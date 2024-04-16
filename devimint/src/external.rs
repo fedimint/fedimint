@@ -36,7 +36,7 @@ pub struct Bitcoind {
 }
 
 impl Bitcoind {
-    pub async fn new(processmgr: &ProcessManager) -> Result<Self> {
+    pub async fn new(processmgr: &ProcessManager, skip_setup: bool) -> Result<Self> {
         let btc_dir = utf8(&processmgr.globals.FM_BTC_DIR);
         let conf = format!(
             include_str!("cfg/bitcoin.conf"),
@@ -59,10 +59,10 @@ impl Bitcoind {
         debug!("bitcoind host: {:?}, auth: {:?}", &host, auth);
         let client =
             Self::new_bitcoin_rpc(&host, auth.clone()).context("Failed to connect to bitcoind")?;
-        let wallet_client = JitTry::new_try(|| async move {
+        let wallet_client = JitTry::new_try(move || async move {
             let client =
                 Self::new_bitcoin_rpc(&host, auth).context("Failed to connect to bitcoind")?;
-            Self::init(&client).await?;
+            Self::init(&client, skip_setup).await?;
             Ok(Arc::new(client))
         });
 
@@ -90,11 +90,13 @@ impl Bitcoind {
         Ok(bitcoincore_rpc::Client::from_jsonrpc(client))
     }
 
-    pub(crate) async fn init(client: &bitcoincore_rpc::Client) -> Result<()> {
+    pub(crate) async fn init(client: &bitcoincore_rpc::Client, skip_setup: bool) -> Result<()> {
         debug!("Setting up bitcoind");
         // create RPC wallet
         for attempt in 0.. {
-            match tokio::task::block_in_place(|| client.create_wallet("", None, None, None, None)) {
+            match fedimint_core::runtime::block_in_place(|| {
+                client.create_wallet("", None, None, None, None)
+            }) {
                 Ok(_) => {
                     break;
                 }
@@ -110,20 +112,22 @@ impl Bitcoind {
             }
         }
 
-        // mine blocks
-        let blocks = 101;
-        let address = tokio::task::block_in_place(|| client.get_new_address(None, None))?;
-        debug!(target: LOG_DEVIMINT, blocks_num=blocks, %address, "Mining blocks to address");
-        tokio::task::block_in_place(|| {
-            client
-                .generate_to_address(blocks, &address)
-                .context("Failed to generate blocks")
-        })?;
-        trace!(target: LOG_DEVIMINT, blocks_num=blocks, %address, "Mining blocks to address complete");
+        if !skip_setup {
+            // mine blocks
+            let blocks = 101;
+            let address = block_in_place(|| client.get_new_address(None, None))?;
+            debug!(target: LOG_DEVIMINT, blocks_num=blocks, %address, "Mining blocks to address");
+            block_in_place(|| {
+                client
+                    .generate_to_address(blocks, &address)
+                    .context("Failed to generate blocks")
+            })?;
+            trace!(target: LOG_DEVIMINT, blocks_num=blocks, %address, "Mining blocks to address complete");
+        }
 
         // wait bitciond is ready
         poll("bitcoind", || async {
-            let info = tokio::task::block_in_place(|| client.get_blockchain_info())
+            let info = block_in_place(|| client.get_blockchain_info())
                 .context("bitcoind getblockchaininfo")
                 .map_err(ControlFlow::Continue)?;
             if info.blocks > 100 {
@@ -164,7 +168,7 @@ impl Bitcoind {
     /// blocks, where bitcoind's rpc returns the height. Since the genesis
     /// block has height 0, we need to add 1 to get the total block count.
     pub async fn get_block_count(&self) -> Result<u64> {
-        Ok(tokio::task::block_in_place(|| self.client.get_block_count())? + 1)
+        Ok(block_in_place(|| self.client.get_block_count())? + 1)
     }
 
     pub async fn mine_blocks_no_wait(&self, block_num: u64) -> Result<u64> {
@@ -215,14 +219,14 @@ impl Bitcoind {
     }
 
     pub async fn get_raw_transaction(&self, txid: &bitcoin::Txid) -> Result<String> {
-        let tx = tokio::task::block_in_place(|| self.client.get_raw_transaction(txid, None))?;
+        let tx = block_in_place(|| self.client.get_raw_transaction(txid, None))?;
         let bytes = tx.consensus_encode_to_vec();
         Ok(bytes.encode_hex())
     }
 
     pub async fn get_new_address(&self) -> Result<Address> {
         let client = &self.wallet_client().await?;
-        let addr = tokio::task::block_in_place(|| client.client.get_new_address(None, None))?;
+        let addr = block_in_place(|| client.client.get_new_address(None, None))?;
         Ok(addr)
     }
 
@@ -232,7 +236,7 @@ impl Bitcoind {
         address: &Address,
     ) -> Result<Vec<BlockHash>> {
         let client = &self.wallet_client().await?;
-        Ok(tokio::task::block_in_place(|| {
+        Ok(block_in_place(|| {
             client.client.generate_to_address(block_num, address)
         })?)
     }
@@ -243,15 +247,13 @@ impl Bitcoind {
         block_hash: Option<&BlockHash>,
     ) -> anyhow::Result<Vec<u8>> {
         let client = &self.wallet_client().await?;
-        Ok(tokio::task::block_in_place(|| {
+        Ok(block_in_place(|| {
             client.client.get_tx_out_proof(txid, block_hash)
         })?)
     }
 
     pub async fn get_blockchain_info(&self) -> anyhow::Result<GetBlockchainInfoResult> {
-        Ok(tokio::task::block_in_place(|| {
-            self.client.get_blockchain_info()
-        })?)
+        Ok(block_in_place(|| self.client.get_blockchain_info())?)
     }
 
     pub async fn send_to_address(
@@ -260,7 +262,7 @@ impl Bitcoind {
         amount: bitcoin::Amount,
     ) -> anyhow::Result<bitcoin::Txid> {
         let client = self.wallet_client().await?;
-        Ok(tokio::task::block_in_place(|| {
+        Ok(block_in_place(|| {
             client
                 .client
                 .send_to_address(addr, amount, None, None, None, None, None, None)
@@ -269,9 +271,7 @@ impl Bitcoind {
 
     pub(crate) async fn get_balances(&self) -> anyhow::Result<GetBalancesResult> {
         let client = self.wallet_client().await?;
-        Ok(tokio::task::block_in_place(|| {
-            client.client.get_balances()
-        })?)
+        Ok(block_in_place(|| client.client.get_balances())?)
     }
 
     pub(crate) fn get_jsonrpc_client(&self) -> &bitcoincore_rpc::jsonrpc::Client {
@@ -782,7 +782,7 @@ pub struct ExternalDaemons {
 
 pub async fn external_daemons(process_mgr: &ProcessManager) -> Result<ExternalDaemons> {
     let start_time = fedimint_core::time::now();
-    let bitcoind = Bitcoind::new(process_mgr).await?;
+    let bitcoind = Bitcoind::new(process_mgr, false).await?;
     let (cln, lnd, electrs, esplora) = tokio::try_join!(
         Lightningd::new(process_mgr, bitcoind.clone()),
         Lnd::new(process_mgr, bitcoind.clone()),

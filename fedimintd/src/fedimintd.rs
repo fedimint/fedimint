@@ -200,7 +200,7 @@ impl Fedimintd {
             .init()
             .unwrap();
 
-        let bitcoind_rpc = BitcoinRpcConfig::from_env_vars()?;
+        let bitcoind_rpc = BitcoinRpcConfig::get_defaults_from_env_vars()?;
 
         Ok(Self {
             opts,

@@ -4,7 +4,7 @@ use std::ops::ControlFlow;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
-use anyhow::{anyhow, Context, Result};
+use anyhow::{anyhow, ensure, Context, Result};
 use clap::{Parser, Subcommand};
 use fedimint_core::task::TaskGroup;
 use fedimint_core::util::write_overwrite_async;
@@ -38,6 +38,12 @@ fn random_test_dir_suffix() -> String {
 pub struct CommonArgs {
     #[clap(short = 'd', long, env = FM_TEST_DIR_ENV)]
     pub test_dir: Option<PathBuf>,
+
+    /// Don't set up new Federation, start from the state in existing
+    /// devimint data dir
+    #[arg(long, env = "FM_SKIP_SETUP")]
+    skip_setup: bool,
+
     #[clap(short = 'n', long, env = FM_FED_SIZE_ENV, default_value = "4")]
     pub fed_size: usize,
 
@@ -55,6 +61,12 @@ pub struct CommonArgs {
 
 impl CommonArgs {
     pub fn mk_test_dir(&self) -> Result<PathBuf> {
+        if self.skip_setup {
+            ensure!(
+                self.test_dir.is_some(),
+                "When using `--skip-setup`, `--test-dir` must be set"
+            );
+        }
         let path = self.test_dir();
 
         std::fs::create_dir_all(&path)
@@ -223,68 +235,71 @@ pub async fn handle_command(cmd: Cmd, common_args: CommonArgs) -> Result<()> {
         Cmd::DevFed { exec } => {
             trace!(target: LOG_DEVIMINT, "Starting dev fed");
             let start_time = Instant::now();
+            let skip_setup = common_args.skip_setup;
             let (process_mgr, task_group) = setup(common_args).await?;
             let main = {
                 let task_group = task_group.clone();
                 async move {
-                    let dev_fed = DevJitFed::new(&process_mgr)?;
+                    let dev_fed = DevJitFed::new(&process_mgr, skip_setup)?;
 
                     let pegin_start_time = Instant::now();
                     debug!(target: LOG_DEVIMINT, "Peging in client and gateways");
 
                     let gw_pegin_amount = 20_000;
                     let client_pegin_amount = 10_000;
-                    let (_, _, _) = tokio::try_join!(
-                        async {
-                            let (address, operation_id) =
-                                dev_fed.internal_client().await?.get_deposit_addr().await?;
-                            dev_fed
-                                .bitcoind()
-                                .await?
-                                .send_to(address, client_pegin_amount)
-                                .await?;
-                            dev_fed.bitcoind().await?.mine_blocks_no_wait(11).await?;
-                            dev_fed
-                                .internal_client()
-                                .await?
-                                .await_deposit(&operation_id)
-                                .await
-                        },
-                        async {
-                            let pegin_addr = dev_fed
-                                .gw_cln_registered()
-                                .await?
-                                .get_pegin_addr(
-                                    &dev_fed.fed().await?.calculate_federation_id().await,
-                                )
-                                .await?;
-                            dev_fed
-                                .bitcoind()
-                                .await?
-                                .send_to(pegin_addr, gw_pegin_amount)
-                                .await?;
-                            dev_fed.bitcoind().await?.mine_blocks_no_wait(11).await
-                        },
-                        async {
-                            let pegin_addr = dev_fed
-                                .gw_lnd_registered()
-                                .await?
-                                .get_pegin_addr(
-                                    &dev_fed.fed().await?.calculate_federation_id().await,
-                                )
-                                .await?;
-                            dev_fed
-                                .bitcoind()
-                                .await?
-                                .send_to(pegin_addr, gw_pegin_amount)
-                                .await?;
-                            dev_fed.bitcoind().await?.mine_blocks_no_wait(11).await
-                        },
-                    )?;
+                    if !skip_setup {
+                        let (_, _, _) = tokio::try_join!(
+                            async {
+                                let (address, operation_id) =
+                                    dev_fed.internal_client().await?.get_deposit_addr().await?;
+                                dev_fed
+                                    .bitcoind()
+                                    .await?
+                                    .send_to(address, client_pegin_amount)
+                                    .await?;
+                                dev_fed.bitcoind().await?.mine_blocks_no_wait(11).await?;
+                                dev_fed
+                                    .internal_client()
+                                    .await?
+                                    .await_deposit(&operation_id)
+                                    .await
+                            },
+                            async {
+                                let pegin_addr = dev_fed
+                                    .gw_cln_registered()
+                                    .await?
+                                    .get_pegin_addr(
+                                        &dev_fed.fed().await?.calculate_federation_id().await,
+                                    )
+                                    .await?;
+                                dev_fed
+                                    .bitcoind()
+                                    .await?
+                                    .send_to(pegin_addr, gw_pegin_amount)
+                                    .await?;
+                                dev_fed.bitcoind().await?.mine_blocks_no_wait(11).await
+                            },
+                            async {
+                                let pegin_addr = dev_fed
+                                    .gw_lnd_registered()
+                                    .await?
+                                    .get_pegin_addr(
+                                        &dev_fed.fed().await?.calculate_federation_id().await,
+                                    )
+                                    .await?;
+                                dev_fed
+                                    .bitcoind()
+                                    .await?
+                                    .send_to(pegin_addr, gw_pegin_amount)
+                                    .await?;
+                                dev_fed.bitcoind().await?.mine_blocks_no_wait(11).await
+                            },
+                        )?;
 
-                    info!(target: LOG_DEVIMINT,
+                        info!(target: LOG_DEVIMINT,
                         elapsed_ms = %pegin_start_time.elapsed().as_millis(),
                         "Pegins completed");
+                    }
 
                     std::env::set_var(FM_INVITE_CODE_ENV, dev_fed.fed().await?.invite_code()?);
 
@@ -415,6 +430,11 @@ async fn run_ui(process_mgr: &ProcessManager) -> Result<(Vec<Fedimintd>, Externa
                     .FM_DATA_DIR
                     .join(format!("fedimintd-{peer}")),
                 FM_BIND_METRICS_API: format!("127.0.0.1:{metrics_port}"),
+                FM_FORCE_BITCOIN_RPC_URL: format!(
+                    "http://127.0.0.1:{}",
+                    process_mgr.globals.FM_PORT_BTC_RPC
+                ),
+                FM_FORCE_BITCOIN_RPC_KIND: "bitcoind".into(),
             };
             let fm = Fedimintd::new(process_mgr, bitcoind.clone(), peer, &vars).await?;
             let server_addr = &vars.FM_BIND_API;
