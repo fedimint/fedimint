@@ -465,7 +465,7 @@
 <a href="#463" id="463">463</a>
 <a href="#464" id="464">464</a>
 <a href="#465" id="465">465</a>
-</pre></div><pre class="rust"><code><span class="kw">use </span>bitcoin_hashes::sha256;
+</pre></div><pre class="rust"><code><span class="kw">use </span>bitcoin::hashes::sha256;
 <span class="kw">use </span>fedimint_client::sm::DynState;
 <span class="kw">use </span>fedimint_core::core::{IntoDynInstance, ModuleInstanceId, OperationId};
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
@@ -660,7 +660,7 @@
 </span><span class="kw">mod </span>tests {
     <span class="kw">use </span>std::str::FromStr;
 
-    <span class="kw">use </span>bitcoin_hashes::Hash;
+    <span class="kw">use </span>bitcoin::hashes::Hash;
     <span class="kw">use </span>fedimint_client::db::migrate_state;
     <span class="kw">use </span>fedimint_client::module::ClientModule;
     <span class="kw">use </span>fedimint_core::core::{IntoDynInstance, OperationId};
