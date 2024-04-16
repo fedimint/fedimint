@@ -60,7 +60,9 @@ pub use fedimint_wallet_common as common;
 use fedimint_wallet_common::config::{WalletClientConfig, WalletConfig, WalletGenParams};
 use fedimint_wallet_common::keys::CompressedPublicKey;
 use fedimint_wallet_common::tweakable::Tweakable;
-use fedimint_wallet_common::{Rbf, WalletInputError, WalletOutputError, WalletOutputV0};
+use fedimint_wallet_common::{
+    Rbf, WalletInputError, WalletOutputError, WalletOutputV0, CONSENSUS_VERSION,
+};
 use futures::StreamExt;
 use hex::ToHex;
 use metrics::{
@@ -197,12 +199,11 @@ impl ServerModuleInit for WalletInit {
     type Params = WalletGenParams;
 
     fn versions(&self, _core: CoreConsensusVersion) -> &[ModuleConsensusVersion] {
-        const MODULE_CONSENSUS_VERSION: ModuleConsensusVersion = ModuleConsensusVersion::new(0, 0);
-        &[MODULE_CONSENSUS_VERSION]
+        &[CONSENSUS_VERSION]
     }
 
     fn supported_api_versions(&self) -> SupportedModuleApiVersions {
-        SupportedModuleApiVersions::from_raw((u32::MAX, 0), (0, 0), &[(0, 0)])
+        SupportedModuleApiVersions::from_raw((2, 0), (2, 0), &[(0, 0)])
     }
 
     async fn init(&self, args: &ServerModuleInitArgs<Self>) -> anyhow::Result<DynServerModule> {

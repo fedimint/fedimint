@@ -56,7 +56,7 @@ impl ServerModuleInit for UnknownInit {
     }
 
     fn supported_api_versions(&self) -> SupportedModuleApiVersions {
-        SupportedModuleApiVersions::from_raw((u32::MAX, 0), (0, 0), &[(0, 0)])
+        SupportedModuleApiVersions::from_raw((2, 0), (0, 0), &[(0, 0)])
     }
 
     /// Initialize the module

@@ -26,7 +26,7 @@ use tpe::{AggregateDecryptionKey, AggregatePublicKey, DecryptionKeyShare, Public
 use crate::contracts::{IncomingContract, OutgoingContract};
 
 pub const KIND: ModuleKind = ModuleKind::from_static_str("lnv2");
-const CONSENSUS_VERSION: ModuleConsensusVersion = ModuleConsensusVersion { major: 0, minor: 0 };
+pub const CONSENSUS_VERSION: ModuleConsensusVersion = ModuleConsensusVersion::new(0, 0);
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
 pub struct ContractId(pub sha256::Hash);
