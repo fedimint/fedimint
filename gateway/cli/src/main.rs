@@ -95,7 +95,7 @@ pub enum Commands {
         /// Default routing fee for all new federations. Setting it won't affect
         /// existing federations
         #[clap(long)]
-        routing_fees: Option<String>,
+        routing_fees: Option<FederationRoutingFees>,
 
         #[clap(long)]
         network: Option<bitcoin::Network>,

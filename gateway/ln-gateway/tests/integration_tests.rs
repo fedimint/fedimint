@@ -274,7 +274,7 @@ async fn test_can_change_default_routing_fees() -> anyhow::Result<()> {
             let set_configuration_payload = SetConfigurationPayload {
                 password: None,
                 num_route_hints: None,
-                routing_fees: Some(fee.clone()),
+                routing_fees: Some(federation_fee.clone()),
                 network: None,
                 per_federation_routing_fees: None,
             };
@@ -392,10 +392,11 @@ async fn test_gateway_enforces_fees() -> anyhow::Result<()> {
 
             // Change the fees of the gateway
             let fee = "10,10000".to_string();
+            let federation_fee = FederationRoutingFees::from_str(&fee)?;
             let set_configuration_payload = SetConfigurationPayload {
                 password: None,
                 num_route_hints: None,
-                routing_fees: Some(fee.clone()),
+                routing_fees: Some(federation_fee),
                 network: None,
                 per_federation_routing_fees: None,
             };
@@ -1243,11 +1244,12 @@ async fn test_gateway_configuration() -> anyhow::Result<()> {
 
     // Verify we can change configurations when the gateway is running
     let new_password = "new_password".to_string();
-    let fee = "1000,2000".to_string();
+    let fee = "10,10000".to_string();
+    let federation_fee = FederationRoutingFees::from_str(&fee)?;
     let set_configuration_payload = SetConfigurationPayload {
         password: Some(new_password.clone()),
         num_route_hints: Some(1),
-        routing_fees: Some(fee.clone()),
+        routing_fees: Some(federation_fee.clone()),
         network: None,
         per_federation_routing_fees: None,
     };
@@ -1262,7 +1264,7 @@ async fn test_gateway_configuration() -> anyhow::Result<()> {
         verify_gateway_rpc_success("get_info", || new_password_rpc_client.get_info()).await;
 
     assert_eq!(gw_info.gateway_state, "Running".to_string());
-    assert_eq!(gw_info.fees, Some(GatewayFee::from_str(&fee)?.0));
+    assert_eq!(gw_info.fees, Some(GatewayFee(federation_fee.into()).0));
     assert_eq!(
         gw_info.network,
         Some(bitcoin30_to_bitcoin29_network(DEFAULT_NETWORK))
