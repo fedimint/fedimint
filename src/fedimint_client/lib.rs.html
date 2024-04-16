@@ -2440,17 +2440,6 @@
 <a href="#2438" id="2438">2438</a>
 <a href="#2439" id="2439">2439</a>
 <a href="#2440" id="2440">2440</a>
-<a href="#2441" id="2441">2441</a>
-<a href="#2442" id="2442">2442</a>
-<a href="#2443" id="2443">2443</a>
-<a href="#2444" id="2444">2444</a>
-<a href="#2445" id="2445">2445</a>
-<a href="#2446" id="2446">2446</a>
-<a href="#2447" id="2447">2447</a>
-<a href="#2448" id="2448">2448</a>
-<a href="#2449" id="2449">2449</a>
-<a href="#2450" id="2450">2450</a>
-<a href="#2451" id="2451">2451</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! # Client library for fedimintd
 //!
 //! This library provides a client interface to build module clients that can be
@@ -4521,17 +4510,6 @@
         <span class="prelude-val">Ok</span>(client)
     }
 
-    <span class="kw">fn </span>admin_api_from_id(id: PeerId, cfg: <span class="kw-2">&amp;</span>ClientConfig) -&gt; anyhow::Result&lt;DynGlobalApi&gt; {
-        <span class="kw">let </span>url = cfg
-            .global
-            .api_endpoints
-            .get(<span class="kw-2">&amp;</span>id)
-            .ok_or_else(|| <span class="macro">anyhow::format_err!</span>(<span class="string">"Invalid admin peer_id: {id}"</span>))<span class="question-mark">?
-            </span>.url
-            .clone();
-        <span class="prelude-val">Ok</span>(DynGlobalApi::from_single_endpoint(id, url))
-    }
-
     <span class="doccomment">/// Build a [`Client`] but do not start the executor
     </span><span class="kw">async fn </span>build(
         <span class="self">self</span>,
@@ -4558,8 +4536,8 @@
         <span class="kw">let </span>fed_id = config.calculate_federation_id();
         <span class="kw">let </span>db = <span class="self">self</span>.db_no_decoders.with_decoders(decoders.clone());
         <span class="kw">let </span>api = <span class="kw">if let </span><span class="prelude-val">Some</span>(admin_creds) = <span class="self">self</span>.admin_creds.as_ref() {
-            <span class="self">Self</span>::admin_api_from_id(admin_creds.peer_id, <span class="kw-2">&amp;</span>config)<span class="question-mark">?
-        </span>} <span class="kw">else </span>{
+            DynGlobalApi::from_config_admin(<span class="kw-2">&amp;</span>config, admin_creds.peer_id)
+        } <span class="kw">else </span>{
             DynGlobalApi::from_config(<span class="kw-2">&amp;</span>config)
         };
         <span class="kw">let </span>task_group = TaskGroup::new();

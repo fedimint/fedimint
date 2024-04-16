@@ -1510,6 +1510,73 @@
 <a href="#1508" id="1508">1508</a>
 <a href="#1509" id="1509">1509</a>
 <a href="#1510" id="1510">1510</a>
+<a href="#1511" id="1511">1511</a>
+<a href="#1512" id="1512">1512</a>
+<a href="#1513" id="1513">1513</a>
+<a href="#1514" id="1514">1514</a>
+<a href="#1515" id="1515">1515</a>
+<a href="#1516" id="1516">1516</a>
+<a href="#1517" id="1517">1517</a>
+<a href="#1518" id="1518">1518</a>
+<a href="#1519" id="1519">1519</a>
+<a href="#1520" id="1520">1520</a>
+<a href="#1521" id="1521">1521</a>
+<a href="#1522" id="1522">1522</a>
+<a href="#1523" id="1523">1523</a>
+<a href="#1524" id="1524">1524</a>
+<a href="#1525" id="1525">1525</a>
+<a href="#1526" id="1526">1526</a>
+<a href="#1527" id="1527">1527</a>
+<a href="#1528" id="1528">1528</a>
+<a href="#1529" id="1529">1529</a>
+<a href="#1530" id="1530">1530</a>
+<a href="#1531" id="1531">1531</a>
+<a href="#1532" id="1532">1532</a>
+<a href="#1533" id="1533">1533</a>
+<a href="#1534" id="1534">1534</a>
+<a href="#1535" id="1535">1535</a>
+<a href="#1536" id="1536">1536</a>
+<a href="#1537" id="1537">1537</a>
+<a href="#1538" id="1538">1538</a>
+<a href="#1539" id="1539">1539</a>
+<a href="#1540" id="1540">1540</a>
+<a href="#1541" id="1541">1541</a>
+<a href="#1542" id="1542">1542</a>
+<a href="#1543" id="1543">1543</a>
+<a href="#1544" id="1544">1544</a>
+<a href="#1545" id="1545">1545</a>
+<a href="#1546" id="1546">1546</a>
+<a href="#1547" id="1547">1547</a>
+<a href="#1548" id="1548">1548</a>
+<a href="#1549" id="1549">1549</a>
+<a href="#1550" id="1550">1550</a>
+<a href="#1551" id="1551">1551</a>
+<a href="#1552" id="1552">1552</a>
+<a href="#1553" id="1553">1553</a>
+<a href="#1554" id="1554">1554</a>
+<a href="#1555" id="1555">1555</a>
+<a href="#1556" id="1556">1556</a>
+<a href="#1557" id="1557">1557</a>
+<a href="#1558" id="1558">1558</a>
+<a href="#1559" id="1559">1559</a>
+<a href="#1560" id="1560">1560</a>
+<a href="#1561" id="1561">1561</a>
+<a href="#1562" id="1562">1562</a>
+<a href="#1563" id="1563">1563</a>
+<a href="#1564" id="1564">1564</a>
+<a href="#1565" id="1565">1565</a>
+<a href="#1566" id="1566">1566</a>
+<a href="#1567" id="1567">1567</a>
+<a href="#1568" id="1568">1568</a>
+<a href="#1569" id="1569">1569</a>
+<a href="#1570" id="1570">1570</a>
+<a href="#1571" id="1571">1571</a>
+<a href="#1572" id="1572">1572</a>
+<a href="#1573" id="1573">1573</a>
+<a href="#1574" id="1574">1574</a>
+<a href="#1575" id="1575">1575</a>
+<a href="#1576" id="1576">1576</a>
+<a href="#1577" id="1577">1577</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap};
 <span class="kw">use </span>std::fmt::{<span class="self">self</span>, Debug, Display};
 <span class="kw">use </span>std::num::NonZeroUsize;
@@ -1668,6 +1735,13 @@
         }
     }
 
+    <span class="kw">pub fn </span>new_one_peer(peer_id: PeerId, error: PeerError) -&gt; <span class="self">Self </span>{
+        <span class="self">Self </span>{
+            general: <span class="prelude-val">None</span>,
+            peers: [(peer_id, error)].into_iter().collect(),
+        }
+    }
+
     <span class="doccomment">/// Report any errors
     </span><span class="kw">pub fn </span>report_if_important(<span class="kw-2">&amp;</span><span class="self">self</span>) {
         <span class="kw">if let </span><span class="prelude-val">Some</span>(error) = <span class="self">self</span>.general.as_ref() {
@@ -1751,6 +1825,12 @@
     /// API call to the federation would be inconvenient.
     </span><span class="kw">fn </span>all_peers(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>BTreeSet&lt;PeerId&gt;;
 
+    <span class="doccomment">/// PeerId of the Guardian node, if set
+    ///
+    /// This is for using Client in a "Admin" mode, making authenticated
+    /// calls to own `fedimintd` instance.
+    </span><span class="kw">fn </span>self_peer(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;PeerId&gt;;
+
     <span class="kw">fn </span>with_module(<span class="kw-2">&amp;</span><span class="self">self</span>, id: ModuleInstanceId) -&gt; DynModuleApi;
 
     <span class="doccomment">/// Make request to a specific federation peer by `peer_id`
@@ -1797,6 +1877,28 @@
         } <span class="kw">else </span>{
             request.<span class="kw">await
         </span>}
+    }
+
+    <span class="doccomment">/// Like [`Self::request_single_peer`], but API more like
+    /// [`Self::request_with_strategy`].
+    </span><span class="kw">async fn </span>request_single_peer_federation&lt;FedRet&gt;(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        timeout: <span class="prelude-ty">Option</span>&lt;Duration&gt;,
+        method: String,
+        params: ApiRequestErased,
+        peer_id: PeerId,
+    ) -&gt; FederationResult&lt;FedRet&gt;
+    <span class="kw">where
+        </span>FedRet: serde::de::DeserializeOwned + Eq + Debug + Clone + MaybeSend,
+    {
+        <span class="prelude-val">Ok</span>(<span class="self">self
+            </span>.request_single_peer(timeout, method, params, peer_id)
+            .<span class="kw">await
+            </span>.map_err(PeerError::Rpc)
+            .and_then(|v| {
+                serde_json::from_value(v).map_err(|e| PeerError::ResponseDeserialization(e.into()))
+            })
+            .map_err(|e| FederationError::new_one_peer(peer_id, e))<span class="question-mark">?</span>)
     }
 
     <span class="doccomment">/// Make an aggregate request to federation, using `strategy` to logically
@@ -1933,14 +2035,18 @@
     <span class="kw">where
         </span>Ret: serde::de::DeserializeOwned + Eq + Debug + Clone + MaybeSend,
     {
-        <span class="comment">// We would never want to accidentally send our password to everyone
-        </span><span class="macro">assert_eq!</span>(
-            <span class="self">self</span>.all_peers().len(),
-            <span class="number">1</span>,
-            <span class="string">"attempted to broadcast admin password?!"
-        </span>);
-        <span class="self">self</span>.request_current_consensus(method.into(), params.with_auth(auth))
-            .<span class="kw">await
+        <span class="kw">let </span><span class="prelude-val">Some</span>(self_peer_id) = <span class="self">self</span>.self_peer() <span class="kw">else </span>{
+            <span class="kw">return </span><span class="prelude-val">Err</span>(FederationError::general(<span class="macro">anyhow::format_err!</span>(
+                <span class="string">"Admin peer_id not set"
+            </span>)));
+        };
+        <span class="self">self</span>.request_single_peer_federation(
+            <span class="prelude-val">None</span>,
+            method.into(),
+            params.with_auth(auth),
+            self_peer_id,
+        )
+        .<span class="kw">await
     </span>}
 
     <span class="kw">async fn </span>request_admin_no_auth&lt;Ret&gt;(
@@ -1985,11 +2091,14 @@
 }
 
 <span class="kw">impl </span>DynGlobalApi {
-    <span class="kw">pub fn </span>from_pre_peer_id_endpoint(url: SafeUrl) -&gt; <span class="self">Self </span>{
+    <span class="kw">pub fn </span>from_pre_peer_id_admin_endpoint(url: SafeUrl) -&gt; <span class="self">Self </span>{
         <span class="comment">// PeerIds are used only for informational purposes, but just in case, make a
         // big number so it stands out
-        </span>GlobalFederationApiWithCache::new(WsFederationApi::new(<span class="macro">vec!</span>[(PeerId::from(<span class="number">1024</span>), url)]))
-            .into()
+        </span><span class="kw">let </span>peer_id = PeerId::from(<span class="number">1024</span>);
+        GlobalFederationApiWithCache::new(
+            WsFederationApi::new(<span class="macro">vec!</span>[(peer_id, url)]).with_self_peer_id(peer_id),
+        )
+        .into()
     }
 
     <span class="kw">pub fn </span>from_single_endpoint(peer: PeerId, url: SafeUrl) -&gt; <span class="self">Self </span>{
@@ -2001,6 +2110,13 @@
 
     <span class="kw">pub fn </span>from_config(config: <span class="kw-2">&amp;</span>ClientConfig) -&gt; <span class="self">Self </span>{
         GlobalFederationApiWithCache::new(WsFederationApi::from_config(config)).into()
+    }
+
+    <span class="kw">pub fn </span>from_config_admin(config: <span class="kw-2">&amp;</span>ClientConfig, self_peer_id: PeerId) -&gt; <span class="self">Self </span>{
+        GlobalFederationApiWithCache::new(
+            WsFederationApi::from_config(config).with_self_peer_id(self_peer_id),
+        )
+        .into()
     }
 
     <span class="kw">pub fn </span>from_invite_code(invite_code: <span class="kw-2">&amp;</span>[InviteCode]) -&gt; <span class="self">Self </span>{
@@ -2273,6 +2389,10 @@
 {
     <span class="kw">fn </span>all_peers(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>BTreeSet&lt;PeerId&gt; {
         <span class="self">self</span>.inner.all_peers()
+    }
+
+    <span class="kw">fn </span>self_peer(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;PeerId&gt; {
+        <span class="self">self</span>.inner.self_peer()
     }
 
     <span class="kw">fn </span>with_module(<span class="kw-2">&amp;</span><span class="self">self</span>, id: ModuleInstanceId) -&gt; DynModuleApi {
@@ -2565,6 +2685,7 @@
 </span><span class="attr">#[derive(Debug, Clone)]
 </span><span class="kw">pub struct </span>WsFederationApi&lt;C = WsClient&gt; {
     peer_ids: BTreeSet&lt;PeerId&gt;,
+    self_peer_id: <span class="prelude-ty">Option</span>&lt;PeerId&gt;,
     peers: Arc&lt;Vec&lt;FederationPeer&lt;C&gt;&gt;&gt;,
     module_id: <span class="prelude-ty">Option</span>&lt;ModuleInstanceId&gt;,
 }
@@ -2694,11 +2815,16 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>.peer_ids
     }
 
+    <span class="kw">fn </span>self_peer(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;PeerId&gt; {
+        <span class="self">self</span>.self_peer_id
+    }
+
     <span class="kw">fn </span>with_module(<span class="kw-2">&amp;</span><span class="self">self</span>, id: ModuleInstanceId) -&gt; DynModuleApi {
         WsFederationApi {
             peer_ids: <span class="self">self</span>.peer_ids.clone(),
             peers: <span class="self">self</span>.peers.clone(),
             module_id: <span class="prelude-val">Some</span>(id),
+            self_peer_id: <span class="self">self</span>.self_peer_id,
         }
         .into()
     }
@@ -2754,7 +2880,7 @@
 <span class="kw">impl </span>WsFederationApi&lt;WsClient&gt; {
     <span class="doccomment">/// Creates a new API client
     </span><span class="kw">pub fn </span>new(peers: Vec&lt;(PeerId, SafeUrl)&gt;) -&gt; <span class="self">Self </span>{
-        <span class="self">Self</span>::new_with_client(peers)
+        <span class="self">Self</span>::new_with_client(peers, <span class="prelude-val">None</span>)
     }
 
     <span class="doccomment">/// Creates a new API client from a client config
@@ -2767,6 +2893,13 @@
                 .map(|(id, peer)| (<span class="kw-2">*</span>id, peer.url.clone()))
                 .collect(),
         )
+    }
+
+    <span class="kw">pub fn </span>with_self_peer_id(<span class="self">self</span>, self_peer_id: PeerId) -&gt; <span class="self">Self </span>{
+        <span class="self">Self </span>{
+            self_peer_id: <span class="prelude-val">Some</span>(self_peer_id),
+            ..<span class="self">self
+        </span>}
     }
 
     <span class="doccomment">/// Creates a new API client from a invite code, assumes they are in peer
@@ -2790,9 +2923,10 @@
     }
 
     <span class="doccomment">/// Creates a new API client
-    </span><span class="kw">pub fn </span>new_with_client(peers: Vec&lt;(PeerId, SafeUrl)&gt;) -&gt; <span class="self">Self </span>{
+    </span><span class="kw">pub fn </span>new_with_client(peers: Vec&lt;(PeerId, SafeUrl)&gt;, self_peer_id: <span class="prelude-ty">Option</span>&lt;PeerId&gt;) -&gt; <span class="self">Self </span>{
         WsFederationApi {
             peer_ids: peers.iter().map(|m| m.<span class="number">0</span>).collect(),
+            self_peer_id,
             peers: Arc::new(
                 peers
                     .into_iter()

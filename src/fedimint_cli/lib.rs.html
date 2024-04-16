@@ -1040,17 +1040,6 @@
 <a href="#1038" id="1038">1038</a>
 <a href="#1039" id="1039">1039</a>
 <a href="#1040" id="1040">1040</a>
-<a href="#1041" id="1041">1041</a>
-<a href="#1042" id="1042">1042</a>
-<a href="#1043" id="1043">1043</a>
-<a href="#1044" id="1044">1044</a>
-<a href="#1045" id="1045">1045</a>
-<a href="#1046" id="1046">1046</a>
-<a href="#1047" id="1047">1047</a>
-<a href="#1048" id="1048">1048</a>
-<a href="#1049" id="1049">1049</a>
-<a href="#1050" id="1050">1050</a>
-<a href="#1051" id="1051">1051</a>
 </pre></div><pre class="rust"><code><span class="kw">mod </span>client;
 <span class="kw">mod </span>db_locked;
 <span class="kw">pub mod </span>envs;
@@ -1278,18 +1267,7 @@
 
     <span class="kw">fn </span>admin_client(<span class="kw-2">&amp;</span><span class="self">self</span>, cfg: <span class="kw-2">&amp;</span>ClientConfig) -&gt; CliResult&lt;DynGlobalApi&gt; {
         <span class="kw">let </span>our_id = <span class="self">self</span>.our_id.ok_or_cli_msg(<span class="string">"Admin client needs our-id set"</span>)<span class="question-mark">?</span>;
-        <span class="self">Self</span>::admin_client_from_id(our_id, cfg)
-    }
-
-    <span class="kw">fn </span>admin_client_from_id(id: PeerId, cfg: <span class="kw-2">&amp;</span>ClientConfig) -&gt; CliResult&lt;DynGlobalApi&gt; {
-        <span class="kw">let </span>url = cfg
-            .global
-            .api_endpoints
-            .get(<span class="kw-2">&amp;</span>id)
-            .expect(<span class="string">"Endpoint exists"</span>)
-            .url
-            .clone();
-        <span class="prelude-val">Ok</span>(DynGlobalApi::from_single_endpoint(id, url))
+        <span class="prelude-val">Ok</span>(DynGlobalApi::from_config_admin(cfg, our_id))
     }
 
     <span class="kw">fn </span>auth(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; CliResult&lt;ApiAuth&gt; {
@@ -1386,7 +1364,7 @@
 <span class="kw">impl </span>DkgAdminArgs {
     <span class="kw">fn </span>ws_admin_client(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; CliResult&lt;DynGlobalApi&gt; {
         <span class="kw">let </span>ws = <span class="self">self</span>.ws.clone();
-        <span class="prelude-val">Ok</span>(DynGlobalApi::from_pre_peer_id_endpoint(ws))
+        <span class="prelude-val">Ok</span>(DynGlobalApi::from_pre_peer_id_admin_endpoint(ws))
     }
 }
 

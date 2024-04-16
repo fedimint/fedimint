@@ -1534,7 +1534,7 @@
         <span class="kw">let </span>local = state.local.clone();
 
         <span class="kw">if let </span><span class="prelude-val">Some</span>(url) = local.and_then(|local| local.leader_api_url) {
-            DynGlobalApi::from_pre_peer_id_endpoint(url)
+            DynGlobalApi::from_pre_peer_id_admin_endpoint(url)
                 .add_config_gen_peer(state.our_peer_info()<span class="question-mark">?</span>)
                 .<span class="kw">await
                 </span>.map_err(|<span class="kw">_</span>| ApiError::not_found(<span class="string">"Unable to connect to the leader"</span>.to_string()))<span class="question-mark">?</span>;
@@ -1594,7 +1594,7 @@
 
         <span class="kw">let </span>consensus = <span class="kw">match </span>local.and_then(|local| local.leader_api_url) {
             <span class="prelude-val">Some</span>(leader_url) =&gt; {
-                <span class="kw">let </span>client = DynGlobalApi::from_pre_peer_id_endpoint(leader_url.clone());
+                <span class="kw">let </span>client = DynGlobalApi::from_pre_peer_id_admin_endpoint(leader_url.clone());
                 <span class="kw">let </span>response = client.consensus_config_gen_params().<span class="kw">await</span>;
                 response
                     .map_err(|<span class="kw">_</span>| ApiError::not_found(<span class="string">"Cannot get leader params"</span>.to_string()))<span class="question-mark">?
@@ -1634,7 +1634,7 @@
             </span>state.local.clone().and_then(|local| {
                 local
                     .leader_api_url
-                    .map(DynGlobalApi::from_pre_peer_id_endpoint)
+                    .map(DynGlobalApi::from_pre_peer_id_admin_endpoint)
             })
         };
 
@@ -1859,7 +1859,7 @@
             </span>state.local.clone().and_then(|local| {
                 local
                     .leader_api_url
-                    .map(DynGlobalApi::from_pre_peer_id_endpoint)
+                    .map(DynGlobalApi::from_pre_peer_id_admin_endpoint)
             })
         };
 
@@ -2394,7 +2394,7 @@
 
             <span class="comment">// our id doesn't really exist at this point
             </span><span class="kw">let </span>auth = ApiAuth(<span class="macro">format!</span>(<span class="string">"password-{port}"</span>));
-            <span class="kw">let </span>client = DynGlobalApi::from_pre_peer_id_endpoint(api_url);
+            <span class="kw">let </span>client = DynGlobalApi::from_pre_peer_id_admin_endpoint(api_url);
 
             (
                 TestConfigApi {
