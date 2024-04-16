@@ -718,6 +718,8 @@
 <a href="#716" id="716">716</a>
 <a href="#717" id="717">717</a>
 <a href="#718" id="718">718</a>
+<a href="#719" id="719">719</a>
+<a href="#720" id="720">720</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::fmt;
 <span class="kw">use </span>std::str::FromStr;
 <span class="kw">use </span>std::sync::Arc;
@@ -1034,6 +1036,8 @@
             pub_key: pub_key.serialize().to_vec(),
             alias: info.alias,
             network,
+            block_height: info.block_height,
+            synced_to_chain: info.synced_to_chain,
         });
     }
 

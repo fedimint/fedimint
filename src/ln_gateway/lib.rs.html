@@ -1915,6 +1915,8 @@
 <a href="#1913" id="1913">1913</a>
 <a href="#1914" id="1914">1914</a>
 <a href="#1915" id="1915">1915</a>
+<a href="#1916" id="1916">1916</a>
+<a href="#1917" id="1917">1917</a>
 </pre></div><pre class="rust"><code><span class="kw">pub mod </span>client;
 <span class="kw">mod </span>db;
 <span class="kw">pub mod </span>envs;
@@ -3463,6 +3465,8 @@
         pub_key,
         alias,
         network,
+        block_height: <span class="kw">_</span>,
+        synced_to_chain: <span class="kw">_</span>,
     } = lnrpc.info().<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="kw">let </span>node_pub_key = PublicKey::from_slice(<span class="kw-2">&amp;</span>pub_key)
         .map_err(|e| GatewayError::InvalidMetadata(<span class="macro">format!</span>(<span class="string">"Invalid node pubkey {e}"</span>)))<span class="question-mark">?</span>;

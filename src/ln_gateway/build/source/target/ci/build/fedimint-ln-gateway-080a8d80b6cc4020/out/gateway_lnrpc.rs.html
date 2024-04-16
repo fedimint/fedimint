@@ -916,6 +916,13 @@
 <a href="#914" id="914">914</a>
 <a href="#915" id="915">915</a>
 <a href="#916" id="916">916</a>
+<a href="#917" id="917">917</a>
+<a href="#918" id="918">918</a>
+<a href="#919" id="919">919</a>
+<a href="#920" id="920">920</a>
+<a href="#921" id="921">921</a>
+<a href="#922" id="922">922</a>
+<a href="#923" id="923">923</a>
 </pre></div><pre class="rust"><code><span class="attr">#[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 </span><span class="kw">pub struct </span>EmptyRequest {}
@@ -940,6 +947,13 @@
     <span class="doccomment">/// The network the node is on. Valid values are "main" | "test" | "signet" | "regtest"
     </span><span class="attr">#[prost(string, tag = <span class="string">"3"</span>)]
     </span><span class="kw">pub </span>network: ::prost::alloc::string::String,
+    <span class="doccomment">/// The best block height that the associated lightning node is aware of
+    /// If `synced_to_chain` is true, then the node is also fully synced to this height
+    </span><span class="attr">#[prost(uint32, tag = <span class="string">"4"</span>)]
+    </span><span class="kw">pub </span>block_height: u32,
+    <span class="doccomment">/// Whether the associated lightning node is fully synced up to `block_height`
+    </span><span class="attr">#[prost(bool, tag = <span class="string">"5"</span>)]
+    </span><span class="kw">pub </span>synced_to_chain: bool,
 }
 <span class="attr">#[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]

@@ -208,6 +208,8 @@
 <a href="#206" id="206">206</a>
 <a href="#207" id="207">207</a>
 <a href="#208" id="208">208</a>
+<a href="#209" id="209">209</a>
+<a href="#210" id="210">210</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::sync::{Arc, Mutex};
 <span class="kw">use </span>std::time::Duration;
 
@@ -326,6 +328,8 @@
             pub_key: <span class="self">self</span>.gateway_node_pub_key.serialize().to_vec(),
             alias: <span class="string">"FakeLightningNode"</span>.to_string(),
             network: <span class="string">"regtest"</span>.to_string(),
+            block_height: <span class="number">0</span>,
+            synced_to_chain: <span class="bool-val">false</span>,
         })
     }
 
