@@ -1,9 +1,13 @@
 # Best used if called by 'tls-download-mutinynet.sh' script
 # fedimint.my-super-host.com should be replaced by a domain controlled by you and all DNS below should redirect to the IP of your server.
 # Domains:
+# - fedimint.my-super-host.com
+# - fedimintd.fedimint.my-super-host.com
+# - guardian-ui.fedimint.my-super-host.com
 # - gatewayd.fedimint.my-super-host.com
 # - gateway-ui.fedimint.my-super-host.com
-# - thub.fedimint.my-super-host.com
+# - rtl.fedimint.my-super-host.com
+# - xmpp.fedimint.my-super-host.com
 
 version: "3.3"
 
@@ -27,6 +31,51 @@ services:
       - "/var/run/docker.sock:/var/run/docker.sock:ro"
   ### END_TRAEFIK ###
 
+  ### START_FEDIMINTD ###
+  fedimintd:
+    image: fedimint/fedimintd:v0.3.0
+    volumes:
+      - fedimintd_data:/data
+    ports:
+      - "0.0.0.0:8173:8173"
+    environment:
+      - FM_BITCOIN_RPC_KIND=bitcoind
+      - FM_BITCOIN_RPC_URL=http://bitcoin:bitcoin@bitcoind:38332
+      - FM_BITCOIN_NETWORK=signet
+      - FM_BIND_P2P=0.0.0.0:8173
+      - FM_P2P_URL=fedimint://fedimint.my-super-host.com:8173
+      - FM_BIND_API=0.0.0.0:80
+      - FM_API_URL=wss://fedimintd.fedimint.my-super-host.com
+      - FM_EXTRA_DKG_META=chat_server_domain=xmpp.fedimint.my-super-host.com
+    restart: always
+    platform: linux/amd64
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.services.fedimintd.loadbalancer.server.port=80"
+      - "traefik.http.routers.fedimintd.rule=Host(`fedimintd.fedimint.my-super-host.com`)"
+      - "traefik.http.routers.fedimintd.entrypoints=websecure"
+      - "traefik.http.routers.fedimintd.tls.certresolver=myresolver"
+  ### END_FEDIMINTD ###
+
+  ### START_GUARDIAN_UI ###
+  guardian-ui:
+    image: fedimintui/guardian-ui:0.3.0
+    environment:
+      - PORT=80
+      - REACT_APP_FM_CONFIG_API=wss://fedimintd.fedimint.my-super-host.com
+    depends_on:
+      - fedimintd
+    restart: always
+    platform: linux/amd64
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.services.guardian-ui.loadbalancer.server.port=80"
+      - "traefik.http.routers.guardian-ui.rule=Host(`guardian-ui.fedimint.my-super-host.com`)"
+      - "traefik.http.routers.guardian-ui.entrypoints=websecure"
+      - "traefik.http.routers.guardian-ui.tls.certresolver=myresolver"
+  ### END_GUARDIAN_UI ###
+
+  ### START_GATEWAYD ###
   gatewayd:
     image: fedimint/gatewayd:v0.3.0
     command: gatewayd lnd
@@ -40,7 +89,7 @@ services:
       # Gateway webserver authentication password
       - FM_GATEWAY_PASSWORD=thereisnosecondbest
       # Configured gateway routing fees Format: <base_msat>,<proportional_millionths>
-      - FM_GATEWAY_FEES=0,0
+      - FM_GATEWAY_FEES=0,10000
       # LND RPC address
       - FM_LND_RPC_ADDR=https://lnd:10009
       # LND TLS cert file path
@@ -54,15 +103,15 @@ services:
       - lnd
     restart: always
     platform: linux/amd64
-    ### TRAEFIK_LABELS ###
     labels:
       - "traefik.enable=true"
       - "traefik.http.services.gatewayd.loadbalancer.server.port=80"
       - "traefik.http.routers.gatewayd.rule=Host(`gatewayd.fedimint.my-super-host.com`)"
       - "traefik.http.routers.gatewayd.entrypoints=websecure"
       - "traefik.http.routers.gatewayd.tls.certresolver=myresolver"
-    ### END_TRAEFIK_LABELS ###
+  ### END_GATEWAYD ###
 
+  ### START_GATEWAY_UI ###
   gateway-ui:
     image: fedimintui/gateway-ui:0.3.0
     environment:
@@ -73,14 +122,13 @@ services:
       - gatewayd
     restart: always
     platform: linux/amd64
-    ### TRAEFIK_LABELS ###
     labels:
       - "traefik.enable=true"
       - "traefik.http.services.gateway-ui.loadbalancer.server.port=80"
       - "traefik.http.routers.gateway-ui.rule=Host(`gateway-ui.fedimint.my-super-host.com`)"
       - "traefik.http.routers.gateway-ui.entrypoints=websecure"
       - "traefik.http.routers.gateway-ui.tls.certresolver=myresolver"
-    ### END_TRAEFIK_LABELS ###
+  ### END_GATEWAY_UI ###
 
   ### START_LND ###
   lnd:
@@ -98,18 +146,6 @@ services:
       - bitcoind
     restart: always
   ### END_LND ###
-
-  ### START_BITCOIND ###
-  bitcoind:
-    image: fedimint/mutinynet-bitcoind:master
-    command: --rpcuser=bitcoin --rpcpassword=bitcoin -zmqpubrawblock=tcp://[::]:48332 -zmqpubrawtx=tcp://[::]:48333
-    ports:
-      - 0.0.0.0:38333:38333
-    volumes:
-      - "bitcoin_datadir:/root/.bitcoin"
-    restart: always
-    platform: linux/amd64
-  ### END_BITCOIND ###
 
   ### START_THUNDERHUB ###
   thunderhub_config_writer:
@@ -138,31 +174,39 @@ services:
     environment:
       - ACCOUNT_CONFIG_PATH=/thconfig/accounts.yaml
       - HOST=0.0.0.0
-      - PORT=3002
-      - FM_GATEWAY_API=http://127.0.0.1:8175
+      - PORT=80
+      - REACT_APP_FM_GATEWAY_API=https://gatewayd.fedimint.my-super-host.com
       - FM_GATEWAY_PASSWORD=thereisnosecondbest
-    ports:
-      - "0.0.0.0:3002:3002"
     volumes:
       - lnd_datadir:/root/.lnd
       - thunderhub_datadir:/thconfig
     depends_on:
       - thunderhub_config_writer
     restart: always
-    ### TRAEFIK_LABELS ###
     labels:
       - "traefik.enable=true"
-      - "traefik.http.services.thub.loadbalancer.server.port=80"
-      - "traefik.http.routers.thub.rule=Host(`thub.fedimint.my-super-host.com`)"
-      - "traefik.http.routers.thub.entrypoints=websecure"
-      - "traefik.http.routers.thub.tls.certresolver=myresolver"
-    ### END_TRAEFIK_LABELS ###
+      - "traefik.http.services.thunderhub.loadbalancer.server.port=80"
+      - "traefik.http.routers.thunderhub.rule=Host(`thunderhub.fedimint.my-super-host.com`)"
+      - "traefik.http.routers.thunderhub.entrypoints=websecure"
+      - "traefik.http.routers.thunderhub.tls.certresolver=myresolver"
   ### END_THUNDERHUB ###
 
+  ### START_BITCOIND ###
+  bitcoind:
+    image: fedimint/mutinynet-bitcoind:master
+    command: --rpcuser=bitcoin --rpcpassword=bitcoin -zmqpubrawblock=tcp://[::]:48332 -zmqpubrawtx=tcp://[::]:48333
+    ports:
+      - 0.0.0.0:38333:38333
+    volumes:
+      - "bitcoin_datadir:/root/.bitcoin"
+    restart: always
+    platform: linux/amd64
+  ### END_BITCOIND ###
+    
 
 volumes:
   letsencrypt_data:
-  bitcoin_datadir:
   lnd_datadir:
+  bitcoin_datadir:
   gateway_datadir:
   thunderhub_datadir:

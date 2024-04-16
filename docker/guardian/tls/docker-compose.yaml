@@ -4,6 +4,10 @@
 # - fedimint.my-super-host.com
 # - fedimintd.fedimint.my-super-host.com
 # - guardian-ui.fedimint.my-super-host.com
+# - gatewayd.fedimint.my-super-host.com
+# - gateway-ui.fedimint.my-super-host.com
+# - rtl.fedimint.my-super-host.com
+# - xmpp.fedimint.my-super-host.com
 
 version: "3.3"
 
@@ -25,8 +29,9 @@ services:
     volumes:
       - "letsencrypt_data:/letsencrypt"
       - "/var/run/docker.sock:/var/run/docker.sock:ro"
-    ### END_TRAEFIK ###
-
+  ### END_TRAEFIK ###
+  
+  ### START_FEDIMINTD ###
   fedimintd:
     image: fedimint/fedimintd:v0.3.0
     volumes:
@@ -44,15 +49,15 @@ services:
       - FM_EXTRA_DKG_META=chat_server_domain=xmpp.fedimint.my-super-host.com
     restart: always
     platform: linux/amd64
-    ### TRAEFIK_LABELS ###
     labels:
       - "traefik.enable=true"
       - "traefik.http.services.fedimintd.loadbalancer.server.port=80"
       - "traefik.http.routers.fedimintd.rule=Host(`fedimintd.fedimint.my-super-host.com`)"
       - "traefik.http.routers.fedimintd.entrypoints=websecure"
       - "traefik.http.routers.fedimintd.tls.certresolver=myresolver"
-    ### END_TRAEFIK_LABELS ###
+  ### END_FEDIMINTD ###
 
+  ### START_GUARDIAN_UI ###
   guardian-ui:
     image: fedimintui/guardian-ui:0.3.0
     environment:
@@ -62,15 +67,27 @@ services:
       - fedimintd
     restart: always
     platform: linux/amd64
-    ### START_TRAEFIK_LABELS ###
     labels:
       - "traefik.enable=true"
       - "traefik.http.services.guardian-ui.loadbalancer.server.port=80"
       - "traefik.http.routers.guardian-ui.rule=Host(`guardian-ui.fedimint.my-super-host.com`)"
       - "traefik.http.routers.guardian-ui.entrypoints=websecure"
       - "traefik.http.routers.guardian-ui.tls.certresolver=myresolver"
-    ### END_TRAEFIK_LABELS ###
+  ### END_GUARDIAN_UI ###
+
+  ### START_BITCOIND ###
+  bitcoind:
+    image: fedimint/mutinynet-bitcoind:master
+    command: --rpcuser=bitcoin --rpcpassword=bitcoin -zmqpubrawblock=tcp://[::]:48332 -zmqpubrawtx=tcp://[::]:48333
+    ports:
+      - 0.0.0.0:38333:38333
+    volumes:
+      - "bitcoin_datadir:/root/.bitcoin"
+    restart: always
+    platform: linux/amd64
+  ### END_BITCOIND ###
 
 volumes:
   letsencrypt_data:
   fedimintd_data:
+  bitcoin_datadir:
