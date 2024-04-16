@@ -14,7 +14,6 @@ use crate::OutgoingLightningPayment;
 enum Opts {
     /// Create a lightning invoice to receive payment via gateway
     Invoice {
-        #[clap(long)]
         amount: Amount,
         #[clap(long, default_value = "")]
         description: String,
