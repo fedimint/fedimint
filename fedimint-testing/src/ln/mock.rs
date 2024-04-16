@@ -116,6 +116,8 @@ impl ILnRpcClient for FakeLightningTest {
             pub_key: self.gateway_node_pub_key.serialize().to_vec(),
             alias: "FakeLightningNode".to_string(),
             network: "regtest".to_string(),
+            block_height: 0,
+            synced_to_chain: false,
         })
     }
 

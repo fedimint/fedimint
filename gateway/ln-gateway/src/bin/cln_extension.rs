@@ -195,7 +195,7 @@ impl ClnRpcService {
         })
     }
 
-    async fn info(&self) -> Result<(PublicKey, String, String), ClnExtensionError> {
+    async fn info(&self) -> Result<(PublicKey, String, String, u32, bool), ClnExtensionError> {
         self.rpc_client()
             .await?
             .call(cln_rpc::Request::Getinfo(
@@ -207,11 +207,16 @@ impl ClnRpcService {
                     id,
                     alias,
                     network,
+                    blockheight,
+                    warning_bitcoind_sync,
+                    warning_lightningd_sync,
                     ..
                 }) => {
                     // FIXME: How to handle missing alias?
                     let alias = alias.unwrap_or_default();
-                    Ok((id, alias, network))
+                    let synced_to_chain =
+                        warning_bitcoind_sync.is_none() && warning_lightningd_sync.is_none();
+                    Ok((id, alias, network, blockheight, synced_to_chain))
                 }
                 _ => Err(ClnExtensionError::RpcWrongResponse),
             })
@@ -227,11 +232,13 @@ impl GatewayLightning for ClnRpcService {
     ) -> Result<tonic::Response<GetNodeInfoResponse>, Status> {
         self.info()
             .await
-            .map(|(pub_key, alias, network)| {
+            .map(|(pub_key, alias, network, block_height, synced_to_chain)| {
                 tonic::Response::new(GetNodeInfoResponse {
                     pub_key: pub_key.serialize().to_vec(),
                     alias,
                     network,
+                    block_height,
+                    synced_to_chain,
                 })
             })
             .map_err(|e| {

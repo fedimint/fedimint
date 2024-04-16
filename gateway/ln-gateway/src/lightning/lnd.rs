@@ -314,6 +314,8 @@ impl ILnRpcClient for GatewayLndClient {
             pub_key: pub_key.serialize().to_vec(),
             alias: info.alias,
             network,
+            block_height: info.block_height,
+            synced_to_chain: info.synced_to_chain,
         });
     }
 
