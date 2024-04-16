@@ -133,7 +133,7 @@ impl ConfigGenApi {
         let local = state.local.clone();
 
         if let Some(url) = local.and_then(|local| local.leader_api_url) {
-            DynGlobalApi::from_pre_peer_id_endpoint(url)
+            DynGlobalApi::from_pre_peer_id_admin_endpoint(url)
                 .add_config_gen_peer(state.our_peer_info()?)
                 .await
                 .map_err(|_| ApiError::not_found("Unable to connect to the leader".to_string()))?;
@@ -193,7 +193,7 @@ impl ConfigGenApi {
 
         let consensus = match local.and_then(|local| local.leader_api_url) {
             Some(leader_url) => {
-                let client = DynGlobalApi::from_pre_peer_id_endpoint(leader_url.clone());
+                let client = DynGlobalApi::from_pre_peer_id_admin_endpoint(leader_url.clone());
                 let response = client.consensus_config_gen_params().await;
                 response
                     .map_err(|_| ApiError::not_found("Cannot get leader params".to_string()))?
@@ -233,7 +233,7 @@ impl ConfigGenApi {
             state.local.clone().and_then(|local| {
                 local
                     .leader_api_url
-                    .map(DynGlobalApi::from_pre_peer_id_endpoint)
+                    .map(DynGlobalApi::from_pre_peer_id_admin_endpoint)
             })
         };
 
@@ -458,7 +458,7 @@ impl ConfigGenApi {
             state.local.clone().and_then(|local| {
                 local
                     .leader_api_url
-                    .map(DynGlobalApi::from_pre_peer_id_endpoint)
+                    .map(DynGlobalApi::from_pre_peer_id_admin_endpoint)
             })
         };
 
@@ -993,7 +993,7 @@ mod tests {
 
             // our id doesn't really exist at this point
             let auth = ApiAuth(format!("password-{port}"));
-            let client = DynGlobalApi::from_pre_peer_id_endpoint(api_url);
+            let client = DynGlobalApi::from_pre_peer_id_admin_endpoint(api_url);
 
             (
                 TestConfigApi {

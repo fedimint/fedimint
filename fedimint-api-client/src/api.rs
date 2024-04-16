@@ -156,6 +156,13 @@ impl FederationError {
         }
     }
 
+    pub fn new_one_peer(peer_id: PeerId, error: PeerError) -> Self {
+        Self {
+            general: None,
+            peers: [(peer_id, error)].into_iter().collect(),
+        }
+    }
+
     /// Report any errors
     pub fn report_if_important(&self) {
         if let Some(error) = self.general.as_ref() {
@@ -239,6 +246,12 @@ pub trait IRawFederationApi: Debug + MaybeSend + MaybeSync {
     /// API call to the federation would be inconvenient.
     fn all_peers(&self) -> &BTreeSet<PeerId>;
 
+    /// PeerId of the Guardian node, if set
+    ///
+    /// This is for using Client in a "Admin" mode, making authenticated
+    /// calls to own `fedimintd` instance.
+    fn self_peer(&self) -> Option<PeerId>;
+
     fn with_module(&self, id: ModuleInstanceId) -> DynModuleApi;
 
     /// Make request to a specific federation peer by `peer_id`
@@ -285,6 +298,28 @@ pub trait FederationApiExt: IRawFederationApi {
         } else {
             request.await
         }
+    }
+
+    /// Like [`Self::request_single_peer`], but API more like
+    /// [`Self::request_with_strategy`].
+    async fn request_single_peer_federation<FedRet>(
+        &self,
+        timeout: Option<Duration>,
+        method: String,
+        params: ApiRequestErased,
+        peer_id: PeerId,
+    ) -> FederationResult<FedRet>
+    where
+        FedRet: serde::de::DeserializeOwned + Eq + Debug + Clone + MaybeSend,
+    {
+        Ok(self
+            .request_single_peer(timeout, method, params, peer_id)
+            .await
+            .map_err(PeerError::Rpc)
+            .and_then(|v| {
+                serde_json::from_value(v).map_err(|e| PeerError::ResponseDeserialization(e.into()))
+            })
+            .map_err(|e| FederationError::new_one_peer(peer_id, e))?)
     }
 
     /// Make an aggregate request to federation, using `strategy` to logically
@@ -421,14 +456,18 @@ pub trait FederationApiExt: IRawFederationApi {
     where
         Ret: serde::de::DeserializeOwned + Eq + Debug + Clone + MaybeSend,
     {
-        // We would never want to accidentally send our password to everyone
-        assert_eq!(
-            self.all_peers().len(),
-            1,
-            "attempted to broadcast admin password?!"
-        );
-        self.request_current_consensus(method.into(), params.with_auth(auth))
-            .await
+        let Some(self_peer_id) = self.self_peer() else {
+            return Err(FederationError::general(anyhow::format_err!(
+                "Admin peer_id not set"
+            )));
+        };
+        self.request_single_peer_federation(
+            None,
+            method.into(),
+            params.with_auth(auth),
+            self_peer_id,
+        )
+        .await
     }
 
     async fn request_admin_no_auth<Ret>(
@@ -473,11 +512,14 @@ impl AsRef<dyn IGlobalFederationApi + 'static> for DynGlobalApi {
 }
 
 impl DynGlobalApi {
-    pub fn from_pre_peer_id_endpoint(url: SafeUrl) -> Self {
+    pub fn from_pre_peer_id_admin_endpoint(url: SafeUrl) -> Self {
         // PeerIds are used only for informational purposes, but just in case, make a
         // big number so it stands out
-        GlobalFederationApiWithCache::new(WsFederationApi::new(vec![(PeerId::from(1024), url)]))
-            .into()
+        let peer_id = PeerId::from(1024);
+        GlobalFederationApiWithCache::new(
+            WsFederationApi::new(vec![(peer_id, url)]).with_self_peer_id(peer_id),
+        )
+        .into()
     }
 
     pub fn from_single_endpoint(peer: PeerId, url: SafeUrl) -> Self {
@@ -489,6 +531,13 @@ impl DynGlobalApi {
 
     pub fn from_config(config: &ClientConfig) -> Self {
         GlobalFederationApiWithCache::new(WsFederationApi::from_config(config)).into()
+    }
+
+    pub fn from_config_admin(config: &ClientConfig, self_peer_id: PeerId) -> Self {
+        GlobalFederationApiWithCache::new(
+            WsFederationApi::from_config(config).with_self_peer_id(self_peer_id),
+        )
+        .into()
     }
 
     pub fn from_invite_code(invite_code: &[InviteCode]) -> Self {
@@ -761,6 +810,10 @@ where
 {
     fn all_peers(&self) -> &BTreeSet<PeerId> {
         self.inner.all_peers()
+    }
+
+    fn self_peer(&self) -> Option<PeerId> {
+        self.inner.self_peer()
     }
 
     fn with_module(&self, id: ModuleInstanceId) -> DynModuleApi {
@@ -1053,6 +1106,7 @@ where
 #[derive(Debug, Clone)]
 pub struct WsFederationApi<C = WsClient> {
     peer_ids: BTreeSet<PeerId>,
+    self_peer_id: Option<PeerId>,
     peers: Arc<Vec<FederationPeer<C>>>,
     module_id: Option<ModuleInstanceId>,
 }
@@ -1182,11 +1236,16 @@ impl<C: JsonRpcClient + Debug + 'static> IRawFederationApi for WsFederationApi<C
         &self.peer_ids
     }
 
+    fn self_peer(&self) -> Option<PeerId> {
+        self.self_peer_id
+    }
+
     fn with_module(&self, id: ModuleInstanceId) -> DynModuleApi {
         WsFederationApi {
             peer_ids: self.peer_ids.clone(),
             peers: self.peers.clone(),
             module_id: Some(id),
+            self_peer_id: self.self_peer_id,
         }
         .into()
     }
@@ -1242,7 +1301,7 @@ impl JsonRpcClient for WsClient {
 impl WsFederationApi<WsClient> {
     /// Creates a new API client
     pub fn new(peers: Vec<(PeerId, SafeUrl)>) -> Self {
-        Self::new_with_client(peers)
+        Self::new_with_client(peers, None)
     }
 
     /// Creates a new API client from a client config
@@ -1255,6 +1314,13 @@ impl WsFederationApi<WsClient> {
                 .map(|(id, peer)| (*id, peer.url.clone()))
                 .collect(),
         )
+    }
+
+    pub fn with_self_peer_id(self, self_peer_id: PeerId) -> Self {
+        Self {
+            self_peer_id: Some(self_peer_id),
+            ..self
+        }
     }
 
     /// Creates a new API client from a invite code, assumes they are in peer
@@ -1278,9 +1344,10 @@ where
     }
 
     /// Creates a new API client
-    pub fn new_with_client(peers: Vec<(PeerId, SafeUrl)>) -> Self {
+    pub fn new_with_client(peers: Vec<(PeerId, SafeUrl)>, self_peer_id: Option<PeerId>) -> Self {
         WsFederationApi {
             peer_ids: peers.iter().map(|m| m.0).collect(),
+            self_peer_id,
             peers: Arc::new(
                 peers
                     .into_iter()

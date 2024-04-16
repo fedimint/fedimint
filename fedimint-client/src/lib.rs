@@ -2068,17 +2068,6 @@ impl ClientBuilder {
         Ok(client)
     }
 
-    fn admin_api_from_id(id: PeerId, cfg: &ClientConfig) -> anyhow::Result<DynGlobalApi> {
-        let url = cfg
-            .global
-            .api_endpoints
-            .get(&id)
-            .ok_or_else(|| anyhow::format_err!("Invalid admin peer_id: {id}"))?
-            .url
-            .clone();
-        Ok(DynGlobalApi::from_single_endpoint(id, url))
-    }
-
     /// Build a [`Client`] but do not start the executor
     async fn build(
         self,
@@ -2105,7 +2094,7 @@ impl ClientBuilder {
         let fed_id = config.calculate_federation_id();
         let db = self.db_no_decoders.with_decoders(decoders.clone());
         let api = if let Some(admin_creds) = self.admin_creds.as_ref() {
-            Self::admin_api_from_id(admin_creds.peer_id, &config)?
+            DynGlobalApi::from_config_admin(&config, admin_creds.peer_id)
         } else {
             DynGlobalApi::from_config(&config)
         };
