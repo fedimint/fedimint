@@ -17,7 +17,7 @@ pub mod config;
 pub const KIND: ModuleKind = ModuleKind::from_static_str("unknown");
 
 /// Modules are non-compatible with older versions
-pub const CONSENSUS_VERSION: ModuleConsensusVersion = ModuleConsensusVersion::new(0, 0);
+pub const MODULE_CONSENSUS_VERSION: ModuleConsensusVersion = ModuleConsensusVersion::new(0, 0);
 
 /// Non-transaction items that will be submitted to consensus
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable, Decodable)]
@@ -62,7 +62,7 @@ plugin_types_trait_impl_common!(
 pub struct UnknownCommonInit;
 
 impl CommonModuleInit for UnknownCommonInit {
-    const CONSENSUS_VERSION: ModuleConsensusVersion = CONSENSUS_VERSION;
+    const CONSENSUS_VERSION: ModuleConsensusVersion = MODULE_CONSENSUS_VERSION;
     const KIND: ModuleKind = KIND;
 
     type ClientConfig = UnknownClientConfig;

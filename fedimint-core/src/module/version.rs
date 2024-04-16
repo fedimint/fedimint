@@ -80,6 +80,9 @@ impl CoreConsensusVersion {
     }
 }
 
+/// Globally declared core consensus version
+pub const CORE_CONSENSUS_VERSION: CoreConsensusVersion = CoreConsensusVersion::new(2, 0);
+
 /// Consensus version of a specific module instance
 ///
 /// Any breaking change to the module's consensus rules require incrementing the

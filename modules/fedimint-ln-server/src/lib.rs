@@ -24,7 +24,7 @@ use fedimint_core::module::audit::Audit;
 use fedimint_core::module::{
     api_endpoint, ApiEndpoint, ApiEndpointContext, ApiVersion, CoreConsensusVersion, InputMeta,
     ModuleConsensusVersion, ModuleInit, PeerHandle, ServerModuleInit, ServerModuleInitArgs,
-    SupportedModuleApiVersions, TransactionItemAmount,
+    SupportedModuleApiVersions, TransactionItemAmount, CORE_CONSENSUS_VERSION,
 };
 use fedimint_core::server::DynServerModule;
 use fedimint_core::task::{sleep, TaskGroup};
@@ -48,6 +48,7 @@ use fedimint_ln_common::{
     LightningGatewayAnnouncement, LightningGatewayRegistration, LightningInput,
     LightningInputError, LightningModuleTypes, LightningOutput, LightningOutputError,
     LightningOutputOutcome, LightningOutputOutcomeV0, LightningOutputV0, RemoveGatewayRequest,
+    MODULE_CONSENSUS_VERSION,
 };
 use fedimint_server::config::distributedgen::PeerHandleOps;
 use futures::StreamExt;
@@ -189,12 +190,18 @@ impl ServerModuleInit for LightningInit {
     type Params = LightningGenParams;
 
     fn versions(&self, _core: CoreConsensusVersion) -> &[ModuleConsensusVersion] {
-        const MODULE_CONSENSUS_VERSION: ModuleConsensusVersion = ModuleConsensusVersion::new(0, 0);
         &[MODULE_CONSENSUS_VERSION]
     }
 
     fn supported_api_versions(&self) -> SupportedModuleApiVersions {
-        SupportedModuleApiVersions::from_raw((u32::MAX, 0), (0, 0), &[(0, 1)])
+        SupportedModuleApiVersions::from_raw(
+            (CORE_CONSENSUS_VERSION.major, CORE_CONSENSUS_VERSION.minor),
+            (
+                MODULE_CONSENSUS_VERSION.major,
+                MODULE_CONSENSUS_VERSION.minor,
+            ),
+            &[(0, 1)],
+        )
     }
 
     async fn init(&self, args: &ServerModuleInitArgs<Self>) -> anyhow::Result<DynServerModule> {

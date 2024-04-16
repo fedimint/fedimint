@@ -21,7 +21,7 @@ pub mod config;
 pub const KIND: ModuleKind = ModuleKind::from_static_str("meta");
 
 /// Modules are non-compatible with older versions
-pub const CONSENSUS_VERSION: ModuleConsensusVersion = ModuleConsensusVersion::new(0, 0);
+pub const MODULE_CONSENSUS_VERSION: ModuleConsensusVersion = ModuleConsensusVersion::new(0, 0);
 
 /// A key identifying a value in the meta module consensus
 ///
@@ -218,7 +218,7 @@ plugin_types_trait_impl_common!(
 pub struct MetaCommonInit;
 
 impl CommonModuleInit for MetaCommonInit {
-    const CONSENSUS_VERSION: ModuleConsensusVersion = CONSENSUS_VERSION;
+    const CONSENSUS_VERSION: ModuleConsensusVersion = MODULE_CONSENSUS_VERSION;
     const KIND: ModuleKind = KIND;
 
     type ClientConfig = MetaClientConfig;

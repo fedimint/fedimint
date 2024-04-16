@@ -12,6 +12,7 @@ use fedimint_core::module::audit::Audit;
 use fedimint_core::module::{
     ApiEndpoint, CoreConsensusVersion, InputMeta, ModuleConsensusVersion, ModuleInit, PeerHandle,
     ServerModuleInit, ServerModuleInitArgs, SupportedModuleApiVersions, TransactionItemAmount,
+    CORE_CONSENSUS_VERSION,
 };
 use fedimint_core::server::DynServerModule;
 use fedimint_core::{push_db_pair_items, OutPoint, PeerId, ServerModule};
@@ -21,7 +22,7 @@ use fedimint_empty_common::config::{
 };
 use fedimint_empty_common::{
     EmptyCommonInit, EmptyConsensusItem, EmptyInput, EmptyInputError, EmptyModuleTypes,
-    EmptyOutput, EmptyOutputError, EmptyOutputOutcome, CONSENSUS_VERSION,
+    EmptyOutput, EmptyOutputError, EmptyOutputOutcome, MODULE_CONSENSUS_VERSION,
 };
 use futures::StreamExt;
 use strum::IntoEnumIterator;
@@ -77,11 +78,18 @@ impl ServerModuleInit for EmptyInit {
 
     /// Returns the version of this module
     fn versions(&self, _core: CoreConsensusVersion) -> &[ModuleConsensusVersion] {
-        &[CONSENSUS_VERSION]
+        &[MODULE_CONSENSUS_VERSION]
     }
 
     fn supported_api_versions(&self) -> SupportedModuleApiVersions {
-        SupportedModuleApiVersions::from_raw((u32::MAX, 0), (0, 0), &[(0, 0)])
+        SupportedModuleApiVersions::from_raw(
+            (CORE_CONSENSUS_VERSION.major, CORE_CONSENSUS_VERSION.minor),
+            (
+                MODULE_CONSENSUS_VERSION.major,
+                MODULE_CONSENSUS_VERSION.minor,
+            ),
+            &[(0, 0)],
+        )
     }
 
     /// Initialize the module

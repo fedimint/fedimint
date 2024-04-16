@@ -16,7 +16,7 @@ pub mod config;
 pub mod common;
 
 pub const KIND: ModuleKind = ModuleKind::from_static_str("mint");
-const CONSENSUS_VERSION: ModuleConsensusVersion = ModuleConsensusVersion::new(0, 0);
+pub const MODULE_CONSENSUS_VERSION: ModuleConsensusVersion = ModuleConsensusVersion::new(2, 0);
 
 /// By default, the maximum notes per denomination when change-making for users
 pub const DEFAULT_MAX_NOTES_PER_DENOMINATION: u16 = 3;
@@ -101,7 +101,7 @@ pub struct BlindNonce(pub tbs::BlindedMessage);
 pub struct MintCommonInit;
 
 impl CommonModuleInit for MintCommonInit {
-    const CONSENSUS_VERSION: ModuleConsensusVersion = CONSENSUS_VERSION;
+    const CONSENSUS_VERSION: ModuleConsensusVersion = MODULE_CONSENSUS_VERSION;
     const KIND: ModuleKind = KIND;
 
     type ClientConfig = MintClientConfig;

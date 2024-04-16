@@ -23,7 +23,7 @@ pub mod tweakable;
 pub mod txoproof;
 
 pub const KIND: ModuleKind = ModuleKind::from_static_str("wallet");
-const CONSENSUS_VERSION: ModuleConsensusVersion = ModuleConsensusVersion::new(0, 0);
+pub const MODULE_CONSENSUS_VERSION: ModuleConsensusVersion = ModuleConsensusVersion::new(2, 0);
 
 pub const CONFIRMATION_TARGET: u16 = 10;
 
@@ -135,7 +135,7 @@ impl std::fmt::Display for WalletOutputOutcomeV0 {
 pub struct WalletCommonInit;
 
 impl CommonModuleInit for WalletCommonInit {
-    const CONSENSUS_VERSION: ModuleConsensusVersion = CONSENSUS_VERSION;
+    const CONSENSUS_VERSION: ModuleConsensusVersion = MODULE_CONSENSUS_VERSION;
     const KIND: ModuleKind = KIND;
 
     type ClientConfig = WalletClientConfig;
