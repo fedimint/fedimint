@@ -64,7 +64,10 @@ async fn peg_in<'a>(
     let (_proof, tx) = bitcoin
         .send_and_mine_block(
             &address,
-            bitcoin30_to_bitcoin29_amount(bsats(PEG_IN_AMOUNT_SATS)),
+            bitcoin30_to_bitcoin29_amount(
+                bsats(PEG_IN_AMOUNT_SATS)
+                    + bsats(wallet_module.get_fee_consensus().peg_in_abs.msats / 1000),
+            ),
         )
         .await;
     let height = dyn_bitcoin_rpc
@@ -607,6 +610,7 @@ fn build_wallet_server_configs(
                 network: bitcoin30_to_bitcoin29_network(bitcoin::Network::Regtest),
                 finality_delay: 10,
                 client_default_bitcoin_rpc: bitcoin_rpc.clone(),
+                fee_consensus: Default::default(),
             },
         })?,
     );

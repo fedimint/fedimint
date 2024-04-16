@@ -57,6 +57,7 @@ pub fn attach_default_module_init_params(
                     client_default_bitcoin_rpc: default_esplora_server(
                         bitcoin29_to_bitcoin30_network(network),
                     ),
+                    fee_consensus: Default::default(),
                 },
             },
         );

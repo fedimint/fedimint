@@ -1959,8 +1959,10 @@ pub async fn recoverytool_test(dev_fed: DevFed) -> Result<()> {
     let client = fed.new_joined_client("recoverytool-test-client").await?;
 
     let mut fed_utxos_sats = HashSet::from([12_345_000, 23_456_000, 34_567_000]);
+    let deposit_fees = fed.deposit_fees().await?.msats / 1000;
     for sats in &fed_utxos_sats {
-        fed.pegin_client(*sats, &client).await?;
+        // pegin_client automatically adds fees, so we need to counteract that
+        fed.pegin_client(*sats - deposit_fees, &client).await?;
     }
 
     // Initiate a withdrawal to verify the recoverytool recognizes change outputs

@@ -9,6 +9,7 @@ use std::{env, fs, iter};
 use anyhow::{anyhow, bail, Context, Result};
 use bitcoincore_rpc::bitcoin::Network;
 use fedimint_api_client::api::DynGlobalApi;
+use fedimint_client::module::ClientModule;
 use fedimint_core::admin_client::{
     ConfigGenConnectionsRequest, ConfigGenParamsRequest, ServerStatus,
 };
@@ -20,11 +21,12 @@ use fedimint_core::module::{ApiAuth, ModuleCommon};
 use fedimint_core::runtime::block_in_place;
 use fedimint_core::task::jit::JitTryAnyhow;
 use fedimint_core::util::SafeUrl;
-use fedimint_core::PeerId;
+use fedimint_core::{Amount, PeerId};
 use fedimint_logging::LOG_DEVIMINT;
 use fedimint_server::config::ConfigGenParams;
 use fedimint_testing::federation::local_config_gen_params;
 use fedimint_wallet_client::config::WalletClientConfig;
+use fedimint_wallet_client::WalletClientModule;
 use fedimintd::envs::FM_EXTRA_DKG_META_ENV;
 use fs_lock::FileLock;
 use futures::future::join_all;
@@ -287,6 +289,48 @@ impl Federation {
         load_from_file(&cfg_path)
     }
 
+    pub async fn module_client_config<M: ClientModule>(
+        &self,
+    ) -> Result<Option<<M::Common as ModuleCommon>::ClientConfig>> {
+        self.client_config()
+            .await?
+            .modules
+            .iter()
+            .find_map(|(module_instance_id, module_cfg)| {
+                if module_cfg.kind == M::kind() {
+                    let decoders = ModuleDecoderRegistry::new(vec![(
+                        *module_instance_id,
+                        M::kind(),
+                        M::decoder(),
+                    )]);
+                    Some(
+                        module_cfg
+                            .config
+                            .clone()
+                            .redecode_raw(&decoders)
+                            .expect("Decoding client cfg failed")
+                            .expect_decoded_ref()
+                            .as_any()
+                            .downcast_ref::<<M::Common as ModuleCommon>::ClientConfig>()
+                            .cloned()
+                            .context("Cast to module config failed"),
+                    )
+                } else {
+                    None
+                }
+            })
+            .transpose()
+    }
+
+    pub async fn deposit_fees(&self) -> Result<Amount> {
+        Ok(self
+            .module_client_config::<WalletClientModule>()
+            .await?
+            .context("No wallet module found")?
+            .fee_consensus
+            .peg_in_abs)
+    }
+
     /// Read the invite code from the client data dir
     pub fn invite_code(&self) -> Result<String> {
         let data_dir: PathBuf = env::var(FM_CLIENT_DIR_ENV)?.parse()?;
@@ -437,11 +481,20 @@ impl Federation {
     }
 
     pub async fn pegin_client(&self, amount: u64, client: &Client) -> Result<()> {
-        info!(amount, "Pegging-in client funds");
+        let deposit_fees_msat = self.deposit_fees().await?.msats;
+        assert_eq!(
+            deposit_fees_msat % 1000,
+            0,
+            "Deposit fees expected to be whole sats in test suite"
+        );
+        let deposit_fees = deposit_fees_msat / 1000;
+        info!(amount, deposit_fees, "Pegging-in client funds");
 
         let (address, operation_id) = client.get_deposit_addr().await?;
 
-        self.bitcoind.send_to(address, amount).await?;
+        self.bitcoind
+            .send_to(address, amount + deposit_fees)
+            .await?;
         self.bitcoind.mine_blocks(21).await?;
 
         client.await_deposit(&operation_id).await?;
@@ -449,10 +502,19 @@ impl Federation {
     }
 
     pub async fn pegin_gateway(&self, amount: u64, gw: &super::gatewayd::Gatewayd) -> Result<()> {
-        info!(amount, "Pegging-in gateway funds");
+        let deposit_fees_msat = self.deposit_fees().await?.msats;
+        assert_eq!(
+            deposit_fees_msat % 1000,
+            0,
+            "Deposit fees expected to be whole sats in test suite"
+        );
+        let deposit_fees = deposit_fees_msat / 1000;
+        info!(amount, deposit_fees, "Pegging-in gateway funds");
         let fed_id = self.calculate_federation_id().await;
         let pegin_addr = gw.get_pegin_addr(&fed_id).await?;
-        self.bitcoind.send_to(pegin_addr, amount).await?;
+        self.bitcoind
+            .send_to(pegin_addr, amount + deposit_fees)
+            .await?;
         self.bitcoind.mine_blocks(21).await?;
         poll("gateway pegin", || async {
             let gateway_balance = cmd!(gw, "balance", "--federation-id={fed_id}")
