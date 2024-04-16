@@ -302,9 +302,14 @@ impl LightningPayFunded {
         while fedimint_core::time::now() < deadline {
             match Self::try_gateway_pay_invoice(gateway.clone(), payload.clone()).await {
                 Ok(preimage) => return Ok(preimage),
-                Err(e) => {
-                    warn!("Error while trying to reach gateway: {e}");
-                    last_error = Some(e);
+                Err(error) => {
+                    warn!(
+                        ?error,
+                        ?payload,
+                        ?gateway,
+                        "Error while trying to reach gateway"
+                    );
+                    last_error = Some(error);
                     sleep(RETRY_DELAY).await;
                 }
             }
