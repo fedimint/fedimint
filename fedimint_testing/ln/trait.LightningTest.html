@@ -3,7 +3,7 @@
     // Required methods
     fn <a href="#tymethod.invoice" class="fn">invoice</a>&lt;'life0, 'async_trait&gt;(
         &amp;'life0 self,
-        amount: <a class="struct" href="../../fedimint_core/struct.Amount.html" title="struct fedimint_core::Amount">Amount</a>,
+        amount: Amount,
         expiry_time: <a class="enum" href="https://doc.rust-lang.org/nightly/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.u64.html">u64</a>&gt;
     ) -&gt; <a class="struct" href="https://doc.rust-lang.org/nightly/core/pin/struct.Pin.html" title="struct core::pin::Pin">Pin</a>&lt;<a class="struct" href="https://doc.rust-lang.org/nightly/alloc/boxed/struct.Box.html" title="struct alloc::boxed::Box">Box</a>&lt;dyn <a class="trait" href="https://doc.rust-lang.org/nightly/core/future/future/trait.Future.html" title="trait core::future::future::Future">Future</a>&lt;Output = <a class="type" href="../../ln_gateway/type.Result.html" title="type ln_gateway::Result">Result</a>&lt;Bolt11Invoice&gt;&gt; + <a class="trait" href="https://doc.rust-lang.org/nightly/core/marker/trait.Send.html" title="trait core::marker::Send">Send</a> + 'async_trait&gt;&gt;
        <span class="where">where Self: 'async_trait,
@@ -15,12 +15,12 @@
     // Provided method
     fn <a href="#method.unpayable_invoice" class="fn">unpayable_invoice</a>(
         &amp;self,
-        amount: <a class="struct" href="../../fedimint_core/struct.Amount.html" title="struct fedimint_core::Amount">Amount</a>,
+        amount: Amount,
         expiry_time: <a class="enum" href="https://doc.rust-lang.org/nightly/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.u64.html">u64</a>&gt;
     ) -&gt; Bolt11Invoice { ... }
 }</code></pre><h2 id="required-methods" class="section-header">Required Methods<a href="#required-methods" class="anchor">§</a></h2><div class="methods"><details class="toggle method-toggle" open><summary><section id="tymethod.invoice" class="method"><a class="src rightside" href="../../src/fedimint_testing/ln/mod.rs.html#23-27">source</a><h4 class="code-header">fn <a href="#tymethod.invoice" class="fn">invoice</a>&lt;'life0, 'async_trait&gt;(
     &amp;'life0 self,
-    amount: <a class="struct" href="../../fedimint_core/struct.Amount.html" title="struct fedimint_core::Amount">Amount</a>,
+    amount: Amount,
     expiry_time: <a class="enum" href="https://doc.rust-lang.org/nightly/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.u64.html">u64</a>&gt;
 ) -&gt; <a class="struct" href="https://doc.rust-lang.org/nightly/core/pin/struct.Pin.html" title="struct core::pin::Pin">Pin</a>&lt;<a class="struct" href="https://doc.rust-lang.org/nightly/alloc/boxed/struct.Box.html" title="struct alloc::boxed::Box">Box</a>&lt;dyn <a class="trait" href="https://doc.rust-lang.org/nightly/core/future/future/trait.Future.html" title="trait core::future::future::Future">Future</a>&lt;Output = <a class="type" href="../../ln_gateway/type.Result.html" title="type ln_gateway::Result">Result</a>&lt;Bolt11Invoice&gt;&gt; + <a class="trait" href="https://doc.rust-lang.org/nightly/core/marker/trait.Send.html" title="trait core::marker::Send">Send</a> + 'async_trait&gt;&gt;<div class="where">where
     Self: 'async_trait,
@@ -28,7 +28,7 @@
 </div></details><details class="toggle method-toggle" open><summary><section id="tymethod.is_shared" class="method"><a class="src rightside" href="../../src/fedimint_testing/ln/mod.rs.html#56">source</a><h4 class="code-header">fn <a href="#tymethod.is_shared" class="fn">is_shared</a>(&amp;self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.bool.html">bool</a></h4></section></summary><div class="docblock"><p>Is this a LN instance shared with other tests</p>
 </div></details><section id="tymethod.listening_address" class="method"><a class="src rightside" href="../../src/fedimint_testing/ln/mod.rs.html#58">source</a><h4 class="code-header">fn <a href="#tymethod.listening_address" class="fn">listening_address</a>(&amp;self) -&gt; <a class="struct" href="https://doc.rust-lang.org/nightly/alloc/string/struct.String.html" title="struct alloc::string::String">String</a></h4></section><section id="tymethod.lightning_node_type" class="method"><a class="src rightside" href="../../src/fedimint_testing/ln/mod.rs.html#60">source</a><h4 class="code-header">fn <a href="#tymethod.lightning_node_type" class="fn">lightning_node_type</a>(&amp;self) -&gt; <a class="enum" href="../gateway/enum.LightningNodeType.html" title="enum fedimint_testing::gateway::LightningNodeType">LightningNodeType</a></h4></section></div><h2 id="provided-methods" class="section-header">Provided Methods<a href="#provided-methods" class="anchor">§</a></h2><div class="methods"><details class="toggle method-toggle" open><summary><section id="method.unpayable_invoice" class="method"><a class="src rightside" href="../../src/fedimint_testing/ln/mod.rs.html#33-53">source</a><h4 class="code-header">fn <a href="#method.unpayable_invoice" class="fn">unpayable_invoice</a>(
     &amp;self,
-    amount: <a class="struct" href="../../fedimint_core/struct.Amount.html" title="struct fedimint_core::Amount">Amount</a>,
+    amount: Amount,
     expiry_time: <a class="enum" href="https://doc.rust-lang.org/nightly/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.u64.html">u64</a>&gt;
 ) -&gt; Bolt11Invoice</h4></section></summary><div class="docblock"><p>Creates an invoice that is not payable</p>
 <ul>
