@@ -5,8 +5,8 @@ use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::time::Duration;
 
-use anyhow::format_err;
-use clap::Parser;
+use anyhow::{format_err, Context};
+use clap::{Parser, Subcommand};
 use fedimint_core::admin_client::ConfigGenParamsRequest;
 use fedimint_core::bitcoin_migration::bitcoin30_to_bitcoin29_network;
 use fedimint_core::config::{
@@ -15,7 +15,7 @@ use fedimint_core::config::{
 use fedimint_core::core::ModuleKind;
 use fedimint_core::db::Database;
 use fedimint_core::envs::{is_env_var_set, BitcoinRpcConfig, FM_USE_UNKNOWN_MODULE_ENV};
-use fedimint_core::module::ServerModuleInit;
+use fedimint_core::module::{ServerApiVersionsSummary, ServerDbVersionsSummary, ServerModuleInit};
 use fedimint_core::task::{sleep, TaskGroup};
 use fedimint_core::timing;
 use fedimint_core::util::{handle_version_hash_command, write_overwrite, SafeUrl};
@@ -29,6 +29,7 @@ use fedimint_mint_server::common::config::{MintGenParams, MintGenParamsConsensus
 use fedimint_mint_server::MintInit;
 use fedimint_server::config::api::ConfigGenSettings;
 use fedimint_server::config::io::{DB_FILE, PLAINTEXT_PASSWORD};
+use fedimint_server::config::ServerConfig;
 use fedimint_server::FedimintServer;
 use fedimint_unknown_common::config::UnknownGenParams;
 use fedimint_unknown_server::UnknownInit;
@@ -56,7 +57,7 @@ const SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(10);
 pub struct ServerOpts {
     /// Path to folder containing federation config files
     #[arg(long = "data-dir", env = FM_DATA_DIR_ENV)]
-    pub data_dir: PathBuf,
+    pub data_dir: Option<PathBuf>,
     /// Password to encrypt sensitive config files
     // TODO: should probably never send password to the server directly, rather send the hash via
     // the API
@@ -95,6 +96,24 @@ pub struct ServerOpts {
     /// `key1=value1,key2=value,...`)
     #[arg(long, env = FM_EXTRA_DKG_META_ENV, value_parser = parse_map, default_value="")]
     extra_dkg_meta: BTreeMap<String, String>,
+
+    #[clap(subcommand)]
+    subcommand: Option<ServerSubcommand>,
+}
+
+#[derive(Subcommand)]
+enum ServerSubcommand {
+    /// Development-related commands
+    #[clap(subcommand)]
+    Dev(DevSubcommand),
+}
+
+#[derive(Subcommand)]
+enum DevSubcommand {
+    /// List supported server API versions and exit
+    ListApiVersions,
+    /// List supported server database versions and exit
+    ListDbVersions,
 }
 
 fn parse_map(s: &str) -> anyhow::Result<BTreeMap<String, String>> {
@@ -174,6 +193,7 @@ impl Fedimintd {
             .set(fedimint_core::time::duration_since_epoch().as_secs() as i64);
 
         let opts: ServerOpts = ServerOpts::parse();
+
         TracingSetup::default()
             .tokio_console_bind(opts.tokio_console_bind)
             .with_jaeger(opts.with_telemetry)
@@ -285,6 +305,26 @@ impl Fedimintd {
 
     /// Block thread and run a Fedimintd server
     pub async fn run(self) -> ! {
+        // handle optional subcommand
+        if let Some(subcommand) = &self.opts.subcommand {
+            match subcommand {
+                ServerSubcommand::Dev(DevSubcommand::ListApiVersions) => {
+                    let api_versions = self.get_server_api_versions();
+                    let api_versions = serde_json::to_string_pretty(&api_versions)
+                        .expect("API versions struct is serializable");
+                    println!("{api_versions}");
+                    std::process::exit(0);
+                }
+                ServerSubcommand::Dev(DevSubcommand::ListDbVersions) => {
+                    let db_versions = self.get_server_db_versions();
+                    let db_versions = serde_json::to_string_pretty(&db_versions)
+                        .expect("API versions struct is serializable");
+                    println!("{db_versions}");
+                    std::process::exit(0);
+                }
+            }
+        }
+
         let root_task_group = TaskGroup::new();
         root_task_group.install_kill_handler();
 
@@ -349,6 +389,44 @@ impl Fedimintd {
         // Should we ever shut down without an error code?
         std::process::exit(-1);
     }
+
+    fn get_server_api_versions(&self) -> ServerApiVersionsSummary {
+        ServerApiVersionsSummary {
+            core: ServerConfig::supported_api_versions().api,
+            modules: self
+                .server_gens
+                .kinds()
+                .into_iter()
+                .map(|module_kind| {
+                    self.server_gens
+                        .get(&module_kind)
+                        .expect("module is present")
+                })
+                .map(|module_init| {
+                    (
+                        module_init.module_kind(),
+                        module_init.supported_api_versions().api,
+                    )
+                })
+                .collect(),
+        }
+    }
+
+    fn get_server_db_versions(&self) -> ServerDbVersionsSummary {
+        ServerDbVersionsSummary {
+            modules: self
+                .server_gens
+                .kinds()
+                .into_iter()
+                .map(|module_kind| {
+                    self.server_gens
+                        .get(&module_kind)
+                        .expect("module is present")
+                })
+                .map(|module_init| (module_init.module_kind(), module_init.database_version()))
+                .collect(),
+        }
+    }
 }
 
 async fn run(
@@ -366,11 +444,13 @@ async fn run(
         });
     }
 
+    let data_dir = opts.data_dir.context("data-dir option is not present")?;
+
     // TODO: Fedimintd should use the config gen API
     // on each run we want to pass the currently passed password, so we need to
     // overwrite
     if let Some(password) = opts.password {
-        write_overwrite(opts.data_dir.join(PLAINTEXT_PASSWORD), password)?;
+        write_overwrite(data_dir.join(PLAINTEXT_PASSWORD), password)?;
     };
     let default_params = ConfigGenParamsRequest {
         meta: opts.extra_dkg_meta.clone(),
@@ -389,11 +469,11 @@ async fn run(
     };
 
     let db = Database::new(
-        fedimint_rocksdb::RocksDb::open(opts.data_dir.join(DB_FILE))?,
+        fedimint_rocksdb::RocksDb::open(data_dir.join(DB_FILE))?,
         Default::default(),
     );
 
-    FedimintServer::new(opts.data_dir, settings, db, version_hash)
+    FedimintServer::new(data_dir, settings, db, version_hash)
         .run(&module_inits, task_group.clone())
         .await?;
 
