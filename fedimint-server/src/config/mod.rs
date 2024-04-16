@@ -18,7 +18,7 @@ use fedimint_core::core::{ModuleInstanceId, ModuleKind, MODULE_INSTANCE_ID_GLOBA
 use fedimint_core::invite_code::InviteCode;
 use fedimint_core::module::{
     ApiAuth, ApiVersion, CoreConsensusVersion, DynServerModuleInit, MultiApiVersion, PeerHandle,
-    SupportedApiVersionsSummary, SupportedCoreApiVersions,
+    SupportedApiVersionsSummary, SupportedCoreApiVersions, CORE_CONSENSUS_VERSION,
 };
 use fedimint_core::net::peers::{IMuxPeerConnections, IPeerConnections, PeerConnections};
 use fedimint_core::task::{timeout, Cancelled, Elapsed, TaskGroup};
@@ -203,8 +203,6 @@ impl ServerConfigConsensus {
         Ok(client)
     }
 }
-
-pub const CORE_CONSENSUS_VERSION: CoreConsensusVersion = CoreConsensusVersion::new(2, 0);
 
 impl ServerConfig {
     /// Api versions supported by this server

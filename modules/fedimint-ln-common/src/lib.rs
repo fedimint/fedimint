@@ -45,7 +45,7 @@ use crate::contracts::{Contract, ContractId, ContractOutcome, Preimage, Preimage
 use crate::route_hints::RouteHint;
 
 pub const KIND: ModuleKind = ModuleKind::from_static_str("ln");
-pub const CONSENSUS_VERSION: ModuleConsensusVersion = ModuleConsensusVersion::new(2, 0);
+pub const MODULE_CONSENSUS_VERSION: ModuleConsensusVersion = ModuleConsensusVersion::new(2, 0);
 
 extensible_associated_module_type!(
     LightningInput,
@@ -393,7 +393,7 @@ impl std::fmt::Display for LightningConsensusItem {
 pub struct LightningCommonInit;
 
 impl CommonModuleInit for LightningCommonInit {
-    const CONSENSUS_VERSION: ModuleConsensusVersion = CONSENSUS_VERSION;
+    const CONSENSUS_VERSION: ModuleConsensusVersion = MODULE_CONSENSUS_VERSION;
     const KIND: ModuleKind = KIND;
 
     type ClientConfig = LightningClientConfig;

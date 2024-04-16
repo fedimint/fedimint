@@ -12,6 +12,7 @@ use fedimint_core::module::audit::Audit;
 use fedimint_core::module::{
     ApiEndpoint, CoreConsensusVersion, InputMeta, ModuleConsensusVersion, ModuleInit, PeerHandle,
     ServerModuleInit, ServerModuleInitArgs, SupportedModuleApiVersions, TransactionItemAmount,
+    CORE_CONSENSUS_VERSION,
 };
 use fedimint_core::server::DynServerModule;
 use fedimint_core::{OutPoint, PeerId, ServerModule};
@@ -22,7 +23,7 @@ use fedimint_unknown_common::config::{
 };
 use fedimint_unknown_common::{
     UnknownCommonInit, UnknownConsensusItem, UnknownInput, UnknownInputError, UnknownModuleTypes,
-    UnknownOutput, UnknownOutputError, UnknownOutputOutcome, CONSENSUS_VERSION,
+    UnknownOutput, UnknownOutputError, UnknownOutputOutcome, MODULE_CONSENSUS_VERSION,
 };
 pub mod db;
 
@@ -52,11 +53,18 @@ impl ServerModuleInit for UnknownInit {
 
     /// Returns the version of this module
     fn versions(&self, _core: CoreConsensusVersion) -> &[ModuleConsensusVersion] {
-        &[CONSENSUS_VERSION]
+        &[MODULE_CONSENSUS_VERSION]
     }
 
     fn supported_api_versions(&self) -> SupportedModuleApiVersions {
-        SupportedModuleApiVersions::from_raw((2, 0), (0, 0), &[(0, 0)])
+        SupportedModuleApiVersions::from_raw(
+            (CORE_CONSENSUS_VERSION.major, CORE_CONSENSUS_VERSION.minor),
+            (
+                MODULE_CONSENSUS_VERSION.major,
+                MODULE_CONSENSUS_VERSION.minor,
+            ),
+            &[(0, 0)],
+        )
     }
 
     /// Initialize the module
