@@ -44,7 +44,7 @@ bls12_381 = { version = "0.7.1", features = [ "zeroize", "groups" ] }
 ff = "0.12.1"
 group = "0.12.1"
 rand_chacha = "0.3.1"
-tpe = { package = "fedimint-tpe", version = "0.4.0-alpha", path = "../../crypto/tpe" }
+tpe = { package = "fedimint-tpe", version = "=0.4.0-alpha", path = "../../crypto/tpe" }
 
 [dev-dependencies]
 tokio = {version = "1.26.0", features = [ "full" ] }
