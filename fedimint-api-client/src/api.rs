@@ -50,6 +50,7 @@ use fedimint_core::{
 use fedimint_logging::LOG_CLIENT_NET_API;
 use futures::stream::FuturesUnordered;
 use futures::{Future, StreamExt};
+use itertools::Itertools;
 use jsonrpsee_core::client::{ClientT, Error as JsonRpcClientError};
 #[cfg(target_family = "wasm")]
 use jsonrpsee_wasm_client::{Client as WsClient, WasmClientBuilder as WsClientBuilder};
@@ -567,8 +568,11 @@ impl DynGlobalApi {
         .into()
     }
 
-    pub fn from_invite_code(invite_code: &[InviteCode]) -> Self {
-        GlobalFederationApiWithCache::new(WsFederationApi::from_invite_code(invite_code)).into()
+    pub fn from_invite_code(invite_code: &InviteCode) -> Self {
+        GlobalFederationApiWithCache::new(WsFederationApi::new(
+            invite_code.peers().into_iter().collect_vec(),
+        ))
+        .into()
     }
 
     pub async fn await_output_outcome<R>(
@@ -1348,17 +1352,6 @@ impl WsFederationApi<WsClient> {
             self_peer_id: Some(self_peer_id),
             ..self
         }
-    }
-
-    /// Creates a new API client from a invite code, assumes they are in peer
-    /// id order
-    pub fn from_invite_code(info: &[InviteCode]) -> Self {
-        Self::new(
-            info.iter()
-                .enumerate()
-                .map(|(id, connect)| (PeerId::from(id as u16), connect.url()))
-                .collect(),
-        )
     }
 }
 

@@ -1,7 +1,7 @@
 use std::time::Duration;
 
 use anyhow::{bail, Context as _};
-use api::{FederationApiExt as _, WsFederationApi};
+use api::{DynGlobalApi, FederationApiExt as _, WsFederationApi};
 use fedimint_core::config::ClientConfig;
 use fedimint_core::encoding::Encodable as _;
 use fedimint_core::endpoint_constants::CLIENT_CONFIG_ENDPOINT;
@@ -49,7 +49,7 @@ pub async fn try_download_client_config(invite_code: &InviteCode) -> anyhow::Res
         1,
     );
 
-    let api_endpoints = WsFederationApi::from_invite_code(&[invite_code.clone()])
+    let api_endpoints = DynGlobalApi::from_invite_code(invite_code)
         .request_with_strategy(
             query_strategy,
             CLIENT_CONFIG_ENDPOINT.to_owned(),
