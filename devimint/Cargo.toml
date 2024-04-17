@@ -21,7 +21,6 @@ fedimint-aead = { path = "../crypto/aead" }
 fedimintd = { path = "../fedimintd" }
 fedimint-core = { workspace = true }
 fedimint-api-client = { workspace = true }
-fedimint-cli  = { path = "../fedimint-cli" }
 fedimint-client  = { path = "../fedimint-client" }
 fedimint-bitcoind = { path = "../fedimint-bitcoind" }
 fedimint-logging = { path = "../fedimint-logging" }
