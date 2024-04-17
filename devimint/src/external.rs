@@ -547,6 +547,22 @@ pub async fn open_channel(
     cln: &Lightningd,
     lnd: &Lnd,
 ) -> Result<()> {
+    lnd.client
+        .lock()
+        .await
+        .lightning()
+        .update_channel_policy(PolicyUpdateRequest {
+            min_htlc_msat: 1,
+            scope: Some(Scope::Global(true)),
+            time_lock_delta: 80,
+            base_fee_msat: 0,
+            fee_rate: 0.0,
+            fee_rate_ppm: 0,
+            max_htlc_msat: 10000000000,
+            min_htlc_msat_specified: true,
+        })
+        .await?;
+
     debug!(target: LOG_DEVIMINT, "Await block ln nodes block processing");
     tokio::try_join!(cln.await_block_processing(), lnd.await_block_processing())?;
     debug!(target: LOG_DEVIMINT, "Opening LN channel between the nodes...");
@@ -640,22 +656,6 @@ pub async fn open_channel(
         Err(ControlFlow::Continue(anyhow!("channel not found")))
     })
     .await?;
-
-    lnd.client
-        .lock()
-        .await
-        .lightning()
-        .update_channel_policy(PolicyUpdateRequest {
-            min_htlc_msat: 1,
-            scope: Some(Scope::Global(true)),
-            time_lock_delta: 80,
-            base_fee_msat: 0,
-            fee_rate: 0.0,
-            fee_rate_ppm: 0,
-            max_htlc_msat: 10000000000,
-            min_htlc_msat_specified: true,
-        })
-        .await?;
 
     Ok(())
 }
