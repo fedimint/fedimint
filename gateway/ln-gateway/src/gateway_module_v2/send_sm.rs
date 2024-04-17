@@ -36,7 +36,7 @@ pub struct SendSMCommon {
     pub operation_id: OperationId,
     pub contract: OutgoingContract,
     pub max_delay: u64,
-    pub max_fee_msat: u64,
+    pub min_contract_amount: Amount,
     pub invoice: Bolt11Invoice,
     pub claim_keypair: KeyPair,
 }
@@ -90,9 +90,9 @@ impl State for SendStateMachine {
                     Self::send_payment(
                         context.clone(),
                         self.common.max_delay,
-                        self.common.max_fee_msat,
+                        self.common.min_contract_amount,
                         self.common.invoice.clone(),
-                        self.common.contract.amount,
+                        self.common.contract.clone(),
                     ),
                     move |dbtx, result, old_state| {
                         Box::pin(Self::transition_send_payment(
@@ -122,9 +122,9 @@ impl SendStateMachine {
     async fn send_payment(
         context: GatewayClientContextV2,
         max_delay: u64,
-        invoice_msats: u64,
+        min_contract_amount: Amount,
         invoice: Bolt11Invoice,
-        contract_amount: Amount,
+        contract: OutgoingContract,
     ) -> Result<[u8; 32], Cancelled> {
         // The following three checks may fail in edge cases since they have inherent
         // timing assumptions. Therefore, they may only be checked after we have created
@@ -137,17 +137,11 @@ impl SendStateMachine {
             return Err(Cancelled::TimeoutTooClose);
         }
 
-        let min_contract_amount = context
-            .gateway
-            .payment_fees_v2()
-            .send_minimum
-            .add_fee(invoice_msats);
-
-        if contract_amount < min_contract_amount {
+        if contract.amount < min_contract_amount {
             return Err(Cancelled::Underfunded);
         }
 
-        let max_fee_msat = (contract_amount - min_contract_amount).msats;
+        let max_fee_msat = (contract.amount - min_contract_amount).msats;
 
         let lightning_context = context
             .gateway
