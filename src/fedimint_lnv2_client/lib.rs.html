@@ -886,6 +886,12 @@
 <a href="#884" id="884">884</a>
 <a href="#885" id="885">885</a>
 <a href="#886" id="886">886</a>
+<a href="#887" id="887">887</a>
+<a href="#888" id="888">888</a>
+<a href="#889" id="889">889</a>
+<a href="#890" id="890">890</a>
+<a href="#891" id="891">891</a>
+<a href="#892" id="892">892</a>
 </pre></div><pre class="rust"><code><span class="kw">pub mod </span>api;
 <span class="attr">#[cfg(feature = <span class="string">"cli"</span>)]
 </span><span class="kw">mod </span>cli;
@@ -1430,7 +1436,7 @@
         description: String,
         max_payment_fee: PaymentFee,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;(Bolt11Invoice, OperationId), FetchInvoiceError&gt; {
-        <span class="kw">let </span>(contract, invoice) = <span class="self">self
+        <span class="kw">let </span>(contract, .., invoice) = <span class="self">self
             </span>.create_contract_and_fetch_invoice_internal(
                 <span class="self">self</span>.keypair.public_key(),
                 gateway_api,
@@ -1454,7 +1460,7 @@
         recipient_static_pk: PublicKey,
         gateway_api: SafeUrl,
         invoice_amount: Amount,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;(IncomingContract, Bolt11Invoice), FetchInvoiceError&gt; {
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;(IncomingContract, [u8; <span class="number">32</span>], Bolt11Invoice), FetchInvoiceError&gt; {
         <span class="self">self</span>.create_contract_and_fetch_invoice_internal(
             recipient_static_pk,
             gateway_api,
@@ -1474,7 +1480,7 @@
         expiry_time: u32,
         description: String,
         payment_fee_limit: PaymentFee,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;(IncomingContract, Bolt11Invoice), FetchInvoiceError&gt; {
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;(IncomingContract, [u8; <span class="number">32</span>], Bolt11Invoice), FetchInvoiceError&gt; {
         <span class="kw">let </span>(ephemeral_tweak, ephemeral_pk) = generate_ephemeral_tweak(recipient_static_pk);
 
         <span class="kw">let </span>encryption_seed = ephemeral_tweak
@@ -1546,7 +1552,7 @@
             <span class="kw">return </span><span class="prelude-val">Err</span>(FetchInvoiceError::InvalidInvoiceAmount);
         }
 
-        <span class="prelude-val">Ok</span>((contract, invoice))
+        <span class="prelude-val">Ok</span>((contract, preimage, invoice))
     }
 
     <span class="kw">async fn </span>fetch_invoice(
@@ -1569,6 +1575,12 @@
             .<span class="kw">await
             </span>.map_err(|e| GatewayError::InvalidJsonResponse(e.to_string()))
     }
+
+    <span class="kw">pub async fn </span>await_incoming_contract(<span class="kw-2">&amp;</span><span class="self">self</span>, contract: IncomingContract) -&gt; bool {
+        <span class="self">self</span>.module_api
+            .await_incoming_contract(<span class="kw-2">&amp;</span>contract.contract_id(), contract.commitment.expiration)
+            .<span class="kw">await
+    </span>}
 
     <span class="kw">pub async fn </span>receive_external_contract(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
