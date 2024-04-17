@@ -1238,7 +1238,7 @@
             process,
         };
         <span class="comment">// wait for lnd rpc to be active
-        </span>poll_with_timeout(<span class="string">"lnd_startup"</span>, Duration::from_secs(<span class="number">15</span>), || <span class="kw">async </span>{
+        </span>poll(<span class="string">"lnd_startup"</span>, || <span class="kw">async </span>{
             this.pub_key().<span class="kw">await</span>.map_err(ControlFlow::Continue)
         })
         .<span class="kw">await</span><span class="question-mark">?</span>;
