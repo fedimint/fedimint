@@ -542,7 +542,7 @@ impl LightningClientModule {
         description: String,
         max_payment_fee: PaymentFee,
     ) -> Result<(Bolt11Invoice, OperationId), FetchInvoiceError> {
-        let (contract, invoice) = self
+        let (contract, .., invoice) = self
             .create_contract_and_fetch_invoice_internal(
                 self.keypair.public_key(),
                 gateway_api,
@@ -566,7 +566,7 @@ impl LightningClientModule {
         recipient_static_pk: PublicKey,
         gateway_api: SafeUrl,
         invoice_amount: Amount,
-    ) -> Result<(IncomingContract, Bolt11Invoice), FetchInvoiceError> {
+    ) -> Result<(IncomingContract, [u8; 32], Bolt11Invoice), FetchInvoiceError> {
         self.create_contract_and_fetch_invoice_internal(
             recipient_static_pk,
             gateway_api,
@@ -586,7 +586,7 @@ impl LightningClientModule {
         expiry_time: u32,
         description: String,
         payment_fee_limit: PaymentFee,
-    ) -> Result<(IncomingContract, Bolt11Invoice), FetchInvoiceError> {
+    ) -> Result<(IncomingContract, [u8; 32], Bolt11Invoice), FetchInvoiceError> {
         let (ephemeral_tweak, ephemeral_pk) = generate_ephemeral_tweak(recipient_static_pk);
 
         let encryption_seed = ephemeral_tweak
@@ -658,7 +658,7 @@ impl LightningClientModule {
             return Err(FetchInvoiceError::InvalidInvoiceAmount);
         }
 
-        Ok((contract, invoice))
+        Ok((contract, preimage, invoice))
     }
 
     async fn fetch_invoice(
@@ -680,6 +680,12 @@ impl LightningClientModule {
             .json::<Result<Bolt11Invoice, String>>()
             .await
             .map_err(|e| GatewayError::InvalidJsonResponse(e.to_string()))
+    }
+
+    pub async fn await_incoming_contract(&self, contract: IncomingContract) -> bool {
+        self.module_api
+            .await_incoming_contract(&contract.contract_id(), contract.commitment.expiration)
+            .await
     }
 
     pub async fn receive_external_contract(
