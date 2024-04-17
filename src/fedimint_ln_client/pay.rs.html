@@ -660,6 +660,11 @@
 <a href="#658" id="658">658</a>
 <a href="#659" id="659">659</a>
 <a href="#660" id="660">660</a>
+<a href="#661" id="661">661</a>
+<a href="#662" id="662">662</a>
+<a href="#663" id="663">663</a>
+<a href="#664" id="664">664</a>
+<a href="#665" id="665">665</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
 
@@ -964,9 +969,14 @@
         <span class="kw">while </span>fedimint_core::time::now() &lt; deadline {
             <span class="kw">match </span><span class="self">Self</span>::try_gateway_pay_invoice(gateway.clone(), payload.clone()).<span class="kw">await </span>{
                 <span class="prelude-val">Ok</span>(preimage) =&gt; <span class="kw">return </span><span class="prelude-val">Ok</span>(preimage),
-                <span class="prelude-val">Err</span>(e) =&gt; {
-                    <span class="macro">warn!</span>(<span class="string">"Error while trying to reach gateway: {e}"</span>);
-                    last_error = <span class="prelude-val">Some</span>(e);
+                <span class="prelude-val">Err</span>(error) =&gt; {
+                    <span class="macro">warn!</span>(
+                        <span class="question-mark">?</span>error,
+                        <span class="question-mark">?</span>payload,
+                        <span class="question-mark">?</span>gateway,
+                        <span class="string">"Error while trying to reach gateway"
+                    </span>);
+                    last_error = <span class="prelude-val">Some</span>(error);
                     sleep(RETRY_DELAY).<span class="kw">await</span>;
                 }
             }

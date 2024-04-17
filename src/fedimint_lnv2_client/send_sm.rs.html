@@ -302,6 +302,27 @@
 <a href="#300" id="300">300</a>
 <a href="#301" id="301">301</a>
 <a href="#302" id="302">302</a>
+<a href="#303" id="303">303</a>
+<a href="#304" id="304">304</a>
+<a href="#305" id="305">305</a>
+<a href="#306" id="306">306</a>
+<a href="#307" id="307">307</a>
+<a href="#308" id="308">308</a>
+<a href="#309" id="309">309</a>
+<a href="#310" id="310">310</a>
+<a href="#311" id="311">311</a>
+<a href="#312" id="312">312</a>
+<a href="#313" id="313">313</a>
+<a href="#314" id="314">314</a>
+<a href="#315" id="315">315</a>
+<a href="#316" id="316">316</a>
+<a href="#317" id="317">317</a>
+<a href="#318" id="318">318</a>
+<a href="#319" id="319">319</a>
+<a href="#320" id="320">320</a>
+<a href="#321" id="321">321</a>
+<a href="#322" id="322">322</a>
+<a href="#323" id="323">323</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
 
@@ -480,15 +501,36 @@
                         <span class="kw">if </span>contract.verify_gateway_response(<span class="kw-2">&amp;</span>gateway_response) {
                             <span class="kw">return </span>gateway_response;
                         } <span class="kw">else </span>{
-                            <span class="macro">error!</span>(<span class="string">"Invalid gateway response: {gateway_response:?}"</span>);
+                            <span class="macro">error!</span>(
+                                <span class="question-mark">?</span>gateway_response,
+                                <span class="question-mark">?</span>contract,
+                                <span class="question-mark">?</span>invoice,
+                                <span class="question-mark">?</span>federation_id,
+                                <span class="question-mark">?</span>gateway_api,
+                                <span class="string">"Invalid gateway response"
+                            </span>);
                         }
                     }
                     <span class="prelude-val">Err</span>(error) =&gt; {
-                        <span class="macro">error!</span>(<span class="string">"Gateway returned error: {error}"</span>)
+                        <span class="macro">error!</span>(
+                            <span class="question-mark">?</span>error,
+                            <span class="question-mark">?</span>contract,
+                            <span class="question-mark">?</span>invoice,
+                            <span class="question-mark">?</span>federation_id,
+                            <span class="question-mark">?</span>gateway_api,
+                            <span class="string">"Gateway returned error"
+                        </span>)
                     }
                 },
                 <span class="prelude-val">Err</span>(error) =&gt; {
-                    <span class="macro">error!</span>(<span class="string">"Error while trying to reach gateway: {error}"</span>);
+                    <span class="macro">error!</span>(
+                        <span class="question-mark">?</span>error,
+                        <span class="question-mark">?</span>contract,
+                        <span class="question-mark">?</span>invoice,
+                        <span class="question-mark">?</span>federation_id,
+                        <span class="question-mark">?</span>gateway_api,
+                        <span class="string">"Error while trying to reach gateway"
+                    </span>);
                 }
             }
 
