@@ -65,9 +65,7 @@ use fedimint_ln_common::contracts::Preimage;
 use fedimint_ln_common::route_hints::RouteHint;
 use fedimint_ln_common::LightningCommonInit;
 use fedimint_lnv2_client::api::LnFederationApi;
-use fedimint_lnv2_client::{
-    CreateInvoicePayload, PaymentFee, PaymentFees, PaymentInfo, SendPaymentPayload,
-};
+use fedimint_lnv2_client::{CreateInvoicePayload, PaymentFee, PaymentInfo, SendPaymentPayload};
 use fedimint_mint_client::{MintClientInit, MintCommonInit};
 use fedimint_wallet_client::{
     WalletClientInit, WalletClientModule, WalletCommonInit, WithdrawState,
@@ -1577,17 +1575,11 @@ impl Gateway {
     pub async fn payment_info_v2(&self, federation_id: &FederationId) -> Option<PaymentInfo> {
         Some(PaymentInfo {
             public_key: self.public_key_v2(federation_id).await?,
-            payment_fees: self.payment_fees_v2(),
+            send_fee_default: PaymentFee::one_percent(),
+            send_fee_minimum: PaymentFee::half_of_one_percent(),
+            receive_fee: PaymentFee::half_of_one_percent(),
             outgoing_cltv_delta: OUTGOING_CLTV_DELTA_V2,
         })
-    }
-
-    pub fn payment_fees_v2(&self) -> PaymentFees {
-        PaymentFees {
-            send_default: PaymentFee::one_percent(),
-            send_minimum: PaymentFee::half_of_one_percent(),
-            receive: PaymentFee::half_of_one_percent(),
-        }
     }
 
     async fn send_payment_v2(
@@ -1630,6 +1622,13 @@ impl Gateway {
             .amount_milli_satoshis()
             .ok_or(anyhow!("Invoice is missing amount"))?;
 
+        let min_contract_amount = self
+            .payment_info_v2(&payload.federation_id)
+            .await
+            .ok_or(anyhow!("Payment Info not available"))?
+            .send_fee_minimum
+            .add_fee(invoice_msats);
+
         // We need to check that the contract has been confirmed by the federation
         // before we start the state machine to prevent DOS attacks.
         let max_delay = module
@@ -1644,7 +1643,7 @@ impl Gateway {
             .start_send_state_machine(
                 operation_id,
                 max_delay,
-                invoice_msats,
+                min_contract_amount,
                 payload.invoice,
                 payload.contract.clone(),
             )
@@ -1662,18 +1661,17 @@ impl Gateway {
             bail!("The contract is invalid")
         }
 
-        let our_pk = self
-            .public_key_v2(&payload.federation_id)
+        let payment_info = self
+            .payment_info_v2(&payload.federation_id)
             .await
-            .ok_or(anyhow!("Federation client not available"))?;
+            .ok_or(anyhow!("Payment Info not available"))?;
 
-        if payload.contract.commitment.refund_pk != our_pk {
+        if payload.contract.commitment.refund_pk != payment_info.public_key {
             bail!("The outgoing contract keyed to another gateway");
         }
 
-        let contract_amount = self
-            .payment_fees_v2()
-            .receive
+        let contract_amount = payment_info
+            .receive_fee
             .subtract_fee(payload.invoice_amount.msats);
 
         if contract_amount != payload.contract.commitment.amount {

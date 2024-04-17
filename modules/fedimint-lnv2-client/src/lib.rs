@@ -134,15 +134,10 @@ pub struct SendPaymentPayload {
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Decodable, Encodable)]
 pub struct PaymentInfo {
     pub public_key: PublicKey,
-    pub payment_fees: PaymentFees,
+    pub send_fee_minimum: PaymentFee,
+    pub send_fee_default: PaymentFee,
+    pub receive_fee: PaymentFee,
     pub outgoing_cltv_delta: u64,
-}
-
-#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Decodable, Encodable)]
-pub struct PaymentFees {
-    pub send_minimum: PaymentFee,
-    pub send_default: PaymentFee,
-    pub receive: PaymentFee,
 }
 
 #[derive(
@@ -360,13 +355,9 @@ impl LightningClientModule {
             .map_err(SendPaymentError::GatewayError)?
             .ok_or(SendPaymentError::UnknownFederation)?;
 
-        if !payment_info
-            .payment_fees
-            .send_default
-            .le(&payment_fee_limit)
-        {
+        if !payment_info.send_fee_default.le(&payment_fee_limit) {
             return Err(SendPaymentError::PaymentFeeExceedsLimit(
-                payment_info.payment_fees.send_default,
+                payment_info.send_fee_default,
             ));
         }
 
@@ -384,10 +375,7 @@ impl LightningClientModule {
 
         let contract = OutgoingContract {
             payment_hash: *invoice.payment_hash(),
-            amount: payment_info
-                .payment_fees
-                .send_default
-                .add_fee(invoice_msats),
+            amount: payment_info.send_fee_default.add_fee(invoice_msats),
             expiration: consensus_block_count + expiration_delta,
             claim_pk: payment_info.public_key,
             refund_pk: refund_keypair.public_key(),
@@ -616,16 +604,13 @@ impl LightningClientModule {
             .map_err(FetchInvoiceError::GatewayError)?
             .ok_or(FetchInvoiceError::UnknownFederation)?;
 
-        if !payment_info.payment_fees.receive.le(&payment_fee_limit) {
+        if !payment_info.receive_fee.le(&payment_fee_limit) {
             return Err(FetchInvoiceError::PaymentFeeExceedsLimit(
-                payment_info.payment_fees.receive,
+                payment_info.receive_fee,
             ));
         }
 
-        let contract_amount = payment_info
-            .payment_fees
-            .receive
-            .subtract_fee(invoice_amount.msats);
+        let contract_amount = payment_info.receive_fee.subtract_fee(invoice_amount.msats);
 
         let expiration = duration_since_epoch()
             .as_secs()
