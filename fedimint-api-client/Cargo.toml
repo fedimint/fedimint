@@ -58,7 +58,7 @@ imbl = "2.0.3"
 backon = "=0.4.3" # don't upgrade unless really needed
 
 [target.'cfg(not(target_family = "wasm"))'.dependencies]
-jsonrpsee-ws-client = { version = "0.22.2", features = ["webpki-tls"], default-features = false }
+jsonrpsee-ws-client = { version = "0.22.4", features = ["webpki-tls"], default-features = false }
 tokio = { version = "1.36.0", features = ["full", "tracing"] }
 tokio-rustls = { workspace = true }
 
