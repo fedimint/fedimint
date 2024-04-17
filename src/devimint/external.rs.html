@@ -1356,6 +1356,22 @@
     cln: <span class="kw-2">&amp;</span>Lightningd,
     lnd: <span class="kw-2">&amp;</span>Lnd,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+    lnd.client
+        .lock()
+        .<span class="kw">await
+        </span>.lightning()
+        .update_channel_policy(PolicyUpdateRequest {
+            min_htlc_msat: <span class="number">1</span>,
+            scope: <span class="prelude-val">Some</span>(Scope::Global(<span class="bool-val">true</span>)),
+            time_lock_delta: <span class="number">80</span>,
+            base_fee_msat: <span class="number">0</span>,
+            fee_rate: <span class="number">0.0</span>,
+            fee_rate_ppm: <span class="number">0</span>,
+            max_htlc_msat: <span class="number">10000000000</span>,
+            min_htlc_msat_specified: <span class="bool-val">true</span>,
+        })
+        .<span class="kw">await</span><span class="question-mark">?</span>;
+
     <span class="macro">debug!</span>(target: LOG_DEVIMINT, <span class="string">"Await block ln nodes block processing"</span>);
     <span class="macro">tokio::try_join!</span>(cln.await_block_processing(), lnd.await_block_processing())<span class="question-mark">?</span>;
     <span class="macro">debug!</span>(target: LOG_DEVIMINT, <span class="string">"Opening LN channel between the nodes..."</span>);
@@ -1449,22 +1465,6 @@
         <span class="prelude-val">Err</span>(ControlFlow::Continue(<span class="macro">anyhow!</span>(<span class="string">"channel not found"</span>)))
     })
     .<span class="kw">await</span><span class="question-mark">?</span>;
-
-    lnd.client
-        .lock()
-        .<span class="kw">await
-        </span>.lightning()
-        .update_channel_policy(PolicyUpdateRequest {
-            min_htlc_msat: <span class="number">1</span>,
-            scope: <span class="prelude-val">Some</span>(Scope::Global(<span class="bool-val">true</span>)),
-            time_lock_delta: <span class="number">80</span>,
-            base_fee_msat: <span class="number">0</span>,
-            fee_rate: <span class="number">0.0</span>,
-            fee_rate_ppm: <span class="number">0</span>,
-            max_htlc_msat: <span class="number">10000000000</span>,
-            min_htlc_msat_specified: <span class="bool-val">true</span>,
-        })
-        .<span class="kw">await</span><span class="question-mark">?</span>;
 
     <span class="prelude-val">Ok</span>(())
 }
