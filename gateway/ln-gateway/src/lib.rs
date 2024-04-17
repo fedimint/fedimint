@@ -126,7 +126,7 @@ pub const DEFAULT_FEES: RoutingFees = RoutingFees {
     proportional_millionths: 10000,
 };
 
-const OUTGOING_CLTV_DELTA_V2: u64 = 144;
+const EXPIRATION_DELTA_MINIMUM_V2: u64 = 144;
 
 pub type Result<T> = std::result::Result<T, GatewayError>;
 
@@ -1578,7 +1578,8 @@ impl Gateway {
             send_fee_default: PaymentFee::one_percent(),
             send_fee_minimum: PaymentFee::half_of_one_percent(),
             receive_fee: PaymentFee::half_of_one_percent(),
-            outgoing_cltv_delta: OUTGOING_CLTV_DELTA_V2,
+            expiration_delta_default: 500,
+            expiration_delta_minimum: EXPIRATION_DELTA_MINIMUM_V2,
         })
     }
 
@@ -1637,7 +1638,7 @@ impl Gateway {
             .await
             .map_err(|_| anyhow!("The gateway can not reach the federation"))?
             .ok_or(anyhow!("The outgoing contract has not yet been confirmed"))?
-            .saturating_sub(OUTGOING_CLTV_DELTA_V2);
+            .saturating_sub(EXPIRATION_DELTA_MINIMUM_V2);
 
         module
             .start_send_state_machine(

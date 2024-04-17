@@ -35,7 +35,7 @@ thiserror = { workspace = true }
 tokio = { version = "1.36.0", features = ["sync"], optional = true }
 tracing = { workspace = true }
 url = { workspace = true }
-validator = { version = "0.18", features = ["derive"] }
+
 
 [dev-dependencies]
 test-log = { version = "0.2", features = [ "trace" ], default-features = false }

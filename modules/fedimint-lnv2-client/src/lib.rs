@@ -60,7 +60,7 @@ pub enum LightningOperationMeta {
 
 /// Number of blocks until outgoing lightning contracts time out and user
 /// client can refund it unilaterally
-const SEND_EXPIRATION_DELTA_BLOCKS_DEFAULT: u64 = 500;
+const EXPIRATION_DELTA_LIMIT_DEFAULT: u64 = 500;
 
 /// Default expiration time for lightning invoices
 const INVOICE_EXPIRATION_SECONDS_DEFAULT: u32 = 3600;
@@ -137,7 +137,8 @@ pub struct PaymentInfo {
     pub send_fee_minimum: PaymentFee,
     pub send_fee_default: PaymentFee,
     pub receive_fee: PaymentFee,
-    pub outgoing_cltv_delta: u64,
+    pub expiration_delta_default: u64,
+    pub expiration_delta_minimum: u64,
 }
 
 #[derive(
@@ -321,7 +322,7 @@ impl LightningClientModule {
             gateway_api,
             invoice,
             PaymentFee::one_percent(),
-            SEND_EXPIRATION_DELTA_BLOCKS_DEFAULT,
+            EXPIRATION_DELTA_LIMIT_DEFAULT,
         )
         .await
     }
@@ -331,7 +332,7 @@ impl LightningClientModule {
         gateway_api: SafeUrl,
         invoice: Bolt11Invoice,
         payment_fee_limit: PaymentFee,
-        expiration_delta: u64,
+        expiration_delta_limit: u64,
     ) -> Result<OperationId, SendPaymentError> {
         let invoice_msats = invoice
             .amount_milli_satoshis()
@@ -361,9 +362,9 @@ impl LightningClientModule {
             ));
         }
 
-        if expiration_delta < payment_info.outgoing_cltv_delta + 288 {
-            return Err(SendPaymentError::InsufficientExpirationDelta(
-                payment_info.outgoing_cltv_delta + 288,
+        if expiration_delta_limit < payment_info.expiration_delta_default {
+            return Err(SendPaymentError::ExpirationDeltaExceedsLimit(
+                payment_info.expiration_delta_default,
             ));
         }
 
@@ -376,7 +377,7 @@ impl LightningClientModule {
         let contract = OutgoingContract {
             payment_hash: *invoice.payment_hash(),
             amount: payment_info.send_fee_default.add_fee(invoice_msats),
-            expiration: consensus_block_count + expiration_delta,
+            expiration: consensus_block_count + payment_info.expiration_delta_default,
             claim_pk: payment_info.public_key,
             refund_pk: refund_keypair.public_key(),
             ephemeral_pk,
@@ -818,8 +819,8 @@ pub enum SendPaymentError {
     UnknownFederation,
     #[error("The gateways fee of {0:?} exceeds the supplied limit")]
     PaymentFeeExceedsLimit(PaymentFee),
-    #[error("To route via this gateway we require a minimum expiration delta of {0} blocks")]
-    InsufficientExpirationDelta(u64),
+    #[error("The gateways expiration delta of {0:?} exceeds the supplied limit")]
+    ExpirationDeltaExceedsLimit(u64),
     #[error("Federation returned an error: {0}")]
     FederationError(String),
     #[error("We failed to finalize the funding transaction")]
