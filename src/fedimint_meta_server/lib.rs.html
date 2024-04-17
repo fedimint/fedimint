@@ -518,6 +518,14 @@
 <a href="#516" id="516">516</a>
 <a href="#517" id="517">517</a>
 <a href="#518" id="518">518</a>
+<a href="#519" id="519">519</a>
+<a href="#520" id="520">520</a>
+<a href="#521" id="521">521</a>
+<a href="#522" id="522">522</a>
+<a href="#523" id="523">523</a>
+<a href="#524" id="524">524</a>
+<a href="#525" id="525">525</a>
+<a href="#526" id="526">526</a>
 </pre></div><pre class="rust"><code><span class="kw">pub mod </span>db;
 
 <span class="kw">use </span>std::collections::BTreeMap;
@@ -541,7 +549,7 @@
 <span class="kw">use </span>fedimint_core::module::{
     api_endpoint, ApiAuth, ApiEndpoint, ApiError, ApiVersion, CoreConsensusVersion, InputMeta,
     ModuleConsensusVersion, ModuleInit, PeerHandle, ServerModuleInit, ServerModuleInitArgs,
-    SupportedModuleApiVersions, TransactionItemAmount,
+    SupportedModuleApiVersions, TransactionItemAmount, CORE_CONSENSUS_VERSION,
 };
 <span class="kw">use </span>fedimint_core::server::DynServerModule;
 <span class="kw">use </span>fedimint_core::{
@@ -558,7 +566,8 @@
 };
 <span class="kw">use </span>fedimint_meta_common::{
     MetaCommonInit, MetaConsensusItem, MetaConsensusValue, MetaInput, MetaInputError, MetaKey,
-    MetaModuleTypes, MetaOutput, MetaOutputError, MetaOutputOutcome, MetaValue, CONSENSUS_VERSION,
+    MetaModuleTypes, MetaOutput, MetaOutputError, MetaOutputOutcome, MetaValue,
+    MODULE_CONSENSUS_VERSION,
 };
 <span class="kw">use </span>futures::StreamExt;
 <span class="kw">use </span>rand::{thread_rng, Rng};
@@ -637,11 +646,18 @@
 
     <span class="doccomment">/// Returns the version of this module
     </span><span class="kw">fn </span>versions(<span class="kw-2">&amp;</span><span class="self">self</span>, _core: CoreConsensusVersion) -&gt; <span class="kw-2">&amp;</span>[ModuleConsensusVersion] {
-        <span class="kw-2">&amp;</span>[CONSENSUS_VERSION]
+        <span class="kw-2">&amp;</span>[MODULE_CONSENSUS_VERSION]
     }
 
     <span class="kw">fn </span>supported_api_versions(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; SupportedModuleApiVersions {
-        SupportedModuleApiVersions::from_raw((u32::MAX, <span class="number">0</span>), (<span class="number">0</span>, <span class="number">0</span>), <span class="kw-2">&amp;</span>[(<span class="number">0</span>, <span class="number">0</span>)])
+        SupportedModuleApiVersions::from_raw(
+            (CORE_CONSENSUS_VERSION.major, CORE_CONSENSUS_VERSION.minor),
+            (
+                MODULE_CONSENSUS_VERSION.major,
+                MODULE_CONSENSUS_VERSION.minor,
+            ),
+            <span class="kw-2">&amp;</span>[(<span class="number">0</span>, <span class="number">0</span>)],
+        )
     }
 
     <span class="doccomment">/// Initialize the module

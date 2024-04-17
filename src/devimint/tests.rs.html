@@ -2521,6 +2521,8 @@
 <a href="#2519" id="2519">2519</a>
 <a href="#2520" id="2520">2520</a>
 <a href="#2521" id="2521">2521</a>
+<a href="#2522" id="2522">2522</a>
+<a href="#2523" id="2523">2523</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::HashSet;
 <span class="kw">use </span>std::io::Write;
 <span class="kw">use </span>std::ops::ControlFlow;
@@ -4482,8 +4484,10 @@
     <span class="kw">let </span>client = fed.new_joined_client(<span class="string">"recoverytool-test-client"</span>).<span class="kw">await</span><span class="question-mark">?</span>;
 
     <span class="kw">let </span><span class="kw-2">mut </span>fed_utxos_sats = HashSet::from([<span class="number">12_345_000</span>, <span class="number">23_456_000</span>, <span class="number">34_567_000</span>]);
+    <span class="kw">let </span>deposit_fees = fed.deposit_fees().<span class="kw">await</span><span class="question-mark">?</span>.msats / <span class="number">1000</span>;
     <span class="kw">for </span>sats <span class="kw">in </span><span class="kw-2">&amp;</span>fed_utxos_sats {
-        fed.pegin_client(<span class="kw-2">*</span>sats, <span class="kw-2">&amp;</span>client).<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="comment">// pegin_client automatically adds fees, so we need to counteract that
+        </span>fed.pegin_client(<span class="kw-2">*</span>sats - deposit_fees, <span class="kw-2">&amp;</span>client).<span class="kw">await</span><span class="question-mark">?</span>;
     }
 
     <span class="comment">// Initiate a withdrawal to verify the recoverytool recognizes change outputs

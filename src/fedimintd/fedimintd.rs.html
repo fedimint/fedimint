@@ -481,6 +481,7 @@
 <a href="#479" id="479">479</a>
 <a href="#480" id="480">480</a>
 <a href="#481" id="481">481</a>
+<a href="#482" id="482">482</a>
 </pre></div><pre class="rust"><code><span class="kw">mod </span>metrics;
 
 <span class="kw">use </span>std::collections::BTreeMap;
@@ -767,6 +768,7 @@
                         // next commit anyway
                         </span>finality_delay,
                         client_default_bitcoin_rpc: default_esplora_server(network),
+                        fee_consensus: Default::default(),
                     },
                 },
             );

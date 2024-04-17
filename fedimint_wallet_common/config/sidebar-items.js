@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"struct":["FeeConsensus","WalletClientConfig","WalletConfig","WalletConfigConsensus","WalletConfigLocal","WalletConfigPrivate","WalletGenParams","WalletGenParamsConsensus","WalletGenParamsLocal"]};
+window.SIDEBAR_ITEMS = {"constant":["DEFAULT_DEPOSIT_FEE_SATS"],"struct":["FeeConsensus","WalletClientConfig","WalletConfig","WalletConfigConsensus","WalletConfigLocal","WalletConfigPrivate","WalletGenParams","WalletGenParamsConsensus","WalletGenParamsLocal"]};

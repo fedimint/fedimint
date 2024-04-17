@@ -127,7 +127,7 @@
 </span><span class="kw">pub const </span>KIND: ModuleKind = ModuleKind::from_static_str(<span class="string">"dummy"</span>);
 
 <span class="doccomment">/// Modules are non-compatible with older versions
-</span><span class="kw">pub const </span>CONSENSUS_VERSION: ModuleConsensusVersion = ModuleConsensusVersion::new(<span class="number">0</span>, <span class="number">0</span>);
+</span><span class="kw">pub const </span>MODULE_CONSENSUS_VERSION: ModuleConsensusVersion = ModuleConsensusVersion::new(<span class="number">0</span>, <span class="number">0</span>);
 
 <span class="doccomment">/// Non-transaction items that will be submitted to consensus
 </span><span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable, Decodable)]
@@ -178,7 +178,7 @@
 </span><span class="kw">pub struct </span>EmptyCommonInit;
 
 <span class="kw">impl </span>CommonModuleInit <span class="kw">for </span>EmptyCommonInit {
-    <span class="kw">const </span>CONSENSUS_VERSION: ModuleConsensusVersion = CONSENSUS_VERSION;
+    <span class="kw">const </span>CONSENSUS_VERSION: ModuleConsensusVersion = MODULE_CONSENSUS_VERSION;
     <span class="kw">const </span>KIND: ModuleKind = KIND;
 
     <span class="kw">type </span>ClientConfig = EmptyClientConfig;

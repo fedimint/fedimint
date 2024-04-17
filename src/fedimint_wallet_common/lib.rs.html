@@ -349,7 +349,7 @@
 <span class="kw">pub mod </span>txoproof;
 
 <span class="kw">pub const </span>KIND: ModuleKind = ModuleKind::from_static_str(<span class="string">"wallet"</span>);
-<span class="kw">const </span>CONSENSUS_VERSION: ModuleConsensusVersion = ModuleConsensusVersion::new(<span class="number">0</span>, <span class="number">0</span>);
+<span class="kw">pub const </span>MODULE_CONSENSUS_VERSION: ModuleConsensusVersion = ModuleConsensusVersion::new(<span class="number">2</span>, <span class="number">0</span>);
 
 <span class="kw">pub const </span>CONFIRMATION_TARGET: u16 = <span class="number">10</span>;
 
@@ -461,7 +461,7 @@
 </span><span class="kw">pub struct </span>WalletCommonInit;
 
 <span class="kw">impl </span>CommonModuleInit <span class="kw">for </span>WalletCommonInit {
-    <span class="kw">const </span>CONSENSUS_VERSION: ModuleConsensusVersion = CONSENSUS_VERSION;
+    <span class="kw">const </span>CONSENSUS_VERSION: ModuleConsensusVersion = MODULE_CONSENSUS_VERSION;
     <span class="kw">const </span>KIND: ModuleKind = KIND;
 
     <span class="kw">type </span>ClientConfig = WalletClientConfig;

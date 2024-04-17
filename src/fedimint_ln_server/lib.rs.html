@@ -1475,6 +1475,13 @@
 <a href="#1473" id="1473">1473</a>
 <a href="#1474" id="1474">1474</a>
 <a href="#1475" id="1475">1475</a>
+<a href="#1476" id="1476">1476</a>
+<a href="#1477" id="1477">1477</a>
+<a href="#1478" id="1478">1478</a>
+<a href="#1479" id="1479">1479</a>
+<a href="#1480" id="1480">1480</a>
+<a href="#1481" id="1481">1481</a>
+<a href="#1482" id="1482">1482</a>
 </pre></div><pre class="rust"><code><span class="kw">pub mod </span>db;
 <span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::time::Duration;
@@ -1501,7 +1508,7 @@
 <span class="kw">use </span>fedimint_core::module::{
     api_endpoint, ApiEndpoint, ApiEndpointContext, ApiVersion, CoreConsensusVersion, InputMeta,
     ModuleConsensusVersion, ModuleInit, PeerHandle, ServerModuleInit, ServerModuleInitArgs,
-    SupportedModuleApiVersions, TransactionItemAmount,
+    SupportedModuleApiVersions, TransactionItemAmount, CORE_CONSENSUS_VERSION,
 };
 <span class="kw">use </span>fedimint_core::server::DynServerModule;
 <span class="kw">use </span>fedimint_core::task::{sleep, TaskGroup};
@@ -1525,6 +1532,7 @@
     LightningGatewayAnnouncement, LightningGatewayRegistration, LightningInput,
     LightningInputError, LightningModuleTypes, LightningOutput, LightningOutputError,
     LightningOutputOutcome, LightningOutputOutcomeV0, LightningOutputV0, RemoveGatewayRequest,
+    MODULE_CONSENSUS_VERSION,
 };
 <span class="kw">use </span>fedimint_server::config::distributedgen::PeerHandleOps;
 <span class="kw">use </span>futures::StreamExt;
@@ -1666,12 +1674,18 @@
     <span class="kw">type </span>Params = LightningGenParams;
 
     <span class="kw">fn </span>versions(<span class="kw-2">&amp;</span><span class="self">self</span>, _core: CoreConsensusVersion) -&gt; <span class="kw-2">&amp;</span>[ModuleConsensusVersion] {
-        <span class="kw">const </span>MODULE_CONSENSUS_VERSION: ModuleConsensusVersion = ModuleConsensusVersion::new(<span class="number">0</span>, <span class="number">0</span>);
         <span class="kw-2">&amp;</span>[MODULE_CONSENSUS_VERSION]
     }
 
     <span class="kw">fn </span>supported_api_versions(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; SupportedModuleApiVersions {
-        SupportedModuleApiVersions::from_raw((u32::MAX, <span class="number">0</span>), (<span class="number">0</span>, <span class="number">0</span>), <span class="kw-2">&amp;</span>[(<span class="number">0</span>, <span class="number">1</span>)])
+        SupportedModuleApiVersions::from_raw(
+            (CORE_CONSENSUS_VERSION.major, CORE_CONSENSUS_VERSION.minor),
+            (
+                MODULE_CONSENSUS_VERSION.major,
+                MODULE_CONSENSUS_VERSION.minor,
+            ),
+            <span class="kw-2">&amp;</span>[(<span class="number">0</span>, <span class="number">1</span>)],
+        )
     }
 
     <span class="kw">async fn </span>init(<span class="kw-2">&amp;</span><span class="self">self</span>, args: <span class="kw-2">&amp;</span>ServerModuleInitArgs&lt;<span class="self">Self</span>&gt;) -&gt; anyhow::Result&lt;DynServerModule&gt; {

@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"constant":["CONSENSUS_VERSION","KIND"],"enum":["EmptyInputError","EmptyOutputError"],"mod":["config"],"struct":["EmptyCommonInit","EmptyConsensusItem","EmptyInput","EmptyModuleTypes","EmptyOutput","EmptyOutputOutcome"]};
+window.SIDEBAR_ITEMS = {"constant":["KIND","MODULE_CONSENSUS_VERSION"],"enum":["EmptyInputError","EmptyOutputError"],"mod":["config"],"struct":["EmptyCommonInit","EmptyConsensusItem","EmptyInput","EmptyModuleTypes","EmptyOutput","EmptyOutputOutcome"]};

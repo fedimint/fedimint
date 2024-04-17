@@ -212,6 +212,18 @@
 <a href="#210" id="210">210</a>
 <a href="#211" id="211">211</a>
 <a href="#212" id="212">212</a>
+<a href="#213" id="213">213</a>
+<a href="#214" id="214">214</a>
+<a href="#215" id="215">215</a>
+<a href="#216" id="216">216</a>
+<a href="#217" id="217">217</a>
+<a href="#218" id="218">218</a>
+<a href="#219" id="219">219</a>
+<a href="#220" id="220">220</a>
+<a href="#221" id="221">221</a>
+<a href="#222" id="222">222</a>
+<a href="#223" id="223">223</a>
+<a href="#224" id="224">224</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 
 <span class="kw">use </span>bitcoin::Network;
@@ -228,6 +240,10 @@
 <span class="kw">use </span><span class="kw">crate</span>::envs::FM_PORT_ESPLORA_ENV;
 <span class="kw">use </span><span class="kw">crate</span>::keys::CompressedPublicKey;
 <span class="kw">use crate</span>::{PegInDescriptor, WalletCommonInit};
+
+<span class="doccomment">/// Helps against dust attacks where an attacker deposits UTXOs that, with
+/// higher fee levels, cannot be spent profitably.
+</span><span class="kw">const </span>DEFAULT_DEPOSIT_FEE_SATS: u64 = <span class="number">1000</span>;
 
 <span class="attr">#[derive(Debug, Clone, Serialize, Deserialize)]
 </span><span class="kw">pub struct </span>WalletGenParams {
@@ -250,6 +266,7 @@
                     ))
                     .expect(<span class="string">"Failed to parse default esplora server"</span>),
                 },
+                fee_consensus: Default::default(),
             },
         }
     }
@@ -266,6 +283,11 @@
     <span class="kw">pub </span>finality_delay: u32,
     <span class="doccomment">/// See [`WalletConfigConsensus::client_default_bitcoin_rpc`].
     </span><span class="kw">pub </span>client_default_bitcoin_rpc: BitcoinRpcConfig,
+    <span class="doccomment">/// Fees to be charged for deposits and withdraws _by the federation_ in
+    /// addition to any on-chain fees.
+    ///
+    /// Deposit fees in particular are a protection against dust attacks.
+    </span><span class="kw">pub </span>fee_consensus: FeeConsensus,
 }
 
 <span class="attr">#[derive(Clone, Debug, Serialize, Deserialize)]
@@ -339,7 +361,7 @@
     }
 }
 
-<span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable, Decodable)]
+<span class="attr">#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable, Decodable)]
 </span><span class="kw">pub struct </span>FeeConsensus {
     <span class="kw">pub </span>peg_in_abs: fedimint_core::Amount,
     <span class="kw">pub </span>peg_out_abs: fedimint_core::Amount,
@@ -348,14 +370,15 @@
 <span class="kw">impl </span>Default <span class="kw">for </span>FeeConsensus {
     <span class="kw">fn </span>default() -&gt; <span class="self">Self </span>{
         <span class="self">Self </span>{
-            peg_in_abs: fedimint_core::Amount::ZERO,
+            peg_in_abs: fedimint_core::Amount::from_sats(DEFAULT_DEPOSIT_FEE_SATS),
             peg_out_abs: fedimint_core::Amount::ZERO,
         }
     }
 }
 
 <span class="kw">impl </span>WalletConfig {
-    <span class="kw">pub fn </span>new(
+    <span class="attr">#[allow(clippy::too_many_arguments)]
+    </span><span class="kw">pub fn </span>new(
         pubkeys: BTreeMap&lt;PeerId, CompressedPublicKey&gt;,
         sk: SecretKey,
         threshold: usize,
@@ -363,6 +386,7 @@
         finality_delay: u32,
         bitcoin_rpc: BitcoinRpcConfig,
         client_default_bitcoin_rpc: BitcoinRpcConfig,
+        fee_consensus: FeeConsensus,
     ) -&gt; <span class="self">Self </span>{
         <span class="kw">let </span>peg_in_descriptor = <span class="kw">if </span>pubkeys.len() == <span class="number">1 </span>{
             PegInDescriptor::Wpkh(
@@ -389,7 +413,7 @@
                 peer_peg_in_keys: pubkeys,
                 finality_delay,
                 default_fee: Feerate { sats_per_kvb: <span class="number">1000 </span>},
-                fee_consensus: Default::default(),
+                fee_consensus,
                 client_default_bitcoin_rpc,
             },
         }

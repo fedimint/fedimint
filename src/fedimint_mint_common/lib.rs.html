@@ -256,7 +256,7 @@
 <span class="kw">pub mod </span>common;
 
 <span class="kw">pub const </span>KIND: ModuleKind = ModuleKind::from_static_str(<span class="string">"mint"</span>);
-<span class="kw">const </span>CONSENSUS_VERSION: ModuleConsensusVersion = ModuleConsensusVersion::new(<span class="number">0</span>, <span class="number">0</span>);
+<span class="kw">pub const </span>MODULE_CONSENSUS_VERSION: ModuleConsensusVersion = ModuleConsensusVersion::new(<span class="number">2</span>, <span class="number">0</span>);
 
 <span class="doccomment">/// By default, the maximum notes per denomination when change-making for users
 </span><span class="kw">pub const </span>DEFAULT_MAX_NOTES_PER_DENOMINATION: u16 = <span class="number">3</span>;
@@ -341,7 +341,7 @@
 </span><span class="kw">pub struct </span>MintCommonInit;
 
 <span class="kw">impl </span>CommonModuleInit <span class="kw">for </span>MintCommonInit {
-    <span class="kw">const </span>CONSENSUS_VERSION: ModuleConsensusVersion = CONSENSUS_VERSION;
+    <span class="kw">const </span>CONSENSUS_VERSION: ModuleConsensusVersion = MODULE_CONSENSUS_VERSION;
     <span class="kw">const </span>KIND: ModuleKind = KIND;
 
     <span class="kw">type </span>ClientConfig = MintClientConfig;

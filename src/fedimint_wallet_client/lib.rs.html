@@ -731,6 +731,10 @@
 <a href="#729" id="729">729</a>
 <a href="#730" id="730">730</a>
 <a href="#731" id="731">731</a>
+<a href="#732" id="732">732</a>
+<a href="#733" id="733">733</a>
+<a href="#734" id="734">734</a>
+<a href="#735" id="735">735</a>
 </pre></div><pre class="rust"><code><span class="kw">pub mod </span>api;
 
 <span class="kw">pub mod </span>client_db;
@@ -770,7 +774,7 @@
 };
 <span class="kw">use </span>fedimint_core::task::{MaybeSend, MaybeSync, TaskGroup};
 <span class="kw">use </span>fedimint_core::{apply, async_trait_maybe_send, Amount, OutPoint};
-<span class="kw">use </span>fedimint_wallet_common::config::WalletClientConfig;
+<span class="kw">use </span>fedimint_wallet_common::config::{FeeConsensus, WalletClientConfig};
 <span class="kw">use </span>fedimint_wallet_common::tweakable::Tweakable;
 <span class="kw">pub use </span>fedimint_wallet_common::<span class="kw-2">*</span>;
 <span class="kw">use </span>futures::{Stream, StreamExt};
@@ -1017,6 +1021,10 @@
 
     <span class="kw">pub fn </span>get_network(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Network {
         <span class="self">self</span>.cfg.network
+    }
+
+    <span class="kw">pub fn </span>get_fee_consensus(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FeeConsensus {
+        <span class="self">self</span>.cfg.fee_consensus
     }
 
     <span class="kw">pub async fn </span>get_deposit_address_inner(

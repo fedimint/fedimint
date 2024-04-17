@@ -319,6 +319,14 @@
 <a href="#317" id="317">317</a>
 <a href="#318" id="318">318</a>
 <a href="#319" id="319">319</a>
+<a href="#320" id="320">320</a>
+<a href="#321" id="321">321</a>
+<a href="#322" id="322">322</a>
+<a href="#323" id="323">323</a>
+<a href="#324" id="324">324</a>
+<a href="#325" id="325">325</a>
+<a href="#326" id="326">326</a>
+<a href="#327" id="327">327</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 
 <span class="kw">use </span>anyhow::bail;
@@ -335,6 +343,7 @@
 <span class="kw">use </span>fedimint_core::module::{
     ApiEndpoint, CoreConsensusVersion, InputMeta, ModuleConsensusVersion, ModuleInit, PeerHandle,
     ServerModuleInit, ServerModuleInitArgs, SupportedModuleApiVersions, TransactionItemAmount,
+    CORE_CONSENSUS_VERSION,
 };
 <span class="kw">use </span>fedimint_core::server::DynServerModule;
 <span class="kw">use </span>fedimint_core::{push_db_pair_items, Amount, OutPoint, PeerId, ServerModule};
@@ -345,7 +354,7 @@
 <span class="kw">use </span>fedimint_dummy_common::{
     broken_fed_public_key, fed_public_key, DummyCommonInit, DummyConsensusItem, DummyInput,
     DummyInputError, DummyModuleTypes, DummyOutput, DummyOutputError, DummyOutputOutcome,
-    CONSENSUS_VERSION,
+    MODULE_CONSENSUS_VERSION,
 };
 <span class="kw">use </span>futures::{FutureExt, StreamExt};
 <span class="kw">use </span>strum::IntoEnumIterator;
@@ -414,11 +423,18 @@
 
     <span class="doccomment">/// Returns the version of this module
     </span><span class="kw">fn </span>versions(<span class="kw-2">&amp;</span><span class="self">self</span>, _core: CoreConsensusVersion) -&gt; <span class="kw-2">&amp;</span>[ModuleConsensusVersion] {
-        <span class="kw-2">&amp;</span>[CONSENSUS_VERSION]
+        <span class="kw-2">&amp;</span>[MODULE_CONSENSUS_VERSION]
     }
 
     <span class="kw">fn </span>supported_api_versions(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; SupportedModuleApiVersions {
-        SupportedModuleApiVersions::from_raw((u32::MAX, <span class="number">0</span>), (<span class="number">0</span>, <span class="number">0</span>), <span class="kw-2">&amp;</span>[(<span class="number">0</span>, <span class="number">0</span>)])
+        SupportedModuleApiVersions::from_raw(
+            (CORE_CONSENSUS_VERSION.major, CORE_CONSENSUS_VERSION.minor),
+            (
+                MODULE_CONSENSUS_VERSION.major,
+                MODULE_CONSENSUS_VERSION.minor,
+            ),
+            <span class="kw-2">&amp;</span>[(<span class="number">0</span>, <span class="number">0</span>)],
+        )
     }
 
     <span class="doccomment">/// Initialize the module

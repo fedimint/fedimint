@@ -1833,6 +1833,16 @@
 <a href="#1831" id="1831">1831</a>
 <a href="#1832" id="1832">1832</a>
 <a href="#1833" id="1833">1833</a>
+<a href="#1834" id="1834">1834</a>
+<a href="#1835" id="1835">1835</a>
+<a href="#1836" id="1836">1836</a>
+<a href="#1837" id="1837">1837</a>
+<a href="#1838" id="1838">1838</a>
+<a href="#1839" id="1839">1839</a>
+<a href="#1840" id="1840">1840</a>
+<a href="#1841" id="1841">1841</a>
+<a href="#1842" id="1842">1842</a>
+<a href="#1843" id="1843">1843</a>
 </pre></div><pre class="rust"><code><span class="kw">pub mod </span>db;
 
 <span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap};
@@ -1878,7 +1888,7 @@
 <span class="kw">use </span>fedimint_core::module::{
     api_endpoint, ApiEndpoint, ApiVersion, CoreConsensusVersion, InputMeta, ModuleConsensusVersion,
     ModuleInit, PeerHandle, ServerModuleInit, ServerModuleInitArgs, SupportedModuleApiVersions,
-    TransactionItemAmount,
+    TransactionItemAmount, CORE_CONSENSUS_VERSION,
 };
 <span class="kw">use </span>fedimint_core::server::DynServerModule;
 <span class="attr">#[cfg(not(target_family = <span class="string">"wasm"</span>))]
@@ -1895,7 +1905,9 @@
 <span class="kw">use </span>fedimint_wallet_common::config::{WalletClientConfig, WalletConfig, WalletGenParams};
 <span class="kw">use </span>fedimint_wallet_common::keys::CompressedPublicKey;
 <span class="kw">use </span>fedimint_wallet_common::tweakable::Tweakable;
-<span class="kw">use </span>fedimint_wallet_common::{Rbf, WalletInputError, WalletOutputError, WalletOutputV0};
+<span class="kw">use </span>fedimint_wallet_common::{
+    Rbf, WalletInputError, WalletOutputError, WalletOutputV0, MODULE_CONSENSUS_VERSION,
+};
 <span class="kw">use </span>futures::StreamExt;
 <span class="kw">use </span>hex::ToHex;
 <span class="kw">use </span>metrics::{
@@ -2032,12 +2044,18 @@
     <span class="kw">type </span>Params = WalletGenParams;
 
     <span class="kw">fn </span>versions(<span class="kw-2">&amp;</span><span class="self">self</span>, _core: CoreConsensusVersion) -&gt; <span class="kw-2">&amp;</span>[ModuleConsensusVersion] {
-        <span class="kw">const </span>MODULE_CONSENSUS_VERSION: ModuleConsensusVersion = ModuleConsensusVersion::new(<span class="number">0</span>, <span class="number">0</span>);
         <span class="kw-2">&amp;</span>[MODULE_CONSENSUS_VERSION]
     }
 
     <span class="kw">fn </span>supported_api_versions(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; SupportedModuleApiVersions {
-        SupportedModuleApiVersions::from_raw((u32::MAX, <span class="number">0</span>), (<span class="number">0</span>, <span class="number">0</span>), <span class="kw-2">&amp;</span>[(<span class="number">0</span>, <span class="number">0</span>)])
+        SupportedModuleApiVersions::from_raw(
+            (CORE_CONSENSUS_VERSION.major, CORE_CONSENSUS_VERSION.minor),
+            (
+                MODULE_CONSENSUS_VERSION.major,
+                MODULE_CONSENSUS_VERSION.minor,
+            ),
+            <span class="kw-2">&amp;</span>[(<span class="number">0</span>, <span class="number">0</span>)],
+        )
     }
 
     <span class="kw">async fn </span>init(<span class="kw-2">&amp;</span><span class="self">self</span>, args: <span class="kw-2">&amp;</span>ServerModuleInitArgs&lt;<span class="self">Self</span>&gt;) -&gt; anyhow::Result&lt;DynServerModule&gt; {
@@ -2092,6 +2110,7 @@
                     params.consensus.finality_delay,
                     params.local.bitcoin_rpc.clone(),
                     params.consensus.client_default_bitcoin_rpc.clone(),
+                    params.consensus.fee_consensus,
                 );
                 (<span class="kw-2">*</span>id, cfg)
             })
@@ -2137,6 +2156,7 @@
             params.consensus.finality_delay,
             params.local.bitcoin_rpc.clone(),
             params.consensus.client_default_bitcoin_rpc.clone(),
+            params.consensus.fee_consensus,
         );
 
         <span class="prelude-val">Ok</span>(wallet_cfg.to_erased())

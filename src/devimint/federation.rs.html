@@ -1039,6 +1039,68 @@
 <a href="#1037" id="1037">1037</a>
 <a href="#1038" id="1038">1038</a>
 <a href="#1039" id="1039">1039</a>
+<a href="#1040" id="1040">1040</a>
+<a href="#1041" id="1041">1041</a>
+<a href="#1042" id="1042">1042</a>
+<a href="#1043" id="1043">1043</a>
+<a href="#1044" id="1044">1044</a>
+<a href="#1045" id="1045">1045</a>
+<a href="#1046" id="1046">1046</a>
+<a href="#1047" id="1047">1047</a>
+<a href="#1048" id="1048">1048</a>
+<a href="#1049" id="1049">1049</a>
+<a href="#1050" id="1050">1050</a>
+<a href="#1051" id="1051">1051</a>
+<a href="#1052" id="1052">1052</a>
+<a href="#1053" id="1053">1053</a>
+<a href="#1054" id="1054">1054</a>
+<a href="#1055" id="1055">1055</a>
+<a href="#1056" id="1056">1056</a>
+<a href="#1057" id="1057">1057</a>
+<a href="#1058" id="1058">1058</a>
+<a href="#1059" id="1059">1059</a>
+<a href="#1060" id="1060">1060</a>
+<a href="#1061" id="1061">1061</a>
+<a href="#1062" id="1062">1062</a>
+<a href="#1063" id="1063">1063</a>
+<a href="#1064" id="1064">1064</a>
+<a href="#1065" id="1065">1065</a>
+<a href="#1066" id="1066">1066</a>
+<a href="#1067" id="1067">1067</a>
+<a href="#1068" id="1068">1068</a>
+<a href="#1069" id="1069">1069</a>
+<a href="#1070" id="1070">1070</a>
+<a href="#1071" id="1071">1071</a>
+<a href="#1072" id="1072">1072</a>
+<a href="#1073" id="1073">1073</a>
+<a href="#1074" id="1074">1074</a>
+<a href="#1075" id="1075">1075</a>
+<a href="#1076" id="1076">1076</a>
+<a href="#1077" id="1077">1077</a>
+<a href="#1078" id="1078">1078</a>
+<a href="#1079" id="1079">1079</a>
+<a href="#1080" id="1080">1080</a>
+<a href="#1081" id="1081">1081</a>
+<a href="#1082" id="1082">1082</a>
+<a href="#1083" id="1083">1083</a>
+<a href="#1084" id="1084">1084</a>
+<a href="#1085" id="1085">1085</a>
+<a href="#1086" id="1086">1086</a>
+<a href="#1087" id="1087">1087</a>
+<a href="#1088" id="1088">1088</a>
+<a href="#1089" id="1089">1089</a>
+<a href="#1090" id="1090">1090</a>
+<a href="#1091" id="1091">1091</a>
+<a href="#1092" id="1092">1092</a>
+<a href="#1093" id="1093">1093</a>
+<a href="#1094" id="1094">1094</a>
+<a href="#1095" id="1095">1095</a>
+<a href="#1096" id="1096">1096</a>
+<a href="#1097" id="1097">1097</a>
+<a href="#1098" id="1098">1098</a>
+<a href="#1099" id="1099">1099</a>
+<a href="#1100" id="1100">1100</a>
+<a href="#1101" id="1101">1101</a>
 </pre></div><pre class="rust"><code><span class="kw">mod </span>config;
 
 <span class="kw">use </span>std::collections::{BTreeMap, HashMap, HashSet};
@@ -1050,6 +1112,7 @@
 <span class="kw">use </span>anyhow::{anyhow, bail, Context, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>bitcoincore_rpc::bitcoin::Network;
 <span class="kw">use </span>fedimint_api_client::api::DynGlobalApi;
+<span class="kw">use </span>fedimint_client::module::ClientModule;
 <span class="kw">use </span>fedimint_core::admin_client::{
     ConfigGenConnectionsRequest, ConfigGenParamsRequest, ServerStatus,
 };
@@ -1061,11 +1124,12 @@
 <span class="kw">use </span>fedimint_core::runtime::block_in_place;
 <span class="kw">use </span>fedimint_core::task::jit::JitTryAnyhow;
 <span class="kw">use </span>fedimint_core::util::SafeUrl;
-<span class="kw">use </span>fedimint_core::PeerId;
+<span class="kw">use </span>fedimint_core::{Amount, PeerId};
 <span class="kw">use </span>fedimint_logging::LOG_DEVIMINT;
 <span class="kw">use </span>fedimint_server::config::ConfigGenParams;
 <span class="kw">use </span>fedimint_testing::federation::local_config_gen_params;
 <span class="kw">use </span>fedimint_wallet_client::config::WalletClientConfig;
+<span class="kw">use </span>fedimint_wallet_client::WalletClientModule;
 <span class="kw">use </span>fedimintd::envs::FM_EXTRA_DKG_META_ENV;
 <span class="kw">use </span>fs_lock::FileLock;
 <span class="kw">use </span>futures::future::join_all;
@@ -1328,6 +1392,48 @@
         load_from_file(<span class="kw-2">&amp;</span>cfg_path)
     }
 
+    <span class="kw">pub async fn </span>module_client_config&lt;M: ClientModule&gt;(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;&lt;M::Common <span class="kw">as </span>ModuleCommon&gt;::ClientConfig&gt;&gt; {
+        <span class="self">self</span>.client_config()
+            .<span class="kw">await</span><span class="question-mark">?
+            </span>.modules
+            .iter()
+            .find_map(|(module_instance_id, module_cfg)| {
+                <span class="kw">if </span>module_cfg.kind == M::kind() {
+                    <span class="kw">let </span>decoders = ModuleDecoderRegistry::new(<span class="macro">vec!</span>[(
+                        <span class="kw-2">*</span>module_instance_id,
+                        M::kind(),
+                        M::decoder(),
+                    )]);
+                    <span class="prelude-val">Some</span>(
+                        module_cfg
+                            .config
+                            .clone()
+                            .redecode_raw(<span class="kw-2">&amp;</span>decoders)
+                            .expect(<span class="string">"Decoding client cfg failed"</span>)
+                            .expect_decoded_ref()
+                            .as_any()
+                            .downcast_ref::&lt;&lt;M::Common <span class="kw">as </span>ModuleCommon&gt;::ClientConfig&gt;()
+                            .cloned()
+                            .context(<span class="string">"Cast to module config failed"</span>),
+                    )
+                } <span class="kw">else </span>{
+                    <span class="prelude-val">None
+                </span>}
+            })
+            .transpose()
+    }
+
+    <span class="kw">pub async fn </span>deposit_fees(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;Amount&gt; {
+        <span class="prelude-val">Ok</span>(<span class="self">self
+            </span>.module_client_config::&lt;WalletClientModule&gt;()
+            .<span class="kw">await</span><span class="question-mark">?
+            </span>.context(<span class="string">"No wallet module found"</span>)<span class="question-mark">?
+            </span>.fee_consensus
+            .peg_in_abs)
+    }
+
     <span class="doccomment">/// Read the invite code from the client data dir
     </span><span class="kw">pub fn </span>invite_code(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;String&gt; {
         <span class="kw">let </span>data_dir: PathBuf = env::var(FM_CLIENT_DIR_ENV)<span class="question-mark">?</span>.parse()<span class="question-mark">?</span>;
@@ -1478,11 +1584,20 @@
     }
 
     <span class="kw">pub async fn </span>pegin_client(<span class="kw-2">&amp;</span><span class="self">self</span>, amount: u64, client: <span class="kw-2">&amp;</span>Client) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-        <span class="macro">info!</span>(amount, <span class="string">"Pegging-in client funds"</span>);
+        <span class="kw">let </span>deposit_fees_msat = <span class="self">self</span>.deposit_fees().<span class="kw">await</span><span class="question-mark">?</span>.msats;
+        <span class="macro">assert_eq!</span>(
+            deposit_fees_msat % <span class="number">1000</span>,
+            <span class="number">0</span>,
+            <span class="string">"Deposit fees expected to be whole sats in test suite"
+        </span>);
+        <span class="kw">let </span>deposit_fees = deposit_fees_msat / <span class="number">1000</span>;
+        <span class="macro">info!</span>(amount, deposit_fees, <span class="string">"Pegging-in client funds"</span>);
 
         <span class="kw">let </span>(address, operation_id) = client.get_deposit_addr().<span class="kw">await</span><span class="question-mark">?</span>;
 
-        <span class="self">self</span>.bitcoind.send_to(address, amount).<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="self">self</span>.bitcoind
+            .send_to(address, amount + deposit_fees)
+            .<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="self">self</span>.bitcoind.mine_blocks(<span class="number">21</span>).<span class="kw">await</span><span class="question-mark">?</span>;
 
         client.await_deposit(<span class="kw-2">&amp;</span>operation_id).<span class="kw">await</span><span class="question-mark">?</span>;
@@ -1490,10 +1605,19 @@
     }
 
     <span class="kw">pub async fn </span>pegin_gateway(<span class="kw-2">&amp;</span><span class="self">self</span>, amount: u64, gw: <span class="kw-2">&amp;</span><span class="kw">super</span>::gatewayd::Gatewayd) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-        <span class="macro">info!</span>(amount, <span class="string">"Pegging-in gateway funds"</span>);
+        <span class="kw">let </span>deposit_fees_msat = <span class="self">self</span>.deposit_fees().<span class="kw">await</span><span class="question-mark">?</span>.msats;
+        <span class="macro">assert_eq!</span>(
+            deposit_fees_msat % <span class="number">1000</span>,
+            <span class="number">0</span>,
+            <span class="string">"Deposit fees expected to be whole sats in test suite"
+        </span>);
+        <span class="kw">let </span>deposit_fees = deposit_fees_msat / <span class="number">1000</span>;
+        <span class="macro">info!</span>(amount, deposit_fees, <span class="string">"Pegging-in gateway funds"</span>);
         <span class="kw">let </span>fed_id = <span class="self">self</span>.calculate_federation_id().<span class="kw">await</span>;
         <span class="kw">let </span>pegin_addr = gw.get_pegin_addr(<span class="kw-2">&amp;</span>fed_id).<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="self">self</span>.bitcoind.send_to(pegin_addr, amount).<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="self">self</span>.bitcoind
+            .send_to(pegin_addr, amount + deposit_fees)
+            .<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="self">self</span>.bitcoind.mine_blocks(<span class="number">21</span>).<span class="kw">await</span><span class="question-mark">?</span>;
         poll(<span class="string">"gateway pegin"</span>, || <span class="kw">async </span>{
             <span class="kw">let </span>gateway_balance = <span class="macro">cmd!</span>(gw, <span class="string">"balance"</span>, <span class="string">"--federation-id={fed_id}"</span>)
