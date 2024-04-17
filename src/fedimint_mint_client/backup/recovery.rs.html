@@ -823,7 +823,7 @@
 
     <span class="doccomment">/// Fill each tier pool to the gap limit
     </span><span class="kw">fn </span>fill_initial_pending_nonces(<span class="kw-2">&amp;mut </span><span class="self">self</span>, amount: Amount, secret: <span class="kw-2">&amp;</span>DerivableSecret) {
-        <span class="macro">info!</span>(%amount, count=<span class="self">self</span>.gap_limit, <span class="string">"Generating initial set of nonces for amount tier"</span>);
+        <span class="macro">debug!</span>(%amount, count=<span class="self">self</span>.gap_limit, <span class="string">"Generating initial set of nonces for amount tier"</span>);
         <span class="kw">for _ in </span><span class="number">0</span>..<span class="self">self</span>.gap_limit {
             <span class="self">self</span>.add_next_pending_nonce_in_pending_pool(amount, secret);
         }

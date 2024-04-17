@@ -2440,6 +2440,7 @@
 <a href="#2438" id="2438">2438</a>
 <a href="#2439" id="2439">2439</a>
 <a href="#2440" id="2440">2440</a>
+<a href="#2441" id="2441">2441</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! # Client library for fedimintd
 //!
 //! This library provides a client interface to build module clients that can be
@@ -4113,6 +4114,7 @@
             watch::Receiver&lt;RecoveryProgress&gt;,
         &gt;,
     ) {
+        <span class="macro">debug!</span>(target:LOG_CLIENT_RECOVERY, num_modules=%module_recovery_progress_receivers.len(), <span class="string">"Staring module recoveries"</span>);
         <span class="kw">let </span><span class="kw-2">mut </span>completed_stream = Vec::new();
         <span class="kw">let </span>progress_stream = futures::stream::FuturesUnordered::new();
 

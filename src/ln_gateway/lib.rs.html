@@ -1861,63 +1861,6 @@
 <a href="#1859" id="1859">1859</a>
 <a href="#1860" id="1860">1860</a>
 <a href="#1861" id="1861">1861</a>
-<a href="#1862" id="1862">1862</a>
-<a href="#1863" id="1863">1863</a>
-<a href="#1864" id="1864">1864</a>
-<a href="#1865" id="1865">1865</a>
-<a href="#1866" id="1866">1866</a>
-<a href="#1867" id="1867">1867</a>
-<a href="#1868" id="1868">1868</a>
-<a href="#1869" id="1869">1869</a>
-<a href="#1870" id="1870">1870</a>
-<a href="#1871" id="1871">1871</a>
-<a href="#1872" id="1872">1872</a>
-<a href="#1873" id="1873">1873</a>
-<a href="#1874" id="1874">1874</a>
-<a href="#1875" id="1875">1875</a>
-<a href="#1876" id="1876">1876</a>
-<a href="#1877" id="1877">1877</a>
-<a href="#1878" id="1878">1878</a>
-<a href="#1879" id="1879">1879</a>
-<a href="#1880" id="1880">1880</a>
-<a href="#1881" id="1881">1881</a>
-<a href="#1882" id="1882">1882</a>
-<a href="#1883" id="1883">1883</a>
-<a href="#1884" id="1884">1884</a>
-<a href="#1885" id="1885">1885</a>
-<a href="#1886" id="1886">1886</a>
-<a href="#1887" id="1887">1887</a>
-<a href="#1888" id="1888">1888</a>
-<a href="#1889" id="1889">1889</a>
-<a href="#1890" id="1890">1890</a>
-<a href="#1891" id="1891">1891</a>
-<a href="#1892" id="1892">1892</a>
-<a href="#1893" id="1893">1893</a>
-<a href="#1894" id="1894">1894</a>
-<a href="#1895" id="1895">1895</a>
-<a href="#1896" id="1896">1896</a>
-<a href="#1897" id="1897">1897</a>
-<a href="#1898" id="1898">1898</a>
-<a href="#1899" id="1899">1899</a>
-<a href="#1900" id="1900">1900</a>
-<a href="#1901" id="1901">1901</a>
-<a href="#1902" id="1902">1902</a>
-<a href="#1903" id="1903">1903</a>
-<a href="#1904" id="1904">1904</a>
-<a href="#1905" id="1905">1905</a>
-<a href="#1906" id="1906">1906</a>
-<a href="#1907" id="1907">1907</a>
-<a href="#1908" id="1908">1908</a>
-<a href="#1909" id="1909">1909</a>
-<a href="#1910" id="1910">1910</a>
-<a href="#1911" id="1911">1911</a>
-<a href="#1912" id="1912">1912</a>
-<a href="#1913" id="1913">1913</a>
-<a href="#1914" id="1914">1914</a>
-<a href="#1915" id="1915">1915</a>
-<a href="#1916" id="1916">1916</a>
-<a href="#1917" id="1917">1917</a>
-<a href="#1918" id="1918">1918</a>
 </pre></div><pre class="rust"><code><span class="kw">pub mod </span>client;
 <span class="kw">mod </span>db;
 <span class="kw">pub mod </span>envs;
@@ -1942,6 +1885,7 @@
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
 
+<span class="kw">use </span>anyhow::{anyhow, bail};
 <span class="kw">use </span>axum::http::StatusCode;
 <span class="kw">use </span>axum::response::{IntoResponse, Response};
 <span class="kw">use </span>bitcoin::{Address, Network, Txid};
@@ -3513,15 +3457,20 @@
     <span class="kw">async fn </span>send_payment_v2(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         payload: SendPaymentPayload,
-    ) -&gt; std::result::Result&lt;std::result::Result&lt;[u8; <span class="number">32</span>], Signature&gt;, SendPaymentErrorV2&gt; {
+    ) -&gt; anyhow::Result&lt;std::result::Result&lt;[u8; <span class="number">32</span>], Signature&gt;&gt; {
         <span class="kw">let </span>clients = <span class="self">self</span>.clients.read().<span class="kw">await</span>;
 
         <span class="kw">let </span>client = clients
             .get(<span class="kw-2">&amp;</span>payload.federation_id)
-            .ok_or(SendPaymentErrorV2::UnknownFederationId)<span class="question-mark">?
+            .ok_or(<span class="macro">anyhow!</span>(<span class="string">"Federation client not available"</span>))<span class="question-mark">?
             </span>.value();
 
-        <span class="kw">let </span>operation_id = OperationId(payload.contract.contract_id().<span class="number">0</span>.into_inner());
+        <span class="comment">// The operation id is equal to the contract id which also doubles as the
+        // message signed by the gateway via the forfeit signature to forfeit
+        // the gateways claim to a contract in case of cancellation. We only create a
+        // forfeit signature after the we have started the send state machine to
+        // prevent replay attacks with a previously cancelled outgoing contract
+        </span><span class="kw">let </span>operation_id = OperationId::from_encodable(payload.contract.clone());
 
         <span class="kw">let </span>module = client.get_first_module::&lt;GatewayClientModuleV2&gt;();
 
@@ -3529,45 +3478,37 @@
             <span class="kw">return </span><span class="prelude-val">Ok</span>(module.subscribe_send(operation_id, payload.contract).<span class="kw">await</span>);
         }
 
-        <span class="kw">if </span>payload.contract.claim_pk != module.keypair.public_key() {
-            <span class="kw">return </span><span class="prelude-val">Err</span>(SendPaymentErrorV2::NotOurKey);
+        <span class="comment">// Since the following three checks may only fail due to client side
+        // programming error we do not have to enable cancellation and can check
+        // them before we start the state machine.
+        </span><span class="kw">if </span>payload.contract.claim_pk != module.keypair.public_key() {
+            <span class="macro">bail!</span>(<span class="string">"The outgoing contract keyed to another gateway"</span>);
         }
 
         <span class="kw">if </span>payload.invoice.consensus_hash::&lt;sha256::Hash&gt;() != payload.contract.invoice_hash {
-            <span class="kw">return </span><span class="prelude-val">Err</span>(SendPaymentErrorV2::InvalidInvoiceHash);
-        }
-
-        <span class="kw">let </span>max_delay = module
-            .module_api
-            .outgoing_contract_expiration(<span class="kw-2">&amp;</span>payload.contract.contract_id())
-            .<span class="kw">await
-            </span>.map_err(|<span class="kw">_</span>| SendPaymentErrorV2::FederationUnreachable)<span class="question-mark">?
-            </span>.ok_or(SendPaymentErrorV2::UnconfirmedContract)<span class="question-mark">?
-            </span>.saturating_sub(OUTGOING_CLTV_DELTA_V2);
-
-        <span class="kw">if </span>max_delay == <span class="number">0 </span>{
-            <span class="kw">return </span><span class="prelude-val">Err</span>(SendPaymentErrorV2::TimeoutTooClose);
+            <span class="macro">bail!</span>(<span class="string">"The invoices hash does not match the contract"</span>);
         }
 
         <span class="kw">let </span>invoice_msats = payload
             .invoice
             .amount_milli_satoshis()
-            .ok_or(SendPaymentErrorV2::InvoiceMissingAmount)<span class="question-mark">?</span>;
+            .ok_or(<span class="macro">anyhow!</span>(<span class="string">"Invoice is missing amount"</span>))<span class="question-mark">?</span>;
 
-        <span class="kw">let </span>min_contract_amount = <span class="self">self</span>.payment_fees_v2().send.add_fee(invoice_msats);
-
-        <span class="kw">if </span>payload.contract.amount &lt; min_contract_amount {
-            <span class="kw">return </span><span class="prelude-val">Err</span>(SendPaymentErrorV2::Underfunded);
-        }
-
-        <span class="kw">let </span>additional_fee = payload.contract.amount - min_contract_amount;
-        <span class="kw">let </span>max_ln_fee = additional_fee.msats + (min_contract_amount.msats - invoice_msats) / <span class="number">2</span>;
+        <span class="comment">// We need to check that the contract has been confirmed by the federation
+        // before we start the state machine to prevent DOS attacks.
+        </span><span class="kw">let </span>max_delay = module
+            .module_api
+            .outgoing_contract_expiration(<span class="kw-2">&amp;</span>payload.contract.contract_id())
+            .<span class="kw">await
+            </span>.map_err(|<span class="kw">_</span>| <span class="macro">anyhow!</span>(<span class="string">"The gateway can not reach the federation"</span>))<span class="question-mark">?
+            </span>.ok_or(<span class="macro">anyhow!</span>(<span class="string">"The outgoing contract has not yet been confirmed"</span>))<span class="question-mark">?
+            </span>.saturating_sub(OUTGOING_CLTV_DELTA_V2);
 
         module
             .start_send_state_machine(
                 operation_id,
                 max_delay,
-                max_ln_fee,
+                invoice_msats,
                 payload.invoice,
                 payload.contract.clone(),
             )
@@ -3580,18 +3521,18 @@
     <span class="kw">async fn </span>create_invoice_v2(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         payload: CreateInvoicePayload,
-    ) -&gt; std::result::Result&lt;Bolt11Invoice, CreateInvoiceErrorV2&gt; {
+    ) -&gt; anyhow::Result&lt;Bolt11Invoice&gt; {
         <span class="kw">if </span>!payload.contract.verify() {
-            <span class="kw">return </span><span class="prelude-val">Err</span>(CreateInvoiceErrorV2::InvalidContract);
+            <span class="macro">bail!</span>(<span class="string">"The contract is invalid"</span>)
         }
 
         <span class="kw">let </span>our_pk = <span class="self">self
             </span>.public_key_v2(<span class="kw-2">&amp;</span>payload.federation_id)
             .<span class="kw">await
-            </span>.ok_or(CreateInvoiceErrorV2::UnknownFederation)<span class="question-mark">?</span>;
+            </span>.ok_or(<span class="macro">anyhow!</span>(<span class="string">"Federation client not available"</span>))<span class="question-mark">?</span>;
 
         <span class="kw">if </span>payload.contract.commitment.refund_pk != our_pk {
-            <span class="kw">return </span><span class="prelude-val">Err</span>(CreateInvoiceErrorV2::NotOurKey);
+            <span class="macro">bail!</span>(<span class="string">"The outgoing contract keyed to another gateway"</span>);
         }
 
         <span class="kw">let </span>contract_amount = <span class="self">self
@@ -3600,11 +3541,11 @@
             .subtract_fee(payload.invoice_amount.msats);
 
         <span class="kw">if </span>contract_amount != payload.contract.commitment.amount {
-            <span class="kw">return </span><span class="prelude-val">Err</span>(CreateInvoiceErrorV2::Unbalanced);
+            <span class="macro">bail!</span>(<span class="string">"The contract amount does not pay the correct amount of fees"</span>);
         }
 
         <span class="kw">if </span>payload.contract.commitment.expiration &lt;= duration_since_epoch().as_secs() {
-            <span class="kw">return </span><span class="prelude-val">Err</span>(CreateInvoiceErrorV2::ContractExpired);
+            <span class="macro">bail!</span>(<span class="string">"The contract has already expired"</span>);
         }
 
         <span class="kw">let </span>invoice = <span class="self">self
@@ -3615,7 +3556,7 @@
                 payload.expiry_time,
             )
             .<span class="kw">await
-            </span>.map_err(CreateInvoiceErrorV2::NodeError)<span class="question-mark">?</span>;
+            </span>.map_err(|e| <span class="macro">anyhow!</span>(e))<span class="question-mark">?</span>;
 
         <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.gateway_db.begin_transaction().<span class="kw">await</span>;
 
@@ -3627,12 +3568,12 @@
             .<span class="kw">await
             </span>.is_some()
         {
-            <span class="kw">return </span><span class="prelude-val">Err</span>(CreateInvoiceErrorV2::HashAlreadyRegistered);
+            <span class="macro">bail!</span>(<span class="string">"Payment hash is already registered"</span>);
         }
 
         dbtx.commit_tx_result()
             .<span class="kw">await
-            </span>.map_err(|<span class="kw">_</span>| CreateInvoiceErrorV2::HashAlreadyRegistered)<span class="question-mark">?</span>;
+            </span>.map_err(|<span class="kw">_</span>| <span class="macro">anyhow!</span>(<span class="string">"Payment hash is already registered"</span>))<span class="question-mark">?</span>;
 
         <span class="prelude-val">Ok</span>(invoice)
     }
@@ -3667,8 +3608,8 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         payment_hash: [u8; <span class="number">32</span>],
         amount: Amount,
-    ) -&gt; std::result::Result&lt;[u8; <span class="number">32</span>], ReceiveErrorV2&gt; {
-        <span class="kw">let </span>operation_id = OperationId(payment_hash);
+    ) -&gt; anyhow::Result&lt;[u8; <span class="number">32</span>]&gt; {
+        <span class="kw">let </span>operation_id = OperationId::from_encodable(payment_hash);
 
         <span class="kw">let </span>payload = <span class="self">self
             </span>.gateway_db
@@ -3676,13 +3617,13 @@
             .<span class="kw">await
             </span>.get_value(<span class="kw-2">&amp;</span>CreateInvoicePayloadKey(payment_hash))
             .<span class="kw">await
-            </span>.ok_or(ReceiveErrorV2::UnknownDecryptionContract)<span class="question-mark">?</span>;
+            </span>.ok_or(<span class="macro">anyhow!</span>(<span class="string">"No corresponding decryption contract available"</span>))<span class="question-mark">?</span>;
 
         <span class="kw">let </span>clients = <span class="self">self</span>.clients.read().<span class="kw">await</span>;
 
         <span class="kw">let </span>client = clients
             .get(<span class="kw-2">&amp;</span>payload.federation_id)
-            .ok_or(ReceiveErrorV2::UnknownFederationId)<span class="question-mark">?
+            .ok_or(<span class="macro">anyhow!</span>(<span class="string">"Federation client not available"</span>))<span class="question-mark">?
             </span>.value();
 
         <span class="kw">let </span>module = client.get_first_module::&lt;GatewayClientModuleV2&gt;();
@@ -3691,22 +3632,21 @@
             <span class="kw">return </span>module
                 .subscribe_receive(operation_id)
                 .<span class="kw">await
-                </span>.ok_or(ReceiveErrorV2::Failure);
+                </span>.ok_or(<span class="macro">anyhow!</span>(<span class="string">"The internal send failed"</span>));
         }
 
         <span class="kw">if </span>payload.invoice_amount != amount {
-            <span class="kw">return </span><span class="prelude-val">Err</span>(ReceiveErrorV2::IncorrectAmount);
+            <span class="macro">bail!</span>(<span class="string">"The available decryption contract's amount is not equal the requested amount"</span>)
         }
 
         module
             .start_receive_state_machine(operation_id, payload.contract)
-            .<span class="kw">await
-            </span>.map_err(ReceiveErrorV2::FinalizationError)<span class="question-mark">?</span>;
+            .<span class="kw">await</span><span class="question-mark">?</span>;
 
         module
             .subscribe_receive(operation_id)
             .<span class="kw">await
-            </span>.ok_or(ReceiveErrorV2::Failure)
+            </span>.ok_or(<span class="macro">anyhow!</span>(<span class="string">"The internal send failed"</span>))
     }
 }
 
@@ -3781,59 +3721,5 @@
             htlc_request.htlc_id,
         )
     }
-}
-
-<span class="attr">#[derive(Error, Debug, Clone, Eq, PartialEq)]
-</span><span class="kw">pub enum </span>SendPaymentErrorV2 {
-    <span class="attr">#[error(<span class="string">"The federation id is unknown"</span>)]
-    </span>UnknownFederationId,
-    <span class="attr">#[error(<span class="string">"The outgoing contract has not been confirmed by the federation"</span>)]
-    </span>UnconfirmedContract,
-    <span class="attr">#[error(<span class="string">"The invoice's hash does not match the commitment in the contract"</span>)]
-    </span>InvalidInvoiceHash,
-    <span class="attr">#[error(<span class="string">"The outgoing contract keyed to another gateway"</span>)]
-    </span>NotOurKey,
-    <span class="attr">#[error(<span class="string">"Invoice is missing amount"</span>)]
-    </span>InvoiceMissingAmount,
-    <span class="attr">#[error(<span class="string">"Outgoing contract is underfunded"</span>)]
-    </span>Underfunded,
-    <span class="attr">#[error(<span class="string">"The gateway can not reach the federation to confirm contract"</span>)]
-    </span>FederationUnreachable,
-    <span class="attr">#[error(<span class="string">"The contract's timeout is in the past or does not allow for a safety margin"</span>)]
-    </span>TimeoutTooClose,
-    <span class="attr">#[error(<span class="string">"The invoice is expired."</span>)]
-    </span>InvoiceExpired,
-}
-
-<span class="attr">#[derive(Error, Debug)]
-</span><span class="kw">pub enum </span>ReceiveErrorV2 {
-    <span class="attr">#[error(<span class="string">"The federation id is unknown"</span>)]
-    </span>UnknownFederationId,
-    <span class="attr">#[error(<span class="string">"There is no corresponding decryption contract available"</span>)]
-    </span>UnknownDecryptionContract,
-    <span class="attr">#[error(<span class="string">"The available decryption contract's amount does not match the amount in the request"</span>)]
-    </span>IncorrectAmount,
-    <span class="attr">#[error(<span class="string">"The funding transaction could not be finalized {0}"</span>)]
-    </span>FinalizationError(anyhow::Error),
-    <span class="attr">#[error(<span class="string">"The internal send failed"</span>)]
-    </span>Failure,
-}
-
-<span class="attr">#[derive(Error, Debug, Clone, Eq, PartialEq)]
-</span><span class="kw">pub enum </span>CreateInvoiceErrorV2 {
-    <span class="attr">#[error(<span class="string">"The contract is invalid"</span>)]
-    </span>InvalidContract,
-    <span class="attr">#[error(<span class="string">"The contract is keyed to another gateway"</span>)]
-    </span>NotOurKey,
-    <span class="attr">#[error(<span class="string">"The gateway is not connected to the Federation"</span>)]
-    </span>UnknownFederation,
-    <span class="attr">#[error(<span class="string">"A different decryption contract with this hash is already registered"</span>)]
-    </span>HashAlreadyRegistered,
-    <span class="attr">#[error(<span class="string">"The contract is already expired"</span>)]
-    </span>ContractExpired,
-    <span class="attr">#[error(<span class="string">"Incoming contract would be underfunded"</span>)]
-    </span>Unbalanced,
-    <span class="attr">#[error(<span class="string">"The lightning node failed to create an invoice"</span>)]
-    </span>NodeError(String),
 }
 </code></pre></div></section></main></body></html>

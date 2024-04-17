@@ -187,6 +187,42 @@
 <a href="#185" id="185">185</a>
 <a href="#186" id="186">186</a>
 <a href="#187" id="187">187</a>
+<a href="#188" id="188">188</a>
+<a href="#189" id="189">189</a>
+<a href="#190" id="190">190</a>
+<a href="#191" id="191">191</a>
+<a href="#192" id="192">192</a>
+<a href="#193" id="193">193</a>
+<a href="#194" id="194">194</a>
+<a href="#195" id="195">195</a>
+<a href="#196" id="196">196</a>
+<a href="#197" id="197">197</a>
+<a href="#198" id="198">198</a>
+<a href="#199" id="199">199</a>
+<a href="#200" id="200">200</a>
+<a href="#201" id="201">201</a>
+<a href="#202" id="202">202</a>
+<a href="#203" id="203">203</a>
+<a href="#204" id="204">204</a>
+<a href="#205" id="205">205</a>
+<a href="#206" id="206">206</a>
+<a href="#207" id="207">207</a>
+<a href="#208" id="208">208</a>
+<a href="#209" id="209">209</a>
+<a href="#210" id="210">210</a>
+<a href="#211" id="211">211</a>
+<a href="#212" id="212">212</a>
+<a href="#213" id="213">213</a>
+<a href="#214" id="214">214</a>
+<a href="#215" id="215">215</a>
+<a href="#216" id="216">216</a>
+<a href="#217" id="217">217</a>
+<a href="#218" id="218">218</a>
+<a href="#219" id="219">219</a>
+<a href="#220" id="220">220</a>
+<a href="#221" id="221">221</a>
+<a href="#222" id="222">222</a>
+<a href="#223" id="223">223</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::sync::Arc;
 
 <span class="kw">use </span>bitcoin_hashes::Hash;
@@ -200,6 +236,7 @@
 <span class="kw">use </span>fedimint_lnv2_common::contracts::OutgoingContract;
 <span class="kw">use </span>fedimint_lnv2_common::{LightningInput, OutgoingWitness, Witness};
 <span class="kw">use </span>lightning_invoice::Bolt11Invoice;
+<span class="kw">use </span>serde::{Deserialize, Serialize};
 
 <span class="kw">use </span><span class="kw">crate</span>::gateway_lnrpc::PayInvoiceRequest;
 <span class="kw">use </span><span class="kw">crate</span>::gateway_module_v2::GatewayClientContextV2;
@@ -234,13 +271,22 @@
 </span><span class="kw">pub enum </span>SendSMState {
     Sending,
     Claiming(Claiming),
-    Cancelled(String),
+    Cancelled(Cancelled),
 }
 
 <span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
 </span><span class="kw">pub struct </span>Claiming {
     <span class="kw">pub </span>preimage: [u8; <span class="number">32</span>],
     <span class="kw">pub </span>outpoints: Vec&lt;OutPoint&gt;,
+}
+
+<span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable, Serialize, Deserialize)]
+</span><span class="kw">pub enum </span>Cancelled {
+    InvoiceExpired,
+    TimeoutTooClose,
+    Underfunded,
+    LightningRpcError(String),
+    ReceiveError(String),
 }
 
 <span class="attr">#[cfg_attr(doc, aquamarine::aquamarine)]
@@ -271,6 +317,7 @@
                         <span class="self">self</span>.common.max_delay,
                         <span class="self">self</span>.common.max_fee_msat,
                         <span class="self">self</span>.common.invoice.clone(),
+                        <span class="self">self</span>.common.contract.amount,
                     ),
                     <span class="kw">move </span>|dbtx, result, old_state| {
                         Box::pin(<span class="self">Self</span>::transition_send_payment(
@@ -300,14 +347,39 @@
     <span class="kw">async fn </span>send_payment(
         context: GatewayClientContextV2,
         max_delay: u64,
-        max_fee_msat: u64,
+        invoice_msats: u64,
         invoice: Bolt11Invoice,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;[u8; <span class="number">32</span>], String&gt; {
+        contract_amount: Amount,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;[u8; <span class="number">32</span>], Cancelled&gt; {
+        <span class="comment">// The following three checks may fail in edge cases since they have inherent
+        // timing assumptions. Therefore, they may only be checked after we have created
+        // the state machine such that we can cancel the contract.
+        </span><span class="kw">if </span>invoice.is_expired() {
+            <span class="kw">return </span><span class="prelude-val">Err</span>(Cancelled::InvoiceExpired);
+        }
+
+        <span class="kw">if </span>max_delay == <span class="number">0 </span>{
+            <span class="kw">return </span><span class="prelude-val">Err</span>(Cancelled::TimeoutTooClose);
+        }
+
+        <span class="kw">let </span>min_contract_amount = context
+            .gateway
+            .payment_fees_v2()
+            .send
+            .add_fee(invoice_msats);
+
+        <span class="kw">if </span>contract_amount &lt; min_contract_amount {
+            <span class="kw">return </span><span class="prelude-val">Err</span>(Cancelled::Underfunded);
+        }
+
+        <span class="kw">let </span>excess_fee = contract_amount - min_contract_amount;
+        <span class="kw">let </span>max_fee_msat = excess_fee.msats + (min_contract_amount.msats - invoice_msats) / <span class="number">2</span>;
+
         <span class="kw">let </span>lightning_context = context
             .gateway
             .get_lightning_context()
             .<span class="kw">await
-            </span>.map_err(|e| e.to_string())<span class="question-mark">?</span>;
+            </span>.map_err(|e| Cancelled::LightningRpcError(e.to_string()))<span class="question-mark">?</span>;
 
         <span class="kw">if </span>lightning_context.lightning_public_key == invoice.recover_payee_pub_key() {
             <span class="kw">let </span>invoice_msats = invoice
@@ -321,7 +393,7 @@
                     Amount::from_msats(invoice_msats),
                 )
                 .<span class="kw">await
-                </span>.map_err(|e| e.to_string());
+                </span>.map_err(|e| Cancelled::ReceiveError(e.to_string()));
         }
 
         lightning_context
@@ -340,14 +412,14 @@
                     .try_into()
                     .expect(<span class="string">"Preimage is 32 bytes"</span>)
             })
-            .map_err(|e| e.to_string())
+            .map_err(|e| Cancelled::LightningRpcError(e.to_string()))
     }
 
     <span class="kw">async fn </span>transition_send_payment(
         dbtx: <span class="kw-2">&amp;mut </span>ClientSMDatabaseTransaction&lt;<span class="lifetime">'_</span>, <span class="lifetime">'_</span>&gt;,
         old_state: SendStateMachine,
         global_context: DynGlobalClientContext,
-        result: <span class="prelude-ty">Result</span>&lt;[u8; <span class="number">32</span>], String&gt;,
+        result: <span class="prelude-ty">Result</span>&lt;[u8; <span class="number">32</span>], Cancelled&gt;,
     ) -&gt; SendStateMachine {
         <span class="kw">match </span>result {
             <span class="prelude-val">Ok</span>(preimage) =&gt; {

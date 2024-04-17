@@ -295,6 +295,10 @@
 <a href="#293" id="293">293</a>
 <a href="#294" id="294">294</a>
 <a href="#295" id="295">295</a>
+<a href="#296" id="296">296</a>
+<a href="#297" id="297">297</a>
+<a href="#298" id="298">298</a>
+<a href="#299" id="299">299</a>
 </pre></div><pre class="rust"><code><span class="kw">mod </span>receive_sm;
 <span class="kw">mod </span>send_sm;
 
@@ -327,7 +331,7 @@
 <span class="kw">use </span>send_sm::{SendSMState, SendStateMachine};
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>tpe::{AggregatePublicKey, PublicKeyShare};
-<span class="kw">use </span>tracing::error;
+<span class="kw">use </span>tracing::warn;
 
 <span class="kw">use </span><span class="kw">crate</span>::gateway_module_v2::receive_sm::ReceiveSMCommon;
 <span class="kw">use </span><span class="kw">crate</span>::gateway_module_v2::send_sm::SendSMCommon;
@@ -527,10 +531,14 @@
                 <span class="kw">match </span>state.state {
                     SendSMState::Sending =&gt; {}
                     SendSMState::Claiming(claiming) =&gt; <span class="kw">return </span><span class="prelude-val">Ok</span>(claiming.preimage),
-                    SendSMState::Cancelled(error) =&gt; {
-                        <span class="macro">error!</span>(<span class="string">"Failed to route payment {}"</span>, error);
+                    SendSMState::Cancelled(cancelled) =&gt; {
+                        <span class="macro">warn!</span>(<span class="string">"Outgoing lightning payment is cancelled {:?}"</span>, cancelled);
 
-                        <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="self">self</span>.keypair.sign_schnorr(contract.forfeit_message()));
+                        <span class="kw">let </span>signature = <span class="self">self</span>.keypair.sign_schnorr(contract.forfeit_message());
+
+                        <span class="macro">assert!</span>(contract.verify_forfeit_signature(<span class="kw-2">&amp;</span>signature));
+
+                        <span class="kw">return </span><span class="prelude-val">Err</span>(signature);
                     }
                 }
             }

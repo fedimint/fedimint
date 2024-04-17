@@ -454,15 +454,6 @@
 <a href="#452" id="452">452</a>
 <a href="#453" id="453">453</a>
 <a href="#454" id="454">454</a>
-<a href="#455" id="455">455</a>
-<a href="#456" id="456">456</a>
-<a href="#457" id="457">457</a>
-<a href="#458" id="458">458</a>
-<a href="#459" id="459">459</a>
-<a href="#460" id="460">460</a>
-<a href="#461" id="461">461</a>
-<a href="#462" id="462">462</a>
-<a href="#463" id="463">463</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::time::Duration;
 <span class="kw">use </span>std::{cmp, ops};
 
@@ -592,18 +583,6 @@
     ) -&gt; anyhow::Result&lt;()&gt; {
         <span class="macro">trace!</span>(
             target: LOG_CLIENT_RECOVERY,
-            <span class="question-mark">?</span>transaction,
-            <span class="string">"found consensus item"
-        </span>);
-
-        <span class="macro">trace!</span>(
-            target: LOG_CLIENT_RECOVERY,
-            tx_hash = %transaction.tx_hash(),
-            <span class="string">"found transaction"
-        </span>);
-
-        <span class="macro">debug!</span>(
-            target: LOG_CLIENT_RECOVERY,
             tx_hash = %transaction.tx_hash(),
             input_num = transaction.inputs.len(),
             output_num = transaction.outputs.len(),
@@ -611,7 +590,7 @@
         </span>);
 
         <span class="kw">for </span>(idx, input) <span class="kw">in </span>transaction.inputs.iter().enumerate() {
-            <span class="macro">debug!</span>(
+            <span class="macro">trace!</span>(
                 target: LOG_CLIENT_RECOVERY,
                 tx_hash = %transaction.tx_hash(),
                 idx,
@@ -625,7 +604,7 @@
         }
 
         <span class="kw">for </span>(out_idx, output) <span class="kw">in </span>transaction.outputs.iter().enumerate() {
-            <span class="macro">debug!</span>(
+            <span class="macro">trace!</span>(
                 target: LOG_CLIENT_RECOVERY,
                 tx_hash = %transaction.tx_hash(),
                 idx = out_idx,
@@ -715,7 +694,7 @@
             epoch_range: ops::Range&lt;u64&gt;,
         ) -&gt; <span class="kw">impl </span>futures::Stream&lt;Item = (u64, Vec&lt;AcceptedItem&gt;)&gt; + <span class="lifetime">'a </span>{
             <span class="comment">// How many request for blocks to run in parallel (streaming).
-            </span><span class="kw">const </span>PARALLISM_LEVEL: usize = <span class="number">8</span>;
+            </span><span class="kw">const </span>PARALLISM_LEVEL: usize = <span class="number">64</span>;
             <span class="kw">const </span>VERSION_THAT_INTRODUCED_GET_SESSION_STATUS: ApiVersion =
                 ApiVersion { major: <span class="number">0</span>, minor: <span class="number">1 </span>};
 
@@ -728,7 +707,7 @@
 
                         <span class="kw">let </span><span class="kw-2">mut </span>retry_sleep = Duration::from_millis(<span class="number">10</span>);
                         <span class="kw">let </span>block = <span class="kw">loop </span>{
-                            <span class="macro">info!</span>(target: LOG_CLIENT_RECOVERY, session_idx, <span class="string">"Awaiting signed block"</span>);
+                            <span class="macro">trace!</span>(target: LOG_CLIENT_RECOVERY, session_idx, <span class="string">"Awaiting signed block"</span>);
 
                             <span class="kw">let </span>items_res = <span class="kw">if </span>core_api_version &lt; VERSION_THAT_INTRODUCED_GET_SESSION_STATUS {
                                 api.await_block(session_idx, <span class="kw-2">&amp;</span>decoders).<span class="kw">await</span>.map(|s| s.items)
@@ -741,9 +720,12 @@
                             };
 
                             <span class="kw">match </span>items_res {
-                                <span class="prelude-val">Ok</span>(block) =&gt; <span class="kw">break </span>block,
+                                <span class="prelude-val">Ok</span>(block) =&gt; {
+                                    <span class="macro">debug!</span>(target: LOG_CLIENT_RECOVERY, session_idx, <span class="string">"Got signed session"</span>);
+                                    <span class="kw">break </span>block
+                                },
                                 <span class="prelude-val">Err</span>(e) =&gt; {
-                                    <span class="macro">info!</span>(e = %e, session_idx, <span class="string">"Error trying to fetch signed block"</span>);
+                                    <span class="macro">warn!</span>(target: LOG_CLIENT_RECOVERY, e = %e, session_idx, <span class="string">"Error trying to fetch signed block"</span>);
                                     <span class="comment">// We don't want PARALLISM_LEVEL tasks hammering Federation
                                     // with requests, so max sleep is significant
                                     </span><span class="kw">const </span>MAX_SLEEP: Duration = Duration::from_secs(<span class="number">120</span>);
