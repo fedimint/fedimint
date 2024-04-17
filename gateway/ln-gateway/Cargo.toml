@@ -52,7 +52,7 @@ fedimint-dummy-client = { version = "=0.4.0-alpha", path = "../../modules/fedimi
 fedimint-wallet-client = { version = "=0.4.0-alpha", path = "../../modules/fedimint-wallet-client" }
 fedimint-lnv2-client = { path = "../../modules/fedimint-lnv2-client" }
 fedimint-lnv2-common = { path = "../../modules/fedimint-lnv2-common" }
-tpe = { package = "fedimint-tpe", version = "0.4.0-alpha", path = "../../crypto/tpe" }
+tpe = { package = "fedimint-tpe", version = "=0.4.0-alpha", path = "../../crypto/tpe" }
 futures = { workspace = true }
 hex = { workspace = true }
 erased-serde = { workspace = true }
