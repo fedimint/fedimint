@@ -176,15 +176,36 @@ impl SendStateMachine {
                         if contract.verify_gateway_response(&gateway_response) {
                             return gateway_response;
                         } else {
-                            error!("Invalid gateway response: {gateway_response:?}");
+                            error!(
+                                ?gateway_response,
+                                ?contract,
+                                ?invoice,
+                                ?federation_id,
+                                ?gateway_api,
+                                "Invalid gateway response"
+                            );
                         }
                     }
                     Err(error) => {
-                        error!("Gateway returned error: {error}")
+                        error!(
+                            ?error,
+                            ?contract,
+                            ?invoice,
+                            ?federation_id,
+                            ?gateway_api,
+                            "Gateway returned error"
+                        )
                     }
                 },
                 Err(error) => {
-                    error!("Error while trying to reach gateway: {error}");
+                    error!(
+                        ?error,
+                        ?contract,
+                        ?invoice,
+                        ?federation_id,
+                        ?gateway_api,
+                        "Error while trying to reach gateway"
+                    );
                 }
             }
 
