@@ -452,7 +452,7 @@ impl GatewayClientModule {
         let tx = TransactionBuilder::new().with_output(self.client_ctx.make_client_output(
             ClientOutput {
                 output: LightningOutput::V0(client_output.output),
-                amount: Amount::ZERO,
+                amount: client_output.amount,
                 state_machines: client_output.state_machines,
             },
         ));
