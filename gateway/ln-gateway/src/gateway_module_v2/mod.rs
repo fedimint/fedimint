@@ -19,7 +19,7 @@ use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::{
     ApiVersion, CommonModuleInit, ModuleCommon, ModuleInit, MultiApiVersion, TransactionItemAmount,
 };
-use fedimint_core::{apply, async_trait_maybe_send, OutPoint, PeerId};
+use fedimint_core::{apply, async_trait_maybe_send, Amount, OutPoint, PeerId};
 use fedimint_lnv2_common::config::LightningClientConfig;
 use fedimint_lnv2_common::contracts::{IncomingContract, OutgoingContract};
 use fedimint_lnv2_common::{LightningCommonInit, LightningModuleTypes, LightningOutput};
@@ -119,14 +119,8 @@ impl ClientModule for GatewayClientModuleV2 {
         }
     }
 
-    fn input_amount(
-        &self,
-        input: &<Self::Common as ModuleCommon>::Input,
-    ) -> Option<TransactionItemAmount> {
-        Some(TransactionItemAmount {
-            amount: input.amount,
-            fee: self.cfg.fee_consensus.input,
-        })
+    fn input_fee(&self, _input: &<Self::Common as ModuleCommon>::Input) -> Option<Amount> {
+        Some(self.cfg.fee_consensus.input)
     }
 
     fn output_amount(

@@ -110,10 +110,7 @@ impl ClientModule for MetaClientModule {
         }
     }
 
-    fn input_amount(
-        &self,
-        _input: &<Self::Common as ModuleCommon>::Input,
-    ) -> Option<TransactionItemAmount> {
+    fn input_fee(&self, _input: &<Self::Common as ModuleCommon>::Input) -> Option<Amount> {
         unreachable!()
     }
 

@@ -67,14 +67,8 @@ impl ClientModule for DummyClientModule {
         }
     }
 
-    fn input_amount(
-        &self,
-        input: &<Self::Common as ModuleCommon>::Input,
-    ) -> Option<TransactionItemAmount> {
-        Some(TransactionItemAmount {
-            amount: input.amount,
-            fee: self.cfg.tx_fee,
-        })
+    fn input_fee(&self, _input: &<Self::Common as ModuleCommon>::Input) -> Option<Amount> {
+        Some(self.cfg.tx_fee)
     }
 
     fn output_amount(
