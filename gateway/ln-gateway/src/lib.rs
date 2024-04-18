@@ -969,6 +969,7 @@ impl Gateway {
                     lightning_context,
                 )
                 .await?;
+
             // no need to enter span earlier, because connect-fed has a span
             self.clients.write().await.insert(
                 federation_id,
@@ -978,6 +979,7 @@ impl Gateway {
                 )
                 .await,
             );
+
             self.scid_to_federation
                 .write()
                 .await
@@ -1291,6 +1293,7 @@ impl Gateway {
         Ok(())
     }
 
+    // TODO: This stuff is horrible, why do we need it? Don't use it.
     pub async fn remove_client_hack(
         &self,
         federation_id: FederationId,
@@ -1299,6 +1302,28 @@ impl Gateway {
             GatewayError::InvalidMetadata(format!("No federation with id {federation_id}")),
         )?;
         Ok(client)
+    }
+
+    // TODO: This stuff is horrible, why do we need it? Don't use it.
+    pub async fn add_client_hack(
+        &self,
+        federation_id: FederationId,
+        client: ClientHandleArc,
+    ) -> anyhow::Result<()> {
+        let write = &mut self.clients.write().await;
+        if write.get(&federation_id).is_some() {
+            bail!("Client already exists: {federation_id}")
+        }
+        write.insert(
+            federation_id,
+            Spanned::new(
+                info_span!("client", federation_id=%federation_id.clone()),
+                async move { client },
+            )
+            .await,
+        );
+
+        Ok(())
     }
 
     pub async fn select_client(
