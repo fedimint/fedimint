@@ -97,9 +97,9 @@ dependencies = [
 
 [[package]]
 name = "allocator-api2"
-version = "0.2.16"
+version = "0.2.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0942ffc6dcaadf03badf6e6a2d0228460359d5e34b57ccdc720b7382dfbd5ec5"
+checksum = "5c6cb57a04249c6480766f7f7cef5467412af1490f8d1e243141daddada3264f"
 
 [[package]]
 name = "anes"
@@ -1415,55 +1415,28 @@ version = "0.4.0-alpha"
 dependencies = [
  "anyhow",
  "async-lock",
- "async-recursion",
  "async-trait",
- "backon",
- "backtrace",
- "bech32",
- "bincode",
  "bitcoin 0.29.2",
- "bitcoin 0.30.2",
- "bitvec",
- "bls12_381",
- "erased-serde",
  "fedimint-core",
- "fedimint-derive",
  "fedimint-logging",
- "fedimint-threshold-crypto",
  "futures",
- "futures-util",
  "getrandom",
  "gloo-timers 0.3.0",
- "hex",
- "imbl",
  "itertools 0.12.1",
  "js-sys",
  "jsonrpsee-core",
- "jsonrpsee-types",
  "jsonrpsee-wasm-client",
  "jsonrpsee-ws-client",
- "lightning",
- "lightning-invoice",
  "lru",
- "macro_rules_attribute",
- "miniscript 10.0.0",
  "once_cell",
- "parity-scale-codec",
- "rand",
- "secp256k1 0.27.0",
- "secp256k1-zkp",
  "serde",
  "serde_json",
- "serdect",
- "strum 0.26.2",
- "strum_macros",
  "thiserror",
  "tokio",
  "tokio-rustls 0.23.4",
  "tokio-test",
  "tracing",
  "tracing-subscriber",
- "url",
  "wasm-bindgen-futures",
 ]
 
