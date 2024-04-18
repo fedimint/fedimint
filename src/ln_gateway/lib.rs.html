@@ -1858,6 +1858,7 @@
 <a href="#1856" id="1856">1856</a>
 <a href="#1857" id="1857">1857</a>
 <a href="#1858" id="1858">1858</a>
+<a href="#1859" id="1859">1859</a>
 </pre></div><pre class="rust"><code><span class="kw">pub mod </span>client;
 <span class="kw">mod </span>db;
 <span class="kw">pub mod </span>envs;
@@ -1986,7 +1987,7 @@
     </span>proportional_millionths: <span class="number">10000</span>,
 };
 
-<span class="kw">const </span>OUTGOING_CLTV_DELTA_V2: u64 = <span class="number">144</span>;
+<span class="kw">const </span>EXPIRATION_DELTA_MINIMUM_V2: u64 = <span class="number">144</span>;
 
 <span class="kw">pub type </span><span class="prelude-ty">Result</span>&lt;T&gt; = std::result::Result&lt;T, GatewayError&gt;;
 
@@ -3438,7 +3439,8 @@
             send_fee_default: PaymentFee::one_percent(),
             send_fee_minimum: PaymentFee::half_of_one_percent(),
             receive_fee: PaymentFee::half_of_one_percent(),
-            outgoing_cltv_delta: OUTGOING_CLTV_DELTA_V2,
+            expiration_delta_default: <span class="number">500</span>,
+            expiration_delta_minimum: EXPIRATION_DELTA_MINIMUM_V2,
         })
     }
 
@@ -3497,7 +3499,7 @@
             .<span class="kw">await
             </span>.map_err(|<span class="kw">_</span>| <span class="macro">anyhow!</span>(<span class="string">"The gateway can not reach the federation"</span>))<span class="question-mark">?
             </span>.ok_or(<span class="macro">anyhow!</span>(<span class="string">"The outgoing contract has not yet been confirmed"</span>))<span class="question-mark">?
-            </span>.saturating_sub(OUTGOING_CLTV_DELTA_V2);
+            </span>.saturating_sub(EXPIRATION_DELTA_MINIMUM_V2);
 
         module
             .start_send_state_machine(

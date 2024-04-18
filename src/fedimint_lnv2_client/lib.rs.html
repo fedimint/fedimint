@@ -890,6 +890,7 @@
 <a href="#888" id="888">888</a>
 <a href="#889" id="889">889</a>
 <a href="#890" id="890">890</a>
+<a href="#891" id="891">891</a>
 </pre></div><pre class="rust"><code><span class="kw">pub mod </span>api;
 <span class="attr">#[cfg(feature = <span class="string">"cli"</span>)]
 </span><span class="kw">mod </span>cli;
@@ -952,7 +953,7 @@
 
 <span class="doccomment">/// Number of blocks until outgoing lightning contracts time out and user
 /// client can refund it unilaterally
-</span><span class="kw">const </span>SEND_EXPIRATION_DELTA_BLOCKS_DEFAULT: u64 = <span class="number">500</span>;
+</span><span class="kw">const </span>EXPIRATION_DELTA_LIMIT_DEFAULT: u64 = <span class="number">500</span>;
 
 <span class="doccomment">/// Default expiration time for lightning invoices
 </span><span class="kw">const </span>INVOICE_EXPIRATION_SECONDS_DEFAULT: u32 = <span class="number">3600</span>;
@@ -1029,7 +1030,8 @@
     <span class="kw">pub </span>send_fee_minimum: PaymentFee,
     <span class="kw">pub </span>send_fee_default: PaymentFee,
     <span class="kw">pub </span>receive_fee: PaymentFee,
-    <span class="kw">pub </span>outgoing_cltv_delta: u64,
+    <span class="kw">pub </span>expiration_delta_default: u64,
+    <span class="kw">pub </span>expiration_delta_minimum: u64,
 }
 
 <span class="attr">#[derive(
@@ -1213,7 +1215,7 @@
             gateway_api,
             invoice,
             PaymentFee::one_percent(),
-            SEND_EXPIRATION_DELTA_BLOCKS_DEFAULT,
+            EXPIRATION_DELTA_LIMIT_DEFAULT,
         )
         .<span class="kw">await
     </span>}
@@ -1223,7 +1225,7 @@
         gateway_api: SafeUrl,
         invoice: Bolt11Invoice,
         payment_fee_limit: PaymentFee,
-        expiration_delta: u64,
+        expiration_delta_limit: u64,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;OperationId, SendPaymentError&gt; {
         <span class="kw">let </span>invoice_msats = invoice
             .amount_milli_satoshis()
@@ -1253,9 +1255,9 @@
             ));
         }
 
-        <span class="kw">if </span>expiration_delta &lt; payment_info.outgoing_cltv_delta + <span class="number">288 </span>{
-            <span class="kw">return </span><span class="prelude-val">Err</span>(SendPaymentError::InsufficientExpirationDelta(
-                payment_info.outgoing_cltv_delta + <span class="number">288</span>,
+        <span class="kw">if </span>expiration_delta_limit &lt; payment_info.expiration_delta_default {
+            <span class="kw">return </span><span class="prelude-val">Err</span>(SendPaymentError::ExpirationDeltaExceedsLimit(
+                payment_info.expiration_delta_default,
             ));
         }
 
@@ -1268,7 +1270,7 @@
         <span class="kw">let </span>contract = OutgoingContract {
             payment_hash: <span class="kw-2">*</span>invoice.payment_hash(),
             amount: payment_info.send_fee_default.add_fee(invoice_msats),
-            expiration: consensus_block_count + expiration_delta,
+            expiration: consensus_block_count + payment_info.expiration_delta_default,
             claim_pk: payment_info.public_key,
             refund_pk: refund_keypair.public_key(),
             ephemeral_pk,
@@ -1710,8 +1712,8 @@
     </span>UnknownFederation,
     <span class="attr">#[error(<span class="string">"The gateways fee of {0:?} exceeds the supplied limit"</span>)]
     </span>PaymentFeeExceedsLimit(PaymentFee),
-    <span class="attr">#[error(<span class="string">"To route via this gateway we require a minimum expiration delta of {0} blocks"</span>)]
-    </span>InsufficientExpirationDelta(u64),
+    <span class="attr">#[error(<span class="string">"The gateways expiration delta of {0:?} exceeds the supplied limit"</span>)]
+    </span>ExpirationDeltaExceedsLimit(u64),
     <span class="attr">#[error(<span class="string">"Federation returned an error: {0}"</span>)]
     </span>FederationError(String),
     <span class="attr">#[error(<span class="string">"We failed to finalize the funding transaction"</span>)]
