@@ -792,6 +792,7 @@ impl MintClientModule {
 
                 outputs.push(ClientOutput {
                     output: MintOutput::new_v0(amount, blind_nonce),
+                    amount,
                     state_machines: state_generator,
                 });
             }

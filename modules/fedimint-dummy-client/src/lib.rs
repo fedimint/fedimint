@@ -127,6 +127,7 @@ impl ClientModule for DummyClientModule {
                 amount,
                 account: self.key.public_key(),
             },
+            amount,
             state_machines: Arc::new(move |txid, _| {
                 vec![DummyStateMachine::Output(amount, txid, id)]
             }),
@@ -254,6 +255,7 @@ impl DummyClientModule {
         // Create output using another account
         let output = ClientOutput {
             output: DummyOutput { amount, account },
+            amount,
             state_machines: Arc::new(move |_, _| Vec::<DummyStateMachine>::new()),
         };
 

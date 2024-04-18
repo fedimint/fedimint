@@ -38,6 +38,7 @@ where
 #[derive(Clone)]
 pub struct ClientOutput<O = DynOutput, S = DynState> {
     pub output: O,
+    pub amount: Amount,
     pub state_machines: StateGenerator<S>,
 }
 
@@ -51,6 +52,7 @@ where
     fn into_dyn(self, module_instance_id: ModuleInstanceId) -> ClientOutput {
         ClientOutput {
             output: self.output.into_dyn(module_instance_id),
+            amount: self.amount,
             state_machines: state_gen_to_dyn(self.state_machines, module_instance_id),
         }
     }

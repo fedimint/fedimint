@@ -893,6 +893,7 @@ impl GatewayPayCancelContract {
         );
         let client_output = ClientOutput::<LightningOutput, GatewayClientStateMachines> {
             output: cancel_output,
+            amount: Amount::ZERO,
             state_machines: Arc::new(|_, _| vec![]),
         };
 

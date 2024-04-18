@@ -264,12 +264,13 @@ impl GatewayClientModule {
     ) -> Result<
         (
             OperationId,
+            Amount,
             ClientOutput<LightningOutputV0, GatewayClientStateMachines>,
         ),
         IncomingSmError,
     > {
         let operation_id = OperationId(htlc.payment_hash.into_inner());
-        let (incoming_output, contract_id) = create_incoming_contract_output(
+        let (incoming_output, amount, contract_id) = create_incoming_contract_output(
             &self.module_api,
             htlc.payment_hash,
             htlc.outgoing_amount_msat,
@@ -279,6 +280,7 @@ impl GatewayClientModule {
 
         let client_output = ClientOutput::<LightningOutputV0, GatewayClientStateMachines> {
             output: incoming_output,
+            amount,
             state_machines: Arc::new(move |txid, _| {
                 vec![
                     GatewayClientStateMachines::Receive(IncomingStateMachine {
@@ -300,7 +302,7 @@ impl GatewayClientModule {
                 ]
             }),
         };
-        Ok((operation_id, client_output))
+        Ok((operation_id, amount, client_output))
     }
 
     async fn create_funding_incoming_contract_output_from_swap(
@@ -315,7 +317,7 @@ impl GatewayClientModule {
     > {
         let payment_hash = swap.payment_hash;
         let operation_id = OperationId(payment_hash.into_inner());
-        let (incoming_output, contract_id) = create_incoming_contract_output(
+        let (incoming_output, amount, contract_id) = create_incoming_contract_output(
             &self.module_api,
             payment_hash,
             swap.amount_msat,
@@ -325,6 +327,7 @@ impl GatewayClientModule {
 
         let client_output = ClientOutput::<LightningOutputV0, GatewayClientStateMachines> {
             output: incoming_output,
+            amount,
             state_machines: Arc::new(move |txid, _| {
                 vec![GatewayClientStateMachines::Receive(IncomingStateMachine {
                     common: IncomingSmCommon {
@@ -415,12 +418,13 @@ impl GatewayClientModule {
     /// Attempt fulfill HTLC by buying preimage from the federation
     pub async fn gateway_handle_intercepted_htlc(&self, htlc: Htlc) -> anyhow::Result<OperationId> {
         debug!("Handling intercepted HTLC {htlc:?}");
-        let (operation_id, client_output) = self
+        let (operation_id, amount, client_output) = self
             .create_funding_incoming_contract_output_from_htlc(htlc.clone())
             .await?;
 
         let output = ClientOutput {
             output: LightningOutput::V0(client_output.output),
+            amount,
             state_machines: client_output.state_machines,
         };
 
@@ -448,6 +452,7 @@ impl GatewayClientModule {
         let tx = TransactionBuilder::new().with_output(self.client_ctx.make_client_output(
             ClientOutput {
                 output: LightningOutput::V0(client_output.output),
+                amount: Amount::ZERO,
                 state_machines: client_output.state_machines,
             },
         ));

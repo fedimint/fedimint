@@ -382,6 +382,7 @@ impl LightningClientModule {
 
         let client_output = ClientOutput::<LightningOutput, LightningClientStateMachines> {
             output: LightningOutput::Outgoing(contract.clone()),
+            amount: contract.amount,
             state_machines: Arc::new(move |funding_txid, _| {
                 vec![LightningClientStateMachines::Send(SendStateMachine {
                     common: SendSMCommon {

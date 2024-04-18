@@ -345,6 +345,8 @@ impl WalletClientModule {
 
         let output = WalletOutput::new_v0_peg_out(address, amount, fees);
 
+        let amount = output.maybe_v0_ref().expect("v0 output").amount().into();
+
         let sm_gen = move |txid, out_idx| {
             vec![WalletClientStates::Withdraw(WithdrawStateMachine {
                 operation_id,
@@ -356,6 +358,7 @@ impl WalletClientModule {
 
         Ok(ClientOutput::<WalletOutput, WalletClientStates> {
             output,
+            amount,
             state_machines: Arc::new(sm_gen),
         })
     }
@@ -367,6 +370,8 @@ impl WalletClientModule {
     ) -> anyhow::Result<ClientOutput<WalletOutput, WalletClientStates>> {
         let output = WalletOutput::new_v0_rbf(rbf.fees, rbf.txid);
 
+        let amount = output.maybe_v0_ref().expect("v0 output").amount().into();
+
         let sm_gen = move |txid, out_idx| {
             vec![WalletClientStates::Withdraw(WithdrawStateMachine {
                 operation_id,
@@ -378,6 +383,7 @@ impl WalletClientModule {
 
         Ok(ClientOutput::<WalletOutput, WalletClientStates> {
             output,
+            amount,
             state_machines: Arc::new(sm_gen),
         })
     }

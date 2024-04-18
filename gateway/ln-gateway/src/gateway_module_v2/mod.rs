@@ -247,6 +247,7 @@ impl GatewayClientModuleV2 {
 
         let client_output = ClientOutput::<LightningOutput, GatewayClientStateMachinesV2> {
             output: LightningOutput::Incoming(contract.clone()),
+            amount: contract.commitment.amount,
             state_machines: Arc::new(move |txid, out_idx| {
                 vec![GatewayClientStateMachinesV2::Receive(ReceiveStateMachine {
                     common: ReceiveSMCommon {

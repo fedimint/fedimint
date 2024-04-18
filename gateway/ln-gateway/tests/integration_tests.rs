@@ -802,6 +802,7 @@ async fn test_gateway_client_intercept_htlc_invalid_offer() -> anyhow::Result<()
             });
             let client_output = ClientOutput {
                 output: ln_output,
+                amount: Amount::ZERO,
                 state_machines,
             };
             let tx = TransactionBuilder::new()

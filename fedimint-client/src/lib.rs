@@ -364,6 +364,7 @@ impl DynGlobalClientContext {
             dbtx,
             InstancelessDynClientOutput {
                 output: Box::new(output.output),
+                amount: output.amount,
                 state_machines: states_to_instanceless_dyn(output.state_machines),
             },
         )
@@ -476,6 +477,7 @@ impl IGlobalClientContext for ModuleGlobalClientContext {
     ) -> anyhow::Result<(TransactionId, Vec<OutPoint>)> {
         let instance_output = ClientOutput {
             output: DynOutput::from_parts(self.module_instance_id, output.output),
+            amount: output.amount,
             state_machines: states_add_instance(self.module_instance_id, output.state_machines),
         };
 
@@ -933,6 +935,9 @@ impl Client {
             let item_amount = module.output_amount(&output.output).expect(
                 "We only build transactions with output versions that are supported by the module",
             );
+
+            assert_eq!(output.amount, item_amount.amount, "Output amount mismatch");
+
             out_amount += item_amount.amount;
             fee_amount += item_amount.fee;
         }
