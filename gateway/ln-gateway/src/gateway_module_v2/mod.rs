@@ -19,7 +19,7 @@ use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::{
     ApiVersion, CommonModuleInit, ModuleCommon, ModuleInit, MultiApiVersion, TransactionItemAmount,
 };
-use fedimint_core::{apply, async_trait_maybe_send, OutPoint, PeerId};
+use fedimint_core::{apply, async_trait_maybe_send, Amount, OutPoint, PeerId};
 use fedimint_lnv2_common::config::LightningClientConfig;
 use fedimint_lnv2_common::contracts::{IncomingContract, OutgoingContract};
 use fedimint_lnv2_common::{LightningCommonInit, LightningModuleTypes, LightningOutput};
@@ -192,7 +192,7 @@ impl GatewayClientModuleV2 {
         &self,
         operation_id: OperationId,
         max_delay: u64,
-        max_fee_msat: u64,
+        min_contract_amount: Amount,
         invoice: Bolt11Invoice,
         contract: OutgoingContract,
     ) -> anyhow::Result<()> {
@@ -201,7 +201,7 @@ impl GatewayClientModuleV2 {
                 operation_id,
                 contract: contract.clone(),
                 max_delay,
-                max_fee_msat,
+                min_contract_amount,
                 invoice,
                 claim_keypair: self.keypair,
             },
