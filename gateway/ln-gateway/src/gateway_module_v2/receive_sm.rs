@@ -17,7 +17,7 @@ use fedimint_core::task::sleep;
 use fedimint_core::{NumPeersExt, OutPoint, PeerId, TransactionId};
 use fedimint_lnv2_client::LightningClientStateMachines;
 use fedimint_lnv2_common::contracts::IncomingContract;
-use fedimint_lnv2_common::{LightningInput, LightningOutputOutcome, Witness};
+use fedimint_lnv2_common::{LightningInput, LightningOutputOutcome};
 use secp256k1::KeyPair;
 use tpe::{aggregate_decryption_shares, AggregatePublicKey, DecryptionKeyShare, PublicKeyShare};
 use tracing::{error, trace};
@@ -238,13 +238,10 @@ impl ReceiveStateMachine {
         }
 
         let client_input = ClientInput::<LightningInput, LightningClientStateMachines> {
-            input: LightningInput {
-                amount: old_state.common.contract.commitment.amount,
-                witness: Witness::Incoming(
-                    old_state.common.contract.contract_id(),
-                    agg_decryption_key,
-                ),
-            },
+            input: LightningInput::Incoming(
+                old_state.common.contract.contract_id(),
+                agg_decryption_key,
+            ),
             amount: old_state.common.contract.commitment.amount,
             keys: vec![old_state.common.refund_keypair],
             // The input of the refund tx is managed by this state machine
