@@ -2441,6 +2441,14 @@
 <a href="#2439" id="2439">2439</a>
 <a href="#2440" id="2440">2440</a>
 <a href="#2441" id="2441">2441</a>
+<a href="#2442" id="2442">2442</a>
+<a href="#2443" id="2443">2443</a>
+<a href="#2444" id="2444">2444</a>
+<a href="#2445" id="2445">2445</a>
+<a href="#2446" id="2446">2446</a>
+<a href="#2447" id="2447">2447</a>
+<a href="#2448" id="2448">2448</a>
+<a href="#2449" id="2449">2449</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! # Client library for fedimintd
 //!
 //! This library provides a client interface to build module clients that can be
@@ -4563,7 +4571,15 @@
             <span class="kw-2">&amp;</span>db,
             <span class="kw-2">&amp;</span>task_group,
         )
-        .<span class="kw">await</span><span class="question-mark">?</span>;
+        .<span class="kw">await
+        </span>.inspect_err(|err| {
+            <span class="macro">warn!</span>(target: LOG_CLIENT, %err, <span class="string">"Failed to discover initial API version to use."</span>);
+        })
+        .unwrap_or(ApiVersionSet {
+            core: ApiVersion::new(<span class="number">0</span>, <span class="number">0</span>),
+            <span class="comment">// This will cause all modules to skip initialization
+            </span>modules: Default::default(),
+        });
 
         <span class="macro">debug!</span>(<span class="question-mark">?</span>common_api_versions, <span class="string">"Completed api version negotiation"</span>);
 
