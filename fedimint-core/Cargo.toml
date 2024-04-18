@@ -54,7 +54,7 @@ macro_rules_attribute = "0.2.0"
 bitvec = "1.0.1"
 parity-scale-codec = { version = "3.6.9", features = ["derive"] }
 imbl = "2.0.3"
-backon = "=0.4.3" # don't upgrade unless really needed
+backon = "=0.4.4" # don't upgrade unless really needed
 
 [target.'cfg(not(target_family = "wasm"))'.dependencies]
 tokio = { version = "1.36.0", features = ["full", "tracing"] }
