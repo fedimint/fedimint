@@ -15,47 +15,19 @@ name = "fedimint_api_client"
 path = "src/lib.rs"
 
 [dependencies]
-async-recursion = "1.0.5"
 anyhow = { workspace = true }
 async-trait = { workspace = true }
 futures = { workspace = true }
-futures-util = { workspace = true }
-backtrace = "0.3.69"
-bincode = { workspace = true }
-bech32 = "0.9.1"
-bls12_381 = "0.7.1"
-serdect = "0.2.0"
 itertools = { workspace = true }
-jsonrpsee-types = { version = "0.22.2" }
-jsonrpsee-core = { version = "0.22.4", features = ["client"] }
+jsonrpsee-core = "0.22.4"
 lru = "0.12.3"
-serde = { version = "1.0.197", features = ["derive"] }
+serde = "1.0.197"
 serde_json = { workspace = true }
-strum = { workspace = true }
-strum_macros = { workspace = true }
-hex = { version = "0.4.3", features = ["serde"] }
-tokio = { version = "1.36.0", features = ["sync", "io-util"] }
 thiserror = { workspace = true }
 tracing = { workspace = true }
-threshold_crypto = { workspace = true }
-url = { version = "2.5.0", features = ["serde"] }
-bitcoin = { version = "0.29.2", features = ["rand", "serde"] }
-bitcoin30 = { package = "bitcoin", version = "0.30.2", features = ["rand-std", "std"] }
-erased-serde = { workspace = true }
-lightning = "0.0.118"
-lightning-invoice = "0.26.0"
-fedimint-derive = { version = "=0.4.0-alpha", path = "../fedimint-derive" }
+bitcoin = "0.29.2"
 fedimint-core = { workspace = true }
 fedimint-logging = { version = "=0.4.0-alpha", path = "../fedimint-logging" }
-rand = { workspace = true }
-miniscript = { version = "10.0.0", features = ["compiler", "serde"] }
-secp256k1-zkp = { version = "0.7.0", features = ["use-serde", "global-context"] }
-secp256k1 = { version = "0.27.0", features = ["global-context", "rand-std"] }
-macro_rules_attribute = "0.2.0"
-bitvec = "1.0.1"
-parity-scale-codec = { version = "3.6.9", features = ["derive"] }
-imbl = "2.0.3"
-backon = "=0.4.3" # don't upgrade unless really needed
 
 [target.'cfg(not(target_family = "wasm"))'.dependencies]
 jsonrpsee-ws-client = { version = "0.22.4", features = ["webpki-tls"], default-features = false }
