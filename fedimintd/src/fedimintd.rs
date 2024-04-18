@@ -38,8 +38,7 @@ use fedimint_wallet_server::common::config::{
 };
 use fedimint_wallet_server::WalletInit;
 use futures::FutureExt;
-use tokio::select;
-use tracing::{debug, error, info, warn};
+use tracing::{debug, error, info};
 
 use crate::default_esplora_server;
 use crate::envs::{
@@ -331,30 +330,24 @@ impl Fedimintd {
 
         let timing_total_runtime = timing::TimeReporter::new("total-runtime").info();
 
-        // DO NOT REMOVE, or spawn_local tasks won't run anymore
-        let local_task_set = tokio::task::LocalSet::new();
-        let _guard = local_task_set.enter();
-
         let task_group = root_task_group.clone();
-        root_task_group
-            .spawn_local("main", move |_task_handle| async move {
-                match run(
-                    self.opts,
-                    &task_group,
-                    self.server_gens,
-                    self.server_gen_params,
-                    self.version_hash,
-                )
-                .await
-                {
-                    Ok(()) => {}
-                    Err(error) => {
-                        error!(?error, "Main task returned error, shutting down");
-                        task_group.shutdown();
-                    }
+        root_task_group.spawn_cancellable("main", async move {
+            match run(
+                self.opts,
+                &task_group,
+                self.server_gens,
+                self.server_gen_params,
+                self.version_hash,
+            )
+            .await
+            {
+                Ok(()) => {}
+                Err(error) => {
+                    error!(?error, "Main task returned error, shutting down");
+                    task_group.shutdown();
                 }
-            })
-            .await;
+            }
+        });
 
         let shutdown_future =
             root_task_group
@@ -367,14 +360,8 @@ impl Fedimintd {
                     sleep(SHUTDOWN_TIMEOUT).await;
                 });
 
-        select! {
-            _ = shutdown_future => {
-                debug!("Terminating main task");
-            }
-            _ = local_task_set => {
-                warn!("local_task_set finished before shutdown was called");
-            }
-        }
+        shutdown_future.await;
+        debug!("Terminating main task");
 
         if let Err(err) = root_task_group.join_all(Some(SHUTDOWN_TIMEOUT)).await {
             error!(?err, "Error while shutting down task group");
