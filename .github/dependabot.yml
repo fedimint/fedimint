@@ -1,10 +1,23 @@
-
 version: 2
 updates:
 - package-ecosystem: cargo
   directory: "/"
   schedule:
-    interval: daily
+    interval: "weekly"
+    timezone: "Etc/UTC"
+    day: "Saturday" # so we can approve and merge over the weekend, while less is going on
+    time: "05:30"
+    ignore:
+    - dependency-name: "bitcoin" # we can't "just update it"
+    open-pull-requests-limit: 5 # more than this would be lots of rebasing
+  groups:
+    # put all patch version updates in one big PR, as
+    # these should just work anyway
+    patch-version-updates:
+      applies-to: version-updates
+      patterns:
+      - "*"
+      update-types: patch
 - package-ecosystem: github-actions
   directory: "/"
   schedule:
