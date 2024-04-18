@@ -1,6 +1,6 @@
 [profile.default]
 # no matter the profile, we want to kill tests that hanged on something
-slow-timeout = { period = "60s", terminate-after = 8 }
+slow-timeout = { period = "20s", terminate-after = 2 }
 
 # define `dev` to allow running cargo and nextest with the same profile name
 # inherits default profile config
@@ -9,4 +9,10 @@ slow-timeout = { period = "60s", terminate-after = 8 }
 [profile.ci]
 fail-fast = true
 failure-output = "immediate"
-slow-timeout = { period = "60s", terminate-after = 8 }
+slow-timeout = { period = "20s", terminate-after = 4 }
+
+# ccov is much slower, so let it be slow
+[profile.ccov]
+fail-fast = true
+failure-output = "immediate"
+slow-timeout = { period = "60s", terminate-after = 2 }
