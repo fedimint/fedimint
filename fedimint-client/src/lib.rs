@@ -2120,7 +2120,15 @@ impl ClientBuilder {
             &db,
             &task_group,
         )
-        .await?;
+        .await
+        .inspect_err(|err| {
+            warn!(target: LOG_CLIENT, %err, "Failed to discover initial API version to use.");
+        })
+        .unwrap_or(ApiVersionSet {
+            core: ApiVersion::new(0, 0),
+            // This will cause all modules to skip initialization
+            modules: Default::default(),
+        });
 
         debug!(?common_api_versions, "Completed api version negotiation");
 
