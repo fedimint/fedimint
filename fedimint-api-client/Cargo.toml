@@ -56,11 +56,17 @@ bitvec = "1.0.1"
 parity-scale-codec = { version = "3.6.9", features = ["derive"] }
 imbl = "2.0.3"
 backon = "=0.4.3" # don't upgrade unless really needed
+arti-client = "0.17.0"
+jsonrpsee-client-transport = { version = "0.22.4" }
+rustls-native-certs = { version = "0.7" }
+webpki-roots = { version = "0.26" }
+tokio-rustls = { version = "0.25" }
+rustls-pki-types = { version = "1" }
 
 [target.'cfg(not(target_family = "wasm"))'.dependencies]
 jsonrpsee-ws-client = { version = "0.22.4", features = ["webpki-tls"], default-features = false }
 tokio = { version = "1.36.0", features = ["full", "tracing"] }
-tokio-rustls = { workspace = true }
+# tokio-rustls = { workspace = true }
 
 [target.'cfg(target_family = "wasm")'.dependencies]
 jsonrpsee-wasm-client = { version = "0.22.2", default-features = false }

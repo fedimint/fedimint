@@ -14,6 +14,8 @@ pub mod api;
 /// Client query system
 pub mod query;
 
+// TODO: (@leonardo) how to handle these fns, for specific connection types ?
+
 /// Tries to download the client config from the federation,
 /// attempts to retry teb times before giving up.
 pub async fn download_from_invite_code(invite_code: &InviteCode) -> anyhow::Result<ClientConfig> {
