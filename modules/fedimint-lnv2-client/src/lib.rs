@@ -23,7 +23,6 @@ use fedimint_core::db::{DatabaseTransaction, DatabaseVersion};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::{
     ApiAuth, ApiVersion, CommonModuleInit, ModuleCommon, ModuleInit, MultiApiVersion,
-    TransactionItemAmount,
 };
 use fedimint_core::time::duration_since_epoch;
 use fedimint_core::util::SafeUrl;
@@ -255,14 +254,8 @@ impl ClientModule for LightningClientModule {
         Some(self.cfg.fee_consensus.input)
     }
 
-    fn output_amount(
-        &self,
-        output: &<Self::Common as ModuleCommon>::Output,
-    ) -> Option<TransactionItemAmount> {
-        Some(TransactionItemAmount {
-            amount: output.amount(),
-            fee: self.cfg.fee_consensus.output,
-        })
+    fn output_fee(&self, _output: &<Self::Common as ModuleCommon>::Output) -> Option<Amount> {
+        Some(self.cfg.fee_consensus.output)
     }
 
     #[cfg(feature = "cli")]

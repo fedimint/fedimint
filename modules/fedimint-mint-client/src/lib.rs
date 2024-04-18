@@ -43,7 +43,7 @@ use fedimint_core::encoding::{Decodable, DecodeError, Encodable};
 use fedimint_core::invite_code::InviteCode;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::module::{
-    ApiVersion, CommonModuleInit, ModuleCommon, ModuleInit, MultiApiVersion, TransactionItemAmount,
+    ApiVersion, CommonModuleInit, ModuleCommon, ModuleInit, MultiApiVersion,
 };
 use fedimint_core::util::{BoxFuture, BoxStream, NextOrPending, SafeUrl};
 use fedimint_core::{
@@ -569,16 +569,8 @@ impl ClientModule for MintClientModule {
         Some(self.cfg.fee_consensus.note_spend_abs)
     }
 
-    fn output_amount(
-        &self,
-        output: &<Self::Common as ModuleCommon>::Output,
-    ) -> Option<TransactionItemAmount> {
-        let output = output.maybe_v0_ref()?;
-
-        Some(TransactionItemAmount {
-            amount: output.amount,
-            fee: self.cfg.fee_consensus.note_issuance_abs,
-        })
+    fn output_fee(&self, _output: &<Self::Common as ModuleCommon>::Output) -> Option<Amount> {
+        Some(self.cfg.fee_consensus.note_issuance_abs)
     }
 
     async fn handle_cli_command(

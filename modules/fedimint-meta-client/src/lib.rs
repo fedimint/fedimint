@@ -17,9 +17,7 @@ use fedimint_client::module::{ClientModule, IClientModule};
 use fedimint_client::sm::Context;
 use fedimint_core::core::Decoder;
 use fedimint_core::db::{DatabaseTransaction, DatabaseVersion};
-use fedimint_core::module::{
-    ApiAuth, ApiVersion, ModuleCommon, ModuleInit, MultiApiVersion, TransactionItemAmount,
-};
+use fedimint_core::module::{ApiAuth, ApiVersion, ModuleCommon, ModuleInit, MultiApiVersion};
 use fedimint_core::{apply, async_trait_maybe_send, Amount, PeerId};
 pub use fedimint_meta_common as common;
 use fedimint_meta_common::{MetaCommonInit, MetaModuleTypes};
@@ -114,10 +112,7 @@ impl ClientModule for MetaClientModule {
         unreachable!()
     }
 
-    fn output_amount(
-        &self,
-        _output: &<Self::Common as ModuleCommon>::Output,
-    ) -> Option<TransactionItemAmount> {
+    fn output_fee(&self, _output: &<Self::Common as ModuleCommon>::Output) -> Option<Amount> {
         unreachable!()
     }
 

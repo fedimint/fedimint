@@ -21,7 +21,7 @@ use fedimint_client::{sm_enum_variant_translation, AddStateMachinesError, DynGlo
 use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, OperationId};
 use fedimint_core::db::{AutocommitError, DatabaseTransaction, DatabaseVersion};
 use fedimint_core::encoding::{Decodable, Encodable};
-use fedimint_core::module::{ApiVersion, ModuleInit, MultiApiVersion, TransactionItemAmount};
+use fedimint_core::module::{ApiVersion, ModuleInit, MultiApiVersion};
 use fedimint_core::{apply, async_trait_maybe_send, Amount, OutPoint, TransactionId};
 use fedimint_ln_client::api::LnFederationApi;
 use fedimint_ln_client::incoming::{
@@ -211,25 +211,16 @@ impl ClientModule for GatewayClientModule {
         Some(self.cfg.fee_consensus.contract_input)
     }
 
-    fn output_amount(
+    fn output_fee(
         &self,
         output: &<Self::Common as fedimint_core::module::ModuleCommon>::Output,
-    ) -> Option<TransactionItemAmount> {
-        let output = output.maybe_v0_ref()?;
-
-        let amt = match output {
-            LightningOutputV0::Contract(account_output) => TransactionItemAmount {
-                amount: account_output.amount,
-                fee: self.cfg.fee_consensus.contract_output,
-            },
+    ) -> Option<Amount> {
+        match output.maybe_v0_ref()? {
+            LightningOutputV0::Contract(_) => Some(self.cfg.fee_consensus.contract_output),
             LightningOutputV0::Offer(_) | LightningOutputV0::CancelOutgoing { .. } => {
-                TransactionItemAmount {
-                    amount: Amount::ZERO,
-                    fee: Amount::ZERO,
-                }
+                Some(Amount::ZERO)
             }
-        };
-        Some(amt)
+        }
     }
 }
 

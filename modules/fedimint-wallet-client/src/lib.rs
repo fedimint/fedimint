@@ -33,7 +33,7 @@ use fedimint_core::db::{
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::envs::BitcoinRpcConfig;
 use fedimint_core::module::{
-    ApiVersion, CommonModuleInit, ModuleCommon, ModuleInit, MultiApiVersion, TransactionItemAmount,
+    ApiVersion, CommonModuleInit, ModuleCommon, ModuleInit, MultiApiVersion,
 };
 use fedimint_core::task::{MaybeSend, MaybeSync, TaskGroup};
 use fedimint_core::{apply, async_trait_maybe_send, Amount, OutPoint};
@@ -236,16 +236,8 @@ impl ClientModule for WalletClientModule {
         Some(self.cfg.fee_consensus.peg_in_abs)
     }
 
-    fn output_amount(
-        &self,
-        output: &<Self::Common as ModuleCommon>::Output,
-    ) -> Option<TransactionItemAmount> {
-        let output = output.maybe_v0_ref()?;
-
-        Some(TransactionItemAmount {
-            amount: output.amount().into(),
-            fee: self.cfg.fee_consensus.peg_out_abs,
-        })
+    fn output_fee(&self, _output: &<Self::Common as ModuleCommon>::Output) -> Option<Amount> {
+        Some(self.cfg.fee_consensus.peg_out_abs)
     }
 }
 

@@ -34,7 +34,7 @@ use fedimint_core::core::{IntoDynInstance, ModuleInstanceId, OperationId};
 use fedimint_core::db::{DatabaseTransaction, DatabaseVersion, IDatabaseTransactionOpsCoreTyped};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::{
-    ApiVersion, CommonModuleInit, ModuleCommon, ModuleInit, MultiApiVersion, TransactionItemAmount,
+    ApiVersion, CommonModuleInit, ModuleCommon, ModuleInit, MultiApiVersion,
 };
 use fedimint_core::task::{timeout, MaybeSend, MaybeSync};
 use fedimint_core::util::update_merge::UpdateMerge;
@@ -402,25 +402,13 @@ impl ClientModule for LightningClientModule {
         Some(self.cfg.fee_consensus.contract_input)
     }
 
-    fn output_amount(
-        &self,
-        output: &<Self::Common as ModuleCommon>::Output,
-    ) -> Option<TransactionItemAmount> {
-        let output = output.maybe_v0_ref()?;
-
-        let amt = match output {
-            LightningOutputV0::Contract(account_output) => TransactionItemAmount {
-                amount: account_output.amount,
-                fee: self.cfg.fee_consensus.contract_output,
-            },
+    fn output_fee(&self, output: &<Self::Common as ModuleCommon>::Output) -> Option<Amount> {
+        match output.maybe_v0_ref()? {
+            LightningOutputV0::Contract(_) => Some(self.cfg.fee_consensus.contract_output),
             LightningOutputV0::Offer(_) | LightningOutputV0::CancelOutgoing { .. } => {
-                TransactionItemAmount {
-                    amount: Amount::ZERO,
-                    fee: Amount::ZERO,
-                }
+                Some(Amount::ZERO)
             }
-        };
-        Some(amt)
+        }
     }
 }
 

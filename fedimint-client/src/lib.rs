@@ -932,14 +932,13 @@ impl Client {
 
         for output in &builder.outputs {
             let module = self.get_module(output.output.module_instance_id());
-            let item_amount = module.output_amount(&output.output).expect(
+
+            let item_fee = module.output_fee(&output.output).expect(
                 "We only build transactions with output versions that are supported by the module",
             );
 
-            assert_eq!(output.amount, item_amount.amount, "Output amount mismatch");
-
-            out_amount += item_amount.amount;
-            fee_amount += item_amount.fee;
+            out_amount += output.amount;
+            fee_amount += item_fee;
         }
 
         let total_out_amount = out_amount + fee_amount;
