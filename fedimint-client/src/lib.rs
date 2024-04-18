@@ -336,6 +336,7 @@ impl DynGlobalClientContext {
             InstancelessDynClientInput {
                 input: Box::new(input.input),
                 keys: input.keys,
+                amount: input.amount,
                 state_machines: states_to_instanceless_dyn(input.state_machines),
             },
         )
@@ -454,6 +455,7 @@ impl IGlobalClientContext for ModuleGlobalClientContext {
         let instance_input = ClientInput {
             input: DynInput::from_parts(self.module_instance_id, input.input),
             keys: input.keys,
+            amount: input.amount,
             state_machines: states_add_instance(self.module_instance_id, input.state_machines),
         };
 

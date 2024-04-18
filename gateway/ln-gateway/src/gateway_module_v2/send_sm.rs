@@ -206,6 +206,7 @@ impl SendStateMachine {
                             OutgoingWitness::Claim(preimage),
                         ),
                     },
+                    amount: old_state.common.contract.amount,
                     keys: vec![old_state.common.claim_keypair],
                     state_machines: Arc::new(|_, _| vec![]),
                 };

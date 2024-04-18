@@ -703,6 +703,7 @@ impl GatewayPayClaimOutgoingContract {
         let client_input = ClientInput::<LightningInput, GatewayClientStateMachines> {
             input: claim_input,
             state_machines: Arc::new(|_, _| vec![]),
+            amount: contract.amount,
             keys: vec![context.redeem_key],
         };
 

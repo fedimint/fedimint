@@ -245,6 +245,7 @@ impl ReceiveStateMachine {
                     agg_decryption_key,
                 ),
             },
+            amount: old_state.common.contract.commitment.amount,
             keys: vec![old_state.common.refund_keypair],
             // The input of the refund tx is managed by this state machine
             state_machines: Arc::new(|_, _| vec![]),

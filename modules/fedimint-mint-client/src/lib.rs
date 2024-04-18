@@ -914,6 +914,7 @@ impl MintClientModule {
             inputs.push(ClientInput {
                 input: MintInput::new_v0(amount, note),
                 keys: vec![spendable_note.spend_key],
+                amount,
                 state_machines: sm_gen,
             });
         }

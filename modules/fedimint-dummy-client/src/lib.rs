@@ -113,6 +113,7 @@ impl ClientModule for DummyClientModule {
                 amount,
                 account: self.key.public_key(),
             },
+            amount,
             keys: vec![self.key],
             state_machines: Arc::new(move |txid, _| {
                 vec![DummyStateMachine::Input(amount, txid, id)]
@@ -198,6 +199,7 @@ impl DummyClientModule {
                 amount,
                 account: account_kp.public_key(),
             },
+            amount,
             keys: vec![account_kp],
             state_machines: Arc::new(move |_, _| Vec::<DummyStateMachine>::new()),
         };

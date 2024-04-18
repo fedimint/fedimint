@@ -525,6 +525,7 @@ async fn test_gateway_cannot_claim_invalid_preimage() -> anyhow::Result<()> {
             let client_input = ClientInput::<LightningInput, GatewayClientStateMachines> {
                 input: claim_input,
                 state_machines: Arc::new(|_, _| vec![]),
+                amount: outgoing_contract.amount,
                 keys: vec![gateway_module.redeem_key],
             };
 

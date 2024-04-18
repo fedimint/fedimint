@@ -256,6 +256,7 @@ impl SendStateMachine {
                             OutgoingWitness::Cancel(signature),
                         ),
                     },
+                    amount: old_state.common.contract.amount,
                     keys: vec![old_state.common.refund_keypair],
                     // The input of the refund tx is managed by this state machine
                     state_machines: Arc::new(|_, _| vec![]),
@@ -311,6 +312,7 @@ impl SendStateMachine {
                     OutgoingWitness::Refund,
                 ),
             },
+            amount: old_state.common.contract.amount,
             keys: vec![old_state.common.refund_keypair],
             // The input of the refund tx is managed by this state machine
             state_machines: Arc::new(|_, _| vec![]),

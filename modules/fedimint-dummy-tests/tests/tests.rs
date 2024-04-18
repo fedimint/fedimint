@@ -89,6 +89,7 @@ async fn federation_should_abort_if_balance_sheet_is_negative() -> anyhow::Resul
             amount: sats(1000),
             account: account_kp.public_key(),
         },
+        amount: sats(1000),
         keys: vec![account_kp],
         state_machines: Arc::new(move |_, _| Vec::<DummyStateMachine>::new()),
     };

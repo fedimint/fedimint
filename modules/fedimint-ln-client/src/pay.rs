@@ -458,6 +458,7 @@ impl LightningPayRefundable {
 
         let refund_client_input = ClientInput::<LightningInput, LightningClientStateMachines> {
             input: refund_input,
+            amount: contract_data.contract_account.amount,
             keys: vec![refund_key],
             // The input of the refund tx is managed by this state machine, so no new state machines
             // need to be created

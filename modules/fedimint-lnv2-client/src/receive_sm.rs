@@ -122,6 +122,7 @@ impl ReceiveStateMachine {
                     old_state.common.agg_decryption_key,
                 ),
             },
+            amount: old_state.common.contract.commitment.amount,
             keys: vec![old_state.common.claim_keypair],
             state_machines: Arc::new(|_, _| vec![]),
         };
