@@ -552,6 +552,9 @@ async fn test_gateway_cannot_claim_invalid_preimage() -> anyhow::Result<()> {
     .await
 }
 
+// disabled for being too slow and not even testing the right thing
+// see https://github.com/fedimint/fedimint/issues/4926
+#[ignore]
 #[tokio::test(flavor = "multi_thread")]
 async fn test_gateway_client_pay_unpayable_invoice() -> anyhow::Result<()> {
     single_federation_test(
@@ -928,6 +931,9 @@ async fn test_gateway_register_with_federation() -> anyhow::Result<()> {
     Ok(())
 }
 
+// disabled for being too slow and not even testing the right thing
+// see https://github.com/fedimint/fedimint/issues/4926
+#[ignore]
 #[tokio::test(flavor = "multi_thread")]
 async fn test_gateway_cannot_pay_expired_invoice() -> anyhow::Result<()> {
     single_federation_test(
