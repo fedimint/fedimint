@@ -216,13 +216,6 @@
 <a href="#214" id="214">214</a>
 <a href="#215" id="215">215</a>
 <a href="#216" id="216">216</a>
-<a href="#217" id="217">217</a>
-<a href="#218" id="218">218</a>
-<a href="#219" id="219">219</a>
-<a href="#220" id="220">220</a>
-<a href="#221" id="221">221</a>
-<a href="#222" id="222">222</a>
-<a href="#223" id="223">223</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::sync::Arc;
 
 <span class="kw">use </span>bitcoin_hashes::Hash;
@@ -261,7 +254,7 @@
     <span class="kw">pub </span>operation_id: OperationId,
     <span class="kw">pub </span>contract: OutgoingContract,
     <span class="kw">pub </span>max_delay: u64,
-    <span class="kw">pub </span>max_fee_msat: u64,
+    <span class="kw">pub </span>min_contract_amount: Amount,
     <span class="kw">pub </span>invoice: Bolt11Invoice,
     <span class="kw">pub </span>claim_keypair: KeyPair,
 }
@@ -315,9 +308,9 @@
                     <span class="self">Self</span>::send_payment(
                         context.clone(),
                         <span class="self">self</span>.common.max_delay,
-                        <span class="self">self</span>.common.max_fee_msat,
+                        <span class="self">self</span>.common.min_contract_amount,
                         <span class="self">self</span>.common.invoice.clone(),
-                        <span class="self">self</span>.common.contract.amount,
+                        <span class="self">self</span>.common.contract.clone(),
                     ),
                     <span class="kw">move </span>|dbtx, result, old_state| {
                         Box::pin(<span class="self">Self</span>::transition_send_payment(
@@ -347,9 +340,9 @@
     <span class="kw">async fn </span>send_payment(
         context: GatewayClientContextV2,
         max_delay: u64,
-        invoice_msats: u64,
+        min_contract_amount: Amount,
         invoice: Bolt11Invoice,
-        contract_amount: Amount,
+        contract: OutgoingContract,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;[u8; <span class="number">32</span>], Cancelled&gt; {
         <span class="comment">// The following three checks may fail in edge cases since they have inherent
         // timing assumptions. Therefore, they may only be checked after we have created
@@ -362,18 +355,11 @@
             <span class="kw">return </span><span class="prelude-val">Err</span>(Cancelled::TimeoutTooClose);
         }
 
-        <span class="kw">let </span>min_contract_amount = context
-            .gateway
-            .payment_fees_v2()
-            .send
-            .add_fee(invoice_msats);
-
-        <span class="kw">if </span>contract_amount &lt; min_contract_amount {
+        <span class="kw">if </span>contract.amount &lt; min_contract_amount {
             <span class="kw">return </span><span class="prelude-val">Err</span>(Cancelled::Underfunded);
         }
 
-        <span class="kw">let </span>excess_fee = contract_amount - min_contract_amount;
-        <span class="kw">let </span>max_fee_msat = excess_fee.msats + (min_contract_amount.msats - invoice_msats) / <span class="number">2</span>;
+        <span class="kw">let </span>max_fee_msat = (contract.amount - min_contract_amount).msats;
 
         <span class="kw">let </span>lightning_context = context
             .gateway

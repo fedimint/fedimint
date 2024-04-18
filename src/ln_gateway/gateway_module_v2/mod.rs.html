@@ -320,7 +320,7 @@
 <span class="kw">use </span>fedimint_core::module::{
     ApiVersion, CommonModuleInit, ModuleCommon, ModuleInit, MultiApiVersion, TransactionItemAmount,
 };
-<span class="kw">use </span>fedimint_core::{apply, async_trait_maybe_send, OutPoint, PeerId};
+<span class="kw">use </span>fedimint_core::{apply, async_trait_maybe_send, Amount, OutPoint, PeerId};
 <span class="kw">use </span>fedimint_lnv2_common::config::LightningClientConfig;
 <span class="kw">use </span>fedimint_lnv2_common::contracts::{IncomingContract, OutgoingContract};
 <span class="kw">use </span>fedimint_lnv2_common::{LightningCommonInit, LightningModuleTypes, LightningOutput};
@@ -493,7 +493,7 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         operation_id: OperationId,
         max_delay: u64,
-        max_fee_msat: u64,
+        min_contract_amount: Amount,
         invoice: Bolt11Invoice,
         contract: OutgoingContract,
     ) -&gt; anyhow::Result&lt;()&gt; {
@@ -502,7 +502,7 @@
                 operation_id,
                 contract: contract.clone(),
                 max_delay,
-                max_fee_msat,
+                min_contract_amount,
                 invoice,
                 claim_keypair: <span class="self">self</span>.keypair,
             },

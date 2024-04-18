@@ -11,7 +11,7 @@
     &amp;self,
     operation_id: OperationId,
     max_delay: <a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.u64.html">u64</a>,
-    max_fee_msat: <a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.u64.html">u64</a>,
+    min_contract_amount: Amount,
     invoice: Bolt11Invoice,
     contract: OutgoingContract
 ) -&gt; <a class="type" href="https://docs.rs/anyhow/1.0.82/anyhow/type.Result.html" title="type anyhow::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.unit.html">()</a>&gt;</h4></section><section id="method.subscribe_send" class="method"><a class="src rightside" href="../../src/ln_gateway/gateway_module_v2/mod.rs.html#221-245">source</a><h4 class="code-header">pub async fn <a href="#method.subscribe_send" class="fn">subscribe_send</a>(

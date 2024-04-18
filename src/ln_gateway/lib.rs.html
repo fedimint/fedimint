@@ -1858,9 +1858,6 @@
 <a href="#1856" id="1856">1856</a>
 <a href="#1857" id="1857">1857</a>
 <a href="#1858" id="1858">1858</a>
-<a href="#1859" id="1859">1859</a>
-<a href="#1860" id="1860">1860</a>
-<a href="#1861" id="1861">1861</a>
 </pre></div><pre class="rust"><code><span class="kw">pub mod </span>client;
 <span class="kw">mod </span>db;
 <span class="kw">pub mod </span>envs;
@@ -1928,9 +1925,7 @@
 <span class="kw">use </span>fedimint_ln_common::route_hints::RouteHint;
 <span class="kw">use </span>fedimint_ln_common::LightningCommonInit;
 <span class="kw">use </span>fedimint_lnv2_client::api::LnFederationApi;
-<span class="kw">use </span>fedimint_lnv2_client::{
-    CreateInvoicePayload, PaymentFee, PaymentFees, PaymentInfo, SendPaymentPayload,
-};
+<span class="kw">use </span>fedimint_lnv2_client::{CreateInvoicePayload, PaymentFee, PaymentInfo, SendPaymentPayload};
 <span class="kw">use </span>fedimint_mint_client::{MintClientInit, MintCommonInit};
 <span class="kw">use </span>fedimint_wallet_client::{
     WalletClientInit, WalletClientModule, WalletCommonInit, WithdrawState,
@@ -3440,18 +3435,11 @@
     <span class="kw">pub async fn </span>payment_info_v2(<span class="kw-2">&amp;</span><span class="self">self</span>, federation_id: <span class="kw-2">&amp;</span>FederationId) -&gt; <span class="prelude-ty">Option</span>&lt;PaymentInfo&gt; {
         <span class="prelude-val">Some</span>(PaymentInfo {
             public_key: <span class="self">self</span>.public_key_v2(federation_id).<span class="kw">await</span><span class="question-mark">?</span>,
-            payment_fees: <span class="self">self</span>.payment_fees_v2(),
+            send_fee_default: PaymentFee::one_percent(),
+            send_fee_minimum: PaymentFee::half_of_one_percent(),
+            receive_fee: PaymentFee::half_of_one_percent(),
             outgoing_cltv_delta: OUTGOING_CLTV_DELTA_V2,
         })
-    }
-
-    <span class="kw">pub fn </span>payment_fees_v2(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; PaymentFees {
-        PaymentFees {
-            <span class="comment">// we take a fee of one percent for outgoing contracts
-            </span>send: PaymentFee::default(),
-            <span class="comment">// we take a fee of one percent for incoming contracts
-            </span>receive: PaymentFee::default(),
-        }
     }
 
     <span class="kw">async fn </span>send_payment_v2(
@@ -3494,6 +3482,13 @@
             .amount_milli_satoshis()
             .ok_or(<span class="macro">anyhow!</span>(<span class="string">"Invoice is missing amount"</span>))<span class="question-mark">?</span>;
 
+        <span class="kw">let </span>min_contract_amount = <span class="self">self
+            </span>.payment_info_v2(<span class="kw-2">&amp;</span>payload.federation_id)
+            .<span class="kw">await
+            </span>.ok_or(<span class="macro">anyhow!</span>(<span class="string">"Payment Info not available"</span>))<span class="question-mark">?
+            </span>.send_fee_minimum
+            .add_fee(invoice_msats);
+
         <span class="comment">// We need to check that the contract has been confirmed by the federation
         // before we start the state machine to prevent DOS attacks.
         </span><span class="kw">let </span>max_delay = module
@@ -3508,7 +3503,7 @@
             .start_send_state_machine(
                 operation_id,
                 max_delay,
-                invoice_msats,
+                min_contract_amount,
                 payload.invoice,
                 payload.contract.clone(),
             )
@@ -3526,18 +3521,17 @@
             <span class="macro">bail!</span>(<span class="string">"The contract is invalid"</span>)
         }
 
-        <span class="kw">let </span>our_pk = <span class="self">self
-            </span>.public_key_v2(<span class="kw-2">&amp;</span>payload.federation_id)
+        <span class="kw">let </span>payment_info = <span class="self">self
+            </span>.payment_info_v2(<span class="kw-2">&amp;</span>payload.federation_id)
             .<span class="kw">await
-            </span>.ok_or(<span class="macro">anyhow!</span>(<span class="string">"Federation client not available"</span>))<span class="question-mark">?</span>;
+            </span>.ok_or(<span class="macro">anyhow!</span>(<span class="string">"Payment Info not available"</span>))<span class="question-mark">?</span>;
 
-        <span class="kw">if </span>payload.contract.commitment.refund_pk != our_pk {
+        <span class="kw">if </span>payload.contract.commitment.refund_pk != payment_info.public_key {
             <span class="macro">bail!</span>(<span class="string">"The outgoing contract keyed to another gateway"</span>);
         }
 
-        <span class="kw">let </span>contract_amount = <span class="self">self
-            </span>.payment_fees_v2()
-            .receive
+        <span class="kw">let </span>contract_amount = payment_info
+            .receive_fee
             .subtract_fee(payload.invoice_amount.msats);
 
         <span class="kw">if </span>contract_amount != payload.contract.commitment.amount {

@@ -890,8 +890,6 @@
 <a href="#888" id="888">888</a>
 <a href="#889" id="889">889</a>
 <a href="#890" id="890">890</a>
-<a href="#891" id="891">891</a>
-<a href="#892" id="892">892</a>
 </pre></div><pre class="rust"><code><span class="kw">pub mod </span>api;
 <span class="attr">#[cfg(feature = <span class="string">"cli"</span>)]
 </span><span class="kw">mod </span>cli;
@@ -1028,14 +1026,10 @@
 <span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Decodable, Encodable)]
 </span><span class="kw">pub struct </span>PaymentInfo {
     <span class="kw">pub </span>public_key: PublicKey,
-    <span class="kw">pub </span>payment_fees: PaymentFees,
+    <span class="kw">pub </span>send_fee_minimum: PaymentFee,
+    <span class="kw">pub </span>send_fee_default: PaymentFee,
+    <span class="kw">pub </span>receive_fee: PaymentFee,
     <span class="kw">pub </span>outgoing_cltv_delta: u64,
-}
-
-<span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Decodable, Encodable)]
-</span><span class="kw">pub struct </span>PaymentFees {
-    <span class="kw">pub </span>send: PaymentFee,
-    <span class="kw">pub </span>receive: PaymentFee,
 }
 
 <span class="attr">#[derive(
@@ -1047,6 +1041,20 @@
 }
 
 <span class="kw">impl </span>PaymentFee {
+    <span class="kw">pub fn </span>one_percent() -&gt; <span class="self">Self </span>{
+        PaymentFee {
+            base: Amount::ZERO,
+            parts_per_million: <span class="number">10_000</span>,
+        }
+    }
+
+    <span class="kw">pub fn </span>half_of_one_percent() -&gt; <span class="self">Self </span>{
+        PaymentFee {
+            base: Amount::ZERO,
+            parts_per_million: <span class="number">5_000</span>,
+        }
+    }
+
     <span class="kw">pub fn </span>add_fee(<span class="kw-2">&amp;</span><span class="self">self</span>, msats: u64) -&gt; Amount {
         Amount::from_msats(msats.saturating_add(<span class="self">self</span>.fee(msats)))
     }
@@ -1060,15 +1068,6 @@
             + msats
                 .saturating_mul(<span class="self">self</span>.parts_per_million)
                 .saturating_div(<span class="number">1_000_000</span>)
-    }
-}
-
-<span class="kw">impl </span>Default <span class="kw">for </span>PaymentFee {
-    <span class="kw">fn </span>default() -&gt; <span class="self">Self </span>{
-        PaymentFee {
-            base: Amount::from_sats(<span class="number">50</span>),
-            parts_per_million: <span class="number">10_000</span>,
-        }
     }
 }
 
@@ -1213,7 +1212,7 @@
         <span class="self">self</span>.send_internal(
             gateway_api,
             invoice,
-            PaymentFee::default(),
+            PaymentFee::one_percent(),
             SEND_EXPIRATION_DELTA_BLOCKS_DEFAULT,
         )
         .<span class="kw">await
@@ -1223,7 +1222,7 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         gateway_api: SafeUrl,
         invoice: Bolt11Invoice,
-        payment_fee: PaymentFee,
+        payment_fee_limit: PaymentFee,
         expiration_delta: u64,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;OperationId, SendPaymentError&gt; {
         <span class="kw">let </span>invoice_msats = invoice
@@ -1248,9 +1247,9 @@
             </span>.map_err(SendPaymentError::GatewayError)<span class="question-mark">?
             </span>.ok_or(SendPaymentError::UnknownFederation)<span class="question-mark">?</span>;
 
-        <span class="kw">if </span>!payment_info.payment_fees.send.le(<span class="kw-2">&amp;</span>payment_fee) {
-            <span class="kw">return </span><span class="prelude-val">Err</span>(SendPaymentError::InsufficientPaymentFee(
-                payment_info.payment_fees.send,
+        <span class="kw">if </span>!payment_info.send_fee_default.le(<span class="kw-2">&amp;</span>payment_fee_limit) {
+            <span class="kw">return </span><span class="prelude-val">Err</span>(SendPaymentError::PaymentFeeExceedsLimit(
+                payment_info.send_fee_default,
             ));
         }
 
@@ -1268,7 +1267,7 @@
 
         <span class="kw">let </span>contract = OutgoingContract {
             payment_hash: <span class="kw-2">*</span>invoice.payment_hash(),
-            amount: payment_fee.add_fee(invoice_msats),
+            amount: payment_info.send_fee_default.add_fee(invoice_msats),
             expiration: consensus_block_count + expiration_delta,
             claim_pk: payment_info.public_key,
             refund_pk: refund_keypair.public_key(),
@@ -1423,7 +1422,7 @@
             invoice_amount,
             INVOICE_EXPIRATION_SECONDS_DEFAULT,
             String::new(),
-            PaymentFee::default(),
+            PaymentFee::one_percent(),
         )
         .<span class="kw">await
     </span>}
@@ -1434,7 +1433,7 @@
         invoice_amount: Amount,
         expiry_time: u32,
         description: String,
-        max_payment_fee: PaymentFee,
+        payment_fee_limit: PaymentFee,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;(Bolt11Invoice, OperationId), FetchInvoiceError&gt; {
         <span class="kw">let </span>(contract, .., invoice) = <span class="self">self
             </span>.create_contract_and_fetch_invoice_internal(
@@ -1443,7 +1442,7 @@
                 invoice_amount,
                 expiry_time,
                 description,
-                max_payment_fee,
+                payment_fee_limit,
             )
             .<span class="kw">await</span><span class="question-mark">?</span>;
 
@@ -1467,7 +1466,7 @@
             invoice_amount,
             INVOICE_EXPIRATION_SECONDS_DEFAULT,
             String::new(),
-            PaymentFee::default(),
+            PaymentFee::one_percent(),
         )
         .<span class="kw">await
     </span>}
@@ -1497,16 +1496,13 @@
             </span>.map_err(FetchInvoiceError::GatewayError)<span class="question-mark">?
             </span>.ok_or(FetchInvoiceError::UnknownFederation)<span class="question-mark">?</span>;
 
-        <span class="kw">if </span>!payment_info.payment_fees.receive.le(<span class="kw-2">&amp;</span>payment_fee_limit) {
+        <span class="kw">if </span>!payment_info.receive_fee.le(<span class="kw-2">&amp;</span>payment_fee_limit) {
             <span class="kw">return </span><span class="prelude-val">Err</span>(FetchInvoiceError::PaymentFeeExceedsLimit(
-                payment_info.payment_fees.receive,
+                payment_info.receive_fee,
             ));
         }
 
-        <span class="kw">let </span>contract_amount = payment_info
-            .payment_fees
-            .receive
-            .subtract_fee(invoice_amount.msats);
+        <span class="kw">let </span>contract_amount = payment_info.receive_fee.subtract_fee(invoice_amount.msats);
 
         <span class="kw">let </span>expiration = duration_since_epoch()
             .as_secs()
@@ -1712,8 +1708,8 @@
     </span>GatewayError(GatewayError),
     <span class="attr">#[error(<span class="string">"The gateway does not support our federation"</span>)]
     </span>UnknownFederation,
-    <span class="attr">#[error(<span class="string">"To route via this gateway we require a minimum payment fee of {0:?}"</span>)]
-    </span>InsufficientPaymentFee(PaymentFee),
+    <span class="attr">#[error(<span class="string">"The gateways fee of {0:?} exceeds the supplied limit"</span>)]
+    </span>PaymentFeeExceedsLimit(PaymentFee),
     <span class="attr">#[error(<span class="string">"To route via this gateway we require a minimum expiration delta of {0} blocks"</span>)]
     </span>InsufficientExpirationDelta(u64),
     <span class="attr">#[error(<span class="string">"Federation returned an error: {0}"</span>)]
