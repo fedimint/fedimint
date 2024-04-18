@@ -10,6 +10,7 @@ use fedimint_mint_common::MintInput;
 
 use crate::{MintClientContext, MintClientStateMachines, SpendableNote};
 
+#[cfg_attr(doc, aquamarine::aquamarine)]
 // TODO: add retry with valid subset of e-cash notes
 /// State machine managing the e-cash redemption process related to a mint
 /// input.

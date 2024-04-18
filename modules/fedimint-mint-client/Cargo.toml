@@ -20,6 +20,10 @@ path = "src/lib.rs"
 name = "notes"
 harness = false
 
+[package.metadata.cargo-udeps.ignore]
+# cargo udeps can't detect that one
+normal = ["aquamarine"]
+
 [dependencies]
 anyhow = { workspace = true }
 async-stream = "0.3.5"

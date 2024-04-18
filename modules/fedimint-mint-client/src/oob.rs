@@ -14,7 +14,7 @@ use crate::input::{
 };
 use crate::{MintClientContext, MintClientStateMachines, SpendableNote};
 
-#[aquamarine::aquamarine]
+#[cfg_attr(doc, aquamarine::aquamarine)]
 /// State machine managing e-cash that has been taken out of the wallet for
 /// out-of-band transmission.
 ///

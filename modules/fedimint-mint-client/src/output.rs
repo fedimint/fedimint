@@ -35,6 +35,7 @@ const SPEND_KEY_CHILD_ID: ChildId = ChildId(0);
 /// Child ID used to derive the blinding key from a note's [`DerivableSecret`]
 const BLINDING_KEY_CHILD_ID: ChildId = ChildId(1);
 
+#[cfg_attr(doc, aquamarine::aquamarine)]
 /// State machine managing the e-cash issuance process related to a mint output.
 ///
 /// ```mermaid
