@@ -8,6 +8,7 @@ use fedimint_client::DynGlobalClientContext;
 use fedimint_core::config::FederationId;
 use fedimint_core::core::{Decoder, OperationId};
 use fedimint_core::encoding::{Decodable, Encodable};
+use fedimint_core::envs::is_running_in_test_env;
 use fedimint_core::task::sleep;
 use fedimint_core::time::duration_since_epoch;
 use fedimint_core::{Amount, OutPoint, TransactionId};
@@ -296,7 +297,12 @@ impl LightningPayFunded {
     ) -> Result<String, GatewayPayError> {
         // Abort the payment if we can't reach the gateway within 30 seconds
         // to prevent unexpected delays for the user.
-        let deadline = fedimint_core::time::now() + GATEWAY_API_TIMEOUT;
+        let deadline = fedimint_core::time::now()
+            + if is_running_in_test_env() {
+                Duration::from_secs(3)
+            } else {
+                GATEWAY_API_TIMEOUT
+            };
 
         let mut last_error = None;
         while fedimint_core::time::now() < deadline {
