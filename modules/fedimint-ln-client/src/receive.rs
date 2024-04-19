@@ -289,6 +289,7 @@ impl LightningReceiveConfirmedInvoice {
         let input = contract.claim();
         let client_input = ClientInput::<LightningInput, LightningClientStateMachines> {
             input,
+            amount: contract.amount,
             keys: vec![keypair],
             // The input of the refund tx is managed by this state machine, so no new state machines
             // need to be created

@@ -8,7 +8,7 @@ use fedimint_core::core::OperationId;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::OutPoint;
 use fedimint_lnv2_common::contracts::IncomingContract;
-use fedimint_lnv2_common::{LightningClientContext, LightningInput, Witness};
+use fedimint_lnv2_common::{LightningClientContext, LightningInput};
 use tpe::AggregateDecryptionKey;
 
 use crate::api::LnFederationApi;
@@ -115,13 +115,11 @@ impl ReceiveStateMachine {
         }
 
         let client_input = ClientInput::<LightningInput, LightningClientStateMachines> {
-            input: LightningInput {
-                amount: old_state.common.contract.commitment.amount,
-                witness: Witness::Incoming(
-                    old_state.common.contract.contract_id(),
-                    old_state.common.agg_decryption_key,
-                ),
-            },
+            input: LightningInput::Incoming(
+                old_state.common.contract.contract_id(),
+                old_state.common.agg_decryption_key,
+            ),
+            amount: old_state.common.contract.commitment.amount,
             keys: vec![old_state.common.claim_keypair],
             state_machines: Arc::new(|_, _| vec![]),
         };

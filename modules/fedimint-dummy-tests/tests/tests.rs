@@ -89,6 +89,7 @@ async fn federation_should_abort_if_balance_sheet_is_negative() -> anyhow::Resul
             amount: sats(1000),
             account: account_kp.public_key(),
         },
+        amount: sats(1000),
         keys: vec![account_kp],
         state_machines: Arc::new(move |_, _| Vec::<DummyStateMachine>::new()),
     };
@@ -120,6 +121,7 @@ async fn unbalanced_transactions_get_rejected() -> anyhow::Result<()> {
             amount: sats(1000),
             account: dummy_module.account(),
         },
+        amount: sats(1000),
         state_machines: Arc::new(move |_, _| Vec::<DummyStateMachine>::new()),
     };
     let tx = TransactionBuilder::new().with_output(output.into_dyn(dummy_module.id));

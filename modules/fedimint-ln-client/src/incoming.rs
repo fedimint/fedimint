@@ -330,6 +330,7 @@ impl DecryptingPreimageState {
         let claim_input = contract.claim();
         let client_input = ClientInput::<LightningInput, IncomingStateMachine> {
             input: claim_input,
+            amount: contract.amount,
             state_machines: Arc::new(|_, _| vec![]),
             keys: vec![context.redeem_key],
         };

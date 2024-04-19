@@ -36,7 +36,7 @@ use fedimint_core::core::{IntoDynInstance, ModuleInstanceId, OperationId};
 use fedimint_core::db::{DatabaseTransaction, DatabaseVersion, IDatabaseTransactionOpsCoreTyped};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::{
-    ApiVersion, CommonModuleInit, ModuleCommon, ModuleInit, MultiApiVersion, TransactionItemAmount,
+    ApiVersion, CommonModuleInit, ModuleCommon, ModuleInit, MultiApiVersion,
 };
 use fedimint_core::task::{timeout, MaybeSend, MaybeSync};
 use fedimint_core::util::update_merge::UpdateMerge;
@@ -405,37 +405,17 @@ impl ClientModule for LightningClientModule {
         }
     }
 
-    fn input_amount(
-        &self,
-        input: &<Self::Common as ModuleCommon>::Input,
-    ) -> Option<TransactionItemAmount> {
-        let input = input.maybe_v0_ref()?;
-
-        Some(TransactionItemAmount {
-            amount: input.amount,
-            fee: self.cfg.fee_consensus.contract_input,
-        })
+    fn input_fee(&self, _input: &<Self::Common as ModuleCommon>::Input) -> Option<Amount> {
+        Some(self.cfg.fee_consensus.contract_input)
     }
 
-    fn output_amount(
-        &self,
-        output: &<Self::Common as ModuleCommon>::Output,
-    ) -> Option<TransactionItemAmount> {
-        let output = output.maybe_v0_ref()?;
-
-        let amt = match output {
-            LightningOutputV0::Contract(account_output) => TransactionItemAmount {
-                amount: account_output.amount,
-                fee: self.cfg.fee_consensus.contract_output,
-            },
+    fn output_fee(&self, output: &<Self::Common as ModuleCommon>::Output) -> Option<Amount> {
+        match output.maybe_v0_ref()? {
+            LightningOutputV0::Contract(_) => Some(self.cfg.fee_consensus.contract_output),
             LightningOutputV0::Offer(_) | LightningOutputV0::CancelOutgoing { .. } => {
-                TransactionItemAmount {
-                    amount: Amount::ZERO,
-                    fee: Amount::ZERO,
-                }
+                Some(Amount::ZERO)
             }
-        };
-        Some(amt)
+        }
     }
 
     #[cfg(feature = "cli")]
@@ -653,6 +633,7 @@ impl LightningClientModule {
         Ok((
             ClientOutput {
                 output: ln_output,
+                amount: contract_amount,
                 state_machines: sm_gen,
             },
             contract_id,
@@ -679,7 +660,7 @@ impl LightningClientModule {
                 })?,
         };
 
-        let (incoming_output, contract_id) = create_incoming_contract_output(
+        let (incoming_output, amount, contract_id) = create_incoming_contract_output(
             &self.module_api,
             *payment_hash,
             invoice_amount,
@@ -689,6 +670,7 @@ impl LightningClientModule {
 
         let client_output = ClientOutput::<LightningOutputV0, LightningClientStateMachines> {
             output: incoming_output,
+            amount,
             state_machines: Arc::new(move |txid, _| {
                 vec![LightningClientStateMachines::InternalPay(
                     IncomingStateMachine {
@@ -898,6 +880,7 @@ impl LightningClientModule {
             invoice,
             ClientOutput {
                 output: ln_output,
+                amount: Amount::ZERO,
                 state_machines: sm_gen,
             },
             preimage.into_32(),
@@ -1110,6 +1093,7 @@ impl LightningClientModule {
 
         let output = self.client_ctx.make_client_output(ClientOutput {
             output: LightningOutput::V0(client_output.output),
+            amount: client_output.amount,
             state_machines: client_output.state_machines,
         });
 
@@ -1318,6 +1302,7 @@ impl LightningClientModule {
         let input = incoming_contract_account.claim();
         let client_input = ClientInput::<LightningInput, LightningClientStateMachines> {
             input,
+            amount: incoming_contract_account.amount,
             keys: vec![key_pair],
             state_machines: Arc::new(|_, _| vec![]),
         };
@@ -1799,7 +1784,7 @@ pub async fn create_incoming_contract_output(
     payment_hash: sha256::Hash,
     amount_msat: Amount,
     redeem_key: secp256k1::KeyPair,
-) -> Result<(LightningOutputV0, ContractId), IncomingSmError> {
+) -> Result<(LightningOutputV0, Amount, ContractId), IncomingSmError> {
     let offer = fetch_and_validate_offer(module_api, payment_hash, amount_msat).await?;
     let our_pub_key = secp256k1::PublicKey::from_keypair(&redeem_key);
     let contract = IncomingContract {
@@ -1814,7 +1799,7 @@ pub async fn create_incoming_contract_output(
         contract: Contract::Incoming(contract),
     });
 
-    Ok((incoming_output, contract_id))
+    Ok((incoming_output, offer.amount, contract_id))
 }
 
 #[derive(Debug, Encodable, Decodable, Serialize)]

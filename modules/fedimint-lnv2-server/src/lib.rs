@@ -40,7 +40,7 @@ use fedimint_lnv2_common::contracts::{IncomingContract, OutgoingContract};
 use fedimint_lnv2_common::{
     ContractId, LightningCommonInit, LightningConsensusItem, LightningInput, LightningInputError,
     LightningModuleTypes, LightningOutput, LightningOutputError, LightningOutputOutcome,
-    OutgoingWitness, Witness, MODULE_CONSENSUS_VERSION,
+    OutgoingWitness, MODULE_CONSENSUS_VERSION,
 };
 use fedimint_server::check_auth;
 use fedimint_server::config::distributedgen::{evaluate_polynomial_g1, PeerHandleOps};
@@ -368,8 +368,8 @@ impl ServerModule for Lightning {
         dbtx: &mut DatabaseTransaction<'c>,
         input: &'b LightningInput,
     ) -> Result<InputMeta, LightningInputError> {
-        let (pub_key, amount) = match &input.witness {
-            Witness::Outgoing(contract_id, outgoing_witness) => {
+        let (pub_key, amount) = match &input {
+            LightningInput::Outgoing(contract_id, outgoing_witness) => {
                 let contract = dbtx
                     .remove_entry(&OutgoingContractKey(*contract_id))
                     .await
@@ -406,7 +406,7 @@ impl ServerModule for Lightning {
                     }
                 }
             }
-            Witness::Incoming(contract_id, agg_decryption_key) => {
+            LightningInput::Incoming(contract_id, agg_decryption_key) => {
                 let contract = dbtx
                     .remove_entry(&IncomingContractKey(*contract_id))
                     .await
