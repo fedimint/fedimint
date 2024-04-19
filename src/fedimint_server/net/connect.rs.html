@@ -1185,7 +1185,7 @@
         <span class="kw">let </span>cfg = rustls::ClientConfig::builder()
             .with_safe_defaults()
             .with_root_certificates(<span class="self">self</span>.cert_store.clone())
-            .with_single_cert(
+            .with_client_auth_cert(
                 <span class="macro">vec!</span>[<span class="self">self</span>.our_certificate.clone()],
                 <span class="self">self</span>.our_private_key.clone(),
             )
@@ -1225,7 +1225,7 @@
         <span class="kw">let </span>verifier = AllowAnyAuthenticatedClient::new(<span class="self">self</span>.cert_store.clone());
         <span class="kw">let </span>config = rustls::ServerConfig::builder()
             .with_safe_defaults()
-            .with_client_cert_verifier(verifier)
+            .with_client_cert_verifier(Arc::from(verifier))
             .with_single_cert(
                 <span class="macro">vec!</span>[<span class="self">self</span>.our_certificate.clone()],
                 <span class="self">self</span>.our_private_key.clone(),
@@ -1947,7 +1947,7 @@
                 <span class="kw">let </span>conn_res = server.next().<span class="kw">await</span>.unwrap();
                 <span class="macro">assert_eq!</span>(
                     conn_res.err().unwrap().to_string().as_str(),
-                    <span class="string">"invalid peer certificate signature"
+                    <span class="string">"invalid peer certificate: BadSignature"
                 </span>);
             });
 
@@ -1966,7 +1966,7 @@
             <span class="kw">let </span>conn_res = err_anytime.<span class="kw">await</span>;
             <span class="macro">assert_eq!</span>(
                 conn_res.err().unwrap().to_string().as_str(),
-                <span class="string">"received fatal alert: AccessDenied"
+                <span class="string">"received fatal alert: DecryptError"
             </span>);
 
             server_task.<span class="kw">await</span>.unwrap();
@@ -1981,7 +1981,7 @@
                 <span class="kw">let </span>conn_res = server.next().<span class="kw">await</span>.unwrap();
                 <span class="macro">assert_eq!</span>(
                     conn_res.err().unwrap().to_string().as_str(),
-                    <span class="string">"received fatal alert: BadCertificate"
+                    <span class="string">"received fatal alert: DecryptError"
                 </span>);
             });
 
@@ -1999,7 +1999,7 @@
             <span class="kw">let </span>conn_res = err_anytime.<span class="kw">await</span>;
             <span class="macro">assert_eq!</span>(
                 conn_res.err().unwrap().to_string().as_str(),
-                <span class="string">"invalid peer certificate signature"
+                <span class="string">"invalid peer certificate: BadSignature"
             </span>);
 
             server_task.<span class="kw">await</span>.unwrap();
@@ -2035,7 +2035,7 @@
             <span class="kw">let </span>conn_res = err_anytime.<span class="kw">await</span>;
             <span class="macro">assert_eq!</span>(
                 conn_res.err().unwrap().to_string().as_str(),
-                <span class="string">"invalid peer certificate contents: invalid peer certificate: CertNotValidForName"
+                <span class="string">"invalid peer certificate: NotValidForName"
             </span>);
 
             server_task.<span class="kw">await</span>.unwrap();
