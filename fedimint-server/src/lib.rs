@@ -27,7 +27,6 @@ use futures::FutureExt;
 use jsonrpsee::server::{PingConfig, RpcServiceBuilder, ServerBuilder, ServerHandle};
 use jsonrpsee::types::ErrorObject;
 use jsonrpsee::RpcModule;
-use tokio::runtime::Runtime;
 use tracing::{error, info};
 
 use crate::config::api::{ConfigGenApi, ConfigGenSettings};
@@ -121,7 +120,7 @@ impl FedimintServer {
 
         info!(target: LOG_CONSENSUS, "Starting consensus API");
 
-        let handler = Self::spawn_consensus_api(consensus_api, true).await;
+        let handler = Self::spawn_consensus_api(consensus_api).await;
 
         consensus_server.run(task_group.make_handle()).await?;
 
@@ -213,8 +212,7 @@ impl FedimintServer {
 
         let mut rpc_module = RpcHandlerCtx::new_module(config_gen);
         Self::attach_endpoints(&mut rpc_module, config::api::server_endpoints(), None);
-        let handler =
-            Self::spawn_api("config-gen", &self.settings.api_bind, rpc_module, 10, true).await;
+        let handler = Self::spawn_api("config-gen", &self.settings.api_bind, rpc_module, 10).await;
 
         let cfg = config_generated_rx.recv().await.expect("should not close");
         handler.stop().await;
@@ -223,10 +221,7 @@ impl FedimintServer {
 
     /// Runs the `ConsensusApi` which serves endpoints while consensus is
     /// running.
-    pub async fn spawn_consensus_api(
-        api: ConsensusApi,
-        force_shutdown: bool,
-    ) -> FedimintApiHandler {
+    pub async fn spawn_consensus_api(api: ConsensusApi) -> FedimintApiHandler {
         let cfg = &api.cfg.local;
         let mut rpc_module = RpcHandlerCtx::new_module(api.clone());
         Self::attach_endpoints(&mut rpc_module, net::api::server_endpoints(), None);
@@ -234,14 +229,7 @@ impl FedimintServer {
             Self::attach_endpoints(&mut rpc_module, module.api_endpoints(), Some(id));
         }
 
-        Self::spawn_api(
-            "consensus",
-            &cfg.api_bind,
-            rpc_module,
-            cfg.max_connections,
-            force_shutdown,
-        )
-        .await
+        Self::spawn_api("consensus", &cfg.api_bind, rpc_module, cfg.max_connections).await
     }
 
     /// Spawns an API server
@@ -254,22 +242,11 @@ impl FedimintServer {
         api_bind: &SocketAddr,
         module: RpcModule<RpcHandlerCtx<T>>,
         max_connections: u32,
-        force_shutdown: bool,
     ) -> FedimintApiHandler {
-        let mut builder = ServerBuilder::new()
+        let handle = ServerBuilder::new()
             .max_connections(max_connections)
             .enable_ws_ping(PingConfig::new().ping_interval(Duration::from_secs(10)))
-            .set_rpc_middleware(RpcServiceBuilder::new().layer(metrics::jsonrpsee::MetricsLayer));
-
-        let runtime = if force_shutdown {
-            let runtime = Runtime::new().expect("Creates runtime");
-            builder = builder.custom_tokio_runtime(runtime.handle().clone());
-            Some(runtime)
-        } else {
-            None
-        };
-
-        let handle = builder
+            .set_rpc_middleware(RpcServiceBuilder::new().layer(metrics::jsonrpsee::MetricsLayer))
             .build(&api_bind.to_string())
             .await
             .context(format!("Bind address: {api_bind}"))
@@ -278,7 +255,7 @@ impl FedimintServer {
             .start(module);
         info!(target: LOG_NET_API, "Starting api on ws://{api_bind}");
 
-        FedimintApiHandler { handle, runtime }
+        FedimintApiHandler { handle }
     }
 
     /// Attaches `endpoints` to the `RpcModule`
@@ -349,7 +326,6 @@ impl FedimintServer {
 }
 
 pub struct FedimintApiHandler {
-    runtime: Option<Runtime>,
     handle: ServerHandle,
 }
 
@@ -357,9 +333,6 @@ impl FedimintApiHandler {
     /// Attempts to stop the API
     pub async fn stop(self) {
         let _ = self.handle.stop();
-        if let Some(runtime) = self.runtime {
-            runtime.shutdown_background();
-        }
         self.handle.stopped().await;
     }
 }
