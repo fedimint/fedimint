@@ -1840,7 +1840,6 @@
 <a href="#1840" id="1840">1840</a>
 <a href="#1841" id="1841">1841</a>
 <a href="#1842" id="1842">1842</a>
-<a href="#1843" id="1843">1843</a>
 </pre></div><pre class="rust"><code><span class="kw">pub mod </span>db;
 
 <span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap};
@@ -1881,7 +1880,7 @@
 <span class="kw">use </span>fedimint_core::endpoint_constants::{
     BLOCK_COUNT_ENDPOINT, BLOCK_COUNT_LOCAL_ENDPOINT, PEG_OUT_FEES_ENDPOINT,
 };
-<span class="kw">use </span>fedimint_core::envs::{is_env_var_set, FM_IN_DEVIMINT_ENV};
+<span class="kw">use </span>fedimint_core::envs::is_running_in_test_env;
 <span class="kw">use </span>fedimint_core::module::audit::Audit;
 <span class="kw">use </span>fedimint_core::module::{
     api_endpoint, ApiEndpoint, ApiVersion, CoreConsensusVersion, InputMeta, ModuleConsensusVersion,
@@ -3051,14 +3050,14 @@
         <span class="kw">let </span>(block_count_tx, block_count_rx) = watch::channel(<span class="prelude-val">None</span>);
         <span class="kw">let </span>(fee_rate_tx, fee_rate_rx) = watch::channel(cfg.consensus.default_fee);
 
-        <span class="kw">let </span>desired_poll_interval = <span class="kw">if </span>is_env_var_set(FM_IN_DEVIMINT_ENV) {
+        <span class="kw">let </span><span class="kw-2">mut </span>desired_interval = tokio::time::interval(<span class="kw">if </span>is_running_in_test_env() {
             <span class="comment">// In devimint, the setup is blocked by detecting block height changes,
             // and polling more often is not an issue.
             </span><span class="macro">debug!</span>(target: LOG_MODULE_WALLET, <span class="string">"Running in devimint, using fast node polling"</span>);
             Duration::from_millis(<span class="number">100</span>)
         } <span class="kw">else </span>{
             Duration::from_secs(<span class="number">10</span>)
-        };
+        });
 
         task_group.spawn_cancellable(<span class="string">"wallet module: background update"</span>, {
             <span class="kw">let </span>bitcoind = bitcoind.clone();
@@ -3108,8 +3107,7 @@
                     <span class="kw">if </span>Duration::from_secs(<span class="number">10</span>) &lt; duration {
                         <span class="macro">warn!</span>(target: LOG_MODULE_WALLET, duration_secs=duration.as_secs(), <span class="string">"Updating from bitcoind slow"</span>);
                     }
-                    <span class="kw">let </span>remaining = desired_poll_interval.saturating_sub(duration);
-                    sleep(remaining).<span class="kw">await</span>;
+                    desired_interval.tick().<span class="kw">await</span>;
                 }
             }
         });

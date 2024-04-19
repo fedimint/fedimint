@@ -87,6 +87,15 @@
 <a href="#87" id="87">87</a>
 <a href="#88" id="88">88</a>
 <a href="#89" id="89">89</a>
+<a href="#90" id="90">90</a>
+<a href="#91" id="91">91</a>
+<a href="#92" id="92">92</a>
+<a href="#93" id="93">93</a>
+<a href="#94" id="94">94</a>
+<a href="#95" id="95">95</a>
+<a href="#96" id="96">96</a>
+<a href="#97" id="97">97</a>
+<a href="#98" id="98">98</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::env;
 
 <span class="kw">use </span>anyhow::Context;
@@ -110,6 +119,15 @@
 </span><span class="kw">pub fn </span>is_env_var_set(var: <span class="kw-2">&amp;</span>str) -&gt; bool {
     std::env::var_os(var).is_some_and(|v| v != <span class="string">"0" </span>&amp;&amp; v != <span class="string">"false"</span>)
 }
+
+<span class="doccomment">/// Use to detect if running in a test environment, either `cargo test` or
+/// `devimint`.
+</span><span class="kw">pub fn </span>is_running_in_test_env() -&gt; bool {
+    <span class="kw">let </span>unit_test = <span class="macro">cfg!</span>(test);
+
+    unit_test || is_env_var_set(<span class="string">"NEXTEST"</span>) || is_env_var_set(FM_IN_DEVIMINT_ENV)
+}
+
 <span class="doccomment">/// Get value of [`FEDIMINT_BUILD_CODE_VERSION_ENV`] at compile time
 </span><span class="attr">#[macro_export]
 </span><span class="macro">macro_rules!</span> fedimint_build_code_version_env {
