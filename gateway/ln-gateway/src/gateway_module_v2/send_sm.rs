@@ -7,6 +7,7 @@ use fedimint_client::DynGlobalClientContext;
 use fedimint_core::core::{KeyPair, OperationId};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::{Amount, OutPoint};
+use fedimint_ln_common::PrunedInvoice;
 use fedimint_lnv2_client::LightningClientStateMachines;
 use fedimint_lnv2_common::contracts::OutgoingContract;
 use fedimint_lnv2_common::{LightningInput, OutgoingWitness};
@@ -141,7 +142,7 @@ impl SendStateMachine {
             return Err(Cancelled::Underfunded);
         }
 
-        let max_fee_msat = (contract.amount - min_contract_amount).msats;
+        let max_fee = contract.amount - min_contract_amount;
 
         let lightning_context = context
             .gateway
@@ -164,23 +165,34 @@ impl SendStateMachine {
                 .map_err(|e| Cancelled::ReceiveError(e.to_string()));
         }
 
-        lightning_context
-            .lnrpc
-            .pay(PayInvoiceRequest {
-                invoice: invoice.to_string(),
-                max_delay,
-                max_fee_msat,
-                payment_hash: invoice.payment_hash().to_vec(),
-            })
-            .await
-            .map(|response| {
-                response
-                    .preimage
-                    .as_slice()
-                    .try_into()
-                    .expect("Preimage is 32 bytes")
-            })
-            .map_err(|e| Cancelled::LightningRpcError(e.to_string()))
+        if lightning_context.lnrpc.supports_private_payments() {
+            lightning_context
+                .lnrpc
+                .pay_private(
+                    PrunedInvoice::try_from(invoice).expect("Invoice has amount"),
+                    max_delay,
+                    max_fee,
+                )
+                .await
+        } else {
+            lightning_context
+                .lnrpc
+                .pay(PayInvoiceRequest {
+                    invoice: invoice.to_string(),
+                    max_delay,
+                    max_fee_msat: max_fee.msats,
+                    payment_hash: invoice.payment_hash().to_vec(),
+                })
+                .await
+        }
+        .map(|response| {
+            response
+                .preimage
+                .as_slice()
+                .try_into()
+                .expect("Preimage is 32 bytes")
+        })
+        .map_err(|e| Cancelled::LightningRpcError(e.to_string()))
     }
 
     async fn transition_send_payment(
