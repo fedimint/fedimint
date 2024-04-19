@@ -392,7 +392,7 @@
             .<span class="kw">await
             </span>.expect(<span class="string">"Failed to init server"</span>);
 
-            <span class="kw">let </span>api_handle = FedimintServer::spawn_consensus_api(consensus_api, <span class="bool-val">false</span>).<span class="kw">await</span>;
+            <span class="kw">let </span>api_handle = FedimintServer::spawn_consensus_api(consensus_api).<span class="kw">await</span>;
 
             task_group.spawn(<span class="string">"fedimintd"</span>, <span class="kw">move </span>|handle| <span class="kw">async move </span>{
                 consensus_server.run(handle).<span class="kw">await</span>.unwrap();

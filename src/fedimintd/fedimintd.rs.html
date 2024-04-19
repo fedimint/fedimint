@@ -465,21 +465,6 @@
 <a href="#465" id="465">465</a>
 <a href="#466" id="466">466</a>
 <a href="#467" id="467">467</a>
-<a href="#468" id="468">468</a>
-<a href="#469" id="469">469</a>
-<a href="#470" id="470">470</a>
-<a href="#471" id="471">471</a>
-<a href="#472" id="472">472</a>
-<a href="#473" id="473">473</a>
-<a href="#474" id="474">474</a>
-<a href="#475" id="475">475</a>
-<a href="#476" id="476">476</a>
-<a href="#477" id="477">477</a>
-<a href="#478" id="478">478</a>
-<a href="#479" id="479">479</a>
-<a href="#480" id="480">480</a>
-<a href="#481" id="481">481</a>
-<a href="#482" id="482">482</a>
 </pre></div><pre class="rust"><code><span class="kw">mod </span>metrics;
 
 <span class="kw">use </span>std::collections::BTreeMap;
@@ -498,7 +483,7 @@
 <span class="kw">use </span>fedimint_core::db::Database;
 <span class="kw">use </span>fedimint_core::envs::{is_env_var_set, BitcoinRpcConfig, FM_USE_UNKNOWN_MODULE_ENV};
 <span class="kw">use </span>fedimint_core::module::{ServerApiVersionsSummary, ServerDbVersionsSummary, ServerModuleInit};
-<span class="kw">use </span>fedimint_core::task::{sleep, TaskGroup};
+<span class="kw">use </span>fedimint_core::task::TaskGroup;
 <span class="kw">use </span>fedimint_core::timing;
 <span class="kw">use </span>fedimint_core::util::{handle_version_hash_command, write_overwrite, SafeUrl};
 <span class="kw">use </span>fedimint_ln_common::config::{
@@ -520,8 +505,7 @@
 };
 <span class="kw">use </span>fedimint_wallet_server::WalletInit;
 <span class="kw">use </span>futures::FutureExt;
-<span class="kw">use </span>tokio::select;
-<span class="kw">use </span>tracing::{debug, error, info, warn};
+<span class="kw">use </span>tracing::{debug, error, info};
 
 <span class="kw">use </span><span class="kw">crate</span>::default_esplora_server;
 <span class="kw">use </span><span class="kw">crate</span>::envs::{
@@ -813,30 +797,24 @@
 
         <span class="kw">let </span>timing_total_runtime = timing::TimeReporter::new(<span class="string">"total-runtime"</span>).info();
 
-        <span class="comment">// DO NOT REMOVE, or spawn_local tasks won't run anymore
-        </span><span class="kw">let </span>local_task_set = tokio::task::LocalSet::new();
-        <span class="kw">let </span>_guard = local_task_set.enter();
-
         <span class="kw">let </span>task_group = root_task_group.clone();
-        root_task_group
-            .spawn_local(<span class="string">"main"</span>, <span class="kw">move </span>|_task_handle| <span class="kw">async move </span>{
-                <span class="kw">match </span>run(
-                    <span class="self">self</span>.opts,
-                    <span class="kw-2">&amp;</span>task_group,
-                    <span class="self">self</span>.server_gens,
-                    <span class="self">self</span>.server_gen_params,
-                    <span class="self">self</span>.version_hash,
-                )
-                .<span class="kw">await
-                </span>{
-                    <span class="prelude-val">Ok</span>(()) =&gt; {}
-                    <span class="prelude-val">Err</span>(error) =&gt; {
-                        <span class="macro">error!</span>(<span class="question-mark">?</span>error, <span class="string">"Main task returned error, shutting down"</span>);
-                        task_group.shutdown();
-                    }
+        root_task_group.spawn_cancellable(<span class="string">"main"</span>, <span class="kw">async move </span>{
+            <span class="kw">match </span>run(
+                <span class="self">self</span>.opts,
+                <span class="kw-2">&amp;</span>task_group,
+                <span class="self">self</span>.server_gens,
+                <span class="self">self</span>.server_gen_params,
+                <span class="self">self</span>.version_hash,
+            )
+            .<span class="kw">await
+            </span>{
+                <span class="prelude-val">Ok</span>(()) =&gt; {}
+                <span class="prelude-val">Err</span>(error) =&gt; {
+                    <span class="macro">error!</span>(<span class="question-mark">?</span>error, <span class="string">"Main task returned error, shutting down"</span>);
+                    task_group.shutdown();
                 }
-            })
-            .<span class="kw">await</span>;
+            }
+        });
 
         <span class="kw">let </span>shutdown_future =
             root_task_group
@@ -844,19 +822,11 @@
                 .make_shutdown_rx()
                 .<span class="kw">await
                 </span>.then(|<span class="kw">_</span>| <span class="kw">async </span>{
-                    <span class="kw">let </span>shutdown_seconds = SHUTDOWN_TIMEOUT.as_secs();
-                    <span class="macro">info!</span>(<span class="string">"Shutdown called, waiting {shutdown_seconds}s for main task to finish"</span>);
-                    sleep(SHUTDOWN_TIMEOUT).<span class="kw">await</span>;
+                    <span class="macro">info!</span>(<span class="string">"Shutdown called"</span>);
                 });
 
-        <span class="macro">select!</span> {
-            <span class="kw">_ </span>= shutdown_future =&gt; {
-                <span class="macro">debug!</span>(<span class="string">"Terminating main task"</span>);
-            }
-            <span class="kw">_ </span>= local_task_set =&gt; {
-                <span class="macro">warn!</span>(<span class="string">"local_task_set finished before shutdown was called"</span>);
-            }
-        }
+        shutdown_future.<span class="kw">await</span>;
+        <span class="macro">debug!</span>(<span class="string">"Terminating main task"</span>);
 
         <span class="kw">if let </span><span class="prelude-val">Err</span>(err) = root_task_group.join_all(<span class="prelude-val">Some</span>(SHUTDOWN_TIMEOUT)).<span class="kw">await </span>{
             <span class="macro">error!</span>(<span class="question-mark">?</span>err, <span class="string">"Error while shutting down task group"</span>);
