@@ -828,6 +828,16 @@
 <a href="#828" id="828">828</a>
 <a href="#829" id="829">829</a>
 <a href="#830" id="830">830</a>
+<a href="#831" id="831">831</a>
+<a href="#832" id="832">832</a>
+<a href="#833" id="833">833</a>
+<a href="#834" id="834">834</a>
+<a href="#835" id="835">835</a>
+<a href="#836" id="836">836</a>
+<a href="#837" id="837">837</a>
+<a href="#838" id="838">838</a>
+<a href="#839" id="839">839</a>
+<a href="#840" id="840">840</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! Implements a connection manager for communication with other federation
 //! members
 //!
@@ -1565,13 +1575,15 @@
     <span class="kw">use </span>std::collections::HashMap;
     <span class="kw">use </span>std::time::Duration;
 
-    <span class="kw">use </span>fedimint_core::task::{sleep, TaskGroup};
+    <span class="kw">use </span>anyhow::{ensure, Context <span class="kw">as _</span>};
+    <span class="kw">use </span>fedimint_core::task::TaskGroup;
+    <span class="kw">use </span>fedimint_core::util::retry;
     <span class="kw">use </span>fedimint_core::PeerId;
 
     <span class="kw">use </span><span class="kw">super</span>::DelayCalculator;
     <span class="kw">use </span><span class="kw">crate</span>::net::connect::mock::{MockNetwork, StreamReliability};
     <span class="kw">use </span><span class="kw">crate</span>::net::connect::Connector;
-    <span class="kw">use </span><span class="kw">crate</span>::net::peers::{NetworkConfig, ReconnectPeerConnections};
+    <span class="kw">use </span><span class="kw">crate</span>::net::peers::{NetworkConfig, PeerStatusChannels, ReconnectPeerConnections};
 
     <span class="attr">#[test_log::test(tokio::test)]
     </span><span class="kw">async fn </span>test_connect() {
@@ -1618,24 +1630,32 @@
             <span class="kw">let </span>(_peers_b, peer_status_client_b) =
                 build_peers(<span class="string">"127.0.0.1:2000"</span>, <span class="number">2</span>, task_group.clone()).<span class="kw">await</span>;
 
-            sleep(Duration::from_secs(<span class="number">20</span>)).<span class="kw">await</span>;
+            <span class="kw">async fn </span>wait_for_connection(name: <span class="kw-2">&amp;</span>str, peer_status: <span class="kw-2">&amp;</span>PeerStatusChannels) {
+                retry(
+                    <span class="macro">format!</span>(<span class="string">"wait for client {}"</span>, name),
+                    fedimint_core::util::FibonacciBackoff::default()
+                        .with_min_delay(Duration::from_millis(<span class="number">200</span>))
+                        .with_max_delay(Duration::from_secs(<span class="number">5</span>))
+                        .with_max_times(<span class="number">10</span>),
+                    || <span class="kw">async </span>{
+                        <span class="kw">let </span>status = peer_status.get_all_status().<span class="kw">await</span>;
+                        <span class="macro">ensure!</span>(status.len() == <span class="number">2</span>);
+                        <span class="macro">ensure!</span>(status.values().all(|s| s.is_ok()));
+                        <span class="prelude-val">Ok</span>(())
+                    },
+                )
+                .<span class="kw">await
+                </span>.context(<span class="string">"peer couldn't connect"</span>)
+                .unwrap();
+            }
 
-            <span class="kw">let </span>status = peer_status_client_a.get_all_status().<span class="kw">await</span>;
-            <span class="macro">assert_eq!</span>(status.len(), <span class="number">2</span>);
-            <span class="macro">assert!</span>(status.values().all(|s| s.is_ok()));
-
-            <span class="kw">let </span>status = peer_status_client_b.get_all_status().<span class="kw">await</span>;
-            <span class="macro">assert_eq!</span>(status.len(), <span class="number">2</span>);
-            <span class="macro">assert!</span>(status.values().all(|s| s.is_ok()));
+            wait_for_connection(<span class="string">"a"</span>, <span class="kw-2">&amp;</span>peer_status_client_a).<span class="kw">await</span>;
+            wait_for_connection(<span class="string">"b"</span>, <span class="kw-2">&amp;</span>peer_status_client_b).<span class="kw">await</span>;
 
             <span class="kw">let </span>(_peers_c, peer_status_client_c) =
                 build_peers(<span class="string">"127.0.0.1:3000"</span>, <span class="number">3</span>, task_group.clone()).<span class="kw">await</span>;
 
-            sleep(Duration::from_secs(<span class="number">20</span>)).<span class="kw">await</span>;
-
-            <span class="kw">let </span>status = peer_status_client_c.get_all_status().<span class="kw">await</span>;
-            <span class="macro">assert_eq!</span>(status.len(), <span class="number">2</span>);
-            <span class="macro">assert!</span>(status.values().all(|s| s.is_ok()));
+            wait_for_connection(<span class="string">"c"</span>, <span class="kw-2">&amp;</span>peer_status_client_c).<span class="kw">await</span>;
         }
 
         task_group.shutdown();
