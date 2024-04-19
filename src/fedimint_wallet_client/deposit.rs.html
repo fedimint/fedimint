@@ -342,6 +342,10 @@
 <a href="#342" id="342">342</a>
 <a href="#343" id="343">343</a>
 <a href="#344" id="344">344</a>
+<a href="#345" id="345">345</a>
+<a href="#346" id="346">346</a>
+<a href="#347" id="347">347</a>
+<a href="#348" id="348">348</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::cmp;
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::{Duration, SystemTime};
@@ -354,7 +358,7 @@
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::task::sleep;
 <span class="kw">use </span>fedimint_core::txoproof::TxOutProof;
-<span class="kw">use </span>fedimint_core::{OutPoint, TransactionId};
+<span class="kw">use </span>fedimint_core::{Amount, OutPoint, TransactionId};
 <span class="kw">use </span>fedimint_wallet_common::tweakable::Tweakable;
 <span class="kw">use </span>fedimint_wallet_common::txoproof::PegInProof;
 <span class="kw">use </span>fedimint_wallet_common::WalletInput;
@@ -624,18 +628,22 @@
         <span class="kw">_ </span>=&gt; <span class="macro">panic!</span>(<span class="string">"Invalid previous state"</span>),
     };
 
-    <span class="kw">let </span>wallet_input = WalletInput::new_v0(
-        PegInProof::new(
-            txout_proof,
-            awaiting_confirmation_state.btc_transaction,
-            awaiting_confirmation_state.out_idx,
-            awaiting_confirmation_state.tweak_key.public_key(),
-        )
-        .expect(<span class="string">"TODO: handle API returning faulty proofs"</span>),
-    );
+    <span class="kw">let </span>pegin_proof = PegInProof::new(
+        txout_proof,
+        awaiting_confirmation_state.btc_transaction,
+        awaiting_confirmation_state.out_idx,
+        awaiting_confirmation_state.tweak_key.public_key(),
+    )
+    .expect(<span class="string">"TODO: handle API returning faulty proofs"</span>);
+
+    <span class="kw">let </span>amount = Amount::from_sats(pegin_proof.tx_output().value);
+
+    <span class="kw">let </span>wallet_input = WalletInput::new_v0(pegin_proof);
+
     <span class="kw">let </span>client_input = ClientInput::&lt;WalletInput, WalletClientStates&gt; {
         input: wallet_input,
         keys: <span class="macro">vec!</span>[awaiting_confirmation_state.tweak_key],
+        amount,
         state_machines: Arc::new(|<span class="kw">_</span>, <span class="kw">_</span>| <span class="macro">vec!</span>[]),
     };
 

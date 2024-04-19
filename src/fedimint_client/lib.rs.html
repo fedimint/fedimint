@@ -2447,6 +2447,14 @@
 <a href="#2447" id="2447">2447</a>
 <a href="#2448" id="2448">2448</a>
 <a href="#2449" id="2449">2449</a>
+<a href="#2450" id="2450">2450</a>
+<a href="#2451" id="2451">2451</a>
+<a href="#2452" id="2452">2452</a>
+<a href="#2453" id="2453">2453</a>
+<a href="#2454" id="2454">2454</a>
+<a href="#2455" id="2455">2455</a>
+<a href="#2456" id="2456">2456</a>
+<a href="#2457" id="2457">2457</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! # Client library for fedimintd
 //!
 //! This library provides a client interface to build module clients that can be
@@ -2785,6 +2793,7 @@
             InstancelessDynClientInput {
                 input: Box::new(input.input),
                 keys: input.keys,
+                amount: input.amount,
                 state_machines: states_to_instanceless_dyn(input.state_machines),
             },
         )
@@ -2812,6 +2821,7 @@
             dbtx,
             InstancelessDynClientOutput {
                 output: Box::new(output.output),
+                amount: output.amount,
                 state_machines: states_to_instanceless_dyn(output.state_machines),
             },
         )
@@ -2903,6 +2913,7 @@
         <span class="kw">let </span>instance_input = ClientInput {
             input: DynInput::from_parts(<span class="self">self</span>.module_instance_id, input.input),
             keys: input.keys,
+            amount: input.amount,
             state_machines: states_add_instance(<span class="self">self</span>.module_instance_id, input.state_machines),
         };
 
@@ -2923,6 +2934,7 @@
     ) -&gt; anyhow::Result&lt;(TransactionId, Vec&lt;OutPoint&gt;)&gt; {
         <span class="kw">let </span>instance_output = ClientOutput {
             output: DynOutput::from_parts(<span class="self">self</span>.module_instance_id, output.output),
+            amount: output.amount,
             state_machines: states_add_instance(<span class="self">self</span>.module_instance_id, output.state_machines),
         };
 
@@ -3366,20 +3378,24 @@
 
         <span class="kw">for </span>input <span class="kw">in </span><span class="kw-2">&amp;</span>builder.inputs {
             <span class="kw">let </span>module = <span class="self">self</span>.get_module(input.input.module_instance_id());
-            <span class="kw">let </span>item_amount = module.input_amount(<span class="kw-2">&amp;</span>input.input).expect(
+
+            <span class="kw">let </span>item_fee = module.input_fee(<span class="kw-2">&amp;</span>input.input).expect(
                 <span class="string">"We only build transactions with input versions that are supported by the module"</span>,
             );
-            in_amount += item_amount.amount;
-            fee_amount += item_amount.fee;
+
+            in_amount += input.amount;
+            fee_amount += item_fee;
         }
 
         <span class="kw">for </span>output <span class="kw">in </span><span class="kw-2">&amp;</span>builder.outputs {
             <span class="kw">let </span>module = <span class="self">self</span>.get_module(output.output.module_instance_id());
-            <span class="kw">let </span>item_amount = module.output_amount(<span class="kw-2">&amp;</span>output.output).expect(
+
+            <span class="kw">let </span>item_fee = module.output_fee(<span class="kw-2">&amp;</span>output.output).expect(
                 <span class="string">"We only build transactions with output versions that are supported by the module"</span>,
             );
-            out_amount += item_amount.amount;
-            fee_amount += item_amount.fee;
+
+            out_amount += output.amount;
+            fee_amount += item_fee;
         }
 
         <span class="kw">let </span>total_out_amount = out_amount + fee_amount;

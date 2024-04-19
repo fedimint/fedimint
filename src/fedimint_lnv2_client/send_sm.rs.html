@@ -317,10 +317,6 @@
 <a href="#317" id="317">317</a>
 <a href="#318" id="318">318</a>
 <a href="#319" id="319">319</a>
-<a href="#320" id="320">320</a>
-<a href="#321" id="321">321</a>
-<a href="#322" id="322">322</a>
-<a href="#323" id="323">323</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
 
@@ -334,7 +330,7 @@
 <span class="kw">use </span>fedimint_core::util::SafeUrl;
 <span class="kw">use </span>fedimint_core::{OutPoint, TransactionId};
 <span class="kw">use </span>fedimint_lnv2_common::contracts::OutgoingContract;
-<span class="kw">use </span>fedimint_lnv2_common::{LightningClientContext, LightningInput, OutgoingWitness, Witness};
+<span class="kw">use </span>fedimint_lnv2_common::{LightningClientContext, LightningInput, OutgoingWitness};
 <span class="kw">use </span>lightning_invoice::Bolt11Invoice;
 <span class="kw">use </span>secp256k1::schnorr::Signature;
 <span class="kw">use </span>secp256k1::KeyPair;
@@ -572,13 +568,11 @@
             <span class="prelude-val">Ok</span>(preimage) =&gt; old_state.update(SendSMState::Success(preimage)),
             <span class="prelude-val">Err</span>(signature) =&gt; {
                 <span class="kw">let </span>client_input = ClientInput::&lt;LightningInput, LightningClientStateMachines&gt; {
-                    input: LightningInput {
-                        amount: old_state.common.contract.amount,
-                        witness: Witness::Outgoing(
-                            old_state.common.contract.contract_id(),
-                            OutgoingWitness::Cancel(signature),
-                        ),
-                    },
+                    input: LightningInput::Outgoing(
+                        old_state.common.contract.contract_id(),
+                        OutgoingWitness::Cancel(signature),
+                    ),
+                    amount: old_state.common.contract.amount,
                     keys: <span class="macro">vec!</span>[old_state.common.refund_keypair],
                     <span class="comment">// The input of the refund tx is managed by this state machine
                     </span>state_machines: Arc::new(|<span class="kw">_</span>, <span class="kw">_</span>| <span class="macro">vec!</span>[]),
@@ -627,13 +621,11 @@
         }
 
         <span class="kw">let </span>client_input = ClientInput::&lt;LightningInput, LightningClientStateMachines&gt; {
-            input: LightningInput {
-                amount: old_state.common.contract.amount,
-                witness: Witness::Outgoing(
-                    old_state.common.contract.contract_id(),
-                    OutgoingWitness::Refund,
-                ),
-            },
+            input: LightningInput::Outgoing(
+                old_state.common.contract.contract_id(),
+                OutgoingWitness::Refund,
+            ),
+            amount: old_state.common.contract.amount,
             keys: <span class="macro">vec!</span>[old_state.common.refund_keypair],
             <span class="comment">// The input of the refund tx is managed by this state machine
             </span>state_machines: Arc::new(|<span class="kw">_</span>, <span class="kw">_</span>| <span class="macro">vec!</span>[]),

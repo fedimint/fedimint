@@ -755,15 +755,6 @@
 <a href="#755" id="755">755</a>
 <a href="#756" id="756">756</a>
 <a href="#757" id="757">757</a>
-<a href="#758" id="758">758</a>
-<a href="#759" id="759">759</a>
-<a href="#760" id="760">760</a>
-<a href="#761" id="761">761</a>
-<a href="#762" id="762">762</a>
-<a href="#763" id="763">763</a>
-<a href="#764" id="764">764</a>
-<a href="#765" id="765">765</a>
-<a href="#766" id="766">766</a>
 </pre></div><pre class="rust"><code><span class="kw">mod </span>complete;
 <span class="kw">pub mod </span>pay;
 
@@ -787,7 +778,7 @@
 <span class="kw">use </span>fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, OperationId};
 <span class="kw">use </span>fedimint_core::db::{AutocommitError, DatabaseTransaction, DatabaseVersion};
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
-<span class="kw">use </span>fedimint_core::module::{ApiVersion, ModuleInit, MultiApiVersion, TransactionItemAmount};
+<span class="kw">use </span>fedimint_core::module::{ApiVersion, ModuleInit, MultiApiVersion};
 <span class="kw">use </span>fedimint_core::{apply, async_trait_maybe_send, Amount, OutPoint, TransactionId};
 <span class="kw">use </span>fedimint_ln_client::api::LnFederationApi;
 <span class="kw">use </span>fedimint_ln_client::incoming::{
@@ -970,37 +961,23 @@
         }
     }
 
-    <span class="kw">fn </span>input_amount(
+    <span class="kw">fn </span>input_fee(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        input: <span class="kw-2">&amp;</span>&lt;<span class="self">Self</span>::Common <span class="kw">as </span>fedimint_core::module::ModuleCommon&gt;::Input,
-    ) -&gt; <span class="prelude-ty">Option</span>&lt;TransactionItemAmount&gt; {
-        <span class="kw">let </span>input = input.maybe_v0_ref()<span class="question-mark">?</span>;
-
-        <span class="prelude-val">Some</span>(TransactionItemAmount {
-            amount: input.amount,
-            fee: <span class="self">self</span>.cfg.fee_consensus.contract_input,
-        })
+        _input: <span class="kw-2">&amp;</span>&lt;<span class="self">Self</span>::Common <span class="kw">as </span>fedimint_core::module::ModuleCommon&gt;::Input,
+    ) -&gt; <span class="prelude-ty">Option</span>&lt;Amount&gt; {
+        <span class="prelude-val">Some</span>(<span class="self">self</span>.cfg.fee_consensus.contract_input)
     }
 
-    <span class="kw">fn </span>output_amount(
+    <span class="kw">fn </span>output_fee(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         output: <span class="kw-2">&amp;</span>&lt;<span class="self">Self</span>::Common <span class="kw">as </span>fedimint_core::module::ModuleCommon&gt;::Output,
-    ) -&gt; <span class="prelude-ty">Option</span>&lt;TransactionItemAmount&gt; {
-        <span class="kw">let </span>output = output.maybe_v0_ref()<span class="question-mark">?</span>;
-
-        <span class="kw">let </span>amt = <span class="kw">match </span>output {
-            LightningOutputV0::Contract(account_output) =&gt; TransactionItemAmount {
-                amount: account_output.amount,
-                fee: <span class="self">self</span>.cfg.fee_consensus.contract_output,
-            },
+    ) -&gt; <span class="prelude-ty">Option</span>&lt;Amount&gt; {
+        <span class="kw">match </span>output.maybe_v0_ref()<span class="question-mark">? </span>{
+            LightningOutputV0::Contract(<span class="kw">_</span>) =&gt; <span class="prelude-val">Some</span>(<span class="self">self</span>.cfg.fee_consensus.contract_output),
             LightningOutputV0::Offer(<span class="kw">_</span>) | LightningOutputV0::CancelOutgoing { .. } =&gt; {
-                TransactionItemAmount {
-                    amount: Amount::ZERO,
-                    fee: Amount::ZERO,
-                }
+                <span class="prelude-val">Some</span>(Amount::ZERO)
             }
-        };
-        <span class="prelude-val">Some</span>(amt)
+        }
     }
 }
 
@@ -1035,12 +1012,13 @@
     ) -&gt; <span class="prelude-ty">Result</span>&lt;
         (
             OperationId,
+            Amount,
             ClientOutput&lt;LightningOutputV0, GatewayClientStateMachines&gt;,
         ),
         IncomingSmError,
     &gt; {
         <span class="kw">let </span>operation_id = OperationId(htlc.payment_hash.into_inner());
-        <span class="kw">let </span>(incoming_output, contract_id) = create_incoming_contract_output(
+        <span class="kw">let </span>(incoming_output, amount, contract_id) = create_incoming_contract_output(
             <span class="kw-2">&amp;</span><span class="self">self</span>.module_api,
             htlc.payment_hash,
             htlc.outgoing_amount_msat,
@@ -1050,6 +1028,7 @@
 
         <span class="kw">let </span>client_output = ClientOutput::&lt;LightningOutputV0, GatewayClientStateMachines&gt; {
             output: incoming_output,
+            amount,
             state_machines: Arc::new(<span class="kw">move </span>|txid, <span class="kw">_</span>| {
                 <span class="macro">vec!</span>[
                     GatewayClientStateMachines::Receive(IncomingStateMachine {
@@ -1071,7 +1050,7 @@
                 ]
             }),
         };
-        <span class="prelude-val">Ok</span>((operation_id, client_output))
+        <span class="prelude-val">Ok</span>((operation_id, amount, client_output))
     }
 
     <span class="kw">async fn </span>create_funding_incoming_contract_output_from_swap(
@@ -1086,7 +1065,7 @@
     &gt; {
         <span class="kw">let </span>payment_hash = swap.payment_hash;
         <span class="kw">let </span>operation_id = OperationId(payment_hash.into_inner());
-        <span class="kw">let </span>(incoming_output, contract_id) = create_incoming_contract_output(
+        <span class="kw">let </span>(incoming_output, amount, contract_id) = create_incoming_contract_output(
             <span class="kw-2">&amp;</span><span class="self">self</span>.module_api,
             payment_hash,
             swap.amount_msat,
@@ -1096,6 +1075,7 @@
 
         <span class="kw">let </span>client_output = ClientOutput::&lt;LightningOutputV0, GatewayClientStateMachines&gt; {
             output: incoming_output,
+            amount,
             state_machines: Arc::new(<span class="kw">move </span>|txid, <span class="kw">_</span>| {
                 <span class="macro">vec!</span>[GatewayClientStateMachines::Receive(IncomingStateMachine {
                     common: IncomingSmCommon {
@@ -1186,12 +1166,13 @@
     <span class="doccomment">/// Attempt fulfill HTLC by buying preimage from the federation
     </span><span class="kw">pub async fn </span>gateway_handle_intercepted_htlc(<span class="kw-2">&amp;</span><span class="self">self</span>, htlc: Htlc) -&gt; anyhow::Result&lt;OperationId&gt; {
         <span class="macro">debug!</span>(<span class="string">"Handling intercepted HTLC {htlc:?}"</span>);
-        <span class="kw">let </span>(operation_id, client_output) = <span class="self">self
+        <span class="kw">let </span>(operation_id, amount, client_output) = <span class="self">self
             </span>.create_funding_incoming_contract_output_from_htlc(htlc.clone())
             .<span class="kw">await</span><span class="question-mark">?</span>;
 
         <span class="kw">let </span>output = ClientOutput {
             output: LightningOutput::V0(client_output.output),
+            amount,
             state_machines: client_output.state_machines,
         };
 
@@ -1219,6 +1200,7 @@
         <span class="kw">let </span>tx = TransactionBuilder::new().with_output(<span class="self">self</span>.client_ctx.make_client_output(
             ClientOutput {
                 output: LightningOutput::V0(client_output.output),
+                amount: client_output.amount,
                 state_machines: client_output.state_machines,
             },
         ));

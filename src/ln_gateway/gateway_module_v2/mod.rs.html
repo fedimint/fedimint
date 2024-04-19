@@ -286,17 +286,6 @@
 <a href="#286" id="286">286</a>
 <a href="#287" id="287">287</a>
 <a href="#288" id="288">288</a>
-<a href="#289" id="289">289</a>
-<a href="#290" id="290">290</a>
-<a href="#291" id="291">291</a>
-<a href="#292" id="292">292</a>
-<a href="#293" id="293">293</a>
-<a href="#294" id="294">294</a>
-<a href="#295" id="295">295</a>
-<a href="#296" id="296">296</a>
-<a href="#297" id="297">297</a>
-<a href="#298" id="298">298</a>
-<a href="#299" id="299">299</a>
 </pre></div><pre class="rust"><code><span class="kw">mod </span>receive_sm;
 <span class="kw">mod </span>send_sm;
 
@@ -316,7 +305,7 @@
 <span class="kw">use </span>fedimint_core::db::{DatabaseTransaction, DatabaseVersion};
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::module::{
-    ApiVersion, CommonModuleInit, ModuleCommon, ModuleInit, MultiApiVersion, TransactionItemAmount,
+    ApiVersion, CommonModuleInit, ModuleCommon, ModuleInit, MultiApiVersion,
 };
 <span class="kw">use </span>fedimint_core::{apply, async_trait_maybe_send, Amount, OutPoint, PeerId};
 <span class="kw">use </span>fedimint_lnv2_common::config::LightningClientConfig;
@@ -418,24 +407,12 @@
         }
     }
 
-    <span class="kw">fn </span>input_amount(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        input: <span class="kw-2">&amp;</span>&lt;<span class="self">Self</span>::Common <span class="kw">as </span>ModuleCommon&gt;::Input,
-    ) -&gt; <span class="prelude-ty">Option</span>&lt;TransactionItemAmount&gt; {
-        <span class="prelude-val">Some</span>(TransactionItemAmount {
-            amount: input.amount,
-            fee: <span class="self">self</span>.cfg.fee_consensus.input,
-        })
+    <span class="kw">fn </span>input_fee(<span class="kw-2">&amp;</span><span class="self">self</span>, _input: <span class="kw-2">&amp;</span>&lt;<span class="self">Self</span>::Common <span class="kw">as </span>ModuleCommon&gt;::Input) -&gt; <span class="prelude-ty">Option</span>&lt;Amount&gt; {
+        <span class="prelude-val">Some</span>(<span class="self">self</span>.cfg.fee_consensus.input)
     }
 
-    <span class="kw">fn </span>output_amount(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        output: <span class="kw-2">&amp;</span>&lt;<span class="self">Self</span>::Common <span class="kw">as </span>ModuleCommon&gt;::Output,
-    ) -&gt; <span class="prelude-ty">Option</span>&lt;TransactionItemAmount&gt; {
-        <span class="prelude-val">Some</span>(TransactionItemAmount {
-            amount: output.amount(),
-            fee: <span class="self">self</span>.cfg.fee_consensus.output,
-        })
+    <span class="kw">fn </span>output_fee(<span class="kw-2">&amp;</span><span class="self">self</span>, _output: <span class="kw-2">&amp;</span>&lt;<span class="self">Self</span>::Common <span class="kw">as </span>ModuleCommon&gt;::Output) -&gt; <span class="prelude-ty">Option</span>&lt;Amount&gt; {
+        <span class="prelude-val">Some</span>(<span class="self">self</span>.cfg.fee_consensus.output)
     }
 }
 
@@ -552,6 +529,7 @@
 
         <span class="kw">let </span>client_output = ClientOutput::&lt;LightningOutput, GatewayClientStateMachinesV2&gt; {
             output: LightningOutput::Incoming(contract.clone()),
+            amount: contract.commitment.amount,
             state_machines: Arc::new(<span class="kw">move </span>|txid, out_idx| {
                 <span class="macro">vec!</span>[GatewayClientStateMachinesV2::Receive(ReceiveStateMachine {
                     common: ReceiveSMCommon {

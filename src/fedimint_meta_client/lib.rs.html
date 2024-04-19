@@ -181,14 +181,6 @@
 <a href="#181" id="181">181</a>
 <a href="#182" id="182">182</a>
 <a href="#183" id="183">183</a>
-<a href="#184" id="184">184</a>
-<a href="#185" id="185">185</a>
-<a href="#186" id="186">186</a>
-<a href="#187" id="187">187</a>
-<a href="#188" id="188">188</a>
-<a href="#189" id="189">189</a>
-<a href="#190" id="190">190</a>
-<a href="#191" id="191">191</a>
 </pre></div><pre class="rust"><code><span class="kw">pub mod </span>api;
 <span class="attr">#[cfg(feature = <span class="string">"cli"</span>)]
 </span><span class="kw">pub mod </span>cli;
@@ -208,9 +200,7 @@
 <span class="kw">use </span>fedimint_client::sm::Context;
 <span class="kw">use </span>fedimint_core::core::Decoder;
 <span class="kw">use </span>fedimint_core::db::{DatabaseTransaction, DatabaseVersion};
-<span class="kw">use </span>fedimint_core::module::{
-    ApiAuth, ApiVersion, ModuleCommon, ModuleInit, MultiApiVersion, TransactionItemAmount,
-};
+<span class="kw">use </span>fedimint_core::module::{ApiAuth, ApiVersion, ModuleCommon, ModuleInit, MultiApiVersion};
 <span class="kw">use </span>fedimint_core::{apply, async_trait_maybe_send, Amount, PeerId};
 <span class="kw">pub use </span>fedimint_meta_common <span class="kw">as </span>common;
 <span class="kw">use </span>fedimint_meta_common::{MetaCommonInit, MetaModuleTypes};
@@ -301,17 +291,11 @@
         }
     }
 
-    <span class="kw">fn </span>input_amount(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        _input: <span class="kw-2">&amp;</span>&lt;<span class="self">Self</span>::Common <span class="kw">as </span>ModuleCommon&gt;::Input,
-    ) -&gt; <span class="prelude-ty">Option</span>&lt;TransactionItemAmount&gt; {
+    <span class="kw">fn </span>input_fee(<span class="kw-2">&amp;</span><span class="self">self</span>, _input: <span class="kw-2">&amp;</span>&lt;<span class="self">Self</span>::Common <span class="kw">as </span>ModuleCommon&gt;::Input) -&gt; <span class="prelude-ty">Option</span>&lt;Amount&gt; {
         <span class="macro">unreachable!</span>()
     }
 
-    <span class="kw">fn </span>output_amount(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        _output: <span class="kw-2">&amp;</span>&lt;<span class="self">Self</span>::Common <span class="kw">as </span>ModuleCommon&gt;::Output,
-    ) -&gt; <span class="prelude-ty">Option</span>&lt;TransactionItemAmount&gt; {
+    <span class="kw">fn </span>output_fee(<span class="kw-2">&amp;</span><span class="self">self</span>, _output: <span class="kw-2">&amp;</span>&lt;<span class="self">Self</span>::Common <span class="kw">as </span>ModuleCommon&gt;::Output) -&gt; <span class="prelude-ty">Option</span>&lt;Amount&gt; {
         <span class="macro">unreachable!</span>()
     }
 

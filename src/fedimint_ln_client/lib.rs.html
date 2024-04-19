@@ -1911,21 +1911,6 @@
 <a href="#1911" id="1911">1911</a>
 <a href="#1912" id="1912">1912</a>
 <a href="#1913" id="1913">1913</a>
-<a href="#1914" id="1914">1914</a>
-<a href="#1915" id="1915">1915</a>
-<a href="#1916" id="1916">1916</a>
-<a href="#1917" id="1917">1917</a>
-<a href="#1918" id="1918">1918</a>
-<a href="#1919" id="1919">1919</a>
-<a href="#1920" id="1920">1920</a>
-<a href="#1921" id="1921">1921</a>
-<a href="#1922" id="1922">1922</a>
-<a href="#1923" id="1923">1923</a>
-<a href="#1924" id="1924">1924</a>
-<a href="#1925" id="1925">1925</a>
-<a href="#1926" id="1926">1926</a>
-<a href="#1927" id="1927">1927</a>
-<a href="#1928" id="1928">1928</a>
 </pre></div><pre class="rust"><code><span class="kw">pub mod </span>api;
 <span class="attr">#[cfg(feature = <span class="string">"cli"</span>)]
 </span><span class="kw">pub mod </span>cli;
@@ -1964,7 +1949,7 @@
 <span class="kw">use </span>fedimint_core::db::{DatabaseTransaction, DatabaseVersion, IDatabaseTransactionOpsCoreTyped};
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::module::{
-    ApiVersion, CommonModuleInit, ModuleCommon, ModuleInit, MultiApiVersion, TransactionItemAmount,
+    ApiVersion, CommonModuleInit, ModuleCommon, ModuleInit, MultiApiVersion,
 };
 <span class="kw">use </span>fedimint_core::task::{timeout, MaybeSend, MaybeSync};
 <span class="kw">use </span>fedimint_core::util::update_merge::UpdateMerge;
@@ -2333,37 +2318,17 @@
         }
     }
 
-    <span class="kw">fn </span>input_amount(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        input: <span class="kw-2">&amp;</span>&lt;<span class="self">Self</span>::Common <span class="kw">as </span>ModuleCommon&gt;::Input,
-    ) -&gt; <span class="prelude-ty">Option</span>&lt;TransactionItemAmount&gt; {
-        <span class="kw">let </span>input = input.maybe_v0_ref()<span class="question-mark">?</span>;
-
-        <span class="prelude-val">Some</span>(TransactionItemAmount {
-            amount: input.amount,
-            fee: <span class="self">self</span>.cfg.fee_consensus.contract_input,
-        })
+    <span class="kw">fn </span>input_fee(<span class="kw-2">&amp;</span><span class="self">self</span>, _input: <span class="kw-2">&amp;</span>&lt;<span class="self">Self</span>::Common <span class="kw">as </span>ModuleCommon&gt;::Input) -&gt; <span class="prelude-ty">Option</span>&lt;Amount&gt; {
+        <span class="prelude-val">Some</span>(<span class="self">self</span>.cfg.fee_consensus.contract_input)
     }
 
-    <span class="kw">fn </span>output_amount(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        output: <span class="kw-2">&amp;</span>&lt;<span class="self">Self</span>::Common <span class="kw">as </span>ModuleCommon&gt;::Output,
-    ) -&gt; <span class="prelude-ty">Option</span>&lt;TransactionItemAmount&gt; {
-        <span class="kw">let </span>output = output.maybe_v0_ref()<span class="question-mark">?</span>;
-
-        <span class="kw">let </span>amt = <span class="kw">match </span>output {
-            LightningOutputV0::Contract(account_output) =&gt; TransactionItemAmount {
-                amount: account_output.amount,
-                fee: <span class="self">self</span>.cfg.fee_consensus.contract_output,
-            },
+    <span class="kw">fn </span>output_fee(<span class="kw-2">&amp;</span><span class="self">self</span>, output: <span class="kw-2">&amp;</span>&lt;<span class="self">Self</span>::Common <span class="kw">as </span>ModuleCommon&gt;::Output) -&gt; <span class="prelude-ty">Option</span>&lt;Amount&gt; {
+        <span class="kw">match </span>output.maybe_v0_ref()<span class="question-mark">? </span>{
+            LightningOutputV0::Contract(<span class="kw">_</span>) =&gt; <span class="prelude-val">Some</span>(<span class="self">self</span>.cfg.fee_consensus.contract_output),
             LightningOutputV0::Offer(<span class="kw">_</span>) | LightningOutputV0::CancelOutgoing { .. } =&gt; {
-                TransactionItemAmount {
-                    amount: Amount::ZERO,
-                    fee: Amount::ZERO,
-                }
+                <span class="prelude-val">Some</span>(Amount::ZERO)
             }
-        };
-        <span class="prelude-val">Some</span>(amt)
+        }
     }
 
     <span class="attr">#[cfg(feature = <span class="string">"cli"</span>)]
@@ -2581,6 +2546,7 @@
         <span class="prelude-val">Ok</span>((
             ClientOutput {
                 output: ln_output,
+                amount: contract_amount,
                 state_machines: sm_gen,
             },
             contract_id,
@@ -2607,7 +2573,7 @@
                 })<span class="question-mark">?</span>,
         };
 
-        <span class="kw">let </span>(incoming_output, contract_id) = create_incoming_contract_output(
+        <span class="kw">let </span>(incoming_output, amount, contract_id) = create_incoming_contract_output(
             <span class="kw-2">&amp;</span><span class="self">self</span>.module_api,
             <span class="kw-2">*</span>payment_hash,
             invoice_amount,
@@ -2617,6 +2583,7 @@
 
         <span class="kw">let </span>client_output = ClientOutput::&lt;LightningOutputV0, LightningClientStateMachines&gt; {
             output: incoming_output,
+            amount,
             state_machines: Arc::new(<span class="kw">move </span>|txid, <span class="kw">_</span>| {
                 <span class="macro">vec!</span>[LightningClientStateMachines::InternalPay(
                     IncomingStateMachine {
@@ -2826,6 +2793,7 @@
             invoice,
             ClientOutput {
                 output: ln_output,
+                amount: Amount::ZERO,
                 state_machines: sm_gen,
             },
             preimage.into_32(),
@@ -3038,6 +3006,7 @@
 
         <span class="kw">let </span>output = <span class="self">self</span>.client_ctx.make_client_output(ClientOutput {
             output: LightningOutput::V0(client_output.output),
+            amount: client_output.amount,
             state_machines: client_output.state_machines,
         });
 
@@ -3246,6 +3215,7 @@
         <span class="kw">let </span>input = incoming_contract_account.claim();
         <span class="kw">let </span>client_input = ClientInput::&lt;LightningInput, LightningClientStateMachines&gt; {
             input,
+            amount: incoming_contract_account.amount,
             keys: <span class="macro">vec!</span>[key_pair],
             state_machines: Arc::new(|<span class="kw">_</span>, <span class="kw">_</span>| <span class="macro">vec!</span>[]),
         };
@@ -3727,7 +3697,7 @@
     payment_hash: sha256::Hash,
     amount_msat: Amount,
     redeem_key: secp256k1::KeyPair,
-) -&gt; <span class="prelude-ty">Result</span>&lt;(LightningOutputV0, ContractId), IncomingSmError&gt; {
+) -&gt; <span class="prelude-ty">Result</span>&lt;(LightningOutputV0, Amount, ContractId), IncomingSmError&gt; {
     <span class="kw">let </span>offer = fetch_and_validate_offer(module_api, payment_hash, amount_msat).<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="kw">let </span>our_pub_key = secp256k1::PublicKey::from_keypair(<span class="kw-2">&amp;</span>redeem_key);
     <span class="kw">let </span>contract = IncomingContract {
@@ -3742,7 +3712,7 @@
         contract: Contract::Incoming(contract),
     });
 
-    <span class="prelude-val">Ok</span>((incoming_output, contract_id))
+    <span class="prelude-val">Ok</span>((incoming_output, offer.amount, contract_id))
 }
 
 <span class="attr">#[derive(Debug, Encodable, Decodable, Serialize)]

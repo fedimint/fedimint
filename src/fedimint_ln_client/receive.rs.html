@@ -442,6 +442,7 @@
 <a href="#442" id="442">442</a>
 <a href="#443" id="443">443</a>
 <a href="#444" id="444">444</a>
+<a href="#445" id="445">445</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
 
@@ -733,6 +734,7 @@
         <span class="kw">let </span>input = contract.claim();
         <span class="kw">let </span>client_input = ClientInput::&lt;LightningInput, LightningClientStateMachines&gt; {
             input,
+            amount: contract.amount,
             keys: <span class="macro">vec!</span>[keypair],
             <span class="comment">// The input of the refund tx is managed by this state machine, so no new state machines
             // need to be created

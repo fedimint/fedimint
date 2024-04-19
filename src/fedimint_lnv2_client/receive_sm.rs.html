@@ -129,8 +129,6 @@
 <a href="#129" id="129">129</a>
 <a href="#130" id="130">130</a>
 <a href="#131" id="131">131</a>
-<a href="#132" id="132">132</a>
-<a href="#133" id="133">133</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::sync::Arc;
 
 <span class="kw">use </span>bitcoin::util::key::KeyPair;
@@ -141,7 +139,7 @@
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::OutPoint;
 <span class="kw">use </span>fedimint_lnv2_common::contracts::IncomingContract;
-<span class="kw">use </span>fedimint_lnv2_common::{LightningClientContext, LightningInput, Witness};
+<span class="kw">use </span>fedimint_lnv2_common::{LightningClientContext, LightningInput};
 <span class="kw">use </span>tpe::AggregateDecryptionKey;
 
 <span class="kw">use </span><span class="kw">crate</span>::api::LnFederationApi;
@@ -248,13 +246,11 @@
         }
 
         <span class="kw">let </span>client_input = ClientInput::&lt;LightningInput, LightningClientStateMachines&gt; {
-            input: LightningInput {
-                amount: old_state.common.contract.commitment.amount,
-                witness: Witness::Incoming(
-                    old_state.common.contract.contract_id(),
-                    old_state.common.agg_decryption_key,
-                ),
-            },
+            input: LightningInput::Incoming(
+                old_state.common.contract.contract_id(),
+                old_state.common.agg_decryption_key,
+            ),
+            amount: old_state.common.contract.commitment.amount,
             keys: <span class="macro">vec!</span>[old_state.common.claim_keypair],
             state_machines: Arc::new(|<span class="kw">_</span>, <span class="kw">_</span>| <span class="macro">vec!</span>[]),
         };

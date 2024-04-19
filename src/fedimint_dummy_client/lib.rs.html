@@ -380,14 +380,6 @@
 <a href="#380" id="380">380</a>
 <a href="#381" id="381">381</a>
 <a href="#382" id="382">382</a>
-<a href="#383" id="383">383</a>
-<a href="#384" id="384">384</a>
-<a href="#385" id="385">385</a>
-<a href="#386" id="386">386</a>
-<a href="#387" id="387">387</a>
-<a href="#388" id="388">388</a>
-<a href="#389" id="389">389</a>
-<a href="#390" id="390">390</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
@@ -406,7 +398,7 @@
     Database, DatabaseTransaction, DatabaseVersion, IDatabaseTransactionOpsCoreTyped,
 };
 <span class="kw">use </span>fedimint_core::module::{
-    ApiVersion, CommonModuleInit, ModuleCommon, ModuleInit, MultiApiVersion, TransactionItemAmount,
+    ApiVersion, CommonModuleInit, ModuleCommon, ModuleInit, MultiApiVersion,
 };
 <span class="kw">use </span>fedimint_core::util::{BoxStream, NextOrPending};
 <span class="kw">use </span>fedimint_core::{apply, async_trait_maybe_send, Amount, OutPoint};
@@ -457,24 +449,12 @@
         }
     }
 
-    <span class="kw">fn </span>input_amount(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        input: <span class="kw-2">&amp;</span>&lt;<span class="self">Self</span>::Common <span class="kw">as </span>ModuleCommon&gt;::Input,
-    ) -&gt; <span class="prelude-ty">Option</span>&lt;TransactionItemAmount&gt; {
-        <span class="prelude-val">Some</span>(TransactionItemAmount {
-            amount: input.amount,
-            fee: <span class="self">self</span>.cfg.tx_fee,
-        })
+    <span class="kw">fn </span>input_fee(<span class="kw-2">&amp;</span><span class="self">self</span>, _input: <span class="kw-2">&amp;</span>&lt;<span class="self">Self</span>::Common <span class="kw">as </span>ModuleCommon&gt;::Input) -&gt; <span class="prelude-ty">Option</span>&lt;Amount&gt; {
+        <span class="prelude-val">Some</span>(<span class="self">self</span>.cfg.tx_fee)
     }
 
-    <span class="kw">fn </span>output_amount(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        output: <span class="kw-2">&amp;</span>&lt;<span class="self">Self</span>::Common <span class="kw">as </span>ModuleCommon&gt;::Output,
-    ) -&gt; <span class="prelude-ty">Option</span>&lt;TransactionItemAmount&gt; {
-        <span class="prelude-val">Some</span>(TransactionItemAmount {
-            amount: output.amount,
-            fee: <span class="self">self</span>.cfg.tx_fee,
-        })
+    <span class="kw">fn </span>output_fee(<span class="kw-2">&amp;</span><span class="self">self</span>, _output: <span class="kw-2">&amp;</span>&lt;<span class="self">Self</span>::Common <span class="kw">as </span>ModuleCommon&gt;::Output) -&gt; <span class="prelude-ty">Option</span>&lt;Amount&gt; {
+        <span class="prelude-val">Some</span>(<span class="self">self</span>.cfg.tx_fee)
     }
 
     <span class="kw">fn </span>supports_being_primary(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
@@ -503,6 +483,7 @@
                 amount,
                 account: <span class="self">self</span>.key.public_key(),
             },
+            amount,
             keys: <span class="macro">vec!</span>[<span class="self">self</span>.key],
             state_machines: Arc::new(<span class="kw">move </span>|txid, <span class="kw">_</span>| {
                 <span class="macro">vec!</span>[DummyStateMachine::Input(amount, txid, id)]
@@ -522,6 +503,7 @@
                 amount,
                 account: <span class="self">self</span>.key.public_key(),
             },
+            amount,
             state_machines: Arc::new(<span class="kw">move </span>|txid, <span class="kw">_</span>| {
                 <span class="macro">vec!</span>[DummyStateMachine::Output(amount, txid, id)]
             }),
@@ -588,6 +570,7 @@
                 amount,
                 account: account_kp.public_key(),
             },
+            amount,
             keys: <span class="macro">vec!</span>[account_kp],
             state_machines: Arc::new(<span class="kw">move </span>|<span class="kw">_</span>, <span class="kw">_</span>| Vec::&lt;DummyStateMachine&gt;::new()),
         };
@@ -648,6 +631,7 @@
         <span class="comment">// Create output using another account
         </span><span class="kw">let </span>output = ClientOutput {
             output: DummyOutput { amount, account },
+            amount,
             state_machines: Arc::new(<span class="kw">move </span>|<span class="kw">_</span>, <span class="kw">_</span>| Vec::&lt;DummyStateMachine&gt;::new()),
         };
 
