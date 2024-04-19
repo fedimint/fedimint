@@ -16,6 +16,7 @@ use fedimint_core::db::{
 };
 use fedimint_core::encoding::Decodable;
 use fedimint_core::endpoint_constants::AWAIT_SIGNED_SESSION_OUTCOME_ENDPOINT;
+use fedimint_core::envs::is_running_in_test_env;
 use fedimint_core::epoch::ConsensusItem;
 use fedimint_core::fmt_utils::OptStacktrace;
 use fedimint_core::module::audit::Audit;
@@ -822,6 +823,12 @@ async fn submit_module_consensus_items(
     modules: ServerModuleRegistry,
     submission_sender: Sender<ConsensusItem>,
 ) {
+    let mut interval = tokio::time::interval(if is_running_in_test_env() {
+        Duration::from_millis(100)
+    } else {
+        Duration::from_secs(1)
+    });
+
     task_group.spawn(
         "submit_module_consensus_items",
         move |task_handle| async move {
@@ -856,7 +863,7 @@ async fn submit_module_consensus_items(
                     }
                 }
 
-                sleep(Duration::from_secs(1)).await;
+                interval.tick().await;
             }
         },
     );

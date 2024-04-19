@@ -103,7 +103,7 @@ async fn await_consensus_to_catch_up(
             .await?;
         if current_consensus < block_count {
             info!("Current consensus block count is {current_consensus}, waiting for consensus to reach block count {block_count}");
-            sleep_in_test(format!("Current consensus block count is {current_consensus}, waiting for consensus to reach block count {block_count}"), Duration::from_secs(1)).await;
+            sleep_in_test(format!("Current consensus block count is {current_consensus}, waiting for consensus to reach block count {block_count}"), Duration::from_millis(100)).await;
         } else {
             info!("Current consensus block count is {current_consensus}, consensus caught up");
             return Ok(current_consensus);
