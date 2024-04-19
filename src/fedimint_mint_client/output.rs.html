@@ -378,6 +378,7 @@
 <a href="#378" id="378">378</a>
 <a href="#379" id="379">379</a>
 <a href="#380" id="380">380</a>
+<a href="#381" id="381">381</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::hash;
 <span class="kw">use </span>std::time::Duration;
@@ -415,7 +416,8 @@
 <span class="doccomment">/// Child ID used to derive the blinding key from a note's [`DerivableSecret`]
 </span><span class="kw">const </span>BLINDING_KEY_CHILD_ID: ChildId = ChildId(<span class="number">1</span>);
 
-<span class="doccomment">/// State machine managing the e-cash issuance process related to a mint output.
+<span class="attr">#[cfg_attr(doc, aquamarine::aquamarine)]
+</span><span class="doccomment">/// State machine managing the e-cash issuance process related to a mint output.
 ///
 /// ```mermaid
 /// graph LR

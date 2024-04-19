@@ -224,6 +224,7 @@
 <a href="#224" id="224">224</a>
 <a href="#225" id="225">225</a>
 <a href="#226" id="226">226</a>
+<a href="#227" id="227">227</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::sync::Arc;
 
 <span class="kw">use </span>fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
@@ -236,7 +237,8 @@
 
 <span class="kw">use crate</span>::{MintClientContext, MintClientStateMachines, SpendableNote};
 
-<span class="comment">// TODO: add retry with valid subset of e-cash notes
+<span class="attr">#[cfg_attr(doc, aquamarine::aquamarine)]
+</span><span class="comment">// TODO: add retry with valid subset of e-cash notes
 </span><span class="doccomment">/// State machine managing the e-cash redemption process related to a mint
 /// input.
 ///
