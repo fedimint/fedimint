@@ -1595,13 +1595,6 @@
 <a href="#1595" id="1595">1595</a>
 <a href="#1596" id="1596">1596</a>
 <a href="#1597" id="1597">1597</a>
-<a href="#1598" id="1598">1598</a>
-<a href="#1599" id="1599">1599</a>
-<a href="#1600" id="1600">1600</a>
-<a href="#1601" id="1601">1601</a>
-<a href="#1602" id="1602">1602</a>
-<a href="#1603" id="1603">1603</a>
-<a href="#1604" id="1604">1604</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap};
 <span class="kw">use </span>std::fmt::{<span class="self">self</span>, Debug, Display};
 <span class="kw">use </span>std::num::NonZeroUsize;
@@ -1654,6 +1647,7 @@
 <span class="kw">use </span>fedimint_logging::LOG_CLIENT_NET_API;
 <span class="kw">use </span>futures::stream::FuturesUnordered;
 <span class="kw">use </span>futures::{Future, StreamExt};
+<span class="kw">use </span>itertools::Itertools;
 <span class="kw">use </span>jsonrpsee_core::client::{ClientT, Error <span class="kw">as </span>JsonRpcClientError};
 <span class="attr">#[cfg(target_family = <span class="string">"wasm"</span>)]
 </span><span class="kw">use </span>jsonrpsee_wasm_client::{Client <span class="kw">as </span>WsClient, WasmClientBuilder <span class="kw">as </span>WsClientBuilder};
@@ -2171,8 +2165,11 @@
         .into()
     }
 
-    <span class="kw">pub fn </span>from_invite_code(invite_code: <span class="kw-2">&amp;</span>[InviteCode]) -&gt; <span class="self">Self </span>{
-        GlobalFederationApiWithCache::new(WsFederationApi::from_invite_code(invite_code)).into()
+    <span class="kw">pub fn </span>from_invite_code(invite_code: <span class="kw-2">&amp;</span>InviteCode) -&gt; <span class="self">Self </span>{
+        GlobalFederationApiWithCache::new(WsFederationApi::new(
+            invite_code.peers().into_iter().collect_vec(),
+        ))
+        .into()
     }
 
     <span class="kw">pub async fn </span>await_output_outcome&lt;R&gt;(
@@ -2952,17 +2949,6 @@
             self_peer_id: <span class="prelude-val">Some</span>(self_peer_id),
             ..<span class="self">self
         </span>}
-    }
-
-    <span class="doccomment">/// Creates a new API client from a invite code, assumes they are in peer
-    /// id order
-    </span><span class="kw">pub fn </span>from_invite_code(info: <span class="kw-2">&amp;</span>[InviteCode]) -&gt; <span class="self">Self </span>{
-        <span class="self">Self</span>::new(
-            info.iter()
-                .enumerate()
-                .map(|(id, connect)| (PeerId::from(id <span class="kw">as </span>u16), connect.url()))
-                .collect(),
-        )
     }
 }
 

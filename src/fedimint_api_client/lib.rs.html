@@ -79,7 +79,7 @@
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::time::Duration;
 
 <span class="kw">use </span>anyhow::{bail, Context <span class="kw">as _</span>};
-<span class="kw">use </span>api::{FederationApiExt <span class="kw">as _</span>, WsFederationApi};
+<span class="kw">use </span>api::{DynGlobalApi, FederationApiExt <span class="kw">as _</span>, WsFederationApi};
 <span class="kw">use </span>fedimint_core::config::ClientConfig;
 <span class="kw">use </span>fedimint_core::encoding::Encodable <span class="kw">as _</span>;
 <span class="kw">use </span>fedimint_core::endpoint_constants::CLIENT_CONFIG_ENDPOINT;
@@ -127,7 +127,7 @@
         <span class="number">1</span>,
     );
 
-    <span class="kw">let </span>api_endpoints = WsFederationApi::from_invite_code(<span class="kw-2">&amp;</span>[invite_code.clone()])
+    <span class="kw">let </span>api_endpoints = DynGlobalApi::from_invite_code(invite_code)
         .request_with_strategy(
             query_strategy,
             CLIENT_CONFIG_ENDPOINT.to_owned(),
