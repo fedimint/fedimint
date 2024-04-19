@@ -1,3 +1,29 @@
+//! Fedimint build scripts
+//!
+//! Implements detection of build hash. Used both internally in all
+//! public-consumed binaries of `fedimint`, and also in custom builds
+//! that can included 3rd party Fedimint modules.
+//!
+//! To use include:
+//!
+//! ```norust
+//! [build-dependencies]
+//! fedimint-build = { version = "=0.4.0-alpha", path = "../fedimint-build" }
+//! ```
+//!
+//! in `Cargo.toml`, and:
+//!
+//! ```ignore
+//! fn main() {
+//!     fedimint_build::set_code_version();
+//! }
+//! ```
+//!
+//! in `build.rs` script.
+//!
+//! This will define `FEDIMINT_BUILD_CODE_VERSION` at the build time, which can
+//! be accessed via `fedimint_build_code_version_env!()` and passed to binary
+//! builders like `FedimintCli::new`.
 pub mod envs;
 
 use std::env;
@@ -100,6 +126,8 @@ fn call_cmd(cmd: &str, args: &[&str]) -> Result<String, String> {
     })
 }
 
+/// Run from a `build.rs` script to detect code version. See [`crate`] for
+/// description.
 pub fn set_code_version() {
     match set_code_version_inner() {
         Ok(()) => {}
