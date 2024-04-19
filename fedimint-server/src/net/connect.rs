@@ -163,7 +163,7 @@ where
         let cfg = rustls::ClientConfig::builder()
             .with_safe_defaults()
             .with_root_certificates(self.cert_store.clone())
-            .with_single_cert(
+            .with_client_auth_cert(
                 vec![self.our_certificate.clone()],
                 self.our_private_key.clone(),
             )
@@ -203,7 +203,7 @@ where
         let verifier = AllowAnyAuthenticatedClient::new(self.cert_store.clone());
         let config = rustls::ServerConfig::builder()
             .with_safe_defaults()
-            .with_client_cert_verifier(verifier)
+            .with_client_cert_verifier(Arc::from(verifier))
             .with_single_cert(
                 vec![self.our_certificate.clone()],
                 self.our_private_key.clone(),
@@ -925,7 +925,7 @@ mod tests {
                 let conn_res = server.next().await.unwrap();
                 assert_eq!(
                     conn_res.err().unwrap().to_string().as_str(),
-                    "invalid peer certificate signature"
+                    "invalid peer certificate: BadSignature"
                 );
             });
 
@@ -944,7 +944,7 @@ mod tests {
             let conn_res = err_anytime.await;
             assert_eq!(
                 conn_res.err().unwrap().to_string().as_str(),
-                "received fatal alert: AccessDenied"
+                "received fatal alert: DecryptError"
             );
 
             server_task.await.unwrap();
@@ -959,7 +959,7 @@ mod tests {
                 let conn_res = server.next().await.unwrap();
                 assert_eq!(
                     conn_res.err().unwrap().to_string().as_str(),
-                    "received fatal alert: BadCertificate"
+                    "received fatal alert: DecryptError"
                 );
             });
 
@@ -977,7 +977,7 @@ mod tests {
             let conn_res = err_anytime.await;
             assert_eq!(
                 conn_res.err().unwrap().to_string().as_str(),
-                "invalid peer certificate signature"
+                "invalid peer certificate: BadSignature"
             );
 
             server_task.await.unwrap();
@@ -1013,7 +1013,7 @@ mod tests {
             let conn_res = err_anytime.await;
             assert_eq!(
                 conn_res.err().unwrap().to_string().as_str(),
-                "invalid peer certificate contents: invalid peer certificate: CertNotValidForName"
+                "invalid peer certificate: NotValidForName"
             );
 
             server_task.await.unwrap();
