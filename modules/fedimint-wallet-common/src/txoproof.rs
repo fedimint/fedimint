@@ -1,6 +1,7 @@
 use std::convert::Infallible;
 use std::hash::Hash;
 
+use anyhow::format_err;
 use bitcoin::{BlockHash, OutPoint, Transaction};
 use fedimint_core::bitcoin_migration::bitcoin30_to_bitcoin29_script;
 use fedimint_core::encoding::{Decodable, DecodeError, Encodable};
@@ -8,17 +9,16 @@ use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::txoproof::TxOutProof;
 use miniscript::{translate_hash_fail, Descriptor, TranslatePk};
 use secp256k1::{Secp256k1, Signing, Verification};
-use serde::{Deserialize, Serialize};
+use serde::de::Error;
+use serde::{Deserialize, Deserializer, Serialize};
 use thiserror::Error;
-use validator::{Validate, ValidationError};
 
 use crate::keys::CompressedPublicKey;
 use crate::tweakable::{Contract, Tweakable};
 
 /// A proof about a script owning a certain output. Verifiable using headers
 /// only.
-#[derive(Clone, Debug, PartialEq, Serialize, Eq, Hash, Deserialize, Validate, Encodable)]
-#[validate(schema(function = "validate_peg_in_proof"))]
+#[derive(Clone, Debug, PartialEq, Serialize, Eq, Hash, Encodable)]
 pub struct PegInProof {
     txout_proof: TxOutProof,
     // check that outputs are not more than u32::max (probably enforced if inclusion proof is
@@ -28,6 +28,34 @@ pub struct PegInProof {
     // Check that the idx is in range
     output_idx: u32,
     tweak_contract_key: secp256k1::PublicKey,
+}
+
+impl<'de> Deserialize<'de> for PegInProof {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        #[derive(Deserialize)]
+        struct PegInProofInner {
+            txout_proof: TxOutProof,
+            transaction: Transaction,
+            output_idx: u32,
+            tweak_contract_key: secp256k1::PublicKey,
+        }
+
+        let pegin_proof_inner = PegInProofInner::deserialize(deserializer)?;
+
+        let pegin_proof = PegInProof {
+            txout_proof: pegin_proof_inner.txout_proof,
+            transaction: pegin_proof_inner.transaction,
+            output_idx: pegin_proof_inner.output_idx,
+            tweak_contract_key: pegin_proof_inner.tweak_contract_key,
+        };
+
+        validate_peg_in_proof(&pegin_proof).map_err(D::Error::custom)?;
+
+        Ok(pegin_proof)
+    }
 }
 
 impl PegInProof {
@@ -144,27 +172,23 @@ impl Tweakable for Descriptor<CompressedPublicKey> {
     }
 }
 
-fn validate_peg_in_proof(proof: &PegInProof) -> Result<(), ValidationError> {
+fn validate_peg_in_proof(proof: &PegInProof) -> Result<(), anyhow::Error> {
     if !proof.txout_proof.contains_tx(proof.transaction.txid()) {
-        return Err(ValidationError::new(
-            "Supplied transaction is not included in proof",
-        ));
+        return Err(format_err!("Supplied transaction is not included in proof",));
     }
 
     if proof.transaction.output.len() > u32::MAX as usize {
-        return Err(ValidationError::new(
-            "Supplied transaction has too many outputs",
-        ));
+        return Err(format_err!("Supplied transaction has too many outputs",));
     }
 
     match proof.transaction.output.get(proof.output_idx as usize) {
         Some(txo) => {
             if txo.value > 2_100_000_000_000_000 {
-                return Err(ValidationError::new("Txout amount out of range"));
+                return Err(format_err!("Txout amount out of range"));
             }
         }
         None => {
-            return Err(ValidationError::new("Output index out of range"));
+            return Err(format_err!("Output index out of range"));
         }
     }
 
@@ -183,7 +207,7 @@ impl Decodable for PegInProof {
             tweak_contract_key: secp256k1::PublicKey::consensus_decode(d, modules)?,
         };
 
-        validate_peg_in_proof(&slf).map_err(DecodeError::from_err)?;
+        validate_peg_in_proof(&slf).map_err(DecodeError::new_custom)?;
         Ok(slf)
     }
 }
