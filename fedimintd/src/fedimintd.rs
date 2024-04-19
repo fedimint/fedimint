@@ -16,7 +16,7 @@ use fedimint_core::core::ModuleKind;
 use fedimint_core::db::Database;
 use fedimint_core::envs::{is_env_var_set, BitcoinRpcConfig, FM_USE_UNKNOWN_MODULE_ENV};
 use fedimint_core::module::{ServerApiVersionsSummary, ServerDbVersionsSummary, ServerModuleInit};
-use fedimint_core::task::{sleep, TaskGroup};
+use fedimint_core::task::TaskGroup;
 use fedimint_core::timing;
 use fedimint_core::util::{handle_version_hash_command, write_overwrite, SafeUrl};
 use fedimint_ln_common::config::{
@@ -355,9 +355,7 @@ impl Fedimintd {
                 .make_shutdown_rx()
                 .await
                 .then(|_| async {
-                    let shutdown_seconds = SHUTDOWN_TIMEOUT.as_secs();
-                    info!("Shutdown called, waiting {shutdown_seconds}s for main task to finish");
-                    sleep(SHUTDOWN_TIMEOUT).await;
+                    info!("Shutdown called");
                 });
 
         shutdown_future.await;
