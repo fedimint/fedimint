@@ -94,21 +94,26 @@ where
     B: Future<Output = anyhow::Result<()>>,
 {
     let fixtures = fixtures();
+    let fixtures = &fixtures;
+
     let lnd1 = fixtures.lnd().await;
     let cln1 = fixtures.cln().await;
     let lnd2 = fixtures.lnd().await;
     let cln2 = fixtures.cln().await;
 
-    for (gateway_ln, other_node) in [(lnd1, cln1), (cln2, lnd2)] {
-        let fed = fixtures.new_default_fed().await;
-        let mut gateway = fixtures
-            .new_gateway(gateway_ln, 0, Some(DEFAULT_GATEWAY_PASSWORD.to_string()))
-            .await;
-        gateway.connect_fed(&fed).await;
-        let user_client = fed.new_client().await;
-        let bitcoin = fixtures.bitcoin();
-        f(gateway, other_node, fed, user_client, bitcoin).await?;
-    }
+    futures::future::try_join_all([(lnd1, cln1), (cln2, lnd2)].into_iter().map(
+        |(gateway_ln, other_node)| async move {
+            let fed = fixtures.new_default_fed().await;
+            let mut gateway = fixtures
+                .new_gateway(gateway_ln, 0, Some(DEFAULT_GATEWAY_PASSWORD.to_string()))
+                .await;
+            gateway.connect_fed(&fed).await;
+            let user_client = fed.new_client().await;
+            let bitcoin = fixtures.bitcoin();
+            f(gateway, other_node, fed, user_client, bitcoin).await
+        },
+    ))
+    .await?;
     Ok(())
 }
 
