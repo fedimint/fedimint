@@ -24,7 +24,7 @@ const TRANSACTION_STATUS_FETCH_INTERVAL: Duration = Duration::from_secs(1);
 
 // FIXME: deal with RBF
 // FIXME: deal with multiple deposits
-#[aquamarine::aquamarine]
+#[cfg_attr(doc, aquamarine::aquamarine)]
 /// The state machine driving forward a deposit (aka peg-in).
 ///
 /// ```mermaid
