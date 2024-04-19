@@ -86,14 +86,7 @@ pub struct ProcessHandle(Arc<Mutex<ProcessHandleInner>>);
 impl ProcessHandle {
     pub async fn terminate(&self) -> Result<()> {
         let mut inner = self.0.lock().await;
-        if let Some(mut child) = inner.child.take() {
-            debug!(
-                target: LOG_DEVIMINT,
-                "sending SIGTERM to {} and waiting for it to exit", inner.name
-            );
-            send_sigterm(&child);
-            child.wait().await?;
-        }
+        inner.terminate().await?;
         Ok(())
     }
     pub async fn is_running(&self) -> bool {
@@ -107,31 +100,60 @@ pub struct ProcessHandleInner {
     child: Option<Child>,
 }
 
-impl Drop for ProcessHandleInner {
-    fn drop(&mut self) {
-        let Some(child) = &mut self.child else {
-            return;
-        };
-        let name = self.name.clone();
-        block_in_place(move || {
-            block_on(async move {
+impl ProcessHandleInner {
+    async fn terminate(&mut self) -> anyhow::Result<()> {
+        if let Some(child) = self.child.as_mut() {
+            debug!(
+                target: LOG_DEVIMINT,
+                name=%self.name,
+                signal="SIGTERM",
+                "sending signal to terminate child process"
+            );
+
+            send_sigterm(child);
+
+            if (fedimint_core::runtime::timeout(Duration::from_secs(2), child.wait()).await)
+                .is_err()
+            {
                 debug!(
                     target: LOG_DEVIMINT,
-                    "sending SIGTERM to {name} and waiting for it to exit"
+                    name=%self.name,
+                    signal="SIGKILL",
+                    "sending signal to terminate child process"
                 );
-                send_sigterm(child);
 
-                if (fedimint_core::runtime::timeout(Duration::from_secs(3), child.wait()).await)
-                    .is_err()
-                {
-                    debug!(
-                        target: LOG_DEVIMINT,
-                        "sending SIGKILL to {name} and waiting for it to exit"
-                    );
-                    send_sigkill(child);
-                    if let Err(e) = child.wait().await {
-                        warn!(target: LOG_DEVIMINT, "failed to wait for {name}: {e:?}");
+                send_sigkill(child);
+
+                match fedimint_core::runtime::timeout(Duration::from_secs(5), child.wait()).await {
+                    Ok(Ok(_)) => {}
+                    Ok(Err(err)) => {
+                        bail!("Failed to terminate child process {}: {}", self.name, err);
                     }
+                    Err(_) => {
+                        bail!("Failed to terminate child process {}: timeout", self.name);
+                    }
+                }
+            }
+        }
+        // only drop the child handle if succeeded to terminate
+        self.child.take();
+        Ok(())
+    }
+}
+
+impl Drop for ProcessHandleInner {
+    fn drop(&mut self) {
+        if self.child.is_none() {
+            return;
+        }
+
+        block_in_place(move || {
+            block_on(async move {
+                if let Err(err) = self.terminate().await {
+                    warn!(target: LOG_DEVIMINT,
+                        name=%self.name,
+                        %err,
+                        "Error terminating process on drop");
                 }
             })
         })

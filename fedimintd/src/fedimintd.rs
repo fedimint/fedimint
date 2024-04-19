@@ -16,7 +16,7 @@ use fedimint_core::core::ModuleKind;
 use fedimint_core::db::Database;
 use fedimint_core::envs::{is_env_var_set, BitcoinRpcConfig, FM_USE_UNKNOWN_MODULE_ENV};
 use fedimint_core::module::{ServerApiVersionsSummary, ServerDbVersionsSummary, ServerModuleInit};
-use fedimint_core::task::{sleep, TaskGroup};
+use fedimint_core::task::TaskGroup;
 use fedimint_core::timing;
 use fedimint_core::util::{handle_version_hash_command, write_overwrite, SafeUrl};
 use fedimint_ln_common::config::{
@@ -38,8 +38,7 @@ use fedimint_wallet_server::common::config::{
 };
 use fedimint_wallet_server::WalletInit;
 use futures::FutureExt;
-use tokio::select;
-use tracing::{debug, error, info, warn};
+use tracing::{debug, error, info};
 
 use crate::default_esplora_server;
 use crate::envs::{
@@ -331,30 +330,24 @@ impl Fedimintd {
 
         let timing_total_runtime = timing::TimeReporter::new("total-runtime").info();
 
-        // DO NOT REMOVE, or spawn_local tasks won't run anymore
-        let local_task_set = tokio::task::LocalSet::new();
-        let _guard = local_task_set.enter();
-
         let task_group = root_task_group.clone();
-        root_task_group
-            .spawn_local("main", move |_task_handle| async move {
-                match run(
-                    self.opts,
-                    &task_group,
-                    self.server_gens,
-                    self.server_gen_params,
-                    self.version_hash,
-                )
-                .await
-                {
-                    Ok(()) => {}
-                    Err(error) => {
-                        error!(?error, "Main task returned error, shutting down");
-                        task_group.shutdown();
-                    }
+        root_task_group.spawn_cancellable("main", async move {
+            match run(
+                self.opts,
+                &task_group,
+                self.server_gens,
+                self.server_gen_params,
+                self.version_hash,
+            )
+            .await
+            {
+                Ok(()) => {}
+                Err(error) => {
+                    error!(?error, "Main task returned error, shutting down");
+                    task_group.shutdown();
                 }
-            })
-            .await;
+            }
+        });
 
         let shutdown_future =
             root_task_group
@@ -362,19 +355,11 @@ impl Fedimintd {
                 .make_shutdown_rx()
                 .await
                 .then(|_| async {
-                    let shutdown_seconds = SHUTDOWN_TIMEOUT.as_secs();
-                    info!("Shutdown called, waiting {shutdown_seconds}s for main task to finish");
-                    sleep(SHUTDOWN_TIMEOUT).await;
+                    info!("Shutdown called");
                 });
 
-        select! {
-            _ = shutdown_future => {
-                debug!("Terminating main task");
-            }
-            _ = local_task_set => {
-                warn!("local_task_set finished before shutdown was called");
-            }
-        }
+        shutdown_future.await;
+        debug!("Terminating main task");
 
         if let Err(err) = root_task_group.join_all(Some(SHUTDOWN_TIMEOUT)).await {
             error!(?err, "Error while shutting down task group");
