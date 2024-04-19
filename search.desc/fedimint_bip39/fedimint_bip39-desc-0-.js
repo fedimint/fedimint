@@ -1,0 +1,1 @@
+searchState.loadedDescShard("fedimint_bip39", 0, "BIP39 client secret support crate\nBIP39 root secret encoding strategy allowing retrieval of …\nReturns the argument unchanged.\nCalls <code>U::from(self)</code>.")

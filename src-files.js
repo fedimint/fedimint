@@ -19,7 +19,7 @@ var srcIndex = new Map(JSON.parse('[\
 ["fedimint_empty_client",["",[],["api.rs","db.rs","lib.rs","states.rs"]]],\
 ["fedimint_empty_common",["",[],["config.rs","lib.rs"]]],\
 ["fedimint_empty_server",["",[],["db.rs","lib.rs"]]],\
-["fedimint_ln_client",["",[],["api.rs","db.rs","incoming.rs","lib.rs","pay.rs","receive.rs"]]],\
+["fedimint_ln_client",["",[],["api.rs","cli.rs","db.rs","incoming.rs","lib.rs","pay.rs","receive.rs"]]],\
 ["fedimint_ln_common",["",[["contracts",[],["incoming.rs","mod.rs","outgoing.rs"]]],["config.rs","lib.rs"]]],\
 ["fedimint_ln_server",["",[],["db.rs","lib.rs","metrics.rs"]]],\
 ["fedimint_lnv2_client",["",[],["api.rs","lib.rs","receive_sm.rs","send_sm.rs"]]],\

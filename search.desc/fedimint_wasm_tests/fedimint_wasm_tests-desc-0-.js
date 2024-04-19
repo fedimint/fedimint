@@ -1,0 +1,1 @@
+searchState.loadedDescShard("fedimint_wasm_tests", 0, "")

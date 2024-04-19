@@ -1,0 +1,1 @@
+searchState.loadedDescShard("gatewayd", 0, "This crate provides <code>gatewayd</code>, the Fedimint gateway binary.")
