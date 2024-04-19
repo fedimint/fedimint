@@ -166,20 +166,6 @@ dependencies = [
 
 [[package]]
 name = "aquamarine"
-version = "0.3.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d1da02abba9f9063d786eab1509833ebb2fac0f966862ca59439c76b9c566760"
-dependencies = [
- "include_dir",
- "itertools 0.10.5",
- "proc-macro-error",
- "proc-macro2",
- "quote",
- "syn 1.0.109",
-]
-
-[[package]]
-name = "aquamarine"
 version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "21cc1548309245035eb18aa7f0967da6bc65587005170c56e6ef2788a4cf3f4e"
@@ -1527,7 +1513,7 @@ name = "fedimint-client"
 version = "0.4.0-alpha"
 dependencies = [
  "anyhow",
- "aquamarine 0.5.0",
+ "aquamarine",
  "async-stream",
  "async-trait",
  "bitcoin 0.29.2",
@@ -1868,7 +1854,7 @@ name = "fedimint-ln-client"
 version = "0.4.0-alpha"
 dependencies = [
  "anyhow",
- "aquamarine 0.5.0",
+ "aquamarine",
  "async-stream",
  "async-trait",
  "bincode",
@@ -1905,7 +1891,7 @@ name = "fedimint-ln-common"
 version = "0.4.0-alpha"
 dependencies = [
  "anyhow",
- "aquamarine 0.5.0",
+ "aquamarine",
  "async-trait",
  "bitcoin 0.29.2",
  "bitcoin_hashes 0.11.0",
@@ -1936,7 +1922,7 @@ name = "fedimint-ln-gateway"
 version = "0.4.0-alpha"
 dependencies = [
  "anyhow",
- "aquamarine 0.5.0",
+ "aquamarine",
  "assert_matches",
  "async-stream",
  "async-trait",
@@ -2064,7 +2050,7 @@ name = "fedimint-lnv2-client"
 version = "0.4.0-alpha"
 dependencies = [
  "anyhow",
- "aquamarine 0.3.3",
+ "aquamarine",
  "async-stream",
  "async-trait",
  "bincode",
@@ -2100,7 +2086,7 @@ name = "fedimint-lnv2-common"
 version = "0.4.0-alpha"
 dependencies = [
  "anyhow",
- "aquamarine 0.3.3",
+ "aquamarine",
  "async-trait",
  "bincode",
  "bitcoin 0.29.2",
@@ -2333,7 +2319,7 @@ name = "fedimint-mint-client"
 version = "0.4.0-alpha"
 dependencies = [
  "anyhow",
- "aquamarine 0.5.0",
+ "aquamarine",
  "async-stream",
  "async-trait",
  "base64 0.22.0",
@@ -2718,7 +2704,7 @@ name = "fedimint-wallet-client"
 version = "0.4.0-alpha"
 dependencies = [
  "anyhow",
- "aquamarine 0.5.0",
+ "aquamarine",
  "async-stream",
  "async-trait",
  "bitcoin 0.29.2",
