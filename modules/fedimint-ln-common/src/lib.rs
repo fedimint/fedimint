@@ -9,6 +9,7 @@
 
 extern crate core;
 
+pub mod endpoint_constants;
 pub mod config;
 pub mod contracts;
 

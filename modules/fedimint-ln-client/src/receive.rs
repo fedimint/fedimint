@@ -8,7 +8,7 @@ use fedimint_client::transaction::ClientInput;
 use fedimint_client::DynGlobalClientContext;
 use fedimint_core::core::{IntoDynInstance, ModuleInstanceId, OperationId};
 use fedimint_core::encoding::{Decodable, Encodable};
-use fedimint_core::endpoint_constants::ACCOUNT_ENDPOINT;
+use fedimint_ln_common::endpoint_constants::ACCOUNT_ENDPOINT;
 use fedimint_core::task::sleep;
 use fedimint_core::{OutPoint, TransactionId};
 use fedimint_ln_common::contracts::incoming::IncomingContractAccount;
