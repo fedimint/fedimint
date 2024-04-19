@@ -735,13 +735,15 @@ mod tests {
     use std::collections::HashMap;
     use std::time::Duration;
 
-    use fedimint_core::task::{sleep, TaskGroup};
+    use anyhow::{ensure, Context as _};
+    use fedimint_core::task::TaskGroup;
+    use fedimint_core::util::retry;
     use fedimint_core::PeerId;
 
     use super::DelayCalculator;
     use crate::net::connect::mock::{MockNetwork, StreamReliability};
     use crate::net::connect::Connector;
-    use crate::net::peers::{NetworkConfig, ReconnectPeerConnections};
+    use crate::net::peers::{NetworkConfig, PeerStatusChannels, ReconnectPeerConnections};
 
     #[test_log::test(tokio::test)]
     async fn test_connect() {
@@ -788,24 +790,32 @@ mod tests {
             let (_peers_b, peer_status_client_b) =
                 build_peers("127.0.0.1:2000", 2, task_group.clone()).await;
 
-            sleep(Duration::from_secs(20)).await;
+            async fn wait_for_connection(name: &str, peer_status: &PeerStatusChannels) {
+                retry(
+                    format!("wait for client {}", name),
+                    fedimint_core::util::FibonacciBackoff::default()
+                        .with_min_delay(Duration::from_millis(200))
+                        .with_max_delay(Duration::from_secs(5))
+                        .with_max_times(10),
+                    || async {
+                        let status = peer_status.get_all_status().await;
+                        ensure!(status.len() == 2);
+                        ensure!(status.values().all(|s| s.is_ok()));
+                        Ok(())
+                    },
+                )
+                .await
+                .context("peer couldn't connect")
+                .unwrap();
+            }
 
-            let status = peer_status_client_a.get_all_status().await;
-            assert_eq!(status.len(), 2);
-            assert!(status.values().all(|s| s.is_ok()));
-
-            let status = peer_status_client_b.get_all_status().await;
-            assert_eq!(status.len(), 2);
-            assert!(status.values().all(|s| s.is_ok()));
+            wait_for_connection("a", &peer_status_client_a).await;
+            wait_for_connection("b", &peer_status_client_b).await;
 
             let (_peers_c, peer_status_client_c) =
                 build_peers("127.0.0.1:3000", 3, task_group.clone()).await;
 
-            sleep(Duration::from_secs(20)).await;
-
-            let status = peer_status_client_c.get_all_status().await;
-            assert_eq!(status.len(), 2);
-            assert!(status.values().all(|s| s.is_ok()));
+            wait_for_connection("c", &peer_status_client_c).await;
         }
 
         task_group.shutdown();
