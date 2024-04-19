@@ -12,7 +12,6 @@ use fedimint_client::backup::Metadata;
 use fedimint_client::ClientHandleArc;
 use fedimint_core::bitcoin_migration::{
     bitcoin29_to_bitcoin30_network, bitcoin30_to_bitcoin29_address, bitcoin30_to_bitcoin29_amount,
-    bitcoin30_to_bitcoin29_secp256k1_public_key,
 };
 use fedimint_core::config::{ClientModuleConfig, FederationId};
 use fedimint_core::core::{ModuleInstanceId, ModuleKind, OperationId};
@@ -346,10 +345,7 @@ pub async fn handle_command(
             warn!("Command deprecated. Use `fedimint-cli module ln invoice` instead.");
             let lightning_module = client.get_first_module::<LightningClientModule>();
             let ln_gateway = lightning_module
-                .get_gateway(
-                    gateway_id.map(bitcoin30_to_bitcoin29_secp256k1_public_key),
-                    force_internal,
-                )
+                .get_gateway(gateway_id, force_internal)
                 .await?;
 
             let lightning_module = client.get_first_module::<LightningClientModule>();
@@ -407,10 +403,7 @@ pub async fn handle_command(
             info!("Paying invoice: {bolt11}");
             let lightning_module = client.get_first_module::<LightningClientModule>();
             let ln_gateway = lightning_module
-                .get_gateway(
-                    gateway_id.map(bitcoin30_to_bitcoin29_secp256k1_public_key),
-                    force_internal,
-                )
+                .get_gateway(gateway_id, force_internal)
                 .await?;
 
             let lightning_module = client.get_first_module::<LightningClientModule>();

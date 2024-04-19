@@ -18,7 +18,11 @@ use fedimint_client::sm::util::MapStateTransitions;
 use fedimint_client::sm::{Context, DynState, ModuleNotifier, State};
 use fedimint_client::transaction::{ClientOutput, TransactionBuilder};
 use fedimint_client::{sm_enum_variant_translation, AddStateMachinesError, DynGlobalClientContext};
-use fedimint_core::bitcoin_migration::bitcoin30_to_bitcoin29_keypair;
+use fedimint_core::bitcoin_migration::{
+    bitcoin29_to_bitcoin30_keypair, bitcoin29_to_bitcoin30_secp256k1_public_key,
+    bitcoin29_to_bitcoin30_sha256_hash, bitcoin30_to_bitcoin29_keypair,
+    bitcoin30_to_bitcoin29_sha256_hash,
+};
 use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, OperationId};
 use fedimint_core::db::{AutocommitError, DatabaseTransaction, DatabaseVersion};
 use fedimint_core::encoding::{Decodable, Encodable};
@@ -266,9 +270,9 @@ impl GatewayClientModule {
         let operation_id = OperationId(htlc.payment_hash.into_inner());
         let (incoming_output, amount, contract_id) = create_incoming_contract_output(
             &self.module_api,
-            htlc.payment_hash,
+            bitcoin29_to_bitcoin30_sha256_hash(htlc.payment_hash),
             htlc.outgoing_amount_msat,
-            self.redeem_key,
+            bitcoin29_to_bitcoin30_keypair(self.redeem_key),
         )
         .await?;
 
@@ -281,7 +285,7 @@ impl GatewayClientModule {
                         common: IncomingSmCommon {
                             operation_id,
                             contract_id,
-                            payment_hash: htlc.payment_hash,
+                            payment_hash: bitcoin29_to_bitcoin30_sha256_hash(htlc.payment_hash),
                         },
                         state: IncomingSmStates::FundingOffer(FundingOfferState { txid }),
                     }),
@@ -313,9 +317,9 @@ impl GatewayClientModule {
         let operation_id = OperationId(payment_hash.into_inner());
         let (incoming_output, amount, contract_id) = create_incoming_contract_output(
             &self.module_api,
-            payment_hash,
+            bitcoin29_to_bitcoin30_sha256_hash(payment_hash),
             swap.amount_msat,
-            self.redeem_key,
+            bitcoin29_to_bitcoin30_keypair(self.redeem_key),
         )
         .await?;
 
@@ -327,7 +331,7 @@ impl GatewayClientModule {
                     common: IncomingSmCommon {
                         operation_id,
                         contract_id,
-                        payment_hash,
+                        payment_hash: bitcoin29_to_bitcoin30_sha256_hash(payment_hash),
                     },
                     state: IncomingSmStates::FundingOffer(FundingOfferState { txid }),
                 })]
@@ -384,14 +388,18 @@ impl GatewayClientModule {
         let gateway_id = gateway_keypair.public_key();
         let challenges = self
             .module_api
-            .get_remove_gateway_challenge(gateway_id)
+            .get_remove_gateway_challenge(bitcoin29_to_bitcoin30_secp256k1_public_key(gateway_id))
             .await?;
 
         let fed_public_key = self.cfg.threshold_pub_key;
         let signatures = challenges
             .into_iter()
             .filter_map(|(peer_id, challenge)| {
-                let msg = create_gateway_remove_message(fed_public_key, peer_id, challenge?);
+                let msg = create_gateway_remove_message(
+                    fed_public_key,
+                    peer_id,
+                    challenge.map(bitcoin30_to_bitcoin29_sha256_hash)?,
+                );
                 let signature = gateway_keypair.sign_schnorr(msg);
                 Some((peer_id, signature))
             })
@@ -748,7 +756,7 @@ impl TryFrom<PaymentData> for SwapParameters {
     type Error = anyhow::Error;
 
     fn try_from(s: PaymentData) -> Result<Self, Self::Error> {
-        let payment_hash = s.payment_hash();
+        let payment_hash = bitcoin30_to_bitcoin29_sha256_hash(s.payment_hash());
         let amount_msat = s
             .amount()
             .ok_or_else(|| anyhow::anyhow!("Amountless invoice cannot be used in direct swap"))?;

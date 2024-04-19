@@ -1,11 +1,12 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use bitcoin::util::key::KeyPair;
+use bitcoin::key::KeyPair;
 use fedimint_api_client::api::DynModuleApi;
 use fedimint_client::sm::{ClientSMDatabaseTransaction, DynState, State, StateTransition};
 use fedimint_client::transaction::ClientInput;
 use fedimint_client::DynGlobalClientContext;
+use fedimint_core::bitcoin_migration::bitcoin30_to_bitcoin29_keypair;
 use fedimint_core::core::{IntoDynInstance, ModuleInstanceId, OperationId};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::task::sleep;
@@ -290,7 +291,7 @@ impl LightningReceiveConfirmedInvoice {
         let client_input = ClientInput::<LightningInput, LightningClientStateMachines> {
             input,
             amount: contract.amount,
-            keys: vec![keypair],
+            keys: vec![bitcoin30_to_bitcoin29_keypair(keypair)],
             // The input of the refund tx is managed by this state machine, so no new state machines
             // need to be created
             state_machines: Arc::new(|_, _| vec![]),
@@ -392,8 +393,8 @@ impl LightningReceiveFunded {
 
 #[cfg(test)]
 mod tests {
-
-    use bitcoin::hashes::{sha256, Hash};
+    use bitcoin29::hashes::{sha256, Hash};
+    use fedimint_core::bitcoin_migration::bitcoin30_to_bitcoin29_secp256k1_secret_key;
     use lightning_invoice::{Currency, InvoiceBuilder, PaymentSecret};
     use secp256k1::SecretKey;
 
@@ -430,7 +431,7 @@ mod tests {
     }
 
     fn invoice(now_epoch: Duration, expiry_time: Duration) -> anyhow::Result<Bolt11Invoice> {
-        let ctx = bitcoin::secp256k1::Secp256k1::new();
+        let ctx = bitcoin29::secp256k1::Secp256k1::new();
         let secret_key = SecretKey::new(&mut rand::thread_rng());
         Ok(InvoiceBuilder::new(Currency::Regtest)
             .description("".to_string())
@@ -440,6 +441,11 @@ mod tests {
             .payment_secret(PaymentSecret([0; 32]))
             .amount_milli_satoshis(1000)
             .expiry_time(expiry_time)
-            .build_signed(|m| ctx.sign_ecdsa_recoverable(m, &secret_key))?)
+            .build_signed(|m| {
+                ctx.sign_ecdsa_recoverable(
+                    m,
+                    &bitcoin30_to_bitcoin29_secp256k1_secret_key(secret_key),
+                )
+            })?)
     }
 }

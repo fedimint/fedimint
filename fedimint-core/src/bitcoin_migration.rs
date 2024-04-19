@@ -304,6 +304,12 @@ pub fn bitcoin29_to_bitcoin30_sha256_hash(
     bitcoin30::hashes::sha256::Hash::from_byte_array(hash.into_inner())
 }
 
+pub fn bitcoin30_to_bitcoin29_sha256_hash(
+    hash: bitcoin30::hashes::sha256::Hash,
+) -> bitcoin::hashes::sha256::Hash {
+    bitcoin::hashes::sha256::Hash::from_inner(hash.to_byte_array())
+}
+
 #[cfg(test)]
 mod tests {
     use bitcoin30::absolute::Height;
@@ -779,6 +785,25 @@ mod tests {
         assert_eq!(
             bitcoin30_hash,
             bitcoin29_to_bitcoin30_sha256_hash(bitcoin29_hash)
+        );
+    }
+
+    #[test]
+    fn test_bitcoin30_to_bitcoin29_sha256_hash() {
+        let bitcoin29_hash = bitcoin::hashes::sha256::Hash::from_hex(
+            "0123456789012345678901234567890123456789012345678901234567890123",
+        )
+        .expect("Failed to parse bitcoin v29 sha256 hash");
+        let bitcoin30_hash = bitcoin30::hashes::sha256::Hash::from_str(
+            "0123456789012345678901234567890123456789012345678901234567890123",
+        )
+        .expect("Failed to parse bitcoin v30 sha256 hash");
+
+        // Assert that bitcoin30->bitcoin29 sha256 hash is the same as native bitcoin30
+        // sha256 hash.
+        assert_eq!(
+            bitcoin29_hash,
+            bitcoin30_to_bitcoin29_sha256_hash(bitcoin30_hash)
         );
     }
 }

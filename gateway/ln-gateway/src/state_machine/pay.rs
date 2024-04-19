@@ -7,7 +7,7 @@ use fedimint_client::transaction::{ClientInput, ClientOutput};
 use fedimint_client::{ClientHandleArc, DynGlobalClientContext};
 use fedimint_core::bitcoin_migration::{
     bitcoin29_to_bitcoin30_keypair, bitcoin29_to_bitcoin30_sha256_hash,
-    bitcoin30_to_bitcoin29_schnorr_signature,
+    bitcoin30_to_bitcoin29_schnorr_signature, bitcoin30_to_bitcoin29_sha256_hash,
 };
 use fedimint_core::config::FederationId;
 use fedimint_core::core::OperationId;
@@ -256,8 +256,8 @@ impl GatewayPayInvoice {
         // Verify that this client is authorized to receive the preimage.
         if let Err(err) = Self::verify_preimage_authentication(
             &context,
-            payload.payment_data.payment_hash(),
-            payload.preimage_auth,
+            bitcoin30_to_bitcoin29_sha256_hash(payload.payment_data.payment_hash()),
+            bitcoin30_to_bitcoin29_sha256_hash(payload.preimage_auth),
             contract.clone(),
         )
         .await
@@ -415,7 +415,10 @@ impl GatewayPayInvoice {
                         invoice: invoice.to_string(),
                         max_delay,
                         max_fee_msat: max_fee.msats,
-                        payment_hash: payment_data.payment_hash().to_vec(),
+                        payment_hash: bitcoin30_to_bitcoin29_sha256_hash(
+                            payment_data.payment_hash(),
+                        )
+                        .to_vec(),
                     })
                     .await
             }
