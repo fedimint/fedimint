@@ -3,7 +3,7 @@
     operation_id: OperationId,
     stream: S
 ) -&gt; BoxStream&lt;'a, U&gt;<div class="where">where
-    U: <a class="trait" href="https://doc.rust-lang.org/nightly/core/clone/trait.Clone.html" title="trait core::clone::Clone">Clone</a> + <a class="trait" href="https://docs.rs/serde/1.0.197/serde/ser/trait.Serialize.html" title="trait serde::ser::Serialize">Serialize</a> + <a class="trait" href="https://doc.rust-lang.org/nightly/core/fmt/trait.Debug.html" title="trait core::fmt::Debug">Debug</a> + MaybeSend + MaybeSync + 'static,
+    U: <a class="trait" href="https://doc.rust-lang.org/nightly/core/clone/trait.Clone.html" title="trait core::clone::Clone">Clone</a> + <a class="trait" href="https://docs.rs/serde/1.0.198/serde/ser/trait.Serialize.html" title="trait serde::ser::Serialize">Serialize</a> + <a class="trait" href="https://doc.rust-lang.org/nightly/core/fmt/trait.Debug.html" title="trait core::fmt::Debug">Debug</a> + MaybeSend + MaybeSync + 'static,
     S: Stream&lt;Item = U&gt; + MaybeSend + 'a,</div></code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Wraps an operation update stream such that the last update before it closes
 is tried to be written to the operation log entry as its outcome.</p>
 </div></details></section></div></main></body></html>
