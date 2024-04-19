@@ -33,7 +33,7 @@ futures = { workspace = true }
 erased-serde = { workspace = true }
 rand = { workspace = true }
 secp256k1 = "0.24.2"
-serde = {version = "1.0.149", features = [ "derive" ] }
+serde = {version = "1.0.198", features = [ "derive" ] }
 strum = { workspace = true }
 strum_macros = { workspace = true }
 tracing = { workspace = true }
