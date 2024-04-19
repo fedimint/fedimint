@@ -17,7 +17,8 @@ updates:
       applies-to: version-updates
       patterns:
       - "*"
-      update-types: patch
+      update-types:
+      - patch
 - package-ecosystem: github-actions
   directory: "/"
   schedule:
