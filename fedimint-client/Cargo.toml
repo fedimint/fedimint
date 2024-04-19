@@ -34,7 +34,7 @@ futures = { workspace = true }
 itertools = { workspace = true }
 rand = { workspace = true }
 secp256k1-zkp = "0.7.0"
-serde = "1.0.197"
+serde = "1.0.198"
 serde_json = { workspace = true }
 strum = { workspace = true }
 strum_macros = { workspace = true }

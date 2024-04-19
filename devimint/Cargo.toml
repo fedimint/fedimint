@@ -46,7 +46,7 @@ tonic_lnd = { workspace = true }
 tower-http = { version = "0.5.2", features = ["cors", "auth"] }
 tracing = { workspace = true }
 tracing-subscriber = "0.3.18"
-serde = "1.0.197"
+serde = "1.0.198"
 url = { workspace = true }
 fedimint-portalloc = { path = "../utils/portalloc" }
 fs-lock = "0.1.3"
