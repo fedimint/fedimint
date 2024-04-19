@@ -301,7 +301,7 @@ pub struct Gateway {
     max_used_scid: Arc<Mutex<u64>>,
 
     // The Gateway's API URL.
-    versioned_api: SafeUrl,
+    pub versioned_api: SafeUrl,
 
     // The socket the gateway listens on.
     listen: SocketAddr,
