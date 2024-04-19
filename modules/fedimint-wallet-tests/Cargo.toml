@@ -31,7 +31,7 @@ fedimint-wallet-client = { path = "../fedimint-wallet-client" }
 fedimint-wallet-common = { path = "../fedimint-wallet-common" }
 fedimint-wallet-server = { path = "../fedimint-wallet-server" }
 futures = { workspace = true }
-miniscript = { version = "10.0.0" }
+miniscript = { version = "11.0.0" }
 tokio = { version = "1.36.0", features = ["sync"] }
 tracing = { workspace = true }
 secp256k1 = { version = "0.24.3", features = [ "serde" ] }

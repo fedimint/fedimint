@@ -27,7 +27,7 @@ fedimint-wallet-common = { version = "=0.4.0-alpha", path = "../fedimint-wallet-
 fedimint-logging = { workspace = true }
 futures = { workspace = true }
 hex = { workspace = true }
-miniscript = { version = "10.0.0", features = [ "compiler", "serde" ] }
+miniscript = { version = "11.0.0", features = [ "compiler", "serde" ] }
 miniscript9 = { package = "miniscript", version = "9.0.2" }
 impl-tools = "0.10.0"
 rand = { workspace = true }

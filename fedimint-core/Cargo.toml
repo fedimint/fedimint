@@ -47,7 +47,7 @@ lightning-invoice = "0.26.0"
 fedimint-derive = { version = "=0.4.0-alpha", path = "../fedimint-derive" }
 fedimint-logging = { version = "=0.4.0-alpha", path = "../fedimint-logging" }
 rand = { workspace = true }
-miniscript = { version = "10.0.0", features = ["compiler", "serde"] }
+miniscript = { version = "11.0.0", features = ["compiler", "serde"] }
 secp256k1-zkp = { version = "0.7.0", features = ["use-serde", "global-context"] }
 secp256k1 = { version = "0.27.0", features = ["global-context", "rand-std"] }
 macro_rules_attribute = "0.2.0"

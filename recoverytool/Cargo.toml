@@ -30,7 +30,7 @@ fedimint-ln-server = { version = "=0.4.0-alpha", path = "../modules/fedimint-ln-
 fedimint-mint-server = { version = "=0.4.0-alpha", path = "../modules/fedimint-mint-server" }
 futures = { workspace = true }
 hex = { workspace = true }
-miniscript = { version = "10.0.0" }
+miniscript = { version = "11.0.0" }
 secp256k1 = { version = "0.24.3", features = [ "serde", "global-context" ] }
 serde = { version = "1.0.198", features = [ "derive" ] }
 serde_json = { workspace = true }

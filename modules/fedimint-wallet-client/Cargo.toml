@@ -27,7 +27,7 @@ fedimint-core = { workspace = true }
 fedimint-api-client = { workspace = true }
 fedimint-wallet-common = { version = "=0.4.0-alpha", path = "../fedimint-wallet-common" }
 futures = { workspace = true }
-miniscript = { version = "10.0.0", features = [ "compiler", "serde" ] }
+miniscript = { version = "11.0.0", features = [ "compiler", "serde" ] }
 impl-tools = "0.10.0"
 rand = { workspace = true }
 secp256k1 = { version = "0.24.3", features = [ "serde" ] }
