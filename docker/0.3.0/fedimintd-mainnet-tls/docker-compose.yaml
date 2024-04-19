@@ -1,0 +1,73 @@
+# See the .env file for config options
+
+version: "3.3"
+
+services:
+  traefik:
+    image: "traefik:v2.10"
+    container_name: "traefik"
+    command:
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--entrypoints.websecure.address=:443"
+      - "--certificatesresolvers.myresolver.acme.tlschallenge=true"
+      - "--certificatesresolvers.myresolver.acme.storage=/letsencrypt/acme.json"
+    ports:
+      - "443:443"
+    volumes:
+      - "letsencrypt_data:/letsencrypt"
+      - "/var/run/docker.sock:/var/run/docker.sock:ro"
+
+  fedimintd:
+    image: fedimint/fedimintd:v0.3.0
+    volumes:
+      - fedimintd_data:/data
+    ports:
+      - "0.0.0.0:8173:8173"
+    environment:
+      - FM_BITCOIN_RPC_KIND=${FM_BITCOIN_RPC_KIND}
+      - FM_BITCOIN_RPC_URL=${FM_BITCOIN_RPC_URL}
+      - FM_BITCOIN_NETWORK=bitcoin
+      - FM_BIND_P2P=0.0.0.0:8173
+      - FM_P2P_URL=fedimint://${FM_DOMAIN}:8173
+      - FM_BIND_API=0.0.0.0:8174
+      - FM_API_URL=wss://${FM_DOMAIN}/ws/
+      - FM_EXTRA_DKG_META=meta_override_url=https://${FM_DOMAIN}/meta.json
+    restart: always
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.services.fedimintd.loadbalancer.server.port=8174"
+      - "traefik.http.routers.fedimintd.rule=Host(`${FM_DOMAIN}`) && Path(`/ws/`)"
+      - "traefik.http.routers.fedimintd.entrypoints=websecure"
+      - "traefik.http.routers.fedimintd.tls.certresolver=myresolver"
+
+  guardian-ui:
+    image: fedimintui/guardian-ui:0.3.0
+    environment:
+      - PORT=80
+      - REACT_APP_FM_CONFIG_API=wss://${FM_DOMAIN}/ws/
+    depends_on:
+      - fedimintd
+    restart: always
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.services.guardian-ui.loadbalancer.server.port=80"
+      - "traefik.http.routers.guardian-ui.rule=Host(`${FM_DOMAIN}`)"
+      - "traefik.http.routers.guardian-ui.entrypoints=websecure"
+      - "traefik.http.routers.guardian-ui.tls.certresolver=myresolver"
+
+  meta-json:
+    image: nginx:latest
+    restart: unless-stopped
+    volumes:
+      - ./meta.json:/usr/share/nginx/html/meta.json:ro
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.services.meta-json.loadbalancer.server.port=80"
+      - "traefik.http.routers.meta-json.rule=Host(`${FM_DOMAIN}`) && Path(`/meta.json`)"
+      - "traefik.http.routers.meta-json.entrypoints=websecure"
+      - "traefik.http.routers.meta-json.tls.certresolver=myresolver"
+
+volumes:
+  letsencrypt_data:
+  fedimintd_data:
