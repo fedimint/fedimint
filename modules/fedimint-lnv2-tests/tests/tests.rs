@@ -66,11 +66,6 @@ async fn print_liquidity(gateway: &GatewayTest, federation_id: FederationId) {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn can_pay_external_invoice_exactly_once() -> anyhow::Result<()> {
-    // TODO: remove this
-    if Fixtures::is_real_test() {
-        return Ok(());
-    }
-
     let fixtures = fixtures();
     let fed = fixtures.new_fed().await;
     let gw = gateway(&fixtures, &fed).await;
@@ -136,11 +131,6 @@ async fn can_pay_external_invoice_exactly_once() -> anyhow::Result<()> {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn refund_unpayable_invoice() -> anyhow::Result<()> {
-    // TODO: remove this
-    if Fixtures::is_real_test() {
-        return Ok(());
-    }
-
     let fixtures = fixtures();
     let fed = fixtures.new_fed().await;
     let gw = gateway(&fixtures, &fed).await;
