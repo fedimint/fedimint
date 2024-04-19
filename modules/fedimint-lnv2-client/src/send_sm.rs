@@ -20,7 +20,7 @@ use secp256k1::KeyPair;
 use tracing::error;
 
 use crate::api::LnFederationApi;
-use crate::{LightningClientStateMachines, SendPaymentPayload};
+use crate::{LightningClientStateMachines, PayBolt11InvoicePayload};
 
 const RETRY_DELAY: Duration = Duration::from_secs(1);
 
@@ -45,8 +45,21 @@ pub struct SendSMCommon {
     pub funding_txid: TransactionId,
     pub gateway_api: SafeUrl,
     pub contract: OutgoingContract,
-    pub invoice: Bolt11Invoice,
+    pub invoice: Invoice,
     pub refund_keypair: KeyPair,
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
+pub enum Invoice {
+    Bolt11(Bolt11Invoice),
+}
+
+impl Invoice {
+    pub fn bolt11(&self) -> &Bolt11Invoice {
+        match self {
+            Invoice::Bolt11(invoice) => invoice,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
@@ -100,7 +113,7 @@ impl State for SendStateMachine {
                             self.common.gateway_api.clone(),
                             context.federation_id,
                             self.common.contract.clone(),
-                            self.common.invoice.clone(),
+                            self.common.invoice.bolt11().clone(),
                         ),
                         move |dbtx, response, old_state| {
                             Box::pin(Self::transition_gateway_send_payment(
@@ -219,11 +232,11 @@ impl SendStateMachine {
         let result = reqwest::Client::new()
             .post(
                 gateway_api
-                    .join("send_payment")
-                    .expect("'send_payment' contains no invalid characters for a URL")
+                    .join("pay_bolt11_invoice")
+                    .expect("'pay_bolt11_invoice' contains no invalid characters for a URL")
                     .as_str(),
             )
-            .json(&SendPaymentPayload {
+            .json(&PayBolt11InvoicePayload {
                 federation_id,
                 contract,
                 invoice,

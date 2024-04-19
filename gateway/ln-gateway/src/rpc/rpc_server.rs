@@ -12,13 +12,13 @@ use fedimint_core::task::TaskGroup;
 use fedimint_ln_client::pay::PayInvoicePayload;
 use fedimint_ln_common::gateway_endpoint_constants::{
     ADDRESS_ENDPOINT, BACKUP_ENDPOINT, BALANCE_ENDPOINT, CLOSE_CHANNELS_WITH_PEER_ENDPOINT,
-    CONFIGURATION_ENDPOINT, CONNECT_FED_ENDPOINT, CREATE_INVOICE_V2_ENDPOINT,
+    CONFIGURATION_ENDPOINT, CONNECT_FED_ENDPOINT, CREATE_BOLT11_INVOICE_V2_ENDPOINT,
     GATEWAY_INFO_ENDPOINT, GATEWAY_INFO_POST_ENDPOINT, GET_FUNDING_ADDRESS_ENDPOINT,
     GET_GATEWAY_ID_ENDPOINT, LEAVE_FED_ENDPOINT, LIST_ACTIVE_CHANNELS_ENDPOINT,
-    OPEN_CHANNEL_ENDPOINT, PAYMENT_INFO_V2_ENDPOINT, PAY_INVOICE_ENDPOINT, RESTORE_ENDPOINT,
-    SEND_PAYMENT_V2_ENDPOINT, SET_CONFIGURATION_ENDPOINT, WITHDRAW_ENDPOINT,
+    OPEN_CHANNEL_ENDPOINT, PAY_BOLT11_INVOICE_V2_ENDPOINT, PAY_INVOICE_ENDPOINT, RESTORE_ENDPOINT,
+    ROUTING_INFO_V2_ENDPOINT, SET_CONFIGURATION_ENDPOINT, WITHDRAW_ENDPOINT,
 };
-use fedimint_lnv2_client::{CreateInvoicePayload, SendPaymentPayload};
+use fedimint_lnv2_client::{CreateBolt11InvoicePayload, PayBolt11InvoicePayload};
 use hex::ToHex;
 use serde_json::{json, Value};
 use tokio::net::TcpListener;
@@ -150,9 +150,12 @@ fn v1_routes(gateway: Gateway) -> Router {
         .route(PAY_INVOICE_ENDPOINT, post(pay_invoice))
         .route(GET_GATEWAY_ID_ENDPOINT, get(get_gateway_id))
         // These routes are for next generation lightning
-        .route(PAYMENT_INFO_V2_ENDPOINT, post(payment_info_v2))
-        .route(SEND_PAYMENT_V2_ENDPOINT, post(send_payment_v2))
-        .route(CREATE_INVOICE_V2_ENDPOINT, post(create_invoice_v2));
+        .route(ROUTING_INFO_V2_ENDPOINT, post(routing_info_v2))
+        .route(PAY_BOLT11_INVOICE_V2_ENDPOINT, post(pay_bolt11_invoice_v2))
+        .route(
+            CREATE_BOLT11_INVOICE_V2_ENDPOINT,
+            post(create_bolt11_invoice_v2),
+        );
 
     // Authenticated, public routes used for gateway administration
     let always_authenticated_routes = Router::new()
@@ -369,29 +372,29 @@ async fn get_gateway_id(
     Ok(Json(json!(gateway.gateway_id)))
 }
 
-async fn payment_info_v2(
+async fn routing_info_v2(
     Extension(gateway): Extension<Gateway>,
     Json(federation_id): Json<FederationId>,
 ) -> Json<Value> {
-    Json(json!(gateway.payment_info_v2(&federation_id).await))
+    Json(json!(gateway.routing_info_v2(&federation_id).await))
 }
 
-async fn send_payment_v2(
+async fn pay_bolt11_invoice_v2(
     Extension(gateway): Extension<Gateway>,
-    Json(payload): Json<SendPaymentPayload>,
+    Json(payload): Json<PayBolt11InvoicePayload>,
 ) -> Json<Value> {
     Json(json!(gateway
-        .send_payment_v2(payload)
+        .pay_bolt11_invoice(payload)
         .await
         .map_err(|e| e.to_string())))
 }
 
-async fn create_invoice_v2(
+async fn create_bolt11_invoice_v2(
     Extension(gateway): Extension<Gateway>,
-    Json(payload): Json<CreateInvoicePayload>,
+    Json(payload): Json<CreateBolt11InvoicePayload>,
 ) -> Json<Value> {
     Json(json!(gateway
-        .create_invoice_v2(payload)
+        .create_bolt11_invoice_v2(payload)
         .await
         .map_err(|e| e.to_string())))
 }

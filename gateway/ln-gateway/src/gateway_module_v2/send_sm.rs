@@ -39,8 +39,21 @@ pub struct SendSMCommon {
     pub contract: OutgoingContract,
     pub max_delay: u64,
     pub min_contract_amount: Amount,
-    pub invoice: Bolt11Invoice,
+    pub invoice: Invoice,
     pub claim_keypair: KeyPair,
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
+pub enum Invoice {
+    Bolt11(Bolt11Invoice),
+}
+
+impl Invoice {
+    pub fn bolt11(&self) -> &Bolt11Invoice {
+        match self {
+            Invoice::Bolt11(invoice) => invoice,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
@@ -92,7 +105,7 @@ impl State for SendStateMachine {
                         context.clone(),
                         self.common.max_delay,
                         self.common.min_contract_amount,
-                        self.common.invoice.clone(),
+                        self.common.invoice.bolt11().clone(),
                         self.common.contract.clone(),
                     ),
                     move |dbtx, result, old_state| {
@@ -150,15 +163,18 @@ impl SendStateMachine {
                 .amount_milli_satoshis()
                 .expect("We checked this previously");
 
-            let (payload, client) = context
+            let (contract, client) = context
                 .gateway
-                .get_payload_and_client_v2(invoice.payment_hash().to_byte_array(), invoice_msats)
+                .get_registered_incoming_contract_and_client_v2(
+                    invoice.payment_hash().to_byte_array(),
+                    invoice_msats,
+                )
                 .await
                 .map_err(|e| Cancelled::DirectSwapError(e.to_string()))?;
 
             return client
                 .get_first_module::<GatewayClientModuleV2>()
-                .relay_direct_swap(payload)
+                .relay_direct_swap(contract)
                 .await
                 .map_err(|e| Cancelled::DirectSwapError(e.to_string()));
         }
