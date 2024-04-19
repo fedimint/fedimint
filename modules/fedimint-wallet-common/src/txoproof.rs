@@ -10,15 +10,13 @@ use miniscript::{translate_hash_fail, Descriptor, TranslatePk};
 use secp256k1::{Secp256k1, Signing, Verification};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
-use validator::{Validate, ValidationError};
 
 use crate::keys::CompressedPublicKey;
 use crate::tweakable::{Contract, Tweakable};
 
 /// A proof about a script owning a certain output. Verifiable using headers
 /// only.
-#[derive(Clone, Debug, PartialEq, Serialize, Eq, Hash, Deserialize, Validate, Encodable)]
-#[validate(schema(function = "validate_peg_in_proof"))]
+#[derive(Clone, Debug, PartialEq, Serialize, Eq, Hash, Deserialize, Encodable)]
 pub struct PegInProof {
     txout_proof: TxOutProof,
     // check that outputs are not more than u32::max (probably enforced if inclusion proof is
@@ -110,6 +108,31 @@ impl PegInProof {
             vout: self.output_idx,
         }
     }
+    pub fn validate(&self) -> Result<(), PegInProofError> {
+        if !self.txout_proof.contains_tx(self.transaction.txid()) {
+            return Err(PegInProofError::TransactionNotInProof);
+        }
+
+        if self.transaction.output.len() > u32::MAX as usize {
+            return Err(PegInProofError::TooManyTransactionOutputs);
+        }
+
+        match self.transaction.output.get(self.output_idx as usize) {
+            Some(txo) => {
+                if txo.value > 2_100_000_000_000_000 {
+                    return Err(PegInProofError::TxOutAmountOutOfRange);
+                }
+            }
+            None => {
+                return Err(PegInProofError::OutputIndexOutOfRange(
+                    self.output_idx as u64,
+                    self.transaction.output.len() as u64,
+                ));
+            }
+        }
+
+        Ok(())
+    }
 }
 
 impl Tweakable for Descriptor<CompressedPublicKey> {
@@ -144,33 +167,6 @@ impl Tweakable for Descriptor<CompressedPublicKey> {
     }
 }
 
-fn validate_peg_in_proof(proof: &PegInProof) -> Result<(), ValidationError> {
-    if !proof.txout_proof.contains_tx(proof.transaction.txid()) {
-        return Err(ValidationError::new(
-            "Supplied transaction is not included in proof",
-        ));
-    }
-
-    if proof.transaction.output.len() > u32::MAX as usize {
-        return Err(ValidationError::new(
-            "Supplied transaction has too many outputs",
-        ));
-    }
-
-    match proof.transaction.output.get(proof.output_idx as usize) {
-        Some(txo) => {
-            if txo.value > 2_100_000_000_000_000 {
-                return Err(ValidationError::new("Txout amount out of range"));
-            }
-        }
-        None => {
-            return Err(ValidationError::new("Output index out of range"));
-        }
-    }
-
-    Ok(())
-}
-
 impl Decodable for PegInProof {
     fn consensus_decode<D: std::io::Read>(
         d: &mut D,
@@ -183,7 +179,7 @@ impl Decodable for PegInProof {
             tweak_contract_key: secp256k1::PublicKey::consensus_decode(d, modules)?,
         };
 
-        validate_peg_in_proof(&slf).map_err(DecodeError::from_err)?;
+        slf.validate().map_err(DecodeError::from_err)?;
         Ok(slf)
     }
 }
@@ -198,6 +194,8 @@ pub enum PegInProofError {
     OutputIndexOutOfRange(u64, u64),
     #[error("The expected script given the tweak did not match the actual script")]
     ScriptDoesNotMatch,
+    #[error("Txout amount out of range")]
+    TxOutAmountOutOfRange,
 }
 
 #[cfg(test)]
