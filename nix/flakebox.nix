@@ -341,7 +341,7 @@ rec {
     lib.concatStringsSep "\n"
       (
         lib.replicate times ''
-          env RUST_BACKTRACE=1 RUST_LOG=info,timing=debug cargo nextest run --locked --workspace --all-targets --cargo-profile $CARGO_PROFILE --profile $CARGO_PROFILE --test-threads=$(($(nproc) * 2))
+          env RUST_BACKTRACE=1 RUST_LOG=info,timing=debug,fedimint_server::consensus::server=debug cargo nextest run --locked --workspace --all-targets --cargo-profile $CARGO_PROFILE --profile $CARGO_PROFILE --test-threads=$(($(nproc) * 2))
         ''
       ) + ''
       mkdir -p $out
