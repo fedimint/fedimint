@@ -9,7 +9,7 @@ use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::{Amount, OutPoint};
 use fedimint_lnv2_client::LightningClientStateMachines;
 use fedimint_lnv2_common::contracts::OutgoingContract;
-use fedimint_lnv2_common::{LightningInput, OutgoingWitness, Witness};
+use fedimint_lnv2_common::{LightningInput, OutgoingWitness};
 use lightning_invoice::Bolt11Invoice;
 use serde::{Deserialize, Serialize};
 
@@ -192,13 +192,11 @@ impl SendStateMachine {
         match result {
             Ok(preimage) => {
                 let client_input = ClientInput::<LightningInput, LightningClientStateMachines> {
-                    input: LightningInput {
-                        amount: old_state.common.contract.amount,
-                        witness: Witness::Outgoing(
-                            old_state.common.contract.contract_id(),
-                            OutgoingWitness::Claim(preimage),
-                        ),
-                    },
+                    input: LightningInput::Outgoing(
+                        old_state.common.contract.contract_id(),
+                        OutgoingWitness::Claim(preimage),
+                    ),
+                    amount: old_state.common.contract.amount,
                     keys: vec![old_state.common.claim_keypair],
                     state_machines: Arc::new(|_, _| vec![]),
                 };

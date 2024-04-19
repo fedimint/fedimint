@@ -10,7 +10,7 @@ use fedimint_core::core::OperationId;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::task::sleep;
 use fedimint_core::txoproof::TxOutProof;
-use fedimint_core::{OutPoint, TransactionId};
+use fedimint_core::{Amount, OutPoint, TransactionId};
 use fedimint_wallet_common::tweakable::Tweakable;
 use fedimint_wallet_common::txoproof::PegInProof;
 use fedimint_wallet_common::WalletInput;
@@ -280,18 +280,22 @@ async fn transition_btc_tx_confirmed(
         _ => panic!("Invalid previous state"),
     };
 
-    let wallet_input = WalletInput::new_v0(
-        PegInProof::new(
-            txout_proof,
-            awaiting_confirmation_state.btc_transaction,
-            awaiting_confirmation_state.out_idx,
-            awaiting_confirmation_state.tweak_key.public_key(),
-        )
-        .expect("TODO: handle API returning faulty proofs"),
-    );
+    let pegin_proof = PegInProof::new(
+        txout_proof,
+        awaiting_confirmation_state.btc_transaction,
+        awaiting_confirmation_state.out_idx,
+        awaiting_confirmation_state.tweak_key.public_key(),
+    )
+    .expect("TODO: handle API returning faulty proofs");
+
+    let amount = Amount::from_sats(pegin_proof.tx_output().value);
+
+    let wallet_input = WalletInput::new_v0(pegin_proof);
+
     let client_input = ClientInput::<WalletInput, WalletClientStates> {
         input: wallet_input,
         keys: vec![awaiting_confirmation_state.tweak_key],
+        amount,
         state_machines: Arc::new(|_, _| vec![]),
     };
 

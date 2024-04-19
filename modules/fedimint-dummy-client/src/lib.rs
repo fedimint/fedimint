@@ -16,7 +16,7 @@ use fedimint_core::db::{
     Database, DatabaseTransaction, DatabaseVersion, IDatabaseTransactionOpsCoreTyped,
 };
 use fedimint_core::module::{
-    ApiVersion, CommonModuleInit, ModuleCommon, ModuleInit, MultiApiVersion, TransactionItemAmount,
+    ApiVersion, CommonModuleInit, ModuleCommon, ModuleInit, MultiApiVersion,
 };
 use fedimint_core::util::{BoxStream, NextOrPending};
 use fedimint_core::{apply, async_trait_maybe_send, Amount, OutPoint};
@@ -67,24 +67,12 @@ impl ClientModule for DummyClientModule {
         }
     }
 
-    fn input_amount(
-        &self,
-        input: &<Self::Common as ModuleCommon>::Input,
-    ) -> Option<TransactionItemAmount> {
-        Some(TransactionItemAmount {
-            amount: input.amount,
-            fee: self.cfg.tx_fee,
-        })
+    fn input_fee(&self, _input: &<Self::Common as ModuleCommon>::Input) -> Option<Amount> {
+        Some(self.cfg.tx_fee)
     }
 
-    fn output_amount(
-        &self,
-        output: &<Self::Common as ModuleCommon>::Output,
-    ) -> Option<TransactionItemAmount> {
-        Some(TransactionItemAmount {
-            amount: output.amount,
-            fee: self.cfg.tx_fee,
-        })
+    fn output_fee(&self, _output: &<Self::Common as ModuleCommon>::Output) -> Option<Amount> {
+        Some(self.cfg.tx_fee)
     }
 
     fn supports_being_primary(&self) -> bool {
@@ -113,6 +101,7 @@ impl ClientModule for DummyClientModule {
                 amount,
                 account: self.key.public_key(),
             },
+            amount,
             keys: vec![self.key],
             state_machines: Arc::new(move |txid, _| {
                 vec![DummyStateMachine::Input(amount, txid, id)]
@@ -132,6 +121,7 @@ impl ClientModule for DummyClientModule {
                 amount,
                 account: self.key.public_key(),
             },
+            amount,
             state_machines: Arc::new(move |txid, _| {
                 vec![DummyStateMachine::Output(amount, txid, id)]
             }),
@@ -198,6 +188,7 @@ impl DummyClientModule {
                 amount,
                 account: account_kp.public_key(),
             },
+            amount,
             keys: vec![account_kp],
             state_machines: Arc::new(move |_, _| Vec::<DummyStateMachine>::new()),
         };
@@ -258,6 +249,7 @@ impl DummyClientModule {
         // Create output using another account
         let output = ClientOutput {
             output: DummyOutput { amount, account },
+            amount,
             state_machines: Arc::new(move |_, _| Vec::<DummyStateMachine>::new()),
         };
 

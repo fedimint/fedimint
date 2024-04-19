@@ -43,7 +43,7 @@ use fedimint_core::encoding::{Decodable, DecodeError, Encodable};
 use fedimint_core::invite_code::InviteCode;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::module::{
-    ApiVersion, CommonModuleInit, ModuleCommon, ModuleInit, MultiApiVersion, TransactionItemAmount,
+    ApiVersion, CommonModuleInit, ModuleCommon, ModuleInit, MultiApiVersion,
 };
 use fedimint_core::util::{BoxFuture, BoxStream, NextOrPending, SafeUrl};
 use fedimint_core::{
@@ -565,27 +565,12 @@ impl ClientModule for MintClientModule {
         }
     }
 
-    fn input_amount(
-        &self,
-        input: &<Self::Common as ModuleCommon>::Input,
-    ) -> Option<TransactionItemAmount> {
-        let input = input.maybe_v0_ref()?;
-        Some(TransactionItemAmount {
-            amount: input.amount,
-            fee: self.cfg.fee_consensus.note_spend_abs,
-        })
+    fn input_fee(&self, _input: &<Self::Common as ModuleCommon>::Input) -> Option<Amount> {
+        Some(self.cfg.fee_consensus.note_spend_abs)
     }
 
-    fn output_amount(
-        &self,
-        output: &<Self::Common as ModuleCommon>::Output,
-    ) -> Option<TransactionItemAmount> {
-        let output = output.maybe_v0_ref()?;
-
-        Some(TransactionItemAmount {
-            amount: output.amount,
-            fee: self.cfg.fee_consensus.note_issuance_abs,
-        })
+    fn output_fee(&self, _output: &<Self::Common as ModuleCommon>::Output) -> Option<Amount> {
+        Some(self.cfg.fee_consensus.note_issuance_abs)
     }
 
     async fn handle_cli_command(
@@ -799,6 +784,7 @@ impl MintClientModule {
 
                 outputs.push(ClientOutput {
                     output: MintOutput::new_v0(amount, blind_nonce),
+                    amount,
                     state_machines: state_generator,
                 });
             }
@@ -914,6 +900,7 @@ impl MintClientModule {
             inputs.push(ClientInput {
                 input: MintInput::new_v0(amount, note),
                 keys: vec![spendable_note.spend_key],
+                amount,
                 state_machines: sm_gen,
             });
         }

@@ -33,7 +33,7 @@ use fedimint_core::db::{
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::envs::BitcoinRpcConfig;
 use fedimint_core::module::{
-    ApiVersion, CommonModuleInit, ModuleCommon, ModuleInit, MultiApiVersion, TransactionItemAmount,
+    ApiVersion, CommonModuleInit, ModuleCommon, ModuleInit, MultiApiVersion,
 };
 use fedimint_core::task::{MaybeSend, MaybeSync, TaskGroup};
 use fedimint_core::{apply, async_trait_maybe_send, Amount, OutPoint};
@@ -232,28 +232,12 @@ impl ClientModule for WalletClientModule {
         }
     }
 
-    fn input_amount(
-        &self,
-        input: &<Self::Common as ModuleCommon>::Input,
-    ) -> Option<TransactionItemAmount> {
-        let input = input.maybe_v0_ref()?;
-
-        Some(TransactionItemAmount {
-            amount: Amount::from_sats(input.0.tx_output().value),
-            fee: self.cfg.fee_consensus.peg_in_abs,
-        })
+    fn input_fee(&self, _input: &<Self::Common as ModuleCommon>::Input) -> Option<Amount> {
+        Some(self.cfg.fee_consensus.peg_in_abs)
     }
 
-    fn output_amount(
-        &self,
-        output: &<Self::Common as ModuleCommon>::Output,
-    ) -> Option<TransactionItemAmount> {
-        let output = output.maybe_v0_ref()?;
-
-        Some(TransactionItemAmount {
-            amount: output.amount().into(),
-            fee: self.cfg.fee_consensus.peg_out_abs,
-        })
+    fn output_fee(&self, _output: &<Self::Common as ModuleCommon>::Output) -> Option<Amount> {
+        Some(self.cfg.fee_consensus.peg_out_abs)
     }
 }
 
@@ -353,6 +337,8 @@ impl WalletClientModule {
 
         let output = WalletOutput::new_v0_peg_out(address, amount, fees);
 
+        let amount = output.maybe_v0_ref().expect("v0 output").amount().into();
+
         let sm_gen = move |txid, out_idx| {
             vec![WalletClientStates::Withdraw(WithdrawStateMachine {
                 operation_id,
@@ -364,6 +350,7 @@ impl WalletClientModule {
 
         Ok(ClientOutput::<WalletOutput, WalletClientStates> {
             output,
+            amount,
             state_machines: Arc::new(sm_gen),
         })
     }
@@ -375,6 +362,8 @@ impl WalletClientModule {
     ) -> anyhow::Result<ClientOutput<WalletOutput, WalletClientStates>> {
         let output = WalletOutput::new_v0_rbf(rbf.fees, rbf.txid);
 
+        let amount = output.maybe_v0_ref().expect("v0 output").amount().into();
+
         let sm_gen = move |txid, out_idx| {
             vec![WalletClientStates::Withdraw(WithdrawStateMachine {
                 operation_id,
@@ -386,6 +375,7 @@ impl WalletClientModule {
 
         Ok(ClientOutput::<WalletOutput, WalletClientStates> {
             output,
+            amount,
             state_machines: Arc::new(sm_gen),
         })
     }

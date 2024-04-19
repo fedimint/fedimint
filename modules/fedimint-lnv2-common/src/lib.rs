@@ -32,7 +32,7 @@ pub const MODULE_CONSENSUS_VERSION: ModuleConsensusVersion = ModuleConsensusVers
 pub struct ContractId(pub sha256::Hash);
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
-pub enum Witness {
+pub enum LightningInput {
     Outgoing(ContractId, OutgoingWitness),
     Incoming(ContractId, AggregateDecryptionKey),
 }
@@ -42,12 +42,6 @@ pub enum OutgoingWitness {
     Claim([u8; 32]),
     Refund,
     Cancel(Signature),
-}
-
-#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
-pub struct LightningInput {
-    pub amount: Amount,
-    pub witness: Witness,
 }
 
 impl std::fmt::Display for LightningInput {

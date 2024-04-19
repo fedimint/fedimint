@@ -11,7 +11,7 @@ use fedimint_core::task::sleep;
 use fedimint_core::util::SafeUrl;
 use fedimint_core::{OutPoint, TransactionId};
 use fedimint_lnv2_common::contracts::OutgoingContract;
-use fedimint_lnv2_common::{LightningClientContext, LightningInput, OutgoingWitness, Witness};
+use fedimint_lnv2_common::{LightningClientContext, LightningInput, OutgoingWitness};
 use lightning_invoice::Bolt11Invoice;
 use secp256k1::schnorr::Signature;
 use secp256k1::KeyPair;
@@ -249,13 +249,11 @@ impl SendStateMachine {
             Ok(preimage) => old_state.update(SendSMState::Success(preimage)),
             Err(signature) => {
                 let client_input = ClientInput::<LightningInput, LightningClientStateMachines> {
-                    input: LightningInput {
-                        amount: old_state.common.contract.amount,
-                        witness: Witness::Outgoing(
-                            old_state.common.contract.contract_id(),
-                            OutgoingWitness::Cancel(signature),
-                        ),
-                    },
+                    input: LightningInput::Outgoing(
+                        old_state.common.contract.contract_id(),
+                        OutgoingWitness::Cancel(signature),
+                    ),
+                    amount: old_state.common.contract.amount,
                     keys: vec![old_state.common.refund_keypair],
                     // The input of the refund tx is managed by this state machine
                     state_machines: Arc::new(|_, _| vec![]),
@@ -304,13 +302,11 @@ impl SendStateMachine {
         }
 
         let client_input = ClientInput::<LightningInput, LightningClientStateMachines> {
-            input: LightningInput {
-                amount: old_state.common.contract.amount,
-                witness: Witness::Outgoing(
-                    old_state.common.contract.contract_id(),
-                    OutgoingWitness::Refund,
-                ),
-            },
+            input: LightningInput::Outgoing(
+                old_state.common.contract.contract_id(),
+                OutgoingWitness::Refund,
+            ),
+            amount: old_state.common.contract.amount,
             keys: vec![old_state.common.refund_keypair],
             // The input of the refund tx is managed by this state machine
             state_machines: Arc::new(|_, _| vec![]),
