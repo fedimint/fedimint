@@ -39,7 +39,7 @@ fedimint-api-client = { workspace = true }
 fedimint-rocksdb = { version = "=0.4.0-alpha", path = "../fedimint-rocksdb" }
 fedimint-mint-client = { version = "=0.4.0-alpha", path = "../modules/fedimint-mint-client" }
 fedimint-mint-common = { version = "=0.4.0-alpha", path = "../modules/fedimint-mint-common" }
-fedimint-ln-client = { version = "=0.4.0-alpha", path = "../modules/fedimint-ln-client" }
+fedimint-ln-client = { version = "=0.4.0-alpha", path = "../modules/fedimint-ln-client", features = [ "cli" ] }
 fedimint-ln-common = { version = "=0.4.0-alpha", path = "../modules/fedimint-ln-common" }
 fedimint-wallet-client = { version = "=0.4.0-alpha", path = "../modules/fedimint-wallet-client" }
 fedimint-logging = { version = "=0.4.0-alpha", path = "../fedimint-logging" }
@@ -57,7 +57,6 @@ tracing-subscriber = { version = "0.3.18", features = [ "env-filter" ] }
 serde_json = { version = "1.0.116", features = ["preserve_order"] }
 url = { version = "2.5.0", features = ["serde"] }
 clap_complete = "4.5.1"
-lnurl-rs = { version = "0.4.1", features = ["async"], default-features = false }
 reqwest = { version = "0.11.26", features = [ "json", "rustls-tls" ], default-features = false }
 
 [build-dependencies]

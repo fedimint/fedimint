@@ -1,4 +1,6 @@
 pub mod api;
+#[cfg(feature = "cli")]
+pub mod cli;
 pub mod db;
 pub mod incoming;
 pub mod pay;
@@ -10,7 +12,7 @@ use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
 
-use anyhow::{bail, ensure, format_err, Context};
+use anyhow::{anyhow, bail, ensure, format_err, Context};
 use api::LnFederationApi;
 use async_stream::stream;
 use bitcoin::hashes::{sha256, Hash, HashEngine, Hmac, HmacEngine};
@@ -56,18 +58,22 @@ use fedimint_ln_common::{
     LightningGatewayAnnouncement, LightningGatewayRegistration, LightningInput,
     LightningModuleTypes, LightningOutput, LightningOutputV0,
 };
+use fedimint_logging::LOG_CLIENT_MODULE_LN;
 use futures::{Future, FutureExt, StreamExt};
 use incoming::IncomingSmError;
 use lightning_invoice::{
     Bolt11Invoice, Currency, InvoiceBuilder, PaymentSecret, RouteHint, RouteHintHop, RoutingFees,
 };
+use rand::rngs::OsRng;
+use rand::seq::IteratorRandom as _;
 use rand::{CryptoRng, Rng, RngCore};
 use secp256k1::{PublicKey, Scalar, Signing, ThirtyTwoByteHash, Verification};
 use secp256k1_zkp::{All, Secp256k1};
 use serde::{Deserialize, Serialize};
+use serde_json::json;
 use strum::IntoEnumIterator;
 use thiserror::Error;
-use tracing::error;
+use tracing::{debug, error, info};
 
 use crate::db::PaymentResultPrefix;
 use crate::incoming::{
@@ -384,6 +390,7 @@ pub struct LightningClientModule {
     update_gateway_cache_merge: UpdateMerge,
 }
 
+#[apply(async_trait_maybe_send!)]
 impl ClientModule for LightningClientModule {
     type Init = LightningClientInit;
     type Common = LightningModuleTypes;
@@ -429,6 +436,14 @@ impl ClientModule for LightningClientModule {
             }
         };
         Some(amt)
+    }
+
+    #[cfg(feature = "cli")]
+    async fn handle_cli_command(
+        &self,
+        args: &[std::ffi::OsString],
+    ) -> anyhow::Result<serde_json::Value> {
+        cli::handle_cli_command(self, args).await
     }
 }
 
@@ -517,7 +532,7 @@ impl LightningClientModule {
             .await
             .context("Gateway is not available")?;
         if !response.status().is_success() {
-            return Err(anyhow::anyhow!(
+            return Err(anyhow!(
                 "Gateway is not available. Returned error code: {}",
                 response.status()
             ));
@@ -526,9 +541,7 @@ impl LightningClientModule {
         let text_gateway_id = response.text().await?;
         let gateway_id = PublicKey::from_str(&text_gateway_id[1..text_gateway_id.len() - 1])?;
         if gateway_id != gateway.gateway_id {
-            return Err(anyhow::anyhow!(
-                "Unexpected gateway id returned: {gateway_id}"
-            ));
+            return Err(anyhow!("Unexpected gateway id returned: {gateway_id}"));
         }
 
         Ok(())
@@ -1015,7 +1028,7 @@ impl LightningClientModule {
         let prev_operation_id =
             self.get_payment_operation_id(invoice.payment_hash(), prev_payment_result.index);
         if self.client_ctx.has_active_states(prev_operation_id).await {
-            return Err(anyhow::anyhow!("Previous payment attempt still in progress. Previous Operation Id: {prev_operation_id}"));
+            return Err(anyhow!("Previous payment attempt still in progress. Previous Operation Id: {prev_operation_id}"));
         }
 
         let next_index = prev_payment_result.index + 1;
@@ -1087,7 +1100,7 @@ impl LightningClientModule {
                     .checked_sub(
                         invoice
                             .amount_milli_satoshis()
-                            .ok_or(anyhow::anyhow!("MissingInvoiceAmount"))?,
+                            .ok_or(anyhow!("MissingInvoiceAmount"))?,
                     )
                     .expect("Contract amount should be greater or equal than invoice amount");
                 Amount::from_msats(fee_msat)
@@ -1299,7 +1312,7 @@ impl LightningClientModule {
     ) -> anyhow::Result<OperationId> {
         let incoming_contract_account = get_incoming_contract(self.module_api.clone(), contract_id)
             .await?
-            .ok_or(anyhow::anyhow!("No contract account found"))
+            .ok_or(anyhow!("No contract account found"))
             .with_context(|| format!("No contract found for {contract_id:?}"))?;
 
         let input = incoming_contract_account.claim();
@@ -1461,7 +1474,7 @@ impl LightningClientModule {
             .await
             .await_tx_accepted(txid)
             .await
-            .map_err(|e| anyhow::anyhow!("Offer transaction was not accepted: {e:?}"))?;
+            .map_err(|e| anyhow!("Offer transaction was not accepted: {e:?}"))?;
 
         Ok((operation_id, invoice, preimage))
     }
@@ -1552,6 +1565,146 @@ impl LightningClientModule {
             }
         }))
     }
+
+    /// Returns a gateway to be used for a lightning operation. If
+    /// `force_internal` is true and no `gateway_id` is specified, no
+    /// gateway will be selected.
+    pub async fn get_gateway(
+        &self,
+        gateway_id: Option<secp256k1::PublicKey>,
+        force_internal: bool,
+    ) -> anyhow::Result<Option<LightningGateway>> {
+        match gateway_id {
+            Some(gateway_id) => {
+                if let Some(gw) = self.select_gateway(&gateway_id).await {
+                    Ok(Some(gw))
+                } else {
+                    // Refresh the gateway cache in case the target gateway was registered since the
+                    // last update.
+                    self.update_gateway_cache().await?;
+                    Ok(self.select_gateway(&gateway_id).await)
+                }
+            }
+            None if !force_internal => {
+                // Refresh the gateway cache to find a random gateway to select from.
+                self.update_gateway_cache().await?;
+                let gateways = self.list_gateways().await;
+                let gw = gateways.into_iter().choose(&mut OsRng).map(|gw| gw.info);
+                if let Some(gw) = gw {
+                    let gw_id = gw.gateway_id;
+                    info!(%gw_id, "Using random gateway");
+                    Ok(Some(gw))
+                } else {
+                    Err(anyhow!(
+                        "No gateways exist in gateway cache and `force_internal` is false"
+                    ))
+                }
+            }
+            None => Ok(None),
+        }
+    }
+
+    pub async fn wait_for_ln_payment(
+        &self,
+        payment_type: PayType,
+        contract_id: ContractId,
+        return_on_funding: bool,
+    ) -> anyhow::Result<Option<serde_json::Value>> {
+        // let lightning_module = client.get_first_module::<LightningClientModule>();
+
+        match payment_type {
+            PayType::Internal(operation_id) => {
+                let mut updates = self
+                    .subscribe_internal_pay(operation_id)
+                    .await?
+                    .into_stream();
+
+                while let Some(update) = updates.next().await {
+                    match update {
+                        InternalPayState::Preimage(preimage) => {
+                            return Ok(Some(
+                                serde_json::to_value(PayInvoiceResponse {
+                                    operation_id,
+                                    contract_id,
+                                    preimage: preimage.consensus_encode_to_hex(),
+                                })
+                                .unwrap(),
+                            ));
+                        }
+                        InternalPayState::RefundSuccess { out_points, error } => {
+                            let e = format!(
+                            "Internal payment failed. A refund was issued to {:?} Error: {error}",
+                            out_points
+                        );
+                            bail!("{e}");
+                        }
+                        InternalPayState::UnexpectedError(e) => {
+                            bail!("{e}");
+                        }
+                        InternalPayState::Funding if return_on_funding => return Ok(None),
+                        InternalPayState::Funding => {}
+                        InternalPayState::RefundError {
+                            error_message,
+                            error,
+                        } => bail!("RefundError: {error_message} {error}"),
+                        InternalPayState::FundingFailed { error } => {
+                            bail!("FundingFailed: {error}")
+                        }
+                    }
+                    debug!(target: LOG_CLIENT_MODULE_LN, ?update, "Wait for ln payment state update");
+                }
+            }
+            PayType::Lightning(operation_id) => {
+                let mut updates = self.subscribe_ln_pay(operation_id).await?.into_stream();
+
+                while let Some(update) = updates.next().await {
+                    match update {
+                        LnPayState::Success { preimage } => {
+                            return Ok(Some(
+                                serde_json::to_value(PayInvoiceResponse {
+                                    operation_id,
+                                    contract_id,
+                                    preimage,
+                                })
+                                .unwrap(),
+                            ));
+                        }
+                        LnPayState::Refunded { gateway_error } => {
+                            info!("{gateway_error}");
+                            // TODO: what should be the format here?
+                            return Ok(Some(json! {
+                                {
+                                    "status": "refunded",
+                                    "gateway_error": gateway_error,
+                                }
+                            }));
+                        }
+                        LnPayState::Created
+                        | LnPayState::Canceled
+                        | LnPayState::AwaitingChange
+                        | LnPayState::WaitingForRefund { .. } => {}
+                        LnPayState::Funded if return_on_funding => return Ok(None),
+                        LnPayState::Funded => {}
+                        LnPayState::UnexpectedError { error_message } => {
+                            bail!("UnexpectedError: {error_message}")
+                        }
+                    }
+                    debug!(target: LOG_CLIENT_MODULE_LN, ?update, "Wait for ln payment state update");
+                }
+            }
+        };
+        bail!("Lightning Payment failed")
+    }
+}
+
+// TODO: move to appropriate module (cli?)
+// some refactoring here needed
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub struct PayInvoiceResponse {
+    operation_id: OperationId,
+    contract_id: ContractId,
+    preimage: String,
 }
 
 #[allow(clippy::large_enum_variant)]
@@ -1722,4 +1875,54 @@ fn tweak_user_secret_key<Ctx: Verification + Signing>(
         .add_tweak(&Scalar::from_be_bytes(tweak).expect("Cant fail"))
         .expect("Cant fail");
     KeyPair::from_secret_key(secp, &sk_tweaked)
+}
+
+/// Get LN invoice with given settings
+pub async fn get_invoice(
+    info: &str,
+    amount: Option<Amount>,
+    lnurl_comment: Option<String>,
+) -> anyhow::Result<Bolt11Invoice> {
+    let info = info.trim();
+    match lightning_invoice::Bolt11Invoice::from_str(info) {
+        Ok(invoice) => {
+            debug!("Parsed parameter as bolt11 invoice: {invoice}");
+            match (invoice.amount_milli_satoshis(), amount) {
+                (Some(_), Some(_)) => {
+                    bail!("Amount specified in both invoice and command line")
+                }
+                (None, _) => {
+                    bail!("We don't support invoices without an amount")
+                }
+                _ => {}
+            };
+            Ok(invoice)
+        }
+        Err(e) => {
+            let lnurl = if info.to_lowercase().starts_with("lnurl") {
+                lnurl::lnurl::LnUrl::from_str(info)?
+            } else if info.contains('@') {
+                lnurl::lightning_address::LightningAddress::from_str(info)?.lnurl()
+            } else {
+                bail!("Invalid invoice or lnurl: {e:?}");
+            };
+            debug!("Parsed parameter as lnurl: {lnurl:?}");
+            let amount = amount.context("When using a lnurl, an amount must be specified")?;
+            let async_client = lnurl::AsyncClient::from_client(reqwest::Client::new());
+            let response = async_client.make_request(&lnurl.url).await?;
+            match response {
+                lnurl::LnUrlResponse::LnUrlPayResponse(response) => {
+                    let invoice = async_client
+                        .get_invoice(&response, amount.msats, None, lnurl_comment.as_deref())
+                        .await?;
+                    let invoice = Bolt11Invoice::from_str(invoice.invoice())?;
+                    assert_eq!(invoice.amount_milli_satoshis(), Some(amount.msats));
+                    Ok(invoice)
+                }
+                other => {
+                    bail!("Unexpected response from lnurl: {other:?}");
+                }
+            }
+        }
+    }
 }

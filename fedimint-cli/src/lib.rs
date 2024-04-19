@@ -31,7 +31,6 @@ use fedimint_core::admin_client::{ConfigGenConnectionsRequest, ConfigGenParamsRe
 use fedimint_core::config::{
     ClientConfig, FederationId, FederationIdPrefix, ServerModuleConfigGenParamsRegistry,
 };
-use fedimint_core::core::OperationId;
 use fedimint_core::db::{Database, DatabaseValue};
 use fedimint_core::invite_code::InviteCode;
 use fedimint_core::module::{ApiAuth, ApiRequestErased};
@@ -1009,13 +1008,6 @@ fn salt_from_file_path(file_path: &Path) -> PathBuf {
         .parent()
         .expect("File has no parent?!")
         .join(SALT_FILE)
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub struct LnInvoiceResponse {
-    pub operation_id: OperationId,
-    pub invoice: String,
 }
 
 /// Convert clap arguments to backup metadata
