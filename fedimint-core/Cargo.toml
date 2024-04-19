@@ -20,7 +20,7 @@ anyhow = { workspace = true }
 async-trait = { workspace = true }
 futures = { workspace = true }
 futures-util = { workspace = true }
-backtrace = "0.3.69"
+backtrace = "0.3.71"
 bincode = { workspace = true }
 bech32 = "0.9.1"
 bls12_381 = "0.7.1"
