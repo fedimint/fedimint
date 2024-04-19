@@ -212,6 +212,18 @@
 <a href="#212" id="212">212</a>
 <a href="#213" id="213">213</a>
 <a href="#214" id="214">214</a>
+<a href="#215" id="215">215</a>
+<a href="#216" id="216">216</a>
+<a href="#217" id="217">217</a>
+<a href="#218" id="218">218</a>
+<a href="#219" id="219">219</a>
+<a href="#220" id="220">220</a>
+<a href="#221" id="221">221</a>
+<a href="#222" id="222">222</a>
+<a href="#223" id="223">223</a>
+<a href="#224" id="224">224</a>
+<a href="#225" id="225">225</a>
+<a href="#226" id="226">226</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::sync::Arc;
 
 <span class="kw">use </span>bitcoin_hashes::Hash;
@@ -221,6 +233,7 @@
 <span class="kw">use </span>fedimint_core::core::{KeyPair, OperationId};
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::{Amount, OutPoint};
+<span class="kw">use </span>fedimint_ln_common::PrunedInvoice;
 <span class="kw">use </span>fedimint_lnv2_client::LightningClientStateMachines;
 <span class="kw">use </span>fedimint_lnv2_common::contracts::OutgoingContract;
 <span class="kw">use </span>fedimint_lnv2_common::{LightningInput, OutgoingWitness};
@@ -355,7 +368,7 @@
             <span class="kw">return </span><span class="prelude-val">Err</span>(Cancelled::Underfunded);
         }
 
-        <span class="kw">let </span>max_fee_msat = (contract.amount - min_contract_amount).msats;
+        <span class="kw">let </span>max_fee = contract.amount - min_contract_amount;
 
         <span class="kw">let </span>lightning_context = context
             .gateway
@@ -378,23 +391,34 @@
                 </span>.map_err(|e| Cancelled::ReceiveError(e.to_string()));
         }
 
-        lightning_context
-            .lnrpc
-            .pay(PayInvoiceRequest {
-                invoice: invoice.to_string(),
-                max_delay,
-                max_fee_msat,
-                payment_hash: invoice.payment_hash().to_vec(),
-            })
-            .<span class="kw">await
-            </span>.map(|response| {
-                response
-                    .preimage
-                    .as_slice()
-                    .try_into()
-                    .expect(<span class="string">"Preimage is 32 bytes"</span>)
-            })
-            .map_err(|e| Cancelled::LightningRpcError(e.to_string()))
+        <span class="kw">if </span>lightning_context.lnrpc.supports_private_payments() {
+            lightning_context
+                .lnrpc
+                .pay_private(
+                    PrunedInvoice::try_from(invoice).expect(<span class="string">"Invoice has amount"</span>),
+                    max_delay,
+                    max_fee,
+                )
+                .<span class="kw">await
+        </span>} <span class="kw">else </span>{
+            lightning_context
+                .lnrpc
+                .pay(PayInvoiceRequest {
+                    invoice: invoice.to_string(),
+                    max_delay,
+                    max_fee_msat: max_fee.msats,
+                    payment_hash: invoice.payment_hash().to_vec(),
+                })
+                .<span class="kw">await
+        </span>}
+        .map(|response| {
+            response
+                .preimage
+                .as_slice()
+                .try_into()
+                .expect(<span class="string">"Preimage is 32 bytes"</span>)
+        })
+        .map_err(|e| Cancelled::LightningRpcError(e.to_string()))
     }
 
     <span class="kw">async fn </span>transition_send_payment(
