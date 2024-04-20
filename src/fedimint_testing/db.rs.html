@@ -433,10 +433,7 @@
 <a href="#433" id="433">433</a>
 <a href="#434" id="434">434</a>
 <a href="#435" id="435">435</a>
-<a href="#436" id="436">436</a>
-<a href="#437" id="437">437</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
-<span class="kw">use </span>std::fs::read_dir;
 <span class="kw">use </span>std::io::ErrorKind;
 <span class="kw">use </span>std::path::{Path, PathBuf};
 <span class="kw">use </span>std::{env, fs, io};
@@ -478,10 +475,9 @@
     <span class="kw">let </span>path = env::current_dir()<span class="question-mark">?</span>;
     <span class="kw">let </span>path_ancestors = path.as_path().ancestors();
 
-    <span class="kw">for </span>p <span class="kw">in </span>path_ancestors {
-        <span class="kw">let </span>has_cargo = read_dir(p)<span class="question-mark">?</span>.any(|p| p.unwrap().file_name() == <span class="kw-2">*</span><span class="string">"Cargo.lock"</span>);
-        <span class="kw">if </span>has_cargo {
-            <span class="kw">return </span><span class="prelude-val">Ok</span>(PathBuf::from(p));
+    <span class="kw">for </span>path <span class="kw">in </span>path_ancestors {
+        <span class="kw">if </span>path.join(<span class="string">"Cargo.lock"</span>).try_exists()<span class="question-mark">? </span>{
+            <span class="kw">return </span><span class="prelude-val">Ok</span>(PathBuf::from(path));
         }
     }
     <span class="prelude-val">Err</span>(io::Error::new(

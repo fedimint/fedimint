@@ -868,6 +868,7 @@
 <a href="#868" id="868">868</a>
 <a href="#869" id="869">869</a>
 <a href="#870" id="870">870</a>
+<a href="#871" id="871">871</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap};
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
@@ -905,7 +906,7 @@
 <span class="kw">use </span>futures::StreamExt;
 <span class="kw">use </span>rand::Rng;
 <span class="kw">use </span>tokio::sync::{watch, RwLock};
-<span class="kw">use </span>tracing::{debug, info, warn, Level};
+<span class="kw">use </span>tracing::{debug, info, instrument, warn, Level};
 
 <span class="kw">use </span><span class="kw">crate</span>::atomic_broadcast::data_provider::{DataProvider, UnitData};
 <span class="kw">use </span><span class="kw">crate</span>::atomic_broadcast::finalization_handler::FinalizationHandler;
@@ -1107,7 +1108,8 @@
         <span class="prelude-val">Ok</span>((consensus_server, consensus_api))
     }
 
-    <span class="kw">pub async fn </span>run(<span class="kw-2">&amp;</span><span class="self">self</span>, task_handle: TaskHandle) -&gt; anyhow::Result&lt;()&gt; {
+    <span class="attr">#[instrument(name = <span class="string">"run"</span>, skip_all, fields(id=%<span class="self">self</span>.cfg.local.identity))]
+    </span><span class="kw">pub async fn </span>run(<span class="kw-2">&amp;</span><span class="self">self</span>, task_handle: TaskHandle) -&gt; anyhow::Result&lt;()&gt; {
         <span class="kw">if </span><span class="self">self</span>.cfg.consensus.broadcast_public_keys.len() == <span class="number">1 </span>{
             <span class="self">self</span>.run_single_guardian(task_handle).<span class="kw">await
         </span>} <span class="kw">else </span>{
