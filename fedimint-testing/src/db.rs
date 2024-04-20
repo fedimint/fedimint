@@ -1,5 +1,4 @@
 use std::collections::BTreeMap;
-use std::fs::read_dir;
 use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 use std::{env, fs, io};
@@ -41,10 +40,9 @@ pub fn get_project_root() -> io::Result<PathBuf> {
     let path = env::current_dir()?;
     let path_ancestors = path.as_path().ancestors();
 
-    for p in path_ancestors {
-        let has_cargo = read_dir(p)?.any(|p| p.unwrap().file_name() == *"Cargo.lock");
-        if has_cargo {
-            return Ok(PathBuf::from(p));
+    for path in path_ancestors {
+        if path.join("Cargo.lock").try_exists()? {
+            return Ok(PathBuf::from(path));
         }
     }
     Err(io::Error::new(

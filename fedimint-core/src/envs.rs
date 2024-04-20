@@ -21,6 +21,15 @@ pub const FM_USE_UNKNOWN_MODULE_ENV: &str = "FM_USE_UNKNOWN_MODULE";
 pub fn is_env_var_set(var: &str) -> bool {
     std::env::var_os(var).is_some_and(|v| v != "0" && v != "false")
 }
+
+/// Use to detect if running in a test environment, either `cargo test` or
+/// `devimint`.
+pub fn is_running_in_test_env() -> bool {
+    let unit_test = cfg!(test);
+
+    unit_test || is_env_var_set("NEXTEST") || is_env_var_set(FM_IN_DEVIMINT_ENV)
+}
+
 /// Get value of [`FEDIMINT_BUILD_CODE_VERSION_ENV`] at compile time
 #[macro_export]
 macro_rules! fedimint_build_code_version_env {
