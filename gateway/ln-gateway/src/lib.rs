@@ -26,7 +26,7 @@ use anyhow::{anyhow, bail};
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use bitcoin::{Address, Network, Txid};
-use bitcoin_hashes::sha256;
+use bitcoin_hashes::{sha256, Hash};
 use clap::Parser;
 use client::GatewayClientBuilder;
 use db::{
@@ -57,7 +57,7 @@ use fedimint_core::task::{sleep, TaskGroup, TaskHandle, TaskShutdownToken};
 use fedimint_core::time::{duration_since_epoch, now};
 use fedimint_core::util::{SafeUrl, Spanned};
 use fedimint_core::{
-    fedimint_build_code_version_env, push_db_pair_items, Amount, BitcoinAmountOrAll, BitcoinHash,
+    fedimint_build_code_version_env, push_db_pair_items, Amount, BitcoinAmountOrAll,
 };
 use fedimint_ln_client::pay::PayInvoicePayload;
 use fedimint_ln_common::config::{GatewayFee, LightningClientConfig};
@@ -66,6 +66,7 @@ use fedimint_ln_common::route_hints::RouteHint;
 use fedimint_ln_common::LightningCommonInit;
 use fedimint_lnv2_client::api::LnFederationApi;
 use fedimint_lnv2_client::{CreateInvoicePayload, PaymentFee, PaymentInfo, SendPaymentPayload};
+use fedimint_lnv2_common::contracts::Image;
 use fedimint_mint_client::{MintClientInit, MintCommonInit};
 use fedimint_wallet_client::{
     WalletClientInit, WalletClientModule, WalletCommonInit, WithdrawState,
@@ -1614,6 +1615,10 @@ impl Gateway {
             bail!("The outgoing contract keyed to another gateway");
         }
 
+        if payload.contract.image.payment_hash()? != payload.invoice.payment_hash().into_inner() {
+            bail!("The invoices payment hash does not match the contract");
+        }
+
         if payload.invoice.consensus_hash::<sha256::Hash>() != payload.contract.invoice_hash {
             bail!("The invoices hash does not match the contract");
         }
@@ -1685,7 +1690,7 @@ impl Gateway {
 
         let invoice = self
             .create_invoice_via_lnrpc_v2(
-                payload.contract.commitment.payment_hash,
+                payload.contract.commitment.image.payment_hash()?,
                 payload.invoice_amount,
                 payload.description.clone(),
                 payload.expiry_time,
@@ -1697,7 +1702,7 @@ impl Gateway {
 
         if dbtx
             .insert_entry(
-                &CreateInvoicePayloadKey(payload.contract.commitment.payment_hash.into_inner()),
+                &CreateInvoicePayloadKey(payload.contract.commitment.image.clone()),
                 &payload,
             )
             .await
@@ -1715,7 +1720,7 @@ impl Gateway {
 
     pub async fn create_invoice_via_lnrpc_v2(
         &self,
-        payment_hash: sha256::Hash,
+        payment_hash: [u8; 32],
         amount: Amount,
         description: String,
         expiry_time: u32,
@@ -1728,7 +1733,7 @@ impl Gateway {
 
         let response = lnrpc
             .create_invoice(CreateInvoiceRequest {
-                payment_hash: payment_hash.into_inner().to_vec(),
+                payment_hash: payment_hash.to_vec(),
                 amount_msat: amount.msats,
                 expiry: expiry_time,
                 description,
@@ -1750,7 +1755,7 @@ impl Gateway {
             .gateway_db
             .begin_transaction_nc()
             .await
-            .get_value(&CreateInvoicePayloadKey(payment_hash))
+            .get_value(&CreateInvoicePayloadKey(Image::Hash(payment_hash)))
             .await
             .ok_or(anyhow!("No corresponding decryption contract available"))?;
 

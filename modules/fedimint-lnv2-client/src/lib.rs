@@ -28,7 +28,7 @@ use fedimint_core::time::duration_since_epoch;
 use fedimint_core::util::SafeUrl;
 use fedimint_core::{apply, async_trait_maybe_send, Amount, OutPoint, TransactionId};
 use fedimint_lnv2_common::config::LightningClientConfig;
-use fedimint_lnv2_common::contracts::{IncomingContract, OutgoingContract};
+use fedimint_lnv2_common::contracts::{Image, IncomingContract, OutgoingContract};
 use fedimint_lnv2_common::{
     LightningClientContext, LightningCommonInit, LightningModuleTypes, LightningOutput,
 };
@@ -362,7 +362,7 @@ impl LightningClientModule {
             .map_err(|e| SendPaymentError::FederationError(e.to_string()))?;
 
         let contract = OutgoingContract {
-            payment_hash: *invoice.payment_hash(),
+            image: Image::Hash(invoice.payment_hash().into_inner()),
             amount: payment_info.send_fee_default.add_fee(invoice_msats),
             expiration: consensus_block_count + payment_info.expiration_delta_default,
             claim_pk: payment_info.public_key,
@@ -616,6 +616,7 @@ impl LightningClientModule {
             self.cfg.tpe_agg_pk,
             encryption_seed,
             preimage,
+            Image::Hash(preimage.consensus_hash::<sha256::Hash>().into_inner()),
             contract_amount,
             expiration,
             claim_pk,
@@ -637,7 +638,7 @@ impl LightningClientModule {
             .map_err(FetchInvoiceError::GatewayError)?
             .map_err(FetchInvoiceError::CreateInvoiceError)?;
 
-        if invoice.payment_hash() != &contract.commitment.payment_hash {
+        if invoice.payment_hash() != &preimage.consensus_hash() {
             return Err(FetchInvoiceError::InvalidInvoicePaymentHash);
         }
 

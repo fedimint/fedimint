@@ -1,8 +1,9 @@
-use bitcoin_hashes::sha256;
+use anyhow::anyhow;
+use bitcoin_hashes::{sha256, Hash};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::Amount;
 use secp256k1::schnorr::Signature;
-use secp256k1::{Message, PublicKey};
+use secp256k1::{Message, PublicKey, SecretKey};
 use serde::{Deserialize, Serialize};
 use tpe::{
     create_decryption_key_share, decrypt_preimage, encrypt_preimage, verify_agg_decryption_key,
@@ -13,13 +14,18 @@ use tpe::{
 use crate::ContractId;
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
-pub struct Commitment {
-    pub payment_hash: sha256::Hash,
-    pub amount: Amount,
-    pub expiration: u64,
-    pub claim_pk: PublicKey,
-    pub refund_pk: PublicKey,
-    pub ephemeral_pk: PublicKey,
+pub enum Image {
+    Hash([u8; 32]),
+    Point(PublicKey),
+}
+
+impl Image {
+    pub fn payment_hash(&self) -> anyhow::Result<[u8; 32]> {
+        match self {
+            Image::Hash(hash) => Ok(*hash),
+            Image::Point(..) => Err(anyhow!("Image is not a payment hash")),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
@@ -28,12 +34,23 @@ pub struct IncomingContract {
     pub ciphertext: CipherText,
 }
 
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
+pub struct Commitment {
+    pub image: Image,
+    pub amount: Amount,
+    pub expiration: u64,
+    pub claim_pk: PublicKey,
+    pub refund_pk: PublicKey,
+    pub ephemeral_pk: PublicKey,
+}
+
 impl IncomingContract {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         agg_pk: AggregatePublicKey,
         encryption_seed: [u8; 32],
         preimage: [u8; 32],
+        image: Image,
         amount: Amount,
         expiration: u64,
         claim_pk: PublicKey,
@@ -41,7 +58,7 @@ impl IncomingContract {
         ephemeral_pk: PublicKey,
     ) -> Self {
         let commitment = Commitment {
-            payment_hash: preimage.consensus_hash(),
+            image,
             amount,
             expiration,
             claim_pk,
@@ -97,7 +114,13 @@ impl IncomingContract {
     }
 
     pub fn verify_preimage(&self, preimage: &[u8; 32]) -> bool {
-        preimage.consensus_hash::<sha256::Hash>() == self.commitment.payment_hash
+        match self.commitment.image {
+            Image::Hash(hash) => preimage.consensus_hash::<sha256::Hash>().into_inner() == hash,
+            Image::Point(pk) => match SecretKey::from_slice(preimage) {
+                Ok(sk) => sk.public_key(secp256k1::SECP256K1) == pk,
+                Err(..) => false,
+            },
+        }
     }
 
     pub fn decrypt_preimage(
@@ -119,7 +142,7 @@ impl IncomingContract {
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
 pub struct OutgoingContract {
-    pub payment_hash: sha256::Hash,
+    pub image: Image,
     pub amount: Amount,
     pub expiration: u64,
     pub claim_pk: PublicKey,
@@ -138,7 +161,13 @@ impl OutgoingContract {
     }
 
     pub fn verify_preimage(&self, preimage: &[u8; 32]) -> bool {
-        preimage.consensus_hash::<sha256::Hash>() == self.payment_hash
+        match self.image {
+            Image::Hash(hash) => preimage.consensus_hash::<sha256::Hash>().into_inner() == hash,
+            Image::Point(pk) => match SecretKey::from_slice(preimage) {
+                Ok(sk) => sk.public_key(secp256k1::SECP256K1) == pk,
+                Err(..) => false,
+            },
+        }
     }
 
     pub fn verify_forfeit_signature(&self, signature: &Signature) -> bool {

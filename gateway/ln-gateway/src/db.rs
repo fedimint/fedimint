@@ -11,6 +11,7 @@ use fedimint_core::invite_code::InviteCode;
 use fedimint_core::{impl_db_lookup, impl_db_record};
 use fedimint_ln_common::serde_routing_fees;
 use fedimint_lnv2_client::CreateInvoicePayload;
+use fedimint_lnv2_common::contracts::Image;
 use futures::FutureExt;
 use lightning_invoice::RoutingFees;
 use rand::Rng;
@@ -154,7 +155,7 @@ async fn migrate_to_v1(dbtx: &mut DatabaseTransaction<'_>) -> Result<(), anyhow:
 }
 
 #[derive(Debug, Encodable, Decodable)]
-pub struct CreateInvoicePayloadKey(pub [u8; 32]);
+pub struct CreateInvoicePayloadKey(pub Image);
 
 impl_db_record!(
     key = CreateInvoicePayloadKey,
