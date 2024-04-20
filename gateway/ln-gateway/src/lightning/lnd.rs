@@ -6,13 +6,13 @@ use std::time::Duration;
 
 use anyhow::ensure;
 use async_trait::async_trait;
-use bitcoin_hashes::Hash;
+use bitcoin_hashes::{sha256, Hash};
 use fedimint_core::db::Database;
 use fedimint_core::task::{sleep, TaskGroup};
 use fedimint_core::{secp256k1, Amount};
 use fedimint_ln_common::PrunedInvoice;
+use fedimint_lnv2_common::contracts::PaymentImage;
 use hex::ToHex;
-use lightning::ln::PaymentHash;
 use secp256k1::PublicKey;
 use tokio::sync::{mpsc, RwLock};
 use tokio_stream::wrappers::ReceiverStream;
@@ -49,6 +49,7 @@ use crate::gateway_lnrpc::{
     GetBalancesResponse, GetLnOnchainAddressResponse, GetNodeInfoResponse, GetRouteHintsResponse,
     InterceptHtlcRequest, InterceptHtlcResponse, PayInvoiceResponse,
 };
+
 type HtlcSubscriptionSender = mpsc::Sender<Result<InterceptHtlcRequest, Status>>;
 
 const LND_PAYMENT_TIMEOUT_SECONDS: i32 = 180;
@@ -290,11 +291,13 @@ impl GatewayLndClient {
                     .gateway_db
                     .begin_transaction_nc()
                     .await
-                    .load_registered_incoming_contract(PaymentHash(
-                        payment_hash
-                            .clone()
-                            .try_into()
-                            .expect("Malformatted payment hash"),
+                    .load_registered_incoming_contract(PaymentImage::Hash(
+                        sha256::Hash::from_byte_array(
+                            payment_hash
+                                .clone()
+                                .try_into()
+                                .expect("Malformatted payment hash"),
+                        ),
                     ))
                     .await
                     .is_some();

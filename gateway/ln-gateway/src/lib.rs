@@ -37,12 +37,11 @@ use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
 
-use ::lightning::ln::PaymentHash;
 use anyhow::{anyhow, bail};
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use bitcoin::{Address, Network, Txid};
-use bitcoin_hashes::sha256;
+use bitcoin_hashes::{sha256, Hash};
 use clap::Parser;
 use client::GatewayClientBuilder;
 use config::GatewayOpts;
@@ -70,7 +69,7 @@ use fedimint_core::secp256k1::PublicKey;
 use fedimint_core::task::{sleep, TaskGroup, TaskHandle, TaskShutdownToken};
 use fedimint_core::time::duration_since_epoch;
 use fedimint_core::util::{SafeUrl, Spanned};
-use fedimint_core::{fedimint_build_code_version_env, Amount, BitcoinAmountOrAll, BitcoinHash};
+use fedimint_core::{fedimint_build_code_version_env, Amount, BitcoinAmountOrAll};
 use fedimint_ln_common::config::{GatewayFee, LightningClientConfig};
 use fedimint_ln_common::contracts::Preimage;
 use fedimint_ln_common::LightningCommonInit;
@@ -78,7 +77,7 @@ use fedimint_lnv2_client::{
     Bolt11InvoiceDescription, CreateBolt11InvoicePayload, PaymentFee, RoutingInfo,
     SendPaymentPayload,
 };
-use fedimint_lnv2_common::contracts::IncomingContract;
+use fedimint_lnv2_common::contracts::{IncomingContract, PaymentImage};
 use fedimint_mint_client::{
     MintClientInit, MintClientModule, MintCommonInit, SelectNotesWithAtleastAmount,
     SelectNotesWithExactAmount,
@@ -620,7 +619,7 @@ impl Gateway {
         // a Fedimint.
         let Ok((contract, client)) = self
             .get_registered_incoming_contract_and_client_v2(
-                payment_hash.to_byte_array(),
+                PaymentImage::Hash(payment_hash),
                 htlc_request.incoming_amount_msat,
             )
             .await
@@ -1762,9 +1761,14 @@ impl Gateway {
             bail!("The contract has already expired");
         }
 
+        let payment_hash = match payload.contract.commitment.payment_image {
+            PaymentImage::Hash(payment_hash) => payment_hash,
+            PaymentImage::Point(..) => bail!("PaymentImage is not a payment hash"),
+        };
+
         let invoice = self
             .create_invoice_via_lnrpc_v2(
-                payload.contract.commitment.payment_hash,
+                payment_hash,
                 payload.invoice_amount,
                 payload.description.clone(),
                 payload.expiry_time,
@@ -1811,7 +1815,7 @@ impl Gateway {
         let response = match description {
             Bolt11InvoiceDescription::Direct(description) => lnrpc
                 .create_invoice(CreateInvoiceRequest {
-                    payment_hash: payment_hash.to_byte_array().to_vec(),
+                    payment_hash: payment_hash.as_byte_array().to_vec(),
                     amount_msat: amount.msats,
                     expiry_secs: expiry_time,
                     description: Some(Description::Direct(description)),
@@ -1820,7 +1824,7 @@ impl Gateway {
                 .map_err(|e| e.to_string())?,
             Bolt11InvoiceDescription::Hash(hash) => lnrpc
                 .create_invoice(CreateInvoiceRequest {
-                    payment_hash: payment_hash.to_byte_array().to_vec(),
+                    payment_hash: payment_hash.as_byte_array().to_vec(),
                     amount_msat: amount.msats,
                     expiry_secs: expiry_time,
                     description: Some(Description::Hash(hash.to_byte_array().to_vec())),
@@ -1837,14 +1841,14 @@ impl Gateway {
     /// by the payload's `federation_id`.
     pub async fn get_registered_incoming_contract_and_client_v2(
         &self,
-        payment_hash: [u8; 32],
+        payment_image: PaymentImage,
         amount_msats: u64,
     ) -> anyhow::Result<(IncomingContract, ClientHandleArc)> {
         let registered_incoming_contract = self
             .gateway_db
             .begin_transaction_nc()
             .await
-            .load_registered_incoming_contract(PaymentHash(payment_hash))
+            .load_registered_incoming_contract(payment_image)
             .await
             .ok_or(anyhow!("No corresponding decryption contract available"))?;
 

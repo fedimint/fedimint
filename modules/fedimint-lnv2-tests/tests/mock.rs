@@ -13,7 +13,7 @@ use fedimint_lnv2_client::api::GatewayConnection;
 use fedimint_lnv2_client::{
     CreateBolt11InvoicePayload, GatewayError, LightningInvoice, PaymentFee, RoutingInfo,
 };
-use fedimint_lnv2_common::contracts::OutgoingContract;
+use fedimint_lnv2_common::contracts::{OutgoingContract, PaymentImage};
 use fedimint_lnv2_common::GatewayEndpoint;
 use lightning_invoice::{
     Bolt11Invoice, Currency, InvoiceBuilder, PaymentSecret, DEFAULT_EXPIRY_TIME,
@@ -107,9 +107,14 @@ impl GatewayConnection for MockGatewayConnection {
         _gateway_api: GatewayEndpoint,
         payload: CreateBolt11InvoicePayload,
     ) -> Result<Bolt11Invoice, GatewayError> {
+        let payment_hash = match payload.contract.commitment.payment_image {
+            PaymentImage::Hash(payment_hash) => payment_hash,
+            PaymentImage::Point(..) => panic!("PaymentImage is not a payment hash"),
+        };
+
         Ok(InvoiceBuilder::new(Currency::Regtest)
             .description(String::new())
-            .payment_hash(payload.contract.commitment.payment_hash)
+            .payment_hash(payment_hash)
             .current_timestamp()
             .min_final_cltv_expiry_delta(0)
             .payment_secret(PaymentSecret([0; 32]))

@@ -26,7 +26,7 @@ use fedimint_core::{apply, async_trait_maybe_send, secp256k1, Amount, OutPoint, 
 use fedimint_lnv2_client::api::LnFederationApi;
 use fedimint_lnv2_client::{LightningInvoice, SendPaymentPayload};
 use fedimint_lnv2_common::config::LightningClientConfig;
-use fedimint_lnv2_common::contracts::IncomingContract;
+use fedimint_lnv2_common::contracts::{IncomingContract, PaymentImage};
 use fedimint_lnv2_common::{
     LightningCommonInit, LightningInputV0, LightningModuleTypes, LightningOutput, LightningOutputV0,
 };
@@ -266,7 +266,7 @@ impl GatewayClientModuleV2 {
         };
 
         ensure!(
-            payment_hash == &payload.contract.payment_hash,
+            PaymentImage::Hash(*payment_hash) == payload.contract.payment_image,
             "The invoices payment hash does not match the contracts payment hash"
         );
 
