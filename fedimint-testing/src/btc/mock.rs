@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 use std::iter::repeat;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::format_err;
@@ -59,19 +59,24 @@ impl IBitcoindRpcFactory for FakeBitcoinFactory {
     }
 }
 
-#[derive(Clone, Debug)]
-pub struct FakeBitcoinTest {
+#[derive(Debug)]
+struct FakeBitcoinTestInner {
     /// Simulates mined bitcoin blocks
-    blocks: Arc<Mutex<Vec<Block>>>,
+    blocks: Vec<Block>,
     /// Simulates pending transactions in the mempool
-    pending: Arc<Mutex<Vec<Transaction>>>,
+    pending: Vec<Transaction>,
     /// Tracks how much bitcoin was sent to an address (doesn't track sending
     /// out of it)
-    addresses: Arc<Mutex<BTreeMap<Txid, Amount>>>,
+    addresses: BTreeMap<Txid, Amount>,
     /// Simulates the merkle tree proofs
-    proofs: Arc<Mutex<BTreeMap<Txid, TxOutProof>>>,
+    proofs: BTreeMap<Txid, TxOutProof>,
     /// Simulates the script history
-    scripts: Arc<Mutex<BTreeMap<Script, Vec<Transaction>>>>,
+    scripts: BTreeMap<Script, Vec<Transaction>>,
+}
+
+#[derive(Clone, Debug)]
+pub struct FakeBitcoinTest {
+    inner: Arc<std::sync::RwLock<FakeBitcoinTestInner>>,
 }
 
 impl Default for FakeBitcoinTest {
@@ -82,12 +87,15 @@ impl Default for FakeBitcoinTest {
 
 impl FakeBitcoinTest {
     pub fn new() -> Self {
+        let inner = FakeBitcoinTestInner {
+            blocks: vec![genesis_block(Network::Regtest)],
+            pending: vec![],
+            addresses: Default::default(),
+            proofs: Default::default(),
+            scripts: Default::default(),
+        };
         FakeBitcoinTest {
-            blocks: Arc::new(Mutex::new(vec![genesis_block(Network::Regtest)])),
-            pending: Arc::new(Mutex::new(vec![])),
-            addresses: Arc::new(Mutex::new(Default::default())),
-            proofs: Arc::new(Mutex::new(Default::default())),
-            scripts: Arc::new(Mutex::new(Default::default())),
+            inner: std::sync::RwLock::new(inner).into(),
         }
     }
 
@@ -152,19 +160,24 @@ impl BitcoinTest for FakeBitcoinTest {
     }
 
     async fn mine_blocks(&self, block_num: u64) {
-        let mut blocks = self.blocks.lock().unwrap();
-        let mut pending = self.pending.lock().unwrap();
-        let mut addresses = self.addresses.lock().unwrap();
+        let mut inner = self.inner.write().unwrap();
+
+        let FakeBitcoinTestInner {
+            ref mut blocks,
+            ref mut pending,
+            ref mut addresses,
+            ..
+        } = *inner;
 
         for _ in 1..=block_num {
-            FakeBitcoinTest::mine_block(&mut addresses, &mut blocks, &mut pending);
+            FakeBitcoinTest::mine_block(addresses, blocks, pending);
         }
     }
 
     async fn prepare_funding_wallet(&self) {
         // In fake wallet this might not be technically necessary,
         // but it makes it behave more like the `RealBitcoinTest`.
-        let block_count = self.blocks.lock().unwrap().len() as u64;
+        let block_count = self.inner.write().unwrap().blocks.len() as u64;
         if block_count < 100 {
             self.mine_blocks(100 - block_count).await;
         }
@@ -175,29 +188,33 @@ impl BitcoinTest for FakeBitcoinTest {
         address: &Address,
         amount: bitcoin::Amount,
     ) -> (TxOutProof, Transaction) {
-        let mut blocks = self.blocks.lock().unwrap();
-        let mut pending = self.pending.lock().unwrap();
-        let mut addresses = self.addresses.lock().unwrap();
-        let mut scripts = self.scripts.lock().unwrap();
-        let mut proofs = self.proofs.lock().unwrap();
+        let mut inner = self.inner.write().unwrap();
 
         let transaction = FakeBitcoinTest::new_transaction(vec![TxOut {
             value: amount.to_sat(),
             script_pubkey: address.payload.script_pubkey(),
         }]);
-        addresses.insert(transaction.txid(), amount.into());
+        inner.addresses.insert(transaction.txid(), amount.into());
 
-        pending.push(transaction.clone());
-        let merkle_proof = FakeBitcoinTest::pending_merkle_tree(&pending);
+        inner.pending.push(transaction.clone());
+        let merkle_proof = FakeBitcoinTest::pending_merkle_tree(&inner.pending);
 
-        FakeBitcoinTest::mine_block(&mut addresses, &mut blocks, &mut pending);
-        let block_header = blocks.last().unwrap().header;
+        let FakeBitcoinTestInner {
+            ref mut blocks,
+            ref mut pending,
+            ref mut addresses,
+            ..
+        } = *inner;
+        FakeBitcoinTest::mine_block(addresses, blocks, pending);
+        let block_header = inner.blocks.last().unwrap().header;
         let proof = TxOutProof {
             block_header,
             merkle_proof,
         };
-        proofs.insert(transaction.txid(), proof.clone());
-        scripts.insert(address.payload.script_pubkey(), vec![transaction.clone()]);
+        inner.proofs.insert(transaction.txid(), proof.clone());
+        inner
+            .scripts
+            .insert(address.payload.script_pubkey(), vec![transaction.clone()]);
 
         (proof, transaction)
     }
@@ -212,9 +229,10 @@ impl BitcoinTest for FakeBitcoinTest {
     async fn mine_block_and_get_received(&self, address: &Address) -> Amount {
         self.mine_blocks(1).await;
         let sats = self
-            .blocks
-            .lock()
+            .inner
+            .read()
             .unwrap()
+            .blocks
             .clone()
             .into_iter()
             .flat_map(|block| block.txdata.into_iter().flat_map(|tx| tx.output))
@@ -226,8 +244,10 @@ impl BitcoinTest for FakeBitcoinTest {
 
     async fn get_mempool_tx_fee(&self, txid: &Txid) -> Amount {
         loop {
-            let pending = self.pending.lock().unwrap().clone();
-            let addresses = self.addresses.lock().unwrap().clone();
+            let (pending, addresses) = {
+                let inner = self.inner.read().unwrap();
+                (inner.pending.clone(), inner.addresses.clone())
+            };
 
             let mut fee = Amount::ZERO;
             let maybe_tx = pending.iter().find(|tx| tx.txid() == *txid);
@@ -262,11 +282,11 @@ impl IBitcoindRpc for FakeBitcoinTest {
     }
 
     async fn get_block_count(&self) -> BitcoinRpcResult<u64> {
-        Ok(self.blocks.lock().unwrap().len() as u64)
+        Ok(self.inner.read().unwrap().blocks.len() as u64)
     }
 
     async fn get_block_hash(&self, height: u64) -> BitcoinRpcResult<BlockHash> {
-        Ok(self.blocks.lock().unwrap()[height as usize]
+        Ok(self.inner.read().unwrap().blocks[height as usize]
             .header
             .block_hash())
     }
@@ -276,13 +296,16 @@ impl IBitcoindRpc for FakeBitcoinTest {
     }
 
     async fn submit_transaction(&self, transaction: Transaction) {
-        let mut pending = self.pending.lock().unwrap();
-        pending.push(transaction);
+        let mut inner = self.inner.write().unwrap();
+        inner.pending.push(transaction);
 
         let mut filtered = BTreeMap::<Vec<OutPoint>, Transaction>::new();
 
         // Simulate the mempool keeping txs with higher fees (less output)
-        for tx in pending.iter() {
+        // TODO: This looks borked, should remove from `filtered` on higher fee or
+        // something, and check per-input anyway. Probably doesn't matter, and I
+        // don't want to touch it.
+        for tx in inner.pending.iter() {
             match filtered.get(&inputs(tx)) {
                 Some(found) if output_sum(tx) > output_sum(found) => {}
                 _ => {
@@ -291,11 +314,11 @@ impl IBitcoindRpc for FakeBitcoinTest {
             }
         }
 
-        *pending = filtered.into_values().collect();
+        inner.pending = filtered.into_values().collect();
     }
 
     async fn get_tx_block_height(&self, txid: &Txid) -> BitcoinRpcResult<Option<u64>> {
-        for (height, block) in self.blocks.lock().unwrap().iter().enumerate() {
+        for (height, block) in self.inner.read().unwrap().blocks.iter().enumerate() {
             if block.txdata.iter().any(|tx| tx.txid() == *txid) {
                 return Ok(Some(height as u64));
             }
@@ -308,14 +331,14 @@ impl IBitcoindRpc for FakeBitcoinTest {
     }
 
     async fn get_script_history(&self, script: &Script) -> BitcoinRpcResult<Vec<Transaction>> {
-        let scripts = self.scripts.lock().unwrap();
-        let script = scripts.get(script);
+        let inner = self.inner.read().unwrap();
+        let script = inner.scripts.get(script);
         Ok(script.unwrap_or(&vec![]).clone())
     }
 
     async fn get_txout_proof(&self, txid: Txid) -> BitcoinRpcResult<TxOutProof> {
-        let proofs = self.proofs.lock().unwrap();
-        let proof = proofs.get(&txid);
+        let inner = self.inner.read().unwrap();
+        let proof = inner.proofs.get(&txid);
         Ok(proof.ok_or(format_err!("No proof stored"))?.clone())
     }
 }
