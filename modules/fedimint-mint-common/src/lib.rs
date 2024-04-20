@@ -11,9 +11,9 @@ use tbs::BlindedSignatureShare;
 use thiserror::Error;
 use tracing::error;
 
-pub mod config;
-
 pub mod common;
+pub mod config;
+pub mod endpoint_constants;
 
 pub const KIND: ModuleKind = ModuleKind::from_static_str("mint");
 pub const MODULE_CONSENSUS_VERSION: ModuleConsensusVersion = ModuleConsensusVersion::new(2, 0);

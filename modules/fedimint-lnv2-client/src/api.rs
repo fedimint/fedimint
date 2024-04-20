@@ -2,14 +2,14 @@ use std::time::Duration;
 
 use fedimint_api_client::api::{FederationApiExt, FederationResult, IModuleFederationApi};
 use fedimint_api_client::query::UnionResponses;
-use fedimint_core::endpoint_constants::{
-    AWAIT_INCOMING_CONTRACT_ENDPOINT, AWAIT_PREIMAGE_ENDPOINT, CONSENSUS_BLOCK_COUNT_ENDPOINT,
-    GATEWAYS_ENDPOINT, OUTGOING_CONTRACT_EXPIRATION_ENDPOINT,
-};
 use fedimint_core::module::ApiRequestErased;
 use fedimint_core::task::{sleep, MaybeSend, MaybeSync};
 use fedimint_core::util::SafeUrl;
 use fedimint_core::{apply, async_trait_maybe_send, NumPeersExt};
+use fedimint_lnv2_common::endpoint_constants::{
+    AWAIT_INCOMING_CONTRACT_ENDPOINT, AWAIT_PREIMAGE_ENDPOINT, CONSENSUS_BLOCK_COUNT_ENDPOINT,
+    GATEWAYS_ENDPOINT, OUTGOING_CONTRACT_EXPIRATION_ENDPOINT,
+};
 use fedimint_lnv2_common::ContractId;
 
 const RETRY_DELAY: Duration = Duration::from_secs(1);
