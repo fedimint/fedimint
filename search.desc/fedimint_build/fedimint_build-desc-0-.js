@@ -1,1 +1,1 @@
-searchState.loadedDescShard("fedimint_build", 0, "Env variable the cargo will set during crate build to pass …\nEnv variable to set to force git hash during build process")
+searchState.loadedDescShard("fedimint_build", 0, "Fedimint build scripts\nRun from a <code>build.rs</code> script to detect code version. See …\nEnv variable the cargo will set during crate build to pass …\nEnv variable to set to force git hash during build process")
