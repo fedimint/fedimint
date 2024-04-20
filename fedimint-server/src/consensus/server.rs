@@ -35,7 +35,7 @@ use fedimint_core::{timing, NumPeers, PeerId};
 use futures::StreamExt;
 use rand::Rng;
 use tokio::sync::{watch, RwLock};
-use tracing::{debug, info, warn, Level};
+use tracing::{debug, info, instrument, warn, Level};
 
 use crate::atomic_broadcast::data_provider::{DataProvider, UnitData};
 use crate::atomic_broadcast::finalization_handler::FinalizationHandler;
@@ -237,6 +237,7 @@ impl ConsensusServer {
         Ok((consensus_server, consensus_api))
     }
 
+    #[instrument(name = "run", skip_all, fields(id=%self.cfg.local.identity))]
     pub async fn run(&self, task_handle: TaskHandle) -> anyhow::Result<()> {
         if self.cfg.consensus.broadcast_public_keys.len() == 1 {
             self.run_single_guardian(task_handle).await
