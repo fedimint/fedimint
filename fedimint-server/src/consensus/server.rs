@@ -9,7 +9,7 @@ use fedimint_api_client::api::{DynGlobalApi, FederationApiExt, WsFederationApi};
 use fedimint_api_client::query::FilterMap;
 use fedimint_core::bitcoin_migration::bitcoin30_to_bitcoin29_secp256k1_public_key;
 use fedimint_core::config::ServerModuleInitRegistry;
-use fedimint_core::core::MODULE_INSTANCE_ID_GLOBAL;
+use fedimint_core::core::{ModuleInstanceId, ModuleKind, MODULE_INSTANCE_ID_GLOBAL};
 use fedimint_core::db::{
     apply_migrations, apply_migrations_server, Database, DatabaseTransaction,
     IDatabaseTransactionOpsCoreTyped,
@@ -25,6 +25,7 @@ use fedimint_core::module::registry::{
 };
 use fedimint_core::module::{ApiRequestErased, SerdeModuleEncoding};
 use fedimint_core::runtime::spawn;
+use fedimint_core::server::DynServerModule;
 use fedimint_core::session_outcome::{
     AcceptedItem, SchnorrSignature, SessionOutcome, SignedSessionOutcome,
 };
@@ -203,13 +204,17 @@ impl ConsensusServer {
             consensus_status_cache: ExpiringCache::new(Duration::from_millis(500)),
         };
 
-        submit_module_consensus_items(
-            task_group,
-            db.clone(),
-            modules.clone(),
-            submission_sender.clone(),
-        )
-        .await;
+        for (module_id, kind, module) in modules.iter_modules() {
+            submit_module_ci_proposals(
+                task_group,
+                db.clone(),
+                module_id,
+                kind.clone(),
+                module.clone(),
+                submission_sender.clone(),
+            )
+            .await;
+        }
 
         let api_endpoints: Vec<_> = cfg
             .consensus
@@ -818,10 +823,12 @@ pub(crate) async fn get_finished_session_count_static(dbtx: &mut DatabaseTransac
 
 const CONSENSUS_PROPOSAL_TIMEOUT: Duration = Duration::from_secs(30);
 
-async fn submit_module_consensus_items(
+async fn submit_module_ci_proposals(
     task_group: &TaskGroup,
     db: Database,
-    modules: ServerModuleRegistry,
+    module_id: ModuleInstanceId,
+    kind: ModuleKind,
+    module: DynServerModule,
     submission_sender: Sender<ConsensusItem>,
 ) {
     let mut interval = tokio::time::interval(if is_running_in_test_env() {
@@ -831,21 +838,32 @@ async fn submit_module_consensus_items(
     });
 
     task_group.spawn(
-        "submit_module_consensus_items",
+        "submit_module_ci_proposals_{module_id}",
         move |task_handle| async move {
             while !task_handle.is_shutting_down() {
-                let mut dbtx = db.begin_transaction_nc().await;
+                let module_consensus_items = tokio::time::timeout(
+                    CONSENSUS_PROPOSAL_TIMEOUT,
+                    module.consensus_proposal(
+                        &mut db
+                            .begin_transaction_nc()
+                            .await
+                            .to_ref_with_prefix_module_id(module_id)
+                            .into_nc(),
+                        module_id,
+                    ),
+                )
+                .await;
 
-                for (module_id, kind, module) in modules.iter_modules() {
-                    let module_consensus_items = tokio::time::timeout(
-                        CONSENSUS_PROPOSAL_TIMEOUT,
-                        module.consensus_proposal(
-                            &mut dbtx.to_ref_with_prefix_module_id(module_id).into_nc(),
-                            module_id,
-                        ),
-                    )
-                    .await;
-                    let Ok(module_consensus_items) = module_consensus_items else {
+                match module_consensus_items {
+                    Ok(items) => {
+                        for item in items {
+                            submission_sender
+                                .send(ConsensusItem::Module(item))
+                                .await
+                                .ok();
+                        }
+                    }
+                    Err(..) => {
                         warn!(
                             target: LOG_CONSENSUS,
                             %module_id,
@@ -853,14 +871,6 @@ async fn submit_module_consensus_items(
                             timeout_secs=CONSENSUS_PROPOSAL_TIMEOUT.as_secs(),
                             "Module failed to propose consensus items on time"
                         );
-                        continue;
-                    };
-
-                    for item in module_consensus_items {
-                        submission_sender
-                            .send(ConsensusItem::Module(item))
-                            .await
-                            .ok();
                     }
                 }
 
