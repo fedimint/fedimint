@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"constant":["CONSENSUS_PROPOSAL_TIMEOUT","TRANSACTION_BUFFER"],"fn":["get_finished_session_count_static","submit_module_consensus_items"],"struct":["ConsensusServer"],"type":["LatestContributionByPeer"]};
+window.SIDEBAR_ITEMS = {"constant":["CONSENSUS_PROPOSAL_TIMEOUT","TRANSACTION_BUFFER"],"fn":["get_finished_session_count_static","submit_module_ci_proposals"],"struct":["ConsensusServer"],"type":["LatestContributionByPeer"]};

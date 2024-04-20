@@ -869,6 +869,16 @@
 <a href="#869" id="869">869</a>
 <a href="#870" id="870">870</a>
 <a href="#871" id="871">871</a>
+<a href="#872" id="872">872</a>
+<a href="#873" id="873">873</a>
+<a href="#874" id="874">874</a>
+<a href="#875" id="875">875</a>
+<a href="#876" id="876">876</a>
+<a href="#877" id="877">877</a>
+<a href="#878" id="878">878</a>
+<a href="#879" id="879">879</a>
+<a href="#880" id="880">880</a>
+<a href="#881" id="881">881</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap};
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
@@ -880,7 +890,7 @@
 <span class="kw">use </span>fedimint_api_client::query::FilterMap;
 <span class="kw">use </span>fedimint_core::bitcoin_migration::bitcoin30_to_bitcoin29_secp256k1_public_key;
 <span class="kw">use </span>fedimint_core::config::ServerModuleInitRegistry;
-<span class="kw">use </span>fedimint_core::core::MODULE_INSTANCE_ID_GLOBAL;
+<span class="kw">use </span>fedimint_core::core::{ModuleInstanceId, ModuleKind, MODULE_INSTANCE_ID_GLOBAL};
 <span class="kw">use </span>fedimint_core::db::{
     apply_migrations, apply_migrations_server, Database, DatabaseTransaction,
     IDatabaseTransactionOpsCoreTyped,
@@ -896,6 +906,7 @@
 };
 <span class="kw">use </span>fedimint_core::module::{ApiRequestErased, SerdeModuleEncoding};
 <span class="kw">use </span>fedimint_core::runtime::spawn;
+<span class="kw">use </span>fedimint_core::server::DynServerModule;
 <span class="kw">use </span>fedimint_core::session_outcome::{
     AcceptedItem, SchnorrSignature, SessionOutcome, SignedSessionOutcome,
 };
@@ -1074,13 +1085,17 @@
             consensus_status_cache: ExpiringCache::new(Duration::from_millis(<span class="number">500</span>)),
         };
 
-        submit_module_consensus_items(
-            task_group,
-            db.clone(),
-            modules.clone(),
-            submission_sender.clone(),
-        )
-        .<span class="kw">await</span>;
+        <span class="kw">for </span>(module_id, kind, module) <span class="kw">in </span>modules.iter_modules() {
+            submit_module_ci_proposals(
+                task_group,
+                db.clone(),
+                module_id,
+                kind.clone(),
+                module.clone(),
+                submission_sender.clone(),
+            )
+            .<span class="kw">await</span>;
+        }
 
         <span class="kw">let </span>api_endpoints: Vec&lt;<span class="kw">_</span>&gt; = cfg
             .consensus
@@ -1689,10 +1704,12 @@
 
 <span class="kw">const </span>CONSENSUS_PROPOSAL_TIMEOUT: Duration = Duration::from_secs(<span class="number">30</span>);
 
-<span class="kw">async fn </span>submit_module_consensus_items(
+<span class="kw">async fn </span>submit_module_ci_proposals(
     task_group: <span class="kw-2">&amp;</span>TaskGroup,
     db: Database,
-    modules: ServerModuleRegistry,
+    module_id: ModuleInstanceId,
+    kind: ModuleKind,
+    module: DynServerModule,
     submission_sender: Sender&lt;ConsensusItem&gt;,
 ) {
     <span class="kw">let </span><span class="kw-2">mut </span>interval = tokio::time::interval(<span class="kw">if </span>is_running_in_test_env() {
@@ -1702,21 +1719,32 @@
     });
 
     task_group.spawn(
-        <span class="string">"submit_module_consensus_items"</span>,
+        <span class="string">"submit_module_ci_proposals_{module_id}"</span>,
         <span class="kw">move </span>|task_handle| <span class="kw">async move </span>{
             <span class="kw">while </span>!task_handle.is_shutting_down() {
-                <span class="kw">let </span><span class="kw-2">mut </span>dbtx = db.begin_transaction_nc().<span class="kw">await</span>;
+                <span class="kw">let </span>module_consensus_items = tokio::time::timeout(
+                    CONSENSUS_PROPOSAL_TIMEOUT,
+                    module.consensus_proposal(
+                        <span class="kw-2">&amp;mut </span>db
+                            .begin_transaction_nc()
+                            .<span class="kw">await
+                            </span>.to_ref_with_prefix_module_id(module_id)
+                            .into_nc(),
+                        module_id,
+                    ),
+                )
+                .<span class="kw">await</span>;
 
-                <span class="kw">for </span>(module_id, kind, module) <span class="kw">in </span>modules.iter_modules() {
-                    <span class="kw">let </span>module_consensus_items = tokio::time::timeout(
-                        CONSENSUS_PROPOSAL_TIMEOUT,
-                        module.consensus_proposal(
-                            <span class="kw-2">&amp;mut </span>dbtx.to_ref_with_prefix_module_id(module_id).into_nc(),
-                            module_id,
-                        ),
-                    )
-                    .<span class="kw">await</span>;
-                    <span class="kw">let </span><span class="prelude-val">Ok</span>(module_consensus_items) = module_consensus_items <span class="kw">else </span>{
+                <span class="kw">match </span>module_consensus_items {
+                    <span class="prelude-val">Ok</span>(items) =&gt; {
+                        <span class="kw">for </span>item <span class="kw">in </span>items {
+                            submission_sender
+                                .send(ConsensusItem::Module(item))
+                                .<span class="kw">await
+                                </span>.ok();
+                        }
+                    }
+                    <span class="prelude-val">Err</span>(..) =&gt; {
                         <span class="macro">warn!</span>(
                             target: LOG_CONSENSUS,
                             %module_id,
@@ -1724,14 +1752,6 @@
                             timeout_secs=CONSENSUS_PROPOSAL_TIMEOUT.as_secs(),
                             <span class="string">"Module failed to propose consensus items on time"
                         </span>);
-                        <span class="kw">continue</span>;
-                    };
-
-                    <span class="kw">for </span>item <span class="kw">in </span>module_consensus_items {
-                        submission_sender
-                            .send(ConsensusItem::Module(item))
-                            .<span class="kw">await
-                            </span>.ok();
                     }
                 }
 
