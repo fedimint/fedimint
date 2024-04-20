@@ -1,3 +1,4 @@
+mod complete_sm;
 mod receive_sm;
 mod send_sm;
 
@@ -39,6 +40,7 @@ use serde::{Deserialize, Serialize};
 use tpe::{AggregatePublicKey, PublicKeyShare};
 use tracing::warn;
 
+use crate::gateway_module_v2::complete_sm::CompleteStateMachine;
 use crate::gateway_module_v2::receive_sm::ReceiveSMCommon;
 use crate::gateway_module_v2::send_sm::SendSMCommon;
 use crate::Gateway;
@@ -104,6 +106,7 @@ pub struct GatewayClientModuleV2 {
 #[derive(Debug, Clone)]
 pub struct GatewayClientContextV2 {
     pub decoder: Decoder,
+    pub notifier: ModuleNotifier<GatewayClientStateMachinesV2>,
     pub tpe_agg_pk: AggregatePublicKey,
     pub tpe_pks: BTreeMap<PeerId, PublicKeyShare>,
     pub gateway: Gateway,
@@ -121,6 +124,7 @@ impl ClientModule for GatewayClientModuleV2 {
     fn context(&self) -> Self::ModuleStateMachineContext {
         GatewayClientContextV2 {
             decoder: self.decoder(),
+            notifier: self.notifier.clone(),
             tpe_agg_pk: self.cfg.tpe_agg_pk,
             tpe_pks: self.cfg.tpe_pks.clone(),
             gateway: self.gateway.clone(),
@@ -141,6 +145,7 @@ impl ClientModule for GatewayClientModuleV2 {
 pub enum GatewayClientStateMachinesV2 {
     Send(SendStateMachine),
     Receive(ReceiveStateMachine),
+    Complete(CompleteStateMachine),
 }
 
 impl IntoDynInstance for GatewayClientStateMachinesV2 {
@@ -160,16 +165,22 @@ impl State for GatewayClientStateMachinesV2 {
         global_context: &DynGlobalClientContext,
     ) -> Vec<StateTransition<Self>> {
         match self {
+            GatewayClientStateMachinesV2::Send(state) => {
+                sm_enum_variant_translation!(
+                    state.transitions(context, global_context),
+                    GatewayClientStateMachinesV2::Send
+                )
+            }
             GatewayClientStateMachinesV2::Receive(state) => {
                 sm_enum_variant_translation!(
                     state.transitions(context, global_context),
                     GatewayClientStateMachinesV2::Receive
                 )
             }
-            GatewayClientStateMachinesV2::Send(state) => {
+            GatewayClientStateMachinesV2::Complete(state) => {
                 sm_enum_variant_translation!(
                     state.transitions(context, global_context),
-                    GatewayClientStateMachinesV2::Send
+                    GatewayClientStateMachinesV2::Complete
                 )
             }
         }
@@ -179,6 +190,7 @@ impl State for GatewayClientStateMachinesV2 {
         match self {
             GatewayClientStateMachinesV2::Receive(state) => state.operation_id(),
             GatewayClientStateMachinesV2::Send(state) => state.operation_id(),
+            GatewayClientStateMachinesV2::Complete(state) => state.operation_id(),
         }
     }
 }
