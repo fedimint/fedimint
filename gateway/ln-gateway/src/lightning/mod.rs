@@ -1,7 +1,9 @@
 pub mod cln;
+pub mod ldk;
 pub mod lnd;
 
 use std::fmt::Debug;
+use std::path::PathBuf;
 use std::str::FromStr;
 use std::sync::Arc;
 
@@ -24,7 +26,8 @@ use thiserror::Error;
 use self::cln::NetworkLnRpcClient;
 use self::lnd::GatewayLndClient;
 use crate::envs::{
-    FM_GATEWAY_LIGHTNING_ADDR_ENV, FM_LND_MACAROON_ENV, FM_LND_RPC_ADDR_ENV, FM_LND_TLS_CERT_ENV,
+    FM_GATEWAY_LIGHTNING_ADDR_ENV, FM_LDK_ESPLORA_SERVER_URL, FM_LDK_NETWORK, FM_LND_MACAROON_ENV,
+    FM_LND_RPC_ADDR_ENV, FM_LND_TLS_CERT_ENV, FM_PORT_LDK,
 };
 use crate::gateway_lnrpc::{
     CloseChannelsWithPeerResponse, CreateInvoiceRequest, CreateInvoiceResponse, EmptyResponse,
@@ -250,6 +253,20 @@ pub enum LightningMode {
         #[arg(long = "cln-extension-addr", env = FM_GATEWAY_LIGHTNING_ADDR_ENV)]
         cln_extension_addr: SafeUrl,
     },
+    #[clap(name = "ldk")]
+    Ldk {
+        /// LDK esplora server URL
+        #[arg(long = "ldk-esplora-server-url", env = FM_LDK_ESPLORA_SERVER_URL)]
+        esplora_server_url: String,
+
+        /// LDK network (defaults to regtest if not provided)
+        #[arg(long = "ldk-network", env = FM_LDK_NETWORK, default_value = "regtest")]
+        network: Network,
+
+        /// LDK lightning server port
+        #[arg(long = "ldk-lightning-port", env = FM_PORT_LDK)]
+        lightning_port: u16,
+    },
 }
 
 #[async_trait]
@@ -261,6 +278,7 @@ pub trait LightningBuilder {
 pub struct GatewayLightningBuilder {
     pub lightning_mode: LightningMode,
     pub gateway_db: Database,
+    pub ldk_data_dir: PathBuf,
 }
 
 #[async_trait]
@@ -281,6 +299,19 @@ impl LightningBuilder for GatewayLightningBuilder {
                 None,
                 self.gateway_db.clone(),
             )),
+            LightningMode::Ldk {
+                esplora_server_url,
+                network,
+                lightning_port,
+            } => Box::new(
+                ldk::GatewayLdkClient::new(
+                    &self.ldk_data_dir,
+                    &esplora_server_url,
+                    network,
+                    lightning_port,
+                )
+                .unwrap(),
+            ),
         }
     }
 }
