@@ -1,9 +1,9 @@
 use bitcoin::Address;
 use fedimint_api_client::api::{FederationApiExt, FederationResult, IModuleFederationApi};
-use fedimint_core::endpoint_constants::{BLOCK_COUNT_ENDPOINT, PEG_OUT_FEES_ENDPOINT};
 use fedimint_core::module::ApiRequestErased;
 use fedimint_core::task::{MaybeSend, MaybeSync};
 use fedimint_core::{apply, async_trait_maybe_send};
+use fedimint_wallet_common::endpoint_constants::{BLOCK_COUNT_ENDPOINT, PEG_OUT_FEES_ENDPOINT};
 use fedimint_wallet_common::PegOutFees;
 
 #[apply(async_trait_maybe_send!)]

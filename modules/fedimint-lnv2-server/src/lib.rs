@@ -14,11 +14,6 @@ use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::db::{
     Database, DatabaseTransaction, DatabaseVersion, IDatabaseTransactionOpsCoreTyped,
 };
-use fedimint_core::endpoint_constants::{
-    ADD_GATEWAY_ENDPOINT, AWAIT_INCOMING_CONTRACT_ENDPOINT, AWAIT_PREIMAGE_ENDPOINT,
-    CONSENSUS_BLOCK_COUNT_ENDPOINT, GATEWAYS_ENDPOINT, OUTGOING_CONTRACT_EXPIRATION_ENDPOINT,
-    REMOVE_GATEWAY_ENDPOINT_V2,
-};
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::{
     api_endpoint, ApiEndpoint, ApiVersion, CoreConsensusVersion, InputMeta, ModuleConsensusVersion,
@@ -37,6 +32,11 @@ use fedimint_lnv2_common::config::{
     LightningConfigLocal, LightningConfigPrivate, LightningGenParams,
 };
 use fedimint_lnv2_common::contracts::{IncomingContract, OutgoingContract};
+use fedimint_lnv2_common::endpoint_constants::{
+    ADD_GATEWAY_ENDPOINT, AWAIT_INCOMING_CONTRACT_ENDPOINT, AWAIT_PREIMAGE_ENDPOINT,
+    CONSENSUS_BLOCK_COUNT_ENDPOINT, GATEWAYS_ENDPOINT, OUTGOING_CONTRACT_EXPIRATION_ENDPOINT,
+    REMOVE_GATEWAY_ENDPOINT_V2,
+};
 use fedimint_lnv2_common::{
     ContractId, LightningCommonInit, LightningConsensusItem, LightningInput, LightningInputError,
     LightningModuleTypes, LightningOutput, LightningOutputError, LightningOutputOutcome,

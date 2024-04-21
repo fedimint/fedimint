@@ -10,7 +10,6 @@ use fedimint_core::config::{
 };
 use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::db::{DatabaseTransaction, DatabaseVersion, IDatabaseTransactionOpsCoreTyped};
-use fedimint_core::endpoint_constants::{BACKUP_ENDPOINT, RECOVER_ENDPOINT};
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::{
     api_endpoint, ApiEndpoint, ApiError, ApiVersion, CoreConsensusVersion, InputMeta,
@@ -27,6 +26,7 @@ use fedimint_mint_common::config::{
     MintClientConfig, MintConfig, MintConfigConsensus, MintConfigLocal, MintConfigPrivate,
     MintGenParams,
 };
+use fedimint_mint_common::endpoint_constants::{BACKUP_ENDPOINT, RECOVER_ENDPOINT};
 pub use fedimint_mint_common::{BackupRequest, SignedBackupRequest};
 use fedimint_mint_common::{
     MintCommonInit, MintConsensusItem, MintInput, MintInputError, MintModuleTypes, MintOutput,

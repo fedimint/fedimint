@@ -14,12 +14,6 @@ use fedimint_core::db::{
     DatabaseTransaction, DatabaseValue, DatabaseVersion, IDatabaseTransactionOpsCoreTyped,
 };
 use fedimint_core::encoding::Encodable;
-use fedimint_core::endpoint_constants::{
-    ACCOUNT_ENDPOINT, AWAIT_ACCOUNT_ENDPOINT, AWAIT_BLOCK_HEIGHT_ENDPOINT, AWAIT_OFFER_ENDPOINT,
-    AWAIT_OUTGOING_CONTRACT_CANCELLED_ENDPOINT, AWAIT_PREIMAGE_DECRYPTION, BLOCK_COUNT_ENDPOINT,
-    GET_DECRYPTED_PREIMAGE_STATUS, LIST_GATEWAYS_ENDPOINT, OFFER_ENDPOINT,
-    REGISTER_GATEWAY_ENDPOINT, REMOVE_GATEWAY_CHALLENGE_ENDPOINT, REMOVE_GATEWAY_ENDPOINT,
-};
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::{
     api_endpoint, ApiEndpoint, ApiEndpointContext, ApiVersion, CoreConsensusVersion, InputMeta,
@@ -42,6 +36,12 @@ use fedimint_ln_common::contracts::{
     Contract, ContractId, ContractOutcome, DecryptedPreimage, DecryptedPreimageStatus,
     EncryptedPreimage, FundedContract, IdentifiableContract, Preimage, PreimageDecryptionShare,
     PreimageKey,
+};
+use fedimint_ln_common::endpoint_constants::{
+    ACCOUNT_ENDPOINT, AWAIT_ACCOUNT_ENDPOINT, AWAIT_BLOCK_HEIGHT_ENDPOINT, AWAIT_OFFER_ENDPOINT,
+    AWAIT_OUTGOING_CONTRACT_CANCELLED_ENDPOINT, AWAIT_PREIMAGE_DECRYPTION, BLOCK_COUNT_ENDPOINT,
+    GET_DECRYPTED_PREIMAGE_STATUS, LIST_GATEWAYS_ENDPOINT, OFFER_ENDPOINT,
+    REGISTER_GATEWAY_ENDPOINT, REMOVE_GATEWAY_CHALLENGE_ENDPOINT, REMOVE_GATEWAY_ENDPOINT,
 };
 use fedimint_ln_common::{
     create_gateway_remove_message, ContractAccount, LightningCommonInit, LightningConsensusItem,

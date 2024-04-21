@@ -35,9 +35,6 @@ use fedimint_core::db::{
     Database, DatabaseTransaction, DatabaseVersion, IDatabaseTransactionOpsCoreTyped,
 };
 use fedimint_core::encoding::{Decodable, Encodable};
-use fedimint_core::endpoint_constants::{
-    BLOCK_COUNT_ENDPOINT, BLOCK_COUNT_LOCAL_ENDPOINT, PEG_OUT_FEES_ENDPOINT,
-};
 use fedimint_core::envs::is_running_in_test_env;
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::{
@@ -58,6 +55,9 @@ use fedimint_logging::LOG_MODULE_WALLET;
 use fedimint_server::config::distributedgen::PeerHandleOps;
 pub use fedimint_wallet_common as common;
 use fedimint_wallet_common::config::{WalletClientConfig, WalletConfig, WalletGenParams};
+use fedimint_wallet_common::endpoint_constants::{
+    BLOCK_COUNT_ENDPOINT, BLOCK_COUNT_LOCAL_ENDPOINT, PEG_OUT_FEES_ENDPOINT,
+};
 use fedimint_wallet_common::keys::CompressedPublicKey;
 use fedimint_wallet_common::tweakable::Tweakable;
 use fedimint_wallet_common::{

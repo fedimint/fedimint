@@ -7,6 +7,7 @@ extern crate core;
 
 pub mod config;
 pub mod contracts;
+pub mod endpoint_constants;
 
 use std::collections::BTreeMap;
 
