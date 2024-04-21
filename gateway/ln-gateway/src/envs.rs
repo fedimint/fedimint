@@ -33,3 +33,12 @@ pub const FM_LND_MACAROON_ENV: &str = "FM_LND_MACAROON";
 
 // Env variable to TODO
 pub const FM_GATEWAY_LIGHTNING_ADDR_ENV: &str = "FM_GATEWAY_LIGHTNING_ADDR";
+
+// Env variable to TODO
+pub const FM_LDK_ESPLORA_SERVER_URL: &str = "FM_LDK_ESPLORA_SERVER_URL";
+
+// Env variable to TODO
+pub const FM_LDK_NETWORK: &str = "FM_LDK_NETWORK";
+
+// Env variable to TODO
+pub const FM_PORT_LDK: &str = "FM_PORT_LDK";
