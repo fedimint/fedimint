@@ -453,11 +453,11 @@
 <span class="kw">use </span>fedimint_client::DynGlobalClientContext;
 <span class="kw">use </span>fedimint_core::core::{IntoDynInstance, ModuleInstanceId, OperationId};
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
-<span class="kw">use </span>fedimint_core::endpoint_constants::ACCOUNT_ENDPOINT;
 <span class="kw">use </span>fedimint_core::task::sleep;
 <span class="kw">use </span>fedimint_core::{OutPoint, TransactionId};
 <span class="kw">use </span>fedimint_ln_common::contracts::incoming::IncomingContractAccount;
 <span class="kw">use </span>fedimint_ln_common::contracts::{DecryptedPreimage, FundedContract};
+<span class="kw">use </span>fedimint_ln_common::endpoint_constants::ACCOUNT_ENDPOINT;
 <span class="kw">use </span>fedimint_ln_common::{LightningClientContext, LightningInput};
 <span class="kw">use </span>lightning_invoice::Bolt11Invoice;
 <span class="kw">use </span>serde::{Deserialize, Serialize};

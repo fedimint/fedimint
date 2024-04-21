@@ -249,9 +249,9 @@
 <span class="kw">use </span>thiserror::Error;
 <span class="kw">use </span>tracing::error;
 
-<span class="kw">pub mod </span>config;
-
 <span class="kw">pub mod </span>common;
+<span class="kw">pub mod </span>config;
+<span class="kw">pub mod </span>endpoint_constants;
 
 <span class="kw">pub const </span>KIND: ModuleKind = ModuleKind::from_static_str(<span class="string">"mint"</span>);
 <span class="kw">pub const </span>MODULE_CONSENSUS_VERSION: ModuleConsensusVersion = ModuleConsensusVersion::new(<span class="number">2</span>, <span class="number">0</span>);

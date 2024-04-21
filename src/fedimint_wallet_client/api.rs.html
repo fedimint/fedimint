@@ -43,10 +43,10 @@
 <a href="#43" id="43">43</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>bitcoin::Address;
 <span class="kw">use </span>fedimint_api_client::api::{FederationApiExt, FederationResult, IModuleFederationApi};
-<span class="kw">use </span>fedimint_core::endpoint_constants::{BLOCK_COUNT_ENDPOINT, PEG_OUT_FEES_ENDPOINT};
 <span class="kw">use </span>fedimint_core::module::ApiRequestErased;
 <span class="kw">use </span>fedimint_core::task::{MaybeSend, MaybeSync};
 <span class="kw">use </span>fedimint_core::{apply, async_trait_maybe_send};
+<span class="kw">use </span>fedimint_wallet_common::endpoint_constants::{BLOCK_COUNT_ENDPOINT, PEG_OUT_FEES_ENDPOINT};
 <span class="kw">use </span>fedimint_wallet_common::PegOutFees;
 
 <span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
