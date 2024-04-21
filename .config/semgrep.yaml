@@ -64,6 +64,9 @@ rules:
   message: "`tokio::spawn` won't set task name by default. use `fedimint_core::runtime::spawn` instead"
   pattern: tokio::spawn
   severity: WARNING
+  paths:
+    exclude:
+      - fedimint-core/src/runtime.rs
 
 - id: ban-tokio-sleep
   languages:
