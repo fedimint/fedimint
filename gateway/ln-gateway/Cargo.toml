@@ -39,6 +39,7 @@ clap = { workspace = true }
 # cln-plugin made semver incompatible change
 cln-plugin = "=0.1.7"
 cln-rpc = { workspace = true }
+esplora-client = { version = "0.6.0", default-features = false, features = ["async", "async-https-rustls"] }
 fedimint-client = { workspace = true }
 fedimint-core = { workspace = true }
 fedimint-api-client = { workspace = true }
@@ -54,6 +55,8 @@ tpe = { package = "fedimint-tpe", version = "=0.4.0-alpha", path = "../../crypto
 futures = { workspace = true }
 hex = { workspace = true }
 erased-serde = { workspace = true }
+ldk-node = "0.3.0"
+lightning = { workspace = true }
 lightning-invoice = { workspace = true }
 prost = "0.12.6"
 rand = { workspace = true }
@@ -84,7 +87,6 @@ fedimint-ln-common = { path = "../../modules/fedimint-ln-common" }
 fedimint-mint-client = { path = "../../modules/fedimint-mint-client" }
 fedimint-wallet-client = { path = "../../modules/fedimint-wallet-client" }
 fedimint-testing = { workspace = true }
-lightning = { workspace = true }
 threshold_crypto = { workspace = true }
 assert_matches = { workspace = true }
 
