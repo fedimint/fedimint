@@ -12,6 +12,9 @@ use fedimint_client::sm::util::MapStateTransitions;
 use fedimint_client::sm::{Context, DynState, ModuleNotifier, State, StateTransition};
 use fedimint_client::transaction::{ClientOutput, TransactionBuilder};
 use fedimint_client::{sm_enum_variant_translation, DynGlobalClientContext};
+use fedimint_core::bitcoin_migration::{
+    bitcoin29_to_bitcoin30_schnorr_signature, bitcoin30_to_bitcoin29_message,
+};
 use fedimint_core::config::FederationId;
 use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, OperationId};
 use fedimint_core::db::{DatabaseTransaction, DatabaseVersion};
@@ -222,9 +225,13 @@ impl GatewayClientModuleV2 {
                     SendSMState::Cancelled(cancelled) => {
                         warn!("Outgoing lightning payment is cancelled {:?}", cancelled);
 
-                        let signature = self.keypair.sign_schnorr(contract.forfeit_message());
+                        let signature = self.keypair.sign_schnorr(bitcoin30_to_bitcoin29_message(
+                            contract.forfeit_message(),
+                        ));
 
-                        assert!(contract.verify_forfeit_signature(&signature));
+                        assert!(contract.verify_forfeit_signature(
+                            &bitcoin29_to_bitcoin30_schnorr_signature(signature)
+                        ));
 
                         return Err(signature);
                     }

@@ -38,7 +38,8 @@ use fedimint_client::module::init::ClientModuleInitRegistry;
 use fedimint_client::ClientHandleArc;
 use fedimint_core::bitcoin_migration::{
     bitcoin29_to_bitcoin30_address, bitcoin29_to_bitcoin30_amount, bitcoin29_to_bitcoin30_network,
-    bitcoin29_to_bitcoin30_txid, bitcoin30_to_bitcoin29_amount, bitcoin30_to_bitcoin29_network,
+    bitcoin29_to_bitcoin30_secp256k1_public_key, bitcoin29_to_bitcoin30_txid,
+    bitcoin30_to_bitcoin29_amount, bitcoin30_to_bitcoin29_network,
 };
 use fedimint_core::config::FederationId;
 use fedimint_core::core::{
@@ -1599,7 +1600,9 @@ impl Gateway {
 
     pub async fn payment_info_v2(&self, federation_id: &FederationId) -> Option<PaymentInfo> {
         Some(PaymentInfo {
-            public_key: self.public_key_v2(federation_id).await?,
+            public_key: bitcoin29_to_bitcoin30_secp256k1_public_key(
+                self.public_key_v2(federation_id).await?,
+            ),
             send_fee_default: PaymentFee::one_percent(),
             send_fee_minimum: PaymentFee::half_of_one_percent(),
             receive_fee: PaymentFee::half_of_one_percent(),
@@ -1635,7 +1638,9 @@ impl Gateway {
         // Since the following three checks may only fail due to client side
         // programming error we do not have to enable cancellation and can check
         // them before we start the state machine.
-        if payload.contract.claim_pk != module.keypair.public_key() {
+        if payload.contract.claim_pk
+            != bitcoin29_to_bitcoin30_secp256k1_public_key(module.keypair.public_key())
+        {
             bail!("The outgoing contract keyed to another gateway");
         }
 
