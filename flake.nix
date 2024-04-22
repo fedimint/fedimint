@@ -140,7 +140,13 @@
             );
 
             args = {
-              nativeBuildInputs = [ pkgs.firefox pkgs.wasm-bindgen-cli pkgs.geckodriver pkgs.wasm-pack ];
+              nativeBuildInputs = [
+                pkgs.wasm-bindgen-cli
+                pkgs.geckodriver
+                pkgs.wasm-pack
+              ] ++ lib.optionals (stdenv.isLinux) [
+                pkgs.firefox
+              ];
             };
           });
 
