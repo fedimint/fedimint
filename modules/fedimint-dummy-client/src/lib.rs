@@ -11,7 +11,7 @@ use fedimint_client::module::recovery::NoModuleBackup;
 use fedimint_client::module::{ClientContext, ClientModule, IClientModule};
 use fedimint_client::sm::{Context, ModuleNotifier};
 use fedimint_client::transaction::{ClientInput, ClientOutput, TransactionBuilder};
-use fedimint_core::core::{Decoder, KeyPair, OperationId};
+use fedimint_core::core::{Decoder, OperationId};
 use fedimint_core::db::{
     Database, DatabaseTransaction, DatabaseVersion, IDatabaseTransactionOpsCoreTyped,
 };
@@ -27,7 +27,7 @@ use fedimint_dummy_common::{
     KIND,
 };
 use futures::{pin_mut, FutureExt, StreamExt};
-use secp256k1::{PublicKey, Secp256k1};
+use secp256k1::{KeyPair, PublicKey, Secp256k1};
 use states::DummyStateMachine;
 use strum::IntoEnumIterator;
 

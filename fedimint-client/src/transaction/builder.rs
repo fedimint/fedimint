@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
-use fedimint_core::core::{DynInput, DynOutput, IntoDynInstance, KeyPair, ModuleInstanceId};
+use bitcoin::KeyPair;
+use fedimint_core::core::{DynInput, DynOutput, IntoDynInstance, ModuleInstanceId};
 use fedimint_core::transaction::{Transaction, TransactionSignature};
 use fedimint_core::Amount;
 use itertools::multiunzip;

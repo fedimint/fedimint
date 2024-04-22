@@ -15,7 +15,6 @@ use std::sync::Arc;
 use std::{cmp, marker};
 
 use anyhow::anyhow;
-pub use bitcoin::KeyPair;
 use bitcoin_hashes::{sha256, Hash};
 use fedimint_core::encoding::{Decodable, DecodeError, DynEncodable, Encodable};
 use fedimint_core::module::registry::ModuleDecoderRegistry;

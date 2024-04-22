@@ -4,7 +4,7 @@ use bitcoin_hashes::Hash;
 use fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
 use fedimint_client::transaction::ClientInput;
 use fedimint_client::DynGlobalClientContext;
-use fedimint_core::core::{KeyPair, OperationId};
+use fedimint_core::core::OperationId;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::{Amount, OutPoint};
 use fedimint_ln_common::PrunedInvoice;
@@ -12,6 +12,7 @@ use fedimint_lnv2_client::LightningClientStateMachines;
 use fedimint_lnv2_common::contracts::OutgoingContract;
 use fedimint_lnv2_common::{LightningInput, OutgoingWitness};
 use lightning_invoice::Bolt11Invoice;
+use secp256k1::KeyPair;
 use serde::{Deserialize, Serialize};
 
 use crate::gateway_lnrpc::PayInvoiceRequest;

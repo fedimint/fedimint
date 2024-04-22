@@ -13,7 +13,7 @@ use fedimint_client::sm::{Context, DynState, ModuleNotifier, State, StateTransit
 use fedimint_client::transaction::{ClientOutput, TransactionBuilder};
 use fedimint_client::{sm_enum_variant_translation, DynGlobalClientContext};
 use fedimint_core::config::FederationId;
-use fedimint_core::core::{Decoder, IntoDynInstance, KeyPair, ModuleInstanceId, OperationId};
+use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, OperationId};
 use fedimint_core::db::{DatabaseTransaction, DatabaseVersion};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::{
@@ -27,6 +27,7 @@ use futures::StreamExt;
 use lightning_invoice::Bolt11Invoice;
 use receive_sm::{ReceiveSMState, ReceiveStateMachine};
 use secp256k1::schnorr::Signature;
+use secp256k1::KeyPair;
 use send_sm::{SendSMState, SendStateMachine};
 use serde::{Deserialize, Serialize};
 use tpe::{AggregatePublicKey, PublicKeyShare};
