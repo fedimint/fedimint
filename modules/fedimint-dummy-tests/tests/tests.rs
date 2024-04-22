@@ -14,7 +14,7 @@ use fedimint_dummy_common::config::{DummyClientConfig, DummyGenParams};
 use fedimint_dummy_common::{broken_fed_key_pair, DummyInput, DummyOutput, KIND};
 use fedimint_dummy_server::DummyInit;
 use fedimint_testing::fixtures::Fixtures;
-use secp256k1::Secp256k1;
+use secp256k1_24::Secp256k1;
 
 fn fixtures() -> Fixtures {
     Fixtures::new_primary(DummyClientInit, DummyInit, DummyGenParams::default())
@@ -149,7 +149,6 @@ async fn unbalanced_transactions_get_rejected() -> anyhow::Result<()> {
 mod fedimint_migration_tests {
     use anyhow::ensure;
     use fedimint_client::module::init::DynClientModuleInit;
-    use fedimint_core::bitcoin_migration::bitcoin29_to_bitcoin30_secp256k1_public_key;
     use fedimint_core::core::OperationId;
     use fedimint_core::db::{
         Database, DatabaseVersion, DatabaseVersionKeyV0, IDatabaseTransactionOpsCoreTyped,
@@ -192,20 +191,13 @@ mod fedimint_migration_tests {
 
         // Write example v0 funds record to the database
         let (_, pk) = secp256k1::generate_keypair(&mut OsRng);
-        dbtx.insert_new_entry(
-            &DummyFundsKeyV0(bitcoin29_to_bitcoin30_secp256k1_public_key(pk)),
-            &(),
-        )
-        .await;
+        dbtx.insert_new_entry(&DummyFundsKeyV0(pk), &()).await;
 
         // Write example v0 outcome record to the database
         let txid = TransactionId::from_slice(&BYTE_32).unwrap();
         dbtx.insert_new_entry(
             &DummyOutcomeKey(OutPoint { txid, out_idx: 0 }),
-            &DummyOutputOutcome(
-                Amount::from_sats(1000),
-                bitcoin29_to_bitcoin30_secp256k1_public_key(pk),
-            ),
+            &DummyOutputOutcome(Amount::from_sats(1000), pk),
         )
         .await;
 

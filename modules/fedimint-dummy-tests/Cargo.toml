@@ -23,7 +23,8 @@ fedimint-server = { path = "../../fedimint-server" }
 fedimint-testing = { path = "../../fedimint-testing" }
 futures = { workspace = true }
 rand = { workspace = true }
-secp256k1 = "0.24.3"
+secp256k1_24 = { package = "secp256k1", version = "0.24.3" }
+secp256k1 = "0.27.0"
 strum = { workspace = true }
 strum_macros = { workspace = true }
 tokio = { version = "1.36.0", features = ["sync"] }
