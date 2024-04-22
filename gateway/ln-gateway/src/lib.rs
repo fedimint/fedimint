@@ -611,6 +611,32 @@ impl Gateway {
                         break;
                     }
 
+                    if let Ok((payload, client)) = self
+                        .get_payload_and_client_v2(
+                            htlc_request
+                                .payment_hash
+                                .clone()
+                                .try_into()
+                                .expect("32 bytes"),
+                            htlc_request.incoming_amount_msat,
+                        )
+                        .await
+                    {
+                        if let Err(error) = client
+                            .get_first_module::<GatewayClientModuleV2>()
+                            .relay_incoming_htlc(
+                                htlc_request.incoming_chan_id,
+                                htlc_request.htlc_id,
+                                payload,
+                            )
+                            .await
+                        {
+                            error!("Error relaying incoming HTLC: {error:?}");
+                        }
+
+                        continue;
+                    }
+
                     let scid_to_feds = self.scid_to_federation.read().await;
                     let federation_id = scid_to_feds.get(&htlc_request.short_channel_id);
                     // Just forward the HTLC if we do not have a federation that
@@ -1769,13 +1795,11 @@ impl Gateway {
         Bolt11Invoice::from_str(&response.invoice).map_err(|e| e.to_string())
     }
 
-    pub async fn receive_v2(
+    pub async fn get_payload_and_client_v2(
         &self,
         payment_hash: [u8; 32],
-        amount: Amount,
-    ) -> anyhow::Result<[u8; 32]> {
-        let operation_id = OperationId::from_encodable(payment_hash);
-
+        amount_msats: u64,
+    ) -> anyhow::Result<(CreateInvoicePayload, ClientHandleArc)> {
         let payload = self
             .gateway_db
             .begin_transaction_nc()
@@ -1784,34 +1808,19 @@ impl Gateway {
             .await
             .ok_or(anyhow!("No corresponding decryption contract available"))?;
 
+        if payload.invoice_amount.msats != amount_msats {
+            bail!("The available decryption contract's amount is not equal the requested amount")
+        }
+
         let clients = self.clients.read().await;
 
         let client = clients
             .get(&payload.federation_id)
             .ok_or(anyhow!("Federation client not available"))?
-            .value();
+            .value()
+            .clone();
 
-        let module = client.get_first_module::<GatewayClientModuleV2>();
-
-        if client.operation_exists(operation_id).await {
-            return module
-                .subscribe_receive(operation_id)
-                .await
-                .ok_or(anyhow!("The internal send failed"));
-        }
-
-        if payload.invoice_amount != amount {
-            bail!("The available decryption contract's amount is not equal the requested amount")
-        }
-
-        module
-            .start_receive_state_machine(operation_id, payload.contract)
-            .await?;
-
-        module
-            .subscribe_receive(operation_id)
-            .await
-            .ok_or(anyhow!("The internal send failed"))
+        Ok((payload, client))
     }
 }
 

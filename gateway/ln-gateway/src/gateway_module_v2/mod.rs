@@ -5,6 +5,7 @@ mod send_sm;
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
+use anyhow::anyhow;
 use fedimint_api_client::api::DynModuleApi;
 use fedimint_client::module::init::{ClientModuleInit, ClientModuleInitArgs};
 use fedimint_client::module::recovery::NoModuleBackup;
@@ -25,8 +26,9 @@ use fedimint_core::module::{
     ApiVersion, CommonModuleInit, ModuleCommon, ModuleInit, MultiApiVersion,
 };
 use fedimint_core::{apply, async_trait_maybe_send, Amount, OutPoint, PeerId};
+use fedimint_lnv2_client::CreateInvoicePayload;
 use fedimint_lnv2_common::config::LightningClientConfig;
-use fedimint_lnv2_common::contracts::{IncomingContract, OutgoingContract};
+use fedimint_lnv2_common::contracts::OutgoingContract;
 use fedimint_lnv2_common::{
     LightningCommonInit, LightningModuleTypes, LightningOutput, LightningOutputV0,
 };
@@ -40,7 +42,9 @@ use serde::{Deserialize, Serialize};
 use tpe::{AggregatePublicKey, PublicKeyShare};
 use tracing::warn;
 
-use crate::gateway_module_v2::complete_sm::CompleteStateMachine;
+use crate::gateway_module_v2::complete_sm::{
+    CompleteSMCommon, CompleteSMState, CompleteStateMachine,
+};
 use crate::gateway_module_v2::receive_sm::ReceiveSMCommon;
 use crate::gateway_module_v2::send_sm::SendSMCommon;
 use crate::Gateway;
@@ -256,21 +260,84 @@ impl GatewayClientModuleV2 {
         }
     }
 
-    pub async fn start_receive_state_machine(
+    pub async fn relay_incoming_htlc(
         &self,
-        operation_id: OperationId,
-        contract: IncomingContract,
+        incoming_chan_id: u64,
+        htlc_id: u64,
+        payload: CreateInvoicePayload,
     ) -> anyhow::Result<()> {
+        let operation_id = OperationId::from_encodable(payload.clone());
+
+        if self.client_ctx.operation_exists(operation_id).await {
+            return Ok(());
+        }
+
         let refund_keypair = self.keypair;
 
         let client_output = ClientOutput::<LightningOutput, GatewayClientStateMachinesV2> {
-            output: LightningOutput::V0(LightningOutputV0::Incoming(contract.clone())),
-            amount: contract.commitment.amount,
+            output: LightningOutput::V0(LightningOutputV0::Incoming(payload.contract.clone())),
+            amount: payload.contract.commitment.amount,
+            state_machines: Arc::new(move |txid, out_idx| {
+                vec![
+                    GatewayClientStateMachinesV2::Receive(ReceiveStateMachine {
+                        common: ReceiveSMCommon {
+                            operation_id,
+                            contract: payload.contract.clone(),
+                            out_point: OutPoint { txid, out_idx },
+                            refund_keypair,
+                        },
+                        state: ReceiveSMState::Funding,
+                    }),
+                    GatewayClientStateMachinesV2::Complete(CompleteStateMachine {
+                        common: CompleteSMCommon {
+                            operation_id,
+                            incoming_chan_id,
+                            htlc_id,
+                        },
+                        state: CompleteSMState::Pending,
+                    }),
+                ]
+            }),
+        };
+
+        let client_output = self.client_ctx.make_client_output(client_output);
+        let transaction = TransactionBuilder::new().with_output(client_output);
+
+        self.client_ctx
+            .finalize_and_submit_transaction(
+                operation_id,
+                LightningCommonInit::KIND.as_str(),
+                |_, _| GatewayOperationMetaV2,
+                transaction,
+            )
+            .await?;
+
+        Ok(())
+    }
+
+    pub async fn relay_direct_swap(
+        &self,
+        payload: CreateInvoicePayload,
+    ) -> anyhow::Result<[u8; 32]> {
+        let operation_id = OperationId::from_encodable(payload.clone());
+
+        if self.client_ctx.operation_exists(operation_id).await {
+            return self
+                .subscribe_receive(operation_id)
+                .await
+                .ok_or(anyhow!("The internal send failed"));
+        }
+
+        let refund_keypair = self.keypair;
+
+        let client_output = ClientOutput::<LightningOutput, GatewayClientStateMachinesV2> {
+            output: LightningOutput::V0(LightningOutputV0::Incoming(payload.contract.clone())),
+            amount: payload.contract.commitment.amount,
             state_machines: Arc::new(move |txid, out_idx| {
                 vec![GatewayClientStateMachinesV2::Receive(ReceiveStateMachine {
                     common: ReceiveSMCommon {
                         operation_id,
-                        contract: contract.clone(),
+                        contract: payload.contract.clone(),
                         out_point: OutPoint { txid, out_idx },
                         refund_keypair,
                     },
@@ -291,10 +358,12 @@ impl GatewayClientModuleV2 {
             )
             .await?;
 
-        Ok(())
+        self.subscribe_receive(operation_id)
+            .await
+            .ok_or(anyhow!("The internal send failed"))
     }
 
-    pub async fn subscribe_receive(&self, operation_id: OperationId) -> Option<[u8; 32]> {
+    async fn subscribe_receive(&self, operation_id: OperationId) -> Option<[u8; 32]> {
         let mut stream = self.notifier.subscribe(operation_id).await;
 
         loop {
