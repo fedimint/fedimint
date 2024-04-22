@@ -104,7 +104,7 @@ mod fedimint_migration_tests {
     use bitcoin_hashes::Hash;
     use fedimint_core::bitcoin_migration::{
         bitcoin29_to_bitcoin30_message, bitcoin29_to_bitcoin30_secp256k1_secret_key,
-        bitcoin30_to_bitcoin29_schnorr_signature, bitcoin30_to_bitcoin29_secp256k1_public_key,
+        bitcoin30_to_bitcoin29_schnorr_signature,
     };
     use fedimint_core::core::{DynInput, DynOutput};
     use fedimint_core::db::{
@@ -166,14 +166,14 @@ mod fedimint_migration_tests {
                 0,
                 DummyInput {
                     amount: Amount::ZERO,
-                    account: bitcoin30_to_bitcoin29_secp256k1_public_key(key_pair.public_key()),
+                    account: key_pair.public_key(),
                 },
             )],
             outputs: vec![DynOutput::from_typed(
                 0,
                 DummyOutput {
                     amount: Amount::ZERO,
-                    account: bitcoin30_to_bitcoin29_secp256k1_public_key(key_pair.public_key()),
+                    account: key_pair.public_key(),
                 },
             )],
             nonce: [0x42; 8],

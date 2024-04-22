@@ -11,6 +11,9 @@ use fedimint_client::module::recovery::NoModuleBackup;
 use fedimint_client::module::{ClientContext, ClientModule, IClientModule};
 use fedimint_client::sm::{Context, ModuleNotifier};
 use fedimint_client::transaction::{ClientInput, ClientOutput, TransactionBuilder};
+use fedimint_core::bitcoin_migration::{
+    bitcoin29_to_bitcoin30_keypair, bitcoin30_to_bitcoin29_keypair,
+};
 use fedimint_core::core::{Decoder, OperationId};
 use fedimint_core::db::{
     Database, DatabaseTransaction, DatabaseVersion, IDatabaseTransactionOpsCoreTyped,
@@ -27,7 +30,8 @@ use fedimint_dummy_common::{
     KIND,
 };
 use futures::{pin_mut, FutureExt, StreamExt};
-use secp256k1::{KeyPair, PublicKey, Secp256k1};
+use secp256k1::{KeyPair, PublicKey};
+use secp256k1_24::Secp256k1;
 use states::DummyStateMachine;
 use strum::IntoEnumIterator;
 
@@ -102,7 +106,7 @@ impl ClientModule for DummyClientModule {
                 account: self.key.public_key(),
             },
             amount,
-            keys: vec![self.key],
+            keys: vec![bitcoin30_to_bitcoin29_keypair(self.key)],
             state_machines: Arc::new(move |txid, _| {
                 vec![DummyStateMachine::Input(amount, txid, id)]
             }),
@@ -189,7 +193,7 @@ impl DummyClientModule {
                 account: account_kp.public_key(),
             },
             amount,
-            keys: vec![account_kp],
+            keys: vec![bitcoin30_to_bitcoin29_keypair(account_kp)],
             state_machines: Arc::new(move |_, _| Vec::<DummyStateMachine>::new()),
         };
 
@@ -354,10 +358,11 @@ impl ClientModuleInit for DummyClientInit {
     async fn init(&self, args: &ClientModuleInitArgs<Self>) -> anyhow::Result<Self::Module> {
         Ok(DummyClientModule {
             cfg: args.cfg().clone(),
-            key: args
-                .module_root_secret()
-                .clone()
-                .to_secp_key(&Secp256k1::new()),
+            key: bitcoin29_to_bitcoin30_keypair(
+                args.module_root_secret()
+                    .clone()
+                    .to_secp_key(&Secp256k1::new()),
+            ),
             notifier: args.notifier().clone(),
             client_ctx: args.context(),
             db: args.db().clone(),

@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use anyhow::bail;
 use fedimint_client::transaction::{ClientInput, ClientOutput, TransactionBuilder};
+use fedimint_core::bitcoin_migration::bitcoin30_to_bitcoin29_keypair;
 use fedimint_core::config::ClientModuleConfig;
 use fedimint_core::core::{IntoDynInstance, ModuleKind, OperationId};
 use fedimint_core::db::mem_impl::MemDatabase;
@@ -92,7 +93,7 @@ async fn federation_should_abort_if_balance_sheet_is_negative() -> anyhow::Resul
             account: account_kp.public_key(),
         },
         amount: sats(1000),
-        keys: vec![account_kp],
+        keys: vec![bitcoin30_to_bitcoin29_keypair(account_kp)],
         state_machines: Arc::new(move |_, _| Vec::<DummyStateMachine>::new()),
     };
 
@@ -148,6 +149,7 @@ async fn unbalanced_transactions_get_rejected() -> anyhow::Result<()> {
 mod fedimint_migration_tests {
     use anyhow::ensure;
     use fedimint_client::module::init::DynClientModuleInit;
+    use fedimint_core::bitcoin_migration::bitcoin29_to_bitcoin30_secp256k1_public_key;
     use fedimint_core::core::OperationId;
     use fedimint_core::db::{
         Database, DatabaseVersion, DatabaseVersionKeyV0, IDatabaseTransactionOpsCoreTyped,
@@ -190,13 +192,20 @@ mod fedimint_migration_tests {
 
         // Write example v0 funds record to the database
         let (_, pk) = secp256k1::generate_keypair(&mut OsRng);
-        dbtx.insert_new_entry(&DummyFundsKeyV0(pk), &()).await;
+        dbtx.insert_new_entry(
+            &DummyFundsKeyV0(bitcoin29_to_bitcoin30_secp256k1_public_key(pk)),
+            &(),
+        )
+        .await;
 
         // Write example v0 outcome record to the database
         let txid = TransactionId::from_slice(&BYTE_32).unwrap();
         dbtx.insert_new_entry(
             &DummyOutcomeKey(OutPoint { txid, out_idx: 0 }),
-            &DummyOutputOutcome(Amount::from_sats(1000), pk),
+            &DummyOutputOutcome(
+                Amount::from_sats(1000),
+                bitcoin29_to_bitcoin30_secp256k1_public_key(pk),
+            ),
         )
         .await;
 
