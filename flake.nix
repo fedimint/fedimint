@@ -103,9 +103,7 @@
             };
           };
 
-          toolchainArgs = {
-            # extraRustFlags = "--cfg tokio_unstable";
-          } // lib.optionalAttrs pkgs.stdenv.isDarwin {
+          toolchainArgs = { } // lib.optionalAttrs pkgs.stdenv.isDarwin {
             # on Darwin newest stdenv doesn't seem to work
             # linking rocksdb
             stdenv = pkgs.clang11Stdenv;

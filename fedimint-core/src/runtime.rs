@@ -29,6 +29,7 @@ mod r#impl {
         T: Send + 'static,
     {
         let span = tracing::span!(tracing::Level::INFO, "spawn", task_name = name);
+        // nosemgrep: ban-tokio-spawn
         tokio::spawn(future.instrument(span))
     }
 
@@ -37,6 +38,7 @@ mod r#impl {
         F: Future<Output = ()> + 'static,
     {
         let span = tracing::span!(tracing::Level::INFO, "spawn_local", task_name = name);
+        // nosemgrep: ban-tokio-spawn
         tokio::task::spawn_local(future.instrument(span))
     }
 
