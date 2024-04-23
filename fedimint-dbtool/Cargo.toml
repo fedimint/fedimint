@@ -19,7 +19,7 @@ name = "fedimint-dbtool"
 [dependencies]
 anyhow = { workspace = true }
 fedimint-aead = { version = "=0.4.0-alpha", path = "../crypto/aead" }
-bytes = "1.5.0"
+bytes = "1.6.0"
 clap = { version = "4.5.4", features = ["derive", "env"] }
 fedimint-core = { version = "=0.4.0-alpha", path = "../fedimint-core" }
 fedimint-client = { version = "=0.4.0-alpha", path = "../fedimint-client" }
