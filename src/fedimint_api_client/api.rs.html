@@ -1595,6 +1595,8 @@
 <a href="#1595" id="1595">1595</a>
 <a href="#1596" id="1596">1596</a>
 <a href="#1597" id="1597">1597</a>
+<a href="#1598" id="1598">1598</a>
+<a href="#1599" id="1599">1599</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap};
 <span class="kw">use </span>std::fmt::{<span class="self">self</span>, Debug, Display};
 <span class="kw">use </span>std::num::NonZeroUsize;
@@ -2103,14 +2105,16 @@
     <span class="kw">where
         </span>Ret: serde::de::DeserializeOwned + Eq + Debug + Clone + MaybeSend,
     {
-        <span class="comment">// There is no auth involved, but still - it should only ever be called on a
-        // single endpoint
-        </span><span class="macro">assert_eq!</span>(
-            <span class="self">self</span>.all_peers().len(),
-            <span class="number">1</span>,
-            <span class="string">"attempted to broadcast an admin request?!"
-        </span>);
-        <span class="self">self</span>.request_current_consensus(method.into(), params).<span class="kw">await
+        <span class="kw">let </span><span class="prelude-val">Some</span>(self_peer_id) = <span class="self">self</span>.self_peer() <span class="kw">else </span>{
+            <span class="kw">return </span><span class="prelude-val">Err</span>(FederationError::general(
+                method,
+                params,
+                <span class="macro">anyhow::format_err!</span>(<span class="string">"Admin peer_id not set"</span>),
+            ));
+        };
+
+        <span class="self">self</span>.request_single_peer_federation(<span class="prelude-val">None</span>, method.into(), params, self_peer_id)
+            .<span class="kw">await
     </span>}
 }
 
