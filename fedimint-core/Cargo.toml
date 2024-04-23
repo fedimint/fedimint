@@ -23,7 +23,7 @@ futures-util = { workspace = true }
 backtrace = "0.3.71"
 bincode = { workspace = true }
 bech32 = "0.9.1"
-bls12_381 = "0.7.1"
+bls12_381 = "0.8.0"
 serdect = "0.2.0"
 itertools = { workspace = true }
 jsonrpsee-types = { version = "0.22.2" }
