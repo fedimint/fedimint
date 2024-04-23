@@ -1,3 +1,5 @@
+use std::io::Cursor;
+
 use bitcoin::hashes::sha256;
 use fedimint_core::core::OperationId;
 use fedimint_core::encoding::{Decodable, Encodable};
@@ -88,8 +90,8 @@ impl_db_lookup!(
 /// Migrates `SubmittedOfferV0` to `SubmittedOffer` and `ConfirmedInvoiceV0` to
 /// `ConfirmedInvoice`
 pub(crate) fn get_v1_migrated_state(
-    bytes: &[u8],
     operation_id: OperationId,
+    cursor: &mut Cursor<&[u8]>,
 ) -> anyhow::Result<Option<(Vec<u8>, OperationId)>> {
     #[derive(Debug, Clone, Decodable)]
     pub struct LightningReceiveConfirmedInvoiceV0 {
@@ -98,27 +100,23 @@ pub(crate) fn get_v1_migrated_state(
     }
 
     let decoders = ModuleDecoderRegistry::default();
-    let mut cursor = std::io::Cursor::new(bytes);
-    let module_instance_id =
-        fedimint_core::core::ModuleInstanceId::consensus_decode(&mut cursor, &decoders)?;
-
-    let ln_sm_variant = u16::consensus_decode(&mut cursor, &decoders)?;
+    let ln_sm_variant = u16::consensus_decode(cursor, &decoders)?;
 
     // If the state machine is not a receive state machine, return None
     if ln_sm_variant != 2 {
         return Ok(None);
     }
 
-    let _ln_sm_len = u16::consensus_decode(&mut cursor, &decoders)?;
-    let _operation_id = OperationId::consensus_decode(&mut cursor, &decoders)?;
-    let receive_sm_variant = u16::consensus_decode(&mut cursor, &decoders)?;
+    let _ln_sm_len = u16::consensus_decode(cursor, &decoders)?;
+    let _operation_id = OperationId::consensus_decode(cursor, &decoders)?;
+    let receive_sm_variant = u16::consensus_decode(cursor, &decoders)?;
 
     let new = match receive_sm_variant {
         // SubmittedOfferV0
         0 => {
-            let _receive_sm_len = u16::consensus_decode(&mut cursor, &decoders)?;
+            let _receive_sm_len = u16::consensus_decode(cursor, &decoders)?;
 
-            let v0 = LightningReceiveSubmittedOfferV0::consensus_decode(&mut cursor, &decoders)?;
+            let v0 = LightningReceiveSubmittedOfferV0::consensus_decode(cursor, &decoders)?;
 
             let new_offer = LightningReceiveSubmittedOffer {
                 offer_txid: v0.offer_txid,
@@ -133,9 +131,9 @@ pub(crate) fn get_v1_migrated_state(
         }
         // ConfirmedInvoiceV0
         2 => {
-            let _receive_sm_len = u16::consensus_decode(&mut cursor, &decoders)?;
+            let _receive_sm_len = u16::consensus_decode(cursor, &decoders)?;
             let confirmed_old =
-                LightningReceiveConfirmedInvoiceV0::consensus_decode(&mut cursor, &decoders)?;
+                LightningReceiveConfirmedInvoiceV0::consensus_decode(cursor, &decoders)?;
             let confirmed_new = LightningReceiveConfirmedInvoice {
                 invoice: confirmed_old.invoice,
                 receiving_key: ReceivingKey::Personal(confirmed_old.receiving_key),
@@ -148,43 +146,39 @@ pub(crate) fn get_v1_migrated_state(
         _ => return Ok(None),
     };
 
-    let bytes = (module_instance_id, new).consensus_encode_to_vec();
+    let bytes = new.consensus_encode_to_vec();
     Ok(Some((bytes, operation_id)))
 }
 
 /// Migrates `SubmittedOffer` with enum prefix 5 back to `SubmittedOffer`
 pub(crate) fn get_v2_migrated_state(
-    bytes: &[u8],
     operation_id: OperationId,
+    cursor: &mut Cursor<&[u8]>,
 ) -> anyhow::Result<Option<(Vec<u8>, OperationId)>> {
     let decoders = ModuleDecoderRegistry::default();
-    let mut cursor = std::io::Cursor::new(bytes);
-    let module_instance_id =
-        fedimint_core::core::ModuleInstanceId::consensus_decode(&mut cursor, &decoders)?;
-
-    let ln_sm_variant = u16::consensus_decode(&mut cursor, &decoders)?;
+    let ln_sm_variant = u16::consensus_decode(cursor, &decoders)?;
 
     // If the state machine is not a receive state machine, return None
     if ln_sm_variant != 2 {
         return Ok(None);
     }
 
-    let _ln_sm_len = u16::consensus_decode(&mut cursor, &decoders)?;
-    let _operation_id = OperationId::consensus_decode(&mut cursor, &decoders)?;
-    let receive_sm_variant = u16::consensus_decode(&mut cursor, &decoders)?;
+    let _ln_sm_len = u16::consensus_decode(cursor, &decoders)?;
+    let _operation_id = OperationId::consensus_decode(cursor, &decoders)?;
+    let receive_sm_variant = u16::consensus_decode(cursor, &decoders)?;
     if receive_sm_variant != 5 {
         return Ok(None);
     }
 
-    let _receive_sm_len = u16::consensus_decode(&mut cursor, &decoders)?;
-    let old = LightningReceiveSubmittedOffer::consensus_decode(&mut cursor, &decoders)?;
+    let _receive_sm_len = u16::consensus_decode(cursor, &decoders)?;
+    let old = LightningReceiveSubmittedOffer::consensus_decode(cursor, &decoders)?;
 
     let new_recv = LightningClientStateMachines::Receive(LightningReceiveStateMachine {
         operation_id,
         state: LightningReceiveStates::SubmittedOffer(old),
     });
 
-    let bytes = (module_instance_id, new_recv).consensus_encode_to_vec();
+    let bytes = new_recv.consensus_encode_to_vec();
     Ok(Some((bytes, operation_id)))
 }
 

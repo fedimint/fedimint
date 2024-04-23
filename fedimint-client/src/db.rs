@@ -1,14 +1,17 @@
 use std::collections::BTreeMap;
+use std::io::Cursor;
 use std::time::SystemTime;
 
 use fedimint_api_client::api::ApiVersionSet;
 use fedimint_core::config::{ClientConfig, FederationId};
 use fedimint_core::core::{ModuleInstanceId, OperationId};
 use fedimint_core::db::{
-    create_database_version, Database, DatabaseTransaction, DatabaseVersion, DatabaseVersionKey,
-    IDatabaseTransactionOpsCore, IDatabaseTransactionOpsCoreTyped, MODULE_GLOBAL_PREFIX,
+    create_database_version, Database, DatabaseTransaction, DatabaseValue, DatabaseVersion,
+    DatabaseVersionKey, IDatabaseTransactionOpsCore, IDatabaseTransactionOpsCoreTyped,
+    MODULE_GLOBAL_PREFIX,
 };
 use fedimint_core::encoding::{Decodable, Encodable};
+use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::util::BoxFuture;
 use fedimint_core::{impl_db_lookup, impl_db_record};
 use fedimint_logging::LOG_CLIENT_DB;
@@ -599,7 +602,8 @@ pub async fn remove_old_and_persist_new_inactive_states(
 }
 
 /// Helper function definition for migrating a single state.
-type MigrateStateFn = fn(&[u8], OperationId) -> anyhow::Result<Option<(Vec<u8>, OperationId)>>;
+type MigrateStateFn =
+    fn(OperationId, &mut Cursor<&[u8]>) -> anyhow::Result<Option<(Vec<u8>, OperationId)>>;
 
 /// Migrates a particular state by looping over all active and inactive states.
 /// If the `migrate` closure returns `None`, this state was not migrated and
@@ -612,8 +616,18 @@ pub async fn migrate_state(
     let mut new_active_states = Vec::with_capacity(active_states.len());
     for (active_state, operation_id) in active_states {
         let bytes = active_state.as_slice();
-        let state = match migrate(bytes, operation_id)? {
-            Some(state) => state,
+
+        let decoders = ModuleDecoderRegistry::default();
+        let mut cursor = std::io::Cursor::new(bytes);
+        let module_instance_id =
+            fedimint_core::core::ModuleInstanceId::consensus_decode(&mut cursor, &decoders)?;
+
+        let state = match migrate(operation_id, &mut cursor)? {
+            Some((mut state, operation_id)) => {
+                let mut final_state = module_instance_id.to_bytes();
+                final_state.append(&mut state);
+                (final_state, operation_id)
+            }
             None => (active_state, operation_id),
         };
 
@@ -623,8 +637,18 @@ pub async fn migrate_state(
     let mut new_inactive_states = Vec::with_capacity(inactive_states.len());
     for (inactive_state, operation_id) in inactive_states {
         let bytes = inactive_state.as_slice();
-        let state = match migrate(bytes, operation_id)? {
-            Some(state) => state,
+
+        let decoders = ModuleDecoderRegistry::default();
+        let mut cursor = std::io::Cursor::new(bytes);
+        let module_instance_id =
+            fedimint_core::core::ModuleInstanceId::consensus_decode(&mut cursor, &decoders)?;
+
+        let state = match migrate(operation_id, &mut cursor)? {
+            Some((mut state, operation_id)) => {
+                let mut final_state = module_instance_id.to_bytes();
+                final_state.append(&mut state);
+                (final_state, operation_id)
+            }
             None => (inactive_state, operation_id),
         };
 

@@ -1,3 +1,5 @@
+use std::io::Cursor;
+
 use fedimint_core::core::{ModuleInstanceId, OperationId};
 use fedimint_core::db::{DatabaseTransaction, IDatabaseTransactionOpsCoreTyped};
 use fedimint_core::encoding::{Decodable, Encodable};
@@ -71,23 +73,20 @@ pub async fn migrate_to_v1(
 
 /// Maps all `Unreachable` states in the state machine to `OutputDone`
 pub(crate) fn get_v1_migrated_state(
-    bytes: &[u8],
     operation_id: OperationId,
+    cursor: &mut Cursor<&[u8]>,
 ) -> anyhow::Result<Option<(Vec<u8>, OperationId)>> {
     let decoders = ModuleDecoderRegistry::default();
-    let mut cursor = std::io::Cursor::new(bytes);
-    let module_instance_id =
-        fedimint_core::core::ModuleInstanceId::consensus_decode(&mut cursor, &decoders)?;
-    let dummy_sm_variant = u16::consensus_decode(&mut cursor, &decoders)?;
+    let dummy_sm_variant = u16::consensus_decode(cursor, &decoders)?;
 
     if dummy_sm_variant != 5 {
         return Ok(None);
     }
 
     // Migrate `Unreachable` states to `OutputDone`
-    let unreachable = Unreachable::consensus_decode(&mut cursor, &decoders)?;
+    let unreachable = Unreachable::consensus_decode(cursor, &decoders)?;
     let new_state = DummyStateMachine::OutputDone(unreachable.amount, unreachable.operation_id);
-    let bytes = (module_instance_id, new_state).consensus_encode_to_vec();
+    let bytes = new_state.consensus_encode_to_vec();
     Ok(Some((bytes, operation_id)))
 }
 
