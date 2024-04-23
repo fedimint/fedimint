@@ -506,14 +506,16 @@ pub trait FederationApiExt: IRawFederationApi {
     where
         Ret: serde::de::DeserializeOwned + Eq + Debug + Clone + MaybeSend,
     {
-        // There is no auth involved, but still - it should only ever be called on a
-        // single endpoint
-        assert_eq!(
-            self.all_peers().len(),
-            1,
-            "attempted to broadcast an admin request?!"
-        );
-        self.request_current_consensus(method.into(), params).await
+        let Some(self_peer_id) = self.self_peer() else {
+            return Err(FederationError::general(
+                method,
+                params,
+                anyhow::format_err!("Admin peer_id not set"),
+            ));
+        };
+
+        self.request_single_peer_federation(None, method.into(), params, self_peer_id)
+            .await
     }
 }
 
