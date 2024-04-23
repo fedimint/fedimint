@@ -27,7 +27,7 @@ jobs:
   tests:
     if: github.repository == 'fedimint/fedimint'
     name: "Backwards-compatibility tests"
-    runs-on: buildjet-8vcpu-ubuntu-2004
+    runs-on: [self-hosted, linux]
     timeout-minutes: 60
 
     steps:
@@ -81,7 +81,7 @@ jobs:
     if: always() && github.repository == 'fedimint/fedimint' && github.event_name != 'merge_group'
     name: "Notifications"
     timeout-minutes: 1
-    runs-on: ubuntu-22.04
+    runs-on: [self-hosted, linux]
     needs: [ tests ]
 
     steps:

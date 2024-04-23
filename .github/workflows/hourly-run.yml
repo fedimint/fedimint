@@ -28,10 +28,10 @@ jobs:
         include:
           - host: linux
             # no one is in the rush for this to funish, so use default (free) Ubuntu instances
-            runs-on: ubuntu-latest
+            runs-on: [self-hosted, linux]
             timeout: 75
             run-tests: true
-            free-disk-space-ubuntu: true
+            free-disk-space-ubuntu: false
 
     name: "Test on ${{ matrix.host }}"
     runs-on: ${{ matrix.runs-on }}
@@ -111,7 +111,7 @@ jobs:
     if: always() && github.repository == 'fedimint/fedimint' && github.event_name != 'merge_group'
     name: "Notifications"
     timeout-minutes: 1
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux]
     # note: we don't depend on `audit` because it will
     # be often broken, and we can't fix it immediately
     needs: [ test ]
