@@ -11,13 +11,15 @@ use fedimint_logging::TracingSetup;
 use ln_gateway::rpc::rpc_client::GatewayRpcClient;
 use ln_gateway::rpc::{
     BackupPayload, BalancePayload, ConfigPayload, ConnectFedPayload, ConnectToPeerPayload,
-    DepositAddressPayload, FederationRoutingFees, GetFundingAddressPayload, LeaveFedPayload,
-    OpenChannelPayload, RestorePayload, SetConfigurationPayload, WithdrawPayload, V1_API_ENDPOINT,
+    DepositAddressPayload, FederationRoutingFees, GatewayInfo, GetFundingAddressPayload,
+    LeaveFedPayload, OpenChannelPayload, RestorePayload, SetConfigurationPayload, WithdrawPayload,
+    V1_API_ENDPOINT,
 };
 use serde::Serialize;
 
 const DEFAULT_WAIT_FOR_CHAIN_SYNC_RETRIES: u32 = 12;
 const DEFAULT_WAIT_FOR_CHAIN_SYNC_RETRY_DELAY_SECONDS: u64 = 10;
+const DEFAULT_EXCLUDE_CONFIG: bool = true;
 
 #[derive(Parser)]
 #[command(version)]
@@ -37,7 +39,10 @@ pub enum Commands {
     /// Display CLI version hash
     VersionHash,
     /// Display high-level information about the Gateway
-    Info,
+    Info {
+        #[clap(long)]
+        exclude_config: Option<bool>,
+    },
     /// Display config information about the Gateways federation
     Config {
         #[clap(long)]
@@ -197,16 +202,18 @@ async fn main() -> anyhow::Result<()> {
         Commands::VersionHash => {
             println!("{}", fedimint_build_code_version_env!());
         }
-        Commands::Info => {
+        Commands::Info { exclude_config } => {
             // For backwards-compatibility, fallback to the original POST endpoint if the
             // GET endpoint fails
             // FIXME: deprecated >= 0.3.0
+            let actual_exclude_config: bool = exclude_config.unwrap_or(DEFAULT_EXCLUDE_CONFIG);
+
             let response = match client().get_info().await {
                 Ok(res) => res,
                 Err(_) => client().get_info_legacy().await?,
             };
 
-            print_response(response);
+            print_info_response(response, actual_exclude_config);
         }
 
         Commands::Config { federation_id } => {
@@ -357,4 +364,22 @@ pub fn print_response<T: Serialize>(val: T) {
         "{}",
         serde_json::to_string_pretty(&val).expect("Cannot serialize")
     )
+}
+
+pub fn print_info_response(response: GatewayInfo, exclude_config: bool) {
+    let mut response_json = serde_json::to_value(&response).expect("Cannot serialize");
+
+    if exclude_config {
+        if let serde_json::Value::Object(ref mut map) = response_json {
+            if let Some(serde_json::Value::Array(ref mut federations)) = map.get_mut("federations")
+            {
+                for federation in federations {
+                    if let serde_json::Value::Object(ref mut federation_map) = federation {
+                        federation_map.remove("config");
+                    }
+                }
+            }
+        }
+    }
+    print_response(response_json);
 }
