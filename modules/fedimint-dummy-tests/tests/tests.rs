@@ -14,7 +14,7 @@ use fedimint_dummy_common::config::{DummyClientConfig, DummyGenParams};
 use fedimint_dummy_common::{broken_fed_key_pair, DummyInput, DummyOutput, KIND};
 use fedimint_dummy_server::DummyInit;
 use fedimint_testing::fixtures::Fixtures;
-use secp256k1_24::Secp256k1;
+use secp256k1::Secp256k1;
 
 fn fixtures() -> Fixtures {
     Fixtures::new_primary(DummyClientInit, DummyInit, DummyGenParams::default())

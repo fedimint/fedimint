@@ -31,7 +31,9 @@ use fedimint_client::sm::util::MapStateTransitions;
 use fedimint_client::sm::{DynState, ModuleNotifier, State, StateTransition};
 use fedimint_client::transaction::{ClientInput, ClientOutput, TransactionBuilder};
 use fedimint_client::{sm_enum_variant_translation, DynGlobalClientContext};
-use fedimint_core::bitcoin_migration::bitcoin30_to_bitcoin29_keypair;
+use fedimint_core::bitcoin_migration::{
+    bitcoin30_to_bitcoin29_keypair, bitcoin30_to_bitcoin29_secp256k1_public_key,
+};
 use fedimint_core::config::FederationId;
 use fedimint_core::core::{IntoDynInstance, ModuleInstanceId, OperationId};
 use fedimint_core::db::{DatabaseTransaction, DatabaseVersion, IDatabaseTransactionOpsCoreTyped};
@@ -1034,9 +1036,14 @@ impl LightningClientModule {
         )
         .await;
 
+        let markers = self.client_ctx.get_internal_payment_markers()?;
+
         let mut is_internal_payment = invoice_has_internal_payment_markers(
             &invoice,
-            self.client_ctx.get_internal_payment_markers()?,
+            (
+                bitcoin30_to_bitcoin29_secp256k1_public_key(markers.0),
+                markers.1,
+            ),
         );
         if !is_internal_payment {
             let gateways = dbtx
@@ -1419,7 +1426,11 @@ impl LightningClientModule {
             None => {
                 // If no gateway is provided, this is assumed to be an internal payment.
                 let markers = self.client_ctx.get_internal_payment_markers()?;
-                (markers.0, markers.1, vec![])
+                (
+                    bitcoin30_to_bitcoin29_secp256k1_public_key(markers.0),
+                    markers.1,
+                    vec![],
+                )
             }
         };
 

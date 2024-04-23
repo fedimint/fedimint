@@ -4,7 +4,10 @@ use std::io::{Cursor, Error, Read, Write};
 
 use anyhow::{bail, Context, Result};
 use fedimint_api_client::api::DynGlobalApi;
-use fedimint_core::bitcoin_migration::{bitcoin29_to_bitcoin30_secp256k1_public_key, bitcoin30_to_bitcoin29_keypair};
+use fedimint_core::bitcoin_migration::{
+    bitcoin29_to_bitcoin30_secp256k1_public_key, bitcoin30_to_bitcoin29_keypair,
+    bitcoin30_to_bitcoin29_secp256k1_public_key,
+};
 use fedimint_core::core::backup::{
     BackupRequest, SignedBackupRequest, BACKUP_REQUEST_MAX_PAYLOAD_SIZE_BYTES,
 };
@@ -226,12 +229,12 @@ impl EncryptedClientBackup {
 
     pub fn into_backup_request(self, keypair: &KeyPair) -> Result<SignedBackupRequest> {
         let request = BackupRequest {
-            id: keypair.public_key(),
+            id: bitcoin30_to_bitcoin29_secp256k1_public_key(keypair.public_key()),
             timestamp: fedimint_core::time::now(),
             payload: self.0,
         };
 
-        request.sign(keypair)
+        request.sign(&bitcoin30_to_bitcoin29_keypair(*keypair))
     }
 
     pub fn len(&self) -> usize {
@@ -373,11 +376,15 @@ impl Client {
     /// Backup id derived from the root secret key (public key used to self-sign
     /// backup requests)
     pub fn get_backup_id(&self) -> bitcoin::secp256k1::PublicKey {
-        self.get_derived_backup_signing_key().public_key()
+        bitcoin30_to_bitcoin29_secp256k1_public_key(
+            self.get_derived_backup_signing_key().public_key(),
+        )
     }
 
     pub fn get_backup_id_static(root_secret: &DerivableSecret) -> bitcoin::secp256k1::PublicKey {
-        Self::get_derived_backup_signing_key_static(root_secret).public_key()
+        bitcoin30_to_bitcoin29_secp256k1_public_key(
+            Self::get_derived_backup_signing_key_static(root_secret).public_key(),
+        )
     }
     /// Static version of [`Self::get_derived_backup_encryption_key`] for
     /// testing without creating whole `MintClient`
@@ -390,11 +397,9 @@ impl Client {
     /// Static version of [`Self::get_derived_backup_signing_key`] for testing
     /// without creating whole `MintClient`
     fn get_derived_backup_signing_key_static(secret: &DerivableSecret) -> KeyPair {
-        bitcoin30_to_bitcoin29_keypair(
-            secret
-                .derive_backup_secret()
-                .to_secp_key(&Secp256k1::<secp256k1::SignOnly>::gen_new()),
-        )
+        secret
+            .derive_backup_secret()
+            .to_secp_key(&Secp256k1::<secp256k1::SignOnly>::gen_new())
     }
 
     fn get_derived_backup_encryption_key(&self) -> fedimint_aead::LessSafeKey {
