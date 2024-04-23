@@ -9,6 +9,7 @@ use std::time::Duration;
 
 use thiserror::Error;
 use tokio::time::Instant;
+use tracing::Instrument;
 
 #[derive(Debug, Error)]
 #[error("deadline has elapsed")]
@@ -27,20 +28,18 @@ mod r#impl {
         F: Future<Output = T> + 'static + Send,
         T: Send + 'static,
     {
-        tokio::task::Builder::new()
-            .name(name)
-            .spawn(future)
-            .expect("spawn failed")
+        let span = tracing::span!(tracing::Level::INFO, "spawn", task_name = name);
+        // nosemgrep: ban-tokio-spawn
+        tokio::spawn(future.instrument(span))
     }
 
     pub(crate) fn spawn_local<F>(name: &str, future: F) -> JoinHandle<()>
     where
         F: Future<Output = ()> + 'static,
     {
-        tokio::task::Builder::new()
-            .name(name)
-            .spawn_local(future)
-            .expect("spawn failed")
+        let span = tracing::span!(tracing::Level::INFO, "spawn_local", task_name = name);
+        // nosemgrep: ban-tokio-spawn
+        tokio::task::spawn_local(future.instrument(span))
     }
 
     // note: this call does not exist on wasm and you need to handle it
