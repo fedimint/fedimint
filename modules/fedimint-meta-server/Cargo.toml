@@ -26,7 +26,6 @@ fedimint-logging = { version = "=0.4.0-alpha", path = "../../fedimint-logging" }
 fedimint-meta-common = { version = "=0.4.0-alpha", path = "../fedimint-meta-common" }
 rand = { workspace = true }
 serde = { version = "1.0.198", features = [ "derive" ] }
-secp256k1 = "0.24.2"
 strum = { workspace = true }
 strum_macros = { workspace = true }
 thiserror = { workspace = true }

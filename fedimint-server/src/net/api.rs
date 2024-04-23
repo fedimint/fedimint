@@ -15,6 +15,7 @@ use fedimint_api_client::api::{
 };
 use fedimint_core::admin_client::ServerStatus;
 use fedimint_core::backup::{ClientBackupKey, ClientBackupSnapshot};
+use fedimint_core::bitcoin_migration::bitcoin30_to_bitcoin29_secp256k1_public_key;
 use fedimint_core::config::{ClientConfig, JsonWithKind};
 use fedimint_core::core::backup::{SignedBackupRequest, BACKUP_REQUEST_MAX_PAYLOAD_SIZE_BYTES};
 use fedimint_core::core::{DynOutputOutcome, ModuleInstanceId};
@@ -43,7 +44,7 @@ use fedimint_core::{OutPoint, PeerId, TransactionId};
 use fedimint_logging::LOG_NET_API;
 use futures::StreamExt;
 use jsonrpsee::RpcModule;
-use secp256k1_zkp::SECP256K1;
+use secp256k1_24::SECP256K1;
 use tokio::sync::RwLock;
 use tracing::{debug, info};
 
@@ -386,7 +387,10 @@ impl ConsensusApi {
         dbtx: &mut DatabaseTransaction<'_>,
         id: secp256k1_zkp::PublicKey,
     ) -> Option<ClientBackupSnapshot> {
-        dbtx.get_value(&ClientBackupKey(id)).await
+        dbtx.get_value(&ClientBackupKey(
+            bitcoin30_to_bitcoin29_secp256k1_public_key(id),
+        ))
+        .await
     }
 }
 

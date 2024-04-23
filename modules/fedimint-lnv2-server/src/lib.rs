@@ -6,6 +6,7 @@ use std::time::Duration;
 use anyhow::ensure;
 use bls12_381::{G1Projective, Scalar};
 use fedimint_bitcoind::{create_bitcoind, DynBitcoindRpc};
+use fedimint_core::bitcoin_migration::bitcoin30_to_bitcoin29_secp256k1_public_key;
 use fedimint_core::config::{
     ConfigGenModuleParams, DkgResult, ServerModuleConfig, ServerModuleConsensusConfig,
     TypedServerModuleConfig, TypedServerModuleConsensusConfig,
@@ -430,7 +431,7 @@ impl ServerModule for Lightning {
                 amount,
                 fee: self.cfg.consensus.fee_consensus.input,
             },
-            pub_key,
+            pub_key: bitcoin30_to_bitcoin29_secp256k1_public_key(pub_key),
         })
     }
 

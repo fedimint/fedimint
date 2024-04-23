@@ -2,10 +2,12 @@ use std::collections::BTreeMap;
 use std::io::Write;
 
 use aleph_bft::Keychain as KeychainTrait;
+use fedimint_core::bitcoin_migration::bitcoin29_to_bitcoin30_message;
 use fedimint_core::session_outcome::{consensus_hash_sha256, SchnorrSignature};
 use fedimint_core::{BitcoinHash, NumPeersExt, PeerId};
-use secp256k1_zkp::hashes::sha256;
-use secp256k1_zkp::{schnorr, All, KeyPair, Message, PublicKey, Secp256k1, SecretKey};
+use secp256k1_24::hashes::sha256;
+use secp256k1_24::Message;
+use secp256k1_zkp::{schnorr, All, KeyPair, PublicKey, Secp256k1, SecretKey};
 
 #[derive(Clone, Debug)]
 pub struct Keychain {
@@ -79,7 +81,10 @@ impl aleph_bft::Keychain for Keychain {
     fn sign(&self, message: &[u8]) -> Self::Signature {
         SchnorrSignature(
             self.secp
-                .sign_schnorr(&self.tagged_hash(message), &self.keypair)
+                .sign_schnorr(
+                    &bitcoin29_to_bitcoin30_message(self.tagged_hash(message)),
+                    &self.keypair,
+                )
                 .as_ref()
                 .to_owned(),
         )
@@ -99,7 +104,7 @@ impl aleph_bft::Keychain for Keychain {
                     .secp
                     .verify_schnorr(
                         &sig,
-                        &self.tagged_hash(message),
+                        &bitcoin29_to_bitcoin30_message(self.tagged_hash(message)),
                         &public_key.x_only_public_key().0,
                     )
                     .is_ok();

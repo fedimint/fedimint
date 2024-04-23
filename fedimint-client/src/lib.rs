@@ -85,6 +85,7 @@ use db::{
 };
 use envs::get_discover_api_version_timeout;
 use fedimint_api_client::api::{ApiVersionSet, DynGlobalApi, DynModuleApi, IGlobalFederationApi};
+use fedimint_core::bitcoin_migration::bitcoin29_to_bitcoin30_secp256k1_public_key;
 use fedimint_core::config::{
     ClientConfig, ClientModuleConfig, FederationId, JsonClientConfig, JsonWithKind,
     ModuleInitRegistry,
@@ -752,6 +753,7 @@ pub struct Client {
     root_secret: DerivableSecret,
     operation_log: OperationLog,
     secp_ctx: Secp256k1<secp256k1_zkp::All>,
+    secp_ctx_24: secp256k1_24::Secp256k1<secp256k1_24::All>,
     meta_service: Arc<MetaService>,
 
     task_group: TaskGroup,
@@ -953,7 +955,12 @@ impl Client {
     }
 
     pub fn get_internal_payment_markers(&self) -> anyhow::Result<(PublicKey, u64)> {
-        Ok((self.federation_id().to_fake_ln_pub_key(&self.secp_ctx)?, 0))
+        Ok((
+            bitcoin29_to_bitcoin30_secp256k1_public_key(
+                self.federation_id().to_fake_ln_pub_key(&self.secp_ctx_24)?,
+            ),
+            0,
+        ))
     }
 
     pub fn get_meta(&self, key: &str) -> Option<String> {
@@ -2334,6 +2341,7 @@ impl ClientBuilder {
             executor,
             api,
             secp_ctx: Secp256k1::new(),
+            secp_ctx_24: secp256k1_24::Secp256k1::new(),
             root_secret,
             task_group,
             operation_log: OperationLog::new(db),

@@ -7,9 +7,7 @@ use anyhow::{anyhow, bail};
 use async_channel::{Receiver, Sender};
 use fedimint_api_client::api::{DynGlobalApi, FederationApiExt, WsFederationApi};
 use fedimint_api_client::query::FilterMap;
-use fedimint_core::bitcoin_migration::{
-    bitcoin29_to_bitcoin30_sha256_hash, bitcoin30_to_bitcoin29_secp256k1_public_key,
-};
+use fedimint_core::bitcoin_migration::bitcoin29_to_bitcoin30_sha256_hash;
 use fedimint_core::config::ServerModuleInitRegistry;
 use fedimint_core::core::{ModuleInstanceId, ModuleKind, MODULE_INSTANCE_ID_GLOBAL};
 use fedimint_core::db::{
@@ -172,7 +170,7 @@ impl ConsensusServer {
             cfg.consensus
                 .broadcast_public_keys
                 .iter()
-                .map(|(peer_id, pk)| (*peer_id, bitcoin30_to_bitcoin29_secp256k1_public_key(*pk)))
+                .map(|(peer_id, pk)| (*peer_id, *pk))
                 .collect(),
             cfg.private.broadcast_secret_key,
         );

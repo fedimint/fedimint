@@ -12,8 +12,12 @@ use fedimint_client::sm::util::MapStateTransitions;
 use fedimint_client::sm::{Context, DynState, ModuleNotifier, State, StateTransition};
 use fedimint_client::transaction::{ClientOutput, TransactionBuilder};
 use fedimint_client::{sm_enum_variant_translation, DynGlobalClientContext};
+use fedimint_core::bitcoin_migration::{
+    bitcoin29_to_bitcoin30_schnorr_signature, bitcoin30_to_bitcoin29_keypair,
+    bitcoin30_to_bitcoin29_message,
+};
 use fedimint_core::config::FederationId;
-use fedimint_core::core::{Decoder, IntoDynInstance, KeyPair, ModuleInstanceId, OperationId};
+use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, OperationId};
 use fedimint_core::db::{DatabaseTransaction, DatabaseVersion};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::{
@@ -27,6 +31,7 @@ use futures::StreamExt;
 use lightning_invoice::Bolt11Invoice;
 use receive_sm::{ReceiveSMState, ReceiveStateMachine};
 use secp256k1::schnorr::Signature;
+use secp256k1::KeyPair;
 use send_sm::{SendSMState, SendStateMachine};
 use serde::{Deserialize, Serialize};
 use tpe::{AggregatePublicKey, PublicKeyShare};
@@ -73,10 +78,11 @@ impl ClientModuleInit for GatewayClientInitV2 {
             notifier: args.notifier().clone(),
             client_ctx: args.context(),
             module_api: args.module_api().clone(),
-            keypair: args
-                .module_root_secret()
-                .clone()
-                .to_secp_key(secp256k1::SECP256K1),
+            keypair: bitcoin30_to_bitcoin29_keypair(
+                args.module_root_secret()
+                    .clone()
+                    .to_secp_key(secp256k1_zkp::SECP256K1),
+            ),
             gateway: self.gateway.clone(),
         })
     }
@@ -221,9 +227,13 @@ impl GatewayClientModuleV2 {
                     SendSMState::Cancelled(cancelled) => {
                         warn!("Outgoing lightning payment is cancelled {:?}", cancelled);
 
-                        let signature = self.keypair.sign_schnorr(contract.forfeit_message());
+                        let signature = self.keypair.sign_schnorr(bitcoin30_to_bitcoin29_message(
+                            contract.forfeit_message(),
+                        ));
 
-                        assert!(contract.verify_forfeit_signature(&signature));
+                        assert!(contract.verify_forfeit_signature(
+                            &bitcoin29_to_bitcoin30_schnorr_signature(signature)
+                        ));
 
                         return Err(signature);
                     }

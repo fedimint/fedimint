@@ -627,7 +627,7 @@ impl PaymentData {
         }
     }
 
-    pub fn destination(&self) -> secp256k1_zkp::PublicKey {
+    pub fn destination(&self) -> secp256k1::PublicKey {
         match self {
             PaymentData::Invoice(invoice) => invoice
                 .payee_pub_key()

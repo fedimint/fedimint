@@ -1,6 +1,11 @@
 use std::fmt::Debug;
 
 use bitcoin_hashes::sha256;
+use fedimint_core::bitcoin_migration::{
+    bitcoin29_to_bitcoin30_schnorr_signature, bitcoin29_to_bitcoin30_secp256k1_public_key,
+    bitcoin29_to_bitcoin30_sha256_hash, bitcoin30_to_bitcoin29_keypair,
+    bitcoin30_to_bitcoin29_message,
+};
 use fedimint_core::encoding::{Decodable, Encodable};
 use secp256k1_zkp::{KeyPair, Message, Secp256k1, Signing, Verification};
 use serde::{Deserialize, Serialize};
@@ -19,7 +24,12 @@ impl BackupRequest {
     }
 
     pub fn sign(self, keypair: &KeyPair) -> anyhow::Result<SignedBackupRequest> {
-        let signature = secp256k1::SECP256K1.sign_schnorr(&Message::from(self.hash()), keypair);
+        let signature = secp256k1::SECP256K1.sign_schnorr(
+            &bitcoin30_to_bitcoin29_message(Message::from(bitcoin29_to_bitcoin30_sha256_hash(
+                self.hash(),
+            ))),
+            &bitcoin30_to_bitcoin29_keypair(*keypair),
+        );
 
         Ok(SignedBackupRequest {
             request: self,
@@ -37,14 +47,19 @@ pub struct SignedBackupRequest {
 }
 
 impl SignedBackupRequest {
-    pub fn verify_valid<C>(&self, ctx: &Secp256k1<C>) -> Result<&BackupRequest, secp256k1::Error>
+    pub fn verify_valid<C>(
+        &self,
+        ctx: &Secp256k1<C>,
+    ) -> Result<&BackupRequest, secp256k1_zkp::Error>
     where
         C: Signing + Verification,
     {
         ctx.verify_schnorr(
-            &self.signature,
+            &bitcoin29_to_bitcoin30_schnorr_signature(self.signature),
             &Message::from_slice(&self.request.hash()).expect("Can't fail"),
-            &self.request.id.x_only_public_key().0,
+            &bitcoin29_to_bitcoin30_secp256k1_public_key(self.request.id)
+                .x_only_public_key()
+                .0,
         )?;
 
         Ok(&self.request)

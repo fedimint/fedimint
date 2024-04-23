@@ -5,6 +5,10 @@ use bitcoin_hashes::sha256;
 use fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
 use fedimint_client::transaction::{ClientInput, ClientOutput};
 use fedimint_client::{ClientHandleArc, DynGlobalClientContext};
+use fedimint_core::bitcoin_migration::{
+    bitcoin29_to_bitcoin30_keypair, bitcoin29_to_bitcoin30_sha256_hash,
+    bitcoin30_to_bitcoin29_schnorr_signature,
+};
 use fedimint_core::config::FederationId;
 use fedimint_core::core::OperationId;
 use fedimint_core::db::IDatabaseTransactionOpsCoreTyped;
@@ -884,12 +888,12 @@ impl GatewayPayCancelContract {
     ) -> GatewayPayStateMachine {
         info!("Canceling outgoing contract {contract:?}");
         let cancel_signature = context.secp.sign_schnorr(
-            &contract.contract.cancellation_message().into(),
-            &context.redeem_key,
+            &bitcoin29_to_bitcoin30_sha256_hash(contract.contract.cancellation_message()).into(),
+            &bitcoin29_to_bitcoin30_keypair(context.redeem_key),
         );
         let cancel_output = LightningOutput::new_v0_cancel_outgoing(
             contract.contract.contract_id(),
-            cancel_signature,
+            bitcoin30_to_bitcoin29_schnorr_signature(cancel_signature),
         );
         let client_output = ClientOutput::<LightningOutput, GatewayClientStateMachines> {
             output: cancel_output,

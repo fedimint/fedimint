@@ -31,6 +31,9 @@ use fedimint_client::sm::util::MapStateTransitions;
 use fedimint_client::sm::{DynState, ModuleNotifier, State, StateTransition};
 use fedimint_client::transaction::{ClientInput, ClientOutput, TransactionBuilder};
 use fedimint_client::{sm_enum_variant_translation, DynGlobalClientContext};
+use fedimint_core::bitcoin_migration::{
+    bitcoin30_to_bitcoin29_keypair, bitcoin30_to_bitcoin29_secp256k1_public_key,
+};
 use fedimint_core::config::FederationId;
 use fedimint_core::core::{IntoDynInstance, ModuleInstanceId, OperationId};
 use fedimint_core::db::{DatabaseTransaction, DatabaseVersion, IDatabaseTransactionOpsCoreTyped};
@@ -67,8 +70,7 @@ use lightning_invoice::{
 use rand::rngs::OsRng;
 use rand::seq::IteratorRandom as _;
 use rand::{CryptoRng, Rng, RngCore};
-use secp256k1::{PublicKey, Scalar, Signing, ThirtyTwoByteHash, Verification};
-use secp256k1_zkp::{All, Secp256k1};
+use secp256k1::{All, PublicKey, Scalar, Secp256k1, Signing, ThirtyTwoByteHash, Verification};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use strum::IntoEnumIterator;
@@ -445,18 +447,21 @@ impl LightningClientModule {
         args: &ClientModuleInitArgs<LightningClientInit>,
     ) -> anyhow::Result<LightningClientModule> {
         let secp = Secp256k1::new();
+        let secp_27 = secp256k1_27::Secp256k1::new();
         let ln_module = LightningClientModule {
             cfg: args.cfg().clone(),
             notifier: args.notifier().clone(),
-            redeem_key: args
-                .module_root_secret()
-                .child_key(ChildId(LightningChildKeys::RedeemKey as u64))
-                .to_secp_key(&secp),
+            redeem_key: bitcoin30_to_bitcoin29_keypair(
+                args.module_root_secret()
+                    .child_key(ChildId(LightningChildKeys::RedeemKey as u64))
+                    .to_secp_key(&secp_27),
+            ),
             module_api: args.module_api().clone(),
-            preimage_auth: args
-                .module_root_secret()
-                .child_key(ChildId(LightningChildKeys::PreimageAuthentication as u64))
-                .to_secp_key(&secp),
+            preimage_auth: bitcoin30_to_bitcoin29_keypair(
+                args.module_root_secret()
+                    .child_key(ChildId(LightningChildKeys::PreimageAuthentication as u64))
+                    .to_secp_key(&secp_27),
+            ),
             secp,
             client_ctx: args.context(),
             update_gateway_cache_merge: UpdateMerge::default(),
@@ -1030,9 +1035,14 @@ impl LightningClientModule {
         )
         .await;
 
+        let markers = self.client_ctx.get_internal_payment_markers()?;
+
         let mut is_internal_payment = invoice_has_internal_payment_markers(
             &invoice,
-            self.client_ctx.get_internal_payment_markers()?,
+            (
+                bitcoin30_to_bitcoin29_secp256k1_public_key(markers.0),
+                markers.1,
+            ),
         );
         if !is_internal_payment {
             let gateways = dbtx
@@ -1415,7 +1425,11 @@ impl LightningClientModule {
             None => {
                 // If no gateway is provided, this is assumed to be an internal payment.
                 let markers = self.client_ctx.get_internal_payment_markers()?;
-                (markers.0, markers.1, vec![])
+                (
+                    bitcoin30_to_bitcoin29_secp256k1_public_key(markers.0),
+                    markers.1,
+                    vec![],
+                )
             }
         };
 

@@ -24,7 +24,8 @@ use fedimint_client::sm::{Context, DynState, ModuleNotifier, State, StateTransit
 use fedimint_client::transaction::{ClientOutput, TransactionBuilder};
 use fedimint_client::{sm_enum_variant_translation, DynGlobalClientContext};
 use fedimint_core::bitcoin_migration::{
-    bitcoin29_to_bitcoin30_network, bitcoin30_to_bitcoin29_address,
+    bitcoin29_to_bitcoin30_network, bitcoin30_to_bitcoin29_address, bitcoin30_to_bitcoin29_keypair,
+    bitcoin30_to_bitcoin29_secp256k1_public_key,
 };
 use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, OperationId};
 use fedimint_core::db::{
@@ -212,7 +213,7 @@ pub struct WalletClientModule {
     module_api: DynModuleApi,
     notifier: ModuleNotifier<WalletClientStates>,
     rpc: DynBitcoindRpc,
-    secp: Secp256k1<All>,
+    secp: secp256k1_27::Secp256k1<secp256k1_27::All>,
     client_ctx: ClientContext<Self>,
 }
 
@@ -291,7 +292,10 @@ impl WalletClientModule {
         let address = bitcoin30_to_bitcoin29_address(
             self.cfg
                 .peg_in_descriptor
-                .tweak(&public_tweak_key, secp256k1::SECP256K1)
+                .tweak(
+                    &bitcoin30_to_bitcoin29_secp256k1_public_key(public_tweak_key),
+                    secp256k1::SECP256K1,
+                )
                 .address(bitcoin29_to_bitcoin30_network(self.cfg.network))
                 .unwrap(),
         );
@@ -299,7 +303,7 @@ impl WalletClientModule {
         let deposit_sm = WalletClientStates::Deposit(DepositStateMachine {
             operation_id,
             state: DepositStates::Created(CreatedDepositState {
-                tweak_key: secret_tweak_key,
+                tweak_key: bitcoin30_to_bitcoin29_keypair(secret_tweak_key),
                 timeout_at: valid_until,
             }),
         });
