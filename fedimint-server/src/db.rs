@@ -102,10 +102,7 @@ mod fedimint_migration_tests {
     use bitcoin::key::KeyPair;
     use bitcoin::secp256k1;
     use bitcoin_hashes::Hash;
-    use fedimint_core::bitcoin_migration::{
-        bitcoin29_to_bitcoin30_message, bitcoin29_to_bitcoin30_secp256k1_secret_key,
-        bitcoin30_to_bitcoin29_schnorr_signature,
-    };
+    use fedimint_core::bitcoin_migration::bitcoin30_to_bitcoin29_schnorr_signature;
     use fedimint_core::core::{DynInput, DynOutput};
     use fedimint_core::db::{
         Database, DatabaseVersion, DatabaseVersionKeyV0, IDatabaseTransactionOpsCoreTyped,
@@ -154,10 +151,9 @@ mod fedimint_migration_tests {
 
         let (sk, _) = secp256k1_zkp::generate_keypair(&mut OsRng);
         let secp = secp256k1::Secp256k1::new();
-        let key_pair =
-            KeyPair::from_secret_key(&secp, &bitcoin29_to_bitcoin30_secp256k1_secret_key(sk));
+        let key_pair = KeyPair::from_secret_key(&secp, &sk);
         let schnorr = secp.sign_schnorr_with_rng(
-            &bitcoin29_to_bitcoin30_message(Message::from_slice(&BYTE_32).unwrap()),
+            &Message::from_slice(&BYTE_32).unwrap(),
             &key_pair,
             &mut thread_rng(),
         );
