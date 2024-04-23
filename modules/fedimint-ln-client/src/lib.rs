@@ -70,8 +70,7 @@ use lightning_invoice::{
 use rand::rngs::OsRng;
 use rand::seq::IteratorRandom as _;
 use rand::{CryptoRng, Rng, RngCore};
-use secp256k1::{PublicKey, Scalar, Signing, ThirtyTwoByteHash, Verification};
-use secp256k1_zkp::{All, Secp256k1};
+use secp256k1::{All, PublicKey, Scalar, Secp256k1, Signing, ThirtyTwoByteHash, Verification};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use strum::IntoEnumIterator;
