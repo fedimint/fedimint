@@ -407,6 +407,9 @@
 <a href="#407" id="407">407</a>
 <a href="#408" id="408">408</a>
 <a href="#409" id="409">409</a>
+<a href="#410" id="410">410</a>
+<a href="#411" id="411">411</a>
+<a href="#412" id="412">412</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::cmp::Reverse;
 <span class="kw">use </span>std::collections::{BTreeMap, BTreeSet};
 <span class="kw">use </span>std::io::{Cursor, Error, Read, Write};
@@ -414,6 +417,7 @@
 <span class="kw">use </span>anyhow::{bail, Context, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>bitcoin::secp256k1;
 <span class="kw">use </span>fedimint_api_client::api::DynGlobalApi;
+<span class="kw">use </span>fedimint_core::bitcoin_migration::bitcoin29_to_bitcoin30_secp256k1_public_key;
 <span class="kw">use </span>fedimint_core::core::backup::{
     BackupRequest, SignedBackupRequest, BACKUP_REQUEST_MAX_PAYLOAD_SIZE_BYTES,
 };
@@ -745,7 +749,9 @@
     ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;ClientBackup&gt;&gt; {
         <span class="macro">debug!</span>(target: LOG_CLIENT, <span class="string">"Downloading backup from the federation"</span>);
         <span class="kw">let </span><span class="kw-2">mut </span>responses: Vec&lt;<span class="kw">_</span>&gt; = api
-            .download_backup(<span class="kw-2">&amp;</span>Client::get_backup_id_static(root_secret))
+            .download_backup(<span class="kw-2">&amp;</span>bitcoin29_to_bitcoin30_secp256k1_public_key(
+                Client::get_backup_id_static(root_secret),
+            ))
             .<span class="kw">await</span><span class="question-mark">?
             </span>.into_iter()
             .filter_map(|backup| {
