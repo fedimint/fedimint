@@ -380,6 +380,8 @@
 <a href="#380" id="380">380</a>
 <a href="#381" id="381">381</a>
 <a href="#382" id="382">382</a>
+<a href="#383" id="383">383</a>
+<a href="#384" id="384">384</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
@@ -393,7 +395,8 @@
 <span class="kw">use </span>fedimint_client::module::{ClientContext, ClientModule, IClientModule};
 <span class="kw">use </span>fedimint_client::sm::{Context, ModuleNotifier};
 <span class="kw">use </span>fedimint_client::transaction::{ClientInput, ClientOutput, TransactionBuilder};
-<span class="kw">use </span>fedimint_core::core::{Decoder, KeyPair, OperationId};
+<span class="kw">use </span>fedimint_core::bitcoin_migration::bitcoin30_to_bitcoin29_keypair;
+<span class="kw">use </span>fedimint_core::core::{Decoder, OperationId};
 <span class="kw">use </span>fedimint_core::db::{
     Database, DatabaseTransaction, DatabaseVersion, IDatabaseTransactionOpsCoreTyped,
 };
@@ -409,7 +412,7 @@
     KIND,
 };
 <span class="kw">use </span>futures::{pin_mut, FutureExt, StreamExt};
-<span class="kw">use </span>secp256k1::{PublicKey, Secp256k1};
+<span class="kw">use </span>secp256k1::{KeyPair, PublicKey, Secp256k1};
 <span class="kw">use </span>states::DummyStateMachine;
 <span class="kw">use </span>strum::IntoEnumIterator;
 
@@ -484,7 +487,7 @@
                 account: <span class="self">self</span>.key.public_key(),
             },
             amount,
-            keys: <span class="macro">vec!</span>[<span class="self">self</span>.key],
+            keys: <span class="macro">vec!</span>[bitcoin30_to_bitcoin29_keypair(<span class="self">self</span>.key)],
             state_machines: Arc::new(<span class="kw">move </span>|txid, <span class="kw">_</span>| {
                 <span class="macro">vec!</span>[DummyStateMachine::Input(amount, txid, id)]
             }),
@@ -571,7 +574,7 @@
                 account: account_kp.public_key(),
             },
             amount,
-            keys: <span class="macro">vec!</span>[account_kp],
+            keys: <span class="macro">vec!</span>[bitcoin30_to_bitcoin29_keypair(account_kp)],
             state_machines: Arc::new(<span class="kw">move </span>|<span class="kw">_</span>, <span class="kw">_</span>| Vec::&lt;DummyStateMachine&gt;::new()),
         };
 
@@ -740,6 +743,7 @@
                 .module_root_secret()
                 .clone()
                 .to_secp_key(<span class="kw-2">&amp;</span>Secp256k1::new()),
+
             notifier: args.notifier().clone(),
             client_ctx: args.context(),
             db: args.db().clone(),

@@ -286,6 +286,16 @@
 <a href="#286" id="286">286</a>
 <a href="#287" id="287">287</a>
 <a href="#288" id="288">288</a>
+<a href="#289" id="289">289</a>
+<a href="#290" id="290">290</a>
+<a href="#291" id="291">291</a>
+<a href="#292" id="292">292</a>
+<a href="#293" id="293">293</a>
+<a href="#294" id="294">294</a>
+<a href="#295" id="295">295</a>
+<a href="#296" id="296">296</a>
+<a href="#297" id="297">297</a>
+<a href="#298" id="298">298</a>
 </pre></div><pre class="rust"><code><span class="kw">mod </span>receive_sm;
 <span class="kw">mod </span>send_sm;
 
@@ -300,8 +310,12 @@
 <span class="kw">use </span>fedimint_client::sm::{Context, DynState, ModuleNotifier, State, StateTransition};
 <span class="kw">use </span>fedimint_client::transaction::{ClientOutput, TransactionBuilder};
 <span class="kw">use </span>fedimint_client::{sm_enum_variant_translation, DynGlobalClientContext};
+<span class="kw">use </span>fedimint_core::bitcoin_migration::{
+    bitcoin29_to_bitcoin30_schnorr_signature, bitcoin30_to_bitcoin29_keypair,
+    bitcoin30_to_bitcoin29_message,
+};
 <span class="kw">use </span>fedimint_core::config::FederationId;
-<span class="kw">use </span>fedimint_core::core::{Decoder, IntoDynInstance, KeyPair, ModuleInstanceId, OperationId};
+<span class="kw">use </span>fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, OperationId};
 <span class="kw">use </span>fedimint_core::db::{DatabaseTransaction, DatabaseVersion};
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::module::{
@@ -315,6 +329,7 @@
 <span class="kw">use </span>lightning_invoice::Bolt11Invoice;
 <span class="kw">use </span>receive_sm::{ReceiveSMState, ReceiveStateMachine};
 <span class="kw">use </span>secp256k1::schnorr::Signature;
+<span class="kw">use </span>secp256k1::KeyPair;
 <span class="kw">use </span>send_sm::{SendSMState, SendStateMachine};
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>tpe::{AggregatePublicKey, PublicKeyShare};
@@ -361,10 +376,11 @@
             notifier: args.notifier().clone(),
             client_ctx: args.context(),
             module_api: args.module_api().clone(),
-            keypair: args
-                .module_root_secret()
-                .clone()
-                .to_secp_key(secp256k1::SECP256K1),
+            keypair: bitcoin30_to_bitcoin29_keypair(
+                args.module_root_secret()
+                    .clone()
+                    .to_secp_key(secp256k1_zkp::SECP256K1),
+            ),
             gateway: <span class="self">self</span>.gateway.clone(),
         })
     }
@@ -509,9 +525,13 @@
                     SendSMState::Cancelled(cancelled) =&gt; {
                         <span class="macro">warn!</span>(<span class="string">"Outgoing lightning payment is cancelled {:?}"</span>, cancelled);
 
-                        <span class="kw">let </span>signature = <span class="self">self</span>.keypair.sign_schnorr(contract.forfeit_message());
+                        <span class="kw">let </span>signature = <span class="self">self</span>.keypair.sign_schnorr(bitcoin30_to_bitcoin29_message(
+                            contract.forfeit_message(),
+                        ));
 
-                        <span class="macro">assert!</span>(contract.verify_forfeit_signature(<span class="kw-2">&amp;</span>signature));
+                        <span class="macro">assert!</span>(contract.verify_forfeit_signature(
+                            <span class="kw-2">&amp;</span>bitcoin29_to_bitcoin30_schnorr_signature(signature)
+                        ));
 
                         <span class="kw">return </span><span class="prelude-val">Err</span>(signature);
                     }

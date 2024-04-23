@@ -1299,7 +1299,7 @@
         }
     }
 
-    <span class="kw">pub fn </span>destination(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; secp256k1_zkp::PublicKey {
+    <span class="kw">pub fn </span>destination(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; secp256k1::PublicKey {
         <span class="kw">match </span><span class="self">self </span>{
             PaymentData::Invoice(invoice) =&gt; invoice
                 .payee_pub_key()

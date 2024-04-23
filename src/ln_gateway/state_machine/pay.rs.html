@@ -924,6 +924,10 @@
 <a href="#924" id="924">924</a>
 <a href="#925" id="925">925</a>
 <a href="#926" id="926">926</a>
+<a href="#927" id="927">927</a>
+<a href="#928" id="928">928</a>
+<a href="#929" id="929">929</a>
+<a href="#930" id="930">930</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::fmt::Display;
 <span class="kw">use </span>std::sync::Arc;
 
@@ -931,6 +935,10 @@
 <span class="kw">use </span>fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
 <span class="kw">use </span>fedimint_client::transaction::{ClientInput, ClientOutput};
 <span class="kw">use </span>fedimint_client::{ClientHandleArc, DynGlobalClientContext};
+<span class="kw">use </span>fedimint_core::bitcoin_migration::{
+    bitcoin29_to_bitcoin30_keypair, bitcoin29_to_bitcoin30_sha256_hash,
+    bitcoin30_to_bitcoin29_schnorr_signature,
+};
 <span class="kw">use </span>fedimint_core::config::FederationId;
 <span class="kw">use </span>fedimint_core::core::OperationId;
 <span class="kw">use </span>fedimint_core::db::IDatabaseTransactionOpsCoreTyped;
@@ -1810,12 +1818,12 @@
     ) -&gt; GatewayPayStateMachine {
         <span class="macro">info!</span>(<span class="string">"Canceling outgoing contract {contract:?}"</span>);
         <span class="kw">let </span>cancel_signature = context.secp.sign_schnorr(
-            <span class="kw-2">&amp;</span>contract.contract.cancellation_message().into(),
-            <span class="kw-2">&amp;</span>context.redeem_key,
+            <span class="kw-2">&amp;</span>bitcoin29_to_bitcoin30_sha256_hash(contract.contract.cancellation_message()).into(),
+            <span class="kw-2">&amp;</span>bitcoin29_to_bitcoin30_keypair(context.redeem_key),
         );
         <span class="kw">let </span>cancel_output = LightningOutput::new_v0_cancel_outgoing(
             contract.contract.contract_id(),
-            cancel_signature,
+            bitcoin30_to_bitcoin29_schnorr_signature(cancel_signature),
         );
         <span class="kw">let </span>client_output = ClientOutput::&lt;LightningOutput, GatewayClientStateMachines&gt; {
             output: cancel_output,

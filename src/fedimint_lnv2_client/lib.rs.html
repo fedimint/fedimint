@@ -877,6 +877,8 @@
 <a href="#877" id="877">877</a>
 <a href="#878" id="878">878</a>
 <a href="#879" id="879">879</a>
+<a href="#880" id="880">880</a>
+<a href="#881" id="881">881</a>
 </pre></div><pre class="rust"><code><span class="kw">pub mod </span>api;
 <span class="attr">#[cfg(feature = <span class="string">"cli"</span>)]
 </span><span class="kw">mod </span>cli;
@@ -896,6 +898,7 @@
 <span class="kw">use </span>fedimint_client::sm::{DynState, ModuleNotifier, State, StateTransition};
 <span class="kw">use </span>fedimint_client::transaction::{ClientOutput, TransactionBuilder};
 <span class="kw">use </span>fedimint_client::{sm_enum_variant_translation, DynGlobalClientContext};
+<span class="kw">use </span>fedimint_core::bitcoin_migration::bitcoin30_to_bitcoin29_keypair;
 <span class="kw">use </span>fedimint_core::config::FederationId;
 <span class="kw">use </span>fedimint_core::core::{IntoDynInstance, ModuleInstanceId, OperationId};
 <span class="kw">use </span>fedimint_core::db::{DatabaseTransaction, DatabaseVersion};
@@ -1094,6 +1097,7 @@
                 .module_root_secret()
                 .clone()
                 .to_secp_key(secp256k1::SECP256K1),
+
             admin_auth: args.admin_auth().cloned(),
         })
     }
@@ -1566,7 +1570,7 @@
             common: ReceiveSMCommon {
                 operation_id,
                 contract: contract.clone(),
-                claim_keypair,
+                claim_keypair: bitcoin30_to_bitcoin29_keypair(claim_keypair),
                 agg_decryption_key,
             },
             state: ReceiveSMState::Pending,

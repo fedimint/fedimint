@@ -723,6 +723,10 @@
 <a href="#723" id="723">723</a>
 <a href="#724" id="724">724</a>
 <a href="#725" id="725">725</a>
+<a href="#726" id="726">726</a>
+<a href="#727" id="727">727</a>
+<a href="#728" id="728">728</a>
+<a href="#729" id="729">729</a>
 </pre></div><pre class="rust"><code><span class="kw">pub mod </span>api;
 
 <span class="kw">pub mod </span>client_db;
@@ -749,7 +753,8 @@
 <span class="kw">use </span>fedimint_client::transaction::{ClientOutput, TransactionBuilder};
 <span class="kw">use </span>fedimint_client::{sm_enum_variant_translation, DynGlobalClientContext};
 <span class="kw">use </span>fedimint_core::bitcoin_migration::{
-    bitcoin29_to_bitcoin30_network, bitcoin30_to_bitcoin29_address,
+    bitcoin29_to_bitcoin30_network, bitcoin30_to_bitcoin29_address, bitcoin30_to_bitcoin29_keypair,
+    bitcoin30_to_bitcoin29_secp256k1_public_key,
 };
 <span class="kw">use </span>fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, OperationId};
 <span class="kw">use </span>fedimint_core::db::{
@@ -937,7 +942,7 @@
     module_api: DynModuleApi,
     notifier: ModuleNotifier&lt;WalletClientStates&gt;,
     rpc: DynBitcoindRpc,
-    secp: Secp256k1&lt;All&gt;,
+    secp: secp256k1_27::Secp256k1&lt;secp256k1_27::All&gt;,
     client_ctx: ClientContext&lt;<span class="self">Self</span>&gt;,
 }
 
@@ -1016,7 +1021,10 @@
         </span><span class="kw">let </span>address = bitcoin30_to_bitcoin29_address(
             <span class="self">self</span>.cfg
                 .peg_in_descriptor
-                .tweak(<span class="kw-2">&amp;</span>public_tweak_key, secp256k1::SECP256K1)
+                .tweak(
+                    <span class="kw-2">&amp;</span>bitcoin30_to_bitcoin29_secp256k1_public_key(public_tweak_key),
+                    secp256k1::SECP256K1,
+                )
                 .address(bitcoin29_to_bitcoin30_network(<span class="self">self</span>.cfg.network))
                 .unwrap(),
         );
@@ -1024,7 +1032,7 @@
         <span class="kw">let </span>deposit_sm = WalletClientStates::Deposit(DepositStateMachine {
             operation_id,
             state: DepositStates::Created(CreatedDepositState {
-                tweak_key: secret_tweak_key,
+                tweak_key: bitcoin30_to_bitcoin29_keypair(secret_tweak_key),
                 timeout_at: valid_until,
             }),
         });

@@ -1882,6 +1882,11 @@
 <a href="#1882" id="1882">1882</a>
 <a href="#1883" id="1883">1883</a>
 <a href="#1884" id="1884">1884</a>
+<a href="#1885" id="1885">1885</a>
+<a href="#1886" id="1886">1886</a>
+<a href="#1887" id="1887">1887</a>
+<a href="#1888" id="1888">1888</a>
+<a href="#1889" id="1889">1889</a>
 </pre></div><pre class="rust"><code><span class="kw">pub mod </span>client;
 <span class="kw">mod </span>db;
 <span class="kw">pub mod </span>envs;
@@ -1922,7 +1927,8 @@
 <span class="kw">use </span>fedimint_client::ClientHandleArc;
 <span class="kw">use </span>fedimint_core::bitcoin_migration::{
     bitcoin29_to_bitcoin30_address, bitcoin29_to_bitcoin30_amount, bitcoin29_to_bitcoin30_network,
-    bitcoin29_to_bitcoin30_txid, bitcoin30_to_bitcoin29_amount, bitcoin30_to_bitcoin29_network,
+    bitcoin29_to_bitcoin30_secp256k1_public_key, bitcoin29_to_bitcoin30_txid,
+    bitcoin30_to_bitcoin29_amount, bitcoin30_to_bitcoin29_network,
 };
 <span class="kw">use </span>fedimint_core::config::FederationId;
 <span class="kw">use </span>fedimint_core::core::{
@@ -3483,7 +3489,9 @@
 
     <span class="kw">pub async fn </span>payment_info_v2(<span class="kw-2">&amp;</span><span class="self">self</span>, federation_id: <span class="kw-2">&amp;</span>FederationId) -&gt; <span class="prelude-ty">Option</span>&lt;PaymentInfo&gt; {
         <span class="prelude-val">Some</span>(PaymentInfo {
-            public_key: <span class="self">self</span>.public_key_v2(federation_id).<span class="kw">await</span><span class="question-mark">?</span>,
+            public_key: bitcoin29_to_bitcoin30_secp256k1_public_key(
+                <span class="self">self</span>.public_key_v2(federation_id).<span class="kw">await</span><span class="question-mark">?</span>,
+            ),
             send_fee_default: PaymentFee::one_percent(),
             send_fee_minimum: PaymentFee::half_of_one_percent(),
             receive_fee: PaymentFee::half_of_one_percent(),
@@ -3519,7 +3527,9 @@
         <span class="comment">// Since the following three checks may only fail due to client side
         // programming error we do not have to enable cancellation and can check
         // them before we start the state machine.
-        </span><span class="kw">if </span>payload.contract.claim_pk != module.keypair.public_key() {
+        </span><span class="kw">if </span>payload.contract.claim_pk
+            != bitcoin29_to_bitcoin30_secp256k1_public_key(module.keypair.public_key())
+        {
             <span class="macro">bail!</span>(<span class="string">"The outgoing contract keyed to another gateway"</span>);
         }
 

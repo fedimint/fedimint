@@ -748,6 +748,7 @@
 <a href="#748" id="748">748</a>
 <a href="#749" id="749">749</a>
 <a href="#750" id="750">750</a>
+<a href="#751" id="751">751</a>
 </pre></div><pre class="rust"><code><span class="kw">mod </span>db;
 
 <span class="kw">use </span>std::collections::BTreeMap;
@@ -756,6 +757,7 @@
 <span class="kw">use </span>anyhow::ensure;
 <span class="kw">use </span>bls12_381::{G1Projective, Scalar};
 <span class="kw">use </span>fedimint_bitcoind::{create_bitcoind, DynBitcoindRpc};
+<span class="kw">use </span>fedimint_core::bitcoin_migration::bitcoin30_to_bitcoin29_secp256k1_public_key;
 <span class="kw">use </span>fedimint_core::config::{
     ConfigGenModuleParams, DkgResult, ServerModuleConfig, ServerModuleConsensusConfig,
     TypedServerModuleConfig, TypedServerModuleConsensusConfig,
@@ -1180,7 +1182,7 @@
                 amount,
                 fee: <span class="self">self</span>.cfg.consensus.fee_consensus.input,
             },
-            pub_key,
+            pub_key: bitcoin30_to_bitcoin29_secp256k1_public_key(pub_key),
         })
     }
 

@@ -2455,6 +2455,14 @@
 <a href="#2455" id="2455">2455</a>
 <a href="#2456" id="2456">2456</a>
 <a href="#2457" id="2457">2457</a>
+<a href="#2458" id="2458">2458</a>
+<a href="#2459" id="2459">2459</a>
+<a href="#2460" id="2460">2460</a>
+<a href="#2461" id="2461">2461</a>
+<a href="#2462" id="2462">2462</a>
+<a href="#2463" id="2463">2463</a>
+<a href="#2464" id="2464">2464</a>
+<a href="#2465" id="2465">2465</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! # Client library for fedimintd
 //!
 //! This library provides a client interface to build module clients that can be
@@ -2542,6 +2550,7 @@
 };
 <span class="kw">use </span>envs::get_discover_api_version_timeout;
 <span class="kw">use </span>fedimint_api_client::api::{ApiVersionSet, DynGlobalApi, DynModuleApi, IGlobalFederationApi};
+<span class="kw">use </span>fedimint_core::bitcoin_migration::bitcoin29_to_bitcoin30_secp256k1_public_key;
 <span class="kw">use </span>fedimint_core::config::{
     ClientConfig, ClientModuleConfig, FederationId, JsonClientConfig, JsonWithKind,
     ModuleInitRegistry,
@@ -3209,6 +3218,7 @@
     root_secret: DerivableSecret,
     operation_log: OperationLog,
     secp_ctx: Secp256k1&lt;secp256k1_zkp::All&gt;,
+    secp_ctx_24: secp256k1_24::Secp256k1&lt;secp256k1_24::All&gt;,
     meta_service: Arc&lt;MetaService&gt;,
 
     task_group: TaskGroup,
@@ -3410,7 +3420,12 @@
     }
 
     <span class="kw">pub fn </span>get_internal_payment_markers(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; anyhow::Result&lt;(PublicKey, u64)&gt; {
-        <span class="prelude-val">Ok</span>((<span class="self">self</span>.federation_id().to_fake_ln_pub_key(<span class="kw-2">&amp;</span><span class="self">self</span>.secp_ctx)<span class="question-mark">?</span>, <span class="number">0</span>))
+        <span class="prelude-val">Ok</span>((
+            bitcoin29_to_bitcoin30_secp256k1_public_key(
+                <span class="self">self</span>.federation_id().to_fake_ln_pub_key(<span class="kw-2">&amp;</span><span class="self">self</span>.secp_ctx_24)<span class="question-mark">?</span>,
+            ),
+            <span class="number">0</span>,
+        ))
     }
 
     <span class="kw">pub fn </span>get_meta(<span class="kw-2">&amp;</span><span class="self">self</span>, key: <span class="kw-2">&amp;</span>str) -&gt; <span class="prelude-ty">Option</span>&lt;String&gt; {
@@ -4791,6 +4806,7 @@
             executor,
             api,
             secp_ctx: Secp256k1::new(),
+            secp_ctx_24: secp256k1_24::Secp256k1::new(),
             root_secret,
             task_group,
             operation_log: OperationLog::new(db),

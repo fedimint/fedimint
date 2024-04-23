@@ -410,14 +410,22 @@
 <a href="#410" id="410">410</a>
 <a href="#411" id="411">411</a>
 <a href="#412" id="412">412</a>
+<a href="#413" id="413">413</a>
+<a href="#414" id="414">414</a>
+<a href="#415" id="415">415</a>
+<a href="#416" id="416">416</a>
+<a href="#417" id="417">417</a>
+<a href="#418" id="418">418</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::cmp::Reverse;
 <span class="kw">use </span>std::collections::{BTreeMap, BTreeSet};
 <span class="kw">use </span>std::io::{Cursor, Error, Read, Write};
 
 <span class="kw">use </span>anyhow::{bail, Context, <span class="prelude-ty">Result</span>};
-<span class="kw">use </span>bitcoin::secp256k1;
 <span class="kw">use </span>fedimint_api_client::api::DynGlobalApi;
-<span class="kw">use </span>fedimint_core::bitcoin_migration::bitcoin29_to_bitcoin30_secp256k1_public_key;
+<span class="kw">use </span>fedimint_core::bitcoin_migration::{
+    bitcoin29_to_bitcoin30_secp256k1_public_key, bitcoin30_to_bitcoin29_keypair,
+    bitcoin30_to_bitcoin29_secp256k1_public_key,
+};
 <span class="kw">use </span>fedimint_core::core::backup::{
     BackupRequest, SignedBackupRequest, BACKUP_REQUEST_MAX_PAYLOAD_SIZE_BYTES,
 };
@@ -638,12 +646,12 @@
 
     <span class="kw">pub fn </span>into_backup_request(<span class="self">self</span>, keypair: <span class="kw-2">&amp;</span>KeyPair) -&gt; <span class="prelude-ty">Result</span>&lt;SignedBackupRequest&gt; {
         <span class="kw">let </span>request = BackupRequest {
-            id: keypair.public_key(),
+            id: bitcoin30_to_bitcoin29_secp256k1_public_key(keypair.public_key()),
             timestamp: fedimint_core::time::now(),
             payload: <span class="self">self</span>.<span class="number">0</span>,
         };
 
-        request.sign(keypair)
+        request.sign(<span class="kw-2">&amp;</span>bitcoin30_to_bitcoin29_keypair(<span class="kw-2">*</span>keypair))
     }
 
     <span class="kw">pub fn </span>len(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; usize {
@@ -784,12 +792,16 @@
 
     <span class="doccomment">/// Backup id derived from the root secret key (public key used to self-sign
     /// backup requests)
-    </span><span class="kw">pub fn </span>get_backup_id(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; secp256k1::PublicKey {
-        <span class="self">self</span>.get_derived_backup_signing_key().public_key()
+    </span><span class="kw">pub fn </span>get_backup_id(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bitcoin::secp256k1::PublicKey {
+        bitcoin30_to_bitcoin29_secp256k1_public_key(
+            <span class="self">self</span>.get_derived_backup_signing_key().public_key(),
+        )
     }
 
-    <span class="kw">pub fn </span>get_backup_id_static(root_secret: <span class="kw-2">&amp;</span>DerivableSecret) -&gt; secp256k1::PublicKey {
-        <span class="self">Self</span>::get_derived_backup_signing_key_static(root_secret).public_key()
+    <span class="kw">pub fn </span>get_backup_id_static(root_secret: <span class="kw-2">&amp;</span>DerivableSecret) -&gt; bitcoin::secp256k1::PublicKey {
+        bitcoin30_to_bitcoin29_secp256k1_public_key(
+            <span class="self">Self</span>::get_derived_backup_signing_key_static(root_secret).public_key(),
+        )
     }
     <span class="doccomment">/// Static version of [`Self::get_derived_backup_encryption_key`] for
     /// testing without creating whole `MintClient`
@@ -801,17 +813,17 @@
 
     <span class="doccomment">/// Static version of [`Self::get_derived_backup_signing_key`] for testing
     /// without creating whole `MintClient`
-    </span><span class="kw">fn </span>get_derived_backup_signing_key_static(secret: <span class="kw-2">&amp;</span>DerivableSecret) -&gt; secp256k1_zkp::KeyPair {
+    </span><span class="kw">fn </span>get_derived_backup_signing_key_static(secret: <span class="kw-2">&amp;</span>DerivableSecret) -&gt; KeyPair {
         secret
             .derive_backup_secret()
-            .to_secp_key(<span class="kw-2">&amp;</span>Secp256k1::&lt;secp256k1::SignOnly&gt;::gen_new())
+            .to_secp_key(<span class="kw-2">&amp;</span>Secp256k1::&lt;secp256k1_zkp::SignOnly&gt;::gen_new())
     }
 
     <span class="kw">fn </span>get_derived_backup_encryption_key(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; fedimint_aead::LessSafeKey {
         <span class="self">Self</span>::get_derived_backup_encryption_key_static(<span class="kw-2">&amp;</span><span class="self">self</span>.root_secret())
     }
 
-    <span class="kw">fn </span>get_derived_backup_signing_key(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; secp256k1::KeyPair {
+    <span class="kw">fn </span>get_derived_backup_signing_key(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; KeyPair {
         <span class="self">Self</span>::get_derived_backup_signing_key_static(<span class="kw-2">&amp;</span><span class="self">self</span>.root_secret())
     }
 

@@ -755,6 +755,9 @@
 <a href="#755" id="755">755</a>
 <a href="#756" id="756">756</a>
 <a href="#757" id="757">757</a>
+<a href="#758" id="758">758</a>
+<a href="#759" id="759">759</a>
+<a href="#760" id="760">760</a>
 </pre></div><pre class="rust"><code><span class="kw">mod </span>complete;
 <span class="kw">pub mod </span>pay;
 
@@ -775,6 +778,7 @@
 <span class="kw">use </span>fedimint_client::sm::{Context, DynState, ModuleNotifier, State};
 <span class="kw">use </span>fedimint_client::transaction::{ClientOutput, TransactionBuilder};
 <span class="kw">use </span>fedimint_client::{sm_enum_variant_translation, AddStateMachinesError, DynGlobalClientContext};
+<span class="kw">use </span>fedimint_core::bitcoin_migration::bitcoin30_to_bitcoin29_keypair;
 <span class="kw">use </span>fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, OperationId};
 <span class="kw">use </span>fedimint_core::db::{AutocommitError, DatabaseTransaction, DatabaseVersion};
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
@@ -796,7 +800,8 @@
 };
 <span class="kw">use </span>futures::StreamExt;
 <span class="kw">use </span>lightning_invoice::RoutingFees;
-<span class="kw">use </span>secp256k1::{KeyPair, Secp256k1};
+<span class="kw">use </span>secp256k1::KeyPair;
+<span class="kw">use </span>secp256k1_zkp::{All, Secp256k1};
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>tracing::{debug, info, warn};
 
@@ -893,10 +898,11 @@
         <span class="prelude-val">Ok</span>(GatewayClientModule {
             cfg: args.cfg().clone(),
             notifier: args.notifier().clone(),
-            redeem_key: args
-                .module_root_secret()
-                .child_key(ChildId(<span class="number">0</span>))
-                .to_secp_key(<span class="kw-2">&amp;</span>Secp256k1::new()),
+            redeem_key: bitcoin30_to_bitcoin29_keypair(
+                args.module_root_secret()
+                    .child_key(ChildId(<span class="number">0</span>))
+                    .to_secp_key(<span class="kw-2">&amp;</span>Secp256k1::new()),
+            ),
             module_api: args.module_api().clone(),
             timelock_delta: <span class="self">self</span>.timelock_delta,
             mint_channel_id: <span class="self">self</span>.mint_channel_id,
@@ -910,7 +916,7 @@
 </span><span class="kw">pub struct </span>GatewayClientContext {
     redeem_key: bitcoin29::KeyPair,
     timelock_delta: u64,
-    secp: secp256k1_zkp::Secp256k1&lt;secp256k1_zkp::All&gt;,
+    secp: Secp256k1&lt;All&gt;,
     <span class="kw">pub </span>ln_decoder: Decoder,
     notifier: ModuleNotifier&lt;GatewayClientStateMachines&gt;,
     gateway: Gateway,
@@ -954,7 +960,7 @@
         <span class="self">Self</span>::ModuleStateMachineContext {
             redeem_key: <span class="self">self</span>.redeem_key,
             timelock_delta: <span class="self">self</span>.timelock_delta,
-            secp: secp256k1_zkp::Secp256k1::new(),
+            secp: Secp256k1::new(),
             ln_decoder: <span class="self">self</span>.decoder(),
             notifier: <span class="self">self</span>.notifier.clone(),
             gateway: <span class="self">self</span>.gateway.clone(),

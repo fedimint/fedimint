@@ -1911,6 +1911,20 @@
 <a href="#1911" id="1911">1911</a>
 <a href="#1912" id="1912">1912</a>
 <a href="#1913" id="1913">1913</a>
+<a href="#1914" id="1914">1914</a>
+<a href="#1915" id="1915">1915</a>
+<a href="#1916" id="1916">1916</a>
+<a href="#1917" id="1917">1917</a>
+<a href="#1918" id="1918">1918</a>
+<a href="#1919" id="1919">1919</a>
+<a href="#1920" id="1920">1920</a>
+<a href="#1921" id="1921">1921</a>
+<a href="#1922" id="1922">1922</a>
+<a href="#1923" id="1923">1923</a>
+<a href="#1924" id="1924">1924</a>
+<a href="#1925" id="1925">1925</a>
+<a href="#1926" id="1926">1926</a>
+<a href="#1927" id="1927">1927</a>
 </pre></div><pre class="rust"><code><span class="kw">pub mod </span>api;
 <span class="attr">#[cfg(feature = <span class="string">"cli"</span>)]
 </span><span class="kw">pub mod </span>cli;
@@ -1944,6 +1958,9 @@
 <span class="kw">use </span>fedimint_client::sm::{DynState, ModuleNotifier, State, StateTransition};
 <span class="kw">use </span>fedimint_client::transaction::{ClientInput, ClientOutput, TransactionBuilder};
 <span class="kw">use </span>fedimint_client::{sm_enum_variant_translation, DynGlobalClientContext};
+<span class="kw">use </span>fedimint_core::bitcoin_migration::{
+    bitcoin30_to_bitcoin29_keypair, bitcoin30_to_bitcoin29_secp256k1_public_key,
+};
 <span class="kw">use </span>fedimint_core::config::FederationId;
 <span class="kw">use </span>fedimint_core::core::{IntoDynInstance, ModuleInstanceId, OperationId};
 <span class="kw">use </span>fedimint_core::db::{DatabaseTransaction, DatabaseVersion, IDatabaseTransactionOpsCoreTyped};
@@ -1980,8 +1997,7 @@
 <span class="kw">use </span>rand::rngs::OsRng;
 <span class="kw">use </span>rand::seq::IteratorRandom <span class="kw">as _</span>;
 <span class="kw">use </span>rand::{CryptoRng, Rng, RngCore};
-<span class="kw">use </span>secp256k1::{PublicKey, Scalar, Signing, ThirtyTwoByteHash, Verification};
-<span class="kw">use </span>secp256k1_zkp::{All, Secp256k1};
+<span class="kw">use </span>secp256k1::{All, PublicKey, Scalar, Secp256k1, Signing, ThirtyTwoByteHash, Verification};
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>serde_json::json;
 <span class="kw">use </span>strum::IntoEnumIterator;
@@ -2358,18 +2374,21 @@
         args: <span class="kw-2">&amp;</span>ClientModuleInitArgs&lt;LightningClientInit&gt;,
     ) -&gt; anyhow::Result&lt;LightningClientModule&gt; {
         <span class="kw">let </span>secp = Secp256k1::new();
+        <span class="kw">let </span>secp_27 = secp256k1_27::Secp256k1::new();
         <span class="kw">let </span>ln_module = LightningClientModule {
             cfg: args.cfg().clone(),
             notifier: args.notifier().clone(),
-            redeem_key: args
-                .module_root_secret()
-                .child_key(ChildId(LightningChildKeys::RedeemKey <span class="kw">as </span>u64))
-                .to_secp_key(<span class="kw-2">&amp;</span>secp),
+            redeem_key: bitcoin30_to_bitcoin29_keypair(
+                args.module_root_secret()
+                    .child_key(ChildId(LightningChildKeys::RedeemKey <span class="kw">as </span>u64))
+                    .to_secp_key(<span class="kw-2">&amp;</span>secp_27),
+            ),
             module_api: args.module_api().clone(),
-            preimage_auth: args
-                .module_root_secret()
-                .child_key(ChildId(LightningChildKeys::PreimageAuthentication <span class="kw">as </span>u64))
-                .to_secp_key(<span class="kw-2">&amp;</span>secp),
+            preimage_auth: bitcoin30_to_bitcoin29_keypair(
+                args.module_root_secret()
+                    .child_key(ChildId(LightningChildKeys::PreimageAuthentication <span class="kw">as </span>u64))
+                    .to_secp_key(<span class="kw-2">&amp;</span>secp_27),
+            ),
             secp,
             client_ctx: args.context(),
             update_gateway_cache_merge: UpdateMerge::default(),
@@ -2943,9 +2962,14 @@
         )
         .<span class="kw">await</span>;
 
+        <span class="kw">let </span>markers = <span class="self">self</span>.client_ctx.get_internal_payment_markers()<span class="question-mark">?</span>;
+
         <span class="kw">let </span><span class="kw-2">mut </span>is_internal_payment = invoice_has_internal_payment_markers(
             <span class="kw-2">&amp;</span>invoice,
-            <span class="self">self</span>.client_ctx.get_internal_payment_markers()<span class="question-mark">?</span>,
+            (
+                bitcoin30_to_bitcoin29_secp256k1_public_key(markers.<span class="number">0</span>),
+                markers.<span class="number">1</span>,
+            ),
         );
         <span class="kw">if </span>!is_internal_payment {
             <span class="kw">let </span>gateways = dbtx
@@ -3328,7 +3352,11 @@
             <span class="prelude-val">None </span>=&gt; {
                 <span class="comment">// If no gateway is provided, this is assumed to be an internal payment.
                 </span><span class="kw">let </span>markers = <span class="self">self</span>.client_ctx.get_internal_payment_markers()<span class="question-mark">?</span>;
-                (markers.<span class="number">0</span>, markers.<span class="number">1</span>, <span class="macro">vec!</span>[])
+                (
+                    bitcoin30_to_bitcoin29_secp256k1_public_key(markers.<span class="number">0</span>),
+                    markers.<span class="number">1</span>,
+                    <span class="macro">vec!</span>[],
+                )
             }
         };
 

@@ -317,12 +317,18 @@
 <a href="#317" id="317">317</a>
 <a href="#318" id="318">318</a>
 <a href="#319" id="319">319</a>
+<a href="#320" id="320">320</a>
+<a href="#321" id="321">321</a>
+<a href="#322" id="322">322</a>
+<a href="#323" id="323">323</a>
+<a href="#324" id="324">324</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
 
 <span class="kw">use </span>fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
 <span class="kw">use </span>fedimint_client::transaction::ClientInput;
 <span class="kw">use </span>fedimint_client::DynGlobalClientContext;
+<span class="kw">use </span>fedimint_core::bitcoin_migration::bitcoin30_to_bitcoin29_keypair;
 <span class="kw">use </span>fedimint_core::config::FederationId;
 <span class="kw">use </span>fedimint_core::core::OperationId;
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
@@ -573,7 +579,9 @@
                         OutgoingWitness::Cancel(signature),
                     ),
                     amount: old_state.common.contract.amount,
-                    keys: <span class="macro">vec!</span>[old_state.common.refund_keypair],
+                    keys: <span class="macro">vec!</span>[bitcoin30_to_bitcoin29_keypair(
+                        old_state.common.refund_keypair,
+                    )],
                     <span class="comment">// The input of the refund tx is managed by this state machine
                     </span>state_machines: Arc::new(|<span class="kw">_</span>, <span class="kw">_</span>| <span class="macro">vec!</span>[]),
                 };
@@ -626,7 +634,9 @@
                 OutgoingWitness::Refund,
             ),
             amount: old_state.common.contract.amount,
-            keys: <span class="macro">vec!</span>[old_state.common.refund_keypair],
+            keys: <span class="macro">vec!</span>[bitcoin30_to_bitcoin29_keypair(
+                old_state.common.refund_keypair,
+            )],
             <span class="comment">// The input of the refund tx is managed by this state machine
             </span>state_machines: Arc::new(|<span class="kw">_</span>, <span class="kw">_</span>| <span class="macro">vec!</span>[]),
         };

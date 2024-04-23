@@ -2042,6 +2042,7 @@
 <a href="#2042" id="2042">2042</a>
 <a href="#2043" id="2043">2043</a>
 <a href="#2044" id="2044">2044</a>
+<a href="#2045" id="2045">2045</a>
 </pre></div><pre class="rust"><code><span class="comment">// Backup and restore logic
 </span><span class="kw">pub mod </span>backup;
 <span class="doccomment">/// Database keys used throughout the mint client module
@@ -2077,6 +2078,7 @@
 <span class="kw">use </span>fedimint_client::sm::{Context, DynState, ModuleNotifier, State, StateTransition};
 <span class="kw">use </span>fedimint_client::transaction::{ClientInput, ClientOutput, TransactionBuilder};
 <span class="kw">use </span>fedimint_client::{sm_enum_variant_translation, DynGlobalClientContext};
+<span class="kw">use </span>fedimint_core::bitcoin_migration::bitcoin30_to_bitcoin29_keypair;
 <span class="kw">use </span>fedimint_core::config::{FederationId, FederationIdPrefix};
 <span class="kw">use </span>fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, OperationId};
 <span class="kw">use </span>fedimint_core::db::{
@@ -2101,7 +2103,7 @@
 <span class="kw">pub use </span>fedimint_mint_common::<span class="kw-2">*</span>;
 <span class="kw">use </span>futures::{pin_mut, StreamExt};
 <span class="kw">use </span>hex::ToHex;
-<span class="kw">use </span>secp256k1::{All, KeyPair, Secp256k1};
+<span class="kw">use </span>secp256k1_zkp::{All, KeyPair, Secp256k1};
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>strum::IntoEnumIterator;
 <span class="kw">use </span>tbs::AggregatePublicKey;
@@ -2943,7 +2945,7 @@
 
             inputs.push(ClientInput {
                 input: MintInput::new_v0(amount, note),
-                keys: <span class="macro">vec!</span>[spendable_note.spend_key],
+                keys: <span class="macro">vec!</span>[bitcoin30_to_bitcoin29_keypair(spendable_note.spend_key)],
                 amount,
                 state_machines: sm_gen,
             });

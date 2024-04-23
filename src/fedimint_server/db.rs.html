@@ -308,10 +308,6 @@
 <a href="#308" id="308">308</a>
 <a href="#309" id="309">309</a>
 <a href="#310" id="310">310</a>
-<a href="#311" id="311">311</a>
-<a href="#312" id="312">312</a>
-<a href="#313" id="313">313</a>
-<a href="#314" id="314">314</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::fmt::Debug;
 
@@ -416,10 +412,7 @@
     <span class="kw">use </span>bitcoin::key::KeyPair;
     <span class="kw">use </span>bitcoin::secp256k1;
     <span class="kw">use </span>bitcoin_hashes::Hash;
-    <span class="kw">use </span>fedimint_core::bitcoin_migration::{
-        bitcoin29_to_bitcoin30_message, bitcoin29_to_bitcoin30_secp256k1_secret_key,
-        bitcoin30_to_bitcoin29_schnorr_signature, bitcoin30_to_bitcoin29_secp256k1_public_key,
-    };
+    <span class="kw">use </span>fedimint_core::bitcoin_migration::bitcoin30_to_bitcoin29_schnorr_signature;
     <span class="kw">use </span>fedimint_core::core::{DynInput, DynOutput};
     <span class="kw">use </span>fedimint_core::db::{
         Database, DatabaseVersion, DatabaseVersionKeyV0, IDatabaseTransactionOpsCoreTyped,
@@ -468,10 +461,9 @@
 
         <span class="kw">let </span>(sk, <span class="kw">_</span>) = secp256k1_zkp::generate_keypair(<span class="kw-2">&amp;mut </span>OsRng);
         <span class="kw">let </span>secp = secp256k1::Secp256k1::new();
-        <span class="kw">let </span>key_pair =
-            KeyPair::from_secret_key(<span class="kw-2">&amp;</span>secp, <span class="kw-2">&amp;</span>bitcoin29_to_bitcoin30_secp256k1_secret_key(sk));
+        <span class="kw">let </span>key_pair = KeyPair::from_secret_key(<span class="kw-2">&amp;</span>secp, <span class="kw-2">&amp;</span>sk);
         <span class="kw">let </span>schnorr = secp.sign_schnorr_with_rng(
-            <span class="kw-2">&amp;</span>bitcoin29_to_bitcoin30_message(Message::from_slice(<span class="kw-2">&amp;</span>BYTE_32).unwrap()),
+            <span class="kw-2">&amp;</span>Message::from_slice(<span class="kw-2">&amp;</span>BYTE_32).unwrap(),
             <span class="kw-2">&amp;</span>key_pair,
             <span class="kw-2">&amp;mut </span>thread_rng(),
         );
@@ -480,14 +472,14 @@
                 <span class="number">0</span>,
                 DummyInput {
                     amount: Amount::ZERO,
-                    account: bitcoin30_to_bitcoin29_secp256k1_public_key(key_pair.public_key()),
+                    account: key_pair.public_key(),
                 },
             )],
             outputs: <span class="macro">vec!</span>[DynOutput::from_typed(
                 <span class="number">0</span>,
                 DummyOutput {
                     amount: Amount::ZERO,
-                    account: bitcoin30_to_bitcoin29_secp256k1_public_key(key_pair.public_key()),
+                    account: key_pair.public_key(),
                 },
             )],
             nonce: [<span class="number">0x42</span>; <span class="number">8</span>],
