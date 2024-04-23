@@ -935,7 +935,6 @@ async fn test_gateway_cannot_pay_expired_invoice() -> anyhow::Result<()> {
     single_federation_test(
         |gateway, other_lightning_client, fed, user_client, _| async move {
             let gateway_id = gateway.gateway.gateway_id;
-            let gateway_client = gateway.remove_client_hack(&fed).await;
             let invoice = other_lightning_client
                 .invoice(sats(1000), 1.into())
                 .await
@@ -953,7 +952,7 @@ async fn test_gateway_cannot_pay_expired_invoice() -> anyhow::Result<()> {
 
             // User client pays test invoice
             let lightning_module = user_client.get_first_module::<LightningClientModule>();
-            let gateway = lightning_module.select_gateway(&gateway_id).await;
+            let gateway_module = lightning_module.select_gateway(&gateway_id).await;
             let OutgoingLightningPayment {
                 payment_type,
                 contract_id,
@@ -972,10 +971,11 @@ async fn test_gateway_cannot_pay_expired_invoice() -> anyhow::Result<()> {
                     let payload = PayInvoicePayload {
                         federation_id: user_client.federation_id(),
                         contract_id,
-                        payment_data: get_payment_data(gateway, invoice),
+                        payment_data: get_payment_data(gateway_module, invoice),
                         preimage_auth: Hash::hash(&[0; 32]),
                     };
 
+                    let gateway_client = gateway.remove_client_hack(&fed).await;
                     let gw_pay_op = gateway_client
                         .get_first_module::<GatewayClientModule>()
                         .gateway_pay_bolt11_invoice(payload)
@@ -985,6 +985,9 @@ async fn test_gateway_cannot_pay_expired_invoice() -> anyhow::Result<()> {
                         .gateway_subscribe_ln_pay(gw_pay_op)
                         .await?
                         .into_stream();
+
+                    gateway.add_client_hack(&fed, gateway_client).await;
+
                     assert_eq!(gw_pay_sub.ok().await?, GatewayExtPayStates::Created);
                     assert_matches!(gw_pay_sub.ok().await?, GatewayExtPayStates::Canceled { .. });
 
@@ -997,6 +1000,7 @@ async fn test_gateway_cannot_pay_expired_invoice() -> anyhow::Result<()> {
 
             // Balance should be unchanged
             assert_eq!(user_client.get_balance().await, sats(2000));
+            let gateway_client = gateway.remove_client_hack(&fed).await;
             assert_eq!(gateway_client.get_balance().await, sats(0));
 
             Ok(())
