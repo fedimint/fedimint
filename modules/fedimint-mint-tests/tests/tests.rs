@@ -317,9 +317,7 @@ mod fedimint_migration_tests {
     use fedimint_client::derivable_secret::{ChildId, DerivableSecret};
     use fedimint_client::module::init::recovery::{RecoveryFromHistory, RecoveryFromHistoryCommon};
     use fedimint_client::module::init::DynClientModuleInit;
-    use fedimint_core::bitcoin_migration::{
-        bitcoin30_to_bitcoin29_keypair, bitcoin30_to_bitcoin29_secp256k1_public_key,
-    };
+    use fedimint_core::bitcoin_migration::bitcoin30_to_bitcoin29_keypair;
     use fedimint_core::core::OperationId;
     use fedimint_core::db::{
         Database, DatabaseVersion, DatabaseVersionKeyV0, IDatabaseTransactionOpsCoreTyped,
@@ -374,7 +372,7 @@ mod fedimint_migration_tests {
             .await;
 
         let (_, pk) = secp256k1::generate_keypair(&mut OsRng);
-        let nonce_key = NonceKey(Nonce(bitcoin30_to_bitcoin29_secp256k1_public_key(pk)));
+        let nonce_key = NonceKey(Nonce(pk));
         dbtx.insert_new_entry(&nonce_key, &()).await;
 
         let out_point = OutPoint {
@@ -407,7 +405,7 @@ mod fedimint_migration_tests {
         dbtx.insert_new_entry(&mint_audit_redemption_total, &Amount::from_sats(15000))
             .await;
 
-        let backup_key = EcashBackupKey(bitcoin30_to_bitcoin29_secp256k1_public_key(pk));
+        let backup_key = EcashBackupKey(pk);
         let ecash_backup = ECashUserBackupSnapshot {
             timestamp: now(),
             data: BYTE_32.to_vec(),
@@ -437,7 +435,7 @@ mod fedimint_migration_tests {
         dbtx.insert_new_entry(
             &NoteKey {
                 amount: Amount::from_sats(1000),
-                nonce: Nonce(bitcoin30_to_bitcoin29_secp256k1_public_key(pubkey)),
+                nonce: Nonce(pubkey),
             },
             &spendable_note,
         )
@@ -450,10 +448,7 @@ mod fedimint_migration_tests {
             .await;
 
         let mut spendable_notes = BTreeMap::new();
-        spendable_notes.insert(
-            Nonce(bitcoin30_to_bitcoin29_secp256k1_public_key(pubkey)),
-            (Amount::from_sats(1000), spendable_note),
-        );
+        spendable_notes.insert(Nonce(pubkey), (Amount::from_sats(1000), spendable_note));
 
         let key_share = PublicKeyShare(G2Affine::generator());
         let agg_pub_key = AggregatePublicKey(G2Affine::generator());

@@ -33,6 +33,7 @@ use fedimint_client::sm::util::MapStateTransitions;
 use fedimint_client::sm::{Context, DynState, ModuleNotifier, State, StateTransition};
 use fedimint_client::transaction::{ClientInput, ClientOutput, TransactionBuilder};
 use fedimint_client::{sm_enum_variant_translation, DynGlobalClientContext};
+use fedimint_core::bitcoin_migration::bitcoin29_to_bitcoin30_secp256k1_public_key;
 use fedimint_core::config::{FederationId, FederationIdPrefix};
 use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, OperationId};
 use fedimint_core::db::{
@@ -1318,7 +1319,9 @@ impl MintClientModule {
                 bail!("Note {idx} has an invalid federation signature");
             }
 
-            let expected_nonce = Nonce(snote.spend_key.public_key());
+            let expected_nonce = Nonce(bitcoin29_to_bitcoin30_secp256k1_public_key(
+                snote.spend_key.public_key(),
+            ));
             if note.nonce != expected_nonce {
                 bail!("Note {idx} cannot be spent using the supplied spend key");
             }
@@ -1685,7 +1688,9 @@ pub struct SpendableNote {
 
 impl SpendableNote {
     fn nonce(&self) -> Nonce {
-        Nonce(self.spend_key.public_key())
+        Nonce(bitcoin29_to_bitcoin30_secp256k1_public_key(
+            self.spend_key.public_key(),
+        ))
     }
 
     fn note(&self) -> Note {
