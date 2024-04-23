@@ -50,7 +50,7 @@
     peer_id: PeerId
 ) -&gt; <a class="type" href="https://docs.rs/anyhow/1.0.82/anyhow/type.Result.html" title="type anyhow::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.unit.html">()</a>&gt;</h4></section><section id="method.request_signed_session_outcome" class="method"><a class="src rightside" href="../../../src/fedimint_server/consensus/server.rs.html#754-806">source</a><h4 class="code-header">async fn <a href="#method.request_signed_session_outcome" class="fn">request_signed_session_outcome</a>(
     &amp;self,
-    federation_api: &amp;WsFederationApi,
+    federation_api: &amp;<a class="struct" href="../../../fedimint_api_client/api/struct.WsFederationApi.html" title="struct fedimint_api_client::api::WsFederationApi">WsFederationApi</a>,
     index: <a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.u64.html">u64</a>
 ) -&gt; SignedSessionOutcome</h4></section><details class="toggle method-toggle" open><summary><section id="method.get_finished_session_count" class="method"><a class="src rightside" href="../../../src/fedimint_server/consensus/server.rs.html#810-812">source</a><h4 class="code-header">async fn <a href="#method.get_finished_session_count" class="fn">get_finished_session_count</a>(&amp;self) -&gt; <a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.u64.html">u64</a></h4></section></summary><div class="docblock"><p>Returns the number of sessions already saved in the database. This count
 <strong>does not</strong> include the currently running session.</p>
