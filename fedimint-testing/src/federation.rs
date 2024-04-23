@@ -3,7 +3,7 @@ use std::sync::Arc;
 
 use fedimint_client::module::init::ClientModuleInitRegistry;
 use fedimint_client::secret::{PlainRootSecretStrategy, RootSecretStrategy};
-use fedimint_client::{Client, ClientHandleArc};
+use fedimint_client::{AdminCreds, Client, ClientHandleArc};
 use fedimint_core::admin_client::{ConfigGenParamsConsensus, PeerServerParams};
 use fedimint_core::config::{
     ClientConfig, FederationId, ServerModuleConfigGenParamsRegistry, ServerModuleInitRegistry,
@@ -51,7 +51,7 @@ impl FederationTest {
             .to_client_config(&self.server_init)
             .unwrap();
 
-        self.new_client_with(client_config, MemDatabase::new().into())
+        self.new_client_with(client_config, MemDatabase::new().into(), None)
             .await
     }
 
@@ -67,19 +67,37 @@ impl FederationTest {
             RocksDb::open(tempfile::tempdir().expect("Couldn't create temp dir"))
                 .expect("Couldn't open DB")
                 .into(),
+            None,
         )
         .await
+    }
+
+    /// Create a new admin client connected to this fed
+    pub async fn new_admin_client(&self, peer_id: PeerId, auth: ApiAuth) -> ClientHandleArc {
+        let client_config = self.configs[&PeerId::from(0)]
+            .consensus
+            .to_client_config(&self.server_init)
+            .unwrap();
+
+        let admin_creds = AdminCreds { peer_id, auth };
+
+        self.new_client_with(client_config, MemDatabase::new().into(), Some(admin_creds))
+            .await
     }
 
     pub async fn new_client_with(
         &self,
         client_config: ClientConfig,
         db: Database,
+        admin_creds: Option<AdminCreds>,
     ) -> ClientHandleArc {
         info!(target: LOG_TEST, "Setting new client with config");
         let mut client_builder = Client::builder(db);
         client_builder.with_module_inits(self.client_init.clone());
         client_builder.with_primary_module(self.primary_client);
+        if let Some(admin_creds) = admin_creds {
+            client_builder.set_admin_creds(admin_creds);
+        }
         let client_secret = Client::load_or_generate_client_secret(client_builder.db_no_decoders())
             .await
             .unwrap();

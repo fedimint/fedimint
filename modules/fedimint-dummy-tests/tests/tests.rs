@@ -58,7 +58,9 @@ async fn client_ignores_unknown_module() {
     cfg.modules.insert(2142, extra_mod);
 
     // Test that building the client worked
-    let _client = fed.new_client_with(cfg, MemDatabase::new().into()).await;
+    let _client = fed
+        .new_client_with(cfg, MemDatabase::new().into(), None)
+        .await;
 }
 
 #[tokio::test(flavor = "multi_thread")]
