@@ -37,7 +37,6 @@ fedimint-core = { workspace = true }
 fedimint-api-client = { workspace = true }
 fedimint-lnv2-common ={ path = "../fedimint-lnv2-common" }
 secp256k1 = { version="0.27.0", default-features=false }
-secp256k1-zkp = { version = "0.7.0", features = [ "serde", "bitcoin_hashes" ] }
 serde = {version = "1.0.198", features = [ "derive" ] }
 serde_json = { workspace = true, optional = true }
 strum = "0.24"
