@@ -1493,7 +1493,7 @@ dependencies = [
  "rand",
  "reqwest 0.12.2",
  "ring",
- "secp256k1-zkp",
+ "secp256k1-zkp 0.7.0",
  "serde",
  "serde_json",
  "strum 0.26.2",
@@ -1563,7 +1563,7 @@ dependencies = [
  "parity-scale-codec",
  "rand",
  "secp256k1 0.27.0",
- "secp256k1-zkp",
+ "secp256k1-zkp 0.7.0",
  "serde",
  "serde_json",
  "serdect",
@@ -1631,7 +1631,7 @@ dependencies = [
  "fedimint-core",
  "fedimint-hkdf",
  "ring",
- "secp256k1-zkp",
+ "secp256k1-zkp 0.7.0",
 ]
 
 [[package]]
@@ -1841,7 +1841,7 @@ dependencies = [
  "rand",
  "reqwest 0.11.26",
  "secp256k1 0.24.3",
- "secp256k1-zkp",
+ "secp256k1-zkp 0.7.0",
  "serde",
  "serde_json",
  "strum 0.26.2",
@@ -1932,7 +1932,7 @@ dependencies = [
  "rand",
  "reqwest 0.11.26",
  "secp256k1 0.24.3",
- "secp256k1-zkp",
+ "secp256k1-zkp 0.9.2",
  "serde",
  "serde_json",
  "strum 0.26.2",
@@ -2303,7 +2303,7 @@ dependencies = [
  "itertools 0.12.1",
  "rand",
  "secp256k1 0.24.3",
- "secp256k1-zkp",
+ "secp256k1-zkp 0.7.0",
  "serde",
  "serde-big-array",
  "serde_json",
@@ -2331,7 +2331,7 @@ dependencies = [
  "itertools 0.12.1",
  "rand",
  "secp256k1 0.24.3",
- "secp256k1-zkp",
+ "secp256k1-zkp 0.7.0",
  "serde",
  "strum 0.26.2",
  "strum_macros",
@@ -2360,7 +2360,7 @@ dependencies = [
  "itertools 0.12.1",
  "rand",
  "secp256k1 0.24.3",
- "secp256k1-zkp",
+ "secp256k1-zkp 0.7.0",
  "serde",
  "strum 0.26.2",
  "strum_macros",
@@ -2497,7 +2497,7 @@ dependencies = [
  "rand",
  "rand_chacha",
  "rcgen",
- "secp256k1-zkp",
+ "secp256k1-zkp 0.7.0",
  "serde",
  "serde_json",
  "sha3",
@@ -2560,7 +2560,7 @@ dependencies = [
  "lightning-invoice",
  "rand",
  "secp256k1 0.27.0",
- "secp256k1-zkp",
+ "secp256k1-zkp 0.7.0",
  "serde",
  "tempfile",
  "tokio",
@@ -2844,7 +2844,7 @@ dependencies = [
  "rand",
  "rcgen",
  "ring",
- "secp256k1-zkp",
+ "secp256k1-zkp 0.7.0",
  "serde",
  "serde_json",
  "sha3",
@@ -5045,7 +5045,19 @@ checksum = "fd403e9f0569b4131ab3fc9fa24a17775331b39382efd2cde851fdca655e3520"
 dependencies = [
  "rand",
  "secp256k1 0.24.3",
- "secp256k1-zkp-sys",
+ "secp256k1-zkp-sys 0.7.0",
+ "serde",
+]
+
+[[package]]
+name = "secp256k1-zkp"
+version = "0.9.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "026efcdacb95ee6aae5cc19144dc1549973eac36a4972700c28493de1ee5d69f"
+dependencies = [
+ "bitcoin-private",
+ "secp256k1 0.27.0",
+ "secp256k1-zkp-sys 0.8.1",
  "serde",
 ]
 
@@ -5057,6 +5069,16 @@ checksum = "64e7a2beac087c1da2d21018a3b7f043fe2f138654ad9c1518d409061a4a0034"
 dependencies = [
  "cc",
  "secp256k1-sys 0.6.1",
+]
+
+[[package]]
+name = "secp256k1-zkp-sys"
+version = "0.8.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d03ab1ca75a18e1899e8d9b8d28b5998ae1ddcb42fec5956769718543293c723"
+dependencies = [
+ "cc",
+ "secp256k1-sys 0.8.1",
 ]
 
 [[package]]
