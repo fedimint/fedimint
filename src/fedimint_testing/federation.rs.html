@@ -237,12 +237,30 @@
 <a href="#237" id="237">237</a>
 <a href="#238" id="238">238</a>
 <a href="#239" id="239">239</a>
+<a href="#240" id="240">240</a>
+<a href="#241" id="241">241</a>
+<a href="#242" id="242">242</a>
+<a href="#243" id="243">243</a>
+<a href="#244" id="244">244</a>
+<a href="#245" id="245">245</a>
+<a href="#246" id="246">246</a>
+<a href="#247" id="247">247</a>
+<a href="#248" id="248">248</a>
+<a href="#249" id="249">249</a>
+<a href="#250" id="250">250</a>
+<a href="#251" id="251">251</a>
+<a href="#252" id="252">252</a>
+<a href="#253" id="253">253</a>
+<a href="#254" id="254">254</a>
+<a href="#255" id="255">255</a>
+<a href="#256" id="256">256</a>
+<a href="#257" id="257">257</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap};
 <span class="kw">use </span>std::sync::Arc;
 
 <span class="kw">use </span>fedimint_client::module::init::ClientModuleInitRegistry;
 <span class="kw">use </span>fedimint_client::secret::{PlainRootSecretStrategy, RootSecretStrategy};
-<span class="kw">use </span>fedimint_client::{Client, ClientHandleArc};
+<span class="kw">use </span>fedimint_client::{AdminCreds, Client, ClientHandleArc};
 <span class="kw">use </span>fedimint_core::admin_client::{ConfigGenParamsConsensus, PeerServerParams};
 <span class="kw">use </span>fedimint_core::config::{
     ClientConfig, FederationId, ServerModuleConfigGenParamsRegistry, ServerModuleInitRegistry,
@@ -290,7 +308,7 @@
             .to_client_config(<span class="kw-2">&amp;</span><span class="self">self</span>.server_init)
             .unwrap();
 
-        <span class="self">self</span>.new_client_with(client_config, MemDatabase::new().into())
+        <span class="self">self</span>.new_client_with(client_config, MemDatabase::new().into(), <span class="prelude-val">None</span>)
             .<span class="kw">await
     </span>}
 
@@ -306,19 +324,37 @@
             RocksDb::open(tempfile::tempdir().expect(<span class="string">"Couldn't create temp dir"</span>))
                 .expect(<span class="string">"Couldn't open DB"</span>)
                 .into(),
+            <span class="prelude-val">None</span>,
         )
         .<span class="kw">await
+    </span>}
+
+    <span class="doccomment">/// Create a new admin client connected to this fed
+    </span><span class="kw">pub async fn </span>new_admin_client(<span class="kw-2">&amp;</span><span class="self">self</span>, peer_id: PeerId, auth: ApiAuth) -&gt; ClientHandleArc {
+        <span class="kw">let </span>client_config = <span class="self">self</span>.configs[<span class="kw-2">&amp;</span>PeerId::from(<span class="number">0</span>)]
+            .consensus
+            .to_client_config(<span class="kw-2">&amp;</span><span class="self">self</span>.server_init)
+            .unwrap();
+
+        <span class="kw">let </span>admin_creds = AdminCreds { peer_id, auth };
+
+        <span class="self">self</span>.new_client_with(client_config, MemDatabase::new().into(), <span class="prelude-val">Some</span>(admin_creds))
+            .<span class="kw">await
     </span>}
 
     <span class="kw">pub async fn </span>new_client_with(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         client_config: ClientConfig,
         db: Database,
+        admin_creds: <span class="prelude-ty">Option</span>&lt;AdminCreds&gt;,
     ) -&gt; ClientHandleArc {
         <span class="macro">info!</span>(target: LOG_TEST, <span class="string">"Setting new client with config"</span>);
         <span class="kw">let </span><span class="kw-2">mut </span>client_builder = Client::builder(db);
         client_builder.with_module_inits(<span class="self">self</span>.client_init.clone());
         client_builder.with_primary_module(<span class="self">self</span>.primary_client);
+        <span class="kw">if let </span><span class="prelude-val">Some</span>(admin_creds) = admin_creds {
+            client_builder.set_admin_creds(admin_creds);
+        }
         <span class="kw">let </span>client_secret = Client::load_or_generate_client_secret(client_builder.db_no_decoders())
             .<span class="kw">await
             </span>.unwrap();
