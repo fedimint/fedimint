@@ -599,7 +599,7 @@ if [[ $SETUP_TLS == true ]]; then
   echo "You can access the services at:"
   if [ "$IS_GATEWAY" = true ]; then
     echo "Gateway-UI: https://gateway-ui.${host_name[*]}"
-    if [ "$USE_THUNDERHUB" =true ]; then
+    if [ "$USE_THUNDERHUB" = true ]; then
       echo "Thunderhub: https://thunderhub.${host_name[*]}"
     fi
   else
@@ -609,7 +609,7 @@ if [[ $SETUP_TLS == true ]]; then
 else
   if [ "$IS_GATEWAY" = true ]; then
     echo "Gateway-UI: http://${EXTERNAL_IP}:3001"
-    if [ "$USE_THUNDERHUB" =true ]; then
+    if [ "$USE_THUNDERHUB" = true ]; then
       echo "Thunderhub: http://${EXTERNAL_IP}:3002"
     fi
   else

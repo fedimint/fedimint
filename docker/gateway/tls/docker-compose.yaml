@@ -1,8 +1,6 @@
-# Best used if called by 'tls-download-mutinynet.sh' script
+# Best used if called by 'downloader.sh' script and selecting gateway
 # fedimint.my-super-host.com should be replaced by a domain controlled by you and all DNS below should redirect to the IP of your server.
 # Domains:
-# - fedimint.my-super-host.com
-# - fedimintd.fedimint.my-super-host.com
 # - guardian-ui.fedimint.my-super-host.com
 # - gatewayd.fedimint.my-super-host.com
 # - gateway-ui.fedimint.my-super-host.com
@@ -30,50 +28,6 @@ services:
       - "letsencrypt_data:/letsencrypt"
       - "/var/run/docker.sock:/var/run/docker.sock:ro"
   ### END_TRAEFIK ###
-
-  ### START_FEDIMINTD ###
-  fedimintd:
-    image: fedimint/fedimintd:v0.3.0
-    volumes:
-      - fedimintd_data:/data
-    ports:
-      - "0.0.0.0:8173:8173"
-    environment:
-      - FM_BITCOIN_RPC_KIND=bitcoind
-      - FM_BITCOIN_RPC_URL=http://bitcoin:bitcoin@bitcoind:38332
-      - FM_BITCOIN_NETWORK=signet
-      - FM_BIND_P2P=0.0.0.0:8173
-      - FM_P2P_URL=fedimint://fedimint.my-super-host.com:8173
-      - FM_BIND_API=0.0.0.0:80
-      - FM_API_URL=wss://fedimintd.fedimint.my-super-host.com
-      - FM_EXTRA_DKG_META=chat_server_domain=xmpp.fedimint.my-super-host.com
-    restart: always
-    platform: linux/amd64
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.services.fedimintd.loadbalancer.server.port=80"
-      - "traefik.http.routers.fedimintd.rule=Host(`fedimintd.fedimint.my-super-host.com`)"
-      - "traefik.http.routers.fedimintd.entrypoints=websecure"
-      - "traefik.http.routers.fedimintd.tls.certresolver=myresolver"
-  ### END_FEDIMINTD ###
-
-  ### START_GUARDIAN_UI ###
-  guardian-ui:
-    image: fedimintui/guardian-ui:0.3.0
-    environment:
-      - PORT=80
-      - REACT_APP_FM_CONFIG_API=wss://fedimintd.fedimint.my-super-host.com
-    depends_on:
-      - fedimintd
-    restart: always
-    platform: linux/amd64
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.services.guardian-ui.loadbalancer.server.port=80"
-      - "traefik.http.routers.guardian-ui.rule=Host(`guardian-ui.fedimint.my-super-host.com`)"
-      - "traefik.http.routers.guardian-ui.entrypoints=websecure"
-      - "traefik.http.routers.guardian-ui.tls.certresolver=myresolver"
-  ### END_GUARDIAN_UI ###
 
   ### START_GATEWAYD ###
   gatewayd:
@@ -117,7 +71,6 @@ services:
     environment:
       - PORT=80
       - REACT_APP_FM_GATEWAY_API=https://gatewayd.fedimint.my-super-host.com
-      - REACT_APP_FM_GATEWAY_PASSWORD=thereisnosecondbest
     depends_on:
       - gatewayd
     restart: always
