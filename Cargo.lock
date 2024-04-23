@@ -2846,7 +2846,6 @@ dependencies = [
  "rand",
  "rcgen",
  "ring",
- "secp256k1-zkp 0.7.0",
  "serde",
  "serde_json",
  "sha3",
