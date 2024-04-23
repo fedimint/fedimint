@@ -52,6 +52,10 @@
 
       bundlers = bundlers.bundlers;
       defaultBundler = bundlers.defaultBundler;
+
+      nixosModules = {
+        fedimintd = import ./nix/modules/fedimintd.nix;
+      };
     } //
     flake-utils.lib.eachDefaultSystem
       (system:
