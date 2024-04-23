@@ -44,7 +44,6 @@ services:
     environment:
       - PORT=3001
       - REACT_APP_FM_GATEWAY_API=http://127.0.0.1:8175
-      - REACT_APP_FM_GATEWAY_PASSWORD=thereisnosecondbest
     depends_on:
       - gatewayd
     restart: always
