@@ -20,7 +20,7 @@ path = "src/lib.rs"
 [dependencies]
 fedimint-aead = { version = "=0.4.0-alpha", path = "../crypto/aead" }
 anyhow = { workspace = true }
-async-channel = "2.2.0"
+async-channel = "2.2.1"
 async-trait = { workspace = true }
 bincode = { workspace = true }
 bitcoin = { workspace = true }

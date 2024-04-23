@@ -64,7 +64,7 @@ url = { version = "2.5.0", features = ["serde"] }
 threshold_crypto = { workspace = true }
 
 # setup dependencies
-axum = { version = "0.7.4", default-features = false, features = [ "form", "tokio" ] }
+axum = { version = "0.7.5", default-features = false, features = [ "form", "tokio" ] }
 http = "1.1"
 http-body = "1.0"
 hyper = { version = "1.2", features = ["full"] }

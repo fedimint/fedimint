@@ -20,7 +20,7 @@ default =[]
 cli = ["dep:clap", "dep:serde_json"]
 
 [dependencies]
-async-trait = "0.1.79"
+async-trait = "0.1.80"
 anyhow = { workspace = true }
 clap = { workspace = true, optional = true }
 hex = { workspace = true }
