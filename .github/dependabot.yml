@@ -9,6 +9,7 @@ updates:
     time: "05:30"
   ignore:
   - dependency-name: "bitcoin" # we can't "just update it"
+  - dependency-name: "lightning" # semver too hard :D
   open-pull-requests-limit: 5 # more than this would mean lot of rebasing
   groups:
     # put all patch version updates in one big PR, as
