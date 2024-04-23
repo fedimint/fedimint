@@ -31,10 +31,9 @@ it ensures consistent and reproducible environment for all developers.
 ### Install Nix
 
 You have 2 options to install nix:
-* [The official installer](https://nixos.org/download.html)
-* The [Determinate Nix Installer](https://zero-to-nix.com/start/install) which is maintained by a 3rd party, but is a little more user-friendly.
 
-If one doesn't work for you, consider trying the other. The end result is having a working `nix` command in your shell.
+* **RECOMMENDED:** The [Determinate Nix Installer](https://github.com/DeterminateSystems/nix-installer)
+* [The official installer](https://nixos.org/download.html)
 
 Example:
 
