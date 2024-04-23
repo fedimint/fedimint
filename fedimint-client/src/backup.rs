@@ -5,6 +5,7 @@ use std::io::{Cursor, Error, Read, Write};
 use anyhow::{bail, Context, Result};
 use bitcoin::secp256k1;
 use fedimint_api_client::api::DynGlobalApi;
+use fedimint_core::bitcoin_migration::bitcoin29_to_bitcoin30_secp256k1_public_key;
 use fedimint_core::core::backup::{
     BackupRequest, SignedBackupRequest, BACKUP_REQUEST_MAX_PAYLOAD_SIZE_BYTES,
 };
@@ -336,7 +337,9 @@ impl Client {
     ) -> Result<Option<ClientBackup>> {
         debug!(target: LOG_CLIENT, "Downloading backup from the federation");
         let mut responses: Vec<_> = api
-            .download_backup(&Client::get_backup_id_static(root_secret))
+            .download_backup(&bitcoin29_to_bitcoin30_secp256k1_public_key(
+                Client::get_backup_id_static(root_secret),
+            ))
             .await?
             .into_iter()
             .filter_map(|backup| {
