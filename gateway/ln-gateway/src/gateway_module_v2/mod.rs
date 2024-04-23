@@ -13,7 +13,8 @@ use fedimint_client::sm::{Context, DynState, ModuleNotifier, State, StateTransit
 use fedimint_client::transaction::{ClientOutput, TransactionBuilder};
 use fedimint_client::{sm_enum_variant_translation, DynGlobalClientContext};
 use fedimint_core::bitcoin_migration::{
-    bitcoin29_to_bitcoin30_schnorr_signature, bitcoin30_to_bitcoin29_message,
+    bitcoin29_to_bitcoin30_schnorr_signature, bitcoin30_to_bitcoin29_keypair,
+    bitcoin30_to_bitcoin29_message,
 };
 use fedimint_core::config::FederationId;
 use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, OperationId};
@@ -77,10 +78,11 @@ impl ClientModuleInit for GatewayClientInitV2 {
             notifier: args.notifier().clone(),
             client_ctx: args.context(),
             module_api: args.module_api().clone(),
-            keypair: args
-                .module_root_secret()
-                .clone()
-                .to_secp_key(secp256k1::SECP256K1),
+            keypair: bitcoin30_to_bitcoin29_keypair(
+                args.module_root_secret()
+                    .clone()
+                    .to_secp_key(secp256k1_zkp::SECP256K1),
+            ),
             gateway: self.gateway.clone(),
         })
     }

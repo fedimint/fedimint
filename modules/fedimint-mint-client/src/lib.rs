@@ -33,7 +33,7 @@ use fedimint_client::sm::util::MapStateTransitions;
 use fedimint_client::sm::{Context, DynState, ModuleNotifier, State, StateTransition};
 use fedimint_client::transaction::{ClientInput, ClientOutput, TransactionBuilder};
 use fedimint_client::{sm_enum_variant_translation, DynGlobalClientContext};
-use fedimint_core::bitcoin_migration::bitcoin29_to_bitcoin30_secp256k1_public_key;
+use fedimint_core::bitcoin_migration::bitcoin30_to_bitcoin29_keypair;
 use fedimint_core::config::{FederationId, FederationIdPrefix};
 use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, OperationId};
 use fedimint_core::db::{
@@ -58,7 +58,7 @@ use fedimint_mint_common::config::MintClientConfig;
 pub use fedimint_mint_common::*;
 use futures::{pin_mut, StreamExt};
 use hex::ToHex;
-use secp256k1::{All, KeyPair, Secp256k1};
+use secp256k1_zkp::{All, KeyPair, Secp256k1};
 use serde::{Deserialize, Serialize};
 use strum::IntoEnumIterator;
 use tbs::AggregatePublicKey;
@@ -900,7 +900,7 @@ impl MintClientModule {
 
             inputs.push(ClientInput {
                 input: MintInput::new_v0(amount, note),
-                keys: vec![spendable_note.spend_key],
+                keys: vec![bitcoin30_to_bitcoin29_keypair(spendable_note.spend_key)],
                 amount,
                 state_machines: sm_gen,
             });
@@ -1319,9 +1319,7 @@ impl MintClientModule {
                 bail!("Note {idx} has an invalid federation signature");
             }
 
-            let expected_nonce = Nonce(bitcoin29_to_bitcoin30_secp256k1_public_key(
-                snote.spend_key.public_key(),
-            ));
+            let expected_nonce = Nonce(snote.spend_key.public_key());
             if note.nonce != expected_nonce {
                 bail!("Note {idx} cannot be spent using the supplied spend key");
             }
@@ -1688,9 +1686,7 @@ pub struct SpendableNote {
 
 impl SpendableNote {
     fn nonce(&self) -> Nonce {
-        Nonce(bitcoin29_to_bitcoin30_secp256k1_public_key(
-            self.spend_key.public_key(),
-        ))
+        Nonce(self.spend_key.public_key())
     }
 
     fn note(&self) -> Note {

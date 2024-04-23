@@ -8,7 +8,7 @@ use fedimint_client::secret::{PlainRootSecretStrategy, RootSecretStrategy};
 use fedimint_client::ClientHandleArc;
 use fedimint_core::bitcoin_migration::{
     bitcoin29_to_bitcoin30_network, bitcoin30_to_bitcoin29_address, bitcoin30_to_bitcoin29_amount,
-    bitcoin30_to_bitcoin29_network,
+    bitcoin30_to_bitcoin29_network, bitcoin30_to_bitcoin29_secp256k1_public_key,
 };
 use fedimint_core::db::mem_impl::MemDatabase;
 use fedimint_core::db::{DatabaseTransaction, IRawDatabaseExt};
@@ -29,7 +29,6 @@ use fedimint_wallet_common::txoproof::PegInProof;
 use fedimint_wallet_common::{PegOutFees, Rbf};
 use fedimint_wallet_server::WalletInit;
 use futures::stream::StreamExt;
-use secp256k1::Secp256k1;
 use tracing::info;
 
 fn fixtures() -> Fixtures {
@@ -465,16 +464,21 @@ async fn peg_ins_that_are_unconfirmed_are_rejected() -> anyhow::Result<()> {
     let module_instance_id = 1;
     let root_secret =
         PlainRootSecretStrategy::to_root_secret(&PlainRootSecretStrategy::random(&mut OsRng));
-    let secp = Secp256k1::new();
+    let secp = bitcoin::secp256k1::Secp256k1::new();
     let tweak_key = root_secret.to_secp_key(&secp);
     let pk = tweak_key.public_key();
     let wallet_config: WalletConfig = wallet_server_cfg[0].to_typed()?;
     let peg_in_descriptor = wallet_config.consensus.peg_in_descriptor;
 
     let peg_in_address = bitcoin30_to_bitcoin29_address(
-        peg_in_descriptor.tweak(&pk, secp256k1::SECP256K1).address(
-            bitcoin29_to_bitcoin30_network(wallet_config.consensus.network),
-        )?,
+        peg_in_descriptor
+            .tweak(
+                &bitcoin30_to_bitcoin29_secp256k1_public_key(pk),
+                secp256k1::SECP256K1,
+            )
+            .address(bitcoin29_to_bitcoin30_network(
+                wallet_config.consensus.network,
+            ))?,
     );
 
     let mut wallet = fedimint_wallet_server::Wallet::new_with_bitcoind(
@@ -526,7 +530,7 @@ async fn peg_ins_that_are_unconfirmed_are_rejected() -> anyhow::Result<()> {
         proof,
         transaction,
         output_index.try_into()?,
-        pk,
+        bitcoin30_to_bitcoin29_secp256k1_public_key(pk),
     )?);
 
     match wallet

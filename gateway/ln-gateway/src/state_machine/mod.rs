@@ -18,6 +18,7 @@ use fedimint_client::sm::util::MapStateTransitions;
 use fedimint_client::sm::{Context, DynState, ModuleNotifier, State};
 use fedimint_client::transaction::{ClientOutput, TransactionBuilder};
 use fedimint_client::{sm_enum_variant_translation, AddStateMachinesError, DynGlobalClientContext};
+use fedimint_core::bitcoin_migration::bitcoin30_to_bitcoin29_keypair;
 use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, OperationId};
 use fedimint_core::db::{AutocommitError, DatabaseTransaction, DatabaseVersion};
 use fedimint_core::encoding::{Decodable, Encodable};
@@ -39,7 +40,8 @@ use fedimint_ln_common::{
 };
 use futures::StreamExt;
 use lightning_invoice::RoutingFees;
-use secp256k1::{KeyPair, Secp256k1};
+use secp256k1::KeyPair;
+use secp256k1_zkp::{All, Secp256k1};
 use serde::{Deserialize, Serialize};
 use tracing::{debug, info, warn};
 
@@ -136,10 +138,11 @@ impl ClientModuleInit for GatewayClientInit {
         Ok(GatewayClientModule {
             cfg: args.cfg().clone(),
             notifier: args.notifier().clone(),
-            redeem_key: args
-                .module_root_secret()
-                .child_key(ChildId(0))
-                .to_secp_key(&Secp256k1::new()),
+            redeem_key: bitcoin30_to_bitcoin29_keypair(
+                args.module_root_secret()
+                    .child_key(ChildId(0))
+                    .to_secp_key(&Secp256k1::new()),
+            ),
             module_api: args.module_api().clone(),
             timelock_delta: self.timelock_delta,
             mint_channel_id: self.mint_channel_id,
@@ -153,7 +156,7 @@ impl ClientModuleInit for GatewayClientInit {
 pub struct GatewayClientContext {
     redeem_key: bitcoin29::KeyPair,
     timelock_delta: u64,
-    secp: secp256k1_zkp::Secp256k1<secp256k1_zkp::All>,
+    secp: Secp256k1<All>,
     pub ln_decoder: Decoder,
     notifier: ModuleNotifier<GatewayClientStateMachines>,
     gateway: Gateway,
@@ -197,7 +200,7 @@ impl ClientModule for GatewayClientModule {
         Self::ModuleStateMachineContext {
             redeem_key: self.redeem_key,
             timelock_delta: self.timelock_delta,
-            secp: secp256k1_zkp::Secp256k1::new(),
+            secp: Secp256k1::new(),
             ln_decoder: self.decoder(),
             notifier: self.notifier.clone(),
             gateway: self.gateway.clone(),
