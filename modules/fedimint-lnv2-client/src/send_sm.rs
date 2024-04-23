@@ -11,7 +11,9 @@ use fedimint_core::task::sleep;
 use fedimint_core::util::SafeUrl;
 use fedimint_core::{OutPoint, TransactionId};
 use fedimint_lnv2_common::contracts::OutgoingContract;
-use fedimint_lnv2_common::{LightningClientContext, LightningInput, OutgoingWitness};
+use fedimint_lnv2_common::{
+    LightningClientContext, LightningInput, LightningInputV0, OutgoingWitness,
+};
 use lightning_invoice::Bolt11Invoice;
 use secp256k1::schnorr::Signature;
 use secp256k1::KeyPair;
@@ -249,10 +251,10 @@ impl SendStateMachine {
             Ok(preimage) => old_state.update(SendSMState::Success(preimage)),
             Err(signature) => {
                 let client_input = ClientInput::<LightningInput, LightningClientStateMachines> {
-                    input: LightningInput::Outgoing(
+                    input: LightningInput::V0(LightningInputV0::Outgoing(
                         old_state.common.contract.contract_id(),
                         OutgoingWitness::Cancel(signature),
-                    ),
+                    )),
                     amount: old_state.common.contract.amount,
                     keys: vec![old_state.common.refund_keypair],
                     // The input of the refund tx is managed by this state machine
@@ -302,10 +304,10 @@ impl SendStateMachine {
         }
 
         let client_input = ClientInput::<LightningInput, LightningClientStateMachines> {
-            input: LightningInput::Outgoing(
+            input: LightningInput::V0(LightningInputV0::Outgoing(
                 old_state.common.contract.contract_id(),
                 OutgoingWitness::Refund,
-            ),
+            )),
             amount: old_state.common.contract.amount,
             keys: vec![old_state.common.refund_keypair],
             // The input of the refund tx is managed by this state machine

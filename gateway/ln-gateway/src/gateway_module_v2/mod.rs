@@ -22,7 +22,9 @@ use fedimint_core::module::{
 use fedimint_core::{apply, async_trait_maybe_send, Amount, OutPoint, PeerId};
 use fedimint_lnv2_common::config::LightningClientConfig;
 use fedimint_lnv2_common::contracts::{IncomingContract, OutgoingContract};
-use fedimint_lnv2_common::{LightningCommonInit, LightningModuleTypes, LightningOutput};
+use fedimint_lnv2_common::{
+    LightningCommonInit, LightningModuleTypes, LightningOutput, LightningOutputV0,
+};
 use futures::StreamExt;
 use lightning_invoice::Bolt11Invoice;
 use receive_sm::{ReceiveSMState, ReceiveStateMachine};
@@ -240,7 +242,7 @@ impl GatewayClientModuleV2 {
         let refund_keypair = self.keypair;
 
         let client_output = ClientOutput::<LightningOutput, GatewayClientStateMachinesV2> {
-            output: LightningOutput::Incoming(contract.clone()),
+            output: LightningOutput::V0(LightningOutputV0::Incoming(contract.clone())),
             amount: contract.commitment.amount,
             state_machines: Arc::new(move |txid, out_idx| {
                 vec![GatewayClientStateMachinesV2::Receive(ReceiveStateMachine {

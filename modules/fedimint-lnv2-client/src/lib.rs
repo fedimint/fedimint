@@ -31,6 +31,7 @@ use fedimint_lnv2_common::config::LightningClientConfig;
 use fedimint_lnv2_common::contracts::{IncomingContract, OutgoingContract};
 use fedimint_lnv2_common::{
     LightningClientContext, LightningCommonInit, LightningModuleTypes, LightningOutput,
+    LightningOutputV0,
 };
 use futures::StreamExt;
 use lightning_invoice::Bolt11Invoice;
@@ -376,7 +377,7 @@ impl LightningClientModule {
         let invoice_clone = invoice.clone();
 
         let client_output = ClientOutput::<LightningOutput, LightningClientStateMachines> {
-            output: LightningOutput::Outgoing(contract.clone()),
+            output: LightningOutput::V0(LightningOutputV0::Outgoing(contract.clone())),
             amount: contract.amount,
             state_machines: Arc::new(move |funding_txid, _| {
                 vec![LightningClientStateMachines::Send(SendStateMachine {
