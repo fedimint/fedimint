@@ -15,7 +15,7 @@ name = "fedimint_core"
 path = "src/lib.rs"
 
 [dependencies]
-async-recursion = "1.0.5"
+async-recursion = "1.1.0"
 anyhow = { workspace = true }
 async-trait = { workspace = true }
 futures = { workspace = true }
