@@ -27,7 +27,7 @@ jobs:
   tests:
     if: github.repository == 'fedimint/fedimint'
     name: "Backwards-compatibility tests"
-    runs-on: buildjet-8vcpu-ubuntu-2004
+    runs-on: [self-hosted, linux]
     timeout-minutes: 60
 
     steps:
@@ -55,7 +55,10 @@ jobs:
         run: |
           # the default tmp dir is too long (/home/ubuntu/actions-runner/_work/_temp/)
           # we need to use `nix develop -c` to be able to use `nix build` inside of backwards-compatibility-test
-          env TMPDIR=/tmp  CARGO_PROFILE=ci nix develop -c ./scripts/tests/test-ci-all-backcompat.sh v0.2.1
+          env TMPDIR=/tmp  CARGO_PROFILE=ci nix develop -c \
+            nix shell github:rustshop/fs-dir-cache -c \
+            scripts/ci/run-in-fs-dir-cache.sh backward-compat \
+            ./scripts/tests/test-ci-all-backcompat.sh v0.2.1
 
       - name: Prepare failed test build dirs
         if: always()
@@ -81,7 +84,7 @@ jobs:
     if: always() && github.repository == 'fedimint/fedimint' && github.event_name != 'merge_group'
     name: "Notifications"
     timeout-minutes: 1
-    runs-on: ubuntu-22.04
+    runs-on: [self-hosted, linux]
     needs: [ tests ]
 
     steps:

@@ -26,7 +26,7 @@ concurrency:
 jobs:
   self-care:
     name: Flake self-check
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - name: Check Nix flake inputs
@@ -37,7 +37,7 @@ jobs:
 
   lint:
     name: "Lint"
-    runs-on: ubuntu-22.04
+    runs-on: [self-hosted, linux]
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
@@ -79,7 +79,7 @@ jobs:
           - macos
         include:
           - host: linux
-            runs-on: buildjet-4vcpu-ubuntu-2004
+            runs-on: [self-hosted, linux]
             build-in-pr: false
             timeout: 30
           - host: macos
@@ -122,7 +122,7 @@ jobs:
           - macos
         include:
           - host: linux
-            runs-on: buildjet-8vcpu-ubuntu-2004
+            runs-on: [self-hosted, linux]
             build-in-pr: true
             timeout: 90
             run-tests: true
@@ -208,7 +208,7 @@ jobs:
   audit:
     if: github.repository == 'fedimint/fedimint'
     name: "Audit"
-    runs-on: buildjet-2vcpu-ubuntu-2004
+    runs-on: [self-hosted, linux]
     timeout-minutes: 10
     # sometimes we can't fix these immediately, yet
     # we don't want to stop the world because of it
@@ -225,6 +225,7 @@ jobs:
         with:
           name: fedimint
           authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
+        continue-on-error: true
 
       - name: Run cargo audit
         run: |
@@ -241,7 +242,7 @@ jobs:
   ccov:
     if: github.repository == 'fedimint/fedimint'
     name: "Code coverage"
-    runs-on: buildjet-8vcpu-ubuntu-2004
+    runs-on: [self-hosted, linux]
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
@@ -293,7 +294,7 @@ jobs:
           - wasm32-unknown
         include:
           - host: linux
-            runs-on: ubuntu-22.04
+            runs-on: [self-hosted, linux]
             build-in-pr: true
             # TODO: debugging network issues, should reduce to 20 minutes
             # https://github.com/fedimint/fedimint/issues/4488
@@ -347,7 +348,7 @@ jobs:
   containers:
     if: github.repository == 'fedimint/fedimint'
     name: "Containers"
-    runs-on: buildjet-8vcpu-ubuntu-2004
+    runs-on: [self-hosted, linux]
     timeout-minutes: 60
     steps:
       - name: Checkout Code
@@ -460,7 +461,7 @@ jobs:
             bins: gateway-cli,gatewayd,gateway-cln-extension
             deb: fedimint-gateway
 
-    runs-on: buildjet-4vcpu-ubuntu-2004
+    runs-on: [self-hosted, linux]
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
@@ -570,7 +571,7 @@ jobs:
     name: Status
     needs: [lint, shell, build, cross, ccov, containers, pkgs]
     if: ${{ always() }}
-    runs-on: ubuntu-22.04
+    runs-on: [self-hosted, linux]
     steps:
       - name: Check status of all jobs
         if: >-
@@ -584,7 +585,7 @@ jobs:
     if: always() && github.repository == 'fedimint/fedimint' && github.event_name != 'merge_group'
     name: "Notifications"
     timeout-minutes: 1
-    runs-on: ubuntu-22.04
+    runs-on: [self-hosted, linux]
     # note: we don't depend on `audit` because it will
     # be often broken, and we can't fix it immediately
     needs: [ lint, build, shell, cross, ccov, containers, pkgs ]
