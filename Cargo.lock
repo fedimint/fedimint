@@ -2761,6 +2761,8 @@ dependencies = [
  "async-trait",
  "bitcoin 0.29.2",
  "bitcoin 0.30.2",
+ "bitcoincore-rpc",
+ "devimint",
  "erased-serde",
  "fedimint-bitcoind",
  "fedimint-client",

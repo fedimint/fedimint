@@ -105,6 +105,11 @@ function cannot_replay_tx() {
 }
 export -f cannot_replay_tx
 
+function circular_deposit() {
+  fm-run-test "${FUNCNAME[0]}" ./scripts/tests/circular-deposit-test.sh
+}
+export -f circular_deposit
+
 function devimint_cli_test() {
   fm-run-test "${FUNCNAME[0]}" ./scripts/tests/devimint-cli-test.sh
 }
@@ -215,6 +220,7 @@ tests_to_run_in_parallel+=(
   "guardian_backup"
   "meta_module"
   "cannot_replay_tx"
+  "circular_deposit"
 )
 done
 
