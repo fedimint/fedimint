@@ -10,7 +10,13 @@ if [ -z "$job_name" ]; then
     exit 1
 fi
 
-export FS_DIR_CACHE_ROOT="$HOME/.cache/fs-dir-cache" # directory to hold all cache (sub)directories
+USER_ROOT="$HOME"
+if [ -n "${RUNNER_ROOT:-}" ]; then
+    # In self-hosted nixos module runner, the HOME is actually /run/... which is memory-quota-limited
+    # so use the persisted root dir instead
+    USER_ROOT="$RUNNER_ROOT"
+fi
+export FS_DIR_CACHE_ROOT="$USER_ROOT/.cache/fs-dir-cache" # directory to hold all cache (sub)directories
 export FS_DIR_CACHE_LOCK_ID="pid-$$-rnd-$RANDOM"     # acquire lock based on the current pid and something random (just in case pid gets reused)
 export FS_DIR_CACHE_KEY_NAME="$job_name"             # the base name of our key
 export FS_DIR_CACHE_LOCK_TIMEOUT_SECS="$((60 * 30))" # unlock after timeout in case our job fails misereably
