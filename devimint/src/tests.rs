@@ -103,6 +103,7 @@ pub async fn latency_tests(
     dev_fed: DevFed,
     r#type: LatencyTest,
     upgrade_clients: Option<&UpgradeClients>,
+    iterations: usize,
 ) -> Result<()> {
     log_binary_versions().await?;
 
@@ -136,17 +137,11 @@ pub async fn latency_tests(
     let initial_balance_sats = 100_000_000;
     fed.pegin_client(initial_balance_sats, &client).await?;
 
-    // LN operations take longer, we need less iterations
-    let iterations = 20;
-
     let cln_gw_id = gw_cln.gateway_id().await?;
 
     match r#type {
         LatencyTest::Reissue => {
             info!("Testing latency of reissue");
-            // On AlephBFT session times may lead to high latencies, so we need to run it
-            // for enough time to catch up a session end
-            let iterations = 30;
             let mut reissues = Vec::with_capacity(iterations);
             let amount_per_iteration_msats =
                 // use a highest 2^-1 amount that fits, to try to use as many notes as possible
@@ -406,14 +401,14 @@ async fn stress_test_fed(dev_fed: &DevFed, clients: Option<&UpgradeClients>) -> 
     let restore_test = if clients.is_some() {
         futures::future::ok(()).right_future()
     } else {
-        latency_tests(dev_fed.clone(), LatencyTest::Restore, clients).left_future()
+        latency_tests(dev_fed.clone(), LatencyTest::Restore, clients, 20).left_future()
     };
 
     try_join!(
-        latency_tests(dev_fed.clone(), LatencyTest::Reissue, clients),
-        latency_tests(dev_fed.clone(), LatencyTest::LnSend, clients),
-        latency_tests(dev_fed.clone(), LatencyTest::LnReceive, clients),
-        latency_tests(dev_fed.clone(), LatencyTest::FmPay, clients),
+        latency_tests(dev_fed.clone(), LatencyTest::Reissue, clients, 20),
+        latency_tests(dev_fed.clone(), LatencyTest::LnSend, clients, 20),
+        latency_tests(dev_fed.clone(), LatencyTest::LnReceive, clients, 20),
+        latency_tests(dev_fed.clone(), LatencyTest::FmPay, clients, 20),
         restore_test,
     )?;
     Ok(())
@@ -2368,6 +2363,9 @@ pub enum TestCmd {
     LatencyTests {
         #[clap(subcommand)]
         r#type: LatencyTest,
+
+        #[arg(long, default_value = "10")]
+        iterations: usize,
     },
     /// `devfed` then kills and restarts most of the Guardian nodes in a 4 node
     /// fedimint
@@ -2469,10 +2467,10 @@ pub async fn handle_command(cmd: TestCmd, common_args: CommonArgs) -> Result<()>
             };
             cleanup_on_exit(main, task_group).await?;
         }
-        TestCmd::LatencyTests { r#type } => {
+        TestCmd::LatencyTests { r#type, iterations } => {
             let (process_mgr, _) = setup(common_args).await?;
             let dev_fed = dev_fed(&process_mgr).await?;
-            latency_tests(dev_fed, r#type, None).await?;
+            latency_tests(dev_fed, r#type, None, iterations).await?;
         }
         TestCmd::ReconnectTest => {
             let (process_mgr, _) = setup(common_args).await?;

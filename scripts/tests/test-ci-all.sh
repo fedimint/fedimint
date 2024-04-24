@@ -237,7 +237,7 @@ fi
 if [ -n "${FM_TEST_CI_ALL_JOBS:-}" ]; then
   # when specifically set, use the env var
   parallel_args+=(--jobs "${FM_TEST_CI_ALL_JOBS}")
-elif [ -n "${CI:-}" ]; then
+elif [ -n "${CI:-}" ] || [ "${CARGO_PROFILE:-}" == "ci" ]; then
   # in CI, we know number of cpus works OK
   parallel_args+=(--jobs +0)
 else
