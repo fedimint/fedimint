@@ -272,7 +272,7 @@
 <span class="kw">use </span>fedimint_core::{NumPeersExt, OutPoint, PeerId, TransactionId};
 <span class="kw">use </span>fedimint_lnv2_client::LightningClientStateMachines;
 <span class="kw">use </span>fedimint_lnv2_common::contracts::IncomingContract;
-<span class="kw">use </span>fedimint_lnv2_common::{LightningInput, LightningOutputOutcome};
+<span class="kw">use </span>fedimint_lnv2_common::{LightningInput, LightningInputV0, LightningOutputOutcome};
 <span class="kw">use </span>secp256k1::KeyPair;
 <span class="kw">use </span>tpe::{aggregate_decryption_shares, AggregatePublicKey, DecryptionKeyShare, PublicKeyShare};
 <span class="kw">use </span>tracing::{error, trace};
@@ -493,10 +493,10 @@
         }
 
         <span class="kw">let </span>client_input = ClientInput::&lt;LightningInput, LightningClientStateMachines&gt; {
-            input: LightningInput::Incoming(
+            input: LightningInput::V0(LightningInputV0::Incoming(
                 old_state.common.contract.contract_id(),
                 agg_decryption_key,
-            ),
+            )),
             amount: old_state.common.contract.commitment.amount,
             keys: <span class="macro">vec!</span>[old_state.common.refund_keypair],
             <span class="comment">// The input of the refund tx is managed by this state machine

@@ -322,6 +322,8 @@
 <a href="#322" id="322">322</a>
 <a href="#323" id="323">323</a>
 <a href="#324" id="324">324</a>
+<a href="#325" id="325">325</a>
+<a href="#326" id="326">326</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
 
@@ -336,7 +338,9 @@
 <span class="kw">use </span>fedimint_core::util::SafeUrl;
 <span class="kw">use </span>fedimint_core::{OutPoint, TransactionId};
 <span class="kw">use </span>fedimint_lnv2_common::contracts::OutgoingContract;
-<span class="kw">use </span>fedimint_lnv2_common::{LightningClientContext, LightningInput, OutgoingWitness};
+<span class="kw">use </span>fedimint_lnv2_common::{
+    LightningClientContext, LightningInput, LightningInputV0, OutgoingWitness,
+};
 <span class="kw">use </span>lightning_invoice::Bolt11Invoice;
 <span class="kw">use </span>secp256k1::schnorr::Signature;
 <span class="kw">use </span>secp256k1::KeyPair;
@@ -574,10 +578,10 @@
             <span class="prelude-val">Ok</span>(preimage) =&gt; old_state.update(SendSMState::Success(preimage)),
             <span class="prelude-val">Err</span>(signature) =&gt; {
                 <span class="kw">let </span>client_input = ClientInput::&lt;LightningInput, LightningClientStateMachines&gt; {
-                    input: LightningInput::Outgoing(
+                    input: LightningInput::V0(LightningInputV0::Outgoing(
                         old_state.common.contract.contract_id(),
                         OutgoingWitness::Cancel(signature),
-                    ),
+                    )),
                     amount: old_state.common.contract.amount,
                     keys: <span class="macro">vec!</span>[bitcoin30_to_bitcoin29_keypair(
                         old_state.common.refund_keypair,
@@ -629,10 +633,10 @@
         }
 
         <span class="kw">let </span>client_input = ClientInput::&lt;LightningInput, LightningClientStateMachines&gt; {
-            input: LightningInput::Outgoing(
+            input: LightningInput::V0(LightningInputV0::Outgoing(
                 old_state.common.contract.contract_id(),
                 OutgoingWitness::Refund,
-            ),
+            )),
             amount: old_state.common.contract.amount,
             keys: <span class="macro">vec!</span>[bitcoin30_to_bitcoin29_keypair(
                 old_state.common.refund_keypair,

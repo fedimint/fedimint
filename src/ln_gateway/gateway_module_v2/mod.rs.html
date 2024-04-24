@@ -296,6 +296,8 @@
 <a href="#296" id="296">296</a>
 <a href="#297" id="297">297</a>
 <a href="#298" id="298">298</a>
+<a href="#299" id="299">299</a>
+<a href="#300" id="300">300</a>
 </pre></div><pre class="rust"><code><span class="kw">mod </span>receive_sm;
 <span class="kw">mod </span>send_sm;
 
@@ -324,7 +326,9 @@
 <span class="kw">use </span>fedimint_core::{apply, async_trait_maybe_send, Amount, OutPoint, PeerId};
 <span class="kw">use </span>fedimint_lnv2_common::config::LightningClientConfig;
 <span class="kw">use </span>fedimint_lnv2_common::contracts::{IncomingContract, OutgoingContract};
-<span class="kw">use </span>fedimint_lnv2_common::{LightningCommonInit, LightningModuleTypes, LightningOutput};
+<span class="kw">use </span>fedimint_lnv2_common::{
+    LightningCommonInit, LightningModuleTypes, LightningOutput, LightningOutputV0,
+};
 <span class="kw">use </span>futures::StreamExt;
 <span class="kw">use </span>lightning_invoice::Bolt11Invoice;
 <span class="kw">use </span>receive_sm::{ReceiveSMState, ReceiveStateMachine};
@@ -548,7 +552,7 @@
         <span class="kw">let </span>refund_keypair = <span class="self">self</span>.keypair;
 
         <span class="kw">let </span>client_output = ClientOutput::&lt;LightningOutput, GatewayClientStateMachinesV2&gt; {
-            output: LightningOutput::Incoming(contract.clone()),
+            output: LightningOutput::V0(LightningOutputV0::Incoming(contract.clone())),
             amount: contract.commitment.amount,
             state_machines: Arc::new(<span class="kw">move </span>|txid, out_idx| {
                 <span class="macro">vec!</span>[GatewayClientStateMachinesV2::Receive(ReceiveStateMachine {

@@ -159,6 +159,13 @@
 <a href="#159" id="159">159</a>
 <a href="#160" id="160">160</a>
 <a href="#161" id="161">161</a>
+<a href="#162" id="162">162</a>
+<a href="#163" id="163">163</a>
+<a href="#164" id="164">164</a>
+<a href="#165" id="165">165</a>
+<a href="#166" id="166">166</a>
+<a href="#167" id="167">167</a>
+<a href="#168" id="168">168</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! # Lightning Module
 //!
 //! This module allows to atomically and trustlessly (in the federated trust
@@ -179,7 +186,7 @@
 <span class="kw">use </span>fedimint_core::core::{Decoder, ModuleInstanceId, ModuleKind};
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::module::{CommonModuleInit, ModuleCommon, ModuleConsensusVersion};
-<span class="kw">use </span>fedimint_core::{plugin_types_trait_impl_common, Amount, PeerId};
+<span class="kw">use </span>fedimint_core::{extensible_associated_module_type, plugin_types_trait_impl_common, PeerId};
 <span class="kw">use </span>secp256k1::schnorr::Signature;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>thiserror::Error;
@@ -193,8 +200,14 @@
 <span class="attr">#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
 </span><span class="kw">pub struct </span>ContractId(<span class="kw">pub </span>sha256::Hash);
 
+<span class="macro">extensible_associated_module_type!</span>(
+    LightningInput,
+    LightningInputV0,
+    UnknownLightningInputVariantError
+);
+
 <span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
-</span><span class="kw">pub enum </span>LightningInput {
+</span><span class="kw">pub enum </span>LightningInputV0 {
     Outgoing(ContractId, OutgoingWitness),
     Incoming(ContractId, AggregateDecryptionKey),
 }
@@ -206,31 +219,28 @@
     Cancel(Signature),
 }
 
-<span class="kw">impl </span>std::fmt::Display <span class="kw">for </span>LightningInput {
+<span class="kw">impl </span>std::fmt::Display <span class="kw">for </span>LightningInputV0 {
     <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>std::fmt::Formatter&lt;<span class="lifetime">'_</span>&gt;) -&gt; std::fmt::Result {
-        <span class="macro">write!</span>(f, <span class="string">"LightningInput"</span>,)
+        <span class="macro">write!</span>(f, <span class="string">"LightningInputV0"</span>,)
     }
 }
 
+<span class="macro">extensible_associated_module_type!</span>(
+    LightningOutput,
+    LightningOutputV0,
+    UnknownLightningOutputVariantError
+);
+
 <span class="attr">#[allow(clippy::large_enum_variant)]
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
-</span><span class="kw">pub enum </span>LightningOutput {
+</span><span class="kw">pub enum </span>LightningOutputV0 {
     Outgoing(OutgoingContract),
     Incoming(IncomingContract),
 }
 
-<span class="kw">impl </span>LightningOutput {
-    <span class="kw">pub fn </span>amount(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Amount {
-        <span class="kw">match </span><span class="self">self </span>{
-            LightningOutput::Outgoing(contract) =&gt; contract.amount,
-            LightningOutput::Incoming(contract) =&gt; contract.commitment.amount,
-        }
-    }
-}
-
-<span class="kw">impl </span>std::fmt::Display <span class="kw">for </span>LightningOutput {
+<span class="kw">impl </span>std::fmt::Display <span class="kw">for </span>LightningOutputV0 {
     <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>std::fmt::Formatter&lt;<span class="lifetime">'_</span>&gt;) -&gt; std::fmt::Result {
-        <span class="macro">write!</span>(f, <span class="string">"LightningOutput"</span>)
+        <span class="macro">write!</span>(f, <span class="string">"LightningOutputV0"</span>)
     }
 }
 
@@ -248,6 +258,8 @@
 
 <span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Error, Encodable, Decodable)]
 </span><span class="kw">pub enum </span>LightningInputError {
+    <span class="attr">#[error(<span class="string">"The lightning input version is not supported by this federation"</span>)]
+    </span>UnknownInputVariant(<span class="attr">#[from] </span>UnknownLightningInputVariantError),
     <span class="attr">#[error(<span class="string">"No contract found for given ContractId"</span>)]
     </span>UnknownContract,
     <span class="attr">#[error(<span class="string">"The preimage is invalid"</span>)]
@@ -264,6 +276,8 @@
 
 <span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Error, Encodable, Decodable)]
 </span><span class="kw">pub enum </span>LightningOutputError {
+    <span class="attr">#[error(<span class="string">"The lightning input version is not supported by this federation"</span>)]
+    </span>UnknownOutputVariant(<span class="attr">#[from] </span>UnknownLightningOutputVariantError),
     <span class="attr">#[error(<span class="string">"The contract is invalid"</span>)]
     </span>InvalidContract,
     <span class="attr">#[error(<span class="string">"The contract is expired"</span>)]

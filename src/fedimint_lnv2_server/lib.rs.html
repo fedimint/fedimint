@@ -749,6 +749,16 @@
 <a href="#749" id="749">749</a>
 <a href="#750" id="750">750</a>
 <a href="#751" id="751">751</a>
+<a href="#752" id="752">752</a>
+<a href="#753" id="753">753</a>
+<a href="#754" id="754">754</a>
+<a href="#755" id="755">755</a>
+<a href="#756" id="756">756</a>
+<a href="#757" id="757">757</a>
+<a href="#758" id="758">758</a>
+<a href="#759" id="759">759</a>
+<a href="#760" id="760">760</a>
+<a href="#761" id="761">761</a>
 </pre></div><pre class="rust"><code><span class="kw">mod </span>db;
 
 <span class="kw">use </span>std::collections::BTreeMap;
@@ -791,8 +801,8 @@
 };
 <span class="kw">use </span>fedimint_lnv2_common::{
     ContractId, LightningCommonInit, LightningConsensusItem, LightningInput, LightningInputError,
-    LightningModuleTypes, LightningOutput, LightningOutputError, LightningOutputOutcome,
-    OutgoingWitness, MODULE_CONSENSUS_VERSION,
+    LightningInputV0, LightningModuleTypes, LightningOutput, LightningOutputError,
+    LightningOutputOutcome, LightningOutputV0, OutgoingWitness, MODULE_CONSENSUS_VERSION,
 };
 <span class="kw">use </span>fedimint_server::check_auth;
 <span class="kw">use </span>fedimint_server::config::distributedgen::{evaluate_polynomial_g1, PeerHandleOps};
@@ -1120,14 +1130,16 @@
         dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'c</span>&gt;,
         input: <span class="kw-2">&amp;</span><span class="lifetime">'b </span>LightningInput,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;InputMeta, LightningInputError&gt; {
+        <span class="kw">let </span>input = input.ensure_v0_ref()<span class="question-mark">?</span>;
+
         <span class="kw">let </span>(pub_key, amount) = <span class="kw">match </span><span class="kw-2">&amp;</span>input {
-            LightningInput::Outgoing(contract_id, outgoing_witness) =&gt; {
+            LightningInputV0::Outgoing(contract_id, outgoing_witness) =&gt; {
                 <span class="kw">let </span>contract = dbtx
                     .remove_entry(<span class="kw-2">&amp;</span>OutgoingContractKey(<span class="kw-2">*</span>contract_id))
                     .<span class="kw">await
                     </span>.ok_or(LightningInputError::UnknownContract)<span class="question-mark">?</span>;
 
-                <span class="kw">match </span>outgoing_witness {
+                <span class="kw">let </span>pub_key = <span class="kw">match </span>outgoing_witness {
                     OutgoingWitness::Claim(preimage) =&gt; {
                         <span class="kw">if </span>contract.expiration &lt;= <span class="self">self</span>.consensus_block_count(dbtx).<span class="kw">await </span>{
                             <span class="kw">return </span><span class="prelude-val">Err</span>(LightningInputError::Expired);
@@ -1140,25 +1152,27 @@
                         dbtx.insert_new_entry(<span class="kw-2">&amp;</span>PreimageKey(<span class="kw-2">*</span>contract_id), preimage)
                             .<span class="kw">await</span>;
 
-                        (contract.claim_pk, contract.amount)
+                        contract.claim_pk
                     }
                     OutgoingWitness::Refund =&gt; {
                         <span class="kw">if </span>contract.expiration &gt; <span class="self">self</span>.consensus_block_count(dbtx).<span class="kw">await </span>{
                             <span class="kw">return </span><span class="prelude-val">Err</span>(LightningInputError::NotExpired);
                         }
 
-                        (contract.refund_pk, contract.amount)
+                        contract.refund_pk
                     }
                     OutgoingWitness::Cancel(forfeit_signature) =&gt; {
                         <span class="kw">if </span>!contract.verify_forfeit_signature(forfeit_signature) {
                             <span class="kw">return </span><span class="prelude-val">Err</span>(LightningInputError::InvalidForfeitSignature);
                         }
 
-                        (contract.refund_pk, contract.amount)
+                        contract.refund_pk
                     }
-                }
+                };
+
+                (pub_key, contract.amount)
             }
-            LightningInput::Incoming(contract_id, agg_decryption_key) =&gt; {
+            LightningInputV0::Incoming(contract_id, agg_decryption_key) =&gt; {
                 <span class="kw">let </span>contract = dbtx
                     .remove_entry(<span class="kw-2">&amp;</span>IncomingContractKey(<span class="kw-2">*</span>contract_id))
                     .<span class="kw">await
@@ -1170,10 +1184,12 @@
                     <span class="kw">return </span><span class="prelude-val">Err</span>(LightningInputError::InvalidDecryptionKey);
                 }
 
-                <span class="kw">match </span>contract.decrypt_preimage(agg_decryption_key) {
-                    <span class="prelude-val">Some</span>(..) =&gt; (contract.commitment.claim_pk, contract.commitment.amount),
-                    <span class="prelude-val">None </span>=&gt; (contract.commitment.refund_pk, contract.commitment.amount),
-                }
+                <span class="kw">let </span>pub_key = <span class="kw">match </span>contract.decrypt_preimage(agg_decryption_key) {
+                    <span class="prelude-val">Some</span>(..) =&gt; contract.commitment.claim_pk,
+                    <span class="prelude-val">None </span>=&gt; contract.commitment.refund_pk,
+                };
+
+                (pub_key, contract.commitment.amount)
             }
         };
 
@@ -1192,8 +1208,10 @@
         output: <span class="kw-2">&amp;</span><span class="lifetime">'a </span>LightningOutput,
         out_point: OutPoint,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;TransactionItemAmount, LightningOutputError&gt; {
+        <span class="kw">let </span>output = output.ensure_v0_ref()<span class="question-mark">?</span>;
+
         <span class="kw">let </span>outcome = <span class="kw">match </span>output {
-            LightningOutput::Outgoing(contract) =&gt; {
+            LightningOutputV0::Outgoing(contract) =&gt; {
                 <span class="kw">if </span>dbtx
                     .insert_entry(<span class="kw-2">&amp;</span>OutgoingContractKey(contract.contract_id()), contract)
                     .<span class="kw">await
@@ -1204,7 +1222,7 @@
 
                 LightningOutputOutcome::Outgoing
             }
-            LightningOutput::Incoming(contract) =&gt; {
+            LightningOutputV0::Incoming(contract) =&gt; {
                 <span class="kw">if </span>!contract.verify() {
                     <span class="kw">return </span><span class="prelude-val">Err</span>(LightningOutputError::InvalidContract);
                 }
@@ -1221,10 +1239,9 @@
                     <span class="kw">return </span><span class="prelude-val">Err</span>(LightningOutputError::ContractAlreadyExists);
                 }
 
-                <span class="kw">let </span>decryption_key_share =
-                    contract.create_decryption_key_share(<span class="kw-2">&amp;</span><span class="self">self</span>.cfg.private.sk);
+                <span class="kw">let </span>dk_share = contract.create_decryption_key_share(<span class="kw-2">&amp;</span><span class="self">self</span>.cfg.private.sk);
 
-                LightningOutputOutcome::Incoming(decryption_key_share)
+                LightningOutputOutcome::Incoming(dk_share)
             }
         };
 
@@ -1237,7 +1254,10 @@
         }
 
         <span class="prelude-val">Ok</span>(TransactionItemAmount {
-            amount: output.amount(),
+            amount: <span class="kw">match </span>output {
+                LightningOutputV0::Outgoing(contract) =&gt; contract.amount,
+                LightningOutputV0::Incoming(contract) =&gt; contract.commitment.amount,
+            },
             fee: <span class="self">self</span>.cfg.consensus.fee_consensus.output,
         })
     }

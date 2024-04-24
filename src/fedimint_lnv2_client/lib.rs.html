@@ -879,6 +879,7 @@
 <a href="#879" id="879">879</a>
 <a href="#880" id="880">880</a>
 <a href="#881" id="881">881</a>
+<a href="#882" id="882">882</a>
 </pre></div><pre class="rust"><code><span class="kw">pub mod </span>api;
 <span class="attr">#[cfg(feature = <span class="string">"cli"</span>)]
 </span><span class="kw">mod </span>cli;
@@ -913,6 +914,7 @@
 <span class="kw">use </span>fedimint_lnv2_common::contracts::{IncomingContract, OutgoingContract};
 <span class="kw">use </span>fedimint_lnv2_common::{
     LightningClientContext, LightningCommonInit, LightningModuleTypes, LightningOutput,
+    LightningOutputV0,
 };
 <span class="kw">use </span>futures::StreamExt;
 <span class="kw">use </span>lightning_invoice::Bolt11Invoice;
@@ -1259,7 +1261,7 @@
         <span class="kw">let </span>invoice_clone = invoice.clone();
 
         <span class="kw">let </span>client_output = ClientOutput::&lt;LightningOutput, LightningClientStateMachines&gt; {
-            output: LightningOutput::Outgoing(contract.clone()),
+            output: LightningOutput::V0(LightningOutputV0::Outgoing(contract.clone())),
             amount: contract.amount,
             state_machines: Arc::new(<span class="kw">move </span>|funding_txid, <span class="kw">_</span>| {
                 <span class="macro">vec!</span>[LightningClientStateMachines::Send(SendStateMachine {
