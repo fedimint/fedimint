@@ -78,6 +78,7 @@ use std::time::Duration;
 use anyhow::{anyhow, bail, ensure, Context};
 use async_stream::stream;
 use backup::ClientBackup;
+use balance_provider::{BalanceProvider, PrimaryModuleBalanceProvider};
 use db::{
     apply_migrations_client, CachedApiVersionSet, CachedApiVersionSetKey, ClientConfigKey,
     ClientConfigKeyPrefix, ClientInitStateKey, ClientModuleRecovery, EncodedClientSecretKey,
@@ -148,10 +149,14 @@ use crate::transaction::{
 
 /// Client backup
 pub mod backup;
+/// Balance Provider for balancing the transactions.
+pub mod balance_provider;
 /// Database keys used by the client
 pub mod db;
 /// Environment variables
 pub mod envs;
+/// Management of meta fields
+pub mod meta;
 /// Module client interface definitions
 pub mod module;
 /// Operation log subsystem of the client
@@ -162,9 +167,6 @@ pub mod secret;
 pub mod sm;
 /// Structs and interfaces to construct Fedimint transactions
 pub mod transaction;
-
-/// Management of meta fields
-pub mod meta;
 
 pub type InstancelessDynClientInput = ClientInput<
     Box<maybe_add_send_sync!(dyn IInput + 'static)>,
@@ -745,7 +747,6 @@ pub struct Client {
     db: Database,
     federation_id: FederationId,
     federation_meta: BTreeMap<String, String>,
-    primary_module_instance: ModuleInstanceId,
     modules: ClientModuleRegistry,
     module_inits: ClientModuleInitRegistry,
     executor: Executor,
@@ -755,6 +756,7 @@ pub struct Client {
     secp_ctx: Secp256k1<secp256k1_zkp::All>,
     secp_ctx_24: secp256k1_24::Secp256k1<secp256k1_24::All>,
     meta_service: Arc<MetaService>,
+    balance_provider: Box<dyn BalanceProvider>,
 
     task_group: TaskGroup,
 
@@ -1017,13 +1019,8 @@ impl Client {
             self.transaction_builder_balance(&partial_transaction)
         {
             let inputs = self
-                .primary_module()
-                .create_sufficient_input(
-                    self.primary_module_instance,
-                    dbtx,
-                    operation_id,
-                    missing_amount,
-                )
+                .balance_provider
+                .create_sufficient_input(self, dbtx, operation_id, missing_amount)
                 .await?;
             partial_transaction.inputs.extend(inputs);
         }
@@ -1040,13 +1037,8 @@ impl Client {
             self.transaction_builder_balance(&partial_transaction)
         {
             let change_outputs = self
-                .primary_module()
-                .create_exact_output(
-                    self.primary_module_instance,
-                    dbtx,
-                    operation_id,
-                    excess_amount,
-                )
+                .balance_provider
+                .create_exact_output(self, dbtx, operation_id, excess_amount)
                 .await;
 
             // We add our new mint outputs to the change range
@@ -1228,8 +1220,8 @@ impl Client {
         operation_id: OperationId,
         out_point: OutPoint,
     ) -> anyhow::Result<Amount> {
-        self.primary_module()
-            .await_primary_module_output(operation_id, out_point)
+        self.balance_provider
+            .await_primary_module_output(self, operation_id, out_point)
             .await
     }
 
@@ -1273,19 +1265,8 @@ impl Client {
         }
     }
 
-    /// Returns the instance id of the first module of the given kind. The
-    /// primary module will always be returned before any other modules (which
-    /// themselves are ordered by their instance ID).
+    /// Returns the instance id of the first module of the given kind.
     pub fn get_first_instance(&self, module_kind: &ModuleKind) -> Option<ModuleInstanceId> {
-        if self
-            .modules
-            .get_with_kind(self.primary_module_instance)
-            .map(|(kind, _)| kind == module_kind)
-            .unwrap_or(false)
-        {
-            return Some(self.primary_module_instance);
-        }
-
         self.modules
             .iter_modules()
             .find(|(_, kind, _module)| *kind == module_kind)
@@ -1350,39 +1331,27 @@ impl Client {
         }
     }
 
-    /// Get the primary module
-    pub fn primary_module(&self) -> &DynClientModule {
-        self.modules
-            .get(self.primary_module_instance)
-            .expect("primary module must be present")
-    }
-
     /// Balance available to the client for spending
     pub async fn get_balance(&self) -> Amount {
-        self.primary_module()
-            .get_balance(
-                self.primary_module_instance,
-                &mut self.db().begin_transaction_nc().await,
-            )
+        self.balance_provider
+            .get_balance(self, &mut self.db().begin_transaction_nc().await)
             .await
     }
 
     /// Returns a stream that yields the current client balance every time it
     /// changes.
-    pub async fn subscribe_balance_changes(&self) -> BoxStream<'static, Amount> {
-        let mut balance_changes = self.primary_module().subscribe_balance_changes().await;
+    pub async fn subscribe_balance_changes(&self) -> BoxStream<'_, Amount> {
+        let mut balance_changes = self.balance_provider.subscribe_balance_changes(self).await;
         let initial_balance = self.get_balance().await;
         let db = self.db().clone();
-        let primary_module = self.primary_module().clone();
-        let primary_module_instance = self.primary_module_instance;
 
         Box::pin(stream! {
             yield initial_balance;
             let mut prev_balance = initial_balance;
             while let Some(()) = balance_changes.next().await {
                 let mut dbtx = db.begin_transaction_nc().await;
-                let balance = primary_module
-                    .get_balance(primary_module_instance, &mut dbtx)
+                let balance = self.balance_provider
+                    .get_balance(self, &mut dbtx)
                     .await;
 
                 // Deduplicate in case modules cannot always tell if the balance actually changed
@@ -1792,7 +1761,7 @@ pub struct AdminCreds {
 /// Used to configure, assemble and build [`Client`]
 pub struct ClientBuilder {
     module_inits: ClientModuleInitRegistry,
-    primary_module_instance: Option<ModuleInstanceId>,
+    balance_provider: Option<Box<dyn BalanceProvider>>,
     admin_creds: Option<AdminCreds>,
     db_no_decoders: Database,
     meta_service: Arc<MetaService>,
@@ -1804,18 +1773,18 @@ impl ClientBuilder {
         let meta_service = MetaService::new(LegacyMetaSource::default());
         ClientBuilder {
             module_inits: Default::default(),
-            primary_module_instance: Default::default(),
             admin_creds: None,
             db_no_decoders: db,
             stopped: false,
             meta_service,
+            balance_provider: None,
         }
     }
 
     fn from_existing(client: &Client) -> Self {
         ClientBuilder {
             module_inits: client.module_inits.clone(),
-            primary_module_instance: Some(client.primary_module_instance),
+            balance_provider: todo!(),
             admin_creds: None,
             db_no_decoders: client.db.with_decoders(Default::default()),
             stopped: false,
@@ -1842,15 +1811,25 @@ impl ClientBuilder {
     /// [`ClientModule::supports_being_primary`] for more information.
     ///
     /// ## Panics
-    /// If there was a primary module specified previously
+    /// - If there was a primary module specified previously
+    /// - If there was balance provider specified previously
     pub fn with_primary_module(&mut self, primary_module_instance: ModuleInstanceId) {
-        let was_replaced = self
-            .primary_module_instance
-            .replace(primary_module_instance)
-            .is_some();
+        self.with_balance_provider(Box::new(PrimaryModuleBalanceProvider::new(
+            primary_module_instance,
+        )));
+    }
+
+    /// Set a balance provider.
+    /// See [`BalanceProvider`] for more information.
+    ///
+    /// ## Panics
+    /// - If there was a primary module specified previously
+    /// - If there was balance provider specified previously
+    pub fn with_balance_provider(&mut self, balance_provider: Box<dyn BalanceProvider>) {
+        let was_replaced = self.balance_provider.replace(balance_provider).is_some();
         assert!(
             !was_replaced,
-            "Only one primary module can be given to the builder."
+            "Only one balance provider can be given to the builder."
         )
     }
 
@@ -2101,7 +2080,7 @@ impl ClientBuilder {
 
     /// Build a [`Client`] but do not start the executor
     async fn build_stopped(
-        self,
+        mut self,
         root_secret: DerivableSecret,
         config: ClientConfig,
     ) -> anyhow::Result<ClientHandle> {
@@ -2115,16 +2094,16 @@ impl ClientBuilder {
             DynGlobalApi::from_config(&config)
         };
         let task_group = TaskGroup::new();
+        let balance_provider = self
+            .balance_provider
+            .take()
+            .expect("balance_provider must be set");
 
         // Migrate the database before interacting with it in case any on-disk data
         // structures have changed.
         self.migrate_database(&db, decoders.clone()).await?;
 
         let init_state = Self::load_init_state(&db).await;
-
-        let primary_module_instance = self
-            .primary_module_instance
-            .ok_or(anyhow!("No primary module instance id was provided"))?;
 
         let notifier = Notifier::new(db.clone());
 
@@ -2284,12 +2263,6 @@ impl ClientBuilder {
                         )
                         .await?;
 
-                    if primary_module_instance == module_instance_id
-                        && !module.supports_being_primary()
-                    {
-                        bail!("Module instance {primary_module_instance} of kind {kind} does not support being a primary module");
-                    }
-
                     modules.register_module(module_instance_id, kind, module);
                 }
             }
@@ -2335,7 +2308,6 @@ impl ClientBuilder {
             db: db.clone(),
             federation_id: fed_id,
             federation_meta: config.global.meta,
-            primary_module_instance,
             modules,
             module_inits: self.module_inits.clone(),
             executor,
@@ -2347,6 +2319,7 @@ impl ClientBuilder {
             operation_log: OperationLog::new(db),
             client_recovery_progress_receiver,
             meta_service: self.meta_service,
+            balance_provider,
         });
         client_inner
             .task_group
