@@ -436,10 +436,16 @@ async fn run_load_test(
 
     reissue_initial_notes(initial_notes, &coordinator, &event_sender).await?;
     get_required_notes(&coordinator, minimum_amount_required, &event_sender).await?;
+
+    let coordinator_balance = get_note_summary(&coordinator).await?.total_amount();
     print_coordinator_notes(&coordinator).await?;
     info!("Reminting {minimum_notes} notes of denomination {note_denomination} for {users} users, {notes_per_user} notes per user (this may take a while if the number of users/notes is high)");
     remint_denomination(&coordinator, note_denomination, minimum_notes).await?;
     print_coordinator_notes(&coordinator).await?;
+    assert_eq!(
+        coordinator_balance,
+        get_note_summary(&coordinator).await?.total_amount()
+    );
 
     let users_clients = get_users_clients(users, db_path, invite_code).await?;
 
