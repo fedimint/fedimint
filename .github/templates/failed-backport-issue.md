@@ -1,5 +1,6 @@
 ---
 title: Backport PR `#{{ env.PR_NUMBER }}` {{ env.SHORT_PR_TITLE }}
+labels: backport
 ---
 PR: #{{ env.PR_NUMBER }}
 Title: {{ env.PR_TITLE }}
