@@ -567,14 +567,6 @@ impl ClientModule for MintClientModule {
         }
     }
 
-    fn input_fee(&self, _input: &<Self::Common as ModuleCommon>::Input) -> Option<Amount> {
-        Some(self.cfg.fee_consensus.note_spend_abs)
-    }
-
-    fn output_fee(&self, _output: &<Self::Common as ModuleCommon>::Output) -> Option<Amount> {
-        Some(self.cfg.fee_consensus.note_issuance_abs)
-    }
-
     async fn handle_cli_command(
         &self,
         args: &[ffi::OsString],

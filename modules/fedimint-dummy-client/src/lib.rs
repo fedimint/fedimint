@@ -67,14 +67,6 @@ impl ClientModule for DummyClientModule {
         }
     }
 
-    fn input_fee(&self, _input: &<Self::Common as ModuleCommon>::Input) -> Option<Amount> {
-        Some(self.cfg.tx_fee)
-    }
-
-    fn output_fee(&self, _output: &<Self::Common as ModuleCommon>::Output) -> Option<Amount> {
-        Some(self.cfg.tx_fee)
-    }
-
     fn supports_being_primary(&self) -> bool {
         true
     }

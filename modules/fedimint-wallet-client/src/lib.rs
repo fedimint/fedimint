@@ -232,14 +232,6 @@ impl ClientModule for WalletClientModule {
             secp: Default::default(),
         }
     }
-
-    fn input_fee(&self, _input: &<Self::Common as ModuleCommon>::Input) -> Option<Amount> {
-        Some(self.cfg.fee_consensus.peg_in_abs)
-    }
-
-    fn output_fee(&self, _output: &<Self::Common as ModuleCommon>::Output) -> Option<Amount> {
-        Some(self.cfg.fee_consensus.peg_out_abs)
-    }
 }
 
 #[derive(Debug, Clone)]

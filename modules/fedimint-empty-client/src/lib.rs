@@ -53,14 +53,6 @@ impl ClientModule for EmptyClientModule {
         }
     }
 
-    fn input_fee(&self, _input: &<Self::Common as ModuleCommon>::Input) -> Option<Amount> {
-        unreachable!()
-    }
-
-    fn output_fee(&self, _output: &<Self::Common as ModuleCommon>::Output) -> Option<Amount> {
-        unreachable!()
-    }
-
     fn supports_being_primary(&self) -> bool {
         false
     }

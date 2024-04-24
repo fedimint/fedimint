@@ -253,14 +253,6 @@ impl ClientModule for LightningClientModule {
         }
     }
 
-    fn input_fee(&self, _input: &<Self::Common as ModuleCommon>::Input) -> Option<Amount> {
-        Some(self.cfg.fee_consensus.input)
-    }
-
-    fn output_fee(&self, _output: &<Self::Common as ModuleCommon>::Output) -> Option<Amount> {
-        Some(self.cfg.fee_consensus.output)
-    }
-
     #[cfg(feature = "cli")]
     async fn handle_cli_command(
         &self,

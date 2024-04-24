@@ -924,27 +924,11 @@ impl Client {
         let mut fee_amount = Amount::ZERO;
 
         for input in &builder.inputs {
-            let module = self.get_module(input.input.module_instance_id());
-
-            let item_fee = module.input_fee(&input.input).expect(
-                "We only build transactions with input versions that are supported by the module",
-            );
-
-            assert_eq!(item_fee, input.fee, "Fee mismatch in input");
-
             in_amount += input.amount;
             fee_amount += input.fee;
         }
 
         for output in &builder.outputs {
-            let module = self.get_module(output.output.module_instance_id());
-
-            let item_fee = module.output_fee(&output.output).expect(
-                "We only build transactions with output versions that are supported by the module",
-            );
-
-            assert_eq!(item_fee, output.fee, "Fee mismatch in output");
-
             out_amount += output.amount;
             fee_amount += output.fee;
         }

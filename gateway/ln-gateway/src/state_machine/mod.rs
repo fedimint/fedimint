@@ -206,25 +206,6 @@ impl ClientModule for GatewayClientModule {
             gateway: self.gateway.clone(),
         }
     }
-
-    fn input_fee(
-        &self,
-        _input: &<Self::Common as fedimint_core::module::ModuleCommon>::Input,
-    ) -> Option<Amount> {
-        Some(self.cfg.fee_consensus.contract_input)
-    }
-
-    fn output_fee(
-        &self,
-        output: &<Self::Common as fedimint_core::module::ModuleCommon>::Output,
-    ) -> Option<Amount> {
-        match output.maybe_v0_ref()? {
-            LightningOutputV0::Contract(_) => Some(self.cfg.fee_consensus.contract_output),
-            LightningOutputV0::Offer(_) | LightningOutputV0::CancelOutgoing { .. } => {
-                Some(Amount::ZERO)
-            }
-        }
-    }
 }
 
 impl GatewayClientModule {
