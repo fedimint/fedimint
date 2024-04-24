@@ -136,7 +136,7 @@ while true; do
 
   case $INSTALL_TYPE in
   guardian)
-    SERVICES="fedimintd guardian-ui"
+    SERVICES="fedimintd guardian-ui xmpp"
     IS_GATEWAY=false
     break
     ;;
@@ -154,6 +154,7 @@ done
 while true; do
   echo
   echo "Do you want to setup TLS certificates with Let's Encrypt? [yes/no]"
+  echo "(to also set up xmpp chat on this instance you must use TLS)"
   read -p "Type 'yes' to setup TLS certificates or 'no' to skip: " SETUP_TLS
 
   case $SETUP_TLS in
@@ -309,6 +310,34 @@ EXTERNAL_IP=$(curl -4 -sSL ifconfig.me)
 REMOTE_USER=$(whoami)
 
 if [[ $SETUP_TLS == true ]]; then
+  if [[ $INSTALL_TYPE == "guardian" ]]; then
+    echo "Do you want to setup an xmpp chat server on this instance? [yes/no]"
+    while true; do
+      read -r -n 1 -p "Your choice (yes/no): " choice
+      echo
+      case $choice in
+      y | Y)
+        SETUP_XMPP=true
+        break
+        ;;
+      n | N)
+        SETUP_XMPP=false
+        # remove xmpp service from services list
+        SERVICES=$(echo $SERVICES | sed -e 's/xmpp//g')
+        # remove xmpp meta from fedimintd setup
+        sed -i '/FM_EXTRA_DKG_META=chat_server_domain=xmpp.fedimint.my-super-host.com/d' $path
+        # remove xmpp section from docker-compose.yaml
+        sed -i '/### START_XMPP ###/,/### END_XMPP ###/d' $path
+        # remove prosody volume from docker-compose.yaml
+        sed -i '/prosody_datadir:/d' $path
+        break
+        ;;
+      *)
+        echo "Invalid option. Please type 'yes' or 'no'."
+        ;;
+      esac
+    done
+  fi
   # All the TLS setup steps go here
   echo
   echo "Fedimint ${INSTALL_TYPE} setup with TLS certificates by Let's Encrypt:"
@@ -604,6 +633,9 @@ if [[ $SETUP_TLS == true ]]; then
     fi
   else
     echo "Guardian-UI: https://guardian-ui.${host_name[*]}"
+    if [ "$SETUP_XMPP" = true ]; then
+      echo "XMPP Prosody Server: https://xmpp.${host_name[*]}"
+    fi
   fi
   echo "Note: by default, you should open ports 8173 and 9735 for external access on your router/firewall, plus 443 as mentioned before."
 else
