@@ -225,6 +225,7 @@ jobs:
         with:
           name: fedimint
           authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
+        continue-on-error: true
 
       - name: Run cargo audit
         run: |
