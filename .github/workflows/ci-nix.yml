@@ -281,6 +281,7 @@ jobs:
 
   cross:
     name: "Cross-compile on ${{ matrix.host }} to ${{ matrix.toolchain }}"
+    needs: [lint, shell, build, ccov]
 
     strategy:
       matrix:
