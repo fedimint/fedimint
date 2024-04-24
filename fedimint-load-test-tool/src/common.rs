@@ -38,9 +38,14 @@ pub async fn get_invite_code_cli() -> anyhow::Result<InviteCode> {
 }
 
 pub async fn get_notes_cli(amount: &Amount) -> anyhow::Result<OOBNotes> {
-    cmd!(FedimintCli, "spend", amount.msats.to_string())
-        .out_json()
-        .await?["notes"]
+    cmd!(
+        FedimintCli,
+        "spend",
+        "--allow-overpay",
+        amount.msats.to_string()
+    )
+    .out_json()
+    .await?["notes"]
         .as_str()
         .map(OOBNotes::from_str)
         .transpose()?
