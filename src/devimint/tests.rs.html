@@ -2519,8 +2519,6 @@
 <a href="#2519" id="2519">2519</a>
 <a href="#2520" id="2520">2520</a>
 <a href="#2521" id="2521">2521</a>
-<a href="#2522" id="2522">2522</a>
-<a href="#2523" id="2523">2523</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::HashSet;
 <span class="kw">use </span>std::io::Write;
 <span class="kw">use </span>std::ops::ControlFlow;
@@ -2626,6 +2624,7 @@
     dev_fed: DevFed,
     r#type: LatencyTest,
     upgrade_clients: <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>UpgradeClients&gt;,
+    iterations: usize,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
     log_binary_versions().<span class="kw">await</span><span class="question-mark">?</span>;
 
@@ -2659,17 +2658,11 @@
     <span class="kw">let </span>initial_balance_sats = <span class="number">100_000_000</span>;
     fed.pegin_client(initial_balance_sats, <span class="kw-2">&amp;</span>client).<span class="kw">await</span><span class="question-mark">?</span>;
 
-    <span class="comment">// LN operations take longer, we need less iterations
-    </span><span class="kw">let </span>iterations = <span class="number">20</span>;
-
     <span class="kw">let </span>cln_gw_id = gw_cln.gateway_id().<span class="kw">await</span><span class="question-mark">?</span>;
 
     <span class="kw">match </span>r#type {
         LatencyTest::Reissue =&gt; {
             <span class="macro">info!</span>(<span class="string">"Testing latency of reissue"</span>);
-            <span class="comment">// On AlephBFT session times may lead to high latencies, so we need to run it
-            // for enough time to catch up a session end
-            </span><span class="kw">let </span>iterations = <span class="number">30</span>;
             <span class="kw">let </span><span class="kw-2">mut </span>reissues = Vec::with_capacity(iterations);
             <span class="kw">let </span>amount_per_iteration_msats =
                 <span class="comment">// use a highest 2^-1 amount that fits, to try to use as many notes as possible
@@ -2929,14 +2922,14 @@
     </span><span class="kw">let </span>restore_test = <span class="kw">if </span>clients.is_some() {
         futures::future::ok(()).right_future()
     } <span class="kw">else </span>{
-        latency_tests(dev_fed.clone(), LatencyTest::Restore, clients).left_future()
+        latency_tests(dev_fed.clone(), LatencyTest::Restore, clients, <span class="number">20</span>).left_future()
     };
 
     <span class="macro">try_join!</span>(
-        latency_tests(dev_fed.clone(), LatencyTest::Reissue, clients),
-        latency_tests(dev_fed.clone(), LatencyTest::LnSend, clients),
-        latency_tests(dev_fed.clone(), LatencyTest::LnReceive, clients),
-        latency_tests(dev_fed.clone(), LatencyTest::FmPay, clients),
+        latency_tests(dev_fed.clone(), LatencyTest::Reissue, clients, <span class="number">20</span>),
+        latency_tests(dev_fed.clone(), LatencyTest::LnSend, clients, <span class="number">20</span>),
+        latency_tests(dev_fed.clone(), LatencyTest::LnReceive, clients, <span class="number">20</span>),
+        latency_tests(dev_fed.clone(), LatencyTest::FmPay, clients, <span class="number">20</span>),
         restore_test,
     )<span class="question-mark">?</span>;
     <span class="prelude-val">Ok</span>(())
@@ -4891,6 +4884,9 @@
     </span>LatencyTests {
         <span class="attr">#[clap(subcommand)]
         </span>r#type: LatencyTest,
+
+        <span class="attr">#[arg(long, default_value = <span class="string">"10"</span>)]
+        </span>iterations: usize,
     },
     <span class="doccomment">/// `devfed` then kills and restarts most of the Guardian nodes in a 4 node
     /// fedimint
@@ -4992,10 +4988,10 @@
             };
             cleanup_on_exit(main, task_group).<span class="kw">await</span><span class="question-mark">?</span>;
         }
-        TestCmd::LatencyTests { r#type } =&gt; {
+        TestCmd::LatencyTests { r#type, iterations } =&gt; {
             <span class="kw">let </span>(process_mgr, <span class="kw">_</span>) = setup(common_args).<span class="kw">await</span><span class="question-mark">?</span>;
             <span class="kw">let </span>dev_fed = dev_fed(<span class="kw-2">&amp;</span>process_mgr).<span class="kw">await</span><span class="question-mark">?</span>;
-            latency_tests(dev_fed, r#type, <span class="prelude-val">None</span>).<span class="kw">await</span><span class="question-mark">?</span>;
+            latency_tests(dev_fed, r#type, <span class="prelude-val">None</span>, iterations).<span class="kw">await</span><span class="question-mark">?</span>;
         }
         TestCmd::ReconnectTest =&gt; {
             <span class="kw">let </span>(process_mgr, <span class="kw">_</span>) = setup(common_args).<span class="kw">await</span><span class="question-mark">?</span>;
