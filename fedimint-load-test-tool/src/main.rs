@@ -553,8 +553,11 @@ async fn get_required_notes(
         info!("Current balance {current_balance} on coordinator not enough, trying to get {diff} more through fedimint-cli");
         match try_get_notes_cli(&diff, 5).await {
             Ok(notes) => {
-                info!("Got {} more notes, reissuing them", notes.total_amount());
+                let notes_amount = notes.total_amount();
+                info!(amount = %notes_amount, "Got more notes, reissuing them");
                 reissue_notes(coordinator, notes, event_sender).await?;
+                let new_balance = coordinator.get_balance().await;
+                assert_eq!(new_balance, current_balance + notes_amount);
             }
             Err(e) => {
                 info!("Unable to get more notes: '{e}', will try to proceed without them");
