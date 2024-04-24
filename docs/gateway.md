@@ -65,7 +65,6 @@ Commands:
   connect-fed                Connect federation with the gateway
   help                       Print this message or the help of the given subcommand(s)
   lightning
-    connect-to-peer          Connect to another lightning node from the gateway\'s underlying lightning node
     get-funding-address      Generate a new address belonging to the on-chain wallet of the gateway\'s underlying lightning node
     open-channel             Open a lightning channel to another lighting node from the gateway\'s underlying lightning node
     list-active-channels     List all channels on the underlying lightning node that can send or receive payments

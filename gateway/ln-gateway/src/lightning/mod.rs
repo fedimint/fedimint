@@ -128,13 +128,6 @@ pub trait ILnRpcClient: Debug + Send + Sync {
         create_invoice_request: CreateInvoiceRequest,
     ) -> Result<CreateInvoiceResponse, LightningRpcError>;
 
-    /// Connect to a peer lightning node from the gateway's lightning node.
-    async fn connect_to_peer(
-        &self,
-        pubkey: secp256k1::PublicKey,
-        host: String,
-    ) -> Result<EmptyResponse, LightningRpcError>;
-
     /// Get a funding address belonging to the gateway's lightning node
     /// wallet.
     async fn get_funding_address(&self) -> Result<GetFundingAddressResponse, LightningRpcError>;
@@ -144,6 +137,7 @@ pub trait ILnRpcClient: Debug + Send + Sync {
     async fn open_channel(
         &self,
         pubkey: secp256k1::PublicKey,
+        host: String,
         channel_size_sats: u64,
         push_amount_sats: u64,
     ) -> Result<EmptyResponse, LightningRpcError>;

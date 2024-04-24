@@ -97,8 +97,8 @@ use lightning_invoice::{Bolt11Invoice, RoutingFees};
 use rand::rngs::OsRng;
 use rand::Rng;
 use rpc::{
-    CloseChannelsWithPeerPayload, ConnectToPeerPayload, FederationInfo, GatewayFedConfig,
-    GatewayInfo, LeaveFedPayload, OpenChannelPayload, SetConfigurationPayload, V1_API_ENDPOINT,
+    CloseChannelsWithPeerPayload, FederationInfo, GatewayFedConfig, GatewayInfo, LeaveFedPayload,
+    OpenChannelPayload, SetConfigurationPayload, V1_API_ENDPOINT,
 };
 use state_machine::pay::OutgoingPaymentError;
 use state_machine::GatewayClientModule;
@@ -1273,19 +1273,6 @@ impl Gateway {
         Ok(())
     }
 
-    /// Instructs the Gateway's Lightning node to connect to a peer specified by
-    /// `pubkey` and `host`.
-    pub async fn handle_connect_to_peer_msg(
-        &self,
-        ConnectToPeerPayload { pubkey, host }: ConnectToPeerPayload,
-    ) -> Result<()> {
-        let context = self.get_lightning_context().await?;
-        context.lnrpc.connect_to_peer(pubkey, host).await?;
-        Ok(())
-    }
-
-    /// Instructs the Gateway's Lightning node to retrieve an onchain funding
-    /// Bitcoin address.
     pub async fn handle_get_funding_address_msg(&self) -> Result<Address> {
         let context = self.get_lightning_context().await?;
         let response = context.lnrpc.get_funding_address().await?;
@@ -1300,6 +1287,7 @@ impl Gateway {
         &self,
         OpenChannelPayload {
             pubkey,
+            host,
             channel_size_sats,
             push_amount_sats,
         }: OpenChannelPayload,
@@ -1307,7 +1295,7 @@ impl Gateway {
         let context = self.get_lightning_context().await?;
         context
             .lnrpc
-            .open_channel(pubkey, channel_size_sats, push_amount_sats)
+            .open_channel(pubkey, host, channel_size_sats, push_amount_sats)
             .await?;
         Ok(())
     }

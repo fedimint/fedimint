@@ -144,17 +144,12 @@ pub struct SetConfigurationPayload {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct ConnectToPeerPayload {
-    pub pubkey: secp256k1::PublicKey,
-    pub host: String,
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct GetFundingAddressPayload;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct OpenChannelPayload {
     pub pubkey: secp256k1::PublicKey,
+    pub host: String,
     pub channel_size_sats: u64,
     pub push_amount_sats: u64,
 }

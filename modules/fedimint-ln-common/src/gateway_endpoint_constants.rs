@@ -5,7 +5,6 @@ pub const BACKUP_ENDPOINT: &str = "/backup";
 pub const BALANCE_ENDPOINT: &str = "/balance";
 pub const CONFIGURATION_ENDPOINT: &str = "/config";
 pub const CONNECT_FED_ENDPOINT: &str = "/connect-fed"; // uses `-` for backwards compatibility
-pub const CONNECT_TO_PEER_ENDPOINT: &str = "/connect_to_peer";
 pub const CREATE_INVOICE_V2_ENDPOINT: &str = "/create_invoice";
 pub const GATEWAY_INFO_ENDPOINT: &str = "/info";
 pub const GET_GATEWAY_ID_ENDPOINT: &str = "/id";

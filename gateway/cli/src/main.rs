@@ -16,9 +16,8 @@ use fedimint_logging::TracingSetup;
 use ln_gateway::rpc::rpc_client::GatewayRpcClient;
 use ln_gateway::rpc::{
     BackupPayload, BalancePayload, CloseChannelsWithPeerPayload, ConfigPayload, ConnectFedPayload,
-    ConnectToPeerPayload, DepositAddressPayload, FederationRoutingFees, GetFundingAddressPayload,
-    LeaveFedPayload, OpenChannelPayload, RestorePayload, SetConfigurationPayload, WithdrawPayload,
-    V1_API_ENDPOINT,
+    DepositAddressPayload, FederationRoutingFees, GetFundingAddressPayload, LeaveFedPayload,
+    OpenChannelPayload, RestorePayload, SetConfigurationPayload, WithdrawPayload, V1_API_ENDPOINT,
 };
 use serde::Serialize;
 
@@ -122,14 +121,6 @@ pub enum Commands {
 /// in a test environment.
 #[derive(Subcommand)]
 pub enum LightningCommands {
-    /// Connect to another lightning node
-    ConnectToPeer {
-        #[clap(long)]
-        pubkey: bitcoin::secp256k1::PublicKey,
-
-        #[clap(long)]
-        host: String,
-    },
     /// Get a Bitcoin address to fund the gateway
     GetFundingAddress,
     /// Open a channel with another lightning node
@@ -137,6 +128,9 @@ pub enum LightningCommands {
         /// The public key of the node to open a channel with
         #[clap(long)]
         pubkey: bitcoin::secp256k1::PublicKey,
+
+        #[clap(long)]
+        host: String,
 
         /// The amount to fund the channel with
         #[clap(long)]
@@ -304,11 +298,6 @@ async fn main() -> anyhow::Result<()> {
         }
 
         Commands::Lightning(lightning_command) => match lightning_command {
-            LightningCommands::ConnectToPeer { pubkey, host } => {
-                client()
-                    .connect_to_peer(ConnectToPeerPayload { pubkey, host })
-                    .await?;
-            }
             LightningCommands::GetFundingAddress => {
                 let response = client()
                     .get_funding_address(GetFundingAddressPayload {})
@@ -318,12 +307,14 @@ async fn main() -> anyhow::Result<()> {
             }
             LightningCommands::OpenChannel {
                 pubkey,
+                host,
                 channel_size_sats,
                 push_amount_sats,
             } => {
                 client()
                     .open_channel(OpenChannelPayload {
                         pubkey,
+                        host,
                         channel_size_sats,
                         push_amount_sats: push_amount_sats.unwrap_or(0),
                     })
