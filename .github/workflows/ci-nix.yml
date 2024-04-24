@@ -60,6 +60,11 @@ jobs:
           path: ~/.cargo
           key: ${{ runner.os }}-${{ hashFiles('Cargo.lock') }}
 
+      - name: Commit check
+        run: |
+          echo $PATH
+          which docker
+
       # run the same check that git `pre-commit` hook would, just in case
       - name: Commit check
         run: nix develop --ignore-environment .#lint --command ./misc/git-hooks/pre-commit
