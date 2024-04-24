@@ -18,7 +18,7 @@ use fedimint_core::config::FederationId;
 use fedimint_core::core::{Decoder, ModuleInstanceId, ModuleKind};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::{CommonModuleInit, ModuleCommon, ModuleConsensusVersion};
-use fedimint_core::{plugin_types_trait_impl_common, Amount, PeerId};
+use fedimint_core::{extensible_associated_module_type, plugin_types_trait_impl_common, PeerId};
 use secp256k1::schnorr::Signature;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -32,8 +32,14 @@ pub const MODULE_CONSENSUS_VERSION: ModuleConsensusVersion = ModuleConsensusVers
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
 pub struct ContractId(pub sha256::Hash);
 
+extensible_associated_module_type!(
+    LightningInput,
+    LightningInputV0,
+    UnknownLightningInputVariantError
+);
+
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
-pub enum LightningInput {
+pub enum LightningInputV0 {
     Outgoing(ContractId, OutgoingWitness),
     Incoming(ContractId, AggregateDecryptionKey),
 }
@@ -45,31 +51,28 @@ pub enum OutgoingWitness {
     Cancel(Signature),
 }
 
-impl std::fmt::Display for LightningInput {
+impl std::fmt::Display for LightningInputV0 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "LightningInput",)
+        write!(f, "LightningInputV0",)
     }
 }
 
+extensible_associated_module_type!(
+    LightningOutput,
+    LightningOutputV0,
+    UnknownLightningOutputVariantError
+);
+
 #[allow(clippy::large_enum_variant)]
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
-pub enum LightningOutput {
+pub enum LightningOutputV0 {
     Outgoing(OutgoingContract),
     Incoming(IncomingContract),
 }
 
-impl LightningOutput {
-    pub fn amount(&self) -> Amount {
-        match self {
-            LightningOutput::Outgoing(contract) => contract.amount,
-            LightningOutput::Incoming(contract) => contract.commitment.amount,
-        }
-    }
-}
-
-impl std::fmt::Display for LightningOutput {
+impl std::fmt::Display for LightningOutputV0 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "LightningOutput")
+        write!(f, "LightningOutputV0")
     }
 }
 
@@ -87,6 +90,8 @@ impl std::fmt::Display for LightningOutputOutcome {
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Error, Encodable, Decodable)]
 pub enum LightningInputError {
+    #[error("The lightning input version is not supported by this federation")]
+    UnknownInputVariant(#[from] UnknownLightningInputVariantError),
     #[error("No contract found for given ContractId")]
     UnknownContract,
     #[error("The preimage is invalid")]
@@ -103,6 +108,8 @@ pub enum LightningInputError {
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Error, Encodable, Decodable)]
 pub enum LightningOutputError {
+    #[error("The lightning input version is not supported by this federation")]
+    UnknownOutputVariant(#[from] UnknownLightningOutputVariantError),
     #[error("The contract is invalid")]
     InvalidContract,
     #[error("The contract is expired")]

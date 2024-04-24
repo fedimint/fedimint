@@ -40,8 +40,8 @@ use fedimint_lnv2_common::endpoint_constants::{
 };
 use fedimint_lnv2_common::{
     ContractId, LightningCommonInit, LightningConsensusItem, LightningInput, LightningInputError,
-    LightningModuleTypes, LightningOutput, LightningOutputError, LightningOutputOutcome,
-    OutgoingWitness, MODULE_CONSENSUS_VERSION,
+    LightningInputV0, LightningModuleTypes, LightningOutput, LightningOutputError,
+    LightningOutputOutcome, LightningOutputV0, OutgoingWitness, MODULE_CONSENSUS_VERSION,
 };
 use fedimint_server::check_auth;
 use fedimint_server::config::distributedgen::{evaluate_polynomial_g1, PeerHandleOps};
@@ -369,14 +369,16 @@ impl ServerModule for Lightning {
         dbtx: &mut DatabaseTransaction<'c>,
         input: &'b LightningInput,
     ) -> Result<InputMeta, LightningInputError> {
+        let input = input.ensure_v0_ref()?;
+
         let (pub_key, amount) = match &input {
-            LightningInput::Outgoing(contract_id, outgoing_witness) => {
+            LightningInputV0::Outgoing(contract_id, outgoing_witness) => {
                 let contract = dbtx
                     .remove_entry(&OutgoingContractKey(*contract_id))
                     .await
                     .ok_or(LightningInputError::UnknownContract)?;
 
-                match outgoing_witness {
+                let pub_key = match outgoing_witness {
                     OutgoingWitness::Claim(preimage) => {
                         if contract.expiration <= self.consensus_block_count(dbtx).await {
                             return Err(LightningInputError::Expired);
@@ -389,25 +391,27 @@ impl ServerModule for Lightning {
                         dbtx.insert_new_entry(&PreimageKey(*contract_id), preimage)
                             .await;
 
-                        (contract.claim_pk, contract.amount)
+                        contract.claim_pk
                     }
                     OutgoingWitness::Refund => {
                         if contract.expiration > self.consensus_block_count(dbtx).await {
                             return Err(LightningInputError::NotExpired);
                         }
 
-                        (contract.refund_pk, contract.amount)
+                        contract.refund_pk
                     }
                     OutgoingWitness::Cancel(forfeit_signature) => {
                         if !contract.verify_forfeit_signature(forfeit_signature) {
                             return Err(LightningInputError::InvalidForfeitSignature);
                         }
 
-                        (contract.refund_pk, contract.amount)
+                        contract.refund_pk
                     }
-                }
+                };
+
+                (pub_key, contract.amount)
             }
-            LightningInput::Incoming(contract_id, agg_decryption_key) => {
+            LightningInputV0::Incoming(contract_id, agg_decryption_key) => {
                 let contract = dbtx
                     .remove_entry(&IncomingContractKey(*contract_id))
                     .await
@@ -419,10 +423,12 @@ impl ServerModule for Lightning {
                     return Err(LightningInputError::InvalidDecryptionKey);
                 }
 
-                match contract.decrypt_preimage(agg_decryption_key) {
-                    Some(..) => (contract.commitment.claim_pk, contract.commitment.amount),
-                    None => (contract.commitment.refund_pk, contract.commitment.amount),
-                }
+                let pub_key = match contract.decrypt_preimage(agg_decryption_key) {
+                    Some(..) => contract.commitment.claim_pk,
+                    None => contract.commitment.refund_pk,
+                };
+
+                (pub_key, contract.commitment.amount)
             }
         };
 
@@ -441,8 +447,10 @@ impl ServerModule for Lightning {
         output: &'a LightningOutput,
         out_point: OutPoint,
     ) -> Result<TransactionItemAmount, LightningOutputError> {
+        let output = output.ensure_v0_ref()?;
+
         let outcome = match output {
-            LightningOutput::Outgoing(contract) => {
+            LightningOutputV0::Outgoing(contract) => {
                 if dbtx
                     .insert_entry(&OutgoingContractKey(contract.contract_id()), contract)
                     .await
@@ -453,7 +461,7 @@ impl ServerModule for Lightning {
 
                 LightningOutputOutcome::Outgoing
             }
-            LightningOutput::Incoming(contract) => {
+            LightningOutputV0::Incoming(contract) => {
                 if !contract.verify() {
                     return Err(LightningOutputError::InvalidContract);
                 }
@@ -470,10 +478,9 @@ impl ServerModule for Lightning {
                     return Err(LightningOutputError::ContractAlreadyExists);
                 }
 
-                let decryption_key_share =
-                    contract.create_decryption_key_share(&self.cfg.private.sk);
+                let dk_share = contract.create_decryption_key_share(&self.cfg.private.sk);
 
-                LightningOutputOutcome::Incoming(decryption_key_share)
+                LightningOutputOutcome::Incoming(dk_share)
             }
         };
 
@@ -486,7 +493,10 @@ impl ServerModule for Lightning {
         }
 
         Ok(TransactionItemAmount {
-            amount: output.amount(),
+            amount: match output {
+                LightningOutputV0::Outgoing(contract) => contract.amount,
+                LightningOutputV0::Incoming(contract) => contract.commitment.amount,
+            },
             fee: self.cfg.consensus.fee_consensus.output,
         })
     }
