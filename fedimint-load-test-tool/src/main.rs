@@ -12,6 +12,7 @@ use common::{
     parse_gateway_id, reissue_notes,
 };
 use devimint::cmd;
+use devimint::envs::FM_INVITE_CODE_ENV;
 use devimint::util::{GatewayClnCli, GatewayLndCli};
 use fedimint_client::ClientHandleArc;
 use fedimint_core::endpoint_constants::SESSION_COUNT_ENDPOINT;
@@ -69,7 +70,7 @@ enum LnInvoiceGeneration {
 enum Command {
     #[command(about = "Keep many websocket connections to a federation for a duration of time")]
     TestConnect {
-        #[arg(long, help = "Federation invite code")]
+        #[arg(long, help = "Federation invite code", env = FM_INVITE_CODE_ENV)]
         invite_code: String,
         #[arg(
             long,
@@ -91,7 +92,7 @@ enum Command {
     },
     #[command(about = "Try to download the client config many times.")]
     TestDownload {
-        #[arg(long, help = "Federation invite code")]
+        #[arg(long, help = "Federation invite code", env = FM_INVITE_CODE_ENV)]
         invite_code: String,
     },
     #[command(
@@ -110,8 +111,9 @@ enum Command {
 struct LoadTestArgs {
     #[arg(
         long,
-        help = "Federation invite code. If none given, we assume the client already has a config downloaded in DB"
-    )]
+        help = "Federation invite code. If none given, we assume the client already has a config downloaded in DB",
+        env = FM_INVITE_CODE_ENV,
+     )]
     invite_code: Option<InviteCode>,
 
     #[arg(
