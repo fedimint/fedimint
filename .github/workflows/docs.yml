@@ -21,6 +21,11 @@ jobs:
       - name: Build docs
         run: nix build -L .#nightly.ci.workspaceDocExport
 
+      # Seems like we are triggering it on self-hosted runner
+      # https://stackoverflow.com/questions/77816301/git-error-rpc-failed-http-400-curl-22-the-requested-url-returned-error-400
+      - name: Increase git post buffer
+        run: git config --global http.postBuffer 524288000
+
       - if: github.repository == 'fedimint/fedimint'
         name: Deploy docs
         uses: peaceiris/actions-gh-pages@v4
