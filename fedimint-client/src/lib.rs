@@ -337,6 +337,7 @@ impl DynGlobalClientContext {
                 input: Box::new(input.input),
                 keys: input.keys,
                 amount: input.amount,
+                fee: input.fee,
                 state_machines: states_to_instanceless_dyn(input.state_machines),
             },
         )
@@ -365,6 +366,7 @@ impl DynGlobalClientContext {
             InstancelessDynClientOutput {
                 output: Box::new(output.output),
                 amount: output.amount,
+                fee: output.fee,
                 state_machines: states_to_instanceless_dyn(output.state_machines),
             },
         )
@@ -457,6 +459,7 @@ impl IGlobalClientContext for ModuleGlobalClientContext {
             input: DynInput::from_parts(self.module_instance_id, input.input),
             keys: input.keys,
             amount: input.amount,
+            fee: input.fee,
             state_machines: states_add_instance(self.module_instance_id, input.state_machines),
         };
 
@@ -478,6 +481,7 @@ impl IGlobalClientContext for ModuleGlobalClientContext {
         let instance_output = ClientOutput {
             output: DynOutput::from_parts(self.module_instance_id, output.output),
             amount: output.amount,
+            fee: output.fee,
             state_machines: states_add_instance(self.module_instance_id, output.state_machines),
         };
 
@@ -926,8 +930,10 @@ impl Client {
                 "We only build transactions with input versions that are supported by the module",
             );
 
+            assert_eq!(item_fee, input.fee, "Fee mismatch in input");
+
             in_amount += input.amount;
-            fee_amount += item_fee;
+            fee_amount += input.fee;
         }
 
         for output in &builder.outputs {
@@ -937,8 +943,10 @@ impl Client {
                 "We only build transactions with output versions that are supported by the module",
             );
 
+            assert_eq!(item_fee, output.fee, "Fee mismatch in output");
+
             out_amount += output.amount;
-            fee_amount += item_fee;
+            fee_amount += output.fee;
         }
 
         let total_out_amount = out_amount + fee_amount;

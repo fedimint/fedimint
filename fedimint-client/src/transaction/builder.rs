@@ -15,6 +15,7 @@ pub struct ClientInput<I = DynInput, S = DynState> {
     pub input: I,
     pub keys: Vec<KeyPair>,
     pub amount: Amount,
+    pub fee: Amount,
     pub state_machines: StateGenerator<S>,
 }
 
@@ -30,6 +31,7 @@ where
             input: self.input.into_dyn(module_instance_id),
             keys: self.keys,
             amount: self.amount,
+            fee: self.fee,
             state_machines: state_gen_to_dyn(self.state_machines, module_instance_id),
         }
     }
@@ -39,6 +41,7 @@ where
 pub struct ClientOutput<O = DynOutput, S = DynState> {
     pub output: O,
     pub amount: Amount,
+    pub fee: Amount,
     pub state_machines: StateGenerator<S>,
 }
 
@@ -53,6 +56,7 @@ where
         ClientOutput {
             output: self.output.into_dyn(module_instance_id),
             amount: self.amount,
+            fee: self.fee,
             state_machines: state_gen_to_dyn(self.state_machines, module_instance_id),
         }
     }

@@ -400,6 +400,7 @@ impl ClientModule for LightningClientModule {
 
     fn context(&self) -> Self::ModuleStateMachineContext {
         LightningClientContext {
+            cfg: self.cfg.clone(),
             ln_decoder: self.decoder(),
             redeem_key: self.redeem_key,
         }
@@ -634,6 +635,7 @@ impl LightningClientModule {
             ClientOutput {
                 output: ln_output,
                 amount: contract_amount,
+                fee: self.cfg.fee_consensus.contract_output,
                 state_machines: sm_gen,
             },
             contract_id,
@@ -671,6 +673,7 @@ impl LightningClientModule {
         let client_output = ClientOutput::<LightningOutputV0, LightningClientStateMachines> {
             output: incoming_output,
             amount,
+            fee: self.cfg.fee_consensus.contract_output,
             state_machines: Arc::new(move |txid, _| {
                 vec![LightningClientStateMachines::InternalPay(
                     IncomingStateMachine {
@@ -881,6 +884,7 @@ impl LightningClientModule {
             ClientOutput {
                 output: ln_output,
                 amount: Amount::ZERO,
+                fee: Amount::ZERO,
                 state_machines: sm_gen,
             },
             preimage.into_32(),
@@ -1094,6 +1098,7 @@ impl LightningClientModule {
         let output = self.client_ctx.make_client_output(ClientOutput {
             output: LightningOutput::V0(client_output.output),
             amount: client_output.amount,
+            fee: client_output.fee,
             state_machines: client_output.state_machines,
         });
 
@@ -1303,6 +1308,7 @@ impl LightningClientModule {
         let client_input = ClientInput::<LightningInput, LightningClientStateMachines> {
             input,
             amount: incoming_contract_account.amount,
+            fee: self.cfg.fee_consensus.contract_input,
             keys: vec![key_pair],
             state_machines: Arc::new(|_, _| vec![]),
         };

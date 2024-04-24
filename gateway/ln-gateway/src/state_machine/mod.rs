@@ -151,6 +151,7 @@ impl ClientModuleInit for GatewayClientInit {
 
 #[derive(Debug, Clone)]
 pub struct GatewayClientContext {
+    cfg: LightningClientConfig,
     redeem_key: bitcoin29::KeyPair,
     timelock_delta: u64,
     secp: secp256k1_zkp::Secp256k1<secp256k1_zkp::All>,
@@ -164,6 +165,7 @@ impl Context for GatewayClientContext {}
 impl From<&GatewayClientContext> for LightningClientContext {
     fn from(ctx: &GatewayClientContext) -> Self {
         LightningClientContext {
+            cfg: ctx.cfg.clone(),
             ln_decoder: ctx.ln_decoder.clone(),
             redeem_key: ctx.redeem_key,
         }
@@ -176,7 +178,7 @@ impl From<&GatewayClientContext> for LightningClientContext {
 /// see [`fedimint_ln_client::LightningClientModule`]
 #[derive(Debug)]
 pub struct GatewayClientModule {
-    cfg: LightningClientConfig,
+    pub cfg: LightningClientConfig,
     pub notifier: ModuleNotifier<GatewayClientStateMachines>,
     pub redeem_key: KeyPair,
     timelock_delta: u64,
@@ -195,6 +197,7 @@ impl ClientModule for GatewayClientModule {
 
     fn context(&self) -> Self::ModuleStateMachineContext {
         Self::ModuleStateMachineContext {
+            cfg: self.cfg.clone(),
             redeem_key: self.redeem_key,
             timelock_delta: self.timelock_delta,
             secp: secp256k1_zkp::Secp256k1::new(),
@@ -272,6 +275,7 @@ impl GatewayClientModule {
         let client_output = ClientOutput::<LightningOutputV0, GatewayClientStateMachines> {
             output: incoming_output,
             amount,
+            fee: self.cfg.fee_consensus.contract_output,
             state_machines: Arc::new(move |txid, _| {
                 vec![
                     GatewayClientStateMachines::Receive(IncomingStateMachine {
@@ -319,6 +323,7 @@ impl GatewayClientModule {
         let client_output = ClientOutput::<LightningOutputV0, GatewayClientStateMachines> {
             output: incoming_output,
             amount,
+            fee: self.cfg.fee_consensus.contract_output,
             state_machines: Arc::new(move |txid, _| {
                 vec![GatewayClientStateMachines::Receive(IncomingStateMachine {
                     common: IncomingSmCommon {
@@ -416,6 +421,7 @@ impl GatewayClientModule {
         let output = ClientOutput {
             output: LightningOutput::V0(client_output.output),
             amount,
+            fee: self.cfg.fee_consensus.contract_output,
             state_machines: client_output.state_machines,
         };
 
@@ -444,6 +450,7 @@ impl GatewayClientModule {
             ClientOutput {
                 output: LightningOutput::V0(client_output.output),
                 amount: client_output.amount,
+                fee: client_output.fee,
                 state_machines: client_output.state_machines,
             },
         ));

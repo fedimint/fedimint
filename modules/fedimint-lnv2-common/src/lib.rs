@@ -152,6 +152,7 @@ plugin_types_trait_impl_common!(
 
 #[derive(Debug, Clone)]
 pub struct LightningClientContext {
+    pub cfg: LightningClientConfig,
     pub decoder: Decoder,
     pub federation_id: FederationId,
     pub tpe_agg_pk: AggregatePublicKey,

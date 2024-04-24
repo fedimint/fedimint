@@ -526,6 +526,7 @@ async fn test_gateway_cannot_claim_invalid_preimage() -> anyhow::Result<()> {
                 input: claim_input,
                 state_machines: Arc::new(|_, _| vec![]),
                 amount: outgoing_contract.amount,
+                fee: gateway_module.cfg.fee_consensus.contract_input,
                 keys: vec![gateway_module.redeem_key],
             };
 
@@ -803,6 +804,7 @@ async fn test_gateway_client_intercept_htlc_invalid_offer() -> anyhow::Result<()
             let client_output = ClientOutput {
                 output: ln_output,
                 amount: Amount::ZERO,
+                fee: Amount::ZERO,
                 state_machines,
             };
             let tx = TransactionBuilder::new()

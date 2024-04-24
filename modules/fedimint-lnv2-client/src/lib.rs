@@ -245,6 +245,7 @@ impl ClientModule for LightningClientModule {
 
     fn context(&self) -> Self::ModuleStateMachineContext {
         LightningClientContext {
+            cfg: self.cfg.clone(),
             decoder: self.decoder(),
             federation_id: self.federation_id,
             tpe_agg_pk: self.cfg.tpe_agg_pk,
@@ -378,6 +379,7 @@ impl LightningClientModule {
         let client_output = ClientOutput::<LightningOutput, LightningClientStateMachines> {
             output: LightningOutput::Outgoing(contract.clone()),
             amount: contract.amount,
+            fee: self.cfg.fee_consensus.output,
             state_machines: Arc::new(move |funding_txid, _| {
                 vec![LightningClientStateMachines::Send(SendStateMachine {
                     common: SendSMCommon {

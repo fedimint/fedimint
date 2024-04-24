@@ -79,6 +79,7 @@ impl State for ReceiveStateMachine {
         context: &Self::ModuleContext,
         global_context: &DynGlobalClientContext,
     ) -> Vec<StateTransition<Self>> {
+        let ctx = context.clone();
         let gc = global_context.clone();
         let tpe_agg_pk = context.tpe_agg_pk;
 
@@ -107,6 +108,7 @@ impl State for ReceiveStateMachine {
                                 dbtx,
                                 output_outcomes,
                                 old_state,
+                                ctx.clone(),
                                 gc.clone(),
                                 tpe_agg_pk,
                             ))
@@ -209,6 +211,7 @@ impl ReceiveStateMachine {
         dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
         decryption_shares: BTreeMap<PeerId, DecryptionKeyShare>,
         old_state: ReceiveStateMachine,
+        context: GatewayClientContextV2,
         global_context: DynGlobalClientContext,
         tpe_agg_pk: AggregatePublicKey,
     ) -> ReceiveStateMachine {
@@ -243,6 +246,7 @@ impl ReceiveStateMachine {
                 agg_decryption_key,
             ),
             amount: old_state.common.contract.commitment.amount,
+            fee: context.cfg.fee_consensus.input,
             keys: vec![old_state.common.refund_keypair],
             // The input of the refund tx is managed by this state machine
             state_machines: Arc::new(|_, _| vec![]),

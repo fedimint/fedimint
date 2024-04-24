@@ -68,6 +68,7 @@ impl State for DepositStateMachine {
             }
             DepositStates::WaitingForConfirmations(waiting_state) => {
                 let global_context = global_context.clone();
+                let context = context.clone();
                 vec![StateTransition::new(
                     await_btc_transaction_confirmed(
                         context.clone(),
@@ -77,6 +78,7 @@ impl State for DepositStateMachine {
                     move |dbtx, txout_proof, old_state| {
                         Box::pin(transition_btc_tx_confirmed(
                             dbtx,
+                            context.clone(),
                             global_context.clone(),
                             old_state,
                             txout_proof,
@@ -271,6 +273,7 @@ async fn await_btc_transaction_confirmed(
 
 async fn transition_btc_tx_confirmed(
     dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
+    context: WalletClientContext,
     global_context: DynGlobalClientContext,
     old_state: DepositStateMachine,
     txout_proof: TxOutProof,
@@ -296,6 +299,7 @@ async fn transition_btc_tx_confirmed(
         input: wallet_input,
         keys: vec![awaiting_confirmation_state.tweak_key],
         amount,
+        fee: context.cfg.fee_consensus.peg_in_abs,
         state_machines: Arc::new(|_, _| vec![]),
     };
 

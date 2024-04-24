@@ -80,6 +80,8 @@ impl State for SendStateMachine {
         context: &Self::ModuleContext,
         global_context: &DynGlobalClientContext,
     ) -> Vec<StateTransition<Self>> {
+        let ctx_pay = context.clone();
+        let ctx_preimage = context.clone();
         let gc_pay = global_context.clone();
         let gc_preimage = global_context.clone();
 
@@ -101,6 +103,7 @@ impl State for SendStateMachine {
                         ),
                         move |dbtx, response, old_state| {
                             Box::pin(Self::transition_gateway_send_payment(
+                                ctx_pay.clone(),
                                 gc_pay.clone(),
                                 dbtx,
                                 response,
@@ -113,6 +116,7 @@ impl State for SendStateMachine {
                         move |dbtx, preimage, old_state| {
                             Box::pin(Self::transition_preimage(
                                 dbtx,
+                                ctx_preimage.clone(),
                                 gc_preimage.clone(),
                                 old_state,
                                 preimage,
@@ -240,6 +244,7 @@ impl SendStateMachine {
     }
 
     async fn transition_gateway_send_payment(
+        context: LightningClientContext,
         global_context: DynGlobalClientContext,
         dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
         gateway_response: Result<[u8; 32], Signature>,
@@ -254,6 +259,7 @@ impl SendStateMachine {
                         OutgoingWitness::Cancel(signature),
                     ),
                     amount: old_state.common.contract.amount,
+                    fee: context.cfg.fee_consensus.input,
                     keys: vec![old_state.common.refund_keypair],
                     // The input of the refund tx is managed by this state machine
                     state_machines: Arc::new(|_, _| vec![]),
@@ -293,6 +299,7 @@ impl SendStateMachine {
 
     async fn transition_preimage(
         dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
+        ctx: LightningClientContext,
         global_context: DynGlobalClientContext,
         old_state: SendStateMachine,
         preimage: Option<[u8; 32]>,
@@ -307,6 +314,7 @@ impl SendStateMachine {
                 OutgoingWitness::Refund,
             ),
             amount: old_state.common.contract.amount,
+            fee: ctx.cfg.fee_consensus.input,
             keys: vec![old_state.common.refund_keypair],
             // The input of the refund tx is managed by this state machine
             state_machines: Arc::new(|_, _| vec![]),

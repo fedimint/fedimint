@@ -37,7 +37,7 @@ pub mod states;
 
 #[derive(Debug)]
 pub struct DummyClientModule {
-    cfg: DummyClientConfig,
+    pub cfg: DummyClientConfig,
     key: KeyPair,
     notifier: ModuleNotifier<DummyStateMachine>,
     client_ctx: ClientContext<Self>,
@@ -102,6 +102,7 @@ impl ClientModule for DummyClientModule {
                 account: self.key.public_key(),
             },
             amount,
+            fee: self.cfg.tx_fee,
             keys: vec![self.key],
             state_machines: Arc::new(move |txid, _| {
                 vec![DummyStateMachine::Input(amount, txid, id)]
@@ -122,6 +123,7 @@ impl ClientModule for DummyClientModule {
                 account: self.key.public_key(),
             },
             amount,
+            fee: self.cfg.tx_fee,
             state_machines: Arc::new(move |txid, _| {
                 vec![DummyStateMachine::Output(amount, txid, id)]
             }),
@@ -189,6 +191,7 @@ impl DummyClientModule {
                 account: account_kp.public_key(),
             },
             amount,
+            fee: self.cfg.tx_fee,
             keys: vec![account_kp],
             state_machines: Arc::new(move |_, _| Vec::<DummyStateMachine>::new()),
         };
@@ -250,6 +253,7 @@ impl DummyClientModule {
         let output = ClientOutput {
             output: DummyOutput { amount, account },
             amount,
+            fee: self.cfg.tx_fee,
             state_machines: Arc::new(move |_, _| Vec::<DummyStateMachine>::new()),
         };
 

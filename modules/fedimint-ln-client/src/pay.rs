@@ -95,7 +95,7 @@ impl State for LightningPayStateMachine {
                 vec![]
             }
             LightningPayStates::Refundable(refundable) => {
-                refundable.transitions(self.common.clone(), global_context.clone())
+                refundable.transitions(self.common.clone(), context.clone(), global_context.clone())
             }
             LightningPayStates::Refund(refund) => refund.transitions(global_context),
             LightningPayStates::Refunded(_) => {
@@ -413,9 +413,11 @@ impl LightningPayRefundable {
     fn transitions(
         &self,
         common: LightningPayCommon,
+        context: LightningClientContext,
         global_context: DynGlobalClientContext,
     ) -> Vec<StateTransition<LightningPayStateMachine>> {
         let contract_id = self.contract_id;
+        let timeout_context = context.clone();
         let timeout_global_context = global_context.clone();
         let timeout_common = common.clone();
         let timelock = self.block_timelock;
@@ -427,6 +429,7 @@ impl LightningPayRefundable {
                         old_state,
                         common.clone(),
                         dbtx,
+                        context.clone(),
                         global_context.clone(),
                     ))
                 },
@@ -438,6 +441,7 @@ impl LightningPayRefundable {
                         old_state,
                         timeout_common.clone(),
                         dbtx,
+                        timeout_context.clone(),
                         timeout_global_context.clone(),
                     ))
                 },
@@ -454,6 +458,7 @@ impl LightningPayRefundable {
         old_state: LightningPayStateMachine,
         common: LightningPayCommon,
         dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
+        context: LightningClientContext,
         global_context: DynGlobalClientContext,
     ) -> LightningPayStateMachine {
         let contract_data = common.contract;
@@ -465,6 +470,7 @@ impl LightningPayRefundable {
         let refund_client_input = ClientInput::<LightningInput, LightningClientStateMachines> {
             input: refund_input,
             amount: contract_data.contract_account.amount,
+            fee: context.cfg.fee_consensus.contract_input,
             keys: vec![refund_key],
             // The input of the refund tx is managed by this state machine, so no new state machines
             // need to be created

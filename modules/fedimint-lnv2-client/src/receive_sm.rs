@@ -60,9 +60,10 @@ impl State for ReceiveStateMachine {
 
     fn transitions(
         &self,
-        _context: &Self::ModuleContext,
+        context: &Self::ModuleContext,
         global_context: &DynGlobalClientContext,
     ) -> Vec<StateTransition<Self>> {
+        let ctx = context.clone();
         let gc = global_context.clone();
 
         match &self.state {
@@ -73,6 +74,7 @@ impl State for ReceiveStateMachine {
                         Box::pin(Self::transition_incoming_contract(
                             dbtx,
                             old_state,
+                            ctx.clone(),
                             gc.clone(),
                             contract_confirmed,
                         ))
@@ -107,6 +109,7 @@ impl ReceiveStateMachine {
     async fn transition_incoming_contract(
         dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
         old_state: ReceiveStateMachine,
+        context: LightningClientContext,
         global_context: DynGlobalClientContext,
         contract_confirmed: bool,
     ) -> ReceiveStateMachine {
@@ -120,6 +123,7 @@ impl ReceiveStateMachine {
                 old_state.common.agg_decryption_key,
             ),
             amount: old_state.common.contract.commitment.amount,
+            fee: context.cfg.fee_consensus.input,
             keys: vec![old_state.common.claim_keypair],
             state_machines: Arc::new(|_, _| vec![]),
         };

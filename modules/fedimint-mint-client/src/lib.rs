@@ -526,6 +526,7 @@ pub struct MintClientModule {
 // TODO: wrap in Arc
 #[derive(Debug, Clone)]
 pub struct MintClientContext {
+    pub cfg: MintClientConfig,
     pub mint_decoder: Decoder,
     pub tbs_pks: Tiered<AggregatePublicKey>,
     pub peer_tbs_pks: BTreeMap<PeerId, Tiered<tbs::PublicKeyShare>>,
@@ -557,6 +558,7 @@ impl ClientModule for MintClientModule {
 
     fn context(&self) -> Self::ModuleStateMachineContext {
         MintClientContext {
+            cfg: self.cfg.clone(),
             mint_decoder: self.decoder(),
             tbs_pks: self.cfg.tbs_pks.clone(),
             peer_tbs_pks: self.cfg.peer_tbs_pks.clone(),
@@ -785,6 +787,7 @@ impl MintClientModule {
                 outputs.push(ClientOutput {
                     output: MintOutput::new_v0(amount, blind_nonce),
                     amount,
+                    fee: self.cfg.fee_consensus.note_issuance_abs,
                     state_machines: state_generator,
                 });
             }
@@ -901,6 +904,7 @@ impl MintClientModule {
                 input: MintInput::new_v0(amount, note),
                 keys: vec![spendable_note.spend_key],
                 amount,
+                fee: self.cfg.fee_consensus.note_spend_abs,
                 state_machines: sm_gen,
             });
         }

@@ -95,6 +95,7 @@ pub struct GatewayClientModuleV2 {
 
 #[derive(Debug, Clone)]
 pub struct GatewayClientContextV2 {
+    pub cfg: LightningClientConfig,
     pub decoder: Decoder,
     pub tpe_agg_pk: AggregatePublicKey,
     pub tpe_pks: BTreeMap<PeerId, PublicKeyShare>,
@@ -112,6 +113,7 @@ impl ClientModule for GatewayClientModuleV2 {
 
     fn context(&self) -> Self::ModuleStateMachineContext {
         GatewayClientContextV2 {
+            cfg: self.cfg.clone(),
             decoder: self.decoder(),
             tpe_agg_pk: self.cfg.tpe_agg_pk,
             tpe_pks: self.cfg.tpe_pks.clone(),
@@ -242,6 +244,7 @@ impl GatewayClientModuleV2 {
         let client_output = ClientOutput::<LightningOutput, GatewayClientStateMachinesV2> {
             output: LightningOutput::Incoming(contract.clone()),
             amount: contract.commitment.amount,
+            fee: self.cfg.fee_consensus.output,
             state_machines: Arc::new(move |txid, out_idx| {
                 vec![GatewayClientStateMachinesV2::Receive(ReceiveStateMachine {
                     common: ReceiveSMCommon {

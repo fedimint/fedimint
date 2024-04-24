@@ -83,6 +83,7 @@ impl State for SendStateMachine {
         context: &Self::ModuleContext,
         global_context: &DynGlobalClientContext,
     ) -> Vec<StateTransition<Self>> {
+        let ctx = context.clone();
         let gc = global_context.clone();
 
         match &self.state {
@@ -99,6 +100,7 @@ impl State for SendStateMachine {
                         Box::pin(Self::transition_send_payment(
                             dbtx,
                             old_state,
+                            ctx.clone(),
                             gc.clone(),
                             result,
                         ))
@@ -198,6 +200,7 @@ impl SendStateMachine {
     async fn transition_send_payment(
         dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
         old_state: SendStateMachine,
+        context: GatewayClientContextV2,
         global_context: DynGlobalClientContext,
         result: Result<[u8; 32], Cancelled>,
     ) -> SendStateMachine {
@@ -209,6 +212,7 @@ impl SendStateMachine {
                         OutgoingWitness::Claim(preimage),
                     ),
                     amount: old_state.common.contract.amount,
+                    fee: context.cfg.fee_consensus.input,
                     keys: vec![old_state.common.claim_keypair],
                     state_machines: Arc::new(|_, _| vec![]),
                 };

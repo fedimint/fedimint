@@ -225,6 +225,7 @@ impl ClientModule for WalletClientModule {
 
     fn context(&self) -> Self::ModuleStateMachineContext {
         WalletClientContext {
+            cfg: self.cfg.clone(),
             rpc: self.rpc.clone(),
             wallet_descriptor: self.cfg.peg_in_descriptor.clone(),
             wallet_decoder: self.decoder(),
@@ -243,6 +244,7 @@ impl ClientModule for WalletClientModule {
 
 #[derive(Debug, Clone)]
 pub struct WalletClientContext {
+    cfg: WalletClientConfig,
     rpc: DynBitcoindRpc,
     wallet_descriptor: PegInDescriptor,
     wallet_decoder: Decoder,
@@ -351,6 +353,7 @@ impl WalletClientModule {
         Ok(ClientOutput::<WalletOutput, WalletClientStates> {
             output,
             amount,
+            fee: self.cfg.fee_consensus.peg_out_abs,
             state_machines: Arc::new(sm_gen),
         })
     }
@@ -376,6 +379,7 @@ impl WalletClientModule {
         Ok(ClientOutput::<WalletOutput, WalletClientStates> {
             output,
             amount,
+            fee: self.cfg.fee_consensus.peg_out_abs,
             state_machines: Arc::new(sm_gen),
         })
     }

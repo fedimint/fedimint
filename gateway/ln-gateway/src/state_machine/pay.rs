@@ -704,6 +704,7 @@ impl GatewayPayClaimOutgoingContract {
             input: claim_input,
             state_machines: Arc::new(|_, _| vec![]),
             amount: contract.amount,
+            fee: context.cfg.fee_consensus.contract_input,
             keys: vec![context.redeem_key],
         };
 
@@ -894,6 +895,7 @@ impl GatewayPayCancelContract {
         let client_output = ClientOutput::<LightningOutput, GatewayClientStateMachines> {
             output: cancel_output,
             amount: Amount::ZERO,
+            fee: Amount::ZERO,
             state_machines: Arc::new(|_, _| vec![]),
         };
 

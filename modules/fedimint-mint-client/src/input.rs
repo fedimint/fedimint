@@ -51,11 +51,13 @@ impl State for MintInputStateMachine {
 
     fn transitions(
         &self,
-        _context: &Self::ModuleContext,
+        context: &Self::ModuleContext,
         global_context: &DynGlobalClientContext,
     ) -> Vec<StateTransition<Self>> {
         match &self.state {
-            MintInputStates::Created(created) => created.transitions(&self.common, global_context),
+            MintInputStates::Created(created) => {
+                created.transitions(&self.common, context, global_context)
+            }
             MintInputStates::Refund(refund) => refund.transitions(global_context),
             MintInputStates::Success(_) => {
                 vec![]
@@ -84,9 +86,11 @@ impl MintInputStateCreated {
     fn transitions(
         &self,
         common: &MintInputCommon,
+        context: &MintClientContext,
         global_context: &DynGlobalClientContext,
     ) -> Vec<StateTransition<MintInputStateMachine>> {
         let global_context = global_context.clone();
+        let context = context.clone();
         vec![StateTransition::new(
             Self::await_success(*common, global_context.clone()),
             move |dbtx, result, old_state| {
@@ -94,6 +98,7 @@ impl MintInputStateCreated {
                     result,
                     old_state,
                     dbtx,
+                    context.clone(),
                     global_context.clone(),
                 ))
             },
@@ -111,6 +116,7 @@ impl MintInputStateCreated {
         result: Result<(), String>,
         old_state: MintInputStateMachine,
         dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
+        context: MintClientContext,
         global_context: DynGlobalClientContext,
     ) -> MintInputStateMachine {
         assert!(matches!(old_state.state, MintInputStates::Created(_)));
@@ -125,7 +131,7 @@ impl MintInputStateCreated {
             }
             Err(_) => {
                 // Transaction rejected: attempting to refund
-                Self::refund(dbtx, old_state, global_context).await
+                Self::refund(dbtx, old_state, context, global_context).await
             }
         }
     }
@@ -133,6 +139,7 @@ impl MintInputStateCreated {
     async fn refund(
         dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
         old_state: MintInputStateMachine,
+        context: MintClientContext,
         global_context: DynGlobalClientContext,
     ) -> MintInputStateMachine {
         let (amount, spendable_note) = match old_state.state {
@@ -144,6 +151,7 @@ impl MintInputStateCreated {
             input: MintInput::new_v0(amount, spendable_note.note()),
             keys: vec![spendable_note.spend_key],
             amount,
+            fee: context.cfg.fee_consensus.note_spend_abs,
             // The input of the refund tx is managed by this state machine, so no new state machines
             // need to be created
             state_machines: Arc::new(|_, _| vec![]),

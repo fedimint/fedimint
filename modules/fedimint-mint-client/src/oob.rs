@@ -92,13 +92,20 @@ impl MintOOBStatesCreated {
         context: &MintClientContext,
         global_context: &DynGlobalClientContext,
     ) -> Vec<StateTransition<MintOOBStateMachine>> {
+        let user_cancel_ctx = context.clone();
         let user_cancel_gc = global_context.clone();
+        let timeout_cancel_ctx = context.clone();
         let timeout_cancel_gc = global_context.clone();
         vec![
             StateTransition::new(
                 context.await_cancel_oob_payment(operation_id),
                 move |dbtx, (), state| {
-                    Box::pin(transition_user_cancel(state, dbtx, user_cancel_gc.clone()))
+                    Box::pin(transition_user_cancel(
+                        state,
+                        dbtx,
+                        user_cancel_ctx.clone(),
+                        user_cancel_gc.clone(),
+                    ))
                 },
             ),
             StateTransition::new(
@@ -107,6 +114,7 @@ impl MintOOBStatesCreated {
                     Box::pin(transition_timeout_cancel(
                         state,
                         dbtx,
+                        timeout_cancel_ctx.clone(),
                         timeout_cancel_gc.clone(),
                     ))
                 },
@@ -118,6 +126,7 @@ impl MintOOBStatesCreated {
 async fn transition_user_cancel(
     prev_state: MintOOBStateMachine,
     dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
+    context: MintClientContext,
     global_context: DynGlobalClientContext,
 ) -> MintOOBStateMachine {
     let (amount, spendable_note) = match prev_state.state {
@@ -130,6 +139,7 @@ async fn transition_user_cancel(
         prev_state.operation_id,
         amount,
         spendable_note,
+        context,
         global_context,
     )
     .await;
@@ -148,6 +158,7 @@ async fn await_timeout_cancel(deadline: SystemTime) {
 async fn transition_timeout_cancel(
     prev_state: MintOOBStateMachine,
     dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
+    context: MintClientContext,
     global_context: DynGlobalClientContext,
 ) -> MintOOBStateMachine {
     let (amount, spendable_note) = match prev_state.state {
@@ -160,6 +171,7 @@ async fn transition_timeout_cancel(
         prev_state.operation_id,
         amount,
         spendable_note,
+        context,
         global_context,
     )
     .await;
@@ -174,12 +186,14 @@ async fn try_cancel_oob_spend(
     operation_id: OperationId,
     amount: Amount,
     spendable_note: SpendableNote,
+    context: MintClientContext,
     global_context: DynGlobalClientContext,
 ) -> TransactionId {
     let input = ClientInput {
         input: MintInput::new_v0(amount, spendable_note.note()),
         keys: vec![spendable_note.spend_key],
         amount,
+        fee: context.cfg.fee_consensus.note_spend_abs,
         state_machines: Arc::new(move |txid, input_idx| {
             vec![MintClientStateMachines::Input(MintInputStateMachine {
                 common: MintInputCommon {

@@ -58,7 +58,7 @@ impl State for LightningReceiveStateMachine {
 
     fn transitions(
         &self,
-        _context: &Self::ModuleContext,
+        context: &Self::ModuleContext,
         global_context: &DynGlobalClientContext,
     ) -> Vec<StateTransition<Self>> {
         match &self.state {
@@ -69,7 +69,7 @@ impl State for LightningReceiveStateMachine {
                 vec![]
             }
             LightningReceiveStates::ConfirmedInvoice(confirmed_invoice) => {
-                confirmed_invoice.transitions(global_context)
+                confirmed_invoice.transitions(context, global_context)
             }
             LightningReceiveStates::Funded(funded) => funded.transitions(global_context),
             LightningReceiveStates::Success(_) => {
@@ -183,11 +183,13 @@ pub struct LightningReceiveConfirmedInvoice {
 impl LightningReceiveConfirmedInvoice {
     fn transitions(
         &self,
+        context: &LightningClientContext,
         global_context: &DynGlobalClientContext,
     ) -> Vec<StateTransition<LightningReceiveStateMachine>> {
         let invoice = self.invoice.clone();
         let receiving_key = self.receiving_key;
         let global_context = global_context.clone();
+        let context = context.clone();
         vec![StateTransition::new(
             Self::await_incoming_contract_account(invoice, global_context.clone()),
             move |dbtx, contract, old_state| {
@@ -196,6 +198,7 @@ impl LightningReceiveConfirmedInvoice {
                     receiving_key,
                     contract,
                     dbtx,
+                    context.clone(),
                     global_context.clone(),
                 ))
             },
@@ -247,15 +250,21 @@ impl LightningReceiveConfirmedInvoice {
         receiving_key: ReceivingKey,
         result: Result<IncomingContractAccount, LightningReceiveError>,
         dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
+        context: LightningClientContext,
         global_context: DynGlobalClientContext,
     ) -> LightningReceiveStateMachine {
         match result {
             Ok(contract) => {
                 match receiving_key {
                     ReceivingKey::Personal(keypair) => {
-                        let (txid, out_points) =
-                            Self::claim_incoming_contract(dbtx, contract, keypair, global_context)
-                                .await;
+                        let (txid, out_points) = Self::claim_incoming_contract(
+                            dbtx,
+                            contract,
+                            keypair,
+                            context,
+                            global_context,
+                        )
+                        .await;
                         LightningReceiveStateMachine {
                             operation_id: old_state.operation_id,
                             state: LightningReceiveStates::Funded(LightningReceiveFunded {
@@ -284,12 +293,14 @@ impl LightningReceiveConfirmedInvoice {
         dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
         contract: IncomingContractAccount,
         keypair: KeyPair,
+        context: LightningClientContext,
         global_context: DynGlobalClientContext,
     ) -> (TransactionId, Vec<OutPoint>) {
         let input = contract.claim();
         let client_input = ClientInput::<LightningInput, LightningClientStateMachines> {
             input,
             amount: contract.amount,
+            fee: context.cfg.fee_consensus.contract_input,
             keys: vec![keypair],
             // The input of the refund tx is managed by this state machine, so no new state machines
             // need to be created
