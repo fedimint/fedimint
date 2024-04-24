@@ -157,6 +157,11 @@ impl OOBNotes {
             .expect("Invariant violated: OOBNotes does not contain any notes")
     }
 
+    /// Returns the total value of all notes in msat as `Amount`
+    pub fn total_amount(&self) -> Amount {
+        self.notes().total_amount()
+    }
+
     pub fn notes_json(&self) -> Result<serde_json::Value, serde_json::Error> {
         let mut notes_map = serde_json::Map::new();
         for notes in self.0.iter() {
@@ -320,13 +325,6 @@ impl<'de> Deserialize<'de> for OOBNotes {
     {
         let s = String::deserialize(deserializer)?;
         FromStr::from_str(&s).map_err(serde::de::Error::custom)
-    }
-}
-
-impl OOBNotes {
-    /// Returns the total value of all notes in msat as `Amount`
-    pub fn total_amount(&self) -> Amount {
-        self.notes().total_amount()
     }
 }
 
