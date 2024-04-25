@@ -60,6 +60,12 @@ jobs:
           path: ~/.cargo
           key: ${{ runner.os }}-${{ hashFiles('Cargo.lock') }}
 
+      - name: Debug
+        run: |
+          id
+          ls -alh /var/run/
+          ls -alh /var/run/docker.sock
+
       # run the same check that git `pre-commit` hook would, just in case
       - name: Commit check
         run: nix develop --ignore-environment .#lint --command ./misc/git-hooks/pre-commit
