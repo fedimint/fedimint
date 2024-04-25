@@ -50,7 +50,7 @@ if [ -z "${CI:-}" ] && [[ -t 1 ]] && [ -z "${FM_TEST_CI_ALL_DISABLE_ETA:-}" ]; t
   parallel_args+=(--eta)
 fi
 parallel_args+=(--jobs "${FM_TEST_CI_ALL_JOBS:-$(($(nproc) / 4 + 1))}")
-parallel_args+=(--load "${FM_TEST_CI_ALL_MAX_LOAD:-1000}")
+parallel_args+=(--load "${FM_TEST_CI_ALL_MAX_LOAD:-$(($(nproc) / 4 + 1))}")
 parallel_args+=(--delay "${FM_TEST_CI_ALL_DELAY:-$((64 / $(nproc) + 1))}")
 parallel_args+=(
   --halt-on-error 1
