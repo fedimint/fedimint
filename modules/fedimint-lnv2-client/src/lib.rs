@@ -7,7 +7,7 @@ mod send_sm;
 use std::sync::Arc;
 
 use async_stream::stream;
-use bitcoin_hashes::{sha256, Hash};
+use bitcoin::hashes::{sha256, Hash};
 use fedimint_api_client::api::DynModuleApi;
 use fedimint_client::module::init::{ClientModuleInit, ClientModuleInitArgs};
 use fedimint_client::module::recovery::NoModuleBackup;
@@ -282,7 +282,7 @@ fn generate_ephemeral_tweak(static_pk: PublicKey) -> ([u8; 32], PublicKey) {
 
     let ephemeral_tweak = ecdh::shared_secret_point(&static_pk, &ephemeral_keypair.secret_key())
         .consensus_hash::<sha256::Hash>()
-        .into_inner();
+        .to_byte_array();
 
     (ephemeral_tweak, ephemeral_keypair.public_key())
 }
@@ -589,11 +589,11 @@ impl LightningClientModule {
 
         let encryption_seed = ephemeral_tweak
             .consensus_hash::<sha256::Hash>()
-            .into_inner();
+            .to_byte_array();
 
         let preimage = encryption_seed
             .consensus_hash::<sha256::Hash>()
-            .into_inner();
+            .to_byte_array();
 
         let payment_info = self
             .fetch_payment_info(gateway_api.clone())
@@ -725,11 +725,11 @@ impl LightningClientModule {
             &self.keypair.secret_key(),
         )
         .consensus_hash::<sha256::Hash>()
-        .into_inner();
+        .to_byte_array();
 
         let encryption_seed = ephemeral_tweak
             .consensus_hash::<sha256::Hash>()
-            .into_inner();
+            .to_byte_array();
 
         let claim_keypair = self
             .keypair

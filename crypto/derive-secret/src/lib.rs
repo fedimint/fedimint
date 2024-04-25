@@ -20,7 +20,7 @@ use fedimint_core::config::FederationId;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::BitcoinHash;
 use hkdf::hashes::Sha512;
-use hkdf::{bitcoin_hashes, Hkdf};
+use hkdf::Hkdf;
 use ring::aead;
 use secp256k1_zkp::{KeyPair, Secp256k1, Signing};
 
@@ -87,7 +87,7 @@ impl DerivableSecret {
             level: 0,
             kdf: Hkdf::from_prk(
                 self.kdf.derive_hmac(&tagged_derive(
-                    &federation_id.0.into_inner()[..8]
+                    &federation_id.0.to_byte_array()[..8]
                         .try_into()
                         .expect("Slice with length 8"),
                     ChildId(0),

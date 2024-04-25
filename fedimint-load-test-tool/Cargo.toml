@@ -29,7 +29,7 @@ fedimint-wallet-client = { version = "=0.4.0-alpha", path = "../modules/fedimint
 futures = { workspace = true }
 jsonrpsee-core = { version = "0.22.4", features = [ "client" ] }
 jsonrpsee-types = { version = "0.22.2" }
-lightning-invoice = { version = "0.26.0", features = [ "serde" ] }
+lightning-invoice = { version = "0.30.0", features = [ "serde" ] }
 rand = { workspace = true }
 serde = { version = "1.0.199", features = [ "derive" ] }
 serde_json = { workspace = true }

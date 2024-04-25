@@ -3,7 +3,6 @@ use std::str::FromStr;
 
 use bitcoin::secp256k1::{Secp256k1, Verification};
 use bitcoin::PublicKey;
-use fedimint_core::bitcoin_migration::bitcoin29_to_bitcoin30_public_key;
 use fedimint_core::encoding::{Decodable, Encodable};
 use miniscript::bitcoin::hashes::{hash160, ripemd160, sha256};
 use miniscript::{hash256, MiniscriptKey, ToPublicKey};
@@ -48,10 +47,10 @@ impl MiniscriptKey for CompressedPublicKey {
 
 impl ToPublicKey for CompressedPublicKey {
     fn to_public_key(&self) -> miniscript::bitcoin::PublicKey {
-        bitcoin29_to_bitcoin30_public_key(PublicKey {
+        PublicKey {
             compressed: true,
             inner: self.key,
-        })
+        }
     }
 
     fn to_sha256(hash: &<Self as MiniscriptKey>::Sha256) -> sha256::Hash {

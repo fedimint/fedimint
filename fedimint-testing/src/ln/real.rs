@@ -140,7 +140,7 @@ impl ILnRpcClient for ClnLightningTest {
 
     async fn connect_to_peer(
         &self,
-        pubkey: bitcoin30::secp256k1::PublicKey,
+        pubkey: bitcoin::secp256k1::PublicKey,
         host: String,
     ) -> Result<EmptyResponse, LightningRpcError> {
         self.lnrpc.connect_to_peer(pubkey, host).await
@@ -152,7 +152,7 @@ impl ILnRpcClient for ClnLightningTest {
 
     async fn open_channel(
         &self,
-        pubkey: bitcoin30::secp256k1::PublicKey,
+        pubkey: bitcoin::secp256k1::PublicKey,
         channel_size_sats: u64,
         push_amount_sats: u64,
     ) -> Result<EmptyResponse, LightningRpcError> {
@@ -332,7 +332,7 @@ impl ILnRpcClient for LndLightningTest {
 
     async fn connect_to_peer(
         &self,
-        pubkey: bitcoin30::secp256k1::PublicKey,
+        pubkey: bitcoin::secp256k1::PublicKey,
         host: String,
     ) -> Result<EmptyResponse, LightningRpcError> {
         self.lnrpc.connect_to_peer(pubkey, host).await
@@ -344,7 +344,7 @@ impl ILnRpcClient for LndLightningTest {
 
     async fn open_channel(
         &self,
-        pubkey: bitcoin30::secp256k1::PublicKey,
+        pubkey: bitcoin::secp256k1::PublicKey,
         channel_size_sats: u64,
         push_amount_sats: u64,
     ) -> Result<EmptyResponse, LightningRpcError> {

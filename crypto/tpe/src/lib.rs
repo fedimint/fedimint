@@ -137,7 +137,7 @@ fn hash_to_message(
         *commitment,
     );
 
-    let seed = message.consensus_hash::<sha256::Hash>().into_inner();
+    let seed = message.consensus_hash::<sha256::Hash>().to_byte_array();
 
     G2Projective::random(&mut ChaChaRng::from_seed(seed)).to_affine()
 }

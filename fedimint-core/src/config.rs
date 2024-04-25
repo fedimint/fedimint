@@ -6,6 +6,7 @@ use std::path::Path;
 use std::str::FromStr;
 
 use anyhow::{bail, format_err, Context};
+use bitcoin29::hashes::hex::format_hex;
 use bitcoin_hashes::sha256::{Hash as Sha256, HashEngine};
 use bitcoin_hashes::{hex, sha256};
 use bls12_381::Scalar;
@@ -16,7 +17,7 @@ use fedimint_core::task::Cancelled;
 use fedimint_core::util::SafeUrl;
 use fedimint_core::{BitcoinHash, ModuleDecoderRegistry};
 use fedimint_logging::LOG_CORE;
-use hex::{format_hex, FromHex};
+use hex::FromHex;
 use serde::de::DeserializeOwned;
 use serde::ser::SerializeMap;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
@@ -284,7 +285,7 @@ impl Display for FederationIdPrefix {
 
 impl Display for FederationId {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        format_hex(&self.0, f)
+        format_hex(&self.0.to_byte_array(), f)
     }
 }
 
@@ -302,11 +303,11 @@ impl FromStr for FederationIdPrefix {
 impl FederationId {
     /// Random dummy id for testing
     pub fn dummy() -> Self {
-        Self(sha256::Hash::from_inner([42; 32]))
+        Self(sha256::Hash::from_byte_array([42; 32]))
     }
 
     pub(crate) fn from_byte_array(bytes: [u8; 32]) -> Self {
-        Self(sha256::Hash::from_inner(bytes))
+        Self(sha256::Hash::from_byte_array(bytes))
     }
 
     pub fn to_prefix(&self) -> FederationIdPrefix {
@@ -326,7 +327,7 @@ impl FederationId {
         &self,
         secp: &secp256k1::Secp256k1<secp256k1::All>,
     ) -> anyhow::Result<secp256k1::PublicKey> {
-        let sk = secp256k1::SecretKey::from_slice(&self.0)?;
+        let sk = secp256k1::SecretKey::from_slice(&self.0.to_byte_array())?;
         Ok(secp256k1::PublicKey::from_secret_key(secp, &sk))
     }
 }

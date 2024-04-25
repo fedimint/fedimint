@@ -5,6 +5,7 @@ use std::time::Duration;
 
 use anyhow::ensure;
 use async_trait::async_trait;
+use bitcoin_hashes::Hash;
 use fedimint_core::task::{sleep, TaskGroup};
 use fedimint_core::Amount;
 use fedimint_ln_common::PrunedInvoice;
@@ -418,7 +419,7 @@ impl ILnRpcClient for GatewayLndClient {
 
         // If the payment exists, that means we've already tried to pay the invoice
         let preimage: Vec<u8> = if let Some(preimage) = self
-            .lookup_payment(invoice.payment_hash.to_vec(), &mut client)
+            .lookup_payment(invoice.payment_hash.to_byte_array().to_vec(), &mut client)
             .await?
         {
             info!("LND payment already exists for invoice {invoice:?}");
@@ -470,7 +471,7 @@ impl ILnRpcClient for GatewayLndClient {
                     amt_msat,
                     dest: invoice.destination.serialize().to_vec(),
                     dest_features,
-                    payment_hash: invoice.payment_hash.to_vec(),
+                    payment_hash: invoice.payment_hash.to_byte_array().to_vec(),
                     payment_addr: invoice.payment_secret.to_vec(),
                     route_hints: route_hints_to_lnd(&invoice.route_hints),
                     final_cltv_delta,

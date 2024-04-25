@@ -1,6 +1,6 @@
 use std::io::Write;
 
-use bitcoin_hashes_12::{sha256, Hash};
+use bitcoin_hashes::{sha256, Hash};
 use fedimint_core::net::peers::IPeerConnections;
 use parity_scale_codec::{Decode, Encode, IoReader};
 

@@ -102,7 +102,6 @@ mod fedimint_migration_tests {
     use bitcoin::key::KeyPair;
     use bitcoin::secp256k1;
     use bitcoin_hashes::Hash;
-    use fedimint_core::bitcoin_migration::bitcoin30_to_bitcoin29_schnorr_signature;
     use fedimint_core::core::{DynInput, DynOutput};
     use fedimint_core::db::{
         Database, DatabaseVersion, DatabaseVersionKeyV0, IDatabaseTransactionOpsCoreTyped,
@@ -173,9 +172,7 @@ mod fedimint_migration_tests {
                 },
             )],
             nonce: [0x42; 8],
-            signatures: TransactionSignature::NaiveMultisig(vec![
-                bitcoin30_to_bitcoin29_schnorr_signature(schnorr),
-            ]),
+            signatures: TransactionSignature::NaiveMultisig(vec![schnorr]),
         };
 
         let module_ids = transaction

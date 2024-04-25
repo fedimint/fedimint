@@ -1,6 +1,7 @@
 use std::hash::Hasher;
 
-use bitcoin::util::psbt::raw::ProprietaryKey;
+use bitcoin::address::NetworkUnchecked;
+use bitcoin::psbt::raw::ProprietaryKey;
 use bitcoin::{Address, Amount, BlockHash, Network, Txid};
 use config::WalletClientConfig;
 use fedimint_core::core::{Decoder, ModuleInstanceId, ModuleKind};
@@ -78,7 +79,7 @@ pub struct PegOutSignatureItem {
 pub struct SpendableUTXO {
     #[serde(with = "::fedimint_core::encoding::as_hex")]
     pub tweak: [u8; 33],
-    #[serde(with = "bitcoin::util::amount::serde::as_sat")]
+    #[serde(with = "bitcoin::amount::serde::as_sat")]
     pub amount: bitcoin::Amount,
 }
 
@@ -103,8 +104,8 @@ impl PegOutFees {
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
 pub struct PegOut {
-    pub recipient: bitcoin::Address,
-    #[serde(with = "bitcoin::util::amount::serde::as_sat")]
+    pub recipient: bitcoin::Address<NetworkUnchecked>,
+    #[serde(with = "bitcoin::amount::serde::as_sat")]
     pub amount: bitcoin::Amount,
     pub fees: PegOutFees,
 }
@@ -176,7 +177,7 @@ extensible_associated_module_type!(
 
 impl WalletOutput {
     pub fn new_v0_peg_out(
-        recipient: Address,
+        recipient: Address<NetworkUnchecked>,
         amount: bitcoin::Amount,
         fees: PegOutFees,
     ) -> WalletOutput {
@@ -219,7 +220,12 @@ impl std::fmt::Display for WalletOutputV0 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             WalletOutputV0::PegOut(pegout) => {
-                write!(f, "Wallet PegOut {} to {}", pegout.amount, pegout.recipient)
+                write!(
+                    f,
+                    "Wallet PegOut {} to {}",
+                    pegout.amount,
+                    pegout.recipient.clone().assume_checked()
+                )
             }
             WalletOutputV0::Rbf(rbf) => write!(f, "Wallet RBF {:?} to {}", rbf.fees, rbf.txid),
         }
@@ -321,5 +327,5 @@ pub enum ProcessPegOutSigError {
     #[error("Missing change tweak")]
     MissingOrMalformedChangeTweak,
     #[error("Error finalizing PSBT {0:?}")]
-    ErrorFinalizingPsbt(Vec<miniscript9::psbt::Error>),
+    ErrorFinalizingPsbt(Vec<miniscript::psbt::Error>),
 }

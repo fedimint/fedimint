@@ -6,10 +6,6 @@ use anyhow::{anyhow as format_err, bail};
 use bitcoin::{BlockHash, Network, ScriptBuf, Transaction, Txid};
 use bitcoincore_rpc::bitcoincore_rpc_json::EstimateMode;
 use bitcoincore_rpc::{Auth, RpcApi};
-use fedimint_core::bitcoin_migration::{
-    bitcoin29_to_bitcoin30_block_hash, bitcoin29_to_bitcoin30_transaction,
-    bitcoin30_to_bitcoin29_script, bitcoin30_to_bitcoin29_transaction, bitcoin30_to_bitcoin29_txid,
-};
 use fedimint_core::encoding::Decodable;
 use fedimint_core::envs::FM_BITCOIND_COOKIE_FILE_ENV;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
@@ -67,9 +63,7 @@ impl IBitcoindRpc for BitcoinClient {
     }
 
     async fn get_block_hash(&self, height: u64) -> anyhow::Result<BlockHash> {
-        block_in_place(|| self.0.get_block_hash(height))
-            .map(bitcoin29_to_bitcoin30_block_hash)
-            .map_err(anyhow::Error::from)
+        block_in_place(|| self.0.get_block_hash(height)).map_err(anyhow::Error::from)
     }
 
     async fn get_fee_rate(&self, confirmation_target: u16) -> anyhow::Result<Option<Feerate>> {
@@ -85,10 +79,7 @@ impl IBitcoindRpc for BitcoinClient {
     async fn submit_transaction(&self, transaction: Transaction) {
         use bitcoincore_rpc::jsonrpc::Error::Rpc;
         use bitcoincore_rpc::Error::JsonRpc;
-        match block_in_place(|| {
-            self.0
-                .send_raw_transaction(&bitcoin30_to_bitcoin29_transaction(&transaction))
-        }) {
+        match block_in_place(|| self.0.send_raw_transaction(&transaction)) {
             // Bitcoin core's RPC will return error code -27 if a transaction is already in a block.
             // This is considered a success case, so we don't surface the error log.
             //
@@ -100,11 +91,8 @@ impl IBitcoindRpc for BitcoinClient {
     }
 
     async fn get_tx_block_height(&self, txid: &Txid) -> anyhow::Result<Option<u64>> {
-        let info = block_in_place(|| {
-            self.0
-                .get_raw_transaction_info(&bitcoin30_to_bitcoin29_txid(*txid), None)
-        })
-        .map_err(|error| info!(?error, "Unable to get raw transaction"));
+        let info = block_in_place(|| self.0.get_raw_transaction_info(txid, None))
+            .map_err(|error| info!(?error, "Unable to get raw transaction"));
         let height = match info.ok().and_then(|info| info.blockhash) {
             None => None,
             Some(hash) => Some(block_in_place(|| self.0.get_block_header_info(&hash))?.height),
@@ -117,12 +105,8 @@ impl IBitcoindRpc for BitcoinClient {
         // start watching for this script in our wallet to avoid the need to rescan the
         // blockchain, labeling it so we can reference it later
         block_in_place(|| {
-            self.0.import_address_script(
-                &bitcoin30_to_bitcoin29_script(script),
-                Some(&script.to_string()),
-                Some(false),
-                None,
-            )
+            self.0
+                .import_address_script(script, Some(&script.to_string()), Some(false), None)
         })?;
 
         Ok(())
@@ -135,9 +119,7 @@ impl IBitcoindRpc for BitcoinClient {
                 .list_transactions(Some(&script.to_string()), None, None, Some(true))
         })?;
         for tx in list {
-            let raw_tx = bitcoin29_to_bitcoin30_transaction(&block_in_place(|| {
-                self.0.get_raw_transaction(&tx.info.txid, None)
-            })?);
+            let raw_tx = block_in_place(|| self.0.get_raw_transaction(&tx.info.txid, None))?;
             results.push(raw_tx);
         }
         Ok(results)
@@ -145,10 +127,7 @@ impl IBitcoindRpc for BitcoinClient {
 
     async fn get_txout_proof(&self, txid: Txid) -> anyhow::Result<TxOutProof> {
         TxOutProof::consensus_decode(
-            &mut Cursor::new(block_in_place(|| {
-                self.0
-                    .get_tx_out_proof(&[bitcoin30_to_bitcoin29_txid(txid)], None)
-            })?),
+            &mut Cursor::new(block_in_place(|| self.0.get_tx_out_proof(&[txid], None))?),
             &ModuleDecoderRegistry::default(),
         )
         .map_err(|error| format_err!("Could not decode tx: {}", error))

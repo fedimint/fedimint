@@ -5,10 +5,6 @@ use std::time::{Duration, SystemTime};
 use fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
 use fedimint_client::transaction::ClientInput;
 use fedimint_client::DynGlobalClientContext;
-use fedimint_core::bitcoin_migration::{
-    bitcoin29_to_bitcoin30_keypair, bitcoin29_to_bitcoin30_script, bitcoin29_to_bitcoin30_txid,
-    bitcoin30_to_bitcoin29_script, bitcoin30_to_bitcoin29_transaction,
-};
 use fedimint_core::core::OperationId;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::task::sleep;
@@ -105,18 +101,12 @@ async fn await_created_btc_transaction_submitted(
     context: WalletClientContext,
     tweak: KeyPair,
 ) -> (bitcoin::Transaction, u32) {
-    let script = bitcoin30_to_bitcoin29_script(
-        &context
-            .wallet_descriptor
-            .tweak(&tweak.public_key(), &context.secp)
-            .script_pubkey(),
-    );
+    let script = context
+        .wallet_descriptor
+        .tweak(&tweak.public_key(), &context.secp)
+        .script_pubkey();
     loop {
-        match context
-            .rpc
-            .watch_script_history(&bitcoin29_to_bitcoin30_script(script.clone()))
-            .await
-        {
+        match context.rpc.watch_script_history(&script).await {
             Ok(_) => break,
             Err(e) => warn!("Error while awaiting btc tx submitting: {e}"),
         }
@@ -129,11 +119,7 @@ async fn await_created_btc_transaction_submitted(
         ))
         .await;
 
-        match context
-            .rpc
-            .get_script_history(&bitcoin29_to_bitcoin30_script(script.clone()))
-            .await
-        {
+        match context.rpc.get_script_history(&script).await {
             Ok(received) => {
                 // TODO: fix
                 if received.len() > 1 {
@@ -146,8 +132,7 @@ async fn await_created_btc_transaction_submitted(
                         .iter()
                         .enumerate()
                         .find_map(|(idx, output)| {
-                            if output.script_pubkey == bitcoin29_to_bitcoin30_script(script.clone())
-                            {
+                            if output.script_pubkey == script {
                                 Some(idx as u32)
                             } else {
                                 None
@@ -155,7 +140,7 @@ async fn await_created_btc_transaction_submitted(
                         })
                         .expect("TODO: handle invalid tx returned by API");
 
-                    return (bitcoin30_to_bitcoin29_transaction(&transaction), out_idx);
+                    return (transaction, out_idx);
                 } else {
                     trace!("No transactions received yet for script {script:?}");
                 }
@@ -235,9 +220,7 @@ async fn await_btc_transaction_confirmed(
 
         let confirmation_block_count = match context
             .rpc
-            .get_tx_block_height(&bitcoin29_to_bitcoin30_txid(
-                waiting_state.btc_transaction.txid(),
-            ))
+            .get_tx_block_height(&waiting_state.btc_transaction.txid())
             .await
         {
             Ok(Some(confirmation_height)) => Some(confirmation_height + 1),
@@ -266,9 +249,7 @@ async fn await_btc_transaction_confirmed(
         // Get txout proof
         let txout_proof = match context
             .rpc
-            .get_txout_proof(bitcoin29_to_bitcoin30_txid(
-                waiting_state.btc_transaction.txid(),
-            ))
+            .get_txout_proof(waiting_state.btc_transaction.txid())
             .await
         {
             Ok(txout_proof) => txout_proof,
@@ -310,9 +291,7 @@ async fn transition_btc_tx_confirmed(
 
     let client_input = ClientInput::<WalletInput, WalletClientStates> {
         input: wallet_input,
-        keys: vec![bitcoin29_to_bitcoin30_keypair(
-            awaiting_confirmation_state.tweak_key,
-        )],
+        keys: vec![awaiting_confirmation_state.tweak_key],
         amount,
         state_machines: Arc::new(|_, _| vec![]),
     };

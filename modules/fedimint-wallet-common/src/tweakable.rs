@@ -28,7 +28,7 @@ impl Tweakable for secp256k1::PublicKey {
     ) -> Self {
         let mut hasher = HmacEngine::<sha256::Hash>::new(&self.serialize()[..]);
         tweak.encode(&mut hasher).expect("hashing is infallible");
-        let tweak = Hmac::from_engine(hasher).into_inner();
+        let tweak = Hmac::from_engine(hasher).to_byte_array();
 
         self.add_exp_tweak(secp, &Scalar::from_be_bytes(tweak).expect("can't fail"))
             .expect("tweak is always 32 bytes, other failure modes are negligible")
@@ -46,7 +46,7 @@ impl Tweakable for secp256k1::SecretKey {
         let tweak = {
             let mut hasher = HmacEngine::<sha256::Hash>::new(&pub_key.serialize()[..]);
             tweak_in.encode(&mut hasher).expect("hashing is infallible");
-            Hmac::from_engine(hasher).into_inner()
+            Hmac::from_engine(hasher).to_byte_array()
         };
 
         self.add_tweak(&Scalar::from_be_bytes(tweak).expect("can't fail"))

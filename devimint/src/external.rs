@@ -116,7 +116,7 @@ impl Bitcoind {
         if !skip_setup {
             // mine blocks
             let blocks = 101;
-            let address = block_in_place(|| client.get_new_address(None, None))?;
+            let address = block_in_place(|| client.get_new_address(None, None))?.assume_checked();
             debug!(target: LOG_DEVIMINT, blocks_num=blocks, %address, "Mining blocks to address");
             block_in_place(|| {
                 client
@@ -209,7 +209,7 @@ impl Bitcoind {
         let tx = self
             .wallet_client()
             .await?
-            .send_to_address(&bitcoin::Address::from_str(&addr)?, amount)
+            .send_to_address(&bitcoin::Address::from_str(&addr)?.assume_checked(), amount)
             .await?;
         Ok(tx)
     }
@@ -227,7 +227,7 @@ impl Bitcoind {
 
     pub async fn get_new_address(&self) -> Result<Address> {
         let client = &self.wallet_client().await?;
-        let addr = block_in_place(|| client.client.get_new_address(None, None))?;
+        let addr = block_in_place(|| client.client.get_new_address(None, None))?.assume_checked();
         Ok(addr)
     }
 
@@ -370,12 +370,13 @@ impl Lightningd {
         process_mgr.spawn_daemon("lightningd", cmd).await
     }
 
-    pub async fn request<R: cln_rpc::model::IntoRequest>(&self, request: R) -> Result<R::Response>
+    pub async fn request<R>(&self, request: R) -> Result<R::Response>
     where
-        R::Response: Send,
+        R: cln_rpc::model::TypedRequest + serde::Serialize + std::fmt::Debug,
+        R::Response: serde::de::DeserializeOwned + std::fmt::Debug,
     {
         let mut rpc = self.rpc.lock().await;
-        Ok(rpc.call_typed(request).await?)
+        Ok(rpc.call_typed(&request).await?)
     }
 
     // TODO(tvolk131): Remove this method and instead use
@@ -597,6 +598,7 @@ async fn open_channel(
             utxos: None,
             mindepth: None,
             reserve: None,
+            channel_type: None,
         })
         .await
         .map_err(ControlFlow::Continue)

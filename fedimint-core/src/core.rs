@@ -68,13 +68,13 @@ impl OperationId {
     }
 
     pub fn from_encodable<E: Encodable>(encodable: E) -> OperationId {
-        Self(encodable.consensus_hash::<sha256::Hash>().into_inner())
+        Self(encodable.consensus_hash::<sha256::Hash>().to_byte_array())
     }
 }
 
 impl Display for OperationId {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        bitcoin_hashes::hex::format_hex(&self.0, f)
+        bitcoin29::hashes::hex::format_hex(&self.0, f)
     }
 }
 

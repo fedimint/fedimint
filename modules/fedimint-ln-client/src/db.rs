@@ -212,7 +212,7 @@ mod tests {
         2we42dvjggjkf44egqheymyw",).expect("Invalid invoice");
         let claim_key = KeyPair::new(secp256k1::SECP256K1, &mut thread_rng());
         let operation_id = OperationId::new_random();
-        let txid = TransactionId::from_inner([42; 32]);
+        let txid = TransactionId::from_byte_array([42; 32]);
 
         let submitted_offer_variant_old = {
             let mut submitted_offer_variant = Vec::<u8>::new();
@@ -362,7 +362,7 @@ mod tests {
         2we42dvjggjkf44egqheymyw",).expect("Invalid invoice");
         let claim_key = KeyPair::new(secp256k1::SECP256K1, &mut thread_rng());
         let operation_id = OperationId::new_random();
-        let txid = TransactionId::from_inner([42; 32]);
+        let txid = TransactionId::from_byte_array([42; 32]);
 
         let submitted_offer_variant_deleted = {
             let mut submitted_offer_variant = Vec::<u8>::new();

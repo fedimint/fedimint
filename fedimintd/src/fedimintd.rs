@@ -8,7 +8,6 @@ use std::time::Duration;
 use anyhow::{format_err, Context};
 use clap::{Parser, Subcommand};
 use fedimint_core::admin_client::ConfigGenParamsRequest;
-use fedimint_core::bitcoin_migration::bitcoin30_to_bitcoin29_network;
 use fedimint_core::config::{
     ModuleInitParams, ServerModuleConfigGenParamsRegistry, ServerModuleInitRegistry,
 };
@@ -276,7 +275,7 @@ impl Fedimintd {
                         bitcoin_rpc: bitcoind_rpc.clone(),
                     },
                     consensus: WalletGenParamsConsensus {
-                        network: bitcoin30_to_bitcoin29_network(network),
+                        network,
                         // TODO this is not very elegant, but I'm planning to get rid of it in a
                         // next commit anyway
                         finality_delay,

@@ -2,8 +2,9 @@ use std::borrow::Cow;
 use std::hash::Hash;
 use std::io::Cursor;
 
-use bitcoin::util::merkleblock::PartialMerkleTree;
-use bitcoin::{BlockHash, BlockHeader, Txid};
+use bitcoin::block::Header as BlockHeader;
+use bitcoin::merkle_tree::PartialMerkleTree;
+use bitcoin::{BlockHash, Txid};
 use hex::{FromHex, ToHex};
 use serde::de::Error;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};

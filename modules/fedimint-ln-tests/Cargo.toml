@@ -28,11 +28,11 @@ fedimint-core ={ path = "../../fedimint-core" }
 fedimint-server = { path = "../../fedimint-server" }
 fedimint-logging = { path = "../../fedimint-logging" }
 futures = { workspace = true }
-lightning-invoice = { version = "0.26.0", features = [ "serde" ] }
+lightning-invoice = { version = "0.30.0", features = [ "serde" ] }
 threshold_crypto = { workspace = true }
 tokio = { version = "1.37.0", features = ["sync"] }
 tracing = { workspace = true }
-secp256k1 = { version="0.24.3", default-features=false }
+secp256k1 = { version="0.27.0", default-features=false }
 serde_json = { workspace = true }
 rand = { workspace = true }
 strum = { workspace = true }
