@@ -245,8 +245,7 @@ if [ -n "${FM_TEST_CI_ALL_JOBS:-}" ]; then
   # when specifically set, use the env var
   parallel_args+=(--jobs "${FM_TEST_CI_ALL_JOBS}")
 elif [ -n "${CI:-}" ] || [ "${CARGO_PROFILE:-}" == "ci" ]; then
-  # in CI, we know number of cpus works OK
-  parallel_args+=(--jobs 4)
+  parallel_args+=(--jobs $(($(nproc) / 4 + 1)))
 else
   # on dev computers default to `num_cpus / 4 + 1` max parallel jobs
   parallel_args+=(--jobs "${FM_TEST_CI_ALL_JOBS:-$(($(nproc) / 4 + 1))}")
