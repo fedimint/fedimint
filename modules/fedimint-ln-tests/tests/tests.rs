@@ -712,6 +712,7 @@ mod fedimint_migration_tests {
     use rand::distributions::Standard;
     use rand::prelude::Distribution;
     use rand::rngs::OsRng;
+    use secp256k1::hashes::Hash as OldHash;
     use secp256k1::{All, KeyPair, Secp256k1, SecretKey};
     use strum::IntoEnumIterator;
     use threshold_crypto::G1Projective;
@@ -737,7 +738,7 @@ mod fedimint_migration_tests {
         let threshold_key = threshold_crypto::PublicKey::from(G1Projective::identity());
         let (_, pk) = secp256k1::generate_keypair(&mut OsRng);
         let incoming_contract = IncomingContract {
-            hash: secp256k1::hashes::sha256::Hash::hash(&BYTE_8),
+            hash: bitcoin_hashes::sha256::Hash::hash(&BYTE_8),
             encrypted_preimage: EncryptedPreimage::new(PreimageKey(BYTE_33), &threshold_key),
             decrypted_preimage: DecryptedPreimage::Some(PreimageKey(BYTE_33)),
             gateway_key: pk,
@@ -759,7 +760,7 @@ mod fedimint_migration_tests {
         )
         .await;
         let outgoing_contract = FundedContract::Outgoing(outgoing::OutgoingContract {
-            hash: secp256k1::hashes::sha256::Hash::hash(&[0, 2, 3, 4, 5, 6, 7, 8]),
+            hash: bitcoin_hashes::sha256::Hash::hash(&[0, 2, 3, 4, 5, 6, 7, 8]),
             gateway_key: pk,
             timelock: 1000000,
             user_key: pk,
@@ -776,7 +777,7 @@ mod fedimint_migration_tests {
 
         let incoming_offer = IncomingContractOffer {
             amount: fedimint_core::Amount { msats: 1000 },
-            hash: secp256k1::hashes::sha256::Hash::hash(&BYTE_8),
+            hash: bitcoin_hashes::sha256::Hash::hash(&BYTE_8),
             encrypted_preimage: EncryptedPreimage::new(PreimageKey(BYTE_33), &threshold_key),
             expiry_time: None,
         };
@@ -905,7 +906,7 @@ mod fedimint_migration_tests {
 
         dbtx.insert_new_entry(
             &PaymentResultKey {
-                payment_hash: sha256::Hash::hash(&BYTE_8),
+                payment_hash: secp256k1::hashes::sha256::Hash::hash(&BYTE_8),
             },
             &PaymentResult {
                 index: 0,
@@ -925,7 +926,7 @@ mod fedimint_migration_tests {
         let secp: Secp256k1<All> = Secp256k1::gen_new();
         let invoice = InvoiceBuilder::new(Currency::Regtest)
             .amount_milli_satoshis(1000)
-            .payment_hash(sha256::Hash::hash(&BYTE_32))
+            .payment_hash(secp256k1::hashes::sha256::Hash::hash(&BYTE_32))
             .description("".to_string())
             .payment_secret(PaymentSecret([0; 32]))
             .current_timestamp()

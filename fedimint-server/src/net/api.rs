@@ -356,7 +356,12 @@ impl ConsensusApi {
             return Err(ApiError::bad_request("snapshot too large".into()));
         }
         debug!(target: LOG_NET_API, id = %request.id, len = request.payload.len(), "Received client backup request");
-        if let Some(prev) = dbtx.get_value(&ClientBackupKey(request.id)).await {
+        if let Some(prev) = dbtx
+            .get_value(&ClientBackupKey(
+                bitcoin30_to_bitcoin29_secp256k1_public_key(request.id),
+            ))
+            .await
+        {
             if request.timestamp <= prev.timestamp {
                 debug!(id = %request.id, len = request.payload.len(), "Received client backup request with old timestamp - ignoring");
                 return Err(ApiError::bad_request("timestamp too small".into()));
@@ -366,7 +371,7 @@ impl ConsensusApi {
         info!(target: LOG_NET_API, id = %request.id, len = request.payload.len(), "Storing new client backup");
         let overwritten = dbtx
             .insert_entry(
-                &ClientBackupKey(request.id),
+                &ClientBackupKey(bitcoin30_to_bitcoin29_secp256k1_public_key(request.id)),
                 &ClientBackupSnapshot {
                     timestamp: request.timestamp,
                     data: request.payload.to_vec(),

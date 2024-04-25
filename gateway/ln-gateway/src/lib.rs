@@ -1689,7 +1689,7 @@ impl Gateway {
 
         if dbtx
             .insert_entry(
-                &CreateInvoicePayloadKey(payload.contract.commitment.payment_hash.into_inner()),
+                &CreateInvoicePayloadKey(payload.contract.commitment.payment_hash.to_byte_array()),
                 &payload,
             )
             .await
@@ -1720,7 +1720,7 @@ impl Gateway {
 
         let response = lnrpc
             .create_invoice(CreateInvoiceRequest {
-                payment_hash: payment_hash.into_inner().to_vec(),
+                payment_hash: payment_hash.to_byte_array().to_vec(),
                 amount_msat: amount.msats,
                 expiry: expiry_time,
                 description,

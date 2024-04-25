@@ -7,6 +7,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::anyhow;
+use bitcoin_hashes::Hash;
 use clap::Parser;
 use cln_plugin::{options, Builder, Plugin};
 use cln_rpc::model;
@@ -761,7 +762,7 @@ impl ClnHtlcInterceptor {
         // Clone the sender to avoid holding the lock while sending the HTLC
         let sender = self.sender.lock().await.clone();
         if let Some(sender) = sender {
-            let payment_hash = payload.htlc.payment_hash.to_vec();
+            let payment_hash = payload.htlc.payment_hash.to_byte_array().to_vec();
 
             let incoming_chan_id =
                 match Self::convert_short_channel_id(payload.htlc.short_channel_id.as_str()) {

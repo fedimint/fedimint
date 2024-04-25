@@ -18,6 +18,7 @@ use fedimint_client::{sm_enum_variant_translation, DynGlobalClientContext};
 use fedimint_core::bitcoin_migration::{
     bitcoin29_to_bitcoin30_schnorr_signature, bitcoin29_to_bitcoin30_secp256k1_public_key,
     bitcoin30_to_bitcoin29_keypair, bitcoin30_to_bitcoin29_message,
+    bitcoin30_to_bitcoin29_sha256_hash,
 };
 use fedimint_core::config::FederationId;
 use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, OperationId};
@@ -224,7 +225,9 @@ impl GatewayClientModuleV2 {
             bail!("The outgoing contract is keyed to another gateway");
         }
 
-        if *payload.invoice.payment_hash() != payload.contract.payment_hash {
+        if *payload.invoice.payment_hash()
+            != bitcoin30_to_bitcoin29_sha256_hash(payload.contract.payment_hash)
+        {
             bail!("The invoices payment hash does not match the contracts payment hash");
         }
 

@@ -5,6 +5,7 @@ use std::time::Duration;
 use anyhow::{bail, Context};
 use bitcoin_hashes::{sha256, Hash as BitcoinHash};
 use fedimint_bitcoind::{create_bitcoind, DynBitcoindRpc};
+use fedimint_core::bitcoin_migration::bitcoin30_to_bitcoin29_sha256_hash;
 use fedimint_core::config::{
     ConfigGenModuleParams, DkgResult, ServerModuleConfig, ServerModuleConsensusConfig,
     TypedServerModuleConfig, TypedServerModuleConsensusConfig,
@@ -438,7 +439,7 @@ impl ServerModule for Lightning {
                     .await;
 
                 let decrypted_preimage = if preimage_vec.len() == 33
-                    && contract.hash == sha256::Hash::hash(&sha256::Hash::hash(&preimage_vec))
+                    && contract.hash == sha256::Hash::hash(&preimage_vec)
                 {
                     let preimage = PreimageKey(
                         preimage_vec
@@ -610,10 +611,11 @@ impl ServerModule for Lightning {
             LightningOutputV0::Contract(contract) => {
                 // Incoming contracts are special, they need to match an offer
                 if let Contract::Incoming(incoming) = &contract.contract {
-                    let offer = dbtx
-                        .get_value(&OfferKey(incoming.hash))
-                        .await
-                        .ok_or(LightningOutputError::NoOffer(incoming.hash))?;
+                    let offer = dbtx.get_value(&OfferKey(incoming.hash)).await.ok_or(
+                        LightningOutputError::NoOffer(bitcoin30_to_bitcoin29_sha256_hash(
+                            incoming.hash,
+                        )),
+                    )?;
 
                     if contract.amount < offer.amount {
                         // If the account is not sufficiently funded fail the output
@@ -748,7 +750,10 @@ impl ServerModule for Lightning {
                 secp256k1::global::SECP256K1
                     .verify_schnorr(
                         gateway_signature,
-                        &outgoing_contract.cancellation_message().into(),
+                        &bitcoin30_to_bitcoin29_sha256_hash(
+                            outgoing_contract.cancellation_message(),
+                        )
+                        .into(),
                         &outgoing_contract.gateway_key.x_only_public_key().0,
                     )
                     .map_err(|_| LightningOutputError::InvalidCancellationSignature)?;
@@ -1053,7 +1058,7 @@ impl Lightning {
         match &incoming_contract_account.contract.decrypted_preimage {
             DecryptedPreimage::Some(key) => (
                 incoming_contract_account.to_owned(),
-                DecryptedPreimageStatus::Some(Preimage(sha256::Hash::hash(&key.0).into_inner())),
+                DecryptedPreimageStatus::Some(Preimage(sha256::Hash::hash(&key.0).to_byte_array())),
             ),
             DecryptedPreimage::Pending => {
                 (incoming_contract_account, DecryptedPreimageStatus::Pending)
@@ -1090,7 +1095,7 @@ impl Lightning {
         {
             DecryptedPreimage::Some(key) => (
                 incoming_contract_account,
-                Some(Preimage(sha256::Hash::hash(&key.0).into_inner())),
+                Some(Preimage(sha256::Hash::hash(&key.0).to_byte_array())),
             ),
             _ => (incoming_contract_account, None),
         }
@@ -1215,7 +1220,11 @@ impl Lightning {
             ))?;
 
         // Verify the supplied schnorr signature is valid
-        let msg = create_gateway_remove_message(fed_public_key, our_peer_id, challenge);
+        let msg = create_gateway_remove_message(
+            fed_public_key,
+            our_peer_id,
+            bitcoin30_to_bitcoin29_sha256_hash(challenge),
+        );
         signature.verify(&msg, &gateway_id.x_only_public_key().0)?;
 
         dbtx.remove_entry(&LightningGatewayKey(gateway_id)).await;
@@ -1378,7 +1387,7 @@ mod tests {
         let preimage = PreimageKey(generate_keypair(&mut OsRng).1.serialize());
         let funded_incoming_contract = FundedContract::Incoming(FundedIncomingContract {
             contract: IncomingContract {
-                hash: sha256::Hash::hash(&sha256::Hash::hash(&preimage.0)),
+                hash: sha256::Hash::hash(&preimage.0),
                 encrypted_preimage: EncryptedPreimage(
                     client_cfg.threshold_pub_key.encrypt(preimage.0),
                 ),

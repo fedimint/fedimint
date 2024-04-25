@@ -7,11 +7,13 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use assert_matches::assert_matches;
+use bitcoin::hashes::{sha256, Hash};
 use bitcoin::Network;
-use bitcoin_hashes::{sha256, Hash};
 use fedimint_client::transaction::{ClientInput, ClientOutput, TransactionBuilder};
 use fedimint_client::ClientHandleArc;
-use fedimint_core::bitcoin_migration::bitcoin30_to_bitcoin29_network;
+use fedimint_core::bitcoin_migration::{
+    bitcoin29_to_bitcoin30_sha256_hash, bitcoin30_to_bitcoin29_network,
+};
 use fedimint_core::config::FederationId;
 use fedimint_core::core::{IntoDynInstance, OperationId};
 use fedimint_core::task::sleep_in_test;
@@ -60,6 +62,7 @@ use ln_gateway::state_machine::{
 };
 use ln_gateway::{DEFAULT_FEES, DEFAULT_NETWORK};
 use reqwest::StatusCode;
+use secp256k1::hashes::Hash as OldHash;
 use secp256k1::PublicKey;
 use tracing::info;
 
@@ -648,7 +651,7 @@ async fn test_gateway_client_intercept_valid_htlc() -> anyhow::Result<()> {
 
         // Run gateway state machine
         let htlc = Htlc {
-            payment_hash: *invoice.payment_hash(),
+            payment_hash: bitcoin29_to_bitcoin30_sha256_hash(*invoice.payment_hash()),
             incoming_amount_msat: Amount::from_msats(invoice.amount_milli_satoshis().unwrap()),
             outgoing_amount_msat: Amount::from_msats(invoice.amount_milli_satoshis().unwrap()),
             incoming_expiry: u32::MAX,
@@ -739,7 +742,7 @@ async fn test_gateway_client_intercept_htlc_no_funds() -> anyhow::Result<()> {
 
         // Run gateway state machine
         let htlc = Htlc {
-            payment_hash: *invoice.payment_hash(),
+            payment_hash: bitcoin29_to_bitcoin30_sha256_hash(*invoice.payment_hash()),
             incoming_amount_msat: Amount::from_msats(invoice.amount_milli_satoshis().unwrap()),
             outgoing_amount_msat: Amount::from_msats(invoice.amount_milli_satoshis().unwrap()),
             incoming_expiry: u32::MAX,
@@ -788,7 +791,7 @@ async fn test_gateway_client_intercept_htlc_invalid_offer() -> anyhow::Result<()
             let preimage = BYTE_33;
             let ln_output = LightningOutput::new_v0_offer(IncomingContractOffer {
                 amount,
-                hash: *invoice.payment_hash(),
+                hash: bitcoin29_to_bitcoin30_sha256_hash(*invoice.payment_hash()),
                 encrypted_preimage: EncryptedPreimage::new(
                     PreimageKey(preimage),
                     &user_lightning_module.cfg.threshold_pub_key,
@@ -835,7 +838,7 @@ async fn test_gateway_client_intercept_htlc_invalid_offer() -> anyhow::Result<()
 
             // Run gateway state machine
             let htlc = Htlc {
-                payment_hash: *invoice.payment_hash(),
+                payment_hash: bitcoin29_to_bitcoin30_sha256_hash(*invoice.payment_hash()),
                 incoming_amount_msat: Amount::from_msats(invoice.amount_milli_satoshis().unwrap()),
                 outgoing_amount_msat: Amount::from_msats(invoice.amount_milli_satoshis().unwrap()),
                 incoming_expiry: u32::MAX,

@@ -186,11 +186,10 @@ pub(crate) fn get_v2_migrated_state(
 mod tests {
     use std::str::FromStr;
 
-    use bitcoin::hashes::Hash;
     use fedimint_client::db::migrate_state;
     use fedimint_core::core::{IntoDynInstance, OperationId};
     use fedimint_core::encoding::Encodable;
-    use fedimint_core::TransactionId;
+    use fedimint_core::{BitcoinHash, TransactionId};
     use lightning_invoice::Bolt11Invoice;
     use rand::thread_rng;
     use secp256k1::KeyPair;
@@ -213,7 +212,7 @@ mod tests {
         2we42dvjggjkf44egqheymyw",).expect("Invalid invoice");
         let claim_key = KeyPair::new(secp256k1::SECP256K1, &mut thread_rng());
         let operation_id = OperationId::new_random();
-        let txid = TransactionId::from_inner([42; 32]);
+        let txid = TransactionId::from_byte_array([42; 32]);
 
         let submitted_offer_variant_old = {
             let mut submitted_offer_variant = Vec::<u8>::new();
@@ -363,7 +362,7 @@ mod tests {
         2we42dvjggjkf44egqheymyw",).expect("Invalid invoice");
         let claim_key = KeyPair::new(secp256k1::SECP256K1, &mut thread_rng());
         let operation_id = OperationId::new_random();
-        let txid = TransactionId::from_inner([42; 32]);
+        let txid = TransactionId::from_byte_array([42; 32]);
 
         let submitted_offer_variant_deleted = {
             let mut submitted_offer_variant = Vec::<u8>::new();

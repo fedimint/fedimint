@@ -656,7 +656,7 @@ mod fedimint_migration_tests {
         Database, DatabaseVersion, DatabaseVersionKeyV0, IDatabaseTransactionOpsCoreTyped,
     };
     use fedimint_core::module::DynServerModuleInit;
-    use fedimint_core::{BitcoinHash, Feerate, OutPoint, PeerId, TransactionId};
+    use fedimint_core::{Feerate, OutPoint, PeerId, TransactionId};
     use fedimint_logging::TracingSetup;
     use fedimint_testing::db::{
         snapshot_db_migrations, snapshot_db_migrations_client, validate_migrations_client,

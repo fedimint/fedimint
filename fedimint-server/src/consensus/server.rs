@@ -7,7 +7,6 @@ use anyhow::{anyhow, bail};
 use async_channel::{Receiver, Sender};
 use fedimint_api_client::api::{DynGlobalApi, FederationApiExt, WsFederationApi};
 use fedimint_api_client::query::FilterMap;
-use fedimint_core::bitcoin_migration::bitcoin29_to_bitcoin30_sha256_hash;
 use fedimint_core::config::ServerModuleInitRegistry;
 use fedimint_core::core::{ModuleInstanceId, ModuleKind, MODULE_INSTANCE_ID_GLOBAL};
 use fedimint_core::db::{
@@ -333,7 +332,7 @@ impl ConsensusServer {
     }
 
     async fn confirm_server_config_consensus_hash(&self) -> anyhow::Result<()> {
-        let our_hash = bitcoin29_to_bitcoin30_sha256_hash(self.cfg.consensus.consensus_hash());
+        let our_hash = self.cfg.consensus.consensus_hash();
         let federation_api = DynGlobalApi::from_endpoints(self.api_endpoints.clone());
 
         info!(target: LOG_CONSENSUS, "Waiting for peers config {our_hash}");

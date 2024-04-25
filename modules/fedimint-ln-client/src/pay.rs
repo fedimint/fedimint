@@ -1,10 +1,13 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use bitcoin::hashes::sha256;
+use bitcoin_hashes::sha256;
 use fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
 use fedimint_client::transaction::ClientInput;
 use fedimint_client::DynGlobalClientContext;
+use fedimint_core::bitcoin_migration::{
+    bitcoin29_to_bitcoin30_sha256_hash, bitcoin30_to_bitcoin29_sha256_hash,
+};
 use fedimint_core::config::FederationId;
 use fedimint_core::core::{Decoder, OperationId};
 use fedimint_core::encoding::{Decodable, Encodable};
@@ -274,7 +277,7 @@ impl LightningPayFunded {
         let payload = self.payload.clone();
         let contract_id = self.payload.contract_id;
         let timelock = self.timelock;
-        let payment_hash = *common.invoice.payment_hash();
+        let payment_hash = bitcoin29_to_bitcoin30_sha256_hash(*common.invoice.payment_hash());
         vec![StateTransition::new(
             Self::gateway_pay_invoice(gateway, payload),
             move |dbtx, result, old_state| {
@@ -379,7 +382,7 @@ impl LightningPayFunded {
             Ok(preimage) => {
                 set_payment_result(
                     &mut dbtx.module_tx(),
-                    payment_hash,
+                    bitcoin30_to_bitcoin29_sha256_hash(payment_hash),
                     PayType::Lightning(old_state.common.operation_id),
                     contract_id,
                     common.gateway_fee,
@@ -639,8 +642,12 @@ impl PaymentData {
 
     pub fn payment_hash(&self) -> sha256::Hash {
         match self {
-            PaymentData::Invoice(invoice) => *invoice.payment_hash(),
-            PaymentData::PrunedInvoice(PrunedInvoice { payment_hash, .. }) => *payment_hash,
+            PaymentData::Invoice(invoice) => {
+                bitcoin29_to_bitcoin30_sha256_hash(*invoice.payment_hash())
+            }
+            PaymentData::PrunedInvoice(PrunedInvoice { payment_hash, .. }) => {
+                bitcoin29_to_bitcoin30_sha256_hash(*payment_hash)
+            }
         }
     }
 

@@ -1192,7 +1192,7 @@ pub async fn start_hold_invoice_payment(
     client.use_gateway(gw_cln).await?;
     let preimage = rand::random::<[u8; 32]>();
     let hash = {
-        use fedimint_core::BitcoinHash;
+        use bitcoincore_rpc::bitcoin::hashes::Hash;
         let mut engine = bitcoin::hashes::sha256::Hash::engine();
         bitcoin::hashes::HashEngine::input(&mut engine, &preimage);
         bitcoin::hashes::sha256::Hash::from_engine(engine)

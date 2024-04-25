@@ -16,10 +16,8 @@ pub trait IdentifiableContract: Encodable {
 }
 
 hash_newtype!(
-    ContractId,
-    Sha256,
-    32,
-    doc = "The hash of a LN incoming contract"
+    /// The hash of a LN incoming contract
+    pub struct ContractId(Sha256);
 );
 
 /// A contract before execution as found in transaction outputs
@@ -103,7 +101,7 @@ impl Contract {
 
 impl Encodable for ContractId {
     fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<usize, Error> {
-        self.as_inner().consensus_encode(writer)
+        self.as_byte_array().consensus_encode(writer)
     }
 }
 
@@ -112,7 +110,7 @@ impl Decodable for ContractId {
         d: &mut D,
         modules: &ModuleDecoderRegistry,
     ) -> Result<Self, DecodeError> {
-        Ok(ContractId::from_inner(Decodable::consensus_decode(
+        Ok(ContractId::from_byte_array(Decodable::consensus_decode(
             d, modules,
         )?))
     }

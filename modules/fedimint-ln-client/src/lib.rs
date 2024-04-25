@@ -32,7 +32,8 @@ use fedimint_client::sm::{DynState, ModuleNotifier, State, StateTransition};
 use fedimint_client::transaction::{ClientInput, ClientOutput, TransactionBuilder};
 use fedimint_client::{sm_enum_variant_translation, DynGlobalClientContext};
 use fedimint_core::bitcoin_migration::{
-    bitcoin30_to_bitcoin29_keypair, bitcoin30_to_bitcoin29_secp256k1_public_key,
+    bitcoin29_to_bitcoin30_sha256_hash, bitcoin30_to_bitcoin29_keypair,
+    bitcoin30_to_bitcoin29_secp256k1_public_key, bitcoin30_to_bitcoin29_sha256_hash,
 };
 use fedimint_core::config::FederationId;
 use fedimint_core::core::{IntoDynInstance, ModuleInstanceId, OperationId};
@@ -578,7 +579,7 @@ impl LightningClientModule {
         let preimage_auth = self.get_preimage_authentication(invoice.payment_hash());
         let payment_hash = *invoice.payment_hash();
         let contract = OutgoingContract {
-            hash: payment_hash,
+            hash: bitcoin29_to_bitcoin30_sha256_hash(payment_hash),
             gateway_key: gateway.gateway_redeem_key,
             timelock: absolute_timelock as u32,
             user_key: user_sk.public_key(),
@@ -602,7 +603,7 @@ impl LightningClientModule {
                         federation_id: fed_id,
                         contract: outgoing_payment.clone(),
                         gateway_fee,
-                        preimage_auth,
+                        preimage_auth: bitcoin29_to_bitcoin30_sha256_hash(preimage_auth),
                         invoice: invoice.clone(),
                     },
                     state: LightningPayStates::CreatedOutgoingLnContract(
@@ -858,7 +859,7 @@ impl LightningClientModule {
 
         let ln_output = LightningOutput::new_v0_offer(IncomingContractOffer {
             amount,
-            hash: payment_hash,
+            hash: bitcoin29_to_bitcoin30_sha256_hash(payment_hash),
             encrypted_preimage: EncryptedPreimage::new(
                 PreimageKey(preimage_key),
                 &self.cfg.threshold_pub_key,
@@ -1277,7 +1278,9 @@ impl LightningClientModule {
     ) -> anyhow::Result<OperationId> {
         let preimage_key: [u8; 33] = key_pair.public_key().serialize();
         let preimage = sha256::Hash::hash(&preimage_key);
-        let contract_id = ContractId::from_hash(sha256::Hash::hash(&preimage));
+        let contract_id = ContractId::from_raw_hash(bitcoin29_to_bitcoin30_sha256_hash(
+            sha256::Hash::hash(&preimage),
+        ));
         self.claim_funded_incoming_contract(key_pair, contract_id, extra_meta)
             .await
     }
@@ -1770,9 +1773,9 @@ async fn fetch_and_validate_offer(
             payment_amount: amount_msat,
         });
     }
-    if offer.hash != payment_hash {
+    if bitcoin30_to_bitcoin29_sha256_hash(offer.hash) != payment_hash {
         return Err(IncomingSmError::InvalidOffer {
-            offer_hash: offer.hash,
+            offer_hash: bitcoin30_to_bitcoin29_sha256_hash(offer.hash),
             payment_hash,
         });
     }

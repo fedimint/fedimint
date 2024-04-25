@@ -1,12 +1,12 @@
 use std::time::Duration;
 
 use async_trait::async_trait;
-use bitcoin::hashes::sha256;
+use bitcoin::hashes::{sha256, Hash};
 use bitcoin::KeyPair;
 use fedimint_core::bitcoin_migration::{
     bitcoin29_to_bitcoin30_keypair, bitcoin30_to_bitcoin29_secp256k1_secret_key,
 };
-use fedimint_core::{Amount, BitcoinHash};
+use fedimint_core::Amount;
 use lightning_invoice::{
     Bolt11Invoice, Currency, InvoiceBuilder, PaymentSecret, DEFAULT_EXPIRY_TIME,
 };

@@ -1658,7 +1658,7 @@ pub fn nonce_from_idx(nonce_idx: u64) -> [u8; 33] {
     let mut nonce: [u8; 33] = [0; 33];
     // Make it look like a compressed pubkey, has to be either 0x02 or 0x03
     nonce[0] = 0x02;
-    nonce[1..].copy_from_slice(&nonce_idx.consensus_hash::<sha256::Hash>()[..]);
+    nonce[1..].copy_from_slice(&nonce_idx.consensus_hash::<bitcoin_hashes::sha256::Hash>()[..]);
 
     nonce
 }
@@ -1727,9 +1727,10 @@ mod tests {
 
     use std::str::FromStr;
 
+    use bitcoin::hashes::Hash;
     use bitcoin::Network::{Bitcoin, Testnet};
     use bitcoin::{Address, Amount, Network, OutPoint, Txid};
-    use fedimint_core::{BitcoinHash, Feerate};
+    use fedimint_core::Feerate;
     use fedimint_wallet_common::{PegOut, PegOutFees, Rbf, WalletOutputV0};
     use miniscript::descriptor::Wsh;
 

@@ -42,9 +42,9 @@ pub struct AbbreviateHexBytes<'a>(pub &'a [u8]);
 impl<'a> fmt::Display for AbbreviateHexBytes<'a> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         if self.0.len() <= 64 || rust_log_full_enabled() {
-            bitcoin_hashes::hex::format_hex(self.0, f)?;
+            bitcoin::hashes::hex::format_hex(self.0, f)?;
         } else {
-            bitcoin_hashes::hex::format_hex(&self.0[..64], f)?;
+            bitcoin::hashes::hex::format_hex(&self.0[..64], f)?;
             f.write_fmt(format_args!("-{}", self.0.len()))?;
         }
         Ok(())

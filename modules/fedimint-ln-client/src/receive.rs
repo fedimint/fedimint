@@ -6,6 +6,7 @@ use fedimint_api_client::api::DynModuleApi;
 use fedimint_client::sm::{ClientSMDatabaseTransaction, DynState, State, StateTransition};
 use fedimint_client::transaction::ClientInput;
 use fedimint_client::DynGlobalClientContext;
+use fedimint_core::bitcoin_migration::bitcoin29_to_bitcoin30_sha256_hash;
 use fedimint_core::core::{IntoDynInstance, ModuleInstanceId, OperationId};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::task::sleep;
@@ -206,7 +207,7 @@ impl LightningReceiveConfirmedInvoice {
         invoice: Bolt11Invoice,
         global_context: DynGlobalClientContext,
     ) -> Result<IncomingContractAccount, LightningReceiveError> {
-        let contract_id = (*invoice.payment_hash()).into();
+        let contract_id = bitcoin29_to_bitcoin30_sha256_hash(*invoice.payment_hash()).into();
         loop {
             // Consider time before the api call to account for network delays
             let now_epoch = fedimint_core::time::duration_since_epoch();

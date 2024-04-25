@@ -18,7 +18,9 @@ use fedimint_client::sm::util::MapStateTransitions;
 use fedimint_client::sm::{Context, DynState, ModuleNotifier, State};
 use fedimint_client::transaction::{ClientOutput, TransactionBuilder};
 use fedimint_client::{sm_enum_variant_translation, AddStateMachinesError, DynGlobalClientContext};
-use fedimint_core::bitcoin_migration::bitcoin30_to_bitcoin29_keypair;
+use fedimint_core::bitcoin_migration::{
+    bitcoin30_to_bitcoin29_keypair, bitcoin30_to_bitcoin29_sha256_hash,
+};
 use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, OperationId};
 use fedimint_core::db::{AutocommitError, DatabaseTransaction, DatabaseVersion};
 use fedimint_core::encoding::{Decodable, Encodable};
@@ -263,10 +265,10 @@ impl GatewayClientModule {
         ),
         IncomingSmError,
     > {
-        let operation_id = OperationId(htlc.payment_hash.into_inner());
+        let operation_id = OperationId(htlc.payment_hash.to_byte_array());
         let (incoming_output, amount, contract_id) = create_incoming_contract_output(
             &self.module_api,
-            htlc.payment_hash,
+            bitcoin30_to_bitcoin29_sha256_hash(htlc.payment_hash),
             htlc.outgoing_amount_msat,
             self.redeem_key,
         )
@@ -281,7 +283,7 @@ impl GatewayClientModule {
                         common: IncomingSmCommon {
                             operation_id,
                             contract_id,
-                            payment_hash: htlc.payment_hash,
+                            payment_hash: bitcoin30_to_bitcoin29_sha256_hash(htlc.payment_hash),
                         },
                         state: IncomingSmStates::FundingOffer(FundingOfferState { txid }),
                     }),
@@ -310,10 +312,10 @@ impl GatewayClientModule {
         IncomingSmError,
     > {
         let payment_hash = swap.payment_hash;
-        let operation_id = OperationId(payment_hash.into_inner());
+        let operation_id = OperationId(payment_hash.to_byte_array());
         let (incoming_output, amount, contract_id) = create_incoming_contract_output(
             &self.module_api,
-            payment_hash,
+            bitcoin30_to_bitcoin29_sha256_hash(payment_hash),
             swap.amount_msat,
             self.redeem_key,
         )
@@ -327,7 +329,7 @@ impl GatewayClientModule {
                     common: IncomingSmCommon {
                         operation_id,
                         contract_id,
-                        payment_hash,
+                        payment_hash: bitcoin30_to_bitcoin29_sha256_hash(payment_hash),
                     },
                     state: IncomingSmStates::FundingOffer(FundingOfferState { txid }),
                 })]
@@ -534,7 +536,7 @@ impl GatewayClientModule {
             .module_autocommit(
                 |dbtx, _| {
                     Box::pin(async {
-                        let operation_id = OperationId(payload.contract_id.into_inner());
+                        let operation_id = OperationId(payload.contract_id.to_byte_array());
 
                         let state_machines =
                             vec![GatewayClientStateMachines::Pay(GatewayPayStateMachine {

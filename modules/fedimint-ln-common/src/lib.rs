@@ -18,7 +18,7 @@ use std::io::{Error, ErrorKind, Read, Write};
 use std::time::{Duration, SystemTime};
 
 use anyhow::{bail, Context as AnyhowContext};
-use bitcoin_hashes::sha256;
+use bitcoin::hashes::sha256;
 use config::LightningClientConfig;
 use fedimint_client::oplog::OperationLogEntry;
 use fedimint_client::sm::Context;

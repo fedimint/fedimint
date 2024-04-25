@@ -5,8 +5,7 @@ use std::io::{Cursor, Error, Read, Write};
 use anyhow::{bail, Context, Result};
 use fedimint_api_client::api::DynGlobalApi;
 use fedimint_core::bitcoin_migration::{
-    bitcoin29_to_bitcoin30_secp256k1_public_key, bitcoin30_to_bitcoin29_keypair,
-    bitcoin30_to_bitcoin29_secp256k1_public_key,
+    bitcoin29_to_bitcoin30_secp256k1_public_key, bitcoin30_to_bitcoin29_secp256k1_public_key,
 };
 use fedimint_core::core::backup::{
     BackupRequest, SignedBackupRequest, BACKUP_REQUEST_MAX_PAYLOAD_SIZE_BYTES,
@@ -228,12 +227,12 @@ impl EncryptedClientBackup {
 
     pub fn into_backup_request(self, keypair: &KeyPair) -> Result<SignedBackupRequest> {
         let request = BackupRequest {
-            id: bitcoin30_to_bitcoin29_secp256k1_public_key(keypair.public_key()),
+            id: keypair.public_key(),
             timestamp: fedimint_core::time::now(),
             payload: self.0,
         };
 
-        request.sign(&bitcoin30_to_bitcoin29_keypair(*keypair))
+        request.sign(keypair)
     }
 
     pub fn len(&self) -> usize {

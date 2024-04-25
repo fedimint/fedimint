@@ -20,7 +20,7 @@ use fedimint_core::config::FederationId;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::BitcoinHash;
 use hkdf::hashes::Sha512;
-use hkdf::{bitcoin_hashes, Hkdf};
+use hkdf::Hkdf;
 use ring::aead;
 use secp256k1_zkp::{KeyPair, Secp256k1, Signing};
 
@@ -87,7 +87,7 @@ impl DerivableSecret {
             level: 0,
             kdf: Hkdf::from_prk(
                 self.kdf.derive_hmac(&tagged_derive(
-                    &federation_id.0.into_inner()[..8]
+                    &federation_id.0.to_byte_array()[..8]
                         .try_into()
                         .expect("Slice with length 8"),
                     ChildId(0),
@@ -153,7 +153,7 @@ fn tagged_derive(tag: &[u8; 8], derivation: ChildId) -> [u8; 16] {
 impl std::fmt::Debug for DerivableSecret {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "DerivableSecret#")?;
-        bitcoin_hashes::hex::format_hex(
+        bitcoin_hashes_11::hex::format_hex(
             &self
                 .kdf
                 .derive::<8>(b"just a debug fingerprint derivation salt"),
