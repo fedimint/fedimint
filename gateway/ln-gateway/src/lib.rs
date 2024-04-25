@@ -1661,7 +1661,7 @@ impl Gateway {
             return Ok(module.subscribe_send(operation_id, payload.contract).await);
         }
 
-        // Since the following three checks may only fail due to client side
+        // Since the following four checks may only fail due to client side
         // programming error we do not have to enable cancellation and can check
         // them before we start the state machine.
         if payload.contract.claim_pk
@@ -1670,8 +1670,14 @@ impl Gateway {
             bail!("The outgoing contract keyed to another gateway");
         }
 
+        if *payload.invoice.payment_hash() != payload.contract.payment_hash {
+            bail!("The invoices payment hash does not match the contracts payment hash");
+        }
+
+        // The outgoing contract commits to the invoice it is intended for via a hash to
+        // prevent DOS attacks where an attacker submits a different invoice.
         if payload.invoice.consensus_hash::<sha256::Hash>() != payload.contract.invoice_hash {
-            bail!("The invoices hash does not match the contract");
+            bail!("The invoices consensus hash does not match the contracts invoice commitment");
         }
 
         let invoice_msats = payload
