@@ -2519,6 +2519,13 @@
 <a href="#2519" id="2519">2519</a>
 <a href="#2520" id="2520">2520</a>
 <a href="#2521" id="2521">2521</a>
+<a href="#2522" id="2522">2522</a>
+<a href="#2523" id="2523">2523</a>
+<a href="#2524" id="2524">2524</a>
+<a href="#2525" id="2525">2525</a>
+<a href="#2526" id="2526">2526</a>
+<a href="#2527" id="2527">2527</a>
+<a href="#2528" id="2528">2528</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::HashSet;
 <span class="kw">use </span>std::io::Write;
 <span class="kw">use </span>std::ops::ControlFlow;
@@ -3298,12 +3305,19 @@
     <span class="macro">assert_eq!</span>(operation[<span class="string">"operation_kind"</span>].as_str().unwrap(), <span class="string">"wallet"</span>);
     <span class="macro">assert!</span>(operation[<span class="string">"outcome"</span>][<span class="string">"Claimed"</span>].as_object().is_some());
 
-    <span class="macro">info!</span>(<span class="string">"Testing backup&amp;restore"</span>);
-    <span class="comment">// TODO: make sure there are no in-progress operations involved
-    // This test can't tolerate "spend", but not "reissue"d coins currently,
-    // and there's a no clean way to do `reissue` on `spend` output ATM
-    // so just putting it here for time being.
-    </span>cli_tests_backup_and_restore(<span class="kw-2">&amp;</span>fed, <span class="kw-2">&amp;</span>client).<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="kw">if </span><span class="kw-2">*</span>VERSION_0_3_0_ALPHA &lt;= fedimintd_version &amp;&amp; <span class="kw-2">*</span>VERSION_0_3_0_ALPHA &lt;= fedimint_cli_version {
+        <span class="macro">info!</span>(<span class="string">"Testing backup&amp;restore"</span>);
+        <span class="comment">// TODO: make sure there are no in-progress operations involved
+        // This test can't tolerate "spend", but not "reissue"d coins currently,
+        // and there's a no clean way to do `reissue` on `spend` output ATM
+        // so just putting it here for time being.
+        </span>cli_tests_backup_and_restore(<span class="kw-2">&amp;</span>fed, <span class="kw-2">&amp;</span>client).<span class="kw">await</span><span class="question-mark">?</span>;
+    } <span class="kw">else </span>{
+        <span class="comment">// It would wait for session to finish, which takes like 2 minutes or so
+        </span><span class="macro">info!</span>(
+            <span class="string">"Skipping backup&amp;restore test, because it was waaay too slow on old Fedimint versions"
+        </span>);
+    }
 
     <span class="comment">// # Spend from client
     </span><span class="macro">info!</span>(<span class="string">"Testing spending from client"</span>);
