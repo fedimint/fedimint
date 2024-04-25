@@ -38,6 +38,9 @@ trap on_error ERR
 trap on_exit EXIT
 
 command time -q --format="$time_fmt" -o "$time_out_path" "$@" 2>&1 | ts -s > "$test_out_path"
+if [ "$test_name" == "latency_test_restore" ] || [ "$test_name" == "recoverytool_tests" ] || [ "$test_name" == "load_test_tool_test" ]; then
+  cat "$test_out_path"
+fi
 
 awk 'BEGIN {FS="\t"} {printf "## STAT: %8.2fs %8dB %8dW %8dc\n", $1, $2, $3, $4}' < "$time_out_path"
 echo "## DONE: $test_name$version_str"
