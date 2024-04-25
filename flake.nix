@@ -285,7 +285,10 @@
                     fi
                   fi
 
-                  export RUSTC_WRAPPER=${pkgs.sccache}/bin/sccache
+
+                  if [ "''${CARGO_PROFILE:-}" != "ci" ]; then
+                    export RUSTC_WRAPPER=${pkgs.sccache}/bin/sccache
+                  fi
                   export CARGO_BUILD_TARGET_DIR="''${CARGO_BUILD_TARGET_DIR:-''${REPO_ROOT}/target-nix}"
                   export FM_DISCOVER_API_VERSION_TIMEOUT=10
                   [ -f "$REPO_ROOT/.shrc.local" ] && source "$REPO_ROOT/.shrc.local"
