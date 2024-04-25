@@ -30,7 +30,7 @@ use fedimint_client::oplog::UpdateStreamOrOutcome;
 use fedimint_client::sm::util::MapStateTransitions;
 use fedimint_client::sm::{DynState, ModuleNotifier, State, StateTransition};
 use fedimint_client::transaction::{ClientInput, ClientOutput, TransactionBuilder};
-use fedimint_client::{sm_enum_variant_translation, DynGlobalClientContext};
+use fedimint_client::{sm_enum_variant_translation, ClientHandleArc, DynGlobalClientContext};
 use fedimint_core::bitcoin_migration::{
     bitcoin30_to_bitcoin29_keypair, bitcoin30_to_bitcoin29_secp256k1_public_key,
 };
@@ -424,6 +424,7 @@ impl ClientModule for LightningClientModule {
     async fn handle_cli_command(
         &self,
         args: &[std::ffi::OsString],
+        _client: ClientHandleArc,
     ) -> anyhow::Result<serde_json::Value> {
         cli::handle_cli_command(self, args).await
     }
