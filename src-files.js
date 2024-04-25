@@ -1,4 +1,5 @@
 var srcIndex = new Map(JSON.parse('[\
+["circular_deposit_test",["",[],["circular-deposit-test.rs"]]],\
 ["devimint",["",[["federation",[],["config.rs"]]],["cli.rs","devfed.rs","envs.rs","external.rs","federation.rs","gatewayd.rs","lib.rs","tests.rs","util.rs","vars.rs","version_constants.rs"]]],\
 ["faucet",["",[],["faucet.rs"]]],\
 ["fedimint_aead",["",[],["envs.rs","lib.rs"]]],\
