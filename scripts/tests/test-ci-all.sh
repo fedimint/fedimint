@@ -196,31 +196,31 @@ for _ in $(seq "${FM_TEST_CI_ALL_TIMES:-1}"); do
 # as it's used for failure test
 tests_to_run_in_parallel+=(
   "always_success_test"
-  # "rust_unit_tests"
+  "rust_unit_tests"
   # TODO: unfortunately it seems like something about headless firefox is broken when
   # running in xarg -P or gnu parallel. Try re-enabling in the future and see if it works.
   # Other than this problem, everything about it is working.
   # "wasm_test"
-  # "backend_test_bitcoind"
-  # "backend_test_bitcoind_ln_gateway"
-  # "backend_test_electrs"
-  # "backend_test_esplora"
+  "backend_test_bitcoind"
+  "backend_test_bitcoind_ln_gateway"
+  "backend_test_electrs"
+  "backend_test_esplora"
   "latency_test_reissue"
-  # "latency_test_ln_send"
-  # "latency_test_ln_receive"
-  # "latency_test_fm_pay"
-  # "latency_test_restore"
-  # "reconnect_test"
-  # "lightning_reconnect_test"
-  # "gateway_reboot_test"
-  # "devimint_cli_test"
-  # "devimint_cli_test_single"
-  # "load_test_tool_test"
-  # "recoverytool_tests"
-  # "guardian_backup"
-  # "meta_module"
-  # "cannot_replay_tx"
-  # "circular_deposit"
+  "latency_test_ln_send"
+  "latency_test_ln_receive"
+  "latency_test_fm_pay"
+  "latency_test_restore"
+  "reconnect_test"
+  "lightning_reconnect_test"
+  "gateway_reboot_test"
+  "devimint_cli_test"
+  "devimint_cli_test_single"
+  "load_test_tool_test"
+  "recoverytool_tests"
+  "guardian_backup"
+  "meta_module"
+  "cannot_replay_tx"
+  "circular_deposit"
 )
 done
 
@@ -245,7 +245,8 @@ if [ -n "${FM_TEST_CI_ALL_JOBS:-}" ]; then
   parallel_args+=(--jobs "${FM_TEST_CI_ALL_JOBS}")
 elif [ -n "${CI:-}" ]; then
   # in CI, we know number of cpus works OK
-  parallel_args+=(--jobs +0)
+  # parallel_args+=(--jobs +0)
+  parallel_args+=(--jobs "${FM_TEST_CI_ALL_JOBS:-$(($(nproc) / 4 + 1))}")
 else
   # on dev computers default to `num_cpus / 4 + 1` max parallel jobs
   parallel_args+=(--jobs "${FM_TEST_CI_ALL_JOBS:-$(($(nproc) / 4 + 1))}")
