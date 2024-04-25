@@ -48,9 +48,12 @@ jobs:
         run: |
           # the default tmp dir is too long (/home/ubuntu/actions-runner/_work/_temp/)
           # we need to use `nix develop -c` to be able to use `nix build` inside of backwards-compatibility-test
-          env TMPDIR=/tmp  CARGO_PROFILE=ci nix develop -c \
+          # Disable `sccache`, it seems incompatible with self-hosted runner sandbox for some reason, and
+          # it doesn't benefit us much here anyway.
+          env TMPDIR=/tmp CARGO_PROFILE=ci nix develop -c \
             nix shell github:rustshop/fs-dir-cache -c \
             scripts/ci/run-in-fs-dir-cache.sh backward-compat \
+            env -u RUSTC_WRAPPER \
             ./scripts/tests/test-ci-all-backcompat.sh v0.2.1
 
       - name: Prepare failed test build dirs
