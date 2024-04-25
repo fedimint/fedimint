@@ -183,6 +183,10 @@ impl Client {
             format!("--data-dir={}", self.client_dir().display())
         )
     }
+
+    pub fn get_name(&self) -> &str {
+        &self.name
+    }
 }
 
 impl Federation {
