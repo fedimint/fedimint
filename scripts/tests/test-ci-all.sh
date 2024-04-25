@@ -269,7 +269,6 @@ parallel_args+=(
   --joblog "$joblog"
   --noswap
   --memfree 2G
-  --nice 15
 )
 
 >&2 echo "## Starting all tests in parallel..."
