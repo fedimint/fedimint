@@ -777,12 +777,19 @@ pub async fn cli_tests(dev_fed: DevFed) -> Result<()> {
     assert_eq!(operation["operation_kind"].as_str().unwrap(), "wallet");
     assert!(operation["outcome"]["Claimed"].as_object().is_some());
 
-    info!("Testing backup&restore");
-    // TODO: make sure there are no in-progress operations involved
-    // This test can't tolerate "spend", but not "reissue"d coins currently,
-    // and there's a no clean way to do `reissue` on `spend` output ATM
-    // so just putting it here for time being.
-    cli_tests_backup_and_restore(&fed, &client).await?;
+    if *VERSION_0_3_0_ALPHA <= fedimintd_version && *VERSION_0_3_0_ALPHA <= fedimint_cli_version {
+        info!("Testing backup&restore");
+        // TODO: make sure there are no in-progress operations involved
+        // This test can't tolerate "spend", but not "reissue"d coins currently,
+        // and there's a no clean way to do `reissue` on `spend` output ATM
+        // so just putting it here for time being.
+        cli_tests_backup_and_restore(&fed, &client).await?;
+    } else {
+        // It would wait for session to finish, which takes like 2 minutes or so
+        info!(
+            "Skipping backup&restore test, because it was waaay too slow on old Fedimint versions"
+        );
+    }
 
     // # Spend from client
     info!("Testing spending from client");
