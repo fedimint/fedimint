@@ -19,3 +19,35 @@ pub fn duration_since_epoch() -> std::time::Duration {
         .duration_since(SystemTime::UNIX_EPOCH)
         .expect("time to work")
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_duration_since_epoch() {
+        let duration = duration_since_epoch();
+        assert!(
+            duration.as_secs() > 0,
+            "Duration since epoch should be positive"
+        );
+    }
+
+    #[test]
+    #[cfg(not(target_family = "wasm"))]
+    fn test_now_on_non_wasm() {
+        let system_time = now();
+        assert!(system_time.elapsed().is_ok(), "SystemTime should be valid");
+    }
+
+    #[test]
+    #[cfg(target_family = "wasm")]
+    fn test_now_on_wasm() {
+        let system_time = now();
+        assert_eq!(
+            system_time,
+            SystemTime::UNIX_EPOCH,
+            "SystemTime on wasm should be UNIX_EPOCH"
+        );
+    }
+}
