@@ -129,12 +129,16 @@
 <a href="#129" id="129">129</a>
 <a href="#130" id="130">130</a>
 <a href="#131" id="131">131</a>
+<a href="#132" id="132">132</a>
+<a href="#133" id="133">133</a>
+<a href="#134" id="134">134</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::sync::Arc;
 
-<span class="kw">use </span>bitcoin::util::key::KeyPair;
+<span class="kw">use </span>bitcoin::key::KeyPair;
 <span class="kw">use </span>fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
 <span class="kw">use </span>fedimint_client::transaction::ClientInput;
 <span class="kw">use </span>fedimint_client::DynGlobalClientContext;
+<span class="kw">use </span>fedimint_core::bitcoin_migration::bitcoin30_to_bitcoin29_keypair;
 <span class="kw">use </span>fedimint_core::core::OperationId;
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::OutPoint;
@@ -251,7 +255,9 @@
                 old_state.common.agg_decryption_key,
             )),
             amount: old_state.common.contract.commitment.amount,
-            keys: <span class="macro">vec!</span>[old_state.common.claim_keypair],
+            keys: <span class="macro">vec!</span>[bitcoin30_to_bitcoin29_keypair(
+                old_state.common.claim_keypair,
+            )],
             state_machines: Arc::new(|<span class="kw">_</span>, <span class="kw">_</span>| <span class="macro">vec!</span>[]),
         };
 
