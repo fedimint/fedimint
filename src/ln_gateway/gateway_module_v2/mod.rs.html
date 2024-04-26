@@ -298,12 +298,95 @@
 <a href="#298" id="298">298</a>
 <a href="#299" id="299">299</a>
 <a href="#300" id="300">300</a>
-</pre></div><pre class="rust"><code><span class="kw">mod </span>receive_sm;
+<a href="#301" id="301">301</a>
+<a href="#302" id="302">302</a>
+<a href="#303" id="303">303</a>
+<a href="#304" id="304">304</a>
+<a href="#305" id="305">305</a>
+<a href="#306" id="306">306</a>
+<a href="#307" id="307">307</a>
+<a href="#308" id="308">308</a>
+<a href="#309" id="309">309</a>
+<a href="#310" id="310">310</a>
+<a href="#311" id="311">311</a>
+<a href="#312" id="312">312</a>
+<a href="#313" id="313">313</a>
+<a href="#314" id="314">314</a>
+<a href="#315" id="315">315</a>
+<a href="#316" id="316">316</a>
+<a href="#317" id="317">317</a>
+<a href="#318" id="318">318</a>
+<a href="#319" id="319">319</a>
+<a href="#320" id="320">320</a>
+<a href="#321" id="321">321</a>
+<a href="#322" id="322">322</a>
+<a href="#323" id="323">323</a>
+<a href="#324" id="324">324</a>
+<a href="#325" id="325">325</a>
+<a href="#326" id="326">326</a>
+<a href="#327" id="327">327</a>
+<a href="#328" id="328">328</a>
+<a href="#329" id="329">329</a>
+<a href="#330" id="330">330</a>
+<a href="#331" id="331">331</a>
+<a href="#332" id="332">332</a>
+<a href="#333" id="333">333</a>
+<a href="#334" id="334">334</a>
+<a href="#335" id="335">335</a>
+<a href="#336" id="336">336</a>
+<a href="#337" id="337">337</a>
+<a href="#338" id="338">338</a>
+<a href="#339" id="339">339</a>
+<a href="#340" id="340">340</a>
+<a href="#341" id="341">341</a>
+<a href="#342" id="342">342</a>
+<a href="#343" id="343">343</a>
+<a href="#344" id="344">344</a>
+<a href="#345" id="345">345</a>
+<a href="#346" id="346">346</a>
+<a href="#347" id="347">347</a>
+<a href="#348" id="348">348</a>
+<a href="#349" id="349">349</a>
+<a href="#350" id="350">350</a>
+<a href="#351" id="351">351</a>
+<a href="#352" id="352">352</a>
+<a href="#353" id="353">353</a>
+<a href="#354" id="354">354</a>
+<a href="#355" id="355">355</a>
+<a href="#356" id="356">356</a>
+<a href="#357" id="357">357</a>
+<a href="#358" id="358">358</a>
+<a href="#359" id="359">359</a>
+<a href="#360" id="360">360</a>
+<a href="#361" id="361">361</a>
+<a href="#362" id="362">362</a>
+<a href="#363" id="363">363</a>
+<a href="#364" id="364">364</a>
+<a href="#365" id="365">365</a>
+<a href="#366" id="366">366</a>
+<a href="#367" id="367">367</a>
+<a href="#368" id="368">368</a>
+<a href="#369" id="369">369</a>
+<a href="#370" id="370">370</a>
+<a href="#371" id="371">371</a>
+<a href="#372" id="372">372</a>
+<a href="#373" id="373">373</a>
+<a href="#374" id="374">374</a>
+<a href="#375" id="375">375</a>
+<a href="#376" id="376">376</a>
+<a href="#377" id="377">377</a>
+<a href="#378" id="378">378</a>
+<a href="#379" id="379">379</a>
+<a href="#380" id="380">380</a>
+<a href="#381" id="381">381</a>
+</pre></div><pre class="rust"><code><span class="kw">mod </span>complete_sm;
+<span class="kw">mod </span>receive_sm;
 <span class="kw">mod </span>send_sm;
 
 <span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::sync::Arc;
 
+<span class="kw">use </span>anyhow::anyhow;
 <span class="kw">use </span>fedimint_api_client::api::DynModuleApi;
 <span class="kw">use </span>fedimint_client::module::init::{ClientModuleInit, ClientModuleInitArgs};
 <span class="kw">use </span>fedimint_client::module::recovery::NoModuleBackup;
@@ -324,8 +407,9 @@
     ApiVersion, CommonModuleInit, ModuleCommon, ModuleInit, MultiApiVersion,
 };
 <span class="kw">use </span>fedimint_core::{apply, async_trait_maybe_send, Amount, OutPoint, PeerId};
+<span class="kw">use </span>fedimint_lnv2_client::CreateInvoicePayload;
 <span class="kw">use </span>fedimint_lnv2_common::config::LightningClientConfig;
-<span class="kw">use </span>fedimint_lnv2_common::contracts::{IncomingContract, OutgoingContract};
+<span class="kw">use </span>fedimint_lnv2_common::contracts::OutgoingContract;
 <span class="kw">use </span>fedimint_lnv2_common::{
     LightningCommonInit, LightningModuleTypes, LightningOutput, LightningOutputV0,
 };
@@ -339,6 +423,9 @@
 <span class="kw">use </span>tpe::{AggregatePublicKey, PublicKeyShare};
 <span class="kw">use </span>tracing::warn;
 
+<span class="kw">use </span><span class="kw">crate</span>::gateway_module_v2::complete_sm::{
+    CompleteSMCommon, CompleteSMState, CompleteStateMachine,
+};
 <span class="kw">use </span><span class="kw">crate</span>::gateway_module_v2::receive_sm::ReceiveSMCommon;
 <span class="kw">use </span><span class="kw">crate</span>::gateway_module_v2::send_sm::SendSMCommon;
 <span class="kw">use </span><span class="kw">crate</span>::Gateway;
@@ -404,6 +491,7 @@
 <span class="attr">#[derive(Debug, Clone)]
 </span><span class="kw">pub struct </span>GatewayClientContextV2 {
     <span class="kw">pub </span>decoder: Decoder,
+    <span class="kw">pub </span>notifier: ModuleNotifier&lt;GatewayClientStateMachinesV2&gt;,
     <span class="kw">pub </span>tpe_agg_pk: AggregatePublicKey,
     <span class="kw">pub </span>tpe_pks: BTreeMap&lt;PeerId, PublicKeyShare&gt;,
     <span class="kw">pub </span>gateway: Gateway,
@@ -421,6 +509,7 @@
     <span class="kw">fn </span>context(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="self">Self</span>::ModuleStateMachineContext {
         GatewayClientContextV2 {
             decoder: <span class="self">self</span>.decoder(),
+            notifier: <span class="self">self</span>.notifier.clone(),
             tpe_agg_pk: <span class="self">self</span>.cfg.tpe_agg_pk,
             tpe_pks: <span class="self">self</span>.cfg.tpe_pks.clone(),
             gateway: <span class="self">self</span>.gateway.clone(),
@@ -441,6 +530,7 @@
 </span><span class="kw">pub enum </span>GatewayClientStateMachinesV2 {
     Send(SendStateMachine),
     Receive(ReceiveStateMachine),
+    Complete(CompleteStateMachine),
 }
 
 <span class="kw">impl </span>IntoDynInstance <span class="kw">for </span>GatewayClientStateMachinesV2 {
@@ -460,16 +550,22 @@
         global_context: <span class="kw-2">&amp;</span>DynGlobalClientContext,
     ) -&gt; Vec&lt;StateTransition&lt;<span class="self">Self</span>&gt;&gt; {
         <span class="kw">match </span><span class="self">self </span>{
+            GatewayClientStateMachinesV2::Send(state) =&gt; {
+                <span class="macro">sm_enum_variant_translation!</span>(
+                    state.transitions(context, global_context),
+                    GatewayClientStateMachinesV2::Send
+                )
+            }
             GatewayClientStateMachinesV2::Receive(state) =&gt; {
                 <span class="macro">sm_enum_variant_translation!</span>(
                     state.transitions(context, global_context),
                     GatewayClientStateMachinesV2::Receive
                 )
             }
-            GatewayClientStateMachinesV2::Send(state) =&gt; {
+            GatewayClientStateMachinesV2::Complete(state) =&gt; {
                 <span class="macro">sm_enum_variant_translation!</span>(
                     state.transitions(context, global_context),
-                    GatewayClientStateMachinesV2::Send
+                    GatewayClientStateMachinesV2::Complete
                 )
             }
         }
@@ -479,6 +575,7 @@
         <span class="kw">match </span><span class="self">self </span>{
             GatewayClientStateMachinesV2::Receive(state) =&gt; state.operation_id(),
             GatewayClientStateMachinesV2::Send(state) =&gt; state.operation_id(),
+            GatewayClientStateMachinesV2::Complete(state) =&gt; state.operation_id(),
         }
     }
 }
@@ -544,21 +641,84 @@
         }
     }
 
-    <span class="kw">pub async fn </span>start_receive_state_machine(
+    <span class="kw">pub async fn </span>relay_incoming_htlc(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        operation_id: OperationId,
-        contract: IncomingContract,
+        incoming_chan_id: u64,
+        htlc_id: u64,
+        payload: CreateInvoicePayload,
     ) -&gt; anyhow::Result&lt;()&gt; {
+        <span class="kw">let </span>operation_id = OperationId::from_encodable(payload.clone());
+
+        <span class="kw">if </span><span class="self">self</span>.client_ctx.operation_exists(operation_id).<span class="kw">await </span>{
+            <span class="kw">return </span><span class="prelude-val">Ok</span>(());
+        }
+
         <span class="kw">let </span>refund_keypair = <span class="self">self</span>.keypair;
 
         <span class="kw">let </span>client_output = ClientOutput::&lt;LightningOutput, GatewayClientStateMachinesV2&gt; {
-            output: LightningOutput::V0(LightningOutputV0::Incoming(contract.clone())),
-            amount: contract.commitment.amount,
+            output: LightningOutput::V0(LightningOutputV0::Incoming(payload.contract.clone())),
+            amount: payload.contract.commitment.amount,
+            state_machines: Arc::new(<span class="kw">move </span>|txid, out_idx| {
+                <span class="macro">vec!</span>[
+                    GatewayClientStateMachinesV2::Receive(ReceiveStateMachine {
+                        common: ReceiveSMCommon {
+                            operation_id,
+                            contract: payload.contract.clone(),
+                            out_point: OutPoint { txid, out_idx },
+                            refund_keypair,
+                        },
+                        state: ReceiveSMState::Funding,
+                    }),
+                    GatewayClientStateMachinesV2::Complete(CompleteStateMachine {
+                        common: CompleteSMCommon {
+                            operation_id,
+                            incoming_chan_id,
+                            htlc_id,
+                        },
+                        state: CompleteSMState::Pending,
+                    }),
+                ]
+            }),
+        };
+
+        <span class="kw">let </span>client_output = <span class="self">self</span>.client_ctx.make_client_output(client_output);
+        <span class="kw">let </span>transaction = TransactionBuilder::new().with_output(client_output);
+
+        <span class="self">self</span>.client_ctx
+            .finalize_and_submit_transaction(
+                operation_id,
+                LightningCommonInit::KIND.as_str(),
+                |<span class="kw">_</span>, <span class="kw">_</span>| GatewayOperationMetaV2,
+                transaction,
+            )
+            .<span class="kw">await</span><span class="question-mark">?</span>;
+
+        <span class="prelude-val">Ok</span>(())
+    }
+
+    <span class="kw">pub async fn </span>relay_direct_swap(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        payload: CreateInvoicePayload,
+    ) -&gt; anyhow::Result&lt;[u8; <span class="number">32</span>]&gt; {
+        <span class="kw">let </span>operation_id = OperationId::from_encodable(payload.clone());
+
+        <span class="kw">if </span><span class="self">self</span>.client_ctx.operation_exists(operation_id).<span class="kw">await </span>{
+            <span class="kw">return </span><span class="self">self
+                </span>.subscribe_receive(operation_id)
+                .<span class="kw">await
+                </span>.ok_or(<span class="macro">anyhow!</span>(<span class="string">"The internal send failed"</span>));
+        }
+
+        <span class="kw">let </span>refund_keypair = <span class="self">self</span>.keypair;
+
+        <span class="kw">let </span>client_output = ClientOutput::&lt;LightningOutput, GatewayClientStateMachinesV2&gt; {
+            output: LightningOutput::V0(LightningOutputV0::Incoming(payload.contract.clone())),
+            amount: payload.contract.commitment.amount,
             state_machines: Arc::new(<span class="kw">move </span>|txid, out_idx| {
                 <span class="macro">vec!</span>[GatewayClientStateMachinesV2::Receive(ReceiveStateMachine {
                     common: ReceiveSMCommon {
                         operation_id,
-                        contract: contract.clone(),
+                        contract: payload.contract.clone(),
                         out_point: OutPoint { txid, out_idx },
                         refund_keypair,
                     },
@@ -579,10 +739,12 @@
             )
             .<span class="kw">await</span><span class="question-mark">?</span>;
 
-        <span class="prelude-val">Ok</span>(())
+        <span class="self">self</span>.subscribe_receive(operation_id)
+            .<span class="kw">await
+            </span>.ok_or(<span class="macro">anyhow!</span>(<span class="string">"The internal send failed"</span>))
     }
 
-    <span class="kw">pub async fn </span>subscribe_receive(<span class="kw-2">&amp;</span><span class="self">self</span>, operation_id: OperationId) -&gt; <span class="prelude-ty">Option</span>&lt;[u8; <span class="number">32</span>]&gt; {
+    <span class="kw">async fn </span>subscribe_receive(<span class="kw-2">&amp;</span><span class="self">self</span>, operation_id: OperationId) -&gt; <span class="prelude-ty">Option</span>&lt;[u8; <span class="number">32</span>]&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>stream = <span class="self">self</span>.notifier.subscribe(operation_id).<span class="kw">await</span>;
 
         <span class="kw">loop </span>{

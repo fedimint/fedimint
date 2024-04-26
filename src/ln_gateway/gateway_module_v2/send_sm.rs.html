@@ -225,6 +225,9 @@
 <a href="#225" id="225">225</a>
 <a href="#226" id="226">226</a>
 <a href="#227" id="227">227</a>
+<a href="#228" id="228">228</a>
+<a href="#229" id="229">229</a>
+<a href="#230" id="230">230</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::sync::Arc;
 
 <span class="kw">use </span>bitcoin_hashes::Hash;
@@ -243,7 +246,7 @@
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 
 <span class="kw">use </span><span class="kw">crate</span>::gateway_lnrpc::PayInvoiceRequest;
-<span class="kw">use </span><span class="kw">crate</span>::gateway_module_v2::GatewayClientContextV2;
+<span class="kw">use </span><span class="kw">crate</span>::gateway_module_v2::{GatewayClientContextV2, GatewayClientModuleV2};
 
 <span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
 </span><span class="kw">pub struct </span>SendStateMachine {
@@ -290,7 +293,7 @@
     TimeoutTooClose,
     Underfunded,
     LightningRpcError(String),
-    ReceiveError(String),
+    DirectSwapError(String),
 }
 
 <span class="attr">#[cfg_attr(doc, aquamarine::aquamarine)]
@@ -383,14 +386,17 @@
                 .amount_milli_satoshis()
                 .expect(<span class="string">"We checked this previously"</span>);
 
-            <span class="kw">return </span>context
+            <span class="kw">let </span>(payload, client) = context
                 .gateway
-                .receive_v2(
-                    invoice.payment_hash().into_inner(),
-                    Amount::from_msats(invoice_msats),
-                )
+                .get_payload_and_client_v2(invoice.payment_hash().into_inner(), invoice_msats)
                 .<span class="kw">await
-                </span>.map_err(|e| Cancelled::ReceiveError(e.to_string()));
+                </span>.map_err(|e| Cancelled::DirectSwapError(e.to_string()))<span class="question-mark">?</span>;
+
+            <span class="kw">return </span>client
+                .get_first_module::&lt;GatewayClientModuleV2&gt;()
+                .relay_direct_swap(payload)
+                .<span class="kw">await
+                </span>.map_err(|e| Cancelled::DirectSwapError(e.to_string()));
         }
 
         <span class="kw">if </span>lightning_context.lnrpc.supports_private_payments() {

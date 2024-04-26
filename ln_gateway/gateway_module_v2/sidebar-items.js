@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"enum":["GatewayClientStateMachinesV2"],"mod":["receive_sm","send_sm"],"struct":["GatewayClientContextV2","GatewayClientInitV2","GatewayClientModuleV2","GatewayOperationMetaV2"]};
+window.SIDEBAR_ITEMS = {"enum":["GatewayClientStateMachinesV2"],"mod":["complete_sm","receive_sm","send_sm"],"struct":["GatewayClientContextV2","GatewayClientInitV2","GatewayClientModuleV2","GatewayOperationMetaV2"]};
