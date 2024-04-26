@@ -77,15 +77,15 @@ jobs:
         run: |
           set -euo pipefail
           # first one might do nothing
-          nix build -L .#wasm32-unknown.ci.ciTestAll --keep-failed
+          nix build -L .#wasm32-unknown.ci.ciTestAll
           # but this one will run
-          nix build -L .#wasm32-unknown.ci.ciTestAll --rebuild --keep-failed
+          nix build -L .#wasm32-unknown.ci.ciTestAll --rebuild
 
       - name: Wasm Tests
         run: |
           set -euo pipefail
-          nix build -L .#wasm32-unknown.ci.wasmTest --keep-failed
-          nix build -L .#wasm32-unknown.ci.wasmTest --rebuild --keep-failed
+          nix build -L .#wasm32-unknown.ci.wasmTest
+          nix build -L .#wasm32-unknown.ci.wasmTest --rebuild
 
       - name: Prepare failed test build dirs
         if: always()
