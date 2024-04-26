@@ -2536,8 +2536,6 @@
 <a href="#2536" id="2536">2536</a>
 <a href="#2537" id="2537">2537</a>
 <a href="#2538" id="2538">2538</a>
-<a href="#2539" id="2539">2539</a>
-<a href="#2540" id="2540">2540</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::HashSet;
 <span class="kw">use </span>std::io::Write;
 <span class="kw">use </span>std::ops::ControlFlow;
@@ -4238,9 +4236,8 @@
     )<span class="question-mark">?</span>;
 
     <span class="kw">let </span>cln_info: GatewayInfo = serde_json::from_value(cln_value)<span class="question-mark">?</span>;
-    poll_with_timeout(
+    poll(
         <span class="string">"Waiting for CLN Gateway Running state after reboot"</span>,
-        Duration::from_secs(<span class="number">15</span>),
         || <span class="kw">async </span>{
             <span class="kw">let </span><span class="kw-2">mut </span>new_cln_cmd = <span class="macro">cmd!</span>(new_gw_cln, <span class="string">"info"</span>);
             <span class="kw">let </span>cln_value = new_cln_cmd.out_json().<span class="kw">await</span>.map_err(ControlFlow::Continue)<span class="question-mark">?</span>;
@@ -4258,9 +4255,8 @@
     .<span class="kw">await</span><span class="question-mark">?</span>;
 
     <span class="kw">let </span>lnd_info: GatewayInfo = serde_json::from_value(lnd_value)<span class="question-mark">?</span>;
-    poll_with_timeout(
+    poll(
         <span class="string">"Waiting for LND Gateway Running state after reboot"</span>,
-        Duration::from_secs(<span class="number">15</span>),
         || <span class="kw">async </span>{
             <span class="kw">let </span><span class="kw-2">mut </span>new_lnd_cmd = <span class="macro">cmd!</span>(new_gw_lnd, <span class="string">"info"</span>);
             <span class="kw">let </span>lnd_value = new_lnd_cmd.out_json().<span class="kw">await</span>.map_err(ControlFlow::Continue)<span class="question-mark">?</span>;

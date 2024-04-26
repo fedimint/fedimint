@@ -831,7 +831,7 @@
 <span class="kw">use </span>tonic_lnd::Client <span class="kw">as </span>LndClient;
 <span class="kw">use </span>tracing::{debug, info, trace, warn};
 
-<span class="kw">use </span><span class="kw">crate</span>::util::{poll, poll_with_timeout, ClnLightningCli, ProcessHandle, ProcessManager};
+<span class="kw">use </span><span class="kw">crate</span>::util::{poll, ClnLightningCli, ProcessHandle, ProcessManager};
 <span class="kw">use </span><span class="kw">crate</span>::vars::utf8;
 <span class="kw">use crate</span>::{cmd, poll_eq};
 
@@ -953,7 +953,7 @@
 
     <span class="doccomment">/// Poll until bitcoind rpc responds for basic commands
     </span><span class="kw">pub async fn </span>poll_ready(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; anyhow::Result&lt;()&gt; {
-        poll_with_timeout(<span class="string">"btcoind rpc ready"</span>, Duration::from_secs(<span class="number">10</span>), || <span class="kw">async </span>{
+        poll(<span class="string">"btcoind rpc ready"</span>, || <span class="kw">async </span>{
             <span class="self">self</span>.get_block_count()
                 .<span class="kw">await
                 </span>.map_err(ControlFlow::Continue::&lt;anyhow::Error, <span class="kw">_</span>&gt;)<span class="question-mark">?</span>;
@@ -1143,7 +1143,7 @@
         <span class="kw">let </span>process = Lightningd::start(process_mgr, cln_dir).<span class="kw">await</span><span class="question-mark">?</span>;
 
         <span class="kw">let </span>socket_cln = cln_dir.join(<span class="string">"regtest/lightning-rpc"</span>);
-        poll_with_timeout(<span class="string">"lightningd"</span>, Duration::from_secs(<span class="number">15</span>), || <span class="kw">async </span>{
+        poll(<span class="string">"lightningd"</span>, || <span class="kw">async </span>{
             ClnRpc::new(socket_cln.clone())
                 .<span class="kw">await
                 </span>.context(<span class="string">"connect to lightningd"</span>)
