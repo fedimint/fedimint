@@ -327,9 +327,32 @@
 <a href="#327" id="327">327</a>
 <a href="#328" id="328">328</a>
 <a href="#329" id="329">329</a>
+<a href="#330" id="330">330</a>
+<a href="#331" id="331">331</a>
+<a href="#332" id="332">332</a>
+<a href="#333" id="333">333</a>
+<a href="#334" id="334">334</a>
+<a href="#335" id="335">335</a>
+<a href="#336" id="336">336</a>
+<a href="#337" id="337">337</a>
+<a href="#338" id="338">338</a>
+<a href="#339" id="339">339</a>
+<a href="#340" id="340">340</a>
+<a href="#341" id="341">341</a>
+<a href="#342" id="342">342</a>
+<a href="#343" id="343">343</a>
+<a href="#344" id="344">344</a>
+<a href="#345" id="345">345</a>
+<a href="#346" id="346">346</a>
+<a href="#347" id="347">347</a>
+<a href="#348" id="348">348</a>
+<a href="#349" id="349">349</a>
+<a href="#350" id="350">350</a>
+<a href="#351" id="351">351</a>
+<a href="#352" id="352">352</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::iter::repeat;
-<span class="kw">use </span>std::sync::{Arc, Mutex};
+<span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
 
 <span class="kw">use </span>anyhow::format_err;
@@ -388,19 +411,24 @@
     }
 }
 
-<span class="attr">#[derive(Clone, Debug)]
-</span><span class="kw">pub struct </span>FakeBitcoinTest {
+<span class="attr">#[derive(Debug)]
+</span><span class="kw">struct </span>FakeBitcoinTestInner {
     <span class="doccomment">/// Simulates mined bitcoin blocks
-    </span>blocks: Arc&lt;Mutex&lt;Vec&lt;Block&gt;&gt;&gt;,
+    </span>blocks: Vec&lt;Block&gt;,
     <span class="doccomment">/// Simulates pending transactions in the mempool
-    </span>pending: Arc&lt;Mutex&lt;Vec&lt;Transaction&gt;&gt;&gt;,
+    </span>pending: Vec&lt;Transaction&gt;,
     <span class="doccomment">/// Tracks how much bitcoin was sent to an address (doesn't track sending
     /// out of it)
-    </span>addresses: Arc&lt;Mutex&lt;BTreeMap&lt;Txid, Amount&gt;&gt;&gt;,
+    </span>addresses: BTreeMap&lt;Txid, Amount&gt;,
     <span class="doccomment">/// Simulates the merkle tree proofs
-    </span>proofs: Arc&lt;Mutex&lt;BTreeMap&lt;Txid, TxOutProof&gt;&gt;&gt;,
+    </span>proofs: BTreeMap&lt;Txid, TxOutProof&gt;,
     <span class="doccomment">/// Simulates the script history
-    </span>scripts: Arc&lt;Mutex&lt;BTreeMap&lt;Script, Vec&lt;Transaction&gt;&gt;&gt;&gt;,
+    </span>scripts: BTreeMap&lt;Script, Vec&lt;Transaction&gt;&gt;,
+}
+
+<span class="attr">#[derive(Clone, Debug)]
+</span><span class="kw">pub struct </span>FakeBitcoinTest {
+    inner: Arc&lt;std::sync::RwLock&lt;FakeBitcoinTestInner&gt;&gt;,
 }
 
 <span class="kw">impl </span>Default <span class="kw">for </span>FakeBitcoinTest {
@@ -411,12 +439,15 @@
 
 <span class="kw">impl </span>FakeBitcoinTest {
     <span class="kw">pub fn </span>new() -&gt; <span class="self">Self </span>{
+        <span class="kw">let </span>inner = FakeBitcoinTestInner {
+            blocks: <span class="macro">vec!</span>[genesis_block(Network::Regtest)],
+            pending: <span class="macro">vec!</span>[],
+            addresses: Default::default(),
+            proofs: Default::default(),
+            scripts: Default::default(),
+        };
         FakeBitcoinTest {
-            blocks: Arc::new(Mutex::new(<span class="macro">vec!</span>[genesis_block(Network::Regtest)])),
-            pending: Arc::new(Mutex::new(<span class="macro">vec!</span>[])),
-            addresses: Arc::new(Mutex::new(Default::default())),
-            proofs: Arc::new(Mutex::new(Default::default())),
-            scripts: Arc::new(Mutex::new(Default::default())),
+            inner: std::sync::RwLock::new(inner).into(),
         }
     }
 
@@ -481,19 +512,24 @@
     }
 
     <span class="kw">async fn </span>mine_blocks(<span class="kw-2">&amp;</span><span class="self">self</span>, block_num: u64) {
-        <span class="kw">let </span><span class="kw-2">mut </span>blocks = <span class="self">self</span>.blocks.lock().unwrap();
-        <span class="kw">let </span><span class="kw-2">mut </span>pending = <span class="self">self</span>.pending.lock().unwrap();
-        <span class="kw">let </span><span class="kw-2">mut </span>addresses = <span class="self">self</span>.addresses.lock().unwrap();
+        <span class="kw">let </span><span class="kw-2">mut </span>inner = <span class="self">self</span>.inner.write().unwrap();
+
+        <span class="kw">let </span>FakeBitcoinTestInner {
+            <span class="kw-2">ref mut </span>blocks,
+            <span class="kw-2">ref mut </span>pending,
+            <span class="kw-2">ref mut </span>addresses,
+            ..
+        } = <span class="kw-2">*</span>inner;
 
         <span class="kw">for _ in </span><span class="number">1</span>..=block_num {
-            FakeBitcoinTest::mine_block(<span class="kw-2">&amp;mut </span>addresses, <span class="kw-2">&amp;mut </span>blocks, <span class="kw-2">&amp;mut </span>pending);
+            FakeBitcoinTest::mine_block(addresses, blocks, pending);
         }
     }
 
     <span class="kw">async fn </span>prepare_funding_wallet(<span class="kw-2">&amp;</span><span class="self">self</span>) {
         <span class="comment">// In fake wallet this might not be technically necessary,
         // but it makes it behave more like the `RealBitcoinTest`.
-        </span><span class="kw">let </span>block_count = <span class="self">self</span>.blocks.lock().unwrap().len() <span class="kw">as </span>u64;
+        </span><span class="kw">let </span>block_count = <span class="self">self</span>.inner.write().unwrap().blocks.len() <span class="kw">as </span>u64;
         <span class="kw">if </span>block_count &lt; <span class="number">100 </span>{
             <span class="self">self</span>.mine_blocks(<span class="number">100 </span>- block_count).<span class="kw">await</span>;
         }
@@ -504,29 +540,33 @@
         address: <span class="kw-2">&amp;</span>Address,
         amount: bitcoin::Amount,
     ) -&gt; (TxOutProof, Transaction) {
-        <span class="kw">let </span><span class="kw-2">mut </span>blocks = <span class="self">self</span>.blocks.lock().unwrap();
-        <span class="kw">let </span><span class="kw-2">mut </span>pending = <span class="self">self</span>.pending.lock().unwrap();
-        <span class="kw">let </span><span class="kw-2">mut </span>addresses = <span class="self">self</span>.addresses.lock().unwrap();
-        <span class="kw">let </span><span class="kw-2">mut </span>scripts = <span class="self">self</span>.scripts.lock().unwrap();
-        <span class="kw">let </span><span class="kw-2">mut </span>proofs = <span class="self">self</span>.proofs.lock().unwrap();
+        <span class="kw">let </span><span class="kw-2">mut </span>inner = <span class="self">self</span>.inner.write().unwrap();
 
         <span class="kw">let </span>transaction = FakeBitcoinTest::new_transaction(<span class="macro">vec!</span>[TxOut {
             value: amount.to_sat(),
             script_pubkey: address.payload.script_pubkey(),
         }]);
-        addresses.insert(transaction.txid(), amount.into());
+        inner.addresses.insert(transaction.txid(), amount.into());
 
-        pending.push(transaction.clone());
-        <span class="kw">let </span>merkle_proof = FakeBitcoinTest::pending_merkle_tree(<span class="kw-2">&amp;</span>pending);
+        inner.pending.push(transaction.clone());
+        <span class="kw">let </span>merkle_proof = FakeBitcoinTest::pending_merkle_tree(<span class="kw-2">&amp;</span>inner.pending);
 
-        FakeBitcoinTest::mine_block(<span class="kw-2">&amp;mut </span>addresses, <span class="kw-2">&amp;mut </span>blocks, <span class="kw-2">&amp;mut </span>pending);
-        <span class="kw">let </span>block_header = blocks.last().unwrap().header;
+        <span class="kw">let </span>FakeBitcoinTestInner {
+            <span class="kw-2">ref mut </span>blocks,
+            <span class="kw-2">ref mut </span>pending,
+            <span class="kw-2">ref mut </span>addresses,
+            ..
+        } = <span class="kw-2">*</span>inner;
+        FakeBitcoinTest::mine_block(addresses, blocks, pending);
+        <span class="kw">let </span>block_header = inner.blocks.last().unwrap().header;
         <span class="kw">let </span>proof = TxOutProof {
             block_header,
             merkle_proof,
         };
-        proofs.insert(transaction.txid(), proof.clone());
-        scripts.insert(address.payload.script_pubkey(), <span class="macro">vec!</span>[transaction.clone()]);
+        inner.proofs.insert(transaction.txid(), proof.clone());
+        inner
+            .scripts
+            .insert(address.payload.script_pubkey(), <span class="macro">vec!</span>[transaction.clone()]);
 
         (proof, transaction)
     }
@@ -541,9 +581,10 @@
     <span class="kw">async fn </span>mine_block_and_get_received(<span class="kw-2">&amp;</span><span class="self">self</span>, address: <span class="kw-2">&amp;</span>Address) -&gt; Amount {
         <span class="self">self</span>.mine_blocks(<span class="number">1</span>).<span class="kw">await</span>;
         <span class="kw">let </span>sats = <span class="self">self
-            </span>.blocks
-            .lock()
+            </span>.inner
+            .read()
             .unwrap()
+            .blocks
             .clone()
             .into_iter()
             .flat_map(|block| block.txdata.into_iter().flat_map(|tx| tx.output))
@@ -555,8 +596,10 @@
 
     <span class="kw">async fn </span>get_mempool_tx_fee(<span class="kw-2">&amp;</span><span class="self">self</span>, txid: <span class="kw-2">&amp;</span>Txid) -&gt; Amount {
         <span class="kw">loop </span>{
-            <span class="kw">let </span>pending = <span class="self">self</span>.pending.lock().unwrap().clone();
-            <span class="kw">let </span>addresses = <span class="self">self</span>.addresses.lock().unwrap().clone();
+            <span class="kw">let </span>(pending, addresses) = {
+                <span class="kw">let </span>inner = <span class="self">self</span>.inner.read().unwrap();
+                (inner.pending.clone(), inner.addresses.clone())
+            };
 
             <span class="kw">let </span><span class="kw-2">mut </span>fee = Amount::ZERO;
             <span class="kw">let </span>maybe_tx = pending.iter().find(|tx| tx.txid() == <span class="kw-2">*</span>txid);
@@ -591,11 +634,11 @@
     }
 
     <span class="kw">async fn </span>get_block_count(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; BitcoinRpcResult&lt;u64&gt; {
-        <span class="prelude-val">Ok</span>(<span class="self">self</span>.blocks.lock().unwrap().len() <span class="kw">as </span>u64)
+        <span class="prelude-val">Ok</span>(<span class="self">self</span>.inner.read().unwrap().blocks.len() <span class="kw">as </span>u64)
     }
 
     <span class="kw">async fn </span>get_block_hash(<span class="kw-2">&amp;</span><span class="self">self</span>, height: u64) -&gt; BitcoinRpcResult&lt;BlockHash&gt; {
-        <span class="prelude-val">Ok</span>(<span class="self">self</span>.blocks.lock().unwrap()[height <span class="kw">as </span>usize]
+        <span class="prelude-val">Ok</span>(<span class="self">self</span>.inner.read().unwrap().blocks[height <span class="kw">as </span>usize]
             .header
             .block_hash())
     }
@@ -605,13 +648,16 @@
     }
 
     <span class="kw">async fn </span>submit_transaction(<span class="kw-2">&amp;</span><span class="self">self</span>, transaction: Transaction) {
-        <span class="kw">let </span><span class="kw-2">mut </span>pending = <span class="self">self</span>.pending.lock().unwrap();
-        pending.push(transaction);
+        <span class="kw">let </span><span class="kw-2">mut </span>inner = <span class="self">self</span>.inner.write().unwrap();
+        inner.pending.push(transaction);
 
         <span class="kw">let </span><span class="kw-2">mut </span>filtered = BTreeMap::&lt;Vec&lt;OutPoint&gt;, Transaction&gt;::new();
 
         <span class="comment">// Simulate the mempool keeping txs with higher fees (less output)
-        </span><span class="kw">for </span>tx <span class="kw">in </span>pending.iter() {
+        // TODO: This looks borked, should remove from `filtered` on higher fee or
+        // something, and check per-input anyway. Probably doesn't matter, and I
+        // don't want to touch it.
+        </span><span class="kw">for </span>tx <span class="kw">in </span>inner.pending.iter() {
             <span class="kw">match </span>filtered.get(<span class="kw-2">&amp;</span>inputs(tx)) {
                 <span class="prelude-val">Some</span>(found) <span class="kw">if </span>output_sum(tx) &gt; output_sum(found) =&gt; {}
                 <span class="kw">_ </span>=&gt; {
@@ -620,11 +666,11 @@
             }
         }
 
-        <span class="kw-2">*</span>pending = filtered.into_values().collect();
+        inner.pending = filtered.into_values().collect();
     }
 
     <span class="kw">async fn </span>get_tx_block_height(<span class="kw-2">&amp;</span><span class="self">self</span>, txid: <span class="kw-2">&amp;</span>Txid) -&gt; BitcoinRpcResult&lt;<span class="prelude-ty">Option</span>&lt;u64&gt;&gt; {
-        <span class="kw">for </span>(height, block) <span class="kw">in </span><span class="self">self</span>.blocks.lock().unwrap().iter().enumerate() {
+        <span class="kw">for </span>(height, block) <span class="kw">in </span><span class="self">self</span>.inner.read().unwrap().blocks.iter().enumerate() {
             <span class="kw">if </span>block.txdata.iter().any(|tx| tx.txid() == <span class="kw-2">*</span>txid) {
                 <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(height <span class="kw">as </span>u64));
             }
@@ -637,14 +683,14 @@
     }
 
     <span class="kw">async fn </span>get_script_history(<span class="kw-2">&amp;</span><span class="self">self</span>, script: <span class="kw-2">&amp;</span>Script) -&gt; BitcoinRpcResult&lt;Vec&lt;Transaction&gt;&gt; {
-        <span class="kw">let </span>scripts = <span class="self">self</span>.scripts.lock().unwrap();
-        <span class="kw">let </span>script = scripts.get(script);
+        <span class="kw">let </span>inner = <span class="self">self</span>.inner.read().unwrap();
+        <span class="kw">let </span>script = inner.scripts.get(script);
         <span class="prelude-val">Ok</span>(script.unwrap_or(<span class="kw-2">&amp;</span><span class="macro">vec!</span>[]).clone())
     }
 
     <span class="kw">async fn </span>get_txout_proof(<span class="kw-2">&amp;</span><span class="self">self</span>, txid: Txid) -&gt; BitcoinRpcResult&lt;TxOutProof&gt; {
-        <span class="kw">let </span>proofs = <span class="self">self</span>.proofs.lock().unwrap();
-        <span class="kw">let </span>proof = proofs.get(<span class="kw-2">&amp;</span>txid);
+        <span class="kw">let </span>inner = <span class="self">self</span>.inner.read().unwrap();
+        <span class="kw">let </span>proof = inner.proofs.get(<span class="kw-2">&amp;</span>txid);
         <span class="prelude-val">Ok</span>(proof.ok_or(<span class="macro">format_err!</span>(<span class="string">"No proof stored"</span>))<span class="question-mark">?</span>.clone())
     }
 }
