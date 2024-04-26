@@ -30,6 +30,8 @@ mod tests {
         }
     }
 
+    /// Test the `consensus_encode` method for `rustls::Certificate`.
+    /// This method encodes a certificate into a consensus format.
     #[test]
     fn test_consensus_encode() {
         let test_cases = [
