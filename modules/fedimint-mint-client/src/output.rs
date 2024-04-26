@@ -262,7 +262,7 @@ impl MintOutputStatesCreated {
                     amount: created.amount,
                     nonce: spendable_note.nonce(),
                 },
-                &spendable_note,
+                &spendable_note.to_undecoded(),
             )
             .await
         {

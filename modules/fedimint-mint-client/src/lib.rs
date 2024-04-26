@@ -23,7 +23,7 @@ use async_stream::stream;
 use backup::recovery::MintRecovery;
 use base64::Engine as _;
 use bitcoin_hashes::{sha256, sha256t, Hash, HashEngine as BitcoinHashEngine};
-use client_db::DbKeyPrefix;
+use client_db::{DbKeyPrefix, NoteKeyPrefix};
 use fedimint_client::module::init::{
     ClientModuleInit, ClientModuleInitArgs, ClientModuleRecoverArgs,
 };
@@ -68,7 +68,7 @@ use tracing::{debug, warn};
 use crate::backup::EcashBackup;
 use crate::client_db::{
     CancelledOOBSpendKey, CancelledOOBSpendKeyPrefix, NextECashNoteIndexKey,
-    NextECashNoteIndexKeyPrefix, NoteKey, NoteKeyPrefix,
+    NextECashNoteIndexKeyPrefix, NoteKey,
 };
 use crate::input::{
     MintInputCommon, MintInputStateCreated, MintInputStateMachine, MintInputStates,
@@ -426,7 +426,7 @@ impl ModuleInit for MintClientInit {
                         dbtx,
                         NoteKeyPrefix,
                         NoteKey,
-                        SpendableNote,
+                        SpendableNoteUndecoded,
                         mint_client_items,
                         "Notes"
                     );
@@ -912,7 +912,7 @@ impl MintClientModule {
     async fn spend_notes_oob(
         &self,
         dbtx: &mut DatabaseTransaction<'_>,
-        notes_selector: &impl NotesSelector<SpendableNote>,
+        notes_selector: &impl NotesSelector,
         amount: Amount,
         try_cancel_after: Duration,
     ) -> anyhow::Result<(
@@ -983,7 +983,7 @@ impl MintClientModule {
     /// Select notes with `requested_amount` using `notes_selector`.
     async fn select_notes(
         dbtx: &mut DatabaseTransaction<'_>,
-        notes_selector: &impl NotesSelector<SpendableNote>,
+        notes_selector: &impl NotesSelector,
         requested_amount: Amount,
         fee_per_note_input: Amount,
     ) -> anyhow::Result<TieredMulti<SpendableNote>> {
@@ -994,12 +994,15 @@ impl MintClientModule {
 
         notes_selector
             .select_notes(note_stream, requested_amount, fee_per_note_input)
-            .await
+            .await?
+            .into_iter()
+            .map(|(amt, snote)| Ok((amt, snote.decode()?)))
+            .collect::<anyhow::Result<TieredMulti<_>>>()
     }
 
     async fn get_all_spendable_notes(
         dbtx: &mut DatabaseTransaction<'_>,
-    ) -> TieredMulti<SpendableNote> {
+    ) -> TieredMulti<SpendableNoteUndecoded> {
         TieredMulti::from_iter(
             (dbtx
                 .find_by_prefix(&NoteKeyPrefix)
@@ -1234,7 +1237,7 @@ impl MintClientModule {
     /// Same as `spend_notes` but allows different to select notes to be used.
     pub async fn spend_notes_with_selector<M: Serialize + Send>(
         &self,
-        notes_selector: &impl NotesSelector<SpendableNote>,
+        notes_selector: &impl NotesSelector,
         requested_amount: Amount,
         try_cancel_after: Duration,
         include_invite: bool,
@@ -1432,7 +1435,7 @@ pub struct SpendOOBRefund {
 }
 
 #[apply(async_trait_maybe_send!)]
-pub trait NotesSelector<Note>: Send + Sync {
+pub trait NotesSelector<Note = SpendableNoteUndecoded>: Send + Sync {
     /// Select notes from stream for requested_amount.
     /// The stream must produce items in non- decreasing order of amount.
     async fn select_notes(
@@ -1695,10 +1698,34 @@ impl SpendableNote {
             signature: self.signature,
         }
     }
+    pub fn to_undecoded(&self) -> SpendableNoteUndecoded {
+        SpendableNoteUndecoded {
+            signature: self
+                .signature
+                .consensus_encode_to_vec()
+                .try_into()
+                .expect("Encoded size always correct"),
+            spend_key: self.spend_key,
+        }
+    }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Encodable, Decodable)]
+/// A version of [`SpendableNote`] that didn't decode the `signature` yet
+///
+/// **Note**: signature decoding from raw bytes is faliable, as not all bytes
+/// are valid signatures. Therefore this type must not be used for external
+/// data, and should be limited to optimizing reading from internal database.
+///
+/// The signature bytes will be validated in [`Self::decode`].
+///
+/// Decoding [`tbs::Signature`] is somewhat CPU-intensive (see benches in this
+/// crate), and when most of the result will be filtered away or completely
+/// unused, it makes sense to skip/delay decoding.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Encodable, Decodable, Serialize)]
 pub struct SpendableNoteUndecoded {
+    // Need to keep this in sync with `tbs::Signature`, but there's a test
+    // verifying they serialize and decode the same.
+    #[serde(serialize_with = "serdect::array::serialize_hex_lower_or_bin")]
     pub signature: [u8; 48],
     pub spend_key: KeyPair,
 }
@@ -1993,12 +2020,20 @@ mod tests {
 
     #[test]
     fn spendable_note_undecoded_sanity() {
+        // TODO: add more hex dumps to the loop
+        #[allow(clippy::single_element_loop)]
         for note_hex in ["a5dd3ebacad1bc48bd8718eed5a8da1d68f91323bef2848ac4fa2e6f8eed710f3178fd4aef047cc234e6b1127086f33cc408b39818781d9521475360de6b205f3328e490a6d99d5e2553a4553207c8bd"] {
 
+            let note = SpendableNote::consensus_decode_hex(note_hex, &Default::default()).unwrap();
+            let note_undecoded= SpendableNoteUndecoded::consensus_decode_hex(note_hex, &Default::default()).unwrap().decode().unwrap();
             assert_eq!(
-                SpendableNote::consensus_decode_hex(note_hex, &Default::default()).unwrap(),
-                SpendableNoteUndecoded::consensus_decode_hex(note_hex, &Default::default()).unwrap().decode().unwrap(),
-            )
+                note,
+                note_undecoded,
+            );
+            assert_eq!(
+                serde_json::to_string(&note).unwrap(),
+                serde_json::to_string(&note_undecoded).unwrap(),
+            );
         }
     }
 

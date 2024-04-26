@@ -108,7 +108,10 @@ impl MintClientModule {
         let next_note_idx = Tiered::from_iter(idxes);
 
         Ok(EcashBackup::new_v0(
-            notes,
+            notes
+                .into_iter()
+                .map(|(amt, spendable_note)| Ok((amt, spendable_note.decode()?)))
+                .collect::<anyhow::Result<TieredMulti<_>>>()?,
             pending_notes,
             session_count,
             next_note_idx,
