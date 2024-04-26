@@ -295,6 +295,7 @@
 <a href="#295" id="295">295</a>
 <a href="#296" id="296">296</a>
 <a href="#297" id="297">297</a>
+<a href="#298" id="298">298</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::ops::Deref <span class="kw">as _</span>;
 <span class="kw">use </span>std::sync::Arc;
 
@@ -468,9 +469,10 @@
                 <span class="kw">let </span>bitcoind = bitcoind.get_try().<span class="kw">await</span><span class="question-mark">?</span>.deref().clone();
                 <span class="kw">let </span>lnd = lnd.get_try().<span class="kw">await</span><span class="question-mark">?</span>.deref().clone();
                 <span class="kw">let </span>cln = cln.get_try().<span class="kw">await</span><span class="question-mark">?</span>.deref().clone();
-                <span class="kw">if </span>!skip_setup {
-                    open_channel(<span class="kw-2">&amp;</span>process_mgr, <span class="kw-2">&amp;</span>bitcoind, <span class="kw-2">&amp;</span>cln, <span class="kw-2">&amp;</span>lnd).<span class="kw">await</span><span class="question-mark">?</span>;
-                }
+                <span class="comment">// Note: We open new channel even if starting from existing state
+                // as ports change on every start, and without this nodes will not find each
+                // other.
+                </span>open_channel(<span class="kw-2">&amp;</span>process_mgr, <span class="kw-2">&amp;</span>bitcoind, <span class="kw-2">&amp;</span>cln, <span class="kw-2">&amp;</span>lnd).<span class="kw">await</span><span class="question-mark">?</span>;
                 <span class="prelude-val">Ok</span>(Arc::new(()))
             }
         });
