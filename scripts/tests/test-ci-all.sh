@@ -23,10 +23,10 @@ fi
 # Avoid re-building workspace in parallel in all test derivations
 # Note: Respect 'CARGO_PROFILE' that crane uses
 >&2 echo "Pre-building workspace..."
-cargo build ${CARGO_PROFILE:+--profile ${CARGO_PROFILE}} --workspace --all-targets
+runLowPrio cargo build ${CARGO_PROFILE:+--profile ${CARGO_PROFILE}} --workspace --all-targets
 # Avoid re-building tests in parallel in all test derivations
 >&2 echo "Pre-building tests..."
-cargo nextest run --no-run ${CARGO_PROFILE:+--cargo-profile ${CARGO_PROFILE}} ${CARGO_PROFILE:+--profile ${CARGO_PROFILE}} --workspace --all-targets
+runLowPrio cargo nextest run --no-run ${CARGO_PROFILE:+--cargo-profile ${CARGO_PROFILE}} ${CARGO_PROFILE:+--profile ${CARGO_PROFILE}} --workspace --all-targets
 
 # We've just built everything there is to built, so we should not have a
 # need to be build things again from now on, but since cargo does not

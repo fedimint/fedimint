@@ -162,7 +162,38 @@ let
       time
     ] ++ builtins.attrValues {
       inherit (pkgs) cargo-nextest;
-    };
+    } ++ [
+      # add a command that can be used to lower both CPU and IO priority
+      # of a command to help make it more friendly to other things
+      # potentially sharing the CI or dev machine
+      (if pkgs.stdenv.isLinux then [
+        pkgs.util-linux
+
+        (pkgs.writeShellScriptBin "runLowPrio" ''
+          set -euo pipefail
+
+          cmd=()
+          if ${pkgs.which}/bin/which chrt 1>/dev/null 2>/dev/null ; then
+            cmd+=(chrt -i 0)
+          fi
+          if ${pkgs.which}/bin/which ionice 1>/dev/null 2>/dev/null ; then
+            cmd+=(ionice -c 3)
+          fi
+
+          >&2 echo "Lowering IO priority with ''${cmd[@]}"
+          exec "''${cmd[@]}" "$@"
+        ''
+        )
+      ] else [
+
+        (pkgs.writeShellScriptBin "runLowPrio" ''
+          exec "$@"
+        ''
+        )
+      ])
+    ]
+
+    ;
 
     # we carefully optimize our debug symbols on cargo level,
     # and in case of errors and panics, would like to see the
@@ -188,6 +219,7 @@ let
       pkgs.lib.optionalAttrs (!(builtins.elem (craneLib.toolchainName or null) [ null "default" "stable" "nightly" ])) commonEnvsShellRocksdbLinkCross
     );
 
+
   craneLibTests = craneLib.overrideArgs (commonEnvsBuild // commonCliTestArgs // {
     src = filterWorkspaceTestFiles commonSrc;
     # there's no point saving the `./target/` dir
@@ -195,10 +227,35 @@ let
   });
 
 
+  # copied and modified from flakebox, to add `runLowPrio`, due to mistake in flakebox
+  rawBuildPackageGroup = { pname ? null, packages, mainProgram ? null, ... }@origArgs:
+    let
+      args = builtins.removeAttrs origArgs [ "mainProgram" "pname" "packages" ];
+      pname = if builtins.hasAttr "pname" origArgs then "${origArgs.pname}-group" else if builtins.hasAttr "pname" craneLib.args then "${craneLib.args.pname}-group" else null;
+      # "--package x --package y" args passed to cargo
+      pkgsArgs = lib.strings.concatStringsSep " " (builtins.map (name: "--package ${name}") packages);
+
+      deps = craneLib.buildDepsOnly (args // (lib.optionalAttrs (pname != null) {
+        inherit pname;
+      }) // {
+        buildPhaseCargoCommand = "runLowPrio cargo build --profile $CARGO_PROFILE ${pkgsArgs}";
+      });
+    in
+    craneLib.buildPackage (args // (lib.optionalAttrs (pname != null) {
+      inherit pname;
+    }) // {
+      cargoArtifacts = deps;
+      meta = { inherit mainProgram; };
+      cargoBuildCommand = "runLowPrio cargo build --profile $CARGO_PROFILE";
+      cargoExtraArgs = "${pkgsArgs}";
+    });
+
   fedimintBuildPackageGroup = args: replaceGitHash {
     name = args.pname;
     package =
-      craneLib.buildPackageGroup args;
+      # ideally this should work:
+      # craneLib.buildPackageGroup (args // { cargoBuildCommand = "runLowPrio cargo build --profile $CARGO_PROFILE"; });
+      rawBuildPackageGroup args;
     placeholder = gitHashPlaceholderValue;
   };
 in
@@ -211,27 +268,28 @@ rec {
   commonArgsBase = commonArgs;
 
   workspaceDeps = craneLib.buildWorkspaceDepsOnly {
-    buildPhaseCargoCommand = "cargoWithProfile doc --locked ; cargoWithProfile check --all-targets --locked ; cargoWithProfile build --locked --all-targets";
+    buildPhaseCargoCommand = "runLowPrio cargo doc --profile $CARGO_PROFILE --locked ; runLowPrio cargo check --profile $CARGO_PROFILE --all-targets --locked ; runLowPrio cargo build --profile $CARGO_PROFILE --locked --all-targets";
   };
 
   # like `workspaceDeps` but don't run `cargo doc`
   workspaceDepsNoDocs = craneLib.buildWorkspaceDepsOnly {
-    buildPhaseCargoCommand = "cargoWithProfile check --all-targets --locked ; cargoWithProfile build --locked --all-targets";
+    buildPhaseCargoCommand = "runLowPrio cargo check --profile $CARGO_PROFILE --all-targets --locked ; runLowPrio cargo build --profile $CARGO_PROFILE --locked --all-targets";
   };
+
   workspaceBuild = craneLib.buildWorkspace {
     cargoArtifacts = workspaceDeps;
-    buildPhaseCargoCommand = "cargoWithProfile doc --locked ; cargoWithProfile check --all-targets --locked ; cargoWithProfile build --locked --all-targets";
+    buildPhaseCargoCommand = "runLowPrio cargo doc --profile $CARGO_PROFILE --locked ; runLowPrio cargo check --profile $CARGO_PROFILE --all-targets --locked ; runLowPrio cargo build --profile $CARGO_PROFILE --locked --all-targets";
   };
 
   workspaceDepsWasmTest = craneLib.buildWorkspaceDepsOnly {
     pname = "${commonArgs.pname}-wasm-test";
-    buildPhaseCargoCommand = "cargoWithProfile build --locked --tests -p fedimint-wasm-tests";
+    buildPhaseCargoCommand = "runLowPrio cargo build --profile $CARGO_PROFILE --locked --tests -p fedimint-wasm-tests";
   };
 
   workspaceBuildWasmTest = craneLib.buildWorkspace {
     pnameSuffix = "-workspace-wasm-test";
     cargoArtifacts = workspaceDepsWasmTest;
-    buildPhaseCargoCommand = "cargoWithProfile build --locked --tests -p fedimint-wasm-tests";
+    buildPhaseCargoCommand = "runLowPrio cargo build --profile $CARGO_PROFILE --locked --tests -p fedimint-wasm-tests";
   };
 
   workspaceTest = craneLib.cargoNextest {
@@ -314,7 +372,7 @@ rec {
   # Build only deps, but with llvm-cov so `workspaceCov` can reuse them cached
   workspaceDepsCov = craneLib.buildDepsOnly {
     pname = "fedimint-workspace-lcov";
-    buildPhaseCargoCommand = "source <(cargo llvm-cov show-env --export-prefix); cargo build --locked --workspace --all-targets --profile $CARGO_PROFILE";
+    buildPhaseCargoCommand = "source <(cargo llvm-cov show-env --export-prefix); runLowPrio cargo build --locked --workspace --all-targets --profile $CARGO_PROFILE";
     cargoBuildCommand = "dontuse";
     cargoCheckCommand = "dontuse";
     nativeBuildInputs = [ pkgs.cargo-llvm-cov ];
@@ -324,7 +382,7 @@ rec {
   workspaceCov = craneLib.buildWorkspace {
     pname = "fedimint-workspace-lcov";
     cargoArtifacts = workspaceDepsCov;
-    buildPhaseCargoCommand = "source <(cargo llvm-cov show-env --export-prefix); cargo build --locked --workspace --all-targets --profile $CARGO_PROFILE;";
+    buildPhaseCargoCommand = "source <(cargo llvm-cov show-env --export-prefix); runLowPrio cargo build --locked --workspace --all-targets --profile $CARGO_PROFILE;";
     nativeBuildInputs = [ pkgs.cargo-llvm-cov ];
     doCheck = false;
   };
