@@ -211,8 +211,7 @@ tests_to_run_in_parallel+=(
   "latency_test_fm_pay"
   "latency_test_restore"
   "reconnect_test"
-  # lnd takes forever to restart
-  # "lightning_reconnect_test"
+  "lightning_reconnect_test"
   "gateway_reboot_test"
   "devimint_cli_test"
   "devimint_cli_test_single"
