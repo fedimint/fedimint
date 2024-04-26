@@ -2526,6 +2526,16 @@
 <a href="#2526" id="2526">2526</a>
 <a href="#2527" id="2527">2527</a>
 <a href="#2528" id="2528">2528</a>
+<a href="#2529" id="2529">2529</a>
+<a href="#2530" id="2530">2530</a>
+<a href="#2531" id="2531">2531</a>
+<a href="#2532" id="2532">2532</a>
+<a href="#2533" id="2533">2533</a>
+<a href="#2534" id="2534">2534</a>
+<a href="#2535" id="2535">2535</a>
+<a href="#2536" id="2536">2536</a>
+<a href="#2537" id="2537">2537</a>
+<a href="#2538" id="2538">2538</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::HashSet;
 <span class="kw">use </span>std::io::Write;
 <span class="kw">use </span>std::ops::ControlFlow;
@@ -2539,6 +2549,7 @@
 <span class="kw">use </span>clap::Subcommand;
 <span class="kw">use </span>cln_rpc::primitives::{Amount <span class="kw">as </span>ClnRpcAmount, AmountOrAny};
 <span class="kw">use </span>fedimint_core::encoding::Decodable;
+<span class="kw">use </span>fedimint_core::envs::is_env_var_set;
 <span class="kw">use </span>fedimint_core::task::block_in_place;
 <span class="kw">use </span>fedimint_core::Amount;
 <span class="kw">use </span>fedimint_ln_client::cli::LnInvoiceResponse;
@@ -2552,7 +2563,7 @@
 <span class="kw">use </span>tracing::{debug, info};
 
 <span class="kw">use </span><span class="kw">crate</span>::cli::{cleanup_on_exit, exec_user_command, setup, write_ready_file, CommonArgs};
-<span class="kw">use </span><span class="kw">crate</span>::envs::{FM_DATA_DIR_ENV, FM_PASSWORD_ENV};
+<span class="kw">use </span><span class="kw">crate</span>::envs::{FM_DATA_DIR_ENV, FM_DEVIMINT_RUN_DEPRECATED_TESTS_ENV, FM_PASSWORD_ENV};
 <span class="kw">use </span><span class="kw">crate</span>::federation::{<span class="self">self</span>, Client, Federation};
 <span class="kw">use </span><span class="kw">crate</span>::util::{poll, poll_with_timeout, LoadTestTool, ProcessManager};
 <span class="kw">use </span><span class="kw">crate</span>::version_constants::{VERSION_0_3_0, VERSION_0_3_0_ALPHA};
@@ -2869,8 +2880,17 @@
                 .map(ToOwned::to_owned)
                 .unwrap();
             <span class="kw">let </span>fedimint_cli_version = <span class="kw">crate</span>::util::FedimintCli::version_or_default().<span class="kw">await</span>;
+            <span class="kw">let </span>fedimintd_version = <span class="kw">crate</span>::util::FedimintdCmd::version_or_default().<span class="kw">await</span>;
+            <span class="kw">if </span>!is_env_var_set(FM_DEVIMINT_RUN_DEPRECATED_TESTS_ENV)
+                &amp;&amp; (fedimint_cli_version &lt; <span class="kw-2">*</span>VERSION_0_3_0_ALPHA
+                    || fedimintd_version &lt; <span class="kw-2">*</span>VERSION_0_3_0_ALPHA)
+            {
+                <span class="macro">info!</span>(<span class="string">"Skipping tests, as in previous versions restore was very slow to test"</span>);
+                <span class="kw">return </span><span class="prelude-val">Ok</span>(());
+            }
+
             <span class="kw">let </span>start_time = Instant::now();
-            <span class="kw">if </span>fedimint_cli_version &gt;= <span class="kw-2">*</span>VERSION_0_3_0_ALPHA {
+            <span class="kw">if </span><span class="kw-2">*</span>VERSION_0_3_0_ALPHA &lt;= fedimint_cli_version {
                 <span class="kw">let </span>restore_client = Client::create(<span class="string">"restore"</span>).<span class="kw">await</span><span class="question-mark">?</span>;
                 <span class="macro">cmd!</span>(
                     restore_client,
