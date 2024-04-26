@@ -361,7 +361,6 @@ where
         module.database_version(),
         module.get_database_migrations(),
         TEST_MODULE_INSTANCE_ID,
-        decoders,
     )
     .await
     .context("Error applying migrations to temp database")?;

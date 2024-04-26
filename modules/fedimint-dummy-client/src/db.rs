@@ -1,6 +1,7 @@
-use fedimint_client::sm::DynState;
-use fedimint_core::core::{IntoDynInstance, ModuleInstanceId, OperationId};
-use fedimint_core::db::{DatabaseTransaction, DatabaseValue, IDatabaseTransactionOpsCoreTyped};
+use std::io::Cursor;
+
+use fedimint_core::core::{ModuleInstanceId, OperationId};
+use fedimint_core::db::{DatabaseTransaction, IDatabaseTransactionOpsCoreTyped};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::{impl_db_record, Amount};
@@ -56,7 +57,7 @@ impl_db_record!(
 /// The new key/value pair has an `Amount` as the value.
 pub async fn migrate_to_v1(
     dbtx: &mut DatabaseTransaction<'_>,
-) -> anyhow::Result<Option<(Vec<DynState>, Vec<DynState>)>> {
+) -> anyhow::Result<Option<(Vec<(Vec<u8>, OperationId)>, Vec<(Vec<u8>, OperationId)>)>> {
     if dbtx.remove_entry(&DummyClientFundsKeyV0).await.is_some() {
         // Since this is a dummy migration, we can insert any value for the client
         // funds. Real modules should handle the funds properly.
@@ -70,69 +71,23 @@ pub async fn migrate_to_v1(
     Ok(None)
 }
 
-/// Migrates the database from version 1 to version 2. Maps all `Unreachable`
-/// states in the state machine to `InputDone`.
-pub async fn migrate_to_v2(
-    module_instance_id: ModuleInstanceId,
-    active_states: Vec<(Vec<u8>, OperationId)>,
-    inactive_states: Vec<(Vec<u8>, OperationId)>,
-    decoders: ModuleDecoderRegistry,
-) -> anyhow::Result<Option<(Vec<DynState>, Vec<DynState>)>> {
-    let mut new_active_states = Vec::new();
-    for (active_state, _) in active_states {
-        // Try to decode the bytes as a `DynState`
-        let dynstate = DynState::from_bytes(active_state.as_slice(), &decoders)?;
-        let typed_state = dynstate
-            .as_any()
-            .downcast_ref::<DummyStateMachine>()
-            .expect("Unexpected DynState suppilied to migration function");
+/// Maps all `Unreachable` states in the state machine to `OutputDone`
+pub(crate) fn get_v1_migrated_state(
+    operation_id: OperationId,
+    cursor: &mut Cursor<&[u8]>,
+) -> anyhow::Result<Option<(Vec<u8>, OperationId)>> {
+    let decoders = ModuleDecoderRegistry::default();
+    let dummy_sm_variant = u16::consensus_decode(cursor, &decoders)?;
 
-        match typed_state {
-            DummyStateMachine::Unreachable(_, _) => {
-                // Try to parse the bytes as the `Unreachable` struct to simulate a deleted
-                // state. In a real migration, `DynState::from_bytes` will
-                // fail since `DummyStateMachine::Unreachable` will not exist.
-                if let Ok(unreachable) =
-                    Unreachable::consensus_decode_vec(active_state.clone(), &decoders)
-                {
-                    new_active_states.push(
-                        DummyStateMachine::OutputDone(unreachable.amount, unreachable.operation_id)
-                            .into_dyn(module_instance_id),
-                    );
-                }
-            }
-            state => new_active_states.push(state.clone().into_dyn(module_instance_id)),
-        }
+    if dummy_sm_variant != 5 {
+        return Ok(None);
     }
 
-    let mut new_inactive_states = Vec::new();
-    for (inactive_state, _) in inactive_states {
-        // Try to decode the bytes as a `DynState`
-        let dynstate = DynState::from_bytes(inactive_state.as_slice(), &decoders)?;
-        let typed_state = dynstate
-            .as_any()
-            .downcast_ref::<DummyStateMachine>()
-            .expect("Unexpected DynState suppilied to migration function");
-
-        match typed_state {
-            DummyStateMachine::Unreachable(_, _) => {
-                // Try to parse the bytes as the `Unreachable` struct to simulate a deleted
-                // state. In a real migration, `DynState::from_bytes` will
-                // fail since `DummyStateMachine::Unreachable` will not exist.
-                if let Ok(unreachable) =
-                    Unreachable::consensus_decode_vec(inactive_state.clone(), &decoders)
-                {
-                    new_inactive_states.push(
-                        DummyStateMachine::OutputDone(unreachable.amount, unreachable.operation_id)
-                            .into_dyn(module_instance_id),
-                    );
-                }
-            }
-            state => new_inactive_states.push(state.clone().into_dyn(module_instance_id)),
-        }
-    }
-
-    Ok(Some((new_active_states, new_inactive_states)))
+    // Migrate `Unreachable` states to `OutputDone`
+    let unreachable = Unreachable::consensus_decode(cursor, &decoders)?;
+    let new_state = DummyStateMachine::OutputDone(unreachable.amount, unreachable.operation_id);
+    let bytes = new_state.consensus_encode_to_vec();
+    Ok(Some((bytes, operation_id)))
 }
 
 #[derive(Debug)]
