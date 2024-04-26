@@ -171,9 +171,10 @@ impl DevJitFed {
                 let bitcoind = bitcoind.get_try().await?.deref().clone();
                 let lnd = lnd.get_try().await?.deref().clone();
                 let cln = cln.get_try().await?.deref().clone();
-                if !skip_setup {
-                    open_channel(&process_mgr, &bitcoind, &cln, &lnd).await?;
-                }
+                // Note: We open new channel even if starting from existing state
+                // as ports change on every start, and without this nodes will not find each
+                // other.
+                open_channel(&process_mgr, &bitcoind, &cln, &lnd).await?;
                 Ok(Arc::new(()))
             }
         });
