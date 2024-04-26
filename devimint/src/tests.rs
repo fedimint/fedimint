@@ -1576,8 +1576,10 @@ pub async fn lightning_gw_reconnect_test(
     client.use_gateway(&gw_cln).await?;
 
     info!("Pegging-in both gateways");
-    fed.pegin_gateway(99_999, &gw_cln).await?;
-    fed.pegin_gateway(99_999, &gw_lnd).await?;
+    try_join!(
+        fed.pegin_gateway(99_999, &gw_cln),
+        fed.pegin_gateway(99_999, &gw_lnd),
+    )?;
 
     // Drop other references to CLN and LND so that the test can kill them
     drop(cln);
@@ -1607,7 +1609,7 @@ pub async fn lightning_gw_reconnect_test(
     gateways[1].set_lightning_node(LightningNode::Lnd(new_lnd.clone()));
 
     tracing::info!("Retrying info...");
-    const MAX_RETRIES: usize = 10;
+    const MAX_RETRIES: usize = 30;
     const RETRY_INTERVAL: Duration = Duration::from_secs(1);
     for gw in gateways {
         for i in 0..MAX_RETRIES {
