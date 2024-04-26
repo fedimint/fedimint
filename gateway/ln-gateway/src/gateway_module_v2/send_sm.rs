@@ -16,7 +16,7 @@ use secp256k1::KeyPair;
 use serde::{Deserialize, Serialize};
 
 use crate::gateway_lnrpc::PayInvoiceRequest;
-use crate::gateway_module_v2::GatewayClientContextV2;
+use crate::gateway_module_v2::{GatewayClientContextV2, GatewayClientModuleV2};
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
 pub struct SendStateMachine {
@@ -63,7 +63,7 @@ pub enum Cancelled {
     TimeoutTooClose,
     Underfunded,
     LightningRpcError(String),
-    ReceiveError(String),
+    DirectSwapError(String),
 }
 
 #[cfg_attr(doc, aquamarine::aquamarine)]
@@ -156,14 +156,17 @@ impl SendStateMachine {
                 .amount_milli_satoshis()
                 .expect("We checked this previously");
 
-            return context
+            let (payload, client) = context
                 .gateway
-                .receive_v2(
-                    invoice.payment_hash().into_inner(),
-                    Amount::from_msats(invoice_msats),
-                )
+                .get_payload_and_client_v2(invoice.payment_hash().into_inner(), invoice_msats)
                 .await
-                .map_err(|e| Cancelled::ReceiveError(e.to_string()));
+                .map_err(|e| Cancelled::DirectSwapError(e.to_string()))?;
+
+            return client
+                .get_first_module::<GatewayClientModuleV2>()
+                .relay_direct_swap(payload)
+                .await
+                .map_err(|e| Cancelled::DirectSwapError(e.to_string()));
         }
 
         if lightning_context.lnrpc.supports_private_payments() {
