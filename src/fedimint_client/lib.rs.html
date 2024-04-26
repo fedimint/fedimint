@@ -2458,11 +2458,6 @@
 <a href="#2458" id="2458">2458</a>
 <a href="#2459" id="2459">2459</a>
 <a href="#2460" id="2460">2460</a>
-<a href="#2461" id="2461">2461</a>
-<a href="#2462" id="2462">2462</a>
-<a href="#2463" id="2463">2463</a>
-<a href="#2464" id="2464">2464</a>
-<a href="#2465" id="2465">2465</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! # Client library for fedimintd
 //!
 //! This library provides a client interface to build module clients that can be
@@ -4323,11 +4318,7 @@
         <span class="self">self</span>.meta_service = meta_service;
     }
 
-    <span class="kw">async fn </span>migrate_database(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        db: <span class="kw-2">&amp;</span>Database,
-        decoders: ModuleDecoderRegistry,
-    ) -&gt; anyhow::Result&lt;()&gt; {
+    <span class="kw">async fn </span>migrate_database(<span class="kw-2">&amp;</span><span class="self">self</span>, db: <span class="kw-2">&amp;</span>Database) -&gt; anyhow::Result&lt;()&gt; {
         <span class="comment">// Only apply the client database migrations if the database has been
         // initialized.
         </span><span class="kw">if let </span><span class="prelude-val">Ok</span>(client_config) = <span class="self">self</span>.load_existing_config().<span class="kw">await </span>{
@@ -4344,7 +4335,6 @@
                     init.database_version(),
                     init.get_database_migrations(),
                     module_id,
-                    decoders.clone(),
                 )
                 .<span class="kw">await</span><span class="question-mark">?</span>;
             }
@@ -4583,7 +4573,7 @@
 
         <span class="comment">// Migrate the database before interacting with it in case any on-disk data
         // structures have changed.
-        </span><span class="self">self</span>.migrate_database(<span class="kw-2">&amp;</span>db, decoders.clone()).<span class="kw">await</span><span class="question-mark">?</span>;
+        </span><span class="self">self</span>.migrate_database(<span class="kw-2">&amp;</span>db).<span class="kw">await</span><span class="question-mark">?</span>;
 
         <span class="kw">let </span>init_state = <span class="self">Self</span>::load_init_state(<span class="kw-2">&amp;</span>db).<span class="kw">await</span>;
 

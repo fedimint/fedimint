@@ -436,36 +436,10 @@
 <a href="#436" id="436">436</a>
 <a href="#437" id="437">437</a>
 <a href="#438" id="438">438</a>
-<a href="#439" id="439">439</a>
-<a href="#440" id="440">440</a>
-<a href="#441" id="441">441</a>
-<a href="#442" id="442">442</a>
-<a href="#443" id="443">443</a>
-<a href="#444" id="444">444</a>
-<a href="#445" id="445">445</a>
-<a href="#446" id="446">446</a>
-<a href="#447" id="447">447</a>
-<a href="#448" id="448">448</a>
-<a href="#449" id="449">449</a>
-<a href="#450" id="450">450</a>
-<a href="#451" id="451">451</a>
-<a href="#452" id="452">452</a>
-<a href="#453" id="453">453</a>
-<a href="#454" id="454">454</a>
-<a href="#455" id="455">455</a>
-<a href="#456" id="456">456</a>
-<a href="#457" id="457">457</a>
-<a href="#458" id="458">458</a>
-<a href="#459" id="459">459</a>
-<a href="#460" id="460">460</a>
-<a href="#461" id="461">461</a>
-<a href="#462" id="462">462</a>
-<a href="#463" id="463">463</a>
-<a href="#464" id="464">464</a>
-<a href="#465" id="465">465</a>
-</pre></div><pre class="rust"><code><span class="kw">use </span>bitcoin::hashes::sha256;
-<span class="kw">use </span>fedimint_client::sm::DynState;
-<span class="kw">use </span>fedimint_core::core::{IntoDynInstance, ModuleInstanceId, OperationId};
+</pre></div><pre class="rust"><code><span class="kw">use </span>std::io::Cursor;
+
+<span class="kw">use </span>bitcoin::hashes::sha256;
+<span class="kw">use </span>fedimint_core::core::OperationId;
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
 <span class="kw">use </span>fedimint_core::{impl_db_lookup, impl_db_record};
@@ -554,37 +528,33 @@
 <span class="doccomment">/// Migrates `SubmittedOfferV0` to `SubmittedOffer` and `ConfirmedInvoiceV0` to
 /// `ConfirmedInvoice`
 </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>get_v1_migrated_state(
-    bytes: <span class="kw-2">&amp;</span>[u8],
-    module_instance_id: ModuleInstanceId,
-    decoders: <span class="kw-2">&amp;</span>ModuleDecoderRegistry,
-) -&gt; anyhow::Result&lt;<span class="prelude-ty">Option</span>&lt;DynState&gt;&gt; {
+    operation_id: OperationId,
+    cursor: <span class="kw-2">&amp;mut </span>Cursor&lt;<span class="kw-2">&amp;</span>[u8]&gt;,
+) -&gt; anyhow::Result&lt;<span class="prelude-ty">Option</span>&lt;(Vec&lt;u8&gt;, OperationId)&gt;&gt; {
     <span class="attr">#[derive(Debug, Clone, Decodable)]
     </span><span class="kw">pub struct </span>LightningReceiveConfirmedInvoiceV0 {
         invoice: Bolt11Invoice,
         receiving_key: KeyPair,
     }
 
-    <span class="kw">let </span><span class="kw-2">mut </span>cursor = std::io::Cursor::new(bytes);
-    <span class="kw">let </span>key = fedimint_core::core::ModuleInstanceId::consensus_decode(<span class="kw-2">&amp;mut </span>cursor, decoders)<span class="question-mark">?</span>;
-    <span class="macro">debug_assert_eq!</span>(key, module_instance_id, <span class="string">"Unexpected module instance ID"</span>);
-
-    <span class="kw">let </span>ln_sm_variant = u16::consensus_decode(<span class="kw-2">&amp;mut </span>cursor, decoders)<span class="question-mark">?</span>;
+    <span class="kw">let </span>decoders = ModuleDecoderRegistry::default();
+    <span class="kw">let </span>ln_sm_variant = u16::consensus_decode(cursor, <span class="kw-2">&amp;</span>decoders)<span class="question-mark">?</span>;
 
     <span class="comment">// If the state machine is not a receive state machine, return None
     </span><span class="kw">if </span>ln_sm_variant != <span class="number">2 </span>{
         <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="prelude-val">None</span>);
     }
 
-    <span class="kw">let </span>_ln_sm_len = u16::consensus_decode(<span class="kw-2">&amp;mut </span>cursor, decoders)<span class="question-mark">?</span>;
-    <span class="kw">let </span>operation_id = OperationId::consensus_decode(<span class="kw-2">&amp;mut </span>cursor, decoders)<span class="question-mark">?</span>;
-    <span class="kw">let </span>receive_sm_variant = u16::consensus_decode(<span class="kw-2">&amp;mut </span>cursor, decoders)<span class="question-mark">?</span>;
+    <span class="kw">let </span>_ln_sm_len = u16::consensus_decode(cursor, <span class="kw-2">&amp;</span>decoders)<span class="question-mark">?</span>;
+    <span class="kw">let </span>_operation_id = OperationId::consensus_decode(cursor, <span class="kw-2">&amp;</span>decoders)<span class="question-mark">?</span>;
+    <span class="kw">let </span>receive_sm_variant = u16::consensus_decode(cursor, <span class="kw-2">&amp;</span>decoders)<span class="question-mark">?</span>;
 
     <span class="kw">let </span>new = <span class="kw">match </span>receive_sm_variant {
         <span class="comment">// SubmittedOfferV0
         </span><span class="number">0 </span>=&gt; {
-            <span class="kw">let </span>_receive_sm_len = u16::consensus_decode(<span class="kw-2">&amp;mut </span>cursor, decoders)<span class="question-mark">?</span>;
+            <span class="kw">let </span>_receive_sm_len = u16::consensus_decode(cursor, <span class="kw-2">&amp;</span>decoders)<span class="question-mark">?</span>;
 
-            <span class="kw">let </span>v0 = LightningReceiveSubmittedOfferV0::consensus_decode(<span class="kw-2">&amp;mut </span>cursor, decoders)<span class="question-mark">?</span>;
+            <span class="kw">let </span>v0 = LightningReceiveSubmittedOfferV0::consensus_decode(cursor, <span class="kw-2">&amp;</span>decoders)<span class="question-mark">?</span>;
 
             <span class="kw">let </span>new_offer = LightningReceiveSubmittedOffer {
                 offer_txid: v0.offer_txid,
@@ -599,9 +569,9 @@
         }
         <span class="comment">// ConfirmedInvoiceV0
         </span><span class="number">2 </span>=&gt; {
-            <span class="kw">let </span>_receive_sm_len = u16::consensus_decode(<span class="kw-2">&amp;mut </span>cursor, decoders)<span class="question-mark">?</span>;
+            <span class="kw">let </span>_receive_sm_len = u16::consensus_decode(cursor, <span class="kw-2">&amp;</span>decoders)<span class="question-mark">?</span>;
             <span class="kw">let </span>confirmed_old =
-                LightningReceiveConfirmedInvoiceV0::consensus_decode(<span class="kw-2">&amp;mut </span>cursor, decoders)<span class="question-mark">?</span>;
+                LightningReceiveConfirmedInvoiceV0::consensus_decode(cursor, <span class="kw-2">&amp;</span>decoders)<span class="question-mark">?</span>;
             <span class="kw">let </span>confirmed_new = LightningReceiveConfirmedInvoice {
                 invoice: confirmed_old.invoice,
                 receiving_key: ReceivingKey::Personal(confirmed_old.receiving_key),
@@ -614,44 +584,40 @@
         <span class="kw">_ </span>=&gt; <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="prelude-val">None</span>),
     };
 
-    <span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(new.into_dyn(module_instance_id)))
+    <span class="kw">let </span>bytes = new.consensus_encode_to_vec();
+    <span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>((bytes, operation_id)))
 }
 
 <span class="doccomment">/// Migrates `SubmittedOffer` with enum prefix 5 back to `SubmittedOffer`
 </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>get_v2_migrated_state(
-    bytes: <span class="kw-2">&amp;</span>[u8],
-    module_instance_id: ModuleInstanceId,
-    decoders: <span class="kw-2">&amp;</span>ModuleDecoderRegistry,
-) -&gt; anyhow::Result&lt;<span class="prelude-ty">Option</span>&lt;DynState&gt;&gt; {
-    <span class="kw">let </span><span class="kw-2">mut </span>cursor = std::io::Cursor::new(bytes);
-    <span class="kw">let </span>key = fedimint_core::core::ModuleInstanceId::consensus_decode(<span class="kw-2">&amp;mut </span>cursor, decoders)<span class="question-mark">?</span>;
-    <span class="macro">debug_assert_eq!</span>(key, module_instance_id, <span class="string">"Unexpected module instance ID"</span>);
-
-    <span class="kw">let </span>ln_sm_variant = u16::consensus_decode(<span class="kw-2">&amp;mut </span>cursor, decoders)<span class="question-mark">?</span>;
+    operation_id: OperationId,
+    cursor: <span class="kw-2">&amp;mut </span>Cursor&lt;<span class="kw-2">&amp;</span>[u8]&gt;,
+) -&gt; anyhow::Result&lt;<span class="prelude-ty">Option</span>&lt;(Vec&lt;u8&gt;, OperationId)&gt;&gt; {
+    <span class="kw">let </span>decoders = ModuleDecoderRegistry::default();
+    <span class="kw">let </span>ln_sm_variant = u16::consensus_decode(cursor, <span class="kw-2">&amp;</span>decoders)<span class="question-mark">?</span>;
 
     <span class="comment">// If the state machine is not a receive state machine, return None
     </span><span class="kw">if </span>ln_sm_variant != <span class="number">2 </span>{
         <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="prelude-val">None</span>);
     }
 
-    <span class="kw">let </span>_ln_sm_len = u16::consensus_decode(<span class="kw-2">&amp;mut </span>cursor, decoders)<span class="question-mark">?</span>;
-    <span class="kw">let </span>operation_id = OperationId::consensus_decode(<span class="kw-2">&amp;mut </span>cursor, decoders)<span class="question-mark">?</span>;
-    <span class="kw">let </span>receive_sm_variant = u16::consensus_decode(<span class="kw-2">&amp;mut </span>cursor, decoders)<span class="question-mark">?</span>;
+    <span class="kw">let </span>_ln_sm_len = u16::consensus_decode(cursor, <span class="kw-2">&amp;</span>decoders)<span class="question-mark">?</span>;
+    <span class="kw">let </span>_operation_id = OperationId::consensus_decode(cursor, <span class="kw-2">&amp;</span>decoders)<span class="question-mark">?</span>;
+    <span class="kw">let </span>receive_sm_variant = u16::consensus_decode(cursor, <span class="kw-2">&amp;</span>decoders)<span class="question-mark">?</span>;
     <span class="kw">if </span>receive_sm_variant != <span class="number">5 </span>{
         <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="prelude-val">None</span>);
     }
 
-    <span class="kw">let </span>_receive_sm_len = u16::consensus_decode(<span class="kw-2">&amp;mut </span>cursor, decoders)<span class="question-mark">?</span>;
-    <span class="kw">let </span>old = LightningReceiveSubmittedOffer::consensus_decode(<span class="kw-2">&amp;mut </span>cursor, decoders)<span class="question-mark">?</span>;
+    <span class="kw">let </span>_receive_sm_len = u16::consensus_decode(cursor, <span class="kw-2">&amp;</span>decoders)<span class="question-mark">?</span>;
+    <span class="kw">let </span>old = LightningReceiveSubmittedOffer::consensus_decode(cursor, <span class="kw-2">&amp;</span>decoders)<span class="question-mark">?</span>;
 
-    <span class="kw">let </span>new_recv = LightningReceiveStateMachine {
+    <span class="kw">let </span>new_recv = LightningClientStateMachines::Receive(LightningReceiveStateMachine {
         operation_id,
         state: LightningReceiveStates::SubmittedOffer(old),
-    };
+    });
 
-    <span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(
-        LightningClientStateMachines::Receive(new_recv).into_dyn(module_instance_id),
-    ))
+    <span class="kw">let </span>bytes = new_recv.consensus_encode_to_vec();
+    <span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>((bytes, operation_id)))
 }
 
 <span class="attr">#[cfg(test)]
@@ -660,10 +626,8 @@
 
     <span class="kw">use </span>bitcoin::hashes::Hash;
     <span class="kw">use </span>fedimint_client::db::migrate_state;
-    <span class="kw">use </span>fedimint_client::module::ClientModule;
     <span class="kw">use </span>fedimint_core::core::{IntoDynInstance, OperationId};
     <span class="kw">use </span>fedimint_core::encoding::Encodable;
-    <span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
     <span class="kw">use </span>fedimint_core::TransactionId;
     <span class="kw">use </span>lightning_invoice::Bolt11Invoice;
     <span class="kw">use </span>rand::thread_rng;
@@ -674,7 +638,7 @@
         LightningReceiveConfirmedInvoice, LightningReceiveStateMachine, LightningReceiveStates,
         LightningReceiveSubmittedOffer,
     };
-    <span class="kw">use crate</span>::{LightningClientModule, LightningClientStateMachines, ReceivingKey};
+    <span class="kw">use crate</span>::{LightningClientStateMachines, ReceivingKey};
 
     <span class="attr">#[tokio::test]
     </span><span class="kw">async fn </span>test_sm_migration_to_v2_submitted() {
@@ -741,29 +705,23 @@
         })
         .into_dyn(instance_id);
 
-        <span class="kw">let </span>decoders = ModuleDecoderRegistry::new(<span class="macro">vec!</span>[(
-            instance_id,
-            LightningClientModule::kind(),
-            LightningClientModule::decoder(),
-        )]);
-
         <span class="kw">let </span>(new_active_states, new_inactive_states) =
-            migrate_state::&lt;LightningClientStateMachines&gt;(
-                instance_id,
-                old_states.clone(),
-                old_states,
-                decoders,
-                get_v1_migrated_state,
-            )
-            .<span class="kw">await
-            </span>.expect(<span class="string">"Migration failed"</span>)
-            .expect(<span class="string">"Migration produced output"</span>);
+            migrate_state(old_states.clone(), old_states, get_v1_migrated_state)
+                .<span class="kw">await
+                </span>.expect(<span class="string">"Migration failed"</span>)
+                .expect(<span class="string">"Migration produced output"</span>);
 
         <span class="macro">assert_eq!</span>(new_inactive_states.len(), <span class="number">1</span>);
-        <span class="macro">assert_eq!</span>(new_inactive_states[<span class="number">0</span>], new_state);
+        <span class="macro">assert_eq!</span>(
+            new_inactive_states[<span class="number">0</span>],
+            (new_state.consensus_encode_to_vec(), operation_id)
+        );
 
         <span class="macro">assert_eq!</span>(new_active_states.len(), <span class="number">1</span>);
-        <span class="macro">assert_eq!</span>(new_active_states[<span class="number">0</span>], new_state);
+        <span class="macro">assert_eq!</span>(
+            new_active_states[<span class="number">0</span>],
+            (new_state.consensus_encode_to_vec(), operation_id)
+        );
     }
 
     <span class="attr">#[tokio::test]
@@ -811,29 +769,23 @@
         })
         .into_dyn(instance_id);
 
-        <span class="kw">let </span>decoders = ModuleDecoderRegistry::new(<span class="macro">vec!</span>[(
-            instance_id,
-            LightningClientModule::kind(),
-            LightningClientModule::decoder(),
-        )]);
-
         <span class="kw">let </span>(new_active_states, new_inactive_states) =
-            migrate_state::&lt;LightningClientStateMachines&gt;(
-                instance_id,
-                old_states.clone(),
-                old_states,
-                decoders,
-                get_v1_migrated_state,
-            )
-            .<span class="kw">await
-            </span>.expect(<span class="string">"Migration failed"</span>)
-            .expect(<span class="string">"Migration produced output"</span>);
+            migrate_state(old_states.clone(), old_states, get_v1_migrated_state)
+                .<span class="kw">await
+                </span>.expect(<span class="string">"Migration failed"</span>)
+                .expect(<span class="string">"Migration produced output"</span>);
 
         <span class="macro">assert_eq!</span>(new_inactive_states.len(), <span class="number">1</span>);
-        <span class="macro">assert_eq!</span>(new_inactive_states[<span class="number">0</span>], new_state);
+        <span class="macro">assert_eq!</span>(
+            new_inactive_states[<span class="number">0</span>],
+            (new_state.consensus_encode_to_vec(), operation_id)
+        );
 
         <span class="macro">assert_eq!</span>(new_active_states.len(), <span class="number">1</span>);
-        <span class="macro">assert_eq!</span>(new_active_states[<span class="number">0</span>], new_state);
+        <span class="macro">assert_eq!</span>(
+            new_active_states[<span class="number">0</span>],
+            (new_state.consensus_encode_to_vec(), operation_id)
+        );
 
         <span class="prelude-val">Ok</span>(())
     }
@@ -903,29 +855,23 @@
         })
         .into_dyn(instance_id);
 
-        <span class="kw">let </span>decoders = ModuleDecoderRegistry::new(<span class="macro">vec!</span>[(
-            instance_id,
-            LightningClientModule::kind(),
-            LightningClientModule::decoder(),
-        )]);
-
         <span class="kw">let </span>(new_active_states, new_inactive_states) =
-            migrate_state::&lt;LightningClientStateMachines&gt;(
-                instance_id,
-                old_states.clone(),
-                old_states,
-                decoders,
-                get_v2_migrated_state,
-            )
-            .<span class="kw">await
-            </span>.expect(<span class="string">"Migration failed"</span>)
-            .expect(<span class="string">"Migration produced output"</span>);
+            migrate_state(old_states.clone(), old_states, get_v2_migrated_state)
+                .<span class="kw">await
+                </span>.expect(<span class="string">"Migration failed"</span>)
+                .expect(<span class="string">"Migration produced output"</span>);
 
         <span class="macro">assert_eq!</span>(new_inactive_states.len(), <span class="number">1</span>);
-        <span class="macro">assert_eq!</span>(new_inactive_states[<span class="number">0</span>], new_state);
+        <span class="macro">assert_eq!</span>(
+            new_inactive_states[<span class="number">0</span>],
+            (new_state.consensus_encode_to_vec(), operation_id)
+        );
 
         <span class="macro">assert_eq!</span>(new_active_states.len(), <span class="number">1</span>);
-        <span class="macro">assert_eq!</span>(new_active_states[<span class="number">0</span>], new_state);
+        <span class="macro">assert_eq!</span>(
+            new_active_states[<span class="number">0</span>],
+            (new_state.consensus_encode_to_vec(), operation_id)
+        );
     }
 }
 </code></pre></div></section></main></body></html>

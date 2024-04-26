@@ -1911,20 +1911,6 @@
 <a href="#1911" id="1911">1911</a>
 <a href="#1912" id="1912">1912</a>
 <a href="#1913" id="1913">1913</a>
-<a href="#1914" id="1914">1914</a>
-<a href="#1915" id="1915">1915</a>
-<a href="#1916" id="1916">1916</a>
-<a href="#1917" id="1917">1917</a>
-<a href="#1918" id="1918">1918</a>
-<a href="#1919" id="1919">1919</a>
-<a href="#1920" id="1920">1920</a>
-<a href="#1921" id="1921">1921</a>
-<a href="#1922" id="1922">1922</a>
-<a href="#1923" id="1923">1923</a>
-<a href="#1924" id="1924">1924</a>
-<a href="#1925" id="1925">1925</a>
-<a href="#1926" id="1926">1926</a>
-<a href="#1927" id="1927">1927</a>
 </pre></div><pre class="rust"><code><span class="kw">pub mod </span>api;
 <span class="attr">#[cfg(feature = <span class="string">"cli"</span>)]
 </span><span class="kw">pub mod </span>cli;
@@ -2264,7 +2250,7 @@
 
     <span class="kw">fn </span>get_database_migrations(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; BTreeMap&lt;DatabaseVersion, ClientMigrationFn&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>migrations: BTreeMap&lt;DatabaseVersion, ClientMigrationFn&gt; = BTreeMap::new();
-        migrations.insert(DatabaseVersion(<span class="number">0</span>), <span class="kw">move </span>|dbtx, <span class="kw">_</span>, <span class="kw">_</span>, <span class="kw">_</span>, <span class="kw">_</span>| {
+        migrations.insert(DatabaseVersion(<span class="number">0</span>), <span class="kw">move </span>|dbtx, <span class="kw">_</span>, <span class="kw">_</span>| {
             Box::pin(<span class="kw">async </span>{
                 dbtx.remove_entry(<span class="kw-2">&amp;</span><span class="kw">crate</span>::db::ActiveGatewayKey).<span class="kw">await</span>;
                 <span class="prelude-val">Ok</span>(<span class="prelude-val">None</span>)
@@ -2273,29 +2259,15 @@
 
         migrations.insert(
             DatabaseVersion(<span class="number">1</span>),
-            <span class="kw">move </span>|<span class="kw">_</span>, module_instance_id, active_states, inactive_states, decoders| {
-                migrate_state::&lt;LightningClientStateMachines&gt;(
-                    module_instance_id,
-                    active_states,
-                    inactive_states,
-                    decoders,
-                    db::get_v1_migrated_state,
-                )
-                .boxed()
+            <span class="kw">move </span>|<span class="kw">_</span>, active_states, inactive_states| {
+                migrate_state(active_states, inactive_states, db::get_v1_migrated_state).boxed()
             },
         );
 
         migrations.insert(
             DatabaseVersion(<span class="number">2</span>),
-            <span class="kw">move </span>|<span class="kw">_</span>, module_instance_id, active_states, inactive_states, decoders| {
-                migrate_state::&lt;LightningClientStateMachines&gt;(
-                    module_instance_id,
-                    active_states,
-                    inactive_states,
-                    decoders,
-                    db::get_v2_migrated_state,
-                )
-                .boxed()
+            <span class="kw">move </span>|<span class="kw">_</span>, active_states, inactive_states| {
+                migrate_state(active_states, inactive_states, db::get_v2_migrated_state).boxed()
             },
         );
 
