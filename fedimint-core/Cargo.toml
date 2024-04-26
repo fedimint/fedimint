@@ -24,7 +24,7 @@ backtrace = "0.3.71"
 bincode = { workspace = true }
 bech32 = "0.11.0"
 bls12_381 = "0.8.0"
-serdect = "0.2.0"
+serdect = { workspace = true }
 itertools = { workspace = true }
 jsonrpsee-types = { version = "0.22.2" }
 jsonrpsee-core = { version = "0.22.4", features = ["client"] }

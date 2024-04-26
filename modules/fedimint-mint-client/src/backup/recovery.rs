@@ -158,7 +158,9 @@ impl RecoveryFromHistory for MintRecovery {
                 amount,
                 nonce: note.nonce(),
             };
-            dbtx.module_dbtx().insert_new_entry(&key, &note).await;
+            dbtx.module_dbtx()
+                .insert_new_entry(&key, &note.to_undecoded())
+                .await;
         }
 
         for (amount, note_idx) in finalized.next_note_idx.iter() {
