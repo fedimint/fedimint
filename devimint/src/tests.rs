@@ -1698,9 +1698,8 @@ pub async fn gw_reboot_test(dev_fed: DevFed, process_mgr: &ProcessManager) -> Re
     )?;
 
     let cln_info: GatewayInfo = serde_json::from_value(cln_value)?;
-    poll_with_timeout(
+    poll(
         "Waiting for CLN Gateway Running state after reboot",
-        Duration::from_secs(15),
         || async {
             let mut new_cln_cmd = cmd!(new_gw_cln, "info");
             let cln_value = new_cln_cmd.out_json().await.map_err(ControlFlow::Continue)?;
@@ -1718,9 +1717,8 @@ pub async fn gw_reboot_test(dev_fed: DevFed, process_mgr: &ProcessManager) -> Re
     .await?;
 
     let lnd_info: GatewayInfo = serde_json::from_value(lnd_value)?;
-    poll_with_timeout(
+    poll(
         "Waiting for LND Gateway Running state after reboot",
-        Duration::from_secs(15),
         || async {
             let mut new_lnd_cmd = cmd!(new_gw_lnd, "info");
             let lnd_value = new_lnd_cmd.out_json().await.map_err(ControlFlow::Continue)?;

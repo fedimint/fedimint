@@ -24,7 +24,7 @@ use tonic_lnd::lnrpc::{ChanInfoRequest, GetInfoRequest, ListChannelsRequest, Pol
 use tonic_lnd::Client as LndClient;
 use tracing::{debug, info, trace, warn};
 
-use crate::util::{poll, poll_with_timeout, ClnLightningCli, ProcessHandle, ProcessManager};
+use crate::util::{poll, ClnLightningCli, ProcessHandle, ProcessManager};
 use crate::vars::utf8;
 use crate::{cmd, poll_eq};
 
@@ -146,7 +146,7 @@ impl Bitcoind {
 
     /// Poll until bitcoind rpc responds for basic commands
     pub async fn poll_ready(&self) -> anyhow::Result<()> {
-        poll_with_timeout("btcoind rpc ready", Duration::from_secs(10), || async {
+        poll("btcoind rpc ready", || async {
             self.get_block_count()
                 .await
                 .map_err(ControlFlow::Continue::<anyhow::Error, _>)?;
@@ -336,7 +336,7 @@ impl Lightningd {
         let process = Lightningd::start(process_mgr, cln_dir).await?;
 
         let socket_cln = cln_dir.join("regtest/lightning-rpc");
-        poll_with_timeout("lightningd", Duration::from_secs(15), || async {
+        poll("lightningd", || async {
             ClnRpc::new(socket_cln.clone())
                 .await
                 .context("connect to lightningd")
