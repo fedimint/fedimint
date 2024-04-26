@@ -11,6 +11,7 @@ use bitcoincore_rpc::bitcoin::Txid;
 use clap::Subcommand;
 use cln_rpc::primitives::{Amount as ClnRpcAmount, AmountOrAny};
 use fedimint_core::encoding::Decodable;
+use fedimint_core::envs::is_env_var_set;
 use fedimint_core::task::block_in_place;
 use fedimint_core::Amount;
 use fedimint_ln_client::cli::LnInvoiceResponse;
@@ -24,7 +25,7 @@ use tokio::{fs, try_join};
 use tracing::{debug, info};
 
 use crate::cli::{cleanup_on_exit, exec_user_command, setup, write_ready_file, CommonArgs};
-use crate::envs::{FM_DATA_DIR_ENV, FM_PASSWORD_ENV};
+use crate::envs::{FM_DATA_DIR_ENV, FM_DEVIMINT_RUN_DEPRECATED_TESTS_ENV, FM_PASSWORD_ENV};
 use crate::federation::{self, Client, Federation};
 use crate::util::{poll, poll_with_timeout, LoadTestTool, ProcessManager};
 use crate::version_constants::{VERSION_0_3_0, VERSION_0_3_0_ALPHA};
@@ -341,8 +342,17 @@ pub async fn latency_tests(
                 .map(ToOwned::to_owned)
                 .unwrap();
             let fedimint_cli_version = crate::util::FedimintCli::version_or_default().await;
+            let fedimintd_version = crate::util::FedimintdCmd::version_or_default().await;
+            if !is_env_var_set(FM_DEVIMINT_RUN_DEPRECATED_TESTS_ENV)
+                && (fedimint_cli_version < *VERSION_0_3_0_ALPHA
+                    || fedimintd_version < *VERSION_0_3_0_ALPHA)
+            {
+                info!("Skipping tests, as in previous versions restore was very slow to test");
+                return Ok(());
+            }
+
             let start_time = Instant::now();
-            if fedimint_cli_version >= *VERSION_0_3_0_ALPHA {
+            if *VERSION_0_3_0_ALPHA <= fedimint_cli_version {
                 let restore_client = Client::create("restore").await?;
                 cmd!(
                     restore_client,
