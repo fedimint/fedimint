@@ -40,7 +40,7 @@ To do lightning payments, Fedimint requires a [Lightning Gateway](https://github
 
 ### Running Fedimint on Mutinynet
 
-See the [Fedimint Mutinynet Setup Guide](./docs/setup-docs.md). You can modify the configuration options to deploy it on
+See the [Fedimint Mutinynet Setup Guide](./docs/setup-docs.md). You can modify the configuration options to deploy it on.
 
 ## For Developers
 
@@ -86,7 +86,7 @@ Then enter the nix developer environment.
 nix develop
 ```
 
-and use this command tostart a local regtest network with 4 guardians, a bitcoin node, and a lightning gateway.
+and use this command to start a local regtest network with 4 guardians, a bitcoin node, and a lightning gateway.
 
 ```bash
 just mprocs
