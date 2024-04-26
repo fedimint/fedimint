@@ -613,6 +613,7 @@ pub async fn open_channel(
 
     bitcoind.mine_blocks(10).await?;
 
+    // diff to trigger ci
     poll("Wait for channel update", || async {
         let mut lnd_client = lnd.client.lock().await;
         let channels = lnd_client
