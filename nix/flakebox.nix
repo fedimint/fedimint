@@ -227,10 +227,35 @@ let
   });
 
 
+  # copied and modified from flakebox, to add `runLowPrio`, due to mistake in flakebox
+  rawBuildPackageGroup = { pname ? null, packages, mainProgram ? null, ... }@origArgs:
+    let
+      args = builtins.removeAttrs origArgs [ "mainProgram" "pname" "packages" ];
+      pname = if builtins.hasAttr "pname" origArgs then "${origArgs.pname}-group" else if builtins.hasAttr "pname" craneLib.args then "${craneLib.args.pname}-group" else null;
+      # "--package x --package y" args passed to cargo
+      pkgsArgs = lib.strings.concatStringsSep " " (builtins.map (name: "--package ${name}") packages);
+
+      deps = craneLib.buildDepsOnly (args // (lib.optionalAttrs (pname != null) {
+        inherit pname;
+      }) // {
+        buildPhaseCargoCommand = "runLowPrio cargo build --profile $CARGO_PROFILE ${pkgsArgs}";
+      });
+    in
+    craneLib.buildPackage (args // (lib.optionalAttrs (pname != null) {
+      inherit pname;
+    }) // {
+      cargoArtifacts = deps;
+      meta = { inherit mainProgram; };
+      cargoBuildCommand = "runLowPrio cargo build --profile $CARGO_PROFILE";
+      cargoExtraArgs = "${pkgsArgs}";
+    });
+
   fedimintBuildPackageGroup = args: replaceGitHash {
     name = args.pname;
     package =
-      craneLib.buildPackageGroup args;
+      # ideally this should work:
+      # craneLib.buildPackageGroup (args // { cargoBuildCommand = "runLowPrio cargo build --profile $CARGO_PROFILE"; });
+      rawBuildPackageGroup args;
     placeholder = gitHashPlaceholderValue;
   };
 in
