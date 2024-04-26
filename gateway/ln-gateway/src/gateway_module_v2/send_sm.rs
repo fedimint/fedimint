@@ -143,8 +143,6 @@ impl SendStateMachine {
             return Err(Cancelled::Underfunded);
         }
 
-        let max_fee = contract.amount - min_contract_amount;
-
         let lightning_context = context
             .gateway
             .get_lightning_context()
@@ -168,6 +166,8 @@ impl SendStateMachine {
                 .await
                 .map_err(|e| Cancelled::DirectSwapError(e.to_string()));
         }
+
+        let max_fee = contract.amount - min_contract_amount;
 
         if lightning_context.lnrpc.supports_private_payments() {
             lightning_context

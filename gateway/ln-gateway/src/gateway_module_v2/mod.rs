@@ -5,7 +5,8 @@ mod send_sm;
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
-use anyhow::anyhow;
+use anyhow::{anyhow, bail};
+use bitcoin_hashes::sha256;
 use fedimint_api_client::api::DynModuleApi;
 use fedimint_client::module::init::{ClientModuleInit, ClientModuleInitArgs};
 use fedimint_client::module::recovery::NoModuleBackup;
@@ -15,8 +16,8 @@ use fedimint_client::sm::{Context, DynState, ModuleNotifier, State, StateTransit
 use fedimint_client::transaction::{ClientOutput, TransactionBuilder};
 use fedimint_client::{sm_enum_variant_translation, DynGlobalClientContext};
 use fedimint_core::bitcoin_migration::{
-    bitcoin29_to_bitcoin30_schnorr_signature, bitcoin30_to_bitcoin29_keypair,
-    bitcoin30_to_bitcoin29_message,
+    bitcoin29_to_bitcoin30_schnorr_signature, bitcoin29_to_bitcoin30_secp256k1_public_key,
+    bitcoin30_to_bitcoin29_keypair, bitcoin30_to_bitcoin29_message,
 };
 use fedimint_core::config::FederationId;
 use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, OperationId};
@@ -26,14 +27,13 @@ use fedimint_core::module::{
     ApiVersion, CommonModuleInit, ModuleCommon, ModuleInit, MultiApiVersion,
 };
 use fedimint_core::{apply, async_trait_maybe_send, Amount, OutPoint, PeerId};
-use fedimint_lnv2_client::CreateInvoicePayload;
+use fedimint_lnv2_client::api::LnFederationApi;
+use fedimint_lnv2_client::{CreateInvoicePayload, SendPaymentPayload};
 use fedimint_lnv2_common::config::LightningClientConfig;
-use fedimint_lnv2_common::contracts::OutgoingContract;
 use fedimint_lnv2_common::{
     LightningCommonInit, LightningModuleTypes, LightningOutput, LightningOutputV0,
 };
 use futures::StreamExt;
-use lightning_invoice::Bolt11Invoice;
 use receive_sm::{ReceiveSMState, ReceiveStateMachine};
 use secp256k1::schnorr::Signature;
 use secp256k1::KeyPair;
@@ -47,7 +47,7 @@ use crate::gateway_module_v2::complete_sm::{
 };
 use crate::gateway_module_v2::receive_sm::ReceiveSMCommon;
 use crate::gateway_module_v2::send_sm::SendSMCommon;
-use crate::Gateway;
+use crate::{Gateway, EXPIRATION_DELTA_MINIMUM_V2};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GatewayOperationMetaV2;
@@ -200,21 +200,70 @@ impl State for GatewayClientStateMachinesV2 {
 }
 
 impl GatewayClientModuleV2 {
-    pub async fn start_send_state_machine(
+    pub async fn send_payment(
         &self,
-        operation_id: OperationId,
-        max_delay: u64,
-        min_contract_amount: Amount,
-        invoice: Bolt11Invoice,
-        contract: OutgoingContract,
-    ) -> anyhow::Result<()> {
+        payload: SendPaymentPayload,
+    ) -> anyhow::Result<Result<[u8; 32], Signature>> {
+        // The operation id is equal to the contract id which also doubles as the
+        // message signed by the gateway via the forfeit signature to forfeit
+        // the gateways claim to a contract in case of cancellation. We only create a
+        // forfeit signature after the we have started the send state machine to
+        // prevent replay attacks with a previously cancelled outgoing contract
+        let operation_id = OperationId::from_encodable(payload.contract.clone());
+
+        if self.client_ctx.operation_exists(operation_id).await {
+            return Ok(self.subscribe_send(operation_id).await);
+        }
+
+        // Since the following four checks may only fail due to client side
+        // programming error we do not have to enable cancellation and can check
+        // them before we start the state machine.
+        if payload.contract.claim_pk
+            != bitcoin29_to_bitcoin30_secp256k1_public_key(self.keypair.public_key())
+        {
+            bail!("The outgoing contract is keyed to another gateway");
+        }
+
+        if *payload.invoice.payment_hash() != payload.contract.payment_hash {
+            bail!("The invoices payment hash does not match the contracts payment hash");
+        }
+
+        // The outgoing contract commits to the invoice it is intended for via a hash to
+        // prevent DOS attacks where an attacker submits a different invoice.
+        if payload.invoice.consensus_hash::<sha256::Hash>() != payload.contract.invoice_hash {
+            bail!("The invoices consensus hash does not match the contracts invoice commitment");
+        }
+
+        let invoice_msats = payload
+            .invoice
+            .amount_milli_satoshis()
+            .ok_or(anyhow!("Invoice is missing amount"))?;
+
+        let min_contract_amount = self
+            .gateway
+            .payment_info_v2(&payload.federation_id)
+            .await
+            .ok_or(anyhow!("Payment Info not available"))?
+            .send_fee_minimum
+            .add_fee(invoice_msats);
+
+        // We need to check that the contract has been confirmed by the federation
+        // before we start the state machine to prevent DOS attacks.
+        let max_delay = self
+            .module_api
+            .outgoing_contract_expiration(&payload.contract.contract_id())
+            .await
+            .map_err(|_| anyhow!("The gateway can not reach the federation"))?
+            .ok_or(anyhow!("The outgoing contract has not yet been confirmed"))?
+            .saturating_sub(EXPIRATION_DELTA_MINIMUM_V2);
+
         let send_sm = GatewayClientStateMachinesV2::Send(SendStateMachine {
             common: SendSMCommon {
                 operation_id,
-                contract: contract.clone(),
+                contract: payload.contract.clone(),
                 max_delay,
                 min_contract_amount,
-                invoice,
+                invoice: payload.invoice,
                 claim_keypair: self.keypair,
             },
             state: SendSMState::Sending,
@@ -228,13 +277,12 @@ impl GatewayClientModuleV2 {
                 vec![self.client_ctx.make_dyn_state(send_sm)],
             )
             .await
+            .ok();
+
+        Ok(self.subscribe_send(operation_id).await)
     }
 
-    pub async fn subscribe_send(
-        &self,
-        operation_id: OperationId,
-        contract: OutgoingContract,
-    ) -> Result<[u8; 32], Signature> {
+    pub async fn subscribe_send(&self, operation_id: OperationId) -> Result<[u8; 32], Signature> {
         let mut stream = self.notifier.subscribe(operation_id).await;
 
         loop {
@@ -246,10 +294,10 @@ impl GatewayClientModuleV2 {
                         warn!("Outgoing lightning payment is cancelled {:?}", cancelled);
 
                         let signature = self.keypair.sign_schnorr(bitcoin30_to_bitcoin29_message(
-                            contract.forfeit_message(),
+                            state.common.contract.forfeit_message(),
                         ));
 
-                        assert!(contract.verify_forfeit_signature(
+                        assert!(state.common.contract.verify_forfeit_signature(
                             &bitcoin29_to_bitcoin30_schnorr_signature(signature)
                         ));
 

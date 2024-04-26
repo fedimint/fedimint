@@ -43,13 +43,12 @@ use fedimint_core::bitcoin_migration::{
 };
 use fedimint_core::config::FederationId;
 use fedimint_core::core::{
-    ModuleInstanceId, ModuleKind, OperationId, LEGACY_HARDCODED_INSTANCE_ID_MINT,
+    ModuleInstanceId, ModuleKind, LEGACY_HARDCODED_INSTANCE_ID_MINT,
     LEGACY_HARDCODED_INSTANCE_ID_WALLET,
 };
 use fedimint_core::db::{
     apply_migrations_server, Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped,
 };
-use fedimint_core::encoding::Encodable;
 use fedimint_core::endpoint_constants::REGISTER_GATEWAY_ENDPOINT;
 use fedimint_core::fmt_utils::OptStacktrace;
 use fedimint_core::invite_code::InviteCode;
@@ -65,7 +64,6 @@ use fedimint_ln_common::config::{GatewayFee, LightningClientConfig};
 use fedimint_ln_common::contracts::Preimage;
 use fedimint_ln_common::route_hints::RouteHint;
 use fedimint_ln_common::LightningCommonInit;
-use fedimint_lnv2_client::api::LnFederationApi;
 use fedimint_lnv2_client::{CreateInvoicePayload, PaymentFee, PaymentInfo, SendPaymentPayload};
 use fedimint_mint_client::{MintClientInit, MintCommonInit};
 use fedimint_wallet_client::{
@@ -1648,72 +1646,10 @@ impl Gateway {
             .ok_or(anyhow!("Federation client not available"))?
             .value();
 
-        // The operation id is equal to the contract id which also doubles as the
-        // message signed by the gateway via the forfeit signature to forfeit
-        // the gateways claim to a contract in case of cancellation. We only create a
-        // forfeit signature after the we have started the send state machine to
-        // prevent replay attacks with a previously cancelled outgoing contract
-        let operation_id = OperationId::from_encodable(payload.contract.clone());
-
-        let module = client.get_first_module::<GatewayClientModuleV2>();
-
-        if client.operation_exists(operation_id).await {
-            return Ok(module.subscribe_send(operation_id, payload.contract).await);
-        }
-
-        // Since the following four checks may only fail due to client side
-        // programming error we do not have to enable cancellation and can check
-        // them before we start the state machine.
-        if payload.contract.claim_pk
-            != bitcoin29_to_bitcoin30_secp256k1_public_key(module.keypair.public_key())
-        {
-            bail!("The outgoing contract keyed to another gateway");
-        }
-
-        if *payload.invoice.payment_hash() != payload.contract.payment_hash {
-            bail!("The invoices payment hash does not match the contracts payment hash");
-        }
-
-        // The outgoing contract commits to the invoice it is intended for via a hash to
-        // prevent DOS attacks where an attacker submits a different invoice.
-        if payload.invoice.consensus_hash::<sha256::Hash>() != payload.contract.invoice_hash {
-            bail!("The invoices consensus hash does not match the contracts invoice commitment");
-        }
-
-        let invoice_msats = payload
-            .invoice
-            .amount_milli_satoshis()
-            .ok_or(anyhow!("Invoice is missing amount"))?;
-
-        let min_contract_amount = self
-            .payment_info_v2(&payload.federation_id)
+        client
+            .get_first_module::<GatewayClientModuleV2>()
+            .send_payment(payload)
             .await
-            .ok_or(anyhow!("Payment Info not available"))?
-            .send_fee_minimum
-            .add_fee(invoice_msats);
-
-        // We need to check that the contract has been confirmed by the federation
-        // before we start the state machine to prevent DOS attacks.
-        let max_delay = module
-            .module_api
-            .outgoing_contract_expiration(&payload.contract.contract_id())
-            .await
-            .map_err(|_| anyhow!("The gateway can not reach the federation"))?
-            .ok_or(anyhow!("The outgoing contract has not yet been confirmed"))?
-            .saturating_sub(EXPIRATION_DELTA_MINIMUM_V2);
-
-        module
-            .start_send_state_machine(
-                operation_id,
-                max_delay,
-                min_contract_amount,
-                payload.invoice,
-                payload.contract.clone(),
-            )
-            .await
-            .ok();
-
-        Ok(module.subscribe_send(operation_id, payload.contract).await)
     }
 
     async fn create_invoice_v2(
