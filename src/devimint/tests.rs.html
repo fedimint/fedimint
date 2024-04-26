@@ -2536,6 +2536,8 @@
 <a href="#2536" id="2536">2536</a>
 <a href="#2537" id="2537">2537</a>
 <a href="#2538" id="2538">2538</a>
+<a href="#2539" id="2539">2539</a>
+<a href="#2540" id="2540">2540</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::HashSet;
 <span class="kw">use </span>std::io::Write;
 <span class="kw">use </span>std::ops::ControlFlow;
@@ -4114,8 +4116,10 @@
     client.use_gateway(<span class="kw-2">&amp;</span>gw_cln).<span class="kw">await</span><span class="question-mark">?</span>;
 
     <span class="macro">info!</span>(<span class="string">"Pegging-in both gateways"</span>);
-    fed.pegin_gateway(<span class="number">99_999</span>, <span class="kw-2">&amp;</span>gw_cln).<span class="kw">await</span><span class="question-mark">?</span>;
-    fed.pegin_gateway(<span class="number">99_999</span>, <span class="kw-2">&amp;</span>gw_lnd).<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="macro">try_join!</span>(
+        fed.pegin_gateway(<span class="number">99_999</span>, <span class="kw-2">&amp;</span>gw_cln),
+        fed.pegin_gateway(<span class="number">99_999</span>, <span class="kw-2">&amp;</span>gw_lnd),
+    )<span class="question-mark">?</span>;
 
     <span class="comment">// Drop other references to CLN and LND so that the test can kill them
     </span>drop(cln);
@@ -4145,7 +4149,7 @@
     gateways[<span class="number">1</span>].set_lightning_node(LightningNode::Lnd(new_lnd.clone()));
 
     <span class="macro">tracing::info!</span>(<span class="string">"Retrying info..."</span>);
-    <span class="kw">const </span>MAX_RETRIES: usize = <span class="number">10</span>;
+    <span class="kw">const </span>MAX_RETRIES: usize = <span class="number">30</span>;
     <span class="kw">const </span>RETRY_INTERVAL: Duration = Duration::from_secs(<span class="number">1</span>);
     <span class="kw">for </span>gw <span class="kw">in </span>gateways {
         <span class="kw">for </span>i <span class="kw">in </span><span class="number">0</span>..MAX_RETRIES {
