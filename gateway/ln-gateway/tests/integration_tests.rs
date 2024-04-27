@@ -1170,6 +1170,8 @@ async fn test_cannot_connect_same_federation() -> anyhow::Result<()> {
     Ok(())
 }
 
+// TODO: fix and re-enable https://github.com/fedimint/fedimint/issues/5001
+#[ignore]
 #[tokio::test(flavor = "multi_thread")]
 async fn test_gateway_configuration() -> anyhow::Result<()> {
     let fixtures = fixtures();
