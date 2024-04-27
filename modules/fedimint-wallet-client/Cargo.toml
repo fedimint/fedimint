@@ -32,7 +32,7 @@ impl-tools = "0.10.0"
 rand = { workspace = true }
 secp256k1 = { version = "0.24.3", features = [ "serde" ] }
 secp256k1_27 = { package = "secp256k1", version = "0.27.0" }
-serde = { version = "1.0.198", features = [ "derive" ] }
+serde = { version = "1.0.199", features = [ "derive" ] }
 serde_json = { workspace = true }
 strum = { workspace = true }
 strum_macros = { workspace = true }

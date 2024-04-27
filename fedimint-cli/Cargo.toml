@@ -49,14 +49,14 @@ fedimint-meta-common = { version = "=0.4.0-alpha", path = "../modules/fedimint-m
 fs-lock = "0.1.3"
 hex = { workspace = true }
 rand = { workspace = true }
-serde = { version = "1.0.198", features = [ "derive" ] }
+serde = { version = "1.0.199", features = [ "derive" ] }
 thiserror = { workspace = true }
 tokio = { version = "1.36.0", features = ["full", "tracing"] }
 tracing = { workspace = true }
 tracing-subscriber = { version = "0.3.18", features = [ "env-filter" ] }
 serde_json = { version = "1.0.116", features = ["preserve_order"] }
 url = { version = "2.5.0", features = ["serde"] }
-clap_complete = "4.5.1"
+clap_complete = "4.5.2"
 reqwest = { version = "0.11.26", features = [ "json", "rustls-tls" ], default-features = false }
 
 [build-dependencies]

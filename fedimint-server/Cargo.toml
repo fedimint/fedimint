@@ -20,7 +20,7 @@ path = "src/lib.rs"
 [dependencies]
 fedimint-aead = { version = "=0.4.0-alpha", path = "../crypto/aead" }
 anyhow = { workspace = true }
-async-channel = "2.2.0"
+async-channel = "2.2.1"
 async-trait = { workspace = true }
 bincode = { workspace = true }
 bitcoin = { workspace = true }
@@ -41,7 +41,7 @@ rcgen = "=0.12.1"
 secp256k1_24 = { package = "secp256k1", version = "0.24.3" }
 secp256k1-zkp = { version = "0.9.2", features = [ "global-context" ] }
 rand_chacha = "0.3.1"
-serde = { version = "1.0.198", features = [ "derive" ] }
+serde = { version = "1.0.199", features = [ "derive" ] }
 serde_json = { workspace = true }
 sha3 = "0.10.8"
 strum = { workspace = true }

@@ -32,7 +32,7 @@ miniscript9 = { package = "miniscript", version = "9.0.2" }
 impl-tools = "0.10.0"
 rand = { workspace = true }
 secp256k1 = { version = "0.24.3", features = [ "serde" ] }
-serde = { version = "1.0.198", features = [ "derive" ] }
+serde = { version = "1.0.199", features = [ "derive" ] }
 strum = { workspace = true }
 strum_macros = { workspace = true }
 thiserror = { workspace = true }

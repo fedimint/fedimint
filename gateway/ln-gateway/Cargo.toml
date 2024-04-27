@@ -30,7 +30,7 @@ path = "tests/integration_tests.rs"
 anyhow = { workspace = true }
 async-stream = "0.3.5"
 async-trait = { workspace = true }
-axum = "0.7.4"
+axum = "0.7.5"
 axum-macros = "0.4.1"
 aquamarine = "0.5.0"
 bitcoin = { workspace = true }
@@ -38,7 +38,7 @@ bitcoin29 = { package = "bitcoin", version = "0.29.2" }
 bitcoin_hashes = { workspace = true }
 clap = { workspace = true }
 # cln-plugin made semver incompatible change
-cln-plugin = "=0.1.7"
+cln-plugin = "=0.1.8"
 cln-rpc = { workspace = true }
 fedimint-client = { version = "=0.4.0-alpha", path = "../../fedimint-client" }
 fedimint-core = { workspace = true }

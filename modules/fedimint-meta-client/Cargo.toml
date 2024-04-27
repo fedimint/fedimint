@@ -20,7 +20,7 @@ default =[]
 cli = ["dep:clap", "dep:serde_json"]
 
 [dependencies]
-async-trait = "0.1.79"
+async-trait = "0.1.80"
 anyhow = { workspace = true }
 clap = { workspace = true, optional = true }
 hex = { workspace = true }
@@ -32,7 +32,7 @@ fedimint-api-client = { workspace = true }
 futures = { workspace = true }
 erased-serde = { workspace = true }
 rand = { workspace = true }
-serde = {version = "1.0.198", features = [ "derive" ] }
+serde = {version = "1.0.199", features = [ "derive" ] }
 strum = { workspace = true }
 strum_macros = { workspace = true }
 tracing = { workspace = true }

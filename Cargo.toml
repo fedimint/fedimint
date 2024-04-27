@@ -97,11 +97,11 @@ strum_macros = "0.26"
 futures = "0.3.30"
 futures-util = "0.3.30"
 lightning-invoice = { version = "0.26.0", features = [ "serde" ] }
-thiserror = "1.0.58"
+thiserror = "1.0.59"
 tokio = { version = "1.36.0", features = ["sync", "io-util"] }
 url = "2.5.0"
 erased-serde = "0.4"
-async-trait = "0.1.79"
+async-trait = "0.1.80"
 bincode = "1.3.3"
 tokio-rustls = "0.24.1"
 hex = "0.4.3"

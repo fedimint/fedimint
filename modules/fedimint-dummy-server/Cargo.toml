@@ -24,7 +24,7 @@ futures = { workspace = true }
 fedimint-core = { version = "=0.4.0-alpha", path = "../../fedimint-core" }
 fedimint-dummy-common = { version = "=0.4.0-alpha", path = "../fedimint-dummy-common" }
 rand = { workspace = true }
-serde = { version = "1.0.198", features = [ "derive" ] }
+serde = { version = "1.0.199", features = [ "derive" ] }
 secp256k1 = "0.27.0"
 strum = { workspace = true }
 strum_macros = { workspace = true }

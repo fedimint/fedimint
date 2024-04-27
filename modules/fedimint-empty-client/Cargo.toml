@@ -24,7 +24,7 @@ fedimint-core = { workspace = true }
 fedimint-api-client = { workspace = true }
 futures = { workspace = true }
 erased-serde = { workspace = true }
-serde = {version = "1.0.198", features = [ "derive" ] }
+serde = {version = "1.0.199", features = [ "derive" ] }
 strum = { workspace = true }
 strum_macros = { workspace = true }
 tracing = { workspace = true }
