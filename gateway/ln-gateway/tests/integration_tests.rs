@@ -100,7 +100,7 @@ where
     let cln2 = fixtures.cln().await;
 
     for (gateway_ln, other_node) in [(lnd1, cln1), (cln2, lnd2)] {
-        let fed = fixtures.new_fed().await;
+        let fed = fixtures.new_default_fed().await;
         let mut gateway = fixtures
             .new_gateway(gateway_ln, 0, Some(DEFAULT_GATEWAY_PASSWORD.to_string()))
             .await;
@@ -127,8 +127,8 @@ where
     B: Future<Output = anyhow::Result<()>>,
 {
     let fixtures = fixtures();
-    let fed1 = fixtures.new_fed().await;
-    let fed2 = fixtures.new_fed().await;
+    let fed1 = fixtures.new_default_fed().await;
+    let fed2 = fixtures.new_default_fed().await;
 
     let lightning = match lightning_node_type {
         LightningNodeType::Lnd => fixtures.lnd().await,
@@ -882,7 +882,7 @@ async fn test_gateway_client_intercept_htlc_invalid_offer() -> anyhow::Result<()
 async fn test_gateway_register_with_federation() -> anyhow::Result<()> {
     let fixtures = fixtures();
     let node = fixtures.lnd().await;
-    let fed = fixtures.new_fed().await;
+    let fed = fixtures.new_default_fed().await;
     let user_client = fed.new_client().await;
     let mut gateway_test = fixtures
         .new_gateway(node, 0, Some(DEFAULT_GATEWAY_PASSWORD.to_string()))
@@ -1038,7 +1038,7 @@ async fn test_gateway_filters_route_hints_by_inbound() -> anyhow::Result<()> {
 
             tracing::info!("Creating federation with gateway type {gateway_type}. Number of route hints: {num_route_hints}");
 
-            let fed = fixtures.new_fed().await;
+            let fed = fixtures.new_default_fed().await;
             let mut gateway = fixtures
                 .new_gateway(
                     gateway_ln,
@@ -1138,7 +1138,7 @@ async fn test_gateway_filters_route_hints_by_inbound() -> anyhow::Result<()> {
 async fn test_cannot_connect_same_federation() -> anyhow::Result<()> {
     let fixtures = fixtures();
 
-    let fed = fixtures.new_fed().await;
+    let fed = fixtures.new_default_fed().await;
     let lnd = fixtures.lnd().await;
     let gateway = fixtures
         .new_gateway(lnd, 0, Some(DEFAULT_GATEWAY_PASSWORD.to_string()))
@@ -1174,7 +1174,7 @@ async fn test_cannot_connect_same_federation() -> anyhow::Result<()> {
 async fn test_gateway_configuration() -> anyhow::Result<()> {
     let fixtures = fixtures();
 
-    let fed = fixtures.new_fed().await;
+    let fed = fixtures.new_default_fed().await;
     let lnd = fixtures.lnd().await;
     let gateway = fixtures.new_gateway(lnd, 0, None).await;
     let initial_rpc_client = gateway.get_rpc().await;
