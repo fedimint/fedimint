@@ -168,6 +168,31 @@
 <a href="#168" id="168">168</a>
 <a href="#169" id="169">169</a>
 <a href="#170" id="170">170</a>
+<a href="#171" id="171">171</a>
+<a href="#172" id="172">172</a>
+<a href="#173" id="173">173</a>
+<a href="#174" id="174">174</a>
+<a href="#175" id="175">175</a>
+<a href="#176" id="176">176</a>
+<a href="#177" id="177">177</a>
+<a href="#178" id="178">178</a>
+<a href="#179" id="179">179</a>
+<a href="#180" id="180">180</a>
+<a href="#181" id="181">181</a>
+<a href="#182" id="182">182</a>
+<a href="#183" id="183">183</a>
+<a href="#184" id="184">184</a>
+<a href="#185" id="185">185</a>
+<a href="#186" id="186">186</a>
+<a href="#187" id="187">187</a>
+<a href="#188" id="188">188</a>
+<a href="#189" id="189">189</a>
+<a href="#190" id="190">190</a>
+<a href="#191" id="191">191</a>
+<a href="#192" id="192">192</a>
+<a href="#193" id="193">193</a>
+<a href="#194" id="194">194</a>
+<a href="#195" id="195">195</a>
 </pre></div><pre class="rust"><code><span class="kw">pub mod </span>cln;
 <span class="kw">pub mod </span>lnd;
 
@@ -190,8 +215,9 @@
     FM_GATEWAY_LIGHTNING_ADDR_ENV, FM_LND_MACAROON_ENV, FM_LND_RPC_ADDR_ENV, FM_LND_TLS_CERT_ENV,
 };
 <span class="kw">use </span><span class="kw">crate</span>::gateway_lnrpc::{
-    CreateInvoiceRequest, CreateInvoiceResponse, EmptyResponse, GetNodeInfoResponse,
-    GetRouteHintsResponse, InterceptHtlcResponse, PayInvoiceRequest, PayInvoiceResponse,
+    CreateInvoiceRequest, CreateInvoiceResponse, EmptyResponse, GetFundingAddressResponse,
+    GetNodeInfoResponse, GetRouteHintsResponse, InterceptHtlcResponse, PayInvoiceRequest,
+    PayInvoiceResponse,
 };
 
 <span class="kw">pub const </span>MAX_LIGHTNING_RETRIES: u32 = <span class="number">10</span>;
@@ -216,6 +242,10 @@
     </span>FailedToOpenChannel { failure_reason: String },
     <span class="attr">#[error(<span class="string">"Failed to get Invoice: {failure_reason}"</span>)]
     </span>FailedToGetInvoice { failure_reason: String },
+    <span class="attr">#[error(<span class="string">"Failed to get funding address: {failure_reason}"</span>)]
+    </span>FailedToGetFundingAddress { failure_reason: String },
+    <span class="attr">#[error(<span class="string">"Failed to connect to peer: {failure_reason}"</span>)]
+    </span>FailedToConnectToPeer { failure_reason: String },
 }
 
 <span class="doccomment">/// A trait that the gateway uses to interact with a lightning node. This allows
@@ -286,6 +316,26 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         create_invoice_request: CreateInvoiceRequest,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;CreateInvoiceResponse, LightningRpcError&gt;;
+
+    <span class="doccomment">/// Connect to a peer lightning node from the gateway's lightning node.
+    </span><span class="kw">async fn </span>connect_to_peer(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        pubkey: secp256k1::PublicKey,
+        host: String,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;EmptyResponse, LightningRpcError&gt;;
+
+    <span class="doccomment">/// Get a funding address belonging to the gateway's lightning node
+    /// wallet.
+    </span><span class="kw">async fn </span>get_funding_address(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;GetFundingAddressResponse, LightningRpcError&gt;;
+
+    <span class="doccomment">/// Open a channel with a peer lightning node from the gateway's lightning
+    /// node.
+    </span><span class="kw">async fn </span>open_channel(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        pubkey: secp256k1::PublicKey,
+        channel_size_sats: u64,
+        push_amount_sats: u64,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;EmptyResponse, LightningRpcError&gt;;
 }
 
 <span class="attr">#[derive(Debug, Clone, Subcommand, Serialize, Deserialize)]

@@ -208,6 +208,28 @@
 <a href="#208" id="208">208</a>
 <a href="#209" id="209">209</a>
 <a href="#210" id="210">210</a>
+<a href="#211" id="211">211</a>
+<a href="#212" id="212">212</a>
+<a href="#213" id="213">213</a>
+<a href="#214" id="214">214</a>
+<a href="#215" id="215">215</a>
+<a href="#216" id="216">216</a>
+<a href="#217" id="217">217</a>
+<a href="#218" id="218">218</a>
+<a href="#219" id="219">219</a>
+<a href="#220" id="220">220</a>
+<a href="#221" id="221">221</a>
+<a href="#222" id="222">222</a>
+<a href="#223" id="223">223</a>
+<a href="#224" id="224">224</a>
+<a href="#225" id="225">225</a>
+<a href="#226" id="226">226</a>
+<a href="#227" id="227">227</a>
+<a href="#228" id="228">228</a>
+<a href="#229" id="229">229</a>
+<a href="#230" id="230">230</a>
+<a href="#231" id="231">231</a>
+<a href="#232" id="232">232</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::sync::{Arc, Mutex};
 <span class="kw">use </span>std::time::Duration;
 
@@ -229,8 +251,9 @@
     SignedRawBolt11Invoice, DEFAULT_EXPIRY_TIME,
 };
 <span class="kw">use </span>ln_gateway::gateway_lnrpc::{
-    <span class="self">self</span>, CreateInvoiceRequest, CreateInvoiceResponse, EmptyResponse, GetNodeInfoResponse,
-    GetRouteHintsResponse, InterceptHtlcResponse, PayInvoiceRequest, PayInvoiceResponse,
+    <span class="self">self</span>, CreateInvoiceRequest, CreateInvoiceResponse, EmptyResponse, GetFundingAddressResponse,
+    GetNodeInfoResponse, GetRouteHintsResponse, InterceptHtlcResponse, PayInvoiceRequest,
+    PayInvoiceResponse,
 };
 <span class="kw">use </span>ln_gateway::lightning::cln::{HtlcResult, RouteHtlcStream};
 <span class="kw">use </span>ln_gateway::lightning::{ILnRpcClient, LightningRpcError};
@@ -416,6 +439,27 @@
         <span class="prelude-val">Ok</span>(CreateInvoiceResponse {
             invoice: invoice.to_string(),
         })
+    }
+
+    <span class="kw">async fn </span>connect_to_peer(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        _pubkey: bitcoin::secp256k1::PublicKey,
+        _host: String,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;EmptyResponse, LightningRpcError&gt; {
+        <span class="macro">unimplemented!</span>(<span class="string">"FakeLightningTest does not support connecting to peers"</span>)
+    }
+
+    <span class="kw">async fn </span>get_funding_address(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;GetFundingAddressResponse, LightningRpcError&gt; {
+        <span class="macro">unimplemented!</span>(<span class="string">"FakeLightningTest does not support getting a funding address"</span>)
+    }
+
+    <span class="kw">async fn </span>open_channel(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        _pubkey: bitcoin::secp256k1::PublicKey,
+        _channel_size_sats: u64,
+        _push_amount_sats: u64,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;EmptyResponse, LightningRpcError&gt; {
+        <span class="macro">unimplemented!</span>(<span class="string">"FakeLightningTest does not support opening channels"</span>)
     }
 }
 </code></pre></div></section></main></body></html>

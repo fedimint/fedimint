@@ -1902,6 +1902,46 @@
 <a href="#1902" id="1902">1902</a>
 <a href="#1903" id="1903">1903</a>
 <a href="#1904" id="1904">1904</a>
+<a href="#1905" id="1905">1905</a>
+<a href="#1906" id="1906">1906</a>
+<a href="#1907" id="1907">1907</a>
+<a href="#1908" id="1908">1908</a>
+<a href="#1909" id="1909">1909</a>
+<a href="#1910" id="1910">1910</a>
+<a href="#1911" id="1911">1911</a>
+<a href="#1912" id="1912">1912</a>
+<a href="#1913" id="1913">1913</a>
+<a href="#1914" id="1914">1914</a>
+<a href="#1915" id="1915">1915</a>
+<a href="#1916" id="1916">1916</a>
+<a href="#1917" id="1917">1917</a>
+<a href="#1918" id="1918">1918</a>
+<a href="#1919" id="1919">1919</a>
+<a href="#1920" id="1920">1920</a>
+<a href="#1921" id="1921">1921</a>
+<a href="#1922" id="1922">1922</a>
+<a href="#1923" id="1923">1923</a>
+<a href="#1924" id="1924">1924</a>
+<a href="#1925" id="1925">1925</a>
+<a href="#1926" id="1926">1926</a>
+<a href="#1927" id="1927">1927</a>
+<a href="#1928" id="1928">1928</a>
+<a href="#1929" id="1929">1929</a>
+<a href="#1930" id="1930">1930</a>
+<a href="#1931" id="1931">1931</a>
+<a href="#1932" id="1932">1932</a>
+<a href="#1933" id="1933">1933</a>
+<a href="#1934" id="1934">1934</a>
+<a href="#1935" id="1935">1935</a>
+<a href="#1936" id="1936">1936</a>
+<a href="#1937" id="1937">1937</a>
+<a href="#1938" id="1938">1938</a>
+<a href="#1939" id="1939">1939</a>
+<a href="#1940" id="1940">1940</a>
+<a href="#1941" id="1941">1941</a>
+<a href="#1942" id="1942">1942</a>
+<a href="#1943" id="1943">1943</a>
+<a href="#1944" id="1944">1944</a>
 </pre></div><pre class="rust"><code><span class="kw">pub mod </span>client;
 <span class="kw">mod </span>db;
 <span class="kw">pub mod </span>envs;
@@ -1984,8 +2024,8 @@
 <span class="kw">use </span>rand::rngs::OsRng;
 <span class="kw">use </span>rand::Rng;
 <span class="kw">use </span>rpc::{
-    FederationInfo, GatewayFedConfig, GatewayInfo, LeaveFedPayload, SetConfigurationPayload,
-    V1_API_ENDPOINT,
+    ConnectToPeerPayload, FederationInfo, GatewayFedConfig, GatewayInfo, LeaveFedPayload,
+    OpenChannelPayload, SetConfigurationPayload, V1_API_ENDPOINT,
 };
 <span class="kw">use </span>secp256k1::schnorr::Signature;
 <span class="kw">use </span>secp256k1::PublicKey;
@@ -2424,7 +2464,7 @@
                         <span class="macro">info!</span>(<span class="string">"Established HTLC stream"</span>);
 
                         <span class="kw">match </span>fetch_lightning_node_info(ln_client.clone()).<span class="kw">await </span>{
-                            <span class="prelude-val">Ok</span>((lightning_public_key, lightning_alias, lightning_network)) =&gt; {
+                            <span class="prelude-val">Ok</span>((lightning_public_key, lightning_alias, lightning_network, _block_height, _synced_to_chain)) =&gt; {
                                 <span class="kw">let </span>gateway_config = self_copy.gateway_config.read().<span class="kw">await</span>.clone();
                                 <span class="kw">let </span>gateway_config = <span class="kw">if let </span><span class="prelude-val">Some</span>(config) = gateway_config {
                                     config
@@ -2624,6 +2664,7 @@
                 gateway_config.num_route_hints,
             )
             .<span class="kw">await</span><span class="question-mark">?</span>;
+            <span class="kw">let </span>node_info = fetch_lightning_node_info(lightning_context.lnrpc.clone()).<span class="kw">await</span><span class="question-mark">?</span>;
             <span class="kw">for </span>(federation_id, client) <span class="kw">in </span>federation_clients {
                 federations.push(
                     client
@@ -2644,6 +2685,8 @@
                 gateway_id: <span class="self">self</span>.gateway_id,
                 gateway_state: <span class="self">self</span>.state.read().<span class="kw">await</span>.to_string(),
                 network: <span class="prelude-val">Some</span>(gateway_config.network),
+                block_height: <span class="prelude-val">Some</span>(node_info.<span class="number">3</span>),
+                synced_to_chain: node_info.<span class="number">4</span>,
             });
         }
 
@@ -2658,6 +2701,8 @@
             gateway_id: <span class="self">self</span>.gateway_id,
             gateway_state: <span class="self">self</span>.state.read().<span class="kw">await</span>.to_string(),
             network: <span class="prelude-val">None</span>,
+            block_height: <span class="prelude-val">None</span>,
+            synced_to_chain: <span class="bool-val">false</span>,
         })
     }
     <span class="kw">pub async fn </span>handle_get_federation_config(
@@ -3099,6 +3144,39 @@
         <span class="prelude-val">Ok</span>(())
     }
 
+    <span class="kw">pub async fn </span>handle_connect_to_peer_msg(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        ConnectToPeerPayload { pubkey, host }: ConnectToPeerPayload,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+        <span class="kw">let </span>context = <span class="self">self</span>.get_lightning_context().<span class="kw">await</span><span class="question-mark">?</span>;
+        context.lnrpc.connect_to_peer(pubkey, host).<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="prelude-val">Ok</span>(())
+    }
+
+    <span class="kw">pub async fn </span>handle_get_funding_address_msg(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;Address&gt; {
+        <span class="kw">let </span>context = <span class="self">self</span>.get_lightning_context().<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>response = context.lnrpc.get_funding_address().<span class="kw">await</span><span class="question-mark">?</span>;
+        Address::from_str(<span class="kw-2">&amp;</span>response.address)
+            .map(|address| address.assume_checked())
+            .map_err(|e| GatewayError::LightningResponseParseError(e.into()))
+    }
+
+    <span class="kw">pub async fn </span>handle_open_channel_msg(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        OpenChannelPayload {
+            pubkey,
+            channel_size_sats,
+            push_amount_sats,
+        }: OpenChannelPayload,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+        <span class="kw">let </span>context = <span class="self">self</span>.get_lightning_context().<span class="kw">await</span><span class="question-mark">?</span>;
+        context
+            .lnrpc
+            .open_channel(pubkey, channel_size_sats, push_amount_sats)
+            .<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="prelude-val">Ok</span>(())
+    }
+
     <span class="doccomment">/// Registers the gateway with each specified federation.
     </span><span class="kw">async fn </span>register_federations(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
@@ -3497,13 +3575,13 @@
 
 <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">async fn </span>fetch_lightning_node_info(
     lnrpc: Arc&lt;<span class="kw">dyn </span>ILnRpcClient&gt;,
-) -&gt; <span class="prelude-ty">Result</span>&lt;(PublicKey, String, Network)&gt; {
+) -&gt; <span class="prelude-ty">Result</span>&lt;(PublicKey, String, Network, u32, bool)&gt; {
     <span class="kw">let </span>GetNodeInfoResponse {
         pub_key,
         alias,
         network,
-        block_height: <span class="kw">_</span>,
-        synced_to_chain: <span class="kw">_</span>,
+        block_height,
+        synced_to_chain,
     } = lnrpc.info().<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="kw">let </span>node_pub_key = PublicKey::from_slice(<span class="kw-2">&amp;</span>pub_key)
         .map_err(|e| GatewayError::InvalidMetadata(<span class="macro">format!</span>(<span class="string">"Invalid node pubkey {e}"</span>)))<span class="question-mark">?</span>;
@@ -3514,7 +3592,7 @@
     };
     <span class="kw">let </span>network = Network::from_str(network)
         .map_err(|e| GatewayError::InvalidMetadata(<span class="macro">format!</span>(<span class="string">"Invalid network {network}: {e}"</span>)))<span class="question-mark">?</span>;
-    <span class="prelude-val">Ok</span>((node_pub_key, alias, network))
+    <span class="prelude-val">Ok</span>((node_pub_key, alias, network, block_height, synced_to_chain))
 }
 
 <span class="kw">impl </span>Gateway {
@@ -3760,6 +3838,8 @@
     </span>InsufficientFunds,
     <span class="attr">#[error(<span class="string">"Federation already connected"</span>)]
     </span>FederationAlreadyConnected,
+    <span class="attr">#[error(<span class="string">"Error parsing response: {}"</span>, OptStacktrace(.<span class="number">0</span>))]
+    </span>LightningResponseParseError(anyhow::Error),
 }
 
 <span class="kw">impl </span>IntoResponse <span class="kw">for </span>GatewayError {

@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"struct":["VERSION_0_3_0","VERSION_0_3_0_ALPHA"]};
+window.SIDEBAR_ITEMS = {"struct":["VERSION_0_3_0","VERSION_0_3_0_ALPHA","VERSION_0_4_0_ALPHA"]};

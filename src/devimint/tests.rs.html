@@ -2536,6 +2536,15 @@
 <a href="#2536" id="2536">2536</a>
 <a href="#2537" id="2537">2537</a>
 <a href="#2538" id="2538">2538</a>
+<a href="#2539" id="2539">2539</a>
+<a href="#2540" id="2540">2540</a>
+<a href="#2541" id="2541">2541</a>
+<a href="#2542" id="2542">2542</a>
+<a href="#2543" id="2543">2543</a>
+<a href="#2544" id="2544">2544</a>
+<a href="#2545" id="2545">2545</a>
+<a href="#2546" id="2546">2546</a>
+<a href="#2547" id="2547">2547</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::HashSet;
 <span class="kw">use </span>std::io::Write;
 <span class="kw">use </span>std::ops::ControlFlow;
@@ -2566,7 +2575,7 @@
 <span class="kw">use </span><span class="kw">crate</span>::envs::{FM_DATA_DIR_ENV, FM_DEVIMINT_RUN_DEPRECATED_TESTS_ENV, FM_PASSWORD_ENV};
 <span class="kw">use </span><span class="kw">crate</span>::federation::{<span class="self">self</span>, Client, Federation};
 <span class="kw">use </span><span class="kw">crate</span>::util::{poll, poll_with_timeout, LoadTestTool, ProcessManager};
-<span class="kw">use </span><span class="kw">crate</span>::version_constants::{VERSION_0_3_0, VERSION_0_3_0_ALPHA};
+<span class="kw">use </span><span class="kw">crate</span>::version_constants::{VERSION_0_3_0, VERSION_0_3_0_ALPHA, VERSION_0_4_0_ALPHA};
 <span class="kw">use crate</span>::{cmd, dev_fed, poll_eq, DevFed, Gatewayd, LightningNode, Lightningd, Lnd};
 
 <span class="kw">pub struct </span>Stats {
@@ -3552,7 +3561,16 @@
         })
         .<span class="kw">await</span><span class="question-mark">?
         </span>.bolt11;
-    <span class="macro">try_join!</span>(cln.await_block_processing(), lnd.await_block_processing())<span class="question-mark">?</span>;
+    <span class="kw">let </span>gateway_cli_version = <span class="kw">crate</span>::util::GatewayCli::version_or_default().<span class="kw">await</span>;
+    <span class="kw">let </span>gatewayd_version = <span class="kw">crate</span>::util::Gatewayd::version_or_default().<span class="kw">await</span>;
+    <span class="kw">if </span>gateway_cli_version &gt;= <span class="kw-2">*</span>VERSION_0_4_0_ALPHA &amp;&amp; gatewayd_version &gt;= <span class="kw-2">*</span>VERSION_0_4_0_ALPHA {
+        <span class="macro">try_join!</span>(
+            gw_cln.wait_for_chain_sync(<span class="kw-2">&amp;</span>bitcoind),
+            gw_lnd.wait_for_chain_sync(<span class="kw-2">&amp;</span>bitcoind)
+        )<span class="question-mark">?</span>;
+    } <span class="kw">else </span>{
+        <span class="macro">try_join!</span>(cln.await_block_processing(), lnd.await_block_processing())<span class="question-mark">?</span>;
+    }
     ln_pay(<span class="kw-2">&amp;</span>client, invoice.clone(), lnd_gw_id.clone(), <span class="bool-val">false</span>).<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="kw">let </span>fed_id = fed.calculate_federation_id().<span class="kw">await</span>;
 

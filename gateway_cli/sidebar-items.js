@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"enum":["Commands"],"fn":["main","print_response"],"struct":["Cli","PerFederationRoutingFees"]};
+window.SIDEBAR_ITEMS = {"constant":["DEFAULT_WAIT_FOR_CHAIN_SYNC_RETRIES","DEFAULT_WAIT_FOR_CHAIN_SYNC_RETRY_DELAY_SECONDS"],"enum":["Commands","LightningCommands"],"fn":["main","print_response"],"struct":["Cli","PerFederationRoutingFees"]};
