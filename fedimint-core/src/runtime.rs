@@ -163,3 +163,66 @@ mod r#impl {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tokio::sync::oneshot;
+
+    #[tokio::test]
+    async fn test_spawn_and_await() {
+        let name = "test_spawn_and_await";
+        let (tx, _rx) = oneshot::channel();
+
+        let future = async move {
+            tokio::time::sleep(Duration::from_secs(1)).await;
+            let _ = tx.send("done");
+        };
+
+        let _handle = spawn(name, future).await;
+    }
+
+    #[tokio::test]
+    async fn test_sleep() {
+        let duration = Duration::from_secs(1);
+        let start = Instant::now();
+        sleep(duration).await;
+        let end = Instant::now();
+
+        assert!(end - start >= duration);
+    }
+
+    #[tokio::test]
+    async fn test_sleep_until() {
+        let duration = Duration::from_secs(1);
+        let deadline = Instant::now() + duration;
+        sleep_until(deadline).await;
+        let now = Instant::now();
+
+        assert!(now >= deadline);
+    }
+
+    #[tokio::test]
+    async fn test_timeout_elapsed() {
+        let duration = Duration::from_secs(1);
+        let future = async {
+            tokio::time::sleep(duration * 2).await;
+            "done"
+        };
+
+        let result = timeout(duration, future).await;
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_timeout_completed() {
+        let duration = Duration::from_secs(1);
+        let future = async {
+            tokio::time::sleep(duration / 2).await;
+            "done"
+        };
+
+        let result = timeout(duration, future).await;
+        assert!(result.is_ok());
+    }
+}
