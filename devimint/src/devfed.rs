@@ -7,11 +7,11 @@ use fedimint_logging::LOG_DEVIMINT;
 use tracing::debug;
 
 use crate::envs::{FM_GWID_CLN_ENV, FM_GWID_LND_ENV};
-use crate::external::{Bitcoind, Electrs, Esplora, Lightningd, Lnd};
+use crate::external::{open_channel_between_gateways, Bitcoind, Electrs, Esplora, Lightningd, Lnd};
 use crate::federation::{Client, Federation};
 use crate::gatewayd::Gatewayd;
 use crate::util::ProcessManager;
-use crate::{open_channel, LightningNode};
+use crate::LightningNode;
 
 #[derive(Clone)]
 pub struct DevFed {
@@ -165,16 +165,28 @@ impl DevJitFed {
         let channel_opened = JitTryAnyhow::new_try({
             let process_mgr = process_mgr.to_owned();
             let lnd = lnd.clone();
+            let gw_lnd = gw_lnd.clone();
             let cln = cln.clone();
+            let gw_cln = gw_cln.clone();
             let bitcoind = bitcoind.clone();
             move || async move {
                 let bitcoind = bitcoind.get_try().await?.deref().clone();
                 let lnd = lnd.get_try().await?.deref().clone();
+                let gw_lnd = gw_lnd.get_try().await?.deref().clone();
                 let cln = cln.get_try().await?.deref().clone();
+                let gw_cln = gw_cln.get_try().await?.deref().clone();
                 // Note: We open new channel even if starting from existing state
                 // as ports change on every start, and without this nodes will not find each
                 // other.
-                open_channel(&process_mgr, &bitcoind, &cln, &lnd).await?;
+                open_channel_between_gateways(
+                    &process_mgr,
+                    &bitcoind,
+                    &cln,
+                    &gw_cln,
+                    &lnd,
+                    &gw_lnd,
+                )
+                .await?;
                 Ok(Arc::new(()))
             }
         });

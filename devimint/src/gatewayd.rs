@@ -8,7 +8,7 @@ use tracing::info;
 
 use crate::cmd;
 use crate::envs::{FM_GATEWAY_API_ADDR_ENV, FM_GATEWAY_DATA_DIR_ENV, FM_GATEWAY_LISTEN_ADDR_ENV};
-use crate::external::LightningNode;
+use crate::external::{Bitcoind, LightningNode};
 use crate::federation::Federation;
 use crate::util::{poll, Command, ProcessHandle, ProcessManager};
 use crate::vars::utf8;
@@ -114,6 +114,15 @@ impl Gatewayd {
         Ok(gateway_id)
     }
 
+    pub async fn lightning_pubkey(&self) -> Result<String> {
+        let info = cmd!(self, "info").out_json().await?;
+        let gateway_id = info["lightning_pub_key"]
+            .as_str()
+            .context("lightning_pub_key must be a string")?
+            .to_owned();
+        Ok(gateway_id)
+    }
+
     pub async fn connect_fed(&self, fed: &Federation) -> Result<()> {
         let invite_code = fed.invite_code()?;
         poll("gateway connect-fed", || async {
@@ -134,5 +143,72 @@ impl Gatewayd {
             .as_str()
             .context("address must be a string")?
             .to_owned())
+    }
+
+    pub async fn connect_to_peer(&self, pubkey: String, host: String) -> Result<()> {
+        cmd!(
+            self,
+            "lightning",
+            "connect-to-peer",
+            "--pubkey",
+            pubkey,
+            "--host",
+            host
+        )
+        .run()
+        .await?;
+        Ok(())
+    }
+
+    pub async fn get_funding_address(&self) -> Result<String> {
+        let address = cmd!(self, "lightning", "get-funding-address")
+            .out_string()
+            .await?;
+        Ok(address)
+    }
+
+    pub async fn open_channel(
+        &self,
+        pubkey: String,
+        channel_size_sats: u64,
+        push_amount_sats: Option<u64>,
+    ) -> Result<()> {
+        cmd!(
+            self,
+            "lightning",
+            "open-channel",
+            "--pubkey",
+            pubkey,
+            "--channel-size-sats",
+            channel_size_sats,
+            "--push-amount-sats",
+            push_amount_sats.unwrap_or(0)
+        )
+        .run()
+        .await?;
+        Ok(())
+    }
+
+    pub async fn wait_for_chain_sync(&self, bitcoind: &Bitcoind) -> Result<()> {
+        poll("lightning node block processing", || async {
+            let block_height = bitcoind
+                .get_block_count()
+                .await
+                .map_err(ControlFlow::Continue)?
+                - 1;
+            cmd!(
+                self,
+                "lightning",
+                "wait-for-chain-sync",
+                "--block-height",
+                block_height
+            )
+            .run()
+            .await
+            .map_err(ControlFlow::Continue)?;
+            Ok(())
+        })
+        .await?;
+        Ok(())
     }
 }

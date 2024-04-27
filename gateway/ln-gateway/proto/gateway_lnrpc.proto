@@ -30,6 +30,15 @@ service GatewayLightning {
   rpc CompleteHtlc(InterceptHtlcResponse) returns (EmptyResponse) {}
 
   rpc CreateInvoice(CreateInvoiceRequest) returns (CreateInvoiceResponse) {}
+
+  /* Connect the underlying lightning node to another node. */
+  rpc ConnectToPeer(ConnectToPeerRequest) returns (EmptyResponse) {}
+
+  /* Get a Bitcoin address that belongs to the underlying lightning node's wallet. */
+  rpc GetFundingAddress(EmptyRequest) returns (GetFundingAddressResponse) {}
+
+  /* Open a channel on the underlying lightning node. */
+  rpc OpenChannel(OpenChannelRequest) returns (EmptyResponse) {}
 }
 
 message EmptyRequest {}
@@ -198,4 +207,29 @@ message CreateInvoiceRequest {
 
 message CreateInvoiceResponse {
   string invoice = 1;
+}
+
+message ConnectToPeerRequest {
+  // The public key of the node we're connecting to.
+  string pubkey = 1;
+
+  // The host address of the node we're connecting to.
+  string host = 2;
+}
+
+message GetFundingAddressResponse {
+  // An address belonging to the lightning node's on-chain wallet.
+  string address = 1;
+}
+
+message OpenChannelRequest {
+  // The public key of the node we're opening a channel to.
+  string pubkey = 1;
+
+  // The capacity of the channel, in sats.
+  uint64 channel_size_sats = 2;
+
+  // The amount of sats that should be pushed to the
+  // counterparty once the channel is opened.
+  uint64 push_amount_sats = 3;
 }

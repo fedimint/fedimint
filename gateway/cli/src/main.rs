@@ -1,21 +1,27 @@
+use std::time::Duration;
+
 use anyhow::bail;
 use bitcoin::address::NetworkUnchecked;
 use bitcoin::Address;
 use clap::{CommandFactory, Parser, Subcommand};
 use fedimint_core::bitcoin_migration::{
     bitcoin30_to_bitcoin29_address, bitcoin30_to_bitcoin29_network,
+    bitcoin30_to_bitcoin29_secp256k1_public_key,
 };
 use fedimint_core::config::FederationId;
-use fedimint_core::util::SafeUrl;
+use fedimint_core::util::{retry, ConstantBackoff, SafeUrl};
 use fedimint_core::{fedimint_build_code_version_env, BitcoinAmountOrAll};
 use fedimint_logging::TracingSetup;
 use ln_gateway::rpc::rpc_client::GatewayRpcClient;
 use ln_gateway::rpc::{
-    BackupPayload, BalancePayload, ConfigPayload, ConnectFedPayload, DepositAddressPayload,
-    FederationRoutingFees, LeaveFedPayload, RestorePayload, SetConfigurationPayload,
-    WithdrawPayload, V1_API_ENDPOINT,
+    BackupPayload, BalancePayload, ConfigPayload, ConnectFedPayload, ConnectToPeerPayload,
+    DepositAddressPayload, FederationRoutingFees, GetFundingAddressPayload, LeaveFedPayload,
+    OpenChannelPayload, RestorePayload, SetConfigurationPayload, WithdrawPayload, V1_API_ENDPOINT,
 };
 use serde::Serialize;
+
+const DEFAULT_WAIT_FOR_CHAIN_SYNC_RETRIES: u32 = 12;
+const DEFAULT_WAIT_FOR_CHAIN_SYNC_RETRY_DELAY_SECONDS: u64 = 10;
 
 #[derive(Parser)]
 #[command(version)]
@@ -104,6 +110,53 @@ pub enum Commands {
         /// other federations not given here will keep their current fees.
         #[clap(long)]
         per_federation_routing_fees: Option<Vec<PerFederationRoutingFees>>,
+    },
+    #[command(subcommand)]
+    Lightning(LightningCommands),
+}
+
+/// This API is intentionally kept very minimal, as its main purpose is to
+/// provide a simple and consistent way to establish liquidity between gateways
+/// in a test environment.
+#[derive(Subcommand)]
+pub enum LightningCommands {
+    /// Connect to another lightning node
+    ConnectToPeer {
+        #[clap(long)]
+        pubkey: bitcoin::secp256k1::PublicKey,
+
+        #[clap(long)]
+        host: String,
+    },
+    /// Get a Bitcoin address to fund the gateway
+    GetFundingAddress,
+    /// Open a channel with another lightning node
+    OpenChannel {
+        /// The public key of the node to open a channel with
+        #[clap(long)]
+        pubkey: bitcoin::secp256k1::PublicKey,
+
+        /// The amount to fund the channel with
+        #[clap(long)]
+        channel_size_sats: u64,
+
+        /// The amount to push to the other side of the channel
+        #[clap(long)]
+        push_amount_sats: Option<u64>,
+    },
+    /// Wait for the lightning node to be synced with the blockchain
+    WaitForChainSync {
+        /// The block height to wait for
+        #[clap(long)]
+        block_height: u32,
+
+        /// The maximum number of retries
+        #[clap(long)]
+        max_retries: Option<u32>,
+
+        /// The delay between retries
+        #[clap(long)]
+        retry_delay_seconds: Option<u64>,
     },
 }
 
@@ -238,6 +291,62 @@ async fn main() -> anyhow::Result<()> {
                 })
                 .await?;
         }
+
+        Commands::Lightning(lightning_command) => match lightning_command {
+            LightningCommands::ConnectToPeer { pubkey, host } => {
+                client()
+                    .connect_to_peer(ConnectToPeerPayload {
+                        pubkey: bitcoin30_to_bitcoin29_secp256k1_public_key(pubkey),
+                        host,
+                    })
+                    .await?;
+            }
+            LightningCommands::GetFundingAddress => {
+                let response = client()
+                    .get_funding_address(GetFundingAddressPayload {})
+                    .await?;
+                println!("{response}");
+            }
+            LightningCommands::OpenChannel {
+                pubkey,
+                channel_size_sats,
+                push_amount_sats,
+            } => {
+                client()
+                    .open_channel(OpenChannelPayload {
+                        pubkey: bitcoin30_to_bitcoin29_secp256k1_public_key(pubkey),
+                        channel_size_sats,
+                        push_amount_sats: push_amount_sats.unwrap_or(0),
+                    })
+                    .await?;
+            }
+            LightningCommands::WaitForChainSync {
+                block_height,
+                max_retries,
+                retry_delay_seconds,
+            } => {
+                retry(
+                    "Wait for chain sync",
+                    ConstantBackoff::default()
+                        .with_delay(Duration::from_secs(
+                            retry_delay_seconds
+                                .unwrap_or(DEFAULT_WAIT_FOR_CHAIN_SYNC_RETRY_DELAY_SECONDS),
+                        ))
+                        .with_max_times(
+                            max_retries.unwrap_or(DEFAULT_WAIT_FOR_CHAIN_SYNC_RETRIES) as usize
+                        ),
+                    || async {
+                        if client().get_info().await?.block_height.unwrap_or(0) >= block_height {
+                            Ok(())
+                        } else {
+                            Err(anyhow::anyhow!("Not synced yet"))
+                        }
+                    },
+                )
+                .await
+                .map_err(|_| anyhow::anyhow!("Timed out waiting for chain sync"))?;
+            }
+        },
     }
 
     Ok(())

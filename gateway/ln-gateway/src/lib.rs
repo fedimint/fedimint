@@ -80,8 +80,8 @@ use lightning_invoice::{Bolt11Invoice, RoutingFees};
 use rand::rngs::OsRng;
 use rand::Rng;
 use rpc::{
-    FederationInfo, GatewayFedConfig, GatewayInfo, LeaveFedPayload, SetConfigurationPayload,
-    V1_API_ENDPOINT,
+    ConnectToPeerPayload, FederationInfo, GatewayFedConfig, GatewayInfo, LeaveFedPayload,
+    OpenChannelPayload, SetConfigurationPayload, V1_API_ENDPOINT,
 };
 use secp256k1::schnorr::Signature;
 use secp256k1::PublicKey;
@@ -520,7 +520,7 @@ impl Gateway {
                         info!("Established HTLC stream");
 
                         match fetch_lightning_node_info(ln_client.clone()).await {
-                            Ok((lightning_public_key, lightning_alias, lightning_network)) => {
+                            Ok((lightning_public_key, lightning_alias, lightning_network, _block_height, _synced_to_chain)) => {
                                 let gateway_config = self_copy.gateway_config.read().await.clone();
                                 let gateway_config = if let Some(config) = gateway_config {
                                     config
@@ -720,6 +720,7 @@ impl Gateway {
                 gateway_config.num_route_hints,
             )
             .await?;
+            let node_info = fetch_lightning_node_info(lightning_context.lnrpc.clone()).await?;
             for (federation_id, client) in federation_clients {
                 federations.push(
                     client
@@ -740,6 +741,8 @@ impl Gateway {
                 gateway_id: self.gateway_id,
                 gateway_state: self.state.read().await.to_string(),
                 network: Some(gateway_config.network),
+                block_height: Some(node_info.3),
+                synced_to_chain: node_info.4,
             });
         }
 
@@ -754,6 +757,8 @@ impl Gateway {
             gateway_id: self.gateway_id,
             gateway_state: self.state.read().await.to_string(),
             network: None,
+            block_height: None,
+            synced_to_chain: false,
         })
     }
     pub async fn handle_get_federation_config(
@@ -1195,6 +1200,39 @@ impl Gateway {
         Ok(())
     }
 
+    pub async fn handle_connect_to_peer_msg(
+        &self,
+        ConnectToPeerPayload { pubkey, host }: ConnectToPeerPayload,
+    ) -> Result<()> {
+        let context = self.get_lightning_context().await?;
+        context.lnrpc.connect_to_peer(pubkey, host).await?;
+        Ok(())
+    }
+
+    pub async fn handle_get_funding_address_msg(&self) -> Result<Address> {
+        let context = self.get_lightning_context().await?;
+        let response = context.lnrpc.get_funding_address().await?;
+        Address::from_str(&response.address)
+            .map(|address| address.assume_checked())
+            .map_err(|e| GatewayError::LightningResponseParseError(e.into()))
+    }
+
+    pub async fn handle_open_channel_msg(
+        &self,
+        OpenChannelPayload {
+            pubkey,
+            channel_size_sats,
+            push_amount_sats,
+        }: OpenChannelPayload,
+    ) -> Result<()> {
+        let context = self.get_lightning_context().await?;
+        context
+            .lnrpc
+            .open_channel(pubkey, channel_size_sats, push_amount_sats)
+            .await?;
+        Ok(())
+    }
+
     /// Registers the gateway with each specified federation.
     async fn register_federations(
         &self,
@@ -1593,13 +1631,13 @@ impl Gateway {
 
 pub(crate) async fn fetch_lightning_node_info(
     lnrpc: Arc<dyn ILnRpcClient>,
-) -> Result<(PublicKey, String, Network)> {
+) -> Result<(PublicKey, String, Network, u32, bool)> {
     let GetNodeInfoResponse {
         pub_key,
         alias,
         network,
-        block_height: _,
-        synced_to_chain: _,
+        block_height,
+        synced_to_chain,
     } = lnrpc.info().await?;
     let node_pub_key = PublicKey::from_slice(&pub_key)
         .map_err(|e| GatewayError::InvalidMetadata(format!("Invalid node pubkey {e}")))?;
@@ -1610,7 +1648,7 @@ pub(crate) async fn fetch_lightning_node_info(
     };
     let network = Network::from_str(network)
         .map_err(|e| GatewayError::InvalidMetadata(format!("Invalid network {network}: {e}")))?;
-    Ok((node_pub_key, alias, network))
+    Ok((node_pub_key, alias, network, block_height, synced_to_chain))
 }
 
 impl Gateway {
@@ -1856,6 +1894,8 @@ pub enum GatewayError {
     InsufficientFunds,
     #[error("Federation already connected")]
     FederationAlreadyConnected,
+    #[error("Error parsing response: {}", OptStacktrace(.0))]
+    LightningResponseParseError(anyhow::Error),
 }
 
 impl IntoResponse for GatewayError {

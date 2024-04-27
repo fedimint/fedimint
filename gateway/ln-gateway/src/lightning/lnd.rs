@@ -16,12 +16,16 @@ use tonic::Status;
 use tonic_lnd::invoicesrpc::AddHoldInvoiceRequest;
 use tonic_lnd::lnrpc::failure::FailureCode;
 use tonic_lnd::lnrpc::payment::PaymentStatus;
-use tonic_lnd::lnrpc::{ChanInfoRequest, GetInfoRequest, ListChannelsRequest};
+use tonic_lnd::lnrpc::{
+    ChanInfoRequest, ConnectPeerRequest, GetInfoRequest, LightningAddress, ListChannelsRequest,
+    OpenChannelRequest,
+};
 use tonic_lnd::routerrpc::{
     CircuitKey, ForwardHtlcInterceptResponse, ResolveHoldForwardAction, SendPaymentRequest,
     TrackPaymentRequest,
 };
 use tonic_lnd::tonic::Code;
+use tonic_lnd::walletrpc::AddrRequest;
 use tonic_lnd::{connect, Client as LndClient};
 use tracing::{debug, error, info, trace, warn};
 
@@ -30,9 +34,9 @@ use super::{ILnRpcClient, LightningRpcError, MAX_LIGHTNING_RETRIES};
 use crate::gateway_lnrpc::get_route_hints_response::{RouteHint, RouteHintHop};
 use crate::gateway_lnrpc::intercept_htlc_response::{Action, Cancel, Forward, Settle};
 use crate::gateway_lnrpc::{
-    CreateInvoiceRequest, CreateInvoiceResponse, EmptyResponse, GetNodeInfoResponse,
-    GetRouteHintsResponse, InterceptHtlcRequest, InterceptHtlcResponse, PayInvoiceRequest,
-    PayInvoiceResponse,
+    CreateInvoiceRequest, CreateInvoiceResponse, EmptyResponse, GetFundingAddressResponse,
+    GetNodeInfoResponse, GetRouteHintsResponse, InterceptHtlcRequest, InterceptHtlcResponse,
+    PayInvoiceRequest, PayInvoiceResponse,
 };
 
 type HtlcSubscriptionSender = mpsc::Sender<Result<InterceptHtlcRequest, Status>>;
@@ -633,6 +637,78 @@ impl ILnRpcClient for GatewayLndClient {
             })?;
         let invoice = hold_invoice_response.into_inner().payment_request;
         Ok(CreateInvoiceResponse { invoice })
+    }
+
+    async fn connect_to_peer(
+        &self,
+        pubkey: secp256k1::PublicKey,
+        host: String,
+    ) -> Result<EmptyResponse, LightningRpcError> {
+        let mut client = self.connect().await?;
+
+        match client
+            .lightning()
+            .connect_peer(ConnectPeerRequest {
+                addr: Some(LightningAddress {
+                    pubkey: pubkey.to_string(),
+                    host,
+                }),
+                perm: false,
+                timeout: 10,
+            })
+            .await
+        {
+            Ok(_) => Ok(EmptyResponse {}),
+            Err(e) => Err(LightningRpcError::FailedToConnectToPeer {
+                failure_reason: format!("Failed to connect to peer {e:?}"),
+            }),
+        }
+    }
+
+    async fn get_funding_address(&self) -> Result<GetFundingAddressResponse, LightningRpcError> {
+        let mut client = self.connect().await?;
+
+        match client
+            .wallet()
+            .next_addr(AddrRequest {
+                account: "".to_string(), // Default wallet account.
+                r#type: 4,               // Taproot address.
+                change: false,
+            })
+            .await
+        {
+            Ok(response) => Ok(GetFundingAddressResponse {
+                address: response.into_inner().addr,
+            }),
+            Err(e) => Err(LightningRpcError::FailedToGetFundingAddress {
+                failure_reason: format!("Failed to get funding address {e:?}"),
+            }),
+        }
+    }
+
+    async fn open_channel(
+        &self,
+        pubkey: secp256k1::PublicKey,
+        channel_size_sats: u64,
+        push_amount_sats: u64,
+    ) -> Result<EmptyResponse, LightningRpcError> {
+        let mut client = self.connect().await?;
+
+        match client
+            .lightning()
+            .open_channel(OpenChannelRequest {
+                node_pubkey: pubkey.serialize().to_vec(),
+                local_funding_amount: channel_size_sats.try_into().expect("u64 -> i64"),
+                push_sat: push_amount_sats.try_into().expect("u64 -> i64"),
+                ..Default::default()
+            })
+            .await
+        {
+            Ok(_) => Ok(EmptyResponse {}),
+            Err(e) => Err(LightningRpcError::FailedToOpenChannel {
+                failure_reason: format!("Failed to open channel {e:?}"),
+            }),
+        }
     }
 }
 

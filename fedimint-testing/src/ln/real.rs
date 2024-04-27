@@ -12,8 +12,9 @@ use fedimint_core::Amount;
 use fedimint_logging::LOG_TEST;
 use lightning_invoice::Bolt11Invoice;
 use ln_gateway::gateway_lnrpc::{
-    CreateInvoiceRequest, CreateInvoiceResponse, EmptyResponse, GetNodeInfoResponse,
-    GetRouteHintsResponse, InterceptHtlcResponse, PayInvoiceRequest, PayInvoiceResponse,
+    CreateInvoiceRequest, CreateInvoiceResponse, EmptyResponse, GetFundingAddressResponse,
+    GetNodeInfoResponse, GetRouteHintsResponse, InterceptHtlcResponse, PayInvoiceRequest,
+    PayInvoiceResponse,
 };
 use ln_gateway::lightning::cln::{NetworkLnRpcClient, RouteHtlcStream};
 use ln_gateway::lightning::lnd::GatewayLndClient;
@@ -135,6 +136,29 @@ impl ILnRpcClient for ClnLightningTest {
         create_invoice_request: CreateInvoiceRequest,
     ) -> Result<CreateInvoiceResponse, LightningRpcError> {
         self.lnrpc.create_invoice(create_invoice_request).await
+    }
+
+    async fn connect_to_peer(
+        &self,
+        pubkey: bitcoin::secp256k1::PublicKey,
+        host: String,
+    ) -> Result<EmptyResponse, LightningRpcError> {
+        self.lnrpc.connect_to_peer(pubkey, host).await
+    }
+
+    async fn get_funding_address(&self) -> Result<GetFundingAddressResponse, LightningRpcError> {
+        self.lnrpc.get_funding_address().await
+    }
+
+    async fn open_channel(
+        &self,
+        pubkey: bitcoin::secp256k1::PublicKey,
+        channel_size_sats: u64,
+        push_amount_sats: u64,
+    ) -> Result<EmptyResponse, LightningRpcError> {
+        self.lnrpc
+            .open_channel(pubkey, channel_size_sats, push_amount_sats)
+            .await
     }
 }
 
@@ -300,6 +324,29 @@ impl ILnRpcClient for LndLightningTest {
         create_invoice_request: CreateInvoiceRequest,
     ) -> Result<CreateInvoiceResponse, LightningRpcError> {
         self.lnrpc.create_invoice(create_invoice_request).await
+    }
+
+    async fn connect_to_peer(
+        &self,
+        pubkey: bitcoin::secp256k1::PublicKey,
+        host: String,
+    ) -> Result<EmptyResponse, LightningRpcError> {
+        self.lnrpc.connect_to_peer(pubkey, host).await
+    }
+
+    async fn get_funding_address(&self) -> Result<GetFundingAddressResponse, LightningRpcError> {
+        self.lnrpc.get_funding_address().await
+    }
+
+    async fn open_channel(
+        &self,
+        pubkey: bitcoin::secp256k1::PublicKey,
+        channel_size_sats: u64,
+        push_amount_sats: u64,
+    ) -> Result<EmptyResponse, LightningRpcError> {
+        self.lnrpc
+            .open_channel(pubkey, channel_size_sats, push_amount_sats)
+            .await
     }
 }
 
