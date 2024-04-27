@@ -40,7 +40,7 @@ To do lightning payments, Fedimint requires a [Lightning Gateway](https://github
 
 ### Running Fedimint on Mutinynet
 
-See the [Fedimint Mutinynet Setup Guide](./docs/setup-docs.md). You can modify the configuration options to deploy it on 
+See the [Fedimint Mutinynet Setup Guide](./docs/setup-docs.md). You can modify the configuration options to deploy it on.
 
 ## For Developers
 
@@ -66,6 +66,8 @@ Fedimint is a Rust project and uses the [Nix package manager](https://nixos.org/
 
 ### Local Development
 
+We have a detailed tutorial on how to use the cli to send/receive ecash, lightning payments, and perform other developer operations in the [Fedimint Developer Tutorial](https://github.com/fedimint/fedimint/blob/master/docs/tutorial.md).
+
 Fedimint's developer environment and rust build pipeline is managed through Nix flakebox (https://github.com/rustshop/flakebox). To get started, install Nix.
 
 ```bash
@@ -84,15 +86,16 @@ Then enter the nix developer environment.
 nix develop
 ```
 
-and start a local regtest network with 4 guardians and a lightning gateway.
+and use this command to start a local regtest network with 4 guardians, a bitcoin node, and a lightning gateway.
 
 ```bash
 just mprocs
 ```
 
-You can then interact with the guardians and lightning gateway through the mprocs cli.
+You can then interact with the guardians and lightning gateway using the cli. For more details on how to use the cli, see the [Fedimint Developer Tutorial](https://github.com/fedimint/fedimint/blob/master/docs/tutorial.md).
 
 If you want to run with UIs, see the [UI](https://github.com/fedimint/ui) repo for developer environment instructions.
 
 # Contributing
+
 For contribution guidelines, Areas of contributions and how to get involved, please refer to the [Contributing Guidelines](CONTRIBUTING.md).
