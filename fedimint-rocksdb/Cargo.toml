@@ -30,4 +30,4 @@ tempfile = "3.10.1"
 tracing-subscriber = { version = "0.3.18", features = [ "env-filter" ] }
 
 [target.'cfg(not(target_family="wasm"))'.dependencies]
-tokio = { version = "1.36.0", features = ["rt", "rt-multi-thread", "sync", "time"] }
+tokio = { version = "1.37.0", features = ["rt", "rt-multi-thread", "sync", "time"] }
