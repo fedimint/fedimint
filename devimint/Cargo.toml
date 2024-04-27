@@ -41,7 +41,7 @@ nix = { version = "0.28.0", features = ["signal"] }
 rand = { workspace = true }
 semver = { workspace = true }
 serde_json = { workspace = true }
-tokio = { version = "1.36.0", features = ["full", "tracing"] }
+tokio = { version = "1.37.0", features = ["full", "tracing"] }
 tonic_lnd = { workspace = true }
 tower-http = { version = "0.5.2", features = ["cors", "auth"] }
 tracing = { workspace = true }

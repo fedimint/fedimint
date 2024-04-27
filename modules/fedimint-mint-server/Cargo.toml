@@ -43,5 +43,5 @@ fedimint-server = { version = "=0.4.0-alpha", path = "../../fedimint-server" }
 [dev-dependencies]
 rand = { workspace = true }
 tracing-subscriber = { version = "0.3.18", features = [ "env-filter" ] }
-tokio = {version = "1.36.0", features = [ "full" ] }
+tokio = {version = "1.37.0", features = [ "full" ] }
 test-log = { version = "0.2", features = [ "trace" ], default-features = false }

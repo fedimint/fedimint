@@ -38,7 +38,7 @@ strum = { workspace = true }
 strum_macros = { workspace = true }
 thiserror = { workspace = true }
 threshold_crypto = { workspace = true }
-tokio = { version = "1.36", features = ["full"] }
+tokio = { version = "1.37", features = ["full"] }
 tracing = { workspace = true }
 rand = { workspace = true }
 url = { version = "2.5.0", features = ["serde"] }
@@ -47,5 +47,5 @@ fedimint-server = { version = "=0.4.0-alpha", path = "../../fedimint-server" }
 [dev-dependencies]
 assert_matches = { workspace = true }
 test-log = { version = "0.2", features = [ "trace" ], default-features = false }
-tokio = {version = "1.36.0", features = [ "full" ] }
+tokio = {version = "1.37.0", features = [ "full" ] }
 tracing-subscriber = { version = "0.3.18", features = [ "env-filter" ] }

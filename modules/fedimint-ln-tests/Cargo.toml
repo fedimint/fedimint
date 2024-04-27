@@ -30,7 +30,7 @@ fedimint-logging = { path = "../../fedimint-logging" }
 futures = { workspace = true }
 lightning-invoice = { version = "0.26.0", features = [ "serde" ] }
 threshold_crypto = { workspace = true }
-tokio = { version = "1.36.0", features = ["sync"] }
+tokio = { version = "1.37.0", features = ["sync"] }
 tracing = { workspace = true }
 secp256k1 = { version="0.24.3", default-features=false }
 serde_json = { workspace = true }

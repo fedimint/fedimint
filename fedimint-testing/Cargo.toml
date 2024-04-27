@@ -44,7 +44,7 @@ serde = { version = "1.0.198", features = [ "derive" ] }
 tracing = { workspace = true }
 rand = { workspace = true }
 tokio-rustls = { workspace = true }
-tokio = { version = "1.36.0", features = ["full", "tracing"] }
+tokio = { version = "1.37.0", features = ["full", "tracing"] }
 tokio-stream = "0.1.15"
 tonic_lnd = { workspace = true }
 url = { workspace = true }

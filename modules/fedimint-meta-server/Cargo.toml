@@ -30,4 +30,4 @@ strum = { workspace = true }
 strum_macros = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
-tokio = { version = "1.26.0", features = ["sync"] }
+tokio = { version = "1.37.0", features = ["sync"] }
