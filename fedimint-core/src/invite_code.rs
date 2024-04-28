@@ -208,3 +208,34 @@ impl<'de> Deserialize<'de> for InviteCode {
         Self::from_str(&string).map_err(serde::de::Error::custom)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::str::FromStr;
+
+    use crate::config::FederationId;
+    use crate::invite_code::InviteCode;
+
+    #[test]
+    fn test_invite_code_to_from_string() {
+        let invite_code_str = "fed11qgqpu8rhwden5te0vejkg6tdd9h8gepwd4cxcumxv4jzuen0duhsqqfqh6nl7sgk72caxfx8khtfnn8y436q3nhyrkev3qp8ugdhdllnh86qmp42pm";
+        let invite_code = InviteCode::from_str(invite_code_str).expect("valid invite code");
+
+        assert_eq!(invite_code.to_string(), invite_code_str);
+        assert_eq!(
+            invite_code.0,
+            [
+                crate::invite_code::InviteCodeData::Api {
+                    url: "wss://fedimintd.mplsfed.foo/".parse().expect("valid url"),
+                    peer: crate::PeerId(0),
+                },
+                crate::invite_code::InviteCodeData::FederationId(FederationId(
+                    bitcoin_hashes::sha256::Hash::from_str(
+                        "bea7ff4116f2b1d324c7b5d699cce4ac7408cee41db2c88027e21b76fff3b9f4"
+                    )
+                    .expect("valid hash")
+                ))
+            ]
+        );
+    }
+}
