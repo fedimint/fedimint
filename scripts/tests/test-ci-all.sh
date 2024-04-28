@@ -176,7 +176,7 @@ export -f always_success_test
 
 tagged_versions=("$@")
 num_versions="$#"
-versions=( "current" "${tagged_versions[@]}" )
+versions=( "${tagged_versions[@]}" "current" )
 if [[ "$num_versions" == "0" ]]; then
   mapfile -t version_matrix < <(generate_current_only_matrix "${versions[@]}")
 else
@@ -243,7 +243,6 @@ done
 parsed_test_commands=$(printf "%s\n" "${tests_with_versions[@]}")
 
 parallel_args=()
-export parallel_jobs='1'
 
 if [ -z "${CI:-}" ] && [[ -t 1 ]] && [ -z "${FM_TEST_CI_ALL_DISABLE_ETA:-}" ]; then
   parallel_args+=(--eta)
