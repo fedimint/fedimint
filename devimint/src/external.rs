@@ -1,4 +1,4 @@
-use std::ops::ControlFlow;
+use std::ops::{ControlFlow, Deref as _};
 use std::path::Path;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -683,9 +683,9 @@ pub async fn open_channel_between_gateways(
     process_mgr: &ProcessManager,
     bitcoind: &Bitcoind,
     cln: &Lightningd,
-    gw_cln: &Gatewayd,
+    gw_cln: &JitTryAnyhow<Arc<Gatewayd>>,
     lnd: &Lnd,
-    gw_lnd: &Gatewayd,
+    gw_lnd: &JitTryAnyhow<Arc<Gatewayd>>,
 ) -> Result<()> {
     let gateway_cli_version = crate::util::GatewayCli::version_or_default().await;
     let gatewayd_version = crate::util::Gatewayd::version_or_default().await;
@@ -708,6 +708,9 @@ pub async fn open_channel_between_gateways(
             min_htlc_msat_specified: true,
         })
         .await?;
+
+    let gw_lnd = gw_lnd.get_try().await?.deref().clone();
+    let gw_cln = gw_cln.get_try().await?.deref().clone();
 
     tokio::try_join!(
         gw_cln.wait_for_chain_sync(bitcoind),
