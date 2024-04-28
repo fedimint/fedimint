@@ -14,7 +14,7 @@ use fedimint_core::db::mem_impl::MemDatabase;
 use fedimint_core::db::Database;
 use fedimint_core::invite_code::InviteCode;
 use fedimint_core::module::ApiAuth;
-use fedimint_core::task::TaskGroup;
+use fedimint_core::task::{block_in_place, TaskGroup};
 use fedimint_core::PeerId;
 use fedimint_logging::LOG_TEST;
 use fedimint_rocksdb::RocksDb;
@@ -116,7 +116,7 @@ impl FederationTest {
         self.configs[&PeerId::from(0)].get_invite_code()
     }
 
-    ///  Return first id for gateways
+    ///  Return the federation id
     pub fn id(&self) -> FederationId {
         self.configs[&PeerId::from(0)]
             .consensus
@@ -125,51 +125,119 @@ impl FederationTest {
             .global
             .calculate_federation_id()
     }
+}
 
-    #[allow(clippy::too_many_arguments)]
-    pub(crate) async fn new(
-        num_peers: u16,
-        num_offline: u16,
-        base_port: u16,
+/// Builder struct for creating a `FederationTest`.
+#[derive(Clone, Debug)]
+pub struct FederationTestBuilder {
+    num_peers: u16,
+    num_offline: u16,
+    base_port: u16,
+    primary_client: ModuleInstanceId,
+    version_hash: String,
+    params: ServerModuleConfigGenParamsRegistry,
+    server_init: ServerModuleInitRegistry,
+    client_init: ClientModuleInitRegistry,
+    reliability: Option<StreamReliability>,
+}
+
+impl FederationTestBuilder {
+    pub fn new(
         params: ServerModuleConfigGenParamsRegistry,
         server_init: ServerModuleInitRegistry,
         client_init: ClientModuleInitRegistry,
-        primary_client: ModuleInstanceId,
-        version_hash: String,
-    ) -> Self {
+    ) -> FederationTestBuilder {
+        let num_peers = 4;
+        Self {
+            num_peers,
+            num_offline: 1,
+            base_port: block_in_place(|| fedimint_portalloc::port_alloc(num_peers * 2))
+                .expect("Failed to allocate a port range"),
+            primary_client: 0,
+            version_hash: "fedimint-testing-dummy-version-hash".to_owned(),
+            params,
+            server_init,
+            client_init,
+            reliability: None,
+        }
+    }
+
+    pub fn num_peers(mut self, num_peers: u16) -> FederationTestBuilder {
+        self.num_peers = num_peers;
+        self
+    }
+
+    pub fn num_offline(mut self, num_offline: u16) -> FederationTestBuilder {
+        self.num_offline = num_offline;
+        self
+    }
+
+    pub fn base_port(mut self, base_port: u16) -> FederationTestBuilder {
+        self.base_port = base_port;
+        self
+    }
+
+    pub fn primary_client(mut self, primary_client: ModuleInstanceId) -> FederationTestBuilder {
+        self.primary_client = primary_client;
+        self
+    }
+
+    pub fn version_hash(mut self, version_hash: String) -> FederationTestBuilder {
+        self.version_hash = version_hash;
+        self
+    }
+
+    pub fn add_unreliable_connections(mut self) -> FederationTestBuilder {
+        self.reliability = Some(StreamReliability::INTEGRATION_TEST);
+        self
+    }
+
+    pub async fn build(self) -> FederationTest {
+        let num_offline = self.num_offline;
         assert!(
-            num_peers > 3 * num_offline,
+            self.num_peers > 3 * self.num_offline,
             "too many peers offline ({num_offline}) to reach consensus"
         );
-        let peers = (0..num_peers).map(PeerId::from).collect::<Vec<_>>();
-        let params =
-            local_config_gen_params(&peers, base_port, params).expect("Generates local config");
+        let peers = (0..self.num_peers).map(PeerId::from).collect::<Vec<_>>();
+        let params = local_config_gen_params(&peers, self.base_port, self.params)
+            .expect("Generates local config");
 
-        let configs = ServerConfig::trusted_dealer_gen(&params, server_init.clone(), version_hash);
+        let configs =
+            ServerConfig::trusted_dealer_gen(&params, self.server_init.clone(), self.version_hash);
         let network = MockNetwork::new();
 
         let task_group = TaskGroup::new();
         for (peer_id, config) in configs.clone() {
-            if u16::from(peer_id) >= num_peers - num_offline {
+            if u16::from(peer_id) >= self.num_peers - self.num_offline {
                 continue;
             }
-            let reliability = StreamReliability::INTEGRATION_TEST;
-            let connections = network.connector(peer_id, reliability).into_dyn();
 
             let instances = config.consensus.iter_module_instances();
-            let decoders = server_init.available_decoders(instances).unwrap();
+            let decoders = self.server_init.available_decoders(instances).unwrap();
             let db = Database::new(MemDatabase::new(), decoders);
 
-            let (consensus_server, consensus_api) = ConsensusServer::new_with(
-                config.clone(),
-                db.clone(),
-                server_init.clone(),
-                connections,
-                DelayCalculator::TEST_DEFAULT,
-                &task_group,
-            )
-            .await
-            .expect("Failed to init server");
+            let (consensus_server, consensus_api) = if let Some(reliability) = self.reliability {
+                let connections = network.connector(peer_id, reliability).into_dyn();
+                ConsensusServer::new_with(
+                    config.clone(),
+                    db.clone(),
+                    self.server_init.clone(),
+                    connections,
+                    DelayCalculator::TEST_DEFAULT,
+                    &task_group,
+                )
+                .await
+                .expect("Failed to init server")
+            } else {
+                ConsensusServer::new(
+                    config.clone(),
+                    db.clone(),
+                    self.server_init.clone(),
+                    &task_group,
+                )
+                .await
+                .expect("Setting up consensus server")
+            };
 
             let api_handle = FedimintServer::spawn_consensus_api(consensus_api).await;
 
@@ -179,11 +247,11 @@ impl FederationTest {
             });
         }
 
-        Self {
+        FederationTest {
             configs,
-            server_init,
-            client_init,
-            primary_client,
+            server_init: self.server_init,
+            client_init: self.client_init,
+            primary_client: self.primary_client,
             _task: task_group,
         }
     }

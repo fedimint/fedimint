@@ -68,7 +68,7 @@ async fn print_liquidity(gateway: &GatewayTest, federation_id: FederationId) {
 #[tokio::test(flavor = "multi_thread")]
 async fn can_pay_external_invoice_exactly_once() -> anyhow::Result<()> {
     let fixtures = fixtures();
-    let fed = fixtures.new_fed().await;
+    let fed = fixtures.new_default_fed().await;
     let gateway_test = gateway(&fixtures, &fed).await;
     let gateway_api = gateway_test.gateway.versioned_api.clone();
 
@@ -126,7 +126,7 @@ async fn can_pay_external_invoice_exactly_once() -> anyhow::Result<()> {
 #[tokio::test(flavor = "multi_thread")]
 async fn refund_unpayable_invoice() -> anyhow::Result<()> {
     let fixtures = fixtures();
-    let fed = fixtures.new_fed().await;
+    let fed = fixtures.new_default_fed().await;
     let gateway_test = gateway(&fixtures, &fed).await;
     let gateway_api = gateway_test.gateway.versioned_api.clone();
 
@@ -165,7 +165,7 @@ async fn refund_unpayable_invoice() -> anyhow::Result<()> {
 #[tokio::test(flavor = "multi_thread")]
 async fn can_make_self_payment_exactly_once() -> anyhow::Result<()> {
     let fixtures = fixtures();
-    let fed = fixtures.new_fed().await;
+    let fed = fixtures.new_default_fed().await;
     let gateway_test = gateway(&fixtures, &fed).await;
     let gateway_api = gateway_test.gateway.versioned_api.clone();
 
@@ -246,8 +246,8 @@ async fn can_make_self_payment_exactly_once() -> anyhow::Result<()> {
 async fn direct_swap() -> anyhow::Result<()> {
     let fixtures = fixtures();
 
-    let fed_send = fixtures.new_fed().await;
-    let fed_receive = fixtures.new_fed().await;
+    let fed_send = fixtures.new_default_fed().await;
+    let fed_receive = fixtures.new_default_fed().await;
 
     let mut gateway_test = gateway(&fixtures, &fed_send).await;
     let gateway_api = gateway_test.gateway.versioned_api.clone();

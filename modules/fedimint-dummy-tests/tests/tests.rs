@@ -22,7 +22,7 @@ fn fixtures() -> Fixtures {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn can_print_and_send_money() -> anyhow::Result<()> {
-    let fed = fixtures().new_fed().await;
+    let fed = fixtures().new_default_fed().await;
     let (client1, client2) = fed.two_clients().await;
 
     let client1_dummy_module = client1.get_first_module::<DummyClientModule>();
@@ -42,7 +42,7 @@ async fn can_print_and_send_money() -> anyhow::Result<()> {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn client_ignores_unknown_module() {
-    let fed = fixtures().new_fed().await;
+    let fed = fixtures().new_default_fed().await;
     let client = fed.new_client().await;
 
     let mut cfg = client.get_config().clone();
@@ -66,7 +66,7 @@ async fn client_ignores_unknown_module() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn federation_should_abort_if_balance_sheet_is_negative() -> anyhow::Result<()> {
-    let fed = fixtures().new_fed().await;
+    let fed = fixtures().new_default_fed().await;
     let client = fed.new_client().await;
 
     let (panic_sender, panic_receiver) = std::sync::mpsc::channel::<()>();
@@ -115,7 +115,7 @@ async fn federation_should_abort_if_balance_sheet_is_negative() -> anyhow::Resul
 /// the federation should reject because it's unbalanced.
 #[tokio::test(flavor = "multi_thread")]
 async fn unbalanced_transactions_get_rejected() -> anyhow::Result<()> {
-    let fed = fixtures().new_fed().await;
+    let fed = fixtures().new_default_fed().await;
     let client = fed.new_client().await;
 
     let dummy_module = client.get_first_module::<DummyClientModule>();
