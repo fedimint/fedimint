@@ -62,7 +62,7 @@ mod faucet {
 
     pub async fn pay_invoice(invoice: &str) -> anyhow::Result<()> {
         let resp = gloo_net::http::Request::post("http://localhost:15243/pay")
-            .body(invoice)
+            .body(invoice)?
             .send()
             .await?;
         if resp.ok() {
@@ -85,7 +85,7 @@ mod faucet {
 
     pub async fn generate_invoice(amt: u64) -> anyhow::Result<String> {
         let resp = gloo_net::http::Request::post("http://localhost:15243/invoice")
-            .body(amt)
+            .body(amt)?
             .send()
             .await?;
         if resp.ok() {
