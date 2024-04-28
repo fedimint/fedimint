@@ -126,19 +126,6 @@ impl DevJitFed {
                 ))
             }
         });
-        let gw_cln_registered = JitTryAnyhow::new_try({
-            let gw_cln = gw_cln.clone();
-            let fed = fed.clone();
-            move || async move {
-                let gw_cln = gw_cln.get_try().await?.deref();
-                let fed = fed.get_try().await?.deref();
-
-                if !skip_setup {
-                    gw_cln.connect_fed(fed).await?;
-                }
-                Ok(Arc::new(()))
-            }
-        });
         let gw_lnd = JitTryAnyhow::new_try({
             let process_mgr = process_mgr.to_owned();
             let lnd = lnd.clone();
@@ -147,18 +134,6 @@ impl DevJitFed {
                 Ok(Arc::new(
                     Gatewayd::new(&process_mgr, LightningNode::Lnd(lnd)).await?,
                 ))
-            }
-        });
-        let gw_lnd_registered = JitTryAnyhow::new_try({
-            let gw_lnd = gw_lnd.clone();
-            let fed = fed.clone();
-            move || async move {
-                let gw_lnd = gw_lnd.get_try().await?.deref();
-                let fed = fed.get_try().await?.deref();
-                if !skip_setup {
-                    gw_lnd.connect_fed(fed).await?;
-                }
-                Ok(Arc::new(()))
             }
         });
 
@@ -187,6 +162,42 @@ impl DevJitFed {
                     &gw_lnd,
                 )
                 .await?;
+                Ok(Arc::new(()))
+            }
+        });
+
+        let gw_cln_registered = JitTryAnyhow::new_try({
+            let gw_cln = gw_cln.clone();
+            let fed = fed.clone();
+            let channel_opened = channel_opened.clone();
+            move || async move {
+                let gw_cln = gw_cln.get_try().await?.deref();
+                let fed = fed.get_try().await?.deref();
+
+                // Hack: the gateway won't respond to any calls until it has a channel
+                // FIXME: https://github.com/fedimint/fedimint/issues/4875
+                let _ = channel_opened.get_try().await?;
+
+                if !skip_setup {
+                    gw_cln.connect_fed(fed).await?;
+                }
+                Ok(Arc::new(()))
+            }
+        });
+        let gw_lnd_registered = JitTryAnyhow::new_try({
+            let gw_lnd = gw_lnd.clone();
+            let fed = fed.clone();
+            let channel_opened = channel_opened.clone();
+            move || async move {
+                let gw_lnd = gw_lnd.get_try().await?.deref();
+                let fed = fed.get_try().await?.deref();
+                // Hack: the gateway won't respond to any calls until it has a channel
+                // FIXME: https://github.com/fedimint/fedimint/issues/4875
+                let _ = channel_opened.get_try().await?;
+
+                if !skip_setup {
+                    gw_lnd.connect_fed(fed).await?;
+                }
                 Ok(Arc::new(()))
             }
         });
