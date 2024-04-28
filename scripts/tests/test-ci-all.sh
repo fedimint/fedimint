@@ -182,7 +182,16 @@ if [[ "$num_versions" == "0" ]]; then
 else
   # precompile binaries
   binaries=( "fedimintd" "fedimint-cli" "gateway-cli" "gatewayd" )
-  parallel nix_build_binary_for_version "{1}" "{2}" ::: "${binaries[@]}" ::: "${tagged_versions[@]}"
+  for version in "${versions[@]}" ; do
+    if [ "$version" == "current" ] ; then
+      continue
+    fi
+    for binary in "${binaries[@]}" ; do
+      var_name=$(nix_binary_version_var_name "$binary" "$version")
+      export "${var_name}=$(nix_build_binary_for_version "$binary" "$version")"
+    done
+  done
+
   if [ -n "${FM_FULL_VERSION_MATRIX:-}" ]; then
     mapfile -t version_matrix < <(generate_full_matrix "${versions[@]}")
   else
