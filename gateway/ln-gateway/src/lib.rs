@@ -715,8 +715,8 @@ impl Gateway {
                 .expect("Gateway configuration should be set");
             let mut federations = Vec::new();
             let federation_clients = self.clients.read().await.clone().into_iter();
-            let route_hints = Self::fetch_lightning_route_hints(
-                lightning_context.lnrpc.clone(),
+            let route_hints = Self::fetch_lightning_route_hints_try(
+                lightning_context.lnrpc.as_ref(),
                 gateway_config.num_route_hints,
             )
             .await?;
