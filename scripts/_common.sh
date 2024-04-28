@@ -116,17 +116,26 @@ export -f filter_count
 function nix_build_binary_for_version() {
   binary="$1"
   version="$2"
+  >&2 echo "Compiling ${binary} for version ${version} ..."
   echo "$(nix build 'github:fedimint/fedimint/'"$version"'#'"$binary" --no-link --print-out-paths)/bin/$binary"
 }
 export -f nix_build_binary_for_version
+
+# name of an an env variable to use for a path of a binary compiled by nix for given binary in a given version
+function nix_binary_version_var_name() {
+  binary="$1"
+  version="$2"
+  echo "fm_bin_${binary}_${version}" | tr '-' "_" | tr '.' '_'
+}
+export -f nix_binary_version_var_name
 
 function use_fed_binaries_for_version() {
   version=$1
   if [[ "$version" == "current" ]]; then
     unset FM_FEDIMINTD_BASE_EXECUTABLE
   else
-    >&2 echo "Compiling fed binaries for version $version..."
-    FM_FEDIMINTD_BASE_EXECUTABLE="$(nix_build_binary_for_version 'fedimintd' "$version")"
+    var_name=$(nix_binary_version_var_name fedimintd "$version")
+    FM_FEDIMINTD_BASE_EXECUTABLE="${!var_name}"
     export FM_FEDIMINTD_BASE_EXECUTABLE
   fi
 }
@@ -138,10 +147,12 @@ function use_client_binaries_for_version() {
     unset FM_FEDIMINT_CLI_BASE_EXECUTABLE
     unset FM_GATEWAY_CLI_BASE_EXECUTABLE
   else
-    >&2 echo "Compiling client binaries for version $version..."
-    FM_FEDIMINT_CLI_BASE_EXECUTABLE="$(nix_build_binary_for_version 'fedimint-cli' "$version")"
+    var_name=$(nix_binary_version_var_name fedimint-cli "$version")
+    FM_FEDIMINT_CLI_BASE_EXECUTABLE="${!var_name}"
     export FM_FEDIMINT_CLI_BASE_EXECUTABLE
-    FM_GATEWAY_CLI_BASE_EXECUTABLE="$(nix_build_binary_for_version 'gateway-cli' "$version")"
+
+    var_name=$(nix_binary_version_var_name gateway-cli "$version")
+    FM_GATEWAY_CLI_BASE_EXECUTABLE="${!var_name}"
     export FM_GATEWAY_CLI_BASE_EXECUTABLE
   fi
 }
@@ -152,8 +163,8 @@ function use_gateway_binaries_for_version() {
   if [[ "$version" == "current" ]]; then
     unset FM_GATEWAYD_BASE_EXECUTABLE
   else
-    >&2 echo "Compiling gateway binaries for version $version..."
-    FM_GATEWAYD_BASE_EXECUTABLE="$(nix_build_binary_for_version 'gatewayd' "$version")"
+    var_name=$(nix_binary_version_var_name gatewayd "$version")
+    FM_GATEWAYD_BASE_EXECUTABLE="${!var_name}"
     export FM_GATEWAYD_BASE_EXECUTABLE
   fi
 }
