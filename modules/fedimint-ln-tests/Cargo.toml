@@ -29,7 +29,7 @@ fedimint-core ={ path = "../../fedimint-core" }
 fedimint-server = { path = "../../fedimint-server" }
 fedimint-logging = { path = "../../fedimint-logging" }
 futures = { workspace = true }
-lightning-invoice = { version = "0.30.0", features = [ "serde" ] }
+lightning-invoice = { workspace = true }
 threshold_crypto = { workspace = true }
 tokio = { version = "1.37.0", features = ["sync"] }
 tracing = { workspace = true }

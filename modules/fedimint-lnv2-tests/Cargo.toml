@@ -30,4 +30,4 @@ fedimint-core ={ path = "../../fedimint-core" }
 fedimint-server = { path = "../../fedimint-server" }
 fedimint-logging = { path = "../../fedimint-logging" }
 tokio = { version = "1.37.0", features = ["sync"] }
-lightning-invoice = { version = "0.30.0", features = [ "serde" ] }
+lightning-invoice = { workspace = true }
