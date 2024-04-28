@@ -6,8 +6,7 @@ use std::io::{Cursor, Read};
 use std::str::FromStr;
 
 use anyhow::ensure;
-use bech32::Variant::Bech32m;
-use bech32::{FromBase32 as _, ToBase32 as _};
+use bech32::{Bech32m, Hrp};
 use serde::{Deserialize, Serialize};
 
 use crate::config::FederationId;
@@ -158,19 +157,17 @@ enum InviteCodeData {
 /// ```txt
 /// [ hrp (4 bytes) ] [ id (48 bytes) ] ([ url len (2 bytes) ] [ url bytes (url len bytes) ])+
 /// ```
-const BECH32_HRP: &str = "fed1";
+const BECH32_HRP: Hrp = Hrp::parse_unchecked("fed1");
 
 impl FromStr for InviteCode {
     type Err = anyhow::Error;
 
     fn from_str(encoded: &str) -> Result<Self, Self::Err> {
-        let (hrp, data, variant) = bech32::decode(encoded)?;
+        let (hrp, data) = bech32::decode(encoded)?;
 
         ensure!(hrp == BECH32_HRP, "Invalid HRP in bech32 encoding");
-        ensure!(variant == Bech32m, "Expected Bech32m encoding");
 
-        let bytes: Vec<u8> = Vec::<u8>::from_base32(&data)?;
-        let invite = InviteCode::consensus_decode(&mut Cursor::new(bytes), &Default::default())?;
+        let invite = InviteCode::consensus_decode(&mut Cursor::new(data), &Default::default())?;
 
         Ok(invite)
     }
@@ -184,8 +181,7 @@ impl Display for InviteCode {
         self.consensus_encode(&mut data)
             .expect("Vec<u8> provides capacity");
 
-        let encode =
-            bech32::encode(BECH32_HRP, data.to_base32(), Bech32m).map_err(|_| fmt::Error)?;
+        let encode = bech32::encode::<Bech32m>(BECH32_HRP, &data).map_err(|_| fmt::Error)?;
         formatter.write_str(&encode)
     }
 }
