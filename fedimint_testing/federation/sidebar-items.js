@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"fn":["local_config_gen_params"],"struct":["FederationTest"]};
+window.SIDEBAR_ITEMS = {"fn":["local_config_gen_params"],"struct":["FederationTest","FederationTestBuilder"]};

@@ -255,6 +255,74 @@
 <a href="#255" id="255">255</a>
 <a href="#256" id="256">256</a>
 <a href="#257" id="257">257</a>
+<a href="#258" id="258">258</a>
+<a href="#259" id="259">259</a>
+<a href="#260" id="260">260</a>
+<a href="#261" id="261">261</a>
+<a href="#262" id="262">262</a>
+<a href="#263" id="263">263</a>
+<a href="#264" id="264">264</a>
+<a href="#265" id="265">265</a>
+<a href="#266" id="266">266</a>
+<a href="#267" id="267">267</a>
+<a href="#268" id="268">268</a>
+<a href="#269" id="269">269</a>
+<a href="#270" id="270">270</a>
+<a href="#271" id="271">271</a>
+<a href="#272" id="272">272</a>
+<a href="#273" id="273">273</a>
+<a href="#274" id="274">274</a>
+<a href="#275" id="275">275</a>
+<a href="#276" id="276">276</a>
+<a href="#277" id="277">277</a>
+<a href="#278" id="278">278</a>
+<a href="#279" id="279">279</a>
+<a href="#280" id="280">280</a>
+<a href="#281" id="281">281</a>
+<a href="#282" id="282">282</a>
+<a href="#283" id="283">283</a>
+<a href="#284" id="284">284</a>
+<a href="#285" id="285">285</a>
+<a href="#286" id="286">286</a>
+<a href="#287" id="287">287</a>
+<a href="#288" id="288">288</a>
+<a href="#289" id="289">289</a>
+<a href="#290" id="290">290</a>
+<a href="#291" id="291">291</a>
+<a href="#292" id="292">292</a>
+<a href="#293" id="293">293</a>
+<a href="#294" id="294">294</a>
+<a href="#295" id="295">295</a>
+<a href="#296" id="296">296</a>
+<a href="#297" id="297">297</a>
+<a href="#298" id="298">298</a>
+<a href="#299" id="299">299</a>
+<a href="#300" id="300">300</a>
+<a href="#301" id="301">301</a>
+<a href="#302" id="302">302</a>
+<a href="#303" id="303">303</a>
+<a href="#304" id="304">304</a>
+<a href="#305" id="305">305</a>
+<a href="#306" id="306">306</a>
+<a href="#307" id="307">307</a>
+<a href="#308" id="308">308</a>
+<a href="#309" id="309">309</a>
+<a href="#310" id="310">310</a>
+<a href="#311" id="311">311</a>
+<a href="#312" id="312">312</a>
+<a href="#313" id="313">313</a>
+<a href="#314" id="314">314</a>
+<a href="#315" id="315">315</a>
+<a href="#316" id="316">316</a>
+<a href="#317" id="317">317</a>
+<a href="#318" id="318">318</a>
+<a href="#319" id="319">319</a>
+<a href="#320" id="320">320</a>
+<a href="#321" id="321">321</a>
+<a href="#322" id="322">322</a>
+<a href="#323" id="323">323</a>
+<a href="#324" id="324">324</a>
+<a href="#325" id="325">325</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap};
 <span class="kw">use </span>std::sync::Arc;
 
@@ -271,7 +339,7 @@
 <span class="kw">use </span>fedimint_core::db::Database;
 <span class="kw">use </span>fedimint_core::invite_code::InviteCode;
 <span class="kw">use </span>fedimint_core::module::ApiAuth;
-<span class="kw">use </span>fedimint_core::task::TaskGroup;
+<span class="kw">use </span>fedimint_core::task::{block_in_place, TaskGroup};
 <span class="kw">use </span>fedimint_core::PeerId;
 <span class="kw">use </span>fedimint_logging::LOG_TEST;
 <span class="kw">use </span>fedimint_rocksdb::RocksDb;
@@ -373,7 +441,7 @@
         <span class="self">self</span>.configs[<span class="kw-2">&amp;</span>PeerId::from(<span class="number">0</span>)].get_invite_code()
     }
 
-    <span class="doccomment">///  Return first id for gateways
+    <span class="doccomment">///  Return the federation id
     </span><span class="kw">pub fn </span>id(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FederationId {
         <span class="self">self</span>.configs[<span class="kw-2">&amp;</span>PeerId::from(<span class="number">0</span>)]
             .consensus
@@ -382,51 +450,119 @@
             .global
             .calculate_federation_id()
     }
+}
 
-    <span class="attr">#[allow(clippy::too_many_arguments)]
-    </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">async fn </span>new(
-        num_peers: u16,
-        num_offline: u16,
-        base_port: u16,
+<span class="doccomment">/// Builder struct for creating a `FederationTest`.
+</span><span class="attr">#[derive(Clone, Debug)]
+</span><span class="kw">pub struct </span>FederationTestBuilder {
+    num_peers: u16,
+    num_offline: u16,
+    base_port: u16,
+    primary_client: ModuleInstanceId,
+    version_hash: String,
+    params: ServerModuleConfigGenParamsRegistry,
+    server_init: ServerModuleInitRegistry,
+    client_init: ClientModuleInitRegistry,
+    reliability: <span class="prelude-ty">Option</span>&lt;StreamReliability&gt;,
+}
+
+<span class="kw">impl </span>FederationTestBuilder {
+    <span class="kw">pub fn </span>new(
         params: ServerModuleConfigGenParamsRegistry,
         server_init: ServerModuleInitRegistry,
         client_init: ClientModuleInitRegistry,
-        primary_client: ModuleInstanceId,
-        version_hash: String,
-    ) -&gt; <span class="self">Self </span>{
+    ) -&gt; FederationTestBuilder {
+        <span class="kw">let </span>num_peers = <span class="number">4</span>;
+        <span class="self">Self </span>{
+            num_peers,
+            num_offline: <span class="number">1</span>,
+            base_port: block_in_place(|| fedimint_portalloc::port_alloc(num_peers * <span class="number">2</span>))
+                .expect(<span class="string">"Failed to allocate a port range"</span>),
+            primary_client: <span class="number">0</span>,
+            version_hash: <span class="string">"fedimint-testing-dummy-version-hash"</span>.to_owned(),
+            params,
+            server_init,
+            client_init,
+            reliability: <span class="prelude-val">None</span>,
+        }
+    }
+
+    <span class="kw">pub fn </span>num_peers(<span class="kw-2">mut </span><span class="self">self</span>, num_peers: u16) -&gt; FederationTestBuilder {
+        <span class="self">self</span>.num_peers = num_peers;
+        <span class="self">self
+    </span>}
+
+    <span class="kw">pub fn </span>num_offline(<span class="kw-2">mut </span><span class="self">self</span>, num_offline: u16) -&gt; FederationTestBuilder {
+        <span class="self">self</span>.num_offline = num_offline;
+        <span class="self">self
+    </span>}
+
+    <span class="kw">pub fn </span>base_port(<span class="kw-2">mut </span><span class="self">self</span>, base_port: u16) -&gt; FederationTestBuilder {
+        <span class="self">self</span>.base_port = base_port;
+        <span class="self">self
+    </span>}
+
+    <span class="kw">pub fn </span>primary_client(<span class="kw-2">mut </span><span class="self">self</span>, primary_client: ModuleInstanceId) -&gt; FederationTestBuilder {
+        <span class="self">self</span>.primary_client = primary_client;
+        <span class="self">self
+    </span>}
+
+    <span class="kw">pub fn </span>version_hash(<span class="kw-2">mut </span><span class="self">self</span>, version_hash: String) -&gt; FederationTestBuilder {
+        <span class="self">self</span>.version_hash = version_hash;
+        <span class="self">self
+    </span>}
+
+    <span class="kw">pub fn </span>add_unreliable_connections(<span class="kw-2">mut </span><span class="self">self</span>) -&gt; FederationTestBuilder {
+        <span class="self">self</span>.reliability = <span class="prelude-val">Some</span>(StreamReliability::INTEGRATION_TEST);
+        <span class="self">self
+    </span>}
+
+    <span class="kw">pub async fn </span>build(<span class="self">self</span>) -&gt; FederationTest {
+        <span class="kw">let </span>num_offline = <span class="self">self</span>.num_offline;
         <span class="macro">assert!</span>(
-            num_peers &gt; <span class="number">3 </span>* num_offline,
+            <span class="self">self</span>.num_peers &gt; <span class="number">3 </span>* <span class="self">self</span>.num_offline,
             <span class="string">"too many peers offline ({num_offline}) to reach consensus"
         </span>);
-        <span class="kw">let </span>peers = (<span class="number">0</span>..num_peers).map(PeerId::from).collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
-        <span class="kw">let </span>params =
-            local_config_gen_params(<span class="kw-2">&amp;</span>peers, base_port, params).expect(<span class="string">"Generates local config"</span>);
+        <span class="kw">let </span>peers = (<span class="number">0</span>..<span class="self">self</span>.num_peers).map(PeerId::from).collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
+        <span class="kw">let </span>params = local_config_gen_params(<span class="kw-2">&amp;</span>peers, <span class="self">self</span>.base_port, <span class="self">self</span>.params)
+            .expect(<span class="string">"Generates local config"</span>);
 
-        <span class="kw">let </span>configs = ServerConfig::trusted_dealer_gen(<span class="kw-2">&amp;</span>params, server_init.clone(), version_hash);
+        <span class="kw">let </span>configs =
+            ServerConfig::trusted_dealer_gen(<span class="kw-2">&amp;</span>params, <span class="self">self</span>.server_init.clone(), <span class="self">self</span>.version_hash);
         <span class="kw">let </span>network = MockNetwork::new();
 
         <span class="kw">let </span>task_group = TaskGroup::new();
         <span class="kw">for </span>(peer_id, config) <span class="kw">in </span>configs.clone() {
-            <span class="kw">if </span>u16::from(peer_id) &gt;= num_peers - num_offline {
+            <span class="kw">if </span>u16::from(peer_id) &gt;= <span class="self">self</span>.num_peers - <span class="self">self</span>.num_offline {
                 <span class="kw">continue</span>;
             }
-            <span class="kw">let </span>reliability = StreamReliability::INTEGRATION_TEST;
-            <span class="kw">let </span>connections = network.connector(peer_id, reliability).into_dyn();
 
             <span class="kw">let </span>instances = config.consensus.iter_module_instances();
-            <span class="kw">let </span>decoders = server_init.available_decoders(instances).unwrap();
+            <span class="kw">let </span>decoders = <span class="self">self</span>.server_init.available_decoders(instances).unwrap();
             <span class="kw">let </span>db = Database::new(MemDatabase::new(), decoders);
 
-            <span class="kw">let </span>(consensus_server, consensus_api) = ConsensusServer::new_with(
-                config.clone(),
-                db.clone(),
-                server_init.clone(),
-                connections,
-                DelayCalculator::TEST_DEFAULT,
-                <span class="kw-2">&amp;</span>task_group,
-            )
-            .<span class="kw">await
-            </span>.expect(<span class="string">"Failed to init server"</span>);
+            <span class="kw">let </span>(consensus_server, consensus_api) = <span class="kw">if let </span><span class="prelude-val">Some</span>(reliability) = <span class="self">self</span>.reliability {
+                <span class="kw">let </span>connections = network.connector(peer_id, reliability).into_dyn();
+                ConsensusServer::new_with(
+                    config.clone(),
+                    db.clone(),
+                    <span class="self">self</span>.server_init.clone(),
+                    connections,
+                    DelayCalculator::TEST_DEFAULT,
+                    <span class="kw-2">&amp;</span>task_group,
+                )
+                .<span class="kw">await
+                </span>.expect(<span class="string">"Failed to init server"</span>)
+            } <span class="kw">else </span>{
+                ConsensusServer::new(
+                    config.clone(),
+                    db.clone(),
+                    <span class="self">self</span>.server_init.clone(),
+                    <span class="kw-2">&amp;</span>task_group,
+                )
+                .<span class="kw">await
+                </span>.expect(<span class="string">"Setting up consensus server"</span>)
+            };
 
             <span class="kw">let </span>api_handle = FedimintServer::spawn_consensus_api(consensus_api).<span class="kw">await</span>;
 
@@ -436,11 +572,11 @@
             });
         }
 
-        <span class="self">Self </span>{
+        FederationTest {
             configs,
-            server_init,
-            client_init,
-            primary_client,
+            server_init: <span class="self">self</span>.server_init,
+            client_init: <span class="self">self</span>.client_init,
+            primary_client: <span class="self">self</span>.primary_client,
             _task: task_group,
         }
     }
