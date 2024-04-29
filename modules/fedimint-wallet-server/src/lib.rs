@@ -5,7 +5,7 @@ use std::convert::Infallible;
 #[cfg(not(target_family = "wasm"))]
 use std::time::Duration;
 
-use anyhow::{bail, format_err, Context};
+use anyhow::{bail, ensure, format_err, Context};
 use bitcoin::hashes::{sha256, Hash as BitcoinHash, HashEngine, Hmac, HmacEngine};
 use bitcoin::policy::DEFAULT_MIN_RELAY_TX_FEE;
 use bitcoin::secp256k1::{All, Secp256k1, Verification};
@@ -407,42 +407,36 @@ impl ServerModule for Wallet {
         &'a self,
         dbtx: &mut DatabaseTransaction<'b>,
         consensus_item: WalletConsensusItem,
-        peer_id: PeerId,
+        peer: PeerId,
     ) -> anyhow::Result<()> {
         trace!(?consensus_item, "Received consensus proposals");
 
         match consensus_item {
-            WalletConsensusItem::BlockCount(block_count) => {
-                let current_vote = dbtx
-                    .get_value(&BlockCountVoteKey(peer_id))
-                    .await
-                    .unwrap_or(0);
+            WalletConsensusItem::BlockCount(block_count_vote) => {
+                debug!(?peer, ?block_count_vote, "Received block count vote");
 
-                if block_count < current_vote {
-                    debug!(?peer_id, ?block_count, "Received outdated block count vote");
-                    bail!("Block count vote decreased");
+                let current_vote = dbtx.get_value(&BlockCountVoteKey(peer)).await.unwrap_or(0);
+
+                if block_count_vote < current_vote {
+                    warn!(?peer, ?block_count_vote, "Block count vote is outdated");
                 }
 
-                if block_count == current_vote {
-                    debug!(
-                        ?peer_id,
-                        ?block_count,
-                        "Received redundant block count vote"
-                    );
-                    bail!("Block count vote is redundant");
-                }
+                ensure!(
+                    block_count_vote > current_vote,
+                    "Block count vote is redundant"
+                );
 
                 let old_consensus_block_count = self.consensus_block_count(dbtx).await;
 
-                dbtx.insert_entry(&BlockCountVoteKey(peer_id), &block_count)
+                dbtx.insert_entry(&BlockCountVoteKey(peer), &block_count_vote)
                     .await;
 
                 let new_consensus_block_count = self.consensus_block_count(dbtx).await;
 
                 debug!(
-                    ?peer_id,
+                    ?peer,
                     ?current_vote,
-                    ?block_count,
+                    ?block_count_vote,
                     ?old_consensus_block_count,
                     ?new_consensus_block_count,
                     "Received block count vote"
@@ -469,7 +463,7 @@ impl ServerModule for Wallet {
                 }
             }
             WalletConsensusItem::Feerate(feerate) => {
-                if Some(feerate) == dbtx.insert_entry(&FeeRateVoteKey(peer_id), &feerate).await {
+                if Some(feerate) == dbtx.insert_entry(&FeeRateVoteKey(peer), &feerate).await {
                     bail!("Fee rate vote is redundant");
                 }
             }
@@ -485,7 +479,7 @@ impl ServerModule for Wallet {
                     .await
                     .context("Unsigned transaction does not exist")?;
 
-                self.sign_peg_out_psbt(&mut unsigned.psbt, &peer_id, &peg_out_signature)
+                self.sign_peg_out_psbt(&mut unsigned.psbt, &peer, &peg_out_signature)
                     .context("Peg out signature is invalid")?;
 
                 dbtx.insert_entry(&UnsignedTransactionKey(txid), &unsigned)
