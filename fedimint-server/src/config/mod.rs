@@ -12,6 +12,7 @@ pub use fedimint_core::config::{
     ServerModuleConsensusConfig, ServerModuleInitRegistry, TypedServerModuleConfig,
 };
 use fedimint_core::core::{ModuleInstanceId, ModuleKind, MODULE_INSTANCE_ID_GLOBAL};
+use fedimint_core::envs::is_running_in_test_env;
 use fedimint_core::invite_code::InviteCode;
 use fedimint_core::module::{
     ApiAuth, ApiVersion, CoreConsensusVersion, DynServerModuleInit, MultiApiVersion, PeerHandle,
@@ -51,6 +52,14 @@ const DEFAULT_MAX_CLIENT_CONNECTIONS: u32 = 1000;
 const DEFAULT_BROADCAST_EXPECTED_ROUNDS_PER_SESSION: u16 = 45 * 20;
 const DEFAULT_BROADCAST_ROUND_DELAY_MS: u16 = 50;
 const DEFAULT_BROADCAST_MAX_ROUNDS_PER_SESSION: u16 = 5000;
+
+/// Set of consensus broadcast settings that results in around 10s session time,
+/// that is useful for testing purposes. Not that all the values here together
+/// need to satisfy bunch of constrains in alephbft, so tweaking them
+/// separately will most probably result in panics and other misbehavior.
+const DEFAULT_TEST_BROADCAST_EXPECTED_ROUNDS_PER_SESSION: u16 = 3 * 20;
+const DEFAULT_TEST_BROADCAST_ROUND_DELAY_MS: u16 = 50;
+const DEFAULT_TEST_BROADCAST_MAX_ROUNDS_PER_SESSION: u16 = 2700;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 /// All the serializable configuration for the fedimint server
@@ -232,15 +241,27 @@ impl ServerConfig {
             fed_bind: params.local.p2p_bind,
             api_bind: params.local.api_bind,
             max_connections: DEFAULT_MAX_CLIENT_CONNECTIONS,
-            broadcast_round_delay_ms: DEFAULT_BROADCAST_ROUND_DELAY_MS,
+            broadcast_round_delay_ms: if is_running_in_test_env() {
+                DEFAULT_TEST_BROADCAST_ROUND_DELAY_MS
+            } else {
+                DEFAULT_BROADCAST_ROUND_DELAY_MS
+            },
             modules: Default::default(),
         };
         let consensus = ServerConfigConsensus {
             code_version: version_hash,
             version: CORE_CONSENSUS_VERSION,
             broadcast_public_keys,
-            broadcast_expected_rounds_per_session: DEFAULT_BROADCAST_EXPECTED_ROUNDS_PER_SESSION,
-            broadcast_max_rounds_per_session: DEFAULT_BROADCAST_MAX_ROUNDS_PER_SESSION,
+            broadcast_expected_rounds_per_session: if is_running_in_test_env() {
+                DEFAULT_TEST_BROADCAST_EXPECTED_ROUNDS_PER_SESSION
+            } else {
+                DEFAULT_BROADCAST_EXPECTED_ROUNDS_PER_SESSION
+            },
+            broadcast_max_rounds_per_session: if is_running_in_test_env() {
+                DEFAULT_TEST_BROADCAST_MAX_ROUNDS_PER_SESSION
+            } else {
+                DEFAULT_BROADCAST_MAX_ROUNDS_PER_SESSION
+            },
             api_endpoints: params.api_urls(),
             tls_certs: params.tls_certs(),
             modules: Default::default(),
