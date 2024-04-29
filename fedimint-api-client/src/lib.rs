@@ -16,8 +16,8 @@ pub mod query;
 
 // TODO: (@leonardo) how to handle these fns, for specific connection types ?
 
-/// Tries to download the client config from the federation,
-/// attempts to retry teb times before giving up.
+/// Tries to download the [`ClientConfig`] from the federation,
+/// attempts to retry ten times before giving up.
 pub async fn download_from_invite_code(invite_code: &InviteCode) -> anyhow::Result<ClientConfig> {
     debug!("Downloading client config from {:?}", invite_code);
 
@@ -35,7 +35,7 @@ pub async fn download_from_invite_code(invite_code: &InviteCode) -> anyhow::Resu
     .context("Failed to download client config")
 }
 
-/// Tries to download the client config only once.
+/// Tries to download the [`ClientConfig`] only once.
 pub async fn try_download_client_config(invite_code: &InviteCode) -> anyhow::Result<ClientConfig> {
     // we have to download the api endpoints first
     let federation_id = invite_code.federation_id();

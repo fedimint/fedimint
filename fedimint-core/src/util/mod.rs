@@ -123,6 +123,18 @@ impl SafeUrl {
     pub fn join(&self, input: &str) -> Result<SafeUrl, ParseError> {
         self.0.join(input).map(SafeUrl)
     }
+    pub fn query(&self) -> Option<&str> {
+        self.0.query()
+    }
+    pub fn authority(&self) -> &str {
+        self.0.authority()
+    }
+    pub fn socket_addrs(
+        &self,
+        default_port_number: impl Fn() -> Option<u16>,
+    ) -> Result<Vec<std::net::SocketAddr>, io::Error> {
+        self.0.socket_addrs(default_port_number)
+    }
 }
 
 impl Display for SafeUrl {

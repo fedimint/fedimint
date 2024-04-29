@@ -273,29 +273,25 @@ checksum = "96d30a06541fbafbc7f82ed10c06164cfbd2c401138f6addd8404629c4b16711"
 [[package]]
 name = "arti-client"
 version = "0.17.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f4020944e05f8a92bf8772d76cc067495c7d040febd20286faa91fd33dc79ac7"
+source = "git+https://github.com/oleonardolima/arti?branch=feat/add-is-onion-addr-and-is-hostname-to-tor-addr#42349dd28826d1587c6c9b1f212b812eceaab8ff"
 dependencies = [
  "cfg-if",
+ "derive-deftly",
  "derive_builder_fork_arti",
  "derive_more",
- "directories",
  "educe",
  "fs-mistrust",
  "futures",
  "hostname-validator",
  "humantime-serde",
  "libc",
- "pin-project",
  "postage",
  "safelog",
  "serde",
  "thiserror",
  "tor-async-utils",
  "tor-basic-utils",
- "tor-cell",
  "tor-chanmgr",
- "tor-checkable",
  "tor-circmgr",
  "tor-config",
  "tor-dirmgr",
@@ -456,6 +452,15 @@ name = "atomic"
 version = "0.5.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c59bdb34bc650a32731b31bd8f0829cc15d24a708ee31559e0bb34f2bc320cba"
+
+[[package]]
+name = "atomic"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8d818003e740b63afc82337e3160717f4f63078720a810b7b903e70a5d1d2994"
+dependencies = [
+ "bytemuck",
+]
 
 [[package]]
 name = "autocfg"
@@ -898,6 +903,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c3ac9f8b63eca6fd385229b3675f6cc0dc5c8a5c8a54a59d4f52ffd670d87b0c"
 
 [[package]]
+name = "bytemuck"
+version = "1.15.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5d6d68c57235a3a081186990eca2867354726650f42f7516ca50c28d6281fd15"
+
+[[package]]
 name = "byteorder"
 version = "1.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -923,8 +934,7 @@ dependencies = [
 [[package]]
 name = "caret"
 version = "0.4.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2d55bb9904b8ef817fd66664cba4ecacac936781105c1016b0d2e13b900218db"
+source = "git+https://github.com/oleonardolima/arti?branch=feat/add-is-onion-addr-and-is-hostname-to-tor-addr#42349dd28826d1587c6c9b1f212b812eceaab8ff"
 
 [[package]]
 name = "cast"
@@ -1125,19 +1135,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d16048cd947b08fa32c24458a22f5dc5e835264f689f4f5653210c69fd107363"
 dependencies = [
  "crossbeam-utils",
-]
-
-[[package]]
-name = "config"
-version = "0.14.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7328b20597b53c2454f0b1919720c25c7339051c02b72b7e05409e00b14132be"
-dependencies = [
- "lazy_static",
- "nom",
- "pathdiff",
- "serde",
- "toml",
 ]
 
 [[package]]
@@ -1500,17 +1497,7 @@ version = "0.7.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5283ac2881753c76c0892406705553f0d9ab30649f81e18964d3408f4501edb8"
 dependencies = [
- "derive-adhoc-macros 0.7.3",
- "heck 0.4.1",
-]
-
-[[package]]
-name = "derive-adhoc"
-version = "0.8.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0c768757217a40364c3af0b732d10bf9ed8af1e4f80b32fd5eeed94f375304b8"
-dependencies = [
- "derive-adhoc-macros 0.8.4",
+ "derive-adhoc-macros",
  "heck 0.4.1",
 ]
 
@@ -1532,14 +1519,25 @@ dependencies = [
 ]
 
 [[package]]
-name = "derive-adhoc-macros"
-version = "0.8.4"
+name = "derive-deftly"
+version = "0.10.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3b41d3d974cda1ce7e9b40f7ec5160a099f20345bc3137447e526e3ba9d63245"
+checksum = "2c173dfcd5b92893ab05a8efb18b9522db4db6e0b93db5740f397573c027ce1e"
+dependencies = [
+ "derive-deftly-macros",
+ "heck 0.4.1",
+]
+
+[[package]]
+name = "derive-deftly-macros"
+version = "0.10.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "216fa20211bcd18cc359b75413bfb6cf89f62568fa27bc5fed3778a7a16e17af"
 dependencies = [
  "heck 0.4.1",
- "itertools 0.12.1",
- "proc-macro-crate 2.0.0",
+ "indexmap 1.9.3",
+ "itertools 0.10.5",
+ "proc-macro-crate 1.3.1",
  "proc-macro2",
  "quote",
  "sha3",
@@ -3540,6 +3538,19 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c007b1ae3abe1cb6f85a16305acd418b7ca6343b953633fee2b76d8f108b830f"
 
 [[package]]
+name = "figment"
+version = "0.10.18"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d032832d74006f99547004d49410a4b4218e4c33382d56ca3ff89df74f86b953"
+dependencies = [
+ "atomic 0.6.0",
+ "serde",
+ "toml",
+ "uncased",
+ "version_check",
+]
+
+[[package]]
 name = "filetime"
 version = "0.2.23"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3615,12 +3626,10 @@ dependencies = [
 [[package]]
 name = "fs-mistrust"
 version = "0.7.9"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5764b75624acb3ec878488145198a8fed761ca18fe26759d4ac4c7543fd2373a"
+source = "git+https://github.com/oleonardolima/arti?branch=feat/add-is-onion-addr-and-is-hostname-to-tor-addr#42349dd28826d1587c6c9b1f212b812eceaab8ff"
 dependencies = [
  "derive_builder_fork_arti",
  "dirs",
- "educe",
  "libc",
  "once_cell",
  "pwd-grp",
@@ -5389,12 +5398,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "de3145af08024dea9fa9914f381a17b8fc6034dfb00f3a84013f7ff43f29ed4c"
 
 [[package]]
-name = "pathdiff"
-version = "0.2.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8835116a5c179084a830efb3adc117ab007512b535bc1a21c991d3b32a6b44dd"
-
-[[package]]
 name = "pem"
 version = "3.0.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5570,7 +5573,7 @@ version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "af3fb618632874fb76937c2361a7f22afd393c982a2165595407edc75b06d3c1"
 dependencies = [
- "atomic",
+ "atomic 0.5.3",
  "crossbeam-queue",
  "futures",
  "parking_lot",
@@ -5762,7 +5765,7 @@ version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6955c41fd7e4283bdf6ff3e7218b7e3f8ef24c4236b31d22be050f4cfd5e2a2c"
 dependencies = [
- "derive-adhoc 0.7.3",
+ "derive-adhoc",
  "libc",
  "paste",
  "thiserror",
@@ -6004,8 +6007,7 @@ dependencies = [
 [[package]]
 name = "retry-error"
 version = "0.5.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d7dea0c97723329951a3ed41ce0de8b8e389de3de4b815fb86ff57f6ab868f04"
+source = "git+https://github.com/oleonardolima/arti?branch=feat/add-is-onion-addr-and-is-hostname-to-tor-addr#42349dd28826d1587c6c9b1f212b812eceaab8ff"
 
 [[package]]
 name = "rfc6979"
@@ -6245,8 +6247,7 @@ checksum = "e86697c916019a8588c99b5fac3cead74ec0b4b819707a682fd4d23fa0ce1ba1"
 [[package]]
 name = "safelog"
 version = "0.3.6"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5ea892f8598a3682b6ed10ed9d8522b50366a792953eda37e1d9ddf01e183e3f"
+source = "git+https://github.com/oleonardolima/arti?branch=feat/add-is-onion-addr-and-is-hostname-to-tor-addr#42349dd28826d1587c6c9b1f212b812eceaab8ff"
 dependencies = [
  "derive_more",
  "educe",
@@ -7351,21 +7352,18 @@ dependencies = [
 [[package]]
 name = "tor-async-utils"
 version = "0.17.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cd81ab26694008630c7be8e14faf5bd1d78b177dd41be694d132d695a315556b"
+source = "git+https://github.com/oleonardolima/arti?branch=feat/add-is-onion-addr-and-is-hostname-to-tor-addr#42349dd28826d1587c6c9b1f212b812eceaab8ff"
 dependencies = [
  "futures",
  "pin-project",
  "postage",
- "thiserror",
  "void",
 ]
 
 [[package]]
 name = "tor-basic-utils"
 version = "0.17.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8c2bfdcdf0279b4ba2ef744406cb4496403677c8854c306ccbf758eb378defd3"
+source = "git+https://github.com/oleonardolima/arti?branch=feat/add-is-onion-addr-and-is-hostname-to-tor-addr#42349dd28826d1587c6c9b1f212b812eceaab8ff"
 dependencies = [
  "hex",
  "libc",
@@ -7379,8 +7377,7 @@ dependencies = [
 [[package]]
 name = "tor-bytes"
 version = "0.17.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7538b9751dfe24c67977378dfd79ab21e4cc99641549fd12d9a8ba98a5752ee2"
+source = "git+https://github.com/oleonardolima/arti?branch=feat/add-is-onion-addr-and-is-hostname-to-tor-addr#42349dd28826d1587c6c9b1f212b812eceaab8ff"
 dependencies = [
  "bytes",
  "digest 0.10.7",
@@ -7395,8 +7392,7 @@ dependencies = [
 [[package]]
 name = "tor-cell"
 version = "0.17.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0b60d58a4f742830cf2e94b83f157e7c1ee3895bd55f912eede58c25835b5fb9"
+source = "git+https://github.com/oleonardolima/arti?branch=feat/add-is-onion-addr-and-is-hostname-to-tor-addr#42349dd28826d1587c6c9b1f212b812eceaab8ff"
 dependencies = [
  "bitflags 2.4.2",
  "bytes",
@@ -7420,8 +7416,7 @@ dependencies = [
 [[package]]
 name = "tor-cert"
 version = "0.17.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "87bb9b74a5f5402768cee442147641d39ca2d0cba459f52fcca03cd8d978bd0d"
+source = "git+https://github.com/oleonardolima/arti?branch=feat/add-is-onion-addr-and-is-hostname-to-tor-addr#42349dd28826d1587c6c9b1f212b812eceaab8ff"
 dependencies = [
  "caret",
  "derive_more",
@@ -7435,8 +7430,7 @@ dependencies = [
 [[package]]
 name = "tor-chanmgr"
 version = "0.17.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f30317ba968577ef37743d0b65c49816464de3f8642b81dea62206b7a86f4fc2"
+source = "git+https://github.com/oleonardolima/arti?branch=feat/add-is-onion-addr-and-is-hostname-to-tor-addr#42349dd28826d1587c6c9b1f212b812eceaab8ff"
 dependencies = [
  "async-trait",
  "derive_builder_fork_arti",
@@ -7467,8 +7461,7 @@ dependencies = [
 [[package]]
 name = "tor-checkable"
 version = "0.17.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cecb84b29d9a9500580cee42625a7ced01f7a7c45933c8ee81cd49ba10de2947"
+source = "git+https://github.com/oleonardolima/arti?branch=feat/add-is-onion-addr-and-is-hostname-to-tor-addr#42349dd28826d1587c6c9b1f212b812eceaab8ff"
 dependencies = [
  "humantime",
  "signature",
@@ -7479,8 +7472,7 @@ dependencies = [
 [[package]]
 name = "tor-circmgr"
 version = "0.17.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "281cf6ef32c8800425aa219747c73a8c939a40038a4f4dbaefa9559892528093"
+source = "git+https://github.com/oleonardolima/arti?branch=feat/add-is-onion-addr-and-is-hostname-to-tor-addr#42349dd28826d1587c6c9b1f212b812eceaab8ff"
 dependencies = [
  "amplify",
  "async-trait",
@@ -7508,7 +7500,6 @@ dependencies = [
  "tor-config",
  "tor-error",
  "tor-guardmgr",
- "tor-hscrypto",
  "tor-linkspec",
  "tor-netdir",
  "tor-netdoc",
@@ -7525,15 +7516,14 @@ dependencies = [
 [[package]]
 name = "tor-config"
 version = "0.17.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "df4e50e84389aeb81acf672f7dac9389a76d21505089db5cd3ae8e7d59374b2f"
+source = "git+https://github.com/oleonardolima/arti?branch=feat/add-is-onion-addr-and-is-hostname-to-tor-addr#42349dd28826d1587c6c9b1f212b812eceaab8ff"
 dependencies = [
- "config",
- "derive-adhoc 0.8.4",
+ "derive-deftly",
  "derive_builder_fork_arti",
  "directories",
  "educe",
  "either",
+ "figment",
  "fs-mistrust",
  "itertools 0.12.1",
  "once_cell",
@@ -7555,8 +7545,7 @@ dependencies = [
 [[package]]
 name = "tor-consdiff"
 version = "0.17.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "91726266349ba3f10456c0bf0fb07fd0e6c3a344178d869eae93219ff78b54bb"
+source = "git+https://github.com/oleonardolima/arti?branch=feat/add-is-onion-addr-and-is-hostname-to-tor-addr#42349dd28826d1587c6c9b1f212b812eceaab8ff"
 dependencies = [
  "digest 0.10.7",
  "hex",
@@ -7567,8 +7556,7 @@ dependencies = [
 [[package]]
 name = "tor-dirclient"
 version = "0.17.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d9e102c3747d09963122edd07458c68c56e18034869102c63a6a37a0620c7e6f"
+source = "git+https://github.com/oleonardolima/arti?branch=feat/add-is-onion-addr-and-is-hostname-to-tor-addr#42349dd28826d1587c6c9b1f212b812eceaab8ff"
 dependencies = [
  "async-compression",
  "base64ct",
@@ -7595,8 +7583,7 @@ dependencies = [
 [[package]]
 name = "tor-dirmgr"
 version = "0.17.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "90293b08ace33a5a49992eab54fa425c59d0fca7784865d9613ebaccdcaf630d"
+source = "git+https://github.com/oleonardolima/arti?branch=feat/add-is-onion-addr-and-is-hostname-to-tor-addr#42349dd28826d1587c6c9b1f212b812eceaab8ff"
 dependencies = [
  "async-trait",
  "base64ct",
@@ -7617,7 +7604,6 @@ dependencies = [
  "paste",
  "postage",
  "rand",
- "retry-error",
  "rusqlite",
  "safelog",
  "scopeguard",
@@ -7647,8 +7633,7 @@ dependencies = [
 [[package]]
 name = "tor-error"
 version = "0.17.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1ad73603da0675c5f16c8ee9f6e3349ad46c6645bd1653d59cc43fe2e5656234"
+source = "git+https://github.com/oleonardolima/arti?branch=feat/add-is-onion-addr-and-is-hostname-to-tor-addr#42349dd28826d1587c6c9b1f212b812eceaab8ff"
 dependencies = [
  "backtrace",
  "derive_more",
@@ -7665,11 +7650,11 @@ dependencies = [
 [[package]]
 name = "tor-guardmgr"
 version = "0.17.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6821b8054aff8d0bf8d6f9004fc98487d5122237715704e448f03306ffbebf62"
+source = "git+https://github.com/oleonardolima/arti?branch=feat/add-is-onion-addr-and-is-hostname-to-tor-addr#42349dd28826d1587c6c9b1f212b812eceaab8ff"
 dependencies = [
  "amplify",
  "base64ct",
+ "derive-deftly",
  "derive_builder_fork_arti",
  "derive_more",
  "dyn-clone",
@@ -7705,11 +7690,10 @@ dependencies = [
 [[package]]
 name = "tor-hsclient"
 version = "0.17.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "833812aab4961e783329c7f0e0b0c218d4548a4225fce414405167aab29cf04e"
+source = "git+https://github.com/oleonardolima/arti?branch=feat/add-is-onion-addr-and-is-hostname-to-tor-addr#42349dd28826d1587c6c9b1f212b812eceaab8ff"
 dependencies = [
  "async-trait",
- "derive-adhoc 0.8.4",
+ "derive-deftly",
  "derive_more",
  "educe",
  "either",
@@ -7717,7 +7701,6 @@ dependencies = [
  "itertools 0.12.1",
  "postage",
  "rand",
- "rand_core",
  "retry-error",
  "safelog",
  "slotmap",
@@ -7747,8 +7730,7 @@ dependencies = [
 [[package]]
 name = "tor-hscrypto"
 version = "0.17.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "24b0c899ce91d6fe6461f646d1e3c8d421dd5c8b570c0799540c4d4a2de80013"
+source = "git+https://github.com/oleonardolima/arti?branch=feat/add-is-onion-addr-and-is-hostname-to-tor-addr#42349dd28826d1587c6c9b1f212b812eceaab8ff"
 dependencies = [
  "data-encoding",
  "derive_more",
@@ -7756,9 +7738,7 @@ dependencies = [
  "itertools 0.12.1",
  "paste",
  "rand",
- "rand_core",
  "safelog",
- "serde",
  "signature",
  "subtle",
  "thiserror",
@@ -7772,12 +7752,11 @@ dependencies = [
 [[package]]
 name = "tor-keymgr"
 version = "0.17.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "907f80483a71d956f1654efbe994acea1082bf9517092af13a69f8d9f6423574"
+source = "git+https://github.com/oleonardolima/arti?branch=feat/add-is-onion-addr-and-is-hostname-to-tor-addr#42349dd28826d1587c6c9b1f212b812eceaab8ff"
 dependencies = [
  "amplify",
  "arrayvec",
- "derive-adhoc 0.8.4",
+ "derive-deftly",
  "derive_builder_fork_arti",
  "derive_more",
  "downcast-rs",
@@ -7787,7 +7766,6 @@ dependencies = [
  "humantime",
  "inventory",
  "itertools 0.12.1",
- "paste",
  "rand",
  "serde",
  "ssh-key",
@@ -7805,16 +7783,14 @@ dependencies = [
 [[package]]
 name = "tor-linkspec"
 version = "0.17.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0b7cb1a138572c49d4c7f3d5810801b35f3ade7450b9679161e8336c5deb04f2"
+source = "git+https://github.com/oleonardolima/arti?branch=feat/add-is-onion-addr-and-is-hostname-to-tor-addr#42349dd28826d1587c6c9b1f212b812eceaab8ff"
 dependencies = [
  "base64ct",
  "by_address",
  "caret",
- "cfg-if",
+ "derive-deftly",
  "derive_builder_fork_arti",
  "derive_more",
- "educe",
  "hex",
  "itertools 0.12.1",
  "safelog",
@@ -7832,8 +7808,7 @@ dependencies = [
 [[package]]
 name = "tor-llcrypto"
 version = "0.17.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ca144066d80aabf43ff5d5ad2796de70d6eac26339fcfc4af38a0de8b27a1990"
+source = "git+https://github.com/oleonardolima/arti?branch=feat/add-is-onion-addr-and-is-hostname-to-tor-addr#42349dd28826d1587c6c9b1f212b812eceaab8ff"
 dependencies = [
  "aes",
  "base64ct",
@@ -7863,8 +7838,7 @@ dependencies = [
 [[package]]
 name = "tor-log-ratelim"
 version = "0.17.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ab79604449b22d8dd9ff16a1a78a4ef98e606a1e5aa899c242528dffe42c1321"
+source = "git+https://github.com/oleonardolima/arti?branch=feat/add-is-onion-addr-and-is-hostname-to-tor-addr#42349dd28826d1587c6c9b1f212b812eceaab8ff"
 dependencies = [
  "futures",
  "humantime",
@@ -7879,11 +7853,9 @@ dependencies = [
 [[package]]
 name = "tor-netdir"
 version = "0.17.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "be3dbedfe6e5d983ca3dc39ef699c0da7a3192f51da7ed466a2d7566389259b7"
+source = "git+https://github.com/oleonardolima/arti?branch=feat/add-is-onion-addr-and-is-hostname-to-tor-addr#42349dd28826d1587c6c9b1f212b812eceaab8ff"
 dependencies = [
  "bitflags 2.4.2",
- "derive_builder_fork_arti",
  "derive_more",
  "digest 0.10.7",
  "futures",
@@ -7898,8 +7870,6 @@ dependencies = [
  "thiserror",
  "time",
  "tor-basic-utils",
- "tor-checkable",
- "tor-config",
  "tor-error",
  "tor-hscrypto",
  "tor-linkspec",
@@ -7914,8 +7884,7 @@ dependencies = [
 [[package]]
 name = "tor-netdoc"
 version = "0.17.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c20047c9f3104723d8966552ec4bd4c38057b5a0857705a6bbecedafb4cc0aef"
+source = "git+https://github.com/oleonardolima/arti?branch=feat/add-is-onion-addr-and-is-hostname-to-tor-addr#42349dd28826d1587c6c9b1f212b812eceaab8ff"
 dependencies = [
  "amplify",
  "base64ct",
@@ -7957,10 +7926,9 @@ dependencies = [
 [[package]]
 name = "tor-persist"
 version = "0.17.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7401ddb8c6a9ed71adeab421a20b786196409f02f389b415bb56041a5b0c80d4"
+source = "git+https://github.com/oleonardolima/arti?branch=feat/add-is-onion-addr-and-is-hostname-to-tor-addr#42349dd28826d1587c6c9b1f212b812eceaab8ff"
 dependencies = [
- "derive-adhoc 0.8.4",
+ "derive-deftly",
  "derive_more",
  "filetime",
  "fs-mistrust",
@@ -7979,8 +7947,7 @@ dependencies = [
 [[package]]
 name = "tor-proto"
 version = "0.17.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "81e852aac27c0b8822ff6a1c5a32b24c7f05f1199e20c84caf34fdd4207139b2"
+source = "git+https://github.com/oleonardolima/arti?branch=feat/add-is-onion-addr-and-is-hostname-to-tor-addr#42349dd28826d1587c6c9b1f212b812eceaab8ff"
 dependencies = [
  "asynchronous-codec",
  "bitvec",
@@ -8014,7 +7981,6 @@ dependencies = [
  "tor-linkspec",
  "tor-llcrypto",
  "tor-log-ratelim",
- "tor-protover",
  "tor-rtcompat",
  "tor-rtmock",
  "tor-units",
@@ -8028,8 +7994,7 @@ dependencies = [
 [[package]]
 name = "tor-protover"
 version = "0.17.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "88c21ab6d4dd884741bf51373b7146cf9dee0be69172ef5bf20ff2dc0561bae9"
+source = "git+https://github.com/oleonardolima/arti?branch=feat/add-is-onion-addr-and-is-hostname-to-tor-addr#42349dd28826d1587c6c9b1f212b812eceaab8ff"
 dependencies = [
  "caret",
  "thiserror",
@@ -8038,10 +8003,8 @@ dependencies = [
 [[package]]
 name = "tor-relay-selection"
 version = "0.17.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7cd9d5ca40722685f05598b8f67c7033923493d0e38e83f04e1e69d3b21935dd"
+source = "git+https://github.com/oleonardolima/arti?branch=feat/add-is-onion-addr-and-is-hostname-to-tor-addr#42349dd28826d1587c6c9b1f212b812eceaab8ff"
 dependencies = [
- "derive_more",
  "rand",
  "serde",
  "tor-basic-utils",
@@ -8053,8 +8016,7 @@ dependencies = [
 [[package]]
 name = "tor-rtcompat"
 version = "0.17.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9974851ee6b7ba68a955cb67b56ac2164b4c7b520feb81533745f7ca119ed898"
+source = "git+https://github.com/oleonardolima/arti?branch=feat/add-is-onion-addr-and-is-hostname-to-tor-addr#42349dd28826d1587c6c9b1f212b812eceaab8ff"
 dependencies = [
  "async-native-tls",
  "async-trait",
@@ -8069,18 +8031,18 @@ dependencies = [
  "thiserror",
  "tokio",
  "tokio-util",
+ "tracing",
 ]
 
 [[package]]
 name = "tor-rtmock"
 version = "0.17.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "576fe55ddf37e640ed2a020d81e3a4bc847551b6142640078b4a887415be2c6d"
+source = "git+https://github.com/oleonardolima/arti?branch=feat/add-is-onion-addr-and-is-hostname-to-tor-addr#42349dd28826d1587c6c9b1f212b812eceaab8ff"
 dependencies = [
  "amplify",
  "async-trait",
  "backtrace",
- "derive-adhoc 0.8.4",
+ "derive-deftly",
  "derive_more",
  "educe",
  "futures",
@@ -8102,8 +8064,7 @@ dependencies = [
 [[package]]
 name = "tor-socksproto"
 version = "0.17.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3135cd3c23683a64cec756d960b72dae12ada350b0e825bfe5fcda811880ae76"
+source = "git+https://github.com/oleonardolima/arti?branch=feat/add-is-onion-addr-and-is-hostname-to-tor-addr#42349dd28826d1587c6c9b1f212b812eceaab8ff"
 dependencies = [
  "caret",
  "subtle",
@@ -8115,8 +8076,7 @@ dependencies = [
 [[package]]
 name = "tor-units"
 version = "0.17.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ab81d120789c8639ceb374d23d180cbd4856e68458061400ecd9b6159bb6ca31"
+source = "git+https://github.com/oleonardolima/arti?branch=feat/add-is-onion-addr-and-is-hostname-to-tor-addr#42349dd28826d1587c6c9b1f212b812eceaab8ff"
 dependencies = [
  "derive_more",
  "thiserror",
@@ -8303,6 +8263,15 @@ name = "typenum"
 version = "1.17.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "42ff0bf0c66b8238c6f3b578df37d0b7848e55df8577b3f74f92a69acceeb825"
+
+[[package]]
+name = "uncased"
+version = "0.9.10"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e1b88fcfe09e89d3866a5c11019378088af2d24c3fbd4f0543f96b479ec90697"
+dependencies = [
+ "version_check",
+]
 
 [[package]]
 name = "unicode-bidi"

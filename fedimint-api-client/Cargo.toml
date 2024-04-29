@@ -56,7 +56,7 @@ bitvec = "1.0.1"
 parity-scale-codec = { version = "3.6.9", features = ["derive"] }
 imbl = "2.0.3"
 backon = "=0.4.3" # don't upgrade unless really needed
-arti-client = { version = "0.17.0", features = ["onion-service-client"]}
+arti-client = { version = "0.17.0", features = ["onion-service-client"], git = "https://github.com/oleonardolima/arti", branch = "feat/add-is-onion-addr-and-is-hostname-to-tor-addr" }
 jsonrpsee-client-transport = { version = "0.22.4" }
 rustls-native-certs = { version = "0.7" }
 webpki-roots = { version = "0.26" }
