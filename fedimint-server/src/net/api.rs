@@ -44,7 +44,7 @@ use fedimint_core::{OutPoint, PeerId, TransactionId};
 use fedimint_logging::LOG_NET_API;
 use futures::StreamExt;
 use jsonrpsee::RpcModule;
-use secp256k1_24::SECP256K1;
+use secp256k1::SECP256K1;
 use tokio::sync::RwLock;
 use tracing::{debug, info};
 
