@@ -8,10 +8,10 @@ name: Daily check
 
 jobs:
   audit:
-    runs-on: [self-hosted, linux]
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: rustsec/audit-check@fe0359b3e165e4d83e11ffab7715e56c43cc2d76
+      - uses: rustsec/audit-check@v1
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
 
