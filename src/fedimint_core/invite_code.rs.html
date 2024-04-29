@@ -208,6 +208,33 @@
 <a href="#208" id="208">208</a>
 <a href="#209" id="209">209</a>
 <a href="#210" id="210">210</a>
+<a href="#211" id="211">211</a>
+<a href="#212" id="212">212</a>
+<a href="#213" id="213">213</a>
+<a href="#214" id="214">214</a>
+<a href="#215" id="215">215</a>
+<a href="#216" id="216">216</a>
+<a href="#217" id="217">217</a>
+<a href="#218" id="218">218</a>
+<a href="#219" id="219">219</a>
+<a href="#220" id="220">220</a>
+<a href="#221" id="221">221</a>
+<a href="#222" id="222">222</a>
+<a href="#223" id="223">223</a>
+<a href="#224" id="224">224</a>
+<a href="#225" id="225">225</a>
+<a href="#226" id="226">226</a>
+<a href="#227" id="227">227</a>
+<a href="#228" id="228">228</a>
+<a href="#229" id="229">229</a>
+<a href="#230" id="230">230</a>
+<a href="#231" id="231">231</a>
+<a href="#232" id="232">232</a>
+<a href="#233" id="233">233</a>
+<a href="#234" id="234">234</a>
+<a href="#235" id="235">235</a>
+<a href="#236" id="236">236</a>
+<a href="#237" id="237">237</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>core::fmt;
 <span class="kw">use </span>std::borrow::Cow;
 <span class="kw">use </span>std::collections::BTreeMap;
@@ -216,8 +243,7 @@
 <span class="kw">use </span>std::str::FromStr;
 
 <span class="kw">use </span>anyhow::ensure;
-<span class="kw">use </span>bech32::Variant::Bech32m;
-<span class="kw">use </span>bech32::{FromBase32 <span class="kw">as _</span>, ToBase32 <span class="kw">as _</span>};
+<span class="kw">use </span>bech32::{Bech32m, Hrp};
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 
 <span class="kw">use </span><span class="kw">crate</span>::config::FederationId;
@@ -368,19 +394,17 @@
 /// ```txt
 /// [ hrp (4 bytes) ] [ id (48 bytes) ] ([ url len (2 bytes) ] [ url bytes (url len bytes) ])+
 /// ```
-</span><span class="kw">const </span>BECH32_HRP: <span class="kw-2">&amp;</span>str = <span class="string">"fed1"</span>;
+</span><span class="kw">const </span>BECH32_HRP: Hrp = Hrp::parse_unchecked(<span class="string">"fed1"</span>);
 
 <span class="kw">impl </span>FromStr <span class="kw">for </span>InviteCode {
     <span class="kw">type </span><span class="prelude-val">Err </span>= anyhow::Error;
 
     <span class="kw">fn </span>from_str(encoded: <span class="kw-2">&amp;</span>str) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, <span class="self">Self</span>::Err&gt; {
-        <span class="kw">let </span>(hrp, data, variant) = bech32::decode(encoded)<span class="question-mark">?</span>;
+        <span class="kw">let </span>(hrp, data) = bech32::decode(encoded)<span class="question-mark">?</span>;
 
         <span class="macro">ensure!</span>(hrp == BECH32_HRP, <span class="string">"Invalid HRP in bech32 encoding"</span>);
-        <span class="macro">ensure!</span>(variant == Bech32m, <span class="string">"Expected Bech32m encoding"</span>);
 
-        <span class="kw">let </span>bytes: Vec&lt;u8&gt; = Vec::&lt;u8&gt;::from_base32(<span class="kw-2">&amp;</span>data)<span class="question-mark">?</span>;
-        <span class="kw">let </span>invite = InviteCode::consensus_decode(<span class="kw-2">&amp;mut </span>Cursor::new(bytes), <span class="kw-2">&amp;</span>Default::default())<span class="question-mark">?</span>;
+        <span class="kw">let </span>invite = InviteCode::consensus_decode(<span class="kw-2">&amp;mut </span>Cursor::new(data), <span class="kw-2">&amp;</span>Default::default())<span class="question-mark">?</span>;
 
         <span class="prelude-val">Ok</span>(invite)
     }
@@ -394,8 +418,7 @@
         <span class="self">self</span>.consensus_encode(<span class="kw-2">&amp;mut </span>data)
             .expect(<span class="string">"Vec&lt;u8&gt; provides capacity"</span>);
 
-        <span class="kw">let </span>encode =
-            bech32::encode(BECH32_HRP, data.to_base32(), Bech32m).map_err(|<span class="kw">_</span>| fmt::Error)<span class="question-mark">?</span>;
+        <span class="kw">let </span>encode = bech32::encode::&lt;Bech32m&gt;(BECH32_HRP, <span class="kw-2">&amp;</span>data).map_err(|<span class="kw">_</span>| fmt::Error)<span class="question-mark">?</span>;
         formatter.write_str(<span class="kw-2">&amp;</span>encode)
     }
 }
@@ -416,6 +439,37 @@
     {
         <span class="kw">let </span>string = Cow::&lt;str&gt;::deserialize(deserializer)<span class="question-mark">?</span>;
         <span class="self">Self</span>::from_str(<span class="kw-2">&amp;</span>string).map_err(serde::de::Error::custom)
+    }
+}
+
+<span class="attr">#[cfg(test)]
+</span><span class="kw">mod </span>tests {
+    <span class="kw">use </span>std::str::FromStr;
+
+    <span class="kw">use </span><span class="kw">crate</span>::config::FederationId;
+    <span class="kw">use </span><span class="kw">crate</span>::invite_code::InviteCode;
+
+    <span class="attr">#[test]
+    </span><span class="kw">fn </span>test_invite_code_to_from_string() {
+        <span class="kw">let </span>invite_code_str = <span class="string">"fed11qgqpu8rhwden5te0vejkg6tdd9h8gepwd4cxcumxv4jzuen0duhsqqfqh6nl7sgk72caxfx8khtfnn8y436q3nhyrkev3qp8ugdhdllnh86qmp42pm"</span>;
+        <span class="kw">let </span>invite_code = InviteCode::from_str(invite_code_str).expect(<span class="string">"valid invite code"</span>);
+
+        <span class="macro">assert_eq!</span>(invite_code.to_string(), invite_code_str);
+        <span class="macro">assert_eq!</span>(
+            invite_code.<span class="number">0</span>,
+            [
+                <span class="kw">crate</span>::invite_code::InviteCodeData::Api {
+                    url: <span class="string">"wss://fedimintd.mplsfed.foo/"</span>.parse().expect(<span class="string">"valid url"</span>),
+                    peer: <span class="kw">crate</span>::PeerId(<span class="number">0</span>),
+                },
+                <span class="kw">crate</span>::invite_code::InviteCodeData::FederationId(FederationId(
+                    bitcoin_hashes::sha256::Hash::from_str(
+                        <span class="string">"bea7ff4116f2b1d324c7b5d699cce4ac7408cee41db2c88027e21b76fff3b9f4"
+                    </span>)
+                    .expect(<span class="string">"valid hash"</span>)
+                ))
+            ]
+        );
     }
 }
 </code></pre></div></section></main></body></html>
