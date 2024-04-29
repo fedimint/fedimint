@@ -5,7 +5,10 @@ use std::time::{Duration, SystemTime};
 use fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
 use fedimint_client::transaction::ClientInput;
 use fedimint_client::DynGlobalClientContext;
-use fedimint_core::bitcoin_migration::bitcoin30_to_bitcoin29_script;
+use fedimint_core::bitcoin_migration::{
+    bitcoin29_to_bitcoin30_script, bitcoin29_to_bitcoin30_txid, bitcoin30_to_bitcoin29_script,
+    bitcoin30_to_bitcoin29_transaction,
+};
 use fedimint_core::core::OperationId;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::task::sleep;
@@ -109,7 +112,11 @@ async fn await_created_btc_transaction_submitted(
             .script_pubkey(),
     );
     loop {
-        match context.rpc.watch_script_history(&script).await {
+        match context
+            .rpc
+            .watch_script_history(&bitcoin29_to_bitcoin30_script(script.clone()))
+            .await
+        {
             Ok(_) => break,
             Err(e) => warn!("Error while awaiting btc tx submitting: {e}"),
         }
@@ -122,7 +129,11 @@ async fn await_created_btc_transaction_submitted(
         ))
         .await;
 
-        match context.rpc.get_script_history(&script).await {
+        match context
+            .rpc
+            .get_script_history(&bitcoin29_to_bitcoin30_script(script.clone()))
+            .await
+        {
             Ok(received) => {
                 // TODO: fix
                 if received.len() > 1 {
@@ -135,7 +146,8 @@ async fn await_created_btc_transaction_submitted(
                         .iter()
                         .enumerate()
                         .find_map(|(idx, output)| {
-                            if output.script_pubkey == script {
+                            if output.script_pubkey == bitcoin29_to_bitcoin30_script(script.clone())
+                            {
                                 Some(idx as u32)
                             } else {
                                 None
@@ -143,7 +155,7 @@ async fn await_created_btc_transaction_submitted(
                         })
                         .expect("TODO: handle invalid tx returned by API");
 
-                    return (transaction, out_idx);
+                    return (bitcoin30_to_bitcoin29_transaction(&transaction), out_idx);
                 } else {
                     trace!("No transactions received yet for script {script:?}");
                 }
@@ -223,7 +235,9 @@ async fn await_btc_transaction_confirmed(
 
         let confirmation_block_count = match context
             .rpc
-            .get_tx_block_height(&waiting_state.btc_transaction.txid())
+            .get_tx_block_height(&bitcoin29_to_bitcoin30_txid(
+                waiting_state.btc_transaction.txid(),
+            ))
             .await
         {
             Ok(Some(confirmation_height)) => Some(confirmation_height + 1),
@@ -252,7 +266,9 @@ async fn await_btc_transaction_confirmed(
         // Get txout proof
         let txout_proof = match context
             .rpc
-            .get_txout_proof(waiting_state.btc_transaction.txid())
+            .get_txout_proof(bitcoin29_to_bitcoin30_txid(
+                waiting_state.btc_transaction.txid(),
+            ))
             .await
         {
             Ok(txout_proof) => txout_proof,

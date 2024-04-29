@@ -7,7 +7,8 @@ use fedimint_bitcoind::DynBitcoindRpc;
 use fedimint_client::secret::{PlainRootSecretStrategy, RootSecretStrategy};
 use fedimint_client::ClientHandleArc;
 use fedimint_core::bitcoin_migration::{
-    bitcoin29_to_bitcoin30_network, bitcoin30_to_bitcoin29_address, bitcoin30_to_bitcoin29_amount,
+    bitcoin29_to_bitcoin30_network, bitcoin29_to_bitcoin30_txid, bitcoin30_to_bitcoin29_address,
+    bitcoin30_to_bitcoin29_amount, bitcoin30_to_bitcoin29_block_hash,
     bitcoin30_to_bitcoin29_network, bitcoin30_to_bitcoin29_secp256k1_public_key,
 };
 use fedimint_core::db::mem_impl::MemDatabase;
@@ -70,7 +71,7 @@ async fn peg_in<'a>(
         )
         .await;
     let height = dyn_bitcoin_rpc
-        .get_tx_block_height(&tx.txid())
+        .get_tx_block_height(&bitcoin29_to_bitcoin30_txid(tx.txid()))
         .await?
         .context("expected tx to be mined")?;
     info!(?height, ?tx, "Peg-in transaction mined");
@@ -143,13 +144,18 @@ async fn sanity_check_bitcoin_blocks() -> anyhow::Result<()> {
     let expected_transaction_block_count = current_block_count;
     let expected_transaction_height = expected_transaction_block_count - 1;
     assert_eq!(
-        dyn_bitcoin_rpc.get_tx_block_height(&tx.txid()).await?,
+        dyn_bitcoin_rpc
+            .get_tx_block_height(&bitcoin29_to_bitcoin30_txid(tx.txid()))
+            .await?,
         Some(expected_transaction_height),
     );
     let expected_transaction_block_hash = dyn_bitcoin_rpc
         .get_block_hash(expected_transaction_height)
         .await?;
-    assert_eq!(proof.block(), expected_transaction_block_hash);
+    assert_eq!(
+        proof.block(),
+        bitcoin30_to_bitcoin29_block_hash(expected_transaction_block_hash)
+    );
 
     Ok(())
 }

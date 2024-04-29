@@ -24,8 +24,8 @@ use fedimint_client::sm::{Context, DynState, ModuleNotifier, State, StateTransit
 use fedimint_client::transaction::{ClientOutput, TransactionBuilder};
 use fedimint_client::{sm_enum_variant_translation, DynGlobalClientContext};
 use fedimint_core::bitcoin_migration::{
-    bitcoin29_to_bitcoin30_network, bitcoin30_to_bitcoin29_address, bitcoin30_to_bitcoin29_keypair,
-    bitcoin30_to_bitcoin29_secp256k1_public_key,
+    bitcoin29_to_bitcoin30_network, bitcoin29_to_bitcoin30_script, bitcoin30_to_bitcoin29_address,
+    bitcoin30_to_bitcoin29_keypair, bitcoin30_to_bitcoin29_secp256k1_public_key,
 };
 use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, OperationId};
 use fedimint_core::db::{
@@ -403,7 +403,9 @@ impl WalletClientModule {
 
                         // Begin watching the script address
                         self.rpc
-                            .watch_script_history(&address.script_pubkey())
+                            .watch_script_history(&bitcoin29_to_bitcoin30_script(
+                                address.script_pubkey(),
+                            ))
                             .await?;
 
                         dbtx.add_state_machines(vec![self.client_ctx.make_dyn_state(sm)])

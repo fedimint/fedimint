@@ -23,8 +23,9 @@ use common::{
 };
 use fedimint_bitcoind::{create_bitcoind, DynBitcoindRpc};
 use fedimint_core::bitcoin_migration::{
-    bitcoin29_to_bitcoin30_secp256k1_public_key, bitcoin30_to_bitcoin29_script,
-    bitcoin30_to_bitcoin29_secp256k1_public_key,
+    bitcoin29_to_bitcoin30_secp256k1_public_key, bitcoin29_to_bitcoin30_transaction,
+    bitcoin29_to_bitcoin30_txid, bitcoin30_to_bitcoin29_block_hash, bitcoin30_to_bitcoin29_network,
+    bitcoin30_to_bitcoin29_script, bitcoin30_to_bitcoin29_secp256k1_public_key,
 };
 use fedimint_core::config::{
     ConfigGenModuleParams, DkgResult, ServerModuleConfig, ServerModuleConsensusConfig,
@@ -790,10 +791,12 @@ impl Wallet {
 
         let bitcoind_rpc = bitcoind;
 
-        let bitcoind_net = bitcoind_rpc
-            .get_network()
-            .await
-            .map_err(|e| WalletCreationError::RpcError(e.to_string()))?;
+        let bitcoind_net = bitcoin30_to_bitcoin29_network(
+            bitcoind_rpc
+                .get_network()
+                .await
+                .map_err(|e| WalletCreationError::RpcError(e.to_string()))?,
+        );
         if bitcoind_net != cfg.consensus.network {
             return Err(WalletCreationError::WrongNetwork(
                 cfg.consensus.network,
@@ -1015,7 +1018,7 @@ impl Wallet {
             for (txid, tx) in &pending_transactions {
                 if let Ok(Some(tx_height)) = self
                     .btc_rpc
-                    .get_tx_block_height(txid)
+                    .get_tx_block_height(&bitcoin29_to_bitcoin30_txid(*txid))
                     .await
                     .map(|r| r.filter(|tx_height| *tx_height == height as u64))
                 {
@@ -1036,7 +1039,7 @@ impl Wallet {
             }
 
             dbtx.insert_new_entry(
-                &BlockHashKey(BlockHash::from_inner(block_hash.into_inner())),
+                &BlockHashKey(bitcoin30_to_bitcoin29_block_hash(block_hash)),
                 &(),
             )
             .await;
@@ -1307,7 +1310,8 @@ pub async fn broadcast_pending_tx(mut dbtx: DatabaseTransaction<'_>, rpc: &DynBi
                 "Broadcasting peg-out",
             );
             trace!(transaction = ?tx);
-            rpc.submit_transaction(tx).await;
+            rpc.submit_transaction(bitcoin29_to_bitcoin30_transaction(&tx))
+                .await;
         }
     }
 }

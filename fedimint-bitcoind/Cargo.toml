@@ -19,7 +19,7 @@ path = "src/lib.rs"
 [dependencies]
 anyhow = { workspace = true }
 async-trait = { workspace = true }
-bitcoin = "0.29.2"
+bitcoin = { workspace = true }
 bitcoincore-rpc = { version = "0.16.0", optional = true }
 electrum-client = { version = "0.18.0", optional = true }
 esplora-client = { version = "0.6.0", default-features = false, features = ["async", "async-https-rustls"], optional = true }
