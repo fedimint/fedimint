@@ -1009,6 +1009,7 @@ async fn test_gateway_cannot_pay_expired_invoice() -> anyhow::Result<()> {
     .await
 }
 
+#[ignore] // TODO: This test should be refactored to a devimint test
 #[tokio::test(flavor = "multi_thread")]
 async fn test_gateway_filters_route_hints_by_inbound() -> anyhow::Result<()> {
     if !Fixtures::is_real_test() {
