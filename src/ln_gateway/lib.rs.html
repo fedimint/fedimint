@@ -2593,8 +2593,8 @@
                 .expect(<span class="string">"Gateway configuration should be set"</span>);
             <span class="kw">let </span><span class="kw-2">mut </span>federations = Vec::new();
             <span class="kw">let </span>federation_clients = <span class="self">self</span>.clients.read().<span class="kw">await</span>.clone().into_iter();
-            <span class="kw">let </span>route_hints = <span class="self">Self</span>::fetch_lightning_route_hints(
-                lightning_context.lnrpc.clone(),
+            <span class="kw">let </span>route_hints = <span class="self">Self</span>::fetch_lightning_route_hints_try(
+                lightning_context.lnrpc.as_ref(),
                 gateway_config.num_route_hints,
             )
             .<span class="kw">await</span><span class="question-mark">?</span>;
@@ -3692,7 +3692,7 @@
     </span>ClientStateMachineError(<span class="attr">#[from] </span>anyhow::Error),
     <span class="attr">#[error(<span class="string">"Failed to open the database: {}"</span>, OptStacktrace(.<span class="number">0</span>))]
     </span>DatabaseError(anyhow::Error),
-    <span class="attr">#[error(<span class="string">"Federation client error"</span>)]
+    <span class="attr">#[error(<span class="string">"Lightning rpc error: {}"</span>, .<span class="number">0</span>)]
     </span>LightningRpcError(<span class="attr">#[from] </span>LightningRpcError),
     <span class="attr">#[error(<span class="string">"Outgoing Payment Error {}"</span>, OptStacktrace(.<span class="number">0</span>))]
     </span>OutgoingPaymentError(<span class="attr">#[from] </span>Box&lt;OutgoingPaymentError&gt;),

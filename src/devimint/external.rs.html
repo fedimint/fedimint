@@ -927,7 +927,18 @@
 <a href="#927" id="927">927</a>
 <a href="#928" id="928">928</a>
 <a href="#929" id="929">929</a>
-</pre></div><pre class="rust"><code><span class="kw">use </span>std::ops::ControlFlow;
+<a href="#930" id="930">930</a>
+<a href="#931" id="931">931</a>
+<a href="#932" id="932">932</a>
+<a href="#933" id="933">933</a>
+<a href="#934" id="934">934</a>
+<a href="#935" id="935">935</a>
+<a href="#936" id="936">936</a>
+<a href="#937" id="937">937</a>
+<a href="#938" id="938">938</a>
+<a href="#939" id="939">939</a>
+<a href="#940" id="940">940</a>
+</pre></div><pre class="rust"><code><span class="kw">use </span>std::ops::{ControlFlow, Deref <span class="kw">as _</span>};
 <span class="kw">use </span>std::path::Path;
 <span class="kw">use </span>std::str::FromStr;
 <span class="kw">use </span>std::sync::Arc;
@@ -1483,6 +1494,22 @@
     cln: <span class="kw-2">&amp;</span>Lightningd,
     lnd: <span class="kw-2">&amp;</span>Lnd,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+    <span class="macro">debug!</span>(target: LOG_DEVIMINT, <span class="string">"Await block ln nodes block processing"</span>);
+    <span class="macro">tokio::try_join!</span>(cln.await_block_processing(), lnd.await_block_processing())<span class="question-mark">?</span>;
+
+    <span class="macro">debug!</span>(target: LOG_DEVIMINT, <span class="string">"Opening LN channel between the nodes..."</span>);
+    <span class="kw">let </span>cln_addr = cln
+        .request(cln_rpc::model::requests::NewaddrRequest { addresstype: <span class="prelude-val">None </span>})
+        .<span class="kw">await</span><span class="question-mark">?
+        </span>.bech32
+        .context(<span class="string">"bech32 should be present"</span>)<span class="question-mark">?</span>;
+
+    bitcoind.send_to(cln_addr, <span class="number">100_000_000</span>).<span class="kw">await</span><span class="question-mark">?</span>;
+    bitcoind.mine_blocks(<span class="number">10</span>).<span class="kw">await</span><span class="question-mark">?</span>;
+
+    <span class="kw">let </span>lnd_pubkey = lnd.pub_key().<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="kw">let </span>cln_pubkey = cln.pub_key().<span class="kw">await</span><span class="question-mark">?</span>;
+
     <span class="kw">let </span>policy_update_req = <span class="kw-2">&amp;</span>PolicyUpdateRequest {
         min_htlc_msat: <span class="number">1</span>,
         scope: <span class="prelude-val">Some</span>(Scope::Global(<span class="bool-val">true</span>)),
@@ -1499,21 +1526,6 @@
         </span>.lightning()
         .update_channel_policy(policy_update_req.clone())
         .<span class="kw">await</span><span class="question-mark">?</span>;
-
-    <span class="macro">debug!</span>(target: LOG_DEVIMINT, <span class="string">"Await block ln nodes block processing"</span>);
-    <span class="macro">tokio::try_join!</span>(cln.await_block_processing(), lnd.await_block_processing())<span class="question-mark">?</span>;
-    <span class="macro">debug!</span>(target: LOG_DEVIMINT, <span class="string">"Opening LN channel between the nodes..."</span>);
-    <span class="kw">let </span>cln_addr = cln
-        .request(cln_rpc::model::requests::NewaddrRequest { addresstype: <span class="prelude-val">None </span>})
-        .<span class="kw">await</span><span class="question-mark">?
-        </span>.bech32
-        .context(<span class="string">"bech32 should be present"</span>)<span class="question-mark">?</span>;
-
-    bitcoind.send_to(cln_addr, <span class="number">100_000_000</span>).<span class="kw">await</span><span class="question-mark">?</span>;
-    bitcoind.mine_blocks(<span class="number">10</span>).<span class="kw">await</span><span class="question-mark">?</span>;
-
-    <span class="kw">let </span>lnd_pubkey = lnd.pub_key().<span class="kw">await</span><span class="question-mark">?</span>;
-    <span class="kw">let </span>cln_pubkey = cln.pub_key().<span class="kw">await</span><span class="question-mark">?</span>;
 
     cln.request(cln_rpc::model::requests::ConnectRequest {
         id: lnd_pubkey.parse()<span class="question-mark">?</span>,
@@ -1612,16 +1624,23 @@
     process_mgr: <span class="kw-2">&amp;</span>ProcessManager,
     bitcoind: <span class="kw-2">&amp;</span>Bitcoind,
     cln: <span class="kw-2">&amp;</span>Lightningd,
-    gw_cln: <span class="kw-2">&amp;</span>Gatewayd,
+    gw_cln: <span class="kw-2">&amp;</span>JitTryAnyhow&lt;Arc&lt;Gatewayd&gt;&gt;,
     lnd: <span class="kw-2">&amp;</span>Lnd,
-    gw_lnd: <span class="kw-2">&amp;</span>Gatewayd,
+    gw_lnd: <span class="kw-2">&amp;</span>JitTryAnyhow&lt;Arc&lt;Gatewayd&gt;&gt;,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
     <span class="kw">let </span>gateway_cli_version = <span class="kw">crate</span>::util::GatewayCli::version_or_default().<span class="kw">await</span>;
     <span class="kw">let </span>gatewayd_version = <span class="kw">crate</span>::util::Gatewayd::version_or_default().<span class="kw">await</span>;
-    <span class="kw">if </span>gateway_cli_version &lt; <span class="kw-2">*</span>VERSION_0_4_0_ALPHA || gatewayd_version &lt; <span class="kw-2">*</span>VERSION_0_4_0_ALPHA {
+    <span class="attr">#[allow(clippy::overly_complex_bool_expr)]
+    </span><span class="kw">if </span>gateway_cli_version &lt; <span class="kw-2">*</span>VERSION_0_4_0_ALPHA || gatewayd_version &lt; <span class="kw-2">*</span>VERSION_0_4_0_ALPHA
+        <span class="comment">// FIXME: The new way is actually slower and require more things to initialize, and
+        // due to more dependency chains lead to flaky CI pipeline
+        </span>|| <span class="bool-val">true
+    </span>{
+        <span class="macro">debug!</span>(target: LOG_DEVIMINT, <span class="string">"Opening channel between gateways (the old way)"</span>);
         <span class="kw">return </span>open_channel(process_mgr, bitcoind, cln, lnd).<span class="kw">await</span>;
     }
 
+    <span class="macro">debug!</span>(target: LOG_DEVIMINT, <span class="string">"Opening channel between gateways (the new way)"</span>);
     lnd.client
         .lock()
         .<span class="kw">await
@@ -1637,6 +1656,9 @@
             min_htlc_msat_specified: <span class="bool-val">true</span>,
         })
         .<span class="kw">await</span><span class="question-mark">?</span>;
+
+    <span class="kw">let </span>gw_lnd = gw_lnd.get_try().<span class="kw">await</span><span class="question-mark">?</span>.deref().clone();
+    <span class="kw">let </span>gw_cln = gw_cln.get_try().<span class="kw">await</span><span class="question-mark">?</span>.deref().clone();
 
     <span class="macro">tokio::try_join!</span>(
         gw_cln.wait_for_chain_sync(bitcoind),

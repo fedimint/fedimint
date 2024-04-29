@@ -212,11 +212,28 @@
 <a href="#212" id="212">212</a>
 <a href="#213" id="213">213</a>
 <a href="#214" id="214">214</a>
+<a href="#215" id="215">215</a>
+<a href="#216" id="216">216</a>
+<a href="#217" id="217">217</a>
+<a href="#218" id="218">218</a>
+<a href="#219" id="219">219</a>
+<a href="#220" id="220">220</a>
+<a href="#221" id="221">221</a>
+<a href="#222" id="222">222</a>
+<a href="#223" id="223">223</a>
+<a href="#224" id="224">224</a>
+<a href="#225" id="225">225</a>
+<a href="#226" id="226">226</a>
+<a href="#227" id="227">227</a>
+<a href="#228" id="228">228</a>
+<a href="#229" id="229">229</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::HashMap;
 <span class="kw">use </span>std::ops::ControlFlow;
 <span class="kw">use </span>std::path::PathBuf;
+<span class="kw">use </span>std::time::Duration;
 
 <span class="kw">use </span>anyhow::{Context, <span class="prelude-ty">Result</span>};
+<span class="kw">use </span>fedimint_core::util::retry;
 <span class="kw">use </span>ln_gateway::rpc::V1_API_ENDPOINT;
 <span class="kw">use </span>tracing::info;
 
@@ -319,8 +336,21 @@
         )
     }
 
+    <span class="kw">pub async fn </span>get_info(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;serde_json::Value&gt; {
+        retry(
+            <span class="string">"Getting {} gateway info via gateway-cli info"</span>,
+            fedimint_core::util::FibonacciBackoff::default()
+                .with_min_delay(Duration::from_millis(<span class="number">200</span>))
+                .with_max_delay(Duration::from_secs(<span class="number">5</span>))
+                .with_max_times(<span class="number">10</span>),
+            || <span class="kw">async </span>{ <span class="macro">cmd!</span>(<span class="self">self</span>, <span class="string">"info"</span>).out_json().<span class="kw">await </span>},
+        )
+        .<span class="kw">await
+        </span>.context(<span class="string">"Getting gateway info via gateway-cli info"</span>)
+    }
+
     <span class="kw">pub async fn </span>gateway_id(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;String&gt; {
-        <span class="kw">let </span>info = <span class="macro">cmd!</span>(<span class="self">self</span>, <span class="string">"info"</span>).out_json().<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>info = <span class="self">self</span>.get_info().<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>gateway_id = info[<span class="string">"gateway_id"</span>]
             .as_str()
             .context(<span class="string">"gateway_id must be a string"</span>)<span class="question-mark">?
@@ -329,7 +359,7 @@
     }
 
     <span class="kw">pub async fn </span>lightning_pubkey(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;String&gt; {
-        <span class="kw">let </span>info = <span class="macro">cmd!</span>(<span class="self">self</span>, <span class="string">"info"</span>).out_json().<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>info = <span class="self">self</span>.get_info().<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>gateway_id = info[<span class="string">"lightning_pub_key"</span>]
             .as_str()
             .context(<span class="string">"lightning_pub_key must be a string"</span>)<span class="question-mark">?

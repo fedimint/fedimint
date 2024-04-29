@@ -4217,9 +4217,7 @@
     fed.pegin_client(<span class="number">10_000</span>, <span class="kw-2">&amp;</span>client).<span class="kw">await</span><span class="question-mark">?</span>;
 
     <span class="comment">// Query current gateway infos
-    </span><span class="kw">let </span><span class="kw-2">mut </span>cln_cmd = <span class="macro">cmd!</span>(gw_cln, <span class="string">"info"</span>);
-    <span class="kw">let </span><span class="kw-2">mut </span>lnd_cmd = <span class="macro">cmd!</span>(gw_lnd, <span class="string">"info"</span>);
-    <span class="kw">let </span>(cln_value, lnd_value) = <span class="macro">try_join!</span>(cln_cmd.out_json(), lnd_cmd.out_json())<span class="question-mark">?</span>;
+    </span><span class="kw">let </span>(cln_value, lnd_value) = <span class="macro">try_join!</span>(gw_cln.get_info(), gw_lnd.get_info())<span class="question-mark">?</span>;
 
     <span class="comment">// Drop references to cln and lnd gateways so the test can kill them
     </span><span class="kw">let </span>cln_gateway_id = gw_cln.gateway_id().<span class="kw">await</span><span class="question-mark">?</span>;
@@ -4264,7 +4262,9 @@
             <span class="kw">if </span>reboot_info.gateway_state == <span class="string">"Running" </span>{
                 <span class="macro">info!</span>(target: LOG_DEVIMINT, <span class="string">"CLN Gateway restarted, with auto-rejoin to federation"</span>);
                 <span class="comment">// Assert that the gateway info is the same as before the reboot
-                </span><span class="macro">assert_eq!</span>(cln_info, reboot_info);
+                </span><span class="kw">if </span>cln_info != reboot_info {
+                    <span class="kw">return </span><span class="prelude-val">Err</span>(ControlFlow::Continue(<span class="macro">anyhow!</span>(<span class="string">"cln_info != reboot_info"</span>)));
+                }
                 <span class="kw">return </span><span class="prelude-val">Ok</span>(());
             }
             <span class="prelude-val">Err</span>(ControlFlow::Continue(<span class="macro">anyhow!</span>(<span class="string">"gateway not running"</span>)))

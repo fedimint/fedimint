@@ -2780,7 +2780,7 @@
     <span class="doccomment">/// Wait (if needed) + update reconnection stats
     </span><span class="kw">async fn </span>wait_and_inc_reconnect(<span class="kw-2">&amp;mut </span><span class="self">self</span>) {
         <span class="self">self</span>.wait().<span class="kw">await</span>;
-        <span class="self">self</span>.connection_attempts += <span class="number">1</span>;
+        <span class="self">self</span>.connection_attempts = <span class="self">self</span>.connection_attempts.saturating_add(<span class="number">1</span>);
         <span class="self">self</span>.last_connection_attempt = now()
     }
 
