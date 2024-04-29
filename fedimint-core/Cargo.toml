@@ -15,7 +15,7 @@ name = "fedimint_core"
 path = "src/lib.rs"
 
 [dependencies]
-async-recursion = "1.1.0"
+async-recursion = "1.1.1"
 anyhow = { workspace = true }
 async-trait = { workspace = true }
 futures = { workspace = true }
@@ -28,7 +28,7 @@ serdect = "0.2.0"
 itertools = { workspace = true }
 jsonrpsee-types = { version = "0.22.2" }
 jsonrpsee-core = { version = "0.22.4", features = ["client"] }
-serde = { version = "1.0.198", features = ["derive"] }
+serde = { version = "1.0.199", features = ["derive"] }
 serde_json = { workspace = true }
 strum = { workspace = true }
 strum_macros = { workspace = true }
@@ -54,19 +54,19 @@ macro_rules_attribute = "0.2.0"
 bitvec = "1.0.1"
 parity-scale-codec = { version = "3.6.9", features = ["derive"] }
 imbl = "2.0.3"
-backon = "=0.4.3" # don't upgrade unless really needed
+backon = "=0.4.4" # don't upgrade unless really needed
 
 [target.'cfg(not(target_family = "wasm"))'.dependencies]
 tokio = { version = "1.36.0", features = ["full", "tracing"] }
 tokio-rustls = { workspace = true }
 
 [target.'cfg(target_family = "wasm")'.dependencies]
-jsonrpsee-wasm-client = { version = "0.22.2", default-features = false }
+jsonrpsee-wasm-client = { version = "0.22.4", default-features = false }
 async-lock = "3.3"
 # getrandom is transitive dependency of rand
 # on wasm, we need to enable the js backend
 # see https://docs.rs/getrandom/latest/getrandom/#indirect-dependencies and https://docs.rs/getrandom/latest/getrandom/#webassembly-support
-getrandom = { version = "0.2.12", features = ["js"] }
+getrandom = { version = "0.2.14", features = ["js"] }
 gloo-timers = { version = "0.3.0", features = ["futures"] }
 wasm-bindgen-futures = "0.4.42"
 js-sys = "0.3.69"

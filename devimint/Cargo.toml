@@ -13,7 +13,7 @@ path = "src/main.rs"
 
 [dependencies]
 anyhow = { version = "1.0.82", features = ["backtrace"] }
-axum = { version = "0.7.4", features = ["tracing"] }
+axum = { version = "0.7.5", features = ["tracing"] }
 bitcoincore-rpc = { workspace = true }
 clap = { version = "4.5.4", features = ["derive", "env", "std", "help", "usage", "error-context", "suggestions"], default-features = false }
 cln-rpc = { workspace = true }
@@ -46,7 +46,7 @@ tonic_lnd = { workspace = true }
 tower-http = { version = "0.5.2", features = ["cors", "auth"] }
 tracing = { workspace = true }
 tracing-subscriber = "0.3.18"
-serde = "1.0.198"
+serde = "1.0.199"
 url = { workspace = true }
 fedimint-portalloc = { path = "../utils/portalloc" }
 fs-lock = "0.1.3"

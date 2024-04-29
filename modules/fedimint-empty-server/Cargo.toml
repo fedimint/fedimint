@@ -22,7 +22,7 @@ erased-serde = { workspace = true }
 futures = { workspace = true }
 fedimint-core = { version = "=0.4.0-alpha", path = "../../fedimint-core" }
 fedimint-empty-common = { version = "=0.4.0-alpha", path = "../fedimint-empty-common" }
-serde = { version = "1.0.198", features = [ "derive" ] }
+serde = { version = "1.0.199", features = [ "derive" ] }
 strum = { workspace = true }
 strum_macros = { workspace = true }
 thiserror = { workspace = true }
