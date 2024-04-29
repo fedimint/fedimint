@@ -7,6 +7,7 @@ use hex::{FromHex, ToHex};
 use miniscript::{Descriptor, MiniscriptKey};
 use secp256k1::hashes::Hash;
 
+use crate::bitcoin_migration::{bitcoin29_to_bitcoin30_network, bitcoin30_to_bitcoin29_network};
 use crate::encoding::{Decodable, DecodeError, Encodable};
 use crate::module::registry::ModuleDecoderRegistry;
 
@@ -123,6 +124,23 @@ impl Decodable for bitcoin::Network {
         bitcoin::Network::from_magic(magic).ok_or_else(|| {
             DecodeError::new_custom(format_err!("Unknown network magic: {:x}", magic))
         })
+    }
+}
+
+impl Encodable for bitcoin30::Network {
+    fn consensus_encode<W: Write>(&self, writer: &mut W) -> Result<usize, Error> {
+        bitcoin30_to_bitcoin29_network(*self).consensus_encode(writer)
+    }
+}
+
+impl Decodable for bitcoin30::Network {
+    fn consensus_decode<D: std::io::Read>(
+        d: &mut D,
+        modules: &ModuleDecoderRegistry,
+    ) -> Result<Self, DecodeError> {
+        Ok(bitcoin29_to_bitcoin30_network(
+            bitcoin::Network::consensus_decode(d, modules)?,
+        ))
     }
 }
 

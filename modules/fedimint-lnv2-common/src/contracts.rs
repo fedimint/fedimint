@@ -1,5 +1,7 @@
 use bitcoin_hashes::sha256;
-use fedimint_core::bitcoin_migration::bitcoin29_to_bitcoin30_message;
+use fedimint_core::bitcoin_migration::{
+    bitcoin29_to_bitcoin30_message, bitcoin29_to_bitcoin30_sha256_hash,
+};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::Amount;
 use secp256k1::schnorr::Signature;
@@ -135,7 +137,7 @@ impl OutgoingContract {
     }
 
     pub fn forfeit_message(&self) -> Message {
-        bitcoin29_to_bitcoin30_message(bitcoin::secp256k1::Message::from(self.contract_id().0))
+        Message::from(bitcoin29_to_bitcoin30_sha256_hash(self.contract_id().0))
     }
 
     pub fn verify_preimage(&self, preimage: &[u8; 32]) -> bool {
