@@ -25,27 +25,36 @@ function run_tests() {
   if [ -z "${FM_TEST_ONLY:-}" ] || [ "${FM_TEST_ONLY:-}" = "bitcoind" ]; then
     >&2 echo "### Testing against bitcoind"
 
-    # Note: Ideally `-E` flags can be used together, but that seems to trigger lots of problems
-    cargo nextest run --locked --workspace --all-targets \
-      ${CARGO_PROFILE:+--cargo-profile ${CARGO_PROFILE}} ${CARGO_PROFILE:+--profile ${CARGO_PROFILE}} \
-      ${TEST_ARGS_THREADED} \
-      -E 'package(fedimint-dummy-tests)'
-    cargo nextest run --locked --workspace --all-targets \
-      ${CARGO_PROFILE:+--cargo-profile ${CARGO_PROFILE}} ${CARGO_PROFILE:+--profile ${CARGO_PROFILE}} \
-      ${TEST_ARGS_THREADED} \
-      -E 'package(fedimint-mint-tests)'
-    cargo nextest run --locked --workspace --all-targets \
-      ${CARGO_PROFILE:+--cargo-profile ${CARGO_PROFILE}} ${CARGO_PROFILE:+--profile ${CARGO_PROFILE}} \
-      ${TEST_ARGS_THREADED} \
-      -E 'package(fedimint-wallet-tests)'
-    cargo nextest run --locked --workspace --all-targets \
-      ${CARGO_PROFILE:+--cargo-profile ${CARGO_PROFILE}} ${CARGO_PROFILE:+--profile ${CARGO_PROFILE}} \
-      ${TEST_ARGS_SERIALIZED} \
-      -E 'package(fedimint-ln-tests)'
-    cargo nextest run --locked --workspace --all-targets \
-      ${CARGO_PROFILE:+--cargo-profile ${CARGO_PROFILE}} ${CARGO_PROFILE:+--profile ${CARGO_PROFILE}} \
-      ${TEST_ARGS_SERIALIZED} \
-      -E 'package(fedimint-lnv2-tests)'
+    if [ -z "${FM_BITCOIND_TEST_ONLY:-}" ] || [ "${FM_BITCOIND_TEST_ONLY:-}" = "dummy" ]; then
+      cargo nextest run --locked --workspace --all-targets \
+        ${CARGO_PROFILE:+--cargo-profile ${CARGO_PROFILE}} ${CARGO_PROFILE:+--profile ${CARGO_PROFILE}} \
+        ${TEST_ARGS_THREADED} \
+        -E 'package(fedimint-dummy-tests)'
+    fi
+    if [ -z "${FM_BITCOIND_TEST_ONLY:-}" ] || [ "${FM_BITCOIND_TEST_ONLY:-}" = "mint" ]; then
+      cargo nextest run --locked --workspace --all-targets \
+        ${CARGO_PROFILE:+--cargo-profile ${CARGO_PROFILE}} ${CARGO_PROFILE:+--profile ${CARGO_PROFILE}} \
+        ${TEST_ARGS_THREADED} \
+        -E 'package(fedimint-mint-tests)'
+    fi
+    if [ -z "${FM_BITCOIND_TEST_ONLY:-}" ] || [ "${FM_BITCOIND_TEST_ONLY:-}" = "wallet" ]; then
+      cargo nextest run --locked --workspace --all-targets \
+        ${CARGO_PROFILE:+--cargo-profile ${CARGO_PROFILE}} ${CARGO_PROFILE:+--profile ${CARGO_PROFILE}} \
+        ${TEST_ARGS_THREADED} \
+        -E 'package(fedimint-wallet-tests)'
+    fi
+    if [ -z "${FM_BITCOIND_TEST_ONLY:-}" ] || [ "${FM_BITCOIND_TEST_ONLY:-}" = "ln" ]; then
+      cargo nextest run --locked --workspace --all-targets \
+        ${CARGO_PROFILE:+--cargo-profile ${CARGO_PROFILE}} ${CARGO_PROFILE:+--profile ${CARGO_PROFILE}} \
+        ${TEST_ARGS_SERIALIZED} \
+        -E 'package(fedimint-ln-tests)'
+    fi
+    if [ -z "${FM_BITCOIND_TEST_ONLY:-}" ] || [ "${FM_BITCOIND_TEST_ONLY:-}" = "lnv2" ]; then
+      cargo nextest run --locked --workspace --all-targets \
+        ${CARGO_PROFILE:+--cargo-profile ${CARGO_PROFILE}} ${CARGO_PROFILE:+--profile ${CARGO_PROFILE}} \
+        ${TEST_ARGS_SERIALIZED} \
+        -E 'package(fedimint-lnv2-tests)'
+    fi
     >&2 echo "### Testing against bitcoind - complete"
   fi
 
