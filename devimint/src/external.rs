@@ -1,4 +1,4 @@
-use std::ops::ControlFlow;
+use std::ops::{ControlFlow, Deref as _};
 use std::path::Path;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -554,6 +554,22 @@ async fn open_channel(
     cln: &Lightningd,
     lnd: &Lnd,
 ) -> Result<()> {
+    debug!(target: LOG_DEVIMINT, "Await block ln nodes block processing");
+    tokio::try_join!(cln.await_block_processing(), lnd.await_block_processing())?;
+
+    debug!(target: LOG_DEVIMINT, "Opening LN channel between the nodes...");
+    let cln_addr = cln
+        .request(cln_rpc::model::requests::NewaddrRequest { addresstype: None })
+        .await?
+        .bech32
+        .context("bech32 should be present")?;
+
+    bitcoind.send_to(cln_addr, 100_000_000).await?;
+    bitcoind.mine_blocks(10).await?;
+
+    let lnd_pubkey = lnd.pub_key().await?;
+    let cln_pubkey = cln.pub_key().await?;
+
     let policy_update_req = &PolicyUpdateRequest {
         min_htlc_msat: 1,
         scope: Some(Scope::Global(true)),
@@ -570,21 +586,6 @@ async fn open_channel(
         .lightning()
         .update_channel_policy(policy_update_req.clone())
         .await?;
-
-    debug!(target: LOG_DEVIMINT, "Await block ln nodes block processing");
-    tokio::try_join!(cln.await_block_processing(), lnd.await_block_processing())?;
-    debug!(target: LOG_DEVIMINT, "Opening LN channel between the nodes...");
-    let cln_addr = cln
-        .request(cln_rpc::model::requests::NewaddrRequest { addresstype: None })
-        .await?
-        .bech32
-        .context("bech32 should be present")?;
-
-    bitcoind.send_to(cln_addr, 100_000_000).await?;
-    bitcoind.mine_blocks(10).await?;
-
-    let lnd_pubkey = lnd.pub_key().await?;
-    let cln_pubkey = cln.pub_key().await?;
 
     cln.request(cln_rpc::model::requests::ConnectRequest {
         id: lnd_pubkey.parse()?,
@@ -683,16 +684,23 @@ pub async fn open_channel_between_gateways(
     process_mgr: &ProcessManager,
     bitcoind: &Bitcoind,
     cln: &Lightningd,
-    gw_cln: &Gatewayd,
+    gw_cln: &JitTryAnyhow<Arc<Gatewayd>>,
     lnd: &Lnd,
-    gw_lnd: &Gatewayd,
+    gw_lnd: &JitTryAnyhow<Arc<Gatewayd>>,
 ) -> Result<()> {
     let gateway_cli_version = crate::util::GatewayCli::version_or_default().await;
     let gatewayd_version = crate::util::Gatewayd::version_or_default().await;
-    if gateway_cli_version < *VERSION_0_4_0_ALPHA || gatewayd_version < *VERSION_0_4_0_ALPHA {
+    #[allow(clippy::overly_complex_bool_expr)]
+    if gateway_cli_version < *VERSION_0_4_0_ALPHA || gatewayd_version < *VERSION_0_4_0_ALPHA
+        // FIXME: The new way is actually slower and require more things to initialize, and
+        // due to more dependency chains lead to flaky CI pipeline
+        || true
+    {
+        debug!(target: LOG_DEVIMINT, "Opening channel between gateways (the old way)");
         return open_channel(process_mgr, bitcoind, cln, lnd).await;
     }
 
+    debug!(target: LOG_DEVIMINT, "Opening channel between gateways (the new way)");
     lnd.client
         .lock()
         .await
@@ -708,6 +716,9 @@ pub async fn open_channel_between_gateways(
             min_htlc_msat_specified: true,
         })
         .await?;
+
+    let gw_lnd = gw_lnd.get_try().await?.deref().clone();
+    let gw_cln = gw_cln.get_try().await?.deref().clone();
 
     tokio::try_join!(
         gw_cln.wait_for_chain_sync(bitcoind),

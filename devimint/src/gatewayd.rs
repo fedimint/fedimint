@@ -1,8 +1,10 @@
 use std::collections::HashMap;
 use std::ops::ControlFlow;
 use std::path::PathBuf;
+use std::time::Duration;
 
 use anyhow::{Context, Result};
+use fedimint_core::util::retry;
 use ln_gateway::rpc::V1_API_ENDPOINT;
 use tracing::info;
 
@@ -105,8 +107,21 @@ impl Gatewayd {
         )
     }
 
+    pub async fn get_info(&self) -> Result<serde_json::Value> {
+        retry(
+            "Getting {} gateway info via gateway-cli info",
+            fedimint_core::util::FibonacciBackoff::default()
+                .with_min_delay(Duration::from_millis(200))
+                .with_max_delay(Duration::from_secs(5))
+                .with_max_times(10),
+            || async { cmd!(self, "info").out_json().await },
+        )
+        .await
+        .context("Getting gateway info via gateway-cli info")
+    }
+
     pub async fn gateway_id(&self) -> Result<String> {
-        let info = cmd!(self, "info").out_json().await?;
+        let info = self.get_info().await?;
         let gateway_id = info["gateway_id"]
             .as_str()
             .context("gateway_id must be a string")?
@@ -115,7 +130,7 @@ impl Gatewayd {
     }
 
     pub async fn lightning_pubkey(&self) -> Result<String> {
-        let info = cmd!(self, "info").out_json().await?;
+        let info = self.get_info().await?;
         let gateway_id = info["lightning_pub_key"]
             .as_str()
             .context("lightning_pub_key must be a string")?

@@ -1,10 +1,12 @@
 use std::convert::Infallible;
-use std::fmt;
 use std::sync::Arc;
+use std::{fmt, panic};
 
 use fedimint_core::runtime::JoinHandle;
+use fedimint_logging::LOG_TASK;
 use futures::Future;
 use tokio::sync;
+use tracing::warn;
 
 use super::MaybeSend;
 
@@ -113,7 +115,20 @@ where
                 let handle: &mut _ = &mut *self.inner.handle.lock().await;
                 handle
                     .await
-                    .unwrap_or_else(|_| panic!("Jit value {} panicked", std::any::type_name::<T>()))
+                    .unwrap_or_else(|err| {
+
+                        #[cfg(not(target_family = "wasm"))]
+                        if err.is_panic() {
+                            warn!(target: LOG_TASK, %err, type_name = %std::any::type_name::<T>(), "Jit value panicked");
+                            // Resume the panic on the main task
+                            panic::resume_unwind(err.into_panic());
+                        }
+                        #[cfg(not(target_family = "wasm"))]
+                        if err.is_cancelled() {
+                            warn!(target: LOG_TASK, %err, type_name = %std::any::type_name::<T>(), "Jit value task canceled:");
+                        }
+                        panic!("Jit value {} failed unexpectedly with: {}", std::any::type_name::<T>(), err);
+                    })
                     .map_err(|err| {
                         let err_str = err.to_string();
                         init_error = Some(err);

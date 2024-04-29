@@ -713,8 +713,8 @@ impl Gateway {
                 .expect("Gateway configuration should be set");
             let mut federations = Vec::new();
             let federation_clients = self.clients.read().await.clone().into_iter();
-            let route_hints = Self::fetch_lightning_route_hints(
-                lightning_context.lnrpc.clone(),
+            let route_hints = Self::fetch_lightning_route_hints_try(
+                lightning_context.lnrpc.as_ref(),
                 gateway_config.num_route_hints,
             )
             .await?;
@@ -1812,7 +1812,7 @@ pub enum GatewayError {
     ClientStateMachineError(#[from] anyhow::Error),
     #[error("Failed to open the database: {}", OptStacktrace(.0))]
     DatabaseError(anyhow::Error),
-    #[error("Federation client error")]
+    #[error("Lightning rpc error: {}", .0)]
     LightningRpcError(#[from] LightningRpcError),
     #[error("Outgoing Payment Error {}", OptStacktrace(.0))]
     OutgoingPaymentError(#[from] Box<OutgoingPaymentError>),

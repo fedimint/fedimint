@@ -172,9 +172,7 @@ impl DevJitFed {
             move || async move {
                 let bitcoind = bitcoind.get_try().await?.deref().clone();
                 let lnd = lnd.get_try().await?.deref().clone();
-                let gw_lnd = gw_lnd.get_try().await?.deref().clone();
                 let cln = cln.get_try().await?.deref().clone();
-                let gw_cln = gw_cln.get_try().await?.deref().clone();
                 // Note: We open new channel even if starting from existing state
                 // as ports change on every start, and without this nodes will not find each
                 // other.

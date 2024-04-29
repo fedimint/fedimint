@@ -176,7 +176,7 @@ export -f always_success_test
 
 tagged_versions=("$@")
 num_versions="$#"
-versions=( "current" "${tagged_versions[@]}" )
+versions=( "${tagged_versions[@]}" "current" )
 if [[ "$num_versions" == "0" ]]; then
   mapfile -t version_matrix < <(generate_current_only_matrix "${versions[@]}")
 else
@@ -243,7 +243,6 @@ done
 parsed_test_commands=$(printf "%s\n" "${tests_with_versions[@]}")
 
 parallel_args=()
-export parallel_jobs='1'
 
 if [ -z "${CI:-}" ] && [[ -t 1 ]] && [ -z "${FM_TEST_CI_ALL_DISABLE_ETA:-}" ]; then
   parallel_args+=(--eta)
@@ -253,17 +252,18 @@ if [ -n "${FM_TEST_CI_ALL_JOBS:-}" ]; then
   # when specifically set, use the env var
   parallel_args+=(--jobs "${FM_TEST_CI_ALL_JOBS}")
 elif [ -n "${CI:-}" ] || [ "${CARGO_PROFILE:-}" == "ci" ]; then
-  parallel_args+=(--jobs $(($(nproc) / 4 + 1)))
+  parallel_args+=(--jobs $(($(nproc) / 3 + 1)))
 else
-  # on dev computers default to `num_cpus / 4 + 1` max parallel jobs
-  parallel_args+=(--jobs "${FM_TEST_CI_ALL_JOBS:-$(($(nproc) / 4 + 1))}")
+  # on dev computers default to `num_cpus / 3 + 1` max parallel jobs
+  parallel_args+=(--jobs "${FM_TEST_CI_ALL_JOBS:-$(($(nproc) / 3 + 1))}")
 fi
 
 parallel_args+=(--timeout "${FM_TEST_CI_ALL_TIMEOUT:-600}")
 
-parallel_args+=(--load "${FM_TEST_CI_ALL_MAX_LOAD:-$(($(nproc) / 4 + 1))}")
+parallel_args+=(--load "${FM_TEST_CI_ALL_MAX_LOAD:-$(($(nproc) / 3 + 1))}")
 # --delay to let nix start extracting and bump the load
-parallel_args+=(--delay "${FM_TEST_CI_ALL_DELAY:-$((64 / $(nproc) + 1))}")
+# usually not needed, as '--jobs' will keep a cap on the load anyway
+parallel_args+=(--delay "${FM_TEST_CI_ALL_DELAY:-0}")
 
 tmpdir=$(mktemp --tmpdir -d XXXXX)
 trap 'rm -r $tmpdir' EXIT

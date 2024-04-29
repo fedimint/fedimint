@@ -1181,7 +1181,7 @@ impl FederationPeerClientShared {
     /// Wait (if needed) + update reconnection stats
     async fn wait_and_inc_reconnect(&mut self) {
         self.wait().await;
-        self.connection_attempts += 1;
+        self.connection_attempts = self.connection_attempts.saturating_add(1);
         self.last_connection_attempt = now()
     }
 
