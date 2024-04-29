@@ -1964,6 +1964,18 @@ pub async fn reconnect_test(dev_fed: DevFed, process_mgr: &ProcessManager) -> Re
 
 pub async fn recoverytool_test(dev_fed: DevFed) -> Result<()> {
     log_binary_versions().await?;
+
+    let fedimintd_version = crate::util::FedimintdCmd::version_or_default().await;
+
+    // TODO(support:v0.3): remove
+    if fedimintd_version < *VERSION_0_4_0_ALPHA {
+        info!("Recoverytool tests in fedmintd version that didn't have short session times when running in tests");
+        // And worst comes to worst, users that want to recover can just use a
+        // recoverytool version corresponding to the version of fedimintd they were
+        // using.
+        return Ok(());
+    }
+
     #[allow(unused_variables)]
     let DevFed {
         bitcoind,
