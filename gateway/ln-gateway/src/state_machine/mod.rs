@@ -704,7 +704,7 @@ impl State for GatewayClientStateMachines {
     }
 }
 
-#[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub struct Htlc {
     /// The HTLC payment hash.
     pub payment_hash: sha256::Hash,
@@ -715,7 +715,7 @@ pub struct Htlc {
     /// The incoming HTLC expiry
     pub incoming_expiry: u32,
     /// The short channel id of the HTLC.
-    pub short_channel_id: u64,
+    pub short_channel_id: Option<u64>,
     /// The id of the incoming channel
     pub incoming_chan_id: u64,
     /// The index of the incoming htlc in the incoming channel

@@ -64,7 +64,9 @@ use fedimint_ln_common::config::{GatewayFee, LightningClientConfig};
 use fedimint_ln_common::contracts::Preimage;
 use fedimint_ln_common::route_hints::RouteHint;
 use fedimint_ln_common::LightningCommonInit;
-use fedimint_lnv2_client::{CreateInvoicePayload, PaymentFee, PaymentInfo, SendPaymentPayload};
+use fedimint_lnv2_client::{
+    Bolt11InvoiceDescription, CreateInvoicePayload, PaymentFee, PaymentInfo, SendPaymentPayload,
+};
 use fedimint_mint_client::{MintClientInit, MintCommonInit};
 use fedimint_wallet_client::{
     WalletClientInit, WalletClientModule, WalletCommonInit, WithdrawState,
@@ -94,6 +96,7 @@ use crate::db::{
     get_gatewayd_database_migrations, CreateInvoicePayloadKey, FederationConfig,
     FederationIdKeyPrefix,
 };
+use crate::gateway_lnrpc::create_invoice_request::Description;
 use crate::gateway_lnrpc::intercept_htlc_response::Forward;
 use crate::gateway_lnrpc::CreateInvoiceRequest;
 use crate::gateway_module_v2::GatewayClientModuleV2;
@@ -634,45 +637,47 @@ impl Gateway {
                     }
 
                     let scid_to_feds = self.scid_to_federation.read().await;
-                    let federation_id = scid_to_feds.get(&htlc_request.short_channel_id);
-                    // Just forward the HTLC if we do not have a federation that
-                    // corresponds to the short channel id
-                    if let Some(federation_id) = federation_id {
-                        let clients = self.clients.read().await;
-                        let client = clients.get(federation_id);
-                        // Just forward the HTLC if we do not have a client that
-                        // corresponds to the federation id
-                        if let Some(client) = client {
-                            let cf = client
-                                .borrow()
-                                .with(|client| async {
-                                    let htlc = htlc_request.clone().try_into();
-                                    if let Ok(htlc) = htlc {
-                                        match client
-                                            .get_first_module::<GatewayClientModule>()
-                                            .gateway_handle_intercepted_htlc(htlc)
-                                            .await
-                                        {
-                                            Ok(_) => {
-                                                return Some(ControlFlow::<(), ()>::Continue(()))
+                    if let Some(short_channel_id) = htlc_request.short_channel_id {
+                        let federation_id = scid_to_feds.get(&short_channel_id);
+                        // Just forward the HTLC if we do not have a federation that
+                        // corresponds to the short channel id
+                        if let Some(federation_id) = federation_id {
+                            let clients = self.clients.read().await;
+                            let client = clients.get(federation_id);
+                            // Just forward the HTLC if we do not have a client that
+                            // corresponds to the federation id
+                            if let Some(client) = client {
+                                let cf = client
+                                    .borrow()
+                                    .with(|client| async {
+                                        let htlc = htlc_request.clone().try_into();
+                                        if let Ok(htlc) = htlc {
+                                            match client
+                                                .get_first_module::<GatewayClientModule>()
+                                                .gateway_handle_intercepted_htlc(htlc)
+                                                .await
+                                            {
+                                                Ok(_) => {
+                                                    return Some(ControlFlow::<(), ()>::Continue(()))
+                                                }
+                                                Err(e) => {
+                                                    info!(
+                                                    "Got error intercepting HTLC: {e:?}, will retry..."
+                                                )
+                                                }
                                             }
-                                            Err(e) => {
-                                                info!(
-                                                "Got error intercepting HTLC: {e:?}, will retry..."
-                                            )
-                                            }
+                                        } else {
+                                            info!("Got no HTLC result")
                                         }
-                                    } else {
-                                        info!("Got no HTLC result")
-                                    }
-                                    None
-                                })
-                                .await;
-                            if let Some(ControlFlow::Continue(())) = cf {
-                                continue;
+                                        None
+                                    })
+                                    .await;
+                                if let Some(ControlFlow::Continue(())) = cf {
+                                    continue;
+                                }
+                            } else {
+                                info!("Got no client result")
                             }
-                        } else {
-                            info!("Got no client result")
                         }
                     }
 
@@ -1709,7 +1714,7 @@ impl Gateway {
         &self,
         payment_hash: sha256::Hash,
         amount: Amount,
-        description: String,
+        description: Bolt11InvoiceDescription,
         expiry_time: u32,
     ) -> std::result::Result<Bolt11Invoice, String> {
         let lnrpc = self
@@ -1718,15 +1723,26 @@ impl Gateway {
             .map_err(|e| e.to_string())?
             .lnrpc;
 
-        let response = lnrpc
-            .create_invoice(CreateInvoiceRequest {
-                payment_hash: payment_hash.into_inner().to_vec(),
-                amount_msat: amount.msats,
-                expiry: expiry_time,
-                description,
-            })
-            .await
-            .map_err(|e| e.to_string())?;
+        let response = match description {
+            Bolt11InvoiceDescription::Direct(description) => lnrpc
+                .create_invoice(CreateInvoiceRequest {
+                    payment_hash: payment_hash.into_inner().to_vec(),
+                    amount_msat: amount.msats,
+                    expiry: expiry_time,
+                    description: Some(Description::Direct(description)),
+                })
+                .await
+                .map_err(|e| e.to_string())?,
+            Bolt11InvoiceDescription::Hash(hash) => lnrpc
+                .create_invoice(CreateInvoiceRequest {
+                    payment_hash: payment_hash.into_inner().to_vec(),
+                    amount_msat: amount.msats,
+                    expiry: expiry_time,
+                    description: Some(Description::Hash(hash.to_vec())),
+                })
+                .await
+                .map_err(|e| e.to_string())?,
+        };
 
         Bolt11Invoice::from_str(&response.invoice).map_err(|e| e.to_string())
     }

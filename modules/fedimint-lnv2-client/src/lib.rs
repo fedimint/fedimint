@@ -120,8 +120,14 @@ pub struct CreateInvoicePayload {
     pub federation_id: FederationId,
     pub contract: IncomingContract,
     pub invoice_amount: Amount,
-    pub description: String,
+    pub description: Bolt11InvoiceDescription,
     pub expiry_time: u32,
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize, Decodable, Encodable)]
+pub enum Bolt11InvoiceDescription {
+    Direct(String),
+    Hash(sha256::Hash),
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Decodable, Encodable)]
@@ -520,7 +526,7 @@ impl LightningClientModule {
             gateway_api,
             invoice_amount,
             INVOICE_EXPIRATION_SECONDS_DEFAULT,
-            String::new(),
+            Bolt11InvoiceDescription::Direct(String::new()),
             PaymentFee::one_percent(),
         )
         .await
@@ -531,7 +537,7 @@ impl LightningClientModule {
         gateway_api: SafeUrl,
         invoice_amount: Amount,
         expiry_time: u32,
-        description: String,
+        description: Bolt11InvoiceDescription,
         payment_fee_limit: PaymentFee,
     ) -> Result<(Bolt11Invoice, OperationId), FetchInvoiceError> {
         let (contract, .., invoice) = self
@@ -564,7 +570,7 @@ impl LightningClientModule {
             gateway_api,
             invoice_amount,
             INVOICE_EXPIRATION_SECONDS_DEFAULT,
-            String::new(),
+            Bolt11InvoiceDescription::Direct(String::new()),
             PaymentFee::one_percent(),
         )
         .await
@@ -576,7 +582,7 @@ impl LightningClientModule {
         gateway_api: SafeUrl,
         invoice_amount: Amount,
         expiry_time: u32,
-        description: String,
+        description: Bolt11InvoiceDescription,
         payment_fee_limit: PaymentFee,
     ) -> Result<(IncomingContract, [u8; 32], Bolt11Invoice), FetchInvoiceError> {
         let (ephemeral_tweak, ephemeral_pk) = generate_ephemeral_tweak(recipient_static_pk);
