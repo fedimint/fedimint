@@ -449,22 +449,23 @@ impl ServerModule for Wallet {
                 );
 
                 // only sync when we have a consensus block count
-                match (old_consensus_block_count, new_consensus_block_count) {
-                    (Some(old), Some(new)) if new > old => {
-                        if old > 0 {
-                            let new_height = new - 1;
-                            let old_height = old - 1;
+                if let Some(old_height) = old_consensus_block_count {
+                    let new_height = new_consensus_block_count.expect("Block count is set");
+
+                    assert!(old_height <= new_height);
+
+                    if new_height != old_height {
+                        if old_height != 0 {
                             self.sync_up_to_consensus_height(dbtx, old_height, new_height)
                                 .await;
                         } else {
                             info!(
-                                ?new,
-                                ?old,
+                                ?old_height,
+                                ?new_height,
                                 "Not syncing up to consensus block count because we are at block 0"
                             );
                         }
                     }
-                    _ => {}
                 }
             }
             WalletConsensusItem::Feerate(feerate) => {
@@ -986,7 +987,7 @@ impl Wallet {
             "New consensus height, syncing up",
         );
 
-        for height in (old_height + 1)..=(new_height) {
+        for height in old_height..new_height {
             if height % 100 == 0 {
                 debug!("Caught up to block {height}");
             }
