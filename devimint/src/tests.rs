@@ -1670,9 +1670,7 @@ pub async fn gw_reboot_test(dev_fed: DevFed, process_mgr: &ProcessManager) -> Re
     fed.pegin_client(10_000, &client).await?;
 
     // Query current gateway infos
-    let mut cln_cmd = cmd!(gw_cln, "info");
-    let mut lnd_cmd = cmd!(gw_lnd, "info");
-    let (cln_value, lnd_value) = try_join!(cln_cmd.out_json(), lnd_cmd.out_json())?;
+    let (cln_value, lnd_value) = try_join!(gw_cln.get_info(), gw_lnd.get_info())?;
 
     // Drop references to cln and lnd gateways so the test can kill them
     let cln_gateway_id = gw_cln.gateway_id().await?;
