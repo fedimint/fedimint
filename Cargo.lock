@@ -2133,8 +2133,6 @@ name = "fedimint-lnv2-tests"
 version = "0.4.0-alpha"
 dependencies = [
  "anyhow",
- "bitcoin 0.29.2",
- "fedimint-bitcoind",
  "fedimint-client",
  "fedimint-core",
  "fedimint-dummy-client",
@@ -2146,10 +2144,7 @@ dependencies = [
  "fedimint-lnv2-client",
  "fedimint-lnv2-common",
  "fedimint-lnv2-server",
- "fedimint-logging",
- "fedimint-server",
  "fedimint-testing",
- "lightning-invoice",
  "tokio",
 ]
 
