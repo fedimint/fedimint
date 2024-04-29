@@ -1506,7 +1506,7 @@ dependencies = [
  "rand",
  "reqwest 0.12.2",
  "ring",
- "secp256k1 0.24.3",
+ "secp256k1 0.27.0",
  "secp256k1-zkp 0.9.2",
  "serde",
  "serde_json",
