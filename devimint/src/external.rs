@@ -570,23 +570,6 @@ async fn open_channel(
     let lnd_pubkey = lnd.pub_key().await?;
     let cln_pubkey = cln.pub_key().await?;
 
-    let policy_update_req = &PolicyUpdateRequest {
-        min_htlc_msat: 1,
-        scope: Some(Scope::Global(true)),
-        time_lock_delta: 80,
-        base_fee_msat: 0,
-        fee_rate: 0.0,
-        fee_rate_ppm: 0,
-        max_htlc_msat: 10000000000,
-        min_htlc_msat_specified: true,
-    };
-    lnd.client
-        .lock()
-        .await
-        .lightning()
-        .update_channel_policy(policy_update_req.clone())
-        .await?;
-
     cln.request(cln_rpc::model::requests::ConnectRequest {
         id: lnd_pubkey.parse()?,
         host: Some("127.0.0.1".to_owned()),
@@ -648,22 +631,8 @@ async fn open_channel(
                 .await;
 
             match chan_info {
-                Ok(info) => {
-                    let edge = info.into_inner();
-                    if edge.node1_policy.is_some() {
-                        return Ok(());
-                    } else {
-                        debug!(?edge, "Empty chan info");
-
-                        info!(target: LOG_DEVIMINT, "Re-setting channel policy");
-                        if let Err(err) = lnd_client
-                            .lightning()
-                            .update_channel_policy(policy_update_req.clone())
-                            .await
-                        {
-                            info!(target: LOG_DEVIMINT, %err, "Re-setting channel policy - error");
-                        }
-                    }
+                Ok(_) => {
+                    return Ok(());
                 }
                 Err(e) => {
                     debug!(%e, "Getting chan info failed")
