@@ -14,7 +14,7 @@ path = "tests/tests.rs"
 [dependencies]
 anyhow = { workspace = true }
 bitcoin_hashes = { workspace = true }
-bls12_381 = "0.7.1"
+bls12_381 = "0.8.0"
 fedimint-dummy-common = { path = "../fedimint-dummy-common" }
 fedimint-dummy-client = { path = "../fedimint-dummy-client" }
 fedimint-dummy-server = { path = "../fedimint-dummy-server" }
@@ -34,6 +34,6 @@ secp256k1 = "0.27.0"
 serde = { version = "1.0.199", features = [ "derive" ] }
 tbs = { package = "fedimint-tbs", version = "=0.4.0-alpha", path = "../../crypto/tbs" }
 threshold_crypto = { workspace = true }
-ff = "0.12.1"
+ff = "0.13.0"
 strum = { workspace = true }
 strum_macros = { workspace = true }
