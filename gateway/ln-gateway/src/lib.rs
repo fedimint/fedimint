@@ -1812,7 +1812,7 @@ pub enum GatewayError {
     ClientStateMachineError(#[from] anyhow::Error),
     #[error("Failed to open the database: {}", OptStacktrace(.0))]
     DatabaseError(anyhow::Error),
-    #[error("Federation client error")]
+    #[error("Lightning rpc error: {}", .0)]
     LightningRpcError(#[from] LightningRpcError),
     #[error("Outgoing Payment Error {}", OptStacktrace(.0))]
     OutgoingPaymentError(#[from] Box<OutgoingPaymentError>),
