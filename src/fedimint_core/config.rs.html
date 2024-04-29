@@ -1048,7 +1048,6 @@
 <a href="#1048" id="1048">1048</a>
 <a href="#1049" id="1049">1049</a>
 <a href="#1050" id="1050">1050</a>
-<a href="#1051" id="1051">1051</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet};
 <span class="kw">use </span>std::fmt::{Debug, Display};
 <span class="kw">use </span>std::hash::Hash;
@@ -1057,7 +1056,6 @@
 <span class="kw">use </span>std::str::FromStr;
 
 <span class="kw">use </span>anyhow::{bail, format_err, Context};
-<span class="kw">use </span>bitcoin::secp256k1;
 <span class="kw">use </span>bitcoin_hashes::sha256::{Hash <span class="kw">as </span>Sha256, HashEngine};
 <span class="kw">use </span>bitcoin_hashes::{hex, sha256};
 <span class="kw">use </span>bls12_381::Scalar;
@@ -1376,7 +1374,7 @@
     /// other LN senders will know that they cannot pay the invoice.
     </span><span class="kw">pub fn </span>to_fake_ln_pub_key(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        secp: <span class="kw-2">&amp;</span>secp256k1::Secp256k1&lt;secp256k1_zkp::All&gt;,
+        secp: <span class="kw-2">&amp;</span>secp256k1::Secp256k1&lt;secp256k1::All&gt;,
     ) -&gt; anyhow::Result&lt;secp256k1::PublicKey&gt; {
         <span class="kw">let </span>sk = secp256k1::SecretKey::from_slice(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="number">0</span>)<span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(secp256k1::PublicKey::from_secret_key(secp, <span class="kw-2">&amp;</span>sk))

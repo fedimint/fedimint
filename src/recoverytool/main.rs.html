@@ -520,6 +520,9 @@
 <a href="#520" id="520">520</a>
 <a href="#521" id="521">521</a>
 <a href="#522" id="522">522</a>
+<a href="#523" id="523">523</a>
+<a href="#524" id="524">524</a>
+<a href="#525" id="525">525</a>
 </pre></div><pre class="rust"><code><span class="kw">pub mod </span>envs;
 
 <span class="kw">use </span>std::cmp::Ordering;
@@ -535,7 +538,7 @@
 <span class="kw">use </span>fedimint_core::bitcoin_migration::{
     bitcoin29_to_bitcoin30_amount, bitcoin29_to_bitcoin30_network, bitcoin29_to_bitcoin30_outpoint,
     bitcoin29_to_bitcoin30_secp256k1_secret_key, bitcoin30_to_bitcoin29_network,
-    bitcoin30_to_bitcoin29_secp256k1_secret_key,
+    bitcoin30_to_bitcoin29_secp256k1_public_key, bitcoin30_to_bitcoin29_secp256k1_secret_key,
 };
 <span class="kw">use </span>fedimint_core::core::{
     LEGACY_HARDCODED_INSTANCE_ID_LN, LEGACY_HARDCODED_INSTANCE_ID_MINT,
@@ -665,7 +668,7 @@
             .get_module_config_typed(LEGACY_HARDCODED_INSTANCE_ID_WALLET)
             .expect(<span class="string">"Malformed wallet config"</span>);
         <span class="kw">let </span>base_descriptor = wallet_cfg.consensus.peg_in_descriptor;
-        <span class="kw">let </span>base_key = wallet_cfg.private.peg_in_key;
+        <span class="kw">let </span>base_key = bitcoin29_to_bitcoin30_secp256k1_secret_key(wallet_cfg.private.peg_in_key);
         <span class="kw">let </span>network = wallet_cfg.consensus.network;
 
         (base_descriptor, base_key, network)
@@ -849,16 +852,19 @@
     tweak: <span class="kw-2">&amp;</span>[u8; <span class="number">33</span>],
     network: Network,
 ) -&gt; Descriptor&lt;Key&gt; {
-    <span class="kw">let </span>secret_key = base_sk.tweak(tweak, secp256k1::SECP256K1);
-    <span class="kw">let </span>pub_key =
-        CompressedPublicKey::new(secp256k1::PublicKey::from_secret_key_global(<span class="kw-2">&amp;</span>secret_key));
+    <span class="kw">let </span>secret_key = bitcoin29_to_bitcoin30_secp256k1_secret_key(
+        bitcoin30_to_bitcoin29_secp256k1_secret_key(<span class="kw-2">*</span>base_sk).tweak(tweak, secp256k1_24::SECP256K1),
+    );
+    <span class="kw">let </span>pub_key = CompressedPublicKey::new(bitcoin30_to_bitcoin29_secp256k1_public_key(
+        secp256k1::PublicKey::from_secret_key_global(<span class="kw-2">&amp;</span>secret_key),
+    ));
     base_descriptor
-        .tweak(tweak, secp256k1::SECP256K1)
+        .tweak(tweak, secp256k1_24::SECP256K1)
         .translate_pk(<span class="kw-2">&amp;mut </span>SecretKeyInjector {
             secret: bitcoin::key::PrivateKey {
                 compressed: <span class="bool-val">true</span>,
                 network,
-                inner: bitcoin29_to_bitcoin30_secp256k1_secret_key(secret_key),
+                inner: secret_key,
             },
             public: pub_key,
         })
@@ -922,8 +928,8 @@
         <span class="kw">match </span><span class="self">self </span>{
             Key::Public(pk) =&gt; pk,
             Key::Private(sk) =&gt; {
-                CompressedPublicKey::new(secp256k1::PublicKey::from_secret_key_global(
-                    <span class="kw-2">&amp;</span>bitcoin30_to_bitcoin29_secp256k1_secret_key(sk.inner),
+                CompressedPublicKey::new(bitcoin30_to_bitcoin29_secp256k1_public_key(
+                    secp256k1::PublicKey::from_secret_key_global(<span class="kw-2">&amp;</span>sk.inner),
                 ))
             }
         }

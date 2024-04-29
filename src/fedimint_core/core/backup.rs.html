@@ -59,13 +59,32 @@
 <a href="#59" id="59">59</a>
 <a href="#60" id="60">60</a>
 <a href="#61" id="61">61</a>
+<a href="#62" id="62">62</a>
+<a href="#63" id="63">63</a>
+<a href="#64" id="64">64</a>
+<a href="#65" id="65">65</a>
+<a href="#66" id="66">66</a>
+<a href="#67" id="67">67</a>
+<a href="#68" id="68">68</a>
+<a href="#69" id="69">69</a>
+<a href="#70" id="70">70</a>
+<a href="#71" id="71">71</a>
+<a href="#72" id="72">72</a>
+<a href="#73" id="73">73</a>
+<a href="#74" id="74">74</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::fmt::Debug;
 
 <span class="kw">use </span>bitcoin::secp256k1;
+<span class="kw">use </span>bitcoin30::secp256k1::{Secp256k1, Signing, Verification};
 <span class="kw">use </span>bitcoin_hashes::sha256;
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
-<span class="kw">use </span>secp256k1_zkp::{KeyPair, Message, Secp256k1, Signing, Verification};
+<span class="kw">use </span>secp256k1_zkp::{KeyPair, Message};
 <span class="kw">use </span>serde::{Deserialize, Serialize};
+
+<span class="kw">use </span><span class="kw">crate</span>::bitcoin_migration::{
+    bitcoin29_to_bitcoin30_message, bitcoin29_to_bitcoin30_schnorr_signature,
+    bitcoin29_to_bitcoin30_secp256k1_public_key,
+};
 
 <span class="doccomment">/// Maximum payload size of a backup request
 ///
@@ -107,14 +126,21 @@
 }
 
 <span class="kw">impl </span>SignedBackupRequest {
-    <span class="kw">pub fn </span>verify_valid&lt;C&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, ctx: <span class="kw-2">&amp;</span>Secp256k1&lt;C&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="kw-2">&amp;</span>BackupRequest, secp256k1::Error&gt;
+    <span class="kw">pub fn </span>verify_valid&lt;C&gt;(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        ctx: <span class="kw-2">&amp;</span>Secp256k1&lt;C&gt;,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="kw-2">&amp;</span>BackupRequest, bitcoin30::secp256k1::Error&gt;
     <span class="kw">where
         </span>C: Signing + Verification,
     {
         ctx.verify_schnorr(
-            <span class="kw-2">&amp;</span><span class="self">self</span>.signature,
-            <span class="kw-2">&amp;</span>Message::from_slice(<span class="kw-2">&amp;</span><span class="self">self</span>.request.hash()).expect(<span class="string">"Can't fail"</span>),
-            <span class="kw-2">&amp;</span><span class="self">self</span>.request.id.x_only_public_key().<span class="number">0</span>,
+            <span class="kw-2">&amp;</span>bitcoin29_to_bitcoin30_schnorr_signature(<span class="self">self</span>.signature),
+            <span class="kw-2">&amp;</span>bitcoin29_to_bitcoin30_message(
+                Message::from_slice(<span class="kw-2">&amp;</span><span class="self">self</span>.request.hash()).expect(<span class="string">"Can't fail"</span>),
+            ),
+            <span class="kw-2">&amp;</span>bitcoin29_to_bitcoin30_secp256k1_public_key(<span class="self">self</span>.request.id)
+                .x_only_public_key()
+                .<span class="number">0</span>,
         )<span class="question-mark">?</span>;
 
         <span class="prelude-val">Ok</span>(<span class="kw-2">&amp;</span><span class="self">self</span>.request)
