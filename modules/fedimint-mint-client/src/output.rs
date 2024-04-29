@@ -7,10 +7,6 @@ use fedimint_api_client::api::{deserialize_outcome, FederationApiExt, SerdeOutpu
 use fedimint_api_client::query::FilterMapThreshold;
 use fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
 use fedimint_client::DynGlobalClientContext;
-use fedimint_core::bitcoin_migration::{
-    bitcoin29_to_bitcoin30_keypair, bitcoin29_to_bitcoin30_secp256k1_public_key,
-    bitcoin30_to_bitcoin29_keypair,
-};
 use fedimint_core::core::{Decoder, OperationId};
 use fedimint_core::db::IDatabaseTransactionOpsCoreTyped;
 use fedimint_core::encoding::{Decodable, Encodable};
@@ -360,7 +356,7 @@ impl NoteIssuanceRequest {
         let blinded_nonce = blind_message(nonce.to_message(), blinding_key);
 
         let cr = NoteIssuanceRequest {
-            spend_key: bitcoin30_to_bitcoin29_keypair(spend_key),
+            spend_key,
             blinding_key,
         };
 
@@ -369,9 +365,7 @@ impl NoteIssuanceRequest {
 
     /// Return nonce of the e-cash note being requested
     pub fn nonce(&self) -> Nonce {
-        Nonce(bitcoin29_to_bitcoin30_secp256k1_public_key(
-            self.spend_key.public_key(),
-        ))
+        Nonce(self.spend_key.public_key())
     }
 
     pub fn blinded_message(&self) -> BlindedMessage {
@@ -382,7 +376,7 @@ impl NoteIssuanceRequest {
     pub fn finalize(&self, blinded_signature: BlindedSignature) -> SpendableNote {
         SpendableNote {
             signature: unblind_signature(self.blinding_key, blinded_signature),
-            spend_key: bitcoin29_to_bitcoin30_keypair(self.spend_key),
+            spend_key: self.spend_key,
         }
     }
 }

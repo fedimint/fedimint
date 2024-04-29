@@ -4,9 +4,7 @@ mod metrics;
 use std::collections::{BTreeMap, HashMap};
 
 use anyhow::bail;
-use fedimint_core::bitcoin_migration::{
-    bitcoin29_to_bitcoin30_secp256k1_public_key, bitcoin30_to_bitcoin29_secp256k1_public_key,
-};
+use fedimint_core::bitcoin_migration::bitcoin30_to_bitcoin29_secp256k1_public_key;
 use fedimint_core::config::{
     ConfigGenModuleParams, DkgResult, ServerModuleConfig, ServerModuleConsensusConfig,
     TypedServerModuleConfig, TypedServerModuleConsensusConfig,
@@ -523,12 +521,7 @@ impl Mint {
             .map_err(|_| ApiError::bad_request("invalid request".into()))?;
 
         debug!(id = %request.id, len = request.payload.len(), "Received user e-cash backup request");
-        if let Some(prev) = dbtx
-            .get_value(&EcashBackupKey(
-                bitcoin29_to_bitcoin30_secp256k1_public_key(request.id),
-            ))
-            .await
-        {
+        if let Some(prev) = dbtx.get_value(&EcashBackupKey(request.id)).await {
             if request.timestamp <= prev.timestamp {
                 debug!(id = %request.id, len = request.payload.len(), "Received user e-cash backup request with old timestamp - ignoring");
                 return Err(ApiError::bad_request("timestamp too small".into()));
@@ -537,7 +530,7 @@ impl Mint {
 
         info!(id = %request.id, len = request.payload.len(), "Storing new user e-cash backup");
         dbtx.insert_entry(
-            &EcashBackupKey(bitcoin29_to_bitcoin30_secp256k1_public_key(request.id)),
+            &EcashBackupKey(request.id),
             &ECashUserBackupSnapshot {
                 timestamp: request.timestamp,
                 data: request.payload.to_vec(),
@@ -670,7 +663,6 @@ impl Mint {
 #[cfg(test)]
 mod test {
     use assert_matches::assert_matches;
-    use fedimint_core::bitcoin_migration::bitcoin29_to_bitcoin30_secp256k1_public_key;
     use fedimint_core::config::{ClientModuleConfig, ConfigGenModuleParams, ServerModuleConfig};
     use fedimint_core::db::mem_impl::MemDatabase;
     use fedimint_core::db::Database;
@@ -743,9 +735,7 @@ mod test {
         denomination: Amount,
     ) -> (secp256k1::KeyPair, Note) {
         let note_key = secp256k1::KeyPair::new(secp256k1::SECP256K1, &mut rand::thread_rng());
-        let nonce = Nonce(bitcoin29_to_bitcoin30_secp256k1_public_key(
-            note_key.public_key(),
-        ));
+        let nonce = Nonce(note_key.public_key());
         let message = nonce.to_message();
         let blinding_key = tbs::BlindingKey::random();
         let blind_msg = blind_message(message, blinding_key);
