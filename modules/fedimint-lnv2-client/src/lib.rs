@@ -39,7 +39,7 @@ use lightning_invoice::Bolt11Invoice;
 use secp256k1::{ecdh, KeyPair, PublicKey, Scalar, SecretKey};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
-use tpe::{derive_agg_decryption_key, AggregateDecryptionKey};
+use tpe::{derive_agg_decryption_key, AggregateDecryptionKey, AggregatePublicKey};
 
 use crate::api::LnFederationApi;
 use crate::receive_sm::{ReceiveSMCommon, ReceiveSMState, ReceiveStateMachine};
@@ -181,6 +181,14 @@ impl PaymentFee {
     }
 }
 
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
+pub struct FederatedLightningAddress {
+    pub gateway_api: SafeUrl,
+    pub federation_id: FederationId,
+    pub public_key: PublicKey,
+    pub tpe_agg_pk: AggregatePublicKey,
+}
+
 #[derive(Debug, Clone)]
 pub struct LightningClientInit;
 
@@ -284,8 +292,8 @@ fn generate_ephemeral_tweak(static_pk: PublicKey) -> ([u8; 32], PublicKey) {
 
 impl LightningClientModule {
     pub async fn fetch_payment_info(
-        &self,
         gateway_api: SafeUrl,
+        federation_id: FederationId,
     ) -> Result<Option<PaymentInfo>, GatewayError> {
         reqwest::Client::new()
             .post(
@@ -294,7 +302,7 @@ impl LightningClientModule {
                     .expect("'payment_info' contains no invalid characters for a URL")
                     .as_str(),
             )
-            .json(&self.federation_id)
+            .json(&federation_id)
             .send()
             .await
             .map_err(|e| GatewayError::Unreachable(e.to_string()))?
@@ -340,8 +348,7 @@ impl LightningClientModule {
             .expect("32 bytes, within curve order")
             .keypair(secp256k1::SECP256K1);
 
-        let payment_info = self
-            .fetch_payment_info(gateway_api.clone())
+        let payment_info = Self::fetch_payment_info(gateway_api.clone(), self.federation_id)
             .await
             .map_err(SendPaymentError::GatewayError)?
             .ok_or(SendPaymentError::UnknownFederation)?;
@@ -512,6 +519,15 @@ impl LightningClientModule {
         }))
     }
 
+    pub fn federated_lightning_address(&self, gateway_api: SafeUrl) -> FederatedLightningAddress {
+        FederatedLightningAddress {
+            gateway_api,
+            federation_id: self.federation_id,
+            public_key: self.keypair.public_key(),
+            tpe_agg_pk: self.cfg.tpe_agg_pk,
+        }
+    }
+
     pub async fn receive(
         &self,
         gateway_api: SafeUrl,
@@ -535,16 +551,14 @@ impl LightningClientModule {
         description: String,
         payment_fee_limit: PaymentFee,
     ) -> Result<(Bolt11Invoice, OperationId), FetchInvoiceError> {
-        let (contract, .., invoice) = self
-            .create_contract_and_fetch_invoice_internal(
-                self.keypair.public_key(),
-                gateway_api,
-                invoice_amount,
-                expiry_time,
-                description,
-                payment_fee_limit,
-            )
-            .await?;
+        let (contract, .., invoice) = Self::create_contract_and_fetch_invoice_internal(
+            self.federated_lightning_address(gateway_api.clone()),
+            invoice_amount,
+            expiry_time,
+            description,
+            payment_fee_limit,
+        )
+        .await?;
 
         let operation_id = self
             .receive_external_contract(contract)
@@ -555,14 +569,11 @@ impl LightningClientModule {
     }
 
     pub async fn create_contract_and_fetch_invoice(
-        &self,
-        recipient_static_pk: PublicKey,
-        gateway_api: SafeUrl,
+        address: FederatedLightningAddress,
         invoice_amount: Amount,
     ) -> Result<(IncomingContract, [u8; 32], Bolt11Invoice), FetchInvoiceError> {
-        self.create_contract_and_fetch_invoice_internal(
-            recipient_static_pk,
-            gateway_api,
+        Self::create_contract_and_fetch_invoice_internal(
+            address,
             invoice_amount,
             INVOICE_EXPIRATION_SECONDS_DEFAULT,
             String::new(),
@@ -572,15 +583,13 @@ impl LightningClientModule {
     }
 
     pub async fn create_contract_and_fetch_invoice_internal(
-        &self,
-        recipient_static_pk: PublicKey,
-        gateway_api: SafeUrl,
+        address: FederatedLightningAddress,
         invoice_amount: Amount,
         expiry_time: u32,
         description: String,
         payment_fee_limit: PaymentFee,
     ) -> Result<(IncomingContract, [u8; 32], Bolt11Invoice), FetchInvoiceError> {
-        let (ephemeral_tweak, ephemeral_pk) = generate_ephemeral_tweak(recipient_static_pk);
+        let (ephemeral_tweak, ephemeral_pk) = generate_ephemeral_tweak(address.public_key);
 
         let encryption_seed = ephemeral_tweak
             .consensus_hash::<sha256::Hash>()
@@ -590,11 +599,11 @@ impl LightningClientModule {
             .consensus_hash::<sha256::Hash>()
             .into_inner();
 
-        let payment_info = self
-            .fetch_payment_info(gateway_api.clone())
-            .await
-            .map_err(FetchInvoiceError::GatewayError)?
-            .ok_or(FetchInvoiceError::UnknownFederation)?;
+        let payment_info =
+            Self::fetch_payment_info(address.gateway_api.clone(), address.federation_id)
+                .await
+                .map_err(FetchInvoiceError::GatewayError)?
+                .ok_or(FetchInvoiceError::UnknownFederation)?;
 
         if !payment_info.receive_fee.le(&payment_fee_limit) {
             return Err(FetchInvoiceError::PaymentFeeExceedsLimit(
@@ -608,7 +617,8 @@ impl LightningClientModule {
             .as_secs()
             .saturating_add(expiry_time as u64);
 
-        let claim_pk = recipient_static_pk
+        let claim_pk = address
+            .public_key
             .mul_tweak(
                 secp256k1::SECP256K1,
                 &Scalar::from_be_bytes(ephemeral_tweak).expect("Within curve order"),
@@ -616,7 +626,7 @@ impl LightningClientModule {
             .expect("Tweak is valid");
 
         let contract = IncomingContract::new(
-            self.cfg.tpe_agg_pk,
+            address.tpe_agg_pk,
             encryption_seed,
             preimage,
             contract_amount,
@@ -627,15 +637,14 @@ impl LightningClientModule {
         );
 
         let payload = CreateInvoicePayload {
-            federation_id: self.federation_id,
+            federation_id: address.federation_id,
             contract: contract.clone(),
             invoice_amount,
             description,
             expiry_time,
         };
 
-        let invoice = self
-            .fetch_invoice(gateway_api, payload)
+        let invoice = Self::fetch_invoice(address.gateway_api, payload)
             .await
             .map_err(FetchInvoiceError::GatewayError)?
             .map_err(FetchInvoiceError::CreateInvoiceError)?;
@@ -652,7 +661,6 @@ impl LightningClientModule {
     }
 
     async fn fetch_invoice(
-        &self,
         gateway_api: SafeUrl,
         payload: CreateInvoicePayload,
     ) -> Result<Result<Bolt11Invoice, String>, GatewayError> {
