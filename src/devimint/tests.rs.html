@@ -2545,6 +2545,18 @@
 <a href="#2545" id="2545">2545</a>
 <a href="#2546" id="2546">2546</a>
 <a href="#2547" id="2547">2547</a>
+<a href="#2548" id="2548">2548</a>
+<a href="#2549" id="2549">2549</a>
+<a href="#2550" id="2550">2550</a>
+<a href="#2551" id="2551">2551</a>
+<a href="#2552" id="2552">2552</a>
+<a href="#2553" id="2553">2553</a>
+<a href="#2554" id="2554">2554</a>
+<a href="#2555" id="2555">2555</a>
+<a href="#2556" id="2556">2556</a>
+<a href="#2557" id="2557">2557</a>
+<a href="#2558" id="2558">2558</a>
+<a href="#2559" id="2559">2559</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::HashSet;
 <span class="kw">use </span>std::io::Write;
 <span class="kw">use </span>std::ops::ControlFlow;
@@ -4511,6 +4523,18 @@
 
 <span class="kw">pub async fn </span>recoverytool_test(dev_fed: DevFed) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
     log_binary_versions().<span class="kw">await</span><span class="question-mark">?</span>;
+
+    <span class="kw">let </span>fedimintd_version = <span class="kw">crate</span>::util::FedimintdCmd::version_or_default().<span class="kw">await</span>;
+
+    <span class="comment">// TODO(support:v0.3): remove
+    </span><span class="kw">if </span>fedimintd_version &lt; <span class="kw-2">*</span>VERSION_0_4_0_ALPHA {
+        <span class="macro">info!</span>(<span class="string">"Recoverytool tests in fedmintd version that didn't have short session times when running in tests"</span>);
+        <span class="comment">// And worst comes to worst, users that want to recover can just use a
+        // recoverytool version corresponding to the version of fedimintd they were
+        // using.
+        </span><span class="kw">return </span><span class="prelude-val">Ok</span>(());
+    }
+
     <span class="attr">#[allow(unused_variables)]
     </span><span class="kw">let </span>DevFed {
         bitcoind,
