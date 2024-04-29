@@ -2451,6 +2451,7 @@ dependencies = [
  "miniscript 10.0.0",
  "rand",
  "secp256k1 0.24.3",
+ "secp256k1 0.27.0",
  "serde",
  "serde_json",
  "tokio",

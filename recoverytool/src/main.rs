@@ -13,7 +13,7 @@ use clap::{ArgGroup, Parser, Subcommand};
 use fedimint_core::bitcoin_migration::{
     bitcoin29_to_bitcoin30_amount, bitcoin29_to_bitcoin30_network, bitcoin29_to_bitcoin30_outpoint,
     bitcoin29_to_bitcoin30_secp256k1_secret_key, bitcoin30_to_bitcoin29_network,
-    bitcoin30_to_bitcoin29_secp256k1_secret_key,
+    bitcoin30_to_bitcoin29_secp256k1_public_key, bitcoin30_to_bitcoin29_secp256k1_secret_key,
 };
 use fedimint_core::core::{
     LEGACY_HARDCODED_INSTANCE_ID_LN, LEGACY_HARDCODED_INSTANCE_ID_MINT,
@@ -143,7 +143,7 @@ async fn main() -> anyhow::Result<()> {
             .get_module_config_typed(LEGACY_HARDCODED_INSTANCE_ID_WALLET)
             .expect("Malformed wallet config");
         let base_descriptor = wallet_cfg.consensus.peg_in_descriptor;
-        let base_key = wallet_cfg.private.peg_in_key;
+        let base_key = bitcoin29_to_bitcoin30_secp256k1_secret_key(wallet_cfg.private.peg_in_key);
         let network = wallet_cfg.consensus.network;
 
         (base_descriptor, base_key, network)
@@ -327,16 +327,19 @@ fn tweak_descriptor(
     tweak: &[u8; 33],
     network: Network,
 ) -> Descriptor<Key> {
-    let secret_key = base_sk.tweak(tweak, secp256k1::SECP256K1);
-    let pub_key =
-        CompressedPublicKey::new(secp256k1::PublicKey::from_secret_key_global(&secret_key));
+    let secret_key = bitcoin29_to_bitcoin30_secp256k1_secret_key(
+        bitcoin30_to_bitcoin29_secp256k1_secret_key(*base_sk).tweak(tweak, secp256k1_24::SECP256K1),
+    );
+    let pub_key = CompressedPublicKey::new(bitcoin30_to_bitcoin29_secp256k1_public_key(
+        secp256k1::PublicKey::from_secret_key_global(&secret_key),
+    ));
     base_descriptor
-        .tweak(tweak, secp256k1::SECP256K1)
+        .tweak(tweak, secp256k1_24::SECP256K1)
         .translate_pk(&mut SecretKeyInjector {
             secret: bitcoin::key::PrivateKey {
                 compressed: true,
                 network,
-                inner: bitcoin29_to_bitcoin30_secp256k1_secret_key(secret_key),
+                inner: secret_key,
             },
             public: pub_key,
         })
@@ -400,8 +403,8 @@ impl Key {
         match self {
             Key::Public(pk) => pk,
             Key::Private(sk) => {
-                CompressedPublicKey::new(secp256k1::PublicKey::from_secret_key_global(
-                    &bitcoin30_to_bitcoin29_secp256k1_secret_key(sk.inner),
+                CompressedPublicKey::new(bitcoin30_to_bitcoin29_secp256k1_public_key(
+                    secp256k1::PublicKey::from_secret_key_global(&sk.inner),
                 ))
             }
         }
