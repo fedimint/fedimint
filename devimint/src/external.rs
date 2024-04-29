@@ -554,20 +554,21 @@ async fn open_channel(
     cln: &Lightningd,
     lnd: &Lnd,
 ) -> Result<()> {
+    let policy_update_req = &PolicyUpdateRequest {
+        min_htlc_msat: 1,
+        scope: Some(Scope::Global(true)),
+        time_lock_delta: 80,
+        base_fee_msat: 0,
+        fee_rate: 0.0,
+        fee_rate_ppm: 0,
+        max_htlc_msat: 10000000000,
+        min_htlc_msat_specified: true,
+    };
     lnd.client
         .lock()
         .await
         .lightning()
-        .update_channel_policy(PolicyUpdateRequest {
-            min_htlc_msat: 1,
-            scope: Some(Scope::Global(true)),
-            time_lock_delta: 80,
-            base_fee_msat: 0,
-            fee_rate: 0.0,
-            fee_rate_ppm: 0,
-            max_htlc_msat: 10000000000,
-            min_htlc_msat_specified: true,
-        })
+        .update_channel_policy(policy_update_req.clone())
         .await?;
 
     debug!(target: LOG_DEVIMINT, "Await block ln nodes block processing");
@@ -652,6 +653,15 @@ async fn open_channel(
                         return Ok(());
                     } else {
                         debug!(?edge, "Empty chan info");
+
+                        info!(target: LOG_DEVIMINT, "Re-setting channel policy");
+                        if let Err(err) = lnd_client
+                            .lightning()
+                            .update_channel_policy(policy_update_req.clone())
+                            .await
+                        {
+                            info!(target: LOG_DEVIMINT, %err, "Re-setting channel policy - error");
+                        }
                     }
                 }
                 Err(e) => {
