@@ -6,8 +6,7 @@ use std::io::{Cursor, Read};
 use std::str::FromStr;
 
 use anyhow::ensure;
-use bech32::Variant::Bech32m;
-use bech32::{FromBase32 as _, ToBase32 as _};
+use bech32::{Bech32m, Hrp};
 use serde::{Deserialize, Serialize};
 
 use crate::config::FederationId;
@@ -158,19 +157,17 @@ enum InviteCodeData {
 /// ```txt
 /// [ hrp (4 bytes) ] [ id (48 bytes) ] ([ url len (2 bytes) ] [ url bytes (url len bytes) ])+
 /// ```
-const BECH32_HRP: &str = "fed1";
+const BECH32_HRP: Hrp = Hrp::parse_unchecked("fed1");
 
 impl FromStr for InviteCode {
     type Err = anyhow::Error;
 
     fn from_str(encoded: &str) -> Result<Self, Self::Err> {
-        let (hrp, data, variant) = bech32::decode(encoded)?;
+        let (hrp, data) = bech32::decode(encoded)?;
 
         ensure!(hrp == BECH32_HRP, "Invalid HRP in bech32 encoding");
-        ensure!(variant == Bech32m, "Expected Bech32m encoding");
 
-        let bytes: Vec<u8> = Vec::<u8>::from_base32(&data)?;
-        let invite = InviteCode::consensus_decode(&mut Cursor::new(bytes), &Default::default())?;
+        let invite = InviteCode::consensus_decode(&mut Cursor::new(data), &Default::default())?;
 
         Ok(invite)
     }
@@ -184,8 +181,7 @@ impl Display for InviteCode {
         self.consensus_encode(&mut data)
             .expect("Vec<u8> provides capacity");
 
-        let encode =
-            bech32::encode(BECH32_HRP, data.to_base32(), Bech32m).map_err(|_| fmt::Error)?;
+        let encode = bech32::encode::<Bech32m>(BECH32_HRP, &data).map_err(|_| fmt::Error)?;
         formatter.write_str(&encode)
     }
 }
@@ -206,5 +202,36 @@ impl<'de> Deserialize<'de> for InviteCode {
     {
         let string = Cow::<str>::deserialize(deserializer)?;
         Self::from_str(&string).map_err(serde::de::Error::custom)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::str::FromStr;
+
+    use crate::config::FederationId;
+    use crate::invite_code::InviteCode;
+
+    #[test]
+    fn test_invite_code_to_from_string() {
+        let invite_code_str = "fed11qgqpu8rhwden5te0vejkg6tdd9h8gepwd4cxcumxv4jzuen0duhsqqfqh6nl7sgk72caxfx8khtfnn8y436q3nhyrkev3qp8ugdhdllnh86qmp42pm";
+        let invite_code = InviteCode::from_str(invite_code_str).expect("valid invite code");
+
+        assert_eq!(invite_code.to_string(), invite_code_str);
+        assert_eq!(
+            invite_code.0,
+            [
+                crate::invite_code::InviteCodeData::Api {
+                    url: "wss://fedimintd.mplsfed.foo/".parse().expect("valid url"),
+                    peer: crate::PeerId(0),
+                },
+                crate::invite_code::InviteCodeData::FederationId(FederationId(
+                    bitcoin_hashes::sha256::Hash::from_str(
+                        "bea7ff4116f2b1d324c7b5d699cce4ac7408cee41db2c88027e21b76fff3b9f4"
+                    )
+                    .expect("valid hash")
+                ))
+            ]
+        );
     }
 }
