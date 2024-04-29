@@ -395,8 +395,8 @@
 
     <span class="kw">pub async fn </span>pay_invoice(invoice: <span class="kw-2">&amp;</span>str) -&gt; anyhow::Result&lt;()&gt; {
         <span class="kw">let </span>resp = gloo_net::http::Request::post(<span class="string">"http://localhost:15243/pay"</span>)
-            .body(invoice)
-            .send()
+            .body(invoice)<span class="question-mark">?
+            </span>.send()
             .<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">if </span>resp.ok() {
             <span class="prelude-val">Ok</span>(())
@@ -418,8 +418,8 @@
 
     <span class="kw">pub async fn </span>generate_invoice(amt: u64) -&gt; anyhow::Result&lt;String&gt; {
         <span class="kw">let </span>resp = gloo_net::http::Request::post(<span class="string">"http://localhost:15243/invoice"</span>)
-            .body(amt)
-            .send()
+            .body(amt)<span class="question-mark">?
+            </span>.send()
             .<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">if </span>resp.ok() {
             <span class="prelude-val">Ok</span>(resp.text().<span class="kw">await</span><span class="question-mark">?</span>)
