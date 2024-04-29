@@ -670,7 +670,6 @@ impl Mint {
 #[cfg(test)]
 mod test {
     use assert_matches::assert_matches;
-    use fedimint_core::bitcoin_migration::bitcoin29_to_bitcoin30_secp256k1_public_key;
     use fedimint_core::config::{ClientModuleConfig, ConfigGenModuleParams, ServerModuleConfig};
     use fedimint_core::db::mem_impl::MemDatabase;
     use fedimint_core::db::Database;
@@ -743,9 +742,7 @@ mod test {
         denomination: Amount,
     ) -> (secp256k1::KeyPair, Note) {
         let note_key = secp256k1::KeyPair::new(secp256k1::SECP256K1, &mut rand::thread_rng());
-        let nonce = Nonce(bitcoin29_to_bitcoin30_secp256k1_public_key(
-            note_key.public_key(),
-        ));
+        let nonce = Nonce(note_key.public_key());
         let message = nonce.to_message();
         let blinding_key = tbs::BlindingKey::random();
         let blind_msg = blind_message(message, blinding_key);
