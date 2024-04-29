@@ -17,7 +17,7 @@ path = "src/lib.rs"
 
 [dependencies]
 anyhow = { workspace = true }
-async-trait = "0.1.79"
+async-trait = "0.1.80"
 bitcoin_hashes = { workspace = true }
 erased-serde = { workspace = true }
 futures = { workspace = true }
@@ -25,7 +25,7 @@ fedimint-core = { version = "=0.4.0-alpha", path = "../../fedimint-core" }
 fedimint-logging = { version = "=0.4.0-alpha", path = "../../fedimint-logging" }
 fedimint-meta-common = { version = "=0.4.0-alpha", path = "../fedimint-meta-common" }
 rand = { workspace = true }
-serde = { version = "1.0.198", features = [ "derive" ] }
+serde = { version = "1.0.199", features = [ "derive" ] }
 strum = { workspace = true }
 strum_macros = { workspace = true }
 thiserror = { workspace = true }
