@@ -554,6 +554,22 @@ async fn open_channel(
     cln: &Lightningd,
     lnd: &Lnd,
 ) -> Result<()> {
+    debug!(target: LOG_DEVIMINT, "Await block ln nodes block processing");
+    tokio::try_join!(cln.await_block_processing(), lnd.await_block_processing())?;
+
+    debug!(target: LOG_DEVIMINT, "Opening LN channel between the nodes...");
+    let cln_addr = cln
+        .request(cln_rpc::model::requests::NewaddrRequest { addresstype: None })
+        .await?
+        .bech32
+        .context("bech32 should be present")?;
+
+    bitcoind.send_to(cln_addr, 100_000_000).await?;
+    bitcoind.mine_blocks(10).await?;
+
+    let lnd_pubkey = lnd.pub_key().await?;
+    let cln_pubkey = cln.pub_key().await?;
+
     let policy_update_req = &PolicyUpdateRequest {
         min_htlc_msat: 1,
         scope: Some(Scope::Global(true)),
@@ -570,21 +586,6 @@ async fn open_channel(
         .lightning()
         .update_channel_policy(policy_update_req.clone())
         .await?;
-
-    debug!(target: LOG_DEVIMINT, "Await block ln nodes block processing");
-    tokio::try_join!(cln.await_block_processing(), lnd.await_block_processing())?;
-    debug!(target: LOG_DEVIMINT, "Opening LN channel between the nodes...");
-    let cln_addr = cln
-        .request(cln_rpc::model::requests::NewaddrRequest { addresstype: None })
-        .await?
-        .bech32
-        .context("bech32 should be present")?;
-
-    bitcoind.send_to(cln_addr, 100_000_000).await?;
-    bitcoind.mine_blocks(10).await?;
-
-    let lnd_pubkey = lnd.pub_key().await?;
-    let cln_pubkey = cln.pub_key().await?;
 
     cln.request(cln_rpc::model::requests::ConnectRequest {
         id: lnd_pubkey.parse()?,
