@@ -71,7 +71,7 @@ use fedimint_wallet_client::{
 };
 use futures::stream::StreamExt;
 use gateway_lnrpc::intercept_htlc_response::Action;
-use gateway_lnrpc::{GetNodeInfoResponse, InterceptHtlcResponse};
+use gateway_lnrpc::{GetNodeInfoResponse, GetRouteHintsResponse, InterceptHtlcResponse};
 use hex::ToHex;
 use lightning::{ILnRpcClient, LightningBuilder, LightningMode, LightningRpcError};
 use lightning_invoice::{Bolt11Invoice, RoutingFees};
@@ -112,8 +112,6 @@ const INITIAL_SCID: u64 = 0;
 /// How long a gateway announcement stays valid
 const GW_ANNOUNCEMENT_TTL: Duration = Duration::from_secs(600);
 
-const ROUTE_HINT_RETRIES: usize = 30;
-const ROUTE_HINT_RETRY_SLEEP: Duration = Duration::from_secs(2);
 const DEFAULT_NUM_ROUTE_HINTS: u32 = 1;
 pub const DEFAULT_NETWORK: Network = Network::Regtest;
 
@@ -713,11 +711,11 @@ impl Gateway {
                 .expect("Gateway configuration should be set");
             let mut federations = Vec::new();
             let federation_clients = self.clients.read().await.clone().into_iter();
-            let route_hints = Self::fetch_lightning_route_hints_try(
-                lightning_context.lnrpc.as_ref(),
+            let route_hints = Self::fetch_lightning_route_hints(
+                lightning_context.lnrpc.clone(),
                 gateway_config.num_route_hints,
             )
-            .await?;
+            .await;
             let node_info = fetch_lightning_node_info(lightning_context.lnrpc.clone()).await?;
             for (federation_id, client) in federation_clients {
                 federations.push(
@@ -963,12 +961,6 @@ impl Gateway {
                 fees: gateway_config.routing_fees,
             };
 
-            let route_hints = Self::fetch_lightning_route_hints(
-                lightning_context.lnrpc.clone(),
-                gateway_config.num_route_hints,
-            )
-            .await?;
-
             let client = self
                 .client_builder
                 .build(gw_client_cfg.clone(), self.clone())
@@ -993,7 +985,8 @@ impl Gateway {
             client
                 .get_first_module::<GatewayClientModule>()
                 .register_with_federation(
-                    route_hints,
+                    // Route hints will be updated in the background
+                    Vec::new(),
                     GW_ANNOUNCEMENT_TTL,
                     gw_client_cfg.fees,
                     lightning_context,
@@ -1238,46 +1231,39 @@ impl Gateway {
         federations: &[(FederationId, FederationConfig)],
     ) -> Result<()> {
         if let Ok(lightning_context) = self.get_lightning_context().await {
-            match Self::fetch_lightning_route_hints(
+            let route_hints = Self::fetch_lightning_route_hints(
                 lightning_context.lnrpc.clone(),
-                gateway_config.num_route_hints
+                gateway_config.num_route_hints,
             )
-            .await
-            {
-                Ok(route_hints) => {
-                    for (federation_id, federation_config) in federations {
-                        if let Some(client) = self.clients.read().await.get(federation_id) {
-                            if let Err(e) = async {
-                                client
-                                    .value()
-                                    .get_first_module::<GatewayClientModule>()
-                                    .register_with_federation(
-                                        route_hints.clone(),
-                                        GW_ANNOUNCEMENT_TTL,
-                                        federation_config.fees,
-                                        lightning_context.clone(),
-                                    )
-                                    .await
-                            }
-                            .instrument(client.span())
+            .await;
+            if route_hints.is_empty() {
+                warn!("Gateway did not retrieve any route hints, may reduce receive success rate.");
+            }
+
+            for (federation_id, federation_config) in federations {
+                if let Some(client) = self.clients.read().await.get(federation_id) {
+                    if let Err(e) = async {
+                        client
+                            .value()
+                            .get_first_module::<GatewayClientModule>()
+                            .register_with_federation(
+                                route_hints.clone(),
+                                GW_ANNOUNCEMENT_TTL,
+                                federation_config.fees,
+                                lightning_context.clone(),
+                            )
                             .await
-                            {
-                                Err(GatewayError::FederationError(FederationError::general(REGISTER_GATEWAY_ENDPOINT, serde_json::Value::Null,
-                                    anyhow::anyhow!(
-                                        "Error registering federation {federation_id}: {e:?}"
-                                    ),
-                                )))?
-                            }
-                        }
+                    }
+                    .instrument(client.span())
+                    .await
+                    {
+                        Err(GatewayError::FederationError(FederationError::general(
+                            REGISTER_GATEWAY_ENDPOINT,
+                            serde_json::Value::Null,
+                            anyhow::anyhow!("Error registering federation {federation_id}: {e:?}"),
+                        )))?
                     }
                 }
-                Err(e) => Err(GatewayError::LightningRpcError(
-                    LightningRpcError::FailedToGetRouteHints {
-                        failure_reason: format!(
-                            "Could not retrieve route hints, gateway will not be registered for now: {e:?}"
-                        ),
-                    },
-                ))?,
             }
         }
         Ok(())
@@ -1476,58 +1462,22 @@ impl Gateway {
         });
     }
 
-    async fn fetch_lightning_route_hints_try(
-        lnrpc: &dyn ILnRpcClient,
-        num_route_hints: u32,
-    ) -> Result<Vec<RouteHint>> {
-        let route_hints = lnrpc
-            .routehints(num_route_hints as usize)
-            .await?
-            .try_into()
-            .expect("Could not parse route hints");
-
-        Ok(route_hints)
-    }
-
     async fn fetch_lightning_route_hints(
         lnrpc: Arc<dyn ILnRpcClient>,
         num_route_hints: u32,
-    ) -> Result<Vec<RouteHint>> {
+    ) -> Vec<RouteHint> {
         if num_route_hints == 0 {
-            return Ok(vec![]);
+            return vec![];
         }
 
-        for num_retries in 0.. {
-            let route_hints = match Self::fetch_lightning_route_hints_try(
-                lnrpc.as_ref(),
-                num_route_hints,
-            )
-            .await
-            {
-                Ok(res) => res,
-                Err(e) => {
-                    if num_retries == ROUTE_HINT_RETRIES {
-                        return Err(e);
-                    }
-                    warn!("Could not fetch route hints: {e}");
-                    sleep(ROUTE_HINT_RETRY_SLEEP).await;
-                    continue;
-                }
-            };
-
-            if !route_hints.is_empty() || num_retries == ROUTE_HINT_RETRIES {
-                return Ok(route_hints);
-            }
-
-            info!(
-                ?num_retries,
-                "LN node returned no route hints, trying again in {}s",
-                ROUTE_HINT_RETRY_SLEEP.as_secs()
-            );
-            sleep(ROUTE_HINT_RETRY_SLEEP).await;
-        }
-
-        unreachable!();
+        let route_hints =
+            lnrpc
+                .routehints(num_route_hints as usize)
+                .await
+                .unwrap_or(GetRouteHintsResponse {
+                    route_hints: Vec::new(),
+                });
+        route_hints.try_into().expect("Could not parse route hints")
     }
 
     async fn make_federation_info(
