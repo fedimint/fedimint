@@ -448,23 +448,23 @@ impl ServerModule for Wallet {
                     "Received block count vote"
                 );
 
-                // only sync when we have a consensus block count
-                if let Some(old_height) = old_consensus_block_count {
-                    let new_height = new_consensus_block_count.expect("Block count is set");
+                assert!(old_consensus_block_count <= new_consensus_block_count);
 
-                    assert!(old_height <= new_height);
-
-                    if new_height != old_height {
-                        if old_height != 0 {
-                            self.sync_up_to_consensus_height(dbtx, old_height, new_height)
-                                .await;
-                        } else {
-                            info!(
-                                ?old_height,
-                                ?new_height,
-                                "Not syncing up to consensus block count because we are at block 0"
-                            );
-                        }
+                if new_consensus_block_count != old_consensus_block_count {
+                    // We do not sync blocks that predate the federation itself
+                    if old_consensus_block_count != 0 {
+                        self.sync_up_to_consensus_height(
+                            dbtx,
+                            old_consensus_block_count,
+                            new_consensus_block_count,
+                        )
+                        .await;
+                    } else {
+                        info!(
+                            ?old_consensus_block_count,
+                            ?new_consensus_block_count,
+                            "Not syncing up to consensus block count because we are at block 0"
+                        );
                     }
                 }
             }
@@ -673,8 +673,7 @@ impl ServerModule for Wallet {
                 BLOCK_COUNT_ENDPOINT,
                 ApiVersion::new(0, 0),
                 async |module: &Wallet, context, _params: ()| -> u32 {
-                    // TODO: perhaps change this to an Option
-                    Ok(module.consensus_block_count(&mut context.dbtx().into_nc()).await.unwrap_or_default())
+                    Ok(module.consensus_block_count(&mut context.dbtx().into_nc()).await)
                 }
             },
             api_endpoint! {
@@ -927,19 +926,20 @@ impl Wallet {
         *self.fee_rate_rx.borrow()
     }
 
-    pub async fn consensus_block_count(&self, dbtx: &mut DatabaseTransaction<'_>) -> Option<u32> {
+    pub async fn consensus_block_count(&self, dbtx: &mut DatabaseTransaction<'_>) -> u32 {
         let peer_count = self.cfg.consensus.peer_peg_in_keys.total();
 
         let mut counts = dbtx
             .find_by_prefix(&BlockCountVotePrefix)
             .await
-            .map(|(.., count)| Some(count))
-            .collect::<Vec<_>>()
+            .map(|entry| entry.1)
+            .collect::<Vec<u32>>()
             .await;
 
         assert!(counts.len() <= peer_count);
+
         while counts.len() < peer_count {
-            counts.push(None);
+            counts.push(0);
         }
 
         counts.sort_unstable();
