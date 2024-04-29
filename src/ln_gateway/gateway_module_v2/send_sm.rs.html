@@ -373,8 +373,6 @@
             <span class="kw">return </span><span class="prelude-val">Err</span>(Cancelled::Underfunded);
         }
 
-        <span class="kw">let </span>max_fee = contract.amount - min_contract_amount;
-
         <span class="kw">let </span>lightning_context = context
             .gateway
             .get_lightning_context()
@@ -398,6 +396,8 @@
                 .<span class="kw">await
                 </span>.map_err(|e| Cancelled::DirectSwapError(e.to_string()));
         }
+
+        <span class="kw">let </span>max_fee = contract.amount - min_contract_amount;
 
         <span class="kw">if </span>lightning_context.lnrpc.supports_private_payments() {
             lightning_context

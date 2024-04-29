@@ -1878,70 +1878,6 @@
 <a href="#1878" id="1878">1878</a>
 <a href="#1879" id="1879">1879</a>
 <a href="#1880" id="1880">1880</a>
-<a href="#1881" id="1881">1881</a>
-<a href="#1882" id="1882">1882</a>
-<a href="#1883" id="1883">1883</a>
-<a href="#1884" id="1884">1884</a>
-<a href="#1885" id="1885">1885</a>
-<a href="#1886" id="1886">1886</a>
-<a href="#1887" id="1887">1887</a>
-<a href="#1888" id="1888">1888</a>
-<a href="#1889" id="1889">1889</a>
-<a href="#1890" id="1890">1890</a>
-<a href="#1891" id="1891">1891</a>
-<a href="#1892" id="1892">1892</a>
-<a href="#1893" id="1893">1893</a>
-<a href="#1894" id="1894">1894</a>
-<a href="#1895" id="1895">1895</a>
-<a href="#1896" id="1896">1896</a>
-<a href="#1897" id="1897">1897</a>
-<a href="#1898" id="1898">1898</a>
-<a href="#1899" id="1899">1899</a>
-<a href="#1900" id="1900">1900</a>
-<a href="#1901" id="1901">1901</a>
-<a href="#1902" id="1902">1902</a>
-<a href="#1903" id="1903">1903</a>
-<a href="#1904" id="1904">1904</a>
-<a href="#1905" id="1905">1905</a>
-<a href="#1906" id="1906">1906</a>
-<a href="#1907" id="1907">1907</a>
-<a href="#1908" id="1908">1908</a>
-<a href="#1909" id="1909">1909</a>
-<a href="#1910" id="1910">1910</a>
-<a href="#1911" id="1911">1911</a>
-<a href="#1912" id="1912">1912</a>
-<a href="#1913" id="1913">1913</a>
-<a href="#1914" id="1914">1914</a>
-<a href="#1915" id="1915">1915</a>
-<a href="#1916" id="1916">1916</a>
-<a href="#1917" id="1917">1917</a>
-<a href="#1918" id="1918">1918</a>
-<a href="#1919" id="1919">1919</a>
-<a href="#1920" id="1920">1920</a>
-<a href="#1921" id="1921">1921</a>
-<a href="#1922" id="1922">1922</a>
-<a href="#1923" id="1923">1923</a>
-<a href="#1924" id="1924">1924</a>
-<a href="#1925" id="1925">1925</a>
-<a href="#1926" id="1926">1926</a>
-<a href="#1927" id="1927">1927</a>
-<a href="#1928" id="1928">1928</a>
-<a href="#1929" id="1929">1929</a>
-<a href="#1930" id="1930">1930</a>
-<a href="#1931" id="1931">1931</a>
-<a href="#1932" id="1932">1932</a>
-<a href="#1933" id="1933">1933</a>
-<a href="#1934" id="1934">1934</a>
-<a href="#1935" id="1935">1935</a>
-<a href="#1936" id="1936">1936</a>
-<a href="#1937" id="1937">1937</a>
-<a href="#1938" id="1938">1938</a>
-<a href="#1939" id="1939">1939</a>
-<a href="#1940" id="1940">1940</a>
-<a href="#1941" id="1941">1941</a>
-<a href="#1942" id="1942">1942</a>
-<a href="#1943" id="1943">1943</a>
-<a href="#1944" id="1944">1944</a>
 </pre></div><pre class="rust"><code><span class="kw">pub mod </span>client;
 <span class="kw">mod </span>db;
 <span class="kw">pub mod </span>envs;
@@ -1987,13 +1923,12 @@
 };
 <span class="kw">use </span>fedimint_core::config::FederationId;
 <span class="kw">use </span>fedimint_core::core::{
-    ModuleInstanceId, ModuleKind, OperationId, LEGACY_HARDCODED_INSTANCE_ID_MINT,
+    ModuleInstanceId, ModuleKind, LEGACY_HARDCODED_INSTANCE_ID_MINT,
     LEGACY_HARDCODED_INSTANCE_ID_WALLET,
 };
 <span class="kw">use </span>fedimint_core::db::{
     apply_migrations_server, Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped,
 };
-<span class="kw">use </span>fedimint_core::encoding::Encodable;
 <span class="kw">use </span>fedimint_core::endpoint_constants::REGISTER_GATEWAY_ENDPOINT;
 <span class="kw">use </span>fedimint_core::fmt_utils::OptStacktrace;
 <span class="kw">use </span>fedimint_core::invite_code::InviteCode;
@@ -2009,7 +1944,6 @@
 <span class="kw">use </span>fedimint_ln_common::contracts::Preimage;
 <span class="kw">use </span>fedimint_ln_common::route_hints::RouteHint;
 <span class="kw">use </span>fedimint_ln_common::LightningCommonInit;
-<span class="kw">use </span>fedimint_lnv2_client::api::LnFederationApi;
 <span class="kw">use </span>fedimint_lnv2_client::{CreateInvoicePayload, PaymentFee, PaymentInfo, SendPaymentPayload};
 <span class="kw">use </span>fedimint_mint_client::{MintClientInit, MintCommonInit};
 <span class="kw">use </span>fedimint_wallet_client::{
@@ -3630,73 +3564,11 @@
             .ok_or(<span class="macro">anyhow!</span>(<span class="string">"Federation client not available"</span>))<span class="question-mark">?
             </span>.value();
 
-        <span class="comment">// The operation id is equal to the contract id which also doubles as the
-        // message signed by the gateway via the forfeit signature to forfeit
-        // the gateways claim to a contract in case of cancellation. We only create a
-        // forfeit signature after the we have started the send state machine to
-        // prevent replay attacks with a previously cancelled outgoing contract
-        </span><span class="kw">let </span>operation_id = OperationId::from_encodable(payload.contract.clone());
-
-        <span class="kw">let </span>module = client.get_first_module::&lt;GatewayClientModuleV2&gt;();
-
-        <span class="kw">if </span>client.operation_exists(operation_id).<span class="kw">await </span>{
-            <span class="kw">return </span><span class="prelude-val">Ok</span>(module.subscribe_send(operation_id, payload.contract).<span class="kw">await</span>);
-        }
-
-        <span class="comment">// Since the following four checks may only fail due to client side
-        // programming error we do not have to enable cancellation and can check
-        // them before we start the state machine.
-        </span><span class="kw">if </span>payload.contract.claim_pk
-            != bitcoin29_to_bitcoin30_secp256k1_public_key(module.keypair.public_key())
-        {
-            <span class="macro">bail!</span>(<span class="string">"The outgoing contract keyed to another gateway"</span>);
-        }
-
-        <span class="kw">if </span><span class="kw-2">*</span>payload.invoice.payment_hash() != payload.contract.payment_hash {
-            <span class="macro">bail!</span>(<span class="string">"The invoices payment hash does not match the contracts payment hash"</span>);
-        }
-
-        <span class="comment">// The outgoing contract commits to the invoice it is intended for via a hash to
-        // prevent DOS attacks where an attacker submits a different invoice.
-        </span><span class="kw">if </span>payload.invoice.consensus_hash::&lt;sha256::Hash&gt;() != payload.contract.invoice_hash {
-            <span class="macro">bail!</span>(<span class="string">"The invoices consensus hash does not match the contracts invoice commitment"</span>);
-        }
-
-        <span class="kw">let </span>invoice_msats = payload
-            .invoice
-            .amount_milli_satoshis()
-            .ok_or(<span class="macro">anyhow!</span>(<span class="string">"Invoice is missing amount"</span>))<span class="question-mark">?</span>;
-
-        <span class="kw">let </span>min_contract_amount = <span class="self">self
-            </span>.payment_info_v2(<span class="kw-2">&amp;</span>payload.federation_id)
+        client
+            .get_first_module::&lt;GatewayClientModuleV2&gt;()
+            .send_payment(payload)
             .<span class="kw">await
-            </span>.ok_or(<span class="macro">anyhow!</span>(<span class="string">"Payment Info not available"</span>))<span class="question-mark">?
-            </span>.send_fee_minimum
-            .add_fee(invoice_msats);
-
-        <span class="comment">// We need to check that the contract has been confirmed by the federation
-        // before we start the state machine to prevent DOS attacks.
-        </span><span class="kw">let </span>max_delay = module
-            .module_api
-            .outgoing_contract_expiration(<span class="kw-2">&amp;</span>payload.contract.contract_id())
-            .<span class="kw">await
-            </span>.map_err(|<span class="kw">_</span>| <span class="macro">anyhow!</span>(<span class="string">"The gateway can not reach the federation"</span>))<span class="question-mark">?
-            </span>.ok_or(<span class="macro">anyhow!</span>(<span class="string">"The outgoing contract has not yet been confirmed"</span>))<span class="question-mark">?
-            </span>.saturating_sub(EXPIRATION_DELTA_MINIMUM_V2);
-
-        module
-            .start_send_state_machine(
-                operation_id,
-                max_delay,
-                min_contract_amount,
-                payload.invoice,
-                payload.contract.clone(),
-            )
-            .<span class="kw">await
-            </span>.ok();
-
-        <span class="prelude-val">Ok</span>(module.subscribe_send(operation_id, payload.contract).<span class="kw">await</span>)
-    }
+    </span>}
 
     <span class="kw">async fn </span>create_invoice_v2(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
