@@ -7,6 +7,7 @@ use fedimint_client::transaction::ClientInput;
 use fedimint_client::DynGlobalClientContext;
 use fedimint_core::bitcoin_migration::{
     bitcoin29_to_bitcoin30_secp256k1_public_key, bitcoin29_to_bitcoin30_sha256_hash,
+    bitcoin30_to_bitcoin29_keypair,
 };
 use fedimint_core::config::FederationId;
 use fedimint_core::core::{Decoder, OperationId};
@@ -432,7 +433,7 @@ impl LightningPayRefundable {
         let refund_client_input = ClientInput::<LightningInput, LightningClientStateMachines> {
             input: refund_input,
             amount: contract_data.contract_account.amount,
-            keys: vec![refund_key],
+            keys: vec![bitcoin30_to_bitcoin29_keypair(refund_key)],
             // The input of the refund tx is managed by this state machine, so no new state machines
             // need to be created
             state_machines: Arc::new(|_, _| vec![]),

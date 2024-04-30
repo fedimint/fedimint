@@ -33,10 +33,9 @@ use fedimint_client::sm::{DynState, ModuleNotifier, State, StateTransition};
 use fedimint_client::transaction::{ClientInput, ClientOutput, TransactionBuilder};
 use fedimint_client::{sm_enum_variant_translation, DynGlobalClientContext};
 use fedimint_core::bitcoin_migration::{
-    bitcoin29_to_bitcoin30_network, bitcoin29_to_bitcoin30_secp256k1_public_key,
-    bitcoin29_to_bitcoin30_sha256_hash, bitcoin30_to_bitcoin29_keypair,
-    bitcoin30_to_bitcoin29_network, bitcoin30_to_bitcoin29_secp256k1_public_key,
-    bitcoin30_to_bitcoin29_secp256k1_secret_key,
+    bitcoin29_to_bitcoin30_secp256k1_public_key, bitcoin29_to_bitcoin30_sha256_hash,
+    bitcoin30_to_bitcoin29_keypair, bitcoin30_to_bitcoin29_network,
+    bitcoin30_to_bitcoin29_secp256k1_public_key, bitcoin30_to_bitcoin29_secp256k1_secret_key,
 };
 use fedimint_core::config::FederationId;
 use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, OperationId};
@@ -533,7 +532,7 @@ impl LightningClientModule {
         ClientOutput<LightningOutputV0, LightningClientStateMachines>,
         ContractId,
     )> {
-        let federation_currency: Currency = self.cfg.network.into();
+        let federation_currency: Currency = bitcoin30_to_bitcoin29_network(self.cfg.network).into();
         let invoice_currency = invoice.currency();
         ensure!(
             federation_currency == invoice_currency,
@@ -580,7 +579,7 @@ impl LightningClientModule {
         };
 
         let outgoing_payment = OutgoingContractData {
-            recovery_key: bitcoin30_to_bitcoin29_keypair(user_sk),
+            recovery_key: user_sk,
             contract_account: OutgoingContractAccount {
                 amount: contract_amount,
                 contract: contract.clone(),
@@ -1442,7 +1441,7 @@ impl LightningClientModule {
                 bitcoin29_to_bitcoin30_secp256k1_public_key(src_node_id),
                 short_channel_id,
                 route_hints,
-                bitcoin29_to_bitcoin30_network(self.cfg.network),
+                self.cfg.network,
             )
             .await?;
         let tx = TransactionBuilder::new().with_output(self.client_ctx.make_client_output(output));

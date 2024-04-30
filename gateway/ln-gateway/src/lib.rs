@@ -1545,14 +1545,12 @@ impl Gateway {
             })?;
         let ln_cfg: &LightningClientConfig = cfg.cast()?;
 
-        if bitcoin29_to_bitcoin30_network(ln_cfg.network) != network {
+        if ln_cfg.network != network {
             error!(
                 "Federation {} runs on {} but this gateway supports {}",
                 info.federation_id, ln_cfg.network, network,
             );
-            return Err(GatewayError::UnsupportedNetwork(
-                bitcoin29_to_bitcoin30_network(ln_cfg.network),
-            ));
+            return Err(GatewayError::UnsupportedNetwork(ln_cfg.network));
         }
 
         Ok(())

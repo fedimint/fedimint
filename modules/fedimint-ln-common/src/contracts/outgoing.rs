@@ -55,7 +55,7 @@ impl OutgoingContract {
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Encodable, Decodable, Serialize, Deserialize)]
 pub struct OutgoingContractData {
-    pub recovery_key: bitcoin::KeyPair,
+    pub recovery_key: bitcoin::key::KeyPair,
     pub contract_account: OutgoingContractAccount,
 }
 

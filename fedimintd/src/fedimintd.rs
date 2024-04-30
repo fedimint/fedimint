@@ -254,9 +254,7 @@ impl Fedimintd {
                     local: LightningGenParamsLocal {
                         bitcoin_rpc: bitcoind_rpc.clone(),
                     },
-                    consensus: LightningGenParamsConsensus {
-                        network: bitcoin30_to_bitcoin29_network(network),
-                    },
+                    consensus: LightningGenParamsConsensus { network },
                 },
             )
             .with_module_kind(MintInit)

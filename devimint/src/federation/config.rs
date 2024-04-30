@@ -33,7 +33,9 @@ pub fn attach_default_module_init_params(
                 local: LightningGenParamsLocal {
                     bitcoin_rpc: bitcoin_rpc.clone(),
                 },
-                consensus: LightningGenParamsConsensus { network },
+                consensus: LightningGenParamsConsensus {
+                    network: bitcoin29_to_bitcoin30_network(network),
+                },
             },
         )
         .attach_config_gen_params(
