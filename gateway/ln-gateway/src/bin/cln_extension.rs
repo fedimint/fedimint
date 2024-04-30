@@ -119,7 +119,7 @@ struct ClnRpcService {
     socket: PathBuf,
     interceptor: Arc<ClnHtlcInterceptor>,
     task_group: TaskGroup,
-    secp24: bitcoin29::secp256k1::Secp256k1<bitcoin29::secp256k1::All>,
+    secp24: secp256k1_24::Secp256k1<secp256k1_24::All>,
     secp: Secp256k1<All>,
 }
 
@@ -184,7 +184,7 @@ impl ClnRpcService {
                     socket,
                     interceptor,
                     task_group: TaskGroup::new(),
-                    secp24: bitcoin29::secp256k1::Secp256k1::gen_new(),
+                    secp24: secp256k1_24::Secp256k1::gen_new(),
                     secp: Secp256k1::gen_new(),
                 },
                 fm_gateway_listen,

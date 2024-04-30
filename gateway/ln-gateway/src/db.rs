@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 
-use bitcoin29::Network;
+use bitcoin::Network;
 use bitcoin_hashes::sha256;
 use fedimint_core::config::FederationId;
 use fedimint_core::db::{
@@ -169,7 +169,6 @@ mod fedimint_migration_tests {
     use anyhow::ensure;
     use bitcoin::Network;
     use bitcoin_hashes::{sha256, Hash};
-    use fedimint_core::bitcoin_migration::bitcoin30_to_bitcoin29_network;
     use fedimint_core::config::FederationId;
     use fedimint_core::db::{Database, IDatabaseTransactionOpsCoreTyped};
     use fedimint_core::invite_code::InviteCode;
@@ -221,7 +220,7 @@ mod fedimint_migration_tests {
             password: "EXAMPLE".to_string(),
             num_route_hints: 2,
             routing_fees: DEFAULT_FEES,
-            network: bitcoin30_to_bitcoin29_network(Network::Regtest),
+            network: Network::Regtest,
         };
 
         dbtx.insert_new_entry(&GatewayConfigurationKeyV0, &gateway_configuration)

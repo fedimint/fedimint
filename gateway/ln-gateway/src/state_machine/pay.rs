@@ -7,9 +7,8 @@ use fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
 use fedimint_client::transaction::{ClientInput, ClientOutput};
 use fedimint_client::{ClientHandleArc, DynGlobalClientContext};
 use fedimint_core::bitcoin_migration::{
-    bitcoin29_to_bitcoin30_keypair, bitcoin29_to_bitcoin30_sha256_hash,
-    bitcoin30_to_bitcoin29_schnorr_signature, bitcoin30_to_bitcoin29_secp256k1_public_key,
-    bitcoin30_to_bitcoin29_sha256_hash,
+    bitcoin29_to_bitcoin30_sha256_hash, bitcoin30_to_bitcoin29_schnorr_signature,
+    bitcoin30_to_bitcoin29_secp256k1_public_key, bitcoin30_to_bitcoin29_sha256_hash,
 };
 use fedimint_core::config::FederationId;
 use fedimint_core::core::OperationId;
@@ -577,14 +576,13 @@ impl GatewayPayInvoice {
 
     async fn validate_outgoing_account(
         account: &OutgoingContractAccount,
-        redeem_key: bitcoin29::KeyPair,
+        redeem_key: bitcoin::key::KeyPair,
         timelock_delta: u64,
         consensus_block_count: u64,
         payment_data: &PaymentData,
         routing_fees: RoutingFees,
     ) -> Result<PaymentParameters, OutgoingContractError> {
-        let our_pub_key =
-            secp256k1::PublicKey::from_keypair(&bitcoin29_to_bitcoin30_keypair(redeem_key));
+        let our_pub_key = secp256k1::PublicKey::from_keypair(&redeem_key);
 
         if account.contract.cancelled {
             return Err(OutgoingContractError::CancelledContract);
@@ -716,7 +714,7 @@ impl GatewayPayClaimOutgoingContract {
             input: claim_input,
             state_machines: Arc::new(|_, _| vec![]),
             amount: contract.amount,
-            keys: vec![bitcoin29_to_bitcoin30_keypair(context.redeem_key)],
+            keys: vec![context.redeem_key],
         };
 
         let out_points = global_context.claim_input(dbtx, client_input).await.1;
@@ -897,7 +895,7 @@ impl GatewayPayCancelContract {
         info!("Canceling outgoing contract {contract:?}");
         let cancel_signature = context.secp.sign_schnorr(
             &bitcoin29_to_bitcoin30_sha256_hash(contract.contract.cancellation_message()).into(),
-            &bitcoin29_to_bitcoin30_keypair(context.redeem_key),
+            &context.redeem_key,
         );
         let cancel_output = LightningOutput::new_v0_cancel_outgoing(
             contract.contract.contract_id(),

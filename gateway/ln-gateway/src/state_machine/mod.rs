@@ -19,9 +19,8 @@ use fedimint_client::sm::{Context, DynState, ModuleNotifier, State};
 use fedimint_client::transaction::{ClientOutput, TransactionBuilder};
 use fedimint_client::{sm_enum_variant_translation, AddStateMachinesError, DynGlobalClientContext};
 use fedimint_core::bitcoin_migration::{
-    bitcoin29_to_bitcoin30_keypair, bitcoin29_to_bitcoin30_sha256_hash,
-    bitcoin30_to_bitcoin29_keypair, bitcoin30_to_bitcoin29_secp256k1_public_key,
-    bitcoin30_to_bitcoin29_sha256_hash,
+    bitcoin29_to_bitcoin30_sha256_hash, bitcoin30_to_bitcoin29_keypair,
+    bitcoin30_to_bitcoin29_secp256k1_public_key, bitcoin30_to_bitcoin29_sha256_hash,
 };
 use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, OperationId};
 use fedimint_core::db::{AutocommitError, DatabaseTransaction, DatabaseVersion};
@@ -160,7 +159,7 @@ impl ClientModuleInit for GatewayClientInit {
 
 #[derive(Debug, Clone)]
 pub struct GatewayClientContext {
-    redeem_key: bitcoin29::KeyPair,
+    redeem_key: KeyPair,
     timelock_delta: u64,
     secp: Secp256k1<All>,
     pub ln_decoder: Decoder,
@@ -174,7 +173,7 @@ impl From<&GatewayClientContext> for LightningClientContext {
     fn from(ctx: &GatewayClientContext) -> Self {
         LightningClientContext {
             ln_decoder: ctx.ln_decoder.clone(),
-            redeem_key: bitcoin29_to_bitcoin30_keypair(ctx.redeem_key),
+            redeem_key: ctx.redeem_key,
             gateway_conn: Arc::new(RealGatewayConnection),
         }
     }
@@ -205,7 +204,7 @@ impl ClientModule for GatewayClientModule {
 
     fn context(&self) -> Self::ModuleStateMachineContext {
         Self::ModuleStateMachineContext {
-            redeem_key: bitcoin30_to_bitcoin29_keypair(self.redeem_key),
+            redeem_key: self.redeem_key,
             timelock_delta: self.timelock_delta,
             secp: Secp256k1::new(),
             ln_decoder: self.decoder(),

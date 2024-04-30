@@ -13,7 +13,7 @@ use fedimint_client::transaction::{ClientInput, ClientOutput, TransactionBuilder
 use fedimint_client::ClientHandleArc;
 use fedimint_core::bitcoin_migration::{
     bitcoin29_to_bitcoin30_secp256k1_public_key, bitcoin29_to_bitcoin30_sha256_hash,
-    bitcoin30_to_bitcoin29_network, bitcoin30_to_bitcoin29_secp256k1_public_key,
+    bitcoin30_to_bitcoin29_secp256k1_public_key,
 };
 use fedimint_core::config::FederationId;
 use fedimint_core::core::{IntoDynInstance, OperationId};
@@ -1247,10 +1247,7 @@ async fn test_gateway_configuration() -> anyhow::Result<()> {
             .await;
     assert_eq!(gw_info.gateway_state, "Running".to_string());
     assert_eq!(gw_info.fees, Some(DEFAULT_FEES));
-    assert_eq!(
-        gw_info.network,
-        Some(bitcoin30_to_bitcoin29_network(DEFAULT_NETWORK))
-    );
+    assert_eq!(gw_info.network, Some(DEFAULT_NETWORK));
 
     // Verify we can change configurations when the gateway is running
     let new_password = "new_password".to_string();
@@ -1275,10 +1272,7 @@ async fn test_gateway_configuration() -> anyhow::Result<()> {
 
     assert_eq!(gw_info.gateway_state, "Running".to_string());
     assert_eq!(gw_info.fees, Some(GatewayFee(federation_fee.into()).0));
-    assert_eq!(
-        gw_info.network,
-        Some(bitcoin30_to_bitcoin29_network(DEFAULT_NETWORK))
-    );
+    assert_eq!(gw_info.network, Some(DEFAULT_NETWORK));
 
     // Verify that get_info with the old password fails
     verify_gateway_rpc_failure(
@@ -1292,9 +1286,9 @@ async fn test_gateway_configuration() -> anyhow::Result<()> {
     let set_configuration_payload = SetConfigurationPayload {
         password: Some(new_password.clone()),
         num_route_hints: None,
-        network: Some(bitcoin30_to_bitcoin29_network(DEFAULT_NETWORK)), /* Same as connected
-                                                                         * lightning node's
-                                                                         * network */
+        network: Some(DEFAULT_NETWORK), /* Same as connected
+                                         * lightning node's
+                                         * network */
         routing_fees: None,
         per_federation_routing_fees: None,
     };
@@ -1308,9 +1302,9 @@ async fn test_gateway_configuration() -> anyhow::Result<()> {
     let set_configuration_payload = SetConfigurationPayload {
         password: Some(new_password.clone()),
         num_route_hints: None,
-        network: Some(bitcoin30_to_bitcoin29_network(Network::Testnet)), /* Different from
-                                                                          * connected lightning
-                                                                          * node's network */
+        network: Some(Network::Testnet), /* Different from
+                                          * connected lightning
+                                          * node's network */
         routing_fees: None,
         per_federation_routing_fees: None,
     };
