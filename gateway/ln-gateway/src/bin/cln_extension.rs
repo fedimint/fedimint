@@ -888,18 +888,18 @@ impl ClnHtlcInterceptor {
                     tokio::time::timeout(MAX_HTLC_PROCESSING_DURATION, async {
                         receiver.await.unwrap_or_else(|e| {
                             error!("Failed to receive outcome of intercepted htlc: {e:?}");
-                            htlc_processing_failure()
+                            serde_json::json!({ "result": "continue" })
                         })
                     })
                     .await
                     .unwrap_or_else(|e| {
                         error!("await_htlc_processing error {e:?}");
-                        htlc_processing_failure()
+                        serde_json::json!({ "result": "continue" })
                     })
                 }
                 Err(e) => {
                     error!("Failed to send htlc to subscription: {e:?}");
-                    htlc_processing_failure()
+                    serde_json::json!({ "result": "continue" })
                 }
             };
 
