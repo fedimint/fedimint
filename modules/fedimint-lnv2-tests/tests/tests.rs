@@ -32,7 +32,7 @@ fn fixtures() -> Fixtures {
     // gateway can connect to a federation. Remove this once connection to a
     // federation does not require lightning legacy anymore.
     fixtures.with_module(
-        fedimint_ln_client::LightningClientInit,
+        fedimint_ln_client::LightningClientInit::default(),
         fedimint_ln_server::LightningInit,
         fedimint_ln_common::config::LightningGenParams::regtest(bitcoin_server),
     )

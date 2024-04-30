@@ -33,12 +33,15 @@ use fedimint_ln_client::incoming::{
     FundingOfferState, IncomingSmCommon, IncomingSmError, IncomingSmStates, IncomingStateMachine,
 };
 use fedimint_ln_client::pay::{PayInvoicePayload, PaymentData};
-use fedimint_ln_client::{create_incoming_contract_output, LightningClientInit};
+use fedimint_ln_client::{
+    create_incoming_contract_output, LightningClientContext, LightningClientInit,
+    RealGatewayConnection,
+};
 use fedimint_ln_common::config::LightningClientConfig;
 use fedimint_ln_common::contracts::{ContractId, Preimage};
 use fedimint_ln_common::route_hints::RouteHint;
 use fedimint_ln_common::{
-    create_gateway_remove_message, LightningClientContext, LightningCommonInit, LightningGateway,
+    create_gateway_remove_message, LightningCommonInit, LightningGateway,
     LightningGatewayAnnouncement, LightningModuleTypes, LightningOutput, LightningOutputV0,
     RemoveGatewayRequest, KIND,
 };
@@ -173,6 +176,7 @@ impl From<&GatewayClientContext> for LightningClientContext {
         LightningClientContext {
             ln_decoder: ctx.ln_decoder.clone(),
             redeem_key: ctx.redeem_key,
+            gateway_conn: Arc::new(RealGatewayConnection),
         }
     }
 }

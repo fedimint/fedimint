@@ -28,7 +28,7 @@ use fedimint_ln_client::pay::{PayInvoicePayload, PaymentData};
 use fedimint_ln_client::{
     LightningClientInit, LightningClientModule, LightningClientStateMachines,
     LightningOperationMeta, LightningOperationMetaVariant, LnPayState, LnReceiveState,
-    OutgoingLightningPayment, PayType,
+    MockGatewayConnection, OutgoingLightningPayment, PayType,
 };
 use fedimint_ln_common::config::{FeeToAmount, GatewayFee, LightningGenParams};
 use fedimint_ln_common::contracts::incoming::IncomingContractOffer;
@@ -82,7 +82,13 @@ fn fixtures() -> Fixtures {
     let fixtures = Fixtures::new_primary(DummyClientInit, DummyInit, DummyGenParams::default())
         .with_server_only_module(UnknownInit, UnknownGenParams::default());
     let ln_params = LightningGenParams::regtest(fixtures.bitcoin_server());
-    fixtures.with_module(LightningClientInit, LightningInit, ln_params)
+    fixtures.with_module(
+        LightningClientInit {
+            gateway_conn: Arc::new(MockGatewayConnection),
+        },
+        LightningInit,
+        ln_params,
+    )
 }
 
 async fn single_federation_test<B>(

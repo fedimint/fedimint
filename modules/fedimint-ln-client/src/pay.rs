@@ -18,16 +18,14 @@ use fedimint_core::{Amount, OutPoint, TransactionId};
 use fedimint_ln_common::contracts::outgoing::OutgoingContractData;
 use fedimint_ln_common::contracts::{ContractId, IdentifiableContract};
 use fedimint_ln_common::route_hints::RouteHint;
-use fedimint_ln_common::{
-    LightningClientContext, LightningGateway, LightningInput, LightningOutputOutcome, PrunedInvoice,
-};
+use fedimint_ln_common::{LightningGateway, LightningInput, LightningOutputOutcome, PrunedInvoice};
 use lightning_invoice::Bolt11Invoice;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tracing::{debug, error, warn};
 
 use crate::api::LnFederationApi;
-use crate::{set_payment_result, LightningClientStateMachines, PayType};
+use crate::{set_payment_result, LightningClientContext, LightningClientStateMachines, PayType};
 
 const GATEWAY_API_TIMEOUT: Duration = Duration::from_secs(30);
 const RETRY_DELAY: Duration = Duration::from_secs(1);
@@ -93,7 +91,9 @@ impl State for LightningPayStateMachine {
             LightningPayStates::Canceled => {
                 vec![]
             }
-            LightningPayStates::Funded(funded) => funded.transitions(self.common.clone()),
+            LightningPayStates::Funded(funded) => {
+                funded.transitions(self.common.clone(), context.clone())
+            }
             LightningPayStates::Success(_) => {
                 vec![]
             }
@@ -272,6 +272,7 @@ impl LightningPayFunded {
     fn transitions(
         &self,
         common: LightningPayCommon,
+        context: LightningClientContext,
     ) -> Vec<StateTransition<LightningPayStateMachine>> {
         let gateway = self.gateway.clone();
         let payload = self.payload.clone();
@@ -279,7 +280,7 @@ impl LightningPayFunded {
         let timelock = self.timelock;
         let payment_hash = *common.invoice.payment_hash();
         vec![StateTransition::new(
-            Self::gateway_pay_invoice(gateway, payload),
+            Self::gateway_pay_invoice(gateway, payload, context),
             move |dbtx, result, old_state| {
                 Box::pin(Self::transition_outgoing_contract_execution(
                     result,
@@ -297,6 +298,7 @@ impl LightningPayFunded {
     async fn gateway_pay_invoice(
         gateway: LightningGateway,
         payload: PayInvoicePayload,
+        context: LightningClientContext,
     ) -> Result<String, GatewayPayError> {
         // Abort the payment if we can't reach the gateway within 30 seconds
         // to prevent unexpected delays for the user.
@@ -309,7 +311,11 @@ impl LightningPayFunded {
 
         let mut last_error = None;
         while fedimint_core::time::now() < deadline {
-            match Self::try_gateway_pay_invoice(gateway.clone(), payload.clone()).await {
+            match context
+                .gateway_conn
+                .pay_invoice(gateway.clone(), payload.clone())
+                .await
+            {
                 Ok(preimage) => return Ok(preimage),
                 Err(error) => {
                     warn!(
@@ -325,48 +331,6 @@ impl LightningPayFunded {
         }
 
         Err(last_error.expect("Error was set"))
-    }
-
-    async fn try_gateway_pay_invoice(
-        gateway: LightningGateway,
-        payload: PayInvoicePayload,
-    ) -> Result<String, GatewayPayError> {
-        let response = reqwest::Client::new()
-            .post(
-                gateway
-                    .api
-                    .join("pay_invoice")
-                    .expect("'pay_invoice' contains no invalid characters for a URL")
-                    .as_str(),
-            )
-            .json(&payload)
-            .send()
-            .await
-            .map_err(|e| GatewayPayError::GatewayInternalError {
-                error_code: None,
-                error_message: e.to_string(),
-            })?;
-
-        if !response.status().is_success() {
-            return Err(GatewayPayError::GatewayInternalError {
-                error_code: Some(response.status().as_u16()),
-                error_message: response
-                    .text()
-                    .await
-                    .expect("Could not retrieve text from response"),
-            });
-        }
-
-        let preimage =
-            response
-                .text()
-                .await
-                .map_err(|_| GatewayPayError::GatewayInternalError {
-                    error_code: None,
-                    error_message: "Error retrieving preimage from response".to_string(),
-                })?;
-        let length = preimage.len();
-        Ok(preimage[1..length - 1].to_string())
     }
 
     async fn transition_outgoing_contract_execution(

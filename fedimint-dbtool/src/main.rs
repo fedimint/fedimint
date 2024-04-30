@@ -179,7 +179,7 @@ async fn main() -> Result<()> {
                 vec![
                     DynClientModuleInit::from(WalletClientInit::default()),
                     DynClientModuleInit::from(MintClientInit),
-                    DynClientModuleInit::from(LightningClientInit),
+                    DynClientModuleInit::from(LightningClientInit::default()),
                 ]
             });
 

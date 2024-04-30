@@ -1,4 +1,5 @@
 use std::str::FromStr;
+use std::sync::Arc;
 
 use assert_matches::assert_matches;
 use fedimint_client::Client;
@@ -12,7 +13,7 @@ use fedimint_dummy_common::config::DummyGenParams;
 use fedimint_dummy_server::DummyInit;
 use fedimint_ln_client::{
     InternalPayState, LightningClientInit, LightningClientModule, LightningOperationMeta,
-    LnPayState, LnReceiveState, OutgoingLightningPayment, PayType,
+    LnPayState, LnReceiveState, MockGatewayConnection, OutgoingLightningPayment, PayType,
 };
 use fedimint_ln_common::config::LightningGenParams;
 use fedimint_ln_common::ln_operation;
@@ -27,7 +28,13 @@ use secp256k1::KeyPair;
 fn fixtures() -> Fixtures {
     let fixtures = Fixtures::new_primary(DummyClientInit, DummyInit, DummyGenParams::default());
     let ln_params = LightningGenParams::regtest(fixtures.bitcoin_server());
-    fixtures.with_module(LightningClientInit, LightningInit, ln_params)
+    fixtures.with_module(
+        LightningClientInit {
+            gateway_conn: Arc::new(MockGatewayConnection),
+        },
+        LightningInit,
+        ln_params,
+    )
 }
 
 /// Setup a gateway connected to the fed and client
@@ -1219,7 +1226,7 @@ mod fedimint_migration_tests {
     async fn test_client_db_migrations() -> anyhow::Result<()> {
         let _ = TracingSetup::default().init();
 
-        let module = DynClientModuleInit::from(LightningClientInit);
+        let module = DynClientModuleInit::from(LightningClientInit::default());
         validate_migrations_client::<_, _, LightningClientModule>(
             module,
             "lightning-client",
