@@ -358,6 +358,12 @@
 <a href="#358" id="358">358</a>
 <a href="#359" id="359">359</a>
 <a href="#360" id="360">360</a>
+<a href="#361" id="361">361</a>
+<a href="#362" id="362">362</a>
+<a href="#363" id="363">363</a>
+<a href="#364" id="364">364</a>
+<a href="#365" id="365">365</a>
+<a href="#366" id="366">366</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::time::Duration;
 
 <span class="kw">use </span>anyhow::bail;
@@ -504,6 +510,8 @@
         </span><span class="attr">#[clap(long)]
         </span>push_amount_sats: <span class="prelude-ty">Option</span>&lt;u64&gt;,
     },
+    <span class="doccomment">/// List active channels
+    </span>ListActiveChannels,
     <span class="doccomment">/// Wait for the lightning node to be synced with the blockchain
     </span>WaitForChainSync {
         <span class="doccomment">/// The block height to wait for
@@ -679,6 +687,10 @@
                         push_amount_sats: push_amount_sats.unwrap_or(<span class="number">0</span>),
                     })
                     .<span class="kw">await</span><span class="question-mark">?</span>;
+            }
+            LightningCommands::ListActiveChannels =&gt; {
+                <span class="kw">let </span>response = client().list_active_channels().<span class="kw">await</span><span class="question-mark">?</span>;
+                print_response(response).<span class="kw">await</span>;
             }
             LightningCommands::WaitForChainSync {
                 block_height,

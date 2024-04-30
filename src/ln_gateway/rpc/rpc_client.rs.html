@@ -181,6 +181,15 @@
 <a href="#181" id="181">181</a>
 <a href="#182" id="182">182</a>
 <a href="#183" id="183">183</a>
+<a href="#184" id="184">184</a>
+<a href="#185" id="185">185</a>
+<a href="#186" id="186">186</a>
+<a href="#187" id="187">187</a>
+<a href="#188" id="188">188</a>
+<a href="#189" id="189">189</a>
+<a href="#190" id="190">190</a>
+<a href="#191" id="191">191</a>
+<a href="#192" id="192">192</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>bitcoin29::Address;
 <span class="kw">use </span>fedimint_core::util::SafeUrl;
 <span class="kw">use </span>fedimint_core::{Amount, TransactionId};
@@ -194,6 +203,7 @@
     DepositAddressPayload, FederationInfo, GatewayFedConfig, GatewayInfo, GetFundingAddressPayload,
     LeaveFedPayload, OpenChannelPayload, RestorePayload, SetConfigurationPayload, WithdrawPayload,
 };
+<span class="kw">use </span><span class="kw">crate</span>::lightning::ChannelInfo;
 
 <span class="kw">pub struct </span>GatewayRpcClient {
     <span class="doccomment">/// Base URL to gateway web server
@@ -317,6 +327,14 @@
             .join(<span class="string">"/open_channel"</span>)
             .expect(<span class="string">"invalid base url"</span>);
         <span class="self">self</span>.call_post(url, payload).<span class="kw">await
+    </span>}
+
+    <span class="kw">pub async fn </span>list_active_channels(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; GatewayRpcResult&lt;Vec&lt;ChannelInfo&gt;&gt; {
+        <span class="kw">let </span>url = <span class="self">self
+            </span>.base_url
+            .join(<span class="string">"/list_active_channels"</span>)
+            .expect(<span class="string">"invalid base url"</span>);
+        <span class="self">self</span>.call_get(url).<span class="kw">await
     </span>}
 
     <span class="kw">async fn </span>call&lt;P: Serialize, T: DeserializeOwned&gt;(

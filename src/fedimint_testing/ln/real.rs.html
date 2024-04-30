@@ -415,6 +415,14 @@
 <a href="#415" id="415">415</a>
 <a href="#416" id="416">416</a>
 <a href="#417" id="417">417</a>
+<a href="#418" id="418">418</a>
+<a href="#419" id="419">419</a>
+<a href="#420" id="420">420</a>
+<a href="#421" id="421">421</a>
+<a href="#422" id="422">422</a>
+<a href="#423" id="423">423</a>
+<a href="#424" id="424">424</a>
+<a href="#425" id="425">425</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::path::PathBuf;
 <span class="kw">use </span>std::str::FromStr;
 <span class="kw">use </span>std::sync::Arc;
@@ -435,7 +443,7 @@
 };
 <span class="kw">use </span>ln_gateway::lightning::cln::{NetworkLnRpcClient, RouteHtlcStream};
 <span class="kw">use </span>ln_gateway::lightning::lnd::GatewayLndClient;
-<span class="kw">use </span>ln_gateway::lightning::{ILnRpcClient, LightningRpcError};
+<span class="kw">use </span>ln_gateway::lightning::{ChannelInfo, ILnRpcClient, LightningRpcError};
 <span class="kw">use </span>tokio::sync::Mutex;
 <span class="kw">use </span>tonic_lnd::lnrpc::{GetInfoRequest, Invoice <span class="kw">as </span>LndInvoice, ListChannelsRequest};
 <span class="kw">use </span>tonic_lnd::{connect, Client <span class="kw">as </span>LndClient};
@@ -576,6 +584,10 @@
         <span class="self">self</span>.lnrpc
             .open_channel(pubkey, channel_size_sats, push_amount_sats)
             .<span class="kw">await
+    </span>}
+
+    <span class="kw">async fn </span>list_active_channels(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;Vec&lt;ChannelInfo&gt;, LightningRpcError&gt; {
+        <span class="self">self</span>.lnrpc.list_active_channels().<span class="kw">await
     </span>}
 }
 
@@ -764,6 +776,10 @@
         <span class="self">self</span>.lnrpc
             .open_channel(pubkey, channel_size_sats, push_amount_sats)
             .<span class="kw">await
+    </span>}
+
+    <span class="kw">async fn </span>list_active_channels(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;Vec&lt;ChannelInfo&gt;, LightningRpcError&gt; {
+        <span class="self">self</span>.lnrpc.list_active_channels().<span class="kw">await
     </span>}
 }
 
