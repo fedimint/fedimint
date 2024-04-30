@@ -1834,6 +1834,22 @@
 <a href="#1834" id="1834">1834</a>
 <a href="#1835" id="1835">1835</a>
 <a href="#1836" id="1836">1836</a>
+<a href="#1837" id="1837">1837</a>
+<a href="#1838" id="1838">1838</a>
+<a href="#1839" id="1839">1839</a>
+<a href="#1840" id="1840">1840</a>
+<a href="#1841" id="1841">1841</a>
+<a href="#1842" id="1842">1842</a>
+<a href="#1843" id="1843">1843</a>
+<a href="#1844" id="1844">1844</a>
+<a href="#1845" id="1845">1845</a>
+<a href="#1846" id="1846">1846</a>
+<a href="#1847" id="1847">1847</a>
+<a href="#1848" id="1848">1848</a>
+<a href="#1849" id="1849">1849</a>
+<a href="#1850" id="1850">1850</a>
+<a href="#1851" id="1851">1851</a>
+<a href="#1852" id="1852">1852</a>
 </pre></div><pre class="rust"><code><span class="kw">pub mod </span>client;
 <span class="kw">mod </span>db;
 <span class="kw">pub mod </span>envs;
@@ -1900,7 +1916,9 @@
 <span class="kw">use </span>fedimint_ln_common::contracts::Preimage;
 <span class="kw">use </span>fedimint_ln_common::route_hints::RouteHint;
 <span class="kw">use </span>fedimint_ln_common::LightningCommonInit;
-<span class="kw">use </span>fedimint_lnv2_client::{CreateInvoicePayload, PaymentFee, PaymentInfo, SendPaymentPayload};
+<span class="kw">use </span>fedimint_lnv2_client::{
+    Bolt11InvoiceDescription, CreateInvoicePayload, PaymentFee, PaymentInfo, SendPaymentPayload,
+};
 <span class="kw">use </span>fedimint_mint_client::{MintClientInit, MintCommonInit};
 <span class="kw">use </span>fedimint_wallet_client::{
     WalletClientInit, WalletClientModule, WalletCommonInit, WithdrawState,
@@ -1930,6 +1948,7 @@
     get_gatewayd_database_migrations, CreateInvoicePayloadKey, FederationConfig,
     FederationIdKeyPrefix,
 };
+<span class="kw">use </span><span class="kw">crate</span>::gateway_lnrpc::create_invoice_request::Description;
 <span class="kw">use </span><span class="kw">crate</span>::gateway_lnrpc::intercept_htlc_response::Forward;
 <span class="kw">use </span><span class="kw">crate</span>::gateway_lnrpc::CreateInvoiceRequest;
 <span class="kw">use </span><span class="kw">crate</span>::gateway_module_v2::GatewayClientModuleV2;
@@ -2470,45 +2489,47 @@
                     }
 
                     <span class="kw">let </span>scid_to_feds = <span class="self">self</span>.scid_to_federation.read().<span class="kw">await</span>;
-                    <span class="kw">let </span>federation_id = scid_to_feds.get(<span class="kw-2">&amp;</span>htlc_request.short_channel_id);
-                    <span class="comment">// Just forward the HTLC if we do not have a federation that
-                    // corresponds to the short channel id
-                    </span><span class="kw">if let </span><span class="prelude-val">Some</span>(federation_id) = federation_id {
-                        <span class="kw">let </span>clients = <span class="self">self</span>.clients.read().<span class="kw">await</span>;
-                        <span class="kw">let </span>client = clients.get(federation_id);
-                        <span class="comment">// Just forward the HTLC if we do not have a client that
-                        // corresponds to the federation id
-                        </span><span class="kw">if let </span><span class="prelude-val">Some</span>(client) = client {
-                            <span class="kw">let </span>cf = client
-                                .borrow()
-                                .with(|client| <span class="kw">async </span>{
-                                    <span class="kw">let </span>htlc = htlc_request.clone().try_into();
-                                    <span class="kw">if let </span><span class="prelude-val">Ok</span>(htlc) = htlc {
-                                        <span class="kw">match </span>client
-                                            .get_first_module::&lt;GatewayClientModule&gt;()
-                                            .gateway_handle_intercepted_htlc(htlc)
-                                            .<span class="kw">await
-                                        </span>{
-                                            <span class="prelude-val">Ok</span>(<span class="kw">_</span>) =&gt; {
-                                                <span class="kw">return </span><span class="prelude-val">Some</span>(ControlFlow::&lt;(), ()&gt;::Continue(()))
+                    <span class="kw">if let </span><span class="prelude-val">Some</span>(short_channel_id) = htlc_request.short_channel_id {
+                        <span class="kw">let </span>federation_id = scid_to_feds.get(<span class="kw-2">&amp;</span>short_channel_id);
+                        <span class="comment">// Just forward the HTLC if we do not have a federation that
+                        // corresponds to the short channel id
+                        </span><span class="kw">if let </span><span class="prelude-val">Some</span>(federation_id) = federation_id {
+                            <span class="kw">let </span>clients = <span class="self">self</span>.clients.read().<span class="kw">await</span>;
+                            <span class="kw">let </span>client = clients.get(federation_id);
+                            <span class="comment">// Just forward the HTLC if we do not have a client that
+                            // corresponds to the federation id
+                            </span><span class="kw">if let </span><span class="prelude-val">Some</span>(client) = client {
+                                <span class="kw">let </span>cf = client
+                                    .borrow()
+                                    .with(|client| <span class="kw">async </span>{
+                                        <span class="kw">let </span>htlc = htlc_request.clone().try_into();
+                                        <span class="kw">if let </span><span class="prelude-val">Ok</span>(htlc) = htlc {
+                                            <span class="kw">match </span>client
+                                                .get_first_module::&lt;GatewayClientModule&gt;()
+                                                .gateway_handle_intercepted_htlc(htlc)
+                                                .<span class="kw">await
+                                            </span>{
+                                                <span class="prelude-val">Ok</span>(<span class="kw">_</span>) =&gt; {
+                                                    <span class="kw">return </span><span class="prelude-val">Some</span>(ControlFlow::&lt;(), ()&gt;::Continue(()))
+                                                }
+                                                <span class="prelude-val">Err</span>(e) =&gt; {
+                                                    <span class="macro">info!</span>(
+                                                    <span class="string">"Got error intercepting HTLC: {e:?}, will retry..."
+                                                </span>)
+                                                }
                                             }
-                                            <span class="prelude-val">Err</span>(e) =&gt; {
-                                                <span class="macro">info!</span>(
-                                                <span class="string">"Got error intercepting HTLC: {e:?}, will retry..."
-                                            </span>)
-                                            }
+                                        } <span class="kw">else </span>{
+                                            <span class="macro">info!</span>(<span class="string">"Got no HTLC result"</span>)
                                         }
-                                    } <span class="kw">else </span>{
-                                        <span class="macro">info!</span>(<span class="string">"Got no HTLC result"</span>)
-                                    }
-                                    <span class="prelude-val">None
-                                </span>})
-                                .<span class="kw">await</span>;
-                            <span class="kw">if let </span><span class="prelude-val">Some</span>(ControlFlow::Continue(())) = cf {
-                                <span class="kw">continue</span>;
+                                        <span class="prelude-val">None
+                                    </span>})
+                                    .<span class="kw">await</span>;
+                                <span class="kw">if let </span><span class="prelude-val">Some</span>(ControlFlow::Continue(())) = cf {
+                                    <span class="kw">continue</span>;
+                                }
+                            } <span class="kw">else </span>{
+                                <span class="macro">info!</span>(<span class="string">"Got no client result"</span>)
                             }
-                        } <span class="kw">else </span>{
-                            <span class="macro">info!</span>(<span class="string">"Got no client result"</span>)
                         }
                     }
 
@@ -3545,7 +3566,7 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         payment_hash: sha256::Hash,
         amount: Amount,
-        description: String,
+        description: Bolt11InvoiceDescription,
         expiry_time: u32,
     ) -&gt; std::result::Result&lt;Bolt11Invoice, String&gt; {
         <span class="kw">let </span>lnrpc = <span class="self">self
@@ -3554,15 +3575,26 @@
             </span>.map_err(|e| e.to_string())<span class="question-mark">?
             </span>.lnrpc;
 
-        <span class="kw">let </span>response = lnrpc
-            .create_invoice(CreateInvoiceRequest {
-                payment_hash: payment_hash.into_inner().to_vec(),
-                amount_msat: amount.msats,
-                expiry: expiry_time,
-                description,
-            })
-            .<span class="kw">await
-            </span>.map_err(|e| e.to_string())<span class="question-mark">?</span>;
+        <span class="kw">let </span>response = <span class="kw">match </span>description {
+            Bolt11InvoiceDescription::Direct(description) =&gt; lnrpc
+                .create_invoice(CreateInvoiceRequest {
+                    payment_hash: payment_hash.into_inner().to_vec(),
+                    amount_msat: amount.msats,
+                    expiry: expiry_time,
+                    description: <span class="prelude-val">Some</span>(Description::Direct(description)),
+                })
+                .<span class="kw">await
+                </span>.map_err(|e| e.to_string())<span class="question-mark">?</span>,
+            Bolt11InvoiceDescription::Hash(hash) =&gt; lnrpc
+                .create_invoice(CreateInvoiceRequest {
+                    payment_hash: payment_hash.into_inner().to_vec(),
+                    amount_msat: amount.msats,
+                    expiry: expiry_time,
+                    description: <span class="prelude-val">Some</span>(Description::Hash(hash.to_vec())),
+                })
+                .<span class="kw">await
+                </span>.map_err(|e| e.to_string())<span class="question-mark">?</span>,
+        };
 
         Bolt11Invoice::from_str(<span class="kw-2">&amp;</span>response.invoice).map_err(|e| e.to_string())
     }

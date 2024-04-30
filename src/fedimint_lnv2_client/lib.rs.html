@@ -879,6 +879,12 @@
 <a href="#879" id="879">879</a>
 <a href="#880" id="880">880</a>
 <a href="#881" id="881">881</a>
+<a href="#882" id="882">882</a>
+<a href="#883" id="883">883</a>
+<a href="#884" id="884">884</a>
+<a href="#885" id="885">885</a>
+<a href="#886" id="886">886</a>
+<a href="#887" id="887">887</a>
 </pre></div><pre class="rust"><code><span class="kw">pub mod </span>api;
 <span class="attr">#[cfg(feature = <span class="string">"cli"</span>)]
 </span><span class="kw">mod </span>cli;
@@ -1001,8 +1007,14 @@
     <span class="kw">pub </span>federation_id: FederationId,
     <span class="kw">pub </span>contract: IncomingContract,
     <span class="kw">pub </span>invoice_amount: Amount,
-    <span class="kw">pub </span>description: String,
+    <span class="kw">pub </span>description: Bolt11InvoiceDescription,
     <span class="kw">pub </span>expiry_time: u32,
+}
+
+<span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize, Decodable, Encodable)]
+</span><span class="kw">pub enum </span>Bolt11InvoiceDescription {
+    Direct(String),
+    Hash(sha256::Hash),
 }
 
 <span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Decodable, Encodable)]
@@ -1401,7 +1413,7 @@
             gateway_api,
             invoice_amount,
             INVOICE_EXPIRATION_SECONDS_DEFAULT,
-            String::new(),
+            Bolt11InvoiceDescription::Direct(String::new()),
             PaymentFee::one_percent(),
         )
         .<span class="kw">await
@@ -1412,7 +1424,7 @@
         gateway_api: SafeUrl,
         invoice_amount: Amount,
         expiry_time: u32,
-        description: String,
+        description: Bolt11InvoiceDescription,
         payment_fee_limit: PaymentFee,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;(Bolt11Invoice, OperationId), FetchInvoiceError&gt; {
         <span class="kw">let </span>(contract, .., invoice) = <span class="self">self
@@ -1445,7 +1457,7 @@
             gateway_api,
             invoice_amount,
             INVOICE_EXPIRATION_SECONDS_DEFAULT,
-            String::new(),
+            Bolt11InvoiceDescription::Direct(String::new()),
             PaymentFee::one_percent(),
         )
         .<span class="kw">await
@@ -1457,7 +1469,7 @@
         gateway_api: SafeUrl,
         invoice_amount: Amount,
         expiry_time: u32,
-        description: String,
+        description: Bolt11InvoiceDescription,
         payment_fee_limit: PaymentFee,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;(IncomingContract, [u8; <span class="number">32</span>], Bolt11Invoice), FetchInvoiceError&gt; {
         <span class="kw">let </span>(ephemeral_tweak, ephemeral_pk) = generate_ephemeral_tweak(recipient_static_pk);

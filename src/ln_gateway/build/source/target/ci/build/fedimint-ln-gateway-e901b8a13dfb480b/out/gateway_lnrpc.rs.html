@@ -1312,6 +1312,22 @@
 <a href="#1312" id="1312">1312</a>
 <a href="#1313" id="1313">1313</a>
 <a href="#1314" id="1314">1314</a>
+<a href="#1315" id="1315">1315</a>
+<a href="#1316" id="1316">1316</a>
+<a href="#1317" id="1317">1317</a>
+<a href="#1318" id="1318">1318</a>
+<a href="#1319" id="1319">1319</a>
+<a href="#1320" id="1320">1320</a>
+<a href="#1321" id="1321">1321</a>
+<a href="#1322" id="1322">1322</a>
+<a href="#1323" id="1323">1323</a>
+<a href="#1324" id="1324">1324</a>
+<a href="#1325" id="1325">1325</a>
+<a href="#1326" id="1326">1326</a>
+<a href="#1327" id="1327">1327</a>
+<a href="#1328" id="1328">1328</a>
+<a href="#1329" id="1329">1329</a>
+<a href="#1330" id="1330">1330</a>
 </pre></div><pre class="rust"><code><span class="attr">#[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 </span><span class="kw">pub struct </span>EmptyRequest {}
@@ -1391,8 +1407,8 @@
     </span><span class="kw">pub </span>incoming_expiry: u32,
     <span class="doccomment">/// The short channel id of the HTLC.
     /// Use this value to confirm relevance of the intercepted HTLC
-    </span><span class="attr">#[prost(uint64, tag = <span class="string">"10"</span>)]
-    </span><span class="kw">pub </span>short_channel_id: u64,
+    </span><span class="attr">#[prost(uint64, optional, tag = <span class="string">"10"</span>)]
+    </span><span class="kw">pub </span>short_channel_id: ::core::option::Option&lt;u64&gt;,
     <span class="doccomment">/// The id of the incoming channel
     </span><span class="attr">#[prost(uint64, tag = <span class="string">"12"</span>)]
     </span><span class="kw">pub </span>incoming_chan_id: u64,
@@ -1501,14 +1517,30 @@
 <span class="attr">#[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 </span><span class="kw">pub struct </span>CreateInvoiceRequest {
-    <span class="attr">#[prost(bytes = <span class="string">"vec"</span>, tag = <span class="string">"1"</span>)]
+    <span class="doccomment">/// The payment hash of the invoice being created.
+    </span><span class="attr">#[prost(bytes = <span class="string">"vec"</span>, tag = <span class="string">"1"</span>)]
     </span><span class="kw">pub </span>payment_hash: ::prost::alloc::vec::Vec&lt;u8&gt;,
-    <span class="attr">#[prost(uint64, tag = <span class="string">"2"</span>)]
+    <span class="doccomment">/// The amount in millisatoshis of the invoice.
+    </span><span class="attr">#[prost(uint64, tag = <span class="string">"2"</span>)]
     </span><span class="kw">pub </span>amount_msat: u64,
-    <span class="attr">#[prost(uint32, tag = <span class="string">"3"</span>)]
+    <span class="doccomment">/// The time in seconds this invoice is valid for.
+    </span><span class="attr">#[prost(uint32, tag = <span class="string">"3"</span>)]
     </span><span class="kw">pub </span>expiry: u32,
-    <span class="attr">#[prost(string, tag = <span class="string">"4"</span>)]
-    </span><span class="kw">pub </span>description: ::prost::alloc::string::String,
+    <span class="doccomment">/// A description or a description hash must be provided.
+    </span><span class="attr">#[prost(oneof = <span class="string">"create_invoice_request::Description"</span>, tags = <span class="string">"4, 5"</span>)]
+    </span><span class="kw">pub </span>description: ::core::option::Option&lt;create_invoice_request::Description&gt;,
+}
+<span class="doccomment">/// Nested message and enum types in `CreateInvoiceRequest`.
+</span><span class="kw">pub mod </span>create_invoice_request {
+    <span class="doccomment">/// A description or a description hash must be provided.
+    </span><span class="attr">#[allow(clippy::derive_partial_eq_without_eq)]
+    #[derive(Clone, PartialEq, ::prost::Oneof)]
+    </span><span class="kw">pub enum </span>Description {
+        <span class="attr">#[prost(string, tag = <span class="string">"4"</span>)]
+        </span>Direct(::prost::alloc::string::String),
+        <span class="attr">#[prost(bytes, tag = <span class="string">"5"</span>)]
+        </span>Hash(::prost::alloc::vec::Vec&lt;u8&gt;),
+    }
 }
 <span class="attr">#[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]

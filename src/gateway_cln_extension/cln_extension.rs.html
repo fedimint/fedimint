@@ -820,6 +820,99 @@
 <a href="#820" id="820">820</a>
 <a href="#821" id="821">821</a>
 <a href="#822" id="822">822</a>
+<a href="#823" id="823">823</a>
+<a href="#824" id="824">824</a>
+<a href="#825" id="825">825</a>
+<a href="#826" id="826">826</a>
+<a href="#827" id="827">827</a>
+<a href="#828" id="828">828</a>
+<a href="#829" id="829">829</a>
+<a href="#830" id="830">830</a>
+<a href="#831" id="831">831</a>
+<a href="#832" id="832">832</a>
+<a href="#833" id="833">833</a>
+<a href="#834" id="834">834</a>
+<a href="#835" id="835">835</a>
+<a href="#836" id="836">836</a>
+<a href="#837" id="837">837</a>
+<a href="#838" id="838">838</a>
+<a href="#839" id="839">839</a>
+<a href="#840" id="840">840</a>
+<a href="#841" id="841">841</a>
+<a href="#842" id="842">842</a>
+<a href="#843" id="843">843</a>
+<a href="#844" id="844">844</a>
+<a href="#845" id="845">845</a>
+<a href="#846" id="846">846</a>
+<a href="#847" id="847">847</a>
+<a href="#848" id="848">848</a>
+<a href="#849" id="849">849</a>
+<a href="#850" id="850">850</a>
+<a href="#851" id="851">851</a>
+<a href="#852" id="852">852</a>
+<a href="#853" id="853">853</a>
+<a href="#854" id="854">854</a>
+<a href="#855" id="855">855</a>
+<a href="#856" id="856">856</a>
+<a href="#857" id="857">857</a>
+<a href="#858" id="858">858</a>
+<a href="#859" id="859">859</a>
+<a href="#860" id="860">860</a>
+<a href="#861" id="861">861</a>
+<a href="#862" id="862">862</a>
+<a href="#863" id="863">863</a>
+<a href="#864" id="864">864</a>
+<a href="#865" id="865">865</a>
+<a href="#866" id="866">866</a>
+<a href="#867" id="867">867</a>
+<a href="#868" id="868">868</a>
+<a href="#869" id="869">869</a>
+<a href="#870" id="870">870</a>
+<a href="#871" id="871">871</a>
+<a href="#872" id="872">872</a>
+<a href="#873" id="873">873</a>
+<a href="#874" id="874">874</a>
+<a href="#875" id="875">875</a>
+<a href="#876" id="876">876</a>
+<a href="#877" id="877">877</a>
+<a href="#878" id="878">878</a>
+<a href="#879" id="879">879</a>
+<a href="#880" id="880">880</a>
+<a href="#881" id="881">881</a>
+<a href="#882" id="882">882</a>
+<a href="#883" id="883">883</a>
+<a href="#884" id="884">884</a>
+<a href="#885" id="885">885</a>
+<a href="#886" id="886">886</a>
+<a href="#887" id="887">887</a>
+<a href="#888" id="888">888</a>
+<a href="#889" id="889">889</a>
+<a href="#890" id="890">890</a>
+<a href="#891" id="891">891</a>
+<a href="#892" id="892">892</a>
+<a href="#893" id="893">893</a>
+<a href="#894" id="894">894</a>
+<a href="#895" id="895">895</a>
+<a href="#896" id="896">896</a>
+<a href="#897" id="897">897</a>
+<a href="#898" id="898">898</a>
+<a href="#899" id="899">899</a>
+<a href="#900" id="900">900</a>
+<a href="#901" id="901">901</a>
+<a href="#902" id="902">902</a>
+<a href="#903" id="903">903</a>
+<a href="#904" id="904">904</a>
+<a href="#905" id="905">905</a>
+<a href="#906" id="906">906</a>
+<a href="#907" id="907">907</a>
+<a href="#908" id="908">908</a>
+<a href="#909" id="909">909</a>
+<a href="#910" id="910">910</a>
+<a href="#911" id="911">911</a>
+<a href="#912" id="912">912</a>
+<a href="#913" id="913">913</a>
+<a href="#914" id="914">914</a>
+<a href="#915" id="915">915</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::array::TryFromSliceError;
 <span class="kw">use </span>std::collections::{BTreeMap, HashMap};
 <span class="kw">use </span>std::net::SocketAddr;
@@ -829,6 +922,7 @@
 <span class="kw">use </span>std::time::Duration;
 
 <span class="kw">use </span>anyhow::anyhow;
+<span class="kw">use </span>bitcoin_hashes::{sha256, Hash};
 <span class="kw">use </span>clap::Parser;
 <span class="kw">use </span>cln_plugin::{options, Builder, Plugin};
 <span class="kw">use </span>cln_rpc::model;
@@ -837,7 +931,9 @@
 <span class="kw">use </span>fedimint_core::util::handle_version_hash_command;
 <span class="kw">use </span>fedimint_core::{fedimint_build_code_version_env, Amount};
 <span class="kw">use </span>hex::ToHex;
+<span class="kw">use </span>lightning_invoice::{Currency, InvoiceBuilder, PaymentSecret};
 <span class="kw">use </span>ln_gateway::envs::FM_CLN_EXTENSION_LISTEN_ADDRESS_ENV;
+<span class="kw">use </span>ln_gateway::gateway_lnrpc::create_invoice_request::Description;
 <span class="kw">use </span>ln_gateway::gateway_lnrpc::gateway_lightning_server::{
     GatewayLightning, GatewayLightningServer,
 };
@@ -850,7 +946,9 @@
     InterceptHtlcRequest, InterceptHtlcResponse, ListActiveChannelsResponse, OpenChannelRequest,
     PayInvoiceRequest, PayInvoiceResponse,
 };
-<span class="kw">use </span>secp256k1::PublicKey;
+<span class="kw">use </span>rand::rngs::OsRng;
+<span class="kw">use </span>rand::Rng;
+<span class="kw">use </span>secp256k1::{All, PublicKey, Secp256k1, SecretKey};
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>thiserror::Error;
 <span class="kw">use </span>tokio::io::{stdin, stdout};
@@ -932,6 +1030,7 @@
     socket: PathBuf,
     interceptor: Arc&lt;ClnHtlcInterceptor&gt;,
     task_group: TaskGroup,
+    secp: Secp256k1&lt;All&gt;,
 }
 
 <span class="kw">impl </span>ClnRpcService {
@@ -994,7 +1093,8 @@
                 <span class="self">Self </span>{
                     socket,
                     interceptor,
-                    task_group: TaskGroup::new()
+                    task_group: TaskGroup::new(),
+                    secp: Secp256k1::gen_new(),
                 },
                 fm_gateway_listen,
                 plugin,
@@ -1331,11 +1431,94 @@
 
     <span class="kw">async fn </span>create_invoice(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        _create_invoice_request: tonic::Request&lt;CreateInvoiceRequest&gt;,
+        create_invoice_request: tonic::Request&lt;CreateInvoiceRequest&gt;,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;tonic::Response&lt;CreateInvoiceResponse&gt;, Status&gt; {
-        <span class="prelude-val">Err</span>(Status::internal(
-            <span class="string">"Invoice creation is not implemented for CLN"</span>,
-        ))
+        <span class="kw">let </span>CreateInvoiceRequest {
+            payment_hash,
+            amount_msat,
+            expiry,
+            description,
+        } = create_invoice_request.into_inner();
+
+        <span class="kw">let </span>payment_hash = sha256::Hash::from_slice(<span class="kw-2">&amp;</span>payment_hash)
+            .map_err(|e| tonic::Status::internal(e.to_string()))<span class="question-mark">?</span>;
+
+        <span class="kw">let </span>duration_since_epoch = fedimint_core::time::duration_since_epoch();
+        <span class="kw">let </span>description = description.ok_or(tonic::Status::internal(
+            <span class="string">"Description or description hash was not provided"</span>.to_string(),
+        ))<span class="question-mark">?</span>;
+        <span class="kw">let </span>info = <span class="self">self
+            </span>.info()
+            .<span class="kw">await
+            </span>.map_err(|e| Status::internal(e.to_string()))<span class="question-mark">?</span>;
+        <span class="kw">let </span>network =
+            Currency::from_str(info.<span class="number">2</span>.as_str()).map_err(|e| Status::internal(e.to_string()))<span class="question-mark">?</span>;
+
+        <span class="kw">let </span>invoice = <span class="kw">match </span>description {
+            Description::Direct(description) =&gt; InvoiceBuilder::new(network)
+                .amount_milli_satoshis(amount_msat)
+                .invoice_description(lightning_invoice::Bolt11InvoiceDescription::Direct(
+                    <span class="kw-2">&amp;</span>lightning_invoice::Description::new(description)
+                        .expect(<span class="string">"Description is valid"</span>),
+                ))
+                .payment_hash(payment_hash)
+                .payment_secret(PaymentSecret(OsRng.gen()))
+                .duration_since_epoch(duration_since_epoch)
+                .min_final_cltv_expiry_delta(<span class="number">18</span>)
+                .expiry_time(Duration::from_secs(expiry.into()))
+                <span class="comment">// Temporarily sign with an ephemeral private key, we will request CLN to sign this
+                // invoice next.
+                </span>.build_signed(|m| {
+                    <span class="self">self</span>.secp
+                        .sign_ecdsa_recoverable(m, <span class="kw-2">&amp;</span>SecretKey::new(<span class="kw-2">&amp;mut </span>OsRng))
+                })
+                .map_err(|e| Status::internal(e.to_string()))<span class="question-mark">?</span>,
+            Description::Hash(hash) =&gt; InvoiceBuilder::new(network)
+                .amount_milli_satoshis(amount_msat)
+                .invoice_description(lightning_invoice::Bolt11InvoiceDescription::Hash(
+                    <span class="kw-2">&amp;</span>lightning_invoice::Sha256(
+                        bitcoin_hashes::sha256::Hash::from_slice(<span class="kw-2">&amp;</span>hash)
+                            .expect(<span class="string">"Couldnt create hash from description hash"</span>),
+                    ),
+                ))
+                .payment_hash(payment_hash)
+                .payment_secret(PaymentSecret(OsRng.gen()))
+                .duration_since_epoch(duration_since_epoch)
+                .min_final_cltv_expiry_delta(<span class="number">18</span>)
+                .expiry_time(Duration::from_secs(expiry.into()))
+                <span class="comment">// Temporarily sign with an ephemeral private key, we will request CLN to sign this
+                // invoice next.
+                </span>.build_signed(|m| {
+                    <span class="self">self</span>.secp
+                        .sign_ecdsa_recoverable(m, <span class="kw-2">&amp;</span>SecretKey::new(<span class="kw-2">&amp;mut </span>OsRng))
+                })
+                .map_err(|e| Status::internal(e.to_string()))<span class="question-mark">?</span>,
+        };
+
+        <span class="kw">let </span>invstring = invoice.to_string();
+
+        <span class="kw">let </span>response = <span class="self">self
+            </span>.rpc_client()
+            .<span class="kw">await
+            </span>.map_err(|e| Status::internal(e.to_string()))<span class="question-mark">?
+            </span>.call(cln_rpc::Request::SignInvoice(
+                model::requests::SigninvoiceRequest { invstring },
+            ))
+            .<span class="kw">await
+            </span>.map(|response| <span class="kw">match </span>response {
+                cln_rpc::Response::SignInvoice(model::responses::SigninvoiceResponse {
+                    bolt11,
+                    ..
+                }) =&gt; <span class="prelude-val">Ok</span>(CreateInvoiceResponse { invoice: bolt11 }),
+                <span class="kw">_ </span>=&gt; <span class="prelude-val">Err</span>(ClnExtensionError::RpcWrongResponse),
+            })
+            .map_err(|e| {
+                <span class="macro">error!</span>(<span class="string">"cln invoice returned error {e:?}"</span>);
+                tonic::Status::internal(e.to_string())
+            })<span class="question-mark">?
+            </span>.map_err(|e| tonic::Status::internal(e.to_string()))<span class="question-mark">?</span>;
+
+        <span class="prelude-val">Ok</span>(tonic::Response::new(response))
     }
 
     <span class="kw">async fn </span>connect_to_peer(
@@ -1566,16 +1749,19 @@
 
         <span class="kw">let </span>htlc_expiry = payload.htlc.cltv_expiry;
 
-        <span class="kw">if </span>payload.onion.short_channel_id.is_none() {
-            <span class="comment">// This is a HTLC terminating at the gateway node. DO NOT intercept
-            </span><span class="kw">return </span><span class="macro">serde_json::json!</span>({ <span class="string">"result"</span>: <span class="string">"continue" </span>});
-        }
-
-        <span class="kw">let </span>short_channel_id = <span class="kw">match </span><span class="self">Self</span>::convert_short_channel_id(
-            payload.onion.short_channel_id.unwrap().as_str(),
-        ) {
-            <span class="prelude-val">Ok</span>(scid) =&gt; scid,
-            <span class="prelude-val">Err</span>(<span class="kw">_</span>) =&gt; <span class="kw">return </span><span class="macro">serde_json::json!</span>({ <span class="string">"result"</span>: <span class="string">"continue" </span>}),
+        <span class="kw">let </span>short_channel_id = <span class="kw">match </span>payload.onion.short_channel_id {
+            <span class="prelude-val">Some</span>(scid) =&gt; {
+                <span class="kw">if let </span><span class="prelude-val">Ok</span>(short_channel_id) = <span class="self">Self</span>::convert_short_channel_id(<span class="kw-2">&amp;</span>scid) {
+                    <span class="prelude-val">Some</span>(short_channel_id)
+                } <span class="kw">else </span>{
+                    <span class="kw">return </span><span class="macro">serde_json::json!</span>({ <span class="string">"result"</span>: <span class="string">"continue" </span>});
+                }
+            }
+            <span class="prelude-val">None </span>=&gt; {
+                <span class="comment">// This HTLC terminates at the gateway node. Ask gatewayd if there is a preimage
+                // available (for LNv2)
+                </span><span class="prelude-val">None
+            </span>}
         };
 
         <span class="macro">info!</span>(<span class="question-mark">?</span>short_channel_id, <span class="string">"Intercepted htlc with SCID"</span>);
@@ -1617,18 +1803,18 @@
                     </span>tokio::time::timeout(MAX_HTLC_PROCESSING_DURATION, <span class="kw">async </span>{
                         receiver.<span class="kw">await</span>.unwrap_or_else(|e| {
                             <span class="macro">error!</span>(<span class="string">"Failed to receive outcome of intercepted htlc: {e:?}"</span>);
-                            htlc_processing_failure()
+                            <span class="macro">serde_json::json!</span>({ <span class="string">"result"</span>: <span class="string">"continue" </span>})
                         })
                     })
                     .<span class="kw">await
                     </span>.unwrap_or_else(|e| {
                         <span class="macro">error!</span>(<span class="string">"await_htlc_processing error {e:?}"</span>);
-                        htlc_processing_failure()
+                        <span class="macro">serde_json::json!</span>({ <span class="string">"result"</span>: <span class="string">"continue" </span>})
                     })
                 }
                 <span class="prelude-val">Err</span>(e) =&gt; {
                     <span class="macro">error!</span>(<span class="string">"Failed to send htlc to subscription: {e:?}"</span>);
-                    htlc_processing_failure()
+                    <span class="macro">serde_json::json!</span>({ <span class="string">"result"</span>: <span class="string">"continue" </span>})
                 }
             };
 

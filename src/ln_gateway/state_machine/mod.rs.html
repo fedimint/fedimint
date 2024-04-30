@@ -1464,7 +1464,7 @@
     }
 }
 
-<span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable)]
+<span class="attr">#[derive(Debug, Clone, Eq, PartialEq)]
 </span><span class="kw">pub struct </span>Htlc {
     <span class="doccomment">/// The HTLC payment hash.
     </span><span class="kw">pub </span>payment_hash: sha256::Hash,
@@ -1475,7 +1475,7 @@
     <span class="doccomment">/// The incoming HTLC expiry
     </span><span class="kw">pub </span>incoming_expiry: u32,
     <span class="doccomment">/// The short channel id of the HTLC.
-    </span><span class="kw">pub </span>short_channel_id: u64,
+    </span><span class="kw">pub </span>short_channel_id: <span class="prelude-ty">Option</span>&lt;u64&gt;,
     <span class="doccomment">/// The id of the incoming channel
     </span><span class="kw">pub </span>incoming_chan_id: u64,
     <span class="doccomment">/// The index of the incoming htlc in the incoming channel
