@@ -21,11 +21,12 @@ use ln_gateway::gateway_lnrpc::gateway_lightning_server::{
 };
 use ln_gateway::gateway_lnrpc::get_route_hints_response::{RouteHint, RouteHintHop};
 use ln_gateway::gateway_lnrpc::intercept_htlc_response::{Action, Cancel, Forward, Settle};
+use ln_gateway::gateway_lnrpc::list_active_channels_response::ChannelInfo;
 use ln_gateway::gateway_lnrpc::{
     ConnectToPeerRequest, CreateInvoiceRequest, CreateInvoiceResponse, EmptyRequest, EmptyResponse,
     GetFundingAddressResponse, GetNodeInfoResponse, GetRouteHintsRequest, GetRouteHintsResponse,
-    InterceptHtlcRequest, InterceptHtlcResponse, OpenChannelRequest, PayInvoiceRequest,
-    PayInvoiceResponse,
+    InterceptHtlcRequest, InterceptHtlcResponse, ListActiveChannelsResponse, OpenChannelRequest,
+    PayInvoiceRequest, PayInvoiceResponse,
 };
 use secp256k1::PublicKey;
 use serde::{Deserialize, Serialize};
@@ -609,6 +610,73 @@ impl GatewayLightning for ClnRpcService {
             })?;
 
         Ok(tonic::Response::new(EmptyResponse {}))
+    }
+
+    async fn list_active_channels(
+        &self,
+        _request: tonic::Request<EmptyRequest>,
+    ) -> Result<tonic::Response<ListActiveChannelsResponse>, Status> {
+        let channels = self
+            .rpc_client()
+            .await
+            .map_err(|e| Status::internal(e.to_string()))?
+            .call(cln_rpc::Request::ListPeerChannels(
+                model::requests::ListpeerchannelsRequest { id: None },
+            ))
+            .await
+            .map(|response| match response {
+                cln_rpc::Response::ListPeerChannels(
+                    model::responses::ListpeerchannelsResponse { channels },
+                ) => Ok(channels
+                    .unwrap_or_default()
+                    .into_iter()
+                    .filter_map(|channel| {
+                        if let Some(state) = channel.state {
+                            if matches!(
+                                state,
+                                model::responses::ListpeerchannelsChannelsState::CHANNELD_NORMAL
+                            ) {
+                                Some(ChannelInfo {
+                                    remote_pubkey: match channel.peer_id {
+                                        Some(peer_id) => format!("{}", peer_id),
+                                        None => return None,
+                                    },
+                                    channel_size_sats: channel
+                                        .total_msat
+                                        .map(|value| value.msat() / 1000)
+                                        .unwrap_or(0),
+                                    outbound_liquidity_sats: channel
+                                        .spendable_msat
+                                        .map(|value| value.msat() / 1000)
+                                        .unwrap_or(0),
+                                    inbound_liquidity_sats: channel
+                                        .receivable_msat
+                                        .map(|value| value.msat() / 1000)
+                                        .unwrap_or(0),
+                                    short_channel_id: match channel.short_channel_id {
+                                        Some(scid) => scid_to_u64(scid),
+                                        None => return None,
+                                    },
+                                })
+                            } else {
+                                None
+                            }
+                        } else {
+                            None
+                        }
+                    })
+                    .collect()),
+                _ => Err(ClnExtensionError::RpcWrongResponse),
+            })
+            .map_err(|e| {
+                error!("cln listchannels rpc returned error {:?}", e);
+                tonic::Status::internal(e.to_string())
+            })?
+            .map_err(|e| tonic::Status::internal(e.to_string()))?;
+
+        Ok(tonic::Response::new(ListActiveChannelsResponse {
+            channels,
+        }))
     }
 }
 

@@ -30,7 +30,7 @@ use tonic_lnd::{connect, Client as LndClient};
 use tracing::{debug, error, info, trace, warn};
 
 use super::cln::RouteHtlcStream;
-use super::{ILnRpcClient, LightningRpcError, MAX_LIGHTNING_RETRIES};
+use super::{ChannelInfo, ILnRpcClient, LightningRpcError, MAX_LIGHTNING_RETRIES};
 use crate::gateway_lnrpc::get_route_hints_response::{RouteHint, RouteHintHop};
 use crate::gateway_lnrpc::intercept_htlc_response::{Action, Cancel, Forward, Settle};
 use crate::gateway_lnrpc::{
@@ -707,6 +707,76 @@ impl ILnRpcClient for GatewayLndClient {
             Ok(_) => Ok(EmptyResponse {}),
             Err(e) => Err(LightningRpcError::FailedToOpenChannel {
                 failure_reason: format!("Failed to open channel {e:?}"),
+            }),
+        }
+    }
+
+    async fn list_active_channels(&self) -> Result<Vec<ChannelInfo>, LightningRpcError> {
+        let mut client = self.connect().await?;
+
+        match client
+            .lightning()
+            .list_channels(ListChannelsRequest {
+                active_only: true,
+                inactive_only: false,
+                public_only: false,
+                private_only: false,
+                peer: vec![],
+            })
+            .await
+        {
+            Ok(response) => Ok(response
+                .into_inner()
+                .channels
+                .into_iter()
+                .map(|channel| {
+                    let channel_size_sats = channel.capacity.try_into().expect("i64 -> u64");
+
+                    let local_balance_sats: u64 =
+                        channel.local_balance.try_into().expect("i64 -> u64");
+                    let local_channel_reserve_sats: u64 = match channel.local_constraints {
+                        Some(constraints) => constraints.chan_reserve_sat,
+                        None => 0,
+                    };
+
+                    let outbound_liquidity_sats =
+                        if local_balance_sats >= local_channel_reserve_sats {
+                            // We must only perform this subtraction if the local balance is
+                            // greater than or equal to the channel reserve, otherwise we would
+                            // underflow and panic.
+                            local_balance_sats - local_channel_reserve_sats
+                        } else {
+                            0
+                        };
+
+                    let remote_balance_sats: u64 =
+                        channel.remote_balance.try_into().expect("i64 -> u64");
+                    let remote_channel_reserve_sats: u64 = match channel.remote_constraints {
+                        Some(constraints) => constraints.chan_reserve_sat,
+                        None => 0,
+                    };
+
+                    let inbound_liquidity_sats =
+                        if remote_balance_sats >= remote_channel_reserve_sats {
+                            // We must only perform this subtraction if the remote balance is
+                            // greater than or equal to the channel reserve, otherwise we would
+                            // underflow and panic.
+                            remote_balance_sats - remote_channel_reserve_sats
+                        } else {
+                            0
+                        };
+
+                    ChannelInfo {
+                        remote_pubkey: channel.remote_pubkey,
+                        channel_size_sats,
+                        outbound_liquidity_sats,
+                        inbound_liquidity_sats,
+                        short_channel_id: channel.chan_id,
+                    }
+                })
+                .collect()),
+            Err(e) => Err(LightningRpcError::FailedToListActiveChannels {
+                failure_reason: format!("Failed to list active channels {e:?}"),
             }),
         }
     }

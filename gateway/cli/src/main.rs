@@ -144,6 +144,8 @@ pub enum LightningCommands {
         #[clap(long)]
         push_amount_sats: Option<u64>,
     },
+    /// List active channels
+    ListActiveChannels,
     /// Wait for the lightning node to be synced with the blockchain
     WaitForChainSync {
         /// The block height to wait for
@@ -319,6 +321,10 @@ async fn main() -> anyhow::Result<()> {
                         push_amount_sats: push_amount_sats.unwrap_or(0),
                     })
                     .await?;
+            }
+            LightningCommands::ListActiveChannels => {
+                let response = client().list_active_channels().await?;
+                print_response(response).await;
             }
             LightningCommands::WaitForChainSync {
                 block_height,

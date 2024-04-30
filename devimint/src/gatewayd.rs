@@ -5,6 +5,7 @@ use std::time::Duration;
 
 use anyhow::{Context, Result};
 use fedimint_core::util::retry;
+use ln_gateway::lightning::ChannelInfo;
 use ln_gateway::rpc::V1_API_ENDPOINT;
 use tracing::info;
 
@@ -202,6 +203,43 @@ impl Gatewayd {
         .run()
         .await?;
         Ok(())
+    }
+
+    pub async fn list_active_channels(&self) -> Result<Vec<ChannelInfo>> {
+        let channels = cmd!(self, "lightning", "list-active-channels")
+            .out_json()
+            .await?;
+        let channels = channels
+            .as_array()
+            .context("channels must be an array")?
+            .iter()
+            .map(|channel| {
+                let remote_pubkey = channel["remote_pubkey"]
+                    .as_str()
+                    .context("remote_pubkey must be a string")?
+                    .to_owned();
+                let channel_size_sats = channel["channel_size_sats"]
+                    .as_u64()
+                    .context("channel_size_sats must be a u64")?;
+                let outbound_liquidity_sats = channel["outbound_liquidity_sats"]
+                    .as_u64()
+                    .context("outbound_liquidity_sats must be a u64")?;
+                let inbound_liquidity_sats = channel["inbound_liquidity_sats"]
+                    .as_u64()
+                    .context("inbound_liquidity_sats must be a u64")?;
+                let short_channel_id = channel["short_channel_id"]
+                    .as_u64()
+                    .context("short_channel_id must be a u64")?;
+                Ok(ChannelInfo {
+                    remote_pubkey,
+                    channel_size_sats,
+                    outbound_liquidity_sats,
+                    inbound_liquidity_sats,
+                    short_channel_id,
+                })
+            })
+            .collect::<Result<Vec<ChannelInfo>>>()?;
+        Ok(channels)
     }
 
     pub async fn wait_for_chain_sync(&self, bitcoind: &Bitcoind) -> Result<()> {

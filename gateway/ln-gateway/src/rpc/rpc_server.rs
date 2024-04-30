@@ -158,6 +158,7 @@ fn v1_routes(gateway: Gateway) -> Router {
         .route("/connect_to_peer", post(connect_to_peer))
         .route("/get_funding_address", post(get_funding_address))
         .route("/open_channel", post(open_channel))
+        .route("/list_active_channels", get(list_active_channels))
         .layer(middleware::from_fn(auth_middleware));
 
     // Routes that are un-authenticated before gateway configuration, then become
@@ -340,6 +341,14 @@ async fn open_channel(
 ) -> Result<impl IntoResponse, GatewayError> {
     gateway.handle_open_channel_msg(payload).await?;
     Ok(Json(json!(())))
+}
+
+#[instrument(skip_all, err)]
+async fn list_active_channels(
+    Extension(gateway): Extension<Gateway>,
+) -> Result<impl IntoResponse, GatewayError> {
+    let channels = gateway.handle_list_active_channels_msg().await?;
+    Ok(Json(json!(channels)))
 }
 
 #[instrument(skip_all, err)]

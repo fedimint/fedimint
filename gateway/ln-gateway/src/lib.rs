@@ -1224,6 +1224,12 @@ impl Gateway {
         Ok(())
     }
 
+    pub async fn handle_list_active_channels_msg(&self) -> Result<Vec<lightning::ChannelInfo>> {
+        let context = self.get_lightning_context().await?;
+        let channels = context.lnrpc.list_active_channels().await?;
+        Ok(channels)
+    }
+
     /// Registers the gateway with each specified federation.
     async fn register_federations(
         &self,

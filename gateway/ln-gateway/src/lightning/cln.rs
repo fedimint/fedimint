@@ -10,7 +10,7 @@ use tonic::transport::{Channel, Endpoint};
 use tonic::Request;
 use tracing::info;
 
-use super::{ILnRpcClient, LightningRpcError};
+use super::{ChannelInfo, ILnRpcClient, LightningRpcError};
 use crate::gateway_lnrpc::gateway_lightning_client::GatewayLightningClient;
 use crate::gateway_lnrpc::{
     ConnectToPeerRequest, CreateInvoiceRequest, CreateInvoiceResponse, EmptyRequest, EmptyResponse,
@@ -201,5 +201,27 @@ impl ILnRpcClient for NetworkLnRpcClient {
                 failure_reason: status.message().to_string(),
             })?;
         Ok(res.into_inner())
+    }
+
+    async fn list_active_channels(&self) -> Result<Vec<ChannelInfo>, LightningRpcError> {
+        let mut client = self.connect().await?;
+        let res = client
+            .list_active_channels(EmptyRequest {})
+            .await
+            .map_err(|status| LightningRpcError::FailedToListActiveChannels {
+                failure_reason: status.message().to_string(),
+            })?;
+        Ok(res
+            .into_inner()
+            .channels
+            .into_iter()
+            .map(|channel| ChannelInfo {
+                remote_pubkey: channel.remote_pubkey,
+                channel_size_sats: channel.channel_size_sats,
+                outbound_liquidity_sats: channel.outbound_liquidity_sats,
+                inbound_liquidity_sats: channel.inbound_liquidity_sats,
+                short_channel_id: channel.short_channel_id,
+            })
+            .collect())
     }
 }
