@@ -61,10 +61,23 @@ function run_tests() {
   if [ -z "${FM_TEST_ONLY:-}" ] || [ "${FM_TEST_ONLY:-}" = "bitcoind-ln-gateway" ]; then
     >&2 echo "### Testing against bitcoind for ln-gateway"
 
-    cargo nextest run --locked --workspace --all-targets \
-      ${CARGO_PROFILE:+--cargo-profile ${CARGO_PROFILE}} ${CARGO_PROFILE:+--profile ${CARGO_PROFILE}} \
-      ${TEST_ARGS_SERIALIZED} \
-      -E 'package(fedimint-ln-gateway)'
+    # since it's being ran serially, these tests take a while, so we split them into two
+    # parts that test-ci-alll runs in parallel
+
+    if [ -z "${FM_BITCOIND_LN_GATEWAY_TEST_ONLY:-}" ] || [ "${FM_BITCOIND_LN_GATEWAY_TEST_ONLY:-}" = "gateway-client" ]; then
+      cargo nextest run --locked --workspace --all-targets \
+        ${CARGO_PROFILE:+--cargo-profile ${CARGO_PROFILE}} ${CARGO_PROFILE:+--profile ${CARGO_PROFILE}} \
+        ${TEST_ARGS_SERIALIZED} \
+        -E 'package(fedimint-ln-gateway) & test(gateway_client)'
+    fi
+
+    if [ -z "${FM_BITCOIND_LN_GATEWAY_TEST_ONLY:-}" ] || [ "${FM_BITCOIND_LN_GATEWAY_TEST_ONLY:-}" = "not-gateway-client" ]; then
+      cargo nextest run --locked --workspace --all-targets \
+        ${CARGO_PROFILE:+--cargo-profile ${CARGO_PROFILE}} ${CARGO_PROFILE:+--profile ${CARGO_PROFILE}} \
+        ${TEST_ARGS_SERIALIZED} \
+        -E 'package(fedimint-ln-gateway) & not test(gateway_client)'
+    fi
+
     >&2 echo "### Testing against bitcoind for ln-gateway - complete"
   fi
 

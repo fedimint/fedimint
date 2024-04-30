@@ -165,13 +165,21 @@ function backend_test_bitcoind_lnv2() {
 }
 export -f backend_test_bitcoind_lnv2
 
-function backend_test_bitcoind_ln_gateway() {
+function backend_test_ln_gateway_client() {
   # backend tests don't support different versions, so we skip for backwards-compatibility tests
   if [ -z "${FM_BACKWARDS_COMPATIBILITY_TEST:-}" ]; then
-    fm-run-test "${FUNCNAME[0]}" env FM_TEST_ONLY=bitcoind-ln-gateway ./scripts/tests/backend-test.sh
+    fm-run-test "${FUNCNAME[0]}" env FM_TEST_ONLY=bitcoind-ln-gateway FM_BITCOIND_LN_GATEWAY_TEST_ONLY=gateway-client ./scripts/tests/backend-test.sh
   fi
 }
-export -f backend_test_bitcoind_ln_gateway
+export -f backend_test_ln_gateway_client
+
+function backend_test_ln_gateway_not_client() {
+  # backend tests don't support different versions, so we skip for backwards-compatibility tests
+  if [ -z "${FM_BACKWARDS_COMPATIBILITY_TEST:-}" ]; then
+    fm-run-test "${FUNCNAME[0]}" env FM_TEST_ONLY=bitcoind-ln-gateway  FM_BITCOIND_LN_GATEWAY_TEST_ONLY=not-gateway-client ./scripts/tests/backend-test.sh
+  fi
+}
+export -f backend_test_ln_gateway_not_client
 
 function backend_test_electrs() {
   # backend tests don't support different versions, so we skip for backwards-compatibility tests
@@ -247,7 +255,8 @@ tests_to_run_in_parallel+=(
   "backend_test_bitcoind_wallet"
   "backend_test_bitcoind_ln"
   "backend_test_bitcoind_lnv2"
-  "backend_test_bitcoind_ln_gateway"
+  "backend_test_ln_gateway_client"
+  "backend_test_ln_gateway_not_client"
   "backend_test_electrs"
   "backend_test_esplora"
   "latency_test_reissue"

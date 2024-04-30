@@ -55,7 +55,7 @@ function ensure_in_dev_shell() {
 function make_fm_test_marker() {
   if [ -n "${FM_TEST_NAME:-}" ]; then
     # make it easy to identify which tmp dir belongs to which test
-    touch "${TMP:-/tmp}-$(echo "$FM_TEST_NAME" |tr -cd '[:alnum:]-_')" || true
+    touch "${TMP:-/tmp}/$(echo "$FM_TEST_NAME" |tr -cd '[:alnum:]-_')" || true
   fi
 }
 
