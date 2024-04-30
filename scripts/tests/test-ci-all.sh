@@ -297,10 +297,10 @@ if [ -n "${FM_TEST_CI_ALL_JOBS:-}" ]; then
   # when specifically set, use the env var
   parallel_args+=(--jobs "${FM_TEST_CI_ALL_JOBS}")
 elif [ -n "${CI:-}" ] || [ "${CARGO_PROFILE:-}" == "ci" ]; then
-  parallel_args+=(--jobs $(($(nproc) / 3 + 1)))
+  parallel_args+=(--jobs $(($(nproc) / 2 + 1)))
 else
-  # on dev computers default to `num_cpus / 3 + 1` max parallel jobs
-  parallel_args+=(--jobs "${FM_TEST_CI_ALL_JOBS:-$(($(nproc) / 3 + 1))}")
+  # on dev computers default to `num_cpus / 2 + 1` max parallel jobs
+  parallel_args+=(--jobs "${FM_TEST_CI_ALL_JOBS:-$(($(nproc) / 2 + 1))}")
 fi
 
 parallel_args+=(--timeout "${FM_TEST_CI_ALL_TIMEOUT:-600}")
