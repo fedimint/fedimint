@@ -652,7 +652,7 @@ async fn test_gateway_client_intercept_valid_htlc() -> anyhow::Result<()> {
             incoming_amount_msat: Amount::from_msats(invoice.amount_milli_satoshis().unwrap()),
             outgoing_amount_msat: Amount::from_msats(invoice.amount_milli_satoshis().unwrap()),
             incoming_expiry: u32::MAX,
-            short_channel_id: 1,
+            short_channel_id: Some(1),
             incoming_chan_id: 2,
             htlc_id: 1,
         };
@@ -697,7 +697,7 @@ async fn test_gateway_client_intercept_offer_does_not_exist() -> anyhow::Result<
             incoming_amount_msat: Amount::from_msats(100),
             outgoing_amount_msat: Amount::from_msats(100),
             incoming_expiry: u32::MAX,
-            short_channel_id: 1,
+            short_channel_id: Some(1),
             incoming_chan_id: 2,
             htlc_id: 1,
         };
@@ -743,7 +743,7 @@ async fn test_gateway_client_intercept_htlc_no_funds() -> anyhow::Result<()> {
             incoming_amount_msat: Amount::from_msats(invoice.amount_milli_satoshis().unwrap()),
             outgoing_amount_msat: Amount::from_msats(invoice.amount_milli_satoshis().unwrap()),
             incoming_expiry: u32::MAX,
-            short_channel_id: 1,
+            short_channel_id: Some(1),
             incoming_chan_id: 2,
             htlc_id: 1,
         };
@@ -839,7 +839,7 @@ async fn test_gateway_client_intercept_htlc_invalid_offer() -> anyhow::Result<()
                 incoming_amount_msat: Amount::from_msats(invoice.amount_milli_satoshis().unwrap()),
                 outgoing_amount_msat: Amount::from_msats(invoice.amount_milli_satoshis().unwrap()),
                 incoming_expiry: u32::MAX,
-                short_channel_id: 1,
+                short_channel_id: Some(1),
                 incoming_chan_id: 2,
                 htlc_id: 1,
             };

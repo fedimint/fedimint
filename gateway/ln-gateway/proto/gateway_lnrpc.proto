@@ -114,7 +114,7 @@ message InterceptHtlcRequest {
 
   // The short channel id of the HTLC.
   // Use this value to confirm relevance of the intercepted HTLC
-  uint64 short_channel_id = 10;
+  optional uint64 short_channel_id = 10;
 
   // The id of the incoming channel
   uint64 incoming_chan_id = 12;
@@ -199,13 +199,21 @@ message GetRouteHintsResponse {
 }
 
 message CreateInvoiceRequest {
+  // The payment hash of the invoice being created.
   bytes payment_hash = 1;
 
+  // The amount in millisatoshis of the invoice.
   uint64 amount_msat = 2;
 
+  // The time in seconds this invoice is valid for.
   uint32 expiry = 3;
 
-  string description = 4;
+  // A description or a description hash must be provided.
+  oneof description {
+    string direct = 4;
+
+    bytes hash = 5;
+  }
 }
 
 message CreateInvoiceResponse {

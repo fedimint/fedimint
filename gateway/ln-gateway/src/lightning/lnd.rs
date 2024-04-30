@@ -31,6 +31,7 @@ use tracing::{debug, error, info, trace, warn};
 
 use super::cln::RouteHtlcStream;
 use super::{ChannelInfo, ILnRpcClient, LightningRpcError, MAX_LIGHTNING_RETRIES};
+use crate::gateway_lnrpc::create_invoice_request::Description;
 use crate::gateway_lnrpc::get_route_hints_response::{RouteHint, RouteHintHop};
 use crate::gateway_lnrpc::intercept_htlc_response::{Action, Cancel, Forward, Settle};
 use crate::gateway_lnrpc::{
@@ -178,7 +179,7 @@ impl GatewayLndClient {
                         incoming_amount_msat: htlc.incoming_amount_msat,
                         outgoing_amount_msat: htlc.outgoing_amount_msat,
                         incoming_expiry: htlc.incoming_expiry,
-                        short_channel_id: htlc.outgoing_requested_chan_id,
+                        short_channel_id: Some(htlc.outgoing_requested_chan_id),
                         incoming_chan_id: incoming_circuit_key.chan_id,
                         htlc_id: incoming_circuit_key.htlc_id,
                     };
@@ -622,19 +623,38 @@ impl ILnRpcClient for GatewayLndClient {
         create_invoice_request: CreateInvoiceRequest,
     ) -> Result<CreateInvoiceResponse, LightningRpcError> {
         let mut client = self.connect().await?;
-        let hold_invoice_response = client
-            .invoices()
-            .add_hold_invoice(AddHoldInvoiceRequest {
-                memo: create_invoice_request.description,
+        let description =
+            create_invoice_request
+                .description
+                .ok_or(LightningRpcError::FailedToGetInvoice {
+                    failure_reason: "Description or description hash was not provided".to_string(),
+                })?;
+
+        let hold_invoice_request = match description {
+            Description::Direct(description) => AddHoldInvoiceRequest {
+                memo: description,
                 hash: create_invoice_request.payment_hash,
                 value_msat: create_invoice_request.amount_msat as i64,
                 expiry: create_invoice_request.expiry as i64,
                 ..Default::default()
-            })
+            },
+            Description::Hash(desc_hash) => AddHoldInvoiceRequest {
+                description_hash: desc_hash,
+                hash: create_invoice_request.payment_hash,
+                value_msat: create_invoice_request.amount_msat as i64,
+                expiry: create_invoice_request.expiry as i64,
+                ..Default::default()
+            },
+        };
+
+        let hold_invoice_response = client
+            .invoices()
+            .add_hold_invoice(hold_invoice_request)
             .await
             .map_err(|e| LightningRpcError::FailedToGetInvoice {
                 failure_reason: e.to_string(),
             })?;
+
         let invoice = hold_invoice_response.into_inner().payment_request;
         Ok(CreateInvoiceResponse { invoice })
     }
