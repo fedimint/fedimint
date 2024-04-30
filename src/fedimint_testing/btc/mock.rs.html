@@ -350,6 +350,29 @@
 <a href="#350" id="350">350</a>
 <a href="#351" id="351">351</a>
 <a href="#352" id="352">352</a>
+<a href="#353" id="353">353</a>
+<a href="#354" id="354">354</a>
+<a href="#355" id="355">355</a>
+<a href="#356" id="356">356</a>
+<a href="#357" id="357">357</a>
+<a href="#358" id="358">358</a>
+<a href="#359" id="359">359</a>
+<a href="#360" id="360">360</a>
+<a href="#361" id="361">361</a>
+<a href="#362" id="362">362</a>
+<a href="#363" id="363">363</a>
+<a href="#364" id="364">364</a>
+<a href="#365" id="365">365</a>
+<a href="#366" id="366">366</a>
+<a href="#367" id="367">367</a>
+<a href="#368" id="368">368</a>
+<a href="#369" id="369">369</a>
+<a href="#370" id="370">370</a>
+<a href="#371" id="371">371</a>
+<a href="#372" id="372">372</a>
+<a href="#373" id="373">373</a>
+<a href="#374" id="374">374</a>
+<a href="#375" id="375">375</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::iter::repeat;
 <span class="kw">use </span>std::sync::Arc;
@@ -365,9 +388,14 @@
     Address, Block, BlockHash, BlockHeader, Network, OutPoint, PackedLockTime, Script, Transaction,
     TxOut,
 };
+<span class="kw">use </span>bitcoin30::ScriptBuf;
 <span class="kw">use </span>fedimint_bitcoind::{
     register_bitcoind, DynBitcoindRpc, IBitcoindRpc, IBitcoindRpcFactory,
     <span class="prelude-ty">Result </span><span class="kw">as </span>BitcoinRpcResult,
+};
+<span class="kw">use </span>fedimint_core::bitcoin_migration::{
+    bitcoin29_to_bitcoin30_block_hash, bitcoin29_to_bitcoin30_transaction,
+    bitcoin30_to_bitcoin29_script, bitcoin30_to_bitcoin29_transaction, bitcoin30_to_bitcoin29_txid,
 };
 <span class="kw">use </span>fedimint_core::envs::BitcoinRpcConfig;
 <span class="kw">use </span>fedimint_core::task::{sleep_in_test, TaskHandle};
@@ -629,29 +657,33 @@
 
 <span class="attr">#[async_trait]
 </span><span class="kw">impl </span>IBitcoindRpc <span class="kw">for </span>FakeBitcoinTest {
-    <span class="kw">async fn </span>get_network(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; BitcoinRpcResult&lt;Network&gt; {
-        <span class="prelude-val">Ok</span>(Network::Regtest)
+    <span class="kw">async fn </span>get_network(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; BitcoinRpcResult&lt;bitcoin30::Network&gt; {
+        <span class="prelude-val">Ok</span>(bitcoin30::Network::Regtest)
     }
 
     <span class="kw">async fn </span>get_block_count(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; BitcoinRpcResult&lt;u64&gt; {
         <span class="prelude-val">Ok</span>(<span class="self">self</span>.inner.read().unwrap().blocks.len() <span class="kw">as </span>u64)
     }
 
-    <span class="kw">async fn </span>get_block_hash(<span class="kw-2">&amp;</span><span class="self">self</span>, height: u64) -&gt; BitcoinRpcResult&lt;BlockHash&gt; {
-        <span class="prelude-val">Ok</span>(<span class="self">self</span>.inner.read().unwrap().blocks[height <span class="kw">as </span>usize]
-            .header
-            .block_hash())
+    <span class="kw">async fn </span>get_block_hash(<span class="kw-2">&amp;</span><span class="self">self</span>, height: u64) -&gt; BitcoinRpcResult&lt;bitcoin30::BlockHash&gt; {
+        <span class="prelude-val">Ok</span>(bitcoin29_to_bitcoin30_block_hash(
+            <span class="self">self</span>.inner.read().unwrap().blocks[height <span class="kw">as </span>usize]
+                .header
+                .block_hash(),
+        ))
     }
 
     <span class="kw">async fn </span>get_fee_rate(<span class="kw-2">&amp;</span><span class="self">self</span>, _confirmation_target: u16) -&gt; BitcoinRpcResult&lt;<span class="prelude-ty">Option</span>&lt;Feerate&gt;&gt; {
         <span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(Feerate { sats_per_kvb: <span class="number">2000 </span>}))
     }
 
-    <span class="kw">async fn </span>submit_transaction(<span class="kw-2">&amp;</span><span class="self">self</span>, transaction: Transaction) {
+    <span class="kw">async fn </span>submit_transaction(<span class="kw-2">&amp;</span><span class="self">self</span>, transaction: bitcoin30::Transaction) {
         <span class="kw">let </span><span class="kw-2">mut </span>inner = <span class="self">self</span>.inner.write().unwrap();
-        inner.pending.push(transaction);
+        inner
+            .pending
+            .push(bitcoin30_to_bitcoin29_transaction(<span class="kw-2">&amp;</span>transaction));
 
-        <span class="kw">let </span><span class="kw-2">mut </span>filtered = BTreeMap::&lt;Vec&lt;OutPoint&gt;, Transaction&gt;::new();
+        <span class="kw">let </span><span class="kw-2">mut </span>filtered = BTreeMap::&lt;Vec&lt;OutPoint&gt;, bitcoin::Transaction&gt;::new();
 
         <span class="comment">// Simulate the mempool keeping txs with higher fees (less output)
         // TODO: This looks borked, should remove from `filtered` on higher fee or
@@ -669,28 +701,42 @@
         inner.pending = filtered.into_values().collect();
     }
 
-    <span class="kw">async fn </span>get_tx_block_height(<span class="kw-2">&amp;</span><span class="self">self</span>, txid: <span class="kw-2">&amp;</span>Txid) -&gt; BitcoinRpcResult&lt;<span class="prelude-ty">Option</span>&lt;u64&gt;&gt; {
+    <span class="kw">async fn </span>get_tx_block_height(<span class="kw-2">&amp;</span><span class="self">self</span>, txid: <span class="kw-2">&amp;</span>bitcoin30::Txid) -&gt; BitcoinRpcResult&lt;<span class="prelude-ty">Option</span>&lt;u64&gt;&gt; {
         <span class="kw">for </span>(height, block) <span class="kw">in </span><span class="self">self</span>.inner.read().unwrap().blocks.iter().enumerate() {
-            <span class="kw">if </span>block.txdata.iter().any(|tx| tx.txid() == <span class="kw-2">*</span>txid) {
+            <span class="kw">if </span>block
+                .txdata
+                .iter()
+                .any(|tx| tx.txid() == bitcoin30_to_bitcoin29_txid(<span class="kw-2">*</span>txid))
+            {
                 <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(height <span class="kw">as </span>u64));
             }
         }
         <span class="prelude-val">Ok</span>(<span class="prelude-val">None</span>)
     }
 
-    <span class="kw">async fn </span>watch_script_history(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="kw">_</span>: <span class="kw-2">&amp;</span>Script) -&gt; BitcoinRpcResult&lt;()&gt; {
+    <span class="kw">async fn </span>watch_script_history(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="kw">_</span>: <span class="kw-2">&amp;</span>ScriptBuf) -&gt; BitcoinRpcResult&lt;()&gt; {
         <span class="prelude-val">Ok</span>(())
     }
 
-    <span class="kw">async fn </span>get_script_history(<span class="kw-2">&amp;</span><span class="self">self</span>, script: <span class="kw-2">&amp;</span>Script) -&gt; BitcoinRpcResult&lt;Vec&lt;Transaction&gt;&gt; {
+    <span class="kw">async fn </span>get_script_history(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        script: <span class="kw-2">&amp;</span>ScriptBuf,
+    ) -&gt; BitcoinRpcResult&lt;Vec&lt;bitcoin30::Transaction&gt;&gt; {
         <span class="kw">let </span>inner = <span class="self">self</span>.inner.read().unwrap();
-        <span class="kw">let </span>script = inner.scripts.get(script);
-        <span class="prelude-val">Ok</span>(script.unwrap_or(<span class="kw-2">&amp;</span><span class="macro">vec!</span>[]).clone())
+        <span class="kw">let </span>script = inner
+            .scripts
+            .get(<span class="kw-2">&amp;</span>bitcoin30_to_bitcoin29_script(script))
+            .map(|txs| {
+                txs.iter()
+                    .map(bitcoin29_to_bitcoin30_transaction)
+                    .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;()
+            });
+        <span class="prelude-val">Ok</span>(script.unwrap_or_default().clone())
     }
 
-    <span class="kw">async fn </span>get_txout_proof(<span class="kw-2">&amp;</span><span class="self">self</span>, txid: Txid) -&gt; BitcoinRpcResult&lt;TxOutProof&gt; {
+    <span class="kw">async fn </span>get_txout_proof(<span class="kw-2">&amp;</span><span class="self">self</span>, txid: bitcoin30::Txid) -&gt; BitcoinRpcResult&lt;TxOutProof&gt; {
         <span class="kw">let </span>inner = <span class="self">self</span>.inner.read().unwrap();
-        <span class="kw">let </span>proof = inner.proofs.get(<span class="kw-2">&amp;</span>txid);
+        <span class="kw">let </span>proof = inner.proofs.get(<span class="kw-2">&amp;</span>bitcoin30_to_bitcoin29_txid(txid));
         <span class="prelude-val">Ok</span>(proof.ok_or(<span class="macro">format_err!</span>(<span class="string">"No proof stored"</span>))<span class="question-mark">?</span>.clone())
     }
 }

@@ -136,22 +136,12 @@
 <a href="#136" id="136">136</a>
 <a href="#137" id="137">137</a>
 <a href="#138" id="138">138</a>
-<a href="#139" id="139">139</a>
-<a href="#140" id="140">140</a>
-<a href="#141" id="141">141</a>
-<a href="#142" id="142">142</a>
-<a href="#143" id="143">143</a>
-<a href="#144" id="144">144</a>
-<a href="#145" id="145">145</a>
-<a href="#146" id="146">146</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::HashMap;
 
 <span class="kw">use </span>anyhow::format_err;
-<span class="kw">use </span>bitcoin::{BlockHash, Network, Script, Transaction, Txid};
+<span class="kw">use </span>bitcoin::{BlockHash, Network, ScriptBuf, Transaction, Txid};
 <span class="kw">use </span>fedimint_core::bitcoin_migration::{
-    bitcoin29_to_bitcoin30_script, bitcoin29_to_bitcoin30_transaction, bitcoin29_to_bitcoin30_txid,
-    bitcoin30_to_bitcoin29_block_hash, bitcoin30_to_bitcoin29_block_header,
-    bitcoin30_to_bitcoin29_partial_merkle_tree, bitcoin30_to_bitcoin29_transaction,
+    bitcoin30_to_bitcoin29_block_header, bitcoin30_to_bitcoin29_partial_merkle_tree,
 };
 <span class="kw">use </span>fedimint_core::task::TaskHandle;
 <span class="kw">use </span>fedimint_core::txoproof::TxOutProof;
@@ -216,9 +206,7 @@
     }
 
     <span class="kw">async fn </span>get_block_hash(<span class="kw-2">&amp;</span><span class="self">self</span>, height: u64) -&gt; anyhow::Result&lt;BlockHash&gt; {
-        <span class="prelude-val">Ok</span>(bitcoin30_to_bitcoin29_block_hash(
-            <span class="self">self</span>.<span class="number">0</span>.get_block_hash(height <span class="kw">as </span>u32).<span class="kw">await</span><span class="question-mark">?</span>,
-        ))
+        <span class="prelude-val">Ok</span>(<span class="self">self</span>.<span class="number">0</span>.get_block_hash(height <span class="kw">as </span>u32).<span class="kw">await</span><span class="question-mark">?</span>)
     }
 
     <span class="kw">async fn </span>get_fee_rate(<span class="kw-2">&amp;</span><span class="self">self</span>, confirmation_target: u16) -&gt; anyhow::Result&lt;<span class="prelude-ty">Option</span>&lt;Feerate&gt;&gt; {
@@ -235,44 +223,40 @@
     }
 
     <span class="kw">async fn </span>submit_transaction(<span class="kw-2">&amp;</span><span class="self">self</span>, transaction: Transaction) {
-        <span class="kw">let _ </span>= <span class="self">self
-            </span>.<span class="number">0
-            </span>.broadcast(<span class="kw-2">&amp;</span>bitcoin29_to_bitcoin30_transaction(<span class="kw-2">&amp;</span>transaction))
-            .<span class="kw">await
-            </span>.map_err(|error| {
-                <span class="comment">// `esplora-client` v0.6.0 only surfaces HTTP error codes, which prevents us
-                // from detecting errors for transactions already submitted.
-                // TODO: Suppress `esplora-client` already submitted errors when client is
-                // updated
-                // https://github.com/fedimint/fedimint/issues/3732
-                </span><span class="macro">info!</span>(<span class="question-mark">?</span>error, <span class="string">"Error broadcasting transaction"</span>);
-            });
+        <span class="kw">let _ </span>= <span class="self">self</span>.<span class="number">0</span>.broadcast(<span class="kw-2">&amp;</span>transaction).<span class="kw">await</span>.map_err(|error| {
+            <span class="comment">// `esplora-client` v0.6.0 only surfaces HTTP error codes, which prevents us
+            // from detecting errors for transactions already submitted.
+            // TODO: Suppress `esplora-client` already submitted errors when client is
+            // updated
+            // https://github.com/fedimint/fedimint/issues/3732
+            </span><span class="macro">info!</span>(<span class="question-mark">?</span>error, <span class="string">"Error broadcasting transaction"</span>);
+        });
     }
 
     <span class="kw">async fn </span>get_tx_block_height(<span class="kw-2">&amp;</span><span class="self">self</span>, txid: <span class="kw-2">&amp;</span>Txid) -&gt; anyhow::Result&lt;<span class="prelude-ty">Option</span>&lt;u64&gt;&gt; {
         <span class="prelude-val">Ok</span>(<span class="self">self
             </span>.<span class="number">0
-            </span>.get_tx_status(<span class="kw-2">&amp;</span>bitcoin29_to_bitcoin30_txid(<span class="kw-2">*</span>txid))
+            </span>.get_tx_status(txid)
             .<span class="kw">await</span><span class="question-mark">?
             </span>.block_height
             .map(|height| height <span class="kw">as </span>u64))
     }
 
-    <span class="kw">async fn </span>watch_script_history(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="kw">_</span>: <span class="kw-2">&amp;</span>Script) -&gt; anyhow::Result&lt;()&gt; {
+    <span class="kw">async fn </span>watch_script_history(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="kw">_</span>: <span class="kw-2">&amp;</span>ScriptBuf) -&gt; anyhow::Result&lt;()&gt; {
         <span class="comment">// no watching needed, has all the history already
         </span><span class="prelude-val">Ok</span>(())
     }
 
     <span class="kw">async fn </span>get_script_history(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        script: <span class="kw-2">&amp;</span>Script,
+        script: <span class="kw-2">&amp;</span>ScriptBuf,
     ) -&gt; anyhow::Result&lt;Vec&lt;bitcoin::Transaction&gt;&gt; {
         <span class="kw">let </span>transactions = <span class="self">self
             </span>.<span class="number">0
-            </span>.scripthash_txs(<span class="kw-2">&amp;</span>bitcoin29_to_bitcoin30_script(script.clone()), <span class="prelude-val">None</span>)
+            </span>.scripthash_txs(script, <span class="prelude-val">None</span>)
             .<span class="kw">await</span><span class="question-mark">?
             </span>.into_iter()
-            .map(|tx| bitcoin30_to_bitcoin29_transaction(<span class="kw-2">&amp;</span>tx.to_tx()))
+            .map(|tx| tx.to_tx())
             .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
 
         <span class="prelude-val">Ok</span>(transactions)
@@ -280,7 +264,7 @@
     <span class="kw">async fn </span>get_txout_proof(<span class="kw-2">&amp;</span><span class="self">self</span>, txid: Txid) -&gt; anyhow::Result&lt;TxOutProof&gt; {
         <span class="kw">let </span>proof = <span class="self">self
             </span>.<span class="number">0
-            </span>.get_merkle_block(<span class="kw-2">&amp;</span>bitcoin29_to_bitcoin30_txid(txid))
+            </span>.get_merkle_block(<span class="kw-2">&amp;</span>txid)
             .<span class="kw">await</span><span class="question-mark">?
             </span>.ok_or(<span class="macro">format_err!</span>(<span class="string">"No merkle proof found"</span>))<span class="question-mark">?</span>;
 

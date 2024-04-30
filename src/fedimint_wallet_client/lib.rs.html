@@ -727,6 +727,8 @@
 <a href="#727" id="727">727</a>
 <a href="#728" id="728">728</a>
 <a href="#729" id="729">729</a>
+<a href="#730" id="730">730</a>
+<a href="#731" id="731">731</a>
 </pre></div><pre class="rust"><code><span class="kw">pub mod </span>api;
 
 <span class="kw">pub mod </span>client_db;
@@ -753,8 +755,8 @@
 <span class="kw">use </span>fedimint_client::transaction::{ClientOutput, TransactionBuilder};
 <span class="kw">use </span>fedimint_client::{sm_enum_variant_translation, DynGlobalClientContext};
 <span class="kw">use </span>fedimint_core::bitcoin_migration::{
-    bitcoin29_to_bitcoin30_network, bitcoin30_to_bitcoin29_address, bitcoin30_to_bitcoin29_keypair,
-    bitcoin30_to_bitcoin29_secp256k1_public_key,
+    bitcoin29_to_bitcoin30_network, bitcoin29_to_bitcoin30_script, bitcoin30_to_bitcoin29_address,
+    bitcoin30_to_bitcoin29_keypair, bitcoin30_to_bitcoin29_secp256k1_public_key,
 };
 <span class="kw">use </span>fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, OperationId};
 <span class="kw">use </span>fedimint_core::db::{
@@ -1132,7 +1134,9 @@
 
                         <span class="comment">// Begin watching the script address
                         </span><span class="self">self</span>.rpc
-                            .watch_script_history(<span class="kw-2">&amp;</span>address.script_pubkey())
+                            .watch_script_history(<span class="kw-2">&amp;</span>bitcoin29_to_bitcoin30_script(
+                                address.script_pubkey(),
+                            ))
                             .<span class="kw">await</span><span class="question-mark">?</span>;
 
                         dbtx.add_state_machines(<span class="macro">vec!</span>[<span class="self">self</span>.client_ctx.make_dyn_state(sm)])

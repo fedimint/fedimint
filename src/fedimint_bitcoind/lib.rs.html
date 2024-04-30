@@ -264,7 +264,7 @@
 
 <span class="kw">use </span>anyhow::Context;
 <span class="kw">pub use </span>anyhow::Result;
-<span class="kw">use </span>bitcoin::{BlockHash, Network, Script, Transaction, Txid};
+<span class="kw">use </span>bitcoin::{BlockHash, Network, ScriptBuf, Transaction, Txid};
 <span class="kw">use </span>fedimint_core::envs::{
     BitcoinRpcConfig, FM_FORCE_BITCOIN_RPC_KIND_ENV, FM_FORCE_BITCOIN_RPC_URL_ENV,
 };
@@ -401,13 +401,13 @@
     ///
     /// Should be called once prior to transactions being submitted or watching
     /// may not occur on backends that need it
-    </span><span class="kw">async fn </span>watch_script_history(<span class="kw-2">&amp;</span><span class="self">self</span>, script: <span class="kw-2">&amp;</span>Script) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt;;
+    </span><span class="kw">async fn </span>watch_script_history(<span class="kw-2">&amp;</span><span class="self">self</span>, script: <span class="kw-2">&amp;</span>ScriptBuf) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt;;
 
     <span class="doccomment">/// Get script transaction history
     ///
     /// Note: should call `watch_script_history` at least once (and ideally only
     /// once), before calling this.
-    </span><span class="kw">async fn </span>get_script_history(<span class="kw-2">&amp;</span><span class="self">self</span>, script: <span class="kw-2">&amp;</span>Script) -&gt; <span class="prelude-ty">Result</span>&lt;Vec&lt;Transaction&gt;&gt;;
+    </span><span class="kw">async fn </span>get_script_history(<span class="kw-2">&amp;</span><span class="self">self</span>, script: <span class="kw-2">&amp;</span>ScriptBuf) -&gt; <span class="prelude-ty">Result</span>&lt;Vec&lt;Transaction&gt;&gt;;
 
     <span class="doccomment">/// Returns a proof that a tx is included in the bitcoin blockchain
     </span><span class="kw">async fn </span>get_txout_proof(<span class="kw-2">&amp;</span><span class="self">self</span>, txid: Txid) -&gt; <span class="prelude-ty">Result</span>&lt;TxOutProof&gt;;
@@ -495,12 +495,12 @@
             .<span class="kw">await
     </span>}
 
-    <span class="kw">async fn </span>watch_script_history(<span class="kw-2">&amp;</span><span class="self">self</span>, script: <span class="kw-2">&amp;</span>Script) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+    <span class="kw">async fn </span>watch_script_history(<span class="kw-2">&amp;</span><span class="self">self</span>, script: <span class="kw-2">&amp;</span>ScriptBuf) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
         <span class="self">self</span>.retry_call(|| <span class="kw">async </span>{ <span class="self">self</span>.inner.watch_script_history(script).<span class="kw">await </span>})
             .<span class="kw">await
     </span>}
 
-    <span class="kw">async fn </span>get_script_history(<span class="kw-2">&amp;</span><span class="self">self</span>, script: <span class="kw-2">&amp;</span>Script) -&gt; <span class="prelude-ty">Result</span>&lt;Vec&lt;Transaction&gt;&gt; {
+    <span class="kw">async fn </span>get_script_history(<span class="kw-2">&amp;</span><span class="self">self</span>, script: <span class="kw-2">&amp;</span>ScriptBuf) -&gt; <span class="prelude-ty">Result</span>&lt;Vec&lt;Transaction&gt;&gt; {
         <span class="self">self</span>.retry_call(|| <span class="kw">async </span>{ <span class="self">self</span>.inner.get_script_history(script).<span class="kw">await </span>})
             .<span class="kw">await
     </span>}

@@ -179,27 +179,12 @@
 <a href="#179" id="179">179</a>
 <a href="#180" id="180">180</a>
 <a href="#181" id="181">181</a>
-<a href="#182" id="182">182</a>
-<a href="#183" id="183">183</a>
-<a href="#184" id="184">184</a>
-<a href="#185" id="185">185</a>
-<a href="#186" id="186">186</a>
-<a href="#187" id="187">187</a>
-<a href="#188" id="188">188</a>
-<a href="#189" id="189">189</a>
-<a href="#190" id="190">190</a>
-<a href="#191" id="191">191</a>
-<a href="#192" id="192">192</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::fmt;
 
 <span class="kw">use </span>anyhow::anyhow <span class="kw">as </span>format_err;
-<span class="kw">use </span>bitcoin::{BlockHash, Network, Script, Transaction, Txid};
+<span class="kw">use </span>bitcoin::{BlockHash, Network, ScriptBuf, Transaction, Txid};
 <span class="kw">use </span>electrum_client::ElectrumApi;
 <span class="kw">use </span>electrum_client::Error::Protocol;
-<span class="kw">use </span>fedimint_core::bitcoin_migration::{
-    bitcoin29_to_bitcoin30_script, bitcoin29_to_bitcoin30_txid, bitcoin30_to_bitcoin29_block_hash,
-    bitcoin30_to_bitcoin29_transaction,
-};
 <span class="kw">use </span>fedimint_core::runtime::block_in_place;
 <span class="kw">use </span>fedimint_core::task::TaskHandle;
 <span class="kw">use </span>fedimint_core::txoproof::TxOutProof;
@@ -259,13 +244,11 @@
 
     <span class="kw">async fn </span>get_block_hash(<span class="kw-2">&amp;</span><span class="self">self</span>, height: u64) -&gt; anyhow::Result&lt;BlockHash&gt; {
         <span class="kw">let </span>result = block_in_place(|| <span class="self">self</span>.<span class="number">0</span>.block_headers(height <span class="kw">as </span>usize, <span class="number">1</span>))<span class="question-mark">?</span>;
-        <span class="prelude-val">Ok</span>(bitcoin30_to_bitcoin29_block_hash(
-            result
-                .headers
-                .first()
-                .ok_or_else(|| <span class="macro">format_err!</span>(<span class="string">"empty block headers response"</span>))<span class="question-mark">?
-                </span>.block_hash(),
-        ))
+        <span class="prelude-val">Ok</span>(result
+            .headers
+            .first()
+            .ok_or_else(|| <span class="macro">format_err!</span>(<span class="string">"empty block headers response"</span>))<span class="question-mark">?
+            </span>.block_hash())
     }
 
     <span class="kw">async fn </span>get_fee_rate(<span class="kw-2">&amp;</span><span class="self">self</span>, confirmation_target: u16) -&gt; anyhow::Result&lt;<span class="prelude-ty">Option</span>&lt;Feerate&gt;&gt; {
@@ -291,7 +274,7 @@
     }
 
     <span class="kw">async fn </span>get_tx_block_height(<span class="kw-2">&amp;</span><span class="self">self</span>, txid: <span class="kw-2">&amp;</span>Txid) -&gt; anyhow::Result&lt;<span class="prelude-ty">Option</span>&lt;u64&gt;&gt; {
-        <span class="kw">let </span>tx = block_in_place(|| <span class="self">self</span>.<span class="number">0</span>.transaction_get(<span class="kw-2">&amp;</span>bitcoin29_to_bitcoin30_txid(<span class="kw-2">*</span>txid)))
+        <span class="kw">let </span>tx = block_in_place(|| <span class="self">self</span>.<span class="number">0</span>.transaction_get(txid))
             .map_err(|error| <span class="macro">info!</span>(<span class="question-mark">?</span>error, <span class="string">"Unable to get raw transaction"</span>));
         <span class="kw">match </span>tx.ok() {
             <span class="prelude-val">None </span>=&gt; <span class="prelude-val">Ok</span>(<span class="prelude-val">None</span>),
@@ -306,24 +289,19 @@
         }
     }
 
-    <span class="kw">async fn </span>watch_script_history(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="kw">_</span>: <span class="kw-2">&amp;</span>Script) -&gt; anyhow::Result&lt;()&gt; {
+    <span class="kw">async fn </span>watch_script_history(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="kw">_</span>: <span class="kw-2">&amp;</span>ScriptBuf) -&gt; anyhow::Result&lt;()&gt; {
         <span class="comment">// no watching needed on electrs, has all the history already
         </span><span class="prelude-val">Ok</span>(())
     }
 
     <span class="kw">async fn </span>get_script_history(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        script: <span class="kw-2">&amp;</span>Script,
+        script: <span class="kw-2">&amp;</span>ScriptBuf,
     ) -&gt; anyhow::Result&lt;Vec&lt;bitcoin::Transaction&gt;&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>results = <span class="macro">vec!</span>[];
-        <span class="kw">let </span>transactions = block_in_place(|| {
-            <span class="self">self</span>.<span class="number">0
-                </span>.script_get_history(<span class="kw-2">&amp;</span>bitcoin29_to_bitcoin30_script(script.clone()))
-        })<span class="question-mark">?</span>;
+        <span class="kw">let </span>transactions = block_in_place(|| <span class="self">self</span>.<span class="number">0</span>.script_get_history(script))<span class="question-mark">?</span>;
         <span class="kw">for </span>history <span class="kw">in </span>transactions.into_iter() {
-            results.push(bitcoin30_to_bitcoin29_transaction(<span class="kw-2">&amp;</span>block_in_place(|| {
-                <span class="self">self</span>.<span class="number">0</span>.transaction_get(<span class="kw-2">&amp;</span>history.tx_hash)
-            })<span class="question-mark">?</span>));
+            results.push(block_in_place(|| <span class="self">self</span>.<span class="number">0</span>.transaction_get(<span class="kw-2">&amp;</span>history.tx_hash))<span class="question-mark">?</span>);
         }
         <span class="prelude-val">Ok</span>(results)
     }

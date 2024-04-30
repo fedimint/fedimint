@@ -168,14 +168,39 @@
 <a href="#168" id="168">168</a>
 <a href="#169" id="169">169</a>
 <a href="#170" id="170">170</a>
+<a href="#171" id="171">171</a>
+<a href="#172" id="172">172</a>
+<a href="#173" id="173">173</a>
+<a href="#174" id="174">174</a>
+<a href="#175" id="175">175</a>
+<a href="#176" id="176">176</a>
+<a href="#177" id="177">177</a>
+<a href="#178" id="178">178</a>
+<a href="#179" id="179">179</a>
+<a href="#180" id="180">180</a>
+<a href="#181" id="181">181</a>
+<a href="#182" id="182">182</a>
+<a href="#183" id="183">183</a>
+<a href="#184" id="184">184</a>
+<a href="#185" id="185">185</a>
+<a href="#186" id="186">186</a>
+<a href="#187" id="187">187</a>
+<a href="#188" id="188">188</a>
+<a href="#189" id="189">189</a>
+<a href="#190" id="190">190</a>
+<a href="#191" id="191">191</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::env;
 <span class="kw">use </span>std::io::Cursor;
 <span class="kw">use </span>std::path::PathBuf;
 
 <span class="kw">use </span>anyhow::{anyhow <span class="kw">as </span>format_err, bail};
-<span class="kw">use </span>bitcoin::{BlockHash, Network, Script, Transaction, Txid};
+<span class="kw">use </span>bitcoin::{BlockHash, Network, ScriptBuf, Transaction, Txid};
 <span class="kw">use </span>bitcoincore_rpc::bitcoincore_rpc_json::EstimateMode;
 <span class="kw">use </span>bitcoincore_rpc::{Auth, RpcApi};
+<span class="kw">use </span>fedimint_core::bitcoin_migration::{
+    bitcoin29_to_bitcoin30_block_hash, bitcoin29_to_bitcoin30_transaction,
+    bitcoin30_to_bitcoin29_script, bitcoin30_to_bitcoin29_transaction, bitcoin30_to_bitcoin29_txid,
+};
 <span class="kw">use </span>fedimint_core::encoding::Decodable;
 <span class="kw">use </span>fedimint_core::envs::FM_BITCOIND_COOKIE_FILE_ENV;
 <span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
@@ -233,7 +258,9 @@
     }
 
     <span class="kw">async fn </span>get_block_hash(<span class="kw-2">&amp;</span><span class="self">self</span>, height: u64) -&gt; anyhow::Result&lt;BlockHash&gt; {
-        block_in_place(|| <span class="self">self</span>.<span class="number">0</span>.get_block_hash(height)).map_err(anyhow::Error::from)
+        block_in_place(|| <span class="self">self</span>.<span class="number">0</span>.get_block_hash(height))
+            .map(bitcoin29_to_bitcoin30_block_hash)
+            .map_err(anyhow::Error::from)
     }
 
     <span class="kw">async fn </span>get_fee_rate(<span class="kw-2">&amp;</span><span class="self">self</span>, confirmation_target: u16) -&gt; anyhow::Result&lt;<span class="prelude-ty">Option</span>&lt;Feerate&gt;&gt; {
@@ -249,7 +276,10 @@
     <span class="kw">async fn </span>submit_transaction(<span class="kw-2">&amp;</span><span class="self">self</span>, transaction: Transaction) {
         <span class="kw">use </span>bitcoincore_rpc::jsonrpc::Error::Rpc;
         <span class="kw">use </span>bitcoincore_rpc::Error::JsonRpc;
-        <span class="kw">match </span>block_in_place(|| <span class="self">self</span>.<span class="number">0</span>.send_raw_transaction(<span class="kw-2">&amp;</span>transaction)) {
+        <span class="kw">match </span>block_in_place(|| {
+            <span class="self">self</span>.<span class="number">0
+                </span>.send_raw_transaction(<span class="kw-2">&amp;</span>bitcoin30_to_bitcoin29_transaction(<span class="kw-2">&amp;</span>transaction))
+        }) {
             <span class="comment">// Bitcoin core's RPC will return error code -27 if a transaction is already in a block.
             // This is considered a success case, so we don't surface the error log.
             //
@@ -261,8 +291,11 @@
     }
 
     <span class="kw">async fn </span>get_tx_block_height(<span class="kw-2">&amp;</span><span class="self">self</span>, txid: <span class="kw-2">&amp;</span>Txid) -&gt; anyhow::Result&lt;<span class="prelude-ty">Option</span>&lt;u64&gt;&gt; {
-        <span class="kw">let </span>info = block_in_place(|| <span class="self">self</span>.<span class="number">0</span>.get_raw_transaction_info(txid, <span class="prelude-val">None</span>))
-            .map_err(|error| <span class="macro">info!</span>(<span class="question-mark">?</span>error, <span class="string">"Unable to get raw transaction"</span>));
+        <span class="kw">let </span>info = block_in_place(|| {
+            <span class="self">self</span>.<span class="number">0
+                </span>.get_raw_transaction_info(<span class="kw-2">&amp;</span>bitcoin30_to_bitcoin29_txid(<span class="kw-2">*</span>txid), <span class="prelude-val">None</span>)
+        })
+        .map_err(|error| <span class="macro">info!</span>(<span class="question-mark">?</span>error, <span class="string">"Unable to get raw transaction"</span>));
         <span class="kw">let </span>height = <span class="kw">match </span>info.ok().and_then(|info| info.blockhash) {
             <span class="prelude-val">None </span>=&gt; <span class="prelude-val">None</span>,
             <span class="prelude-val">Some</span>(hash) =&gt; <span class="prelude-val">Some</span>(block_in_place(|| <span class="self">self</span>.<span class="number">0</span>.get_block_header_info(<span class="kw-2">&amp;</span>hash))<span class="question-mark">?</span>.height),
@@ -270,26 +303,32 @@
         <span class="prelude-val">Ok</span>(height.map(|h| h <span class="kw">as </span>u64))
     }
 
-    <span class="kw">async fn </span>watch_script_history(<span class="kw-2">&amp;</span><span class="self">self</span>, script: <span class="kw-2">&amp;</span>Script) -&gt; anyhow::Result&lt;()&gt; {
+    <span class="kw">async fn </span>watch_script_history(<span class="kw-2">&amp;</span><span class="self">self</span>, script: <span class="kw-2">&amp;</span>ScriptBuf) -&gt; anyhow::Result&lt;()&gt; {
         <span class="macro">warn!</span>(target: LOG_CORE, <span class="string">"Wallet operations are broken on bitcoind. Use different backend."</span>);
         <span class="comment">// start watching for this script in our wallet to avoid the need to rescan the
         // blockchain, labeling it so we can reference it later
         </span>block_in_place(|| {
-            <span class="self">self</span>.<span class="number">0
-                </span>.import_address_script(script, <span class="prelude-val">Some</span>(<span class="kw-2">&amp;</span>script.to_string()), <span class="prelude-val">Some</span>(<span class="bool-val">false</span>), <span class="prelude-val">None</span>)
+            <span class="self">self</span>.<span class="number">0</span>.import_address_script(
+                <span class="kw-2">&amp;</span>bitcoin30_to_bitcoin29_script(script),
+                <span class="prelude-val">Some</span>(<span class="kw-2">&amp;</span>script.to_string()),
+                <span class="prelude-val">Some</span>(<span class="bool-val">false</span>),
+                <span class="prelude-val">None</span>,
+            )
         })<span class="question-mark">?</span>;
 
         <span class="prelude-val">Ok</span>(())
     }
 
-    <span class="kw">async fn </span>get_script_history(<span class="kw-2">&amp;</span><span class="self">self</span>, script: <span class="kw-2">&amp;</span>Script) -&gt; anyhow::Result&lt;Vec&lt;Transaction&gt;&gt; {
+    <span class="kw">async fn </span>get_script_history(<span class="kw-2">&amp;</span><span class="self">self</span>, script: <span class="kw-2">&amp;</span>ScriptBuf) -&gt; anyhow::Result&lt;Vec&lt;Transaction&gt;&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>results = <span class="macro">vec!</span>[];
         <span class="kw">let </span>list = block_in_place(|| {
             <span class="self">self</span>.<span class="number">0
                 </span>.list_transactions(<span class="prelude-val">Some</span>(<span class="kw-2">&amp;</span>script.to_string()), <span class="prelude-val">None</span>, <span class="prelude-val">None</span>, <span class="prelude-val">Some</span>(<span class="bool-val">true</span>))
         })<span class="question-mark">?</span>;
         <span class="kw">for </span>tx <span class="kw">in </span>list {
-            <span class="kw">let </span>raw_tx = block_in_place(|| <span class="self">self</span>.<span class="number">0</span>.get_raw_transaction(<span class="kw-2">&amp;</span>tx.info.txid, <span class="prelude-val">None</span>))<span class="question-mark">?</span>;
+            <span class="kw">let </span>raw_tx = bitcoin29_to_bitcoin30_transaction(<span class="kw-2">&amp;</span>block_in_place(|| {
+                <span class="self">self</span>.<span class="number">0</span>.get_raw_transaction(<span class="kw-2">&amp;</span>tx.info.txid, <span class="prelude-val">None</span>)
+            })<span class="question-mark">?</span>);
             results.push(raw_tx);
         }
         <span class="prelude-val">Ok</span>(results)
@@ -297,7 +336,10 @@
 
     <span class="kw">async fn </span>get_txout_proof(<span class="kw-2">&amp;</span><span class="self">self</span>, txid: Txid) -&gt; anyhow::Result&lt;TxOutProof&gt; {
         TxOutProof::consensus_decode(
-            <span class="kw-2">&amp;mut </span>Cursor::new(block_in_place(|| <span class="self">self</span>.<span class="number">0</span>.get_tx_out_proof(<span class="kw-2">&amp;</span>[txid], <span class="prelude-val">None</span>))<span class="question-mark">?</span>),
+            <span class="kw-2">&amp;mut </span>Cursor::new(block_in_place(|| {
+                <span class="self">self</span>.<span class="number">0
+                    </span>.get_tx_out_proof(<span class="kw-2">&amp;</span>[bitcoin30_to_bitcoin29_txid(txid)], <span class="prelude-val">None</span>)
+            })<span class="question-mark">?</span>),
             <span class="kw-2">&amp;</span>ModuleDecoderRegistry::default(),
         )
         .map_err(|error| <span class="macro">format_err!</span>(<span class="string">"Could not decode tx: {}"</span>, error))

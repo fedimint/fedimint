@@ -1840,6 +1840,10 @@
 <a href="#1840" id="1840">1840</a>
 <a href="#1841" id="1841">1841</a>
 <a href="#1842" id="1842">1842</a>
+<a href="#1843" id="1843">1843</a>
+<a href="#1844" id="1844">1844</a>
+<a href="#1845" id="1845">1845</a>
+<a href="#1846" id="1846">1846</a>
 </pre></div><pre class="rust"><code><span class="kw">pub mod </span>db;
 
 <span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap};
@@ -1865,8 +1869,9 @@
 };
 <span class="kw">use </span>fedimint_bitcoind::{create_bitcoind, DynBitcoindRpc};
 <span class="kw">use </span>fedimint_core::bitcoin_migration::{
-    bitcoin29_to_bitcoin30_secp256k1_public_key, bitcoin30_to_bitcoin29_script,
-    bitcoin30_to_bitcoin29_secp256k1_public_key,
+    bitcoin29_to_bitcoin30_secp256k1_public_key, bitcoin29_to_bitcoin30_transaction,
+    bitcoin29_to_bitcoin30_txid, bitcoin30_to_bitcoin29_block_hash, bitcoin30_to_bitcoin29_network,
+    bitcoin30_to_bitcoin29_script, bitcoin30_to_bitcoin29_secp256k1_public_key,
 };
 <span class="kw">use </span>fedimint_core::config::{
     ConfigGenModuleParams, DkgResult, ServerModuleConfig, ServerModuleConsensusConfig,
@@ -2632,10 +2637,12 @@
 
         <span class="kw">let </span>bitcoind_rpc = bitcoind;
 
-        <span class="kw">let </span>bitcoind_net = bitcoind_rpc
-            .get_network()
-            .<span class="kw">await
-            </span>.map_err(|e| WalletCreationError::RpcError(e.to_string()))<span class="question-mark">?</span>;
+        <span class="kw">let </span>bitcoind_net = bitcoin30_to_bitcoin29_network(
+            bitcoind_rpc
+                .get_network()
+                .<span class="kw">await
+                </span>.map_err(|e| WalletCreationError::RpcError(e.to_string()))<span class="question-mark">?</span>,
+        );
         <span class="kw">if </span>bitcoind_net != cfg.consensus.network {
             <span class="kw">return </span><span class="prelude-val">Err</span>(WalletCreationError::WrongNetwork(
                 cfg.consensus.network,
@@ -2857,7 +2864,7 @@
             <span class="kw">for </span>(txid, tx) <span class="kw">in </span><span class="kw-2">&amp;</span>pending_transactions {
                 <span class="kw">if let </span><span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(tx_height)) = <span class="self">self
                     </span>.btc_rpc
-                    .get_tx_block_height(txid)
+                    .get_tx_block_height(<span class="kw-2">&amp;</span>bitcoin29_to_bitcoin30_txid(<span class="kw-2">*</span>txid))
                     .<span class="kw">await
                     </span>.map(|r| r.filter(|tx_height| <span class="kw-2">*</span>tx_height == height <span class="kw">as </span>u64))
                 {
@@ -2878,7 +2885,7 @@
             }
 
             dbtx.insert_new_entry(
-                <span class="kw-2">&amp;</span>BlockHashKey(BlockHash::from_inner(block_hash.into_inner())),
+                <span class="kw-2">&amp;</span>BlockHashKey(bitcoin30_to_bitcoin29_block_hash(block_hash)),
                 <span class="kw-2">&amp;</span>(),
             )
             .<span class="kw">await</span>;
@@ -3149,7 +3156,8 @@
                 <span class="string">"Broadcasting peg-out"</span>,
             );
             <span class="macro">trace!</span>(transaction = <span class="question-mark">?</span>tx);
-            rpc.submit_transaction(tx).<span class="kw">await</span>;
+            rpc.submit_transaction(bitcoin29_to_bitcoin30_transaction(<span class="kw-2">&amp;</span>tx))
+                .<span class="kw">await</span>;
         }
     }
 }
