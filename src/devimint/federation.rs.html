@@ -1103,6 +1103,15 @@
 <a href="#1103" id="1103">1103</a>
 <a href="#1104" id="1104">1104</a>
 <a href="#1105" id="1105">1105</a>
+<a href="#1106" id="1106">1106</a>
+<a href="#1107" id="1107">1107</a>
+<a href="#1108" id="1108">1108</a>
+<a href="#1109" id="1109">1109</a>
+<a href="#1110" id="1110">1110</a>
+<a href="#1111" id="1111">1111</a>
+<a href="#1112" id="1112">1112</a>
+<a href="#1113" id="1113">1113</a>
+<a href="#1114" id="1114">1114</a>
 </pre></div><pre class="rust"><code><span class="kw">mod </span>config;
 
 <span class="kw">use </span>std::collections::{BTreeMap, HashMap, HashSet};
@@ -1144,7 +1153,7 @@
 <span class="kw">use </span><span class="kw">super</span>::vars::utf8;
 <span class="kw">use </span><span class="kw">crate</span>::envs::{FM_CLIENT_DIR_ENV, FM_DATA_DIR_ENV};
 <span class="kw">use </span><span class="kw">crate</span>::util::{poll, FedimintdCmd};
-<span class="kw">use </span><span class="kw">crate</span>::version_constants::VERSION_0_3_0_ALPHA;
+<span class="kw">use </span><span class="kw">crate</span>::version_constants::{VERSION_0_3_0, VERSION_0_3_0_ALPHA};
 <span class="kw">use crate</span>::{poll_eq, vars};
 
 <span class="attr">#[derive(Clone)]
@@ -1683,13 +1692,22 @@
     <span class="kw">pub async fn </span>await_gateways_registered(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
         <span class="kw">let </span>start_time = Instant::now();
         <span class="macro">debug!</span>(target: LOG_DEVIMINT, <span class="string">"Awaiting LN gateways registration"</span>);
+        <span class="kw">let </span>fedimint_cli_version = <span class="kw">crate</span>::util::FedimintCli::version_or_default().<span class="kw">await</span>;
+        <span class="comment">// TODO(support:v0.3.0): remove
+        // update-gateway-cache exists only for v0.3.0
+        </span><span class="kw">let </span>command = <span class="kw">if </span>fedimint_cli_version == <span class="kw-2">*</span>VERSION_0_3_0 {
+            <span class="string">"update-gateway-cache"
+        </span>} <span class="kw">else </span>{
+            <span class="string">"list-gateways"
+        </span>};
+
         poll(<span class="string">"gateways registered"</span>, || <span class="kw">async </span>{
             <span class="kw">let </span>num_gateways = <span class="macro">cmd!</span>(
                 <span class="self">self</span>.internal_client()
                     .<span class="kw">await
                     </span>.map_err(ControlFlow::Continue)<span class="question-mark">?</span>,
-                <span class="string">"list-gateways"
-            </span>)
+                command
+            )
             .out_json()
             .<span class="kw">await
             </span>.map_err(ControlFlow::Continue)<span class="question-mark">?
