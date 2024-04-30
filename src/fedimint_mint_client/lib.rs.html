@@ -2043,6 +2043,21 @@
 <a href="#2043" id="2043">2043</a>
 <a href="#2044" id="2044">2044</a>
 <a href="#2045" id="2045">2045</a>
+<a href="#2046" id="2046">2046</a>
+<a href="#2047" id="2047">2047</a>
+<a href="#2048" id="2048">2048</a>
+<a href="#2049" id="2049">2049</a>
+<a href="#2050" id="2050">2050</a>
+<a href="#2051" id="2051">2051</a>
+<a href="#2052" id="2052">2052</a>
+<a href="#2053" id="2053">2053</a>
+<a href="#2054" id="2054">2054</a>
+<a href="#2055" id="2055">2055</a>
+<a href="#2056" id="2056">2056</a>
+<a href="#2057" id="2057">2057</a>
+<a href="#2058" id="2058">2058</a>
+<a href="#2059" id="2059">2059</a>
+<a href="#2060" id="2060">2060</a>
 </pre></div><pre class="rust"><code><span class="comment">// Backup and restore logic
 </span><span class="kw">pub mod </span>backup;
 <span class="doccomment">/// Database keys used throughout the mint client module
@@ -2695,24 +2710,36 @@
         <span class="bool-val">true
     </span>}
 
-    <span class="kw">async fn </span>create_sufficient_input(
+    <span class="kw">async fn </span>create_final_inputs_and_outputs(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>&gt;,
         operation_id: OperationId,
-        min_amount: Amount,
-    ) -&gt; anyhow::Result&lt;Vec&lt;ClientInput&lt;MintInput, MintClientStateMachines&gt;&gt;&gt; {
-        <span class="self">self</span>.create_input(dbtx, operation_id, min_amount).<span class="kw">await
-    </span>}
+        input: Amount,
+        output: Amount,
+    ) -&gt; anyhow::Result&lt;(
+        Vec&lt;ClientInput&lt;MintInput, MintClientStateMachines&gt;&gt;,
+        Vec&lt;ClientOutput&lt;MintOutput, MintClientStateMachines&gt;&gt;,
+    )&gt; {
+        <span class="kw">let </span>inputs = <span class="self">self
+            </span>.create_sufficient_input(dbtx, operation_id, output.saturating_sub(input))
+            .<span class="kw">await</span><span class="question-mark">?</span>;
 
-    <span class="kw">async fn </span>create_exact_output(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>&gt;,
-        operation_id: OperationId,
-        amount: Amount,
-    ) -&gt; Vec&lt;ClientOutput&lt;MintOutput, MintClientStateMachines&gt;&gt; {
-        <span class="comment">// FIXME: don't hardcode notes per denomination
-        </span><span class="self">self</span>.create_output(dbtx, operation_id, <span class="number">2</span>, amount).<span class="kw">await
-    </span>}
+        <span class="kw">let </span>selected_input_amount = inputs.iter().map(|input| input.amount).sum();
+
+        <span class="kw">let </span>selected_input_fee = <span class="self">self
+            </span>.cfg
+            .fee_consensus
+            .note_spend_abs
+            .mul_u64(inputs.len() <span class="kw">as </span>u64);
+
+        <span class="kw">let </span>missing_output = (input + selected_input_amount) - (output + selected_input_fee);
+
+        <span class="kw">let </span>outputs = <span class="self">self
+            </span>.create_exact_output(dbtx, operation_id, <span class="number">2</span>, missing_output)
+            .<span class="kw">await</span>;
+
+        <span class="prelude-val">Ok</span>((inputs, outputs))
+    }
 
     <span class="kw">async fn </span>await_primary_module_output(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
@@ -2767,35 +2794,55 @@
 }
 
 <span class="kw">impl </span>MintClientModule {
-    <span class="doccomment">/// Returns the number of held e-cash notes per denomination
-    </span><span class="kw">pub async fn </span>get_wallet_summary(<span class="kw-2">&amp;</span><span class="self">self</span>, dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>&gt;) -&gt; TieredSummary {
-        dbtx.find_by_prefix(<span class="kw-2">&amp;</span>NoteKeyPrefix)
-            .<span class="kw">await
-            </span>.fold(
-                TieredSummary::default(),
-                |<span class="kw-2">mut </span>acc, (key, _note)| <span class="kw">async move </span>{
-                    acc.inc(key.amount, <span class="number">1</span>);
-                    acc
-                },
-            )
-            .<span class="kw">await
-    </span>}
+    <span class="kw">async fn </span>create_sufficient_input(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>&gt;,
+        operation_id: OperationId,
+        min_amount: Amount,
+    ) -&gt; anyhow::Result&lt;Vec&lt;ClientInput&lt;MintInput, MintClientStateMachines&gt;&gt;&gt; {
+        <span class="kw">if </span>min_amount == Amount::ZERO {
+            <span class="kw">return </span><span class="prelude-val">Ok</span>(Vec::new());
+        }
+
+        <span class="kw">let </span>selected_notes = <span class="self">Self</span>::select_notes(
+            dbtx,
+            <span class="kw-2">&amp;</span>SelectNotesWithAtleastAmount,
+            min_amount,
+            <span class="self">self</span>.cfg.fee_consensus.note_spend_abs,
+        )
+        .<span class="kw">await</span><span class="question-mark">?</span>;
+
+        <span class="kw">for </span>(amount, note) <span class="kw">in </span>selected_notes.iter_items() {
+            dbtx.remove_entry(<span class="kw-2">&amp;</span>NoteKey {
+                amount,
+                nonce: note.nonce(),
+            })
+            .<span class="kw">await</span>;
+        }
+
+        <span class="kw">let </span>inputs = <span class="self">self
+            </span>.create_input_from_notes(operation_id, selected_notes)
+            .<span class="kw">await</span><span class="question-mark">?</span>;
+
+        <span class="macro">assert!</span>(!inputs.is_empty());
+
+        <span class="prelude-val">Ok</span>(inputs)
+    }
 
     <span class="comment">// TODO: put "notes per denomination" default into cfg
     </span><span class="doccomment">/// Creates a mint output with exactly the given `amount`, issuing e-cash
     /// notes such that the client holds `notes_per_denomination` notes of each
     /// e-cash note denomination held.
-    </span><span class="kw">pub async fn </span>create_output(
+    </span><span class="kw">pub async fn </span>create_exact_output(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>&gt;,
         operation_id: OperationId,
         notes_per_denomination: u16,
         exact_amount: Amount,
     ) -&gt; Vec&lt;ClientOutput&lt;MintOutput, MintClientStateMachines&gt;&gt; {
-        <span class="macro">assert!</span>(
-            exact_amount &gt; Amount::ZERO,
-            <span class="string">"zero-amount outputs are not supported"
-        </span>);
+        <span class="kw">if </span>exact_amount == Amount::ZERO {
+            <span class="kw">return </span>Vec::new();
+        }
 
         <span class="kw">let </span>denominations = TieredSummary::represent_amount(
             exact_amount,
@@ -2836,8 +2883,24 @@
             }
         }
 
+        <span class="macro">assert!</span>(!outputs.is_empty());
+
         outputs
     }
+
+    <span class="doccomment">/// Returns the number of held e-cash notes per denomination
+    </span><span class="kw">pub async fn </span>get_wallet_summary(<span class="kw-2">&amp;</span><span class="self">self</span>, dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>&gt;) -&gt; TieredSummary {
+        dbtx.find_by_prefix(<span class="kw-2">&amp;</span>NoteKeyPrefix)
+            .<span class="kw">await
+            </span>.fold(
+                TieredSummary::default(),
+                |<span class="kw-2">mut </span>acc, (key, _note)| <span class="kw">async move </span>{
+                    acc.inc(key.amount, <span class="number">1</span>);
+                    acc
+                },
+            )
+            .<span class="kw">await
+    </span>}
 
     <span class="doccomment">/// Wait for the e-cash notes to be retrieved. If this is not possible
     /// because another terminal state was reached an error describing the
@@ -2873,39 +2936,6 @@
         <span class="macro">pin_mut!</span>(stream);
 
         stream.next_or_pending().<span class="kw">await
-    </span>}
-
-    <span class="comment">// FIXME: use lazy e-cash note loading implemented in #2183
-    </span><span class="doccomment">/// Creates a mint input of at least `min_amount`.
-    </span><span class="kw">pub async fn </span>create_input(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>&gt;,
-        operation_id: OperationId,
-        min_amount: Amount,
-    ) -&gt; anyhow::Result&lt;Vec&lt;ClientInput&lt;MintInput, MintClientStateMachines&gt;&gt;&gt; {
-        <span class="macro">assert!</span>(
-            min_amount &gt; Amount::ZERO,
-            <span class="string">"zero-amount inputs are not supported"
-        </span>);
-
-        <span class="kw">let </span>selected_notes = <span class="self">Self</span>::select_notes(
-            dbtx,
-            <span class="kw-2">&amp;</span>SelectNotesWithAtleastAmount,
-            min_amount,
-            <span class="self">self</span>.cfg.fee_consensus.note_spend_abs,
-        )
-        .<span class="kw">await</span><span class="question-mark">?</span>;
-
-        <span class="kw">for </span>(amount, note) <span class="kw">in </span>selected_notes.iter_items() {
-            dbtx.remove_entry(<span class="kw-2">&amp;</span>NoteKey {
-                amount,
-                nonce: note.nonce(),
-            })
-            .<span class="kw">await</span>;
-        }
-
-        <span class="self">self</span>.create_input_from_notes(operation_id, selected_notes)
-            .<span class="kw">await
     </span>}
 
     <span class="doccomment">/// Create a mint input from external, potentially untrusted notes

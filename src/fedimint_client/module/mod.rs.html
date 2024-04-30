@@ -869,34 +869,6 @@
 <a href="#869" id="869">869</a>
 <a href="#870" id="870">870</a>
 <a href="#871" id="871">871</a>
-<a href="#872" id="872">872</a>
-<a href="#873" id="873">873</a>
-<a href="#874" id="874">874</a>
-<a href="#875" id="875">875</a>
-<a href="#876" id="876">876</a>
-<a href="#877" id="877">877</a>
-<a href="#878" id="878">878</a>
-<a href="#879" id="879">879</a>
-<a href="#880" id="880">880</a>
-<a href="#881" id="881">881</a>
-<a href="#882" id="882">882</a>
-<a href="#883" id="883">883</a>
-<a href="#884" id="884">884</a>
-<a href="#885" id="885">885</a>
-<a href="#886" id="886">886</a>
-<a href="#887" id="887">887</a>
-<a href="#888" id="888">888</a>
-<a href="#889" id="889">889</a>
-<a href="#890" id="890">890</a>
-<a href="#891" id="891">891</a>
-<a href="#892" id="892">892</a>
-<a href="#893" id="893">893</a>
-<a href="#894" id="894">894</a>
-<a href="#895" id="895">895</a>
-<a href="#896" id="896">896</a>
-<a href="#897" id="897">897</a>
-<a href="#898" id="898">898</a>
-<a href="#899" id="899">899</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>core::fmt;
 <span class="kw">use </span>std::any::Any;
 <span class="kw">use </span>std::fmt::Debug;
@@ -1468,8 +1440,7 @@
     ///
     /// If it does it must implement:
     ///
-    /// * [`Self::create_sufficient_input`]
-    /// * [`Self::create_exact_output`]
+    /// * [`Self::create_final_inputs_and_outputs`]
     /// * [`Self::await_primary_module_output`]
     /// * [`Self::get_balance`]
     /// * [`Self::subscribe_balance_changes`]
@@ -1477,52 +1448,40 @@
         <span class="bool-val">false
     </span>}
 
-    <span class="doccomment">/// Creates an input of **at least** a given `min_amount` from the holdings
-    /// managed by the module.
+    <span class="doccomment">/// Creates all inputs and outputs necessary to balance the transaction.
+    /// The function returns an error if and only if the client's funds are not
+    /// sufficient to create the inputs necessary to fully fund the transaction.
     ///
-    /// If successful it returns:
+    /// A returned input also contains:
     /// * A set of private keys belonging to the input for signing the
     ///   transaction
-    /// * The input of **at least** `min_amount`, the actual amount might be
-    ///   larger, the caller has to handle this case and possibly generate
-    ///   change using `create_change_output`.
     /// * A closure that generates states belonging to the input. This closure
     ///   takes the transaction id of the transaction in which the input was
     ///   used and the input index as input since these cannot be known at time
     ///   of calling `create_funding_input` and have to be injected later.
     ///
-    /// The function returns an error if the client's funds are not sufficient
-    /// to create the requested input.
-    </span><span class="kw">async fn </span>create_sufficient_input(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        _dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>&gt;,
-        _operation_id: OperationId,
-        _min_amount: Amount,
-    ) -&gt; anyhow::Result&lt;Vec&lt;ClientInput&lt;&lt;<span class="self">Self</span>::Common <span class="kw">as </span>ModuleCommon&gt;::Input, <span class="self">Self</span>::States&gt;&gt;&gt; {
-        <span class="macro">unimplemented!</span>()
-    }
-
-    <span class="doccomment">/// Creates an output of **exactly** `amount` that will pay into the
-    /// holdings managed by the module.
-    ///
-    /// It returns:
-    /// * The output of **exactly** `amount`.
+    /// A returned output also contains:
     /// * A closure that generates states belonging to the output. This closure
     ///   takes the transaction id of the transaction in which the output was
     ///   used and the output index as input since these cannot be known at time
     ///   of calling `create_change_output` and have to be injected later.
-    </span><span class="kw">async fn </span>create_exact_output(
+
+    </span><span class="kw">async fn </span>create_final_inputs_and_outputs(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         _dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>&gt;,
         _operation_id: OperationId,
-        _amount: Amount,
-    ) -&gt; Vec&lt;ClientOutput&lt;&lt;<span class="self">Self</span>::Common <span class="kw">as </span>ModuleCommon&gt;::Output, <span class="self">Self</span>::States&gt;&gt; {
+        _input_amount: Amount,
+        _output_amount: Amount,
+    ) -&gt; anyhow::Result&lt;(
+        Vec&lt;ClientInput&lt;&lt;<span class="self">Self</span>::Common <span class="kw">as </span>ModuleCommon&gt;::Input, <span class="self">Self</span>::States&gt;&gt;,
+        Vec&lt;ClientOutput&lt;&lt;<span class="self">Self</span>::Common <span class="kw">as </span>ModuleCommon&gt;::Output, <span class="self">Self</span>::States&gt;&gt;,
+    )&gt; {
         <span class="macro">unimplemented!</span>()
     }
 
     <span class="doccomment">/// Waits for the funds from an output created by
-    /// [`Self::create_exact_output`] to become available. This function
-    /// returning typically implies a change in the output of
+    /// [`Self::create_final_inputs_and_outputs`] to become available. This
+    /// function returning typically implies a change in the output of
     /// [`Self::get_balance`].
     </span><span class="kw">async fn </span>await_primary_module_output(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
@@ -1627,21 +1586,14 @@
 
     <span class="kw">fn </span>supports_being_primary(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool;
 
-    <span class="kw">async fn </span>create_sufficient_input(
+    <span class="kw">async fn </span>create_final_inputs_and_outputs(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         module_instance: ModuleInstanceId,
         dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>&gt;,
         operation_id: OperationId,
-        min_amount: Amount,
-    ) -&gt; anyhow::Result&lt;Vec&lt;ClientInput&gt;&gt;;
-
-    <span class="kw">async fn </span>create_exact_output(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        module_instance: ModuleInstanceId,
-        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>&gt;,
-        operation_id: OperationId,
-        amount: Amount,
-    ) -&gt; Vec&lt;ClientOutput&gt;;
+        input_amount: Amount,
+        output_amount: Amount,
+    ) -&gt; anyhow::Result&lt;(Vec&lt;ClientInput&gt;, Vec&lt;ClientOutput&gt;)&gt;;
 
     <span class="kw">async fn </span>await_primary_module_output(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
@@ -1720,42 +1672,34 @@
         &lt;T <span class="kw">as </span>ClientModule&gt;::supports_being_primary(<span class="self">self</span>)
     }
 
-    <span class="kw">async fn </span>create_sufficient_input(
+    <span class="kw">async fn </span>create_final_inputs_and_outputs(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         module_instance: ModuleInstanceId,
         dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>&gt;,
         operation_id: OperationId,
-        min_amount: Amount,
-    ) -&gt; anyhow::Result&lt;Vec&lt;ClientInput&gt;&gt; {
-        <span class="prelude-val">Ok</span>(&lt;T <span class="kw">as </span>ClientModule&gt;::create_sufficient_input(
+        input_amount: Amount,
+        output_amount: Amount,
+    ) -&gt; anyhow::Result&lt;(Vec&lt;ClientInput&gt;, Vec&lt;ClientOutput&gt;)&gt; {
+        <span class="kw">let </span>(inputs, outputs) = &lt;T <span class="kw">as </span>ClientModule&gt;::create_final_inputs_and_outputs(
             <span class="self">self</span>,
             <span class="kw-2">&amp;mut </span>dbtx.to_ref_with_prefix_module_id(module_instance),
             operation_id,
-            min_amount,
+            input_amount,
+            output_amount,
         )
-        .<span class="kw">await</span><span class="question-mark">?
-        </span>.into_iter()
-        .map(|input| input.into_dyn(module_instance))
-        .collect())
-    }
+        .<span class="kw">await</span><span class="question-mark">?</span>;
 
-    <span class="kw">async fn </span>create_exact_output(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        module_instance: ModuleInstanceId,
-        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>&gt;,
-        operation_id: OperationId,
-        amount: Amount,
-    ) -&gt; Vec&lt;ClientOutput&gt; {
-        &lt;T <span class="kw">as </span>ClientModule&gt;::create_exact_output(
-            <span class="self">self</span>,
-            <span class="kw-2">&amp;mut </span>dbtx.to_ref_with_prefix_module_id(module_instance),
-            operation_id,
-            amount,
-        )
-        .<span class="kw">await
-        </span>.into_iter()
-        .map(|output| output.into_dyn(module_instance))
-        .collect()
+        <span class="kw">let </span>inputs = inputs
+            .into_iter()
+            .map(|input| input.into_dyn(module_instance))
+            .collect::&lt;Vec&lt;ClientInput&gt;&gt;();
+
+        <span class="kw">let </span>outputs = outputs
+            .into_iter()
+            .map(|output| output.into_dyn(module_instance))
+            .collect::&lt;Vec&lt;ClientOutput&gt;&gt;();
+
+        <span class="prelude-val">Ok</span>((inputs, outputs))
     }
 
     <span class="kw">async fn </span>await_primary_module_output(

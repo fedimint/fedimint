@@ -752,7 +752,7 @@
     <span class="kw">let </span>operation_id = OperationId::new_random();
     <span class="kw">for _ in </span><span class="number">0</span>..quantity {
         <span class="kw">let </span>outputs = mint_client
-            .create_output(
+            .create_exact_output(
                 <span class="kw-2">&amp;mut </span>module_transaction.to_ref_nc(),
                 operation_id,
                 <span class="number">1</span>,

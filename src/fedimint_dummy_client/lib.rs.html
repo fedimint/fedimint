@@ -382,7 +382,9 @@
 <a href="#382" id="382">382</a>
 <a href="#383" id="383">383</a>
 <a href="#384" id="384">384</a>
-</pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
+<a href="#385" id="385">385</a>
+</pre></div><pre class="rust"><code><span class="kw">use </span>core::cmp::Ordering;
+<span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
 
@@ -464,53 +466,72 @@
         <span class="bool-val">true
     </span>}
 
-    <span class="kw">async fn </span>create_sufficient_input(
+    <span class="kw">async fn </span>create_final_inputs_and_outputs(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>&gt;,
-        id: OperationId,
-        amount: Amount,
-    ) -&gt; anyhow::Result&lt;Vec&lt;ClientInput&lt;&lt;<span class="self">Self</span>::Common <span class="kw">as </span>ModuleCommon&gt;::Input, <span class="self">Self</span>::States&gt;&gt;&gt; {
+        operation_id: OperationId,
+        input_amount: Amount,
+        output_amount: Amount,
+    ) -&gt; anyhow::Result&lt;(
+        Vec&lt;ClientInput&lt;DummyInput, DummyStateMachine&gt;&gt;,
+        Vec&lt;ClientOutput&lt;DummyOutput, DummyStateMachine&gt;&gt;,
+    )&gt; {
         dbtx.ensure_isolated().expect(<span class="string">"must be isolated"</span>);
 
-        <span class="comment">// Check and subtract from our funds
-        </span><span class="kw">let </span>funds = get_funds(dbtx).<span class="kw">await</span>;
-        <span class="kw">if </span>funds &lt; amount {
-            <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="macro">format_err!</span>(<span class="string">"Insufficient funds"</span>));
+        <span class="kw">match </span>input_amount.cmp(<span class="kw-2">&amp;</span>output_amount) {
+            Ordering::Less =&gt; {
+                <span class="kw">let </span>missing_input_amount = output_amount - input_amount;
+
+                <span class="comment">// Check and subtract from our funds
+                </span><span class="kw">let </span>our_funds = get_funds(dbtx).<span class="kw">await</span>;
+
+                <span class="kw">if </span>our_funds &lt; missing_input_amount {
+                    <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="macro">format_err!</span>(<span class="string">"Insufficient funds"</span>));
+                }
+
+                <span class="kw">let </span>updated = our_funds - missing_input_amount;
+
+                dbtx.insert_entry(<span class="kw-2">&amp;</span>DummyClientFundsKeyV1, <span class="kw-2">&amp;</span>updated).<span class="kw">await</span>;
+
+                <span class="kw">let </span>input = ClientInput {
+                    input: DummyInput {
+                        amount: missing_input_amount,
+                        account: <span class="self">self</span>.key.public_key(),
+                    },
+                    amount: missing_input_amount,
+                    keys: <span class="macro">vec!</span>[bitcoin30_to_bitcoin29_keypair(<span class="self">self</span>.key)],
+                    state_machines: Arc::new(<span class="kw">move </span>|txid, <span class="kw">_</span>| {
+                        <span class="macro">vec!</span>[DummyStateMachine::Input(
+                            missing_input_amount,
+                            txid,
+                            operation_id,
+                        )]
+                    }),
+                };
+
+                <span class="prelude-val">Ok</span>((<span class="macro">vec!</span>[input], Vec::new()))
+            }
+            Ordering::Equal =&gt; <span class="prelude-val">Ok</span>((Vec::new(), Vec::new())),
+            Ordering::Greater =&gt; {
+                <span class="kw">let </span>missing_output_amount = input_amount - output_amount;
+                <span class="kw">let </span>output = ClientOutput {
+                    output: DummyOutput {
+                        amount: missing_output_amount,
+                        account: <span class="self">self</span>.key.public_key(),
+                    },
+                    amount: missing_output_amount,
+                    state_machines: Arc::new(<span class="kw">move </span>|txid, <span class="kw">_</span>| {
+                        <span class="macro">vec!</span>[DummyStateMachine::Output(
+                            missing_output_amount,
+                            txid,
+                            operation_id,
+                        )]
+                    }),
+                };
+
+                <span class="prelude-val">Ok</span>((Vec::new(), <span class="macro">vec!</span>[output]))
+            }
         }
-        <span class="kw">let </span>updated = funds - amount;
-        dbtx.insert_entry(<span class="kw-2">&amp;</span>DummyClientFundsKeyV1, <span class="kw-2">&amp;</span>updated).<span class="kw">await</span>;
-
-        <span class="comment">// Construct input and state machine to track the tx
-        </span><span class="prelude-val">Ok</span>(<span class="macro">vec!</span>[ClientInput {
-            input: DummyInput {
-                amount,
-                account: <span class="self">self</span>.key.public_key(),
-            },
-            amount,
-            keys: <span class="macro">vec!</span>[bitcoin30_to_bitcoin29_keypair(<span class="self">self</span>.key)],
-            state_machines: Arc::new(<span class="kw">move </span>|txid, <span class="kw">_</span>| {
-                <span class="macro">vec!</span>[DummyStateMachine::Input(amount, txid, id)]
-            }),
-        }])
-    }
-
-    <span class="kw">async fn </span>create_exact_output(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        _dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>&gt;,
-        id: OperationId,
-        amount: Amount,
-    ) -&gt; Vec&lt;ClientOutput&lt;&lt;<span class="self">Self</span>::Common <span class="kw">as </span>ModuleCommon&gt;::Output, <span class="self">Self</span>::States&gt;&gt; {
-        <span class="comment">// Construct output and state machine to track the tx
-        </span><span class="macro">vec!</span>[ClientOutput {
-            output: DummyOutput {
-                amount,
-                account: <span class="self">self</span>.key.public_key(),
-            },
-            amount,
-            state_machines: Arc::new(<span class="kw">move </span>|txid, <span class="kw">_</span>| {
-                <span class="macro">vec!</span>[DummyStateMachine::Output(amount, txid, id)]
-            }),
-        }]
     }
 
     <span class="kw">async fn </span>await_primary_module_output(
@@ -611,25 +632,8 @@
     <span class="doccomment">/// Send money to another user
     </span><span class="kw">pub async fn </span>send_money(<span class="kw-2">&amp;</span><span class="self">self</span>, account: PublicKey, amount: Amount) -&gt; anyhow::Result&lt;OutPoint&gt; {
         <span class="self">self</span>.db.ensure_isolated().expect(<span class="string">"must be isolated"</span>);
-        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.db.begin_transaction().<span class="kw">await</span>;
+
         <span class="kw">let </span>op_id = OperationId(rand::random());
-
-        <span class="comment">// TODO: Building a tx could be easier
-        // Create input using our own account
-        </span><span class="kw">let </span>inputs = <span class="self">self
-            </span>.client_ctx
-            .map_dyn(
-                fedimint_client::module::ClientModule::create_sufficient_input(
-                    <span class="self">self</span>,
-                    <span class="kw-2">&amp;mut </span>dbtx.to_ref_nc(),
-                    op_id,
-                    amount,
-                )
-                .<span class="kw">await</span><span class="question-mark">?</span>,
-            )
-            .collect();
-
-        dbtx.commit_tx().<span class="kw">await</span>;
 
         <span class="comment">// Create output using another account
         </span><span class="kw">let </span>output = ClientOutput {
@@ -639,9 +643,7 @@
         };
 
         <span class="comment">// Build and send tx to the fed
-        </span><span class="kw">let </span>tx = TransactionBuilder::new()
-            .with_inputs(inputs)
-            .with_output(<span class="self">self</span>.client_ctx.make_client_output(output));
+        </span><span class="kw">let </span>tx = TransactionBuilder::new().with_output(<span class="self">self</span>.client_ctx.make_client_output(output));
 
         <span class="kw">let </span>outpoint = |txid, <span class="kw">_</span>| OutPoint { txid, out_idx: <span class="number">0 </span>};
         <span class="kw">let </span>(txid, <span class="kw">_</span>) = <span class="self">self
