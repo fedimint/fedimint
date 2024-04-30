@@ -168,7 +168,7 @@ export -f bckn_bitcoind_lnv2
 function bckn_gw_client() {
   # backend tests don't support different versions, so we skip for backwards-compatibility tests
   if [ -z "${FM_BACKWARDS_COMPATIBILITY_TEST:-}" ]; then
-    fm-run-test "${FUNCNAME[0]}" env FM_TEST_ONLY=bitcoind-ln-gateway FM_BITCOIND_gw_TEST_ONLY=gateway-client ./scripts/tests/backend-test.sh
+    fm-run-test "${FUNCNAME[0]}" env FM_TEST_ONLY=bitcoind-ln-gateway FM_BITCOIND_GW_TEST_ONLY=gateway-client ./scripts/tests/backend-test.sh
   fi
 }
 export -f bckn_gw_client
@@ -176,7 +176,7 @@ export -f bckn_gw_client
 function bckn_gw_not_client() {
   # backend tests don't support different versions, so we skip for backwards-compatibility tests
   if [ -z "${FM_BACKWARDS_COMPATIBILITY_TEST:-}" ]; then
-    fm-run-test "${FUNCNAME[0]}" env FM_TEST_ONLY=bitcoind-ln-gateway  FM_BITCOIND_gw_TEST_ONLY=not-gateway-client ./scripts/tests/backend-test.sh
+    fm-run-test "${FUNCNAME[0]}" env FM_TEST_ONLY=bitcoind-ln-gateway FM_BITCOIND_GW_TEST_ONLY=not-gateway-client ./scripts/tests/backend-test.sh
   fi
 }
 export -f bckn_gw_not_client

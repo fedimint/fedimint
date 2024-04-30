@@ -64,14 +64,14 @@ function run_tests() {
     # since it's being ran serially, these tests take a while, so we split them into two
     # parts that test-ci-alll runs in parallel
 
-    if [ -z "${FM_BITCOIND_LN_GATEWAY_TEST_ONLY:-}" ] || [ "${FM_BITCOIND_LN_GATEWAY_TEST_ONLY:-}" = "gateway-client" ]; then
+    if [ -z "${FM_BITCOIND_GW_TEST_ONLY:-}" ] || [ "${FM_BITCOIND_GW_TEST_ONLY:-}" = "gateway-client" ]; then
       cargo nextest run --locked --workspace --all-targets \
         ${CARGO_PROFILE:+--cargo-profile ${CARGO_PROFILE}} ${CARGO_PROFILE:+--profile ${CARGO_PROFILE}} \
         ${TEST_ARGS_SERIALIZED} \
         -E 'package(fedimint-ln-gateway) & test(gateway_client)'
     fi
 
-    if [ -z "${FM_BITCOIND_LN_GATEWAY_TEST_ONLY:-}" ] || [ "${FM_BITCOIND_LN_GATEWAY_TEST_ONLY:-}" = "not-gateway-client" ]; then
+    if [ -z "${FM_BITCOIND_GW_TEST_ONLY:-}" ] || [ "${FM_BITCOIND_GW_TEST_ONLY:-}" = "not-gateway-client" ]; then
       cargo nextest run --locked --workspace --all-targets \
         ${CARGO_PROFILE:+--cargo-profile ${CARGO_PROFILE}} ${CARGO_PROFILE:+--profile ${CARGO_PROFILE}} \
         ${TEST_ARGS_SERIALIZED} \
