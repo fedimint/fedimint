@@ -186,11 +186,10 @@ pub(crate) fn get_v2_migrated_state(
 mod tests {
     use std::str::FromStr;
 
-    use bitcoin29::hashes::Hash;
     use fedimint_client::db::migrate_state;
     use fedimint_core::core::{IntoDynInstance, OperationId};
     use fedimint_core::encoding::Encodable;
-    use fedimint_core::TransactionId;
+    use fedimint_core::{BitcoinHash, TransactionId};
     use lightning_invoice::Bolt11Invoice;
     use rand::thread_rng;
     use secp256k1::KeyPair;

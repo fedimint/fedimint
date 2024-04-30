@@ -799,7 +799,7 @@ mod tests {
         )
         .expect("Failed to parse bitcoin v30 sha256 hash");
 
-        // Assert that bitcoin30->bitcoin29 sha256 hash is the same as native bitcoin30
+        // Assert that bitcoin30->bitcoin29 sha256 hash is the same as native bitcoin29
         // sha256 hash.
         assert_eq!(
             bitcoin29_hash,

@@ -1,6 +1,7 @@
 use std::fmt::Display;
 use std::sync::Arc;
 
+use bitcoin::hashes::Hash;
 use bitcoin_hashes::sha256;
 use fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
 use fedimint_client::transaction::{ClientInput, ClientOutput};
@@ -415,10 +416,7 @@ impl GatewayPayInvoice {
                         invoice: invoice.to_string(),
                         max_delay,
                         max_fee_msat: max_fee.msats,
-                        payment_hash: bitcoin30_to_bitcoin29_sha256_hash(
-                            payment_data.payment_hash(),
-                        )
-                        .to_vec(),
+                        payment_hash: payment_data.payment_hash().to_byte_array().to_vec(),
                     })
                     .await
             }
