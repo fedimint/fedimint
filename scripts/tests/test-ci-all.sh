@@ -125,77 +125,77 @@ function load_test_tool_test() {
 }
 export -f load_test_tool_test
 
-function backend_test_bitcoind_dummy() {
+function bckn_bitcoind_dummy() {
   # backend tests don't support different versions, so we skip for backwards-compatibility tests
   if [ -z "${FM_BACKWARDS_COMPATIBILITY_TEST:-}" ]; then
     fm-run-test "${FUNCNAME[0]}" env FM_TEST_ONLY=bitcoind FM_BITCOIND_TEST_ONLY=dummy ./scripts/tests/backend-test.sh
   fi
 }
-export -f backend_test_bitcoind_dummy
+export -f bckn_bitcoind_dummy
 
-function backend_test_bitcoind_mint() {
+function bckn_bitcoind_mint() {
   # backend tests don't support different versions, so we skip for backwards-compatibility tests
   if [ -z "${FM_BACKWARDS_COMPATIBILITY_TEST:-}" ]; then
     fm-run-test "${FUNCNAME[0]}" env FM_TEST_ONLY=bitcoind FM_BITCOIND_TEST_ONLY=mint ./scripts/tests/backend-test.sh
   fi
 }
-export -f backend_test_bitcoind_mint
+export -f bckn_bitcoind_mint
 
-function backend_test_bitcoind_wallet() {
+function bckn_bitcoind_wallet() {
   # backend tests don't support different versions, so we skip for backwards-compatibility tests
   if [ -z "${FM_BACKWARDS_COMPATIBILITY_TEST:-}" ]; then
     fm-run-test "${FUNCNAME[0]}" env FM_TEST_ONLY=bitcoind FM_BITCOIND_TEST_ONLY=wallet ./scripts/tests/backend-test.sh
   fi
 }
-export -f backend_test_bitcoind_wallet
+export -f bckn_bitcoind_wallet
 
-function backend_test_bitcoind_ln() {
+function bckn_bitcoind_ln() {
   # backend tests don't support different versions, so we skip for backwards-compatibility tests
   if [ -z "${FM_BACKWARDS_COMPATIBILITY_TEST:-}" ]; then
     fm-run-test "${FUNCNAME[0]}" env FM_TEST_ONLY=bitcoind FM_BITCOIND_TEST_ONLY=ln ./scripts/tests/backend-test.sh
   fi
 }
-export -f backend_test_bitcoind_ln
+export -f bckn_bitcoind_ln
 
-function backend_test_bitcoind_lnv2() {
+function bckn_bitcoind_lnv2() {
   # backend tests don't support different versions, so we skip for backwards-compatibility tests
   if [ -z "${FM_BACKWARDS_COMPATIBILITY_TEST:-}" ]; then
     fm-run-test "${FUNCNAME[0]}" env FM_TEST_ONLY=bitcoind FM_BITCOIND_TEST_ONLY=lnv2 ./scripts/tests/backend-test.sh
   fi
 }
-export -f backend_test_bitcoind_lnv2
+export -f bckn_bitcoind_lnv2
 
-function backend_test_ln_gateway_client() {
+function bckn_gw_client() {
   # backend tests don't support different versions, so we skip for backwards-compatibility tests
   if [ -z "${FM_BACKWARDS_COMPATIBILITY_TEST:-}" ]; then
-    fm-run-test "${FUNCNAME[0]}" env FM_TEST_ONLY=bitcoind-ln-gateway FM_BITCOIND_LN_GATEWAY_TEST_ONLY=gateway-client ./scripts/tests/backend-test.sh
+    fm-run-test "${FUNCNAME[0]}" env FM_TEST_ONLY=bitcoind-ln-gateway FM_BITCOIND_gw_TEST_ONLY=gateway-client ./scripts/tests/backend-test.sh
   fi
 }
-export -f backend_test_ln_gateway_client
+export -f bckn_gw_client
 
-function backend_test_ln_gateway_not_client() {
+function bckn_gw_not_client() {
   # backend tests don't support different versions, so we skip for backwards-compatibility tests
   if [ -z "${FM_BACKWARDS_COMPATIBILITY_TEST:-}" ]; then
-    fm-run-test "${FUNCNAME[0]}" env FM_TEST_ONLY=bitcoind-ln-gateway  FM_BITCOIND_LN_GATEWAY_TEST_ONLY=not-gateway-client ./scripts/tests/backend-test.sh
+    fm-run-test "${FUNCNAME[0]}" env FM_TEST_ONLY=bitcoind-ln-gateway  FM_BITCOIND_gw_TEST_ONLY=not-gateway-client ./scripts/tests/backend-test.sh
   fi
 }
-export -f backend_test_ln_gateway_not_client
+export -f bckn_gw_not_client
 
-function backend_test_electrs() {
+function bckn_electrs() {
   # backend tests don't support different versions, so we skip for backwards-compatibility tests
   if [ -z "${FM_BACKWARDS_COMPATIBILITY_TEST:-}" ]; then
     fm-run-test "${FUNCNAME[0]}" env FM_TEST_ONLY=electrs ./scripts/tests/backend-test.sh
   fi
 }
-export -f backend_test_electrs
+export -f bckn_electrs
 
-function backend_test_esplora() {
+function bckn_esplora() {
   # backend tests don't support different versions, so we skip for backwards-compatibility tests
   if [ -z "${FM_BACKWARDS_COMPATIBILITY_TEST:-}" ]; then
     fm-run-test "${FUNCNAME[0]}" env FM_TEST_ONLY=esplora ./scripts/tests/backend-test.sh
   fi
 }
-export -f backend_test_esplora
+export -f bckn_esplora
 
 function wasm_test() {
   if [ -z "${FM_BACKWARDS_COMPATIBILITY_TEST:-}" ]; then
@@ -250,15 +250,15 @@ tests_to_run_in_parallel+=(
   # running in xarg -P or gnu parallel. Try re-enabling in the future and see if it works.
   # Other than this problem, everything about it is working.
   # "wasm_test"
-  "backend_test_bitcoind_dummy"
-  "backend_test_bitcoind_mint"
-  "backend_test_bitcoind_wallet"
-  "backend_test_bitcoind_ln"
-  "backend_test_bitcoind_lnv2"
-  "backend_test_ln_gateway_client"
-  "backend_test_ln_gateway_not_client"
-  "backend_test_electrs"
-  "backend_test_esplora"
+  "bckn_bitcoind_dummy"
+  "bckn_bitcoind_mint"
+  "bckn_bitcoind_wallet"
+  "bckn_bitcoind_ln"
+  "bckn_bitcoind_lnv2"
+  "bckn_gw_client"
+  "bckn_gw_not_client"
+  "bckn_electrs"
+  "bckn_esplora"
   "latency_test_reissue"
   "latency_test_ln_send"
   "latency_test_ln_receive"
