@@ -1,6 +1,7 @@
 //! Map `gateway_lnrpc` protobuf types to rust types
 
 use anyhow::anyhow;
+use fedimint_core::bitcoin_migration::bitcoin30_to_bitcoin29_secp256k1_public_key;
 use secp256k1::PublicKey;
 
 impl TryFrom<crate::gateway_lnrpc::get_route_hints_response::RouteHintHop>
@@ -18,7 +19,9 @@ impl TryFrom<crate::gateway_lnrpc::get_route_hints_response::RouteHintHop>
         };
 
         Ok(Self {
-            src_node_id: PublicKey::from_slice(slice).expect("invalid source node id"),
+            src_node_id: bitcoin30_to_bitcoin29_secp256k1_public_key(
+                PublicKey::from_slice(slice).expect("invalid source node id"),
+            ),
             short_channel_id: hop.short_channel_id,
             base_msat: hop.base_msat,
             proportional_millionths: hop.proportional_millionths,

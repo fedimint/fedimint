@@ -211,7 +211,7 @@ impl ILnRpcClient for FakeLightningTest {
 
     async fn connect_to_peer(
         &self,
-        _pubkey: bitcoin::secp256k1::PublicKey,
+        _pubkey: bitcoin30::secp256k1::PublicKey,
         _host: String,
     ) -> Result<EmptyResponse, LightningRpcError> {
         unimplemented!("FakeLightningTest does not support connecting to peers")
@@ -223,7 +223,7 @@ impl ILnRpcClient for FakeLightningTest {
 
     async fn open_channel(
         &self,
-        _pubkey: bitcoin::secp256k1::PublicKey,
+        _pubkey: bitcoin30::secp256k1::PublicKey,
         _channel_size_sats: u64,
         _push_amount_sats: u64,
     ) -> Result<EmptyResponse, LightningRpcError> {

@@ -5,6 +5,7 @@ use assert_matches::assert_matches;
 use fedimint_client::Client;
 use fedimint_core::bitcoin_migration::{
     bitcoin29_to_bitcoin30_keypair, bitcoin29_to_bitcoin30_secp256k1_public_key,
+    bitcoin30_to_bitcoin29_secp256k1_public_key,
 };
 use fedimint_core::util::NextOrPending;
 use fedimint_core::{sats, Amount};
@@ -240,7 +241,14 @@ async fn gateway_protects_preimage_for_payment() -> anyhow::Result<()> {
         payment_type,
         contract_id: _,
         fee: _,
-    } = pay_invoice(&client1, invoice.clone(), Some(gw.gateway.gateway_id)).await?;
+    } = pay_invoice(
+        &client1,
+        invoice.clone(),
+        Some(bitcoin30_to_bitcoin29_secp256k1_public_key(
+            gw.gateway.gateway_id,
+        )),
+    )
+    .await?;
     match payment_type {
         PayType::Lightning(operation_id) => {
             let mut sub = client1
@@ -262,7 +270,14 @@ async fn gateway_protects_preimage_for_payment() -> anyhow::Result<()> {
         payment_type,
         contract_id: _,
         fee: _,
-    } = pay_invoice(&client2, invoice.clone(), Some(gw.gateway.gateway_id)).await?;
+    } = pay_invoice(
+        &client2,
+        invoice.clone(),
+        Some(bitcoin30_to_bitcoin29_secp256k1_public_key(
+            gw.gateway.gateway_id,
+        )),
+    )
+    .await?;
     match payment_type {
         PayType::Lightning(operation_id) => {
             let mut sub = client2
@@ -303,7 +318,14 @@ async fn cannot_pay_same_external_invoice_twice() -> anyhow::Result<()> {
         payment_type,
         contract_id: _,
         fee: _,
-    } = pay_invoice(&client, invoice.clone(), Some(gw.gateway.gateway_id)).await?;
+    } = pay_invoice(
+        &client,
+        invoice.clone(),
+        Some(bitcoin30_to_bitcoin29_secp256k1_public_key(
+            gw.gateway.gateway_id,
+        )),
+    )
+    .await?;
     match payment_type {
         PayType::Lightning(operation_id) => {
             let mut sub = client
@@ -327,7 +349,14 @@ async fn cannot_pay_same_external_invoice_twice() -> anyhow::Result<()> {
         payment_type,
         contract_id: _,
         fee: _,
-    } = pay_invoice(&client, invoice, Some(gw.gateway.gateway_id)).await?;
+    } = pay_invoice(
+        &client,
+        invoice,
+        Some(bitcoin30_to_bitcoin29_secp256k1_public_key(
+            gw.gateway.gateway_id,
+        )),
+    )
+    .await?;
     match payment_type {
         PayType::Lightning(operation_id) => {
             let mut sub = client
@@ -407,11 +436,7 @@ async fn makes_internal_payments_within_federation() -> anyhow::Result<()> {
     let gw = gateway(&fixtures, &fed).await;
 
     let ln_module = client1.get_first_module::<LightningClientModule>();
-    let ln_gateway = ln_module
-        .select_gateway(&bitcoin29_to_bitcoin30_secp256k1_public_key(
-            gw.gateway.gateway_id,
-        ))
-        .await;
+    let ln_gateway = ln_module.select_gateway(&gw.gateway.gateway_id).await;
     let desc = Description::new("with-gateway-hint".to_string())?;
     let (op, invoice, _) = ln_module
         .create_bolt11_invoice(
@@ -434,7 +459,14 @@ async fn makes_internal_payments_within_federation() -> anyhow::Result<()> {
         payment_type,
         contract_id: _,
         fee: _,
-    } = pay_invoice(&client2, invoice, Some(gw.gateway.gateway_id)).await?;
+    } = pay_invoice(
+        &client2,
+        invoice,
+        Some(bitcoin30_to_bitcoin29_secp256k1_public_key(
+            gw.gateway.gateway_id,
+        )),
+    )
+    .await?;
     match payment_type {
         PayType::Internal(op_id) => {
             let mut sub2 = client2
@@ -528,11 +560,7 @@ async fn can_receive_for_other_user() -> anyhow::Result<()> {
     let keypair = bitcoin29_to_bitcoin30_keypair(KeyPair::new_global(&mut OsRng));
 
     let ln_module = client1.get_first_module::<LightningClientModule>();
-    let ln_gateway = ln_module
-        .select_gateway(&bitcoin29_to_bitcoin30_secp256k1_public_key(
-            gw.gateway.gateway_id,
-        ))
-        .await;
+    let ln_gateway = ln_module.select_gateway(&gw.gateway.gateway_id).await;
     let desc = Description::new("with-gateway-hint".to_string())?;
     let (op, invoice, _) = ln_module
         .create_bolt11_invoice_for_user(
@@ -556,7 +584,14 @@ async fn can_receive_for_other_user() -> anyhow::Result<()> {
         payment_type,
         contract_id: _,
         fee: _,
-    } = pay_invoice(&client2, invoice, Some(gw.gateway.gateway_id)).await?;
+    } = pay_invoice(
+        &client2,
+        invoice,
+        Some(bitcoin30_to_bitcoin29_secp256k1_public_key(
+            gw.gateway.gateway_id,
+        )),
+    )
+    .await?;
     match payment_type {
         PayType::Internal(op_id) => {
             let mut sub2 = client2
@@ -603,11 +638,7 @@ async fn can_receive_for_other_user_tweaked() -> anyhow::Result<()> {
     let keypair = bitcoin29_to_bitcoin30_keypair(KeyPair::new_global(&mut OsRng));
 
     let ln_module = client1.get_first_module::<LightningClientModule>();
-    let ln_gateway = ln_module
-        .select_gateway(&bitcoin29_to_bitcoin30_secp256k1_public_key(
-            gw.gateway.gateway_id,
-        ))
-        .await;
+    let ln_gateway = ln_module.select_gateway(&gw.gateway.gateway_id).await;
     let desc = Description::new("with-gateway-hint-tweaked".to_string())?;
     let (op, invoice, _) = ln_module
         .create_bolt11_invoice_for_user_tweaked(
@@ -632,7 +663,14 @@ async fn can_receive_for_other_user_tweaked() -> anyhow::Result<()> {
         payment_type,
         contract_id: _,
         fee: _,
-    } = pay_invoice(&client2, invoice, Some(gw.gateway.gateway_id)).await?;
+    } = pay_invoice(
+        &client2,
+        invoice,
+        Some(bitcoin30_to_bitcoin29_secp256k1_public_key(
+            gw.gateway.gateway_id,
+        )),
+    )
+    .await?;
     match payment_type {
         PayType::Internal(op_id) => {
             let mut sub2 = client2
@@ -684,9 +722,15 @@ async fn rejects_wrong_network_invoice() -> anyhow::Result<()> {
     )
     .unwrap();
 
-    let error = pay_invoice(&client1, signet_invoice, Some(gw.gateway.gateway_id))
-        .await
-        .unwrap_err();
+    let error = pay_invoice(
+        &client1,
+        signet_invoice,
+        Some(bitcoin30_to_bitcoin29_secp256k1_public_key(
+            gw.gateway.gateway_id,
+        )),
+    )
+    .await
+    .unwrap_err();
     assert_eq!(
         error.to_string(),
         "Invalid invoice currency: expected=Regtest, got=Signet"

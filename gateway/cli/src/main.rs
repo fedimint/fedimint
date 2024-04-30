@@ -6,7 +6,6 @@ use bitcoin::Address;
 use clap::{CommandFactory, Parser, Subcommand};
 use fedimint_core::bitcoin_migration::{
     bitcoin30_to_bitcoin29_address, bitcoin30_to_bitcoin29_network,
-    bitcoin30_to_bitcoin29_secp256k1_public_key,
 };
 use fedimint_core::config::FederationId;
 use fedimint_core::util::{retry, ConstantBackoff, SafeUrl};
@@ -297,10 +296,7 @@ async fn main() -> anyhow::Result<()> {
         Commands::Lightning(lightning_command) => match lightning_command {
             LightningCommands::ConnectToPeer { pubkey, host } => {
                 client()
-                    .connect_to_peer(ConnectToPeerPayload {
-                        pubkey: bitcoin30_to_bitcoin29_secp256k1_public_key(pubkey),
-                        host,
-                    })
+                    .connect_to_peer(ConnectToPeerPayload { pubkey, host })
                     .await?;
             }
             LightningCommands::GetFundingAddress => {
@@ -316,7 +312,7 @@ async fn main() -> anyhow::Result<()> {
             } => {
                 client()
                     .open_channel(OpenChannelPayload {
-                        pubkey: bitcoin30_to_bitcoin29_secp256k1_public_key(pubkey),
+                        pubkey,
                         channel_size_sats,
                         push_amount_sats: push_amount_sats.unwrap_or(0),
                     })

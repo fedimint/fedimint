@@ -15,10 +15,6 @@ use fedimint_client::sm::util::MapStateTransitions;
 use fedimint_client::sm::{Context, DynState, ModuleNotifier, State, StateTransition};
 use fedimint_client::transaction::{ClientOutput, TransactionBuilder};
 use fedimint_client::{sm_enum_variant_translation, DynGlobalClientContext};
-use fedimint_core::bitcoin_migration::{
-    bitcoin29_to_bitcoin30_schnorr_signature, bitcoin29_to_bitcoin30_secp256k1_public_key,
-    bitcoin30_to_bitcoin29_keypair, bitcoin30_to_bitcoin29_message,
-};
 use fedimint_core::config::FederationId;
 use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, OperationId};
 use fedimint_core::db::{DatabaseTransaction, DatabaseVersion};
@@ -86,11 +82,10 @@ impl ClientModuleInit for GatewayClientInitV2 {
             notifier: args.notifier().clone(),
             client_ctx: args.context(),
             module_api: args.module_api().clone(),
-            keypair: bitcoin30_to_bitcoin29_keypair(
-                args.module_root_secret()
-                    .clone()
-                    .to_secp_key(secp256k1_zkp::SECP256K1),
-            ),
+            keypair: args
+                .module_root_secret()
+                .clone()
+                .to_secp_key(secp256k1_zkp::SECP256K1),
             gateway: self.gateway.clone(),
         })
     }
@@ -218,9 +213,7 @@ impl GatewayClientModuleV2 {
         // Since the following four checks may only fail due to client side
         // programming error we do not have to enable cancellation and can check
         // them before we start the state machine.
-        if payload.contract.claim_pk
-            != bitcoin29_to_bitcoin30_secp256k1_public_key(self.keypair.public_key())
-        {
+        if payload.contract.claim_pk != self.keypair.public_key() {
             bail!("The outgoing contract is keyed to another gateway");
         }
 
@@ -293,13 +286,11 @@ impl GatewayClientModuleV2 {
                     SendSMState::Cancelled(cancelled) => {
                         warn!("Outgoing lightning payment is cancelled {:?}", cancelled);
 
-                        let signature = self.keypair.sign_schnorr(bitcoin30_to_bitcoin29_message(
-                            state.common.contract.forfeit_message(),
-                        ));
+                        let signature = self
+                            .keypair
+                            .sign_schnorr(state.common.contract.forfeit_message());
 
-                        assert!(state.common.contract.verify_forfeit_signature(
-                            &bitcoin29_to_bitcoin30_schnorr_signature(signature)
-                        ));
+                        assert!(state.common.contract.verify_forfeit_signature(&signature));
 
                         return Err(signature);
                     }

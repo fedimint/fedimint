@@ -409,7 +409,7 @@ impl ClientModule for LightningClientModule {
     fn context(&self) -> Self::ModuleStateMachineContext {
         LightningClientContext {
             ln_decoder: self.decoder(),
-            redeem_key: bitcoin30_to_bitcoin29_keypair(self.redeem_key),
+            redeem_key: self.redeem_key,
             gateway_conn: self.gateway_conn.clone(),
         }
     }
@@ -1928,7 +1928,7 @@ pub async fn get_invoice(
 #[derive(Debug, Clone)]
 pub struct LightningClientContext {
     pub ln_decoder: Decoder,
-    pub redeem_key: bitcoin29::KeyPair,
+    pub redeem_key: KeyPair,
     pub gateway_conn: Arc<dyn GatewayConnection + Send + Sync>,
 }
 
