@@ -1,3 +1,4 @@
+use core::cmp::Ordering;
 use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::time::Duration;
@@ -80,53 +81,72 @@ impl ClientModule for DummyClientModule {
         true
     }
 
-    async fn create_sufficient_input(
+    async fn create_final_inputs_and_outputs(
         &self,
         dbtx: &mut DatabaseTransaction<'_>,
-        id: OperationId,
-        amount: Amount,
-    ) -> anyhow::Result<Vec<ClientInput<<Self::Common as ModuleCommon>::Input, Self::States>>> {
+        operation_id: OperationId,
+        input_amount: Amount,
+        output_amount: Amount,
+    ) -> anyhow::Result<(
+        Vec<ClientInput<DummyInput, DummyStateMachine>>,
+        Vec<ClientOutput<DummyOutput, DummyStateMachine>>,
+    )> {
         dbtx.ensure_isolated().expect("must be isolated");
 
-        // Check and subtract from our funds
-        let funds = get_funds(dbtx).await;
-        if funds < amount {
-            return Err(format_err!("Insufficient funds"));
+        match input_amount.cmp(&output_amount) {
+            Ordering::Less => {
+                let missing_input_amount = output_amount - input_amount;
+
+                // Check and subtract from our funds
+                let our_funds = get_funds(dbtx).await;
+
+                if our_funds < missing_input_amount {
+                    return Err(format_err!("Insufficient funds"));
+                }
+
+                let updated = our_funds - missing_input_amount;
+
+                dbtx.insert_entry(&DummyClientFundsKeyV1, &updated).await;
+
+                let input = ClientInput {
+                    input: DummyInput {
+                        amount: missing_input_amount,
+                        account: self.key.public_key(),
+                    },
+                    amount: missing_input_amount,
+                    keys: vec![bitcoin30_to_bitcoin29_keypair(self.key)],
+                    state_machines: Arc::new(move |txid, _| {
+                        vec![DummyStateMachine::Input(
+                            missing_input_amount,
+                            txid,
+                            operation_id,
+                        )]
+                    }),
+                };
+
+                Ok((vec![input], Vec::new()))
+            }
+            Ordering::Equal => Ok((Vec::new(), Vec::new())),
+            Ordering::Greater => {
+                let missing_output_amount = input_amount - output_amount;
+                let output = ClientOutput {
+                    output: DummyOutput {
+                        amount: missing_output_amount,
+                        account: self.key.public_key(),
+                    },
+                    amount: missing_output_amount,
+                    state_machines: Arc::new(move |txid, _| {
+                        vec![DummyStateMachine::Output(
+                            missing_output_amount,
+                            txid,
+                            operation_id,
+                        )]
+                    }),
+                };
+
+                Ok((Vec::new(), vec![output]))
+            }
         }
-        let updated = funds - amount;
-        dbtx.insert_entry(&DummyClientFundsKeyV1, &updated).await;
-
-        // Construct input and state machine to track the tx
-        Ok(vec![ClientInput {
-            input: DummyInput {
-                amount,
-                account: self.key.public_key(),
-            },
-            amount,
-            keys: vec![bitcoin30_to_bitcoin29_keypair(self.key)],
-            state_machines: Arc::new(move |txid, _| {
-                vec![DummyStateMachine::Input(amount, txid, id)]
-            }),
-        }])
-    }
-
-    async fn create_exact_output(
-        &self,
-        _dbtx: &mut DatabaseTransaction<'_>,
-        id: OperationId,
-        amount: Amount,
-    ) -> Vec<ClientOutput<<Self::Common as ModuleCommon>::Output, Self::States>> {
-        // Construct output and state machine to track the tx
-        vec![ClientOutput {
-            output: DummyOutput {
-                amount,
-                account: self.key.public_key(),
-            },
-            amount,
-            state_machines: Arc::new(move |txid, _| {
-                vec![DummyStateMachine::Output(amount, txid, id)]
-            }),
-        }]
     }
 
     async fn await_primary_module_output(
@@ -227,25 +247,8 @@ impl DummyClientModule {
     /// Send money to another user
     pub async fn send_money(&self, account: PublicKey, amount: Amount) -> anyhow::Result<OutPoint> {
         self.db.ensure_isolated().expect("must be isolated");
-        let mut dbtx = self.db.begin_transaction().await;
+
         let op_id = OperationId(rand::random());
-
-        // TODO: Building a tx could be easier
-        // Create input using our own account
-        let inputs = self
-            .client_ctx
-            .map_dyn(
-                fedimint_client::module::ClientModule::create_sufficient_input(
-                    self,
-                    &mut dbtx.to_ref_nc(),
-                    op_id,
-                    amount,
-                )
-                .await?,
-            )
-            .collect();
-
-        dbtx.commit_tx().await;
 
         // Create output using another account
         let output = ClientOutput {
@@ -255,9 +258,7 @@ impl DummyClientModule {
         };
 
         // Build and send tx to the fed
-        let tx = TransactionBuilder::new()
-            .with_inputs(inputs)
-            .with_output(self.client_ctx.make_client_output(output));
+        let tx = TransactionBuilder::new().with_output(self.client_ctx.make_client_output(output));
 
         let outpoint = |txid, _| OutPoint { txid, out_idx: 0 };
         let (txid, _) = self

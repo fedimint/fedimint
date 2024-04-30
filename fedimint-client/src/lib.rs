@@ -67,7 +67,6 @@
 //!
 //! For a hacky instantiation of a complete client see the [`ng` subcommand of `fedimint-cli`](https://github.com/fedimint/fedimint/blob/55f9d88e17d914b92a7018de677d16e57ed42bf6/fedimint-cli/src/ng.rs#L56-L73).
 
-use std::cmp::Ordering;
 use std::collections::{BTreeMap, HashSet};
 use std::fmt::{Debug, Formatter};
 use std::ops::{self, Range};
@@ -140,9 +139,8 @@ use crate::sm::{
     ClientSMDatabaseTransaction, DynState, Executor, IState, Notifier, OperationState, State,
 };
 use crate::transaction::{
-    tx_submission_sm_decoder, ClientInput, ClientOutput, TransactionBuilder,
-    TransactionBuilderBalance, TxSubmissionContext, TxSubmissionStates,
-    TRANSACTION_SUBMISSION_MODULE_INSTANCE,
+    tx_submission_sm_decoder, ClientInput, ClientOutput, TransactionBuilder, TxSubmissionContext,
+    TxSubmissionStates, TRANSACTION_SUBMISSION_MODULE_INSTANCE,
 };
 
 /// Client backup
@@ -905,15 +903,12 @@ impl Client {
         self.modules.get(instance).is_some()
     }
 
-    /// Determines if a transaction is underfunded, overfunded or balanced
+    /// Returns the input amount and output amount of a transaction
     ///
     /// # Panics
     /// If any of the input or output versions in the transaction builder are
     /// unknown by the respective module.
-    fn transaction_builder_balance(
-        &self,
-        builder: &TransactionBuilder,
-    ) -> TransactionBuilderBalance {
+    fn transaction_builder_balance(&self, builder: &TransactionBuilder) -> (Amount, Amount) {
         // FIXME: prevent overflows, currently not suitable for untrusted input
         let mut in_amount = Amount::ZERO;
         let mut out_amount = Amount::ZERO;
@@ -941,15 +936,7 @@ impl Client {
             fee_amount += item_fee;
         }
 
-        let total_out_amount = out_amount + fee_amount;
-
-        match total_out_amount.cmp(&in_amount) {
-            Ordering::Equal => TransactionBuilderBalance::Balanced,
-            Ordering::Less => TransactionBuilderBalance::Overfunded(in_amount - total_out_amount),
-            Ordering::Greater => {
-                TransactionBuilderBalance::Underfunded(total_out_amount - in_amount)
-            }
-        }
+        (in_amount, out_amount + fee_amount)
     }
 
     pub fn get_internal_payment_markers(&self) -> anyhow::Result<(PublicKey, u64)> {
@@ -1006,54 +993,33 @@ impl Client {
         operation_id: OperationId,
         mut partial_transaction: TransactionBuilder,
     ) -> anyhow::Result<(Transaction, Vec<DynState>, Range<u64>)> {
-        if let TransactionBuilderBalance::Underfunded(missing_amount) =
-            self.transaction_builder_balance(&partial_transaction)
-        {
-            let inputs = self
-                .primary_module()
-                .create_sufficient_input(
-                    self.primary_module_instance,
-                    dbtx,
-                    operation_id,
-                    missing_amount,
-                )
-                .await?;
-            partial_transaction.inputs.extend(inputs);
-        }
+        let (input_amount, output_amount) = self.transaction_builder_balance(&partial_transaction);
 
-        // This is the range of mint outputs that will be added to the transaction
+        let (added_inputs, change_outputs) = self
+            .primary_module()
+            .create_final_inputs_and_outputs(
+                self.primary_module_instance,
+                dbtx,
+                operation_id,
+                input_amount,
+                output_amount,
+            )
+            .await?;
+
+        // This is the range of  outputs that will be added to the transaction
         // in order to balance it. Notice that it may stay empty in case the transaction
         // is already balanced.
-        let mut change_range = Range {
+        let change_range = Range {
             start: partial_transaction.outputs.len() as u64,
-            end: partial_transaction.outputs.len() as u64,
+            end: (partial_transaction.outputs.len() + change_outputs.len()) as u64,
         };
 
-        if let TransactionBuilderBalance::Overfunded(excess_amount) =
-            self.transaction_builder_balance(&partial_transaction)
-        {
-            let change_outputs = self
-                .primary_module()
-                .create_exact_output(
-                    self.primary_module_instance,
-                    dbtx,
-                    operation_id,
-                    excess_amount,
-                )
-                .await;
+        partial_transaction.inputs.extend(added_inputs);
+        partial_transaction.outputs.extend(change_outputs);
 
-            // We add our new mint outputs to the change range
-            change_range.end += change_outputs.len() as u64;
-            partial_transaction.outputs.extend(change_outputs);
-        }
+        let (input_amount, output_amount) = self.transaction_builder_balance(&partial_transaction);
 
-        assert!(
-            matches!(
-                self.transaction_builder_balance(&partial_transaction),
-                TransactionBuilderBalance::Balanced
-            ),
-            "Transaction is balanced after the previous two operations"
-        );
+        assert_eq!(input_amount, output_amount, "Transaction is not balanced");
 
         let (tx, states) = partial_transaction.build(&self.secp_ctx, thread_rng());
 
