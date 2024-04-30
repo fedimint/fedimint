@@ -34,9 +34,8 @@ use fedimint_client::transaction::{ClientInput, ClientOutput, TransactionBuilder
 use fedimint_client::{sm_enum_variant_translation, DynGlobalClientContext};
 use fedimint_core::bitcoin_migration::{
     bitcoin29_to_bitcoin30_secp256k1_public_key, bitcoin29_to_bitcoin30_sha256_hash,
-    bitcoin30_to_bitcoin29_keypair, bitcoin30_to_bitcoin29_network,
-    bitcoin30_to_bitcoin29_secp256k1_public_key, bitcoin30_to_bitcoin29_secp256k1_secret_key,
-    bitcoin30_to_bitcoin29_sha256_hash,
+    bitcoin30_to_bitcoin29_network, bitcoin30_to_bitcoin29_secp256k1_public_key,
+    bitcoin30_to_bitcoin29_secp256k1_secret_key, bitcoin30_to_bitcoin29_sha256_hash,
 };
 use fedimint_core::config::FederationId;
 use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, OperationId};
@@ -1312,7 +1311,7 @@ impl LightningClientModule {
         let client_input = ClientInput::<LightningInput, LightningClientStateMachines> {
             input,
             amount: incoming_contract_account.amount,
-            keys: vec![bitcoin30_to_bitcoin29_keypair(key_pair)],
+            keys: vec![key_pair],
             state_machines: Arc::new(|_, _| vec![]),
         };
 

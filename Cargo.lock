@@ -1494,7 +1494,7 @@ dependencies = [
  "aquamarine",
  "async-stream",
  "async-trait",
- "bitcoin 0.29.2",
+ "bitcoin 0.30.2",
  "fedimint-aead",
  "fedimint-api-client",
  "fedimint-build",

@@ -13,8 +13,7 @@ use fedimint_client::transaction::{ClientInput, ClientOutput, TransactionBuilder
 use fedimint_client::ClientHandleArc;
 use fedimint_core::bitcoin_migration::{
     bitcoin29_to_bitcoin30_secp256k1_public_key, bitcoin29_to_bitcoin30_sha256_hash,
-    bitcoin30_to_bitcoin29_keypair, bitcoin30_to_bitcoin29_network,
-    bitcoin30_to_bitcoin29_secp256k1_public_key,
+    bitcoin30_to_bitcoin29_network, bitcoin30_to_bitcoin29_secp256k1_public_key,
 };
 use fedimint_core::config::FederationId;
 use fedimint_core::core::{IntoDynInstance, OperationId};
@@ -536,7 +535,7 @@ async fn test_gateway_cannot_claim_invalid_preimage() -> anyhow::Result<()> {
                 input: claim_input,
                 state_machines: Arc::new(|_, _| vec![]),
                 amount: outgoing_contract.amount,
-                keys: vec![bitcoin30_to_bitcoin29_keypair(gateway_module.redeem_key)],
+                keys: vec![gateway_module.redeem_key],
             };
 
             let tx = TransactionBuilder::new().with_input(client_input.into_dyn(gateway_module.id));

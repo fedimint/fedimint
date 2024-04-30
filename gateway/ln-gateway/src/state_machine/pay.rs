@@ -716,7 +716,7 @@ impl GatewayPayClaimOutgoingContract {
             input: claim_input,
             state_machines: Arc::new(|_, _| vec![]),
             amount: contract.amount,
-            keys: vec![context.redeem_key],
+            keys: vec![bitcoin29_to_bitcoin30_keypair(context.redeem_key)],
         };
 
         let out_points = global_context.claim_input(dbtx, client_input).await.1;
