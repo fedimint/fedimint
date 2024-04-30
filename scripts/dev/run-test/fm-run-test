@@ -37,7 +37,7 @@ on_exit() {
 trap on_error ERR
 trap on_exit EXIT
 
-command time -q --format="$time_fmt" -o "$time_out_path" timeout -k 450 500 "$@" 2>&1 | ts -s > "$test_out_path"
+command time -q --format="$time_fmt" -o "$time_out_path" timeout -k 230 245 "$@" 2>&1 | ts -s > "$test_out_path"
 
 awk 'BEGIN {FS="\t"} {printf "## STAT: %8.2fs %8dB %8dW %8dc\n", $1, $2, $3, $4}' < "$time_out_path"
 echo "## DONE: $test_name$version_str"
