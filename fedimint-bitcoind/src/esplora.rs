@@ -1,11 +1,9 @@
 use std::collections::HashMap;
 
 use anyhow::format_err;
-use bitcoin::{BlockHash, Network, Script, Transaction, Txid};
+use bitcoin::{BlockHash, Network, ScriptBuf, Transaction, Txid};
 use fedimint_core::bitcoin_migration::{
-    bitcoin29_to_bitcoin30_script, bitcoin29_to_bitcoin30_transaction, bitcoin29_to_bitcoin30_txid,
-    bitcoin30_to_bitcoin29_block_hash, bitcoin30_to_bitcoin29_block_header,
-    bitcoin30_to_bitcoin29_partial_merkle_tree, bitcoin30_to_bitcoin29_transaction,
+    bitcoin30_to_bitcoin29_block_header, bitcoin30_to_bitcoin29_partial_merkle_tree,
 };
 use fedimint_core::task::TaskHandle;
 use fedimint_core::txoproof::TxOutProof;
@@ -70,9 +68,7 @@ impl IBitcoindRpc for EsploraClient {
     }
 
     async fn get_block_hash(&self, height: u64) -> anyhow::Result<BlockHash> {
-        Ok(bitcoin30_to_bitcoin29_block_hash(
-            self.0.get_block_hash(height as u32).await?,
-        ))
+        Ok(self.0.get_block_hash(height as u32).await?)
     }
 
     async fn get_fee_rate(&self, confirmation_target: u16) -> anyhow::Result<Option<Feerate>> {
@@ -89,44 +85,40 @@ impl IBitcoindRpc for EsploraClient {
     }
 
     async fn submit_transaction(&self, transaction: Transaction) {
-        let _ = self
-            .0
-            .broadcast(&bitcoin29_to_bitcoin30_transaction(&transaction))
-            .await
-            .map_err(|error| {
-                // `esplora-client` v0.6.0 only surfaces HTTP error codes, which prevents us
-                // from detecting errors for transactions already submitted.
-                // TODO: Suppress `esplora-client` already submitted errors when client is
-                // updated
-                // https://github.com/fedimint/fedimint/issues/3732
-                info!(?error, "Error broadcasting transaction");
-            });
+        let _ = self.0.broadcast(&transaction).await.map_err(|error| {
+            // `esplora-client` v0.6.0 only surfaces HTTP error codes, which prevents us
+            // from detecting errors for transactions already submitted.
+            // TODO: Suppress `esplora-client` already submitted errors when client is
+            // updated
+            // https://github.com/fedimint/fedimint/issues/3732
+            info!(?error, "Error broadcasting transaction");
+        });
     }
 
     async fn get_tx_block_height(&self, txid: &Txid) -> anyhow::Result<Option<u64>> {
         Ok(self
             .0
-            .get_tx_status(&bitcoin29_to_bitcoin30_txid(*txid))
+            .get_tx_status(txid)
             .await?
             .block_height
             .map(|height| height as u64))
     }
 
-    async fn watch_script_history(&self, _: &Script) -> anyhow::Result<()> {
+    async fn watch_script_history(&self, _: &ScriptBuf) -> anyhow::Result<()> {
         // no watching needed, has all the history already
         Ok(())
     }
 
     async fn get_script_history(
         &self,
-        script: &Script,
+        script: &ScriptBuf,
     ) -> anyhow::Result<Vec<bitcoin::Transaction>> {
         let transactions = self
             .0
-            .scripthash_txs(&bitcoin29_to_bitcoin30_script(script.clone()), None)
+            .scripthash_txs(script, None)
             .await?
             .into_iter()
-            .map(|tx| bitcoin30_to_bitcoin29_transaction(&tx.to_tx()))
+            .map(|tx| tx.to_tx())
             .collect::<Vec<_>>();
 
         Ok(transactions)
@@ -134,7 +126,7 @@ impl IBitcoindRpc for EsploraClient {
     async fn get_txout_proof(&self, txid: Txid) -> anyhow::Result<TxOutProof> {
         let proof = self
             .0
-            .get_merkle_block(&bitcoin29_to_bitcoin30_txid(txid))
+            .get_merkle_block(&txid)
             .await?
             .ok_or(format_err!("No merkle proof found"))?;
 

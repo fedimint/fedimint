@@ -13,9 +13,14 @@ use bitcoin::{
     Address, Block, BlockHash, BlockHeader, Network, OutPoint, PackedLockTime, Script, Transaction,
     TxOut,
 };
+use bitcoin30::ScriptBuf;
 use fedimint_bitcoind::{
     register_bitcoind, DynBitcoindRpc, IBitcoindRpc, IBitcoindRpcFactory,
     Result as BitcoinRpcResult,
+};
+use fedimint_core::bitcoin_migration::{
+    bitcoin29_to_bitcoin30_block_hash, bitcoin29_to_bitcoin30_transaction,
+    bitcoin30_to_bitcoin29_script, bitcoin30_to_bitcoin29_transaction, bitcoin30_to_bitcoin29_txid,
 };
 use fedimint_core::envs::BitcoinRpcConfig;
 use fedimint_core::task::{sleep_in_test, TaskHandle};
@@ -277,29 +282,33 @@ impl BitcoinTest for FakeBitcoinTest {
 
 #[async_trait]
 impl IBitcoindRpc for FakeBitcoinTest {
-    async fn get_network(&self) -> BitcoinRpcResult<Network> {
-        Ok(Network::Regtest)
+    async fn get_network(&self) -> BitcoinRpcResult<bitcoin30::Network> {
+        Ok(bitcoin30::Network::Regtest)
     }
 
     async fn get_block_count(&self) -> BitcoinRpcResult<u64> {
         Ok(self.inner.read().unwrap().blocks.len() as u64)
     }
 
-    async fn get_block_hash(&self, height: u64) -> BitcoinRpcResult<BlockHash> {
-        Ok(self.inner.read().unwrap().blocks[height as usize]
-            .header
-            .block_hash())
+    async fn get_block_hash(&self, height: u64) -> BitcoinRpcResult<bitcoin30::BlockHash> {
+        Ok(bitcoin29_to_bitcoin30_block_hash(
+            self.inner.read().unwrap().blocks[height as usize]
+                .header
+                .block_hash(),
+        ))
     }
 
     async fn get_fee_rate(&self, _confirmation_target: u16) -> BitcoinRpcResult<Option<Feerate>> {
         Ok(Some(Feerate { sats_per_kvb: 2000 }))
     }
 
-    async fn submit_transaction(&self, transaction: Transaction) {
+    async fn submit_transaction(&self, transaction: bitcoin30::Transaction) {
         let mut inner = self.inner.write().unwrap();
-        inner.pending.push(transaction);
+        inner
+            .pending
+            .push(bitcoin30_to_bitcoin29_transaction(&transaction));
 
-        let mut filtered = BTreeMap::<Vec<OutPoint>, Transaction>::new();
+        let mut filtered = BTreeMap::<Vec<OutPoint>, bitcoin::Transaction>::new();
 
         // Simulate the mempool keeping txs with higher fees (less output)
         // TODO: This looks borked, should remove from `filtered` on higher fee or
@@ -317,28 +326,42 @@ impl IBitcoindRpc for FakeBitcoinTest {
         inner.pending = filtered.into_values().collect();
     }
 
-    async fn get_tx_block_height(&self, txid: &Txid) -> BitcoinRpcResult<Option<u64>> {
+    async fn get_tx_block_height(&self, txid: &bitcoin30::Txid) -> BitcoinRpcResult<Option<u64>> {
         for (height, block) in self.inner.read().unwrap().blocks.iter().enumerate() {
-            if block.txdata.iter().any(|tx| tx.txid() == *txid) {
+            if block
+                .txdata
+                .iter()
+                .any(|tx| tx.txid() == bitcoin30_to_bitcoin29_txid(*txid))
+            {
                 return Ok(Some(height as u64));
             }
         }
         Ok(None)
     }
 
-    async fn watch_script_history(&self, _: &Script) -> BitcoinRpcResult<()> {
+    async fn watch_script_history(&self, _: &ScriptBuf) -> BitcoinRpcResult<()> {
         Ok(())
     }
 
-    async fn get_script_history(&self, script: &Script) -> BitcoinRpcResult<Vec<Transaction>> {
+    async fn get_script_history(
+        &self,
+        script: &ScriptBuf,
+    ) -> BitcoinRpcResult<Vec<bitcoin30::Transaction>> {
         let inner = self.inner.read().unwrap();
-        let script = inner.scripts.get(script);
-        Ok(script.unwrap_or(&vec![]).clone())
+        let script = inner
+            .scripts
+            .get(&bitcoin30_to_bitcoin29_script(script))
+            .map(|txs| {
+                txs.iter()
+                    .map(bitcoin29_to_bitcoin30_transaction)
+                    .collect::<Vec<_>>()
+            });
+        Ok(script.unwrap_or_default().clone())
     }
 
-    async fn get_txout_proof(&self, txid: Txid) -> BitcoinRpcResult<TxOutProof> {
+    async fn get_txout_proof(&self, txid: bitcoin30::Txid) -> BitcoinRpcResult<TxOutProof> {
         let inner = self.inner.read().unwrap();
-        let proof = inner.proofs.get(&txid);
+        let proof = inner.proofs.get(&bitcoin30_to_bitcoin29_txid(txid));
         Ok(proof.ok_or(format_err!("No proof stored"))?.clone())
     }
 }
