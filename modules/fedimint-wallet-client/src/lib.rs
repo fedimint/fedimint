@@ -46,7 +46,6 @@ use rand::{thread_rng, Rng};
 use secp256k1::{All, Secp256k1};
 use serde::{Deserialize, Serialize};
 use strum::IntoEnumIterator;
-use tracing::warn;
 
 use crate::api::WalletFederationApi;
 use crate::client_db::NextPegInTweakIndexKey;
@@ -499,16 +498,12 @@ impl WalletClientModule {
                         None => return,
                     };
 
-                    let claiming = loop {
-                        match next_deposit_state(&mut operation_stream).await {
-                        Some(DepositStates::Claiming(claiming)) => break claiming,
+                    let claiming = match next_deposit_state(&mut operation_stream).await {
+                        Some(DepositStates::Claiming(claiming)) => claiming,
                         Some(s) => {
-                            // TODO: workaround, fix https://github.com/fedimint/fedimint/issues/5126#issuecomment-2083828644
-                            warn!("Unexpected state {s:?}");
-                            continue
+                            panic!("Unexpected state {s:?}")
                         },
                         None => return,
-                    }
                     };
                     yield DepositState::Confirmed(tx_data.clone());
 
