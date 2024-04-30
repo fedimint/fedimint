@@ -29,6 +29,7 @@ itertools = "0.12.1"
 lightning-invoice = { version = "0.30.0", features = [ "serde" ] }
 fedimint-client = { path = "../../fedimint-client" }
 fedimint-core ={ path = "../../fedimint-core" }
+fedimint-ln-common ={ path = "../fedimint-ln-common" }
 secp256k1 = { version="0.27.0", default-features=false }
 serde = { workspace = true }
 serde_json = "1.0.116"
@@ -41,6 +42,7 @@ rand = { workspace = true }
 url = { version = "2.3.1", features = ["serde"] }
 # crypto deps
 bls12_381 = { workspace = true }
+group = { workspace = true }
 rand_chacha = { workspace = true }
 tpe = { package = "fedimint-tpe", version = "=0.4.0-alpha", path = "../../crypto/tpe" }
 

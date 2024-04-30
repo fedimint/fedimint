@@ -5,6 +5,7 @@ use fedimint_core::core::ModuleKind;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::envs::BitcoinRpcConfig;
 use fedimint_core::{plugin_types_trait_impl_config, Amount, PeerId};
+use group::Curve;
 use serde::{Deserialize, Serialize};
 use tpe::{AggregatePublicKey, PublicKeyShare, SecretKeyShare};
 
@@ -105,5 +106,53 @@ impl Default for FeeConsensus {
             input: Amount::from_sats(1),
             output: Amount::from_sats(1),
         }
+    }
+}
+
+#[allow(dead_code)]
+fn migrate_config_consensus(
+    config: fedimint_ln_common::config::LightningConfigConsensus,
+    peer_count: u16,
+) -> LightningConfigConsensus {
+    LightningConfigConsensus {
+        tpe_agg_pk: AggregatePublicKey(config.threshold_pub_keys.public_key().0.to_affine()),
+        tpe_pks: (0..peer_count)
+            .map(|peer| {
+                (
+                    PeerId::from(peer),
+                    PublicKeyShare(
+                        config
+                            .threshold_pub_keys
+                            .public_key_share(peer as usize)
+                            .0
+                             .0
+                            .to_affine(),
+                    ),
+                )
+            })
+            .collect(),
+        fee_consensus: FeeConsensus {
+            input: config.fee_consensus.contract_input,
+            output: config.fee_consensus.contract_output,
+        },
+        network: config.network,
+    }
+}
+
+#[allow(dead_code)]
+fn migrate_config_private(
+    config: fedimint_ln_common::config::LightningConfigPrivate,
+) -> LightningConfigPrivate {
+    LightningConfigPrivate {
+        sk: SecretKeyShare(config.threshold_sec_key.0 .0 .0),
+    }
+}
+
+#[allow(dead_code)]
+fn migrate_config_local(
+    config: fedimint_ln_common::config::LightningConfigLocal,
+) -> LightningConfigLocal {
+    LightningConfigLocal {
+        bitcoin_rpc: config.bitcoin_rpc,
     }
 }
