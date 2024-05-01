@@ -1,4 +1,5 @@
 use std::str::FromStr;
+use std::sync::Arc;
 
 use assert_matches::assert_matches;
 use fedimint_client::Client;
@@ -12,7 +13,8 @@ use fedimint_dummy_common::config::DummyGenParams;
 use fedimint_dummy_server::DummyInit;
 use fedimint_ln_client::{
     InternalPayState, LightningClientInit, LightningClientModule, LightningOperationMeta,
-    LnPayState, LnReceiveState, OutgoingLightningPayment, PayType,
+    LnPayState, LnReceiveState, MockGatewayConnection, OutgoingLightningPayment, PayType,
+    RealGatewayConnection,
 };
 use fedimint_ln_common::config::LightningGenParams;
 use fedimint_ln_common::ln_operation;
@@ -27,7 +29,13 @@ use secp256k1::KeyPair;
 fn fixtures() -> Fixtures {
     let fixtures = Fixtures::new_primary(DummyClientInit, DummyInit, DummyGenParams::default());
     let ln_params = LightningGenParams::regtest(fixtures.bitcoin_server());
-    fixtures.with_module(LightningClientInit, LightningInit, ln_params)
+    fixtures.with_module(
+        LightningClientInit {
+            gateway_conn: Arc::new(MockGatewayConnection),
+        },
+        LightningInit,
+        ln_params,
+    )
 }
 
 /// Setup a gateway connected to the fed and client
@@ -197,9 +205,19 @@ async fn cannot_pay_same_internal_invoice_twice() -> anyhow::Result<()> {
     Ok(())
 }
 
+// TODO: This test verifies behavior between the client and the gateway, it
+// should be a devimint test
 #[tokio::test(flavor = "multi_thread")]
 async fn gateway_protects_preimage_for_payment() -> anyhow::Result<()> {
-    let fixtures = fixtures();
+    let fixtures = Fixtures::new_primary(DummyClientInit, DummyInit, DummyGenParams::default());
+    let ln_params = LightningGenParams::regtest(fixtures.bitcoin_server());
+    let fixtures = fixtures.with_module(
+        LightningClientInit {
+            gateway_conn: Arc::new(RealGatewayConnection),
+        },
+        LightningInit,
+        ln_params,
+    );
     let fed = fixtures.new_default_fed().await;
     let gw = gateway(&fixtures, &fed).await;
     let (client1, client2) = fed.two_clients().await;
@@ -1219,7 +1237,7 @@ mod fedimint_migration_tests {
     async fn test_client_db_migrations() -> anyhow::Result<()> {
         let _ = TracingSetup::default().init();
 
-        let module = DynClientModuleInit::from(LightningClientInit);
+        let module = DynClientModuleInit::from(LightningClientInit::default());
         validate_migrations_client::<_, _, LightningClientModule>(
             module,
             "lightning-client",

@@ -144,7 +144,7 @@ pub async fn build_client(
     };
     let mut client_builder = Client::builder(db);
     client_builder.with_module(MintClientInit);
-    client_builder.with_module(LightningClientInit);
+    client_builder.with_module(LightningClientInit::default());
     client_builder.with_module(WalletClientInit::default());
     client_builder.with_primary_module(1);
     let client_secret =

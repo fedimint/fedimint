@@ -21,7 +21,6 @@ use anyhow::{bail, Context as AnyhowContext};
 use bitcoin_hashes::sha256;
 use config::LightningClientConfig;
 use fedimint_client::oplog::OperationLogEntry;
-use fedimint_client::sm::Context;
 use fedimint_client::ClientHandleArc;
 use fedimint_core::core::{Decoder, ModuleInstanceId, ModuleKind, OperationId};
 use fedimint_core::encoding::{Decodable, DecodeError, Encodable};
@@ -416,14 +415,6 @@ plugin_types_trait_impl_common!(
     LightningInputError,
     LightningOutputError
 );
-
-#[derive(Debug, Clone)]
-pub struct LightningClientContext {
-    pub ln_decoder: Decoder,
-    pub redeem_key: bitcoin::KeyPair,
-}
-
-impl Context for LightningClientContext {}
 
 // TODO: upstream serde support to LDK
 /// Hack to get a route hint that implements `serde` traits.

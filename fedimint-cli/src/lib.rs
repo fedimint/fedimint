@@ -527,7 +527,7 @@ impl FedimintCli {
     }
 
     pub fn with_default_modules(self) -> Self {
-        self.with_module(LightningClientInit)
+        self.with_module(LightningClientInit::default())
             .with_module(MintClientInit)
             .with_module(WalletClientInit::default())
             .with_module(MetaClientInit)

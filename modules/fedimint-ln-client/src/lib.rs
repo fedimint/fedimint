@@ -39,7 +39,7 @@ use fedimint_core::bitcoin_migration::{
     bitcoin30_to_bitcoin29_secp256k1_secret_key,
 };
 use fedimint_core::config::FederationId;
-use fedimint_core::core::{IntoDynInstance, ModuleInstanceId, OperationId};
+use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, OperationId};
 use fedimint_core::db::{DatabaseTransaction, DatabaseVersion, IDatabaseTransactionOpsCoreTyped};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::{
@@ -62,9 +62,9 @@ use fedimint_ln_common::contracts::{
     PreimageKey,
 };
 use fedimint_ln_common::{
-    ContractOutput, LightningClientContext, LightningCommonInit, LightningGateway,
-    LightningGatewayAnnouncement, LightningGatewayRegistration, LightningInput,
-    LightningModuleTypes, LightningOutput, LightningOutputV0,
+    ContractOutput, LightningCommonInit, LightningGateway, LightningGatewayAnnouncement,
+    LightningGatewayRegistration, LightningInput, LightningModuleTypes, LightningOutput,
+    LightningOutputV0,
 };
 use fedimint_logging::LOG_CLIENT_MODULE_LN;
 use futures::{Future, FutureExt, StreamExt};
@@ -72,6 +72,7 @@ use incoming::IncomingSmError;
 use lightning_invoice::{
     Bolt11Invoice, Currency, InvoiceBuilder, PaymentSecret, RouteHint, RouteHintHop, RoutingFees,
 };
+use pay::PayInvoicePayload;
 use rand::rngs::OsRng;
 use rand::seq::IteratorRandom as _;
 use rand::{CryptoRng, Rng, RngCore};
@@ -268,7 +269,17 @@ pub enum LightningOperationMetaVariant {
 }
 
 #[derive(Debug, Clone)]
-pub struct LightningClientInit;
+pub struct LightningClientInit {
+    pub gateway_conn: Arc<dyn GatewayConnection + Send + Sync>,
+}
+
+impl Default for LightningClientInit {
+    fn default() -> Self {
+        LightningClientInit {
+            gateway_conn: Arc::new(RealGatewayConnection),
+        }
+    }
+}
 
 impl ModuleInit for LightningClientInit {
     type Common = LightningCommonInit;
@@ -337,7 +348,7 @@ impl ClientModuleInit for LightningClientInit {
     }
 
     async fn init(&self, args: &ClientModuleInitArgs<Self>) -> anyhow::Result<Self::Module> {
-        Ok(LightningClientModule::new(args).await?)
+        Ok(LightningClientModule::new(args, self.gateway_conn.clone()).await?)
     }
 
     fn get_database_migrations(&self) -> BTreeMap<DatabaseVersion, ClientMigrationFn> {
@@ -382,6 +393,7 @@ pub struct LightningClientModule {
     preimage_auth: KeyPair,
     client_ctx: ClientContext<Self>,
     update_gateway_cache_merge: UpdateMerge,
+    gateway_conn: Arc<dyn GatewayConnection + Send + Sync>,
 }
 
 #[apply(async_trait_maybe_send!)]
@@ -396,6 +408,7 @@ impl ClientModule for LightningClientModule {
         LightningClientContext {
             ln_decoder: self.decoder(),
             redeem_key: bitcoin30_to_bitcoin29_keypair(self.redeem_key),
+            gateway_conn: self.gateway_conn.clone(),
         }
     }
 
@@ -437,6 +450,7 @@ enum PayError {
 impl LightningClientModule {
     async fn new(
         args: &ClientModuleInitArgs<LightningClientInit>,
+        gateway_conn: Arc<dyn GatewayConnection + Send + Sync>,
     ) -> anyhow::Result<LightningClientModule> {
         let secp24 = bitcoin29::secp256k1::Secp256k1::new();
         let secp = Secp256k1::new();
@@ -456,6 +470,7 @@ impl LightningClientModule {
             secp,
             client_ctx: args.context(),
             update_gateway_cache_merge: UpdateMerge::default(),
+            gateway_conn: gateway_conn.clone(),
         };
 
         // Only initialize the gateway cache if it is empty
@@ -491,36 +506,6 @@ impl LightningClientModule {
         bytes[32..34].copy_from_slice(&index.to_le_bytes());
         let hash: sha256::Hash = Hash::hash(&bytes);
         OperationId(hash.to_byte_array())
-    }
-
-    // Ping gateway endpoint to verify that it is available before locking funds in
-    // OutgoingContract
-    async fn verify_gateway_availability(&self, gateway: &LightningGateway) -> anyhow::Result<()> {
-        let response = reqwest::Client::new()
-            .get(
-                gateway
-                    .api
-                    .join("id")
-                    .expect("id contains no invalid characters for a URL")
-                    .as_str(),
-            )
-            .send()
-            .await
-            .context("Gateway is not available")?;
-        if !response.status().is_success() {
-            return Err(anyhow!(
-                "Gateway is not available. Returned error code: {}",
-                response.status()
-            ));
-        }
-
-        let text_gateway_id = response.text().await?;
-        let gateway_id = PublicKey::from_str(&text_gateway_id[1..text_gateway_id.len() - 1])?;
-        if gateway_id != bitcoin29_to_bitcoin30_secp256k1_public_key(gateway.gateway_id) {
-            return Err(anyhow!("Unexpected gateway id returned: {gateway_id}"));
-        }
-
-        Ok(())
     }
 
     /// Hashes the client's preimage authentication secret with the provided
@@ -559,7 +544,9 @@ impl LightningClientModule {
 
         // Do not create the funding transaction if the gateway is not currently
         // available
-        self.verify_gateway_availability(&gateway).await?;
+        self.gateway_conn
+            .verify_gateway_availability(&gateway)
+            .await?;
 
         let consensus_count = self
             .module_api
@@ -1935,5 +1922,124 @@ pub async fn get_invoice(
                 }
             }
         }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct LightningClientContext {
+    pub ln_decoder: Decoder,
+    pub redeem_key: bitcoin29::KeyPair,
+    pub gateway_conn: Arc<dyn GatewayConnection + Send + Sync>,
+}
+
+impl fedimint_client::sm::Context for LightningClientContext {}
+
+#[apply(async_trait_maybe_send!)]
+pub trait GatewayConnection: std::fmt::Debug {
+    // Ping gateway endpoint to verify that it is available before locking funds in
+    // OutgoingContract
+    async fn verify_gateway_availability(&self, gateway: &LightningGateway) -> anyhow::Result<()>;
+
+    // Send a POST request to the gateway to request it to pay a BOLT11 invoice.
+    async fn pay_invoice(
+        &self,
+        gateway: LightningGateway,
+        payload: PayInvoicePayload,
+    ) -> Result<String, GatewayPayError>;
+}
+
+#[derive(Debug)]
+pub struct RealGatewayConnection;
+
+#[apply(async_trait_maybe_send!)]
+impl GatewayConnection for RealGatewayConnection {
+    async fn verify_gateway_availability(&self, gateway: &LightningGateway) -> anyhow::Result<()> {
+        let response = reqwest::Client::new()
+            .get(
+                gateway
+                    .api
+                    .join("id")
+                    .expect("id contains no invalid characters for a URL")
+                    .as_str(),
+            )
+            .send()
+            .await
+            .context("Gateway is not available")?;
+        if !response.status().is_success() {
+            return Err(anyhow!(
+                "Gateway is not available. Returned error code: {}",
+                response.status()
+            ));
+        }
+
+        let text_gateway_id = response.text().await?;
+        let gateway_id = PublicKey::from_str(&text_gateway_id[1..text_gateway_id.len() - 1])?;
+        if gateway_id != bitcoin29_to_bitcoin30_secp256k1_public_key(gateway.gateway_id) {
+            return Err(anyhow!("Unexpected gateway id returned: {gateway_id}"));
+        }
+
+        Ok(())
+    }
+
+    async fn pay_invoice(
+        &self,
+        gateway: LightningGateway,
+        payload: PayInvoicePayload,
+    ) -> Result<String, GatewayPayError> {
+        let response = reqwest::Client::new()
+            .post(
+                gateway
+                    .api
+                    .join("pay_invoice")
+                    .expect("'pay_invoice' contains no invalid characters for a URL")
+                    .as_str(),
+            )
+            .json(&payload)
+            .send()
+            .await
+            .map_err(|e| GatewayPayError::GatewayInternalError {
+                error_code: None,
+                error_message: e.to_string(),
+            })?;
+
+        if !response.status().is_success() {
+            return Err(GatewayPayError::GatewayInternalError {
+                error_code: Some(response.status().as_u16()),
+                error_message: response
+                    .text()
+                    .await
+                    .expect("Could not retrieve text from response"),
+            });
+        }
+
+        let preimage =
+            response
+                .text()
+                .await
+                .map_err(|_| GatewayPayError::GatewayInternalError {
+                    error_code: None,
+                    error_message: "Error retrieving preimage from response".to_string(),
+                })?;
+        let length = preimage.len();
+        Ok(preimage[1..length - 1].to_string())
+    }
+}
+
+#[derive(Debug)]
+pub struct MockGatewayConnection;
+
+#[apply(async_trait_maybe_send!)]
+impl GatewayConnection for MockGatewayConnection {
+    async fn verify_gateway_availability(&self, _gateway: &LightningGateway) -> anyhow::Result<()> {
+        Ok(())
+    }
+
+    async fn pay_invoice(
+        &self,
+        _gateway: LightningGateway,
+        _payload: PayInvoicePayload,
+    ) -> Result<String, GatewayPayError> {
+        // Just return a fake preimage to indicate success
+        Ok("00000000".to_string())
     }
 }
