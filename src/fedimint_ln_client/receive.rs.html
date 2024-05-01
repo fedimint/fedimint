@@ -465,14 +465,14 @@
 <span class="kw">use </span>fedimint_ln_common::contracts::incoming::IncomingContractAccount;
 <span class="kw">use </span>fedimint_ln_common::contracts::{DecryptedPreimage, FundedContract};
 <span class="kw">use </span>fedimint_ln_common::endpoint_constants::ACCOUNT_ENDPOINT;
-<span class="kw">use </span>fedimint_ln_common::{LightningClientContext, LightningInput};
+<span class="kw">use </span>fedimint_ln_common::LightningInput;
 <span class="kw">use </span>lightning_invoice::Bolt11Invoice;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>thiserror::Error;
 <span class="kw">use </span>tracing::{debug, error, info};
 
 <span class="kw">use </span><span class="kw">crate</span>::api::LnFederationApi;
-<span class="kw">use crate</span>::{LightningClientStateMachines, ReceivingKey};
+<span class="kw">use crate</span>::{LightningClientContext, LightningClientStateMachines, ReceivingKey};
 
 <span class="kw">const </span>RETRY_DELAY: Duration = Duration::from_secs(<span class="number">1</span>);
 

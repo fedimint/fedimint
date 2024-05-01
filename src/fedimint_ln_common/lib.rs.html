@@ -728,15 +728,6 @@
 <a href="#728" id="728">728</a>
 <a href="#729" id="729">729</a>
 <a href="#730" id="730">730</a>
-<a href="#731" id="731">731</a>
-<a href="#732" id="732">732</a>
-<a href="#733" id="733">733</a>
-<a href="#734" id="734">734</a>
-<a href="#735" id="735">735</a>
-<a href="#736" id="736">736</a>
-<a href="#737" id="737">737</a>
-<a href="#738" id="738">738</a>
-<a href="#739" id="739">739</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! # Lightning Module
 //!
 //! This module allows to atomically and trustlessly (in the federated trust
@@ -760,7 +751,6 @@
 <span class="kw">use </span>bitcoin_hashes::sha256;
 <span class="kw">use </span>config::LightningClientConfig;
 <span class="kw">use </span>fedimint_client::oplog::OperationLogEntry;
-<span class="kw">use </span>fedimint_client::sm::Context;
 <span class="kw">use </span>fedimint_client::ClientHandleArc;
 <span class="kw">use </span>fedimint_core::core::{Decoder, ModuleInstanceId, ModuleKind, OperationId};
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, DecodeError, Encodable};
@@ -1155,14 +1145,6 @@
     LightningInputError,
     LightningOutputError
 );
-
-<span class="attr">#[derive(Debug, Clone)]
-</span><span class="kw">pub struct </span>LightningClientContext {
-    <span class="kw">pub </span>ln_decoder: Decoder,
-    <span class="kw">pub </span>redeem_key: bitcoin::KeyPair,
-}
-
-<span class="kw">impl </span>Context <span class="kw">for </span>LightningClientContext {}
 
 <span class="comment">// TODO: upstream serde support to LDK
 </span><span class="doccomment">/// Hack to get a route hint that implements `serde` traits.

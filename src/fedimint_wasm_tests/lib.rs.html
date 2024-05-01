@@ -359,7 +359,7 @@
 <span class="kw">fn </span>make_client_builder() -&gt; fedimint_client::ClientBuilder {
     <span class="kw">let </span>mem_database = MemDatabase::default();
     <span class="kw">let </span><span class="kw-2">mut </span>builder = fedimint_client::Client::builder(mem_database.into());
-    builder.with_module(LightningClientInit);
+    builder.with_module(LightningClientInit::default());
     builder.with_module(MintClientInit);
     builder.with_module(WalletClientInit::default());
     builder.with_primary_module(<span class="number">1</span>);

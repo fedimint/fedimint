@@ -1575,7 +1575,7 @@ Examples:
     </span>}
 
     <span class="kw">pub fn </span>with_default_modules(<span class="self">self</span>) -&gt; <span class="self">Self </span>{
-        <span class="self">self</span>.with_module(LightningClientInit)
+        <span class="self">self</span>.with_module(LightningClientInit::default())
             .with_module(MintClientInit)
             .with_module(WalletClientInit::default())
             .with_module(MetaClientInit)

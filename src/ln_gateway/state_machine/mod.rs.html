@@ -766,6 +766,10 @@
 <a href="#766" id="766">766</a>
 <a href="#767" id="767">767</a>
 <a href="#768" id="768">768</a>
+<a href="#769" id="769">769</a>
+<a href="#770" id="770">770</a>
+<a href="#771" id="771">771</a>
+<a href="#772" id="772">772</a>
 </pre></div><pre class="rust"><code><span class="kw">mod </span>complete;
 <span class="kw">pub mod </span>pay;
 
@@ -801,12 +805,15 @@
     FundingOfferState, IncomingSmCommon, IncomingSmError, IncomingSmStates, IncomingStateMachine,
 };
 <span class="kw">use </span>fedimint_ln_client::pay::{PayInvoicePayload, PaymentData};
-<span class="kw">use </span>fedimint_ln_client::{create_incoming_contract_output, LightningClientInit};
+<span class="kw">use </span>fedimint_ln_client::{
+    create_incoming_contract_output, LightningClientContext, LightningClientInit,
+    RealGatewayConnection,
+};
 <span class="kw">use </span>fedimint_ln_common::config::LightningClientConfig;
 <span class="kw">use </span>fedimint_ln_common::contracts::{ContractId, Preimage};
 <span class="kw">use </span>fedimint_ln_common::route_hints::RouteHint;
 <span class="kw">use </span>fedimint_ln_common::{
-    create_gateway_remove_message, LightningClientContext, LightningCommonInit, LightningGateway,
+    create_gateway_remove_message, LightningCommonInit, LightningGateway,
     LightningGatewayAnnouncement, LightningModuleTypes, LightningOutput, LightningOutputV0,
     RemoveGatewayRequest, KIND,
 };
@@ -941,6 +948,7 @@
         LightningClientContext {
             ln_decoder: ctx.ln_decoder.clone(),
             redeem_key: ctx.redeem_key,
+            gateway_conn: Arc::new(RealGatewayConnection),
         }
     }
 }
