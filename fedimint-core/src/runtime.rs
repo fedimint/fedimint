@@ -166,8 +166,9 @@ mod r#impl {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use tokio::sync::oneshot;
+
+    use super::*;
 
     #[tokio::test]
     async fn test_spawn_and_await() {
@@ -175,7 +176,8 @@ mod tests {
         let (tx, _rx) = oneshot::channel();
 
         let future = async move {
-            tokio::time::sleep(Duration::from_secs(1)).await;
+            // Simulating some work
+            tokio::time::sleep(Duration::from_millis(1)).await;
             let _ = tx.send("done");
         };
 
@@ -184,7 +186,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_sleep() {
-        let duration = Duration::from_secs(1);
+        let duration = Duration::from_millis(1);
         let start = Instant::now();
         sleep(duration).await;
         let end = Instant::now();
@@ -194,7 +196,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_sleep_until() {
-        let duration = Duration::from_secs(1);
+        let duration = Duration::from_millis(1);
         let deadline = Instant::now() + duration;
         sleep_until(deadline).await;
         let now = Instant::now();
@@ -204,7 +206,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_timeout_elapsed() {
-        let duration = Duration::from_secs(1);
+        let duration = Duration::from_millis(1);
         let future = async {
             tokio::time::sleep(duration * 2).await;
             "done"
@@ -216,7 +218,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_timeout_completed() {
-        let duration = Duration::from_secs(1);
+        let duration = Duration::from_millis(1);
         let future = async {
             tokio::time::sleep(duration / 2).await;
             "done"
