@@ -758,6 +758,14 @@
 <a href="#758" id="758">758</a>
 <a href="#759" id="759">759</a>
 <a href="#760" id="760">760</a>
+<a href="#761" id="761">761</a>
+<a href="#762" id="762">762</a>
+<a href="#763" id="763">763</a>
+<a href="#764" id="764">764</a>
+<a href="#765" id="765">765</a>
+<a href="#766" id="766">766</a>
+<a href="#767" id="767">767</a>
+<a href="#768" id="768">768</a>
 </pre></div><pre class="rust"><code><span class="kw">mod </span>complete;
 <span class="kw">pub mod </span>pay;
 
@@ -778,7 +786,11 @@
 <span class="kw">use </span>fedimint_client::sm::{Context, DynState, ModuleNotifier, State};
 <span class="kw">use </span>fedimint_client::transaction::{ClientOutput, TransactionBuilder};
 <span class="kw">use </span>fedimint_client::{sm_enum_variant_translation, AddStateMachinesError, DynGlobalClientContext};
-<span class="kw">use </span>fedimint_core::bitcoin_migration::bitcoin30_to_bitcoin29_keypair;
+<span class="kw">use </span>fedimint_core::bitcoin_migration::{
+    bitcoin29_to_bitcoin30_keypair, bitcoin29_to_bitcoin30_secp256k1_public_key,
+    bitcoin29_to_bitcoin30_sha256_hash, bitcoin30_to_bitcoin29_keypair,
+    bitcoin30_to_bitcoin29_sha256_hash,
+};
 <span class="kw">use </span>fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, OperationId};
 <span class="kw">use </span>fedimint_core::db::{AutocommitError, DatabaseTransaction, DatabaseVersion};
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
@@ -1026,9 +1038,9 @@
         <span class="kw">let </span>operation_id = OperationId(htlc.payment_hash.into_inner());
         <span class="kw">let </span>(incoming_output, amount, contract_id) = create_incoming_contract_output(
             <span class="kw-2">&amp;</span><span class="self">self</span>.module_api,
-            htlc.payment_hash,
+            bitcoin29_to_bitcoin30_sha256_hash(htlc.payment_hash),
             htlc.outgoing_amount_msat,
-            <span class="self">self</span>.redeem_key,
+            bitcoin29_to_bitcoin30_keypair(<span class="self">self</span>.redeem_key),
         )
         .<span class="kw">await</span><span class="question-mark">?</span>;
 
@@ -1041,7 +1053,7 @@
                         common: IncomingSmCommon {
                             operation_id,
                             contract_id,
-                            payment_hash: htlc.payment_hash,
+                            payment_hash: bitcoin29_to_bitcoin30_sha256_hash(htlc.payment_hash),
                         },
                         state: IncomingSmStates::FundingOffer(FundingOfferState { txid }),
                     }),
@@ -1073,9 +1085,9 @@
         <span class="kw">let </span>operation_id = OperationId(payment_hash.into_inner());
         <span class="kw">let </span>(incoming_output, amount, contract_id) = create_incoming_contract_output(
             <span class="kw-2">&amp;</span><span class="self">self</span>.module_api,
-            payment_hash,
+            bitcoin29_to_bitcoin30_sha256_hash(payment_hash),
             swap.amount_msat,
-            <span class="self">self</span>.redeem_key,
+            bitcoin29_to_bitcoin30_keypair(<span class="self">self</span>.redeem_key),
         )
         .<span class="kw">await</span><span class="question-mark">?</span>;
 
@@ -1087,7 +1099,7 @@
                     common: IncomingSmCommon {
                         operation_id,
                         contract_id,
-                        payment_hash,
+                        payment_hash: bitcoin29_to_bitcoin30_sha256_hash(payment_hash),
                     },
                     state: IncomingSmStates::FundingOffer(FundingOfferState { txid }),
                 })]
@@ -1144,14 +1156,18 @@
         <span class="kw">let </span>gateway_id = gateway_keypair.public_key();
         <span class="kw">let </span>challenges = <span class="self">self
             </span>.module_api
-            .get_remove_gateway_challenge(gateway_id)
+            .get_remove_gateway_challenge(bitcoin29_to_bitcoin30_secp256k1_public_key(gateway_id))
             .<span class="kw">await</span><span class="question-mark">?</span>;
 
         <span class="kw">let </span>fed_public_key = <span class="self">self</span>.cfg.threshold_pub_key;
         <span class="kw">let </span>signatures = challenges
             .into_iter()
             .filter_map(|(peer_id, challenge)| {
-                <span class="kw">let </span>msg = create_gateway_remove_message(fed_public_key, peer_id, challenge<span class="question-mark">?</span>);
+                <span class="kw">let </span>msg = create_gateway_remove_message(
+                    fed_public_key,
+                    peer_id,
+                    challenge.map(bitcoin30_to_bitcoin29_sha256_hash)<span class="question-mark">?</span>,
+                );
                 <span class="kw">let </span>signature = gateway_keypair.sign_schnorr(msg);
                 <span class="prelude-val">Some</span>((peer_id, signature))
             })
@@ -1508,7 +1524,7 @@
     <span class="kw">type </span>Error = anyhow::Error;
 
     <span class="kw">fn </span>try_from(s: PaymentData) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, <span class="self">Self</span>::Error&gt; {
-        <span class="kw">let </span>payment_hash = s.payment_hash();
+        <span class="kw">let </span>payment_hash = bitcoin30_to_bitcoin29_sha256_hash(s.payment_hash());
         <span class="kw">let </span>amount_msat = s
             .amount()
             .ok_or_else(|| <span class="macro">anyhow::anyhow!</span>(<span class="string">"Amountless invoice cannot be used in direct swap"</span>))<span class="question-mark">?</span>;

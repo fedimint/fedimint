@@ -782,6 +782,31 @@
 <a href="#782" id="782">782</a>
 <a href="#783" id="783">783</a>
 <a href="#784" id="784">784</a>
+<a href="#785" id="785">785</a>
+<a href="#786" id="786">786</a>
+<a href="#787" id="787">787</a>
+<a href="#788" id="788">788</a>
+<a href="#789" id="789">789</a>
+<a href="#790" id="790">790</a>
+<a href="#791" id="791">791</a>
+<a href="#792" id="792">792</a>
+<a href="#793" id="793">793</a>
+<a href="#794" id="794">794</a>
+<a href="#795" id="795">795</a>
+<a href="#796" id="796">796</a>
+<a href="#797" id="797">797</a>
+<a href="#798" id="798">798</a>
+<a href="#799" id="799">799</a>
+<a href="#800" id="800">800</a>
+<a href="#801" id="801">801</a>
+<a href="#802" id="802">802</a>
+<a href="#803" id="803">803</a>
+<a href="#804" id="804">804</a>
+<a href="#805" id="805">805</a>
+<a href="#806" id="806">806</a>
+<a href="#807" id="807">807</a>
+<a href="#808" id="808">808</a>
+<a href="#809" id="809">809</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::io::Cursor;
 <span class="kw">use </span>std::str::FromStr;
 
@@ -1086,6 +1111,12 @@
     hash: bitcoin::hashes::sha256::Hash,
 ) -&gt; bitcoin30::hashes::sha256::Hash {
     bitcoin30::hashes::sha256::Hash::from_byte_array(hash.into_inner())
+}
+
+<span class="kw">pub fn </span>bitcoin30_to_bitcoin29_sha256_hash(
+    hash: bitcoin30::hashes::sha256::Hash,
+) -&gt; bitcoin::hashes::sha256::Hash {
+    bitcoin::hashes::sha256::Hash::from_inner(hash.to_byte_array())
 }
 
 <span class="attr">#[cfg(test)]
@@ -1563,6 +1594,25 @@
         </span><span class="macro">assert_eq!</span>(
             bitcoin30_hash,
             bitcoin29_to_bitcoin30_sha256_hash(bitcoin29_hash)
+        );
+    }
+
+    <span class="attr">#[test]
+    </span><span class="kw">fn </span>test_bitcoin30_to_bitcoin29_sha256_hash() {
+        <span class="kw">let </span>bitcoin29_hash = bitcoin::hashes::sha256::Hash::from_hex(
+            <span class="string">"0123456789012345678901234567890123456789012345678901234567890123"</span>,
+        )
+        .expect(<span class="string">"Failed to parse bitcoin v29 sha256 hash"</span>);
+        <span class="kw">let </span>bitcoin30_hash = bitcoin30::hashes::sha256::Hash::from_str(
+            <span class="string">"0123456789012345678901234567890123456789012345678901234567890123"</span>,
+        )
+        .expect(<span class="string">"Failed to parse bitcoin v30 sha256 hash"</span>);
+
+        <span class="comment">// Assert that bitcoin30-&gt;bitcoin29 sha256 hash is the same as native bitcoin30
+        // sha256 hash.
+        </span><span class="macro">assert_eq!</span>(
+            bitcoin29_hash,
+            bitcoin30_to_bitcoin29_sha256_hash(bitcoin30_hash)
         );
     }
 }

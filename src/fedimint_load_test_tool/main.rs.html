@@ -1352,9 +1352,6 @@
 <a href="#1352" id="1352">1352</a>
 <a href="#1353" id="1353">1353</a>
 <a href="#1354" id="1354">1354</a>
-<a href="#1355" id="1355">1355</a>
-<a href="#1356" id="1356">1356</a>
-<a href="#1357" id="1357">1357</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap};
 <span class="kw">use </span>std::path::PathBuf;
 <span class="kw">use </span>std::str::FromStr;
@@ -1371,7 +1368,6 @@
 <span class="kw">use </span>devimint::cmd;
 <span class="kw">use </span>devimint::util::{GatewayClnCli, GatewayLndCli};
 <span class="kw">use </span>fedimint_client::ClientHandleArc;
-<span class="kw">use </span>fedimint_core::bitcoin_migration::bitcoin30_to_bitcoin29_secp256k1_public_key;
 <span class="kw">use </span>fedimint_core::endpoint_constants::SESSION_COUNT_ENDPOINT;
 <span class="kw">use </span>fedimint_core::invite_code::InviteCode;
 <span class="kw">use </span>fedimint_core::module::ApiRequestErased;
@@ -1977,9 +1973,7 @@
 ) -&gt; <span class="prelude-ty">Option</span>&lt;LightningGateway&gt; {
     <span class="kw">let </span>gateway_id = parse_gateway_id(gateway_id.or(<span class="prelude-val">None</span>)<span class="question-mark">?</span>.as_str()).expect(<span class="string">"Invalid gateway id"</span>);
     <span class="kw">let </span>ln_module = client.get_first_module::&lt;LightningClientModule&gt;();
-    ln_module
-        .select_gateway(<span class="kw-2">&amp;</span>bitcoin30_to_bitcoin29_secp256k1_public_key(gateway_id))
-        .<span class="kw">await
+    ln_module.select_gateway(<span class="kw-2">&amp;</span>gateway_id).<span class="kw">await
 </span>}
 
 <span class="attr">#[allow(clippy::too_many_arguments)]

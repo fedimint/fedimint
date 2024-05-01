@@ -701,13 +701,6 @@
 <a href="#701" id="701">701</a>
 <a href="#702" id="702">702</a>
 <a href="#703" id="703">703</a>
-<a href="#704" id="704">704</a>
-<a href="#705" id="705">705</a>
-<a href="#706" id="706">706</a>
-<a href="#707" id="707">707</a>
-<a href="#708" id="708">708</a>
-<a href="#709" id="709">709</a>
-<a href="#710" id="710">710</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::ffi;
 <span class="kw">use </span>std::str::FromStr;
@@ -722,7 +715,6 @@
 <span class="kw">use </span>fedimint_client::ClientHandleArc;
 <span class="kw">use </span>fedimint_core::bitcoin_migration::{
     bitcoin29_to_bitcoin30_network, bitcoin30_to_bitcoin29_address, bitcoin30_to_bitcoin29_amount,
-    bitcoin30_to_bitcoin29_secp256k1_public_key,
 };
 <span class="kw">use </span>fedimint_core::config::{ClientModuleConfig, FederationId};
 <span class="kw">use </span>fedimint_core::core::{ModuleInstanceId, ModuleKind, OperationId};
@@ -1056,10 +1048,7 @@
             <span class="macro">warn!</span>(<span class="string">"Command deprecated. Use `fedimint-cli module ln invoice` instead."</span>);
             <span class="kw">let </span>lightning_module = client.get_first_module::&lt;LightningClientModule&gt;();
             <span class="kw">let </span>ln_gateway = lightning_module
-                .get_gateway(
-                    gateway_id.map(bitcoin30_to_bitcoin29_secp256k1_public_key),
-                    force_internal,
-                )
+                .get_gateway(gateway_id, force_internal)
                 .<span class="kw">await</span><span class="question-mark">?</span>;
 
             <span class="kw">let </span>lightning_module = client.get_first_module::&lt;LightningClientModule&gt;();
@@ -1117,10 +1106,7 @@
             <span class="macro">info!</span>(<span class="string">"Paying invoice: {bolt11}"</span>);
             <span class="kw">let </span>lightning_module = client.get_first_module::&lt;LightningClientModule&gt;();
             <span class="kw">let </span>ln_gateway = lightning_module
-                .get_gateway(
-                    gateway_id.map(bitcoin30_to_bitcoin29_secp256k1_public_key),
-                    force_internal,
-                )
+                .get_gateway(gateway_id, force_internal)
                 .<span class="kw">await</span><span class="question-mark">?</span>;
 
             <span class="kw">let </span>lightning_module = client.get_first_module::&lt;LightningClientModule&gt;();
