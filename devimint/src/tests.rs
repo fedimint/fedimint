@@ -2053,7 +2053,6 @@ pub async fn recoverytool_test(dev_fed: DevFed) -> Result<()> {
     // a session is generated we don't wait for another.
     let last_tx_session = client.get_session_count().await?;
 
-    let now = fedimint_core::time::now();
     info!("Recovering using utxos method");
     let output = cmd!(
         crate::util::Recoverytool,
@@ -2118,28 +2117,23 @@ pub async fn recoverytool_test(dev_fed: DevFed) -> Result<()> {
     // Funds from descriptors should match the fed's utxos
     assert_eq!(diff.to_sat(), total_fed_sats);
     info!("Recovering using epochs method");
-    let outputs = loop {
-        let output = cmd!(
-            crate::util::Recoverytool,
-            "--readonly",
-            "--cfg",
-            "{data_dir}/fedimintd-0",
-            "epochs",
-            "--db",
-            "{data_dir}/fedimintd-0/database"
-        )
-        .env(FM_PASSWORD_ENV, "pass")
-        .out_json()
-        .await?;
-        let outputs = output.as_array().context("expected an array")?;
-        if outputs.len() >= fed_utxos_sats.len() {
-            break outputs.clone();
-        }
-        if now.elapsed()? > Duration::from_secs(180) {
-            bail!("recoverytool epochs method timed out");
-        }
-        fedimint_core::task::sleep_in_test("recovery failed", Duration::from_secs(1)).await
-    };
+
+    let outputs = cmd!(
+        crate::util::Recoverytool,
+        "--readonly",
+        "--cfg",
+        "{data_dir}/fedimintd-0",
+        "epochs",
+        "--db",
+        "{data_dir}/fedimintd-0/database"
+    )
+    .env(FM_PASSWORD_ENV, "pass")
+    .out_json()
+    .await?
+    .as_array()
+    .context("expected an array")?
+    .clone();
+
     let epochs_descriptors = outputs
         .iter()
         .map(|o| o["descriptor"].as_str().unwrap())
