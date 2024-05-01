@@ -9,6 +9,18 @@ let
 
       enable = mkEnableOption (lib.mdDoc "fedimint");
 
+      user = mkOption {
+        type = types.str;
+        default = "fedimintd-${name}";
+        description = "The user as which to run fedimintd.";
+      };
+
+      group = mkOption {
+        type = types.str;
+        default = config.user;
+        description = "The group as which to run fedimintd.";
+      };
+
       extraEnvironment = mkOption {
         type = types.attrsOf types.str;
         description = lib.mdDoc "Extra Environment variables to pass to the fedimintd.";
@@ -226,8 +238,9 @@ in
                 cfg.extraEnvironment
               ]);
               serviceConfig = {
-                DynamicUser = true;
-                User = "fedimint";
+                User = cfg.user;
+                Group = cfg.group;
+
                 LockPersonality = true;
                 MemoryDenyWriteExecute = true;
                 ProtectClock = true;
@@ -260,5 +273,24 @@ in
           )
         ))
         eachFedimintd;
+
+
+    users.users = mapAttrs'
+      (fedimintdName: cfg: (
+        nameValuePair "fedimintd-${fedimintdName}" {
+          name = cfg.user;
+          group = cfg.group;
+          description = "Fedimint daemon user";
+          home = cfg.dataDir;
+          isSystemUser = true;
+        }
+      ))
+      eachFedimintd;
+
+    users.groups = mapAttrs'
+      (fedimintdName: cfg: (
+        nameValuePair "${cfg.group}" { }
+      ))
+      eachFedimintd;
   };
 }
