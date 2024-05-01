@@ -24,8 +24,13 @@ let
       extraEnvironment = mkOption {
         type = types.attrsOf types.str;
         description = lib.mdDoc "Extra Environment variables to pass to the fedimintd.";
-        default = { };
-        example = { RUST_BACKTRACE = "1"; };
+        default = {
+          RUST_BACKTRACE = "1";
+        };
+        example = {
+          RUST_LOG = "info,fm=debug";
+          RUST_BACKTRACE = "1";
+        };
       };
 
       package = mkOption {
@@ -136,11 +141,6 @@ let
           and is set to be read only.
         '';
       };
-      rustLogEnv = mkOption {
-        type = types.str;
-        default = "info,fedimint_server::request=debug,fedimint_client::request=debug";
-        description = "Value to set RUST_LOG to";
-      };
     };
   };
 in
@@ -225,7 +225,6 @@ in
               wantedBy = [ "multi-user.target" ];
               environment = lib.mkMerge ([
                 {
-                  RUST_LOG = cfg.rustLogEnv;
                   FM_BIND_P2P = "${cfg.p2p.bind}:${builtins.toString cfg.p2p.port}";
                   FM_BIND_API = "${cfg.api.bind}:${builtins.toString cfg.api.port}";
                   FM_P2P_URL = cfg.p2p.address;
