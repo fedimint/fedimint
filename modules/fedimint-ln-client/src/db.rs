@@ -186,7 +186,7 @@ pub(crate) fn get_v2_migrated_state(
 mod tests {
     use std::str::FromStr;
 
-    use bitcoin::hashes::Hash;
+    use bitcoin29::hashes::Hash;
     use fedimint_client::db::migrate_state;
     use fedimint_core::core::{IntoDynInstance, OperationId};
     use fedimint_core::encoding::Encodable;

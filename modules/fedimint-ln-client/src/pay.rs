@@ -5,6 +5,9 @@ use bitcoin::hashes::sha256;
 use fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
 use fedimint_client::transaction::ClientInput;
 use fedimint_client::DynGlobalClientContext;
+use fedimint_core::bitcoin_migration::{
+    bitcoin29_to_bitcoin30_secp256k1_public_key, bitcoin29_to_bitcoin30_sha256_hash,
+};
 use fedimint_core::config::FederationId;
 use fedimint_core::core::{Decoder, OperationId};
 use fedimint_core::encoding::{Decodable, Encodable};
@@ -284,7 +287,7 @@ impl LightningPayFunded {
                     contract_id,
                     timelock,
                     dbtx,
-                    payment_hash,
+                    bitcoin29_to_bitcoin30_sha256_hash(payment_hash),
                     common.clone(),
                 ))
             },
@@ -629,18 +632,26 @@ impl PaymentData {
 
     pub fn destination(&self) -> secp256k1::PublicKey {
         match self {
-            PaymentData::Invoice(invoice) => invoice
-                .payee_pub_key()
-                .cloned()
-                .unwrap_or_else(|| invoice.recover_payee_pub_key()),
-            PaymentData::PrunedInvoice(PrunedInvoice { destination, .. }) => *destination,
+            PaymentData::Invoice(invoice) => bitcoin29_to_bitcoin30_secp256k1_public_key(
+                invoice
+                    .payee_pub_key()
+                    .cloned()
+                    .unwrap_or_else(|| invoice.recover_payee_pub_key()),
+            ),
+            PaymentData::PrunedInvoice(PrunedInvoice { destination, .. }) => {
+                bitcoin29_to_bitcoin30_secp256k1_public_key(*destination)
+            }
         }
     }
 
     pub fn payment_hash(&self) -> sha256::Hash {
         match self {
-            PaymentData::Invoice(invoice) => *invoice.payment_hash(),
-            PaymentData::PrunedInvoice(PrunedInvoice { payment_hash, .. }) => *payment_hash,
+            PaymentData::Invoice(invoice) => {
+                bitcoin29_to_bitcoin30_sha256_hash(*invoice.payment_hash())
+            }
+            PaymentData::PrunedInvoice(PrunedInvoice { payment_hash, .. }) => {
+                bitcoin29_to_bitcoin30_sha256_hash(*payment_hash)
+            }
         }
     }
 

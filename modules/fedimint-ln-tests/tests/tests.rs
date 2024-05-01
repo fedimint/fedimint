@@ -2,6 +2,9 @@ use std::str::FromStr;
 
 use assert_matches::assert_matches;
 use fedimint_client::Client;
+use fedimint_core::bitcoin_migration::{
+    bitcoin29_to_bitcoin30_keypair, bitcoin29_to_bitcoin30_secp256k1_public_key,
+};
 use fedimint_core::util::NextOrPending;
 use fedimint_core::{sats, Amount};
 use fedimint_dummy_client::{DummyClientInit, DummyClientModule};
@@ -44,7 +47,9 @@ async fn pay_invoice(
 ) -> anyhow::Result<OutgoingLightningPayment> {
     let ln_module = client.get_first_module::<LightningClientModule>();
     let gateway = if let Some(gateway_id) = gateway_id {
-        ln_module.select_gateway(&gateway_id).await
+        ln_module
+            .select_gateway(&bitcoin29_to_bitcoin30_secp256k1_public_key(gateway_id))
+            .await
     } else {
         None
     };
@@ -384,7 +389,11 @@ async fn makes_internal_payments_within_federation() -> anyhow::Result<()> {
     let gw = gateway(&fixtures, &fed).await;
 
     let ln_module = client1.get_first_module::<LightningClientModule>();
-    let ln_gateway = ln_module.select_gateway(&gw.gateway.gateway_id).await;
+    let ln_gateway = ln_module
+        .select_gateway(&bitcoin29_to_bitcoin30_secp256k1_public_key(
+            gw.gateway.gateway_id,
+        ))
+        .await;
     let desc = Description::new("with-gateway-hint".to_string())?;
     let (op, invoice, _) = ln_module
         .create_bolt11_invoice(
@@ -435,7 +444,7 @@ async fn can_receive_for_other_user() -> anyhow::Result<()> {
     let client2_dummy_module = client2.get_first_module::<DummyClientModule>();
 
     // generate a new keypair
-    let keypair = KeyPair::new_global(&mut OsRng);
+    let keypair = bitcoin29_to_bitcoin30_keypair(KeyPair::new_global(&mut OsRng));
 
     // Print money for client2
     let (op, outpoint) = client2_dummy_module.print_money(sats(1000)).await?;
@@ -498,10 +507,14 @@ async fn can_receive_for_other_user() -> anyhow::Result<()> {
     let gw = gateway(&fixtures, &fed).await;
 
     // generate a new keypair
-    let keypair = KeyPair::new_global(&mut OsRng);
+    let keypair = bitcoin29_to_bitcoin30_keypair(KeyPair::new_global(&mut OsRng));
 
     let ln_module = client1.get_first_module::<LightningClientModule>();
-    let ln_gateway = ln_module.select_gateway(&gw.gateway.gateway_id).await;
+    let ln_gateway = ln_module
+        .select_gateway(&bitcoin29_to_bitcoin30_secp256k1_public_key(
+            gw.gateway.gateway_id,
+        ))
+        .await;
     let desc = Description::new("with-gateway-hint".to_string())?;
     let (op, invoice, _) = ln_module
         .create_bolt11_invoice_for_user(
@@ -569,10 +582,14 @@ async fn can_receive_for_other_user_tweaked() -> anyhow::Result<()> {
     client2.await_primary_module_output(op, outpoint).await?;
 
     // generate a new keypair
-    let keypair = KeyPair::new_global(&mut OsRng);
+    let keypair = bitcoin29_to_bitcoin30_keypair(KeyPair::new_global(&mut OsRng));
 
     let ln_module = client1.get_first_module::<LightningClientModule>();
-    let ln_gateway = ln_module.select_gateway(&gw.gateway.gateway_id).await;
+    let ln_gateway = ln_module
+        .select_gateway(&bitcoin29_to_bitcoin30_secp256k1_public_key(
+            gw.gateway.gateway_id,
+        ))
+        .await;
     let desc = Description::new("with-gateway-hint-tweaked".to_string())?;
     let (op, invoice, _) = ln_module
         .create_bolt11_invoice_for_user_tweaked(
@@ -668,6 +685,10 @@ mod fedimint_migration_tests {
     use anyhow::ensure;
     use bitcoin_hashes::{sha256, Hash};
     use fedimint_client::module::init::DynClientModuleInit;
+    use fedimint_core::bitcoin_migration::{
+        bitcoin29_to_bitcoin30_keypair, bitcoin29_to_bitcoin30_secp256k1_public_key,
+        bitcoin29_to_bitcoin30_sha256_hash,
+    };
     use fedimint_core::core::OperationId;
     use fedimint_core::db::{
         Database, DatabaseVersion, DatabaseVersionKeyV0, IDatabaseTransactionOpsCoreTyped,
@@ -898,14 +919,16 @@ mod fedimint_migration_tests {
         .await;
 
         dbtx.insert_new_entry(
-            &fedimint_ln_client::db::LightningGatewayKey(pk),
+            &fedimint_ln_client::db::LightningGatewayKey(
+                bitcoin29_to_bitcoin30_secp256k1_public_key(pk),
+            ),
             &lightning_gateway_registration,
         )
         .await;
 
         dbtx.insert_new_entry(
             &PaymentResultKey {
-                payment_hash: sha256::Hash::hash(&BYTE_8),
+                payment_hash: bitcoin29_to_bitcoin30_sha256_hash(sha256::Hash::hash(&BYTE_8)),
             },
             &PaymentResult {
                 index: 0,
@@ -944,7 +967,9 @@ mod fedimint_migration_tests {
             invoice
                 .consensus_encode(&mut submitted_offer_variant)
                 .expect("Invoice is encodable");
-            let receiving_key = ReceivingKey::Personal(KeyPair::new_global(&mut OsRng));
+            let receiving_key = ReceivingKey::Personal(bitcoin29_to_bitcoin30_keypair(
+                KeyPair::new_global(&mut OsRng),
+            ));
             receiving_key
                 .consensus_encode(&mut submitted_offer_variant)
                 .expect("ReceivingKey is encodable");

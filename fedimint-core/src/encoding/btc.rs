@@ -5,6 +5,7 @@ use anyhow::format_err;
 use bitcoin::hashes::Hash as BitcoinHash;
 use hex::{FromHex, ToHex};
 use miniscript::{Descriptor, MiniscriptKey};
+use secp256k1::hashes::Hash;
 
 use crate::encoding::{Decodable, DecodeError, Encodable};
 use crate::module::registry::ModuleDecoderRegistry;
@@ -177,6 +178,23 @@ impl Decodable for bitcoin::hashes::sha256::Hash {
         modules: &ModuleDecoderRegistry,
     ) -> Result<Self, DecodeError> {
         Ok(bitcoin::hashes::sha256::Hash::from_inner(
+            Decodable::consensus_decode(d, modules)?,
+        ))
+    }
+}
+
+impl Encodable for bitcoin30::hashes::sha256::Hash {
+    fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<usize, Error> {
+        self.to_byte_array().consensus_encode(writer)
+    }
+}
+
+impl Decodable for bitcoin30::hashes::sha256::Hash {
+    fn consensus_decode<D: std::io::Read>(
+        d: &mut D,
+        modules: &ModuleDecoderRegistry,
+    ) -> Result<Self, DecodeError> {
+        Ok(bitcoin30::hashes::sha256::Hash::from_byte_array(
             Decodable::consensus_decode(d, modules)?,
         ))
     }
