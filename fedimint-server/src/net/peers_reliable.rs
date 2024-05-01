@@ -254,6 +254,13 @@ where
     }
 
     async fn receive(&mut self) -> Cancellable<(PeerId, T)> {
+        // if all peers banned (or just solo-federation), just hang here as there's
+        // never going to be any message. This avoids panic on `select_all` with
+        // no futures.
+        if self.connections.is_empty() {
+            std::future::pending().await
+        }
+
         // TODO: optimize, don't throw away remaining futures
 
         let futures_non_banned = self.connections.iter_mut().map(|(&peer, connection)| {
