@@ -7,7 +7,7 @@
              'life0: 'async_trait</span>;
 <span class="item-spacer"></span>    fn <a href="#tymethod.await_incoming_contract" class="fn">await_incoming_contract</a>&lt;'life0, 'life1, 'async_trait&gt;(
         &amp;'life0 self,
-        contract_id: &amp;'life1 <a class="struct" href="../../fedimint_lnv2_common/struct.ContractId.html" title="struct fedimint_lnv2_common::ContractId">ContractId</a>,
+        contract_id: &amp;'life1 ContractId,
         expiration: <a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.u64.html">u64</a>
     ) -&gt; <a class="struct" href="https://doc.rust-lang.org/nightly/core/pin/struct.Pin.html" title="struct core::pin::Pin">Pin</a>&lt;<a class="struct" href="https://doc.rust-lang.org/nightly/alloc/boxed/struct.Box.html" title="struct alloc::boxed::Box">Box</a>&lt;dyn <a class="trait" href="https://doc.rust-lang.org/nightly/core/future/future/trait.Future.html" title="trait core::future::future::Future">Future</a>&lt;Output = <a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.bool.html">bool</a>&gt; + <a class="trait" href="https://doc.rust-lang.org/nightly/core/marker/trait.Send.html" title="trait core::marker::Send">Send</a> + 'async_trait&gt;&gt;
        <span class="where">where Self: 'async_trait,
@@ -15,7 +15,7 @@
              'life1: 'async_trait</span>;
 <span class="item-spacer"></span>    fn <a href="#tymethod.await_preimage" class="fn">await_preimage</a>&lt;'life0, 'life1, 'async_trait&gt;(
         &amp;'life0 self,
-        contract_id: &amp;'life1 <a class="struct" href="../../fedimint_lnv2_common/struct.ContractId.html" title="struct fedimint_lnv2_common::ContractId">ContractId</a>,
+        contract_id: &amp;'life1 ContractId,
         expiration: <a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.u64.html">u64</a>
     ) -&gt; <a class="struct" href="https://doc.rust-lang.org/nightly/core/pin/struct.Pin.html" title="struct core::pin::Pin">Pin</a>&lt;<a class="struct" href="https://doc.rust-lang.org/nightly/alloc/boxed/struct.Box.html" title="struct alloc::boxed::Box">Box</a>&lt;dyn <a class="trait" href="https://doc.rust-lang.org/nightly/core/future/future/trait.Future.html" title="trait core::future::future::Future">Future</a>&lt;Output = <a class="enum" href="https://doc.rust-lang.org/nightly/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;[<a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.u8.html">u8</a>; <a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.array.html">32</a>]&gt;&gt; + <a class="trait" href="https://doc.rust-lang.org/nightly/core/marker/trait.Send.html" title="trait core::marker::Send">Send</a> + 'async_trait&gt;&gt;
        <span class="where">where Self: 'async_trait,
@@ -23,7 +23,7 @@
              'life1: 'async_trait</span>;
 <span class="item-spacer"></span>    fn <a href="#tymethod.outgoing_contract_expiration" class="fn">outgoing_contract_expiration</a>&lt;'life0, 'life1, 'async_trait&gt;(
         &amp;'life0 self,
-        contract_id: &amp;'life1 <a class="struct" href="../../fedimint_lnv2_common/struct.ContractId.html" title="struct fedimint_lnv2_common::ContractId">ContractId</a>
+        contract_id: &amp;'life1 ContractId
     ) -&gt; <a class="struct" href="https://doc.rust-lang.org/nightly/core/pin/struct.Pin.html" title="struct core::pin::Pin">Pin</a>&lt;<a class="struct" href="https://doc.rust-lang.org/nightly/alloc/boxed/struct.Box.html" title="struct alloc::boxed::Box">Box</a>&lt;dyn <a class="trait" href="https://doc.rust-lang.org/nightly/core/future/future/trait.Future.html" title="trait core::future::future::Future">Future</a>&lt;Output = <a class="type" href="../../fedimint_api_client/api/type.FederationResult.html" title="type fedimint_api_client::api::FederationResult">FederationResult</a>&lt;<a class="enum" href="https://doc.rust-lang.org/nightly/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.u64.html">u64</a>&gt;&gt;&gt; + <a class="trait" href="https://doc.rust-lang.org/nightly/core/marker/trait.Send.html" title="trait core::marker::Send">Send</a> + 'async_trait&gt;&gt;
        <span class="where">where Self: 'async_trait,
              'life0: 'async_trait,
@@ -39,21 +39,21 @@
     Self: 'async_trait,
     'life0: 'async_trait,</div></h4></section><section id="tymethod.await_incoming_contract" class="method"><a class="src rightside" href="../../src/fedimint_lnv2_client/api.rs.html#21">source</a><h4 class="code-header">fn <a href="#tymethod.await_incoming_contract" class="fn">await_incoming_contract</a>&lt;'life0, 'life1, 'async_trait&gt;(
     &amp;'life0 self,
-    contract_id: &amp;'life1 <a class="struct" href="../../fedimint_lnv2_common/struct.ContractId.html" title="struct fedimint_lnv2_common::ContractId">ContractId</a>,
+    contract_id: &amp;'life1 ContractId,
     expiration: <a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.u64.html">u64</a>
 ) -&gt; <a class="struct" href="https://doc.rust-lang.org/nightly/core/pin/struct.Pin.html" title="struct core::pin::Pin">Pin</a>&lt;<a class="struct" href="https://doc.rust-lang.org/nightly/alloc/boxed/struct.Box.html" title="struct alloc::boxed::Box">Box</a>&lt;dyn <a class="trait" href="https://doc.rust-lang.org/nightly/core/future/future/trait.Future.html" title="trait core::future::future::Future">Future</a>&lt;Output = <a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.bool.html">bool</a>&gt; + <a class="trait" href="https://doc.rust-lang.org/nightly/core/marker/trait.Send.html" title="trait core::marker::Send">Send</a> + 'async_trait&gt;&gt;<div class="where">where
     Self: 'async_trait,
     'life0: 'async_trait,
     'life1: 'async_trait,</div></h4></section><section id="tymethod.await_preimage" class="method"><a class="src rightside" href="../../src/fedimint_lnv2_client/api.rs.html#23">source</a><h4 class="code-header">fn <a href="#tymethod.await_preimage" class="fn">await_preimage</a>&lt;'life0, 'life1, 'async_trait&gt;(
     &amp;'life0 self,
-    contract_id: &amp;'life1 <a class="struct" href="../../fedimint_lnv2_common/struct.ContractId.html" title="struct fedimint_lnv2_common::ContractId">ContractId</a>,
+    contract_id: &amp;'life1 ContractId,
     expiration: <a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.u64.html">u64</a>
 ) -&gt; <a class="struct" href="https://doc.rust-lang.org/nightly/core/pin/struct.Pin.html" title="struct core::pin::Pin">Pin</a>&lt;<a class="struct" href="https://doc.rust-lang.org/nightly/alloc/boxed/struct.Box.html" title="struct alloc::boxed::Box">Box</a>&lt;dyn <a class="trait" href="https://doc.rust-lang.org/nightly/core/future/future/trait.Future.html" title="trait core::future::future::Future">Future</a>&lt;Output = <a class="enum" href="https://doc.rust-lang.org/nightly/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;[<a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.u8.html">u8</a>; <a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.array.html">32</a>]&gt;&gt; + <a class="trait" href="https://doc.rust-lang.org/nightly/core/marker/trait.Send.html" title="trait core::marker::Send">Send</a> + 'async_trait&gt;&gt;<div class="where">where
     Self: 'async_trait,
     'life0: 'async_trait,
     'life1: 'async_trait,</div></h4></section><section id="tymethod.outgoing_contract_expiration" class="method"><a class="src rightside" href="../../src/fedimint_lnv2_client/api.rs.html#25-28">source</a><h4 class="code-header">fn <a href="#tymethod.outgoing_contract_expiration" class="fn">outgoing_contract_expiration</a>&lt;'life0, 'life1, 'async_trait&gt;(
     &amp;'life0 self,
-    contract_id: &amp;'life1 <a class="struct" href="../../fedimint_lnv2_common/struct.ContractId.html" title="struct fedimint_lnv2_common::ContractId">ContractId</a>
+    contract_id: &amp;'life1 ContractId
 ) -&gt; <a class="struct" href="https://doc.rust-lang.org/nightly/core/pin/struct.Pin.html" title="struct core::pin::Pin">Pin</a>&lt;<a class="struct" href="https://doc.rust-lang.org/nightly/alloc/boxed/struct.Box.html" title="struct alloc::boxed::Box">Box</a>&lt;dyn <a class="trait" href="https://doc.rust-lang.org/nightly/core/future/future/trait.Future.html" title="trait core::future::future::Future">Future</a>&lt;Output = <a class="type" href="../../fedimint_api_client/api/type.FederationResult.html" title="type fedimint_api_client::api::FederationResult">FederationResult</a>&lt;<a class="enum" href="https://doc.rust-lang.org/nightly/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.u64.html">u64</a>&gt;&gt;&gt; + <a class="trait" href="https://doc.rust-lang.org/nightly/core/marker/trait.Send.html" title="trait core::marker::Send">Send</a> + 'async_trait&gt;&gt;<div class="where">where
     Self: 'async_trait,
     'life0: 'async_trait,

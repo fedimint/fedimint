@@ -701,8 +701,8 @@
                     <span class="kw">let </span>pegin_start_time = Instant::now();
                     <span class="macro">debug!</span>(target: LOG_DEVIMINT, <span class="string">"Peging in client and gateways"</span>);
 
-                    <span class="kw">let </span>gw_pegin_amount = <span class="number">20_000</span>;
-                    <span class="kw">let </span>client_pegin_amount = <span class="number">10_000</span>;
+                    <span class="kw">let </span>gw_pegin_amount = <span class="number">1_000_000</span>;
+                    <span class="kw">let </span>client_pegin_amount = <span class="number">1_000_000</span>;
                     <span class="kw">if </span>!skip_setup {
                         <span class="kw">let </span>(<span class="kw">_</span>, <span class="kw">_</span>, <span class="kw">_</span>) = <span class="macro">tokio::try_join!</span>(
                             <span class="kw">async </span>{
