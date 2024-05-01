@@ -240,17 +240,20 @@ in
                 User = cfg.user;
                 Group = cfg.group;
 
+                Restart = "always";
+                RestartSec = 10;
+                StartLimitBurst = 5;
+                UMask = "077";
+                LimitNOFILE = "100000";
+
                 LockPersonality = true;
-                MemoryDenyWriteExecute = true;
                 ProtectClock = true;
                 ProtectControlGroups = true;
                 ProtectHostname = true;
                 ProtectKernelLogs = true;
                 ProtectKernelModules = true;
                 ProtectKernelTunables = true;
-                PrivateDevices = true;
                 PrivateMounts = true;
-                PrivateUsers = true;
                 RestrictAddressFamilies = [ "AF_INET" "AF_INET6" ];
                 RestrictNamespaces = true;
                 RestrictRealtime = true;
@@ -262,11 +265,14 @@ in
                 StateDirectory = "fedimintd";
                 StateDirectoryMode = "0700";
                 ExecStart = startScript;
-                Restart = "always";
-                RestartSec = 10;
-                StartLimitBurst = 5;
-                UMask = "077";
-                LimitNOFILE = "100000";
+
+
+                # Hardening measures
+                PrivateTmp = "true";
+                ProtectSystem = "full";
+                NoNewPrivileges = "true";
+                PrivateDevices = "true";
+                MemoryDenyWriteExecute = "true";
               };
             }
           )
