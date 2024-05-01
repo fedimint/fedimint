@@ -209,6 +209,13 @@ impl Command {
         self
     }
 
+    pub fn args<T: ToString>(mut self, args: impl IntoIterator<Item = T>) -> Self {
+        for arg in args.into_iter() {
+            self = self.arg(arg)
+        }
+        self
+    }
+
     pub fn env<K, V>(mut self, key: K, val: V) -> Self
     where
         K: AsRef<OsStr>,

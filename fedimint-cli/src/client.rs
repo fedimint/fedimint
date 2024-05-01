@@ -74,7 +74,11 @@ pub enum ClientCmd {
     /// Display wallet info (holdings, tiers)
     Info,
     /// Reissue notes received from a third party to avoid double spends
-    Reissue { oob_notes: OOBNotes },
+    Reissue {
+        oob_notes: OOBNotes,
+        #[arg(long = "no-wait", action = clap::ArgAction::SetFalse)]
+        wait: bool,
+    },
     /// Prepare notes to send to a third party as a payment
     Spend {
         /// The amount of e-cash to spend
@@ -207,24 +211,26 @@ pub async fn handle_command(
 ) -> anyhow::Result<serde_json::Value> {
     match command {
         ClientCmd::Info => get_note_summary(&client).await,
-        ClientCmd::Reissue { oob_notes } => {
+        ClientCmd::Reissue { oob_notes, wait } => {
             let amount = oob_notes.total_amount();
 
             let mint = client.get_first_module::<MintClientModule>();
 
             let operation_id = mint.reissue_external_notes(oob_notes, ()).await?;
-            let mut updates = mint
-                .subscribe_reissue_external_notes(operation_id)
-                .await
-                .unwrap()
-                .into_stream();
+            if wait {
+                let mut updates = mint
+                    .subscribe_reissue_external_notes(operation_id)
+                    .await
+                    .unwrap()
+                    .into_stream();
 
-            while let Some(update) = updates.next().await {
-                if let fedimint_mint_client::ReissueExternalNotesState::Failed(e) = update {
-                    bail!("Reissue failed: {e}");
+                while let Some(update) = updates.next().await {
+                    if let fedimint_mint_client::ReissueExternalNotesState::Failed(e) = update {
+                        bail!("Reissue failed: {e}");
+                    }
+
+                    debug!(target: LOG_CLIENT, ?update, "Reissue external notes state update");
                 }
-
-                debug!(target: LOG_CLIENT, ?update, "Reissue external notes state update");
             }
 
             Ok(serde_json::to_value(amount).unwrap())
