@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"fn":["load_session"],"struct":["UnitSaver"]};
+window.SIDEBAR_ITEMS = {"struct":["BackupReader","BackupWriter"]};

@@ -62,67 +62,81 @@
 <a href="#62" id="62">62</a>
 <a href="#63" id="63">63</a>
 <a href="#64" id="64">64</a>
-</pre></div><pre class="rust"><code><span class="kw">use </span>std::io::Cursor;
-
-<span class="kw">use </span>async_trait::async_trait;
+<a href="#65" id="65">65</a>
+<a href="#66" id="66">66</a>
+<a href="#67" id="67">67</a>
+<a href="#68" id="68">68</a>
+<a href="#69" id="69">69</a>
+<a href="#70" id="70">70</a>
+<a href="#71" id="71">71</a>
+</pre></div><pre class="rust"><code><span class="kw">use </span>async_trait::async_trait;
 <span class="kw">use </span>fedimint_core::db::{Database, IDatabaseTransactionOpsCoreTyped};
+<span class="kw">use </span>futures::StreamExt;
+<span class="kw">use </span>tracing::info;
 
-<span class="kw">use </span><span class="kw">crate</span>::db::AlephUnitsKey;
+<span class="kw">use </span><span class="kw">crate</span>::db::{AlephUnitsKey, AlephUnitsPrefix};
 <span class="kw">use </span><span class="kw">crate</span>::LOG_CONSENSUS;
 
-<span class="doccomment">/// This function loads the aleph bft backup from disk and creates a UnitSaver
-/// instance which allows aleph bft to append further bytes to the existing
-/// backup
-</span><span class="kw">pub async fn </span>load_session(db: Database) -&gt; (Cursor&lt;Vec&lt;u8&gt;&gt;, UnitSaver) {
-    <span class="kw">let </span><span class="kw-2">mut </span>buffer = <span class="macro">vec!</span>[];
-    <span class="kw">let </span><span class="kw-2">mut </span>units_index = <span class="number">0</span>;
-    <span class="kw">let </span><span class="kw-2">mut </span>dbtx = db.begin_transaction().<span class="kw">await</span>;
-
-    <span class="kw">while let </span><span class="prelude-val">Some</span>(bytes) = dbtx.get_value(<span class="kw-2">&amp;</span>AlephUnitsKey(units_index)).<span class="kw">await </span>{
-        buffer.extend(bytes);
-        units_index += <span class="number">1</span>;
-    }
-
-    std::mem::drop(dbtx);
-
-    <span class="kw">if </span>!buffer.is_empty() {
-        <span class="macro">tracing::info!</span>(target: LOG_CONSENSUS, buffer_len = %buffer.len(), <span class="string">"Recovering from an in-session-shutdown"</span>);
-    }
-
-    <span class="comment">// the cursor enables aleph bft to read the units via std::io::Read
-    </span><span class="kw">let </span>unit_loader = Cursor::new(buffer);
-
-    <span class="comment">// we pass the first free unit index to the UnitSaver as an offset
-    </span><span class="kw">let </span>unit_saver = UnitSaver::new(db, units_index);
-
-    (unit_loader, unit_saver)
-}
-
-<span class="doccomment">/// The UnitSaver enables aleph bft to store its local directed acyclic graph of
-/// units on disk in order to recover from a mid session crash.
-</span><span class="kw">pub struct </span>UnitSaver {
+<span class="kw">pub struct </span>BackupReader {
     db: Database,
-    units_index: u64,
 }
 
-<span class="kw">impl </span>UnitSaver {
-    <span class="kw">fn </span>new(db: Database, units_index: u64) -&gt; <span class="self">Self </span>{
-        <span class="self">Self </span>{ db, units_index }
+<span class="kw">impl </span>BackupReader {
+    <span class="kw">pub fn </span>new(db: Database) -&gt; <span class="self">Self </span>{
+        <span class="self">Self </span>{ db }
     }
 }
 
 <span class="attr">#[async_trait]
-</span><span class="kw">impl </span>aleph_bft::BackupWriter <span class="kw">for </span>UnitSaver {
+</span><span class="kw">impl </span>aleph_bft::BackupReader <span class="kw">for </span>BackupReader {
+    <span class="kw">async fn </span>read(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; std::io::Result&lt;Vec&lt;u8&gt;&gt; {
+        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.db.begin_transaction().<span class="kw">await</span>;
+
+        <span class="kw">let </span>units = dbtx
+            .find_by_prefix(<span class="kw-2">&amp;</span>AlephUnitsPrefix)
+            .<span class="kw">await
+            </span>.map(|entry| entry.<span class="number">1</span>)
+            .collect::&lt;Vec&lt;Vec&lt;u8&gt;&gt;&gt;()
+            .<span class="kw">await</span>;
+
+        <span class="kw">if </span>!units.is_empty() {
+            <span class="macro">info!</span>(target: LOG_CONSENSUS, units_len = %units.len(), <span class="string">"Recovering from an in-session-shutdown"</span>);
+        }
+
+        <span class="prelude-val">Ok</span>(units.into_iter().flatten().collect())
+    }
+}
+
+<span class="kw">pub struct </span>BackupWriter {
+    db: Database,
+}
+
+<span class="kw">impl </span>BackupWriter {
+    <span class="kw">pub fn </span>new(db: Database) -&gt; <span class="self">Self </span>{
+        <span class="self">Self </span>{ db }
+    }
+}
+
+<span class="attr">#[async_trait]
+</span><span class="kw">impl </span>aleph_bft::BackupWriter <span class="kw">for </span>BackupWriter {
     <span class="kw">async fn </span>append(<span class="kw-2">&amp;mut </span><span class="self">self</span>, data: <span class="kw-2">&amp;</span>[u8]) -&gt; std::io::Result&lt;()&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.db.begin_transaction().<span class="kw">await</span>;
 
-        dbtx.insert_new_entry(<span class="kw-2">&amp;</span>AlephUnitsKey(<span class="self">self</span>.units_index), <span class="kw-2">&amp;</span>data.to_owned())
+        <span class="kw">let </span>index = dbtx
+            .find_by_prefix_sorted_descending(<span class="kw-2">&amp;</span>AlephUnitsPrefix)
+            .<span class="kw">await
+            </span>.next()
+            .<span class="kw">await
+            </span>.map(|entry| (entry.<span class="number">0 </span>.<span class="number">0</span>) + <span class="number">1</span>)
+            .unwrap_or(<span class="number">0</span>);
+
+        dbtx.insert_new_entry(<span class="kw-2">&amp;</span>AlephUnitsKey(index), <span class="kw-2">&amp;</span>data.to_owned())
             .<span class="kw">await</span>;
 
         dbtx.commit_tx_result()
             .<span class="kw">await
             </span>.expect(<span class="string">"This is the only place where we write to this key"</span>);
-        <span class="self">self</span>.units_index += <span class="number">1</span>;
+
         <span class="prelude-val">Ok</span>(())
     }
 }

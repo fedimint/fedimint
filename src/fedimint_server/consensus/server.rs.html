@@ -878,7 +878,6 @@
 <a href="#878" id="878">878</a>
 <a href="#879" id="879">879</a>
 <a href="#880" id="880">880</a>
-<a href="#881" id="881">881</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap};
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
@@ -919,6 +918,7 @@
 <span class="kw">use </span>tokio::sync::{watch, RwLock};
 <span class="kw">use </span>tracing::{debug, info, instrument, warn, Level};
 
+<span class="kw">use </span><span class="kw">crate</span>::atomic_broadcast::backup::{BackupReader, BackupWriter};
 <span class="kw">use </span><span class="kw">crate</span>::atomic_broadcast::data_provider::{DataProvider, UnitData};
 <span class="kw">use </span><span class="kw">crate</span>::atomic_broadcast::finalization_handler::FinalizationHandler;
 <span class="kw">use </span><span class="kw">crate</span>::atomic_broadcast::network::Network;
@@ -940,7 +940,7 @@
 <span class="kw">use </span><span class="kw">crate</span>::net::api::{ConsensusApi, ExpiringCache};
 <span class="kw">use </span><span class="kw">crate</span>::net::connect::{Connector, TlsTcpConnector};
 <span class="kw">use </span><span class="kw">crate</span>::net::peers::{DelayCalculator, PeerConnector, ReconnectPeerConnections};
-<span class="kw">use crate</span>::{atomic_broadcast, LOG_CONSENSUS, LOG_CORE};
+<span class="kw">use crate</span>::{LOG_CONSENSUS, LOG_CORE};
 
 <span class="doccomment">/// How many txs can be stored in memory before blocking the API
 </span><span class="kw">const </span>TRANSACTION_BUFFER: usize = <span class="number">1000</span>;
@@ -1292,8 +1292,6 @@
         <span class="kw">let </span>(signature_sender, signature_receiver) = watch::channel(<span class="prelude-val">None</span>);
         <span class="kw">let </span>(terminator_sender, terminator_receiver) = futures::channel::oneshot::channel();
 
-        <span class="kw">let </span>(loader, saver) = atomic_broadcast::backup::load_session(<span class="self">self</span>.db.clone()).<span class="kw">await</span>;
-
         <span class="kw">let </span>aleph_handle = spawn(
             <span class="string">"aleph run session"</span>,
             aleph_bft::run_session(
@@ -1301,8 +1299,8 @@
                 aleph_bft::LocalIO::new(
                     DataProvider::new(<span class="self">self</span>.submission_receiver.clone(), signature_receiver),
                     FinalizationHandler::new(unit_data_sender),
-                    saver,
-                    loader,
+                    BackupWriter::new(<span class="self">self</span>.db.clone()),
+                    BackupReader::new(<span class="self">self</span>.db.clone()),
                 ),
                 Network::new(<span class="self">self</span>.connections.clone()),
                 <span class="self">self</span>.keychain.clone(),
