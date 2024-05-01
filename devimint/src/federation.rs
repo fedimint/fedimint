@@ -187,6 +187,13 @@ impl Client {
     pub fn get_name(&self) -> &str {
         &self.name
     }
+
+    /// Returns the current consensus session count
+    pub async fn get_session_count(&self) -> Result<u64> {
+        cmd!(self, "dev", "session-count").out_json().await?["count"]
+            .as_u64()
+            .context("count field wasn't a number")
+    }
 }
 
 impl Federation {
