@@ -644,7 +644,7 @@
                     amount: created.amount,
                     nonce: spendable_note.nonce(),
                 },
-                <span class="kw-2">&amp;</span>spendable_note,
+                <span class="kw-2">&amp;</span>spendable_note.to_undecoded(),
             )
             .<span class="kw">await
         </span>{

@@ -115,6 +115,9 @@
 <a href="#115" id="115">115</a>
 <a href="#116" id="116">116</a>
 <a href="#117" id="117">117</a>
+<a href="#118" id="118">118</a>
+<a href="#119" id="119">119</a>
+<a href="#120" id="120">120</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>fedimint_client::module::recovery::{DynModuleBackup, ModuleBackup};
 <span class="kw">use </span>fedimint_client::module::ClientDbTxContext;
 <span class="kw">use </span>fedimint_core::core::{IntoDynInstance, ModuleInstanceId};
@@ -225,7 +228,10 @@
         <span class="kw">let </span>next_note_idx = Tiered::from_iter(idxes);
 
         <span class="prelude-val">Ok</span>(EcashBackup::new_v0(
-            notes,
+            notes
+                .into_iter()
+                .map(|(amt, spendable_note)| <span class="prelude-val">Ok</span>((amt, spendable_note.decode()<span class="question-mark">?</span>)))
+                .collect::&lt;anyhow::Result&lt;TieredMulti&lt;<span class="kw">_</span>&gt;&gt;&gt;()<span class="question-mark">?</span>,
             pending_notes,
             session_count,
             next_note_idx,

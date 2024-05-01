@@ -105,7 +105,7 @@
 <span class="kw">use </span>strum_macros::EnumIter;
 
 <span class="kw">use </span><span class="kw">crate</span>::backup::recovery::MintRecoveryState;
-<span class="kw">use </span><span class="kw">crate</span>::SpendableNote;
+<span class="kw">use </span><span class="kw">crate</span>::SpendableNoteUndecoded;
 
 <span class="attr">#[repr(u8)]
 #[derive(Clone, EnumIter, Debug)]
@@ -134,7 +134,7 @@
 
 <span class="macro">impl_db_record!</span>(
     key = NoteKey,
-    value = SpendableNote,
+    value = SpendableNoteUndecoded,
     db_prefix = DbKeyPrefix::Note,
 );
 <span class="macro">impl_db_lookup!</span>(key = NoteKey, query_prefix = NoteKeyPrefix);

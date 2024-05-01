@@ -484,6 +484,8 @@
 <a href="#484" id="484">484</a>
 <a href="#485" id="485">485</a>
 <a href="#486" id="486">486</a>
+<a href="#487" id="487">487</a>
+<a href="#488" id="488">488</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::cmp::max;
 <span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::fmt;
@@ -644,7 +646,9 @@
                 amount,
                 nonce: note.nonce(),
             };
-            dbtx.module_dbtx().insert_new_entry(<span class="kw-2">&amp;</span>key, <span class="kw-2">&amp;</span>note).<span class="kw">await</span>;
+            dbtx.module_dbtx()
+                .insert_new_entry(<span class="kw-2">&amp;</span>key, <span class="kw-2">&amp;</span>note.to_undecoded())
+                .<span class="kw">await</span>;
         }
 
         <span class="kw">for </span>(amount, note_idx) <span class="kw">in </span>finalized.next_note_idx.iter() {

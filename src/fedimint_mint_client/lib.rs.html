@@ -2058,6 +2058,41 @@
 <a href="#2058" id="2058">2058</a>
 <a href="#2059" id="2059">2059</a>
 <a href="#2060" id="2060">2060</a>
+<a href="#2061" id="2061">2061</a>
+<a href="#2062" id="2062">2062</a>
+<a href="#2063" id="2063">2063</a>
+<a href="#2064" id="2064">2064</a>
+<a href="#2065" id="2065">2065</a>
+<a href="#2066" id="2066">2066</a>
+<a href="#2067" id="2067">2067</a>
+<a href="#2068" id="2068">2068</a>
+<a href="#2069" id="2069">2069</a>
+<a href="#2070" id="2070">2070</a>
+<a href="#2071" id="2071">2071</a>
+<a href="#2072" id="2072">2072</a>
+<a href="#2073" id="2073">2073</a>
+<a href="#2074" id="2074">2074</a>
+<a href="#2075" id="2075">2075</a>
+<a href="#2076" id="2076">2076</a>
+<a href="#2077" id="2077">2077</a>
+<a href="#2078" id="2078">2078</a>
+<a href="#2079" id="2079">2079</a>
+<a href="#2080" id="2080">2080</a>
+<a href="#2081" id="2081">2081</a>
+<a href="#2082" id="2082">2082</a>
+<a href="#2083" id="2083">2083</a>
+<a href="#2084" id="2084">2084</a>
+<a href="#2085" id="2085">2085</a>
+<a href="#2086" id="2086">2086</a>
+<a href="#2087" id="2087">2087</a>
+<a href="#2088" id="2088">2088</a>
+<a href="#2089" id="2089">2089</a>
+<a href="#2090" id="2090">2090</a>
+<a href="#2091" id="2091">2091</a>
+<a href="#2092" id="2092">2092</a>
+<a href="#2093" id="2093">2093</a>
+<a href="#2094" id="2094">2094</a>
+<a href="#2095" id="2095">2095</a>
 </pre></div><pre class="rust"><code><span class="comment">// Backup and restore logic
 </span><span class="kw">pub mod </span>backup;
 <span class="doccomment">/// Database keys used throughout the mint client module
@@ -2083,7 +2118,7 @@
 <span class="kw">use </span>backup::recovery::MintRecovery;
 <span class="kw">use </span>base64::Engine <span class="kw">as _</span>;
 <span class="kw">use </span>bitcoin_hashes::{sha256, sha256t, Hash, HashEngine <span class="kw">as </span>BitcoinHashEngine};
-<span class="kw">use </span>client_db::DbKeyPrefix;
+<span class="kw">use </span>client_db::{DbKeyPrefix, NoteKeyPrefix};
 <span class="kw">use </span>fedimint_client::module::init::{
     ClientModuleInit, ClientModuleInitArgs, ClientModuleRecoverArgs,
 };
@@ -2128,7 +2163,7 @@
 <span class="kw">use </span><span class="kw">crate</span>::backup::EcashBackup;
 <span class="kw">use </span><span class="kw">crate</span>::client_db::{
     CancelledOOBSpendKey, CancelledOOBSpendKeyPrefix, NextECashNoteIndexKey,
-    NextECashNoteIndexKeyPrefix, NoteKey, NoteKeyPrefix,
+    NextECashNoteIndexKeyPrefix, NoteKey,
 };
 <span class="kw">use </span><span class="kw">crate</span>::input::{
     MintInputCommon, MintInputStateCreated, MintInputStateMachine, MintInputStates,
@@ -2486,7 +2521,7 @@
                         dbtx,
                         NoteKeyPrefix,
                         NoteKey,
-                        SpendableNote,
+                        SpendableNoteUndecoded,
                         mint_client_items,
                         <span class="string">"Notes"
                     </span>);
@@ -2987,7 +3022,7 @@
     <span class="kw">async fn </span>spend_notes_oob(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>&gt;,
-        notes_selector: <span class="kw-2">&amp;</span><span class="kw">impl </span>NotesSelector&lt;SpendableNote&gt;,
+        notes_selector: <span class="kw-2">&amp;</span><span class="kw">impl </span>NotesSelector,
         amount: Amount,
         try_cancel_after: Duration,
     ) -&gt; anyhow::Result&lt;(
@@ -3058,7 +3093,7 @@
     <span class="doccomment">/// Select notes with `requested_amount` using `notes_selector`.
     </span><span class="kw">async fn </span>select_notes(
         dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>&gt;,
-        notes_selector: <span class="kw-2">&amp;</span><span class="kw">impl </span>NotesSelector&lt;SpendableNote&gt;,
+        notes_selector: <span class="kw-2">&amp;</span><span class="kw">impl </span>NotesSelector,
         requested_amount: Amount,
         fee_per_note_input: Amount,
     ) -&gt; anyhow::Result&lt;TieredMulti&lt;SpendableNote&gt;&gt; {
@@ -3069,12 +3104,15 @@
 
         notes_selector
             .select_notes(note_stream, requested_amount, fee_per_note_input)
-            .<span class="kw">await
-    </span>}
+            .<span class="kw">await</span><span class="question-mark">?
+            </span>.into_iter()
+            .map(|(amt, snote)| <span class="prelude-val">Ok</span>((amt, snote.decode()<span class="question-mark">?</span>)))
+            .collect::&lt;anyhow::Result&lt;TieredMulti&lt;<span class="kw">_</span>&gt;&gt;&gt;()
+    }
 
     <span class="kw">async fn </span>get_all_spendable_notes(
         dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>&gt;,
-    ) -&gt; TieredMulti&lt;SpendableNote&gt; {
+    ) -&gt; TieredMulti&lt;SpendableNoteUndecoded&gt; {
         TieredMulti::from_iter(
             (dbtx
                 .find_by_prefix(<span class="kw-2">&amp;</span>NoteKeyPrefix)
@@ -3309,7 +3347,7 @@
     <span class="doccomment">/// Same as `spend_notes` but allows different to select notes to be used.
     </span><span class="kw">pub async fn </span>spend_notes_with_selector&lt;M: Serialize + Send&gt;(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        notes_selector: <span class="kw-2">&amp;</span><span class="kw">impl </span>NotesSelector&lt;SpendableNote&gt;,
+        notes_selector: <span class="kw-2">&amp;</span><span class="kw">impl </span>NotesSelector,
         requested_amount: Amount,
         try_cancel_after: Duration,
         include_invite: bool,
@@ -3507,7 +3545,7 @@
 }
 
 <span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
-</span><span class="kw">pub trait </span>NotesSelector&lt;Note&gt;: Send + Sync {
+</span><span class="kw">pub trait </span>NotesSelector&lt;Note = SpendableNoteUndecoded&gt;: Send + Sync {
     <span class="doccomment">/// Select notes from stream for requested_amount.
     /// The stream must produce items in non- decreasing order of amount.
     </span><span class="kw">async fn </span>select_notes(
@@ -3770,11 +3808,35 @@
             signature: <span class="self">self</span>.signature,
         }
     }
+    <span class="kw">pub fn </span>to_undecoded(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; SpendableNoteUndecoded {
+        SpendableNoteUndecoded {
+            signature: <span class="self">self
+                </span>.signature
+                .consensus_encode_to_vec()
+                .try_into()
+                .expect(<span class="string">"Encoded size always correct"</span>),
+            spend_key: <span class="self">self</span>.spend_key,
+        }
+    }
 }
 
-<span class="attr">#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Encodable, Decodable)]
+<span class="doccomment">/// A version of [`SpendableNote`] that didn't decode the `signature` yet
+///
+/// **Note**: signature decoding from raw bytes is faliable, as not all bytes
+/// are valid signatures. Therefore this type must not be used for external
+/// data, and should be limited to optimizing reading from internal database.
+///
+/// The signature bytes will be validated in [`Self::decode`].
+///
+/// Decoding [`tbs::Signature`] is somewhat CPU-intensive (see benches in this
+/// crate), and when most of the result will be filtered away or completely
+/// unused, it makes sense to skip/delay decoding.
+</span><span class="attr">#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Encodable, Decodable, Serialize)]
 </span><span class="kw">pub struct </span>SpendableNoteUndecoded {
-    <span class="kw">pub </span>signature: [u8; <span class="number">48</span>],
+    <span class="comment">// Need to keep this in sync with `tbs::Signature`, but there's a test
+    // verifying they serialize and decode the same.
+    </span><span class="attr">#[serde(serialize_with = <span class="string">"serdect::array::serialize_hex_lower_or_bin"</span>)]
+    </span><span class="kw">pub </span>signature: [u8; <span class="number">48</span>],
     <span class="kw">pub </span>spend_key: KeyPair,
 }
 
@@ -4068,12 +4130,20 @@
 
     <span class="attr">#[test]
     </span><span class="kw">fn </span>spendable_note_undecoded_sanity() {
-        <span class="kw">for </span>note_hex <span class="kw">in </span>[<span class="string">"a5dd3ebacad1bc48bd8718eed5a8da1d68f91323bef2848ac4fa2e6f8eed710f3178fd4aef047cc234e6b1127086f33cc408b39818781d9521475360de6b205f3328e490a6d99d5e2553a4553207c8bd"</span>] {
+        <span class="comment">// TODO: add more hex dumps to the loop
+        </span><span class="attr">#[allow(clippy::single_element_loop)]
+        </span><span class="kw">for </span>note_hex <span class="kw">in </span>[<span class="string">"a5dd3ebacad1bc48bd8718eed5a8da1d68f91323bef2848ac4fa2e6f8eed710f3178fd4aef047cc234e6b1127086f33cc408b39818781d9521475360de6b205f3328e490a6d99d5e2553a4553207c8bd"</span>] {
 
+            <span class="kw">let </span>note = SpendableNote::consensus_decode_hex(note_hex, <span class="kw-2">&amp;</span>Default::default()).unwrap();
+            <span class="kw">let </span>note_undecoded= SpendableNoteUndecoded::consensus_decode_hex(note_hex, <span class="kw-2">&amp;</span>Default::default()).unwrap().decode().unwrap();
             <span class="macro">assert_eq!</span>(
-                SpendableNote::consensus_decode_hex(note_hex, <span class="kw-2">&amp;</span>Default::default()).unwrap(),
-                SpendableNoteUndecoded::consensus_decode_hex(note_hex, <span class="kw-2">&amp;</span>Default::default()).unwrap().decode().unwrap(),
-            )
+                note,
+                note_undecoded,
+            );
+            <span class="macro">assert_eq!</span>(
+                serde_json::to_string(<span class="kw-2">&amp;</span>note).unwrap(),
+                serde_json::to_string(<span class="kw-2">&amp;</span>note_undecoded).unwrap(),
+            );
         }
     }
 
