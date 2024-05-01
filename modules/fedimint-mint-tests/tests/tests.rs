@@ -436,7 +436,7 @@ mod fedimint_migration_tests {
                 amount: Amount::from_sats(1000),
                 nonce: Nonce(pubkey),
             },
-            &spendable_note,
+            &spendable_note.to_undecoded(),
         )
         .await;
 

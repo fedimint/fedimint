@@ -7,7 +7,7 @@ use serde::Serialize;
 use strum_macros::EnumIter;
 
 use crate::backup::recovery::MintRecoveryState;
-use crate::SpendableNote;
+use crate::SpendableNoteUndecoded;
 
 #[repr(u8)]
 #[derive(Clone, EnumIter, Debug)]
@@ -36,7 +36,7 @@ pub struct NoteKeyPrefix;
 
 impl_db_record!(
     key = NoteKey,
-    value = SpendableNote,
+    value = SpendableNoteUndecoded,
     db_prefix = DbKeyPrefix::Note,
 );
 impl_db_lookup!(key = NoteKey, query_prefix = NoteKeyPrefix);
