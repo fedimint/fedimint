@@ -85,11 +85,25 @@ let
             example = "signet";
             description = lib.mdDoc "Bitcoin node (bitcoind/electrum/esplora) address to connect to";
           };
+
           kind = mkOption {
             type = types.str;
             default = "bitcoind";
             example = "electrum";
             description = lib.mdDoc "Kind of a bitcoin node.";
+          };
+
+          secretFile = mkOption {
+            type = types.nullOr types.str;
+            default = null;
+            description = lib.mdDoc ''
+              If set the URL specified in `bitcoin.rpc.address` will get the content of this file added
+              as an URL password, so `http://user@example.com` will turn into `http://user:SOMESECRET@example.com`.
+
+              Example:
+
+              `/etc/nix-bitcoin-secrets/bitcoin-rpcpassword-public` (for nix-bitcoin default)
+            '';
           };
         };
       };
@@ -173,61 +187,78 @@ in
         eachFedimintd);
 
 
-    systemd.services = mapAttrs'
-      (fedimintdName: cfg: (
-        nameValuePair "fedimintd-${fedimintdName}" (
-
-          {
-            description = "Fedimint Server";
-            documentation = [ "https://github.com/fedimint/fedimint/" ];
-            wantedBy = [ "multi-user.target" ];
-            environment = lib.mkMerge ([
-              {
-                RUST_LOG = cfg.rustLogEnv;
-                FM_BIND_P2P = "${cfg.p2p.bind}:${builtins.toString cfg.p2p.port}";
-                FM_BIND_API = "${cfg.api.bind}:${builtins.toString cfg.api.port}";
-                FM_P2P_URL = cfg.p2p.address;
-                FM_API_URL = cfg.api.address;
-                FM_DATA_DIR = cfg.dataDir;
-                FM_BITCOIN_NETWORK = cfg.bitcoin.network;
-                FM_BITCOIN_RPC_URL = cfg.bitcoin.rpc.address;
-                FM_BITCOIN_RPC_KIND = cfg.bitcoin.rpc.kind;
-              }
-              cfg.extraEnvironment
-            ]);
-            serviceConfig = {
-              DynamicUser = true;
-              User = "fedimint";
-              LockPersonality = true;
-              MemoryDenyWriteExecute = true;
-              ProtectClock = true;
-              ProtectControlGroups = true;
-              ProtectHostname = true;
-              ProtectKernelLogs = true;
-              ProtectKernelModules = true;
-              ProtectKernelTunables = true;
-              PrivateDevices = true;
-              PrivateMounts = true;
-              PrivateUsers = true;
-              RestrictAddressFamilies = [ "AF_INET" "AF_INET6" ];
-              RestrictNamespaces = true;
-              RestrictRealtime = true;
-              SystemCallArchitectures = "native";
-              SystemCallFilter = [
-                "@system-service"
-                "~@privileged"
-              ];
-              StateDirectory = "fedimintd";
-              StateDirectoryMode = "0700";
-              ExecStart = "${cfg.package}/bin/fedimintd";
-              Restart = "always";
-              RestartSec = 10;
-              StartLimitBurst = 5;
-              UMask = "077";
-              LimitNOFILE = "100000";
-            };
-          })
-      ))
-      eachFedimintd;
+    systemd.services =
+      mapAttrs'
+        (fedimintdName: cfg: (
+          nameValuePair "fedimintd-${fedimintdName}" (
+            let
+              startScript = pkgs.writeShellScript "fedimintd-start" (
+                (if cfg.bitcoin.rpc.secretFile != null then
+                  ''
+                    secret=$(${pkgs.coreutils}/bin/head -n 1 "${cfg.bitcoin.rpc.secretFile}")
+                    prefix="''${FM_BITCOIN_RPC_URL%*@*}"  # Everything before the last '@'
+                    suffix="''${FM_BITCOIN_RPC_URL##*@}"  # Everything after the last '@'
+                    FM_BITCOIN_RPC_URL="''${prefix}:''${secret}@''${suffix}"
+                  ''
+                else
+                  "") +
+                ''
+                  exec ${cfg.package}/bin/fedimintd
+                ''
+              );
+            in
+            {
+              description = "Fedimint Server";
+              documentation = [ "https://github.com/fedimint/fedimint/" ];
+              wantedBy = [ "multi-user.target" ];
+              environment = lib.mkMerge ([
+                {
+                  RUST_LOG = cfg.rustLogEnv;
+                  FM_BIND_P2P = "${cfg.p2p.bind}:${builtins.toString cfg.p2p.port}";
+                  FM_BIND_API = "${cfg.api.bind}:${builtins.toString cfg.api.port}";
+                  FM_P2P_URL = cfg.p2p.address;
+                  FM_API_URL = cfg.api.address;
+                  FM_DATA_DIR = cfg.dataDir;
+                  FM_BITCOIN_NETWORK = cfg.bitcoin.network;
+                  FM_BITCOIN_RPC_URL = cfg.bitcoin.rpc.address;
+                  FM_BITCOIN_RPC_KIND = cfg.bitcoin.rpc.kind;
+                }
+                cfg.extraEnvironment
+              ]);
+              serviceConfig = {
+                DynamicUser = true;
+                User = "fedimint";
+                LockPersonality = true;
+                MemoryDenyWriteExecute = true;
+                ProtectClock = true;
+                ProtectControlGroups = true;
+                ProtectHostname = true;
+                ProtectKernelLogs = true;
+                ProtectKernelModules = true;
+                ProtectKernelTunables = true;
+                PrivateDevices = true;
+                PrivateMounts = true;
+                PrivateUsers = true;
+                RestrictAddressFamilies = [ "AF_INET" "AF_INET6" ];
+                RestrictNamespaces = true;
+                RestrictRealtime = true;
+                SystemCallArchitectures = "native";
+                SystemCallFilter = [
+                  "@system-service"
+                  "~@privileged"
+                ];
+                StateDirectory = "fedimintd";
+                StateDirectoryMode = "0700";
+                ExecStart = startScript;
+                Restart = "always";
+                RestartSec = 10;
+                StartLimitBurst = 5;
+                UMask = "077";
+                LimitNOFILE = "100000";
+              };
+            }
+          )
+        ))
+        eachFedimintd;
   };
 }
