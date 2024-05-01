@@ -249,14 +249,14 @@ async fn sends_ecash_out_of_band_cancel() -> anyhow::Result<()> {
     info!("Refund tx accepted, waiting for refunded e-cash");
 
     // FIXME: UserCanceledSuccess should mean the money is in our wallet
-    for _ in 0..200 {
+    for _ in 0..120 {
         let balance = client.get_balance().await;
         let expected_min_balance = sats(1000) - EXPECTED_MAXIMUM_FEE;
         if expected_min_balance <= balance {
             return Ok(());
         }
         debug!(target: LOG_TEST, %balance, %expected_min_balance, "Wallet balance not updated yet");
-        sleep_in_test("waiting for wallet balance", Duration::from_millis(100)).await;
+        sleep_in_test("waiting for wallet balance", Duration::from_millis(500)).await;
     }
 
     panic!("Did not receive refund in time");
