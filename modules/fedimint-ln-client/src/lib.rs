@@ -1940,6 +1940,7 @@ pub trait GatewayConnection: std::fmt::Debug {
     // OutgoingContract
     async fn verify_gateway_availability(&self, gateway: &LightningGateway) -> anyhow::Result<()>;
 
+    // Send a POST request to the gateway to request it to pay a BOLT11 invoice.
     async fn pay_invoice(
         &self,
         gateway: LightningGateway,

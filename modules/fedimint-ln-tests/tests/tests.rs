@@ -14,6 +14,7 @@ use fedimint_dummy_server::DummyInit;
 use fedimint_ln_client::{
     InternalPayState, LightningClientInit, LightningClientModule, LightningOperationMeta,
     LnPayState, LnReceiveState, MockGatewayConnection, OutgoingLightningPayment, PayType,
+    RealGatewayConnection,
 };
 use fedimint_ln_common::config::LightningGenParams;
 use fedimint_ln_common::ln_operation;
@@ -204,9 +205,19 @@ async fn cannot_pay_same_internal_invoice_twice() -> anyhow::Result<()> {
     Ok(())
 }
 
+// TODO: This test verifies behavior between the client and the gateway, it
+// should be a devimint test
 #[tokio::test(flavor = "multi_thread")]
 async fn gateway_protects_preimage_for_payment() -> anyhow::Result<()> {
-    let fixtures = fixtures();
+    let fixtures = Fixtures::new_primary(DummyClientInit, DummyInit, DummyGenParams::default());
+    let ln_params = LightningGenParams::regtest(fixtures.bitcoin_server());
+    let fixtures = fixtures.with_module(
+        LightningClientInit {
+            gateway_conn: Arc::new(RealGatewayConnection),
+        },
+        LightningInit,
+        ln_params,
+    );
     let fed = fixtures.new_default_fed().await;
     let gw = gateway(&fixtures, &fed).await;
     let (client1, client2) = fed.two_clients().await;
