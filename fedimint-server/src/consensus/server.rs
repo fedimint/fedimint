@@ -38,6 +38,7 @@ use rand::Rng;
 use tokio::sync::{watch, RwLock};
 use tracing::{debug, info, instrument, warn, Level};
 
+use crate::atomic_broadcast::backup::{BackupReader, BackupWriter};
 use crate::atomic_broadcast::data_provider::{DataProvider, UnitData};
 use crate::atomic_broadcast::finalization_handler::FinalizationHandler;
 use crate::atomic_broadcast::network::Network;
@@ -59,7 +60,7 @@ use crate::metrics::{
 use crate::net::api::{ConsensusApi, ExpiringCache};
 use crate::net::connect::{Connector, TlsTcpConnector};
 use crate::net::peers::{DelayCalculator, PeerConnector, ReconnectPeerConnections};
-use crate::{atomic_broadcast, LOG_CONSENSUS, LOG_CORE};
+use crate::{LOG_CONSENSUS, LOG_CORE};
 
 /// How many txs can be stored in memory before blocking the API
 const TRANSACTION_BUFFER: usize = 1000;
@@ -411,8 +412,6 @@ impl ConsensusServer {
         let (signature_sender, signature_receiver) = watch::channel(None);
         let (terminator_sender, terminator_receiver) = futures::channel::oneshot::channel();
 
-        let (loader, saver) = atomic_broadcast::backup::load_session(self.db.clone()).await;
-
         let aleph_handle = spawn(
             "aleph run session",
             aleph_bft::run_session(
@@ -420,8 +419,8 @@ impl ConsensusServer {
                 aleph_bft::LocalIO::new(
                     DataProvider::new(self.submission_receiver.clone(), signature_receiver),
                     FinalizationHandler::new(unit_data_sender),
-                    saver,
-                    loader,
+                    BackupWriter::new(self.db.clone()),
+                    BackupReader::new(self.db.clone()),
                 ),
                 Network::new(self.connections.clone()),
                 self.keychain.clone(),
