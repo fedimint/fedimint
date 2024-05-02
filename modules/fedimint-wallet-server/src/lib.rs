@@ -5,7 +5,7 @@ use std::convert::Infallible;
 #[cfg(not(target_family = "wasm"))]
 use std::time::Duration;
 
-use anyhow::{bail, format_err, Context};
+use anyhow::{bail, ensure, format_err, Context};
 use bitcoin::hashes::{sha256, Hash as BitcoinHash, HashEngine, Hmac, HmacEngine};
 use bitcoin::policy::DEFAULT_MIN_RELAY_TX_FEE;
 use bitcoin::secp256k1::{All, Secp256k1, Verification};
@@ -408,68 +408,63 @@ impl ServerModule for Wallet {
         &'a self,
         dbtx: &mut DatabaseTransaction<'b>,
         consensus_item: WalletConsensusItem,
-        peer_id: PeerId,
+        peer: PeerId,
     ) -> anyhow::Result<()> {
         trace!(?consensus_item, "Received consensus proposals");
 
         match consensus_item {
-            WalletConsensusItem::BlockCount(block_count) => {
-                let current_vote = dbtx
-                    .get_value(&BlockCountVoteKey(peer_id))
-                    .await
-                    .unwrap_or(0);
+            WalletConsensusItem::BlockCount(block_count_vote) => {
+                debug!(?peer, ?block_count_vote, "Received block count vote");
 
-                if block_count < current_vote {
-                    debug!(?peer_id, ?block_count, "Received outdated block count vote");
-                    bail!("Block count vote decreased");
+                let current_vote = dbtx.get_value(&BlockCountVoteKey(peer)).await.unwrap_or(0);
+
+                if block_count_vote < current_vote {
+                    warn!(?peer, ?block_count_vote, "Block count vote is outdated");
                 }
 
-                if block_count == current_vote {
-                    debug!(
-                        ?peer_id,
-                        ?block_count,
-                        "Received redundant block count vote"
-                    );
-                    bail!("Block count vote is redundant");
-                }
+                ensure!(
+                    block_count_vote > current_vote,
+                    "Block count vote is redundant"
+                );
 
                 let old_consensus_block_count = self.consensus_block_count(dbtx).await;
 
-                dbtx.insert_entry(&BlockCountVoteKey(peer_id), &block_count)
+                dbtx.insert_entry(&BlockCountVoteKey(peer), &block_count_vote)
                     .await;
 
                 let new_consensus_block_count = self.consensus_block_count(dbtx).await;
 
                 debug!(
-                    ?peer_id,
+                    ?peer,
                     ?current_vote,
-                    ?block_count,
+                    ?block_count_vote,
                     ?old_consensus_block_count,
                     ?new_consensus_block_count,
                     "Received block count vote"
                 );
 
-                // only sync when we have a consensus block count
-                match (old_consensus_block_count, new_consensus_block_count) {
-                    (Some(old), Some(new)) if new > old => {
-                        if old > 0 {
-                            let new_height = new - 1;
-                            let old_height = old - 1;
-                            self.sync_up_to_consensus_height(dbtx, old_height, new_height)
-                                .await;
-                        } else {
-                            info!(
-                                ?new,
-                                ?old,
-                                "Not syncing up to consensus block count because we are at block 0"
-                            );
-                        }
+                assert!(old_consensus_block_count <= new_consensus_block_count);
+
+                if new_consensus_block_count != old_consensus_block_count {
+                    // We do not sync blocks that predate the federation itself
+                    if old_consensus_block_count != 0 {
+                        self.sync_up_to_consensus_height(
+                            dbtx,
+                            old_consensus_block_count,
+                            new_consensus_block_count,
+                        )
+                        .await;
+                    } else {
+                        info!(
+                            ?old_consensus_block_count,
+                            ?new_consensus_block_count,
+                            "Not syncing up to consensus block count because we are at block 0"
+                        );
                     }
-                    _ => {}
                 }
             }
             WalletConsensusItem::Feerate(feerate) => {
-                if Some(feerate) == dbtx.insert_entry(&FeeRateVoteKey(peer_id), &feerate).await {
+                if Some(feerate) == dbtx.insert_entry(&FeeRateVoteKey(peer), &feerate).await {
                     bail!("Fee rate vote is redundant");
                 }
             }
@@ -485,7 +480,7 @@ impl ServerModule for Wallet {
                     .await
                     .context("Unsigned transaction does not exist")?;
 
-                self.sign_peg_out_psbt(&mut unsigned.psbt, &peer_id, &peg_out_signature)
+                self.sign_peg_out_psbt(&mut unsigned.psbt, &peer, &peg_out_signature)
                     .context("Peg out signature is invalid")?;
 
                 dbtx.insert_entry(&UnsignedTransactionKey(txid), &unsigned)
@@ -673,8 +668,7 @@ impl ServerModule for Wallet {
                 BLOCK_COUNT_ENDPOINT,
                 ApiVersion::new(0, 0),
                 async |module: &Wallet, context, _params: ()| -> u32 {
-                    // TODO: perhaps change this to an Option
-                    Ok(module.consensus_block_count(&mut context.dbtx().into_nc()).await.unwrap_or_default())
+                    Ok(module.consensus_block_count(&mut context.dbtx().into_nc()).await)
                 }
             },
             api_endpoint! {
@@ -929,19 +923,20 @@ impl Wallet {
         *self.fee_rate_rx.borrow()
     }
 
-    pub async fn consensus_block_count(&self, dbtx: &mut DatabaseTransaction<'_>) -> Option<u32> {
+    pub async fn consensus_block_count(&self, dbtx: &mut DatabaseTransaction<'_>) -> u32 {
         let peer_count = self.cfg.consensus.peer_peg_in_keys.total();
 
         let mut counts = dbtx
             .find_by_prefix(&BlockCountVotePrefix)
             .await
-            .map(|(.., count)| Some(count))
-            .collect::<Vec<_>>()
+            .map(|entry| entry.1)
+            .collect::<Vec<u32>>()
             .await;
 
         assert!(counts.len() <= peer_count);
+
         while counts.len() < peer_count {
-            counts.push(None);
+            counts.push(0);
         }
 
         counts.sort_unstable();
@@ -989,7 +984,7 @@ impl Wallet {
             "New consensus height, syncing up",
         );
 
-        for height in (old_height + 1)..=(new_height) {
+        for height in old_height..new_height {
             if height % 100 == 0 {
                 debug!("Caught up to block {height}");
             }
