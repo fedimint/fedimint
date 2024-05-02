@@ -1112,6 +1112,12 @@
 <a href="#1112" id="1112">1112</a>
 <a href="#1113" id="1113">1113</a>
 <a href="#1114" id="1114">1114</a>
+<a href="#1115" id="1115">1115</a>
+<a href="#1116" id="1116">1116</a>
+<a href="#1117" id="1117">1117</a>
+<a href="#1118" id="1118">1118</a>
+<a href="#1119" id="1119">1119</a>
+<a href="#1120" id="1120">1120</a>
 </pre></div><pre class="rust"><code><span class="kw">mod </span>config;
 
 <span class="kw">use </span>std::collections::{BTreeMap, HashMap, HashSet};
@@ -1767,6 +1773,12 @@
 
     <span class="kw">pub fn </span>num_members(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; usize {
         <span class="self">self</span>.members.len()
+    }
+
+    <span class="kw">pub fn </span>member_ids(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw">impl </span>Iterator&lt;Item = PeerId&gt; + <span class="lifetime">'_ </span>{
+        <span class="self">self</span>.members
+            .keys()
+            .map(|<span class="kw-2">&amp;</span>peer_id| PeerId::from(peer_id <span class="kw">as </span>u16))
     }
 }
 

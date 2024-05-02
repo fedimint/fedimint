@@ -2557,7 +2557,23 @@
 <a href="#2557" id="2557">2557</a>
 <a href="#2558" id="2558">2558</a>
 <a href="#2559" id="2559">2559</a>
-</pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::HashSet;
+<a href="#2560" id="2560">2560</a>
+<a href="#2561" id="2561">2561</a>
+<a href="#2562" id="2562">2562</a>
+<a href="#2563" id="2563">2563</a>
+<a href="#2564" id="2564">2564</a>
+<a href="#2565" id="2565">2565</a>
+<a href="#2566" id="2566">2566</a>
+<a href="#2567" id="2567">2567</a>
+<a href="#2568" id="2568">2568</a>
+<a href="#2569" id="2569">2569</a>
+<a href="#2570" id="2570">2570</a>
+<a href="#2571" id="2571">2571</a>
+<a href="#2572" id="2572">2572</a>
+<a href="#2573" id="2573">2573</a>
+<a href="#2574" id="2574">2574</a>
+<a href="#2575" id="2575">2575</a>
+</pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashSet};
 <span class="kw">use </span>std::io::Write;
 <span class="kw">use </span>std::ops::ControlFlow;
 <span class="kw">use </span>std::path::{Path, PathBuf};
@@ -2569,10 +2585,11 @@
 <span class="kw">use </span>bitcoincore_rpc::bitcoin::Txid;
 <span class="kw">use </span>clap::Subcommand;
 <span class="kw">use </span>cln_rpc::primitives::{Amount <span class="kw">as </span>ClnRpcAmount, AmountOrAny};
+<span class="kw">use </span>fedimint_core::core::LEGACY_HARDCODED_INSTANCE_ID_WALLET;
 <span class="kw">use </span>fedimint_core::encoding::Decodable;
 <span class="kw">use </span>fedimint_core::envs::is_env_var_set;
 <span class="kw">use </span>fedimint_core::task::block_in_place;
-<span class="kw">use </span>fedimint_core::Amount;
+<span class="kw">use </span>fedimint_core::{Amount, PeerId};
 <span class="kw">use </span>fedimint_ln_client::cli::LnInvoiceResponse;
 <span class="kw">use </span>fedimint_logging::LOG_DEVIMINT;
 <span class="kw">use </span>hex::ToHex;
@@ -4700,8 +4717,6 @@
 }
 
 <span class="kw">pub async fn </span>guardian_backup_test(dev_fed: DevFed, process_mgr: <span class="kw-2">&amp;</span>ProcessManager) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-    <span class="kw">use </span>fedimint_core::core::LEGACY_HARDCODED_INSTANCE_ID_WALLET;
-
     log_binary_versions().<span class="kw">await</span><span class="question-mark">?</span>;
 
     <span class="kw">let </span>fedimint_cli_version = <span class="kw">crate</span>::util::FedimintCli::version_or_default().<span class="kw">await</span>;
@@ -4811,21 +4826,12 @@
         </span>.expect(<span class="string">"could not restart fedimintd"</span>);
 
     poll(<span class="string">"Peer catches up again"</span>, || <span class="kw">async </span>{
-        <span class="kw">let </span>block_count = <span class="macro">cmd!</span>(
-            client,
-            <span class="string">"dev"</span>,
-            <span class="string">"api"</span>,
-            <span class="string">"--peer-id"</span>,
-            PEER_TO_TEST.to_string(),
-            <span class="string">"module_{LEGACY_HARDCODED_INSTANCE_ID_WALLET}_block_count"</span>,
-        )
-        .out_json()
-        .<span class="kw">await
-        </span>.map_err(ControlFlow::Continue)<span class="question-mark">?</span>[<span class="string">"value"</span>]
-            .as_u64()
-            .expect(<span class="string">"No block height returned"</span>);
+        <span class="kw">let </span>block_counts = all_peer_block_count(<span class="kw-2">&amp;</span>client, fed.member_ids())
+            .<span class="kw">await
+            </span>.map_err(ControlFlow::Continue)<span class="question-mark">?</span>;
+        <span class="kw">let </span>block_count = block_counts[<span class="kw-2">&amp;</span>PeerId::from(PEER_TO_TEST <span class="kw">as </span>u16)];
 
-        <span class="macro">info!</span>(<span class="string">"Caught up to block {block_count} of at least {old_block_count}"</span>);
+        <span class="macro">info!</span>(<span class="string">"Caught up to block {block_count} of at least {old_block_count} (counts={block_counts:?})"</span>);
 
         <span class="kw">if </span>block_count &lt; old_block_count {
             <span class="kw">return </span><span class="prelude-val">Err</span>(ControlFlow::Continue(<span class="macro">anyhow!</span>(<span class="string">"Block count still behind"</span>)));
@@ -4837,6 +4843,32 @@
     </span>.expect(<span class="string">"Peer didn't rejoin federation"</span>);
 
     <span class="prelude-val">Ok</span>(())
+}
+
+<span class="kw">async fn </span>peer_block_count(client: <span class="kw-2">&amp;</span>Client, peer: PeerId) -&gt; <span class="prelude-ty">Result</span>&lt;u64&gt; {
+    <span class="macro">cmd!</span>(
+        client,
+        <span class="string">"dev"</span>,
+        <span class="string">"api"</span>,
+        <span class="string">"--peer-id"</span>,
+        peer.to_string(),
+        <span class="string">"module_{LEGACY_HARDCODED_INSTANCE_ID_WALLET}_block_count"</span>,
+    )
+    .out_json()
+    .<span class="kw">await</span><span class="question-mark">?</span>[<span class="string">"value"</span>]
+        .as_u64()
+        .context(<span class="string">"No block height returned"</span>)
+}
+
+<span class="kw">async fn </span>all_peer_block_count(
+    client: <span class="kw-2">&amp;</span>Client,
+    peers: <span class="kw">impl </span>Iterator&lt;Item = PeerId&gt;,
+) -&gt; <span class="prelude-ty">Result</span>&lt;BTreeMap&lt;PeerId, u64&gt;&gt; {
+    <span class="kw">let </span><span class="kw-2">mut </span>peer_heights = BTreeMap::new();
+    <span class="kw">for </span>peer <span class="kw">in </span>peers {
+        peer_heights.insert(peer, peer_block_count(client, peer).<span class="kw">await</span><span class="question-mark">?</span>);
+    }
+    <span class="prelude-val">Ok</span>(peer_heights)
 }
 
 <span class="kw">pub async fn </span>cannot_replay_tx_test(dev_fed: DevFed) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
