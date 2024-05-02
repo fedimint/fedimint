@@ -75,8 +75,8 @@ pub struct ConsensusServer {
     api_endpoints: Vec<(PeerId, SafeUrl)>,
     cfg: ServerConfig,
     submission_receiver: Receiver<ConsensusItem>,
+    shutdown_receiver: watch::Receiver<Option<u64>>,
     latest_contribution_by_peer: Arc<RwLock<LatestContributionByPeer>>,
-
     /// Just a string version of `cfg.local.identity` for performance
     self_id_str: String,
     /// Just a string version of peer ids for performance
@@ -176,6 +176,7 @@ impl ConsensusServer {
         );
 
         let (submission_sender, submission_receiver) = async_channel::bounded(TRANSACTION_BUFFER);
+        let (shutdown_sender, shutdown_receiver) = watch::channel(None);
 
         // Build P2P connections for the atomic broadcast
         let (connections, peer_status_channels) = ReconnectPeerConnections::new(
@@ -195,6 +196,7 @@ impl ConsensusServer {
             modules: modules.clone(),
             client_cfg: cfg.consensus.to_client_config(&module_inits)?,
             submission_sender: submission_sender.clone(),
+            shutdown_sender,
             supported_api_versions: ServerConfig::supported_api_versions_summary(
                 &cfg.consensus.modules,
                 &module_inits,
@@ -235,6 +237,7 @@ impl ConsensusServer {
                 .collect(),
             cfg: cfg.clone(),
             submission_receiver,
+            shutdown_receiver,
             latest_contribution_by_peer,
             modules,
         };
@@ -256,6 +259,7 @@ impl ConsensusServer {
 
         while !task_handle.is_shutting_down() {
             let session_index = self.get_finished_session_count().await;
+
             CONSENSUS_SESSION_COUNT.set(session_index as i64);
 
             let mut item_index = self.pending_accepted_items().await.len() as u64;
@@ -301,8 +305,7 @@ impl ConsensusServer {
 
             info!(target: LOG_CONSENSUS, "Session {session_index} completed");
 
-            // if the submission channel is closed we are shutting down
-            if self.submission_receiver.is_closed() {
+            if Some(session_index) == self.shutdown_receiver.borrow().to_owned() {
                 break;
             }
         }
@@ -320,11 +323,20 @@ impl ConsensusServer {
 
         while !task_handle.is_shutting_down() {
             let session_index = self.get_finished_session_count().await;
+
             CONSENSUS_SESSION_COUNT.set(session_index as i64);
 
             self.run_session(session_index).await?;
 
             info!(target: LOG_CONSENSUS, "Session {session_index} completed");
+
+            if Some(session_index) == self.shutdown_receiver.borrow().to_owned() {
+                info!(target: LOG_CONSENSUS, "Initiating shutdown, waiting for peers to complete the session...");
+
+                sleep(Duration::from_secs(60)).await;
+
+                break;
+            }
         }
 
         info!(target: LOG_CONSENSUS, "Consensus task shut down");
