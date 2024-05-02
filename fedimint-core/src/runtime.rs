@@ -219,12 +219,21 @@ mod tests {
     #[tokio::test]
     async fn test_timeout_completed() {
         let duration = Duration::from_millis(1);
-        let future = async {
+
+        let (tx, rx) = oneshot::channel();
+
+        let future = async move {
             tokio::time::sleep(duration / 2).await;
-            "done"
+            let _ = tx.send("done");
         };
 
-        let result = timeout(duration, future).await;
-        assert!(result.is_ok());
+        tokio::select! {
+            result = timeout(duration, future) => {
+                assert!(result.is_ok());
+            }
+            _ = rx => {
+                assert!(false, "Timeout occurred before future completed");
+            }
+        }
     }
 }
