@@ -1839,11 +1839,6 @@
 <a href="#1839" id="1839">1839</a>
 <a href="#1840" id="1840">1840</a>
 <a href="#1841" id="1841">1841</a>
-<a href="#1842" id="1842">1842</a>
-<a href="#1843" id="1843">1843</a>
-<a href="#1844" id="1844">1844</a>
-<a href="#1845" id="1845">1845</a>
-<a href="#1846" id="1846">1846</a>
 </pre></div><pre class="rust"><code><span class="kw">pub mod </span>db;
 
 <span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap};
@@ -1851,7 +1846,7 @@
 <span class="attr">#[cfg(not(target_family = <span class="string">"wasm"</span>))]
 </span><span class="kw">use </span>std::time::Duration;
 
-<span class="kw">use </span>anyhow::{bail, format_err, Context};
+<span class="kw">use </span>anyhow::{bail, ensure, format_err, Context};
 <span class="kw">use </span>bitcoin::hashes::{sha256, Hash <span class="kw">as </span>BitcoinHash, HashEngine, Hmac, HmacEngine};
 <span class="kw">use </span>bitcoin::policy::DEFAULT_MIN_RELAY_TX_FEE;
 <span class="kw">use </span>bitcoin::secp256k1::{All, Secp256k1, Verification};
@@ -2254,68 +2249,63 @@
         <span class="kw-2">&amp;</span><span class="lifetime">'a </span><span class="self">self</span>,
         dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'b</span>&gt;,
         consensus_item: WalletConsensusItem,
-        peer_id: PeerId,
+        peer: PeerId,
     ) -&gt; anyhow::Result&lt;()&gt; {
         <span class="macro">trace!</span>(<span class="question-mark">?</span>consensus_item, <span class="string">"Received consensus proposals"</span>);
 
         <span class="kw">match </span>consensus_item {
-            WalletConsensusItem::BlockCount(block_count) =&gt; {
-                <span class="kw">let </span>current_vote = dbtx
-                    .get_value(<span class="kw-2">&amp;</span>BlockCountVoteKey(peer_id))
-                    .<span class="kw">await
-                    </span>.unwrap_or(<span class="number">0</span>);
+            WalletConsensusItem::BlockCount(block_count_vote) =&gt; {
+                <span class="macro">debug!</span>(<span class="question-mark">?</span>peer, <span class="question-mark">?</span>block_count_vote, <span class="string">"Received block count vote"</span>);
 
-                <span class="kw">if </span>block_count &lt; current_vote {
-                    <span class="macro">debug!</span>(<span class="question-mark">?</span>peer_id, <span class="question-mark">?</span>block_count, <span class="string">"Received outdated block count vote"</span>);
-                    <span class="macro">bail!</span>(<span class="string">"Block count vote decreased"</span>);
+                <span class="kw">let </span>current_vote = dbtx.get_value(<span class="kw-2">&amp;</span>BlockCountVoteKey(peer)).<span class="kw">await</span>.unwrap_or(<span class="number">0</span>);
+
+                <span class="kw">if </span>block_count_vote &lt; current_vote {
+                    <span class="macro">warn!</span>(<span class="question-mark">?</span>peer, <span class="question-mark">?</span>block_count_vote, <span class="string">"Block count vote is outdated"</span>);
                 }
 
-                <span class="kw">if </span>block_count == current_vote {
-                    <span class="macro">debug!</span>(
-                        <span class="question-mark">?</span>peer_id,
-                        <span class="question-mark">?</span>block_count,
-                        <span class="string">"Received redundant block count vote"
-                    </span>);
-                    <span class="macro">bail!</span>(<span class="string">"Block count vote is redundant"</span>);
-                }
+                <span class="macro">ensure!</span>(
+                    block_count_vote &gt; current_vote,
+                    <span class="string">"Block count vote is redundant"
+                </span>);
 
                 <span class="kw">let </span>old_consensus_block_count = <span class="self">self</span>.consensus_block_count(dbtx).<span class="kw">await</span>;
 
-                dbtx.insert_entry(<span class="kw-2">&amp;</span>BlockCountVoteKey(peer_id), <span class="kw-2">&amp;</span>block_count)
+                dbtx.insert_entry(<span class="kw-2">&amp;</span>BlockCountVoteKey(peer), <span class="kw-2">&amp;</span>block_count_vote)
                     .<span class="kw">await</span>;
 
                 <span class="kw">let </span>new_consensus_block_count = <span class="self">self</span>.consensus_block_count(dbtx).<span class="kw">await</span>;
 
                 <span class="macro">debug!</span>(
-                    <span class="question-mark">?</span>peer_id,
+                    <span class="question-mark">?</span>peer,
                     <span class="question-mark">?</span>current_vote,
-                    <span class="question-mark">?</span>block_count,
+                    <span class="question-mark">?</span>block_count_vote,
                     <span class="question-mark">?</span>old_consensus_block_count,
                     <span class="question-mark">?</span>new_consensus_block_count,
                     <span class="string">"Received block count vote"
                 </span>);
 
-                <span class="comment">// only sync when we have a consensus block count
-                </span><span class="kw">match </span>(old_consensus_block_count, new_consensus_block_count) {
-                    (<span class="prelude-val">Some</span>(old), <span class="prelude-val">Some</span>(new)) <span class="kw">if </span>new &gt; old =&gt; {
-                        <span class="kw">if </span>old &gt; <span class="number">0 </span>{
-                            <span class="kw">let </span>new_height = new - <span class="number">1</span>;
-                            <span class="kw">let </span>old_height = old - <span class="number">1</span>;
-                            <span class="self">self</span>.sync_up_to_consensus_height(dbtx, old_height, new_height)
-                                .<span class="kw">await</span>;
-                        } <span class="kw">else </span>{
-                            <span class="macro">info!</span>(
-                                <span class="question-mark">?</span>new,
-                                <span class="question-mark">?</span>old,
-                                <span class="string">"Not syncing up to consensus block count because we are at block 0"
-                            </span>);
-                        }
+                <span class="macro">assert!</span>(old_consensus_block_count &lt;= new_consensus_block_count);
+
+                <span class="kw">if </span>new_consensus_block_count != old_consensus_block_count {
+                    <span class="comment">// We do not sync blocks that predate the federation itself
+                    </span><span class="kw">if </span>old_consensus_block_count != <span class="number">0 </span>{
+                        <span class="self">self</span>.sync_up_to_consensus_height(
+                            dbtx,
+                            old_consensus_block_count,
+                            new_consensus_block_count,
+                        )
+                        .<span class="kw">await</span>;
+                    } <span class="kw">else </span>{
+                        <span class="macro">info!</span>(
+                            <span class="question-mark">?</span>old_consensus_block_count,
+                            <span class="question-mark">?</span>new_consensus_block_count,
+                            <span class="string">"Not syncing up to consensus block count because we are at block 0"
+                        </span>);
                     }
-                    <span class="kw">_ </span>=&gt; {}
                 }
             }
             WalletConsensusItem::Feerate(feerate) =&gt; {
-                <span class="kw">if </span><span class="prelude-val">Some</span>(feerate) == dbtx.insert_entry(<span class="kw-2">&amp;</span>FeeRateVoteKey(peer_id), <span class="kw-2">&amp;</span>feerate).<span class="kw">await </span>{
+                <span class="kw">if </span><span class="prelude-val">Some</span>(feerate) == dbtx.insert_entry(<span class="kw-2">&amp;</span>FeeRateVoteKey(peer), <span class="kw-2">&amp;</span>feerate).<span class="kw">await </span>{
                     <span class="macro">bail!</span>(<span class="string">"Fee rate vote is redundant"</span>);
                 }
             }
@@ -2331,7 +2321,7 @@
                     .<span class="kw">await
                     </span>.context(<span class="string">"Unsigned transaction does not exist"</span>)<span class="question-mark">?</span>;
 
-                <span class="self">self</span>.sign_peg_out_psbt(<span class="kw-2">&amp;mut </span>unsigned.psbt, <span class="kw-2">&amp;</span>peer_id, <span class="kw-2">&amp;</span>peg_out_signature)
+                <span class="self">self</span>.sign_peg_out_psbt(<span class="kw-2">&amp;mut </span>unsigned.psbt, <span class="kw-2">&amp;</span>peer, <span class="kw-2">&amp;</span>peg_out_signature)
                     .context(<span class="string">"Peg out signature is invalid"</span>)<span class="question-mark">?</span>;
 
                 dbtx.insert_entry(<span class="kw-2">&amp;</span>UnsignedTransactionKey(txid), <span class="kw-2">&amp;</span>unsigned)
@@ -2519,8 +2509,7 @@
                 BLOCK_COUNT_ENDPOINT,
                 ApiVersion::new(<span class="number">0</span>, <span class="number">0</span>),
                 <span class="kw">async </span>|module: <span class="kw-2">&amp;</span>Wallet, context, _params: ()| -&gt; u32 {
-                    <span class="comment">// TODO: perhaps change this to an Option
-                    </span><span class="prelude-val">Ok</span>(module.consensus_block_count(<span class="kw-2">&amp;mut </span>context.dbtx().into_nc()).<span class="kw">await</span>.unwrap_or_default())
+                    <span class="prelude-val">Ok</span>(module.consensus_block_count(<span class="kw-2">&amp;mut </span>context.dbtx().into_nc()).<span class="kw">await</span>)
                 }
             },
             <span class="macro">api_endpoint!</span> {
@@ -2775,19 +2764,20 @@
         <span class="kw-2">*</span><span class="self">self</span>.fee_rate_rx.borrow()
     }
 
-    <span class="kw">pub async fn </span>consensus_block_count(<span class="kw-2">&amp;</span><span class="self">self</span>, dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>&gt;) -&gt; <span class="prelude-ty">Option</span>&lt;u32&gt; {
+    <span class="kw">pub async fn </span>consensus_block_count(<span class="kw-2">&amp;</span><span class="self">self</span>, dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>&gt;) -&gt; u32 {
         <span class="kw">let </span>peer_count = <span class="self">self</span>.cfg.consensus.peer_peg_in_keys.total();
 
         <span class="kw">let </span><span class="kw-2">mut </span>counts = dbtx
             .find_by_prefix(<span class="kw-2">&amp;</span>BlockCountVotePrefix)
             .<span class="kw">await
-            </span>.map(|(.., count)| <span class="prelude-val">Some</span>(count))
-            .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;()
+            </span>.map(|entry| entry.<span class="number">1</span>)
+            .collect::&lt;Vec&lt;u32&gt;&gt;()
             .<span class="kw">await</span>;
 
         <span class="macro">assert!</span>(counts.len() &lt;= peer_count);
+
         <span class="kw">while </span>counts.len() &lt; peer_count {
-            counts.push(<span class="prelude-val">None</span>);
+            counts.push(<span class="number">0</span>);
         }
 
         counts.sort_unstable();
@@ -2835,7 +2825,7 @@
             <span class="string">"New consensus height, syncing up"</span>,
         );
 
-        <span class="kw">for </span>height <span class="kw">in </span>(old_height + <span class="number">1</span>)..=(new_height) {
+        <span class="kw">for </span>height <span class="kw">in </span>old_height..new_height {
             <span class="kw">if </span>height % <span class="number">100 </span>== <span class="number">0 </span>{
                 <span class="macro">debug!</span>(<span class="string">"Caught up to block {height}"</span>);
             }
