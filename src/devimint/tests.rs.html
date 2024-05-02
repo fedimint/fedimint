@@ -2573,6 +2573,15 @@
 <a href="#2573" id="2573">2573</a>
 <a href="#2574" id="2574">2574</a>
 <a href="#2575" id="2575">2575</a>
+<a href="#2576" id="2576">2576</a>
+<a href="#2577" id="2577">2577</a>
+<a href="#2578" id="2578">2578</a>
+<a href="#2579" id="2579">2579</a>
+<a href="#2580" id="2580">2580</a>
+<a href="#2581" id="2581">2581</a>
+<a href="#2582" id="2582">2582</a>
+<a href="#2583" id="2583">2583</a>
+<a href="#2584" id="2584">2584</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashSet};
 <span class="kw">use </span>std::io::Write;
 <span class="kw">use </span>std::ops::ControlFlow;
@@ -4624,7 +4633,11 @@
     <span class="kw">let </span>total_fed_sats = fed_utxos_sats.iter().sum::&lt;u64&gt;();
     fed.finalize_mempool_tx().<span class="kw">await</span><span class="question-mark">?</span>;
 
-    <span class="kw">let </span>now = fedimint_core::time::now();
+    <span class="comment">// We are done transacting and save the current session id so we can wait for
+    // the next session later on. We already save it here so that if in the meantime
+    // a session is generated we don't wait for another.
+    </span><span class="kw">let </span>last_tx_session = client.get_session_count().<span class="kw">await</span><span class="question-mark">?</span>;
+
     <span class="macro">info!</span>(<span class="string">"Recovering using utxos method"</span>);
     <span class="kw">let </span>output = <span class="macro">cmd!</span>(
         <span class="kw">crate</span>::util::Recoverytool,
@@ -4679,31 +4692,33 @@
     <span class="kw">let </span>diff = balances_after.mine.immature + balances_after.mine.trusted
         - balances_before.mine.immature
         - balances_before.mine.trusted;
+
+    <span class="comment">// We need to wait for a session to be generated to make sure we have the signed
+    // session outcome in our DB. If there ever is another problem here: wait for
+    // fedimintd-0 specifically to acknowledge the session switch. In practice this
+    // should be sufficiently synchronous though.
+    </span>wait_session_outcome(<span class="kw-2">&amp;</span>client, last_tx_session).<span class="kw">await</span><span class="question-mark">?</span>;
+
     <span class="comment">// Funds from descriptors should match the fed's utxos
     </span><span class="macro">assert_eq!</span>(diff.to_sat(), total_fed_sats);
     <span class="macro">info!</span>(<span class="string">"Recovering using epochs method"</span>);
-    <span class="kw">let </span>outputs = <span class="kw">loop </span>{
-        <span class="kw">let </span>output = <span class="macro">cmd!</span>(
-            <span class="kw">crate</span>::util::Recoverytool,
-            <span class="string">"--readonly"</span>,
-            <span class="string">"--cfg"</span>,
-            <span class="string">"{data_dir}/fedimintd-0"</span>,
-            <span class="string">"epochs"</span>,
-            <span class="string">"--db"</span>,
-            <span class="string">"{data_dir}/fedimintd-0/database"
-        </span>)
-        .env(FM_PASSWORD_ENV, <span class="string">"pass"</span>)
-        .out_json()
-        .<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">let </span>outputs = output.as_array().context(<span class="string">"expected an array"</span>)<span class="question-mark">?</span>;
-        <span class="kw">if </span>outputs.len() &gt;= fed_utxos_sats.len() {
-            <span class="kw">break </span>outputs.clone();
-        }
-        <span class="kw">if </span>now.elapsed()<span class="question-mark">? </span>&gt; Duration::from_secs(<span class="number">180</span>) {
-            <span class="macro">bail!</span>(<span class="string">"recoverytool epochs method timed out"</span>);
-        }
-        fedimint_core::task::sleep_in_test(<span class="string">"recovery failed"</span>, Duration::from_secs(<span class="number">1</span>)).<span class="kw">await
-    </span>};
+
+    <span class="kw">let </span>outputs = <span class="macro">cmd!</span>(
+        <span class="kw">crate</span>::util::Recoverytool,
+        <span class="string">"--readonly"</span>,
+        <span class="string">"--cfg"</span>,
+        <span class="string">"{data_dir}/fedimintd-0"</span>,
+        <span class="string">"epochs"</span>,
+        <span class="string">"--db"</span>,
+        <span class="string">"{data_dir}/fedimintd-0/database"
+    </span>)
+    .env(FM_PASSWORD_ENV, <span class="string">"pass"</span>)
+    .out_json()
+    .<span class="kw">await</span><span class="question-mark">?
+    </span>.as_array()
+    .context(<span class="string">"expected an array"</span>)<span class="question-mark">?
+    </span>.clone();
+
     <span class="kw">let </span>epochs_descriptors = outputs
         .iter()
         .map(|o| o[<span class="string">"descriptor"</span>].as_str().unwrap())
@@ -5030,12 +5045,15 @@
 
 <span class="kw">async fn </span>wait_session(client: <span class="kw-2">&amp;</span>federation::Client) -&gt; anyhow::Result&lt;()&gt; {
     <span class="macro">info!</span>(<span class="string">"Waiting for a new session"</span>);
-    <span class="kw">let </span>session_count = <span class="macro">cmd!</span>(client, <span class="string">"dev"</span>, <span class="string">"api"</span>, <span class="string">"session_count"</span>)
-        .out_json()
-        .<span class="kw">await</span><span class="question-mark">?</span>[<span class="string">"value"</span>]
-        .as_u64()
-        .context(<span class="string">"session count must be integer"</span>)<span class="question-mark">?
-        </span>.to_owned();
+    <span class="kw">let </span>session_count = client.get_session_count().<span class="kw">await</span><span class="question-mark">?</span>;
+    wait_session_outcome(client, session_count).<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="prelude-val">Ok</span>(())
+}
+
+<span class="kw">async fn </span>wait_session_outcome(
+    client: <span class="kw-2">&amp;</span>federation::Client,
+    session_count: u64,
+) -&gt; anyhow::Result&lt;()&gt; {
     <span class="kw">let </span>start = Instant::now();
     poll_with_timeout(
         <span class="string">"Waiting for a new session"</span>,
