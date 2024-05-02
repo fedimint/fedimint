@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::collections::{BTreeMap, HashSet};
 use std::io::Write;
 use std::ops::ControlFlow;
 use std::path::{Path, PathBuf};
@@ -10,10 +10,11 @@ use bitcoincore_rpc::bitcoin;
 use bitcoincore_rpc::bitcoin::Txid;
 use clap::Subcommand;
 use cln_rpc::primitives::{Amount as ClnRpcAmount, AmountOrAny};
+use fedimint_core::core::LEGACY_HARDCODED_INSTANCE_ID_WALLET;
 use fedimint_core::encoding::Decodable;
 use fedimint_core::envs::is_env_var_set;
 use fedimint_core::task::block_in_place;
-use fedimint_core::Amount;
+use fedimint_core::{Amount, PeerId};
 use fedimint_ln_client::cli::LnInvoiceResponse;
 use fedimint_logging::LOG_DEVIMINT;
 use hex::ToHex;
@@ -2141,8 +2142,6 @@ pub async fn recoverytool_test(dev_fed: DevFed) -> Result<()> {
 }
 
 pub async fn guardian_backup_test(dev_fed: DevFed, process_mgr: &ProcessManager) -> Result<()> {
-    use fedimint_core::core::LEGACY_HARDCODED_INSTANCE_ID_WALLET;
-
     log_binary_versions().await?;
 
     let fedimint_cli_version = crate::util::FedimintCli::version_or_default().await;
@@ -2252,21 +2251,12 @@ pub async fn guardian_backup_test(dev_fed: DevFed, process_mgr: &ProcessManager)
         .expect("could not restart fedimintd");
 
     poll("Peer catches up again", || async {
-        let block_count = cmd!(
-            client,
-            "dev",
-            "api",
-            "--peer-id",
-            PEER_TO_TEST.to_string(),
-            "module_{LEGACY_HARDCODED_INSTANCE_ID_WALLET}_block_count",
-        )
-        .out_json()
-        .await
-        .map_err(ControlFlow::Continue)?["value"]
-            .as_u64()
-            .expect("No block height returned");
+        let block_counts = all_peer_block_count(&client, fed.member_ids())
+            .await
+            .map_err(ControlFlow::Continue)?;
+        let block_count = block_counts[&PeerId::from(PEER_TO_TEST as u16)];
 
-        info!("Caught up to block {block_count} of at least {old_block_count}");
+        info!("Caught up to block {block_count} of at least {old_block_count} (counts={block_counts:?})");
 
         if block_count < old_block_count {
             return Err(ControlFlow::Continue(anyhow!("Block count still behind")));
@@ -2278,6 +2268,32 @@ pub async fn guardian_backup_test(dev_fed: DevFed, process_mgr: &ProcessManager)
     .expect("Peer didn't rejoin federation");
 
     Ok(())
+}
+
+async fn peer_block_count(client: &Client, peer: PeerId) -> Result<u64> {
+    cmd!(
+        client,
+        "dev",
+        "api",
+        "--peer-id",
+        peer.to_string(),
+        "module_{LEGACY_HARDCODED_INSTANCE_ID_WALLET}_block_count",
+    )
+    .out_json()
+    .await?["value"]
+        .as_u64()
+        .context("No block height returned")
+}
+
+async fn all_peer_block_count(
+    client: &Client,
+    peers: impl Iterator<Item = PeerId>,
+) -> Result<BTreeMap<PeerId, u64>> {
+    let mut peer_heights = BTreeMap::new();
+    for peer in peers {
+        peer_heights.insert(peer, peer_block_count(client, peer).await?);
+    }
+    Ok(peer_heights)
 }
 
 pub async fn cannot_replay_tx_test(dev_fed: DevFed) -> Result<()> {
