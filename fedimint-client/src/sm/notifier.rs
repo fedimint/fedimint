@@ -1,4 +1,5 @@
 use std::marker::PhantomData;
+use std::sync::Arc;
 
 use fedimint_core::core::{ModuleInstanceId, OperationId};
 use fedimint_core::db::{Database, IDatabaseTransactionOpsCoreTyped};
@@ -124,17 +125,7 @@ where
 
         // It's important to start the subscription first and then query the database to
         // not lose any transitions in the meantime.
-        let new_transitions =
-            self.subscribe_all_operations()
-                .await
-                .filter_map(move |state: S| async move {
-                    if state.operation_id() == operation_id {
-                        trace!(%operation_id, ?state, "Received state transition notification");
-                        Some(state)
-                    } else {
-                        None
-                    }
-                });
+        let new_transitions = self.subscribe_all_operations().await;
 
         let db_states = {
             let mut dbtx = self.db.begin_transaction().await;
@@ -180,6 +171,32 @@ where
                 .collect::<Vec<S>>()
         };
 
+        let new_transitions = new_transitions.filter_map({
+            let db_states: Arc<_> = Arc::new(db_states.clone());
+
+            move |state: S| {
+                let db_states = db_states.clone();
+                async move {
+                    if state.operation_id() == operation_id {
+                        trace!(%operation_id, ?state, "Received state transition notification");
+                        // Deduplicate events that might have both come from the DB and streamed,
+                        // due to subscribing to notifier before querying the DB.
+                        //
+                        // Note: linear search should be good enough in practice for many reasons.
+                        // Eg. states tend to have all the states in the DB, or all streamed "live",
+                        // so the overlap here should be minimal.
+                        // And we'll rewrite the whole thing anyway and use only db as a reference.
+                        if db_states.iter().any(|db_s| db_s == &state) {
+                            debug!(%operation_id, ?state, "Ignoring duplicated event");
+                            return None;
+                        }
+                        Some(state)
+                    } else {
+                        None
+                    }
+                }
+            }
+        });
         Box::pin(futures::stream::iter(db_states).chain(new_transitions))
     }
 
