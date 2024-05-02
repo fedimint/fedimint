@@ -729,11 +729,6 @@
 <a href="#729" id="729">729</a>
 <a href="#730" id="730">730</a>
 <a href="#731" id="731">731</a>
-<a href="#732" id="732">732</a>
-<a href="#733" id="733">733</a>
-<a href="#734" id="734">734</a>
-<a href="#735" id="735">735</a>
-<a href="#736" id="736">736</a>
 </pre></div><pre class="rust"><code><span class="kw">pub mod </span>api;
 
 <span class="kw">pub mod </span>client_db;
@@ -782,7 +777,6 @@
 <span class="kw">use </span>secp256k1::{All, Secp256k1};
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>strum::IntoEnumIterator;
-<span class="kw">use </span>tracing::warn;
 
 <span class="kw">use </span><span class="kw">crate</span>::api::WalletFederationApi;
 <span class="kw">use </span><span class="kw">crate</span>::client_db::NextPegInTweakIndexKey;
@@ -1235,16 +1229,12 @@
                         <span class="prelude-val">None </span>=&gt; <span class="kw">return</span>,
                     };
 
-                    <span class="kw">let </span>claiming = <span class="kw">loop </span>{
-                        <span class="kw">match </span>next_deposit_state(<span class="kw-2">&amp;mut </span>operation_stream).<span class="kw">await </span>{
-                        <span class="prelude-val">Some</span>(DepositStates::Claiming(claiming)) =&gt; <span class="kw">break </span>claiming,
+                    <span class="kw">let </span>claiming = <span class="kw">match </span>next_deposit_state(<span class="kw-2">&amp;mut </span>operation_stream).<span class="kw">await </span>{
+                        <span class="prelude-val">Some</span>(DepositStates::Claiming(claiming)) =&gt; claiming,
                         <span class="prelude-val">Some</span>(s) =&gt; {
-                            <span class="comment">// TODO: workaround, fix https://github.com/fedimint/fedimint/issues/5126#issuecomment-2083828644
-                            </span><span class="macro">warn!</span>(<span class="string">"Unexpected state {s:?}"</span>);
-                            <span class="kw">continue
-                        </span>},
+                            <span class="macro">panic!</span>(<span class="string">"Unexpected state {s:?}"</span>)
+                        },
                         <span class="prelude-val">None </span>=&gt; <span class="kw">return</span>,
-                    }
                     };
                     <span class="kw">yield </span>DepositState::Confirmed(tx_data.clone());
 

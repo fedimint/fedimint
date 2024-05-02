@@ -213,7 +213,25 @@
 <a href="#213" id="213">213</a>
 <a href="#214" id="214">214</a>
 <a href="#215" id="215">215</a>
+<a href="#216" id="216">216</a>
+<a href="#217" id="217">217</a>
+<a href="#218" id="218">218</a>
+<a href="#219" id="219">219</a>
+<a href="#220" id="220">220</a>
+<a href="#221" id="221">221</a>
+<a href="#222" id="222">222</a>
+<a href="#223" id="223">223</a>
+<a href="#224" id="224">224</a>
+<a href="#225" id="225">225</a>
+<a href="#226" id="226">226</a>
+<a href="#227" id="227">227</a>
+<a href="#228" id="228">228</a>
+<a href="#229" id="229">229</a>
+<a href="#230" id="230">230</a>
+<a href="#231" id="231">231</a>
+<a href="#232" id="232">232</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::marker::PhantomData;
+<span class="kw">use </span>std::sync::Arc;
 
 <span class="kw">use </span>fedimint_core::core::{ModuleInstanceId, OperationId};
 <span class="kw">use </span>fedimint_core::db::{Database, IDatabaseTransactionOpsCoreTyped};
@@ -339,17 +357,7 @@
 
         <span class="comment">// It's important to start the subscription first and then query the database to
         // not lose any transitions in the meantime.
-        </span><span class="kw">let </span>new_transitions =
-            <span class="self">self</span>.subscribe_all_operations()
-                .<span class="kw">await
-                </span>.filter_map(<span class="kw">move </span>|state: S| <span class="kw">async move </span>{
-                    <span class="kw">if </span>state.operation_id() == operation_id {
-                        <span class="macro">trace!</span>(%operation_id, <span class="question-mark">?</span>state, <span class="string">"Received state transition notification"</span>);
-                        <span class="prelude-val">Some</span>(state)
-                    } <span class="kw">else </span>{
-                        <span class="prelude-val">None
-                    </span>}
-                });
+        </span><span class="kw">let </span>new_transitions = <span class="self">self</span>.subscribe_all_operations().<span class="kw">await</span>;
 
         <span class="kw">let </span>db_states = {
             <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.db.begin_transaction().<span class="kw">await</span>;
@@ -395,6 +403,32 @@
                 .collect::&lt;Vec&lt;S&gt;&gt;()
         };
 
+        <span class="kw">let </span>new_transitions = new_transitions.filter_map({
+            <span class="kw">let </span>db_states: Arc&lt;<span class="kw">_</span>&gt; = Arc::new(db_states.clone());
+
+            <span class="kw">move </span>|state: S| {
+                <span class="kw">let </span>db_states = db_states.clone();
+                <span class="kw">async move </span>{
+                    <span class="kw">if </span>state.operation_id() == operation_id {
+                        <span class="macro">trace!</span>(%operation_id, <span class="question-mark">?</span>state, <span class="string">"Received state transition notification"</span>);
+                        <span class="comment">// Deduplicate events that might have both come from the DB and streamed,
+                        // due to subscribing to notifier before querying the DB.
+                        //
+                        // Note: linear search should be good enough in practice for many reasons.
+                        // Eg. states tend to have all the states in the DB, or all streamed "live",
+                        // so the overlap here should be minimal.
+                        // And we'll rewrite the whole thing anyway and use only db as a reference.
+                        </span><span class="kw">if </span>db_states.iter().any(|db_s| db_s == <span class="kw-2">&amp;</span>state) {
+                            <span class="macro">debug!</span>(%operation_id, <span class="question-mark">?</span>state, <span class="string">"Ignoring duplicated event"</span>);
+                            <span class="kw">return </span><span class="prelude-val">None</span>;
+                        }
+                        <span class="prelude-val">Some</span>(state)
+                    } <span class="kw">else </span>{
+                        <span class="prelude-val">None
+                    </span>}
+                }
+            }
+        });
         Box::pin(futures::stream::iter(db_states).chain(new_transitions))
     }
 
