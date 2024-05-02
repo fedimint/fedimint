@@ -356,61 +356,7 @@
 <a href="#356" id="356">356</a>
 <a href="#357" id="357">357</a>
 <a href="#358" id="358">358</a>
-<a href="#359" id="359">359</a>
-<a href="#360" id="360">360</a>
-<a href="#361" id="361">361</a>
-<a href="#362" id="362">362</a>
-<a href="#363" id="363">363</a>
-<a href="#364" id="364">364</a>
-<a href="#365" id="365">365</a>
-<a href="#366" id="366">366</a>
-<a href="#367" id="367">367</a>
-<a href="#368" id="368">368</a>
-<a href="#369" id="369">369</a>
-<a href="#370" id="370">370</a>
-<a href="#371" id="371">371</a>
-<a href="#372" id="372">372</a>
-<a href="#373" id="373">373</a>
-<a href="#374" id="374">374</a>
-<a href="#375" id="375">375</a>
-<a href="#376" id="376">376</a>
-<a href="#377" id="377">377</a>
-<a href="#378" id="378">378</a>
-<a href="#379" id="379">379</a>
-<a href="#380" id="380">380</a>
-<a href="#381" id="381">381</a>
-<a href="#382" id="382">382</a>
-<a href="#383" id="383">383</a>
-<a href="#384" id="384">384</a>
-<a href="#385" id="385">385</a>
-<a href="#386" id="386">386</a>
-<a href="#387" id="387">387</a>
-<a href="#388" id="388">388</a>
-<a href="#389" id="389">389</a>
-<a href="#390" id="390">390</a>
-<a href="#391" id="391">391</a>
-<a href="#392" id="392">392</a>
-<a href="#393" id="393">393</a>
-<a href="#394" id="394">394</a>
-<a href="#395" id="395">395</a>
-<a href="#396" id="396">396</a>
-<a href="#397" id="397">397</a>
-<a href="#398" id="398">398</a>
-<a href="#399" id="399">399</a>
-<a href="#400" id="400">400</a>
-<a href="#401" id="401">401</a>
-<a href="#402" id="402">402</a>
-<a href="#403" id="403">403</a>
-<a href="#404" id="404">404</a>
-<a href="#405" id="405">405</a>
-<a href="#406" id="406">406</a>
-<a href="#407" id="407">407</a>
-<a href="#408" id="408">408</a>
-<a href="#409" id="409">409</a>
-<a href="#410" id="410">410</a>
-<a href="#411" id="411">411</a>
-<a href="#412" id="412">412</a>
-</pre></div><pre class="rust"><code><span class="kw">use </span>std::cmp::min;
+</pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::btree_map::Entry;
 <span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::marker::PhantomData;
 
@@ -433,7 +379,7 @@
 <span class="kw">impl</span>&lt;T&gt; TieredMulti&lt;T&gt; {
     <span class="doccomment">/// Returns a new `TieredMulti` with the given `BTreeMap` map
     </span><span class="kw">pub fn </span>new(map: BTreeMap&lt;Amount, Vec&lt;T&gt;&gt;) -&gt; <span class="self">Self </span>{
-        TieredMulti(map)
+        TieredMulti(map.into_iter().filter(|(<span class="kw">_</span>, v)| !v.is_empty()).collect())
     }
 
     <span class="doccomment">/// Returns the total value of all notes in msat as `Amount`
@@ -462,14 +408,15 @@
     }
 
     <span class="doccomment">/// Returns the summary of number of items in each tier
-    </span><span class="kw">pub fn </span>summary(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; TieredSummary {
-        TieredSummary(Tiered::from_iter(
+    </span><span class="kw">pub fn </span>summary(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; TieredCounts {
+        TieredCounts(Tiered::from_iter(
             <span class="self">self</span>.iter().map(|(amount, values)| (<span class="kw-2">*</span>amount, values.len())),
         ))
     }
 
     <span class="doccomment">/// Verifies whether all vectors in all tiers are empty
     </span><span class="kw">pub fn </span>is_empty(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
+        <span class="self">self</span>.assert_invariants();
         <span class="self">self</span>.count_items() == <span class="number">0
     </span>}
 
@@ -542,13 +489,18 @@
 
     <span class="doccomment">/// Returns an `Option` with a reference to the vector of the given `Amount`
     </span><span class="kw">pub fn </span>get(<span class="kw-2">&amp;</span><span class="self">self</span>, amt: Amount) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>Vec&lt;T&gt;&gt; {
+        <span class="self">self</span>.assert_invariants();
         <span class="self">self</span>.<span class="number">0</span>.get(<span class="kw-2">&amp;</span>amt)
     }
 
-    <span class="comment">// TODO: Get rid of it. It might be used to break useful invariants (like making
-    // sure there are no empty `Vec`s after removal)
-    </span><span class="kw">pub fn </span>get_mut(<span class="kw-2">&amp;mut </span><span class="self">self</span>, amt: Amount) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;mut </span>Vec&lt;T&gt;&gt; {
-        <span class="self">self</span>.<span class="number">0</span>.get_mut(<span class="kw-2">&amp;</span>amt)
+    <span class="kw">pub fn </span>push(<span class="kw-2">&amp;mut </span><span class="self">self</span>, amt: Amount, val: T) {
+        <span class="self">self</span>.<span class="number">0</span>.entry(amt).or_default().push(val)
+    }
+
+    <span class="kw">fn </span>assert_invariants(<span class="kw-2">&amp;</span><span class="self">self</span>) {
+        <span class="comment">// Just for compactness and determinism, we don't want entries with 0 items
+        </span><span class="attr">#[cfg(debug_assertions)]
+        </span><span class="self">self</span>.iter().for_each(|(<span class="kw">_</span>, v)| <span class="macro">debug_assert!</span>(!v.is_empty()))
     }
 }
 
@@ -556,6 +508,7 @@
     <span class="kw">fn </span>from_iter&lt;T: IntoIterator&lt;Item = (Amount, C)&gt;&gt;(iter: T) -&gt; <span class="self">Self </span>{
         <span class="kw">let </span><span class="kw-2">mut </span>res = TieredMulti::default();
         res.extend(iter);
+        res.assert_invariants();
         res
     }
 }
@@ -670,56 +623,28 @@
 }
 
 <span class="attr">#[derive(Debug, PartialEq, Default, Serialize, Deserialize, Clone)]
-</span><span class="kw">pub struct </span>TieredSummary(Tiered&lt;usize&gt;);
+</span><span class="kw">pub struct </span>TieredCounts(Tiered&lt;usize&gt;);
 
-<span class="kw">impl </span>TieredSummary {
-    <span class="doccomment">/// Determines the denominations to use when representing an amount
-    ///
-    /// Algorithm tries to leave the user with a target number of
-    /// `denomination_sets` starting at the lowest denomination.  `self`
-    /// gives the denominations that the user already has.
-    </span><span class="kw">pub fn </span>represent_amount&lt;K&gt;(
-        amount: Amount,
-        current_denominations: <span class="kw-2">&amp;</span>TieredSummary,
-        tiers: <span class="kw-2">&amp;</span>Tiered&lt;K&gt;,
-        denomination_sets: u16,
-    ) -&gt; TieredSummary {
-        <span class="kw">let </span><span class="kw-2">mut </span>remaining_amount = amount;
-        <span class="kw">let </span><span class="kw-2">mut </span>denominations = TieredSummary::default();
-
-        <span class="comment">// try to hit the target `denomination_sets`
-        </span><span class="kw">for </span>tier <span class="kw">in </span>tiers.tiers() {
-            <span class="kw">let </span>notes = current_denominations
-                .<span class="number">0
-                </span>.get(<span class="kw-2">*</span>tier)
-                .copied()
-                .unwrap_or_default();
-            <span class="kw">let </span>missing_notes = (denomination_sets <span class="kw">as </span>u64).saturating_sub(notes <span class="kw">as </span>u64);
-            <span class="kw">let </span>possible_notes = remaining_amount / <span class="kw-2">*</span>tier;
-
-            <span class="kw">let </span>add_notes = min(possible_notes, missing_notes);
-            denominations.inc(<span class="kw-2">*</span>tier, add_notes <span class="kw">as </span>usize);
-            remaining_amount -= <span class="kw-2">*</span>tier * add_notes;
+<span class="kw">impl </span>TieredCounts {
+    <span class="kw">pub fn </span>inc(<span class="kw-2">&amp;mut </span><span class="self">self</span>, tier: Amount, n: usize) {
+        <span class="kw">if </span><span class="number">0 </span>&lt; n {
+            <span class="kw-2">*</span><span class="self">self</span>.<span class="number">0</span>.get_mut_or_default(tier) += n;
         }
-
-        <span class="comment">// if there is a remaining amount, add denominations with a greedy algorithm
-        </span><span class="kw">for </span>tier <span class="kw">in </span>tiers.tiers().rev() {
-            <span class="kw">let </span>res = remaining_amount / <span class="kw-2">*</span>tier;
-            remaining_amount %= <span class="kw-2">*</span>tier;
-            denominations.inc(<span class="kw-2">*</span>tier, res <span class="kw">as </span>usize);
-        }
-
-        <span class="kw">let </span>represented: u64 = denominations
-            .<span class="number">0
-            </span>.iter()
-            .map(|(k, v)| k.msats * (<span class="kw-2">*</span>v <span class="kw">as </span>u64))
-            .sum();
-        <span class="macro">assert_eq!</span>(represented, amount.msats);
-        denominations
     }
 
-    <span class="kw">pub fn </span>inc(<span class="kw-2">&amp;mut </span><span class="self">self</span>, tier: Amount, n: usize) {
-        <span class="kw-2">*</span><span class="self">self</span>.<span class="number">0</span>.get_mut_or_default(tier) += n;
+    <span class="kw">pub fn </span>dec(<span class="kw-2">&amp;mut </span><span class="self">self</span>, tier: Amount) {
+        <span class="kw">match </span><span class="self">self</span>.<span class="number">0</span>.entry(tier) {
+            Entry::Vacant(<span class="kw">_</span>) =&gt; <span class="macro">panic!</span>(<span class="string">"Trying to decrement an empty tier"</span>),
+            Entry::Occupied(<span class="kw-2">mut </span>c) =&gt; {
+                <span class="macro">assert!</span>(<span class="kw-2">*</span>c.get() != <span class="number">0</span>);
+                <span class="kw">if </span><span class="kw-2">*</span>c.get() == <span class="number">1 </span>{
+                    c.remove_entry();
+                } <span class="kw">else </span>{
+                    <span class="kw-2">*</span>c.get_mut() -= <span class="number">1</span>;
+                }
+            }
+        }
+        <span class="self">self</span>.assert_invariants();
     }
 
     <span class="kw">pub fn </span>iter(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw">impl </span>Iterator&lt;Item = (Amount, usize)&gt; + <span class="lifetime">'_ </span>{
@@ -737,11 +662,26 @@
     <span class="kw">pub fn </span>count_tiers(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; usize {
         <span class="self">self</span>.<span class="number">0</span>.count_tiers()
     }
+
+    <span class="kw">pub fn </span>is_empty(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
+        <span class="self">self</span>.count_items() == <span class="number">0
+    </span>}
+
+    <span class="kw">pub fn </span>get(<span class="kw-2">&amp;</span><span class="self">self</span>, tier: Amount) -&gt; usize {
+        <span class="self">self</span>.assert_invariants();
+        <span class="self">self</span>.<span class="number">0</span>.get(tier).copied().unwrap_or_default()
+    }
+
+    <span class="kw">fn </span>assert_invariants(<span class="kw-2">&amp;</span><span class="self">self</span>) {
+        <span class="comment">// Just for compactness and determinism, we don't want entries with 0 count
+        </span><span class="attr">#[cfg(debug_assertions)]
+        </span><span class="self">self</span>.iter().for_each(|(<span class="kw">_</span>, count)| <span class="macro">debug_assert!</span>(<span class="number">0 </span>&lt; count))
+    }
 }
 
-<span class="kw">impl </span>FromIterator&lt;(Amount, usize)&gt; <span class="kw">for </span>TieredSummary {
+<span class="kw">impl </span>FromIterator&lt;(Amount, usize)&gt; <span class="kw">for </span>TieredCounts {
     <span class="kw">fn </span>from_iter&lt;I: IntoIterator&lt;Item = (Amount, usize)&gt;&gt;(iter: I) -&gt; <span class="self">Self </span>{
-        TieredSummary(iter.into_iter().collect())
+        TieredCounts(iter.into_iter().filter(|(<span class="kw">_</span>, count)| <span class="kw-2">*</span>count != <span class="number">0</span>).collect())
     }
 }
 
@@ -752,10 +692,13 @@
 
     <span class="attr">#[test]
     </span><span class="kw">fn </span>summary_works() {
-        <span class="kw">let </span>notes = notes(<span class="macro">vec!</span>[
-            (Amount::from_sats(<span class="number">1</span>), <span class="number">1</span>),
-            (Amount::from_sats(<span class="number">2</span>), <span class="number">3</span>),
-            (Amount::from_sats(<span class="number">3</span>), <span class="number">2</span>),
+        <span class="kw">let </span>notes = TieredMulti::from_iter(<span class="macro">vec!</span>[
+            (Amount::from_sats(<span class="number">1</span>), ()),
+            (Amount::from_sats(<span class="number">2</span>), ()),
+            (Amount::from_sats(<span class="number">3</span>), ()),
+            (Amount::from_sats(<span class="number">3</span>), ()),
+            (Amount::from_sats(<span class="number">2</span>), ()),
+            (Amount::from_sats(<span class="number">2</span>), ()),
         ]);
         <span class="kw">let </span>summary = notes.summary();
         <span class="macro">assert_eq!</span>(
@@ -769,57 +712,6 @@
         <span class="macro">assert_eq!</span>(summary.total_amount(), notes.total_amount());
         <span class="macro">assert_eq!</span>(summary.count_items(), notes.count_items());
         <span class="macro">assert_eq!</span>(summary.count_tiers(), notes.count_tiers());
-    }
-
-    <span class="attr">#[test]
-    </span><span class="kw">fn </span>represent_amount_targets_denomination_sets() {
-        <span class="kw">let </span>starting = notes(<span class="macro">vec!</span>[
-            (Amount::from_sats(<span class="number">1</span>), <span class="number">1</span>),
-            (Amount::from_sats(<span class="number">2</span>), <span class="number">3</span>),
-            (Amount::from_sats(<span class="number">3</span>), <span class="number">2</span>),
-        ])
-        .summary();
-        <span class="kw">let </span>tiers = tiers(<span class="macro">vec!</span>[<span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>, <span class="number">4</span>]);
-
-        <span class="comment">// target 3 tiers will fill out the 1 and 3 denominations
-        </span><span class="macro">assert_eq!</span>(
-            TieredSummary::represent_amount(Amount::from_sats(<span class="number">6</span>), <span class="kw-2">&amp;</span>starting, <span class="kw-2">&amp;</span>tiers, <span class="number">3</span>),
-            denominations(<span class="macro">vec!</span>[
-                (Amount::from_sats(<span class="number">1</span>), <span class="number">3</span>),
-                (Amount::from_sats(<span class="number">2</span>), <span class="number">0</span>),
-                (Amount::from_sats(<span class="number">3</span>), <span class="number">1</span>),
-                (Amount::from_sats(<span class="number">4</span>), <span class="number">0</span>)
-            ])
-        );
-
-        <span class="comment">// target 2 tiers will fill out the 1 and 4 denominations
-        </span><span class="macro">assert_eq!</span>(
-            TieredSummary::represent_amount(Amount::from_sats(<span class="number">6</span>), <span class="kw-2">&amp;</span>starting, <span class="kw-2">&amp;</span>tiers, <span class="number">2</span>),
-            denominations(<span class="macro">vec!</span>[
-                (Amount::from_sats(<span class="number">1</span>), <span class="number">2</span>),
-                (Amount::from_sats(<span class="number">2</span>), <span class="number">0</span>),
-                (Amount::from_sats(<span class="number">3</span>), <span class="number">0</span>),
-                (Amount::from_sats(<span class="number">4</span>), <span class="number">1</span>)
-            ])
-        );
-    }
-
-    <span class="kw">fn </span>notes(notes: Vec&lt;(Amount, usize)&gt;) -&gt; TieredMulti&lt;usize&gt; {
-        notes
-            .into_iter()
-            .flat_map(|(amount, number)| <span class="macro">vec!</span>[(amount, <span class="number">0usize</span>); number])
-            .collect()
-    }
-
-    <span class="kw">fn </span>tiers(tiers: Vec&lt;u64&gt;) -&gt; Tiered&lt;()&gt; {
-        tiers
-            .into_iter()
-            .map(|tier| (Amount::from_sats(tier), ()))
-            .collect()
-    }
-
-    <span class="kw">fn </span>denominations(denominations: Vec&lt;(Amount, usize)&gt;) -&gt; TieredSummary {
-        TieredSummary::from_iter(denominations)
     }
 }
 </code></pre></div></section></main></body></html>

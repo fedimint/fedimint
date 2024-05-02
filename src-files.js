@@ -52,6 +52,7 @@ var srcIndex = new Map(JSON.parse('[\
 ["hkdf",["",[],["lib.rs"]]],\
 ["ln_gateway",["",[["gateway_module_v2",[],["complete_sm.rs","mod.rs","receive_sm.rs","send_sm.rs"]],["lightning",[],["cln.rs","lnd.rs","mod.rs"]],["rpc",[],["mod.rs","rpc_client.rs","rpc_server.rs"]],["state_machine",[],["complete.rs","mod.rs","pay.rs"]]],["client.rs","db.rs","envs.rs","lib.rs","types.rs"]]],\
 ["meta_sanity_test",["",[],["meta-sanity-test.rs"]]],\
+["mint_client_sanity",["",[],["mint-client-sanity.rs"]]],\
 ["recoverytool",["",[],["envs.rs","main.rs"]]],\
 ["tbs",["",[],["lib.rs"]]],\
 ["tpe",["",[],["lib.rs"]]]\

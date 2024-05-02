@@ -411,7 +411,7 @@
 <span class="kw">use </span>fedimint_core::db::Database;
 <span class="kw">use </span>fedimint_core::invite_code::InviteCode;
 <span class="kw">use </span>fedimint_core::module::CommonModuleInit;
-<span class="kw">use </span>fedimint_core::{Amount, OutPoint, TieredSummary};
+<span class="kw">use </span>fedimint_core::{Amount, OutPoint, TieredCounts};
 <span class="kw">use </span>fedimint_ln_client::{
     LightningClientInit, LightningClientModule, LnPayState, OutgoingLightningPayment,
 };
@@ -726,10 +726,10 @@
     secp256k1::PublicKey::from_str(s)
 }
 
-<span class="kw">pub async fn </span>get_note_summary(client: <span class="kw-2">&amp;</span>ClientHandleArc) -&gt; anyhow::Result&lt;TieredSummary&gt; {
+<span class="kw">pub async fn </span>get_note_summary(client: <span class="kw-2">&amp;</span>ClientHandleArc) -&gt; anyhow::Result&lt;TieredCounts&gt; {
     <span class="kw">let </span>mint_client = client.get_first_module::&lt;MintClientModule&gt;();
     <span class="kw">let </span>summary = mint_client
-        .get_wallet_summary(
+        .get_notes_tier_counts(
             <span class="kw-2">&amp;mut </span>client
                 .db()
                 .begin_transaction_nc()

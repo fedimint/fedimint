@@ -701,6 +701,12 @@
 <a href="#701" id="701">701</a>
 <a href="#702" id="702">702</a>
 <a href="#703" id="703">703</a>
+<a href="#704" id="704">704</a>
+<a href="#705" id="705">705</a>
+<a href="#706" id="706">706</a>
+<a href="#707" id="707">707</a>
+<a href="#708" id="708">708</a>
+<a href="#709" id="709">709</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::ffi;
 <span class="kw">use </span>std::str::FromStr;
@@ -720,7 +726,7 @@
 <span class="kw">use </span>fedimint_core::core::{ModuleInstanceId, ModuleKind, OperationId};
 <span class="kw">use </span>fedimint_core::encoding::Encodable;
 <span class="kw">use </span>fedimint_core::time::now;
-<span class="kw">use </span>fedimint_core::{Amount, BitcoinAmountOrAll, TieredMulti, TieredSummary};
+<span class="kw">use </span>fedimint_core::{Amount, BitcoinAmountOrAll, TieredCounts, TieredMulti};
 <span class="kw">use </span>fedimint_ln_client::cli::LnInvoiceResponse;
 <span class="kw">use </span>fedimint_ln_client::{
     LightningClientModule, LnReceiveState, OutgoingLightningPayment, PayType,
@@ -777,7 +783,11 @@
     <span class="doccomment">/// Display wallet info (holdings, tiers)
     </span>Info,
     <span class="doccomment">/// Reissue notes received from a third party to avoid double spends
-    </span>Reissue { oob_notes: OOBNotes },
+    </span>Reissue {
+        oob_notes: OOBNotes,
+        <span class="attr">#[arg(long = <span class="string">"no-wait"</span>, action = clap::ArgAction::SetFalse)]
+        </span>wait: bool,
+    },
     <span class="doccomment">/// Prepare notes to send to a third party as a payment
     </span>Spend {
         <span class="doccomment">/// The amount of e-cash to spend
@@ -910,24 +920,26 @@
 ) -&gt; anyhow::Result&lt;serde_json::Value&gt; {
     <span class="kw">match </span>command {
         ClientCmd::Info =&gt; get_note_summary(<span class="kw-2">&amp;</span>client).<span class="kw">await</span>,
-        ClientCmd::Reissue { oob_notes } =&gt; {
+        ClientCmd::Reissue { oob_notes, wait } =&gt; {
             <span class="kw">let </span>amount = oob_notes.total_amount();
 
             <span class="kw">let </span>mint = client.get_first_module::&lt;MintClientModule&gt;();
 
             <span class="kw">let </span>operation_id = mint.reissue_external_notes(oob_notes, ()).<span class="kw">await</span><span class="question-mark">?</span>;
-            <span class="kw">let </span><span class="kw-2">mut </span>updates = mint
-                .subscribe_reissue_external_notes(operation_id)
-                .<span class="kw">await
-                </span>.unwrap()
-                .into_stream();
+            <span class="kw">if </span>wait {
+                <span class="kw">let </span><span class="kw-2">mut </span>updates = mint
+                    .subscribe_reissue_external_notes(operation_id)
+                    .<span class="kw">await
+                    </span>.unwrap()
+                    .into_stream();
 
-            <span class="kw">while let </span><span class="prelude-val">Some</span>(update) = updates.next().<span class="kw">await </span>{
-                <span class="kw">if let </span>fedimint_mint_client::ReissueExternalNotesState::Failed(e) = update {
-                    <span class="macro">bail!</span>(<span class="string">"Reissue failed: {e}"</span>);
+                <span class="kw">while let </span><span class="prelude-val">Some</span>(update) = updates.next().<span class="kw">await </span>{
+                    <span class="kw">if let </span>fedimint_mint_client::ReissueExternalNotesState::Failed(e) = update {
+                        <span class="macro">bail!</span>(<span class="string">"Reissue failed: {e}"</span>);
+                    }
+
+                    <span class="macro">debug!</span>(target: LOG_CLIENT, <span class="question-mark">?</span>update, <span class="string">"Reissue external notes state update"</span>);
                 }
-
-                <span class="macro">debug!</span>(target: LOG_CLIENT, <span class="question-mark">?</span>update, <span class="string">"Reissue external notes state update"</span>);
             }
 
             <span class="prelude-val">Ok</span>(serde_json::to_value(amount).unwrap())
@@ -1375,7 +1387,7 @@
     <span class="kw">let </span>mint_client = client.get_first_module::&lt;MintClientModule&gt;();
     <span class="kw">let </span>wallet_client = client.get_first_module::&lt;WalletClientModule&gt;();
     <span class="kw">let </span>summary = mint_client
-        .get_wallet_summary(
+        .get_notes_tier_counts(
             <span class="kw-2">&amp;mut </span>client
                 .db()
                 .begin_transaction_nc()
@@ -1402,6 +1414,6 @@
     meta: BTreeMap&lt;String, String&gt;,
     total_amount_msat: Amount,
     total_num_notes: usize,
-    denominations_msat: TieredSummary,
+    denominations_msat: TieredCounts,
 }
 </code></pre></div></section></main></body></html>
