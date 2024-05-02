@@ -447,7 +447,7 @@
 
     <span class="kw">async fn </span>connect_to_peer(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        _pubkey: bitcoin::secp256k1::PublicKey,
+        _pubkey: bitcoin30::secp256k1::PublicKey,
         _host: String,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;EmptyResponse, LightningRpcError&gt; {
         <span class="macro">unimplemented!</span>(<span class="string">"FakeLightningTest does not support connecting to peers"</span>)
@@ -459,7 +459,7 @@
 
     <span class="kw">async fn </span>open_channel(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        _pubkey: bitcoin::secp256k1::PublicKey,
+        _pubkey: bitcoin30::secp256k1::PublicKey,
         _channel_size_sats: u64,
         _push_amount_sats: u64,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;EmptyResponse, LightningRpcError&gt; {

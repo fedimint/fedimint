@@ -157,13 +157,15 @@
 <a href="#157" id="157">157</a>
 <a href="#158" id="158">158</a>
 <a href="#159" id="159">159</a>
+<a href="#160" id="160">160</a>
 </pre></div><pre class="rust"><code><span class="kw">pub mod </span>rpc_client;
 <span class="kw">pub mod </span>rpc_server;
 
 <span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::str::FromStr;
 
-<span class="kw">use </span>bitcoin29::{Address, Network};
+<span class="kw">use </span>bitcoin::address::NetworkUnchecked;
+<span class="kw">use </span>bitcoin::{Address, Network};
 <span class="kw">use </span>fedimint_core::config::{ClientConfig, FederationId, JsonClientConfig};
 <span class="kw">use </span>fedimint_core::{Amount, BitcoinAmountOrAll};
 <span class="kw">use </span>fedimint_ln_common::config::parse_routing_fees;
@@ -215,7 +217,7 @@
 </span><span class="kw">pub struct </span>WithdrawPayload {
     <span class="kw">pub </span>federation_id: FederationId,
     <span class="kw">pub </span>amount: BitcoinAmountOrAll,
-    <span class="kw">pub </span>address: Address,
+    <span class="kw">pub </span>address: Address&lt;NetworkUnchecked&gt;,
 }
 
 <span class="doccomment">/// Information about one of the feds we are connected to

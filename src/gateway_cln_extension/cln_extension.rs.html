@@ -913,6 +913,20 @@
 <a href="#913" id="913">913</a>
 <a href="#914" id="914">914</a>
 <a href="#915" id="915">915</a>
+<a href="#916" id="916">916</a>
+<a href="#917" id="917">917</a>
+<a href="#918" id="918">918</a>
+<a href="#919" id="919">919</a>
+<a href="#920" id="920">920</a>
+<a href="#921" id="921">921</a>
+<a href="#922" id="922">922</a>
+<a href="#923" id="923">923</a>
+<a href="#924" id="924">924</a>
+<a href="#925" id="925">925</a>
+<a href="#926" id="926">926</a>
+<a href="#927" id="927">927</a>
+<a href="#928" id="928">928</a>
+<a href="#929" id="929">929</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::array::TryFromSliceError;
 <span class="kw">use </span>std::collections::{BTreeMap, HashMap};
 <span class="kw">use </span>std::net::SocketAddr;
@@ -927,6 +941,10 @@
 <span class="kw">use </span>cln_plugin::{options, Builder, Plugin};
 <span class="kw">use </span>cln_rpc::model;
 <span class="kw">use </span>cln_rpc::primitives::ShortChannelId;
+<span class="kw">use </span>fedimint_core::bitcoin_migration::{
+    bitcoin29_to_bitcoin30_secp256k1_public_key, bitcoin30_to_bitcoin29_secp256k1_public_key,
+    bitcoin30_to_bitcoin29_secp256k1_secret_key,
+};
 <span class="kw">use </span>fedimint_core::task::TaskGroup;
 <span class="kw">use </span>fedimint_core::util::handle_version_hash_command;
 <span class="kw">use </span>fedimint_core::{fedimint_build_code_version_env, Amount};
@@ -1030,6 +1048,7 @@
     socket: PathBuf,
     interceptor: Arc&lt;ClnHtlcInterceptor&gt;,
     task_group: TaskGroup,
+    secp24: secp256k1_24::Secp256k1&lt;secp256k1_24::All&gt;,
     secp: Secp256k1&lt;All&gt;,
 }
 
@@ -1094,6 +1113,7 @@
                     socket,
                     interceptor,
                     task_group: TaskGroup::new(),
+                    secp24: secp256k1_24::Secp256k1::gen_new(),
                     secp: Secp256k1::gen_new(),
                 },
                 fm_gateway_listen,
@@ -1140,7 +1160,13 @@
                     </span><span class="kw">let </span>alias = alias.unwrap_or_default();
                     <span class="kw">let </span>synced_to_chain =
                         warning_bitcoind_sync.is_none() &amp;&amp; warning_lightningd_sync.is_none();
-                    <span class="prelude-val">Ok</span>((id, alias, network, blockheight, synced_to_chain))
+                    <span class="prelude-val">Ok</span>((
+                        bitcoin29_to_bitcoin30_secp256k1_public_key(id),
+                        alias,
+                        network,
+                        blockheight,
+                        synced_to_chain,
+                    ))
                 }
                 <span class="kw">_ </span>=&gt; <span class="prelude-val">Err</span>(ClnExtensionError::RpcWrongResponse),
             })
@@ -1257,11 +1283,9 @@
 
             <span class="kw">let </span>channel = <span class="kw">match </span>channels_response {
                 cln_rpc::Response::ListChannels(channels) =&gt; {
-                    <span class="kw">let </span><span class="prelude-val">Some</span>(channel) = channels
-                        .channels
-                        .into_iter()
-                        .find(|chan| chan.destination == node_info.<span class="number">0</span>)
-                    <span class="kw">else </span>{
+                    <span class="kw">let </span><span class="prelude-val">Some</span>(channel) = channels.channels.into_iter().find(|chan| {
+                        chan.destination == bitcoin30_to_bitcoin29_secp256k1_public_key(node_info.<span class="number">0</span>)
+                    }) <span class="kw">else </span>{
                         <span class="macro">warn!</span>(<span class="question-mark">?</span>scid, <span class="string">"Channel not found in graph"</span>);
                         <span class="kw">continue</span>;
                     };
@@ -1469,8 +1493,10 @@
                 <span class="comment">// Temporarily sign with an ephemeral private key, we will request CLN to sign this
                 // invoice next.
                 </span>.build_signed(|m| {
-                    <span class="self">self</span>.secp
-                        .sign_ecdsa_recoverable(m, <span class="kw-2">&amp;</span>SecretKey::new(<span class="kw-2">&amp;mut </span>OsRng))
+                    <span class="self">self</span>.secp24.sign_ecdsa_recoverable(
+                        m,
+                        <span class="kw-2">&amp;</span>bitcoin30_to_bitcoin29_secp256k1_secret_key(SecretKey::new(<span class="kw-2">&amp;mut </span>OsRng)),
+                    )
                 })
                 .map_err(|e| Status::internal(e.to_string()))<span class="question-mark">?</span>,
             Description::Hash(hash) =&gt; InvoiceBuilder::new(network)
@@ -1489,8 +1515,10 @@
                 <span class="comment">// Temporarily sign with an ephemeral private key, we will request CLN to sign this
                 // invoice next.
                 </span>.build_signed(|m| {
-                    <span class="self">self</span>.secp
-                        .sign_ecdsa_recoverable(m, <span class="kw-2">&amp;</span>SecretKey::new(<span class="kw-2">&amp;mut </span>OsRng))
+                    <span class="self">self</span>.secp24.sign_ecdsa_recoverable(
+                        m,
+                        <span class="kw-2">&amp;</span>bitcoin30_to_bitcoin29_secp256k1_secret_key(SecretKey::new(<span class="kw-2">&amp;mut </span>OsRng)),
+                    )
                 })
                 .map_err(|e| Status::internal(e.to_string()))<span class="question-mark">?</span>,
         };

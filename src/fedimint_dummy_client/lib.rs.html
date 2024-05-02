@@ -382,7 +382,6 @@
 <a href="#382" id="382">382</a>
 <a href="#383" id="383">383</a>
 <a href="#384" id="384">384</a>
-<a href="#385" id="385">385</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>core::cmp::Ordering;
 <span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::sync::Arc;
@@ -397,7 +396,6 @@
 <span class="kw">use </span>fedimint_client::module::{ClientContext, ClientModule, IClientModule};
 <span class="kw">use </span>fedimint_client::sm::{Context, ModuleNotifier};
 <span class="kw">use </span>fedimint_client::transaction::{ClientInput, ClientOutput, TransactionBuilder};
-<span class="kw">use </span>fedimint_core::bitcoin_migration::bitcoin30_to_bitcoin29_keypair;
 <span class="kw">use </span>fedimint_core::core::{Decoder, OperationId};
 <span class="kw">use </span>fedimint_core::db::{
     Database, DatabaseTransaction, DatabaseVersion, IDatabaseTransactionOpsCoreTyped,
@@ -499,7 +497,7 @@
                         account: <span class="self">self</span>.key.public_key(),
                     },
                     amount: missing_input_amount,
-                    keys: <span class="macro">vec!</span>[bitcoin30_to_bitcoin29_keypair(<span class="self">self</span>.key)],
+                    keys: <span class="macro">vec!</span>[<span class="self">self</span>.key],
                     state_machines: Arc::new(<span class="kw">move </span>|txid, <span class="kw">_</span>| {
                         <span class="macro">vec!</span>[DummyStateMachine::Input(
                             missing_input_amount,
@@ -595,7 +593,7 @@
                 account: account_kp.public_key(),
             },
             amount,
-            keys: <span class="macro">vec!</span>[bitcoin30_to_bitcoin29_keypair(account_kp)],
+            keys: <span class="macro">vec!</span>[account_kp],
             state_machines: Arc::new(<span class="kw">move </span>|<span class="kw">_</span>, <span class="kw">_</span>| Vec::&lt;DummyStateMachine&gt;::new()),
         };
 

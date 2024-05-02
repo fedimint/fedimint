@@ -226,13 +226,11 @@
 <a href="#226" id="226">226</a>
 <a href="#227" id="227">227</a>
 <a href="#228" id="228">228</a>
-<a href="#229" id="229">229</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::sync::Arc;
 
 <span class="kw">use </span>fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
 <span class="kw">use </span>fedimint_client::transaction::ClientInput;
 <span class="kw">use </span>fedimint_client::DynGlobalClientContext;
-<span class="kw">use </span>fedimint_core::bitcoin_migration::bitcoin30_to_bitcoin29_keypair;
 <span class="kw">use </span>fedimint_core::core::OperationId;
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::{Amount, TransactionId};
@@ -372,7 +370,7 @@
 
         <span class="kw">let </span>refund_input = ClientInput::&lt;MintInput, MintClientStateMachines&gt; {
             input: MintInput::new_v0(amount, spendable_note.note()),
-            keys: <span class="macro">vec!</span>[bitcoin30_to_bitcoin29_keypair(spendable_note.spend_key)],
+            keys: <span class="macro">vec!</span>[spendable_note.spend_key],
             amount,
             <span class="comment">// The input of the refund tx is managed by this state machine, so no new state machines
             // need to be created

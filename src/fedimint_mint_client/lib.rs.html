@@ -2092,7 +2092,6 @@
 <a href="#2092" id="2092">2092</a>
 <a href="#2093" id="2093">2093</a>
 <a href="#2094" id="2094">2094</a>
-<a href="#2095" id="2095">2095</a>
 </pre></div><pre class="rust"><code><span class="comment">// Backup and restore logic
 </span><span class="kw">pub mod </span>backup;
 <span class="doccomment">/// Database keys used throughout the mint client module
@@ -2128,7 +2127,6 @@
 <span class="kw">use </span>fedimint_client::sm::{Context, DynState, ModuleNotifier, State, StateTransition};
 <span class="kw">use </span>fedimint_client::transaction::{ClientInput, ClientOutput, TransactionBuilder};
 <span class="kw">use </span>fedimint_client::{sm_enum_variant_translation, DynGlobalClientContext};
-<span class="kw">use </span>fedimint_core::bitcoin_migration::bitcoin30_to_bitcoin29_keypair;
 <span class="kw">use </span>fedimint_core::config::{FederationId, FederationIdPrefix};
 <span class="kw">use </span>fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, OperationId};
 <span class="kw">use </span>fedimint_core::db::{
@@ -3010,7 +3008,7 @@
 
             inputs.push(ClientInput {
                 input: MintInput::new_v0(amount, note),
-                keys: <span class="macro">vec!</span>[bitcoin30_to_bitcoin29_keypair(spendable_note.spend_key)],
+                keys: <span class="macro">vec!</span>[spendable_note.spend_key],
                 amount,
                 state_machines: sm_gen,
             });

@@ -1838,18 +1838,6 @@
 <a href="#1838" id="1838">1838</a>
 <a href="#1839" id="1839">1839</a>
 <a href="#1840" id="1840">1840</a>
-<a href="#1841" id="1841">1841</a>
-<a href="#1842" id="1842">1842</a>
-<a href="#1843" id="1843">1843</a>
-<a href="#1844" id="1844">1844</a>
-<a href="#1845" id="1845">1845</a>
-<a href="#1846" id="1846">1846</a>
-<a href="#1847" id="1847">1847</a>
-<a href="#1848" id="1848">1848</a>
-<a href="#1849" id="1849">1849</a>
-<a href="#1850" id="1850">1850</a>
-<a href="#1851" id="1851">1851</a>
-<a href="#1852" id="1852">1852</a>
 </pre></div><pre class="rust"><code><span class="kw">pub mod </span>client;
 <span class="kw">mod </span>db;
 <span class="kw">pub mod </span>envs;
@@ -1889,9 +1877,8 @@
 <span class="kw">use </span>fedimint_client::module::init::ClientModuleInitRegistry;
 <span class="kw">use </span>fedimint_client::ClientHandleArc;
 <span class="kw">use </span>fedimint_core::bitcoin_migration::{
-    bitcoin29_to_bitcoin30_address, bitcoin29_to_bitcoin30_amount, bitcoin29_to_bitcoin30_network,
-    bitcoin29_to_bitcoin30_secp256k1_public_key, bitcoin29_to_bitcoin30_txid,
-    bitcoin30_to_bitcoin29_amount, bitcoin30_to_bitcoin29_network,
+    bitcoin29_to_bitcoin30_address, bitcoin29_to_bitcoin30_amount, bitcoin29_to_bitcoin30_txid,
+    bitcoin30_to_bitcoin29_address, bitcoin30_to_bitcoin29_amount,
 };
 <span class="kw">use </span>fedimint_core::config::FederationId;
 <span class="kw">use </span>fedimint_core::core::{
@@ -2383,13 +2370,13 @@
                                         .<span class="kw">await
                                 </span>};
 
-                                <span class="kw">if </span>gateway_config.network != bitcoin30_to_bitcoin29_network(lightning_network) {
+                                <span class="kw">if </span>gateway_config.network != lightning_network {
                                     <span class="macro">warn!</span>(<span class="string">"Lightning node does not match previously configured gateway network : ({:?})"</span>, gateway_config.network);
                                     <span class="macro">info!</span>(<span class="string">"Changing gateway network to match lightning node network : ({:?})"</span>, lightning_network);
                                     self_copy.handle_disconnect(htlc_task_group).<span class="kw">await</span>;
                                     self_copy.handle_set_configuration_msg(SetConfigurationPayload {
                                         password: <span class="prelude-val">None</span>,
-                                        network: <span class="prelude-val">Some</span>(bitcoin30_to_bitcoin29_network(lightning_network)),
+                                        network: <span class="prelude-val">Some</span>(lightning_network),
                                         num_route_hints: <span class="prelude-val">None</span>,
                                         routing_fees: <span class="prelude-val">None</span>,
                                         per_federation_routing_fees: <span class="prelude-val">None</span>,
@@ -2671,6 +2658,7 @@
         } = payload;
         <span class="kw">let </span>client = <span class="self">self</span>.select_client(federation_id).<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>wallet_module = client.value().get_first_module::&lt;WalletClientModule&gt;();
+        <span class="kw">let </span>address = bitcoin30_to_bitcoin29_address(address.assume_checked());
 
         <span class="comment">// TODO: Fees should probably be passed in as a parameter
         </span><span class="kw">let </span>(amount, fees) = <span class="kw">match </span>amount {
@@ -2833,11 +2821,8 @@
                 routing_fees: <span class="prelude-val">Some</span>(gateway_config.routing_fees.into()),
             };
 
-            <span class="self">self</span>.check_federation_network(
-                <span class="kw-2">&amp;</span>federation_info,
-                bitcoin29_to_bitcoin30_network(gateway_config.network),
-            )
-            .<span class="kw">await</span><span class="question-mark">?</span>;
+            <span class="self">self</span>.check_federation_network(<span class="kw-2">&amp;</span>federation_info, gateway_config.network)
+                .<span class="kw">await</span><span class="question-mark">?</span>;
 
             client
                 .get_first_module::&lt;GatewayClientModule&gt;()
@@ -2941,12 +2926,7 @@
         <span class="kw">let </span>gw_state = <span class="self">self</span>.state.read().<span class="kw">await</span>.clone();
         <span class="kw">let </span>lightning_network = <span class="kw">match </span>gw_state {
             GatewayState::Running { lightning_context } =&gt; {
-                <span class="kw">if </span>network.is_some()
-                    &amp;&amp; network
-                        != <span class="prelude-val">Some</span>(bitcoin30_to_bitcoin29_network(
-                            lightning_context.lightning_network,
-                        ))
-                {
+                <span class="kw">if </span>network.is_some() &amp;&amp; network != <span class="prelude-val">Some</span>(lightning_context.lightning_network) {
                     <span class="kw">return </span><span class="prelude-val">Err</span>(GatewayError::GatewayConfigurationError(
                         <span class="string">"Cannot change network while connected to a lightning node"</span>.to_string(),
                     ));
@@ -2999,7 +2979,7 @@
 
             GatewayConfiguration {
                 hashed_password,
-                network: bitcoin30_to_bitcoin29_network(lightning_network),
+                network: lightning_network,
                 num_route_hints: DEFAULT_NUM_ROUTE_HINTS,
                 routing_fees: DEFAULT_FEES,
                 password_salt,
@@ -3165,7 +3145,7 @@
         <span class="kw">let </span>hashed_password = hash_password(password.clone(), password_salt);
         <span class="kw">let </span>gateway_config = GatewayConfiguration {
             hashed_password,
-            network: bitcoin30_to_bitcoin29_network(network),
+            network,
             num_route_hints,
             routing_fees: routing_fees.<span class="number">0</span>,
             password_salt,
@@ -3397,14 +3377,12 @@
             })<span class="question-mark">?</span>;
         <span class="kw">let </span>ln_cfg: <span class="kw-2">&amp;</span>LightningClientConfig = cfg.cast()<span class="question-mark">?</span>;
 
-        <span class="kw">if </span>bitcoin29_to_bitcoin30_network(ln_cfg.network) != network {
+        <span class="kw">if </span>ln_cfg.network != network {
             <span class="macro">error!</span>(
                 <span class="string">"Federation {} runs on {} but this gateway supports {}"</span>,
                 info.federation_id, ln_cfg.network, network,
             );
-            <span class="kw">return </span><span class="prelude-val">Err</span>(GatewayError::UnsupportedNetwork(
-                bitcoin29_to_bitcoin30_network(ln_cfg.network),
-            ));
+            <span class="kw">return </span><span class="prelude-val">Err</span>(GatewayError::UnsupportedNetwork(ln_cfg.network));
         }
 
         <span class="prelude-val">Ok</span>(())
@@ -3475,9 +3453,7 @@
 
     <span class="kw">pub async fn </span>payment_info_v2(<span class="kw-2">&amp;</span><span class="self">self</span>, federation_id: <span class="kw-2">&amp;</span>FederationId) -&gt; <span class="prelude-ty">Option</span>&lt;PaymentInfo&gt; {
         <span class="prelude-val">Some</span>(PaymentInfo {
-            public_key: bitcoin29_to_bitcoin30_secp256k1_public_key(
-                <span class="self">self</span>.public_key_v2(federation_id).<span class="kw">await</span><span class="question-mark">?</span>,
-            ),
+            public_key: <span class="self">self</span>.public_key_v2(federation_id).<span class="kw">await</span><span class="question-mark">?</span>,
             send_fee_default: PaymentFee::one_percent(),
             send_fee_minimum: PaymentFee::half_of_one_percent(),
             receive_fee: PaymentFee::half_of_one_percent(),

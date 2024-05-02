@@ -770,6 +770,8 @@
 <a href="#770" id="770">770</a>
 <a href="#771" id="771">771</a>
 <a href="#772" id="772">772</a>
+<a href="#773" id="773">773</a>
+<a href="#774" id="774">774</a>
 </pre></div><pre class="rust"><code><span class="kw">mod </span>complete;
 <span class="kw">pub mod </span>pay;
 
@@ -791,9 +793,8 @@
 <span class="kw">use </span>fedimint_client::transaction::{ClientOutput, TransactionBuilder};
 <span class="kw">use </span>fedimint_client::{sm_enum_variant_translation, AddStateMachinesError, DynGlobalClientContext};
 <span class="kw">use </span>fedimint_core::bitcoin_migration::{
-    bitcoin29_to_bitcoin30_keypair, bitcoin29_to_bitcoin30_secp256k1_public_key,
     bitcoin29_to_bitcoin30_sha256_hash, bitcoin30_to_bitcoin29_keypair,
-    bitcoin30_to_bitcoin29_sha256_hash,
+    bitcoin30_to_bitcoin29_secp256k1_public_key, bitcoin30_to_bitcoin29_sha256_hash,
 };
 <span class="kw">use </span>fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, OperationId};
 <span class="kw">use </span>fedimint_core::db::{AutocommitError, DatabaseTransaction, DatabaseVersion};
@@ -917,11 +918,10 @@
         <span class="prelude-val">Ok</span>(GatewayClientModule {
             cfg: args.cfg().clone(),
             notifier: args.notifier().clone(),
-            redeem_key: bitcoin30_to_bitcoin29_keypair(
-                args.module_root_secret()
-                    .child_key(ChildId(<span class="number">0</span>))
-                    .to_secp_key(<span class="kw-2">&amp;</span>Secp256k1::new()),
-            ),
+            redeem_key: args
+                .module_root_secret()
+                .child_key(ChildId(<span class="number">0</span>))
+                .to_secp_key(<span class="kw-2">&amp;</span>Secp256k1::new()),
             module_api: args.module_api().clone(),
             timelock_delta: <span class="self">self</span>.timelock_delta,
             mint_channel_id: <span class="self">self</span>.mint_channel_id,
@@ -933,7 +933,7 @@
 
 <span class="attr">#[derive(Debug, Clone)]
 </span><span class="kw">pub struct </span>GatewayClientContext {
-    redeem_key: bitcoin29::KeyPair,
+    redeem_key: KeyPair,
     timelock_delta: u64,
     secp: Secp256k1&lt;All&gt;,
     <span class="kw">pub </span>ln_decoder: Decoder,
@@ -1018,13 +1018,17 @@
         LightningGatewayAnnouncement {
             info: LightningGateway {
                 mint_channel_id: <span class="self">self</span>.mint_channel_id,
-                gateway_redeem_key: <span class="self">self</span>.redeem_key.public_key(),
-                node_pub_key: lightning_context.lightning_public_key,
+                gateway_redeem_key: bitcoin30_to_bitcoin29_secp256k1_public_key(
+                    <span class="self">self</span>.redeem_key.public_key(),
+                ),
+                node_pub_key: bitcoin30_to_bitcoin29_secp256k1_public_key(
+                    lightning_context.lightning_public_key,
+                ),
                 lightning_alias: lightning_context.lightning_alias,
                 api: <span class="self">self</span>.gateway.versioned_api.clone(),
                 route_hints,
                 fees,
-                gateway_id: <span class="self">self</span>.gateway.gateway_id,
+                gateway_id: bitcoin30_to_bitcoin29_secp256k1_public_key(<span class="self">self</span>.gateway.gateway_id),
                 supports_private_payments: lightning_context.lnrpc.supports_private_payments(),
             },
             ttl,
@@ -1048,7 +1052,7 @@
             <span class="kw-2">&amp;</span><span class="self">self</span>.module_api,
             bitcoin29_to_bitcoin30_sha256_hash(htlc.payment_hash),
             htlc.outgoing_amount_msat,
-            bitcoin29_to_bitcoin30_keypair(<span class="self">self</span>.redeem_key),
+            <span class="self">self</span>.redeem_key,
         )
         .<span class="kw">await</span><span class="question-mark">?</span>;
 
@@ -1095,7 +1099,7 @@
             <span class="kw-2">&amp;</span><span class="self">self</span>.module_api,
             bitcoin29_to_bitcoin30_sha256_hash(payment_hash),
             swap.amount_msat,
-            bitcoin29_to_bitcoin30_keypair(<span class="self">self</span>.redeem_key),
+            <span class="self">self</span>.redeem_key,
         )
         .<span class="kw">await</span><span class="question-mark">?</span>;
 
@@ -1164,7 +1168,7 @@
         <span class="kw">let </span>gateway_id = gateway_keypair.public_key();
         <span class="kw">let </span>challenges = <span class="self">self
             </span>.module_api
-            .get_remove_gateway_challenge(bitcoin29_to_bitcoin30_secp256k1_public_key(gateway_id))
+            .get_remove_gateway_challenge(gateway_id)
             .<span class="kw">await</span><span class="question-mark">?</span>;
 
         <span class="kw">let </span>fed_public_key = <span class="self">self</span>.cfg.threshold_pub_key;
@@ -1176,13 +1180,13 @@
                     peer_id,
                     challenge.map(bitcoin30_to_bitcoin29_sha256_hash)<span class="question-mark">?</span>,
                 );
-                <span class="kw">let </span>signature = gateway_keypair.sign_schnorr(msg);
+                <span class="kw">let </span>signature = bitcoin30_to_bitcoin29_keypair(gateway_keypair).sign_schnorr(msg);
                 <span class="prelude-val">Some</span>((peer_id, signature))
             })
             .collect::&lt;BTreeMap&lt;<span class="kw">_</span>, <span class="kw">_</span>&gt;&gt;();
 
         <span class="kw">let </span>remove_gateway_request = RemoveGatewayRequest {
-            gateway_id,
+            gateway_id: bitcoin30_to_bitcoin29_secp256k1_public_key(gateway_id),
             signatures,
         };
 

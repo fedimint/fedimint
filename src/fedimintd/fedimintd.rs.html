@@ -463,8 +463,6 @@
 <a href="#463" id="463">463</a>
 <a href="#464" id="464">464</a>
 <a href="#465" id="465">465</a>
-<a href="#466" id="466">466</a>
-<a href="#467" id="467">467</a>
 </pre></div><pre class="rust"><code><span class="kw">mod </span>metrics;
 
 <span class="kw">use </span>std::collections::BTreeMap;
@@ -721,9 +719,7 @@
                     local: LightningGenParamsLocal {
                         bitcoin_rpc: bitcoind_rpc.clone(),
                     },
-                    consensus: LightningGenParamsConsensus {
-                        network: bitcoin30_to_bitcoin29_network(network),
-                    },
+                    consensus: LightningGenParamsConsensus { network },
                 },
             )
             .with_module_kind(MintInit)

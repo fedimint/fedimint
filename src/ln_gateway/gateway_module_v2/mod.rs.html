@@ -418,15 +418,6 @@
 <a href="#418" id="418">418</a>
 <a href="#419" id="419">419</a>
 <a href="#420" id="420">420</a>
-<a href="#421" id="421">421</a>
-<a href="#422" id="422">422</a>
-<a href="#423" id="423">423</a>
-<a href="#424" id="424">424</a>
-<a href="#425" id="425">425</a>
-<a href="#426" id="426">426</a>
-<a href="#427" id="427">427</a>
-<a href="#428" id="428">428</a>
-<a href="#429" id="429">429</a>
 </pre></div><pre class="rust"><code><span class="kw">mod </span>complete_sm;
 <span class="kw">mod </span>receive_sm;
 <span class="kw">mod </span>send_sm;
@@ -444,10 +435,6 @@
 <span class="kw">use </span>fedimint_client::sm::{Context, DynState, ModuleNotifier, State, StateTransition};
 <span class="kw">use </span>fedimint_client::transaction::{ClientOutput, TransactionBuilder};
 <span class="kw">use </span>fedimint_client::{sm_enum_variant_translation, DynGlobalClientContext};
-<span class="kw">use </span>fedimint_core::bitcoin_migration::{
-    bitcoin29_to_bitcoin30_schnorr_signature, bitcoin29_to_bitcoin30_secp256k1_public_key,
-    bitcoin30_to_bitcoin29_keypair, bitcoin30_to_bitcoin29_message,
-};
 <span class="kw">use </span>fedimint_core::config::FederationId;
 <span class="kw">use </span>fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, OperationId};
 <span class="kw">use </span>fedimint_core::db::{DatabaseTransaction, DatabaseVersion};
@@ -515,11 +502,10 @@
             notifier: args.notifier().clone(),
             client_ctx: args.context(),
             module_api: args.module_api().clone(),
-            keypair: bitcoin30_to_bitcoin29_keypair(
-                args.module_root_secret()
-                    .clone()
-                    .to_secp_key(secp256k1_zkp::SECP256K1),
-            ),
+            keypair: args
+                .module_root_secret()
+                .clone()
+                .to_secp_key(secp256k1_zkp::SECP256K1),
             gateway: <span class="self">self</span>.gateway.clone(),
         })
     }
@@ -647,9 +633,7 @@
         <span class="comment">// Since the following four checks may only fail due to client side
         // programming error we do not have to enable cancellation and can check
         // them before we start the state machine.
-        </span><span class="kw">if </span>payload.contract.claim_pk
-            != bitcoin29_to_bitcoin30_secp256k1_public_key(<span class="self">self</span>.keypair.public_key())
-        {
+        </span><span class="kw">if </span>payload.contract.claim_pk != <span class="self">self</span>.keypair.public_key() {
             <span class="macro">bail!</span>(<span class="string">"The outgoing contract is keyed to another gateway"</span>);
         }
 
@@ -722,13 +706,11 @@
                     SendSMState::Cancelled(cancelled) =&gt; {
                         <span class="macro">warn!</span>(<span class="string">"Outgoing lightning payment is cancelled {:?}"</span>, cancelled);
 
-                        <span class="kw">let </span>signature = <span class="self">self</span>.keypair.sign_schnorr(bitcoin30_to_bitcoin29_message(
-                            state.common.contract.forfeit_message(),
-                        ));
+                        <span class="kw">let </span>signature = <span class="self">self
+                            </span>.keypair
+                            .sign_schnorr(state.common.contract.forfeit_message());
 
-                        <span class="macro">assert!</span>(state.common.contract.verify_forfeit_signature(
-                            <span class="kw-2">&amp;</span>bitcoin29_to_bitcoin30_schnorr_signature(signature)
-                        ));
+                        <span class="macro">assert!</span>(state.common.contract.verify_forfeit_signature(<span class="kw-2">&amp;</span>signature));
 
                         <span class="kw">return </span><span class="prelude-val">Err</span>(signature);
                     }

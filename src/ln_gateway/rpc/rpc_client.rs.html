@@ -190,7 +190,9 @@
 <a href="#190" id="190">190</a>
 <a href="#191" id="191">191</a>
 <a href="#192" id="192">192</a>
-</pre></div><pre class="rust"><code><span class="kw">use </span>bitcoin29::Address;
+<a href="#193" id="193">193</a>
+</pre></div><pre class="rust"><code><span class="kw">use </span>bitcoin::address::NetworkUnchecked;
+<span class="kw">use </span>bitcoin::Address;
 <span class="kw">use </span>fedimint_core::util::SafeUrl;
 <span class="kw">use </span>fedimint_core::{Amount, TransactionId};
 <span class="kw">use </span>reqwest::{Method, StatusCode};
@@ -252,7 +254,7 @@
     <span class="kw">pub async fn </span>get_deposit_address(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         payload: DepositAddressPayload,
-    ) -&gt; GatewayRpcResult&lt;Address&gt; {
+    ) -&gt; GatewayRpcResult&lt;Address&lt;NetworkUnchecked&gt;&gt; {
         <span class="kw">let </span>url = <span class="self">self</span>.base_url.join(<span class="string">"/address"</span>).expect(<span class="string">"invalid base url"</span>);
         <span class="self">self</span>.call_post(url, payload).<span class="kw">await
     </span>}
@@ -313,7 +315,7 @@
     <span class="kw">pub async fn </span>get_funding_address(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         payload: GetFundingAddressPayload,
-    ) -&gt; GatewayRpcResult&lt;Address&gt; {
+    ) -&gt; GatewayRpcResult&lt;Address&lt;NetworkUnchecked&gt;&gt; {
         <span class="kw">let </span>url = <span class="self">self
             </span>.base_url
             .join(<span class="string">"/get_funding_address"</span>)

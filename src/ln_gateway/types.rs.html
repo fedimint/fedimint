@@ -50,9 +50,13 @@
 <a href="#50" id="50">50</a>
 <a href="#51" id="51">51</a>
 <a href="#52" id="52">52</a>
+<a href="#53" id="53">53</a>
+<a href="#54" id="54">54</a>
+<a href="#55" id="55">55</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! Map `gateway_lnrpc` protobuf types to rust types
 
 </span><span class="kw">use </span>anyhow::anyhow;
+<span class="kw">use </span>fedimint_core::bitcoin_migration::bitcoin30_to_bitcoin29_secp256k1_public_key;
 <span class="kw">use </span>secp256k1::PublicKey;
 
 <span class="kw">impl </span>TryFrom&lt;<span class="kw">crate</span>::gateway_lnrpc::get_route_hints_response::RouteHintHop&gt;
@@ -70,7 +74,9 @@
         };
 
         <span class="prelude-val">Ok</span>(<span class="self">Self </span>{
-            src_node_id: PublicKey::from_slice(slice).expect(<span class="string">"invalid source node id"</span>),
+            src_node_id: bitcoin30_to_bitcoin29_secp256k1_public_key(
+                PublicKey::from_slice(slice).expect(<span class="string">"invalid source node id"</span>),
+            ),
             short_channel_id: hop.short_channel_id,
             base_msat: hop.base_msat,
             proportional_millionths: hop.proportional_millionths,

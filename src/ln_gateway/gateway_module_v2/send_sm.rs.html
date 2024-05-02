@@ -228,12 +228,16 @@
 <a href="#228" id="228">228</a>
 <a href="#229" id="229">229</a>
 <a href="#230" id="230">230</a>
+<a href="#231" id="231">231</a>
+<a href="#232" id="232">232</a>
+<a href="#233" id="233">233</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::sync::Arc;
 
 <span class="kw">use </span>bitcoin_hashes::Hash;
 <span class="kw">use </span>fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
 <span class="kw">use </span>fedimint_client::transaction::ClientInput;
 <span class="kw">use </span>fedimint_client::DynGlobalClientContext;
+<span class="kw">use </span>fedimint_core::bitcoin_migration::bitcoin29_to_bitcoin30_secp256k1_public_key;
 <span class="kw">use </span>fedimint_core::core::OperationId;
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::{Amount, OutPoint};
@@ -379,7 +383,9 @@
             .<span class="kw">await
             </span>.map_err(|e| Cancelled::LightningRpcError(e.to_string()))<span class="question-mark">?</span>;
 
-        <span class="kw">if </span>lightning_context.lightning_public_key == invoice.recover_payee_pub_key() {
+        <span class="kw">if </span>lightning_context.lightning_public_key
+            == bitcoin29_to_bitcoin30_secp256k1_public_key(invoice.recover_payee_pub_key())
+        {
             <span class="kw">let </span>invoice_msats = invoice
                 .amount_milli_satoshis()
                 .expect(<span class="string">"We checked this previously"</span>);

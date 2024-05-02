@@ -565,7 +565,7 @@
 
     <span class="kw">async fn </span>connect_to_peer(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        pubkey: bitcoin::secp256k1::PublicKey,
+        pubkey: bitcoin30::secp256k1::PublicKey,
         host: String,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;EmptyResponse, LightningRpcError&gt; {
         <span class="self">self</span>.lnrpc.connect_to_peer(pubkey, host).<span class="kw">await
@@ -577,7 +577,7 @@
 
     <span class="kw">async fn </span>open_channel(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        pubkey: bitcoin::secp256k1::PublicKey,
+        pubkey: bitcoin30::secp256k1::PublicKey,
         channel_size_sats: u64,
         push_amount_sats: u64,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;EmptyResponse, LightningRpcError&gt; {
@@ -757,7 +757,7 @@
 
     <span class="kw">async fn </span>connect_to_peer(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        pubkey: bitcoin::secp256k1::PublicKey,
+        pubkey: bitcoin30::secp256k1::PublicKey,
         host: String,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;EmptyResponse, LightningRpcError&gt; {
         <span class="self">self</span>.lnrpc.connect_to_peer(pubkey, host).<span class="kw">await
@@ -769,7 +769,7 @@
 
     <span class="kw">async fn </span>open_channel(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        pubkey: bitcoin::secp256k1::PublicKey,
+        pubkey: bitcoin30::secp256k1::PublicKey,
         channel_size_sats: u64,
         push_amount_sats: u64,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;EmptyResponse, LightningRpcError&gt; {

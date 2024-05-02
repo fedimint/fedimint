@@ -362,6 +362,8 @@
 <a href="#362" id="362">362</a>
 <a href="#363" id="363">363</a>
 <a href="#364" id="364">364</a>
+<a href="#365" id="365">365</a>
+<a href="#366" id="366">366</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::cmp;
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::{Duration, SystemTime};
@@ -370,8 +372,8 @@
 <span class="kw">use </span>fedimint_client::transaction::ClientInput;
 <span class="kw">use </span>fedimint_client::DynGlobalClientContext;
 <span class="kw">use </span>fedimint_core::bitcoin_migration::{
-    bitcoin29_to_bitcoin30_script, bitcoin29_to_bitcoin30_txid, bitcoin30_to_bitcoin29_script,
-    bitcoin30_to_bitcoin29_transaction,
+    bitcoin29_to_bitcoin30_keypair, bitcoin29_to_bitcoin30_script, bitcoin29_to_bitcoin30_txid,
+    bitcoin30_to_bitcoin29_script, bitcoin30_to_bitcoin29_transaction,
 };
 <span class="kw">use </span>fedimint_core::core::OperationId;
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
@@ -674,7 +676,9 @@
 
     <span class="kw">let </span>client_input = ClientInput::&lt;WalletInput, WalletClientStates&gt; {
         input: wallet_input,
-        keys: <span class="macro">vec!</span>[awaiting_confirmation_state.tweak_key],
+        keys: <span class="macro">vec!</span>[bitcoin29_to_bitcoin30_keypair(
+            awaiting_confirmation_state.tweak_key,
+        )],
         amount,
         state_machines: Arc::new(|<span class="kw">_</span>, <span class="kw">_</span>| <span class="macro">vec!</span>[]),
     };
