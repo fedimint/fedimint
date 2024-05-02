@@ -2082,6 +2082,8 @@ pub async fn recoverytool_test(dev_fed: DevFed) -> Result<()> {
         .map(|o| o["descriptor"].as_str().unwrap())
         .collect::<HashSet<_>>();
 
+    debug!(target: LOG_DEVIMINT, ?utxos_descriptors, "recoverytool descriptors using UTXOs method");
+
     let descriptors_json = [serde_json::value::to_raw_value(&serde_json::Value::Array(
         utxos_descriptors
             .iter()
@@ -2139,6 +2141,9 @@ pub async fn recoverytool_test(dev_fed: DevFed) -> Result<()> {
         .iter()
         .map(|o| o["descriptor"].as_str().unwrap())
         .collect::<HashSet<_>>();
+
+    debug!(target: LOG_DEVIMINT, ?epochs_descriptors, "recoverytool descriptors using epochs method");
+
     // Epochs method includes descriptors from spent outputs, so we only need to
     // verify the epochs method includes all available utxos
     for utxo_descriptor in utxos_descriptors.iter() {
