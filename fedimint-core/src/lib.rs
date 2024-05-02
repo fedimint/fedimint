@@ -209,6 +209,12 @@ impl Amount {
     pub fn sats_f64(&self) -> f64 {
         self.msats as f64 / 1000.0
     }
+
+    pub fn checked_sub(self, other: Amount) -> Option<Self> {
+        Some(Self {
+            msats: self.msats.checked_sub(other.msats)?,
+        })
+    }
 }
 
 /// Shorthand for [`Amount::from_msats`]

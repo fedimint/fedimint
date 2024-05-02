@@ -15,6 +15,7 @@ path = "tests/tests.rs"
 anyhow = { workspace = true }
 bitcoin_hashes = { workspace = true }
 bls12_381 = "0.8.0"
+devimint = { workspace = true }
 fedimint-dummy-common = { path = "../fedimint-dummy-common" }
 fedimint-dummy-client = { path = "../fedimint-dummy-client" }
 fedimint-dummy-server = { path = "../fedimint-dummy-server" }
@@ -31,6 +32,8 @@ tokio = { version = "1.37.0", features = ["sync"] }
 tracing = { workspace = true }
 rand = { workspace = true }
 secp256k1 = "0.27.0"
+serde_json = { workspace = true }
+semver = { workspace = true }
 serde = { version = "1.0.199", features = [ "derive" ] }
 tbs = { package = "fedimint-tbs", version = "=0.4.0-alpha", path = "../../crypto/tbs" }
 threshold_crypto = { workspace = true }
