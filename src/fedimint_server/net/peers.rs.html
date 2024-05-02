@@ -838,6 +838,11 @@
 <a href="#838" id="838">838</a>
 <a href="#839" id="839">839</a>
 <a href="#840" id="840">840</a>
+<a href="#841" id="841">841</a>
+<a href="#842" id="842">842</a>
+<a href="#843" id="843">843</a>
+<a href="#844" id="844">844</a>
+<a href="#845" id="845">845</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! Implements a connection manager for communication with other federation
 //! members
 //!
@@ -1181,9 +1186,14 @@
     }
 
     <span class="kw">async fn </span>receive(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; Cancellable&lt;(PeerId, T)&gt; {
-        <span class="comment">// TODO: optimize, don't throw away remaining futures
+        <span class="comment">// if all peers banned (or just solo-federation), just hang here as there's
+        // never going to be any message. This avoids panic on `select_all` with
+        // no futures.
+        </span><span class="kw">if </span><span class="self">self</span>.connections.is_empty() {
+            std::future::pending().<span class="kw">await
+        </span>}
 
-        </span><span class="kw">let </span>futures_non_banned = <span class="self">self</span>.connections.iter_mut().map(|(<span class="kw-2">&amp;</span>peer, connection)| {
+        <span class="kw">let </span>futures_non_banned = <span class="self">self</span>.connections.iter_mut().map(|(<span class="kw-2">&amp;</span>peer, connection)| {
             <span class="kw">let </span>receive_future = <span class="kw">async move </span>{
                 <span class="kw">let </span>msg = connection.receive().<span class="kw">await</span>;
                 (peer, msg)
