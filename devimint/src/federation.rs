@@ -654,6 +654,12 @@ impl Federation {
     pub fn num_members(&self) -> usize {
         self.members.len()
     }
+
+    pub fn member_ids(&self) -> impl Iterator<Item = PeerId> + '_ {
+        self.members
+            .keys()
+            .map(|&peer_id| PeerId::from(peer_id as u16))
+    }
 }
 
 #[derive(Clone)]
