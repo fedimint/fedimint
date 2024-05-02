@@ -1,4 +1,5 @@
-use bitcoin29::Address;
+use bitcoin::address::NetworkUnchecked;
+use bitcoin::Address;
 use fedimint_core::util::SafeUrl;
 use fedimint_core::{Amount, TransactionId};
 use reqwest::{Method, StatusCode};
@@ -60,7 +61,7 @@ impl GatewayRpcClient {
     pub async fn get_deposit_address(
         &self,
         payload: DepositAddressPayload,
-    ) -> GatewayRpcResult<Address> {
+    ) -> GatewayRpcResult<Address<NetworkUnchecked>> {
         let url = self.base_url.join("/address").expect("invalid base url");
         self.call_post(url, payload).await
     }
@@ -121,7 +122,7 @@ impl GatewayRpcClient {
     pub async fn get_funding_address(
         &self,
         payload: GetFundingAddressPayload,
-    ) -> GatewayRpcResult<Address> {
+    ) -> GatewayRpcResult<Address<NetworkUnchecked>> {
         let url = self
             .base_url
             .join("/get_funding_address")

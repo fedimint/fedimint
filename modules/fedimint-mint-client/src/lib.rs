@@ -33,7 +33,6 @@ use fedimint_client::sm::util::MapStateTransitions;
 use fedimint_client::sm::{Context, DynState, ModuleNotifier, State, StateTransition};
 use fedimint_client::transaction::{ClientInput, ClientOutput, TransactionBuilder};
 use fedimint_client::{sm_enum_variant_translation, DynGlobalClientContext};
-use fedimint_core::bitcoin_migration::bitcoin30_to_bitcoin29_keypair;
 use fedimint_core::config::{FederationId, FederationIdPrefix};
 use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, OperationId};
 use fedimint_core::db::{
@@ -915,7 +914,7 @@ impl MintClientModule {
 
             inputs.push(ClientInput {
                 input: MintInput::new_v0(amount, note),
-                keys: vec![bitcoin30_to_bitcoin29_keypair(spendable_note.spend_key)],
+                keys: vec![spendable_note.spend_key],
                 amount,
                 state_machines: sm_gen,
             });

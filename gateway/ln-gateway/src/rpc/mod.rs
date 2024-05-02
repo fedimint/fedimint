@@ -4,7 +4,8 @@ pub mod rpc_server;
 use std::collections::BTreeMap;
 use std::str::FromStr;
 
-use bitcoin29::{Address, Network};
+use bitcoin::address::NetworkUnchecked;
+use bitcoin::{Address, Network};
 use fedimint_core::config::{ClientConfig, FederationId, JsonClientConfig};
 use fedimint_core::{Amount, BitcoinAmountOrAll};
 use fedimint_ln_common::config::parse_routing_fees;
@@ -56,7 +57,7 @@ pub struct DepositAddressPayload {
 pub struct WithdrawPayload {
     pub federation_id: FederationId,
     pub amount: BitcoinAmountOrAll,
-    pub address: Address,
+    pub address: Address<NetworkUnchecked>,
 }
 
 /// Information about one of the feds we are connected to

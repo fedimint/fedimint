@@ -13,8 +13,6 @@ path = "tests/tests.rs"
 
 [dependencies]
 anyhow = "1.0.82"
-bitcoin = { version = "0.29.2", features = [ "rand", "serde"] }
-fedimint-bitcoind = { path = "../../fedimint-bitcoind" }
 fedimint-dummy-common = { path = "../fedimint-dummy-common" }
 fedimint-dummy-client = { path = "../fedimint-dummy-client" }
 fedimint-dummy-server = { path = "../fedimint-dummy-server" }
@@ -27,7 +25,4 @@ fedimint-ln-server = { path = "../fedimint-ln-server" }
 fedimint-testing = { path = "../../fedimint-testing" }
 fedimint-client = { path = "../../fedimint-client" }
 fedimint-core ={ path = "../../fedimint-core" }
-fedimint-server = { path = "../../fedimint-server" }
-fedimint-logging = { path = "../../fedimint-logging" }
 tokio = { version = "1.37.0", features = ["sync"] }
-lightning-invoice = { version = "0.26.0", features = [ "serde" ] }

@@ -13,7 +13,7 @@ use fedimint_client::transaction::{ClientInput, ClientOutput, TransactionBuilder
 use fedimint_client::ClientHandleArc;
 use fedimint_core::bitcoin_migration::{
     bitcoin29_to_bitcoin30_secp256k1_public_key, bitcoin29_to_bitcoin30_sha256_hash,
-    bitcoin30_to_bitcoin29_network,
+    bitcoin30_to_bitcoin29_secp256k1_public_key,
 };
 use fedimint_core::config::FederationId;
 use fedimint_core::core::{IntoDynInstance, OperationId};
@@ -71,9 +71,7 @@ async fn user_pay_invoice(
     invoice: Bolt11Invoice,
     gateway_id: &PublicKey,
 ) -> anyhow::Result<OutgoingLightningPayment> {
-    let gateway = ln_module
-        .select_gateway(&bitcoin29_to_bitcoin30_secp256k1_public_key(*gateway_id))
-        .await;
+    let gateway = ln_module.select_gateway(gateway_id).await;
     ln_module.pay_bolt11_invoice(gateway, invoice, ()).await
 }
 
@@ -184,9 +182,7 @@ async fn gateway_pay_valid_invoice(
     gateway_id: &PublicKey,
 ) -> anyhow::Result<()> {
     let user_lightning_module = &user_client.get_first_module::<LightningClientModule>();
-    let gateway = user_lightning_module
-        .select_gateway(&bitcoin29_to_bitcoin30_secp256k1_public_key(*gateway_id))
-        .await;
+    let gateway = user_lightning_module.select_gateway(gateway_id).await;
 
     // User client pays test invoice
     let OutgoingLightningPayment {
@@ -425,9 +421,7 @@ async fn test_gateway_enforces_fees() -> anyhow::Result<()> {
 
             let user_lightning_module = user_client.get_first_module::<LightningClientModule>();
             let gateway_id = gateway_test.gateway.gateway_id;
-            let gateway = user_lightning_module
-                .select_gateway(&bitcoin29_to_bitcoin30_secp256k1_public_key(gateway_id))
-                .await;
+            let gateway = user_lightning_module.select_gateway(&gateway_id).await;
             let gateway_client = gateway_test.select_client(fed.id()).await;
 
             let invoice_amount = sats(250);
@@ -584,9 +578,7 @@ async fn test_gateway_client_pay_unpayable_invoice() -> anyhow::Result<()> {
             // Create invoice that cannot be paid
             let invoice = other_lightning_client.unpayable_invoice(sats(250), None);
 
-            let gateway = lightning_module
-                .select_gateway(&bitcoin29_to_bitcoin30_secp256k1_public_key(gateway_id))
-                .await;
+            let gateway = lightning_module.select_gateway(&gateway_id).await;
 
             // User client pays test invoice
             let OutgoingLightningPayment {
@@ -647,9 +639,7 @@ async fn test_gateway_client_intercept_valid_htlc() -> anyhow::Result<()> {
         // User client creates invoice in federation
         let invoice_amount = sats(100);
         let ln_module = user_client.get_first_module::<LightningClientModule>();
-        let ln_gateway = ln_module
-            .select_gateway(&bitcoin29_to_bitcoin30_secp256k1_public_key(gateway_id))
-            .await;
+        let ln_gateway = ln_module.select_gateway(&gateway_id).await;
         let desc = Description::new("description".to_string())?;
         let (_invoice_op, invoice, _) = ln_module
             .create_bolt11_invoice(
@@ -740,9 +730,7 @@ async fn test_gateway_client_intercept_htlc_no_funds() -> anyhow::Result<()> {
         let gateway_client = gateway.select_client(fed.id()).await;
         // User client creates invoice in federation
         let ln_module = user_client.get_first_module::<LightningClientModule>();
-        let ln_gateway = ln_module
-            .select_gateway(&bitcoin29_to_bitcoin30_secp256k1_public_key(gateway_id))
-            .await;
+        let ln_gateway = ln_module.select_gateway(&gateway_id).await;
         let desc = Description::new("description".to_string())?;
         let (_invoice_op, invoice, _) = ln_module
             .create_bolt11_invoice(
@@ -970,9 +958,7 @@ async fn test_gateway_cannot_pay_expired_invoice() -> anyhow::Result<()> {
 
             // User client pays test invoice
             let lightning_module = user_client.get_first_module::<LightningClientModule>();
-            let gateway_module = lightning_module
-                .select_gateway(&bitcoin29_to_bitcoin30_secp256k1_public_key(gateway_id))
-                .await;
+            let gateway_module = lightning_module.select_gateway(&gateway_id).await;
             let OutgoingLightningPayment {
                 payment_type,
                 contract_id,
@@ -1064,9 +1050,7 @@ async fn test_gateway_filters_route_hints_by_inbound() -> anyhow::Result<()> {
             let invoice_amount = sats(100);
             let gateway_id = gateway.gateway.gateway_id;
             let ln_module = user_client.get_first_module::<LightningClientModule>();
-            let ln_gateway = ln_module
-                .select_gateway(&bitcoin29_to_bitcoin30_secp256k1_public_key(gateway_id))
-                .await;
+            let ln_gateway = ln_module.select_gateway(&gateway_id).await;
             let desc = Description::new("description".to_string())?;
             let (_invoice_op, invoice, _) = user_client
                 .get_first_module::<LightningClientModule>()
@@ -1102,7 +1086,8 @@ async fn test_gateway_filters_route_hints_by_inbound() -> anyhow::Result<()> {
                     );
                     let route_hint_pub_key = route_hint.0.first().unwrap().src_node_id;
                     assert_eq!(
-                        route_hint_pub_key, public_key,
+                        route_hint_pub_key,
+                        bitcoin30_to_bitcoin29_secp256k1_public_key(public_key),
                         "Public key of route hint hop did not match expected public key"
                     );
                 }
@@ -1123,13 +1108,16 @@ async fn test_gateway_filters_route_hints_by_inbound() -> anyhow::Result<()> {
                         if route_hint.0.len() == 1 {
                             // If there's only one hop, it should contain the gateway's public key
                             let route_hint_pub_key = route_hint.0.first().unwrap().src_node_id;
-                            assert_eq!(route_hint_pub_key, public_key);
+                            assert_eq!(
+                                route_hint_pub_key,
+                                bitcoin30_to_bitcoin29_secp256k1_public_key(public_key)
+                            );
                             num_one_hops += 1;
                         } else {
                             // If there's > 1 hop, it should exist in `all_keys`
                             for hop in route_hint.0 {
                                 assert!(
-                                    all_keys.contains(&hop.src_node_id),
+                                    all_keys.contains(&bitcoin29_to_bitcoin30_secp256k1_public_key(hop.src_node_id)),
                                     "Public key of route hint hop did not match expected public key"
                                 );
                             }
@@ -1259,10 +1247,7 @@ async fn test_gateway_configuration() -> anyhow::Result<()> {
             .await;
     assert_eq!(gw_info.gateway_state, "Running".to_string());
     assert_eq!(gw_info.fees, Some(DEFAULT_FEES));
-    assert_eq!(
-        gw_info.network,
-        Some(bitcoin30_to_bitcoin29_network(DEFAULT_NETWORK))
-    );
+    assert_eq!(gw_info.network, Some(DEFAULT_NETWORK));
 
     // Verify we can change configurations when the gateway is running
     let new_password = "new_password".to_string();
@@ -1287,10 +1272,7 @@ async fn test_gateway_configuration() -> anyhow::Result<()> {
 
     assert_eq!(gw_info.gateway_state, "Running".to_string());
     assert_eq!(gw_info.fees, Some(GatewayFee(federation_fee.into()).0));
-    assert_eq!(
-        gw_info.network,
-        Some(bitcoin30_to_bitcoin29_network(DEFAULT_NETWORK))
-    );
+    assert_eq!(gw_info.network, Some(DEFAULT_NETWORK));
 
     // Verify that get_info with the old password fails
     verify_gateway_rpc_failure(
@@ -1304,9 +1286,9 @@ async fn test_gateway_configuration() -> anyhow::Result<()> {
     let set_configuration_payload = SetConfigurationPayload {
         password: Some(new_password.clone()),
         num_route_hints: None,
-        network: Some(bitcoin30_to_bitcoin29_network(DEFAULT_NETWORK)), /* Same as connected
-                                                                         * lightning node's
-                                                                         * network */
+        network: Some(DEFAULT_NETWORK), /* Same as connected
+                                         * lightning node's
+                                         * network */
         routing_fees: None,
         per_federation_routing_fees: None,
     };
@@ -1320,9 +1302,9 @@ async fn test_gateway_configuration() -> anyhow::Result<()> {
     let set_configuration_payload = SetConfigurationPayload {
         password: Some(new_password.clone()),
         num_route_hints: None,
-        network: Some(bitcoin30_to_bitcoin29_network(Network::Testnet)), /* Different from
-                                                                          * connected lightning
-                                                                          * node's network */
+        network: Some(Network::Testnet), /* Different from
+                                          * connected lightning
+                                          * node's network */
         routing_fees: None,
         per_federation_routing_fees: None,
     };
@@ -1589,9 +1571,7 @@ async fn test_gateway_executes_swaps_between_connected_federations() -> anyhow::
             // User creates invoice in federation 2
             let invoice_amt = msats(2_500);
             let ln_module = client2.get_first_module::<LightningClientModule>();
-            let ln_gateway = ln_module
-                .select_gateway(&bitcoin29_to_bitcoin30_secp256k1_public_key(gateway_id))
-                .await;
+            let ln_gateway = ln_module.select_gateway(&gateway_id).await;
             let desc = Description::new("description".to_string())?;
             let (receive_op, invoice, _) = ln_module
                 .create_bolt11_invoice(

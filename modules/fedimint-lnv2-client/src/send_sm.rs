@@ -4,7 +4,6 @@ use std::time::Duration;
 use fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
 use fedimint_client::transaction::ClientInput;
 use fedimint_client::DynGlobalClientContext;
-use fedimint_core::bitcoin_migration::bitcoin30_to_bitcoin29_keypair;
 use fedimint_core::config::FederationId;
 use fedimint_core::core::OperationId;
 use fedimint_core::encoding::{Decodable, Encodable};
@@ -257,9 +256,7 @@ impl SendStateMachine {
                         OutgoingWitness::Cancel(signature),
                     )),
                     amount: old_state.common.contract.amount,
-                    keys: vec![bitcoin30_to_bitcoin29_keypair(
-                        old_state.common.refund_keypair,
-                    )],
+                    keys: vec![old_state.common.refund_keypair],
                     // The input of the refund tx is managed by this state machine
                     state_machines: Arc::new(|_, _| vec![]),
                 };
@@ -312,9 +309,7 @@ impl SendStateMachine {
                 OutgoingWitness::Refund,
             )),
             amount: old_state.common.contract.amount,
-            keys: vec![bitcoin30_to_bitcoin29_keypair(
-                old_state.common.refund_keypair,
-            )],
+            keys: vec![old_state.common.refund_keypair],
             // The input of the refund tx is managed by this state machine
             state_machines: Arc::new(|_, _| vec![]),
         };

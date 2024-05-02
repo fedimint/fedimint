@@ -6,8 +6,8 @@ use fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
 use fedimint_client::transaction::ClientInput;
 use fedimint_client::DynGlobalClientContext;
 use fedimint_core::bitcoin_migration::{
-    bitcoin29_to_bitcoin30_script, bitcoin29_to_bitcoin30_txid, bitcoin30_to_bitcoin29_script,
-    bitcoin30_to_bitcoin29_transaction,
+    bitcoin29_to_bitcoin30_keypair, bitcoin29_to_bitcoin30_script, bitcoin29_to_bitcoin30_txid,
+    bitcoin30_to_bitcoin29_script, bitcoin30_to_bitcoin29_transaction,
 };
 use fedimint_core::core::OperationId;
 use fedimint_core::encoding::{Decodable, Encodable};
@@ -310,7 +310,9 @@ async fn transition_btc_tx_confirmed(
 
     let client_input = ClientInput::<WalletInput, WalletClientStates> {
         input: wallet_input,
-        keys: vec![awaiting_confirmation_state.tweak_key],
+        keys: vec![bitcoin29_to_bitcoin30_keypair(
+            awaiting_confirmation_state.tweak_key,
+        )],
         amount,
         state_machines: Arc::new(|_, _| vec![]),
     };

@@ -4,7 +4,6 @@ use bitcoin::key::KeyPair;
 use fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
 use fedimint_client::transaction::ClientInput;
 use fedimint_client::DynGlobalClientContext;
-use fedimint_core::bitcoin_migration::bitcoin30_to_bitcoin29_keypair;
 use fedimint_core::core::OperationId;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::OutPoint;
@@ -121,9 +120,7 @@ impl ReceiveStateMachine {
                 old_state.common.agg_decryption_key,
             )),
             amount: old_state.common.contract.commitment.amount,
-            keys: vec![bitcoin30_to_bitcoin29_keypair(
-                old_state.common.claim_keypair,
-            )],
+            keys: vec![old_state.common.claim_keypair],
             state_machines: Arc::new(|_, _| vec![]),
         };
 
