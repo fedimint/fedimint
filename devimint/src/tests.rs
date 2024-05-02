@@ -2049,7 +2049,11 @@ pub async fn recoverytool_test(dev_fed: DevFed) -> Result<()> {
     let total_fed_sats = fed_utxos_sats.iter().sum::<u64>();
     fed.finalize_mempool_tx().await?;
 
-    let now = fedimint_core::time::now();
+    // We are done transacting and save the current session id so we can wait for
+    // the next session later on. We already save it here so that if in the meantime
+    // a session is generated we don't wait for another.
+    let last_tx_session = client.get_session_count().await?;
+
     info!("Recovering using utxos method");
     let output = cmd!(
         crate::util::Recoverytool,
@@ -2104,31 +2108,33 @@ pub async fn recoverytool_test(dev_fed: DevFed) -> Result<()> {
     let diff = balances_after.mine.immature + balances_after.mine.trusted
         - balances_before.mine.immature
         - balances_before.mine.trusted;
+
+    // We need to wait for a session to be generated to make sure we have the signed
+    // session outcome in our DB. If there ever is another problem here: wait for
+    // fedimintd-0 specifically to acknowledge the session switch. In practice this
+    // should be sufficiently synchronous though.
+    wait_session_outcome(&client, last_tx_session).await?;
+
     // Funds from descriptors should match the fed's utxos
     assert_eq!(diff.to_sat(), total_fed_sats);
     info!("Recovering using epochs method");
-    let outputs = loop {
-        let output = cmd!(
-            crate::util::Recoverytool,
-            "--readonly",
-            "--cfg",
-            "{data_dir}/fedimintd-0",
-            "epochs",
-            "--db",
-            "{data_dir}/fedimintd-0/database"
-        )
-        .env(FM_PASSWORD_ENV, "pass")
-        .out_json()
-        .await?;
-        let outputs = output.as_array().context("expected an array")?;
-        if outputs.len() >= fed_utxos_sats.len() {
-            break outputs.clone();
-        }
-        if now.elapsed()? > Duration::from_secs(180) {
-            bail!("recoverytool epochs method timed out");
-        }
-        fedimint_core::task::sleep_in_test("recovery failed", Duration::from_secs(1)).await
-    };
+
+    let outputs = cmd!(
+        crate::util::Recoverytool,
+        "--readonly",
+        "--cfg",
+        "{data_dir}/fedimintd-0",
+        "epochs",
+        "--db",
+        "{data_dir}/fedimintd-0/database"
+    )
+    .env(FM_PASSWORD_ENV, "pass")
+    .out_json()
+    .await?
+    .as_array()
+    .context("expected an array")?
+    .clone();
+
     let epochs_descriptors = outputs
         .iter()
         .map(|o| o["descriptor"].as_str().unwrap())
@@ -2455,12 +2461,15 @@ pub enum TestCmd {
 
 async fn wait_session(client: &federation::Client) -> anyhow::Result<()> {
     info!("Waiting for a new session");
-    let session_count = cmd!(client, "dev", "api", "session_count")
-        .out_json()
-        .await?["value"]
-        .as_u64()
-        .context("session count must be integer")?
-        .to_owned();
+    let session_count = client.get_session_count().await?;
+    wait_session_outcome(client, session_count).await?;
+    Ok(())
+}
+
+async fn wait_session_outcome(
+    client: &federation::Client,
+    session_count: u64,
+) -> anyhow::Result<()> {
     let start = Instant::now();
     poll_with_timeout(
         "Waiting for a new session",
