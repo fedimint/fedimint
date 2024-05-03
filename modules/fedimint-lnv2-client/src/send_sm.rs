@@ -1,6 +1,8 @@
 use std::sync::Arc;
 use std::time::Duration;
 
+use bitcoin::secp256k1::schnorr::Signature;
+use bitcoin::secp256k1::KeyPair;
 use fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
 use fedimint_client::transaction::ClientInput;
 use fedimint_client::DynGlobalClientContext;
@@ -15,8 +17,6 @@ use fedimint_lnv2_common::{
     LightningClientContext, LightningInput, LightningInputV0, OutgoingWitness,
 };
 use lightning_invoice::Bolt11Invoice;
-use secp256k1::schnorr::Signature;
-use secp256k1::KeyPair;
 use tracing::error;
 
 use crate::api::LnFederationApi;

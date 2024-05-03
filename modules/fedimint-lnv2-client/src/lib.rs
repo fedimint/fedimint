@@ -8,6 +8,7 @@ use std::sync::Arc;
 
 use async_stream::stream;
 use bitcoin::hashes::{sha256, Hash};
+use bitcoin::secp256k1::{ecdh, KeyPair, PublicKey, Scalar, SecretKey};
 use fedimint_api_client::api::DynModuleApi;
 use fedimint_client::module::init::{ClientModuleInit, ClientModuleInitArgs};
 use fedimint_client::module::recovery::NoModuleBackup;
@@ -35,7 +36,6 @@ use fedimint_lnv2_common::{
 };
 use futures::StreamExt;
 use lightning_invoice::Bolt11Invoice;
-use secp256k1::{ecdh, KeyPair, PublicKey, Scalar, SecretKey};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tpe::{derive_agg_decryption_key, AggregateDecryptionKey};
@@ -221,7 +221,7 @@ impl ClientModuleInit for LightningClientInit {
             keypair: args
                 .module_root_secret()
                 .clone()
-                .to_secp_key(secp256k1::SECP256K1),
+                .to_secp_key(bitcoin::secp256k1::SECP256K1),
 
             admin_auth: args.admin_auth().cloned(),
         })
@@ -278,7 +278,7 @@ impl ClientModule for LightningClientModule {
 }
 
 fn generate_ephemeral_tweak(static_pk: PublicKey) -> ([u8; 32], PublicKey) {
-    let ephemeral_keypair = KeyPair::new(secp256k1::SECP256K1, &mut rand::thread_rng());
+    let ephemeral_keypair = KeyPair::new(bitcoin::secp256k1::SECP256K1, &mut rand::thread_rng());
 
     let ephemeral_tweak = ecdh::shared_secret_point(&static_pk, &ephemeral_keypair.secret_key())
         .consensus_hash::<sha256::Hash>()
@@ -343,7 +343,7 @@ impl LightningClientModule {
 
         let refund_keypair = SecretKey::from_slice(&ephemeral_tweak)
             .expect("32 bytes, within curve order")
-            .keypair(secp256k1::SECP256K1);
+            .keypair(bitcoin::secp256k1::SECP256K1);
 
         let payment_info = self
             .fetch_payment_info(gateway_api.clone())
@@ -615,7 +615,7 @@ impl LightningClientModule {
 
         let claim_pk = recipient_static_pk
             .mul_tweak(
-                secp256k1::SECP256K1,
+                bitcoin::secp256k1::SECP256K1,
                 &Scalar::from_be_bytes(ephemeral_tweak).expect("Within curve order"),
             )
             .expect("Tweak is valid");
@@ -736,7 +736,7 @@ impl LightningClientModule {
             .secret_key()
             .mul_tweak(&Scalar::from_be_bytes(ephemeral_tweak).expect("Within curve order"))
             .expect("Tweak is valid")
-            .keypair(secp256k1::SECP256K1);
+            .keypair(bitcoin::secp256k1::SECP256K1);
 
         if claim_keypair.public_key() != contract.commitment.claim_pk {
             return None; // The claim key is not derived from our pk

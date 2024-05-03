@@ -2032,7 +2032,6 @@ dependencies = [
  "lightning-invoice",
  "rand",
  "reqwest 0.11.26",
- "secp256k1 0.27.0",
  "serde",
  "serde_json",
  "strum",
