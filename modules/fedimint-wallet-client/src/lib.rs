@@ -11,6 +11,7 @@ use std::time::SystemTime;
 use anyhow::{anyhow, bail, ensure, Context as AnyhowContext};
 use async_stream::stream;
 use bitcoin::address::NetworkUnchecked;
+use bitcoin::secp256k1::{All, Secp256k1, SECP256K1};
 use bitcoin::{Address, Network};
 use client_db::DbKeyPrefix;
 use fedimint_api_client::api::DynModuleApi;
@@ -41,7 +42,6 @@ use fedimint_wallet_common::tweakable::Tweakable;
 pub use fedimint_wallet_common::*;
 use futures::{Stream, StreamExt};
 use rand::{thread_rng, Rng};
-use secp256k1::{All, Secp256k1};
 use serde::{Deserialize, Serialize};
 use strum::IntoEnumIterator;
 
@@ -290,7 +290,7 @@ impl WalletClientModule {
         let address = self
             .cfg
             .peg_in_descriptor
-            .tweak(&public_tweak_key, secp256k1::SECP256K1)
+            .tweak(&public_tweak_key, SECP256K1)
             .address(self.cfg.network)
             .unwrap();
 

@@ -2,6 +2,7 @@ use std::cmp;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 
+use bitcoin::secp256k1::KeyPair;
 use fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
 use fedimint_client::transaction::ClientInput;
 use fedimint_client::DynGlobalClientContext;
@@ -13,7 +14,6 @@ use fedimint_core::{Amount, OutPoint, TransactionId};
 use fedimint_wallet_common::tweakable::Tweakable;
 use fedimint_wallet_common::txoproof::PegInProof;
 use fedimint_wallet_common::WalletInput;
-use secp256k1::KeyPair;
 use tracing::{debug, instrument, trace, warn};
 
 use crate::api::WalletFederationApi;
