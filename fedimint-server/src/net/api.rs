@@ -8,6 +8,7 @@ use std::time::{Duration, Instant};
 
 use anyhow::{anyhow, Result};
 use async_trait::async_trait;
+use bitcoin::secp256k1::SECP256K1;
 use bitcoin_hashes::sha256;
 use fedimint_aead::{encrypt, get_encryption_key, random_salt};
 use fedimint_api_client::api::{
@@ -43,7 +44,6 @@ use fedimint_core::{OutPoint, PeerId, TransactionId};
 use fedimint_logging::LOG_NET_API;
 use futures::StreamExt;
 use jsonrpsee::RpcModule;
-use secp256k1::SECP256K1;
 use tokio::sync::RwLock;
 use tracing::{debug, info};
 
@@ -384,7 +384,7 @@ impl ConsensusApi {
     async fn handle_recover_request(
         &self,
         dbtx: &mut DatabaseTransaction<'_>,
-        id: secp256k1_zkp::PublicKey,
+        id: bitcoin::secp256k1::PublicKey,
     ) -> Option<ClientBackupSnapshot> {
         dbtx.get_value(&ClientBackupKey(id)).await
     }
@@ -585,7 +585,7 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConsensusApi>> {
         api_endpoint! {
             RECOVER_ENDPOINT,
             ApiVersion::new(0, 0),
-            async |fedimint: &ConsensusApi, context, id: secp256k1_zkp::PublicKey| -> Option<ClientBackupSnapshot> {
+            async |fedimint: &ConsensusApi, context, id: bitcoin::secp256k1::PublicKey| -> Option<ClientBackupSnapshot> {
                 Ok(fedimint
                     .handle_recover_request(&mut context.dbtx().into_nc(), id).await)
             }

@@ -4,7 +4,7 @@ use std::net::SocketAddr;
 use std::time::Duration;
 
 use anyhow::{bail, format_err};
-use bitcoin::secp256k1::PublicKey;
+use bitcoin::secp256k1::{PublicKey, Secp256k1, SecretKey};
 use fedimint_core::admin_client::ConfigGenParamsConsensus;
 pub use fedimint_core::config::{
     serde_binary_human_readable, ClientConfig, DkgError, DkgPeerMsg, DkgResult, FederationId,
@@ -24,7 +24,6 @@ use fedimint_core::{timing, PeerId};
 use fedimint_logging::{LOG_NET_PEER, LOG_NET_PEER_DKG};
 use futures::future::join_all;
 use rand::rngs::OsRng;
-use secp256k1_zkp::{Secp256k1, SecretKey};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use tokio_rustls::rustls;
@@ -417,7 +416,7 @@ impl ServerConfig {
         let mut broadcast_pks = BTreeMap::new();
         let mut broadcast_sks = BTreeMap::new();
         for peer_id in peer0.peer_ids() {
-            let (broadcast_sk, broadcast_pk) = secp256k1_zkp::generate_keypair(&mut OsRng);
+            let (broadcast_sk, broadcast_pk) = bitcoin::secp256k1::generate_keypair(&mut OsRng);
             broadcast_pks.insert(peer_id, broadcast_pk);
             broadcast_sks.insert(peer_id, broadcast_sk);
         }
@@ -485,7 +484,7 @@ impl ServerConfig {
             peers.clone(),
         );
 
-        let (broadcast_sk, broadcast_pk) = secp256k1_zkp::generate_keypair(&mut OsRng);
+        let (broadcast_sk, broadcast_pk) = bitcoin::secp256k1::generate_keypair(&mut OsRng);
 
         let broadcast_public_keys = broadcast_keys_exchange
             .exchange_pubkeys("broadcast".to_string(), broadcast_pk)
