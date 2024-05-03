@@ -142,8 +142,8 @@ pub enum TransactionError {
     UnsupportedSignatureScheme { variant: u64 },
     #[error("The transaction did not have the correct number of signatures")]
     InvalidWitnessLength,
-    #[error("The transaction had an invalid input")]
+    #[error("The transaction had an invalid input: {}", .0)]
     Input(DynInputError),
-    #[error("The transaction had an invalid output")]
+    #[error("The transaction had an invalid output: {}", .0)]
     Output(DynOutputError),
 }
