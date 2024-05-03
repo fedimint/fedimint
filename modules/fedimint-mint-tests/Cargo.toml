@@ -34,7 +34,7 @@ rand = { workspace = true }
 secp256k1 = "0.27.0"
 serde_json = { workspace = true }
 semver = { workspace = true }
-serde = { version = "1.0.199", features = [ "derive" ] }
+serde = { workspace = true }
 tbs = { package = "fedimint-tbs", version = "=0.4.0-alpha", path = "../../crypto/tbs" }
 threshold_crypto = { workspace = true }
 ff = "0.13.0"

@@ -50,7 +50,7 @@ fedimint-unknown-server = { version = "=0.4.0-alpha", path = "../modules/fedimin
 fedimint-unknown-common = { version = "=0.4.0-alpha", path = "../modules/fedimint-unknown-common" }
 rand = { workspace = true }
 rcgen = "=0.12.1"
-serde = { version = "1.0.199", features = [ "derive" ] }
+serde = { workspace = true }
 serde_json = { workspace = true }
 sha3 = "0.10.8"
 tbs = { package = "fedimint-tbs", version = "=0.4.0-alpha", path = "../crypto/tbs" }

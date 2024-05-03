@@ -21,7 +21,7 @@ futures = { workspace = true }
 itertools = { workspace = true }
 jsonrpsee-core = "0.22.4"
 lru = "0.12.3"
-serde = "1.0.199"
+serde = { workspace = true }
 serde_json = { workspace = true }
 tokio = { version = "1.37.0", features = ["sync", "io-util"] }
 thiserror = { workspace = true }
