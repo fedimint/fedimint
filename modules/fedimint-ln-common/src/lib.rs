@@ -18,6 +18,8 @@ use std::io::{Error, ErrorKind, Read, Write};
 use std::time::{Duration, SystemTime};
 
 use anyhow::{bail, Context as AnyhowContext};
+use bitcoin::secp256k1::schnorr::Signature;
+use bitcoin::secp256k1::Message;
 use bitcoin_hashes::sha256;
 use config::LightningClientConfig;
 use fedimint_client::oplog::OperationLogEntry;
@@ -32,8 +34,6 @@ use fedimint_core::{
 };
 use lightning::util::ser::{WithoutLength, Writeable};
 use lightning_invoice::{Bolt11Invoice, RoutingFees};
-use secp256k1::schnorr::Signature;
-use secp256k1::Message;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use threshold_crypto::PublicKey;
@@ -106,7 +106,7 @@ impl LightningOutput {
 
     pub fn new_v0_cancel_outgoing(
         contract: ContractId,
-        gateway_signature: secp256k1::schnorr::Signature,
+        gateway_signature: bitcoin::secp256k1::schnorr::Signature,
     ) -> LightningOutput {
         LightningOutput::V0(LightningOutputV0::CancelOutgoing {
             contract,
@@ -138,7 +138,7 @@ pub enum LightningOutputV0 {
         /// Contract to update
         contract: ContractId,
         /// Signature of gateway
-        gateway_signature: secp256k1::schnorr::Signature,
+        gateway_signature: bitcoin::secp256k1::schnorr::Signature,
     },
 }
 
@@ -345,8 +345,8 @@ pub struct LightningGateway {
     /// gateway.
     pub mint_channel_id: u64,
     /// Key used to pay the gateway
-    pub gateway_redeem_key: secp256k1::PublicKey,
-    pub node_pub_key: secp256k1::PublicKey,
+    pub gateway_redeem_key: bitcoin::secp256k1::PublicKey,
+    pub node_pub_key: bitcoin::secp256k1::PublicKey,
     pub lightning_alias: String,
     /// URL to the gateway's versioned public API
     /// (e.g. <https://gateway.example.com/v1>)
@@ -359,7 +359,7 @@ pub struct LightningGateway {
     /// Gateway configured routing fees
     #[serde(with = "serde_routing_fees")]
     pub fees: RoutingFees,
-    pub gateway_id: secp256k1::PublicKey,
+    pub gateway_id: bitcoin::secp256k1::PublicKey,
     /// Indicates if the gateway supports private payments
     pub supports_private_payments: bool,
 }
@@ -419,9 +419,9 @@ plugin_types_trait_impl_common!(
 // TODO: upstream serde support to LDK
 /// Hack to get a route hint that implements `serde` traits.
 pub mod route_hints {
+    use bitcoin::secp256k1::PublicKey;
     use fedimint_core::encoding::{Decodable, Encodable};
     use lightning_invoice::RoutingFees;
-    use secp256k1::PublicKey;
     use serde::{Deserialize, Serialize};
 
     #[derive(Clone, Debug, Hash, Eq, PartialEq, Serialize, Deserialize, Encodable, Decodable)]
@@ -613,7 +613,7 @@ pub enum LightningOutputError {
     #[error("The incoming LN account requires more funding (need {0} got {1})")]
     InsufficientIncomingFunding(Amount, Amount),
     #[error("No offer found for payment hash {0}")]
-    NoOffer(secp256k1::hashes::sha256::Hash),
+    NoOffer(bitcoin::secp256k1::hashes::sha256::Hash),
     #[error("Only outgoing contracts support cancellation")]
     NotOutgoingContract,
     #[error("Cancellation request wasn't properly signed")]
@@ -646,7 +646,7 @@ pub async fn ln_operation(
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Decodable, Encodable)]
 pub struct PrunedInvoice {
     pub amount: Amount,
-    pub destination: secp256k1::PublicKey,
+    pub destination: bitcoin::secp256k1::PublicKey,
     /// Wire-format encoding of feature bit vector
     #[serde(with = "fedimint_core::hex::serde", default)]
     pub destination_features: Vec<u8>,
@@ -705,7 +705,7 @@ impl TryFrom<Bolt11Invoice> for PrunedInvoice {
 /// registration.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RemoveGatewayRequest {
-    pub gateway_id: secp256k1::PublicKey,
+    pub gateway_id: bitcoin::secp256k1::PublicKey,
     pub signatures: BTreeMap<PeerId, Signature>,
 }
 

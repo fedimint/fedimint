@@ -127,10 +127,12 @@ impl PreimageKey {
     ///
     /// # Errors
     ///
-    /// Returns [`secp256k1::Error::InvalidPublicKey`] if the Preimage does not
-    /// represent a valid Secp256k1 point x coordinate.
-    pub fn to_public_key(&self) -> Result<secp256k1::PublicKey, secp256k1::Error> {
-        secp256k1::PublicKey::from_slice(&self.0)
+    /// Returns [`bitcoin::secp256k1::Error::InvalidPublicKey`] if the Preimage
+    /// does not represent a valid Secp256k1 point x coordinate.
+    pub fn to_public_key(
+        &self,
+    ) -> Result<bitcoin::secp256k1::PublicKey, bitcoin::secp256k1::Error> {
+        bitcoin::secp256k1::PublicKey::from_slice(&self.0)
     }
 }
 

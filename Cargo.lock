@@ -1870,7 +1870,6 @@ dependencies = [
  "lightning",
  "lightning-invoice",
  "rand",
- "secp256k1 0.27.0",
  "serde",
  "serde-big-array",
  "serde_json",
