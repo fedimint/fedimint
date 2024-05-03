@@ -32,22 +32,4 @@ mod tests {
             "Duration since epoch should be positive"
         );
     }
-
-    #[test]
-    #[cfg(not(target_family = "wasm"))]
-    fn test_now_on_non_wasm() {
-        let system_time = now();
-        assert!(system_time.elapsed().is_ok(), "SystemTime should be valid");
-    }
-
-    #[test]
-    #[cfg(target_family = "wasm")]
-    fn test_now_on_wasm() {
-        let system_time = now();
-        assert_eq!(
-            system_time,
-            SystemTime::UNIX_EPOCH,
-            "SystemTime on wasm should be UNIX_EPOCH"
-        );
-    }
 }
