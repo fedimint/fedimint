@@ -6,7 +6,9 @@ use fedimint_client::DynGlobalClientContext;
 use fedimint_core::core::OperationId;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::{Amount, TransactionId};
+use fedimint_logging::LOG_CLIENT_MODULE_MINT;
 use fedimint_mint_common::MintInput;
+use tracing::{debug, warn};
 
 use crate::{MintClientContext, MintClientStateMachines, SpendableNote};
 
@@ -123,8 +125,9 @@ impl MintInputStateCreated {
                     state: MintInputStates::Success(MintInputStateSuccess {}),
                 }
             }
-            Err(_) => {
+            Err(err) => {
                 // Transaction rejected: attempting to refund
+                debug!(target: LOG_CLIENT_MODULE_MINT, %err, "Refunding mint transaction input due to transaction error");
                 Self::refund(dbtx, old_state, global_context).await
             }
         }
@@ -200,9 +203,10 @@ impl MintInputStateRefund {
                     }),
                 }
             }
-            Err(_) => {
+            Err(err) => {
                 // Refund failed
                 // TODO: include e-cash notes for recovery? Although, they are in the log …
+                warn!(target: LOG_CLIENT_MODULE_MINT, %err, %refund_txid, "Refund transaction rejected. Notes probably lost.");
                 MintInputStateMachine {
                     common: old_state.common,
                     state: MintInputStates::Error(MintInputStateError {
