@@ -44,3 +44,55 @@ pub fn checked_address_to_unchecked_address(
     bincode::deserialize(&bincode::serialize(address).expect("Failed to serialize bitcoin address"))
         .expect("Failed to convert checked bitcoin address to unchecked bitcoin address")
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_network_magic_conversions() {
+        let bitcoin29_mainnet_magic: u32 = bitcoin29::network::constants::Network::Bitcoin.magic();
+        let bitcoin30_mainnet_magic = bitcoin::network::constants::Network::Bitcoin.magic();
+        assert_eq!(
+            bitcoin29_to_bitcoin30_network_magic(bitcoin29_mainnet_magic),
+            bitcoin30_mainnet_magic
+        );
+        assert_eq!(
+            bitcoin30_to_bitcoin29_network_magic(&bitcoin30_mainnet_magic),
+            bitcoin29_mainnet_magic
+        );
+
+        let bitcoin29_testnet_magic: u32 = bitcoin29::network::constants::Network::Testnet.magic();
+        let bitcoin30_testnet_magic = bitcoin::network::constants::Network::Testnet.magic();
+        assert_eq!(
+            bitcoin29_to_bitcoin30_network_magic(bitcoin29_testnet_magic),
+            bitcoin30_testnet_magic
+        );
+        assert_eq!(
+            bitcoin30_to_bitcoin29_network_magic(&bitcoin30_testnet_magic),
+            bitcoin29_testnet_magic
+        );
+
+        let bitcoin29_signet_magic: u32 = bitcoin29::network::constants::Network::Signet.magic();
+        let bitcoin30_signet_magic = bitcoin::network::constants::Network::Signet.magic();
+        assert_eq!(
+            bitcoin29_to_bitcoin30_network_magic(bitcoin29_signet_magic),
+            bitcoin30_signet_magic
+        );
+        assert_eq!(
+            bitcoin30_to_bitcoin29_network_magic(&bitcoin30_signet_magic),
+            bitcoin29_signet_magic
+        );
+
+        let bitcoin29_regtest_magic: u32 = bitcoin29::network::constants::Network::Regtest.magic();
+        let bitcoin30_regtest_magic = bitcoin::network::constants::Network::Regtest.magic();
+        assert_eq!(
+            bitcoin29_to_bitcoin30_network_magic(bitcoin29_regtest_magic),
+            bitcoin30_regtest_magic
+        );
+        assert_eq!(
+            bitcoin30_to_bitcoin29_network_magic(&bitcoin30_regtest_magic),
+            bitcoin29_regtest_magic
+        );
+    }
+}
