@@ -16,8 +16,7 @@ use fedimint_core::{Amount, NumPeersExt, OutPoint, PeerId, Tiered};
 use fedimint_derive_secret::{ChildId, DerivableSecret};
 use fedimint_mint_common::endpoint_constants::AWAIT_OUTPUT_OUTCOME_ENDPOINT;
 use fedimint_mint_common::{BlindNonce, MintOutputOutcome, Nonce};
-use secp256k1::KeyPair;
-use secp256k1_zkp::{Secp256k1, Signing};
+use secp256k1::{KeyPair, Secp256k1, Signing};
 use serde::{Deserialize, Serialize};
 use tbs::{
     aggregate_signature_shares, blind_message, unblind_signature, AggregatePublicKey,

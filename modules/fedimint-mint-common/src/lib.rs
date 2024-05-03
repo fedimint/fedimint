@@ -84,7 +84,7 @@ pub struct Note {
     Encodable,
     Decodable,
 )]
-pub struct Nonce(pub secp256k1_zkp::PublicKey);
+pub struct Nonce(pub secp256k1::PublicKey);
 
 /// [`Nonce`] but blinded by the user key
 ///
@@ -184,7 +184,7 @@ impl Note {
     }
 
     /// Access the nonce as the public key to the spend key
-    pub fn spend_key(&self) -> &secp256k1_zkp::PublicKey {
+    pub fn spend_key(&self) -> &secp256k1::PublicKey {
         &self.nonce.0
     }
 }

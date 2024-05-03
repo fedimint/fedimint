@@ -23,5 +23,5 @@ fedimint-core = { version = "=0.4.0-alpha", path = "../../fedimint-core" }
 bitcoin_hashes = "0.11.0"
 hkdf = { package = "fedimint-hkdf", version = "=0.4.0-alpha", path = "../../crypto/hkdf" }
 ring = "0.17.8"
-secp256k1-zkp = { version = "0.9.2", features = [ "serde" ] }
+secp256k1 = "0.27.0"
 bls12_381 = "0.8.0"

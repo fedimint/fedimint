@@ -1634,7 +1634,7 @@ dependencies = [
  "fedimint-core",
  "fedimint-hkdf",
  "ring",
- "secp256k1-zkp",
+ "secp256k1 0.27.0",
 ]
 
 [[package]]
@@ -2291,7 +2291,6 @@ dependencies = [
  "itertools 0.12.1",
  "rand",
  "secp256k1 0.27.0",
- "secp256k1-zkp",
  "serde",
  "serde-big-array",
  "serde_json",
@@ -2320,7 +2319,6 @@ dependencies = [
  "itertools 0.12.1",
  "rand",
  "secp256k1 0.27.0",
- "secp256k1-zkp",
  "serde",
  "strum",
  "strum_macros",
@@ -2349,7 +2347,6 @@ dependencies = [
  "itertools 0.12.1",
  "rand",
  "secp256k1 0.27.0",
- "secp256k1-zkp",
  "serde",
  "strum",
  "strum_macros",
@@ -4986,28 +4983,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "70a129b9e9efbfb223753b9163c4ab3b13cff7fd9c7f010fbac25ab4099fa07e"
 dependencies = [
  "cc",
-]
-
-[[package]]
-name = "secp256k1-zkp"
-version = "0.9.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "026efcdacb95ee6aae5cc19144dc1549973eac36a4972700c28493de1ee5d69f"
-dependencies = [
- "bitcoin-private",
- "secp256k1 0.27.0",
- "secp256k1-zkp-sys",
- "serde",
-]
-
-[[package]]
-name = "secp256k1-zkp-sys"
-version = "0.8.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d03ab1ca75a18e1899e8d9b8d28b5998ae1ddcb42fec5956769718543293c723"
-dependencies = [
- "cc",
- "secp256k1-sys 0.8.1",
 ]
 
 [[package]]

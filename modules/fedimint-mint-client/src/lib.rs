@@ -57,7 +57,7 @@ use fedimint_mint_common::config::MintClientConfig;
 pub use fedimint_mint_common::*;
 use futures::{pin_mut, StreamExt};
 use hex::ToHex;
-use secp256k1_zkp::{All, KeyPair, Secp256k1};
+use secp256k1::{All, KeyPair, Secp256k1};
 use serde::{Deserialize, Serialize};
 use strum::IntoEnumIterator;
 use tbs::AggregatePublicKey;

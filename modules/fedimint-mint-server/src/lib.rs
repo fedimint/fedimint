@@ -41,7 +41,7 @@ use metrics::{
     MINT_REDEEMED_ECASH_FEES_SATS, MINT_REDEEMED_ECASH_SATS,
 };
 use rand::rngs::OsRng;
-use secp256k1_zkp::SECP256K1;
+use secp256k1::SECP256K1;
 use strum::IntoEnumIterator;
 use tbs::{
     aggregate_public_key_shares, sign_blinded_msg, AggregatePublicKey, PublicKeyShare,
@@ -500,7 +500,7 @@ impl ServerModule for Mint {
             api_endpoint! {
                 RECOVER_ENDPOINT,
                 ApiVersion::new(0, 0),
-                async |module: &Mint, context, id: secp256k1_zkp::PublicKey| -> Option<ECashUserBackupSnapshot> {
+                async |module: &Mint, context, id: secp256k1::PublicKey| -> Option<ECashUserBackupSnapshot> {
                     Ok(module
                         .handle_recover_request(&mut context.dbtx().into_nc(), id).await)
                 }
@@ -543,7 +543,7 @@ impl Mint {
     async fn handle_recover_request(
         &self,
         dbtx: &mut DatabaseTransaction<'_>,
-        id: secp256k1_zkp::PublicKey,
+        id: secp256k1::PublicKey,
     ) -> Option<ECashUserBackupSnapshot> {
         dbtx.get_value(&EcashBackupKey(id)).await
     }

@@ -2,7 +2,7 @@ use std::fmt::Debug;
 
 use bitcoin_hashes::{sha256, Hash};
 use fedimint_core::encoding::{Decodable, Encodable};
-use secp256k1_zkp::{KeyPair, Message, Secp256k1, Signing, Verification};
+use secp256k1::{KeyPair, Message, Secp256k1, Signing, Verification};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize, Encodable, Decodable)]
@@ -37,10 +37,7 @@ pub struct SignedBackupRequest {
 }
 
 impl SignedBackupRequest {
-    pub fn verify_valid<C>(
-        &self,
-        ctx: &Secp256k1<C>,
-    ) -> Result<&BackupRequest, secp256k1_zkp::Error>
+    pub fn verify_valid<C>(&self, ctx: &Secp256k1<C>) -> Result<&BackupRequest, secp256k1::Error>
     where
         C: Signing + Verification,
     {
