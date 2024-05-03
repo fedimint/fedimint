@@ -39,7 +39,7 @@ tracing = { workspace = true }
 threshold_crypto = { workspace = true }
 url = { version = "2.5.0", features = ["serde"] }
 bitcoin29 = { package = "bitcoin", version = "0.29.2", features = ["rand", "serde"] }
-bitcoin = { version = "0.30.2", features = ["rand-std", "std"] }
+bitcoin = { workspace = true }
 bitcoin_hashes = { workspace = true }
 erased-serde = { workspace = true }
 lightning = "0.0.122"

@@ -24,7 +24,7 @@ anyhow = { workspace = true }
 aquamarine = "0.5.0"
 async-stream = "0.3.5"
 async-trait = { workspace = true }
-bitcoin = "0.30.2"
+bitcoin = { workspace = true }
 fedimint-core = { workspace = true }
 fedimint-api-client  = { workspace = true }
 fedimint-derive-secret = { version = "=0.4.0-alpha", path = "../crypto/derive-secret" }

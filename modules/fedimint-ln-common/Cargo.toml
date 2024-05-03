@@ -26,7 +26,7 @@ anyhow = { workspace = true }
 async-trait = { workspace = true }
 aquamarine = "0.5.0"
 bitcoin_hashes = { workspace = true }
-bitcoin = { version = "0.30.2", features = [ "rand", "serde"] }
+bitcoin = { workspace = true }
 erased-serde = { workspace = true }
 futures = { workspace = true }
 itertools = { workspace = true }

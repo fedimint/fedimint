@@ -18,7 +18,7 @@ path = "src/lib.rs"
 [dependencies]
 anyhow = { workspace = true }
 async-trait = "0.1"
-bitcoin = { version = "0.30.2", features = [ "rand", "serde"] }
+bitcoin = { workspace = true }
 erased-serde = { workspace = true }
 fedimint-bitcoind = { version = "=0.4.0-alpha", path = "../../fedimint-bitcoind" }
 fedimint-core = { version = "=0.4.0-alpha", path = "../../fedimint-core" }
