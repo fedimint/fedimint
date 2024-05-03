@@ -2,6 +2,7 @@ use std::time::Duration;
 
 use anyhow::{bail, Context};
 use assert_matches::assert_matches;
+use bitcoin::secp256k1;
 use bitcoin::secp256k1::rand::rngs::OsRng;
 use fedimint_bitcoind::DynBitcoindRpc;
 use fedimint_client::secret::{PlainRootSecretStrategy, RootSecretStrategy};
@@ -605,7 +606,8 @@ mod fedimint_migration_tests {
     use bitcoin::hashes::Hash;
     use bitcoin::psbt::{Input, PartiallySignedTransaction};
     use bitcoin::{
-        Amount, BlockHash, ScriptBuf, Sequence, Transaction, TxIn, TxOut, Txid, WPubkeyHash,
+        secp256k1, Amount, BlockHash, ScriptBuf, Sequence, Transaction, TxIn, TxOut, Txid,
+        WPubkeyHash,
     };
     use fedimint_client::module::init::DynClientModuleInit;
     use fedimint_core::db::{

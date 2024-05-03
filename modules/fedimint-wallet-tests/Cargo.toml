@@ -39,7 +39,6 @@ futures = { workspace = true }
 miniscript = { version = "10.0.0" }
 tokio = { workspace = true }
 tracing = { workspace = true }
-secp256k1 = { version = "0.27.0", features = [ "serde" ] }
 rand = { workspace = true }
 strum = { workspace = true }
 strum_macros = { workspace = true }
