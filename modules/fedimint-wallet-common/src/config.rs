@@ -1,5 +1,6 @@
 use std::collections::BTreeMap;
 
+use bitcoin::secp256k1::SecretKey;
 use bitcoin::Network;
 use fedimint_core::core::ModuleKind;
 use fedimint_core::encoding::{Decodable, Encodable};
@@ -8,7 +9,6 @@ use fedimint_core::module::__reexports::serde_json;
 use fedimint_core::util::SafeUrl;
 use fedimint_core::{plugin_types_trait_impl_config, Feerate, PeerId};
 use miniscript::descriptor::{Wpkh, Wsh};
-use secp256k1::SecretKey;
 use serde::{Deserialize, Serialize};
 
 use crate::envs::FM_PORT_ESPLORA_ENV;

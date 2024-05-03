@@ -72,7 +72,7 @@ impl std::fmt::Display for WalletConsensusItem {
 #[derive(Clone, Debug, Serialize, Deserialize, Encodable, Decodable)]
 pub struct PegOutSignatureItem {
     pub txid: Txid,
-    pub signature: Vec<secp256k1::ecdsa::Signature>,
+    pub signature: Vec<bitcoin::secp256k1::ecdsa::Signature>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize, Encodable, Decodable)]
@@ -319,7 +319,7 @@ pub enum ProcessPegOutSigError {
     #[error("Bad Sighash")]
     SighashError,
     #[error("Malformed signature: {0}")]
-    MalformedSignature(secp256k1::Error),
+    MalformedSignature(bitcoin::secp256k1::Error),
     #[error("Invalid signature")]
     InvalidSignature,
     #[error("Duplicate signature")]

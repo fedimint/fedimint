@@ -1,7 +1,7 @@
 use std::io::Write;
 
 use bitcoin::hashes::{sha256, Hash as BitcoinHash, Hmac, HmacEngine};
-use secp256k1::{Scalar, Secp256k1, Signing, Verification};
+use bitcoin::secp256k1::{PublicKey, Scalar, Secp256k1, SecretKey, Signing, Verification};
 
 /// An object that can be used as a Ricardian contract to tweak a key
 pub trait Contract {
@@ -20,7 +20,7 @@ pub trait Tweakable {
     ) -> Self;
 }
 
-impl Tweakable for secp256k1::PublicKey {
+impl Tweakable for PublicKey {
     fn tweak<Ctx: Verification + Signing, Ctr: Contract>(
         &self,
         tweak: &Ctr,
@@ -35,13 +35,13 @@ impl Tweakable for secp256k1::PublicKey {
     }
 }
 
-impl Tweakable for secp256k1::SecretKey {
+impl Tweakable for SecretKey {
     fn tweak<Ctx: Verification + Signing, Ctr: Contract>(
         &self,
         tweak_in: &Ctr,
         secp: &Secp256k1<Ctx>,
     ) -> Self {
-        let pub_key = secp256k1::PublicKey::from_secret_key(secp, self);
+        let pub_key = PublicKey::from_secret_key(secp, self);
 
         let tweak = {
             let mut hasher = HmacEngine::<sha256::Hash>::new(&pub_key.serialize()[..]);
@@ -54,7 +54,7 @@ impl Tweakable for secp256k1::SecretKey {
     }
 }
 
-impl Contract for secp256k1::PublicKey {
+impl Contract for PublicKey {
     fn encode<W: std::io::Write>(&self, writer: &mut W) -> std::io::Result<()> {
         writer.write_all(&self.serialize())
     }

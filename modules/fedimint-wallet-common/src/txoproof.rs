@@ -2,12 +2,12 @@ use std::convert::Infallible;
 use std::hash::Hash;
 
 use anyhow::format_err;
+use bitcoin::secp256k1::{PublicKey, Secp256k1, Signing, Verification};
 use bitcoin::{BlockHash, OutPoint, Transaction};
 use fedimint_core::encoding::{Decodable, DecodeError, Encodable};
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::txoproof::TxOutProof;
 use miniscript::{translate_hash_fail, Descriptor, TranslatePk};
-use secp256k1::{Secp256k1, Signing, Verification};
 use serde::de::Error;
 use serde::{Deserialize, Deserializer, Serialize};
 use thiserror::Error;
@@ -26,7 +26,7 @@ pub struct PegInProof {
     transaction: Transaction,
     // Check that the idx is in range
     output_idx: u32,
-    tweak_contract_key: secp256k1::PublicKey,
+    tweak_contract_key: PublicKey,
 }
 
 impl<'de> Deserialize<'de> for PegInProof {
@@ -39,7 +39,7 @@ impl<'de> Deserialize<'de> for PegInProof {
             txout_proof: TxOutProof,
             transaction: Transaction,
             output_idx: u32,
-            tweak_contract_key: secp256k1::PublicKey,
+            tweak_contract_key: PublicKey,
         }
 
         let pegin_proof_inner = PegInProofInner::deserialize(deserializer)?;
@@ -62,7 +62,7 @@ impl PegInProof {
         txout_proof: TxOutProof,
         transaction: Transaction,
         output_idx: u32,
-        tweak_contract_key: secp256k1::PublicKey,
+        tweak_contract_key: PublicKey,
     ) -> Result<PegInProof, PegInProofError> {
         // TODO: remove redundancy with serde validation
         if !txout_proof.contains_tx(transaction.txid()) {
@@ -114,11 +114,11 @@ impl PegInProof {
         self.txout_proof.block()
     }
 
-    pub fn tweak_contract_key(&self) -> &secp256k1::PublicKey {
+    pub fn tweak_contract_key(&self) -> &PublicKey {
         &self.tweak_contract_key
     }
 
-    pub fn identity(&self) -> (secp256k1::PublicKey, bitcoin::Txid) {
+    pub fn identity(&self) -> (PublicKey, bitcoin::Txid) {
         (self.tweak_contract_key, self.transaction.txid())
     }
 
@@ -201,7 +201,7 @@ impl Decodable for PegInProof {
             txout_proof: TxOutProof::consensus_decode(d, modules)?,
             transaction: Transaction::consensus_decode(d, modules)?,
             output_idx: u32::consensus_decode(d, modules)?,
-            tweak_contract_key: secp256k1::PublicKey::consensus_decode(d, modules)?,
+            tweak_contract_key: PublicKey::consensus_decode(d, modules)?,
         };
 
         validate_peg_in_proof(&slf).map_err(DecodeError::new_custom)?;

@@ -2693,7 +2693,6 @@ dependencies = [
  "impl-tools",
  "miniscript",
  "rand",
- "secp256k1 0.27.0",
  "serde",
  "strum",
  "strum_macros",
