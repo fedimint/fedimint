@@ -1,7 +1,7 @@
+use bitcoin::secp256k1::ecdsa::Signature;
 use bitcoin::{BlockHash, Txid};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::{impl_db_lookup, impl_db_record, PeerId};
-use secp256k1::ecdsa::Signature;
 use serde::Serialize;
 use strum_macros::EnumIter;
 

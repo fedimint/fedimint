@@ -14,7 +14,9 @@ use bitcoin::policy::DEFAULT_MIN_RELAY_TX_FEE;
 use bitcoin::psbt::{Input, PartiallySignedTransaction};
 use bitcoin::secp256k1::{All, Secp256k1, Verification};
 use bitcoin::sighash::{EcdsaSighashType, SighashCache};
-use bitcoin::{Address, BlockHash, Network, ScriptBuf, Sequence, Transaction, TxIn, TxOut, Txid};
+use bitcoin::{
+    secp256k1, Address, BlockHash, Network, ScriptBuf, Sequence, Transaction, TxIn, TxOut, Txid,
+};
 use common::config::WalletConfigConsensus;
 use common::{
     proprietary_tweak_key, PegOutFees, PegOutSignatureItem, ProcessPegOutSigError, SpendableUTXO,
@@ -1698,7 +1700,7 @@ mod tests {
     use std::str::FromStr;
 
     use bitcoin::Network::{Bitcoin, Testnet};
-    use bitcoin::{Address, Amount, Network, OutPoint, Txid};
+    use bitcoin::{secp256k1, Address, Amount, Network, OutPoint, Txid};
     use fedimint_core::{BitcoinHash, Feerate};
     use fedimint_wallet_common::{PegOut, PegOutFees, Rbf, WalletOutputV0};
     use miniscript::descriptor::Wsh;
