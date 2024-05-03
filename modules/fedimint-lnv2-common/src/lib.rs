@@ -11,6 +11,7 @@ pub mod endpoint_constants;
 
 use std::collections::BTreeMap;
 
+use bitcoin::secp256k1::schnorr::Signature;
 use bitcoin_hashes::sha256;
 use config::LightningClientConfig;
 use fedimint_client::sm::Context;
@@ -19,7 +20,6 @@ use fedimint_core::core::{Decoder, ModuleInstanceId, ModuleKind};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::{CommonModuleInit, ModuleCommon, ModuleConsensusVersion};
 use fedimint_core::{extensible_associated_module_type, plugin_types_trait_impl_common, PeerId};
-use secp256k1::schnorr::Signature;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tpe::{AggregateDecryptionKey, AggregatePublicKey, DecryptionKeyShare, PublicKeyShare};

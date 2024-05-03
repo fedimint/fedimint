@@ -1,8 +1,8 @@
+use bitcoin::secp256k1::schnorr::Signature;
+use bitcoin::secp256k1::{Message, PublicKey};
 use bitcoin_hashes::sha256;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::Amount;
-use secp256k1::schnorr::Signature;
-use secp256k1::{Message, PublicKey};
 use serde::{Deserialize, Serialize};
 use tpe::{
     create_decryption_key_share, decrypt_preimage, encrypt_preimage, verify_agg_decryption_key,
@@ -142,7 +142,7 @@ impl OutgoingContract {
     }
 
     pub fn verify_forfeit_signature(&self, signature: &Signature) -> bool {
-        secp256k1::global::SECP256K1
+        bitcoin::secp256k1::global::SECP256K1
             .verify_schnorr(
                 signature,
                 &self.forfeit_message(),
@@ -159,7 +159,7 @@ impl OutgoingContract {
     }
 
     pub fn verify_invoice_auth(&self, message: sha256::Hash, signature: &Signature) -> bool {
-        secp256k1::global::SECP256K1
+        bitcoin::secp256k1::global::SECP256K1
             .verify_schnorr(
                 signature,
                 &message.into(),
