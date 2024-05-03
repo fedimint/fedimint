@@ -877,6 +877,18 @@
 <a href="#877" id="877">877</a>
 <a href="#878" id="878">878</a>
 <a href="#879" id="879">879</a>
+<a href="#880" id="880">880</a>
+<a href="#881" id="881">881</a>
+<a href="#882" id="882">882</a>
+<a href="#883" id="883">883</a>
+<a href="#884" id="884">884</a>
+<a href="#885" id="885">885</a>
+<a href="#886" id="886">886</a>
+<a href="#887" id="887">887</a>
+<a href="#888" id="888">888</a>
+<a href="#889" id="889">889</a>
+<a href="#890" id="890">890</a>
+<a href="#891" id="891">891</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap};
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
@@ -954,8 +966,8 @@
     api_endpoints: Vec&lt;(PeerId, SafeUrl)&gt;,
     cfg: ServerConfig,
     submission_receiver: Receiver&lt;ConsensusItem&gt;,
+    shutdown_receiver: watch::Receiver&lt;<span class="prelude-ty">Option</span>&lt;u64&gt;&gt;,
     latest_contribution_by_peer: Arc&lt;RwLock&lt;LatestContributionByPeer&gt;&gt;,
-
     <span class="doccomment">/// Just a string version of `cfg.local.identity` for performance
     </span>self_id_str: String,
     <span class="doccomment">/// Just a string version of peer ids for performance
@@ -1055,6 +1067,7 @@
         );
 
         <span class="kw">let </span>(submission_sender, submission_receiver) = async_channel::bounded(TRANSACTION_BUFFER);
+        <span class="kw">let </span>(shutdown_sender, shutdown_receiver) = watch::channel(<span class="prelude-val">None</span>);
 
         <span class="comment">// Build P2P connections for the atomic broadcast
         </span><span class="kw">let </span>(connections, peer_status_channels) = ReconnectPeerConnections::new(
@@ -1074,6 +1087,7 @@
             modules: modules.clone(),
             client_cfg: cfg.consensus.to_client_config(<span class="kw-2">&amp;</span>module_inits)<span class="question-mark">?</span>,
             submission_sender: submission_sender.clone(),
+            shutdown_sender,
             supported_api_versions: ServerConfig::supported_api_versions_summary(
                 <span class="kw-2">&amp;</span>cfg.consensus.modules,
                 <span class="kw-2">&amp;</span>module_inits,
@@ -1114,6 +1128,7 @@
                 .collect(),
             cfg: cfg.clone(),
             submission_receiver,
+            shutdown_receiver,
             latest_contribution_by_peer,
             modules,
         };
@@ -1135,6 +1150,7 @@
 
         <span class="kw">while </span>!task_handle.is_shutting_down() {
             <span class="kw">let </span>session_index = <span class="self">self</span>.get_finished_session_count().<span class="kw">await</span>;
+
             CONSENSUS_SESSION_COUNT.set(session_index <span class="kw">as </span>i64);
 
             <span class="kw">let </span><span class="kw-2">mut </span>item_index = <span class="self">self</span>.pending_accepted_items().<span class="kw">await</span>.len() <span class="kw">as </span>u64;
@@ -1180,8 +1196,7 @@
 
             <span class="macro">info!</span>(target: LOG_CONSENSUS, <span class="string">"Session {session_index} completed"</span>);
 
-            <span class="comment">// if the submission channel is closed we are shutting down
-            </span><span class="kw">if </span><span class="self">self</span>.submission_receiver.is_closed() {
+            <span class="kw">if </span><span class="prelude-val">Some</span>(session_index) == <span class="self">self</span>.shutdown_receiver.borrow().to_owned() {
                 <span class="kw">break</span>;
             }
         }
@@ -1199,11 +1214,20 @@
 
         <span class="kw">while </span>!task_handle.is_shutting_down() {
             <span class="kw">let </span>session_index = <span class="self">self</span>.get_finished_session_count().<span class="kw">await</span>;
+
             CONSENSUS_SESSION_COUNT.set(session_index <span class="kw">as </span>i64);
 
             <span class="self">self</span>.run_session(session_index).<span class="kw">await</span><span class="question-mark">?</span>;
 
             <span class="macro">info!</span>(target: LOG_CONSENSUS, <span class="string">"Session {session_index} completed"</span>);
+
+            <span class="kw">if </span><span class="prelude-val">Some</span>(session_index) == <span class="self">self</span>.shutdown_receiver.borrow().to_owned() {
+                <span class="macro">info!</span>(target: LOG_CONSENSUS, <span class="string">"Initiating shutdown, waiting for peers to complete the session..."</span>);
+
+                sleep(Duration::from_secs(<span class="number">60</span>)).<span class="kw">await</span>;
+
+                <span class="kw">break</span>;
+            }
         }
 
         <span class="macro">info!</span>(target: LOG_CONSENSUS, <span class="string">"Consensus task shut down"</span>);
