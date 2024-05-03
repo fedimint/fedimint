@@ -2,10 +2,6 @@ use std::io::{Error, Read, Write};
 
 use secp256k1_zkp::ecdsa::Signature;
 
-use crate::bitcoin_migration::{
-    bitcoin29_to_bitcoin30_keypair, bitcoin29_to_bitcoin30_schnorr_signature,
-    bitcoin30_to_bitcoin29_keypair, bitcoin30_to_bitcoin29_schnorr_signature,
-};
 use crate::encoding::{Decodable, DecodeError, Encodable};
 use crate::module::registry::ModuleDecoderRegistry;
 
@@ -39,22 +35,6 @@ impl Decodable for secp256k1_zkp::PublicKey {
         modules: &ModuleDecoderRegistry,
     ) -> Result<Self, DecodeError> {
         secp256k1_zkp::PublicKey::from_slice(&<[u8; 33]>::consensus_decode(d, modules)?)
-            .map_err(DecodeError::from_err)
-    }
-}
-
-impl Encodable for bitcoin30::secp256k1::PublicKey {
-    fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<usize, std::io::Error> {
-        self.serialize().consensus_encode(writer)
-    }
-}
-
-impl Decodable for bitcoin30::secp256k1::PublicKey {
-    fn consensus_decode<D: std::io::Read>(
-        d: &mut D,
-        modules: &ModuleDecoderRegistry,
-    ) -> Result<Self, DecodeError> {
-        bitcoin30::secp256k1::PublicKey::from_slice(&<[u8; 33]>::consensus_decode(d, modules)?)
             .map_err(DecodeError::from_err)
     }
 }
@@ -98,56 +78,19 @@ impl Decodable for secp256k1_zkp::schnorr::Signature {
     }
 }
 
-impl Encodable for secp256k1::schnorr::Signature {
-    fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<usize, std::io::Error> {
-        bitcoin30_to_bitcoin29_schnorr_signature(*self).consensus_encode(writer)
-    }
-}
-
-impl Decodable for secp256k1::schnorr::Signature {
-    fn consensus_decode<D: std::io::Read>(
-        d: &mut D,
-        modules: &ModuleDecoderRegistry,
-    ) -> Result<Self, DecodeError> {
-        let bytes =
-            <[u8; secp256k1_zkp::constants::SCHNORR_SIGNATURE_SIZE]>::consensus_decode(d, modules)?;
-        secp256k1_zkp::schnorr::Signature::from_slice(&bytes)
-            .map(bitcoin29_to_bitcoin30_schnorr_signature)
-            .map_err(DecodeError::from_err)
-    }
-}
-
-impl Encodable for bitcoin::KeyPair {
+impl Encodable for bitcoin::key::KeyPair {
     fn consensus_encode<W: Write>(&self, writer: &mut W) -> Result<usize, Error> {
         self.secret_bytes().consensus_encode(writer)
     }
 }
 
-impl Decodable for bitcoin::KeyPair {
+impl Decodable for bitcoin::key::KeyPair {
     fn consensus_decode<D: Read>(
         d: &mut D,
         modules: &ModuleDecoderRegistry,
     ) -> Result<Self, DecodeError> {
         let sec_bytes = <[u8; 32]>::consensus_decode(d, modules)?;
         Self::from_seckey_slice(secp256k1_zkp::global::SECP256K1, &sec_bytes) // FIXME: evaluate security risk of global ctx
-            .map_err(DecodeError::from_err)
-    }
-}
-
-impl Encodable for bitcoin30::key::KeyPair {
-    fn consensus_encode<W: Write>(&self, writer: &mut W) -> Result<usize, Error> {
-        bitcoin30_to_bitcoin29_keypair(*self).consensus_encode(writer)
-    }
-}
-
-impl Decodable for bitcoin30::key::KeyPair {
-    fn consensus_decode<D: Read>(
-        d: &mut D,
-        modules: &ModuleDecoderRegistry,
-    ) -> Result<Self, DecodeError> {
-        let sec_bytes = <[u8; 32]>::consensus_decode(d, modules)?;
-        bitcoin::KeyPair::from_seckey_slice(secp256k1_zkp::global::SECP256K1, &sec_bytes) // FIXME: evaluate security risk of global ctx
-            .map(bitcoin29_to_bitcoin30_keypair)
             .map_err(DecodeError::from_err)
     }
 }
@@ -175,7 +118,7 @@ mod tests {
     fn test_schnorr_pub_key() {
         let ctx = secp256k1_zkp::global::SECP256K1;
         let mut rng = rand::rngs::OsRng;
-        let sec_key = bitcoin::KeyPair::new(ctx, &mut rng);
+        let sec_key = bitcoin::key::KeyPair::new(ctx, &mut rng);
         let pub_key = sec_key.public_key();
         test_roundtrip(pub_key);
 

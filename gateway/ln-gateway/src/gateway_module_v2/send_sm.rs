@@ -4,7 +4,6 @@ use bitcoin_hashes::Hash;
 use fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
 use fedimint_client::transaction::ClientInput;
 use fedimint_client::DynGlobalClientContext;
-use fedimint_core::bitcoin_migration::bitcoin29_to_bitcoin30_secp256k1_public_key;
 use fedimint_core::core::OperationId;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::{Amount, OutPoint};
@@ -150,16 +149,14 @@ impl SendStateMachine {
             .await
             .map_err(|e| Cancelled::LightningRpcError(e.to_string()))?;
 
-        if lightning_context.lightning_public_key
-            == bitcoin29_to_bitcoin30_secp256k1_public_key(invoice.recover_payee_pub_key())
-        {
+        if lightning_context.lightning_public_key == invoice.recover_payee_pub_key() {
             let invoice_msats = invoice
                 .amount_milli_satoshis()
                 .expect("We checked this previously");
 
             let (payload, client) = context
                 .gateway
-                .get_payload_and_client_v2(invoice.payment_hash().into_inner(), invoice_msats)
+                .get_payload_and_client_v2(invoice.payment_hash().to_byte_array(), invoice_msats)
                 .await
                 .map_err(|e| Cancelled::DirectSwapError(e.to_string()))?;
 
@@ -188,7 +185,7 @@ impl SendStateMachine {
                     invoice: invoice.to_string(),
                     max_delay,
                     max_fee_msat: max_fee.msats,
-                    payment_hash: invoice.payment_hash().to_vec(),
+                    payment_hash: invoice.payment_hash().to_byte_array().to_vec(),
                 })
                 .await
         }

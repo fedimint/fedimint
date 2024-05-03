@@ -5,22 +5,18 @@ use std::time::Duration;
 
 use anyhow::format_err;
 use async_trait::async_trait;
+use bitcoin::absolute::LockTime;
+use bitcoin::block::{Header as BlockHeader, Version};
 use bitcoin::blockdata::constants::genesis_block;
 use bitcoin::hash_types::Txid;
 use bitcoin::hashes::Hash;
-use bitcoin::util::merkleblock::PartialMerkleTree;
+use bitcoin::merkle_tree::PartialMerkleTree;
 use bitcoin::{
-    Address, Block, BlockHash, BlockHeader, Network, OutPoint, PackedLockTime, Script, Transaction,
-    TxOut,
+    Address, Block, BlockHash, CompactTarget, Network, OutPoint, ScriptBuf, Transaction, TxOut,
 };
-use bitcoin30::ScriptBuf;
 use fedimint_bitcoind::{
     register_bitcoind, DynBitcoindRpc, IBitcoindRpc, IBitcoindRpcFactory,
     Result as BitcoinRpcResult,
-};
-use fedimint_core::bitcoin_migration::{
-    bitcoin29_to_bitcoin30_block_hash, bitcoin29_to_bitcoin30_transaction,
-    bitcoin30_to_bitcoin29_script, bitcoin30_to_bitcoin29_transaction, bitcoin30_to_bitcoin29_txid,
 };
 use fedimint_core::envs::BitcoinRpcConfig;
 use fedimint_core::task::{sleep_in_test, TaskHandle};
@@ -76,7 +72,7 @@ struct FakeBitcoinTestInner {
     /// Simulates the merkle tree proofs
     proofs: BTreeMap<Txid, TxOutProof>,
     /// Simulates the script history
-    scripts: BTreeMap<Script, Vec<Transaction>>,
+    scripts: BTreeMap<ScriptBuf, Vec<Transaction>>,
 }
 
 #[derive(Clone, Debug)]
@@ -113,7 +109,7 @@ impl FakeBitcoinTest {
     fn new_transaction(out: Vec<TxOut>) -> Transaction {
         Transaction {
             version: 0,
-            lock_time: PackedLockTime::ZERO,
+            lock_time: LockTime::ZERO,
             input: vec![],
             output: out,
         }
@@ -142,11 +138,11 @@ impl FakeBitcoinTest {
             .unwrap();
         let block = Block {
             header: BlockHeader {
-                version: 0,
+                version: Version::from_consensus(0),
                 prev_blockhash: blocks.last().map(|b| b.header.block_hash()).unwrap_or(root),
                 merkle_root,
                 time: 0,
-                bits: 0,
+                bits: CompactTarget::from_consensus(0),
                 nonce: 0,
             },
             txdata: pending.clone(),
@@ -282,31 +278,27 @@ impl BitcoinTest for FakeBitcoinTest {
 
 #[async_trait]
 impl IBitcoindRpc for FakeBitcoinTest {
-    async fn get_network(&self) -> BitcoinRpcResult<bitcoin30::Network> {
-        Ok(bitcoin30::Network::Regtest)
+    async fn get_network(&self) -> BitcoinRpcResult<bitcoin::Network> {
+        Ok(bitcoin::Network::Regtest)
     }
 
     async fn get_block_count(&self) -> BitcoinRpcResult<u64> {
         Ok(self.inner.read().unwrap().blocks.len() as u64)
     }
 
-    async fn get_block_hash(&self, height: u64) -> BitcoinRpcResult<bitcoin30::BlockHash> {
-        Ok(bitcoin29_to_bitcoin30_block_hash(
-            self.inner.read().unwrap().blocks[height as usize]
-                .header
-                .block_hash(),
-        ))
+    async fn get_block_hash(&self, height: u64) -> BitcoinRpcResult<bitcoin::BlockHash> {
+        Ok(self.inner.read().unwrap().blocks[height as usize]
+            .header
+            .block_hash())
     }
 
     async fn get_fee_rate(&self, _confirmation_target: u16) -> BitcoinRpcResult<Option<Feerate>> {
         Ok(Some(Feerate { sats_per_kvb: 2000 }))
     }
 
-    async fn submit_transaction(&self, transaction: bitcoin30::Transaction) {
+    async fn submit_transaction(&self, transaction: bitcoin::Transaction) {
         let mut inner = self.inner.write().unwrap();
-        inner
-            .pending
-            .push(bitcoin30_to_bitcoin29_transaction(&transaction));
+        inner.pending.push(transaction);
 
         let mut filtered = BTreeMap::<Vec<OutPoint>, bitcoin::Transaction>::new();
 
@@ -326,13 +318,9 @@ impl IBitcoindRpc for FakeBitcoinTest {
         inner.pending = filtered.into_values().collect();
     }
 
-    async fn get_tx_block_height(&self, txid: &bitcoin30::Txid) -> BitcoinRpcResult<Option<u64>> {
+    async fn get_tx_block_height(&self, txid: &bitcoin::Txid) -> BitcoinRpcResult<Option<u64>> {
         for (height, block) in self.inner.read().unwrap().blocks.iter().enumerate() {
-            if block
-                .txdata
-                .iter()
-                .any(|tx| tx.txid() == bitcoin30_to_bitcoin29_txid(*txid))
-            {
+            if block.txdata.iter().any(|tx| tx.txid() == *txid) {
                 return Ok(Some(height as u64));
             }
         }
@@ -346,22 +334,15 @@ impl IBitcoindRpc for FakeBitcoinTest {
     async fn get_script_history(
         &self,
         script: &ScriptBuf,
-    ) -> BitcoinRpcResult<Vec<bitcoin30::Transaction>> {
+    ) -> BitcoinRpcResult<Vec<bitcoin::Transaction>> {
         let inner = self.inner.read().unwrap();
-        let script = inner
-            .scripts
-            .get(&bitcoin30_to_bitcoin29_script(script))
-            .map(|txs| {
-                txs.iter()
-                    .map(bitcoin29_to_bitcoin30_transaction)
-                    .collect::<Vec<_>>()
-            });
-        Ok(script.unwrap_or_default().clone())
+        let script = inner.scripts.get(script).cloned().unwrap_or_default();
+        Ok(script)
     }
 
-    async fn get_txout_proof(&self, txid: bitcoin30::Txid) -> BitcoinRpcResult<TxOutProof> {
+    async fn get_txout_proof(&self, txid: bitcoin::Txid) -> BitcoinRpcResult<TxOutProof> {
         let inner = self.inner.read().unwrap();
-        let proof = inner.proofs.get(&bitcoin30_to_bitcoin29_txid(txid));
+        let proof = inner.proofs.get(&txid);
         Ok(proof.ok_or(format_err!("No proof stored"))?.clone())
     }
 }

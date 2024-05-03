@@ -58,7 +58,7 @@ impl Faucet {
             .ln_rpc
             .lock()
             .await
-            .call_typed(cln_rpc::model::requests::PayRequest {
+            .call_typed(&cln_rpc::model::requests::PayRequest {
                 bolt11: invoice,
                 amount_msat: None,
                 label: None,
@@ -90,7 +90,7 @@ impl Faucet {
             .ln_rpc
             .lock()
             .await
-            .call_typed(cln_rpc::model::requests::InvoiceRequest {
+            .call_typed(&cln_rpc::model::requests::InvoiceRequest {
                 amount_msat: AmountOrAny::Amount(ClnAmount::from_sat(amount)),
                 description: "lnd-gw-to-cln".to_string(),
                 label: format!("faucet-{}", rand::random::<u64>()),

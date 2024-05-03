@@ -14,7 +14,7 @@ use fedimint_core::core::LEGACY_HARDCODED_INSTANCE_ID_WALLET;
 use fedimint_core::encoding::Decodable;
 use fedimint_core::envs::is_env_var_set;
 use fedimint_core::task::block_in_place;
-use fedimint_core::{Amount, PeerId};
+use fedimint_core::{Amount, BitcoinHash, PeerId};
 use fedimint_ln_client::cli::LnInvoiceResponse;
 use fedimint_logging::LOG_DEVIMINT;
 use hex::ToHex;
@@ -1193,7 +1193,6 @@ pub async fn start_hold_invoice_payment(
     client.use_gateway(gw_cln).await?;
     let preimage = rand::random::<[u8; 32]>();
     let hash = {
-        use fedimint_core::BitcoinHash;
         let mut engine = bitcoin::hashes::sha256::Hash::engine();
         bitcoin::hashes::HashEngine::input(&mut engine, &preimage);
         bitcoin::hashes::sha256::Hash::from_engine(engine)
@@ -1203,7 +1202,7 @@ pub async fn start_hold_invoice_payment(
         .await?
         .add_hold_invoice(tonic_lnd::invoicesrpc::AddHoldInvoiceRequest {
             value_msat: 1000,
-            hash: hash.to_vec(),
+            hash: hash.to_byte_array().to_vec(),
             ..Default::default()
         })
         .await?
@@ -1224,7 +1223,7 @@ pub async fn finish_hold_invoice_payment(
         .invoices_client_lock()
         .await?
         .subscribe_single_invoice(tonic_lnd::invoicesrpc::SubscribeSingleInvoiceRequest {
-            r_hash: hold_invoice_hash.to_vec(),
+            r_hash: hold_invoice_hash.to_byte_array().to_vec(),
         })
         .await?
         .into_inner();

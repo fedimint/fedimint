@@ -10,11 +10,6 @@ use anyhow::anyhow;
 use bitcoin::network::constants::Network;
 use bitcoin::OutPoint;
 use clap::{ArgGroup, Parser, Subcommand};
-use fedimint_core::bitcoin_migration::{
-    bitcoin29_to_bitcoin30_amount, bitcoin29_to_bitcoin30_network, bitcoin29_to_bitcoin30_outpoint,
-    bitcoin29_to_bitcoin30_secp256k1_secret_key, bitcoin30_to_bitcoin29_network,
-    bitcoin30_to_bitcoin29_secp256k1_public_key, bitcoin30_to_bitcoin29_secp256k1_secret_key,
-};
 use fedimint_core::core::{
     LEGACY_HARDCODED_INSTANCE_ID_LN, LEGACY_HARDCODED_INSTANCE_ID_MINT,
     LEGACY_HARDCODED_INSTANCE_ID_WALLET,
@@ -143,28 +138,19 @@ async fn main() -> anyhow::Result<()> {
             .get_module_config_typed(LEGACY_HARDCODED_INSTANCE_ID_WALLET)
             .expect("Malformed wallet config");
         let base_descriptor = wallet_cfg.consensus.peg_in_descriptor;
-        let base_key = bitcoin29_to_bitcoin30_secp256k1_secret_key(wallet_cfg.private.peg_in_key);
+        let base_key = wallet_cfg.private.peg_in_key;
         let network = wallet_cfg.consensus.network;
 
         (base_descriptor, base_key, network)
     } else if let (Some(descriptor), Some(key)) = (opts.descriptor, opts.key) {
-        (
-            descriptor,
-            key,
-            bitcoin30_to_bitcoin29_network(opts.network),
-        )
+        (descriptor, key, opts.network)
     } else {
         panic!("Either config or descriptor need to be provided by clap");
     };
 
     match opts.strategy {
         TweakSource::Direct { tweak } => {
-            let descriptor = tweak_descriptor(
-                &base_descriptor,
-                &base_key,
-                &tweak,
-                bitcoin29_to_bitcoin30_network(network),
-            );
+            let descriptor = tweak_descriptor(&base_descriptor, &base_key, &tweak, network);
             let wallets = vec![ImportableWalletMin { descriptor }];
 
             serde_json::to_writer(std::io::stdout().lock(), &wallets)
@@ -185,17 +171,12 @@ async fn main() -> anyhow::Result<()> {
                 .find_by_prefix(&UTXOPrefixKey)
                 .await
                 .map(|(UTXOKey(outpoint), SpendableUTXO { tweak, amount })| {
-                    let descriptor = tweak_descriptor(
-                        &base_descriptor,
-                        &base_key,
-                        &tweak,
-                        bitcoin29_to_bitcoin30_network(network),
-                    );
+                    let descriptor = tweak_descriptor(&base_descriptor, &base_key, &tweak, network);
 
                     ImportableWallet {
-                        outpoint: bitcoin29_to_bitcoin30_outpoint(outpoint),
+                        outpoint,
                         descriptor,
-                        amount_sat: bitcoin29_to_bitcoin30_amount(amount),
+                        amount_sat: amount,
                     }
                 })
                 .collect()
@@ -266,12 +247,7 @@ async fn main() -> anyhow::Result<()> {
 
             let wallets = tweaks
                 .map(|tweak| {
-                    let descriptor = tweak_descriptor(
-                        &base_descriptor,
-                        &base_key,
-                        &tweak,
-                        bitcoin29_to_bitcoin30_network(network),
-                    );
+                    let descriptor = tweak_descriptor(&base_descriptor, &base_key, &tweak, network);
                     ImportableWalletMin { descriptor }
                 })
                 .collect::<Vec<_>>()
@@ -327,14 +303,11 @@ fn tweak_descriptor(
     tweak: &[u8; 33],
     network: Network,
 ) -> Descriptor<Key> {
-    let secret_key = bitcoin29_to_bitcoin30_secp256k1_secret_key(
-        bitcoin30_to_bitcoin29_secp256k1_secret_key(*base_sk).tweak(tweak, secp256k1_24::SECP256K1),
-    );
-    let pub_key = CompressedPublicKey::new(bitcoin30_to_bitcoin29_secp256k1_public_key(
-        secp256k1::PublicKey::from_secret_key_global(&secret_key),
-    ));
+    let secret_key = base_sk.tweak(tweak, secp256k1::SECP256K1);
+    let pub_key =
+        CompressedPublicKey::new(secp256k1::PublicKey::from_secret_key_global(&secret_key));
     base_descriptor
-        .tweak(tweak, secp256k1_24::SECP256K1)
+        .tweak(tweak, secp256k1::SECP256K1)
         .translate_pk(&mut SecretKeyInjector {
             secret: bitcoin::key::PrivateKey {
                 compressed: true,
@@ -403,9 +376,7 @@ impl Key {
         match self {
             Key::Public(pk) => pk,
             Key::Private(sk) => {
-                CompressedPublicKey::new(bitcoin30_to_bitcoin29_secp256k1_public_key(
-                    secp256k1::PublicKey::from_secret_key_global(&sk.inner),
-                ))
+                CompressedPublicKey::new(secp256k1::PublicKey::from_secret_key_global(&sk.inner))
             }
         }
     }

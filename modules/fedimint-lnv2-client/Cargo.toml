@@ -27,12 +27,11 @@ async-stream = "0.3.5"
 aquamarine = "0.5.0"
 bincode = "1"
 bitcoin = { workspace = true }
-bitcoin_hashes = { workspace = true }
 clap = { workspace = true, optional = true }
 erased-serde = { workspace = true }
 futures = "0.3.24"
 itertools = "0.12.1"
-lightning-invoice = { version = "0.26.0", features = [ "serde" ] }
+lightning-invoice = { version = "0.30.0", features = [ "serde" ] }
 fedimint-client = { path = "../../fedimint-client" }
 fedimint-core = { workspace = true }
 fedimint-api-client = { workspace = true }

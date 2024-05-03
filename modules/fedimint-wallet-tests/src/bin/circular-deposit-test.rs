@@ -2,7 +2,7 @@ use std::ops::ControlFlow;
 use std::str::FromStr;
 
 use anyhow::{Context, Result};
-use bitcoincore_rpc::bitcoin::util::address::Address;
+use bitcoincore_rpc::bitcoin::address::Address;
 use bitcoincore_rpc::bitcoin::{Transaction, Txid};
 use devimint::cmd;
 use devimint::federation::Client;
@@ -53,11 +53,9 @@ async fn assert_withdrawal(
 
     let parsed_address = Address::from_str(&deposit_address)?;
     let tx = Transaction::consensus_decode_hex(&tx_hex, &Default::default()).unwrap();
-    assert!(tx
-        .output
-        .iter()
-        .any(|o| o.script_pubkey == parsed_address.script_pubkey()
-            && o.value == withdrawal_amount_sats));
+    assert!(tx.output.iter().any(|o| o.script_pubkey
+        == parsed_address.clone().assume_checked().script_pubkey()
+        && o.value == withdrawal_amount_sats));
 
     // Verify the receive client gets the deposit
     try_join!(

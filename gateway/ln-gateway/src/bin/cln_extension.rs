@@ -12,10 +12,6 @@ use clap::Parser;
 use cln_plugin::{options, Builder, Plugin};
 use cln_rpc::model;
 use cln_rpc::primitives::ShortChannelId;
-use fedimint_core::bitcoin_migration::{
-    bitcoin29_to_bitcoin30_secp256k1_public_key, bitcoin30_to_bitcoin29_secp256k1_public_key,
-    bitcoin30_to_bitcoin29_secp256k1_secret_key,
-};
 use fedimint_core::task::TaskGroup;
 use fedimint_core::util::handle_version_hash_command;
 use fedimint_core::{fedimint_build_code_version_env, Amount};
@@ -119,7 +115,6 @@ struct ClnRpcService {
     socket: PathBuf,
     interceptor: Arc<ClnHtlcInterceptor>,
     task_group: TaskGroup,
-    secp24: secp256k1_24::Secp256k1<secp256k1_24::All>,
     secp: Secp256k1<All>,
 }
 
@@ -184,7 +179,6 @@ impl ClnRpcService {
                     socket,
                     interceptor,
                     task_group: TaskGroup::new(),
-                    secp24: secp256k1_24::Secp256k1::gen_new(),
                     secp: Secp256k1::gen_new(),
                 },
                 fm_gateway_listen,
@@ -231,13 +225,7 @@ impl ClnRpcService {
                     let alias = alias.unwrap_or_default();
                     let synced_to_chain =
                         warning_bitcoind_sync.is_none() && warning_lightningd_sync.is_none();
-                    Ok((
-                        bitcoin29_to_bitcoin30_secp256k1_public_key(id),
-                        alias,
-                        network,
-                        blockheight,
-                        synced_to_chain,
-                    ))
+                    Ok((id, alias, network, blockheight, synced_to_chain))
                 }
                 _ => Err(ClnExtensionError::RpcWrongResponse),
             })
@@ -354,9 +342,11 @@ impl GatewayLightning for ClnRpcService {
 
             let channel = match channels_response {
                 cln_rpc::Response::ListChannels(channels) => {
-                    let Some(channel) = channels.channels.into_iter().find(|chan| {
-                        chan.destination == bitcoin30_to_bitcoin29_secp256k1_public_key(node_info.0)
-                    }) else {
+                    let Some(channel) = channels
+                        .channels
+                        .into_iter()
+                        .find(|chan| chan.destination == node_info.0)
+                    else {
                         warn!(?scid, "Channel not found in graph");
                         continue;
                     };
@@ -564,10 +554,8 @@ impl GatewayLightning for ClnRpcService {
                 // Temporarily sign with an ephemeral private key, we will request CLN to sign this
                 // invoice next.
                 .build_signed(|m| {
-                    self.secp24.sign_ecdsa_recoverable(
-                        m,
-                        &bitcoin30_to_bitcoin29_secp256k1_secret_key(SecretKey::new(&mut OsRng)),
-                    )
+                    self.secp
+                        .sign_ecdsa_recoverable(m, &SecretKey::new(&mut OsRng))
                 })
                 .map_err(|e| Status::internal(e.to_string()))?,
             Description::Hash(hash) => InvoiceBuilder::new(network)
@@ -586,10 +574,8 @@ impl GatewayLightning for ClnRpcService {
                 // Temporarily sign with an ephemeral private key, we will request CLN to sign this
                 // invoice next.
                 .build_signed(|m| {
-                    self.secp24.sign_ecdsa_recoverable(
-                        m,
-                        &bitcoin30_to_bitcoin29_secp256k1_secret_key(SecretKey::new(&mut OsRng)),
-                    )
+                    self.secp
+                        .sign_ecdsa_recoverable(m, &SecretKey::new(&mut OsRng))
                 })
                 .map_err(|e| Status::internal(e.to_string()))?,
         };
@@ -705,6 +691,7 @@ impl GatewayLightning for ClnRpcService {
                     utxos: None,
                     mindepth: None,
                     reserve: None,
+                    channel_type: None,
                 },
             ))
             .await
@@ -868,7 +855,7 @@ impl ClnHtlcInterceptor {
         // Clone the sender to avoid holding the lock while sending the HTLC
         let sender = self.sender.lock().await.clone();
         if let Some(sender) = sender {
-            let payment_hash = payload.htlc.payment_hash.to_vec();
+            let payment_hash = payload.htlc.payment_hash.to_byte_array().to_vec();
 
             let incoming_chan_id =
                 match Self::convert_short_channel_id(payload.htlc.short_channel_id.as_str()) {

@@ -1242,7 +1242,7 @@ impl MintClientModule {
         let operation_id = OperationId(
             notes
                 .consensus_hash::<sha256t::Hash<OOBReissueTag>>()
-                .into_inner(),
+                .to_byte_array(),
         );
 
         let amount = notes.total_amount();
@@ -1579,7 +1579,7 @@ pub fn spendable_notes_to_operation_id(
     OperationId(
         spendable_selected_notes
             .consensus_hash::<sha256t::Hash<OOBSpendTag>>()
-            .into_inner(),
+            .to_byte_array(),
     )
 }
 
@@ -2185,9 +2185,11 @@ mod tests {
 
     #[test]
     fn notes_encode_decode() {
-        let federation_id_1 = FederationId(bitcoin_hashes::sha256::Hash::from_inner([0x21; 32]));
+        let federation_id_1 =
+            FederationId(bitcoin_hashes::sha256::Hash::from_byte_array([0x21; 32]));
         let federation_id_prefix_1 = federation_id_1.to_prefix();
-        let federation_id_2 = FederationId(bitcoin_hashes::sha256::Hash::from_inner([0x42; 32]));
+        let federation_id_2 =
+            FederationId(bitcoin_hashes::sha256::Hash::from_byte_array([0x42; 32]));
         let federation_id_prefix_2 = federation_id_2.to_prefix();
 
         let notes = vec![(

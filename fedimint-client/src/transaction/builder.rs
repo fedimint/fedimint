@@ -1,7 +1,6 @@
 use std::sync::Arc;
 
 use bitcoin::key::KeyPair;
-use fedimint_core::bitcoin_migration::bitcoin30_to_bitcoin29_schnorr_signature;
 use fedimint_core::core::{DynInput, DynOutput, IntoDynInstance, ModuleInstanceId};
 use fedimint_core::transaction::{Transaction, TransactionSignature};
 use fedimint_core::Amount;
@@ -124,9 +123,7 @@ impl TransactionBuilder {
         let signatures = input_keys
             .into_iter()
             .flatten()
-            .map(|keypair| {
-                bitcoin30_to_bitcoin29_schnorr_signature(secp_ctx.sign_schnorr(&msg, &keypair))
-            })
+            .map(|keypair| secp_ctx.sign_schnorr(&msg, &keypair))
             .collect();
 
         let transaction = Transaction {

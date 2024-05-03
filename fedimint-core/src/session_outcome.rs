@@ -1,4 +1,4 @@
-use bitcoin30::hashes::{sha256, Hash};
+use bitcoin::hashes::{sha256, Hash};
 use parity_scale_codec::{Decode, Encode};
 
 use crate::encoding::{Decodable, Encodable};
@@ -39,7 +39,7 @@ impl SessionOutcome {
         let leaf_hashes = self.items.iter().map(consensus_hash_sha256);
 
         // TODO: extract merkle tree calculation and remove bitcoin dep
-        if let Some(root) = bitcoin30::merkle_tree::calculate_root(leaf_hashes) {
+        if let Some(root) = bitcoin::merkle_tree::calculate_root(leaf_hashes) {
             header[8..].copy_from_slice(&root.to_byte_array());
         }
 

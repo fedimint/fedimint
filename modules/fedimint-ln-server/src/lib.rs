@@ -438,7 +438,8 @@ impl ServerModule for Lightning {
                     .await;
 
                 let decrypted_preimage = if preimage_vec.len() == 33
-                    && contract.hash == sha256::Hash::hash(&sha256::Hash::hash(&preimage_vec))
+                    && contract.hash
+                        == sha256::Hash::hash(&sha256::Hash::hash(&preimage_vec).to_byte_array())
                 {
                     let preimage = PreimageKey(
                         preimage_vec
@@ -1053,7 +1054,7 @@ impl Lightning {
         match &incoming_contract_account.contract.decrypted_preimage {
             DecryptedPreimage::Some(key) => (
                 incoming_contract_account.to_owned(),
-                DecryptedPreimageStatus::Some(Preimage(sha256::Hash::hash(&key.0).into_inner())),
+                DecryptedPreimageStatus::Some(Preimage(sha256::Hash::hash(&key.0).to_byte_array())),
             ),
             DecryptedPreimage::Pending => {
                 (incoming_contract_account, DecryptedPreimageStatus::Pending)
@@ -1090,7 +1091,7 @@ impl Lightning {
         {
             DecryptedPreimage::Some(key) => (
                 incoming_contract_account,
-                Some(Preimage(sha256::Hash::hash(&key.0).into_inner())),
+                Some(Preimage(sha256::Hash::hash(&key.0).to_byte_array())),
             ),
             _ => (incoming_contract_account, None),
         }
@@ -1378,7 +1379,7 @@ mod tests {
         let preimage = PreimageKey(generate_keypair(&mut OsRng).1.serialize());
         let funded_incoming_contract = FundedContract::Incoming(FundedIncomingContract {
             contract: IncomingContract {
-                hash: sha256::Hash::hash(&sha256::Hash::hash(&preimage.0)),
+                hash: sha256::Hash::hash(&sha256::Hash::hash(&preimage.0).to_byte_array()),
                 encrypted_preimage: EncryptedPreimage(
                     client_cfg.threshold_pub_key.encrypt(preimage.0),
                 ),

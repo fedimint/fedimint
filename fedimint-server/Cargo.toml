@@ -61,7 +61,6 @@ tokio-util = { version = "0.7.10", features = [ "codec" ] }
 tracing-subscriber = { version = "0.3.18", features = [ "env-filter" ] }
 aleph-bft = { package = "fedimint-aleph-bft", version = "0.30.0", default-features = false }
 aleph-bft-types = "0.10.0"
-bitcoin_hashes_12 = { package = "bitcoin_hashes", version = "0.12.0" }
 parity-scale-codec = "3.6.9"
 
 

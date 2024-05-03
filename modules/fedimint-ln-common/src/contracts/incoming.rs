@@ -21,7 +21,7 @@ pub struct IncomingContractOffer {
 
 impl IncomingContractOffer {
     pub fn id(&self) -> OfferId {
-        OfferId::from_hash(self.hash)
+        OfferId::from_raw_hash(self.hash)
     }
 }
 
@@ -85,21 +85,19 @@ pub struct FundedIncomingContract {
 }
 
 hash_newtype!(
-    OfferId,
-    Sha256,
-    32,
-    doc = "The hash of a LN incoming contract offer"
+    /// The hash of a LN incoming contract offer
+    pub struct OfferId(Sha256);
 );
 
 impl IdentifiableContract for IncomingContract {
     fn contract_id(&self) -> ContractId {
-        ContractId::from_hash(self.hash)
+        ContractId::from_raw_hash(self.hash)
     }
 }
 
 impl Encodable for OfferId {
     fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<usize, Error> {
-        self.as_inner().consensus_encode(writer)
+        self.to_byte_array().consensus_encode(writer)
     }
 }
 
@@ -108,7 +106,7 @@ impl Decodable for OfferId {
         d: &mut D,
         modules: &ModuleDecoderRegistry,
     ) -> Result<Self, DecodeError> {
-        Ok(OfferId::from_inner(Decodable::consensus_decode(
+        Ok(OfferId::from_byte_array(Decodable::consensus_decode(
             d, modules,
         )?))
     }

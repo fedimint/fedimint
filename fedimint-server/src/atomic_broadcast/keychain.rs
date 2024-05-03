@@ -2,11 +2,10 @@ use std::collections::BTreeMap;
 use std::io::Write;
 
 use aleph_bft::Keychain as KeychainTrait;
-use bitcoin::hashes::Hash;
+use bitcoin::secp256k1::hashes::sha256;
+use bitcoin::secp256k1::Message;
 use fedimint_core::session_outcome::{consensus_hash_sha256, SchnorrSignature};
-use fedimint_core::{NumPeersExt, PeerId};
-use secp256k1::hashes::sha256;
-use secp256k1::Message;
+use fedimint_core::{BitcoinHash, NumPeersExt, PeerId};
 use secp256k1_zkp::{schnorr, All, KeyPair, PublicKey, Secp256k1, SecretKey};
 
 #[derive(Clone, Debug)]

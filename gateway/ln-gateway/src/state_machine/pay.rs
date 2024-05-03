@@ -1,15 +1,10 @@
 use std::fmt::Display;
 use std::sync::Arc;
 
-use bitcoin::hashes::Hash;
-use bitcoin_hashes::sha256;
+use bitcoin_hashes::{sha256, Hash};
 use fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
 use fedimint_client::transaction::{ClientInput, ClientOutput};
 use fedimint_client::{ClientHandleArc, DynGlobalClientContext};
-use fedimint_core::bitcoin_migration::{
-    bitcoin29_to_bitcoin30_sha256_hash, bitcoin30_to_bitcoin29_schnorr_signature,
-    bitcoin30_to_bitcoin29_secp256k1_public_key, bitcoin30_to_bitcoin29_sha256_hash,
-};
 use fedimint_core::config::FederationId;
 use fedimint_core::core::OperationId;
 use fedimint_core::db::IDatabaseTransactionOpsCoreTyped;
@@ -257,8 +252,8 @@ impl GatewayPayInvoice {
         // Verify that this client is authorized to receive the preimage.
         if let Err(err) = Self::verify_preimage_authentication(
             &context,
-            bitcoin30_to_bitcoin29_sha256_hash(payload.payment_data.payment_hash()),
-            bitcoin30_to_bitcoin29_sha256_hash(payload.preimage_auth),
+            payload.payment_data.payment_hash(),
+            payload.preimage_auth,
             contract.clone(),
         )
         .await
@@ -588,8 +583,7 @@ impl GatewayPayInvoice {
             return Err(OutgoingContractError::CancelledContract);
         }
 
-        if account.contract.gateway_key != bitcoin30_to_bitcoin29_secp256k1_public_key(our_pub_key)
-        {
+        if account.contract.gateway_key != our_pub_key {
             return Err(OutgoingContractError::NotOurKey);
         }
 
@@ -640,11 +634,7 @@ impl GatewayPayInvoice {
             None => None,
             Some(hop) => match context.gateway.state.read().await.clone() {
                 GatewayState::Running { lightning_context } => {
-                    if hop.src_node_id
-                        != bitcoin30_to_bitcoin29_secp256k1_public_key(
-                            lightning_context.lightning_public_key,
-                        )
-                    {
+                    if hop.src_node_id != lightning_context.lightning_public_key {
                         return None;
                     }
 
@@ -894,12 +884,12 @@ impl GatewayPayCancelContract {
     ) -> GatewayPayStateMachine {
         info!("Canceling outgoing contract {contract:?}");
         let cancel_signature = context.secp.sign_schnorr(
-            &bitcoin29_to_bitcoin30_sha256_hash(contract.contract.cancellation_message()).into(),
+            &contract.contract.cancellation_message().into(),
             &context.redeem_key,
         );
         let cancel_output = LightningOutput::new_v0_cancel_outgoing(
             contract.contract.contract_id(),
-            bitcoin30_to_bitcoin29_schnorr_signature(cancel_signature),
+            cancel_signature,
         );
         let client_output = ClientOutput::<LightningOutput, GatewayClientStateMachines> {
             output: cancel_output,

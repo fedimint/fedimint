@@ -36,10 +36,6 @@ use db::{
 use fedimint_api_client::api::FederationError;
 use fedimint_client::module::init::ClientModuleInitRegistry;
 use fedimint_client::ClientHandleArc;
-use fedimint_core::bitcoin_migration::{
-    bitcoin29_to_bitcoin30_address, bitcoin29_to_bitcoin30_amount, bitcoin29_to_bitcoin30_txid,
-    bitcoin30_to_bitcoin29_address, bitcoin30_to_bitcoin29_amount,
-};
 use fedimint_core::config::FederationId;
 use fedimint_core::core::{
     ModuleInstanceId, ModuleKind, LEGACY_HARDCODED_INSTANCE_ID_MINT,
@@ -807,7 +803,7 @@ impl Gateway {
             .get_first_module::<WalletClientModule>()
             .get_deposit_address(now() + Duration::from_secs(86400 * 365), ())
             .await?;
-        Ok(bitcoin29_to_bitcoin30_address(address).assume_checked())
+        Ok(address)
     }
 
     pub async fn handle_withdraw_msg(&self, payload: WithdrawPayload) -> Result<Txid> {
@@ -818,7 +814,6 @@ impl Gateway {
         } = payload;
         let client = self.select_client(federation_id).await?;
         let wallet_module = client.value().get_first_module::<WalletClientModule>();
-        let address = bitcoin30_to_bitcoin29_address(address.assume_checked());
 
         // TODO: Fees should probably be passed in as a parameter
         let (amount, fees) = match amount {
@@ -828,17 +823,16 @@ impl Gateway {
                 let balance =
                     bitcoin::Amount::from_sat(client.value().get_balance().await.msats / 1000);
                 let fees = wallet_module
-                    .get_withdraw_fees(address.clone(), bitcoin30_to_bitcoin29_amount(balance))
+                    .get_withdraw_fees(address.clone(), balance)
                     .await?;
-                let withdraw_amount =
-                    balance.checked_sub(bitcoin29_to_bitcoin30_amount(fees.amount()));
+                let withdraw_amount = balance.checked_sub(fees.amount());
                 if withdraw_amount.is_none() {
                     return Err(GatewayError::InsufficientFunds);
                 }
                 (withdraw_amount.unwrap(), fees)
             }
             BitcoinAmountOrAll::Amount(amount) => (
-                bitcoin29_to_bitcoin30_amount(amount),
+                amount,
                 wallet_module
                     .get_withdraw_fees(address.clone(), amount)
                     .await?,
@@ -846,12 +840,7 @@ impl Gateway {
         };
 
         let operation_id = wallet_module
-            .withdraw(
-                address.clone(),
-                bitcoin30_to_bitcoin29_amount(amount),
-                fees,
-                (),
-            )
+            .withdraw(address.clone(), amount, fees, ())
             .await?;
         let mut updates = wallet_module
             .subscribe_withdraw_updates(operation_id)
@@ -861,8 +850,11 @@ impl Gateway {
         while let Some(update) = updates.next().await {
             match update {
                 WithdrawState::Succeeded(txid) => {
-                    info!("Sent {amount} funds to address {address}");
-                    return Ok(bitcoin29_to_bitcoin30_txid(txid));
+                    info!(
+                        "Sent {amount} funds to address {}",
+                        address.assume_checked()
+                    );
+                    return Ok(txid);
                 }
                 WithdrawState::Failed(e) => {
                     return Err(GatewayError::UnexpectedState(e));
@@ -1682,7 +1674,7 @@ impl Gateway {
 
         if dbtx
             .insert_entry(
-                &CreateInvoicePayloadKey(payload.contract.commitment.payment_hash.into_inner()),
+                &CreateInvoicePayloadKey(payload.contract.commitment.payment_hash.to_byte_array()),
                 &payload,
             )
             .await
@@ -1714,7 +1706,7 @@ impl Gateway {
         let response = match description {
             Bolt11InvoiceDescription::Direct(description) => lnrpc
                 .create_invoice(CreateInvoiceRequest {
-                    payment_hash: payment_hash.into_inner().to_vec(),
+                    payment_hash: payment_hash.to_byte_array().to_vec(),
                     amount_msat: amount.msats,
                     expiry: expiry_time,
                     description: Some(Description::Direct(description)),
@@ -1723,10 +1715,10 @@ impl Gateway {
                 .map_err(|e| e.to_string())?,
             Bolt11InvoiceDescription::Hash(hash) => lnrpc
                 .create_invoice(CreateInvoiceRequest {
-                    payment_hash: payment_hash.into_inner().to_vec(),
+                    payment_hash: payment_hash.to_byte_array().to_vec(),
                     amount_msat: amount.msats,
                     expiry: expiry_time,
-                    description: Some(Description::Hash(hash.to_vec())),
+                    description: Some(Description::Hash(hash.to_byte_array().to_vec())),
                 })
                 .await
                 .map_err(|e| e.to_string())?,

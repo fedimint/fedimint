@@ -2,7 +2,6 @@ use std::collections::BTreeMap;
 
 use anyhow::bail;
 use async_trait::async_trait;
-use fedimint_core::bitcoin_migration::bitcoin30_to_bitcoin29_secp256k1_public_key;
 use fedimint_core::config::{
     ConfigGenModuleParams, DkgResult, ServerModuleConfig, ServerModuleConsensusConfig,
     TypedServerModuleConfig, TypedServerModuleConsensusConfig,
@@ -253,7 +252,7 @@ impl ServerModule for Dummy {
                 fee: self.cfg.consensus.tx_fee,
             },
             // IMPORTANT: include the pubkey to validate the user signed this tx
-            pub_key: bitcoin30_to_bitcoin29_secp256k1_public_key(input.account),
+            pub_key: input.account,
         })
     }
 

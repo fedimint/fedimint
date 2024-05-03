@@ -4,7 +4,6 @@ mod metrics;
 use std::collections::{BTreeMap, HashMap};
 
 use anyhow::bail;
-use fedimint_core::bitcoin_migration::bitcoin30_to_bitcoin29_secp256k1_public_key;
 use fedimint_core::config::{
     ConfigGenModuleParams, DkgResult, ServerModuleConfig, ServerModuleConsensusConfig,
     TypedServerModuleConfig, TypedServerModuleConsensusConfig,
@@ -401,7 +400,7 @@ impl ServerModule for Mint {
         calculate_mint_redeemed_ecash_metrics(dbtx, amount, fee);
         Ok(InputMeta {
             amount: TransactionItemAmount { amount, fee },
-            pub_key: bitcoin30_to_bitcoin29_secp256k1_public_key(*input.note.spend_key()),
+            pub_key: *input.note.spend_key(),
         })
     }
 

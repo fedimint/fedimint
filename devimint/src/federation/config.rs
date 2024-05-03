@@ -1,5 +1,4 @@
 use bitcoincore_rpc::bitcoin::Network;
-use fedimint_core::bitcoin_migration::bitcoin29_to_bitcoin30_network;
 use fedimint_core::config::ServerModuleConfigGenParamsRegistry;
 use fedimint_core::envs::{is_env_var_set, BitcoinRpcConfig, FM_USE_UNKNOWN_MODULE_ENV};
 use fedimint_core::module::ServerModuleInit as _;
@@ -33,9 +32,7 @@ pub fn attach_default_module_init_params(
                 local: LightningGenParamsLocal {
                     bitcoin_rpc: bitcoin_rpc.clone(),
                 },
-                consensus: LightningGenParamsConsensus {
-                    network: bitcoin29_to_bitcoin30_network(network),
-                },
+                consensus: LightningGenParamsConsensus { network },
             },
         )
         .attach_config_gen_params(
@@ -56,9 +53,7 @@ pub fn attach_default_module_init_params(
                     // TODO this is not very elegant, but I'm planning to get rid of it in a next
                     // commit anyway
                     finality_delay,
-                    client_default_bitcoin_rpc: default_esplora_server(
-                        bitcoin29_to_bitcoin30_network(network),
-                    ),
+                    client_default_bitcoin_rpc: default_esplora_server(network),
                     fee_consensus: Default::default(),
                 },
             },

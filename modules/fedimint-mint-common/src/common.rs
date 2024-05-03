@@ -1,7 +1,6 @@
 use std::fmt::Debug;
 
-use bitcoin_hashes::sha256;
-use fedimint_core::bitcoin_migration::bitcoin29_to_bitcoin30_sha256_hash;
+use bitcoin_hashes::{sha256, Hash};
 use fedimint_core::encoding::{Decodable, Encodable};
 use secp256k1_zkp::{KeyPair, Message, Secp256k1, Signing, Verification};
 use serde::{Deserialize, Serialize};
@@ -20,10 +19,7 @@ impl BackupRequest {
     }
 
     pub fn sign(self, keypair: &KeyPair) -> anyhow::Result<SignedBackupRequest> {
-        let signature = secp256k1::SECP256K1.sign_schnorr(
-            &Message::from(bitcoin29_to_bitcoin30_sha256_hash(self.hash())),
-            keypair,
-        );
+        let signature = secp256k1::SECP256K1.sign_schnorr(&Message::from(self.hash()), keypair);
 
         Ok(SignedBackupRequest {
             request: self,
@@ -50,7 +46,7 @@ impl SignedBackupRequest {
     {
         ctx.verify_schnorr(
             &self.signature,
-            &Message::from_slice(&self.request.hash()).expect("Can't fail"),
+            &Message::from_slice(&self.request.hash().to_byte_array()).expect("Can't fail"),
             &self.request.id.x_only_public_key().0,
         )?;
 

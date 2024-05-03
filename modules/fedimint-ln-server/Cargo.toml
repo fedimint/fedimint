@@ -25,13 +25,13 @@ bitcoin_hashes = { workspace = true }
 erased-serde = { workspace = true }
 futures = { workspace = true }
 itertools = { workspace = true }
-lightning = "0.0.118"
-lightning-invoice = { version = "0.26.0", features = [ "serde" ] }
+lightning = "0.0.122"
+lightning-invoice = { version = "0.30.0", features = [ "serde" ] }
 fedimint-bitcoind = { version = "=0.4.0-alpha", path = "../../fedimint-bitcoind" }
 fedimint-core = { version = "=0.4.0-alpha", path = "../../fedimint-core" }
 fedimint-ln-common = { version = "=0.4.0-alpha", path = "../fedimint-ln-common" }
 fedimint-metrics = { version = "=0.4.0-alpha", path = "../../fedimint-metrics" }
-secp256k1 = { version="0.24.3", default-features=false }
+secp256k1 = { version="0.27.0", default-features=false }
 serde = {version = "1.0.199", features = [ "derive" ] }
 serde_json = { workspace = true }
 strum = { workspace = true }
