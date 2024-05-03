@@ -129,7 +129,7 @@ pub trait ILnRpcClient: Debug + Send + Sync {
     /// Connect to a peer lightning node from the gateway's lightning node.
     async fn connect_to_peer(
         &self,
-        pubkey: secp256k1::PublicKey,
+        pubkey: bitcoin::secp256k1::PublicKey,
         host: String,
     ) -> Result<EmptyResponse, LightningRpcError>;
 
@@ -141,7 +141,7 @@ pub trait ILnRpcClient: Debug + Send + Sync {
     /// node.
     async fn open_channel(
         &self,
-        pubkey: secp256k1::PublicKey,
+        pubkey: bitcoin::secp256k1::PublicKey,
         channel_size_sats: u64,
         push_amount_sats: u64,
     ) -> Result<EmptyResponse, LightningRpcError>;

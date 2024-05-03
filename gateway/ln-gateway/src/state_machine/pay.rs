@@ -577,7 +577,7 @@ impl GatewayPayInvoice {
         payment_data: &PaymentData,
         routing_fees: RoutingFees,
     ) -> Result<PaymentParameters, OutgoingContractError> {
-        let our_pub_key = secp256k1::PublicKey::from_keypair(&redeem_key);
+        let our_pub_key = bitcoin::secp256k1::PublicKey::from_keypair(&redeem_key);
 
         if account.contract.cancelled {
             return Err(OutgoingContractError::CancelledContract);

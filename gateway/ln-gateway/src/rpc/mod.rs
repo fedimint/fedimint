@@ -80,7 +80,7 @@ pub struct GatewayInfo {
     #[serde(with = "serde_option_routing_fees")]
     pub fees: Option<RoutingFees>,
     pub route_hints: Vec<route_hints::RouteHint>,
-    pub gateway_id: secp256k1::PublicKey,
+    pub gateway_id: bitcoin::secp256k1::PublicKey,
     pub gateway_state: String,
     pub network: Option<Network>,
     // TODO: This is here to allow for backwards compatibility with old versions of this struct. We
@@ -145,7 +145,7 @@ pub struct SetConfigurationPayload {
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ConnectToPeerPayload {
-    pub pubkey: secp256k1::PublicKey,
+    pub pubkey: bitcoin::secp256k1::PublicKey,
     pub host: String,
 }
 
@@ -154,7 +154,7 @@ pub struct GetFundingAddressPayload;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct OpenChannelPayload {
-    pub pubkey: secp256k1::PublicKey,
+    pub pubkey: bitcoin::secp256k1::PublicKey,
     pub channel_size_sats: u64,
     pub push_amount_sats: u64,
 }

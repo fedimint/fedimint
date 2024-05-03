@@ -67,7 +67,7 @@ pub struct GatewayPublicKey;
 
 impl_db_record!(
     key = GatewayPublicKey,
-    value = secp256k1::KeyPair,
+    value = bitcoin::secp256k1::KeyPair,
     db_prefix = DbKeyPrefix::GatewayPublicKey,
 );
 
@@ -211,9 +211,9 @@ mod fedimint_migration_tests {
         dbtx.insert_new_entry(&FederationIdKey { id: federation_id }, &federation_config)
             .await;
 
-        let context = secp256k1::Secp256k1::new();
+        let context = bitcoin::secp256k1::Secp256k1::new();
         let (secret, _) = context.generate_keypair(&mut OsRng);
-        let key_pair = secp256k1::KeyPair::from_secret_key(&context, &secret);
+        let key_pair = bitcoin::secp256k1::KeyPair::from_secret_key(&context, &secret);
         dbtx.insert_new_entry(&GatewayPublicKey, &key_pair).await;
 
         let gateway_configuration = GatewayConfigurationV0 {

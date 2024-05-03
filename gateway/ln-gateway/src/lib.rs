@@ -25,6 +25,8 @@ use std::time::Duration;
 use anyhow::{anyhow, bail};
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
+use bitcoin::secp256k1::schnorr::Signature;
+use bitcoin::secp256k1::PublicKey;
 use bitcoin::{Address, Network, Txid};
 use bitcoin_hashes::sha256;
 use clap::Parser;
@@ -78,8 +80,6 @@ use rpc::{
     ConnectToPeerPayload, FederationInfo, GatewayFedConfig, GatewayInfo, LeaveFedPayload,
     OpenChannelPayload, SetConfigurationPayload, V1_API_ENDPOINT,
 };
-use secp256k1::schnorr::Signature;
-use secp256k1::PublicKey;
 use state_machine::pay::OutgoingPaymentError;
 use state_machine::GatewayClientModule;
 use strum::IntoEnumIterator;
@@ -289,7 +289,7 @@ pub struct Gateway {
     scid_to_federation: ScidToFederationMap,
 
     // A public key representing the identity of the gateway. Private key is not used.
-    pub gateway_id: secp256k1::PublicKey,
+    pub gateway_id: PublicKey,
 
     // Tracker for short channel ID assignments. When connecting a new federation,
     // this value is incremented and assigned to the federation as the `mint_channel_id`
@@ -421,14 +421,14 @@ impl Gateway {
         })
     }
 
-    pub async fn get_gateway_id(gateway_db: Database) -> secp256k1::PublicKey {
+    pub async fn get_gateway_id(gateway_db: Database) -> PublicKey {
         let mut dbtx = gateway_db.begin_transaction().await;
         if let Some(key_pair) = dbtx.get_value(&GatewayPublicKey {}).await {
             key_pair.public_key()
         } else {
-            let context = secp256k1::Secp256k1::new();
+            let context = bitcoin::secp256k1::Secp256k1::new();
             let (secret, public) = context.generate_keypair(&mut OsRng);
-            let key_pair = secp256k1::KeyPair::from_secret_key(&context, &secret);
+            let key_pair = bitcoin::secp256k1::KeyPair::from_secret_key(&context, &secret);
             dbtx.insert_new_entry(&GatewayPublicKey, &key_pair).await;
             dbtx.commit_tx().await;
             public

@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use bitcoin::secp256k1::KeyPair;
 use bitcoin_hashes::Hash;
 use fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
 use fedimint_client::transaction::ClientInput;
@@ -12,7 +13,6 @@ use fedimint_lnv2_client::LightningClientStateMachines;
 use fedimint_lnv2_common::contracts::OutgoingContract;
 use fedimint_lnv2_common::{LightningInput, LightningInputV0, OutgoingWitness};
 use lightning_invoice::Bolt11Invoice;
-use secp256k1::KeyPair;
 use serde::{Deserialize, Serialize};
 
 use crate::gateway_lnrpc::PayInvoiceRequest;

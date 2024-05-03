@@ -5,12 +5,12 @@ use std::time::Duration;
 
 use anyhow::ensure;
 use async_trait::async_trait;
+use bitcoin::secp256k1::PublicKey;
 use bitcoin_hashes::Hash;
 use fedimint_core::task::{sleep, TaskGroup};
 use fedimint_core::Amount;
 use fedimint_ln_common::PrunedInvoice;
 use hex::ToHex;
-use secp256k1::PublicKey;
 use tokio::sync::mpsc;
 use tokio_stream::wrappers::ReceiverStream;
 use tonic::Status;
@@ -662,7 +662,7 @@ impl ILnRpcClient for GatewayLndClient {
 
     async fn connect_to_peer(
         &self,
-        pubkey: secp256k1::PublicKey,
+        pubkey: bitcoin::secp256k1::PublicKey,
         host: String,
     ) -> Result<EmptyResponse, LightningRpcError> {
         let mut client = self.connect().await?;
@@ -709,7 +709,7 @@ impl ILnRpcClient for GatewayLndClient {
 
     async fn open_channel(
         &self,
-        pubkey: secp256k1::PublicKey,
+        pubkey: bitcoin::secp256k1::PublicKey,
         channel_size_sats: u64,
         push_amount_sats: u64,
     ) -> Result<EmptyResponse, LightningRpcError> {

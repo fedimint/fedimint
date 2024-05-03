@@ -7,6 +7,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use assert_matches::assert_matches;
+use bitcoin::secp256k1::PublicKey;
 use bitcoin::Network;
 use bitcoin_hashes::{sha256, Hash};
 use fedimint_client::transaction::{ClientInput, ClientOutput, TransactionBuilder};
@@ -59,7 +60,6 @@ use ln_gateway::state_machine::{
 };
 use ln_gateway::{DEFAULT_FEES, DEFAULT_NETWORK};
 use reqwest::StatusCode;
-use secp256k1::PublicKey;
 use tracing::info;
 
 async fn user_pay_invoice(

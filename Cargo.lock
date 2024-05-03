@@ -1930,8 +1930,6 @@ dependencies = [
  "prost",
  "rand",
  "reqwest 0.11.26",
- "secp256k1 0.27.0",
- "secp256k1-zkp",
  "serde",
  "serde_json",
  "strum",

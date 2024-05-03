@@ -6,6 +6,8 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use anyhow::{anyhow, bail};
+use bitcoin::secp256k1::schnorr::Signature;
+use bitcoin::secp256k1::KeyPair;
 use bitcoin_hashes::sha256;
 use fedimint_api_client::api::DynModuleApi;
 use fedimint_client::module::init::{ClientModuleInit, ClientModuleInitArgs};
@@ -31,8 +33,6 @@ use fedimint_lnv2_common::{
 };
 use futures::StreamExt;
 use receive_sm::{ReceiveSMState, ReceiveStateMachine};
-use secp256k1::schnorr::Signature;
-use secp256k1::KeyPair;
 use send_sm::{SendSMState, SendStateMachine};
 use serde::{Deserialize, Serialize};
 use tpe::{AggregatePublicKey, PublicKeyShare};
@@ -85,7 +85,7 @@ impl ClientModuleInit for GatewayClientInitV2 {
             keypair: args
                 .module_root_secret()
                 .clone()
-                .to_secp_key(secp256k1_zkp::SECP256K1),
+                .to_secp_key(bitcoin::secp256k1::SECP256K1),
             gateway: self.gateway.clone(),
         })
     }
