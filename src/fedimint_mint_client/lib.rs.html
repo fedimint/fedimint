@@ -2305,6 +2305,8 @@
 <a href="#2305" id="2305">2305</a>
 <a href="#2306" id="2306">2306</a>
 <a href="#2307" id="2307">2307</a>
+<a href="#2308" id="2308">2308</a>
+<a href="#2309" id="2309">2309</a>
 </pre></div><pre class="rust"><code><span class="comment">// Backup and restore logic
 </span><span class="kw">pub mod </span>backup;
 <span class="doccomment">/// Database keys used throughout the mint client module
@@ -3549,7 +3551,7 @@
         <span class="kw">let </span>operation_id = OperationId(
             notes
                 .consensus_hash::&lt;sha256t::Hash&lt;OOBReissueTag&gt;&gt;()
-                .into_inner(),
+                .to_byte_array(),
         );
 
         <span class="kw">let </span>amount = notes.total_amount();
@@ -3886,7 +3888,7 @@
     OperationId(
         spendable_selected_notes
             .consensus_hash::&lt;sha256t::Hash&lt;OOBSpendTag&gt;&gt;()
-            .into_inner(),
+            .to_byte_array(),
     )
 }
 
@@ -4492,9 +4494,11 @@
 
     <span class="attr">#[test]
     </span><span class="kw">fn </span>notes_encode_decode() {
-        <span class="kw">let </span>federation_id_1 = FederationId(bitcoin_hashes::sha256::Hash::from_inner([<span class="number">0x21</span>; <span class="number">32</span>]));
+        <span class="kw">let </span>federation_id_1 =
+            FederationId(bitcoin_hashes::sha256::Hash::from_byte_array([<span class="number">0x21</span>; <span class="number">32</span>]));
         <span class="kw">let </span>federation_id_prefix_1 = federation_id_1.to_prefix();
-        <span class="kw">let </span>federation_id_2 = FederationId(bitcoin_hashes::sha256::Hash::from_inner([<span class="number">0x42</span>; <span class="number">32</span>]));
+        <span class="kw">let </span>federation_id_2 =
+            FederationId(bitcoin_hashes::sha256::Hash::from_byte_array([<span class="number">0x42</span>; <span class="number">32</span>]));
         <span class="kw">let </span>federation_id_prefix_2 = federation_id_2.to_prefix();
 
         <span class="kw">let </span>notes = <span class="macro">vec!</span>[(

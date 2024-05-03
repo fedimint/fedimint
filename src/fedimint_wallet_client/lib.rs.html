@@ -721,14 +721,6 @@
 <a href="#721" id="721">721</a>
 <a href="#722" id="722">722</a>
 <a href="#723" id="723">723</a>
-<a href="#724" id="724">724</a>
-<a href="#725" id="725">725</a>
-<a href="#726" id="726">726</a>
-<a href="#727" id="727">727</a>
-<a href="#728" id="728">728</a>
-<a href="#729" id="729">729</a>
-<a href="#730" id="730">730</a>
-<a href="#731" id="731">731</a>
 </pre></div><pre class="rust"><code><span class="kw">pub mod </span>api;
 
 <span class="kw">pub mod </span>client_db;
@@ -741,6 +733,7 @@
 
 <span class="kw">use </span>anyhow::{anyhow, bail, ensure, Context <span class="kw">as </span>AnyhowContext};
 <span class="kw">use </span>async_stream::stream;
+<span class="kw">use </span>bitcoin::address::NetworkUnchecked;
 <span class="kw">use </span>bitcoin::{Address, Network};
 <span class="kw">use </span>client_db::DbKeyPrefix;
 <span class="kw">use </span>fedimint_api_client::api::DynModuleApi;
@@ -754,10 +747,7 @@
 <span class="kw">use </span>fedimint_client::sm::{Context, DynState, ModuleNotifier, State, StateTransition};
 <span class="kw">use </span>fedimint_client::transaction::{ClientOutput, TransactionBuilder};
 <span class="kw">use </span>fedimint_client::{sm_enum_variant_translation, DynGlobalClientContext};
-<span class="kw">use </span>fedimint_core::bitcoin_migration::{
-    bitcoin29_to_bitcoin30_network, bitcoin29_to_bitcoin30_script, bitcoin30_to_bitcoin29_address,
-    bitcoin30_to_bitcoin29_keypair, bitcoin30_to_bitcoin29_secp256k1_public_key,
-};
+<span class="kw">use </span>fedimint_core::bitcoin_migration::checked_address_to_unchecked_address;
 <span class="kw">use </span>fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, OperationId};
 <span class="kw">use </span>fedimint_core::db::{
     AutocommitError, DatabaseTransaction, DatabaseVersion, IDatabaseTransactionOpsCoreTyped,
@@ -920,12 +910,12 @@
 #[serde(rename_all = <span class="string">"snake_case"</span>)]
 </span><span class="kw">pub enum </span>WalletOperationMetaVariant {
     Deposit {
-        address: bitcoin::Address,
+        address: bitcoin::Address&lt;NetworkUnchecked&gt;,
         expires_at: SystemTime,
     },
     Withdraw {
-        address: bitcoin::Address,
-        <span class="attr">#[serde(with = <span class="string">"bitcoin::util::amount::serde::as_sat"</span>)]
+        address: bitcoin::Address&lt;NetworkUnchecked&gt;,
+        <span class="attr">#[serde(with = <span class="string">"bitcoin::amount::serde::as_sat"</span>)]
         </span>amount: bitcoin::Amount,
         fee: PegOutFees,
         change: Vec&lt;OutPoint&gt;,
@@ -944,7 +934,7 @@
     module_api: DynModuleApi,
     notifier: ModuleNotifier&lt;WalletClientStates&gt;,
     rpc: DynBitcoindRpc,
-    secp: secp256k1_27::Secp256k1&lt;secp256k1_27::All&gt;,
+    secp: Secp256k1&lt;All&gt;,
     client_ctx: ClientContext&lt;<span class="self">Self</span>&gt;,
 }
 
@@ -1020,21 +1010,17 @@
         <span class="kw">let </span>public_tweak_key = secret_tweak_key.public_key();
         <span class="kw">let </span>operation_id = OperationId(public_tweak_key.x_only_public_key().<span class="number">0</span>.serialize()); <span class="comment">// TODO: make hash?
 
-        </span><span class="kw">let </span>address = bitcoin30_to_bitcoin29_address(
-            <span class="self">self</span>.cfg
-                .peg_in_descriptor
-                .tweak(
-                    <span class="kw-2">&amp;</span>bitcoin30_to_bitcoin29_secp256k1_public_key(public_tweak_key),
-                    secp256k1::SECP256K1,
-                )
-                .address(bitcoin29_to_bitcoin30_network(<span class="self">self</span>.cfg.network))
-                .unwrap(),
-        );
+        </span><span class="kw">let </span>address = <span class="self">self
+            </span>.cfg
+            .peg_in_descriptor
+            .tweak(<span class="kw-2">&amp;</span>public_tweak_key, secp256k1::SECP256K1)
+            .address(<span class="self">self</span>.cfg.network)
+            .unwrap();
 
         <span class="kw">let </span>deposit_sm = WalletClientStates::Deposit(DepositStateMachine {
             operation_id,
             state: DepositStates::Created(CreatedDepositState {
-                tweak_key: bitcoin30_to_bitcoin29_keypair(secret_tweak_key),
+                tweak_key: secret_tweak_key,
                 timeout_at: valid_until,
             }),
         });
@@ -1050,13 +1036,13 @@
     /// The caller should be prepared to retry with a new fee estimate.
     </span><span class="kw">pub async fn </span>get_withdraw_fees(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        address: bitcoin::Address,
+        address: bitcoin::Address&lt;NetworkUnchecked&gt;,
         amount: bitcoin::Amount,
     ) -&gt; anyhow::Result&lt;PegOutFees&gt; {
         check_address(<span class="kw-2">&amp;</span>address, <span class="self">self</span>.cfg.network)<span class="question-mark">?</span>;
 
         <span class="self">self</span>.module_api
-            .fetch_peg_out_fees(<span class="kw-2">&amp;</span>address, amount)
+            .fetch_peg_out_fees(<span class="kw-2">&amp;</span>address.assume_checked(), amount)
             .<span class="kw">await</span><span class="question-mark">?
             </span>.context(<span class="string">"Federation didn't return peg-out fees"</span>)
     }
@@ -1064,7 +1050,7 @@
     <span class="kw">pub async fn </span>create_withdraw_output(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         operation_id: OperationId,
-        address: bitcoin::Address,
+        address: bitcoin::Address&lt;NetworkUnchecked&gt;,
         amount: bitcoin::Amount,
         fees: PegOutFees,
     ) -&gt; anyhow::Result&lt;ClientOutput&lt;WalletOutput, WalletClientStates&gt;&gt; {
@@ -1134,9 +1120,7 @@
 
                         <span class="comment">// Begin watching the script address
                         </span><span class="self">self</span>.rpc
-                            .watch_script_history(<span class="kw-2">&amp;</span>bitcoin29_to_bitcoin30_script(
-                                address.script_pubkey(),
-                            ))
+                            .watch_script_history(<span class="kw-2">&amp;</span>address.script_pubkey())
                             .<span class="kw">await</span><span class="question-mark">?</span>;
 
                         dbtx.add_state_machines(<span class="macro">vec!</span>[<span class="self">self</span>.client_ctx.make_dyn_state(sm)])
@@ -1147,7 +1131,7 @@
                             WalletCommonInit::KIND.as_str(),
                             WalletOperationMeta {
                                 variant: WalletOperationMetaVariant::Deposit {
-                                    address: address.clone(),
+                                    address: checked_address_to_unchecked_address(<span class="kw-2">&amp;</span>address),
                                     expires_at: valid_until,
                                 },
                                 extra_meta: extra_meta_inner,
@@ -1260,7 +1244,7 @@
     /// acknowledged by the user since it can be unexpectedly high.
     </span><span class="kw">pub async fn </span>withdraw&lt;M: Serialize + MaybeSend + MaybeSync&gt;(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        address: bitcoin::Address,
+        address: bitcoin::Address&lt;NetworkUnchecked&gt;,
         amount: bitcoin::Amount,
         fee: PegOutFees,
         extra_meta: M,
@@ -1398,7 +1382,7 @@
     }
 }
 
-<span class="kw">fn </span>check_address(address: <span class="kw-2">&amp;</span>Address, network: Network) -&gt; anyhow::Result&lt;()&gt; {
+<span class="kw">fn </span>check_address(address: <span class="kw-2">&amp;</span>Address&lt;NetworkUnchecked&gt;, network: Network) -&gt; anyhow::Result&lt;()&gt; {
     <span class="macro">ensure!</span>(
         address.is_valid_for_network(network),
         <span class="string">"Address isn't compatible with the federation's network: {network:?}"

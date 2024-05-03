@@ -72,9 +72,7 @@ function.</div></details></div></details><details class="toggle implementors-tog
 on a per-routefinding-call basis through to the scorer methods,
 which are used to determine the parameters for the suitability of channels for use.</div></details><details class="toggle method-toggle" open><summary><section id="method.channel_penalty_msat" class="method trait-impl"><a href="#method.channel_penalty_msat" class="anchor">§</a><h4 class="code-header">fn <a class="fn">channel_penalty_msat</a>(
     &amp;self,
-    short_channel_id: <a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.u64.html">u64</a>,
-    source: &amp;NodeId,
-    target: &amp;NodeId,
+    candidate: &amp;CandidateRouteHop&lt;'_&gt;,
     usage: ChannelUsage,
     score_params: &amp;&lt;T as ScoreLookUp&gt;::ScoreParams
 ) -&gt; <a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.u64.html">u64</a></h4></section></summary><div class='docblock'>Returns the fee in msats willing to be paid to avoid routing <code>send_amt_msat</code> through the

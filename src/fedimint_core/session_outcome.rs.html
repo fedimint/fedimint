@@ -76,7 +76,7 @@
 <a href="#76" id="76">76</a>
 <a href="#77" id="77">77</a>
 <a href="#78" id="78">78</a>
-</pre></div><pre class="rust"><code><span class="kw">use </span>bitcoin30::hashes::{sha256, Hash};
+</pre></div><pre class="rust"><code><span class="kw">use </span>bitcoin::hashes::{sha256, Hash};
 <span class="kw">use </span>parity_scale_codec::{Decode, Encode};
 
 <span class="kw">use </span><span class="kw">crate</span>::encoding::{Decodable, Encodable};
@@ -117,7 +117,7 @@
         <span class="kw">let </span>leaf_hashes = <span class="self">self</span>.items.iter().map(consensus_hash_sha256);
 
         <span class="comment">// TODO: extract merkle tree calculation and remove bitcoin dep
-        </span><span class="kw">if let </span><span class="prelude-val">Some</span>(root) = bitcoin30::merkle_tree::calculate_root(leaf_hashes) {
+        </span><span class="kw">if let </span><span class="prelude-val">Some</span>(root) = bitcoin::merkle_tree::calculate_root(leaf_hashes) {
             header[<span class="number">8</span>..].copy_from_slice(<span class="kw-2">&amp;</span>root.to_byte_array());
         }
 

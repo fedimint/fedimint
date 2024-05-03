@@ -442,16 +442,6 @@
 <a href="#442" id="442">442</a>
 <a href="#443" id="443">443</a>
 <a href="#444" id="444">444</a>
-<a href="#445" id="445">445</a>
-<a href="#446" id="446">446</a>
-<a href="#447" id="447">447</a>
-<a href="#448" id="448">448</a>
-<a href="#449" id="449">449</a>
-<a href="#450" id="450">450</a>
-<a href="#451" id="451">451</a>
-<a href="#452" id="452">452</a>
-<a href="#453" id="453">453</a>
-<a href="#454" id="454">454</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
 
@@ -847,9 +837,6 @@
 <span class="attr">#[cfg(test)]
 </span><span class="kw">mod </span>tests {
     <span class="kw">use </span>bitcoin::hashes::{sha256, Hash};
-    <span class="kw">use </span>fedimint_core::bitcoin_migration::{
-        bitcoin30_to_bitcoin29_secp256k1_secret_key, bitcoin30_to_bitcoin29_sha256_hash,
-    };
     <span class="kw">use </span>lightning_invoice::{Currency, InvoiceBuilder, PaymentSecret};
     <span class="kw">use </span>secp256k1::SecretKey;
 
@@ -886,24 +873,17 @@
     }
 
     <span class="kw">fn </span>invoice(now_epoch: Duration, expiry_time: Duration) -&gt; anyhow::Result&lt;Bolt11Invoice&gt; {
-        <span class="kw">let </span>ctx = secp256k1_24::Secp256k1::new();
+        <span class="kw">let </span>ctx = secp256k1::Secp256k1::new();
         <span class="kw">let </span>secret_key = SecretKey::new(<span class="kw-2">&amp;mut </span>rand::thread_rng());
         <span class="prelude-val">Ok</span>(InvoiceBuilder::new(Currency::Regtest)
             .description(<span class="string">""</span>.to_string())
-            .payment_hash(bitcoin30_to_bitcoin29_sha256_hash(sha256::Hash::hash(
-                <span class="kw-2">&amp;</span>[<span class="number">0</span>; <span class="number">32</span>],
-            )))
+            .payment_hash(sha256::Hash::hash(<span class="kw-2">&amp;</span>[<span class="number">0</span>; <span class="number">32</span>]))
             .duration_since_epoch(now_epoch)
             .min_final_cltv_expiry_delta(<span class="number">0</span>)
             .payment_secret(PaymentSecret([<span class="number">0</span>; <span class="number">32</span>]))
             .amount_milli_satoshis(<span class="number">1000</span>)
             .expiry_time(expiry_time)
-            .build_signed(|m| {
-                ctx.sign_ecdsa_recoverable(
-                    m,
-                    <span class="kw-2">&amp;</span>bitcoin30_to_bitcoin29_secp256k1_secret_key(secret_key),
-                )
-            })<span class="question-mark">?</span>)
+            .build_signed(|m| ctx.sign_ecdsa_recoverable(m, <span class="kw-2">&amp;</span>secret_key))<span class="question-mark">?</span>)
     }
 }
 </code></pre></div></section></main></body></html>

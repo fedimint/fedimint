@@ -268,16 +268,41 @@
 <a href="#268" id="268">268</a>
 <a href="#269" id="269">269</a>
 <a href="#270" id="270">270</a>
+<a href="#271" id="271">271</a>
+<a href="#272" id="272">272</a>
+<a href="#273" id="273">273</a>
+<a href="#274" id="274">274</a>
+<a href="#275" id="275">275</a>
+<a href="#276" id="276">276</a>
+<a href="#277" id="277">277</a>
+<a href="#278" id="278">278</a>
+<a href="#279" id="279">279</a>
+<a href="#280" id="280">280</a>
+<a href="#281" id="281">281</a>
+<a href="#282" id="282">282</a>
+<a href="#283" id="283">283</a>
+<a href="#284" id="284">284</a>
+<a href="#285" id="285">285</a>
+<a href="#286" id="286">286</a>
+<a href="#287" id="287">287</a>
+<a href="#288" id="288">288</a>
+<a href="#289" id="289">289</a>
+<a href="#290" id="290">290</a>
+<a href="#291" id="291">291</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::io::{Error, Write};
 <span class="kw">use </span>std::str::FromStr;
 
 <span class="kw">use </span>anyhow::format_err;
+<span class="kw">use </span>bitcoin::address::NetworkUnchecked;
 <span class="kw">use </span>bitcoin::hashes::Hash <span class="kw">as </span>BitcoinHash;
 <span class="kw">use </span>hex::{FromHex, ToHex};
 <span class="kw">use </span>miniscript::{Descriptor, MiniscriptKey};
-<span class="kw">use </span>secp256k1::hashes::Hash;
 
-<span class="kw">use </span><span class="kw">crate</span>::bitcoin_migration::{bitcoin29_to_bitcoin30_network, bitcoin30_to_bitcoin29_network};
+<span class="kw">use </span><span class="kw">crate</span>::bitcoin_migration::{
+    bitcoin29_to_bitcoin30_network_magic, bitcoin29_to_bitcoin30_psbt,
+    bitcoin30_to_bitcoin29_network_magic, bitcoin30_to_bitcoin29_psbt,
+    checked_address_to_unchecked_address,
+};
 <span class="kw">use </span><span class="kw">crate</span>::encoding::{Decodable, DecodeError, Encodable};
 <span class="kw">use </span><span class="kw">crate</span>::module::registry::ModuleDecoderRegistry;
 
@@ -304,13 +329,33 @@
     };
 }
 
-<span class="macro">impl_encode_decode_bridge!</span>(bitcoin::BlockHeader);
+<span class="macro">impl_encode_decode_bridge!</span>(bitcoin::block::Header);
 <span class="macro">impl_encode_decode_bridge!</span>(bitcoin::BlockHash);
 <span class="macro">impl_encode_decode_bridge!</span>(bitcoin::OutPoint);
-<span class="macro">impl_encode_decode_bridge!</span>(bitcoin::Script);
+<span class="macro">impl_encode_decode_bridge!</span>(bitcoin::ScriptBuf);
 <span class="macro">impl_encode_decode_bridge!</span>(bitcoin::Transaction);
-<span class="macro">impl_encode_decode_bridge!</span>(bitcoin::util::merkleblock::PartialMerkleTree);
-<span class="macro">impl_encode_decode_bridge!</span>(bitcoin::util::psbt::PartiallySignedTransaction);
+<span class="macro">impl_encode_decode_bridge!</span>(bitcoin::merkle_tree::PartialMerkleTree);
+
+<span class="kw">impl </span><span class="kw">crate</span>::encoding::Encodable <span class="kw">for </span>bitcoin::psbt::PartiallySignedTransaction {
+    <span class="kw">fn </span>consensus_encode&lt;W: std::io::Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: <span class="kw-2">&amp;mut </span>W) -&gt; <span class="prelude-ty">Result</span>&lt;usize, std::io::Error&gt; {
+        bitcoin29::consensus::Encodable::consensus_encode(
+            <span class="kw-2">&amp;</span>bitcoin30_to_bitcoin29_psbt(<span class="self">self</span>),
+            writer,
+        )
+    }
+}
+
+<span class="kw">impl </span><span class="kw">crate</span>::encoding::Decodable <span class="kw">for </span>bitcoin::psbt::PartiallySignedTransaction {
+    <span class="kw">fn </span>consensus_decode_from_finite_reader&lt;D: std::io::Read&gt;(
+        d: <span class="kw-2">&amp;mut </span>D,
+        _modules: <span class="kw-2">&amp;</span>ModuleDecoderRegistry,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, <span class="kw">crate</span>::encoding::DecodeError&gt; {
+        <span class="prelude-val">Ok</span>(bitcoin29_to_bitcoin30_psbt(
+            <span class="kw-2">&amp;</span>bitcoin29::consensus::Decodable::consensus_decode_from_finite_reader(d)
+                .map_err(<span class="kw">crate</span>::encoding::DecodeError::from_err)<span class="question-mark">?</span>,
+        ))
+    }
+}
 
 <span class="kw">impl </span><span class="kw">crate</span>::encoding::Encodable <span class="kw">for </span>bitcoin::Txid {
     <span class="kw">fn </span>consensus_encode&lt;W: std::io::Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: <span class="kw-2">&amp;mut </span>W) -&gt; <span class="prelude-ty">Result</span>&lt;usize, std::io::Error&gt; {
@@ -379,6 +424,27 @@
     }
 }
 
+<span class="kw">impl </span>Encodable <span class="kw">for </span>bitcoin::network::Magic {
+    <span class="kw">fn </span>consensus_encode&lt;W: Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: <span class="kw-2">&amp;mut </span>W) -&gt; <span class="prelude-ty">Result</span>&lt;usize, Error&gt; {
+        <span class="comment">// The encoding format for bitcoin v0.30 is different from bitcoin v0.29. We're
+        // converting before encoding to maintain backwards compatibility.
+        </span><span class="kw">let </span>num = bitcoin30_to_bitcoin29_network_magic(<span class="self">self</span>);
+        num.consensus_encode(writer)
+    }
+}
+
+<span class="kw">impl </span>Decodable <span class="kw">for </span>bitcoin::network::Magic {
+    <span class="kw">fn </span>consensus_decode&lt;D: std::io::Read&gt;(
+        d: <span class="kw-2">&amp;mut </span>D,
+        modules: <span class="kw-2">&amp;</span>ModuleDecoderRegistry,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
+        <span class="comment">// The encoding format for bitcoin v0.30 is different from bitcoin v0.29. We're
+        // converting after decoding to maintain backwards compatibility.
+        </span><span class="kw">let </span>num = u32::consensus_decode(d, modules)<span class="question-mark">?</span>;
+        <span class="prelude-val">Ok</span>(bitcoin29_to_bitcoin30_network_magic(num))
+    }
+}
+
 <span class="kw">impl </span>Encodable <span class="kw">for </span>bitcoin::Network {
     <span class="kw">fn </span>consensus_encode&lt;W: Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: <span class="kw-2">&amp;mut </span>W) -&gt; <span class="prelude-ty">Result</span>&lt;usize, Error&gt; {
         <span class="self">self</span>.magic().consensus_encode(writer)
@@ -390,27 +456,10 @@
         d: <span class="kw-2">&amp;mut </span>D,
         modules: <span class="kw-2">&amp;</span>ModuleDecoderRegistry,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
-        <span class="kw">let </span>magic = u32::consensus_decode(d, modules)<span class="question-mark">?</span>;
+        <span class="kw">let </span>magic = bitcoin::network::Magic::consensus_decode(d, modules)<span class="question-mark">?</span>;
         bitcoin::Network::from_magic(magic).ok_or_else(|| {
             DecodeError::new_custom(<span class="macro">format_err!</span>(<span class="string">"Unknown network magic: {:x}"</span>, magic))
         })
-    }
-}
-
-<span class="kw">impl </span>Encodable <span class="kw">for </span>bitcoin30::Network {
-    <span class="kw">fn </span>consensus_encode&lt;W: Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: <span class="kw-2">&amp;mut </span>W) -&gt; <span class="prelude-ty">Result</span>&lt;usize, Error&gt; {
-        bitcoin30_to_bitcoin29_network(<span class="kw-2">*</span><span class="self">self</span>).consensus_encode(writer)
-    }
-}
-
-<span class="kw">impl </span>Decodable <span class="kw">for </span>bitcoin30::Network {
-    <span class="kw">fn </span>consensus_decode&lt;D: std::io::Read&gt;(
-        d: <span class="kw-2">&amp;mut </span>D,
-        modules: <span class="kw-2">&amp;</span>ModuleDecoderRegistry,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
-        <span class="prelude-val">Ok</span>(bitcoin29_to_bitcoin30_network(
-            bitcoin::Network::consensus_decode(d, modules)<span class="question-mark">?</span>,
-        ))
     }
 }
 
@@ -440,23 +489,33 @@
     }
 }
 
-<span class="kw">impl </span>Decodable <span class="kw">for </span>bitcoin::Address {
+<span class="kw">impl </span>Encodable <span class="kw">for </span>bitcoin::Address&lt;NetworkUnchecked&gt; {
+    <span class="kw">fn </span>consensus_encode&lt;W: std::io::Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: <span class="kw-2">&amp;mut </span>W) -&gt; <span class="prelude-ty">Result</span>&lt;usize, Error&gt; {
+        <span class="self">self</span>.clone().assume_checked().consensus_encode(writer)
+    }
+}
+
+<span class="kw">impl </span>Decodable <span class="kw">for </span>bitcoin::Address&lt;NetworkUnchecked&gt; {
     <span class="kw">fn </span>consensus_decode&lt;D: std::io::Read&gt;(
         <span class="kw-2">mut </span>d: <span class="kw-2">&amp;mut </span>D,
         modules: <span class="kw-2">&amp;</span>ModuleDecoderRegistry,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
-        <span class="kw">let </span>network = bitcoin::Network::from_magic(u32::consensus_decode(<span class="kw-2">&amp;mut </span>d, modules)<span class="question-mark">?</span>)
-            .ok_or_else(|| DecodeError::from_str(<span class="string">"Unknown network"</span>))<span class="question-mark">?</span>;
-        <span class="kw">let </span>script_pk = bitcoin::Script::consensus_decode(<span class="kw-2">&amp;mut </span>d, modules)<span class="question-mark">?</span>;
+        <span class="kw">let </span>network = bitcoin::Network::from_magic(bitcoin::network::Magic::consensus_decode(
+            <span class="kw-2">&amp;mut </span>d, modules,
+        )<span class="question-mark">?</span>)
+        .ok_or_else(|| DecodeError::from_str(<span class="string">"Unknown network"</span>))<span class="question-mark">?</span>;
+        <span class="kw">let </span>script_pk = bitcoin::ScriptBuf::consensus_decode(<span class="kw-2">&amp;mut </span>d, modules)<span class="question-mark">?</span>;
 
-        bitcoin::Address::from_script(<span class="kw-2">&amp;</span>script_pk, network)
-            .map_err(|e| DecodeError::new_custom(e.into()))
+        <span class="kw">let </span>address = bitcoin::Address::from_script(<span class="kw-2">&amp;</span>script_pk, network)
+            .map_err(|e| DecodeError::new_custom(e.into()))<span class="question-mark">?</span>;
+
+        <span class="prelude-val">Ok</span>(checked_address_to_unchecked_address(<span class="kw-2">&amp;</span>address))
     }
 }
 
 <span class="kw">impl </span>Encodable <span class="kw">for </span>bitcoin::hashes::sha256::Hash {
     <span class="kw">fn </span>consensus_encode&lt;W: std::io::Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: <span class="kw-2">&amp;mut </span>W) -&gt; <span class="prelude-ty">Result</span>&lt;usize, Error&gt; {
-        <span class="self">self</span>.into_inner().consensus_encode(writer)
+        <span class="self">self</span>.to_byte_array().consensus_encode(writer)
     }
 }
 
@@ -465,24 +524,7 @@
         d: <span class="kw-2">&amp;mut </span>D,
         modules: <span class="kw-2">&amp;</span>ModuleDecoderRegistry,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
-        <span class="prelude-val">Ok</span>(bitcoin::hashes::sha256::Hash::from_inner(
-            Decodable::consensus_decode(d, modules)<span class="question-mark">?</span>,
-        ))
-    }
-}
-
-<span class="kw">impl </span>Encodable <span class="kw">for </span>bitcoin30::hashes::sha256::Hash {
-    <span class="kw">fn </span>consensus_encode&lt;W: std::io::Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: <span class="kw-2">&amp;mut </span>W) -&gt; <span class="prelude-ty">Result</span>&lt;usize, Error&gt; {
-        <span class="self">self</span>.to_byte_array().consensus_encode(writer)
-    }
-}
-
-<span class="kw">impl </span>Decodable <span class="kw">for </span>bitcoin30::hashes::sha256::Hash {
-    <span class="kw">fn </span>consensus_decode&lt;D: std::io::Read&gt;(
-        d: <span class="kw-2">&amp;mut </span>D,
-        modules: <span class="kw-2">&amp;</span>ModuleDecoderRegistry,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
-        <span class="prelude-val">Ok</span>(bitcoin30::hashes::sha256::Hash::from_byte_array(
+        <span class="prelude-val">Ok</span>(bitcoin::hashes::sha256::Hash::from_byte_array(
             Decodable::consensus_decode(d, modules)<span class="question-mark">?</span>,
         ))
     }

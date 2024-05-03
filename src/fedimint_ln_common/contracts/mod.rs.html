@@ -178,8 +178,6 @@
 <a href="#178" id="178">178</a>
 <a href="#179" id="179">179</a>
 <a href="#180" id="180">180</a>
-<a href="#181" id="181">181</a>
-<a href="#182" id="182">182</a>
 </pre></div><pre class="rust"><code><span class="kw">pub mod </span>incoming;
 <span class="kw">pub mod </span>outgoing;
 
@@ -198,11 +196,9 @@
 }
 
 <span class="macro">hash_newtype!</span>(
-    ContractId,
-    Sha256,
-    <span class="number">32</span>,
-    doc = <span class="string">"The hash of a LN incoming contract"
-</span>);
+    <span class="doccomment">/// The hash of a LN incoming contract
+    </span><span class="kw">pub struct </span>ContractId(Sha256);
+);
 
 <span class="doccomment">/// A contract before execution as found in transaction outputs
 </span><span class="comment">// TODO: investigate if this is actually a problem
@@ -285,7 +281,7 @@
 
 <span class="kw">impl </span>Encodable <span class="kw">for </span>ContractId {
     <span class="kw">fn </span>consensus_encode&lt;W: std::io::Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: <span class="kw-2">&amp;mut </span>W) -&gt; <span class="prelude-ty">Result</span>&lt;usize, Error&gt; {
-        <span class="self">self</span>.as_inner().consensus_encode(writer)
+        <span class="self">self</span>.to_byte_array().consensus_encode(writer)
     }
 }
 
@@ -294,7 +290,7 @@
         d: <span class="kw-2">&amp;mut </span>D,
         modules: <span class="kw-2">&amp;</span>ModuleDecoderRegistry,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
-        <span class="prelude-val">Ok</span>(ContractId::from_inner(Decodable::consensus_decode(
+        <span class="prelude-val">Ok</span>(ContractId::from_byte_array(Decodable::consensus_decode(
             d, modules,
         )<span class="question-mark">?</span>))
     }

@@ -894,7 +894,7 @@
 <span class="kw">use </span>std::sync::Arc;
 
 <span class="kw">use </span>async_stream::stream;
-<span class="kw">use </span>bitcoin_hashes::{sha256, Hash};
+<span class="kw">use </span>bitcoin::hashes::{sha256, Hash};
 <span class="kw">use </span>fedimint_api_client::api::DynModuleApi;
 <span class="kw">use </span>fedimint_client::module::init::{ClientModuleInit, ClientModuleInitArgs};
 <span class="kw">use </span>fedimint_client::module::recovery::NoModuleBackup;
@@ -1169,7 +1169,7 @@
 
     <span class="kw">let </span>ephemeral_tweak = ecdh::shared_secret_point(<span class="kw-2">&amp;</span>static_pk, <span class="kw-2">&amp;</span>ephemeral_keypair.secret_key())
         .consensus_hash::&lt;sha256::Hash&gt;()
-        .into_inner();
+        .to_byte_array();
 
     (ephemeral_tweak, ephemeral_keypair.public_key())
 }
@@ -1476,11 +1476,11 @@
 
         <span class="kw">let </span>encryption_seed = ephemeral_tweak
             .consensus_hash::&lt;sha256::Hash&gt;()
-            .into_inner();
+            .to_byte_array();
 
         <span class="kw">let </span>preimage = encryption_seed
             .consensus_hash::&lt;sha256::Hash&gt;()
-            .into_inner();
+            .to_byte_array();
 
         <span class="kw">let </span>payment_info = <span class="self">self
             </span>.fetch_payment_info(gateway_api.clone())
@@ -1612,11 +1612,11 @@
             <span class="kw-2">&amp;</span><span class="self">self</span>.keypair.secret_key(),
         )
         .consensus_hash::&lt;sha256::Hash&gt;()
-        .into_inner();
+        .to_byte_array();
 
         <span class="kw">let </span>encryption_seed = ephemeral_tweak
             .consensus_hash::&lt;sha256::Hash&gt;()
-            .into_inner();
+            .to_byte_array();
 
         <span class="kw">let </span>claim_keypair = <span class="self">self
             </span>.keypair

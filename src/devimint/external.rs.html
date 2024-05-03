@@ -880,6 +880,8 @@
 <a href="#880" id="880">880</a>
 <a href="#881" id="881">881</a>
 <a href="#882" id="882">882</a>
+<a href="#883" id="883">883</a>
+<a href="#884" id="884">884</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::ops::{ControlFlow, Deref <span class="kw">as _</span>};
 <span class="kw">use </span>std::path::Path;
 <span class="kw">use </span>std::str::FromStr;
@@ -998,7 +1000,7 @@
         <span class="kw">if </span>!skip_setup {
             <span class="comment">// mine blocks
             </span><span class="kw">let </span>blocks = <span class="number">101</span>;
-            <span class="kw">let </span>address = block_in_place(|| client.get_new_address(<span class="prelude-val">None</span>, <span class="prelude-val">None</span>))<span class="question-mark">?</span>;
+            <span class="kw">let </span>address = block_in_place(|| client.get_new_address(<span class="prelude-val">None</span>, <span class="prelude-val">None</span>))<span class="question-mark">?</span>.assume_checked();
             <span class="macro">debug!</span>(target: LOG_DEVIMINT, blocks_num=blocks, %address, <span class="string">"Mining blocks to address"</span>);
             block_in_place(|| {
                 client
@@ -1091,7 +1093,7 @@
         <span class="kw">let </span>tx = <span class="self">self
             </span>.wallet_client()
             .<span class="kw">await</span><span class="question-mark">?
-            </span>.send_to_address(<span class="kw-2">&amp;</span>bitcoin::Address::from_str(<span class="kw-2">&amp;</span>addr)<span class="question-mark">?</span>, amount)
+            </span>.send_to_address(<span class="kw-2">&amp;</span>bitcoin::Address::from_str(<span class="kw-2">&amp;</span>addr)<span class="question-mark">?</span>.assume_checked(), amount)
             .<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(tx)
     }
@@ -1109,7 +1111,7 @@
 
     <span class="kw">pub async fn </span>get_new_address(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;Address&gt; {
         <span class="kw">let </span>client = <span class="kw-2">&amp;</span><span class="self">self</span>.wallet_client().<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">let </span>addr = block_in_place(|| client.client.get_new_address(<span class="prelude-val">None</span>, <span class="prelude-val">None</span>))<span class="question-mark">?</span>;
+        <span class="kw">let </span>addr = block_in_place(|| client.client.get_new_address(<span class="prelude-val">None</span>, <span class="prelude-val">None</span>))<span class="question-mark">?</span>.assume_checked();
         <span class="prelude-val">Ok</span>(addr)
     }
 
@@ -1252,12 +1254,13 @@
         process_mgr.spawn_daemon(<span class="string">"lightningd"</span>, cmd).<span class="kw">await
     </span>}
 
-    <span class="kw">pub async fn </span>request&lt;R: cln_rpc::model::IntoRequest&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, request: R) -&gt; <span class="prelude-ty">Result</span>&lt;R::Response&gt;
+    <span class="kw">pub async fn </span>request&lt;R&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, request: R) -&gt; <span class="prelude-ty">Result</span>&lt;R::Response&gt;
     <span class="kw">where
-        </span>R::Response: Send,
+        </span>R: cln_rpc::model::TypedRequest + serde::Serialize + std::fmt::Debug,
+        R::Response: serde::de::DeserializeOwned + std::fmt::Debug,
     {
         <span class="kw">let </span><span class="kw-2">mut </span>rpc = <span class="self">self</span>.rpc.lock().<span class="kw">await</span>;
-        <span class="prelude-val">Ok</span>(rpc.call_typed(request).<span class="kw">await</span><span class="question-mark">?</span>)
+        <span class="prelude-val">Ok</span>(rpc.call_typed(<span class="kw-2">&amp;</span>request).<span class="kw">await</span><span class="question-mark">?</span>)
     }
 
     <span class="comment">// TODO(tvolk131): Remove this method and instead use
@@ -1479,6 +1482,7 @@
             utxos: <span class="prelude-val">None</span>,
             mindepth: <span class="prelude-val">None</span>,
             reserve: <span class="prelude-val">None</span>,
+            channel_type: <span class="prelude-val">None</span>,
         })
         .<span class="kw">await
         </span>.map_err(ControlFlow::Continue)

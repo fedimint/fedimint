@@ -634,17 +634,6 @@
 <a href="#634" id="634">634</a>
 <a href="#635" id="635">635</a>
 <a href="#636" id="636">636</a>
-<a href="#637" id="637">637</a>
-<a href="#638" id="638">638</a>
-<a href="#639" id="639">639</a>
-<a href="#640" id="640">640</a>
-<a href="#641" id="641">641</a>
-<a href="#642" id="642">642</a>
-<a href="#643" id="643">643</a>
-<a href="#644" id="644">644</a>
-<a href="#645" id="645">645</a>
-<a href="#646" id="646">646</a>
-<a href="#647" id="647">647</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
 
@@ -652,9 +641,6 @@
 <span class="kw">use </span>fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
 <span class="kw">use </span>fedimint_client::transaction::ClientInput;
 <span class="kw">use </span>fedimint_client::DynGlobalClientContext;
-<span class="kw">use </span>fedimint_core::bitcoin_migration::{
-    bitcoin29_to_bitcoin30_secp256k1_public_key, bitcoin29_to_bitcoin30_sha256_hash,
-};
 <span class="kw">use </span>fedimint_core::config::FederationId;
 <span class="kw">use </span>fedimint_core::core::{Decoder, OperationId};
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
@@ -935,7 +921,7 @@
                     contract_id,
                     timelock,
                     dbtx,
-                    bitcoin29_to_bitcoin30_sha256_hash(payment_hash),
+                    payment_hash,
                     common.clone(),
                 ))
             },
@@ -1243,26 +1229,18 @@
 
     <span class="kw">pub fn </span>destination(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; secp256k1::PublicKey {
         <span class="kw">match </span><span class="self">self </span>{
-            PaymentData::Invoice(invoice) =&gt; bitcoin29_to_bitcoin30_secp256k1_public_key(
-                invoice
-                    .payee_pub_key()
-                    .cloned()
-                    .unwrap_or_else(|| invoice.recover_payee_pub_key()),
-            ),
-            PaymentData::PrunedInvoice(PrunedInvoice { destination, .. }) =&gt; {
-                bitcoin29_to_bitcoin30_secp256k1_public_key(<span class="kw-2">*</span>destination)
-            }
+            PaymentData::Invoice(invoice) =&gt; invoice
+                .payee_pub_key()
+                .cloned()
+                .unwrap_or_else(|| invoice.recover_payee_pub_key()),
+            PaymentData::PrunedInvoice(PrunedInvoice { destination, .. }) =&gt; <span class="kw-2">*</span>destination,
         }
     }
 
     <span class="kw">pub fn </span>payment_hash(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; sha256::Hash {
         <span class="kw">match </span><span class="self">self </span>{
-            PaymentData::Invoice(invoice) =&gt; {
-                bitcoin29_to_bitcoin30_sha256_hash(<span class="kw-2">*</span>invoice.payment_hash())
-            }
-            PaymentData::PrunedInvoice(PrunedInvoice { payment_hash, .. }) =&gt; {
-                bitcoin29_to_bitcoin30_sha256_hash(<span class="kw-2">*</span>payment_hash)
-            }
+            PaymentData::Invoice(invoice) =&gt; <span class="kw-2">*</span>invoice.payment_hash(),
+            PaymentData::PrunedInvoice(PrunedInvoice { payment_hash, .. }) =&gt; <span class="kw-2">*</span>payment_hash,
         }
     }
 

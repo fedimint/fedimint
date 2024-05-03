@@ -1480,6 +1480,7 @@
 <a href="#1480" id="1480">1480</a>
 <a href="#1481" id="1481">1481</a>
 <a href="#1482" id="1482">1482</a>
+<a href="#1483" id="1483">1483</a>
 </pre></div><pre class="rust"><code><span class="kw">pub mod </span>db;
 <span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::time::Duration;
@@ -1920,7 +1921,8 @@
                     .<span class="kw">await</span>;
 
                 <span class="kw">let </span>decrypted_preimage = <span class="kw">if </span>preimage_vec.len() == <span class="number">33
-                    </span>&amp;&amp; contract.hash == sha256::Hash::hash(<span class="kw-2">&amp;</span>sha256::Hash::hash(<span class="kw-2">&amp;</span>preimage_vec))
+                    </span>&amp;&amp; contract.hash
+                        == sha256::Hash::hash(<span class="kw-2">&amp;</span>sha256::Hash::hash(<span class="kw-2">&amp;</span>preimage_vec).to_byte_array())
                 {
                     <span class="kw">let </span>preimage = PreimageKey(
                         preimage_vec
@@ -2535,7 +2537,7 @@
         <span class="kw">match </span><span class="kw-2">&amp;</span>incoming_contract_account.contract.decrypted_preimage {
             DecryptedPreimage::Some(key) =&gt; (
                 incoming_contract_account.to_owned(),
-                DecryptedPreimageStatus::Some(Preimage(sha256::Hash::hash(<span class="kw-2">&amp;</span>key.<span class="number">0</span>).into_inner())),
+                DecryptedPreimageStatus::Some(Preimage(sha256::Hash::hash(<span class="kw-2">&amp;</span>key.<span class="number">0</span>).to_byte_array())),
             ),
             DecryptedPreimage::Pending =&gt; {
                 (incoming_contract_account, DecryptedPreimageStatus::Pending)
@@ -2572,7 +2574,7 @@
         {
             DecryptedPreimage::Some(key) =&gt; (
                 incoming_contract_account,
-                <span class="prelude-val">Some</span>(Preimage(sha256::Hash::hash(<span class="kw-2">&amp;</span>key.<span class="number">0</span>).into_inner())),
+                <span class="prelude-val">Some</span>(Preimage(sha256::Hash::hash(<span class="kw-2">&amp;</span>key.<span class="number">0</span>).to_byte_array())),
             ),
             <span class="kw">_ </span>=&gt; (incoming_contract_account, <span class="prelude-val">None</span>),
         }
@@ -2860,7 +2862,7 @@
         <span class="kw">let </span>preimage = PreimageKey(generate_keypair(<span class="kw-2">&amp;mut </span>OsRng).<span class="number">1</span>.serialize());
         <span class="kw">let </span>funded_incoming_contract = FundedContract::Incoming(FundedIncomingContract {
             contract: IncomingContract {
-                hash: sha256::Hash::hash(<span class="kw-2">&amp;</span>sha256::Hash::hash(<span class="kw-2">&amp;</span>preimage.<span class="number">0</span>)),
+                hash: sha256::Hash::hash(<span class="kw-2">&amp;</span>sha256::Hash::hash(<span class="kw-2">&amp;</span>preimage.<span class="number">0</span>).to_byte_array()),
                 encrypted_preimage: EncryptedPreimage(
                     client_cfg.threshold_pub_key.encrypt(preimage.<span class="number">0</span>),
                 ),

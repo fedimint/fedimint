@@ -224,7 +224,7 @@
             </span>.ln_rpc
             .lock()
             .<span class="kw">await
-            </span>.call_typed(cln_rpc::model::requests::PayRequest {
+            </span>.call_typed(<span class="kw-2">&amp;</span>cln_rpc::model::requests::PayRequest {
                 bolt11: invoice,
                 amount_msat: <span class="prelude-val">None</span>,
                 label: <span class="prelude-val">None</span>,
@@ -256,7 +256,7 @@
             </span>.ln_rpc
             .lock()
             .<span class="kw">await
-            </span>.call_typed(cln_rpc::model::requests::InvoiceRequest {
+            </span>.call_typed(<span class="kw-2">&amp;</span>cln_rpc::model::requests::InvoiceRequest {
                 amount_msat: AmountOrAny::Amount(ClnAmount::from_sat(amount)),
                 description: <span class="string">"lnd-gw-to-cln"</span>.to_string(),
                 label: <span class="macro">format!</span>(<span class="string">"faucet-{}"</span>, rand::random::&lt;u64&gt;()),

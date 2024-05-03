@@ -266,15 +266,11 @@
 <a href="#266" id="266">266</a>
 <a href="#267" id="267">267</a>
 <a href="#268" id="268">268</a>
-<a href="#269" id="269">269</a>
-<a href="#270" id="270">270</a>
-<a href="#271" id="271">271</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::convert::Infallible;
 <span class="kw">use </span>std::hash::Hash;
 
 <span class="kw">use </span>anyhow::format_err;
 <span class="kw">use </span>bitcoin::{BlockHash, OutPoint, Transaction};
-<span class="kw">use </span>fedimint_core::bitcoin_migration::bitcoin30_to_bitcoin29_script;
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, DecodeError, Encodable};
 <span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
 <span class="kw">use </span>fedimint_core::txoproof::TxOutProof;
@@ -365,11 +361,9 @@
         secp: <span class="kw-2">&amp;</span>Secp256k1&lt;C&gt;,
         untweaked_pegin_descriptor: <span class="kw-2">&amp;</span>Descriptor&lt;CompressedPublicKey&gt;,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;(), PegInProofError&gt; {
-        <span class="kw">let </span>script = bitcoin30_to_bitcoin29_script(
-            <span class="kw-2">&amp;</span>untweaked_pegin_descriptor
-                .tweak(<span class="kw-2">&amp;</span><span class="self">self</span>.tweak_contract_key, secp)
-                .script_pubkey(),
-        );
+        <span class="kw">let </span>script = untweaked_pegin_descriptor
+            .tweak(<span class="kw-2">&amp;</span><span class="self">self</span>.tweak_contract_key, secp)
+            .script_pubkey();
 
         <span class="kw">let </span>txo = <span class="self">self
             </span>.transaction

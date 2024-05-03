@@ -884,6 +884,7 @@
 <a href="#884" id="884">884</a>
 <a href="#885" id="885">885</a>
 <a href="#886" id="886">886</a>
+<a href="#887" id="887">887</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::fmt;
 <span class="kw">use </span>std::str::FromStr;
 <span class="kw">use </span>std::sync::Arc;
@@ -891,6 +892,7 @@
 
 <span class="kw">use </span>anyhow::ensure;
 <span class="kw">use </span>async_trait::async_trait;
+<span class="kw">use </span>bitcoin_hashes::Hash;
 <span class="kw">use </span>fedimint_core::task::{sleep, TaskGroup};
 <span class="kw">use </span>fedimint_core::Amount;
 <span class="kw">use </span>fedimint_ln_common::PrunedInvoice;
@@ -1304,7 +1306,7 @@
 
         <span class="comment">// If the payment exists, that means we've already tried to pay the invoice
         </span><span class="kw">let </span>preimage: Vec&lt;u8&gt; = <span class="kw">if let </span><span class="prelude-val">Some</span>(preimage) = <span class="self">self
-            </span>.lookup_payment(invoice.payment_hash.to_vec(), <span class="kw-2">&amp;mut </span>client)
+            </span>.lookup_payment(invoice.payment_hash.to_byte_array().to_vec(), <span class="kw-2">&amp;mut </span>client)
             .<span class="kw">await</span><span class="question-mark">?
         </span>{
             <span class="macro">info!</span>(<span class="string">"LND payment already exists for invoice {invoice:?}"</span>);
@@ -1356,7 +1358,7 @@
                     amt_msat,
                     dest: invoice.destination.serialize().to_vec(),
                     dest_features,
-                    payment_hash: invoice.payment_hash.to_vec(),
+                    payment_hash: invoice.payment_hash.to_byte_array().to_vec(),
                     payment_addr: invoice.payment_secret.to_vec(),
                     route_hints: route_hints_to_lnd(<span class="kw-2">&amp;</span>invoice.route_hints),
                     final_cltv_delta,

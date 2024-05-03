@@ -1048,6 +1048,7 @@
 <a href="#1048" id="1048">1048</a>
 <a href="#1049" id="1049">1049</a>
 <a href="#1050" id="1050">1050</a>
+<a href="#1051" id="1051">1051</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet};
 <span class="kw">use </span>std::fmt::{Debug, Display};
 <span class="kw">use </span>std::hash::Hash;
@@ -1056,6 +1057,7 @@
 <span class="kw">use </span>std::str::FromStr;
 
 <span class="kw">use </span>anyhow::{bail, format_err, Context};
+<span class="kw">use </span>bitcoin29::hashes::hex::format_hex;
 <span class="kw">use </span>bitcoin_hashes::sha256::{Hash <span class="kw">as </span>Sha256, HashEngine};
 <span class="kw">use </span>bitcoin_hashes::{hex, sha256};
 <span class="kw">use </span>bls12_381::Scalar;
@@ -1066,7 +1068,7 @@
 <span class="kw">use </span>fedimint_core::util::SafeUrl;
 <span class="kw">use </span>fedimint_core::{BitcoinHash, ModuleDecoderRegistry};
 <span class="kw">use </span>fedimint_logging::LOG_CORE;
-<span class="kw">use </span>hex::{format_hex, FromHex};
+<span class="kw">use </span>hex::FromHex;
 <span class="kw">use </span>serde::de::DeserializeOwned;
 <span class="kw">use </span>serde::ser::SerializeMap;
 <span class="kw">use </span>serde::{Deserialize, Deserializer, Serialize, Serializer};
@@ -1334,7 +1336,7 @@
 
 <span class="kw">impl </span>Display <span class="kw">for </span>FederationId {
     <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>std::fmt::Formatter) -&gt; std::fmt::Result {
-        format_hex(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="number">0</span>, f)
+        format_hex(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="number">0</span>.to_byte_array(), f)
     }
 }
 
@@ -1352,11 +1354,11 @@
 </span><span class="kw">impl </span>FederationId {
     <span class="doccomment">/// Random dummy id for testing
     </span><span class="kw">pub fn </span>dummy() -&gt; <span class="self">Self </span>{
-        <span class="self">Self</span>(sha256::Hash::from_inner([<span class="number">42</span>; <span class="number">32</span>]))
+        <span class="self">Self</span>(sha256::Hash::from_byte_array([<span class="number">42</span>; <span class="number">32</span>]))
     }
 
     <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>from_byte_array(bytes: [u8; <span class="number">32</span>]) -&gt; <span class="self">Self </span>{
-        <span class="self">Self</span>(sha256::Hash::from_inner(bytes))
+        <span class="self">Self</span>(sha256::Hash::from_byte_array(bytes))
     }
 
     <span class="kw">pub fn </span>to_prefix(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FederationIdPrefix {
@@ -1376,7 +1378,7 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         secp: <span class="kw-2">&amp;</span>secp256k1::Secp256k1&lt;secp256k1::All&gt;,
     ) -&gt; anyhow::Result&lt;secp256k1::PublicKey&gt; {
-        <span class="kw">let </span>sk = secp256k1::SecretKey::from_slice(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="number">0</span>)<span class="question-mark">?</span>;
+        <span class="kw">let </span>sk = secp256k1::SecretKey::from_slice(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="number">0</span>.to_byte_array())<span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(secp256k1::PublicKey::from_secret_key(secp, <span class="kw-2">&amp;</span>sk))
     }
 }

@@ -494,35 +494,6 @@
 <a href="#494" id="494">494</a>
 <a href="#495" id="495">495</a>
 <a href="#496" id="496">496</a>
-<a href="#497" id="497">497</a>
-<a href="#498" id="498">498</a>
-<a href="#499" id="499">499</a>
-<a href="#500" id="500">500</a>
-<a href="#501" id="501">501</a>
-<a href="#502" id="502">502</a>
-<a href="#503" id="503">503</a>
-<a href="#504" id="504">504</a>
-<a href="#505" id="505">505</a>
-<a href="#506" id="506">506</a>
-<a href="#507" id="507">507</a>
-<a href="#508" id="508">508</a>
-<a href="#509" id="509">509</a>
-<a href="#510" id="510">510</a>
-<a href="#511" id="511">511</a>
-<a href="#512" id="512">512</a>
-<a href="#513" id="513">513</a>
-<a href="#514" id="514">514</a>
-<a href="#515" id="515">515</a>
-<a href="#516" id="516">516</a>
-<a href="#517" id="517">517</a>
-<a href="#518" id="518">518</a>
-<a href="#519" id="519">519</a>
-<a href="#520" id="520">520</a>
-<a href="#521" id="521">521</a>
-<a href="#522" id="522">522</a>
-<a href="#523" id="523">523</a>
-<a href="#524" id="524">524</a>
-<a href="#525" id="525">525</a>
 </pre></div><pre class="rust"><code><span class="kw">pub mod </span>envs;
 
 <span class="kw">use </span>std::cmp::Ordering;
@@ -535,11 +506,6 @@
 <span class="kw">use </span>bitcoin::network::constants::Network;
 <span class="kw">use </span>bitcoin::OutPoint;
 <span class="kw">use </span>clap::{ArgGroup, Parser, Subcommand};
-<span class="kw">use </span>fedimint_core::bitcoin_migration::{
-    bitcoin29_to_bitcoin30_amount, bitcoin29_to_bitcoin30_network, bitcoin29_to_bitcoin30_outpoint,
-    bitcoin29_to_bitcoin30_secp256k1_secret_key, bitcoin30_to_bitcoin29_network,
-    bitcoin30_to_bitcoin29_secp256k1_public_key, bitcoin30_to_bitcoin29_secp256k1_secret_key,
-};
 <span class="kw">use </span>fedimint_core::core::{
     LEGACY_HARDCODED_INSTANCE_ID_LN, LEGACY_HARDCODED_INSTANCE_ID_MINT,
     LEGACY_HARDCODED_INSTANCE_ID_WALLET,
@@ -668,28 +634,19 @@
             .get_module_config_typed(LEGACY_HARDCODED_INSTANCE_ID_WALLET)
             .expect(<span class="string">"Malformed wallet config"</span>);
         <span class="kw">let </span>base_descriptor = wallet_cfg.consensus.peg_in_descriptor;
-        <span class="kw">let </span>base_key = bitcoin29_to_bitcoin30_secp256k1_secret_key(wallet_cfg.private.peg_in_key);
+        <span class="kw">let </span>base_key = wallet_cfg.private.peg_in_key;
         <span class="kw">let </span>network = wallet_cfg.consensus.network;
 
         (base_descriptor, base_key, network)
     } <span class="kw">else if let </span>(<span class="prelude-val">Some</span>(descriptor), <span class="prelude-val">Some</span>(key)) = (opts.descriptor, opts.key) {
-        (
-            descriptor,
-            key,
-            bitcoin30_to_bitcoin29_network(opts.network),
-        )
+        (descriptor, key, opts.network)
     } <span class="kw">else </span>{
         <span class="macro">panic!</span>(<span class="string">"Either config or descriptor need to be provided by clap"</span>);
     };
 
     <span class="kw">match </span>opts.strategy {
         TweakSource::Direct { tweak } =&gt; {
-            <span class="kw">let </span>descriptor = tweak_descriptor(
-                <span class="kw-2">&amp;</span>base_descriptor,
-                <span class="kw-2">&amp;</span>base_key,
-                <span class="kw-2">&amp;</span>tweak,
-                bitcoin29_to_bitcoin30_network(network),
-            );
+            <span class="kw">let </span>descriptor = tweak_descriptor(<span class="kw-2">&amp;</span>base_descriptor, <span class="kw-2">&amp;</span>base_key, <span class="kw-2">&amp;</span>tweak, network);
             <span class="kw">let </span>wallets = <span class="macro">vec!</span>[ImportableWalletMin { descriptor }];
 
             serde_json::to_writer(std::io::stdout().lock(), <span class="kw-2">&amp;</span>wallets)
@@ -710,17 +667,12 @@
                 </span>.find_by_prefix(<span class="kw-2">&amp;</span>UTXOPrefixKey)
                 .<span class="kw">await
                 </span>.map(|(UTXOKey(outpoint), SpendableUTXO { tweak, amount })| {
-                    <span class="kw">let </span>descriptor = tweak_descriptor(
-                        <span class="kw-2">&amp;</span>base_descriptor,
-                        <span class="kw-2">&amp;</span>base_key,
-                        <span class="kw-2">&amp;</span>tweak,
-                        bitcoin29_to_bitcoin30_network(network),
-                    );
+                    <span class="kw">let </span>descriptor = tweak_descriptor(<span class="kw-2">&amp;</span>base_descriptor, <span class="kw-2">&amp;</span>base_key, <span class="kw-2">&amp;</span>tweak, network);
 
                     ImportableWallet {
-                        outpoint: bitcoin29_to_bitcoin30_outpoint(outpoint),
+                        outpoint,
                         descriptor,
-                        amount_sat: bitcoin29_to_bitcoin30_amount(amount),
+                        amount_sat: amount,
                     }
                 })
                 .collect()
@@ -791,12 +743,7 @@
 
             <span class="kw">let </span>wallets = tweaks
                 .map(|tweak| {
-                    <span class="kw">let </span>descriptor = tweak_descriptor(
-                        <span class="kw-2">&amp;</span>base_descriptor,
-                        <span class="kw-2">&amp;</span>base_key,
-                        <span class="kw-2">&amp;</span>tweak,
-                        bitcoin29_to_bitcoin30_network(network),
-                    );
+                    <span class="kw">let </span>descriptor = tweak_descriptor(<span class="kw-2">&amp;</span>base_descriptor, <span class="kw-2">&amp;</span>base_key, <span class="kw-2">&amp;</span>tweak, network);
                     ImportableWalletMin { descriptor }
                 })
                 .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;()
@@ -852,14 +799,11 @@
     tweak: <span class="kw-2">&amp;</span>[u8; <span class="number">33</span>],
     network: Network,
 ) -&gt; Descriptor&lt;Key&gt; {
-    <span class="kw">let </span>secret_key = bitcoin29_to_bitcoin30_secp256k1_secret_key(
-        bitcoin30_to_bitcoin29_secp256k1_secret_key(<span class="kw-2">*</span>base_sk).tweak(tweak, secp256k1_24::SECP256K1),
-    );
-    <span class="kw">let </span>pub_key = CompressedPublicKey::new(bitcoin30_to_bitcoin29_secp256k1_public_key(
-        secp256k1::PublicKey::from_secret_key_global(<span class="kw-2">&amp;</span>secret_key),
-    ));
+    <span class="kw">let </span>secret_key = base_sk.tweak(tweak, secp256k1::SECP256K1);
+    <span class="kw">let </span>pub_key =
+        CompressedPublicKey::new(secp256k1::PublicKey::from_secret_key_global(<span class="kw-2">&amp;</span>secret_key));
     base_descriptor
-        .tweak(tweak, secp256k1_24::SECP256K1)
+        .tweak(tweak, secp256k1::SECP256K1)
         .translate_pk(<span class="kw-2">&amp;mut </span>SecretKeyInjector {
             secret: bitcoin::key::PrivateKey {
                 compressed: <span class="bool-val">true</span>,
@@ -928,9 +872,7 @@
         <span class="kw">match </span><span class="self">self </span>{
             Key::Public(pk) =&gt; pk,
             Key::Private(sk) =&gt; {
-                CompressedPublicKey::new(bitcoin30_to_bitcoin29_secp256k1_public_key(
-                    secp256k1::PublicKey::from_secret_key_global(<span class="kw-2">&amp;</span>sk.inner),
-                ))
+                CompressedPublicKey::new(secp256k1::PublicKey::from_secret_key_global(<span class="kw-2">&amp;</span>sk.inner))
             }
         }
     }

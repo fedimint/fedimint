@@ -2586,7 +2586,6 @@
 <a href="#2586" id="2586">2586</a>
 <a href="#2587" id="2587">2587</a>
 <a href="#2588" id="2588">2588</a>
-<a href="#2589" id="2589">2589</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashSet};
 <span class="kw">use </span>std::io::Write;
 <span class="kw">use </span>std::ops::ControlFlow;
@@ -2603,7 +2602,7 @@
 <span class="kw">use </span>fedimint_core::encoding::Decodable;
 <span class="kw">use </span>fedimint_core::envs::is_env_var_set;
 <span class="kw">use </span>fedimint_core::task::block_in_place;
-<span class="kw">use </span>fedimint_core::{Amount, PeerId};
+<span class="kw">use </span>fedimint_core::{Amount, BitcoinHash, PeerId};
 <span class="kw">use </span>fedimint_ln_client::cli::LnInvoiceResponse;
 <span class="kw">use </span>fedimint_logging::LOG_DEVIMINT;
 <span class="kw">use </span>hex::ToHex;
@@ -3782,7 +3781,6 @@
     client.use_gateway(gw_cln).<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="kw">let </span>preimage = rand::random::&lt;[u8; <span class="number">32</span>]&gt;();
     <span class="kw">let </span>hash = {
-        <span class="kw">use </span>fedimint_core::BitcoinHash;
         <span class="kw">let </span><span class="kw-2">mut </span>engine = bitcoin::hashes::sha256::Hash::engine();
         bitcoin::hashes::HashEngine::input(<span class="kw-2">&amp;mut </span>engine, <span class="kw-2">&amp;</span>preimage);
         bitcoin::hashes::sha256::Hash::from_engine(engine)
@@ -3792,7 +3790,7 @@
         .<span class="kw">await</span><span class="question-mark">?
         </span>.add_hold_invoice(tonic_lnd::invoicesrpc::AddHoldInvoiceRequest {
             value_msat: <span class="number">1000</span>,
-            hash: hash.to_vec(),
+            hash: hash.to_byte_array().to_vec(),
             ..Default::default()
         })
         .<span class="kw">await</span><span class="question-mark">?
@@ -3813,7 +3811,7 @@
         .invoices_client_lock()
         .<span class="kw">await</span><span class="question-mark">?
         </span>.subscribe_single_invoice(tonic_lnd::invoicesrpc::SubscribeSingleInvoiceRequest {
-            r_hash: hold_invoice_hash.to_vec(),
+            r_hash: hold_invoice_hash.to_byte_array().to_vec(),
         })
         .<span class="kw">await</span><span class="question-mark">?
         </span>.into_inner();

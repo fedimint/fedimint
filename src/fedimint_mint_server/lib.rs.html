@@ -788,14 +788,12 @@
 <a href="#788" id="788">788</a>
 <a href="#789" id="789">789</a>
 <a href="#790" id="790">790</a>
-<a href="#791" id="791">791</a>
 </pre></div><pre class="rust"><code><span class="kw">pub mod </span>db;
 <span class="kw">mod </span>metrics;
 
 <span class="kw">use </span>std::collections::{BTreeMap, HashMap};
 
 <span class="kw">use </span>anyhow::bail;
-<span class="kw">use </span>fedimint_core::bitcoin_migration::bitcoin30_to_bitcoin29_secp256k1_public_key;
 <span class="kw">use </span>fedimint_core::config::{
     ConfigGenModuleParams, DkgResult, ServerModuleConfig, ServerModuleConsensusConfig,
     TypedServerModuleConfig, TypedServerModuleConsensusConfig,
@@ -1192,7 +1190,7 @@
         calculate_mint_redeemed_ecash_metrics(dbtx, amount, fee);
         <span class="prelude-val">Ok</span>(InputMeta {
             amount: TransactionItemAmount { amount, fee },
-            pub_key: bitcoin30_to_bitcoin29_secp256k1_public_key(<span class="kw-2">*</span>input.note.spend_key()),
+            pub_key: <span class="kw-2">*</span>input.note.spend_key(),
         })
     }
 

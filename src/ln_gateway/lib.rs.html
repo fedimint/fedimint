@@ -1830,14 +1830,6 @@
 <a href="#1830" id="1830">1830</a>
 <a href="#1831" id="1831">1831</a>
 <a href="#1832" id="1832">1832</a>
-<a href="#1833" id="1833">1833</a>
-<a href="#1834" id="1834">1834</a>
-<a href="#1835" id="1835">1835</a>
-<a href="#1836" id="1836">1836</a>
-<a href="#1837" id="1837">1837</a>
-<a href="#1838" id="1838">1838</a>
-<a href="#1839" id="1839">1839</a>
-<a href="#1840" id="1840">1840</a>
 </pre></div><pre class="rust"><code><span class="kw">pub mod </span>client;
 <span class="kw">mod </span>db;
 <span class="kw">pub mod </span>envs;
@@ -1876,10 +1868,6 @@
 <span class="kw">use </span>fedimint_api_client::api::FederationError;
 <span class="kw">use </span>fedimint_client::module::init::ClientModuleInitRegistry;
 <span class="kw">use </span>fedimint_client::ClientHandleArc;
-<span class="kw">use </span>fedimint_core::bitcoin_migration::{
-    bitcoin29_to_bitcoin30_address, bitcoin29_to_bitcoin30_amount, bitcoin29_to_bitcoin30_txid,
-    bitcoin30_to_bitcoin29_address, bitcoin30_to_bitcoin29_amount,
-};
 <span class="kw">use </span>fedimint_core::config::FederationId;
 <span class="kw">use </span>fedimint_core::core::{
     ModuleInstanceId, ModuleKind, LEGACY_HARDCODED_INSTANCE_ID_MINT,
@@ -2647,7 +2635,7 @@
             .get_first_module::&lt;WalletClientModule&gt;()
             .get_deposit_address(now() + Duration::from_secs(<span class="number">86400 </span>* <span class="number">365</span>), ())
             .<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="prelude-val">Ok</span>(bitcoin29_to_bitcoin30_address(address).assume_checked())
+        <span class="prelude-val">Ok</span>(address)
     }
 
     <span class="kw">pub async fn </span>handle_withdraw_msg(<span class="kw-2">&amp;</span><span class="self">self</span>, payload: WithdrawPayload) -&gt; <span class="prelude-ty">Result</span>&lt;Txid&gt; {
@@ -2658,7 +2646,6 @@
         } = payload;
         <span class="kw">let </span>client = <span class="self">self</span>.select_client(federation_id).<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>wallet_module = client.value().get_first_module::&lt;WalletClientModule&gt;();
-        <span class="kw">let </span>address = bitcoin30_to_bitcoin29_address(address.assume_checked());
 
         <span class="comment">// TODO: Fees should probably be passed in as a parameter
         </span><span class="kw">let </span>(amount, fees) = <span class="kw">match </span>amount {
@@ -2668,17 +2655,16 @@
                 <span class="kw">let </span>balance =
                     bitcoin::Amount::from_sat(client.value().get_balance().<span class="kw">await</span>.msats / <span class="number">1000</span>);
                 <span class="kw">let </span>fees = wallet_module
-                    .get_withdraw_fees(address.clone(), bitcoin30_to_bitcoin29_amount(balance))
+                    .get_withdraw_fees(address.clone(), balance)
                     .<span class="kw">await</span><span class="question-mark">?</span>;
-                <span class="kw">let </span>withdraw_amount =
-                    balance.checked_sub(bitcoin29_to_bitcoin30_amount(fees.amount()));
+                <span class="kw">let </span>withdraw_amount = balance.checked_sub(fees.amount());
                 <span class="kw">if </span>withdraw_amount.is_none() {
                     <span class="kw">return </span><span class="prelude-val">Err</span>(GatewayError::InsufficientFunds);
                 }
                 (withdraw_amount.unwrap(), fees)
             }
             BitcoinAmountOrAll::Amount(amount) =&gt; (
-                bitcoin29_to_bitcoin30_amount(amount),
+                amount,
                 wallet_module
                     .get_withdraw_fees(address.clone(), amount)
                     .<span class="kw">await</span><span class="question-mark">?</span>,
@@ -2686,12 +2672,7 @@
         };
 
         <span class="kw">let </span>operation_id = wallet_module
-            .withdraw(
-                address.clone(),
-                bitcoin30_to_bitcoin29_amount(amount),
-                fees,
-                (),
-            )
+            .withdraw(address.clone(), amount, fees, ())
             .<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span><span class="kw-2">mut </span>updates = wallet_module
             .subscribe_withdraw_updates(operation_id)
@@ -2701,8 +2682,11 @@
         <span class="kw">while let </span><span class="prelude-val">Some</span>(update) = updates.next().<span class="kw">await </span>{
             <span class="kw">match </span>update {
                 WithdrawState::Succeeded(txid) =&gt; {
-                    <span class="macro">info!</span>(<span class="string">"Sent {amount} funds to address {address}"</span>);
-                    <span class="kw">return </span><span class="prelude-val">Ok</span>(bitcoin29_to_bitcoin30_txid(txid));
+                    <span class="macro">info!</span>(
+                        <span class="string">"Sent {amount} funds to address {}"</span>,
+                        address.assume_checked()
+                    );
+                    <span class="kw">return </span><span class="prelude-val">Ok</span>(txid);
                 }
                 WithdrawState::Failed(e) =&gt; {
                     <span class="kw">return </span><span class="prelude-val">Err</span>(GatewayError::UnexpectedState(e));
@@ -3522,7 +3506,7 @@
 
         <span class="kw">if </span>dbtx
             .insert_entry(
-                <span class="kw-2">&amp;</span>CreateInvoicePayloadKey(payload.contract.commitment.payment_hash.into_inner()),
+                <span class="kw-2">&amp;</span>CreateInvoicePayloadKey(payload.contract.commitment.payment_hash.to_byte_array()),
                 <span class="kw-2">&amp;</span>payload,
             )
             .<span class="kw">await
@@ -3554,7 +3538,7 @@
         <span class="kw">let </span>response = <span class="kw">match </span>description {
             Bolt11InvoiceDescription::Direct(description) =&gt; lnrpc
                 .create_invoice(CreateInvoiceRequest {
-                    payment_hash: payment_hash.into_inner().to_vec(),
+                    payment_hash: payment_hash.to_byte_array().to_vec(),
                     amount_msat: amount.msats,
                     expiry: expiry_time,
                     description: <span class="prelude-val">Some</span>(Description::Direct(description)),
@@ -3563,10 +3547,10 @@
                 </span>.map_err(|e| e.to_string())<span class="question-mark">?</span>,
             Bolt11InvoiceDescription::Hash(hash) =&gt; lnrpc
                 .create_invoice(CreateInvoiceRequest {
-                    payment_hash: payment_hash.into_inner().to_vec(),
+                    payment_hash: payment_hash.to_byte_array().to_vec(),
                     amount_msat: amount.msats,
                     expiry: expiry_time,
-                    description: <span class="prelude-val">Some</span>(Description::Hash(hash.to_vec())),
+                    description: <span class="prelude-val">Some</span>(Description::Hash(hash.to_byte_array().to_vec())),
                 })
                 .<span class="kw">await
                 </span>.map_err(|e| e.to_string())<span class="question-mark">?</span>,

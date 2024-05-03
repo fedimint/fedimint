@@ -279,6 +279,9 @@
 <a href="#279" id="279">279</a>
 <a href="#280" id="280">280</a>
 <a href="#281" id="281">281</a>
+<a href="#282" id="282">282</a>
+<a href="#283" id="283">283</a>
+<a href="#284" id="284">284</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::io::Cursor;
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
@@ -419,7 +422,10 @@
     }
 
     <span class="kw">async fn </span>get_new_address(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Address {
-        <span class="self">self</span>.client.get_new_address(<span class="prelude-val">None</span>, <span class="prelude-val">None</span>).expect(<span class="self">Self</span>::ERROR)
+        <span class="self">self</span>.client
+            .get_new_address(<span class="prelude-val">None</span>, <span class="prelude-val">None</span>)
+            .expect(<span class="self">Self</span>::ERROR)
+            .assume_checked()
     }
 
     <span class="kw">async fn </span>get_mempool_tx_fee(<span class="kw-2">&amp;</span><span class="self">self</span>, txid: <span class="kw-2">&amp;</span>Txid) -&gt; Amount {

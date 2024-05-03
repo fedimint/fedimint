@@ -1814,31 +1814,6 @@
 <a href="#1814" id="1814">1814</a>
 <a href="#1815" id="1815">1815</a>
 <a href="#1816" id="1816">1816</a>
-<a href="#1817" id="1817">1817</a>
-<a href="#1818" id="1818">1818</a>
-<a href="#1819" id="1819">1819</a>
-<a href="#1820" id="1820">1820</a>
-<a href="#1821" id="1821">1821</a>
-<a href="#1822" id="1822">1822</a>
-<a href="#1823" id="1823">1823</a>
-<a href="#1824" id="1824">1824</a>
-<a href="#1825" id="1825">1825</a>
-<a href="#1826" id="1826">1826</a>
-<a href="#1827" id="1827">1827</a>
-<a href="#1828" id="1828">1828</a>
-<a href="#1829" id="1829">1829</a>
-<a href="#1830" id="1830">1830</a>
-<a href="#1831" id="1831">1831</a>
-<a href="#1832" id="1832">1832</a>
-<a href="#1833" id="1833">1833</a>
-<a href="#1834" id="1834">1834</a>
-<a href="#1835" id="1835">1835</a>
-<a href="#1836" id="1836">1836</a>
-<a href="#1837" id="1837">1837</a>
-<a href="#1838" id="1838">1838</a>
-<a href="#1839" id="1839">1839</a>
-<a href="#1840" id="1840">1840</a>
-<a href="#1841" id="1841">1841</a>
 </pre></div><pre class="rust"><code><span class="kw">pub mod </span>db;
 
 <span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap};
@@ -1847,15 +1822,15 @@
 </span><span class="kw">use </span>std::time::Duration;
 
 <span class="kw">use </span>anyhow::{bail, ensure, format_err, Context};
+<span class="kw">use </span>bitcoin::absolute::LockTime;
+<span class="kw">use </span>bitcoin::address::NetworkUnchecked;
+<span class="kw">use </span>bitcoin::ecdsa::Signature <span class="kw">as </span>EcdsaSig;
 <span class="kw">use </span>bitcoin::hashes::{sha256, Hash <span class="kw">as </span>BitcoinHash, HashEngine, Hmac, HmacEngine};
 <span class="kw">use </span>bitcoin::policy::DEFAULT_MIN_RELAY_TX_FEE;
+<span class="kw">use </span>bitcoin::psbt::{Input, PartiallySignedTransaction};
 <span class="kw">use </span>bitcoin::secp256k1::{All, Secp256k1, Verification};
-<span class="kw">use </span>bitcoin::util::psbt::{Input, PartiallySignedTransaction};
-<span class="kw">use </span>bitcoin::util::sighash::SighashCache;
-<span class="kw">use </span>bitcoin::{
-    Address, BlockHash, EcdsaSig, EcdsaSighashType, Network, PackedLockTime, Script, Sequence,
-    Transaction, TxIn, TxOut, Txid,
-};
+<span class="kw">use </span>bitcoin::sighash::{EcdsaSighashType, SighashCache};
+<span class="kw">use </span>bitcoin::{Address, BlockHash, Network, ScriptBuf, Sequence, Transaction, TxIn, TxOut, Txid};
 <span class="kw">use </span>common::config::WalletConfigConsensus;
 <span class="kw">use </span>common::{
     proprietary_tweak_key, PegOutFees, PegOutSignatureItem, ProcessPegOutSigError, SpendableUTXO,
@@ -1863,11 +1838,6 @@
     WalletOutput, WalletOutputOutcome, CONFIRMATION_TARGET,
 };
 <span class="kw">use </span>fedimint_bitcoind::{create_bitcoind, DynBitcoindRpc};
-<span class="kw">use </span>fedimint_core::bitcoin_migration::{
-    bitcoin29_to_bitcoin30_secp256k1_public_key, bitcoin29_to_bitcoin30_transaction,
-    bitcoin29_to_bitcoin30_txid, bitcoin30_to_bitcoin29_block_hash, bitcoin30_to_bitcoin29_network,
-    bitcoin30_to_bitcoin29_script, bitcoin30_to_bitcoin29_secp256k1_public_key,
-};
 <span class="kw">use </span>fedimint_core::config::{
     ConfigGenModuleParams, DkgResult, ServerModuleConfig, ServerModuleConsensusConfig,
     TypedServerModuleConfig, TypedServerModuleConsensusConfig,
@@ -1911,8 +1881,8 @@
     WALLET_INOUT_FEES_SATS, WALLET_INOUT_SATS, WALLET_PEGIN_FEES_SATS, WALLET_PEGIN_SATS,
     WALLET_PEGOUT_FEES_SATS, WALLET_PEGOUT_SATS,
 };
+<span class="kw">use </span>miniscript::psbt::PsbtExt;
 <span class="kw">use </span>miniscript::{translate_hash_fail, Descriptor, TranslatePk};
-<span class="kw">use </span>miniscript9::psbt::PsbtExt;
 <span class="kw">use </span>rand::rngs::OsRng;
 <span class="kw">use </span>secp256k1::{Message, Scalar};
 <span class="kw">use </span>serde::Serialize;
@@ -2129,20 +2099,10 @@
         <span class="kw">let </span>(sk, pk) = secp.generate_keypair(<span class="kw-2">&amp;mut </span>OsRng);
         <span class="kw">let </span>our_key = CompressedPublicKey { key: pk };
         <span class="kw">let </span>peer_peg_in_keys: BTreeMap&lt;PeerId, CompressedPublicKey&gt; = peers
-            .exchange_pubkeys(
-                <span class="string">"wallet"</span>.to_string(),
-                bitcoin29_to_bitcoin30_secp256k1_public_key(our_key.key),
-            )
+            .exchange_pubkeys(<span class="string">"wallet"</span>.to_string(), our_key.key)
             .<span class="kw">await</span><span class="question-mark">?
             </span>.into_iter()
-            .map(|(k, key)| {
-                (
-                    k,
-                    CompressedPublicKey {
-                        key: bitcoin30_to_bitcoin29_secp256k1_public_key(key),
-                    },
-                )
-            })
+            .map(|(k, key)| (k, CompressedPublicKey { key }))
             .collect();
 
         <span class="kw">let </span>wallet_cfg = WalletConfig::new(
@@ -2522,7 +2482,7 @@
             <span class="macro">api_endpoint!</span> {
                 PEG_OUT_FEES_ENDPOINT,
                 ApiVersion::new(<span class="number">0</span>, <span class="number">0</span>),
-                <span class="kw">async </span>|module: <span class="kw-2">&amp;</span>Wallet, context, params: (Address, u64)| -&gt; <span class="prelude-ty">Option</span>&lt;PegOutFees&gt; {
+                <span class="kw">async </span>|module: <span class="kw-2">&amp;</span>Wallet, context, params: (Address&lt;NetworkUnchecked&gt;, u64)| -&gt; <span class="prelude-ty">Option</span>&lt;PegOutFees&gt; {
                     <span class="kw">let </span>(address, sats) = params;
                     <span class="kw">let </span>feerate = module.consensus_fee_rate(<span class="kw-2">&amp;mut </span>context.dbtx().into_nc()).<span class="kw">await</span>;
 
@@ -2531,7 +2491,7 @@
 
                     <span class="kw">let </span>tx = module.offline_wallet().create_tx(
                         bitcoin::Amount::from_sat(sats),
-                        address.script_pubkey(),
+                        address.assume_checked().script_pubkey(),
                         <span class="macro">vec!</span>[],
                         module.available_utxos(<span class="kw-2">&amp;mut </span>context.dbtx().into_nc()).<span class="kw">await</span>,
                         feerate,
@@ -2626,12 +2586,10 @@
 
         <span class="kw">let </span>bitcoind_rpc = bitcoind;
 
-        <span class="kw">let </span>bitcoind_net = bitcoin30_to_bitcoin29_network(
-            bitcoind_rpc
-                .get_network()
-                .<span class="kw">await
-                </span>.map_err(|e| WalletCreationError::RpcError(e.to_string()))<span class="question-mark">?</span>,
-        );
+        <span class="kw">let </span>bitcoind_net = bitcoind_rpc
+            .get_network()
+            .<span class="kw">await
+            </span>.map_err(|e| WalletCreationError::RpcError(e.to_string()))<span class="question-mark">?</span>;
         <span class="kw">if </span>bitcoind_net != cfg.consensus.network {
             <span class="kw">return </span><span class="prelude-val">Err</span>(WalletCreationError::WrongNetwork(
                 cfg.consensus.network,
@@ -2854,7 +2812,7 @@
             <span class="kw">for </span>(txid, tx) <span class="kw">in </span><span class="kw-2">&amp;</span>pending_transactions {
                 <span class="kw">if let </span><span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(tx_height)) = <span class="self">self
                     </span>.btc_rpc
-                    .get_tx_block_height(<span class="kw-2">&amp;</span>bitcoin29_to_bitcoin30_txid(<span class="kw-2">*</span>txid))
+                    .get_tx_block_height(txid)
                     .<span class="kw">await
                     </span>.map(|r| r.filter(|tx_height| <span class="kw-2">*</span>tx_height == height <span class="kw">as </span>u64))
                 {
@@ -2874,11 +2832,7 @@
                 }
             }
 
-            dbtx.insert_new_entry(
-                <span class="kw-2">&amp;</span>BlockHashKey(bitcoin30_to_bitcoin29_block_hash(block_hash)),
-                <span class="kw-2">&amp;</span>(),
-            )
-            .<span class="kw">await</span>;
+            dbtx.insert_new_entry(<span class="kw-2">&amp;</span>BlockHashKey(block_hash), <span class="kw-2">&amp;</span>()).<span class="kw">await</span>;
         }
     }
 
@@ -2891,14 +2845,12 @@
     ) {
         <span class="self">self</span>.remove_rbf_transactions(dbtx, pending_tx).<span class="kw">await</span>;
 
-        <span class="kw">let </span>script_pk = bitcoin30_to_bitcoin29_script(
-            <span class="kw-2">&amp;</span><span class="self">self
-                </span>.cfg
-                .consensus
-                .peg_in_descriptor
-                .tweak(<span class="kw-2">&amp;</span>pending_tx.tweak, <span class="kw-2">&amp;</span><span class="self">self</span>.secp)
-                .script_pubkey(),
-        );
+        <span class="kw">let </span>script_pk = <span class="self">self
+            </span>.cfg
+            .consensus
+            .peg_in_descriptor
+            .tweak(<span class="kw-2">&amp;</span>pending_tx.tweak, <span class="kw-2">&amp;</span><span class="self">self</span>.secp)
+            .script_pubkey();
         <span class="kw">for </span>(idx, output) <span class="kw">in </span>pending_tx.tx.output.iter().enumerate() {
             <span class="kw">if </span>output.script_pubkey == script_pk {
                 dbtx.insert_entry(
@@ -2971,7 +2923,7 @@
         <span class="kw">match </span>output {
             WalletOutputV0::PegOut(peg_out) =&gt; <span class="self">self</span>.offline_wallet().create_tx(
                 peg_out.amount,
-                peg_out.recipient.script_pubkey(),
+                peg_out.recipient.clone().assume_checked().script_pubkey(),
                 <span class="macro">vec!</span>[],
                 <span class="self">self</span>.available_utxos(dbtx).<span class="kw">await</span>,
                 peg_out.fees.fee_rate,
@@ -3141,13 +3093,12 @@
         <span class="kw">if </span>!rbf_txids.contains(<span class="kw-2">&amp;</span>tx.txid()) {
             <span class="macro">debug!</span>(
                 tx = %tx.txid(),
-                weight = tx.weight(),
+                weight = tx.weight().to_wu(),
                 output = <span class="question-mark">?</span>tx.output,
                 <span class="string">"Broadcasting peg-out"</span>,
             );
             <span class="macro">trace!</span>(transaction = <span class="question-mark">?</span>tx);
-            rpc.submit_transaction(bitcoin29_to_bitcoin30_transaction(<span class="kw-2">&amp;</span>tx))
-                .<span class="kw">await</span>;
+            rpc.submit_transaction(tx).<span class="kw">await</span>;
         }
     }
 }
@@ -3224,7 +3175,7 @@
     </span><span class="kw">fn </span>create_tx(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         peg_out_amount: bitcoin::Amount,
-        destination: Script,
+        destination: ScriptBuf,
         <span class="kw-2">mut </span>included_utxos: Vec&lt;(UTXOKey, SpendableUTXO)&gt;,
         <span class="kw-2">mut </span>remaining_utxos: Vec&lt;(UTXOKey, SpendableUTXO)&gt;,
         <span class="kw-2">mut </span>fee_rate: Feerate,
@@ -3299,7 +3250,7 @@
                 script_pubkey: change_script,
             },
         ];
-        <span class="kw">let </span><span class="kw-2">mut </span>change_out = bitcoin::util::psbt::Output::default();
+        <span class="kw">let </span><span class="kw-2">mut </span>change_out = bitcoin::psbt::Output::default();
         change_out
             .proprietary
             .insert(proprietary_tweak_key(), change_tweak.to_vec());
@@ -3317,7 +3268,7 @@
 
         <span class="kw">let </span>transaction = Transaction {
             version: <span class="number">2</span>,
-            lock_time: PackedLockTime::ZERO,
+            lock_time: LockTime::ZERO,
             input: selected_utxos
                 .iter()
                 .map(|(utxo_key, _utxo)| TxIn {
@@ -3350,18 +3301,17 @@
                         non_witness_utxo: <span class="prelude-val">None</span>,
                         witness_utxo: <span class="prelude-val">Some</span>(TxOut {
                             value: utxo.amount.to_sat(),
-                            script_pubkey: bitcoin30_to_bitcoin29_script(<span class="kw-2">&amp;</span>script_pubkey),
+                            script_pubkey,
                         }),
                         partial_sigs: Default::default(),
                         sighash_type: <span class="prelude-val">None</span>,
                         redeem_script: <span class="prelude-val">None</span>,
-                        witness_script: <span class="prelude-val">Some</span>(bitcoin30_to_bitcoin29_script(
-                            <span class="kw-2">&amp;</span><span class="self">self
-                                </span>.descriptor
+                        witness_script: <span class="prelude-val">Some</span>(
+                            <span class="self">self</span>.descriptor
                                 .tweak(<span class="kw-2">&amp;</span>utxo.tweak, <span class="self">self</span>.secp)
                                 .script_code()
                                 .expect(<span class="string">"Failed to tweak descriptor"</span>),
-                        )),
+                        ),
                         bip32_derivation: Default::default(),
                         final_script_sig: <span class="prelude-val">None</span>,
                         final_script_witness: <span class="prelude-val">None</span>,
@@ -3448,7 +3398,7 @@
         }
     }
 
-    <span class="kw">fn </span>derive_script(<span class="kw-2">&amp;</span><span class="self">self</span>, tweak: <span class="kw-2">&amp;</span>[u8]) -&gt; Script {
+    <span class="kw">fn </span>derive_script(<span class="kw-2">&amp;</span><span class="self">self</span>, tweak: <span class="kw-2">&amp;</span>[u8]) -&gt; ScriptBuf {
         <span class="kw">struct </span>CompressedPublicKeyTranslator&lt;<span class="lifetime">'t</span>, <span class="lifetime">'s</span>, Ctx: Verification&gt; {
             tweak: <span class="kw-2">&amp;</span><span class="lifetime">'t </span>[u8],
             secp: <span class="kw-2">&amp;</span><span class="lifetime">'s </span>Secp256k1&lt;Ctx&gt;,
@@ -3462,7 +3412,7 @@
                 <span class="kw">let </span>hashed_tweak = {
                     <span class="kw">let </span><span class="kw-2">mut </span>hasher = HmacEngine::&lt;sha256::Hash&gt;::new(<span class="kw-2">&amp;</span>pk.key.serialize()[..]);
                     hasher.input(<span class="self">self</span>.tweak);
-                    Hmac::from_engine(hasher).into_inner()
+                    Hmac::from_engine(hasher).to_byte_array()
                 };
 
                 <span class="prelude-val">Ok</span>(CompressedPublicKey {
@@ -3486,7 +3436,7 @@
             })
             .expect(<span class="string">"can't fail"</span>);
 
-        bitcoin30_to_bitcoin29_script(<span class="kw-2">&amp;</span>descriptor.script_pubkey())
+        descriptor.script_pubkey()
     }
 }
 
@@ -3505,7 +3455,7 @@
     <span class="kw">pub </span>tx: Transaction,
     <span class="kw">pub </span>tweak: [u8; <span class="number">33</span>],
     <span class="kw">pub </span>change: bitcoin::Amount,
-    <span class="kw">pub </span>destination: Script,
+    <span class="kw">pub </span>destination: ScriptBuf,
     <span class="kw">pub </span>fees: PegOutFees,
     <span class="kw">pub </span>selected_utxos: Vec&lt;(UTXOKey, SpendableUTXO)&gt;,
     <span class="kw">pub </span>peg_out_amount: bitcoin::Amount,
@@ -3536,7 +3486,7 @@
     <span class="kw">pub </span>signatures: Vec&lt;(PeerId, PegOutSignatureItem)&gt;,
     <span class="kw">pub </span>change: bitcoin::Amount,
     <span class="kw">pub </span>fees: PegOutFees,
-    <span class="kw">pub </span>destination: Script,
+    <span class="kw">pub </span>destination: ScriptBuf,
     <span class="kw">pub </span>selected_utxos: Vec&lt;(UTXOKey, SpendableUTXO)&gt;,
     <span class="kw">pub </span>peg_out_amount: bitcoin::Amount,
     <span class="kw">pub </span>rbf: <span class="prelude-ty">Option</span>&lt;Rbf&gt;,
@@ -3613,7 +3563,7 @@
         // spendable sats = 3000 - 219 - 330 = 2451
         </span><span class="kw">let </span>tx = wallet.create_tx(
             Amount::from_sat(<span class="number">2452</span>),
-            recipient.script_pubkey(),
+            recipient.clone().assume_checked().script_pubkey(),
             <span class="macro">vec!</span>[],
             <span class="macro">vec!</span>[(UTXOKey(OutPoint::null()), spendable.clone())],
             fee,
@@ -3626,7 +3576,7 @@
         </span><span class="kw">let </span><span class="kw-2">mut </span>tx = wallet
             .create_tx(
                 Amount::from_sat(<span class="number">1000</span>),
-                recipient.script_pubkey(),
+                recipient.clone().assume_checked().script_pubkey(),
                 <span class="macro">vec!</span>[],
                 <span class="macro">vec!</span>[(UTXOKey(OutPoint::null()), spendable)],
                 fee,

@@ -132,16 +132,14 @@
 <a href="#132" id="132">132</a>
 <a href="#133" id="133">133</a>
 <a href="#134" id="134">134</a>
-<a href="#135" id="135">135</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::io::Write;
 
 <span class="kw">use </span>aleph_bft::Keychain <span class="kw">as </span>KeychainTrait;
-<span class="kw">use </span>bitcoin::hashes::Hash;
+<span class="kw">use </span>bitcoin::secp256k1::hashes::sha256;
+<span class="kw">use </span>bitcoin::secp256k1::Message;
 <span class="kw">use </span>fedimint_core::session_outcome::{consensus_hash_sha256, SchnorrSignature};
-<span class="kw">use </span>fedimint_core::{NumPeersExt, PeerId};
-<span class="kw">use </span>secp256k1::hashes::sha256;
-<span class="kw">use </span>secp256k1::Message;
+<span class="kw">use </span>fedimint_core::{BitcoinHash, NumPeersExt, PeerId};
 <span class="kw">use </span>secp256k1_zkp::{schnorr, All, KeyPair, PublicKey, Secp256k1, SecretKey};
 
 <span class="attr">#[derive(Clone, Debug)]

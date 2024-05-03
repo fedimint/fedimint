@@ -676,10 +676,6 @@
 <a href="#676" id="676">676</a>
 <a href="#677" id="677">677</a>
 <a href="#678" id="678">678</a>
-<a href="#679" id="679">679</a>
-<a href="#680" id="680">680</a>
-<a href="#681" id="681">681</a>
-<a href="#682" id="682">682</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! Implements the client API through which users interact with the federation
 </span><span class="kw">use </span>std::cmp::Ordering;
 <span class="kw">use </span>std::collections::{BTreeMap, HashMap};
@@ -697,7 +693,6 @@
 };
 <span class="kw">use </span>fedimint_core::admin_client::ServerStatus;
 <span class="kw">use </span>fedimint_core::backup::{ClientBackupKey, ClientBackupSnapshot};
-<span class="kw">use </span>fedimint_core::bitcoin_migration::bitcoin30_to_bitcoin29_secp256k1_public_key;
 <span class="kw">use </span>fedimint_core::config::{ClientConfig, JsonWithKind};
 <span class="kw">use </span>fedimint_core::core::backup::{SignedBackupRequest, BACKUP_REQUEST_MAX_PAYLOAD_SIZE_BYTES};
 <span class="kw">use </span>fedimint_core::core::{DynOutputOutcome, ModuleInstanceId};
@@ -1069,10 +1064,7 @@
         dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>&gt;,
         id: secp256k1_zkp::PublicKey,
     ) -&gt; <span class="prelude-ty">Option</span>&lt;ClientBackupSnapshot&gt; {
-        dbtx.get_value(<span class="kw-2">&amp;</span>ClientBackupKey(
-            bitcoin30_to_bitcoin29_secp256k1_public_key(id),
-        ))
-        .<span class="kw">await
+        dbtx.get_value(<span class="kw-2">&amp;</span>ClientBackupKey(id)).<span class="kw">await
     </span>}
 }
 

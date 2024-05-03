@@ -159,13 +159,9 @@
 <a href="#159" id="159">159</a>
 <a href="#160" id="160">160</a>
 <a href="#161" id="161">161</a>
-<a href="#162" id="162">162</a>
-<a href="#163" id="163">163</a>
-<a href="#164" id="164">164</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::sync::Arc;
 
 <span class="kw">use </span>bitcoin::key::KeyPair;
-<span class="kw">use </span>fedimint_core::bitcoin_migration::bitcoin30_to_bitcoin29_schnorr_signature;
 <span class="kw">use </span>fedimint_core::core::{DynInput, DynOutput, IntoDynInstance, ModuleInstanceId};
 <span class="kw">use </span>fedimint_core::transaction::{Transaction, TransactionSignature};
 <span class="kw">use </span>fedimint_core::Amount;
@@ -288,9 +284,7 @@
         <span class="kw">let </span>signatures = input_keys
             .into_iter()
             .flatten()
-            .map(|keypair| {
-                bitcoin30_to_bitcoin29_schnorr_signature(secp_ctx.sign_schnorr(<span class="kw-2">&amp;</span>msg, <span class="kw-2">&amp;</span>keypair))
-            })
+            .map(|keypair| secp_ctx.sign_schnorr(<span class="kw-2">&amp;</span>msg, <span class="kw-2">&amp;</span>keypair))
             .collect();
 
         <span class="kw">let </span>transaction = Transaction {

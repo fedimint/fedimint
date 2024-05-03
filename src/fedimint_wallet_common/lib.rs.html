@@ -323,9 +323,16 @@
 <a href="#323" id="323">323</a>
 <a href="#324" id="324">324</a>
 <a href="#325" id="325">325</a>
+<a href="#326" id="326">326</a>
+<a href="#327" id="327">327</a>
+<a href="#328" id="328">328</a>
+<a href="#329" id="329">329</a>
+<a href="#330" id="330">330</a>
+<a href="#331" id="331">331</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::hash::Hasher;
 
-<span class="kw">use </span>bitcoin::util::psbt::raw::ProprietaryKey;
+<span class="kw">use </span>bitcoin::address::NetworkUnchecked;
+<span class="kw">use </span>bitcoin::psbt::raw::ProprietaryKey;
 <span class="kw">use </span>bitcoin::{Address, Amount, BlockHash, Network, Txid};
 <span class="kw">use </span>config::WalletClientConfig;
 <span class="kw">use </span>fedimint_core::core::{Decoder, ModuleInstanceId, ModuleKind};
@@ -403,7 +410,7 @@
 </span><span class="kw">pub struct </span>SpendableUTXO {
     <span class="attr">#[serde(with = <span class="string">"::fedimint_core::encoding::as_hex"</span>)]
     </span><span class="kw">pub </span>tweak: [u8; <span class="number">33</span>],
-    <span class="attr">#[serde(with = <span class="string">"bitcoin::util::amount::serde::as_sat"</span>)]
+    <span class="attr">#[serde(with = <span class="string">"bitcoin::amount::serde::as_sat"</span>)]
     </span><span class="kw">pub </span>amount: bitcoin::Amount,
 }
 
@@ -428,8 +435,8 @@
 
 <span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
 </span><span class="kw">pub struct </span>PegOut {
-    <span class="kw">pub </span>recipient: bitcoin::Address,
-    <span class="attr">#[serde(with = <span class="string">"bitcoin::util::amount::serde::as_sat"</span>)]
+    <span class="kw">pub </span>recipient: bitcoin::Address&lt;NetworkUnchecked&gt;,
+    <span class="attr">#[serde(with = <span class="string">"bitcoin::amount::serde::as_sat"</span>)]
     </span><span class="kw">pub </span>amount: bitcoin::Amount,
     <span class="kw">pub </span>fees: PegOutFees,
 }
@@ -501,7 +508,7 @@
 
 <span class="kw">impl </span>WalletOutput {
     <span class="kw">pub fn </span>new_v0_peg_out(
-        recipient: Address,
+        recipient: Address&lt;NetworkUnchecked&gt;,
         amount: bitcoin::Amount,
         fees: PegOutFees,
     ) -&gt; WalletOutput {
@@ -544,7 +551,12 @@
     <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>std::fmt::Formatter&lt;<span class="lifetime">'_</span>&gt;) -&gt; std::fmt::Result {
         <span class="kw">match </span><span class="self">self </span>{
             WalletOutputV0::PegOut(pegout) =&gt; {
-                <span class="macro">write!</span>(f, <span class="string">"Wallet PegOut {} to {}"</span>, pegout.amount, pegout.recipient)
+                <span class="macro">write!</span>(
+                    f,
+                    <span class="string">"Wallet PegOut {} to {}"</span>,
+                    pegout.amount,
+                    pegout.recipient.clone().assume_checked()
+                )
             }
             WalletOutputV0::Rbf(rbf) =&gt; <span class="macro">write!</span>(f, <span class="string">"Wallet RBF {:?} to {}"</span>, rbf.fees, rbf.txid),
         }
@@ -646,6 +658,6 @@
     <span class="attr">#[error(<span class="string">"Missing change tweak"</span>)]
     </span>MissingOrMalformedChangeTweak,
     <span class="attr">#[error(<span class="string">"Error finalizing PSBT {0:?}"</span>)]
-    </span>ErrorFinalizingPsbt(Vec&lt;miniscript9::psbt::Error&gt;),
+    </span>ErrorFinalizingPsbt(Vec&lt;miniscript::psbt::Error&gt;),
 }
 </code></pre></div></section></main></body></html>

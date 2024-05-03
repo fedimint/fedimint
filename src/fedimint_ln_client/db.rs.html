@@ -649,7 +649,7 @@
         2we42dvjggjkf44egqheymyw"</span>,).expect(<span class="string">"Invalid invoice"</span>);
         <span class="kw">let </span>claim_key = KeyPair::new(secp256k1::SECP256K1, <span class="kw-2">&amp;mut </span>thread_rng());
         <span class="kw">let </span>operation_id = OperationId::new_random();
-        <span class="kw">let </span>txid = TransactionId::from_inner([<span class="number">42</span>; <span class="number">32</span>]);
+        <span class="kw">let </span>txid = TransactionId::from_byte_array([<span class="number">42</span>; <span class="number">32</span>]);
 
         <span class="kw">let </span>submitted_offer_variant_old = {
             <span class="kw">let </span><span class="kw-2">mut </span>submitted_offer_variant = Vec::&lt;u8&gt;::new();
@@ -799,7 +799,7 @@
         2we42dvjggjkf44egqheymyw"</span>,).expect(<span class="string">"Invalid invoice"</span>);
         <span class="kw">let </span>claim_key = KeyPair::new(secp256k1::SECP256K1, <span class="kw-2">&amp;mut </span>thread_rng());
         <span class="kw">let </span>operation_id = OperationId::new_random();
-        <span class="kw">let </span>txid = TransactionId::from_inner([<span class="number">42</span>; <span class="number">32</span>]);
+        <span class="kw">let </span>txid = TransactionId::from_byte_array([<span class="number">42</span>; <span class="number">32</span>]);
 
         <span class="kw">let </span>submitted_offer_variant_deleted = {
             <span class="kw">let </span><span class="kw-2">mut </span>submitted_offer_variant = Vec::&lt;u8&gt;::new();

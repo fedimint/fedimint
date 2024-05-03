@@ -877,7 +877,6 @@
 <a href="#877" id="877">877</a>
 <a href="#878" id="878">878</a>
 <a href="#879" id="879">879</a>
-<a href="#880" id="880">880</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap};
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
@@ -887,7 +886,6 @@
 <span class="kw">use </span>async_channel::{Receiver, Sender};
 <span class="kw">use </span>fedimint_api_client::api::{DynGlobalApi, FederationApiExt, WsFederationApi};
 <span class="kw">use </span>fedimint_api_client::query::FilterMap;
-<span class="kw">use </span>fedimint_core::bitcoin_migration::bitcoin29_to_bitcoin30_sha256_hash;
 <span class="kw">use </span>fedimint_core::config::ServerModuleInitRegistry;
 <span class="kw">use </span>fedimint_core::core::{ModuleInstanceId, ModuleKind, MODULE_INSTANCE_ID_GLOBAL};
 <span class="kw">use </span>fedimint_core::db::{
@@ -1214,7 +1212,7 @@
     }
 
     <span class="kw">async fn </span>confirm_server_config_consensus_hash(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; anyhow::Result&lt;()&gt; {
-        <span class="kw">let </span>our_hash = bitcoin29_to_bitcoin30_sha256_hash(<span class="self">self</span>.cfg.consensus.consensus_hash());
+        <span class="kw">let </span>our_hash = <span class="self">self</span>.cfg.consensus.consensus_hash();
         <span class="kw">let </span>federation_api = DynGlobalApi::from_endpoints(<span class="self">self</span>.api_endpoints.clone());
 
         <span class="macro">info!</span>(target: LOG_CONSENSUS, <span class="string">"Waiting for peers config {our_hash}"</span>);

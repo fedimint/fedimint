@@ -123,8 +123,6 @@
 <a href="#123" id="123">123</a>
 <a href="#124" id="124">124</a>
 <a href="#125" id="125">125</a>
-<a href="#126" id="126">126</a>
-<a href="#127" id="127">127</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::io::Error;
 
 <span class="kw">use </span>bitcoin_hashes::sha256::Hash <span class="kw">as </span>Sha256;
@@ -148,7 +146,7 @@
 
 <span class="kw">impl </span>IncomingContractOffer {
     <span class="kw">pub fn </span>id(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; OfferId {
-        OfferId::from_hash(<span class="self">self</span>.hash)
+        OfferId::from_raw_hash(<span class="self">self</span>.hash)
     }
 }
 
@@ -212,21 +210,19 @@
 }
 
 <span class="macro">hash_newtype!</span>(
-    OfferId,
-    Sha256,
-    <span class="number">32</span>,
-    doc = <span class="string">"The hash of a LN incoming contract offer"
-</span>);
+    <span class="doccomment">/// The hash of a LN incoming contract offer
+    </span><span class="kw">pub struct </span>OfferId(Sha256);
+);
 
 <span class="kw">impl </span>IdentifiableContract <span class="kw">for </span>IncomingContract {
     <span class="kw">fn </span>contract_id(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ContractId {
-        ContractId::from_hash(<span class="self">self</span>.hash)
+        ContractId::from_raw_hash(<span class="self">self</span>.hash)
     }
 }
 
 <span class="kw">impl </span>Encodable <span class="kw">for </span>OfferId {
     <span class="kw">fn </span>consensus_encode&lt;W: std::io::Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: <span class="kw-2">&amp;mut </span>W) -&gt; <span class="prelude-ty">Result</span>&lt;usize, Error&gt; {
-        <span class="self">self</span>.as_inner().consensus_encode(writer)
+        <span class="self">self</span>.to_byte_array().consensus_encode(writer)
     }
 }
 
@@ -235,7 +231,7 @@
         d: <span class="kw-2">&amp;mut </span>D,
         modules: <span class="kw-2">&amp;</span>ModuleDecoderRegistry,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
-        <span class="prelude-val">Ok</span>(OfferId::from_inner(Decodable::consensus_decode(
+        <span class="prelude-val">Ok</span>(OfferId::from_byte_array(Decodable::consensus_decode(
             d, modules,
         )<span class="question-mark">?</span>))
     }

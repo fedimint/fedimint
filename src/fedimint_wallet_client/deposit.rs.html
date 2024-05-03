@@ -343,27 +343,6 @@
 <a href="#343" id="343">343</a>
 <a href="#344" id="344">344</a>
 <a href="#345" id="345">345</a>
-<a href="#346" id="346">346</a>
-<a href="#347" id="347">347</a>
-<a href="#348" id="348">348</a>
-<a href="#349" id="349">349</a>
-<a href="#350" id="350">350</a>
-<a href="#351" id="351">351</a>
-<a href="#352" id="352">352</a>
-<a href="#353" id="353">353</a>
-<a href="#354" id="354">354</a>
-<a href="#355" id="355">355</a>
-<a href="#356" id="356">356</a>
-<a href="#357" id="357">357</a>
-<a href="#358" id="358">358</a>
-<a href="#359" id="359">359</a>
-<a href="#360" id="360">360</a>
-<a href="#361" id="361">361</a>
-<a href="#362" id="362">362</a>
-<a href="#363" id="363">363</a>
-<a href="#364" id="364">364</a>
-<a href="#365" id="365">365</a>
-<a href="#366" id="366">366</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::cmp;
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::{Duration, SystemTime};
@@ -371,10 +350,6 @@
 <span class="kw">use </span>fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
 <span class="kw">use </span>fedimint_client::transaction::ClientInput;
 <span class="kw">use </span>fedimint_client::DynGlobalClientContext;
-<span class="kw">use </span>fedimint_core::bitcoin_migration::{
-    bitcoin29_to_bitcoin30_keypair, bitcoin29_to_bitcoin30_script, bitcoin29_to_bitcoin30_txid,
-    bitcoin30_to_bitcoin29_script, bitcoin30_to_bitcoin29_transaction,
-};
 <span class="kw">use </span>fedimint_core::core::OperationId;
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::task::sleep;
@@ -471,18 +446,12 @@
     context: WalletClientContext,
     tweak: KeyPair,
 ) -&gt; (bitcoin::Transaction, u32) {
-    <span class="kw">let </span>script = bitcoin30_to_bitcoin29_script(
-        <span class="kw-2">&amp;</span>context
-            .wallet_descriptor
-            .tweak(<span class="kw-2">&amp;</span>tweak.public_key(), <span class="kw-2">&amp;</span>context.secp)
-            .script_pubkey(),
-    );
+    <span class="kw">let </span>script = context
+        .wallet_descriptor
+        .tweak(<span class="kw-2">&amp;</span>tweak.public_key(), <span class="kw-2">&amp;</span>context.secp)
+        .script_pubkey();
     <span class="kw">loop </span>{
-        <span class="kw">match </span>context
-            .rpc
-            .watch_script_history(<span class="kw-2">&amp;</span>bitcoin29_to_bitcoin30_script(script.clone()))
-            .<span class="kw">await
-        </span>{
+        <span class="kw">match </span>context.rpc.watch_script_history(<span class="kw-2">&amp;</span>script).<span class="kw">await </span>{
             <span class="prelude-val">Ok</span>(<span class="kw">_</span>) =&gt; <span class="kw">break</span>,
             <span class="prelude-val">Err</span>(e) =&gt; <span class="macro">warn!</span>(<span class="string">"Error while awaiting btc tx submitting: {e}"</span>),
         }
@@ -495,11 +464,7 @@
         ))
         .<span class="kw">await</span>;
 
-        <span class="kw">match </span>context
-            .rpc
-            .get_script_history(<span class="kw-2">&amp;</span>bitcoin29_to_bitcoin30_script(script.clone()))
-            .<span class="kw">await
-        </span>{
+        <span class="kw">match </span>context.rpc.get_script_history(<span class="kw-2">&amp;</span>script).<span class="kw">await </span>{
             <span class="prelude-val">Ok</span>(received) =&gt; {
                 <span class="comment">// TODO: fix
                 </span><span class="kw">if </span>received.len() &gt; <span class="number">1 </span>{
@@ -512,8 +477,7 @@
                         .iter()
                         .enumerate()
                         .find_map(|(idx, output)| {
-                            <span class="kw">if </span>output.script_pubkey == bitcoin29_to_bitcoin30_script(script.clone())
-                            {
+                            <span class="kw">if </span>output.script_pubkey == script {
                                 <span class="prelude-val">Some</span>(idx <span class="kw">as </span>u32)
                             } <span class="kw">else </span>{
                                 <span class="prelude-val">None
@@ -521,7 +485,7 @@
                         })
                         .expect(<span class="string">"TODO: handle invalid tx returned by API"</span>);
 
-                    <span class="kw">return </span>(bitcoin30_to_bitcoin29_transaction(<span class="kw-2">&amp;</span>transaction), out_idx);
+                    <span class="kw">return </span>(transaction, out_idx);
                 } <span class="kw">else </span>{
                     <span class="macro">trace!</span>(<span class="string">"No transactions received yet for script {script:?}"</span>);
                 }
@@ -601,9 +565,7 @@
 
         <span class="kw">let </span>confirmation_block_count = <span class="kw">match </span>context
             .rpc
-            .get_tx_block_height(<span class="kw-2">&amp;</span>bitcoin29_to_bitcoin30_txid(
-                waiting_state.btc_transaction.txid(),
-            ))
+            .get_tx_block_height(<span class="kw-2">&amp;</span>waiting_state.btc_transaction.txid())
             .<span class="kw">await
         </span>{
             <span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(confirmation_height)) =&gt; <span class="prelude-val">Some</span>(confirmation_height + <span class="number">1</span>),
@@ -632,9 +594,7 @@
         <span class="comment">// Get txout proof
         </span><span class="kw">let </span>txout_proof = <span class="kw">match </span>context
             .rpc
-            .get_txout_proof(bitcoin29_to_bitcoin30_txid(
-                waiting_state.btc_transaction.txid(),
-            ))
+            .get_txout_proof(waiting_state.btc_transaction.txid())
             .<span class="kw">await
         </span>{
             <span class="prelude-val">Ok</span>(txout_proof) =&gt; txout_proof,
@@ -676,9 +636,7 @@
 
     <span class="kw">let </span>client_input = ClientInput::&lt;WalletInput, WalletClientStates&gt; {
         input: wallet_input,
-        keys: <span class="macro">vec!</span>[bitcoin29_to_bitcoin30_keypair(
-            awaiting_confirmation_state.tweak_key,
-        )],
+        keys: <span class="macro">vec!</span>[awaiting_confirmation_state.tweak_key],
         amount,
         state_machines: Arc::new(|<span class="kw">_</span>, <span class="kw">_</span>| <span class="macro">vec!</span>[]),
     };

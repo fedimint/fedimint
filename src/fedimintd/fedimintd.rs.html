@@ -462,7 +462,6 @@
 <a href="#462" id="462">462</a>
 <a href="#463" id="463">463</a>
 <a href="#464" id="464">464</a>
-<a href="#465" id="465">465</a>
 </pre></div><pre class="rust"><code><span class="kw">mod </span>metrics;
 
 <span class="kw">use </span>std::collections::BTreeMap;
@@ -473,7 +472,6 @@
 <span class="kw">use </span>anyhow::{format_err, Context};
 <span class="kw">use </span>clap::{Parser, Subcommand};
 <span class="kw">use </span>fedimint_core::admin_client::ConfigGenParamsRequest;
-<span class="kw">use </span>fedimint_core::bitcoin_migration::bitcoin30_to_bitcoin29_network;
 <span class="kw">use </span>fedimint_core::config::{
     ModuleInitParams, ServerModuleConfigGenParamsRegistry, ServerModuleInitRegistry,
 };
@@ -741,7 +739,7 @@
                         bitcoin_rpc: bitcoind_rpc.clone(),
                     },
                     consensus: WalletGenParamsConsensus {
-                        network: bitcoin30_to_bitcoin29_network(network),
+                        network,
                         <span class="comment">// TODO this is not very elegant, but I'm planning to get rid of it in a
                         // next commit anyway
                         </span>finality_delay,

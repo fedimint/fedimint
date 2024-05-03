@@ -168,13 +168,7 @@
 <a href="#168" id="168">168</a>
 <a href="#169" id="169">169</a>
 <a href="#170" id="170">170</a>
-<a href="#171" id="171">171</a>
-<a href="#172" id="172">172</a>
-<a href="#173" id="173">173</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>bitcoin_hashes::sha256;
-<span class="kw">use </span>fedimint_core::bitcoin_migration::{
-    bitcoin29_to_bitcoin30_message, bitcoin29_to_bitcoin30_sha256_hash,
-};
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::Amount;
 <span class="kw">use </span>secp256k1::schnorr::Signature;
@@ -310,7 +304,7 @@
     }
 
     <span class="kw">pub fn </span>forfeit_message(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Message {
-        Message::from(bitcoin29_to_bitcoin30_sha256_hash(<span class="self">self</span>.contract_id().<span class="number">0</span>))
+        Message::from(<span class="self">self</span>.contract_id().<span class="number">0</span>)
     }
 
     <span class="kw">pub fn </span>verify_preimage(<span class="kw-2">&amp;</span><span class="self">self</span>, preimage: <span class="kw-2">&amp;</span>[u8; <span class="number">32</span>]) -&gt; bool {
@@ -338,7 +332,7 @@
         secp256k1::global::SECP256K1
             .verify_schnorr(
                 signature,
-                <span class="kw-2">&amp;</span>bitcoin29_to_bitcoin30_message(message.into()),
+                <span class="kw-2">&amp;</span>message.into(),
                 <span class="kw-2">&amp;</span><span class="self">self</span>.refund_pk.x_only_public_key().<span class="number">0</span>,
             )
             .is_ok()

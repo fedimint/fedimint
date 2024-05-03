@@ -133,16 +133,10 @@
 <a href="#133" id="133">133</a>
 <a href="#134" id="134">134</a>
 <a href="#135" id="135">135</a>
-<a href="#136" id="136">136</a>
-<a href="#137" id="137">137</a>
-<a href="#138" id="138">138</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::HashMap;
 
 <span class="kw">use </span>anyhow::format_err;
 <span class="kw">use </span>bitcoin::{BlockHash, Network, ScriptBuf, Transaction, Txid};
-<span class="kw">use </span>fedimint_core::bitcoin_migration::{
-    bitcoin30_to_bitcoin29_block_header, bitcoin30_to_bitcoin29_partial_merkle_tree,
-};
 <span class="kw">use </span>fedimint_core::task::TaskHandle;
 <span class="kw">use </span>fedimint_core::txoproof::TxOutProof;
 <span class="kw">use </span>fedimint_core::util::SafeUrl;
@@ -269,8 +263,8 @@
             </span>.ok_or(<span class="macro">format_err!</span>(<span class="string">"No merkle proof found"</span>))<span class="question-mark">?</span>;
 
         <span class="prelude-val">Ok</span>(TxOutProof {
-            block_header: bitcoin30_to_bitcoin29_block_header(proof.header),
-            merkle_proof: bitcoin30_to_bitcoin29_partial_merkle_tree(proof.txn),
+            block_header: proof.header,
+            merkle_proof: proof.txn,
         })
     }
 }

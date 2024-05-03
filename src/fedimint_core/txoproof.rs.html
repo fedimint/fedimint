@@ -129,12 +129,14 @@
 <a href="#129" id="129">129</a>
 <a href="#130" id="130">130</a>
 <a href="#131" id="131">131</a>
+<a href="#132" id="132">132</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::borrow::Cow;
 <span class="kw">use </span>std::hash::Hash;
 <span class="kw">use </span>std::io::Cursor;
 
-<span class="kw">use </span>bitcoin::util::merkleblock::PartialMerkleTree;
-<span class="kw">use </span>bitcoin::{BlockHash, BlockHeader, Txid};
+<span class="kw">use </span>bitcoin::block::Header <span class="kw">as </span>BlockHeader;
+<span class="kw">use </span>bitcoin::merkle_tree::PartialMerkleTree;
+<span class="kw">use </span>bitcoin::{BlockHash, Txid};
 <span class="kw">use </span>hex::{FromHex, ToHex};
 <span class="kw">use </span>serde::de::Error;
 <span class="kw">use </span>serde::{Deserialize, Deserializer, Serialize, Serializer};

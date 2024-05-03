@@ -109,13 +109,11 @@
 <a href="#109" id="109">109</a>
 <a href="#110" id="110">110</a>
 <a href="#111" id="111">111</a>
-<a href="#112" id="112">112</a>
-<a href="#113" id="113">113</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::ops::ControlFlow;
 <span class="kw">use </span>std::str::FromStr;
 
 <span class="kw">use </span>anyhow::{Context, <span class="prelude-ty">Result</span>};
-<span class="kw">use </span>bitcoincore_rpc::bitcoin::util::address::Address;
+<span class="kw">use </span>bitcoincore_rpc::bitcoin::address::Address;
 <span class="kw">use </span>bitcoincore_rpc::bitcoin::{Transaction, Txid};
 <span class="kw">use </span>devimint::cmd;
 <span class="kw">use </span>devimint::federation::Client;
@@ -166,11 +164,9 @@
 
     <span class="kw">let </span>parsed_address = Address::from_str(<span class="kw-2">&amp;</span>deposit_address)<span class="question-mark">?</span>;
     <span class="kw">let </span>tx = Transaction::consensus_decode_hex(<span class="kw-2">&amp;</span>tx_hex, <span class="kw-2">&amp;</span>Default::default()).unwrap();
-    <span class="macro">assert!</span>(tx
-        .output
-        .iter()
-        .any(|o| o.script_pubkey == parsed_address.script_pubkey()
-            &amp;&amp; o.value == withdrawal_amount_sats));
+    <span class="macro">assert!</span>(tx.output.iter().any(|o| o.script_pubkey
+        == parsed_address.clone().assume_checked().script_pubkey()
+        &amp;&amp; o.value == withdrawal_amount_sats));
 
     <span class="comment">// Verify the receive client gets the deposit
     </span><span class="macro">try_join!</span>(

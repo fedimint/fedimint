@@ -414,7 +414,7 @@
         <span class="kw-2">*</span>commitment,
     );
 
-    <span class="kw">let </span>seed = message.consensus_hash::&lt;sha256::Hash&gt;().into_inner();
+    <span class="kw">let </span>seed = message.consensus_hash::&lt;sha256::Hash&gt;().to_byte_array();
 
     G2Projective::random(<span class="kw-2">&amp;mut </span>ChaChaRng::from_seed(seed)).to_affine()
 }

@@ -406,18 +406,12 @@
 <a href="#406" id="406">406</a>
 <a href="#407" id="407">407</a>
 <a href="#408" id="408">408</a>
-<a href="#409" id="409">409</a>
-<a href="#410" id="410">410</a>
-<a href="#411" id="411">411</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::cmp::Reverse;
 <span class="kw">use </span>std::collections::{BTreeMap, BTreeSet};
 <span class="kw">use </span>std::io::{Cursor, Error, Read, Write};
 
 <span class="kw">use </span>anyhow::{bail, Context, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>fedimint_api_client::api::DynGlobalApi;
-<span class="kw">use </span>fedimint_core::bitcoin_migration::{
-    bitcoin30_to_bitcoin29_keypair, bitcoin30_to_bitcoin29_secp256k1_public_key,
-};
 <span class="kw">use </span>fedimint_core::core::backup::{
     BackupRequest, SignedBackupRequest, BACKUP_REQUEST_MAX_PAYLOAD_SIZE_BYTES,
 };
@@ -638,12 +632,12 @@
 
     <span class="kw">pub fn </span>into_backup_request(<span class="self">self</span>, keypair: <span class="kw-2">&amp;</span>KeyPair) -&gt; <span class="prelude-ty">Result</span>&lt;SignedBackupRequest&gt; {
         <span class="kw">let </span>request = BackupRequest {
-            id: bitcoin30_to_bitcoin29_secp256k1_public_key(keypair.public_key()),
+            id: keypair.public_key(),
             timestamp: fedimint_core::time::now(),
             payload: <span class="self">self</span>.<span class="number">0</span>,
         };
 
-        request.sign(<span class="kw-2">&amp;</span>bitcoin30_to_bitcoin29_keypair(<span class="kw-2">*</span>keypair))
+        request.sign(keypair)
     }
 
     <span class="kw">pub fn </span>len(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; usize {

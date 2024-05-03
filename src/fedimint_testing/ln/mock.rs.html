@@ -216,36 +216,14 @@
 <a href="#216" id="216">216</a>
 <a href="#217" id="217">217</a>
 <a href="#218" id="218">218</a>
-<a href="#219" id="219">219</a>
-<a href="#220" id="220">220</a>
-<a href="#221" id="221">221</a>
-<a href="#222" id="222">222</a>
-<a href="#223" id="223">223</a>
-<a href="#224" id="224">224</a>
-<a href="#225" id="225">225</a>
-<a href="#226" id="226">226</a>
-<a href="#227" id="227">227</a>
-<a href="#228" id="228">228</a>
-<a href="#229" id="229">229</a>
-<a href="#230" id="230">230</a>
-<a href="#231" id="231">231</a>
-<a href="#232" id="232">232</a>
-<a href="#233" id="233">233</a>
-<a href="#234" id="234">234</a>
-<a href="#235" id="235">235</a>
-<a href="#236" id="236">236</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::sync::{Arc, Mutex};
 <span class="kw">use </span>std::time::Duration;
 
 <span class="kw">use </span>async_stream::stream;
 <span class="kw">use </span>async_trait::async_trait;
 <span class="kw">use </span>bitcoin::hashes::{sha256, Hash};
+<span class="kw">use </span>bitcoin::key::KeyPair;
 <span class="kw">use </span>bitcoin::secp256k1::{PublicKey, SecretKey};
-<span class="kw">use </span>bitcoin::KeyPair;
-<span class="kw">use </span>fedimint_core::bitcoin_migration::{
-    bitcoin29_to_bitcoin30_secp256k1_public_key, bitcoin29_to_bitcoin30_secp256k1_secret_key,
-    bitcoin30_to_bitcoin29_secp256k1_secret_key,
-};
 <span class="kw">use </span>fedimint_core::task::TaskGroup;
 <span class="kw">use </span>fedimint_core::util::BoxStream;
 <span class="kw">use </span>fedimint_core::Amount;
@@ -287,12 +265,8 @@
         <span class="kw">let </span>(<span class="kw">_</span>, receiver) = mpsc::channel::&lt;HtlcResult&gt;(<span class="number">10</span>);
 
         FakeLightningTest {
-            gateway_node_sec_key: bitcoin29_to_bitcoin30_secp256k1_secret_key(
-                SecretKey::from_keypair(<span class="kw-2">&amp;</span>kp),
-            ),
-            gateway_node_pub_key: bitcoin29_to_bitcoin30_secp256k1_public_key(
-                PublicKey::from_keypair(<span class="kw-2">&amp;</span>kp),
-            ),
+            gateway_node_sec_key: SecretKey::from_keypair(<span class="kw-2">&amp;</span>kp),
+            gateway_node_pub_key: PublicKey::from_keypair(<span class="kw-2">&amp;</span>kp),
             amount_sent,
             receiver,
         }
@@ -324,12 +298,7 @@
             .expiry_time(Duration::from_secs(
                 expiry_time.unwrap_or(DEFAULT_EXPIRY_TIME),
             ))
-            .build_signed(|m| {
-                ctx.sign_ecdsa_recoverable(
-                    m,
-                    <span class="kw-2">&amp;</span>bitcoin30_to_bitcoin29_secp256k1_secret_key(<span class="self">self</span>.gateway_node_sec_key),
-                )
-            })
+            .build_signed(|m| ctx.sign_ecdsa_recoverable(m, <span class="kw-2">&amp;</span><span class="self">self</span>.gateway_node_sec_key))
             .unwrap())
     }
 
@@ -432,12 +401,7 @@
             .payment_secret(PaymentSecret([<span class="number">0</span>; <span class="number">32</span>]))
             .amount_milli_satoshis(create_invoice_request.amount_msat)
             .expiry_time(Duration::from_secs(create_invoice_request.expiry <span class="kw">as </span>u64))
-            .build_signed(|m| {
-                ctx.sign_ecdsa_recoverable(
-                    m,
-                    <span class="kw-2">&amp;</span>bitcoin30_to_bitcoin29_secp256k1_secret_key(<span class="self">self</span>.gateway_node_sec_key),
-                )
-            })
+            .build_signed(|m| ctx.sign_ecdsa_recoverable(m, <span class="kw-2">&amp;</span><span class="self">self</span>.gateway_node_sec_key))
             .unwrap();
 
         <span class="prelude-val">Ok</span>(CreateInvoiceResponse {
@@ -447,7 +411,7 @@
 
     <span class="kw">async fn </span>connect_to_peer(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        _pubkey: bitcoin30::secp256k1::PublicKey,
+        _pubkey: bitcoin::secp256k1::PublicKey,
         _host: String,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;EmptyResponse, LightningRpcError&gt; {
         <span class="macro">unimplemented!</span>(<span class="string">"FakeLightningTest does not support connecting to peers"</span>)
@@ -459,7 +423,7 @@
 
     <span class="kw">async fn </span>open_channel(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        _pubkey: bitcoin30::secp256k1::PublicKey,
+        _pubkey: bitcoin::secp256k1::PublicKey,
         _channel_size_sats: u64,
         _push_amount_sats: u64,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;EmptyResponse, LightningRpcError&gt; {

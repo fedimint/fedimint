@@ -183,7 +183,7 @@
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::BitcoinHash;
 <span class="kw">use </span>hkdf::hashes::Sha512;
-<span class="kw">use </span>hkdf::{bitcoin_hashes, Hkdf};
+<span class="kw">use </span>hkdf::Hkdf;
 <span class="kw">use </span>ring::aead;
 <span class="kw">use </span>secp256k1_zkp::{KeyPair, Secp256k1, Signing};
 
@@ -250,7 +250,7 @@
             level: <span class="number">0</span>,
             kdf: Hkdf::from_prk(
                 <span class="self">self</span>.kdf.derive_hmac(<span class="kw-2">&amp;</span>tagged_derive(
-                    <span class="kw-2">&amp;</span>federation_id.<span class="number">0</span>.into_inner()[..<span class="number">8</span>]
+                    <span class="kw-2">&amp;</span>federation_id.<span class="number">0</span>.to_byte_array()[..<span class="number">8</span>]
                         .try_into()
                         .expect(<span class="string">"Slice with length 8"</span>),
                     ChildId(<span class="number">0</span>),
