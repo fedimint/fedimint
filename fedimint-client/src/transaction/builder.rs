@@ -1,12 +1,12 @@
 use std::sync::Arc;
 
 use bitcoin::key::KeyPair;
+use bitcoin::secp256k1::Secp256k1;
 use fedimint_core::core::{DynInput, DynOutput, IntoDynInstance, ModuleInstanceId};
 use fedimint_core::transaction::{Transaction, TransactionSignature};
 use fedimint_core::Amount;
 use itertools::multiunzip;
 use rand::{CryptoRng, Rng, RngCore};
-use secp256k1_zkp::Secp256k1;
 
 use crate::module::StateGenerator;
 use crate::sm::DynState;
@@ -102,7 +102,7 @@ impl TransactionBuilder {
         mut rng: R,
     ) -> (Transaction, Vec<DynState>)
     where
-        C: secp256k1_zkp::Signing + secp256k1_zkp::Verification,
+        C: bitcoin::secp256k1::Signing + bitcoin::secp256k1::Verification,
     {
         let (inputs, input_keys, input_states): (Vec<_>, Vec<_>, Vec<_>) = multiunzip(
             self.inputs
@@ -118,7 +118,8 @@ impl TransactionBuilder {
         let nonce: [u8; 8] = rng.gen();
 
         let txid = Transaction::tx_hash_from_parts(&inputs, &outputs, nonce);
-        let msg = secp256k1_zkp::Message::from_slice(&txid[..]).expect("txid has right length");
+        let msg =
+            bitcoin::secp256k1::Message::from_slice(&txid[..]).expect("txid has right length");
 
         let signatures = input_keys
             .into_iter()

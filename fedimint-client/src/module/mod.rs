@@ -6,6 +6,7 @@ use std::sync::Arc;
 use std::{ffi, marker, ops};
 
 use anyhow::{anyhow, bail};
+use bitcoin::secp256k1::PublicKey;
 use fedimint_api_client::api::DynGlobalApi;
 use fedimint_core::config::ClientConfig;
 use fedimint_core::core::{
@@ -21,7 +22,6 @@ use fedimint_core::{
     apply, async_trait_maybe_send, dyn_newtype_define, maybe_add_send_sync, Amount, OutPoint,
     TransactionId,
 };
-use secp256k1_zkp::PublicKey;
 
 use self::init::ClientModuleInit;
 use crate::module::recovery::{DynModuleBackup, ModuleBackup};

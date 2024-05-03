@@ -3,6 +3,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::io::{Cursor, Error, Read, Write};
 
 use anyhow::{bail, Context, Result};
+use bitcoin::secp256k1::{KeyPair, Secp256k1};
 use fedimint_api_client::api::DynGlobalApi;
 use fedimint_core::core::backup::{
     BackupRequest, SignedBackupRequest, BACKUP_REQUEST_MAX_PAYLOAD_SIZE_BYTES,
@@ -13,7 +14,6 @@ use fedimint_core::encoding::{Decodable, DecodeError, Encodable};
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_derive_secret::DerivableSecret;
 use fedimint_logging::{LOG_CLIENT, LOG_CLIENT_BACKUP, LOG_CLIENT_RECOVERY};
-use secp256k1_zkp::{KeyPair, Secp256k1};
 use serde::{Deserialize, Serialize};
 use tracing::{debug, info, warn};
 
@@ -388,7 +388,7 @@ impl Client {
     fn get_derived_backup_signing_key_static(secret: &DerivableSecret) -> KeyPair {
         secret
             .derive_backup_secret()
-            .to_secp_key(&Secp256k1::<secp256k1_zkp::SignOnly>::gen_new())
+            .to_secp_key(&Secp256k1::<bitcoin::secp256k1::SignOnly>::gen_new())
     }
 
     fn get_derived_backup_encryption_key(&self) -> fedimint_aead::LessSafeKey {

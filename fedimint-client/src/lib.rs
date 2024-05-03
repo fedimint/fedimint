@@ -77,6 +77,7 @@ use std::time::Duration;
 use anyhow::{anyhow, bail, ensure, Context};
 use async_stream::stream;
 use backup::ClientBackup;
+use bitcoin::secp256k1::{PublicKey, Secp256k1};
 use db::{
     apply_migrations_client, CachedApiVersionSet, CachedApiVersionSetKey, ClientConfigKey,
     ClientConfigKeyPrefix, ClientInitStateKey, ClientModuleRecovery, EncodedClientSecretKey,
@@ -116,7 +117,6 @@ use meta::{LegacyMetaSource, MetaService};
 use module::recovery::RecoveryProgress;
 use module::{DynClientModule, FinalClient};
 use rand::thread_rng;
-use secp256k1_zkp::{PublicKey, Secp256k1};
 use secret::{DeriveableSecretClientExt, PlainRootSecretStrategy, RootSecretStrategy as _};
 use thiserror::Error;
 #[cfg(not(target_family = "wasm"))]
@@ -749,7 +749,7 @@ pub struct Client {
     api: DynGlobalApi,
     root_secret: DerivableSecret,
     operation_log: OperationLog,
-    secp_ctx: Secp256k1<secp256k1_zkp::All>,
+    secp_ctx: Secp256k1<bitcoin::secp256k1::All>,
     meta_service: Arc<MetaService>,
 
     task_group: TaskGroup,
