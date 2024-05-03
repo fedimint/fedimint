@@ -48,9 +48,6 @@ fedimint-derive = { version = "=0.4.0-alpha", path = "../fedimint-derive" }
 fedimint-logging = { version = "=0.4.0-alpha", path = "../fedimint-logging" }
 rand = { workspace = true }
 miniscript = { version = "10.0.0", features = ["compiler", "serde"] }
-secp256k1-zkp = { version = "0.9.2", features = ["serde", "global-context"] }
-secp256k1_24 = { package = "secp256k1", version = "0.24.3", features = ["global-context", "rand-std"] }
-secp256k1 = { version = "0.27.0", features = ["global-context", "rand-std"] }
 macro_rules_attribute = "0.2.0"
 bitvec = "1.0.1"
 parity-scale-codec = { version = "3.6.9", features = ["derive"] }

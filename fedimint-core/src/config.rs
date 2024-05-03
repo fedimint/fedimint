@@ -325,10 +325,10 @@ impl FederationId {
     /// other LN senders will know that they cannot pay the invoice.
     pub fn to_fake_ln_pub_key(
         &self,
-        secp: &secp256k1::Secp256k1<secp256k1::All>,
-    ) -> anyhow::Result<secp256k1::PublicKey> {
-        let sk = secp256k1::SecretKey::from_slice(&self.0.to_byte_array())?;
-        Ok(secp256k1::PublicKey::from_secret_key(secp, &sk))
+        secp: &bitcoin::secp256k1::Secp256k1<bitcoin::secp256k1::All>,
+    ) -> anyhow::Result<bitcoin::secp256k1::PublicKey> {
+        let sk = bitcoin::secp256k1::SecretKey::from_slice(&self.0.to_byte_array())?;
+        Ok(bitcoin::secp256k1::PublicKey::from_secret_key(secp, &sk))
     }
 }
 
@@ -807,7 +807,7 @@ pub trait TypedServerModuleConfig: DeserializeOwned + Serialize {
 /// Things that a `distributed_gen` config can send between peers
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum DkgPeerMsg {
-    PublicKey(secp256k1::PublicKey),
+    PublicKey(bitcoin::secp256k1::PublicKey),
     DistributedGen(SupportedDkgMessage),
     Module(Vec<u8>),
     // Dkg completed on our side
