@@ -32,8 +32,8 @@ pub const INVALID_INVOICE_DESCRIPTION: &str = "INVALID";
 
 #[derive(Debug)]
 pub struct FakeLightningTest {
-    pub gateway_node_pub_key: secp256k1::PublicKey,
-    gateway_node_sec_key: secp256k1::SecretKey,
+    pub gateway_node_pub_key: bitcoin::secp256k1::PublicKey,
+    gateway_node_sec_key: bitcoin::secp256k1::SecretKey,
     amount_sent: Arc<Mutex<u64>>,
     receiver: mpsc::Receiver<HtlcResult>,
 }

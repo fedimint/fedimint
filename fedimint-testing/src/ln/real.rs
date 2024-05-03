@@ -34,7 +34,7 @@ use crate::ln::LightningTest;
 pub struct ClnLightningTest {
     rpc_cln: Arc<Mutex<ClnRpc>>,
     initial_balance: Amount,
-    pub node_pub_key: secp256k1::PublicKey,
+    pub node_pub_key: bitcoin::secp256k1::PublicKey,
     lnrpc: Box<dyn ILnRpcClient>,
 }
 
@@ -189,7 +189,7 @@ impl ClnLightningTest {
         }
     }
 
-    async fn pubkey(rpc: Arc<Mutex<ClnRpc>>) -> secp256k1::PublicKey {
+    async fn pubkey(rpc: Arc<Mutex<ClnRpc>>) -> bitcoin::secp256k1::PublicKey {
         info!("fetching pubkey from cln");
         if let Response::Getinfo(get_info) = rpc
             .lock()
@@ -198,7 +198,7 @@ impl ClnLightningTest {
             .await
             .unwrap()
         {
-            secp256k1::PublicKey::from_str(&get_info.id.to_string()).unwrap()
+            bitcoin::secp256k1::PublicKey::from_str(&get_info.id.to_string()).unwrap()
         } else {
             panic!("cln-rpc response did not match expected GetinfoResponse")
         }
@@ -232,7 +232,7 @@ impl ClnLightningTest {
 pub struct LndLightningTest {
     rpc_lnd: Arc<Mutex<LndClient>>,
     initial_balance: Amount,
-    pub node_pub_key: secp256k1::PublicKey,
+    pub node_pub_key: bitcoin::secp256k1::PublicKey,
     lnrpc: Box<dyn ILnRpcClient>,
 }
 
@@ -387,7 +387,7 @@ impl LndLightningTest {
         }
     }
 
-    async fn pubkey(rpc: Arc<Mutex<LndClient>>) -> secp256k1::PublicKey {
+    async fn pubkey(rpc: Arc<Mutex<LndClient>>) -> bitcoin::secp256k1::PublicKey {
         info!("fetching pubkey from lnd");
         let info = rpc
             .lock()
@@ -397,7 +397,8 @@ impl LndLightningTest {
             .await
             .expect("failed to get info")
             .into_inner();
-        let pub_key: secp256k1::PublicKey = info.identity_pubkey.parse().expect("invalid pubkey");
+        let pub_key: bitcoin::secp256k1::PublicKey =
+            info.identity_pubkey.parse().expect("invalid pubkey");
         pub_key
     }
 

@@ -5,6 +5,7 @@ use std::time::Duration;
 
 use anyhow::anyhow;
 use async_trait::async_trait;
+use bitcoin::secp256k1::PublicKey;
 use fedimint_client::module::init::ClientModuleInitRegistry;
 use fedimint_client::ClientHandleArc;
 use fedimint_core::config::FederationId;
@@ -20,7 +21,6 @@ use ln_gateway::lightning::{ILnRpcClient, LightningBuilder};
 use ln_gateway::rpc::rpc_client::GatewayRpcClient;
 use ln_gateway::rpc::{ConnectFedPayload, FederationInfo, V1_API_ENDPOINT};
 use ln_gateway::{Gateway, GatewayState};
-use secp256k1::PublicKey;
 use tempfile::TempDir;
 use tracing::{info, warn};
 
@@ -75,7 +75,7 @@ impl GatewayTest {
             .unwrap()
     }
 
-    pub fn get_gateway_id(&self) -> secp256k1::PublicKey {
+    pub fn get_gateway_id(&self) -> bitcoin::secp256k1::PublicKey {
         self.gateway.gateway_id
     }
 

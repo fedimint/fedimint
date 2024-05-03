@@ -2554,8 +2554,6 @@ dependencies = [
  "lazy_static",
  "lightning-invoice",
  "rand",
- "secp256k1 0.27.0",
- "secp256k1-zkp",
  "serde",
  "tempfile",
  "tokio",
@@ -5007,7 +5005,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "026efcdacb95ee6aae5cc19144dc1549973eac36a4972700c28493de1ee5d69f"
 dependencies = [
  "bitcoin-private",
- "rand",
  "secp256k1 0.27.0",
  "secp256k1-zkp-sys",
  "serde",

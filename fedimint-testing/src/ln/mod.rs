@@ -3,13 +3,13 @@ use std::time::Duration;
 use async_trait::async_trait;
 use bitcoin::hashes::sha256;
 use bitcoin::key::KeyPair;
+use bitcoin::secp256k1::SecretKey;
 use fedimint_core::{Amount, BitcoinHash};
 use lightning_invoice::{
     Bolt11Invoice, Currency, InvoiceBuilder, PaymentSecret, DEFAULT_EXPIRY_TIME,
 };
 use ln_gateway::lightning::ILnRpcClient;
 use rand::rngs::OsRng;
-use secp256k1_zkp::SecretKey;
 
 use self::mock::INVALID_INVOICE_DESCRIPTION;
 use crate::gateway::LightningNodeType;
