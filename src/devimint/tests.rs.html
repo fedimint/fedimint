@@ -2582,6 +2582,11 @@
 <a href="#2582" id="2582">2582</a>
 <a href="#2583" id="2583">2583</a>
 <a href="#2584" id="2584">2584</a>
+<a href="#2585" id="2585">2585</a>
+<a href="#2586" id="2586">2586</a>
+<a href="#2587" id="2587">2587</a>
+<a href="#2588" id="2588">2588</a>
+<a href="#2589" id="2589">2589</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashSet};
 <span class="kw">use </span>std::io::Write;
 <span class="kw">use </span>std::ops::ControlFlow;
@@ -4666,6 +4671,8 @@
         .map(|o| o[<span class="string">"descriptor"</span>].as_str().unwrap())
         .collect::&lt;HashSet&lt;<span class="kw">_</span>&gt;&gt;();
 
+    <span class="macro">debug!</span>(target: LOG_DEVIMINT, <span class="question-mark">?</span>utxos_descriptors, <span class="string">"recoverytool descriptors using UTXOs method"</span>);
+
     <span class="kw">let </span>descriptors_json = [serde_json::value::to_raw_value(<span class="kw-2">&amp;</span>serde_json::Value::Array(
         utxos_descriptors
             .iter()
@@ -4723,6 +4730,9 @@
         .iter()
         .map(|o| o[<span class="string">"descriptor"</span>].as_str().unwrap())
         .collect::&lt;HashSet&lt;<span class="kw">_</span>&gt;&gt;();
+
+    <span class="macro">debug!</span>(target: LOG_DEVIMINT, <span class="question-mark">?</span>epochs_descriptors, <span class="string">"recoverytool descriptors using epochs method"</span>);
+
     <span class="comment">// Epochs method includes descriptors from spent outputs, so we only need to
     // verify the epochs method includes all available utxos
     </span><span class="kw">for </span>utxo_descriptor <span class="kw">in </span>utxos_descriptors.iter() {
