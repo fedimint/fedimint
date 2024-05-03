@@ -20,7 +20,7 @@ enum Opts {
         #[clap(long)]
         expiry_time: Option<u64>,
         #[clap(long)]
-        gateway_id: Option<secp256k1::PublicKey>,
+        gateway_id: Option<bitcoin::secp256k1::PublicKey>,
         #[clap(long, default_value = "false")]
         force_internal: bool,
     },
@@ -38,7 +38,7 @@ enum Opts {
         #[clap(long, action)]
         finish_in_background: bool,
         #[clap(long)]
-        gateway_id: Option<secp256k1::PublicKey>,
+        gateway_id: Option<bitcoin::secp256k1::PublicKey>,
         #[clap(long, default_value = "false")]
         force_internal: bool,
     },

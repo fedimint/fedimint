@@ -17,6 +17,9 @@ use api::LnFederationApi;
 use async_stream::stream;
 use bitcoin::hashes::{sha256, Hash, HashEngine, Hmac, HmacEngine};
 use bitcoin::key::KeyPair;
+use bitcoin::secp256k1::{
+    All, PublicKey, Scalar, Secp256k1, Signing, ThirtyTwoByteHash, Verification,
+};
 use bitcoin::Network;
 use db::{
     DbKeyPrefix, LightningGatewayKey, LightningGatewayKeyPrefix, PaymentResult, PaymentResultKey,
@@ -69,7 +72,6 @@ use pay::PayInvoicePayload;
 use rand::rngs::OsRng;
 use rand::seq::IteratorRandom as _;
 use rand::{CryptoRng, Rng, RngCore};
-use secp256k1::{All, PublicKey, Scalar, Secp256k1, Signing, ThirtyTwoByteHash, Verification};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use strum::IntoEnumIterator;
@@ -203,7 +205,7 @@ pub enum LnReceiveState {
 
 fn invoice_has_internal_payment_markers(
     invoice: &Bolt11Invoice,
-    markers: (secp256k1::PublicKey, u64),
+    markers: (bitcoin::secp256k1::PublicKey, u64),
 ) -> bool {
     // Asserts that the invoice src_node_id and short_channel_id match known
     // values used as internal payment markers
@@ -238,7 +240,7 @@ pub struct LightningOperationMetaPay {
     pub change: Vec<OutPoint>,
     pub is_internal_payment: bool,
     pub contract_id: ContractId,
-    pub gateway_id: Option<secp256k1::PublicKey>,
+    pub gateway_id: Option<bitcoin::secp256k1::PublicKey>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -254,7 +256,7 @@ pub enum LightningOperationMetaVariant {
     Receive {
         out_point: OutPoint,
         invoice: Bolt11Invoice,
-        gateway_id: Option<secp256k1::PublicKey>,
+        gateway_id: Option<bitcoin::secp256k1::PublicKey>,
     },
     Claim {
         out_points: Vec<OutPoint>,
@@ -754,7 +756,7 @@ impl LightningClientModule {
         receiving_key: ReceivingKey,
         mut rng: impl RngCore + CryptoRng + 'a,
         expiry_time: Option<u64>,
-        src_node_id: secp256k1::PublicKey,
+        src_node_id: bitcoin::secp256k1::PublicKey,
         short_channel_id: u64,
         route_hints: Vec<fedimint_ln_common::route_hints::RouteHint>,
         network: Network,
@@ -864,7 +866,7 @@ impl LightningClientModule {
     /// cache.
     pub async fn select_gateway(
         &self,
-        gateway_id: &secp256k1::PublicKey,
+        gateway_id: &bitcoin::secp256k1::PublicKey,
     ) -> Option<LightningGateway> {
         let mut dbtx = self.client_ctx.module_db().begin_transaction_nc().await;
         let gateways = dbtx
@@ -1528,7 +1530,7 @@ impl LightningClientModule {
     /// gateway will be selected.
     pub async fn get_gateway(
         &self,
-        gateway_id: Option<secp256k1::PublicKey>,
+        gateway_id: Option<bitcoin::secp256k1::PublicKey>,
         force_internal: bool,
     ) -> anyhow::Result<Option<LightningGateway>> {
         match gateway_id {
@@ -1758,7 +1760,7 @@ pub async fn create_incoming_contract_output(
     redeem_key: KeyPair,
 ) -> Result<(LightningOutputV0, Amount, ContractId), IncomingSmError> {
     let offer = fetch_and_validate_offer(module_api, payment_hash, amount_msat).await?;
-    let our_pub_key = secp256k1::PublicKey::from_keypair(&redeem_key);
+    let our_pub_key = bitcoin::secp256k1::PublicKey::from_keypair(&redeem_key);
     let contract = IncomingContract {
         hash: offer.hash,
         encrypted_preimage: offer.encrypted_preimage.clone(),

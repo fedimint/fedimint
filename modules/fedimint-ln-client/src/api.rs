@@ -2,6 +2,7 @@ use std::collections::{BTreeMap, HashMap};
 use std::time::Duration;
 
 use bitcoin::hashes::sha256::{self, Hash as Sha256Hash};
+use bitcoin::secp256k1::PublicKey;
 use fedimint_api_client::api::{
     FederationApiExt, FederationError, FederationResult, IModuleFederationApi,
 };
@@ -24,7 +25,6 @@ use fedimint_ln_common::{
     ContractAccount, LightningGateway, LightningGatewayAnnouncement, RemoveGatewayRequest,
 };
 use itertools::Itertools;
-use secp256k1::PublicKey;
 use tracing::{info, warn};
 
 #[apply(async_trait_maybe_send!)]

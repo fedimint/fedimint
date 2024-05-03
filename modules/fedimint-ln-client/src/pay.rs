@@ -591,7 +591,7 @@ impl PaymentData {
         }
     }
 
-    pub fn destination(&self) -> secp256k1::PublicKey {
+    pub fn destination(&self) -> bitcoin::secp256k1::PublicKey {
         match self {
             PaymentData::Invoice(invoice) => invoice
                 .payee_pub_key()
