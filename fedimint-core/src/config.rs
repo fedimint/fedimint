@@ -293,9 +293,7 @@ impl FromStr for FederationIdPrefix {
     type Err = anyhow::Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Ok(Self(Vec::from_hex(s)?.try_into().map_err(
-            |bytes: Vec<u8>| hex::Error::InvalidLength(4, bytes.len()),
-        )?))
+        Ok(Self(<[u8; 4]>::from_hex(s)?))
     }
 }
 
@@ -336,11 +334,7 @@ impl FromStr for FederationId {
     type Err = anyhow::Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Ok(Self::from_byte_array(
-            Vec::from_hex(s)?
-                .try_into()
-                .map_err(|bytes: Vec<u8>| hex::Error::InvalidLength(32, bytes.len()))?,
-        ))
+        Ok(Self::from_byte_array(<[u8; 32]>::from_hex(s)?))
     }
 }
 
