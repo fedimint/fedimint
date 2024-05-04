@@ -54,7 +54,7 @@ secp256k1 = { version = "0.27.0", features = ["global-context", "rand-std"] }
 macro_rules_attribute = "0.2.0"
 bitvec = "1.0.1"
 parity-scale-codec = { version = "3.6.9", features = ["derive"] }
-imbl = "2.0.3"
+imbl = "3.0.0"
 backon = "=0.4.4" # don't upgrade unless really needed
 
 [target.'cfg(not(target_family = "wasm"))'.dependencies]
