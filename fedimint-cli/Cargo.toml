@@ -23,7 +23,7 @@ path = "src/lib.rs"
 [dependencies]
 anyhow = { workspace = true }
 async-trait = { workspace = true }
-base64 = "0.22.0"
+base64 = "0.22.1"
 bip39 = { version = "2.0.0", features = ["rand"] }
 bitcoin = { workspace = true }
 time = { version = "0.3.36", features = [ "formatting" ] }
