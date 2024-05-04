@@ -291,9 +291,9 @@
     </span>UnsupportedSignatureScheme { variant: u64 },
     <span class="attr">#[error(<span class="string">"The transaction did not have the correct number of signatures"</span>)]
     </span>InvalidWitnessLength,
-    <span class="attr">#[error(<span class="string">"The transaction had an invalid input"</span>)]
+    <span class="attr">#[error(<span class="string">"The transaction had an invalid input: {}"</span>, .<span class="number">0</span>)]
     </span>Input(DynInputError),
-    <span class="attr">#[error(<span class="string">"The transaction had an invalid output"</span>)]
+    <span class="attr">#[error(<span class="string">"The transaction had an invalid output: {}"</span>, .<span class="number">0</span>)]
     </span>Output(DynOutputError),
 }
 </code></pre></div></section></main></body></html>

@@ -226,6 +226,10 @@
 <a href="#226" id="226">226</a>
 <a href="#227" id="227">227</a>
 <a href="#228" id="228">228</a>
+<a href="#229" id="229">229</a>
+<a href="#230" id="230">230</a>
+<a href="#231" id="231">231</a>
+<a href="#232" id="232">232</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::sync::Arc;
 
 <span class="kw">use </span>fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
@@ -234,7 +238,9 @@
 <span class="kw">use </span>fedimint_core::core::OperationId;
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::{Amount, TransactionId};
+<span class="kw">use </span>fedimint_logging::LOG_CLIENT_MODULE_MINT;
 <span class="kw">use </span>fedimint_mint_common::MintInput;
+<span class="kw">use </span>tracing::{debug, warn};
 
 <span class="kw">use crate</span>::{MintClientContext, MintClientStateMachines, SpendableNote};
 
@@ -351,9 +357,10 @@
                     state: MintInputStates::Success(MintInputStateSuccess {}),
                 }
             }
-            <span class="prelude-val">Err</span>(<span class="kw">_</span>) =&gt; {
+            <span class="prelude-val">Err</span>(err) =&gt; {
                 <span class="comment">// Transaction rejected: attempting to refund
-                </span><span class="self">Self</span>::refund(dbtx, old_state, global_context).<span class="kw">await
+                </span><span class="macro">debug!</span>(target: LOG_CLIENT_MODULE_MINT, %err, <span class="string">"Refunding mint transaction input due to transaction error"</span>);
+                <span class="self">Self</span>::refund(dbtx, old_state, global_context).<span class="kw">await
             </span>}
         }
     }
@@ -428,10 +435,11 @@
                     }),
                 }
             }
-            <span class="prelude-val">Err</span>(<span class="kw">_</span>) =&gt; {
+            <span class="prelude-val">Err</span>(err) =&gt; {
                 <span class="comment">// Refund failed
                 // TODO: include e-cash notes for recovery? Although, they are in the log …
-                </span>MintInputStateMachine {
+                </span><span class="macro">warn!</span>(target: LOG_CLIENT_MODULE_MINT, %err, %refund_txid, <span class="string">"Refund transaction rejected. Notes probably lost."</span>);
+                MintInputStateMachine {
                     common: old_state.common,
                     state: MintInputStates::Error(MintInputStateError {
                         error: <span class="macro">format!</span>(<span class="string">"Refund transaction {refund_txid} was rejected"</span>),
