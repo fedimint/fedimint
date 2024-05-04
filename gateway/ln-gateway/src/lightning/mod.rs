@@ -156,6 +156,8 @@ pub struct ChannelInfo {
     pub outbound_liquidity_sats: u64,
     pub inbound_liquidity_sats: u64,
     pub short_channel_id: u64,
+    pub channel_point_txid: String,
+    pub channel_point_output_index: u32,
 }
 
 #[derive(Debug, Clone, Subcommand, Serialize, Deserialize)]

@@ -748,6 +748,10 @@ impl GatewayLightning for ClnRpcService {
                                         Some(scid) => scid_to_u64(scid),
                                         None => return None,
                                     },
+                                    channel_point_txid: channel.funding_txid.unwrap_or_default(),
+                                    channel_point_output_index: channel
+                                        .funding_outnum
+                                        .unwrap_or_default(),
                                 })
                             } else {
                                 None

@@ -787,12 +787,25 @@ impl ILnRpcClient for GatewayLndClient {
                             0
                         };
 
+                    let (channel_point_txid, channel_point_output_index) = channel
+                        .channel_point
+                        .split_once(':')
+                        .map(|(txid, output_index)| {
+                            (
+                                txid.to_string(),
+                                output_index.parse::<u32>().unwrap_or_default(),
+                            )
+                        })
+                        .unwrap_or_default();
+
                     ChannelInfo {
                         remote_pubkey: channel.remote_pubkey,
                         channel_size_sats,
                         outbound_liquidity_sats,
                         inbound_liquidity_sats,
                         short_channel_id: channel.chan_id,
+                        channel_point_txid,
+                        channel_point_output_index,
                     }
                 })
                 .collect()),

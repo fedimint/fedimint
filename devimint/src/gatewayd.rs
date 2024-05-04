@@ -230,12 +230,23 @@ impl Gatewayd {
                 let short_channel_id = channel["short_channel_id"]
                     .as_u64()
                     .context("short_channel_id must be a u64")?;
+                let channel_point_txid = channel["channel_point_txid"]
+                    .as_str()
+                    .context("channel_point_txid must be a string")?
+                    .to_owned();
+                let channel_point_output_index = channel["channel_point_output_index"]
+                    .as_u64()
+                    .context("channel_point_output_index must be a u32")?
+                    .try_into()
+                    .context("channel_point_output_index must be a u32")?;
                 Ok(ChannelInfo {
                     remote_pubkey,
                     channel_size_sats,
                     outbound_liquidity_sats,
                     inbound_liquidity_sats,
                     short_channel_id,
+                    channel_point_txid,
+                    channel_point_output_index,
                 })
             })
             .collect::<Result<Vec<ChannelInfo>>>()?;

@@ -221,6 +221,8 @@ impl ILnRpcClient for NetworkLnRpcClient {
                 outbound_liquidity_sats: channel.outbound_liquidity_sats,
                 inbound_liquidity_sats: channel.inbound_liquidity_sats,
                 short_channel_id: channel.short_channel_id,
+                channel_point_txid: channel.channel_point_txid,
+                channel_point_output_index: channel.channel_point_output_index,
             })
             .collect())
     }

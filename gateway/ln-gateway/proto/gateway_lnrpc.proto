@@ -261,6 +261,12 @@ message ListActiveChannelsResponse {
 
     // The SCID of the channel.
     uint64 short_channel_id = 5;
+
+    // Hex-encoded string representing the byte-reversed hash of the funding transaction.
+    string channel_point_txid = 6;
+
+    // The output index of the funding transaction.
+    uint32 channel_point_output_index = 7;
   }
 
   // All channels on the node that are currently able to send and receive payments.
