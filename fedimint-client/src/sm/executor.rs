@@ -171,7 +171,7 @@ impl Executor {
                 }
             }
 
-            dbtx.insert_entry(
+            dbtx.insert_new_entry(
                 &ActiveStateKey::from_state(state.clone()),
                 &ActiveStateMeta::default(),
             )
