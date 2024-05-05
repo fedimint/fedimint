@@ -2,12 +2,6 @@
 
 # You can download this script and run it with: curl -sSL https://raw.githubusercontent.com/Kodylow/fedimint/kl/docker-deploy/docker/downloader.sh | bash
 
-# Check if the script is running in an interactive shell
-if [ -z "$PS1" ]; then
-  echo "This script requires an interactive shell. Please run this script from an interactive shell like 'bash' or 'zsh'."
-  exit 1
-fi
-
 echo
 echo """
                                                     %%
@@ -55,7 +49,7 @@ echo "Or join the Fedimint Discord server and post an issue there: https://disco
 echo
 while true; do
   echo "Ready to start?"
-  read -p "Type 'yes' to start: " START
+  read -p "Type 'yes' to start: " START </dev/tty
   if [[ $START == "yes" ]]; then
     break
   fi
