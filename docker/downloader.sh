@@ -1,8 +1,12 @@
 #!/bin/bash
 
-# This file downloads the mainnet docker-compose files for the LN gateway, fedimintd plus some useful tools
-# Important: This version uses TLS certificates, so you must have a domain under your control that you can change the DNS records for
 # You can download this script and run it with: curl -sSL https://raw.githubusercontent.com/Kodylow/fedimint/kl/docker-deploy/docker/downloader.sh | bash
+
+# Check if the script is running in an interactive shell
+if [ -z "$PS1" ]; then
+  echo "This script requires an interactive shell. Please run this script from an interactive shell like 'bash' or 'zsh'."
+  exit 1
+fi
 
 echo
 echo """
