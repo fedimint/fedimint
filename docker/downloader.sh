@@ -47,21 +47,22 @@ echo
 echo "Fedimint is early stage software, so please be patient and report any issues you encounter by opening an issue on Github: https://github.com/fedimint/fedimint/issues"
 echo "Or join the Fedimint Discord server and post an issue there: https://discord.gg/9CFbk6BvaJ"
 echo
+echo "Ready to start?"
 while true; do
-  echo "Ready to start?"
   read -p "Type 'yes' to start: " START </dev/tty
   if [[ $START == "yes" ]]; then
     break
   fi
+
 done
 
+echo "Which version of Fedimint do you want to install?"
 while true; do
   echo
-  echo "Which version of Fedimint do you want to install?"
-  read -p "Hit enter to install the latest version, or type a specific version: " FEDIMINT_VERSION
-  FEDIMINT_VERSION=${FEDIMINT_VERSION:-latest}
+  read -p "Hit enter to install the latest version, or type a specific version: " FEDIMINT_VERSION </dev/tty
+  FEDIMINT_VERSION=${FEDIMINT_VERSION:-0.3.0}
   case $FEDIMINT_VERSION in
-  0.3.0 | latest)
+  0.3.0)
     FEDIMINT_VERSION="0.3.0"
     break
     ;;
@@ -124,17 +125,16 @@ if [ "$(awk '/MemTotal/ {print $2}' /proc/meminfo)" -lt 900000 ]; then
 fi
 
 echo "Dependencies are ready. Let's continue..."
-
+echo
+echo "Do you want to install a Fedimint Guardian or a Lightning Gateway? [guardian/gateway]"
+echo "Guardian: connects with other guardians to form and run a Fedimint"
+echo "Gateway: a lightning network service provider to users of Fedimints"
 while true; do
-  echo
-  echo "Do you want to install a Fedimint Guardian or a Lightning Gateway? [guardian/gateway]"
-  echo "Guardian: connects with other guardians to form and run a Fedimint"
-  echo "Gateway: a lightning network service provider to users of Fedimints"
-  read -p "Type 'guardian' or 'gateway': " INSTALL_TYPE
+  read -p "Type 'guardian' or 'gateway': " INSTALL_TYPE </dev/tty
 
   case $INSTALL_TYPE in
   guardian)
-    SERVICES="fedimintd guardian-ui xmpp"
+    SERVICES="fedimintd guardian-ui bitcoindxmpp"
     IS_GATEWAY=false
     break
     ;;
@@ -149,11 +149,11 @@ while true; do
   esac
 done
 
+echo
+echo "Do you want to setup TLS certificates with Let's Encrypt? [yes/no]"
+echo "(to also set up xmpp chat on this instance you must use TLS)"
 while true; do
-  echo
-  echo "Do you want to setup TLS certificates with Let's Encrypt? [yes/no]"
-  echo "(to also set up xmpp chat on this instance you must use TLS)"
-  read -p "Type 'yes' to setup TLS certificates or 'no' to skip: " SETUP_TLS
+  read -p "Type 'yes' to setup TLS certificates or 'no' to skip: " SETUP_TLS </dev/tty
 
   case $SETUP_TLS in
   yes)
@@ -172,16 +172,17 @@ while true; do
   esac
 done
 
-DOCKER_COMPOSE_FILE="https://raw.githubusercontent.com/Kodylow/fedimint/kl/docker-deploy/docker/latest/${INSTALL_TYPE}/${TLS_DIR}/docker-compose.yaml"
+DOCKER_COMPOSE_FILE="https://raw.githubusercontent.com/Kodylow/fedimint/kl/docker-deploy/docker/${INSTALL_TYPE}/${TLS_DIR}/docker-compose.yaml"
 
+echo
+echo "Which Bitcoin network are you using? [mainnet/mutinynet]"
 while true; do
-  echo "Which Bitcoin network are you using? [mainnet/mutinynet]"
-  read -p "Type your choice: " NETWORK_TYPE
+  read -p "Type your choice: " NETWORK_TYPE </dev/tty
 
   case $NETWORK_TYPE in
   mainnet)
     echo "Warning: Fedimint is alpha software. Running mainnet is currently recommended only for experienced developers who understand the risks."
-    read -p "Do you acknowledge this and wish to continue? (Type the word 'yes' to acknowledge): " ACKNOWLEDGE
+    read -p "Do you acknowledge this and wish to continue? (Type the word 'yes' to acknowledge): " ACKNOWLEDGE </dev/tty
     if [[ $ACKNOWLEDGE != "yes" ]]; then
       echo "Installation aborted. Please reconsider the network choice if you are not ready for mainnet."
       exit 1
@@ -206,7 +207,7 @@ if [ "$IS_GATEWAY" = false ]; then
   echo "1. An Esplora API"
   echo "2. An existing Bitcoin node"
   while true; do
-    read -r -n 1 -p "Your choice (1/2): " choice
+    read -r -n 1 -p "Your choice (1/2): " choice </dev/tty
     echo
     case $choice in
     1)
@@ -229,7 +230,7 @@ else # Is Gateway
   echo "1. Start and use a new LND Lightning node"
   echo "2. Point at an existing LND Lightning node"
   while true; do
-    read -r -n 1 -p "Your choice (1/2): " choice
+    read -r -n 1 -p "Your choice (1/2): " choice </dev/tty
     echo
     case $choice in
     1)
@@ -250,16 +251,16 @@ else # Is Gateway
   echo "Do you want to run thunderhub for the lightning gateway?"
   echo "This is a fork of thunderhub that is compatible with the Fedimint lightning gateway."
   echo "It lets you manage your lightning node and multiple fedimints' ecash from a single interface."
-
-  read -r -n 1 -p "Do you want to run thunderhub alongside the gateway? [Y/n]: " choice
   echo
   while true; do
+    read -r -n 1 -p "Do you want to run thunderhub alongside the gateway? [yes/no]: " choice </dev/tty
     case $choice in
-    y | Y)
+    yes)
       USE_THUNDERHUB=true
+      SERVICES="gatewayd lightningd thunderhub"
       break
       ;;
-    n | N)
+    no)
       USE_THUNDERHUB=false
       SERVICES="gatewayd gateway-ui"
       break
@@ -289,6 +290,7 @@ resolve_host() {
 
 download() {
   local url=$1
+  echo "Downloading $url in background..."
   local path=$2
   curl -sSL $url -o $path
 }
@@ -311,14 +313,14 @@ if [[ $SETUP_TLS == true ]]; then
   if [[ $INSTALL_TYPE == "guardian" ]]; then
     echo "Do you want to setup an xmpp chat server on this instance? [yes/no]"
     while true; do
-      read -r -n 1 -p "Your choice (yes/no): " choice
+      read -r -n 1 -p "Your choice (yes/no): " choice </dev/tty
       echo
       case $choice in
-      y | Y)
+      yes)
         SETUP_XMPP=true
         break
         ;;
-      n | N)
+      no)
         SETUP_XMPP=false
         # remove xmpp service from services list
         SERVICES=$(echo $SERVICES | sed -e 's/xmpp//g')
@@ -433,7 +435,6 @@ if [[ $SETUP_TLS == true ]]; then
   done
 fi
 
-echo "Downloading docker-compose file"
 download $DOCKER_COMPOSE_FILE ./docker-compose.yaml
 
 rename_version() {
@@ -477,8 +478,8 @@ if [ "$IS_GATEWAY" = true ]; then
 
   if [ "$START_NEW_LND_NODE" = false ]; then
     # Remove the LND and Bitcoin sections from the docker-compose file
-    sed -i '/### START_OF_LND ###/,/### END_OF_LND ###/d' ./docker-compose.yaml
-    sed -i '/### START_OF_BITCOIND ###/,/### END_OF_BITCOIND ###/d' ./docker-compose.yaml
+    sed -i '/### START_LND ###/,/### END_LND ###/d' ./docker-compose.yaml
+    sed -i '/### START_BITCOIND ###/,/### END_BITCOIND ###/d' ./docker-compose.yaml
     # Remove the volume binding for lnd_datadir:/root/.lnd
     sed -i '/- lnd_datadir:\/root\/\.lnd/d' ./docker-compose.yaml
     # Remove the 'depends_on: - lnd' lines
@@ -536,7 +537,7 @@ if [ "$IS_GATEWAY" = true ]; then
   fi
   if [ "$USE_THUNDERHUB" = false ]; then
     # Remove thunderhub from the docker-compose file
-    sed -i '/### START_OF_THUNDERHUB ###/,/### END_OF_THUNDERHUB ###/d' ./docker-compose.yaml
+    sed -i '/### START_THUNDERHUB ###/,/### END_THUNDERHUB ###/d' ./docker-compose.yaml
 
     # Remove thunderhub data directory 'thunderhub_datadir:' from the docker-compose file
     sed -i '/thunderhub_datadir:/d' ./docker-compose.yaml
@@ -562,29 +563,58 @@ else # Is Guardian
       ;;
     esac
 
-    read -p "Enter the Esplora URL you'd like to use to get $NETWORK_TYPE blockdata from, or click enter to use the network default: [$DEFAULT_ESPLORA_URL]: " ESPLORA_URL
+    read -p "Enter the Esplora URL you'd like to use to get $NETWORK_TYPE blockdata from, or click enter to use the network default: [$DEFAULT_ESPLORA_URL]: " ESPLORA_URL </dev/tty
     ESPLORA_URL=${ESPLORA_URL:-$DEFAULT_ESPLORA_URL}
     echo "Using Esplora URL: $ESPLORA_URL"
 
     # Set the esplora URL in the docker-compose file
-    sed -i "s|FM_BITCOIN_RPC_URL=https://blockstream.info/api/|FM_BITCOIN_RPC_URL=$ESPLORA_URL|" ./docker-compose.yaml
+    sed -i "s|FM_BITCOIN_RPC_URL=|FM_BITCOIN_RPC_URL=$ESPLORA_URL|" ./docker-compose.yaml
 
     # Set the bitcoin network in the docker-compose file if not mutinynet default
     if [ "$NETWORK_TYPE" != "mutinynet" ]; then
       sed -i "s|FM_BITCOIN_NETWORK=signet|FM_BITCOIN_NETWORK=$NETWORK_TYPE|" ./docker-compose.yaml
     fi
 
-  else # Using Bitcoin Node for Guardian blockchain data
-    echo "You will need to provide the Bitcoin Node RPC URL to get blockchain data."
-    read -p "Enter the RPC URL for your Bitcoin node (ex. https://mynode.m.voltageapp.io:8332): " -a bitcoin_rpc_url </dev/tty
-    if [[ -z ${bitcoin_rpc_url[*]} ]]; then
-      echo 'Error: You must set a Bitcoin RPC URL if you configure the guardian with an existing Bitcoin node' >&2
-      exit 1
-    fi
-    echo "Using Bitcoin RPC URL: $bitcoin_rpc_url"
+    # Remove the bitcoind service from the docker-compose file
+    sed -i '/### START_BITCOIND ###/,/### END_BITCOIND ###/d' ./docker-compose.yaml
 
-    # Set the bitcoin RPC URL in the docker-compose file
-    sed -i "s|FM_BITCOIN_RPC_URL=https://blockstream.info/api/|FM_BITCOIN_RPC_URL=$bitcoin_rpc_url|" ./docker-compose.yaml
+  else # Using Bitcoin Node for Guardian blockchain data
+    echo
+    echo "Do you want to start a new Bitcoin node or use an existing one? [new/existing]"
+    while true; do
+      read -p "Type 'new' to start a new node or 'existing' to use an existing node: " node_choice </dev/tty
+      case $node_choice in
+      new)
+        break
+        ;;
+      existing)
+        break
+        ;;
+      *)
+        echo "Invalid option. Please type 'new' or 'existing'."
+        ;;
+      esac
+    done
+
+    if [[ $node_choice == "new" ]]; then
+      echo "You will need to provide the Bitcoin Node RPC URL to get blockchain data."
+      echo "A new bitcoin node will be started as part of your docker compose setup."
+    elif [[ $node_choice == "existing" ]]; then
+      read -p "Enter the RPC URL for your existing Bitcoin node (ex. https://mynode.m.voltageapp.io:8332): " -a bitcoin_rpc_url </dev/tty
+      if [[ -z ${bitcoin_rpc_url[*]} ]]; then
+        echo 'Error: You must set a Bitcoin RPC URL if you configure the guardian with an existing Bitcoin node' >&2
+        exit 1
+      fi
+      echo "Using Bitcoin RPC URL: $bitcoin_rpc_url"
+      # Set the bitcoin RPC URL in the docker-compose file
+      sed -i "s|FM_BITCOIN_RPC_URL=|FM_BITCOIN_RPC_URL=$bitcoin_rpc_url|" ./docker-compose.yaml
+      # Remove the bitcoind service from the docker-compose file
+      sed -i '/### START_BITCOIND ###/,/### END_BITCOIND ###/d' ./docker-compose.yaml
+      # Remove the volume binding for bitcoin_datadir:/root/.bitcoin
+      sed -i '/bitcoin_datadir:/d' ./docker-compose.yaml
+    else
+      echo "Invalid option. Please type 'new' or 'existing'."
+    fi
   fi
 fi
 
