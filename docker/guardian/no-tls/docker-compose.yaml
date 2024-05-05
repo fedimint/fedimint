@@ -11,8 +11,8 @@ services:
       - "0.0.0.0:8173:8173"
       - "0.0.0.0:8174:8174"
     environment:
-      - FM_BITCOIN_RPC_KIND=esplora
-      - FM_BITCOIN_RPC_URL=https://mutinynet.com/api/
+      - FM_BITCOIN_RPC_KIND=bitcoind
+      - FM_BITCOIN_RPC_URL=http://bitcoin:bitcoin@bitcoind:38332
       - FM_BITCOIN_NETWORK=signet
       - FM_BIND_P2P=0.0.0.0:8173
       - FM_P2P_URL=fedimint://127.0.0.1:8173
@@ -38,9 +38,22 @@ services:
     platform: linux/amd64
   ### END_GUARDIAN_UI ###
 
+  ### START_BITCOIND ###
+  bitcoind:
+    image: fedimint/mutinynet-bitcoind:master
+    command: --rpcuser=bitcoin --rpcpassword=bitcoin -zmqpubrawblock=tcp://[::]:48332 -zmqpubrawtx=tcp://[::]:48333
+    ports:
+      - 0.0.0.0:38333:38333
+    volumes:
+      - "bitcoin_datadir:/root/.bitcoin"
+    restart: always
+    platform: linux/amd64
+  ### END_BITCOIND ###
+
 volumes:
   fedimintd_data:
     driver: local
+  bitcoin_datadir:
 
 # Example of running it without docker compose:
 # docker run -it -e FM_BITCOIN_RPC_KIND=esplora -e FM_BITCOIN_RPC_URL=https://mutinynet.com/api/ -e FM_BIND_P2P=0.0.0.0:8173 -e FM_P2P_URL=fedimint://127.0.0.1:8173 -e FM_BIND_API=0.0.0.0:8174 -e FM_API_URL=ws://127.0.0.1:8174  -p 0.0.0.0:8173:8173 -p 0.0.0.0:8174:8174 fedimint/fedimintd:master
