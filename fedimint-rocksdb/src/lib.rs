@@ -14,7 +14,9 @@ use fedimint_core::db::{
 };
 use futures::stream;
 pub use rocksdb;
-use rocksdb::{OptimisticTransactionDB, OptimisticTransactionOptions, WriteOptions};
+use rocksdb::{
+    DBRecoveryMode, OptimisticTransactionDB, OptimisticTransactionOptions, WriteOptions,
+};
 use tracing::debug;
 
 use crate::envs::FM_ROCKSDB_WRITE_BUFFER_SIZE_ENV;
@@ -26,7 +28,10 @@ pub struct RocksDbTransaction<'a>(rocksdb::Transaction<'a, rocksdb::OptimisticTr
 
 impl RocksDb {
     pub fn open(db_path: impl AsRef<Path>) -> anyhow::Result<RocksDb> {
-        let opts = get_default_options()?;
+        let mut opts = get_default_options()?;
+        // Since we turned synchronous writes one we should never encounter a corrupted
+        // WAL and should rather fail in this case
+        opts.set_wal_recovery_mode(DBRecoveryMode::AbsoluteConsistency);
         let db: rocksdb::OptimisticTransactionDB =
             rocksdb::OptimisticTransactionDB::<rocksdb::SingleThreaded>::open(&opts, &db_path)?;
         Ok(RocksDb(db))
@@ -135,10 +140,13 @@ impl IRawDatabase for RocksDb {
     async fn begin_transaction<'a>(&'a self) -> RocksDbTransaction {
         let mut optimistic_options = OptimisticTransactionOptions::default();
         optimistic_options.set_snapshot(true);
-        let mut rocksdb_tx = RocksDbTransaction(
-            self.0
-                .transaction_opt(&WriteOptions::default(), &optimistic_options),
-        );
+
+        let mut write_options = WriteOptions::default();
+        // Make sure we never lose data on unclean shutdown
+        write_options.set_sync(true);
+
+        let mut rocksdb_tx =
+            RocksDbTransaction(self.0.transaction_opt(&write_options, &optimistic_options));
         rocksdb_tx
             .set_tx_savepoint()
             .await
