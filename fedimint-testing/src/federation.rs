@@ -21,9 +21,9 @@ use fedimint_rocksdb::RocksDb;
 use fedimint_server::config::api::ConfigGenParamsLocal;
 use fedimint_server::config::{gen_cert_and_key, ConfigGenParams, ServerConfig};
 use fedimint_server::consensus::server::ConsensusServer;
-use fedimint_server::net::connect::mock::{MockNetwork, StreamReliability};
-use fedimint_server::net::connect::{parse_host_port, Connector};
-use fedimint_server::net::peers::DelayCalculator;
+
+use fedimint_server::net::connect::{parse_host_port};
+
 use fedimint_server::FedimintServer;
 use tokio_rustls::rustls;
 use tracing::info;
@@ -138,7 +138,6 @@ pub struct FederationTestBuilder {
     params: ServerModuleConfigGenParamsRegistry,
     server_init: ServerModuleInitRegistry,
     client_init: ClientModuleInitRegistry,
-    reliability: Option<StreamReliability>,
 }
 
 impl FederationTestBuilder {
@@ -158,7 +157,6 @@ impl FederationTestBuilder {
             params,
             server_init,
             client_init,
-            reliability: None,
         }
     }
 
@@ -187,11 +185,6 @@ impl FederationTestBuilder {
         self
     }
 
-    pub fn add_unreliable_connections(mut self) -> FederationTestBuilder {
-        self.reliability = Some(StreamReliability::INTEGRATION_TEST);
-        self
-    }
-
     pub async fn build(self) -> FederationTest {
         let num_offline = self.num_offline;
         assert!(
@@ -204,7 +197,6 @@ impl FederationTestBuilder {
 
         let configs =
             ServerConfig::trusted_dealer_gen(&params, self.server_init.clone(), self.version_hash);
-        let network = MockNetwork::new();
 
         let task_group = TaskGroup::new();
         for (peer_id, config) in configs.clone() {
@@ -216,28 +208,14 @@ impl FederationTestBuilder {
             let decoders = self.server_init.available_decoders(instances).unwrap();
             let db = Database::new(MemDatabase::new(), decoders);
 
-            let (consensus_server, consensus_api) = if let Some(reliability) = self.reliability {
-                let connections = network.connector(peer_id, reliability).into_dyn();
-                ConsensusServer::new_with(
-                    config.clone(),
-                    db.clone(),
-                    self.server_init.clone(),
-                    connections,
-                    DelayCalculator::TEST_DEFAULT,
-                    &task_group,
-                )
-                .await
-                .expect("Failed to init server")
-            } else {
-                ConsensusServer::new(
-                    config.clone(),
-                    db.clone(),
-                    self.server_init.clone(),
-                    &task_group,
-                )
-                .await
-                .expect("Setting up consensus server")
-            };
+            let (consensus_server, consensus_api) = ConsensusServer::new(
+                config.clone(),
+                db.clone(),
+                self.server_init.clone(),
+                &task_group,
+            )
+            .await
+            .expect("Setting up consensus server");
 
             let api_handle = FedimintServer::spawn_consensus_api(consensus_api).await;
 
