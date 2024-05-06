@@ -21,9 +21,7 @@ use fedimint_rocksdb::RocksDb;
 use fedimint_server::config::api::ConfigGenParamsLocal;
 use fedimint_server::config::{gen_cert_and_key, ConfigGenParams, ServerConfig};
 use fedimint_server::consensus::server::ConsensusServer;
-
-use fedimint_server::net::connect::{parse_host_port};
-
+use fedimint_server::net::connect::parse_host_port;
 use fedimint_server::FedimintServer;
 use tokio_rustls::rustls;
 use tracing::info;
