@@ -86,6 +86,7 @@ clap = { version = "4.5.4", features = ["derive", "std", "help", "usage", "error
 serde = "1.0.200"
 serde_json = "1.0.116"
 serdect = "0.2.0"
+bls12_381 = "0.8.0"
 itertools = "0.12.1"
 anyhow = "1.0.82"
 bitcoin_hashes = "0.12.0"

@@ -25,7 +25,7 @@ async-trait = { workspace = true }
 bincode = { workspace = true }
 bitcoin = { workspace = true }
 bitcoin_hashes = { workspace = true }
-bls12_381 = "0.8.0"
+bls12_381 = { workspace = true }
 bytes = "1.6.0"
 futures = { workspace = true }
 hex = { workspace = true }

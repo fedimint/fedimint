@@ -38,7 +38,7 @@ tracing = "0.1.37"
 rand = "0.8"
 url = { version = "2.3.1", features = ["serde"] }
 fedimint-server = { path = "../../fedimint-server" }
-bls12_381 = { version = "0.8.0", features = [ "zeroize", "groups" ] }
+bls12_381 = { workspace = true }
 
 
 [dev-dependencies]
