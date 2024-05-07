@@ -283,7 +283,7 @@
 <span class="kw">pub use </span>bls12_381::{G1Affine, G2Affine};
 <span class="kw">use </span>fedimint_core::bls12_381_serde;
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
-<span class="kw">use </span>ff::Field;
+<span class="kw">use </span>group::ff::Field;
 <span class="kw">use </span>group::{Curve, Group};
 <span class="kw">use </span>rand_chacha::rand_core::SeedableRng;
 <span class="kw">use </span>rand_chacha::ChaChaRng;
@@ -471,7 +471,7 @@
 
     <span class="kw">use </span>bitcoin_hashes::{sha256, Hash};
     <span class="kw">use </span>bls12_381::{G1Projective, Scalar};
-    <span class="kw">use </span>ff::Field;
+    <span class="kw">use </span>group::ff::Field;
     <span class="kw">use </span>group::Curve;
     <span class="kw">use </span>rand::rngs::OsRng;
 

@@ -321,7 +321,7 @@
 <span class="kw">use </span>bls12_381::{pairing, G1Affine, G1Projective, G2Affine, G2Projective, Scalar};
 <span class="kw">use </span>fedimint_core::bls12_381_serde;
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
-<span class="kw">use </span>ff::Field;
+<span class="kw">use </span>group::ff::Field;
 <span class="kw">use </span>group::{Curve, Group};
 <span class="kw">use </span>hex::encode;
 <span class="kw">use </span>rand::rngs::OsRng;
@@ -544,7 +544,7 @@
     <span class="kw">use </span>std::collections::BTreeMap;
 
     <span class="kw">use </span>bls12_381::{G2Projective, Scalar};
-    <span class="kw">use </span>ff::Field;
+    <span class="kw">use </span>group::ff::Field;
     <span class="kw">use </span>group::Curve;
     <span class="kw">use </span>rand::rngs::OsRng;
 
