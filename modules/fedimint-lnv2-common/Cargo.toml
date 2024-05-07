@@ -41,7 +41,7 @@ rand = { workspace = true }
 url = { version = "2.3.1", features = ["serde"] }
 # crypto deps
 bls12_381 = { workspace = true }
-rand_chacha = "0.3.1"
+rand_chacha = { workspace = true }
 tpe = { package = "fedimint-tpe", version = "=0.4.0-alpha", path = "../../crypto/tpe" }
 
 [dev-dependencies]

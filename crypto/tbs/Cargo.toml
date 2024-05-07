@@ -24,7 +24,7 @@ bls12_381 = { workspace = true }
 group = { workspace = true }
 hex = { workspace = true }
 rand = { workspace = true }
-rand_chacha = "0.3.1"
+rand_chacha = { workspace = true }
 serde = { version = "1.0", features = ["derive"] }
 sha3 = "0.10.8"
 

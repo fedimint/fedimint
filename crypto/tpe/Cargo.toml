@@ -21,7 +21,7 @@ fedimint-core  = { version = "=0.4.0-alpha", path = "../../fedimint-core/" }
 bls12_381 = { workspace = true }
 group = { workspace = true }
 rand = { workspace = true }
-rand_chacha = "0.3.1"
+rand_chacha = { workspace = true }
 bitcoin_hashes = { workspace = true }
 serde = { version = "1.0", features = ["derive"] }
 serde-big-array = "0.5.1"
