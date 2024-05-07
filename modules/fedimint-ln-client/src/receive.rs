@@ -12,7 +12,7 @@ use fedimint_core::task::sleep;
 use fedimint_core::{OutPoint, TransactionId};
 use fedimint_ln_common::contracts::incoming::IncomingContractAccount;
 use fedimint_ln_common::contracts::{DecryptedPreimage, FundedContract};
-use fedimint_ln_common::endpoint_constants::ACCOUNT_ENDPOINT;
+use fedimint_ln_common::federation_endpoint_constants::ACCOUNT_ENDPOINT;
 use fedimint_ln_common::LightningInput;
 use lightning_invoice::Bolt11Invoice;
 use serde::{Deserialize, Serialize};

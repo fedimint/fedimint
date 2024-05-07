@@ -10,6 +10,13 @@ use bitcoin_hashes::{sha256, Hash};
 use fedimint_core::config::FederationId;
 use fedimint_core::task::TaskGroup;
 use fedimint_ln_client::pay::PayInvoicePayload;
+use fedimint_ln_common::gateway_endpoint_constants::{
+    ADDRESS_ENDPOINT, BACKUP_ENDPOINT, BALANCE_ENDPOINT, CONFIGURATION_ENDPOINT,
+    CONNECT_FED_ENDPOINT, CREATE_INVOICE_V2_ENDPOINT, GATEWAY_INFO_ENDPOINT,
+    GATEWAY_INFO_POST_ENDPOINT, GET_GATEWAY_ID_ENDPOINT, LEAVE_FED_ENDPOINT,
+    PAYMENT_INFO_V2_ENDPOINT, PAY_INVOICE_ENDPOINT, RESTORE_ENDPOINT, SEND_PAYMENT_V2_ENDPOINT,
+    SET_CONFIGURATION_ENDPOINT, WITHDRAW_ENDPOINT,
+};
 use fedimint_lnv2_client::{CreateInvoicePayload, SendPaymentPayload};
 use hex::ToHex;
 use serde_json::{json, Value};
@@ -139,22 +146,22 @@ async fn authenticate(
 fn v1_routes(gateway: Gateway) -> Router {
     // Public routes on gateway webserver
     let public_routes = Router::new()
-        .route("/pay_invoice", post(pay_invoice))
-        .route("/id", get(get_gateway_id))
+        .route(PAY_INVOICE_ENDPOINT, post(pay_invoice))
+        .route(GET_GATEWAY_ID_ENDPOINT, get(get_gateway_id))
         // These routes are for next generation lightning
-        .route("/payment_info", post(payment_info_v2))
-        .route("/send_payment", post(send_payment_v2))
-        .route("/create_invoice", post(create_invoice_v2));
+        .route(PAYMENT_INFO_V2_ENDPOINT, post(payment_info_v2))
+        .route(SEND_PAYMENT_V2_ENDPOINT, post(send_payment_v2))
+        .route(CREATE_INVOICE_V2_ENDPOINT, post(create_invoice_v2));
 
     // Authenticated, public routes used for gateway administration
     let always_authenticated_routes = Router::new()
-        .route("/balance", post(balance))
-        .route("/address", post(address))
-        .route("/withdraw", post(withdraw))
-        .route("/connect-fed", post(connect_fed))
-        .route("/leave-fed", post(leave_fed))
-        .route("/backup", post(backup))
-        .route("/restore", post(restore))
+        .route(BALANCE_ENDPOINT, post(balance))
+        .route(ADDRESS_ENDPOINT, post(address))
+        .route(WITHDRAW_ENDPOINT, post(withdraw))
+        .route(CONNECT_FED_ENDPOINT, post(connect_fed))
+        .route(LEAVE_FED_ENDPOINT, post(leave_fed))
+        .route(BACKUP_ENDPOINT, post(backup))
+        .route(RESTORE_ENDPOINT, post(restore))
         .route("/connect_to_peer", post(connect_to_peer))
         .route("/get_funding_address", post(get_funding_address))
         .route("/open_channel", post(open_channel))
@@ -164,11 +171,11 @@ fn v1_routes(gateway: Gateway) -> Router {
     // Routes that are un-authenticated before gateway configuration, then become
     // authenticated after a password has been set.
     let authenticated_after_config_routes = Router::new()
-        .route("/set_configuration", post(set_configuration))
-        .route("/config", get(configuration))
+        .route(SET_CONFIGURATION_ENDPOINT, post(set_configuration))
+        .route(CONFIGURATION_ENDPOINT, get(configuration))
         // FIXME: deprecated >= 0.3.0
-        .route("/info", post(handle_post_info))
-        .route("/info", get(info))
+        .route(GATEWAY_INFO_POST_ENDPOINT, post(handle_post_info))
+        .route(GATEWAY_INFO_ENDPOINT, get(info))
         .layer(middleware::from_fn(auth_after_config_middleware));
 
     Router::new()
