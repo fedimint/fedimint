@@ -132,13 +132,16 @@
 <a href="#132" id="132">132</a>
 <a href="#133" id="133">133</a>
 <a href="#134" id="134">134</a>
+<a href="#135" id="135">135</a>
+<a href="#136" id="136">136</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::io::Write;
 
 <span class="kw">use </span>aleph_bft::Keychain <span class="kw">as </span>KeychainTrait;
 <span class="kw">use </span>bitcoin::secp256k1::hashes::sha256;
 <span class="kw">use </span>bitcoin::secp256k1::Message;
-<span class="kw">use </span>fedimint_core::session_outcome::{consensus_hash_sha256, SchnorrSignature};
+<span class="kw">use </span>fedimint_core::encoding::Encodable;
+<span class="kw">use </span>fedimint_core::session_outcome::SchnorrSignature;
 <span class="kw">use </span>fedimint_core::{BitcoinHash, NumPeersExt, PeerId};
 <span class="kw">use </span>secp256k1_zkp::{schnorr, All, KeyPair, PublicKey, Secp256k1, SecretKey};
 
@@ -180,8 +183,9 @@
     }
 
     <span class="kw">fn </span>tagged_hash(<span class="kw-2">&amp;</span><span class="self">self</span>, message: <span class="kw-2">&amp;</span>[u8]) -&gt; Message {
-        <span class="kw">let </span>public_key_tag = consensus_hash_sha256(<span class="kw-2">&amp;</span><span class="self">self</span>.public_keys);
         <span class="kw">let </span><span class="kw-2">mut </span>engine = sha256::HashEngine::default();
+
+        <span class="kw">let </span>public_key_tag = <span class="self">self</span>.public_keys.consensus_hash::&lt;sha256::Hash&gt;();
 
         engine
             .write_all(public_key_tag.as_ref())

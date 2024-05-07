@@ -68,14 +68,6 @@
 <a href="#68" id="68">68</a>
 <a href="#69" id="69">69</a>
 <a href="#70" id="70">70</a>
-<a href="#71" id="71">71</a>
-<a href="#72" id="72">72</a>
-<a href="#73" id="73">73</a>
-<a href="#74" id="74">74</a>
-<a href="#75" id="75">75</a>
-<a href="#76" id="76">76</a>
-<a href="#77" id="77">77</a>
-<a href="#78" id="78">78</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>bitcoin::hashes::{sha256, Hash};
 <span class="kw">use </span>parity_scale_codec::{Decode, Encode};
 
@@ -114,10 +106,12 @@
 
         header[..<span class="number">8</span>].copy_from_slice(<span class="kw-2">&amp;</span>index.to_be_bytes());
 
-        <span class="kw">let </span>leaf_hashes = <span class="self">self</span>.items.iter().map(consensus_hash_sha256);
+        <span class="kw">let </span>leaf_hashes = <span class="self">self
+            </span>.items
+            .iter()
+            .map(|item| item.consensus_hash::&lt;sha256::Hash&gt;());
 
-        <span class="comment">// TODO: extract merkle tree calculation and remove bitcoin dep
-        </span><span class="kw">if let </span><span class="prelude-val">Some</span>(root) = bitcoin::merkle_tree::calculate_root(leaf_hashes) {
+        <span class="kw">if let </span><span class="prelude-val">Some</span>(root) = bitcoin::merkle_tree::calculate_root(leaf_hashes) {
             header[<span class="number">8</span>..].copy_from_slice(<span class="kw-2">&amp;</span>root.to_byte_array());
         }
 
@@ -143,15 +137,5 @@
     Initial,
     Pending(Vec&lt;AcceptedItem&gt;),
     Complete(SessionOutcome),
-}
-
-<span class="comment">// TODO: remove this as soon as we bump bitcoin_hashes in fedimint_core to
-// 0.12.0
-</span><span class="kw">pub fn </span>consensus_hash_sha256&lt;E: Encodable&gt;(encodable: <span class="kw-2">&amp;</span>E) -&gt; sha256::Hash {
-    <span class="kw">let </span><span class="kw-2">mut </span>engine = sha256::HashEngine::default();
-    encodable
-        .consensus_encode(<span class="kw-2">&amp;mut </span>engine)
-        .expect(<span class="string">"Writing to HashEngine cannot fail"</span>);
-    sha256::Hash::from_engine(engine)
 }
 </code></pre></div></section></main></body></html>
