@@ -23,5 +23,5 @@ group = { workspace = true }
 rand = { workspace = true }
 rand_chacha = { workspace = true }
 bitcoin_hashes = { workspace = true }
-serde = { version = "1.0", features = ["derive"] }
-serde-big-array = "0.5.1"
+serde = { workspace = true }
+serde-big-array = { workspace = true }

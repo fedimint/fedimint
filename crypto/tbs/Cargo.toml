@@ -25,7 +25,7 @@ group = { workspace = true }
 hex = { workspace = true }
 rand = { workspace = true }
 rand_chacha = { workspace = true }
-serde = { version = "1.0", features = ["derive"] }
+serde = { workspace = true }
 sha3 = "0.10.8"
 
 [dev-dependencies]
