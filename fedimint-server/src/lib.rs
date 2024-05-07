@@ -10,8 +10,7 @@ use std::time::Duration;
 
 use anyhow::{anyhow as format_err, Context};
 use async_trait::async_trait;
-use bitcoin_hashes::sha256::HashEngine;
-use bitcoin_hashes::{sha256, Hash};
+use bitcoin_hashes::sha256;
 use config::io::{read_server_config, PLAINTEXT_PASSWORD};
 use config::ServerConfig;
 use fedimint_core::config::ServerModuleInitRegistry;
@@ -348,19 +347,13 @@ pub fn check_auth(context: &mut ApiEndpointContext) -> ApiResult<()> {
     }
 }
 
+// The verification hashes are purposefully different for each peer such that
+// their manual verification by the guardians via the UI is more robust
 pub fn get_verification_hashes(config: &ServerConfig) -> BTreeMap<PeerId, sha256::Hash> {
-    let mut hashes = BTreeMap::new();
-    for (peer, cert) in config.consensus.tls_certs.iter() {
-        let mut engine = HashEngine::default();
-
-        config
-            .consensus
-            .consensus_encode(&mut engine)
-            .expect("hashes");
-        cert.consensus_encode(&mut engine).expect("hashes");
-
-        let hash = sha256::Hash::from_engine(engine);
-        hashes.insert(*peer, hash);
-    }
-    hashes
+    config
+        .consensus
+        .api_endpoints
+        .keys()
+        .map(|peer| (*peer, (*peer, config.consensus.clone()).consensus_hash()))
+        .collect()
 }
