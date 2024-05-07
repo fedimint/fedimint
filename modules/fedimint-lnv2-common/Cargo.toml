@@ -37,7 +37,7 @@ strum_macros = "0.26"
 thiserror = "1.0.59"
 threshold_crypto = { workspace = true }
 tracing = "0.1.37"
-rand = "0.8"
+rand = { workspace = true }
 url = { version = "2.3.1", features = ["serde"] }
 # crypto deps
 bls12_381 = { workspace = true }
