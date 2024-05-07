@@ -387,7 +387,9 @@ impl ServerModule for Mint {
             .await
             .is_some()
         {
-            return Err(MintInputError::SpentCoin);
+            return Err(MintInputError::SpentCoin {
+                nonce: input.note.nonce,
+            });
         }
 
         dbtx.insert_new_entry(

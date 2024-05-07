@@ -80,16 +80,20 @@ impl Transaction {
     pub fn validate_signatures(
         &self,
         pub_keys: Vec<secp256k1_zkp::PublicKey>,
+        txid: TransactionId,
     ) -> Result<(), TransactionError> {
         let signatures = match &self.signatures {
             TransactionSignature::NaiveMultisig(sigs) => sigs,
             TransactionSignature::Default { variant, .. } => {
-                return Err(TransactionError::UnsupportedSignatureScheme { variant: *variant })
+                return Err(TransactionError::UnsupportedSignatureScheme {
+                    variant: *variant,
+                    txid,
+                })
             }
         };
 
         if pub_keys.len() != signatures.len() {
-            return Err(TransactionError::InvalidWitnessLength);
+            return Err(TransactionError::InvalidWitnessLength { txid });
         }
 
         let txid = self.tx_hash();
@@ -102,9 +106,9 @@ impl Transaction {
             {
                 return Err(TransactionError::InvalidSignature {
                     tx: self.consensus_encode_to_hex(),
-                    hash: self.tx_hash().consensus_encode_to_hex(),
                     sig: signature.consensus_encode_to_hex(),
                     key: pk.consensus_encode_to_hex(),
+                    txid,
                 });
             }
         }
@@ -125,25 +129,34 @@ pub enum TransactionSignature {
 
 #[derive(Debug, Error, Encodable, Decodable, Clone, Eq, PartialEq)]
 pub enum TransactionError {
-    #[error("The transaction is unbalanced (in={inputs}, out={outputs}, fee={fee})")]
+    #[error("The transaction {txid} is unbalanced (in={inputs}, out={outputs}, fee={fee})")]
     UnbalancedTransaction {
         inputs: Amount,
         outputs: Amount,
         fee: Amount,
+        txid: TransactionId,
     },
-    #[error("The transaction's signature is invalid: tx={tx}, hash={hash}, sig={sig}, key={key}")]
+    #[error("The transaction's {txid} signature is invalid: tx={tx}, sig={sig}, key={key}")]
     InvalidSignature {
+        txid: TransactionId,
         tx: String,
-        hash: String,
         sig: String,
         key: String,
     },
-    #[error("The transaction's signature scheme is not supported: variant={variant}")]
-    UnsupportedSignatureScheme { variant: u64 },
-    #[error("The transaction did not have the correct number of signatures")]
-    InvalidWitnessLength,
-    #[error("The transaction had an invalid input: {}", .0)]
-    Input(DynInputError),
-    #[error("The transaction had an invalid output: {}", .0)]
-    Output(DynOutputError),
+    #[error("The transaction's {txid} signature scheme is not supported: variant={variant}")]
+    UnsupportedSignatureScheme { txid: TransactionId, variant: u64 },
+    #[error("The transaction {txid} did not have the correct number of signatures")]
+    InvalidWitnessLength { txid: TransactionId },
+    #[error("The transaction {txid} had an invalid input at index {}: {}",  .input_idx, .error)]
+    Input {
+        error: DynInputError,
+        input_idx: u64,
+        txid: TransactionId,
+    },
+    #[error("The transaction {txid} had an invalid output at index {}: {}",  .output_idx, .error)]
+    Output {
+        error: DynOutputError,
+        output_idx: u64,
+        txid: TransactionId,
+    },
 }

@@ -219,8 +219,8 @@ plugin_types_trait_impl_common!(
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Error, Encodable, Decodable)]
 pub enum MintInputError {
-    #[error("The note is already spent")]
-    SpentCoin,
+    #[error("The note is already spent ({nonce:?})")]
+    SpentCoin { nonce: Nonce },
     #[error("The note has an invalid amount not issued by the mint: {0:?}")]
     InvalidAmountTier(Amount),
     #[error("The note has an invalid signature")]
