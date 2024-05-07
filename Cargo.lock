@@ -1656,7 +1656,6 @@ dependencies = [
  "fedimint-client",
  "fedimint-core",
  "fedimint-dummy-common",
- "fedimint-threshold-crypto",
  "futures",
  "rand",
  "serde",
@@ -1671,18 +1670,9 @@ name = "fedimint-dummy-common"
 version = "0.4.0-alpha"
 dependencies = [
  "anyhow",
- "async-trait",
- "bitcoin_hashes 0.12.0",
- "erased-serde",
  "fedimint-core",
- "fedimint-threshold-crypto",
- "futures",
- "rand",
  "serde",
- "strum",
- "strum_macros",
  "thiserror",
- "tracing",
 ]
 
 [[package]]
@@ -1691,18 +1681,13 @@ version = "0.4.0-alpha"
 dependencies = [
  "anyhow",
  "async-trait",
- "bitcoin_hashes 0.12.0",
  "erased-serde",
  "fedimint-core",
  "fedimint-dummy-common",
  "futures",
- "rand",
  "serde",
  "strum",
  "strum_macros",
- "thiserror",
- "tokio",
- "tracing",
 ]
 
 [[package]]
@@ -1716,13 +1701,10 @@ dependencies = [
  "fedimint-dummy-common",
  "fedimint-dummy-server",
  "fedimint-logging",
- "fedimint-server",
  "fedimint-testing",
- "fedimint-threshold-crypto",
  "futures",
  "rand",
  "strum",
- "strum_macros",
  "tokio",
  "tracing",
 ]
