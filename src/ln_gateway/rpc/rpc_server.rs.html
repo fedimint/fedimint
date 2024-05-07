@@ -384,6 +384,13 @@
 <a href="#384" id="384">384</a>
 <a href="#385" id="385">385</a>
 <a href="#386" id="386">386</a>
+<a href="#387" id="387">387</a>
+<a href="#388" id="388">388</a>
+<a href="#389" id="389">389</a>
+<a href="#390" id="390">390</a>
+<a href="#391" id="391">391</a>
+<a href="#392" id="392">392</a>
+<a href="#393" id="393">393</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>axum::extract::Request;
 <span class="kw">use </span>axum::http::{header, StatusCode};
 <span class="kw">use </span>axum::middleware::{<span class="self">self</span>, Next};
@@ -396,6 +403,13 @@
 <span class="kw">use </span>fedimint_core::config::FederationId;
 <span class="kw">use </span>fedimint_core::task::TaskGroup;
 <span class="kw">use </span>fedimint_ln_client::pay::PayInvoicePayload;
+<span class="kw">use </span>fedimint_ln_common::gateway_endpoint_constants::{
+    ADDRESS_ENDPOINT, BACKUP_ENDPOINT, BALANCE_ENDPOINT, CONFIGURATION_ENDPOINT,
+    CONNECT_FED_ENDPOINT, CREATE_INVOICE_V2_ENDPOINT, GATEWAY_INFO_ENDPOINT,
+    GATEWAY_INFO_POST_ENDPOINT, GET_GATEWAY_ID_ENDPOINT, LEAVE_FED_ENDPOINT,
+    PAYMENT_INFO_V2_ENDPOINT, PAY_INVOICE_ENDPOINT, RESTORE_ENDPOINT, SEND_PAYMENT_V2_ENDPOINT,
+    SET_CONFIGURATION_ENDPOINT, WITHDRAW_ENDPOINT,
+};
 <span class="kw">use </span>fedimint_lnv2_client::{CreateInvoicePayload, SendPaymentPayload};
 <span class="kw">use </span>hex::ToHex;
 <span class="kw">use </span>serde_json::{json, Value};
@@ -525,22 +539,22 @@
 </span><span class="kw">fn </span>v1_routes(gateway: Gateway) -&gt; Router {
     <span class="comment">// Public routes on gateway webserver
     </span><span class="kw">let </span>public_routes = Router::new()
-        .route(<span class="string">"/pay_invoice"</span>, post(pay_invoice))
-        .route(<span class="string">"/id"</span>, get(get_gateway_id))
+        .route(PAY_INVOICE_ENDPOINT, post(pay_invoice))
+        .route(GET_GATEWAY_ID_ENDPOINT, get(get_gateway_id))
         <span class="comment">// These routes are for next generation lightning
-        </span>.route(<span class="string">"/payment_info"</span>, post(payment_info_v2))
-        .route(<span class="string">"/send_payment"</span>, post(send_payment_v2))
-        .route(<span class="string">"/create_invoice"</span>, post(create_invoice_v2));
+        </span>.route(PAYMENT_INFO_V2_ENDPOINT, post(payment_info_v2))
+        .route(SEND_PAYMENT_V2_ENDPOINT, post(send_payment_v2))
+        .route(CREATE_INVOICE_V2_ENDPOINT, post(create_invoice_v2));
 
     <span class="comment">// Authenticated, public routes used for gateway administration
     </span><span class="kw">let </span>always_authenticated_routes = Router::new()
-        .route(<span class="string">"/balance"</span>, post(balance))
-        .route(<span class="string">"/address"</span>, post(address))
-        .route(<span class="string">"/withdraw"</span>, post(withdraw))
-        .route(<span class="string">"/connect-fed"</span>, post(connect_fed))
-        .route(<span class="string">"/leave-fed"</span>, post(leave_fed))
-        .route(<span class="string">"/backup"</span>, post(backup))
-        .route(<span class="string">"/restore"</span>, post(restore))
+        .route(BALANCE_ENDPOINT, post(balance))
+        .route(ADDRESS_ENDPOINT, post(address))
+        .route(WITHDRAW_ENDPOINT, post(withdraw))
+        .route(CONNECT_FED_ENDPOINT, post(connect_fed))
+        .route(LEAVE_FED_ENDPOINT, post(leave_fed))
+        .route(BACKUP_ENDPOINT, post(backup))
+        .route(RESTORE_ENDPOINT, post(restore))
         .route(<span class="string">"/connect_to_peer"</span>, post(connect_to_peer))
         .route(<span class="string">"/get_funding_address"</span>, post(get_funding_address))
         .route(<span class="string">"/open_channel"</span>, post(open_channel))
@@ -550,11 +564,11 @@
     <span class="comment">// Routes that are un-authenticated before gateway configuration, then become
     // authenticated after a password has been set.
     </span><span class="kw">let </span>authenticated_after_config_routes = Router::new()
-        .route(<span class="string">"/set_configuration"</span>, post(set_configuration))
-        .route(<span class="string">"/config"</span>, get(configuration))
+        .route(SET_CONFIGURATION_ENDPOINT, post(set_configuration))
+        .route(CONFIGURATION_ENDPOINT, get(configuration))
         <span class="comment">// FIXME: deprecated &gt;= 0.3.0
-        </span>.route(<span class="string">"/info"</span>, post(handle_post_info))
-        .route(<span class="string">"/info"</span>, get(info))
+        </span>.route(GATEWAY_INFO_POST_ENDPOINT, post(handle_post_info))
+        .route(GATEWAY_INFO_ENDPOINT, get(info))
         .layer(middleware::from_fn(auth_after_config_middleware));
 
     Router::new()

@@ -21,7 +21,7 @@ var srcIndex = new Map(JSON.parse('[\
 ["fedimint_empty_common",["",[],["config.rs","lib.rs"]]],\
 ["fedimint_empty_server",["",[],["db.rs","lib.rs"]]],\
 ["fedimint_ln_client",["",[],["api.rs","cli.rs","db.rs","incoming.rs","lib.rs","pay.rs","receive.rs"]]],\
-["fedimint_ln_common",["",[["contracts",[],["incoming.rs","mod.rs","outgoing.rs"]]],["config.rs","endpoint_constants.rs","lib.rs"]]],\
+["fedimint_ln_common",["",[["contracts",[],["incoming.rs","mod.rs","outgoing.rs"]]],["config.rs","federation_endpoint_constants.rs","gateway_endpoint_constants.rs","lib.rs"]]],\
 ["fedimint_ln_server",["",[],["db.rs","lib.rs","metrics.rs"]]],\
 ["fedimint_lnv2_client",["",[],["api.rs","lib.rs","receive_sm.rs","send_sm.rs"]]],\
 ["fedimint_lnv2_common",["",[],["config.rs","contracts.rs","endpoint_constants.rs","lib.rs"]]],\

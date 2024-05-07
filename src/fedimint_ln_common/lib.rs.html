@@ -728,6 +728,7 @@
 <a href="#728" id="728">728</a>
 <a href="#729" id="729">729</a>
 <a href="#730" id="730">730</a>
+<a href="#731" id="731">731</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! # Lightning Module
 //!
 //! This module allows to atomically and trustlessly (in the federated trust
@@ -741,7 +742,8 @@
 
 <span class="kw">pub mod </span>config;
 <span class="kw">pub mod </span>contracts;
-<span class="kw">pub mod </span>endpoint_constants;
+<span class="kw">pub mod </span>federation_endpoint_constants;
+<span class="kw">pub mod </span>gateway_endpoint_constants;
 
 <span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::io::{Error, ErrorKind, Read, Write};
