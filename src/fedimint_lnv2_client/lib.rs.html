@@ -885,6 +885,8 @@
 <a href="#885" id="885">885</a>
 <a href="#886" id="886">886</a>
 <a href="#887" id="887">887</a>
+<a href="#888" id="888">888</a>
+<a href="#889" id="889">889</a>
 </pre></div><pre class="rust"><code><span class="kw">pub mod </span>api;
 <span class="attr">#[cfg(feature = <span class="string">"cli"</span>)]
 </span><span class="kw">mod </span>cli;
@@ -1634,6 +1636,8 @@
         <span class="kw">if </span>!contract.verify_agg_decryption_key(<span class="kw-2">&amp;</span><span class="self">self</span>.cfg.tpe_agg_pk, <span class="kw-2">&amp;</span>agg_decryption_key) {
             <span class="kw">return </span><span class="prelude-val">None</span>; <span class="comment">// The decryption key is not derived from our pk
         </span>}
+
+        contract.decrypt_preimage(<span class="kw-2">&amp;</span>agg_decryption_key)<span class="question-mark">?</span>;
 
         <span class="prelude-val">Some</span>((claim_keypair, agg_decryption_key))
     }
