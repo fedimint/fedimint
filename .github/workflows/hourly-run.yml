@@ -87,25 +87,6 @@ jobs:
           nix build -L .#wasm32-unknown.ci.wasmTest
           nix build -L .#wasm32-unknown.ci.wasmTest --rebuild
 
-      - name: Prepare failed test build dirs
-        if: always()
-        run:  |
-          set -x
-          # delete source and target artifacts as it is huge and rather useless now
-          sudo rm -Rf /tmp/nix-build-*/source || true
-          # chown so actions/upload-artifact can access it
-          sudo chown -R $USER /tmp/nix-build-* || true
-          # delete unix sockets, as actions/upload-artifact can't handle them
-          find /tmp/nix-build-* -type s -print0 | xargs -0 rm || true
-
-      - name: Upload failed test build dirs
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: "fedimint-failed-test-logs-${{ github.run_number }}-${{ matrix.host}}"
-          path: |
-            /tmp/nix-build-*/
-            !/tmp/nix-build-*/source/
 
   notifications:
     if: always() && github.repository == 'fedimint/fedimint' && github.event_name != 'merge_group'
