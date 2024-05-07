@@ -668,7 +668,7 @@ mod test {
     use fedimint_core::db::mem_impl::MemDatabase;
     use fedimint_core::db::Database;
     use fedimint_core::module::{ModuleConsensusVersion, ServerModuleInit};
-    use fedimint_core::{Amount, PeerId, ServerModule};
+    use fedimint_core::{secp256k1, Amount, PeerId, ServerModule};
     use fedimint_mint_common::config::FeeConsensus;
     use fedimint_mint_common::{MintInput, Nonce, Note};
     use tbs::blind_message;

@@ -13,6 +13,7 @@ use fedimint_client::transaction::{ClientInput, ClientOutput, TransactionBuilder
 use fedimint_client::ClientHandleArc;
 use fedimint_core::config::FederationId;
 use fedimint_core::core::{IntoDynInstance, OperationId};
+use fedimint_core::secp256k1::PublicKey;
 use fedimint_core::task::sleep_in_test;
 use fedimint_core::util::NextOrPending;
 use fedimint_core::{msats, sats, Amount, OutPoint, TransactionId};
@@ -58,7 +59,6 @@ use ln_gateway::state_machine::{
 };
 use ln_gateway::{DEFAULT_FEES, DEFAULT_NETWORK};
 use reqwest::StatusCode;
-use secp256k1::PublicKey;
 use tracing::info;
 
 async fn user_pay_invoice(

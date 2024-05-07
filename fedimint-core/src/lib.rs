@@ -35,6 +35,7 @@ pub use bitcoin_hashes::Hash as BitcoinHash;
 use fedimint_core::config::PeerUrl;
 pub use macro_rules_attribute::apply;
 pub use module::ServerModule;
+pub use secp256k1;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 pub use tiered::Tiered;

@@ -12,6 +12,7 @@ use clap::Parser;
 use cln_plugin::{options, Builder, Plugin};
 use cln_rpc::model;
 use cln_rpc::primitives::ShortChannelId;
+use fedimint_core::secp256k1::{All, PublicKey, Secp256k1, SecretKey};
 use fedimint_core::task::TaskGroup;
 use fedimint_core::util::handle_version_hash_command;
 use fedimint_core::{fedimint_build_code_version_env, Amount};
@@ -33,7 +34,6 @@ use ln_gateway::gateway_lnrpc::{
 };
 use rand::rngs::OsRng;
 use rand::Rng;
-use secp256k1::{All, PublicKey, Secp256k1, SecretKey};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio::io::{stdin, stdout};

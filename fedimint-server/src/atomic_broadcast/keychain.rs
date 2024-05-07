@@ -2,12 +2,11 @@ use std::collections::BTreeMap;
 use std::io::Write;
 
 use aleph_bft::Keychain as KeychainTrait;
-use bitcoin::secp256k1::hashes::sha256;
-use bitcoin::secp256k1::Message;
 use fedimint_core::encoding::Encodable;
 use fedimint_core::session_outcome::SchnorrSignature;
-use fedimint_core::{BitcoinHash, NumPeersExt, PeerId};
-use secp256k1::{schnorr, KeyPair, PublicKey};
+use fedimint_core::{secp256k1, BitcoinHash, NumPeersExt, PeerId};
+use secp256k1::hashes::sha256;
+use secp256k1::{schnorr, KeyPair, Message, PublicKey};
 
 use crate::config::ServerConfig;
 

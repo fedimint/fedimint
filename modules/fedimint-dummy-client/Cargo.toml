@@ -25,7 +25,6 @@ fedimint-api-client = { workspace = true }
 futures = { workspace = true }
 erased-serde = { workspace = true }
 rand = { workspace = true }
-secp256k1 = "0.27.0"
 serde = { workspace = true }
 strum = { workspace = true }
 strum_macros = { workspace = true }

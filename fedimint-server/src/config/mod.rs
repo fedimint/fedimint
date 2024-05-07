@@ -4,7 +4,6 @@ use std::net::SocketAddr;
 use std::time::Duration;
 
 use anyhow::{bail, format_err};
-use bitcoin::secp256k1::PublicKey;
 use fedimint_core::admin_client::ConfigGenParamsConsensus;
 pub use fedimint_core::config::{
     serde_binary_human_readable, ClientConfig, DkgError, DkgPeerMsg, DkgResult, FederationId,
@@ -20,11 +19,11 @@ use fedimint_core::module::{
 };
 use fedimint_core::net::peers::{IMuxPeerConnections, IPeerConnections, PeerConnections};
 use fedimint_core::task::{timeout, Cancelled, Elapsed, TaskGroup};
-use fedimint_core::{timing, PeerId};
+use fedimint_core::{secp256k1, timing, PeerId};
 use fedimint_logging::{LOG_NET_PEER, LOG_NET_PEER_DKG};
 use futures::future::join_all;
 use rand::rngs::OsRng;
-use secp256k1::{Secp256k1, SecretKey};
+use secp256k1::{PublicKey, Secp256k1, SecretKey};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use tokio_rustls::rustls;

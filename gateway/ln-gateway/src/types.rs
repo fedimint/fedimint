@@ -1,7 +1,7 @@
 //! Map `gateway_lnrpc` protobuf types to rust types
 
 use anyhow::anyhow;
-use secp256k1::PublicKey;
+use fedimint_core::secp256k1::PublicKey;
 
 impl TryFrom<crate::gateway_lnrpc::get_route_hints_response::RouteHintHop>
     for fedimint_ln_common::route_hints::RouteHintHop

@@ -7,7 +7,7 @@ use anyhow::ensure;
 use async_trait::async_trait;
 use bitcoin_hashes::Hash;
 use fedimint_core::task::{sleep, TaskGroup};
-use fedimint_core::Amount;
+use fedimint_core::{secp256k1, Amount};
 use fedimint_ln_common::PrunedInvoice;
 use hex::ToHex;
 use secp256k1::PublicKey;

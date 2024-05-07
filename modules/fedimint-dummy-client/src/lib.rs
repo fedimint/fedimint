@@ -19,6 +19,7 @@ use fedimint_core::db::{
 use fedimint_core::module::{
     ApiVersion, CommonModuleInit, ModuleCommon, ModuleInit, MultiApiVersion,
 };
+use fedimint_core::secp256k1::{KeyPair, PublicKey, Secp256k1};
 use fedimint_core::util::{BoxStream, NextOrPending};
 use fedimint_core::{apply, async_trait_maybe_send, Amount, OutPoint};
 pub use fedimint_dummy_common as common;
@@ -28,7 +29,6 @@ use fedimint_dummy_common::{
     KIND,
 };
 use futures::{pin_mut, FutureExt, StreamExt};
-use secp256k1::{KeyPair, PublicKey, Secp256k1};
 use states::DummyStateMachine;
 use strum::IntoEnumIterator;
 
