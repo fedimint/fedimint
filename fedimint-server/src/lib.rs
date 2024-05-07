@@ -106,7 +106,7 @@ impl FedimintServer {
     ) -> anyhow::Result<()> {
         let cfg = match FedimintServer::get_config(&self.data_dir).await? {
             Some(cfg) => cfg,
-            None => self.run_dkg(task_group.clone()).await?,
+            None => self.run_config_gen(task_group.make_subgroup()).await?,
         };
 
         let decoders = init_registry.decoders_strict(
@@ -150,21 +150,14 @@ impl FedimintServer {
         Ok(None)
     }
 
-    /// Starts server that will run DKG
-    /// After configs are generated, start `ConsensusApi` and `ConsensusServer`
-    pub async fn run_dkg(&mut self, task_group: TaskGroup) -> anyhow::Result<ServerConfig> {
+    pub async fn run_config_gen(
+        &mut self,
+        mut task_group: TaskGroup,
+    ) -> anyhow::Result<ServerConfig> {
         info!(target: LOG_CONSENSUS, "Starting config gen");
 
         initialize_gauge_metrics(&self.db).await;
 
-        self.generate_config(task_group.make_subgroup()).await
-    }
-
-    /// Generates the `ServerConfig`
-    ///
-    /// If a local password file exists, will try to read the configs from the
-    /// filesystem.  Otherwise, it will start the `ConfigGenApi`.
-    async fn generate_config(&self, mut task_group: TaskGroup) -> anyhow::Result<ServerConfig> {
         let (config_generated_tx, mut config_generated_rx) = tokio::sync::mpsc::channel(1);
 
         let config_gen = ConfigGenApi::new(
