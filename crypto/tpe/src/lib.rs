@@ -6,7 +6,7 @@ use bls12_381::{pairing, G1Projective, G2Projective, Scalar};
 pub use bls12_381::{G1Affine, G2Affine};
 use fedimint_core::bls12_381_serde;
 use fedimint_core::encoding::{Decodable, Encodable};
-use ff::Field;
+use group::ff::Field;
 use group::{Curve, Group};
 use rand_chacha::rand_core::SeedableRng;
 use rand_chacha::ChaChaRng;
@@ -194,7 +194,7 @@ mod tests {
 
     use bitcoin_hashes::{sha256, Hash};
     use bls12_381::{G1Projective, Scalar};
-    use ff::Field;
+    use group::ff::Field;
     use group::Curve;
     use rand::rngs::OsRng;
 
