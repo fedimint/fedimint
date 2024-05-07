@@ -48,7 +48,7 @@ use rand::thread_rng;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use thiserror::Error;
-use tracing::{debug, error, info};
+use tracing::{debug, info};
 use utils::parse_peer_id;
 
 use crate::client::ClientCmd;
@@ -540,7 +540,7 @@ impl FedimintCli {
                 let _ = writeln!(std::io::stdout(), "{output}");
             }
             Err(err) => {
-                error!("{}", err.error);
+                debug!(err = %err.error, "Command failed");
                 let _ = writeln!(std::io::stdout(), "{err}");
                 exit(1);
             }
