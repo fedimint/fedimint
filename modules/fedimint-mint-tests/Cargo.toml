@@ -14,7 +14,7 @@ path = "tests/tests.rs"
 [dependencies]
 anyhow = { workspace = true }
 bitcoin_hashes = { workspace = true }
-bls12_381 = "0.8.0"
+bls12_381 = { workspace = true }
 devimint = { workspace = true }
 fedimint-dummy-common = { path = "../fedimint-dummy-common" }
 fedimint-dummy-client = { path = "../fedimint-dummy-client" }

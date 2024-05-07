@@ -8,7 +8,7 @@ use std::collections::BTreeMap;
 use bls12_381::{pairing, G1Affine, G1Projective, G2Affine, G2Projective, Scalar};
 use fedimint_core::bls12_381_serde;
 use fedimint_core::encoding::{Decodable, Encodable};
-use ff::Field;
+use group::ff::Field;
 use group::{Curve, Group};
 use hex::encode;
 use rand::rngs::OsRng;
@@ -231,7 +231,7 @@ mod tests {
     use std::collections::BTreeMap;
 
     use bls12_381::{G2Projective, Scalar};
-    use ff::Field;
+    use group::ff::Field;
     use group::Curve;
     use rand::rngs::OsRng;
 

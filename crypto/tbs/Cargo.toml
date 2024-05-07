@@ -20,13 +20,12 @@ path = "src/lib.rs"
 
 [dependencies]
 fedimint-core = { version = "=0.4.0-alpha", path = "../../fedimint-core/" }
-bls12_381 = "0.8.0"
-ff = "0.13.0"
-group = "0.13.0"
+bls12_381 = { workspace = true }
+group = { workspace = true }
 hex = { workspace = true }
 rand = { workspace = true }
-rand_chacha = "0.3.1"
-serde = { version = "1.0", features = ["derive"] }
+rand_chacha = { workspace = true }
+serde = { workspace = true }
 sha3 = "0.10.8"
 
 [dev-dependencies]

@@ -83,13 +83,17 @@ threshold_crypto = { version = "0.2", package = "fedimint-threshold-crypto" }
 tonic_lnd = { version = "0.2.0", package="fedimint-tonic-lnd", features = ["lightningrpc", "routerrpc"] }
 cln-rpc = "0.1.8"
 clap = { version = "4.5.4", features = ["derive", "std", "help", "usage", "error-context", "suggestions", "env"], default-features = false }
-serde = "1.0.200"
+serde = { version = "1.0.200", features = ["derive"] }
+serde-big-array = "0.5.1"
 serde_json = "1.0.116"
 serdect = "0.2.0"
+bls12_381 = "0.8.0"
+group = "0.13.0"
 itertools = "0.12.1"
 anyhow = "1.0.82"
 bitcoin_hashes = "0.12.0"
 rand = "0.8.5"
+rand_chacha = "0.3.1"
 tracing = "0.1.40"
 bitcoin = "0.30.2"
 bitcoincore-rpc = "0.17.0"

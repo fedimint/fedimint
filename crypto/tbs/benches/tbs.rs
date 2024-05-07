@@ -4,7 +4,7 @@ use std::io::Cursor;
 use bls12_381::{G2Projective, Scalar};
 use criterion::{criterion_group, criterion_main, Criterion};
 use fedimint_core::encoding::{Decodable, Encodable};
-use ff::Field;
+use group::ff::Field;
 use group::Curve;
 use rand::rngs::OsRng;
 use tbs::{
