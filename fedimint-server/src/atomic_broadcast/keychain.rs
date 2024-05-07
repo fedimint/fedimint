@@ -4,7 +4,8 @@ use std::io::Write;
 use aleph_bft::Keychain as KeychainTrait;
 use bitcoin::secp256k1::hashes::sha256;
 use bitcoin::secp256k1::Message;
-use fedimint_core::session_outcome::{consensus_hash_sha256, SchnorrSignature};
+use fedimint_core::encoding::Encodable;
+use fedimint_core::session_outcome::SchnorrSignature;
 use fedimint_core::{BitcoinHash, NumPeersExt, PeerId};
 use secp256k1_zkp::{schnorr, All, KeyPair, PublicKey, Secp256k1, SecretKey};
 
@@ -46,8 +47,9 @@ impl Keychain {
     }
 
     fn tagged_hash(&self, message: &[u8]) -> Message {
-        let public_key_tag = consensus_hash_sha256(&self.public_keys);
         let mut engine = sha256::HashEngine::default();
+
+        let public_key_tag = self.public_keys.consensus_hash::<sha256::Hash>();
 
         engine
             .write_all(public_key_tag.as_ref())
