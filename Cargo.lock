@@ -2621,15 +2621,9 @@ name = "fedimint-unknown-common"
 version = "0.4.0-alpha"
 dependencies = [
  "anyhow",
- "async-trait",
- "bitcoin_hashes 0.12.0",
- "erased-serde",
  "fedimint-core",
- "futures",
- "rand",
  "serde",
  "thiserror",
- "tracing",
 ]
 
 [[package]]
@@ -2641,14 +2635,8 @@ dependencies = [
  "erased-serde",
  "fedimint-core",
  "fedimint-unknown-common",
- "futures",
- "rand",
- "serde",
  "strum",
  "strum_macros",
- "thiserror",
- "tokio",
- "tracing",
 ]
 
 [[package]]
