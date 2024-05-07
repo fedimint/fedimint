@@ -1569,7 +1569,8 @@ impl MintClientModule {
             amount,
             nonce: note.nonce(),
         })
-        .await;
+        .await
+        .expect("Must deleted existing spendable note");
     }
 }
 
