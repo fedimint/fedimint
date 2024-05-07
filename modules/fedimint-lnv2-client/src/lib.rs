@@ -748,6 +748,8 @@ impl LightningClientModule {
             return None; // The decryption key is not derived from our pk
         }
 
+        contract.decrypt_preimage(&agg_decryption_key)?;
+
         Some((claim_keypair, agg_decryption_key))
     }
 
