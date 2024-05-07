@@ -36,9 +36,11 @@ impl SessionOutcome {
 
         header[..8].copy_from_slice(&index.to_be_bytes());
 
-        let leaf_hashes = self.items.iter().map(consensus_hash_sha256);
+        let leaf_hashes = self
+            .items
+            .iter()
+            .map(|item| item.consensus_hash::<sha256::Hash>());
 
-        // TODO: extract merkle tree calculation and remove bitcoin dep
         if let Some(root) = bitcoin::merkle_tree::calculate_root(leaf_hashes) {
             header[8..].copy_from_slice(&root.to_byte_array());
         }
@@ -65,14 +67,4 @@ pub enum SessionStatus {
     Initial,
     Pending(Vec<AcceptedItem>),
     Complete(SessionOutcome),
-}
-
-// TODO: remove this as soon as we bump bitcoin_hashes in fedimint_core to
-// 0.12.0
-pub fn consensus_hash_sha256<E: Encodable>(encodable: &E) -> sha256::Hash {
-    let mut engine = sha256::HashEngine::default();
-    encodable
-        .consensus_encode(&mut engine)
-        .expect("Writing to HashEngine cannot fail");
-    sha256::Hash::from_engine(engine)
 }
