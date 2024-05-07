@@ -99,37 +99,55 @@ impl FedimintServer {
         }
     }
 
-    /// Starts the `ConfigGenApi` with existing configs
-    pub async fn run_cfg(
+    pub async fn run(
         &mut self,
-        cfg: &ServerConfig,
+        init_registry: &ServerModuleInitRegistry,
         task_group: TaskGroup,
     ) -> anyhow::Result<()> {
-        info!(target: LOG_CONSENSUS, "Starting config gen");
+        let cfg = match FedimintServer::get_config(&self.data_dir).await? {
+            Some(cfg) => cfg,
+            None => self.run_dkg(task_group.clone()).await?,
+        };
 
-        initialize_gauge_metrics(&self.db).await;
+        let decoders = init_registry.decoders_strict(
+            cfg.consensus
+                .modules
+                .iter()
+                .map(|(id, config)| (*id, &config.kind)),
+        )?;
 
-        let (consensus_server, consensus_api) = ConsensusServer::new(
-            cfg.clone(),
-            self.db.clone(),
-            self.settings.registry.clone(),
-            &task_group,
-        )
-        .await
-        .context("Setting up consensus server")?;
+        let db = self.db.with_decoders(decoders);
 
-        info!(target: LOG_CONSENSUS, "Starting consensus API");
+        initialize_gauge_metrics(&db).await;
 
-        let handler = Self::spawn_consensus_api(consensus_api).await;
+        let (server, api) = ConsensusServer::new(cfg, db, init_registry.clone(), &task_group)
+            .await
+            .context("Setting up consensus server")?;
 
-        consensus_server.run(task_group.make_handle()).await?;
+        info!(target: LOG_CONSENSUS, "Starting Consensus Api");
+
+        let handler = Self::spawn_consensus_api(api).await;
+
+        info!(target: LOG_CONSENSUS, "Starting Consensus Server");
+
+        server.run(task_group.make_handle()).await?;
 
         handler.stop().await;
 
         info!(target: LOG_CONSENSUS, "Shutting down tasks");
+
         task_group.shutdown();
 
         Ok(())
+    }
+
+    pub async fn get_config(data_dir: &Path) -> anyhow::Result<Option<ServerConfig>> {
+        // Attempt get the config with local password, otherwise start config gen
+        if let Ok(password) = fs::read_to_string(data_dir.join(PLAINTEXT_PASSWORD)) {
+            return Ok(Some(read_server_config(&password, data_dir.to_owned())?));
+        }
+
+        Ok(None)
     }
 
     /// Starts server that will run DKG
@@ -140,45 +158,6 @@ impl FedimintServer {
         initialize_gauge_metrics(&self.db).await;
 
         self.generate_config(task_group.make_subgroup()).await
-    }
-
-    pub async fn run(
-        &mut self,
-        module_inits: &ServerModuleInitRegistry,
-        task_group: TaskGroup,
-    ) -> anyhow::Result<()> {
-        let cfg = match FedimintServer::get_config(&self.data_dir).await? {
-            Some(cfg) => cfg,
-            None => self.run_dkg(task_group.clone()).await?,
-        };
-
-        let decoders = module_inits.decoders_strict(
-            cfg.consensus
-                .modules
-                .iter()
-                .map(|(id, config)| (*id, &config.kind)),
-        )?;
-
-        let db = self.db.with_decoders(decoders);
-
-        // Reconstruct yourself, with a DB that has decoders configured
-        let mut s = Self {
-            db,
-            data_dir: self.data_dir.clone(),
-            settings: self.settings.clone(),
-            version_hash: self.version_hash.clone(),
-        };
-
-        s.run_cfg(&cfg, task_group.clone()).await
-    }
-
-    pub async fn get_config(data_dir: &Path) -> anyhow::Result<Option<ServerConfig>> {
-        // Attempt get the config with local password, otherwise start config gen
-        if let Ok(password) = fs::read_to_string(data_dir.join(PLAINTEXT_PASSWORD)) {
-            return Ok(Some(read_server_config(&password, data_dir.to_owned())?));
-        }
-
-        Ok(None)
     }
 
     /// Generates the `ServerConfig`
