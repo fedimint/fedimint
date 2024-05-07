@@ -17,24 +17,15 @@ path = "src/lib.rs"
 
 [dependencies]
 anyhow = { workspace = true }
-async-trait = { workspace = true }
 bitcoin = { workspace = true }
-erased-serde = { workspace = true }
 fedimint-core = { version = "=0.4.0-alpha", path = "../../fedimint-core" }
-futures = { workspace = true }
 hex = { workspace = true }
 miniscript = { version = "10.0.0", features = [ "compiler", "serde" ] }
 impl-tools = "0.10.0"
-rand = { workspace = true }
 secp256k1 = { version = "0.27.0", features = [ "serde" ] }
 serde = { workspace = true }
-strum = { workspace = true }
-strum_macros = { workspace = true }
 thiserror = { workspace = true }
-tokio = { version = "1.37.0", features = ["sync"], optional = true }
 tracing = { workspace = true }
-url = { workspace = true }
 
 [dev-dependencies]
 test-log = { version = "0.2", features = [ "trace" ], default-features = false }
-tracing-subscriber = { version = "0.3.18", features = [ "env-filter" ] }
