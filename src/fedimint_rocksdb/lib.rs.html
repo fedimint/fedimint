@@ -644,6 +644,14 @@
 <a href="#644" id="644">644</a>
 <a href="#645" id="645">645</a>
 <a href="#646" id="646">646</a>
+<a href="#647" id="647">647</a>
+<a href="#648" id="648">648</a>
+<a href="#649" id="649">649</a>
+<a href="#650" id="650">650</a>
+<a href="#651" id="651">651</a>
+<a href="#652" id="652">652</a>
+<a href="#653" id="653">653</a>
+<a href="#654" id="654">654</a>
 </pre></div><pre class="rust"><code><span class="attr">#![allow(where_clauses_object_safety)] </span><span class="comment">// https://github.com/dtolnay/async-trait/issues/228
 
 </span><span class="kw">pub mod </span>envs;
@@ -660,7 +668,9 @@
 };
 <span class="kw">use </span>futures::stream;
 <span class="kw">pub use </span>rocksdb;
-<span class="kw">use </span>rocksdb::{OptimisticTransactionDB, OptimisticTransactionOptions, WriteOptions};
+<span class="kw">use </span>rocksdb::{
+    DBRecoveryMode, OptimisticTransactionDB, OptimisticTransactionOptions, WriteOptions,
+};
 <span class="kw">use </span>tracing::debug;
 
 <span class="kw">use </span><span class="kw">crate</span>::envs::FM_ROCKSDB_WRITE_BUFFER_SIZE_ENV;
@@ -672,7 +682,10 @@
 
 <span class="kw">impl </span>RocksDb {
     <span class="kw">pub fn </span>open(db_path: <span class="kw">impl </span>AsRef&lt;Path&gt;) -&gt; anyhow::Result&lt;RocksDb&gt; {
-        <span class="kw">let </span>opts = get_default_options()<span class="question-mark">?</span>;
+        <span class="kw">let </span><span class="kw-2">mut </span>opts = get_default_options()<span class="question-mark">?</span>;
+        <span class="comment">// Since we turned synchronous writes one we should never encounter a corrupted
+        // WAL and should rather fail in this case
+        </span>opts.set_wal_recovery_mode(DBRecoveryMode::AbsoluteConsistency);
         <span class="kw">let </span>db: rocksdb::OptimisticTransactionDB =
             rocksdb::OptimisticTransactionDB::&lt;rocksdb::SingleThreaded&gt;::open(<span class="kw-2">&amp;</span>opts, <span class="kw-2">&amp;</span>db_path)<span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(RocksDb(db))
@@ -781,10 +794,13 @@
     <span class="kw">async fn </span>begin_transaction&lt;<span class="lifetime">'a</span>&gt;(<span class="kw-2">&amp;</span><span class="lifetime">'a </span><span class="self">self</span>) -&gt; RocksDbTransaction {
         <span class="kw">let </span><span class="kw-2">mut </span>optimistic_options = OptimisticTransactionOptions::default();
         optimistic_options.set_snapshot(<span class="bool-val">true</span>);
-        <span class="kw">let </span><span class="kw-2">mut </span>rocksdb_tx = RocksDbTransaction(
-            <span class="self">self</span>.<span class="number">0
-                </span>.transaction_opt(<span class="kw-2">&amp;</span>WriteOptions::default(), <span class="kw-2">&amp;</span>optimistic_options),
-        );
+
+        <span class="kw">let </span><span class="kw-2">mut </span>write_options = WriteOptions::default();
+        <span class="comment">// Make sure we never lose data on unclean shutdown
+        </span>write_options.set_sync(<span class="bool-val">true</span>);
+
+        <span class="kw">let </span><span class="kw-2">mut </span>rocksdb_tx =
+            RocksDbTransaction(<span class="self">self</span>.<span class="number">0</span>.transaction_opt(<span class="kw-2">&amp;</span>write_options, <span class="kw-2">&amp;</span>optimistic_options));
         rocksdb_tx
             .set_tx_savepoint()
             .<span class="kw">await
