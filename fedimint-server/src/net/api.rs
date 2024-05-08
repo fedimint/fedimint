@@ -27,8 +27,7 @@ use fedimint_core::endpoint_constants::{
     CLIENT_CONFIG_ENDPOINT, FEDERATION_ID_ENDPOINT, GUARDIAN_CONFIG_BACKUP_ENDPOINT,
     INVITE_CODE_ENDPOINT, MODULES_CONFIG_JSON_ENDPOINT, RECOVER_ENDPOINT,
     SERVER_CONFIG_CONSENSUS_HASH_ENDPOINT, SESSION_COUNT_ENDPOINT, SESSION_STATUS_ENDPOINT,
-    SHUTDOWN_ENDPOINT, STATUS_ENDPOINT, SUBMIT_TRANSACTION_ENDPOINT, VERIFY_CONFIG_HASH_ENDPOINT,
-    VERSION_ENDPOINT,
+    SHUTDOWN_ENDPOINT, STATUS_ENDPOINT, SUBMIT_TRANSACTION_ENDPOINT, VERSION_ENDPOINT,
 };
 use fedimint_core::epoch::ConsensusItem;
 use fedimint_core::module::audit::{Audit, AuditSummary};
@@ -58,7 +57,7 @@ use crate::consensus::server::{get_finished_session_count_static, LatestContribu
 use crate::db::{AcceptedItemPrefix, AcceptedTransactionKey, SignedSessionOutcomeKey};
 use crate::fedimint_core::encoding::Encodable;
 use crate::metrics::{BACKUP_WRITE_SIZE_BYTES, STORED_BACKUPS_COUNT};
-use crate::{check_auth, get_verification_hashes, ApiResult, HasApiContext};
+use crate::{check_auth, ApiResult, HasApiContext};
 
 /// A state that has context for the API, passed to each rpc handler callback
 #[derive(Clone)]
@@ -573,14 +572,6 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConsensusApi>> {
                 check_auth(context)?;
                 let password = context.request_auth().expect("Auth was checked before").0;
                 Ok(fedimint.get_guardian_config_backup(password).await?)
-            }
-        },
-        api_endpoint! {
-            VERIFY_CONFIG_HASH_ENDPOINT,
-            ApiVersion::new(0, 0),
-            async |fedimint: &ConsensusApi, context, _v: ()| -> BTreeMap<PeerId, sha256::Hash> {
-                check_auth(context)?;
-                Ok(get_verification_hashes(&fedimint.cfg))
             }
         },
         api_endpoint! {
