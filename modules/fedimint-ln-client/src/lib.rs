@@ -439,6 +439,16 @@ enum PayError {
     Failed(String),
 }
 
+#[derive(thiserror::Error, Debug, Clone)]
+pub enum PayBolt11InvoiceError {
+    #[error("Previous payment attempt({}) still in progress", .operation_id)]
+    PreviousPaymentAttemptStillInProgress { operation_id: OperationId },
+    #[error("No LN gateway available")]
+    NoLnGatewayAvailable,
+    #[error("Funded contract already exists: {}", .contract_id)]
+    FundedContractAlreadyExists { contract_id: ContractId },
+}
+
 impl LightningClientModule {
     async fn new(
         args: &ClientModuleInitArgs<LightningClientInit>,
@@ -964,6 +974,8 @@ impl LightningClientModule {
     ///
     /// The `gateway` can be acquired by calling
     /// [`LightningClientModule::select_gateway`].
+    ///
+    /// Can return error of type [`PayBolt11InvoiceError`]
     pub async fn pay_bolt11_invoice<M: Serialize + MaybeSend + MaybeSync>(
         &self,
         maybe_gateway: Option<LightningGateway>,
@@ -984,7 +996,11 @@ impl LightningClientModule {
         let prev_operation_id =
             self.get_payment_operation_id(invoice.payment_hash(), prev_payment_result.index);
         if self.client_ctx.has_active_states(prev_operation_id).await {
-            return Err(anyhow!("Previous payment attempt still in progress. Previous Operation Id: {prev_operation_id}"));
+            bail!(
+                PayBolt11InvoiceError::PreviousPaymentAttemptStillInProgress {
+                    operation_id: prev_operation_id
+                }
+            )
         }
 
         let next_index = prev_payment_result.index + 1;
@@ -1022,7 +1038,7 @@ impl LightningClientModule {
                 .await?;
             (PayType::Internal(operation_id), output, contract_id)
         } else {
-            let gateway = maybe_gateway.context("No LN gateway available")?;
+            let gateway = maybe_gateway.context(PayBolt11InvoiceError::NoLnGatewayAvailable)?;
             let (output, contract_id) = self
                 .create_outgoing_output(
                     operation_id,
@@ -1041,7 +1057,7 @@ impl LightningClientModule {
         // Verify that no other outgoing contract exists or the value is empty
         if let Ok(Some(contract)) = self.module_api.fetch_contract(contract_id).await {
             if contract.amount.msats != 0 {
-                anyhow::bail!("Funded contract already exists. ContractId: {contract_id}");
+                bail!(PayBolt11InvoiceError::FundedContractAlreadyExists { contract_id });
             }
         }
 
