@@ -7,16 +7,18 @@ use std::panic::AssertUnwindSafe;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
-use anyhow::{anyhow as format_err, Context};
+use anyhow::Context;
 use async_trait::async_trait;
 use config::io::{read_server_config, PLAINTEXT_PASSWORD};
 use config::ServerConfig;
+use fedimint_aead::random_salt;
 use fedimint_core::config::ServerModuleInitRegistry;
 use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::db::Database;
 use fedimint_core::epoch::ConsensusItem;
-use fedimint_core::module::{ApiAuth, ApiEndpoint, ApiEndpointContext, ApiError, ApiRequestErased};
+use fedimint_core::module::{ApiEndpoint, ApiEndpointContext, ApiError, ApiRequestErased};
 use fedimint_core::task::TaskGroup;
+use fedimint_core::util::write_new;
 use fedimint_logging::{LOG_CONSENSUS, LOG_CORE, LOG_NET_API};
 use futures::FutureExt;
 use jsonrpsee::server::{PingConfig, RpcServiceBuilder, ServerBuilder, ServerHandle};
@@ -25,6 +27,7 @@ use jsonrpsee::RpcModule;
 use tracing::{error, info};
 
 use crate::config::api::{ConfigGenApi, ConfigGenSettings};
+use crate::config::io::{write_server_config, SALT_FILE};
 use crate::consensus::server::ConsensusServer;
 use crate::metrics::initialize_gauge_metrics;
 use crate::net::api::{ConsensusApi, RpcHandlerCtx};
@@ -153,37 +156,37 @@ impl FedimintServer {
 
         initialize_gauge_metrics(&self.db).await;
 
-        let (config_generated_tx, mut config_generated_rx) = tokio::sync::mpsc::channel(1);
+        let (cfg_sender, mut cfg_receiver) = tokio::sync::mpsc::channel(1);
 
         let config_gen = ConfigGenApi::new(
-            self.data_dir.clone(),
             self.settings.clone(),
             self.db.clone(),
-            config_generated_tx,
+            cfg_sender,
             &mut task_group,
             self.version_hash.clone(),
         );
-
-        // Attempt get the config with local password, otherwise start config gen
-        if let Ok(password) = fs::read_to_string(self.data_dir.join(PLAINTEXT_PASSWORD)) {
-            config_gen
-                .set_password(ApiAuth(password.clone()))
-                .await
-                .map_err(|_| format_err!("Unable to use local password"))?;
-            info!(target: LOG_CONSENSUS, "Setting password from local file");
-
-            if config_gen.start_consensus(ApiAuth(password)).await.is_ok() {
-                info!(target: LOG_CONSENSUS, "Configs found locally");
-                return Ok(config_generated_rx.recv().await.expect("should not close"));
-            }
-        }
 
         let mut rpc_module = RpcHandlerCtx::new_module(config_gen);
         Self::attach_endpoints(&mut rpc_module, config::api::server_endpoints(), None);
         let handler = Self::spawn_api("config-gen", &self.settings.api_bind, rpc_module, 10).await;
 
-        let cfg = config_generated_rx.recv().await.expect("should not close");
+        let cfg = cfg_receiver.recv().await.expect("should not close");
+
         handler.stop().await;
+
+        // TODO: Make writing password optional
+        write_new(
+            self.data_dir.join(PLAINTEXT_PASSWORD),
+            &cfg.private.api_auth.0,
+        )?;
+        write_new(self.data_dir.join(SALT_FILE), random_salt())?;
+        write_server_config(
+            &cfg,
+            self.data_dir.clone(),
+            &cfg.private.api_auth.0,
+            &self.settings.registry,
+        )?;
+
         Ok(cfg)
     }
 
