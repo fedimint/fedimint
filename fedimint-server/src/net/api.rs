@@ -114,20 +114,16 @@ impl ConsensusApi {
 
         debug!(%txid, "Received mint transaction");
 
+        // Create read-only DB tx so that the read state is consistent
+        let mut dbtx = self.db.begin_transaction_nc().await;
         // we already processed the transaction before
-        if self
-            .db
-            .begin_transaction()
-            .await
+        if dbtx
             .get_value(&AcceptedTransactionKey(txid))
             .await
             .is_some()
         {
             return Ok(txid);
         }
-
-        // Create read-only DB tx so that the read state is consistent
-        let mut dbtx = self.db.begin_transaction_nc().await;
 
         // We ignore any writes, as we only verify if the transaction is valid here
         dbtx.ignore_uncommitted();
