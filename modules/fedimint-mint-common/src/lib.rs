@@ -1,3 +1,4 @@
+use core::fmt;
 use std::hash::Hash;
 
 pub use common::{BackupRequest, SignedBackupRequest};
@@ -63,6 +64,12 @@ pub struct Note {
     pub signature: tbs::Signature,
 }
 
+impl fmt::Display for Note {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.nonce.fmt(f)
+    }
+}
+
 /// Unique ID of a mint note.
 ///
 /// User-generated, random or otherwise unpredictably generated
@@ -85,6 +92,12 @@ pub struct Note {
     Decodable,
 )]
 pub struct Nonce(pub secp256k1_zkp::PublicKey);
+
+impl fmt::Display for Nonce {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.0.fmt(f)
+    }
+}
 
 /// [`Nonce`] but blinded by the user key
 ///

@@ -21,6 +21,7 @@ use fedimint_core::{
     apply, async_trait_maybe_send, push_db_key_items, push_db_pair_items, Amount, NumPeersExt,
     OutPoint, PeerId, ServerModule, Tiered, TieredMultiZip,
 };
+use fedimint_logging::LOG_MODULE_MINT;
 pub use fedimint_mint_common as common;
 use fedimint_mint_common::config::{
     MintClientConfig, MintConfig, MintConfigConsensus, MintConfigLocal, MintConfigPrivate,
@@ -382,6 +383,7 @@ impl ServerModule for Mint {
             return Err(MintInputError::InvalidSignature);
         }
 
+        debug!(target: LOG_MODULE_MINT, nonce=%(input.note.nonce), "Marking note as spent");
         if dbtx
             .insert_entry(&NonceKey(input.note.nonce), &())
             .await
