@@ -363,6 +363,7 @@
 <a href="#363" id="363">363</a>
 <a href="#364" id="364">364</a>
 <a href="#365" id="365">365</a>
+<a href="#366" id="366">366</a>
 </pre></div><pre class="rust"><code><span class="attr">#![allow(where_clauses_object_safety)] </span><span class="comment">// https://github.com/dtolnay/async-trait/issues/228
 </span><span class="kw">extern crate </span>fedimint_core;
 
@@ -566,7 +567,8 @@
         </span><span class="kw">if let </span><span class="prelude-val">Ok</span>(password) = fs::read_to_string(<span class="self">self</span>.data_dir.join(PLAINTEXT_PASSWORD)) {
             config_gen
                 .set_password(ApiAuth(password.clone()))
-                .map_err(|<span class="kw">_</span>| <span class="macro">format_err!</span>(<span class="string">"Unable to use local password"</span>))<span class="question-mark">?</span>;
+                .<span class="kw">await
+                </span>.map_err(|<span class="kw">_</span>| <span class="macro">format_err!</span>(<span class="string">"Unable to use local password"</span>))<span class="question-mark">?</span>;
             <span class="macro">info!</span>(target: LOG_CONSENSUS, <span class="string">"Setting password from local file"</span>);
 
             <span class="kw">if </span>config_gen.start_consensus(ApiAuth(password)).<span class="kw">await</span>.is_ok() {
