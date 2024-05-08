@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 use std::fs;
 use std::net::SocketAddr;
 use std::path::PathBuf;
-use std::sync::{Arc, Mutex, MutexGuard};
+use std::sync::Arc;
 use std::time::Duration;
 
 use async_trait::async_trait;
@@ -33,6 +33,7 @@ use fedimint_core::util::{write_new, SafeUrl};
 use fedimint_core::PeerId;
 use itertools::Itertools;
 use tokio::sync::mpsc::Sender;
+use tokio::sync::{Mutex, MutexGuard};
 use tokio_rustls::rustls;
 use tracing::{error, info};
 
@@ -84,8 +85,8 @@ impl ConfigGenApi {
     }
 
     // Sets the auth and decryption key derived from the password
-    pub fn set_password(&self, auth: ApiAuth) -> ApiResult<()> {
-        let mut state = self.require_status(ServerStatus::AwaitingPassword)?;
+    pub async fn set_password(&self, auth: ApiAuth) -> ApiResult<()> {
+        let mut state = self.require_status(ServerStatus::AwaitingPassword).await?;
         state.auth = Some(auth);
         state.status = ServerStatus::SharingConfigGenParams;
         info!(
@@ -95,19 +96,19 @@ impl ConfigGenApi {
         Ok(())
     }
 
-    fn require_status(&self, status: ServerStatus) -> ApiResult<MutexGuard<ConfigGenState>> {
-        let state = self.state.lock().expect("lock poisoned");
+    async fn require_status(&self, status: ServerStatus) -> ApiResult<MutexGuard<ConfigGenState>> {
+        let state = self.state.lock().await;
         if state.status != status {
             return Self::bad_request(&format!("Expected to be in {status:?} state"));
         }
         Ok(state)
     }
 
-    fn require_any_status(
+    async fn require_any_status(
         &self,
         statuses: &[ServerStatus],
     ) -> ApiResult<MutexGuard<ConfigGenState>> {
-        let state = self.state.lock().expect("lock poisoned");
+        let state = self.state.lock().await;
         if !statuses.contains(&state.status) {
             return Self::bad_request(&format!("Expected to be in one of {:?} states", statuses));
         }
@@ -120,7 +121,9 @@ impl ConfigGenApi {
         request: ConfigGenConnectionsRequest,
     ) -> ApiResult<()> {
         {
-            let mut state = self.require_status(ServerStatus::SharingConfigGenParams)?;
+            let mut state = self
+                .require_status(ServerStatus::SharingConfigGenParams)
+                .await?;
             state.set_request(request)?;
         }
         self.update_leader().await?;
@@ -129,7 +132,7 @@ impl ConfigGenApi {
 
     /// Sends our updated peer info to the leader (if we have one)
     async fn update_leader(&self) -> ApiResult<()> {
-        let state = self.state.lock().expect("lock poisoned").clone();
+        let state = self.state.lock().await.clone();
         let local = state.local.clone();
 
         if let Some(url) = local.and_then(|local| local.leader_api_url) {
@@ -143,8 +146,8 @@ impl ConfigGenApi {
 
     /// Called from `set_config_gen_connections` to add a peer's connection info
     /// to the leader
-    pub fn add_config_gen_peer(&self, peer: PeerServerParams) -> ApiResult<()> {
-        let mut state = self.state.lock().expect("lock poisoned");
+    pub async fn add_config_gen_peer(&self, peer: PeerServerParams) -> ApiResult<()> {
+        let mut state = self.state.lock().await;
         state.peers.insert(peer.api_url.clone(), peer);
         info!(target: fedimint_logging::LOG_NET_PEER_DKG, "New peer added to config gen");
         Ok(())
@@ -152,13 +155,13 @@ impl ConfigGenApi {
 
     /// Returns the peers that have called `add_config_gen_peer` on the leader
     pub async fn config_gen_peers(&self) -> ApiResult<Vec<PeerServerParams>> {
-        let state = self.state.lock().expect("lock poisoned");
+        let state = self.state.lock().await;
         Ok(state.get_peer_info().into_values().collect())
     }
 
     /// Returns default config gen params that can be modified by the leader
-    pub fn default_config_gen_params(&self) -> ApiResult<ConfigGenParamsRequest> {
-        let state = self.state.lock().expect("lock poisoned");
+    pub async fn default_config_gen_params(&self) -> ApiResult<ConfigGenParamsRequest> {
+        let state = self.state.lock().await;
         Ok(state.settings.default_params.clone())
     }
 
@@ -167,7 +170,9 @@ impl ConfigGenApi {
     /// The leader passes consensus params, everyone passes local params
     pub async fn set_config_gen_params(&self, request: ConfigGenParamsRequest) -> ApiResult<()> {
         self.consensus_config_gen_params(&request).await?;
-        let mut state = self.require_status(ServerStatus::SharingConfigGenParams)?;
+        let mut state = self
+            .require_status(ServerStatus::SharingConfigGenParams)
+            .await?;
         state.requested_params = Some(request);
         info!(
             target: fedimint_logging::LOG_NET_PEER_DKG,
@@ -176,8 +181,8 @@ impl ConfigGenApi {
         Ok(())
     }
 
-    fn get_requested_params(&self) -> ApiResult<ConfigGenParamsRequest> {
-        let state = self.state.lock().expect("lock poisoned").clone();
+    async fn get_requested_params(&self) -> ApiResult<ConfigGenParamsRequest> {
+        let state = self.state.lock().await.clone();
         state.requested_params.ok_or(ApiError::bad_request(
             "Config params were not set on this guardian".to_string(),
         ))
@@ -188,7 +193,7 @@ impl ConfigGenApi {
         &self,
         request: &ConfigGenParamsRequest,
     ) -> ApiResult<ConfigGenParamsResponse> {
-        let state = self.state.lock().expect("lock poisoned").clone();
+        let state = self.state.lock().await.clone();
         let local = state.local.clone();
 
         let consensus = match local.and_then(|local| local.leader_api_url) {
@@ -222,7 +227,9 @@ impl ConfigGenApi {
     /// Calling a second time will return an error.
     pub async fn run_dkg(&self) -> ApiResult<()> {
         let leader = {
-            let mut state = self.require_status(ServerStatus::SharingConfigGenParams)?;
+            let mut state = self
+                .require_status(ServerStatus::SharingConfigGenParams)
+                .await?;
             // Update our state
             state.status = ServerStatus::ReadyForConfigGen;
             info!(
@@ -256,11 +263,12 @@ impl ConfigGenApi {
             };
 
             // Get params and registry
-            let request = self_clone.get_requested_params()?;
+            let request = self_clone.get_requested_params().await?;
             let response = self_clone.consensus_config_gen_params(&request).await?;
             let (params, registry) = {
-                let state: MutexGuard<'_, ConfigGenState> =
-                    self_clone.require_status(ServerStatus::ReadyForConfigGen)?;
+                let state: MutexGuard<'_, ConfigGenState> = self_clone
+                    .require_status(ServerStatus::ReadyForConfigGen)
+                    .await?;
                 let params = state.get_config_gen_params(&request, response.consensus)?;
                 let registry = state.settings.registry.clone();
                 (params, registry)
@@ -282,7 +290,7 @@ impl ConfigGenApi {
                 .expect("shuts down");
 
             {
-                let mut state = self_clone.state.lock().expect("lock poisoned");
+                let mut state = self_clone.state.lock().await;
                 match config {
                     Ok(config) => {
                         self_clone.stage_configs(&config, &state)?;
@@ -314,12 +322,12 @@ impl ConfigGenApi {
 
     /// Returns the consensus config hash, tweaked by our TLS cert, to be shared
     /// with other peers
-    pub fn verify_config_hash(&self) -> ApiResult<BTreeMap<PeerId, sha256::Hash>> {
+    pub async fn verify_config_hash(&self) -> ApiResult<BTreeMap<PeerId, sha256::Hash>> {
         let expected_status = [
             ServerStatus::VerifyingConfigs,
             ServerStatus::VerifiedConfigs,
         ];
-        let state = self.require_any_status(&expected_status)?;
+        let state = self.require_any_status(&expected_status).await?;
         let config = state
             .config
             .clone()
@@ -392,7 +400,7 @@ impl ConfigGenApi {
                 ServerStatus::VerifyingConfigs,
                 ServerStatus::VerifiedConfigs,
             ];
-            let mut state = self.require_any_status(&expected_status)?;
+            let mut state = self.require_any_status(&expected_status).await?;
             if state.status == ServerStatus::VerifiedConfigs {
                 return Ok(());
             }
@@ -428,7 +436,7 @@ impl ConfigGenApi {
 
     /// Returns the server status
     pub async fn server_status(&self) -> ServerStatus {
-        self.state.lock().expect("lock poisoned").status.clone()
+        self.state.lock().await.status.clone()
     }
 
     fn bad_request<T>(msg: &str) -> ApiResult<T> {
@@ -444,7 +452,7 @@ impl ConfigGenApi {
                 ServerStatus::VerifyingConfigs,
                 ServerStatus::VerifiedConfigs,
             ];
-            let mut state = self.require_any_status(&expected_status)?;
+            let mut state = self.require_any_status(&expected_status).await?;
 
             let cfg_staging_dir = self.data_dir.join(CONFIG_STAGING_DIR);
             self.remove_staged_configs(&cfg_staging_dir)?;
@@ -476,7 +484,7 @@ impl ConfigGenApi {
             }
             // Progress status to AwaitingPassword
             {
-                let mut state = self_clone.state.lock().expect("lock poisoned");
+                let mut state = self_clone.state.lock().await;
                 state.reset();
             }
             self_clone.update_leader().await
@@ -514,7 +522,7 @@ impl ConfigGenApi {
     async fn await_peer_restart(&self) {
         loop {
             {
-                let state = self.state.lock().expect("lock poisoned");
+                let state = self.state.lock().await;
                 let peers = state.peers.clone();
                 if peers
                     .values()
@@ -753,7 +761,7 @@ impl HasApiContext<ConfigGenApi> for ConfigGenApi {
             db = self.db.with_prefix_module_id(id);
             dbtx = dbtx.with_prefix_module_id(id)
         }
-        let state = self.state.lock().expect("locks");
+        let state = self.state.lock().await;
         let auth = request.auth.as_ref();
         let has_auth = match state.auth.clone() {
             // The first client to connect gets the set the password
@@ -776,7 +784,7 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConfigGenApi>> {
             async |config: &ConfigGenApi, context, _v: ()| -> () {
                 match context.request_auth() {
                     None => return Err(ApiError::bad_request("Missing password".to_string())),
-                    Some(auth) => config.set_password(auth)
+                    Some(auth) => config.set_password(auth).await
                 }
             }
         },
@@ -793,7 +801,7 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConfigGenApi>> {
             ApiVersion::new(0, 0),
             async |config: &ConfigGenApi, _context, peer: PeerServerParams| -> () {
                 // No auth required since this is an API-to-API call and the peer connections will be manually accepted or not in the UI
-                config.add_config_gen_peer(peer)
+                config.add_config_gen_peer(peer).await
             }
         },
         api_endpoint! {
@@ -808,7 +816,7 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConfigGenApi>> {
             ApiVersion::new(0, 0),
             async |config: &ConfigGenApi, context,  _v: ()| -> ConfigGenParamsRequest {
                 check_auth(context)?;
-                config.default_config_gen_params()
+                config.default_config_gen_params().await
             }
         },
         api_endpoint! {
@@ -823,7 +831,7 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConfigGenApi>> {
             CONSENSUS_CONFIG_GEN_PARAMS_ENDPOINT,
             ApiVersion::new(0, 0),
             async |config: &ConfigGenApi, _context, _v: ()| -> ConfigGenParamsResponse {
-                let request = config.get_requested_params()?;
+                let request = config.get_requested_params().await?;
                 config.consensus_config_gen_params(&request).await
             }
         },
@@ -840,7 +848,7 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConfigGenApi>> {
             ApiVersion::new(0, 0),
             async |config: &ConfigGenApi, context, _v: ()| -> BTreeMap<PeerId, sha256::Hash> {
                 check_auth(context)?;
-                config.verify_config_hash()
+                config.verify_config_hash().await
             }
         },
         api_endpoint! {
