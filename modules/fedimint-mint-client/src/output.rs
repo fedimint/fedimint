@@ -14,6 +14,7 @@ use fedimint_core::module::ApiRequestErased;
 use fedimint_core::task::sleep;
 use fedimint_core::{Amount, NumPeersExt, OutPoint, PeerId, Tiered};
 use fedimint_derive_secret::{ChildId, DerivableSecret};
+use fedimint_logging::LOG_CLIENT_MODULE_MINT;
 use fedimint_mint_common::endpoint_constants::AWAIT_OUTPUT_OUTCOME_ENDPOINT;
 use fedimint_mint_common::{BlindNonce, MintOutputOutcome, Nonce};
 use secp256k1::KeyPair;
@@ -23,7 +24,7 @@ use tbs::{
     aggregate_signature_shares, blind_message, unblind_signature, AggregatePublicKey,
     BlindedMessage, BlindedSignature, BlindedSignatureShare, BlindingKey, PublicKeyShare,
 };
-use tracing::error;
+use tracing::{debug, error};
 
 use crate::client_db::NoteKey;
 use crate::{MintClientContext, SpendableNote};
@@ -255,6 +256,7 @@ impl MintOutputStatesCreated {
 
         assert!(spendable_note.note().verify(*amount_key));
 
+        debug!(target: LOG_CLIENT_MODULE_MINT, amount = %created.amount, note=?spendable_note, "Adding new note from transaction output");
         if let Some(note) = dbtx
             .module_tx()
             .insert_entry(
