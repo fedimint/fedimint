@@ -1,7 +1,6 @@
 #![allow(where_clauses_object_safety)] // https://github.com/dtolnay/async-trait/issues/228
 extern crate fedimint_core;
 
-use std::collections::BTreeMap;
 use std::fs;
 use std::net::SocketAddr;
 use std::panic::AssertUnwindSafe;
@@ -10,17 +9,14 @@ use std::time::Duration;
 
 use anyhow::{anyhow as format_err, Context};
 use async_trait::async_trait;
-use bitcoin_hashes::sha256;
 use config::io::{read_server_config, PLAINTEXT_PASSWORD};
 use config::ServerConfig;
 use fedimint_core::config::ServerModuleInitRegistry;
 use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::db::Database;
-use fedimint_core::encoding::Encodable;
 use fedimint_core::epoch::ConsensusItem;
 use fedimint_core::module::{ApiAuth, ApiEndpoint, ApiEndpointContext, ApiError, ApiRequestErased};
 use fedimint_core::task::TaskGroup;
-use fedimint_core::PeerId;
 use fedimint_logging::{LOG_CONSENSUS, LOG_CORE, LOG_NET_API};
 use futures::FutureExt;
 use jsonrpsee::server::{PingConfig, RpcServiceBuilder, ServerBuilder, ServerHandle};
@@ -345,15 +341,4 @@ pub fn check_auth(context: &mut ApiEndpointContext) -> ApiResult<()> {
     } else {
         Ok(())
     }
-}
-
-// The verification hashes are purposefully different for each peer such that
-// their manual verification by the guardians via the UI is more robust
-pub fn get_verification_hashes(config: &ServerConfig) -> BTreeMap<PeerId, sha256::Hash> {
-    config
-        .consensus
-        .api_endpoints
-        .keys()
-        .map(|peer| (*peer, (*peer, config.consensus.clone()).consensus_hash()))
-        .collect()
 }
