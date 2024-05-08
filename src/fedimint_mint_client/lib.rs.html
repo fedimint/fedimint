@@ -2307,6 +2307,7 @@
 <a href="#2307" id="2307">2307</a>
 <a href="#2308" id="2308">2308</a>
 <a href="#2309" id="2309">2309</a>
+<a href="#2310" id="2310">2310</a>
 </pre></div><pre class="rust"><code><span class="comment">// Backup and restore logic
 </span><span class="kw">pub mod </span>backup;
 <span class="doccomment">/// Database keys used throughout the mint client module
@@ -3878,7 +3879,8 @@
             amount,
             nonce: note.nonce(),
         })
-        .<span class="kw">await</span>;
+        .<span class="kw">await
+        </span>.expect(<span class="string">"Must deleted existing spendable note"</span>);
     }
 }
 
