@@ -2196,7 +2196,6 @@ dependencies = [
  "futures",
  "hex",
  "itertools 0.12.1",
- "rand",
  "secp256k1-zkp",
  "serde",
  "serde-big-array",
@@ -2208,7 +2207,6 @@ dependencies = [
  "thiserror",
  "tokio",
  "tracing",
- "tracing-subscriber",
 ]
 
 [[package]]
@@ -2216,22 +2214,14 @@ name = "fedimint-mint-common"
 version = "0.4.0-alpha"
 dependencies = [
  "anyhow",
- "async-trait",
  "bincode",
  "bitcoin_hashes 0.12.0",
  "fedimint-core",
  "fedimint-tbs",
- "fedimint-threshold-crypto",
- "futures",
- "itertools 0.12.1",
- "rand",
  "secp256k1-zkp",
  "serde",
- "strum",
- "strum_macros",
  "thiserror",
  "tracing",
- "tracing-subscriber",
 ]
 
 [[package]]
@@ -2241,8 +2231,6 @@ dependencies = [
  "anyhow",
  "assert_matches",
  "async-trait",
- "bincode",
- "bitcoin_hashes 0.12.0",
  "erased-serde",
  "fedimint-core",
  "fedimint-logging",
@@ -2259,10 +2247,8 @@ dependencies = [
  "strum",
  "strum_macros",
  "test-log",
- "thiserror",
  "tokio",
  "tracing",
- "tracing-subscriber",
 ]
 
 [[package]]
@@ -2282,18 +2268,14 @@ dependencies = [
  "fedimint-mint-client",
  "fedimint-mint-common",
  "fedimint-mint-server",
- "fedimint-server",
  "fedimint-tbs",
  "fedimint-testing",
  "fedimint-threshold-crypto",
  "ff",
  "futures",
  "rand",
- "semver",
  "serde",
- "serde_json",
  "strum",
- "strum_macros",
  "tokio",
  "tracing",
 ]

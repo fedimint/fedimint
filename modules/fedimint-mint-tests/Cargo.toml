@@ -25,17 +25,13 @@ fedimint-mint-server = { path = "../fedimint-mint-server" }
 fedimint-testing = { path = "../../fedimint-testing" }
 fedimint-client = { path = "../../fedimint-client" }
 fedimint-core ={ path = "../../fedimint-core" }
-fedimint-server = { path = "../../fedimint-server" }
 fedimint-logging = { path = "../../fedimint-logging" }
 futures = { workspace = true }
 tokio = { version = "1.37.0", features = ["sync"] }
 tracing = { workspace = true }
 rand = { workspace = true }
-serde_json = { workspace = true }
-semver = { workspace = true }
 serde = { workspace = true }
 tbs = { package = "fedimint-tbs", version = "=0.4.0-alpha", path = "../../crypto/tbs" }
 threshold_crypto = { workspace = true }
 ff = "0.13.0"
 strum = { workspace = true }
-strum_macros = { workspace = true }

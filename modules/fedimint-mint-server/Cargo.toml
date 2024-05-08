@@ -20,8 +20,6 @@ path = "src/lib.rs"
 anyhow = { workspace = true }
 assert_matches = { workspace = true }
 async-trait = { workspace = true }
-bincode = { workspace = true }
-bitcoin_hashes = { workspace = true }
 erased-serde = { workspace = true }
 futures = { workspace = true }
 itertools = { workspace = true }
@@ -34,14 +32,11 @@ serde = { workspace = true }
 strum = { workspace = true }
 strum_macros = { workspace = true }
 tbs = { package = "fedimint-tbs", version = "=0.4.0-alpha", path = "../../crypto/tbs" }
-thiserror = { workspace = true }
 threshold_crypto = { workspace = true }
 tracing = { workspace = true }
 fedimint-server = { version = "=0.4.0-alpha", path = "../../fedimint-server" }
 fedimint-logging = { workspace = true }
 
 [dev-dependencies]
-rand = { workspace = true }
-tracing-subscriber = { version = "0.3.18", features = [ "env-filter" ] }
 tokio = {version = "1.37.0", features = [ "full" ] }
 test-log = { version = "0.2", features = [ "trace" ], default-features = false }
