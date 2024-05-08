@@ -299,30 +299,6 @@
 <a href="#299" id="299">299</a>
 <a href="#300" id="300">300</a>
 <a href="#301" id="301">301</a>
-<a href="#302" id="302">302</a>
-<a href="#303" id="303">303</a>
-<a href="#304" id="304">304</a>
-<a href="#305" id="305">305</a>
-<a href="#306" id="306">306</a>
-<a href="#307" id="307">307</a>
-<a href="#308" id="308">308</a>
-<a href="#309" id="309">309</a>
-<a href="#310" id="310">310</a>
-<a href="#311" id="311">311</a>
-<a href="#312" id="312">312</a>
-<a href="#313" id="313">313</a>
-<a href="#314" id="314">314</a>
-<a href="#315" id="315">315</a>
-<a href="#316" id="316">316</a>
-<a href="#317" id="317">317</a>
-<a href="#318" id="318">318</a>
-<a href="#319" id="319">319</a>
-<a href="#320" id="320">320</a>
-<a href="#321" id="321">321</a>
-<a href="#322" id="322">322</a>
-<a href="#323" id="323">323</a>
-<a href="#324" id="324">324</a>
-<a href="#325" id="325">325</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap};
 <span class="kw">use </span>std::sync::Arc;
 
@@ -346,9 +322,7 @@
 <span class="kw">use </span>fedimint_server::config::api::ConfigGenParamsLocal;
 <span class="kw">use </span>fedimint_server::config::{gen_cert_and_key, ConfigGenParams, ServerConfig};
 <span class="kw">use </span>fedimint_server::consensus::server::ConsensusServer;
-<span class="kw">use </span>fedimint_server::net::connect::mock::{MockNetwork, StreamReliability};
-<span class="kw">use </span>fedimint_server::net::connect::{parse_host_port, Connector};
-<span class="kw">use </span>fedimint_server::net::peers::DelayCalculator;
+<span class="kw">use </span>fedimint_server::net::connect::parse_host_port;
 <span class="kw">use </span>fedimint_server::FedimintServer;
 <span class="kw">use </span>tokio_rustls::rustls;
 <span class="kw">use </span>tracing::info;
@@ -463,7 +437,6 @@
     params: ServerModuleConfigGenParamsRegistry,
     server_init: ServerModuleInitRegistry,
     client_init: ClientModuleInitRegistry,
-    reliability: <span class="prelude-ty">Option</span>&lt;StreamReliability&gt;,
 }
 
 <span class="kw">impl </span>FederationTestBuilder {
@@ -483,7 +456,6 @@
             params,
             server_init,
             client_init,
-            reliability: <span class="prelude-val">None</span>,
         }
     }
 
@@ -512,11 +484,6 @@
         <span class="self">self
     </span>}
 
-    <span class="kw">pub fn </span>add_unreliable_connections(<span class="kw-2">mut </span><span class="self">self</span>) -&gt; FederationTestBuilder {
-        <span class="self">self</span>.reliability = <span class="prelude-val">Some</span>(StreamReliability::INTEGRATION_TEST);
-        <span class="self">self
-    </span>}
-
     <span class="kw">pub async fn </span>build(<span class="self">self</span>) -&gt; FederationTest {
         <span class="kw">let </span>num_offline = <span class="self">self</span>.num_offline;
         <span class="macro">assert!</span>(
@@ -529,7 +496,6 @@
 
         <span class="kw">let </span>configs =
             ServerConfig::trusted_dealer_gen(<span class="kw-2">&amp;</span>params, <span class="self">self</span>.server_init.clone(), <span class="self">self</span>.version_hash);
-        <span class="kw">let </span>network = MockNetwork::new();
 
         <span class="kw">let </span>task_group = TaskGroup::new();
         <span class="kw">for </span>(peer_id, config) <span class="kw">in </span>configs.clone() {
@@ -541,28 +507,14 @@
             <span class="kw">let </span>decoders = <span class="self">self</span>.server_init.available_decoders(instances).unwrap();
             <span class="kw">let </span>db = Database::new(MemDatabase::new(), decoders);
 
-            <span class="kw">let </span>(consensus_server, consensus_api) = <span class="kw">if let </span><span class="prelude-val">Some</span>(reliability) = <span class="self">self</span>.reliability {
-                <span class="kw">let </span>connections = network.connector(peer_id, reliability).into_dyn();
-                ConsensusServer::new_with(
-                    config.clone(),
-                    db.clone(),
-                    <span class="self">self</span>.server_init.clone(),
-                    connections,
-                    DelayCalculator::TEST_DEFAULT,
-                    <span class="kw-2">&amp;</span>task_group,
-                )
-                .<span class="kw">await
-                </span>.expect(<span class="string">"Failed to init server"</span>)
-            } <span class="kw">else </span>{
-                ConsensusServer::new(
-                    config.clone(),
-                    db.clone(),
-                    <span class="self">self</span>.server_init.clone(),
-                    <span class="kw-2">&amp;</span>task_group,
-                )
-                .<span class="kw">await
-                </span>.expect(<span class="string">"Setting up consensus server"</span>)
-            };
+            <span class="kw">let </span>(consensus_server, consensus_api) = ConsensusServer::new(
+                config.clone(),
+                db.clone(),
+                <span class="self">self</span>.server_init.clone(),
+                <span class="kw-2">&amp;</span>task_group,
+            )
+            .<span class="kw">await
+            </span>.expect(<span class="string">"Setting up consensus server"</span>);
 
             <span class="kw">let </span>api_handle = FedimintServer::spawn_consensus_api(consensus_api).<span class="kw">await</span>;
 

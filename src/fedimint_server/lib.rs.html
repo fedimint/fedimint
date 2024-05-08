@@ -314,34 +314,6 @@
 <a href="#314" id="314">314</a>
 <a href="#315" id="315">315</a>
 <a href="#316" id="316">316</a>
-<a href="#317" id="317">317</a>
-<a href="#318" id="318">318</a>
-<a href="#319" id="319">319</a>
-<a href="#320" id="320">320</a>
-<a href="#321" id="321">321</a>
-<a href="#322" id="322">322</a>
-<a href="#323" id="323">323</a>
-<a href="#324" id="324">324</a>
-<a href="#325" id="325">325</a>
-<a href="#326" id="326">326</a>
-<a href="#327" id="327">327</a>
-<a href="#328" id="328">328</a>
-<a href="#329" id="329">329</a>
-<a href="#330" id="330">330</a>
-<a href="#331" id="331">331</a>
-<a href="#332" id="332">332</a>
-<a href="#333" id="333">333</a>
-<a href="#334" id="334">334</a>
-<a href="#335" id="335">335</a>
-<a href="#336" id="336">336</a>
-<a href="#337" id="337">337</a>
-<a href="#338" id="338">338</a>
-<a href="#339" id="339">339</a>
-<a href="#340" id="340">340</a>
-<a href="#341" id="341">341</a>
-<a href="#342" id="342">342</a>
-<a href="#343" id="343">343</a>
-<a href="#344" id="344">344</a>
 </pre></div><pre class="rust"><code><span class="attr">#![allow(where_clauses_object_safety)] </span><span class="comment">// https://github.com/dtolnay/async-trait/issues/228
 </span><span class="kw">extern crate </span>fedimint_core;
 
@@ -438,60 +410,17 @@
         }
     }
 
-    <span class="doccomment">/// Starts the `ConfigGenApi` with existing configs
-    </span><span class="kw">pub async fn </span>run_cfg(
-        <span class="kw-2">&amp;mut </span><span class="self">self</span>,
-        cfg: <span class="kw-2">&amp;</span>ServerConfig,
-        task_group: TaskGroup,
-    ) -&gt; anyhow::Result&lt;()&gt; {
-        <span class="macro">info!</span>(target: LOG_CONSENSUS, <span class="string">"Starting config gen"</span>);
-
-        initialize_gauge_metrics(<span class="kw-2">&amp;</span><span class="self">self</span>.db).<span class="kw">await</span>;
-
-        <span class="kw">let </span>(consensus_server, consensus_api) = ConsensusServer::new(
-            cfg.clone(),
-            <span class="self">self</span>.db.clone(),
-            <span class="self">self</span>.settings.registry.clone(),
-            <span class="kw-2">&amp;</span>task_group,
-        )
-        .<span class="kw">await
-        </span>.context(<span class="string">"Setting up consensus server"</span>)<span class="question-mark">?</span>;
-
-        <span class="macro">info!</span>(target: LOG_CONSENSUS, <span class="string">"Starting consensus API"</span>);
-
-        <span class="kw">let </span>handler = <span class="self">Self</span>::spawn_consensus_api(consensus_api).<span class="kw">await</span>;
-
-        consensus_server.run(task_group.make_handle()).<span class="kw">await</span><span class="question-mark">?</span>;
-
-        handler.stop().<span class="kw">await</span>;
-
-        <span class="macro">info!</span>(target: LOG_CONSENSUS, <span class="string">"Shutting down tasks"</span>);
-        task_group.shutdown();
-
-        <span class="prelude-val">Ok</span>(())
-    }
-
-    <span class="doccomment">/// Starts server that will run DKG
-    /// After configs are generated, start `ConsensusApi` and `ConsensusServer`
-    </span><span class="kw">pub async fn </span>run_dkg(<span class="kw-2">&amp;mut </span><span class="self">self</span>, task_group: TaskGroup) -&gt; anyhow::Result&lt;ServerConfig&gt; {
-        <span class="macro">info!</span>(target: LOG_CONSENSUS, <span class="string">"Starting config gen"</span>);
-
-        initialize_gauge_metrics(<span class="kw-2">&amp;</span><span class="self">self</span>.db).<span class="kw">await</span>;
-
-        <span class="self">self</span>.generate_config(task_group.make_subgroup()).<span class="kw">await
-    </span>}
-
     <span class="kw">pub async fn </span>run(
         <span class="kw-2">&amp;mut </span><span class="self">self</span>,
-        module_inits: <span class="kw-2">&amp;</span>ServerModuleInitRegistry,
+        init_registry: <span class="kw-2">&amp;</span>ServerModuleInitRegistry,
         task_group: TaskGroup,
     ) -&gt; anyhow::Result&lt;()&gt; {
         <span class="kw">let </span>cfg = <span class="kw">match </span>FedimintServer::get_config(<span class="kw-2">&amp;</span><span class="self">self</span>.data_dir).<span class="kw">await</span><span class="question-mark">? </span>{
             <span class="prelude-val">Some</span>(cfg) =&gt; cfg,
-            <span class="prelude-val">None </span>=&gt; <span class="self">self</span>.run_dkg(task_group.clone()).<span class="kw">await</span><span class="question-mark">?</span>,
+            <span class="prelude-val">None </span>=&gt; <span class="self">self</span>.run_config_gen(task_group.make_subgroup()).<span class="kw">await</span><span class="question-mark">?</span>,
         };
 
-        <span class="kw">let </span>decoders = module_inits.decoders_strict(
+        <span class="kw">let </span>decoders = init_registry.decoders_strict(
             cfg.consensus
                 .modules
                 .iter()
@@ -500,16 +429,28 @@
 
         <span class="kw">let </span>db = <span class="self">self</span>.db.with_decoders(decoders);
 
-        <span class="comment">// Reconstruct yourself, with a DB that has decoders configured
-        </span><span class="kw">let </span><span class="kw-2">mut </span>s = <span class="self">Self </span>{
-            db,
-            data_dir: <span class="self">self</span>.data_dir.clone(),
-            settings: <span class="self">self</span>.settings.clone(),
-            version_hash: <span class="self">self</span>.version_hash.clone(),
-        };
+        initialize_gauge_metrics(<span class="kw-2">&amp;</span>db).<span class="kw">await</span>;
 
-        s.run_cfg(<span class="kw-2">&amp;</span>cfg, task_group.clone()).<span class="kw">await
-    </span>}
+        <span class="kw">let </span>(server, api) = ConsensusServer::new(cfg, db, init_registry.clone(), <span class="kw-2">&amp;</span>task_group)
+            .<span class="kw">await
+            </span>.context(<span class="string">"Setting up consensus server"</span>)<span class="question-mark">?</span>;
+
+        <span class="macro">info!</span>(target: LOG_CONSENSUS, <span class="string">"Starting Consensus Api"</span>);
+
+        <span class="kw">let </span>handler = <span class="self">Self</span>::spawn_consensus_api(api).<span class="kw">await</span>;
+
+        <span class="macro">info!</span>(target: LOG_CONSENSUS, <span class="string">"Starting Consensus Server"</span>);
+
+        server.run(task_group.make_handle()).<span class="kw">await</span><span class="question-mark">?</span>;
+
+        handler.stop().<span class="kw">await</span>;
+
+        <span class="macro">info!</span>(target: LOG_CONSENSUS, <span class="string">"Shutting down tasks"</span>);
+
+        task_group.shutdown();
+
+        <span class="prelude-val">Ok</span>(())
+    }
 
     <span class="kw">pub async fn </span>get_config(data_dir: <span class="kw-2">&amp;</span>Path) -&gt; anyhow::Result&lt;<span class="prelude-ty">Option</span>&lt;ServerConfig&gt;&gt; {
         <span class="comment">// Attempt get the config with local password, otherwise start config gen
@@ -520,11 +461,14 @@
         <span class="prelude-val">Ok</span>(<span class="prelude-val">None</span>)
     }
 
-    <span class="doccomment">/// Generates the `ServerConfig`
-    ///
-    /// If a local password file exists, will try to read the configs from the
-    /// filesystem.  Otherwise, it will start the `ConfigGenApi`.
-    </span><span class="kw">async fn </span>generate_config(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="kw-2">mut </span>task_group: TaskGroup) -&gt; anyhow::Result&lt;ServerConfig&gt; {
+    <span class="kw">pub async fn </span>run_config_gen(
+        <span class="kw-2">&amp;mut </span><span class="self">self</span>,
+        <span class="kw-2">mut </span>task_group: TaskGroup,
+    ) -&gt; anyhow::Result&lt;ServerConfig&gt; {
+        <span class="macro">info!</span>(target: LOG_CONSENSUS, <span class="string">"Starting config gen"</span>);
+
+        initialize_gauge_metrics(<span class="kw-2">&amp;</span><span class="self">self</span>.db).<span class="kw">await</span>;
+
         <span class="kw">let </span>(config_generated_tx, <span class="kw-2">mut </span>config_generated_rx) = tokio::sync::mpsc::channel(<span class="number">1</span>);
 
         <span class="kw">let </span>config_gen = ConfigGenApi::new(

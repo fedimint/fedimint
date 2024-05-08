@@ -860,35 +860,6 @@
 <a href="#860" id="860">860</a>
 <a href="#861" id="861">861</a>
 <a href="#862" id="862">862</a>
-<a href="#863" id="863">863</a>
-<a href="#864" id="864">864</a>
-<a href="#865" id="865">865</a>
-<a href="#866" id="866">866</a>
-<a href="#867" id="867">867</a>
-<a href="#868" id="868">868</a>
-<a href="#869" id="869">869</a>
-<a href="#870" id="870">870</a>
-<a href="#871" id="871">871</a>
-<a href="#872" id="872">872</a>
-<a href="#873" id="873">873</a>
-<a href="#874" id="874">874</a>
-<a href="#875" id="875">875</a>
-<a href="#876" id="876">876</a>
-<a href="#877" id="877">877</a>
-<a href="#878" id="878">878</a>
-<a href="#879" id="879">879</a>
-<a href="#880" id="880">880</a>
-<a href="#881" id="881">881</a>
-<a href="#882" id="882">882</a>
-<a href="#883" id="883">883</a>
-<a href="#884" id="884">884</a>
-<a href="#885" id="885">885</a>
-<a href="#886" id="886">886</a>
-<a href="#887" id="887">887</a>
-<a href="#888" id="888">888</a>
-<a href="#889" id="889">889</a>
-<a href="#890" id="890">890</a>
-<a href="#891" id="891">891</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap};
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
@@ -949,7 +920,7 @@
 };
 <span class="kw">use </span><span class="kw">crate</span>::net::api::{ConsensusApi, ExpiringCache};
 <span class="kw">use </span><span class="kw">crate</span>::net::connect::{Connector, TlsTcpConnector};
-<span class="kw">use </span><span class="kw">crate</span>::net::peers::{DelayCalculator, PeerConnector, ReconnectPeerConnections};
+<span class="kw">use </span><span class="kw">crate</span>::net::peers::{DelayCalculator, ReconnectPeerConnections};
 <span class="kw">use crate</span>::{LOG_CONSENSUS, LOG_CORE};
 
 <span class="doccomment">/// How many txs can be stored in memory before blocking the API
@@ -980,31 +951,6 @@
         cfg: ServerConfig,
         db: Database,
         module_inits: ServerModuleInitRegistry,
-        task_group: <span class="kw-2">&amp;</span>TaskGroup,
-    ) -&gt; anyhow::Result&lt;(<span class="self">Self</span>, ConsensusApi)&gt; {
-        <span class="kw">let </span>connector: PeerConnector&lt;Message&gt; =
-            TlsTcpConnector::new(cfg.tls_config(), cfg.local.identity).into_dyn();
-
-        <span class="self">Self</span>::new_with(
-            cfg,
-            db,
-            module_inits,
-            connector,
-            DelayCalculator::PROD_DEFAULT,
-            task_group,
-        )
-        .<span class="kw">await
-    </span>}
-
-    <span class="doccomment">/// Creates a server that can simulate network and delays
-    ///
-    /// Initializes modules and runs any database migrations
-    </span><span class="kw">pub async fn </span>new_with(
-        cfg: ServerConfig,
-        db: Database,
-        module_inits: ServerModuleInitRegistry,
-        connector: PeerConnector&lt;Message&gt;,
-        delay_calculator: DelayCalculator,
         task_group: <span class="kw-2">&amp;</span>TaskGroup,
     ) -&gt; anyhow::Result&lt;(<span class="self">Self</span>, ConsensusApi)&gt; {
         <span class="comment">// Check the configs are valid
@@ -1058,11 +1004,7 @@
 
         <span class="kw">let </span>keychain = Keychain::new(
             cfg.local.identity,
-            cfg.consensus
-                .broadcast_public_keys
-                .iter()
-                .map(|(peer_id, pk)| (<span class="kw-2">*</span>peer_id, <span class="kw-2">*</span>pk))
-                .collect(),
+            cfg.consensus.broadcast_public_keys.clone(),
             cfg.private.broadcast_secret_key,
         );
 
@@ -1072,8 +1014,8 @@
         <span class="comment">// Build P2P connections for the atomic broadcast
         </span><span class="kw">let </span>(connections, peer_status_channels) = ReconnectPeerConnections::new(
             cfg.network_config(),
-            delay_calculator,
-            connector,
+            DelayCalculator::PROD_DEFAULT,
+            TlsTcpConnector::new(cfg.tls_config(), cfg.local.identity).into_dyn(),
             task_group,
         )
         .<span class="kw">await</span>;
