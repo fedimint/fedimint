@@ -743,6 +743,14 @@ impl ClientModule for MintClientModule {
     }
 }
 
+#[derive(thiserror::Error, Debug, Clone)]
+pub enum ReissueExternalNotesError {
+    #[error("Federation ID does not match")]
+    WrongFederationId,
+    #[error("We already reissued these notes")]
+    AlreadyReissued,
+}
+
 impl MintClientModule {
     async fn create_sufficient_input(
         &self,
@@ -1222,6 +1230,7 @@ impl MintClientModule {
     /// Try to reissue e-cash notes received from a third party to receive them
     /// in our wallet. The progress and outcome can be observed using
     /// [`MintClientModule::subscribe_reissue_external_notes`].
+    /// Can return error of type [`ReissueExternalNotesError`]
     pub async fn reissue_external_notes<M: Serialize + Send>(
         &self,
         oob_notes: OOBNotes,
@@ -1236,7 +1245,7 @@ impl MintClientModule {
         );
 
         if federation_id_prefix != self.federation_id.to_prefix() {
-            bail!("Federation ID does not match");
+            bail!(ReissueExternalNotesError::WrongFederationId);
         }
 
         let operation_id = OperationId(
@@ -1281,7 +1290,7 @@ impl MintClientModule {
                 tx,
             )
             .await
-            .context("We already reissued these notes")?;
+            .context(ReissueExternalNotesError::AlreadyReissued)?;
 
         Ok(operation_id)
     }
