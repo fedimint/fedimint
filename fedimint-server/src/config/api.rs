@@ -18,6 +18,7 @@ use fedimint_core::config::{
 };
 use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::db::Database;
+use fedimint_core::encoding::Encodable;
 use fedimint_core::endpoint_constants::{
     ADD_CONFIG_GEN_PEER_ENDPOINT, AUTH_ENDPOINT, CONFIG_GEN_PEERS_ENDPOINT,
     CONSENSUS_CONFIG_GEN_PARAMS_ENDPOINT, DEFAULT_CONFIG_GEN_PARAMS_ENDPOINT,
@@ -43,7 +44,7 @@ use crate::config::io::{
 use crate::config::{gen_cert_and_key, ConfigGenParams, ServerConfig};
 use crate::envs::FM_PEER_ID_SORT_BY_URL_ENV;
 use crate::net::peers::DelayCalculator;
-use crate::{check_auth, get_verification_hashes, ApiResult, HasApiContext};
+use crate::{check_auth, ApiResult, HasApiContext};
 
 /// Serves the config gen API endpoints
 #[derive(Clone)]
@@ -320,20 +321,31 @@ impl ConfigGenApi {
         Ok(())
     }
 
-    /// Returns the consensus config hash, tweaked by our TLS cert, to be shared
-    /// with other peers
+    /// Returns tagged hashes of consensus config to be shared with other peers.
+    /// The hashes are tagged with the peer id  such that they are unique to
+    /// each peer and their manual verification by the guardians via the UI is
+    /// more robust.
     pub async fn verify_config_hash(&self) -> ApiResult<BTreeMap<PeerId, sha256::Hash>> {
         let expected_status = [
             ServerStatus::VerifyingConfigs,
             ServerStatus::VerifiedConfigs,
         ];
+
         let state = self.require_any_status(&expected_status).await?;
+
         let config = state
             .config
             .clone()
             .ok_or(ApiError::bad_request("Missing config".to_string()))?;
 
-        Ok(get_verification_hashes(&config))
+        let verification_hashes = config
+            .consensus
+            .api_endpoints
+            .keys()
+            .map(|peer| (*peer, (*peer, config.consensus.clone()).consensus_hash()))
+            .collect();
+
+        Ok(verification_hashes)
     }
 
     /// Writes the configs to a staging directory disk after they are generated
