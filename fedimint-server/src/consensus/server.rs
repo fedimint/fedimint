@@ -58,7 +58,7 @@ use crate::metrics::{
 };
 use crate::net::api::{ConsensusApi, ExpiringCache};
 use crate::net::connect::{Connector, TlsTcpConnector};
-use crate::net::peers::{DelayCalculator, PeerConnector, ReconnectPeerConnections};
+use crate::net::peers::{DelayCalculator, ReconnectPeerConnections};
 use crate::{LOG_CONSENSUS, LOG_CORE};
 
 /// How many txs can be stored in memory before blocking the API
@@ -89,31 +89,6 @@ impl ConsensusServer {
         cfg: ServerConfig,
         db: Database,
         module_inits: ServerModuleInitRegistry,
-        task_group: &TaskGroup,
-    ) -> anyhow::Result<(Self, ConsensusApi)> {
-        let connector: PeerConnector<Message> =
-            TlsTcpConnector::new(cfg.tls_config(), cfg.local.identity).into_dyn();
-
-        Self::new_with(
-            cfg,
-            db,
-            module_inits,
-            connector,
-            DelayCalculator::PROD_DEFAULT,
-            task_group,
-        )
-        .await
-    }
-
-    /// Creates a server that can simulate network and delays
-    ///
-    /// Initializes modules and runs any database migrations
-    pub async fn new_with(
-        cfg: ServerConfig,
-        db: Database,
-        module_inits: ServerModuleInitRegistry,
-        connector: PeerConnector<Message>,
-        delay_calculator: DelayCalculator,
         task_group: &TaskGroup,
     ) -> anyhow::Result<(Self, ConsensusApi)> {
         // Check the configs are valid
@@ -167,11 +142,7 @@ impl ConsensusServer {
 
         let keychain = Keychain::new(
             cfg.local.identity,
-            cfg.consensus
-                .broadcast_public_keys
-                .iter()
-                .map(|(peer_id, pk)| (*peer_id, *pk))
-                .collect(),
+            cfg.consensus.broadcast_public_keys.clone(),
             cfg.private.broadcast_secret_key,
         );
 
@@ -181,8 +152,8 @@ impl ConsensusServer {
         // Build P2P connections for the atomic broadcast
         let (connections, peer_status_channels) = ReconnectPeerConnections::new(
             cfg.network_config(),
-            delay_calculator,
-            connector,
+            DelayCalculator::PROD_DEFAULT,
+            TlsTcpConnector::new(cfg.tls_config(), cfg.local.identity).into_dyn(),
             task_group,
         )
         .await;
