@@ -4,6 +4,7 @@ use std::time::Duration;
 
 use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, OperationId};
 use fedimint_core::encoding::{Decodable, Encodable};
+use fedimint_core::endpoint_constants::SUBMIT_ENDPOINT_API_VERSION;
 use fedimint_core::runtime::sleep;
 use fedimint_core::transaction::Transaction;
 use fedimint_core::TransactionId;
@@ -107,19 +108,27 @@ impl State for TxSubmissionStates {
 impl TxSubmissionStates {
     async fn trigger_created_rejected(tx: Transaction, context: DynGlobalClientContext) -> String {
         loop {
-            match context.api().submit_transaction(tx.clone()).await {
-                Ok(serde_result) => match serde_result.try_into_inner(context.decoders()) {
-                    Ok(result) => {
-                        if let Err(transaction_error) = result {
-                            return transaction_error.to_string();
+            if SUBMIT_ENDPOINT_API_VERSION <= context.core_api_version() {
+                if let Err(e) = context.api().submit_transaction(tx.clone()).await {
+                    if let Some(call_error) = e.try_to_call_error(context.num_peers()) {
+                        return call_error.message;
+                    }
+                }
+            } else {
+                match context.api().submit_transaction_old(tx.clone()).await {
+                    Ok(serde_result) => match serde_result.try_into_inner(context.decoders()) {
+                        Ok(result) => {
+                            if let Err(transaction_error) = result {
+                                return transaction_error.to_string();
+                            }
                         }
+                        Err(decode_error) => {
+                            warn!(target: LOG_CLIENT_NET_API, error = %decode_error, "Failed to decode SerdeModuleEncoding")
+                        }
+                    },
+                    Err(error) => {
+                        error.report_if_important();
                     }
-                    Err(decode_error) => {
-                        warn!(target: LOG_CLIENT_NET_API, error = %decode_error, "Failed to decode SerdeModuleEncoding")
-                    }
-                },
-                Err(error) => {
-                    error.report_if_important();
                 }
             }
 

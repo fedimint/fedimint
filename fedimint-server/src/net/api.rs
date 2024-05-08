@@ -27,7 +27,8 @@ use fedimint_core::endpoint_constants::{
     CLIENT_CONFIG_ENDPOINT, FEDERATION_ID_ENDPOINT, GUARDIAN_CONFIG_BACKUP_ENDPOINT,
     INVITE_CODE_ENDPOINT, MODULES_CONFIG_JSON_ENDPOINT, RECOVER_ENDPOINT,
     SERVER_CONFIG_CONSENSUS_HASH_ENDPOINT, SESSION_COUNT_ENDPOINT, SESSION_STATUS_ENDPOINT,
-    SHUTDOWN_ENDPOINT, STATUS_ENDPOINT, SUBMIT_TRANSACTION_ENDPOINT, VERSION_ENDPOINT,
+    SHUTDOWN_ENDPOINT, STATUS_ENDPOINT, SUBMIT_ENDPOINT, SUBMIT_ENDPOINT_API_VERSION,
+    SUBMIT_TRANSACTION_ENDPOINT_OLD, VERSION_ENDPOINT,
 };
 use fedimint_core::epoch::ConsensusItem;
 use fedimint_core::module::audit::{Audit, AuditSummary};
@@ -38,7 +39,9 @@ use fedimint_core::module::{
 };
 use fedimint_core::server::DynServerModule;
 use fedimint_core::session_outcome::{SessionOutcome, SessionStatus, SignedSessionOutcome};
-use fedimint_core::transaction::{SerdeTransaction, Transaction, TransactionError};
+use fedimint_core::transaction::{
+    SerdeTransaction, Transaction, TransactionError, TransactionErrorOld,
+};
 use fedimint_core::{OutPoint, PeerId, TransactionId};
 use fedimint_logging::LOG_NET_API;
 use futures::StreamExt;
@@ -441,16 +444,27 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConsensusApi>> {
             }
         },
         api_endpoint! {
-            SUBMIT_TRANSACTION_ENDPOINT,
+            SUBMIT_TRANSACTION_ENDPOINT_OLD,
             ApiVersion::new(0, 0),
-            async |fedimint: &ConsensusApi, _context, transaction: SerdeTransaction| -> SerdeModuleEncoding<Result<TransactionId, TransactionError>> {
+            async |fedimint: &ConsensusApi, _context, transaction: SerdeTransaction| -> SerdeModuleEncoding<Result<TransactionId, TransactionErrorOld>> {
                 let transaction = transaction
                     .try_into_inner(&fedimint.modules.decoder_registry())
                     .map_err(|e| ApiError::bad_request(e.to_string()))?;
 
                 // we return an inner error if and only if the submitted transaction is
                 // invalid and will be rejected if we were to submit it to consensus
-                Ok((&fedimint.submit_transaction(transaction).await).into())
+                Ok((&fedimint.submit_transaction(transaction).await.map_err(TransactionErrorOld::from)).into())
+            }
+        },
+        api_endpoint! {
+            SUBMIT_ENDPOINT,
+            SUBMIT_ENDPOINT_API_VERSION,
+            async |fedimint: &ConsensusApi, _context, transaction: SerdeTransaction| -> TransactionId {
+                let transaction = transaction
+                    .try_into_inner(&fedimint.modules.decoder_registry())
+                    .map_err(|e| ApiError::bad_request(e.to_string()))?;
+
+                Ok(fedimint.submit_transaction(transaction).await?)
             }
         },
         api_endpoint! {

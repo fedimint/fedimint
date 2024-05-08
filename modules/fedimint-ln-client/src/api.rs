@@ -186,7 +186,7 @@ where
     async fn fetch_gateways(&self) -> FederationResult<Vec<LightningGatewayAnnouncement>> {
         let gateway_announcements: Vec<LightningGatewayAnnouncement> = self
             .request_with_strategy(
-                UnionResponses::new(self.all_peers().total()),
+                UnionResponses::new(self.all_peers().num_peers()),
                 LIST_GATEWAYS_ENDPOINT.to_string(),
                 ApiRequestErased::default(),
             )

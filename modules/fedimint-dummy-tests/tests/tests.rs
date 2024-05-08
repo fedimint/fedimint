@@ -128,7 +128,7 @@ async fn unbalanced_transactions_get_rejected() -> anyhow::Result<()> {
     };
     let tx = TransactionBuilder::new().with_output(output.into_dyn(dummy_module.id));
     let (tx, _) = tx.build(&Secp256k1::new(), rand::thread_rng());
-    let result = client.api().submit_transaction(tx).await;
+    let result = client.api().submit_transaction_old(tx).await;
     match result {
         Ok(submission_result) => {
             if submission_result

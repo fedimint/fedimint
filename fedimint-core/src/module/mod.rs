@@ -140,11 +140,23 @@ impl Debug for ApiAuth {
 pub struct ApiError {
     pub code: i32,
     pub message: String,
+    pub data: Option<serde_json::Value>,
 }
 
 impl ApiError {
+    pub const TX_ERROR_UNBALANCED: i32 = 37010;
+    pub const TX_ERROR_INVALID_SIGNATURE: i32 = 37011;
+    pub const TX_ERROR_UNSUPPORTED_SIGNATURE_SCHEME: i32 = 37012;
+    pub const TX_ERROR_INVALID_WITNESS_LEN: i32 = 37013;
+    pub const TX_ERROR_INPUT_ERROR: i32 = 37014;
+    pub const TX_ERROR_OUTPUT_ERROR: i32 = 37015;
+
     pub fn new(code: i32, message: String) -> Self {
-        Self { code, message }
+        Self {
+            code,
+            message,
+            data: None,
+        }
     }
 
     pub fn not_found(message: String) -> Self {
@@ -250,6 +262,7 @@ impl<'a> ApiEndpointContext<'a> {
             ApiError {
                 code: 500,
                 message: "API server error when writing to database".to_string(),
+                data: None,
             }
         })
     }

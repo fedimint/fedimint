@@ -2376,7 +2376,7 @@ pub async fn cannot_replay_tx_test(dev_fed: DevFed) -> Result<()> {
     // TODO(support:v0.2): remove
     if fedimint_cli_version >= *VERSION_0_3_0_ALPHA {
         cmd!(double_spend_client, "reissue", double_spend_notes)
-            .assert_error_contains("The transaction had an invalid input")
+            .assert_error_contains("an invalid input")
             .await?;
     } else {
         // v0.2 clients don't write json errors to stdout, so we can't parse

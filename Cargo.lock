@@ -1399,6 +1399,7 @@ dependencies = [
  "itertools 0.12.1",
  "js-sys",
  "jsonrpsee-core",
+ "jsonrpsee-types",
  "jsonrpsee-wasm-client",
  "jsonrpsee-ws-client",
  "lru",
