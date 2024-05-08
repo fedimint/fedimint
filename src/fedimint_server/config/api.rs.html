@@ -1405,6 +1405,18 @@
 <a href="#1405" id="1405">1405</a>
 <a href="#1406" id="1406">1406</a>
 <a href="#1407" id="1407">1407</a>
+<a href="#1408" id="1408">1408</a>
+<a href="#1409" id="1409">1409</a>
+<a href="#1410" id="1410">1410</a>
+<a href="#1411" id="1411">1411</a>
+<a href="#1412" id="1412">1412</a>
+<a href="#1413" id="1413">1413</a>
+<a href="#1414" id="1414">1414</a>
+<a href="#1415" id="1415">1415</a>
+<a href="#1416" id="1416">1416</a>
+<a href="#1417" id="1417">1417</a>
+<a href="#1418" id="1418">1418</a>
+<a href="#1419" id="1419">1419</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::fs;
 <span class="kw">use </span>std::net::SocketAddr;
@@ -1425,6 +1437,7 @@
 };
 <span class="kw">use </span>fedimint_core::core::ModuleInstanceId;
 <span class="kw">use </span>fedimint_core::db::Database;
+<span class="kw">use </span>fedimint_core::encoding::Encodable;
 <span class="kw">use </span>fedimint_core::endpoint_constants::{
     ADD_CONFIG_GEN_PEER_ENDPOINT, AUTH_ENDPOINT, CONFIG_GEN_PEERS_ENDPOINT,
     CONSENSUS_CONFIG_GEN_PARAMS_ENDPOINT, DEFAULT_CONFIG_GEN_PARAMS_ENDPOINT,
@@ -1450,7 +1463,7 @@
 <span class="kw">use </span><span class="kw">crate</span>::config::{gen_cert_and_key, ConfigGenParams, ServerConfig};
 <span class="kw">use </span><span class="kw">crate</span>::envs::FM_PEER_ID_SORT_BY_URL_ENV;
 <span class="kw">use </span><span class="kw">crate</span>::net::peers::DelayCalculator;
-<span class="kw">use crate</span>::{check_auth, get_verification_hashes, ApiResult, HasApiContext};
+<span class="kw">use crate</span>::{check_auth, ApiResult, HasApiContext};
 
 <span class="doccomment">/// Serves the config gen API endpoints
 </span><span class="attr">#[derive(Clone)]
@@ -1727,20 +1740,31 @@
         <span class="prelude-val">Ok</span>(())
     }
 
-    <span class="doccomment">/// Returns the consensus config hash, tweaked by our TLS cert, to be shared
-    /// with other peers
+    <span class="doccomment">/// Returns tagged hashes of consensus config to be shared with other peers.
+    /// The hashes are tagged with the peer id  such that they are unique to
+    /// each peer and their manual verification by the guardians via the UI is
+    /// more robust.
     </span><span class="kw">pub async fn </span>verify_config_hash(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ApiResult&lt;BTreeMap&lt;PeerId, sha256::Hash&gt;&gt; {
         <span class="kw">let </span>expected_status = [
             ServerStatus::VerifyingConfigs,
             ServerStatus::VerifiedConfigs,
         ];
+
         <span class="kw">let </span>state = <span class="self">self</span>.require_any_status(<span class="kw-2">&amp;</span>expected_status).<span class="kw">await</span><span class="question-mark">?</span>;
+
         <span class="kw">let </span>config = state
             .config
             .clone()
             .ok_or(ApiError::bad_request(<span class="string">"Missing config"</span>.to_string()))<span class="question-mark">?</span>;
 
-        <span class="prelude-val">Ok</span>(get_verification_hashes(<span class="kw-2">&amp;</span>config))
+        <span class="kw">let </span>verification_hashes = config
+            .consensus
+            .api_endpoints
+            .keys()
+            .map(|peer| (<span class="kw-2">*</span>peer, (<span class="kw-2">*</span>peer, config.consensus.clone()).consensus_hash()))
+            .collect();
+
+        <span class="prelude-val">Ok</span>(verification_hashes)
     }
 
     <span class="doccomment">/// Writes the configs to a staging directory disk after they are generated
