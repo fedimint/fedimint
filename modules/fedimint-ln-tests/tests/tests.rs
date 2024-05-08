@@ -19,6 +19,7 @@ use fedimint_ln_server::LightningInit;
 use fedimint_testing::federation::FederationTest;
 use fedimint_testing::fixtures::Fixtures;
 use fedimint_testing::gateway::{GatewayTest, DEFAULT_GATEWAY_PASSWORD};
+use fedimint_testing::ln::FakeLightningTest;
 use lightning_invoice::{Bolt11Invoice, Bolt11InvoiceDescription, Description};
 use rand::rngs::OsRng;
 use secp256k1::KeyPair;
@@ -37,9 +38,8 @@ fn fixtures() -> Fixtures {
 
 /// Setup a gateway connected to the fed and client
 async fn gateway(fixtures: &Fixtures, fed: &FederationTest) -> GatewayTest {
-    let lnd = fixtures.lnd().await;
     let mut gateway = fixtures
-        .new_gateway(lnd, 0, Some(DEFAULT_GATEWAY_PASSWORD.to_string()))
+        .new_gateway(0, Some(DEFAULT_GATEWAY_PASSWORD.to_string()))
         .await;
     gateway.connect_fed(fed).await;
     gateway
@@ -227,8 +227,8 @@ async fn gateway_protects_preimage_for_payment() -> anyhow::Result<()> {
     let (op, outpoint) = client2_dummy_module.print_money(sats(10000)).await?;
     client2.await_primary_module_output(op, outpoint).await?;
 
-    let cln = fixtures.cln().await;
-    let invoice = cln.invoice(Amount::from_sats(100), None).await?;
+    let other_ln = FakeLightningTest::new();
+    let invoice = other_ln.invoice(Amount::from_sats(100), None).await?;
 
     // Pay invoice with client1
     let OutgoingLightningPayment {
@@ -290,8 +290,8 @@ async fn cannot_pay_same_external_invoice_twice() -> anyhow::Result<()> {
     let (op, outpoint) = dummy_module.print_money(sats(1000)).await?;
     client.await_primary_module_output(op, outpoint).await?;
 
-    let cln = fixtures.cln().await;
-    let invoice = cln.invoice(Amount::from_sats(100), None).await?;
+    let other_ln = FakeLightningTest::new();
+    let invoice = other_ln.invoice(Amount::from_sats(100), None).await?;
 
     // Pay the invoice for the first time
     let OutgoingLightningPayment {

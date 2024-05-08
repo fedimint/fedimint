@@ -25,9 +25,6 @@ use rand::rngs::OsRng;
 use tokio::sync::mpsc;
 use tracing::info;
 
-use super::LightningTest;
-use crate::gateway::LightningNodeType;
-
 pub const INVALID_INVOICE_DESCRIPTION: &str = "INVALID";
 
 #[derive(Debug)]
@@ -61,9 +58,8 @@ impl Default for FakeLightningTest {
     }
 }
 
-#[async_trait]
-impl LightningTest for FakeLightningTest {
-    async fn invoice(
+impl FakeLightningTest {
+    pub async fn invoice(
         &self,
         amount: Amount,
         expiry_time: Option<u64>,
@@ -84,16 +80,34 @@ impl LightningTest for FakeLightningTest {
             .unwrap())
     }
 
-    fn is_shared(&self) -> bool {
-        false
+    /// Creates an invoice that is not payable
+    ///
+    /// * Mocks use hard-coded invoice description to fail the payment
+    /// * Real fixtures won't be able to route to randomly generated node pubkey
+    pub fn unpayable_invoice(&self, amount: Amount, expiry_time: Option<u64>) -> Bolt11Invoice {
+        let ctx = bitcoin::secp256k1::Secp256k1::new();
+        // Generate fake node keypair
+        let kp = KeyPair::new(&ctx, &mut OsRng);
+
+        // `FakeLightningTest` will fail to pay any invoice with
+        // `INVALID_INVOICE_DESCRIPTION` in the description of the invoice.
+        InvoiceBuilder::new(Currency::Regtest)
+            .payee_pub_key(kp.public_key())
+            .description(INVALID_INVOICE_DESCRIPTION.to_string())
+            .payment_hash(sha256::Hash::hash(&[0; 32]))
+            .current_timestamp()
+            .min_final_cltv_expiry_delta(0)
+            .payment_secret(PaymentSecret([0; 32]))
+            .amount_milli_satoshis(amount.msats)
+            .expiry_time(Duration::from_secs(
+                expiry_time.unwrap_or(DEFAULT_EXPIRY_TIME),
+            ))
+            .build_signed(|m| ctx.sign_ecdsa_recoverable(m, &SecretKey::from_keypair(&kp)))
+            .expect("Invoice creation failed")
     }
 
-    fn listening_address(&self) -> String {
+    pub fn listening_address(&self) -> String {
         "FakeListeningAddress".to_string()
-    }
-
-    fn lightning_node_type(&self) -> LightningNodeType {
-        unimplemented!("FakeLightningTest does not have a lightning node type")
     }
 }
 
