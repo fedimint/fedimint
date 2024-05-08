@@ -201,6 +201,7 @@ impl FedimintServer {
         if let Ok(password) = fs::read_to_string(self.data_dir.join(PLAINTEXT_PASSWORD)) {
             config_gen
                 .set_password(ApiAuth(password.clone()))
+                .await
                 .map_err(|_| format_err!("Unable to use local password"))?;
             info!(target: LOG_CONSENSUS, "Setting password from local file");
 
