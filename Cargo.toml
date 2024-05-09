@@ -79,7 +79,7 @@ keywords = ["bitcoin", "lightning", "chaumian", "e-cash", "federated"]
 
 [workspace.dependencies]
 criterion = { version = "0.5.1" }
-threshold_crypto = { version = "0.2", package = "fedimint-threshold-crypto" }
+threshold_crypto = { version = "0.2.1", package = "fedimint-threshold-crypto" }
 tonic_lnd = { version = "0.2.0", package="fedimint-tonic-lnd", features = ["lightningrpc", "routerrpc"] }
 cln-rpc = "0.1.8"
 clap = { version = "4.5.4", features = ["derive", "std", "help", "usage", "error-context", "suggestions", "env"], default-features = false }

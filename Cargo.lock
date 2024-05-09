@@ -2065,9 +2065,11 @@ dependencies = [
  "erased-serde",
  "fedimint-client",
  "fedimint-core",
+ "fedimint-ln-common",
  "fedimint-threshold-crypto",
  "fedimint-tpe",
  "futures",
+ "group",
  "itertools 0.12.1",
  "lightning-invoice",
  "rand",
@@ -2571,9 +2573,9 @@ dependencies = [
 
 [[package]]
 name = "fedimint-threshold-crypto"
-version = "0.2.0"
+version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ac4f959c486005e123fc1658135119456540e0ab4193852d541004ed3edcfa8d"
+checksum = "3e5f0913eb5fb65f83e6b503794f2eba124b542b9bdbb5cf941bc12bc7b0ea67"
 dependencies = [
  "bls12_381",
  "byteorder",
