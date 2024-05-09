@@ -4,8 +4,9 @@ use fedimint_core::util::SafeUrl;
 use fedimint_core::{Amount, TransactionId};
 use fedimint_ln_common::gateway_endpoint_constants::{
     BACKUP_ENDPOINT, BALANCE_ENDPOINT, CONFIGURATION_ENDPOINT, CONNECT_FED_ENDPOINT,
-    GATEWAY_INFO_ENDPOINT, GATEWAY_INFO_POST_ENDPOINT, LEAVE_FED_ENDPOINT, RESTORE_ENDPOINT,
-    SET_CONFIGURATION_ENDPOINT, WITHDRAW_ENDPOINT,
+    CONNECT_TO_PEER_ENDPOINT, GATEWAY_INFO_ENDPOINT, GATEWAY_INFO_POST_ENDPOINT,
+    GET_FUNDING_ADDRESS_ENDPOINT, LEAVE_FED_ENDPOINT, LIST_ACTIVE_CHANNELS_ENDPOINT,
+    OPEN_CHANNEL_ENDPOINT, RESTORE_ENDPOINT, SET_CONFIGURATION_ENDPOINT, WITHDRAW_ENDPOINT,
 };
 use reqwest::{Method, StatusCode};
 use serde::de::DeserializeOwned;
@@ -143,7 +144,7 @@ impl GatewayRpcClient {
     pub async fn connect_to_peer(&self, payload: ConnectToPeerPayload) -> GatewayRpcResult<()> {
         let url = self
             .base_url
-            .join("/connect_to_peer")
+            .join(CONNECT_TO_PEER_ENDPOINT)
             .expect("invalid base url");
         self.call_post(url, payload).await
     }
@@ -154,7 +155,7 @@ impl GatewayRpcClient {
     ) -> GatewayRpcResult<Address<NetworkUnchecked>> {
         let url = self
             .base_url
-            .join("/get_funding_address")
+            .join(GET_FUNDING_ADDRESS_ENDPOINT)
             .expect("invalid base url");
         self.call_post(url, payload).await
     }
@@ -162,7 +163,7 @@ impl GatewayRpcClient {
     pub async fn open_channel(&self, payload: OpenChannelPayload) -> GatewayRpcResult<()> {
         let url = self
             .base_url
-            .join("/open_channel")
+            .join(OPEN_CHANNEL_ENDPOINT)
             .expect("invalid base url");
         self.call_post(url, payload).await
     }
@@ -170,7 +171,7 @@ impl GatewayRpcClient {
     pub async fn list_active_channels(&self) -> GatewayRpcResult<Vec<ChannelInfo>> {
         let url = self
             .base_url
-            .join("/list_active_channels")
+            .join(LIST_ACTIVE_CHANNELS_ENDPOINT)
             .expect("invalid base url");
         self.call_get(url).await
     }
