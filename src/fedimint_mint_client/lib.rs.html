@@ -2308,6 +2308,15 @@
 <a href="#2308" id="2308">2308</a>
 <a href="#2309" id="2309">2309</a>
 <a href="#2310" id="2310">2310</a>
+<a href="#2311" id="2311">2311</a>
+<a href="#2312" id="2312">2312</a>
+<a href="#2313" id="2313">2313</a>
+<a href="#2314" id="2314">2314</a>
+<a href="#2315" id="2315">2315</a>
+<a href="#2316" id="2316">2316</a>
+<a href="#2317" id="2317">2317</a>
+<a href="#2318" id="2318">2318</a>
+<a href="#2319" id="2319">2319</a>
 </pre></div><pre class="rust"><code><span class="comment">// Backup and restore logic
 </span><span class="kw">pub mod </span>backup;
 <span class="doccomment">/// Database keys used throughout the mint client module
@@ -3053,6 +3062,14 @@
     }
 }
 
+<span class="attr">#[derive(thiserror::Error, Debug, Clone)]
+</span><span class="kw">pub enum </span>ReissueExternalNotesError {
+    <span class="attr">#[error(<span class="string">"Federation ID does not match"</span>)]
+    </span>WrongFederationId,
+    <span class="attr">#[error(<span class="string">"We already reissued these notes"</span>)]
+    </span>AlreadyReissued,
+}
+
 <span class="kw">impl </span>MintClientModule {
     <span class="kw">async fn </span>create_sufficient_input(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
@@ -3532,6 +3549,7 @@
     <span class="doccomment">/// Try to reissue e-cash notes received from a third party to receive them
     /// in our wallet. The progress and outcome can be observed using
     /// [`MintClientModule::subscribe_reissue_external_notes`].
+    /// Can return error of type [`ReissueExternalNotesError`]
     </span><span class="kw">pub async fn </span>reissue_external_notes&lt;M: Serialize + Send&gt;(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         oob_notes: OOBNotes,
@@ -3546,7 +3564,7 @@
         </span>);
 
         <span class="kw">if </span>federation_id_prefix != <span class="self">self</span>.federation_id.to_prefix() {
-            <span class="macro">bail!</span>(<span class="string">"Federation ID does not match"</span>);
+            <span class="macro">bail!</span>(ReissueExternalNotesError::WrongFederationId);
         }
 
         <span class="kw">let </span>operation_id = OperationId(
@@ -3591,7 +3609,7 @@
                 tx,
             )
             .<span class="kw">await
-            </span>.context(<span class="string">"We already reissued these notes"</span>)<span class="question-mark">?</span>;
+            </span>.context(ReissueExternalNotesError::AlreadyReissued)<span class="question-mark">?</span>;
 
         <span class="prelude-val">Ok</span>(operation_id)
     }
