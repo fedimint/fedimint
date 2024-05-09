@@ -1,13 +1,10 @@
 use std::collections::BTreeMap;
-use std::fs;
 use std::net::SocketAddr;
-use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 
 use async_trait::async_trait;
 use bitcoin_hashes::sha256;
-use fedimint_aead::random_salt;
 use fedimint_api_client::api::{DynGlobalApi, StatusResponse};
 use fedimint_core::admin_client::{
     ConfigGenConnectionsRequest, ConfigGenParamsConsensus, ConfigGenParamsRequest,
@@ -30,7 +27,7 @@ use fedimint_core::module::{
     api_endpoint, ApiAuth, ApiEndpoint, ApiEndpointContext, ApiError, ApiRequestErased, ApiVersion,
 };
 use fedimint_core::task::{sleep, TaskGroup};
-use fedimint_core::util::{write_new, SafeUrl};
+use fedimint_core::util::SafeUrl;
 use fedimint_core::PeerId;
 use itertools::Itertools;
 use tokio::sync::mpsc::Sender;
@@ -38,9 +35,6 @@ use tokio::sync::{Mutex, MutexGuard};
 use tokio_rustls::rustls;
 use tracing::{error, info};
 
-use crate::config::io::{
-    read_server_config, write_server_config, CONFIG_STAGING_DIR, PLAINTEXT_PASSWORD, SALT_FILE,
-};
 use crate::config::{gen_cert_and_key, ConfigGenParams, ServerConfig};
 use crate::envs::FM_PEER_ID_SORT_BY_URL_ENV;
 use crate::net::peers::DelayCalculator;
@@ -49,8 +43,6 @@ use crate::{check_auth, ApiResult, HasApiContext};
 /// Serves the config gen API endpoints
 #[derive(Clone)]
 pub struct ConfigGenApi {
-    /// Directory the configs will be created in
-    data_dir: PathBuf,
     /// In-memory state machine
     state: Arc<Mutex<ConfigGenState>>,
     /// DB not really used
@@ -59,14 +51,12 @@ pub struct ConfigGenApi {
     config_generated_tx: Sender<ServerConfig>,
     /// Task group for running DKG
     task_group: TaskGroup,
-
     /// Version hash
     version_hash: String,
 }
 
 impl ConfigGenApi {
     pub fn new(
-        data_dir: PathBuf,
         settings: ConfigGenSettings,
         db: Database,
         config_generated_tx: Sender<ServerConfig>,
@@ -74,7 +64,6 @@ impl ConfigGenApi {
         version_hash: String,
     ) -> Self {
         let config_gen_api = Self {
-            data_dir,
             state: Arc::new(Mutex::new(ConfigGenState::new(settings))),
             db,
             config_generated_tx,
@@ -294,7 +283,6 @@ impl ConfigGenApi {
                 let mut state = self_clone.state.lock().await;
                 match config {
                     Ok(config) => {
-                        self_clone.stage_configs(&config, &state)?;
                         state.status = ServerStatus::VerifyingConfigs;
                         state.config = Some(config);
                         info!(
@@ -348,63 +336,6 @@ impl ConfigGenApi {
         Ok(verification_hashes)
     }
 
-    /// Writes the configs to a staging directory disk after they are generated
-    fn stage_configs(&self, config: &ServerConfig, state: &ConfigGenState) -> ApiResult<()> {
-        let cfg_staging_dir = self.data_dir.join(CONFIG_STAGING_DIR);
-        fs::create_dir_all(&cfg_staging_dir)
-            .map_err(|e| ApiError::server_error(format!("Unable to modify data dir {e:?}")))?;
-
-        let auth = config.private.api_auth.0.clone();
-        let io_error = |e| ApiError::server_error(format!("Unable to write to data dir {e:?}"));
-
-        // TODO: Make writing password optional
-        write_new(cfg_staging_dir.join(PLAINTEXT_PASSWORD), &auth).map_err(io_error)?;
-        write_new(cfg_staging_dir.join(SALT_FILE), random_salt()).map_err(io_error)?;
-        write_server_config(config, cfg_staging_dir, &auth, &state.settings.registry)
-            .map_err(|e| ApiError::server_error(format!("Unable to encrypt configs {e:?}")))
-    }
-
-    /// Moves configuration artifacts from a staging directory to a permanent
-    /// data directory.
-    fn persist_staged_configs(&self, cfg_staging_dir: &PathBuf) -> ApiResult<()> {
-        let files = fs::read_dir(cfg_staging_dir).map_err(|e| {
-            ApiError::server_error(format!("Unable to read config staging dir {e:?}"))
-        })?;
-
-        for file_result in files {
-            let file = file_result.map_err(|e| {
-                ApiError::server_error(format!("Unable to read file in config staging dir {e:?}"))
-            })?;
-            let path = file.path();
-            let filename = path
-                .file_name()
-                .ok_or(ApiError::server_error(
-                    "Failed to get file name".to_string(),
-                ))?
-                .to_str()
-                .ok_or(ApiError::server_error(
-                    "Failed to convert file name to string".to_string(),
-                ))?;
-
-            // TODO: https://github.com/fedimint/fedimint/issues/3692
-
-            let dest = self.data_dir.join(filename);
-            fs::rename(&path, &dest)
-                .map_err(|e| ApiError::server_error(format!("Unable to modify data dir {e:?}")))?;
-        }
-
-        Ok(())
-    }
-
-    fn remove_staged_configs(&self, cfg_staging_dir: &PathBuf) -> ApiResult<()> {
-        if cfg_staging_dir.exists() {
-            fs::remove_dir_all(cfg_staging_dir)
-                .map_err(|e| ApiError::server_error(format!("Unable to modify data dir {e:?}")))
-        } else {
-            Ok(())
-        }
-    }
-
     /// We have verified all our peer configs
     pub async fn verified_configs(&self) -> ApiResult<()> {
         {
@@ -427,21 +358,18 @@ impl ConfigGenApi {
         Ok(())
     }
 
-    /// Attempts to decrypt the config files from disk using the auth string.
-    ///
-    /// Will force shut down the config gen API so the consensus API can start.
-    /// Removes the upgrade flag when called.
-    pub async fn start_consensus(&self, auth: ApiAuth) -> ApiResult<()> {
-        let cfg_staging_dir = self.data_dir.join(CONFIG_STAGING_DIR);
-        if cfg_staging_dir.exists() {
-            self.persist_staged_configs(&cfg_staging_dir)?;
-            self.remove_staged_configs(&cfg_staging_dir)?;
-        }
+    pub async fn start_consensus(&self) -> ApiResult<()> {
+        let state = self
+            .require_any_status(&[
+                ServerStatus::VerifyingConfigs,
+                ServerStatus::VerifiedConfigs,
+            ])
+            .await?;
 
-        let cfg = read_server_config(&auth.0, self.data_dir.clone())
-            .map_err(|e| ApiError::bad_request(format!("Unable to decrypt configs {e:?}")))?;
-
-        self.config_generated_tx.send(cfg).await.expect("Can send");
+        self.config_generated_tx
+            .send(state.config.clone().expect("Config should exist"))
+            .await
+            .expect("Can send");
 
         Ok(())
     }
@@ -465,9 +393,6 @@ impl ConfigGenApi {
                 ServerStatus::VerifiedConfigs,
             ];
             let mut state = self.require_any_status(&expected_status).await?;
-
-            let cfg_staging_dir = self.data_dir.join(CONFIG_STAGING_DIR);
-            self.remove_staged_configs(&cfg_staging_dir)?;
 
             state.status = ServerStatus::SetupRestarted;
             info!(
@@ -876,11 +801,7 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConfigGenApi>> {
             ApiVersion::new(0, 0),
             async |config: &ConfigGenApi, context, _v: ()| -> () {
                 check_auth(context)?;
-                let request_auth = context.request_auth();
-                match request_auth {
-                    None => return Err(ApiError::bad_request("Missing password".to_string())),
-                    Some(auth) => config.start_consensus(auth).await
-                }
+                config.start_consensus().await
             }
         },
         api_endpoint! {
@@ -944,7 +865,7 @@ mod tests {
     use tracing::info;
 
     use crate::config::api::{ConfigGenConnectionsRequest, ConfigGenSettings};
-    use crate::config::io::{read_server_config, CONFIG_STAGING_DIR, PLAINTEXT_PASSWORD};
+    use crate::config::io::{read_server_config, PLAINTEXT_PASSWORD};
     use crate::config::{DynServerModuleInit, ServerConfig, DEFAULT_MAX_CLIENT_CONNECTIONS};
     use crate::fedimint_core::module::ServerModuleInit;
     use crate::FedimintServer;
@@ -1129,15 +1050,9 @@ mod tests {
         }
 
         /// reads the dummy module config from the filesystem
-        fn read_config(&self, staging: bool) -> ServerConfig {
-            let cfg_dir = if staging {
-                self.dir.join(CONFIG_STAGING_DIR)
-            } else {
-                self.dir.clone()
-            };
-
-            let auth = fs::read_to_string(cfg_dir.join(PLAINTEXT_PASSWORD));
-            read_server_config(&auth.unwrap(), cfg_dir.clone()).unwrap()
+        fn read_config(&self) -> ServerConfig {
+            let auth = fs::read_to_string(self.dir.join(PLAINTEXT_PASSWORD));
+            read_server_config(&auth.unwrap(), self.dir.clone()).unwrap()
         }
     }
 
@@ -1386,14 +1301,6 @@ mod tests {
         }
         assert_eq!(hashes.len(), 1);
 
-        // verify the local and consensus values for peers
-        for peer in all_peers.iter() {
-            let cfg = peer.read_config(true); // read temporary configs from staging dir
-            let dummy: DummyConfig = cfg.get_module_config_typed(0).unwrap();
-            assert_eq!(dummy.consensus.tx_fee, leader_amount);
-            assert_eq!(cfg.consensus.meta["\"test\""], leader_name);
-        }
-
         // set verified configs
         for peer in all_peers.iter() {
             peer.client.verified_configs(peer.auth.clone()).await.ok();
@@ -1410,7 +1317,7 @@ mod tests {
             assert_eq!(peer.status().await.server, ServerStatus::ConsensusRunning);
 
             // verify the local and consensus values for peers
-            let cfg = peer.read_config(false); // read persisted configs
+            let cfg = peer.read_config(); // read persisted configs
             let dummy: DummyConfig = cfg.get_module_config_typed(0).unwrap();
             assert_eq!(dummy.consensus.tx_fee, leader_amount);
             assert_eq!(cfg.consensus.meta["\"test\""], leader_name);
