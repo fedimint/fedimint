@@ -16,6 +16,10 @@ rustc-args = ["--cfg", "tokio_unstable"]
 path = "src/main.rs"
 name = "fedimint-dbtool"
 
+[lib]
+name = "fedimint_dbtool"
+path = "src/lib.rs"
+
 [dependencies]
 anyhow = { workspace = true }
 fedimint-aead = { version = "=0.4.0-alpha", path = "../crypto/aead" }
@@ -25,6 +29,8 @@ fedimint-core = { version = "=0.4.0-alpha", path = "../fedimint-core" }
 fedimint-client = { version = "=0.4.0-alpha", path = "../fedimint-client" }
 fedimint-server = { version = "=0.4.0-alpha", path = "../fedimint-server" }
 fedimint-rocksdb = { version = "=0.4.0-alpha", path = "../fedimint-rocksdb" }
+fedimint-meta-server = { version = "=0.4.0-alpha", path = "../modules/fedimint-meta-server" }
+fedimint-meta-client = { version = "=0.4.0-alpha", path = "../modules/fedimint-meta-client" }
 fedimint-mint-server = { version = "=0.4.0-alpha", path = "../modules/fedimint-mint-server" }
 fedimint-mint-client = { version = "=0.4.0-alpha", path = "../modules/fedimint-mint-client" }
 fedimint-ln-server = { version = "=0.4.0-alpha", path = "../modules/fedimint-ln-server" }
