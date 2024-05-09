@@ -314,6 +314,9 @@
 <a href="#314" id="314">314</a>
 <a href="#315" id="315">315</a>
 <a href="#316" id="316">316</a>
+<a href="#317" id="317">317</a>
+<a href="#318" id="318">318</a>
+<a href="#319" id="319">319</a>
 </pre></div><pre class="rust"><code><span class="attr">#![allow(where_clauses_object_safety)] </span><span class="comment">// https://github.com/dtolnay/async-trait/issues/228
 </span><span class="kw">extern crate </span>fedimint_core;
 
@@ -323,16 +326,18 @@
 <span class="kw">use </span>std::path::{Path, PathBuf};
 <span class="kw">use </span>std::time::Duration;
 
-<span class="kw">use </span>anyhow::{anyhow <span class="kw">as </span>format_err, Context};
+<span class="kw">use </span>anyhow::Context;
 <span class="kw">use </span>async_trait::async_trait;
 <span class="kw">use </span>config::io::{read_server_config, PLAINTEXT_PASSWORD};
 <span class="kw">use </span>config::ServerConfig;
+<span class="kw">use </span>fedimint_aead::random_salt;
 <span class="kw">use </span>fedimint_core::config::ServerModuleInitRegistry;
 <span class="kw">use </span>fedimint_core::core::ModuleInstanceId;
 <span class="kw">use </span>fedimint_core::db::Database;
 <span class="kw">use </span>fedimint_core::epoch::ConsensusItem;
-<span class="kw">use </span>fedimint_core::module::{ApiAuth, ApiEndpoint, ApiEndpointContext, ApiError, ApiRequestErased};
+<span class="kw">use </span>fedimint_core::module::{ApiEndpoint, ApiEndpointContext, ApiError, ApiRequestErased};
 <span class="kw">use </span>fedimint_core::task::TaskGroup;
+<span class="kw">use </span>fedimint_core::util::write_new;
 <span class="kw">use </span>fedimint_logging::{LOG_CONSENSUS, LOG_CORE, LOG_NET_API};
 <span class="kw">use </span>futures::FutureExt;
 <span class="kw">use </span>jsonrpsee::server::{PingConfig, RpcServiceBuilder, ServerBuilder, ServerHandle};
@@ -341,6 +346,7 @@
 <span class="kw">use </span>tracing::{error, info};
 
 <span class="kw">use </span><span class="kw">crate</span>::config::api::{ConfigGenApi, ConfigGenSettings};
+<span class="kw">use </span><span class="kw">crate</span>::config::io::{write_server_config, SALT_FILE};
 <span class="kw">use </span><span class="kw">crate</span>::consensus::server::ConsensusServer;
 <span class="kw">use </span><span class="kw">crate</span>::metrics::initialize_gauge_metrics;
 <span class="kw">use </span><span class="kw">crate</span>::net::api::{ConsensusApi, RpcHandlerCtx};
@@ -469,37 +475,37 @@
 
         initialize_gauge_metrics(<span class="kw-2">&amp;</span><span class="self">self</span>.db).<span class="kw">await</span>;
 
-        <span class="kw">let </span>(config_generated_tx, <span class="kw-2">mut </span>config_generated_rx) = tokio::sync::mpsc::channel(<span class="number">1</span>);
+        <span class="kw">let </span>(cfg_sender, <span class="kw-2">mut </span>cfg_receiver) = tokio::sync::mpsc::channel(<span class="number">1</span>);
 
         <span class="kw">let </span>config_gen = ConfigGenApi::new(
-            <span class="self">self</span>.data_dir.clone(),
             <span class="self">self</span>.settings.clone(),
             <span class="self">self</span>.db.clone(),
-            config_generated_tx,
+            cfg_sender,
             <span class="kw-2">&amp;mut </span>task_group,
             <span class="self">self</span>.version_hash.clone(),
         );
-
-        <span class="comment">// Attempt get the config with local password, otherwise start config gen
-        </span><span class="kw">if let </span><span class="prelude-val">Ok</span>(password) = fs::read_to_string(<span class="self">self</span>.data_dir.join(PLAINTEXT_PASSWORD)) {
-            config_gen
-                .set_password(ApiAuth(password.clone()))
-                .<span class="kw">await
-                </span>.map_err(|<span class="kw">_</span>| <span class="macro">format_err!</span>(<span class="string">"Unable to use local password"</span>))<span class="question-mark">?</span>;
-            <span class="macro">info!</span>(target: LOG_CONSENSUS, <span class="string">"Setting password from local file"</span>);
-
-            <span class="kw">if </span>config_gen.start_consensus(ApiAuth(password)).<span class="kw">await</span>.is_ok() {
-                <span class="macro">info!</span>(target: LOG_CONSENSUS, <span class="string">"Configs found locally"</span>);
-                <span class="kw">return </span><span class="prelude-val">Ok</span>(config_generated_rx.recv().<span class="kw">await</span>.expect(<span class="string">"should not close"</span>));
-            }
-        }
 
         <span class="kw">let </span><span class="kw-2">mut </span>rpc_module = RpcHandlerCtx::new_module(config_gen);
         <span class="self">Self</span>::attach_endpoints(<span class="kw-2">&amp;mut </span>rpc_module, config::api::server_endpoints(), <span class="prelude-val">None</span>);
         <span class="kw">let </span>handler = <span class="self">Self</span>::spawn_api(<span class="string">"config-gen"</span>, <span class="kw-2">&amp;</span><span class="self">self</span>.settings.api_bind, rpc_module, <span class="number">10</span>).<span class="kw">await</span>;
 
-        <span class="kw">let </span>cfg = config_generated_rx.recv().<span class="kw">await</span>.expect(<span class="string">"should not close"</span>);
+        <span class="kw">let </span>cfg = cfg_receiver.recv().<span class="kw">await</span>.expect(<span class="string">"should not close"</span>);
+
         handler.stop().<span class="kw">await</span>;
+
+        <span class="comment">// TODO: Make writing password optional
+        </span>write_new(
+            <span class="self">self</span>.data_dir.join(PLAINTEXT_PASSWORD),
+            <span class="kw-2">&amp;</span>cfg.private.api_auth.<span class="number">0</span>,
+        )<span class="question-mark">?</span>;
+        write_new(<span class="self">self</span>.data_dir.join(SALT_FILE), random_salt())<span class="question-mark">?</span>;
+        write_server_config(
+            <span class="kw-2">&amp;</span>cfg,
+            <span class="self">self</span>.data_dir.clone(),
+            <span class="kw-2">&amp;</span>cfg.private.api_auth.<span class="number">0</span>,
+            <span class="kw-2">&amp;</span><span class="self">self</span>.settings.registry,
+        )<span class="question-mark">?</span>;
+
         <span class="prelude-val">Ok</span>(cfg)
     }
 
