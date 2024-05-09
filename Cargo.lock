@@ -1603,6 +1603,8 @@ dependencies = [
  "fedimint-ln-gateway",
  "fedimint-ln-server",
  "fedimint-logging",
+ "fedimint-meta-client",
+ "fedimint-meta-server",
  "fedimint-mint-client",
  "fedimint-mint-server",
  "fedimint-rocksdb",
