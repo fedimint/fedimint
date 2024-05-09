@@ -220,14 +220,16 @@
 <a href="#220" id="220">220</a>
 <a href="#221" id="221">221</a>
 <a href="#222" id="222">222</a>
+<a href="#223" id="223">223</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>bitcoin::address::NetworkUnchecked;
 <span class="kw">use </span>bitcoin::Address;
 <span class="kw">use </span>fedimint_core::util::SafeUrl;
 <span class="kw">use </span>fedimint_core::{Amount, TransactionId};
 <span class="kw">use </span>fedimint_ln_common::gateway_endpoint_constants::{
     BACKUP_ENDPOINT, BALANCE_ENDPOINT, CONFIGURATION_ENDPOINT, CONNECT_FED_ENDPOINT,
-    GATEWAY_INFO_ENDPOINT, GATEWAY_INFO_POST_ENDPOINT, LEAVE_FED_ENDPOINT, RESTORE_ENDPOINT,
-    SET_CONFIGURATION_ENDPOINT, WITHDRAW_ENDPOINT,
+    CONNECT_TO_PEER_ENDPOINT, GATEWAY_INFO_ENDPOINT, GATEWAY_INFO_POST_ENDPOINT,
+    GET_FUNDING_ADDRESS_ENDPOINT, LEAVE_FED_ENDPOINT, LIST_ACTIVE_CHANNELS_ENDPOINT,
+    OPEN_CHANNEL_ENDPOINT, RESTORE_ENDPOINT, SET_CONFIGURATION_ENDPOINT, WITHDRAW_ENDPOINT,
 };
 <span class="kw">use </span>reqwest::{Method, StatusCode};
 <span class="kw">use </span>serde::de::DeserializeOwned;
@@ -365,7 +367,7 @@
     <span class="kw">pub async fn </span>connect_to_peer(<span class="kw-2">&amp;</span><span class="self">self</span>, payload: ConnectToPeerPayload) -&gt; GatewayRpcResult&lt;()&gt; {
         <span class="kw">let </span>url = <span class="self">self
             </span>.base_url
-            .join(<span class="string">"/connect_to_peer"</span>)
+            .join(CONNECT_TO_PEER_ENDPOINT)
             .expect(<span class="string">"invalid base url"</span>);
         <span class="self">self</span>.call_post(url, payload).<span class="kw">await
     </span>}
@@ -376,7 +378,7 @@
     ) -&gt; GatewayRpcResult&lt;Address&lt;NetworkUnchecked&gt;&gt; {
         <span class="kw">let </span>url = <span class="self">self
             </span>.base_url
-            .join(<span class="string">"/get_funding_address"</span>)
+            .join(GET_FUNDING_ADDRESS_ENDPOINT)
             .expect(<span class="string">"invalid base url"</span>);
         <span class="self">self</span>.call_post(url, payload).<span class="kw">await
     </span>}
@@ -384,7 +386,7 @@
     <span class="kw">pub async fn </span>open_channel(<span class="kw-2">&amp;</span><span class="self">self</span>, payload: OpenChannelPayload) -&gt; GatewayRpcResult&lt;()&gt; {
         <span class="kw">let </span>url = <span class="self">self
             </span>.base_url
-            .join(<span class="string">"/open_channel"</span>)
+            .join(OPEN_CHANNEL_ENDPOINT)
             .expect(<span class="string">"invalid base url"</span>);
         <span class="self">self</span>.call_post(url, payload).<span class="kw">await
     </span>}
@@ -392,7 +394,7 @@
     <span class="kw">pub async fn </span>list_active_channels(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; GatewayRpcResult&lt;Vec&lt;ChannelInfo&gt;&gt; {
         <span class="kw">let </span>url = <span class="self">self
             </span>.base_url
-            .join(<span class="string">"/list_active_channels"</span>)
+            .join(LIST_ACTIVE_CHANNELS_ENDPOINT)
             .expect(<span class="string">"invalid base url"</span>);
         <span class="self">self</span>.call_get(url).<span class="kw">await
     </span>}

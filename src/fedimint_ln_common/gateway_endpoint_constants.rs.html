@@ -14,16 +14,28 @@
 <a href="#14" id="14">14</a>
 <a href="#15" id="15">15</a>
 <a href="#16" id="16">16</a>
-</pre></div><pre class="rust"><code><span class="kw">pub const </span>ADDRESS_ENDPOINT: <span class="kw-2">&amp;</span>str = <span class="string">"/address"</span>;
+<a href="#17" id="17">17</a>
+<a href="#18" id="18">18</a>
+<a href="#19" id="19">19</a>
+<a href="#20" id="20">20</a>
+<a href="#21" id="21">21</a>
+<a href="#22" id="22">22</a>
+</pre></div><pre class="rust"><code><span class="doccomment">/// Use `_` for word separator
+
+</span><span class="kw">pub const </span>ADDRESS_ENDPOINT: <span class="kw-2">&amp;</span>str = <span class="string">"/address"</span>;
 <span class="kw">pub const </span>BACKUP_ENDPOINT: <span class="kw-2">&amp;</span>str = <span class="string">"/backup"</span>;
 <span class="kw">pub const </span>BALANCE_ENDPOINT: <span class="kw-2">&amp;</span>str = <span class="string">"/balance"</span>;
 <span class="kw">pub const </span>CONFIGURATION_ENDPOINT: <span class="kw-2">&amp;</span>str = <span class="string">"/config"</span>;
-<span class="kw">pub const </span>CONNECT_FED_ENDPOINT: <span class="kw-2">&amp;</span>str = <span class="string">"/connect-fed"</span>;
+<span class="kw">pub const </span>CONNECT_FED_ENDPOINT: <span class="kw-2">&amp;</span>str = <span class="string">"/connect-fed"</span>; <span class="comment">// uses `-` for backwards compatibility
+</span><span class="kw">pub const </span>CONNECT_TO_PEER_ENDPOINT: <span class="kw-2">&amp;</span>str = <span class="string">"/connect_to_peer"</span>;
 <span class="kw">pub const </span>CREATE_INVOICE_V2_ENDPOINT: <span class="kw-2">&amp;</span>str = <span class="string">"/create_invoice"</span>;
 <span class="kw">pub const </span>GATEWAY_INFO_ENDPOINT: <span class="kw-2">&amp;</span>str = <span class="string">"/info"</span>;
 <span class="kw">pub const </span>GET_GATEWAY_ID_ENDPOINT: <span class="kw-2">&amp;</span>str = <span class="string">"/id"</span>;
 <span class="kw">pub const </span>GATEWAY_INFO_POST_ENDPOINT: <span class="kw-2">&amp;</span>str = <span class="string">"/info"</span>;
-<span class="kw">pub const </span>LEAVE_FED_ENDPOINT: <span class="kw-2">&amp;</span>str = <span class="string">"/leave_fed"</span>;
+<span class="kw">pub const </span>GET_FUNDING_ADDRESS_ENDPOINT: <span class="kw-2">&amp;</span>str = <span class="string">"/get_funding_address"</span>;
+<span class="kw">pub const </span>LEAVE_FED_ENDPOINT: <span class="kw-2">&amp;</span>str = <span class="string">"/leave-fed"</span>; <span class="comment">// uses `-` for backwards compatibility
+</span><span class="kw">pub const </span>LIST_ACTIVE_CHANNELS_ENDPOINT: <span class="kw-2">&amp;</span>str = <span class="string">"/list_active_channels"</span>;
+<span class="kw">pub const </span>OPEN_CHANNEL_ENDPOINT: <span class="kw-2">&amp;</span>str = <span class="string">"/open_channel"</span>;
 <span class="kw">pub const </span>PAYMENT_INFO_V2_ENDPOINT: <span class="kw-2">&amp;</span>str = <span class="string">"/payment_info"</span>;
 <span class="kw">pub const </span>PAY_INVOICE_ENDPOINT: <span class="kw-2">&amp;</span>str = <span class="string">"/pay_invoice"</span>;
 <span class="kw">pub const </span>RESTORE_ENDPOINT: <span class="kw-2">&amp;</span>str = <span class="string">"/restore"</span>;

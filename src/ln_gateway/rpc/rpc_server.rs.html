@@ -391,6 +391,7 @@
 <a href="#391" id="391">391</a>
 <a href="#392" id="392">392</a>
 <a href="#393" id="393">393</a>
+<a href="#394" id="394">394</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>axum::extract::Request;
 <span class="kw">use </span>axum::http::{header, StatusCode};
 <span class="kw">use </span>axum::middleware::{<span class="self">self</span>, Next};
@@ -405,10 +406,11 @@
 <span class="kw">use </span>fedimint_ln_client::pay::PayInvoicePayload;
 <span class="kw">use </span>fedimint_ln_common::gateway_endpoint_constants::{
     ADDRESS_ENDPOINT, BACKUP_ENDPOINT, BALANCE_ENDPOINT, CONFIGURATION_ENDPOINT,
-    CONNECT_FED_ENDPOINT, CREATE_INVOICE_V2_ENDPOINT, GATEWAY_INFO_ENDPOINT,
-    GATEWAY_INFO_POST_ENDPOINT, GET_GATEWAY_ID_ENDPOINT, LEAVE_FED_ENDPOINT,
-    PAYMENT_INFO_V2_ENDPOINT, PAY_INVOICE_ENDPOINT, RESTORE_ENDPOINT, SEND_PAYMENT_V2_ENDPOINT,
-    SET_CONFIGURATION_ENDPOINT, WITHDRAW_ENDPOINT,
+    CONNECT_FED_ENDPOINT, CONNECT_TO_PEER_ENDPOINT, CREATE_INVOICE_V2_ENDPOINT,
+    GATEWAY_INFO_ENDPOINT, GATEWAY_INFO_POST_ENDPOINT, GET_FUNDING_ADDRESS_ENDPOINT,
+    GET_GATEWAY_ID_ENDPOINT, LEAVE_FED_ENDPOINT, LIST_ACTIVE_CHANNELS_ENDPOINT,
+    OPEN_CHANNEL_ENDPOINT, PAYMENT_INFO_V2_ENDPOINT, PAY_INVOICE_ENDPOINT, RESTORE_ENDPOINT,
+    SEND_PAYMENT_V2_ENDPOINT, SET_CONFIGURATION_ENDPOINT, WITHDRAW_ENDPOINT,
 };
 <span class="kw">use </span>fedimint_lnv2_client::{CreateInvoicePayload, SendPaymentPayload};
 <span class="kw">use </span>hex::ToHex;
@@ -555,10 +557,10 @@
         .route(LEAVE_FED_ENDPOINT, post(leave_fed))
         .route(BACKUP_ENDPOINT, post(backup))
         .route(RESTORE_ENDPOINT, post(restore))
-        .route(<span class="string">"/connect_to_peer"</span>, post(connect_to_peer))
-        .route(<span class="string">"/get_funding_address"</span>, post(get_funding_address))
-        .route(<span class="string">"/open_channel"</span>, post(open_channel))
-        .route(<span class="string">"/list_active_channels"</span>, get(list_active_channels))
+        .route(CONNECT_TO_PEER_ENDPOINT, post(connect_to_peer))
+        .route(GET_FUNDING_ADDRESS_ENDPOINT, post(get_funding_address))
+        .route(OPEN_CHANNEL_ENDPOINT, post(open_channel))
+        .route(LIST_ACTIVE_CHANNELS_ENDPOINT, get(list_active_channels))
         .layer(middleware::from_fn(auth_middleware));
 
     <span class="comment">// Routes that are un-authenticated before gateway configuration, then become
