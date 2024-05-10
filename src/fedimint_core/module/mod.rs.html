@@ -999,6 +999,10 @@
 <a href="#999" id="999">999</a>
 <a href="#1000" id="1000">1000</a>
 <a href="#1001" id="1001">1001</a>
+<a href="#1002" id="1002">1002</a>
+<a href="#1003" id="1003">1003</a>
+<a href="#1004" id="1004">1004</a>
+<a href="#1005" id="1005">1005</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! Fedimint supports modules to allow extending it's functionality.
 //! Some of the standard functionality is implemented in form of modules as
 //! well.
@@ -1019,13 +1023,14 @@
 <span class="kw">use </span>std::fmt::{<span class="self">self</span>, Debug, Formatter};
 <span class="kw">use </span>std::marker::{<span class="self">self</span>, PhantomData};
 <span class="kw">use </span>std::pin::Pin;
+<span class="kw">use </span>std::sync::atomic::{AtomicU64, Ordering};
 <span class="kw">use </span>std::sync::Arc;
 
 <span class="kw">use </span>fedimint_logging::LOG_NET_API;
 <span class="kw">use </span>futures::Future;
 <span class="kw">use </span>jsonrpsee_core::JsonValue;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
-<span class="kw">use </span>tracing::instrument;
+<span class="kw">use </span>tracing::Instrument;
 
 <span class="comment">// TODO: Make this module public and remove the wildcard `pub use` below
 </span><span class="kw">mod </span>version;
@@ -1313,8 +1318,7 @@
             <span class="kw">type </span>Param = <span class="macro-nonterminal">$param_ty</span>;
             <span class="kw">type </span>Response = <span class="macro-nonterminal">$resp_ty</span>;
 
-            <span class="attr">#[::tracing::instrument(skip_all, target=<span class="string">"fm::net::api"</span>, level = <span class="string">"info"</span>, name=<span class="string">"request_handler"</span>, fields(api=<span class="macro-nonterminal">$path</span>))]
-            </span><span class="kw">async fn </span>handle&lt;<span class="lifetime">'state</span>, <span class="lifetime">'context</span>, <span class="lifetime">'dbtx</span>&gt;(
+            <span class="kw">async fn </span>handle&lt;<span class="lifetime">'state</span>, <span class="lifetime">'context</span>, <span class="lifetime">'dbtx</span>&gt;(
                 <span class="macro-nonterminal">$state</span>: <span class="kw-2">&amp;</span><span class="lifetime">'state </span><span class="self">Self</span>::State,
                 <span class="macro-nonterminal">$context</span>: <span class="kw-2">&amp;</span><span class="lifetime">'context </span><span class="kw-2">mut </span><span class="macro-nonterminal">$crate::module::ApiEndpointContext</span>&lt;<span class="lifetime">'dbtx</span>&gt;,
                 <span class="macro-nonterminal">$param</span>: <span class="self">Self</span>::Param,
@@ -1357,6 +1361,9 @@
     </span><span class="kw">pub </span>handler: HandlerFn&lt;M&gt;,
 }
 
+<span class="doccomment">/// Global request ID used for logging
+</span><span class="kw">static </span>REQ_ID: AtomicU64 = AtomicU64::new(<span class="number">0</span>);
+
 <span class="comment">// &lt;()&gt; is used to avoid specify state.
 </span><span class="kw">impl </span>ApiEndpoint&lt;()&gt; {
     <span class="kw">pub fn </span>from_typed&lt;E: TypedApiEndpoint&gt;() -&gt; ApiEndpoint&lt;E::State&gt;
@@ -1365,14 +1372,7 @@
         E::Param: Debug,
         E::Response: Debug,
     {
-        <span class="attr">#[instrument(
-            target = <span class="string">"fedimint_server::request"</span>,
-            level = <span class="string">"trace"</span>,
-            skip_all,
-            fields(method = E::PATH),
-            ret,
-        )]
-        </span><span class="kw">async fn </span>handle_request&lt;<span class="lifetime">'state</span>, <span class="lifetime">'context</span>, <span class="lifetime">'dbtx</span>, E&gt;(
+        <span class="kw">async fn </span>handle_request&lt;<span class="lifetime">'state</span>, <span class="lifetime">'context</span>, <span class="lifetime">'dbtx</span>, E&gt;(
             state: <span class="kw-2">&amp;</span><span class="lifetime">'state </span>E::State,
             context: <span class="kw-2">&amp;</span><span class="lifetime">'context </span><span class="kw-2">mut </span>ApiEndpointContext&lt;<span class="lifetime">'dbtx</span>&gt;,
             request: ApiRequest&lt;E::Param&gt;,
@@ -1383,7 +1383,7 @@
             E::Param: Debug,
             E::Response: Debug,
         {
-            <span class="macro">tracing::debug!</span>(target: LOG_NET_API, path = E::PATH, <span class="question-mark">?</span>request, <span class="string">"received request"</span>);
+            <span class="macro">tracing::debug!</span>(target: LOG_NET_API, path = E::PATH, <span class="question-mark">?</span>request, <span class="string">"received api request"</span>);
             <span class="kw">let </span>result = E::handle(state, context, request.params).<span class="kw">await</span>;
             <span class="kw">if let </span><span class="prelude-val">Err</span>(error) = <span class="kw-2">&amp;</span>result {
                 <span class="macro">tracing::warn!</span>(target: LOG_NET_API, path = E::PATH, <span class="question-mark">?</span>error, <span class="string">"api request error"</span>);
@@ -1401,7 +1401,15 @@
                         .to_typed()
                         .map_err(|e| ApiError::bad_request(e.to_string()))<span class="question-mark">?</span>;
 
-                    <span class="kw">let </span>ret = handle_request::&lt;E&gt;(m, <span class="kw-2">&amp;mut </span>context, request).<span class="kw">await</span><span class="question-mark">?</span>;
+                    <span class="kw">let </span>span = <span class="macro">tracing::info_span!</span>(
+                        target: LOG_NET_API,
+                        <span class="string">"api_req"</span>,
+                        id = REQ_ID.fetch_add(<span class="number">1</span>, Ordering::SeqCst),
+                        method = E::PATH,
+                    );
+                    <span class="kw">let </span>ret = handle_request::&lt;E&gt;(m, <span class="kw-2">&amp;mut </span>context, request)
+                        .instrument(span)
+                        .<span class="kw">await</span><span class="question-mark">?</span>;
 
                     context.commit_tx_result(E::PATH).<span class="kw">await</span><span class="question-mark">?</span>;
 
