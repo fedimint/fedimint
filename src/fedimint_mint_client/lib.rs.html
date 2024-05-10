@@ -2317,6 +2317,36 @@
 <a href="#2317" id="2317">2317</a>
 <a href="#2318" id="2318">2318</a>
 <a href="#2319" id="2319">2319</a>
+<a href="#2320" id="2320">2320</a>
+<a href="#2321" id="2321">2321</a>
+<a href="#2322" id="2322">2322</a>
+<a href="#2323" id="2323">2323</a>
+<a href="#2324" id="2324">2324</a>
+<a href="#2325" id="2325">2325</a>
+<a href="#2326" id="2326">2326</a>
+<a href="#2327" id="2327">2327</a>
+<a href="#2328" id="2328">2328</a>
+<a href="#2329" id="2329">2329</a>
+<a href="#2330" id="2330">2330</a>
+<a href="#2331" id="2331">2331</a>
+<a href="#2332" id="2332">2332</a>
+<a href="#2333" id="2333">2333</a>
+<a href="#2334" id="2334">2334</a>
+<a href="#2335" id="2335">2335</a>
+<a href="#2336" id="2336">2336</a>
+<a href="#2337" id="2337">2337</a>
+<a href="#2338" id="2338">2338</a>
+<a href="#2339" id="2339">2339</a>
+<a href="#2340" id="2340">2340</a>
+<a href="#2341" id="2341">2341</a>
+<a href="#2342" id="2342">2342</a>
+<a href="#2343" id="2343">2343</a>
+<a href="#2344" id="2344">2344</a>
+<a href="#2345" id="2345">2345</a>
+<a href="#2346" id="2346">2346</a>
+<a href="#2347" id="2347">2347</a>
+<a href="#2348" id="2348">2348</a>
+<a href="#2349" id="2349">2349</a>
 </pre></div><pre class="rust"><code><span class="comment">// Backup and restore logic
 </span><span class="kw">pub mod </span>backup;
 <span class="doccomment">/// Database keys used throughout the mint client module
@@ -2330,12 +2360,12 @@
 
 <span class="kw">use </span>std::cmp::{min, Ordering};
 <span class="kw">use </span>std::collections::BTreeMap;
-<span class="kw">use </span>std::ffi;
 <span class="kw">use </span>std::fmt::{Display, Formatter};
 <span class="kw">use </span>std::io::Read;
 <span class="kw">use </span>std::str::FromStr;
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
+<span class="kw">use </span>std::{ffi, fmt};
 
 <span class="kw">use </span>anyhow::{anyhow, bail, ensure, Context <span class="kw">as _</span>};
 <span class="kw">use </span>async_stream::stream;
@@ -3090,11 +3120,8 @@
         .<span class="kw">await</span><span class="question-mark">?</span>;
 
         <span class="kw">for </span>(amount, note) <span class="kw">in </span>selected_notes.iter_items() {
-            dbtx.remove_entry(<span class="kw-2">&amp;</span>NoteKey {
-                amount,
-                nonce: note.nonce(),
-            })
-            .<span class="kw">await</span>;
+            <span class="macro">debug!</span>(target: LOG_CLIENT_MODULE_MINT, %amount, %note, <span class="string">"Spending note as sufficient input to fund a tx"</span>);
+            MintClientModule::delete_spendable_note(dbtx, amount, note).<span class="kw">await</span>;
         }
 
         <span class="kw">let </span>inputs = <span class="self">self
@@ -3318,6 +3345,7 @@
         <span class="kw">let </span><span class="kw-2">mut </span>selected_notes_decoded = <span class="macro">vec!</span>[];
         <span class="kw">for </span>(amount, note) <span class="kw">in </span>selected_notes.iter_items() {
             <span class="kw">let </span>spendable_note_decoded = note.decode()<span class="question-mark">?</span>;
+            <span class="macro">debug!</span>(target: LOG_CLIENT_MODULE_MINT, %amount, %note, <span class="string">"Consolidating note"</span>);
             <span class="self">Self</span>::delete_spendable_note(dbtx, amount, <span class="kw-2">&amp;</span>spendable_note_decoded).<span class="kw">await</span>;
             selected_notes_decoded.push((amount, spendable_note_decoded));
             sum += amount;
@@ -3399,11 +3427,8 @@
         <span class="kw">let </span>operation_id = spendable_notes_to_operation_id(<span class="kw-2">&amp;</span>selected_notes);
 
         <span class="kw">for </span>(amount, note) <span class="kw">in </span>selected_notes.iter_items() {
-            dbtx.remove_entry(<span class="kw-2">&amp;</span>NoteKey {
-                amount,
-                nonce: note.nonce(),
-            })
-            .<span class="kw">await</span>;
+            <span class="macro">debug!</span>(target: LOG_CLIENT_MODULE_MINT, %amount, %note, <span class="string">"Spending note as oob"</span>);
+            MintClientModule::delete_spendable_note(dbtx, amount, note).<span class="kw">await</span>;
         }
 
         <span class="kw">let </span><span class="kw-2">mut </span>state_machines = Vec::new();
@@ -4164,10 +4189,25 @@
 
 <span class="doccomment">/// A [`Note`] with associated secret key that allows to proof ownership (spend
 /// it)
-</span><span class="attr">#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Deserialize, Serialize, Encodable, Decodable)]
+</span><span class="attr">#[derive(Clone, Copy, PartialEq, Eq, Hash, Deserialize, Serialize, Encodable, Decodable)]
 </span><span class="kw">pub struct </span>SpendableNote {
     <span class="kw">pub </span>signature: tbs::Signature,
     <span class="kw">pub </span>spend_key: KeyPair,
+}
+
+<span class="kw">impl </span>fmt::Debug <span class="kw">for </span>SpendableNote {
+    <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>Formatter&lt;<span class="lifetime">'_</span>&gt;) -&gt; fmt::Result {
+        f.debug_struct(<span class="string">"SpendableNote"</span>)
+            .field(<span class="string">"nonce"</span>, <span class="kw-2">&amp;</span><span class="self">self</span>.nonce())
+            .field(<span class="string">"signature"</span>, <span class="kw-2">&amp;</span><span class="self">self</span>.signature)
+            .field(<span class="string">"spend_key"</span>, <span class="kw-2">&amp;</span><span class="self">self</span>.spend_key)
+            .finish()
+    }
+}
+<span class="kw">impl </span>fmt::Display <span class="kw">for </span>SpendableNote {
+    <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>Formatter&lt;<span class="lifetime">'_</span>&gt;) -&gt; fmt::Result {
+        <span class="self">self</span>.nonce().fmt(f)
+    }
 }
 
 <span class="kw">impl </span>SpendableNote {
@@ -4204,7 +4244,7 @@
 /// Decoding [`tbs::Signature`] is somewhat CPU-intensive (see benches in this
 /// crate), and when most of the result will be filtered away or completely
 /// unused, it makes sense to skip/delay decoding.
-</span><span class="attr">#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Encodable, Decodable, Serialize)]
+</span><span class="attr">#[derive(Clone, Copy, PartialEq, Eq, Hash, Encodable, Decodable, Serialize)]
 </span><span class="kw">pub struct </span>SpendableNoteUndecoded {
     <span class="comment">// Need to keep this in sync with `tbs::Signature`, but there's a test
     // verifying they serialize and decode the same.
@@ -4213,7 +4253,27 @@
     <span class="kw">pub </span>spend_key: KeyPair,
 }
 
+<span class="kw">impl </span>fmt::Display <span class="kw">for </span>SpendableNoteUndecoded {
+    <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>Formatter&lt;<span class="lifetime">'_</span>&gt;) -&gt; fmt::Result {
+        <span class="self">self</span>.nonce().fmt(f)
+    }
+}
+
+<span class="kw">impl </span>fmt::Debug <span class="kw">for </span>SpendableNoteUndecoded {
+    <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>Formatter&lt;<span class="lifetime">'_</span>&gt;) -&gt; fmt::Result {
+        f.debug_struct(<span class="string">"SpendableNote"</span>)
+            .field(<span class="string">"nonce"</span>, <span class="kw-2">&amp;</span><span class="self">self</span>.nonce())
+            .field(<span class="string">"signature"</span>, <span class="kw-2">&amp;</span><span class="string">"[raw]"</span>)
+            .field(<span class="string">"spend_key"</span>, <span class="kw-2">&amp;</span><span class="self">self</span>.spend_key)
+            .finish()
+    }
+}
+
 <span class="kw">impl </span>SpendableNoteUndecoded {
+    <span class="kw">fn </span>nonce(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Nonce {
+        Nonce(<span class="self">self</span>.spend_key.public_key())
+    }
+
     <span class="kw">pub fn </span>decode(<span class="self">self</span>) -&gt; anyhow::Result&lt;SpendableNote&gt; {
         <span class="prelude-val">Ok</span>(SpendableNote {
             signature: Decodable::consensus_decode_from_finite_reader(

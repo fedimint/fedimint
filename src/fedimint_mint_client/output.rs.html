@@ -380,6 +380,8 @@
 <a href="#380" id="380">380</a>
 <a href="#381" id="381">381</a>
 <a href="#382" id="382">382</a>
+<a href="#383" id="383">383</a>
+<a href="#384" id="384">384</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::hash;
 <span class="kw">use </span>std::time::Duration;
@@ -396,6 +398,7 @@
 <span class="kw">use </span>fedimint_core::task::sleep;
 <span class="kw">use </span>fedimint_core::{Amount, NumPeersExt, OutPoint, PeerId, Tiered};
 <span class="kw">use </span>fedimint_derive_secret::{ChildId, DerivableSecret};
+<span class="kw">use </span>fedimint_logging::LOG_CLIENT_MODULE_MINT;
 <span class="kw">use </span>fedimint_mint_common::endpoint_constants::AWAIT_OUTPUT_OUTCOME_ENDPOINT;
 <span class="kw">use </span>fedimint_mint_common::{BlindNonce, MintOutputOutcome, Nonce};
 <span class="kw">use </span>secp256k1::KeyPair;
@@ -405,7 +408,7 @@
     aggregate_signature_shares, blind_message, unblind_signature, AggregatePublicKey,
     BlindedMessage, BlindedSignature, BlindedSignatureShare, BlindingKey, PublicKeyShare,
 };
-<span class="kw">use </span>tracing::error;
+<span class="kw">use </span>tracing::{debug, error};
 
 <span class="kw">use </span><span class="kw">crate</span>::client_db::NoteKey;
 <span class="kw">use crate</span>::{MintClientContext, SpendableNote};
@@ -637,6 +640,7 @@
 
         <span class="macro">assert!</span>(spendable_note.note().verify(<span class="kw-2">*</span>amount_key));
 
+        <span class="macro">debug!</span>(target: LOG_CLIENT_MODULE_MINT, amount = %created.amount, note=%spendable_note, <span class="string">"Adding new note from transaction output"</span>);
         <span class="kw">if let </span><span class="prelude-val">Some</span>(note) = dbtx
             .module_tx()
             .insert_entry(

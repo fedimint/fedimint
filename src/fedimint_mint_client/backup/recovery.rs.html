@@ -486,6 +486,7 @@
 <a href="#486" id="486">486</a>
 <a href="#487" id="487">487</a>
 <a href="#488" id="488">488</a>
+<a href="#489" id="489">489</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::cmp::max;
 <span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::fmt;
@@ -500,7 +501,7 @@
     apply, async_trait_maybe_send, Amount, NumPeersExt, OutPoint, PeerId, Tiered, TieredMulti,
 };
 <span class="kw">use </span>fedimint_derive_secret::DerivableSecret;
-<span class="kw">use </span>fedimint_logging::LOG_CLIENT_RECOVERY_MINT;
+<span class="kw">use </span>fedimint_logging::{LOG_CLIENT_MODULE_MINT, LOG_CLIENT_RECOVERY_MINT};
 <span class="kw">use </span>fedimint_mint_common::{MintInput, MintOutput, Nonce};
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>tbs::{AggregatePublicKey, BlindedMessage, PublicKeyShare};
@@ -646,6 +647,7 @@
                 amount,
                 nonce: note.nonce(),
             };
+            <span class="macro">debug!</span>(target: LOG_CLIENT_MODULE_MINT, %amount, %note, <span class="string">"Restoring note"</span>);
             dbtx.module_dbtx()
                 .insert_new_entry(<span class="kw-2">&amp;</span>key, <span class="kw-2">&amp;</span>note.to_undecoded())
                 .<span class="kw">await</span>;
