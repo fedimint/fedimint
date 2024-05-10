@@ -500,7 +500,7 @@ impl ExecutorInner {
                         ExecutorLoopEvent::Triggered(first_completed_result)
                     }));
 
-                    debug!(target: LOG_CLIENT_REACTOR, operation_id = %state.operation_id(), total = futures.len(), transitions_num, "Started new active state machine.");
+                    debug!(target: LOG_CLIENT_REACTOR, operation_id = %state.operation_id(), total = futures.len(), transitions_num, "New active state machine.");
                 }
                 ExecutorLoopEvent::Triggered(TransitionForActiveState {
                     outcome,
@@ -511,10 +511,11 @@ impl ExecutorInner {
                     debug!(
                         target: LOG_CLIENT_REACTOR,
                         operation_id = %state.operation_id(),
-                        "State machine trigger function complete. Starting transition function.",
+                        "Triggered state transition",
                     );
-                    let span = tracing::info_span!(
-                        "state_machine_transition",
+                    let span = tracing::debug_span!(
+                        target: LOG_CLIENT_REACTOR,
+                        "sm_transition",
                         operation_id = %state.operation_id()
                     );
                     // Perform the transition as another future, so transitions can happen in
@@ -532,12 +533,10 @@ impl ExecutorInner {
                             async move {
                                 debug!(
                                     target: LOG_CLIENT_REACTOR,
-                                    operation_id = %state.operation_id(),
                                     "Executing state transition",
                                 );
                                 trace!(
                                     target: LOG_CLIENT_REACTOR,
-                                    operation_id = %state.operation_id(),
                                     ?state,
                                     outcome = ?AbbreviateJson(&outcome),
                                     "Executing state transition (details)",
@@ -609,10 +608,9 @@ impl ExecutorInner {
 
                                 debug!(
                                     target: LOG_CLIENT_REACTOR,
-                                    operation_id = %state.operation_id(),
                                     terminal = !outcome.is_active(),
                                     ?outcome,
-                                    "Finished executing state transition",
+                                    "State transition complete",
                                 );
 
                                 match &outcome {

@@ -7,6 +7,7 @@
 use std::future::Future;
 use std::time::Duration;
 
+use fedimint_logging::LOG_RUNTIME;
 use thiserror::Error;
 use tokio::time::Instant;
 use tracing::Instrument;
@@ -19,7 +20,6 @@ pub use self::r#impl::*;
 
 #[cfg(not(target_family = "wasm"))]
 mod r#impl {
-    use fedimint_logging::LOG_RUNTIME;
     pub use tokio::task::{JoinError, JoinHandle};
 
     use super::*;
