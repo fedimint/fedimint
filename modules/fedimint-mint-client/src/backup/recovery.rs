@@ -12,7 +12,7 @@ use fedimint_core::{
     apply, async_trait_maybe_send, Amount, NumPeersExt, OutPoint, PeerId, Tiered, TieredMulti,
 };
 use fedimint_derive_secret::DerivableSecret;
-use fedimint_logging::LOG_CLIENT_RECOVERY_MINT;
+use fedimint_logging::{LOG_CLIENT_MODULE_MINT, LOG_CLIENT_RECOVERY_MINT};
 use fedimint_mint_common::{MintInput, MintOutput, Nonce};
 use serde::{Deserialize, Serialize};
 use tbs::{AggregatePublicKey, BlindedMessage, PublicKeyShare};
@@ -158,6 +158,7 @@ impl RecoveryFromHistory for MintRecovery {
                 amount,
                 nonce: note.nonce(),
             };
+            debug!(target: LOG_CLIENT_MODULE_MINT, %amount, %note, "Restoring note");
             dbtx.module_dbtx()
                 .insert_new_entry(&key, &note.to_undecoded())
                 .await;

@@ -11,12 +11,12 @@ pub mod output;
 
 use std::cmp::{min, Ordering};
 use std::collections::BTreeMap;
-use std::ffi;
 use std::fmt::{Display, Formatter};
 use std::io::Read;
 use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
+use std::{ffi, fmt};
 
 use anyhow::{anyhow, bail, ensure, Context as _};
 use async_stream::stream;
@@ -771,11 +771,8 @@ impl MintClientModule {
         .await?;
 
         for (amount, note) in selected_notes.iter_items() {
-            dbtx.remove_entry(&NoteKey {
-                amount,
-                nonce: note.nonce(),
-            })
-            .await;
+            debug!(target: LOG_CLIENT_MODULE_MINT, %amount, %note, "Spending note as sufficient input to fund a tx");
+            MintClientModule::delete_spendable_note(dbtx, amount, note).await;
         }
 
         let inputs = self
@@ -999,6 +996,7 @@ impl MintClientModule {
         let mut selected_notes_decoded = vec![];
         for (amount, note) in selected_notes.iter_items() {
             let spendable_note_decoded = note.decode()?;
+            debug!(target: LOG_CLIENT_MODULE_MINT, %amount, %note, "Consolidating note");
             Self::delete_spendable_note(dbtx, amount, &spendable_note_decoded).await;
             selected_notes_decoded.push((amount, spendable_note_decoded));
             sum += amount;
@@ -1080,11 +1078,8 @@ impl MintClientModule {
         let operation_id = spendable_notes_to_operation_id(&selected_notes);
 
         for (amount, note) in selected_notes.iter_items() {
-            dbtx.remove_entry(&NoteKey {
-                amount,
-                nonce: note.nonce(),
-            })
-            .await;
+            debug!(target: LOG_CLIENT_MODULE_MINT, %amount, %note, "Spending note as oob");
+            MintClientModule::delete_spendable_note(dbtx, amount, note).await;
         }
 
         let mut state_machines = Vec::new();
@@ -1845,10 +1840,25 @@ impl State for MintClientStateMachines {
 
 /// A [`Note`] with associated secret key that allows to proof ownership (spend
 /// it)
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Deserialize, Serialize, Encodable, Decodable)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Deserialize, Serialize, Encodable, Decodable)]
 pub struct SpendableNote {
     pub signature: tbs::Signature,
     pub spend_key: KeyPair,
+}
+
+impl fmt::Debug for SpendableNote {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        f.debug_struct("SpendableNote")
+            .field("nonce", &self.nonce())
+            .field("signature", &self.signature)
+            .field("spend_key", &self.spend_key)
+            .finish()
+    }
+}
+impl fmt::Display for SpendableNote {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        self.nonce().fmt(f)
+    }
 }
 
 impl SpendableNote {
@@ -1885,7 +1895,7 @@ impl SpendableNote {
 /// Decoding [`tbs::Signature`] is somewhat CPU-intensive (see benches in this
 /// crate), and when most of the result will be filtered away or completely
 /// unused, it makes sense to skip/delay decoding.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Encodable, Decodable, Serialize)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Encodable, Decodable, Serialize)]
 pub struct SpendableNoteUndecoded {
     // Need to keep this in sync with `tbs::Signature`, but there's a test
     // verifying they serialize and decode the same.
@@ -1894,7 +1904,27 @@ pub struct SpendableNoteUndecoded {
     pub spend_key: KeyPair,
 }
 
+impl fmt::Display for SpendableNoteUndecoded {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        self.nonce().fmt(f)
+    }
+}
+
+impl fmt::Debug for SpendableNoteUndecoded {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        f.debug_struct("SpendableNote")
+            .field("nonce", &self.nonce())
+            .field("signature", &"[raw]")
+            .field("spend_key", &self.spend_key)
+            .finish()
+    }
+}
+
 impl SpendableNoteUndecoded {
+    fn nonce(&self) -> Nonce {
+        Nonce(self.spend_key.public_key())
+    }
+
     pub fn decode(self) -> anyhow::Result<SpendableNote> {
         Ok(SpendableNote {
             signature: Decodable::consensus_decode_from_finite_reader(
