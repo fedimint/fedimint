@@ -234,7 +234,7 @@ plugin_types_trait_impl_common!(
 pub enum MintInputError {
     #[error("The note is already spent")]
     SpentCoin,
-    #[error("The note has an invalid amount not issued by the mint: {0:?}")]
+    #[error("The note has an invalid amount not issued by the mint: {0}")]
     InvalidAmountTier(Amount),
     #[error("The note has an invalid signature")]
     InvalidSignature,
@@ -244,7 +244,7 @@ pub enum MintInputError {
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Error, Encodable, Decodable)]
 pub enum MintOutputError {
-    #[error("The note has an invalid amount not issued by the mint: {0:?}")]
+    #[error("The note has an invalid amount not issued by the mint: {0}")]
     InvalidAmountTier(Amount),
     #[error("The mint output version is not supported by this federation")]
     UnknownOutputVariant(#[from] UnknownMintOutputVariantError),

@@ -771,7 +771,7 @@ impl MintClientModule {
         .await?;
 
         for (amount, note) in selected_notes.iter_items() {
-            debug!(target: LOG_CLIENT_MODULE_MINT, %amount, ?note, "Spending note as sufficient input to fund a tx");
+            debug!(target: LOG_CLIENT_MODULE_MINT, %amount, %note, "Spending note as sufficient input to fund a tx");
             MintClientModule::delete_spendable_note(dbtx, amount, note).await;
         }
 
@@ -996,7 +996,7 @@ impl MintClientModule {
         let mut selected_notes_decoded = vec![];
         for (amount, note) in selected_notes.iter_items() {
             let spendable_note_decoded = note.decode()?;
-            debug!(target: LOG_CLIENT_MODULE_MINT, %amount, ?note, "Consolidating note");
+            debug!(target: LOG_CLIENT_MODULE_MINT, %amount, %note, "Consolidating note");
             Self::delete_spendable_note(dbtx, amount, &spendable_note_decoded).await;
             selected_notes_decoded.push((amount, spendable_note_decoded));
             sum += amount;
@@ -1078,7 +1078,7 @@ impl MintClientModule {
         let operation_id = spendable_notes_to_operation_id(&selected_notes);
 
         for (amount, note) in selected_notes.iter_items() {
-            debug!(target: LOG_CLIENT_MODULE_MINT, %amount, ?note, "Spending note as oob");
+            debug!(target: LOG_CLIENT_MODULE_MINT, %amount, %note, "Spending note as oob");
             MintClientModule::delete_spendable_note(dbtx, amount, note).await;
         }
 
@@ -1855,6 +1855,11 @@ impl fmt::Debug for SpendableNote {
             .finish()
     }
 }
+impl fmt::Display for SpendableNote {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        self.nonce().fmt(f)
+    }
+}
 
 impl SpendableNote {
     fn nonce(&self) -> Nonce {
@@ -1899,6 +1904,12 @@ pub struct SpendableNoteUndecoded {
     pub spend_key: KeyPair,
 }
 
+impl fmt::Display for SpendableNoteUndecoded {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        self.nonce().fmt(f)
+    }
+}
+
 impl fmt::Debug for SpendableNoteUndecoded {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         f.debug_struct("SpendableNote")
@@ -1908,6 +1919,7 @@ impl fmt::Debug for SpendableNoteUndecoded {
             .finish()
     }
 }
+
 impl SpendableNoteUndecoded {
     fn nonce(&self) -> Nonce {
         Nonce(self.spend_key.public_key())

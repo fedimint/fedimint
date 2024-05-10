@@ -158,7 +158,7 @@ impl RecoveryFromHistory for MintRecovery {
                 amount,
                 nonce: note.nonce(),
             };
-            debug!(target: LOG_CLIENT_MODULE_MINT, %amount, ?note, "Restoring note");
+            debug!(target: LOG_CLIENT_MODULE_MINT, %amount, %note, "Restoring note");
             dbtx.module_dbtx()
                 .insert_new_entry(&key, &note.to_undecoded())
                 .await;

@@ -256,7 +256,7 @@ impl MintOutputStatesCreated {
 
         assert!(spendable_note.note().verify(*amount_key));
 
-        debug!(target: LOG_CLIENT_MODULE_MINT, amount = %created.amount, note=?spendable_note, "Adding new note from transaction output");
+        debug!(target: LOG_CLIENT_MODULE_MINT, amount = %created.amount, note=%spendable_note, "Adding new note from transaction output");
         if let Some(note) = dbtx
             .module_tx()
             .insert_entry(
