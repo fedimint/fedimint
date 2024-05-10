@@ -25,10 +25,8 @@ use tempfile::TempDir;
 use tracing::{info, warn};
 
 use crate::federation::FederationTest;
-use crate::fixtures::{test_dir, Fixtures};
-use crate::ln::mock::FakeLightningTest;
-use crate::ln::real::{ClnLightningTest, LndLightningTest};
-use crate::ln::LightningTest;
+use crate::fixtures::test_dir;
+use crate::ln::FakeLightningTest;
 
 pub const DEFAULT_GATEWAY_PASSWORD: &str = "thereisnosecondbest";
 
@@ -82,7 +80,7 @@ impl GatewayTest {
     pub(crate) async fn new(
         base_port: u16,
         cli_password: Option<String>,
-        lightning: Box<dyn LightningTest>,
+        lightning: FakeLightningTest,
         decoders: ModuleDecoderRegistry,
         registry: ClientModuleInitRegistry,
         num_route_hints: u32,
@@ -97,14 +95,8 @@ impl GatewayTest {
         let client_builder: GatewayClientBuilder =
             GatewayClientBuilder::new(path.clone(), registry, 0);
 
-        let lightning_builder: Arc<dyn LightningBuilder + Send + Sync> = if Fixtures::is_real_test()
-        {
-            Arc::new(RealLightningBuilder {
-                node_type: lightning.lightning_node_type(),
-            })
-        } else {
-            Arc::new(FakeLightningBuilder {})
-        };
+        let lightning_builder: Arc<dyn LightningBuilder + Send + Sync> =
+            Arc::new(FakeLightningBuilder);
 
         let gateway_db = Database::new(MemDatabase::new(), decoders.clone());
 
@@ -227,21 +219,6 @@ impl Display for LightningNodeType {
         match self {
             LightningNodeType::Cln => write!(f, "cln"),
             LightningNodeType::Lnd => write!(f, "lnd"),
-        }
-    }
-}
-
-#[derive(Clone)]
-pub struct RealLightningBuilder {
-    node_type: LightningNodeType,
-}
-
-#[async_trait]
-impl LightningBuilder for RealLightningBuilder {
-    async fn build(&self) -> Box<dyn ILnRpcClient> {
-        match &self.node_type {
-            LightningNodeType::Cln => Box::new(ClnLightningTest::new().await),
-            LightningNodeType::Lnd => Box::new(LndLightningTest::new().await),
         }
     }
 }

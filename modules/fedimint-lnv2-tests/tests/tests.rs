@@ -16,6 +16,7 @@ use fedimint_lnv2_server::LightningInit;
 use fedimint_testing::federation::FederationTest;
 use fedimint_testing::fixtures::Fixtures;
 use fedimint_testing::gateway::{GatewayTest, DEFAULT_GATEWAY_PASSWORD};
+use fedimint_testing::ln::FakeLightningTest;
 
 fn fixtures() -> Fixtures {
     let fixtures = Fixtures::new_primary(DummyClientInit, DummyInit, DummyGenParams::default());
@@ -40,9 +41,8 @@ fn fixtures() -> Fixtures {
 
 /// Setup a gateway connected to the fed and client
 async fn gateway(fixtures: &Fixtures, fed: &FederationTest) -> GatewayTest {
-    let lnd = fixtures.lnd().await;
     let mut gateway = fixtures
-        .new_gateway(lnd, 0, Some(DEFAULT_GATEWAY_PASSWORD.to_string()))
+        .new_gateway(0, Some(DEFAULT_GATEWAY_PASSWORD.to_string()))
         .await;
     gateway.connect_fed(fed).await;
     gateway
@@ -72,8 +72,8 @@ async fn can_pay_external_invoice_exactly_once() -> anyhow::Result<()> {
     let gateway_test = gateway(&fixtures, &fed).await;
     let gateway_api = gateway_test.gateway.versioned_api.clone();
 
-    let cln = fixtures.cln().await;
-    let invoice = cln.invoice(Amount::from_sats(100), None).await?;
+    let other_ln = FakeLightningTest::new();
+    let invoice = other_ln.invoice(Amount::from_sats(100), None).await?;
 
     let client = fed.new_client().await;
 
@@ -130,8 +130,8 @@ async fn refund_unpayable_invoice() -> anyhow::Result<()> {
     let gateway_test = gateway(&fixtures, &fed).await;
     let gateway_api = gateway_test.gateway.versioned_api.clone();
 
-    let cln = fixtures.cln().await;
-    let invoice = cln.unpayable_invoice(Amount::from_sats(100), None);
+    let other_ln = FakeLightningTest::new();
+    let invoice = other_ln.unpayable_invoice(Amount::from_sats(100), None);
 
     let client = fed.new_client().await;
 

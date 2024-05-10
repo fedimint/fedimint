@@ -27,9 +27,7 @@ use crate::envs::{
 };
 use crate::federation::{FederationTest, FederationTestBuilder};
 use crate::gateway::GatewayTest;
-use crate::ln::mock::FakeLightningTest;
-use crate::ln::real::{ClnLightningTest, LndLightningTest};
-use crate::ln::LightningTest;
+use crate::ln::FakeLightningTest;
 
 /// A default timeout for things happening in tests
 pub const TIMEOUT: Duration = Duration::from_secs(10);
@@ -142,7 +140,6 @@ impl Fixtures {
     /// Starts a new gateway with a given lightning node
     pub async fn new_gateway(
         &self,
-        ln: Box<dyn LightningTest>,
         num_route_hints: u32,
         cli_password: Option<String>,
     ) -> GatewayTest {
@@ -156,7 +153,7 @@ impl Fixtures {
             block_in_place(|| fedimint_portalloc::port_alloc(1))
                 .expect("Failed to allocate a port range"),
             cli_password,
-            ln,
+            FakeLightningTest::new(),
             decoders,
             ClientModuleInitRegistry::from_iter(
                 clients
@@ -172,22 +169,6 @@ impl Fixtures {
             num_route_hints,
         )
         .await
-    }
-
-    /// Returns the LND lightning node
-    pub async fn lnd(&self) -> Box<dyn LightningTest> {
-        match Fixtures::is_real_test() {
-            true => Box::new(LndLightningTest::new().await),
-            false => Box::new(FakeLightningTest::new()),
-        }
-    }
-
-    /// Returns the CLN lightning node
-    pub async fn cln(&self) -> Box<dyn LightningTest> {
-        match Fixtures::is_real_test() {
-            true => Box::new(ClnLightningTest::new().await),
-            false => Box::new(FakeLightningTest::new()),
-        }
     }
 
     /// Get a server bitcoin RPC config
