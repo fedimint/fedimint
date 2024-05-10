@@ -312,6 +312,7 @@ macro_rules! __api_endpoint {
             type Param = $param_ty;
             type Response = $resp_ty;
 
+            #[::tracing::instrument(skip_all, target="fm::net::api", level = "info", name="request_handler", fields(api=$path))]
             async fn handle<'state, 'context, 'dbtx>(
                 $state: &'state Self::State,
                 $context: &'context mut $crate::module::ApiEndpointContext<'dbtx>,

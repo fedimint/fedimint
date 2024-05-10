@@ -587,6 +587,7 @@ impl ConsensusServer {
             .expect("This is the only place where we write to this key");
     }
 
+    #[instrument(target = "fm::consensus", skip(self, item), level = "info")]
     pub async fn process_consensus_item(
         &self,
         session_index: u64,
