@@ -998,6 +998,7 @@
 <a href="#998" id="998">998</a>
 <a href="#999" id="999">999</a>
 <a href="#1000" id="1000">1000</a>
+<a href="#1001" id="1001">1001</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! Fedimint supports modules to allow extending it's functionality.
 //! Some of the standard functionality is implemented in form of modules as
 //! well.
@@ -1312,7 +1313,8 @@
             <span class="kw">type </span>Param = <span class="macro-nonterminal">$param_ty</span>;
             <span class="kw">type </span>Response = <span class="macro-nonterminal">$resp_ty</span>;
 
-            <span class="kw">async fn </span>handle&lt;<span class="lifetime">'state</span>, <span class="lifetime">'context</span>, <span class="lifetime">'dbtx</span>&gt;(
+            <span class="attr">#[::tracing::instrument(skip_all, target=<span class="string">"fm::net::api"</span>, level = <span class="string">"info"</span>, name=<span class="string">"request_handler"</span>, fields(api=<span class="macro-nonterminal">$path</span>))]
+            </span><span class="kw">async fn </span>handle&lt;<span class="lifetime">'state</span>, <span class="lifetime">'context</span>, <span class="lifetime">'dbtx</span>&gt;(
                 <span class="macro-nonterminal">$state</span>: <span class="kw-2">&amp;</span><span class="lifetime">'state </span><span class="self">Self</span>::State,
                 <span class="macro-nonterminal">$context</span>: <span class="kw-2">&amp;</span><span class="lifetime">'context </span><span class="kw-2">mut </span><span class="macro-nonterminal">$crate::module::ApiEndpointContext</span>&lt;<span class="lifetime">'dbtx</span>&gt;,
                 <span class="macro-nonterminal">$param</span>: <span class="self">Self</span>::Param,
