@@ -199,7 +199,7 @@ pub async fn cleanup_on_exit<T>(
                 .shutdown_join_all(Duration::from_secs(30))
                 .await?;
 
-            // drop v faterthe shutdown
+            // the caller can drop the v after shutdown
             Ok(Some(v))
         }
         Ok(Err(err)) => {
