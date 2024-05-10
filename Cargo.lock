@@ -2501,7 +2501,6 @@ dependencies = [
  "rand_chacha",
  "rcgen",
  "secp256k1 0.27.0",
- "secp256k1-zkp",
  "serde",
  "serde_json",
  "sha3",

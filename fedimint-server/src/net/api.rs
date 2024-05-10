@@ -47,13 +47,12 @@ use secp256k1::SECP256K1;
 use tokio::sync::{watch, RwLock};
 use tracing::{debug, info};
 
-use super::peers::PeerStatusChannels;
 use crate::config::io::{
     CONSENSUS_CONFIG, ENCRYPTED_EXT, JSON_EXT, LOCAL_CONFIG, PRIVATE_CONFIG, SALT_FILE,
 };
 use crate::config::ServerConfig;
 use crate::consensus::process_transaction_with_dbtx;
-use crate::consensus::server::{get_finished_session_count_static, LatestContributionByPeer};
+use crate::consensus::server::get_finished_session_count_static;
 use crate::db::{AcceptedItemPrefix, AcceptedTransactionKey, SignedSessionOutcomeKey};
 use crate::fedimint_core::encoding::Encodable;
 use crate::metrics::{BACKUP_WRITE_SIZE_BYTES, STORED_BACKUPS_COUNT};
@@ -92,8 +91,8 @@ pub struct ConsensusApi {
     /// For sending API events to consensus such as transactions
     pub submission_sender: async_channel::Sender<ConsensusItem>,
     pub shutdown_sender: watch::Sender<Option<u64>>,
-    pub peer_status_channels: PeerStatusChannels,
-    pub latest_contribution_by_peer: Arc<RwLock<LatestContributionByPeer>>,
+    pub connection_status_channels: Arc<RwLock<BTreeMap<PeerId, PeerConnectionStatus>>>,
+    pub last_ci_by_peer: Arc<RwLock<BTreeMap<PeerId, u64>>>,
     pub consensus_status_cache: ExpiringCache<ApiResult<FederationStatus>>,
     pub supported_api_versions: SupportedApiVersionsSummary,
 }
@@ -204,27 +203,20 @@ impl ConsensusApi {
     }
 
     pub async fn get_federation_status(&self) -> ApiResult<FederationStatus> {
-        let peers_connection_status = self.peer_status_channels.get_all_status().await;
-        let latest_contribution_by_peer = self.latest_contribution_by_peer.read().await.clone();
+        let peers_connection_status = self.connection_status_channels.read().await.clone();
+        let last_ci_by_peer = self.last_ci_by_peer.read().await.clone();
         let session_count = self.session_count().await;
 
         let status_by_peer = peers_connection_status
             .into_iter()
             .map(|(peer, connection_status)| {
-                let last_contribution = latest_contribution_by_peer.get(&peer).cloned();
+                let last_contribution = last_ci_by_peer.get(&peer).cloned();
                 let flagged = last_contribution.unwrap_or(0) + 1 < session_count;
-                let connection_status = match connection_status {
-                    Ok(status) => status,
-                    Err(e) => {
-                        debug!(target: LOG_NET_API, %peer, "Unable to get peer connection status: {e}");
-                        PeerConnectionStatus::Disconnected
-                    }
-                };
 
                 let consensus_status = PeerStatus {
+                    connection_status,
                     last_contribution,
                     flagged,
-                    connection_status,
                 };
 
                 (peer, consensus_status)
@@ -385,7 +377,7 @@ impl ConsensusApi {
     async fn handle_recover_request(
         &self,
         dbtx: &mut DatabaseTransaction<'_>,
-        id: secp256k1_zkp::PublicKey,
+        id: secp256k1::PublicKey,
     ) -> Option<ClientBackupSnapshot> {
         dbtx.get_value(&ClientBackupKey(id)).await
     }
@@ -587,7 +579,7 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConsensusApi>> {
         api_endpoint! {
             RECOVER_ENDPOINT,
             ApiVersion::new(0, 0),
-            async |fedimint: &ConsensusApi, context, id: secp256k1_zkp::PublicKey| -> Option<ClientBackupSnapshot> {
+            async |fedimint: &ConsensusApi, context, id: secp256k1::PublicKey| -> Option<ClientBackupSnapshot> {
                 Ok(fedimint
                     .handle_recover_request(&mut context.dbtx().into_nc(), id).await)
             }
