@@ -103,6 +103,7 @@ use crate::rpc::{
     WithdrawPayload,
 };
 use crate::state_machine::GatewayExtPayStates;
+
 /// This initial SCID is considered invalid by LND HTLC interceptor,
 /// So we should always increment the value before assigning a new SCID.
 const INITIAL_SCID: u64 = 0;
@@ -110,9 +111,15 @@ const INITIAL_SCID: u64 = 0;
 /// How long a gateway announcement stays valid
 const GW_ANNOUNCEMENT_TTL: Duration = Duration::from_secs(600);
 
+/// The default number of route hints that the legacy gateway provides for
+/// invoice creation.
 const DEFAULT_NUM_ROUTE_HINTS: u32 = 1;
+
+/// Default Bitcoin network for testing purposes.
 pub const DEFAULT_NETWORK: Network = Network::Regtest;
 
+/// The default routing fees that the gateway charges for incoming and outgoing
+/// payments. Identical to the Lightning Network.
 pub const DEFAULT_FEES: RoutingFees = RoutingFees {
     // Base routing fee. Default is 0 msat
     base_msat: 0,
@@ -121,17 +128,23 @@ pub const DEFAULT_FEES: RoutingFees = RoutingFees {
     proportional_millionths: 10000,
 };
 
+/// LNv2 CLTV Delta in blocks
 const EXPIRATION_DELTA_MINIMUM_V2: u64 = 144;
 
 pub type Result<T> = std::result::Result<T, GatewayError>;
 
+/// Name of the gateway's database that is used for metadata and configuration
+/// storage.
 const DB_FILE: &str = "gatewayd.db";
 
+/// The non-lightning default module types that the Gateway supports.
 const DEFAULT_MODULE_KINDS: [(ModuleInstanceId, &ModuleKind); 2] = [
     (LEGACY_HARDCODED_INSTANCE_ID_MINT, &MintCommonInit::KIND),
     (LEGACY_HARDCODED_INSTANCE_ID_WALLET, &WalletCommonInit::KIND),
 ];
 
+/// Command line parameters for starting the gateway. `mode`, `data_dir`,
+/// `listen`, and `api_addr` are all required.
 #[derive(Parser)]
 #[command(version)]
 struct GatewayOpts {
@@ -173,6 +186,8 @@ struct GatewayOpts {
 }
 
 impl GatewayOpts {
+    /// Converts the command line parameters into a helper struct the Gateway
+    /// uses to store runtime parameters.
     fn to_gateway_parameters(&self) -> anyhow::Result<GatewayParameters> {
         let versioned_api = self.api_addr.join(V1_API_ENDPOINT).map_err(|e| {
             anyhow::anyhow!(
@@ -240,7 +255,10 @@ impl Display for GatewayState {
     }
 }
 
+/// Type definition for looking up a `FederationId` from a short channel id.
 type ScidToFederationMap = Arc<RwLock<BTreeMap<u64, FederationId>>>;
+
+// Type definition for looking up a `Client` from a `FederationId`
 type FederationToClientMap =
     Arc<RwLock<BTreeMap<FederationId, Spanned<fedimint_client::ClientHandleArc>>>>;
 
@@ -318,6 +336,8 @@ impl std::fmt::Debug for Gateway {
 }
 
 impl Gateway {
+    /// Creates a new gateway but with a custom module registry provided inside
+    /// `client_builder`. Currently only used for testing.
     #[allow(clippy::too_many_arguments)]
     pub async fn new_with_custom_registry(
         lightning_builder: Arc<dyn LightningBuilder + Send + Sync>,
@@ -349,6 +369,8 @@ impl Gateway {
         .await
     }
 
+    /// Default function for creating a gateway with the `Mint`, `Wallet`, and
+    /// `Gateway` modules.
     pub async fn new_with_default_modules() -> anyhow::Result<Gateway> {
         let opts = GatewayOpts::parse();
 
@@ -387,13 +409,16 @@ impl Gateway {
         .await
     }
 
-    pub async fn new(
+    /// Helper function for creating a gateway from either
+    /// `new_with_default_modules` or `new_with_custom_registry`.
+    async fn new(
         lightning_builder: Arc<dyn LightningBuilder + Send + Sync>,
         gateway_parameters: GatewayParameters,
         gateway_db: Database,
         client_builder: GatewayClientBuilder,
     ) -> anyhow::Result<Gateway> {
-        // Apply database migrations before using the database
+        // Apply database migrations before using the database to ensure old database
+        // structures are readable.
         apply_migrations_server(
             &gateway_db,
             "gatewayd".to_string(),
@@ -402,6 +427,8 @@ impl Gateway {
         )
         .await?;
 
+        // Reads the `GatewayConfig` from the database if it exists or is provided from
+        // the command line.
         let gateway_config =
             Self::get_gateway_configuration(gateway_db.clone(), &gateway_parameters).await;
 
@@ -421,6 +448,7 @@ impl Gateway {
         })
     }
 
+    /// Returns a `PublicKey` that uniquely identifies the Gateway.
     pub async fn get_gateway_id(gateway_db: Database) -> secp256k1::PublicKey {
         let mut dbtx = gateway_db.begin_transaction().await;
         if let Some(key_pair) = dbtx.get_value(&GatewayPublicKey {}).await {
@@ -435,6 +463,8 @@ impl Gateway {
         }
     }
 
+    /// Reads and serializes structures from the Gateway's database for the
+    /// purpose for serializing to JSON for inspection.
     pub async fn dump_database<'a>(
         dbtx: &mut DatabaseTransaction<'_>,
         prefix_names: Vec<String>,
@@ -478,6 +508,10 @@ impl Gateway {
         Box::new(gateway_items.into_iter())
     }
 
+    /// Main entrypoint into the gateway that starts the client registration
+    /// timer, loads the federation clients from the persisted config,
+    /// begins listening for intercepted HTLCs, and starts the webserver to
+    /// service requests.
     pub async fn run(mut self, tg: &mut TaskGroup) -> anyhow::Result<TaskShutdownToken> {
         self.register_clients_timer(tg).await;
         self.load_clients().await;
@@ -489,6 +523,8 @@ impl Gateway {
         Ok(shutdown_receiver)
     }
 
+    /// Begins the task for listening for intercepted HTLCs from the Lightning
+    /// node.
     async fn start_gateway(&self, task_group: &mut TaskGroup) -> Result<()> {
         let mut self_copy = self.clone();
         let tg = task_group.clone();
@@ -583,6 +619,8 @@ impl Gateway {
         Ok(())
     }
 
+    /// Utility function for waiting for the task that is listening for
+    /// intercepted HTLCs to shutdown.
     async fn handle_disconnect(&mut self, htlc_task_group: TaskGroup) {
         self.set_gateway_state(GatewayState::Disconnected).await;
         if let Err(e) = htlc_task_group.shutdown_join_all(None).await {
@@ -590,6 +628,10 @@ impl Gateway {
         }
     }
 
+    /// Blocks waiting for intercepted HTLCs to be sent over the `stream`.
+    /// Spawns a state machine to either forward, cancel, or complete the
+    /// HTLC depending on if the gateway is able to acquire the preimage from
+    /// the federation.
     pub async fn handle_htlc_stream(&self, mut stream: RouteHtlcStream<'_>, handle: TaskHandle) {
         let GatewayState::Running { lightning_context } = self.state.read().await.clone() else {
             panic!("Gateway isn't in a running state")
@@ -605,6 +647,11 @@ impl Gateway {
                         break;
                     }
 
+                    // If `payment_hash` has been registered as a LNv2 payment, we try to complete
+                    // the payment by getting the preimage from the federation
+                    // using the LNv2 protocol. If the `payment_hash` is not registered,
+                    // this HTLC is either a legacy Lightning payment or the end destination is not
+                    // a Fedimint.
                     if let Ok((payload, client)) = self
                         .get_payload_and_client_v2(
                             htlc_request
@@ -631,6 +678,9 @@ impl Gateway {
                         continue;
                     }
 
+                    // Check if the HTLC corresponds to a federation supporting legacy Lightning by
+                    // looking up the `Client` from the short channel id and
+                    // `FederationId` (scid -> FederationId -> Client).
                     let scid_to_feds = self.scid_to_federation.read().await;
                     if let Some(short_channel_id) = htlc_request.short_channel_id {
                         let federation_id = scid_to_feds.get(&short_channel_id);
@@ -694,11 +744,14 @@ impl Gateway {
         }
     }
 
+    /// Helper function for atomically changing the Gateway's internal state.
     async fn set_gateway_state(&mut self, state: GatewayState) {
         let mut lock = self.state.write().await;
         *lock = state;
     }
 
+    /// Returns information about the Gateway back to the client when requested
+    /// via the webserver.
     pub async fn handle_get_info(&self) -> Result<GatewayInfo> {
         if let GatewayState::Running { lightning_context } = self.state.read().await.clone() {
             // `GatewayConfiguration` should always exist in the database when we are in the
@@ -757,6 +810,9 @@ impl Gateway {
             synced_to_chain: false,
         })
     }
+
+    /// If the Gateway is connected to the Lightning node, returns the
+    /// `ClientConfig` for each federation that the Gateway is connected to.
     pub async fn handle_get_federation_config(
         &self,
         federation_id: Option<FederationId>,
@@ -785,6 +841,8 @@ impl Gateway {
         })
     }
 
+    /// Returns the balance of the requested federation that the Gateway is
+    /// connected to.
     pub async fn handle_balance_msg(&self, payload: BalancePayload) -> Result<Amount> {
         // no need for instrument, it is done on api layer
         Ok(self
@@ -795,6 +853,8 @@ impl Gateway {
             .await)
     }
 
+    /// Returns a Bitcoin deposit on-chain address for pegging in Bitcoin for a
+    /// specific connected federation.
     pub async fn handle_address_msg(&self, payload: DepositAddressPayload) -> Result<Address> {
         let (_, address) = self
             .select_client(payload.federation_id)
@@ -806,6 +866,8 @@ impl Gateway {
         Ok(address)
     }
 
+    /// Returns a Bitcoin TXID from a peg-out transaction for a specific
+    /// connected federation.
     pub async fn handle_withdraw_msg(&self, payload: WithdrawPayload) -> Result<Txid> {
         let WithdrawPayload {
             amount,
@@ -868,6 +930,8 @@ impl Gateway {
         ))
     }
 
+    /// Requests the gateway to pay an outgoing LN invoice on behalf of a
+    /// Fedimint client. Returns the payment hash's preimage on success.
     async fn handle_pay_invoice_msg(&self, payload: PayInvoicePayload) -> Result<Preimage> {
         if let GatewayState::Running { .. } = self.state.read().await.clone() {
             debug!("Handling pay invoice message: {payload:?}");
@@ -914,6 +978,10 @@ impl Gateway {
         Err(GatewayError::Disconnected)
     }
 
+    /// Handles a connection request to join a new federation. The gateway will
+    /// download the federation's client configuration, construct a new
+    /// client, registers, the gateway with the federation, and persists the
+    /// necessary config to reconstruct the client when restarting the gateway.
     async fn handle_connect_federation(
         &mut self,
         payload: ConnectFedPayload,
@@ -1014,6 +1082,10 @@ impl Gateway {
         Err(GatewayError::Disconnected)
     }
 
+    /// Handle a request to have the Gateway leave a federation. The Gateway
+    /// will request the federation to remove the registration record and
+    /// the gateway will remove the configuration needed to construct the
+    /// federation client.
     pub async fn handle_leave_federation(
         &mut self,
         payload: LeaveFedPayload,
@@ -1051,6 +1123,8 @@ impl Gateway {
         Ok(federation_info)
     }
 
+    /// Handles a request for the gateway to backup a connected federation's
+    /// ecash. Not currently supported.
     pub async fn handle_backup_msg(
         &self,
         BackupPayload { federation_id: _ }: BackupPayload,
@@ -1058,6 +1132,8 @@ impl Gateway {
         unimplemented!("Backup is not currently supported");
     }
 
+    /// Handles a request for the gateway to restore a connected federation's
+    /// ecash. Not currently supported.
     pub async fn handle_restore_msg(
         &self,
         RestorePayload { federation_id: _ }: RestorePayload,
@@ -1065,6 +1141,11 @@ impl Gateway {
         unimplemented!("Restore is not currently supported");
     }
 
+    /// Handle a request to change a connected federation's configuration or
+    /// gateway metadata. If `num_route_hints` is changed, the Gateway
+    /// will re-register with all connected federations. If
+    /// `per_federation_routing_fees` is changed, the Gateway will only
+    /// re-register with the specified federation.
     pub async fn handle_set_configuration_msg(
         &self,
         SetConfigurationPayload {
@@ -1180,6 +1261,8 @@ impl Gateway {
         Ok(())
     }
 
+    /// Instructs the Gateway's Lightning node to connect to a peer specified by
+    /// `pubkey` and `host`.
     pub async fn handle_connect_to_peer_msg(
         &self,
         ConnectToPeerPayload { pubkey, host }: ConnectToPeerPayload,
@@ -1189,6 +1272,8 @@ impl Gateway {
         Ok(())
     }
 
+    /// Instructs the Gateway's Lightning node to retrieve an onchain funding
+    /// Bitcoin address.
     pub async fn handle_get_funding_address_msg(&self) -> Result<Address> {
         let context = self.get_lightning_context().await?;
         let response = context.lnrpc.get_funding_address().await?;
@@ -1197,6 +1282,8 @@ impl Gateway {
             .map_err(|e| GatewayError::LightningResponseParseError(e.into()))
     }
 
+    /// Instructs the Gateway's Lightning node to open a channel to a peer
+    /// specified by `pubkey`.
     pub async fn handle_open_channel_msg(
         &self,
         OpenChannelPayload {
@@ -1213,6 +1300,8 @@ impl Gateway {
         Ok(())
     }
 
+    /// Returns a list of Lightning network channels from the Gateway's
+    /// Lightning node.
     pub async fn handle_list_active_channels_msg(&self) -> Result<Vec<lightning::ChannelInfo>> {
         let context = self.get_lightning_context().await?;
         let channels = context.lnrpc.list_active_channels().await?;
@@ -1306,6 +1395,9 @@ impl Gateway {
         Some(gateway_config)
     }
 
+    /// Removes a federation client from the Gateway's in memory structures that
+    /// keep track of available clients. Does not remove the persisted
+    /// client configuration in the database.
     async fn remove_client(
         &self,
         federation_id: FederationId,
@@ -1337,39 +1429,8 @@ impl Gateway {
         Ok(())
     }
 
-    // TODO: This stuff is horrible, why do we need it? Don't use it.
-    pub async fn remove_client_hack(
-        &self,
-        federation_id: FederationId,
-    ) -> Result<Spanned<fedimint_client::ClientHandleArc>> {
-        let client = self.clients.write().await.remove(&federation_id).ok_or(
-            GatewayError::InvalidMetadata(format!("No federation with id {federation_id}")),
-        )?;
-        Ok(client)
-    }
-
-    // TODO: This stuff is horrible, why do we need it? Don't use it.
-    pub async fn add_client_hack(
-        &self,
-        federation_id: FederationId,
-        client: ClientHandleArc,
-    ) -> anyhow::Result<()> {
-        let write = &mut self.clients.write().await;
-        if write.get(&federation_id).is_some() {
-            bail!("Client already exists: {federation_id}")
-        }
-        write.insert(
-            federation_id,
-            Spanned::new(
-                info_span!("client", federation_id=%federation_id.clone()),
-                async move { client },
-            )
-            .await,
-        );
-
-        Ok(())
-    }
-
+    /// Retrieves a `ClientHandleArc` from the Gateway's in memory structures
+    /// that keep track of available clients, given a `federation_id`.
     pub async fn select_client(
         &self,
         federation_id: FederationId,
@@ -1384,6 +1445,9 @@ impl Gateway {
             )))
     }
 
+    /// Reads the connected federation client configs from the Gateway's
+    /// database and reconstructs the clients necessary for interacting with
+    /// connection federations.
     async fn load_clients(&mut self) {
         let dbtx = self.gateway_db.begin_transaction().await;
         let configs = self.client_builder.load_configs(dbtx.into_nc()).await;
@@ -1419,6 +1483,11 @@ impl Gateway {
         }
     }
 
+    /// Legacy mechanism for registering the Gateway with connected federations.
+    /// This will spawn a task that will re-register the Gateway with
+    /// connected federations every 8.5 mins. Only registers the Gateway if it
+    /// has successfully connected to the Lightning node, so that it can
+    /// include route hints in the registration.
     async fn register_clients_timer(&mut self, task_group: &mut TaskGroup) {
         let gateway = self.clone();
         task_group.spawn_cancellable("register clients", async move {
@@ -1447,8 +1516,8 @@ impl Gateway {
                     // Retry to register gateway with federations in 10 seconds since it failed
                     Duration::from_secs(10)
                 } else {
-                // Allow a 15% buffer of the TTL before the re-registering gateway
-                // with the federations.
+                    // Allow a 15% buffer of the TTL before the re-registering gateway
+                    // with the federations.
                     GW_ANNOUNCEMENT_TTL.mul_f32(0.85)
                 };
 
@@ -1457,6 +1526,9 @@ impl Gateway {
         });
     }
 
+    /// Retrieve route hints from the Lightning node, capped at
+    /// `num_route_hints`. The route hints should be ordered based on liquidity
+    /// of incoming channels.
     async fn fetch_lightning_route_hints(
         lnrpc: Arc<dyn ILnRpcClient>,
         num_route_hints: u32,
@@ -1475,6 +1547,9 @@ impl Gateway {
         route_hints.try_into().expect("Could not parse route hints")
     }
 
+    /// Creates the `FederationInfo` struct from a given `federation_id` that is
+    /// used to inform Gateway operators of basic data about their connected
+    /// federations.
     async fn make_federation_info(
         &self,
         client: &ClientHandleArc,
@@ -1511,6 +1586,8 @@ impl Gateway {
         }
     }
 
+    /// Verifies that the supplied `network` matches the Bitcoin network in the
+    /// connected client's configuration.
     async fn check_federation_network(
         &self,
         info: &FederationInfo,
@@ -1570,6 +1647,8 @@ impl Gateway {
     }
 }
 
+/// Retrieves the basic information about the Gateway's connected Lightning
+/// node.
 pub(crate) async fn fetch_lightning_node_info(
     lnrpc: Arc<dyn ILnRpcClient>,
 ) -> Result<(PublicKey, String, Network, u32, bool)> {
@@ -1592,7 +1671,11 @@ pub(crate) async fn fetch_lightning_node_info(
     Ok((node_pub_key, alias, network, block_height, synced_to_chain))
 }
 
+// LNv2 Gateway implementation
 impl Gateway {
+    /// Retrieves the `PublicKey` of the Gateway module for a given federation
+    /// for LNv2. This is NOT the same as the `gateway_id`, it is different
+    /// per-connected federation.
     async fn public_key_v2(&self, federation_id: &FederationId) -> Option<PublicKey> {
         self.clients.read().await.get(federation_id).map(|client| {
             client
@@ -1603,6 +1686,8 @@ impl Gateway {
         })
     }
 
+    /// Returns payment information that LNv2 clients can use to instruct this
+    /// Gateway to pay an invoice or receive a payment.
     pub async fn payment_info_v2(&self, federation_id: &FederationId) -> Option<PaymentInfo> {
         Some(PaymentInfo {
             public_key: self.public_key_v2(federation_id).await?,
@@ -1614,6 +1699,8 @@ impl Gateway {
         })
     }
 
+    /// Instructs this gateway to pay a Lightning network invoice via the LNv2
+    /// protocol.
     async fn send_payment_v2(
         &self,
         payload: SendPaymentPayload,
@@ -1631,6 +1718,10 @@ impl Gateway {
             .await
     }
 
+    /// For the LNv2 protocol, this will create an invoice by fetching it from
+    /// the connected Lightning node, then save the payment hash so that
+    /// incoming HTLCs can be matched as a receive attempt to a specific
+    /// federation.
     async fn create_invoice_v2(
         &self,
         payload: CreateInvoicePayload,
@@ -1690,6 +1781,8 @@ impl Gateway {
         Ok(invoice)
     }
 
+    /// Retrieves a BOLT11 invoice from the connected Lightning node with a
+    /// specific `payment_hash`.
     pub async fn create_invoice_via_lnrpc_v2(
         &self,
         payment_hash: sha256::Hash,
@@ -1727,6 +1820,9 @@ impl Gateway {
         Bolt11Invoice::from_str(&response.invoice).map_err(|e| e.to_string())
     }
 
+    /// Retrieves the persisted `CreateInvoicePayload` from the database
+    /// specified by the `payment_hash` and the `ClientHandleArc` specified
+    /// by the payload's `federation_id`.
     pub async fn get_payload_and_client_v2(
         &self,
         payment_hash: [u8; 32],
@@ -1756,6 +1852,9 @@ impl Gateway {
     }
 }
 
+/// Errors that can occur while processing incoming HTLC's, making outgoing
+/// payments, registering with connected federations, or responding to webserver
+/// requests.
 #[derive(Debug, Error)]
 pub enum GatewayError {
     #[error("Federation error: {}", OptStacktrace(.0))]
@@ -1812,6 +1911,7 @@ impl IntoResponse for GatewayError {
     }
 }
 
+/// Utility struct for formatting an intercepted HTLC. Useful for debugging.
 struct PrettyInterceptHtlcRequest<'a>(&'a crate::gateway_lnrpc::InterceptHtlcRequest);
 
 impl Display for PrettyInterceptHtlcRequest<'_> {
