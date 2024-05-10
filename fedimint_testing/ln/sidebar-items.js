@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"mod":["mock","real"],"trait":["LightningTest"]};
+window.SIDEBAR_ITEMS = {"constant":["INVALID_INVOICE_DESCRIPTION"],"struct":["FakeLightningTest"]};
