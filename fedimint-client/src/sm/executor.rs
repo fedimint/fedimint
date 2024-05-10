@@ -279,7 +279,7 @@ impl Executor {
         );
 
         let task_runner_inner = self.inner.clone();
-        let _handle = self.inner.client_task_group.spawn("state machine executor", |task_handle| async move {
+        let _handle = self.inner.client_task_group.spawn("sm-executor", |task_handle| async move {
             let executor_runner = task_runner_inner.run(context_gen, sm_update_rx);
             let task_group_shutdown_rx = task_handle.make_shutdown_rx().await;
             select! {
