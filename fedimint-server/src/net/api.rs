@@ -111,7 +111,7 @@ impl ConsensusApi {
     ) -> Result<TransactionId, TransactionError> {
         let txid = transaction.tx_hash();
 
-        debug!(%txid, "Received mint transaction");
+        debug!(target: LOG_NET_API, %txid, "Received a submitted transaction");
 
         // Create read-only DB tx so that the read state is consistent
         let mut dbtx = self.db.begin_transaction_nc().await;
