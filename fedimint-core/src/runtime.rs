@@ -19,6 +19,7 @@ pub use self::r#impl::*;
 
 #[cfg(not(target_family = "wasm"))]
 mod r#impl {
+    use fedimint_logging::LOG_RUNTIME;
     pub use tokio::task::{JoinError, JoinHandle};
 
     use super::*;
@@ -28,7 +29,7 @@ mod r#impl {
         F: Future<Output = T> + 'static + Send,
         T: Send + 'static,
     {
-        let span = tracing::span!(tracing::Level::INFO, "spawn", task_name = name);
+        let span = tracing::debug_span!(target: LOG_RUNTIME, "spawn", task = name);
         // nosemgrep: ban-tokio-spawn
         tokio::spawn(future.instrument(span))
     }
@@ -37,7 +38,7 @@ mod r#impl {
     where
         F: Future<Output = ()> + 'static,
     {
-        let span = tracing::span!(tracing::Level::INFO, "spawn_local", task_name = name);
+        let span = tracing::debug_span!(target: LOG_RUNTIME, "spawn_local", task = name);
         // nosemgrep: ban-tokio-spawn
         tokio::task::spawn_local(future.instrument(span))
     }
@@ -126,6 +127,7 @@ mod r#impl {
     where
         F: Future<Output = T> + 'static,
     {
+        let span = tracing::debug_span!(target: LOG_RUNTIME, "spawn", task = name);
         let (fut, handle) = future.remote_handle();
         wasm_bindgen_futures::spawn_local(fut);
 
