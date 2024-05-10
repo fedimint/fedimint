@@ -2,8 +2,10 @@ use std::ops::Deref as _;
 use std::sync::Arc;
 
 use anyhow::Result;
+use fedimint_core::runtime;
 use fedimint_core::task::jit::{JitTry, JitTryAnyhow};
 use fedimint_logging::LOG_DEVIMINT;
+use tokio::join;
 use tracing::debug;
 
 use crate::envs::{FM_GWID_CLN_ENV, FM_GWID_LND_ENV};
@@ -12,6 +14,17 @@ use crate::federation::{Client, Federation};
 use crate::gatewayd::Gatewayd;
 use crate::util::ProcessManager;
 use crate::LightningNode;
+
+async fn spawn_drop<T>(t: T)
+where
+    T: Send + 'static,
+{
+    runtime::spawn("spawn_drop", async {
+        drop(t);
+    })
+    .await
+    .expect("drop panic");
+}
 
 #[derive(Clone)]
 pub struct DevFed {
@@ -25,6 +38,31 @@ pub struct DevFed {
     pub esplora: Esplora,
 }
 
+impl DevFed {
+    pub async fn fast_terminate(self) {
+        let Self {
+            bitcoind,
+            cln,
+            lnd,
+            fed,
+            gw_cln,
+            gw_lnd,
+            electrs,
+            esplora,
+        } = self;
+
+        join!(
+            spawn_drop(gw_cln),
+            spawn_drop(gw_lnd),
+            spawn_drop(fed),
+            spawn_drop(lnd),
+            spawn_drop(cln),
+            spawn_drop(esplora),
+            spawn_drop(electrs),
+            spawn_drop(bitcoind),
+        );
+    }
+}
 pub async fn dev_fed(process_mgr: &ProcessManager) -> Result<DevFed> {
     DevJitFed::new(process_mgr, false)?
         .to_dev_fed(process_mgr)
@@ -304,5 +342,30 @@ impl DevJitFed {
             esplora: self.esplora().await?.to_owned(),
             electrs: self.electrs().await?.to_owned(),
         })
+    }
+
+    pub async fn fast_terminate(self) {
+        let Self {
+            bitcoind,
+            cln,
+            lnd,
+            fed,
+            gw_cln,
+            gw_lnd,
+            electrs,
+            esplora,
+            ..
+        } = self;
+
+        join!(
+            spawn_drop(gw_cln),
+            spawn_drop(gw_lnd),
+            spawn_drop(fed),
+            spawn_drop(lnd),
+            spawn_drop(cln),
+            spawn_drop(esplora),
+            spawn_drop(electrs),
+            spawn_drop(bitcoind),
+        );
     }
 }

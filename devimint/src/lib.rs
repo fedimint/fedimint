@@ -37,5 +37,8 @@ where
     // by waiting on all jits to complete, we make it less likely
     // that something is not finished yet and will block in `on_block`
     let _ = dev_fed.finalize(&process_mgr).await;
-    res
+    dev_fed.fast_terminate().await;
+    res?;
+
+    Ok(())
 }
