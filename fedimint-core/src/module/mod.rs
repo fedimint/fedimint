@@ -18,13 +18,14 @@ use std::collections::BTreeMap;
 use std::fmt::{self, Debug, Formatter};
 use std::marker::{self, PhantomData};
 use std::pin::Pin;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 
 use fedimint_logging::LOG_NET_API;
 use futures::Future;
 use jsonrpsee_core::JsonValue;
 use serde::{Deserialize, Serialize};
-use tracing::instrument;
+use tracing::Instrument;
 
 // TODO: Make this module public and remove the wildcard `pub use` below
 mod version;
@@ -312,7 +313,6 @@ macro_rules! __api_endpoint {
             type Param = $param_ty;
             type Response = $resp_ty;
 
-            #[::tracing::instrument(skip_all, target="fm::net::api", level = "info", name="request_handler", fields(api=$path))]
             async fn handle<'state, 'context, 'dbtx>(
                 $state: &'state Self::State,
                 $context: &'context mut $crate::module::ApiEndpointContext<'dbtx>,
@@ -356,6 +356,9 @@ pub struct ApiEndpoint<M> {
     pub handler: HandlerFn<M>,
 }
 
+/// Global request ID used for logging
+static REQ_ID: AtomicU64 = AtomicU64::new(0);
+
 // <()> is used to avoid specify state.
 impl ApiEndpoint<()> {
     pub fn from_typed<E: TypedApiEndpoint>() -> ApiEndpoint<E::State>
@@ -364,13 +367,6 @@ impl ApiEndpoint<()> {
         E::Param: Debug,
         E::Response: Debug,
     {
-        #[instrument(
-            target = "fedimint_server::request",
-            level = "trace",
-            skip_all,
-            fields(method = E::PATH),
-            ret,
-        )]
         async fn handle_request<'state, 'context, 'dbtx, E>(
             state: &'state E::State,
             context: &'context mut ApiEndpointContext<'dbtx>,
@@ -382,7 +378,7 @@ impl ApiEndpoint<()> {
             E::Param: Debug,
             E::Response: Debug,
         {
-            tracing::debug!(target: LOG_NET_API, path = E::PATH, ?request, "received request");
+            tracing::debug!(target: LOG_NET_API, path = E::PATH, ?request, "received api request");
             let result = E::handle(state, context, request.params).await;
             if let Err(error) = &result {
                 tracing::warn!(target: LOG_NET_API, path = E::PATH, ?error, "api request error");
@@ -400,7 +396,15 @@ impl ApiEndpoint<()> {
                         .to_typed()
                         .map_err(|e| ApiError::bad_request(e.to_string()))?;
 
-                    let ret = handle_request::<E>(m, &mut context, request).await?;
+                    let span = tracing::info_span!(
+                        target: LOG_NET_API,
+                        "api_req",
+                        id = REQ_ID.fetch_add(1, Ordering::SeqCst),
+                        method = E::PATH,
+                    );
+                    let ret = handle_request::<E>(m, &mut context, request)
+                        .instrument(span)
+                        .await?;
 
                     context.commit_tx_result(E::PATH).await?;
 
