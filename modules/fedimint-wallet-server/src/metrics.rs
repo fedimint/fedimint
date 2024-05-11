@@ -13,7 +13,7 @@ lazy_static! {
             "Value of wallet input/out in sats",
             AMOUNTS_BUCKETS_SATS.clone()
         ),
-        &[&"direction"],
+        &["direction"],
         REGISTRY
     )
     .unwrap();
@@ -24,7 +24,7 @@ lazy_static! {
                 "Value of wallet input/output fees in sats",
                 AMOUNTS_BUCKETS_SATS.clone()
             ),
-            &[&"direction"],
+            &["direction"],
             REGISTRY
         )
         .unwrap();
