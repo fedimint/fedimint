@@ -6,9 +6,10 @@
 //! details.
 
 use std::cmp::{max, min};
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::fmt::Debug;
 use std::net::SocketAddr;
+use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::Context;
@@ -25,7 +26,7 @@ use rand::{thread_rng, Rng};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc::{Receiver, Sender};
-use tokio::sync::oneshot;
+use tokio::sync::RwLock;
 use tokio::time::Instant;
 use tracing::{debug, info, instrument, trace, warn};
 
@@ -89,45 +90,6 @@ struct PeerConnectionStateMachine<M> {
     state: PeerConnectionState<M>,
 }
 
-struct PeerStatusQuery {
-    response_sender: oneshot::Sender<PeerConnectionStatus>,
-}
-
-type PeerStatusChannelSender = Sender<PeerStatusQuery>;
-type PeerStatusChannelReceiver = Receiver<PeerStatusQuery>;
-
-/// Keeps the references to a `PeerStatusChannelSender` for each `PeerId`, which
-/// can be used to ask the corresponding `PeerConnectionStateMachine` for the
-/// current `PeerConnectionStatus`
-#[derive(Clone)]
-pub struct PeerStatusChannels(HashMap<PeerId, PeerStatusChannelSender>);
-
-impl PeerStatusChannels {
-    pub async fn get_all_status(&self) -> HashMap<PeerId, anyhow::Result<PeerConnectionStatus>> {
-        let results = self.0.iter().map(|(peer_id, sender)| async {
-            let (response_sender, response_receiver) = oneshot::channel();
-            let query = PeerStatusQuery { response_sender };
-            let sender_response = sender
-                .send(query)
-                .await
-                .map_err(|_| anyhow::anyhow!("channel closed while querying peer status"));
-            match sender_response {
-                Ok(()) => {
-                    let status = response_receiver
-                        .await
-                        .map_err(|_| anyhow::anyhow!("channel closed while receiving peer status"));
-                    (*peer_id, status)
-                }
-                Err(e) => (*peer_id, Err(e)),
-            }
-        });
-        futures::future::join_all(results)
-            .await
-            .into_iter()
-            .collect()
-    }
-}
-
 /// Calculates delays for reconnecting to peers
 #[derive(Debug, Clone, Copy)]
 pub struct DelayCalculator {
@@ -187,7 +149,7 @@ struct CommonPeerConnectionState<M> {
     delay_calculator: DelayCalculator,
     connect: SharedAnyConnector<PeerMessage<M>>,
     incoming_connections: Receiver<AnyFramedTransport<PeerMessage<M>>>,
-    status_query_receiver: PeerStatusChannelReceiver,
+    status_channels: Arc<RwLock<BTreeMap<PeerId, PeerConnectionStatus>>>,
 }
 
 struct DisconnectedPeerConnectionState {
@@ -219,18 +181,16 @@ where
         delay_calculator: DelayCalculator,
         connect: PeerConnector<T>,
         task_group: &TaskGroup,
-    ) -> (Self, PeerStatusChannels) {
+        status_channels: Arc<RwLock<BTreeMap<PeerId, PeerConnectionStatus>>>,
+    ) -> Self {
         let shared_connector: SharedAnyConnector<PeerMessage<T>> = connect.into();
         let mut connection_senders = HashMap::new();
-        let mut status_query_senders = HashMap::new();
         let mut connections = HashMap::new();
         let self_id = cfg.identity;
 
         for (peer, peer_address) in cfg.peers.iter().filter(|(&peer, _)| peer != cfg.identity) {
             let (connection_sender, connection_receiver) =
                 tokio::sync::mpsc::channel::<AnyFramedTransport<PeerMessage<T>>>(4);
-            let (status_query_sender, status_query_receiver) =
-                tokio::sync::mpsc::channel::<PeerStatusQuery>(1); // better block the sender than flood the receiver
 
             let connection = PeerConnection::new(
                 cfg.identity,
@@ -239,25 +199,28 @@ where
                 delay_calculator,
                 shared_connector.clone(),
                 connection_receiver,
-                status_query_receiver,
+                status_channels.clone(),
                 task_group,
             )
             .await;
 
             connection_senders.insert(*peer, connection_sender);
-            status_query_senders.insert(*peer, status_query_sender);
             connections.insert(*peer, connection);
+
+            status_channels
+                .write()
+                .await
+                .insert(*peer, PeerConnectionStatus::Disconnected);
         }
+
         task_group.spawn("listen task", move |handle| {
             Self::run_listen_task(cfg, shared_connector, connection_senders, handle)
         });
-        (
-            ReconnectPeerConnections {
-                connections,
-                self_id,
-            },
-            PeerStatusChannels(status_query_senders),
-        )
+
+        ReconnectPeerConnections {
+            connections,
+            self_id,
+        }
     }
 
     async fn run_listen_task(
@@ -399,14 +362,34 @@ where
 
         match state {
             PeerConnectionState::Disconnected(disconnected) => {
-                common
+                let new_state = common
                     .state_transition_disconnected(disconnected, task_handle)
-                    .await
+                    .await;
+
+                if let Some(PeerConnectionState::Connected(..)) = new_state {
+                    common
+                        .status_channels
+                        .write()
+                        .await
+                        .insert(common.peer_id, PeerConnectionStatus::Connected);
+                }
+
+                new_state
             }
             PeerConnectionState::Connected(connected) => {
-                common
+                let new_state = common
                     .state_transition_connected(connected, task_handle)
-                    .await
+                    .await;
+
+                if let Some(PeerConnectionState::Disconnected(..)) = new_state {
+                    common
+                        .status_channels
+                        .write()
+                        .await
+                        .insert(common.peer_id, PeerConnectionStatus::Disconnected);
+                };
+
+                new_state
             }
         }
         .map(|new_state| PeerConnectionStateMachine {
@@ -451,13 +434,6 @@ where
                         return None;
                     },
                 }
-            },
-            Some(status_query) = self.status_query_receiver.recv() => {
-                if status_query.response_sender.send(PeerConnectionStatus::Connected).is_err() {
-                    let peer_id = self.peer_id;
-                    debug!(target: LOG_NET_PEER, %peer_id, "Could not send peer status response: receiver dropped");
-                }
-                PeerConnectionState::Connected(connected)
             },
             Some(message_res) = connected.connection.next() => {
                 match message_res {
@@ -577,13 +553,6 @@ where
                     },
                 }
             },
-            Some(status_query) = self.status_query_receiver.recv() => {
-                if status_query.response_sender.send(PeerConnectionStatus::Disconnected).is_err() {
-                    let peer_id = self.peer_id;
-                    debug!(target: LOG_NET_PEER, %peer_id, "Could not send peer status response: receiver dropped");
-                }
-                PeerConnectionState::Disconnected(disconnected)
-            },
             () = tokio::time::sleep_until(disconnected.reconnect_at), if self.our_id < self.peer_id => {
                 // to prevent "reconnection ping-pongs", only the side with lower PeerId is responsible for reconnecting
                 self.reconnect(disconnected).await
@@ -647,7 +616,7 @@ where
         delay_calculator: DelayCalculator,
         connect: SharedAnyConnector<PeerMessage<M>>,
         incoming_connections: Receiver<AnyFramedTransport<PeerMessage<M>>>,
-        status_query_receiver: PeerStatusChannelReceiver,
+        status_channels: Arc<RwLock<BTreeMap<PeerId, PeerConnectionStatus>>>,
         task_group: &TaskGroup,
     ) -> PeerConnection<M> {
         let (outgoing_sender, outgoing_receiver) = async_channel::bounded(1024);
@@ -665,7 +634,7 @@ where
                     delay_calculator,
                     connect,
                     incoming_connections,
-                    status_query_receiver,
+                    status_channels,
                     &handle,
                 )
                 .await
@@ -705,7 +674,7 @@ where
         delay_calculator: DelayCalculator,
         connect: SharedAnyConnector<PeerMessage<M>>,
         incoming_connections: Receiver<AnyFramedTransport<PeerMessage<M>>>,
-        status_query_receiver: PeerStatusChannelReceiver,
+        status_channels: Arc<RwLock<BTreeMap<PeerId, PeerConnectionStatus>>>,
         task_handle: &TaskHandle,
     ) {
         let common = CommonPeerConnectionState {
@@ -719,7 +688,7 @@ where
             delay_calculator,
             connect,
             incoming_connections,
-            status_query_receiver,
+            status_channels,
         };
         let initial_state = PeerConnectionState::Disconnected(DisconnectedPeerConnectionState {
             reconnect_at: Instant::now(),
@@ -737,18 +706,21 @@ where
 
 #[cfg(test)]
 mod tests {
-    use std::collections::HashMap;
+    use std::collections::{BTreeMap, HashMap};
+    use std::sync::Arc;
     use std::time::Duration;
 
     use anyhow::{ensure, Context as _};
+    use fedimint_api_client::api::PeerConnectionStatus;
     use fedimint_core::task::TaskGroup;
     use fedimint_core::util::retry;
     use fedimint_core::PeerId;
+    use tokio::sync::RwLock;
 
     use super::DelayCalculator;
     use crate::net::connect::mock::{MockNetwork, StreamReliability};
     use crate::net::connect::Connector;
-    use crate::net::peers::{NetworkConfig, PeerStatusChannels, ReconnectPeerConnections};
+    use crate::net::peers::{NetworkConfig, ReconnectPeerConnections};
 
     #[test_log::test(tokio::test)]
     async fn test_connect() {
@@ -781,13 +753,17 @@ mod tests {
                 let connect = net_ref
                     .connector(cfg.identity, StreamReliability::MILDLY_UNRELIABLE)
                     .into_dyn();
-                ReconnectPeerConnections::<u64>::new(
+                let status_channels = Default::default();
+                let connection = ReconnectPeerConnections::<u64>::new(
                     cfg,
                     DelayCalculator::TEST_DEFAULT,
                     connect,
                     &task_group,
+                    Arc::clone(&status_channels),
                 )
-                .await
+                .await;
+
+                (connection, status_channels)
             };
 
             let (_peers_a, peer_status_client_a) =
@@ -795,7 +771,10 @@ mod tests {
             let (_peers_b, peer_status_client_b) =
                 build_peers("127.0.0.1:2000", 2, task_group.clone()).await;
 
-            async fn wait_for_connection(name: &str, peer_status: &PeerStatusChannels) {
+            async fn wait_for_connection(
+                name: &str,
+                status_channels: &Arc<RwLock<BTreeMap<PeerId, PeerConnectionStatus>>>,
+            ) {
                 retry(
                     format!("wait for client {}", name),
                     fedimint_core::util::FibonacciBackoff::default()
@@ -803,9 +782,8 @@ mod tests {
                         .with_max_delay(Duration::from_secs(5))
                         .with_max_times(10),
                     || async {
-                        let status = peer_status.get_all_status().await;
+                        let status = status_channels.read().await;
                         ensure!(status.len() == 2);
-                        ensure!(status.values().all(|s| s.is_ok()));
                         Ok(())
                     },
                 )

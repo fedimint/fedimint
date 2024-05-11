@@ -1,24 +1,21 @@
+use fedimint_core::task::TaskGroup;
 use fedimint_logging::LOG_CONSENSUS;
 use tracing::warn;
 
 #[derive(Clone)]
-pub struct Spawner;
-
-impl Spawner {
-    pub fn new() -> Self {
-        Self {}
-    }
+pub struct Spawner {
+    task_group: TaskGroup,
 }
 
-impl Default for Spawner {
-    fn default() -> Self {
-        Self::new()
+impl Spawner {
+    pub fn new(task_group: TaskGroup) -> Self {
+        Self { task_group }
     }
 }
 
 impl aleph_bft::SpawnHandle for Spawner {
     fn spawn(&self, name: &str, task: impl futures::Future<Output = ()> + Send + 'static) {
-        fedimint_core::runtime::spawn(name, task);
+        self.task_group.spawn(name, move |_| task);
     }
 
     fn spawn_essential(
@@ -26,15 +23,16 @@ impl aleph_bft::SpawnHandle for Spawner {
         name: &str,
         task: impl futures::Future<Output = ()> + Send + 'static,
     ) -> aleph_bft::TaskHandle {
-        let (res_tx, res_rx) = futures::channel::oneshot::channel();
+        let (sender, receiver) = futures::channel::oneshot::channel();
 
-        fedimint_core::runtime::spawn(name, async move {
+        self.task_group.spawn(name, move |_| async {
             task.await;
-            if let Err(_err) = res_tx.send(()) {
+
+            if sender.send(()).is_err() {
                 warn!(target: LOG_CONSENSUS, "Unable to send essential spawned task completion. Are we shutting down?");
             }
         });
 
-        Box::pin(async move { res_rx.await.map_err(|_| ()) })
+        Box::pin(async move { receiver.await.map_err(|_| ()) })
     }
 }

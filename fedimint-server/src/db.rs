@@ -122,7 +122,7 @@ mod fedimint_migration_tests {
     use futures::StreamExt;
     use rand::rngs::OsRng;
     use rand::thread_rng;
-    use secp256k1_zkp::Message;
+    use secp256k1::Message;
     use strum::IntoEnumIterator;
     use tracing::info;
 
@@ -148,7 +148,7 @@ mod fedimint_migration_tests {
 
         let accepted_tx_id = AcceptedTransactionKey(TransactionId::from_slice(&BYTE_32).unwrap());
 
-        let (sk, _) = secp256k1_zkp::generate_keypair(&mut OsRng);
+        let (sk, _) = secp256k1::generate_keypair(&mut OsRng);
         let secp = secp256k1::Secp256k1::new();
         let key_pair = KeyPair::from_secret_key(&secp, &sk);
         let schnorr = secp.sign_schnorr_with_rng(

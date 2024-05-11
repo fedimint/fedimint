@@ -7,30 +7,26 @@ use bitcoin::secp256k1::Message;
 use fedimint_core::encoding::Encodable;
 use fedimint_core::session_outcome::SchnorrSignature;
 use fedimint_core::{BitcoinHash, NumPeersExt, PeerId};
-use secp256k1_zkp::{schnorr, All, KeyPair, PublicKey, Secp256k1, SecretKey};
+use secp256k1::{schnorr, KeyPair, PublicKey};
+
+use crate::config::ServerConfig;
 
 #[derive(Clone, Debug)]
 pub struct Keychain {
     peer_id: PeerId,
-    public_keys: BTreeMap<PeerId, secp256k1_zkp::PublicKey>,
+    public_keys: BTreeMap<PeerId, PublicKey>,
     keypair: KeyPair,
-    secp: Secp256k1<All>,
 }
 
 impl Keychain {
-    pub fn new(
-        peer_id: PeerId,
-        public_keys: BTreeMap<PeerId, PublicKey>,
-        secret_key: SecretKey,
-    ) -> Self {
-        let secp = Secp256k1::new();
-        let keypair = secret_key.keypair(&secp);
-
+    pub fn new(cfg: &ServerConfig) -> Self {
         Keychain {
-            peer_id,
-            public_keys,
-            keypair,
-            secp,
+            peer_id: cfg.local.identity,
+            public_keys: cfg.consensus.broadcast_public_keys.clone(),
+            keypair: cfg
+                .private
+                .broadcast_secret_key
+                .keypair(secp256k1::SECP256K1),
         }
     }
 
@@ -81,8 +77,8 @@ impl aleph_bft::Keychain for Keychain {
 
     fn sign(&self, message: &[u8]) -> Self::Signature {
         SchnorrSignature(
-            self.secp
-                .sign_schnorr(&self.tagged_hash(message), &self.keypair)
+            self.keypair
+                .sign_schnorr(self.tagged_hash(message))
                 .as_ref()
                 .to_owned(),
         )
@@ -98,8 +94,7 @@ impl aleph_bft::Keychain for Keychain {
 
         if let Some(public_key) = self.public_keys.get(&peer_id) {
             if let Ok(sig) = schnorr::Signature::from_slice(&signature.0) {
-                return self
-                    .secp
+                return secp256k1::SECP256K1
                     .verify_schnorr(
                         &sig,
                         &self.tagged_hash(message),

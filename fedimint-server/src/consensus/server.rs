@@ -1,11 +1,12 @@
-use std::collections::{BTreeMap, HashMap};
+use std::collections::BTreeMap;
+use std::default::Default;
 use std::sync::Arc;
 use std::time::Duration;
 
 use aleph_bft::Keychain as KeychainTrait;
 use anyhow::{anyhow, bail};
 use async_channel::{Receiver, Sender};
-use fedimint_api_client::api::{DynGlobalApi, FederationApiExt, WsFederationApi};
+use fedimint_api_client::api::{DynGlobalApi, FederationApiExt, PeerConnectionStatus};
 use fedimint_api_client::query::FilterMap;
 use fedimint_core::config::ServerModuleInitRegistry;
 use fedimint_core::core::{ModuleInstanceId, ModuleKind, MODULE_INSTANCE_ID_GLOBAL};
@@ -30,7 +31,6 @@ use fedimint_core::session_outcome::{
 };
 use fedimint_core::task::{sleep, TaskGroup, TaskHandle};
 use fedimint_core::timing::TimeReporter;
-use fedimint_core::util::SafeUrl;
 use fedimint_core::{timing, NumPeers, PeerId};
 use futures::StreamExt;
 use rand::Rng;
@@ -64,23 +64,22 @@ use crate::{LOG_CONSENSUS, LOG_CORE};
 /// How many txs can be stored in memory before blocking the API
 const TRANSACTION_BUFFER: usize = 1000;
 
-pub(crate) type LatestContributionByPeer = HashMap<PeerId, u64>;
-
 /// Runs the main server consensus loop
 pub struct ConsensusServer {
     modules: ServerModuleRegistry,
     db: Database,
-    connections: ReconnectPeerConnections<Message>,
     keychain: Keychain,
-    api_endpoints: Vec<(PeerId, SafeUrl)>,
+    federation_api: DynGlobalApi,
     cfg: ServerConfig,
     submission_receiver: Receiver<ConsensusItem>,
     shutdown_receiver: watch::Receiver<Option<u64>>,
-    latest_contribution_by_peer: Arc<RwLock<LatestContributionByPeer>>,
+    last_ci_by_peer: Arc<RwLock<BTreeMap<PeerId, u64>>>,
     /// Just a string version of `cfg.local.identity` for performance
     self_id_str: String,
     /// Just a string version of peer ids for performance
     peer_id_str: Vec<String>,
+    connection_status_channels: Arc<RwLock<BTreeMap<PeerId, PeerConnectionStatus>>>,
+    task_group: TaskGroup,
 }
 
 impl ConsensusServer {
@@ -88,14 +87,10 @@ impl ConsensusServer {
     pub async fn new(
         cfg: ServerConfig,
         db: Database,
-        module_inits: ServerModuleInitRegistry,
+        module_init_registry: ServerModuleInitRegistry,
         task_group: &TaskGroup,
     ) -> anyhow::Result<(Self, ConsensusApi)> {
-        // Check the configs are valid
-        cfg.validate_config(&cfg.local.identity, &module_inits)?;
-
-        // Apply database migrations and build `ServerModuleRegistry`
-        let mut modules = BTreeMap::new();
+        cfg.validate_config(&cfg.local.identity, &module_init_registry)?;
 
         apply_migrations_server(
             &db,
@@ -105,79 +100,64 @@ impl ConsensusServer {
         )
         .await?;
 
+        let mut modules = BTreeMap::new();
+
         for (module_id, module_cfg) in &cfg.consensus.modules {
-            let kind = module_cfg.kind.clone();
-            let Some(init) = module_inits.get(&kind) else {
-                bail!(
-                    "Detected configuration for unsupported module id: {module_id}, kind: {kind}"
-                );
+            match module_init_registry.get(&module_cfg.kind) {
+                Some(module_init) => {
+                    info!(target: LOG_CORE, "Initialise module {module_id}");
+
+                    apply_migrations(
+                        &db,
+                        module_init.module_kind().to_string(),
+                        module_init.database_version(),
+                        module_init.get_database_migrations(),
+                        Some(*module_id),
+                    )
+                    .await?;
+
+                    let module = module_init
+                        .init(
+                            NumPeers::from(cfg.consensus.api_endpoints.len()),
+                            cfg.get_module_config(*module_id)?,
+                            db.with_prefix_module_id(*module_id),
+                            task_group,
+                            cfg.local.identity,
+                        )
+                        .await?;
+
+                    modules.insert(*module_id, (module_cfg.kind.clone(), module));
+                }
+                None => bail!("Detected configuration for unsupported module id: {module_id}"),
             };
-            info!(target: LOG_CORE,
-                module_instance_id = *module_id, kind = %kind, "Init module");
-
-            apply_migrations(
-                &db,
-                init.module_kind().to_string(),
-                init.database_version(),
-                init.get_database_migrations(),
-                Some(*module_id),
-            )
-            .await?;
-
-            let isolated_db = db.with_prefix_module_id(*module_id);
-            let module = init
-                .init(
-                    NumPeers::from(cfg.consensus.api_endpoints.len()),
-                    cfg.get_module_config(*module_id)?,
-                    isolated_db,
-                    task_group,
-                    cfg.local.identity,
-                )
-                .await?;
-
-            modules.insert(*module_id, (kind, module));
         }
 
-        let modules = ModuleRegistry::from(modules);
+        let module_registry = ModuleRegistry::from(modules);
 
-        let keychain = Keychain::new(
-            cfg.local.identity,
-            cfg.consensus.broadcast_public_keys.clone(),
-            cfg.private.broadcast_secret_key,
-        );
+        let client_cfg = cfg.consensus.to_client_config(&module_init_registry)?;
 
         let (submission_sender, submission_receiver) = async_channel::bounded(TRANSACTION_BUFFER);
         let (shutdown_sender, shutdown_receiver) = watch::channel(None);
-
-        // Build P2P connections for the atomic broadcast
-        let (connections, peer_status_channels) = ReconnectPeerConnections::new(
-            cfg.network_config(),
-            DelayCalculator::PROD_DEFAULT,
-            TlsTcpConnector::new(cfg.tls_config(), cfg.local.identity).into_dyn(),
-            task_group,
-        )
-        .await;
-
-        // Build API that can handle requests
-        let latest_contribution_by_peer = Default::default();
+        let connection_status_channels = Default::default();
+        let last_ci_by_peer = Default::default();
 
         let consensus_api = ConsensusApi {
             cfg: cfg.clone(),
             db: db.clone(),
-            modules: modules.clone(),
-            client_cfg: cfg.consensus.to_client_config(&module_inits)?,
+            modules: module_registry.clone(),
+            client_cfg: client_cfg.clone(),
             submission_sender: submission_sender.clone(),
             shutdown_sender,
             supported_api_versions: ServerConfig::supported_api_versions_summary(
                 &cfg.consensus.modules,
-                &module_inits,
+                &module_init_registry,
             ),
-            latest_contribution_by_peer: Arc::clone(&latest_contribution_by_peer),
-            peer_status_channels,
+            last_ci_by_peer: Arc::clone(&last_ci_by_peer),
+            connection_status_channels: Arc::clone(&connection_status_channels),
             consensus_status_cache: ExpiringCache::new(Duration::from_millis(500)),
         };
 
-        for (module_id, kind, module) in modules.iter_modules() {
+        for (module_id, kind, module) in module_registry.iter_modules() {
             submit_module_ci_proposals(
                 task_group,
                 db.clone(),
@@ -189,28 +169,21 @@ impl ConsensusServer {
             .await;
         }
 
-        let api_endpoints: Vec<_> = cfg
-            .consensus
-            .api_endpoints
-            .clone()
-            .into_iter()
-            .map(|(id, node)| (id, node.url))
-            .collect();
-
         let consensus_server = ConsensusServer {
-            connections,
             db,
-            keychain,
-            api_endpoints,
+            keychain: Keychain::new(&cfg),
+            federation_api: DynGlobalApi::from_config(&client_cfg),
             self_id_str: cfg.local.identity.to_string(),
             peer_id_str: (0..cfg.consensus.api_endpoints.len())
                 .map(|x| x.to_string())
                 .collect(),
             cfg: cfg.clone(),
+            connection_status_channels,
             submission_receiver,
             shutdown_receiver,
-            latest_contribution_by_peer,
-            modules,
+            last_ci_by_peer,
+            modules: module_registry,
+            task_group: task_group.clone(),
         };
 
         Ok((consensus_server, consensus_api))
@@ -292,12 +265,22 @@ impl ConsensusServer {
 
         self.confirm_server_config_consensus_hash().await?;
 
+        // Build P2P connections for the atomic broadcast
+        let connections = ReconnectPeerConnections::new(
+            self.cfg.network_config(),
+            DelayCalculator::PROD_DEFAULT,
+            TlsTcpConnector::new(self.cfg.tls_config(), self.cfg.local.identity).into_dyn(),
+            &self.task_group,
+            Arc::clone(&self.connection_status_channels),
+        )
+        .await;
+
         while !task_handle.is_shutting_down() {
             let session_index = self.get_finished_session_count().await;
 
             CONSENSUS_SESSION_COUNT.set(session_index as i64);
 
-            self.run_session(session_index).await?;
+            self.run_session(connections.clone(), session_index).await?;
 
             info!(target: LOG_CONSENSUS, "Session {session_index} completed");
 
@@ -317,12 +300,11 @@ impl ConsensusServer {
 
     async fn confirm_server_config_consensus_hash(&self) -> anyhow::Result<()> {
         let our_hash = self.cfg.consensus.consensus_hash();
-        let federation_api = DynGlobalApi::from_endpoints(self.api_endpoints.clone());
 
         info!(target: LOG_CONSENSUS, "Waiting for peers config {our_hash}");
 
         loop {
-            match federation_api.server_config_consensus_hash().await {
+            match self.federation_api.server_config_consensus_hash().await {
                 Ok(consensus_hash) => {
                     if consensus_hash != our_hash {
                         bail!("Our consensus config doesn't match peers!")
@@ -341,7 +323,11 @@ impl ConsensusServer {
         }
     }
 
-    pub async fn run_session(&self, session_index: u64) -> anyhow::Result<()> {
+    pub async fn run_session(
+        &self,
+        connections: ReconnectPeerConnections<Message>,
+        session_index: u64,
+    ) -> anyhow::Result<()> {
         // In order to bound a sessions RAM consumption we need to bound its number of
         // units and therefore its number of rounds. Since we use a session to
         // create a naive secp256k1 threshold signature for the header of session
@@ -404,9 +390,9 @@ impl ConsensusServer {
                     BackupWriter::new(self.db.clone()),
                     BackupReader::new(self.db.clone()),
                 ),
-                Network::new(self.connections.clone()),
+                Network::new(connections),
                 self.keychain.clone(),
-                Spawner::new(),
+                Spawner::new(self.task_group.make_subgroup()),
                 aleph_bft_types::Terminator::create_root(terminator_receiver, "Terminator"),
             ),
         );
@@ -449,8 +435,6 @@ impl ConsensusServer {
         let mut num_batches = 0;
         let mut item_index = 0;
 
-        let federation_api = WsFederationApi::new(self.api_endpoints.clone());
-
         // We build a session outcome out of the ordered batches until either we have
         // processed batches_per_session_outcome of batches or a threshold signed
         // session outcome is obtained from our peers
@@ -474,7 +458,7 @@ impl ConsensusServer {
                         num_batches += 1;
                     }
                 },
-                signed_session_outcome = self.request_signed_session_outcome(&federation_api, session_index) => {
+                signed_session_outcome = self.request_signed_session_outcome(&self.federation_api, session_index) => {
                     let pending_accepted_items = self.pending_accepted_items().await;
 
                     // this panics if we have more accepted items than the signed session outcome
@@ -530,7 +514,7 @@ impl ConsensusServer {
                         }
                     }
                 }
-                signed_session_outcome = self.request_signed_session_outcome(&federation_api, session_index) => {
+                signed_session_outcome = self.request_signed_session_outcome(&self.federation_api, session_index) => {
                     // We check that the session outcome we have created agrees with the federations consensus
                     assert!(header == signed_session_outcome.session_outcome.header(session_index));
 
@@ -603,7 +587,7 @@ impl ConsensusServer {
 
         debug!(%peer, item = ?FmtDbgConsensusItem(&item), "Processing consensus item");
 
-        self.latest_contribution_by_peer
+        self.last_ci_by_peer
             .write()
             .await
             .insert(peer, session_index);
@@ -735,7 +719,7 @@ impl ConsensusServer {
 
     async fn request_signed_session_outcome(
         &self,
-        federation_api: &WsFederationApi,
+        federation_api: &DynGlobalApi,
         index: u64,
     ) -> SignedSessionOutcome {
         let keychain = self.keychain.clone();
