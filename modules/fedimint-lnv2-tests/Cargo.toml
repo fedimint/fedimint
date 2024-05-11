@@ -12,7 +12,7 @@ name = "fedimint_lnv2_tests"
 path = "tests/tests.rs"
 
 [dependencies]
-anyhow = "1.0.82"
+anyhow = "1.0.83"
 fedimint-dummy-common = { path = "../fedimint-dummy-common" }
 fedimint-dummy-client = { path = "../fedimint-dummy-client" }
 fedimint-dummy-server = { path = "../fedimint-dummy-server" }

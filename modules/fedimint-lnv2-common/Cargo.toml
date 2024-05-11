@@ -17,7 +17,7 @@ name = "fedimint_lnv2_common"
 path = "src/lib.rs"
 
 [dependencies]
-anyhow = "1.0.82"
+anyhow = "1.0.83"
 async-trait = "0.1.80"
 aquamarine = "0.5.0"
 bincode = "1"
@@ -32,10 +32,10 @@ fedimint-core ={ path = "../../fedimint-core" }
 fedimint-ln-common ={ path = "../fedimint-ln-common" }
 secp256k1 = { version="0.27.0", default-features=false }
 serde = { workspace = true }
-serde_json = "1.0.116"
+serde_json = "1.0.117"
 strum = "0.26"
 strum_macros = "0.26"
-thiserror = "1.0.59"
+thiserror = "1.0.60"
 threshold_crypto = { workspace = true }
 tracing = "0.1.37"
 rand = { workspace = true }
