@@ -240,7 +240,7 @@
 <span class="kw">use </span>bitcoin::secp256k1::{PublicKey, SecretKey};
 <span class="kw">use </span>fedimint_core::task::TaskGroup;
 <span class="kw">use </span>fedimint_core::util::BoxStream;
-<span class="kw">use </span>fedimint_core::Amount;
+<span class="kw">use </span>fedimint_core::{secp256k1, Amount};
 <span class="kw">use </span>fedimint_logging::LOG_TEST;
 <span class="kw">use </span>lightning_invoice::{
     Bolt11Invoice, Bolt11InvoiceDescription, Currency, Description, InvoiceBuilder, PaymentSecret,

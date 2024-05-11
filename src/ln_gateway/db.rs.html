@@ -301,6 +301,7 @@
 <a href="#301" id="301">301</a>
 <a href="#302" id="302">302</a>
 <a href="#303" id="303">303</a>
+<a href="#304" id="304">304</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 
 <span class="kw">use </span>bitcoin::Network;
@@ -311,7 +312,7 @@
 };
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::invite_code::InviteCode;
-<span class="kw">use </span>fedimint_core::{impl_db_lookup, impl_db_record};
+<span class="kw">use </span>fedimint_core::{impl_db_lookup, impl_db_record, secp256k1};
 <span class="kw">use </span>fedimint_ln_common::serde_routing_fees;
 <span class="kw">use </span>fedimint_lnv2_client::CreateInvoicePayload;
 <span class="kw">use </span>futures::FutureExt;
@@ -476,6 +477,7 @@
     <span class="kw">use </span>fedimint_core::db::{Database, IDatabaseTransactionOpsCoreTyped};
     <span class="kw">use </span>fedimint_core::invite_code::InviteCode;
     <span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
+    <span class="kw">use </span>fedimint_core::secp256k1;
     <span class="kw">use </span>fedimint_core::util::SafeUrl;
     <span class="kw">use </span>fedimint_logging::TracingSetup;
     <span class="kw">use </span>fedimint_testing::db::{

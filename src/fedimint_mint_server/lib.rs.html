@@ -1460,7 +1460,7 @@
     <span class="kw">use </span>fedimint_core::db::mem_impl::MemDatabase;
     <span class="kw">use </span>fedimint_core::db::Database;
     <span class="kw">use </span>fedimint_core::module::{ModuleConsensusVersion, ServerModuleInit};
-    <span class="kw">use </span>fedimint_core::{Amount, PeerId, ServerModule};
+    <span class="kw">use </span>fedimint_core::{secp256k1, Amount, PeerId, ServerModule};
     <span class="kw">use </span>fedimint_mint_common::config::FeeConsensus;
     <span class="kw">use </span>fedimint_mint_common::{MintInput, Nonce, Note};
     <span class="kw">use </span>tbs::blind_message;

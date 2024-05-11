@@ -128,17 +128,15 @@
 <a href="#128" id="128">128</a>
 <a href="#129" id="129">129</a>
 <a href="#130" id="130">130</a>
-<a href="#131" id="131">131</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::io::Write;
 
 <span class="kw">use </span>aleph_bft::Keychain <span class="kw">as </span>KeychainTrait;
-<span class="kw">use </span>bitcoin::secp256k1::hashes::sha256;
-<span class="kw">use </span>bitcoin::secp256k1::Message;
 <span class="kw">use </span>fedimint_core::encoding::Encodable;
 <span class="kw">use </span>fedimint_core::session_outcome::SchnorrSignature;
-<span class="kw">use </span>fedimint_core::{BitcoinHash, NumPeersExt, PeerId};
-<span class="kw">use </span>secp256k1::{schnorr, KeyPair, PublicKey};
+<span class="kw">use </span>fedimint_core::{secp256k1, BitcoinHash, NumPeersExt, PeerId};
+<span class="kw">use </span>secp256k1::hashes::sha256;
+<span class="kw">use </span>secp256k1::{schnorr, KeyPair, Message, PublicKey};
 
 <span class="kw">use </span><span class="kw">crate</span>::config::ServerConfig;
 

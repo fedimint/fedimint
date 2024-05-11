@@ -245,6 +245,7 @@
 <span class="kw">use </span>fedimint_core::db::mem_impl::MemDatabase;
 <span class="kw">use </span>fedimint_core::db::Database;
 <span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
+<span class="kw">use </span>fedimint_core::secp256k1::PublicKey;
 <span class="kw">use </span>fedimint_core::task::{block_in_place, block_on, sleep_in_test, TaskGroup};
 <span class="kw">use </span>fedimint_core::util::SafeUrl;
 <span class="kw">use </span>fedimint_logging::LOG_TEST;
@@ -254,7 +255,6 @@
 <span class="kw">use </span>ln_gateway::rpc::rpc_client::GatewayRpcClient;
 <span class="kw">use </span>ln_gateway::rpc::{ConnectFedPayload, FederationInfo, V1_API_ENDPOINT};
 <span class="kw">use </span>ln_gateway::{Gateway, GatewayState};
-<span class="kw">use </span>secp256k1::PublicKey;
 <span class="kw">use </span>tempfile::TempDir;
 <span class="kw">use </span>tracing::{info, warn};
 
@@ -307,7 +307,7 @@
             </span>.unwrap()
     }
 
-    <span class="kw">pub fn </span>get_gateway_id(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; secp256k1::PublicKey {
+    <span class="kw">pub fn </span>get_gateway_id(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; PublicKey {
         <span class="self">self</span>.gateway.gateway_id
     }
 

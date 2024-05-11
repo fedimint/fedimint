@@ -167,7 +167,7 @@
 <span class="kw">use </span>bitcoin::address::NetworkUnchecked;
 <span class="kw">use </span>bitcoin::{Address, Network};
 <span class="kw">use </span>fedimint_core::config::{ClientConfig, FederationId, JsonClientConfig};
-<span class="kw">use </span>fedimint_core::{Amount, BitcoinAmountOrAll};
+<span class="kw">use </span>fedimint_core::{secp256k1, Amount, BitcoinAmountOrAll};
 <span class="kw">use </span>fedimint_ln_common::config::parse_routing_fees;
 <span class="kw">use </span>fedimint_ln_common::{route_hints, serde_option_routing_fees};
 <span class="kw">use </span>lightning_invoice::RoutingFees;

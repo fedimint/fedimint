@@ -403,6 +403,7 @@
 <span class="kw">use </span>fedimint_core::module::{
     ApiVersion, CommonModuleInit, ModuleCommon, ModuleInit, MultiApiVersion,
 };
+<span class="kw">use </span>fedimint_core::secp256k1::{KeyPair, PublicKey, Secp256k1};
 <span class="kw">use </span>fedimint_core::util::{BoxStream, NextOrPending};
 <span class="kw">use </span>fedimint_core::{apply, async_trait_maybe_send, Amount, OutPoint};
 <span class="kw">pub use </span>fedimint_dummy_common <span class="kw">as </span>common;
@@ -412,7 +413,6 @@
     KIND,
 };
 <span class="kw">use </span>futures::{pin_mut, FutureExt, StreamExt};
-<span class="kw">use </span>secp256k1::{KeyPair, PublicKey, Secp256k1};
 <span class="kw">use </span>states::DummyStateMachine;
 <span class="kw">use </span>strum::IntoEnumIterator;
 

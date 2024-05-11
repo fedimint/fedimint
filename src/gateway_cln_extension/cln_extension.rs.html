@@ -928,6 +928,7 @@
 <span class="kw">use </span>cln_plugin::{options, Builder, Plugin};
 <span class="kw">use </span>cln_rpc::model;
 <span class="kw">use </span>cln_rpc::primitives::ShortChannelId;
+<span class="kw">use </span>fedimint_core::secp256k1::{All, PublicKey, Secp256k1, SecretKey};
 <span class="kw">use </span>fedimint_core::task::TaskGroup;
 <span class="kw">use </span>fedimint_core::util::handle_version_hash_command;
 <span class="kw">use </span>fedimint_core::{fedimint_build_code_version_env, Amount};
@@ -949,7 +950,6 @@
 };
 <span class="kw">use </span>rand::rngs::OsRng;
 <span class="kw">use </span>rand::Rng;
-<span class="kw">use </span>secp256k1::{All, PublicKey, Secp256k1, SecretKey};
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>thiserror::Error;
 <span class="kw">use </span>tokio::io::{stdin, stdout};

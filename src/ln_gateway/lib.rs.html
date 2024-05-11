@@ -1980,6 +1980,8 @@
 <span class="kw">use </span>fedimint_core::fmt_utils::OptStacktrace;
 <span class="kw">use </span>fedimint_core::invite_code::InviteCode;
 <span class="kw">use </span>fedimint_core::module::CommonModuleInit;
+<span class="kw">use </span>fedimint_core::secp256k1::schnorr::Signature;
+<span class="kw">use </span>fedimint_core::secp256k1::{KeyPair, PublicKey, Secp256k1};
 <span class="kw">use </span>fedimint_core::task::{sleep, TaskGroup, TaskHandle, TaskShutdownToken};
 <span class="kw">use </span>fedimint_core::time::{duration_since_epoch, now};
 <span class="kw">use </span>fedimint_core::util::{SafeUrl, Spanned};
@@ -2010,8 +2012,6 @@
     ConnectToPeerPayload, FederationInfo, GatewayFedConfig, GatewayInfo, LeaveFedPayload,
     OpenChannelPayload, SetConfigurationPayload, V1_API_ENDPOINT,
 };
-<span class="kw">use </span>secp256k1::schnorr::Signature;
-<span class="kw">use </span>secp256k1::PublicKey;
 <span class="kw">use </span>state_machine::pay::OutgoingPaymentError;
 <span class="kw">use </span>state_machine::GatewayClientModule;
 <span class="kw">use </span>strum::IntoEnumIterator;
@@ -2239,7 +2239,7 @@
     </span>scid_to_federation: ScidToFederationMap,
 
     <span class="comment">// A public key representing the identity of the gateway. Private key is not used.
-    </span><span class="kw">pub </span>gateway_id: secp256k1::PublicKey,
+    </span><span class="kw">pub </span>gateway_id: PublicKey,
 
     <span class="comment">// Tracker for short channel ID assignments. When connecting a new federation,
     // this value is incremented and assigned to the federation as the `mint_channel_id`
@@ -2381,14 +2381,14 @@
     }
 
     <span class="doccomment">/// Returns a `PublicKey` that uniquely identifies the Gateway.
-    </span><span class="kw">pub async fn </span>get_gateway_id(gateway_db: Database) -&gt; secp256k1::PublicKey {
+    </span><span class="kw">pub async fn </span>get_gateway_id(gateway_db: Database) -&gt; PublicKey {
         <span class="kw">let </span><span class="kw-2">mut </span>dbtx = gateway_db.begin_transaction().<span class="kw">await</span>;
         <span class="kw">if let </span><span class="prelude-val">Some</span>(key_pair) = dbtx.get_value(<span class="kw-2">&amp;</span>GatewayPublicKey {}).<span class="kw">await </span>{
             key_pair.public_key()
         } <span class="kw">else </span>{
-            <span class="kw">let </span>context = secp256k1::Secp256k1::new();
+            <span class="kw">let </span>context = Secp256k1::new();
             <span class="kw">let </span>(secret, public) = context.generate_keypair(<span class="kw-2">&amp;mut </span>OsRng);
-            <span class="kw">let </span>key_pair = secp256k1::KeyPair::from_secret_key(<span class="kw-2">&amp;</span>context, <span class="kw-2">&amp;</span>secret);
+            <span class="kw">let </span>key_pair = KeyPair::from_secret_key(<span class="kw-2">&amp;</span>context, <span class="kw-2">&amp;</span>secret);
             dbtx.insert_new_entry(<span class="kw-2">&amp;</span>GatewayPublicKey, <span class="kw-2">&amp;</span>key_pair).<span class="kw">await</span>;
             dbtx.commit_tx().<span class="kw">await</span>;
             public

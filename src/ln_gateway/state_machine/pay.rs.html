@@ -936,7 +936,7 @@
 <span class="kw">use </span>fedimint_core::db::IDatabaseTransactionOpsCoreTyped;
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::util::Spanned;
-<span class="kw">use </span>fedimint_core::{Amount, OutPoint, TransactionId};
+<span class="kw">use </span>fedimint_core::{secp256k1, Amount, OutPoint, TransactionId};
 <span class="kw">use </span>fedimint_ln_client::api::LnFederationApi;
 <span class="kw">use </span>fedimint_ln_client::pay::{PayInvoicePayload, PaymentData};
 <span class="kw">use </span>fedimint_ln_common::config::FeeToAmount;

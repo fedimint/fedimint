@@ -236,13 +236,13 @@
 <span class="kw">use </span>fedimint_client::DynGlobalClientContext;
 <span class="kw">use </span>fedimint_core::core::OperationId;
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
+<span class="kw">use </span>fedimint_core::secp256k1::KeyPair;
 <span class="kw">use </span>fedimint_core::{Amount, OutPoint};
 <span class="kw">use </span>fedimint_ln_common::PrunedInvoice;
 <span class="kw">use </span>fedimint_lnv2_client::LightningClientStateMachines;
 <span class="kw">use </span>fedimint_lnv2_common::contracts::OutgoingContract;
 <span class="kw">use </span>fedimint_lnv2_common::{LightningInput, LightningInputV0, OutgoingWitness};
 <span class="kw">use </span>lightning_invoice::Bolt11Invoice;
-<span class="kw">use </span>secp256k1::KeyPair;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 
 <span class="kw">use </span><span class="kw">crate</span>::gateway_lnrpc::PayInvoiceRequest;
