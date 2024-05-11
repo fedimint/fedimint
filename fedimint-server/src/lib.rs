@@ -19,7 +19,7 @@ use fedimint_core::epoch::ConsensusItem;
 use fedimint_core::module::{ApiEndpoint, ApiEndpointContext, ApiError, ApiRequestErased};
 use fedimint_core::task::TaskGroup;
 use fedimint_core::util::write_new;
-use fedimint_logging::{LOG_CONSENSUS, LOG_CORE, LOG_NET_API};
+use fedimint_logging::{LOG_CONSENSUS, LOG_NET_API};
 use futures::FutureExt;
 use jsonrpsee::server::{PingConfig, RpcServiceBuilder, ServerBuilder, ServerHandle};
 use jsonrpsee::types::ErrorObject;
@@ -28,9 +28,8 @@ use tracing::{error, info};
 
 use crate::config::api::{ConfigGenApi, ConfigGenSettings};
 use crate::config::io::{write_server_config, SALT_FILE};
-use crate::consensus::server::ConsensusServer;
 use crate::metrics::initialize_gauge_metrics;
-use crate::net::api::{ConsensusApi, RpcHandlerCtx};
+use crate::net::api::RpcHandlerCtx;
 use crate::net::connect::TlsTcpConnector;
 
 pub mod envs;
@@ -99,7 +98,7 @@ impl FedimintServer {
 
     pub async fn run(
         &mut self,
-        init_registry: &ServerModuleInitRegistry,
+        module_init_registry: &ServerModuleInitRegistry,
         task_group: TaskGroup,
     ) -> anyhow::Result<()> {
         let cfg = match FedimintServer::get_config(&self.data_dir).await? {
@@ -107,7 +106,7 @@ impl FedimintServer {
             None => self.run_config_gen(task_group.make_subgroup()).await?,
         };
 
-        let decoders = init_registry.decoders_strict(
+        let decoders = module_init_registry.decoders_strict(
             cfg.consensus
                 .modules
                 .iter()
@@ -118,19 +117,17 @@ impl FedimintServer {
 
         initialize_gauge_metrics(&db).await;
 
-        let (server, api) = ConsensusServer::new(cfg, db, init_registry.clone(), &task_group)
-            .await
-            .context("Setting up consensus server")?;
+        let (engine, api_handler) = consensus::spawn_api_and_build_engine(
+            cfg,
+            db,
+            module_init_registry.clone(),
+            &task_group,
+        )
+        .await?;
 
-        info!(target: LOG_CONSENSUS, "Starting Consensus Api");
+        engine.run().await?;
 
-        let handler = Self::spawn_consensus_api(api).await;
-
-        info!(target: LOG_CONSENSUS, "Starting Consensus Server");
-
-        server.run(task_group.make_handle()).await?;
-
-        handler.stop().await;
+        api_handler.stop().await;
 
         info!(target: LOG_CONSENSUS, "Shutting down tasks");
 
@@ -167,7 +164,9 @@ impl FedimintServer {
         );
 
         let mut rpc_module = RpcHandlerCtx::new_module(config_gen);
+
         Self::attach_endpoints(&mut rpc_module, config::api::server_endpoints(), None);
+
         let handler = Self::spawn_api("config-gen", &self.settings.api_bind, rpc_module, 10).await;
 
         let cfg = cfg_receiver.recv().await.expect("should not close");
@@ -188,19 +187,6 @@ impl FedimintServer {
         )?;
 
         Ok(cfg)
-    }
-
-    /// Runs the `ConsensusApi` which serves endpoints while consensus is
-    /// running.
-    pub async fn spawn_consensus_api(api: ConsensusApi) -> FedimintApiHandler {
-        let cfg = &api.cfg.local;
-        let mut rpc_module = RpcHandlerCtx::new_module(api.clone());
-        Self::attach_endpoints(&mut rpc_module, net::api::server_endpoints(), None);
-        for (id, _, module) in api.modules.iter_modules() {
-            Self::attach_endpoints(&mut rpc_module, module.api_endpoints(), Some(id));
-        }
-
-        Self::spawn_api("consensus", &cfg.api_bind, rpc_module, cfg.max_connections).await
     }
 
     /// Spawns an API server

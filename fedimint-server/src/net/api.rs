@@ -51,8 +51,8 @@ use crate::config::io::{
     CONSENSUS_CONFIG, ENCRYPTED_EXT, JSON_EXT, LOCAL_CONFIG, PRIVATE_CONFIG, SALT_FILE,
 };
 use crate::config::ServerConfig;
-use crate::consensus::process_transaction_with_dbtx;
-use crate::consensus::server::get_finished_session_count_static;
+use crate::consensus::engine::get_finished_session_count_static;
+use crate::consensus::transaction::process_transaction_with_dbtx;
 use crate::db::{AcceptedItemPrefix, AcceptedTransactionKey, SignedSessionOutcomeKey};
 use crate::fedimint_core::encoding::Encodable;
 use crate::metrics::{BACKUP_WRITE_SIZE_BYTES, STORED_BACKUPS_COUNT};
@@ -127,8 +127,7 @@ impl ConsensusApi {
         // We ignore any writes, as we only verify if the transaction is valid here
         dbtx.ignore_uncommitted();
 
-        process_transaction_with_dbtx(self.modules.clone(), &mut dbtx, txid, transaction.clone())
-            .await?;
+        process_transaction_with_dbtx(self.modules.clone(), &mut dbtx, transaction.clone()).await?;
 
         self.submission_sender
             .send(ConsensusItem::Transaction(transaction))
@@ -241,8 +240,6 @@ impl ConsensusApi {
             .count() as u64;
 
         Ok(FederationStatus {
-            // the naming is in preparation for aleph bft since we will switch to
-            // the session count here and want to keep the public API stable
             session_count,
             peers_online,
             peers_offline,

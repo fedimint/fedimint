@@ -1,106 +1,217 @@
 #![allow(clippy::let_unit_value)]
 
-pub(crate) mod debug_fmt;
-pub mod server;
+pub mod debug_fmt;
+pub mod engine;
+pub mod transaction;
 
-use fedimint_core::db::DatabaseTransaction;
-use fedimint_core::module::registry::ServerModuleRegistry;
-use fedimint_core::module::TransactionItemAmount;
-use fedimint_core::transaction::{Transaction, TransactionError};
-use fedimint_core::{Amount, OutPoint, TransactionId};
-use tracing::instrument;
+use std::collections::BTreeMap;
+use std::sync::Arc;
+use std::time::Duration;
 
-use crate::metrics::{CONSENSUS_TX_PROCESSED_INPUTS, CONSENSUS_TX_PROCESSED_OUTPUTS};
+use anyhow::bail;
+use async_channel::Sender;
+use fedimint_api_client::api::DynGlobalApi;
+use fedimint_core::config::ServerModuleInitRegistry;
+use fedimint_core::core::{ModuleInstanceId, ModuleKind};
+use fedimint_core::db::{apply_migrations, apply_migrations_server, Database};
+use fedimint_core::envs::is_running_in_test_env;
+use fedimint_core::epoch::ConsensusItem;
+use fedimint_core::module::registry::ModuleRegistry;
+use fedimint_core::server::DynServerModule;
+use fedimint_core::task::TaskGroup;
+use fedimint_core::NumPeers;
+use fedimint_logging::{LOG_CONSENSUS, LOG_CORE};
+use tokio::sync::watch;
+use tracing::info;
+use tracing::log::warn;
 
-#[instrument(target = "fm::consensus", skip_all, fields(txid = %txid))]
-pub async fn process_transaction_with_dbtx(
-    modules: ServerModuleRegistry,
-    dbtx: &mut DatabaseTransaction<'_>,
-    txid: TransactionId,
-    transaction: Transaction,
-) -> Result<(), TransactionError> {
-    let mut funding_verifier = FundingVerifier::default();
-    let mut public_keys = Vec::new();
-    let in_count = transaction.inputs.len();
-    let out_count = transaction.outputs.len();
+use crate::atomic_broadcast::Keychain;
+use crate::config::{ServerConfig, ServerConfigLocal};
+use crate::consensus::engine::ConsensusEngine;
+use crate::db::{get_global_database_migrations, GLOBAL_DATABASE_VERSION};
+use crate::net::api::{ConsensusApi, ExpiringCache, RpcHandlerCtx};
+use crate::{net, FedimintApiHandler, FedimintServer};
 
-    dbtx.on_commit(move || {
-        CONSENSUS_TX_PROCESSED_INPUTS.observe(in_count as f64);
-        CONSENSUS_TX_PROCESSED_OUTPUTS.observe(out_count as f64);
+/// How many txs can be stored in memory before blocking the API
+const TRANSACTION_BUFFER: usize = 1000;
+
+pub async fn spawn_api_and_build_engine(
+    cfg: ServerConfig,
+    db: Database,
+    module_init_registry: ServerModuleInitRegistry,
+    task_group: &TaskGroup,
+) -> anyhow::Result<(ConsensusEngine, FedimintApiHandler)> {
+    cfg.validate_config(&cfg.local.identity, &module_init_registry)?;
+
+    apply_migrations_server(
+        &db,
+        "fedimint-server".to_string(),
+        GLOBAL_DATABASE_VERSION,
+        get_global_database_migrations(),
+    )
+    .await?;
+
+    let mut modules = BTreeMap::new();
+
+    for (module_id, module_cfg) in &cfg.consensus.modules {
+        match module_init_registry.get(&module_cfg.kind) {
+            Some(module_init) => {
+                info!(target: LOG_CORE, "Initialise module {module_id}");
+
+                apply_migrations(
+                    &db,
+                    module_init.module_kind().to_string(),
+                    module_init.database_version(),
+                    module_init.get_database_migrations(),
+                    Some(*module_id),
+                )
+                .await?;
+
+                let module = module_init
+                    .init(
+                        NumPeers::from(cfg.consensus.api_endpoints.len()),
+                        cfg.get_module_config(*module_id)?,
+                        db.with_prefix_module_id(*module_id),
+                        task_group,
+                        cfg.local.identity,
+                    )
+                    .await?;
+
+                modules.insert(*module_id, (module_cfg.kind.clone(), module));
+            }
+            None => bail!("Detected configuration for unsupported module id: {module_id}"),
+        };
+    }
+
+    let module_registry = ModuleRegistry::from(modules);
+
+    let client_cfg = cfg.consensus.to_client_config(&module_init_registry)?;
+
+    let (submission_sender, submission_receiver) = async_channel::bounded(TRANSACTION_BUFFER);
+    let (shutdown_sender, shutdown_receiver) = watch::channel(None);
+    let connection_status_channels = Default::default();
+    let last_ci_by_peer = Default::default();
+
+    let consensus_api = ConsensusApi {
+        cfg: cfg.clone(),
+        db: db.clone(),
+        modules: module_registry.clone(),
+        client_cfg: client_cfg.clone(),
+        submission_sender: submission_sender.clone(),
+        shutdown_sender,
+        supported_api_versions: ServerConfig::supported_api_versions_summary(
+            &cfg.consensus.modules,
+            &module_init_registry,
+        ),
+        last_ci_by_peer: Arc::clone(&last_ci_by_peer),
+        connection_status_channels: Arc::clone(&connection_status_channels),
+        consensus_status_cache: ExpiringCache::new(Duration::from_millis(500)),
+    };
+
+    info!(target: LOG_CONSENSUS, "Starting Consensus Api");
+
+    let api_handler = start_consensus_api(&cfg.local, consensus_api).await;
+
+    info!(target: LOG_CONSENSUS, "Starting Submission of Module CI proposals");
+
+    for (module_id, kind, module) in module_registry.iter_modules() {
+        submit_module_ci_proposals(
+            task_group,
+            db.clone(),
+            module_id,
+            kind.clone(),
+            module.clone(),
+            submission_sender.clone(),
+        )
+        .await;
+    }
+
+    info!(target: LOG_CONSENSUS, "Starting Consensus Engine");
+
+    let engine = ConsensusEngine {
+        db,
+        keychain: Keychain::new(&cfg),
+        federation_api: DynGlobalApi::from_config(&client_cfg),
+        self_id_str: cfg.local.identity.to_string(),
+        peer_id_str: (0..cfg.consensus.api_endpoints.len())
+            .map(|x| x.to_string())
+            .collect(),
+        cfg: cfg.clone(),
+        connection_status_channels,
+        submission_receiver,
+        shutdown_receiver,
+        last_ci_by_peer,
+        modules: module_registry,
+        task_group: task_group.clone(),
+    };
+
+    Ok((engine, api_handler))
+}
+
+async fn start_consensus_api(cfg: &ServerConfigLocal, api: ConsensusApi) -> FedimintApiHandler {
+    let mut rpc_module = RpcHandlerCtx::new_module(api.clone());
+
+    FedimintServer::attach_endpoints(&mut rpc_module, net::api::server_endpoints(), None);
+
+    for (id, _, module) in api.modules.iter_modules() {
+        FedimintServer::attach_endpoints(&mut rpc_module, module.api_endpoints(), Some(id));
+    }
+
+    FedimintServer::spawn_api("consensus", &cfg.api_bind, rpc_module, cfg.max_connections).await
+}
+
+const CONSENSUS_PROPOSAL_TIMEOUT: Duration = Duration::from_secs(30);
+
+async fn submit_module_ci_proposals(
+    task_group: &TaskGroup,
+    db: Database,
+    module_id: ModuleInstanceId,
+    kind: ModuleKind,
+    module: DynServerModule,
+    submission_sender: Sender<ConsensusItem>,
+) {
+    let mut interval = tokio::time::interval(if is_running_in_test_env() {
+        Duration::from_millis(100)
+    } else {
+        Duration::from_secs(1)
     });
-    for input in transaction.inputs.iter() {
-        let meta = modules
-            .get_expect(input.module_instance_id())
-            .process_input(
-                &mut dbtx.to_ref_with_prefix_module_id(input.module_instance_id()),
-                input,
-                input.module_instance_id(),
-            )
-            .await
-            .map_err(TransactionError::Input)?;
 
-        funding_verifier.add_input(meta.amount);
-        public_keys.push(meta.pub_key);
-    }
+    task_group.spawn(
+        "submit_module_ci_proposals_{module_id}",
+        move |task_handle| async move {
+            while !task_handle.is_shutting_down() {
+                let module_consensus_items = tokio::time::timeout(
+                    CONSENSUS_PROPOSAL_TIMEOUT,
+                    module.consensus_proposal(
+                        &mut db
+                            .begin_transaction_nc()
+                            .await
+                            .to_ref_with_prefix_module_id(module_id)
+                            .into_nc(),
+                        module_id,
+                    ),
+                )
+                .await;
 
-    transaction.validate_signatures(public_keys)?;
+                match module_consensus_items {
+                    Ok(items) => {
+                        for item in items {
+                            submission_sender
+                                .send(ConsensusItem::Module(item))
+                                .await
+                                .ok();
+                        }
+                    }
+                    Err(..) => {
+                        warn!(
+                            target: LOG_CONSENSUS,
+                            "Module {module_id} of kind {kind} failed to propose consensus items on time"
+                        );
+                    }
+                }
 
-    for (output, out_idx) in transaction.outputs.iter().zip(0u64..) {
-        let amount = modules
-            .get_expect(output.module_instance_id())
-            .process_output(
-                &mut dbtx.to_ref_with_prefix_module_id(output.module_instance_id()),
-                output,
-                OutPoint { txid, out_idx },
-                output.module_instance_id(),
-            )
-            .await
-            .map_err(TransactionError::Output)?;
-
-        funding_verifier.add_output(amount);
-    }
-
-    funding_verifier.verify_funding()?;
-
-    Ok(())
-}
-
-pub struct FundingVerifier {
-    input_amount: Amount,
-    output_amount: Amount,
-    fee_amount: Amount,
-}
-
-impl FundingVerifier {
-    pub fn add_input(&mut self, input_amount: TransactionItemAmount) {
-        self.input_amount += input_amount.amount;
-        self.fee_amount += input_amount.fee;
-    }
-
-    pub fn add_output(&mut self, output_amount: TransactionItemAmount) {
-        self.output_amount += output_amount.amount;
-        self.fee_amount += output_amount.fee;
-    }
-
-    pub fn verify_funding(self) -> Result<(), TransactionError> {
-        if self.input_amount == (self.output_amount + self.fee_amount) {
-            Ok(())
-        } else {
-            Err(TransactionError::UnbalancedTransaction {
-                inputs: self.input_amount,
-                outputs: self.output_amount,
-                fee: self.fee_amount,
-            })
-        }
-    }
-}
-
-impl Default for FundingVerifier {
-    fn default() -> Self {
-        FundingVerifier {
-            input_amount: Amount::ZERO,
-            output_amount: Amount::ZERO,
-            fee_amount: Amount::ZERO,
-        }
-    }
+                interval.tick().await;
+            }
+        },
+    );
 }
