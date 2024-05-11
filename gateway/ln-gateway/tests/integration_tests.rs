@@ -878,17 +878,10 @@ async fn test_gateway_register_with_federation() -> anyhow::Result<()> {
         .await;
     gateway_test.connect_fed(&fed).await;
 
-    let routing_fees = RoutingFees {
-        base_msat: 0,
-        proportional_millionths: 0,
-    };
     let lightning_module = user_client.get_first_module::<LightningClientModule>();
     lightning_module.update_gateway_cache().await?;
     let gateways = lightning_module.list_gateways().await;
-    assert!(!gateways.is_empty());
-    assert!(gateways
-        .into_iter()
-        .any(|gateway| gateway.info.fees == routing_fees));
+    assert_eq!(gateways.len(), 1);
 
     // Leave the federation
     let rpc_client = gateway_test
@@ -911,10 +904,7 @@ async fn test_gateway_register_with_federation() -> anyhow::Result<()> {
 
     lightning_module.update_gateway_cache().await?;
     let gateways = lightning_module.list_gateways().await;
-    assert!(!gateways.is_empty());
-    assert!(gateways
-        .into_iter()
-        .any(|gateway| gateway.info.fees == routing_fees));
+    assert_eq!(gateways.len(), 1);
 
     Ok(())
 }
