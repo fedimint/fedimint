@@ -54,7 +54,7 @@ tpe = { package = "fedimint-tpe", version = "=0.4.0-alpha", path = "../../crypto
 futures = { workspace = true }
 hex = { workspace = true }
 erased-serde = { workspace = true }
-lightning-invoice = "0.30.0"
+lightning-invoice = { workspace = true }
 prost = "0.12.6"
 rand = { workspace = true }
 reqwest = { version = "0.11.26", features = [ "json", "rustls-tls" ], default-features = false }
@@ -84,7 +84,7 @@ fedimint-ln-common = { path = "../../modules/fedimint-ln-common" }
 fedimint-mint-client = { path = "../../modules/fedimint-mint-client" }
 fedimint-wallet-client = { path = "../../modules/fedimint-wallet-client" }
 fedimint-testing = { workspace = true }
-lightning = "0.0.122"
+lightning = { workspace = true }
 threshold_crypto = { workspace = true }
 assert_matches = { workspace = true }
 
