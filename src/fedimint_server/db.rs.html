@@ -429,7 +429,7 @@
     <span class="kw">use </span>futures::StreamExt;
     <span class="kw">use </span>rand::rngs::OsRng;
     <span class="kw">use </span>rand::thread_rng;
-    <span class="kw">use </span>secp256k1_zkp::Message;
+    <span class="kw">use </span>secp256k1::Message;
     <span class="kw">use </span>strum::IntoEnumIterator;
     <span class="kw">use </span>tracing::info;
 
@@ -455,7 +455,7 @@
 
         <span class="kw">let </span>accepted_tx_id = AcceptedTransactionKey(TransactionId::from_slice(<span class="kw-2">&amp;</span>BYTE_32).unwrap());
 
-        <span class="kw">let </span>(sk, <span class="kw">_</span>) = secp256k1_zkp::generate_keypair(<span class="kw-2">&amp;mut </span>OsRng);
+        <span class="kw">let </span>(sk, <span class="kw">_</span>) = secp256k1::generate_keypair(<span class="kw-2">&amp;mut </span>OsRng);
         <span class="kw">let </span>secp = secp256k1::Secp256k1::new();
         <span class="kw">let </span>key_pair = KeyPair::from_secret_key(<span class="kw-2">&amp;</span>secp, <span class="kw-2">&amp;</span>sk);
         <span class="kw">let </span>schnorr = secp.sign_schnorr_with_rng(

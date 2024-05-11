@@ -846,7 +846,7 @@
 <span class="kw">use </span>fedimint_logging::{LOG_NET_PEER, LOG_NET_PEER_DKG};
 <span class="kw">use </span>futures::future::join_all;
 <span class="kw">use </span>rand::rngs::OsRng;
-<span class="kw">use </span>secp256k1_zkp::{Secp256k1, SecretKey};
+<span class="kw">use </span>secp256k1::{Secp256k1, SecretKey};
 <span class="kw">use </span>serde::de::DeserializeOwned;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>tokio_rustls::rustls;
@@ -1239,7 +1239,7 @@
         <span class="kw">let </span><span class="kw-2">mut </span>broadcast_pks = BTreeMap::new();
         <span class="kw">let </span><span class="kw-2">mut </span>broadcast_sks = BTreeMap::new();
         <span class="kw">for </span>peer_id <span class="kw">in </span>peer0.peer_ids() {
-            <span class="kw">let </span>(broadcast_sk, broadcast_pk) = secp256k1_zkp::generate_keypair(<span class="kw-2">&amp;mut </span>OsRng);
+            <span class="kw">let </span>(broadcast_sk, broadcast_pk) = secp256k1::generate_keypair(<span class="kw-2">&amp;mut </span>OsRng);
             broadcast_pks.insert(peer_id, broadcast_pk);
             broadcast_sks.insert(peer_id, broadcast_sk);
         }
@@ -1307,7 +1307,7 @@
             peers.clone(),
         );
 
-        <span class="kw">let </span>(broadcast_sk, broadcast_pk) = secp256k1_zkp::generate_keypair(<span class="kw-2">&amp;mut </span>OsRng);
+        <span class="kw">let </span>(broadcast_sk, broadcast_pk) = secp256k1::generate_keypair(<span class="kw-2">&amp;mut </span>OsRng);
 
         <span class="kw">let </span>broadcast_public_keys = broadcast_keys_exchange
             .exchange_pubkeys(<span class="string">"broadcast"</span>.to_string(), broadcast_pk)

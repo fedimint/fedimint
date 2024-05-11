@@ -129,11 +129,6 @@
 <a href="#129" id="129">129</a>
 <a href="#130" id="130">130</a>
 <a href="#131" id="131">131</a>
-<a href="#132" id="132">132</a>
-<a href="#133" id="133">133</a>
-<a href="#134" id="134">134</a>
-<a href="#135" id="135">135</a>
-<a href="#136" id="136">136</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::io::Write;
 
@@ -143,30 +138,26 @@
 <span class="kw">use </span>fedimint_core::encoding::Encodable;
 <span class="kw">use </span>fedimint_core::session_outcome::SchnorrSignature;
 <span class="kw">use </span>fedimint_core::{BitcoinHash, NumPeersExt, PeerId};
-<span class="kw">use </span>secp256k1_zkp::{schnorr, All, KeyPair, PublicKey, Secp256k1, SecretKey};
+<span class="kw">use </span>secp256k1::{schnorr, KeyPair, PublicKey};
+
+<span class="kw">use </span><span class="kw">crate</span>::config::ServerConfig;
 
 <span class="attr">#[derive(Clone, Debug)]
 </span><span class="kw">pub struct </span>Keychain {
     peer_id: PeerId,
-    public_keys: BTreeMap&lt;PeerId, secp256k1_zkp::PublicKey&gt;,
+    public_keys: BTreeMap&lt;PeerId, PublicKey&gt;,
     keypair: KeyPair,
-    secp: Secp256k1&lt;All&gt;,
 }
 
 <span class="kw">impl </span>Keychain {
-    <span class="kw">pub fn </span>new(
-        peer_id: PeerId,
-        public_keys: BTreeMap&lt;PeerId, PublicKey&gt;,
-        secret_key: SecretKey,
-    ) -&gt; <span class="self">Self </span>{
-        <span class="kw">let </span>secp = Secp256k1::new();
-        <span class="kw">let </span>keypair = secret_key.keypair(<span class="kw-2">&amp;</span>secp);
-
+    <span class="kw">pub fn </span>new(cfg: <span class="kw-2">&amp;</span>ServerConfig) -&gt; <span class="self">Self </span>{
         Keychain {
-            peer_id,
-            public_keys,
-            keypair,
-            secp,
+            peer_id: cfg.local.identity,
+            public_keys: cfg.consensus.broadcast_public_keys.clone(),
+            keypair: cfg
+                .private
+                .broadcast_secret_key
+                .keypair(secp256k1::SECP256K1),
         }
     }
 
@@ -217,8 +208,8 @@
 
     <span class="kw">fn </span>sign(<span class="kw-2">&amp;</span><span class="self">self</span>, message: <span class="kw-2">&amp;</span>[u8]) -&gt; <span class="self">Self</span>::Signature {
         SchnorrSignature(
-            <span class="self">self</span>.secp
-                .sign_schnorr(<span class="kw-2">&amp;</span><span class="self">self</span>.tagged_hash(message), <span class="kw-2">&amp;</span><span class="self">self</span>.keypair)
+            <span class="self">self</span>.keypair
+                .sign_schnorr(<span class="self">self</span>.tagged_hash(message))
                 .as_ref()
                 .to_owned(),
         )
@@ -234,8 +225,7 @@
 
         <span class="kw">if let </span><span class="prelude-val">Some</span>(public_key) = <span class="self">self</span>.public_keys.get(<span class="kw-2">&amp;</span>peer_id) {
             <span class="kw">if let </span><span class="prelude-val">Ok</span>(sig) = schnorr::Signature::from_slice(<span class="kw-2">&amp;</span>signature.<span class="number">0</span>) {
-                <span class="kw">return </span><span class="self">self
-                    </span>.secp
+                <span class="kw">return </span>secp256k1::SECP256K1
                     .verify_schnorr(
                         <span class="kw-2">&amp;</span>sig,
                         <span class="kw-2">&amp;</span><span class="self">self</span>.tagged_hash(message),

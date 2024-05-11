@@ -845,30 +845,15 @@
 <a href="#845" id="845">845</a>
 <a href="#846" id="846">846</a>
 <a href="#847" id="847">847</a>
-<a href="#848" id="848">848</a>
-<a href="#849" id="849">849</a>
-<a href="#850" id="850">850</a>
-<a href="#851" id="851">851</a>
-<a href="#852" id="852">852</a>
-<a href="#853" id="853">853</a>
-<a href="#854" id="854">854</a>
-<a href="#855" id="855">855</a>
-<a href="#856" id="856">856</a>
-<a href="#857" id="857">857</a>
-<a href="#858" id="858">858</a>
-<a href="#859" id="859">859</a>
-<a href="#860" id="860">860</a>
-<a href="#861" id="861">861</a>
-<a href="#862" id="862">862</a>
-<a href="#863" id="863">863</a>
-</pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap};
+</pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
+<span class="kw">use </span>std::default::Default;
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
 
 <span class="kw">use </span>aleph_bft::Keychain <span class="kw">as </span>KeychainTrait;
 <span class="kw">use </span>anyhow::{anyhow, bail};
 <span class="kw">use </span>async_channel::{Receiver, Sender};
-<span class="kw">use </span>fedimint_api_client::api::{DynGlobalApi, FederationApiExt, WsFederationApi};
+<span class="kw">use </span>fedimint_api_client::api::{DynGlobalApi, FederationApiExt, PeerConnectionStatus};
 <span class="kw">use </span>fedimint_api_client::query::FilterMap;
 <span class="kw">use </span>fedimint_core::config::ServerModuleInitRegistry;
 <span class="kw">use </span>fedimint_core::core::{ModuleInstanceId, ModuleKind, MODULE_INSTANCE_ID_GLOBAL};
@@ -893,7 +878,6 @@
 };
 <span class="kw">use </span>fedimint_core::task::{sleep, TaskGroup, TaskHandle};
 <span class="kw">use </span>fedimint_core::timing::TimeReporter;
-<span class="kw">use </span>fedimint_core::util::SafeUrl;
 <span class="kw">use </span>fedimint_core::{timing, NumPeers, PeerId};
 <span class="kw">use </span>futures::StreamExt;
 <span class="kw">use </span>rand::Rng;
@@ -927,23 +911,22 @@
 <span class="doccomment">/// How many txs can be stored in memory before blocking the API
 </span><span class="kw">const </span>TRANSACTION_BUFFER: usize = <span class="number">1000</span>;
 
-<span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">type </span>LatestContributionByPeer = HashMap&lt;PeerId, u64&gt;;
-
 <span class="doccomment">/// Runs the main server consensus loop
 </span><span class="kw">pub struct </span>ConsensusServer {
     modules: ServerModuleRegistry,
     db: Database,
-    connections: ReconnectPeerConnections&lt;Message&gt;,
     keychain: Keychain,
-    api_endpoints: Vec&lt;(PeerId, SafeUrl)&gt;,
+    federation_api: DynGlobalApi,
     cfg: ServerConfig,
     submission_receiver: Receiver&lt;ConsensusItem&gt;,
     shutdown_receiver: watch::Receiver&lt;<span class="prelude-ty">Option</span>&lt;u64&gt;&gt;,
-    latest_contribution_by_peer: Arc&lt;RwLock&lt;LatestContributionByPeer&gt;&gt;,
+    last_ci_by_peer: Arc&lt;RwLock&lt;BTreeMap&lt;PeerId, u64&gt;&gt;&gt;,
     <span class="doccomment">/// Just a string version of `cfg.local.identity` for performance
     </span>self_id_str: String,
     <span class="doccomment">/// Just a string version of peer ids for performance
     </span>peer_id_str: Vec&lt;String&gt;,
+    connection_status_channels: Arc&lt;RwLock&lt;BTreeMap&lt;PeerId, PeerConnectionStatus&gt;&gt;&gt;,
+    task_group: TaskGroup,
 }
 
 <span class="kw">impl </span>ConsensusServer {
@@ -951,14 +934,10 @@
     </span><span class="kw">pub async fn </span>new(
         cfg: ServerConfig,
         db: Database,
-        module_inits: ServerModuleInitRegistry,
+        module_init_registry: ServerModuleInitRegistry,
         task_group: <span class="kw-2">&amp;</span>TaskGroup,
     ) -&gt; anyhow::Result&lt;(<span class="self">Self</span>, ConsensusApi)&gt; {
-        <span class="comment">// Check the configs are valid
-        </span>cfg.validate_config(<span class="kw-2">&amp;</span>cfg.local.identity, <span class="kw-2">&amp;</span>module_inits)<span class="question-mark">?</span>;
-
-        <span class="comment">// Apply database migrations and build `ServerModuleRegistry`
-        </span><span class="kw">let </span><span class="kw-2">mut </span>modules = BTreeMap::new();
+        cfg.validate_config(<span class="kw-2">&amp;</span>cfg.local.identity, <span class="kw-2">&amp;</span>module_init_registry)<span class="question-mark">?</span>;
 
         apply_migrations_server(
             <span class="kw-2">&amp;</span>db,
@@ -968,79 +947,64 @@
         )
         .<span class="kw">await</span><span class="question-mark">?</span>;
 
+        <span class="kw">let </span><span class="kw-2">mut </span>modules = BTreeMap::new();
+
         <span class="kw">for </span>(module_id, module_cfg) <span class="kw">in </span><span class="kw-2">&amp;</span>cfg.consensus.modules {
-            <span class="kw">let </span>kind = module_cfg.kind.clone();
-            <span class="kw">let </span><span class="prelude-val">Some</span>(init) = module_inits.get(<span class="kw-2">&amp;</span>kind) <span class="kw">else </span>{
-                <span class="macro">bail!</span>(
-                    <span class="string">"Detected configuration for unsupported module id: {module_id}, kind: {kind}"
-                </span>);
+            <span class="kw">match </span>module_init_registry.get(<span class="kw-2">&amp;</span>module_cfg.kind) {
+                <span class="prelude-val">Some</span>(module_init) =&gt; {
+                    <span class="macro">info!</span>(target: LOG_CORE, <span class="string">"Initialise module {module_id}"</span>);
+
+                    apply_migrations(
+                        <span class="kw-2">&amp;</span>db,
+                        module_init.module_kind().to_string(),
+                        module_init.database_version(),
+                        module_init.get_database_migrations(),
+                        <span class="prelude-val">Some</span>(<span class="kw-2">*</span>module_id),
+                    )
+                    .<span class="kw">await</span><span class="question-mark">?</span>;
+
+                    <span class="kw">let </span>module = module_init
+                        .init(
+                            NumPeers::from(cfg.consensus.api_endpoints.len()),
+                            cfg.get_module_config(<span class="kw-2">*</span>module_id)<span class="question-mark">?</span>,
+                            db.with_prefix_module_id(<span class="kw-2">*</span>module_id),
+                            task_group,
+                            cfg.local.identity,
+                        )
+                        .<span class="kw">await</span><span class="question-mark">?</span>;
+
+                    modules.insert(<span class="kw-2">*</span>module_id, (module_cfg.kind.clone(), module));
+                }
+                <span class="prelude-val">None </span>=&gt; <span class="macro">bail!</span>(<span class="string">"Detected configuration for unsupported module id: {module_id}"</span>),
             };
-            <span class="macro">info!</span>(target: LOG_CORE,
-                module_instance_id = <span class="kw-2">*</span>module_id, kind = %kind, <span class="string">"Init module"</span>);
-
-            apply_migrations(
-                <span class="kw-2">&amp;</span>db,
-                init.module_kind().to_string(),
-                init.database_version(),
-                init.get_database_migrations(),
-                <span class="prelude-val">Some</span>(<span class="kw-2">*</span>module_id),
-            )
-            .<span class="kw">await</span><span class="question-mark">?</span>;
-
-            <span class="kw">let </span>isolated_db = db.with_prefix_module_id(<span class="kw-2">*</span>module_id);
-            <span class="kw">let </span>module = init
-                .init(
-                    NumPeers::from(cfg.consensus.api_endpoints.len()),
-                    cfg.get_module_config(<span class="kw-2">*</span>module_id)<span class="question-mark">?</span>,
-                    isolated_db,
-                    task_group,
-                    cfg.local.identity,
-                )
-                .<span class="kw">await</span><span class="question-mark">?</span>;
-
-            modules.insert(<span class="kw-2">*</span>module_id, (kind, module));
         }
 
-        <span class="kw">let </span>modules = ModuleRegistry::from(modules);
+        <span class="kw">let </span>module_registry = ModuleRegistry::from(modules);
 
-        <span class="kw">let </span>keychain = Keychain::new(
-            cfg.local.identity,
-            cfg.consensus.broadcast_public_keys.clone(),
-            cfg.private.broadcast_secret_key,
-        );
+        <span class="kw">let </span>client_cfg = cfg.consensus.to_client_config(<span class="kw-2">&amp;</span>module_init_registry)<span class="question-mark">?</span>;
 
         <span class="kw">let </span>(submission_sender, submission_receiver) = async_channel::bounded(TRANSACTION_BUFFER);
         <span class="kw">let </span>(shutdown_sender, shutdown_receiver) = watch::channel(<span class="prelude-val">None</span>);
-
-        <span class="comment">// Build P2P connections for the atomic broadcast
-        </span><span class="kw">let </span>(connections, peer_status_channels) = ReconnectPeerConnections::new(
-            cfg.network_config(),
-            DelayCalculator::PROD_DEFAULT,
-            TlsTcpConnector::new(cfg.tls_config(), cfg.local.identity).into_dyn(),
-            task_group,
-        )
-        .<span class="kw">await</span>;
-
-        <span class="comment">// Build API that can handle requests
-        </span><span class="kw">let </span>latest_contribution_by_peer = Default::default();
+        <span class="kw">let </span>connection_status_channels = Default::default();
+        <span class="kw">let </span>last_ci_by_peer = Default::default();
 
         <span class="kw">let </span>consensus_api = ConsensusApi {
             cfg: cfg.clone(),
             db: db.clone(),
-            modules: modules.clone(),
-            client_cfg: cfg.consensus.to_client_config(<span class="kw-2">&amp;</span>module_inits)<span class="question-mark">?</span>,
+            modules: module_registry.clone(),
+            client_cfg: client_cfg.clone(),
             submission_sender: submission_sender.clone(),
             shutdown_sender,
             supported_api_versions: ServerConfig::supported_api_versions_summary(
                 <span class="kw-2">&amp;</span>cfg.consensus.modules,
-                <span class="kw-2">&amp;</span>module_inits,
+                <span class="kw-2">&amp;</span>module_init_registry,
             ),
-            latest_contribution_by_peer: Arc::clone(<span class="kw-2">&amp;</span>latest_contribution_by_peer),
-            peer_status_channels,
+            last_ci_by_peer: Arc::clone(<span class="kw-2">&amp;</span>last_ci_by_peer),
+            connection_status_channels: Arc::clone(<span class="kw-2">&amp;</span>connection_status_channels),
             consensus_status_cache: ExpiringCache::new(Duration::from_millis(<span class="number">500</span>)),
         };
 
-        <span class="kw">for </span>(module_id, kind, module) <span class="kw">in </span>modules.iter_modules() {
+        <span class="kw">for </span>(module_id, kind, module) <span class="kw">in </span>module_registry.iter_modules() {
             submit_module_ci_proposals(
                 task_group,
                 db.clone(),
@@ -1052,28 +1016,21 @@
             .<span class="kw">await</span>;
         }
 
-        <span class="kw">let </span>api_endpoints: Vec&lt;<span class="kw">_</span>&gt; = cfg
-            .consensus
-            .api_endpoints
-            .clone()
-            .into_iter()
-            .map(|(id, node)| (id, node.url))
-            .collect();
-
         <span class="kw">let </span>consensus_server = ConsensusServer {
-            connections,
             db,
-            keychain,
-            api_endpoints,
+            keychain: Keychain::new(<span class="kw-2">&amp;</span>cfg),
+            federation_api: DynGlobalApi::from_config(<span class="kw-2">&amp;</span>client_cfg),
             self_id_str: cfg.local.identity.to_string(),
             peer_id_str: (<span class="number">0</span>..cfg.consensus.api_endpoints.len())
                 .map(|x| x.to_string())
                 .collect(),
             cfg: cfg.clone(),
+            connection_status_channels,
             submission_receiver,
             shutdown_receiver,
-            latest_contribution_by_peer,
-            modules,
+            last_ci_by_peer,
+            modules: module_registry,
+            task_group: task_group.clone(),
         };
 
         <span class="prelude-val">Ok</span>((consensus_server, consensus_api))
@@ -1155,12 +1112,22 @@
 
         <span class="self">self</span>.confirm_server_config_consensus_hash().<span class="kw">await</span><span class="question-mark">?</span>;
 
+        <span class="comment">// Build P2P connections for the atomic broadcast
+        </span><span class="kw">let </span>connections = ReconnectPeerConnections::new(
+            <span class="self">self</span>.cfg.network_config(),
+            DelayCalculator::PROD_DEFAULT,
+            TlsTcpConnector::new(<span class="self">self</span>.cfg.tls_config(), <span class="self">self</span>.cfg.local.identity).into_dyn(),
+            <span class="kw-2">&amp;</span><span class="self">self</span>.task_group,
+            Arc::clone(<span class="kw-2">&amp;</span><span class="self">self</span>.connection_status_channels),
+        )
+        .<span class="kw">await</span>;
+
         <span class="kw">while </span>!task_handle.is_shutting_down() {
             <span class="kw">let </span>session_index = <span class="self">self</span>.get_finished_session_count().<span class="kw">await</span>;
 
             CONSENSUS_SESSION_COUNT.set(session_index <span class="kw">as </span>i64);
 
-            <span class="self">self</span>.run_session(session_index).<span class="kw">await</span><span class="question-mark">?</span>;
+            <span class="self">self</span>.run_session(connections.clone(), session_index).<span class="kw">await</span><span class="question-mark">?</span>;
 
             <span class="macro">info!</span>(target: LOG_CONSENSUS, <span class="string">"Session {session_index} completed"</span>);
 
@@ -1180,12 +1147,11 @@
 
     <span class="kw">async fn </span>confirm_server_config_consensus_hash(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; anyhow::Result&lt;()&gt; {
         <span class="kw">let </span>our_hash = <span class="self">self</span>.cfg.consensus.consensus_hash();
-        <span class="kw">let </span>federation_api = DynGlobalApi::from_endpoints(<span class="self">self</span>.api_endpoints.clone());
 
         <span class="macro">info!</span>(target: LOG_CONSENSUS, <span class="string">"Waiting for peers config {our_hash}"</span>);
 
         <span class="kw">loop </span>{
-            <span class="kw">match </span>federation_api.server_config_consensus_hash().<span class="kw">await </span>{
+            <span class="kw">match </span><span class="self">self</span>.federation_api.server_config_consensus_hash().<span class="kw">await </span>{
                 <span class="prelude-val">Ok</span>(consensus_hash) =&gt; {
                     <span class="kw">if </span>consensus_hash != our_hash {
                         <span class="macro">bail!</span>(<span class="string">"Our consensus config doesn't match peers!"</span>)
@@ -1204,7 +1170,11 @@
         }
     }
 
-    <span class="kw">pub async fn </span>run_session(<span class="kw-2">&amp;</span><span class="self">self</span>, session_index: u64) -&gt; anyhow::Result&lt;()&gt; {
+    <span class="kw">pub async fn </span>run_session(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        connections: ReconnectPeerConnections&lt;Message&gt;,
+        session_index: u64,
+    ) -&gt; anyhow::Result&lt;()&gt; {
         <span class="comment">// In order to bound a sessions RAM consumption we need to bound its number of
         // units and therefore its number of rounds. Since we use a session to
         // create a naive secp256k1 threshold signature for the header of session
@@ -1267,9 +1237,9 @@
                     BackupWriter::new(<span class="self">self</span>.db.clone()),
                     BackupReader::new(<span class="self">self</span>.db.clone()),
                 ),
-                Network::new(<span class="self">self</span>.connections.clone()),
+                Network::new(connections),
                 <span class="self">self</span>.keychain.clone(),
-                Spawner::new(),
+                Spawner::new(<span class="self">self</span>.task_group.make_subgroup()),
                 aleph_bft_types::Terminator::create_root(terminator_receiver, <span class="string">"Terminator"</span>),
             ),
         );
@@ -1312,8 +1282,6 @@
         <span class="kw">let </span><span class="kw-2">mut </span>num_batches = <span class="number">0</span>;
         <span class="kw">let </span><span class="kw-2">mut </span>item_index = <span class="number">0</span>;
 
-        <span class="kw">let </span>federation_api = WsFederationApi::new(<span class="self">self</span>.api_endpoints.clone());
-
         <span class="comment">// We build a session outcome out of the ordered batches until either we have
         // processed batches_per_session_outcome of batches or a threshold signed
         // session outcome is obtained from our peers
@@ -1337,7 +1305,7 @@
                         num_batches += <span class="number">1</span>;
                     }
                 },
-                signed_session_outcome = <span class="self">self</span>.request_signed_session_outcome(<span class="kw-2">&amp;</span>federation_api, session_index) =&gt; {
+                signed_session_outcome = <span class="self">self</span>.request_signed_session_outcome(<span class="kw-2">&amp;</span><span class="self">self</span>.federation_api, session_index) =&gt; {
                     <span class="kw">let </span>pending_accepted_items = <span class="self">self</span>.pending_accepted_items().<span class="kw">await</span>;
 
                     <span class="comment">// this panics if we have more accepted items than the signed session outcome
@@ -1393,7 +1361,7 @@
                         }
                     }
                 }
-                signed_session_outcome = <span class="self">self</span>.request_signed_session_outcome(<span class="kw-2">&amp;</span>federation_api, session_index) =&gt; {
+                signed_session_outcome = <span class="self">self</span>.request_signed_session_outcome(<span class="kw-2">&amp;</span><span class="self">self</span>.federation_api, session_index) =&gt; {
                     <span class="comment">// We check that the session outcome we have created agrees with the federations consensus
                     </span><span class="macro">assert!</span>(header == signed_session_outcome.session_outcome.header(session_index));
 
@@ -1466,7 +1434,7 @@
 
         <span class="macro">debug!</span>(%peer, item = <span class="question-mark">?</span>FmtDbgConsensusItem(<span class="kw-2">&amp;</span>item), <span class="string">"Processing consensus item"</span>);
 
-        <span class="self">self</span>.latest_contribution_by_peer
+        <span class="self">self</span>.last_ci_by_peer
             .write()
             .<span class="kw">await
             </span>.insert(peer, session_index);
@@ -1598,7 +1566,7 @@
 
     <span class="kw">async fn </span>request_signed_session_outcome(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        federation_api: <span class="kw-2">&amp;</span>WsFederationApi,
+        federation_api: <span class="kw-2">&amp;</span>DynGlobalApi,
         index: u64,
     ) -&gt; SignedSessionOutcome {
         <span class="kw">let </span>keychain = <span class="self">self</span>.keychain.clone();

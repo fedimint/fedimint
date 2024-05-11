@@ -36,29 +36,24 @@
 <a href="#36" id="36">36</a>
 <a href="#37" id="37">37</a>
 <a href="#38" id="38">38</a>
-<a href="#39" id="39">39</a>
-<a href="#40" id="40">40</a>
-</pre></div><pre class="rust"><code><span class="kw">use </span>fedimint_logging::LOG_CONSENSUS;
+</pre></div><pre class="rust"><code><span class="kw">use </span>fedimint_core::task::TaskGroup;
+<span class="kw">use </span>fedimint_logging::LOG_CONSENSUS;
 <span class="kw">use </span>tracing::warn;
 
 <span class="attr">#[derive(Clone)]
-</span><span class="kw">pub struct </span>Spawner;
-
-<span class="kw">impl </span>Spawner {
-    <span class="kw">pub fn </span>new() -&gt; <span class="self">Self </span>{
-        <span class="self">Self </span>{}
-    }
+</span><span class="kw">pub struct </span>Spawner {
+    task_group: TaskGroup,
 }
 
-<span class="kw">impl </span>Default <span class="kw">for </span>Spawner {
-    <span class="kw">fn </span>default() -&gt; <span class="self">Self </span>{
-        <span class="self">Self</span>::new()
+<span class="kw">impl </span>Spawner {
+    <span class="kw">pub fn </span>new(task_group: TaskGroup) -&gt; <span class="self">Self </span>{
+        <span class="self">Self </span>{ task_group }
     }
 }
 
 <span class="kw">impl </span>aleph_bft::SpawnHandle <span class="kw">for </span>Spawner {
     <span class="kw">fn </span>spawn(<span class="kw-2">&amp;</span><span class="self">self</span>, name: <span class="kw-2">&amp;</span>str, task: <span class="kw">impl </span>futures::Future&lt;Output = ()&gt; + Send + <span class="lifetime">'static</span>) {
-        fedimint_core::runtime::spawn(name, task);
+        <span class="self">self</span>.task_group.spawn(name, <span class="kw">move </span>|<span class="kw">_</span>| task);
     }
 
     <span class="kw">fn </span>spawn_essential(
@@ -66,16 +61,17 @@
         name: <span class="kw-2">&amp;</span>str,
         task: <span class="kw">impl </span>futures::Future&lt;Output = ()&gt; + Send + <span class="lifetime">'static</span>,
     ) -&gt; aleph_bft::TaskHandle {
-        <span class="kw">let </span>(res_tx, res_rx) = futures::channel::oneshot::channel();
+        <span class="kw">let </span>(sender, receiver) = futures::channel::oneshot::channel();
 
-        fedimint_core::runtime::spawn(name, <span class="kw">async move </span>{
+        <span class="self">self</span>.task_group.spawn(name, <span class="kw">move </span>|<span class="kw">_</span>| <span class="kw">async </span>{
             task.<span class="kw">await</span>;
-            <span class="kw">if let </span><span class="prelude-val">Err</span>(_err) = res_tx.send(()) {
+
+            <span class="kw">if </span>sender.send(()).is_err() {
                 <span class="macro">warn!</span>(target: LOG_CONSENSUS, <span class="string">"Unable to send essential spawned task completion. Are we shutting down?"</span>);
             }
         });
 
-        Box::pin(<span class="kw">async move </span>{ res_rx.<span class="kw">await</span>.map_err(|<span class="kw">_</span>| ()) })
+        Box::pin(<span class="kw">async move </span>{ receiver.<span class="kw">await</span>.map_err(|<span class="kw">_</span>| ()) })
     }
 }
 </code></pre></div></section></main></body></html>
