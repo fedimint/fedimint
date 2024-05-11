@@ -24,7 +24,6 @@ futures = { workspace = true }
 fedimint-core = { version = "=0.4.0-alpha", path = "../../fedimint-core" }
 rand = { workspace = true }
 serde = { workspace = true }
-secp256k1 = "0.27.0"
 strum = { workspace = true }
 strum_macros = { workspace = true }
 thiserror = { workspace = true }

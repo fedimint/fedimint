@@ -8,7 +8,7 @@ use fedimint_core::db::{
 };
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::invite_code::InviteCode;
-use fedimint_core::{impl_db_lookup, impl_db_record};
+use fedimint_core::{impl_db_lookup, impl_db_record, secp256k1};
 use fedimint_ln_common::serde_routing_fees;
 use fedimint_lnv2_client::CreateInvoicePayload;
 use futures::FutureExt;
@@ -173,6 +173,7 @@ mod fedimint_migration_tests {
     use fedimint_core::db::{Database, IDatabaseTransactionOpsCoreTyped};
     use fedimint_core::invite_code::InviteCode;
     use fedimint_core::module::registry::ModuleDecoderRegistry;
+    use fedimint_core::secp256k1;
     use fedimint_core::util::SafeUrl;
     use fedimint_logging::TracingSetup;
     use fedimint_testing::db::{

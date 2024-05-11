@@ -22,7 +22,7 @@ use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::{
     ApiVersion, CommonModuleInit, ModuleCommon, ModuleInit, MultiApiVersion,
 };
-use fedimint_core::{apply, async_trait_maybe_send, Amount, OutPoint, PeerId};
+use fedimint_core::{apply, async_trait_maybe_send, secp256k1, Amount, OutPoint, PeerId};
 use fedimint_lnv2_client::api::LnFederationApi;
 use fedimint_lnv2_client::{CreateInvoicePayload, SendPaymentPayload};
 use fedimint_lnv2_common::config::LightningClientConfig;

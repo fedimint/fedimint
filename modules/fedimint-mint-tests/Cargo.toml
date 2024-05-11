@@ -31,7 +31,6 @@ futures = { workspace = true }
 tokio = { version = "1.37.0", features = ["sync"] }
 tracing = { workspace = true }
 rand = { workspace = true }
-secp256k1 = "0.27.0"
 serde_json = { workspace = true }
 semver = { workspace = true }
 serde = { workspace = true }

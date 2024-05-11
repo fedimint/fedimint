@@ -25,7 +25,6 @@ fedimint-core = { version = "=0.4.0-alpha", path = "../../fedimint-core" }
 fedimint-dummy-common = { version = "=0.4.0-alpha", path = "../fedimint-dummy-common" }
 rand = { workspace = true }
 serde = { workspace = true }
-secp256k1 = "0.27.0"
 strum = { workspace = true }
 strum_macros = { workspace = true }
 thiserror = { workspace = true }

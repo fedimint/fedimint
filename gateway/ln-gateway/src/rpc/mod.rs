@@ -7,7 +7,7 @@ use std::str::FromStr;
 use bitcoin::address::NetworkUnchecked;
 use bitcoin::{Address, Network};
 use fedimint_core::config::{ClientConfig, FederationId, JsonClientConfig};
-use fedimint_core::{Amount, BitcoinAmountOrAll};
+use fedimint_core::{secp256k1, Amount, BitcoinAmountOrAll};
 use fedimint_ln_common::config::parse_routing_fees;
 use fedimint_ln_common::{route_hints, serde_option_routing_fees};
 use lightning_invoice::RoutingFees;

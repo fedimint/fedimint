@@ -8,7 +8,7 @@ use bitcoin::key::KeyPair;
 use bitcoin::secp256k1::{PublicKey, SecretKey};
 use fedimint_core::task::TaskGroup;
 use fedimint_core::util::BoxStream;
-use fedimint_core::Amount;
+use fedimint_core::{secp256k1, Amount};
 use fedimint_logging::LOG_TEST;
 use lightning_invoice::{
     Bolt11Invoice, Bolt11InvoiceDescription, Currency, Description, InvoiceBuilder, PaymentSecret,

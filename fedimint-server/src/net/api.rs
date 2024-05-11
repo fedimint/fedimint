@@ -36,6 +36,7 @@ use fedimint_core::module::{
     api_endpoint, ApiEndpoint, ApiEndpointContext, ApiError, ApiRequestErased, ApiVersion,
     SerdeModuleEncoding, SupportedApiVersionsSummary,
 };
+use fedimint_core::secp256k1::{PublicKey, SECP256K1};
 use fedimint_core::server::DynServerModule;
 use fedimint_core::session_outcome::{SessionOutcome, SessionStatus, SignedSessionOutcome};
 use fedimint_core::transaction::{SerdeTransaction, Transaction, TransactionError};
@@ -43,7 +44,6 @@ use fedimint_core::{OutPoint, PeerId, TransactionId};
 use fedimint_logging::LOG_NET_API;
 use futures::StreamExt;
 use jsonrpsee::RpcModule;
-use secp256k1::SECP256K1;
 use tokio::sync::{watch, RwLock};
 use tracing::{debug, info};
 
@@ -377,7 +377,7 @@ impl ConsensusApi {
     async fn handle_recover_request(
         &self,
         dbtx: &mut DatabaseTransaction<'_>,
-        id: secp256k1::PublicKey,
+        id: PublicKey,
     ) -> Option<ClientBackupSnapshot> {
         dbtx.get_value(&ClientBackupKey(id)).await
     }
@@ -579,7 +579,7 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConsensusApi>> {
         api_endpoint! {
             RECOVER_ENDPOINT,
             ApiVersion::new(0, 0),
-            async |fedimint: &ConsensusApi, context, id: secp256k1::PublicKey| -> Option<ClientBackupSnapshot> {
+            async |fedimint: &ConsensusApi, context, id: PublicKey| -> Option<ClientBackupSnapshot> {
                 Ok(fedimint
                     .handle_recover_request(&mut context.dbtx().into_nc(), id).await)
             }

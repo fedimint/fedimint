@@ -11,6 +11,7 @@ use fedimint_core::config::FederationId;
 use fedimint_core::db::mem_impl::MemDatabase;
 use fedimint_core::db::Database;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
+use fedimint_core::secp256k1::PublicKey;
 use fedimint_core::task::{block_in_place, block_on, sleep_in_test, TaskGroup};
 use fedimint_core::util::SafeUrl;
 use fedimint_logging::LOG_TEST;
@@ -20,7 +21,6 @@ use ln_gateway::lightning::{ILnRpcClient, LightningBuilder};
 use ln_gateway::rpc::rpc_client::GatewayRpcClient;
 use ln_gateway::rpc::{ConnectFedPayload, FederationInfo, V1_API_ENDPOINT};
 use ln_gateway::{Gateway, GatewayState};
-use secp256k1::PublicKey;
 use tempfile::TempDir;
 use tracing::{info, warn};
 
@@ -73,7 +73,7 @@ impl GatewayTest {
             .unwrap()
     }
 
-    pub fn get_gateway_id(&self) -> secp256k1::PublicKey {
+    pub fn get_gateway_id(&self) -> PublicKey {
         self.gateway.gateway_id
     }
 
