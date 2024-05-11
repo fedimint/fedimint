@@ -203,9 +203,6 @@
 <a href="#203" id="203">203</a>
 <a href="#204" id="204">204</a>
 <a href="#205" id="205">205</a>
-<a href="#206" id="206">206</a>
-<a href="#207" id="207">207</a>
-<a href="#208" id="208">208</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::convert::Infallible;
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::{fmt, panic};
@@ -298,10 +295,7 @@
     </span><span class="kw">where
         </span>Fut: Future&lt;Output = std::result::Result&lt;T, E&gt;&gt; + <span class="lifetime">'static </span>+ MaybeSend,
     {
-        <span class="kw">let </span>handle = <span class="kw">crate</span>::runtime::spawn(
-            <span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">"JitTry {} value"</span>, std::any::type_name::&lt;T&gt;()),
-            <span class="kw">async move </span>{ f().<span class="kw">await </span>},
-        );
+        <span class="kw">let </span>handle = <span class="kw">crate</span>::runtime::spawn(<span class="string">"jit-value"</span>, <span class="kw">async move </span>{ f().<span class="kw">await </span>});
 
         <span class="self">Self </span>{
             inner: JitInner {

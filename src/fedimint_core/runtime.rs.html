@@ -163,6 +163,8 @@
 <a href="#163" id="163">163</a>
 <a href="#164" id="164">164</a>
 <a href="#165" id="165">165</a>
+<a href="#166" id="166">166</a>
+<a href="#167" id="167">167</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! Copyright 2021 The Matrix.org Foundation C.I.C.
 //! Abstraction over an executor so we can spawn tasks under WASM the same way
 //! we do usually.
@@ -172,6 +174,7 @@
 </span><span class="kw">use </span>std::future::Future;
 <span class="kw">use </span>std::time::Duration;
 
+<span class="kw">use </span>fedimint_logging::LOG_RUNTIME;
 <span class="kw">use </span>thiserror::Error;
 <span class="kw">use </span>tokio::time::Instant;
 <span class="kw">use </span>tracing::Instrument;
@@ -193,7 +196,7 @@
         </span>F: Future&lt;Output = T&gt; + <span class="lifetime">'static </span>+ Send,
         T: Send + <span class="lifetime">'static</span>,
     {
-        <span class="kw">let </span>span = <span class="macro">tracing::span!</span>(tracing::Level::INFO, <span class="string">"spawn"</span>, task_name = name);
+        <span class="kw">let </span>span = <span class="macro">tracing::debug_span!</span>(target: LOG_RUNTIME, <span class="string">"spawn"</span>, task = name);
         <span class="comment">// nosemgrep: ban-tokio-spawn
         </span>tokio::spawn(future.instrument(span))
     }
@@ -202,7 +205,7 @@
     <span class="kw">where
         </span>F: Future&lt;Output = ()&gt; + <span class="lifetime">'static</span>,
     {
-        <span class="kw">let </span>span = <span class="macro">tracing::span!</span>(tracing::Level::INFO, <span class="string">"spawn_local"</span>, task_name = name);
+        <span class="kw">let </span>span = <span class="macro">tracing::debug_span!</span>(target: LOG_RUNTIME, <span class="string">"spawn_local"</span>, task = name);
         <span class="comment">// nosemgrep: ban-tokio-spawn
         </span>tokio::task::spawn_local(future.instrument(span))
     }
@@ -291,6 +294,7 @@
     <span class="kw">where
         </span>F: Future&lt;Output = T&gt; + <span class="lifetime">'static</span>,
     {
+        <span class="kw">let </span>span = <span class="macro">tracing::debug_span!</span>(target: LOG_RUNTIME, <span class="string">"spawn"</span>, task = name);
         <span class="kw">let </span>(fut, handle) = future.remote_handle();
         wasm_bindgen_futures::spawn_local(fut);
 
