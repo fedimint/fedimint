@@ -51,15 +51,15 @@ tower = { version = "0.4.13", default-features = false }
 tracing = { workspace = true }
 url = { version = "2.5.0", features = ["serde"] }
 threshold_crypto = { workspace = true }
-jsonrpsee = { version = "0.22.4", features = ["server"] }
+jsonrpsee = { version = "0.22.5", features = ["server"] }
 tokio = { version = "1.37.0", features = ["full", "tracing"] }
 tokio-stream = "0.1.15"
 tokio-rustls = { workspace = true }
-tokio-util = { version = "0.7.10", features = [ "codec" ] }
+tokio-util = { version = "0.7.11", features = [ "codec" ] }
 tracing-subscriber = { version = "0.3.18", features = [ "env-filter" ] }
 aleph-bft = { package = "fedimint-aleph-bft", version = "0.30.0", default-features = false }
 aleph-bft-types = "0.10.0"
-parity-scale-codec = "3.6.9"
+parity-scale-codec = "3.6.12"
 
 
 [dev-dependencies]

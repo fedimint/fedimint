@@ -34,7 +34,7 @@ bytes = "1.6.0"
 clap = { workspace = true }
 futures = { workspace = true }
 itertools = { workspace = true }
-jsonrpsee = { version = "0.22.4", features = ["server"] }
+jsonrpsee = { version = "0.22.5", features = ["server"] }
 fedimint-bitcoind = { version = "=0.4.0-alpha", path = "../fedimint-bitcoind" }
 fedimint-core = { version = "=0.4.0-alpha", path = "../fedimint-core" }
 fedimint-ln-common = { version = "=0.4.0-alpha", path = "../modules/fedimint-ln-common" }
@@ -57,7 +57,7 @@ tbs = { package = "fedimint-tbs", version = "=0.4.0-alpha", path = "../crypto/tb
 thiserror = { workspace = true }
 tokio = { version = "1.37.0", features = ["full", "tracing"] }
 tokio-rustls = { workspace = true }
-tokio-util = { version = "0.7.10", features = [ "codec" ] }
+tokio-util = { version = "0.7.11", features = [ "codec" ] }
 tracing = { workspace = true }
 url = { version = "2.5.0", features = ["serde"] }
 threshold_crypto = { workspace = true }

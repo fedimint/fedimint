@@ -19,7 +19,7 @@ path = "src/lib.rs"
 anyhow = { workspace = true }
 fs2 = "0.4.3"
 serde = { workspace = true }
-serde_json = { version = "1.0.116", features = ["preserve_order"] }
+serde_json = { version = "1.0.117", features = ["preserve_order"] }
 tracing = { workspace = true }
 rand = { workspace = true }
 dirs = "5.0.1"
