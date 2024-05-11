@@ -25,6 +25,7 @@ use std::io::Error;
 use std::num::ParseIntError;
 use std::str::FromStr;
 
+use ::core::fmt;
 /// Mostly re-exported for [`Decodable`] macros.
 pub use anyhow;
 use anyhow::bail;
@@ -312,6 +313,12 @@ impl<T> NumPeersExt for BTreeMap<PeerId, T> {
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct NumPeers(usize);
 
+impl fmt::Display for NumPeers {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fmt::Display::fmt(&self.0, f)
+    }
+}
+
 impl From<usize> for NumPeers {
     fn from(value: usize) -> Self {
         Self(value)
@@ -356,6 +363,10 @@ impl NumPeersExt for BTreeSet<PeerId> {
 /// for consensus-related calculations given the number of peers
 pub trait NumPeersExt {
     fn total(&self) -> usize;
+
+    fn num_peers(&self) -> NumPeers {
+        NumPeers::from(self.total())
+    }
 
     /// number of peers that can be evil without disrupting the federation
     fn max_evil(&self) -> usize {

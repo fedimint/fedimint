@@ -1508,7 +1508,7 @@ impl<'tx, Cap> DatabaseTransaction<'tx, Cap> {
     }
 
     /// Register a hook that will be run after commit succeeds.
-    #[instrument(level = "debug", skip_all, ret)]
+    #[instrument(level = "trace", skip_all)]
     pub fn on_commit(&mut self, f: maybe_add_send!(impl FnOnce() + 'static)) {
         self.on_commit_hooks.push(Box::new(f));
     }

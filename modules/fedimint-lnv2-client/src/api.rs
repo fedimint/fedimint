@@ -90,7 +90,7 @@ where
 
     async fn fetch_gateways(&self) -> FederationResult<Vec<SafeUrl>> {
         self.request_with_strategy(
-            UnionResponses::new(self.all_peers().total()),
+            UnionResponses::new(self.all_peers().num_peers()),
             GATEWAYS_ENDPOINT.to_string(),
             ApiRequestErased::default(),
         )

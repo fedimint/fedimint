@@ -4,10 +4,12 @@ use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::SerdeModuleEncoding;
 use fedimint_core::{Amount, TransactionId};
 use secp256k1_zkp::schnorr;
+use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use crate::config::ALEPH_BFT_UNIT_BYTE_LIMIT;
 use crate::core::{DynInputError, DynOutputError};
+use crate::module::ApiError;
 
 /// An atomic value transfer operation within the Fedimint system and consensus
 ///
@@ -84,12 +86,17 @@ impl Transaction {
         let signatures = match &self.signatures {
             TransactionSignature::NaiveMultisig(sigs) => sigs,
             TransactionSignature::Default { variant, .. } => {
-                return Err(TransactionError::UnsupportedSignatureScheme { variant: *variant })
+                return Err(TransactionError::UnsupportedSignatureScheme {
+                    variant: *variant,
+                    txid: self.tx_hash(),
+                })
             }
         };
 
         if pub_keys.len() != signatures.len() {
-            return Err(TransactionError::InvalidWitnessLength);
+            return Err(TransactionError::InvalidWitnessLength {
+                txid: self.tx_hash(),
+            });
         }
 
         let txid = self.tx_hash();
@@ -102,7 +109,7 @@ impl Transaction {
             {
                 return Err(TransactionError::InvalidSignature {
                     tx: self.consensus_encode_to_hex(),
-                    hash: self.tx_hash().consensus_encode_to_hex(),
+                    txid: self.tx_hash(),
                     sig: signature.consensus_encode_to_hex(),
                     key: pk.consensus_encode_to_hex(),
                 });
@@ -123,8 +130,11 @@ pub enum TransactionSignature {
     },
 }
 
+/// The old transaction error that we used to send to clients
+///
+/// Phased out because it's hard to evolve. See <https://github.com/fedimint/fedimint/issues/5238>
 #[derive(Debug, Error, Encodable, Decodable, Clone, Eq, PartialEq)]
-pub enum TransactionError {
+pub enum TransactionErrorOld {
     #[error("The transaction is unbalanced (in={inputs}, out={outputs}, fee={fee})")]
     UnbalancedTransaction {
         inputs: Amount,
@@ -146,4 +156,105 @@ pub enum TransactionError {
     Input(DynInputError),
     #[error("The transaction had an invalid output: {}", .0)]
     Output(DynOutputError),
+}
+
+impl From<TransactionError> for TransactionErrorOld {
+    fn from(e: TransactionError) -> Self {
+        match e {
+            TransactionError::UnbalancedTransaction {
+                inputs,
+                outputs,
+                fee,
+                txid: _,
+            } => TransactionErrorOld::UnbalancedTransaction {
+                inputs,
+                outputs,
+                fee,
+            },
+            TransactionError::InvalidSignature { txid, tx, sig, key } => {
+                TransactionErrorOld::InvalidSignature {
+                    tx,
+                    hash: txid.to_string(),
+                    sig,
+                    key,
+                }
+            }
+            TransactionError::UnsupportedSignatureScheme { txid: _, variant } => {
+                TransactionErrorOld::UnsupportedSignatureScheme { variant }
+            }
+            TransactionError::InvalidWitnessLength { txid: _ } => {
+                TransactionErrorOld::InvalidWitnessLength
+            }
+
+            TransactionError::Input {
+                error,
+                input_idx: _,
+                txid: _,
+            } => TransactionErrorOld::Input(error),
+            TransactionError::Output {
+                error,
+                output_idx: _,
+                txid: _,
+            } => TransactionErrorOld::Output(error),
+        }
+    }
+}
+
+/// Transaction error
+#[derive(Debug, Error, Clone, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "type")]
+pub enum TransactionError {
+    #[error("The transaction {txid} is unbalanced (in={inputs}, out={outputs}, fee={fee})")]
+    UnbalancedTransaction {
+        inputs: Amount,
+        outputs: Amount,
+        fee: Amount,
+        txid: TransactionId,
+    },
+    #[error("The transaction's {txid} signature is invalid: tx={tx}, sig={sig}, key={key}")]
+    InvalidSignature {
+        txid: TransactionId,
+        tx: String,
+        sig: String,
+        key: String,
+    },
+    #[error("The transaction's {txid} signature scheme is not supported: variant={variant}")]
+    UnsupportedSignatureScheme { txid: TransactionId, variant: u64 },
+    #[error("The transaction {txid} did not have the correct number of signatures")]
+    InvalidWitnessLength { txid: TransactionId },
+    #[error("The transaction {txid} had an invalid input at index {}: {}",  .input_idx, .error)]
+    Input {
+        #[serde(with = "crate::encoding::as_hex")]
+        error: DynInputError,
+        input_idx: u64,
+        txid: TransactionId,
+    },
+    #[error("The transaction {txid} had an invalid output at index {}: {}",  .output_idx, .error)]
+    Output {
+        #[serde(with = "crate::encoding::as_hex")]
+        error: DynOutputError,
+        output_idx: u64,
+        txid: TransactionId,
+    },
+}
+
+impl From<TransactionError> for ApiError {
+    fn from(e: TransactionError) -> Self {
+        let code = match e {
+            TransactionError::UnbalancedTransaction { .. } => ApiError::TX_ERROR_UNBALANCED,
+            TransactionError::InvalidSignature { .. } => ApiError::TX_ERROR_INVALID_SIGNATURE,
+            TransactionError::UnsupportedSignatureScheme { .. } => {
+                ApiError::TX_ERROR_UNSUPPORTED_SIGNATURE_SCHEME
+            }
+            TransactionError::InvalidWitnessLength { .. } => ApiError::TX_ERROR_INVALID_WITNESS_LEN,
+            TransactionError::Input { .. } => ApiError::TX_ERROR_INPUT_ERROR,
+            TransactionError::Output { .. } => ApiError::TX_ERROR_OUTPUT_ERROR,
+        };
+
+        ApiError {
+            code,
+            message: e.to_string(),
+            data: Some(serde_json::to_value(&e).expect("Can't fail")),
+        }
+    }
 }

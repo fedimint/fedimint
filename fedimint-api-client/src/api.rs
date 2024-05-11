@@ -27,7 +27,7 @@ use fedimint_core::endpoint_constants::{
     RESTART_FEDERATION_SETUP_ENDPOINT, RUN_DKG_ENDPOINT, SERVER_CONFIG_CONSENSUS_HASH_ENDPOINT,
     SESSION_COUNT_ENDPOINT, SESSION_STATUS_ENDPOINT, SET_CONFIG_GEN_CONNECTIONS_ENDPOINT,
     SET_CONFIG_GEN_PARAMS_ENDPOINT, SET_PASSWORD_ENDPOINT, START_CONSENSUS_ENDPOINT,
-    STATUS_ENDPOINT, SUBMIT_TRANSACTION_ENDPOINT, VERIFIED_CONFIGS_ENDPOINT,
+    STATUS_ENDPOINT, SUBMIT_ENDPOINT, SUBMIT_TRANSACTION_ENDPOINT_OLD, VERIFIED_CONFIGS_ENDPOINT,
     VERIFY_CONFIG_HASH_ENDPOINT, VERSION_ENDPOINT,
 };
 use fedimint_core::fmt_utils::{AbbreviateDebug, AbbreviateJson};
@@ -35,17 +35,18 @@ use fedimint_core::invite_code::InviteCode;
 use fedimint_core::module::audit::AuditSummary;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::module::{
-    ApiAuth, ApiRequestErased, ApiVersion, SerdeModuleEncoding, SupportedApiVersionsSummary,
+    ApiAuth, ApiError, ApiRequestErased, ApiVersion, SerdeModuleEncoding,
+    SupportedApiVersionsSummary,
 };
 use fedimint_core::session_outcome::{AcceptedItem, SessionOutcome, SessionStatus};
 use fedimint_core::task::jit::JitTryAnyhow;
 use fedimint_core::task::{MaybeSend, MaybeSync};
 use fedimint_core::time::now;
-use fedimint_core::transaction::{SerdeTransaction, Transaction, TransactionError};
+use fedimint_core::transaction::{SerdeTransaction, Transaction, TransactionErrorOld};
 use fedimint_core::util::SafeUrl;
 use fedimint_core::{
-    apply, async_trait_maybe_send, dyn_newtype_define, runtime, NumPeersExt, OutPoint, PeerId,
-    TransactionId,
+    apply, async_trait_maybe_send, dyn_newtype_define, runtime, NumPeers, NumPeersExt, OutPoint,
+    PeerId, TransactionId,
 };
 use fedimint_logging::LOG_CLIENT_NET_API;
 use futures::stream::FuturesUnordered;
@@ -85,6 +86,14 @@ pub enum PeerError {
 }
 
 impl PeerError {
+    /// Is this error a "call-error"
+    ///
+    /// Call errors are non-server-side jsonrpc errors - "application level
+    /// errors" typically.
+    pub fn is_call_err(&self) -> bool {
+        matches!(self, PeerError::Rpc(JsonRpcClientError::Call(_)))
+    }
+
     /// Report errors that are worth reporting
     ///
     /// The goal here is to avoid spamming logs with errors that happen commonly
@@ -131,6 +140,81 @@ pub struct FederationError {
     peers: BTreeMap<PeerId, PeerError>,
 }
 
+impl FederationError {
+    /// Get the call error (application level error)
+    ///
+    /// Return `Some` if the error is application level ("call") error.
+    ///
+    /// Call errors are jsonrpc errors that have a code different then
+    /// predefined server-side errors. They all always come with a message,
+    /// and sometimes also `serde_json::Value` data.
+    /// See <https://www.jsonrpc.org/specification#error_object>
+    ///
+    /// This function returns `Some` only if there's a consensus from enough
+    /// peers on the error.
+    pub fn try_to_call_error(&self, num_peers: NumPeers) -> Option<ApiError> {
+        let mut count_by_all = HashMap::new();
+        let mut count_by_no_data = HashMap::new();
+        let mut count_by_no_data_no_message = HashMap::new();
+
+        // collect all the call errors
+        self.peers.iter().for_each(|(_id, error)| {
+            if let PeerError::Rpc(JsonRpcClientError::Call(call)) = error {
+                let data: Option<&str> = call.data().map(|data| data.get());
+
+                *count_by_all
+                    .entry((call.code(), call.message().to_owned(), data))
+                    .or_default() += 1;
+                *count_by_no_data
+                    .entry((call.code(), call.message().to_owned()))
+                    .or_default() += 1;
+                *count_by_no_data_no_message.entry(call.code()).or_default() += 1;
+            }
+        });
+
+        // If there's a consensus on everything, go with it
+        for ((code, message, data), count) in &count_by_all {
+            if num_peers.threshold() <= *count {
+                return Some(ApiError {
+                    code: *code,
+                    message: message.clone(),
+                    data: data.and_then(|data| serde_json::from_str(data).unwrap_or_default()),
+                });
+            }
+        }
+
+        // If data doesn't match, that's OK, just ignore it
+        for ((code, message), count) in &count_by_no_data {
+            if num_peers.threshold() <= *count {
+                return Some(ApiError {
+                    code: *code,
+                    message: message.clone(),
+                    data: None,
+                });
+            }
+        }
+
+        // If there's a consensus on the code, then go with that code, and pick any
+        // message. Better than nothing, and message is not all that important, maybe
+        // it is just a spelling difference.
+        for (code, count) in &count_by_no_data_no_message {
+            if num_peers.threshold() <= *count {
+                return Some(ApiError {
+                    code: *code,
+                    message: count_by_no_data
+                        .iter()
+                        .find(|((code_inner, _message), _count)| code_inner == code)
+                        .expect("Must have at least one")
+                        .0
+                         .1
+                        .clone(),
+                    data: None,
+                });
+            }
+        }
+        None
+    }
+}
 impl Display for FederationError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str("Federation rpc error {")?;
@@ -392,7 +476,7 @@ pub trait FederationApiExt: IRawFederationApi {
         loop {
             let response = futures.next().await;
             trace!(target: LOG_CLIENT_NET_API, ?response, method, params = ?AbbreviateDebug(params.to_json()), "Received peer response");
-            match response {
+            let step = match response {
                 Some(PeerResponse { peer, result }) => {
                     let result: PeerResult<PeerRet> =
                         result.map_err(PeerError::Rpc).and_then(|o| {
@@ -400,59 +484,57 @@ pub trait FederationApiExt: IRawFederationApi {
                                 .map_err(|e| PeerError::ResponseDeserialization(e.into()))
                         });
 
-                    let strategy_step = strategy.process(peer, result);
-                    trace!(
-                        target: LOG_CLIENT_NET_API,
-                        method,
-                        ?params,
-                        ?strategy_step,
-                        "Taking strategy step to the response after peer response"
-                    );
-                    match strategy_step {
-                        QueryStep::Retry(peers) => {
-                            for retry_peer in peers {
-                                let mut delay_ms =
-                                    peer_delay_ms.get(&retry_peer).copied().unwrap_or(10);
-                                delay_ms = cmp::min(max_delay_ms, delay_ms * 2);
-                                peer_delay_ms.insert(retry_peer, delay_ms);
-
-                                futures.push(Box::pin({
-                                    let method = &method;
-                                    let params = &params;
-                                    async move {
-                                        // Note: we need to sleep inside the retrying future,
-                                        // so that `futures` is being polled continuously
-                                        runtime::sleep(Duration::from_millis(delay_ms)).await;
-                                        PeerResponse {
-                                            peer: retry_peer,
-                                            result: self
-                                                .request_raw(
-                                                    retry_peer,
-                                                    method,
-                                                    &[params.to_json()],
-                                                )
-                                                .await
-                                                .map(AbbreviateDebug),
-                                        }
-                                    }
-                                }));
-                            }
-                        }
-                        QueryStep::Continue => {}
-                        QueryStep::Failure { general, peers } => {
-                            return Err(FederationError {
-                                method: method.clone(),
-                                params: params.params.clone(),
-                                general,
-                                peers,
-                            })
-                        }
-                        QueryStep::Success(response) => return Ok(response),
-                    }
+                    strategy.process(peer, result)
                 }
                 None => {
-                    panic!("Query strategy ran out of peers to query without returning a result");
+                    debug!(target: LOG_CLIENT_NET_API, num_peers = %peers.num_peers(), "Query strategy ran out of peers to query without returning a result");
+
+                    strategy.exhausted()
                 }
+            };
+
+            trace!(
+                target: LOG_CLIENT_NET_API,
+                method,
+                ?params,
+                ?step,
+                "Taking strategy step to the response after peer response"
+            );
+            match step {
+                QueryStep::Retry(peers) => {
+                    for retry_peer in peers {
+                        let mut delay_ms = peer_delay_ms.get(&retry_peer).copied().unwrap_or(10);
+                        delay_ms = cmp::min(max_delay_ms, delay_ms * 2);
+                        peer_delay_ms.insert(retry_peer, delay_ms);
+
+                        futures.push(Box::pin({
+                            let method = &method;
+                            let params = &params;
+                            async move {
+                                // Note: we need to sleep inside the retrying future,
+                                // so that `futures` is being polled continuously
+                                runtime::sleep(Duration::from_millis(delay_ms)).await;
+                                PeerResponse {
+                                    peer: retry_peer,
+                                    result: self
+                                        .request_raw(retry_peer, method, &[params.to_json()])
+                                        .await
+                                        .map(AbbreviateDebug),
+                                }
+                            }
+                        }));
+                    }
+                }
+                QueryStep::Continue => {}
+                QueryStep::Failure { general, peers } => {
+                    return Err(FederationError {
+                        method: method.clone(),
+                        params: params.params.clone(),
+                        general,
+                        peers,
+                    })
+                }
+                QueryStep::Success(response) => return Ok(response),
             }
         }
     }
@@ -606,10 +688,12 @@ impl DynGlobalApi {
 /// The API for the global (non-module) endpoints
 #[apply(async_trait_maybe_send!)]
 pub trait IGlobalFederationApi: IRawFederationApi {
-    async fn submit_transaction(
+    async fn submit_transaction_old(
         &self,
         tx: Transaction,
-    ) -> FederationResult<SerdeModuleEncoding<Result<TransactionId, TransactionError>>>;
+    ) -> FederationResult<SerdeModuleEncoding<Result<TransactionId, TransactionErrorOld>>>;
+
+    async fn submit_transaction(&self, tx: Transaction) -> FederationResult<TransactionId>;
 
     async fn await_block(
         &self,
@@ -928,13 +1012,22 @@ where
         }
     }
 
-    /// Submit a transaction for inclusion
-    async fn submit_transaction(
+    /// Submit a transaction for inclusion (old version)
+    async fn submit_transaction_old(
         &self,
         tx: Transaction,
-    ) -> FederationResult<SerdeModuleEncoding<Result<TransactionId, TransactionError>>> {
+    ) -> FederationResult<SerdeModuleEncoding<Result<TransactionId, TransactionErrorOld>>> {
         self.request_current_consensus(
-            SUBMIT_TRANSACTION_ENDPOINT.to_owned(),
+            SUBMIT_TRANSACTION_ENDPOINT_OLD.to_owned(),
+            ApiRequestErased::new(&SerdeTransaction::from(&tx)),
+        )
+        .await
+    }
+
+    /// Submit a transaction for inclusion
+    async fn submit_transaction(&self, tx: Transaction) -> FederationResult<TransactionId> {
+        self.request_current_consensus(
+            SUBMIT_ENDPOINT.to_owned(),
             ApiRequestErased::new(&SerdeTransaction::from(&tx)),
         )
         .await
@@ -975,7 +1068,9 @@ where
     ) -> FederationResult<Vec<ClientBackupSnapshot>> {
         Ok(self
             .request_with_strategy(
-                UnionResponsesSingle::<Option<ClientBackupSnapshot>>::new(self.all_peers().total()),
+                UnionResponsesSingle::<Option<ClientBackupSnapshot>>::new(
+                    self.all_peers().num_peers(),
+                ),
                 RECOVER_ENDPOINT.to_owned(),
                 ApiRequestErased::new(id),
             )

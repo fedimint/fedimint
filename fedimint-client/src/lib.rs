@@ -196,7 +196,14 @@ pub trait IGlobalClientContext: Debug + MaybeSend + MaybeSync + 'static {
     /// calls can be made
     fn module_api(&self) -> DynModuleApi;
 
+    /// The api-version-discovered core [`ApiVersion`] to use
+    fn core_api_version(&self) -> ApiVersion;
+
     fn client_config(&self) -> &ClientConfig;
+
+    fn num_peers(&self) -> NumPeers {
+        self.client_config().global.api_endpoints.len().into()
+    }
 
     /// Returns a reference to the client's federation API client. The provided
     /// interface [`IGlobalFederationApi`] typically does not provide the
@@ -248,6 +255,10 @@ impl IGlobalClientContext for () {
     }
 
     fn api(&self) -> &DynGlobalApi {
+        unimplemented!("fake implementation, only for tests");
+    }
+
+    fn core_api_version(&self) -> ApiVersion {
         unimplemented!("fake implementation, only for tests");
     }
 
@@ -432,6 +443,10 @@ struct ModuleGlobalClientContext {
 impl IGlobalClientContext for ModuleGlobalClientContext {
     fn module_api(&self) -> DynModuleApi {
         self.api().with_module(self.module_instance_id)
+    }
+
+    fn core_api_version(&self) -> ApiVersion {
+        self.client.common_api_versions.core
     }
 
     fn api(&self) -> &DynGlobalApi {
@@ -747,6 +762,8 @@ pub struct Client {
     module_inits: ClientModuleInitRegistry,
     executor: Executor,
     api: DynGlobalApi,
+    /// [`ApiVersion`]s discovered during api-version discovery for this session
+    common_api_versions: ApiVersionSet,
     root_secret: DerivableSecret,
     operation_log: OperationLog,
     secp_ctx: Secp256k1<secp256k1_zkp::All>,
@@ -2286,6 +2303,7 @@ impl ClientBuilder {
         let client_inner = Arc::new(Client {
             config: config.clone(),
             decoders,
+            common_api_versions,
             db: db.clone(),
             federation_id: fed_id,
             federation_meta: config.global.meta,

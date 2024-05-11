@@ -9,7 +9,7 @@ use fedimint_core::module::{
 };
 use fedimint_core::task::{MaybeSend, MaybeSync};
 use fedimint_core::time::now;
-use fedimint_core::{maybe_add_send_sync, PeerId};
+use fedimint_core::{maybe_add_send_sync, NumPeers, NumPeersExt, PeerId};
 use itertools::Itertools;
 
 use crate::api::{self, ApiVersionSet, PeerError, PeerResult};
@@ -25,7 +25,12 @@ pub trait QueryStrategy<IR, OR = IR> {
     fn request_timeout(&self) -> Option<Duration> {
         None
     }
+    /// Process a `response` from the `peer_id` and return query steps to take
     fn process(&mut self, peer_id: PeerId, response: api::PeerResult<IR>) -> QueryStep<OR>;
+
+    /// There's no more peers to query, return query steps to take (typically
+    /// failure)
+    fn exhausted(&mut self) -> QueryStep<OR>;
 }
 
 /// Results from the strategy handling a response from a peer
@@ -50,16 +55,16 @@ pub enum QueryStep<R> {
 
 struct ErrorStrategy {
     errors: BTreeMap<PeerId, PeerError>,
-    threshold: usize,
+    num_peers: NumPeers,
 }
 
 impl ErrorStrategy {
-    pub fn new(threshold: usize) -> Self {
-        assert!(threshold > 0);
+    pub fn new(num_peers: NumPeers) -> Self {
+        assert!(num_peers.threshold() > 0);
 
         Self {
             errors: BTreeMap::new(),
-            threshold,
+            num_peers,
         }
     }
 
@@ -80,17 +85,48 @@ impl ErrorStrategy {
     pub fn process<R>(&mut self, peer: PeerId, error: PeerError) -> QueryStep<R> {
         assert!(self.errors.insert(peer, error).is_none());
 
-        if self.errors.len() == self.threshold {
+        let call_error_count = self.errors.iter().filter(|(_, e)| e.is_call_err()).count();
+        let non_call_error_count = self.errors.len() - call_error_count;
+        if non_call_error_count == self.num_peers.one_honest() {
+            // If there enough non-application errors that there's no way to get consensus,
+            // there's no reason to continue.
             QueryStep::Failure {
                 general: Some(anyhow!(
-                    "Received errors from {} peers: {}",
-                    self.threshold,
+                    "Received {} out of {} non-call errors from peers: {}",
+                    self.num_peers.threshold(),
+                    self.num_peers,
+                    self.format_errors()
+                )),
+                peers: mem::take(&mut self.errors),
+            }
+        } else if call_error_count == self.num_peers.threshold() {
+            // For a call-errors to surface as a federation-level, it needs get a threshold
+            // of responses being call-errors.
+            QueryStep::Failure {
+                general: Some(anyhow!(
+                    "Received {} out of {} call errors from peers: {}",
+                    self.num_peers.threshold(),
+                    self.num_peers,
                     self.format_errors()
                 )),
                 peers: mem::take(&mut self.errors),
             }
         } else {
             QueryStep::Continue
+        }
+    }
+
+    fn exhausted<R>(&mut self) -> QueryStep<R> {
+        // It's possible that a combination of results, non-call and call errors doesn't
+        // reach the threshold anywhere. In that case, just return all existing
+        // errors.
+        QueryStep::Failure {
+            general: Some(anyhow!(
+                "Exhausted {} peers without reaching result or conclusive errors from peers: {}",
+                self.num_peers,
+                self.format_errors()
+            )),
+            peers: mem::take(&mut self.errors),
         }
     }
 }
@@ -110,11 +146,9 @@ impl<R, T> FilterMap<R, T> {
         filter_map: impl Fn(R) -> anyhow::Result<T> + MaybeSend + MaybeSync + 'static,
         total_peers: usize,
     ) -> Self {
-        let max_evil = (total_peers - 1) / 3;
-
         Self {
             filter_map: Box::new(filter_map),
-            error_strategy: ErrorStrategy::new(max_evil + 1),
+            error_strategy: ErrorStrategy::new(NumPeers::from(total_peers)),
         }
     }
 }
@@ -130,6 +164,9 @@ impl<R: Debug + Eq + Clone, T> QueryStrategy<R, T> for FilterMap<R, T> {
             },
             Err(error) => self.error_strategy.process(peer, error),
         }
+    }
+    fn exhausted(&mut self) -> QueryStep<T> {
+        self.error_strategy.exhausted()
     }
 }
 
@@ -153,7 +190,7 @@ impl<R, T> FilterMapThreshold<R, T> {
 
         Self {
             filter_map: Box::new(verifier),
-            error_strategy: ErrorStrategy::new(max_evil + 1),
+            error_strategy: ErrorStrategy::new(NumPeers::from(total_peers)),
             filtered_responses: BTreeMap::new(),
             threshold,
         }
@@ -180,6 +217,9 @@ impl<R: Eq + Clone + Debug, T> QueryStrategy<R, BTreeMap<PeerId, T>> for FilterM
             Err(error) => self.error_strategy.process(peer, error),
         }
     }
+    fn exhausted(&mut self) -> QueryStep<BTreeMap<PeerId, T>> {
+        self.error_strategy.exhausted()
+    }
 }
 
 /// Returns when we obtain a threshold of identical responses
@@ -196,7 +236,7 @@ impl<R> ThresholdConsensus<R> {
         let threshold = total_peers - max_evil;
 
         Self {
-            error_strategy: ErrorStrategy::new(max_evil + 1),
+            error_strategy: ErrorStrategy::new(NumPeers::from(total_peers)),
             responses: BTreeMap::new(),
             retry: BTreeSet::new(),
             threshold,
@@ -244,6 +284,9 @@ impl<R: Eq + Clone + Debug> QueryStrategy<R> for ThresholdConsensus<R> {
             Err(error) => self.error_strategy.process(peer, error),
         }
     }
+    fn exhausted(&mut self) -> QueryStep<R> {
+        self.error_strategy.exhausted()
+    }
 }
 
 /// Returns the deduplicated union of a threshold of responses; elements are
@@ -255,14 +298,11 @@ pub struct UnionResponses<R> {
 }
 
 impl<R> UnionResponses<R> {
-    pub fn new(total_peers: usize) -> Self {
-        let max_evil = (total_peers - 1) / 3;
-        let threshold = total_peers - max_evil;
-
+    pub fn new(total_peers: NumPeers) -> Self {
         Self {
-            error_strategy: ErrorStrategy::new(max_evil + 1),
+            error_strategy: ErrorStrategy::new(total_peers),
             responses: HashMap::new(),
-            threshold,
+            threshold: total_peers.threshold(),
         }
     }
 }
@@ -297,6 +337,10 @@ impl<R: Debug + Eq + Clone> QueryStrategy<Vec<R>> for UnionResponses<R> {
             Err(error) => self.error_strategy.process(peer, error),
         }
     }
+
+    fn exhausted(&mut self) -> QueryStep<Vec<R>> {
+        self.error_strategy.exhausted()
+    }
 }
 
 /// Returns the deduplicated union of `required` number of responses
@@ -310,15 +354,12 @@ pub struct UnionResponsesSingle<R> {
 }
 
 impl<R> UnionResponsesSingle<R> {
-    pub fn new(total_peers: usize) -> Self {
-        let max_evil = (total_peers - 1) / 3;
-        let threshold = total_peers - max_evil;
-
+    pub fn new(total_peers: NumPeers) -> Self {
         Self {
-            error_strategy: ErrorStrategy::new(max_evil + 1),
+            error_strategy: ErrorStrategy::new(total_peers),
             responses: HashSet::new(),
             union: vec![],
-            threshold,
+            threshold: total_peers.threshold(),
         }
     }
 }
@@ -341,6 +382,10 @@ impl<R: Debug + Eq + Clone> QueryStrategy<R, Vec<R>> for UnionResponsesSingle<R>
             }
             Err(error) => self.error_strategy.process(peer, error),
         }
+    }
+
+    fn exhausted(&mut self) -> QueryStep<Vec<R>> {
+        self.error_strategy.exhausted()
     }
 }
 
@@ -387,6 +432,10 @@ impl<R> QueryStrategy<R, BTreeMap<PeerId, R>> for ThresholdOrDeadline<R> {
             }
         }
     }
+
+    fn exhausted(&mut self) -> QueryStep<BTreeMap<PeerId, R>> {
+        QueryStep::Success(mem::take(&mut self.responses))
+    }
 }
 
 /// Query for supported api versions from all the guardians (with a deadline)
@@ -407,6 +456,27 @@ impl DiscoverApiVersionSet {
             client_versions,
         }
     }
+
+    /// Convert the `step` return by `inner` to own step
+    fn convert_inner_step(
+        &mut self,
+        step: QueryStep<BTreeMap<PeerId, SupportedApiVersionsSummary>>,
+    ) -> QueryStep<ApiVersionSet> {
+        match step {
+            QueryStep::Success(o) => {
+                match discover_common_api_versions_set(&self.client_versions, o) {
+                    Ok(o) => QueryStep::Success(o),
+                    Err(e) => QueryStep::Failure {
+                        general: Some(e),
+                        peers: BTreeMap::new(),
+                    },
+                }
+            }
+            QueryStep::Retry(v) => QueryStep::Retry(v),
+            QueryStep::Continue => QueryStep::Continue,
+            QueryStep::Failure { general, peers } => QueryStep::Failure { general, peers },
+        }
+    }
 }
 
 impl QueryStrategy<SupportedApiVersionsSummary, ApiVersionSet> for DiscoverApiVersionSet {
@@ -424,20 +494,13 @@ impl QueryStrategy<SupportedApiVersionsSummary, ApiVersionSet> for DiscoverApiVe
         peer: PeerId,
         result: api::PeerResult<SupportedApiVersionsSummary>,
     ) -> QueryStep<ApiVersionSet> {
-        match self.inner.process(peer, result) {
-            QueryStep::Success(o) => {
-                match discover_common_api_versions_set(&self.client_versions, o) {
-                    Ok(o) => QueryStep::Success(o),
-                    Err(e) => QueryStep::Failure {
-                        general: Some(e),
-                        peers: BTreeMap::new(),
-                    },
-                }
-            }
-            QueryStep::Retry(v) => QueryStep::Retry(v),
-            QueryStep::Continue => QueryStep::Continue,
-            QueryStep::Failure { general, peers } => QueryStep::Failure { general, peers },
-        }
+        let step = self.inner.process(peer, result);
+        self.convert_inner_step(step)
+    }
+
+    fn exhausted(&mut self) -> QueryStep<ApiVersionSet> {
+        let step = self.inner.exhausted();
+        self.convert_inner_step(step)
     }
 }
 
