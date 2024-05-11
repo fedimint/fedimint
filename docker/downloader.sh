@@ -570,10 +570,15 @@ else # Is Guardian
     # Set the esplora URL in the docker-compose file
     sed -i "s|FM_BITCOIN_RPC_URL=|FM_BITCOIN_RPC_URL=$ESPLORA_URL|" ./docker-compose.yaml
 
-    # Set the bitcoin network in the docker-compose file if not mutinynet default
-    if [ "$NETWORK_TYPE" != "mutinynet" ]; then
-      sed -i "s|FM_BITCOIN_NETWORK=signet|FM_BITCOIN_NETWORK=$NETWORK_TYPE|" ./docker-compose.yaml
-    fi
+    # Set the bitcoin network in the docker-compose file (mainnet is bitcoin for network)
+    case $NETWORK_TYPE in
+    mutinynet)
+      sed -i "s|FM_BITCOIN_NETWORK=signet|FM_BITCOIN_NETWORK=signet|" ./docker-compose.yaml
+      ;;
+    mainnet)
+      sed -i "s|FM_BITCOIN_NETWORK=signet|FM_BITCOIN_NETWORK=bitcoin|" ./docker-compose.yaml
+      ;;
+    esac
 
     # Remove the bitcoind service from the docker-compose file
     sed -i '/### START_BITCOIND ###/,/### END_BITCOIND ###/d' ./docker-compose.yaml
