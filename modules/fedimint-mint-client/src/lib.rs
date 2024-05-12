@@ -476,6 +476,7 @@ impl ClientModuleInit for MintClientInit {
             secp: Secp256k1::new(),
             notifier: args.notifier().clone(),
             client_ctx: args.context(),
+            note_spending_lock: SpendNotesLock::new(),
         })
     }
 
@@ -487,6 +488,27 @@ impl ClientModuleInit for MintClientInit {
         args.recover_from_history::<MintRecovery>(snapshot).await
     }
 }
+
+/// This lock should be held over the whole process of selecting and
+/// deleting spendable notes to protect concurrent calls from trying to
+/// spend the same notes.
+///
+/// Technically multiple concurrent usages will fail on auto-commit,
+/// but it makes it impossible to assert things being or not in the DB, etc.
+#[derive(Debug, Default)]
+struct SpendNotesLock(tokio::sync::Mutex<()>);
+
+impl SpendNotesLock {
+    fn new() -> Self {
+        Default::default()
+    }
+
+    async fn lock(&self) -> SpendNotesLockGuard {
+        SpendNotesLockGuard(self.0.lock().await)
+    }
+}
+
+struct SpendNotesLockGuard<'a>(#[allow(unused)] tokio::sync::MutexGuard<'a, ()>);
 
 /// The `MintClientModule` is responsible for handling e-cash minting
 /// operations. It interacts with the mint server to issue, reissue, and
@@ -521,6 +543,8 @@ pub struct MintClientModule {
     secp: Secp256k1<All>,
     notifier: ModuleNotifier<MintClientStateMachines>,
     client_ctx: ClientContext<Self>,
+    /// See [`SpendNotesLock`]
+    note_spending_lock: SpendNotesLock,
 }
 
 // TODO: wrap in Arc
@@ -659,12 +683,14 @@ impl ClientModule for MintClientModule {
         Vec<ClientInput<MintInput, MintClientStateMachines>>,
         Vec<ClientOutput<MintOutput, MintClientStateMachines>>,
     )> {
+        let guard = self.note_spending_lock.lock().await;
         let (mut consolidated_inputs, consolidated_amount) =
             self.consolidate_notes(dbtx, operation_id).await?;
 
         let mut inputs = self
             .create_sufficient_input(
                 dbtx,
+                &guard,
                 operation_id,
                 output
                     .saturating_sub(input)
@@ -755,6 +781,7 @@ impl MintClientModule {
     async fn create_sufficient_input(
         &self,
         dbtx: &mut DatabaseTransaction<'_>,
+        guard: &SpendNotesLockGuard<'_>,
         operation_id: OperationId,
         min_amount: Amount,
     ) -> anyhow::Result<Vec<ClientInput<MintInput, MintClientStateMachines>>> {
@@ -764,6 +791,7 @@ impl MintClientModule {
 
         let selected_notes = Self::select_notes(
             dbtx,
+            guard,
             &SelectNotesWithAtleastAmount,
             min_amount,
             self.cfg.fee_consensus.note_spend_abs,
@@ -1073,7 +1101,9 @@ impl MintClientModule {
             "zero-amount out-of-band spends are not supported"
         );
 
-        let selected_notes = Self::select_notes(dbtx, notes_selector, amount, Amount::ZERO).await?;
+        let guard = self.note_spending_lock.lock().await;
+        let selected_notes =
+            Self::select_notes(dbtx, &guard, notes_selector, amount, Amount::ZERO).await?;
 
         let operation_id = spendable_notes_to_operation_id(&selected_notes);
 
@@ -1128,6 +1158,7 @@ impl MintClientModule {
     /// Select notes with `requested_amount` using `notes_selector`.
     async fn select_notes(
         dbtx: &mut DatabaseTransaction<'_>,
+        _guard: &SpendNotesLockGuard<'_>,
         notes_selector: &impl NotesSelector,
         requested_amount: Amount,
         fee_per_note_input: Amount,
