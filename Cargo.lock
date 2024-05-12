@@ -1560,7 +1560,7 @@ dependencies = [
  "jsonrpsee-core",
  "jsonrpsee-types",
  "jsonrpsee-wasm-client",
- "lightning",
+ "lightning 0.0.122",
  "lightning-invoice",
  "macro_rules_attribute",
  "miniscript",
@@ -1870,7 +1870,7 @@ dependencies = [
  "fedimint-threshold-crypto",
  "futures",
  "itertools 0.12.1",
- "lightning",
+ "lightning 0.0.122",
  "lightning-invoice",
  "rand",
  "secp256k1 0.27.0",
@@ -1927,7 +1927,7 @@ dependencies = [
  "fedimint-wallet-client",
  "futures",
  "hex",
- "lightning",
+ "lightning 0.0.122",
  "lightning-invoice",
  "prost",
  "rand",
@@ -1965,7 +1965,7 @@ dependencies = [
  "fedimint-threshold-crypto",
  "futures",
  "itertools 0.12.1",
- "lightning",
+ "lightning 0.0.122",
  "lightning-invoice",
  "rand",
  "secp256k1 0.27.0",
@@ -3888,15 +3888,24 @@ dependencies = [
 ]
 
 [[package]]
-name = "lightning-invoice"
-version = "0.30.0"
+name = "lightning"
+version = "0.0.123"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "106fdb897e69df697480f45bf0a564b425af488fb0f7407e770a770c39b19a21"
+checksum = "5fd92d4aa159374be430c7590e169b4a6c0fb79018f5bc4ea1bffde536384db3"
+dependencies = [
+ "bitcoin 0.30.2",
+ "hex-conservative",
+]
+
+[[package]]
+name = "lightning-invoice"
+version = "0.31.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "26d07d01cf197bf2184b929b7dc94aa70d935aac6df896c256a3a9475b7e9d40"
 dependencies = [
  "bech32 0.9.1",
  "bitcoin 0.30.2",
- "lightning",
- "num-traits",
+ "lightning 0.0.123",
  "secp256k1 0.27.0",
  "serde",
 ]

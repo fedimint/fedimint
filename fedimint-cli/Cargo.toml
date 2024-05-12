@@ -30,7 +30,7 @@ time = { version = "0.3.36", features = [ "formatting" ] }
 clap = { workspace = true }
 futures = { workspace = true }
 itertools = { workspace = true }
-lightning-invoice = { version = "0.30.0", features = [ "serde" ] }
+lightning-invoice = { version = "0.31.0", features = [ "serde" ] }
 fedimint-aead = { version = "=0.4.0-alpha", path = "../crypto/aead" }
 fedimint-bip39 = { version = "=0.4.0-alpha", path = "../fedimint-bip39" }
 fedimint-client = { version = "=0.4.0-alpha", path = "../fedimint-client" }
