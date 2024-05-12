@@ -52,7 +52,7 @@ use crate::config::io::{
 };
 use crate::config::ServerConfig;
 use crate::consensus::process_transaction_with_dbtx;
-use crate::consensus::server::get_finished_session_count_static;
+use crate::consensus::server::{get_finished_session_count_static, ProcessTransactionRwLock};
 use crate::db::{AcceptedItemPrefix, AcceptedTransactionKey, SignedSessionOutcomeKey};
 use crate::fedimint_core::encoding::Encodable;
 use crate::metrics::{BACKUP_WRITE_SIZE_BYTES, STORED_BACKUPS_COUNT};
@@ -88,6 +88,9 @@ pub struct ConsensusApi {
     pub modules: ServerModuleRegistry,
     /// Cached client config
     pub client_cfg: ClientConfig,
+    /// Protect [`process_transaction_with_dbtx`] from db-view inconsistency
+    /// See [`ProcessTransactionRwLock`] for details.
+    pub process_transaction_lock: ProcessTransactionRwLock,
     /// For sending API events to consensus such as transactions
     pub submission_sender: async_channel::Sender<ConsensusItem>,
     pub shutdown_sender: watch::Sender<Option<u64>>,
@@ -114,6 +117,7 @@ impl ConsensusApi {
 
         // Create read-only DB tx so that the read state is consistent
         let mut dbtx = self.db.begin_transaction_nc().await;
+        let guard = self.process_transaction_lock.read().await;
         // we already processed the transaction before
         if dbtx
             .get_value(&AcceptedTransactionKey(txid))
@@ -127,6 +131,8 @@ impl ConsensusApi {
         dbtx.ignore_uncommitted();
 
         process_transaction_with_dbtx(self.modules.clone(), &mut dbtx, transaction.clone()).await?;
+
+        drop(guard);
 
         self.submission_sender
             .send(ConsensusItem::Transaction(transaction))

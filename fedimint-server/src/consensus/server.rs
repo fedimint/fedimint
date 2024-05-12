@@ -1,5 +1,6 @@
 use std::collections::BTreeMap;
 use std::default::Default;
+use std::ops::{self};
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -64,6 +65,41 @@ use crate::{LOG_CONSENSUS, LOG_CORE};
 /// How many txs can be stored in memory before blocking the API
 const TRANSACTION_BUFFER: usize = 1000;
 
+/// RwLock protecting transaction processing
+///
+/// Processing transaction could happen concurrently from two places:
+///
+/// * tx submitting ([`ConsensusApi::submit_transaction`]), in a read only way,
+///   where writes are never committed
+/// * consensus processing thread
+///   ([`Self::process_consensus_item_with_db_transaction`), where writes are
+///   actually committed
+///
+/// Since our database can only guarantee snapshot isolation level, it can't
+/// protect ro thread from data changing from underneath it, which can
+/// lead to spooky, unintuitive, hard to repro and debug bugs.
+/// See <https://github.com/fedimint/fedimint/issues/5195>.
+/// To prevent it, we protect the whole thing with a `RwLock`. Since
+/// [`tokio::sync::RwLock`] is explicitly write-preferring, it should
+/// not delay consensus processing too much. Any other way could lead to
+/// bugs caused by other modules
+#[derive(Debug, Clone, Default)]
+pub struct ProcessTransactionRwLock(Arc<tokio::sync::RwLock<()>>);
+
+impl ProcessTransactionRwLock {
+    pub fn new() -> Self {
+        Default::default()
+    }
+}
+
+impl ops::Deref for ProcessTransactionRwLock {
+    type Target = RwLock<()>;
+
+    fn deref(&self) -> &Self::Target {
+        self.0.deref()
+    }
+}
+
 /// Runs the main server consensus loop
 pub struct ConsensusServer {
     modules: ServerModuleRegistry,
@@ -74,6 +110,10 @@ pub struct ConsensusServer {
     submission_receiver: Receiver<ConsensusItem>,
     shutdown_receiver: watch::Receiver<Option<u64>>,
     last_ci_by_peer: Arc<RwLock<BTreeMap<PeerId, u64>>>,
+
+    /// Protect [`process_transaction_with_dbtx`] from db-view inconsistency
+    /// See [`ProcessTransactionRwLock`] for details.
+    process_transaction_lock: ProcessTransactionRwLock,
     /// Just a string version of `cfg.local.identity` for performance
     self_id_str: String,
     /// Just a string version of peer ids for performance
@@ -141,6 +181,8 @@ impl ConsensusServer {
         let connection_status_channels = Default::default();
         let last_ci_by_peer = Default::default();
 
+        let process_transaction_lock = ProcessTransactionRwLock::new();
+
         let consensus_api = ConsensusApi {
             cfg: cfg.clone(),
             db: db.clone(),
@@ -155,6 +197,7 @@ impl ConsensusServer {
             last_ci_by_peer: Arc::clone(&last_ci_by_peer),
             connection_status_channels: Arc::clone(&connection_status_channels),
             consensus_status_cache: ExpiringCache::new(Duration::from_millis(500)),
+            process_transaction_lock: process_transaction_lock.clone(),
         };
 
         for (module_id, kind, module) in module_registry.iter_modules() {
@@ -178,6 +221,7 @@ impl ConsensusServer {
                 .map(|x| x.to_string())
                 .collect(),
             cfg: cfg.clone(),
+            process_transaction_lock: process_transaction_lock.clone(),
             connection_status_channels,
             submission_receiver,
             shutdown_receiver,
@@ -683,15 +727,16 @@ impl ConsensusServer {
                     .await
             }
             ConsensusItem::Transaction(transaction) => {
+                let txid = transaction.tx_hash();
+                let _guard = self.process_transaction_lock.write().await;
                 if dbtx
-                    .get_value(&AcceptedTransactionKey(transaction.tx_hash()))
+                    .get_value(&AcceptedTransactionKey(txid))
                     .await
                     .is_some()
                 {
                     bail!("Transaction is already accepted");
                 }
 
-                let txid = transaction.tx_hash();
                 let modules_ids = transaction
                     .outputs
                     .iter()
