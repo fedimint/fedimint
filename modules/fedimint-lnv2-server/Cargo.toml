@@ -13,7 +13,7 @@ name = "fedimint_lnv2_server"
 path = "src/lib.rs"
 
 [dependencies]
-anyhow = "1.0.82"
+anyhow = "1.0.83"
 async-trait = "0.1.80"
 bincode = "1"
 bitcoin_hashes = { workspace = true }
@@ -26,11 +26,11 @@ fedimint-core ={ path = "../../fedimint-core" }
 fedimint-lnv2-common = { path = "../fedimint-lnv2-common" }
 secp256k1 = { version="0.27.0", default-features=false }
 serde = { workspace = true }
-serde_json = "1.0.116"
+serde_json = "1.0.117"
 strum = "0.26"
 strum_macros = "0.26"
 tpe = { package = "fedimint-tpe", version = "=0.4.0-alpha", path = "../../crypto/tpe" }
-thiserror = "1.0.59"
+thiserror = "1.0.60"
 group = { workspace = true }
 threshold_crypto = { workspace = true }
 tokio = { version = "1.37", features = ["full"] }
