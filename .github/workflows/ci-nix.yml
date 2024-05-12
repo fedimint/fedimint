@@ -150,24 +150,24 @@ jobs:
 
       - name: Build workspace
         if: github.event_name != 'pull_request' || matrix.build-in-pr
-        run: nix run "github:Mic92/nix-fast-build?rev=4376b8a33b217ee2f78ba3dcff01a3e464d13a46" -- --skip-cached --no-nom --flake .#legacyPackages.$(nix eval --raw --impure --expr builtins.currentSystem).ci.workspaceBuild
+        run: nix build .#ci.workspaceBuild
 
       - name: Clippy workspace
         if: github.event_name != 'pull_request' || matrix.build-in-pr
-        run: nix run "github:Mic92/nix-fast-build?rev=4376b8a33b217ee2f78ba3dcff01a3e464d13a46" -- --skip-cached --no-nom --flake .#legacyPackages.$(nix eval --raw --impure --expr builtins.currentSystem).ci.workspaceClippy
+        run: nix build .#ci.workspaceClippy
 
       - name: Run cargo doc
         if: (github.event_name != 'pull_request' || matrix.build-in-pr) && (matrix.host != 'macos')
-        run: nix run "github:Mic92/nix-fast-build?rev=4376b8a33b217ee2f78ba3dcff01a3e464d13a46" -- --skip-cached --no-nom --flake .#legacyPackages.$(nix eval --raw --impure --expr builtins.currentSystem).ci.workspaceDoc
+        run: nix build .#ci.workspaceDoc
 
       - name: Test docs
         if: (github.event_name != 'pull_request' || matrix.build-in-pr) && (matrix.host != 'macos')
-        run: nix run "github:Mic92/nix-fast-build?rev=4376b8a33b217ee2f78ba3dcff01a3e464d13a46" -- --skip-cached --no-nom --flake .#legacyPackages.$(nix eval --raw --impure --expr builtins.currentSystem).ci.workspaceTestDoc
+        run: nix build .#ci.workspaceTestDoc
 
       - name: Tests
         if: (github.event_name != 'pull_request' || matrix.build-in-pr) && matrix.run-tests
         run: |
-          nix run "github:Mic92/nix-fast-build?rev=4376b8a33b217ee2f78ba3dcff01a3e464d13a46" -- --skip-cached --no-nom --flake .#legacyPackages.$(nix eval --raw --impure --expr builtins.currentSystem).wasm32-unknown.ci.ciTestAll
+          nix build .#wasm32-unknown.ci.ciTestAll
 
       - name: Tests (5 times more)
         if: github.event_name == 'merge_group' && matrix.run-tests
@@ -176,7 +176,7 @@ jobs:
 
       - name: Wasm Tests
         if: (github.event_name != 'pull_request' || matrix.build-in-pr) && matrix.run-tests && (matrix.host != 'macos')
-        run: nix run "github:Mic92/nix-fast-build?rev=4376b8a33b217ee2f78ba3dcff01a3e464d13a46" -- --skip-cached --no-nom --flake .#legacyPackages.$(nix eval --raw --impure --expr builtins.currentSystem).wasm32-unknown.ci.wasmTest
+        run: nix build .#wasm32-unknown.ci.wasmTest
 
   audit:
     if: github.repository == 'fedimint/fedimint'
@@ -203,11 +203,11 @@ jobs:
       - name: Run cargo audit
         run: |
           nix flake update advisory-db
-          nix run "github:Mic92/nix-fast-build?rev=4376b8a33b217ee2f78ba3dcff01a3e464d13a46" -- --skip-cached --no-nom --flake .#legacyPackages.$(nix eval --raw --impure --expr builtins.currentSystem).ci.cargoAudit
+          nix build .#ci.cargoAudit
 
       - name: Run cargo deny
         run: |
-          nix run "github:Mic92/nix-fast-build?rev=4376b8a33b217ee2f78ba3dcff01a3e464d13a46" -- --skip-cached --no-nom --flake .#legacyPackages.$(nix eval --raw --impure --expr builtins.currentSystem).ci.cargoDeny
+          nix build .#ci.cargoDeny
 
   # Code Coverage will build using a completely different profile (neither debug/release)
   # Which means we can not reuse much from `build` job. Might as well run it as another
@@ -235,12 +235,10 @@ jobs:
         run: nix run nixpkgs#curl -- --fail-with-body -X POST --data-binary @.codecov.yml https://codecov.io/validate
 
       - name: Build and run tests with Code Coverage
-        run: nix run "github:Mic92/nix-fast-build?rev=4376b8a33b217ee2f78ba3dcff01a3e464d13a46" -- --skip-cached --no-nom --flake .#legacyPackages.$(nix eval --raw --impure --expr builtins.currentSystem).ci.workspaceTestCov
+        run: nix build .#ci.workspaceTestCov
 
-      # nix-fast-build will not create `result-` (- on purpuse) if the result was already build
-      # which is kind of OK - no code changes requires no codecov message.
-      # - name: Ensure lcov.info exists
-      #   run: test -f result-/lcov.info
+      - name: Ensure lcov.info exists
+        run: test -f result/lcov.info
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v4
@@ -312,12 +310,7 @@ jobs:
       - name: Build client packages for ${{ matrix.toolchain }}
         if: github.event_name != 'pull_request' || matrix.build-in-pr
         run: |
-          # nix-fast-build seems to strugle
-          if [[ "${{ matrix.host }}" == "macos" ]]; then
-            nix build -L .#ci.client-pkgs
-          else
-            nix run "github:Mic92/nix-fast-build?rev=4376b8a33b217ee2f78ba3dcff01a3e464d13a46" -- --skip-cached --no-nom --flake .#legacyPackages.$(nix eval --raw --impure --expr builtins.currentSystem).${{ matrix.toolchain }}.ci.client-pkgs
-          fi
+          nix build -L .#ci.client-pkgs
 
   containers:
     if: github.repository == 'fedimint/fedimint'
