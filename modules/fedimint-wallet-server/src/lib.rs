@@ -210,7 +210,7 @@ impl ServerModuleInit for WalletInit {
     }
 
     async fn init(&self, args: &ServerModuleInitArgs<Self>) -> anyhow::Result<DynServerModule> {
-        for direction in [&"incoming", "outgoing"] {
+        for direction in ["incoming", "outgoing"] {
             WALLET_INOUT_FEES_SATS
                 .with_label_values(&[direction])
                 .get_sample_count();
