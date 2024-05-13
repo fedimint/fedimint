@@ -102,6 +102,8 @@
 <a href="#102" id="102">102</a>
 <a href="#103" id="103">103</a>
 <a href="#104" id="104">104</a>
+<a href="#105" id="105">105</a>
+<a href="#106" id="106">106</a>
 </pre></div><pre class="rust"><code><span class="attr">#![allow(clippy::let_unit_value)]
 
 </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">mod </span>debug_fmt;
@@ -111,16 +113,18 @@
 <span class="kw">use </span>fedimint_core::module::registry::ServerModuleRegistry;
 <span class="kw">use </span>fedimint_core::module::TransactionItemAmount;
 <span class="kw">use </span>fedimint_core::transaction::{Transaction, TransactionError};
-<span class="kw">use </span>fedimint_core::{Amount, OutPoint};
+<span class="kw">use </span>fedimint_core::{Amount, OutPoint, TransactionId};
+<span class="kw">use </span>tracing::instrument;
 
 <span class="kw">use </span><span class="kw">crate</span>::metrics::{CONSENSUS_TX_PROCESSED_INPUTS, CONSENSUS_TX_PROCESSED_OUTPUTS};
 
-<span class="kw">pub async fn </span>process_transaction_with_dbtx(
+<span class="attr">#[instrument(target = <span class="string">"fm::consensus"</span>, skip_all, fields(txid = %txid))]
+</span><span class="kw">pub async fn </span>process_transaction_with_dbtx(
     modules: ServerModuleRegistry,
     dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>&gt;,
+    txid: TransactionId,
     transaction: Transaction,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;(), TransactionError&gt; {
-    <span class="kw">let </span>txid = transaction.tx_hash();
     <span class="kw">let </span><span class="kw-2">mut </span>funding_verifier = FundingVerifier::default();
     <span class="kw">let </span><span class="kw-2">mut </span>public_keys = Vec::new();
     <span class="kw">let </span>in_count = transaction.inputs.len();
