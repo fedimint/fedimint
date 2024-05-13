@@ -143,7 +143,7 @@ impl IRawDatabase for RocksDbReadOnly {
 impl<'a> IDatabaseTransactionOpsCore for RocksDbTransaction<'a> {
     async fn raw_insert_bytes(&mut self, key: &[u8], value: &[u8]) -> Result<Option<Vec<u8>>> {
         fedimint_core::runtime::block_in_place(|| {
-            let val = self.0.get(key).unwrap();
+            let val = self.0.snapshot().get(key).unwrap();
             self.0.put(key, value)?;
             Ok(val)
         })
@@ -155,7 +155,7 @@ impl<'a> IDatabaseTransactionOpsCore for RocksDbTransaction<'a> {
 
     async fn raw_remove_entry(&mut self, key: &[u8]) -> Result<Option<Vec<u8>>> {
         fedimint_core::runtime::block_in_place(|| {
-            let val = self.0.get(key).unwrap();
+            let val = self.0.snapshot().get(key).unwrap();
             self.0.delete(key)?;
             Ok(val)
         })
@@ -283,7 +283,7 @@ impl<'a> IDatabaseTransactionOpsCore for RocksDbReadOnlyTransaction<'a> {
     }
 
     async fn raw_get_bytes(&mut self, key: &[u8]) -> Result<Option<Vec<u8>>> {
-        fedimint_core::runtime::block_in_place(|| Ok(self.0.get(key)?))
+        fedimint_core::runtime::block_in_place(|| Ok(self.0.snapshot().get(key)?))
     }
 
     async fn raw_remove_entry(&mut self, _key: &[u8]) -> Result<Option<Vec<u8>>> {
