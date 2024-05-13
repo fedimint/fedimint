@@ -2067,7 +2067,10 @@ mod test_utils {
     use std::collections::BTreeMap;
     use std::time::Duration;
 
+    use futures::future::ready;
     use futures::{Future, FutureExt, StreamExt};
+    use rand::Rng;
+    use tokio::join;
 
     use super::{
         apply_migrations, Database, DatabaseTransaction, DatabaseVersion, DatabaseVersionKey,
@@ -2366,6 +2369,95 @@ mod test_utils {
             .await;
 
         assert_eq!(returned_keys, expected_keys);
+    }
+
+    pub async fn verify_snapshot_isolation(db: Database) {
+        // This scenario is taken straight out of https://github.com/fedimint/fedimint/issues/5195 bug
+        for i in 0..1000 {
+            let base_key = i * 2;
+            let tx_accepted_key = base_key;
+            let spent_input_key = base_key + 1;
+
+            async fn random_yield() {
+                let times = if rand::thread_rng().gen_bool(0.5) {
+                    0
+                } else {
+                    10
+                };
+                for _ in 0..times {
+                    tokio::task::yield_now().await
+                }
+            }
+
+            join!(
+                async {
+                    random_yield().await;
+                    let mut dbtx = db.begin_transaction().await;
+
+                    random_yield().await;
+                    let a = dbtx.get_value(&TestKey(tx_accepted_key)).await;
+                    random_yield().await;
+                    // we have 4 operations that can give you the db key,
+                    // try all of them
+                    let s = match i % 5 {
+                        0 => dbtx.get_value(&TestKey(spent_input_key)).await,
+                        1 => dbtx.remove_entry(&TestKey(spent_input_key)).await,
+                        2 => {
+                            dbtx.insert_entry(&TestKey(spent_input_key), &TestVal(200))
+                                .await
+                        }
+                        3 => {
+                            dbtx.find_by_prefix(&DbPrefixTestPrefix)
+                                .await
+                                .filter(|(k, _v)| ready(k == &TestKey(spent_input_key)))
+                                .map(|(_k, v)| v)
+                                .next()
+                                .await
+                        }
+                        4 => {
+                            dbtx.find_by_prefix_sorted_descending(&DbPrefixTestPrefix)
+                                .await
+                                .filter(|(k, _v)| ready(k == &TestKey(spent_input_key)))
+                                .map(|(_k, v)| v)
+                                .next()
+                                .await
+                        }
+                        _ => {
+                            panic!("woot?");
+                        }
+                    };
+
+                    match (a, s) {
+                        (None, None) | (Some(_), Some(_)) => {}
+                        (None, Some(_)) => panic!("none some?! {}", i),
+                        (Some(_), None) => panic!("some none?! {}", i),
+                    }
+                },
+                async {
+                    random_yield().await;
+
+                    let mut dbtx = db.begin_transaction().await;
+                    random_yield().await;
+                    assert_eq!(dbtx.get_value(&TestKey(tx_accepted_key)).await, None);
+
+                    random_yield().await;
+                    assert_eq!(
+                        dbtx.insert_entry(&TestKey(spent_input_key), &TestVal(100))
+                            .await,
+                        None
+                    );
+
+                    random_yield().await;
+                    assert_eq!(
+                        dbtx.insert_entry(&TestKey(tx_accepted_key), &TestVal(100))
+                            .await,
+                        None
+                    );
+                    random_yield().await;
+                    dbtx.commit_tx().await;
+                }
+            );
+        }
     }
 
     pub async fn verify_phantom_entry(db: Database) {
