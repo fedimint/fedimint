@@ -683,25 +683,27 @@ impl ConsensusServer {
                     .await
             }
             ConsensusItem::Transaction(transaction) => {
+                let txid = transaction.tx_hash();
                 if dbtx
-                    .get_value(&AcceptedTransactionKey(transaction.tx_hash()))
+                    .get_value(&AcceptedTransactionKey(txid))
                     .await
                     .is_some()
                 {
+                    debug!(target: LOG_CONSENSUS, %txid, "Transaction already accepted");
                     bail!("Transaction is already accepted");
                 }
 
-                let txid = transaction.tx_hash();
                 let modules_ids = transaction
                     .outputs
                     .iter()
                     .map(|output| output.module_instance_id())
                     .collect::<Vec<_>>();
 
-                process_transaction_with_dbtx(self.modules.clone(), dbtx, transaction)
+                process_transaction_with_dbtx(self.modules.clone(), dbtx, txid, transaction)
                     .await
                     .map_err(|error| anyhow!(error.to_string()))?;
 
+                debug!(target: LOG_CONSENSUS, %txid,  "Transaction accepted");
                 dbtx.insert_entry(&AcceptedTransactionKey(txid), &modules_ids)
                     .await;
 

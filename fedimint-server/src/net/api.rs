@@ -120,13 +120,15 @@ impl ConsensusApi {
             .await
             .is_some()
         {
+            debug!(target: LOG_NET_API, %txid, "Transaction already accepted");
             return Ok(txid);
         }
 
         // We ignore any writes, as we only verify if the transaction is valid here
         dbtx.ignore_uncommitted();
 
-        process_transaction_with_dbtx(self.modules.clone(), &mut dbtx, transaction.clone()).await?;
+        process_transaction_with_dbtx(self.modules.clone(), &mut dbtx, txid, transaction.clone())
+            .await?;
 
         self.submission_sender
             .send(ConsensusItem::Transaction(transaction))

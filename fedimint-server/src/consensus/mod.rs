@@ -7,16 +7,18 @@ use fedimint_core::db::DatabaseTransaction;
 use fedimint_core::module::registry::ServerModuleRegistry;
 use fedimint_core::module::TransactionItemAmount;
 use fedimint_core::transaction::{Transaction, TransactionError};
-use fedimint_core::{Amount, OutPoint};
+use fedimint_core::{Amount, OutPoint, TransactionId};
+use tracing::instrument;
 
 use crate::metrics::{CONSENSUS_TX_PROCESSED_INPUTS, CONSENSUS_TX_PROCESSED_OUTPUTS};
 
+#[instrument(target = "fm::consensus", skip_all, fields(txid = %txid))]
 pub async fn process_transaction_with_dbtx(
     modules: ServerModuleRegistry,
     dbtx: &mut DatabaseTransaction<'_>,
+    txid: TransactionId,
     transaction: Transaction,
 ) -> Result<(), TransactionError> {
-    let txid = transaction.tx_hash();
     let mut funding_verifier = FundingVerifier::default();
     let mut public_keys = Vec::new();
     let in_count = transaction.inputs.len();
