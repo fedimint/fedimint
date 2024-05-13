@@ -66,7 +66,7 @@ pub fn port_alloc(range_size: u16) -> anyhow::Result<u16> {
                 base_port = LOW;
             }
             let range = base_port..base_port + range_size;
-            if let Some(next_port) = data.contains(&range) {
+            if let Some(next_port) = data.contains(range.clone()) {
                 warn!(
                     base_port,
                     range_size,
