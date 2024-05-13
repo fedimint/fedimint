@@ -1,4 +1,4 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `fedimint-core/src/db/mod.rs`."><title>mod.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../static.files/rustdoc-2c208a72533b4dd0.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="fedimint_core" data-themes="" data-resource-suffix="" data-rustdoc-version="1.79.0-nightly (ccfcd950b 2024-04-15)" data-channel="nightly" data-search-js="search-ffac13a0df2b1870.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../../static.files/storage-e32f0c247825364d.js"></script><script defer src="../../../static.files/src-script-e66d777a5a92e9b2.js"></script><script defer src="../../../src-files.js"></script><script defer src="../../../static.files/main-c97aec732c613ca4.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-09095024cf37855e.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer"></div><main><nav class="sub"><form class="search-form"><span></span><div id="sidebar-button" tabindex="-1"><a href="../../../fedimint_core/all.html" title="show sidebar"></a></div><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" tabindex="-1"><a href="../../../help.html" title="help">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../../settings.html" title="settings">Settings</a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `fedimint-core/src/db/mod.rs`."><title>mod.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../static.files/rustdoc-dd39b87e5fcfba68.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="fedimint_core" data-themes="" data-resource-suffix="" data-rustdoc-version="1.80.0-nightly (8f9080db4 2024-05-09)" data-channel="nightly" data-search-js="search-d52510db62a78183.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../../../static.files/src-script-e66d777a5a92e9b2.js"></script><script defer src="../../../src-files.js"></script><script defer src="../../../static.files/main-20a3ad099b048cf2.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer"></div><main><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
 <a href="#2" id="2">2</a>
 <a href="#3" id="3">3</a>
 <a href="#4" id="4">4</a>
@@ -3001,6 +3001,98 @@
 <a href="#3001" id="3001">3001</a>
 <a href="#3002" id="3002">3002</a>
 <a href="#3003" id="3003">3003</a>
+<a href="#3004" id="3004">3004</a>
+<a href="#3005" id="3005">3005</a>
+<a href="#3006" id="3006">3006</a>
+<a href="#3007" id="3007">3007</a>
+<a href="#3008" id="3008">3008</a>
+<a href="#3009" id="3009">3009</a>
+<a href="#3010" id="3010">3010</a>
+<a href="#3011" id="3011">3011</a>
+<a href="#3012" id="3012">3012</a>
+<a href="#3013" id="3013">3013</a>
+<a href="#3014" id="3014">3014</a>
+<a href="#3015" id="3015">3015</a>
+<a href="#3016" id="3016">3016</a>
+<a href="#3017" id="3017">3017</a>
+<a href="#3018" id="3018">3018</a>
+<a href="#3019" id="3019">3019</a>
+<a href="#3020" id="3020">3020</a>
+<a href="#3021" id="3021">3021</a>
+<a href="#3022" id="3022">3022</a>
+<a href="#3023" id="3023">3023</a>
+<a href="#3024" id="3024">3024</a>
+<a href="#3025" id="3025">3025</a>
+<a href="#3026" id="3026">3026</a>
+<a href="#3027" id="3027">3027</a>
+<a href="#3028" id="3028">3028</a>
+<a href="#3029" id="3029">3029</a>
+<a href="#3030" id="3030">3030</a>
+<a href="#3031" id="3031">3031</a>
+<a href="#3032" id="3032">3032</a>
+<a href="#3033" id="3033">3033</a>
+<a href="#3034" id="3034">3034</a>
+<a href="#3035" id="3035">3035</a>
+<a href="#3036" id="3036">3036</a>
+<a href="#3037" id="3037">3037</a>
+<a href="#3038" id="3038">3038</a>
+<a href="#3039" id="3039">3039</a>
+<a href="#3040" id="3040">3040</a>
+<a href="#3041" id="3041">3041</a>
+<a href="#3042" id="3042">3042</a>
+<a href="#3043" id="3043">3043</a>
+<a href="#3044" id="3044">3044</a>
+<a href="#3045" id="3045">3045</a>
+<a href="#3046" id="3046">3046</a>
+<a href="#3047" id="3047">3047</a>
+<a href="#3048" id="3048">3048</a>
+<a href="#3049" id="3049">3049</a>
+<a href="#3050" id="3050">3050</a>
+<a href="#3051" id="3051">3051</a>
+<a href="#3052" id="3052">3052</a>
+<a href="#3053" id="3053">3053</a>
+<a href="#3054" id="3054">3054</a>
+<a href="#3055" id="3055">3055</a>
+<a href="#3056" id="3056">3056</a>
+<a href="#3057" id="3057">3057</a>
+<a href="#3058" id="3058">3058</a>
+<a href="#3059" id="3059">3059</a>
+<a href="#3060" id="3060">3060</a>
+<a href="#3061" id="3061">3061</a>
+<a href="#3062" id="3062">3062</a>
+<a href="#3063" id="3063">3063</a>
+<a href="#3064" id="3064">3064</a>
+<a href="#3065" id="3065">3065</a>
+<a href="#3066" id="3066">3066</a>
+<a href="#3067" id="3067">3067</a>
+<a href="#3068" id="3068">3068</a>
+<a href="#3069" id="3069">3069</a>
+<a href="#3070" id="3070">3070</a>
+<a href="#3071" id="3071">3071</a>
+<a href="#3072" id="3072">3072</a>
+<a href="#3073" id="3073">3073</a>
+<a href="#3074" id="3074">3074</a>
+<a href="#3075" id="3075">3075</a>
+<a href="#3076" id="3076">3076</a>
+<a href="#3077" id="3077">3077</a>
+<a href="#3078" id="3078">3078</a>
+<a href="#3079" id="3079">3079</a>
+<a href="#3080" id="3080">3080</a>
+<a href="#3081" id="3081">3081</a>
+<a href="#3082" id="3082">3082</a>
+<a href="#3083" id="3083">3083</a>
+<a href="#3084" id="3084">3084</a>
+<a href="#3085" id="3085">3085</a>
+<a href="#3086" id="3086">3086</a>
+<a href="#3087" id="3087">3087</a>
+<a href="#3088" id="3088">3088</a>
+<a href="#3089" id="3089">3089</a>
+<a href="#3090" id="3090">3090</a>
+<a href="#3091" id="3091">3091</a>
+<a href="#3092" id="3092">3092</a>
+<a href="#3093" id="3093">3093</a>
+<a href="#3094" id="3094">3094</a>
+<a href="#3095" id="3095">3095</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! Core Fedimint database traits and types
 //!
 //! # Isolation of database transactions
@@ -5070,7 +5162,10 @@
     <span class="kw">use </span>std::collections::BTreeMap;
     <span class="kw">use </span>std::time::Duration;
 
+    <span class="kw">use </span>futures::future::ready;
     <span class="kw">use </span>futures::{Future, FutureExt, StreamExt};
+    <span class="kw">use </span>rand::Rng;
+    <span class="kw">use </span>tokio::join;
 
     <span class="kw">use super</span>::{
         apply_migrations, Database, DatabaseTransaction, DatabaseVersion, DatabaseVersionKey,
@@ -5369,6 +5464,95 @@
             .<span class="kw">await</span>;
 
         <span class="macro">assert_eq!</span>(returned_keys, expected_keys);
+    }
+
+    <span class="kw">pub async fn </span>verify_snapshot_isolation(db: Database) {
+        <span class="comment">// This scenario is taken straight out of https://github.com/fedimint/fedimint/issues/5195 bug
+        </span><span class="kw">for </span>i <span class="kw">in </span><span class="number">0</span>..<span class="number">1000 </span>{
+            <span class="kw">let </span>base_key = i * <span class="number">2</span>;
+            <span class="kw">let </span>tx_accepted_key = base_key;
+            <span class="kw">let </span>spent_input_key = base_key + <span class="number">1</span>;
+
+            <span class="kw">async fn </span>random_yield() {
+                <span class="kw">let </span>times = <span class="kw">if </span>rand::thread_rng().gen_bool(<span class="number">0.5</span>) {
+                    <span class="number">0
+                </span>} <span class="kw">else </span>{
+                    <span class="number">10
+                </span>};
+                <span class="kw">for _ in </span><span class="number">0</span>..times {
+                    tokio::task::yield_now().<span class="kw">await
+                </span>}
+            }
+
+            <span class="macro">join!</span>(
+                <span class="kw">async </span>{
+                    random_yield().<span class="kw">await</span>;
+                    <span class="kw">let </span><span class="kw-2">mut </span>dbtx = db.begin_transaction().<span class="kw">await</span>;
+
+                    random_yield().<span class="kw">await</span>;
+                    <span class="kw">let </span>a = dbtx.get_value(<span class="kw-2">&amp;</span>TestKey(tx_accepted_key)).<span class="kw">await</span>;
+                    random_yield().<span class="kw">await</span>;
+                    <span class="comment">// we have 4 operations that can give you the db key,
+                    // try all of them
+                    </span><span class="kw">let </span>s = <span class="kw">match </span>i % <span class="number">5 </span>{
+                        <span class="number">0 </span>=&gt; dbtx.get_value(<span class="kw-2">&amp;</span>TestKey(spent_input_key)).<span class="kw">await</span>,
+                        <span class="number">1 </span>=&gt; dbtx.remove_entry(<span class="kw-2">&amp;</span>TestKey(spent_input_key)).<span class="kw">await</span>,
+                        <span class="number">2 </span>=&gt; {
+                            dbtx.insert_entry(<span class="kw-2">&amp;</span>TestKey(spent_input_key), <span class="kw-2">&amp;</span>TestVal(<span class="number">200</span>))
+                                .<span class="kw">await
+                        </span>}
+                        <span class="number">3 </span>=&gt; {
+                            dbtx.find_by_prefix(<span class="kw-2">&amp;</span>DbPrefixTestPrefix)
+                                .<span class="kw">await
+                                </span>.filter(|(k, _v)| ready(k == <span class="kw-2">&amp;</span>TestKey(spent_input_key)))
+                                .map(|(_k, v)| v)
+                                .next()
+                                .<span class="kw">await
+                        </span>}
+                        <span class="number">4 </span>=&gt; {
+                            dbtx.find_by_prefix_sorted_descending(<span class="kw-2">&amp;</span>DbPrefixTestPrefix)
+                                .<span class="kw">await
+                                </span>.filter(|(k, _v)| ready(k == <span class="kw-2">&amp;</span>TestKey(spent_input_key)))
+                                .map(|(_k, v)| v)
+                                .next()
+                                .<span class="kw">await
+                        </span>}
+                        <span class="kw">_ </span>=&gt; {
+                            <span class="macro">panic!</span>(<span class="string">"woot?"</span>);
+                        }
+                    };
+
+                    <span class="kw">match </span>(a, s) {
+                        (<span class="prelude-val">None</span>, <span class="prelude-val">None</span>) | (<span class="prelude-val">Some</span>(<span class="kw">_</span>), <span class="prelude-val">Some</span>(<span class="kw">_</span>)) =&gt; {}
+                        (<span class="prelude-val">None</span>, <span class="prelude-val">Some</span>(<span class="kw">_</span>)) =&gt; <span class="macro">panic!</span>(<span class="string">"none some?! {}"</span>, i),
+                        (<span class="prelude-val">Some</span>(<span class="kw">_</span>), <span class="prelude-val">None</span>) =&gt; <span class="macro">panic!</span>(<span class="string">"some none?! {}"</span>, i),
+                    }
+                },
+                <span class="kw">async </span>{
+                    random_yield().<span class="kw">await</span>;
+
+                    <span class="kw">let </span><span class="kw-2">mut </span>dbtx = db.begin_transaction().<span class="kw">await</span>;
+                    random_yield().<span class="kw">await</span>;
+                    <span class="macro">assert_eq!</span>(dbtx.get_value(<span class="kw-2">&amp;</span>TestKey(tx_accepted_key)).<span class="kw">await</span>, <span class="prelude-val">None</span>);
+
+                    random_yield().<span class="kw">await</span>;
+                    <span class="macro">assert_eq!</span>(
+                        dbtx.insert_entry(<span class="kw-2">&amp;</span>TestKey(spent_input_key), <span class="kw-2">&amp;</span>TestVal(<span class="number">100</span>))
+                            .<span class="kw">await</span>,
+                        <span class="prelude-val">None
+                    </span>);
+
+                    random_yield().<span class="kw">await</span>;
+                    <span class="macro">assert_eq!</span>(
+                        dbtx.insert_entry(<span class="kw-2">&amp;</span>TestKey(tx_accepted_key), <span class="kw-2">&amp;</span>TestVal(<span class="number">100</span>))
+                            .<span class="kw">await</span>,
+                        <span class="prelude-val">None
+                    </span>);
+                    random_yield().<span class="kw">await</span>;
+                    dbtx.commit_tx().<span class="kw">await</span>;
+                }
+            );
+        }
     }
 
     <span class="kw">pub async fn </span>verify_phantom_entry(db: Database) {

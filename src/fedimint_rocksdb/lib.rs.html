@@ -1,4 +1,4 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `fedimint-rocksdb/src/lib.rs`."><title>lib.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-2c208a72533b4dd0.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="fedimint_rocksdb" data-themes="" data-resource-suffix="" data-rustdoc-version="1.79.0-nightly (ccfcd950b 2024-04-15)" data-channel="nightly" data-search-js="search-ffac13a0df2b1870.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../static.files/storage-e32f0c247825364d.js"></script><script defer src="../../static.files/src-script-e66d777a5a92e9b2.js"></script><script defer src="../../src-files.js"></script><script defer src="../../static.files/main-c97aec732c613ca4.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-09095024cf37855e.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer"></div><main><nav class="sub"><form class="search-form"><span></span><div id="sidebar-button" tabindex="-1"><a href="../../fedimint_rocksdb/all.html" title="show sidebar"></a></div><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" tabindex="-1"><a href="../../help.html" title="help">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../settings.html" title="settings">Settings</a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `fedimint-rocksdb/src/lib.rs`."><title>lib.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-dd39b87e5fcfba68.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="fedimint_rocksdb" data-themes="" data-resource-suffix="" data-rustdoc-version="1.80.0-nightly (8f9080db4 2024-05-09)" data-channel="nightly" data-search-js="search-d52510db62a78183.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../../static.files/src-script-e66d777a5a92e9b2.js"></script><script defer src="../../src-files.js"></script><script defer src="../../static.files/main-20a3ad099b048cf2.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer"></div><main><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
 <a href="#2" id="2">2</a>
 <a href="#3" id="3">3</a>
 <a href="#4" id="4">4</a>
@@ -652,6 +652,29 @@
 <a href="#652" id="652">652</a>
 <a href="#653" id="653">653</a>
 <a href="#654" id="654">654</a>
+<a href="#655" id="655">655</a>
+<a href="#656" id="656">656</a>
+<a href="#657" id="657">657</a>
+<a href="#658" id="658">658</a>
+<a href="#659" id="659">659</a>
+<a href="#660" id="660">660</a>
+<a href="#661" id="661">661</a>
+<a href="#662" id="662">662</a>
+<a href="#663" id="663">663</a>
+<a href="#664" id="664">664</a>
+<a href="#665" id="665">665</a>
+<a href="#666" id="666">666</a>
+<a href="#667" id="667">667</a>
+<a href="#668" id="668">668</a>
+<a href="#669" id="669">669</a>
+<a href="#670" id="670">670</a>
+<a href="#671" id="671">671</a>
+<a href="#672" id="672">672</a>
+<a href="#673" id="673">673</a>
+<a href="#674" id="674">674</a>
+<a href="#675" id="675">675</a>
+<a href="#676" id="676">676</a>
+<a href="#677" id="677">677</a>
 </pre></div><pre class="rust"><code><span class="attr">#![allow(where_clauses_object_safety)] </span><span class="comment">// https://github.com/dtolnay/async-trait/issues/228
 
 </span><span class="kw">pub mod </span>envs;
@@ -822,7 +845,7 @@
 </span><span class="kw">impl</span>&lt;<span class="lifetime">'a</span>&gt; IDatabaseTransactionOpsCore <span class="kw">for </span>RocksDbTransaction&lt;<span class="lifetime">'a</span>&gt; {
     <span class="kw">async fn </span>raw_insert_bytes(<span class="kw-2">&amp;mut </span><span class="self">self</span>, key: <span class="kw-2">&amp;</span>[u8], value: <span class="kw-2">&amp;</span>[u8]) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;Vec&lt;u8&gt;&gt;&gt; {
         fedimint_core::runtime::block_in_place(|| {
-            <span class="kw">let </span>val = <span class="self">self</span>.<span class="number">0</span>.get(key).unwrap();
+            <span class="kw">let </span>val = <span class="self">self</span>.<span class="number">0</span>.snapshot().get(key).unwrap();
             <span class="self">self</span>.<span class="number">0</span>.put(key, value)<span class="question-mark">?</span>;
             <span class="prelude-val">Ok</span>(val)
         })
@@ -834,7 +857,7 @@
 
     <span class="kw">async fn </span>raw_remove_entry(<span class="kw-2">&amp;mut </span><span class="self">self</span>, key: <span class="kw-2">&amp;</span>[u8]) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;Vec&lt;u8&gt;&gt;&gt; {
         fedimint_core::runtime::block_in_place(|| {
-            <span class="kw">let </span>val = <span class="self">self</span>.<span class="number">0</span>.get(key).unwrap();
+            <span class="kw">let </span>val = <span class="self">self</span>.<span class="number">0</span>.snapshot().get(key).unwrap();
             <span class="self">self</span>.<span class="number">0</span>.delete(key)<span class="question-mark">?</span>;
             <span class="prelude-val">Ok</span>(val)
         })
@@ -962,7 +985,7 @@
     }
 
     <span class="kw">async fn </span>raw_get_bytes(<span class="kw-2">&amp;mut </span><span class="self">self</span>, key: <span class="kw-2">&amp;</span>[u8]) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;Vec&lt;u8&gt;&gt;&gt; {
-        fedimint_core::runtime::block_in_place(|| <span class="prelude-val">Ok</span>(<span class="self">self</span>.<span class="number">0</span>.get(key)<span class="question-mark">?</span>))
+        fedimint_core::runtime::block_in_place(|| <span class="prelude-val">Ok</span>(<span class="self">self</span>.<span class="number">0</span>.snapshot().get(key)<span class="question-mark">?</span>))
     }
 
     <span class="kw">async fn </span>raw_remove_entry(<span class="kw-2">&amp;mut </span><span class="self">self</span>, _key: <span class="kw-2">&amp;</span>[u8]) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;Vec&lt;u8&gt;&gt;&gt; {
@@ -970,19 +993,36 @@
     }
 
     <span class="kw">async fn </span>raw_find_by_prefix(<span class="kw-2">&amp;mut </span><span class="self">self</span>, key_prefix: <span class="kw-2">&amp;</span>[u8]) -&gt; <span class="prelude-ty">Result</span>&lt;PrefixStream&lt;<span class="lifetime">'_</span>&gt;&gt; {
+        <span class="comment">// turn an `iter` into a `Stream` where every `next` is ran inside
+        // `block_in_place` to offload the blocking calls
+        </span><span class="kw">fn </span>convert_to_async_stream&lt;<span class="lifetime">'i</span>, I&gt;(iter: I) -&gt; <span class="kw">impl </span>futures::Stream&lt;Item = I::Item&gt;
+        <span class="kw">where
+            </span>I: Iterator + Send + <span class="lifetime">'i</span>,
+            I::Item: Send,
+        {
+            stream::unfold(iter, |<span class="kw-2">mut </span>iter| <span class="kw">async move </span>{
+                fedimint_core::runtime::block_in_place(<span class="kw">move </span>|| {
+                    <span class="kw">let </span>item = iter.next();
+                    item.map(<span class="kw">move </span>|item| (item, iter))
+                })
+            })
+        }
+
         <span class="prelude-val">Ok</span>(fedimint_core::runtime::block_in_place(|| {
             <span class="kw">let </span>prefix = key_prefix.to_vec();
-            <span class="kw">let </span>rocksdb_iter = <span class="self">self
-                </span>.<span class="number">0
-                </span>.prefix_iterator(prefix.clone())
-                .map_while(<span class="kw">move </span>|res| {
-                    <span class="kw">let </span>(key_bytes, value_bytes) = res.expect(<span class="string">"Error reading from RocksDb"</span>);
-                    key_bytes
-                        .starts_with(<span class="kw-2">&amp;</span>prefix)
-                        .then_some((key_bytes, value_bytes))
-                })
-                .map(|(key_bytes, value_bytes)| (key_bytes.to_vec(), value_bytes.to_vec()));
-            Box::pin(stream::iter(rocksdb_iter))
+            <span class="kw">let </span><span class="kw-2">mut </span>options = rocksdb::ReadOptions::default();
+            options.set_iterate_range(rocksdb::PrefixRange(prefix.clone()));
+            <span class="kw">let </span>iter = <span class="self">self</span>.<span class="number">0</span>.snapshot().iterator_opt(
+                rocksdb::IteratorMode::From(<span class="kw-2">&amp;</span>prefix, rocksdb::Direction::Forward),
+                options,
+            );
+            <span class="kw">let </span>rocksdb_iter = iter.map_while(<span class="kw">move </span>|res| {
+                <span class="kw">let </span>(key_bytes, value_bytes) = res.expect(<span class="string">"Error reading from RocksDb"</span>);
+                key_bytes
+                    .starts_with(<span class="kw-2">&amp;</span>prefix)
+                    .then_some((key_bytes.to_vec(), value_bytes.to_vec()))
+            });
+            Box::pin(convert_to_async_stream(rocksdb_iter))
         }))
     }
 
@@ -1005,14 +1045,12 @@
             <span class="kw">let </span><span class="kw-2">mut </span>options = rocksdb::ReadOptions::default();
             options.set_iterate_range(rocksdb::PrefixRange(prefix.clone()));
             <span class="kw">let </span>iter = <span class="self">self</span>.<span class="number">0</span>.snapshot().iterator_opt(iterator_mode, options);
-            <span class="kw">let </span>rocksdb_iter = iter
-                .map_while(<span class="kw">move </span>|res| {
-                    <span class="kw">let </span>(key_bytes, value_bytes) = res.expect(<span class="string">"Error reading from RocksDb"</span>);
-                    key_bytes
-                        .starts_with(<span class="kw-2">&amp;</span>prefix)
-                        .then_some((key_bytes, value_bytes))
-                })
-                .map(|(key_bytes, value_bytes)| (key_bytes.to_vec(), value_bytes.to_vec()));
+            <span class="kw">let </span>rocksdb_iter = iter.map_while(<span class="kw">move </span>|res| {
+                <span class="kw">let </span>(key_bytes, value_bytes) = res.expect(<span class="string">"Error reading from RocksDb"</span>);
+                key_bytes
+                    .starts_with(<span class="kw-2">&amp;</span>prefix)
+                    .then_some((key_bytes.to_vec(), value_bytes.to_vec()))
+            });
             Box::pin(stream::iter(rocksdb_iter))
         }))
     }
@@ -1107,6 +1145,14 @@
     </span><span class="kw">async fn </span>test_dbtx_prevent_nonrepeatable_reads() {
         fedimint_core::db::verify_prevent_nonrepeatable_reads(open_temp_db(
             <span class="string">"fcb-rocksdb-test-prevent-nonrepeatable-reads"</span>,
+        ))
+        .<span class="kw">await</span>;
+    }
+
+    <span class="attr">#[tokio::test(flavor = <span class="string">"multi_thread"</span>)]
+    </span><span class="kw">async fn </span>test_dbtx_snapshot_isolation() {
+        fedimint_core::db::verify_snapshot_isolation(open_temp_db(
+            <span class="string">"fcb-rocksdb-test-snapshot-isolation"</span>,
         ))
         .<span class="kw">await</span>;
     }
