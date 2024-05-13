@@ -433,6 +433,14 @@ mod fedimint_rocksdb_tests {
     }
 
     #[tokio::test(flavor = "multi_thread")]
+    async fn test_dbtx_snapshot_isolation() {
+        fedimint_core::db::verify_snapshot_isolation(open_temp_db(
+            "fcb-rocksdb-test-snapshot-isolation",
+        ))
+        .await;
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
     async fn test_dbtx_rollback_to_savepoint() {
         fedimint_core::db::verify_rollback_to_savepoint(open_temp_db(
             "fcb-rocksdb-test-rollback-to-savepoint",
