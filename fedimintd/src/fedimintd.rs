@@ -364,8 +364,7 @@ impl Fedimintd {
 
         info!("Shutdown complete");
 
-        #[cfg(feature = "telemetry")]
-        opentelemetry::global::shutdown_tracer_provider();
+        fedimint_logging::shutdown();
 
         drop(timing_total_runtime);
 

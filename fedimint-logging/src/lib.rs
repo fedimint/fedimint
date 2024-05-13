@@ -186,3 +186,8 @@ impl TracingSetup {
         Ok(())
     }
 }
+
+pub fn shutdown() {
+    #[cfg(feature = "telemetry")]
+    opentelemetry::global::shutdown_tracer_provider();
+}

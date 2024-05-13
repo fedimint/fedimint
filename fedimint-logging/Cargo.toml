@@ -15,7 +15,7 @@ name = "fedimint_logging"
 path = "src/lib.rs"
 
 [features]
-telemetry = ["tracing-opentelemetry", "opentelemetry-jaeger", "tracing-chrome", "console-subscriber"]
+telemetry = ["tracing-opentelemetry", "opentelemetry-jaeger", "tracing-chrome", "console-subscriber", "opentelemetry" ]
 
 [dependencies]
 anyhow = { workspace = true }
