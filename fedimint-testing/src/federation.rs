@@ -139,7 +139,7 @@ pub struct FederationTestBuilder {
 }
 
 impl FederationTestBuilder {
-    pub fn new(
+    pub async fn new(
         params: ServerModuleConfigGenParamsRegistry,
         server_init: ServerModuleInitRegistry,
         client_init: ClientModuleInitRegistry,

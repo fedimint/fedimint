@@ -125,16 +125,18 @@ impl Fixtures {
             self.params.clone(),
             ServerModuleInitRegistry::from(self.servers.clone()),
             ClientModuleInitRegistry::from(self.clients.clone()),
-        );
+        )
+        .await;
         federation_builder.build().await
     }
 
-    pub fn new_fed_builder(&self) -> FederationTestBuilder {
+    pub async fn new_fed_builder(&self) -> FederationTestBuilder {
         FederationTestBuilder::new(
             self.params.clone(),
             ServerModuleInitRegistry::from(self.servers.clone()),
             ClientModuleInitRegistry::from(self.clients.clone()),
         )
+        .await
     }
 
     /// Starts a new gateway with a given lightning node
