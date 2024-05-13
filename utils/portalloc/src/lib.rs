@@ -92,7 +92,7 @@ pub fn port_alloc(range_size: u16) -> anyhow::Result<u16> {
                 };
             }
 
-            const ALLOCATION_TIME_SECS: u64 = 600;
+            const ALLOCATION_TIME_SECS: u64 = 120;
             // The caller gets some time actually start using the port (`bind`),
             // to prevent other callers from re-using it. This could typically be
             // much shorter, as portalloc will not only respect the allocation,
