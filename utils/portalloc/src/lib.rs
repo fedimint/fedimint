@@ -21,10 +21,15 @@ pub mod util;
 
 use std::net::TcpListener;
 use std::path::PathBuf;
-use std::time::Duration;
+
+// ports below 10k are typically used by normal software increasing change they
+// would get in a way
+pub const LOW: u16 = 10000;
+// ports above 32k are typically ephmeral increasing a chance of random conflict
+// after port was already tried
+pub const HIGH: u16 = 32000;
 
 use anyhow::bail;
-use rand::{thread_rng, Rng};
 use tracing::warn;
 
 use crate::data::DataDir;
@@ -52,29 +57,22 @@ pub fn port_alloc(range_size: u16) -> anyhow::Result<u16> {
 
     let mut data_dir = DataDir::new(data_dir()?)?;
 
-    // ports below 10k are typically used by normal software increasing change they
-    // would get in a way
-    const LOW: u16 = 10000;
-    // ports above 32k are typically ephmeral increasing a chance of random conflict
-    // after port was already tried
-    const HIGH: u16 = 32000;
-    const RETRY_DELAY: Duration = Duration::from_millis(100);
-
     data_dir.with_lock(|data_dir| {
-        // `_listeners` are here only to prevent other processes from binding until
-        // the port was allocated
+        let mut data = data_dir.load_data(now_ts())?;
+        let mut base_port: u16 = data.next;
         Ok('retry: loop {
-            let mut data = data_dir.load_data(now_ts())?;
-
-            let base_port: u16 = thread_rng().gen_range(LOW..HIGH - range_size);
+            if HIGH < base_port {
+                data = data.reclaim(now_ts());
+                base_port = LOW;
+            }
             let range = base_port..base_port + range_size;
-            if data.contains(&range) {
+            if let Some(next_port) = data.contains(&range) {
                 warn!(
                     base_port,
                     range_size,
                     "Could not use a port (already reserved). Will try a different range."
                 );
-                data_dir.r#yield(RETRY_DELAY)?;
+                base_port = next_port;
                 continue 'retry;
             }
 
@@ -85,7 +83,7 @@ pub fn port_alloc(range_size: u16) -> anyhow::Result<u16> {
                             ?error,
                             port, "Could not use a port. Will try a different range"
                         );
-                        data_dir.r#yield(RETRY_DELAY)?;
+                        base_port = port + 1;
                         continue 'retry;
                     }
                     Ok(l) => l,
@@ -93,6 +91,7 @@ pub fn port_alloc(range_size: u16) -> anyhow::Result<u16> {
             }
 
             const ALLOCATION_TIME_SECS: u64 = 120;
+
             // The caller gets some time actually start using the port (`bind`),
             // to prevent other callers from re-using it. This could typically be
             // much shorter, as portalloc will not only respect the allocation,
