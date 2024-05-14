@@ -669,9 +669,6 @@
 <a href="#669" id="669">669</a>
 <a href="#670" id="670">670</a>
 <a href="#671" id="671">671</a>
-<a href="#672" id="672">672</a>
-<a href="#673" id="673">673</a>
-<a href="#674" id="674">674</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! Implements the client API through which users interact with the federation
 </span><span class="kw">use </span>std::cmp::Ordering;
 <span class="kw">use </span>std::collections::{BTreeMap, HashMap};
@@ -725,8 +722,8 @@
     CONSENSUS_CONFIG, ENCRYPTED_EXT, JSON_EXT, LOCAL_CONFIG, PRIVATE_CONFIG, SALT_FILE,
 };
 <span class="kw">use </span><span class="kw">crate</span>::config::ServerConfig;
-<span class="kw">use </span><span class="kw">crate</span>::consensus::process_transaction_with_dbtx;
-<span class="kw">use </span><span class="kw">crate</span>::consensus::server::get_finished_session_count_static;
+<span class="kw">use </span><span class="kw">crate</span>::consensus::engine::get_finished_session_count_static;
+<span class="kw">use </span><span class="kw">crate</span>::consensus::transaction::process_transaction_with_dbtx;
 <span class="kw">use </span><span class="kw">crate</span>::db::{AcceptedItemPrefix, AcceptedTransactionKey, SignedSessionOutcomeKey};
 <span class="kw">use </span><span class="kw">crate</span>::fedimint_core::encoding::Encodable;
 <span class="kw">use </span><span class="kw">crate</span>::metrics::{BACKUP_WRITE_SIZE_BYTES, STORED_BACKUPS_COUNT};
@@ -801,8 +798,7 @@
         <span class="comment">// We ignore any writes, as we only verify if the transaction is valid here
         </span>dbtx.ignore_uncommitted();
 
-        process_transaction_with_dbtx(<span class="self">self</span>.modules.clone(), <span class="kw-2">&amp;mut </span>dbtx, txid, transaction.clone())
-            .<span class="kw">await</span><span class="question-mark">?</span>;
+        process_transaction_with_dbtx(<span class="self">self</span>.modules.clone(), <span class="kw-2">&amp;mut </span>dbtx, transaction.clone()).<span class="kw">await</span><span class="question-mark">?</span>;
 
         <span class="self">self</span>.submission_sender
             .send(ConsensusItem::Transaction(transaction))
@@ -915,9 +911,7 @@
             .count() <span class="kw">as </span>u64;
 
         <span class="prelude-val">Ok</span>(FederationStatus {
-            <span class="comment">// the naming is in preparation for aleph bft since we will switch to
-            // the session count here and want to keep the public API stable
-            </span>session_count,
+            session_count,
             peers_online,
             peers_offline,
             peers_flagged,

@@ -104,110 +104,332 @@
 <a href="#104" id="104">104</a>
 <a href="#105" id="105">105</a>
 <a href="#106" id="106">106</a>
+<a href="#107" id="107">107</a>
+<a href="#108" id="108">108</a>
+<a href="#109" id="109">109</a>
+<a href="#110" id="110">110</a>
+<a href="#111" id="111">111</a>
+<a href="#112" id="112">112</a>
+<a href="#113" id="113">113</a>
+<a href="#114" id="114">114</a>
+<a href="#115" id="115">115</a>
+<a href="#116" id="116">116</a>
+<a href="#117" id="117">117</a>
+<a href="#118" id="118">118</a>
+<a href="#119" id="119">119</a>
+<a href="#120" id="120">120</a>
+<a href="#121" id="121">121</a>
+<a href="#122" id="122">122</a>
+<a href="#123" id="123">123</a>
+<a href="#124" id="124">124</a>
+<a href="#125" id="125">125</a>
+<a href="#126" id="126">126</a>
+<a href="#127" id="127">127</a>
+<a href="#128" id="128">128</a>
+<a href="#129" id="129">129</a>
+<a href="#130" id="130">130</a>
+<a href="#131" id="131">131</a>
+<a href="#132" id="132">132</a>
+<a href="#133" id="133">133</a>
+<a href="#134" id="134">134</a>
+<a href="#135" id="135">135</a>
+<a href="#136" id="136">136</a>
+<a href="#137" id="137">137</a>
+<a href="#138" id="138">138</a>
+<a href="#139" id="139">139</a>
+<a href="#140" id="140">140</a>
+<a href="#141" id="141">141</a>
+<a href="#142" id="142">142</a>
+<a href="#143" id="143">143</a>
+<a href="#144" id="144">144</a>
+<a href="#145" id="145">145</a>
+<a href="#146" id="146">146</a>
+<a href="#147" id="147">147</a>
+<a href="#148" id="148">148</a>
+<a href="#149" id="149">149</a>
+<a href="#150" id="150">150</a>
+<a href="#151" id="151">151</a>
+<a href="#152" id="152">152</a>
+<a href="#153" id="153">153</a>
+<a href="#154" id="154">154</a>
+<a href="#155" id="155">155</a>
+<a href="#156" id="156">156</a>
+<a href="#157" id="157">157</a>
+<a href="#158" id="158">158</a>
+<a href="#159" id="159">159</a>
+<a href="#160" id="160">160</a>
+<a href="#161" id="161">161</a>
+<a href="#162" id="162">162</a>
+<a href="#163" id="163">163</a>
+<a href="#164" id="164">164</a>
+<a href="#165" id="165">165</a>
+<a href="#166" id="166">166</a>
+<a href="#167" id="167">167</a>
+<a href="#168" id="168">168</a>
+<a href="#169" id="169">169</a>
+<a href="#170" id="170">170</a>
+<a href="#171" id="171">171</a>
+<a href="#172" id="172">172</a>
+<a href="#173" id="173">173</a>
+<a href="#174" id="174">174</a>
+<a href="#175" id="175">175</a>
+<a href="#176" id="176">176</a>
+<a href="#177" id="177">177</a>
+<a href="#178" id="178">178</a>
+<a href="#179" id="179">179</a>
+<a href="#180" id="180">180</a>
+<a href="#181" id="181">181</a>
+<a href="#182" id="182">182</a>
+<a href="#183" id="183">183</a>
+<a href="#184" id="184">184</a>
+<a href="#185" id="185">185</a>
+<a href="#186" id="186">186</a>
+<a href="#187" id="187">187</a>
+<a href="#188" id="188">188</a>
+<a href="#189" id="189">189</a>
+<a href="#190" id="190">190</a>
+<a href="#191" id="191">191</a>
+<a href="#192" id="192">192</a>
+<a href="#193" id="193">193</a>
+<a href="#194" id="194">194</a>
+<a href="#195" id="195">195</a>
+<a href="#196" id="196">196</a>
+<a href="#197" id="197">197</a>
+<a href="#198" id="198">198</a>
+<a href="#199" id="199">199</a>
+<a href="#200" id="200">200</a>
+<a href="#201" id="201">201</a>
+<a href="#202" id="202">202</a>
+<a href="#203" id="203">203</a>
+<a href="#204" id="204">204</a>
+<a href="#205" id="205">205</a>
+<a href="#206" id="206">206</a>
+<a href="#207" id="207">207</a>
+<a href="#208" id="208">208</a>
+<a href="#209" id="209">209</a>
+<a href="#210" id="210">210</a>
+<a href="#211" id="211">211</a>
+<a href="#212" id="212">212</a>
+<a href="#213" id="213">213</a>
+<a href="#214" id="214">214</a>
+<a href="#215" id="215">215</a>
+<a href="#216" id="216">216</a>
+<a href="#217" id="217">217</a>
 </pre></div><pre class="rust"><code><span class="attr">#![allow(clippy::let_unit_value)]
 
-</span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">mod </span>debug_fmt;
-<span class="kw">pub mod </span>server;
+</span><span class="kw">pub mod </span>debug_fmt;
+<span class="kw">pub mod </span>engine;
+<span class="kw">pub mod </span>transaction;
 
-<span class="kw">use </span>fedimint_core::db::DatabaseTransaction;
-<span class="kw">use </span>fedimint_core::module::registry::ServerModuleRegistry;
-<span class="kw">use </span>fedimint_core::module::TransactionItemAmount;
-<span class="kw">use </span>fedimint_core::transaction::{Transaction, TransactionError};
-<span class="kw">use </span>fedimint_core::{Amount, OutPoint, TransactionId};
-<span class="kw">use </span>tracing::instrument;
+<span class="kw">use </span>std::collections::BTreeMap;
+<span class="kw">use </span>std::sync::Arc;
+<span class="kw">use </span>std::time::Duration;
 
-<span class="kw">use </span><span class="kw">crate</span>::metrics::{CONSENSUS_TX_PROCESSED_INPUTS, CONSENSUS_TX_PROCESSED_OUTPUTS};
+<span class="kw">use </span>anyhow::bail;
+<span class="kw">use </span>async_channel::Sender;
+<span class="kw">use </span>fedimint_api_client::api::DynGlobalApi;
+<span class="kw">use </span>fedimint_core::config::ServerModuleInitRegistry;
+<span class="kw">use </span>fedimint_core::core::{ModuleInstanceId, ModuleKind};
+<span class="kw">use </span>fedimint_core::db::{apply_migrations, apply_migrations_server, Database};
+<span class="kw">use </span>fedimint_core::envs::is_running_in_test_env;
+<span class="kw">use </span>fedimint_core::epoch::ConsensusItem;
+<span class="kw">use </span>fedimint_core::module::registry::ModuleRegistry;
+<span class="kw">use </span>fedimint_core::server::DynServerModule;
+<span class="kw">use </span>fedimint_core::task::TaskGroup;
+<span class="kw">use </span>fedimint_core::NumPeers;
+<span class="kw">use </span>fedimint_logging::{LOG_CONSENSUS, LOG_CORE};
+<span class="kw">use </span>tokio::sync::watch;
+<span class="kw">use </span>tracing::info;
+<span class="kw">use </span>tracing::log::warn;
 
-<span class="attr">#[instrument(target = <span class="string">"fm::consensus"</span>, skip_all, fields(txid = %txid))]
-</span><span class="kw">pub async fn </span>process_transaction_with_dbtx(
-    modules: ServerModuleRegistry,
-    dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>&gt;,
-    txid: TransactionId,
-    transaction: Transaction,
-) -&gt; <span class="prelude-ty">Result</span>&lt;(), TransactionError&gt; {
-    <span class="kw">let </span><span class="kw-2">mut </span>funding_verifier = FundingVerifier::default();
-    <span class="kw">let </span><span class="kw-2">mut </span>public_keys = Vec::new();
-    <span class="kw">let </span>in_count = transaction.inputs.len();
-    <span class="kw">let </span>out_count = transaction.outputs.len();
+<span class="kw">use </span><span class="kw">crate</span>::atomic_broadcast::Keychain;
+<span class="kw">use </span><span class="kw">crate</span>::config::{ServerConfig, ServerConfigLocal};
+<span class="kw">use </span><span class="kw">crate</span>::consensus::engine::ConsensusEngine;
+<span class="kw">use </span><span class="kw">crate</span>::db::{get_global_database_migrations, GLOBAL_DATABASE_VERSION};
+<span class="kw">use </span><span class="kw">crate</span>::net::api::{ConsensusApi, ExpiringCache, RpcHandlerCtx};
+<span class="kw">use crate</span>::{net, FedimintApiHandler, FedimintServer};
 
-    dbtx.on_commit(<span class="kw">move </span>|| {
-        CONSENSUS_TX_PROCESSED_INPUTS.observe(in_count <span class="kw">as </span>f64);
-        CONSENSUS_TX_PROCESSED_OUTPUTS.observe(out_count <span class="kw">as </span>f64);
+<span class="doccomment">/// How many txs can be stored in memory before blocking the API
+</span><span class="kw">const </span>TRANSACTION_BUFFER: usize = <span class="number">1000</span>;
+
+<span class="kw">pub async fn </span>spawn_api_and_build_engine(
+    cfg: ServerConfig,
+    db: Database,
+    module_init_registry: ServerModuleInitRegistry,
+    task_group: <span class="kw-2">&amp;</span>TaskGroup,
+) -&gt; anyhow::Result&lt;(ConsensusEngine, FedimintApiHandler)&gt; {
+    cfg.validate_config(<span class="kw-2">&amp;</span>cfg.local.identity, <span class="kw-2">&amp;</span>module_init_registry)<span class="question-mark">?</span>;
+
+    apply_migrations_server(
+        <span class="kw-2">&amp;</span>db,
+        <span class="string">"fedimint-server"</span>.to_string(),
+        GLOBAL_DATABASE_VERSION,
+        get_global_database_migrations(),
+    )
+    .<span class="kw">await</span><span class="question-mark">?</span>;
+
+    <span class="kw">let </span><span class="kw-2">mut </span>modules = BTreeMap::new();
+
+    <span class="kw">for </span>(module_id, module_cfg) <span class="kw">in </span><span class="kw-2">&amp;</span>cfg.consensus.modules {
+        <span class="kw">match </span>module_init_registry.get(<span class="kw-2">&amp;</span>module_cfg.kind) {
+            <span class="prelude-val">Some</span>(module_init) =&gt; {
+                <span class="macro">info!</span>(target: LOG_CORE, <span class="string">"Initialise module {module_id}"</span>);
+
+                apply_migrations(
+                    <span class="kw-2">&amp;</span>db,
+                    module_init.module_kind().to_string(),
+                    module_init.database_version(),
+                    module_init.get_database_migrations(),
+                    <span class="prelude-val">Some</span>(<span class="kw-2">*</span>module_id),
+                )
+                .<span class="kw">await</span><span class="question-mark">?</span>;
+
+                <span class="kw">let </span>module = module_init
+                    .init(
+                        NumPeers::from(cfg.consensus.api_endpoints.len()),
+                        cfg.get_module_config(<span class="kw-2">*</span>module_id)<span class="question-mark">?</span>,
+                        db.with_prefix_module_id(<span class="kw-2">*</span>module_id),
+                        task_group,
+                        cfg.local.identity,
+                    )
+                    .<span class="kw">await</span><span class="question-mark">?</span>;
+
+                modules.insert(<span class="kw-2">*</span>module_id, (module_cfg.kind.clone(), module));
+            }
+            <span class="prelude-val">None </span>=&gt; <span class="macro">bail!</span>(<span class="string">"Detected configuration for unsupported module id: {module_id}"</span>),
+        };
+    }
+
+    <span class="kw">let </span>module_registry = ModuleRegistry::from(modules);
+
+    <span class="kw">let </span>client_cfg = cfg.consensus.to_client_config(<span class="kw-2">&amp;</span>module_init_registry)<span class="question-mark">?</span>;
+
+    <span class="kw">let </span>(submission_sender, submission_receiver) = async_channel::bounded(TRANSACTION_BUFFER);
+    <span class="kw">let </span>(shutdown_sender, shutdown_receiver) = watch::channel(<span class="prelude-val">None</span>);
+    <span class="kw">let </span>connection_status_channels = Default::default();
+    <span class="kw">let </span>last_ci_by_peer = Default::default();
+
+    <span class="kw">let </span>consensus_api = ConsensusApi {
+        cfg: cfg.clone(),
+        db: db.clone(),
+        modules: module_registry.clone(),
+        client_cfg: client_cfg.clone(),
+        submission_sender: submission_sender.clone(),
+        shutdown_sender,
+        supported_api_versions: ServerConfig::supported_api_versions_summary(
+            <span class="kw-2">&amp;</span>cfg.consensus.modules,
+            <span class="kw-2">&amp;</span>module_init_registry,
+        ),
+        last_ci_by_peer: Arc::clone(<span class="kw-2">&amp;</span>last_ci_by_peer),
+        connection_status_channels: Arc::clone(<span class="kw-2">&amp;</span>connection_status_channels),
+        consensus_status_cache: ExpiringCache::new(Duration::from_millis(<span class="number">500</span>)),
+    };
+
+    <span class="macro">info!</span>(target: LOG_CONSENSUS, <span class="string">"Starting Consensus Api"</span>);
+
+    <span class="kw">let </span>api_handler = start_consensus_api(<span class="kw-2">&amp;</span>cfg.local, consensus_api).<span class="kw">await</span>;
+
+    <span class="macro">info!</span>(target: LOG_CONSENSUS, <span class="string">"Starting Submission of Module CI proposals"</span>);
+
+    <span class="kw">for </span>(module_id, kind, module) <span class="kw">in </span>module_registry.iter_modules() {
+        submit_module_ci_proposals(
+            task_group,
+            db.clone(),
+            module_id,
+            kind.clone(),
+            module.clone(),
+            submission_sender.clone(),
+        )
+        .<span class="kw">await</span>;
+    }
+
+    <span class="macro">info!</span>(target: LOG_CONSENSUS, <span class="string">"Starting Consensus Engine"</span>);
+
+    <span class="kw">let </span>engine = ConsensusEngine {
+        db,
+        keychain: Keychain::new(<span class="kw-2">&amp;</span>cfg),
+        federation_api: DynGlobalApi::from_config(<span class="kw-2">&amp;</span>client_cfg),
+        self_id_str: cfg.local.identity.to_string(),
+        peer_id_str: (<span class="number">0</span>..cfg.consensus.api_endpoints.len())
+            .map(|x| x.to_string())
+            .collect(),
+        cfg: cfg.clone(),
+        connection_status_channels,
+        submission_receiver,
+        shutdown_receiver,
+        last_ci_by_peer,
+        modules: module_registry,
+        task_group: task_group.clone(),
+    };
+
+    <span class="prelude-val">Ok</span>((engine, api_handler))
+}
+
+<span class="kw">async fn </span>start_consensus_api(cfg: <span class="kw-2">&amp;</span>ServerConfigLocal, api: ConsensusApi) -&gt; FedimintApiHandler {
+    <span class="kw">let </span><span class="kw-2">mut </span>rpc_module = RpcHandlerCtx::new_module(api.clone());
+
+    FedimintServer::attach_endpoints(<span class="kw-2">&amp;mut </span>rpc_module, net::api::server_endpoints(), <span class="prelude-val">None</span>);
+
+    <span class="kw">for </span>(id, <span class="kw">_</span>, module) <span class="kw">in </span>api.modules.iter_modules() {
+        FedimintServer::attach_endpoints(<span class="kw-2">&amp;mut </span>rpc_module, module.api_endpoints(), <span class="prelude-val">Some</span>(id));
+    }
+
+    FedimintServer::spawn_api(<span class="string">"consensus"</span>, <span class="kw-2">&amp;</span>cfg.api_bind, rpc_module, cfg.max_connections).<span class="kw">await
+</span>}
+
+<span class="kw">const </span>CONSENSUS_PROPOSAL_TIMEOUT: Duration = Duration::from_secs(<span class="number">30</span>);
+
+<span class="kw">async fn </span>submit_module_ci_proposals(
+    task_group: <span class="kw-2">&amp;</span>TaskGroup,
+    db: Database,
+    module_id: ModuleInstanceId,
+    kind: ModuleKind,
+    module: DynServerModule,
+    submission_sender: Sender&lt;ConsensusItem&gt;,
+) {
+    <span class="kw">let </span><span class="kw-2">mut </span>interval = tokio::time::interval(<span class="kw">if </span>is_running_in_test_env() {
+        Duration::from_millis(<span class="number">100</span>)
+    } <span class="kw">else </span>{
+        Duration::from_secs(<span class="number">1</span>)
     });
-    <span class="kw">for </span>input <span class="kw">in </span>transaction.inputs.iter() {
-        <span class="kw">let </span>meta = modules
-            .get_expect(input.module_instance_id())
-            .process_input(
-                <span class="kw-2">&amp;mut </span>dbtx.to_ref_with_prefix_module_id(input.module_instance_id()),
-                input,
-                input.module_instance_id(),
-            )
-            .<span class="kw">await
-            </span>.map_err(TransactionError::Input)<span class="question-mark">?</span>;
 
-        funding_verifier.add_input(meta.amount);
-        public_keys.push(meta.pub_key);
-    }
+    task_group.spawn(
+        <span class="string">"submit_module_ci_proposals_{module_id}"</span>,
+        <span class="kw">move </span>|task_handle| <span class="kw">async move </span>{
+            <span class="kw">while </span>!task_handle.is_shutting_down() {
+                <span class="kw">let </span>module_consensus_items = tokio::time::timeout(
+                    CONSENSUS_PROPOSAL_TIMEOUT,
+                    module.consensus_proposal(
+                        <span class="kw-2">&amp;mut </span>db
+                            .begin_transaction_nc()
+                            .<span class="kw">await
+                            </span>.to_ref_with_prefix_module_id(module_id)
+                            .into_nc(),
+                        module_id,
+                    ),
+                )
+                .<span class="kw">await</span>;
 
-    transaction.validate_signatures(public_keys)<span class="question-mark">?</span>;
+                <span class="kw">match </span>module_consensus_items {
+                    <span class="prelude-val">Ok</span>(items) =&gt; {
+                        <span class="kw">for </span>item <span class="kw">in </span>items {
+                            submission_sender
+                                .send(ConsensusItem::Module(item))
+                                .<span class="kw">await
+                                </span>.ok();
+                        }
+                    }
+                    <span class="prelude-val">Err</span>(..) =&gt; {
+                        <span class="macro">warn!</span>(
+                            target: LOG_CONSENSUS,
+                            <span class="string">"Module {module_id} of kind {kind} failed to propose consensus items on time"
+                        </span>);
+                    }
+                }
 
-    <span class="kw">for </span>(output, out_idx) <span class="kw">in </span>transaction.outputs.iter().zip(<span class="number">0u64</span>..) {
-        <span class="kw">let </span>amount = modules
-            .get_expect(output.module_instance_id())
-            .process_output(
-                <span class="kw-2">&amp;mut </span>dbtx.to_ref_with_prefix_module_id(output.module_instance_id()),
-                output,
-                OutPoint { txid, out_idx },
-                output.module_instance_id(),
-            )
-            .<span class="kw">await
-            </span>.map_err(TransactionError::Output)<span class="question-mark">?</span>;
-
-        funding_verifier.add_output(amount);
-    }
-
-    funding_verifier.verify_funding()<span class="question-mark">?</span>;
-
-    <span class="prelude-val">Ok</span>(())
-}
-
-<span class="kw">pub struct </span>FundingVerifier {
-    input_amount: Amount,
-    output_amount: Amount,
-    fee_amount: Amount,
-}
-
-<span class="kw">impl </span>FundingVerifier {
-    <span class="kw">pub fn </span>add_input(<span class="kw-2">&amp;mut </span><span class="self">self</span>, input_amount: TransactionItemAmount) {
-        <span class="self">self</span>.input_amount += input_amount.amount;
-        <span class="self">self</span>.fee_amount += input_amount.fee;
-    }
-
-    <span class="kw">pub fn </span>add_output(<span class="kw-2">&amp;mut </span><span class="self">self</span>, output_amount: TransactionItemAmount) {
-        <span class="self">self</span>.output_amount += output_amount.amount;
-        <span class="self">self</span>.fee_amount += output_amount.fee;
-    }
-
-    <span class="kw">pub fn </span>verify_funding(<span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;(), TransactionError&gt; {
-        <span class="kw">if </span><span class="self">self</span>.input_amount == (<span class="self">self</span>.output_amount + <span class="self">self</span>.fee_amount) {
-            <span class="prelude-val">Ok</span>(())
-        } <span class="kw">else </span>{
-            <span class="prelude-val">Err</span>(TransactionError::UnbalancedTransaction {
-                inputs: <span class="self">self</span>.input_amount,
-                outputs: <span class="self">self</span>.output_amount,
-                fee: <span class="self">self</span>.fee_amount,
-            })
-        }
-    }
-}
-
-<span class="kw">impl </span>Default <span class="kw">for </span>FundingVerifier {
-    <span class="kw">fn </span>default() -&gt; <span class="self">Self </span>{
-        FundingVerifier {
-            input_amount: Amount::ZERO,
-            output_amount: Amount::ZERO,
-            fee_amount: Amount::ZERO,
-        }
-    }
+                interval.tick().<span class="kw">await</span>;
+            }
+        },
+    );
 }
 </code></pre></div></section></main></body></html>
