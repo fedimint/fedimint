@@ -2002,6 +2002,7 @@ fn module_instance_id_or_global(module_instance_id: Option<ModuleInstanceId>) ->
 #[allow(unused_imports)]
 mod test_utils {
     use std::collections::BTreeMap;
+    use std::thread::sleep;
     use std::time::Duration;
 
     use futures::future::ready;
@@ -2322,7 +2323,10 @@ mod test_utils {
                     10
                 };
                 for _ in 0..times {
-                    tokio::task::yield_now().await
+                    #[cfg(target_family = "wasm")]
+                    crate::runtime::sleep(Duration::from_millis(1)).await;
+                    #[cfg(not(target_family = "wasm"))]
+                    tokio::task::yield_now().await;
                 }
             }
 
