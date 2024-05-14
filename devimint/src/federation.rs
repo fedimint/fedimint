@@ -19,6 +19,7 @@ use fedimint_core::envs::BitcoinRpcConfig;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::module::{ApiAuth, ModuleCommon};
 use fedimint_core::runtime::block_in_place;
+use fedimint_core::task::block_on;
 use fedimint_core::task::jit::JitTryAnyhow;
 use fedimint_core::util::SafeUrl;
 use fedimint_core::{Amount, PeerId};
@@ -31,6 +32,7 @@ use fedimintd::envs::FM_EXTRA_DKG_META_ENV;
 use fs_lock::FileLock;
 use futures::future::join_all;
 use rand::Rng;
+use tokio::task::JoinSet;
 use tokio::time::Instant;
 use tracing::{debug, info};
 
@@ -53,6 +55,20 @@ pub struct Federation {
     client: JitTryAnyhow<Client>,
 }
 
+impl Drop for Federation {
+    fn drop(&mut self) {
+        block_in_place(|| {
+            block_on(async {
+                let mut set = JoinSet::new();
+
+                while let Some((_id, fedimintd)) = self.members.pop_first() {
+                    set.spawn(async move { drop(fedimintd) });
+                }
+                while (set.join_next().await).is_some() {}
+            })
+        })
+    }
+}
 /// `fedimint-cli` instance (basically path with client state: config + db)
 #[derive(Clone)]
 pub struct Client {

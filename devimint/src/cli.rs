@@ -189,7 +189,7 @@ pub async fn update_test_dir_link(
 pub async fn cleanup_on_exit<T>(
     main_process: impl futures::Future<Output = Result<T>>,
     task_group: TaskGroup,
-) -> Result<()> {
+) -> Result<Option<T>> {
     match task_group
         .make_handle()
         .cancel_on_shutdown(main_process)
@@ -197,7 +197,7 @@ pub async fn cleanup_on_exit<T>(
     {
         Err(_) => {
             info!("Received shutdown signal before finishing main process, exiting early");
-            Ok(())
+            Ok(None)
         }
         Ok(Ok(v)) => {
             debug!(target: LOG_DEVIMINT, "Main process finished successfully, shutting down task group");
@@ -205,9 +205,8 @@ pub async fn cleanup_on_exit<T>(
                 .shutdown_join_all(Duration::from_secs(30))
                 .await?;
 
-            // drop v here, not before the shutdown
-            drop(v);
-            Ok(())
+            // the caller can drop the v after shutdown
+            Ok(Some(v))
         }
         Ok(Err(err)) => {
             warn!(target: LOG_DEVIMINT, %err, "Main process failed, will shutdown");
@@ -323,7 +322,9 @@ pub async fn handle_command(cmd: Cmd, common_args: CommonArgs) -> Result<()> {
                     Ok::<_, anyhow::Error>(daemons)
                 }
             };
-            cleanup_on_exit(main, task_group).await?;
+            if let Some(fed) = cleanup_on_exit(main, task_group).await? {
+                fed.fast_terminate().await
+            }
         }
         Cmd::Rpc(rpc_cmd) => rpc_command(rpc_cmd, common_args).await?,
         Cmd::RunUi => {
