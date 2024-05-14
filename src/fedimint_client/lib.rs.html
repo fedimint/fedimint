@@ -2416,6 +2416,9 @@
 <a href="#2416" id="2416">2416</a>
 <a href="#2417" id="2417">2417</a>
 <a href="#2418" id="2418">2418</a>
+<a href="#2419" id="2419">2419</a>
+<a href="#2420" id="2420">2420</a>
+<a href="#2421" id="2421">2421</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! # Client library for fedimintd
 //!
 //! This library provides a client interface to build module clients that can be
@@ -2528,7 +2531,7 @@
 };
 <span class="kw">pub use </span>fedimint_derive_secret <span class="kw">as </span>derivable_secret;
 <span class="kw">use </span>fedimint_derive_secret::DerivableSecret;
-<span class="kw">use </span>fedimint_logging::{LOG_CLIENT, LOG_CLIENT_RECOVERY};
+<span class="kw">use </span>fedimint_logging::{LOG_CLIENT, LOG_CLIENT_NET_API, LOG_CLIENT_RECOVERY};
 <span class="kw">use </span>futures::{Future, Stream, StreamExt};
 <span class="kw">use </span>meta::{LegacyMetaSource, MetaService};
 <span class="kw">use </span>module::recovery::RecoveryProgress;
@@ -3528,6 +3531,9 @@
         </span>);
 
         <span class="kw">let </span>txid = transaction.tx_hash();
+
+        <span class="macro">debug!</span>(target: LOG_CLIENT_NET_API, %txid, <span class="question-mark">?</span>transaction,  <span class="string">"Finalized and submitting transaction"</span>);
+
         <span class="kw">let </span>change_outpoints = change_range
             .into_iter()
             .map(|out_idx| OutPoint { txid, out_idx })
