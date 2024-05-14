@@ -110,27 +110,28 @@ where
             .val
             .get_or_init(|| async {
                 let handle: &mut _ = &mut *self.inner.handle.lock().await;
-                handle
-                    .await
-                    .unwrap_or_else(|err| {
+                match handle.await {
+                        Ok(Ok(o)) => Ok(o),
+                        Ok(Err(err)) => {
+                            let err_str = err.to_string();
+                            init_error = Some(err);
+                            Err(err_str)
+                        },
+                        Err(err) => {
 
-                        #[cfg(not(target_family = "wasm"))]
-                        if err.is_panic() {
-                            warn!(target: LOG_TASK, %err, type_name = %std::any::type_name::<T>(), "Jit value panicked");
-                            // Resume the panic on the main task
-                            panic::resume_unwind(err.into_panic());
-                        }
-                        #[cfg(not(target_family = "wasm"))]
-                        if err.is_cancelled() {
-                            warn!(target: LOG_TASK, %err, type_name = %std::any::type_name::<T>(), "Jit value task canceled:");
-                        }
-                        panic!("Jit value {} failed unexpectedly with: {}", std::any::type_name::<T>(), err);
-                    })
-                    .map_err(|err| {
-                        let err_str = err.to_string();
-                        init_error = Some(err);
-                        err_str
-                    })
+                            #[cfg(not(target_family = "wasm"))]
+                            if err.is_panic() {
+                                warn!(target: LOG_TASK, %err, type_name = %std::any::type_name::<T>(), "Jit value panicked");
+                                // Resume the panic on the main task
+                                panic::resume_unwind(err.into_panic());
+                            }
+                            #[cfg(not(target_family = "wasm"))]
+                            if err.is_cancelled() {
+                                warn!(target: LOG_TASK, %err, type_name = %std::any::type_name::<T>(), "Jit value task canceled:");
+                            }
+                            Err(format!("Jit value {} failed unexpectedly with: {}", std::any::type_name::<T>(), err))
+                        },
+                    }
             })
             .await;
         if let Some(err) = init_error {
