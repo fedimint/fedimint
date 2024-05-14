@@ -247,7 +247,7 @@
 <span class="kw">use </span><span class="kw">crate</span>::consensus::engine::ConsensusEngine;
 <span class="kw">use </span><span class="kw">crate</span>::db::{get_global_database_migrations, GLOBAL_DATABASE_VERSION};
 <span class="kw">use </span><span class="kw">crate</span>::net::api::{ConsensusApi, ExpiringCache, RpcHandlerCtx};
-<span class="kw">use crate</span>::{net, FedimintApiHandler, FedimintServer};
+<span class="kw">use crate</span>::{net, FedimintApiHandler};
 
 <span class="doccomment">/// How many txs can be stored in memory before blocking the API
 </span><span class="kw">const </span>TRANSACTION_BUFFER: usize = <span class="number">1000</span>;
@@ -368,13 +368,13 @@
 <span class="kw">async fn </span>start_consensus_api(cfg: <span class="kw-2">&amp;</span>ServerConfigLocal, api: ConsensusApi) -&gt; FedimintApiHandler {
     <span class="kw">let </span><span class="kw-2">mut </span>rpc_module = RpcHandlerCtx::new_module(api.clone());
 
-    FedimintServer::attach_endpoints(<span class="kw-2">&amp;mut </span>rpc_module, net::api::server_endpoints(), <span class="prelude-val">None</span>);
+    <span class="kw">crate</span>::attach_endpoints(<span class="kw-2">&amp;mut </span>rpc_module, net::api::server_endpoints(), <span class="prelude-val">None</span>);
 
     <span class="kw">for </span>(id, <span class="kw">_</span>, module) <span class="kw">in </span>api.modules.iter_modules() {
-        FedimintServer::attach_endpoints(<span class="kw-2">&amp;mut </span>rpc_module, module.api_endpoints(), <span class="prelude-val">Some</span>(id));
+        <span class="kw">crate</span>::attach_endpoints(<span class="kw-2">&amp;mut </span>rpc_module, module.api_endpoints(), <span class="prelude-val">Some</span>(id));
     }
 
-    FedimintServer::spawn_api(<span class="string">"consensus"</span>, <span class="kw-2">&amp;</span>cfg.api_bind, rpc_module, cfg.max_connections).<span class="kw">await
+    <span class="kw">crate</span>::spawn_api(<span class="string">"consensus"</span>, <span class="kw-2">&amp;</span>cfg.api_bind, rpc_module, cfg.max_connections).<span class="kw">await
 </span>}
 
 <span class="kw">const </span>CONSENSUS_PROPOSAL_TIMEOUT: Duration = Duration::from_secs(<span class="number">30</span>);

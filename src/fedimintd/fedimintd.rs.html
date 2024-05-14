@@ -461,6 +461,11 @@
 <a href="#461" id="461">461</a>
 <a href="#462" id="462">462</a>
 <a href="#463" id="463">463</a>
+<a href="#464" id="464">464</a>
+<a href="#465" id="465">465</a>
+<a href="#466" id="466">466</a>
+<a href="#467" id="467">467</a>
+<a href="#468" id="468">468</a>
 </pre></div><pre class="rust"><code><span class="kw">mod </span>metrics;
 
 <span class="kw">use </span>std::collections::BTreeMap;
@@ -492,7 +497,6 @@
 <span class="kw">use </span>fedimint_server::config::api::ConfigGenSettings;
 <span class="kw">use </span>fedimint_server::config::io::{DB_FILE, PLAINTEXT_PASSWORD};
 <span class="kw">use </span>fedimint_server::config::ServerConfig;
-<span class="kw">use </span>fedimint_server::FedimintServer;
 <span class="kw">use </span>fedimint_unknown_common::config::UnknownGenParams;
 <span class="kw">use </span>fedimint_unknown_server::UnknownInit;
 <span class="kw">use </span>fedimint_wallet_server::common::config::{
@@ -918,9 +922,15 @@
         Default::default(),
     );
 
-    FedimintServer::new(data_dir, settings, db, version_hash)
-        .run(<span class="kw-2">&amp;</span>module_inits, task_group.clone())
-        .<span class="kw">await</span><span class="question-mark">?</span>;
+    fedimint_server::run(
+        data_dir,
+        settings,
+        db,
+        version_hash,
+        <span class="kw-2">&amp;</span>module_inits,
+        task_group.clone(),
+    )
+    .<span class="kw">await</span><span class="question-mark">?</span>;
 
     <span class="prelude-val">Ok</span>(())
 }

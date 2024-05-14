@@ -279,30 +279,6 @@
 <a href="#279" id="279">279</a>
 <a href="#280" id="280">280</a>
 <a href="#281" id="281">281</a>
-<a href="#282" id="282">282</a>
-<a href="#283" id="283">283</a>
-<a href="#284" id="284">284</a>
-<a href="#285" id="285">285</a>
-<a href="#286" id="286">286</a>
-<a href="#287" id="287">287</a>
-<a href="#288" id="288">288</a>
-<a href="#289" id="289">289</a>
-<a href="#290" id="290">290</a>
-<a href="#291" id="291">291</a>
-<a href="#292" id="292">292</a>
-<a href="#293" id="293">293</a>
-<a href="#294" id="294">294</a>
-<a href="#295" id="295">295</a>
-<a href="#296" id="296">296</a>
-<a href="#297" id="297">297</a>
-<a href="#298" id="298">298</a>
-<a href="#299" id="299">299</a>
-<a href="#300" id="300">300</a>
-<a href="#301" id="301">301</a>
-<a href="#302" id="302">302</a>
-<a href="#303" id="303">303</a>
-<a href="#304" id="304">304</a>
-<a href="#305" id="305">305</a>
 </pre></div><pre class="rust"><code><span class="attr">#![allow(where_clauses_object_safety)] </span><span class="comment">// https://github.com/dtolnay/async-trait/issues/228
 </span><span class="kw">extern crate </span>fedimint_core;
 
@@ -373,217 +349,193 @@
     ) -&gt; (<span class="kw-2">&amp;</span>State, ApiEndpointContext&lt;<span class="lifetime">'_</span>&gt;);
 }
 
-<span class="doccomment">/// Main server for running Fedimint consensus and APIs
-</span><span class="attr">#[derive(Debug)]
-</span><span class="kw">pub struct </span>FedimintServer {
-    <span class="doccomment">/// Location where configs are stored
-    </span><span class="kw">pub </span>data_dir: PathBuf,
-    <span class="doccomment">/// Module and endpoint settings necessary for starting the API
-    </span><span class="kw">pub </span>settings: ConfigGenSettings,
-    <span class="doccomment">/// Database shared by the API and consensus
-    </span><span class="kw">pub </span>db: Database,
-    <span class="doccomment">/// Version hash
-    </span><span class="kw">pub </span>version_hash: String,
+<span class="kw">pub async fn </span>run(
+    data_dir: PathBuf,
+    settings: ConfigGenSettings,
+    db: Database,
+    version_hash: String,
+    module_init_registry: <span class="kw-2">&amp;</span>ServerModuleInitRegistry,
+    task_group: TaskGroup,
+) -&gt; anyhow::Result&lt;()&gt; {
+    <span class="kw">let </span>cfg = <span class="kw">match </span>get_config(<span class="kw-2">&amp;</span>data_dir).<span class="kw">await</span><span class="question-mark">? </span>{
+        <span class="prelude-val">Some</span>(cfg) =&gt; cfg,
+        <span class="prelude-val">None </span>=&gt; {
+            run_config_gen(
+                data_dir,
+                settings,
+                db.clone(),
+                version_hash,
+                task_group.make_subgroup(),
+            )
+            .<span class="kw">await</span><span class="question-mark">?
+        </span>}
+    };
+
+    <span class="kw">let </span>decoders = module_init_registry.decoders_strict(
+        cfg.consensus
+            .modules
+            .iter()
+            .map(|(id, config)| (<span class="kw-2">*</span>id, <span class="kw-2">&amp;</span>config.kind)),
+    )<span class="question-mark">?</span>;
+
+    <span class="kw">let </span>db = db.with_decoders(decoders);
+
+    initialize_gauge_metrics(<span class="kw-2">&amp;</span>db).<span class="kw">await</span>;
+
+    <span class="kw">let </span>(engine, api_handler) =
+        consensus::spawn_api_and_build_engine(cfg, db, module_init_registry.clone(), <span class="kw-2">&amp;</span>task_group)
+            .<span class="kw">await</span><span class="question-mark">?</span>;
+
+    engine.run().<span class="kw">await</span><span class="question-mark">?</span>;
+
+    api_handler.stop().<span class="kw">await</span>;
+
+    <span class="macro">info!</span>(target: LOG_CONSENSUS, <span class="string">"Shutting down tasks"</span>);
+
+    task_group.shutdown();
+
+    <span class="prelude-val">Ok</span>(())
 }
 
-<span class="kw">impl </span>FedimintServer {
-    <span class="kw">pub fn </span>new(
-        data_dir: PathBuf,
-        settings: ConfigGenSettings,
-        db: Database,
-        version_hash: String,
-    ) -&gt; <span class="self">Self </span>{
-        <span class="self">Self </span>{
-            data_dir,
-            settings,
-            db,
-            version_hash,
-        }
+<span class="kw">pub async fn </span>get_config(data_dir: <span class="kw-2">&amp;</span>Path) -&gt; anyhow::Result&lt;<span class="prelude-ty">Option</span>&lt;ServerConfig&gt;&gt; {
+    <span class="comment">// Attempt get the config with local password, otherwise start config gen
+    </span><span class="kw">if let </span><span class="prelude-val">Ok</span>(password) = fs::read_to_string(data_dir.join(PLAINTEXT_PASSWORD)) {
+        <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(read_server_config(<span class="kw-2">&amp;</span>password, data_dir.to_owned())<span class="question-mark">?</span>));
     }
 
-    <span class="kw">pub async fn </span>run(
-        <span class="kw-2">&amp;mut </span><span class="self">self</span>,
-        module_init_registry: <span class="kw-2">&amp;</span>ServerModuleInitRegistry,
-        task_group: TaskGroup,
-    ) -&gt; anyhow::Result&lt;()&gt; {
-        <span class="kw">let </span>cfg = <span class="kw">match </span>FedimintServer::get_config(<span class="kw-2">&amp;</span><span class="self">self</span>.data_dir).<span class="kw">await</span><span class="question-mark">? </span>{
-            <span class="prelude-val">Some</span>(cfg) =&gt; cfg,
-            <span class="prelude-val">None </span>=&gt; <span class="self">self</span>.run_config_gen(task_group.make_subgroup()).<span class="kw">await</span><span class="question-mark">?</span>,
+    <span class="prelude-val">Ok</span>(<span class="prelude-val">None</span>)
+}
+
+<span class="kw">pub async fn </span>run_config_gen(
+    data_dir: PathBuf,
+    settings: ConfigGenSettings,
+    db: Database,
+    version_hash: String,
+    <span class="kw-2">mut </span>task_group: TaskGroup,
+) -&gt; anyhow::Result&lt;ServerConfig&gt; {
+    <span class="macro">info!</span>(target: LOG_CONSENSUS, <span class="string">"Starting config gen"</span>);
+
+    initialize_gauge_metrics(<span class="kw-2">&amp;</span>db).<span class="kw">await</span>;
+
+    <span class="kw">let </span>(cfg_sender, <span class="kw-2">mut </span>cfg_receiver) = tokio::sync::mpsc::channel(<span class="number">1</span>);
+
+    <span class="kw">let </span>config_gen = ConfigGenApi::new(
+        settings.clone(),
+        db.clone(),
+        cfg_sender,
+        <span class="kw-2">&amp;mut </span>task_group,
+        version_hash.clone(),
+    );
+
+    <span class="kw">let </span><span class="kw-2">mut </span>rpc_module = RpcHandlerCtx::new_module(config_gen);
+
+    attach_endpoints(<span class="kw-2">&amp;mut </span>rpc_module, config::api::server_endpoints(), <span class="prelude-val">None</span>);
+
+    <span class="kw">let </span>handler = spawn_api(<span class="string">"config-gen"</span>, <span class="kw-2">&amp;</span>settings.api_bind, rpc_module, <span class="number">10</span>).<span class="kw">await</span>;
+
+    <span class="kw">let </span>cfg = cfg_receiver.recv().<span class="kw">await</span>.expect(<span class="string">"should not close"</span>);
+
+    handler.stop().<span class="kw">await</span>;
+
+    <span class="comment">// TODO: Make writing password optional
+    </span>write_new(data_dir.join(PLAINTEXT_PASSWORD), <span class="kw-2">&amp;</span>cfg.private.api_auth.<span class="number">0</span>)<span class="question-mark">?</span>;
+    write_new(data_dir.join(SALT_FILE), random_salt())<span class="question-mark">?</span>;
+    write_server_config(
+        <span class="kw-2">&amp;</span>cfg,
+        data_dir.clone(),
+        <span class="kw-2">&amp;</span>cfg.private.api_auth.<span class="number">0</span>,
+        <span class="kw-2">&amp;</span>settings.registry,
+    )<span class="question-mark">?</span>;
+
+    <span class="prelude-val">Ok</span>(cfg)
+}
+
+<span class="doccomment">/// Spawns an API server
+///
+/// `force_shutdown` runs the API in a new runtime that the
+/// `FedimintApiHandler` can force to shutdown, otherwise the task cannot
+/// easily be killed.
+</span><span class="kw">async fn </span>spawn_api&lt;T&gt;(
+    name: <span class="kw-2">&amp;</span><span class="lifetime">'static </span>str,
+    api_bind: <span class="kw-2">&amp;</span>SocketAddr,
+    module: RpcModule&lt;RpcHandlerCtx&lt;T&gt;&gt;,
+    max_connections: u32,
+) -&gt; FedimintApiHandler {
+    <span class="kw">let </span>handle = ServerBuilder::new()
+        .max_connections(max_connections)
+        .enable_ws_ping(PingConfig::new().ping_interval(Duration::from_secs(<span class="number">10</span>)))
+        .set_rpc_middleware(RpcServiceBuilder::new().layer(metrics::jsonrpsee::MetricsLayer))
+        .build(<span class="kw-2">&amp;</span>api_bind.to_string())
+        .<span class="kw">await
+        </span>.context(<span class="macro">format!</span>(<span class="string">"Bind address: {api_bind}"</span>))
+        .context(<span class="macro">format!</span>(<span class="string">"API name: {name}"</span>))
+        .expect(<span class="string">"Could not build API server"</span>)
+        .start(module);
+    <span class="macro">info!</span>(target: LOG_NET_API, <span class="string">"Starting api on ws://{api_bind}"</span>);
+
+    FedimintApiHandler { handle }
+}
+
+<span class="doccomment">/// Attaches `endpoints` to the `RpcModule`
+</span><span class="kw">fn </span>attach_endpoints&lt;State, T&gt;(
+    rpc_module: <span class="kw-2">&amp;mut </span>RpcModule&lt;RpcHandlerCtx&lt;T&gt;&gt;,
+    endpoints: Vec&lt;ApiEndpoint&lt;State&gt;&gt;,
+    module_instance_id: <span class="prelude-ty">Option</span>&lt;ModuleInstanceId&gt;,
+) <span class="kw">where
+    </span>T: HasApiContext&lt;State&gt; + Sync + Send + <span class="lifetime">'static</span>,
+    State: Sync + Send + <span class="lifetime">'static</span>,
+{
+    <span class="kw">for </span>endpoint <span class="kw">in </span>endpoints {
+        <span class="kw">let </span>path = <span class="kw">if let </span><span class="prelude-val">Some</span>(module_instance_id) = module_instance_id {
+            <span class="comment">// This memory leak is fine because it only happens on server startup
+            // and path has to live till the end of program anyways.
+            </span>Box::leak(<span class="macro">format!</span>(<span class="string">"module_{}_{}"</span>, module_instance_id, endpoint.path).into_boxed_str())
+        } <span class="kw">else </span>{
+            endpoint.path
         };
-
-        <span class="kw">let </span>decoders = module_init_registry.decoders_strict(
-            cfg.consensus
-                .modules
-                .iter()
-                .map(|(id, config)| (<span class="kw-2">*</span>id, <span class="kw-2">&amp;</span>config.kind)),
-        )<span class="question-mark">?</span>;
-
-        <span class="kw">let </span>db = <span class="self">self</span>.db.with_decoders(decoders);
-
-        initialize_gauge_metrics(<span class="kw-2">&amp;</span>db).<span class="kw">await</span>;
-
-        <span class="kw">let </span>(engine, api_handler) = consensus::spawn_api_and_build_engine(
-            cfg,
-            db,
-            module_init_registry.clone(),
-            <span class="kw-2">&amp;</span>task_group,
-        )
-        .<span class="kw">await</span><span class="question-mark">?</span>;
-
-        engine.run().<span class="kw">await</span><span class="question-mark">?</span>;
-
-        api_handler.stop().<span class="kw">await</span>;
-
-        <span class="macro">info!</span>(target: LOG_CONSENSUS, <span class="string">"Shutting down tasks"</span>);
-
-        task_group.shutdown();
-
-        <span class="prelude-val">Ok</span>(())
-    }
-
-    <span class="kw">pub async fn </span>get_config(data_dir: <span class="kw-2">&amp;</span>Path) -&gt; anyhow::Result&lt;<span class="prelude-ty">Option</span>&lt;ServerConfig&gt;&gt; {
-        <span class="comment">// Attempt get the config with local password, otherwise start config gen
-        </span><span class="kw">if let </span><span class="prelude-val">Ok</span>(password) = fs::read_to_string(data_dir.join(PLAINTEXT_PASSWORD)) {
-            <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(read_server_config(<span class="kw-2">&amp;</span>password, data_dir.to_owned())<span class="question-mark">?</span>));
+        <span class="comment">// Check if paths contain any abnormal characters
+        </span><span class="kw">if </span>path.contains(|c: char| !<span class="macro">matches!</span>(c, <span class="string">'0'</span>..=<span class="string">'9' </span>| <span class="string">'a'</span>..=<span class="string">'z' </span>| <span class="string">'_'</span>)) {
+            <span class="macro">panic!</span>(<span class="string">"Constructing bad path name {path}"</span>);
         }
 
-        <span class="prelude-val">Ok</span>(<span class="prelude-val">None</span>)
-    }
+        <span class="comment">// Another memory leak that is fine because the function is only called once at
+        // startup
+        </span><span class="kw">let </span>handler: <span class="kw-2">&amp;</span><span class="lifetime">'static </span><span class="kw">_ </span>= Box::leak(endpoint.handler);
 
-    <span class="kw">pub async fn </span>run_config_gen(
-        <span class="kw-2">&amp;mut </span><span class="self">self</span>,
-        <span class="kw-2">mut </span>task_group: TaskGroup,
-    ) -&gt; anyhow::Result&lt;ServerConfig&gt; {
-        <span class="macro">info!</span>(target: LOG_CONSENSUS, <span class="string">"Starting config gen"</span>);
+        rpc_module
+            .register_async_method(path, <span class="kw">move </span>|params, rpc_state| <span class="kw">async move </span>{
+                <span class="kw">let </span>params = params.one::&lt;serde_json::Value&gt;()<span class="question-mark">?</span>;
+                <span class="kw">let </span>rpc_context = <span class="kw-2">&amp;</span>rpc_state.rpc_context;
 
-        initialize_gauge_metrics(<span class="kw-2">&amp;</span><span class="self">self</span>.db).<span class="kw">await</span>;
+                <span class="comment">// Using AssertUnwindSafe here is far from ideal. In theory this means we could
+                // end up with an inconsistent state in theory. In practice most API functions
+                // are only reading and the few that do write anything are atomic. Lastly, this
+                // is only the last line of defense
+                </span>AssertUnwindSafe(tokio::time::timeout(API_ENDPOINT_TIMEOUT, <span class="kw">async </span>{
+                    <span class="kw">let </span>request = serde_json::from_value(params)
+                        .map_err(|e| ApiError::bad_request(e.to_string()))<span class="question-mark">?</span>;
+                    <span class="kw">let </span>(state, context) = rpc_context.context(<span class="kw-2">&amp;</span>request, module_instance_id).<span class="kw">await</span>;
 
-        <span class="kw">let </span>(cfg_sender, <span class="kw-2">mut </span>cfg_receiver) = tokio::sync::mpsc::channel(<span class="number">1</span>);
-
-        <span class="kw">let </span>config_gen = ConfigGenApi::new(
-            <span class="self">self</span>.settings.clone(),
-            <span class="self">self</span>.db.clone(),
-            cfg_sender,
-            <span class="kw-2">&amp;mut </span>task_group,
-            <span class="self">self</span>.version_hash.clone(),
-        );
-
-        <span class="kw">let </span><span class="kw-2">mut </span>rpc_module = RpcHandlerCtx::new_module(config_gen);
-
-        <span class="self">Self</span>::attach_endpoints(<span class="kw-2">&amp;mut </span>rpc_module, config::api::server_endpoints(), <span class="prelude-val">None</span>);
-
-        <span class="kw">let </span>handler = <span class="self">Self</span>::spawn_api(<span class="string">"config-gen"</span>, <span class="kw-2">&amp;</span><span class="self">self</span>.settings.api_bind, rpc_module, <span class="number">10</span>).<span class="kw">await</span>;
-
-        <span class="kw">let </span>cfg = cfg_receiver.recv().<span class="kw">await</span>.expect(<span class="string">"should not close"</span>);
-
-        handler.stop().<span class="kw">await</span>;
-
-        <span class="comment">// TODO: Make writing password optional
-        </span>write_new(
-            <span class="self">self</span>.data_dir.join(PLAINTEXT_PASSWORD),
-            <span class="kw-2">&amp;</span>cfg.private.api_auth.<span class="number">0</span>,
-        )<span class="question-mark">?</span>;
-        write_new(<span class="self">self</span>.data_dir.join(SALT_FILE), random_salt())<span class="question-mark">?</span>;
-        write_server_config(
-            <span class="kw-2">&amp;</span>cfg,
-            <span class="self">self</span>.data_dir.clone(),
-            <span class="kw-2">&amp;</span>cfg.private.api_auth.<span class="number">0</span>,
-            <span class="kw-2">&amp;</span><span class="self">self</span>.settings.registry,
-        )<span class="question-mark">?</span>;
-
-        <span class="prelude-val">Ok</span>(cfg)
-    }
-
-    <span class="doccomment">/// Spawns an API server
-    ///
-    /// `force_shutdown` runs the API in a new runtime that the
-    /// `FedimintApiHandler` can force to shutdown, otherwise the task cannot
-    /// easily be killed.
-    </span><span class="kw">async fn </span>spawn_api&lt;T&gt;(
-        name: <span class="kw-2">&amp;</span><span class="lifetime">'static </span>str,
-        api_bind: <span class="kw-2">&amp;</span>SocketAddr,
-        module: RpcModule&lt;RpcHandlerCtx&lt;T&gt;&gt;,
-        max_connections: u32,
-    ) -&gt; FedimintApiHandler {
-        <span class="kw">let </span>handle = ServerBuilder::new()
-            .max_connections(max_connections)
-            .enable_ws_ping(PingConfig::new().ping_interval(Duration::from_secs(<span class="number">10</span>)))
-            .set_rpc_middleware(RpcServiceBuilder::new().layer(metrics::jsonrpsee::MetricsLayer))
-            .build(<span class="kw-2">&amp;</span>api_bind.to_string())
-            .<span class="kw">await
-            </span>.context(<span class="macro">format!</span>(<span class="string">"Bind address: {api_bind}"</span>))
-            .context(<span class="macro">format!</span>(<span class="string">"API name: {name}"</span>))
-            .expect(<span class="string">"Could not build API server"</span>)
-            .start(module);
-        <span class="macro">info!</span>(target: LOG_NET_API, <span class="string">"Starting api on ws://{api_bind}"</span>);
-
-        FedimintApiHandler { handle }
-    }
-
-    <span class="doccomment">/// Attaches `endpoints` to the `RpcModule`
-    </span><span class="kw">fn </span>attach_endpoints&lt;State, T&gt;(
-        rpc_module: <span class="kw-2">&amp;mut </span>RpcModule&lt;RpcHandlerCtx&lt;T&gt;&gt;,
-        endpoints: Vec&lt;ApiEndpoint&lt;State&gt;&gt;,
-        module_instance_id: <span class="prelude-ty">Option</span>&lt;ModuleInstanceId&gt;,
-    ) <span class="kw">where
-        </span>T: HasApiContext&lt;State&gt; + Sync + Send + <span class="lifetime">'static</span>,
-        State: Sync + Send + <span class="lifetime">'static</span>,
-    {
-        <span class="kw">for </span>endpoint <span class="kw">in </span>endpoints {
-            <span class="kw">let </span>path = <span class="kw">if let </span><span class="prelude-val">Some</span>(module_instance_id) = module_instance_id {
-                <span class="comment">// This memory leak is fine because it only happens on server startup
-                // and path has to live till the end of program anyways.
-                </span>Box::leak(
-                    <span class="macro">format!</span>(<span class="string">"module_{}_{}"</span>, module_instance_id, endpoint.path).into_boxed_str(),
-                )
-            } <span class="kw">else </span>{
-                endpoint.path
-            };
-            <span class="comment">// Check if paths contain any abnormal characters
-            </span><span class="kw">if </span>path.contains(|c: char| !<span class="macro">matches!</span>(c, <span class="string">'0'</span>..=<span class="string">'9' </span>| <span class="string">'a'</span>..=<span class="string">'z' </span>| <span class="string">'_'</span>)) {
-                <span class="macro">panic!</span>(<span class="string">"Constructing bad path name {path}"</span>);
-            }
-
-            <span class="comment">// Another memory leak that is fine because the function is only called once at
-            // startup
-            </span><span class="kw">let </span>handler: <span class="kw-2">&amp;</span><span class="lifetime">'static </span><span class="kw">_ </span>= Box::leak(endpoint.handler);
-
-            rpc_module
-                .register_async_method(path, <span class="kw">move </span>|params, rpc_state| <span class="kw">async move </span>{
-                    <span class="kw">let </span>params = params.one::&lt;serde_json::Value&gt;()<span class="question-mark">?</span>;
-                    <span class="kw">let </span>rpc_context = <span class="kw-2">&amp;</span>rpc_state.rpc_context;
-
-                    <span class="comment">// Using AssertUnwindSafe here is far from ideal. In theory this means we could
-                    // end up with an inconsistent state in theory. In practice most API functions
-                    // are only reading and the few that do write anything are atomic. Lastly, this
-                    // is only the last line of defense
-                    </span>AssertUnwindSafe(tokio::time::timeout(API_ENDPOINT_TIMEOUT, <span class="kw">async </span>{
-                        <span class="kw">let </span>request = serde_json::from_value(params)
-                            .map_err(|e| ApiError::bad_request(e.to_string()))<span class="question-mark">?</span>;
-                        <span class="kw">let </span>(state, context) =
-                            rpc_context.context(<span class="kw-2">&amp;</span>request, module_instance_id).<span class="kw">await</span>;
-
-                        (handler)(state, context, request).<span class="kw">await
-                    </span>}))
-                    .catch_unwind()
-                    .<span class="kw">await
-                    </span>.map_err(|<span class="kw">_</span>| {
-                        <span class="macro">error!</span>(
-                            target: LOG_NET_API,
-                            path, <span class="string">"API handler panicked, DO NOT IGNORE, FIX IT!!!"
-                        </span>);
-                        ErrorObject::owned(<span class="number">500</span>, <span class="string">"API handler panicked"</span>, <span class="prelude-val">None</span>::&lt;()&gt;)
-                    })<span class="question-mark">?
-                    </span>.map_err(|tokio::time::error::Elapsed { .. }| {
-                        <span class="comment">// TODO: find a better error for this, the error we used before:
-                        // jsonrpsee::core::Error::RequestTimeout
-                        // was moved to be client-side only
-                        </span>ErrorObject::owned(-<span class="number">32000</span>, <span class="string">"Request timeout"</span>, <span class="prelude-val">None</span>::&lt;()&gt;)
-                    })<span class="question-mark">?
-                    </span>.map_err(|e| ErrorObject::owned(e.code, e.message, <span class="prelude-val">None</span>::&lt;()&gt;))
-                })
-                .expect(<span class="string">"Failed to register async method"</span>);
-        }
+                    (handler)(state, context, request).<span class="kw">await
+                </span>}))
+                .catch_unwind()
+                .<span class="kw">await
+                </span>.map_err(|<span class="kw">_</span>| {
+                    <span class="macro">error!</span>(
+                        target: LOG_NET_API,
+                        path, <span class="string">"API handler panicked, DO NOT IGNORE, FIX IT!!!"
+                    </span>);
+                    ErrorObject::owned(<span class="number">500</span>, <span class="string">"API handler panicked"</span>, <span class="prelude-val">None</span>::&lt;()&gt;)
+                })<span class="question-mark">?
+                </span>.map_err(|tokio::time::error::Elapsed { .. }| {
+                    <span class="comment">// TODO: find a better error for this, the error we used before:
+                    // jsonrpsee::core::Error::RequestTimeout
+                    // was moved to be client-side only
+                    </span>ErrorObject::owned(-<span class="number">32000</span>, <span class="string">"Request timeout"</span>, <span class="prelude-val">None</span>::&lt;()&gt;)
+                })<span class="question-mark">?
+                </span>.map_err(|e| ErrorObject::owned(e.code, e.message, <span class="prelude-val">None</span>::&lt;()&gt;))
+            })
+            .expect(<span class="string">"Failed to register async method"</span>);
     }
 }
 

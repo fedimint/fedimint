@@ -1289,41 +1289,6 @@
 <a href="#1289" id="1289">1289</a>
 <a href="#1290" id="1290">1290</a>
 <a href="#1291" id="1291">1291</a>
-<a href="#1292" id="1292">1292</a>
-<a href="#1293" id="1293">1293</a>
-<a href="#1294" id="1294">1294</a>
-<a href="#1295" id="1295">1295</a>
-<a href="#1296" id="1296">1296</a>
-<a href="#1297" id="1297">1297</a>
-<a href="#1298" id="1298">1298</a>
-<a href="#1299" id="1299">1299</a>
-<a href="#1300" id="1300">1300</a>
-<a href="#1301" id="1301">1301</a>
-<a href="#1302" id="1302">1302</a>
-<a href="#1303" id="1303">1303</a>
-<a href="#1304" id="1304">1304</a>
-<a href="#1305" id="1305">1305</a>
-<a href="#1306" id="1306">1306</a>
-<a href="#1307" id="1307">1307</a>
-<a href="#1308" id="1308">1308</a>
-<a href="#1309" id="1309">1309</a>
-<a href="#1310" id="1310">1310</a>
-<a href="#1311" id="1311">1311</a>
-<a href="#1312" id="1312">1312</a>
-<a href="#1313" id="1313">1313</a>
-<a href="#1314" id="1314">1314</a>
-<a href="#1315" id="1315">1315</a>
-<a href="#1316" id="1316">1316</a>
-<a href="#1317" id="1317">1317</a>
-<a href="#1318" id="1318">1318</a>
-<a href="#1319" id="1319">1319</a>
-<a href="#1320" id="1320">1320</a>
-<a href="#1321" id="1321">1321</a>
-<a href="#1322" id="1322">1322</a>
-<a href="#1323" id="1323">1323</a>
-<a href="#1324" id="1324">1324</a>
-<a href="#1325" id="1325">1325</a>
-<a href="#1326" id="1326">1326</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::net::SocketAddr;
 <span class="kw">use </span>std::sync::Arc;
@@ -2194,7 +2159,6 @@
     <span class="kw">use </span><span class="kw">crate</span>::config::io::{read_server_config, PLAINTEXT_PASSWORD};
     <span class="kw">use </span><span class="kw">crate</span>::config::{DynServerModuleInit, ServerConfig, DEFAULT_MAX_CLIENT_CONNECTIONS};
     <span class="kw">use </span><span class="kw">crate</span>::fedimint_core::module::ServerModuleInit;
-    <span class="kw">use </span><span class="kw">crate</span>::FedimintServer;
 
     <span class="doccomment">/// Helper in config API tests for simulating a guardian's client and server
     </span><span class="kw">struct </span>TestConfigApi {
@@ -2204,21 +2168,12 @@
         settings: ConfigGenSettings,
         amount: Amount,
         dir: PathBuf,
-        module_inits: ServerModuleInitRegistry,
     }
 
     <span class="kw">impl </span>TestConfigApi {
-        <span class="kw">pub fn </span>module_inits(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>ServerModuleInitRegistry {
-            <span class="kw-2">&amp;</span><span class="self">self</span>.module_inits
-        }
-
         <span class="doccomment">/// Creates a new test API taking up a port, with P2P endpoint on the
         /// next port
-        </span><span class="kw">async fn </span>new(
-            port: u16,
-            name_suffix: u16,
-            data_dir: PathBuf,
-        ) -&gt; (TestConfigApi, FedimintServer) {
+        </span><span class="kw">async fn </span>new(port: u16, name_suffix: u16, data_dir: PathBuf) -&gt; TestConfigApi {
             <span class="kw">let </span>db = MemDatabase::new().into_database();
 
             <span class="kw">let </span>name = <span class="macro">format!</span>(<span class="string">"peer{name_suffix}"</span>);
@@ -2248,32 +2203,38 @@
                     DummyInit,
                 )]),
             };
+
             <span class="kw">let </span>dir = data_dir.join(name_suffix.to_string());
             fs::create_dir_all(dir.clone()).expect(<span class="string">"Unable to create test dir"</span>);
 
-            <span class="kw">let </span>api = FedimintServer {
-                data_dir: dir.clone(),
-                settings: settings.clone(),
-                db,
-                version_hash: <span class="string">"dummyversionhash"</span>.to_owned(),
-            };
+            <span class="kw">let </span>dir_clone = dir.clone();
+            <span class="kw">let </span>settings_clone = settings.clone();
+
+            spawn(<span class="string">"fedimint server"</span>, <span class="kw">async move </span>{
+                <span class="kw">crate</span>::run(
+                    dir_clone,
+                    settings_clone,
+                    db,
+                    <span class="string">"dummyversionhash"</span>.to_owned(),
+                    <span class="kw-2">&amp;</span>module_inits,
+                    TaskGroup::new(),
+                )
+                .<span class="kw">await
+                </span>.expect(<span class="string">"Failed to run fedimint server"</span>);
+            });
 
             <span class="comment">// our id doesn't really exist at this point
             </span><span class="kw">let </span>auth = ApiAuth(<span class="macro">format!</span>(<span class="string">"password-{port}"</span>));
             <span class="kw">let </span>client = DynGlobalApi::from_pre_peer_id_admin_endpoint(api_url);
 
-            (
-                TestConfigApi {
-                    client,
-                    auth,
-                    name,
-                    settings,
-                    amount: Amount::from_sats(port <span class="kw">as </span>u64),
-                    dir,
-                    module_inits,
-                },
-                api,
-            )
+            TestConfigApi {
+                client,
+                auth,
+                name,
+                settings,
+                amount: Amount::from_sats(port <span class="kw">as </span>u64),
+                dir,
+            }
         }
 
         <span class="doccomment">/// Helper function using generated urls
@@ -2390,29 +2351,14 @@
         <span class="kw">let </span>(data_dir, _maybe_tmp_dir_guard) = test_dir(<span class="string">"test-config-api"</span>);
         <span class="kw">let </span>base_port = port_alloc(PEER_NUM * PORTS_PER_PEER).unwrap();
 
-        <span class="comment">// let mut join_handles = vec![];
-        </span><span class="kw">let </span><span class="kw-2">mut </span>apis = <span class="macro">vec!</span>[];
         <span class="kw">let </span><span class="kw-2">mut </span>followers = <span class="macro">vec!</span>[];
-        <span class="kw">let </span>(<span class="kw-2">mut </span>test_config, api) = TestConfigApi::new(base_port, <span class="number">0</span>, data_dir.clone()).<span class="kw">await</span>;
-
-        apis.push(api);
+        <span class="kw">let </span><span class="kw-2">mut </span>test_config = TestConfigApi::new(base_port, <span class="number">0</span>, data_dir.clone()).<span class="kw">await</span>;
 
         <span class="kw">for </span>i <span class="kw">in </span><span class="number">1</span>..PEER_NUM {
             <span class="kw">let </span>port = base_port + (i * PORTS_PER_PEER);
-            <span class="kw">let </span>(follower, api) = TestConfigApi::new(port, i, data_dir.clone()).<span class="kw">await</span>;
-            apis.push(api);
+            <span class="kw">let </span>follower = TestConfigApi::new(port, i, data_dir.clone()).<span class="kw">await</span>;
             followers.push(follower);
         }
-
-        <span class="kw">let </span>module_inits = test_config.module_inits().clone();
-        <span class="comment">// Run the Fedimint servers and test concurrently
-        </span>spawn(<span class="string">"Fedimint server apis"</span>, <span class="kw">async move </span>{
-            join_all(
-                apis.iter_mut()
-                    .map(|fedimint_server| fedimint_server.run(<span class="kw-2">&amp;</span>module_inits, TaskGroup::new())),
-            )
-            .<span class="kw">await</span>;
-        });
 
         test_config = validate_leader_setup(test_config).<span class="kw">await</span>;
 
@@ -2447,30 +2393,14 @@
         <span class="kw">let </span>(data_dir, _maybe_tmp_dir_guard) = test_dir(<span class="string">"test-restart-setup"</span>);
         <span class="kw">let </span>base_port = port_alloc(PEER_NUM * PORTS_PER_PEER).unwrap();
 
-        <span class="comment">// let mut join_handles = vec![];
-        </span><span class="kw">let </span><span class="kw-2">mut </span>apis = <span class="macro">vec!</span>[];
         <span class="kw">let </span><span class="kw-2">mut </span>followers = <span class="macro">vec!</span>[];
-        <span class="kw">let </span>(<span class="kw-2">mut </span>test_config, fedimint_server) =
-            TestConfigApi::new(base_port, <span class="number">0</span>, data_dir.clone()).<span class="kw">await</span>;
-
-        apis.push(fedimint_server);
+        <span class="kw">let </span><span class="kw-2">mut </span>test_config = TestConfigApi::new(base_port, <span class="number">0</span>, data_dir.clone()).<span class="kw">await</span>;
 
         <span class="kw">for </span>i <span class="kw">in </span><span class="number">1</span>..PEER_NUM {
             <span class="kw">let </span>port = base_port + (i * PORTS_PER_PEER);
-            <span class="kw">let </span>(follower, api) = TestConfigApi::new(port, i, data_dir.clone()).<span class="kw">await</span>;
-            apis.push(api);
+            <span class="kw">let </span>follower = TestConfigApi::new(port, i, data_dir.clone()).<span class="kw">await</span>;
             followers.push(follower);
         }
-
-        <span class="kw">let </span>module_inits = test_config.module_inits().clone();
-        <span class="comment">// Run the Fedimint servers and test concurrently
-        </span>spawn(<span class="string">"Fedimint server apis"</span>, <span class="kw">async move </span>{
-            join_all(
-                apis.iter_mut()
-                    .map(|api| api.run(<span class="kw-2">&amp;</span>module_inits, TaskGroup::new())),
-            )
-            .<span class="kw">await</span>;
-        });
 
         test_config = validate_leader_setup(test_config).<span class="kw">await</span>;
 
