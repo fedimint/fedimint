@@ -68,217 +68,193 @@ pub trait HasApiContext<State> {
     ) -> (&State, ApiEndpointContext<'_>);
 }
 
-/// Main server for running Fedimint consensus and APIs
-#[derive(Debug)]
-pub struct FedimintServer {
-    /// Location where configs are stored
-    pub data_dir: PathBuf,
-    /// Module and endpoint settings necessary for starting the API
-    pub settings: ConfigGenSettings,
-    /// Database shared by the API and consensus
-    pub db: Database,
-    /// Version hash
-    pub version_hash: String,
+pub async fn run(
+    data_dir: PathBuf,
+    settings: ConfigGenSettings,
+    db: Database,
+    version_hash: String,
+    module_init_registry: &ServerModuleInitRegistry,
+    task_group: TaskGroup,
+) -> anyhow::Result<()> {
+    let cfg = match get_config(&data_dir).await? {
+        Some(cfg) => cfg,
+        None => {
+            run_config_gen(
+                data_dir,
+                settings,
+                db.clone(),
+                version_hash,
+                task_group.make_subgroup(),
+            )
+            .await?
+        }
+    };
+
+    let decoders = module_init_registry.decoders_strict(
+        cfg.consensus
+            .modules
+            .iter()
+            .map(|(id, config)| (*id, &config.kind)),
+    )?;
+
+    let db = db.with_decoders(decoders);
+
+    initialize_gauge_metrics(&db).await;
+
+    let (engine, api_handler) =
+        consensus::spawn_api_and_build_engine(cfg, db, module_init_registry.clone(), &task_group)
+            .await?;
+
+    engine.run().await?;
+
+    api_handler.stop().await;
+
+    info!(target: LOG_CONSENSUS, "Shutting down tasks");
+
+    task_group.shutdown();
+
+    Ok(())
 }
 
-impl FedimintServer {
-    pub fn new(
-        data_dir: PathBuf,
-        settings: ConfigGenSettings,
-        db: Database,
-        version_hash: String,
-    ) -> Self {
-        Self {
-            data_dir,
-            settings,
-            db,
-            version_hash,
-        }
+pub async fn get_config(data_dir: &Path) -> anyhow::Result<Option<ServerConfig>> {
+    // Attempt get the config with local password, otherwise start config gen
+    if let Ok(password) = fs::read_to_string(data_dir.join(PLAINTEXT_PASSWORD)) {
+        return Ok(Some(read_server_config(&password, data_dir.to_owned())?));
     }
 
-    pub async fn run(
-        &mut self,
-        module_init_registry: &ServerModuleInitRegistry,
-        task_group: TaskGroup,
-    ) -> anyhow::Result<()> {
-        let cfg = match FedimintServer::get_config(&self.data_dir).await? {
-            Some(cfg) => cfg,
-            None => self.run_config_gen(task_group.make_subgroup()).await?,
+    Ok(None)
+}
+
+pub async fn run_config_gen(
+    data_dir: PathBuf,
+    settings: ConfigGenSettings,
+    db: Database,
+    version_hash: String,
+    mut task_group: TaskGroup,
+) -> anyhow::Result<ServerConfig> {
+    info!(target: LOG_CONSENSUS, "Starting config gen");
+
+    initialize_gauge_metrics(&db).await;
+
+    let (cfg_sender, mut cfg_receiver) = tokio::sync::mpsc::channel(1);
+
+    let config_gen = ConfigGenApi::new(
+        settings.clone(),
+        db.clone(),
+        cfg_sender,
+        &mut task_group,
+        version_hash.clone(),
+    );
+
+    let mut rpc_module = RpcHandlerCtx::new_module(config_gen);
+
+    attach_endpoints(&mut rpc_module, config::api::server_endpoints(), None);
+
+    let handler = spawn_api("config-gen", &settings.api_bind, rpc_module, 10).await;
+
+    let cfg = cfg_receiver.recv().await.expect("should not close");
+
+    handler.stop().await;
+
+    // TODO: Make writing password optional
+    write_new(data_dir.join(PLAINTEXT_PASSWORD), &cfg.private.api_auth.0)?;
+    write_new(data_dir.join(SALT_FILE), random_salt())?;
+    write_server_config(
+        &cfg,
+        data_dir.clone(),
+        &cfg.private.api_auth.0,
+        &settings.registry,
+    )?;
+
+    Ok(cfg)
+}
+
+/// Spawns an API server
+///
+/// `force_shutdown` runs the API in a new runtime that the
+/// `FedimintApiHandler` can force to shutdown, otherwise the task cannot
+/// easily be killed.
+async fn spawn_api<T>(
+    name: &'static str,
+    api_bind: &SocketAddr,
+    module: RpcModule<RpcHandlerCtx<T>>,
+    max_connections: u32,
+) -> FedimintApiHandler {
+    let handle = ServerBuilder::new()
+        .max_connections(max_connections)
+        .enable_ws_ping(PingConfig::new().ping_interval(Duration::from_secs(10)))
+        .set_rpc_middleware(RpcServiceBuilder::new().layer(metrics::jsonrpsee::MetricsLayer))
+        .build(&api_bind.to_string())
+        .await
+        .context(format!("Bind address: {api_bind}"))
+        .context(format!("API name: {name}"))
+        .expect("Could not build API server")
+        .start(module);
+    info!(target: LOG_NET_API, "Starting api on ws://{api_bind}");
+
+    FedimintApiHandler { handle }
+}
+
+/// Attaches `endpoints` to the `RpcModule`
+fn attach_endpoints<State, T>(
+    rpc_module: &mut RpcModule<RpcHandlerCtx<T>>,
+    endpoints: Vec<ApiEndpoint<State>>,
+    module_instance_id: Option<ModuleInstanceId>,
+) where
+    T: HasApiContext<State> + Sync + Send + 'static,
+    State: Sync + Send + 'static,
+{
+    for endpoint in endpoints {
+        let path = if let Some(module_instance_id) = module_instance_id {
+            // This memory leak is fine because it only happens on server startup
+            // and path has to live till the end of program anyways.
+            Box::leak(format!("module_{}_{}", module_instance_id, endpoint.path).into_boxed_str())
+        } else {
+            endpoint.path
         };
-
-        let decoders = module_init_registry.decoders_strict(
-            cfg.consensus
-                .modules
-                .iter()
-                .map(|(id, config)| (*id, &config.kind)),
-        )?;
-
-        let db = self.db.with_decoders(decoders);
-
-        initialize_gauge_metrics(&db).await;
-
-        let (engine, api_handler) = consensus::spawn_api_and_build_engine(
-            cfg,
-            db,
-            module_init_registry.clone(),
-            &task_group,
-        )
-        .await?;
-
-        engine.run().await?;
-
-        api_handler.stop().await;
-
-        info!(target: LOG_CONSENSUS, "Shutting down tasks");
-
-        task_group.shutdown();
-
-        Ok(())
-    }
-
-    pub async fn get_config(data_dir: &Path) -> anyhow::Result<Option<ServerConfig>> {
-        // Attempt get the config with local password, otherwise start config gen
-        if let Ok(password) = fs::read_to_string(data_dir.join(PLAINTEXT_PASSWORD)) {
-            return Ok(Some(read_server_config(&password, data_dir.to_owned())?));
+        // Check if paths contain any abnormal characters
+        if path.contains(|c: char| !matches!(c, '0'..='9' | 'a'..='z' | '_')) {
+            panic!("Constructing bad path name {path}");
         }
 
-        Ok(None)
-    }
+        // Another memory leak that is fine because the function is only called once at
+        // startup
+        let handler: &'static _ = Box::leak(endpoint.handler);
 
-    pub async fn run_config_gen(
-        &mut self,
-        mut task_group: TaskGroup,
-    ) -> anyhow::Result<ServerConfig> {
-        info!(target: LOG_CONSENSUS, "Starting config gen");
+        rpc_module
+            .register_async_method(path, move |params, rpc_state| async move {
+                let params = params.one::<serde_json::Value>()?;
+                let rpc_context = &rpc_state.rpc_context;
 
-        initialize_gauge_metrics(&self.db).await;
+                // Using AssertUnwindSafe here is far from ideal. In theory this means we could
+                // end up with an inconsistent state in theory. In practice most API functions
+                // are only reading and the few that do write anything are atomic. Lastly, this
+                // is only the last line of defense
+                AssertUnwindSafe(tokio::time::timeout(API_ENDPOINT_TIMEOUT, async {
+                    let request = serde_json::from_value(params)
+                        .map_err(|e| ApiError::bad_request(e.to_string()))?;
+                    let (state, context) = rpc_context.context(&request, module_instance_id).await;
 
-        let (cfg_sender, mut cfg_receiver) = tokio::sync::mpsc::channel(1);
-
-        let config_gen = ConfigGenApi::new(
-            self.settings.clone(),
-            self.db.clone(),
-            cfg_sender,
-            &mut task_group,
-            self.version_hash.clone(),
-        );
-
-        let mut rpc_module = RpcHandlerCtx::new_module(config_gen);
-
-        Self::attach_endpoints(&mut rpc_module, config::api::server_endpoints(), None);
-
-        let handler = Self::spawn_api("config-gen", &self.settings.api_bind, rpc_module, 10).await;
-
-        let cfg = cfg_receiver.recv().await.expect("should not close");
-
-        handler.stop().await;
-
-        // TODO: Make writing password optional
-        write_new(
-            self.data_dir.join(PLAINTEXT_PASSWORD),
-            &cfg.private.api_auth.0,
-        )?;
-        write_new(self.data_dir.join(SALT_FILE), random_salt())?;
-        write_server_config(
-            &cfg,
-            self.data_dir.clone(),
-            &cfg.private.api_auth.0,
-            &self.settings.registry,
-        )?;
-
-        Ok(cfg)
-    }
-
-    /// Spawns an API server
-    ///
-    /// `force_shutdown` runs the API in a new runtime that the
-    /// `FedimintApiHandler` can force to shutdown, otherwise the task cannot
-    /// easily be killed.
-    async fn spawn_api<T>(
-        name: &'static str,
-        api_bind: &SocketAddr,
-        module: RpcModule<RpcHandlerCtx<T>>,
-        max_connections: u32,
-    ) -> FedimintApiHandler {
-        let handle = ServerBuilder::new()
-            .max_connections(max_connections)
-            .enable_ws_ping(PingConfig::new().ping_interval(Duration::from_secs(10)))
-            .set_rpc_middleware(RpcServiceBuilder::new().layer(metrics::jsonrpsee::MetricsLayer))
-            .build(&api_bind.to_string())
-            .await
-            .context(format!("Bind address: {api_bind}"))
-            .context(format!("API name: {name}"))
-            .expect("Could not build API server")
-            .start(module);
-        info!(target: LOG_NET_API, "Starting api on ws://{api_bind}");
-
-        FedimintApiHandler { handle }
-    }
-
-    /// Attaches `endpoints` to the `RpcModule`
-    fn attach_endpoints<State, T>(
-        rpc_module: &mut RpcModule<RpcHandlerCtx<T>>,
-        endpoints: Vec<ApiEndpoint<State>>,
-        module_instance_id: Option<ModuleInstanceId>,
-    ) where
-        T: HasApiContext<State> + Sync + Send + 'static,
-        State: Sync + Send + 'static,
-    {
-        for endpoint in endpoints {
-            let path = if let Some(module_instance_id) = module_instance_id {
-                // This memory leak is fine because it only happens on server startup
-                // and path has to live till the end of program anyways.
-                Box::leak(
-                    format!("module_{}_{}", module_instance_id, endpoint.path).into_boxed_str(),
-                )
-            } else {
-                endpoint.path
-            };
-            // Check if paths contain any abnormal characters
-            if path.contains(|c: char| !matches!(c, '0'..='9' | 'a'..='z' | '_')) {
-                panic!("Constructing bad path name {path}");
-            }
-
-            // Another memory leak that is fine because the function is only called once at
-            // startup
-            let handler: &'static _ = Box::leak(endpoint.handler);
-
-            rpc_module
-                .register_async_method(path, move |params, rpc_state| async move {
-                    let params = params.one::<serde_json::Value>()?;
-                    let rpc_context = &rpc_state.rpc_context;
-
-                    // Using AssertUnwindSafe here is far from ideal. In theory this means we could
-                    // end up with an inconsistent state in theory. In practice most API functions
-                    // are only reading and the few that do write anything are atomic. Lastly, this
-                    // is only the last line of defense
-                    AssertUnwindSafe(tokio::time::timeout(API_ENDPOINT_TIMEOUT, async {
-                        let request = serde_json::from_value(params)
-                            .map_err(|e| ApiError::bad_request(e.to_string()))?;
-                        let (state, context) =
-                            rpc_context.context(&request, module_instance_id).await;
-
-                        (handler)(state, context, request).await
-                    }))
-                    .catch_unwind()
-                    .await
-                    .map_err(|_| {
-                        error!(
-                            target: LOG_NET_API,
-                            path, "API handler panicked, DO NOT IGNORE, FIX IT!!!"
-                        );
-                        ErrorObject::owned(500, "API handler panicked", None::<()>)
-                    })?
-                    .map_err(|tokio::time::error::Elapsed { .. }| {
-                        // TODO: find a better error for this, the error we used before:
-                        // jsonrpsee::core::Error::RequestTimeout
-                        // was moved to be client-side only
-                        ErrorObject::owned(-32000, "Request timeout", None::<()>)
-                    })?
-                    .map_err(|e| ErrorObject::owned(e.code, e.message, None::<()>))
-                })
-                .expect("Failed to register async method");
-        }
+                    (handler)(state, context, request).await
+                }))
+                .catch_unwind()
+                .await
+                .map_err(|_| {
+                    error!(
+                        target: LOG_NET_API,
+                        path, "API handler panicked, DO NOT IGNORE, FIX IT!!!"
+                    );
+                    ErrorObject::owned(500, "API handler panicked", None::<()>)
+                })?
+                .map_err(|tokio::time::error::Elapsed { .. }| {
+                    // TODO: find a better error for this, the error we used before:
+                    // jsonrpsee::core::Error::RequestTimeout
+                    // was moved to be client-side only
+                    ErrorObject::owned(-32000, "Request timeout", None::<()>)
+                })?
+                .map_err(|e| ErrorObject::owned(e.code, e.message, None::<()>))
+            })
+            .expect("Failed to register async method");
     }
 }
 
