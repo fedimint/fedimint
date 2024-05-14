@@ -23,6 +23,7 @@ use crate::envs::{
 };
 use crate::federation::Fedimintd;
 use crate::util::{poll, ProcessManager};
+use crate::vars::mkdir;
 use crate::{external_daemons, vars, ExternalDaemons};
 
 fn random_test_dir_suffix() -> String {
@@ -117,13 +118,16 @@ pub enum RpcCmd {
 }
 
 pub async fn setup(arg: CommonArgs) -> Result<(ProcessManager, TaskGroup)> {
-    let globals = vars::Global::new(&arg.mk_test_dir()?, arg.fed_size, arg.offline_nodes).await?;
+    let test_dir = &arg.mk_test_dir()?;
+    mkdir(test_dir.clone()).await?;
+    let logs_dir: PathBuf = test_dir.join("logs");
+    mkdir(logs_dir.clone()).await?;
 
     let log_file = fs::OpenOptions::new()
         .write(true)
         .create(true)
         .append(true)
-        .open(globals.FM_LOGS_DIR.join("devimint.log"))
+        .open(logs_dir.join("devimint.log"))
         .await?
         .into_std()
         .await;
@@ -133,6 +137,8 @@ pub async fn setup(arg: CommonArgs) -> Result<(ProcessManager, TaskGroup)> {
         // jsonrpsee is expected to fail during startup
         .with_directive("jsonrpsee-client=off")
         .init()?;
+
+    let globals = vars::Global::new(test_dir, arg.fed_size, arg.offline_nodes).await?;
 
     if let Some(link_test_dir) = arg.link_test_dir.as_ref() {
         update_test_dir_link(link_test_dir, &arg.test_dir()).await?;
