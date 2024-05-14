@@ -30,10 +30,12 @@ pub const LOW: u16 = 10000;
 pub const HIGH: u16 = 32000;
 
 use anyhow::bail;
-use tracing::warn;
+use tracing::{debug, trace, warn};
 
 use crate::data::DataDir;
 use crate::envs::FM_PORTALLOC_DATA_DIR_ENV;
+
+const LOG_PORT_ALLOC: &str = "port-alloc";
 
 type UnixTimestamp = u64;
 
@@ -51,6 +53,7 @@ pub fn data_dir() -> anyhow::Result<PathBuf> {
     }
 }
 pub fn port_alloc(range_size: u16) -> anyhow::Result<u16> {
+    trace!(target: LOG_PORT_ALLOC, range_size, "Looking for port");
     if range_size == 0 {
         bail!("Can't allocate range of 0 bytes");
     }
@@ -61,6 +64,7 @@ pub fn port_alloc(range_size: u16) -> anyhow::Result<u16> {
         let mut data = data_dir.load_data(now_ts())?;
         let mut base_port: u16 = data.next;
         Ok('retry: loop {
+            trace!(target: LOG_PORT_ALLOC, base_port, range_size, "Checking a port");
             if HIGH < base_port {
                 data = data.reclaim(now_ts());
                 base_port = LOW;
@@ -103,6 +107,7 @@ pub fn port_alloc(range_size: u16) -> anyhow::Result<u16> {
 
             data_dir.store_data(&data)?;
 
+            debug!(target: LOG_PORT_ALLOC, base_port, range_size, "Allocated port range");
             break base_port;
         })
     })
