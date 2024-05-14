@@ -78,6 +78,48 @@ Options:
   -V, --version                    Print version information
 ```
 
+#### Gateway Peg-in Process
+This section outlines the steps to add a gateway to a federation and subsequently fund the gateway.
+
+##### Connecting the Gateway to a Federation
+Start by connecting your gateway to the desired federation using the following command:
+```bash
+$ gateway-cli connect-fed fed1xxxxxxx
+```
+##### Requesting a Deposit Address
+Once the gateway is successfully integrated into the federation, you can request a new address to deposit coins:
+```bash
+$ gateway-cli address --federation-id fed1xxxxxxx
+bc1xyz...
+```
+##### Sending Coins to the Gateway
+After obtaining the deposit address, you can send coins to this address. Below is an example using `lncli`, but you can use any compatible method:
+```bash
+$ lncli sendcoins bc1xyz... 50000 --min_confs 0 --sat_per_vbyte 12
+{
+    "txid": "1a6..."
+}
+```
+##### Confirming the Transaction
+Ensure that the transaction receives at least 10 confirmations from the Bitcoin network. Once confirmed, the funds will be available in the gateway. You can check the status and see the updated balance as follows:
+```bash
+$ gateway-cli info
+{
+  "version_hash": "0307c3a3...",
+  "federations": [
+    {
+      "federation_id": "fed1xxxxxx",
+      "balance_msat": 50000000,
+      "config": {
+        ...
+      }
+    }
+  ]
+}
+```
+This process ensures that your gateway is properly funded and ready to participate in the federation's activities.
+
+
 ### Mintgate
 
 A simple and delightful dashboard for administrative access and control of your Fedimint gateway. Presently, Mintgate supports admin functions like:
