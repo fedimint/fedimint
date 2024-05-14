@@ -16,9 +16,6 @@ anyhow = { workspace = true }
 bitcoin_hashes = { workspace = true }
 bls12_381 = { workspace = true }
 devimint = { workspace = true }
-fedimint-dummy-common = { path = "../fedimint-dummy-common" }
-fedimint-dummy-client = { path = "../fedimint-dummy-client" }
-fedimint-dummy-server = { path = "../fedimint-dummy-server" }
 fedimint-mint-common = { path = "../fedimint-mint-common" }
 fedimint-mint-client = { path = "../fedimint-mint-client" }
 fedimint-mint-server = { path = "../fedimint-mint-server" }
@@ -35,3 +32,8 @@ tbs = { package = "fedimint-tbs", version = "=0.4.0-alpha", path = "../../crypto
 threshold_crypto = { workspace = true }
 ff = "0.13.0"
 strum = { workspace = true }
+
+[dev-dependencies]
+fedimint-dummy-common = { path = "../fedimint-dummy-common" }
+fedimint-dummy-client = { path = "../fedimint-dummy-client" }
+fedimint-dummy-server = { path = "../fedimint-dummy-server" }

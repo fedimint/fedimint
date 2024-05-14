@@ -47,7 +47,6 @@ fedimint-rocksdb = { version = "=0.4.0-alpha", path = "../../fedimint-rocksdb" }
 fedimint-ln-client = { version = "=0.4.0-alpha", path = "../../modules/fedimint-ln-client" }
 fedimint-ln-common = { version = "=0.4.0-alpha", path = "../../modules/fedimint-ln-common" }
 fedimint-mint-client = { version = "=0.4.0-alpha", path = "../../modules/fedimint-mint-client" }
-fedimint-dummy-client = { version = "=0.4.0-alpha", path = "../../modules/fedimint-dummy-client" }
 fedimint-wallet-client = { version = "=0.4.0-alpha", path = "../../modules/fedimint-wallet-client" }
 fedimint-lnv2-client = { path = "../../modules/fedimint-lnv2-client" }
 fedimint-lnv2-common = { path = "../../modules/fedimint-lnv2-common" }
@@ -74,6 +73,7 @@ tracing = { version = "0.1.40", default-features = false, features= ["log", "att
 url = { version = "2.5.0", features = ["serde"] }
 
 [dev-dependencies]
+fedimint-dummy-client = { version = "=0.4.0-alpha", path = "../../modules/fedimint-dummy-client" }
 fedimint-dummy-server = { path = "../../modules/fedimint-dummy-server" }
 fedimint-dummy-common = { path = "../../modules/fedimint-dummy-common" }
 fedimint-unknown-server = { path = "../../modules/fedimint-unknown-server" }
