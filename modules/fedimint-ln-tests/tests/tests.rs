@@ -245,7 +245,7 @@ async fn gateway_protects_preimage_for_payment() -> anyhow::Result<()> {
                 .into_stream();
 
             assert_eq!(sub.ok().await?, LnPayState::Created);
-            assert_eq!(sub.ok().await?, LnPayState::Funded);
+            assert_matches!(sub.ok().await?, LnPayState::Funded { .. });
             assert_matches!(sub.ok().await?, LnPayState::Success { .. });
         }
         _ => panic!("Expected lightning payment!"),
@@ -267,7 +267,7 @@ async fn gateway_protects_preimage_for_payment() -> anyhow::Result<()> {
                 .into_stream();
 
             assert_eq!(sub.ok().await?, LnPayState::Created);
-            assert_eq!(sub.ok().await?, LnPayState::Funded);
+            assert_matches!(sub.ok().await?, LnPayState::Funded { .. });
             assert_matches!(sub.ok().await?, LnPayState::WaitingForRefund { .. });
             assert_matches!(sub.ok().await?, LnPayState::Refunded { .. });
         }
@@ -308,7 +308,7 @@ async fn cannot_pay_same_external_invoice_twice() -> anyhow::Result<()> {
                 .into_stream();
 
             assert_eq!(sub.ok().await?, LnPayState::Created);
-            assert_eq!(sub.ok().await?, LnPayState::Funded);
+            assert_matches!(sub.ok().await?, LnPayState::Funded { .. });
             assert_matches!(sub.ok().await?, LnPayState::Success { .. });
         }
         _ => panic!("Expected lightning payment!"),
@@ -332,7 +332,7 @@ async fn cannot_pay_same_external_invoice_twice() -> anyhow::Result<()> {
                 .into_stream();
 
             assert_eq!(sub.ok().await?, LnPayState::Created);
-            assert_eq!(sub.ok().await?, LnPayState::Funded);
+            assert_matches!(sub.ok().await?, LnPayState::Funded { .. });
             assert_matches!(sub.ok().await?, LnPayState::Success { .. });
         }
         _ => panic!("Expected lightning payment!"),
@@ -686,6 +686,7 @@ mod fedimint_migration_tests {
     use anyhow::ensure;
     use bitcoin_hashes::{sha256, Hash};
     use fedimint_client::module::init::DynClientModuleInit;
+    use fedimint_core::config::FederationId;
     use fedimint_core::core::OperationId;
     use fedimint_core::db::{
         Database, DatabaseVersion, DatabaseVersionKeyV0, IDatabaseTransactionOpsCoreTyped,
@@ -695,6 +696,9 @@ mod fedimint_migration_tests {
     use fedimint_core::util::SafeUrl;
     use fedimint_core::{Amount, OutPoint, PeerId, TransactionId};
     use fedimint_ln_client::db::{PaymentResult, PaymentResultKey, PaymentResultPrefix};
+    use fedimint_ln_client::pay::{
+        LightningPayCommon, LightningPayStates, PayInvoicePayload, PaymentData,
+    };
     use fedimint_ln_client::receive::LightningReceiveStates;
     use fedimint_ln_client::{
         LightningClientInit, LightningClientModule, LightningClientStateMachines,
@@ -703,9 +707,12 @@ mod fedimint_migration_tests {
     use fedimint_ln_common::contracts::incoming::{
         FundedIncomingContract, IncomingContract, IncomingContractOffer, OfferId,
     };
+    use fedimint_ln_common::contracts::outgoing::{
+        OutgoingContract, OutgoingContractAccount, OutgoingContractData,
+    };
     use fedimint_ln_common::contracts::{
         outgoing, ContractId, DecryptedPreimage, EncryptedPreimage, FundedContract,
-        PreimageDecryptionShare, PreimageKey,
+        IdentifiableContract, PreimageDecryptionShare, PreimageKey,
     };
     use fedimint_ln_common::route_hints::{RouteHint, RouteHintHop};
     use fedimint_ln_common::{
@@ -1005,13 +1012,101 @@ mod fedimint_migration_tests {
         let old_confirmed_bytes =
             create_receive_state_machine(confirmed_offer_variant_old, operation_id, 2);
 
+        let (sk, pk) = secp256k1::generate_keypair(&mut OsRng);
+        let outgoing_contract = OutgoingContract {
+            hash: sha256::Hash::hash(&BYTE_32),
+            gateway_key: pk,
+            timelock: 1000,
+            user_key: pk,
+            cancelled: false,
+        };
+        let outgoing_account = OutgoingContractAccount {
+            amount: Amount::from_msats(10000),
+            contract: outgoing_contract.clone(),
+        };
+        let contract = OutgoingContractData {
+            recovery_key: KeyPair::from_secret_key(&secp, &sk),
+            contract_account: outgoing_account,
+        };
+        let ln_common = LightningPayCommon {
+            operation_id,
+            federation_id: FederationId::dummy(),
+            contract,
+            gateway_fee: Amount::from_msats(1000),
+            preimage_auth: sha256::Hash::hash(&BYTE_32),
+            invoice: invoice.clone(),
+        };
+
+        let mut refund_state = Vec::new();
+        TransactionId::all_zeros()
+            .consensus_encode(&mut refund_state)
+            .expect("TransactionId is encodable");
+        vec![OutPoint {
+            txid: TransactionId::all_zeros(),
+            out_idx: 0,
+        }]
+        .consensus_encode(&mut refund_state)
+        .expect("OutPoint vector is encodable");
+        let old_refund_bytes = create_pay_state_machine(refund_state, ln_common.clone(), 5u64);
+
+        let mut funded_state = Vec::new();
+
+        let hop = RouteHintHop {
+            src_node_id: pk,
+            short_channel_id: 3,
+            base_msat: 20,
+            proportional_millionths: 3000,
+            cltv_expiry_delta: 8,
+            htlc_minimum_msat: Some(10),
+            htlc_maximum_msat: Some(1000),
+        };
+        let route_hints = vec![RouteHint(vec![hop])];
+
+        PayInvoicePayload {
+            federation_id: FederationId::dummy(),
+            contract_id: outgoing_contract.contract_id(),
+            payment_data: PaymentData::Invoice(invoice),
+            preimage_auth: sha256::Hash::hash(&BYTE_32),
+        }
+        .consensus_encode(&mut funded_state)
+        .expect("PayInvoicePayload is encodable");
+        LightningGateway {
+            mint_channel_id: 3,
+            gateway_redeem_key: pk,
+            node_pub_key: pk,
+            lightning_alias: "MyLightningNode".to_string(),
+            api: SafeUrl::from_str("http://mylightningnode.com")
+                .expect("SafeUrl parsing should not fail"),
+            route_hints,
+            fees: RoutingFees {
+                base_msat: 10,
+                proportional_millionths: 1000,
+            },
+            gateway_id: pk,
+            supports_private_payments: false,
+        }
+        .consensus_encode(&mut funded_state)
+        .expect("LightningGateway is encodable");
+        10000u32
+            .consensus_encode(&mut funded_state)
+            .expect("Timelock is encodable");
+        let old_funded_bytes = create_pay_state_machine(funded_state, ln_common, 2u64);
+
         (
             vec![
                 old_receive_bytes.clone(),
                 new_receive_bytes.clone(),
                 old_confirmed_bytes.clone(),
+                old_refund_bytes.clone(),
+                old_funded_bytes.clone(),
             ],
-            vec![old_receive_bytes, new_receive_bytes, old_confirmed_bytes],
+            vec![
+                old_receive_bytes,
+                new_receive_bytes,
+                old_confirmed_bytes,
+                old_refund_bytes,
+                old_funded_bytes,
+            ],
         )
     }
 
@@ -1046,6 +1141,37 @@ mod fedimint_migration_tests {
         receive_variant
             .consensus_encode(&mut sm_bytes)
             .expect("receive variant is encodable");
+        sm_bytes
+    }
+
+    /// Creates a vector of bytes that contains consensus encoded
+    /// `LightningClientStateMachines::LightningPay` state machine. `sm_state`
+    /// is the u64 representation of the state enum.
+    fn create_pay_state_machine(
+        state: Vec<u8>,
+        ln_pay_common: LightningPayCommon,
+        sm_state: u64,
+    ) -> Vec<u8> {
+        let mut ln_pay_variant = Vec::<u8>::new();
+        ln_pay_common
+            .consensus_encode(&mut ln_pay_variant)
+            .expect("LnPayCommon is encodable");
+        sm_state
+            .consensus_encode(&mut ln_pay_variant)
+            .expect("u64 is encodable");
+        state
+            .consensus_encode(&mut ln_pay_variant)
+            .expect("State is encodable");
+
+        let mut sm_bytes = Vec::<u8>::new();
+        TEST_MODULE_INSTANCE_ID
+            .consensus_encode(&mut sm_bytes)
+            .expect("u16 is encodable");
+        1u64.consensus_encode(&mut sm_bytes)
+            .expect("u64 is encodable"); // LightningPay state machine variant
+        ln_pay_variant
+            .consensus_encode(&mut sm_bytes)
+            .expect("ln pay variant is encodable");
         sm_bytes
     }
 
@@ -1263,38 +1389,41 @@ mod fedimint_migration_tests {
                     }
                 }
 
-                // Verify that after the state machine migrations, there is two `SubmittedOffer` state and no `SubmittedOfferV0` states.
-                let mut input_count = 0;
-                let mut confirmed_count = 0;
-                for active_state in active_states {
-                    if let LightningClientStateMachines::Receive(machine) = active_state {
-                        match machine.state {
-                            LightningReceiveStates::SubmittedOffer(_) => input_count += 1,
-                            LightningReceiveStates::ConfirmedInvoice(_) => confirmed_count += 1,
-                            _ => panic!("State machine migration failed, active states contain unexpected state"),
+                fn verify_states(states: Vec<LightningClientStateMachines>) -> anyhow::Result<()> {
+                    let mut input_count = 0;
+                    let mut confirmed_count = 0;
+                    let mut refund_count = 0;
+                    let mut funded_count = 0;
+                    for active_state in states {
+                        match active_state {
+                            LightningClientStateMachines::Receive(machine) => {
+                                match machine.state {
+                                    LightningReceiveStates::SubmittedOffer(_) => input_count += 1,
+                                    LightningReceiveStates::ConfirmedInvoice(_) => confirmed_count += 1,
+                                    _ => panic!("State machine migration failed, states contain unexpected state"),
+                                }
+                            }
+                            LightningClientStateMachines::LightningPay(machine) => {
+                                match machine.state {
+                                    LightningPayStates::Refund(_) => refund_count += 1,
+                                    LightningPayStates::Funded(_) => funded_count += 1,
+                                    _ => panic!("State machine migration failed, states contain unexpected state"),
+                                }
+                            }
+                            _ => panic!("Found unexpected state machine"),
                         }
                     }
+
+                    ensure!(input_count == 2, "Expecting two `SubmittedOffer` state, found {input_count}");
+                    ensure!(confirmed_count == 1, "Expecting one `ConfirmedInvoice` state, found {confirmed_count}");
+                    ensure!(refund_count == 1, "Expecting one `Refund` state, found {refund_count}");
+                    ensure!(funded_count == 1, "Expecting one `Funded` state, found {funded_count}");
+
+                    Ok(())
                 }
 
-                // expecting two, one starting in `SubmittedOffer` and one from migrated from `SubmittedOfferV0`
-                ensure!(input_count == 2, "Expecting two `SubmittedOffer` active state, found {input_count}");
-                ensure!(confirmed_count == 1, "Expecting one `ConfirmedInvoice` active state, found {confirmed_count}");
-
-                let mut input_count = 0;
-                let mut confirmed_count = 0;
-                for inactive_state in inactive_states {
-                    if let LightningClientStateMachines::Receive(machine) = inactive_state {
-                        match machine.state {
-                            LightningReceiveStates::SubmittedOffer(_) => input_count += 1,
-                            LightningReceiveStates::ConfirmedInvoice(_) => confirmed_count += 1,
-                            _ => panic!("State machine migration failed, active states contain unexpected state"),
-                        }
-                    }
-                }
-
-                // expecting two, one starting in `SubmittedOffer` and one from migrated from `SubmittedOfferV0`
-                ensure!(input_count == 2, "Expecting two `SubmittedOffer` inactive state, found {input_count}");
-                ensure!(confirmed_count == 1, "Expecting two `ConfirmedInvoice` inactive state, found {confirmed_count}");
+                verify_states(active_states)?;
+                verify_states(inactive_states)?;
 
                 Ok(())
             },

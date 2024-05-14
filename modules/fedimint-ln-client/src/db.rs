@@ -4,13 +4,17 @@ use bitcoin::hashes::sha256;
 use fedimint_core::core::OperationId;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::registry::ModuleDecoderRegistry;
-use fedimint_core::{impl_db_lookup, impl_db_record};
-use fedimint_ln_common::LightningGatewayRegistration;
+use fedimint_core::{impl_db_lookup, impl_db_record, OutPoint, TransactionId};
+use fedimint_ln_common::{LightningGateway, LightningGatewayRegistration};
 use lightning_invoice::Bolt11Invoice;
 use secp256k1::{KeyPair, PublicKey};
 use serde::Serialize;
 use strum_macros::EnumIter;
 
+use crate::pay::{
+    LightningPayCommon, LightningPayFunded, LightningPayRefund, LightningPayStateMachine,
+    LightningPayStates, PayInvoicePayload,
+};
 use crate::receive::{
     LightningReceiveConfirmedInvoice, LightningReceiveStateMachine, LightningReceiveStates,
     LightningReceiveSubmittedOffer, LightningReceiveSubmittedOfferV0,
@@ -180,6 +184,79 @@ pub(crate) fn get_v2_migrated_state(
 
     let bytes = new_recv.consensus_encode_to_vec();
     Ok(Some((bytes, operation_id)))
+}
+
+/// Migrates `Refund` state with enum prefix 5 to contain the `error_reason`
+/// field
+pub(crate) fn get_v3_migrated_state(
+    operation_id: OperationId,
+    cursor: &mut Cursor<&[u8]>,
+) -> anyhow::Result<Option<(Vec<u8>, OperationId)>> {
+    let decoders = ModuleDecoderRegistry::default();
+    let ln_sm_variant = u16::consensus_decode(cursor, &decoders)?;
+
+    // If the state machine is not a pay state machine, return None
+    if ln_sm_variant != 1 {
+        return Ok(None);
+    }
+
+    let _ln_sm_len = u16::consensus_decode(cursor, &decoders)?;
+    let common = LightningPayCommon::consensus_decode(cursor, &decoders)?;
+    let pay_sm_variant = u16::consensus_decode(cursor, &decoders)?;
+
+    let _pay_sm_len = u16::consensus_decode(cursor, &decoders)?;
+
+    // if the pay state machine is not `Refund` or `Funded` variant, return none
+    match pay_sm_variant {
+        // Funded
+        2 => {
+            #[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
+            pub struct LightningPayFundedV0 {
+                pub payload: PayInvoicePayload,
+                pub gateway: LightningGateway,
+                pub timelock: u32,
+            }
+
+            let v0 = LightningPayFundedV0::consensus_decode(cursor, &decoders)?;
+            let v1 = LightningPayFunded {
+                payload: v0.payload,
+                gateway: v0.gateway,
+                timelock: v0.timelock,
+                funding_time: fedimint_core::time::now(),
+            };
+
+            let new_pay = LightningPayStateMachine {
+                common,
+                state: LightningPayStates::Funded(v1),
+            };
+            let new_sm = LightningClientStateMachines::LightningPay(new_pay);
+            let bytes = new_sm.consensus_encode_to_vec();
+            Ok(Some((bytes, operation_id)))
+        }
+        // Refund
+        5 => {
+            #[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
+            pub struct LightningPayRefundV0 {
+                txid: TransactionId,
+                out_points: Vec<OutPoint>,
+            }
+
+            let v0 = LightningPayRefundV0::consensus_decode(cursor, &decoders)?;
+            let v1 = LightningPayRefund {
+                txid: v0.txid,
+                out_points: v0.out_points,
+                error_reason: "unknown error (database migration)".to_string(),
+            };
+            let new_pay = LightningPayStateMachine {
+                common,
+                state: LightningPayStates::Refund(v1),
+            };
+            let new_sm = LightningClientStateMachines::LightningPay(new_pay);
+            let bytes = new_sm.consensus_encode_to_vec();
+            Ok(Some((bytes, operation_id)))
+        }
+        _ => Ok(None),
+    }
 }
 
 #[cfg(test)]

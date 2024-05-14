@@ -219,8 +219,8 @@ mod tests {
                 Some(LnPayState::Success { preimage: _ }) => {
                     break;
                 }
-                Some(LnPayState::Refunded { gateway_error }) => {
-                    return Err(anyhow!("refunded {gateway_error}"));
+                Some(LnPayState::Refunded { error_reason }) => {
+                    return Err(anyhow!("refunded {error_reason}"));
                 }
                 None => return Err(anyhow!("Lightning send failed")),
                 _ => {}
