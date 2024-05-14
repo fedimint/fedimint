@@ -5,33 +5,25 @@ use std::time::Duration;
 
 use aleph_bft::Keychain as KeychainTrait;
 use anyhow::{anyhow, bail};
-use async_channel::{Receiver, Sender};
+use async_channel::Receiver;
 use fedimint_api_client::api::{DynGlobalApi, FederationApiExt, PeerConnectionStatus};
 use fedimint_api_client::query::FilterMap;
-use fedimint_core::config::ServerModuleInitRegistry;
-use fedimint_core::core::{ModuleInstanceId, ModuleKind, MODULE_INSTANCE_ID_GLOBAL};
-use fedimint_core::db::{
-    apply_migrations, apply_migrations_server, Database, DatabaseTransaction,
-    IDatabaseTransactionOpsCoreTyped,
-};
+use fedimint_core::core::MODULE_INSTANCE_ID_GLOBAL;
+use fedimint_core::db::{Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped};
 use fedimint_core::encoding::Decodable;
 use fedimint_core::endpoint_constants::AWAIT_SIGNED_SESSION_OUTCOME_ENDPOINT;
-use fedimint_core::envs::is_running_in_test_env;
 use fedimint_core::epoch::ConsensusItem;
 use fedimint_core::fmt_utils::OptStacktrace;
 use fedimint_core::module::audit::Audit;
-use fedimint_core::module::registry::{
-    ModuleDecoderRegistry, ModuleRegistry, ServerModuleRegistry,
-};
+use fedimint_core::module::registry::{ModuleDecoderRegistry, ServerModuleRegistry};
 use fedimint_core::module::{ApiRequestErased, SerdeModuleEncoding};
 use fedimint_core::runtime::spawn;
-use fedimint_core::server::DynServerModule;
 use fedimint_core::session_outcome::{
     AcceptedItem, SchnorrSignature, SessionOutcome, SignedSessionOutcome,
 };
 use fedimint_core::task::{sleep, TaskGroup, TaskHandle};
 use fedimint_core::timing::TimeReporter;
-use fedimint_core::{timing, NumPeers, PeerId};
+use fedimint_core::{timing, PeerId};
 use futures::StreamExt;
 use rand::Rng;
 use tokio::sync::{watch, RwLock};
@@ -45,10 +37,10 @@ use crate::atomic_broadcast::spawner::Spawner;
 use crate::atomic_broadcast::{to_node_index, Keychain, Message};
 use crate::config::ServerConfig;
 use crate::consensus::debug_fmt::FmtDbgConsensusItem;
-use crate::consensus::process_transaction_with_dbtx;
+use crate::consensus::transaction::process_transaction_with_dbtx;
 use crate::db::{
-    get_global_database_migrations, AcceptedItemKey, AcceptedItemPrefix, AcceptedTransactionKey,
-    AlephUnitsPrefix, SignedSessionOutcomeKey, SignedSessionOutcomePrefix, GLOBAL_DATABASE_VERSION,
+    AcceptedItemKey, AcceptedItemPrefix, AcceptedTransactionKey, AlephUnitsPrefix,
+    SignedSessionOutcomeKey, SignedSessionOutcomePrefix,
 };
 use crate::fedimint_core::encoding::Encodable;
 use crate::metrics::{
@@ -56,145 +48,36 @@ use crate::metrics::{
     CONSENSUS_ITEM_PROCESSING_MODULE_AUDIT_DURATION_SECONDS,
     CONSENSUS_PEER_CONTRIBUTION_SESSION_IDX, CONSENSUS_SESSION_COUNT,
 };
-use crate::net::api::{ConsensusApi, ExpiringCache};
 use crate::net::connect::{Connector, TlsTcpConnector};
 use crate::net::peers::{DelayCalculator, ReconnectPeerConnections};
-use crate::{LOG_CONSENSUS, LOG_CORE};
-
-/// How many txs can be stored in memory before blocking the API
-const TRANSACTION_BUFFER: usize = 1000;
+use crate::LOG_CONSENSUS;
 
 /// Runs the main server consensus loop
-pub struct ConsensusServer {
-    modules: ServerModuleRegistry,
-    db: Database,
-    keychain: Keychain,
-    federation_api: DynGlobalApi,
-    cfg: ServerConfig,
-    submission_receiver: Receiver<ConsensusItem>,
-    shutdown_receiver: watch::Receiver<Option<u64>>,
-    last_ci_by_peer: Arc<RwLock<BTreeMap<PeerId, u64>>>,
+pub struct ConsensusEngine {
+    pub modules: ServerModuleRegistry,
+    pub db: Database,
+    pub keychain: Keychain,
+    pub federation_api: DynGlobalApi,
+    pub cfg: ServerConfig,
+    pub submission_receiver: Receiver<ConsensusItem>,
+    pub shutdown_receiver: watch::Receiver<Option<u64>>,
+    pub last_ci_by_peer: Arc<RwLock<BTreeMap<PeerId, u64>>>,
     /// Just a string version of `cfg.local.identity` for performance
-    self_id_str: String,
+    pub self_id_str: String,
     /// Just a string version of peer ids for performance
-    peer_id_str: Vec<String>,
-    connection_status_channels: Arc<RwLock<BTreeMap<PeerId, PeerConnectionStatus>>>,
-    task_group: TaskGroup,
+    pub peer_id_str: Vec<String>,
+    pub connection_status_channels: Arc<RwLock<BTreeMap<PeerId, PeerConnectionStatus>>>,
+    pub task_group: TaskGroup,
 }
 
-impl ConsensusServer {
-    /// Creates a server with real network and no delays
-    pub async fn new(
-        cfg: ServerConfig,
-        db: Database,
-        module_init_registry: ServerModuleInitRegistry,
-        task_group: &TaskGroup,
-    ) -> anyhow::Result<(Self, ConsensusApi)> {
-        cfg.validate_config(&cfg.local.identity, &module_init_registry)?;
-
-        apply_migrations_server(
-            &db,
-            "fedimint-server".to_string(),
-            GLOBAL_DATABASE_VERSION,
-            get_global_database_migrations(),
-        )
-        .await?;
-
-        let mut modules = BTreeMap::new();
-
-        for (module_id, module_cfg) in &cfg.consensus.modules {
-            match module_init_registry.get(&module_cfg.kind) {
-                Some(module_init) => {
-                    info!(target: LOG_CORE, "Initialise module {module_id}");
-
-                    apply_migrations(
-                        &db,
-                        module_init.module_kind().to_string(),
-                        module_init.database_version(),
-                        module_init.get_database_migrations(),
-                        Some(*module_id),
-                    )
-                    .await?;
-
-                    let module = module_init
-                        .init(
-                            NumPeers::from(cfg.consensus.api_endpoints.len()),
-                            cfg.get_module_config(*module_id)?,
-                            db.with_prefix_module_id(*module_id),
-                            task_group,
-                            cfg.local.identity,
-                        )
-                        .await?;
-
-                    modules.insert(*module_id, (module_cfg.kind.clone(), module));
-                }
-                None => bail!("Detected configuration for unsupported module id: {module_id}"),
-            };
-        }
-
-        let module_registry = ModuleRegistry::from(modules);
-
-        let client_cfg = cfg.consensus.to_client_config(&module_init_registry)?;
-
-        let (submission_sender, submission_receiver) = async_channel::bounded(TRANSACTION_BUFFER);
-        let (shutdown_sender, shutdown_receiver) = watch::channel(None);
-        let connection_status_channels = Default::default();
-        let last_ci_by_peer = Default::default();
-
-        let consensus_api = ConsensusApi {
-            cfg: cfg.clone(),
-            db: db.clone(),
-            modules: module_registry.clone(),
-            client_cfg: client_cfg.clone(),
-            submission_sender: submission_sender.clone(),
-            shutdown_sender,
-            supported_api_versions: ServerConfig::supported_api_versions_summary(
-                &cfg.consensus.modules,
-                &module_init_registry,
-            ),
-            last_ci_by_peer: Arc::clone(&last_ci_by_peer),
-            connection_status_channels: Arc::clone(&connection_status_channels),
-            consensus_status_cache: ExpiringCache::new(Duration::from_millis(500)),
-        };
-
-        for (module_id, kind, module) in module_registry.iter_modules() {
-            submit_module_ci_proposals(
-                task_group,
-                db.clone(),
-                module_id,
-                kind.clone(),
-                module.clone(),
-                submission_sender.clone(),
-            )
-            .await;
-        }
-
-        let consensus_server = ConsensusServer {
-            db,
-            keychain: Keychain::new(&cfg),
-            federation_api: DynGlobalApi::from_config(&client_cfg),
-            self_id_str: cfg.local.identity.to_string(),
-            peer_id_str: (0..cfg.consensus.api_endpoints.len())
-                .map(|x| x.to_string())
-                .collect(),
-            cfg: cfg.clone(),
-            connection_status_channels,
-            submission_receiver,
-            shutdown_receiver,
-            last_ci_by_peer,
-            modules: module_registry,
-            task_group: task_group.clone(),
-        };
-
-        Ok((consensus_server, consensus_api))
-    }
-
+impl ConsensusEngine {
     #[instrument(name = "run", skip_all, fields(id=%self.cfg.local.identity))]
-    pub async fn run(&self, task_handle: TaskHandle) -> anyhow::Result<()> {
+    pub async fn run(self) -> anyhow::Result<()> {
         if self.cfg.consensus.broadcast_public_keys.len() == 1 {
-            self.run_single_guardian(task_handle).await
+            self.run_single_guardian(self.task_group.make_handle())
+                .await
         } else {
-            self.run_consensus(task_handle).await
+            self.run_consensus(self.task_group.make_handle()).await
         }
     }
 
@@ -699,7 +582,7 @@ impl ConsensusServer {
                     .map(|output| output.module_instance_id())
                     .collect::<Vec<_>>();
 
-                process_transaction_with_dbtx(self.modules.clone(), dbtx, txid, transaction)
+                process_transaction_with_dbtx(self.modules.clone(), dbtx, transaction)
                     .await
                     .map_err(|error| anyhow!(error.to_string()))?;
 
@@ -780,70 +663,11 @@ impl ConsensusServer {
     }
 }
 
-pub(crate) async fn get_finished_session_count_static(dbtx: &mut DatabaseTransaction<'_>) -> u64 {
+pub async fn get_finished_session_count_static(dbtx: &mut DatabaseTransaction<'_>) -> u64 {
     dbtx.find_by_prefix_sorted_descending(&SignedSessionOutcomePrefix)
         .await
         .next()
         .await
         .map(|entry| (entry.0 .0) + 1)
         .unwrap_or(0)
-}
-
-const CONSENSUS_PROPOSAL_TIMEOUT: Duration = Duration::from_secs(30);
-
-async fn submit_module_ci_proposals(
-    task_group: &TaskGroup,
-    db: Database,
-    module_id: ModuleInstanceId,
-    kind: ModuleKind,
-    module: DynServerModule,
-    submission_sender: Sender<ConsensusItem>,
-) {
-    let mut interval = tokio::time::interval(if is_running_in_test_env() {
-        Duration::from_millis(100)
-    } else {
-        Duration::from_secs(1)
-    });
-
-    task_group.spawn(
-        "submit_module_ci_proposals_{module_id}",
-        move |task_handle| async move {
-            while !task_handle.is_shutting_down() {
-                let module_consensus_items = tokio::time::timeout(
-                    CONSENSUS_PROPOSAL_TIMEOUT,
-                    module.consensus_proposal(
-                        &mut db
-                            .begin_transaction_nc()
-                            .await
-                            .to_ref_with_prefix_module_id(module_id)
-                            .into_nc(),
-                        module_id,
-                    ),
-                )
-                .await;
-
-                match module_consensus_items {
-                    Ok(items) => {
-                        for item in items {
-                            submission_sender
-                                .send(ConsensusItem::Module(item))
-                                .await
-                                .ok();
-                        }
-                    }
-                    Err(..) => {
-                        warn!(
-                            target: LOG_CONSENSUS,
-                            %module_id,
-                            %kind,
-                            timeout_secs=CONSENSUS_PROPOSAL_TIMEOUT.as_secs(),
-                            "Module failed to propose consensus items on time"
-                        );
-                    }
-                }
-
-                interval.tick().await;
-            }
-        },
-    );
 }

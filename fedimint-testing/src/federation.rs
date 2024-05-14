@@ -20,9 +20,8 @@ use fedimint_logging::LOG_TEST;
 use fedimint_rocksdb::RocksDb;
 use fedimint_server::config::api::ConfigGenParamsLocal;
 use fedimint_server::config::{gen_cert_and_key, ConfigGenParams, ServerConfig};
-use fedimint_server::consensus::server::ConsensusServer;
+use fedimint_server::consensus;
 use fedimint_server::net::connect::parse_host_port;
-use fedimint_server::FedimintServer;
 use tokio_rustls::rustls;
 use tracing::info;
 
@@ -205,21 +204,21 @@ impl FederationTestBuilder {
             let instances = config.consensus.iter_module_instances();
             let decoders = self.server_init.available_decoders(instances).unwrap();
             let db = Database::new(MemDatabase::new(), decoders);
+            let module_init_registry = self.server_init.clone();
+            let subgroup = task_group.make_subgroup();
 
-            let (consensus_server, consensus_api) = ConsensusServer::new(
+            let (engine, api_handler) = consensus::spawn_api_and_build_engine(
                 config.clone(),
                 db.clone(),
-                self.server_init.clone(),
-                &task_group,
+                module_init_registry,
+                &subgroup,
             )
             .await
-            .expect("Setting up consensus server");
+            .expect("Could not initialise consensus");
 
-            let api_handle = FedimintServer::spawn_consensus_api(consensus_api).await;
-
-            task_group.spawn("fedimintd", move |handle| async move {
-                consensus_server.run(handle).await.unwrap();
-                api_handle.stop().await;
+            task_group.spawn("fedimintd", move |_| async move {
+                engine.run().await.expect("Failed to run consensus");
+                api_handler.stop().await;
             });
         }
 
