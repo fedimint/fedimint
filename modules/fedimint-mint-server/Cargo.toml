@@ -18,7 +18,6 @@ path = "src/lib.rs"
 
 [dependencies]
 anyhow = { workspace = true }
-assert_matches = { workspace = true }
 async-trait = { workspace = true }
 erased-serde = { workspace = true }
 futures = { workspace = true }
@@ -38,5 +37,6 @@ fedimint-server = { version = "=0.4.0-alpha", path = "../../fedimint-server" }
 fedimint-logging = { workspace = true }
 
 [dev-dependencies]
+assert_matches = { workspace = true }
 tokio = {version = "1.37.0", features = [ "full" ] }
 test-log = { version = "0.2", features = [ "trace" ], default-features = false }

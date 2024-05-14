@@ -17,16 +17,12 @@ path = "src/bin/circular-deposit-test.rs"
 
 [dependencies]
 anyhow = { workspace = true }
-assert_matches = { workspace = true }
 bitcoin = { workspace = true }
 bitcoincore-rpc = { workspace = true }
 devimint = { workspace = true }
 fedimint-bitcoind = { path = "../../fedimint-bitcoind" }
 fedimint-client = { path = "../../fedimint-client" }
 fedimint-core ={ path = "../../fedimint-core" }
-fedimint-dummy-client = { path = "../fedimint-dummy-client" }
-fedimint-dummy-common = { path = "../fedimint-dummy-common" }
-fedimint-dummy-server = { path = "../fedimint-dummy-server" }
 fedimint-logging = { path = "../../fedimint-logging" }
 fedimint-testing ={ path = "../../fedimint-testing" }
 fedimint-wallet-client = { path = "../fedimint-wallet-client" }
@@ -38,3 +34,9 @@ tracing = { workspace = true }
 secp256k1 = { version = "0.27.0", features = [ "serde" ] }
 rand = { workspace = true }
 strum = { workspace = true }
+
+[dev-dependencies]
+assert_matches = { workspace = true }
+fedimint-dummy-client = { path = "../fedimint-dummy-client" }
+fedimint-dummy-common = { path = "../fedimint-dummy-common" }
+fedimint-dummy-server = { path = "../fedimint-dummy-server" }
