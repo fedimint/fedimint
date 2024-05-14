@@ -14,12 +14,21 @@ fn default_next() -> u16 {
     crate::LOW
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, Default)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all = "kebab-case")]
 pub struct RootData {
     #[serde(default = "default_next")]
     pub next: u16,
     pub keys: BTreeMap<u16, RangeData>,
+}
+
+impl Default for RootData {
+    fn default() -> Self {
+        Self {
+            next: crate::LOW,
+            keys: Default::default(),
+        }
+    }
 }
 
 impl RootData {
