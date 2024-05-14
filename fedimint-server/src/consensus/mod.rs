@@ -30,7 +30,7 @@ use crate::config::{ServerConfig, ServerConfigLocal};
 use crate::consensus::engine::ConsensusEngine;
 use crate::db::{get_global_database_migrations, GLOBAL_DATABASE_VERSION};
 use crate::net::api::{ConsensusApi, ExpiringCache, RpcHandlerCtx};
-use crate::{net, FedimintApiHandler, FedimintServer};
+use crate::{net, FedimintApiHandler};
 
 /// How many txs can be stored in memory before blocking the API
 const TRANSACTION_BUFFER: usize = 1000;
@@ -151,13 +151,13 @@ pub async fn spawn_api_and_build_engine(
 async fn start_consensus_api(cfg: &ServerConfigLocal, api: ConsensusApi) -> FedimintApiHandler {
     let mut rpc_module = RpcHandlerCtx::new_module(api.clone());
 
-    FedimintServer::attach_endpoints(&mut rpc_module, net::api::server_endpoints(), None);
+    crate::attach_endpoints(&mut rpc_module, net::api::server_endpoints(), None);
 
     for (id, _, module) in api.modules.iter_modules() {
-        FedimintServer::attach_endpoints(&mut rpc_module, module.api_endpoints(), Some(id));
+        crate::attach_endpoints(&mut rpc_module, module.api_endpoints(), Some(id));
     }
 
-    FedimintServer::spawn_api("consensus", &cfg.api_bind, rpc_module, cfg.max_connections).await
+    crate::spawn_api("consensus", &cfg.api_bind, rpc_module, cfg.max_connections).await
 }
 
 const CONSENSUS_PROPOSAL_TIMEOUT: Duration = Duration::from_secs(30);

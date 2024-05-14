@@ -29,7 +29,6 @@ use fedimint_mint_server::MintInit;
 use fedimint_server::config::api::ConfigGenSettings;
 use fedimint_server::config::io::{DB_FILE, PLAINTEXT_PASSWORD};
 use fedimint_server::config::ServerConfig;
-use fedimint_server::FedimintServer;
 use fedimint_unknown_common::config::UnknownGenParams;
 use fedimint_unknown_server::UnknownInit;
 use fedimint_wallet_server::common::config::{
@@ -455,9 +454,15 @@ async fn run(
         Default::default(),
     );
 
-    FedimintServer::new(data_dir, settings, db, version_hash)
-        .run(&module_inits, task_group.clone())
-        .await?;
+    fedimint_server::run(
+        data_dir,
+        settings,
+        db,
+        version_hash,
+        &module_inits,
+        task_group.clone(),
+    )
+    .await?;
 
     Ok(())
 }

@@ -868,7 +868,6 @@ mod tests {
     use crate::config::io::{read_server_config, PLAINTEXT_PASSWORD};
     use crate::config::{DynServerModuleInit, ServerConfig, DEFAULT_MAX_CLIENT_CONNECTIONS};
     use crate::fedimint_core::module::ServerModuleInit;
-    use crate::FedimintServer;
 
     /// Helper in config API tests for simulating a guardian's client and server
     struct TestConfigApi {
@@ -878,21 +877,12 @@ mod tests {
         settings: ConfigGenSettings,
         amount: Amount,
         dir: PathBuf,
-        module_inits: ServerModuleInitRegistry,
     }
 
     impl TestConfigApi {
-        pub fn module_inits(&self) -> &ServerModuleInitRegistry {
-            &self.module_inits
-        }
-
         /// Creates a new test API taking up a port, with P2P endpoint on the
         /// next port
-        async fn new(
-            port: u16,
-            name_suffix: u16,
-            data_dir: PathBuf,
-        ) -> (TestConfigApi, FedimintServer) {
+        async fn new(port: u16, name_suffix: u16, data_dir: PathBuf) -> TestConfigApi {
             let db = MemDatabase::new().into_database();
 
             let name = format!("peer{name_suffix}");
@@ -922,32 +912,38 @@ mod tests {
                     DummyInit,
                 )]),
             };
+
             let dir = data_dir.join(name_suffix.to_string());
             fs::create_dir_all(dir.clone()).expect("Unable to create test dir");
 
-            let api = FedimintServer {
-                data_dir: dir.clone(),
-                settings: settings.clone(),
-                db,
-                version_hash: "dummyversionhash".to_owned(),
-            };
+            let dir_clone = dir.clone();
+            let settings_clone = settings.clone();
+
+            spawn("fedimint server", async move {
+                crate::run(
+                    dir_clone,
+                    settings_clone,
+                    db,
+                    "dummyversionhash".to_owned(),
+                    &module_inits,
+                    TaskGroup::new(),
+                )
+                .await
+                .expect("Failed to run fedimint server");
+            });
 
             // our id doesn't really exist at this point
             let auth = ApiAuth(format!("password-{port}"));
             let client = DynGlobalApi::from_pre_peer_id_admin_endpoint(api_url);
 
-            (
-                TestConfigApi {
-                    client,
-                    auth,
-                    name,
-                    settings,
-                    amount: Amount::from_sats(port as u64),
-                    dir,
-                    module_inits,
-                },
-                api,
-            )
+            TestConfigApi {
+                client,
+                auth,
+                name,
+                settings,
+                amount: Amount::from_sats(port as u64),
+                dir,
+            }
         }
 
         /// Helper function using generated urls
@@ -1064,29 +1060,14 @@ mod tests {
         let (data_dir, _maybe_tmp_dir_guard) = test_dir("test-config-api");
         let base_port = port_alloc(PEER_NUM * PORTS_PER_PEER).unwrap();
 
-        // let mut join_handles = vec![];
-        let mut apis = vec![];
         let mut followers = vec![];
-        let (mut test_config, api) = TestConfigApi::new(base_port, 0, data_dir.clone()).await;
-
-        apis.push(api);
+        let mut test_config = TestConfigApi::new(base_port, 0, data_dir.clone()).await;
 
         for i in 1..PEER_NUM {
             let port = base_port + (i * PORTS_PER_PEER);
-            let (follower, api) = TestConfigApi::new(port, i, data_dir.clone()).await;
-            apis.push(api);
+            let follower = TestConfigApi::new(port, i, data_dir.clone()).await;
             followers.push(follower);
         }
-
-        let module_inits = test_config.module_inits().clone();
-        // Run the Fedimint servers and test concurrently
-        spawn("Fedimint server apis", async move {
-            join_all(
-                apis.iter_mut()
-                    .map(|fedimint_server| fedimint_server.run(&module_inits, TaskGroup::new())),
-            )
-            .await;
-        });
 
         test_config = validate_leader_setup(test_config).await;
 
@@ -1121,30 +1102,14 @@ mod tests {
         let (data_dir, _maybe_tmp_dir_guard) = test_dir("test-restart-setup");
         let base_port = port_alloc(PEER_NUM * PORTS_PER_PEER).unwrap();
 
-        // let mut join_handles = vec![];
-        let mut apis = vec![];
         let mut followers = vec![];
-        let (mut test_config, fedimint_server) =
-            TestConfigApi::new(base_port, 0, data_dir.clone()).await;
-
-        apis.push(fedimint_server);
+        let mut test_config = TestConfigApi::new(base_port, 0, data_dir.clone()).await;
 
         for i in 1..PEER_NUM {
             let port = base_port + (i * PORTS_PER_PEER);
-            let (follower, api) = TestConfigApi::new(port, i, data_dir.clone()).await;
-            apis.push(api);
+            let follower = TestConfigApi::new(port, i, data_dir.clone()).await;
             followers.push(follower);
         }
-
-        let module_inits = test_config.module_inits().clone();
-        // Run the Fedimint servers and test concurrently
-        spawn("Fedimint server apis", async move {
-            join_all(
-                apis.iter_mut()
-                    .map(|api| api.run(&module_inits, TaskGroup::new())),
-            )
-            .await;
-        });
 
         test_config = validate_leader_setup(test_config).await;
 
