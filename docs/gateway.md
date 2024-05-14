@@ -119,6 +119,29 @@ $ gateway-cli info
 ```
 This process ensures that your gateway is properly funded and ready to participate in the federation's activities.
 
+#### Gateway Peg-out Process
+This section provides a detailed guide on how to withdraw funds from the gateway and subsequently remove the gateway from a federation.
+
+##### Obtaining a Withdrawal Address
+First, generate a new address to which the funds will be withdrawn. Below is an example using `lncli` to create a new address:
+```bash
+$ lncli newaddress p2tr
+{ "address": "bc1xas..." }
+```
+##### Withdrawing Funds
+Use the following command to initiate the withdrawal of funds to the specified address:
+```bash
+$ gateway-cli withdraw --federation-id fed1xxxxxx --amount 50000000 --address bc1xas...
+```
+Wait for the transaction to be completed and confirmed on the network.
+
+##### Removing the Gateway from the Federation
+Once the funds have been successfully withdrawn, you can proceed to remove the gateway from the federation. Execute the following command to make the gateway leave the federation:
+```bash
+$ gateway-cli leave-fed --federation-id fed1xxxxxx
+```
+This process ensures that the gateway is cleanly removed from the federation after the funds have been securely withdrawn.
+
 
 ### Mintgate
 
