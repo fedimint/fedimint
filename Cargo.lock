@@ -1558,7 +1558,6 @@ dependencies = [
  "itertools 0.12.1",
  "js-sys",
  "jsonrpsee-core",
- "jsonrpsee-types",
  "jsonrpsee-wasm-client",
  "lightning",
  "lightning-invoice",
@@ -1567,7 +1566,6 @@ dependencies = [
  "once_cell",
  "parity-scale-codec",
  "rand",
- "secp256k1 0.24.3",
  "secp256k1 0.27.0",
  "secp256k1-zkp",
  "serde",
@@ -1658,7 +1656,6 @@ dependencies = [
  "fedimint-client",
  "fedimint-core",
  "fedimint-dummy-common",
- "fedimint-threshold-crypto",
  "futures",
  "rand",
  "serde",
@@ -1673,18 +1670,9 @@ name = "fedimint-dummy-common"
 version = "0.4.0-alpha"
 dependencies = [
  "anyhow",
- "async-trait",
- "bitcoin_hashes 0.12.0",
- "erased-serde",
  "fedimint-core",
- "fedimint-threshold-crypto",
- "futures",
- "rand",
  "serde",
- "strum",
- "strum_macros",
  "thiserror",
- "tracing",
 ]
 
 [[package]]
@@ -1693,18 +1681,13 @@ version = "0.4.0-alpha"
 dependencies = [
  "anyhow",
  "async-trait",
- "bitcoin_hashes 0.12.0",
  "erased-serde",
  "fedimint-core",
  "fedimint-dummy-common",
  "futures",
- "rand",
  "serde",
  "strum",
  "strum_macros",
- "thiserror",
- "tokio",
- "tracing",
 ]
 
 [[package]]
@@ -1718,13 +1701,10 @@ dependencies = [
  "fedimint-dummy-common",
  "fedimint-dummy-server",
  "fedimint-logging",
- "fedimint-server",
  "fedimint-testing",
- "fedimint-threshold-crypto",
  "futures",
  "rand",
  "strum",
- "strum_macros",
  "tokio",
  "tracing",
 ]
@@ -1740,12 +1720,10 @@ dependencies = [
  "fedimint-client",
  "fedimint-core",
  "fedimint-empty-common",
- "futures",
  "serde",
  "strum",
  "strum_macros",
  "thiserror",
- "tracing",
 ]
 
 [[package]]
@@ -1753,15 +1731,9 @@ name = "fedimint-empty-common"
 version = "0.4.0-alpha"
 dependencies = [
  "anyhow",
- "async-trait",
- "erased-serde",
  "fedimint-core",
- "futures",
  "serde",
- "strum",
- "strum_macros",
  "thiserror",
- "tracing",
 ]
 
 [[package]]
@@ -1777,8 +1749,6 @@ dependencies = [
  "serde",
  "strum",
  "strum_macros",
- "thiserror",
- "tracing",
 ]
 
 [[package]]
@@ -1827,7 +1797,6 @@ dependencies = [
  "aquamarine",
  "async-stream",
  "async-trait",
- "bincode",
  "bitcoin 0.30.2",
  "clap",
  "erased-serde",
@@ -1836,7 +1805,6 @@ dependencies = [
  "fedimint-core",
  "fedimint-ln-common",
  "fedimint-logging",
- "fedimint-threshold-crypto",
  "futures",
  "itertools 0.12.1",
  "lightning-invoice",
@@ -1851,8 +1819,6 @@ dependencies = [
  "thiserror",
  "tokio",
  "tracing",
- "tracing-subscriber",
- "url",
 ]
 
 [[package]]
@@ -1860,30 +1826,19 @@ name = "fedimint-ln-common"
 version = "0.4.0-alpha"
 dependencies = [
  "anyhow",
- "aquamarine",
- "async-trait",
  "bitcoin 0.30.2",
  "bitcoin_hashes 0.12.0",
- "erased-serde",
  "fedimint-client",
  "fedimint-core",
  "fedimint-threshold-crypto",
- "futures",
- "itertools 0.12.1",
  "lightning",
  "lightning-invoice",
- "rand",
  "secp256k1 0.27.0",
  "serde",
  "serde-big-array",
  "serde_json",
- "strum",
- "strum_macros",
  "thiserror",
- "tokio",
  "tracing",
- "tracing-subscriber",
- "url",
 ]
 
 [[package]]
@@ -1954,7 +1909,6 @@ dependencies = [
  "anyhow",
  "assert_matches",
  "async-trait",
- "bincode",
  "bitcoin_hashes 0.12.0",
  "erased-serde",
  "fedimint-bitcoind",
@@ -1964,21 +1918,14 @@ dependencies = [
  "fedimint-server",
  "fedimint-threshold-crypto",
  "futures",
- "itertools 0.12.1",
- "lightning",
- "lightning-invoice",
  "rand",
  "secp256k1 0.27.0",
  "serde",
- "serde_json",
  "strum",
  "strum_macros",
  "test-log",
- "thiserror",
  "tokio",
  "tracing",
- "tracing-subscriber",
- "url",
 ]
 
 [[package]]
@@ -1988,7 +1935,6 @@ dependencies = [
  "anyhow",
  "assert_matches",
  "bitcoin_hashes 0.12.0",
- "fedimint-bitcoind",
  "fedimint-client",
  "fedimint-core",
  "fedimint-dummy-client",
@@ -1998,7 +1944,6 @@ dependencies = [
  "fedimint-ln-common",
  "fedimint-ln-server",
  "fedimint-logging",
- "fedimint-server",
  "fedimint-testing",
  "fedimint-threshold-crypto",
  "futures",
@@ -2007,7 +1952,6 @@ dependencies = [
  "secp256k1 0.27.0",
  "serde_json",
  "strum",
- "strum_macros",
  "tokio",
  "tracing",
 ]
@@ -2020,7 +1964,6 @@ dependencies = [
  "aquamarine",
  "async-stream",
  "async-trait",
- "bincode",
  "bitcoin 0.30.2",
  "clap",
  "erased-serde",
@@ -2028,23 +1971,16 @@ dependencies = [
  "fedimint-client",
  "fedimint-core",
  "fedimint-lnv2-common",
- "fedimint-threshold-crypto",
  "fedimint-tpe",
  "futures",
- "itertools 0.12.1",
  "lightning-invoice",
  "rand",
  "reqwest 0.11.26",
  "secp256k1 0.27.0",
  "serde",
  "serde_json",
- "strum",
- "strum_macros",
  "thiserror",
- "tokio",
  "tracing",
- "tracing-subscriber",
- "url",
 ]
 
 [[package]]
@@ -2052,34 +1988,17 @@ name = "fedimint-lnv2-common"
 version = "0.4.0-alpha"
 dependencies = [
  "anyhow",
- "aquamarine",
- "async-trait",
- "bincode",
  "bitcoin 0.30.2",
  "bitcoin_hashes 0.12.0",
- "bls12_381",
- "erased-serde",
  "fedimint-client",
  "fedimint-core",
  "fedimint-ln-common",
- "fedimint-threshold-crypto",
  "fedimint-tpe",
- "futures",
  "group",
- "itertools 0.12.1",
- "lightning-invoice",
- "rand",
- "rand_chacha",
  "secp256k1 0.27.0",
  "serde",
  "serde_json",
- "strum",
- "strum_macros",
  "thiserror",
- "tokio",
- "tracing",
- "tracing-subscriber",
- "url",
 ]
 
 [[package]]
@@ -2088,31 +2007,19 @@ version = "0.4.0-alpha"
 dependencies = [
  "anyhow",
  "async-trait",
- "bincode",
- "bitcoin_hashes 0.12.0",
  "bls12_381",
  "erased-serde",
  "fedimint-bitcoind",
  "fedimint-core",
  "fedimint-lnv2-common",
  "fedimint-server",
- "fedimint-threshold-crypto",
  "fedimint-tpe",
  "futures",
  "group",
- "itertools 0.12.1",
- "lightning-invoice",
  "rand",
- "secp256k1 0.27.0",
  "serde",
- "serde_json",
  "strum",
  "strum_macros",
- "thiserror",
- "tokio",
- "tracing",
- "tracing-subscriber",
- "url",
 ]
 
 [[package]]
@@ -2192,16 +2099,11 @@ dependencies = [
  "fedimint-client",
  "fedimint-core",
  "fedimint-meta-common",
- "fedimint-threshold-crypto",
- "futures",
- "hex",
- "rand",
  "serde",
  "serde_json",
  "strum",
  "strum_macros",
  "thiserror",
- "tracing",
 ]
 
 [[package]]
@@ -2209,20 +2111,11 @@ name = "fedimint-meta-common"
 version = "0.4.0-alpha"
 dependencies = [
  "anyhow",
- "async-trait",
- "bitcoin_hashes 0.12.0",
- "erased-serde",
  "fedimint-core",
- "fedimint-threshold-crypto",
- "futures",
  "hex",
- "rand",
  "serde",
  "serde_json",
- "strum",
- "strum_macros",
  "thiserror",
- "tracing",
 ]
 
 [[package]]
@@ -2231,7 +2124,6 @@ version = "0.4.0-alpha"
 dependencies = [
  "anyhow",
  "async-trait",
- "bitcoin_hashes 0.12.0",
  "erased-serde",
  "fedimint-core",
  "fedimint-logging",
@@ -2241,8 +2133,6 @@ dependencies = [
  "serde",
  "strum",
  "strum_macros",
- "thiserror",
- "tokio",
  "tracing",
 ]
 
@@ -2296,7 +2186,6 @@ dependencies = [
  "futures",
  "hex",
  "itertools 0.12.1",
- "rand",
  "secp256k1-zkp",
  "serde",
  "serde-big-array",
@@ -2308,7 +2197,6 @@ dependencies = [
  "thiserror",
  "tokio",
  "tracing",
- "tracing-subscriber",
 ]
 
 [[package]]
@@ -2316,22 +2204,14 @@ name = "fedimint-mint-common"
 version = "0.4.0-alpha"
 dependencies = [
  "anyhow",
- "async-trait",
  "bincode",
  "bitcoin_hashes 0.12.0",
  "fedimint-core",
  "fedimint-tbs",
- "fedimint-threshold-crypto",
- "futures",
- "itertools 0.12.1",
- "rand",
  "secp256k1-zkp",
  "serde",
- "strum",
- "strum_macros",
  "thiserror",
  "tracing",
- "tracing-subscriber",
 ]
 
 [[package]]
@@ -2341,8 +2221,6 @@ dependencies = [
  "anyhow",
  "assert_matches",
  "async-trait",
- "bincode",
- "bitcoin_hashes 0.12.0",
  "erased-serde",
  "fedimint-core",
  "fedimint-logging",
@@ -2359,10 +2237,8 @@ dependencies = [
  "strum",
  "strum_macros",
  "test-log",
- "thiserror",
  "tokio",
  "tracing",
- "tracing-subscriber",
 ]
 
 [[package]]
@@ -2382,18 +2258,14 @@ dependencies = [
  "fedimint-mint-client",
  "fedimint-mint-common",
  "fedimint-mint-server",
- "fedimint-server",
  "fedimint-tbs",
  "fedimint-testing",
  "fedimint-threshold-crypto",
  "ff",
  "futures",
  "rand",
- "semver",
  "serde",
- "serde_json",
  "strum",
- "strum_macros",
  "tokio",
  "tracing",
 ]
@@ -2621,15 +2493,9 @@ name = "fedimint-unknown-common"
 version = "0.4.0-alpha"
 dependencies = [
  "anyhow",
- "async-trait",
- "bitcoin_hashes 0.12.0",
- "erased-serde",
  "fedimint-core",
- "futures",
- "rand",
  "serde",
  "thiserror",
- "tracing",
 ]
 
 [[package]]
@@ -2641,14 +2507,8 @@ dependencies = [
  "erased-serde",
  "fedimint-core",
  "fedimint-unknown-common",
- "futures",
- "rand",
- "serde",
  "strum",
  "strum_macros",
- "thiserror",
- "tokio",
- "tracing",
 ]
 
 [[package]]
@@ -2667,19 +2527,15 @@ dependencies = [
  "fedimint-core",
  "fedimint-wallet-common",
  "futures",
- "impl-tools",
- "miniscript",
  "rand",
  "secp256k1 0.27.0",
  "serde",
  "serde_json",
  "strum",
  "strum_macros",
- "thiserror",
  "tokio",
  "tracing",
  "tracing-subscriber",
- "url",
 ]
 
 [[package]]
@@ -2687,25 +2543,16 @@ name = "fedimint-wallet-common"
 version = "0.4.0-alpha"
 dependencies = [
  "anyhow",
- "async-trait",
  "bitcoin 0.30.2",
- "erased-serde",
  "fedimint-core",
- "futures",
  "hex",
  "impl-tools",
  "miniscript",
- "rand",
  "secp256k1 0.27.0",
  "serde",
- "strum",
- "strum_macros",
  "test-log",
  "thiserror",
- "tokio",
  "tracing",
- "tracing-subscriber",
- "url",
 ]
 
 [[package]]
@@ -2724,18 +2571,14 @@ dependencies = [
  "fedimint-wallet-common",
  "futures",
  "hex",
- "impl-tools",
  "miniscript",
  "rand",
  "secp256k1 0.27.0",
  "serde",
  "strum",
  "strum_macros",
- "thiserror",
  "tokio",
  "tracing",
- "tracing-subscriber",
- "url",
 ]
 
 [[package]]
@@ -2744,11 +2587,9 @@ version = "0.4.0-alpha"
 dependencies = [
  "anyhow",
  "assert_matches",
- "async-trait",
  "bitcoin 0.30.2",
  "bitcoincore-rpc",
  "devimint",
- "erased-serde",
  "fedimint-bitcoind",
  "fedimint-client",
  "fedimint-core",
@@ -2756,17 +2597,14 @@ dependencies = [
  "fedimint-dummy-common",
  "fedimint-dummy-server",
  "fedimint-logging",
- "fedimint-server",
  "fedimint-testing",
  "fedimint-wallet-client",
  "fedimint-wallet-common",
  "fedimint-wallet-server",
  "futures",
- "miniscript",
  "rand",
  "secp256k1 0.27.0",
  "strum",
- "strum_macros",
  "tokio",
  "tracing",
 ]

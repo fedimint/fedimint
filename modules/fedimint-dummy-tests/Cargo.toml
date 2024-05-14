@@ -19,14 +19,9 @@ fedimint-dummy-client = { path = "../fedimint-dummy-client" }
 fedimint-dummy-common = { path = "../fedimint-dummy-common" }
 fedimint-dummy-server = { path = "../fedimint-dummy-server" }
 fedimint-logging = { path = "../../fedimint-logging" }
-fedimint-server = { path = "../../fedimint-server" }
 fedimint-testing = { path = "../../fedimint-testing" }
 futures = { workspace = true }
 rand = { workspace = true }
 strum = { workspace = true }
-strum_macros = { workspace = true }
 tokio = { version = "1.37.0", features = ["sync"] }
 tracing = { workspace = true }
-
-[dev-dependencies]
-threshold_crypto = { workspace = true }

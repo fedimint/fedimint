@@ -18,7 +18,6 @@ path = "src/lib.rs"
 [dependencies]
 anyhow = { workspace = true }
 async-trait = "0.1.80"
-bitcoin_hashes = { workspace = true }
 erased-serde = { workspace = true }
 futures = { workspace = true }
 fedimint-core = { version = "=0.4.0-alpha", path = "../../fedimint-core" }
@@ -28,6 +27,4 @@ rand = { workspace = true }
 serde = { workspace = true }
 strum = { workspace = true }
 strum_macros = { workspace = true }
-thiserror = { workspace = true }
 tracing = { workspace = true }
-tokio = { version = "1.37.0", features = ["sync"] }

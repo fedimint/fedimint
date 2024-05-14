@@ -22,10 +22,8 @@ fedimint-empty-common = { version = "=0.4.0-alpha", path = "../fedimint-empty-co
 fedimint-client = { version = "=0.4.0-alpha", path = "../../fedimint-client" }
 fedimint-core = { workspace = true }
 fedimint-api-client = { workspace = true }
-futures = { workspace = true }
 erased-serde = { workspace = true }
 serde = { workspace = true }
 strum = { workspace = true }
 strum_macros = { workspace = true }
-tracing = { workspace = true }
 thiserror = { workspace = true }
