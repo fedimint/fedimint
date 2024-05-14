@@ -203,6 +203,7 @@
 <a href="#203" id="203">203</a>
 <a href="#204" id="204">204</a>
 <a href="#205" id="205">205</a>
+<a href="#206" id="206">206</a>
 </pre></div><pre class="rust"><code><span class="attr">#![allow(non_snake_case)]
 
 </span><span class="kw">use </span>std::path::{Path, PathBuf};
@@ -275,7 +276,8 @@
         <span class="self">self</span>.as_ref().and_then(ToEnvVar::to_env_value)
     }
 }
-<span class="kw">async fn </span>mkdir(dir: PathBuf) -&gt; anyhow::Result&lt;PathBuf&gt; {
+
+<span class="kw">pub async fn </span>mkdir(dir: PathBuf) -&gt; anyhow::Result&lt;PathBuf&gt; {
     <span class="kw">if </span>!dir.exists() {
         tokio::fs::create_dir(<span class="kw-2">&amp;</span>dir).<span class="kw">await</span><span class="question-mark">?</span>;
     }

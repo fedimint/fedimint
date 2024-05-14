@@ -1031,7 +1031,7 @@
 
     <span class="doccomment">/// Poll until bitcoind rpc responds for basic commands
     </span><span class="kw">pub async fn </span>poll_ready(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; anyhow::Result&lt;()&gt; {
-        poll(<span class="string">"btcoind rpc ready"</span>, || <span class="kw">async </span>{
+        poll(<span class="string">"bitcoind rpc ready"</span>, || <span class="kw">async </span>{
             <span class="self">self</span>.get_block_count()
                 .<span class="kw">await
                 </span>.map_err(ControlFlow::Continue::&lt;anyhow::Error, <span class="kw">_</span>&gt;)<span class="question-mark">?</span>;

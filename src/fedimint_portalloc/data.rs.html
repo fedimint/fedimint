@@ -122,6 +122,7 @@
 <a href="#122" id="122">122</a>
 <a href="#123" id="123">123</a>
 <a href="#124" id="124">124</a>
+<a href="#125" id="125">125</a>
 </pre></div><pre class="rust"><code><span class="kw">mod </span>dto;
 
 <span class="kw">use </span>std::path::PathBuf;
@@ -201,6 +202,7 @@
         <span class="kw">if </span><span class="self">self</span>.lock_file.try_lock_exclusive().is_err() {
             <span class="macro">info!</span>(<span class="string">"Lock taken, waiting..."</span>);
             <span class="self">self</span>.lock_file.lock_exclusive()<span class="question-mark">?</span>;
+            <span class="macro">info!</span>(<span class="string">"Acquired lock after wait"</span>);
         };
         <span class="macro">debug!</span>(<span class="string">"Acquired lock"</span>);
         <span class="self">self</span>.locked = <span class="bool-val">true</span>;

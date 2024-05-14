@@ -220,6 +220,8 @@
 <a href="#220" id="220">220</a>
 <a href="#221" id="221">221</a>
 <a href="#222" id="222">222</a>
+<a href="#223" id="223">223</a>
+<a href="#224" id="224">224</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::path::PathBuf;
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
@@ -347,17 +349,19 @@
             <span class="self">self</span>.params.clone(),
             ServerModuleInitRegistry::from(<span class="self">self</span>.servers.clone()),
             ClientModuleInitRegistry::from(<span class="self">self</span>.clients.clone()),
-        );
+        )
+        .<span class="kw">await</span>;
         federation_builder.build().<span class="kw">await
     </span>}
 
-    <span class="kw">pub fn </span>new_fed_builder(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FederationTestBuilder {
+    <span class="kw">pub async fn </span>new_fed_builder(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FederationTestBuilder {
         FederationTestBuilder::new(
             <span class="self">self</span>.params.clone(),
             ServerModuleInitRegistry::from(<span class="self">self</span>.servers.clone()),
             ClientModuleInitRegistry::from(<span class="self">self</span>.clients.clone()),
         )
-    }
+        .<span class="kw">await
+    </span>}
 
     <span class="doccomment">/// Starts a new gateway with a given lightning node
     </span><span class="kw">pub async fn </span>new_gateway(

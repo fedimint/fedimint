@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"struct":["RangeData","RootData"]};
+window.SIDEBAR_ITEMS = {"fn":["default_next"],"struct":["RangeData","RootData"]};
