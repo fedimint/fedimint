@@ -110,7 +110,7 @@ use fedimint_core::{
 };
 pub use fedimint_derive_secret as derivable_secret;
 use fedimint_derive_secret::DerivableSecret;
-use fedimint_logging::{LOG_CLIENT, LOG_CLIENT_RECOVERY};
+use fedimint_logging::{LOG_CLIENT, LOG_CLIENT_NET_API, LOG_CLIENT_RECOVERY};
 use futures::{Future, Stream, StreamExt};
 use meta::{LegacyMetaSource, MetaService};
 use module::recovery::RecoveryProgress;
@@ -1110,6 +1110,9 @@ impl Client {
         );
 
         let txid = transaction.tx_hash();
+
+        debug!(target: LOG_CLIENT_NET_API, %txid, ?transaction,  "Finalized and submitting transaction");
+
         let change_outpoints = change_range
             .into_iter()
             .map(|out_idx| OutPoint { txid, out_idx })
