@@ -77,6 +77,7 @@ impl<'a> LockedRoot<'a> {
         if self.lock_file.try_lock_exclusive().is_err() {
             info!("Lock taken, waiting...");
             self.lock_file.lock_exclusive()?;
+            info!("Acquired lock after wait");
         };
         debug!("Acquired lock");
         self.locked = true;

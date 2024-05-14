@@ -147,7 +147,7 @@ impl Bitcoind {
 
     /// Poll until bitcoind rpc responds for basic commands
     pub async fn poll_ready(&self) -> anyhow::Result<()> {
-        poll("btcoind rpc ready", || async {
+        poll("bitcoind rpc ready", || async {
             self.get_block_count()
                 .await
                 .map_err(ControlFlow::Continue::<anyhow::Error, _>)?;

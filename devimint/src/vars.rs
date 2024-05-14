@@ -70,7 +70,8 @@ impl<T: ToEnvVar> ToEnvVar for Option<T> {
         self.as_ref().and_then(ToEnvVar::to_env_value)
     }
 }
-async fn mkdir(dir: PathBuf) -> anyhow::Result<PathBuf> {
+
+pub async fn mkdir(dir: PathBuf) -> anyhow::Result<PathBuf> {
     if !dir.exists() {
         tokio::fs::create_dir(&dir).await?;
     }

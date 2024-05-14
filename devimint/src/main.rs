@@ -8,7 +8,7 @@ use fedimint_core::fedimint_build_code_version_env;
 use fedimint_core::util::{handle_version_hash_command, write_overwrite_async};
 use fedimint_logging::LOG_DEVIMINT;
 use tokio::time::Instant;
-use tracing::{debug, trace, warn};
+use tracing::{debug, warn};
 
 #[derive(Parser)]
 #[command(version)]
@@ -39,7 +39,6 @@ async fn handle_command() -> anyhow::Result<()> {
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    trace!(target: LOG_DEVIMINT, "Started");
     let start_time = Instant::now();
     handle_version_hash_command(fedimint_build_code_version_env!());
     let res = match handle_command().await {
