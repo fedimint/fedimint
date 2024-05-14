@@ -150,24 +150,24 @@ jobs:
 
       - name: Build workspace
         if: github.event_name != 'pull_request' || matrix.build-in-pr
-        run: nix build .#ci.workspaceBuild
+        run: nix build -L .#ci.workspaceBuild
 
       - name: Clippy workspace
         if: github.event_name != 'pull_request' || matrix.build-in-pr
-        run: nix build .#ci.workspaceClippy
+        run: nix build -L .#ci.workspaceClippy
 
       - name: Run cargo doc
         if: (github.event_name != 'pull_request' || matrix.build-in-pr) && (matrix.host != 'macos')
-        run: nix build .#ci.workspaceDoc
+        run: nix build -L .#ci.workspaceDoc
 
       - name: Test docs
         if: (github.event_name != 'pull_request' || matrix.build-in-pr) && (matrix.host != 'macos')
-        run: nix build .#ci.workspaceTestDoc
+        run: nix build -L .#ci.workspaceTestDoc
 
       - name: Tests
         if: (github.event_name != 'pull_request' || matrix.build-in-pr) && matrix.run-tests
         run: |
-          nix build .#wasm32-unknown.ci.ciTestAll
+          nix build -L .#wasm32-unknown.ci.ciTestAll
 
       - name: Tests (5 times more)
         if: github.event_name == 'merge_group' && matrix.run-tests
@@ -176,7 +176,7 @@ jobs:
 
       - name: Wasm Tests
         if: (github.event_name != 'pull_request' || matrix.build-in-pr) && matrix.run-tests && (matrix.host != 'macos')
-        run: nix build .#wasm32-unknown.ci.wasmTest
+        run: nix build -L .#wasm32-unknown.ci.wasmTest
 
   audit:
     if: github.repository == 'fedimint/fedimint'
@@ -203,11 +203,11 @@ jobs:
       - name: Run cargo audit
         run: |
           nix flake update advisory-db
-          nix build .#ci.cargoAudit
+          nix build -L .#ci.cargoAudit
 
       - name: Run cargo deny
         run: |
-          nix build .#ci.cargoDeny
+          nix build -L .#ci.cargoDeny
 
   # Code Coverage will build using a completely different profile (neither debug/release)
   # Which means we can not reuse much from `build` job. Might as well run it as another
@@ -235,7 +235,7 @@ jobs:
         run: nix run nixpkgs#curl -- --fail-with-body -X POST --data-binary @.codecov.yml https://codecov.io/validate
 
       - name: Build and run tests with Code Coverage
-        run: nix build .#ci.workspaceTestCov
+        run: nix build -L .#ci.workspaceTestCov
 
       - name: Ensure lcov.info exists
         run: test -f result/lcov.info
@@ -459,7 +459,7 @@ jobs:
           bins="${{ matrix.build.bins }}"
           for bin in ${bins//,/ } ; do
             if [[ $GITHUB_REF_TYPE == "tag" ]]; then
-              nix build .#$bin
+              nix build -L .#$bin
               cachix push fedimint -c 8 -j 8 $(nix-store --query --references $(readlink -f result)) $(readlink -f result)
               cachix pin fedimint "fedimint-release-$bin:$BUILD_ID" $(readlink -f result)
             fi
@@ -477,7 +477,7 @@ jobs:
         run: |
           bins="${{ matrix.build.bins }}"
           for bin in ${bins//,/ } ; do
-            nix build .#$bin && sha256sum "./result/bin/$bin"
+            nix build -L .#$bin && sha256sum "./result/bin/$bin"
           done
 
       - name: Upload Binaries
