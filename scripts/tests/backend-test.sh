@@ -2,7 +2,7 @@
 # Runs the all the Rust integration tests
 
 set -euo pipefail
-export RUST_LOG="${RUST_LOG:-info,timing=debug}"
+export RUST_LOG="${RUST_LOG:-info}"
 
 source scripts/_common.sh
 build_workspace
