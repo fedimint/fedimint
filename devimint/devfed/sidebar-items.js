@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"fn":["dev_fed"],"struct":["DevFed","DevJitFed"],"type":["JitArc"]};
+window.SIDEBAR_ITEMS = {"fn":["dev_fed","spawn_drop"],"struct":["DevFed","DevJitFed"],"type":["JitArc"]};

@@ -1125,6 +1125,22 @@
 <a href="#1125" id="1125">1125</a>
 <a href="#1126" id="1126">1126</a>
 <a href="#1127" id="1127">1127</a>
+<a href="#1128" id="1128">1128</a>
+<a href="#1129" id="1129">1129</a>
+<a href="#1130" id="1130">1130</a>
+<a href="#1131" id="1131">1131</a>
+<a href="#1132" id="1132">1132</a>
+<a href="#1133" id="1133">1133</a>
+<a href="#1134" id="1134">1134</a>
+<a href="#1135" id="1135">1135</a>
+<a href="#1136" id="1136">1136</a>
+<a href="#1137" id="1137">1137</a>
+<a href="#1138" id="1138">1138</a>
+<a href="#1139" id="1139">1139</a>
+<a href="#1140" id="1140">1140</a>
+<a href="#1141" id="1141">1141</a>
+<a href="#1142" id="1142">1142</a>
+<a href="#1143" id="1143">1143</a>
 </pre></div><pre class="rust"><code><span class="kw">mod </span>config;
 
 <span class="kw">use </span>std::collections::{BTreeMap, HashMap, HashSet};
@@ -1146,6 +1162,7 @@
 <span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
 <span class="kw">use </span>fedimint_core::module::{ApiAuth, ModuleCommon};
 <span class="kw">use </span>fedimint_core::runtime::block_in_place;
+<span class="kw">use </span>fedimint_core::task::block_on;
 <span class="kw">use </span>fedimint_core::task::jit::JitTryAnyhow;
 <span class="kw">use </span>fedimint_core::util::SafeUrl;
 <span class="kw">use </span>fedimint_core::{Amount, PeerId};
@@ -1158,6 +1175,7 @@
 <span class="kw">use </span>fs_lock::FileLock;
 <span class="kw">use </span>futures::future::join_all;
 <span class="kw">use </span>rand::Rng;
+<span class="kw">use </span>tokio::task::JoinSet;
 <span class="kw">use </span>tokio::time::Instant;
 <span class="kw">use </span>tracing::{debug, info};
 
@@ -1180,6 +1198,20 @@
     </span>client: JitTryAnyhow&lt;Client&gt;,
 }
 
+<span class="kw">impl </span>Drop <span class="kw">for </span>Federation {
+    <span class="kw">fn </span>drop(<span class="kw-2">&amp;mut </span><span class="self">self</span>) {
+        block_in_place(|| {
+            block_on(<span class="kw">async </span>{
+                <span class="kw">let </span><span class="kw-2">mut </span>set = JoinSet::new();
+
+                <span class="kw">while let </span><span class="prelude-val">Some</span>((_id, fedimintd)) = <span class="self">self</span>.members.pop_first() {
+                    set.spawn(<span class="kw">async move </span>{ drop(fedimintd) });
+                }
+                <span class="kw">while </span>(set.join_next().<span class="kw">await</span>).is_some() {}
+            })
+        })
+    }
+}
 <span class="doccomment">/// `fedimint-cli` instance (basically path with client state: config + db)
 </span><span class="attr">#[derive(Clone)]
 </span><span class="kw">pub struct </span>Client {
