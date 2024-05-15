@@ -215,6 +215,10 @@
 <a href="#215" id="215">215</a>
 <a href="#216" id="216">216</a>
 <a href="#217" id="217">217</a>
+<a href="#218" id="218">218</a>
+<a href="#219" id="219">219</a>
+<a href="#220" id="220">220</a>
+<a href="#221" id="221">221</a>
 </pre></div><pre class="rust"><code><span class="attr">#![allow(clippy::let_unit_value)]
 
 </span><span class="kw">pub mod </span>debug_fmt;
@@ -252,12 +256,12 @@
 <span class="doccomment">/// How many txs can be stored in memory before blocking the API
 </span><span class="kw">const </span>TRANSACTION_BUFFER: usize = <span class="number">1000</span>;
 
-<span class="kw">pub async fn </span>spawn_api_and_build_engine(
+<span class="kw">pub async fn </span>run(
     cfg: ServerConfig,
     db: Database,
     module_init_registry: ServerModuleInitRegistry,
     task_group: <span class="kw-2">&amp;</span>TaskGroup,
-) -&gt; anyhow::Result&lt;(ConsensusEngine, FedimintApiHandler)&gt; {
+) -&gt; anyhow::Result&lt;()&gt; {
     cfg.validate_config(<span class="kw-2">&amp;</span>cfg.local.identity, <span class="kw-2">&amp;</span>module_init_registry)<span class="question-mark">?</span>;
 
     apply_migrations_server(
@@ -345,7 +349,7 @@
 
     <span class="macro">info!</span>(target: LOG_CONSENSUS, <span class="string">"Starting Consensus Engine"</span>);
 
-    <span class="kw">let </span>engine = ConsensusEngine {
+    ConsensusEngine {
         db,
         keychain: Keychain::new(<span class="kw-2">&amp;</span>cfg),
         federation_api: DynGlobalApi::from_config(<span class="kw-2">&amp;</span>client_cfg),
@@ -360,9 +364,13 @@
         last_ci_by_peer,
         modules: module_registry,
         task_group: task_group.clone(),
-    };
+    }
+    .run()
+    .<span class="kw">await</span><span class="question-mark">?</span>;
 
-    <span class="prelude-val">Ok</span>((engine, api_handler))
+    api_handler.stop().<span class="kw">await</span>;
+
+    <span class="prelude-val">Ok</span>(())
 }
 
 <span class="kw">async fn </span>start_consensus_api(cfg: <span class="kw-2">&amp;</span>ServerConfigLocal, api: ConsensusApi) -&gt; FedimintApiHandler {

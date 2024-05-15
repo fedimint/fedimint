@@ -298,9 +298,30 @@
 <a href="#298" id="298">298</a>
 <a href="#299" id="299">299</a>
 <a href="#300" id="300">300</a>
+<a href="#301" id="301">301</a>
+<a href="#302" id="302">302</a>
+<a href="#303" id="303">303</a>
+<a href="#304" id="304">304</a>
+<a href="#305" id="305">305</a>
+<a href="#306" id="306">306</a>
+<a href="#307" id="307">307</a>
+<a href="#308" id="308">308</a>
+<a href="#309" id="309">309</a>
+<a href="#310" id="310">310</a>
+<a href="#311" id="311">311</a>
+<a href="#312" id="312">312</a>
+<a href="#313" id="313">313</a>
+<a href="#314" id="314">314</a>
+<a href="#315" id="315">315</a>
+<a href="#316" id="316">316</a>
+<a href="#317" id="317">317</a>
+<a href="#318" id="318">318</a>
+<a href="#319" id="319">319</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap};
 <span class="kw">use </span>std::sync::Arc;
+<span class="kw">use </span>std::time::Duration;
 
+<span class="kw">use </span>fedimint_api_client::api::{DynGlobalApi, FederationApiExt};
 <span class="kw">use </span>fedimint_client::module::init::ClientModuleInitRegistry;
 <span class="kw">use </span>fedimint_client::secret::{PlainRootSecretStrategy, RootSecretStrategy};
 <span class="kw">use </span>fedimint_client::{AdminCreds, Client, ClientHandleArc};
@@ -312,9 +333,10 @@
 <span class="kw">use </span>fedimint_core::core::ModuleInstanceId;
 <span class="kw">use </span>fedimint_core::db::mem_impl::MemDatabase;
 <span class="kw">use </span>fedimint_core::db::Database;
+<span class="kw">use </span>fedimint_core::endpoint_constants::SESSION_COUNT_ENDPOINT;
 <span class="kw">use </span>fedimint_core::invite_code::InviteCode;
-<span class="kw">use </span>fedimint_core::module::ApiAuth;
-<span class="kw">use </span>fedimint_core::task::{block_in_place, TaskGroup};
+<span class="kw">use </span>fedimint_core::module::{ApiAuth, ApiRequestErased};
+<span class="kw">use </span>fedimint_core::task::{block_in_place, sleep_in_test, TaskGroup};
 <span class="kw">use </span>fedimint_core::PeerId;
 <span class="kw">use </span>fedimint_logging::LOG_TEST;
 <span class="kw">use </span>fedimint_rocksdb::RocksDb;
@@ -507,19 +529,35 @@
             <span class="kw">let </span>module_init_registry = <span class="self">self</span>.server_init.clone();
             <span class="kw">let </span>subgroup = task_group.make_subgroup();
 
-            <span class="kw">let </span>(engine, api_handler) = consensus::spawn_api_and_build_engine(
-                config.clone(),
-                db.clone(),
-                module_init_registry,
-                <span class="kw-2">&amp;</span>subgroup,
-            )
-            .<span class="kw">await
-            </span>.expect(<span class="string">"Could not initialise consensus"</span>);
-
             task_group.spawn(<span class="string">"fedimintd"</span>, <span class="kw">move </span>|<span class="kw">_</span>| <span class="kw">async move </span>{
-                engine.run().<span class="kw">await</span>.expect(<span class="string">"Failed to run consensus"</span>);
-                api_handler.stop().<span class="kw">await</span>;
+                consensus::run(config.clone(), db.clone(), module_init_registry, <span class="kw-2">&amp;</span>subgroup)
+                    .<span class="kw">await
+                    </span>.expect(<span class="string">"Could not initialise consensus"</span>);
             });
+        }
+
+        <span class="kw">for </span>(peer_id, config) <span class="kw">in </span>configs.clone() {
+            <span class="kw">if </span>u16::from(peer_id) &gt;= <span class="self">self</span>.num_peers - <span class="self">self</span>.num_offline {
+                <span class="kw">continue</span>;
+            }
+
+            <span class="kw">let </span>client_config = config
+                .consensus
+                .to_client_config(<span class="kw-2">&amp;</span><span class="self">self</span>.server_init)
+                .unwrap();
+
+            <span class="kw">let </span>api = DynGlobalApi::from_config_admin(<span class="kw-2">&amp;</span>client_config, peer_id);
+
+            <span class="kw">while let </span><span class="prelude-val">Err</span>(e) = api
+                .request_admin_no_auth::&lt;u64&gt;(SESSION_COUNT_ENDPOINT, ApiRequestErased::default())
+                .<span class="kw">await
+            </span>{
+                sleep_in_test(
+                    <span class="macro">format!</span>(<span class="string">"Waiting for api of peer {peer_id} to come online: {e}"</span>),
+                    Duration::from_millis(<span class="number">500</span>),
+                )
+                .<span class="kw">await</span>;
+            }
         }
 
         FederationTest {
