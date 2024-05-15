@@ -36,12 +36,12 @@ use crate::atomic_broadcast::network::Network;
 use crate::atomic_broadcast::spawner::Spawner;
 use crate::atomic_broadcast::{to_node_index, Keychain, Message};
 use crate::config::ServerConfig;
-use crate::consensus::debug_fmt::FmtDbgConsensusItem;
-use crate::consensus::transaction::process_transaction_with_dbtx;
-use crate::db::{
+use crate::consensus::db::{
     AcceptedItemKey, AcceptedItemPrefix, AcceptedTransactionKey, AlephUnitsPrefix,
     SignedSessionOutcomeKey, SignedSessionOutcomePrefix,
 };
+use crate::consensus::debug_fmt::FmtDbgConsensusItem;
+use crate::consensus::transaction::process_transaction_with_dbtx;
 use crate::fedimint_core::encoding::Encodable;
 use crate::metrics::{
     CONSENSUS_ITEMS_PROCESSED_TOTAL, CONSENSUS_ITEM_PROCESSING_DURATION_SECONDS,

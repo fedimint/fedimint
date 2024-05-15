@@ -16,7 +16,7 @@ use fedimint_core::push_db_pair_items_no_serde;
 use fedimint_rocksdb::RocksDbReadOnly;
 use fedimint_server::config::io::read_server_config;
 use fedimint_server::config::ServerConfig;
-use fedimint_server::db as ConsensusRange;
+use fedimint_server::consensus::db as ConsensusRange;
 use futures::StreamExt;
 use ln_gateway::Gateway;
 use strum::IntoEnumIterator;

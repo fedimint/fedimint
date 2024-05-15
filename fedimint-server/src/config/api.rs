@@ -37,8 +37,8 @@ use tracing::{error, info};
 
 use crate::config::{gen_cert_and_key, ConfigGenParams, ServerConfig};
 use crate::envs::FM_PEER_ID_SORT_BY_URL_ENV;
+use crate::net::api::{check_auth, ApiResult, HasApiContext};
 use crate::net::peers::DelayCalculator;
-use crate::{check_auth, ApiResult, HasApiContext};
 
 /// Serves the config gen API endpoints
 #[derive(Clone)]

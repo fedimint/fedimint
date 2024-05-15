@@ -3,7 +3,7 @@ use fedimint_core::db::{Database, IDatabaseTransactionOpsCoreTyped};
 use futures::StreamExt;
 use tracing::info;
 
-use crate::db::{AlephUnitsKey, AlephUnitsPrefix};
+use crate::consensus::db::{AlephUnitsKey, AlephUnitsPrefix};
 use crate::LOG_CONSENSUS;
 
 pub struct BackupReader {

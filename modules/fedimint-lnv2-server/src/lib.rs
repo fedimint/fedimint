@@ -42,8 +42,8 @@ use fedimint_lnv2_common::{
     LightningInputV0, LightningModuleTypes, LightningOutput, LightningOutputError,
     LightningOutputOutcome, LightningOutputV0, OutgoingWitness, MODULE_CONSENSUS_VERSION,
 };
-use fedimint_server::check_auth;
 use fedimint_server::config::distributedgen::{evaluate_polynomial_g1, PeerHandleOps};
+use fedimint_server::net::api::check_auth;
 use futures::StreamExt;
 use group::ff::Field;
 use group::Curve;

@@ -28,7 +28,7 @@ use fedimint_mint_server::common::MintCommonInit;
 use fedimint_mint_server::Mint;
 use fedimint_rocksdb::{RocksDb, RocksDbReadOnly};
 use fedimint_server::config::io::read_server_config;
-use fedimint_server::db::SignedSessionOutcomePrefix;
+use fedimint_server::consensus::db::SignedSessionOutcomePrefix;
 use fedimint_wallet_server::common::config::WalletConfig;
 use fedimint_wallet_server::common::keys::CompressedPublicKey;
 use fedimint_wallet_server::common::tweakable::Tweakable;
