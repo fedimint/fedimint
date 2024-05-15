@@ -466,6 +466,7 @@
 <a href="#466" id="466">466</a>
 <a href="#467" id="467">467</a>
 <a href="#468" id="468">468</a>
+<a href="#469" id="469">469</a>
 </pre></div><pre class="rust"><code><span class="kw">mod </span>metrics;
 
 <span class="kw">use </span>std::collections::BTreeMap;
@@ -651,7 +652,6 @@
         handle_version_hash_command(version_hash);
 
         <span class="kw">let </span>version = <span class="macro">env!</span>(<span class="string">"CARGO_PKG_VERSION"</span>);
-        <span class="macro">info!</span>(<span class="string">"Starting fedimintd (version: {version} version_hash: {version_hash})"</span>);
 
         APP_START_TS
             .with_label_values(<span class="kw-2">&amp;</span>[version, version_hash])
@@ -664,6 +664,8 @@
             .with_jaeger(opts.with_telemetry)
             .init()
             .unwrap();
+
+        <span class="macro">info!</span>(<span class="string">"Starting fedimintd (version: {version} version_hash: {version_hash})"</span>);
 
         <span class="kw">let </span>bitcoind_rpc = BitcoinRpcConfig::get_defaults_from_env_vars()<span class="question-mark">?</span>;
 
