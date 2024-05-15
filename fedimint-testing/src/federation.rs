@@ -211,17 +211,9 @@ impl FederationTestBuilder {
             let subgroup = task_group.make_subgroup();
 
             task_group.spawn("fedimintd", move |_| async move {
-                let (engine, api_handler) = consensus::spawn_api_and_build_engine(
-                    config.clone(),
-                    db.clone(),
-                    module_init_registry,
-                    &subgroup,
-                )
-                .await
-                .expect("Could not initialise consensus");
-
-                engine.run().await.expect("Failed to run consensus");
-                api_handler.stop().await;
+                consensus::run(config.clone(), db.clone(), module_init_registry, &subgroup)
+                    .await
+                    .expect("Could not initialise consensus");
             });
         }
 

@@ -101,13 +101,7 @@ pub async fn run(
 
     initialize_gauge_metrics(&db).await;
 
-    let (engine, api_handler) =
-        consensus::spawn_api_and_build_engine(cfg, db, module_init_registry.clone(), &task_group)
-            .await?;
-
-    engine.run().await?;
-
-    api_handler.stop().await;
+    consensus::run(cfg, db, module_init_registry.clone(), &task_group).await?;
 
     info!(target: LOG_CONSENSUS, "Shutting down tasks");
 
