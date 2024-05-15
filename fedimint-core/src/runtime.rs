@@ -29,7 +29,7 @@ mod r#impl {
         F: Future<Output = T> + 'static + Send,
         T: Send + 'static,
     {
-        let span = tracing::debug_span!(target: LOG_RUNTIME, "spawn", task = name);
+        let span = tracing::debug_span!(target: LOG_RUNTIME, parent: None, "spawn", task = name);
         // nosemgrep: ban-tokio-spawn
         tokio::spawn(future.instrument(span))
     }
@@ -38,7 +38,8 @@ mod r#impl {
     where
         F: Future<Output = ()> + 'static,
     {
-        let span = tracing::debug_span!(target: LOG_RUNTIME, "spawn_local", task = name);
+        let span =
+            tracing::debug_span!(target: LOG_RUNTIME, parent: None, "spawn_local", task = name);
         // nosemgrep: ban-tokio-spawn
         tokio::task::spawn_local(future.instrument(span))
     }
