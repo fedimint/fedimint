@@ -206,27 +206,27 @@ async fn main() -> anyhow::Result<()> {
                 Err(_) => client().get_info_legacy().await?,
             };
 
-            print_response(response).await;
+            print_response(response);
         }
 
         Commands::Config { federation_id } => {
             let response = client().get_config(ConfigPayload { federation_id }).await?;
 
-            print_response(response).await;
+            print_response(response);
         }
         Commands::Balance { federation_id } => {
             let response = client()
                 .get_balance(BalancePayload { federation_id })
                 .await?;
 
-            print_response(response).await;
+            print_response(response);
         }
         Commands::Address { federation_id } => {
             let response = client()
                 .get_deposit_address(DepositAddressPayload { federation_id })
                 .await?;
 
-            print_response(response).await;
+            print_response(response);
         }
         Commands::Withdraw {
             federation_id,
@@ -241,20 +241,20 @@ async fn main() -> anyhow::Result<()> {
                 })
                 .await?;
 
-            print_response(response).await;
+            print_response(response);
         }
         Commands::ConnectFed { invite_code } => {
             let response = client()
                 .connect_federation(ConnectFedPayload { invite_code })
                 .await?;
 
-            print_response(response).await;
+            print_response(response);
         }
         Commands::LeaveFed { federation_id } => {
             let response = client()
                 .leave_federation(LeaveFedPayload { federation_id })
                 .await?;
-            print_response(response).await;
+            print_response(response);
         }
         Commands::Backup { federation_id } => {
             client().backup(BackupPayload { federation_id }).await?;
@@ -318,7 +318,7 @@ async fn main() -> anyhow::Result<()> {
             }
             LightningCommands::ListActiveChannels => {
                 let response = client().list_active_channels().await?;
-                print_response(response).await;
+                print_response(response);
             }
             LightningCommands::WaitForChainSync {
                 block_height,
@@ -352,7 +352,7 @@ async fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
-pub async fn print_response<T: Serialize>(val: T) {
+pub fn print_response<T: Serialize>(val: T) {
     println!(
         "{}",
         serde_json::to_string_pretty(&val).expect("Cannot serialize")
