@@ -35,12 +35,12 @@ use crate::{net, FedimintApiHandler};
 /// How many txs can be stored in memory before blocking the API
 const TRANSACTION_BUFFER: usize = 1000;
 
-pub async fn spawn_api_and_build_engine(
+pub async fn run(
     cfg: ServerConfig,
     db: Database,
     module_init_registry: ServerModuleInitRegistry,
     task_group: &TaskGroup,
-) -> anyhow::Result<(ConsensusEngine, FedimintApiHandler)> {
+) -> anyhow::Result<()> {
     cfg.validate_config(&cfg.local.identity, &module_init_registry)?;
 
     apply_migrations_server(
@@ -128,7 +128,7 @@ pub async fn spawn_api_and_build_engine(
 
     info!(target: LOG_CONSENSUS, "Starting Consensus Engine");
 
-    let engine = ConsensusEngine {
+    ConsensusEngine {
         db,
         keychain: Keychain::new(&cfg),
         federation_api: DynGlobalApi::from_config(&client_cfg),
@@ -143,9 +143,13 @@ pub async fn spawn_api_and_build_engine(
         last_ci_by_peer,
         modules: module_registry,
         task_group: task_group.clone(),
-    };
+    }
+    .run()
+    .await?;
 
-    Ok((engine, api_handler))
+    api_handler.stop().await;
+
+    Ok(())
 }
 
 async fn start_consensus_api(cfg: &ServerConfigLocal, api: ConsensusApi) -> FedimintApiHandler {

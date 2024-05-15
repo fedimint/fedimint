@@ -1,6 +1,8 @@
 use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
+use std::time::Duration;
 
+use fedimint_api_client::api::{DynGlobalApi, FederationApiExt};
 use fedimint_client::module::init::ClientModuleInitRegistry;
 use fedimint_client::secret::{PlainRootSecretStrategy, RootSecretStrategy};
 use fedimint_client::{AdminCreds, Client, ClientHandleArc};
@@ -12,9 +14,10 @@ use fedimint_core::config::{
 use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::db::mem_impl::MemDatabase;
 use fedimint_core::db::Database;
+use fedimint_core::endpoint_constants::SESSION_COUNT_ENDPOINT;
 use fedimint_core::invite_code::InviteCode;
-use fedimint_core::module::ApiAuth;
-use fedimint_core::task::{block_in_place, TaskGroup};
+use fedimint_core::module::{ApiAuth, ApiRequestErased};
+use fedimint_core::task::{block_in_place, sleep_in_test, TaskGroup};
 use fedimint_core::PeerId;
 use fedimint_logging::LOG_TEST;
 use fedimint_rocksdb::RocksDb;
@@ -207,19 +210,35 @@ impl FederationTestBuilder {
             let module_init_registry = self.server_init.clone();
             let subgroup = task_group.make_subgroup();
 
-            let (engine, api_handler) = consensus::spawn_api_and_build_engine(
-                config.clone(),
-                db.clone(),
-                module_init_registry,
-                &subgroup,
-            )
-            .await
-            .expect("Could not initialise consensus");
-
             task_group.spawn("fedimintd", move |_| async move {
-                engine.run().await.expect("Failed to run consensus");
-                api_handler.stop().await;
+                consensus::run(config.clone(), db.clone(), module_init_registry, &subgroup)
+                    .await
+                    .expect("Could not initialise consensus");
             });
+        }
+
+        for (peer_id, config) in configs.clone() {
+            if u16::from(peer_id) >= self.num_peers - self.num_offline {
+                continue;
+            }
+
+            let client_config = config
+                .consensus
+                .to_client_config(&self.server_init)
+                .unwrap();
+
+            let api = DynGlobalApi::from_config_admin(&client_config, peer_id);
+
+            while let Err(e) = api
+                .request_admin_no_auth::<u64>(SESSION_COUNT_ENDPOINT, ApiRequestErased::default())
+                .await
+            {
+                sleep_in_test(
+                    format!("Waiting for api of peer {peer_id} to come online: {e}"),
+                    Duration::from_millis(500),
+                )
+                .await;
+            }
         }
 
         FederationTest {
