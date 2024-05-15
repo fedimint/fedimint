@@ -143,7 +143,7 @@ impl IRawDatabase for RocksDbReadOnly {
 impl<'a> IDatabaseTransactionOpsCore for RocksDbTransaction<'a> {
     async fn raw_insert_bytes(&mut self, key: &[u8], value: &[u8]) -> Result<Option<Vec<u8>>> {
         fedimint_core::runtime::block_in_place(|| {
-            let val = self.0.get(key).unwrap();
+            let val = self.0.snapshot().get(key).unwrap();
             self.0.put(key, value)?;
             Ok(val)
         })
@@ -155,7 +155,7 @@ impl<'a> IDatabaseTransactionOpsCore for RocksDbTransaction<'a> {
 
     async fn raw_remove_entry(&mut self, key: &[u8]) -> Result<Option<Vec<u8>>> {
         fedimint_core::runtime::block_in_place(|| {
-            let val = self.0.get(key).unwrap();
+            let val = self.0.snapshot().get(key).unwrap();
             self.0.delete(key)?;
             Ok(val)
         })
@@ -283,7 +283,7 @@ impl<'a> IDatabaseTransactionOpsCore for RocksDbReadOnlyTransaction<'a> {
     }
 
     async fn raw_get_bytes(&mut self, key: &[u8]) -> Result<Option<Vec<u8>>> {
-        fedimint_core::runtime::block_in_place(|| Ok(self.0.get(key)?))
+        fedimint_core::runtime::block_in_place(|| Ok(self.0.snapshot().get(key)?))
     }
 
     async fn raw_remove_entry(&mut self, _key: &[u8]) -> Result<Option<Vec<u8>>> {
@@ -291,19 +291,36 @@ impl<'a> IDatabaseTransactionOpsCore for RocksDbReadOnlyTransaction<'a> {
     }
 
     async fn raw_find_by_prefix(&mut self, key_prefix: &[u8]) -> Result<PrefixStream<'_>> {
+        // turn an `iter` into a `Stream` where every `next` is ran inside
+        // `block_in_place` to offload the blocking calls
+        fn convert_to_async_stream<'i, I>(iter: I) -> impl futures::Stream<Item = I::Item>
+        where
+            I: Iterator + Send + 'i,
+            I::Item: Send,
+        {
+            stream::unfold(iter, |mut iter| async move {
+                fedimint_core::runtime::block_in_place(move || {
+                    let item = iter.next();
+                    item.map(move |item| (item, iter))
+                })
+            })
+        }
+
         Ok(fedimint_core::runtime::block_in_place(|| {
             let prefix = key_prefix.to_vec();
-            let rocksdb_iter = self
-                .0
-                .prefix_iterator(prefix.clone())
-                .map_while(move |res| {
-                    let (key_bytes, value_bytes) = res.expect("Error reading from RocksDb");
-                    key_bytes
-                        .starts_with(&prefix)
-                        .then_some((key_bytes, value_bytes))
-                })
-                .map(|(key_bytes, value_bytes)| (key_bytes.to_vec(), value_bytes.to_vec()));
-            Box::pin(stream::iter(rocksdb_iter))
+            let mut options = rocksdb::ReadOptions::default();
+            options.set_iterate_range(rocksdb::PrefixRange(prefix.clone()));
+            let iter = self.0.snapshot().iterator_opt(
+                rocksdb::IteratorMode::From(&prefix, rocksdb::Direction::Forward),
+                options,
+            );
+            let rocksdb_iter = iter.map_while(move |res| {
+                let (key_bytes, value_bytes) = res.expect("Error reading from RocksDb");
+                key_bytes
+                    .starts_with(&prefix)
+                    .then_some((key_bytes.to_vec(), value_bytes.to_vec()))
+            });
+            Box::pin(convert_to_async_stream(rocksdb_iter))
         }))
     }
 
@@ -326,14 +343,12 @@ impl<'a> IDatabaseTransactionOpsCore for RocksDbReadOnlyTransaction<'a> {
             let mut options = rocksdb::ReadOptions::default();
             options.set_iterate_range(rocksdb::PrefixRange(prefix.clone()));
             let iter = self.0.snapshot().iterator_opt(iterator_mode, options);
-            let rocksdb_iter = iter
-                .map_while(move |res| {
-                    let (key_bytes, value_bytes) = res.expect("Error reading from RocksDb");
-                    key_bytes
-                        .starts_with(&prefix)
-                        .then_some((key_bytes, value_bytes))
-                })
-                .map(|(key_bytes, value_bytes)| (key_bytes.to_vec(), value_bytes.to_vec()));
+            let rocksdb_iter = iter.map_while(move |res| {
+                let (key_bytes, value_bytes) = res.expect("Error reading from RocksDb");
+                key_bytes
+                    .starts_with(&prefix)
+                    .then_some((key_bytes.to_vec(), value_bytes.to_vec()))
+            });
             Box::pin(stream::iter(rocksdb_iter))
         }))
     }
@@ -428,6 +443,14 @@ mod fedimint_rocksdb_tests {
     async fn test_dbtx_prevent_nonrepeatable_reads() {
         fedimint_core::db::verify_prevent_nonrepeatable_reads(open_temp_db(
             "fcb-rocksdb-test-prevent-nonrepeatable-reads",
+        ))
+        .await;
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_dbtx_snapshot_isolation() {
+        fedimint_core::db::verify_snapshot_isolation(open_temp_db(
+            "fcb-rocksdb-test-snapshot-isolation",
         ))
         .await;
     }
