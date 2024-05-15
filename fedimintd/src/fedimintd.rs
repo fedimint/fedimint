@@ -183,7 +183,6 @@ impl Fedimintd {
         handle_version_hash_command(version_hash);
 
         let version = env!("CARGO_PKG_VERSION");
-        info!("Starting fedimintd (version: {version} version_hash: {version_hash})");
 
         APP_START_TS
             .with_label_values(&[version, version_hash])
@@ -196,6 +195,8 @@ impl Fedimintd {
             .with_jaeger(opts.with_telemetry)
             .init()
             .unwrap();
+
+        info!("Starting fedimintd (version: {version} version_hash: {version_hash})");
 
         let bitcoind_rpc = BitcoinRpcConfig::get_defaults_from_env_vars()?;
 
