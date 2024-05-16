@@ -82,33 +82,39 @@ Options:
 This section outlines the steps to add a gateway to a federation and subsequently fund the gateway.
 
 ##### Connecting the Gateway to a Federation
+
 Start by connecting your gateway to the desired federation using the following command:
 ```bash
-$ gateway-cli connect-fed fed1xxxxxxx
+$ gateway-cli connect-fed <federation-invite-code>
 ```
+
 ##### Requesting a Deposit Address
 Once the gateway is successfully integrated into the federation, you can request a new address to deposit coins:
 ```bash
-$ gateway-cli address --federation-id fed1xxxxxxx
-bc1xyz...
+$ gateway-cli address --federation-id <federation-id>
+"bc1asd..."
 ```
+**Note:** You can obtain the `<federation-id>` by calling `gateway-cli info` after joining the federation.
+
 ##### Sending Coins to the Gateway
-After obtaining the deposit address, you can send coins to this address. Below is an example using `lncli`, but you can use any compatible method:
+After obtaining the deposit address, you can send coins to this address. Below is an example using `lncli` to send 50,000 satoshis (sats), but you can use any compatible method:
 ```bash
-$ lncli sendcoins bc1xyz... 50000 --min_confs 0 --sat_per_vbyte 12
-{
-    "txid": "1a6..."
-}
+$ lncli sendcoins <gateway-btc-address> 50000 --min_confs 0 --sat_per_vbyte <sats-per-vbyte>
+{ "txid": "1a6..." }
 ```
+**Note:** Replace `<gateway-btc-address>` with the bitcoin address you generated previously for the gateway. Additionally, ensure you check the current transaction fees in the mempool to determine an appropriate value for `<sats-per-vbyte>` to ensure timely confirmation of your transaction.
+
 ##### Confirming the Transaction
-Ensure that the transaction receives at least 10 confirmations from the Bitcoin network. Once confirmed, the funds will be available in the gateway. You can check the status and see the updated balance as follows:
+To ensure the security of the transaction, verify that it has received at least `finality_delay + 1` confirmations from the Bitcoin network. The `finality_delay` parameter is defined in the federation's configuration settings.
+
+Once the transaction has achieved the required number of confirmations, the funds will be available in the gateway.
 ```bash
 $ gateway-cli info
 {
-  "version_hash": "0307c3a3...",
+  "version_hash": "...",
   "federations": [
     {
-      "federation_id": "fed1xxxxxx",
+      "federation_id": "...",
       "balance_msat": 50000000,
       "config": {
         ...
@@ -129,16 +135,18 @@ $ lncli newaddress p2tr
 { "address": "bc1xas..." }
 ```
 ##### Withdrawing Funds
-Use the following command to initiate the withdrawal of funds to the specified address:
+To initiate the withdrawal of funds to a specified address, use the following command:
 ```bash
-$ gateway-cli withdraw --federation-id fed1xxxxxx --amount 50000000 --address bc1xas...
+$ gateway-cli withdraw --federation-id <federation-id> --amount 50000 --address bc1xas...
 ```
-Wait for the transaction to be completed and confirmed on the network.
+**Note:** The amount is specified in satoshis (sats).
+
+After executing the command, wait for the transaction to be fully processed and confirmed on the network. This ensures that the funds are securely transferred to the designated address.
 
 ##### Removing the Gateway from the Federation
 Once the funds have been successfully withdrawn, you can proceed to remove the gateway from the federation. Execute the following command to make the gateway leave the federation:
 ```bash
-$ gateway-cli leave-fed --federation-id fed1xxxxxx
+$ gateway-cli leave-fed --federation-id <federation-id>
 ```
 This process ensures that the gateway is cleanly removed from the federation after the funds have been securely withdrawn.
 
