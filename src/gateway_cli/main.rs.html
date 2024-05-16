@@ -566,27 +566,27 @@
                 <span class="prelude-val">Err</span>(<span class="kw">_</span>) =&gt; client().get_info_legacy().<span class="kw">await</span><span class="question-mark">?</span>,
             };
 
-            print_response(response).<span class="kw">await</span>;
+            print_response(response);
         }
 
         Commands::Config { federation_id } =&gt; {
             <span class="kw">let </span>response = client().get_config(ConfigPayload { federation_id }).<span class="kw">await</span><span class="question-mark">?</span>;
 
-            print_response(response).<span class="kw">await</span>;
+            print_response(response);
         }
         Commands::Balance { federation_id } =&gt; {
             <span class="kw">let </span>response = client()
                 .get_balance(BalancePayload { federation_id })
                 .<span class="kw">await</span><span class="question-mark">?</span>;
 
-            print_response(response).<span class="kw">await</span>;
+            print_response(response);
         }
         Commands::Address { federation_id } =&gt; {
             <span class="kw">let </span>response = client()
                 .get_deposit_address(DepositAddressPayload { federation_id })
                 .<span class="kw">await</span><span class="question-mark">?</span>;
 
-            print_response(response).<span class="kw">await</span>;
+            print_response(response);
         }
         Commands::Withdraw {
             federation_id,
@@ -601,20 +601,20 @@
                 })
                 .<span class="kw">await</span><span class="question-mark">?</span>;
 
-            print_response(response).<span class="kw">await</span>;
+            print_response(response);
         }
         Commands::ConnectFed { invite_code } =&gt; {
             <span class="kw">let </span>response = client()
                 .connect_federation(ConnectFedPayload { invite_code })
                 .<span class="kw">await</span><span class="question-mark">?</span>;
 
-            print_response(response).<span class="kw">await</span>;
+            print_response(response);
         }
         Commands::LeaveFed { federation_id } =&gt; {
             <span class="kw">let </span>response = client()
                 .leave_federation(LeaveFedPayload { federation_id })
                 .<span class="kw">await</span><span class="question-mark">?</span>;
-            print_response(response).<span class="kw">await</span>;
+            print_response(response);
         }
         Commands::Backup { federation_id } =&gt; {
             client().backup(BackupPayload { federation_id }).<span class="kw">await</span><span class="question-mark">?</span>;
@@ -678,7 +678,7 @@
             }
             LightningCommands::ListActiveChannels =&gt; {
                 <span class="kw">let </span>response = client().list_active_channels().<span class="kw">await</span><span class="question-mark">?</span>;
-                print_response(response).<span class="kw">await</span>;
+                print_response(response);
             }
             LightningCommands::WaitForChainSync {
                 block_height,
@@ -712,7 +712,7 @@
     <span class="prelude-val">Ok</span>(())
 }
 
-<span class="kw">pub async fn </span>print_response&lt;T: Serialize&gt;(val: T) {
+<span class="kw">pub fn </span>print_response&lt;T: Serialize&gt;(val: T) {
     <span class="macro">println!</span>(
         <span class="string">"{}"</span>,
         serde_json::to_string_pretty(<span class="kw-2">&amp;</span>val).expect(<span class="string">"Cannot serialize"</span>)
