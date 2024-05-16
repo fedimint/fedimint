@@ -3,6 +3,7 @@ use std::ops::ControlFlow;
 use std::path::PathBuf;
 
 use anyhow::{Context, Result};
+use fedimint_core::secp256k1::PublicKey;
 use fedimint_core::util::{backoff_util, retry};
 use ln_gateway::lightning::ChannelInfo;
 use ln_gateway::rpc::V1_API_ENDPOINT;
@@ -156,13 +157,13 @@ impl Gatewayd {
         Ok(gateway_id)
     }
 
-    pub async fn lightning_pubkey(&self) -> Result<String> {
+    pub async fn lightning_pubkey(&self) -> Result<PublicKey> {
         let info = self.get_info().await?;
         let gateway_id = info["lightning_pub_key"]
             .as_str()
             .context("lightning_pub_key must be a string")?
             .to_owned();
-        Ok(gateway_id)
+        Ok(gateway_id.parse()?)
     }
 
     pub async fn connect_fed(&self, fed: &Federation) -> Result<()> {
@@ -196,7 +197,7 @@ impl Gatewayd {
 
     pub async fn open_channel(
         &self,
-        pubkey: String,
+        pubkey: PublicKey,
         host: String,
         channel_size_sats: u64,
         push_amount_sats: Option<u64>,
@@ -245,7 +246,9 @@ impl Gatewayd {
                     .as_u64()
                     .context("short_channel_id must be a u64")?;
                 Ok(ChannelInfo {
-                    remote_pubkey,
+                    remote_pubkey: remote_pubkey
+                        .parse()
+                        .expect("Lightning node returned invalid remote channel pubkey"),
                     channel_size_sats,
                     outbound_liquidity_sats,
                     inbound_liquidity_sats,
