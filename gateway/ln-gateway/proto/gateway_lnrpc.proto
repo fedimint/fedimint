@@ -59,6 +59,7 @@ message GetRouteHintsRequest {
 
 message GetNodeInfoResponse {
   // The public key of the associated lightning node
+  // TODO: Rename this to `pubkey` to match the rest of the API.
   bytes pub_key = 1;
 
   // The alias of the lightning node
@@ -267,7 +268,7 @@ message GetFundingAddressResponse {
 
 message OpenChannelRequest {
   // The public key of the node we're opening a channel to.
-  string pubkey = 1;
+  bytes pubkey = 1;
 
   // The host address of the node we're connecting to.
   string host = 4;
@@ -293,7 +294,7 @@ message CloseChannelsWithPeerResponse {
 message ListActiveChannelsResponse {
   message ChannelInfo {
     // The pubkey of the lightning node that the channel is open with.
-    string remote_pubkey = 1;
+    bytes remote_pubkey = 1;
 
     // The total capacity of the channel, in sats.
     uint64 channel_size_sats = 2;
