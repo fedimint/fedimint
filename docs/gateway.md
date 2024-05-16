@@ -78,6 +78,79 @@ Options:
   -V, --version                    Print version information
 ```
 
+#### Gateway Peg-in Process
+This section outlines the steps to add a gateway to a federation and subsequently fund the gateway.
+
+##### Connecting the Gateway to a Federation
+
+Start by connecting your gateway to the desired federation using the following command:
+```bash
+$ gateway-cli connect-fed <federation-invite-code>
+```
+
+##### Requesting a Deposit Address
+Once the gateway is successfully integrated into the federation, you can request a new address to deposit coins:
+```bash
+$ gateway-cli address --federation-id <federation-id>
+"bc1asd..."
+```
+**Note:** You can obtain the `<federation-id>` by calling `gateway-cli info` after joining the federation.
+
+##### Sending Coins to the Gateway
+After obtaining the deposit address, you can send coins to this address. Below is an example using `lncli` to send 50,000 satoshis (sats), but you can use any compatible method:
+```bash
+$ lncli sendcoins <gateway-btc-address> 50000 --min_confs 0 --sat_per_vbyte <sats-per-vbyte>
+{ "txid": "1a6..." }
+```
+**Note:** Replace `<gateway-btc-address>` with the bitcoin address you generated previously for the gateway. Additionally, ensure you check the current transaction fees in the mempool to determine an appropriate value for `<sats-per-vbyte>` to ensure timely confirmation of your transaction.
+
+##### Confirming the Transaction
+To ensure the security of the transaction, verify that it has received at least `finality_delay + 1` confirmations from the Bitcoin network. The `finality_delay` parameter is defined in the federation's configuration settings.
+
+Once the transaction has achieved the required number of confirmations, the funds will be available in the gateway.
+```bash
+$ gateway-cli info
+{
+  "version_hash": "...",
+  "federations": [
+    {
+      "federation_id": "...",
+      "balance_msat": 50000000,
+      "config": {
+        ...
+      }
+    }
+  ]
+}
+```
+This process ensures that your gateway is properly funded and ready to participate in the federation's activities.
+
+#### Gateway Peg-out Process
+This section provides a detailed guide on how to withdraw funds from the gateway and subsequently remove the gateway from a federation.
+
+##### Obtaining a Withdrawal Address
+First, generate a new address to which the funds will be withdrawn. Below is an example using `lncli` to create a new address:
+```bash
+$ lncli newaddress p2tr
+{ "address": "bc1xas..." }
+```
+##### Withdrawing Funds
+To initiate the withdrawal of funds to a specified address, use the following command:
+```bash
+$ gateway-cli withdraw --federation-id <federation-id> --amount 50000 --address bc1xas...
+```
+**Note:** The amount is specified in satoshis (sats).
+
+After executing the command, wait for the transaction to be fully processed and confirmed on the network. This ensures that the funds are securely transferred to the designated address.
+
+##### Removing the Gateway from the Federation
+Once the funds have been successfully withdrawn, you can proceed to remove the gateway from the federation. Execute the following command to make the gateway leave the federation:
+```bash
+$ gateway-cli leave-fed --federation-id <federation-id>
+```
+This process ensures that the gateway is cleanly removed from the federation after the funds have been securely withdrawn.
+
+
 ### Mintgate
 
 A simple and delightful dashboard for administrative access and control of your Fedimint gateway. Presently, Mintgate supports admin functions like:
