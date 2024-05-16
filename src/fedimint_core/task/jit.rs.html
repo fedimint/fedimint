@@ -203,6 +203,7 @@
 <a href="#203" id="203">203</a>
 <a href="#204" id="204">204</a>
 <a href="#205" id="205">205</a>
+<a href="#206" id="206">206</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::convert::Infallible;
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::{fmt, panic};
@@ -315,27 +316,28 @@
             .val
             .get_or_init(|| <span class="kw">async </span>{
                 <span class="kw">let </span>handle: <span class="kw-2">&amp;mut </span><span class="kw">_ </span>= <span class="kw-2">&amp;mut *</span><span class="self">self</span>.inner.handle.lock().<span class="kw">await</span>;
-                handle
-                    .<span class="kw">await
-                    </span>.unwrap_or_else(|err| {
+                <span class="kw">match </span>handle.<span class="kw">await </span>{
+                        <span class="prelude-val">Ok</span>(<span class="prelude-val">Ok</span>(o)) =&gt; <span class="prelude-val">Ok</span>(o),
+                        <span class="prelude-val">Ok</span>(<span class="prelude-val">Err</span>(err)) =&gt; {
+                            <span class="kw">let </span>err_str = err.to_string();
+                            init_error = <span class="prelude-val">Some</span>(err);
+                            <span class="prelude-val">Err</span>(err_str)
+                        },
+                        <span class="prelude-val">Err</span>(err) =&gt; {
 
-                        <span class="attr">#[cfg(not(target_family = <span class="string">"wasm"</span>))]
-                        </span><span class="kw">if </span>err.is_panic() {
-                            <span class="macro">warn!</span>(target: LOG_TASK, %err, type_name = %std::any::type_name::&lt;T&gt;(), <span class="string">"Jit value panicked"</span>);
-                            <span class="comment">// Resume the panic on the main task
-                            </span>panic::resume_unwind(err.into_panic());
-                        }
-                        <span class="attr">#[cfg(not(target_family = <span class="string">"wasm"</span>))]
-                        </span><span class="kw">if </span>err.is_cancelled() {
-                            <span class="macro">warn!</span>(target: LOG_TASK, %err, type_name = %std::any::type_name::&lt;T&gt;(), <span class="string">"Jit value task canceled:"</span>);
-                        }
-                        <span class="macro">panic!</span>(<span class="string">"Jit value {} failed unexpectedly with: {}"</span>, std::any::type_name::&lt;T&gt;(), err);
-                    })
-                    .map_err(|err| {
-                        <span class="kw">let </span>err_str = err.to_string();
-                        init_error = <span class="prelude-val">Some</span>(err);
-                        err_str
-                    })
+                            <span class="attr">#[cfg(not(target_family = <span class="string">"wasm"</span>))]
+                            </span><span class="kw">if </span>err.is_panic() {
+                                <span class="macro">warn!</span>(target: LOG_TASK, %err, type_name = %std::any::type_name::&lt;T&gt;(), <span class="string">"Jit value panicked"</span>);
+                                <span class="comment">// Resume the panic on the main task
+                                </span>panic::resume_unwind(err.into_panic());
+                            }
+                            <span class="attr">#[cfg(not(target_family = <span class="string">"wasm"</span>))]
+                            </span><span class="kw">if </span>err.is_cancelled() {
+                                <span class="macro">warn!</span>(target: LOG_TASK, %err, type_name = %std::any::type_name::&lt;T&gt;(), <span class="string">"Jit value task canceled:"</span>);
+                            }
+                            <span class="prelude-val">Err</span>(<span class="macro">format!</span>(<span class="string">"Jit value {} failed unexpectedly with: {}"</span>, std::any::type_name::&lt;T&gt;(), err))
+                        },
+                    }
             })
             .<span class="kw">await</span>;
         <span class="kw">if let </span><span class="prelude-val">Some</span>(err) = init_error {
