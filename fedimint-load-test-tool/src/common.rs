@@ -257,7 +257,7 @@ pub async fn gateway_pay_invoice(
             LnPayState::Created
             | LnPayState::Funded { block_height: _ }
             | LnPayState::AwaitingChange => {}
-            LnPayState::FundingRejected => {
+            LnPayState::Canceled => {
                 let elapsed: Duration = m.elapsed()?;
                 warn!("{prefix} Invoice canceled in {elapsed:?}");
                 event_sender.send(MetricEvent {
@@ -266,9 +266,9 @@ pub async fn gateway_pay_invoice(
                 })?;
                 break;
             }
-            LnPayState::Refunded { error_reason } => {
+            LnPayState::Refunded { gateway_error } => {
                 let elapsed: Duration = m.elapsed()?;
-                warn!("{prefix} Invoice refunded due to {error_reason} in {elapsed:?}");
+                warn!("{prefix} Invoice refunded due to {gateway_error} in {elapsed:?}");
                 event_sender.send(MetricEvent {
                     name: "gateway_pay_invoice_refunded".into(),
                     duration: elapsed,

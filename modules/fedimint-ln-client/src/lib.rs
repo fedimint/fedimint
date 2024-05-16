@@ -169,12 +169,12 @@ pub enum InternalPayState {
 #[serde(rename_all = "snake_case")]
 pub enum LnPayState {
     Created,
-    FundingRejected,
+    Canceled,
     Funded { block_height: u32 },
     WaitingForRefund { error_reason: String },
     AwaitingChange,
     Success { preimage: String },
-    Refunded { error_reason: String },
+    Refunded { gateway_error: GatewayPayError },
     UnexpectedError { error_message: String },
 }
 
@@ -1149,7 +1149,7 @@ impl LightningClientModule {
                         yield LnPayState::Created;
                     }
                     Some(LightningPayStates::FundingRejected) => {
-                        yield LnPayState::FundingRejected;
+                        yield LnPayState::Canceled;
                         return;
                     }
                     Some(state) => {
@@ -1201,9 +1201,8 @@ impl LightningClientModule {
 
                         match client_ctx.await_primary_module_outputs(operation_id, refund.out_points).await {
                             Ok(_) => {
-                                yield LnPayState::Refunded {
-                                    error_reason: refund.error_reason,
-                                };
+                                let gateway_error = GatewayPayError::GatewayInternalError { error_code: Some(500), error_message: refund.error_reason };
+                                yield LnPayState::Refunded { gateway_error };
                             }
                             Err(e) => {
                                 yield LnPayState::UnexpectedError {
@@ -1626,13 +1625,12 @@ impl LightningClientModule {
                                 .unwrap(),
                             ));
                         }
-                        LnPayState::Refunded { error_reason } => {
-                            info!("{error_reason}");
+                        LnPayState::Refunded { gateway_error } => {
                             // TODO: what should be the format here?
                             return Ok(Some(json! {
                                 {
                                     "status": "refunded",
-                                    "gateway_error": error_reason,
+                                    "gateway_error": gateway_error.to_string(),
                                 }
                             }));
                         }
@@ -1646,7 +1644,7 @@ impl LightningClientModule {
                         LnPayState::UnexpectedError { error_message } => {
                             bail!("UnexpectedError: {error_message}")
                         }
-                        LnPayState::FundingRejected => bail!("Funding transaction was rejected"),
+                        LnPayState::Canceled => bail!("Funding transaction was rejected"),
                     }
                     debug!(target: LOG_CLIENT_MODULE_LN, ?update, "Wait for ln payment state update");
                 }
