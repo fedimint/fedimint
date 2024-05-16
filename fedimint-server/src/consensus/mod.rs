@@ -1,5 +1,7 @@
 #![allow(clippy::let_unit_value)]
 
+pub mod api;
+pub mod db;
 pub mod debug_fmt;
 pub mod engine;
 pub mod transaction;
@@ -10,6 +12,7 @@ use std::time::Duration;
 
 use anyhow::bail;
 use async_channel::Sender;
+use db::{get_global_database_migrations, GLOBAL_DATABASE_VERSION};
 use fedimint_api_client::api::DynGlobalApi;
 use fedimint_core::config::ServerModuleInitRegistry;
 use fedimint_core::core::{ModuleInstanceId, ModuleKind};
@@ -21,16 +24,17 @@ use fedimint_core::server::DynServerModule;
 use fedimint_core::task::TaskGroup;
 use fedimint_core::NumPeers;
 use fedimint_logging::{LOG_CONSENSUS, LOG_CORE};
+use jsonrpsee::server::ServerHandle;
 use tokio::sync::watch;
 use tracing::info;
 use tracing::log::warn;
 
 use crate::atomic_broadcast::Keychain;
 use crate::config::{ServerConfig, ServerConfigLocal};
+use crate::consensus::api::ConsensusApi;
 use crate::consensus::engine::ConsensusEngine;
-use crate::db::{get_global_database_migrations, GLOBAL_DATABASE_VERSION};
-use crate::net::api::{ConsensusApi, ExpiringCache, RpcHandlerCtx};
-use crate::{net, FedimintApiHandler};
+use crate::net;
+use crate::net::api::RpcHandlerCtx;
 
 /// How many txs can be stored in memory before blocking the API
 const TRANSACTION_BUFFER: usize = 1000;
@@ -105,7 +109,6 @@ pub async fn run(
         ),
         last_ci_by_peer: Arc::clone(&last_ci_by_peer),
         connection_status_channels: Arc::clone(&connection_status_channels),
-        consensus_status_cache: ExpiringCache::new(Duration::from_millis(500)),
     };
 
     info!(target: LOG_CONSENSUS, "Starting Consensus Api");
@@ -147,21 +150,25 @@ pub async fn run(
     .run()
     .await?;
 
-    api_handler.stop().await;
+    api_handler
+        .stop()
+        .expect("Consensus api should still be running");
+
+    api_handler.stopped().await;
 
     Ok(())
 }
 
-async fn start_consensus_api(cfg: &ServerConfigLocal, api: ConsensusApi) -> FedimintApiHandler {
+async fn start_consensus_api(cfg: &ServerConfigLocal, api: ConsensusApi) -> ServerHandle {
     let mut rpc_module = RpcHandlerCtx::new_module(api.clone());
 
-    crate::attach_endpoints(&mut rpc_module, net::api::server_endpoints(), None);
+    net::api::attach_endpoints(&mut rpc_module, api::server_endpoints(), None);
 
     for (id, _, module) in api.modules.iter_modules() {
-        crate::attach_endpoints(&mut rpc_module, module.api_endpoints(), Some(id));
+        net::api::attach_endpoints(&mut rpc_module, module.api_endpoints(), Some(id));
     }
 
-    crate::spawn_api("consensus", &cfg.api_bind, rpc_module, cfg.max_connections).await
+    net::api::spawn("consensus", &cfg.api_bind, rpc_module, cfg.max_connections).await
 }
 
 const CONSENSUS_PROPOSAL_TIMEOUT: Duration = Duration::from_secs(30);
