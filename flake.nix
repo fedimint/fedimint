@@ -32,7 +32,6 @@
             (import ./nix/overlays/rocksdb.nix)
             (import ./nix/overlays/wasm-bindgen.nix)
             (import ./nix/overlays/cargo-nextest.nix)
-            (import ./nix/overlays/cargo-llvm-cov.nix)
             (import ./nix/overlays/esplora-electrs.nix)
             (import ./nix/overlays/clightning.nix)
             (import ./nix/overlays/darwin-compile-fixes.nix)
@@ -221,7 +220,6 @@
                 toolchain = toolchainNative;
                 buildInputs = craneMultiBuild.commonArgs.buildInputs;
                 nativeBuildInputs = craneMultiBuild.commonArgs.nativeBuildInputs ++ [
-                  pkgs.cargo-llvm-cov
                   pkgs.cargo-udeps
                   pkgs.cargo-audit
                   pkgs.cargo-deny
@@ -262,6 +260,9 @@
                 ] ++ lib.optionals (!stdenv.isDarwin) [
                   # broken on MacOS?
                   pkgs.cargo-workspaces
+
+                  # marked as broken on MacOS
+                  pkgs.cargo-llvm-cov
                 ];
 
                 shellHook = ''
