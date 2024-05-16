@@ -1335,6 +1335,45 @@ mod tests {
         );
     }
 
+    #[test]
+    fn test_custom_index_enum() {
+        #[derive(Debug, PartialEq, Eq, Encodable, Decodable)]
+        enum Old {
+            Foo,
+            Bar,
+            Baz,
+        }
+
+        #[derive(Debug, PartialEq, Eq, Encodable, Decodable)]
+        enum New {
+            #[encodable(index = 0)]
+            Foo,
+            #[encodable(index = 2)]
+            Baz,
+            #[encodable_default]
+            Default { variant: u64, bytes: Vec<u8> },
+        }
+
+        let test_vector = vec![
+            (Old::Foo, New::Foo),
+            (
+                Old::Bar,
+                New::Default {
+                    variant: 1,
+                    bytes: vec![],
+                },
+            ),
+            (Old::Baz, New::Baz),
+        ];
+
+        for (old, new) in test_vector {
+            let old_bytes = old.consensus_encode_to_vec();
+            let decoded_new =
+                New::consensus_decode_vec(old_bytes, &Default::default()).expect("Decoding failed");
+            assert_eq!(decoded_new, new);
+        }
+    }
+
     fn encode_value<T: Encodable>(value: &T) -> Vec<u8> {
         let mut writer = Vec::new();
         value.consensus_encode(&mut writer).unwrap();
