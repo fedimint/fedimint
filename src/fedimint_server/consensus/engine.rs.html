@@ -709,12 +709,12 @@
 <span class="kw">use </span><span class="kw">crate</span>::atomic_broadcast::spawner::Spawner;
 <span class="kw">use </span><span class="kw">crate</span>::atomic_broadcast::{to_node_index, Keychain, Message};
 <span class="kw">use </span><span class="kw">crate</span>::config::ServerConfig;
-<span class="kw">use </span><span class="kw">crate</span>::consensus::debug_fmt::FmtDbgConsensusItem;
-<span class="kw">use </span><span class="kw">crate</span>::consensus::transaction::process_transaction_with_dbtx;
-<span class="kw">use </span><span class="kw">crate</span>::db::{
+<span class="kw">use </span><span class="kw">crate</span>::consensus::db::{
     AcceptedItemKey, AcceptedItemPrefix, AcceptedTransactionKey, AlephUnitsPrefix,
     SignedSessionOutcomeKey, SignedSessionOutcomePrefix,
 };
+<span class="kw">use </span><span class="kw">crate</span>::consensus::debug_fmt::FmtDbgConsensusItem;
+<span class="kw">use </span><span class="kw">crate</span>::consensus::transaction::process_transaction_with_dbtx;
 <span class="kw">use </span><span class="kw">crate</span>::fedimint_core::encoding::Encodable;
 <span class="kw">use </span><span class="kw">crate</span>::metrics::{
     CONSENSUS_ITEMS_PROCESSED_TOTAL, CONSENSUS_ITEM_PROCESSING_DURATION_SECONDS,

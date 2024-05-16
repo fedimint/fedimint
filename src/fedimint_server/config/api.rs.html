@@ -1328,8 +1328,8 @@
 
 <span class="kw">use </span><span class="kw">crate</span>::config::{gen_cert_and_key, ConfigGenParams, ServerConfig};
 <span class="kw">use </span><span class="kw">crate</span>::envs::FM_PEER_ID_SORT_BY_URL_ENV;
+<span class="kw">use </span><span class="kw">crate</span>::net::api::{check_auth, ApiResult, HasApiContext};
 <span class="kw">use </span><span class="kw">crate</span>::net::peers::DelayCalculator;
-<span class="kw">use crate</span>::{check_auth, ApiResult, HasApiContext};
 
 <span class="doccomment">/// Serves the config gen API endpoints
 </span><span class="attr">#[derive(Clone)]

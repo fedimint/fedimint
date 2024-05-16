@@ -219,9 +219,18 @@
 <a href="#219" id="219">219</a>
 <a href="#220" id="220">220</a>
 <a href="#221" id="221">221</a>
+<a href="#222" id="222">222</a>
+<a href="#223" id="223">223</a>
+<a href="#224" id="224">224</a>
+<a href="#225" id="225">225</a>
+<a href="#226" id="226">226</a>
+<a href="#227" id="227">227</a>
+<a href="#228" id="228">228</a>
 </pre></div><pre class="rust"><code><span class="attr">#![allow(clippy::let_unit_value)]
 
-</span><span class="kw">pub mod </span>debug_fmt;
+</span><span class="kw">pub mod </span>api;
+<span class="kw">pub mod </span>db;
+<span class="kw">pub mod </span>debug_fmt;
 <span class="kw">pub mod </span>engine;
 <span class="kw">pub mod </span>transaction;
 
@@ -231,6 +240,7 @@
 
 <span class="kw">use </span>anyhow::bail;
 <span class="kw">use </span>async_channel::Sender;
+<span class="kw">use </span>db::{get_global_database_migrations, GLOBAL_DATABASE_VERSION};
 <span class="kw">use </span>fedimint_api_client::api::DynGlobalApi;
 <span class="kw">use </span>fedimint_core::config::ServerModuleInitRegistry;
 <span class="kw">use </span>fedimint_core::core::{ModuleInstanceId, ModuleKind};
@@ -242,16 +252,17 @@
 <span class="kw">use </span>fedimint_core::task::TaskGroup;
 <span class="kw">use </span>fedimint_core::NumPeers;
 <span class="kw">use </span>fedimint_logging::{LOG_CONSENSUS, LOG_CORE};
+<span class="kw">use </span>jsonrpsee::server::ServerHandle;
 <span class="kw">use </span>tokio::sync::watch;
 <span class="kw">use </span>tracing::info;
 <span class="kw">use </span>tracing::log::warn;
 
 <span class="kw">use </span><span class="kw">crate</span>::atomic_broadcast::Keychain;
 <span class="kw">use </span><span class="kw">crate</span>::config::{ServerConfig, ServerConfigLocal};
+<span class="kw">use </span><span class="kw">crate</span>::consensus::api::ConsensusApi;
 <span class="kw">use </span><span class="kw">crate</span>::consensus::engine::ConsensusEngine;
-<span class="kw">use </span><span class="kw">crate</span>::db::{get_global_database_migrations, GLOBAL_DATABASE_VERSION};
-<span class="kw">use </span><span class="kw">crate</span>::net::api::{ConsensusApi, ExpiringCache, RpcHandlerCtx};
-<span class="kw">use crate</span>::{net, FedimintApiHandler};
+<span class="kw">use </span><span class="kw">crate</span>::net;
+<span class="kw">use </span><span class="kw">crate</span>::net::api::RpcHandlerCtx;
 
 <span class="doccomment">/// How many txs can be stored in memory before blocking the API
 </span><span class="kw">const </span>TRANSACTION_BUFFER: usize = <span class="number">1000</span>;
@@ -326,7 +337,6 @@
         ),
         last_ci_by_peer: Arc::clone(<span class="kw-2">&amp;</span>last_ci_by_peer),
         connection_status_channels: Arc::clone(<span class="kw-2">&amp;</span>connection_status_channels),
-        consensus_status_cache: ExpiringCache::new(Duration::from_millis(<span class="number">500</span>)),
     };
 
     <span class="macro">info!</span>(target: LOG_CONSENSUS, <span class="string">"Starting Consensus Api"</span>);
@@ -368,21 +378,25 @@
     .run()
     .<span class="kw">await</span><span class="question-mark">?</span>;
 
-    api_handler.stop().<span class="kw">await</span>;
+    api_handler
+        .stop()
+        .expect(<span class="string">"Consensus api should still be running"</span>);
+
+    api_handler.stopped().<span class="kw">await</span>;
 
     <span class="prelude-val">Ok</span>(())
 }
 
-<span class="kw">async fn </span>start_consensus_api(cfg: <span class="kw-2">&amp;</span>ServerConfigLocal, api: ConsensusApi) -&gt; FedimintApiHandler {
+<span class="kw">async fn </span>start_consensus_api(cfg: <span class="kw-2">&amp;</span>ServerConfigLocal, api: ConsensusApi) -&gt; ServerHandle {
     <span class="kw">let </span><span class="kw-2">mut </span>rpc_module = RpcHandlerCtx::new_module(api.clone());
 
-    <span class="kw">crate</span>::attach_endpoints(<span class="kw-2">&amp;mut </span>rpc_module, net::api::server_endpoints(), <span class="prelude-val">None</span>);
+    net::api::attach_endpoints(<span class="kw-2">&amp;mut </span>rpc_module, api::server_endpoints(), <span class="prelude-val">None</span>);
 
     <span class="kw">for </span>(id, <span class="kw">_</span>, module) <span class="kw">in </span>api.modules.iter_modules() {
-        <span class="kw">crate</span>::attach_endpoints(<span class="kw-2">&amp;mut </span>rpc_module, module.api_endpoints(), <span class="prelude-val">Some</span>(id));
+        net::api::attach_endpoints(<span class="kw-2">&amp;mut </span>rpc_module, module.api_endpoints(), <span class="prelude-val">Some</span>(id));
     }
 
-    <span class="kw">crate</span>::spawn_api(<span class="string">"consensus"</span>, <span class="kw-2">&amp;</span>cfg.api_bind, rpc_module, cfg.max_connections).<span class="kw">await
+    net::api::spawn(<span class="string">"consensus"</span>, <span class="kw-2">&amp;</span>cfg.api_bind, rpc_module, cfg.max_connections).<span class="kw">await
 </span>}
 
 <span class="kw">const </span>CONSENSUS_PROPOSAL_TIMEOUT: Duration = Duration::from_secs(<span class="number">30</span>);

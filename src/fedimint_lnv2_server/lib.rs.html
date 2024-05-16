@@ -802,8 +802,8 @@
     LightningInputV0, LightningModuleTypes, LightningOutput, LightningOutputError,
     LightningOutputOutcome, LightningOutputV0, OutgoingWitness, MODULE_CONSENSUS_VERSION,
 };
-<span class="kw">use </span>fedimint_server::check_auth;
 <span class="kw">use </span>fedimint_server::config::distributedgen::{evaluate_polynomial_g1, PeerHandleOps};
+<span class="kw">use </span>fedimint_server::net::api::check_auth;
 <span class="kw">use </span>futures::StreamExt;
 <span class="kw">use </span>group::ff::Field;
 <span class="kw">use </span>group::Curve;

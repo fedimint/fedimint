@@ -12,7 +12,7 @@
 "fedimint_meta_server":[["impl IntoEnumIterator for <a class=\"enum\" href=\"fedimint_meta_server/db/enum.DbKeyPrefix.html\" title=\"enum fedimint_meta_server::db::DbKeyPrefix\">DbKeyPrefix</a>"]],
 "fedimint_mint_client":[["impl IntoEnumIterator for <a class=\"enum\" href=\"fedimint_mint_client/client_db/enum.DbKeyPrefix.html\" title=\"enum fedimint_mint_client::client_db::DbKeyPrefix\">DbKeyPrefix</a>"]],
 "fedimint_mint_server":[["impl IntoEnumIterator for <a class=\"enum\" href=\"fedimint_mint_server/db/enum.DbKeyPrefix.html\" title=\"enum fedimint_mint_server::db::DbKeyPrefix\">DbKeyPrefix</a>"]],
-"fedimint_server":[["impl IntoEnumIterator for <a class=\"enum\" href=\"fedimint_server/db/enum.DbKeyPrefix.html\" title=\"enum fedimint_server::db::DbKeyPrefix\">DbKeyPrefix</a>"]],
+"fedimint_server":[["impl IntoEnumIterator for <a class=\"enum\" href=\"fedimint_server/consensus/db/enum.DbKeyPrefix.html\" title=\"enum fedimint_server::consensus::db::DbKeyPrefix\">DbKeyPrefix</a>"]],
 "fedimint_unknown_server":[["impl IntoEnumIterator for <a class=\"enum\" href=\"fedimint_unknown_server/db/enum.DbKeyPrefix.html\" title=\"enum fedimint_unknown_server::db::DbKeyPrefix\">DbKeyPrefix</a>"]],
 "fedimint_wallet_client":[["impl IntoEnumIterator for <a class=\"enum\" href=\"fedimint_wallet_client/client_db/enum.DbKeyPrefix.html\" title=\"enum fedimint_wallet_client::client_db::DbKeyPrefix\">DbKeyPrefix</a>"]],
 "fedimint_wallet_server":[["impl IntoEnumIterator for <a class=\"enum\" href=\"fedimint_wallet_server/db/enum.DbKeyPrefix.html\" title=\"enum fedimint_wallet_server::db::DbKeyPrefix\">DbKeyPrefix</a>"]],
