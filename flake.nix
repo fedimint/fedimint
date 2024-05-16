@@ -220,7 +220,6 @@
                 toolchain = toolchainNative;
                 buildInputs = craneMultiBuild.commonArgs.buildInputs;
                 nativeBuildInputs = craneMultiBuild.commonArgs.nativeBuildInputs ++ [
-                  pkgs.cargo-llvm-cov
                   pkgs.cargo-udeps
                   pkgs.cargo-audit
                   pkgs.cargo-deny
@@ -261,6 +260,9 @@
                 ] ++ lib.optionals (!stdenv.isDarwin) [
                   # broken on MacOS?
                   pkgs.cargo-workspaces
+
+                  # marked as broken on MacOS
+                  pkgs.cargo-llvm-cov
                 ];
 
                 shellHook = ''
