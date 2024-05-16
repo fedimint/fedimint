@@ -304,7 +304,7 @@ impl LightningPayFunded {
                 },
             ),
             StateTransition::new(
-                await_contract_cancellable(contract_id, global_context.clone()),
+                await_contract_cancelled(contract_id, global_context.clone()),
                 move |dbtx, (), old_state| {
                     Box::pin(try_refund_outgoing_contract(
                         old_state,
@@ -450,7 +450,7 @@ impl LightningPayRefundable {
         let timelock = self.block_timelock;
         vec![
             StateTransition::new(
-                await_contract_cancellable(contract_id, global_context.clone()),
+                await_contract_cancelled(contract_id, global_context.clone()),
                 move |dbtx, (), old_state| {
                     Box::pin(try_refund_outgoing_contract(
                         old_state,
@@ -478,10 +478,7 @@ impl LightningPayRefundable {
 }
 
 /// Waits for a contract with `contract_id` to be cancelled by the gateway.
-async fn await_contract_cancellable(
-    contract_id: ContractId,
-    global_context: DynGlobalClientContext,
-) {
+async fn await_contract_cancelled(contract_id: ContractId, global_context: DynGlobalClientContext) {
     loop {
         // If we fail to get the contract from the federation, we need to keep retrying
         // until we successfully do.

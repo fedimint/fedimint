@@ -1217,6 +1217,7 @@ impl LightningClientModule {
                     }
                     None => {
                         error!("Unexpected end of lightning pay state machine");
+                        yield LnPayState::UnexpectedError { error_message: "Unexpected end of lightning pay state machine".to_string() };
                     }
                 }
             }
