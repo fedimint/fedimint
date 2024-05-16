@@ -238,6 +238,18 @@ pub mod amount {
     }
 }
 
+impl From<Amount> for bitcoin::Amount {
+    fn from(amt: Amount) -> Self {
+        bitcoin::Amount::from_sat(amt.msats)
+    }
+}
+
+impl From<bitcoin::Amount> for Amount {
+    fn from(amt: bitcoin::Amount) -> Self {
+        Amount::from_sats(amt.to_sat())
+    }
+}
+
 /// Amount of bitcoin to send, or "all" to send all available funds
 #[derive(Debug, Eq, PartialEq, Copy, Hash, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
