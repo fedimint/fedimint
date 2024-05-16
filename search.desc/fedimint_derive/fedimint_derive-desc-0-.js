@@ -1,1 +1,1 @@
-searchState.loadedDescShard("fedimint_derive", 0, "")
+searchState.loadedDescShard("fedimint_derive", 0, "Processes all variants in a <code>Punctuated</code> list extracting any …\nExtracts the u64 index from an attribute if it matches …")
