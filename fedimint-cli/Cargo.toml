@@ -1,6 +1,6 @@
 [package]
 name = "fedimint-cli"
-version = "0.4.0-alpha"
+version = {workspace = true}
 authors = ["The Fedimint Developers"]
 edition = "2021"
 description = "fedimint-cli is a command line interface wrapper for the client library."

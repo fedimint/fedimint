@@ -1,6 +1,6 @@
 [package]
 name = "fedimint-api-client"
-version = "0.4.0-alpha"
+version = {workspace = true}
 authors = ["The Fedimint Developers"]
 edition = "2021"
 description = "fedimint-api-client provides common code used by client."
