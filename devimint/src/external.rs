@@ -584,9 +584,12 @@ async fn open_channel(
     let cln_pubkey = cln.pub_key().await?;
 
     cln.request(cln_rpc::model::requests::ConnectRequest {
-        id: lnd_pubkey.parse()?,
-        host: Some("127.0.0.1".to_owned()),
-        port: Some(process_mgr.globals.FM_PORT_LND_LISTEN),
+        id: format!(
+            "{}@127.0.0.1:{}",
+            lnd_pubkey, process_mgr.globals.FM_PORT_LND_LISTEN
+        ),
+        host: None,
+        port: None,
     })
     .await
     .context("connect request")?;
