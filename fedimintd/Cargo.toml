@@ -1,6 +1,6 @@
 [package]
 name = "fedimintd"
-version = "0.4.0-alpha"
+version = {workspace = true}
 authors = ["The Fedimint Developers"]
 edition = "2021"
 description = "fedimintd is the main consensus code for processing transactions and REST API"

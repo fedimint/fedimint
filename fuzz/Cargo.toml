@@ -2,7 +2,7 @@
 name = "fedimint-fuzz"
 edition = "2021"
 authors = ["The Fedimint Developers"]
-version = "0.4.0-alpha"
+version = {workspace = true}
 publish = false
 license = "MIT"
 readme = "../README.md"
