@@ -2871,6 +2871,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "gateway-tests"
+version = "0.4.0-alpha"
+dependencies = [
+ "anyhow",
+ "clap",
+ "devimint",
+ "fedimint-core",
+ "fedimint-ln-gateway",
+ "fedimint-testing",
+ "semver",
+ "serde_json",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "generic-array"
 version = "0.14.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"

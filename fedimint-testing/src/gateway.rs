@@ -1,5 +1,6 @@
 use std::fmt::{Display, Formatter};
 use std::net::SocketAddr;
+use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -219,6 +220,18 @@ impl Display for LightningNodeType {
         match self {
             LightningNodeType::Cln => write!(f, "cln"),
             LightningNodeType::Lnd => write!(f, "lnd"),
+        }
+    }
+}
+
+impl FromStr for LightningNodeType {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            "cln" => Ok(LightningNodeType::Cln),
+            "lnd" => Ok(LightningNodeType::Lnd),
+            _ => Err(format!("Invalid value for LightningNodeType: {}", s)),
         }
     }
 }

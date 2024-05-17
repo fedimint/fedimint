@@ -8,6 +8,7 @@ members = [
     "docs",
     "gateway/ln-gateway",
     "gateway/cli",
+    "gateway/integration_tests",
     "fedimintd",
     "fedimint-bip39",
     "fedimint-bitcoind",
