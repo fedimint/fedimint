@@ -675,12 +675,7 @@ pub async fn open_channel_between_gateways(
 ) -> Result<()> {
     let gateway_cli_version = crate::util::GatewayCli::version_or_default().await;
     let gatewayd_version = crate::util::Gatewayd::version_or_default().await;
-    #[allow(clippy::overly_complex_bool_expr)]
-    if gateway_cli_version < *VERSION_0_4_0_ALPHA || gatewayd_version < *VERSION_0_4_0_ALPHA
-        // FIXME: The new way is actually slower and require more things to initialize, and
-        // due to more dependency chains lead to flaky CI pipeline
-        || true
-    {
+    if gateway_cli_version < *VERSION_0_4_0_ALPHA || gatewayd_version < *VERSION_0_4_0_ALPHA {
         debug!(target: LOG_DEVIMINT, "Opening channel between gateways (the old way)");
         return open_channel(process_mgr, bitcoind, cln, lnd).await;
     }
