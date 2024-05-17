@@ -1,7 +1,6 @@
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::fmt::{self, Debug, Display};
 use std::num::NonZeroUsize;
-use std::ops::Add;
 use std::pin::Pin;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
@@ -35,7 +34,8 @@ use fedimint_core::invite_code::InviteCode;
 use fedimint_core::module::audit::AuditSummary;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::module::{
-    ApiAuth, ApiRequestErased, ApiVersion, SerdeModuleEncoding, SupportedApiVersionsSummary,
+    ApiAuth, ApiRequestErased, ApiVersion, MultiApiVersion, SerdeModuleEncoding,
+    SupportedApiVersionsSummary,
 };
 use fedimint_core::session_outcome::{AcceptedItem, SessionOutcome, SessionStatus};
 use fedimint_core::task::jit::JitTryAnyhow;
@@ -44,8 +44,8 @@ use fedimint_core::time::now;
 use fedimint_core::transaction::{SerdeTransaction, Transaction, TransactionError};
 use fedimint_core::util::SafeUrl;
 use fedimint_core::{
-    apply, async_trait_maybe_send, dyn_newtype_define, runtime, NumPeersExt, OutPoint, PeerId,
-    TransactionId,
+    apply, async_trait_maybe_send, dyn_newtype_define, runtime, NumPeers, NumPeersExt, OutPoint,
+    PeerId, TransactionId,
 };
 use fedimint_logging::LOG_CLIENT_NET_API;
 use futures::stream::FuturesUnordered;
@@ -62,9 +62,7 @@ use thiserror::Error;
 use tokio::sync::{Mutex, OnceCell, RwLock};
 use tracing::{debug, error, instrument, trace, warn};
 
-use crate::query::{
-    DiscoverApiVersionSet, QueryStep, QueryStrategy, ThresholdConsensus, UnionResponsesSingle,
-};
+use crate::query::{QueryStep, QueryStrategy, ThresholdConsensus, UnionResponsesSingle};
 
 pub type PeerResult<T> = Result<T, PeerError>;
 pub type JsonRpcResult<T> = Result<T, JsonRpcClientError>;
@@ -351,8 +349,6 @@ pub trait FederationApiExt: IRawFederationApi {
         method: String,
         params: ApiRequestErased,
     ) -> FederationResult<FedRet> {
-        let timeout = strategy.request_timeout();
-
         #[cfg(not(target_family = "wasm"))]
         let mut futures = FuturesUnordered::<Pin<Box<dyn Future<Output = _> + Send>>>::new();
         #[cfg(target_family = "wasm")]
@@ -368,18 +364,9 @@ pub trait FederationApiExt: IRawFederationApi {
                         .map(AbbreviateDebug)
                 };
 
-                let result = if let Some(timeout) = timeout {
-                    match fedimint_core::runtime::timeout(timeout, request).await {
-                        Ok(result) => result,
-                        Err(_timeout) => Err(JsonRpcClientError::RequestTimeout),
-                    }
-                } else {
-                    request.await
-                };
-
                 PeerResponse {
                     peer: *peer_id,
-                    result,
+                    result: request.await,
                 }
             }));
         }
@@ -466,7 +453,7 @@ pub trait FederationApiExt: IRawFederationApi {
         Ret: serde::de::DeserializeOwned + Eq + Debug + Clone + MaybeSend,
     {
         self.request_with_strategy(
-            ThresholdConsensus::new(self.all_peers().total()),
+            ThresholdConsensus::new(NumPeers::from(self.all_peers().total())),
             method,
             params,
         )
@@ -641,9 +628,7 @@ pub trait IGlobalFederationApi: IRawFederationApi {
     async fn discover_api_version_set(
         &self,
         client_versions: &SupportedApiVersionsSummary,
-        timeout: Duration,
-        num_responses_required: Option<usize>,
-    ) -> FederationResult<ApiVersionSet>;
+    ) -> anyhow::Result<ApiVersionSet>;
 
     /// Sets the password used to decrypt the configs and authenticate
     ///
@@ -975,7 +960,9 @@ where
     ) -> FederationResult<Vec<ClientBackupSnapshot>> {
         Ok(self
             .request_with_strategy(
-                UnionResponsesSingle::<Option<ClientBackupSnapshot>>::new(self.all_peers().total()),
+                UnionResponsesSingle::<Option<ClientBackupSnapshot>>::new(NumPeers::from(
+                    self.all_peers().total(),
+                )),
                 RECOVER_ENDPOINT.to_owned(),
                 ApiRequestErased::new(id),
             )
@@ -988,21 +975,45 @@ where
     async fn discover_api_version_set(
         &self,
         client_versions: &SupportedApiVersionsSummary,
-        timeout: Duration,
-        num_responses_required: Option<usize>,
-    ) -> FederationResult<ApiVersionSet> {
-        self.request_with_strategy(
-            DiscoverApiVersionSet::new(
-                num_responses_required
-                    .unwrap_or(self.all_peers().len())
-                    .min(self.all_peers().len()),
-                now().add(timeout),
-                client_versions.clone(),
-            ),
-            VERSION_ENDPOINT.to_owned(),
-            ApiRequestErased::default(),
-        )
-        .await
+    ) -> anyhow::Result<ApiVersionSet> {
+        let federation_versions = self
+            .request_current_consensus::<SupportedApiVersionsSummary>(
+                VERSION_ENDPOINT.to_owned(),
+                ApiRequestErased::default(),
+            )
+            .await?;
+
+        fn is_supported(version: &ApiVersion, supported_versions: &MultiApiVersion) -> bool {
+            supported_versions
+                .0
+                .iter()
+                .filter(|v| version.major == v.major)
+                .any(|v| version.minor <= v.minor)
+        }
+
+        Ok(ApiVersionSet {
+            core: client_versions
+                .core
+                .api
+                .into_iter()
+                .filter(|version| is_supported(version, &federation_versions.core.api))
+                .max()
+                .ok_or(anyhow!("Could not find a common core API version"))?,
+            modules: client_versions
+                .modules
+                .iter()
+                .filter_map(|(module_instance_id, client_module_versions)| {
+                    let versions = federation_versions.modules.get(module_instance_id)?;
+
+                    client_module_versions
+                        .api
+                        .into_iter()
+                        .filter(|module_version| is_supported(module_version, &versions.api))
+                        .max()
+                        .map(|v| (*module_instance_id, v))
+                })
+                .collect(),
+        })
     }
 
     async fn set_password(&self, auth: ApiAuth) -> FederationResult<()> {

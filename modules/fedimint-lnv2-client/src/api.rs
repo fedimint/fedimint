@@ -5,7 +5,7 @@ use fedimint_api_client::query::UnionResponses;
 use fedimint_core::module::ApiRequestErased;
 use fedimint_core::task::{sleep, MaybeSend, MaybeSync};
 use fedimint_core::util::SafeUrl;
-use fedimint_core::{apply, async_trait_maybe_send, NumPeersExt};
+use fedimint_core::{apply, async_trait_maybe_send, NumPeers, NumPeersExt};
 use fedimint_lnv2_common::endpoint_constants::{
     AWAIT_INCOMING_CONTRACT_ENDPOINT, AWAIT_PREIMAGE_ENDPOINT, CONSENSUS_BLOCK_COUNT_ENDPOINT,
     GATEWAYS_ENDPOINT, OUTGOING_CONTRACT_EXPIRATION_ENDPOINT,
@@ -90,7 +90,7 @@ where
 
     async fn fetch_gateways(&self) -> FederationResult<Vec<SafeUrl>> {
         self.request_with_strategy(
-            UnionResponses::new(self.all_peers().total()),
+            UnionResponses::new(NumPeers::from(self.all_peers().total())),
             GATEWAYS_ENDPOINT.to_string(),
             ApiRequestErased::default(),
         )

@@ -192,8 +192,8 @@ impl cmp::Ord for ApiVersion {
 /// Each element must have a distinct major api number, and means
 /// either minimum required API version of this major number (for the client),
 /// or maximum supported version of this major number (for the server).
-#[derive(Debug, Clone, Serialize, Default)]
-pub struct MultiApiVersion(Vec<ApiVersion>);
+#[derive(Debug, Clone, Eq, PartialEq, Serialize, Default)]
+pub struct MultiApiVersion(pub Vec<ApiVersion>);
 
 impl MultiApiVersion {
     pub fn new() -> Self {
@@ -365,7 +365,7 @@ fn api_version_multi_from_iter_sanity() {
     .is_err());
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub struct SupportedCoreApiVersions {
     pub core_consensus: CoreConsensusVersion,
     /// Supported Api versions for this core consensus versions
@@ -390,7 +390,7 @@ impl SupportedCoreApiVersions {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub struct SupportedModuleApiVersions {
     pub core_consensus: CoreConsensusVersion,
     pub module_consensus: ModuleConsensusVersion,
@@ -441,7 +441,7 @@ impl SupportedModuleApiVersions {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub struct SupportedApiVersionsSummary {
     pub core: SupportedCoreApiVersions,
     pub modules: BTreeMap<ModuleInstanceId, SupportedModuleApiVersions>,
