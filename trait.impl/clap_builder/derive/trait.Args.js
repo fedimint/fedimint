@@ -7,6 +7,7 @@
 "fedimintd":[["impl Args for <a class=\"struct\" href=\"fedimintd/fedimintd/struct.ServerOpts.html\" title=\"struct fedimintd::fedimintd::ServerOpts\">ServerOpts</a>"]],
 "gateway_cli":[["impl Args for <a class=\"struct\" href=\"gateway_cli/struct.Cli.html\" title=\"struct gateway_cli::Cli\">Cli</a>"]],
 "gateway_cln_extension":[["impl Args for <a class=\"struct\" href=\"gateway_cln_extension/struct.ClnExtensionOpts.html\" title=\"struct gateway_cln_extension::ClnExtensionOpts\">ClnExtensionOpts</a>"]],
+"gateway_tests":[["impl Args for <a class=\"struct\" href=\"gateway_tests/struct.GatewayTestOpts.html\" title=\"struct gateway_tests::GatewayTestOpts\">GatewayTestOpts</a>"]],
 "ln_gateway":[["impl Args for <a class=\"struct\" href=\"ln_gateway/struct.GatewayOpts.html\" title=\"struct ln_gateway::GatewayOpts\">GatewayOpts</a>"]],
 "recoverytool":[["impl Args for <a class=\"struct\" href=\"recoverytool/struct.RecoveryTool.html\" title=\"struct recoverytool::RecoveryTool\">RecoveryTool</a>"]]
 };if (window.register_implementors) {window.register_implementors(implementors);} else {window.pending_implementors = implementors;}})()
