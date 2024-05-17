@@ -19,8 +19,7 @@ use hex::ToHex;
 use tokio::fs;
 use tokio::sync::{MappedMutexGuard, Mutex, MutexGuard};
 use tokio::time::Instant;
-use tonic_lnd::lnrpc::policy_update_request::Scope;
-use tonic_lnd::lnrpc::{ChanInfoRequest, GetInfoRequest, ListChannelsRequest, PolicyUpdateRequest};
+use tonic_lnd::lnrpc::{ChanInfoRequest, GetInfoRequest, ListChannelsRequest};
 use tonic_lnd::Client as LndClient;
 use tracing::{debug, info, trace, warn};
 
@@ -685,32 +684,16 @@ pub async fn open_channel_between_gateways(
         debug!(target: LOG_DEVIMINT, "Opening channel between gateways (the old way)");
         return open_channel(process_mgr, bitcoind, cln, lnd).await;
     }
-
-    debug!(target: LOG_DEVIMINT, "Opening channel between gateways (the new way)");
-    lnd.client
-        .lock()
-        .await
-        .lightning()
-        .update_channel_policy(PolicyUpdateRequest {
-            min_htlc_msat: 1,
-            scope: Some(Scope::Global(true)),
-            time_lock_delta: 80,
-            base_fee_msat: 0,
-            fee_rate: 0.0,
-            fee_rate_ppm: 0,
-            max_htlc_msat: 10_000_000_000,
-            min_htlc_msat_specified: true,
-        })
-        .await?;
-
     let gw_lnd = gw_lnd.get_try().await?.deref().clone();
     let gw_cln = gw_cln.get_try().await?.deref().clone();
 
+    debug!(target: LOG_DEVIMINT, "Await block ln nodes block processing");
     tokio::try_join!(
         gw_cln.wait_for_chain_sync(bitcoind),
         gw_lnd.wait_for_chain_sync(bitcoind)
     )?;
-    info!(target: LOG_DEVIMINT, "block sync done");
+
+    debug!(target: LOG_DEVIMINT, "Opening LN channel between the nodes...");
     let cln_addr = gw_cln.get_funding_address().await?;
 
     bitcoind.send_to(cln_addr, 100_000_000).await?;
@@ -726,9 +709,17 @@ pub async fn open_channel_between_gateways(
         )
         .await?;
 
-    gw_cln
-        .open_channel(lnd_pubkey.clone(), 10_000_000, Some(5_000_000))
-        .await?;
+    // TODO: We're currently polling for the channel to be opened to avoid
+    // flakiness, but this shouldn't ever fail. This is likely needed because
+    // the node is not fully synced yet. In that case, we should wait for the
+    // node to be fully synced before opening the channel.
+    poll("fund channel", || async {
+        gw_cln
+            .open_channel(lnd_pubkey.clone(), 10_000_000, Some(5_000_000))
+            .await
+            .map_err(ControlFlow::Continue)
+    })
+    .await?;
 
     bitcoind.mine_blocks(10).await?;
 
@@ -736,6 +727,7 @@ pub async fn open_channel_between_gateways(
         let channels = gw_lnd
             .list_active_channels()
             .await
+            .context("lnd list channels")
             .map_err(ControlFlow::Break)?;
 
         if channels
