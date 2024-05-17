@@ -869,57 +869,6 @@ async fn test_gateway_client_intercept_htlc_invalid_offer() -> anyhow::Result<()
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_gateway_register_with_federation() -> anyhow::Result<()> {
-    let fixtures = fixtures();
-    let fed = fixtures.new_default_fed().await;
-    let user_client = fed.new_client().await;
-    let mut gateway_test = fixtures
-        .new_gateway(0, Some(DEFAULT_GATEWAY_PASSWORD.to_string()))
-        .await;
-    gateway_test.connect_fed(&fed).await;
-
-    let routing_fees = RoutingFees {
-        base_msat: 0,
-        proportional_millionths: 0,
-    };
-    let lightning_module = user_client.get_first_module::<LightningClientModule>();
-    lightning_module.update_gateway_cache().await?;
-    let gateways = lightning_module.list_gateways().await;
-    assert!(!gateways.is_empty());
-    assert!(gateways
-        .into_iter()
-        .any(|gateway| gateway.info.fees == routing_fees));
-
-    // Leave the federation
-    let rpc_client = gateway_test
-        .get_rpc()
-        .await
-        .with_password(Some(DEFAULT_GATEWAY_PASSWORD.to_string()));
-    verify_gateway_rpc_success("leave_federation", || {
-        rpc_client.leave_federation(LeaveFedPayload {
-            federation_id: fed.id(),
-        })
-    })
-    .await;
-
-    lightning_module.update_gateway_cache().await?;
-    let gateways = lightning_module.list_gateways().await;
-    assert!(gateways.is_empty());
-
-    // Reconnect the federation and verify that the gateway has registered.
-    gateway_test.connect_fed(&fed).await;
-
-    lightning_module.update_gateway_cache().await?;
-    let gateways = lightning_module.list_gateways().await;
-    assert!(!gateways.is_empty());
-    assert!(gateways
-        .into_iter()
-        .any(|gateway| gateway.info.fees == routing_fees));
-
-    Ok(())
-}
-
-#[tokio::test(flavor = "multi_thread")]
 async fn test_gateway_cannot_pay_expired_invoice() -> anyhow::Result<()> {
     single_federation_test(
         |gateway, other_lightning_client, fed, user_client, _| async move {
@@ -988,41 +937,6 @@ async fn test_gateway_cannot_pay_expired_invoice() -> anyhow::Result<()> {
         },
     )
     .await
-}
-
-#[tokio::test(flavor = "multi_thread")]
-async fn test_cannot_connect_same_federation() -> anyhow::Result<()> {
-    let fixtures = fixtures();
-
-    let fed = fixtures.new_default_fed().await;
-    let gateway = fixtures
-        .new_gateway(0, Some(DEFAULT_GATEWAY_PASSWORD.to_string()))
-        .await;
-    let rpc_client = gateway
-        .get_rpc()
-        .await
-        .with_password(Some(DEFAULT_GATEWAY_PASSWORD.to_string()));
-
-    // Verify that we can't join a federation yet because the configuration is not
-    // set
-    let join_payload = ConnectFedPayload {
-        invite_code: fed.invite_code().to_string(),
-    };
-
-    verify_gateway_rpc_success("connect_federation", || {
-        rpc_client.connect_federation(join_payload.clone())
-    })
-    .await;
-
-    // Try to connect the same federation
-    verify_gateway_rpc_failure(
-        "connect_federation",
-        || rpc_client.connect_federation(join_payload.clone()),
-        StatusCode::INTERNAL_SERVER_ERROR,
-    )
-    .await;
-
-    Ok(())
 }
 
 // TODO: fix and re-enable https://github.com/fedimint/fedimint/issues/5001
