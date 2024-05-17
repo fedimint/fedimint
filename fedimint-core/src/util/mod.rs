@@ -104,8 +104,26 @@ impl SafeUrl {
         self.0.port()
     }
     pub fn port_or_known_default(&self) -> Option<u16> {
-        self.0.port_or_known_default()
+        match self.0.scheme() {
+            // p2p port
+            "fedimint" => Some(8173),
+            _ => self.0.port_or_known_default(),
+        }
     }
+
+    /// `self` but with port explicitly set, if known from url
+    pub fn with_port_or_known_default(&self) -> SafeUrl {
+        if self.port().is_none() {
+            if let Some(default) = self.port_or_known_default() {
+                let mut url = self.clone();
+                url.0.set_port(Some(default)).expect("Can't fail");
+                return url;
+            }
+        }
+
+        self.clone()
+    }
+
     pub fn path(&self) -> &str {
         self.0.path()
     }
