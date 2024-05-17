@@ -151,7 +151,7 @@ fn parse_map(s: &str) -> anyhow::Result<BTreeMap<String, String>> {
 /// // Note: not called `main` to avoid rustdoc executing it
 /// // #[tokio::main]
 /// async fn main_() -> anyhow::Result<()> {
-///     Fedimintd::new(env!("FEDIMINT_BUILD_CODE_VERSION"))?
+///     Fedimintd::new(env!("FEDIMINT_BUILD_CODE_VERSION"), Some("vendor-xyz-1"))?
 ///         // use `.with_default_modules()` to avoid having
 ///         // to import these manually
 ///         .with_module_kind(WalletInit)
@@ -164,28 +164,41 @@ fn parse_map(s: &str) -> anyhow::Result<BTreeMap<String, String>> {
 pub struct Fedimintd {
     server_gens: ServerModuleInitRegistry,
     server_gen_params: ServerModuleConfigGenParamsRegistry,
-    version_hash: String,
+    code_version_hash: String,
+    code_version_str: String,
     opts: ServerOpts,
     bitcoind_rpc: BitcoinRpcConfig,
 }
 
 impl Fedimintd {
-    /// Start a new custom `fedimintd`
+    /// Build a new `fedimintd`
     ///
-    /// Like [`Self::new`] but with an ability to customize version strings.
-    pub fn new(version_hash: &str) -> anyhow::Result<Fedimintd> {
+    /// `code_version_hash` should be the git hash of the code, the
+    /// `fedimintd` binary is bing built from. This is used mostly for
+    /// information purposes (`fedimintd version-hash`). See
+    /// `fedimint-build` crate for easy way to obtain it.
+    ///
+    /// `code_version_vendor_suffix` is an optional suffix that will be appended
+    /// to the internal fedimint release version, to distinguish binaries
+    /// built by different vendors, usually  with a different set of modules.
+    /// Currently DKG will enforce that the combined `code_version` is the same
+    /// between all peers.
+    pub fn new(
+        code_version_hash: &str,
+        code_version_vendor_suffix: Option<&str>,
+    ) -> anyhow::Result<Fedimintd> {
         assert_eq!(
             env!("FEDIMINT_BUILD_CODE_VERSION").len(),
-            version_hash.len(),
+            code_version_hash.len(),
             "version_hash must have an expected length"
         );
 
-        handle_version_hash_command(version_hash);
+        handle_version_hash_command(code_version_hash);
 
-        let version = env!("CARGO_PKG_VERSION");
+        let fedimint_version = env!("CARGO_PKG_VERSION");
 
         APP_START_TS
-            .with_label_values(&[version, version_hash])
+            .with_label_values(&[fedimint_version, code_version_hash])
             .set(fedimint_core::time::duration_since_epoch().as_secs() as i64);
 
         let opts: ServerOpts = ServerOpts::parse();
@@ -196,7 +209,7 @@ impl Fedimintd {
             .init()
             .unwrap();
 
-        info!("Starting fedimintd (version: {version} version_hash: {version_hash})");
+        info!("Starting fedimintd (version: {fedimint_version} version_hash: {code_version_hash})");
 
         let bitcoind_rpc = BitcoinRpcConfig::get_defaults_from_env_vars()?;
 
@@ -205,7 +218,10 @@ impl Fedimintd {
             bitcoind_rpc,
             server_gens: ServerModuleInitRegistry::new(),
             server_gen_params: ServerModuleConfigGenParamsRegistry::default(),
-            version_hash: version_hash.to_owned(),
+            code_version_hash: code_version_hash.to_owned(),
+            code_version_str: code_version_vendor_suffix
+                .map(|suffix| format!("{fedimint_version}.{suffix}"))
+                .unwrap_or_else(|| fedimint_version.to_string()),
         })
     }
 
@@ -223,7 +239,7 @@ impl Fedimintd {
     /// Get the version hash this `fedimintd` will report for diagnostic
     /// purposes
     pub fn version_hash(&self) -> &str {
-        &self.version_hash
+        &self.code_version_hash
     }
 
     /// Attach additional module instance with parameters
@@ -334,7 +350,7 @@ impl Fedimintd {
                 &task_group,
                 self.server_gens,
                 self.server_gen_params,
-                self.version_hash,
+                self.code_version_str,
             )
             .await
             {
@@ -416,7 +432,7 @@ async fn run(
     task_group: &TaskGroup,
     module_inits: ServerModuleInitRegistry,
     module_inits_params: ServerModuleConfigGenParamsRegistry,
-    version_hash: String,
+    code_version_str: String,
 ) -> anyhow::Result<()> {
     if let Some(socket_addr) = opts.bind_metrics_api.as_ref() {
         task_group.spawn_cancellable("metrics-server", {
@@ -459,7 +475,7 @@ async fn run(
         data_dir,
         settings,
         db,
-        version_hash,
+        code_version_str,
         &module_inits,
         task_group.clone(),
     )

@@ -226,7 +226,7 @@ impl ServerConfig {
         broadcast_public_keys: BTreeMap<PeerId, PublicKey>,
         broadcast_secret_key: SecretKey,
         modules: BTreeMap<ModuleInstanceId, ServerModuleConfig>,
-        version_hash: String,
+        code_version_str: String,
     ) -> Self {
         let private = ServerConfigPrivate {
             api_auth: params.local.api_auth.clone(),
@@ -248,7 +248,7 @@ impl ServerConfig {
             modules: Default::default(),
         };
         let consensus = ServerConfigConsensus {
-            code_version: version_hash,
+            code_version: code_version_str,
             version: CORE_CONSENSUS_VERSION,
             broadcast_public_keys,
             broadcast_expected_rounds_per_session: if is_running_in_test_env() {
@@ -409,7 +409,7 @@ impl ServerConfig {
     pub fn trusted_dealer_gen(
         params: &HashMap<PeerId, ConfigGenParams>,
         registry: ServerModuleInitRegistry,
-        version_hash: String,
+        code_version_str: String,
     ) -> BTreeMap<PeerId, Self> {
         let peer0 = &params[&PeerId::from(0)];
 
@@ -447,7 +447,7 @@ impl ServerConfig {
                         .iter()
                         .map(|(module_id, cfgs)| (*module_id, cfgs[&id].clone()))
                         .collect(),
-                    version_hash.clone(),
+                    code_version_str.clone(),
                 );
                 (id, config)
             })
@@ -462,7 +462,7 @@ impl ServerConfig {
         registry: ServerModuleInitRegistry,
         delay_calculator: DelayCalculator,
         task_group: &mut TaskGroup,
-        version_hash: String,
+        code_version_str: String,
     ) -> DkgResult<Self> {
         let _timing /* logs on drop */ = timing::TimeReporter::new("distributed-gen").info();
         let server_conn = connect(
@@ -495,7 +495,7 @@ impl ServerConfig {
             let server = Self::trusted_dealer_gen(
                 &HashMap::from([(*our_id, params.clone())]),
                 registry,
-                version_hash,
+                code_version_str,
             );
             return Ok(server[our_id].clone());
         }
@@ -582,7 +582,7 @@ impl ServerConfig {
             broadcast_public_keys,
             broadcast_sk,
             module_cfgs,
-            version_hash,
+            code_version_str,
         );
 
         info!(
