@@ -18,6 +18,7 @@ use anyhow::format_err;
 use bip39::Mnemonic;
 use clap::{Args, CommandFactory, Parser, Subcommand};
 use db_locked::LockedBuilder;
+use envs::FM_API_SECRET_ENV;
 use fedimint_aead::{encrypted_read, encrypted_write, get_encryption_key};
 use fedimint_api_client::api::{
     DynGlobalApi, FederationApiExt, FederationError, IRawFederationApi, WsFederationApi,
@@ -223,9 +224,13 @@ impl Opts {
         Ok(dir)
     }
 
-    fn admin_client(&self, cfg: &ClientConfig) -> CliResult<DynGlobalApi> {
+    fn admin_client(
+        &self,
+        cfg: &ClientConfig,
+        api_secret: Option<String>,
+    ) -> CliResult<DynGlobalApi> {
         let our_id = self.our_id.ok_or_cli_msg("Admin client needs our-id set")?;
-        Ok(DynGlobalApi::from_config_admin(cfg, our_id))
+        Ok(DynGlobalApi::from_config_admin(cfg, api_secret, our_id))
     }
 
     fn auth(&self) -> CliResult<ApiAuth> {
@@ -296,6 +301,7 @@ enum Command {
     },
 }
 
+#[allow(clippy::large_enum_variant)]
 #[derive(Debug, Clone, Subcommand)]
 enum AdminCmd {
     /// Show the status according to the `status` endpoint
@@ -315,14 +321,19 @@ struct DkgAdminArgs {
     #[arg(long, env = "FM_WS_URL")]
     ws: SafeUrl,
 
+    #[arg(env = FM_API_SECRET_ENV)]
+    api_secret: Option<String>,
+
     #[clap(subcommand)]
     subcommand: DkgAdminCmd,
 }
 
 impl DkgAdminArgs {
-    fn ws_admin_client(&self) -> CliResult<DynGlobalApi> {
+    fn ws_admin_client(&self, api_secret: Option<String>) -> CliResult<DynGlobalApi> {
         let ws = self.ws.clone();
-        Ok(DynGlobalApi::from_pre_peer_id_admin_endpoint(ws))
+        Ok(DynGlobalApi::from_pre_peer_id_admin_endpoint(
+            ws, api_secret,
+        ))
     }
 }
 
@@ -382,6 +393,8 @@ enum EncodeType {
         federation_id: FederationId,
         #[clap(long = "peer")]
         peer: PeerId,
+        #[arg(env = FM_API_SECRET_ENV)]
+        api_secret: Option<String>,
     },
 
     /// Encode a JSON string of notes to an ecash string
@@ -576,6 +589,7 @@ impl FedimintCli {
                     &client_config.global.calculate_federation_id(),
                 ),
                 client_config.clone(),
+                invite_code.api_secret(),
             )
             .await
             .map(Arc::new)
@@ -649,11 +663,16 @@ impl FedimintCli {
             &client_config.calculate_federation_id(),
         );
         let backup = builder
-            .download_backup_from_federation(&root_secret, &client_config)
+            .download_backup_from_federation(&root_secret, &client_config, invite_code.api_secret())
             .await
             .map_err_cli()?;
         builder
-            .recover(root_secret, client_config.to_owned(), backup)
+            .recover(
+                root_secret,
+                client_config.to_owned(),
+                invite_code.api_secret(),
+                backup,
+            )
             .await
             .map(Arc::new)
             .map_err_cli()
@@ -666,9 +685,10 @@ impl FedimintCli {
                 let client_config = Client::get_config_from_db(&db)
                     .await
                     .ok_or_cli_msg("client config code not found")?;
+                let api_secret = Client::get_api_secret_from_db(&db).await;
 
                 let invite_code = client_config
-                    .invite_code(&peer)
+                    .invite_code(&peer, api_secret)
                     .ok_or_cli_msg("peer not found")?;
 
                 Ok(CliOutput::InviteCode { invite_code })
@@ -722,7 +742,7 @@ impl FedimintCli {
                 let client = self.client_open(&cli).await?;
 
                 let audit = cli
-                    .admin_client(client.get_config())?
+                    .admin_client(client.get_config(), client.api_secret().clone())?
                     .audit(cli.auth()?)
                     .await?;
                 Ok(CliOutput::Raw(
@@ -732,7 +752,10 @@ impl FedimintCli {
             Command::Admin(AdminCmd::Status) => {
                 let client = self.client_open(&cli).await?;
 
-                let status = cli.admin_client(client.get_config())?.status().await?;
+                let status = cli
+                    .admin_client(client.get_config(), client.api_secret().clone())?
+                    .status()
+                    .await?;
                 Ok(CliOutput::Raw(
                     serde_json::to_value(status).map_err_cli_msg("invalid response")?,
                 ))
@@ -741,7 +764,7 @@ impl FedimintCli {
                 let client = self.client_open(&cli).await?;
 
                 let guardian_config_backup = cli
-                    .admin_client(client.get_config())?
+                    .admin_client(client.get_config(), client.api_secret().clone())?
                     .guardian_config_backup(cli.auth()?)
                     .await?;
                 Ok(CliOutput::Raw(
@@ -775,7 +798,9 @@ impl FedimintCli {
                 }
                 let client = self.client_open(&cli).await?;
 
-                let ws_api: Arc<_> = WsFederationApi::from_config(client.get_config()).into();
+                let ws_api: Arc<_> =
+                    WsFederationApi::from_config(client.get_config(), client.api_secret().clone())
+                        .into();
                 let response: Value = match peer_id {
                     Some(peer_id) => ws_api
                         .request_raw(peer_id.into(), &method, &[params.to_json()])
@@ -847,8 +872,9 @@ impl FedimintCli {
                     url,
                     federation_id,
                     peer,
+                    api_secret,
                 } => Ok(CliOutput::InviteCode {
-                    invite_code: InviteCode::new(url, peer, federation_id),
+                    invite_code: InviteCode::new(url, peer, federation_id, api_secret),
                 }),
                 EncodeType::Notes { notes_json } => {
                     let notes = serde_json::from_str::<OOBNotesJson>(&notes_json)
@@ -931,7 +957,7 @@ impl FedimintCli {
         cli: Opts,
         dkg_args: DkgAdminArgs,
     ) -> Result<CliOutput, CliError> {
-        let client = dkg_args.ws_admin_client()?;
+        let client = dkg_args.ws_admin_client(dkg_args.api_secret.clone())?;
         match &dkg_args.subcommand {
             DkgAdminCmd::WsStatus => {
                 let status = client.status().await?;

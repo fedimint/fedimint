@@ -97,6 +97,16 @@ impl SafeUrl {
         self.0
     }
 
+    #[allow(clippy::result_unit_err)] // just copying `url`'s API here
+    pub fn set_username(&mut self, username: &str) -> Result<(), ()> {
+        self.0.set_username(username)
+    }
+
+    #[allow(clippy::result_unit_err)] // just copying `url`'s API here
+    pub fn set_password(&mut self, password: Option<&str>) -> Result<(), ()> {
+        self.0.set_password(password)
+    }
+
     pub fn host(&self) -> Option<Host<&str>> {
         self.0.host()
     }

@@ -78,6 +78,7 @@ pub fn write_server_config(
     path: PathBuf,
     password: &str,
     module_config_gens: &ServerModuleInitRegistry,
+    api_secret: Option<String>,
 ) -> anyhow::Result<()> {
     let salt = fs::read_to_string(path.join(SALT_FILE))?;
     let key = get_encryption_key(password, &salt)?;
@@ -86,7 +87,7 @@ pub fn write_server_config(
     plaintext_json_write(&server.local, path.join(LOCAL_CONFIG))?;
     plaintext_json_write(&server.consensus, path.join(CONSENSUS_CONFIG))?;
     plaintext_display_write(
-        &server.get_invite_code(),
+        &server.get_invite_code(api_secret),
         &path.join(CLIENT_INVITE_CODE_FILE),
     )?;
     plaintext_json_write(&client_config, path.join(CLIENT_CONFIG))?;

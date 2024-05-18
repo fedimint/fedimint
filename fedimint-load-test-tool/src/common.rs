@@ -155,7 +155,7 @@ pub async fn build_client(
         if let Some(invite_code) = &invite_code {
             let client_config = fedimint_api_client::download_from_invite_code(invite_code).await?;
             client_builder
-                .join(root_secret, client_config.clone())
+                .join(root_secret, client_config.clone(), invite_code.api_secret())
                 .await
         } else {
             bail!("Database not initialize and invite code not provided");

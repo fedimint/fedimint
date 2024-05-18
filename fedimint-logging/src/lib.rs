@@ -27,6 +27,7 @@ pub const LOG_NET_API: &str = "fm::net::api";
 pub const LOG_NET_PEER_DKG: &str = "fm::net::peer::dkg";
 pub const LOG_NET_PEER: &str = "fm::net::peer";
 pub const LOG_NET: &str = "fm::net";
+pub const LOG_NET_AUTH: &str = "fm::net::auth";
 pub const LOG_TASK: &str = "fm::task";
 pub const LOG_RUNTIME: &str = "fm::runtime";
 pub const LOG_TEST: &str = "fm::test";

@@ -8,6 +8,7 @@ use std::time::{Duration, SystemTime};
 use std::{cmp, result};
 
 use anyhow::anyhow;
+use base64::Engine as _;
 use bitcoin::hashes::sha256;
 use bitcoin::secp256k1;
 use fedimint_core::admin_client::{
@@ -54,6 +55,8 @@ use itertools::Itertools;
 use jsonrpsee_core::client::{ClientT, Error as JsonRpcClientError};
 #[cfg(target_family = "wasm")]
 use jsonrpsee_wasm_client::{Client as WsClient, WasmClientBuilder as WsClientBuilder};
+#[cfg(not(target_family = "wasm"))]
+use jsonrpsee_ws_client::{HeaderMap, HeaderValue};
 #[cfg(not(target_family = "wasm"))]
 use jsonrpsee_ws_client::{WsClient, WsClientBuilder};
 use serde::{Deserialize, Serialize};
@@ -542,30 +545,36 @@ impl AsRef<dyn IGlobalFederationApi + 'static> for DynGlobalApi {
 }
 
 impl DynGlobalApi {
-    pub fn from_pre_peer_id_admin_endpoint(url: SafeUrl) -> Self {
+    pub fn from_pre_peer_id_admin_endpoint(url: SafeUrl, api_secret: Option<String>) -> Self {
         // PeerIds are used only for informational purposes, but just in case, make a
         // big number so it stands out
         let peer_id = PeerId::from(1024);
         GlobalFederationApiWithCache::new(
-            WsFederationApi::new(vec![(peer_id, url)]).with_self_peer_id(peer_id),
+            WsFederationApi::new(vec![(peer_id, url)], api_secret).with_self_peer_id(peer_id),
         )
         .into()
     }
 
-    pub fn from_single_endpoint(peer: PeerId, url: SafeUrl) -> Self {
-        GlobalFederationApiWithCache::new(WsFederationApi::new(vec![(peer, url)])).into()
-    }
-    pub fn from_endpoints(peers: Vec<(PeerId, SafeUrl)>) -> Self {
-        GlobalFederationApiWithCache::new(WsFederationApi::new(peers)).into()
+    pub fn from_single_endpoint(peer: PeerId, url: SafeUrl, api_secret: Option<String>) -> Self {
+        GlobalFederationApiWithCache::new(WsFederationApi::new(vec![(peer, url)], api_secret))
+            .into()
     }
 
-    pub fn from_config(config: &ClientConfig) -> Self {
-        GlobalFederationApiWithCache::new(WsFederationApi::from_config(config)).into()
+    pub fn from_endpoints(peers: Vec<(PeerId, SafeUrl)>, api_secret: Option<String>) -> Self {
+        GlobalFederationApiWithCache::new(WsFederationApi::new(peers, api_secret)).into()
     }
 
-    pub fn from_config_admin(config: &ClientConfig, self_peer_id: PeerId) -> Self {
+    pub fn from_config(config: &ClientConfig, api_secret: Option<String>) -> Self {
+        GlobalFederationApiWithCache::new(WsFederationApi::from_config(config, api_secret)).into()
+    }
+
+    pub fn from_config_admin(
+        config: &ClientConfig,
+        api_secret: Option<String>,
+        self_peer_id: PeerId,
+    ) -> Self {
         GlobalFederationApiWithCache::new(
-            WsFederationApi::from_config(config).with_self_peer_id(self_peer_id),
+            WsFederationApi::from_config(config, api_secret).with_self_peer_id(self_peer_id),
         )
         .into()
     }
@@ -573,6 +582,7 @@ impl DynGlobalApi {
     pub fn from_invite_code(invite_code: &InviteCode) -> Self {
         GlobalFederationApiWithCache::new(WsFederationApi::new(
             invite_code.peers().into_iter().collect_vec(),
+            invite_code.api_secret(),
         ))
         .into()
     }
@@ -1202,11 +1212,11 @@ impl<C> FederationPeerClient<C>
 where
     C: JsonRpcClient + 'static,
 {
-    pub fn new(peer_id: PeerId, url: SafeUrl) -> Self {
+    pub fn new(peer_id: PeerId, url: SafeUrl, api_secret: Option<String>) -> Self {
         let shared: Arc<_> = tokio::sync::Mutex::new(FederationPeerClientShared::new()).into();
 
         Self {
-            client: Self::new_jit_client(peer_id, url, shared.clone()),
+            client: Self::new_jit_client(peer_id, url, api_secret, shared.clone()),
             shared,
         }
     }
@@ -1214,6 +1224,7 @@ where
     fn new_jit_client(
         peer_id: PeerId,
         url: SafeUrl,
+        api_secret: Option<String>,
         shared: Arc<Mutex<FederationPeerClientShared>>,
     ) -> JitTryAnyhow<C> {
         JitTryAnyhow::new_try(move || async move {
@@ -1224,7 +1235,7 @@ where
                 peer_id = %peer_id,
                 url = %url,
                 "Connecting to peer");
-            let res = C::connect(&url).await;
+            let res = C::connect(&url, api_secret).await;
 
             match &res {
                 Ok(_) => {
@@ -1247,8 +1258,8 @@ where
         })
     }
 
-    pub async fn reconnect(&mut self, peer_id: PeerId, url: SafeUrl) {
-        self.client = Self::new_jit_client(peer_id, url, self.shared.clone());
+    pub async fn reconnect(&mut self, peer_id: PeerId, url: SafeUrl, api_secret: Option<String>) {
+        self.client = Self::new_jit_client(peer_id, url, api_secret, self.shared.clone());
     }
 }
 
@@ -1256,6 +1267,7 @@ where
 struct FederationPeer<C> {
     url: SafeUrl,
     peer_id: PeerId,
+    api_secret: Option<String>,
     client: RwLock<FederationPeerClient<C>>,
 }
 impl<C: JsonRpcClient + Debug + 'static> IModuleFederationApi for WsFederationApi<C> {}
@@ -1305,25 +1317,59 @@ impl<C: JsonRpcClient + Debug + 'static> IRawFederationApi for WsFederationApi<C
 
 #[apply(async_trait_maybe_send!)]
 pub trait JsonRpcClient: ClientT + Sized + MaybeSend + MaybeSync {
-    async fn connect(url: &SafeUrl) -> result::Result<Self, JsonRpcClientError>;
+    async fn connect(
+        url: &SafeUrl,
+        api_secret: Option<String>,
+    ) -> result::Result<Self, JsonRpcClientError>;
     fn is_connected(&self) -> bool;
 }
 
 #[apply(async_trait_maybe_send!)]
 impl JsonRpcClient for WsClient {
-    async fn connect(url: &SafeUrl) -> result::Result<Self, JsonRpcClientError> {
+    async fn connect(
+        url: &SafeUrl,
+        api_secret: Option<String>,
+    ) -> result::Result<Self, JsonRpcClientError> {
         #[cfg(not(target_family = "wasm"))]
-        return WsClientBuilder::default()
+        let mut client = WsClientBuilder::default()
             .use_webpki_rustls()
-            .max_concurrent_requests(u16::MAX as usize)
-            .build(url.as_str())
-            .await;
+            .max_concurrent_requests(u16::MAX as usize);
 
         #[cfg(target_family = "wasm")]
-        WsClientBuilder::default()
-            .max_concurrent_requests(u16::MAX as usize)
-            .build(url.as_str())
-            .await
+        let client = WsClientBuilder::default().max_concurrent_requests(u16::MAX as usize);
+
+        if let Some(api_secret) = api_secret {
+            #[cfg(not(target_family = "wasm"))]
+            {
+                // on native platforms, jsonrpsee-client ignores `user:pass@...` in the Url,
+                // but we can set up the headers manually
+                let mut headers = HeaderMap::new();
+
+                let auth = base64::engine::general_purpose::STANDARD
+                    .encode(format!("fedimint:{api_secret}"));
+
+                headers.insert(
+                    "Authorization",
+                    HeaderValue::from_str(&format!("Basic {auth}")).expect("Can't fail"),
+                );
+
+                client = client.set_headers(headers);
+            }
+            #[cfg(target_family = "wasm")]
+            {
+                // on wasm, url will be handled by the browser, which should take care of
+                // `user:pass@...`
+                let mut url = url.clone();
+                url.set_username("fedimint").map_err(|_| {
+                    JsonRpcClientError::Transport(anyhow::format_err!("invalid username"))
+                })?;
+                url.set_password(Some(&api_secret)).map_err(|_| {
+                    JsonRpcClientError::Transport(anyhow::format_err!("invalid secret"))
+                })?;
+                return client.build(url.as_str()).await;
+            }
+        }
+        client.build(url.as_str()).await
     }
 
     fn is_connected(&self) -> bool {
@@ -1333,12 +1379,12 @@ impl JsonRpcClient for WsClient {
 
 impl WsFederationApi<WsClient> {
     /// Creates a new API client
-    pub fn new(peers: Vec<(PeerId, SafeUrl)>) -> Self {
-        Self::new_with_client(peers, None)
+    pub fn new(peers: Vec<(PeerId, SafeUrl)>, api_secret: Option<String>) -> Self {
+        Self::new_with_client(peers, None, api_secret)
     }
 
     /// Creates a new API client from a client config
-    pub fn from_config(config: &ClientConfig) -> Self {
+    pub fn from_config(config: &ClientConfig, api_secret: Option<String>) -> Self {
         Self::new(
             config
                 .global
@@ -1346,6 +1392,7 @@ impl WsFederationApi<WsClient> {
                 .iter()
                 .map(|(id, peer)| (*id, peer.url.clone()))
                 .collect(),
+            api_secret,
         )
     }
 
@@ -1366,7 +1413,11 @@ where
     }
 
     /// Creates a new API client
-    pub fn new_with_client(peers: Vec<(PeerId, SafeUrl)>, self_peer_id: Option<PeerId>) -> Self {
+    pub fn new_with_client(
+        peers: Vec<(PeerId, SafeUrl)>,
+        self_peer_id: Option<PeerId>,
+        api_secret: Option<String>,
+    ) -> Self {
         WsFederationApi {
             peer_ids: peers.iter().map(|m| m.0).collect(),
             self_peer_id,
@@ -1382,8 +1433,13 @@ where
 
                         FederationPeer {
                             peer_id,
-                            client: RwLock::new(FederationPeerClient::new(peer_id, url.clone())),
+                            client: RwLock::new(FederationPeerClient::new(
+                                peer_id,
+                                url.clone(),
+                                api_secret.clone(),
+                            )),
                             url,
+                            api_secret: api_secret.clone(),
                         }
                     })
                     .collect(),
@@ -1438,7 +1494,9 @@ where
                     trace!(target: LOG_CLIENT_NET_API, "Some other request reconnected client, retrying");
                 }
                 _ => {
-                    wclient.reconnect(self.peer_id, self.url.clone()).await;
+                    wclient
+                        .reconnect(self.peer_id, self.url.clone(), self.api_secret.clone())
+                        .await;
                 }
             }
         }
@@ -1525,7 +1583,7 @@ mod tests {
             self.0.is_connected()
         }
 
-        async fn connect(_url: &SafeUrl) -> Result<Self> {
+        async fn connect(_url: &SafeUrl, _api_secret: Option<String>) -> Result<Self> {
             Ok(Self(C::connect().await?))
         }
     }
@@ -1565,6 +1623,7 @@ mod tests {
             "ws://test1".parse().unwrap(),
             PeerId::from(1),
             FederationId::dummy(),
+            Some("api_secret".into()),
         );
 
         let bech32 = connect.to_string();

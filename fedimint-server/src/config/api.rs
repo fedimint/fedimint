@@ -53,6 +53,8 @@ pub struct ConfigGenApi {
     task_group: TaskGroup,
     /// Code version str that will get encoded in consensus hash
     code_version_str: String,
+    /// Api secret to use
+    api_secret: Option<String>,
 }
 
 impl ConfigGenApi {
@@ -62,6 +64,7 @@ impl ConfigGenApi {
         config_generated_tx: Sender<ServerConfig>,
         task_group: &mut TaskGroup,
         code_version_str: String,
+        api_secret: Option<String>,
     ) -> Self {
         let config_gen_api = Self {
             state: Arc::new(Mutex::new(ConfigGenState::new(settings))),
@@ -69,6 +72,7 @@ impl ConfigGenApi {
             config_generated_tx,
             task_group: task_group.clone(),
             code_version_str,
+            api_secret,
         };
         info!(target: fedimint_logging::LOG_NET_PEER_DKG, "Created new config gen Api");
         config_gen_api
@@ -126,7 +130,7 @@ impl ConfigGenApi {
         let local = state.local.clone();
 
         if let Some(url) = local.and_then(|local| local.leader_api_url) {
-            DynGlobalApi::from_pre_peer_id_admin_endpoint(url)
+            DynGlobalApi::from_pre_peer_id_admin_endpoint(url, self.api_secret.clone())
                 .add_config_gen_peer(state.our_peer_info()?)
                 .await
                 .map_err(|_| ApiError::not_found("Unable to connect to the leader".to_string()))?;
@@ -188,7 +192,10 @@ impl ConfigGenApi {
 
         let consensus = match local.and_then(|local| local.leader_api_url) {
             Some(leader_url) => {
-                let client = DynGlobalApi::from_pre_peer_id_admin_endpoint(leader_url.clone());
+                let client = DynGlobalApi::from_pre_peer_id_admin_endpoint(
+                    leader_url.clone(),
+                    self.api_secret.clone(),
+                );
                 let response = client.consensus_config_gen_params().await;
                 response
                     .map_err(|_| ApiError::not_found("Cannot get leader params".to_string()))?
@@ -228,9 +235,9 @@ impl ConfigGenApi {
             );
             // Create a WSClient for the leader
             state.local.clone().and_then(|local| {
-                local
-                    .leader_api_url
-                    .map(DynGlobalApi::from_pre_peer_id_admin_endpoint)
+                local.leader_api_url.map(|url| {
+                    DynGlobalApi::from_pre_peer_id_admin_endpoint(url, self.api_secret.clone())
+                })
             })
         };
 
@@ -401,9 +408,9 @@ impl ConfigGenApi {
             );
             // Create a WSClient for the leader
             state.local.clone().and_then(|local| {
-                local
-                    .leader_api_url
-                    .map(DynGlobalApi::from_pre_peer_id_admin_endpoint)
+                local.leader_api_url.map(|url| {
+                    DynGlobalApi::from_pre_peer_id_admin_endpoint(url, self.api_secret.clone())
+                })
             })
         };
 
@@ -922,6 +929,8 @@ mod tests {
             spawn("fedimint server", async move {
                 crate::run(
                     dir_clone,
+                    None,
+                    vec![],
                     settings_clone,
                     db,
                     "dummyversionhash".to_owned(),
@@ -934,7 +943,7 @@ mod tests {
 
             // our id doesn't really exist at this point
             let auth = ApiAuth(format!("password-{port}"));
-            let client = DynGlobalApi::from_pre_peer_id_admin_endpoint(api_url);
+            let client = DynGlobalApi::from_pre_peer_id_admin_endpoint(api_url, None);
 
             TestConfigApi {
                 client,

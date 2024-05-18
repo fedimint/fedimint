@@ -56,11 +56,22 @@ impl Decodable for InviteCode {
 }
 
 impl InviteCode {
-    pub fn new(url: SafeUrl, peer: PeerId, federation_id: FederationId) -> Self {
-        InviteCode(vec![
+    pub fn new(
+        url: SafeUrl,
+        peer: PeerId,
+        federation_id: FederationId,
+        api_secret: Option<String>,
+    ) -> Self {
+        let mut s = InviteCode(vec![
             InviteCodeData::Api { url, peer },
             InviteCodeData::FederationId(federation_id),
-        ])
+        ]);
+
+        if let Some(api_secret) = api_secret {
+            s.0.push(InviteCodeData::ApiSecret(api_secret));
+        }
+
+        s
     }
 
     /// Constructs an [`InviteCode`] which contains as many guardian URLs as
@@ -94,6 +105,13 @@ impl InviteCode {
             .expect("Ensured by constructor")
     }
 
+    /// Api secret, if needed, to use when communicating with the federation
+    pub fn api_secret(&self) -> Option<String> {
+        self.0.iter().find_map(|data| match data {
+            InviteCodeData::ApiSecret(api_secret) => Some(api_secret.clone()),
+            _ => None,
+        })
+    }
     /// Returns the id of the guardian from which we got the API URL, see
     /// [`InviteCode::url`].
     pub fn peer(&self) -> PeerId {
@@ -143,8 +161,13 @@ enum InviteCodeData {
         /// Peer id of the host from the Url
         peer: PeerId,
     },
+
     /// Authentication id for the federation
     FederationId(FederationId),
+
+    /// Api secret to use
+    ApiSecret(String),
+
     /// Unknown invite code fields to be defined in the future
     #[encodable_default]
     Default { variant: u64, bytes: Vec<u8> },

@@ -451,6 +451,7 @@ where
             any_guardian_url.url.clone(),
             *any_guardian_id,
             cfg.calculate_federation_id(),
+            self.client.get().api_secret().clone(),
         )
     }
 

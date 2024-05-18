@@ -201,6 +201,7 @@ mod fedimint_migration_tests {
             SafeUrl::from_str("http://myexamplefed.com").expect("SafeUrl parsing can't fail"),
             0.into(),
             federation_id,
+            None,
         );
         let federation_config = FederationConfig {
             invite_code,
