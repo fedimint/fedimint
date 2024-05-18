@@ -13,7 +13,7 @@ name = "fedimint_lnv2_server"
 path = "src/lib.rs"
 
 [dependencies]
-anyhow = "1.0.83"
+anyhow = "1.0.85"
 async-trait = "0.1.80"
 erased-serde = { workspace = true }
 futures = "0.3.24"
