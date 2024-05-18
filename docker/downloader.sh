@@ -57,11 +57,16 @@ while true; do
 done
 
 echo "Which version of Fedimint do you want to install?"
+echo "0.3.1 is the latest version and is recommended for most users."
 while true; do
   echo
   read -p "Hit enter to install the latest version, or type a specific version: " FEDIMINT_VERSION </dev/tty
-  FEDIMINT_VERSION=${FEDIMINT_VERSION:-0.3.0}
+  FEDIMINT_VERSION=${FEDIMINT_VERSION:-0.3.1}
   case $FEDIMINT_VERSION in
+  0.3.1)
+    FEDIMINT_VERSION="0.3.1"
+    break
+    ;;
   0.3.0)
     FEDIMINT_VERSION="0.3.0"
     break
@@ -253,7 +258,7 @@ else # Is Gateway
   echo "It lets you manage your lightning node and multiple fedimints' ecash from a single interface."
   echo
   while true; do
-    read -r -n 1 -p "Do you want to run thunderhub alongside the gateway? [yes/no]: " choice </dev/tty
+    read -p "Do you want to run thunderhub alongside the gateway? [yes/no]: " choice </dev/tty
     case $choice in
     yes)
       USE_THUNDERHUB=true
@@ -266,7 +271,7 @@ else # Is Gateway
       break
       ;;
     *)
-      echo "Invalid option. Please choose Y or N."
+      echo "Invalid option. Please choose yes or no."
       ;;
     esac
   done
