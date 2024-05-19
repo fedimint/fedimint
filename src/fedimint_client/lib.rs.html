@@ -2419,6 +2419,35 @@
 <a href="#2419" id="2419">2419</a>
 <a href="#2420" id="2420">2420</a>
 <a href="#2421" id="2421">2421</a>
+<a href="#2422" id="2422">2422</a>
+<a href="#2423" id="2423">2423</a>
+<a href="#2424" id="2424">2424</a>
+<a href="#2425" id="2425">2425</a>
+<a href="#2426" id="2426">2426</a>
+<a href="#2427" id="2427">2427</a>
+<a href="#2428" id="2428">2428</a>
+<a href="#2429" id="2429">2429</a>
+<a href="#2430" id="2430">2430</a>
+<a href="#2431" id="2431">2431</a>
+<a href="#2432" id="2432">2432</a>
+<a href="#2433" id="2433">2433</a>
+<a href="#2434" id="2434">2434</a>
+<a href="#2435" id="2435">2435</a>
+<a href="#2436" id="2436">2436</a>
+<a href="#2437" id="2437">2437</a>
+<a href="#2438" id="2438">2438</a>
+<a href="#2439" id="2439">2439</a>
+<a href="#2440" id="2440">2440</a>
+<a href="#2441" id="2441">2441</a>
+<a href="#2442" id="2442">2442</a>
+<a href="#2443" id="2443">2443</a>
+<a href="#2444" id="2444">2444</a>
+<a href="#2445" id="2445">2445</a>
+<a href="#2446" id="2446">2446</a>
+<a href="#2447" id="2447">2447</a>
+<a href="#2448" id="2448">2448</a>
+<a href="#2449" id="2449">2449</a>
+<a href="#2450" id="2450">2450</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! # Client library for fedimintd
 //!
 //! This library provides a client interface to build module clients that can be
@@ -2521,7 +2550,8 @@
     ApiAuth, ApiVersion, MultiApiVersion, SupportedApiVersionsSummary, SupportedCoreApiVersions,
     SupportedModuleApiVersions,
 };
-<span class="kw">use </span>fedimint_core::task::{MaybeSend, MaybeSync, TaskGroup};
+<span class="kw">use </span>fedimint_core::task::{sleep, MaybeSend, MaybeSync, TaskGroup};
+<span class="kw">use </span>fedimint_core::time::now;
 <span class="kw">use </span>fedimint_core::transaction::Transaction;
 <span class="kw">use </span>fedimint_core::util::{BoxStream, NextOrPending};
 <span class="kw">use </span>fedimint_core::{
@@ -2602,7 +2632,8 @@
     </span>Other(<span class="attr">#[from] </span>anyhow::Error),
 }
 
-<span class="kw">pub enum </span>DiscoverCommonApiVersionMode {
+<span class="attr">#[derive(Debug, Clone, Copy)]
+</span><span class="kw">pub enum </span>DiscoverCommonApiVersionMode {
     <span class="doccomment">/// Get the response from only a few peers, or until a timeout
     </span>Fast,
     <span class="doccomment">/// Try to get a response from all peers, or until a timeout
@@ -3794,7 +3825,7 @@
 
     <span class="doccomment">/// Query the federation for API version support and then calculate
     /// the best API version to use (supported by most guardians).
-    </span><span class="kw">pub async fn </span>discover_common_api_version_static(
+    </span><span class="kw">pub async fn </span>discover_common_api_version_static_try(
         config: <span class="kw-2">&amp;</span>ClientConfig,
         client_module_init: <span class="kw-2">&amp;</span>ClientModuleInitRegistry,
         api: <span class="kw-2">&amp;</span>DynGlobalApi,
@@ -3812,6 +3843,33 @@
                 },
             )
             .<span class="kw">await</span><span class="question-mark">?</span>)
+    }
+
+    <span class="kw">pub async fn </span>discover_common_api_version_static(
+        config: <span class="kw-2">&amp;</span>ClientConfig,
+        client_module_init: <span class="kw-2">&amp;</span>ClientModuleInitRegistry,
+        api: <span class="kw-2">&amp;</span>DynGlobalApi,
+        mode: DiscoverCommonApiVersionMode,
+    ) -&gt; anyhow::Result&lt;ApiVersionSet&gt; {
+        <span class="comment">// We want to give it at least a good 30 second worth of trying, before we give
+        // up.
+        </span><span class="kw">let </span>deadline = now() + Duration::from_secs(<span class="number">30</span>);
+
+        <span class="kw">loop </span>{
+            <span class="kw">let </span>res =
+                <span class="self">Self</span>::discover_common_api_version_static_try(config, client_module_init, api, mode)
+                    .<span class="kw">await</span>;
+
+            <span class="kw">if </span>res.is_ok() {
+                <span class="kw">return </span>res;
+            }
+
+            <span class="kw">if </span>deadline &lt; now() {
+                <span class="kw">return </span>res;
+            }
+            <span class="macro">debug!</span>(target: LOG_CLIENT, <span class="string">"Retrying getting api version from Federation"</span>);
+            sleep(Duration::from_secs(<span class="number">1</span>)).<span class="kw">await</span>;
+        }
     }
 
     <span class="doccomment">/// [`SupportedApiVersionsSummary`] that the client and its modules support
