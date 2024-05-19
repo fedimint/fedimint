@@ -100,7 +100,8 @@ use fedimint_core::module::{
     ApiAuth, ApiVersion, MultiApiVersion, SupportedApiVersionsSummary, SupportedCoreApiVersions,
     SupportedModuleApiVersions,
 };
-use fedimint_core::task::{MaybeSend, MaybeSync, TaskGroup};
+use fedimint_core::task::{sleep, MaybeSend, MaybeSync, TaskGroup};
+use fedimint_core::time::now;
 use fedimint_core::transaction::Transaction;
 use fedimint_core::util::{BoxStream, NextOrPending};
 use fedimint_core::{
@@ -181,6 +182,7 @@ pub enum AddStateMachinesError {
     Other(#[from] anyhow::Error),
 }
 
+#[derive(Debug, Clone, Copy)]
 pub enum DiscoverCommonApiVersionMode {
     /// Get the response from only a few peers, or until a timeout
     Fast,
@@ -1373,7 +1375,7 @@ impl Client {
 
     /// Query the federation for API version support and then calculate
     /// the best API version to use (supported by most guardians).
-    pub async fn discover_common_api_version_static(
+    pub async fn discover_common_api_version_static_try(
         config: &ClientConfig,
         client_module_init: &ClientModuleInitRegistry,
         api: &DynGlobalApi,
@@ -1391,6 +1393,33 @@ impl Client {
                 },
             )
             .await?)
+    }
+
+    pub async fn discover_common_api_version_static(
+        config: &ClientConfig,
+        client_module_init: &ClientModuleInitRegistry,
+        api: &DynGlobalApi,
+        mode: DiscoverCommonApiVersionMode,
+    ) -> anyhow::Result<ApiVersionSet> {
+        // We want to give it at least a good 30 second worth of trying, before we give
+        // up.
+        let deadline = now() + Duration::from_secs(30);
+
+        loop {
+            let res =
+                Self::discover_common_api_version_static_try(config, client_module_init, api, mode)
+                    .await;
+
+            if res.is_ok() {
+                return res;
+            }
+
+            if deadline < now() {
+                return res;
+            }
+            debug!(target: LOG_CLIENT, "Retrying getting api version from Federation");
+            sleep(Duration::from_secs(1)).await;
+        }
     }
 
     /// [`SupportedApiVersionsSummary`] that the client and its modules support
