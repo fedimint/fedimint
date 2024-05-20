@@ -53,6 +53,24 @@ If you have any questions or need assistance, don't hesitate to reach out to us 
 
 Happy Hacking!
 
+# Feature Process
+
+Fedimint is a project with high inherent complexity, maintained by relatively few people and thus needs to avoid accidental complexity through unnecessary requirements. The following process aims to minimize feature creep:
+
+Any changes that cannot be easily reverted because they touch consensus, public APIs, etc. should go through a design phase. For that please open an issue describing:
+  * The minimum requirements and why they are necessary
+    * Possible additional requirements and why they are useful enough to justify the added complexity
+  * The design space you explored
+  * The design you consider ideal
+
+Two contributors familiar with the area should ACK before proceeding with an implementation. Feature creep should be avoided both in the design phase as well as when implementing.
+
+## Code/Requirement Ownership
+**Please consider yourself personally accountable for the requirements your implementation introduced - you should be able to explain and justify requirements on request.** Some of them might be implicit, especially when introduced by a bug fix and not through the feature process. Please avoid introducing requirements "just in case" and strive for a clean and straightforward design that is easy to maintain and may still be extended at a later point if it becomes necessary. Please try to keep track of your prior work as the project progresses since requirements may have become redundant.
+
+**Furthermore, question existing requirements and consider removing them if nobody can explain well why they exist;** if a removal needs to be reverted it does not mean that you made a mistake, at least now we are aware why it is necessary and can record this in a comment. If you never have to put something back in you are not removing enough code.
+
+Do not optimize code that should not exist in the first place. **Premature optimization is the root of all evil.**
 
 # Code Review Policy
 
