@@ -226,10 +226,10 @@ where
         (**self).begin_transaction().await
     }
     async fn register(&self, key: &[u8]) {
-        (**self).register(key).await
+        (**self).register(key).await;
     }
     async fn notify(&self, key: &[u8]) {
-        (**self).notify(key).await
+        (**self).notify(key).await;
     }
 
     fn prefix_len(&self) -> usize {
@@ -260,10 +260,10 @@ impl<RawDatabase: IRawDatabase + MaybeSend + 'static> IDatabase for BaseDatabase
         ))
     }
     async fn register(&self, key: &[u8]) {
-        self.notifications.register(key).await
+        self.notifications.register(key).await;
     }
     async fn notify(&self, key: &[u8]) {
-        self.notifications.notify(key).await
+        self.notifications.notify(key).await;
     }
 
     fn prefix_len(&self) -> usize {
@@ -458,10 +458,7 @@ impl Database {
                     return Ok(val);
                 }
                 Err(err) => {
-                    if max_attempts
-                        .map(|max_att| max_att <= curr_attempts)
-                        .unwrap_or(false)
-                    {
+                    if max_attempts.is_some_and(|max_att| max_att <= curr_attempts) {
                         warn!(
                             target: LOG_DB,
                             curr_attempts,
@@ -583,11 +580,11 @@ where
         })
     }
     async fn register(&self, key: &[u8]) {
-        self.inner.register(&self.get_full_key(key)).await
+        self.inner.register(&self.get_full_key(key)).await;
     }
 
     async fn notify(&self, key: &[u8]) {
-        self.inner.notify(&self.get_full_key(key)).await
+        self.inner.notify(&self.get_full_key(key)).await;
     }
 
     fn prefix_len(&self) -> usize {
@@ -1035,7 +1032,7 @@ where
     {
         self.raw_remove_by_prefix(&key_prefix.to_bytes())
             .await
-            .expect("Unrecoverable error when removing entries from the database")
+            .expect("Unrecoverable error when removing entries from the database");
     }
 }
 
@@ -1219,7 +1216,8 @@ where
             .commit_tx()
             .await?;
         self.notifications.submit_queue(
-            self.notify_queue
+            &self
+                .notify_queue
                 .take()
                 .expect("commit must be called only once"),
         );
@@ -2385,7 +2383,7 @@ mod test_utils {
                     10
                 };
                 for _ in 0..times {
-                    tokio::task::yield_now().await
+                    tokio::task::yield_now().await;
                 }
             }
 
@@ -2429,8 +2427,8 @@ mod test_utils {
 
                     match (a, s) {
                         (None, None) | (Some(_), Some(_)) => {}
-                        (None, Some(_)) => panic!("none some?! {}", i),
-                        (Some(_), None) => panic!("some none?! {}", i),
+                        (None, Some(_)) => panic!("none some?! {i}"),
+                        (Some(_), None) => panic!("some none?! {i}"),
                     }
                 },
                 async {
@@ -2909,7 +2907,7 @@ mod test_utils {
                 attempts: failed_attempts,
                 ..
             } => {
-                assert_eq!(failed_attempts, 5)
+                assert_eq!(failed_attempts, 5);
             }
             AutocommitError::ClosureError { .. } => panic!("Closure did not return error"),
         }

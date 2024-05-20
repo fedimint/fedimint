@@ -442,7 +442,7 @@ impl std::ops::Div for Amount {
 
 impl std::ops::SubAssign for Amount {
     fn sub_assign(&mut self, rhs: Self) {
-        self.msats -= rhs.msats
+        self.msats -= rhs.msats;
     }
 }
 

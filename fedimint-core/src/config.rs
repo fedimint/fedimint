@@ -459,7 +459,7 @@ impl Serialize for ServerModuleConfigGenParamsRegistry {
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         let modules: Vec<_> = self.iter_modules().collect();
         let mut serializer = serializer.serialize_map(Some(modules.len()))?;
-        for (id, kind, params) in modules.into_iter() {
+        for (id, kind, params) in modules {
             serializer.serialize_key(&id)?;
             serializer.serialize_value(&(kind.clone(), params.clone()))?;
         }
@@ -488,9 +488,12 @@ where
     M: AsRef<dyn IDynCommonModuleInit + Send + Sync + 'static>,
 {
     fn from(value: Vec<M>) -> Self {
-        Self(BTreeMap::from_iter(
-            value.into_iter().map(|i| (i.as_ref().module_kind(), i)),
-        ))
+        Self(
+            value
+                .into_iter()
+                .map(|i| (i.as_ref().module_kind(), i))
+                .collect::<BTreeMap<_, _>>(),
+        )
     }
 }
 
@@ -499,9 +502,11 @@ where
     M: AsRef<maybe_add_send_sync!(dyn IDynCommonModuleInit + 'static)>,
 {
     fn from_iter<T: IntoIterator<Item = M>>(iter: T) -> Self {
-        Self(BTreeMap::from_iter(
-            iter.into_iter().map(|i| (i.as_ref().module_kind(), i)),
-        ))
+        Self(
+            iter.into_iter()
+                .map(|i| (i.as_ref().module_kind(), i))
+                .collect::<BTreeMap<_, _>>(),
+        )
     }
 }
 
@@ -517,9 +522,10 @@ impl<M> ModuleInitRegistry<M> {
     {
         let gen: M = gen.into();
         let kind = gen.as_ref().module_kind();
-        if self.0.insert(kind.clone(), gen).is_some() {
-            panic!("Can't insert module of same kind twice: {kind}");
-        }
+        assert!(
+            self.0.insert(kind.clone(), gen).is_none(),
+            "Can't insert module of same kind twice: {kind}"
+        );
     }
 
     pub fn kinds(&self) -> BTreeSet<ModuleKind> {
@@ -899,7 +905,7 @@ mod serde_commit {
     use crate::config::DkgGroup;
 
     pub fn serialize<S: Serializer, G: DkgGroup>(vec: &[G], s: S) -> Result<S::Ok, S::Error> {
-        let wrap_vec: Vec<Wrap<G>> = vec.iter().cloned().map(Wrap).collect();
+        let wrap_vec: Vec<Wrap<G>> = vec.iter().copied().map(Wrap).collect();
         wrap_vec.serialize(s)
     }
 

@@ -204,7 +204,7 @@ impl GatewayClientModuleV2 {
         // the gateways claim to a contract in case of cancellation. We only create a
         // forfeit signature after the we have started the send state machine to
         // prevent replay attacks with a previously cancelled outgoing contract
-        let operation_id = OperationId::from_encodable(payload.contract.clone());
+        let operation_id = OperationId::from_encodable(&payload.contract.clone());
 
         if self.client_ctx.operation_exists(operation_id).await {
             return Ok(self.subscribe_send(operation_id).await);
@@ -305,7 +305,7 @@ impl GatewayClientModuleV2 {
         htlc_id: u64,
         payload: CreateInvoicePayload,
     ) -> anyhow::Result<()> {
-        let operation_id = OperationId::from_encodable(payload.clone());
+        let operation_id = OperationId::from_encodable(&payload.clone());
 
         if self.client_ctx.operation_exists(operation_id).await {
             return Ok(());
@@ -358,7 +358,7 @@ impl GatewayClientModuleV2 {
         &self,
         payload: CreateInvoicePayload,
     ) -> anyhow::Result<[u8; 32]> {
-        let operation_id = OperationId::from_encodable(payload.clone());
+        let operation_id = OperationId::from_encodable(&payload.clone());
 
         if self.client_ctx.operation_exists(operation_id).await {
             return self

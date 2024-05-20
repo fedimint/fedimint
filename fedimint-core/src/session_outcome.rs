@@ -39,7 +39,7 @@ impl SessionOutcome {
         let leaf_hashes = self
             .items
             .iter()
-            .map(|item| item.consensus_hash::<sha256::Hash>());
+            .map(Encodable::consensus_hash::<sha256::Hash>);
 
         if let Some(root) = bitcoin::merkle_tree::calculate_root(leaf_hashes) {
             header[8..].copy_from_slice(&root.to_byte_array());

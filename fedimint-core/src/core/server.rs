@@ -236,7 +236,7 @@ where
         audit: &mut Audit,
         module_instance_id: ModuleInstanceId,
     ) {
-        <Self as ServerModule>::audit(self, dbtx, audit, module_instance_id).await
+        <Self as ServerModule>::audit(self, dbtx, audit, module_instance_id).await;
     }
 
     fn api_endpoints(&self) -> Vec<ApiEndpoint<DynServerModule>> {

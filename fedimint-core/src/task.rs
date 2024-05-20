@@ -112,7 +112,7 @@ impl TaskGroup {
     }
 
     pub fn shutdown(&self) {
-        self.inner.shutdown()
+        self.inner.shutdown();
     }
 
     pub async fn shutdown_join_all(
@@ -311,7 +311,7 @@ impl TaskGroup {
                     warn!(
                         target: LOG_TASK, task=%name,
                         "Timeout waiting for task to shut down"
-                    )
+                    );
                 }
             }
         }
@@ -543,7 +543,7 @@ mod tests {
     async fn shutdown_task_group_after() -> anyhow::Result<()> {
         let tg = TaskGroup::new();
         tg.spawn("shutdown waiter", |handle| async move {
-            handle.make_shutdown_rx().await.await
+            handle.make_shutdown_rx().await.await;
         });
         sleep(Duration::from_millis(10)).await;
         tg.shutdown_join_all(None).await?;
@@ -555,7 +555,7 @@ mod tests {
         let tg = TaskGroup::new();
         tg.spawn("shutdown waiter", |handle| async move {
             sleep(Duration::from_millis(10)).await;
-            handle.make_shutdown_rx().await.await
+            handle.make_shutdown_rx().await.await;
         });
         tg.shutdown_join_all(None).await?;
         Ok(())
@@ -566,7 +566,7 @@ mod tests {
         let tg = TaskGroup::new();
         tg.make_subgroup()
             .spawn("shutdown waiter", |handle| async move {
-                handle.make_shutdown_rx().await.await
+                handle.make_shutdown_rx().await.await;
             });
         sleep(Duration::from_millis(10)).await;
         tg.shutdown_join_all(None).await?;
@@ -579,7 +579,7 @@ mod tests {
         tg.make_subgroup()
             .spawn("shutdown waiter", |handle| async move {
                 sleep(Duration::from_millis(10)).await;
-                handle.make_shutdown_rx().await.await
+                handle.make_shutdown_rx().await.await;
             });
         tg.shutdown_join_all(None).await?;
         Ok(())

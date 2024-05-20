@@ -22,7 +22,7 @@ pub use self::r#impl::*;
 mod r#impl {
     pub use tokio::task::{JoinError, JoinHandle};
 
-    use super::*;
+    use super::{Duration, Elapsed, Future, Instant, Instrument, LOG_RUNTIME};
 
     pub fn spawn<F, T>(name: &str, future: F) -> tokio::task::JoinHandle<T>
     where
@@ -63,11 +63,11 @@ mod r#impl {
 
     pub async fn sleep(duration: Duration) {
         // nosemgrep: ban-tokio-sleep
-        tokio::time::sleep(duration).await
+        tokio::time::sleep(duration).await;
     }
 
     pub async fn sleep_until(deadline: Instant) {
-        tokio::time::sleep_until(deadline).await
+        tokio::time::sleep_until(deadline).await;
     }
 
     pub async fn timeout<T>(duration: Duration, future: T) -> Result<T::Output, Elapsed>

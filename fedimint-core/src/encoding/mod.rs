@@ -520,7 +520,7 @@ where
         }
 
         let mut len = 0;
-        for item in self.iter() {
+        for item in self {
             len += item.consensus_encode(writer)?;
         }
         Ok(len)
@@ -552,7 +552,7 @@ where
         }
         // todo: impl without copy
         let mut data = [T::default(); SIZE];
-        for item in data.iter_mut() {
+        for item in &mut data {
             *item = T::consensus_decode_from_finite_reader(d, modules)?;
         }
         Ok(data)
@@ -839,7 +839,7 @@ where
     fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<usize, std::io::Error> {
         let mut len = 0;
         len += (self.len() as u64).consensus_encode(writer)?;
-        for (k, v) in self.iter() {
+        for (k, v) in self {
             len += k.consensus_encode(writer)?;
             len += v.consensus_encode(writer)?;
         }
@@ -862,8 +862,7 @@ where
             let k = K::consensus_decode_from_finite_reader(d, modules)?;
             if res
                 .last_key_value()
-                .map(|(prev_key, _v)| k <= *prev_key)
-                .unwrap_or_default()
+                .is_some_and(|(prev_key, _v)| k <= *prev_key)
             {
                 return Err(DecodeError::from_str("Non-canonical encoding"));
             }
@@ -883,7 +882,7 @@ where
     fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<usize, std::io::Error> {
         let mut len = 0;
         len += (self.len() as u64).consensus_encode(writer)?;
-        for k in self.iter() {
+        for k in self {
             len += k.consensus_encode(writer)?;
         }
         Ok(len)
@@ -902,11 +901,7 @@ where
         let len = u64::consensus_decode_from_finite_reader(d, modules)?;
         for _ in 0..len {
             let k = K::consensus_decode_from_finite_reader(d, modules)?;
-            if res
-                .last()
-                .map(|prev_key| k <= *prev_key)
-                .unwrap_or_default()
-            {
+            if res.last().is_some_and(|prev_key| k <= *prev_key) {
                 return Err(DecodeError::from_str("Non-canonical encoding"));
             }
             if !res.insert(k) {
@@ -1129,7 +1124,7 @@ mod tests {
     use crate::db::DatabaseValue;
     use crate::encoding::{Decodable, Encodable};
 
-    pub(crate) fn test_roundtrip<T>(value: T)
+    pub(crate) fn test_roundtrip<T>(value: &T)
     where
         T: Encodable + Decodable + Eq + Debug,
     {
@@ -1139,11 +1134,11 @@ mod tests {
 
         let mut cursor = Cursor::new(bytes);
         let decoded = T::consensus_decode(&mut cursor, &ModuleDecoderRegistry::default()).unwrap();
-        assert_eq!(value, decoded);
+        assert_eq!(value, &decoded);
         assert_eq!(cursor.position(), len as u64);
     }
 
-    pub(crate) fn test_roundtrip_expected<T>(value: T, expected: &[u8])
+    pub(crate) fn test_roundtrip_expected<T>(value: &T, expected: &[u8])
     where
         T: Encodable + Decodable + Eq + Debug,
     {
@@ -1154,7 +1149,7 @@ mod tests {
 
         let mut cursor = Cursor::new(bytes);
         let decoded = T::consensus_decode(&mut cursor, &ModuleDecoderRegistry::default()).unwrap();
-        assert_eq!(value, decoded);
+        assert_eq!(value, &decoded);
         assert_eq!(cursor.position(), len as u64);
     }
 
@@ -1188,7 +1183,7 @@ mod tests {
         ];
 
         for e in enums {
-            test_roundtrip(e);
+            test_roundtrip(&e);
         }
     }
 
@@ -1246,7 +1241,7 @@ mod tests {
         };
         let bytes = [3, 1, 2, 3, 42];
 
-        test_roundtrip_expected(reference, &bytes);
+        test_roundtrip_expected(&reference, &bytes);
     }
 
     #[test_log::test]
@@ -1257,7 +1252,7 @@ mod tests {
         let reference = TestStruct(vec![1, 2, 3], 42);
         let bytes = [3, 1, 2, 3, 42];
 
-        test_roundtrip_expected(reference, &bytes);
+        test_roundtrip_expected(&reference, &bytes);
     }
 
     #[test_log::test]
@@ -1280,7 +1275,7 @@ mod tests {
         ];
 
         for (reference, bytes) in test_cases {
-            test_roundtrip_expected(reference, &bytes);
+            test_roundtrip_expected(&reference, &bytes);
         }
     }
 
@@ -1300,12 +1295,12 @@ mod tests {
         let invoice = invoice_str
             .parse::<lightning_invoice::Bolt11Invoice>()
             .unwrap();
-        test_roundtrip(invoice);
+        test_roundtrip(&invoice);
     }
 
     #[test_log::test]
     fn test_btreemap() {
-        test_roundtrip(BTreeMap::from([
+        test_roundtrip(&BTreeMap::from([
             ("a".to_string(), 1u32),
             ("b".to_string(), 2),
         ]));
@@ -1313,12 +1308,12 @@ mod tests {
 
     #[test_log::test]
     fn test_btreeset() {
-        test_roundtrip(BTreeSet::from(["a".to_string(), "b".to_string()]));
+        test_roundtrip(&BTreeSet::from(["a".to_string(), "b".to_string()]));
     }
 
     #[test_log::test]
     fn test_systemtime() {
-        test_roundtrip(fedimint_core::time::now());
+        test_roundtrip(&fedimint_core::time::now());
     }
 
     #[test]
@@ -1436,7 +1431,7 @@ mod tests {
         )
         .unwrap();
         test_roundtrip_expected(
-            txid,
+            &txid,
             &[
                 154, 192, 239, 210, 168, 79, 183, 215, 157, 7, 201, 237, 22, 132, 133, 30, 74, 48,
                 206, 233, 21, 231, 57, 225, 198, 140, 229, 35, 47, 237, 247, 81,
@@ -1449,7 +1444,7 @@ mod tests {
             bitcoin::Transaction::from_bytes(&transaction, &ModuleDecoderRegistry::default())
                 .unwrap();
         test_roundtrip_expected(
-            transaction,
+            &transaction,
             &[
                 2, 0, 0, 0, 0, 1, 1, 211, 91, 102, 197, 76, 246, 192, 155, 129, 168, 217, 76, 213,
                 209, 121, 113, 156, 215, 89, 92, 37, 132, 73, 69, 42, 147, 5, 171, 155, 18, 223,
@@ -1470,7 +1465,7 @@ mod tests {
         )
         .unwrap();
         test_roundtrip_expected(
-            blockhash,
+            &blockhash,
             &[
                 242, 96, 118, 76, 42, 229, 64, 214, 67, 122, 136, 166, 217, 0, 30, 46, 143, 168,
                 248, 168, 189, 101, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,

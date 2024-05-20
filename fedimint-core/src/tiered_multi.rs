@@ -36,7 +36,7 @@ impl<T> TieredMulti<T> {
 
     /// Returns the number of items in all vectors
     pub fn count_items(&self) -> usize {
-        self.0.values().map(|notes| notes.len()).sum()
+        self.0.values().map(Vec::len).sum()
     }
 
     /// Returns the number of tiers
@@ -51,9 +51,11 @@ impl<T> TieredMulti<T> {
 
     /// Returns the summary of number of items in each tier
     pub fn summary(&self) -> TieredCounts {
-        TieredCounts(Tiered::from_iter(
-            self.iter().map(|(amount, values)| (*amount, values.len())),
-        ))
+        TieredCounts(
+            self.iter()
+                .map(|(amount, values)| (*amount, values.len()))
+                .collect(),
+        )
     }
 
     /// Verifies whether all vectors in all tiers are empty
@@ -136,13 +138,13 @@ impl<T> TieredMulti<T> {
     }
 
     pub fn push(&mut self, amt: Amount, val: T) {
-        self.0.entry(amt).or_default().push(val)
+        self.0.entry(amt).or_default().push(val);
     }
 
     fn assert_invariants(&self) {
         // Just for compactness and determinism, we don't want entries with 0 items
         #[cfg(debug_assertions)]
-        self.iter().for_each(|(_, v)| debug_assert!(!v.is_empty()))
+        self.iter().for_each(|(_, v)| debug_assert!(!v.is_empty()));
     }
 }
 
@@ -180,7 +182,7 @@ impl<C> Default for TieredMulti<C> {
 impl<C> Extend<(Amount, C)> for TieredMulti<C> {
     fn extend<T: IntoIterator<Item = (Amount, C)>>(&mut self, iter: T) {
         for (amount, note) in iter {
-            self.0.entry(amount).or_default().push(note)
+            self.0.entry(amount).or_default().push(note);
         }
     }
 }
@@ -239,7 +241,7 @@ where
     fn next(&mut self) -> Option<Self::Item> {
         let mut notes = Vec::with_capacity(self.iters.len());
         let mut amount = None;
-        for iter in self.iters.iter_mut() {
+        for iter in &mut self.iters {
             match iter.next() {
                 Some((amt, note)) => {
                     if let Some(amount) = amount {
@@ -317,7 +319,7 @@ impl TieredCounts {
     fn assert_invariants(&self) {
         // Just for compactness and determinism, we don't want entries with 0 count
         #[cfg(debug_assertions)]
-        self.iter().for_each(|(_, count)| debug_assert!(0 < count))
+        self.iter().for_each(|(_, count)| debug_assert!(0 < count));
     }
 }
 

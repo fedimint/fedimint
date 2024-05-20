@@ -111,7 +111,7 @@ mod tests {
             &sk,
         );
 
-        test_roundtrip(sig);
+        test_roundtrip(&sig);
     }
 
     #[test_log::test]
@@ -120,13 +120,13 @@ mod tests {
         let mut rng = rand::rngs::OsRng;
         let sec_key = bitcoin::key::KeyPair::new(ctx, &mut rng);
         let pub_key = sec_key.public_key();
-        test_roundtrip(pub_key);
+        test_roundtrip(&pub_key);
 
         let sig = ctx.sign_schnorr(
             &secp256k1_zkp::hashes::sha256::Hash::hash(b"Hello World!").into(),
             &sec_key,
         );
 
-        test_roundtrip(sig);
+        test_roundtrip(&sig);
     }
 }

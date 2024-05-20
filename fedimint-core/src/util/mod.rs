@@ -60,12 +60,11 @@ where
     /// where the future will be cancelled by shutdown logic anyway and handling
     /// each place where a stream may terminate would be too much trouble.
     async fn next_or_pending(&mut self) -> Self::Output {
-        match self.next().await {
-            Some(item) => item,
-            None => {
-                debug!("Stream ended in next_or_pending, pending forever to avoid throwing an error on shutdown");
-                std::future::pending().await
-            }
+        if let Some(item) = self.next().await {
+            item
+        } else {
+            debug!("Stream ended in next_or_pending, pending forever to avoid throwing an error on shutdown");
+            std::future::pending().await
         }
     }
 }
@@ -303,7 +302,7 @@ pub fn handle_version_hash_command(version_hash: &str) {
     let mut args = std::env::args();
     if let Some(ref arg) = args.nth(1) {
         if arg.as_str() == "version-hash" {
-            println!("{}", version_hash);
+            println!("{version_hash}");
             std::process::exit(0);
         }
     }
