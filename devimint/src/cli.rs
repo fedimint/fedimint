@@ -29,7 +29,7 @@ use crate::{external_daemons, vars, ExternalDaemons};
 fn random_test_dir_suffix() -> String {
     rand::thread_rng()
         .sample_iter(&Alphanumeric)
-        .filter(|c| c.is_ascii_digit())
+        .filter(u8::is_ascii_digit)
         .take(3)
         .map(char::from)
         .collect::<String>()
@@ -323,7 +323,7 @@ pub async fn handle_command(cmd: Cmd, common_args: CommonArgs) -> Result<()> {
                 }
             };
             if let Some(fed) = cleanup_on_exit(main, task_group).await? {
-                fed.fast_terminate().await
+                fed.fast_terminate().await;
             }
         }
         Cmd::Rpc(rpc_cmd) => rpc_command(rpc_cmd, common_args).await?,

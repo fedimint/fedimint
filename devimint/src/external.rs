@@ -310,7 +310,7 @@ impl Drop for LightningdProcessHandle {
                 if let Err(e) = self.terminate().await {
                     warn!(target: LOG_DEVIMINT, "failed to terminate lightningd: {e:?}");
                 }
-            })
+            });
         });
     }
 }
@@ -395,7 +395,7 @@ impl Lightningd {
                 .await
                 .map_err(ControlFlow::Continue)?
                 .blockheight;
-            poll_eq!(lnd_height as u64, btc_height)
+            poll_eq!(u64::from(lnd_height), btc_height)
         })
         .await?;
         Ok(())
@@ -637,7 +637,7 @@ async fn open_channel(
                     return Ok(());
                 }
                 Err(e) => {
-                    debug!(%e, "Getting chan info failed")
+                    debug!(%e, "Getting chan info failed");
                 }
             }
         }
@@ -683,7 +683,7 @@ pub async fn open_channel_between_gateways(
             base_fee_msat: 0,
             fee_rate: 0.0,
             fee_rate_ppm: 0,
-            max_htlc_msat: 10000000000,
+            max_htlc_msat: 10_000_000_000,
             min_htlc_msat_specified: true,
         })
         .await?;

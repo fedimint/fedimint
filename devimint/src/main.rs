@@ -48,7 +48,7 @@ async fn main() -> anyhow::Result<()> {
                 let ready_file = PathBuf::from(test_dir).join("ready");
                 write_overwrite_async(ready_file, "ERROR").await?;
             } else {
-                warn!(target: LOG_DEVIMINT, "{}", &format!("{} was not set", FM_TEST_DIR_ENV));
+                warn!(target: LOG_DEVIMINT, "{}", &format!("{FM_TEST_DIR_ENV} was not set"));
             }
             Err(e)
         }

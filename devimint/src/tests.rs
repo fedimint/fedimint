@@ -230,7 +230,7 @@ pub async fn latency_tests(
             for _ in 0..iterations {
                 let invoice = ln_invoice(
                     &client,
-                    Amount::from_msats(100000),
+                    Amount::from_msats(100_000),
                     "latency-over-cln-gw".to_string(),
                     cln_gw_id.clone(),
                 )
@@ -464,7 +464,7 @@ pub async fn upgrade_tests(process_mgr: &ProcessManager, binary: UpgradeTest) ->
                     fedimintd_version
                 );
             }
-            info!("## fedimintd upgraded all binaries successfully")
+            info!("## fedimintd upgraded all binaries successfully");
         }
         UpgradeTest::FedimintCli { paths } => {
             let set_fedimint_cli_path = |path: &PathBuf| {
@@ -517,7 +517,7 @@ pub async fn upgrade_tests(process_mgr: &ProcessManager, binary: UpgradeTest) ->
                     fedimint_cli_version
                 );
             }
-            info!("## fedimint-cli upgraded all binaries successfully")
+            info!("## fedimint-cli upgraded all binaries successfully");
         }
         UpgradeTest::Gatewayd { paths } => {
             if let Some(oldest_gatewayd) = paths.first() {
@@ -548,7 +548,7 @@ pub async fn upgrade_tests(process_mgr: &ProcessManager, binary: UpgradeTest) ->
                     gatewayd_version
                 );
             }
-            info!("## gatewayd upgraded all binaries successfully")
+            info!("## gatewayd upgraded all binaries successfully");
         }
     }
     Ok(())
@@ -825,7 +825,7 @@ pub async fn cli_tests(dev_fed: DevFed) -> Result<()> {
     let client_post_spend_balance = client.balance().await?;
     assert_eq!(client_post_spend_balance, CLIENT_START_AMOUNT);
 
-    let reissue_amount: u64 = 409600;
+    let reissue_amount: u64 = 409_600;
 
     // Ensure that client can reissue after spending
     info!("Testing reissuing e-cash after spending");
@@ -841,7 +841,7 @@ pub async fn cli_tests(dev_fed: DevFed) -> Result<()> {
 
     let reissue_notes = cmd!(client, "spend", reissue_amount).out_json().await?["notes"]
         .as_str()
-        .map(|s| s.to_owned())
+        .map(ToOwned::to_owned)
         .unwrap();
     let client_reissue_amt = cmd!(client, "reissue", reissue_notes)
         .out_json()
@@ -854,7 +854,7 @@ pub async fn cli_tests(dev_fed: DevFed) -> Result<()> {
     info!("Testing reissuing e-cash via module commands");
     let reissue_notes = cmd!(client, "spend", reissue_amount).out_json().await?["notes"]
         .as_str()
-        .map(|s| s.to_owned())
+        .map(ToOwned::to_owned)
         .unwrap();
     let client_reissue_amt = if fedimint_cli_version >= *VERSION_0_3_0_ALPHA {
         cmd!(client, "module", "mint", "reissue", reissue_notes)
@@ -937,7 +937,7 @@ pub async fn cli_tests(dev_fed: DevFed) -> Result<()> {
 
     let ln_invoice_response = ln_invoice(
         &client,
-        Amount::from_msats(1100000),
+        Amount::from_msats(1_100_000),
         "incoming-over-cln-gw".to_string(),
         cln_gw_id.clone(),
     )
@@ -981,12 +981,12 @@ pub async fn cli_tests(dev_fed: DevFed) -> Result<()> {
         .as_u64()
         .unwrap();
     anyhow::ensure!(
-        final_cln_incoming_client_balance - final_cln_outgoing_client_balance == 1100000,
+        final_cln_incoming_client_balance - final_cln_outgoing_client_balance == 1_100_000,
         "Client balance changed by {} on CLN incoming payment, expected 1100000",
         final_cln_incoming_client_balance - final_cln_outgoing_client_balance
     );
     anyhow::ensure!(
-        final_cln_outgoing_gateway_balance - final_cln_incoming_gateway_balance == 1100000,
+        final_cln_outgoing_gateway_balance - final_cln_incoming_gateway_balance == 1_100_000,
         "CLN Gateway balance changed by {} on CLN incoming payment, expected 1100000",
         final_cln_outgoing_gateway_balance - final_cln_incoming_gateway_balance
     );
@@ -1062,7 +1062,7 @@ pub async fn cli_tests(dev_fed: DevFed) -> Result<()> {
     info!("Testing incoming payment from CLN to client via LND gateway");
     let recv = ln_invoice(
         &client,
-        Amount::from_msats(1300000),
+        Amount::from_msats(1_300_000),
         "incoming-over-lnd-gw".to_string(),
         lnd_gw_id,
     )
@@ -2145,8 +2145,8 @@ pub async fn recoverytool_test(dev_fed: DevFed) -> Result<()> {
 
     // Epochs method includes descriptors from spent outputs, so we only need to
     // verify the epochs method includes all available utxos
-    for utxo_descriptor in utxos_descriptors.iter() {
-        assert!(epochs_descriptors.contains(*utxo_descriptor))
+    for utxo_descriptor in utxos_descriptors {
+        assert!(epochs_descriptors.contains(utxo_descriptor));
     }
     Ok(())
 }

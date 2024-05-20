@@ -20,7 +20,7 @@ use fedimintd::envs::FM_DISABLE_META_MODULE_ENV;
 
 /// Duplicate default fedimint module setup
 pub fn attach_default_module_init_params(
-    bitcoin_rpc: BitcoinRpcConfig,
+    bitcoin_rpc: &BitcoinRpcConfig,
     module_init_params: &mut ServerModuleConfigGenParamsRegistry,
     network: Network,
     finality_delay: u32,
