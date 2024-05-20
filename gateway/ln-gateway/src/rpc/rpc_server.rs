@@ -362,8 +362,8 @@ async fn close_channels_with_peer(
     Extension(gateway): Extension<Gateway>,
     Json(payload): Json<CloseChannelsWithPeerPayload>,
 ) -> Result<impl IntoResponse, GatewayError> {
-    let num_channels_closed = gateway.handle_close_channels_with_peer_msg(payload).await?;
-    Ok(Json(json!(num_channels_closed)))
+    let response = gateway.handle_close_channels_with_peer_msg(payload).await?;
+    Ok(Json(json!(response)))
 }
 
 #[instrument(skip_all, err)]

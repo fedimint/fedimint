@@ -36,9 +36,9 @@ use crate::gateway_lnrpc::create_invoice_request::Description;
 use crate::gateway_lnrpc::get_route_hints_response::{RouteHint, RouteHintHop};
 use crate::gateway_lnrpc::intercept_htlc_response::{Action, Cancel, Forward, Settle};
 use crate::gateway_lnrpc::{
-    CreateInvoiceRequest, CreateInvoiceResponse, EmptyResponse, GetFundingAddressResponse,
-    GetNodeInfoResponse, GetRouteHintsResponse, InterceptHtlcRequest, InterceptHtlcResponse,
-    PayInvoiceRequest, PayInvoiceResponse,
+    CloseChannelsWithPeerResponse, CreateInvoiceRequest, CreateInvoiceResponse, EmptyResponse,
+    GetFundingAddressResponse, GetNodeInfoResponse, GetRouteHintsResponse, InterceptHtlcRequest,
+    InterceptHtlcResponse, PayInvoiceRequest, PayInvoiceResponse,
 };
 
 type HtlcSubscriptionSender = mpsc::Sender<Result<InterceptHtlcRequest, Status>>;
@@ -732,7 +732,10 @@ impl ILnRpcClient for GatewayLndClient {
         }
     }
 
-    async fn close_channels_with_peer(&self, pubkey: PublicKey) -> Result<u32, LightningRpcError> {
+    async fn close_channels_with_peer(
+        &self,
+        pubkey: PublicKey,
+    ) -> Result<CloseChannelsWithPeerResponse, LightningRpcError> {
         let mut client = self.connect().await?;
 
         let channels_with_peer = client
@@ -780,7 +783,9 @@ impl ILnRpcClient for GatewayLndClient {
                 })?;
         }
 
-        Ok(channels_with_peer.len() as u32)
+        Ok(CloseChannelsWithPeerResponse {
+            num_channels_closed: channels_with_peer.len() as u32,
+        })
     }
 
     async fn list_active_channels(&self) -> Result<Vec<ChannelInfo>, LightningRpcError> {

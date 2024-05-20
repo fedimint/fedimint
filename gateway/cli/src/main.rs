@@ -325,10 +325,10 @@ async fn main() -> anyhow::Result<()> {
                     .await?;
             }
             LightningCommands::CloseChannelsWithPeer { pubkey } => {
-                let num_channels_closed = client()
+                let response = client()
                     .close_channels_with_peer(CloseChannelsWithPeerPayload { pubkey })
                     .await?;
-                println!("Closed {num_channels_closed} channel(s)");
+                print_response(response);
             }
             LightningCommands::ListActiveChannels => {
                 let response = client().list_active_channels().await?;

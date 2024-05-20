@@ -15,9 +15,9 @@ use lightning_invoice::{
     SignedRawBolt11Invoice, DEFAULT_EXPIRY_TIME,
 };
 use ln_gateway::gateway_lnrpc::{
-    self, CreateInvoiceRequest, CreateInvoiceResponse, EmptyResponse, GetFundingAddressResponse,
-    GetNodeInfoResponse, GetRouteHintsResponse, InterceptHtlcResponse, PayInvoiceRequest,
-    PayInvoiceResponse,
+    self, CloseChannelsWithPeerResponse, CreateInvoiceRequest, CreateInvoiceResponse,
+    EmptyResponse, GetFundingAddressResponse, GetNodeInfoResponse, GetRouteHintsResponse,
+    InterceptHtlcResponse, PayInvoiceRequest, PayInvoiceResponse,
 };
 use ln_gateway::lightning::cln::{HtlcResult, RouteHtlcStream};
 use ln_gateway::lightning::{ChannelInfo, ILnRpcClient, LightningRpcError};
@@ -229,7 +229,7 @@ impl ILnRpcClient for FakeLightningTest {
     async fn close_channels_with_peer(
         &self,
         _pubkey: bitcoin::secp256k1::PublicKey,
-    ) -> Result<u32, LightningRpcError> {
+    ) -> Result<CloseChannelsWithPeerResponse, LightningRpcError> {
         unimplemented!("FakeLightningTest does not support closing channels by peer")
     }
 

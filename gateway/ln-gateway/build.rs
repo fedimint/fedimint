@@ -9,6 +9,7 @@ fn main() {
         .build_server(true)
         .build_client(true)
         .protoc_arg("--experimental_allow_proto3_optional")
+        .type_attribute(".", "#[derive(serde::Serialize, serde::Deserialize)]")
         .compile(&[proto_path], &[include_path])
         .unwrap_or_else(|e| panic!("failed to compile gateway proto files: {e}"));
 

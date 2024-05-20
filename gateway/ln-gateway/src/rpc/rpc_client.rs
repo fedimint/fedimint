@@ -21,6 +21,7 @@ use super::{
     SetConfigurationPayload, WithdrawPayload,
 };
 use crate::lightning::ChannelInfo;
+use crate::CloseChannelsWithPeerResponse;
 
 pub struct GatewayRpcClient {
     /// Base URL to gateway web server
@@ -173,7 +174,7 @@ impl GatewayRpcClient {
     pub async fn close_channels_with_peer(
         &self,
         payload: CloseChannelsWithPeerPayload,
-    ) -> GatewayRpcResult<u32> {
+    ) -> GatewayRpcResult<CloseChannelsWithPeerResponse> {
         let url = self
             .base_url
             .join(CLOSE_CHANNELS_WITH_PEER_ENDPOINT)

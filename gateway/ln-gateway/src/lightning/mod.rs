@@ -20,9 +20,9 @@ use crate::envs::{
     FM_GATEWAY_LIGHTNING_ADDR_ENV, FM_LND_MACAROON_ENV, FM_LND_RPC_ADDR_ENV, FM_LND_TLS_CERT_ENV,
 };
 use crate::gateway_lnrpc::{
-    CreateInvoiceRequest, CreateInvoiceResponse, EmptyResponse, GetFundingAddressResponse,
-    GetNodeInfoResponse, GetRouteHintsResponse, InterceptHtlcResponse, PayInvoiceRequest,
-    PayInvoiceResponse,
+    CloseChannelsWithPeerResponse, CreateInvoiceRequest, CreateInvoiceResponse, EmptyResponse,
+    GetFundingAddressResponse, GetNodeInfoResponse, GetRouteHintsResponse, InterceptHtlcResponse,
+    PayInvoiceRequest, PayInvoiceResponse,
 };
 
 pub const MAX_LIGHTNING_RETRIES: u32 = 10;
@@ -149,11 +149,11 @@ pub trait ILnRpcClient: Debug + Send + Sync {
     ) -> Result<EmptyResponse, LightningRpcError>;
 
     /// Close all channels with a peer lightning node from the gateway's
-    /// lightning node, returning the number of channels closed.
+    /// lightning node.
     async fn close_channels_with_peer(
         &self,
         pubkey: secp256k1::PublicKey,
-    ) -> Result<u32, LightningRpcError>;
+    ) -> Result<CloseChannelsWithPeerResponse, LightningRpcError>;
 
     async fn list_active_channels(&self) -> Result<Vec<ChannelInfo>, LightningRpcError>;
 }
