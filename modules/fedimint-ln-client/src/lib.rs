@@ -1407,6 +1407,8 @@ impl LightningClientModule {
             }
         };
 
+        debug!(target: LOG_CLIENT_MODULE_LN, ?gateway_id, %amount, "Selected LN gateway for invoice generation");
+
         let (operation_id, invoice, output, preimage) = self
             .create_lightning_receive_output(
                 amount,
@@ -1420,6 +1422,7 @@ impl LightningClientModule {
                 self.cfg.network,
             )
             .await?;
+
         let tx = TransactionBuilder::new().with_output(self.client_ctx.make_client_output(output));
         let extra_meta = serde_json::to_value(extra_meta).expect("extra_meta is serializable");
         let operation_meta_gen = |txid, _| LightningOperationMeta {
@@ -1440,6 +1443,8 @@ impl LightningClientModule {
             )
             .await?;
 
+        debug!(target: LOG_CLIENT_MODULE_LN, ?txid, ?operation_id, "Waiting for LN invoice to be confirmed");
+
         // Wait for the transaction to be accepted by the federation, otherwise the
         // invoice will not be able to be paid
         self.client_ctx
@@ -1448,6 +1453,8 @@ impl LightningClientModule {
             .await_tx_accepted(txid)
             .await
             .map_err(|e| anyhow!("Offer transaction was not accepted: {e:?}"))?;
+
+        debug!(target: LOG_CLIENT_MODULE_LN, %invoice, "Invoice confirmed");
 
         Ok((operation_id, invoice, preimage))
     }
