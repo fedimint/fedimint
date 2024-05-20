@@ -1726,6 +1726,7 @@ dependencies = [
  "fedimint-client",
  "fedimint-core",
  "fedimint-ln-common",
+ "fedimint-logging",
  "fedimint-threshold-crypto",
  "futures",
  "itertools 0.12.1",
