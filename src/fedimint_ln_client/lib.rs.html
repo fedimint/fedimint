@@ -2018,6 +2018,13 @@
 <a href="#2018" id="2018">2018</a>
 <a href="#2019" id="2019">2019</a>
 <a href="#2020" id="2020">2020</a>
+<a href="#2021" id="2021">2021</a>
+<a href="#2022" id="2022">2022</a>
+<a href="#2023" id="2023">2023</a>
+<a href="#2024" id="2024">2024</a>
+<a href="#2025" id="2025">2025</a>
+<a href="#2026" id="2026">2026</a>
+<a href="#2027" id="2027">2027</a>
 </pre></div><pre class="rust"><code><span class="kw">pub mod </span>api;
 <span class="attr">#[cfg(feature = <span class="string">"cli"</span>)]
 </span><span class="kw">pub mod </span>cli;
@@ -3427,6 +3434,8 @@
             }
         };
 
+        <span class="macro">debug!</span>(target: LOG_CLIENT_MODULE_LN, <span class="question-mark">?</span>gateway_id, %amount, <span class="string">"Selected LN gateway for invoice generation"</span>);
+
         <span class="kw">let </span>(operation_id, invoice, output, preimage) = <span class="self">self
             </span>.create_lightning_receive_output(
                 amount,
@@ -3440,6 +3449,7 @@
                 <span class="self">self</span>.cfg.network,
             )
             .<span class="kw">await</span><span class="question-mark">?</span>;
+
         <span class="kw">let </span>tx = TransactionBuilder::new().with_output(<span class="self">self</span>.client_ctx.make_client_output(output));
         <span class="kw">let </span>extra_meta = serde_json::to_value(extra_meta).expect(<span class="string">"extra_meta is serializable"</span>);
         <span class="kw">let </span>operation_meta_gen = |txid, <span class="kw">_</span>| LightningOperationMeta {
@@ -3460,6 +3470,8 @@
             )
             .<span class="kw">await</span><span class="question-mark">?</span>;
 
+        <span class="macro">debug!</span>(target: LOG_CLIENT_MODULE_LN, <span class="question-mark">?</span>txid, <span class="question-mark">?</span>operation_id, <span class="string">"Waiting for LN invoice to be confirmed"</span>);
+
         <span class="comment">// Wait for the transaction to be accepted by the federation, otherwise the
         // invoice will not be able to be paid
         </span><span class="self">self</span>.client_ctx
@@ -3468,6 +3480,8 @@
             </span>.await_tx_accepted(txid)
             .<span class="kw">await
             </span>.map_err(|e| <span class="macro">anyhow!</span>(<span class="string">"Offer transaction was not accepted: {e:?}"</span>))<span class="question-mark">?</span>;
+
+        <span class="macro">debug!</span>(target: LOG_CLIENT_MODULE_LN, %invoice, <span class="string">"Invoice confirmed"</span>);
 
         <span class="prelude-val">Ok</span>((operation_id, invoice, preimage))
     }
