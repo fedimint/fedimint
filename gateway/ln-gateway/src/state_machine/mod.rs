@@ -387,7 +387,7 @@ impl GatewayClientModule {
         let challenges = self
             .module_api
             .get_remove_gateway_challenge(gateway_id)
-            .await?;
+            .await;
 
         let fed_public_key = self.cfg.threshold_pub_key;
         let signatures = challenges
@@ -404,9 +404,7 @@ impl GatewayClientModule {
             signatures,
         };
 
-        self.module_api
-            .remove_gateway(remove_gateway_request)
-            .await?;
+        self.module_api.remove_gateway(remove_gateway_request).await;
 
         Ok(())
     }

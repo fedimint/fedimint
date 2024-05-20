@@ -1,11 +1,9 @@
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::fmt::Debug;
 use std::mem;
-use std::time::SystemTime;
 
 use anyhow::anyhow;
 use fedimint_core::task::{MaybeSend, MaybeSync};
-use fedimint_core::time::now;
 use fedimint_core::{maybe_add_send_sync, NumPeers, NumPeersExt, PeerId};
 use itertools::Itertools;
 
@@ -105,7 +103,7 @@ impl<R, T> FilterMap<R, T> {
     ) -> Self {
         Self {
             filter_map: Box::new(filter_map),
-            error_strategy: ErrorStrategy::new(num_peers.one_honest()),
+            error_strategy: ErrorStrategy::new(num_peers.threshold()),
         }
     }
 }
@@ -319,51 +317,6 @@ impl<R: Debug + Eq + Clone> QueryStrategy<R, Vec<R>> for UnionResponsesSingle<R>
                 }
             }
             Err(error) => self.error_strategy.process(peer, error),
-        }
-    }
-}
-
-/// Query strategy that returns when enough peers responded or a deadline passed
-pub struct ThresholdOrDeadline<R> {
-    deadline: SystemTime,
-    threshold: usize,
-    responses: BTreeMap<PeerId, R>,
-}
-
-impl<R> ThresholdOrDeadline<R> {
-    pub fn new(threshold: usize, deadline: SystemTime) -> Self {
-        Self {
-            deadline,
-            threshold,
-            responses: BTreeMap::default(),
-        }
-    }
-}
-
-impl<R> QueryStrategy<R, BTreeMap<PeerId, R>> for ThresholdOrDeadline<R> {
-    fn process(
-        &mut self,
-        peer: PeerId,
-        result: api::PeerResult<R>,
-    ) -> QueryStep<BTreeMap<PeerId, R>> {
-        match result {
-            Ok(response) => {
-                assert!(self.responses.insert(peer, response).is_none());
-
-                if self.threshold <= self.responses.len() || self.deadline <= now() {
-                    QueryStep::Success(mem::take(&mut self.responses))
-                } else {
-                    QueryStep::Continue
-                }
-            }
-            // we rely on retries and timeouts to detect a deadline passing
-            Err(_) => {
-                if self.deadline <= now() {
-                    QueryStep::Success(mem::take(&mut self.responses))
-                } else {
-                    QueryStep::Retry(BTreeSet::from([peer]))
-                }
-            }
         }
     }
 }

@@ -5,7 +5,7 @@ use bitcoin::hashes::sha256::{self, Hash as Sha256Hash};
 use fedimint_api_client::api::{
     FederationApiExt, FederationError, FederationResult, IModuleFederationApi,
 };
-use fedimint_api_client::query::{ThresholdOrDeadline, UnionResponses};
+use fedimint_api_client::query::UnionResponses;
 use fedimint_core::module::ApiRequestErased;
 use fedimint_core::task::{MaybeSend, MaybeSync};
 use fedimint_core::{apply, async_trait_maybe_send, NumPeers, NumPeersExt, PeerId};
@@ -73,15 +73,12 @@ pub trait LnFederationApi {
     async fn get_remove_gateway_challenge(
         &self,
         gateway_id: PublicKey,
-    ) -> FederationResult<BTreeMap<PeerId, Option<sha256::Hash>>>;
+    ) -> BTreeMap<PeerId, Option<sha256::Hash>>;
 
     /// Removes the gateway's registration record. First checks the provided
     /// signature to verify the gateway authorized the removal of the
     /// registration.
-    async fn remove_gateway(
-        &self,
-        remove_gateway_request: RemoveGatewayRequest,
-    ) -> FederationResult<()>;
+    async fn remove_gateway(&self, remove_gateway_request: RemoveGatewayRequest);
 
     async fn offer_exists(&self, payment_hash: Sha256Hash) -> FederationResult<bool>;
 
@@ -211,46 +208,48 @@ where
     async fn get_remove_gateway_challenge(
         &self,
         gateway_id: PublicKey,
-    ) -> FederationResult<BTreeMap<PeerId, Option<sha256::Hash>>> {
-        // Only wait a second since removing a gateway is "best effort"
-        let deadline = fedimint_core::time::now() + Duration::from_secs(1);
-        let responses = self
-            .request_with_strategy(
-                ThresholdOrDeadline::<Option<sha256::Hash>>::new(
-                    self.all_peers().total(),
-                    deadline,
-                ),
-                REMOVE_GATEWAY_CHALLENGE_ENDPOINT.to_string(),
-                ApiRequestErased::new(gateway_id),
-            )
-            .await?;
-        Ok(responses)
-    }
+    ) -> BTreeMap<PeerId, Option<sha256::Hash>> {
+        let mut responses = BTreeMap::new();
 
-    async fn remove_gateway(
-        &self,
-        remove_gateway_request: RemoveGatewayRequest,
-    ) -> FederationResult<()> {
-        // Only wait a second since removing a gateway is "best effort"
-        let gateway_id = remove_gateway_request.gateway_id;
-        let deadline = fedimint_core::time::now() + Duration::from_secs(1);
-        let responses = self
-            .request_with_strategy(
-                ThresholdOrDeadline::<bool>::new(self.all_peers().total(), deadline),
-                REMOVE_GATEWAY_ENDPOINT.to_string(),
-                ApiRequestErased::new(remove_gateway_request),
-            )
-            .await?;
-
-        for (peer_id, response) in responses.into_iter() {
-            if response {
-                info!("Successfully removed {gateway_id} gateway from peer: {peer_id}",);
-            } else {
-                warn!("Unable to remove gateway {gateway_id} registration from peer: {peer_id}");
+        for peer in self.all_peers() {
+            if let Ok(response) = self
+                // Only wait a second since removing a gateway is "best effort"
+                .request_single_peer_federation::<Option<sha256::Hash>>(
+                    Some(Duration::from_secs(1)),
+                    REMOVE_GATEWAY_CHALLENGE_ENDPOINT.to_string(),
+                    ApiRequestErased::new(gateway_id),
+                    *peer,
+                )
+                .await
+            {
+                responses.insert(*peer, response);
             }
         }
 
-        Ok(())
+        responses
+    }
+
+    async fn remove_gateway(&self, remove_gateway_request: RemoveGatewayRequest) {
+        let gateway_id = remove_gateway_request.gateway_id;
+
+        for peer in self.all_peers() {
+            if let Ok(response) = self
+                .request_single_peer_federation::<bool>(
+                    // Only wait a second since removing a gateway is "best effort"
+                    Some(Duration::from_secs(1)),
+                    REMOVE_GATEWAY_ENDPOINT.to_string(),
+                    ApiRequestErased::new(remove_gateway_request.clone()),
+                    *peer,
+                )
+                .await
+            {
+                if response {
+                    info!("Successfully removed {gateway_id} gateway from peer: {peer}",);
+                } else {
+                    warn!("Unable to remove gateway {gateway_id} registration from peer: {peer}");
+                }
+            }
+        }
     }
 
     async fn offer_exists(&self, payment_hash: Sha256Hash) -> FederationResult<bool> {
