@@ -2009,22 +2009,6 @@
 <a href="#2009" id="2009">2009</a>
 <a href="#2010" id="2010">2010</a>
 <a href="#2011" id="2011">2011</a>
-<a href="#2012" id="2012">2012</a>
-<a href="#2013" id="2013">2013</a>
-<a href="#2014" id="2014">2014</a>
-<a href="#2015" id="2015">2015</a>
-<a href="#2016" id="2016">2016</a>
-<a href="#2017" id="2017">2017</a>
-<a href="#2018" id="2018">2018</a>
-<a href="#2019" id="2019">2019</a>
-<a href="#2020" id="2020">2020</a>
-<a href="#2021" id="2021">2021</a>
-<a href="#2022" id="2022">2022</a>
-<a href="#2023" id="2023">2023</a>
-<a href="#2024" id="2024">2024</a>
-<a href="#2025" id="2025">2025</a>
-<a href="#2026" id="2026">2026</a>
-<a href="#2027" id="2027">2027</a>
 </pre></div><pre class="rust"><code><span class="kw">pub mod </span>api;
 <span class="attr">#[cfg(feature = <span class="string">"cli"</span>)]
 </span><span class="kw">pub mod </span>cli;
@@ -2100,7 +2084,6 @@
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>serde_json::json;
 <span class="kw">use </span>strum::IntoEnumIterator;
-<span class="kw">use </span>thiserror::Error;
 <span class="kw">use </span>tracing::{debug, error, info};
 
 <span class="kw">use </span><span class="kw">crate</span>::db::PaymentResultPrefix;
@@ -2198,21 +2181,12 @@
 </span><span class="kw">pub enum </span>LnPayState {
     Created,
     Canceled,
-    Funded,
-    WaitingForRefund {
-        block_height: u32,
-        gateway_error: GatewayPayError,
-    },
+    Funded { block_height: u32 },
+    WaitingForRefund { error_reason: String },
     AwaitingChange,
-    Success {
-        preimage: String,
-    },
-    Refunded {
-        gateway_error: GatewayPayError,
-    },
-    UnexpectedError {
-        error_message: String,
-    },
+    Success { preimage: String },
+    Refunded { gateway_error: GatewayPayError },
+    UnexpectedError { error_message: String },
 }
 
 <span class="doccomment">/// The high-level state of a reissue operation started with
@@ -2303,7 +2277,7 @@
 
 <span class="kw">impl </span>ModuleInit <span class="kw">for </span>LightningClientInit {
     <span class="kw">type </span>Common = LightningCommonInit;
-    <span class="kw">const </span>DATABASE_VERSION: DatabaseVersion = DatabaseVersion(<span class="number">3</span>);
+    <span class="kw">const </span>DATABASE_VERSION: DatabaseVersion = DatabaseVersion(<span class="number">4</span>);
 
     <span class="kw">async fn </span>dump_database(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
@@ -2394,6 +2368,13 @@
             },
         );
 
+        migrations.insert(
+            DatabaseVersion(<span class="number">3</span>),
+            <span class="kw">move </span>|<span class="kw">_</span>, active_states, inactive_states| {
+                migrate_state(active_states, inactive_states, db::get_v3_migrated_state).boxed()
+            },
+        );
+
         migrations
     }
 }
@@ -2451,19 +2432,6 @@
     ) -&gt; anyhow::Result&lt;serde_json::Value&gt; {
         cli::handle_cli_command(<span class="self">self</span>, args).<span class="kw">await
     </span>}
-}
-
-<span class="attr">#[derive(Error, Debug, Serialize, Deserialize)]
-#[serde(rename_all = <span class="string">"snake_case"</span>)]
-</span><span class="kw">enum </span>PayError {
-    <span class="attr">#[error(<span class="string">"Lightning payment was canceled"</span>)]
-    </span>Canceled,
-    <span class="attr">#[error(<span class="string">"Lightning payment was refunded"</span>)]
-    </span>Refunded(TransactionId),
-    <span class="attr">#[error(<span class="string">"Lightning payment waiting for refund"</span>)]
-    </span>Refundable(u32, GatewayPayError),
-    <span class="attr">#[error(<span class="string">"Lightning payment failed"</span>)]
-    </span>Failed(String),
 }
 
 <span class="attr">#[derive(thiserror::Error, Debug, Clone)]
@@ -2732,49 +2700,6 @@
                     LightningReceiveStates::Canceled(e) =&gt; {
                         <span class="kw">return </span><span class="prelude-val">Err</span>(e);
                     }
-                    <span class="kw">_ </span>=&gt; {}
-                },
-                <span class="prelude-val">Some</span>(<span class="kw">_</span>) =&gt; {}
-                <span class="prelude-val">None </span>=&gt; {}
-            }
-        }
-    }
-
-    <span class="comment">// Wait for the Lightning invoice to be paid successfully or waiting for refund
-    </span><span class="kw">async fn </span>await_lightning_payment_success(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        operation_id: OperationId,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;String, PayError&gt; {
-        <span class="kw">let </span><span class="kw-2">mut </span>stream = <span class="self">self</span>.notifier.subscribe(operation_id).<span class="kw">await</span>;
-        <span class="kw">loop </span>{
-            <span class="kw">match </span>stream.next().<span class="kw">await </span>{
-                <span class="prelude-val">Some</span>(LightningClientStateMachines::LightningPay(state)) =&gt; <span class="kw">match </span>state.state {
-                    LightningPayStates::Success(preimage) =&gt; {
-                        <span class="kw">return </span><span class="prelude-val">Ok</span>(preimage);
-                    }
-                    LightningPayStates::Refundable(refundable) =&gt; {
-                        <span class="kw">return </span><span class="prelude-val">Err</span>(PayError::Refundable(
-                            refundable.block_timelock,
-                            refundable.error,
-                        ));
-                    }
-                    <span class="kw">_ </span>=&gt; {}
-                },
-                <span class="prelude-val">Some</span>(<span class="kw">_</span>) =&gt; {}
-                <span class="prelude-val">None </span>=&gt; {}
-            }
-        }
-    }
-
-    <span class="kw">async fn </span>await_refund(<span class="kw-2">&amp;</span><span class="self">self</span>, operation_id: OperationId) -&gt; <span class="prelude-ty">Result</span>&lt;Vec&lt;OutPoint&gt;, PayError&gt; {
-        <span class="kw">let </span><span class="kw-2">mut </span>stream = <span class="self">self</span>.notifier.subscribe(operation_id).<span class="kw">await</span>;
-        <span class="kw">loop </span>{
-            <span class="kw">match </span>stream.next().<span class="kw">await </span>{
-                <span class="prelude-val">Some</span>(LightningClientStateMachines::LightningPay(state)) =&gt; <span class="kw">match </span>state.state {
-                    LightningPayStates::Refunded(out_points) =&gt; {
-                        <span class="kw">return </span><span class="prelude-val">Ok</span>(out_points);
-                    }
-                    LightningPayStates::Failure(reason) =&gt; <span class="kw">return </span><span class="prelude-val">Err</span>(PayError::Failed(reason)),
                     <span class="kw">_ </span>=&gt; {}
                 },
                 <span class="prelude-val">Some</span>(<span class="kw">_</span>) =&gt; {}
@@ -3195,12 +3120,14 @@
         }))
     }
 
-    <span class="kw">pub async fn </span>subscribe_ln_pay(
+    <span class="doccomment">/// Subscribes to a stream of updates about a particular external Lightning
+    /// payment operation specified by the `operation_id`.
+    </span><span class="kw">pub async fn </span>subscribe_ln_pay(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         operation_id: OperationId,
     ) -&gt; anyhow::Result&lt;UpdateStreamOrOutcome&lt;LnPayState&gt;&gt; {
         <span class="kw">let </span>operation = <span class="self">self</span>.client_ctx.get_operation(operation_id).<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">let </span>(out_point, <span class="kw">_</span>, change) = <span class="kw">match </span>operation.meta::&lt;LightningOperationMeta&gt;().variant {
+        <span class="kw">let </span>(<span class="kw">_</span>, <span class="kw">_</span>, change) = <span class="kw">match </span>operation.meta::&lt;LightningOperationMeta&gt;().variant {
             LightningOperationMetaVariant::Pay(LightningOperationMetaPay {
                 out_point,
                 invoice,
@@ -3212,55 +3139,97 @@
 
         <span class="kw">let </span>client_ctx = <span class="self">self</span>.client_ctx.clone();
 
+        <span class="kw">async fn </span>get_next_pay_state(
+            stream: <span class="kw-2">&amp;mut </span>fedimint_core::util::BoxStream&lt;<span class="lifetime">'_</span>, LightningClientStateMachines&gt;,
+        ) -&gt; <span class="prelude-ty">Option</span>&lt;LightningPayStates&gt; {
+            <span class="kw">match </span>stream.next().<span class="kw">await </span>{
+                <span class="prelude-val">Some</span>(LightningClientStateMachines::LightningPay(state)) =&gt; <span class="prelude-val">Some</span>(state.state),
+                <span class="prelude-val">Some</span>(<span class="kw">_</span>) =&gt; <span class="macro">panic!</span>(<span class="string">"Operation is not a lightning payment"</span>),
+                <span class="prelude-val">None </span>=&gt; <span class="prelude-val">None</span>,
+            }
+        }
+
         <span class="prelude-val">Ok</span>(operation.outcome_or_updates(<span class="kw-2">&amp;</span><span class="self">self</span>.client_ctx.global_db(), operation_id, <span class="kw">move </span>|| {
             <span class="macro">stream!</span> {
                 <span class="kw">let </span>self_ref = client_ctx.self_ref();
 
-                <span class="kw">yield </span>LnPayState::Created;
-
-                <span class="kw">if </span>client_ctx
-                    .transaction_updates(operation_id)
-                    .<span class="kw">await
-                    </span>.await_tx_accepted(out_point.txid)
-                    .<span class="kw">await
-                    </span>.is_err()
-                {
-                    <span class="kw">yield </span>LnPayState::Canceled;
-                    <span class="kw">return</span>;
-                }
-                <span class="kw">yield </span>LnPayState::Funded;
-
-                <span class="kw">match </span>self_ref.await_lightning_payment_success(operation_id).<span class="kw">await </span>{
-                    <span class="prelude-val">Ok</span>(preimage) =&gt; {
-                        <span class="kw">if </span>!change.is_empty() {
-                            <span class="kw">yield </span>LnPayState::AwaitingChange;
-                            <span class="kw">match </span>client_ctx.await_primary_module_outputs(operation_id, change).<span class="kw">await </span>{
-                                <span class="prelude-val">Ok</span>(<span class="kw">_</span>) =&gt; {}
-                                <span class="prelude-val">Err</span>(<span class="kw">_</span>) =&gt; {
-                                    <span class="kw">yield </span>LnPayState::UnexpectedError { error_message: <span class="string">"Error occurred while waiting for the primary module's output"</span>.to_string() };
-                                    <span class="kw">return</span>;
-                                }
-                            }
-                        }
-
-                        <span class="kw">yield </span>LnPayState::Success {preimage};
+                <span class="kw">let </span><span class="kw-2">mut </span>stream = self_ref.notifier.subscribe(operation_id).<span class="kw">await</span>;
+                <span class="kw">let </span>state = get_next_pay_state(<span class="kw-2">&amp;mut </span>stream).<span class="kw">await</span>;
+                <span class="kw">match </span>state {
+                    <span class="prelude-val">Some</span>(LightningPayStates::CreatedOutgoingLnContract(<span class="kw">_</span>)) =&gt; {
+                        <span class="kw">yield </span>LnPayState::Created;
+                    }
+                    <span class="prelude-val">Some</span>(LightningPayStates::FundingRejected) =&gt; {
+                        <span class="kw">yield </span>LnPayState::Canceled;
                         <span class="kw">return</span>;
                     }
-                    <span class="prelude-val">Err</span>(PayError::Refundable(block_height, error)) =&gt; {
-                        <span class="kw">yield </span>LnPayState::WaitingForRefund{ block_height, gateway_error: error.clone() };
+                    <span class="prelude-val">Some</span>(state) =&gt; {
+                        <span class="kw">yield </span>LnPayState::UnexpectedError { error_message: <span class="macro">format!</span>(<span class="string">"Found unexpected state during lightning payment: {state:?}"</span>) };
+                        <span class="kw">return</span>;
+                    }
+                    <span class="prelude-val">None </span>=&gt; {
+                        <span class="macro">error!</span>(<span class="string">"Unexpected end of lightning pay state machine"</span>);
+                        <span class="kw">return</span>;
+                    }
+                }
 
-                        <span class="kw">if let </span><span class="prelude-val">Ok</span>(out_points) = self_ref.await_refund(operation_id).<span class="kw">await </span>{
-                            <span class="comment">// need to await primary module to get refund
-                            </span><span class="kw">if </span>client_ctx.await_primary_module_outputs(operation_id, out_points).<span class="kw">await</span>.is_ok() {
-                                <span class="kw">yield </span>LnPayState::Refunded { gateway_error: error };
-                                <span class="kw">return</span>;
+                <span class="kw">let </span>state = get_next_pay_state(<span class="kw-2">&amp;mut </span>stream).<span class="kw">await</span>;
+                <span class="kw">match </span>state {
+                    <span class="prelude-val">Some</span>(LightningPayStates::Funded(funded)) =&gt; {
+                        <span class="kw">yield </span>LnPayState::Funded { block_height: funded.timelock }
+                    }
+                    <span class="prelude-val">Some</span>(state) =&gt; {
+                        <span class="kw">yield </span>LnPayState::UnexpectedError { error_message: <span class="macro">format!</span>(<span class="string">"Found unexpected state during lightning payment: {state:?}"</span>) };
+                        <span class="kw">return</span>;
+                    }
+                    <span class="kw">_ </span>=&gt; {
+                        <span class="macro">error!</span>(<span class="string">"Unexpected end of lightning pay state machine"</span>);
+                        <span class="kw">return</span>;
+                    }
+                }
+
+                <span class="kw">let </span>state = get_next_pay_state(<span class="kw-2">&amp;mut </span>stream).<span class="kw">await</span>;
+                <span class="kw">match </span>state {
+                    <span class="prelude-val">Some</span>(LightningPayStates::Success(preimage)) =&gt; {
+                        <span class="kw">if </span>!change.is_empty() {
+                            <span class="kw">yield </span>LnPayState::AwaitingChange;
+                            <span class="kw">match </span>client_ctx.await_primary_module_outputs(operation_id, change.clone()).<span class="kw">await </span>{
+                                <span class="prelude-val">Ok</span>(<span class="kw">_</span>) =&gt; {
+                                    <span class="kw">yield </span>LnPayState::Success { preimage };
+                                }
+                                <span class="prelude-val">Err</span>(e) =&gt; {
+                                    <span class="kw">yield </span>LnPayState::UnexpectedError { error_message: <span class="macro">format!</span>(<span class="string">"Error occurred while waiting for the change: {e:?}"</span>) };
+                                }
+                            }
+                        } <span class="kw">else </span>{
+                            <span class="kw">yield </span>LnPayState::Success { preimage };
+                        }
+                    }
+                    <span class="prelude-val">Some</span>(LightningPayStates::Refund(refund)) =&gt; {
+                        <span class="kw">yield </span>LnPayState::WaitingForRefund {
+                            error_reason: refund.error_reason.clone(),
+                        };
+
+                        <span class="kw">match </span>client_ctx.await_primary_module_outputs(operation_id, refund.out_points).<span class="kw">await </span>{
+                            <span class="prelude-val">Ok</span>(<span class="kw">_</span>) =&gt; {
+                                <span class="kw">let </span>gateway_error = GatewayPayError::GatewayInternalError { error_code: <span class="prelude-val">Some</span>(<span class="number">500</span>), error_message: refund.error_reason };
+                                <span class="kw">yield </span>LnPayState::Refunded { gateway_error };
+                            }
+                            <span class="prelude-val">Err</span>(e) =&gt; {
+                                <span class="kw">yield </span>LnPayState::UnexpectedError {
+                                    error_message: <span class="macro">format!</span>(<span class="string">"Error occurred trying to get refund. Refund was not successful: {e:?}"</span>),
+                                };
                             }
                         }
                     }
-                    <span class="kw">_ </span>=&gt; {}
+                    <span class="prelude-val">Some</span>(state) =&gt; {
+                        <span class="kw">yield </span>LnPayState::UnexpectedError { error_message: <span class="macro">format!</span>(<span class="string">"Found unexpected state during lightning payment: {state:?}"</span>) };
+                    }
+                    <span class="prelude-val">None </span>=&gt; {
+                        <span class="macro">error!</span>(<span class="string">"Unexpected end of lightning pay state machine"</span>);
+                        <span class="kw">yield </span>LnPayState::UnexpectedError { error_message: <span class="string">"Unexpected end of lightning pay state machine"</span>.to_string() };
+                    }
                 }
-
-                <span class="kw">yield </span>LnPayState::UnexpectedError { error_message: <span class="string">"Error occurred trying to get refund. Refund was not successful"</span>.to_string() };
             }
         }))
     }
@@ -3617,9 +3586,7 @@
         contract_id: ContractId,
         return_on_funding: bool,
     ) -&gt; anyhow::Result&lt;<span class="prelude-ty">Option</span>&lt;serde_json::Value&gt;&gt; {
-        <span class="comment">// let lightning_module = client.get_first_module::&lt;LightningClientModule&gt;();
-
-        </span><span class="kw">match </span>payment_type {
+        <span class="kw">match </span>payment_type {
             PayType::Internal(operation_id) =&gt; {
                 <span class="kw">let </span><span class="kw-2">mut </span>updates = <span class="self">self
                     </span>.subscribe_internal_pay(operation_id)
@@ -3677,24 +3644,25 @@
                             ));
                         }
                         LnPayState::Refunded { gateway_error } =&gt; {
-                            <span class="macro">info!</span>(<span class="string">"{gateway_error}"</span>);
                             <span class="comment">// TODO: what should be the format here?
                             </span><span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(<span class="macro">json!</span> {
                                 {
                                     <span class="string">"status"</span>: <span class="string">"refunded"</span>,
-                                    <span class="string">"gateway_error"</span>: gateway_error,
+                                    <span class="string">"gateway_error"</span>: gateway_error.to_string(),
                                 }
                             }));
                         }
                         LnPayState::Created
-                        | LnPayState::Canceled
                         | LnPayState::AwaitingChange
                         | LnPayState::WaitingForRefund { .. } =&gt; {}
-                        LnPayState::Funded <span class="kw">if </span>return_on_funding =&gt; <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="prelude-val">None</span>),
-                        LnPayState::Funded =&gt; {}
+                        LnPayState::Funded { block_height: <span class="kw">_ </span>} <span class="kw">if </span>return_on_funding =&gt; {
+                            <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="prelude-val">None</span>)
+                        }
+                        LnPayState::Funded { block_height: <span class="kw">_ </span>} =&gt; {}
                         LnPayState::UnexpectedError { error_message } =&gt; {
                             <span class="macro">bail!</span>(<span class="string">"UnexpectedError: {error_message}"</span>)
                         }
+                        LnPayState::Canceled =&gt; <span class="macro">bail!</span>(<span class="string">"Funding transaction was rejected"</span>),
                     }
                     <span class="macro">debug!</span>(target: LOG_CLIENT_MODULE_LN, <span class="question-mark">?</span>update, <span class="string">"Wait for ln payment state update"</span>);
                 }
