@@ -7,10 +7,11 @@ pub mod states;
 use std::collections::BTreeMap;
 
 use api::MetaFederationApi;
-use common::{MetaConsensusValue, MetaKey, MetaValue};
+use common::{MetaConsensusValue, MetaKey, MetaValue, KIND};
 use db::DbKeyPrefix;
 use fedimint_api_client::api::DynModuleApi;
 use fedimint_client::db::ClientMigrationFn;
+use fedimint_client::meta::{LegacyMetaSource, MetaSource};
 use fedimint_client::module::init::{ClientModuleInit, ClientModuleInitArgs};
 use fedimint_client::module::recovery::NoModuleBackup;
 use fedimint_client::module::{ClientModule, IClientModule};
@@ -179,5 +180,30 @@ impl ClientModuleInit for MetaClientInit {
 
     fn get_database_migrations(&self) -> BTreeMap<DatabaseVersion, ClientMigrationFn> {
         BTreeMap::new()
+    }
+}
+
+pub struct MetaModuleOrLegacyMetaSource {
+    legacy: LegacyMetaSource,
+}
+
+#[apply(async_trait_maybe_send!)]
+impl MetaSource for MetaModuleOrLegacyMetaSource {
+    async fn wait_for_update(&self) {
+        fedimint_core::runtime::sleep(Duration::from_secs(10 * 60)).await
+    }
+
+    async fn fetch(
+        &self,
+        client: &fedimint_client::Client,
+        fetch_kind: fedimint_client::meta::FetchKind,
+        last_revision: Option<u64>,
+    ) -> anyhow::Result<fedimint_client::meta::MetaValues> {
+        if client.get_first_instance(&KIND).is_some() {
+            let meta_module = client.get_first_module::<MetaClientModule>();
+            meta_module.get_consensus_value(MetaKey(0))
+        } else {
+            self.legacy.fetch(client, fetch_kind, last_revision)
+        }
     }
 }
