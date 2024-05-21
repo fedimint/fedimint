@@ -39,12 +39,24 @@ pub struct Bitcoind {
 impl Bitcoind {
     pub async fn new(processmgr: &ProcessManager, skip_setup: bool) -> Result<Self> {
         let btc_dir = utf8(&processmgr.globals.FM_BTC_DIR);
+
+        // TODO(support:v0.3)
+        // we need to run with txindex for versions before 0.4.0-alpha to correctly
+        // process change outputs
+        let fedimintd_version = crate::util::FedimintdCmd::version_or_default().await;
+        let tx_index = if fedimintd_version < *VERSION_0_4_0_ALPHA {
+            "1"
+        } else {
+            "0"
+        };
+
         let conf = format!(
             include_str!("cfg/bitcoin.conf"),
             rpc_port = processmgr.globals.FM_PORT_BTC_RPC,
             p2p_port = processmgr.globals.FM_PORT_BTC_P2P,
             zmq_pub_raw_block = processmgr.globals.FM_PORT_BTC_ZMQ_PUB_RAW_BLOCK,
             zmq_pub_raw_tx = processmgr.globals.FM_PORT_BTC_ZMQ_PUB_RAW_TX,
+            tx_index = tx_index,
         );
         write_overwrite_async(processmgr.globals.FM_BTC_DIR.join("bitcoin.conf"), conf).await?;
         let process = processmgr
