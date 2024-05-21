@@ -28,6 +28,10 @@ pub const KIND: ModuleKind = ModuleKind::from_static_str("meta");
 /// Modules are non-compatible with older versions
 pub const MODULE_CONSENSUS_VERSION: ModuleConsensusVersion = ModuleConsensusVersion::new(0, 0);
 
+/// The meta module was built with flexibility and upgradability in mind. We
+/// currently only intend to use one key, which is defined here.
+pub const DEFAULT_META_KEY: MetaKey = MetaKey(0);
+
 /// A key identifying a value in the meta module consensus
 ///
 /// Intentionally small (`u8`) to avoid problems with malicious peers
@@ -48,7 +52,7 @@ pub const MODULE_CONSENSUS_VERSION: ModuleConsensusVersion = ModuleConsensusVers
     Serialize,
     Deserialize,
 )]
-pub struct MetaKey(u8);
+pub struct MetaKey(pub u8);
 
 impl fmt::Display for MetaKey {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
