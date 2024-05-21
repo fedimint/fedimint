@@ -48,13 +48,13 @@ impl BitcoinTest for RealBitcoinTestNoLock {
         )
     }
 
-    async fn mine_blocks(&self, block_num: u64) {
-        if let Some(block_hash) = self
+    async fn mine_blocks(&self, block_num: u64) -> Vec<bitcoin::BlockHash> {
+        let mined_block_hashes = self
             .client
             .generate_to_address(block_num, &self.get_new_address().await)
-            .expect(Self::ERROR)
-            .last()
-        {
+            .expect(Self::ERROR);
+
+        if let Some(block_hash) = mined_block_hashes.last() {
             let last_mined_block = self
                 .client
                 .get_block_header_info(block_hash)
@@ -85,6 +85,8 @@ impl BitcoinTest for RealBitcoinTestNoLock {
                 }
             }
         };
+
+        mined_block_hashes
     }
 
     async fn prepare_funding_wallet(&self) {
@@ -103,11 +105,12 @@ impl BitcoinTest for RealBitcoinTestNoLock {
             .client
             .send_to_address(address, amount, None, None, None, None, None, None)
             .expect(Self::ERROR);
-        self.mine_blocks(1).await;
+        let mined_block_hashes = self.mine_blocks(1).await;
+        let mined_block_hash = mined_block_hashes.first().expect("mined a block");
 
         let tx = self
             .client
-            .get_raw_transaction(&id, None)
+            .get_raw_transaction(&id, Some(mined_block_hash))
             .expect(Self::ERROR);
         let proof = TxOutProof::consensus_decode(
             &mut Cursor::new(loop {
@@ -151,6 +154,28 @@ impl BitcoinTest for RealBitcoinTestNoLock {
                 }
             }
         }
+    }
+
+    async fn get_tx_block_height(&self, txid: &Txid) -> Option<u64> {
+        let current_block_count = self
+            .client
+            .get_block_count()
+            .expect("failed to fetch chain tip");
+        (0..=current_block_count)
+            .position(|height| {
+                let block_hash = self
+                    .client
+                    .get_block_hash(height)
+                    .expect("failed to fetch block hash");
+
+                self.client
+                    .get_block_info(&block_hash)
+                    .expect("failed to fetch block info")
+                    .tx
+                    .iter()
+                    .any(|id| id == txid)
+            })
+            .map(|height| height as u64)
     }
 }
 
@@ -207,9 +232,9 @@ impl BitcoinTest for RealBitcoinTest {
         })
     }
 
-    async fn mine_blocks(&self, block_num: u64) {
+    async fn mine_blocks(&self, block_num: u64) -> Vec<bitcoin::BlockHash> {
         let _lock = self.lock_exclusive().await;
-        self.inner.mine_blocks(block_num).await;
+        self.inner.mine_blocks(block_num).await
     }
 
     async fn prepare_funding_wallet(&self) {
@@ -239,6 +264,11 @@ impl BitcoinTest for RealBitcoinTest {
     async fn get_mempool_tx_fee(&self, txid: &Txid) -> Amount {
         let _lock = self.lock_exclusive().await;
         self.inner.get_mempool_tx_fee(txid).await
+    }
+
+    async fn get_tx_block_height(&self, txid: &Txid) -> Option<u64> {
+        let _lock = self.lock_exclusive().await;
+        self.inner.get_tx_block_height(txid).await
     }
 }
 
@@ -248,11 +278,12 @@ impl BitcoinTest for RealBitcoinTestLocked {
         panic!("Double-locking would lead to a hang");
     }
 
-    async fn mine_blocks(&self, block_num: u64) {
+    async fn mine_blocks(&self, block_num: u64) -> Vec<bitcoin::BlockHash> {
         let pre = self.inner.client.get_block_count().unwrap();
-        self.inner.mine_blocks(block_num).await;
+        let mined_block_hashes = self.inner.mine_blocks(block_num).await;
         let post = self.inner.client.get_block_count().unwrap();
         assert_eq!(post - pre, block_num);
+        mined_block_hashes
     }
 
     async fn prepare_funding_wallet(&self) {
@@ -277,5 +308,9 @@ impl BitcoinTest for RealBitcoinTestLocked {
 
     async fn get_mempool_tx_fee(&self, txid: &Txid) -> Amount {
         self.inner.get_mempool_tx_fee(txid).await
+    }
+
+    async fn get_tx_block_height(&self, txid: &Txid) -> Option<u64> {
+        self.inner.get_tx_block_height(txid).await
     }
 }

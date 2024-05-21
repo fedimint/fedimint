@@ -4,7 +4,6 @@ use anyhow::{bail, Context};
 use assert_matches::assert_matches;
 use bitcoin::secp256k1::rand::rngs::OsRng;
 use bitcoin::secp256k1::Secp256k1;
-use fedimint_bitcoind::DynBitcoindRpc;
 use fedimint_client::secret::{PlainRootSecretStrategy, RootSecretStrategy};
 use fedimint_client::ClientHandleArc;
 use fedimint_core::bitcoin_migration::{
@@ -49,7 +48,6 @@ const PEG_IN_TIMEOUT: Duration = Duration::from_secs(60);
 async fn peg_in<'a>(
     client: &'a ClientHandleArc,
     bitcoin: &dyn BitcoinTest,
-    dyn_bitcoin_rpc: &DynBitcoindRpc,
     finality_delay: u64,
 ) -> anyhow::Result<BoxStream<'a, Amount>> {
     let valid_until = time::now() + PEG_IN_TIMEOUT;
@@ -63,9 +61,9 @@ async fn peg_in<'a>(
     let (_proof, tx) = bitcoin
         .send_and_mine_block(&address, bsats(PEG_IN_AMOUNT_SATS))
         .await;
-    let height = dyn_bitcoin_rpc
+    let height = bitcoin
         .get_tx_block_height(&tx.txid())
-        .await?
+        .await
         .context("expected tx to be mined")?;
     info!(?height, ?tx, "Peg-in transaction mined");
     let sub = wallet_module.subscribe_deposit_updates(op).await?;
@@ -135,7 +133,7 @@ async fn sanity_check_bitcoin_blocks() -> anyhow::Result<()> {
     let expected_transaction_block_count = current_block_count;
     let expected_transaction_height = expected_transaction_block_count - 1;
     assert_eq!(
-        dyn_bitcoin_rpc.get_tx_block_height(&tx.txid()).await?,
+        bitcoin.get_tx_block_height(&tx.txid()).await,
         Some(expected_transaction_height),
     );
     let expected_transaction_block_hash = dyn_bitcoin_rpc
@@ -153,15 +151,13 @@ async fn on_chain_peg_in_and_peg_out_happy_case() -> anyhow::Result<()> {
     let client = fed.new_client().await;
     let bitcoin = fixtures.bitcoin();
     let bitcoin = bitcoin.lock_exclusive().await;
-    let dyn_bitcoin_rpc = fixtures.dyn_bitcoin_rpc();
     info!("Starting test on_chain_peg_in_and_peg_out_happy_case");
 
     let finality_delay = 10;
     bitcoin.mine_blocks(finality_delay).await;
     await_consensus_to_catch_up(&client, 1).await?;
 
-    let mut balance_sub =
-        peg_in(&client, bitcoin.as_ref(), &dyn_bitcoin_rpc, finality_delay).await?;
+    let mut balance_sub = peg_in(&client, bitcoin.as_ref(), finality_delay).await?;
 
     info!("Peg-in finished for test on_chain_peg_in_and_peg_out_happy_case");
     // Peg-out test, requires block to recognize change UTXOs
@@ -213,15 +209,13 @@ async fn peg_out_fail_refund() -> anyhow::Result<()> {
     let client = fed.new_client().await;
     let bitcoin = fixtures.bitcoin();
     let bitcoin = bitcoin.lock_exclusive().await;
-    let dyn_bitcoin_rpc = fixtures.dyn_bitcoin_rpc();
     info!("Starting test peg_out_fail_refund");
 
     let finality_delay = 10;
     bitcoin.mine_blocks(finality_delay).await;
     await_consensus_to_catch_up(&client, 1).await?;
 
-    let mut balance_sub =
-        peg_in(&client, bitcoin.as_ref(), &dyn_bitcoin_rpc, finality_delay).await?;
+    let mut balance_sub = peg_in(&client, bitcoin.as_ref(), finality_delay).await?;
 
     info!("Peg-in finished for test peg_out_fail_refund");
     // Peg-out test, requires block to recognize change UTXOs
@@ -263,15 +257,13 @@ async fn peg_outs_support_rbf() -> anyhow::Result<()> {
     let bitcoin = fixtures.bitcoin();
     // Need lock to keep tx in mempool from getting mined
     let bitcoin = bitcoin.lock_exclusive().await;
-    let dyn_bitcoin_rpc = fixtures.dyn_bitcoin_rpc();
     info!("Starting test peg_outs_support_rbf");
 
     let finality_delay = 10;
     bitcoin.mine_blocks(finality_delay).await;
     await_consensus_to_catch_up(&client, 1).await?;
 
-    let mut balance_sub =
-        peg_in(&client, bitcoin.as_ref(), &dyn_bitcoin_rpc, finality_delay).await?;
+    let mut balance_sub = peg_in(&client, bitcoin.as_ref(), finality_delay).await?;
 
     info!("Peg-in finished for test peg_outs_support_rbf");
     let address = bitcoin.get_new_address().await;
@@ -352,8 +344,7 @@ async fn peg_outs_must_wait_for_available_utxos() -> anyhow::Result<()> {
     bitcoin.mine_blocks(finality_delay).await;
     await_consensus_to_catch_up(&client, 1).await?;
 
-    let mut balance_sub =
-        peg_in(&client, bitcoin.as_ref(), &dyn_bitcoin_rpc, finality_delay).await?;
+    let mut balance_sub = peg_in(&client, bitcoin.as_ref(), finality_delay).await?;
 
     info!("Peg-in finished for test peg_outs_must_wait_for_available_utxos");
     let address = bitcoin.get_new_address().await;
