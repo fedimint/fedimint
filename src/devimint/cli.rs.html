@@ -492,7 +492,7 @@
 <span class="kw">fn </span>random_test_dir_suffix() -&gt; String {
     rand::thread_rng()
         .sample_iter(<span class="kw-2">&amp;</span>Alphanumeric)
-        .filter(|c| c.is_ascii_digit())
+        .filter(u8::is_ascii_digit)
         .take(<span class="number">3</span>)
         .map(char::from)
         .collect::&lt;String&gt;()
@@ -786,8 +786,8 @@
                 }
             };
             <span class="kw">if let </span><span class="prelude-val">Some</span>(fed) = cleanup_on_exit(main, task_group).<span class="kw">await</span><span class="question-mark">? </span>{
-                fed.fast_terminate().<span class="kw">await
-            </span>}
+                fed.fast_terminate().<span class="kw">await</span>;
+            }
         }
         Cmd::Rpc(rpc_cmd) =&gt; rpc_command(rpc_cmd, common_args).<span class="kw">await</span><span class="question-mark">?</span>,
         Cmd::RunUi =&gt; {

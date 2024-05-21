@@ -90,7 +90,7 @@
 
 <span class="doccomment">/// Duplicate default fedimint module setup
 </span><span class="kw">pub fn </span>attach_default_module_init_params(
-    bitcoin_rpc: BitcoinRpcConfig,
+    bitcoin_rpc: <span class="kw-2">&amp;</span>BitcoinRpcConfig,
     module_init_params: <span class="kw-2">&amp;mut </span>ServerModuleConfigGenParamsRegistry,
     network: Network,
     finality_delay: u32,

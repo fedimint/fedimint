@@ -1265,8 +1265,8 @@
                         %err,
                         <span class="string">"Error terminating process on drop"</span>);
                 }
-            })
-        })
+            });
+        });
     }
 }
 
@@ -1320,8 +1320,8 @@
     </span>}
 
     <span class="kw">pub fn </span>args&lt;T: ToString&gt;(<span class="kw-2">mut </span><span class="self">self</span>, args: <span class="kw">impl </span>IntoIterator&lt;Item = T&gt;) -&gt; <span class="self">Self </span>{
-        <span class="kw">for </span>arg <span class="kw">in </span>args.into_iter() {
-            <span class="self">self </span>= <span class="self">self</span>.arg(arg)
+        <span class="kw">for </span>arg <span class="kw">in </span>args {
+            <span class="self">self </span>= <span class="self">self</span>.arg(arg);
         }
         <span class="self">self
     </span>}
@@ -1453,7 +1453,7 @@
             .create(<span class="bool-val">true</span>)
             .open(<span class="kw-2">&amp;</span>path)
             .<span class="kw">await
-            </span>.with_context(|| <span class="macro">format!</span>(<span class="string">"path: {} cmd: {}"</span>, path, name))<span class="question-mark">?
+            </span>.with_context(|| <span class="macro">format!</span>(<span class="string">"path: {path} cmd: {name}"</span>))<span class="question-mark">?
             </span>.into_std()
             .<span class="kw">await</span>;
         <span class="self">self</span>.cmd.stdout(log.try_clone()<span class="question-mark">?</span>);
@@ -2172,7 +2172,7 @@
         }
     }
     <span class="comment">// otherwise return the default value
-    </span>default.iter().map(|s| s.to_string()).collect()
+    </span>default.iter().map(ToString::to_string).collect()
 }
 
 <span class="kw">fn </span>to_command(cli: Vec&lt;String&gt;) -&gt; Command {

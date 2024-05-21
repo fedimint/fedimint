@@ -2818,7 +2818,7 @@
             <span class="kw">for _ in </span><span class="number">0</span>..iterations {
                 <span class="kw">let </span>invoice = ln_invoice(
                     <span class="kw-2">&amp;</span>client,
-                    Amount::from_msats(<span class="number">100000</span>),
+                    Amount::from_msats(<span class="number">100_000</span>),
                     <span class="string">"latency-over-cln-gw"</span>.to_string(),
                     cln_gw_id.clone(),
                 )
@@ -3052,7 +3052,7 @@
                     fedimintd_version
                 );
             }
-            <span class="macro">info!</span>(<span class="string">"## fedimintd upgraded all binaries successfully"</span>)
+            <span class="macro">info!</span>(<span class="string">"## fedimintd upgraded all binaries successfully"</span>);
         }
         UpgradeTest::FedimintCli { paths } =&gt; {
             <span class="kw">let </span>set_fedimint_cli_path = |path: <span class="kw-2">&amp;</span>PathBuf| {
@@ -3105,7 +3105,7 @@
                     fedimint_cli_version
                 );
             }
-            <span class="macro">info!</span>(<span class="string">"## fedimint-cli upgraded all binaries successfully"</span>)
+            <span class="macro">info!</span>(<span class="string">"## fedimint-cli upgraded all binaries successfully"</span>);
         }
         UpgradeTest::Gatewayd { paths } =&gt; {
             <span class="kw">if let </span><span class="prelude-val">Some</span>(oldest_gatewayd) = paths.first() {
@@ -3136,7 +3136,7 @@
                     gatewayd_version
                 );
             }
-            <span class="macro">info!</span>(<span class="string">"## gatewayd upgraded all binaries successfully"</span>)
+            <span class="macro">info!</span>(<span class="string">"## gatewayd upgraded all binaries successfully"</span>);
         }
     }
     <span class="prelude-val">Ok</span>(())
@@ -3413,7 +3413,7 @@
     <span class="kw">let </span>client_post_spend_balance = client.balance().<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="macro">assert_eq!</span>(client_post_spend_balance, CLIENT_START_AMOUNT);
 
-    <span class="kw">let </span>reissue_amount: u64 = <span class="number">409600</span>;
+    <span class="kw">let </span>reissue_amount: u64 = <span class="number">409_600</span>;
 
     <span class="comment">// Ensure that client can reissue after spending
     </span><span class="macro">info!</span>(<span class="string">"Testing reissuing e-cash after spending"</span>);
@@ -3429,7 +3429,7 @@
 
     <span class="kw">let </span>reissue_notes = <span class="macro">cmd!</span>(client, <span class="string">"spend"</span>, reissue_amount).out_json().<span class="kw">await</span><span class="question-mark">?</span>[<span class="string">"notes"</span>]
         .as_str()
-        .map(|s| s.to_owned())
+        .map(ToOwned::to_owned)
         .unwrap();
     <span class="kw">let </span>client_reissue_amt = <span class="macro">cmd!</span>(client, <span class="string">"reissue"</span>, reissue_notes)
         .out_json()
@@ -3442,7 +3442,7 @@
     </span><span class="macro">info!</span>(<span class="string">"Testing reissuing e-cash via module commands"</span>);
     <span class="kw">let </span>reissue_notes = <span class="macro">cmd!</span>(client, <span class="string">"spend"</span>, reissue_amount).out_json().<span class="kw">await</span><span class="question-mark">?</span>[<span class="string">"notes"</span>]
         .as_str()
-        .map(|s| s.to_owned())
+        .map(ToOwned::to_owned)
         .unwrap();
     <span class="kw">let </span>client_reissue_amt = <span class="kw">if </span>fedimint_cli_version &gt;= <span class="kw-2">*</span>VERSION_0_3_0_ALPHA {
         <span class="macro">cmd!</span>(client, <span class="string">"module"</span>, <span class="string">"mint"</span>, <span class="string">"reissue"</span>, reissue_notes)
@@ -3525,7 +3525,7 @@
 
     <span class="kw">let </span>ln_invoice_response = ln_invoice(
         <span class="kw-2">&amp;</span>client,
-        Amount::from_msats(<span class="number">1100000</span>),
+        Amount::from_msats(<span class="number">1_100_000</span>),
         <span class="string">"incoming-over-cln-gw"</span>.to_string(),
         cln_gw_id.clone(),
     )
@@ -3569,12 +3569,12 @@
         </span>.as_u64()
         .unwrap();
     <span class="macro">anyhow::ensure!</span>(
-        final_cln_incoming_client_balance - final_cln_outgoing_client_balance == <span class="number">1100000</span>,
+        final_cln_incoming_client_balance - final_cln_outgoing_client_balance == <span class="number">1_100_000</span>,
         <span class="string">"Client balance changed by {} on CLN incoming payment, expected 1100000"</span>,
         final_cln_incoming_client_balance - final_cln_outgoing_client_balance
     );
     <span class="macro">anyhow::ensure!</span>(
-        final_cln_outgoing_gateway_balance - final_cln_incoming_gateway_balance == <span class="number">1100000</span>,
+        final_cln_outgoing_gateway_balance - final_cln_incoming_gateway_balance == <span class="number">1_100_000</span>,
         <span class="string">"CLN Gateway balance changed by {} on CLN incoming payment, expected 1100000"</span>,
         final_cln_outgoing_gateway_balance - final_cln_incoming_gateway_balance
     );
@@ -3650,7 +3650,7 @@
     </span><span class="macro">info!</span>(<span class="string">"Testing incoming payment from CLN to client via LND gateway"</span>);
     <span class="kw">let </span>recv = ln_invoice(
         <span class="kw-2">&amp;</span>client,
-        Amount::from_msats(<span class="number">1300000</span>),
+        Amount::from_msats(<span class="number">1_300_000</span>),
         <span class="string">"incoming-over-lnd-gw"</span>.to_string(),
         lnd_gw_id,
     )
@@ -4733,8 +4733,8 @@
 
     <span class="comment">// Epochs method includes descriptors from spent outputs, so we only need to
     // verify the epochs method includes all available utxos
-    </span><span class="kw">for </span>utxo_descriptor <span class="kw">in </span>utxos_descriptors.iter() {
-        <span class="macro">assert!</span>(epochs_descriptors.contains(<span class="kw-2">*</span>utxo_descriptor))
+    </span><span class="kw">for </span>utxo_descriptor <span class="kw">in </span>utxos_descriptors {
+        <span class="macro">assert!</span>(epochs_descriptors.contains(utxo_descriptor));
     }
     <span class="prelude-val">Ok</span>(())
 }
