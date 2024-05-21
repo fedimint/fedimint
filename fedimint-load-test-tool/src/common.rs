@@ -254,7 +254,9 @@ pub async fn gateway_pay_invoice(
                 })?;
                 break;
             }
-            LnPayState::Created | LnPayState::Funded | LnPayState::AwaitingChange => {}
+            LnPayState::Created
+            | LnPayState::Funded { block_height: _ }
+            | LnPayState::AwaitingChange => {}
             LnPayState::Canceled => {
                 let elapsed: Duration = m.elapsed()?;
                 warn!("{prefix} Invoice canceled in {elapsed:?}");
@@ -273,11 +275,8 @@ pub async fn gateway_pay_invoice(
                 })?;
                 break;
             }
-            LnPayState::WaitingForRefund {
-                block_height: _,
-                gateway_error,
-            } => {
-                warn!("{prefix} Waiting for refund: {gateway_error:?}")
+            LnPayState::WaitingForRefund { error_reason } => {
+                warn!("{prefix} Waiting for refund: {error_reason:?}")
             }
             LnPayState::UnexpectedError { error_message } => {
                 bail!("Failed to pay invoice: {error_message:?}")

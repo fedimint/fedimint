@@ -83,7 +83,7 @@
   enable_write_thread_adaptive_yield=true
   WAL_ttl_seconds=0
   max_manifest_file_size=1073741824
-  wal_recovery_mode=kPointInTimeRecovery
+  wal_recovery_mode=kAbsoluteConsistency
   enable_pipelined_write=false
   write_thread_slow_yield_usec=3
   unordered_write=false
