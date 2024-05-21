@@ -945,6 +945,12 @@ where
         K::Value: MaybeSend + MaybeSync,
     {
         if let Some(prev) = self.insert_entry(key, value).await {
+            debug_assert!(
+                false,
+                "Database overwriting element when expecting insertion of new entry. Key: {:?} Prev Value: {:?}",
+                key,
+                prev,
+            );
             warn!(
                 target: LOG_DB,
                 "Database overwriting element when expecting insertion of new
