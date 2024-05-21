@@ -99,6 +99,20 @@ impl IBitcoindRpc for BitcoinClient {
         Ok(height.map(|h| h as u64))
     }
 
+    async fn is_tx_in_block(
+        &self,
+        txid: &Txid,
+        block_hash: &BlockHash,
+        block_height: u64,
+    ) -> anyhow::Result<bool> {
+        let block_info = block_in_place(|| self.0.get_block_info(block_hash))?;
+        anyhow::ensure!(
+            block_info.height as u64 == block_height,
+            "Block height for block hash does not match expected height"
+        );
+        Ok(block_info.tx.contains(txid))
+    }
+
     async fn watch_script_history(&self, script: &Script) -> anyhow::Result<()> {
         // start watching for this script in our wallet to avoid the need to rescan the
         // blockchain, labeling it so we can reference it later

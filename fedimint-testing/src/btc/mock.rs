@@ -333,6 +333,21 @@ impl IBitcoindRpc for FakeBitcoinTest {
         Ok(None)
     }
 
+    async fn is_tx_in_block(
+        &self,
+        txid: &Txid,
+        block_hash: &BlockHash,
+        block_height: u64,
+    ) -> BitcoinRpcResult<bool> {
+        let block = &self.blocks.lock().unwrap()[block_height as usize];
+        assert!(
+            block.block_hash() == *block_hash,
+            "Block height for hash does not match expected height"
+        );
+
+        Ok(block.txdata.iter().any(|tx| tx.txid() == *txid))
+    }
+
     async fn watch_script_history(&self, _: &Script) -> BitcoinRpcResult<()> {
         Ok(())
     }

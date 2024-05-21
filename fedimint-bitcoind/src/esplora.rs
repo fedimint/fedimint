@@ -101,6 +101,31 @@ impl IBitcoindRpc for EsploraClient {
             .map(|height| height as u64))
     }
 
+    async fn is_tx_in_block(
+        &self,
+        txid: &Txid,
+        block_hash: &BlockHash,
+        block_height: u64,
+    ) -> anyhow::Result<bool> {
+        let tx_status = self.0.get_tx_status(txid).await?;
+
+        let is_in_block_height = tx_status
+            .block_height
+            .is_some_and(|height| height as u64 == block_height);
+
+        if is_in_block_height {
+            let tx_block_hash = tx_status.block_hash.ok_or(anyhow::format_err!(
+                "Tx has a block height without a block hash"
+            ))?;
+            anyhow::ensure!(
+                *block_hash == tx_block_hash,
+                "Block height for block hash does not match expected height"
+            );
+        }
+
+        Ok(is_in_block_height)
+    }
+
     async fn watch_script_history(&self, _: &Script) -> anyhow::Result<()> {
         // no watching needed, has all the history already
         Ok(())
