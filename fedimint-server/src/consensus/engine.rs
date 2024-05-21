@@ -13,10 +13,9 @@ use fedimint_core::db::{Database, DatabaseTransaction, IDatabaseTransactionOpsCo
 use fedimint_core::encoding::Decodable;
 use fedimint_core::endpoint_constants::AWAIT_SIGNED_SESSION_OUTCOME_ENDPOINT;
 use fedimint_core::epoch::ConsensusItem;
-use fedimint_core::fmt_utils::OptStacktrace;
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::registry::{ModuleDecoderRegistry, ServerModuleRegistry};
-use fedimint_core::module::{ApiRequestErased, SerdeModuleEncoding};
+use fedimint_core::module::{ApiRequestErased, SerdeModuleEncoding, SupportedApiVersionsSummary};
 use fedimint_core::runtime::spawn;
 use fedimint_core::session_outcome::{
     AcceptedItem, SchnorrSignature, SessionOutcome, SignedSessionOutcome,
@@ -59,6 +58,7 @@ pub struct ConsensusEngine {
     pub keychain: Keychain,
     pub federation_api: DynGlobalApi,
     pub cfg: ServerConfig,
+    pub supported_api_versions: SupportedApiVersionsSummary,
     pub submission_receiver: Receiver<ConsensusItem>,
     pub shutdown_receiver: watch::Receiver<Option<u64>>,
     pub last_ci_by_peer: Arc<RwLock<BTreeMap<PeerId, u64>>>,
@@ -148,6 +148,11 @@ impl ConsensusEngine {
 
         self.confirm_server_config_consensus_hash().await?;
 
+        // We require agreement on the API versions such that the behaviour of two
+        // correct peers is eventually consistent and the federations behaviour is
+        // invariant with respect to the current subset of correct and online peers.
+        self.confirm_supported_api_versions().await?;
+
         // Build P2P connections for the atomic broadcast
         let connections = ReconnectPeerConnections::new(
             self.cfg.network_config(),
@@ -182,23 +187,44 @@ impl ConsensusEngine {
     }
 
     async fn confirm_server_config_consensus_hash(&self) -> anyhow::Result<()> {
-        let our_hash = self.cfg.consensus.consensus_hash();
-
-        info!(target: LOG_CONSENSUS, "Waiting for peers config {our_hash}");
+        info!(target: LOG_CONSENSUS, "Confirming server config consensus hash with peers...");
 
         loop {
             match self.federation_api.server_config_consensus_hash().await {
                 Ok(consensus_hash) => {
-                    if consensus_hash != our_hash {
+                    if consensus_hash != self.cfg.consensus.consensus_hash() {
                         bail!("Our consensus config doesn't match peers!")
                     }
 
-                    info!(target: LOG_CONSENSUS, "Confirmed peers config {our_hash}");
+                    info!(target: LOG_CONSENSUS, "Confirmed server config consensus hash with peers");
 
                     return Ok(());
                 }
                 Err(e) => {
-                    warn!(target: LOG_CONSENSUS, "Could not check consensus config hash: {}", OptStacktrace(e))
+                    warn!(target: LOG_CONSENSUS, "Could not confirm consensus config hash: {e}")
+                }
+            }
+
+            sleep(Duration::from_millis(100)).await;
+        }
+    }
+
+    async fn confirm_supported_api_versions(&self) -> anyhow::Result<()> {
+        info!(target: LOG_CONSENSUS, "Confirming supported api versions with peers...");
+
+        loop {
+            match self.federation_api.supported_api_versions().await {
+                Ok(supported_api_versions) => {
+                    if supported_api_versions != self.supported_api_versions {
+                        bail!("Our supported api versions dont match our peers!")
+                    }
+
+                    info!(target: LOG_CONSENSUS, "Confirmed supported api versions with peers");
+
+                    return Ok(());
+                }
+                Err(e) => {
+                    warn!(target: LOG_CONSENSUS, "Could not check consensus config hash: {e}")
                 }
             }
 

@@ -617,6 +617,8 @@ pub trait IGlobalFederationApi: IRawFederationApi {
     /// Fetches the server consensus hash if enough peers agree on it
     async fn server_config_consensus_hash(&self) -> FederationResult<sha256::Hash>;
 
+    async fn supported_api_versions(&self) -> FederationResult<SupportedApiVersionsSummary>;
+
     async fn upload_backup(&self, request: &SignedBackupRequest) -> FederationResult<()>;
 
     async fn download_backup(
@@ -949,6 +951,11 @@ where
         .await
     }
 
+    async fn supported_api_versions(&self) -> FederationResult<SupportedApiVersionsSummary> {
+        self.request_current_consensus(VERSION_ENDPOINT.to_owned(), ApiRequestErased::default())
+            .await
+    }
+
     async fn upload_backup(&self, request: &SignedBackupRequest) -> FederationResult<()> {
         self.request_current_consensus(BACKUP_ENDPOINT.to_owned(), ApiRequestErased::new(request))
             .await
@@ -976,13 +983,6 @@ where
         &self,
         client_versions: &SupportedApiVersionsSummary,
     ) -> anyhow::Result<ApiVersionSet> {
-        let federation_versions = self
-            .request_current_consensus::<SupportedApiVersionsSummary>(
-                VERSION_ENDPOINT.to_owned(),
-                ApiRequestErased::default(),
-            )
-            .await?;
-
         fn is_supported(version: &ApiVersion, supported_versions: &MultiApiVersion) -> bool {
             supported_versions
                 .0
@@ -990,6 +990,8 @@ where
                 .filter(|v| version.major == v.major)
                 .any(|v| version.minor <= v.minor)
         }
+
+        let federation_versions = self.supported_api_versions().await?;
 
         Ok(ApiVersionSet {
             core: client_versions

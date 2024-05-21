@@ -96,6 +96,9 @@ pub async fn run(
     let connection_status_channels = Default::default();
     let last_ci_by_peer = Default::default();
 
+    let supported_api_versions =
+        ServerConfig::supported_api_versions_summary(&cfg.consensus.modules, &module_init_registry);
+
     let consensus_api = ConsensusApi {
         cfg: cfg.clone(),
         db: db.clone(),
@@ -103,10 +106,7 @@ pub async fn run(
         client_cfg: client_cfg.clone(),
         submission_sender: submission_sender.clone(),
         shutdown_sender,
-        supported_api_versions: ServerConfig::supported_api_versions_summary(
-            &cfg.consensus.modules,
-            &module_init_registry,
-        ),
+        supported_api_versions: supported_api_versions.clone(),
         last_ci_by_peer: Arc::clone(&last_ci_by_peer),
         connection_status_channels: Arc::clone(&connection_status_channels),
     };
@@ -140,6 +140,7 @@ pub async fn run(
             .map(|x| x.to_string())
             .collect(),
         cfg: cfg.clone(),
+        supported_api_versions,
         connection_status_channels,
         submission_receiver,
         shutdown_receiver,
