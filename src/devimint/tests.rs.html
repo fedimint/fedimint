@@ -3515,12 +3515,12 @@
     <span class="macro">anyhow::ensure!</span>(
         initial_client_balance - final_cln_outgoing_client_balance == expected_diff,
         <span class="string">"Client balance changed by {} on CLN outgoing payment, expected {expected_diff}"</span>,
-        initial_client_balance - final_cln_outgoing_client_balance
+        (initial_client_balance - final_cln_outgoing_client_balance)
     );
     <span class="macro">anyhow::ensure!</span>(
         final_cln_outgoing_gateway_balance - initial_cln_gateway_balance == expected_diff,
         <span class="string">"CLN Gateway balance changed by {} on CLN outgoing payment, expected {expected_diff}"</span>,
-        final_cln_outgoing_gateway_balance - initial_cln_gateway_balance
+        (final_cln_outgoing_gateway_balance - initial_cln_gateway_balance)
     );
 
     <span class="kw">let </span>ln_invoice_response = ln_invoice(
@@ -3571,12 +3571,12 @@
     <span class="macro">anyhow::ensure!</span>(
         final_cln_incoming_client_balance - final_cln_outgoing_client_balance == <span class="number">1_100_000</span>,
         <span class="string">"Client balance changed by {} on CLN incoming payment, expected 1100000"</span>,
-        final_cln_incoming_client_balance - final_cln_outgoing_client_balance
+        (final_cln_incoming_client_balance - final_cln_outgoing_client_balance)
     );
     <span class="macro">anyhow::ensure!</span>(
         final_cln_outgoing_gateway_balance - final_cln_incoming_gateway_balance == <span class="number">1_100_000</span>,
         <span class="string">"CLN Gateway balance changed by {} on CLN incoming payment, expected 1100000"</span>,
-        final_cln_outgoing_gateway_balance - final_cln_incoming_gateway_balance
+        (final_cln_outgoing_gateway_balance - final_cln_incoming_gateway_balance)
     );
 
     <span class="comment">// LND gateway tests
@@ -3638,12 +3638,12 @@
     <span class="macro">anyhow::ensure!</span>(
         final_cln_incoming_client_balance - final_lnd_outgoing_client_balance == <span class="number">2_000_000</span>,
         <span class="string">"Client balance changed by {} on LND outgoing payment, expected 2_000_000"</span>,
-        final_cln_incoming_client_balance - final_lnd_outgoing_client_balance
+        (final_cln_incoming_client_balance - final_lnd_outgoing_client_balance)
     );
     <span class="macro">anyhow::ensure!</span>(
         final_lnd_outgoing_gateway_balance - initial_lnd_gateway_balance == <span class="number">2_000_000</span>,
         <span class="string">"LND Gateway balance changed by {} on LND outgoing payment, expected 2_000_000"</span>,
-        final_lnd_outgoing_gateway_balance - initial_lnd_gateway_balance
+        (final_lnd_outgoing_gateway_balance - initial_lnd_gateway_balance)
     );
 
     <span class="comment">// INCOMING: fedimint-cli receives from CLN via LND gateway
@@ -3693,12 +3693,12 @@
     <span class="macro">anyhow::ensure!</span>(
         final_lnd_incoming_client_balance - final_lnd_outgoing_client_balance == <span class="number">1_300_000</span>,
         <span class="string">"Client balance changed by {} on LND incoming payment, expected 1_300_000"</span>,
-        final_lnd_incoming_client_balance - final_lnd_outgoing_client_balance
+        (final_lnd_incoming_client_balance - final_lnd_outgoing_client_balance)
     );
     <span class="macro">anyhow::ensure!</span>(
         final_lnd_outgoing_gateway_balance - final_lnd_incoming_gateway_balance == <span class="number">1_300_000</span>,
         <span class="string">"LND Gateway balance changed by {} on LND incoming payment, expected 1_300_000"</span>,
-        final_lnd_outgoing_gateway_balance - final_lnd_incoming_gateway_balance
+        (final_lnd_outgoing_gateway_balance - final_lnd_incoming_gateway_balance)
     );
 
     <span class="macro">info!</span>(<span class="string">"Will finish the payment of the LND HOLD invoice via CLN gateway"</span>);
