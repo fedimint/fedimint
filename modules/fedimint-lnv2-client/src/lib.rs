@@ -73,7 +73,7 @@ const INVOICE_EXPIRATION_SECONDS_DEFAULT: u32 = 3600;
 /// classDef virtual fill:#fff,stroke-dasharray: 5 5
 ///
 ///     Funding -- funding transaction is rejected --> Rejected
-///     Funding -- funding transaction is accepted --> Funded    
+///     Funding -- funding transaction is accepted --> Funded
 ///     Funded -- payment is confirmed  --> Success
 ///     Funded -- payment attempt expires --> Refunding
 ///     Funded -- gateway cancels payment attempt --> Refunding
@@ -428,7 +428,7 @@ impl LightningClientModule {
         invoice: &Bolt11Invoice,
     ) -> Result<OperationId, SendPaymentError> {
         for payment_attempt in 0..u64::MAX {
-            let operation_id = OperationId::from_encodable((invoice.clone(), payment_attempt));
+            let operation_id = OperationId::from_encodable(&(invoice.clone(), payment_attempt));
 
             if !self.client_ctx.operation_exists(operation_id).await {
                 return Ok(operation_id);
@@ -489,7 +489,7 @@ impl LightningClientModule {
                                     },
                                     Err(..) => {
                                         // The gateway may have incorrectly claimed the outgoing contract thereby causing
-                                        // our refund transaction to be rejected. Therefore, we check one last time if 
+                                        // our refund transaction to be rejected. Therefore, we check one last time if
                                         // the preimage is available before we enter the failure state.
                                         if let Some(preimage) = module_api.await_preimage(
                                             &state.common.contract.contract_id(),
@@ -687,7 +687,7 @@ impl LightningClientModule {
         &self,
         contract: IncomingContract,
     ) -> Option<OperationId> {
-        let operation_id = OperationId::from_encodable(contract.clone());
+        let operation_id = OperationId::from_encodable(&contract.clone());
 
         let (claim_keypair, agg_decryption_key) = self.recover_contract_keys(&contract).await?;
 

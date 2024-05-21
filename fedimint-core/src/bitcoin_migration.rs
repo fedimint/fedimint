@@ -32,10 +32,10 @@ pub fn bitcoin30_to_bitcoin29_network_magic(magic: &bitcoin::network::Magic) -> 
     // See the following bitcoin v0.29 and v0.30 code:
     // https://docs.rs/bitcoin/0.29.2/src/bitcoin/network/constants.rs.html#81-84
     // https://docs.rs/bitcoin/0.30.2/src/bitcoin/network/constants.rs.html#251-258
-    ((bytes[3] as u32) << 24)
-        | ((bytes[2] as u32) << 16)
-        | ((bytes[1] as u32) << 8)
-        | (bytes[0] as u32)
+    (u32::from(bytes[3]) << 24)
+        | (u32::from(bytes[2]) << 16)
+        | (u32::from(bytes[1]) << 8)
+        | u32::from(bytes[0])
 }
 
 pub fn checked_address_to_unchecked_address(

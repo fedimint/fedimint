@@ -5,9 +5,7 @@ use serde_json::Value;
 pub fn rust_log_full_enabled() -> bool {
     // this will be called only once per-thread for best performance
     thread_local!(static RUST_LOG_FULL: bool = {
-        std::env::var_os("RUST_LOG_FULL")
-            .map(|val| !val.is_empty())
-            .unwrap_or(false)
+        std::env::var_os("RUST_LOG_FULL").is_some_and(|val| !val.is_empty())
     });
     RUST_LOG_FULL.with(|x| *x)
 }

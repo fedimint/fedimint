@@ -214,7 +214,7 @@ impl<'a> IRawDatabaseTransaction for MemTransaction<'a> {
                     anyhow::ensure!(
                         data_copy.remove(&delete_op.key) == delete_op.old_value,
                         "write-write conflict"
-                    )
+                    );
                 }
             }
         }

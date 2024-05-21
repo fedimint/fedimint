@@ -67,7 +67,7 @@ impl OperationId {
         Self(bytes)
     }
 
-    pub fn from_encodable<E: Encodable>(encodable: E) -> OperationId {
+    pub fn from_encodable<E: Encodable>(encodable: &E) -> OperationId {
         Self(encodable.consensus_hash::<sha256::Hash>().to_byte_array())
     }
 }

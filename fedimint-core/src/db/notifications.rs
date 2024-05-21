@@ -65,7 +65,7 @@ impl Notifications {
     }
 
     /// Notifies the waiters about the notifications recorded in NotifyQueue.
-    pub fn submit_queue(&self, queue: NotifyQueue) {
+    pub fn submit_queue(&self, queue: &NotifyQueue) {
         for bucket in queue.buckets.iter_ones() {
             self.buckets[bucket].notify_waiters();
         }
@@ -154,7 +154,7 @@ mod tests {
         let mut queue = NotifyQueue::new();
         queue.add(&key1);
         queue.add(&key2);
-        notifs.submit_queue(queue);
+        notifs.submit_queue(&queue);
         assert!(
             future_returns_shortly(sub1).await.is_some(),
             "should notify"

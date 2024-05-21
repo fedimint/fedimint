@@ -138,7 +138,7 @@ impl TimeReporter {
 impl Drop for TimeReporter {
     fn drop(&mut self) {
         if let Some(mut inner) = self.inner.take() {
-            inner.report()
+            inner.report();
         }
     }
 }

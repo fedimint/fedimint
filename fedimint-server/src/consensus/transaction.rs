@@ -37,7 +37,7 @@ pub async fn process_transaction_with_dbtx(
         public_keys.push(meta.pub_key);
     }
 
-    transaction.validate_signatures(public_keys)?;
+    transaction.validate_signatures(&public_keys)?;
 
     let txid = transaction.tx_hash();
 

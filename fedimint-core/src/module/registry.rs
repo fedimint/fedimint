@@ -143,7 +143,7 @@ impl<M: std::fmt::Debug, State> ModuleRegistry<M, State> {
         assert!(
             self.inner.insert(id, (kind, module)).is_none(),
             "Module was already registered!"
-        )
+        );
     }
 
     pub fn append_module(&mut self, kind: ModuleKind, module: M) {
@@ -155,7 +155,7 @@ impl<M: std::fmt::Debug, State> ModuleRegistry<M, State> {
         assert!(
             self.inner.insert(last_id, (kind, module)).is_none(),
             "Module was already registered?!"
-        )
+        );
     }
 }
 
@@ -166,11 +166,10 @@ impl ServerModuleRegistry {
     /// Generate a `ModuleDecoderRegistry` from this `ModuleRegistry`
     pub fn decoder_registry(&self) -> ModuleDecoderRegistry {
         // TODO: cache decoders
-        ModuleDecoderRegistry::from_iter(
-            self.inner
-                .iter()
-                .map(|(&id, (kind, module))| (id, kind.clone(), module.decoder())),
-        )
+        self.inner
+            .iter()
+            .map(|(&id, (kind, module))| (id, kind.clone(), module.decoder()))
+            .collect::<ModuleDecoderRegistry>()
     }
 }
 

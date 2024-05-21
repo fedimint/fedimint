@@ -115,7 +115,7 @@ mod tests {
         let ciphertext = pk.encrypt(message);
         let decryption_share = sks.secret_key_share(0).decrypt_share(&ciphertext).unwrap();
 
-        test_roundtrip(ciphertext);
-        test_roundtrip(decryption_share);
+        test_roundtrip(&ciphertext);
+        test_roundtrip(&decryption_share);
     }
 }

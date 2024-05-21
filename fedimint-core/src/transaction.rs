@@ -79,7 +79,7 @@ impl Transaction {
     /// Validate the schnorr signatures signed over the `tx_hash`
     pub fn validate_signatures(
         &self,
-        pub_keys: Vec<secp256k1_zkp::PublicKey>,
+        pub_keys: &[secp256k1_zkp::PublicKey],
     ) -> Result<(), TransactionError> {
         let signatures = match &self.signatures {
             TransactionSignature::NaiveMultisig(sigs) => sigs,

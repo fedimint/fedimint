@@ -207,7 +207,7 @@ impl MultiApiVersion {
             .fold((None, true), |(prev, is_sorted), next| {
                 (
                     Some(*next),
-                    is_sorted && prev.map(|prev| prev.major < next.major).unwrap_or(true),
+                    is_sorted && prev.map_or(true, |prev| prev.major < next.major),
                 )
             })
             .1
@@ -306,7 +306,7 @@ impl<'a> IntoIterator for &'a MultiApiVersion {
 impl FromIterator<ApiVersion> for Result<MultiApiVersion, ApiVersion> {
     fn from_iter<T: IntoIterator<Item = ApiVersion>>(iter: T) -> Self {
         let mut s = MultiApiVersion::new();
-        for version in iter.into_iter() {
+        for version in iter {
             if s.try_insert(version).is_err() {
                 return Err(version);
             }
@@ -407,12 +407,11 @@ impl SupportedModuleApiVersions {
         Self {
             core_consensus: CoreConsensusVersion::new(core.0, core.1),
             module_consensus: ModuleConsensusVersion::new(module.0, module.1),
-            api: result::Result::<MultiApiVersion, ApiVersion>::from_iter(
-                api_versions
-                    .iter()
-                    .copied()
-                    .map(|(major, minor)| ApiVersion { major, minor }),
-            )
+            api: api_versions
+                .iter()
+                .copied()
+                .map(|(major, minor)| ApiVersion { major, minor })
+                .collect::<result::Result<MultiApiVersion, ApiVersion>>()
             .expect(
                 "overlapping (conflicting) api versions when declaring SupportedModuleApiVersions",
             ),
