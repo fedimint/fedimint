@@ -2,6 +2,9 @@
 
 name: "Backwards-Compatibility"
 
+env:
+  PERFIT_SERVER: https://perfit-fedimint.dpc.pw
+
 # Controls when the workflow will run
 on:
   # Triggers the workflow on push or pull request events but only for the "main" branch and release tags
@@ -32,6 +35,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+      - name: Prepare
+        uses: ./.github/actions/prepare
       - uses: cachix/install-nix-action@V27
         with:
           nix_path: nixpkgs=channel:nixos-23.11
@@ -50,8 +55,16 @@ jobs:
           # we need to use `nix develop -c` to be able to use `nix build` inside of backwards-compatibility-test
           # Disable `sccache`, it seems incompatible with self-hosted runner sandbox for some reason, and
           # it doesn't benefit us much here anyway.
-          env TMPDIR=/tmp CARGO_PROFILE=ci nix develop -c \
+          env \
+            TMPDIR=/tmp \
+            CARGO_PROFILE=ci \
+            PERFIT_ACCESS_TOKEN="${{ secrets.PERFIT_ACCESS_TOKEN }}" \
+            nix develop -c \
             nix shell github:rustshop/fs-dir-cache -c \
+            nix run github:rustshop/perfit#perfit -- \
+              run \
+                --metric L3yA_sgbQ_mc2t-IWtKI4g \
+                --metadata "commit=${LAST_COMMIT_SHA}" \
             scripts/ci/run-in-fs-dir-cache.sh backward-compat \
             env -u RUSTC_WRAPPER \
             ./scripts/tests/test-ci-all-backcompat.sh v0.2.1
