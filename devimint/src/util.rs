@@ -155,8 +155,8 @@ impl Drop for ProcessHandleInner {
                         %err,
                         "Error terminating process on drop");
                 }
-            })
-        })
+            });
+        });
     }
 }
 
@@ -210,8 +210,8 @@ impl Command {
     }
 
     pub fn args<T: ToString>(mut self, args: impl IntoIterator<Item = T>) -> Self {
-        for arg in args.into_iter() {
-            self = self.arg(arg)
+        for arg in args {
+            self = self.arg(arg);
         }
         self
     }
@@ -343,7 +343,7 @@ impl Command {
             .create(true)
             .open(&path)
             .await
-            .with_context(|| format!("path: {} cmd: {}", path, name))?
+            .with_context(|| format!("path: {path} cmd: {name}"))?
             .into_std()
             .await;
         self.cmd.stdout(log.try_clone()?);
@@ -1062,7 +1062,7 @@ fn get_command_str_for_alias(aliases: &[&str], default: &[&str]) -> Vec<String> 
         }
     }
     // otherwise return the default value
-    default.iter().map(|s| s.to_string()).collect()
+    default.iter().map(ToString::to_string).collect()
 }
 
 fn to_command(cli: Vec<String>) -> Command {

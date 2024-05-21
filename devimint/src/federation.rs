@@ -65,8 +65,8 @@ impl Drop for Federation {
                     set.spawn(async move { drop(fedimintd) });
                 }
                 while (set.join_next().await).is_some() {}
-            })
-        })
+            });
+        });
     }
 }
 /// `fedimint-cli` instance (basically path with client state: config + db)
@@ -281,10 +281,10 @@ impl Federation {
                 let peer_data_dir = utf8(&peer_env_vars.FM_DATA_DIR);
 
                 let invite_code_filename_indexed =
-                    format!("{invite_code_filename_original}-{}", index);
+                    format!("{invite_code_filename_original}-{index}");
                 tokio::fs::rename(
-                    format!("{peer_data_dir}/{}", invite_code_filename_original),
-                    format!("{client_dir}/{}", invite_code_filename_indexed),
+                    format!("{peer_data_dir}/{invite_code_filename_original}"),
+                    format!("{client_dir}/{invite_code_filename_indexed}"),
                 )
                 .await
                 .context("moving invite-code file")?;
@@ -372,7 +372,7 @@ impl Federation {
     }
     pub fn invite_code_for(peer_id: PeerId) -> Result<String> {
         let data_dir: PathBuf = env::var(FM_CLIENT_DIR_ENV)?.parse()?;
-        let name = format!("invite-code-{}", peer_id);
+        let name = format!("invite-code-{peer_id}");
         let invite_code = fs::read_to_string(data_dir.join(name))?;
         Ok(invite_code)
     }
@@ -426,7 +426,7 @@ impl Federation {
             if self.members.contains_key(&peer_id) {
                 continue;
             }
-            self.start_server(process_mgr, peer_id).await?
+            self.start_server(process_mgr, peer_id).await?;
         }
         self.await_all_peers().await?;
         Ok(())
@@ -435,9 +435,9 @@ impl Federation {
     /// Terminates all running peers.
     pub async fn terminate_all_servers(&mut self) -> Result<()> {
         info!("terminating all servers");
-        let running_peer_ids: Vec<_> = self.members.keys().cloned().collect();
+        let running_peer_ids: Vec<_> = self.members.keys().copied().collect();
         for peer_id in running_peer_ids {
-            self.terminate_server(peer_id).await?
+            self.terminate_server(peer_id).await?;
         }
         Ok(())
     }
@@ -873,7 +873,7 @@ pub async fn run_cli_dkg(
             .start_consensus(auth_for(peer_id), endpoint)
             .await;
         if let Err(e) = result {
-            tracing::debug!(target: LOG_DEVIMINT, "Error calling start_consensus: {e:?}, trying to continue...")
+            tracing::debug!(target: LOG_DEVIMINT, "Error calling start_consensus: {e:?}, trying to continue...");
         }
         cli_wait_server_status(endpoint, ServerStatus::ConsensusRunning).await?;
     }
@@ -918,7 +918,7 @@ pub async fn run_client_dkg(
 
     // Note: names prefixed by peerid, as DKG sort peers by submitted name
     // by default.
-    let leader_name = format!("{}-leader", leader_id);
+    let leader_name = format!("{leader_id}-leader");
     leader
         .set_config_gen_connections(
             ConfigGenConnectionsRequest {
@@ -1026,7 +1026,7 @@ pub async fn run_client_dkg(
     debug!(target: LOG_DEVIMINT, "Starting consensus");
     for (peer_id, client) in &admin_clients {
         if let Err(e) = client.start_consensus(auth_for(peer_id)).await {
-            tracing::debug!(target: LOG_DEVIMINT, "Error calling start_consensus: {e:?}, trying to continue...")
+            tracing::debug!(target: LOG_DEVIMINT, "Error calling start_consensus: {e:?}, trying to continue...");
         }
         wait_server_status(client, ServerStatus::ConsensusRunning).await?;
     }
@@ -1040,7 +1040,7 @@ async fn set_config_gen_params(
     mut server_gen_params: ServerModuleConfigGenParamsRegistry,
 ) -> Result<()> {
     self::config::attach_default_module_init_params(
-        BitcoinRpcConfig::get_defaults_from_env_vars()?,
+        &BitcoinRpcConfig::get_defaults_from_env_vars()?,
         &mut server_gen_params,
         Network::Regtest,
         10,
@@ -1071,7 +1071,7 @@ async fn cli_set_config_gen_params(
     mut server_gen_params: ServerModuleConfigGenParamsRegistry,
 ) -> Result<()> {
     self::config::attach_default_module_init_params(
-        BitcoinRpcConfig::get_defaults_from_env_vars()?,
+        &BitcoinRpcConfig::get_defaults_from_env_vars()?,
         &mut server_gen_params,
         Network::Regtest,
         10,
