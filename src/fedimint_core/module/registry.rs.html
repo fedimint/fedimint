@@ -204,7 +204,6 @@
 <a href="#204" id="204">204</a>
 <a href="#205" id="205">205</a>
 <a href="#206" id="206">206</a>
-<a href="#207" id="207">207</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 
 <span class="kw">use </span>anyhow::anyhow;
@@ -350,7 +349,7 @@
         </span><span class="macro">assert!</span>(
             <span class="self">self</span>.inner.insert(id, (kind, module)).is_none(),
             <span class="string">"Module was already registered!"
-        </span>)
+        </span>);
     }
 
     <span class="kw">pub fn </span>append_module(<span class="kw-2">&amp;mut </span><span class="self">self</span>, kind: ModuleKind, module: M) {
@@ -362,7 +361,7 @@
         <span class="macro">assert!</span>(
             <span class="self">self</span>.inner.insert(last_id, (kind, module)).is_none(),
             <span class="string">"Module was already registered?!"
-        </span>)
+        </span>);
     }
 }
 
@@ -373,11 +372,10 @@
     <span class="doccomment">/// Generate a `ModuleDecoderRegistry` from this `ModuleRegistry`
     </span><span class="kw">pub fn </span>decoder_registry(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ModuleDecoderRegistry {
         <span class="comment">// TODO: cache decoders
-        </span>ModuleDecoderRegistry::from_iter(
-            <span class="self">self</span>.inner
-                .iter()
-                .map(|(<span class="kw-2">&amp;</span>id, (kind, module))| (id, kind.clone(), module.decoder())),
-        )
+        </span><span class="self">self</span>.inner
+            .iter()
+            .map(|(<span class="kw-2">&amp;</span>id, (kind, module))| (id, kind.clone(), module.decoder()))
+            .collect::&lt;ModuleDecoderRegistry&gt;()
     }
 }
 

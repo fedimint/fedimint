@@ -73,7 +73,7 @@
  graph LR
  classDef virtual fill:#fff,stroke-dasharray: 5 5
      Funding -- funding transaction is rejected --> Rejected
-     Funding -- funding transaction is accepted --> Funded    
+     Funding -- funding transaction is accepted --> Funded
      Funded -- payment is confirmed  --> Success
      Funded -- payment attempt expires --> Refunding
      Funded -- gateway cancels payment attempt --> Refunding

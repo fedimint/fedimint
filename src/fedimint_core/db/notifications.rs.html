@@ -232,7 +232,7 @@
     }
 
     <span class="doccomment">/// Notifies the waiters about the notifications recorded in NotifyQueue.
-    </span><span class="kw">pub fn </span>submit_queue(<span class="kw-2">&amp;</span><span class="self">self</span>, queue: NotifyQueue) {
+    </span><span class="kw">pub fn </span>submit_queue(<span class="kw-2">&amp;</span><span class="self">self</span>, queue: <span class="kw-2">&amp;</span>NotifyQueue) {
         <span class="kw">for </span>bucket <span class="kw">in </span>queue.buckets.iter_ones() {
             <span class="self">self</span>.buckets[bucket].notify_waiters();
         }
@@ -321,7 +321,7 @@
         <span class="kw">let </span><span class="kw-2">mut </span>queue = NotifyQueue::new();
         queue.add(<span class="kw-2">&amp;</span>key1);
         queue.add(<span class="kw-2">&amp;</span>key2);
-        notifs.submit_queue(queue);
+        notifs.submit_queue(<span class="kw-2">&amp;</span>queue);
         <span class="macro">assert!</span>(
             future_returns_shortly(sub1).<span class="kw">await</span>.is_some(),
             <span class="string">"should notify"

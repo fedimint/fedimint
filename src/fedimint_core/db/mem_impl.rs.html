@@ -524,7 +524,7 @@
                     <span class="macro">anyhow::ensure!</span>(
                         data_copy.remove(<span class="kw-2">&amp;</span>delete_op.key) == delete_op.old_value,
                         <span class="string">"write-write conflict"
-                    </span>)
+                    </span>);
                 }
             }
         }

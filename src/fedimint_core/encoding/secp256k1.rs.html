@@ -243,7 +243,7 @@
             <span class="kw-2">&amp;</span>sk,
         );
 
-        test_roundtrip(sig);
+        test_roundtrip(<span class="kw-2">&amp;</span>sig);
     }
 
     <span class="attr">#[test_log::test]
@@ -252,14 +252,14 @@
         <span class="kw">let </span><span class="kw-2">mut </span>rng = rand::rngs::OsRng;
         <span class="kw">let </span>sec_key = bitcoin::key::KeyPair::new(ctx, <span class="kw-2">&amp;mut </span>rng);
         <span class="kw">let </span>pub_key = sec_key.public_key();
-        test_roundtrip(pub_key);
+        test_roundtrip(<span class="kw-2">&amp;</span>pub_key);
 
         <span class="kw">let </span>sig = ctx.sign_schnorr(
             <span class="kw-2">&amp;</span>secp256k1_zkp::hashes::sha256::Hash::hash(<span class="string">b"Hello World!"</span>).into(),
             <span class="kw-2">&amp;</span>sec_key,
         );
 
-        test_roundtrip(sig);
+        test_roundtrip(<span class="kw-2">&amp;</span>sig);
     }
 }
 </code></pre></div></section></main></body></html>

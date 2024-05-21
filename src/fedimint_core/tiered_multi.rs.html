@@ -356,6 +356,8 @@
 <a href="#356" id="356">356</a>
 <a href="#357" id="357">357</a>
 <a href="#358" id="358">358</a>
+<a href="#359" id="359">359</a>
+<a href="#360" id="360">360</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::btree_map::Entry;
 <span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::marker::PhantomData;
@@ -394,7 +396,7 @@
 
     <span class="doccomment">/// Returns the number of items in all vectors
     </span><span class="kw">pub fn </span>count_items(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; usize {
-        <span class="self">self</span>.<span class="number">0</span>.values().map(|notes| notes.len()).sum()
+        <span class="self">self</span>.<span class="number">0</span>.values().map(Vec::len).sum()
     }
 
     <span class="doccomment">/// Returns the number of tiers
@@ -409,9 +411,11 @@
 
     <span class="doccomment">/// Returns the summary of number of items in each tier
     </span><span class="kw">pub fn </span>summary(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; TieredCounts {
-        TieredCounts(Tiered::from_iter(
-            <span class="self">self</span>.iter().map(|(amount, values)| (<span class="kw-2">*</span>amount, values.len())),
-        ))
+        TieredCounts(
+            <span class="self">self</span>.iter()
+                .map(|(amount, values)| (<span class="kw-2">*</span>amount, values.len()))
+                .collect(),
+        )
     }
 
     <span class="doccomment">/// Verifies whether all vectors in all tiers are empty
@@ -494,13 +498,13 @@
     }
 
     <span class="kw">pub fn </span>push(<span class="kw-2">&amp;mut </span><span class="self">self</span>, amt: Amount, val: T) {
-        <span class="self">self</span>.<span class="number">0</span>.entry(amt).or_default().push(val)
+        <span class="self">self</span>.<span class="number">0</span>.entry(amt).or_default().push(val);
     }
 
     <span class="kw">fn </span>assert_invariants(<span class="kw-2">&amp;</span><span class="self">self</span>) {
         <span class="comment">// Just for compactness and determinism, we don't want entries with 0 items
         </span><span class="attr">#[cfg(debug_assertions)]
-        </span><span class="self">self</span>.iter().for_each(|(<span class="kw">_</span>, v)| <span class="macro">debug_assert!</span>(!v.is_empty()))
+        </span><span class="self">self</span>.iter().for_each(|(<span class="kw">_</span>, v)| <span class="macro">debug_assert!</span>(!v.is_empty()));
     }
 }
 
@@ -538,7 +542,7 @@
 <span class="kw">impl</span>&lt;C&gt; Extend&lt;(Amount, C)&gt; <span class="kw">for </span>TieredMulti&lt;C&gt; {
     <span class="kw">fn </span>extend&lt;T: IntoIterator&lt;Item = (Amount, C)&gt;&gt;(<span class="kw-2">&amp;mut </span><span class="self">self</span>, iter: T) {
         <span class="kw">for </span>(amount, note) <span class="kw">in </span>iter {
-            <span class="self">self</span>.<span class="number">0</span>.entry(amount).or_default().push(note)
+            <span class="self">self</span>.<span class="number">0</span>.entry(amount).or_default().push(note);
         }
     }
 }
@@ -597,7 +601,7 @@
     <span class="kw">fn </span>next(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="self">Self</span>::Item&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>notes = Vec::with_capacity(<span class="self">self</span>.iters.len());
         <span class="kw">let </span><span class="kw-2">mut </span>amount = <span class="prelude-val">None</span>;
-        <span class="kw">for </span>iter <span class="kw">in </span><span class="self">self</span>.iters.iter_mut() {
+        <span class="kw">for </span>iter <span class="kw">in </span><span class="kw-2">&amp;mut </span><span class="self">self</span>.iters {
             <span class="kw">match </span>iter.next() {
                 <span class="prelude-val">Some</span>((amt, note)) =&gt; {
                     <span class="kw">if let </span><span class="prelude-val">Some</span>(amount) = amount {
@@ -675,7 +679,7 @@
     <span class="kw">fn </span>assert_invariants(<span class="kw-2">&amp;</span><span class="self">self</span>) {
         <span class="comment">// Just for compactness and determinism, we don't want entries with 0 count
         </span><span class="attr">#[cfg(debug_assertions)]
-        </span><span class="self">self</span>.iter().for_each(|(<span class="kw">_</span>, count)| <span class="macro">debug_assert!</span>(<span class="number">0 </span>&lt; count))
+        </span><span class="self">self</span>.iter().for_each(|(<span class="kw">_</span>, count)| <span class="macro">debug_assert!</span>(<span class="number">0 </span>&lt; count));
     }
 }
 

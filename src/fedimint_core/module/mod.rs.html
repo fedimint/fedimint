@@ -1246,12 +1246,12 @@
 
     <span class="doccomment">/// Attempts to commit the dbtx or returns an ApiError
     </span><span class="kw">pub async fn </span>commit_tx_result(<span class="self">self</span>, path: <span class="kw-2">&amp;</span><span class="lifetime">'static </span>str) -&gt; <span class="prelude-ty">Result</span>&lt;(), ApiError&gt; {
-        <span class="self">self</span>.dbtx.commit_tx_result().<span class="kw">await</span>.map_err(|_err| {
+        <span class="self">self</span>.dbtx.commit_tx_result().<span class="kw">await</span>.map_err(|err| {
             <span class="macro">tracing::warn!</span>(
                 target: fedimint_logging::LOG_NET_API,
                 path,
                 <span class="string">"API server error when writing to database: {:?}"</span>,
-                _err
+                err
             );
             ApiError {
                 code: <span class="number">500</span>,

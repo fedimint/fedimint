@@ -130,10 +130,10 @@
     // See the following bitcoin v0.29 and v0.30 code:
     // https://docs.rs/bitcoin/0.29.2/src/bitcoin/network/constants.rs.html#81-84
     // https://docs.rs/bitcoin/0.30.2/src/bitcoin/network/constants.rs.html#251-258
-    </span>((bytes[<span class="number">3</span>] <span class="kw">as </span>u32) &lt;&lt; <span class="number">24</span>)
-        | ((bytes[<span class="number">2</span>] <span class="kw">as </span>u32) &lt;&lt; <span class="number">16</span>)
-        | ((bytes[<span class="number">1</span>] <span class="kw">as </span>u32) &lt;&lt; <span class="number">8</span>)
-        | (bytes[<span class="number">0</span>] <span class="kw">as </span>u32)
+    </span>(u32::from(bytes[<span class="number">3</span>]) &lt;&lt; <span class="number">24</span>)
+        | (u32::from(bytes[<span class="number">2</span>]) &lt;&lt; <span class="number">16</span>)
+        | (u32::from(bytes[<span class="number">1</span>]) &lt;&lt; <span class="number">8</span>)
+        | u32::from(bytes[<span class="number">0</span>])
 }
 
 <span class="kw">pub fn </span>checked_address_to_unchecked_address(

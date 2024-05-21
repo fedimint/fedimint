@@ -624,7 +624,7 @@
         // the gateways claim to a contract in case of cancellation. We only create a
         // forfeit signature after the we have started the send state machine to
         // prevent replay attacks with a previously cancelled outgoing contract
-        </span><span class="kw">let </span>operation_id = OperationId::from_encodable(payload.contract.clone());
+        </span><span class="kw">let </span>operation_id = OperationId::from_encodable(<span class="kw-2">&amp;</span>payload.contract.clone());
 
         <span class="kw">if </span><span class="self">self</span>.client_ctx.operation_exists(operation_id).<span class="kw">await </span>{
             <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="self">self</span>.subscribe_send(operation_id).<span class="kw">await</span>);
@@ -725,7 +725,7 @@
         htlc_id: u64,
         payload: CreateInvoicePayload,
     ) -&gt; anyhow::Result&lt;()&gt; {
-        <span class="kw">let </span>operation_id = OperationId::from_encodable(payload.clone());
+        <span class="kw">let </span>operation_id = OperationId::from_encodable(<span class="kw-2">&amp;</span>payload.clone());
 
         <span class="kw">if </span><span class="self">self</span>.client_ctx.operation_exists(operation_id).<span class="kw">await </span>{
             <span class="kw">return </span><span class="prelude-val">Ok</span>(());
@@ -778,7 +778,7 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         payload: CreateInvoicePayload,
     ) -&gt; anyhow::Result&lt;[u8; <span class="number">32</span>]&gt; {
-        <span class="kw">let </span>operation_id = OperationId::from_encodable(payload.clone());
+        <span class="kw">let </span>operation_id = OperationId::from_encodable(<span class="kw-2">&amp;</span>payload.clone());
 
         <span class="kw">if </span><span class="self">self</span>.client_ctx.operation_exists(operation_id).<span class="kw">await </span>{
             <span class="kw">return </span><span class="self">self

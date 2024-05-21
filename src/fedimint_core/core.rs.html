@@ -692,7 +692,7 @@
         <span class="self">Self</span>(bytes)
     }
 
-    <span class="kw">pub fn </span>from_encodable&lt;E: Encodable&gt;(encodable: E) -&gt; OperationId {
+    <span class="kw">pub fn </span>from_encodable&lt;E: Encodable&gt;(encodable: <span class="kw-2">&amp;</span>E) -&gt; OperationId {
         <span class="self">Self</span>(encodable.consensus_hash::&lt;sha256::Hash&gt;().to_byte_array())
     }
 }

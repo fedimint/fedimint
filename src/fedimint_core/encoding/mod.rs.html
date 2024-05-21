@@ -1473,11 +1473,6 @@
 <a href="#1473" id="1473">1473</a>
 <a href="#1474" id="1474">1474</a>
 <a href="#1475" id="1475">1475</a>
-<a href="#1476" id="1476">1476</a>
-<a href="#1477" id="1477">1477</a>
-<a href="#1478" id="1478">1478</a>
-<a href="#1479" id="1479">1479</a>
-<a href="#1480" id="1480">1480</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! This module defines a binary encoding interface which is more suitable for
 //! consensus critical encoding than e.g. `bincode`. Over time all structs that
 //! need to be encoded to binary will be migrated to this interface.
@@ -2000,7 +1995,7 @@
         }
 
         <span class="kw">let </span><span class="kw-2">mut </span>len = <span class="number">0</span>;
-        <span class="kw">for </span>item <span class="kw">in </span><span class="self">self</span>.iter() {
+        <span class="kw">for </span>item <span class="kw">in </span><span class="self">self </span>{
             len += item.consensus_encode(writer)<span class="question-mark">?</span>;
         }
         <span class="prelude-val">Ok</span>(len)
@@ -2032,7 +2027,7 @@
         }
         <span class="comment">// todo: impl without copy
         </span><span class="kw">let </span><span class="kw-2">mut </span>data = [T::default(); SIZE];
-        <span class="kw">for </span>item <span class="kw">in </span>data.iter_mut() {
+        <span class="kw">for </span>item <span class="kw">in </span><span class="kw-2">&amp;mut </span>data {
             <span class="kw-2">*</span>item = T::consensus_decode_from_finite_reader(d, modules)<span class="question-mark">?</span>;
         }
         <span class="prelude-val">Ok</span>(data)
@@ -2319,7 +2314,7 @@
     <span class="kw">fn </span>consensus_encode&lt;W: std::io::Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: <span class="kw-2">&amp;mut </span>W) -&gt; <span class="prelude-ty">Result</span>&lt;usize, std::io::Error&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>len = <span class="number">0</span>;
         len += (<span class="self">self</span>.len() <span class="kw">as </span>u64).consensus_encode(writer)<span class="question-mark">?</span>;
-        <span class="kw">for </span>(k, v) <span class="kw">in </span><span class="self">self</span>.iter() {
+        <span class="kw">for </span>(k, v) <span class="kw">in </span><span class="self">self </span>{
             len += k.consensus_encode(writer)<span class="question-mark">?</span>;
             len += v.consensus_encode(writer)<span class="question-mark">?</span>;
         }
@@ -2342,8 +2337,7 @@
             <span class="kw">let </span>k = K::consensus_decode_from_finite_reader(d, modules)<span class="question-mark">?</span>;
             <span class="kw">if </span>res
                 .last_key_value()
-                .map(|(prev_key, _v)| k &lt;= <span class="kw-2">*</span>prev_key)
-                .unwrap_or_default()
+                .is_some_and(|(prev_key, _v)| k &lt;= <span class="kw-2">*</span>prev_key)
             {
                 <span class="kw">return </span><span class="prelude-val">Err</span>(DecodeError::from_str(<span class="string">"Non-canonical encoding"</span>));
             }
@@ -2363,7 +2357,7 @@
     <span class="kw">fn </span>consensus_encode&lt;W: std::io::Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: <span class="kw-2">&amp;mut </span>W) -&gt; <span class="prelude-ty">Result</span>&lt;usize, std::io::Error&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>len = <span class="number">0</span>;
         len += (<span class="self">self</span>.len() <span class="kw">as </span>u64).consensus_encode(writer)<span class="question-mark">?</span>;
-        <span class="kw">for </span>k <span class="kw">in </span><span class="self">self</span>.iter() {
+        <span class="kw">for </span>k <span class="kw">in </span><span class="self">self </span>{
             len += k.consensus_encode(writer)<span class="question-mark">?</span>;
         }
         <span class="prelude-val">Ok</span>(len)
@@ -2382,11 +2376,7 @@
         <span class="kw">let </span>len = u64::consensus_decode_from_finite_reader(d, modules)<span class="question-mark">?</span>;
         <span class="kw">for _ in </span><span class="number">0</span>..len {
             <span class="kw">let </span>k = K::consensus_decode_from_finite_reader(d, modules)<span class="question-mark">?</span>;
-            <span class="kw">if </span>res
-                .last()
-                .map(|prev_key| k &lt;= <span class="kw-2">*</span>prev_key)
-                .unwrap_or_default()
-            {
+            <span class="kw">if </span>res.last().is_some_and(|prev_key| k &lt;= <span class="kw-2">*</span>prev_key) {
                 <span class="kw">return </span><span class="prelude-val">Err</span>(DecodeError::from_str(<span class="string">"Non-canonical encoding"</span>));
             }
             <span class="kw">if </span>!res.insert(k) {
@@ -2609,7 +2599,7 @@
     <span class="kw">use </span><span class="kw">crate</span>::db::DatabaseValue;
     <span class="kw">use </span><span class="kw">crate</span>::encoding::{Decodable, Encodable};
 
-    <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>test_roundtrip&lt;T&gt;(value: T)
+    <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>test_roundtrip&lt;T&gt;(value: <span class="kw-2">&amp;</span>T)
     <span class="kw">where
         </span>T: Encodable + Decodable + Eq + Debug,
     {
@@ -2619,11 +2609,11 @@
 
         <span class="kw">let </span><span class="kw-2">mut </span>cursor = Cursor::new(bytes);
         <span class="kw">let </span>decoded = T::consensus_decode(<span class="kw-2">&amp;mut </span>cursor, <span class="kw-2">&amp;</span>ModuleDecoderRegistry::default()).unwrap();
-        <span class="macro">assert_eq!</span>(value, decoded);
+        <span class="macro">assert_eq!</span>(value, <span class="kw-2">&amp;</span>decoded);
         <span class="macro">assert_eq!</span>(cursor.position(), len <span class="kw">as </span>u64);
     }
 
-    <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>test_roundtrip_expected&lt;T&gt;(value: T, expected: <span class="kw-2">&amp;</span>[u8])
+    <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>test_roundtrip_expected&lt;T&gt;(value: <span class="kw-2">&amp;</span>T, expected: <span class="kw-2">&amp;</span>[u8])
     <span class="kw">where
         </span>T: Encodable + Decodable + Eq + Debug,
     {
@@ -2634,7 +2624,7 @@
 
         <span class="kw">let </span><span class="kw-2">mut </span>cursor = Cursor::new(bytes);
         <span class="kw">let </span>decoded = T::consensus_decode(<span class="kw-2">&amp;mut </span>cursor, <span class="kw-2">&amp;</span>ModuleDecoderRegistry::default()).unwrap();
-        <span class="macro">assert_eq!</span>(value, decoded);
+        <span class="macro">assert_eq!</span>(value, <span class="kw-2">&amp;</span>decoded);
         <span class="macro">assert_eq!</span>(cursor.position(), len <span class="kw">as </span>u64);
     }
 
@@ -2668,7 +2658,7 @@
         ];
 
         <span class="kw">for </span>e <span class="kw">in </span>enums {
-            test_roundtrip(e);
+            test_roundtrip(<span class="kw-2">&amp;</span>e);
         }
     }
 
@@ -2726,7 +2716,7 @@
         };
         <span class="kw">let </span>bytes = [<span class="number">3</span>, <span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>, <span class="number">42</span>];
 
-        test_roundtrip_expected(reference, <span class="kw-2">&amp;</span>bytes);
+        test_roundtrip_expected(<span class="kw-2">&amp;</span>reference, <span class="kw-2">&amp;</span>bytes);
     }
 
     <span class="attr">#[test_log::test]
@@ -2737,7 +2727,7 @@
         <span class="kw">let </span>reference = TestStruct(<span class="macro">vec!</span>[<span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>], <span class="number">42</span>);
         <span class="kw">let </span>bytes = [<span class="number">3</span>, <span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>, <span class="number">42</span>];
 
-        test_roundtrip_expected(reference, <span class="kw-2">&amp;</span>bytes);
+        test_roundtrip_expected(<span class="kw-2">&amp;</span>reference, <span class="kw-2">&amp;</span>bytes);
     }
 
     <span class="attr">#[test_log::test]
@@ -2760,7 +2750,7 @@
         ];
 
         <span class="kw">for </span>(reference, bytes) <span class="kw">in </span>test_cases {
-            test_roundtrip_expected(reference, <span class="kw-2">&amp;</span>bytes);
+            test_roundtrip_expected(<span class="kw-2">&amp;</span>reference, <span class="kw-2">&amp;</span>bytes);
         }
     }
 
@@ -2780,12 +2770,12 @@
         <span class="kw">let </span>invoice = invoice_str
             .parse::&lt;lightning_invoice::Bolt11Invoice&gt;()
             .unwrap();
-        test_roundtrip(invoice);
+        test_roundtrip(<span class="kw-2">&amp;</span>invoice);
     }
 
     <span class="attr">#[test_log::test]
     </span><span class="kw">fn </span>test_btreemap() {
-        test_roundtrip(BTreeMap::from([
+        test_roundtrip(<span class="kw-2">&amp;</span>BTreeMap::from([
             (<span class="string">"a"</span>.to_string(), <span class="number">1u32</span>),
             (<span class="string">"b"</span>.to_string(), <span class="number">2</span>),
         ]));
@@ -2793,12 +2783,12 @@
 
     <span class="attr">#[test_log::test]
     </span><span class="kw">fn </span>test_btreeset() {
-        test_roundtrip(BTreeSet::from([<span class="string">"a"</span>.to_string(), <span class="string">"b"</span>.to_string()]));
+        test_roundtrip(<span class="kw-2">&amp;</span>BTreeSet::from([<span class="string">"a"</span>.to_string(), <span class="string">"b"</span>.to_string()]));
     }
 
     <span class="attr">#[test_log::test]
     </span><span class="kw">fn </span>test_systemtime() {
-        test_roundtrip(fedimint_core::time::now());
+        test_roundtrip(<span class="kw-2">&amp;</span>fedimint_core::time::now());
     }
 
     <span class="attr">#[test]
@@ -2916,7 +2906,7 @@
         )
         .unwrap();
         test_roundtrip_expected(
-            txid,
+            <span class="kw-2">&amp;</span>txid,
             <span class="kw-2">&amp;</span>[
                 <span class="number">154</span>, <span class="number">192</span>, <span class="number">239</span>, <span class="number">210</span>, <span class="number">168</span>, <span class="number">79</span>, <span class="number">183</span>, <span class="number">215</span>, <span class="number">157</span>, <span class="number">7</span>, <span class="number">201</span>, <span class="number">237</span>, <span class="number">22</span>, <span class="number">132</span>, <span class="number">133</span>, <span class="number">30</span>, <span class="number">74</span>, <span class="number">48</span>,
                 <span class="number">206</span>, <span class="number">233</span>, <span class="number">21</span>, <span class="number">231</span>, <span class="number">57</span>, <span class="number">225</span>, <span class="number">198</span>, <span class="number">140</span>, <span class="number">229</span>, <span class="number">35</span>, <span class="number">47</span>, <span class="number">237</span>, <span class="number">247</span>, <span class="number">81</span>,
@@ -2929,7 +2919,7 @@
             bitcoin::Transaction::from_bytes(<span class="kw-2">&amp;</span>transaction, <span class="kw-2">&amp;</span>ModuleDecoderRegistry::default())
                 .unwrap();
         test_roundtrip_expected(
-            transaction,
+            <span class="kw-2">&amp;</span>transaction,
             <span class="kw-2">&amp;</span>[
                 <span class="number">2</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">1</span>, <span class="number">1</span>, <span class="number">211</span>, <span class="number">91</span>, <span class="number">102</span>, <span class="number">197</span>, <span class="number">76</span>, <span class="number">246</span>, <span class="number">192</span>, <span class="number">155</span>, <span class="number">129</span>, <span class="number">168</span>, <span class="number">217</span>, <span class="number">76</span>, <span class="number">213</span>,
                 <span class="number">209</span>, <span class="number">121</span>, <span class="number">113</span>, <span class="number">156</span>, <span class="number">215</span>, <span class="number">89</span>, <span class="number">92</span>, <span class="number">37</span>, <span class="number">132</span>, <span class="number">73</span>, <span class="number">69</span>, <span class="number">42</span>, <span class="number">147</span>, <span class="number">5</span>, <span class="number">171</span>, <span class="number">155</span>, <span class="number">18</span>, <span class="number">223</span>,
@@ -2950,7 +2940,7 @@
         )
         .unwrap();
         test_roundtrip_expected(
-            blockhash,
+            <span class="kw-2">&amp;</span>blockhash,
             <span class="kw-2">&amp;</span>[
                 <span class="number">242</span>, <span class="number">96</span>, <span class="number">118</span>, <span class="number">76</span>, <span class="number">42</span>, <span class="number">229</span>, <span class="number">64</span>, <span class="number">214</span>, <span class="number">67</span>, <span class="number">122</span>, <span class="number">136</span>, <span class="number">166</span>, <span class="number">217</span>, <span class="number">0</span>, <span class="number">30</span>, <span class="number">46</span>, <span class="number">143</span>, <span class="number">168</span>,
                 <span class="number">248</span>, <span class="number">168</span>, <span class="number">189</span>, <span class="number">101</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>,

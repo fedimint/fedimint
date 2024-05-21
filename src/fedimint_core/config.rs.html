@@ -1043,6 +1043,12 @@
 <a href="#1043" id="1043">1043</a>
 <a href="#1044" id="1044">1044</a>
 <a href="#1045" id="1045">1045</a>
+<a href="#1046" id="1046">1046</a>
+<a href="#1047" id="1047">1047</a>
+<a href="#1048" id="1048">1048</a>
+<a href="#1049" id="1049">1049</a>
+<a href="#1050" id="1050">1050</a>
+<a href="#1051" id="1051">1051</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet};
 <span class="kw">use </span>std::fmt::{Debug, Display};
 <span class="kw">use </span>std::hash::Hash;
@@ -1504,7 +1510,7 @@
     <span class="kw">fn </span>serialize&lt;S: Serializer&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, serializer: S) -&gt; <span class="prelude-ty">Result</span>&lt;S::Ok, S::Error&gt; {
         <span class="kw">let </span>modules: Vec&lt;<span class="kw">_</span>&gt; = <span class="self">self</span>.iter_modules().collect();
         <span class="kw">let </span><span class="kw-2">mut </span>serializer = serializer.serialize_map(<span class="prelude-val">Some</span>(modules.len()))<span class="question-mark">?</span>;
-        <span class="kw">for </span>(id, kind, params) <span class="kw">in </span>modules.into_iter() {
+        <span class="kw">for </span>(id, kind, params) <span class="kw">in </span>modules {
             serializer.serialize_key(<span class="kw-2">&amp;</span>id)<span class="question-mark">?</span>;
             serializer.serialize_value(<span class="kw-2">&amp;</span>(kind.clone(), params.clone()))<span class="question-mark">?</span>;
         }
@@ -1533,9 +1539,12 @@
     </span>M: AsRef&lt;<span class="kw">dyn </span>IDynCommonModuleInit + Send + Sync + <span class="lifetime">'static</span>&gt;,
 {
     <span class="kw">fn </span>from(value: Vec&lt;M&gt;) -&gt; <span class="self">Self </span>{
-        <span class="self">Self</span>(BTreeMap::from_iter(
-            value.into_iter().map(|i| (i.as_ref().module_kind(), i)),
-        ))
+        <span class="self">Self</span>(
+            value
+                .into_iter()
+                .map(|i| (i.as_ref().module_kind(), i))
+                .collect::&lt;BTreeMap&lt;<span class="kw">_</span>, <span class="kw">_</span>&gt;&gt;(),
+        )
     }
 }
 
@@ -1544,9 +1553,11 @@
     </span>M: AsRef&lt;<span class="macro">maybe_add_send_sync!</span>(<span class="kw">dyn </span>IDynCommonModuleInit + <span class="lifetime">'static</span>)&gt;,
 {
     <span class="kw">fn </span>from_iter&lt;T: IntoIterator&lt;Item = M&gt;&gt;(iter: T) -&gt; <span class="self">Self </span>{
-        <span class="self">Self</span>(BTreeMap::from_iter(
-            iter.into_iter().map(|i| (i.as_ref().module_kind(), i)),
-        ))
+        <span class="self">Self</span>(
+            iter.into_iter()
+                .map(|i| (i.as_ref().module_kind(), i))
+                .collect::&lt;BTreeMap&lt;<span class="kw">_</span>, <span class="kw">_</span>&gt;&gt;(),
+        )
     }
 }
 
@@ -1562,9 +1573,10 @@
     {
         <span class="kw">let </span>gen: M = gen.into();
         <span class="kw">let </span>kind = gen.as_ref().module_kind();
-        <span class="kw">if </span><span class="self">self</span>.<span class="number">0</span>.insert(kind.clone(), gen).is_some() {
-            <span class="macro">panic!</span>(<span class="string">"Can't insert module of same kind twice: {kind}"</span>);
-        }
+        <span class="macro">assert!</span>(
+            <span class="self">self</span>.<span class="number">0</span>.insert(kind.clone(), gen).is_none(),
+            <span class="string">"Can't insert module of same kind twice: {kind}"
+        </span>);
     }
 
     <span class="kw">pub fn </span>kinds(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; BTreeSet&lt;ModuleKind&gt; {
@@ -1944,7 +1956,7 @@
     <span class="kw">use </span><span class="kw">crate</span>::config::DkgGroup;
 
     <span class="kw">pub fn </span>serialize&lt;S: Serializer, G: DkgGroup&gt;(vec: <span class="kw-2">&amp;</span>[G], s: S) -&gt; <span class="prelude-ty">Result</span>&lt;S::Ok, S::Error&gt; {
-        <span class="kw">let </span>wrap_vec: Vec&lt;Wrap&lt;G&gt;&gt; = vec.iter().cloned().map(Wrap).collect();
+        <span class="kw">let </span>wrap_vec: Vec&lt;Wrap&lt;G&gt;&gt; = vec.iter().copied().map(Wrap).collect();
         wrap_vec.serialize(s)
     }
 

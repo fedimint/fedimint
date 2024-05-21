@@ -236,8 +236,8 @@
         <span class="kw">let </span>ciphertext = pk.encrypt(message);
         <span class="kw">let </span>decryption_share = sks.secret_key_share(<span class="number">0</span>).decrypt_share(<span class="kw-2">&amp;</span>ciphertext).unwrap();
 
-        test_roundtrip(ciphertext);
-        test_roundtrip(decryption_share);
+        test_roundtrip(<span class="kw-2">&amp;</span>ciphertext);
+        test_roundtrip(<span class="kw-2">&amp;</span>decryption_share);
     }
 }
 </code></pre></div></section></main></body></html>

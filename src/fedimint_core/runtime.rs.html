@@ -190,7 +190,7 @@
 </span><span class="kw">mod </span>r#impl {
     <span class="kw">pub use </span>tokio::task::{JoinError, JoinHandle};
 
-    <span class="kw">use super</span>::<span class="kw-2">*</span>;
+    <span class="kw">use super</span>::{Duration, Elapsed, Future, Instant, Instrument, LOG_RUNTIME};
 
     <span class="kw">pub fn </span>spawn&lt;F, T&gt;(name: <span class="kw-2">&amp;</span>str, future: F) -&gt; tokio::task::JoinHandle&lt;T&gt;
     <span class="kw">where
@@ -231,12 +231,12 @@
 
     <span class="kw">pub async fn </span>sleep(duration: Duration) {
         <span class="comment">// nosemgrep: ban-tokio-sleep
-        </span>tokio::time::sleep(duration).<span class="kw">await
-    </span>}
+        </span>tokio::time::sleep(duration).<span class="kw">await</span>;
+    }
 
     <span class="kw">pub async fn </span>sleep_until(deadline: Instant) {
-        tokio::time::sleep_until(deadline).<span class="kw">await
-    </span>}
+        tokio::time::sleep_until(deadline).<span class="kw">await</span>;
+    }
 
     <span class="kw">pub async fn </span>timeout&lt;T&gt;(duration: Duration, future: T) -&gt; <span class="prelude-ty">Result</span>&lt;T::Output, Elapsed&gt;
     <span class="kw">where

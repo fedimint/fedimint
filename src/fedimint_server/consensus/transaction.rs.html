@@ -139,7 +139,7 @@
         public_keys.push(meta.pub_key);
     }
 
-    transaction.validate_signatures(public_keys)<span class="question-mark">?</span>;
+    transaction.validate_signatures(<span class="kw-2">&amp;</span>public_keys)<span class="question-mark">?</span>;
 
     <span class="kw">let </span>txid = transaction.tx_hash();
 

@@ -3091,8 +3091,6 @@
 <a href="#3091" id="3091">3091</a>
 <a href="#3092" id="3092">3092</a>
 <a href="#3093" id="3093">3093</a>
-<a href="#3094" id="3094">3094</a>
-<a href="#3095" id="3095">3095</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! Core Fedimint database traits and types
 //!
 //! # Isolation of database transactions
@@ -3321,11 +3319,11 @@
         (<span class="kw-2">**</span><span class="self">self</span>).begin_transaction().<span class="kw">await
     </span>}
     <span class="kw">async fn </span>register(<span class="kw-2">&amp;</span><span class="self">self</span>, key: <span class="kw-2">&amp;</span>[u8]) {
-        (<span class="kw-2">**</span><span class="self">self</span>).register(key).<span class="kw">await
-    </span>}
+        (<span class="kw-2">**</span><span class="self">self</span>).register(key).<span class="kw">await</span>;
+    }
     <span class="kw">async fn </span>notify(<span class="kw-2">&amp;</span><span class="self">self</span>, key: <span class="kw-2">&amp;</span>[u8]) {
-        (<span class="kw-2">**</span><span class="self">self</span>).notify(key).<span class="kw">await
-    </span>}
+        (<span class="kw-2">**</span><span class="self">self</span>).notify(key).<span class="kw">await</span>;
+    }
 
     <span class="kw">fn </span>prefix_len(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; usize {
         (<span class="kw-2">**</span><span class="self">self</span>).prefix_len()
@@ -3355,11 +3353,11 @@
         ))
     }
     <span class="kw">async fn </span>register(<span class="kw-2">&amp;</span><span class="self">self</span>, key: <span class="kw-2">&amp;</span>[u8]) {
-        <span class="self">self</span>.notifications.register(key).<span class="kw">await
-    </span>}
+        <span class="self">self</span>.notifications.register(key).<span class="kw">await</span>;
+    }
     <span class="kw">async fn </span>notify(<span class="kw-2">&amp;</span><span class="self">self</span>, key: <span class="kw-2">&amp;</span>[u8]) {
-        <span class="self">self</span>.notifications.notify(key).<span class="kw">await
-    </span>}
+        <span class="self">self</span>.notifications.notify(key).<span class="kw">await</span>;
+    }
 
     <span class="kw">fn </span>prefix_len(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; usize {
         <span class="number">0
@@ -3553,10 +3551,7 @@
                     <span class="kw">return </span><span class="prelude-val">Ok</span>(val);
                 }
                 <span class="prelude-val">Err</span>(err) =&gt; {
-                    <span class="kw">if </span>max_attempts
-                        .map(|max_att| max_att &lt;= curr_attempts)
-                        .unwrap_or(<span class="bool-val">false</span>)
-                    {
+                    <span class="kw">if </span>max_attempts.is_some_and(|max_att| max_att &lt;= curr_attempts) {
                         <span class="macro">warn!</span>(
                             target: LOG_DB,
                             curr_attempts,
@@ -3678,12 +3673,12 @@
         })
     }
     <span class="kw">async fn </span>register(<span class="kw-2">&amp;</span><span class="self">self</span>, key: <span class="kw-2">&amp;</span>[u8]) {
-        <span class="self">self</span>.inner.register(<span class="kw-2">&amp;</span><span class="self">self</span>.get_full_key(key)).<span class="kw">await
-    </span>}
+        <span class="self">self</span>.inner.register(<span class="kw-2">&amp;</span><span class="self">self</span>.get_full_key(key)).<span class="kw">await</span>;
+    }
 
     <span class="kw">async fn </span>notify(<span class="kw-2">&amp;</span><span class="self">self</span>, key: <span class="kw-2">&amp;</span>[u8]) {
-        <span class="self">self</span>.inner.notify(<span class="kw-2">&amp;</span><span class="self">self</span>.get_full_key(key)).<span class="kw">await
-    </span>}
+        <span class="self">self</span>.inner.notify(<span class="kw-2">&amp;</span><span class="self">self</span>.get_full_key(key)).<span class="kw">await</span>;
+    }
 
     <span class="kw">fn </span>prefix_len(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; usize {
         <span class="self">self</span>.inner.prefix_len() + <span class="self">self</span>.prefix.len()
@@ -4130,7 +4125,7 @@
     {
         <span class="self">self</span>.raw_remove_by_prefix(<span class="kw-2">&amp;</span>key_prefix.to_bytes())
             .<span class="kw">await
-            </span>.expect(<span class="string">"Unrecoverable error when removing entries from the database"</span>)
+            </span>.expect(<span class="string">"Unrecoverable error when removing entries from the database"</span>);
     }
 }
 
@@ -4314,7 +4309,8 @@
             </span>.commit_tx()
             .<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="self">self</span>.notifications.submit_queue(
-            <span class="self">self</span>.notify_queue
+            <span class="kw-2">&amp;</span><span class="self">self
+                </span>.notify_queue
                 .take()
                 .expect(<span class="string">"commit must be called only once"</span>),
         );
@@ -5480,8 +5476,8 @@
                     <span class="number">10
                 </span>};
                 <span class="kw">for _ in </span><span class="number">0</span>..times {
-                    tokio::task::yield_now().<span class="kw">await
-                </span>}
+                    tokio::task::yield_now().<span class="kw">await</span>;
+                }
             }
 
             <span class="macro">join!</span>(
@@ -5524,8 +5520,8 @@
 
                     <span class="kw">match </span>(a, s) {
                         (<span class="prelude-val">None</span>, <span class="prelude-val">None</span>) | (<span class="prelude-val">Some</span>(<span class="kw">_</span>), <span class="prelude-val">Some</span>(<span class="kw">_</span>)) =&gt; {}
-                        (<span class="prelude-val">None</span>, <span class="prelude-val">Some</span>(<span class="kw">_</span>)) =&gt; <span class="macro">panic!</span>(<span class="string">"none some?! {}"</span>, i),
-                        (<span class="prelude-val">Some</span>(<span class="kw">_</span>), <span class="prelude-val">None</span>) =&gt; <span class="macro">panic!</span>(<span class="string">"some none?! {}"</span>, i),
+                        (<span class="prelude-val">None</span>, <span class="prelude-val">Some</span>(<span class="kw">_</span>)) =&gt; <span class="macro">panic!</span>(<span class="string">"none some?! {i}"</span>),
+                        (<span class="prelude-val">Some</span>(<span class="kw">_</span>), <span class="prelude-val">None</span>) =&gt; <span class="macro">panic!</span>(<span class="string">"some none?! {i}"</span>),
                     }
                 },
                 <span class="kw">async </span>{
@@ -6004,7 +6000,7 @@
                 attempts: failed_attempts,
                 ..
             } =&gt; {
-                <span class="macro">assert_eq!</span>(failed_attempts, <span class="number">5</span>)
+                <span class="macro">assert_eq!</span>(failed_attempts, <span class="number">5</span>);
             }
             AutocommitError::ClosureError { .. } =&gt; <span class="macro">panic!</span>(<span class="string">"Closure did not return error"</span>),
         }

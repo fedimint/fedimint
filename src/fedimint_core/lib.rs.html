@@ -1112,7 +1112,7 @@
 
 <span class="kw">impl </span>std::ops::SubAssign <span class="kw">for </span>Amount {
     <span class="kw">fn </span>sub_assign(<span class="kw-2">&amp;mut </span><span class="self">self</span>, rhs: <span class="self">Self</span>) {
-        <span class="self">self</span>.msats -= rhs.msats
+        <span class="self">self</span>.msats -= rhs.msats;
     }
 }
 
