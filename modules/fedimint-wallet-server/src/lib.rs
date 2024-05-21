@@ -43,6 +43,7 @@ use fedimint_core::server::DynServerModule;
 use fedimint_core::task::sleep;
 use fedimint_core::task::{TaskGroup, TaskHandle};
 use fedimint_core::time::now;
+use fedimint_core::util::{retry, FibonacciBackoff};
 use fedimint_core::{
     apply, async_trait_maybe_send, push_db_key_items, push_db_pair_items, Feerate, NumPeersExt,
     OutPoint, PeerId, ServerModule,
@@ -974,11 +975,19 @@ impl Wallet {
 
             // TODO: use batching for mainnet syncing
             trace!(block = height, "Fetching block hash");
-            let block_hash = self
-                .btc_rpc
-                .get_block_hash(height as u64)
+            let block_hash =
+                retry(
+                    "get_block_hash",
+                    FibonacciBackoff::default()
+                        .with_min_delay(Duration::from_secs(1))
+                        .with_max_delay(Duration::from_secs(10 * 60))
+                        .with_max_times(usize::MAX),
+                    || {
+                        self.btc_rpc.get_block_hash(height as u64) // TODO: use u64 for height everywhere
+                    },
+                )
                 .await
-                .expect("bitcoind rpc backend failed"); // TODO: use u64 for height everywhere
+                .expect("bitcoind rpc to get block hash");
 
             let pending_transactions = dbtx
                 .find_by_prefix(&PendingTransactionPrefixKey)
@@ -994,12 +1003,21 @@ impl Wallet {
                 "Recognizing change UTXOs"
             );
             for (txid, tx) in &pending_transactions {
-                if self
-                    .btc_rpc
-                    .is_tx_in_block(txid, &block_hash, height as u64)
-                    .await
-                    .unwrap_or_else(|_| panic!("Failed checking if tx is in block height {height}"))
-                {
+                let is_tx_in_block = retry(
+                    "is_tx_in_block",
+                    FibonacciBackoff::default()
+                        .with_min_delay(Duration::from_secs(1))
+                        .with_max_delay(Duration::from_secs(10 * 60))
+                        .with_max_times(usize::MAX),
+                    || {
+                        self.btc_rpc
+                            .is_tx_in_block(txid, &block_hash, height as u64)
+                    },
+                )
+                .await
+                .unwrap_or_else(|_| panic!("Failed checking if tx is in block height {height}"));
+
+                if is_tx_in_block {
                     debug!(?txid, ?height, ?block_hash, "Recognizing change UTXO");
                     self.recognize_change_utxo(dbtx, tx).await;
                 } else {
