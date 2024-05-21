@@ -2164,11 +2164,13 @@ dependencies = [
  "fedimint-client",
  "fedimint-core",
  "fedimint-meta-common",
+ "futures",
  "serde",
  "serde_json",
  "strum",
  "strum_macros",
  "thiserror",
+ "tracing",
 ]
 
 [[package]]

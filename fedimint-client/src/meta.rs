@@ -41,10 +41,10 @@ pub enum FetchKind {
     Background,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct MetaValues {
-    values: BTreeMap<MetaFieldKey, MetaFieldValue>,
-    revision: u64,
+    pub values: BTreeMap<MetaFieldKey, MetaFieldValue>,
+    pub revision: u64,
 }
 
 #[derive(Debug, Clone, Copy)]
