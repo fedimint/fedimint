@@ -994,25 +994,21 @@ impl Wallet {
                 "Recognizing change UTXOs"
             );
             for (txid, tx) in &pending_transactions {
-                if let Ok(Some(tx_height)) = self
+                if self
                     .btc_rpc
-                    .get_tx_block_height(txid)
+                    .is_tx_in_block(txid, &block_hash, height as u64)
                     .await
-                    .map(|r| r.filter(|tx_height| *tx_height == height as u64))
+                    .unwrap_or_else(|_| panic!("Failed checking if tx is in block height {height}"))
                 {
-                    if tx_height == height as u64 {
-                        debug!(?txid, ?tx_height, "Recognizing change UTXO");
-                        self.recognize_change_utxo(dbtx, tx).await;
-                    } else {
-                        debug!(
-                            ?txid,
-                            ?tx_height,
-                            ?height,
-                            "Pending transaction not yet confirmed in this block"
-                        );
-                    }
+                    debug!(?txid, ?height, ?block_hash, "Recognizing change UTXO");
+                    self.recognize_change_utxo(dbtx, tx).await;
                 } else {
-                    debug!(?txid, ?height, "Pending transaction not yet confirmed");
+                    debug!(
+                        ?txid,
+                        ?height,
+                        ?block_hash,
+                        "Pending transaction not yet confirmed in this block"
+                    );
                 }
             }
 

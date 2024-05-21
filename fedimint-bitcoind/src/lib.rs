@@ -138,13 +138,25 @@ pub trait IBitcoindRpc: Debug {
     /// when it makes sense.
     async fn submit_transaction(&self, transaction: Transaction);
 
-    /// Check if a transaction is included in a block
+    /// If a transaction is included in a block, returns the block height.
+    /// Note: calling this method with bitcoind as a backend must first call
+    /// `watch_script_history` or run bitcoind with txindex enabled.
     async fn get_tx_block_height(&self, txid: &Txid) -> Result<Option<u64>>;
+
+    /// Check if a transaction is included in a block
+    async fn is_tx_in_block(
+        &self,
+        txid: &Txid,
+        block_hash: &BlockHash,
+        block_height: u64,
+    ) -> Result<bool>;
 
     /// Watches for a script and returns any transactions associated with it
     ///
     /// Should be called once prior to transactions being submitted or watching
     /// may not occur on backends that need it
+    /// TODO: bitcoind backend is broken
+    /// `<https://github.com/fedimint/fedimint/issues/5329>`
     async fn watch_script_history(&self, script: &ScriptBuf) -> Result<()>;
 
     /// Get script transaction history
@@ -237,6 +249,20 @@ where
     async fn get_tx_block_height(&self, txid: &Txid) -> Result<Option<u64>> {
         self.retry_call(|| async { self.inner.get_tx_block_height(txid).await })
             .await
+    }
+
+    async fn is_tx_in_block(
+        &self,
+        txid: &Txid,
+        block_hash: &BlockHash,
+        block_height: u64,
+    ) -> Result<bool> {
+        self.retry_call(|| async {
+            self.inner
+                .is_tx_in_block(txid, block_hash, block_height)
+                .await
+        })
+        .await
     }
 
     async fn watch_script_history(&self, script: &ScriptBuf) -> Result<()> {
