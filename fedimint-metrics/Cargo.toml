@@ -15,7 +15,7 @@ name = "fedimint_metrics"
 path = "./src/lib.rs"
 
 [dependencies]
-anyhow = { version = "1.0.83", features = ["backtrace"] }
+anyhow = { version = "1.0.85", features = ["backtrace"] }
 axum = "0.7.5"
 fedimint-core = { version = "=0.4.0-alpha", path = "../fedimint-core" }
 lazy_static = "1.4.0"

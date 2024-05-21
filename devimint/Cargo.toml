@@ -12,7 +12,7 @@ name = "devimint"
 path = "src/main.rs"
 
 [dependencies]
-anyhow = { version = "1.0.83", features = ["backtrace"] }
+anyhow = { version = "1.0.85", features = ["backtrace"] }
 axum = { version = "0.7.5", features = ["tracing"] }
 bitcoincore-rpc = { workspace = true }
 clap = { version = "4.5.4", features = ["derive", "env", "std", "help", "usage", "error-context", "suggestions"], default-features = false }

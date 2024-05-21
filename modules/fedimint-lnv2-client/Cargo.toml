@@ -21,7 +21,7 @@ default =[]
 cli = ["dep:clap", "dep:serde_json"]
 
 [dependencies]
-anyhow = "1.0.83"
+anyhow = "1.0.85"
 async-trait = "0.1.80"
 async-stream = "0.3.5"
 aquamarine = "0.5.0"
@@ -37,7 +37,7 @@ fedimint-lnv2-common ={ path = "../fedimint-lnv2-common" }
 secp256k1 = { version="0.27.0", default-features=false }
 serde = { workspace = true }
 serde_json = { workspace = true, optional = true }
-thiserror = "1.0.60"
+thiserror = "1.0.61"
 tracing = "0.1.37"
 rand = { workspace = true }
 tpe = { package = "fedimint-tpe", version = "=0.4.0-alpha", path = "../../crypto/tpe" }
