@@ -3091,6 +3091,12 @@
 <a href="#3091" id="3091">3091</a>
 <a href="#3092" id="3092">3092</a>
 <a href="#3093" id="3093">3093</a>
+<a href="#3094" id="3094">3094</a>
+<a href="#3095" id="3095">3095</a>
+<a href="#3096" id="3096">3096</a>
+<a href="#3097" id="3097">3097</a>
+<a href="#3098" id="3098">3098</a>
+<a href="#3099" id="3099">3099</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! Core Fedimint database traits and types
 //!
 //! # Isolation of database transactions
@@ -4035,6 +4041,12 @@
         K::Value: MaybeSend + MaybeSync,
     {
         <span class="kw">if let </span><span class="prelude-val">Some</span>(prev) = <span class="self">self</span>.insert_entry(key, value).<span class="kw">await </span>{
+            <span class="macro">debug_assert!</span>(
+                <span class="bool-val">false</span>,
+                <span class="string">"Database overwriting element when expecting insertion of new entry. Key: {:?} Prev Value: {:?}"</span>,
+                key,
+                prev,
+            );
             <span class="macro">warn!</span>(
                 target: LOG_DB,
                 <span class="string">"Database overwriting element when expecting insertion of new
