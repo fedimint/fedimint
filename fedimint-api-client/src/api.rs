@@ -1,3 +1,4 @@
+use std::cmp::min;
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::fmt::{self, Debug, Display};
 use std::num::NonZeroUsize;
@@ -983,12 +984,18 @@ where
         &self,
         client_versions: &SupportedApiVersionsSummary,
     ) -> anyhow::Result<ApiVersionSet> {
-        fn is_supported(version: &ApiVersion, supported_versions: &MultiApiVersion) -> bool {
+        fn supported_minor(
+            version: &ApiVersion,
+            supported_versions: &MultiApiVersion,
+        ) -> Option<ApiVersion> {
             supported_versions
                 .0
                 .iter()
-                .filter(|v| version.major == v.major)
-                .any(|v| version.minor <= v.minor)
+                .find(|v| version.major == v.major)
+                .map(|v| ApiVersion {
+                    major: version.major,
+                    minor: min(version.minor, v.minor),
+                })
         }
 
         let federation_versions = self.supported_api_versions().await?;
@@ -998,19 +1005,19 @@ where
                 .core
                 .api
                 .into_iter()
-                .filter(|version| is_supported(version, &federation_versions.core.api))
+                .filter_map(|version| supported_minor(&version, &federation_versions.core.api))
                 .max()
                 .ok_or(anyhow!("Could not find a common core API version"))?,
             modules: client_versions
                 .modules
                 .iter()
                 .filter_map(|(module_instance_id, client_module_versions)| {
-                    let versions = federation_versions.modules.get(module_instance_id)?;
+                    let module_versions = federation_versions.modules.get(module_instance_id)?;
 
                     client_module_versions
                         .api
                         .into_iter()
-                        .filter(|module_version| is_supported(module_version, &versions.api))
+                        .filter_map(|version| supported_minor(&version, &module_versions.api))
                         .max()
                         .map(|v| (*module_instance_id, v))
                 })
