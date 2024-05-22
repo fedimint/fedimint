@@ -85,7 +85,7 @@ impl OperationId {
 impl<'a> Display for OperationIdShortFmt<'a> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         bitcoin29::hashes::hex::format_hex(&self.0 .0[0..4], f)?;
-        f.write_str("..")?;
+        f.write_str("_")?;
         bitcoin29::hashes::hex::format_hex(&self.0 .0[28..], f)?;
         Ok(())
     }
