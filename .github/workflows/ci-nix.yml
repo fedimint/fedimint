@@ -3,7 +3,7 @@
 name: "CI (nix)"
 
 env:
-  PERFIT_SERVER: https://perfit-fedimint.dpc.pw
+  PERFIT_SERVER: https://perfit.dev.fedimint.org
 
 # Controls when the workflow will run
 on:
