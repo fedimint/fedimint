@@ -882,6 +882,18 @@
 <a href="#882" id="882">882</a>
 <a href="#883" id="883">883</a>
 <a href="#884" id="884">884</a>
+<a href="#885" id="885">885</a>
+<a href="#886" id="886">886</a>
+<a href="#887" id="887">887</a>
+<a href="#888" id="888">888</a>
+<a href="#889" id="889">889</a>
+<a href="#890" id="890">890</a>
+<a href="#891" id="891">891</a>
+<a href="#892" id="892">892</a>
+<a href="#893" id="893">893</a>
+<a href="#894" id="894">894</a>
+<a href="#895" id="895">895</a>
+<a href="#896" id="896">896</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::ops::{ControlFlow, Deref <span class="kw">as _</span>};
 <span class="kw">use </span>std::path::Path;
 <span class="kw">use </span>std::str::FromStr;
@@ -923,12 +935,24 @@
 <span class="kw">impl </span>Bitcoind {
     <span class="kw">pub async fn </span>new(processmgr: <span class="kw-2">&amp;</span>ProcessManager, skip_setup: bool) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>&gt; {
         <span class="kw">let </span>btc_dir = utf8(<span class="kw-2">&amp;</span>processmgr.globals.FM_BTC_DIR);
+
+        <span class="comment">// TODO(support:v0.3)
+        // we need to run with txindex for versions before 0.4.0-alpha to correctly
+        // process change outputs
+        </span><span class="kw">let </span>fedimintd_version = <span class="kw">crate</span>::util::FedimintdCmd::version_or_default().<span class="kw">await</span>;
+        <span class="kw">let </span>tx_index = <span class="kw">if </span>fedimintd_version &lt; <span class="kw-2">*</span>VERSION_0_4_0_ALPHA {
+            <span class="string">"1"
+        </span>} <span class="kw">else </span>{
+            <span class="string">"0"
+        </span>};
+
         <span class="kw">let </span>conf = <span class="macro">format!</span>(
             <span class="macro">include_str!</span>(<span class="string">"cfg/bitcoin.conf"</span>),
             rpc_port = processmgr.globals.FM_PORT_BTC_RPC,
             p2p_port = processmgr.globals.FM_PORT_BTC_P2P,
             zmq_pub_raw_block = processmgr.globals.FM_PORT_BTC_ZMQ_PUB_RAW_BLOCK,
             zmq_pub_raw_tx = processmgr.globals.FM_PORT_BTC_ZMQ_PUB_RAW_TX,
+            tx_index = tx_index,
         );
         write_overwrite_async(processmgr.globals.FM_BTC_DIR.join(<span class="string">"bitcoin.conf"</span>), conf).<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>process = processmgr

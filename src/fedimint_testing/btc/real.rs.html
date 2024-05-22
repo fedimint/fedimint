@@ -282,6 +282,41 @@
 <a href="#282" id="282">282</a>
 <a href="#283" id="283">283</a>
 <a href="#284" id="284">284</a>
+<a href="#285" id="285">285</a>
+<a href="#286" id="286">286</a>
+<a href="#287" id="287">287</a>
+<a href="#288" id="288">288</a>
+<a href="#289" id="289">289</a>
+<a href="#290" id="290">290</a>
+<a href="#291" id="291">291</a>
+<a href="#292" id="292">292</a>
+<a href="#293" id="293">293</a>
+<a href="#294" id="294">294</a>
+<a href="#295" id="295">295</a>
+<a href="#296" id="296">296</a>
+<a href="#297" id="297">297</a>
+<a href="#298" id="298">298</a>
+<a href="#299" id="299">299</a>
+<a href="#300" id="300">300</a>
+<a href="#301" id="301">301</a>
+<a href="#302" id="302">302</a>
+<a href="#303" id="303">303</a>
+<a href="#304" id="304">304</a>
+<a href="#305" id="305">305</a>
+<a href="#306" id="306">306</a>
+<a href="#307" id="307">307</a>
+<a href="#308" id="308">308</a>
+<a href="#309" id="309">309</a>
+<a href="#310" id="310">310</a>
+<a href="#311" id="311">311</a>
+<a href="#312" id="312">312</a>
+<a href="#313" id="313">313</a>
+<a href="#314" id="314">314</a>
+<a href="#315" id="315">315</a>
+<a href="#316" id="316">316</a>
+<a href="#317" id="317">317</a>
+<a href="#318" id="318">318</a>
+<a href="#319" id="319">319</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::io::Cursor;
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
@@ -332,13 +367,13 @@
         </span>)
     }
 
-    <span class="kw">async fn </span>mine_blocks(<span class="kw-2">&amp;</span><span class="self">self</span>, block_num: u64) {
-        <span class="kw">if let </span><span class="prelude-val">Some</span>(block_hash) = <span class="self">self
+    <span class="kw">async fn </span>mine_blocks(<span class="kw-2">&amp;</span><span class="self">self</span>, block_num: u64) -&gt; Vec&lt;bitcoin::BlockHash&gt; {
+        <span class="kw">let </span>mined_block_hashes = <span class="self">self
             </span>.client
             .generate_to_address(block_num, <span class="kw-2">&amp;</span><span class="self">self</span>.get_new_address().<span class="kw">await</span>)
-            .expect(<span class="self">Self</span>::ERROR)
-            .last()
-        {
+            .expect(<span class="self">Self</span>::ERROR);
+
+        <span class="kw">if let </span><span class="prelude-val">Some</span>(block_hash) = mined_block_hashes.last() {
             <span class="kw">let </span>last_mined_block = <span class="self">self
                 </span>.client
                 .get_block_header_info(block_hash)
@@ -369,6 +404,8 @@
                 }
             }
         };
+
+        mined_block_hashes
     }
 
     <span class="kw">async fn </span>prepare_funding_wallet(<span class="kw-2">&amp;</span><span class="self">self</span>) {
@@ -387,11 +424,12 @@
             </span>.client
             .send_to_address(address, amount, <span class="prelude-val">None</span>, <span class="prelude-val">None</span>, <span class="prelude-val">None</span>, <span class="prelude-val">None</span>, <span class="prelude-val">None</span>, <span class="prelude-val">None</span>)
             .expect(<span class="self">Self</span>::ERROR);
-        <span class="self">self</span>.mine_blocks(<span class="number">1</span>).<span class="kw">await</span>;
+        <span class="kw">let </span>mined_block_hashes = <span class="self">self</span>.mine_blocks(<span class="number">1</span>).<span class="kw">await</span>;
+        <span class="kw">let </span>mined_block_hash = mined_block_hashes.first().expect(<span class="string">"mined a block"</span>);
 
         <span class="kw">let </span>tx = <span class="self">self
             </span>.client
-            .get_raw_transaction(<span class="kw-2">&amp;</span>id, <span class="prelude-val">None</span>)
+            .get_raw_transaction(<span class="kw-2">&amp;</span>id, <span class="prelude-val">Some</span>(mined_block_hash))
             .expect(<span class="self">Self</span>::ERROR);
         <span class="kw">let </span>proof = TxOutProof::consensus_decode(
             <span class="kw-2">&amp;mut </span>Cursor::new(<span class="kw">loop </span>{
@@ -438,6 +476,28 @@
                 }
             }
         }
+    }
+
+    <span class="kw">async fn </span>get_tx_block_height(<span class="kw-2">&amp;</span><span class="self">self</span>, txid: <span class="kw-2">&amp;</span>Txid) -&gt; <span class="prelude-ty">Option</span>&lt;u64&gt; {
+        <span class="kw">let </span>current_block_count = <span class="self">self
+            </span>.client
+            .get_block_count()
+            .expect(<span class="string">"failed to fetch chain tip"</span>);
+        (<span class="number">0</span>..=current_block_count)
+            .position(|height| {
+                <span class="kw">let </span>block_hash = <span class="self">self
+                    </span>.client
+                    .get_block_hash(height)
+                    .expect(<span class="string">"failed to fetch block hash"</span>);
+
+                <span class="self">self</span>.client
+                    .get_block_info(<span class="kw-2">&amp;</span>block_hash)
+                    .expect(<span class="string">"failed to fetch block info"</span>)
+                    .tx
+                    .iter()
+                    .any(|id| id == txid)
+            })
+            .map(|height| height <span class="kw">as </span>u64)
     }
 }
 
@@ -494,10 +554,10 @@
         })
     }
 
-    <span class="kw">async fn </span>mine_blocks(<span class="kw-2">&amp;</span><span class="self">self</span>, block_num: u64) {
+    <span class="kw">async fn </span>mine_blocks(<span class="kw-2">&amp;</span><span class="self">self</span>, block_num: u64) -&gt; Vec&lt;bitcoin::BlockHash&gt; {
         <span class="kw">let </span>_lock = <span class="self">self</span>.lock_exclusive().<span class="kw">await</span>;
-        <span class="self">self</span>.inner.mine_blocks(block_num).<span class="kw">await</span>;
-    }
+        <span class="self">self</span>.inner.mine_blocks(block_num).<span class="kw">await
+    </span>}
 
     <span class="kw">async fn </span>prepare_funding_wallet(<span class="kw-2">&amp;</span><span class="self">self</span>) {
         <span class="kw">let </span>_lock = <span class="self">self</span>.lock_exclusive().<span class="kw">await</span>;
@@ -526,6 +586,11 @@
     <span class="kw">async fn </span>get_mempool_tx_fee(<span class="kw-2">&amp;</span><span class="self">self</span>, txid: <span class="kw-2">&amp;</span>Txid) -&gt; Amount {
         <span class="kw">let </span>_lock = <span class="self">self</span>.lock_exclusive().<span class="kw">await</span>;
         <span class="self">self</span>.inner.get_mempool_tx_fee(txid).<span class="kw">await
+    </span>}
+
+    <span class="kw">async fn </span>get_tx_block_height(<span class="kw-2">&amp;</span><span class="self">self</span>, txid: <span class="kw-2">&amp;</span>Txid) -&gt; <span class="prelude-ty">Option</span>&lt;u64&gt; {
+        <span class="kw">let </span>_lock = <span class="self">self</span>.lock_exclusive().<span class="kw">await</span>;
+        <span class="self">self</span>.inner.get_tx_block_height(txid).<span class="kw">await
     </span>}
 }
 
@@ -535,11 +600,12 @@
         <span class="macro">panic!</span>(<span class="string">"Double-locking would lead to a hang"</span>);
     }
 
-    <span class="kw">async fn </span>mine_blocks(<span class="kw-2">&amp;</span><span class="self">self</span>, block_num: u64) {
+    <span class="kw">async fn </span>mine_blocks(<span class="kw-2">&amp;</span><span class="self">self</span>, block_num: u64) -&gt; Vec&lt;bitcoin::BlockHash&gt; {
         <span class="kw">let </span>pre = <span class="self">self</span>.inner.client.get_block_count().unwrap();
-        <span class="self">self</span>.inner.mine_blocks(block_num).<span class="kw">await</span>;
+        <span class="kw">let </span>mined_block_hashes = <span class="self">self</span>.inner.mine_blocks(block_num).<span class="kw">await</span>;
         <span class="kw">let </span>post = <span class="self">self</span>.inner.client.get_block_count().unwrap();
         <span class="macro">assert_eq!</span>(post - pre, block_num);
+        mined_block_hashes
     }
 
     <span class="kw">async fn </span>prepare_funding_wallet(<span class="kw-2">&amp;</span><span class="self">self</span>) {
@@ -564,6 +630,10 @@
 
     <span class="kw">async fn </span>get_mempool_tx_fee(<span class="kw-2">&amp;</span><span class="self">self</span>, txid: <span class="kw-2">&amp;</span>Txid) -&gt; Amount {
         <span class="self">self</span>.inner.get_mempool_tx_fee(txid).<span class="kw">await
+    </span>}
+
+    <span class="kw">async fn </span>get_tx_block_height(<span class="kw-2">&amp;</span><span class="self">self</span>, txid: <span class="kw-2">&amp;</span>Txid) -&gt; <span class="prelude-ty">Option</span>&lt;u64&gt; {
+        <span class="self">self</span>.inner.get_tx_block_height(txid).<span class="kw">await
     </span>}
 }
 </code></pre></div></section></main></body></html>

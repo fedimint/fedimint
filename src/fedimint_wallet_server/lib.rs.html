@@ -1814,6 +1814,20 @@
 <a href="#1814" id="1814">1814</a>
 <a href="#1815" id="1815">1815</a>
 <a href="#1816" id="1816">1816</a>
+<a href="#1817" id="1817">1817</a>
+<a href="#1818" id="1818">1818</a>
+<a href="#1819" id="1819">1819</a>
+<a href="#1820" id="1820">1820</a>
+<a href="#1821" id="1821">1821</a>
+<a href="#1822" id="1822">1822</a>
+<a href="#1823" id="1823">1823</a>
+<a href="#1824" id="1824">1824</a>
+<a href="#1825" id="1825">1825</a>
+<a href="#1826" id="1826">1826</a>
+<a href="#1827" id="1827">1827</a>
+<a href="#1828" id="1828">1828</a>
+<a href="#1829" id="1829">1829</a>
+<a href="#1830" id="1830">1830</a>
 </pre></div><pre class="rust"><code><span class="kw">pub mod </span>db;
 
 <span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap};
@@ -1859,6 +1873,7 @@
 </span><span class="kw">use </span>fedimint_core::task::sleep;
 <span class="kw">use </span>fedimint_core::task::{TaskGroup, TaskHandle};
 <span class="kw">use </span>fedimint_core::time::now;
+<span class="kw">use </span>fedimint_core::util::{retry, FibonacciBackoff};
 <span class="kw">use </span>fedimint_core::{
     apply, async_trait_maybe_send, push_db_key_items, push_db_pair_items, Feerate, NumPeersExt,
     OutPoint, PeerId, ServerModule,
@@ -2790,13 +2805,21 @@
 
             <span class="comment">// TODO: use batching for mainnet syncing
             </span><span class="macro">trace!</span>(block = height, <span class="string">"Fetching block hash"</span>);
-            <span class="kw">let </span>block_hash = <span class="self">self
-                </span>.btc_rpc
-                .get_block_hash(height <span class="kw">as </span>u64)
+            <span class="kw">let </span>block_hash =
+                retry(
+                    <span class="string">"get_block_hash"</span>,
+                    FibonacciBackoff::default()
+                        .with_min_delay(Duration::from_secs(<span class="number">1</span>))
+                        .with_max_delay(Duration::from_secs(<span class="number">10 </span>* <span class="number">60</span>))
+                        .with_max_times(usize::MAX),
+                    || {
+                        <span class="self">self</span>.btc_rpc.get_block_hash(height <span class="kw">as </span>u64) <span class="comment">// TODO: use u64 for height everywhere
+                    </span>},
+                )
                 .<span class="kw">await
-                </span>.expect(<span class="string">"bitcoind rpc backend failed"</span>); <span class="comment">// TODO: use u64 for height everywhere
+                </span>.expect(<span class="string">"bitcoind rpc to get block hash"</span>);
 
-            </span><span class="kw">let </span>pending_transactions = dbtx
+            <span class="kw">let </span>pending_transactions = dbtx
                 .find_by_prefix(<span class="kw-2">&amp;</span>PendingTransactionPrefixKey)
                 .<span class="kw">await
                 </span>.map(|(key, transaction)| (key.<span class="number">0</span>, transaction))
@@ -2810,25 +2833,30 @@
                 <span class="string">"Recognizing change UTXOs"
             </span>);
             <span class="kw">for </span>(txid, tx) <span class="kw">in </span><span class="kw-2">&amp;</span>pending_transactions {
-                <span class="kw">if let </span><span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(tx_height)) = <span class="self">self
-                    </span>.btc_rpc
-                    .get_tx_block_height(txid)
-                    .<span class="kw">await
-                    </span>.map(|r| r.filter(|tx_height| <span class="kw-2">*</span>tx_height == height <span class="kw">as </span>u64))
-                {
-                    <span class="kw">if </span>tx_height == height <span class="kw">as </span>u64 {
-                        <span class="macro">debug!</span>(<span class="question-mark">?</span>txid, <span class="question-mark">?</span>tx_height, <span class="string">"Recognizing change UTXO"</span>);
-                        <span class="self">self</span>.recognize_change_utxo(dbtx, tx).<span class="kw">await</span>;
-                    } <span class="kw">else </span>{
-                        <span class="macro">debug!</span>(
-                            <span class="question-mark">?</span>txid,
-                            <span class="question-mark">?</span>tx_height,
-                            <span class="question-mark">?</span>height,
-                            <span class="string">"Pending transaction not yet confirmed in this block"
-                        </span>);
-                    }
+                <span class="kw">let </span>is_tx_in_block = retry(
+                    <span class="string">"is_tx_in_block"</span>,
+                    FibonacciBackoff::default()
+                        .with_min_delay(Duration::from_secs(<span class="number">1</span>))
+                        .with_max_delay(Duration::from_secs(<span class="number">10 </span>* <span class="number">60</span>))
+                        .with_max_times(usize::MAX),
+                    || {
+                        <span class="self">self</span>.btc_rpc
+                            .is_tx_in_block(txid, <span class="kw-2">&amp;</span>block_hash, height <span class="kw">as </span>u64)
+                    },
+                )
+                .<span class="kw">await
+                </span>.unwrap_or_else(|<span class="kw">_</span>| <span class="macro">panic!</span>(<span class="string">"Failed checking if tx is in block height {height}"</span>));
+
+                <span class="kw">if </span>is_tx_in_block {
+                    <span class="macro">debug!</span>(<span class="question-mark">?</span>txid, <span class="question-mark">?</span>height, <span class="question-mark">?</span>block_hash, <span class="string">"Recognizing change UTXO"</span>);
+                    <span class="self">self</span>.recognize_change_utxo(dbtx, tx).<span class="kw">await</span>;
                 } <span class="kw">else </span>{
-                    <span class="macro">debug!</span>(<span class="question-mark">?</span>txid, <span class="question-mark">?</span>height, <span class="string">"Pending transaction not yet confirmed"</span>);
+                    <span class="macro">debug!</span>(
+                        <span class="question-mark">?</span>txid,
+                        <span class="question-mark">?</span>height,
+                        <span class="question-mark">?</span>block_hash,
+                        <span class="string">"Pending transaction not yet confirmed in this block"
+                    </span>);
                 }
             }
 
