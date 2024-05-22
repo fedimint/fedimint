@@ -501,6 +501,7 @@ impl ExecutorInner {
                     }));
 
                     debug!(target: LOG_CLIENT_REACTOR, operation_id = %state.operation_id().fmt_short(), total = futures.len(), transitions_num, "New active state machine.");
+                    trace!(target: LOG_CLIENT_REACTOR, state = ?state, "Started new active state machine, details.");
                 }
                 ExecutorLoopEvent::Triggered(TransitionForActiveState {
                     outcome,
