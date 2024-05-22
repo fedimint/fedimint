@@ -20,6 +20,7 @@ use tokio::io::AsyncWriteExt;
 use tracing::{debug, warn, Instrument, Span};
 use url::{Host, ParseError, Url};
 
+use crate::net::STANDARD_FEDIMINT_P2P_PORT;
 use crate::task::MaybeSend;
 use crate::{apply, async_trait_maybe_send, maybe_add_send, runtime};
 
@@ -115,7 +116,7 @@ impl SafeUrl {
         }
         match self.0.scheme() {
             // p2p port scheme
-            "fedimint" => Some(8173),
+            "fedimint" => Some(STANDARD_FEDIMINT_P2P_PORT),
             _ => self.0.port_or_known_default(),
         }
     }
