@@ -1241,7 +1241,7 @@
                 <span class="kw">yield </span>GatewayExtReceiveStates::Funding;
 
                 <span class="kw">let </span>state = <span class="kw">loop </span>{
-                    <span class="macro">debug!</span>(<span class="string">"Getting next ln receive state for {operation_id}"</span>);
+                    <span class="macro">debug!</span>(<span class="string">"Getting next ln receive state for {}"</span>, operation_id.fmt_short());
                     <span class="kw">if let </span><span class="prelude-val">Some</span>(GatewayClientStateMachines::Receive(state)) = stream.next().<span class="kw">await </span>{
                         <span class="kw">match </span>state.state {
                             IncomingSmStates::Preimage(preimage) =&gt;{
@@ -1266,7 +1266,7 @@
                                 <span class="kw">break </span>GatewayExtReceiveStates::FundingFailed{ error }
                             },
                             other =&gt; {
-                                <span class="macro">debug!</span>(<span class="string">"Got state {other:?} while awaiting for output of {operation_id}"</span>);
+                                <span class="macro">debug!</span>(<span class="string">"Got state {other:?} while awaiting for output of {}"</span>, operation_id.fmt_short());
                             }
                         }
                     }
@@ -1324,7 +1324,7 @@
                                         .<span class="kw">await</span>;
                                 }
                                 <span class="prelude-val">Err</span>(AddStateMachinesError::StateAlreadyExists) =&gt; {
-                                    <span class="macro">info!</span>(<span class="string">"State machine for operation {operation_id} already exists, will not add a new one"</span>)
+                                    <span class="macro">info!</span>(<span class="string">"State machine for operation {} already exists, will not add a new one"</span>, operation_id.fmt_short())
                                 }
                                 <span class="prelude-val">Err</span>(other) =&gt; {
                                     <span class="macro">anyhow::bail!</span>(<span class="string">"Failed to add state machines: {other:?}"</span>)
@@ -1357,7 +1357,7 @@
                 <span class="kw">yield </span>GatewayExtPayStates::Created;
 
                 <span class="kw">loop </span>{
-                    <span class="macro">debug!</span>(<span class="string">"Getting next ln pay state for {operation_id}"</span>);
+                    <span class="macro">debug!</span>(<span class="string">"Getting next ln pay state for {}"</span>, operation_id.fmt_short());
                     <span class="kw">if let </span><span class="prelude-val">Some</span>(GatewayClientStateMachines::Pay(state)) = stream.next().<span class="kw">await </span>{
                         <span class="kw">match </span>state.state {
                             GatewayPayStates::Preimage(out_points, preimage) =&gt; {
@@ -1386,27 +1386,27 @@
                                     }
                                     <span class="prelude-val">Err</span>(e) =&gt; {
                                         <span class="macro">warn!</span>(<span class="question-mark">?</span>operation_id, <span class="string">"Got failure {e:?} while awaiting for transaction {txid} to be accepted for"</span>);
-                                        <span class="kw">yield </span>GatewayExtPayStates::Fail { error, error_message: <span class="macro">format!</span>(<span class="string">"Refund transaction {txid} was not accepted by the federation. OperationId: {operation_id} Error: {e:?}"</span>) };
+                                        <span class="kw">yield </span>GatewayExtPayStates::Fail { error, error_message: <span class="macro">format!</span>(<span class="string">"Refund transaction {txid} was not accepted by the federation. OperationId: {} Error: {e:?}"</span>, operation_id.fmt_short()) };
                                     }
                                 }
                             }
                             GatewayPayStates::OfferDoesNotExist(contract_id) =&gt; {
-                                <span class="macro">warn!</span>(<span class="string">"Yielding OfferDoesNotExist state for {operation_id} and contract {contract_id}"</span>);
+                                <span class="macro">warn!</span>(<span class="string">"Yielding OfferDoesNotExist state for {} and contract {contract_id}"</span>, operation_id.fmt_short());
                                 <span class="kw">yield </span>GatewayExtPayStates::OfferDoesNotExist { contract_id };
                             }
                             GatewayPayStates::Failed{ error, error_message } =&gt; {
-                                <span class="macro">warn!</span>(<span class="string">"Yielding Fail state for {operation_id} due to {error:?} {error_message:?}"</span>);
+                                <span class="macro">warn!</span>(<span class="string">"Yielding Fail state for {} due to {error:?} {error_message:?}"</span>, operation_id.fmt_short());
                                 <span class="kw">yield </span>GatewayExtPayStates::Fail{ error, error_message };
                             },
                             GatewayPayStates::PayInvoice(<span class="kw">_</span>) =&gt; {
-                                <span class="macro">debug!</span>(<span class="string">"Got initial state PayInvoice while awaiting for output of {operation_id}"</span>);
+                                <span class="macro">debug!</span>(<span class="string">"Got initial state PayInvoice while awaiting for output of {}"</span>, operation_id.fmt_short());
                             }
                             other =&gt; {
-                                <span class="macro">info!</span>(<span class="string">"Got state {other:?} while awaiting for output of {operation_id}"</span>);
+                                <span class="macro">info!</span>(<span class="string">"Got state {other:?} while awaiting for output of {}"</span>, operation_id.fmt_short());
                             }
                         }
                     } <span class="kw">else </span>{
-                        <span class="macro">warn!</span>(<span class="string">"Got None while getting next ln pay state for {operation_id}"</span>);
+                        <span class="macro">warn!</span>(<span class="string">"Got None while getting next ln pay state for {}"</span>, operation_id.fmt_short());
                     }
                 }
             }

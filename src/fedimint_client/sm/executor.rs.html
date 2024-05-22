@@ -1829,11 +1829,11 @@
             </span><span class="kw">match </span>event {
                 ExecutorLoopEvent::New { state } =&gt; {
                     <span class="kw">if </span>currently_running_sms.contains(<span class="kw-2">&amp;</span>state) {
-                        <span class="macro">warn!</span>(target: LOG_CLIENT_REACTOR, operation_id = %state.operation_id(), <span class="string">"Received a state machine that is already running. Ignoring"</span>);
+                        <span class="macro">warn!</span>(target: LOG_CLIENT_REACTOR, operation_id = %state.operation_id().fmt_short(), <span class="string">"Received a state machine that is already running. Ignoring"</span>);
                         <span class="kw">continue</span>;
                     }
                     <span class="kw">let </span><span class="prelude-val">Some</span>(meta) = <span class="self">self</span>.get_active_state(<span class="kw-2">&amp;</span>state).<span class="kw">await else </span>{
-                        <span class="macro">warn!</span>(target: LOG_CLIENT_REACTOR, operation_id = %state.operation_id(), <span class="string">"Couldn't look up received state machine. Ignoring."</span>);
+                        <span class="macro">warn!</span>(target: LOG_CLIENT_REACTOR, operation_id = %state.operation_id().fmt_short(), <span class="string">"Couldn't look up received state machine. Ignoring."</span>);
                         <span class="kw">continue</span>;
                     };
 
@@ -1841,7 +1841,7 @@
                         </span>.get_transition_for(<span class="kw-2">&amp;</span>state, meta, <span class="kw-2">&amp;</span>global_context_gen)
                         .<span class="kw">await</span>;
                     <span class="kw">if </span>transitions.is_empty() {
-                        <span class="macro">warn!</span>(target: LOG_CLIENT_REACTOR, operation_id = %state.operation_id(), <span class="string">"Received an active state that doesn't produce any transitions. Ignoring."</span>);
+                        <span class="macro">warn!</span>(target: LOG_CLIENT_REACTOR, operation_id = %state.operation_id().fmt_short(), <span class="string">"Received an active state that doesn't produce any transitions. Ignoring."</span>);
                         <span class="kw">continue</span>;
                     }
 
@@ -1853,7 +1853,7 @@
                         ExecutorLoopEvent::Triggered(first_completed_result)
                     }));
 
-                    <span class="macro">debug!</span>(target: LOG_CLIENT_REACTOR, operation_id = %state.operation_id(), total = futures.len(), transitions_num, <span class="string">"New active state machine."</span>);
+                    <span class="macro">debug!</span>(target: LOG_CLIENT_REACTOR, operation_id = %state.operation_id().fmt_short(), total = futures.len(), transitions_num, <span class="string">"New active state machine."</span>);
                 }
                 ExecutorLoopEvent::Triggered(TransitionForActiveState {
                     outcome,
@@ -1863,13 +1863,13 @@
                 }) =&gt; {
                     <span class="macro">debug!</span>(
                         target: LOG_CLIENT_REACTOR,
-                        operation_id = %state.operation_id(),
+                        operation_id = %state.operation_id().fmt_short(),
                         <span class="string">"Triggered state transition"</span>,
                     );
                     <span class="kw">let </span>span = <span class="macro">tracing::debug_span!</span>(
                         target: LOG_CLIENT_REACTOR,
                         <span class="string">"sm_transition"</span>,
-                        operation_id = %state.operation_id()
+                        operation_id = %state.operation_id().fmt_short()
                     );
                     <span class="comment">// Perform the transition as another future, so transitions can happen in
                     // parallel.
@@ -1990,7 +1990,7 @@
                     </span>);
                     <span class="macro">debug!</span>(
                         target: LOG_CLIENT_REACTOR,
-                        operation_id = %state.operation_id(),
+                        operation_id = %state.operation_id().fmt_short(),
                         outcome_active = outcome.is_active(),
                         total = futures.len(),
                         <span class="string">"State transition complete"
@@ -1998,7 +1998,7 @@
                     <span class="macro">trace!</span>(
                         target: LOG_CLIENT_REACTOR,
                         <span class="question-mark">?</span>outcome,
-                        operation_id = %state.operation_id(), total = futures.len(),
+                        operation_id = %state.operation_id().fmt_short(), total = futures.len(),
                         <span class="string">"State transition complete"
                     </span>);
                 }

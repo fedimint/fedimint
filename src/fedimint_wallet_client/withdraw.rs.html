@@ -240,10 +240,10 @@
 
                 e.report_if_important();
                 <span class="macro">debug!</span>(
-                    error = e.to_string(),
-                    operation_id = operation_id.to_string(),
-                    <span class="string">"Retrying in {}s"</span>,
-                    RETRY_DELAY.as_secs_f64()
+                    error = %e,
+                    operation_id = %operation_id.fmt_short(),
+                    delay_secs =  RETRY_DELAY.as_secs_f64(),
+                    <span class="string">"Waiting before retry"</span>,
                 );
 
                 sleep(RETRY_DELAY).<span class="kw">await</span>;

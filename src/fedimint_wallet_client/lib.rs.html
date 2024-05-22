@@ -1164,7 +1164,7 @@
             </span>.client_ctx
             .get_operation(operation_id)
             .<span class="kw">await
-            </span>.with_context(|| <span class="macro">anyhow!</span>(<span class="string">"Operation not found: {operation_id}"</span>))<span class="question-mark">?</span>;
+            </span>.with_context(|| <span class="macro">anyhow!</span>(<span class="string">"Operation not found: {}"</span>, operation_id.fmt_short()))<span class="question-mark">?</span>;
 
         <span class="kw">if </span>operation_log_entry.operation_module_kind() != WalletCommonInit::KIND.as_str() {
             <span class="macro">bail!</span>(<span class="string">"Operation is not a wallet operation"</span>);
@@ -1325,7 +1325,7 @@
             </span>.client_ctx
             .get_operation(operation_id)
             .<span class="kw">await
-            </span>.with_context(|| <span class="macro">anyhow!</span>(<span class="string">"Operation not found: {operation_id}"</span>))<span class="question-mark">?</span>;
+            </span>.with_context(|| <span class="macro">anyhow!</span>(<span class="string">"Operation not found: {}"</span>, operation_id.fmt_short()))<span class="question-mark">?</span>;
 
         <span class="kw">if </span>operation.operation_module_kind() != WalletCommonInit::KIND.as_str() {
             <span class="macro">bail!</span>(<span class="string">"Operation is not a wallet operation"</span>);

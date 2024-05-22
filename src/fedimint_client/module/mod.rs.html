@@ -869,6 +869,12 @@
 <a href="#869" id="869">869</a>
 <a href="#870" id="870">870</a>
 <a href="#871" id="871">871</a>
+<a href="#872" id="872">872</a>
+<a href="#873" id="873">873</a>
+<a href="#874" id="874">874</a>
+<a href="#875" id="875">875</a>
+<a href="#876" id="876">876</a>
+<a href="#877" id="877">877</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>core::fmt;
 <span class="kw">use </span>std::any::Any;
 <span class="kw">use </span>std::fmt::Debug;
@@ -1342,7 +1348,10 @@
         <span class="kw">let </span><span class="kw-2">mut </span>dbtx = db.begin_transaction().<span class="kw">await</span>;
 
         <span class="kw">if </span>Client::operation_exists_dbtx(<span class="kw-2">&amp;mut </span>dbtx.to_ref_nc(), operation_id).<span class="kw">await </span>{
-            <span class="macro">bail!</span>(<span class="string">"Operation with id {operation_id} already exists"</span>);
+            <span class="macro">bail!</span>(
+                <span class="string">"Operation with id {} already exists"</span>,
+                operation_id.fmt_short()
+            );
         }
 
         <span class="self">self</span>.client
@@ -1358,9 +1367,12 @@
             .<span class="kw">await
             </span>.expect(<span class="string">"State machine is valid"</span>);
 
-        dbtx.commit_tx_result()
-            .<span class="kw">await
-            </span>.map_err(|<span class="kw">_</span>| <span class="macro">anyhow!</span>(<span class="string">"Operation with id {operation_id} already exists"</span>))<span class="question-mark">?</span>;
+        dbtx.commit_tx_result().<span class="kw">await</span>.map_err(|<span class="kw">_</span>| {
+            <span class="macro">anyhow!</span>(
+                <span class="string">"Operation with id {} already exists"</span>,
+                operation_id.fmt_short()
+            )
+        })<span class="question-mark">?</span>;
 
         <span class="prelude-val">Ok</span>(())
     }

@@ -690,6 +690,9 @@
 <a href="#690" id="690">690</a>
 <a href="#691" id="691">691</a>
 <a href="#692" id="692">692</a>
+<a href="#693" id="693">693</a>
+<a href="#694" id="694">694</a>
+<a href="#695" id="695">695</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::ffi;
 <span class="kw">use </span>std::str::FromStr;
@@ -965,7 +968,7 @@
                     )
                     .<span class="kw">await</span><span class="question-mark">?
             </span>};
-            <span class="macro">info!</span>(<span class="string">"Spend e-cash operation: {operation}"</span>);
+            <span class="macro">info!</span>(<span class="string">"Spend e-cash operation: {}"</span>, operation.fmt_short());
 
             <span class="prelude-val">Ok</span>(<span class="macro">json!</span>({
                 <span class="string">"notes"</span>: notes,
@@ -1110,7 +1113,10 @@
                 .pay_bolt11_invoice(ln_gateway, bolt11, ())
                 .<span class="kw">await</span><span class="question-mark">?</span>;
             <span class="kw">let </span>operation_id = payment_type.operation_id();
-            <span class="macro">info!</span>(<span class="string">"Gateway fee: {fee}, payment operation id: {operation_id}"</span>);
+            <span class="macro">info!</span>(
+                <span class="string">"Gateway fee: {fee}, payment operation id: {}"</span>,
+                operation_id.fmt_short()
+            );
             <span class="kw">if </span>finish_in_background {
                 client
                     .get_first_module::&lt;LightningClientModule&gt;()

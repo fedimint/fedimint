@@ -1696,9 +1696,9 @@
     </span>InvoiceMissingAmount,
     <span class="attr">#[error(<span class="string">"The invoice has expired"</span>)]
     </span>InvoiceExpired,
-    <span class="attr">#[error(<span class="string">"A previous payment for the same invoice is still pending: {0}"</span>)]
+    <span class="attr">#[error(<span class="string">"A previous payment for the same invoice is still pending: {}"</span>, .<span class="number">0</span>.fmt_full())]
     </span>PendingPreviousPayment(OperationId),
-    <span class="attr">#[error(<span class="string">"A previous payment for the same invoice was successful: {0}"</span>)]
+    <span class="attr">#[error(<span class="string">"A previous payment for the same invoice was successful: {}"</span>, .<span class="number">0</span>.fmt_full())]
     </span>SuccessfulPreviousPayment(OperationId),
     <span class="attr">#[error(<span class="string">"Gateway error: {0}"</span>)]
     </span>GatewayError(GatewayError),

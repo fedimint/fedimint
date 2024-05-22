@@ -393,9 +393,9 @@
                 .collect::&lt;Vec&lt;(S, <span class="kw">_</span>)&gt;&gt;();
             all_states_timed.sort_by(|(<span class="kw">_</span>, t1), (<span class="kw">_</span>, t2)| t1.cmp(t2));
             <span class="macro">debug!</span>(
-                %operation_id,
-                <span class="string">"Returning {} state transitions from DB for notifier subscription"</span>,
-                all_states_timed.len()
+                operation_id = %operation_id.fmt_short(),
+                num = all_states_timed.len(),
+                <span class="string">"Returning state transitions from DB for notifier subscription"</span>,
             );
             all_states_timed
                 .into_iter()
@@ -410,7 +410,7 @@
                 <span class="kw">let </span>db_states = db_states.clone();
                 <span class="kw">async move </span>{
                     <span class="kw">if </span>state.operation_id() == operation_id {
-                        <span class="macro">trace!</span>(%operation_id, <span class="question-mark">?</span>state, <span class="string">"Received state transition notification"</span>);
+                        <span class="macro">trace!</span>(operation_id = %operation_id.fmt_short(), <span class="question-mark">?</span>state, <span class="string">"Received state transition notification"</span>);
                         <span class="comment">// Deduplicate events that might have both come from the DB and streamed,
                         // due to subscribing to notifier before querying the DB.
                         //
@@ -419,7 +419,7 @@
                         // so the overlap here should be minimal.
                         // And we'll rewrite the whole thing anyway and use only db as a reference.
                         </span><span class="kw">if </span>db_states.iter().any(|db_s| db_s == <span class="kw-2">&amp;</span>state) {
-                            <span class="macro">debug!</span>(%operation_id, <span class="question-mark">?</span>state, <span class="string">"Ignoring duplicated event"</span>);
+                            <span class="macro">debug!</span>(operation_id = %operation_id.fmt_short(), <span class="question-mark">?</span>state, <span class="string">"Ignoring duplicated event"</span>);
                             <span class="kw">return </span><span class="prelude-val">None</span>;
                         }
                         <span class="prelude-val">Some</span>(state)

@@ -2436,7 +2436,7 @@
 
 <span class="attr">#[derive(thiserror::Error, Debug, Clone)]
 </span><span class="kw">pub enum </span>PayBolt11InvoiceError {
-    <span class="attr">#[error(<span class="string">"Previous payment attempt({}) still in progress"</span>, .operation_id)]
+    <span class="attr">#[error(<span class="string">"Previous payment attempt({}) still in progress"</span>, .operation_id.fmt_full())]
     </span>PreviousPaymentAttemptStillInProgress { operation_id: OperationId },
     <span class="attr">#[error(<span class="string">"No LN gateway available"</span>)]
     </span>NoLnGatewayAvailable,

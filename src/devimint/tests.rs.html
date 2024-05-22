@@ -2586,6 +2586,10 @@
 <a href="#2586" id="2586">2586</a>
 <a href="#2587" id="2587">2587</a>
 <a href="#2588" id="2588">2588</a>
+<a href="#2589" id="2589">2589</a>
+<a href="#2590" id="2590">2590</a>
+<a href="#2591" id="2591">2591</a>
+<a href="#2592" id="2592">2592</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashSet};
 <span class="kw">use </span>std::io::Write;
 <span class="kw">use </span>std::ops::ControlFlow;
@@ -3559,7 +3563,9 @@
     <span class="comment">// Receive the ecash notes
     </span><span class="macro">info!</span>(<span class="string">"Testing receiving e-cash notes"</span>);
     <span class="kw">let </span>operation_id = ln_invoice_response.operation_id;
-    <span class="macro">cmd!</span>(client, <span class="string">"await-invoice"</span>, operation_id).run().<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="macro">cmd!</span>(client, <span class="string">"await-invoice"</span>, operation_id.fmt_full())
+        .run()
+        .<span class="kw">await</span><span class="question-mark">?</span>;
 
     <span class="comment">// Assert balances changed by 1100000 msat
     </span><span class="kw">let </span>final_cln_incoming_client_balance = client.balance().<span class="kw">await</span><span class="question-mark">?</span>;
@@ -3681,7 +3687,9 @@
     <span class="comment">// Receive the ecash notes
     </span><span class="macro">info!</span>(<span class="string">"Testing receiving ecash notes"</span>);
     <span class="kw">let </span>operation_id = recv.operation_id;
-    <span class="macro">cmd!</span>(client, <span class="string">"await-invoice"</span>, operation_id).run().<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="macro">cmd!</span>(client, <span class="string">"await-invoice"</span>, operation_id.fmt_full())
+        .run()
+        .<span class="kw">await</span><span class="question-mark">?</span>;
 
     <span class="comment">// Assert balances changed by 1_300_000 msat
     </span><span class="kw">let </span>final_lnd_incoming_client_balance = client.balance().<span class="kw">await</span><span class="question-mark">?</span>;
