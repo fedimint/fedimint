@@ -113,9 +113,10 @@ pub fn attach_endpoints<State, T>(
             endpoint.path
         };
         // Check if paths contain any abnormal characters
-        if path.contains(|c: char| !matches!(c, '0'..='9' | 'a'..='z' | '_')) {
-            panic!("Constructing bad path name {path}");
-        }
+        assert!(
+            !path.contains(|c: char| !matches!(c, '0'..='9' | 'a'..='z' | '_')),
+            "Constructing bad path name {path}"
+        );
 
         // Another memory leak that is fine because the function is only called once at
         // startup

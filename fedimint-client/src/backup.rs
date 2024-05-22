@@ -260,9 +260,9 @@ impl Client {
         }
 
         Ok(ClientBackup {
+            session_count,
             metadata,
             modules,
-            session_count,
         })
     }
 

@@ -291,8 +291,8 @@ async fn main() -> anyhow::Result<()> {
                 .set_configuration(SetConfigurationPayload {
                     password,
                     num_route_hints,
-                    network,
                     routing_fees,
+                    network,
                     per_federation_routing_fees,
                 })
                 .await?;
@@ -370,5 +370,5 @@ pub fn print_response<T: Serialize>(val: T) {
     println!(
         "{}",
         serde_json::to_string_pretty(&val).expect("Cannot serialize")
-    )
+    );
 }

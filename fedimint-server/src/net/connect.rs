@@ -82,7 +82,7 @@ pub struct PeerCertStore {
 impl TlsTcpConnector {
     pub fn new(cfg: TlsConfig, our_id: PeerId) -> TlsTcpConnector {
         let mut cert_store = RootCertStore::empty();
-        for (_, cert) in cfg.peer_certs.iter() {
+        for cert in cfg.peer_certs.values() {
             cert_store
                 .add(cert)
                 .expect("Could not add peer certificate");
@@ -177,7 +177,7 @@ where
         let tls_conn = connector
             .connect(
                 fake_domain,
-                TcpStream::connect(parse_host_port(destination)?).await?,
+                TcpStream::connect(parse_host_port(&destination)?).await?,
             )
             .await?;
 
@@ -232,7 +232,7 @@ pub fn dns_sanitize(name: &str) -> String {
 }
 
 /// Parses the host and port from a url
-pub fn parse_host_port(url: SafeUrl) -> anyhow::Result<String> {
+pub fn parse_host_port(url: &SafeUrl) -> anyhow::Result<String> {
     let host = url
         .host_str()
         .ok_or_else(|| format_err!("Missing host in {url}"))?;
@@ -640,7 +640,7 @@ pub mod mock {
             let mut clients_lock = self.clients.try_lock().map_err(|e| {
                 anyhow!("Mock network mutex busy or poisoned, the network stack will re-try anyway: {e:?}")
             })?;
-            if let Some(client) = clients_lock.get_mut(&parse_host_port(destination)?) {
+            if let Some(client) = clients_lock.get_mut(&parse_host_port(&destination)?) {
                 let (stream_our, stream_theirs) = tokio::io::duplex(43_689);
                 let mut stream_our = UnreliableDuplexStream::new(stream_our, self.reliability);
                 let stream_theirs = UnreliableDuplexStream::new(stream_theirs, self.reliability);

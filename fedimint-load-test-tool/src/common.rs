@@ -276,7 +276,7 @@ pub async fn gateway_pay_invoice(
                 break;
             }
             LnPayState::WaitingForRefund { error_reason } => {
-                warn!("{prefix} Waiting for refund: {error_reason:?}")
+                warn!("{prefix} Waiting for refund: {error_reason:?}");
             }
             LnPayState::UnexpectedError { error_message } => {
                 bail!("Failed to pay invoice: {error_message:?}")
@@ -386,7 +386,7 @@ pub async fn remint_denomination(
     for i in 0..quantity {
         let out_point = OutPoint {
             txid,
-            out_idx: i as u64,
+            out_idx: u64::from(i),
         };
         mint_client
             .await_output_finalized(operation_id, out_point)

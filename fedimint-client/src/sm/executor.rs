@@ -798,12 +798,7 @@ impl ExecutorBuilder {
     /// Build [`Executor`] and spawn background task in `tasks` executing active
     /// state machines. The supplied database `db` must support isolation, so
     /// cannot be an isolated DB instance itself.
-    pub async fn build(
-        self,
-        db: Database,
-        notifier: Notifier,
-        client_task_group: TaskGroup,
-    ) -> Executor {
+    pub fn build(self, db: Database, notifier: Notifier, client_task_group: TaskGroup) -> Executor {
         let (sm_update_tx, sm_update_rx) = tokio::sync::mpsc::unbounded_channel();
 
         let inner = Arc::new(ExecutorInner {
@@ -1314,9 +1309,8 @@ mod tests {
                 broadcast: broadcast.clone(),
             },
         );
-        let executor = executor_builder
-            .build(db.clone(), Notifier::new(db.clone()), TaskGroup::new())
-            .await;
+        let executor =
+            executor_builder.build(db.clone(), Notifier::new(db.clone()), TaskGroup::new());
         executor
             .start_executor(Arc::new(|_, _| DynGlobalClientContext::new_fake()))
             .await;

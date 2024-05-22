@@ -104,7 +104,7 @@ impl ConfigGenApi {
     ) -> ApiResult<MutexGuard<ConfigGenState>> {
         let state = self.state.lock().await;
         if !statuses.contains(&state.status) {
-            return Self::bad_request(&format!("Expected to be in one of {:?} states", statuses));
+            return Self::bad_request(&format!("Expected to be in one of {statuses:?} states"));
         }
         Ok(state)
     }
@@ -441,22 +441,19 @@ impl ConfigGenApi {
     async fn await_leader_restart(&self, client: &DynGlobalApi) -> ApiResult<()> {
         let mut retries = 0;
         loop {
-            match client.status().await {
-                Ok(status) => {
-                    if status.server == ServerStatus::AwaitingPassword
-                        || status.server == ServerStatus::SharingConfigGenParams
-                    {
-                        break Ok(());
-                    }
+            if let Ok(status) = client.status().await {
+                if status.server == ServerStatus::AwaitingPassword
+                    || status.server == ServerStatus::SharingConfigGenParams
+                {
+                    break Ok(());
                 }
-                Err(_) => {
-                    if retries > 3 {
-                        return Err(ApiError::not_found(
-                            "Unable to connect to the leader".to_string(),
-                        ));
-                    }
-                    retries += 1;
+            } else {
+                if retries > 3 {
+                    return Err(ApiError::not_found(
+                        "Unable to connect to the leader".to_string(),
+                    ));
                 }
+                retries += 1;
             }
             sleep(Duration::from_millis(100)).await;
         }
@@ -703,7 +700,7 @@ impl HasApiContext<ConfigGenApi> for ConfigGenApi {
         let mut dbtx = self.db.begin_transaction().await;
         if let Some(id) = id {
             db = self.db.with_prefix_module_id(id);
-            dbtx = dbtx.with_prefix_module_id(id)
+            dbtx = dbtx.with_prefix_module_id(id);
         }
         let state = self.state.lock().await;
         let auth = request.auth.as_ref();
@@ -1057,7 +1054,7 @@ mod tests {
         /// reads the dummy module config from the filesystem
         fn read_config(&self) -> ServerConfig {
             let auth = fs::read_to_string(self.dir.join(PLAINTEXT_PASSWORD));
-            read_server_config(&auth.unwrap(), self.dir.clone()).unwrap()
+            read_server_config(&auth.unwrap(), &self.dir).unwrap()
         }
     }
 

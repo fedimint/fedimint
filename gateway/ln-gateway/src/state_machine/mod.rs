@@ -560,7 +560,7 @@ impl GatewayClientModule {
                                         .await;
                                 }
                                 Err(AddStateMachinesError::StateAlreadyExists) => {
-                                    info!("State machine for operation {} already exists, will not add a new one", operation_id.fmt_short())
+                                    info!("State machine for operation {} already exists, will not add a new one", operation_id.fmt_short());
                                 }
                                 Err(other) => {
                                     anyhow::bail!("Failed to add state machines: {other:?}")

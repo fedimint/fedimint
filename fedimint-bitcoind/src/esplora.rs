@@ -59,13 +59,13 @@ impl IBitcoindRpc for EsploraClient {
 
     async fn get_block_count(&self) -> anyhow::Result<u64> {
         match self.0.get_height().await {
-            Ok(height) => Ok(height as u64 + 1),
+            Ok(height) => Ok(u64::from(height) + 1),
             Err(e) => Err(e.into()),
         }
     }
 
     async fn get_block_hash(&self, height: u64) -> anyhow::Result<BlockHash> {
-        Ok(self.0.get_block_hash(height as u32).await?)
+        Ok(self.0.get_block_hash(u32::try_from(height)?).await?)
     }
 
     async fn get_fee_rate(&self, confirmation_target: u16) -> anyhow::Result<Option<Feerate>> {
@@ -98,7 +98,7 @@ impl IBitcoindRpc for EsploraClient {
             .get_tx_status(txid)
             .await?
             .block_height
-            .map(|height| height as u64))
+            .map(u64::from))
     }
 
     async fn is_tx_in_block(

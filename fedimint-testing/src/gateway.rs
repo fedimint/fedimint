@@ -49,7 +49,7 @@ pub struct GatewayTest {
 
 impl GatewayTest {
     /// RPC client for communicating with the gateway admin API
-    pub async fn get_rpc(&self) -> GatewayRpcClient {
+    pub fn get_rpc(&self) -> GatewayRpcClient {
         GatewayRpcClient::new(self.versioned_api.clone(), None)
     }
 
@@ -67,7 +67,6 @@ impl GatewayTest {
         let invite_code = fed.invite_code().to_string();
         let rpc = self
             .get_rpc()
-            .await
             .with_password(Some(DEFAULT_GATEWAY_PASSWORD.to_string()));
         rpc.connect_federation(ConnectFedPayload { invite_code })
             .await
@@ -203,9 +202,9 @@ impl Drop for GatewayTest {
         block_in_place(move || {
             block_on(async move {
                 if let Err(e) = self.task_group.clone().shutdown_join_all(None).await {
-                    warn!("Got error shutting down GatewayTest: {e:?}")
+                    warn!("Got error shutting down GatewayTest: {e:?}");
                 }
-            })
+            });
         });
     }
 }
@@ -231,7 +230,7 @@ impl FromStr for LightningNodeType {
         match s.to_lowercase().as_str() {
             "cln" => Ok(LightningNodeType::Cln),
             "lnd" => Ok(LightningNodeType::Lnd),
-            _ => Err(format!("Invalid value for LightningNodeType: {}", s)),
+            _ => Err(format!("Invalid value for LightningNodeType: {s}")),
         }
     }
 }

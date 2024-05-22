@@ -119,7 +119,7 @@ impl<S: MetaSource + ?Sized> MetaService<S> {
     /// Wait until Meta Service is initialized, after this `get_field` will not
     /// block.
     pub async fn wait_initialization(&self) {
-        self.initial_fetch_waiter.wait().await
+        self.initial_fetch_waiter.wait().await;
     }
 
     /// NOTE: this subscription never ends even after update task is shutdown.
@@ -231,7 +231,7 @@ pub struct LegacyMetaSource {
 #[apply(async_trait_maybe_send!)]
 impl MetaSource for LegacyMetaSource {
     async fn wait_for_update(&self) {
-        fedimint_core::runtime::sleep(Duration::from_secs(10 * 60)).await
+        fedimint_core::runtime::sleep(Duration::from_secs(10 * 60)).await;
     }
 
     async fn fetch(
@@ -301,11 +301,10 @@ pub async fn fetch_meta_overrides(
         .remove(&federation_id)
         .with_context(|| anyhow::format_err!("No entry for federation {federation_id} in {url}"))?
         .into_iter()
-        .filter_map(|(key, value)| match value {
-            serde_json::Value::String(value_str) => {
+        .filter_map(|(key, value)| {
+            if let serde_json::Value::String(value_str) = value {
                 Some((MetaFieldKey(key), MetaFieldValue(value_str)))
-            }
-            _ => {
+            } else {
                 warn!("Meta override map contained non-string key: {key}, ignoring");
                 None
             }

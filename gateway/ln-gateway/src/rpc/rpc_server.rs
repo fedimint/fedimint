@@ -307,7 +307,7 @@ async fn backup(
     Extension(gateway): Extension<Gateway>,
     Json(payload): Json<BackupPayload>,
 ) -> Result<impl IntoResponse, GatewayError> {
-    gateway.handle_backup_msg(payload).await?;
+    gateway.handle_backup_msg(payload)?;
     Ok(())
 }
 
@@ -317,7 +317,7 @@ async fn restore(
     Extension(gateway): Extension<Gateway>,
     Json(payload): Json<RestorePayload>,
 ) -> Result<impl IntoResponse, GatewayError> {
-    gateway.handle_restore_msg(payload).await?;
+    gateway.handle_restore_msg(payload)?;
     Ok(())
 }
 

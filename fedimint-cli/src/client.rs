@@ -317,7 +317,7 @@ pub async fn handle_command(
         ClientCmd::Combine { oob_notes } => {
             let federation_id_prefix = match oob_notes
                 .iter()
-                .map(|notes| notes.federation_id_prefix())
+                .map(OOBNotes::federation_id_prefix)
                 .all_equal_value()
             {
                 Ok(id) => id,
@@ -607,8 +607,8 @@ pub async fn handle_command(
         ClientCmd::DiscoverVersion => {
             Ok(json!({ "versions": client.load_and_refresh_common_api_version().await? }))
         }
-        ClientCmd::Module { module, args } => match module {
-            Some(module) => {
+        ClientCmd::Module { module, args } => {
+            if let Some(module) = module {
                 let module_instance_id = match module {
                     ModuleSelector::Id(id) => id,
                     ModuleSelector::Kind(kind) => client
@@ -621,8 +621,7 @@ pub async fn handle_command(
                     .context("Module not found")?
                     .handle_cli_command(&args)
                     .await
-            }
-            None => {
+            } else {
                 let module_list: Vec<ModuleInfo> = client
                     .get_config()
                     .modules
@@ -641,7 +640,7 @@ pub async fn handle_command(
                     "list": module_list,
                 }))
             }
-        },
+        }
         ClientCmd::Config => {
             let config = client.get_config_json();
             Ok(serde_json::to_value(config).expect("Client config is serializable"))

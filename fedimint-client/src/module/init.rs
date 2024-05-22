@@ -199,7 +199,7 @@ where
         self.context.clone()
     }
 
-    pub async fn update_recovery_progress(&self, progress: RecoveryProgress) {
+    pub fn update_recovery_progress(&self, progress: RecoveryProgress) {
         if progress.is_done() {
             // Recovery is complete when the recovery function finishes. To avoid
             // confusing any downstream code, we never send completed process.

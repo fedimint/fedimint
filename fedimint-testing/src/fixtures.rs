@@ -125,18 +125,16 @@ impl Fixtures {
             self.params.clone(),
             ServerModuleInitRegistry::from(self.servers.clone()),
             ClientModuleInitRegistry::from(self.clients.clone()),
-        )
-        .await;
+        );
         federation_builder.build().await
     }
 
-    pub async fn new_fed_builder(&self) -> FederationTestBuilder {
+    pub fn new_fed_builder(&self) -> FederationTestBuilder {
         FederationTestBuilder::new(
             self.params.clone(),
             ServerModuleInitRegistry::from(self.servers.clone()),
             ClientModuleInitRegistry::from(self.clients.clone()),
         )
-        .await
     }
 
     /// Starts a new gateway with a given lightning node
@@ -182,16 +180,17 @@ impl Fixtures {
     // TODO: Right now we only support mocks or esplora, we should support others in
     // the future
     pub fn bitcoin_client(&self) -> BitcoinRpcConfig {
-        match Fixtures::is_real_test() {
-            true => BitcoinRpcConfig {
+        if Fixtures::is_real_test() {
+            BitcoinRpcConfig {
                 kind: "esplora".to_string(),
                 url: SafeUrl::parse(&format!(
                     "http://127.0.0.1:{}/",
                     env::var(FM_PORT_ESPLORA_ENV).unwrap_or(String::from("50002"))
                 ))
                 .expect("Failed to parse default esplora server"),
-            },
-            false => self.bitcoin_rpc.clone(),
+            }
+        } else {
+            self.bitcoin_rpc.clone()
         }
     }
 
@@ -209,14 +208,13 @@ impl Fixtures {
 ///
 /// Callers must hold onto the tempdir until it is no longer needed
 pub fn test_dir(pathname: &str) -> (PathBuf, Option<TempDir>) {
-    let (parent, maybe_tmp_dir_guard) = match env::var(FM_TEST_DIR_ENV) {
-        Ok(directory) => (directory, None),
-        Err(_) => {
-            let random = format!("test-{}", rand::random::<u64>());
-            let guard = tempfile::Builder::new().prefix(&random).tempdir().unwrap();
-            let directory = guard.path().to_str().unwrap().to_owned();
-            (directory, Some(guard))
-        }
+    let (parent, maybe_tmp_dir_guard) = if let Ok(directory) = env::var(FM_TEST_DIR_ENV) {
+        (directory, None)
+    } else {
+        let random = format!("test-{}", rand::random::<u64>());
+        let guard = tempfile::Builder::new().prefix(&random).tempdir().unwrap();
+        let directory = guard.path().to_str().unwrap().to_owned();
+        (directory, Some(guard))
     };
     let fullpath = PathBuf::from(parent).join(pathname);
     fs::create_dir_all(fullpath.clone()).expect("Can make dirs");

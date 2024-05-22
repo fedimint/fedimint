@@ -180,7 +180,6 @@ impl ClientModule for DummyClientModule {
         Box::pin(
             self.notifier
                 .subscribe_all_operations()
-                .await
                 .filter_map(|state| async move {
                     match state {
                         DummyStateMachine::OutputDone(_, _) => Some(()),

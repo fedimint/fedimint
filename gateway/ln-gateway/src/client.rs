@@ -75,20 +75,18 @@ impl GatewayClientBuilder {
         client_builder.with_module_inits(registry);
         client_builder.with_primary_module(self.primary_module);
 
-        let client_secret =
-            match Client::load_decodable_client_secret::<[u8; 64]>(client_builder.db_no_decoders())
+        let client_secret = if let Ok(secret) =
+            Client::load_decodable_client_secret::<[u8; 64]>(client_builder.db_no_decoders()).await
+        {
+            secret
+        } else {
+            info!("Generating secret and writing to client storage");
+            let secret = PlainRootSecretStrategy::random(&mut thread_rng());
+            Client::store_encodable_client_secret(client_builder.db_no_decoders(), secret)
                 .await
-            {
-                Ok(secret) => secret,
-                Err(_) => {
-                    info!("Generating secret and writing to client storage");
-                    let secret = PlainRootSecretStrategy::random(&mut thread_rng());
-                    Client::store_encodable_client_secret(client_builder.db_no_decoders(), secret)
-                        .await
-                        .map_err(GatewayError::ClientStateMachineError)?;
-                    secret
-                }
-            };
+                .map_err(GatewayError::ClientStateMachineError)?;
+            secret
+        };
 
         let root_secret = PlainRootSecretStrategy::to_root_secret(&client_secret);
         if Client::is_initialized(client_builder.db_no_decoders()).await {
@@ -101,11 +99,7 @@ impl GatewayClientBuilder {
                 fedimint_api_client::download_from_invite_code(&invite_code).await?;
             client_builder
                 // TODO: make this configurable?
-                .join(
-                    root_secret,
-                    client_config.to_owned(),
-                    invite_code.api_secret(),
-                )
+                .join(root_secret, client_config.clone(), invite_code.api_secret())
                 .await
         }
         .map(Arc::new)

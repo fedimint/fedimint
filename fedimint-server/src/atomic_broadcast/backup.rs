@@ -56,8 +56,7 @@ impl aleph_bft::BackupWriter for BackupWriter {
             .await
             .next()
             .await
-            .map(|entry| (entry.0 .0) + 1)
-            .unwrap_or(0);
+            .map_or(0, |entry| (entry.0 .0) + 1);
 
         dbtx.insert_new_entry(&AlephUnitsKey(index), &data.to_owned())
             .await;

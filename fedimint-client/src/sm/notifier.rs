@@ -125,7 +125,7 @@ where
 
         // It's important to start the subscription first and then query the database to
         // not lose any transitions in the meantime.
-        let new_transitions = self.subscribe_all_operations().await;
+        let new_transitions = self.subscribe_all_operations();
 
         let db_states = {
             let mut dbtx = self.db.begin_transaction().await;
@@ -201,7 +201,7 @@ where
     }
 
     /// Subscribe to all state transitions belonging to the module instance.
-    pub async fn subscribe_all_operations(&self) -> BoxStream<'static, S> {
+    pub fn subscribe_all_operations(&self) -> BoxStream<'static, S> {
         let module_instance_id = self.module_instance;
         Box::pin(
             BroadcastStream::new(self.broadcast.subscribe())

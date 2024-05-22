@@ -85,10 +85,10 @@ impl<G: DkgGroup> Dkg<G> {
             .map(|(g, h)| g + h)
             .collect();
 
-        let hashed = dkg.hash(commit.clone());
+        let hashed = dkg.hash(&commit);
         dkg.commitments.insert(our_id, commit);
         dkg.hashed_commits.insert(our_id, hashed);
-        let step = dkg.broadcast(DkgMessage::HashedCommit(hashed));
+        let step = dkg.broadcast(&DkgMessage::HashedCommit(hashed));
 
         (dkg, step)
     }
@@ -106,11 +106,11 @@ impl<G: DkgGroup> Dkg<G> {
 
                 if self.hashed_commits.len() == self.peers.len() {
                     let our_commit = self.commitments[&self.our_id].clone();
-                    return Ok(self.broadcast(DkgMessage::Commit(our_commit)));
+                    return Ok(self.broadcast(&DkgMessage::Commit(our_commit)));
                 }
             }
             DkgMessage::Commit(commit) => {
-                let hash = self.hash(commit.clone());
+                let hash = self.hash(&commit);
                 ensure!(self.threshold == commit.len(), "wrong degree from {peer}");
                 ensure!(hash == self.hashed_commits[&peer], "wrong hash from {peer}");
 
@@ -163,7 +163,7 @@ impl<G: DkgGroup> Dkg<G> {
                     let extract: Vec<G> = self.f1_poly.iter().map(|c| self.gen_g * *c).collect();
 
                     self.pk_shares.insert(self.our_id, extract.clone());
-                    return Ok(self.broadcast(DkgMessage::Extract(extract)));
+                    return Ok(self.broadcast(&DkgMessage::Extract(extract)));
                 }
             }
             // Feldman-VSS exposes the public key shares
@@ -213,9 +213,9 @@ impl<G: DkgGroup> Dkg<G> {
         Ok(DkgStep::Messages(vec![]))
     }
 
-    fn hash(&self, poly: Vec<G>) -> Sha256 {
+    fn hash(&self, poly: &[G]) -> Sha256 {
         let mut engine = HashEngine::default();
-        for element in poly.iter() {
+        for element in poly {
             engine
                 .write_all(element.to_bytes().as_ref())
                 .expect("hashes");
@@ -223,7 +223,7 @@ impl<G: DkgGroup> Dkg<G> {
         Sha256::from_engine(engine)
     }
 
-    fn broadcast(&self, msg: DkgMessage<G>) -> DkgStep<G> {
+    fn broadcast(&self, msg: &DkgMessage<G>) -> DkgStep<G> {
         let others = self.peers.iter().filter(|p| **p != self.our_id);
         DkgStep::Messages(others.map(|peer| (*peer, msg.clone())).collect())
     }
@@ -399,7 +399,7 @@ fn random_scalar(rng: &mut impl RngCore) -> Scalar {
 pub fn evaluate_polynomial_scalar(coefficients: &[Scalar], x: &Scalar) -> Scalar {
     coefficients
         .iter()
-        .cloned()
+        .copied()
         .rev()
         .reduce(|acc, coefficient| acc * x + coefficient)
         .expect("We have at least one coefficient")
@@ -451,7 +451,7 @@ impl DkgKeys<G1Projective> {
 pub fn evaluate_polynomial_g1(coefficients: &[G1Projective], x: &Scalar) -> G1Affine {
     coefficients
         .iter()
-        .cloned()
+        .copied()
         .rev()
         .reduce(|acc, coefficient| acc * x + coefficient)
         .expect("We have at least one coefficient")
@@ -461,7 +461,7 @@ pub fn evaluate_polynomial_g1(coefficients: &[G1Projective], x: &Scalar) -> G1Af
 pub fn evaluate_polynomial_g2(coefficients: &[G2Projective], x: &Scalar) -> G2Affine {
     coefficients
         .iter()
-        .cloned()
+        .copied()
         .rev()
         .reduce(|acc, coefficient| acc * x + coefficient)
         .expect("We have at least one coefficient")

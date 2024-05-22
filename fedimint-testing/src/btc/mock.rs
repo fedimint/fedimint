@@ -104,7 +104,7 @@ impl FakeBitcoinTest {
     }
 
     fn pending_merkle_tree(pending: &[Transaction]) -> PartialMerkleTree {
-        let txs = pending.iter().map(|tx| tx.txid()).collect::<Vec<Txid>>();
+        let txs = pending.iter().map(Transaction::txid).collect::<Vec<Txid>>();
         let matches = repeat(true).take(txs.len()).collect::<Vec<bool>>();
         PartialMerkleTree::from_txids(txs.as_slice(), matches.as_slice())
     }
@@ -147,7 +147,7 @@ impl FakeBitcoinTest {
         let block = Block {
             header: BlockHeader {
                 version: Version::from_consensus(0),
-                prev_blockhash: blocks.last().map(|b| b.header.block_hash()).unwrap_or(root),
+                prev_blockhash: blocks.last().map_or(root, |b| b.header.block_hash()),
                 merkle_root,
                 time: 0,
                 bits: CompactTarget::from_consensus(0),
@@ -248,8 +248,7 @@ impl BitcoinTest for FakeBitcoinTest {
             .iter()
             .flat_map(|block| block.txdata.iter().flat_map(|tx| tx.output.clone()))
             .find(|out| out.script_pubkey == address.payload.script_pubkey())
-            .map(|tx| tx.value)
-            .unwrap_or(0);
+            .map_or(0, |tx| tx.value);
         Amount::from_sats(sats)
     }
 
@@ -271,13 +270,13 @@ impl BitcoinTest for FakeBitcoinTest {
                 Some(tx) => tx,
             };
 
-            for input in tx.input.iter() {
+            for input in &tx.input {
                 fee += *addresses
                     .get(&input.previous_output.txid)
                     .expect("previous transaction should be known");
             }
 
-            for output in tx.output.iter() {
+            for output in &tx.output {
                 fee -= Amount::from_sats(output.value);
             }
 
@@ -325,7 +324,7 @@ impl IBitcoindRpc for FakeBitcoinTest {
         // TODO: This looks borked, should remove from `filtered` on higher fee or
         // something, and check per-input anyway. Probably doesn't matter, and I
         // don't want to touch it.
-        for tx in inner.pending.iter() {
+        for tx in &inner.pending {
             match filtered.get(&inputs(tx)) {
                 Some(found) if output_sum(tx) > output_sum(found) => {}
                 _ => {

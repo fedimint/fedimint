@@ -12,15 +12,15 @@ use fedimint_wallet_client::WalletClientInit;
 use rand::thread_rng;
 
 async fn load_or_generate_mnemonic(db: &Database) -> anyhow::Result<[u8; 64]> {
-    Ok(match Client::load_decodable_client_secret(db).await {
-        Ok(s) => s,
-
-        Err(_) => {
+    Ok(
+        if let Ok(s) = Client::load_decodable_client_secret(db).await {
+            s
+        } else {
             let secret = PlainRootSecretStrategy::random(&mut thread_rng());
             Client::store_encodable_client_secret(db, secret).await?;
             secret
-        }
-    })
+        },
+    )
 }
 
 fn make_client_builder() -> fedimint_client::ClientBuilder {
@@ -42,7 +42,7 @@ async fn client(invite_code: &InviteCode) -> Result<fedimint_client::ClientHandl
     builder
         .join(
             PlainRootSecretStrategy::to_root_secret(&client_secret),
-            client_config.to_owned(),
+            client_config.clone(),
             None,
         )
         .await

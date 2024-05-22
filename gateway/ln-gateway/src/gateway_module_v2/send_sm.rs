@@ -106,10 +106,7 @@ impl State for SendStateMachine {
                     },
                 )]
             }
-            SendSMState::Claiming(..) => {
-                vec![]
-            }
-            SendSMState::Cancelled(..) => {
+            SendSMState::Claiming(..) | SendSMState::Cancelled(..) => {
                 vec![]
             }
         }

@@ -88,11 +88,9 @@ impl State for GatewayPayStateMachine {
         global_context: &DynGlobalClientContext,
     ) -> Vec<fedimint_client::sm::StateTransition<Self>> {
         match &self.state {
-            GatewayPayStates::PayInvoice(gateway_pay_invoice) => gateway_pay_invoice.transitions(
-                global_context.clone(),
-                context.clone(),
-                self.common.clone(),
-            ),
+            GatewayPayStates::PayInvoice(gateway_pay_invoice) => {
+                gateway_pay_invoice.transitions(global_context.clone(), context, &self.common)
+            }
             GatewayPayStates::WaitForSwapPreimage(gateway_pay_wait_for_swap_preimage) => {
                 gateway_pay_wait_for_swap_preimage.transitions(context.clone(), self.common.clone())
             }
@@ -183,8 +181,8 @@ impl GatewayPayInvoice {
     fn transitions(
         &self,
         global_context: DynGlobalClientContext,
-        context: GatewayClientContext,
-        common: GatewayPayCommon,
+        context: &GatewayClientContext,
+        common: &GatewayPayCommon,
     ) -> Vec<StateTransition<GatewayPayStateMachine>> {
         let payload = self.pay_invoice_payload.clone();
         vec![StateTransition::new(
@@ -600,7 +598,7 @@ impl GatewayPayInvoice {
             ));
         }
 
-        let max_delay = (account.contract.timelock as u64)
+        let max_delay = u64::from(account.contract.timelock)
             .checked_sub(consensus_block_count.saturating_sub(1))
             .and_then(|delta| delta.checked_sub(timelock_delta));
         if max_delay.is_none() {
@@ -639,7 +637,7 @@ impl GatewayPayInvoice {
                     }
 
                     let scid_to_feds = context.gateway.scid_to_federation.read().await;
-                    match scid_to_feds.get(&hop.short_channel_id).cloned() {
+                    match scid_to_feds.get(&hop.short_channel_id).copied() {
                         None => None,
                         Some(federation_id) => {
                             let clients = context.gateway.clients.read().await;

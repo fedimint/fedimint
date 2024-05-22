@@ -49,7 +49,7 @@ pub async fn run(
     module_init_registry: &ServerModuleInitRegistry,
     task_group: TaskGroup,
 ) -> anyhow::Result<()> {
-    let cfg = match get_config(&data_dir).await? {
+    let cfg = match get_config(&data_dir)? {
         Some(cfg) => cfg,
         None => {
             run_config_gen(
@@ -93,10 +93,10 @@ pub async fn run(
     Ok(())
 }
 
-pub async fn get_config(data_dir: &Path) -> anyhow::Result<Option<ServerConfig>> {
+pub fn get_config(data_dir: &Path) -> anyhow::Result<Option<ServerConfig>> {
     // Attempt get the config with local password, otherwise start config gen
     if let Ok(password) = fs::read_to_string(data_dir.join(PLAINTEXT_PASSWORD)) {
-        return Ok(Some(read_server_config(&password, data_dir.to_owned())?));
+        return Ok(Some(read_server_config(&password, data_dir)?));
     }
 
     Ok(None)
@@ -153,7 +153,7 @@ pub async fn run_config_gen(
     write_new(data_dir.join(SALT_FILE), random_salt())?;
     write_server_config(
         &cfg,
-        data_dir.clone(),
+        &data_dir,
         &cfg.private.api_auth.0,
         &settings.registry,
         api_secret,

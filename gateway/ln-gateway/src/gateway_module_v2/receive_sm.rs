@@ -114,16 +114,10 @@ impl State for ReceiveStateMachine {
                     ),
                 ]
             }
-            ReceiveSMState::Success(..) => {
-                vec![]
-            }
-            ReceiveSMState::Rejected(..) => {
-                vec![]
-            }
-            ReceiveSMState::Refunding(..) => {
-                vec![]
-            }
-            ReceiveSMState::Failure => {
+            ReceiveSMState::Success(..)
+            | ReceiveSMState::Rejected(..)
+            | ReceiveSMState::Refunding(..)
+            | ReceiveSMState::Failure => {
                 vec![]
             }
         }
@@ -160,7 +154,7 @@ impl ReceiveStateMachine {
         decryption_contract: IncomingContract,
     ) -> BTreeMap<PeerId, DecryptionKeyShare> {
         let verify_decryption_share = move |peer, outcome: SerdeOutputOutcome| {
-            let outcome = deserialize_outcome::<LightningOutputOutcome>(outcome, &module_decoder)?;
+            let outcome = deserialize_outcome::<LightningOutputOutcome>(&outcome, &module_decoder)?;
 
             match outcome {
                 LightningOutputOutcome::Incoming(share) => {

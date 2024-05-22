@@ -228,7 +228,7 @@ async fn gateway_protects_preimage_for_payment() -> anyhow::Result<()> {
     client2.await_primary_module_output(op, outpoint).await?;
 
     let other_ln = FakeLightningTest::new();
-    let invoice = other_ln.invoice(Amount::from_sats(100), None).await?;
+    let invoice = other_ln.invoice(Amount::from_sats(100), None)?;
 
     // Pay invoice with client1
     let OutgoingLightningPayment {
@@ -291,7 +291,7 @@ async fn cannot_pay_same_external_invoice_twice() -> anyhow::Result<()> {
     client.await_primary_module_output(op, outpoint).await?;
 
     let other_ln = FakeLightningTest::new();
-    let invoice = other_ln.invoice(Amount::from_sats(100), None).await?;
+    let invoice = other_ln.invoice(Amount::from_sats(100), None)?;
 
     // Pay the invoice for the first time
     let OutgoingLightningPayment {

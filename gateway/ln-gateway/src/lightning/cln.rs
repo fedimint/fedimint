@@ -34,7 +34,7 @@ pub struct NetworkLnRpcClient {
 }
 
 impl NetworkLnRpcClient {
-    pub async fn new(url: SafeUrl) -> Self {
+    pub fn new(url: SafeUrl) -> Self {
         info!(
             "Gateway configured to connect to remote LnRpcClient at \n cln extension address: {} ",
             url.to_string()
@@ -125,7 +125,7 @@ impl ILnRpcClient for NetworkLnRpcClient {
             })?;
         Ok((
             Box::pin(res.into_inner()),
-            Arc::new(Self::new(self.connection_url.clone()).await),
+            Arc::new(Self::new(self.connection_url.clone())),
         ))
     }
 

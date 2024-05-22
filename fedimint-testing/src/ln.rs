@@ -59,7 +59,7 @@ impl Default for FakeLightningTest {
 }
 
 impl FakeLightningTest {
-    pub async fn invoice(
+    pub fn invoice(
         &self,
         amount: Amount,
         expiry_time: Option<u64>,
@@ -67,7 +67,7 @@ impl FakeLightningTest {
         let ctx = bitcoin::secp256k1::Secp256k1::new();
 
         Ok(InvoiceBuilder::new(Currency::Regtest)
-            .description("".to_string())
+            .description(String::new())
             .payment_hash(sha256::Hash::hash(&[0; 32]))
             .current_timestamp()
             .min_final_cltv_expiry_delta(0)
@@ -190,13 +190,15 @@ impl ILnRpcClient for FakeLightningTest {
         let payment_hash = sha256::Hash::from_slice(&create_invoice_request.payment_hash)
             .expect("Failed to lookup FederationId");
         let invoice = InvoiceBuilder::new(Currency::Regtest)
-            .description("".to_string())
+            .description(String::new())
             .payment_hash(payment_hash)
             .current_timestamp()
             .min_final_cltv_expiry_delta(0)
             .payment_secret(PaymentSecret([0; 32]))
             .amount_milli_satoshis(create_invoice_request.amount_msat)
-            .expiry_time(Duration::from_secs(create_invoice_request.expiry as u64))
+            .expiry_time(Duration::from_secs(u64::from(
+                create_invoice_request.expiry,
+            )))
             .build_signed(|m| ctx.sign_ecdsa_recoverable(m, &self.gateway_node_sec_key))
             .unwrap();
 

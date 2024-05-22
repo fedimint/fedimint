@@ -314,7 +314,7 @@ async fn main() -> anyhow::Result<()> {
         }
         Command::TestDownload { invite_code } => {
             let invite_code = InviteCode::from_str(&invite_code).context("invalid invite code")?;
-            test_download_config(invite_code, opts.users, event_sender.clone()).await?
+            test_download_config(&invite_code, opts.users, &event_sender.clone())
         }
         Command::LoadTest(args) => {
             let invite_code = invite_code_or_fallback(args.invite_code).await;
@@ -341,7 +341,7 @@ async fn main() -> anyhow::Result<()> {
                 vec![]
             };
             if args.generate_invoice_with.is_none() && invoices.is_empty() {
-                info!("No --generate-invoice-with given no invoices on --invoices-file, not LN/gateway tests will be run")
+                info!("No --generate-invoice-with given no invoices on --invoices-file, not LN/gateway tests will be run");
             }
             run_load_test(
                 opts.archive_dir,
@@ -427,10 +427,10 @@ async fn run_load_test(
     invoice_amount: Amount,
     event_sender: mpsc::UnboundedSender<MetricEvent>,
 ) -> anyhow::Result<Vec<BoxFuture<'static, anyhow::Result<()>>>> {
-    let db_path = get_db_path(archive_dir);
+    let db_path = get_db_path(&archive_dir);
     let (coordinator, invite_code) = get_coordinator_client(&db_path, &invite_code).await?;
     let minimum_notes = notes_per_user * users;
-    let minimum_amount_required = note_denomination * (minimum_notes as u64);
+    let minimum_amount_required = note_denomination * u64::from(minimum_notes);
 
     reissue_initial_notes(initial_notes, &coordinator, &event_sender).await?;
     get_required_notes(&coordinator, minimum_amount_required, &event_sender).await?;
@@ -609,7 +609,7 @@ async fn get_coordinator_client(
     Ok((client, invite_code))
 }
 
-fn get_db_path(archive_dir: Option<PathBuf>) -> Option<PathBuf> {
+fn get_db_path(archive_dir: &Option<PathBuf>) -> Option<PathBuf> {
     archive_dir.as_ref().map(|p| p.join("db"))
 }
 
@@ -731,10 +731,10 @@ async fn run_ln_circular_load_test(
     strategy: LnCircularStrategy,
     event_sender: mpsc::UnboundedSender<MetricEvent>,
 ) -> anyhow::Result<Vec<BoxFuture<'static, anyhow::Result<()>>>> {
-    let db_path = get_db_path(archive_dir);
+    let db_path = get_db_path(&archive_dir);
     let (coordinator, invite_code) = get_coordinator_client(&db_path, &invite_code).await?;
     let minimum_notes = notes_per_user * users;
-    let minimum_amount_required = note_denomination * (minimum_notes as u64);
+    let minimum_amount_required = note_denomination * u64::from(minimum_notes);
 
     reissue_initial_notes(initial_notes, &coordinator, &event_sender).await?;
     get_required_notes(&coordinator, minimum_amount_required, &event_sender).await?;
@@ -1080,12 +1080,12 @@ async fn client_create_invoice(
     Ok((operation_id, invoice))
 }
 
-async fn test_download_config(
-    invite_code: InviteCode,
+fn test_download_config(
+    invite_code: &InviteCode,
     users: u16,
-    event_sender: mpsc::UnboundedSender<MetricEvent>,
-) -> anyhow::Result<Vec<BoxFuture<'static, anyhow::Result<()>>>> {
-    Ok((0..users)
+    event_sender: &mpsc::UnboundedSender<MetricEvent>,
+) -> Vec<BoxFuture<'static, anyhow::Result<()>>> {
+    (0..users)
         .map(|_| {
             let invite_code = invite_code.clone();
             let event_sender = event_sender.clone();
@@ -1100,7 +1100,7 @@ async fn test_download_config(
             });
             f
         })
-        .collect())
+        .collect()
 }
 
 async fn test_connect_raw_client(
@@ -1251,7 +1251,7 @@ async fn handle_metrics_summary(
                 .truncate(true)
                 .open(metrics_json_output)
                 .await?,
-        ))
+        ));
     }
     let mut results = BTreeMap::new();
     while let Some(event) = event_receiver.recv().await {
@@ -1272,7 +1272,7 @@ async fn handle_metrics_summary(
         let avg = sum / n as u32;
         let metric_summary = EventMetricSummary {
             name: k.clone(),
-            users: opts.users as u64,
+            users: u64::from(opts.users),
             n: n as u64,
             avg_ms: avg.as_millis(),
             median_ms: median.as_millis(),

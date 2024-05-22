@@ -1852,7 +1852,7 @@ macro_rules! push_db_pair_items_no_serde {
                 .map(|(key, val)| {
                     (
                         $crate::encoding::Encodable::consensus_encode_to_hex(&key),
-                        SerdeWrapper::from_encodable(val),
+                        SerdeWrapper::from_encodable(&val),
                     )
                 })
                 .collect::<BTreeMap<_, _>>()

@@ -142,7 +142,7 @@ pub struct FederationTestBuilder {
 }
 
 impl FederationTestBuilder {
-    pub async fn new(
+    pub fn new(
         params: ServerModuleConfigGenParamsRegistry,
         server_init: ServerModuleInitRegistry,
         client_init: ClientModuleInitRegistry,
@@ -193,11 +193,11 @@ impl FederationTestBuilder {
             "too many peers offline ({num_offline}) to reach consensus"
         );
         let peers = (0..self.num_peers).map(PeerId::from).collect::<Vec<_>>();
-        let params = local_config_gen_params(&peers, self.base_port, self.params)
+        let params = local_config_gen_params(&peers, self.base_port, &self.params)
             .expect("Generates local config");
 
         let configs =
-            ServerConfig::trusted_dealer_gen(&params, self.server_init.clone(), self.version_hash);
+            ServerConfig::trusted_dealer_gen(&params, &self.server_init, &self.version_hash);
 
         let task_group = TaskGroup::new();
         for (peer_id, config) in configs.clone() {
@@ -265,7 +265,7 @@ impl FederationTestBuilder {
 pub fn local_config_gen_params(
     peers: &[PeerId],
     base_port: u16,
-    server_config_gen: ServerModuleConfigGenParamsRegistry,
+    server_config_gen: &ServerModuleConfigGenParamsRegistry,
 ) -> anyhow::Result<HashMap<PeerId, ConfigGenParams>> {
     // Generate TLS cert and private key
     let tls_keys: HashMap<PeerId, (rustls::Certificate, rustls::PrivateKey)> = peers
@@ -300,8 +300,8 @@ pub fn local_config_gen_params(
     peers
         .iter()
         .map(|peer| {
-            let p2p_bind = parse_host_port(connections[peer].clone().p2p_url)?;
-            let api_bind = parse_host_port(connections[peer].clone().api_url)?;
+            let p2p_bind = parse_host_port(&connections[peer].clone().p2p_url)?;
+            let api_bind = parse_host_port(&connections[peer].clone().api_url)?;
 
             let params = ConfigGenParams {
                 local: ConfigGenParamsLocal {

@@ -203,7 +203,7 @@ impl GatewayRpcClient {
         if let Some(payload) = payload {
             builder = builder
                 .json(&payload)
-                .header(reqwest::header::CONTENT_TYPE, "application/json")
+                .header(reqwest::header::CONTENT_TYPE, "application/json");
         }
         let response = builder.send().await?;
 

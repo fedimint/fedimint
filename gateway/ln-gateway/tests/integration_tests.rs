@@ -134,7 +134,6 @@ where
         .await;
     let client = gateway
         .get_rpc()
-        .await
         .with_password(Some(DEFAULT_GATEWAY_PASSWORD.to_string()));
 
     f(gateway, client, fed1, fed2, fixtures.bitcoin()).await?;
@@ -230,7 +229,7 @@ async fn test_gateway_client_pay_valid_invoice() -> anyhow::Result<()> {
             assert_eq!(user_client.get_balance().await, sats(1000));
 
             // Create test invoice
-            let invoice = other_lightning_client.invoice(sats(250), None).await?;
+            let invoice = other_lightning_client.invoice(sats(250), None)?;
 
             gateway_pay_valid_invoice(
                 invoice,
@@ -255,7 +254,6 @@ async fn test_can_change_default_routing_fees() -> anyhow::Result<()> {
         |gateway, other_lightning_client, fed, user_client, _| async move {
             let rpc_client = gateway
                 .get_rpc()
-                .await
                 .with_password(Some(DEFAULT_GATEWAY_PASSWORD.to_string()));
             // Print money for user_client
             let dummy_module = user_client.get_first_module::<DummyClientModule>();
@@ -286,7 +284,7 @@ async fn test_can_change_default_routing_fees() -> anyhow::Result<()> {
 
             // Create test invoice
             let invoice_amount = sats(250);
-            let invoice = other_lightning_client.invoice(invoice_amount, None).await?;
+            let invoice = other_lightning_client.invoice(invoice_amount, None)?;
 
             let gateway_client = gateway.select_client(fed.id()).await;
             gateway_pay_valid_invoice(
@@ -317,7 +315,6 @@ async fn test_can_change_federation_routing_fees() -> anyhow::Result<()> {
         |gateway, other_lightning_client, fed, user_client, _| async move {
             let rpc_client = gateway
                 .get_rpc()
-                .await
                 .with_password(Some(DEFAULT_GATEWAY_PASSWORD.to_string()));
             // Print money for user_client
             let dummy_module = user_client.get_first_module::<DummyClientModule>();
@@ -345,7 +342,7 @@ async fn test_can_change_federation_routing_fees() -> anyhow::Result<()> {
 
             // Create test invoice
             let invoice_amount = sats(250);
-            let invoice = other_lightning_client.invoice(invoice_amount, None).await?;
+            let invoice = other_lightning_client.invoice(invoice_amount, None)?;
 
             let gateway_client = gateway.select_client(fed.id()).await;
             gateway_pay_valid_invoice(
@@ -376,7 +373,6 @@ async fn test_gateway_enforces_fees() -> anyhow::Result<()> {
         |gateway_test, other_lightning_client, fed, user_client, _| async move {
             let rpc_client = gateway_test
                 .get_rpc()
-                .await
                 .with_password(Some(DEFAULT_GATEWAY_PASSWORD.to_string()));
             // Print money for user_client
             let dummy_module = user_client.get_first_module::<DummyClientModule>();
@@ -410,7 +406,7 @@ async fn test_gateway_enforces_fees() -> anyhow::Result<()> {
             let gateway_client = gateway_test.select_client(fed.id()).await;
 
             let invoice_amount = sats(250);
-            let invoice = other_lightning_client.invoice(invoice_amount, None).await?;
+            let invoice = other_lightning_client.invoice(invoice_amount, None)?;
 
             // Try to pay an invoice, this should fail since the client will not set the
             // gateway's fees.
@@ -487,7 +483,7 @@ async fn test_gateway_cannot_claim_invalid_preimage() -> anyhow::Result<()> {
             assert_eq!(user_client.get_balance().await, sats(1000));
 
             // Fund outgoing contract that the user client expects the gateway to pay
-            let invoice = other_lightning_client.invoice(sats(250), None).await?;
+            let invoice = other_lightning_client.invoice(sats(250), None)?;
             let OutgoingLightningPayment {
                 payment_type: _,
                 contract_id,
@@ -876,7 +872,6 @@ async fn test_gateway_cannot_pay_expired_invoice() -> anyhow::Result<()> {
             let gateway_client = gateway.select_client(fed.id()).await;
             let invoice = other_lightning_client
                 .invoice(sats(1000), 1.into())
-                .await
                 .unwrap();
             assert_eq!(invoice.expiry_time(), Duration::from_secs(1));
 
@@ -947,7 +942,7 @@ async fn test_gateway_configuration() -> anyhow::Result<()> {
 
     let fed = fixtures.new_default_fed().await;
     let gateway = fixtures.new_gateway(0, None).await;
-    let initial_rpc_client = gateway.get_rpc().await;
+    let initial_rpc_client = gateway.get_rpc();
 
     // Verify that we can't join a federation yet because the configuration is not
     // set
