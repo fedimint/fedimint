@@ -72,6 +72,8 @@ pub struct FakeBitcoinTest {
     proofs: Arc<Mutex<BTreeMap<Txid, TxOutProof>>>,
     /// Simulates the script history
     scripts: Arc<Mutex<BTreeMap<Script, Vec<Transaction>>>>,
+    /// Tracks the block height a transaction was included
+    txid_to_block_height: Arc<Mutex<BTreeMap<Txid, usize>>>,
 }
 
 impl Default for FakeBitcoinTest {
@@ -88,6 +90,7 @@ impl FakeBitcoinTest {
             addresses: Arc::new(Mutex::new(Default::default())),
             proofs: Arc::new(Mutex::new(Default::default())),
             scripts: Arc::new(Mutex::new(Default::default())),
+            txid_to_block_height: Arc::new(Mutex::new(Default::default())),
         }
     }
 
@@ -110,15 +113,20 @@ impl FakeBitcoinTest {
         addresses: &mut BTreeMap<Txid, Amount>,
         blocks: &mut Vec<Block>,
         pending: &mut Vec<Transaction>,
-    ) {
+        txid_to_block_height: &mut BTreeMap<Txid, usize>,
+    ) -> bitcoin::BlockHash {
         debug!(
             "Mining block: {} transactions, {} blocks",
             pending.len(),
             blocks.len()
         );
         let root = BlockHash::hash(&[0]);
+        // block height is 0-based, so blocks.len() before appending the current block
+        // gives the correct height
+        let block_height = blocks.len();
         for tx in pending.iter() {
             addresses.insert(tx.txid(), Amount::from_sats(output_sum(tx)));
+            txid_to_block_height.insert(tx.txid(), block_height);
         }
         // all blocks need at least one transaction
         if pending.is_empty() {
@@ -139,7 +147,8 @@ impl FakeBitcoinTest {
             txdata: pending.clone(),
         };
         pending.clear();
-        blocks.push(block);
+        blocks.push(block.clone());
+        block.block_hash()
     }
 }
 
@@ -151,14 +160,22 @@ impl BitcoinTest for FakeBitcoinTest {
         Box::new(self.clone())
     }
 
-    async fn mine_blocks(&self, block_num: u64) {
+    async fn mine_blocks(&self, block_num: u64) -> Vec<bitcoin::BlockHash> {
         let mut blocks = self.blocks.lock().unwrap();
         let mut pending = self.pending.lock().unwrap();
         let mut addresses = self.addresses.lock().unwrap();
+        let mut txid_to_block_height = self.txid_to_block_height.lock().unwrap();
 
-        for _ in 1..=block_num {
-            FakeBitcoinTest::mine_block(&mut addresses, &mut blocks, &mut pending);
-        }
+        (1..=block_num)
+            .map(|_| {
+                FakeBitcoinTest::mine_block(
+                    &mut addresses,
+                    &mut blocks,
+                    &mut pending,
+                    &mut txid_to_block_height,
+                )
+            })
+            .collect()
     }
 
     async fn prepare_funding_wallet(&self) {
@@ -180,6 +197,7 @@ impl BitcoinTest for FakeBitcoinTest {
         let mut addresses = self.addresses.lock().unwrap();
         let mut scripts = self.scripts.lock().unwrap();
         let mut proofs = self.proofs.lock().unwrap();
+        let mut txid_to_block_height = self.txid_to_block_height.lock().unwrap();
 
         let transaction = FakeBitcoinTest::new_transaction(vec![TxOut {
             value: amount.to_sat(),
@@ -190,7 +208,12 @@ impl BitcoinTest for FakeBitcoinTest {
         pending.push(transaction.clone());
         let merkle_proof = FakeBitcoinTest::pending_merkle_tree(&pending);
 
-        FakeBitcoinTest::mine_block(&mut addresses, &mut blocks, &mut pending);
+        FakeBitcoinTest::mine_block(
+            &mut addresses,
+            &mut blocks,
+            &mut pending,
+            &mut txid_to_block_height,
+        );
         let block_header = blocks.last().unwrap().header;
         let proof = TxOutProof {
             block_header,
@@ -215,9 +238,8 @@ impl BitcoinTest for FakeBitcoinTest {
             .blocks
             .lock()
             .unwrap()
-            .clone()
-            .into_iter()
-            .flat_map(|block| block.txdata.into_iter().flat_map(|tx| tx.output))
+            .iter()
+            .flat_map(|block| block.txdata.iter().flat_map(|tx| tx.output.clone()))
             .find(|out| out.script_pubkey == address.payload.script_pubkey())
             .map(|tx| tx.value)
             .unwrap_or(0);
@@ -252,6 +274,14 @@ impl BitcoinTest for FakeBitcoinTest {
 
             return fee;
         }
+    }
+
+    async fn get_tx_block_height(&self, txid: &Txid) -> Option<u64> {
+        self.txid_to_block_height
+            .lock()
+            .expect("RwLock poisoned")
+            .get(txid)
+            .map(|height| height.to_owned() as u64)
     }
 }
 
@@ -301,6 +331,21 @@ impl IBitcoindRpc for FakeBitcoinTest {
             }
         }
         Ok(None)
+    }
+
+    async fn is_tx_in_block(
+        &self,
+        txid: &Txid,
+        block_hash: &BlockHash,
+        block_height: u64,
+    ) -> BitcoinRpcResult<bool> {
+        let block = &self.blocks.lock().unwrap()[block_height as usize];
+        assert!(
+            block.block_hash() == *block_hash,
+            "Block height for hash does not match expected height"
+        );
+
+        Ok(block.txdata.iter().any(|tx| tx.txid() == *txid))
     }
 
     async fn watch_script_history(&self, _: &Script) -> BitcoinRpcResult<()> {

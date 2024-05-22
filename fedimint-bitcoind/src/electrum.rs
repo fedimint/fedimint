@@ -108,6 +108,43 @@ impl IBitcoindRpc for ElectrumClient {
         }
     }
 
+    async fn is_tx_in_block(
+        &self,
+        txid: &Txid,
+        block_hash: &BlockHash,
+        block_height: u64,
+    ) -> anyhow::Result<bool> {
+        let tx = block_in_place(|| self.0.transaction_get(txid))
+            .map_err(|error| info!(?error, "Unable to get raw transaction"));
+
+        match tx.ok() {
+            None => Ok(false),
+            Some(tx) => {
+                let output = tx
+                    .output
+                    // use last since that's the change output we've constructed
+                    .last()
+                    .ok_or(format_err!("Transaction must contain at least one output"))?;
+
+                match block_in_place(|| self.0.script_get_history(&output.script_pubkey))?
+                    .iter()
+                    .find(|tx| tx.tx_hash == *txid && tx.height as u64 == block_height)
+                {
+                    Some(tx) => {
+                        let sanity_block_hash = self.get_block_hash(tx.height as u64).await?;
+                        anyhow::ensure!(
+                            *block_hash == sanity_block_hash,
+                            "Block height for block hash does not match expected height"
+                        );
+
+                        Ok(true)
+                    }
+                    None => Ok(false),
+                }
+            }
+        }
+    }
+
     async fn watch_script_history(&self, _: &Script) -> anyhow::Result<()> {
         // no watching needed on electrs, has all the history already
         Ok(())

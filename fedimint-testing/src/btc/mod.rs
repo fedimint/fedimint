@@ -13,7 +13,7 @@ pub trait BitcoinTest {
     async fn lock_exclusive(&self) -> Box<dyn BitcoinTest + Send + Sync>;
 
     /// Mines a given number of blocks
-    async fn mine_blocks(&self, block_num: u64);
+    async fn mine_blocks(&self, block_num: u64) -> Vec<bitcoin::BlockHash>;
 
     /// Prepare funding wallet
     ///
@@ -41,4 +41,11 @@ pub trait BitcoinTest {
 
     /// Waits till tx is found in mempool and returns the fees
     async fn get_mempool_tx_fee(&self, txid: &Txid) -> Amount;
+
+    /// Returns the block height for the txid if found.
+    ///
+    /// Note: this exists since there's a bug for using bitcoind without txindex
+    /// for finding a tx block height.
+    /// see: `<https://github.com/fedimint/fedimint/issues/5329>`
+    async fn get_tx_block_height(&self, txid: &Txid) -> Option<u64>;
 }
