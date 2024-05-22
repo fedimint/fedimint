@@ -479,7 +479,7 @@ impl GatewayClientModule {
                 yield GatewayExtReceiveStates::Funding;
 
                 let state = loop {
-                    debug!("Getting next ln receive state for {operation_id}");
+                    debug!("Getting next ln receive state for {}", operation_id.fmt_short());
                     if let Some(GatewayClientStateMachines::Receive(state)) = stream.next().await {
                         match state.state {
                             IncomingSmStates::Preimage(preimage) =>{
@@ -504,7 +504,7 @@ impl GatewayClientModule {
                                 break GatewayExtReceiveStates::FundingFailed{ error }
                             },
                             other => {
-                                debug!("Got state {other:?} while awaiting for output of {operation_id}");
+                                debug!("Got state {other:?} while awaiting for output of {}", operation_id.fmt_short());
                             }
                         }
                     }
@@ -562,7 +562,7 @@ impl GatewayClientModule {
                                         .await;
                                 }
                                 Err(AddStateMachinesError::StateAlreadyExists) => {
-                                    info!("State machine for operation {operation_id} already exists, will not add a new one")
+                                    info!("State machine for operation {} already exists, will not add a new one", operation_id.fmt_short())
                                 }
                                 Err(other) => {
                                     anyhow::bail!("Failed to add state machines: {other:?}")
@@ -595,7 +595,7 @@ impl GatewayClientModule {
                 yield GatewayExtPayStates::Created;
 
                 loop {
-                    debug!("Getting next ln pay state for {operation_id}");
+                    debug!("Getting next ln pay state for {}", operation_id.fmt_short());
                     if let Some(GatewayClientStateMachines::Pay(state)) = stream.next().await {
                         match state.state {
                             GatewayPayStates::Preimage(out_points, preimage) => {
@@ -624,27 +624,27 @@ impl GatewayClientModule {
                                     }
                                     Err(e) => {
                                         warn!(?operation_id, "Got failure {e:?} while awaiting for transaction {txid} to be accepted for");
-                                        yield GatewayExtPayStates::Fail { error, error_message: format!("Refund transaction {txid} was not accepted by the federation. OperationId: {operation_id} Error: {e:?}") };
+                                        yield GatewayExtPayStates::Fail { error, error_message: format!("Refund transaction {txid} was not accepted by the federation. OperationId: {} Error: {e:?}", operation_id.fmt_short()) };
                                     }
                                 }
                             }
                             GatewayPayStates::OfferDoesNotExist(contract_id) => {
-                                warn!("Yielding OfferDoesNotExist state for {operation_id} and contract {contract_id}");
+                                warn!("Yielding OfferDoesNotExist state for {} and contract {contract_id}", operation_id.fmt_short());
                                 yield GatewayExtPayStates::OfferDoesNotExist { contract_id };
                             }
                             GatewayPayStates::Failed{ error, error_message } => {
-                                warn!("Yielding Fail state for {operation_id} due to {error:?} {error_message:?}");
+                                warn!("Yielding Fail state for {} due to {error:?} {error_message:?}", operation_id.fmt_short());
                                 yield GatewayExtPayStates::Fail{ error, error_message };
                             },
                             GatewayPayStates::PayInvoice(_) => {
-                                debug!("Got initial state PayInvoice while awaiting for output of {operation_id}");
+                                debug!("Got initial state PayInvoice while awaiting for output of {}", operation_id.fmt_short());
                             }
                             other => {
-                                info!("Got state {other:?} while awaiting for output of {operation_id}");
+                                info!("Got state {other:?} while awaiting for output of {}", operation_id.fmt_short());
                             }
                         }
                     } else {
-                        warn!("Got None while getting next ln pay state for {operation_id}");
+                        warn!("Got None while getting next ln pay state for {}", operation_id.fmt_short());
                     }
                 }
             }

@@ -58,6 +58,9 @@ pub mod backup;
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Encodable, Decodable, PartialOrd, Ord)]
 pub struct OperationId(pub [u8; 32]);
 
+pub struct OperationIdFullFmt<'a>(&'a OperationId);
+pub struct OperationIdShortFmt<'a>(&'a OperationId);
+
 impl OperationId {
     /// Generate random [`OperationId`]
     pub fn new_random() -> Self {
@@ -70,17 +73,33 @@ impl OperationId {
     pub fn from_encodable<E: Encodable>(encodable: &E) -> OperationId {
         Self(encodable.consensus_hash::<sha256::Hash>().to_byte_array())
     }
+
+    pub fn fmt_short(&self) -> OperationIdShortFmt {
+        OperationIdShortFmt(self)
+    }
+    pub fn fmt_full(&self) -> OperationIdFullFmt {
+        OperationIdFullFmt(self)
+    }
 }
 
-impl Display for OperationId {
+impl<'a> Display for OperationIdShortFmt<'a> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        bitcoin29::hashes::hex::format_hex(&self.0, f)
+        bitcoin29::hashes::hex::format_hex(&self.0 .0[0..4], f)?;
+        f.write_str("..")?;
+        bitcoin29::hashes::hex::format_hex(&self.0 .0[28..], f)?;
+        Ok(())
+    }
+}
+
+impl<'a> Display for OperationIdFullFmt<'a> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        bitcoin29::hashes::hex::format_hex(&self.0 .0, f)
     }
 }
 
 impl Debug for OperationId {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "OperationId({self})")
+        write!(f, "OperationId({})", self.fmt_short())
     }
 }
 
@@ -96,7 +115,7 @@ impl FromStr for OperationId {
 impl Serialize for OperationId {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         if serializer.is_human_readable() {
-            serializer.serialize_str(&self.to_string())
+            serializer.serialize_str(&self.fmt_full().to_string())
         } else {
             serializer.serialize_bytes(&self.0)
         }

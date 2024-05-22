@@ -425,7 +425,7 @@ impl ClientModule for LightningClientModule {
 
 #[derive(thiserror::Error, Debug, Clone)]
 pub enum PayBolt11InvoiceError {
-    #[error("Previous payment attempt({}) still in progress", .operation_id)]
+    #[error("Previous payment attempt({}) still in progress", .operation_id.fmt_full())]
     PreviousPaymentAttemptStillInProgress { operation_id: OperationId },
     #[error("No LN gateway available")]
     NoLnGatewayAvailable,

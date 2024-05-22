@@ -471,7 +471,10 @@ where
         let mut dbtx = db.begin_transaction().await;
 
         if Client::operation_exists_dbtx(&mut dbtx.to_ref_nc(), operation_id).await {
-            bail!("Operation with id {operation_id} already exists");
+            bail!(
+                "Operation with id {} already exists",
+                operation_id.fmt_short()
+            );
         }
 
         self.client
@@ -487,9 +490,12 @@ where
             .await
             .expect("State machine is valid");
 
-        dbtx.commit_tx_result()
-            .await
-            .map_err(|_| anyhow!("Operation with id {operation_id} already exists"))?;
+        dbtx.commit_tx_result().await.map_err(|_| {
+            anyhow!(
+                "Operation with id {} already exists",
+                operation_id.fmt_short()
+            )
+        })?;
 
         Ok(())
     }

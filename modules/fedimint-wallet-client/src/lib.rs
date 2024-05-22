@@ -441,7 +441,7 @@ impl WalletClientModule {
             .client_ctx
             .get_operation(operation_id)
             .await
-            .with_context(|| anyhow!("Operation not found: {operation_id}"))?;
+            .with_context(|| anyhow!("Operation not found: {}", operation_id.fmt_short()))?;
 
         if operation_log_entry.operation_module_kind() != WalletCommonInit::KIND.as_str() {
             bail!("Operation is not a wallet operation");
@@ -602,7 +602,7 @@ impl WalletClientModule {
             .client_ctx
             .get_operation(operation_id)
             .await
-            .with_context(|| anyhow!("Operation not found: {operation_id}"))?;
+            .with_context(|| anyhow!("Operation not found: {}", operation_id.fmt_short()))?;
 
         if operation.operation_module_kind() != WalletCommonInit::KIND.as_str() {
             bail!("Operation is not a wallet operation");

@@ -161,9 +161,9 @@ where
                 .collect::<Vec<(S, _)>>();
             all_states_timed.sort_by(|(_, t1), (_, t2)| t1.cmp(t2));
             debug!(
-                %operation_id,
-                "Returning {} state transitions from DB for notifier subscription",
-                all_states_timed.len()
+                operation_id = %operation_id.fmt_short(),
+                num = all_states_timed.len(),
+                "Returning state transitions from DB for notifier subscription",
             );
             all_states_timed
                 .into_iter()
@@ -178,7 +178,7 @@ where
                 let db_states = db_states.clone();
                 async move {
                     if state.operation_id() == operation_id {
-                        trace!(%operation_id, ?state, "Received state transition notification");
+                        trace!(operation_id = %operation_id.fmt_short(), ?state, "Received state transition notification");
                         // Deduplicate events that might have both come from the DB and streamed,
                         // due to subscribing to notifier before querying the DB.
                         //
@@ -187,7 +187,7 @@ where
                         // so the overlap here should be minimal.
                         // And we'll rewrite the whole thing anyway and use only db as a reference.
                         if db_states.iter().any(|db_s| db_s == &state) {
-                            debug!(%operation_id, ?state, "Ignoring duplicated event");
+                            debug!(operation_id = %operation_id.fmt_short(), ?state, "Ignoring duplicated event");
                             return None;
                         }
                         Some(state)
