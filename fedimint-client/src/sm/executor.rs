@@ -476,11 +476,11 @@ impl ExecutorInner {
             match event {
                 ExecutorLoopEvent::New { state } => {
                     if currently_running_sms.contains(&state) {
-                        warn!(target: LOG_CLIENT_REACTOR, operation_id = %state.operation_id(), "Received a state machine that is already running. Ignoring");
+                        warn!(target: LOG_CLIENT_REACTOR, operation_id = %state.operation_id().fmt_short(), "Received a state machine that is already running. Ignoring");
                         continue;
                     }
                     let Some(meta) = self.get_active_state(&state).await else {
-                        warn!(target: LOG_CLIENT_REACTOR, operation_id = %state.operation_id(), "Couldn't look up received state machine. Ignoring.");
+                        warn!(target: LOG_CLIENT_REACTOR, operation_id = %state.operation_id().fmt_short(), "Couldn't look up received state machine. Ignoring.");
                         continue;
                     };
 
@@ -488,7 +488,7 @@ impl ExecutorInner {
                         .get_transition_for(&state, meta, &global_context_gen)
                         .await;
                     if transitions.is_empty() {
-                        warn!(target: LOG_CLIENT_REACTOR, operation_id = %state.operation_id(), "Received an active state that doesn't produce any transitions. Ignoring.");
+                        warn!(target: LOG_CLIENT_REACTOR, operation_id = %state.operation_id().fmt_short(), "Received an active state that doesn't produce any transitions. Ignoring.");
                         continue;
                     }
 
@@ -500,7 +500,7 @@ impl ExecutorInner {
                         ExecutorLoopEvent::Triggered(first_completed_result)
                     }));
 
-                    debug!(target: LOG_CLIENT_REACTOR, operation_id = %state.operation_id(), total = futures.len(), transitions_num, "New active state machine.");
+                    debug!(target: LOG_CLIENT_REACTOR, operation_id = %state.operation_id().fmt_short(), total = futures.len(), transitions_num, "New active state machine.");
                 }
                 ExecutorLoopEvent::Triggered(TransitionForActiveState {
                     outcome,
@@ -510,13 +510,13 @@ impl ExecutorInner {
                 }) => {
                     debug!(
                         target: LOG_CLIENT_REACTOR,
-                        operation_id = %state.operation_id(),
+                        operation_id = %state.operation_id().fmt_short(),
                         "Triggered state transition",
                     );
                     let span = tracing::debug_span!(
                         target: LOG_CLIENT_REACTOR,
                         "sm_transition",
-                        operation_id = %state.operation_id()
+                        operation_id = %state.operation_id().fmt_short()
                     );
                     // Perform the transition as another future, so transitions can happen in
                     // parallel.
@@ -637,7 +637,7 @@ impl ExecutorInner {
                     );
                     debug!(
                         target: LOG_CLIENT_REACTOR,
-                        operation_id = %state.operation_id(),
+                        operation_id = %state.operation_id().fmt_short(),
                         outcome_active = outcome.is_active(),
                         total = futures.len(),
                         "State transition complete"
@@ -645,7 +645,7 @@ impl ExecutorInner {
                     trace!(
                         target: LOG_CLIENT_REACTOR,
                         ?outcome,
-                        operation_id = %state.operation_id(), total = futures.len(),
+                        operation_id = %state.operation_id().fmt_short(), total = futures.len(),
                         "State transition complete"
                     );
                 }

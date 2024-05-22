@@ -101,7 +101,10 @@ pub(crate) async fn handle_cli_command(
                 fee,
             } = module.pay_bolt11_invoice(ln_gateway, bolt11, ()).await?;
             let operation_id = payment_type.operation_id();
-            info!("Gateway fee: {fee}, payment operation id: {operation_id}");
+            info!(
+                "Gateway fee: {fee}, payment operation id: {}",
+                operation_id.fmt_short()
+            );
             if finish_in_background {
                 module
                     .wait_for_ln_payment(payment_type, contract_id, true)

@@ -807,9 +807,9 @@ pub enum SendPaymentError {
     InvoiceMissingAmount,
     #[error("The invoice has expired")]
     InvoiceExpired,
-    #[error("A previous payment for the same invoice is still pending: {0}")]
+    #[error("A previous payment for the same invoice is still pending: {}", .0.fmt_full())]
     PendingPreviousPayment(OperationId),
-    #[error("A previous payment for the same invoice was successful: {0}")]
+    #[error("A previous payment for the same invoice was successful: {}", .0.fmt_full())]
     SuccessfulPreviousPayment(OperationId),
     #[error("Gateway error: {0}")]
     GatewayError(GatewayError),

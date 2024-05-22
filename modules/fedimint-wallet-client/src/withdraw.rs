@@ -92,10 +92,10 @@ async fn await_withdraw_processed(
 
                 e.report_if_important();
                 debug!(
-                    error = e.to_string(),
-                    operation_id = operation_id.to_string(),
-                    "Retrying in {}s",
-                    RETRY_DELAY.as_secs_f64()
+                    error = %e,
+                    operation_id = %operation_id.fmt_short(),
+                    delay_secs =  RETRY_DELAY.as_secs_f64(),
+                    "Waiting before retry",
                 );
 
                 sleep(RETRY_DELAY).await;

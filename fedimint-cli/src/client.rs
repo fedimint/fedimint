@@ -273,7 +273,7 @@ pub async fn handle_command(
                     )
                     .await?
             };
-            info!("Spend e-cash operation: {operation}");
+            info!("Spend e-cash operation: {}", operation.fmt_short());
 
             Ok(json!({
                 "notes": notes,
@@ -418,7 +418,10 @@ pub async fn handle_command(
                 .pay_bolt11_invoice(ln_gateway, bolt11, ())
                 .await?;
             let operation_id = payment_type.operation_id();
-            info!("Gateway fee: {fee}, payment operation id: {operation_id}");
+            info!(
+                "Gateway fee: {fee}, payment operation id: {}",
+                operation_id.fmt_short()
+            );
             if finish_in_background {
                 client
                     .get_first_module::<LightningClientModule>()
