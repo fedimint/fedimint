@@ -5,7 +5,7 @@ use std::time::Duration;
 use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, OperationId};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::runtime::sleep;
-use fedimint_core::transaction::Transaction;
+use fedimint_core::transaction::{Transaction, TransactionSubmissionOutcome};
 use fedimint_core::TransactionId;
 use fedimint_logging::LOG_CLIENT_NET_API;
 use tracing::warn;
@@ -108,9 +108,9 @@ impl TxSubmissionStates {
     async fn trigger_created_rejected(tx: Transaction, context: DynGlobalClientContext) -> String {
         loop {
             match context.api().submit_transaction(tx.clone()).await {
-                Ok(serde_result) => match serde_result.try_into_inner(context.decoders()) {
-                    Ok(result) => {
-                        if let Err(transaction_error) = result {
+                Ok(serde_outcome) => match serde_outcome.try_into_inner(context.decoders()) {
+                    Ok(outcome) => {
+                        if let TransactionSubmissionOutcome(Err(transaction_error)) = outcome {
                             return transaction_error.to_string();
                         }
                     }

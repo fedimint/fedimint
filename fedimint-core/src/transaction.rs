@@ -147,3 +147,6 @@ pub enum TransactionError {
     #[error("The transaction had an invalid output: {}", .0)]
     Output(DynOutputError),
 }
+
+#[derive(Debug, Encodable, Decodable, Clone, Eq, PartialEq)]
+pub struct TransactionSubmissionOutcome(pub Result<TransactionId, TransactionError>);

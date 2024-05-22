@@ -37,7 +37,9 @@ use fedimint_core::module::{
 use fedimint_core::secp256k1::{PublicKey, SECP256K1};
 use fedimint_core::server::DynServerModule;
 use fedimint_core::session_outcome::{SessionOutcome, SessionStatus, SignedSessionOutcome};
-use fedimint_core::transaction::{SerdeTransaction, Transaction, TransactionError};
+use fedimint_core::transaction::{
+    SerdeTransaction, Transaction, TransactionError, TransactionSubmissionOutcome,
+};
 use fedimint_core::{OutPoint, PeerId, TransactionId};
 use fedimint_logging::LOG_NET_API;
 use futures::StreamExt;
@@ -410,14 +412,14 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConsensusApi>> {
         api_endpoint! {
             SUBMIT_TRANSACTION_ENDPOINT,
             ApiVersion::new(0, 0),
-            async |fedimint: &ConsensusApi, _context, transaction: SerdeTransaction| -> SerdeModuleEncoding<Result<TransactionId, TransactionError>> {
+            async |fedimint: &ConsensusApi, _context, transaction: SerdeTransaction| -> SerdeModuleEncoding<TransactionSubmissionOutcome> {
                 let transaction = transaction
                     .try_into_inner(&fedimint.modules.decoder_registry())
                     .map_err(|e| ApiError::bad_request(e.to_string()))?;
 
                 // we return an inner error if and only if the submitted transaction is
                 // invalid and will be rejected if we were to submit it to consensus
-                Ok((&fedimint.submit_transaction(transaction).await).into())
+                Ok((&TransactionSubmissionOutcome(fedimint.submit_transaction(transaction).await)).into())
             }
         },
         api_endpoint! {

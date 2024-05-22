@@ -41,7 +41,7 @@ use fedimint_core::session_outcome::{AcceptedItem, SessionOutcome, SessionStatus
 use fedimint_core::task::jit::JitTryAnyhow;
 use fedimint_core::task::{MaybeSend, MaybeSync};
 use fedimint_core::time::now;
-use fedimint_core::transaction::{SerdeTransaction, Transaction, TransactionError};
+use fedimint_core::transaction::{SerdeTransaction, Transaction, TransactionSubmissionOutcome};
 use fedimint_core::util::SafeUrl;
 use fedimint_core::{
     apply, async_trait_maybe_send, dyn_newtype_define, runtime, NumPeersExt, OutPoint, PeerId,
@@ -609,7 +609,7 @@ pub trait IGlobalFederationApi: IRawFederationApi {
     async fn submit_transaction(
         &self,
         tx: Transaction,
-    ) -> FederationResult<SerdeModuleEncoding<Result<TransactionId, TransactionError>>>;
+    ) -> FederationResult<SerdeModuleEncoding<TransactionSubmissionOutcome>>;
 
     async fn await_block(
         &self,
@@ -932,7 +932,7 @@ where
     async fn submit_transaction(
         &self,
         tx: Transaction,
-    ) -> FederationResult<SerdeModuleEncoding<Result<TransactionId, TransactionError>>> {
+    ) -> FederationResult<SerdeModuleEncoding<TransactionSubmissionOutcome>> {
         self.request_current_consensus(
             SUBMIT_TRANSACTION_ENDPOINT.to_owned(),
             ApiRequestErased::new(&SerdeTransaction::from(&tx)),
