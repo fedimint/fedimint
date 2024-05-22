@@ -176,10 +176,11 @@ jobs:
         run: |
           env \
             PERFIT_ACCESS_TOKEN="${{ secrets.PERFIT_ACCESS_TOKEN }}" \
-            nix run github:rustshop/perfit#perfit -- \
+            nix run 'github:rustshop/perfit?rev=c8faba2f76f296b974d859e2a7aa480ad8afc9d6#perfit' -- \
               run \
                 --metric eNKLuiKcRc2Q6_eTIhLuJQ \
                 --metadata "commit=${LAST_COMMIT_SHA}" \
+                -- \
               nix build -L .#wasm32-unknown.ci.ciTestAll
 
       - name: Tests (5 times more)
@@ -187,10 +188,11 @@ jobs:
         run: |
           env \
             PERFIT_ACCESS_TOKEN="${{ secrets.PERFIT_ACCESS_TOKEN }}" \
-            nix run github:rustshop/perfit#perfit -- \
+            nix run 'github:rustshop/perfit?rev=c8faba2f76f296b974d859e2a7aa480ad8afc9d6#perfit' -- \
               run \
                 --metric 50K9greJRzCdxpsFj842Bw \
                 --metadata "commit=${LAST_COMMIT_SHA}" \
+                -- \
             nix build -L .#wasm32-unknown.ci.ciTestAll5Times
 
       - name: Wasm Tests
@@ -198,10 +200,11 @@ jobs:
         run: |
           env \
             PERFIT_ACCESS_TOKEN="${{ secrets.PERFIT_ACCESS_TOKEN }}" \
-            nix run github:rustshop/perfit#perfit -- \
+            nix run 'github:rustshop/perfit?rev=c8faba2f76f296b974d859e2a7aa480ad8afc9d6#perfit' -- \
               run \
                 --metric 8H0d2B59Q1KYIz0b4Nkh-Q \
                 --metadata "commit=${LAST_COMMIT_SHA}" \
+                -- \
           nix build -L .#wasm32-unknown.ci.wasmTest
 
   audit:
@@ -266,10 +269,11 @@ jobs:
         run: |
           env \
             PERFIT_ACCESS_TOKEN="${{ secrets.PERFIT_ACCESS_TOKEN }}" \
-            nix run github:rustshop/perfit#perfit -- \
+            nix run 'github:rustshop/perfit?rev=c8faba2f76f296b974d859e2a7aa480ad8afc9d6#perfit' -- \
               run \
                 --metric pLyTAwXFShaeO0sJlNGaVA \
                 --metadata "commit=${LAST_COMMIT_SHA}" \
+                -- \
             nix build -L .#ci.workspaceTestCov
 
       - name: Ensure lcov.info exists
