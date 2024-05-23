@@ -42,7 +42,7 @@ pub async fn run(
     data_dir: PathBuf,
     settings: ConfigGenSettings,
     db: Database,
-    version_hash: String,
+    code_version_str: String,
     module_init_registry: &ServerModuleInitRegistry,
     task_group: TaskGroup,
 ) -> anyhow::Result<()> {
@@ -53,7 +53,7 @@ pub async fn run(
                 data_dir,
                 settings,
                 db.clone(),
-                version_hash,
+                code_version_str,
                 task_group.make_subgroup(),
             )
             .await?
@@ -93,7 +93,7 @@ pub async fn run_config_gen(
     data_dir: PathBuf,
     settings: ConfigGenSettings,
     db: Database,
-    version_hash: String,
+    code_version_str: String,
     mut task_group: TaskGroup,
 ) -> anyhow::Result<ServerConfig> {
     info!(target: LOG_CONSENSUS, "Starting config gen");
@@ -107,7 +107,7 @@ pub async fn run_config_gen(
         db.clone(),
         cfg_sender,
         &mut task_group,
-        version_hash.clone(),
+        code_version_str.clone(),
     );
 
     let mut rpc_module = RpcHandlerCtx::new_module(config_gen);
