@@ -21,7 +21,7 @@ async-trait = "0.1"
 bitcoin = { workspace = true }
 erased-serde = { workspace = true }
 fedimint-bitcoind = { version = "=0.4.0-alpha", path = "../../fedimint-bitcoind" }
-fedimint-core = { version = "=0.4.0-alpha", path = "../../fedimint-core" }
+fedimint-core = { workspace = true }
 fedimint-metrics = { version = "=0.4.0-alpha", path = "../../fedimint-metrics" }
 fedimint-wallet-common = { version = "=0.4.0-alpha", path = "../fedimint-wallet-common" }
 fedimint-logging = { workspace = true }

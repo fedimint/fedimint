@@ -25,7 +25,7 @@ anyhow = { workspace = true }
 fedimint-aead = { version = "=0.4.0-alpha", path = "../crypto/aead" }
 bytes = "1.6.0"
 clap = { version = "4.5.4", features = ["derive", "env"] }
-fedimint-core = { version = "=0.4.0-alpha", path = "../fedimint-core" }
+fedimint-core = { workspace = true }
 fedimint-client = { version = "=0.4.0-alpha", path = "../fedimint-client" }
 fedimint-server = { version = "=0.4.0-alpha", path = "../fedimint-server" }
 fedimint-rocksdb = { version = "=0.4.0-alpha", path = "../fedimint-rocksdb" }

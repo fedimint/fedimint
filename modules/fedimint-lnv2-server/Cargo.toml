@@ -18,7 +18,7 @@ async-trait = "0.1.80"
 erased-serde = { workspace = true }
 futures = "0.3.24"
 fedimint-bitcoind = { path = "../../fedimint-bitcoind" }
-fedimint-core ={ path = "../../fedimint-core" }
+fedimint-core = { workspace = true }
 fedimint-lnv2-common = { path = "../fedimint-lnv2-common" }
 serde = { workspace = true }
 strum = "0.26"

@@ -19,7 +19,7 @@ path = "src/lib.rs"
 
 [dependencies]
 anyhow = { workspace = true }
-fedimint-core = { version = "=0.4.0-alpha", path = "../../fedimint-core" }
+fedimint-core = { workspace = true }
 bitcoin_hashes = "0.11.0"
 hkdf = { package = "fedimint-hkdf", version = "=0.4.0-alpha", path = "../../crypto/hkdf" }
 ring = "0.17.8"
