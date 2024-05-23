@@ -19,7 +19,7 @@ path = "src/lib.rs"
 async-trait = { workspace = true }
 anyhow = { workspace = true }
 fedimint-dummy-common = { version = "=0.4.0-alpha", path = "../fedimint-dummy-common" }
-fedimint-client = { version = "=0.4.0-alpha", path = "../../fedimint-client" }
+fedimint-client = { workspace = true }
 fedimint-core = { workspace = true }
 fedimint-api-client = { workspace = true }
 futures = { workspace = true }

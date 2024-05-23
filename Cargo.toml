@@ -114,6 +114,7 @@ tokio-rustls = "0.24.1"
 hex = "0.4.3"
 assert_matches = "1.5.0"
 devimint = { path = "./devimint" }
+fedimint-client = { path = "./fedimint-client" }
 fedimint-core = { path = "./fedimint-core" }
 fedimint-ln-client = { path = "./modules/fedimint-ln-client" }
 fedimint-api-client = { path = "./fedimint-api-client" }

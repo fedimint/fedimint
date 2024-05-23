@@ -24,7 +24,7 @@ bitcoin_hashes = { workspace = true }
 erased-serde = { workspace = true }
 futures = { workspace = true }
 fedimint-bitcoind = { version = "=0.4.0-alpha", path = "../../fedimint-bitcoind" }
-fedimint-core = { version = "=0.4.0-alpha", path = "../../fedimint-core" }
+fedimint-core = { workspace = true }
 fedimint-ln-common = { version = "=0.4.0-alpha", path = "../fedimint-ln-common" }
 fedimint-metrics = { version = "=0.4.0-alpha", path = "../../fedimint-metrics" }
 secp256k1 = { version="0.27.0", default-features=false }

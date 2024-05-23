@@ -15,13 +15,13 @@ path = "src/lib.rs"
 anyhow = { workspace = true }
 futures = { workspace = true }
 ring = { version = "0.17.8", features = ["wasm32_unknown_unknown_js"] }
-fedimint-client = { path = "../fedimint-client" }
+fedimint-client = { workspace = true }
 fedimint-core = { workspace = true }
 fedimint-api-client = { workspace = true }
 fedimint-mint-client = { path = "../modules/fedimint-mint-client" }
 fedimint-mint-common = { path = "../modules/fedimint-mint-common" }
 fedimint-ln-common = { path = "../modules/fedimint-ln-common" }
-fedimint-ln-client = { path = "../modules/fedimint-ln-client" }
+fedimint-ln-client = { workspace = true }
 fedimint-wallet-client = { path = "../modules/fedimint-wallet-client" }
 js-sys = "0.3.69"
 wasm-bindgen = "=0.2.92" # must match the nix provided wasm-bindgen-cli version

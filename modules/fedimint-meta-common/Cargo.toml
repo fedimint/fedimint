@@ -18,7 +18,7 @@ path = "src/lib.rs"
 [dependencies]
 anyhow = { workspace = true }
 hex = { workspace = true }
-fedimint-core = { version = "=0.4.0-alpha", path = "../../fedimint-core" }
+fedimint-core = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }

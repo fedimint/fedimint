@@ -17,12 +17,12 @@ base64 = "0.22.1"
 bitcoin = { workspace = true }
 clap = { workspace = true }
 devimint = { version = "=0.4.0-alpha", path = "../devimint" }
-fedimint-client = { version = "=0.4.0-alpha", path = "../fedimint-client" }
+fedimint-client = { workspace = true }
 fedimint-core = { workspace = true }
 fedimint-api-client = { workspace = true }
-fedimint-ln-client = { version = "=0.4.0-alpha", path = "../modules/fedimint-ln-client" }
+fedimint-ln-client = { workspace = true }
 fedimint-ln-common = { path = "../modules/fedimint-ln-common" }
-fedimint-logging = { version = "=0.4.0-alpha", path = "../fedimint-logging" }
+fedimint-logging = { workspace = true }
 fedimint-mint-client = { version = "=0.4.0-alpha", path = "../modules/fedimint-mint-client" }
 fedimint-rocksdb = { version = "=0.4.0-alpha", path = "../fedimint-rocksdb" }
 fedimint-wallet-client = { version = "=0.4.0-alpha", path = "../modules/fedimint-wallet-client" }

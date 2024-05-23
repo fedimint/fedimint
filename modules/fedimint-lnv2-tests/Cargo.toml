@@ -20,9 +20,9 @@ fedimint-lnv2-common = { path = "../fedimint-lnv2-common" }
 fedimint-lnv2-client = { path = "../fedimint-lnv2-client" }
 fedimint-lnv2-server = { path = "../fedimint-lnv2-server" }
 fedimint-ln-common = { path = "../fedimint-ln-common" }
-fedimint-ln-client = { path = "../fedimint-ln-client" }
+fedimint-ln-client = { workspace = true }
 fedimint-ln-server = { path = "../fedimint-ln-server" }
 fedimint-testing = { path = "../../fedimint-testing" }
-fedimint-client = { path = "../../fedimint-client" }
-fedimint-core ={ path = "../../fedimint-core" }
+fedimint-client = { workspace = true }
+fedimint-core = { workspace = true }
 tokio = { version = "1.37.0", features = ["sync"] }

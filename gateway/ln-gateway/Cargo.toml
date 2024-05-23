@@ -39,12 +39,12 @@ clap = { workspace = true }
 # cln-plugin made semver incompatible change
 cln-plugin = "=0.1.7"
 cln-rpc = { workspace = true }
-fedimint-client = { version = "=0.4.0-alpha", path = "../../fedimint-client" }
+fedimint-client = { workspace = true }
 fedimint-core = { workspace = true }
 fedimint-api-client = { workspace = true }
-fedimint-logging = { version = "=0.4.0-alpha", path = "../../fedimint-logging" }
+fedimint-logging = { workspace = true }
 fedimint-rocksdb = { version = "=0.4.0-alpha", path = "../../fedimint-rocksdb" }
-fedimint-ln-client = { version = "=0.4.0-alpha", path = "../../modules/fedimint-ln-client" }
+fedimint-ln-client = { workspace = true }
 fedimint-ln-common = { version = "=0.4.0-alpha", path = "../../modules/fedimint-ln-common" }
 fedimint-mint-client = { version = "=0.4.0-alpha", path = "../../modules/fedimint-mint-client" }
 fedimint-wallet-client = { version = "=0.4.0-alpha", path = "../../modules/fedimint-wallet-client" }
@@ -78,7 +78,7 @@ fedimint-dummy-server = { path = "../../modules/fedimint-dummy-server" }
 fedimint-dummy-common = { path = "../../modules/fedimint-dummy-common" }
 fedimint-unknown-server = { path = "../../modules/fedimint-unknown-server" }
 fedimint-unknown-common = { path = "../../modules/fedimint-unknown-common" }
-fedimint-ln-client = { path = "../../modules/fedimint-ln-client" }
+fedimint-ln-client = { workspace = true }
 fedimint-ln-server = { path = "../../modules/fedimint-ln-server" }
 fedimint-ln-common = { path = "../../modules/fedimint-ln-common" }
 fedimint-mint-client = { path = "../../modules/fedimint-mint-client" }

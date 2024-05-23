@@ -20,11 +20,11 @@ anyhow = { workspace = true }
 bitcoin = { workspace = true }
 clap = { version = "4.5.4", features = [ "derive", "env" ] }
 fedimint-aead = { version = "=0.4.0-alpha", path = "../crypto/aead" }
-fedimint-core = { version = "=0.4.0-alpha", path = "../fedimint-core" }
+fedimint-core = { workspace = true }
 fedimint-rocksdb = { version = "=0.4.0-alpha", path = "../fedimint-rocksdb" }
 fedimint-server = { version = "=0.4.0-alpha", path = "../fedimint-server" }
 fedimint-wallet-server = { version = "=0.4.0-alpha", path = "../modules/fedimint-wallet-server" }
-fedimint-logging = { version = "=0.4.0-alpha", path = "../fedimint-logging" }
+fedimint-logging = { workspace = true }
 fedimint-ln-common = { version = "=0.4.0-alpha", path = "../modules/fedimint-ln-common" }
 fedimint-ln-server = { version = "=0.4.0-alpha", path = "../modules/fedimint-ln-server" }
 fedimint-mint-server = { version = "=0.4.0-alpha", path = "../modules/fedimint-mint-server" }

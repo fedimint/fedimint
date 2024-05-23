@@ -25,8 +25,8 @@ anyhow = { workspace = true }
 fedimint-aead = { version = "=0.4.0-alpha", path = "../crypto/aead" }
 bytes = "1.6.0"
 clap = { version = "4.5.4", features = ["derive", "env"] }
-fedimint-core = { version = "=0.4.0-alpha", path = "../fedimint-core" }
-fedimint-client = { version = "=0.4.0-alpha", path = "../fedimint-client" }
+fedimint-core = { workspace = true }
+fedimint-client = { workspace = true }
 fedimint-server = { version = "=0.4.0-alpha", path = "../fedimint-server" }
 fedimint-rocksdb = { version = "=0.4.0-alpha", path = "../fedimint-rocksdb" }
 fedimint-meta-server = { version = "=0.4.0-alpha", path = "../modules/fedimint-meta-server" }
@@ -34,8 +34,8 @@ fedimint-meta-client = { version = "=0.4.0-alpha", path = "../modules/fedimint-m
 fedimint-mint-server = { version = "=0.4.0-alpha", path = "../modules/fedimint-mint-server" }
 fedimint-mint-client = { version = "=0.4.0-alpha", path = "../modules/fedimint-mint-client" }
 fedimint-ln-server = { version = "=0.4.0-alpha", path = "../modules/fedimint-ln-server" }
-fedimint-ln-client = { version = "=0.4.0-alpha", path = "../modules/fedimint-ln-client" }
-fedimint-logging = { version = "=0.4.0-alpha", path = "../fedimint-logging" }
+fedimint-ln-client = { workspace = true }
+fedimint-logging = { workspace = true }
 fedimint-wallet-server = { version = "=0.4.0-alpha", path = "../modules/fedimint-wallet-server" }
 fedimint-wallet-client = { version = "=0.4.0-alpha", path = "../modules/fedimint-wallet-client" }
 futures = { workspace = true }

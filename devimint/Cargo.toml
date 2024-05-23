@@ -23,7 +23,7 @@ fedimint-core = { workspace = true }
 fedimint-api-client = { workspace = true }
 fedimint-client  = { path = "../fedimint-client" }
 fedimint-bitcoind = { path = "../fedimint-bitcoind" }
-fedimint-logging = { path = "../fedimint-logging" }
+fedimint-logging = { workspace = true }
 fedimint-mint-server = { path = "../modules/fedimint-mint-server" }
 fedimint-ln-server = { path = "../modules/fedimint-ln-server" }
 fedimint-ln-client = { workspace = true, features = [ "cli" ] }

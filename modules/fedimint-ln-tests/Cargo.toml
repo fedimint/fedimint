@@ -19,12 +19,12 @@ fedimint-dummy-common = { path = "../fedimint-dummy-common" }
 fedimint-dummy-client = { path = "../fedimint-dummy-client" }
 fedimint-dummy-server = { path = "../fedimint-dummy-server" }
 fedimint-ln-common = { path = "../fedimint-ln-common" }
-fedimint-ln-client = { path = "../fedimint-ln-client" }
+fedimint-ln-client = { workspace = true }
 fedimint-ln-server = { path = "../fedimint-ln-server" }
 fedimint-testing = { path = "../../fedimint-testing" }
-fedimint-client = { path = "../../fedimint-client" }
-fedimint-core ={ path = "../../fedimint-core" }
-fedimint-logging = { path = "../../fedimint-logging" }
+fedimint-client = { workspace = true }
+fedimint-core = { workspace = true }
+fedimint-logging = { workspace = true }
 futures = { workspace = true }
 lightning-invoice = { version = "0.30.0", features = [ "serde" ] }
 threshold_crypto = { workspace = true }

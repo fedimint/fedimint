@@ -30,7 +30,7 @@ clap = { workspace = true, optional = true }
 erased-serde = { workspace = true }
 futures = "0.3.24"
 lightning-invoice = { version = "0.30.0", features = [ "serde" ] }
-fedimint-client = { path = "../../fedimint-client" }
+fedimint-client = { workspace = true }
 fedimint-core = { workspace = true }
 fedimint-api-client = { workspace = true }
 fedimint-lnv2-common ={ path = "../fedimint-lnv2-common" }

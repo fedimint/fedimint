@@ -29,7 +29,7 @@ fedimint-core = { workspace = true }
 fedimint-api-client  = { workspace = true }
 fedimint-derive-secret = { version = "=0.4.0-alpha", path = "../crypto/derive-secret" }
 fedimint-aead = { version = "=0.4.0-alpha", path = "../crypto/aead" }
-fedimint-logging = { version = "=0.4.0-alpha", path = "../fedimint-logging" }
+fedimint-logging = { workspace = true }
 futures = { workspace = true }
 itertools = { workspace = true }
 rand = { workspace = true }

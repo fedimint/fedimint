@@ -22,7 +22,7 @@ async-trait = { workspace = true }
 erased-serde = { workspace = true }
 futures = { workspace = true }
 itertools = { workspace = true }
-fedimint-core = { version = "=0.4.0-alpha", path = "../../fedimint-core" }
+fedimint-core = { workspace = true }
 fedimint-metrics = { version = "=0.4.0-alpha", path = "../../fedimint-metrics" }
 fedimint-mint-common = { version = "=0.4.0-alpha", path = "../fedimint-mint-common" }
 rand = { workspace = true }

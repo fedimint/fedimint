@@ -20,8 +20,8 @@ anyhow = { workspace = true }
 async-trait = "0.1.80"
 erased-serde = { workspace = true }
 futures = { workspace = true }
-fedimint-core = { version = "=0.4.0-alpha", path = "../../fedimint-core" }
-fedimint-logging = { version = "=0.4.0-alpha", path = "../../fedimint-logging" }
+fedimint-core = { workspace = true }
+fedimint-logging = { workspace = true }
 fedimint-meta-common = { version = "=0.4.0-alpha", path = "../fedimint-meta-common" }
 rand = { workspace = true }
 serde = { workspace = true }

@@ -38,7 +38,7 @@ futures = { workspace = true }
 itertools = { workspace = true }
 jsonrpsee = { version = "0.22.5", features = ["server"] }
 fedimint-bitcoind = { version = "=0.4.0-alpha", path = "../fedimint-bitcoind" }
-fedimint-core = { version = "=0.4.0-alpha", path = "../fedimint-core" }
+fedimint-core = { workspace = true }
 fedimint-ln-common = { version = "=0.4.0-alpha", path = "../modules/fedimint-ln-common" }
 fedimint-ln-server = { version = "=0.4.0-alpha", path = "../modules/fedimint-ln-server" }
 fedimint-logging = { version = "=0.4.0-alpha", path = "../fedimint-logging" }

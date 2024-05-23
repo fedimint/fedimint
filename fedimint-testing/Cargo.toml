@@ -29,7 +29,7 @@ fedimint-api-client = { workspace = true }
 fedimint-client  = { version = "=0.4.0-alpha", path = "../fedimint-client" }
 fedimint-server  = { version = "=0.4.0-alpha", path = "../fedimint-server" }
 fedimint-bitcoind = { version = "=0.4.0-alpha", path = "../fedimint-bitcoind" }
-fedimint-logging = { version = "=0.4.0-alpha", path = "../fedimint-logging" }
+fedimint-logging = { workspace = true }
 fedimint-rocksdb = { version = "=0.4.0-alpha", path = "../fedimint-rocksdb" }
 fs-lock = "0.1.3"
 lazy_static = "1.4.0"

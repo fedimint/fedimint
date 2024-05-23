@@ -20,8 +20,8 @@ path = "src/lib.rs"
 anyhow = "1.0.85"
 bitcoin_hashes = { workspace = true }
 bitcoin = { workspace = true }
-fedimint-client = { path = "../../fedimint-client" }
-fedimint-core ={ path = "../../fedimint-core" }
+fedimint-client = { workspace = true }
+fedimint-core = { workspace = true }
 fedimint-ln-common ={ path = "../fedimint-ln-common" }
 secp256k1 = { version="0.27.0", default-features=false }
 serde = { workspace = true }

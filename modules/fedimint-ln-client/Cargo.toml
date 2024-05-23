@@ -37,7 +37,7 @@ futures = { workspace = true }
 itertools = { workspace = true }
 lightning-invoice = { workspace = true }
 lnurl-rs = { version = "0.4.1", features = ["async"], default-features = false }
-fedimint-client = { version = "=0.4.0-alpha", path = "../../fedimint-client" }
+fedimint-client = { workspace = true }
 fedimint-core = { workspace = true }
 fedimint-api-client = { workspace = true }
 fedimint-ln-common = { version = "=0.4.0-alpha", path = "../fedimint-ln-common" }
