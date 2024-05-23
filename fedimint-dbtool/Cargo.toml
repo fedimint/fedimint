@@ -34,7 +34,7 @@ fedimint-meta-client = { version = "=0.4.0-alpha", path = "../modules/fedimint-m
 fedimint-mint-server = { version = "=0.4.0-alpha", path = "../modules/fedimint-mint-server" }
 fedimint-mint-client = { version = "=0.4.0-alpha", path = "../modules/fedimint-mint-client" }
 fedimint-ln-server = { version = "=0.4.0-alpha", path = "../modules/fedimint-ln-server" }
-fedimint-ln-client = { version = "=0.4.0-alpha", path = "../modules/fedimint-ln-client" }
+fedimint-ln-client = { workspace = true }
 fedimint-logging = { version = "=0.4.0-alpha", path = "../fedimint-logging" }
 fedimint-wallet-server = { version = "=0.4.0-alpha", path = "../modules/fedimint-wallet-server" }
 fedimint-wallet-client = { version = "=0.4.0-alpha", path = "../modules/fedimint-wallet-client" }
