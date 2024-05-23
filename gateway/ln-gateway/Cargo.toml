@@ -42,7 +42,7 @@ cln-rpc = { workspace = true }
 fedimint-client = { workspace = true }
 fedimint-core = { workspace = true }
 fedimint-api-client = { workspace = true }
-fedimint-logging = { version = "=0.4.0-alpha", path = "../../fedimint-logging" }
+fedimint-logging = { workspace = true }
 fedimint-rocksdb = { version = "=0.4.0-alpha", path = "../../fedimint-rocksdb" }
 fedimint-ln-client = { workspace = true }
 fedimint-ln-common = { version = "=0.4.0-alpha", path = "../../modules/fedimint-ln-common" }

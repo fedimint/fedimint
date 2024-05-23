@@ -25,7 +25,7 @@ bitcoin = { workspace = true }
 clap = { version = "4.5.4", features = ["derive", "std", "help", "usage", "error-context", "suggestions"], default-features = false }
 ln-gateway = { version = "=0.4.0-alpha", package = "fedimint-ln-gateway", path= "../ln-gateway" }
 fedimint-core = { workspace = true }
-fedimint-logging = { version = "=0.4.0-alpha", path = "../../fedimint-logging" }
+fedimint-logging = { workspace = true }
 reqwest = { version = "0.11.26", features = [ "json", "rustls-tls" ], default-features = false }
 serde = { workspace = true}
 serde_json = { workspace = true }

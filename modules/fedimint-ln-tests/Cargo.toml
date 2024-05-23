@@ -24,7 +24,7 @@ fedimint-ln-server = { path = "../fedimint-ln-server" }
 fedimint-testing = { path = "../../fedimint-testing" }
 fedimint-client = { workspace = true }
 fedimint-core = { workspace = true }
-fedimint-logging = { path = "../../fedimint-logging" }
+fedimint-logging = { workspace = true }
 futures = { workspace = true }
 lightning-invoice = { version = "0.30.0", features = [ "serde" ] }
 threshold_crypto = { workspace = true }

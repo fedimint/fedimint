@@ -18,7 +18,7 @@ fedimint-core = { workspace = true }
 fedimint-dummy-client = { path = "../fedimint-dummy-client" }
 fedimint-dummy-common = { path = "../fedimint-dummy-common" }
 fedimint-dummy-server = { path = "../fedimint-dummy-server" }
-fedimint-logging = { path = "../../fedimint-logging" }
+fedimint-logging = { workspace = true }
 fedimint-testing = { path = "../../fedimint-testing" }
 futures = { workspace = true }
 rand = { workspace = true }

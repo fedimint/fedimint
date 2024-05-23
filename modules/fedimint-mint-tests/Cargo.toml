@@ -22,7 +22,7 @@ fedimint-mint-server = { path = "../fedimint-mint-server" }
 fedimint-testing = { path = "../../fedimint-testing" }
 fedimint-client = { workspace = true }
 fedimint-core = { workspace = true }
-fedimint-logging = { path = "../../fedimint-logging" }
+fedimint-logging = { workspace = true }
 futures = { workspace = true }
 tokio = { version = "1.37.0", features = ["sync"] }
 tracing = { workspace = true }

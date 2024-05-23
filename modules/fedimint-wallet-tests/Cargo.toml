@@ -23,7 +23,7 @@ devimint = { workspace = true }
 fedimint-bitcoind = { path = "../../fedimint-bitcoind" }
 fedimint-client = { workspace = true }
 fedimint-core = { workspace = true }
-fedimint-logging = { path = "../../fedimint-logging" }
+fedimint-logging = { workspace = true }
 fedimint-testing ={ path = "../../fedimint-testing" }
 fedimint-wallet-client = { path = "../fedimint-wallet-client" }
 fedimint-wallet-common = { path = "../fedimint-wallet-common" }
