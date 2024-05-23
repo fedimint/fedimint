@@ -38,7 +38,7 @@ hex = { workspace = true }
 itertools = { workspace = true }
 fedimint-core = { workspace = true }
 fedimint-api-client = { workspace = true }
-fedimint-client = { version = "=0.4.0-alpha", path = "../../fedimint-client" }
+fedimint-client = { workspace = true }
 fedimint-derive-secret = { version = "=0.4.0-alpha", path = "../../crypto/derive-secret"}
 fedimint-mint-common ={ version = "=0.4.0-alpha", path = "../fedimint-mint-common" }
 fedimint-logging = { version = "=0.4.0-alpha", path = "../../fedimint-logging" }

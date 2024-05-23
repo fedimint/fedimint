@@ -17,7 +17,7 @@ base64 = "0.22.1"
 bitcoin = { workspace = true }
 clap = { workspace = true }
 devimint = { version = "=0.4.0-alpha", path = "../devimint" }
-fedimint-client = { version = "=0.4.0-alpha", path = "../fedimint-client" }
+fedimint-client = { workspace = true }
 fedimint-core = { workspace = true }
 fedimint-api-client = { workspace = true }
 fedimint-ln-client = { version = "=0.4.0-alpha", path = "../modules/fedimint-ln-client" }

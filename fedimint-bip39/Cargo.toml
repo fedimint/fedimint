@@ -18,6 +18,6 @@ path = "./src/lib.rs"
 
 [dependencies]
 bip39 = { version = "2.0.0", features = ["rand"] }
-fedimint-client = { version = "=0.4.0-alpha", path = "../fedimint-client" }
+fedimint-client = { workspace = true }
 fedimint-core = { workspace = true }
 rand = { workspace = true }

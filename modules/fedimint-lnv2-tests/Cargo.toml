@@ -23,6 +23,6 @@ fedimint-ln-common = { path = "../fedimint-ln-common" }
 fedimint-ln-client = { path = "../fedimint-ln-client" }
 fedimint-ln-server = { path = "../fedimint-ln-server" }
 fedimint-testing = { path = "../../fedimint-testing" }
-fedimint-client = { path = "../../fedimint-client" }
+fedimint-client = { workspace = true }
 fedimint-core = { workspace = true }
 tokio = { version = "1.37.0", features = ["sync"] }

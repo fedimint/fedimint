@@ -20,7 +20,7 @@ fedimint-mint-common = { path = "../fedimint-mint-common" }
 fedimint-mint-client = { path = "../fedimint-mint-client" }
 fedimint-mint-server = { path = "../fedimint-mint-server" }
 fedimint-testing = { path = "../../fedimint-testing" }
-fedimint-client = { path = "../../fedimint-client" }
+fedimint-client = { workspace = true }
 fedimint-core = { workspace = true }
 fedimint-logging = { path = "../../fedimint-logging" }
 futures = { workspace = true }
