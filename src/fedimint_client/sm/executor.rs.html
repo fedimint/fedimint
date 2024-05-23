@@ -1351,6 +1351,7 @@
 <a href="#1351" id="1351">1351</a>
 <a href="#1352" id="1352">1352</a>
 <a href="#1353" id="1353">1353</a>
+<a href="#1354" id="1354">1354</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashSet};
 <span class="kw">use </span>std::convert::Infallible;
 <span class="kw">use </span>std::fmt::{Debug, Formatter};
@@ -1854,6 +1855,7 @@
                     }));
 
                     <span class="macro">debug!</span>(target: LOG_CLIENT_REACTOR, operation_id = %state.operation_id().fmt_short(), total = futures.len(), transitions_num, <span class="string">"New active state machine."</span>);
+                    <span class="macro">trace!</span>(target: LOG_CLIENT_REACTOR, state = <span class="question-mark">?</span>state, <span class="string">"Started new active state machine, details."</span>);
                 }
                 ExecutorLoopEvent::Triggered(TransitionForActiveState {
                     outcome,
