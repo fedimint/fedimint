@@ -572,6 +572,8 @@
 <a href="#572" id="572">572</a>
 <a href="#573" id="573">573</a>
 <a href="#574" id="574">574</a>
+<a href="#575" id="575">575</a>
+<a href="#576" id="576">576</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! Implements the client API through which users interact with the federation
 </span><span class="kw">use </span>std::cmp::Ordering;
 <span class="kw">use </span>std::collections::{BTreeMap, HashMap};
@@ -611,7 +613,9 @@
 <span class="kw">use </span>fedimint_core::secp256k1::{PublicKey, SECP256K1};
 <span class="kw">use </span>fedimint_core::server::DynServerModule;
 <span class="kw">use </span>fedimint_core::session_outcome::{SessionOutcome, SessionStatus, SignedSessionOutcome};
-<span class="kw">use </span>fedimint_core::transaction::{SerdeTransaction, Transaction, TransactionError};
+<span class="kw">use </span>fedimint_core::transaction::{
+    SerdeTransaction, Transaction, TransactionError, TransactionSubmissionOutcome,
+};
 <span class="kw">use </span>fedimint_core::{OutPoint, PeerId, TransactionId};
 <span class="kw">use </span>fedimint_logging::LOG_NET_API;
 <span class="kw">use </span>futures::StreamExt;
@@ -984,14 +988,14 @@
         <span class="macro">api_endpoint!</span> {
             SUBMIT_TRANSACTION_ENDPOINT,
             ApiVersion::new(<span class="number">0</span>, <span class="number">0</span>),
-            <span class="kw">async </span>|fedimint: <span class="kw-2">&amp;</span>ConsensusApi, _context, transaction: SerdeTransaction| -&gt; SerdeModuleEncoding&lt;<span class="prelude-ty">Result</span>&lt;TransactionId, TransactionError&gt;&gt; {
+            <span class="kw">async </span>|fedimint: <span class="kw-2">&amp;</span>ConsensusApi, _context, transaction: SerdeTransaction| -&gt; SerdeModuleEncoding&lt;TransactionSubmissionOutcome&gt; {
                 <span class="kw">let </span>transaction = transaction
                     .try_into_inner(<span class="kw-2">&amp;</span>fedimint.modules.decoder_registry())
                     .map_err(|e| ApiError::bad_request(e.to_string()))<span class="question-mark">?</span>;
 
                 <span class="comment">// we return an inner error if and only if the submitted transaction is
                 // invalid and will be rejected if we were to submit it to consensus
-                </span><span class="prelude-val">Ok</span>((<span class="kw-2">&amp;</span>fedimint.submit_transaction(transaction).<span class="kw">await</span>).into())
+                </span><span class="prelude-val">Ok</span>((<span class="kw-2">&amp;</span>TransactionSubmissionOutcome(fedimint.submit_transaction(transaction).<span class="kw">await</span>)).into())
             }
         },
         <span class="macro">api_endpoint!</span> {

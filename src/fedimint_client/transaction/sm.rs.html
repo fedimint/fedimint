@@ -159,7 +159,7 @@
 <span class="kw">use </span>fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, OperationId};
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::runtime::sleep;
-<span class="kw">use </span>fedimint_core::transaction::Transaction;
+<span class="kw">use </span>fedimint_core::transaction::{Transaction, TransactionSubmissionOutcome};
 <span class="kw">use </span>fedimint_core::TransactionId;
 <span class="kw">use </span>fedimint_logging::LOG_CLIENT_NET_API;
 <span class="kw">use </span>tracing::warn;
@@ -262,9 +262,9 @@
     <span class="kw">async fn </span>trigger_created_rejected(tx: Transaction, context: DynGlobalClientContext) -&gt; String {
         <span class="kw">loop </span>{
             <span class="kw">match </span>context.api().submit_transaction(tx.clone()).<span class="kw">await </span>{
-                <span class="prelude-val">Ok</span>(serde_result) =&gt; <span class="kw">match </span>serde_result.try_into_inner(context.decoders()) {
-                    <span class="prelude-val">Ok</span>(result) =&gt; {
-                        <span class="kw">if let </span><span class="prelude-val">Err</span>(transaction_error) = result {
+                <span class="prelude-val">Ok</span>(serde_outcome) =&gt; <span class="kw">match </span>serde_outcome.try_into_inner(context.decoders()) {
+                    <span class="prelude-val">Ok</span>(outcome) =&gt; {
+                        <span class="kw">if let </span>TransactionSubmissionOutcome(<span class="prelude-val">Err</span>(transaction_error)) = outcome {
                             <span class="kw">return </span>transaction_error.to_string();
                         }
                     }
