@@ -68,7 +68,7 @@ parity-scale-codec = "3.6.12"
 tempfile = "3.10.1"
 fedimint-dummy-common = { path = "../modules/fedimint-dummy-common" }
 fedimint-dummy-server = { path = "../modules/fedimint-dummy-server" }
-fedimint-testing = { path = "../fedimint-testing" }
+fedimint-testing = { workspace = true }
 fedimint-portalloc = { path = "../utils/portalloc" }
 test-log = { version = "0.2", features = ["trace"], default-features = false }
 
