@@ -121,6 +121,7 @@ fedimint-core = { path = "./fedimint-core" }
 fedimint-ln-client = { path = "./modules/fedimint-ln-client" }
 fedimint-api-client = { path = "./fedimint-api-client" }
 fedimint-logging = { path = "./fedimint-logging" }
+fedimint-empty-common = { path = "./modules/fedimint-empty-common" }
 
 # Workaround: https://github.com/rust-lang/cargo/issues/12457 which causes
 #             https://github.com/ipetkov/crane/issues/370
