@@ -1,6 +1,6 @@
 [package]
 name = "fedimint-recoverytool"
-version = "0.4.0-alpha"
+version = { workspace = true }
 edition = "2021"
 authors = ["The Fedimint Developers"]
 description = "recoverytool allows retrieving on-chain funds from a offline federation"
