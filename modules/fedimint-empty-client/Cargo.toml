@@ -1,6 +1,6 @@
 [package]
 name = "fedimint-empty-client"
-version = "0.4.0-alpha"
+version = { workspace = true }
 authors = ["The Fedimint Developers"]
 edition = "2021"
 description = "fedimint-empty is an empty fedimint module, good template for a new module."
@@ -18,8 +18,8 @@ path = "src/lib.rs"
 [dependencies]
 async-trait = { workspace = true }
 anyhow = { workspace = true }
-fedimint-empty-common = { version = "=0.4.0-alpha", path = "../fedimint-empty-common" }
-fedimint-client = { version = "=0.4.0-alpha", path = "../../fedimint-client" }
+fedimint-empty-common = { path = "../fedimint-empty-common" }
+fedimint-client = { workspace = true }
 fedimint-core = { workspace = true }
 fedimint-api-client = { workspace = true }
 erased-serde = { workspace = true }

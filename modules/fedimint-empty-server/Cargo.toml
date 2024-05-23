@@ -1,6 +1,6 @@
 [package]
 name = "fedimint-empty-server"
-version = "0.4.0-alpha"
+version = { workspace = true }
 authors = ["The Fedimint Developers"]
 edition = "2021"
 description = "fedimint-empty is a empty fedimint module, good template for a new module."
@@ -20,8 +20,8 @@ anyhow = { workspace = true }
 async-trait = { workspace = true }
 erased-serde = { workspace = true }
 futures = { workspace = true }
-fedimint-core = { version = "=0.4.0-alpha", path = "../../fedimint-core" }
-fedimint-empty-common = { version = "=0.4.0-alpha", path = "../fedimint-empty-common" }
+fedimint-core = { workspace = true }
+fedimint-empty-common = { path = "../fedimint-empty-common" }
 serde = { workspace = true }
 strum = { workspace = true }
 strum_macros = { workspace = true }

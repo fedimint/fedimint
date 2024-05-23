@@ -26,11 +26,11 @@ bitcoincore-rpc = "0.17.0"
 clap = { version = "4.5.4", features = ["derive", "std", "help", "usage", "error-context", "suggestions" ], default-features = false }
 fedimint-core = { workspace = true }
 fedimint-api-client = { workspace = true }
-fedimint-client  = { version = "=0.4.0-alpha", path = "../fedimint-client" }
-fedimint-server  = { version = "=0.4.0-alpha", path = "../fedimint-server" }
-fedimint-bitcoind = { version = "=0.4.0-alpha", path = "../fedimint-bitcoind" }
-fedimint-logging = { version = "=0.4.0-alpha", path = "../fedimint-logging" }
-fedimint-rocksdb = { version = "=0.4.0-alpha", path = "../fedimint-rocksdb" }
+fedimint-client  = { path = "../fedimint-client" }
+fedimint-server  = { path = "../fedimint-server" }
+fedimint-bitcoind = { path = "../fedimint-bitcoind" }
+fedimint-logging = { path = "../fedimint-logging" }
+fedimint-rocksdb = { path = "../fedimint-rocksdb" }
 fs-lock = "0.1.3"
 lazy_static = "1.4.0"
 ln-gateway = { version = "=0.4.0-alpha", package = "fedimint-ln-gateway", path = "../gateway/ln-gateway" }

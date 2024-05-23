@@ -23,9 +23,9 @@ axum = "0.7.5"
 axum-macros = "0.4.1"
 bitcoin = { workspace = true }
 clap = { version = "4.5.4", features = ["derive", "std", "help", "usage", "error-context", "suggestions"], default-features = false }
-ln-gateway = { version = "=0.4.0-alpha", package = "fedimint-ln-gateway", path= "../ln-gateway" }
-fedimint-core = { version = "=0.4.0-alpha", path = "../../fedimint-core" }
-fedimint-logging = { version = "=0.4.0-alpha", path = "../../fedimint-logging" }
+ln-gateway = { package = "fedimint-ln-gateway", path= "../ln-gateway" }
+fedimint-core = { path = "../../fedimint-core" }
+fedimint-logging = { path = "../../fedimint-logging" }
 reqwest = { version = "0.11.26", features = [ "json", "rustls-tls" ], default-features = false }
 serde = { workspace = true}
 serde_json = { workspace = true }
@@ -35,4 +35,4 @@ url = { version = "2.5.0", features = ["serde"] }
 clap_complete = "4.5.2"
 
 [build-dependencies]
-fedimint-build = { version = "=0.4.0-alpha", path = "../../fedimint-build" }
+fedimint-build = { path = "../../fedimint-build" }

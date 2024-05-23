@@ -1,6 +1,6 @@
 [package]
 name = "fedimint-tpe"
-version = "0.4.0-alpha"
+version = { workspace = true }
 authors = ["The Fedimint Developers"]
 edition = "2021"
 description = "tpe is a helper cryptography library for threshold point encryption"
@@ -17,7 +17,7 @@ name = "tpe"
 path = "src/lib.rs"
 
 [dependencies]
-fedimint-core  = { version = "=0.4.0-alpha", path = "../../fedimint-core/" }
+fedimint-core  = { workspace = true }
 bls12_381 = { workspace = true }
 group = { workspace = true }
 rand = { workspace = true }

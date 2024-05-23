@@ -1,6 +1,6 @@
 [package]
 name = "fedimint-ln-server"
-version = "0.4.0-alpha"
+version = { workspace = true }
 authors = ["The Fedimint Developers"]
 edition = "2021"
 description = "fedimint-ln is a lightning payment service module."
@@ -23,11 +23,11 @@ async-trait = { workspace = true }
 bitcoin_hashes = { workspace = true }
 erased-serde = { workspace = true }
 futures = { workspace = true }
-fedimint-bitcoind = { version = "=0.4.0-alpha", path = "../../fedimint-bitcoind" }
-fedimint-core = { version = "=0.4.0-alpha", path = "../../fedimint-core" }
-fedimint-ln-common = { version = "=0.4.0-alpha", path = "../fedimint-ln-common" }
-fedimint-metrics = { version = "=0.4.0-alpha", path = "../../fedimint-metrics" }
-secp256k1 = { version="0.27.0", default-features=false }
+fedimint-bitcoind = { path = "../../fedimint-bitcoind" }
+fedimint-core = { path = "../../fedimint-core" }
+fedimint-ln-common = { path = "../fedimint-ln-common" }
+fedimint-metrics = { path = "../../fedimint-metrics" }
+secp256k1 = { version = "0.27.0", default-features = false }
 serde = { workspace = true }
 strum = { workspace = true }
 strum_macros = { workspace = true }

@@ -39,18 +39,18 @@ clap = { workspace = true }
 # cln-plugin made semver incompatible change
 cln-plugin = "=0.1.7"
 cln-rpc = { workspace = true }
-fedimint-client = { version = "=0.4.0-alpha", path = "../../fedimint-client" }
+fedimint-client = { path = "../../fedimint-client" }
 fedimint-core = { workspace = true }
 fedimint-api-client = { workspace = true }
-fedimint-logging = { version = "=0.4.0-alpha", path = "../../fedimint-logging" }
-fedimint-rocksdb = { version = "=0.4.0-alpha", path = "../../fedimint-rocksdb" }
-fedimint-ln-client = { version = "=0.4.0-alpha", path = "../../modules/fedimint-ln-client" }
-fedimint-ln-common = { version = "=0.4.0-alpha", path = "../../modules/fedimint-ln-common" }
-fedimint-mint-client = { version = "=0.4.0-alpha", path = "../../modules/fedimint-mint-client" }
-fedimint-wallet-client = { version = "=0.4.0-alpha", path = "../../modules/fedimint-wallet-client" }
+fedimint-logging = { path = "../../fedimint-logging" }
+fedimint-rocksdb = { path = "../../fedimint-rocksdb" }
+fedimint-ln-client = { path = "../../modules/fedimint-ln-client" }
+fedimint-ln-common = { path = "../../modules/fedimint-ln-common" }
+fedimint-mint-client = { path = "../../modules/fedimint-mint-client" }
+fedimint-wallet-client = { path = "../../modules/fedimint-wallet-client" }
 fedimint-lnv2-client = { path = "../../modules/fedimint-lnv2-client" }
 fedimint-lnv2-common = { path = "../../modules/fedimint-lnv2-common" }
-tpe = { package = "fedimint-tpe", version = "=0.4.0-alpha", path = "../../crypto/tpe" }
+tpe = { package = "fedimint-tpe", path = "../../crypto/tpe" }
 futures = { workspace = true }
 hex = { workspace = true }
 erased-serde = { workspace = true }
@@ -73,7 +73,7 @@ tracing = { version = "0.1.40", default-features = false, features= ["log", "att
 url = { version = "2.5.0", features = ["serde"] }
 
 [dev-dependencies]
-fedimint-dummy-client = { version = "=0.4.0-alpha", path = "../../modules/fedimint-dummy-client" }
+fedimint-dummy-client = { path = "../../modules/fedimint-dummy-client" }
 fedimint-dummy-server = { path = "../../modules/fedimint-dummy-server" }
 fedimint-dummy-common = { path = "../../modules/fedimint-dummy-common" }
 fedimint-unknown-server = { path = "../../modules/fedimint-unknown-server" }
@@ -89,5 +89,5 @@ threshold_crypto = { workspace = true }
 assert_matches = { workspace = true }
 
 [build-dependencies]
-fedimint-build = { version = "=0.4.0-alpha", path = "../../fedimint-build" }
+fedimint-build = { path = "../../fedimint-build" }
 tonic-build = "0.11.0"

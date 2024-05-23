@@ -115,9 +115,11 @@ hex = "0.4.3"
 assert_matches = "1.5.0"
 devimint = { path = "./devimint" }
 fedimint-core = { path = "./fedimint-core" }
+fedimint-client = { path = "./fedimint-client" }
 fedimint-ln-client = { path = "./modules/fedimint-ln-client" }
 fedimint-api-client = { path = "./fedimint-api-client" }
 fedimint-logging = { path = "./fedimint-logging" }
+fedimint-testing = { path = "./fedimint-testing" }
 
 # Workaround: https://github.com/rust-lang/cargo/issues/12457 which causes
 #             https://github.com/ipetkov/crane/issues/370

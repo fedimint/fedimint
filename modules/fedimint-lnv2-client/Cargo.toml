@@ -1,6 +1,6 @@
 [package]
 name = "fedimint-lnv2-client"
-version = "0.4.0-alpha"
+version = { workspace = true }
 authors = ["The Fedimint Developers"]
 edition = "2021"
 description = "fedimint-ln is a lightning payment service module."

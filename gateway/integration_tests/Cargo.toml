@@ -1,6 +1,6 @@
 [package]
 name = "gateway-tests"
-version = "0.4.0-alpha"
+version = { workspace = true }
 authors = ["The Fedimint Developers"]
 edition = "2021"
 description = "gateway-tests contain integration tests for the gateway"
@@ -20,8 +20,8 @@ clap = { workspace = true }
 devimint = { workspace = true }
 tokio = { workspace = true }
 fedimint-core = { workspace = true }
-fedimint-testing = { path = "../../fedimint-testing" }
-ln-gateway = { version = "=0.4.0-alpha", package = "fedimint-ln-gateway", path= "../ln-gateway" }
+fedimint-testing = { workspace = true }
+ln-gateway = { package = "fedimint-ln-gateway", path= "../ln-gateway" }
 tracing = { workspace = true }
 serde_json = { workspace = true }
 semver = { workspace = true }

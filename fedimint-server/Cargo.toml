@@ -1,6 +1,6 @@
 [package]
 name = "fedimint-server"
-version = {workspace = true}
+version = { workspace = true}
 authors = ["The Fedimint Developers"]
 edition = "2021"
 description = "fedimint-server' facilitates federated consensus with atomic broadcast and distributed configuration."
@@ -18,7 +18,7 @@ name = "fedimint_server"
 path = "src/lib.rs"
 
 [dependencies]
-fedimint-aead = { version = "=0.4.0-alpha", path = "../crypto/aead" }
+fedimint-aead = { path = "../crypto/aead" }
 anyhow = { workspace = true }
 async-channel = "2.3.1"
 async-trait = { workspace = true }
@@ -32,8 +32,8 @@ hex = { workspace = true }
 itertools = { workspace = true }
 fedimint-core = { workspace = true }
 fedimint-api-client = { workspace = true }
-fedimint-logging = { version = "=0.4.0-alpha", path = "../fedimint-logging" }
-fedimint-metrics = { version = "=0.4.0-alpha", path = "../fedimint-metrics" }
+fedimint-logging = { path = "../fedimint-logging" }
+fedimint-metrics = { path = "../fedimint-metrics" }
 lazy_static = "1.4.0"
 pin-project = "1.1.5"
 rand = { workspace = true }
@@ -45,7 +45,7 @@ sha3 = "0.10.8"
 strum = { workspace = true }
 strum_macros = { workspace = true }
 tar = "0.4.40"
-tbs = { package = "fedimint-tbs", version = "=0.4.0-alpha", path = "../crypto/tbs" }
+tbs = { package = "fedimint-tbs",path = "../crypto/tbs" }
 thiserror = { workspace = true }
 tower = { version = "0.4.13", default-features = false }
 tracing = { workspace = true }
@@ -71,4 +71,4 @@ fedimint-portalloc = { path = "../utils/portalloc" }
 test-log = { version = "0.2", features = ["trace"], default-features = false }
 
 [build-dependencies]
-fedimint-build = { version = "=0.4.0-alpha", path = "../fedimint-build" }
+fedimint-build = { path = "../fedimint-build" }
