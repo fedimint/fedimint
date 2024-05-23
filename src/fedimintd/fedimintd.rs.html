@@ -467,6 +467,22 @@
 <a href="#467" id="467">467</a>
 <a href="#468" id="468">468</a>
 <a href="#469" id="469">469</a>
+<a href="#470" id="470">470</a>
+<a href="#471" id="471">471</a>
+<a href="#472" id="472">472</a>
+<a href="#473" id="473">473</a>
+<a href="#474" id="474">474</a>
+<a href="#475" id="475">475</a>
+<a href="#476" id="476">476</a>
+<a href="#477" id="477">477</a>
+<a href="#478" id="478">478</a>
+<a href="#479" id="479">479</a>
+<a href="#480" id="480">480</a>
+<a href="#481" id="481">481</a>
+<a href="#482" id="482">482</a>
+<a href="#483" id="483">483</a>
+<a href="#484" id="484">484</a>
+<a href="#485" id="485">485</a>
 </pre></div><pre class="rust"><code><span class="kw">mod </span>metrics;
 
 <span class="kw">use </span>std::collections::BTreeMap;
@@ -620,7 +636,7 @@
 /// // Note: not called `main` to avoid rustdoc executing it
 /// // #[tokio::main]
 /// async fn main_() -&gt; anyhow::Result&lt;()&gt; {
-///     Fedimintd::new(env!("FEDIMINT_BUILD_CODE_VERSION"))?
+///     Fedimintd::new(env!("FEDIMINT_BUILD_CODE_VERSION"), Some("vendor-xyz-1"))?
 ///         // use `.with_default_modules()` to avoid having
 ///         // to import these manually
 ///         .with_module_kind(WalletInit)
@@ -633,28 +649,41 @@
 </span><span class="kw">pub struct </span>Fedimintd {
     server_gens: ServerModuleInitRegistry,
     server_gen_params: ServerModuleConfigGenParamsRegistry,
-    version_hash: String,
+    code_version_hash: String,
+    code_version_str: String,
     opts: ServerOpts,
     bitcoind_rpc: BitcoinRpcConfig,
 }
 
 <span class="kw">impl </span>Fedimintd {
-    <span class="doccomment">/// Start a new custom `fedimintd`
+    <span class="doccomment">/// Build a new `fedimintd`
     ///
-    /// Like [`Self::new`] but with an ability to customize version strings.
-    </span><span class="kw">pub fn </span>new(version_hash: <span class="kw-2">&amp;</span>str) -&gt; anyhow::Result&lt;Fedimintd&gt; {
+    /// `code_version_hash` should be the git hash of the code, the
+    /// `fedimintd` binary is bing built from. This is used mostly for
+    /// information purposes (`fedimintd version-hash`). See
+    /// `fedimint-build` crate for easy way to obtain it.
+    ///
+    /// `code_version_vendor_suffix` is an optional suffix that will be appended
+    /// to the internal fedimint release version, to distinguish binaries
+    /// built by different vendors, usually  with a different set of modules.
+    /// Currently DKG will enforce that the combined `code_version` is the same
+    /// between all peers.
+    </span><span class="kw">pub fn </span>new(
+        code_version_hash: <span class="kw-2">&amp;</span>str,
+        code_version_vendor_suffix: <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>str&gt;,
+    ) -&gt; anyhow::Result&lt;Fedimintd&gt; {
         <span class="macro">assert_eq!</span>(
             <span class="macro">env!</span>(<span class="string">"FEDIMINT_BUILD_CODE_VERSION"</span>).len(),
-            version_hash.len(),
+            code_version_hash.len(),
             <span class="string">"version_hash must have an expected length"
         </span>);
 
-        handle_version_hash_command(version_hash);
+        handle_version_hash_command(code_version_hash);
 
-        <span class="kw">let </span>version = <span class="macro">env!</span>(<span class="string">"CARGO_PKG_VERSION"</span>);
+        <span class="kw">let </span>fedimint_version = <span class="macro">env!</span>(<span class="string">"CARGO_PKG_VERSION"</span>);
 
         APP_START_TS
-            .with_label_values(<span class="kw-2">&amp;</span>[version, version_hash])
+            .with_label_values(<span class="kw-2">&amp;</span>[fedimint_version, code_version_hash])
             .set(fedimint_core::time::duration_since_epoch().as_secs() <span class="kw">as </span>i64);
 
         <span class="kw">let </span>opts: ServerOpts = ServerOpts::parse();
@@ -665,7 +694,7 @@
             .init()
             .unwrap();
 
-        <span class="macro">info!</span>(<span class="string">"Starting fedimintd (version: {version} version_hash: {version_hash})"</span>);
+        <span class="macro">info!</span>(<span class="string">"Starting fedimintd (version: {fedimint_version} version_hash: {code_version_hash})"</span>);
 
         <span class="kw">let </span>bitcoind_rpc = BitcoinRpcConfig::get_defaults_from_env_vars()<span class="question-mark">?</span>;
 
@@ -674,7 +703,10 @@
             bitcoind_rpc,
             server_gens: ServerModuleInitRegistry::new(),
             server_gen_params: ServerModuleConfigGenParamsRegistry::default(),
-            version_hash: version_hash.to_owned(),
+            code_version_hash: code_version_hash.to_owned(),
+            code_version_str: code_version_vendor_suffix
+                .map(|suffix| <span class="macro">format!</span>(<span class="string">"{fedimint_version}.{suffix}"</span>))
+                .unwrap_or_else(|| fedimint_version.to_string()),
         })
     }
 
@@ -692,7 +724,7 @@
     <span class="doccomment">/// Get the version hash this `fedimintd` will report for diagnostic
     /// purposes
     </span><span class="kw">pub fn </span>version_hash(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>str {
-        <span class="kw-2">&amp;</span><span class="self">self</span>.version_hash
+        <span class="kw-2">&amp;</span><span class="self">self</span>.code_version_hash
     }
 
     <span class="doccomment">/// Attach additional module instance with parameters
@@ -803,7 +835,7 @@
                 <span class="kw-2">&amp;</span>task_group,
                 <span class="self">self</span>.server_gens,
                 <span class="self">self</span>.server_gen_params,
-                <span class="self">self</span>.version_hash,
+                <span class="self">self</span>.code_version_str,
             )
             .<span class="kw">await
             </span>{
@@ -885,7 +917,7 @@
     task_group: <span class="kw-2">&amp;</span>TaskGroup,
     module_inits: ServerModuleInitRegistry,
     module_inits_params: ServerModuleConfigGenParamsRegistry,
-    version_hash: String,
+    code_version_str: String,
 ) -&gt; anyhow::Result&lt;()&gt; {
     <span class="kw">if let </span><span class="prelude-val">Some</span>(socket_addr) = opts.bind_metrics_api.as_ref() {
         task_group.spawn_cancellable(<span class="string">"metrics-server"</span>, {
@@ -928,7 +960,7 @@
         data_dir,
         settings,
         db,
-        version_hash,
+        code_version_str,
         <span class="kw-2">&amp;</span>module_inits,
         task_group.clone(),
     )

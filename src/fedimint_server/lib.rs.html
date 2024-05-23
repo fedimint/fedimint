@@ -180,7 +180,7 @@
     data_dir: PathBuf,
     settings: ConfigGenSettings,
     db: Database,
-    version_hash: String,
+    code_version_str: String,
     module_init_registry: <span class="kw-2">&amp;</span>ServerModuleInitRegistry,
     task_group: TaskGroup,
 ) -&gt; anyhow::Result&lt;()&gt; {
@@ -191,7 +191,7 @@
                 data_dir,
                 settings,
                 db.clone(),
-                version_hash,
+                code_version_str,
                 task_group.make_subgroup(),
             )
             .<span class="kw">await</span><span class="question-mark">?
@@ -231,7 +231,7 @@
     data_dir: PathBuf,
     settings: ConfigGenSettings,
     db: Database,
-    version_hash: String,
+    code_version_str: String,
     <span class="kw-2">mut </span>task_group: TaskGroup,
 ) -&gt; anyhow::Result&lt;ServerConfig&gt; {
     <span class="macro">info!</span>(target: LOG_CONSENSUS, <span class="string">"Starting config gen"</span>);
@@ -245,7 +245,7 @@
         db.clone(),
         cfg_sender,
         <span class="kw-2">&amp;mut </span>task_group,
-        version_hash.clone(),
+        code_version_str.clone(),
     );
 
     <span class="kw">let </span><span class="kw-2">mut </span>rpc_module = RpcHandlerCtx::new_module(config_gen);

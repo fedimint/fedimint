@@ -1342,8 +1342,8 @@
     </span>config_generated_tx: Sender&lt;ServerConfig&gt;,
     <span class="doccomment">/// Task group for running DKG
     </span>task_group: TaskGroup,
-    <span class="doccomment">/// Version hash
-    </span>version_hash: String,
+    <span class="doccomment">/// Code version str that will get encoded in consensus hash
+    </span>code_version_str: String,
 }
 
 <span class="kw">impl </span>ConfigGenApi {
@@ -1352,14 +1352,14 @@
         db: Database,
         config_generated_tx: Sender&lt;ServerConfig&gt;,
         task_group: <span class="kw-2">&amp;mut </span>TaskGroup,
-        version_hash: String,
+        code_version_str: String,
     ) -&gt; <span class="self">Self </span>{
         <span class="kw">let </span>config_gen_api = <span class="self">Self </span>{
             state: Arc::new(Mutex::new(ConfigGenState::new(settings))),
             db,
             config_generated_tx,
             task_group: task_group.clone(),
-            version_hash,
+            code_version_str,
         };
         <span class="macro">info!</span>(target: fedimint_logging::LOG_NET_PEER_DKG, <span class="string">"Created new config gen Api"</span>);
         config_gen_api
@@ -1562,7 +1562,7 @@
                 registry,
                 DelayCalculator::PROD_DEFAULT,
                 <span class="kw-2">&amp;mut </span>task_group,
-                self_clone.version_hash.clone(),
+                self_clone.code_version_str.clone(),
             )
             .<span class="kw">await</span>;
             task_group
