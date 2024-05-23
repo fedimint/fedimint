@@ -1,6 +1,6 @@
 [package]
 name = "fedimint-unknown-common"
-version = "0.4.0-alpha"
+version = { workspace = true }
 authors = ["The Fedimint Developers"]
 edition = "2021"
 description = "fedimint-unknown is a fedimint module that doesn't have any client side implementation."

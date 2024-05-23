@@ -1,6 +1,6 @@
 [package]
 name = "fedimint-empty-client"
-version = "0.4.0-alpha"
+version = { workspace = true }
 authors = ["The Fedimint Developers"]
 edition = "2021"
 description = "fedimint-empty is an empty fedimint module, good template for a new module."

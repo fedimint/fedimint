@@ -1,6 +1,6 @@
 [package]
 name = "fedimint-tpe"
-version = "0.4.0-alpha"
+version = { workspace = true }
 authors = ["The Fedimint Developers"]
 edition = "2021"
 description = "tpe is a helper cryptography library for threshold point encryption"
