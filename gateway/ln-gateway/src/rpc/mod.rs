@@ -158,3 +158,8 @@ pub struct OpenChannelPayload {
     pub channel_size_sats: u64,
     pub push_amount_sats: u64,
 }
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct CloseChannelsWithPeerPayload {
+    pub pubkey: secp256k1::PublicKey,
+}

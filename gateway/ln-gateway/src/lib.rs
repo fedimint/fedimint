@@ -70,15 +70,18 @@ use fedimint_wallet_client::{
 };
 use futures::stream::StreamExt;
 use gateway_lnrpc::intercept_htlc_response::Action;
-use gateway_lnrpc::{GetNodeInfoResponse, GetRouteHintsResponse, InterceptHtlcResponse};
+use gateway_lnrpc::{
+    CloseChannelsWithPeerResponse, GetNodeInfoResponse, GetRouteHintsResponse,
+    InterceptHtlcResponse,
+};
 use hex::ToHex;
 use lightning::{ILnRpcClient, LightningBuilder, LightningMode, LightningRpcError};
 use lightning_invoice::{Bolt11Invoice, RoutingFees};
 use rand::rngs::OsRng;
 use rand::Rng;
 use rpc::{
-    ConnectToPeerPayload, FederationInfo, GatewayFedConfig, GatewayInfo, LeaveFedPayload,
-    OpenChannelPayload, SetConfigurationPayload, V1_API_ENDPOINT,
+    CloseChannelsWithPeerPayload, ConnectToPeerPayload, FederationInfo, GatewayFedConfig,
+    GatewayInfo, LeaveFedPayload, OpenChannelPayload, SetConfigurationPayload, V1_API_ENDPOINT,
 };
 use state_machine::pay::OutgoingPaymentError;
 use state_machine::GatewayClientModule;
@@ -1298,6 +1301,17 @@ impl Gateway {
             .open_channel(pubkey, channel_size_sats, push_amount_sats)
             .await?;
         Ok(())
+    }
+
+    /// Instructs the Gateway's Lightning node to close all channels with a peer
+    /// specified by `pubkey`.
+    pub async fn handle_close_channels_with_peer_msg(
+        &self,
+        CloseChannelsWithPeerPayload { pubkey }: CloseChannelsWithPeerPayload,
+    ) -> Result<CloseChannelsWithPeerResponse> {
+        let context = self.get_lightning_context().await?;
+        let response = context.lnrpc.close_channels_with_peer(pubkey).await?;
+        Ok(response)
     }
 
     /// Returns a list of Lightning network channels from the Gateway's

@@ -20,9 +20,9 @@ use crate::envs::{
     FM_GATEWAY_LIGHTNING_ADDR_ENV, FM_LND_MACAROON_ENV, FM_LND_RPC_ADDR_ENV, FM_LND_TLS_CERT_ENV,
 };
 use crate::gateway_lnrpc::{
-    CreateInvoiceRequest, CreateInvoiceResponse, EmptyResponse, GetFundingAddressResponse,
-    GetNodeInfoResponse, GetRouteHintsResponse, InterceptHtlcResponse, PayInvoiceRequest,
-    PayInvoiceResponse,
+    CloseChannelsWithPeerResponse, CreateInvoiceRequest, CreateInvoiceResponse, EmptyResponse,
+    GetFundingAddressResponse, GetNodeInfoResponse, GetRouteHintsResponse, InterceptHtlcResponse,
+    PayInvoiceRequest, PayInvoiceResponse,
 };
 
 pub const MAX_LIGHTNING_RETRIES: u32 = 10;
@@ -45,6 +45,8 @@ pub enum LightningRpcError {
     FailedToCompleteHtlc { failure_reason: String },
     #[error("Failed to open channel: {failure_reason}")]
     FailedToOpenChannel { failure_reason: String },
+    #[error("Failed to close channel: {failure_reason}")]
+    FailedToCloseChannelsWithPeer { failure_reason: String },
     #[error("Failed to get Invoice: {failure_reason}")]
     FailedToGetInvoice { failure_reason: String },
     #[error("Failed to get funding address: {failure_reason}")]
@@ -145,6 +147,13 @@ pub trait ILnRpcClient: Debug + Send + Sync {
         channel_size_sats: u64,
         push_amount_sats: u64,
     ) -> Result<EmptyResponse, LightningRpcError>;
+
+    /// Close all channels with a peer lightning node from the gateway's
+    /// lightning node.
+    async fn close_channels_with_peer(
+        &self,
+        pubkey: secp256k1::PublicKey,
+    ) -> Result<CloseChannelsWithPeerResponse, LightningRpcError>;
 
     async fn list_active_channels(&self) -> Result<Vec<ChannelInfo>, LightningRpcError>;
 }

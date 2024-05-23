@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package gateway_lnrpc;
 
-/* 
+/*
  * GatewayLightning is a service that provides limited access and functionality
  * from a lightning node to Fedimint gateways
  */
@@ -13,12 +13,12 @@ service GatewayLightning {
   /* GetRouteHints returns the route hints to the associated lightning node */
   rpc GetRouteHints(GetRouteHintsRequest) returns (GetRouteHintsResponse) {}
 
-  /* 
+  /*
    * PayInvoice attempts to pay an invoice using the associated lightning node
    */
   rpc PayInvoice(PayInvoiceRequest) returns (PayInvoiceResponse) {}
 
-  /* 
+  /*
    * RouteHtlcs opens a bi-directional stream for the client to receive intercepted
    * HTLCs. `InterceptHtlcRequest` is sent from the server to alert the client that
    * an HTLC has been intercepted and needs to be processed. The client is expected
@@ -39,6 +39,9 @@ service GatewayLightning {
 
   /* Open a channel on the underlying lightning node. */
   rpc OpenChannel(OpenChannelRequest) returns (EmptyResponse) {}
+
+  /* Close all channels with a given peer on the underlying lightning node. */
+  rpc CloseChannelsWithPeer(CloseChannelsWithPeerRequest) returns (CloseChannelsWithPeerResponse) {}
 
   /* List all channels that are active and able to send and receive funds. */
   rpc ListActiveChannels(EmptyRequest) returns (ListActiveChannelsResponse) {}
@@ -243,6 +246,16 @@ message OpenChannelRequest {
   // The amount of sats that should be pushed to the
   // counterparty once the channel is opened.
   uint64 push_amount_sats = 3;
+}
+
+message CloseChannelsWithPeerRequest {
+  // The public key of the node we're closing channels with.
+  bytes pubkey = 1;
+}
+
+message CloseChannelsWithPeerResponse {
+    // The number of channels that were closed.
+    uint32 num_channels_closed = 1;
 }
 
 message ListActiveChannelsResponse {
