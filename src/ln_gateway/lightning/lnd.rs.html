@@ -885,6 +885,62 @@
 <a href="#885" id="885">885</a>
 <a href="#886" id="886">886</a>
 <a href="#887" id="887">887</a>
+<a href="#888" id="888">888</a>
+<a href="#889" id="889">889</a>
+<a href="#890" id="890">890</a>
+<a href="#891" id="891">891</a>
+<a href="#892" id="892">892</a>
+<a href="#893" id="893">893</a>
+<a href="#894" id="894">894</a>
+<a href="#895" id="895">895</a>
+<a href="#896" id="896">896</a>
+<a href="#897" id="897">897</a>
+<a href="#898" id="898">898</a>
+<a href="#899" id="899">899</a>
+<a href="#900" id="900">900</a>
+<a href="#901" id="901">901</a>
+<a href="#902" id="902">902</a>
+<a href="#903" id="903">903</a>
+<a href="#904" id="904">904</a>
+<a href="#905" id="905">905</a>
+<a href="#906" id="906">906</a>
+<a href="#907" id="907">907</a>
+<a href="#908" id="908">908</a>
+<a href="#909" id="909">909</a>
+<a href="#910" id="910">910</a>
+<a href="#911" id="911">911</a>
+<a href="#912" id="912">912</a>
+<a href="#913" id="913">913</a>
+<a href="#914" id="914">914</a>
+<a href="#915" id="915">915</a>
+<a href="#916" id="916">916</a>
+<a href="#917" id="917">917</a>
+<a href="#918" id="918">918</a>
+<a href="#919" id="919">919</a>
+<a href="#920" id="920">920</a>
+<a href="#921" id="921">921</a>
+<a href="#922" id="922">922</a>
+<a href="#923" id="923">923</a>
+<a href="#924" id="924">924</a>
+<a href="#925" id="925">925</a>
+<a href="#926" id="926">926</a>
+<a href="#927" id="927">927</a>
+<a href="#928" id="928">928</a>
+<a href="#929" id="929">929</a>
+<a href="#930" id="930">930</a>
+<a href="#931" id="931">931</a>
+<a href="#932" id="932">932</a>
+<a href="#933" id="933">933</a>
+<a href="#934" id="934">934</a>
+<a href="#935" id="935">935</a>
+<a href="#936" id="936">936</a>
+<a href="#937" id="937">937</a>
+<a href="#938" id="938">938</a>
+<a href="#939" id="939">939</a>
+<a href="#940" id="940">940</a>
+<a href="#941" id="941">941</a>
+<a href="#942" id="942">942</a>
+<a href="#943" id="943">943</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::fmt;
 <span class="kw">use </span>std::str::FromStr;
 <span class="kw">use </span>std::sync::Arc;
@@ -905,8 +961,8 @@
 <span class="kw">use </span>tonic_lnd::lnrpc::failure::FailureCode;
 <span class="kw">use </span>tonic_lnd::lnrpc::payment::PaymentStatus;
 <span class="kw">use </span>tonic_lnd::lnrpc::{
-    ChanInfoRequest, ConnectPeerRequest, GetInfoRequest, LightningAddress, ListChannelsRequest,
-    OpenChannelRequest,
+    ChanInfoRequest, ChannelPoint, CloseChannelRequest, ConnectPeerRequest, GetInfoRequest,
+    LightningAddress, ListChannelsRequest, OpenChannelRequest,
 };
 <span class="kw">use </span>tonic_lnd::routerrpc::{
     CircuitKey, ForwardHtlcInterceptResponse, ResolveHoldForwardAction, SendPaymentRequest,
@@ -923,9 +979,9 @@
 <span class="kw">use </span><span class="kw">crate</span>::gateway_lnrpc::get_route_hints_response::{RouteHint, RouteHintHop};
 <span class="kw">use </span><span class="kw">crate</span>::gateway_lnrpc::intercept_htlc_response::{Action, Cancel, Forward, Settle};
 <span class="kw">use </span><span class="kw">crate</span>::gateway_lnrpc::{
-    CreateInvoiceRequest, CreateInvoiceResponse, EmptyResponse, GetFundingAddressResponse,
-    GetNodeInfoResponse, GetRouteHintsResponse, InterceptHtlcRequest, InterceptHtlcResponse,
-    PayInvoiceRequest, PayInvoiceResponse,
+    CloseChannelsWithPeerResponse, CreateInvoiceRequest, CreateInvoiceResponse, EmptyResponse,
+    GetFundingAddressResponse, GetNodeInfoResponse, GetRouteHintsResponse, InterceptHtlcRequest,
+    InterceptHtlcResponse, PayInvoiceRequest, PayInvoiceResponse,
 };
 
 <span class="kw">type </span>HtlcSubscriptionSender = mpsc::Sender&lt;<span class="prelude-ty">Result</span>&lt;InterceptHtlcRequest, Status&gt;&gt;;
@@ -1549,7 +1605,7 @@
 
     <span class="kw">async fn </span>connect_to_peer(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        pubkey: secp256k1::PublicKey,
+        pubkey: PublicKey,
         host: String,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;EmptyResponse, LightningRpcError&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>client = <span class="self">self</span>.connect().<span class="kw">await</span><span class="question-mark">?</span>;
@@ -1596,7 +1652,7 @@
 
     <span class="kw">async fn </span>open_channel(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        pubkey: secp256k1::PublicKey,
+        pubkey: PublicKey,
         channel_size_sats: u64,
         push_amount_sats: u64,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;EmptyResponse, LightningRpcError&gt; {
@@ -1617,6 +1673,62 @@
                 failure_reason: <span class="macro">format!</span>(<span class="string">"Failed to open channel {e:?}"</span>),
             }),
         }
+    }
+
+    <span class="kw">async fn </span>close_channels_with_peer(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        pubkey: PublicKey,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;CloseChannelsWithPeerResponse, LightningRpcError&gt; {
+        <span class="kw">let </span><span class="kw-2">mut </span>client = <span class="self">self</span>.connect().<span class="kw">await</span><span class="question-mark">?</span>;
+
+        <span class="kw">let </span>channels_with_peer = client
+            .lightning()
+            .list_channels(ListChannelsRequest {
+                active_only: <span class="bool-val">false</span>,
+                inactive_only: <span class="bool-val">false</span>,
+                public_only: <span class="bool-val">false</span>,
+                private_only: <span class="bool-val">false</span>,
+                peer: pubkey.serialize().to_vec(),
+            })
+            .<span class="kw">await
+            </span>.map_err(|e| LightningRpcError::FailedToCloseChannelsWithPeer {
+                failure_reason: <span class="macro">format!</span>(<span class="string">"Failed to list channels {e:?}"</span>),
+            })<span class="question-mark">?
+            </span>.into_inner()
+            .channels;
+
+        <span class="kw">for </span>channel <span class="kw">in </span><span class="kw-2">&amp;</span>channels_with_peer {
+            <span class="kw">let </span>channel_point =
+                bitcoin::OutPoint::from_str(<span class="kw-2">&amp;</span>channel.channel_point).map_err(|e| {
+                    LightningRpcError::FailedToCloseChannelsWithPeer {
+                        failure_reason: <span class="macro">format!</span>(<span class="string">"Failed to parse channel point {e:?}"</span>),
+                    }
+                })<span class="question-mark">?</span>;
+
+            client
+                .lightning()
+                .close_channel(CloseChannelRequest {
+                    channel_point: <span class="prelude-val">Some</span>(ChannelPoint {
+                        funding_txid: <span class="prelude-val">Some</span>(
+                            tonic_lnd::lnrpc::channel_point::FundingTxid::FundingTxidBytes(
+                                &lt;bitcoin::Txid <span class="kw">as </span>AsRef&lt;[u8]&gt;&gt;::as_ref(<span class="kw-2">&amp;</span>channel_point.txid)
+                                    .as_ref()
+                                    .to_vec(),
+                            ),
+                        ),
+                        output_index: channel_point.vout,
+                    }),
+                    ..Default::default()
+                })
+                .<span class="kw">await
+                </span>.map_err(|e| LightningRpcError::FailedToCloseChannelsWithPeer {
+                    failure_reason: <span class="macro">format!</span>(<span class="string">"Failed to close channel {e:?}"</span>),
+                })<span class="question-mark">?</span>;
+        }
+
+        <span class="prelude-val">Ok</span>(CloseChannelsWithPeerResponse {
+            num_channels_closed: channels_with_peer.len() <span class="kw">as </span>u32,
+        })
     }
 
     <span class="kw">async fn </span>list_active_channels(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;Vec&lt;ChannelInfo&gt;, LightningRpcError&gt; {

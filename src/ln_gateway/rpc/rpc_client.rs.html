@@ -221,15 +221,30 @@
 <a href="#221" id="221">221</a>
 <a href="#222" id="222">222</a>
 <a href="#223" id="223">223</a>
+<a href="#224" id="224">224</a>
+<a href="#225" id="225">225</a>
+<a href="#226" id="226">226</a>
+<a href="#227" id="227">227</a>
+<a href="#228" id="228">228</a>
+<a href="#229" id="229">229</a>
+<a href="#230" id="230">230</a>
+<a href="#231" id="231">231</a>
+<a href="#232" id="232">232</a>
+<a href="#233" id="233">233</a>
+<a href="#234" id="234">234</a>
+<a href="#235" id="235">235</a>
+<a href="#236" id="236">236</a>
+<a href="#237" id="237">237</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>bitcoin::address::NetworkUnchecked;
 <span class="kw">use </span>bitcoin::Address;
 <span class="kw">use </span>fedimint_core::util::SafeUrl;
 <span class="kw">use </span>fedimint_core::{Amount, TransactionId};
 <span class="kw">use </span>fedimint_ln_common::gateway_endpoint_constants::{
-    BACKUP_ENDPOINT, BALANCE_ENDPOINT, CONFIGURATION_ENDPOINT, CONNECT_FED_ENDPOINT,
-    CONNECT_TO_PEER_ENDPOINT, GATEWAY_INFO_ENDPOINT, GATEWAY_INFO_POST_ENDPOINT,
-    GET_FUNDING_ADDRESS_ENDPOINT, LEAVE_FED_ENDPOINT, LIST_ACTIVE_CHANNELS_ENDPOINT,
-    OPEN_CHANNEL_ENDPOINT, RESTORE_ENDPOINT, SET_CONFIGURATION_ENDPOINT, WITHDRAW_ENDPOINT,
+    BACKUP_ENDPOINT, BALANCE_ENDPOINT, CLOSE_CHANNELS_WITH_PEER_ENDPOINT, CONFIGURATION_ENDPOINT,
+    CONNECT_FED_ENDPOINT, CONNECT_TO_PEER_ENDPOINT, GATEWAY_INFO_ENDPOINT,
+    GATEWAY_INFO_POST_ENDPOINT, GET_FUNDING_ADDRESS_ENDPOINT, LEAVE_FED_ENDPOINT,
+    LIST_ACTIVE_CHANNELS_ENDPOINT, OPEN_CHANNEL_ENDPOINT, RESTORE_ENDPOINT,
+    SET_CONFIGURATION_ENDPOINT, WITHDRAW_ENDPOINT,
 };
 <span class="kw">use </span>reqwest::{Method, StatusCode};
 <span class="kw">use </span>serde::de::DeserializeOwned;
@@ -237,11 +252,13 @@
 <span class="kw">use </span>thiserror::Error;
 
 <span class="kw">use super</span>::{
-    BackupPayload, BalancePayload, ConfigPayload, ConnectFedPayload, ConnectToPeerPayload,
-    DepositAddressPayload, FederationInfo, GatewayFedConfig, GatewayInfo, GetFundingAddressPayload,
-    LeaveFedPayload, OpenChannelPayload, RestorePayload, SetConfigurationPayload, WithdrawPayload,
+    BackupPayload, BalancePayload, CloseChannelsWithPeerPayload, ConfigPayload, ConnectFedPayload,
+    ConnectToPeerPayload, DepositAddressPayload, FederationInfo, GatewayFedConfig, GatewayInfo,
+    GetFundingAddressPayload, LeaveFedPayload, OpenChannelPayload, RestorePayload,
+    SetConfigurationPayload, WithdrawPayload,
 };
 <span class="kw">use </span><span class="kw">crate</span>::lightning::ChannelInfo;
+<span class="kw">use </span><span class="kw">crate</span>::CloseChannelsWithPeerResponse;
 
 <span class="kw">pub struct </span>GatewayRpcClient {
     <span class="doccomment">/// Base URL to gateway web server
@@ -387,6 +404,17 @@
         <span class="kw">let </span>url = <span class="self">self
             </span>.base_url
             .join(OPEN_CHANNEL_ENDPOINT)
+            .expect(<span class="string">"invalid base url"</span>);
+        <span class="self">self</span>.call_post(url, payload).<span class="kw">await
+    </span>}
+
+    <span class="kw">pub async fn </span>close_channels_with_peer(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        payload: CloseChannelsWithPeerPayload,
+    ) -&gt; GatewayRpcResult&lt;CloseChannelsWithPeerResponse&gt; {
+        <span class="kw">let </span>url = <span class="self">self
+            </span>.base_url
+            .join(CLOSE_CHANNELS_WITH_PEER_ENDPOINT)
             .expect(<span class="string">"invalid base url"</span>);
         <span class="self">self</span>.call_post(url, payload).<span class="kw">await
     </span>}

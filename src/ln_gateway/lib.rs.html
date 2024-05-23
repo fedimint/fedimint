@@ -1930,6 +1930,20 @@
 <a href="#1930" id="1930">1930</a>
 <a href="#1931" id="1931">1931</a>
 <a href="#1932" id="1932">1932</a>
+<a href="#1933" id="1933">1933</a>
+<a href="#1934" id="1934">1934</a>
+<a href="#1935" id="1935">1935</a>
+<a href="#1936" id="1936">1936</a>
+<a href="#1937" id="1937">1937</a>
+<a href="#1938" id="1938">1938</a>
+<a href="#1939" id="1939">1939</a>
+<a href="#1940" id="1940">1940</a>
+<a href="#1941" id="1941">1941</a>
+<a href="#1942" id="1942">1942</a>
+<a href="#1943" id="1943">1943</a>
+<a href="#1944" id="1944">1944</a>
+<a href="#1945" id="1945">1945</a>
+<a href="#1946" id="1946">1946</a>
 </pre></div><pre class="rust"><code><span class="kw">pub mod </span>client;
 <span class="kw">mod </span>db;
 <span class="kw">pub mod </span>envs;
@@ -2002,15 +2016,18 @@
 };
 <span class="kw">use </span>futures::stream::StreamExt;
 <span class="kw">use </span>gateway_lnrpc::intercept_htlc_response::Action;
-<span class="kw">use </span>gateway_lnrpc::{GetNodeInfoResponse, GetRouteHintsResponse, InterceptHtlcResponse};
+<span class="kw">use </span>gateway_lnrpc::{
+    CloseChannelsWithPeerResponse, GetNodeInfoResponse, GetRouteHintsResponse,
+    InterceptHtlcResponse,
+};
 <span class="kw">use </span>hex::ToHex;
 <span class="kw">use </span>lightning::{ILnRpcClient, LightningBuilder, LightningMode, LightningRpcError};
 <span class="kw">use </span>lightning_invoice::{Bolt11Invoice, RoutingFees};
 <span class="kw">use </span>rand::rngs::OsRng;
 <span class="kw">use </span>rand::Rng;
 <span class="kw">use </span>rpc::{
-    ConnectToPeerPayload, FederationInfo, GatewayFedConfig, GatewayInfo, LeaveFedPayload,
-    OpenChannelPayload, SetConfigurationPayload, V1_API_ENDPOINT,
+    CloseChannelsWithPeerPayload, ConnectToPeerPayload, FederationInfo, GatewayFedConfig,
+    GatewayInfo, LeaveFedPayload, OpenChannelPayload, SetConfigurationPayload, V1_API_ENDPOINT,
 };
 <span class="kw">use </span>state_machine::pay::OutgoingPaymentError;
 <span class="kw">use </span>state_machine::GatewayClientModule;
@@ -3230,6 +3247,17 @@
             .open_channel(pubkey, channel_size_sats, push_amount_sats)
             .<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(())
+    }
+
+    <span class="doccomment">/// Instructs the Gateway's Lightning node to close all channels with a peer
+    /// specified by `pubkey`.
+    </span><span class="kw">pub async fn </span>handle_close_channels_with_peer_msg(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        CloseChannelsWithPeerPayload { pubkey }: CloseChannelsWithPeerPayload,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;CloseChannelsWithPeerResponse&gt; {
+        <span class="kw">let </span>context = <span class="self">self</span>.get_lightning_context().<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>response = context.lnrpc.close_channels_with_peer(pubkey).<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="prelude-val">Ok</span>(response)
     }
 
     <span class="doccomment">/// Returns a list of Lightning network channels from the Gateway's

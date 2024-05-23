@@ -914,6 +914,75 @@
 <a href="#914" id="914">914</a>
 <a href="#915" id="915">915</a>
 <a href="#916" id="916">916</a>
+<a href="#917" id="917">917</a>
+<a href="#918" id="918">918</a>
+<a href="#919" id="919">919</a>
+<a href="#920" id="920">920</a>
+<a href="#921" id="921">921</a>
+<a href="#922" id="922">922</a>
+<a href="#923" id="923">923</a>
+<a href="#924" id="924">924</a>
+<a href="#925" id="925">925</a>
+<a href="#926" id="926">926</a>
+<a href="#927" id="927">927</a>
+<a href="#928" id="928">928</a>
+<a href="#929" id="929">929</a>
+<a href="#930" id="930">930</a>
+<a href="#931" id="931">931</a>
+<a href="#932" id="932">932</a>
+<a href="#933" id="933">933</a>
+<a href="#934" id="934">934</a>
+<a href="#935" id="935">935</a>
+<a href="#936" id="936">936</a>
+<a href="#937" id="937">937</a>
+<a href="#938" id="938">938</a>
+<a href="#939" id="939">939</a>
+<a href="#940" id="940">940</a>
+<a href="#941" id="941">941</a>
+<a href="#942" id="942">942</a>
+<a href="#943" id="943">943</a>
+<a href="#944" id="944">944</a>
+<a href="#945" id="945">945</a>
+<a href="#946" id="946">946</a>
+<a href="#947" id="947">947</a>
+<a href="#948" id="948">948</a>
+<a href="#949" id="949">949</a>
+<a href="#950" id="950">950</a>
+<a href="#951" id="951">951</a>
+<a href="#952" id="952">952</a>
+<a href="#953" id="953">953</a>
+<a href="#954" id="954">954</a>
+<a href="#955" id="955">955</a>
+<a href="#956" id="956">956</a>
+<a href="#957" id="957">957</a>
+<a href="#958" id="958">958</a>
+<a href="#959" id="959">959</a>
+<a href="#960" id="960">960</a>
+<a href="#961" id="961">961</a>
+<a href="#962" id="962">962</a>
+<a href="#963" id="963">963</a>
+<a href="#964" id="964">964</a>
+<a href="#965" id="965">965</a>
+<a href="#966" id="966">966</a>
+<a href="#967" id="967">967</a>
+<a href="#968" id="968">968</a>
+<a href="#969" id="969">969</a>
+<a href="#970" id="970">970</a>
+<a href="#971" id="971">971</a>
+<a href="#972" id="972">972</a>
+<a href="#973" id="973">973</a>
+<a href="#974" id="974">974</a>
+<a href="#975" id="975">975</a>
+<a href="#976" id="976">976</a>
+<a href="#977" id="977">977</a>
+<a href="#978" id="978">978</a>
+<a href="#979" id="979">979</a>
+<a href="#980" id="980">980</a>
+<a href="#981" id="981">981</a>
+<a href="#982" id="982">982</a>
+<a href="#983" id="983">983</a>
+<a href="#984" id="984">984</a>
+<a href="#985" id="985">985</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::array::TryFromSliceError;
 <span class="kw">use </span>std::collections::{BTreeMap, HashMap};
 <span class="kw">use </span>std::net::SocketAddr;
@@ -927,6 +996,7 @@
 <span class="kw">use </span>clap::Parser;
 <span class="kw">use </span>cln_plugin::{options, Builder, Plugin};
 <span class="kw">use </span>cln_rpc::model;
+<span class="kw">use </span>cln_rpc::model::responses::ListpeerchannelsChannels;
 <span class="kw">use </span>cln_rpc::primitives::ShortChannelId;
 <span class="kw">use </span>fedimint_core::secp256k1::{All, PublicKey, Secp256k1, SecretKey};
 <span class="kw">use </span>fedimint_core::task::TaskGroup;
@@ -943,7 +1013,8 @@
 <span class="kw">use </span>ln_gateway::gateway_lnrpc::intercept_htlc_response::{Action, Cancel, Forward, Settle};
 <span class="kw">use </span>ln_gateway::gateway_lnrpc::list_active_channels_response::ChannelInfo;
 <span class="kw">use </span>ln_gateway::gateway_lnrpc::{
-    ConnectToPeerRequest, CreateInvoiceRequest, CreateInvoiceResponse, EmptyRequest, EmptyResponse,
+    CloseChannelsWithPeerRequest, CloseChannelsWithPeerResponse, ConnectToPeerRequest,
+    CreateInvoiceRequest, CreateInvoiceResponse, EmptyRequest, EmptyResponse,
     GetFundingAddressResponse, GetNodeInfoResponse, GetRouteHintsRequest, GetRouteHintsResponse,
     InterceptHtlcRequest, InterceptHtlcResponse, ListActiveChannelsResponse, OpenChannelRequest,
     PayInvoiceRequest, PayInvoiceResponse,
@@ -1617,6 +1688,73 @@
             })<span class="question-mark">?</span>;
 
         <span class="prelude-val">Ok</span>(tonic::Response::new(EmptyResponse {}))
+    }
+
+    <span class="kw">async fn </span>close_channels_with_peer(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        request: tonic::Request&lt;CloseChannelsWithPeerRequest&gt;,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;tonic::Response&lt;CloseChannelsWithPeerResponse&gt;, Status&gt; {
+        <span class="kw">let </span>request_inner = request.into_inner();
+
+        <span class="kw">let </span>peer_id = PublicKey::from_slice(<span class="kw-2">&amp;</span>request_inner.pubkey).map_err(|e| {
+            Status::invalid_argument(<span class="macro">format!</span>(<span class="string">"Unable to parse request pubkey: {e}"</span>))
+        })<span class="question-mark">?</span>;
+
+        <span class="kw">let </span>channels_with_peer: Vec&lt;ListpeerchannelsChannels&gt; = <span class="self">self
+            </span>.rpc_client()
+            .<span class="kw">await
+            </span>.map_err(|e| Status::internal(e.to_string()))<span class="question-mark">?
+            </span>.call(cln_rpc::Request::ListPeerChannels(
+                model::requests::ListpeerchannelsRequest { id: <span class="prelude-val">Some</span>(peer_id) },
+            ))
+            .<span class="kw">await
+            </span>.map(|response| <span class="kw">match </span>response {
+                cln_rpc::Response::ListPeerChannels(
+                    model::responses::ListpeerchannelsResponse { channels },
+                ) =&gt; <span class="prelude-val">Ok</span>(channels
+                    .unwrap_or_default()
+                    .into_iter()
+                    .filter(|channel| {
+                        channel.state
+                            == <span class="prelude-val">Some</span>(
+                                model::responses::ListpeerchannelsChannelsState::CHANNELD_NORMAL,
+                            )
+                    })
+                    .collect()),
+                <span class="kw">_ </span>=&gt; <span class="prelude-val">Err</span>(ClnExtensionError::RpcWrongResponse),
+            })
+            .map_err(|e| {
+                <span class="macro">error!</span>(<span class="string">"cln listchannels rpc returned error {:?}"</span>, e);
+                tonic::Status::internal(e.to_string())
+            })<span class="question-mark">?
+            </span>.map_err(|e| tonic::Status::internal(e.to_string()))<span class="question-mark">?</span>;
+
+        <span class="kw">for </span>channel_id <span class="kw">in </span>channels_with_peer
+            .iter()
+            .filter_map(|channel| channel.channel_id)
+        {
+            <span class="self">self</span>.rpc_client()
+                .<span class="kw">await
+                </span>.map_err(|e| Status::internal(e.to_string()))<span class="question-mark">?
+                </span>.call(cln_rpc::Request::Close(model::requests::CloseRequest {
+                    id: channel_id.to_string(),
+                    unilateraltimeout: <span class="prelude-val">None</span>,
+                    destination: <span class="prelude-val">None</span>,
+                    fee_negotiation_step: <span class="prelude-val">None</span>,
+                    wrong_funding: <span class="prelude-val">None</span>,
+                    force_lease_closed: <span class="prelude-val">None</span>,
+                    feerange: <span class="prelude-val">None</span>,
+                }))
+                .<span class="kw">await
+                </span>.map_err(|e| {
+                    <span class="macro">error!</span>(<span class="string">"cln fundchannel rpc returned error {:?}"</span>, e);
+                    tonic::Status::internal(e.to_string())
+                })<span class="question-mark">?</span>;
+        }
+
+        <span class="prelude-val">Ok</span>(tonic::Response::new(CloseChannelsWithPeerResponse {
+            num_channels_closed: channels_with_peer.len() <span class="kw">as </span>u32,
+        }))
     }
 
     <span class="kw">async fn </span>list_active_channels(

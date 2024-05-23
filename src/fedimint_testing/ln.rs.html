@@ -230,6 +230,13 @@
 <a href="#230" id="230">230</a>
 <a href="#231" id="231">231</a>
 <a href="#232" id="232">232</a>
+<a href="#233" id="233">233</a>
+<a href="#234" id="234">234</a>
+<a href="#235" id="235">235</a>
+<a href="#236" id="236">236</a>
+<a href="#237" id="237">237</a>
+<a href="#238" id="238">238</a>
+<a href="#239" id="239">239</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::sync::{Arc, Mutex};
 <span class="kw">use </span>std::time::Duration;
 
@@ -247,9 +254,9 @@
     SignedRawBolt11Invoice, DEFAULT_EXPIRY_TIME,
 };
 <span class="kw">use </span>ln_gateway::gateway_lnrpc::{
-    <span class="self">self</span>, CreateInvoiceRequest, CreateInvoiceResponse, EmptyResponse, GetFundingAddressResponse,
-    GetNodeInfoResponse, GetRouteHintsResponse, InterceptHtlcResponse, PayInvoiceRequest,
-    PayInvoiceResponse,
+    <span class="self">self</span>, CloseChannelsWithPeerResponse, CreateInvoiceRequest, CreateInvoiceResponse,
+    EmptyResponse, GetFundingAddressResponse, GetNodeInfoResponse, GetRouteHintsResponse,
+    InterceptHtlcResponse, PayInvoiceRequest, PayInvoiceResponse,
 };
 <span class="kw">use </span>ln_gateway::lightning::cln::{HtlcResult, RouteHtlcStream};
 <span class="kw">use </span>ln_gateway::lightning::{ChannelInfo, ILnRpcClient, LightningRpcError};
@@ -456,6 +463,13 @@
         _push_amount_sats: u64,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;EmptyResponse, LightningRpcError&gt; {
         <span class="macro">unimplemented!</span>(<span class="string">"FakeLightningTest does not support opening channels"</span>)
+    }
+
+    <span class="kw">async fn </span>close_channels_with_peer(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        _pubkey: bitcoin::secp256k1::PublicKey,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;CloseChannelsWithPeerResponse, LightningRpcError&gt; {
+        <span class="macro">unimplemented!</span>(<span class="string">"FakeLightningTest does not support closing channels by peer"</span>)
     }
 
     <span class="kw">async fn </span>list_active_channels(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;Vec&lt;ChannelInfo&gt;, LightningRpcError&gt; {
