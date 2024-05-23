@@ -157,7 +157,15 @@ jobs:
 
       - name: Build workspace
         if: github.event_name != 'pull_request' || matrix.build-in-pr
-        run: nix build -L .#ci.workspaceBuild
+        run: |
+          env \
+            PERFIT_ACCESS_TOKEN="${{ secrets.PERFIT_ACCESS_TOKEN }}" \
+            nix run 'github:rustshop/perfit?rev=a2ea3bae86b0e70d2ebdbca1fd16a843b7f0a3bd#perfit' -- \
+              run \
+                --metric U6-uakhBSo6AHQg5tmB_bg \
+                --metadata "commit=${LAST_COMMIT_SHA}" \
+                -- \
+              nix build -L .#ci.workspaceBuild
 
       - name: Clippy workspace
         if: github.event_name != 'pull_request' || matrix.build-in-pr
@@ -176,7 +184,7 @@ jobs:
         run: |
           env \
             PERFIT_ACCESS_TOKEN="${{ secrets.PERFIT_ACCESS_TOKEN }}" \
-            nix run 'github:rustshop/perfit?rev=c8faba2f76f296b974d859e2a7aa480ad8afc9d6#perfit' -- \
+            nix run 'github:rustshop/perfit?rev=a2ea3bae86b0e70d2ebdbca1fd16a843b7f0a3bd#perfit' -- \
               run \
                 --metric eNKLuiKcRc2Q6_eTIhLuJQ \
                 --metadata "commit=${LAST_COMMIT_SHA}" \
@@ -188,7 +196,7 @@ jobs:
         run: |
           env \
             PERFIT_ACCESS_TOKEN="${{ secrets.PERFIT_ACCESS_TOKEN }}" \
-            nix run 'github:rustshop/perfit?rev=c8faba2f76f296b974d859e2a7aa480ad8afc9d6#perfit' -- \
+            nix run 'github:rustshop/perfit?rev=a2ea3bae86b0e70d2ebdbca1fd16a843b7f0a3bd#perfit' -- \
               run \
                 --metric 50K9greJRzCdxpsFj842Bw \
                 --metadata "commit=${LAST_COMMIT_SHA}" \
@@ -200,7 +208,7 @@ jobs:
         run: |
           env \
             PERFIT_ACCESS_TOKEN="${{ secrets.PERFIT_ACCESS_TOKEN }}" \
-            nix run 'github:rustshop/perfit?rev=c8faba2f76f296b974d859e2a7aa480ad8afc9d6#perfit' -- \
+            nix run 'github:rustshop/perfit?rev=a2ea3bae86b0e70d2ebdbca1fd16a843b7f0a3bd#perfit' -- \
               run \
                 --metric 8H0d2B59Q1KYIz0b4Nkh-Q \
                 --metadata "commit=${LAST_COMMIT_SHA}" \
@@ -269,7 +277,7 @@ jobs:
         run: |
           env \
             PERFIT_ACCESS_TOKEN="${{ secrets.PERFIT_ACCESS_TOKEN }}" \
-            nix run 'github:rustshop/perfit?rev=c8faba2f76f296b974d859e2a7aa480ad8afc9d6#perfit' -- \
+            nix run 'github:rustshop/perfit?rev=a2ea3bae86b0e70d2ebdbca1fd16a843b7f0a3bd#perfit' -- \
               run \
                 --metric pLyTAwXFShaeO0sJlNGaVA \
                 --metadata "commit=${LAST_COMMIT_SHA}" \

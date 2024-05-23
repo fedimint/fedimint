@@ -61,7 +61,7 @@ jobs:
             PERFIT_ACCESS_TOKEN="${{ secrets.PERFIT_ACCESS_TOKEN }}" \
             nix develop -c \
             nix shell github:rustshop/fs-dir-cache -c \
-            nix run 'github:rustshop/perfit?rev=c8faba2f76f296b974d859e2a7aa480ad8afc9d6#perfit' -- \
+            nix run 'github:rustshop/perfit?rev=a2ea3bae86b0e70d2ebdbca1fd16a843b7f0a3bd#perfit' -- \
               run \
                 --metric L3yA_sgbQ_mc2t-IWtKI4g \
                 --metadata "commit=${LAST_COMMIT_SHA}" \
