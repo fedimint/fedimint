@@ -821,6 +821,8 @@
 <a href="#821" id="821">821</a>
 <a href="#822" id="822">822</a>
 <a href="#823" id="823">823</a>
+<a href="#824" id="824">824</a>
+<a href="#825" id="825">825</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! Implements a connection manager for communication with other federation
 //! members
 //!
@@ -1413,8 +1415,10 @@
 
     <span class="kw">async fn </span>try_reconnect(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;AnyFramedTransport&lt;PeerMessage&lt;M&gt;&gt;, anyhow::Error&gt; {
         <span class="macro">debug!</span>(target: LOG_NET_PEER, our_id = <span class="question-mark">?</span><span class="self">self</span>.our_id, peer = <span class="question-mark">?</span><span class="self">self</span>.peer_id, <span class="string">"Trying to reconnect"</span>);
-        <span class="kw">let </span>addr = <span class="self">self</span>.peer_address.clone();
-        <span class="kw">let </span>(connected_peer, conn) = <span class="self">self</span>.connect.connect_framed(addr, <span class="self">self</span>.peer_id).<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>(connected_peer, conn) = <span class="self">self
+            </span>.connect
+            .connect_framed(<span class="self">self</span>.peer_address.with_port_or_known_default(), <span class="self">self</span>.peer_id)
+            .<span class="kw">await</span><span class="question-mark">?</span>;
 
         <span class="kw">if </span>connected_peer == <span class="self">self</span>.peer_id {
             <span class="prelude-val">Ok</span>(conn)
