@@ -221,3 +221,14 @@ docs: build-docs
 
 release-bump-version VERSION="prerelease":
   cargo workspaces version --all --exact --no-git-commit --yes --force '*' --pre-id rc {{VERSION}}
+
+
+cargo_sort_defaults := "-w --order package,features,dependencies"
+
+# Fix sort order in `Cargo.toml` files
+cargo-sort-fix *ARGS="":
+  cargo sort {{cargo_sort_defaults}} {{ARGS}}
+
+# Check sort order in `Cargo.toml` files
+cargo-sort-check *ARGS="":
+  cargo sort {{cargo_sort_defaults}} --check {{ARGS}}
