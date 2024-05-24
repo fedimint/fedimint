@@ -21,6 +21,7 @@ use hex::FromHex;
 use serde::de::DeserializeOwned;
 use serde::ser::SerializeMap;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use serde_json::json;
 use thiserror::Error;
 use threshold_crypto::group::{Curve, Group, GroupEncoding};
 use threshold_crypto::{G1Projective, G2Projective};
@@ -237,6 +238,34 @@ impl ClientConfig {
                 api_secret.clone(),
             )
         })
+    }
+
+    /// Converts a consensus-encoded client config struct to a client config
+    /// struct that when encoded as JSON shows the fields of module configs
+    /// instead of a consensus-encoded hex string.
+    ///
+    /// In case of unknown module the config value is a hex string.
+    pub fn to_json(&self) -> JsonClientConfig {
+        JsonClientConfig {
+            global: self.global.clone(),
+            modules: self
+                .modules
+                .iter()
+                .map(|(&module_instance_id, module_config)| {
+                    let module_config_json = JsonWithKind {
+                    kind: module_config.kind.clone(),
+                    value: module_config.config
+                        .clone()
+                        .decoded()
+                        .and_then(|dyn_cfg| dyn_cfg.to_json())
+                        .unwrap_or_else(|| json!({
+                            "unknown_module_hex": module_config.config.consensus_encode_to_hex()
+                        })),
+                };
+                    (module_instance_id, module_config_json)
+                })
+                .collect(),
+        }
     }
 }
 

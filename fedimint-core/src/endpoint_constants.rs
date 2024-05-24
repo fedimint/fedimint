@@ -5,6 +5,7 @@ pub const AUTH_ENDPOINT: &str = "auth";
 pub const AWAIT_OUTPUT_OUTCOME_ENDPOINT: &str = "await_output_outcome";
 pub const BACKUP_ENDPOINT: &str = "backup";
 pub const CLIENT_CONFIG_ENDPOINT: &str = "client_config";
+pub const CLIENT_CONFIG_JSON_ENDPOINT: &str = "client_config_json";
 pub const SERVER_CONFIG_CONSENSUS_HASH_ENDPOINT: &str = "server_config_consensus_hash";
 pub const SESSION_COUNT_ENDPOINT: &str = "session_count";
 pub const AWAIT_SESSION_OUTCOME_ENDPOINT: &str = "await_session_outcome";
