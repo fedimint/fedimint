@@ -289,7 +289,8 @@ fn error(ident: &Ident, message: &str) -> TokenStream2 {
 }
 
 fn derive_struct_decode(ident: &Ident, fields: &Fields) -> TokenStream2 {
-    let decode_block = derive_tuple_or_named_decode_block(quote! { #ident }, quote! { d }, fields);
+    let decode_block =
+        derive_tuple_or_named_decode_block(ident, quote! { #ident }, quote! { d }, fields);
 
     quote! {
         Ok(#decode_block)
@@ -307,6 +308,7 @@ fn derive_enum_decode(ident: &Ident, variants: &Punctuated<Variant, Comma>) -> T
         .map(|(variant_idx, variant)| {
             let variant_ident = variant.ident.clone();
             let decode_block = derive_tuple_or_named_decode_block(
+                ident,
                 quote! { #ident::#variant_ident },
                 quote! { &mut cursor },
                 &variant.fields,
@@ -390,18 +392,20 @@ fn is_tuple_struct(fields: &Fields) -> bool {
 //   * Struct
 // as idents
 fn derive_tuple_or_named_decode_block(
+    ident: &Ident,
     constructor: TokenStream2,
     reader: TokenStream2,
     fields: &Fields,
 ) -> TokenStream2 {
     if is_tuple_struct(fields) {
-        derive_tuple_decode_block(constructor, reader, fields)
+        derive_tuple_decode_block(ident, constructor, reader, fields)
     } else {
-        derive_named_decode_block(constructor, reader, fields)
+        derive_named_decode_block(ident, constructor, reader, fields)
     }
 }
 
 fn derive_tuple_decode_block(
+    ident: &Ident,
     constructor: TokenStream2,
     reader: TokenStream2,
     fields: &Fields,
@@ -417,7 +421,9 @@ fn derive_tuple_decode_block(
             #(
                 let #field_names = ::fedimint_core::encoding::Decodable::consensus_decode_from_finite_reader(#reader, modules)
                     .context(concat!(
-                        "Decoding ",
+                        "Decoding tuple block ",
+                        stringify!(#ident),
+                        " field ",
                         stringify!(#field_names),
                     ))?;
             )*
@@ -427,6 +433,7 @@ fn derive_tuple_decode_block(
 }
 
 fn derive_named_decode_block(
+    ident: &Ident,
     constructor: TokenStream2,
     reader: TokenStream2,
     fields: &Fields,
@@ -441,7 +448,9 @@ fn derive_named_decode_block(
             #(
                 let #variant_fields = ::fedimint_core::encoding::Decodable::consensus_decode_from_finite_reader(#reader, modules)
                     .context(concat!(
-                        "Decoding ",
+                        "Decoding named block ",
+                        stringify!(#ident),
+                        " {} ",
                         stringify!(#variant_fields),
                     ))?;
             )*
