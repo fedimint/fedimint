@@ -169,6 +169,18 @@ fuzz-target TARGET="" *ARGS="--exit_upon_crash":
   # * can't be run with sccache, so just disable here
   env -u RUSTC_WRAPPER CC=clang RUSTFLAGS="--cfg tokio_unstable" cargo hfuzz run {{TARGET}}
 
+# A quick round of fuzzing for every defined target
+fuzz-ci-quick *ARGS="--exit_upon_crash --run_time 30 -q -v":
+  #!/usr/bin/env bash
+  set -euo pipefail
+
+  export HFUZZ_RUN_ARGS="{{ARGS}}"
+  for target in $(ls fuzz/src/bin/ | sed -e 's/.rs$//g') ; do
+    >&2 echo "Fuzzing ${target}"
+    env -u RUSTC_WRAPPER CC=clang RUSTFLAGS="--cfg tokio_unstable" \
+      cargo hfuzz run "${target}"
+  done
+
 fuzz-target-debug TARGET="" CRASH="" *ARGS="--exit_upon_crash":
   #!/usr/bin/env bash
   set -euo pipefail

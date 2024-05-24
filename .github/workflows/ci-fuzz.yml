@@ -1,0 +1,85 @@
+name: "Fuzzing"
+
+env:
+  PERFIT_SERVER: https://perfit.dev.fedimint.org
+
+# Controls when the workflow will run
+on:
+  # Triggers the workflow on push or pull request events but only for the "main" branch and release tags
+  push:
+    branches: [ "main", "master", "devel", "releases/v*" ]
+    tags:
+      - 'v*' # Push events to matching v*, i.e. v1.0, v20.15.10
+  pull_request:
+    branches: [ "main", "master", "devel", "releases/v*" ]
+  merge_group:
+    branches: [ "main", "master", "devel", "releases/v*" ]
+
+  # Allows you to run this workflow manually from the Actions tab
+  workflow_dispatch:
+
+# https://stackoverflow.com/questions/66335225/how-to-cancel-previous-runs-in-the-pr-when-you-push-new-commitsupdate-the-curre
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+# A workflow run is made up of one or more jobs that can run sequentially or in parallel
+jobs:
+  tests:
+    if: github.repository == 'fedimint/fedimint'
+    name: "Quick fuzzing"
+    runs-on: [self-hosted, linux]
+    timeout-minutes: 60
+
+    steps:
+      - uses: actions/checkout@v4
+      - name: Prepare
+        uses: ./.github/actions/prepare
+      - uses: cachix/install-nix-action@V27
+        with:
+          nix_path: nixpkgs=channel:nixos-23.11
+          extra_nix_config: |
+            connect-timeout = 15
+            stalled-download-timeout = 15
+      - uses: cachix/cachix-action@v14
+        with:
+          name: fedimint
+          authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
+        continue-on-error: true
+
+      - name: Quick fuzzing
+        run: |
+          # the default tmp dir is too long (/home/ubuntu/actions-runner/_work/_temp/)
+          # we need to use `nix develop -c` to be able to use `nix build` inside of backwards-compatibility-test
+          # Disable `sccache`, it seems incompatible with self-hosted runner sandbox for some reason, and
+          # it doesn't benefit us much here anyway.
+          env \
+            TMPDIR=/tmp \
+            CARGO_PROFILE=ci \
+            PERFIT_ACCESS_TOKEN="${{ secrets.PERFIT_ACCESS_TOKEN }}" \
+            nix develop .#fuzz -c \
+            nix shell github:rustshop/fs-dir-cache -c \
+            nix run 'github:rustshop/perfit?rev=a2ea3bae86b0e70d2ebdbca1fd16a843b7f0a3bd#perfit' -- \
+              run \
+                --metric G7nbgg0NS_mR5377weP5gg \
+                --metadata "commit=${LAST_COMMIT_SHA}" \
+                -- \
+            runLowPrio just fuzz-ci-quick
+
+  notifications:
+    if: always() && github.repository == 'fedimint/fedimint' && github.event_name != 'merge_group'
+    name: "Notifications"
+    timeout-minutes: 1
+    runs-on: [self-hosted, linux]
+    needs: [ tests ]
+
+    steps:
+    - name: Discord notifications on failure
+      # https://stackoverflow.com/a/74562058/134409
+      if: ${{ always() && contains(needs.*.result, 'failure') }}
+      # https://github.com/marketplace/actions/actions-status-discord
+      uses: sarisia/actions-status-discord@v1
+      with:
+        webhook: ${{ secrets.DISCORD_WEBHOOK }}
+        # current job is a success, but that's not what we're interested in
+        status: failure
