@@ -375,6 +375,8 @@ enum DecodeType {
     InviteCode { invite_code: InviteCode },
     /// Decode a string of ecash notes into a JSON representation
     Notes { notes: OOBNotes },
+    /// Decode a transaction hex string and print it to stdout
+    Transaction { hex_string: String },
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -487,9 +489,6 @@ Examples:
         #[arg(env = FM_PASSWORD_ENV)]
         password: String,
     },
-
-    /// Decode a transaction hex string and print it to stdout
-    DecodeTransaction { hex_string: String },
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -866,6 +865,21 @@ impl FedimintCli {
                         .map_err_cli_msg("failed to decode notes")?;
                     Ok(CliOutput::Raw(notes_json))
                 }
+                DecodeType::Transaction { hex_string } => {
+                    let bytes: Vec<u8> = hex::FromHex::from_hex(&hex_string)
+                        .map_err_cli_msg("failed to decode transaction")?;
+
+                    let client = self.client_open(&cli).await?;
+                    let tx = fedimint_core::transaction::Transaction::from_bytes(
+                        &bytes,
+                        client.decoders(),
+                    )
+                    .map_err_cli_msg("failed to decode transaction")?;
+
+                    Ok(CliOutput::DecodeTransaction {
+                        transaction: (format!("{tx:?}")),
+                    })
+                }
             },
             Command::Dev(DevCmd::Encode { encode_type }) => match encode_type {
                 EncodeType::InviteCode {
@@ -925,19 +939,6 @@ impl FedimintCli {
                 let key = get_encryption_key(&password, &salt).map_err_cli()?;
                 encrypted_write(plaintext_bytes, &key, out_file).map_err_cli()?;
                 Ok(CliOutput::ConfigEncrypt)
-            }
-            Command::Dev(DevCmd::DecodeTransaction { hex_string }) => {
-                let bytes: Vec<u8> = hex::FromHex::from_hex(&hex_string)
-                    .map_err_cli_msg("failed to decode transaction")?;
-
-                let client = self.client_open(&cli).await?;
-                let tx =
-                    fedimint_core::transaction::Transaction::from_bytes(&bytes, client.decoders())
-                        .map_err_cli_msg("failed to decode transaction")?;
-
-                Ok(CliOutput::DecodeTransaction {
-                    transaction: (format!("{tx:?}")),
-                })
             }
             Command::Completion { shell } => {
                 clap_complete::generate(
