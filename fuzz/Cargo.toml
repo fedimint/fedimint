@@ -14,6 +14,11 @@ cargo-fuzz = true
 [dependencies]
 honggfuzz = { version = "0.5.55", default-features = false }
 fedimint-core = { workspace = true }
+fedimint-wallet-common = { workspace = true }
+fedimint-ln-common = { workspace = true }
+fedimint-lnv2-common = { workspace = true }
+fedimint-mint-common = { workspace = true }
+fedimint-meta-common = { workspace = true }
 
 # cargo-deny just needs at least one `bin` defined
 [lib]

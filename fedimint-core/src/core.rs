@@ -204,12 +204,25 @@ impl From<&'static str> for ModuleKind {
 ///
 /// This allows parsing and handling of dyn-types of modules which
 /// are not available.
-#[derive(Encodable, Decodable, Debug, Hash, PartialEq, Clone)]
+#[derive(Debug, Hash, PartialEq, Clone)]
 pub struct DynUnknown(pub Vec<u8>);
 
 impl fmt::Display for DynUnknown {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         f.write_str(&self.0.consensus_encode_to_hex())
+    }
+}
+
+// Note: confusingly, while `DynUnknown` carries a `Vec`
+// it is actually not responsible for writing out the length of the data,
+// as the higher level (`module_plugin_dyn_newtype_encode_decode`) is doing
+// it, based on how many bytes are written here. That's why `DynUnknown` does
+// not implement `Decodable` directly, and `Vec` here has len only
+// for the purpose of knowing how many bytes to carry.
+impl Encodable for DynUnknown {
+    fn consensus_encode<W: std::io::Write>(&self, w: &mut W) -> Result<usize, std::io::Error> {
+        w.write_all(&self.0[..])?;
+        Ok(self.0.len())
     }
 }
 
