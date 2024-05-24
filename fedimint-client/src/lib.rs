@@ -85,10 +85,7 @@ use db::{
 use fedimint_api_client::api::{
     ApiVersionSet, DynGlobalApi, DynModuleApi, FederationApiExt, IGlobalFederationApi,
 };
-use fedimint_core::config::{
-    ClientConfig, ClientModuleConfig, FederationId, JsonClientConfig, JsonWithKind,
-    ModuleInitRegistry,
-};
+use fedimint_core::config::{ClientConfig, FederationId, JsonClientConfig, ModuleInitRegistry};
 use fedimint_core::core::{
     DynInput, DynOutput, IInput, IOutput, ModuleInstanceId, ModuleKind, OperationId,
 };
