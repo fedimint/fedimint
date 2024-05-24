@@ -22,6 +22,7 @@ fedimint-aead = { version = "=0.4.0-alpha", path = "../crypto/aead" }
 anyhow = { workspace = true }
 async-channel = "2.3.1"
 async-trait = { workspace = true }
+base64 = { workspace = true }
 bincode = { workspace = true }
 bitcoin = { workspace = true }
 bitcoin_hashes = { workspace = true }
@@ -29,6 +30,7 @@ bls12_381 = { workspace = true }
 bytes = "1.6.0"
 futures = { workspace = true }
 hex = { workspace = true }
+hyper = { version = "0.14" }
 itertools = { workspace = true }
 fedimint-core = { workspace = true }
 fedimint-api-client = { workspace = true }

@@ -276,13 +276,14 @@ impl ServerConfig {
         cfg
     }
 
-    pub fn get_invite_code(&self) -> InviteCode {
+    pub fn get_invite_code(&self, api_secret: Option<String>) -> InviteCode {
         InviteCode::new(
             self.consensus.api_endpoints[&self.local.identity]
                 .url
                 .clone(),
             self.local.identity,
             FederationId(self.consensus.api_endpoints.consensus_hash()),
+            api_secret,
         )
     }
 

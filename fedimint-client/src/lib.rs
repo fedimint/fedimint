@@ -78,9 +78,9 @@ use anyhow::{anyhow, bail, ensure, Context};
 use async_stream::stream;
 use backup::ClientBackup;
 use db::{
-    apply_migrations_client, CachedApiVersionSet, CachedApiVersionSetKey, ClientConfigKey,
-    ClientConfigKeyPrefix, ClientInitStateKey, ClientModuleRecovery, EncodedClientSecretKey,
-    InitMode,
+    apply_migrations_client, ApiSecretKey, CachedApiVersionSet, CachedApiVersionSetKey,
+    ClientConfigKey, ClientConfigKeyPrefix, ClientInitStateKey, ClientModuleRecovery,
+    EncodedClientSecretKey, InitMode,
 };
 use envs::get_discover_api_version_timeout;
 use fedimint_api_client::api::{ApiVersionSet, DynGlobalApi, DynModuleApi, IGlobalFederationApi};
@@ -600,20 +600,21 @@ impl ClientHandle {
     /// Notably it will re-use the original [`Database`] handle, and not attempt
     /// to open it again.
     pub async fn restart(self) -> anyhow::Result<ClientHandle> {
-        let (builder, config, root_secret) = {
+        let (builder, config, api_secret, root_secret) = {
             let client = self
                 .inner
                 .as_ref()
                 .ok_or_else(|| anyhow::format_err!("Already stopped"))?;
             let builder = ClientBuilder::from_existing(client);
             let config = client.config.clone();
+            let api_secret = client.api_secret.clone();
             let root_secret = client.root_secret.clone();
 
-            (builder, config, root_secret)
+            (builder, config, api_secret, root_secret)
         };
         self.shutdown().await;
 
-        builder.build(root_secret, config, false).await
+        builder.build(root_secret, config, api_secret, false).await
     }
 }
 
@@ -740,6 +741,7 @@ where
 /// and resource freeing of the [`Client`].
 pub struct Client {
     config: ClientConfig,
+    api_secret: Option<String>,
     decoders: ModuleDecoderRegistry,
     db: Database,
     federation_id: FederationId,
@@ -791,6 +793,11 @@ impl Client {
             .await
             .map(|(_, config)| config);
         config
+    }
+
+    pub async fn get_api_secret_from_db(db: &Database) -> Option<String> {
+        let mut dbtx = db.begin_transaction().await;
+        dbtx.get_value(&ApiSecretKey).await
     }
 
     pub async fn store_encodable_client_secret<T: Encodable>(
@@ -882,6 +889,10 @@ impl Client {
 
     fn config(&self) -> &ClientConfig {
         &self.config
+    }
+
+    pub fn api_secret(&self) -> &Option<String> {
+        &self.api_secret
     }
 
     pub fn decoders(&self) -> &ModuleDecoderRegistry {
@@ -1894,6 +1905,7 @@ impl ClientBuilder {
         self,
         root_secret: DerivableSecret,
         config: ClientConfig,
+        api_secret: Option<String>,
         init_mode: InitMode,
     ) -> anyhow::Result<ClientHandle> {
         if Client::is_initialized(&self.db_no_decoders).await {
@@ -1914,6 +1926,10 @@ impl ClientBuilder {
             )
             .await;
 
+            if let Some(api_secret) = api_secret.as_ref() {
+                dbtx.insert_new_entry(&ApiSecretKey, api_secret).await;
+            }
+
             let init_state = InitState::Pending(init_mode);
             dbtx.insert_entry(&ClientInitStateKey, &init_state).await;
 
@@ -1929,7 +1945,7 @@ impl ClientBuilder {
         }
 
         let stopped = self.stopped;
-        self.build(root_secret, config, stopped).await
+        self.build(root_secret, config, api_secret, stopped).await
     }
 
     /// Join a new Federation
@@ -2000,7 +2016,7 @@ impl ClientBuilder {
     ///     // .with_module(LightningClientInit)
     ///     // .with_module(MintClientInit)
     ///     // .with_module(WalletClientInit::default())
-    ///     .join(root_secret, config)
+    ///     .join(root_secret, config, None)
     ///     .await
     ///     .expect("Error joining federation");
     /// # }
@@ -2009,8 +2025,10 @@ impl ClientBuilder {
         self,
         root_secret: DerivableSecret,
         config: ClientConfig,
+        api_secret: Option<String>,
     ) -> anyhow::Result<ClientHandle> {
-        self.init(root_secret, config, InitMode::Fresh).await
+        self.init(root_secret, config, api_secret, InitMode::Fresh)
+            .await
     }
 
     /// Download most recent valid backup found from the Federation
@@ -2018,8 +2036,9 @@ impl ClientBuilder {
         &self,
         root_secret: &DerivableSecret,
         config: &ClientConfig,
+        api_secret: Option<String>,
     ) -> anyhow::Result<Option<ClientBackup>> {
-        let api = DynGlobalApi::from_config(config);
+        let api = DynGlobalApi::from_config(config, api_secret);
         Client::download_backup_from_federation_static(
             &api,
             &Self::federation_root_secret(root_secret, config),
@@ -2042,12 +2061,14 @@ impl ClientBuilder {
         self,
         root_secret: DerivableSecret,
         config: ClientConfig,
+        api_secret: Option<String>,
         backup: Option<ClientBackup>,
     ) -> anyhow::Result<ClientHandle> {
         let client = self
             .init(
                 root_secret,
                 config,
+                api_secret,
                 InitMode::Recover {
                     snapshot: backup.clone(),
                 },
@@ -2061,9 +2082,11 @@ impl ClientBuilder {
         let Some(config) = Client::get_config_from_db(&self.db_no_decoders).await else {
             bail!("Client database not initialized")
         };
+
+        let api_secret = Client::get_api_secret_from_db(&self.db_no_decoders).await;
         let stopped = self.stopped;
 
-        let client = self.build_stopped(root_secret, config).await?;
+        let client = self.build_stopped(root_secret, config, api_secret).await?;
         if !stopped {
             client.as_inner().start_executor().await;
         }
@@ -2075,9 +2098,10 @@ impl ClientBuilder {
         self,
         root_secret: DerivableSecret,
         config: ClientConfig,
+        api_secret: Option<String>,
         stopped: bool,
     ) -> anyhow::Result<ClientHandle> {
-        let client = self.build_stopped(root_secret, config).await?;
+        let client = self.build_stopped(root_secret, config, api_secret).await?;
         if !stopped {
             client.as_inner().start_executor().await;
         }
@@ -2090,15 +2114,16 @@ impl ClientBuilder {
         self,
         root_secret: DerivableSecret,
         config: ClientConfig,
+        api_secret: Option<String>,
     ) -> anyhow::Result<ClientHandle> {
         let decoders = self.decoders(&config);
         let config = Self::config_decoded(config, &decoders)?;
         let fed_id = config.calculate_federation_id();
         let db = self.db_no_decoders.with_decoders(decoders.clone());
         let api = if let Some(admin_creds) = self.admin_creds.as_ref() {
-            DynGlobalApi::from_config_admin(&config, admin_creds.peer_id)
+            DynGlobalApi::from_config_admin(&config, api_secret.clone(), admin_creds.peer_id)
         } else {
-            DynGlobalApi::from_config(&config)
+            DynGlobalApi::from_config(&config, api_secret.clone())
         };
         let task_group = TaskGroup::new();
 
@@ -2317,6 +2342,7 @@ impl ClientBuilder {
 
         let client_inner = Arc::new(Client {
             config: config.clone(),
+            api_secret,
             decoders,
             db: db.clone(),
             federation_id: fed_id,

@@ -44,6 +44,8 @@ pub enum DbKeyPrefix {
     ClientLastBackup = 0x33,
     ClientMetaField = 0x34,
     ClientMetaServiceInfo = 0x35,
+    ApiSecret = 0x36,
+
     /// Arbitrary data of the applications integrating Fedimint client and
     /// wanting to store some Federation-specific data in Fedimint client
     /// database.
@@ -147,6 +149,20 @@ impl_db_record!(
 );
 
 impl_db_lookup!(key = ClientConfigKey, query_prefix = ClientConfigKeyPrefix);
+
+#[derive(Debug, Encodable, Decodable, Serialize)]
+pub struct ApiSecretKey;
+
+#[derive(Debug, Encodable)]
+pub struct ApiSecretKeyPrefix;
+
+impl_db_record!(
+    key = ApiSecretKey,
+    value = String,
+    db_prefix = DbKeyPrefix::ApiSecret
+);
+
+impl_db_lookup!(key = ApiSecretKey, query_prefix = ApiSecretKeyPrefix);
 
 /// Client metadata that will be stored/restored on backup&recovery
 #[derive(Debug, Encodable, Decodable, Serialize)]

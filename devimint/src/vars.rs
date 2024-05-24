@@ -84,6 +84,7 @@ use fedimint_core::envs::{
 };
 use fedimint_portalloc::port_alloc;
 use fedimint_server::config::ConfigGenParams;
+use fedimintd::envs::FM_API_SECRET_ENV;
 use format as f;
 
 pub fn utf8(path: &Path) -> &str {
@@ -94,6 +95,11 @@ declare_vars! {
     Global = (test_dir: &Path, fed_size: usize, offline_nodes: usize) =>
     {
         FM_USE_UNKNOWN_MODULE: String = std::env::var(FM_USE_UNKNOWN_MODULE_ENV).unwrap_or_else(|_| "1".into()); env: "FM_USE_UNKNOWN_MODULE";
+
+        FM_API_SECRET: Option<String> = std::env::var(FM_API_SECRET_ENV).ok().and_then(|s| {
+            let s = s.trim();
+            (!s.is_empty()).then_some(s.to_owned())
+        }); env: FM_API_SECRET_ENV;
 
         FM_IN_DEVIMINT: String = "1".to_string(); env: FM_IN_DEVIMINT_ENV;
 

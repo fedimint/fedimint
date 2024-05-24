@@ -17,6 +17,7 @@ path = "src/lib.rs"
 [dependencies]
 anyhow = { workspace = true }
 async-trait = { workspace = true }
+base64 = { workspace = true }
 futures = { workspace = true }
 itertools = { workspace = true }
 jsonrpsee-core = "0.22.5"

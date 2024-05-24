@@ -244,9 +244,10 @@ impl Federation {
                 )
                 .await?,
             );
-            let admin_client = DynGlobalApi::from_pre_peer_id_admin_endpoint(SafeUrl::parse(
-                &peer_env_vars.FM_API_URL,
-            )?);
+            let admin_client = DynGlobalApi::from_pre_peer_id_admin_endpoint(
+                SafeUrl::parse(&peer_env_vars.FM_API_URL)?,
+                process_mgr.globals.FM_API_SECRET.clone(),
+            );
             endpoints.insert(*peer, peer_env_vars.FM_API_URL.clone());
             admin_clients.insert(*peer, admin_client);
             peer_to_env_vars_map.insert(peer.to_usize(), peer_env_vars);

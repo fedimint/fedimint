@@ -38,8 +38,11 @@ pub mod config;
 /// Implementation of multiplexed peer connections
 pub mod multiplexed;
 
+#[allow(clippy::too_many_arguments)]
 pub async fn run(
     data_dir: PathBuf,
+    api_secret: Option<String>,
+    api_extra_secrets: Vec<String>,
     settings: ConfigGenSettings,
     db: Database,
     code_version_str: String,
@@ -55,6 +58,8 @@ pub async fn run(
                 db.clone(),
                 code_version_str,
                 task_group.make_subgroup(),
+                api_secret.clone(),
+                api_extra_secrets.clone(),
             )
             .await?
         }
@@ -71,7 +76,15 @@ pub async fn run(
 
     initialize_gauge_metrics(&db).await;
 
-    consensus::run(cfg, db, module_init_registry.clone(), &task_group).await?;
+    consensus::run(
+        cfg,
+        db,
+        module_init_registry.clone(),
+        &task_group,
+        api_secret,
+        api_extra_secrets,
+    )
+    .await?;
 
     info!(target: LOG_CONSENSUS, "Shutting down tasks");
 
@@ -95,6 +108,8 @@ pub async fn run_config_gen(
     db: Database,
     code_version_str: String,
     mut task_group: TaskGroup,
+    api_secret: Option<String>,
+    api_extra_secrets: Vec<String>,
 ) -> anyhow::Result<ServerConfig> {
     info!(target: LOG_CONSENSUS, "Starting config gen");
 
@@ -108,13 +123,22 @@ pub async fn run_config_gen(
         cfg_sender,
         &mut task_group,
         code_version_str.clone(),
+        api_secret.clone(),
     );
 
     let mut rpc_module = RpcHandlerCtx::new_module(config_gen);
 
     net::api::attach_endpoints(&mut rpc_module, config::api::server_endpoints(), None);
 
-    let api_handler = net::api::spawn("config-gen", &settings.api_bind, rpc_module, 10).await;
+    let api_handler = net::api::spawn(
+        "config-gen",
+        &settings.api_bind,
+        rpc_module,
+        10,
+        api_secret.clone(),
+        api_extra_secrets,
+    )
+    .await;
 
     let cfg = cfg_receiver.recv().await.expect("should not close");
 
@@ -132,6 +156,7 @@ pub async fn run_config_gen(
         data_dir.clone(),
         &cfg.private.api_auth.0,
         &settings.registry,
+        api_secret,
     )?;
 
     Ok(cfg)

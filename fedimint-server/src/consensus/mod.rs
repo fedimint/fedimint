@@ -44,6 +44,8 @@ pub async fn run(
     db: Database,
     module_init_registry: ServerModuleInitRegistry,
     task_group: &TaskGroup,
+    api_secret: Option<String>,
+    api_extra_secrets: Vec<String>,
 ) -> anyhow::Result<()> {
     cfg.validate_config(&cfg.local.identity, &module_init_registry)?;
 
@@ -109,11 +111,18 @@ pub async fn run(
         ),
         last_ci_by_peer: Arc::clone(&last_ci_by_peer),
         connection_status_channels: Arc::clone(&connection_status_channels),
+        api_secret: api_secret.clone(),
     };
 
     info!(target: LOG_CONSENSUS, "Starting Consensus Api");
 
-    let api_handler = start_consensus_api(&cfg.local, consensus_api).await;
+    let api_handler = start_consensus_api(
+        &cfg.local,
+        consensus_api,
+        api_secret.clone(),
+        api_extra_secrets,
+    )
+    .await;
 
     info!(target: LOG_CONSENSUS, "Starting Submission of Module CI proposals");
 
@@ -134,7 +143,7 @@ pub async fn run(
     ConsensusEngine {
         db,
         keychain: Keychain::new(&cfg),
-        federation_api: DynGlobalApi::from_config(&client_cfg),
+        federation_api: DynGlobalApi::from_config(&client_cfg, api_secret),
         self_id_str: cfg.local.identity.to_string(),
         peer_id_str: (0..cfg.consensus.api_endpoints.len())
             .map(|x| x.to_string())
@@ -159,7 +168,12 @@ pub async fn run(
     Ok(())
 }
 
-async fn start_consensus_api(cfg: &ServerConfigLocal, api: ConsensusApi) -> ServerHandle {
+async fn start_consensus_api(
+    cfg: &ServerConfigLocal,
+    api: ConsensusApi,
+    api_secret: Option<String>,
+    api_extra_secrets: Vec<String>,
+) -> ServerHandle {
     let mut rpc_module = RpcHandlerCtx::new_module(api.clone());
 
     net::api::attach_endpoints(&mut rpc_module, api::server_endpoints(), None);
@@ -168,7 +182,15 @@ async fn start_consensus_api(cfg: &ServerConfigLocal, api: ConsensusApi) -> Serv
         net::api::attach_endpoints(&mut rpc_module, module.api_endpoints(), Some(id));
     }
 
-    net::api::spawn("consensus", &cfg.api_bind, rpc_module, cfg.max_connections).await
+    net::api::spawn(
+        "consensus",
+        &cfg.api_bind,
+        rpc_module,
+        cfg.max_connections,
+        api_secret,
+        api_extra_secrets,
+    )
+    .await
 }
 
 const CONSENSUS_PROPOSAL_TIMEOUT: Duration = Duration::from_secs(30);

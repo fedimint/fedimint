@@ -101,7 +101,11 @@ impl GatewayClientBuilder {
                 fedimint_api_client::download_from_invite_code(&invite_code).await?;
             client_builder
                 // TODO: make this configurable?
-                .join(root_secret, client_config.to_owned())
+                .join(
+                    root_secret,
+                    client_config.to_owned(),
+                    invite_code.api_secret(),
+                )
                 .await
         }
         .map(Arc::new)

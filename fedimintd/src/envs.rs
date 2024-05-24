@@ -36,3 +36,9 @@ pub const FM_BIND_METRICS_API_ENV: &str = "FM_BIND_METRICS_API";
 
 // Env variable to TODO
 pub const FM_PORT_ESPLORA_ENV: &str = "FM_PORT_ESPLORA";
+
+// Api authentication primary secret
+pub const FM_API_SECRET_ENV: &str = "FM_API_SECRET";
+
+// Api authentication (user=pass,...)
+pub const FM_API_EXTRA_SECRETS_ENV: &str = "FM_API_EXTRA_SECRETS";

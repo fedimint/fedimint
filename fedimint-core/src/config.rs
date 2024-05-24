@@ -228,9 +228,14 @@ impl ClientConfig {
 
     /// Create an invite code with the api endpoint of the given peer which can
     /// be used to download this client config
-    pub fn invite_code(&self, peer: &PeerId) -> Option<InviteCode> {
+    pub fn invite_code(&self, peer: &PeerId, api_secret: Option<String>) -> Option<InviteCode> {
         self.global.api_endpoints.get(peer).map(|peer_url| {
-            InviteCode::new(peer_url.url.clone(), *peer, self.calculate_federation_id())
+            InviteCode::new(
+                peer_url.url.clone(),
+                *peer,
+                self.calculate_federation_id(),
+                api_secret.clone(),
+            )
         })
     }
 }

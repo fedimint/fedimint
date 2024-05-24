@@ -63,7 +63,7 @@ pub async fn try_download_client_config(invite_code: &InviteCode) -> anyhow::Res
         .map(|(peer, url)| (peer, url.url))
         .collect();
 
-    let client_config = WsFederationApi::new(api_endpoints)
+    let client_config = WsFederationApi::new(api_endpoints, invite_code.api_secret())
         .request_current_consensus::<ClientConfig>(
             CLIENT_CONFIG_ENDPOINT.to_owned(),
             ApiRequestErased::default(),

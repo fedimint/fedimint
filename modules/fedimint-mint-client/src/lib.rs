@@ -104,6 +104,7 @@ enum OOBNotesData {
         peer_apis: Vec<(PeerId, SafeUrl)>,
         federation_id: FederationId,
     },
+    ApiSecret(String),
     #[encodable_default]
     Default {
         variant: u64,
@@ -123,7 +124,7 @@ impl OOBNotes {
     }
 
     pub fn new_with_invite(notes: TieredMulti<SpendableNote>, invite: InviteCode) -> Self {
-        Self(vec![
+        let mut data = vec![
             // FIXME: once we can break compatibility with 0.2 we can remove the prefix in case an
             // invite is present
             OOBNotesData::FederationIdPrefix(invite.federation_id().to_prefix()),
@@ -132,7 +133,11 @@ impl OOBNotes {
                 peer_apis: vec![(invite.peer(), invite.url())],
                 federation_id: invite.federation_id(),
             },
-        ])
+        ];
+        if let Some(api_secret) = invite.api_secret() {
+            data.push(OOBNotesData::ApiSecret(api_secret))
+        }
+        Self(data)
     }
 
     pub fn federation_id_prefix(&self) -> FederationIdPrefix {
@@ -180,9 +185,15 @@ impl OOBNotes {
                         .expect("Decoding makes sure peer_apis isn't empty");
                     notes_map.insert(
                         "invite".to_string(),
-                        serde_json::to_value(InviteCode::new(api, peer_id, *federation_id))?,
+                        serde_json::to_value(InviteCode::new(
+                            api,
+                            peer_id,
+                            *federation_id,
+                            self.api_secret(),
+                        ))?,
                     );
                 }
+                OOBNotesData::ApiSecret(_) => { /* already covered inside `Invite` */ }
                 OOBNotesData::Default { variant, bytes } => {
                     notes_map.insert(
                         format!("default_{}", variant),
@@ -207,7 +218,21 @@ impl OOBNotes {
                 .first()
                 .cloned()
                 .expect("Decoding makes sure peer_apis isn't empty");
-            Some(InviteCode::new(api, peer_id, *federation_id))
+            Some(InviteCode::new(
+                api,
+                peer_id,
+                *federation_id,
+                self.api_secret(),
+            ))
+        })
+    }
+
+    fn api_secret(&self) -> Option<String> {
+        self.0.iter().find_map(|data| {
+            let OOBNotesData::ApiSecret(api_secret) = data else {
+                return None;
+            };
+            Some(api_secret.clone())
         })
     }
 }
@@ -2252,6 +2277,7 @@ mod tests {
             "wss://foo.bar".parse().unwrap(),
             PeerId::from(0),
             federation_id_1,
+            None,
         );
         let notes_invite = OOBNotes::new_with_invite(notes.clone(), invite.clone());
         test_roundtrip_serialize_str(notes_invite, |oob_notes| {

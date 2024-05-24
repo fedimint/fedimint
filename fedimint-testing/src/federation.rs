@@ -105,6 +105,7 @@ impl FederationTest {
             .join(
                 PlainRootSecretStrategy::to_root_secret(&client_secret),
                 client_config,
+                None,
             )
             .await
             .map(Arc::new)
@@ -113,7 +114,7 @@ impl FederationTest {
 
     /// Return first invite code for gateways
     pub fn invite_code(&self) -> InviteCode {
-        self.configs[&PeerId::from(0)].get_invite_code()
+        self.configs[&PeerId::from(0)].get_invite_code(None)
     }
 
     ///  Return the federation id
@@ -211,9 +212,16 @@ impl FederationTestBuilder {
             let subgroup = task_group.make_subgroup();
 
             task_group.spawn("fedimintd", move |_| async move {
-                consensus::run(config.clone(), db.clone(), module_init_registry, &subgroup)
-                    .await
-                    .expect("Could not initialise consensus");
+                consensus::run(
+                    config.clone(),
+                    db.clone(),
+                    module_init_registry,
+                    &subgroup,
+                    None,
+                    vec![],
+                )
+                .await
+                .expect("Could not initialise consensus");
             });
         }
 
@@ -227,7 +235,7 @@ impl FederationTestBuilder {
                 .to_client_config(&self.server_init)
                 .unwrap();
 
-            let api = DynGlobalApi::from_config_admin(&client_config, peer_id);
+            let api = DynGlobalApi::from_config_admin(&client_config, None, peer_id);
 
             while let Err(e) = api
                 .request_admin_no_auth::<u64>(SESSION_COUNT_ENDPOINT, ApiRequestErased::default())
