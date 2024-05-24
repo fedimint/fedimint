@@ -24,7 +24,7 @@ fedimint-bitcoind = { path = "../../fedimint-bitcoind" }
 fedimint-client = { workspace = true }
 fedimint-core = { workspace = true }
 fedimint-logging = { workspace = true }
-fedimint-testing ={ path = "../../fedimint-testing" }
+fedimint-testing = { workspace = true }
 fedimint-wallet-client = { path = "../fedimint-wallet-client" }
 fedimint-wallet-common = { path = "../fedimint-wallet-common" }
 fedimint-wallet-server = { path = "../fedimint-wallet-server" }

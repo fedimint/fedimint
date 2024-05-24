@@ -18,7 +18,7 @@ path = "src/lib.rs"
 [dependencies]
 async-trait = { workspace = true }
 anyhow = { workspace = true }
-fedimint-empty-common = { version = "=0.4.0-alpha", path = "../fedimint-empty-common" }
+fedimint-empty-common = { workspace = true }
 fedimint-client = { workspace = true }
 fedimint-core = { workspace = true }
 fedimint-api-client = { workspace = true }
