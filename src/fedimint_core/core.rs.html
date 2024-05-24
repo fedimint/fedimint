@@ -642,6 +642,19 @@
 <a href="#642" id="642">642</a>
 <a href="#643" id="643">643</a>
 <a href="#644" id="644">644</a>
+<a href="#645" id="645">645</a>
+<a href="#646" id="646">646</a>
+<a href="#647" id="647">647</a>
+<a href="#648" id="648">648</a>
+<a href="#649" id="649">649</a>
+<a href="#650" id="650">650</a>
+<a href="#651" id="651">651</a>
+<a href="#652" id="652">652</a>
+<a href="#653" id="653">653</a>
+<a href="#654" id="654">654</a>
+<a href="#655" id="655">655</a>
+<a href="#656" id="656">656</a>
+<a href="#657" id="657">657</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! Fedimint Core API (common) module interface
 //!
 //! Fedimint supports externally implemented modules.
@@ -848,12 +861,25 @@
 ///
 /// This allows parsing and handling of dyn-types of modules which
 /// are not available.
-</span><span class="attr">#[derive(Encodable, Decodable, Debug, Hash, PartialEq, Clone)]
+</span><span class="attr">#[derive(Debug, Hash, PartialEq, Clone)]
 </span><span class="kw">pub struct </span>DynUnknown(<span class="kw">pub </span>Vec&lt;u8&gt;);
 
 <span class="kw">impl </span>fmt::Display <span class="kw">for </span>DynUnknown {
     <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>Formatter&lt;<span class="lifetime">'_</span>&gt;) -&gt; fmt::Result {
         f.write_str(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="number">0</span>.consensus_encode_to_hex())
+    }
+}
+
+<span class="comment">// Note: confusingly, while `DynUnknown` carries a `Vec`
+// it is actually not responsible for writing out the length of the data,
+// as the higher level (`module_plugin_dyn_newtype_encode_decode`) is doing
+// it, based on how many bytes are written here. That's why `DynUnknown` does
+// not implement `Decodable` directly, and `Vec` here has len only
+// for the purpose of knowing how many bytes to carry.
+</span><span class="kw">impl </span>Encodable <span class="kw">for </span>DynUnknown {
+    <span class="kw">fn </span>consensus_encode&lt;W: std::io::Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, w: <span class="kw-2">&amp;mut </span>W) -&gt; <span class="prelude-ty">Result</span>&lt;usize, std::io::Error&gt; {
+        w.write_all(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="number">0</span>[..])<span class="question-mark">?</span>;
+        <span class="prelude-val">Ok</span>(<span class="self">self</span>.<span class="number">0</span>.len())
     }
 }
 
