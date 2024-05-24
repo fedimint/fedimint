@@ -1757,6 +1757,11 @@ name = "fedimint-fuzz"
 version = "0.4.0-alpha"
 dependencies = [
  "fedimint-core",
+ "fedimint-ln-common",
+ "fedimint-lnv2-common",
+ "fedimint-meta-common",
+ "fedimint-mint-common",
+ "fedimint-wallet-common",
  "honggfuzz",
 ]
 

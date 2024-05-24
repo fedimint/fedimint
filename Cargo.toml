@@ -123,6 +123,11 @@ fedimint-api-client = { path = "./fedimint-api-client" }
 fedimint-logging = { path = "./fedimint-logging" }
 fedimint-empty-common = { path = "./modules/fedimint-empty-common" }
 fedimint-testing = { path = "./fedimint-testing" }
+fedimint-ln-common = { path = "./modules/fedimint-ln-common" }
+fedimint-lnv2-common = { path = "./modules/fedimint-lnv2-common" }
+fedimint-meta-common = { path = "./modules/fedimint-meta-common" }
+fedimint-mint-common = { path = "./modules/fedimint-mint-common" }
+fedimint-wallet-common = { path = "./modules/fedimint-wallet-common" }
 
 # Workaround: https://github.com/rust-lang/cargo/issues/12457 which causes
 #             https://github.com/ipetkov/crane/issues/370
