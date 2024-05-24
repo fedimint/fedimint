@@ -141,7 +141,7 @@
         .map(|(peer, url)| (peer, url.url))
         .collect();
 
-    <span class="kw">let </span>client_config = WsFederationApi::new(api_endpoints)
+    <span class="kw">let </span>client_config = WsFederationApi::new(api_endpoints, invite_code.api_secret())
         .request_current_consensus::&lt;ClientConfig&gt;(
             CLIENT_CONFIG_ENDPOINT.to_owned(),
             ApiRequestErased::default(),

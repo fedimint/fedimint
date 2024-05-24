@@ -1049,6 +1049,11 @@
 <a href="#1049" id="1049">1049</a>
 <a href="#1050" id="1050">1050</a>
 <a href="#1051" id="1051">1051</a>
+<a href="#1052" id="1052">1052</a>
+<a href="#1053" id="1053">1053</a>
+<a href="#1054" id="1054">1054</a>
+<a href="#1055" id="1055">1055</a>
+<a href="#1056" id="1056">1056</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet};
 <span class="kw">use </span>std::fmt::{Debug, Display};
 <span class="kw">use </span>std::hash::Hash;
@@ -1279,9 +1284,14 @@
 
     <span class="doccomment">/// Create an invite code with the api endpoint of the given peer which can
     /// be used to download this client config
-    </span><span class="kw">pub fn </span>invite_code(<span class="kw-2">&amp;</span><span class="self">self</span>, peer: <span class="kw-2">&amp;</span>PeerId) -&gt; <span class="prelude-ty">Option</span>&lt;InviteCode&gt; {
+    </span><span class="kw">pub fn </span>invite_code(<span class="kw-2">&amp;</span><span class="self">self</span>, peer: <span class="kw-2">&amp;</span>PeerId, api_secret: <span class="prelude-ty">Option</span>&lt;String&gt;) -&gt; <span class="prelude-ty">Option</span>&lt;InviteCode&gt; {
         <span class="self">self</span>.global.api_endpoints.get(peer).map(|peer_url| {
-            InviteCode::new(peer_url.url.clone(), <span class="kw-2">*</span>peer, <span class="self">self</span>.calculate_federation_id())
+            InviteCode::new(
+                peer_url.url.clone(),
+                <span class="kw-2">*</span>peer,
+                <span class="self">self</span>.calculate_federation_id(),
+                api_secret.clone(),
+            )
         })
     }
 }

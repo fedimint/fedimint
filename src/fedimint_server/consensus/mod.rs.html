@@ -226,6 +226,28 @@
 <a href="#226" id="226">226</a>
 <a href="#227" id="227">227</a>
 <a href="#228" id="228">228</a>
+<a href="#229" id="229">229</a>
+<a href="#230" id="230">230</a>
+<a href="#231" id="231">231</a>
+<a href="#232" id="232">232</a>
+<a href="#233" id="233">233</a>
+<a href="#234" id="234">234</a>
+<a href="#235" id="235">235</a>
+<a href="#236" id="236">236</a>
+<a href="#237" id="237">237</a>
+<a href="#238" id="238">238</a>
+<a href="#239" id="239">239</a>
+<a href="#240" id="240">240</a>
+<a href="#241" id="241">241</a>
+<a href="#242" id="242">242</a>
+<a href="#243" id="243">243</a>
+<a href="#244" id="244">244</a>
+<a href="#245" id="245">245</a>
+<a href="#246" id="246">246</a>
+<a href="#247" id="247">247</a>
+<a href="#248" id="248">248</a>
+<a href="#249" id="249">249</a>
+<a href="#250" id="250">250</a>
 </pre></div><pre class="rust"><code><span class="attr">#![allow(clippy::let_unit_value)]
 
 </span><span class="kw">pub mod </span>api;
@@ -272,6 +294,8 @@
     db: Database,
     module_init_registry: ServerModuleInitRegistry,
     task_group: <span class="kw-2">&amp;</span>TaskGroup,
+    api_secret: <span class="prelude-ty">Option</span>&lt;String&gt;,
+    api_extra_secrets: Vec&lt;String&gt;,
 ) -&gt; anyhow::Result&lt;()&gt; {
     cfg.validate_config(<span class="kw-2">&amp;</span>cfg.local.identity, <span class="kw-2">&amp;</span>module_init_registry)<span class="question-mark">?</span>;
 
@@ -337,11 +361,18 @@
         ),
         last_ci_by_peer: Arc::clone(<span class="kw-2">&amp;</span>last_ci_by_peer),
         connection_status_channels: Arc::clone(<span class="kw-2">&amp;</span>connection_status_channels),
+        api_secret: api_secret.clone(),
     };
 
     <span class="macro">info!</span>(target: LOG_CONSENSUS, <span class="string">"Starting Consensus Api"</span>);
 
-    <span class="kw">let </span>api_handler = start_consensus_api(<span class="kw-2">&amp;</span>cfg.local, consensus_api).<span class="kw">await</span>;
+    <span class="kw">let </span>api_handler = start_consensus_api(
+        <span class="kw-2">&amp;</span>cfg.local,
+        consensus_api,
+        api_secret.clone(),
+        api_extra_secrets,
+    )
+    .<span class="kw">await</span>;
 
     <span class="macro">info!</span>(target: LOG_CONSENSUS, <span class="string">"Starting Submission of Module CI proposals"</span>);
 
@@ -362,7 +393,7 @@
     ConsensusEngine {
         db,
         keychain: Keychain::new(<span class="kw-2">&amp;</span>cfg),
-        federation_api: DynGlobalApi::from_config(<span class="kw-2">&amp;</span>client_cfg),
+        federation_api: DynGlobalApi::from_config(<span class="kw-2">&amp;</span>client_cfg, api_secret),
         self_id_str: cfg.local.identity.to_string(),
         peer_id_str: (<span class="number">0</span>..cfg.consensus.api_endpoints.len())
             .map(|x| x.to_string())
@@ -387,7 +418,12 @@
     <span class="prelude-val">Ok</span>(())
 }
 
-<span class="kw">async fn </span>start_consensus_api(cfg: <span class="kw-2">&amp;</span>ServerConfigLocal, api: ConsensusApi) -&gt; ServerHandle {
+<span class="kw">async fn </span>start_consensus_api(
+    cfg: <span class="kw-2">&amp;</span>ServerConfigLocal,
+    api: ConsensusApi,
+    api_secret: <span class="prelude-ty">Option</span>&lt;String&gt;,
+    api_extra_secrets: Vec&lt;String&gt;,
+) -&gt; ServerHandle {
     <span class="kw">let </span><span class="kw-2">mut </span>rpc_module = RpcHandlerCtx::new_module(api.clone());
 
     net::api::attach_endpoints(<span class="kw-2">&amp;mut </span>rpc_module, api::server_endpoints(), <span class="prelude-val">None</span>);
@@ -396,7 +432,15 @@
         net::api::attach_endpoints(<span class="kw-2">&amp;mut </span>rpc_module, module.api_endpoints(), <span class="prelude-val">Some</span>(id));
     }
 
-    net::api::spawn(<span class="string">"consensus"</span>, <span class="kw-2">&amp;</span>cfg.api_bind, rpc_module, cfg.max_connections).<span class="kw">await
+    net::api::spawn(
+        <span class="string">"consensus"</span>,
+        <span class="kw-2">&amp;</span>cfg.api_bind,
+        rpc_module,
+        cfg.max_connections,
+        api_secret,
+        api_extra_secrets,
+    )
+    .<span class="kw">await
 </span>}
 
 <span class="kw">const </span>CONSENSUS_PROPOSAL_TIMEOUT: Duration = Duration::from_secs(<span class="number">30</span>);

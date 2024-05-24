@@ -875,6 +875,7 @@
 <a href="#875" id="875">875</a>
 <a href="#876" id="876">876</a>
 <a href="#877" id="877">877</a>
+<a href="#878" id="878">878</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>core::fmt;
 <span class="kw">use </span>std::any::Any;
 <span class="kw">use </span>std::fmt::Debug;
@@ -1328,6 +1329,7 @@
             any_guardian_url.url.clone(),
             <span class="kw-2">*</span>any_guardian_id,
             cfg.calculate_federation_id(),
+            <span class="self">self</span>.client.get().api_secret().clone(),
         )
     }
 

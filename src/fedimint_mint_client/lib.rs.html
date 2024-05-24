@@ -2347,6 +2347,32 @@
 <a href="#2347" id="2347">2347</a>
 <a href="#2348" id="2348">2348</a>
 <a href="#2349" id="2349">2349</a>
+<a href="#2350" id="2350">2350</a>
+<a href="#2351" id="2351">2351</a>
+<a href="#2352" id="2352">2352</a>
+<a href="#2353" id="2353">2353</a>
+<a href="#2354" id="2354">2354</a>
+<a href="#2355" id="2355">2355</a>
+<a href="#2356" id="2356">2356</a>
+<a href="#2357" id="2357">2357</a>
+<a href="#2358" id="2358">2358</a>
+<a href="#2359" id="2359">2359</a>
+<a href="#2360" id="2360">2360</a>
+<a href="#2361" id="2361">2361</a>
+<a href="#2362" id="2362">2362</a>
+<a href="#2363" id="2363">2363</a>
+<a href="#2364" id="2364">2364</a>
+<a href="#2365" id="2365">2365</a>
+<a href="#2366" id="2366">2366</a>
+<a href="#2367" id="2367">2367</a>
+<a href="#2368" id="2368">2368</a>
+<a href="#2369" id="2369">2369</a>
+<a href="#2370" id="2370">2370</a>
+<a href="#2371" id="2371">2371</a>
+<a href="#2372" id="2372">2372</a>
+<a href="#2373" id="2373">2373</a>
+<a href="#2374" id="2374">2374</a>
+<a href="#2375" id="2375">2375</a>
 </pre></div><pre class="rust"><code><span class="comment">// Backup and restore logic
 </span><span class="kw">pub mod </span>backup;
 <span class="doccomment">/// Database keys used throughout the mint client module
@@ -2453,6 +2479,7 @@
         </span>peer_apis: Vec&lt;(PeerId, SafeUrl)&gt;,
         federation_id: FederationId,
     },
+    ApiSecret(String),
     <span class="attr">#[encodable_default]
     </span>Default {
         variant: u64,
@@ -2472,7 +2499,7 @@
     }
 
     <span class="kw">pub fn </span>new_with_invite(notes: TieredMulti&lt;SpendableNote&gt;, invite: InviteCode) -&gt; <span class="self">Self </span>{
-        <span class="self">Self</span>(<span class="macro">vec!</span>[
+        <span class="kw">let </span><span class="kw-2">mut </span>data = <span class="macro">vec!</span>[
             <span class="comment">// FIXME: once we can break compatibility with 0.2 we can remove the prefix in case an
             // invite is present
             </span>OOBNotesData::FederationIdPrefix(invite.federation_id().to_prefix()),
@@ -2481,7 +2508,11 @@
                 peer_apis: <span class="macro">vec!</span>[(invite.peer(), invite.url())],
                 federation_id: invite.federation_id(),
             },
-        ])
+        ];
+        <span class="kw">if let </span><span class="prelude-val">Some</span>(api_secret) = invite.api_secret() {
+            data.push(OOBNotesData::ApiSecret(api_secret))
+        }
+        <span class="self">Self</span>(data)
     }
 
     <span class="kw">pub fn </span>federation_id_prefix(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FederationIdPrefix {
@@ -2529,9 +2560,15 @@
                         .expect(<span class="string">"Decoding makes sure peer_apis isn't empty"</span>);
                     notes_map.insert(
                         <span class="string">"invite"</span>.to_string(),
-                        serde_json::to_value(InviteCode::new(api, peer_id, <span class="kw-2">*</span>federation_id))<span class="question-mark">?</span>,
+                        serde_json::to_value(InviteCode::new(
+                            api,
+                            peer_id,
+                            <span class="kw-2">*</span>federation_id,
+                            <span class="self">self</span>.api_secret(),
+                        ))<span class="question-mark">?</span>,
                     );
                 }
+                OOBNotesData::ApiSecret(<span class="kw">_</span>) =&gt; { <span class="comment">/* already covered inside `Invite` */ </span>}
                 OOBNotesData::Default { variant, bytes } =&gt; {
                     notes_map.insert(
                         <span class="macro">format!</span>(<span class="string">"default_{}"</span>, variant),
@@ -2556,7 +2593,21 @@
                 .first()
                 .cloned()
                 .expect(<span class="string">"Decoding makes sure peer_apis isn't empty"</span>);
-            <span class="prelude-val">Some</span>(InviteCode::new(api, peer_id, <span class="kw-2">*</span>federation_id))
+            <span class="prelude-val">Some</span>(InviteCode::new(
+                api,
+                peer_id,
+                <span class="kw-2">*</span>federation_id,
+                <span class="self">self</span>.api_secret(),
+            ))
+        })
+    }
+
+    <span class="kw">fn </span>api_secret(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;String&gt; {
+        <span class="self">self</span>.<span class="number">0</span>.iter().find_map(|data| {
+            <span class="kw">let </span>OOBNotesData::ApiSecret(api_secret) = data <span class="kw">else </span>{
+                <span class="kw">return </span><span class="prelude-val">None</span>;
+            };
+            <span class="prelude-val">Some</span>(api_secret.clone())
         })
     }
 }
@@ -4601,6 +4652,7 @@
             <span class="string">"wss://foo.bar"</span>.parse().unwrap(),
             PeerId::from(<span class="number">0</span>),
             federation_id_1,
+            <span class="prelude-val">None</span>,
         );
         <span class="kw">let </span>notes_invite = OOBNotes::new_with_invite(notes.clone(), invite.clone());
         test_roundtrip_serialize_str(notes_invite, |oob_notes| {

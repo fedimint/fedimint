@@ -574,6 +574,8 @@
 <a href="#574" id="574">574</a>
 <a href="#575" id="575">575</a>
 <a href="#576" id="576">576</a>
+<a href="#577" id="577">577</a>
+<a href="#578" id="578">578</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! Implements the client API through which users interact with the federation
 </span><span class="kw">use </span>std::cmp::Ordering;
 <span class="kw">use </span>std::collections::{BTreeMap, HashMap};
@@ -643,6 +645,8 @@
     </span><span class="kw">pub </span>modules: ServerModuleRegistry,
     <span class="doccomment">/// Cached client config
     </span><span class="kw">pub </span>client_cfg: ClientConfig,
+
+    <span class="kw">pub </span>api_secret: <span class="prelude-ty">Option</span>&lt;String&gt;,
     <span class="doccomment">/// For sending API events to consensus such as transactions
     </span><span class="kw">pub </span>submission_sender: async_channel::Sender&lt;ConsensusItem&gt;,
     <span class="kw">pub </span>shutdown_sender: watch::Sender&lt;<span class="prelude-ty">Option</span>&lt;u64&gt;&gt;,
@@ -1027,7 +1031,7 @@
             INVITE_CODE_ENDPOINT,
             ApiVersion::new(<span class="number">0</span>, <span class="number">0</span>),
             <span class="kw">async </span>|fedimint: <span class="kw-2">&amp;</span>ConsensusApi, _context,  _v: ()| -&gt; String {
-                <span class="prelude-val">Ok</span>(fedimint.cfg.get_invite_code().to_string())
+                <span class="prelude-val">Ok</span>(fedimint.cfg.get_invite_code(fedimint.api_secret.clone()).to_string())
             }
         },
         <span class="macro">api_endpoint!</span> {

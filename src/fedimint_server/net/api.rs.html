@@ -144,7 +144,22 @@
 <a href="#144" id="144">144</a>
 <a href="#145" id="145">145</a>
 <a href="#146" id="146">146</a>
-</pre></div><pre class="rust"><code><span class="kw">use </span>std::fmt::{Debug, Formatter};
+<a href="#147" id="147">147</a>
+<a href="#148" id="148">148</a>
+<a href="#149" id="149">149</a>
+<a href="#150" id="150">150</a>
+<a href="#151" id="151">151</a>
+<a href="#152" id="152">152</a>
+<a href="#153" id="153">153</a>
+<a href="#154" id="154">154</a>
+<a href="#155" id="155">155</a>
+<a href="#156" id="156">156</a>
+<a href="#157" id="157">157</a>
+<a href="#158" id="158">158</a>
+<a href="#159" id="159">159</a>
+</pre></div><pre class="rust"><code><span class="kw">mod </span>http_auth;
+
+<span class="kw">use </span>std::fmt::{Debug, Formatter};
 <span class="kw">use </span>std::net::SocketAddr;
 <span class="kw">use </span>std::panic::AssertUnwindSafe;
 <span class="kw">use </span>std::sync::Arc;
@@ -162,6 +177,7 @@
 <span class="kw">use </span>tracing::{error, info};
 
 <span class="kw">use </span><span class="kw">crate</span>::metrics;
+<span class="kw">use </span><span class="kw">crate</span>::net::api::http_auth::HttpAuthLayer;
 
 <span class="doccomment">/// A state that has context for the API, passed to each rpc handler callback
 </span><span class="attr">#[derive(Clone)]
@@ -214,13 +230,23 @@
     api_bind: <span class="kw-2">&amp;</span>SocketAddr,
     module: RpcModule&lt;RpcHandlerCtx&lt;T&gt;&gt;,
     max_connections: u32,
+    api_secret: <span class="prelude-ty">Option</span>&lt;String&gt;,
+    api_extra_secrets: Vec&lt;String&gt;,
 ) -&gt; ServerHandle {
     <span class="macro">info!</span>(target: LOG_NET_API, <span class="string">"Starting api on ws://{api_bind}"</span>);
+
+    <span class="kw">let </span>builder = tower::ServiceBuilder::new().layer(HttpAuthLayer::new(
+        api_secret
+            .into_iter()
+            .chain(api_extra_secrets.into_iter())
+            .collect(),
+    ));
 
     ServerBuilder::new()
         .max_connections(max_connections)
         .enable_ws_ping(PingConfig::new().ping_interval(Duration::from_secs(<span class="number">10</span>)))
         .set_rpc_middleware(RpcServiceBuilder::new().layer(metrics::jsonrpsee::MetricsLayer))
+        .set_http_middleware(builder)
         .build(<span class="kw-2">&amp;</span>api_bind.to_string())
         .<span class="kw">await
         </span>.context(<span class="macro">format!</span>(<span class="string">"Bind address: {api_bind}"</span>))

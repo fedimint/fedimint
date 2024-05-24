@@ -1141,6 +1141,7 @@
 <a href="#1141" id="1141">1141</a>
 <a href="#1142" id="1142">1142</a>
 <a href="#1143" id="1143">1143</a>
+<a href="#1144" id="1144">1144</a>
 </pre></div><pre class="rust"><code><span class="kw">mod </span>config;
 
 <span class="kw">use </span>std::collections::{BTreeMap, HashMap, HashSet};
@@ -1387,9 +1388,10 @@
                 )
                 .<span class="kw">await</span><span class="question-mark">?</span>,
             );
-            <span class="kw">let </span>admin_client = DynGlobalApi::from_pre_peer_id_admin_endpoint(SafeUrl::parse(
-                <span class="kw-2">&amp;</span>peer_env_vars.FM_API_URL,
-            )<span class="question-mark">?</span>);
+            <span class="kw">let </span>admin_client = DynGlobalApi::from_pre_peer_id_admin_endpoint(
+                SafeUrl::parse(<span class="kw-2">&amp;</span>peer_env_vars.FM_API_URL)<span class="question-mark">?</span>,
+                process_mgr.globals.FM_API_SECRET.clone(),
+            );
             endpoints.insert(<span class="kw-2">*</span>peer, peer_env_vars.FM_API_URL.clone());
             admin_clients.insert(<span class="kw-2">*</span>peer, admin_client);
             peer_to_env_vars_map.insert(peer.to_usize(), peer_env_vars);

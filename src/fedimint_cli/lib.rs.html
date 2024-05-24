@@ -1046,6 +1046,32 @@
 <a href="#1046" id="1046">1046</a>
 <a href="#1047" id="1047">1047</a>
 <a href="#1048" id="1048">1048</a>
+<a href="#1049" id="1049">1049</a>
+<a href="#1050" id="1050">1050</a>
+<a href="#1051" id="1051">1051</a>
+<a href="#1052" id="1052">1052</a>
+<a href="#1053" id="1053">1053</a>
+<a href="#1054" id="1054">1054</a>
+<a href="#1055" id="1055">1055</a>
+<a href="#1056" id="1056">1056</a>
+<a href="#1057" id="1057">1057</a>
+<a href="#1058" id="1058">1058</a>
+<a href="#1059" id="1059">1059</a>
+<a href="#1060" id="1060">1060</a>
+<a href="#1061" id="1061">1061</a>
+<a href="#1062" id="1062">1062</a>
+<a href="#1063" id="1063">1063</a>
+<a href="#1064" id="1064">1064</a>
+<a href="#1065" id="1065">1065</a>
+<a href="#1066" id="1066">1066</a>
+<a href="#1067" id="1067">1067</a>
+<a href="#1068" id="1068">1068</a>
+<a href="#1069" id="1069">1069</a>
+<a href="#1070" id="1070">1070</a>
+<a href="#1071" id="1071">1071</a>
+<a href="#1072" id="1072">1072</a>
+<a href="#1073" id="1073">1073</a>
+<a href="#1074" id="1074">1074</a>
 </pre></div><pre class="rust"><code><span class="kw">mod </span>client;
 <span class="kw">mod </span>db_locked;
 <span class="kw">pub mod </span>envs;
@@ -1066,6 +1092,7 @@
 <span class="kw">use </span>bip39::Mnemonic;
 <span class="kw">use </span>clap::{Args, CommandFactory, Parser, Subcommand};
 <span class="kw">use </span>db_locked::LockedBuilder;
+<span class="kw">use </span>envs::FM_API_SECRET_ENV;
 <span class="kw">use </span>fedimint_aead::{encrypted_read, encrypted_write, get_encryption_key};
 <span class="kw">use </span>fedimint_api_client::api::{
     DynGlobalApi, FederationApiExt, FederationError, IRawFederationApi, WsFederationApi,
@@ -1271,9 +1298,13 @@
         <span class="prelude-val">Ok</span>(dir)
     }
 
-    <span class="kw">fn </span>admin_client(<span class="kw-2">&amp;</span><span class="self">self</span>, cfg: <span class="kw-2">&amp;</span>ClientConfig) -&gt; CliResult&lt;DynGlobalApi&gt; {
+    <span class="kw">fn </span>admin_client(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        cfg: <span class="kw-2">&amp;</span>ClientConfig,
+        api_secret: <span class="prelude-ty">Option</span>&lt;String&gt;,
+    ) -&gt; CliResult&lt;DynGlobalApi&gt; {
         <span class="kw">let </span>our_id = <span class="self">self</span>.our_id.ok_or_cli_msg(<span class="string">"Admin client needs our-id set"</span>)<span class="question-mark">?</span>;
-        <span class="prelude-val">Ok</span>(DynGlobalApi::from_config_admin(cfg, our_id))
+        <span class="prelude-val">Ok</span>(DynGlobalApi::from_config_admin(cfg, api_secret, our_id))
     }
 
     <span class="kw">fn </span>auth(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; CliResult&lt;ApiAuth&gt; {
@@ -1344,7 +1375,8 @@
     },
 }
 
-<span class="attr">#[derive(Debug, Clone, Subcommand)]
+<span class="attr">#[allow(clippy::large_enum_variant)]
+#[derive(Debug, Clone, Subcommand)]
 </span><span class="kw">enum </span>AdminCmd {
     <span class="doccomment">/// Show the status according to the `status` endpoint
     </span>Status,
@@ -1363,14 +1395,19 @@
     <span class="attr">#[arg(long, env = <span class="string">"FM_WS_URL"</span>)]
     </span>ws: SafeUrl,
 
+    <span class="attr">#[arg(env = FM_API_SECRET_ENV)]
+    </span>api_secret: <span class="prelude-ty">Option</span>&lt;String&gt;,
+
     <span class="attr">#[clap(subcommand)]
     </span>subcommand: DkgAdminCmd,
 }
 
 <span class="kw">impl </span>DkgAdminArgs {
-    <span class="kw">fn </span>ws_admin_client(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; CliResult&lt;DynGlobalApi&gt; {
+    <span class="kw">fn </span>ws_admin_client(<span class="kw-2">&amp;</span><span class="self">self</span>, api_secret: <span class="prelude-ty">Option</span>&lt;String&gt;) -&gt; CliResult&lt;DynGlobalApi&gt; {
         <span class="kw">let </span>ws = <span class="self">self</span>.ws.clone();
-        <span class="prelude-val">Ok</span>(DynGlobalApi::from_pre_peer_id_admin_endpoint(ws))
+        <span class="prelude-val">Ok</span>(DynGlobalApi::from_pre_peer_id_admin_endpoint(
+            ws, api_secret,
+        ))
     }
 }
 
@@ -1430,6 +1467,8 @@
         </span>federation_id: FederationId,
         <span class="attr">#[clap(long = <span class="string">"peer"</span>)]
         </span>peer: PeerId,
+        <span class="attr">#[arg(env = FM_API_SECRET_ENV)]
+        </span>api_secret: <span class="prelude-ty">Option</span>&lt;String&gt;,
     },
 
     <span class="doccomment">/// Encode a JSON string of notes to an ecash string
@@ -1624,6 +1663,7 @@ Examples:
                     <span class="kw-2">&amp;</span>client_config.global.calculate_federation_id(),
                 ),
                 client_config.clone(),
+                invite_code.api_secret(),
             )
             .<span class="kw">await
             </span>.map(Arc::new)
@@ -1697,11 +1737,16 @@ Examples:
             <span class="kw-2">&amp;</span>client_config.calculate_federation_id(),
         );
         <span class="kw">let </span>backup = builder
-            .download_backup_from_federation(<span class="kw-2">&amp;</span>root_secret, <span class="kw-2">&amp;</span>client_config)
+            .download_backup_from_federation(<span class="kw-2">&amp;</span>root_secret, <span class="kw-2">&amp;</span>client_config, invite_code.api_secret())
             .<span class="kw">await
             </span>.map_err_cli()<span class="question-mark">?</span>;
         builder
-            .recover(root_secret, client_config.to_owned(), backup)
+            .recover(
+                root_secret,
+                client_config.to_owned(),
+                invite_code.api_secret(),
+                backup,
+            )
             .<span class="kw">await
             </span>.map(Arc::new)
             .map_err_cli()
@@ -1714,9 +1759,10 @@ Examples:
                 <span class="kw">let </span>client_config = Client::get_config_from_db(<span class="kw-2">&amp;</span>db)
                     .<span class="kw">await
                     </span>.ok_or_cli_msg(<span class="string">"client config code not found"</span>)<span class="question-mark">?</span>;
+                <span class="kw">let </span>api_secret = Client::get_api_secret_from_db(<span class="kw-2">&amp;</span>db).<span class="kw">await</span>;
 
                 <span class="kw">let </span>invite_code = client_config
-                    .invite_code(<span class="kw-2">&amp;</span>peer)
+                    .invite_code(<span class="kw-2">&amp;</span>peer, api_secret)
                     .ok_or_cli_msg(<span class="string">"peer not found"</span>)<span class="question-mark">?</span>;
 
                 <span class="prelude-val">Ok</span>(CliOutput::InviteCode { invite_code })
@@ -1770,7 +1816,7 @@ Examples:
                 <span class="kw">let </span>client = <span class="self">self</span>.client_open(<span class="kw-2">&amp;</span>cli).<span class="kw">await</span><span class="question-mark">?</span>;
 
                 <span class="kw">let </span>audit = cli
-                    .admin_client(client.get_config())<span class="question-mark">?
+                    .admin_client(client.get_config(), client.api_secret().clone())<span class="question-mark">?
                     </span>.audit(cli.auth()<span class="question-mark">?</span>)
                     .<span class="kw">await</span><span class="question-mark">?</span>;
                 <span class="prelude-val">Ok</span>(CliOutput::Raw(
@@ -1780,7 +1826,10 @@ Examples:
             Command::Admin(AdminCmd::Status) =&gt; {
                 <span class="kw">let </span>client = <span class="self">self</span>.client_open(<span class="kw-2">&amp;</span>cli).<span class="kw">await</span><span class="question-mark">?</span>;
 
-                <span class="kw">let </span>status = cli.admin_client(client.get_config())<span class="question-mark">?</span>.status().<span class="kw">await</span><span class="question-mark">?</span>;
+                <span class="kw">let </span>status = cli
+                    .admin_client(client.get_config(), client.api_secret().clone())<span class="question-mark">?
+                    </span>.status()
+                    .<span class="kw">await</span><span class="question-mark">?</span>;
                 <span class="prelude-val">Ok</span>(CliOutput::Raw(
                     serde_json::to_value(status).map_err_cli_msg(<span class="string">"invalid response"</span>)<span class="question-mark">?</span>,
                 ))
@@ -1789,7 +1838,7 @@ Examples:
                 <span class="kw">let </span>client = <span class="self">self</span>.client_open(<span class="kw-2">&amp;</span>cli).<span class="kw">await</span><span class="question-mark">?</span>;
 
                 <span class="kw">let </span>guardian_config_backup = cli
-                    .admin_client(client.get_config())<span class="question-mark">?
+                    .admin_client(client.get_config(), client.api_secret().clone())<span class="question-mark">?
                     </span>.guardian_config_backup(cli.auth()<span class="question-mark">?</span>)
                     .<span class="kw">await</span><span class="question-mark">?</span>;
                 <span class="prelude-val">Ok</span>(CliOutput::Raw(
@@ -1823,7 +1872,9 @@ Examples:
                 }
                 <span class="kw">let </span>client = <span class="self">self</span>.client_open(<span class="kw-2">&amp;</span>cli).<span class="kw">await</span><span class="question-mark">?</span>;
 
-                <span class="kw">let </span>ws_api: Arc&lt;<span class="kw">_</span>&gt; = WsFederationApi::from_config(client.get_config()).into();
+                <span class="kw">let </span>ws_api: Arc&lt;<span class="kw">_</span>&gt; =
+                    WsFederationApi::from_config(client.get_config(), client.api_secret().clone())
+                        .into();
                 <span class="kw">let </span>response: Value = <span class="kw">match </span>peer_id {
                     <span class="prelude-val">Some</span>(peer_id) =&gt; ws_api
                         .request_raw(peer_id.into(), <span class="kw-2">&amp;</span>method, <span class="kw-2">&amp;</span>[params.to_json()])
@@ -1895,8 +1946,9 @@ Examples:
                     url,
                     federation_id,
                     peer,
+                    api_secret,
                 } =&gt; <span class="prelude-val">Ok</span>(CliOutput::InviteCode {
-                    invite_code: InviteCode::new(url, peer, federation_id),
+                    invite_code: InviteCode::new(url, peer, federation_id, api_secret),
                 }),
                 EncodeType::Notes { notes_json } =&gt; {
                     <span class="kw">let </span>notes = serde_json::from_str::&lt;OOBNotesJson&gt;(<span class="kw-2">&amp;</span>notes_json)
@@ -1979,7 +2031,7 @@ Examples:
         cli: Opts,
         dkg_args: DkgAdminArgs,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;CliOutput, CliError&gt; {
-        <span class="kw">let </span>client = dkg_args.ws_admin_client()<span class="question-mark">?</span>;
+        <span class="kw">let </span>client = dkg_args.ws_admin_client(dkg_args.api_secret.clone())<span class="question-mark">?</span>;
         <span class="kw">match </span><span class="kw-2">&amp;</span>dkg_args.subcommand {
             DkgAdminCmd::WsStatus =&gt; {
                 <span class="kw">let </span>status = client.status().<span class="kw">await</span><span class="question-mark">?</span>;

@@ -819,6 +819,7 @@
 <a href="#819" id="819">819</a>
 <a href="#820" id="820">820</a>
 <a href="#821" id="821">821</a>
+<a href="#822" id="822">822</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap};
 <span class="kw">use </span>std::env;
 <span class="kw">use </span>std::net::SocketAddr;
@@ -1097,13 +1098,14 @@
         cfg
     }
 
-    <span class="kw">pub fn </span>get_invite_code(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; InviteCode {
+    <span class="kw">pub fn </span>get_invite_code(<span class="kw-2">&amp;</span><span class="self">self</span>, api_secret: <span class="prelude-ty">Option</span>&lt;String&gt;) -&gt; InviteCode {
         InviteCode::new(
             <span class="self">self</span>.consensus.api_endpoints[<span class="kw-2">&amp;</span><span class="self">self</span>.local.identity]
                 .url
                 .clone(),
             <span class="self">self</span>.local.identity,
             FederationId(<span class="self">self</span>.consensus.api_endpoints.consensus_hash()),
+            api_secret,
         )
     }
 

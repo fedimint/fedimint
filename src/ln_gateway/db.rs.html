@@ -302,6 +302,7 @@
 <a href="#302" id="302">302</a>
 <a href="#303" id="303">303</a>
 <a href="#304" id="304">304</a>
+<a href="#305" id="305">305</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 
 <span class="kw">use </span>bitcoin::Network;
@@ -505,6 +506,7 @@
             SafeUrl::from_str(<span class="string">"http://myexamplefed.com"</span>).expect(<span class="string">"SafeUrl parsing can't fail"</span>),
             <span class="number">0</span>.into(),
             federation_id,
+            <span class="prelude-val">None</span>,
         );
         <span class="kw">let </span>federation_config = FederationConfig {
             invite_code,

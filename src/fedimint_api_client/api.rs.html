@@ -1597,6 +1597,65 @@
 <a href="#1597" id="1597">1597</a>
 <a href="#1598" id="1598">1598</a>
 <a href="#1599" id="1599">1599</a>
+<a href="#1600" id="1600">1600</a>
+<a href="#1601" id="1601">1601</a>
+<a href="#1602" id="1602">1602</a>
+<a href="#1603" id="1603">1603</a>
+<a href="#1604" id="1604">1604</a>
+<a href="#1605" id="1605">1605</a>
+<a href="#1606" id="1606">1606</a>
+<a href="#1607" id="1607">1607</a>
+<a href="#1608" id="1608">1608</a>
+<a href="#1609" id="1609">1609</a>
+<a href="#1610" id="1610">1610</a>
+<a href="#1611" id="1611">1611</a>
+<a href="#1612" id="1612">1612</a>
+<a href="#1613" id="1613">1613</a>
+<a href="#1614" id="1614">1614</a>
+<a href="#1615" id="1615">1615</a>
+<a href="#1616" id="1616">1616</a>
+<a href="#1617" id="1617">1617</a>
+<a href="#1618" id="1618">1618</a>
+<a href="#1619" id="1619">1619</a>
+<a href="#1620" id="1620">1620</a>
+<a href="#1621" id="1621">1621</a>
+<a href="#1622" id="1622">1622</a>
+<a href="#1623" id="1623">1623</a>
+<a href="#1624" id="1624">1624</a>
+<a href="#1625" id="1625">1625</a>
+<a href="#1626" id="1626">1626</a>
+<a href="#1627" id="1627">1627</a>
+<a href="#1628" id="1628">1628</a>
+<a href="#1629" id="1629">1629</a>
+<a href="#1630" id="1630">1630</a>
+<a href="#1631" id="1631">1631</a>
+<a href="#1632" id="1632">1632</a>
+<a href="#1633" id="1633">1633</a>
+<a href="#1634" id="1634">1634</a>
+<a href="#1635" id="1635">1635</a>
+<a href="#1636" id="1636">1636</a>
+<a href="#1637" id="1637">1637</a>
+<a href="#1638" id="1638">1638</a>
+<a href="#1639" id="1639">1639</a>
+<a href="#1640" id="1640">1640</a>
+<a href="#1641" id="1641">1641</a>
+<a href="#1642" id="1642">1642</a>
+<a href="#1643" id="1643">1643</a>
+<a href="#1644" id="1644">1644</a>
+<a href="#1645" id="1645">1645</a>
+<a href="#1646" id="1646">1646</a>
+<a href="#1647" id="1647">1647</a>
+<a href="#1648" id="1648">1648</a>
+<a href="#1649" id="1649">1649</a>
+<a href="#1650" id="1650">1650</a>
+<a href="#1651" id="1651">1651</a>
+<a href="#1652" id="1652">1652</a>
+<a href="#1653" id="1653">1653</a>
+<a href="#1654" id="1654">1654</a>
+<a href="#1655" id="1655">1655</a>
+<a href="#1656" id="1656">1656</a>
+<a href="#1657" id="1657">1657</a>
+<a href="#1658" id="1658">1658</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap};
 <span class="kw">use </span>std::fmt::{<span class="self">self</span>, Debug, Display};
 <span class="kw">use </span>std::num::NonZeroUsize;
@@ -1607,6 +1666,7 @@
 <span class="kw">use </span>std::{cmp, result};
 
 <span class="kw">use </span>anyhow::anyhow;
+<span class="kw">use </span>base64::Engine <span class="kw">as _</span>;
 <span class="kw">use </span>bitcoin::hashes::sha256;
 <span class="kw">use </span>bitcoin::secp256k1;
 <span class="kw">use </span>fedimint_core::admin_client::{
@@ -1653,6 +1713,8 @@
 <span class="kw">use </span>jsonrpsee_core::client::{ClientT, Error <span class="kw">as </span>JsonRpcClientError};
 <span class="attr">#[cfg(target_family = <span class="string">"wasm"</span>)]
 </span><span class="kw">use </span>jsonrpsee_wasm_client::{Client <span class="kw">as </span>WsClient, WasmClientBuilder <span class="kw">as </span>WsClientBuilder};
+<span class="attr">#[cfg(not(target_family = <span class="string">"wasm"</span>))]
+</span><span class="kw">use </span>jsonrpsee_ws_client::{HeaderMap, HeaderValue};
 <span class="attr">#[cfg(not(target_family = <span class="string">"wasm"</span>))]
 </span><span class="kw">use </span>jsonrpsee_ws_client::{WsClient, WsClientBuilder};
 <span class="kw">use </span>serde::{Deserialize, Serialize};
@@ -2141,30 +2203,36 @@
 }
 
 <span class="kw">impl </span>DynGlobalApi {
-    <span class="kw">pub fn </span>from_pre_peer_id_admin_endpoint(url: SafeUrl) -&gt; <span class="self">Self </span>{
+    <span class="kw">pub fn </span>from_pre_peer_id_admin_endpoint(url: SafeUrl, api_secret: <span class="prelude-ty">Option</span>&lt;String&gt;) -&gt; <span class="self">Self </span>{
         <span class="comment">// PeerIds are used only for informational purposes, but just in case, make a
         // big number so it stands out
         </span><span class="kw">let </span>peer_id = PeerId::from(<span class="number">1024</span>);
         GlobalFederationApiWithCache::new(
-            WsFederationApi::new(<span class="macro">vec!</span>[(peer_id, url)]).with_self_peer_id(peer_id),
+            WsFederationApi::new(<span class="macro">vec!</span>[(peer_id, url)], api_secret).with_self_peer_id(peer_id),
         )
         .into()
     }
 
-    <span class="kw">pub fn </span>from_single_endpoint(peer: PeerId, url: SafeUrl) -&gt; <span class="self">Self </span>{
-        GlobalFederationApiWithCache::new(WsFederationApi::new(<span class="macro">vec!</span>[(peer, url)])).into()
-    }
-    <span class="kw">pub fn </span>from_endpoints(peers: Vec&lt;(PeerId, SafeUrl)&gt;) -&gt; <span class="self">Self </span>{
-        GlobalFederationApiWithCache::new(WsFederationApi::new(peers)).into()
+    <span class="kw">pub fn </span>from_single_endpoint(peer: PeerId, url: SafeUrl, api_secret: <span class="prelude-ty">Option</span>&lt;String&gt;) -&gt; <span class="self">Self </span>{
+        GlobalFederationApiWithCache::new(WsFederationApi::new(<span class="macro">vec!</span>[(peer, url)], api_secret))
+            .into()
     }
 
-    <span class="kw">pub fn </span>from_config(config: <span class="kw-2">&amp;</span>ClientConfig) -&gt; <span class="self">Self </span>{
-        GlobalFederationApiWithCache::new(WsFederationApi::from_config(config)).into()
+    <span class="kw">pub fn </span>from_endpoints(peers: Vec&lt;(PeerId, SafeUrl)&gt;, api_secret: <span class="prelude-ty">Option</span>&lt;String&gt;) -&gt; <span class="self">Self </span>{
+        GlobalFederationApiWithCache::new(WsFederationApi::new(peers, api_secret)).into()
     }
 
-    <span class="kw">pub fn </span>from_config_admin(config: <span class="kw-2">&amp;</span>ClientConfig, self_peer_id: PeerId) -&gt; <span class="self">Self </span>{
+    <span class="kw">pub fn </span>from_config(config: <span class="kw-2">&amp;</span>ClientConfig, api_secret: <span class="prelude-ty">Option</span>&lt;String&gt;) -&gt; <span class="self">Self </span>{
+        GlobalFederationApiWithCache::new(WsFederationApi::from_config(config, api_secret)).into()
+    }
+
+    <span class="kw">pub fn </span>from_config_admin(
+        config: <span class="kw-2">&amp;</span>ClientConfig,
+        api_secret: <span class="prelude-ty">Option</span>&lt;String&gt;,
+        self_peer_id: PeerId,
+    ) -&gt; <span class="self">Self </span>{
         GlobalFederationApiWithCache::new(
-            WsFederationApi::from_config(config).with_self_peer_id(self_peer_id),
+            WsFederationApi::from_config(config, api_secret).with_self_peer_id(self_peer_id),
         )
         .into()
     }
@@ -2172,6 +2240,7 @@
     <span class="kw">pub fn </span>from_invite_code(invite_code: <span class="kw-2">&amp;</span>InviteCode) -&gt; <span class="self">Self </span>{
         GlobalFederationApiWithCache::new(WsFederationApi::new(
             invite_code.peers().into_iter().collect_vec(),
+            invite_code.api_secret(),
         ))
         .into()
     }
@@ -2801,11 +2870,11 @@
 <span class="kw">where
     </span>C: JsonRpcClient + <span class="lifetime">'static</span>,
 {
-    <span class="kw">pub fn </span>new(peer_id: PeerId, url: SafeUrl) -&gt; <span class="self">Self </span>{
+    <span class="kw">pub fn </span>new(peer_id: PeerId, url: SafeUrl, api_secret: <span class="prelude-ty">Option</span>&lt;String&gt;) -&gt; <span class="self">Self </span>{
         <span class="kw">let </span>shared: Arc&lt;<span class="kw">_</span>&gt; = tokio::sync::Mutex::new(FederationPeerClientShared::new()).into();
 
         <span class="self">Self </span>{
-            client: <span class="self">Self</span>::new_jit_client(peer_id, url, shared.clone()),
+            client: <span class="self">Self</span>::new_jit_client(peer_id, url, api_secret, shared.clone()),
             shared,
         }
     }
@@ -2813,6 +2882,7 @@
     <span class="kw">fn </span>new_jit_client(
         peer_id: PeerId,
         url: SafeUrl,
+        api_secret: <span class="prelude-ty">Option</span>&lt;String&gt;,
         shared: Arc&lt;Mutex&lt;FederationPeerClientShared&gt;&gt;,
     ) -&gt; JitTryAnyhow&lt;C&gt; {
         JitTryAnyhow::new_try(<span class="kw">move </span>|| <span class="kw">async move </span>{
@@ -2823,7 +2893,7 @@
                 peer_id = %peer_id,
                 url = %url,
                 <span class="string">"Connecting to peer"</span>);
-            <span class="kw">let </span>res = C::connect(<span class="kw-2">&amp;</span>url).<span class="kw">await</span>;
+            <span class="kw">let </span>res = C::connect(<span class="kw-2">&amp;</span>url, api_secret).<span class="kw">await</span>;
 
             <span class="kw">match </span><span class="kw-2">&amp;</span>res {
                 <span class="prelude-val">Ok</span>(<span class="kw">_</span>) =&gt; {
@@ -2846,8 +2916,8 @@
         })
     }
 
-    <span class="kw">pub async fn </span>reconnect(<span class="kw-2">&amp;mut </span><span class="self">self</span>, peer_id: PeerId, url: SafeUrl) {
-        <span class="self">self</span>.client = <span class="self">Self</span>::new_jit_client(peer_id, url, <span class="self">self</span>.shared.clone());
+    <span class="kw">pub async fn </span>reconnect(<span class="kw-2">&amp;mut </span><span class="self">self</span>, peer_id: PeerId, url: SafeUrl, api_secret: <span class="prelude-ty">Option</span>&lt;String&gt;) {
+        <span class="self">self</span>.client = <span class="self">Self</span>::new_jit_client(peer_id, url, api_secret, <span class="self">self</span>.shared.clone());
     }
 }
 
@@ -2855,6 +2925,7 @@
 </span><span class="kw">struct </span>FederationPeer&lt;C&gt; {
     url: SafeUrl,
     peer_id: PeerId,
+    api_secret: <span class="prelude-ty">Option</span>&lt;String&gt;,
     client: RwLock&lt;FederationPeerClient&lt;C&gt;&gt;,
 }
 <span class="kw">impl</span>&lt;C: JsonRpcClient + Debug + <span class="lifetime">'static</span>&gt; IModuleFederationApi <span class="kw">for </span>WsFederationApi&lt;C&gt; {}
@@ -2904,25 +2975,59 @@
 
 <span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
 </span><span class="kw">pub trait </span>JsonRpcClient: ClientT + Sized + MaybeSend + MaybeSync {
-    <span class="kw">async fn </span>connect(url: <span class="kw-2">&amp;</span>SafeUrl) -&gt; result::Result&lt;<span class="self">Self</span>, JsonRpcClientError&gt;;
+    <span class="kw">async fn </span>connect(
+        url: <span class="kw-2">&amp;</span>SafeUrl,
+        api_secret: <span class="prelude-ty">Option</span>&lt;String&gt;,
+    ) -&gt; result::Result&lt;<span class="self">Self</span>, JsonRpcClientError&gt;;
     <span class="kw">fn </span>is_connected(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool;
 }
 
 <span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
 </span><span class="kw">impl </span>JsonRpcClient <span class="kw">for </span>WsClient {
-    <span class="kw">async fn </span>connect(url: <span class="kw-2">&amp;</span>SafeUrl) -&gt; result::Result&lt;<span class="self">Self</span>, JsonRpcClientError&gt; {
+    <span class="kw">async fn </span>connect(
+        url: <span class="kw-2">&amp;</span>SafeUrl,
+        api_secret: <span class="prelude-ty">Option</span>&lt;String&gt;,
+    ) -&gt; result::Result&lt;<span class="self">Self</span>, JsonRpcClientError&gt; {
         <span class="attr">#[cfg(not(target_family = <span class="string">"wasm"</span>))]
-        </span><span class="kw">return </span>WsClientBuilder::default()
+        </span><span class="kw">let </span><span class="kw-2">mut </span>client = WsClientBuilder::default()
             .use_webpki_rustls()
-            .max_concurrent_requests(u16::MAX <span class="kw">as </span>usize)
-            .build(url.as_str())
-            .<span class="kw">await</span>;
+            .max_concurrent_requests(u16::MAX <span class="kw">as </span>usize);
 
         <span class="attr">#[cfg(target_family = <span class="string">"wasm"</span>)]
-        </span>WsClientBuilder::default()
-            .max_concurrent_requests(u16::MAX <span class="kw">as </span>usize)
-            .build(url.as_str())
-            .<span class="kw">await
+        </span><span class="kw">let </span>client = WsClientBuilder::default().max_concurrent_requests(u16::MAX <span class="kw">as </span>usize);
+
+        <span class="kw">if let </span><span class="prelude-val">Some</span>(api_secret) = api_secret {
+            <span class="attr">#[cfg(not(target_family = <span class="string">"wasm"</span>))]
+            </span>{
+                <span class="comment">// on native platforms, jsonrpsee-client ignores `user:pass@...` in the Url,
+                // but we can set up the headers manually
+                </span><span class="kw">let </span><span class="kw-2">mut </span>headers = HeaderMap::new();
+
+                <span class="kw">let </span>auth = base64::engine::general_purpose::STANDARD
+                    .encode(<span class="macro">format!</span>(<span class="string">"fedimint:{api_secret}"</span>));
+
+                headers.insert(
+                    <span class="string">"Authorization"</span>,
+                    HeaderValue::from_str(<span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">"Basic {auth}"</span>)).expect(<span class="string">"Can't fail"</span>),
+                );
+
+                client = client.set_headers(headers);
+            }
+            <span class="attr">#[cfg(target_family = <span class="string">"wasm"</span>)]
+            </span>{
+                <span class="comment">// on wasm, url will be handled by the browser, which should take care of
+                // `user:pass@...`
+                </span><span class="kw">let </span><span class="kw-2">mut </span>url = url.clone();
+                url.set_username(<span class="string">"fedimint"</span>).map_err(|<span class="kw">_</span>| {
+                    JsonRpcClientError::Transport(<span class="macro">anyhow::format_err!</span>(<span class="string">"invalid username"</span>))
+                })<span class="question-mark">?</span>;
+                url.set_password(<span class="prelude-val">Some</span>(<span class="kw-2">&amp;</span>api_secret)).map_err(|<span class="kw">_</span>| {
+                    JsonRpcClientError::Transport(<span class="macro">anyhow::format_err!</span>(<span class="string">"invalid secret"</span>))
+                })<span class="question-mark">?</span>;
+                <span class="kw">return </span>client.build(url.as_str()).<span class="kw">await</span>;
+            }
+        }
+        client.build(url.as_str()).<span class="kw">await
     </span>}
 
     <span class="kw">fn </span>is_connected(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
@@ -2932,12 +3037,12 @@
 
 <span class="kw">impl </span>WsFederationApi&lt;WsClient&gt; {
     <span class="doccomment">/// Creates a new API client
-    </span><span class="kw">pub fn </span>new(peers: Vec&lt;(PeerId, SafeUrl)&gt;) -&gt; <span class="self">Self </span>{
-        <span class="self">Self</span>::new_with_client(peers, <span class="prelude-val">None</span>)
+    </span><span class="kw">pub fn </span>new(peers: Vec&lt;(PeerId, SafeUrl)&gt;, api_secret: <span class="prelude-ty">Option</span>&lt;String&gt;) -&gt; <span class="self">Self </span>{
+        <span class="self">Self</span>::new_with_client(peers, <span class="prelude-val">None</span>, api_secret)
     }
 
     <span class="doccomment">/// Creates a new API client from a client config
-    </span><span class="kw">pub fn </span>from_config(config: <span class="kw-2">&amp;</span>ClientConfig) -&gt; <span class="self">Self </span>{
+    </span><span class="kw">pub fn </span>from_config(config: <span class="kw-2">&amp;</span>ClientConfig, api_secret: <span class="prelude-ty">Option</span>&lt;String&gt;) -&gt; <span class="self">Self </span>{
         <span class="self">Self</span>::new(
             config
                 .global
@@ -2945,6 +3050,7 @@
                 .iter()
                 .map(|(id, peer)| (<span class="kw-2">*</span>id, peer.url.clone()))
                 .collect(),
+            api_secret,
         )
     }
 
@@ -2965,7 +3071,11 @@
     }
 
     <span class="doccomment">/// Creates a new API client
-    </span><span class="kw">pub fn </span>new_with_client(peers: Vec&lt;(PeerId, SafeUrl)&gt;, self_peer_id: <span class="prelude-ty">Option</span>&lt;PeerId&gt;) -&gt; <span class="self">Self </span>{
+    </span><span class="kw">pub fn </span>new_with_client(
+        peers: Vec&lt;(PeerId, SafeUrl)&gt;,
+        self_peer_id: <span class="prelude-ty">Option</span>&lt;PeerId&gt;,
+        api_secret: <span class="prelude-ty">Option</span>&lt;String&gt;,
+    ) -&gt; <span class="self">Self </span>{
         WsFederationApi {
             peer_ids: peers.iter().map(|m| m.<span class="number">0</span>).collect(),
             self_peer_id,
@@ -2981,8 +3091,13 @@
 
                         FederationPeer {
                             peer_id,
-                            client: RwLock::new(FederationPeerClient::new(peer_id, url.clone())),
+                            client: RwLock::new(FederationPeerClient::new(
+                                peer_id,
+                                url.clone(),
+                                api_secret.clone(),
+                            )),
                             url,
+                            api_secret: api_secret.clone(),
                         }
                     })
                     .collect(),
@@ -3037,7 +3152,9 @@
                     </span><span class="macro">trace!</span>(target: LOG_CLIENT_NET_API, <span class="string">"Some other request reconnected client, retrying"</span>);
                 }
                 <span class="kw">_ </span>=&gt; {
-                    wclient.reconnect(<span class="self">self</span>.peer_id, <span class="self">self</span>.url.clone()).<span class="kw">await</span>;
+                    wclient
+                        .reconnect(<span class="self">self</span>.peer_id, <span class="self">self</span>.url.clone(), <span class="self">self</span>.api_secret.clone())
+                        .<span class="kw">await</span>;
                 }
             }
         }
@@ -3124,7 +3241,7 @@
             <span class="self">self</span>.<span class="number">0</span>.is_connected()
         }
 
-        <span class="kw">async fn </span>connect(_url: <span class="kw-2">&amp;</span>SafeUrl) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>&gt; {
+        <span class="kw">async fn </span>connect(_url: <span class="kw-2">&amp;</span>SafeUrl, _api_secret: <span class="prelude-ty">Option</span>&lt;String&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>&gt; {
             <span class="prelude-val">Ok</span>(<span class="self">Self</span>(C::connect().<span class="kw">await</span><span class="question-mark">?</span>))
         }
     }
@@ -3164,6 +3281,7 @@
             <span class="string">"ws://test1"</span>.parse().unwrap(),
             PeerId::from(<span class="number">1</span>),
             FederationId::dummy(),
+            <span class="prelude-val">Some</span>(<span class="string">"api_secret"</span>.into()),
         );
 
         <span class="kw">let </span>bech32 = connect.to_string();

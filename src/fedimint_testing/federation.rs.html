@@ -317,6 +317,14 @@
 <a href="#317" id="317">317</a>
 <a href="#318" id="318">318</a>
 <a href="#319" id="319">319</a>
+<a href="#320" id="320">320</a>
+<a href="#321" id="321">321</a>
+<a href="#322" id="322">322</a>
+<a href="#323" id="323">323</a>
+<a href="#324" id="324">324</a>
+<a href="#325" id="325">325</a>
+<a href="#326" id="326">326</a>
+<a href="#327" id="327">327</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap};
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
@@ -424,6 +432,7 @@
             .join(
                 PlainRootSecretStrategy::to_root_secret(<span class="kw-2">&amp;</span>client_secret),
                 client_config,
+                <span class="prelude-val">None</span>,
             )
             .<span class="kw">await
             </span>.map(Arc::new)
@@ -432,7 +441,7 @@
 
     <span class="doccomment">/// Return first invite code for gateways
     </span><span class="kw">pub fn </span>invite_code(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; InviteCode {
-        <span class="self">self</span>.configs[<span class="kw-2">&amp;</span>PeerId::from(<span class="number">0</span>)].get_invite_code()
+        <span class="self">self</span>.configs[<span class="kw-2">&amp;</span>PeerId::from(<span class="number">0</span>)].get_invite_code(<span class="prelude-val">None</span>)
     }
 
     <span class="doccomment">///  Return the federation id
@@ -530,9 +539,16 @@
             <span class="kw">let </span>subgroup = task_group.make_subgroup();
 
             task_group.spawn(<span class="string">"fedimintd"</span>, <span class="kw">move </span>|<span class="kw">_</span>| <span class="kw">async move </span>{
-                consensus::run(config.clone(), db.clone(), module_init_registry, <span class="kw-2">&amp;</span>subgroup)
-                    .<span class="kw">await
-                    </span>.expect(<span class="string">"Could not initialise consensus"</span>);
+                consensus::run(
+                    config.clone(),
+                    db.clone(),
+                    module_init_registry,
+                    <span class="kw-2">&amp;</span>subgroup,
+                    <span class="prelude-val">None</span>,
+                    <span class="macro">vec!</span>[],
+                )
+                .<span class="kw">await
+                </span>.expect(<span class="string">"Could not initialise consensus"</span>);
             });
         }
 
@@ -546,7 +562,7 @@
                 .to_client_config(<span class="kw-2">&amp;</span><span class="self">self</span>.server_init)
                 .unwrap();
 
-            <span class="kw">let </span>api = DynGlobalApi::from_config_admin(<span class="kw-2">&amp;</span>client_config, peer_id);
+            <span class="kw">let </span>api = DynGlobalApi::from_config_admin(<span class="kw-2">&amp;</span>client_config, <span class="prelude-val">None</span>, peer_id);
 
             <span class="kw">while let </span><span class="prelude-val">Err</span>(e) = api
                 .request_admin_no_auth::&lt;u64&gt;(SESSION_COUNT_ENDPOINT, ApiRequestErased::default())

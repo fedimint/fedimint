@@ -331,6 +331,7 @@
 <a href="#331" id="331">331</a>
 <a href="#332" id="332">332</a>
 <a href="#333" id="333">333</a>
+<a href="#334" id="334">334</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::sync::Arc;
 
 <span class="kw">use </span>anyhow::Result;
@@ -376,6 +377,7 @@
         .join(
             PlainRootSecretStrategy::to_root_secret(<span class="kw-2">&amp;</span>client_secret),
             client_config.to_owned(),
+            <span class="prelude-val">None</span>,
         )
         .<span class="kw">await
         </span>.map(Arc::new)
