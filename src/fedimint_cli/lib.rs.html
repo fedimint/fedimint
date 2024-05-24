@@ -1072,6 +1072,7 @@
 <a href="#1072" id="1072">1072</a>
 <a href="#1073" id="1073">1073</a>
 <a href="#1074" id="1074">1074</a>
+<a href="#1075" id="1075">1075</a>
 </pre></div><pre class="rust"><code><span class="kw">mod </span>client;
 <span class="kw">mod </span>db_locked;
 <span class="kw">pub mod </span>envs;
@@ -1449,6 +1450,8 @@
     </span>InviteCode { invite_code: InviteCode },
     <span class="doccomment">/// Decode a string of ecash notes into a JSON representation
     </span>Notes { notes: OOBNotes },
+    <span class="doccomment">/// Decode a transaction hex string and print it to stdout
+    </span>Transaction { hex_string: String },
 }
 
 <span class="attr">#[derive(Debug, Clone, Deserialize, Serialize)]
@@ -1561,9 +1564,6 @@ Examples:
         </span><span class="attr">#[arg(env = FM_PASSWORD_ENV)]
         </span>password: String,
     },
-
-    <span class="doccomment">/// Decode a transaction hex string and print it to stdout
-    </span>DecodeTransaction { hex_string: String },
 }
 
 <span class="attr">#[derive(Debug, Serialize, Deserialize)]
@@ -1940,6 +1940,21 @@ Examples:
                         .map_err_cli_msg(<span class="string">"failed to decode notes"</span>)<span class="question-mark">?</span>;
                     <span class="prelude-val">Ok</span>(CliOutput::Raw(notes_json))
                 }
+                DecodeType::Transaction { hex_string } =&gt; {
+                    <span class="kw">let </span>bytes: Vec&lt;u8&gt; = hex::FromHex::from_hex(<span class="kw-2">&amp;</span>hex_string)
+                        .map_err_cli_msg(<span class="string">"failed to decode transaction"</span>)<span class="question-mark">?</span>;
+
+                    <span class="kw">let </span>client = <span class="self">self</span>.client_open(<span class="kw-2">&amp;</span>cli).<span class="kw">await</span><span class="question-mark">?</span>;
+                    <span class="kw">let </span>tx = fedimint_core::transaction::Transaction::from_bytes(
+                        <span class="kw-2">&amp;</span>bytes,
+                        client.decoders(),
+                    )
+                    .map_err_cli_msg(<span class="string">"failed to decode transaction"</span>)<span class="question-mark">?</span>;
+
+                    <span class="prelude-val">Ok</span>(CliOutput::DecodeTransaction {
+                        transaction: (<span class="macro">format!</span>(<span class="string">"{tx:?}"</span>)),
+                    })
+                }
             },
             Command::Dev(DevCmd::Encode { encode_type }) =&gt; <span class="kw">match </span>encode_type {
                 EncodeType::InviteCode {
@@ -1999,19 +2014,6 @@ Examples:
                 <span class="kw">let </span>key = get_encryption_key(<span class="kw-2">&amp;</span>password, <span class="kw-2">&amp;</span>salt).map_err_cli()<span class="question-mark">?</span>;
                 encrypted_write(plaintext_bytes, <span class="kw-2">&amp;</span>key, out_file).map_err_cli()<span class="question-mark">?</span>;
                 <span class="prelude-val">Ok</span>(CliOutput::ConfigEncrypt)
-            }
-            Command::Dev(DevCmd::DecodeTransaction { hex_string }) =&gt; {
-                <span class="kw">let </span>bytes: Vec&lt;u8&gt; = hex::FromHex::from_hex(<span class="kw-2">&amp;</span>hex_string)
-                    .map_err_cli_msg(<span class="string">"failed to decode transaction"</span>)<span class="question-mark">?</span>;
-
-                <span class="kw">let </span>client = <span class="self">self</span>.client_open(<span class="kw-2">&amp;</span>cli).<span class="kw">await</span><span class="question-mark">?</span>;
-                <span class="kw">let </span>tx =
-                    fedimint_core::transaction::Transaction::from_bytes(<span class="kw-2">&amp;</span>bytes, client.decoders())
-                        .map_err_cli_msg(<span class="string">"failed to decode transaction"</span>)<span class="question-mark">?</span>;
-
-                <span class="prelude-val">Ok</span>(CliOutput::DecodeTransaction {
-                    transaction: (<span class="macro">format!</span>(<span class="string">"{tx:?}"</span>)),
-                })
             }
             Command::Completion { shell } =&gt; {
                 clap_complete::generate(
