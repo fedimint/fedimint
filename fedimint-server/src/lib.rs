@@ -13,6 +13,7 @@ use fedimint_core::epoch::ConsensusItem;
 use fedimint_core::task::TaskGroup;
 use fedimint_core::util::write_new;
 use fedimint_logging::LOG_CONSENSUS;
+use net::api::ApiSecrets;
 use tracing::info;
 
 use crate::config::api::{ConfigGenApi, ConfigGenSettings};
@@ -41,8 +42,7 @@ pub mod multiplexed;
 #[allow(clippy::too_many_arguments)]
 pub async fn run(
     data_dir: PathBuf,
-    api_secret: Option<String>,
-    api_extra_secrets: Vec<String>,
+    force_api_secrets: ApiSecrets,
     settings: ConfigGenSettings,
     db: Database,
     code_version_str: String,
@@ -58,8 +58,7 @@ pub async fn run(
                 db.clone(),
                 code_version_str,
                 task_group.make_subgroup(),
-                api_secret.clone(),
-                api_extra_secrets.clone(),
+                force_api_secrets.clone(),
             )
             .await?
         }
@@ -81,8 +80,7 @@ pub async fn run(
         db,
         module_init_registry.clone(),
         &task_group,
-        api_secret,
-        api_extra_secrets,
+        force_api_secrets,
     )
     .await?;
 
@@ -108,8 +106,7 @@ pub async fn run_config_gen(
     db: Database,
     code_version_str: String,
     mut task_group: TaskGroup,
-    api_secret: Option<String>,
-    api_extra_secrets: Vec<String>,
+    force_api_secrets: ApiSecrets,
 ) -> anyhow::Result<ServerConfig> {
     info!(target: LOG_CONSENSUS, "Starting config gen");
 
@@ -123,7 +120,7 @@ pub async fn run_config_gen(
         cfg_sender,
         &mut task_group,
         code_version_str.clone(),
-        api_secret.clone(),
+        force_api_secrets.get_active(),
     );
 
     let mut rpc_module = RpcHandlerCtx::new_module(config_gen);
@@ -135,8 +132,7 @@ pub async fn run_config_gen(
         &settings.api_bind,
         rpc_module,
         10,
-        api_secret.clone(),
-        api_extra_secrets,
+        force_api_secrets.clone(),
     )
     .await;
 
@@ -156,7 +152,7 @@ pub async fn run_config_gen(
         data_dir.clone(),
         &cfg.private.api_auth.0,
         &settings.registry,
-        api_secret,
+        force_api_secrets.get_active(),
     )?;
 
     Ok(cfg)

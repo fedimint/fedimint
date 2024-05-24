@@ -29,6 +29,7 @@ use fedimint_mint_server::MintInit;
 use fedimint_server::config::api::ConfigGenSettings;
 use fedimint_server::config::io::{DB_FILE, PLAINTEXT_PASSWORD};
 use fedimint_server::config::ServerConfig;
+use fedimint_server::net::api::ApiSecrets;
 use fedimint_unknown_common::config::UnknownGenParams;
 use fedimint_unknown_server::UnknownInit;
 use fedimint_wallet_server::common::config::{
@@ -40,10 +41,10 @@ use tracing::{debug, error, info};
 
 use crate::default_esplora_server;
 use crate::envs::{
-    FM_API_EXTRA_SECRETS_ENV, FM_API_SECRET_ENV, FM_API_URL_ENV, FM_BIND_API_ENV,
-    FM_BIND_METRICS_API_ENV, FM_BIND_P2P_ENV, FM_BITCOIN_NETWORK_ENV, FM_DATA_DIR_ENV,
-    FM_DISABLE_META_MODULE_ENV, FM_EXTRA_DKG_META_ENV, FM_FINALITY_DELAY_ENV, FM_P2P_URL_ENV,
-    FM_PASSWORD_ENV, FM_TOKIO_CONSOLE_BIND_ENV,
+    FM_API_URL_ENV, FM_BIND_API_ENV, FM_BIND_METRICS_API_ENV, FM_BIND_P2P_ENV,
+    FM_BITCOIN_NETWORK_ENV, FM_DATA_DIR_ENV, FM_DISABLE_META_MODULE_ENV, FM_EXTRA_DKG_META_ENV,
+    FM_FINALITY_DELAY_ENV, FM_FORCE_API_SECRETS_ENV, FM_P2P_URL_ENV, FM_PASSWORD_ENV,
+    FM_TOKIO_CONSOLE_BIND_ENV,
 };
 use crate::fedimintd::metrics::APP_START_TS;
 
@@ -95,23 +96,22 @@ pub struct ServerOpts {
     #[arg(long, env = FM_EXTRA_DKG_META_ENV, value_parser = parse_map, default_value="")]
     extra_dkg_meta: BTreeMap<String, String>,
 
-    /// Default Api secret that will be used to communicate with other peers
-    /// secret
+    /// Comma separated list of API secrets.
     ///
-    /// If Federation is public, it should have `api_secret` and
-    /// `api_extra_secrets` not set.
+    /// Setting it will enforce API authentication and make the Federation
+    /// "private".
     ///
-    /// Otherwise it will enforce authentication on the Api HTTP level.
-    #[arg(env = FM_API_SECRET_ENV)]
-    api_secret: Option<String>,
-
-    /// Comma separated list of additional secrets that can be used to access
-    /// the Api
+    /// The first secret in the list is the "active" one that the peer will use
+    /// itself to connect to other peers. Any further one is accepted by
+    /// this peer, e.g. for the purposes of smooth rotation of secret
+    /// between users.
     ///
-    /// Format: `secret1,secret2,...`
-    #[arg(env = FM_API_EXTRA_SECRETS_ENV, value_parser = parse_vec, default_value="")]
-    // Note: full path used due to https://github.com/clap-rs/clap/issues/4626#issuecomment-1593681582
-    api_extra_secrets: std::vec::Vec<String>,
+    /// Note that the value provided here will override any other settings
+    /// that the user might want to set via UI at runtime, etc.
+    /// In the future, managing secrets might be possible via Admin UI
+    /// and defaults will be provided via `FM_DEFAULT_API_SECRETS`.
+    #[arg(long, env = FM_FORCE_API_SECRETS_ENV, default_value = "")]
+    force_api_secrets: ApiSecrets,
 
     #[clap(subcommand)]
     subcommand: Option<ServerSubcommand>,
@@ -150,16 +150,6 @@ fn parse_map(s: &str) -> anyhow::Result<BTreeMap<String, String>> {
     Ok(map)
 }
 
-fn parse_vec(s: &str) -> anyhow::Result<Vec<String>> {
-    if s.is_empty() {
-        return Ok(vec![]);
-    }
-
-    Ok(s.split(',')
-        .map(|s| s.trim().to_string())
-        .filter(|s| !s.is_empty())
-        .collect())
-}
 /// `fedimintd` builder
 ///
 /// Fedimint supports third party modules. Right now (and for forseable feature)
@@ -502,8 +492,7 @@ async fn run(
 
     fedimint_server::run(
         data_dir,
-        opts.api_secret,
-        opts.api_extra_secrets,
+        opts.force_api_secrets,
         settings,
         db,
         code_version_str,

@@ -1,14 +1,16 @@
 mod http_auth;
 
-use std::fmt::{Debug, Formatter};
+use std::fmt::{self, Debug, Formatter};
 use std::net::SocketAddr;
 use std::panic::AssertUnwindSafe;
+use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
 
-use anyhow::Context;
+use anyhow::{bail, Context};
 use async_trait::async_trait;
 use fedimint_core::core::ModuleInstanceId;
+use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::{ApiEndpoint, ApiEndpointContext, ApiError, ApiRequestErased};
 use fedimint_logging::LOG_NET_API;
 use futures::FutureExt;
@@ -19,6 +21,60 @@ use tracing::{error, info};
 
 use crate::metrics;
 use crate::net::api::http_auth::HttpAuthLayer;
+
+#[derive(Clone, Encodable, Decodable, Default)]
+pub struct ApiSecrets(Vec<String>);
+
+impl fmt::Debug for ApiSecrets {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        f.debug_struct("ApiSecrets")
+            .field("num_secrets", &self.0.len())
+            .finish()
+    }
+}
+
+impl FromStr for ApiSecrets {
+    type Err = anyhow::Error;
+
+    fn from_str(s: &str) -> anyhow::Result<Self> {
+        if s.is_empty() {
+            return Ok(Self(vec![]));
+        }
+
+        let secrets = s
+            .split(',')
+            .map(|s| s.trim())
+            .map(|s| {
+                if s.is_empty() {
+                    bail!("Empty Api Secret is not allowed")
+                }
+                Ok(s.to_string())
+            })
+            .collect::<anyhow::Result<_>>()?;
+        Ok(ApiSecrets(secrets))
+    }
+}
+
+impl ApiSecrets {
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+
+    /// Get "active" secret - one that should be used to call other peers
+    pub fn get_active(&self) -> Option<String> {
+        self.0.first().cloned()
+    }
+
+    /// Get all secrets
+    pub fn get_all(&self) -> Vec<String> {
+        self.0.clone()
+    }
+
+    /// Get empty value - meaning no secrets to use
+    pub fn none() -> ApiSecrets {
+        Self(vec![])
+    }
+}
 
 /// A state that has context for the API, passed to each rpc handler callback
 #[derive(Clone)]
@@ -71,17 +127,12 @@ pub async fn spawn<T>(
     api_bind: &SocketAddr,
     module: RpcModule<RpcHandlerCtx<T>>,
     max_connections: u32,
-    api_secret: Option<String>,
-    api_extra_secrets: Vec<String>,
+    force_api_secrets: ApiSecrets,
 ) -> ServerHandle {
     info!(target: LOG_NET_API, "Starting api on ws://{api_bind}");
 
-    let builder = tower::ServiceBuilder::new().layer(HttpAuthLayer::new(
-        api_secret
-            .into_iter()
-            .chain(api_extra_secrets.into_iter())
-            .collect(),
-    ));
+    let builder =
+        tower::ServiceBuilder::new().layer(HttpAuthLayer::new(force_api_secrets.get_all()));
 
     ServerBuilder::new()
         .max_connections(max_connections)

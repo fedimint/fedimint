@@ -68,7 +68,7 @@ pub struct ConsensusApi {
     /// Cached client config
     pub client_cfg: ClientConfig,
 
-    pub api_secret: Option<String>,
+    pub force_api_secret: Option<String>,
     /// For sending API events to consensus such as transactions
     pub submission_sender: async_channel::Sender<ConsensusItem>,
     pub shutdown_sender: watch::Sender<Option<u64>>,
@@ -80,6 +80,12 @@ pub struct ConsensusApi {
 impl ConsensusApi {
     pub fn api_versions_summary(&self) -> &SupportedApiVersionsSummary {
         &self.supported_api_versions
+    }
+
+    pub fn get_active_api_secret(&self) -> Option<String> {
+        // TODO: In the future, we might want to fetch it from the DB, so it's possible
+        // to customize from the UX
+        self.force_api_secret.clone()
     }
 
     // we want to return an error if and only if the submitted transaction is
@@ -453,7 +459,7 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConsensusApi>> {
             INVITE_CODE_ENDPOINT,
             ApiVersion::new(0, 0),
             async |fedimint: &ConsensusApi, _context,  _v: ()| -> String {
-                Ok(fedimint.cfg.get_invite_code(fedimint.api_secret.clone()).to_string())
+                Ok(fedimint.cfg.get_invite_code(fedimint.get_active_api_secret()).to_string())
             }
         },
         api_endpoint! {
