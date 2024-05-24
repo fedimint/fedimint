@@ -238,6 +238,31 @@ impl Executor {
             .await
     }
 
+    /// Only meant for debug tooling
+    pub async fn get_operation_states(
+        &self,
+        operation_id: OperationId,
+    ) -> (
+        Vec<(DynState, ActiveStateMeta)>,
+        Vec<(DynState, InactiveStateMeta)>,
+    ) {
+        let mut dbtx = self.inner.db.begin_transaction_nc().await;
+        let active_states: Vec<_> = dbtx
+            .find_by_prefix(&ActiveOperationStateKeyPrefix { operation_id })
+            .await
+            .map(|(active_key, active_meta)| (active_key.state, active_meta))
+            .collect()
+            .await;
+        let inactive_states: Vec<_> = dbtx
+            .find_by_prefix(&InactiveOperationStateKeyPrefix { operation_id })
+            .await
+            .map(|(active_key, inactive_meta)| (active_key.state, inactive_meta))
+            .collect()
+            .await;
+
+        (active_states, inactive_states)
+    }
+
     /// Starts the background thread that runs the state machines. This cannot
     /// be done when building the executor since some global contexts in turn
     /// may depend on the executor, forming a cyclic dependency.

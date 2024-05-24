@@ -767,6 +767,12 @@ impl Client {
         &self.task_group
     }
 
+    /// Useful for our CLI tooling, not meant for external use
+    #[doc(hidden)]
+    pub fn executor(&self) -> &Executor {
+        &self.executor
+    }
+
     pub async fn get_config_from_db(db: &Database) -> Option<ClientConfig> {
         let mut dbtx = db.begin_transaction().await;
         #[allow(clippy::let_and_return)]
