@@ -223,6 +223,7 @@
                   pkgs.cargo-udeps
                   pkgs.cargo-audit
                   pkgs.cargo-deny
+                  pkgs.cargo-sort
                   pkgs.parallel
                   pkgs.just
                   pkgs.time
@@ -325,7 +326,11 @@
                 ];
               });
 
-              lint = flakeboxLib.mkLintShell { };
+              lint = flakeboxLib.mkLintShell {
+                nativeBuildInputs = [
+                  pkgs.cargo-sort
+                ];
+              };
 
               # Shell with extra stuff to support cross-compilation with `cargo build --target <target>`
               #
