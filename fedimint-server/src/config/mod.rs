@@ -134,10 +134,6 @@ pub struct ServerConfigConsensus {
     pub tls_certs: BTreeMap<PeerId, rustls::Certificate>,
     /// All configuration that needs to be the same for modules
     pub modules: BTreeMap<ModuleInstanceId, ServerModuleConsensusConfig>,
-    #[encodable_ignore]
-    // FIXME: Make modules encodable or we will not check module keys
-    /// Human readable representation of [`Self::modules`]
-    pub modules_json: BTreeMap<ModuleInstanceId, JsonWithKind>,
     /// Additional config the federation wants to transmit to the clients
     pub meta: BTreeMap<String, String>,
 }
@@ -264,7 +260,6 @@ impl ServerConfig {
             api_endpoints: params.api_urls(),
             tls_certs: params.tls_certs(),
             modules: Default::default(),
-            modules_json: Default::default(),
             meta: params.consensus.meta,
         };
         let mut cfg = Self {
@@ -297,13 +292,11 @@ impl ServerConfig {
                 local,
                 private,
                 consensus,
-                consensus_json,
             } = config;
 
             self.local.modules.insert(name, local);
             self.private.modules.insert(name, private);
             self.consensus.modules.insert(name, consensus);
-            self.consensus.modules_json.insert(name, consensus_json);
         }
     }
 
@@ -320,8 +313,7 @@ impl ServerConfig {
             .get(&id)
             .ok_or_else(|| format_err!("Module {id} not found"))?
             .clone();
-        let consensus_json = Self::get_module_cfg_by_instance_id(&self.consensus.modules_json, id)?;
-        let module = ServerModuleConfig::from(local, private, consensus, consensus_json);
+        let module = ServerModuleConfig::from(local, private, consensus);
 
         module.to_typed()
     }
@@ -349,13 +341,7 @@ impl ServerConfig {
             .get(&id)
             .ok_or_else(|| format_err!("Module {id} not found"))?
             .clone();
-        let consensus_json = Self::get_module_cfg_by_instance_id(&self.consensus.modules_json, id)?;
-        Ok(ServerModuleConfig::from(
-            local,
-            private,
-            consensus,
-            consensus_json,
-        ))
+        Ok(ServerModuleConfig::from(local, private, consensus))
     }
 
     fn get_module_cfg_by_instance_id(
@@ -526,7 +512,7 @@ impl ServerConfig {
         });
         for (module_instance_id, config) in join_all(modules_runner).await {
             let config = config?;
-            registered_modules.remove(config.consensus_json.kind());
+            registered_modules.remove(&config.consensus.kind);
             module_cfgs.insert(module_instance_id, config);
         }
         if !registered_modules.is_empty() {

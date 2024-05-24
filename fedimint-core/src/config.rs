@@ -721,7 +721,6 @@ pub struct ServerModuleConfig {
     pub local: JsonWithKind,
     pub private: JsonWithKind,
     pub consensus: ServerModuleConsensusConfig,
-    pub consensus_json: JsonWithKind,
 }
 
 impl ServerModuleConfig {
@@ -729,13 +728,11 @@ impl ServerModuleConfig {
         local: JsonWithKind,
         private: JsonWithKind,
         consensus: ServerModuleConsensusConfig,
-        consensus_json: JsonWithKind,
     ) -> Self {
         Self {
             local,
             private,
             consensus,
-            consensus_json,
         }
     }
 
@@ -801,10 +798,6 @@ pub trait TypedServerModuleConfig: DeserializeOwned + Serialize {
                 version: consensus.version(),
                 config: consensus.consensus_encode_to_vec(),
             },
-            consensus_json: JsonWithKind::new(
-                kind,
-                serde_json::to_value(consensus).expect("serialization can't fail"),
-            ),
         }
     }
 }

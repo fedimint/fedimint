@@ -23,9 +23,9 @@ use fedimint_core::endpoint_constants::{
     AUDIT_ENDPOINT, AUTH_ENDPOINT, AWAIT_OUTPUT_OUTCOME_ENDPOINT, AWAIT_SESSION_OUTCOME_ENDPOINT,
     AWAIT_SIGNED_SESSION_OUTCOME_ENDPOINT, AWAIT_TRANSACTION_ENDPOINT, BACKUP_ENDPOINT,
     CLIENT_CONFIG_ENDPOINT, FEDERATION_ID_ENDPOINT, GUARDIAN_CONFIG_BACKUP_ENDPOINT,
-    INVITE_CODE_ENDPOINT, MODULES_CONFIG_JSON_ENDPOINT, RECOVER_ENDPOINT,
-    SERVER_CONFIG_CONSENSUS_HASH_ENDPOINT, SESSION_COUNT_ENDPOINT, SESSION_STATUS_ENDPOINT,
-    SHUTDOWN_ENDPOINT, STATUS_ENDPOINT, SUBMIT_TRANSACTION_ENDPOINT, VERSION_ENDPOINT,
+    INVITE_CODE_ENDPOINT, RECOVER_ENDPOINT, SERVER_CONFIG_CONSENSUS_HASH_ENDPOINT,
+    SESSION_COUNT_ENDPOINT, SESSION_STATUS_ENDPOINT, SHUTDOWN_ENDPOINT, STATUS_ENDPOINT,
+    SUBMIT_TRANSACTION_ENDPOINT, VERSION_ENDPOINT,
 };
 use fedimint_core::epoch::ConsensusItem;
 use fedimint_core::module::audit::{Audit, AuditSummary};
@@ -49,7 +49,7 @@ use tracing::{debug, info};
 use crate::config::io::{
     CONSENSUS_CONFIG, ENCRYPTED_EXT, JSON_EXT, LOCAL_CONFIG, PRIVATE_CONFIG, SALT_FILE,
 };
-use crate::config::{JsonWithKind, ServerConfig};
+use crate::config::ServerConfig;
 use crate::consensus::db::{AcceptedItemPrefix, AcceptedTransactionKey, SignedSessionOutcomeKey};
 use crate::consensus::engine::get_finished_session_count_static;
 use crate::consensus::transaction::process_transaction_with_dbtx;
@@ -568,13 +568,6 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConsensusApi>> {
             async |_fedimint: &ConsensusApi, context, _v: ()| -> () {
                 check_auth(context)?;
                 Ok(())
-            }
-        },
-        api_endpoint! {
-            MODULES_CONFIG_JSON_ENDPOINT,
-            ApiVersion::new(0, 0),
-            async |fedimint: &ConsensusApi, _context, _v: ()| -> BTreeMap<ModuleInstanceId, JsonWithKind> {
-                Ok(fedimint.cfg.consensus.modules_json.clone())
             }
         },
     ]
