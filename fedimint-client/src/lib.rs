@@ -80,10 +80,11 @@ use backup::ClientBackup;
 use db::{
     apply_migrations_client, ApiSecretKey, CachedApiVersionSet, CachedApiVersionSetKey,
     ClientConfigKey, ClientConfigKeyPrefix, ClientInitStateKey, ClientModuleRecovery,
-    EncodedClientSecretKey, InitMode,
+    EncodedClientSecretKey, InitMode, PeerLastApiVersionsSummary, PeerLastApiVersionsSummaryKey,
 };
-use envs::get_discover_api_version_timeout;
-use fedimint_api_client::api::{ApiVersionSet, DynGlobalApi, DynModuleApi, IGlobalFederationApi};
+use fedimint_api_client::api::{
+    ApiVersionSet, DynGlobalApi, DynModuleApi, FederationApiExt, IGlobalFederationApi,
+};
 use fedimint_core::config::{
     ClientConfig, ClientModuleConfig, FederationId, JsonClientConfig, JsonWithKind,
     ModuleInitRegistry,
@@ -95,23 +96,24 @@ use fedimint_core::db::{
     AutocommitError, Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped,
 };
 use fedimint_core::encoding::{Decodable, Encodable};
+use fedimint_core::endpoint_constants::VERSION_ENDPOINT;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::module::{
-    ApiAuth, ApiVersion, MultiApiVersion, SupportedApiVersionsSummary, SupportedCoreApiVersions,
-    SupportedModuleApiVersions,
+    ApiAuth, ApiRequestErased, ApiVersion, MultiApiVersion, SupportedApiVersionsSummary,
+    SupportedCoreApiVersions, SupportedModuleApiVersions,
 };
-use fedimint_core::task::{sleep, MaybeSend, MaybeSync, TaskGroup};
-use fedimint_core::time::now;
+use fedimint_core::task::{Elapsed, MaybeSend, MaybeSync, TaskGroup};
 use fedimint_core::transaction::Transaction;
 use fedimint_core::util::{BoxStream, NextOrPending};
 use fedimint_core::{
     apply, async_trait_maybe_send, dyn_newtype_define, fedimint_build_code_version_env,
-    maybe_add_send, maybe_add_send_sync, runtime, Amount, NumPeers, OutPoint, PeerId,
+    maybe_add_send, maybe_add_send_sync, runtime, Amount, NumPeers, NumPeersExt, OutPoint, PeerId,
     TransactionId,
 };
 pub use fedimint_derive_secret as derivable_secret;
 use fedimint_derive_secret::DerivableSecret;
 use fedimint_logging::{LOG_CLIENT, LOG_CLIENT_NET_API, LOG_CLIENT_RECOVERY};
+use futures::stream::FuturesUnordered;
 use futures::{Future, Stream, StreamExt};
 use meta::{LegacyMetaSource, MetaService};
 use module::recovery::RecoveryProgress;
@@ -126,6 +128,7 @@ use tokio::sync::watch;
 use tokio_stream::wrappers::WatchStream;
 use tracing::{debug, error, info, warn};
 
+use crate::api_version_discovery::discover_common_api_versions_set;
 use crate::backup::Metadata;
 use crate::db::{ClientMetadataKey, ClientModuleRecoveryState, InitState, OperationLogKey};
 use crate::module::init::{
@@ -160,6 +163,8 @@ pub mod secret;
 pub mod sm;
 /// Structs and interfaces to construct Fedimint transactions
 pub mod transaction;
+
+mod api_version_discovery;
 
 /// Management of meta fields
 pub mod meta;
@@ -1375,67 +1380,78 @@ impl Client {
         })
     }
 
-    pub async fn discover_common_api_version(
-        &self,
-        threshold: Option<usize>,
-    ) -> anyhow::Result<ApiVersionSet> {
-        Ok(self
-            .api()
-            .discover_api_version_set(
-                &Self::supported_api_versions_summary_static(self.get_config(), &self.module_inits)
-                    .await,
-                get_discover_api_version_timeout(),
-                threshold,
-            )
-            .await?)
-    }
-
     /// Query the federation for API version support and then calculate
     /// the best API version to use (supported by most guardians).
-    pub async fn discover_common_api_version_static_try(
-        config: &ClientConfig,
-        client_module_init: &ClientModuleInitRegistry,
-        api: &DynGlobalApi,
-        mode: DiscoverCommonApiVersionMode,
-    ) -> anyhow::Result<ApiVersionSet> {
-        Ok(api
-            .discover_api_version_set(
-                &Self::supported_api_versions_summary_static(config, client_module_init).await,
-                get_discover_api_version_timeout(),
-                match mode {
-                    DiscoverCommonApiVersionMode::Fast => {
-                        Some((config.global.api_endpoints.len() / 2).min(1))
-                    }
-                    DiscoverCommonApiVersionMode::Full => None,
-                },
+    pub async fn refresh_peers_api_versions(
+        num_peers: NumPeers,
+        api: DynGlobalApi,
+        db: Database,
+        num_responses_sender: watch::Sender<usize>,
+    ) {
+        let mut requests = FuturesUnordered::new();
+
+        // Make a single request to a peer after a delay
+        //
+        // The delay is here to unify the type of a future both for initial request and
+        // possible retries.
+        async fn make_request(
+            delay: Duration,
+            peer_id: PeerId,
+            api: &DynGlobalApi,
+        ) -> (
+            PeerId,
+            Result<SupportedApiVersionsSummary, fedimint_api_client::api::PeerError>,
+        ) {
+            runtime::sleep(delay).await;
+            (
+                peer_id,
+                api.request_single_peer_typed::<SupportedApiVersionsSummary>(
+                    None,
+                    VERSION_ENDPOINT.to_owned(),
+                    ApiRequestErased::default(),
+                    peer_id,
+                )
+                .await,
             )
-            .await?)
-    }
+        }
 
-    pub async fn discover_common_api_version_static(
-        config: &ClientConfig,
-        client_module_init: &ClientModuleInitRegistry,
-        api: &DynGlobalApi,
-        mode: DiscoverCommonApiVersionMode,
-    ) -> anyhow::Result<ApiVersionSet> {
-        // We want to give it at least a good 30 second worth of trying, before we give
-        // up.
-        let deadline = now() + Duration::from_secs(30);
+        for peer_id in num_peers.peer_ids() {
+            requests.push(make_request(Duration::ZERO, peer_id, &api))
+        }
 
-        loop {
-            let res =
-                Self::discover_common_api_version_static_try(config, client_module_init, api, mode)
+        let mut num_responses = 0;
+
+        while let Some((peer_id, response)) = requests.next().await {
+            match response {
+                Err(err) => {
+                    if db
+                        .begin_transaction_nc()
+                        .await
+                        .get_value(&PeerLastApiVersionsSummaryKey(peer_id))
+                        .await
+                        .is_some()
+                    {
+                        debug!(target: LOG_CLIENT, %peer_id, %err, "Failed to refresh API versions of a peer, but we have a previous response");
+                    } else {
+                        debug!(target: LOG_CLIENT, %peer_id, %err, "Failed to refresh API versions of a peer, will retry");
+                        requests.push(make_request(Duration::from_secs(15), peer_id, &api))
+                    }
+                }
+                Ok(o) => {
+                    // Save the response to the database right away, just to
+                    // not lose it
+                    let mut dbtx = db.begin_transaction().await;
+                    dbtx.insert_entry(
+                        &PeerLastApiVersionsSummaryKey(peer_id),
+                        &PeerLastApiVersionsSummary(o),
+                    )
                     .await;
-
-            if res.is_ok() {
-                return res;
+                    dbtx.commit_tx().await;
+                    num_responses += 1;
+                    // ignore errors: we don't care if anyone is still listening
+                    let _ = num_responses_sender.send(num_responses);
+                }
             }
-
-            if deadline < now() {
-                return res;
-            }
-            debug!(target: LOG_CLIENT, "Retrying getting api version from Federation");
-            sleep(Duration::from_secs(1)).await;
         }
     }
 
@@ -1471,6 +1487,17 @@ impl Client {
         }
     }
 
+    pub async fn load_and_refresh_common_api_version(&self) -> anyhow::Result<ApiVersionSet> {
+        Self::load_and_refresh_common_api_version_static(
+            &self.config,
+            &self.module_inits,
+            &self.api,
+            &self.db,
+            &self.task_group,
+        )
+        .await
+    }
+
     /// Load the common api versions to use from cache and start a background
     /// process to refresh them.
     ///
@@ -1478,7 +1505,7 @@ impl Client {
     /// complete every time a [`Client`] is being built.
     async fn load_and_refresh_common_api_version_static(
         config: &ClientConfig,
-        module_inits: &ModuleInitRegistry<DynClientModuleInit>,
+        module_init: &ClientModuleInitRegistry,
         api: &DynGlobalApi,
         db: &Database,
         task_group: &TaskGroup,
@@ -1491,50 +1518,76 @@ impl Client {
         {
             debug!("Found existing cached common api versions");
             let config = config.clone();
-            let module_inits = module_inits.clone();
+            let client_module_init = module_init.clone();
             let api = api.clone();
             let db = db.clone();
+            let task_group = task_group.clone();
             // Separate task group, because we actually don't want to be waiting for this to
             // finish, and it's just best effort.
-            task_group.spawn_cancellable("refresh_common_api_version_static", async move {
-                if let Err(error) = Self::refresh_common_api_version_static(
-                    &config,
-                    &module_inits,
-                    &api,
-                    &db,
-                    DiscoverCommonApiVersionMode::Full,
-                )
-                .await
-                {
-                    warn!(%error, "Failed to discover common api versions");
-                }
-            });
+            task_group
+                .clone()
+                .spawn_cancellable("refresh_common_api_version_static", async move {
+                    if let Err(error) = Self::refresh_common_api_version_static(
+                        &config,
+                        &client_module_init,
+                        &api,
+                        &db,
+                        task_group,
+                    )
+                    .await
+                    {
+                        warn!(%error, "Failed to discover common api versions");
+                    }
+                });
 
             return Ok(v.0);
         }
 
         debug!("No existing cached common api versions found, waiting for initial discovery");
-        Self::refresh_common_api_version_static(
-            config,
-            module_inits,
-            api,
-            db,
-            DiscoverCommonApiVersionMode::Fast,
-        )
-        .await
+        Self::refresh_common_api_version_static(config, module_init, api, db, task_group.clone())
+            .await
     }
 
     async fn refresh_common_api_version_static(
         config: &ClientConfig,
-        module_inits: &ModuleInitRegistry<DynClientModuleInit>,
+        client_module_init: &ClientModuleInitRegistry,
         api: &DynGlobalApi,
         db: &Database,
-        mode: DiscoverCommonApiVersionMode,
+        task_group: TaskGroup,
     ) -> anyhow::Result<ApiVersionSet> {
         debug!("Refreshing common api versions");
 
-        let common_api_versions =
-            Client::discover_common_api_version_static(config, module_inits, api, mode).await?;
+        let (num_responses_sender, mut num_responses_receiver) = tokio::sync::watch::channel(0);
+        let num_peers = NumPeers::from(config.global.api_endpoints.len());
+
+        task_group.spawn_cancellable("refresh peers api versions", {
+            Client::refresh_peers_api_versions(
+                num_peers,
+                api.clone(),
+                db.clone(),
+                num_responses_sender,
+            )
+        });
+
+        // Wait at most 15 seconds before calculating a set of common api versions to
+        // use. Note that all peers individual responses from previous attempts
+        // are still being used, and requests, or even retries for response of
+        // peers are not actually cancelled, as they are happening on a separate
+        // task. This is all just to bound the time user can be waiting
+        // for the join operation to finish, at the risk of picking wrong version in
+        // very rare circumstances.
+        let _: Result<_, Elapsed> = runtime::timeout(
+            Duration::from_secs(15),
+            num_responses_receiver.wait_for(|num| num_peers.threshold() <= *num),
+        )
+        .await;
+
+        let peer_api_version_sets = Self::load_peers_last_api_versions(db, num_peers).await;
+
+        let common_api_versions = discover_common_api_versions_set(
+            &Self::supported_api_versions_summary_static(config, client_module_init).await,
+            peer_api_version_sets,
+        )?;
 
         debug!(
             value = ?common_api_versions,
@@ -1762,6 +1815,25 @@ impl Client {
             });
         }
         debug!(target: LOG_CLIENT_RECOVERY, "Recovery executor stopped");
+    }
+
+    async fn load_peers_last_api_versions(
+        db: &Database,
+        num_peers: NumPeers,
+    ) -> BTreeMap<PeerId, SupportedApiVersionsSummary> {
+        let mut peer_api_version_sets = BTreeMap::new();
+
+        let mut dbtx = db.begin_transaction_nc().await;
+        for peer_id in num_peers.peer_ids() {
+            if let Some(v) = dbtx
+                .get_value(&PeerLastApiVersionsSummaryKey(peer_id))
+                .await
+            {
+                peer_api_version_sets.insert(peer_id, v.0);
+            }
+        }
+        drop(dbtx);
+        peer_api_version_sets
     }
 }
 
