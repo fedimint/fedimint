@@ -30,7 +30,7 @@ bls12_381 = { workspace = true }
 bytes = "1.6.0"
 futures = { workspace = true }
 hex = { workspace = true }
-hyper = { version = "0.14" }
+hyper = { version = "1.3" }
 itertools = { workspace = true }
 fedimint-core = { workspace = true }
 fedimint-api-client = { workspace = true }
