@@ -12,7 +12,8 @@ repository = "https://github.com/fedimint/fedimint"
 cargo-fuzz = true
 
 [dependencies]
-honggfuzz = { version = "0.5.56", default-features = false }
+# needs to be pinned to the same version `cargo-fuzz` binary uses
+honggfuzz = { version = "=0.5.55", default-features = false }
 fedimint-core = { workspace = true }
 fedimint-wallet-common = { workspace = true }
 fedimint-ln-common = { workspace = true }
