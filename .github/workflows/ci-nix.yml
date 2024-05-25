@@ -50,7 +50,7 @@ jobs:
           extra_nix_config: |
             connect-timeout = 15
             stalled-download-timeout = 15
-      - uses: cachix/cachix-action@v14
+      - uses: cachix/cachix-action@v15
         with:
           name: fedimint
           authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
@@ -98,7 +98,7 @@ jobs:
           extra_nix_config: |
             connect-timeout = 15
             stalled-download-timeout = 15
-      - uses: cachix/cachix-action@v14
+      - uses: cachix/cachix-action@v15
         if: github.event_name != 'pull_request' || matrix.build-in-pr
         with:
           name: fedimint
@@ -148,7 +148,7 @@ jobs:
           extra_nix_config: |
             connect-timeout = 15
             stalled-download-timeout = 15
-      - uses: cachix/cachix-action@v14
+      - uses: cachix/cachix-action@v15
         if: github.event_name != 'pull_request' || matrix.build-in-pr
         with:
           name: fedimint
@@ -231,7 +231,7 @@ jobs:
           extra_nix_config: |
             connect-timeout = 15
             stalled-download-timeout = 15
-      - uses: cachix/cachix-action@v14
+      - uses: cachix/cachix-action@v15
         with:
           name: fedimint
           authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
@@ -264,7 +264,7 @@ jobs:
           extra_nix_config: |
             connect-timeout = 15
             stalled-download-timeout = 15
-      - uses: cachix/cachix-action@v14
+      - uses: cachix/cachix-action@v15
         with:
           name: fedimint
           authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
@@ -347,7 +347,7 @@ jobs:
             connect-timeout = 15
             stalled-download-timeout = 15
 
-      - uses: cachix/cachix-action@v14
+      - uses: cachix/cachix-action@v15
         if: github.event_name != 'pull_request' || matrix.build-in-pr
         with:
           name: fedimint
@@ -376,7 +376,7 @@ jobs:
           extra_nix_config: |
             connect-timeout = 15
             stalled-download-timeout = 15
-      - uses: cachix/cachix-action@v14
+      - uses: cachix/cachix-action@v15
         with:
           name: fedimint
           authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
@@ -485,7 +485,7 @@ jobs:
           extra_nix_config: |
             connect-timeout = 15
             stalled-download-timeout = 15
-      - uses: cachix/cachix-action@v14
+      - uses: cachix/cachix-action@v15
         with:
           name: fedimint
           authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
