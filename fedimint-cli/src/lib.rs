@@ -32,6 +32,7 @@ use fedimint_core::admin_client::{ConfigGenConnectionsRequest, ConfigGenParamsRe
 use fedimint_core::config::{
     ClientConfig, FederationId, FederationIdPrefix, ServerModuleConfigGenParamsRegistry,
 };
+use fedimint_core::core::{ModuleInstanceId, OperationId};
 use fedimint_core::db::{Database, DatabaseValue};
 use fedimint_core::invite_code::InviteCode;
 use fedimint_core::module::{ApiAuth, ApiRequestErased};
@@ -45,9 +46,10 @@ use fedimint_server::config::io::SALT_FILE;
 use fedimint_wallet_client::api::WalletFederationApi;
 use fedimint_wallet_client::{WalletClientInit, WalletClientModule};
 use futures::future::pending;
+use itertools::Itertools;
 use rand::thread_rng;
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
+use serde_json::{json, Value};
 use thiserror::Error;
 use tracing::{debug, info};
 use utils::parse_peer_id;
@@ -489,6 +491,10 @@ Examples:
         #[arg(env = FM_PASSWORD_ENV)]
         password: String,
     },
+
+    /// Lists active and inactive state machine states of the operation
+    /// chronologically
+    ListOperationStates { operation_id: OperationId },
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -939,6 +945,50 @@ impl FedimintCli {
                 let key = get_encryption_key(&password, &salt).map_err_cli()?;
                 encrypted_write(plaintext_bytes, &key, out_file).map_err_cli()?;
                 Ok(CliOutput::ConfigEncrypt)
+            }
+            Command::Dev(DevCmd::ListOperationStates { operation_id }) => {
+                let client = self.client_open(&cli).await?;
+                #[derive(Serialize)]
+                struct ReactorLogState {
+                    active: bool,
+                    module_instance: ModuleInstanceId,
+                    creation_time: String,
+                    #[serde(skip_serializing_if = "Option::is_none")]
+                    end_time: Option<String>,
+                    state: String,
+                }
+
+                let (active_states, inactive_states) =
+                    client.executor().get_operation_states(operation_id).await;
+                let all_states =
+                    active_states
+                        .into_iter()
+                        .map(|(active_state, active_meta)| ReactorLogState {
+                            active: true,
+                            module_instance: active_state.module_instance_id(),
+                            creation_time: crate::client::time_to_iso8601(&active_meta.created_at),
+                            end_time: None,
+                            state: format!("{active_state:?}",),
+                        })
+                        .chain(inactive_states.into_iter().map(
+                            |(inactive_state, inactive_meta)| ReactorLogState {
+                                active: false,
+                                module_instance: inactive_state.module_instance_id(),
+                                creation_time: crate::client::time_to_iso8601(
+                                    &inactive_meta.created_at,
+                                ),
+                                end_time: Some(crate::client::time_to_iso8601(
+                                    &inactive_meta.exited_at,
+                                )),
+                                state: format!("{inactive_state:?}",),
+                            },
+                        ))
+                        .sorted_by(|a, b| a.creation_time.cmp(&b.creation_time))
+                        .collect::<Vec<_>>();
+
+                Ok(CliOutput::Raw(json!({
+                    "states": all_states
+                })))
             }
             Command::Completion { shell } => {
                 clap_complete::generate(
