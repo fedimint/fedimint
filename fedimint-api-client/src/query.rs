@@ -1,13 +1,10 @@
-use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::Debug;
 use std::mem;
-use std::time::{Duration, SystemTime};
 
 use anyhow::anyhow;
 use fedimint_core::task::{MaybeSend, MaybeSync};
-use fedimint_core::time::now;
-use fedimint_core::{maybe_add_send_sync, PeerId};
-use itertools::Itertools;
+use fedimint_core::{maybe_add_send_sync, NumPeers, NumPeersExt, PeerId};
 
 use crate::api::{self, PeerError, PeerResult};
 
@@ -18,10 +15,6 @@ use crate::api::{self, PeerError, PeerResult};
 /// responses from the Federation members. This trait abstracts away the details
 /// of each specific strategy for the generic client Api code.
 pub trait QueryStrategy<IR, OR = IR> {
-    /// Should requests for this strategy have specific timeouts?
-    fn request_timeout(&self) -> Option<Duration> {
-        None
-    }
     fn process(&mut self, peer_id: PeerId, response: api::PeerResult<IR>) -> QueryStep<OR>;
 }
 
@@ -92,31 +85,26 @@ impl ErrorStrategy {
     }
 }
 
-/// Returns the first valid response. The response of a peer is
-/// assumed to be final, hence this query strategy does not implement retry
-/// logic.
+/// Returns when we obtain the first valid responses. RPC call errors or
+/// invalid responses are not retried.
 pub struct FilterMap<R, T> {
     filter_map: Box<maybe_add_send_sync!(dyn Fn(R) -> anyhow::Result<T>)>,
     error_strategy: ErrorStrategy,
 }
 
 impl<R, T> FilterMap<R, T> {
-    /// Strategy for returning first response that is verifiable (typically with
-    /// a signature)
     pub fn new(
         filter_map: impl Fn(R) -> anyhow::Result<T> + MaybeSend + MaybeSync + 'static,
-        total_peers: usize,
+        num_peers: NumPeers,
     ) -> Self {
-        let max_evil = (total_peers - 1) / 3;
-
         Self {
             filter_map: Box::new(filter_map),
-            error_strategy: ErrorStrategy::new(max_evil + 1),
+            error_strategy: ErrorStrategy::new(num_peers.threshold()),
         }
     }
 }
 
-impl<R: Debug + Eq + Clone, T> QueryStrategy<R, T> for FilterMap<R, T> {
+impl<R, T> QueryStrategy<R, T> for FilterMap<R, T> {
     fn process(&mut self, peer: PeerId, result: PeerResult<R>) -> QueryStep<T> {
         match result {
             Ok(response) => match (self.filter_map)(response) {
@@ -130,9 +118,8 @@ impl<R: Debug + Eq + Clone, T> QueryStrategy<R, T> for FilterMap<R, T> {
     }
 }
 
-/// Returns when a threshold of valid responses. The response of a peer is
-/// assumed to be final, hence this query strategy does not implement retry
-/// logic.
+/// Returns when we obtain a threshold of valid responses. RPC call errors or
+/// invalid responses are not retried.
 pub struct FilterMapThreshold<R, T> {
     filter_map: Box<maybe_add_send_sync!(dyn Fn(PeerId, R) -> anyhow::Result<T>)>,
     error_strategy: ErrorStrategy,
@@ -143,21 +130,18 @@ pub struct FilterMapThreshold<R, T> {
 impl<R, T> FilterMapThreshold<R, T> {
     pub fn new(
         verifier: impl Fn(PeerId, R) -> anyhow::Result<T> + MaybeSend + MaybeSync + 'static,
-        total_peers: usize,
+        num_peers: NumPeers,
     ) -> Self {
-        let max_evil = (total_peers - 1) / 3;
-        let threshold = total_peers - max_evil;
-
         Self {
             filter_map: Box::new(verifier),
-            error_strategy: ErrorStrategy::new(max_evil + 1),
+            error_strategy: ErrorStrategy::new(num_peers.one_honest()),
             filtered_responses: BTreeMap::new(),
-            threshold,
+            threshold: num_peers.threshold(),
         }
     }
 }
 
-impl<R: Eq + Clone + Debug, T> QueryStrategy<R, BTreeMap<PeerId, T>> for FilterMapThreshold<R, T> {
+impl<R, T> QueryStrategy<R, BTreeMap<PeerId, T>> for FilterMapThreshold<R, T> {
     fn process(&mut self, peer: PeerId, result: PeerResult<R>) -> QueryStep<BTreeMap<PeerId, T>> {
         match result {
             Ok(response) => match (self.filter_map)(peer, response) {
@@ -179,7 +163,10 @@ impl<R: Eq + Clone + Debug, T> QueryStrategy<R, BTreeMap<PeerId, T>> for FilterM
     }
 }
 
-/// Returns when we obtain a threshold of identical responses
+/// Returns when we obtain a threshold of identical responses. Responses are not
+/// assumed to be static and may be updated by the peers; on failure to
+/// establish consensus with a threshold of responses, we retry the requests.
+/// RPC call errors are not retried.
 pub struct ThresholdConsensus<R> {
     error_strategy: ErrorStrategy,
     responses: BTreeMap<PeerId, R>,
@@ -188,49 +175,29 @@ pub struct ThresholdConsensus<R> {
 }
 
 impl<R> ThresholdConsensus<R> {
-    pub fn new(total_peers: usize) -> Self {
-        let max_evil = (total_peers - 1) / 3;
-        let threshold = total_peers - max_evil;
-
+    pub fn new(num_peers: NumPeers) -> Self {
         Self {
-            error_strategy: ErrorStrategy::new(max_evil + 1),
+            error_strategy: ErrorStrategy::new(num_peers.one_honest()),
             responses: BTreeMap::new(),
             retry: BTreeSet::new(),
-            threshold,
+            threshold: num_peers.threshold(),
         }
     }
 }
 
-impl<R: Eq> ThresholdConsensus<R> {
-    /// Get the most common response that has been processed so far. If there is
-    /// a tie between two values, the value picked is arbitrary and stability
-    /// between calls is not guaranteed.
-    fn get_most_common_response(&self) -> Option<&R> {
-        // TODO: This implementation scales poorly as `self.responses` increases (n^2)
-        self.responses
-            .values()
-            .max_by_key(|response| self.responses.values().filter(|r| r == response).count())
-    }
-}
-
-impl<R: Eq + Clone + Debug> QueryStrategy<R> for ThresholdConsensus<R> {
-    fn process(&mut self, peer: PeerId, result: api::PeerResult<R>) -> QueryStep<R> {
+impl<R: Eq> QueryStrategy<R> for ThresholdConsensus<R> {
+    fn process(&mut self, peer: PeerId, result: PeerResult<R>) -> QueryStep<R> {
         match result {
             Ok(response) => {
-                self.responses.insert(peer, response);
-                assert!(self.retry.insert(peer));
+                let current_count = self.responses.values().filter(|r| **r == response).count();
 
-                if let Some(most_common_response) = self.get_most_common_response() {
-                    let count = self
-                        .responses
-                        .values()
-                        .filter(|r| r == &most_common_response)
-                        .count();
-
-                    if count >= self.threshold {
-                        return QueryStep::Success(most_common_response.clone());
-                    }
+                if current_count + 1 >= self.threshold {
+                    return QueryStep::Success(response);
                 }
+
+                self.responses.insert(peer, response);
+
+                assert!(self.retry.insert(peer));
 
                 if self.retry.len() == self.threshold {
                     QueryStep::Retry(mem::take(&mut self.retry))
@@ -239,149 +206,6 @@ impl<R: Eq + Clone + Debug> QueryStrategy<R> for ThresholdConsensus<R> {
                 }
             }
             Err(error) => self.error_strategy.process(peer, error),
-        }
-    }
-}
-
-/// Returns the deduplicated union of a threshold of responses; elements are
-/// in descending order by the number of duplications across different peers.
-pub struct UnionResponses<R> {
-    error_strategy: ErrorStrategy,
-    responses: HashMap<PeerId, Vec<R>>,
-    threshold: usize,
-}
-
-impl<R> UnionResponses<R> {
-    pub fn new(total_peers: usize) -> Self {
-        let max_evil = (total_peers - 1) / 3;
-        let threshold = total_peers - max_evil;
-
-        Self {
-            error_strategy: ErrorStrategy::new(max_evil + 1),
-            responses: HashMap::new(),
-            threshold,
-        }
-    }
-}
-
-impl<R: Debug + Eq + Clone> QueryStrategy<Vec<R>> for UnionResponses<R> {
-    fn process(&mut self, peer: PeerId, result: PeerResult<Vec<R>>) -> QueryStep<Vec<R>> {
-        match result {
-            Ok(response) => {
-                assert!(self.responses.insert(peer, response).is_none());
-
-                if self.responses.len() == self.threshold {
-                    let mut union = self
-                        .responses
-                        .values()
-                        .flatten()
-                        .dedup()
-                        .cloned()
-                        .collect::<Vec<R>>();
-
-                    union.sort_by_cached_key(|r| {
-                        self.responses
-                            .values()
-                            .filter(|response| !response.contains(r))
-                            .count()
-                    });
-
-                    QueryStep::Success(union)
-                } else {
-                    QueryStep::Continue
-                }
-            }
-            Err(error) => self.error_strategy.process(peer, error),
-        }
-    }
-}
-
-/// Returns the deduplicated union of `required` number of responses
-///
-/// Unlike [`UnionResponses`], it works with single values, not `Vec`s.
-pub struct UnionResponsesSingle<R> {
-    error_strategy: ErrorStrategy,
-    responses: HashSet<PeerId>,
-    union: Vec<R>,
-    threshold: usize,
-}
-
-impl<R> UnionResponsesSingle<R> {
-    pub fn new(total_peers: usize) -> Self {
-        let max_evil = (total_peers - 1) / 3;
-        let threshold = total_peers - max_evil;
-
-        Self {
-            error_strategy: ErrorStrategy::new(max_evil + 1),
-            responses: HashSet::new(),
-            union: vec![],
-            threshold,
-        }
-    }
-}
-
-impl<R: Debug + Eq + Clone> QueryStrategy<R, Vec<R>> for UnionResponsesSingle<R> {
-    fn process(&mut self, peer: PeerId, result: api::PeerResult<R>) -> QueryStep<Vec<R>> {
-        match result {
-            Ok(response) => {
-                if !self.union.contains(&response) {
-                    self.union.push(response);
-                }
-
-                assert!(self.responses.insert(peer));
-
-                if self.responses.len() == self.threshold {
-                    QueryStep::Success(mem::take(&mut self.union))
-                } else {
-                    QueryStep::Continue
-                }
-            }
-            Err(error) => self.error_strategy.process(peer, error),
-        }
-    }
-}
-
-/// Query strategy that returns when enough peers responded or a deadline passed
-pub struct ThresholdOrDeadline<R> {
-    deadline: SystemTime,
-    threshold: usize,
-    responses: BTreeMap<PeerId, R>,
-}
-
-impl<R> ThresholdOrDeadline<R> {
-    pub fn new(threshold: usize, deadline: SystemTime) -> Self {
-        Self {
-            deadline,
-            threshold,
-            responses: BTreeMap::default(),
-        }
-    }
-}
-
-impl<R> QueryStrategy<R, BTreeMap<PeerId, R>> for ThresholdOrDeadline<R> {
-    fn process(
-        &mut self,
-        peer: PeerId,
-        result: api::PeerResult<R>,
-    ) -> QueryStep<BTreeMap<PeerId, R>> {
-        match result {
-            Ok(response) => {
-                assert!(self.responses.insert(peer, response).is_none());
-
-                if self.threshold <= self.responses.len() || self.deadline <= now() {
-                    QueryStep::Success(mem::take(&mut self.responses))
-                } else {
-                    QueryStep::Continue
-                }
-            }
-            // we rely on retries and timeouts to detect a deadline passing
-            Err(_) => {
-                if self.deadline <= now() {
-                    QueryStep::Success(mem::take(&mut self.responses))
-                } else {
-                    QueryStep::Retry(BTreeSet::from([peer]))
-                }
-            }
         }
     }
 }
