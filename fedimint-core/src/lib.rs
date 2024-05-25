@@ -322,6 +322,10 @@ impl NumPeers {
     pub fn as_usize(&self) -> usize {
         self.0
     }
+
+    pub fn peer_ids(&self) -> impl Iterator<Item = PeerId> {
+        (0u16..(self.0 as u16)).map(PeerId)
+    }
 }
 
 impl NumPeersExt for NumPeers {

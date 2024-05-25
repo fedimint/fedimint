@@ -12,8 +12,9 @@ use fedimint_core::db::{
 };
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::registry::ModuleDecoderRegistry;
+use fedimint_core::module::SupportedApiVersionsSummary;
 use fedimint_core::util::BoxFuture;
-use fedimint_core::{impl_db_lookup, impl_db_record};
+use fedimint_core::{impl_db_lookup, impl_db_record, PeerId};
 use fedimint_logging::LOG_CLIENT_DB;
 use futures::StreamExt;
 use serde::Serialize;
@@ -45,6 +46,7 @@ pub enum DbKeyPrefix {
     ClientMetaField = 0x34,
     ClientMetaServiceInfo = 0x35,
     ApiSecret = 0x36,
+    PeerLastApiVersionsSummaryCache = 0x37,
 
     /// Arbitrary data of the applications integrating Fedimint client and
     /// wanting to store some Federation-specific data in Fedimint client
@@ -132,6 +134,18 @@ impl_db_record!(
     key = CachedApiVersionSetKey,
     value = CachedApiVersionSet,
     db_prefix = DbKeyPrefix::CommonApiVersionCache
+);
+
+#[derive(Debug, Encodable, Decodable)]
+pub struct PeerLastApiVersionsSummaryKey(pub PeerId);
+
+#[derive(Debug, Encodable, Decodable)]
+pub struct PeerLastApiVersionsSummary(pub SupportedApiVersionsSummary);
+
+impl_db_record!(
+    key = PeerLastApiVersionsSummaryKey,
+    value = PeerLastApiVersionsSummary,
+    db_prefix = DbKeyPrefix::PeerLastApiVersionsSummaryCache
 );
 
 #[derive(Debug, Encodable, Decodable, Serialize)]

@@ -1,7 +1,6 @@
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::fmt::{self, Debug, Display};
 use std::num::NonZeroUsize;
-use std::ops::Add;
 use std::pin::Pin;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
@@ -29,15 +28,13 @@ use fedimint_core::endpoint_constants::{
     SESSION_COUNT_ENDPOINT, SESSION_STATUS_ENDPOINT, SET_CONFIG_GEN_CONNECTIONS_ENDPOINT,
     SET_CONFIG_GEN_PARAMS_ENDPOINT, SET_PASSWORD_ENDPOINT, START_CONSENSUS_ENDPOINT,
     STATUS_ENDPOINT, SUBMIT_TRANSACTION_ENDPOINT, VERIFIED_CONFIGS_ENDPOINT,
-    VERIFY_CONFIG_HASH_ENDPOINT, VERSION_ENDPOINT,
+    VERIFY_CONFIG_HASH_ENDPOINT,
 };
 use fedimint_core::fmt_utils::{AbbreviateDebug, AbbreviateJson};
 use fedimint_core::invite_code::InviteCode;
 use fedimint_core::module::audit::AuditSummary;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
-use fedimint_core::module::{
-    ApiAuth, ApiRequestErased, ApiVersion, SerdeModuleEncoding, SupportedApiVersionsSummary,
-};
+use fedimint_core::module::{ApiAuth, ApiRequestErased, ApiVersion, SerdeModuleEncoding};
 use fedimint_core::session_outcome::{AcceptedItem, SessionOutcome, SessionStatus};
 use fedimint_core::task::jit::JitTryAnyhow;
 use fedimint_core::task::{MaybeSend, MaybeSync};
@@ -53,6 +50,7 @@ use futures::stream::FuturesUnordered;
 use futures::{Future, StreamExt};
 use itertools::Itertools;
 use jsonrpsee_core::client::{ClientT, Error as JsonRpcClientError};
+use jsonrpsee_core::DeserializeOwned;
 #[cfg(target_family = "wasm")]
 use jsonrpsee_wasm_client::{Client as WsClient, WasmClientBuilder as WsClientBuilder};
 #[cfg(not(target_family = "wasm"))]
@@ -65,9 +63,7 @@ use thiserror::Error;
 use tokio::sync::{Mutex, OnceCell, RwLock};
 use tracing::{debug, error, instrument, trace, warn};
 
-use crate::query::{
-    DiscoverApiVersionSet, QueryStep, QueryStrategy, ThresholdConsensus, UnionResponsesSingle,
-};
+use crate::query::{QueryStep, QueryStrategy, ThresholdConsensus, UnionResponsesSingle};
 
 pub type PeerResult<T> = Result<T, PeerError>;
 pub type JsonRpcResult<T> = Result<T, JsonRpcClientError>;
@@ -322,6 +318,23 @@ pub trait FederationApiExt: IRawFederationApi {
         } else {
             request.await
         }
+    }
+    async fn request_single_peer_typed<Ret>(
+        &self,
+        timeout: Option<Duration>,
+        method: String,
+        params: ApiRequestErased,
+        peer_id: PeerId,
+    ) -> PeerResult<Ret>
+    where
+        Ret: DeserializeOwned,
+    {
+        self.request_single_peer(timeout, method, params, peer_id)
+            .await
+            .map_err(PeerError::Rpc)
+            .and_then(|v| {
+                serde_json::from_value(v).map_err(|e| PeerError::ResponseDeserialization(e.into()))
+            })
     }
 
     /// Like [`Self::request_single_peer`], but API more like
@@ -646,14 +659,6 @@ pub trait IGlobalFederationApi: IRawFederationApi {
         &self,
         id: &secp256k1::PublicKey,
     ) -> FederationResult<Vec<ClientBackupSnapshot>>;
-
-    /// Query peers and calculate optimal common api versions to use.
-    async fn discover_api_version_set(
-        &self,
-        client_versions: &SupportedApiVersionsSummary,
-        timeout: Duration,
-        num_responses_required: Option<usize>,
-    ) -> FederationResult<ApiVersionSet>;
 
     /// Sets the password used to decrypt the configs and authenticate
     ///
@@ -993,26 +998,6 @@ where
             .into_iter()
             .flatten()
             .collect())
-    }
-
-    async fn discover_api_version_set(
-        &self,
-        client_versions: &SupportedApiVersionsSummary,
-        timeout: Duration,
-        num_responses_required: Option<usize>,
-    ) -> FederationResult<ApiVersionSet> {
-        self.request_with_strategy(
-            DiscoverApiVersionSet::new(
-                num_responses_required
-                    .unwrap_or(self.all_peers().len())
-                    .min(self.all_peers().len()),
-                now().add(timeout),
-                client_versions.clone(),
-            ),
-            VERSION_ENDPOINT.to_owned(),
-            ApiRequestErased::default(),
-        )
-        .await
     }
 
     async fn set_password(&self, auth: ApiAuth) -> FederationResult<()> {
