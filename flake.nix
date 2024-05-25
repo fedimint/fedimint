@@ -315,7 +315,7 @@
               default = flakeboxLib.mkDevShell (commonShellArgs // { });
 
               fuzz = flakeboxLib.mkDevShell (commonShellArgs // {
-                nativeBuildInputs = with pkgs; [
+                nativeBuildInputs = with pkgs; commonShellArgs.nativeBuildInputs ++ [
                   cargo-hongfuzz
                   libbfd_2_38
                   libunwind.dev
