@@ -30,7 +30,7 @@ On a high-level Fedimint architecture consist of:
 communication with Fedimint peers. This library can be used to build Fedimint client applications that can run on
 desktop computers, mobile devices and in web browsers (WASM).
 
-More high level documentation is available as a part of [`fedimint-docs`](./fedimint_docs/indiex.html) crate.
+More high level documentation is available as a part of [`fedimint-docs`](./fedimint_docs/index.html) crate.
 
 # Modules
 
