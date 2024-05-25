@@ -2474,6 +2474,12 @@
 <a href="#2474" id="2474">2474</a>
 <a href="#2475" id="2475">2475</a>
 <a href="#2476" id="2476">2476</a>
+<a href="#2477" id="2477">2477</a>
+<a href="#2478" id="2478">2478</a>
+<a href="#2479" id="2479">2479</a>
+<a href="#2480" id="2480">2480</a>
+<a href="#2481" id="2481">2481</a>
+<a href="#2482" id="2482">2482</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! # Client library for fedimintd
 //!
 //! This library provides a client interface to build module clients that can be
@@ -3257,6 +3263,12 @@
     <span class="doccomment">/// Get the [`TaskGroup`] that is tied to Client's lifetime.
     </span><span class="kw">pub fn </span>task_group(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>TaskGroup {
         <span class="kw-2">&amp;</span><span class="self">self</span>.task_group
+    }
+
+    <span class="doccomment">/// Useful for our CLI tooling, not meant for external use
+    </span><span class="attr">#[doc(hidden)]
+    </span><span class="kw">pub fn </span>executor(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>Executor {
+        <span class="kw-2">&amp;</span><span class="self">self</span>.executor
     }
 
     <span class="kw">pub async fn </span>get_config_from_db(db: <span class="kw-2">&amp;</span>Database) -&gt; <span class="prelude-ty">Option</span>&lt;ClientConfig&gt; {

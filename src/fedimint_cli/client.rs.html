@@ -693,10 +693,16 @@
 <a href="#693" id="693">693</a>
 <a href="#694" id="694">694</a>
 <a href="#695" id="695">695</a>
+<a href="#696" id="696">696</a>
+<a href="#697" id="697">697</a>
+<a href="#698" id="698">698</a>
+<a href="#699" id="699">699</a>
+<a href="#700" id="700">700</a>
+<a href="#701" id="701">701</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::ffi;
 <span class="kw">use </span>std::str::FromStr;
-<span class="kw">use </span>std::time::{Duration, UNIX_EPOCH};
+<span class="kw">use </span>std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 <span class="kw">use </span>anyhow::{bail, Context};
 <span class="kw">use </span>bip39::Mnemonic;
@@ -1223,24 +1229,13 @@
                 </span>outcome: <span class="prelude-ty">Option</span>&lt;serde_json::Value&gt;,
             }
 
-            <span class="kw">const </span>ISO8601_CONFIG: iso8601::EncodedConfig = iso8601::Config::DEFAULT
-                .set_formatted_components(iso8601::FormattedComponents::DateTime)
-                .encode();
             <span class="kw">let </span>operations = client
                 .operation_log()
                 .list_operations(limit, <span class="prelude-val">None</span>)
                 .<span class="kw">await
                 </span>.into_iter()
                 .map(|(k, v)| {
-                    <span class="kw">let </span>creation_time = OffsetDateTime::from_unix_timestamp(
-                        k.creation_time
-                            .duration_since(UNIX_EPOCH)
-                            .expect(<span class="string">"Couldn't convert time from SystemTime to timestamp"</span>)
-                            .as_secs() <span class="kw">as </span>i64,
-                    )
-                    .expect(<span class="string">"Couldn't convert time from SystemTime to OffsetDateTime"</span>)
-                    .format(<span class="kw-2">&amp;</span>iso8601::Iso8601::&lt;ISO8601_CONFIG&gt;)
-                    .expect(<span class="string">"Couldn't format OffsetDateTime as ISO8601"</span>);
+                    <span class="kw">let </span>creation_time = time_to_iso8601(<span class="kw-2">&amp;</span>k.creation_time);
 
                     OperationOutput {
                         id: k.operation_id,
@@ -1387,5 +1382,22 @@
     total_amount_msat: Amount,
     total_num_notes: usize,
     denominations_msat: TieredCounts,
+}
+
+<span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>time_to_iso8601(time: <span class="kw-2">&amp;</span>SystemTime) -&gt; String {
+    <span class="kw">const </span>ISO8601_CONFIG: iso8601::EncodedConfig = iso8601::Config::DEFAULT
+        .set_formatted_components(iso8601::FormattedComponents::DateTime)
+        .encode();
+
+    OffsetDateTime::from_unix_timestamp_nanos(
+        time.duration_since(UNIX_EPOCH)
+            .expect(<span class="string">"Couldn't convert time from SystemTime to timestamp"</span>)
+            .as_nanos()
+            .try_into()
+            .expect(<span class="string">"Time overflowed"</span>),
+    )
+    .expect(<span class="string">"Couldn't convert time from SystemTime to OffsetDateTime"</span>)
+    .format(<span class="kw-2">&amp;</span>iso8601::Iso8601::&lt;ISO8601_CONFIG&gt;)
+    .expect(<span class="string">"Couldn't format OffsetDateTime as ISO8601"</span>)
 }
 </code></pre></div></section></main></body></html>
