@@ -1306,7 +1306,7 @@
             <span class="macro">unreachable!</span>(<span class="string">"Update stream ended without outcome"</span>);
         }
         ClientCmd::DiscoverVersion =&gt; {
-            <span class="prelude-val">Ok</span>(<span class="macro">json!</span>({ <span class="string">"versions"</span>: client.discover_common_api_version(<span class="prelude-val">None</span>).<span class="kw">await</span><span class="question-mark">? </span>}))
+            <span class="prelude-val">Ok</span>(<span class="macro">json!</span>({ <span class="string">"versions"</span>: client.load_and_refresh_common_api_version().<span class="kw">await</span><span class="question-mark">? </span>}))
         }
         ClientCmd::Module { module, args } =&gt; <span class="kw">match </span>module {
             <span class="prelude-val">Some</span>(module) =&gt; {

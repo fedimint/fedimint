@@ -652,7 +652,7 @@
 /// Each element must have a distinct major api number, and means
 /// either minimum required API version of this major number (for the client),
 /// or maximum supported version of this major number (for the server).
-</span><span class="attr">#[derive(Debug, Clone, Serialize, Default)]
+</span><span class="attr">#[derive(Debug, Clone, Serialize, Default, Encodable, Decodable)]
 </span><span class="kw">pub struct </span>MultiApiVersion(Vec&lt;ApiVersion&gt;);
 
 <span class="kw">impl </span>MultiApiVersion {
@@ -825,7 +825,7 @@
     .is_err());
 }
 
-<span class="attr">#[derive(Debug, Clone, Serialize, Deserialize)]
+<span class="attr">#[derive(Debug, Clone, Serialize, Deserialize, Encodable, Decodable)]
 </span><span class="kw">pub struct </span>SupportedCoreApiVersions {
     <span class="kw">pub </span>core_consensus: CoreConsensusVersion,
     <span class="doccomment">/// Supported Api versions for this core consensus versions
@@ -850,7 +850,7 @@
     }
 }
 
-<span class="attr">#[derive(Debug, Clone, Serialize, Deserialize)]
+<span class="attr">#[derive(Debug, Clone, Serialize, Deserialize, Encodable, Decodable)]
 </span><span class="kw">pub struct </span>SupportedModuleApiVersions {
     <span class="kw">pub </span>core_consensus: CoreConsensusVersion,
     <span class="kw">pub </span>module_consensus: ModuleConsensusVersion,
@@ -900,7 +900,7 @@
     }
 }
 
-<span class="attr">#[derive(Debug, Clone, Serialize, Deserialize)]
+<span class="attr">#[derive(Debug, Clone, Serialize, Deserialize, Decodable, Encodable)]
 </span><span class="kw">pub struct </span>SupportedApiVersionsSummary {
     <span class="kw">pub </span>core: SupportedCoreApiVersions,
     <span class="kw">pub </span>modules: BTreeMap&lt;ModuleInstanceId, SupportedModuleApiVersions&gt;,

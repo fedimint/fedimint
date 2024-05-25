@@ -2480,6 +2480,78 @@
 <a href="#2480" id="2480">2480</a>
 <a href="#2481" id="2481">2481</a>
 <a href="#2482" id="2482">2482</a>
+<a href="#2483" id="2483">2483</a>
+<a href="#2484" id="2484">2484</a>
+<a href="#2485" id="2485">2485</a>
+<a href="#2486" id="2486">2486</a>
+<a href="#2487" id="2487">2487</a>
+<a href="#2488" id="2488">2488</a>
+<a href="#2489" id="2489">2489</a>
+<a href="#2490" id="2490">2490</a>
+<a href="#2491" id="2491">2491</a>
+<a href="#2492" id="2492">2492</a>
+<a href="#2493" id="2493">2493</a>
+<a href="#2494" id="2494">2494</a>
+<a href="#2495" id="2495">2495</a>
+<a href="#2496" id="2496">2496</a>
+<a href="#2497" id="2497">2497</a>
+<a href="#2498" id="2498">2498</a>
+<a href="#2499" id="2499">2499</a>
+<a href="#2500" id="2500">2500</a>
+<a href="#2501" id="2501">2501</a>
+<a href="#2502" id="2502">2502</a>
+<a href="#2503" id="2503">2503</a>
+<a href="#2504" id="2504">2504</a>
+<a href="#2505" id="2505">2505</a>
+<a href="#2506" id="2506">2506</a>
+<a href="#2507" id="2507">2507</a>
+<a href="#2508" id="2508">2508</a>
+<a href="#2509" id="2509">2509</a>
+<a href="#2510" id="2510">2510</a>
+<a href="#2511" id="2511">2511</a>
+<a href="#2512" id="2512">2512</a>
+<a href="#2513" id="2513">2513</a>
+<a href="#2514" id="2514">2514</a>
+<a href="#2515" id="2515">2515</a>
+<a href="#2516" id="2516">2516</a>
+<a href="#2517" id="2517">2517</a>
+<a href="#2518" id="2518">2518</a>
+<a href="#2519" id="2519">2519</a>
+<a href="#2520" id="2520">2520</a>
+<a href="#2521" id="2521">2521</a>
+<a href="#2522" id="2522">2522</a>
+<a href="#2523" id="2523">2523</a>
+<a href="#2524" id="2524">2524</a>
+<a href="#2525" id="2525">2525</a>
+<a href="#2526" id="2526">2526</a>
+<a href="#2527" id="2527">2527</a>
+<a href="#2528" id="2528">2528</a>
+<a href="#2529" id="2529">2529</a>
+<a href="#2530" id="2530">2530</a>
+<a href="#2531" id="2531">2531</a>
+<a href="#2532" id="2532">2532</a>
+<a href="#2533" id="2533">2533</a>
+<a href="#2534" id="2534">2534</a>
+<a href="#2535" id="2535">2535</a>
+<a href="#2536" id="2536">2536</a>
+<a href="#2537" id="2537">2537</a>
+<a href="#2538" id="2538">2538</a>
+<a href="#2539" id="2539">2539</a>
+<a href="#2540" id="2540">2540</a>
+<a href="#2541" id="2541">2541</a>
+<a href="#2542" id="2542">2542</a>
+<a href="#2543" id="2543">2543</a>
+<a href="#2544" id="2544">2544</a>
+<a href="#2545" id="2545">2545</a>
+<a href="#2546" id="2546">2546</a>
+<a href="#2547" id="2547">2547</a>
+<a href="#2548" id="2548">2548</a>
+<a href="#2549" id="2549">2549</a>
+<a href="#2550" id="2550">2550</a>
+<a href="#2551" id="2551">2551</a>
+<a href="#2552" id="2552">2552</a>
+<a href="#2553" id="2553">2553</a>
+<a href="#2554" id="2554">2554</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! # Client library for fedimintd
 //!
 //! This library provides a client interface to build module clients that can be
@@ -2562,10 +2634,11 @@
 <span class="kw">use </span>db::{
     apply_migrations_client, ApiSecretKey, CachedApiVersionSet, CachedApiVersionSetKey,
     ClientConfigKey, ClientConfigKeyPrefix, ClientInitStateKey, ClientModuleRecovery,
-    EncodedClientSecretKey, InitMode,
+    EncodedClientSecretKey, InitMode, PeerLastApiVersionsSummary, PeerLastApiVersionsSummaryKey,
 };
-<span class="kw">use </span>envs::get_discover_api_version_timeout;
-<span class="kw">use </span>fedimint_api_client::api::{ApiVersionSet, DynGlobalApi, DynModuleApi, IGlobalFederationApi};
+<span class="kw">use </span>fedimint_api_client::api::{
+    ApiVersionSet, DynGlobalApi, DynModuleApi, FederationApiExt, IGlobalFederationApi,
+};
 <span class="kw">use </span>fedimint_core::config::{
     ClientConfig, ClientModuleConfig, FederationId, JsonClientConfig, JsonWithKind,
     ModuleInitRegistry,
@@ -2577,23 +2650,24 @@
     AutocommitError, Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped,
 };
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
+<span class="kw">use </span>fedimint_core::endpoint_constants::VERSION_ENDPOINT;
 <span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
 <span class="kw">use </span>fedimint_core::module::{
-    ApiAuth, ApiVersion, MultiApiVersion, SupportedApiVersionsSummary, SupportedCoreApiVersions,
-    SupportedModuleApiVersions,
+    ApiAuth, ApiRequestErased, ApiVersion, MultiApiVersion, SupportedApiVersionsSummary,
+    SupportedCoreApiVersions, SupportedModuleApiVersions,
 };
-<span class="kw">use </span>fedimint_core::task::{sleep, MaybeSend, MaybeSync, TaskGroup};
-<span class="kw">use </span>fedimint_core::time::now;
+<span class="kw">use </span>fedimint_core::task::{Elapsed, MaybeSend, MaybeSync, TaskGroup};
 <span class="kw">use </span>fedimint_core::transaction::Transaction;
 <span class="kw">use </span>fedimint_core::util::{BoxStream, NextOrPending};
 <span class="kw">use </span>fedimint_core::{
     apply, async_trait_maybe_send, dyn_newtype_define, fedimint_build_code_version_env,
-    maybe_add_send, maybe_add_send_sync, runtime, Amount, NumPeers, OutPoint, PeerId,
+    maybe_add_send, maybe_add_send_sync, runtime, Amount, NumPeers, NumPeersExt, OutPoint, PeerId,
     TransactionId,
 };
 <span class="kw">pub use </span>fedimint_derive_secret <span class="kw">as </span>derivable_secret;
 <span class="kw">use </span>fedimint_derive_secret::DerivableSecret;
 <span class="kw">use </span>fedimint_logging::{LOG_CLIENT, LOG_CLIENT_NET_API, LOG_CLIENT_RECOVERY};
+<span class="kw">use </span>futures::stream::FuturesUnordered;
 <span class="kw">use </span>futures::{Future, Stream, StreamExt};
 <span class="kw">use </span>meta::{LegacyMetaSource, MetaService};
 <span class="kw">use </span>module::recovery::RecoveryProgress;
@@ -2608,6 +2682,7 @@
 <span class="kw">use </span>tokio_stream::wrappers::WatchStream;
 <span class="kw">use </span>tracing::{debug, error, info, warn};
 
+<span class="kw">use </span><span class="kw">crate</span>::api_version_discovery::discover_common_api_versions_set;
 <span class="kw">use </span><span class="kw">crate</span>::backup::Metadata;
 <span class="kw">use </span><span class="kw">crate</span>::db::{ClientMetadataKey, ClientModuleRecoveryState, InitState, OperationLogKey};
 <span class="kw">use </span><span class="kw">crate</span>::module::init::{
@@ -2642,6 +2717,8 @@
 </span><span class="kw">pub mod </span>sm;
 <span class="doccomment">/// Structs and interfaces to construct Fedimint transactions
 </span><span class="kw">pub mod </span>transaction;
+
+<span class="kw">mod </span>api_version_discovery;
 
 <span class="doccomment">/// Management of meta fields
 </span><span class="kw">pub mod </span>meta;
@@ -3857,67 +3934,78 @@
         })
     }
 
-    <span class="kw">pub async fn </span>discover_common_api_version(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        threshold: <span class="prelude-ty">Option</span>&lt;usize&gt;,
-    ) -&gt; anyhow::Result&lt;ApiVersionSet&gt; {
-        <span class="prelude-val">Ok</span>(<span class="self">self
-            </span>.api()
-            .discover_api_version_set(
-                <span class="kw-2">&amp;</span><span class="self">Self</span>::supported_api_versions_summary_static(<span class="self">self</span>.get_config(), <span class="kw-2">&amp;</span><span class="self">self</span>.module_inits)
-                    .<span class="kw">await</span>,
-                get_discover_api_version_timeout(),
-                threshold,
-            )
-            .<span class="kw">await</span><span class="question-mark">?</span>)
-    }
-
     <span class="doccomment">/// Query the federation for API version support and then calculate
     /// the best API version to use (supported by most guardians).
-    </span><span class="kw">pub async fn </span>discover_common_api_version_static_try(
-        config: <span class="kw-2">&amp;</span>ClientConfig,
-        client_module_init: <span class="kw-2">&amp;</span>ClientModuleInitRegistry,
-        api: <span class="kw-2">&amp;</span>DynGlobalApi,
-        mode: DiscoverCommonApiVersionMode,
-    ) -&gt; anyhow::Result&lt;ApiVersionSet&gt; {
-        <span class="prelude-val">Ok</span>(api
-            .discover_api_version_set(
-                <span class="kw-2">&amp;</span><span class="self">Self</span>::supported_api_versions_summary_static(config, client_module_init).<span class="kw">await</span>,
-                get_discover_api_version_timeout(),
-                <span class="kw">match </span>mode {
-                    DiscoverCommonApiVersionMode::Fast =&gt; {
-                        <span class="prelude-val">Some</span>((config.global.api_endpoints.len() / <span class="number">2</span>).min(<span class="number">1</span>))
-                    }
-                    DiscoverCommonApiVersionMode::Full =&gt; <span class="prelude-val">None</span>,
-                },
+    </span><span class="kw">pub async fn </span>refresh_peers_api_versions(
+        num_peers: NumPeers,
+        api: DynGlobalApi,
+        db: Database,
+        num_responses_sender: watch::Sender&lt;usize&gt;,
+    ) {
+        <span class="kw">let </span><span class="kw-2">mut </span>requests = FuturesUnordered::new();
+
+        <span class="comment">// Make a single request to a peer after a delay
+        //
+        // The delay is here to unify the type of a future both for initial request and
+        // possible retries.
+        </span><span class="kw">async fn </span>make_request(
+            delay: Duration,
+            peer_id: PeerId,
+            api: <span class="kw-2">&amp;</span>DynGlobalApi,
+        ) -&gt; (
+            PeerId,
+            <span class="prelude-ty">Result</span>&lt;SupportedApiVersionsSummary, fedimint_api_client::api::PeerError&gt;,
+        ) {
+            runtime::sleep(delay).<span class="kw">await</span>;
+            (
+                peer_id,
+                api.request_single_peer_typed::&lt;SupportedApiVersionsSummary&gt;(
+                    <span class="prelude-val">None</span>,
+                    VERSION_ENDPOINT.to_owned(),
+                    ApiRequestErased::default(),
+                    peer_id,
+                )
+                .<span class="kw">await</span>,
             )
-            .<span class="kw">await</span><span class="question-mark">?</span>)
-    }
+        }
 
-    <span class="kw">pub async fn </span>discover_common_api_version_static(
-        config: <span class="kw-2">&amp;</span>ClientConfig,
-        client_module_init: <span class="kw-2">&amp;</span>ClientModuleInitRegistry,
-        api: <span class="kw-2">&amp;</span>DynGlobalApi,
-        mode: DiscoverCommonApiVersionMode,
-    ) -&gt; anyhow::Result&lt;ApiVersionSet&gt; {
-        <span class="comment">// We want to give it at least a good 30 second worth of trying, before we give
-        // up.
-        </span><span class="kw">let </span>deadline = now() + Duration::from_secs(<span class="number">30</span>);
+        <span class="kw">for </span>peer_id <span class="kw">in </span>num_peers.peer_ids() {
+            requests.push(make_request(Duration::ZERO, peer_id, <span class="kw-2">&amp;</span>api))
+        }
 
-        <span class="kw">loop </span>{
-            <span class="kw">let </span>res =
-                <span class="self">Self</span>::discover_common_api_version_static_try(config, client_module_init, api, mode)
+        <span class="kw">let </span><span class="kw-2">mut </span>num_responses = <span class="number">0</span>;
+
+        <span class="kw">while let </span><span class="prelude-val">Some</span>((peer_id, response)) = requests.next().<span class="kw">await </span>{
+            <span class="kw">match </span>response {
+                <span class="prelude-val">Err</span>(err) =&gt; {
+                    <span class="kw">if </span>db
+                        .begin_transaction_nc()
+                        .<span class="kw">await
+                        </span>.get_value(<span class="kw-2">&amp;</span>PeerLastApiVersionsSummaryKey(peer_id))
+                        .<span class="kw">await
+                        </span>.is_some()
+                    {
+                        <span class="macro">debug!</span>(target: LOG_CLIENT, %peer_id, %err, <span class="string">"Failed to refresh API versions of a peer, but we have a previous response"</span>);
+                    } <span class="kw">else </span>{
+                        <span class="macro">debug!</span>(target: LOG_CLIENT, %peer_id, %err, <span class="string">"Failed to refresh API versions of a peer, will retry"</span>);
+                        requests.push(make_request(Duration::from_secs(<span class="number">15</span>), peer_id, <span class="kw-2">&amp;</span>api))
+                    }
+                }
+                <span class="prelude-val">Ok</span>(o) =&gt; {
+                    <span class="comment">// Save the response to the database right away, just to
+                    // not lose it
+                    </span><span class="kw">let </span><span class="kw-2">mut </span>dbtx = db.begin_transaction().<span class="kw">await</span>;
+                    dbtx.insert_entry(
+                        <span class="kw-2">&amp;</span>PeerLastApiVersionsSummaryKey(peer_id),
+                        <span class="kw-2">&amp;</span>PeerLastApiVersionsSummary(o),
+                    )
                     .<span class="kw">await</span>;
-
-            <span class="kw">if </span>res.is_ok() {
-                <span class="kw">return </span>res;
+                    dbtx.commit_tx().<span class="kw">await</span>;
+                    num_responses += <span class="number">1</span>;
+                    <span class="comment">// ignore errors: we don't care if anyone is still listening
+                    </span><span class="kw">let _ </span>= num_responses_sender.send(num_responses);
+                }
             }
-
-            <span class="kw">if </span>deadline &lt; now() {
-                <span class="kw">return </span>res;
-            }
-            <span class="macro">debug!</span>(target: LOG_CLIENT, <span class="string">"Retrying getting api version from Federation"</span>);
-            sleep(Duration::from_secs(<span class="number">1</span>)).<span class="kw">await</span>;
         }
     }
 
@@ -3953,6 +4041,17 @@
         }
     }
 
+    <span class="kw">pub async fn </span>load_and_refresh_common_api_version(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; anyhow::Result&lt;ApiVersionSet&gt; {
+        <span class="self">Self</span>::load_and_refresh_common_api_version_static(
+            <span class="kw-2">&amp;</span><span class="self">self</span>.config,
+            <span class="kw-2">&amp;</span><span class="self">self</span>.module_inits,
+            <span class="kw-2">&amp;</span><span class="self">self</span>.api,
+            <span class="kw-2">&amp;</span><span class="self">self</span>.db,
+            <span class="kw-2">&amp;</span><span class="self">self</span>.task_group,
+        )
+        .<span class="kw">await
+    </span>}
+
     <span class="doccomment">/// Load the common api versions to use from cache and start a background
     /// process to refresh them.
     ///
@@ -3960,7 +4059,7 @@
     /// complete every time a [`Client`] is being built.
     </span><span class="kw">async fn </span>load_and_refresh_common_api_version_static(
         config: <span class="kw-2">&amp;</span>ClientConfig,
-        module_inits: <span class="kw-2">&amp;</span>ModuleInitRegistry&lt;DynClientModuleInit&gt;,
+        module_init: <span class="kw-2">&amp;</span>ClientModuleInitRegistry,
         api: <span class="kw-2">&amp;</span>DynGlobalApi,
         db: <span class="kw-2">&amp;</span>Database,
         task_group: <span class="kw-2">&amp;</span>TaskGroup,
@@ -3973,50 +4072,76 @@
         </span>{
             <span class="macro">debug!</span>(<span class="string">"Found existing cached common api versions"</span>);
             <span class="kw">let </span>config = config.clone();
-            <span class="kw">let </span>module_inits = module_inits.clone();
+            <span class="kw">let </span>client_module_init = module_init.clone();
             <span class="kw">let </span>api = api.clone();
             <span class="kw">let </span>db = db.clone();
+            <span class="kw">let </span>task_group = task_group.clone();
             <span class="comment">// Separate task group, because we actually don't want to be waiting for this to
             // finish, and it's just best effort.
-            </span>task_group.spawn_cancellable(<span class="string">"refresh_common_api_version_static"</span>, <span class="kw">async move </span>{
-                <span class="kw">if let </span><span class="prelude-val">Err</span>(error) = <span class="self">Self</span>::refresh_common_api_version_static(
-                    <span class="kw-2">&amp;</span>config,
-                    <span class="kw-2">&amp;</span>module_inits,
-                    <span class="kw-2">&amp;</span>api,
-                    <span class="kw-2">&amp;</span>db,
-                    DiscoverCommonApiVersionMode::Full,
-                )
-                .<span class="kw">await
-                </span>{
-                    <span class="macro">warn!</span>(%error, <span class="string">"Failed to discover common api versions"</span>);
-                }
-            });
+            </span>task_group
+                .clone()
+                .spawn_cancellable(<span class="string">"refresh_common_api_version_static"</span>, <span class="kw">async move </span>{
+                    <span class="kw">if let </span><span class="prelude-val">Err</span>(error) = <span class="self">Self</span>::refresh_common_api_version_static(
+                        <span class="kw-2">&amp;</span>config,
+                        <span class="kw-2">&amp;</span>client_module_init,
+                        <span class="kw-2">&amp;</span>api,
+                        <span class="kw-2">&amp;</span>db,
+                        task_group,
+                    )
+                    .<span class="kw">await
+                    </span>{
+                        <span class="macro">warn!</span>(%error, <span class="string">"Failed to discover common api versions"</span>);
+                    }
+                });
 
             <span class="kw">return </span><span class="prelude-val">Ok</span>(v.<span class="number">0</span>);
         }
 
         <span class="macro">debug!</span>(<span class="string">"No existing cached common api versions found, waiting for initial discovery"</span>);
-        <span class="self">Self</span>::refresh_common_api_version_static(
-            config,
-            module_inits,
-            api,
-            db,
-            DiscoverCommonApiVersionMode::Fast,
-        )
-        .<span class="kw">await
+        <span class="self">Self</span>::refresh_common_api_version_static(config, module_init, api, db, task_group.clone())
+            .<span class="kw">await
     </span>}
 
     <span class="kw">async fn </span>refresh_common_api_version_static(
         config: <span class="kw-2">&amp;</span>ClientConfig,
-        module_inits: <span class="kw-2">&amp;</span>ModuleInitRegistry&lt;DynClientModuleInit&gt;,
+        client_module_init: <span class="kw-2">&amp;</span>ClientModuleInitRegistry,
         api: <span class="kw-2">&amp;</span>DynGlobalApi,
         db: <span class="kw-2">&amp;</span>Database,
-        mode: DiscoverCommonApiVersionMode,
+        task_group: TaskGroup,
     ) -&gt; anyhow::Result&lt;ApiVersionSet&gt; {
         <span class="macro">debug!</span>(<span class="string">"Refreshing common api versions"</span>);
 
-        <span class="kw">let </span>common_api_versions =
-            Client::discover_common_api_version_static(config, module_inits, api, mode).<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>(num_responses_sender, <span class="kw-2">mut </span>num_responses_receiver) = tokio::sync::watch::channel(<span class="number">0</span>);
+        <span class="kw">let </span>num_peers = NumPeers::from(config.global.api_endpoints.len());
+
+        task_group.spawn_cancellable(<span class="string">"refresh peers api versions"</span>, {
+            Client::refresh_peers_api_versions(
+                num_peers,
+                api.clone(),
+                db.clone(),
+                num_responses_sender,
+            )
+        });
+
+        <span class="comment">// Wait at most 15 seconds before calculating a set of common api versions to
+        // use. Note that all peers individual responses from previous attempts
+        // are still being used, and requests, or even retries for response of
+        // peers are not actually cancelled, as they are happening on a separate
+        // task. This is all just to bound the time user can be waiting
+        // for the join operation to finish, at the risk of picking wrong version in
+        // very rare circumstances.
+        </span><span class="kw">let _</span>: <span class="prelude-ty">Result</span>&lt;<span class="kw">_</span>, Elapsed&gt; = runtime::timeout(
+            Duration::from_secs(<span class="number">15</span>),
+            num_responses_receiver.wait_for(|num| num_peers.threshold() &lt;= <span class="kw-2">*</span>num),
+        )
+        .<span class="kw">await</span>;
+
+        <span class="kw">let </span>peer_api_version_sets = <span class="self">Self</span>::load_peers_last_api_versions(db, num_peers).<span class="kw">await</span>;
+
+        <span class="kw">let </span>common_api_versions = discover_common_api_versions_set(
+            <span class="kw-2">&amp;</span><span class="self">Self</span>::supported_api_versions_summary_static(config, client_module_init).<span class="kw">await</span>,
+            peer_api_version_sets,
+        )<span class="question-mark">?</span>;
 
         <span class="macro">debug!</span>(
             value = <span class="question-mark">?</span>common_api_versions,
@@ -4244,6 +4369,25 @@
             });
         }
         <span class="macro">debug!</span>(target: LOG_CLIENT_RECOVERY, <span class="string">"Recovery executor stopped"</span>);
+    }
+
+    <span class="kw">async fn </span>load_peers_last_api_versions(
+        db: <span class="kw-2">&amp;</span>Database,
+        num_peers: NumPeers,
+    ) -&gt; BTreeMap&lt;PeerId, SupportedApiVersionsSummary&gt; {
+        <span class="kw">let </span><span class="kw-2">mut </span>peer_api_version_sets = BTreeMap::new();
+
+        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = db.begin_transaction_nc().<span class="kw">await</span>;
+        <span class="kw">for </span>peer_id <span class="kw">in </span>num_peers.peer_ids() {
+            <span class="kw">if let </span><span class="prelude-val">Some</span>(v) = dbtx
+                .get_value(<span class="kw-2">&amp;</span>PeerLastApiVersionsSummaryKey(peer_id))
+                .<span class="kw">await
+            </span>{
+                peer_api_version_sets.insert(peer_id, v.<span class="number">0</span>);
+            }
+        }
+        drop(dbtx);
+        peer_api_version_sets
     }
 }
 
