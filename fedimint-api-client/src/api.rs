@@ -1,7 +1,6 @@
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::fmt::{self, Debug, Display};
 use std::num::NonZeroUsize;
-use std::ops::Add;
 use std::pin::Pin;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
@@ -63,7 +62,7 @@ use tokio::sync::{Mutex, OnceCell, RwLock};
 use tracing::{debug, error, instrument, trace, warn};
 
 use crate::query::{
-    DiscoverApiVersionSet, QueryStep, QueryStrategy, ThresholdConsensus, UnionResponsesSingle,
+    FilterMapThreshold, QueryStep, QueryStrategy, ThresholdConsensus, UnionResponsesSingle,
 };
 
 pub type PeerResult<T> = Result<T, PeerError>;
@@ -641,9 +640,7 @@ pub trait IGlobalFederationApi: IRawFederationApi {
     async fn discover_api_version_set(
         &self,
         client_versions: &SupportedApiVersionsSummary,
-        timeout: Duration,
-        num_responses_required: Option<usize>,
-    ) -> FederationResult<ApiVersionSet>;
+    ) -> anyhow::Result<ApiVersionSet>;
 
     /// Sets the password used to decrypt the configs and authenticate
     ///
@@ -988,21 +985,16 @@ where
     async fn discover_api_version_set(
         &self,
         client_versions: &SupportedApiVersionsSummary,
-        timeout: Duration,
-        num_responses_required: Option<usize>,
-    ) -> FederationResult<ApiVersionSet> {
-        self.request_with_strategy(
-            DiscoverApiVersionSet::new(
-                num_responses_required
-                    .unwrap_or(self.all_peers().len())
-                    .min(self.all_peers().len()),
-                now().add(timeout),
-                client_versions.clone(),
-            ),
-            VERSION_ENDPOINT.to_owned(),
-            ApiRequestErased::default(),
-        )
-        .await
+    ) -> anyhow::Result<ApiVersionSet> {
+        let peer_versions = self
+            .request_with_strategy(
+                FilterMapThreshold::new(|_, summary| Ok(summary), self.all_peers().len()),
+                VERSION_ENDPOINT.to_owned(),
+                ApiRequestErased::default(),
+            )
+            .await?;
+
+        crate::query::discover_common_api_versions_set(client_versions, peer_versions)
     }
 
     async fn set_password(&self, auth: ApiAuth) -> FederationResult<()> {

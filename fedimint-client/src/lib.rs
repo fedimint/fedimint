@@ -100,7 +100,7 @@ use fedimint_core::module::{
     ApiAuth, ApiVersion, MultiApiVersion, SupportedApiVersionsSummary, SupportedCoreApiVersions,
     SupportedModuleApiVersions,
 };
-use fedimint_core::task::{sleep, MaybeSend, MaybeSync, TaskGroup};
+use fedimint_core::task::{sleep, timeout, MaybeSend, MaybeSync, TaskGroup};
 use fedimint_core::time::now;
 use fedimint_core::transaction::Transaction;
 use fedimint_core::util::{BoxStream, NextOrPending};
@@ -180,14 +180,6 @@ pub enum AddStateMachinesError {
     StateAlreadyExists,
     #[error("Got {0}")]
     Other(#[from] anyhow::Error),
-}
-
-#[derive(Debug, Clone, Copy)]
-pub enum DiscoverCommonApiVersionMode {
-    /// Get the response from only a few peers, or until a timeout
-    Fast,
-    /// Try to get a response from all peers, or until a timeout
-    Full,
 }
 
 pub type AddStateMachinesResult = Result<(), AddStateMachinesError>;
@@ -1358,19 +1350,15 @@ impl Client {
         })
     }
 
-    pub async fn discover_common_api_version(
-        &self,
-        threshold: Option<usize>,
-    ) -> anyhow::Result<ApiVersionSet> {
-        Ok(self
-            .api()
-            .discover_api_version_set(
+    pub async fn discover_common_api_version(&self) -> anyhow::Result<ApiVersionSet> {
+        timeout(
+            get_discover_api_version_timeout(),
+            self.api().discover_api_version_set(
                 &Self::supported_api_versions_summary_static(self.get_config(), &self.module_inits)
                     .await,
-                get_discover_api_version_timeout(),
-                threshold,
-            )
-            .await?)
+            ),
+        )
+        .await?
     }
 
     /// Query the federation for API version support and then calculate
@@ -1379,27 +1367,20 @@ impl Client {
         config: &ClientConfig,
         client_module_init: &ClientModuleInitRegistry,
         api: &DynGlobalApi,
-        mode: DiscoverCommonApiVersionMode,
     ) -> anyhow::Result<ApiVersionSet> {
-        Ok(api
-            .discover_api_version_set(
+        timeout(
+            get_discover_api_version_timeout(),
+            api.discover_api_version_set(
                 &Self::supported_api_versions_summary_static(config, client_module_init).await,
-                get_discover_api_version_timeout(),
-                match mode {
-                    DiscoverCommonApiVersionMode::Fast => {
-                        Some((config.global.api_endpoints.len() / 2).min(1))
-                    }
-                    DiscoverCommonApiVersionMode::Full => None,
-                },
-            )
-            .await?)
+            ),
+        )
+        .await?
     }
 
     pub async fn discover_common_api_version_static(
         config: &ClientConfig,
         client_module_init: &ClientModuleInitRegistry,
         api: &DynGlobalApi,
-        mode: DiscoverCommonApiVersionMode,
     ) -> anyhow::Result<ApiVersionSet> {
         // We want to give it at least a good 30 second worth of trying, before we give
         // up.
@@ -1407,8 +1388,7 @@ impl Client {
 
         loop {
             let res =
-                Self::discover_common_api_version_static_try(config, client_module_init, api, mode)
-                    .await;
+                Self::discover_common_api_version_static_try(config, client_module_init, api).await;
 
             if res.is_ok() {
                 return res;
@@ -1480,14 +1460,8 @@ impl Client {
             // Separate task group, because we actually don't want to be waiting for this to
             // finish, and it's just best effort.
             task_group.spawn_cancellable("refresh_common_api_version_static", async move {
-                if let Err(error) = Self::refresh_common_api_version_static(
-                    &config,
-                    &module_inits,
-                    &api,
-                    &db,
-                    DiscoverCommonApiVersionMode::Full,
-                )
-                .await
+                if let Err(error) =
+                    Self::refresh_common_api_version_static(&config, &module_inits, &api, &db).await
                 {
                     warn!(%error, "Failed to discover common api versions");
                 }
@@ -1497,14 +1471,7 @@ impl Client {
         }
 
         debug!("No existing cached common api versions found, waiting for initial discovery");
-        Self::refresh_common_api_version_static(
-            config,
-            module_inits,
-            api,
-            db,
-            DiscoverCommonApiVersionMode::Fast,
-        )
-        .await
+        Self::refresh_common_api_version_static(config, module_inits, api, db).await
     }
 
     async fn refresh_common_api_version_static(
@@ -1512,12 +1479,11 @@ impl Client {
         module_inits: &ModuleInitRegistry<DynClientModuleInit>,
         api: &DynGlobalApi,
         db: &Database,
-        mode: DiscoverCommonApiVersionMode,
     ) -> anyhow::Result<ApiVersionSet> {
         debug!("Refreshing common api versions");
 
         let common_api_versions =
-            Client::discover_common_api_version_static(config, module_inits, api, mode).await?;
+            Client::discover_common_api_version_static(config, module_inits, api).await?;
 
         debug!(
             value = ?common_api_versions,

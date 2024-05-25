@@ -119,7 +119,7 @@ impl<R, T> FilterMap<R, T> {
     }
 }
 
-impl<R: Debug + Eq + Clone, T> QueryStrategy<R, T> for FilterMap<R, T> {
+impl<R: Debug + Clone, T> QueryStrategy<R, T> for FilterMap<R, T> {
     fn process(&mut self, peer: PeerId, result: PeerResult<R>) -> QueryStep<T> {
         match result {
             Ok(response) => match (self.filter_map)(response) {
@@ -160,7 +160,7 @@ impl<R, T> FilterMapThreshold<R, T> {
     }
 }
 
-impl<R: Eq + Clone + Debug, T> QueryStrategy<R, BTreeMap<PeerId, T>> for FilterMapThreshold<R, T> {
+impl<R: Clone + Debug, T> QueryStrategy<R, BTreeMap<PeerId, T>> for FilterMapThreshold<R, T> {
     fn process(&mut self, peer: PeerId, result: PeerResult<R>) -> QueryStep<BTreeMap<PeerId, T>> {
         match result {
             Ok(response) => match (self.filter_map)(peer, response) {
@@ -389,58 +389,6 @@ impl<R> QueryStrategy<R, BTreeMap<PeerId, R>> for ThresholdOrDeadline<R> {
     }
 }
 
-/// Query for supported api versions from all the guardians (with a deadline)
-/// and calculate the best versions to use for each component (core + modules).
-pub struct DiscoverApiVersionSet {
-    inner: ThresholdOrDeadline<SupportedApiVersionsSummary>,
-    client_versions: SupportedApiVersionsSummary,
-}
-
-impl DiscoverApiVersionSet {
-    pub fn new(
-        threshold: usize,
-        deadline: SystemTime,
-        client_versions: SupportedApiVersionsSummary,
-    ) -> Self {
-        Self {
-            inner: ThresholdOrDeadline::new(threshold, deadline),
-            client_versions,
-        }
-    }
-}
-
-impl QueryStrategy<SupportedApiVersionsSummary, ApiVersionSet> for DiscoverApiVersionSet {
-    fn request_timeout(&self) -> Option<Duration> {
-        Some(
-            self.inner
-                .deadline
-                .duration_since(fedimint_core::time::now())
-                .unwrap_or(Duration::ZERO),
-        )
-    }
-
-    fn process(
-        &mut self,
-        peer: PeerId,
-        result: api::PeerResult<SupportedApiVersionsSummary>,
-    ) -> QueryStep<ApiVersionSet> {
-        match self.inner.process(peer, result) {
-            QueryStep::Success(o) => {
-                match discover_common_api_versions_set(&self.client_versions, o) {
-                    Ok(o) => QueryStep::Success(o),
-                    Err(e) => QueryStep::Failure {
-                        general: Some(e),
-                        peers: BTreeMap::new(),
-                    },
-                }
-            }
-            QueryStep::Retry(v) => QueryStep::Retry(v),
-            QueryStep::Continue => QueryStep::Continue,
-            QueryStep::Failure { general, peers } => QueryStep::Failure { general, peers },
-        }
-    }
-}
-
 fn discover_common_core_api_version(
     client_versions: &SupportedCoreApiVersions,
     peer_versions: BTreeMap<PeerId, SupportedCoreApiVersions>,
@@ -649,7 +597,7 @@ fn discover_common_module_api_version(
     )
 }
 
-fn discover_common_api_versions_set(
+pub(crate) fn discover_common_api_versions_set(
     client_versions: &SupportedApiVersionsSummary,
     peer_versions: BTreeMap<PeerId, SupportedApiVersionsSummary>,
 ) -> anyhow::Result<ApiVersionSet> {
