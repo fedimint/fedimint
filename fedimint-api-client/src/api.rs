@@ -42,8 +42,8 @@ use fedimint_core::time::now;
 use fedimint_core::transaction::{SerdeTransaction, Transaction, TransactionSubmissionOutcome};
 use fedimint_core::util::SafeUrl;
 use fedimint_core::{
-    apply, async_trait_maybe_send, dyn_newtype_define, runtime, NumPeersExt, OutPoint, PeerId,
-    TransactionId,
+    apply, async_trait_maybe_send, dyn_newtype_define, runtime, NumPeers, NumPeersExt, OutPoint,
+    PeerId, TransactionId,
 };
 use fedimint_logging::LOG_CLIENT_NET_API;
 use futures::stream::FuturesUnordered;
@@ -63,7 +63,7 @@ use thiserror::Error;
 use tokio::sync::{Mutex, OnceCell, RwLock};
 use tracing::{debug, error, instrument, trace, warn};
 
-use crate::query::{QueryStep, QueryStrategy, ThresholdConsensus, UnionResponsesSingle};
+use crate::query::{FilterMapThreshold, QueryStep, QueryStrategy, ThresholdConsensus};
 
 pub type PeerResult<T> = Result<T, PeerError>;
 pub type JsonRpcResult<T> = Result<T, JsonRpcClientError>;
@@ -367,8 +367,6 @@ pub trait FederationApiExt: IRawFederationApi {
         method: String,
         params: ApiRequestErased,
     ) -> FederationResult<FedRet> {
-        let timeout = strategy.request_timeout();
-
         #[cfg(not(target_family = "wasm"))]
         let mut futures = FuturesUnordered::<Pin<Box<dyn Future<Output = _> + Send>>>::new();
         #[cfg(target_family = "wasm")]
@@ -384,18 +382,9 @@ pub trait FederationApiExt: IRawFederationApi {
                         .map(AbbreviateDebug)
                 };
 
-                let result = if let Some(timeout) = timeout {
-                    match fedimint_core::runtime::timeout(timeout, request).await {
-                        Ok(result) => result,
-                        Err(_timeout) => Err(JsonRpcClientError::RequestTimeout),
-                    }
-                } else {
-                    request.await
-                };
-
                 PeerResponse {
                     peer: *peer_id,
-                    result,
+                    result: request.await,
                 }
             }));
         }
@@ -482,7 +471,7 @@ pub trait FederationApiExt: IRawFederationApi {
         Ret: serde::de::DeserializeOwned + Eq + Debug + Clone + MaybeSend,
     {
         self.request_with_strategy(
-            ThresholdConsensus::new(self.all_peers().total()),
+            ThresholdConsensus::new(NumPeers::from(self.all_peers().total())),
             method,
             params,
         )
@@ -658,7 +647,7 @@ pub trait IGlobalFederationApi: IRawFederationApi {
     async fn download_backup(
         &self,
         id: &secp256k1::PublicKey,
-    ) -> FederationResult<Vec<ClientBackupSnapshot>>;
+    ) -> FederationResult<BTreeMap<PeerId, Option<ClientBackupSnapshot>>>;
 
     /// Sets the password used to decrypt the configs and authenticate
     ///
@@ -987,17 +976,16 @@ where
     async fn download_backup(
         &self,
         id: &secp256k1::PublicKey,
-    ) -> FederationResult<Vec<ClientBackupSnapshot>> {
-        Ok(self
-            .request_with_strategy(
-                UnionResponsesSingle::<Option<ClientBackupSnapshot>>::new(self.all_peers().total()),
-                RECOVER_ENDPOINT.to_owned(),
-                ApiRequestErased::new(id),
-            )
-            .await?
-            .into_iter()
-            .flatten()
-            .collect())
+    ) -> FederationResult<BTreeMap<PeerId, Option<ClientBackupSnapshot>>> {
+        self.request_with_strategy(
+            FilterMapThreshold::new(
+                |_, snapshot| Ok(snapshot),
+                NumPeers::from(self.all_peers().total()),
+            ),
+            RECOVER_ENDPOINT.to_owned(),
+            ApiRequestErased::new(id),
+        )
+        .await
     }
 
     async fn set_password(&self, auth: ApiAuth) -> FederationResult<()> {

@@ -7,6 +7,7 @@ use fedimint_core::encoding::Encodable as _;
 use fedimint_core::endpoint_constants::CLIENT_CONFIG_ENDPOINT;
 use fedimint_core::invite_code::InviteCode;
 use fedimint_core::module::ApiRequestErased;
+use fedimint_core::NumPeers;
 use query::FilterMap;
 use tracing::debug;
 
@@ -46,7 +47,7 @@ pub async fn try_download_client_config(invite_code: &InviteCode) -> anyhow::Res
 
             Ok(cfg.global.api_endpoints)
         },
-        1,
+        NumPeers::from(1),
     );
 
     let api_endpoints = DynGlobalApi::from_invite_code(invite_code)

@@ -187,14 +187,6 @@ pub enum AddStateMachinesError {
     Other(#[from] anyhow::Error),
 }
 
-#[derive(Debug, Clone, Copy)]
-pub enum DiscoverCommonApiVersionMode {
-    /// Get the response from only a few peers, or until a timeout
-    Fast,
-    /// Try to get a response from all peers, or until a timeout
-    Full,
-}
-
 pub type AddStateMachinesResult = Result<(), AddStateMachinesError>;
 
 #[apply(async_trait_maybe_send!)]

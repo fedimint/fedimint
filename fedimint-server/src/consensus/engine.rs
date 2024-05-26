@@ -23,7 +23,7 @@ use fedimint_core::session_outcome::{
 };
 use fedimint_core::task::{sleep, TaskGroup, TaskHandle};
 use fedimint_core::timing::TimeReporter;
-use fedimint_core::{timing, PeerId};
+use fedimint_core::{timing, NumPeers, PeerId};
 use futures::StreamExt;
 use rand::Rng;
 use tokio::sync::{watch, RwLock};
@@ -641,7 +641,7 @@ impl ConsensusEngine {
 
             let result = federation_api
                 .request_with_strategy(
-                    FilterMap::new(filter_map.clone(), total_peers),
+                    FilterMap::new(filter_map.clone(), NumPeers::from(total_peers)),
                     AWAIT_SIGNED_SESSION_OUTCOME_ENDPOINT.to_string(),
                     ApiRequestErased::new(index),
                 )

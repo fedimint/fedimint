@@ -338,8 +338,8 @@ impl Client {
             .download_backup(&Client::get_backup_id_static(root_secret))
             .await?
             .into_iter()
-            .filter_map(|backup| {
-                match EncryptedClientBackup(backup.data).decrypt_with(
+            .filter_map(|(peer, backup)| {
+                match EncryptedClientBackup(backup?.data).decrypt_with(
                     &Self::get_derived_backup_encryption_key_static(root_secret),
                     decoders,
                 ) {
@@ -347,7 +347,7 @@ impl Client {
                     Err(e) => {
                         warn!(
                             target: LOG_CLIENT_RECOVERY,
-                            "Invalid backup returned by one of the peers: {e}"
+                            "Invalid backup returned by {peer}: {e}"
                         );
                         None
                     }
