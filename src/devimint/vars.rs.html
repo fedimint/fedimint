@@ -210,9 +210,22 @@
 <a href="#210" id="210">210</a>
 <a href="#211" id="211">211</a>
 <a href="#212" id="212">212</a>
+<a href="#213" id="213">213</a>
+<a href="#214" id="214">214</a>
+<a href="#215" id="215">215</a>
+<a href="#216" id="216">216</a>
+<a href="#217" id="217">217</a>
+<a href="#218" id="218">218</a>
+<a href="#219" id="219">219</a>
+<a href="#220" id="220">220</a>
+<a href="#221" id="221">221</a>
+<a href="#222" id="222">222</a>
+<a href="#223" id="223">223</a>
+<a href="#224" id="224">224</a>
 </pre></div><pre class="rust"><code><span class="attr">#![allow(non_snake_case)]
 
 </span><span class="kw">use </span>std::path::{Path, PathBuf};
+<span class="kw">use </span>std::str::FromStr <span class="kw">as _</span>;
 
 <span class="kw">pub trait </span>ToEnvVar {
     <span class="kw">fn </span>to_env_value(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;String&gt;;
@@ -283,6 +296,15 @@
     }
 }
 
+<span class="kw">impl </span>ToEnvVar <span class="kw">for </span>ApiSecrets {
+    <span class="kw">fn </span>to_env_value(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;String&gt; {
+        <span class="kw">if </span><span class="self">self</span>.is_empty() {
+            <span class="kw">return </span><span class="prelude-val">None</span>;
+        }
+        <span class="prelude-val">Some</span>(<span class="self">self</span>.get_all().join(<span class="string">","</span>))
+    }
+}
+
 <span class="kw">pub async fn </span>mkdir(dir: PathBuf) -&gt; anyhow::Result&lt;PathBuf&gt; {
     <span class="kw">if </span>!dir.exists() {
         tokio::fs::create_dir(<span class="kw-2">&amp;</span>dir).<span class="kw">await</span><span class="question-mark">?</span>;
@@ -296,7 +318,8 @@
 };
 <span class="kw">use </span>fedimint_portalloc::port_alloc;
 <span class="kw">use </span>fedimint_server::config::ConfigGenParams;
-<span class="kw">use </span>fedimintd::envs::FM_API_SECRET_ENV;
+<span class="kw">use </span>fedimint_server::net::api::ApiSecrets;
+<span class="kw">use </span>fedimintd::envs::FM_FORCE_API_SECRETS_ENV;
 <span class="kw">use </span>format <span class="kw">as </span>f;
 
 <span class="kw">pub fn </span>utf8(path: <span class="kw-2">&amp;</span>Path) -&gt; <span class="kw-2">&amp;</span>str {
@@ -308,10 +331,11 @@
     {
         FM_USE_UNKNOWN_MODULE: String = std::env::var(FM_USE_UNKNOWN_MODULE_ENV).unwrap_or_else(|<span class="kw">_</span>| <span class="string">"1"</span>.into()); env: <span class="string">"FM_USE_UNKNOWN_MODULE"</span>;
 
-        FM_API_SECRET: <span class="prelude-ty">Option</span>&lt;String&gt; = std::env::var(FM_API_SECRET_ENV).ok().and_then(|s| {
-            <span class="kw">let </span>s = s.trim();
-            (!s.is_empty()).then_some(s.to_owned())
-        }); env: FM_API_SECRET_ENV;
+        FM_FORCE_API_SECRETS: ApiSecrets = std::env::var(FM_FORCE_API_SECRETS_ENV).ok().and_then(|s| {
+            ApiSecrets::from_str(<span class="kw-2">&amp;</span>s).ok()
+        }).unwrap_or_default(); env: FM_FORCE_API_SECRETS_ENV;
+
+        FM_API_SECRET: <span class="prelude-ty">Option</span>&lt;String&gt; = std::env::var(<span class="string">"FM_API_SECRET"</span>).ok().or_else(|| FM_FORCE_API_SECRETS.get_active()); env: <span class="string">"FM_API_SECRET"</span>;
 
         FM_IN_DEVIMINT: String = <span class="string">"1"</span>.to_string(); env: FM_IN_DEVIMINT_ENV;
 

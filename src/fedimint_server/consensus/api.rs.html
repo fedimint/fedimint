@@ -576,6 +576,12 @@
 <a href="#576" id="576">576</a>
 <a href="#577" id="577">577</a>
 <a href="#578" id="578">578</a>
+<a href="#579" id="579">579</a>
+<a href="#580" id="580">580</a>
+<a href="#581" id="581">581</a>
+<a href="#582" id="582">582</a>
+<a href="#583" id="583">583</a>
+<a href="#584" id="584">584</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! Implements the client API through which users interact with the federation
 </span><span class="kw">use </span>std::cmp::Ordering;
 <span class="kw">use </span>std::collections::{BTreeMap, HashMap};
@@ -646,7 +652,7 @@
     <span class="doccomment">/// Cached client config
     </span><span class="kw">pub </span>client_cfg: ClientConfig,
 
-    <span class="kw">pub </span>api_secret: <span class="prelude-ty">Option</span>&lt;String&gt;,
+    <span class="kw">pub </span>force_api_secret: <span class="prelude-ty">Option</span>&lt;String&gt;,
     <span class="doccomment">/// For sending API events to consensus such as transactions
     </span><span class="kw">pub </span>submission_sender: async_channel::Sender&lt;ConsensusItem&gt;,
     <span class="kw">pub </span>shutdown_sender: watch::Sender&lt;<span class="prelude-ty">Option</span>&lt;u64&gt;&gt;,
@@ -658,6 +664,12 @@
 <span class="kw">impl </span>ConsensusApi {
     <span class="kw">pub fn </span>api_versions_summary(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>SupportedApiVersionsSummary {
         <span class="kw-2">&amp;</span><span class="self">self</span>.supported_api_versions
+    }
+
+    <span class="kw">pub fn </span>get_active_api_secret(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;String&gt; {
+        <span class="comment">// TODO: In the future, we might want to fetch it from the DB, so it's possible
+        // to customize from the UX
+        </span><span class="self">self</span>.force_api_secret.clone()
     }
 
     <span class="comment">// we want to return an error if and only if the submitted transaction is
@@ -1031,7 +1043,7 @@
             INVITE_CODE_ENDPOINT,
             ApiVersion::new(<span class="number">0</span>, <span class="number">0</span>),
             <span class="kw">async </span>|fedimint: <span class="kw-2">&amp;</span>ConsensusApi, _context,  _v: ()| -&gt; String {
-                <span class="prelude-val">Ok</span>(fedimint.cfg.get_invite_code(fedimint.api_secret.clone()).to_string())
+                <span class="prelude-val">Ok</span>(fedimint.cfg.get_invite_code(fedimint.get_active_api_secret()).to_string())
             }
         },
         <span class="macro">api_endpoint!</span> {

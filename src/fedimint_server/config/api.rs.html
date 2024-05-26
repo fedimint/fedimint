@@ -2175,6 +2175,7 @@
     <span class="kw">use </span><span class="kw">crate</span>::config::io::{read_server_config, PLAINTEXT_PASSWORD};
     <span class="kw">use </span><span class="kw">crate</span>::config::{DynServerModuleInit, ServerConfig, DEFAULT_MAX_CLIENT_CONNECTIONS};
     <span class="kw">use </span><span class="kw">crate</span>::fedimint_core::module::ServerModuleInit;
+    <span class="kw">use </span><span class="kw">crate</span>::net::api::ApiSecrets;
 
     <span class="doccomment">/// Helper in config API tests for simulating a guardian's client and server
     </span><span class="kw">struct </span>TestConfigApi {
@@ -2229,8 +2230,7 @@
             spawn(<span class="string">"fedimint server"</span>, <span class="kw">async move </span>{
                 <span class="kw">crate</span>::run(
                     dir_clone,
-                    <span class="prelude-val">None</span>,
-                    <span class="macro">vec!</span>[],
+                    ApiSecrets::none(),
                     settings_clone,
                     db,
                     <span class="string">"dummyversionhash"</span>.to_owned(),

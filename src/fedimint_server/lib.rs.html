@@ -157,10 +157,6 @@
 <a href="#157" id="157">157</a>
 <a href="#158" id="158">158</a>
 <a href="#159" id="159">159</a>
-<a href="#160" id="160">160</a>
-<a href="#161" id="161">161</a>
-<a href="#162" id="162">162</a>
-<a href="#163" id="163">163</a>
 </pre></div><pre class="rust"><code><span class="attr">#![allow(where_clauses_object_safety)] </span><span class="comment">// https://github.com/dtolnay/async-trait/issues/228
 </span><span class="kw">extern crate </span>fedimint_core;
 
@@ -176,6 +172,7 @@
 <span class="kw">use </span>fedimint_core::task::TaskGroup;
 <span class="kw">use </span>fedimint_core::util::write_new;
 <span class="kw">use </span>fedimint_logging::LOG_CONSENSUS;
+<span class="kw">use </span>net::api::ApiSecrets;
 <span class="kw">use </span>tracing::info;
 
 <span class="kw">use </span><span class="kw">crate</span>::config::api::{ConfigGenApi, ConfigGenSettings};
@@ -204,8 +201,7 @@
 <span class="attr">#[allow(clippy::too_many_arguments)]
 </span><span class="kw">pub async fn </span>run(
     data_dir: PathBuf,
-    api_secret: <span class="prelude-ty">Option</span>&lt;String&gt;,
-    api_extra_secrets: Vec&lt;String&gt;,
+    force_api_secrets: ApiSecrets,
     settings: ConfigGenSettings,
     db: Database,
     code_version_str: String,
@@ -221,8 +217,7 @@
                 db.clone(),
                 code_version_str,
                 task_group.make_subgroup(),
-                api_secret.clone(),
-                api_extra_secrets.clone(),
+                force_api_secrets.clone(),
             )
             .<span class="kw">await</span><span class="question-mark">?
         </span>}
@@ -244,8 +239,7 @@
         db,
         module_init_registry.clone(),
         <span class="kw-2">&amp;</span>task_group,
-        api_secret,
-        api_extra_secrets,
+        force_api_secrets,
     )
     .<span class="kw">await</span><span class="question-mark">?</span>;
 
@@ -271,8 +265,7 @@
     db: Database,
     code_version_str: String,
     <span class="kw-2">mut </span>task_group: TaskGroup,
-    api_secret: <span class="prelude-ty">Option</span>&lt;String&gt;,
-    api_extra_secrets: Vec&lt;String&gt;,
+    force_api_secrets: ApiSecrets,
 ) -&gt; anyhow::Result&lt;ServerConfig&gt; {
     <span class="macro">info!</span>(target: LOG_CONSENSUS, <span class="string">"Starting config gen"</span>);
 
@@ -286,7 +279,7 @@
         cfg_sender,
         <span class="kw-2">&amp;mut </span>task_group,
         code_version_str.clone(),
-        api_secret.clone(),
+        force_api_secrets.get_active(),
     );
 
     <span class="kw">let </span><span class="kw-2">mut </span>rpc_module = RpcHandlerCtx::new_module(config_gen);
@@ -298,8 +291,7 @@
         <span class="kw-2">&amp;</span>settings.api_bind,
         rpc_module,
         <span class="number">10</span>,
-        api_secret.clone(),
-        api_extra_secrets,
+        force_api_secrets.clone(),
     )
     .<span class="kw">await</span>;
 
@@ -319,7 +311,7 @@
         data_dir.clone(),
         <span class="kw-2">&amp;</span>cfg.private.api_auth.<span class="number">0</span>,
         <span class="kw-2">&amp;</span>settings.registry,
-        api_secret,
+        force_api_secrets.get_active(),
     )<span class="question-mark">?</span>;
 
     <span class="prelude-val">Ok</span>(cfg)
