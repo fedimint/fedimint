@@ -76,6 +76,7 @@
 <a href="#76" id="76">76</a>
 <a href="#77" id="77">77</a>
 <a href="#78" id="78">78</a>
+<a href="#79" id="79">79</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::time::Duration;
 
 <span class="kw">use </span>anyhow::{bail, Context <span class="kw">as _</span>};
@@ -85,6 +86,7 @@
 <span class="kw">use </span>fedimint_core::endpoint_constants::CLIENT_CONFIG_ENDPOINT;
 <span class="kw">use </span>fedimint_core::invite_code::InviteCode;
 <span class="kw">use </span>fedimint_core::module::ApiRequestErased;
+<span class="kw">use </span>fedimint_core::NumPeers;
 <span class="kw">use </span>query::FilterMap;
 <span class="kw">use </span>tracing::debug;
 
@@ -124,7 +126,7 @@
 
             <span class="prelude-val">Ok</span>(cfg.global.api_endpoints)
         },
-        <span class="number">1</span>,
+        NumPeers::from(<span class="number">1</span>),
     );
 
     <span class="kw">let </span>api_endpoints = DynGlobalApi::from_invite_code(invite_code)

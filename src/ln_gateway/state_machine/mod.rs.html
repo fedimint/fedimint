@@ -758,8 +758,6 @@
 <a href="#758" id="758">758</a>
 <a href="#759" id="759">759</a>
 <a href="#760" id="760">760</a>
-<a href="#761" id="761">761</a>
-<a href="#762" id="762">762</a>
 </pre></div><pre class="rust"><code><span class="kw">mod </span>complete;
 <span class="kw">pub mod </span>pay;
 
@@ -1149,7 +1147,7 @@
         <span class="kw">let </span>challenges = <span class="self">self
             </span>.module_api
             .get_remove_gateway_challenge(gateway_id)
-            .<span class="kw">await</span><span class="question-mark">?</span>;
+            .<span class="kw">await</span>;
 
         <span class="kw">let </span>fed_public_key = <span class="self">self</span>.cfg.threshold_pub_key;
         <span class="kw">let </span>signatures = challenges
@@ -1166,9 +1164,7 @@
             signatures,
         };
 
-        <span class="self">self</span>.module_api
-            .remove_gateway(remove_gateway_request)
-            .<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="self">self</span>.module_api.remove_gateway(remove_gateway_request).<span class="kw">await</span>;
 
         <span class="prelude-val">Ok</span>(())
     }

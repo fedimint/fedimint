@@ -696,7 +696,7 @@
 };
 <span class="kw">use </span>fedimint_core::task::{sleep, TaskGroup, TaskHandle};
 <span class="kw">use </span>fedimint_core::timing::TimeReporter;
-<span class="kw">use </span>fedimint_core::{timing, PeerId};
+<span class="kw">use </span>fedimint_core::{timing, NumPeers, PeerId};
 <span class="kw">use </span>futures::StreamExt;
 <span class="kw">use </span>rand::Rng;
 <span class="kw">use </span>tokio::sync::{watch, RwLock};
@@ -1314,7 +1314,7 @@
 
             <span class="kw">let </span>result = federation_api
                 .request_with_strategy(
-                    FilterMap::new(filter_map.clone(), total_peers),
+                    FilterMap::new(filter_map.clone(), NumPeers::from(total_peers)),
                     AWAIT_SIGNED_SESSION_OUTCOME_ENDPOINT.to_string(),
                     ApiRequestErased::new(index),
                 )

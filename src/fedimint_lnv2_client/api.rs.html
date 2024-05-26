@@ -97,19 +97,43 @@
 <a href="#97" id="97">97</a>
 <a href="#98" id="98">98</a>
 <a href="#99" id="99">99</a>
-</pre></div><pre class="rust"><code><span class="kw">use </span>std::time::Duration;
+<a href="#100" id="100">100</a>
+<a href="#101" id="101">101</a>
+<a href="#102" id="102">102</a>
+<a href="#103" id="103">103</a>
+<a href="#104" id="104">104</a>
+<a href="#105" id="105">105</a>
+<a href="#106" id="106">106</a>
+<a href="#107" id="107">107</a>
+<a href="#108" id="108">108</a>
+<a href="#109" id="109">109</a>
+<a href="#110" id="110">110</a>
+<a href="#111" id="111">111</a>
+<a href="#112" id="112">112</a>
+<a href="#113" id="113">113</a>
+<a href="#114" id="114">114</a>
+<a href="#115" id="115">115</a>
+<a href="#116" id="116">116</a>
+<a href="#117" id="117">117</a>
+<a href="#118" id="118">118</a>
+<a href="#119" id="119">119</a>
+<a href="#120" id="120">120</a>
+<a href="#121" id="121">121</a>
+</pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
+<span class="kw">use </span>std::time::Duration;
 
 <span class="kw">use </span>fedimint_api_client::api::{FederationApiExt, FederationResult, IModuleFederationApi};
-<span class="kw">use </span>fedimint_api_client::query::UnionResponses;
+<span class="kw">use </span>fedimint_api_client::query::FilterMapThreshold;
 <span class="kw">use </span>fedimint_core::module::ApiRequestErased;
 <span class="kw">use </span>fedimint_core::task::{sleep, MaybeSend, MaybeSync};
 <span class="kw">use </span>fedimint_core::util::SafeUrl;
-<span class="kw">use </span>fedimint_core::{apply, async_trait_maybe_send, NumPeersExt};
+<span class="kw">use </span>fedimint_core::{apply, async_trait_maybe_send, NumPeers, NumPeersExt, PeerId};
 <span class="kw">use </span>fedimint_lnv2_common::endpoint_constants::{
     AWAIT_INCOMING_CONTRACT_ENDPOINT, AWAIT_PREIMAGE_ENDPOINT, CONSENSUS_BLOCK_COUNT_ENDPOINT,
     GATEWAYS_ENDPOINT, OUTGOING_CONTRACT_EXPIRATION_ENDPOINT,
 };
 <span class="kw">use </span>fedimint_lnv2_common::ContractId;
+<span class="kw">use </span>itertools::Itertools;
 
 <span class="kw">const </span>RETRY_DELAY: Duration = Duration::from_secs(<span class="number">1</span>);
 
@@ -188,12 +212,32 @@
     </span>}
 
     <span class="kw">async fn </span>fetch_gateways(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FederationResult&lt;Vec&lt;SafeUrl&gt;&gt; {
-        <span class="self">self</span>.request_with_strategy(
-            UnionResponses::new(<span class="self">self</span>.all_peers().total()),
-            GATEWAYS_ENDPOINT.to_string(),
-            ApiRequestErased::default(),
-        )
-        .<span class="kw">await
-    </span>}
+        <span class="kw">let </span>gateways: BTreeMap&lt;PeerId, Vec&lt;SafeUrl&gt;&gt; = <span class="self">self
+            </span>.request_with_strategy(
+                FilterMapThreshold::new(
+                    |<span class="kw">_</span>, gateways| <span class="prelude-val">Ok</span>(gateways),
+                    NumPeers::from(<span class="self">self</span>.all_peers().total()),
+                ),
+                GATEWAYS_ENDPOINT.to_string(),
+                ApiRequestErased::default(),
+            )
+            .<span class="kw">await</span><span class="question-mark">?</span>;
+
+        <span class="kw">let </span><span class="kw-2">mut </span>union = gateways
+            .values()
+            .flatten()
+            .dedup()
+            .cloned()
+            .collect::&lt;Vec&lt;SafeUrl&gt;&gt;();
+
+        union.sort_by_cached_key(|r| {
+            gateways
+                .values()
+                .filter(|response| !response.contains(r))
+                .count()
+        });
+
+        <span class="prelude-val">Ok</span>(union)
+    }
 }
 </code></pre></div></section></main></body></html>

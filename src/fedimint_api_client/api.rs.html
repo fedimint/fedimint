@@ -1629,18 +1629,6 @@
 <a href="#1629" id="1629">1629</a>
 <a href="#1630" id="1630">1630</a>
 <a href="#1631" id="1631">1631</a>
-<a href="#1632" id="1632">1632</a>
-<a href="#1633" id="1633">1633</a>
-<a href="#1634" id="1634">1634</a>
-<a href="#1635" id="1635">1635</a>
-<a href="#1636" id="1636">1636</a>
-<a href="#1637" id="1637">1637</a>
-<a href="#1638" id="1638">1638</a>
-<a href="#1639" id="1639">1639</a>
-<a href="#1640" id="1640">1640</a>
-<a href="#1641" id="1641">1641</a>
-<a href="#1642" id="1642">1642</a>
-<a href="#1643" id="1643">1643</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap};
 <span class="kw">use </span>std::fmt::{<span class="self">self</span>, Debug, Display};
 <span class="kw">use </span>std::num::NonZeroUsize;
@@ -1685,8 +1673,8 @@
 <span class="kw">use </span>fedimint_core::transaction::{SerdeTransaction, Transaction, TransactionSubmissionOutcome};
 <span class="kw">use </span>fedimint_core::util::SafeUrl;
 <span class="kw">use </span>fedimint_core::{
-    apply, async_trait_maybe_send, dyn_newtype_define, runtime, NumPeersExt, OutPoint, PeerId,
-    TransactionId,
+    apply, async_trait_maybe_send, dyn_newtype_define, runtime, NumPeers, NumPeersExt, OutPoint,
+    PeerId, TransactionId,
 };
 <span class="kw">use </span>fedimint_logging::LOG_CLIENT_NET_API;
 <span class="kw">use </span>futures::stream::FuturesUnordered;
@@ -1706,7 +1694,7 @@
 <span class="kw">use </span>tokio::sync::{Mutex, OnceCell, RwLock};
 <span class="kw">use </span>tracing::{debug, error, instrument, trace, warn};
 
-<span class="kw">use </span><span class="kw">crate</span>::query::{QueryStep, QueryStrategy, ThresholdConsensus, UnionResponsesSingle};
+<span class="kw">use </span><span class="kw">crate</span>::query::{FilterMapThreshold, QueryStep, QueryStrategy, ThresholdConsensus};
 
 <span class="kw">pub type </span>PeerResult&lt;T&gt; = <span class="prelude-ty">Result</span>&lt;T, PeerError&gt;;
 <span class="kw">pub type </span>JsonRpcResult&lt;T&gt; = <span class="prelude-ty">Result</span>&lt;T, JsonRpcClientError&gt;;
@@ -2010,8 +1998,6 @@
         method: String,
         params: ApiRequestErased,
     ) -&gt; FederationResult&lt;FedRet&gt; {
-        <span class="kw">let </span>timeout = strategy.request_timeout();
-
         <span class="attr">#[cfg(not(target_family = <span class="string">"wasm"</span>))]
         </span><span class="kw">let </span><span class="kw-2">mut </span>futures = FuturesUnordered::&lt;Pin&lt;Box&lt;<span class="kw">dyn </span>Future&lt;Output = <span class="kw">_</span>&gt; + Send&gt;&gt;&gt;::new();
         <span class="attr">#[cfg(target_family = <span class="string">"wasm"</span>)]
@@ -2027,18 +2013,9 @@
                         </span>.map(AbbreviateDebug)
                 };
 
-                <span class="kw">let </span>result = <span class="kw">if let </span><span class="prelude-val">Some</span>(timeout) = timeout {
-                    <span class="kw">match </span>fedimint_core::runtime::timeout(timeout, request).<span class="kw">await </span>{
-                        <span class="prelude-val">Ok</span>(result) =&gt; result,
-                        <span class="prelude-val">Err</span>(_timeout) =&gt; <span class="prelude-val">Err</span>(JsonRpcClientError::RequestTimeout),
-                    }
-                } <span class="kw">else </span>{
-                    request.<span class="kw">await
-                </span>};
-
                 PeerResponse {
                     peer: <span class="kw-2">*</span>peer_id,
-                    result,
+                    result: request.<span class="kw">await</span>,
                 }
             }));
         }
@@ -2125,7 +2102,7 @@
         </span>Ret: serde::de::DeserializeOwned + Eq + Debug + Clone + MaybeSend,
     {
         <span class="self">self</span>.request_with_strategy(
-            ThresholdConsensus::new(<span class="self">self</span>.all_peers().total()),
+            ThresholdConsensus::new(NumPeers::from(<span class="self">self</span>.all_peers().total())),
             method,
             params,
         )
@@ -2301,7 +2278,7 @@
     <span class="kw">async fn </span>download_backup(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         id: <span class="kw-2">&amp;</span>secp256k1::PublicKey,
-    ) -&gt; FederationResult&lt;Vec&lt;ClientBackupSnapshot&gt;&gt;;
+    ) -&gt; FederationResult&lt;BTreeMap&lt;PeerId, <span class="prelude-ty">Option</span>&lt;ClientBackupSnapshot&gt;&gt;&gt;;
 
     <span class="doccomment">/// Sets the password used to decrypt the configs and authenticate
     ///
@@ -2630,18 +2607,17 @@
     <span class="kw">async fn </span>download_backup(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         id: <span class="kw-2">&amp;</span>secp256k1::PublicKey,
-    ) -&gt; FederationResult&lt;Vec&lt;ClientBackupSnapshot&gt;&gt; {
-        <span class="prelude-val">Ok</span>(<span class="self">self
-            </span>.request_with_strategy(
-                UnionResponsesSingle::&lt;<span class="prelude-ty">Option</span>&lt;ClientBackupSnapshot&gt;&gt;::new(<span class="self">self</span>.all_peers().total()),
-                RECOVER_ENDPOINT.to_owned(),
-                ApiRequestErased::new(id),
-            )
-            .<span class="kw">await</span><span class="question-mark">?
-            </span>.into_iter()
-            .flatten()
-            .collect())
-    }
+    ) -&gt; FederationResult&lt;BTreeMap&lt;PeerId, <span class="prelude-ty">Option</span>&lt;ClientBackupSnapshot&gt;&gt;&gt; {
+        <span class="self">self</span>.request_with_strategy(
+            FilterMapThreshold::new(
+                |<span class="kw">_</span>, snapshot| <span class="prelude-val">Ok</span>(snapshot),
+                NumPeers::from(<span class="self">self</span>.all_peers().total()),
+            ),
+            RECOVER_ENDPOINT.to_owned(),
+            ApiRequestErased::new(id),
+        )
+        .<span class="kw">await
+    </span>}
 
     <span class="kw">async fn </span>set_password(<span class="kw-2">&amp;</span><span class="self">self</span>, auth: ApiAuth) -&gt; FederationResult&lt;()&gt; {
         <span class="self">self</span>.request_admin(SET_PASSWORD_ENDPOINT, ApiRequestErased::default(), auth)

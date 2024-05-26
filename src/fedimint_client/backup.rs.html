@@ -746,8 +746,8 @@
             .download_backup(<span class="kw-2">&amp;</span>Client::get_backup_id_static(root_secret))
             .<span class="kw">await</span><span class="question-mark">?
             </span>.into_iter()
-            .filter_map(|backup| {
-                <span class="kw">match </span>EncryptedClientBackup(backup.data).decrypt_with(
+            .filter_map(|(peer, backup)| {
+                <span class="kw">match </span>EncryptedClientBackup(backup<span class="question-mark">?</span>.data).decrypt_with(
                     <span class="kw-2">&amp;</span><span class="self">Self</span>::get_derived_backup_encryption_key_static(root_secret),
                     decoders,
                 ) {
@@ -755,7 +755,7 @@
                     <span class="prelude-val">Err</span>(e) =&gt; {
                         <span class="macro">warn!</span>(
                             target: LOG_CLIENT_RECOVERY,
-                            <span class="string">"Invalid backup returned by one of the peers: {e}"
+                            <span class="string">"Invalid backup returned by {peer}: {e}"
                         </span>);
                         <span class="prelude-val">None
                     </span>}

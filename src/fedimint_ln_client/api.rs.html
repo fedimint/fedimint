@@ -346,6 +346,10 @@
 <a href="#346" id="346">346</a>
 <a href="#347" id="347">347</a>
 <a href="#348" id="348">348</a>
+<a href="#349" id="349">349</a>
+<a href="#350" id="350">350</a>
+<a href="#351" id="351">351</a>
+<a href="#352" id="352">352</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap};
 <span class="kw">use </span>std::time::Duration;
 
@@ -353,10 +357,10 @@
 <span class="kw">use </span>fedimint_api_client::api::{
     FederationApiExt, FederationError, FederationResult, IModuleFederationApi,
 };
-<span class="kw">use </span>fedimint_api_client::query::{ThresholdOrDeadline, UnionResponses};
+<span class="kw">use </span>fedimint_api_client::query::FilterMapThreshold;
 <span class="kw">use </span>fedimint_core::module::ApiRequestErased;
 <span class="kw">use </span>fedimint_core::task::{MaybeSend, MaybeSync};
-<span class="kw">use </span>fedimint_core::{apply, async_trait_maybe_send, NumPeersExt, PeerId};
+<span class="kw">use </span>fedimint_core::{apply, async_trait_maybe_send, NumPeers, NumPeersExt, PeerId};
 <span class="kw">use </span>fedimint_ln_common::contracts::incoming::{IncomingContractAccount, IncomingContractOffer};
 <span class="kw">use </span>fedimint_ln_common::contracts::outgoing::OutgoingContractAccount;
 <span class="kw">use </span>fedimint_ln_common::contracts::{
@@ -421,15 +425,12 @@
     </span><span class="kw">async fn </span>get_remove_gateway_challenge(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         gateway_id: PublicKey,
-    ) -&gt; FederationResult&lt;BTreeMap&lt;PeerId, <span class="prelude-ty">Option</span>&lt;sha256::Hash&gt;&gt;&gt;;
+    ) -&gt; BTreeMap&lt;PeerId, <span class="prelude-ty">Option</span>&lt;sha256::Hash&gt;&gt;;
 
     <span class="doccomment">/// Removes the gateway's registration record. First checks the provided
     /// signature to verify the gateway authorized the removal of the
     /// registration.
-    </span><span class="kw">async fn </span>remove_gateway(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        remove_gateway_request: RemoveGatewayRequest,
-    ) -&gt; FederationResult&lt;()&gt;;
+    </span><span class="kw">async fn </span>remove_gateway(<span class="kw-2">&amp;</span><span class="self">self</span>, remove_gateway_request: RemoveGatewayRequest);
 
     <span class="kw">async fn </span>offer_exists(<span class="kw-2">&amp;</span><span class="self">self</span>, payment_hash: Sha256Hash) -&gt; FederationResult&lt;bool&gt;;
 
@@ -532,9 +533,12 @@
     /// might be aware of different ones, so we just return the union of all
     /// responses and allow client selection.
     </span><span class="kw">async fn </span>fetch_gateways(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FederationResult&lt;Vec&lt;LightningGatewayAnnouncement&gt;&gt; {
-        <span class="kw">let </span>gateway_announcements: Vec&lt;LightningGatewayAnnouncement&gt; = <span class="self">self
+        <span class="kw">let </span>gateway_announcements = <span class="self">self
             </span>.request_with_strategy(
-                UnionResponses::new(<span class="self">self</span>.all_peers().total()),
+                FilterMapThreshold::new(
+                    |<span class="kw">_</span>, gateways| <span class="prelude-val">Ok</span>(gateways),
+                    NumPeers::from(<span class="self">self</span>.all_peers().total()),
+                ),
                 LIST_GATEWAYS_ENDPOINT.to_string(),
                 ApiRequestErased::default(),
             )
@@ -559,46 +563,48 @@
     <span class="kw">async fn </span>get_remove_gateway_challenge(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         gateway_id: PublicKey,
-    ) -&gt; FederationResult&lt;BTreeMap&lt;PeerId, <span class="prelude-ty">Option</span>&lt;sha256::Hash&gt;&gt;&gt; {
-        <span class="comment">// Only wait a second since removing a gateway is "best effort"
-        </span><span class="kw">let </span>deadline = fedimint_core::time::now() + Duration::from_secs(<span class="number">1</span>);
-        <span class="kw">let </span>responses = <span class="self">self
-            </span>.request_with_strategy(
-                ThresholdOrDeadline::&lt;<span class="prelude-ty">Option</span>&lt;sha256::Hash&gt;&gt;::new(
-                    <span class="self">self</span>.all_peers().total(),
-                    deadline,
-                ),
-                REMOVE_GATEWAY_CHALLENGE_ENDPOINT.to_string(),
-                ApiRequestErased::new(gateway_id),
-            )
-            .<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="prelude-val">Ok</span>(responses)
-    }
+    ) -&gt; BTreeMap&lt;PeerId, <span class="prelude-ty">Option</span>&lt;sha256::Hash&gt;&gt; {
+        <span class="kw">let </span><span class="kw-2">mut </span>responses = BTreeMap::new();
 
-    <span class="kw">async fn </span>remove_gateway(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        remove_gateway_request: RemoveGatewayRequest,
-    ) -&gt; FederationResult&lt;()&gt; {
-        <span class="comment">// Only wait a second since removing a gateway is "best effort"
-        </span><span class="kw">let </span>gateway_id = remove_gateway_request.gateway_id;
-        <span class="kw">let </span>deadline = fedimint_core::time::now() + Duration::from_secs(<span class="number">1</span>);
-        <span class="kw">let </span>responses = <span class="self">self
-            </span>.request_with_strategy(
-                ThresholdOrDeadline::&lt;bool&gt;::new(<span class="self">self</span>.all_peers().total(), deadline),
-                REMOVE_GATEWAY_ENDPOINT.to_string(),
-                ApiRequestErased::new(remove_gateway_request),
-            )
-            .<span class="kw">await</span><span class="question-mark">?</span>;
-
-        <span class="kw">for </span>(peer_id, response) <span class="kw">in </span>responses.into_iter() {
-            <span class="kw">if </span>response {
-                <span class="macro">info!</span>(<span class="string">"Successfully removed {gateway_id} gateway from peer: {peer_id}"</span>,);
-            } <span class="kw">else </span>{
-                <span class="macro">warn!</span>(<span class="string">"Unable to remove gateway {gateway_id} registration from peer: {peer_id}"</span>);
+        <span class="kw">for </span>peer <span class="kw">in </span><span class="self">self</span>.all_peers() {
+            <span class="kw">if let </span><span class="prelude-val">Ok</span>(response) = <span class="self">self
+                </span><span class="comment">// Only wait a second since removing a gateway is "best effort"
+                </span>.request_single_peer_federation::&lt;<span class="prelude-ty">Option</span>&lt;sha256::Hash&gt;&gt;(
+                    <span class="prelude-val">Some</span>(Duration::from_secs(<span class="number">1</span>)),
+                    REMOVE_GATEWAY_CHALLENGE_ENDPOINT.to_string(),
+                    ApiRequestErased::new(gateway_id),
+                    <span class="kw-2">*</span>peer,
+                )
+                .<span class="kw">await
+            </span>{
+                responses.insert(<span class="kw-2">*</span>peer, response);
             }
         }
 
-        <span class="prelude-val">Ok</span>(())
+        responses
+    }
+
+    <span class="kw">async fn </span>remove_gateway(<span class="kw-2">&amp;</span><span class="self">self</span>, remove_gateway_request: RemoveGatewayRequest) {
+        <span class="kw">let </span>gateway_id = remove_gateway_request.gateway_id;
+
+        <span class="kw">for </span>peer <span class="kw">in </span><span class="self">self</span>.all_peers() {
+            <span class="kw">if let </span><span class="prelude-val">Ok</span>(response) = <span class="self">self
+                </span>.request_single_peer_federation::&lt;bool&gt;(
+                    <span class="comment">// Only wait a second since removing a gateway is "best effort"
+                    </span><span class="prelude-val">Some</span>(Duration::from_secs(<span class="number">1</span>)),
+                    REMOVE_GATEWAY_ENDPOINT.to_string(),
+                    ApiRequestErased::new(remove_gateway_request.clone()),
+                    <span class="kw-2">*</span>peer,
+                )
+                .<span class="kw">await
+            </span>{
+                <span class="kw">if </span>response {
+                    <span class="macro">info!</span>(<span class="string">"Successfully removed {gateway_id} gateway from peer: {peer}"</span>,);
+                } <span class="kw">else </span>{
+                    <span class="macro">warn!</span>(<span class="string">"Unable to remove gateway {gateway_id} registration from peer: {peer}"</span>);
+                }
+            }
+        }
     }
 
     <span class="kw">async fn </span>offer_exists(<span class="kw-2">&amp;</span><span class="self">self</span>, payment_hash: Sha256Hash) -&gt; FederationResult&lt;bool&gt; {
@@ -653,10 +659,12 @@
 /// `LightningGatewayAnnouncement`s representing the same gateway registration
 /// may not be equal.
 </span><span class="kw">fn </span>filter_duplicate_gateways(
-    gateways: Vec&lt;LightningGatewayAnnouncement&gt;,
+    gateways: BTreeMap&lt;PeerId, Vec&lt;LightningGatewayAnnouncement&gt;&gt;,
 ) -&gt; Vec&lt;LightningGatewayAnnouncement&gt; {
     <span class="kw">let </span>gateways_by_gateway_id = gateways
-        .into_iter()
+        .values()
+        .flatten()
+        .cloned()
         .map(|announcement| (announcement.info.gateway_id, announcement))
         .into_group_map();
 
