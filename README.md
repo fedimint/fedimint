@@ -50,8 +50,8 @@ We are actively looking for developers to help build Fedimint and associated ope
 - [Fedimint Technical Reference Documentation](https://docs.fedimint.org)
 - [Fedimint Contributor Calendar](https://calendar.google.com/calendar/u/0/embed?src=fedimintcalendar@gmail.com): This calendar contains all the developer calls and events.
 - [Fedimint Developer Calls](https://meet.jit.si/fedimintdevcall): We have developer calls every monday at 4PM UTC to review PRs and discuss current development priorities. As a new developer, this is a great place to find good first issues and mentorship from the core team on how to get started contributing to Fedimint.
+- [PR Review Club](https://meet.jit.si/fedimintdevcall): We have PR review calls every tuesday at 4PM UTC.
 - [Weekly Deep Dive](https://meet.jit.si/fedimintdevcall): We have a deep dive every thursday at 4PM UTC to discuss technical topics relating to Fedimint in depth: cryptography, Rust programming, consensus, networking, etc. This is a great place to learn about the internals of Fedimint and Bitcoin. We normally plan these calls based off requests from contributors on aspects of Fedimint they want to learn more about, so please reach out if you have a topic you want to learn more about.
-- [UI/UX Design Calls](https://meet.jit.si/fedimintdevcall): We have UI/UX design calls every wednesday at 4PM UTC to discuss the UI/UX of Fedimint and associated projects. This is a great place to get involved if you are a UI/UX designer or developer with React/Typescript experience.
 
 ### Fedimint Repos and Projects to Contribute To
 
