@@ -34,7 +34,7 @@ use crate::config::{ServerConfig, ServerConfigLocal};
 use crate::consensus::api::ConsensusApi;
 use crate::consensus::engine::ConsensusEngine;
 use crate::net;
-use crate::net::api::RpcHandlerCtx;
+use crate::net::api::{ApiSecrets, RpcHandlerCtx};
 
 /// How many txs can be stored in memory before blocking the API
 const TRANSACTION_BUFFER: usize = 1000;
@@ -44,8 +44,7 @@ pub async fn run(
     db: Database,
     module_init_registry: ServerModuleInitRegistry,
     task_group: &TaskGroup,
-    api_secret: Option<String>,
-    api_extra_secrets: Vec<String>,
+    force_api_secrets: ApiSecrets,
 ) -> anyhow::Result<()> {
     cfg.validate_config(&cfg.local.identity, &module_init_registry)?;
 
@@ -111,18 +110,13 @@ pub async fn run(
         ),
         last_ci_by_peer: Arc::clone(&last_ci_by_peer),
         connection_status_channels: Arc::clone(&connection_status_channels),
-        api_secret: api_secret.clone(),
+        force_api_secret: force_api_secrets.get_active(),
     };
 
     info!(target: LOG_CONSENSUS, "Starting Consensus Api");
 
-    let api_handler = start_consensus_api(
-        &cfg.local,
-        consensus_api,
-        api_secret.clone(),
-        api_extra_secrets,
-    )
-    .await;
+    let api_handler =
+        start_consensus_api(&cfg.local, consensus_api, force_api_secrets.clone()).await;
 
     info!(target: LOG_CONSENSUS, "Starting Submission of Module CI proposals");
 
@@ -143,7 +137,7 @@ pub async fn run(
     ConsensusEngine {
         db,
         keychain: Keychain::new(&cfg),
-        federation_api: DynGlobalApi::from_config(&client_cfg, api_secret),
+        federation_api: DynGlobalApi::from_config(&client_cfg, force_api_secrets.get_active()),
         self_id_str: cfg.local.identity.to_string(),
         peer_id_str: (0..cfg.consensus.api_endpoints.len())
             .map(|x| x.to_string())
@@ -171,8 +165,7 @@ pub async fn run(
 async fn start_consensus_api(
     cfg: &ServerConfigLocal,
     api: ConsensusApi,
-    api_secret: Option<String>,
-    api_extra_secrets: Vec<String>,
+    force_api_secrets: ApiSecrets,
 ) -> ServerHandle {
     let mut rpc_module = RpcHandlerCtx::new_module(api.clone());
 
@@ -187,8 +180,7 @@ async fn start_consensus_api(
         &cfg.api_bind,
         rpc_module,
         cfg.max_connections,
-        api_secret,
-        api_extra_secrets,
+        force_api_secrets,
     )
     .await
 }

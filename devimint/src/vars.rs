@@ -1,6 +1,7 @@
 #![allow(non_snake_case)]
 
 use std::path::{Path, PathBuf};
+use std::str::FromStr as _;
 
 pub trait ToEnvVar {
     fn to_env_value(&self) -> Option<String>;
@@ -71,6 +72,15 @@ impl<T: ToEnvVar> ToEnvVar for Option<T> {
     }
 }
 
+impl ToEnvVar for ApiSecrets {
+    fn to_env_value(&self) -> Option<String> {
+        if self.is_empty() {
+            return None;
+        }
+        Some(self.get_all().join(","))
+    }
+}
+
 pub async fn mkdir(dir: PathBuf) -> anyhow::Result<PathBuf> {
     if !dir.exists() {
         tokio::fs::create_dir(&dir).await?;
@@ -84,7 +94,8 @@ use fedimint_core::envs::{
 };
 use fedimint_portalloc::port_alloc;
 use fedimint_server::config::ConfigGenParams;
-use fedimintd::envs::FM_API_SECRET_ENV;
+use fedimint_server::net::api::ApiSecrets;
+use fedimintd::envs::FM_FORCE_API_SECRETS_ENV;
 use format as f;
 
 pub fn utf8(path: &Path) -> &str {
@@ -96,10 +107,11 @@ declare_vars! {
     {
         FM_USE_UNKNOWN_MODULE: String = std::env::var(FM_USE_UNKNOWN_MODULE_ENV).unwrap_or_else(|_| "1".into()); env: "FM_USE_UNKNOWN_MODULE";
 
-        FM_API_SECRET: Option<String> = std::env::var(FM_API_SECRET_ENV).ok().and_then(|s| {
-            let s = s.trim();
-            (!s.is_empty()).then_some(s.to_owned())
-        }); env: FM_API_SECRET_ENV;
+        FM_FORCE_API_SECRETS: ApiSecrets = std::env::var(FM_FORCE_API_SECRETS_ENV).ok().and_then(|s| {
+            ApiSecrets::from_str(&s).ok()
+        }).unwrap_or_default(); env: FM_FORCE_API_SECRETS_ENV;
+
+        FM_API_SECRET: Option<String> = std::env::var("FM_API_SECRET").ok().or_else(|| FM_FORCE_API_SECRETS.get_active()); env: "FM_API_SECRET";
 
         FM_IN_DEVIMINT: String = "1".to_string(); env: FM_IN_DEVIMINT_ENV;
 

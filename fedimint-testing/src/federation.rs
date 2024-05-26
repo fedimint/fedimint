@@ -217,8 +217,7 @@ impl FederationTestBuilder {
                     db.clone(),
                     module_init_registry,
                     &subgroup,
-                    None,
-                    vec![],
+                    fedimint_server::net::api::ApiSecrets::default(),
                 )
                 .await
                 .expect("Could not initialise consensus");

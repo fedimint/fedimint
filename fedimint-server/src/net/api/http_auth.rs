@@ -147,7 +147,7 @@ where
             }
         }
 
-        debug!(target: LOG_NET_AUTH, "Access denided to incoming api connection");
+        debug!(target: LOG_NET_AUTH, "Access denied to incoming api connection");
         let mut response = Response::new("Unauthorized".into());
         *response.status_mut() = http::StatusCode::UNAUTHORIZED;
         response.headers_mut().insert(

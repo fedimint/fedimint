@@ -875,6 +875,7 @@ mod tests {
     use crate::config::io::{read_server_config, PLAINTEXT_PASSWORD};
     use crate::config::{DynServerModuleInit, ServerConfig, DEFAULT_MAX_CLIENT_CONNECTIONS};
     use crate::fedimint_core::module::ServerModuleInit;
+    use crate::net::api::ApiSecrets;
 
     /// Helper in config API tests for simulating a guardian's client and server
     struct TestConfigApi {
@@ -929,8 +930,7 @@ mod tests {
             spawn("fedimint server", async move {
                 crate::run(
                     dir_clone,
-                    None,
-                    vec![],
+                    ApiSecrets::none(),
                     settings_clone,
                     db,
                     "dummyversionhash".to_owned(),
