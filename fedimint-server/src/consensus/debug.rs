@@ -3,9 +3,9 @@ use std::fmt;
 use crate::ConsensusItem;
 
 /// A newtype for a nice [`fmt::Debug`] of a [`ConsensusItem`]
-pub struct FmtDbgConsensusItem<'ci>(pub &'ci ConsensusItem);
+pub struct DebugConsensusItem<'ci>(pub &'ci ConsensusItem);
 
-impl<'ci> fmt::Debug for FmtDbgConsensusItem<'ci> {
+impl<'ci> fmt::Debug for DebugConsensusItem<'ci> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self.0 {
             ConsensusItem::Module(mci) => {

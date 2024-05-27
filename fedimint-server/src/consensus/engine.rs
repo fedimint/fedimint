@@ -41,7 +41,7 @@ use crate::consensus::db::{
     AcceptedItemKey, AcceptedItemPrefix, AcceptedTransactionKey, AlephUnitsPrefix,
     SignedSessionOutcomeKey, SignedSessionOutcomePrefix,
 };
-use crate::consensus::debug_fmt::FmtDbgConsensusItem;
+use crate::consensus::debug::DebugConsensusItem;
 use crate::consensus::transaction::process_transaction_with_dbtx;
 use crate::fedimint_core::encoding::Encodable;
 use crate::metrics::{
@@ -354,14 +354,14 @@ impl ConsensusEngine {
                     assert!(processed.iter().eq(pending_accepted_items.iter()));
 
                     for accepted_item in unprocessed {
-                        let result = self.process_consensus_item(
+                        if self.process_consensus_item(
                             session_index,
                             item_index,
                             accepted_item.item.clone(),
                             accepted_item.peer
-                        ).await;
-
-                        assert!(result.is_ok());
+                        ).await.is_err(){
+                            panic!("Rejected accepted consensus item {:?}", DebugConsensusItem(&accepted_item.item));
+                        }
 
                         item_index += 1;
                     }
@@ -469,7 +469,7 @@ impl ConsensusEngine {
             .with_label_values(&[peer_id_str])
             .start_timer();
 
-        debug!(%peer, item = ?FmtDbgConsensusItem(&item), "Processing consensus item");
+        debug!(%peer, item = ?DebugConsensusItem(&item), "Processing consensus item");
 
         self.last_ci_by_peer
             .write()
