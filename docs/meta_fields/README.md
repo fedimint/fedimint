@@ -34,4 +34,4 @@ If widely adopted these may become standardised in the future, so the definition
 follow the same structure as described above. Below we list known third party extensions (please open a PR to add
 yours):
 
-> *None yet*
+* [Fedi](https://fedibtc.github.io/fedi-docs/docs/fedi/meta_fields/federation-metadata-configurations)
