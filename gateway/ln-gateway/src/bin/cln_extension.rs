@@ -640,7 +640,7 @@ impl GatewayLightning for ClnRpcService {
             .await
             .map_err(|e| Status::internal(e.to_string()))?
             .call(cln_rpc::Request::NewAddr(model::requests::NewaddrRequest {
-                addresstype: Some(cln_rpc::model::requests::NewaddrAddresstype::BECH32),
+                addresstype: None,
             }))
             .await
             .map(|response| match response {
