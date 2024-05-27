@@ -1,6 +1,5 @@
-use std::io::Write;
-
 use bitcoin_hashes::{sha256, Hash};
+use fedimint_core::encoding::Encodable;
 use fedimint_core::net::peers::IPeerConnections;
 use parity_scale_codec::{Decode, Encode, IoReader};
 
@@ -16,12 +15,7 @@ impl aleph_bft::Hasher for Hasher {
     type Hash = [u8; 32];
 
     fn hash(input: &[u8]) -> Self::Hash {
-        let mut engine = sha256::HashEngine::default();
-        engine
-            .write_all(input)
-            .expect("Writing to a hash engine cannot fail");
-
-        sha256::Hash::from_engine(engine).to_byte_array()
+        input.consensus_hash::<sha256::Hash>().to_byte_array()
     }
 }
 
