@@ -673,6 +673,7 @@
 <a href="#673" id="673">673</a>
 <a href="#674" id="674">674</a>
 <a href="#675" id="675">675</a>
+<a href="#676" id="676">676</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::default::Default;
 <span class="kw">use </span>std::sync::Arc;
@@ -704,18 +705,19 @@
 <span class="kw">use </span>tokio::sync::{watch, RwLock};
 <span class="kw">use </span>tracing::{debug, info, instrument, warn, Level};
 
-<span class="kw">use </span><span class="kw">crate</span>::atomic_broadcast::backup::{BackupReader, BackupWriter};
-<span class="kw">use </span><span class="kw">crate</span>::atomic_broadcast::data_provider::{DataProvider, UnitData};
-<span class="kw">use </span><span class="kw">crate</span>::atomic_broadcast::finalization_handler::FinalizationHandler;
-<span class="kw">use </span><span class="kw">crate</span>::atomic_broadcast::network::Network;
-<span class="kw">use </span><span class="kw">crate</span>::atomic_broadcast::spawner::Spawner;
-<span class="kw">use </span><span class="kw">crate</span>::atomic_broadcast::{to_node_index, Keychain, Message};
 <span class="kw">use </span><span class="kw">crate</span>::config::ServerConfig;
+<span class="kw">use </span><span class="kw">crate</span>::consensus::aleph_bft::backup::{BackupReader, BackupWriter};
+<span class="kw">use </span><span class="kw">crate</span>::consensus::aleph_bft::data_provider::{DataProvider, UnitData};
+<span class="kw">use </span><span class="kw">crate</span>::consensus::aleph_bft::finalization_handler::FinalizationHandler;
+<span class="kw">use </span><span class="kw">crate</span>::consensus::aleph_bft::keychain::Keychain;
+<span class="kw">use </span><span class="kw">crate</span>::consensus::aleph_bft::network::Network;
+<span class="kw">use </span><span class="kw">crate</span>::consensus::aleph_bft::spawner::Spawner;
+<span class="kw">use </span><span class="kw">crate</span>::consensus::aleph_bft::{to_node_index, Message};
 <span class="kw">use </span><span class="kw">crate</span>::consensus::db::{
     AcceptedItemKey, AcceptedItemPrefix, AcceptedTransactionKey, AlephUnitsPrefix,
     SignedSessionOutcomeKey, SignedSessionOutcomePrefix,
 };
-<span class="kw">use </span><span class="kw">crate</span>::consensus::debug_fmt::FmtDbgConsensusItem;
+<span class="kw">use </span><span class="kw">crate</span>::consensus::debug::DebugConsensusItem;
 <span class="kw">use </span><span class="kw">crate</span>::consensus::transaction::process_transaction_with_dbtx;
 <span class="kw">use </span><span class="kw">crate</span>::fedimint_core::encoding::Encodable;
 <span class="kw">use </span><span class="kw">crate</span>::metrics::{
@@ -976,7 +978,7 @@
 
         <span class="comment">// This method removes the backup of the current session from the database
         // and therefore has to be called after we have waited for the session to
-        // shutdown or we risk write-write conflicts with the UnitSaver
+        // shut down, or we risk write-write conflicts with the UnitSaver
         </span><span class="self">self</span>.complete_session(session_index, signed_session_outcome)
             .<span class="kw">await</span>;
 
@@ -1028,14 +1030,14 @@
                     <span class="macro">assert!</span>(processed.iter().eq(pending_accepted_items.iter()));
 
                     <span class="kw">for </span>accepted_item <span class="kw">in </span>unprocessed {
-                        <span class="kw">let </span>result = <span class="self">self</span>.process_consensus_item(
+                        <span class="kw">if </span><span class="self">self</span>.process_consensus_item(
                             session_index,
                             item_index,
                             accepted_item.item.clone(),
                             accepted_item.peer
-                        ).<span class="kw">await</span>;
-
-                        <span class="macro">assert!</span>(result.is_ok());
+                        ).<span class="kw">await</span>.is_err(){
+                            <span class="macro">panic!</span>(<span class="string">"Rejected accepted consensus item {:?}"</span>, DebugConsensusItem(<span class="kw-2">&amp;</span>accepted_item.item));
+                        }
 
                         item_index += <span class="number">1</span>;
                     }
@@ -1074,7 +1076,7 @@
                 }
                 signed_session_outcome = <span class="self">self</span>.request_signed_session_outcome(<span class="kw-2">&amp;</span><span class="self">self</span>.federation_api, session_index) =&gt; {
                     <span class="comment">// We check that the session outcome we have created agrees with the federations consensus
-                    </span><span class="macro">assert!</span>(header == signed_session_outcome.session_outcome.header(session_index));
+                    </span><span class="macro">assert_eq!</span>(header, signed_session_outcome.session_outcome.header(session_index));
 
                     <span class="kw">return </span><span class="prelude-val">Ok</span>(signed_session_outcome);
                 }
@@ -1143,7 +1145,7 @@
             .with_label_values(<span class="kw-2">&amp;</span>[peer_id_str])
             .start_timer();
 
-        <span class="macro">debug!</span>(%peer, item = <span class="question-mark">?</span>FmtDbgConsensusItem(<span class="kw-2">&amp;</span>item), <span class="string">"Processing consensus item"</span>);
+        <span class="macro">debug!</span>(%peer, item = <span class="question-mark">?</span>DebugConsensusItem(<span class="kw-2">&amp;</span>item), <span class="string">"Processing consensus item"</span>);
 
         <span class="self">self</span>.last_ci_by_peer
             .write()
@@ -1158,9 +1160,9 @@
 
         dbtx.ignore_uncommitted();
 
-        <span class="comment">// When we recover from a mid session crash aleph bft will replay the units that
-        // already were processed before the crash. We therefore skip all consensus
-        // items until we have seen all previously accepted items again.
+        <span class="comment">// When we recover from a mid-session crash aleph bft will replay the units that
+        // were already processed before the crash. We therefore skip all consensus
+        // items until we have seen every previously accepted items again.
         </span><span class="kw">if let </span><span class="prelude-val">Some</span>(accepted_item) = dbtx
             .get_value(<span class="kw-2">&amp;</span>AcceptedItemKey(item_index.to_owned()))
             .<span class="kw">await
@@ -1175,7 +1177,7 @@
         <span class="self">self</span>.process_consensus_item_with_db_transaction(<span class="kw-2">&amp;mut </span>dbtx.to_ref_nc(), item.clone(), peer)
             .<span class="kw">await</span><span class="question-mark">?</span>;
 
-        <span class="comment">// After this point the we have to commit the database transaction since the
+        <span class="comment">// After this point we have to commit the database transaction since the
         // item has been fully processed without errors
         </span>dbtx.warn_uncommitted();
 

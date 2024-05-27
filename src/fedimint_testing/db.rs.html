@@ -838,8 +838,8 @@
     <span class="prelude-val">Ok</span>((Database::new(RocksDb::open(<span class="kw-2">&amp;</span>tmp_dir)<span class="question-mark">?</span>, decoders), tmp_dir))
 }
 
-<span class="doccomment">/// Helper function that recursively copies all of the contents from
-/// `atomic_broadcast` to `dst`.
+<span class="doccomment">/// Helper function that recursively copies all contents from
+/// `src` to `dst`.
 </span><span class="kw">pub fn </span>copy_directory(src: <span class="kw-2">&amp;</span>Path, dst: <span class="kw-2">&amp;</span>Path) -&gt; io::Result&lt;()&gt; {
     <span class="macro">trace!</span>(target: LOG_TEST, src = %src.display(), dst = %dst.display(), <span class="string">"Copy dir"</span>);
 
