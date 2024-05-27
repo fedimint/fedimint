@@ -65,11 +65,11 @@
                 ))<span class="question-mark">?</span>;
                 <span class="comment">// TODO: This is kind of lengthy, and maybe could be conditionally enabled
                 // via an env var or something.
-                </span><span class="kw">for </span>input <span class="kw">in </span>tx.inputs.iter() {
+                </span><span class="kw">for </span>input <span class="kw">in </span><span class="kw-2">&amp;</span>tx.inputs {
                     <span class="comment">// TODO: add pretty print fn to interface
                     </span>f.write_fmt(<span class="macro">format_args!</span>(<span class="string">"\n    Input: {input}"</span>))<span class="question-mark">?</span>;
                 }
-                <span class="kw">for </span>output <span class="kw">in </span>tx.outputs.iter() {
+                <span class="kw">for </span>output <span class="kw">in </span><span class="kw-2">&amp;</span>tx.outputs {
                     f.write_fmt(<span class="macro">format_args!</span>(<span class="string">"\n    Output: {output}"</span>)).unwrap();
                 }
             }

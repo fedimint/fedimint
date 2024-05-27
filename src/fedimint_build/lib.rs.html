@@ -133,9 +133,6 @@
 <a href="#133" id="133">133</a>
 <a href="#134" id="134">134</a>
 <a href="#135" id="135">135</a>
-<a href="#136" id="136">136</a>
-<a href="#137" id="137">137</a>
-<a href="#138" id="138">138</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! Fedimint build scripts
 //!
 //! Implements detection of build hash. Used both internally in all
@@ -183,12 +180,9 @@
     // can read the version hash from .cargo_vcs_info.json
     </span><span class="kw">if let </span><span class="prelude-val">Ok</span>(file) = std::fs::File::open(<span class="string">"./.cargo_vcs_info.json"</span>) {
         <span class="kw">let </span>info: serde_json::Value = serde_json::from_reader(file)
-            .map_err(|e| <span class="macro">format!</span>(<span class="string">"Failed to parse .cargo_vcs_info.json: {}"</span>, e))<span class="question-mark">?</span>;
+            .map_err(|e| <span class="macro">format!</span>(<span class="string">"Failed to parse .cargo_vcs_info.json: {e}"</span>))<span class="question-mark">?</span>;
         <span class="kw">let </span>hash = info[<span class="string">"git"</span>][<span class="string">"sha1"</span>].as_str().ok_or_else(|| {
-            <span class="macro">format!</span>(
-                <span class="string">"Failed to parse .cargo_vcs_info.json: no `.git.sha` field: {:?}"</span>,
-                info
-            )
+            <span class="macro">format!</span>(<span class="string">"Failed to parse .cargo_vcs_info.json: no `.git.sha` field: {info:?}"</span>)
         })<span class="question-mark">?</span>;
         <span class="macro">println!</span>(<span class="string">"cargo:rustc-env={FEDIMINT_BUILD_CODE_VERSION_ENV}={hash}"</span>);
         <span class="kw">return </span><span class="prelude-val">Ok</span>(());

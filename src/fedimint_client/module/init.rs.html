@@ -640,7 +640,7 @@
         <span class="self">self</span>.context.clone()
     }
 
-    <span class="kw">pub async fn </span>update_recovery_progress(<span class="kw-2">&amp;</span><span class="self">self</span>, progress: RecoveryProgress) {
+    <span class="kw">pub fn </span>update_recovery_progress(<span class="kw-2">&amp;</span><span class="self">self</span>, progress: RecoveryProgress) {
         <span class="kw">if </span>progress.is_done() {
             <span class="comment">// Recovery is complete when the recovery function finishes. To avoid
             // confusing any downstream code, we never send completed process.

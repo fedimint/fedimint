@@ -1371,12 +1371,6 @@
 <a href="#1371" id="1371">1371</a>
 <a href="#1372" id="1372">1372</a>
 <a href="#1373" id="1373">1373</a>
-<a href="#1374" id="1374">1374</a>
-<a href="#1375" id="1375">1375</a>
-<a href="#1376" id="1376">1376</a>
-<a href="#1377" id="1377">1377</a>
-<a href="#1378" id="1378">1378</a>
-<a href="#1379" id="1379">1379</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashSet};
 <span class="kw">use </span>std::convert::Infallible;
 <span class="kw">use </span>std::fmt::{Debug, Formatter};
@@ -2177,12 +2171,7 @@
     <span class="doccomment">/// Build [`Executor`] and spawn background task in `tasks` executing active
     /// state machines. The supplied database `db` must support isolation, so
     /// cannot be an isolated DB instance itself.
-    </span><span class="kw">pub async fn </span>build(
-        <span class="self">self</span>,
-        db: Database,
-        notifier: Notifier,
-        client_task_group: TaskGroup,
-    ) -&gt; Executor {
+    </span><span class="kw">pub fn </span>build(<span class="self">self</span>, db: Database, notifier: Notifier, client_task_group: TaskGroup) -&gt; Executor {
         <span class="kw">let </span>(sm_update_tx, sm_update_rx) = tokio::sync::mpsc::unbounded_channel();
 
         <span class="kw">let </span>inner = Arc::new(ExecutorInner {
@@ -2693,9 +2682,8 @@
                 broadcast: broadcast.clone(),
             },
         );
-        <span class="kw">let </span>executor = executor_builder
-            .build(db.clone(), Notifier::new(db.clone()), TaskGroup::new())
-            .<span class="kw">await</span>;
+        <span class="kw">let </span>executor =
+            executor_builder.build(db.clone(), Notifier::new(db.clone()), TaskGroup::new());
         executor
             .start_executor(Arc::new(|<span class="kw">_</span>, <span class="kw">_</span>| DynGlobalClientContext::new_fake()))
             .<span class="kw">await</span>;

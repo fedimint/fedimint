@@ -338,7 +338,6 @@
 <a href="#338" id="338">338</a>
 <a href="#339" id="339">339</a>
 <a href="#340" id="340">340</a>
-<a href="#341" id="341">341</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::pin::pin;
 <span class="kw">use </span>std::sync::Arc;
@@ -460,8 +459,8 @@
     <span class="doccomment">/// Wait until Meta Service is initialized, after this `get_field` will not
     /// block.
     </span><span class="kw">pub async fn </span>wait_initialization(<span class="kw-2">&amp;</span><span class="self">self</span>) {
-        <span class="self">self</span>.initial_fetch_waiter.wait().<span class="kw">await
-    </span>}
+        <span class="self">self</span>.initial_fetch_waiter.wait().<span class="kw">await</span>;
+    }
 
     <span class="doccomment">/// NOTE: this subscription never ends even after update task is shutdown.
     /// You should consume this stream in a spawn_cancellable.
@@ -572,8 +571,8 @@
 <span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
 </span><span class="kw">impl </span>MetaSource <span class="kw">for </span>LegacyMetaSource {
     <span class="kw">async fn </span>wait_for_update(<span class="kw-2">&amp;</span><span class="self">self</span>) {
-        fedimint_core::runtime::sleep(Duration::from_secs(<span class="number">10 </span>* <span class="number">60</span>)).<span class="kw">await
-    </span>}
+        fedimint_core::runtime::sleep(Duration::from_secs(<span class="number">10 </span>* <span class="number">60</span>)).<span class="kw">await</span>;
+    }
 
     <span class="kw">async fn </span>fetch(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
@@ -642,11 +641,10 @@
         .remove(<span class="kw-2">&amp;</span>federation_id)
         .with_context(|| <span class="macro">anyhow::format_err!</span>(<span class="string">"No entry for federation {federation_id} in {url}"</span>))<span class="question-mark">?
         </span>.into_iter()
-        .filter_map(|(key, value)| <span class="kw">match </span>value {
-            serde_json::Value::String(value_str) =&gt; {
+        .filter_map(|(key, value)| {
+            <span class="kw">if let </span>serde_json::Value::String(value_str) = value {
                 <span class="prelude-val">Some</span>((MetaFieldKey(key), MetaFieldValue(value_str)))
-            }
-            <span class="kw">_ </span>=&gt; {
+            } <span class="kw">else </span>{
                 <span class="macro">warn!</span>(<span class="string">"Meta override map contained non-string key: {key}, ignoring"</span>);
                 <span class="prelude-val">None
             </span>}

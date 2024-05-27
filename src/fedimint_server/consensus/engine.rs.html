@@ -671,6 +671,8 @@
 <a href="#671" id="671">671</a>
 <a href="#672" id="672">672</a>
 <a href="#673" id="673">673</a>
+<a href="#674" id="674">674</a>
+<a href="#675" id="675">675</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::default::Default;
 <span class="kw">use </span>std::sync::Arc;
@@ -681,7 +683,7 @@
 <span class="kw">use </span>async_channel::Receiver;
 <span class="kw">use </span>fedimint_api_client::api::{DynGlobalApi, FederationApiExt, PeerConnectionStatus};
 <span class="kw">use </span>fedimint_api_client::query::FilterMap;
-<span class="kw">use </span>fedimint_core::core::MODULE_INSTANCE_ID_GLOBAL;
+<span class="kw">use </span>fedimint_core::core::{DynOutput, MODULE_INSTANCE_ID_GLOBAL};
 <span class="kw">use </span>fedimint_core::db::{Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped};
 <span class="kw">use </span>fedimint_core::encoding::Decodable;
 <span class="kw">use </span>fedimint_core::endpoint_constants::AWAIT_SIGNED_SESSION_OUTCOME_ENDPOINT;
@@ -871,7 +873,7 @@
                     <span class="kw">return </span><span class="prelude-val">Ok</span>(());
                 }
                 <span class="prelude-val">Err</span>(e) =&gt; {
-                    <span class="macro">warn!</span>(target: LOG_CONSENSUS, <span class="string">"Could not check consensus config hash: {}"</span>, OptStacktrace(e))
+                    <span class="macro">warn!</span>(target: LOG_CONSENSUS, <span class="string">"Could not check consensus config hash: {}"</span>, OptStacktrace(e));
                 }
             }
 
@@ -902,7 +904,7 @@
 
         <span class="kw">let </span>expected_rounds = <span class="number">3 </span>* <span class="self">self</span>.cfg.consensus.broadcast_expected_rounds_per_session <span class="kw">as </span>usize;
         <span class="kw">let </span>max_round = <span class="number">3 </span>* <span class="self">self</span>.cfg.consensus.broadcast_max_rounds_per_session;
-        <span class="kw">let </span>round_delay = <span class="self">self</span>.cfg.local.broadcast_round_delay_ms <span class="kw">as </span>f64;
+        <span class="kw">let </span>round_delay = f64::from(<span class="self">self</span>.cfg.local.broadcast_round_delay_ms);
 
         <span class="kw">let </span>exp_slowdown_offset = <span class="number">3 </span>* expected_rounds;
 
@@ -1202,9 +1204,10 @@
             timing_prom.observe_duration();
         }
 
-        <span class="kw">if </span>audit.net_assets().milli_sat &lt; <span class="number">0 </span>{
-            <span class="macro">panic!</span>(<span class="string">"Balance sheet of the fed has gone negative, this should never happen! {audit}"</span>)
-        }
+        <span class="macro">assert!</span>(
+            audit.net_assets().milli_sat &gt;= <span class="number">0</span>,
+            <span class="string">"Balance sheet of the fed has gone negative, this should never happen! {audit}"
+        </span>);
 
         dbtx.commit_tx_result()
             .<span class="kw">await
@@ -1252,7 +1255,7 @@
                 <span class="kw">let </span>modules_ids = transaction
                     .outputs
                     .iter()
-                    .map(|output| output.module_instance_id())
+                    .map(DynOutput::module_instance_id)
                     .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
 
                 process_transaction_with_dbtx(<span class="self">self</span>.modules.clone(), dbtx, transaction)
@@ -1288,7 +1291,7 @@
             .try_into_inner(<span class="kw-2">&amp;</span>decoders)
         {
             <span class="prelude-val">Ok</span>(signed_session_outcome) =&gt; {
-                <span class="kw">match </span>signed_session_outcome.signatures.len() == keychain.threshold()
+                <span class="kw">if </span>signed_session_outcome.signatures.len() == keychain.threshold()
                     &amp;&amp; signed_session_outcome
                         .signatures
                         .iter()
@@ -1298,9 +1301,11 @@
                                 sig,
                                 to_node_index(<span class="kw-2">*</span>peer_id),
                             )
-                        }) {
-                    <span class="bool-val">true </span>=&gt; <span class="prelude-val">Ok</span>(signed_session_outcome),
-                    <span class="bool-val">false </span>=&gt; <span class="prelude-val">Err</span>(<span class="macro">anyhow!</span>(<span class="string">"Invalid signatures"</span>)),
+                        })
+                {
+                    <span class="prelude-val">Ok</span>(signed_session_outcome)
+                } <span class="kw">else </span>{
+                    <span class="prelude-val">Err</span>(<span class="macro">anyhow!</span>(<span class="string">"Invalid signatures"</span>))
                 }
             }
             <span class="prelude-val">Err</span>(error) =&gt; <span class="prelude-val">Err</span>(<span class="macro">anyhow!</span>(error.to_string())),
@@ -1323,7 +1328,7 @@
             <span class="kw">match </span>result {
                 <span class="prelude-val">Ok</span>(signed_session_outcome) =&gt; <span class="kw">return </span>signed_session_outcome,
                 <span class="prelude-val">Err</span>(error) =&gt; {
-                    <span class="macro">tracing::error!</span>(target: LOG_CONSENSUS, <span class="string">"Error while requesting signed session outcome: {}"</span>, error)
+                    <span class="macro">tracing::error!</span>(target: LOG_CONSENSUS, <span class="string">"Error while requesting signed session outcome: {}"</span>, error);
                 }
             }
         }
@@ -1341,7 +1346,6 @@
         .<span class="kw">await
         </span>.next()
         .<span class="kw">await
-        </span>.map(|entry| (entry.<span class="number">0 </span>.<span class="number">0</span>) + <span class="number">1</span>)
-        .unwrap_or(<span class="number">0</span>)
+        </span>.map_or(<span class="number">0</span>, |entry| (entry.<span class="number">0 </span>.<span class="number">0</span>) + <span class="number">1</span>)
 }
 </code></pre></div></section></main></body></html>

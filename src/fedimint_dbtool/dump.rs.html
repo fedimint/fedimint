@@ -329,7 +329,7 @@
 </span><span class="kw">struct </span>SerdeWrapper(<span class="attr">#[serde(with = <span class="string">"hex::serde"</span>)] </span>Vec&lt;u8&gt;);
 
 <span class="kw">impl </span>SerdeWrapper {
-    <span class="kw">fn </span>from_encodable&lt;T: Encodable&gt;(e: T) -&gt; SerdeWrapper {
+    <span class="kw">fn </span>from_encodable&lt;T: Encodable&gt;(e: <span class="kw-2">&amp;</span>T) -&gt; SerdeWrapper {
         <span class="kw">let </span><span class="kw-2">mut </span>bytes = <span class="macro">vec!</span>[];
         e.consensus_encode(<span class="kw-2">&amp;mut </span>bytes)
             .expect(<span class="string">"Write to vec can't fail"</span>);
@@ -368,7 +368,7 @@
         };
 
         <span class="kw">let </span>(server_cfg, client_cfg, decoders) = <span class="kw">if let </span><span class="prelude-val">Ok</span>(cfg) =
-            read_server_config(<span class="kw-2">&amp;</span>password, cfg_dir).context(<span class="string">"Failed to read server config"</span>)
+            read_server_config(<span class="kw-2">&amp;</span>password, <span class="kw-2">&amp;</span>cfg_dir).context(<span class="string">"Failed to read server config"</span>)
         {
             <span class="comment">// Successfully read the server's config, that means this database is a server
             // db

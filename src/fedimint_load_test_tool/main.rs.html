@@ -1668,8 +1668,8 @@
         </span>}
         Command::TestDownload { invite_code } =&gt; {
             <span class="kw">let </span>invite_code = InviteCode::from_str(<span class="kw-2">&amp;</span>invite_code).context(<span class="string">"invalid invite code"</span>)<span class="question-mark">?</span>;
-            test_download_config(invite_code, opts.users, event_sender.clone()).<span class="kw">await</span><span class="question-mark">?
-        </span>}
+            test_download_config(<span class="kw-2">&amp;</span>invite_code, opts.users, <span class="kw-2">&amp;</span>event_sender.clone())
+        }
         Command::LoadTest(args) =&gt; {
             <span class="kw">let </span>invite_code = invite_code_or_fallback(args.invite_code).<span class="kw">await</span>;
 
@@ -1695,7 +1695,7 @@
                 <span class="macro">vec!</span>[]
             };
             <span class="kw">if </span>args.generate_invoice_with.is_none() &amp;&amp; invoices.is_empty() {
-                <span class="macro">info!</span>(<span class="string">"No --generate-invoice-with given no invoices on --invoices-file, not LN/gateway tests will be run"</span>)
+                <span class="macro">info!</span>(<span class="string">"No --generate-invoice-with given no invoices on --invoices-file, not LN/gateway tests will be run"</span>);
             }
             run_load_test(
                 opts.archive_dir,
@@ -1781,10 +1781,10 @@
     invoice_amount: Amount,
     event_sender: mpsc::UnboundedSender&lt;MetricEvent&gt;,
 ) -&gt; anyhow::Result&lt;Vec&lt;BoxFuture&lt;<span class="lifetime">'static</span>, anyhow::Result&lt;()&gt;&gt;&gt;&gt; {
-    <span class="kw">let </span>db_path = get_db_path(archive_dir);
+    <span class="kw">let </span>db_path = get_db_path(<span class="kw-2">&amp;</span>archive_dir);
     <span class="kw">let </span>(coordinator, invite_code) = get_coordinator_client(<span class="kw-2">&amp;</span>db_path, <span class="kw-2">&amp;</span>invite_code).<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="kw">let </span>minimum_notes = notes_per_user * users;
-    <span class="kw">let </span>minimum_amount_required = note_denomination * (minimum_notes <span class="kw">as </span>u64);
+    <span class="kw">let </span>minimum_amount_required = note_denomination * u64::from(minimum_notes);
 
     reissue_initial_notes(initial_notes, <span class="kw-2">&amp;</span>coordinator, <span class="kw-2">&amp;</span>event_sender).<span class="kw">await</span><span class="question-mark">?</span>;
     get_required_notes(<span class="kw-2">&amp;</span>coordinator, minimum_amount_required, <span class="kw-2">&amp;</span>event_sender).<span class="kw">await</span><span class="question-mark">?</span>;
@@ -1963,7 +1963,7 @@
     <span class="prelude-val">Ok</span>((client, invite_code))
 }
 
-<span class="kw">fn </span>get_db_path(archive_dir: <span class="prelude-ty">Option</span>&lt;PathBuf&gt;) -&gt; <span class="prelude-ty">Option</span>&lt;PathBuf&gt; {
+<span class="kw">fn </span>get_db_path(archive_dir: <span class="kw-2">&amp;</span><span class="prelude-ty">Option</span>&lt;PathBuf&gt;) -&gt; <span class="prelude-ty">Option</span>&lt;PathBuf&gt; {
     archive_dir.as_ref().map(|p| p.join(<span class="string">"db"</span>))
 }
 
@@ -2085,10 +2085,10 @@
     strategy: LnCircularStrategy,
     event_sender: mpsc::UnboundedSender&lt;MetricEvent&gt;,
 ) -&gt; anyhow::Result&lt;Vec&lt;BoxFuture&lt;<span class="lifetime">'static</span>, anyhow::Result&lt;()&gt;&gt;&gt;&gt; {
-    <span class="kw">let </span>db_path = get_db_path(archive_dir);
+    <span class="kw">let </span>db_path = get_db_path(<span class="kw-2">&amp;</span>archive_dir);
     <span class="kw">let </span>(coordinator, invite_code) = get_coordinator_client(<span class="kw-2">&amp;</span>db_path, <span class="kw-2">&amp;</span>invite_code).<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="kw">let </span>minimum_notes = notes_per_user * users;
-    <span class="kw">let </span>minimum_amount_required = note_denomination * (minimum_notes <span class="kw">as </span>u64);
+    <span class="kw">let </span>minimum_amount_required = note_denomination * u64::from(minimum_notes);
 
     reissue_initial_notes(initial_notes, <span class="kw-2">&amp;</span>coordinator, <span class="kw-2">&amp;</span>event_sender).<span class="kw">await</span><span class="question-mark">?</span>;
     get_required_notes(<span class="kw-2">&amp;</span>coordinator, minimum_amount_required, <span class="kw-2">&amp;</span>event_sender).<span class="kw">await</span><span class="question-mark">?</span>;
@@ -2434,12 +2434,12 @@
     <span class="prelude-val">Ok</span>((operation_id, invoice))
 }
 
-<span class="kw">async fn </span>test_download_config(
-    invite_code: InviteCode,
+<span class="kw">fn </span>test_download_config(
+    invite_code: <span class="kw-2">&amp;</span>InviteCode,
     users: u16,
-    event_sender: mpsc::UnboundedSender&lt;MetricEvent&gt;,
-) -&gt; anyhow::Result&lt;Vec&lt;BoxFuture&lt;<span class="lifetime">'static</span>, anyhow::Result&lt;()&gt;&gt;&gt;&gt; {
-    <span class="prelude-val">Ok</span>((<span class="number">0</span>..users)
+    event_sender: <span class="kw-2">&amp;</span>mpsc::UnboundedSender&lt;MetricEvent&gt;,
+) -&gt; Vec&lt;BoxFuture&lt;<span class="lifetime">'static</span>, anyhow::Result&lt;()&gt;&gt;&gt; {
+    (<span class="number">0</span>..users)
         .map(|<span class="kw">_</span>| {
             <span class="kw">let </span>invite_code = invite_code.clone();
             <span class="kw">let </span>event_sender = event_sender.clone();
@@ -2454,7 +2454,7 @@
             });
             f
         })
-        .collect())
+        .collect()
 }
 
 <span class="kw">async fn </span>test_connect_raw_client(
@@ -2605,7 +2605,7 @@
                 .truncate(<span class="bool-val">true</span>)
                 .open(metrics_json_output)
                 .<span class="kw">await</span><span class="question-mark">?</span>,
-        ))
+        ));
     }
     <span class="kw">let </span><span class="kw-2">mut </span>results = BTreeMap::new();
     <span class="kw">while let </span><span class="prelude-val">Some</span>(event) = event_receiver.recv().<span class="kw">await </span>{
@@ -2626,7 +2626,7 @@
         <span class="kw">let </span>avg = sum / n <span class="kw">as </span>u32;
         <span class="kw">let </span>metric_summary = EventMetricSummary {
             name: k.clone(),
-            users: opts.users <span class="kw">as </span>u64,
+            users: u64::from(opts.users),
             n: n <span class="kw">as </span>u64,
             avg_ms: avg.as_millis(),
             median_ms: median.as_millis(),

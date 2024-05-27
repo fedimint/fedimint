@@ -68,7 +68,6 @@
 <a href="#68" id="68">68</a>
 <a href="#69" id="69">69</a>
 <a href="#70" id="70">70</a>
-<a href="#71" id="71">71</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>async_trait::async_trait;
 <span class="kw">use </span>fedimint_core::db::{Database, IDatabaseTransactionOpsCoreTyped};
 <span class="kw">use </span>futures::StreamExt;
@@ -127,8 +126,7 @@
             .<span class="kw">await
             </span>.next()
             .<span class="kw">await
-            </span>.map(|entry| (entry.<span class="number">0 </span>.<span class="number">0</span>) + <span class="number">1</span>)
-            .unwrap_or(<span class="number">0</span>);
+            </span>.map_or(<span class="number">0</span>, |entry| (entry.<span class="number">0 </span>.<span class="number">0</span>) + <span class="number">1</span>);
 
         dbtx.insert_new_entry(<span class="kw-2">&amp;</span>AlephUnitsKey(index), <span class="kw-2">&amp;</span>data.to_owned())
             .<span class="kw">await</span>;

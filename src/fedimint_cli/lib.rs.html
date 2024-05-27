@@ -1115,14 +1115,6 @@
 <a href="#1115" id="1115">1115</a>
 <a href="#1116" id="1116">1116</a>
 <a href="#1117" id="1117">1117</a>
-<a href="#1118" id="1118">1118</a>
-<a href="#1119" id="1119">1119</a>
-<a href="#1120" id="1120">1120</a>
-<a href="#1121" id="1121">1121</a>
-<a href="#1122" id="1122">1122</a>
-<a href="#1123" id="1123">1123</a>
-<a href="#1124" id="1124">1124</a>
-<a href="#1125" id="1125">1125</a>
 </pre></div><pre class="rust"><code><span class="kw">mod </span>client;
 <span class="kw">mod </span>db_locked;
 <span class="kw">pub mod </span>envs;
@@ -1307,7 +1299,7 @@
         <span class="kw">let </span>json = serde_json::to_value(<span class="self">self</span>).expect(<span class="string">"CliError is valid json"</span>);
         <span class="kw">let </span>json_as_string =
             serde_json::to_string_pretty(<span class="kw-2">&amp;</span>json).expect(<span class="string">"valid json is serializable"</span>);
-        <span class="macro">write!</span>(f, <span class="string">"{}"</span>, json_as_string)
+        <span class="macro">write!</span>(f, <span class="string">"{json_as_string}"</span>)
     }
 }
 
@@ -1373,8 +1365,7 @@
         <span class="kw">let </span>db_path = <span class="self">self</span>.data_dir_create().<span class="kw">await</span><span class="question-mark">?</span>.join(<span class="string">"client.db"</span>);
         <span class="kw">let </span>lock_path = db_path.with_extension(<span class="string">"db.lock"</span>);
         <span class="prelude-val">Ok</span>(LockedBuilder::new(<span class="kw-2">&amp;</span>lock_path)
-            .<span class="kw">await
-            </span>.map_err_cli_msg(<span class="string">"could not lock database"</span>)<span class="question-mark">?
+            .map_err_cli_msg(<span class="string">"could not lock database"</span>)<span class="question-mark">?
             </span>.with_db(
                 fedimint_rocksdb::RocksDb::open(db_path)
                     .map_err_cli_msg(<span class="string">"could not open database"</span>)<span class="question-mark">?</span>,
@@ -1385,16 +1376,15 @@
 
 <span class="kw">async fn </span>load_or_generate_mnemonic(db: <span class="kw-2">&amp;</span>Database) -&gt; <span class="prelude-ty">Result</span>&lt;Mnemonic, CliError&gt; {
     <span class="prelude-val">Ok</span>(
-        <span class="kw">match </span>Client::load_decodable_client_secret::&lt;Vec&lt;u8&gt;&gt;(db).<span class="kw">await </span>{
-            <span class="prelude-val">Ok</span>(entropy) =&gt; Mnemonic::from_entropy(<span class="kw-2">&amp;</span>entropy).map_err_cli()<span class="question-mark">?</span>,
-            <span class="prelude-val">Err</span>(<span class="kw">_</span>) =&gt; {
-                <span class="macro">info!</span>(<span class="string">"Generating mnemonic and writing entropy to client storage"</span>);
-                <span class="kw">let </span>mnemonic = Bip39RootSecretStrategy::&lt;<span class="number">12</span>&gt;::random(<span class="kw-2">&amp;mut </span>thread_rng());
-                Client::store_encodable_client_secret(db, mnemonic.to_entropy())
-                    .<span class="kw">await
-                    </span>.map_err_cli()<span class="question-mark">?</span>;
-                mnemonic
-            }
+        <span class="kw">if let </span><span class="prelude-val">Ok</span>(entropy) = Client::load_decodable_client_secret::&lt;Vec&lt;u8&gt;&gt;(db).<span class="kw">await </span>{
+            Mnemonic::from_entropy(<span class="kw-2">&amp;</span>entropy).map_err_cli()<span class="question-mark">?
+        </span>} <span class="kw">else </span>{
+            <span class="macro">info!</span>(<span class="string">"Generating mnemonic and writing entropy to client storage"</span>);
+            <span class="kw">let </span>mnemonic = Bip39RootSecretStrategy::&lt;<span class="number">12</span>&gt;::random(<span class="kw-2">&amp;mut </span>thread_rng());
+            Client::store_encodable_client_secret(db, mnemonic.to_entropy())
+                .<span class="kw">await
+                </span>.map_err_cli()<span class="question-mark">?</span>;
+            mnemonic
         },
     )
 }
@@ -1456,11 +1446,9 @@
 }
 
 <span class="kw">impl </span>DkgAdminArgs {
-    <span class="kw">fn </span>ws_admin_client(<span class="kw-2">&amp;</span><span class="self">self</span>, api_secret: <span class="prelude-ty">Option</span>&lt;String&gt;) -&gt; CliResult&lt;DynGlobalApi&gt; {
+    <span class="kw">fn </span>ws_admin_client(<span class="kw-2">&amp;</span><span class="self">self</span>, api_secret: <span class="prelude-ty">Option</span>&lt;String&gt;) -&gt; DynGlobalApi {
         <span class="kw">let </span>ws = <span class="self">self</span>.ws.clone();
-        <span class="prelude-val">Ok</span>(DynGlobalApi::from_pre_peer_id_admin_endpoint(
-            ws, api_secret,
-        ))
+        DynGlobalApi::from_pre_peer_id_admin_endpoint(ws, api_secret)
     }
 }
 
@@ -1799,7 +1787,7 @@ Examples:
         builder
             .recover(
                 root_secret,
-                client_config.to_owned(),
+                client_config.clone(),
                 invite_code.api_secret(),
                 backup,
             )
@@ -1924,7 +1912,7 @@ Examples:
 
                 <span class="kw">let </span><span class="kw-2">mut </span>params = ApiRequestErased::new(params);
                 <span class="kw">if let </span><span class="prelude-val">Some</span>(auth) = auth {
-                    params = params.with_auth(ApiAuth(auth))
+                    params = params.with_auth(ApiAuth(auth));
                 }
                 <span class="kw">let </span>client = <span class="self">self</span>.client_open(<span class="kw-2">&amp;</span>cli).<span class="kw">await</span><span class="question-mark">?</span>;
 
@@ -2128,12 +2116,8 @@ Examples:
         }
     }
 
-    <span class="kw">async fn </span>handle_admin_dkg_command(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        cli: Opts,
-        dkg_args: DkgAdminArgs,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;CliOutput, CliError&gt; {
-        <span class="kw">let </span>client = dkg_args.ws_admin_client(dkg_args.api_secret.clone())<span class="question-mark">?</span>;
+    <span class="kw">async fn </span>handle_admin_dkg_command(<span class="kw-2">&amp;</span><span class="self">self</span>, cli: Opts, dkg_args: DkgAdminArgs) -&gt; CliOutputResult {
+        <span class="kw">let </span>client = dkg_args.ws_admin_client(dkg_args.api_secret.clone());
         <span class="kw">match </span><span class="kw-2">&amp;</span>dkg_args.subcommand {
             DkgAdminCmd::WsStatus =&gt; {
                 <span class="kw">let </span>status = client.status().<span class="kw">await</span><span class="question-mark">?</span>;

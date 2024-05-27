@@ -216,6 +216,7 @@
 <a href="#216" id="216">216</a>
 <a href="#217" id="217">217</a>
 <a href="#218" id="218">218</a>
+<a href="#219" id="219">219</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::fmt;
 
 <span class="kw">use </span>anyhow::anyhow <span class="kw">as </span>format_err;
@@ -280,7 +281,8 @@
     }
 
     <span class="kw">async fn </span>get_block_hash(<span class="kw-2">&amp;</span><span class="self">self</span>, height: u64) -&gt; anyhow::Result&lt;BlockHash&gt; {
-        <span class="kw">let </span>result = block_in_place(|| <span class="self">self</span>.<span class="number">0</span>.block_headers(height <span class="kw">as </span>usize, <span class="number">1</span>))<span class="question-mark">?</span>;
+        <span class="kw">let </span>height = usize::try_from(height)<span class="question-mark">?</span>;
+        <span class="kw">let </span>result = block_in_place(|| <span class="self">self</span>.<span class="number">0</span>.block_headers(height, <span class="number">1</span>))<span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(result
             .headers
             .first()
@@ -374,7 +376,7 @@
     ) -&gt; anyhow::Result&lt;Vec&lt;bitcoin::Transaction&gt;&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>results = <span class="macro">vec!</span>[];
         <span class="kw">let </span>transactions = block_in_place(|| <span class="self">self</span>.<span class="number">0</span>.script_get_history(script))<span class="question-mark">?</span>;
-        <span class="kw">for </span>history <span class="kw">in </span>transactions.into_iter() {
+        <span class="kw">for </span>history <span class="kw">in </span>transactions {
             results.push(block_in_place(|| <span class="self">self</span>.<span class="number">0</span>.transaction_get(<span class="kw-2">&amp;</span>history.tx_hash))<span class="question-mark">?</span>);
         }
         <span class="prelude-val">Ok</span>(results)

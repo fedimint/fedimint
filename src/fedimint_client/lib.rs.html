@@ -2537,13 +2537,6 @@
 <a href="#2537" id="2537">2537</a>
 <a href="#2538" id="2538">2538</a>
 <a href="#2539" id="2539">2539</a>
-<a href="#2540" id="2540">2540</a>
-<a href="#2541" id="2541">2541</a>
-<a href="#2542" id="2542">2542</a>
-<a href="#2543" id="2543">2543</a>
-<a href="#2544" id="2544">2544</a>
-<a href="#2545" id="2545">2545</a>
-<a href="#2546" id="2546">2546</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! # Client library for fedimintd
 //!
 //! This library provides a client interface to build module clients that can be
@@ -3094,13 +3087,13 @@
     }
 
     <span class="kw">pub async fn </span>start_executor(<span class="kw-2">&amp;</span><span class="self">self</span>) {
-        <span class="self">self</span>.as_inner().start_executor().<span class="kw">await
-    </span>}
+        <span class="self">self</span>.as_inner().start_executor().<span class="kw">await</span>;
+    }
 
     <span class="doccomment">/// Shutdown the client.
     </span><span class="kw">pub async fn </span>shutdown(<span class="kw-2">mut </span><span class="self">self</span>) {
-        <span class="self">self</span>.shutdown_inner().<span class="kw">await
-    </span>}
+        <span class="self">self</span>.shutdown_inner().<span class="kw">await</span>;
+    }
 
     <span class="kw">async fn </span>shutdown_inner(<span class="kw-2">&amp;mut </span><span class="self">self</span>) {
         <span class="kw">let </span><span class="prelude-val">Some</span>(inner) = <span class="self">self</span>.inner.take() <span class="kw">else </span>{
@@ -3356,16 +3349,15 @@
         <span class="kw">let </span><span class="kw-2">mut </span>dbtx = db.begin_transaction().<span class="kw">await</span>;
 
         <span class="comment">// Don't overwrite an existing secret
-        </span><span class="kw">match </span>dbtx.get_value(<span class="kw-2">&amp;</span>EncodedClientSecretKey).<span class="kw">await </span>{
-            <span class="prelude-val">Some</span>(<span class="kw">_</span>) =&gt; <span class="macro">bail!</span>(<span class="string">"Encoded client secret already exists, cannot overwrite"</span>),
-            <span class="prelude-val">None </span>=&gt; {
-                <span class="kw">let </span>encoded_secret = T::consensus_encode_to_vec(<span class="kw-2">&amp;</span>secret);
-                dbtx.insert_entry(<span class="kw-2">&amp;</span>EncodedClientSecretKey, <span class="kw-2">&amp;</span>encoded_secret)
-                    .<span class="kw">await</span>;
-                dbtx.commit_tx().<span class="kw">await</span>;
-                <span class="prelude-val">Ok</span>(())
-            }
+        </span><span class="kw">if </span>dbtx.get_value(<span class="kw-2">&amp;</span>EncodedClientSecretKey).<span class="kw">await</span>.is_some() {
+            <span class="macro">bail!</span>(<span class="string">"Encoded client secret already exists, cannot overwrite"</span>)
         }
+
+        <span class="kw">let </span>encoded_secret = T::consensus_encode_to_vec(<span class="kw-2">&amp;</span>secret);
+        dbtx.insert_entry(<span class="kw-2">&amp;</span>EncodedClientSecretKey, <span class="kw-2">&amp;</span>encoded_secret)
+            .<span class="kw">await</span>;
+        dbtx.commit_tx().<span class="kw">await</span>;
+        <span class="prelude-val">Ok</span>(())
     }
 
     <span class="kw">pub async fn </span>load_decodable_client_secret&lt;T: Decodable&gt;(db: <span class="kw-2">&amp;</span>Database) -&gt; anyhow::Result&lt;T&gt; {
@@ -3392,16 +3384,16 @@
     }
 
     <span class="kw">pub async fn </span>load_or_generate_client_secret(db: <span class="kw-2">&amp;</span>Database) -&gt; anyhow::Result&lt;[u8; <span class="number">64</span>]&gt; {
-        <span class="kw">let </span>client_secret = <span class="kw">match </span><span class="self">Self</span>::load_decodable_client_secret::&lt;[u8; <span class="number">64</span>]&gt;(db).<span class="kw">await </span>{
-            <span class="prelude-val">Ok</span>(secret) =&gt; secret,
-            <span class="prelude-val">Err</span>(<span class="kw">_</span>) =&gt; {
+        <span class="kw">let </span>client_secret =
+            <span class="kw">if let </span><span class="prelude-val">Ok</span>(secret) = <span class="self">Self</span>::load_decodable_client_secret::&lt;[u8; <span class="number">64</span>]&gt;(db).<span class="kw">await </span>{
+                secret
+            } <span class="kw">else </span>{
                 <span class="kw">let </span>secret = PlainRootSecretStrategy::random(<span class="kw-2">&amp;mut </span>thread_rng());
                 <span class="self">Self</span>::store_encodable_client_secret(db, secret)
                     .<span class="kw">await
                     </span>.expect(<span class="string">"Storing client secret must work"</span>);
                 secret
-            }
-        };
+            };
         <span class="prelude-val">Ok</span>(client_secret)
     }
 
@@ -3804,8 +3796,7 @@
         <span class="kw">if </span><span class="self">self
             </span>.modules
             .get_with_kind(<span class="self">self</span>.primary_module_instance)
-            .map(|(kind, <span class="kw">_</span>)| kind == module_kind)
-            .unwrap_or(<span class="bool-val">false</span>)
+            .is_some_and(|(kind, <span class="kw">_</span>)| kind == module_kind)
         {
             <span class="kw">return </span><span class="prelude-val">Some</span>(<span class="self">self</span>.primary_module_instance);
         }
@@ -3865,8 +3856,9 @@
                             config
                                 .clone()
                                 .decoded()
-                                .map(|decoded| decoded.to_json().into())
-                                .unwrap_or(serde_json::Value::Null),
+                                .map_or(serde_json::Value::Null, |decoded| {
+                                    decoded.to_json().into()
+                                }),
                         ),
                     )
                 })
@@ -3994,7 +3986,7 @@
     }
 
     <span class="doccomment">/// [`SupportedApiVersionsSummary`] that the client and its modules support
-    </span><span class="kw">pub async fn </span>supported_api_versions_summary_static(
+    </span><span class="kw">pub fn </span>supported_api_versions_summary_static(
         config: <span class="kw-2">&amp;</span>ClientConfig,
         client_module_init: <span class="kw-2">&amp;</span>ClientModuleInitRegistry,
     ) -&gt; SupportedApiVersionsSummary {
@@ -4123,7 +4115,7 @@
         <span class="kw">let </span>peer_api_version_sets = <span class="self">Self</span>::load_peers_last_api_versions(db, num_peers).<span class="kw">await</span>;
 
         <span class="kw">let </span>common_api_versions = discover_common_api_versions_set(
-            <span class="kw-2">&amp;</span><span class="self">Self</span>::supported_api_versions_summary_static(config, client_module_init).<span class="kw">await</span>,
+            <span class="kw-2">&amp;</span><span class="self">Self</span>::supported_api_versions_summary_static(config, client_module_init),
             peer_api_version_sets,
         )<span class="question-mark">?</span>;
 
@@ -4170,10 +4162,10 @@
                 <span class="prelude-val">None</span>,
             )
             .<span class="kw">await
-            </span>.expect(<span class="string">"Failed to autocommit metadata"</span>)
+            </span>.expect(<span class="string">"Failed to autocommit metadata"</span>);
     }
 
-    <span class="kw">pub async fn </span>has_pending_recoveries(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
+    <span class="kw">pub fn </span>has_pending_recoveries(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
         !<span class="self">self
             </span>.client_recovery_progress_receiver
             .borrow()
@@ -4248,7 +4240,7 @@
         dbtx.insert_new_entry(<span class="kw-2">&amp;</span>ClientMetadataKey, metadata).<span class="kw">await</span>;
     }
 
-    <span class="kw">async fn </span>spawn_module_recoveries_task(
+    <span class="kw">fn </span>spawn_module_recoveries_task(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         recovery_sender: watch::Sender&lt;BTreeMap&lt;ModuleInstanceId, RecoveryProgress&gt;&gt;,
         module_recoveries: BTreeMap&lt;
@@ -4269,8 +4261,8 @@
                     module_recoveries,
                     module_recovery_progress_receivers,
                 )
-                .<span class="kw">await
-            </span>});
+                .<span class="kw">await</span>;
+            });
     }
 
     <span class="kw">async fn </span>run_module_recoveries_task(
@@ -4289,7 +4281,7 @@
         <span class="kw">let </span><span class="kw-2">mut </span>completed_stream = Vec::new();
         <span class="kw">let </span>progress_stream = futures::stream::FuturesUnordered::new();
 
-        <span class="kw">for </span>(module_instance_id, f) <span class="kw">in </span>module_recoveries.into_iter() {
+        <span class="kw">for </span>(module_instance_id, f) <span class="kw">in </span>module_recoveries {
             completed_stream.push(futures::stream::once(Box::pin(<span class="kw">async move </span>{
                 <span class="kw">match </span>f.<span class="kw">await </span>{
                     <span class="prelude-val">Ok</span>(<span class="kw">_</span>) =&gt; (module_instance_id, <span class="prelude-val">None</span>),
@@ -4305,7 +4297,7 @@
             })));
         }
 
-        <span class="kw">for </span>(module_instance_id, rx) <span class="kw">in </span>module_recovery_progress_receivers.into_iter() {
+        <span class="kw">for </span>(module_instance_id, rx) <span class="kw">in </span>module_recovery_progress_receivers {
             progress_stream.push(
                 tokio_stream::wrappers::WatchStream::new(rx)
                     .fuse()
@@ -4469,7 +4461,7 @@
         <span class="macro">assert!</span>(
             !was_replaced,
             <span class="string">"Only one primary module can be given to the builder."
-        </span>)
+        </span>);
     }
 
     <span class="kw">pub fn </span>with_meta_service(<span class="kw-2">&amp;mut </span><span class="self">self</span>, meta_service: Arc&lt;MetaService&gt;) {
@@ -4552,8 +4544,7 @@
             <span class="kw">let </span>metadata = init_state
                 .does_require_recovery()
                 .flatten()
-                .map(|s| s.metadata)
-                .unwrap_or(Metadata::empty());
+                .map_or(Metadata::empty(), |s| s.metadata);
 
             dbtx.insert_new_entry(<span class="kw-2">&amp;</span>ClientMetadataKey, <span class="kw-2">&amp;</span>metadata).<span class="kw">await</span>;
 
@@ -4702,7 +4693,7 @@
         <span class="kw">let </span>api_secret = Client::get_api_secret_from_db(<span class="kw-2">&amp;</span><span class="self">self</span>.db_no_decoders).<span class="kw">await</span>;
         <span class="kw">let </span>stopped = <span class="self">self</span>.stopped;
 
-        <span class="kw">let </span>client = <span class="self">self</span>.build_stopped(root_secret, config, api_secret).<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>client = <span class="self">self</span>.build_stopped(root_secret, <span class="kw-2">&amp;</span>config, api_secret).<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">if </span>!stopped {
             client.as_inner().start_executor().<span class="kw">await</span>;
         }
@@ -4717,7 +4708,7 @@
         api_secret: <span class="prelude-ty">Option</span>&lt;String&gt;,
         stopped: bool,
     ) -&gt; anyhow::Result&lt;ClientHandle&gt; {
-        <span class="kw">let </span>client = <span class="self">self</span>.build_stopped(root_secret, config, api_secret).<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>client = <span class="self">self</span>.build_stopped(root_secret, <span class="kw-2">&amp;</span>config, api_secret).<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">if </span>!stopped {
             client.as_inner().start_executor().<span class="kw">await</span>;
         }
@@ -4729,10 +4720,10 @@
     </span><span class="kw">async fn </span>build_stopped(
         <span class="self">self</span>,
         root_secret: DerivableSecret,
-        config: ClientConfig,
+        config: <span class="kw-2">&amp;</span>ClientConfig,
         api_secret: <span class="prelude-ty">Option</span>&lt;String&gt;,
     ) -&gt; anyhow::Result&lt;ClientHandle&gt; {
-        <span class="kw">let </span>decoders = <span class="self">self</span>.decoders(<span class="kw-2">&amp;</span>config);
+        <span class="kw">let </span>decoders = <span class="self">self</span>.decoders(config);
         <span class="kw">let </span>config = <span class="self">Self</span>::config_decoded(config, <span class="kw-2">&amp;</span>decoders)<span class="question-mark">?</span>;
         <span class="kw">let </span>fed_id = config.calculate_federation_id();
         <span class="kw">let </span>db = <span class="self">self</span>.db_no_decoders.with_decoders(decoders.clone());
@@ -4833,7 +4824,7 @@
                                             notifier.clone(),
                                             api.clone(),
                                         admin_auth,
-                                            snapshot.as_ref().and_then(|s| s.modules.get(<span class="kw-2">&amp;</span>module_instance_id).to_owned()),
+                                            snapshot.as_ref().and_then(|s| s.modules.get(<span class="kw-2">&amp;</span>module_instance_id)),
                                             progress_tx,
                                         )
                                         .<span class="kw">await
@@ -4939,20 +4930,17 @@
                 executor_builder.with_module_dyn(module.context(module_instance_id));
             }
 
-            <span class="kw">for </span>(module_instance_id, <span class="kw">_</span>) <span class="kw">in </span>module_recoveries.iter() {
+            <span class="kw">for </span>module_instance_id <span class="kw">in </span>module_recoveries.keys() {
                 executor_builder.with_valid_module_id(<span class="kw-2">*</span>module_instance_id);
             }
 
-            executor_builder
-                .build(db.clone(), notifier, task_group.clone())
-                .<span class="kw">await
-        </span>};
+            executor_builder.build(db.clone(), notifier, task_group.clone())
+        };
 
-        <span class="kw">let </span>recovery_receiver_init_val = BTreeMap::from_iter(
-            module_recovery_progress_receivers
-                .iter()
-                .map(|(module_instance_id, rx)| (<span class="kw-2">*</span>module_instance_id, <span class="kw-2">*</span>rx.borrow())),
-        );
+        <span class="kw">let </span>recovery_receiver_init_val = module_recovery_progress_receivers
+            .iter()
+            .map(|(module_instance_id, rx)| (<span class="kw-2">*</span>module_instance_id, <span class="kw-2">*</span>rx.borrow()))
+            .collect::&lt;BTreeMap&lt;<span class="kw">_</span>, <span class="kw">_</span>&gt;&gt;();
         <span class="kw">let </span>(client_recovery_progress_sender, client_recovery_progress_receiver) =
             watch::channel(recovery_receiver_init_val);
 
@@ -4983,8 +4971,8 @@
                     client_inner
                         .meta_service
                         .update_continuously(<span class="kw-2">&amp;</span>client_inner)
-                        .<span class="kw">await
-                </span>}
+                        .<span class="kw">await</span>;
+                }
             });
 
         <span class="kw">let </span>client_arc = ClientHandle::new(client_inner);
@@ -4992,13 +4980,11 @@
         final_client.set(client_arc.downgrade());
 
         <span class="kw">if </span>!module_recoveries.is_empty() {
-            client_arc
-                .spawn_module_recoveries_task(
-                    client_recovery_progress_sender,
-                    module_recoveries,
-                    module_recovery_progress_receivers,
-                )
-                .<span class="kw">await</span>;
+            client_arc.spawn_module_recoveries_task(
+                client_recovery_progress_sender,
+                module_recoveries,
+                module_recovery_progress_receivers,
+            );
         }
 
         <span class="prelude-val">Ok</span>(client_arc)
@@ -5035,7 +5021,7 @@
     }
 
     <span class="kw">fn </span>config_decoded(
-        config: ClientConfig,
+        config: <span class="kw-2">&amp;</span>ClientConfig,
         decoders: <span class="kw-2">&amp;</span>ModuleDecoderRegistry,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;ClientConfig, fedimint_core::encoding::DecodeError&gt; {
         config.clone().redecode_raw(decoders)

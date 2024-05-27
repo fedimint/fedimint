@@ -1932,18 +1932,6 @@
 <a href="#1932" id="1932">1932</a>
 <a href="#1933" id="1933">1933</a>
 <a href="#1934" id="1934">1934</a>
-<a href="#1935" id="1935">1935</a>
-<a href="#1936" id="1936">1936</a>
-<a href="#1937" id="1937">1937</a>
-<a href="#1938" id="1938">1938</a>
-<a href="#1939" id="1939">1939</a>
-<a href="#1940" id="1940">1940</a>
-<a href="#1941" id="1941">1941</a>
-<a href="#1942" id="1942">1942</a>
-<a href="#1943" id="1943">1943</a>
-<a href="#1944" id="1944">1944</a>
-<a href="#1945" id="1945">1945</a>
-<a href="#1946" id="1946">1946</a>
 </pre></div><pre class="rust"><code><span class="kw">pub mod </span>client;
 <span class="kw">mod </span>db;
 <span class="kw">pub mod </span>envs;
@@ -2329,7 +2317,7 @@
         registry.attach(MintClientInit);
         registry.attach(WalletClientInit::default());
 
-        <span class="kw">let </span>decoders = registry.available_decoders(DEFAULT_MODULE_KINDS.iter().cloned())<span class="question-mark">?</span>;
+        <span class="kw">let </span>decoders = registry.available_decoders(DEFAULT_MODULE_KINDS.iter().copied())<span class="question-mark">?</span>;
 
         <span class="kw">let </span>gateway_db = Database::new(
             fedimint_rocksdb::RocksDb::open(opts.data_dir.join(DB_FILE))<span class="question-mark">?</span>,
@@ -2462,9 +2450,9 @@
     /// begins listening for intercepted HTLCs, and starts the webserver to
     /// service requests.
     </span><span class="kw">pub async fn </span>run(<span class="kw-2">mut </span><span class="self">self</span>, tg: <span class="kw-2">&amp;mut </span>TaskGroup) -&gt; anyhow::Result&lt;TaskShutdownToken&gt; {
-        <span class="self">self</span>.register_clients_timer(tg).<span class="kw">await</span>;
+        <span class="self">self</span>.register_clients_timer(tg);
         <span class="self">self</span>.load_clients().<span class="kw">await</span>;
-        <span class="self">self</span>.start_gateway(tg).<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="self">self</span>.start_gateway(tg);
         <span class="comment">// start webserver last to avoid handling requests before fully initialized
         </span>run_webserver(<span class="self">self</span>.clone(), tg).<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>handle = tg.make_handle();
@@ -2474,7 +2462,7 @@
 
     <span class="doccomment">/// Begins the task for listening for intercepted HTLCs from the Lightning
     /// node.
-    </span><span class="kw">async fn </span>start_gateway(<span class="kw-2">&amp;</span><span class="self">self</span>, task_group: <span class="kw-2">&amp;mut </span>TaskGroup) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+    </span><span class="kw">fn </span>start_gateway(<span class="kw-2">&amp;</span><span class="self">self</span>, task_group: <span class="kw-2">&amp;mut </span>TaskGroup) {
         <span class="kw">let </span><span class="kw-2">mut </span>self_copy = <span class="self">self</span>.clone();
         <span class="kw">let </span>tg = task_group.clone();
         task_group.spawn(<span class="string">"Subscribe to intercepted HTLCs in stream"</span>, <span class="kw">move </span>|handle| <span class="kw">async move </span>{
@@ -2537,15 +2525,12 @@
                                 }).<span class="kw">await</span>;
 
                                 <span class="comment">// Blocks until the connection to the lightning node breaks or we receive the shutdown signal
-                                </span><span class="kw">match </span>handle.cancel_on_shutdown(self_copy.handle_htlc_stream(stream, handle.clone())).<span class="kw">await </span>{
-                                    <span class="prelude-val">Ok</span>(<span class="kw">_</span>) =&gt; {
-                                        <span class="macro">warn!</span>(<span class="string">"HTLC Stream Lightning connection broken. Gateway is disconnected"</span>);
-                                    },
-                                    <span class="prelude-val">Err</span>(<span class="kw">_</span>) =&gt; {
-                                        <span class="macro">info!</span>(<span class="string">"Received shutdown signal"</span>);
-                                        self_copy.handle_disconnect(htlc_task_group).<span class="kw">await</span>;
-                                        <span class="kw">break</span>;
-                                    }
+                                </span><span class="kw">if </span>handle.cancel_on_shutdown(self_copy.handle_htlc_stream(stream, handle.clone())).<span class="kw">await</span>.is_ok() {
+                                    <span class="macro">warn!</span>(<span class="string">"HTLC Stream Lightning connection broken. Gateway is disconnected"</span>);
+                                } <span class="kw">else </span>{
+                                    <span class="macro">info!</span>(<span class="string">"Received shutdown signal"</span>);
+                                    self_copy.handle_disconnect(htlc_task_group).<span class="kw">await</span>;
+                                    <span class="kw">break</span>;
                                 }
                             }
                             <span class="prelude-val">Err</span>(e) =&gt; {
@@ -2564,8 +2549,6 @@
                 sleep(Duration::from_secs(<span class="number">5</span>)).<span class="kw">await</span>;
             }
         });
-
-        <span class="prelude-val">Ok</span>(())
     }
 
     <span class="doccomment">/// Utility function for waiting for the task that is listening for
@@ -2655,13 +2638,11 @@
                                                     <span class="kw">return </span><span class="prelude-val">Some</span>(ControlFlow::&lt;(), ()&gt;::Continue(()))
                                                 }
                                                 <span class="prelude-val">Err</span>(e) =&gt; {
-                                                    <span class="macro">info!</span>(
-                                                    <span class="string">"Got error intercepting HTLC: {e:?}, will retry..."
-                                                </span>)
+                                                    <span class="macro">info!</span>(<span class="string">"Got error intercepting HTLC: {e:?}, will retry..."</span>);
                                                 }
                                             }
                                         } <span class="kw">else </span>{
-                                            <span class="macro">info!</span>(<span class="string">"Got no HTLC result"</span>)
+                                            <span class="macro">info!</span>(<span class="string">"Got no HTLC result"</span>);
                                         }
                                         <span class="prelude-val">None
                                     </span>})
@@ -2670,7 +2651,7 @@
                                     <span class="kw">continue</span>;
                                 }
                             } <span class="kw">else </span>{
-                                <span class="macro">info!</span>(<span class="string">"Got no client result"</span>)
+                                <span class="macro">info!</span>(<span class="string">"Got no client result"</span>);
                             }
                         }
                     }
@@ -2990,8 +2971,7 @@
                 routing_fees: <span class="prelude-val">Some</span>(gateway_config.routing_fees.into()),
             };
 
-            <span class="self">self</span>.check_federation_network(<span class="kw-2">&amp;</span>federation_info, gateway_config.network)
-                .<span class="kw">await</span><span class="question-mark">?</span>;
+            <span class="self">Self</span>::check_federation_network(<span class="kw-2">&amp;</span>federation_info, gateway_config.network)<span class="question-mark">?</span>;
 
             client
                 .get_first_module::&lt;GatewayClientModule&gt;()
@@ -3074,7 +3054,7 @@
 
     <span class="doccomment">/// Handles a request for the gateway to backup a connected federation's
     /// ecash. Not currently supported.
-    </span><span class="kw">pub async fn </span>handle_backup_msg(
+    </span><span class="kw">pub fn </span>handle_backup_msg(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         BackupPayload { federation_id: <span class="kw">_ </span>}: BackupPayload,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
@@ -3083,7 +3063,7 @@
 
     <span class="doccomment">/// Handles a request for the gateway to restore a connected federation's
     /// ecash. Not currently supported.
-    </span><span class="kw">pub async fn </span>handle_restore_msg(
+    </span><span class="kw">pub fn </span>handle_restore_msg(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         RestorePayload { federation_id: <span class="kw">_ </span>}: RestorePayload,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
@@ -3172,7 +3152,7 @@
 
         <span class="kw">let </span><span class="kw-2">mut </span>register_federations: Vec&lt;(FederationId, FederationConfig)&gt; = Vec::new();
         <span class="kw">if let </span><span class="prelude-val">Some</span>(per_federation_routing_fees) = per_federation_routing_fees {
-            <span class="kw">for </span>(federation_id, routing_fees) <span class="kw">in </span>per_federation_routing_fees.iter() {
+            <span class="kw">for </span>(federation_id, routing_fees) <span class="kw">in </span><span class="kw-2">&amp;</span>per_federation_routing_fees {
                 <span class="kw">let </span>federation_key = FederationIdKey { id: <span class="kw-2">*</span>federation_id };
                 <span class="kw">if let </span><span class="prelude-val">Some</span>(<span class="kw-2">mut </span>federation_config) = dbtx.get_value(<span class="kw-2">&amp;</span>federation_key).<span class="kw">await </span>{
                     federation_config.fees = routing_fees.clone().into();
@@ -3227,7 +3207,7 @@
         <span class="kw">let </span>context = <span class="self">self</span>.get_lightning_context().<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>response = context.lnrpc.get_funding_address().<span class="kw">await</span><span class="question-mark">?</span>;
         Address::from_str(<span class="kw-2">&amp;</span>response.address)
-            .map(|address| address.assume_checked())
+            .map(Address::assume_checked)
             .map_err(|e| GatewayError::LightningResponseParseError(e.into()))
     }
 
@@ -3305,8 +3285,8 @@
                             REGISTER_GATEWAY_ENDPOINT,
                             serde_json::Value::Null,
                             <span class="macro">anyhow::anyhow!</span>(<span class="string">"Error registering federation {federation_id}: {e:?}"</span>),
-                        )))<span class="question-mark">?
-                    </span>}
+                        )))<span class="question-mark">?</span>;
+                    }
                 }
             }
         }
@@ -3448,7 +3428,7 @@
     /// connected federations every 8.5 mins. Only registers the Gateway if it
     /// has successfully connected to the Lightning node, so that it can
     /// include route hints in the registration.
-    </span><span class="kw">async fn </span>register_clients_timer(<span class="kw-2">&amp;mut </span><span class="self">self</span>, task_group: <span class="kw-2">&amp;mut </span>TaskGroup) {
+    </span><span class="kw">fn </span>register_clients_timer(<span class="kw-2">&amp;mut </span><span class="self">self</span>, task_group: <span class="kw-2">&amp;mut </span>TaskGroup) {
         <span class="kw">let </span>gateway = <span class="self">self</span>.clone();
         task_group.spawn_cancellable(<span class="string">"register clients"</span>, <span class="kw">async move </span>{
             <span class="kw">loop </span>{
@@ -3548,11 +3528,7 @@
 
     <span class="doccomment">/// Verifies that the supplied `network` matches the Bitcoin network in the
     /// connected client's configuration.
-    </span><span class="kw">async fn </span>check_federation_network(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        info: <span class="kw-2">&amp;</span>FederationInfo,
-        network: Network,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+    </span><span class="kw">fn </span>check_federation_network(info: <span class="kw-2">&amp;</span>FederationInfo, network: Network) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
         <span class="kw">let </span>cfg = info
             .config
             .modules

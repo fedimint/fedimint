@@ -464,8 +464,8 @@
                 };
 
                 <span class="kw">let </span><span class="kw-2">mut </span>dbdump = DatabaseDump::new(
-                    cfg_dir.to_path_buf(),
-                    options.database.to_owned(),
+                    cfg_dir.clone(),
+                    options.database.clone(),
                     password.to_string(),
                     module_inits,
                     client_module_inits,

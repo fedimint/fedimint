@@ -148,10 +148,6 @@
 <a href="#148" id="148">148</a>
 <a href="#149" id="149">149</a>
 <a href="#150" id="150">150</a>
-<a href="#151" id="151">151</a>
-<a href="#152" id="152">152</a>
-<a href="#153" id="153">153</a>
-<a href="#154" id="154">154</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! State machine for submitting transactions
 
 </span><span class="kw">use </span>std::time::Duration;
@@ -241,13 +237,9 @@
                     ),
                 ]
             }
-            TxSubmissionStates::Accepted(..) =&gt; {
-                <span class="macro">vec!</span>[]
-            }
-            TxSubmissionStates::Rejected(..) =&gt; {
-                <span class="macro">vec!</span>[]
-            }
-            TxSubmissionStates::NonRetryableError(..) =&gt; {
+            TxSubmissionStates::Accepted(..)
+            | TxSubmissionStates::Rejected(..)
+            | TxSubmissionStates::NonRetryableError(..) =&gt; {
                 <span class="macro">vec!</span>[]
             }
         }
@@ -269,7 +261,7 @@
                         }
                     }
                     <span class="prelude-val">Err</span>(decode_error) =&gt; {
-                        <span class="macro">warn!</span>(target: LOG_CLIENT_NET_API, error = %decode_error, <span class="string">"Failed to decode SerdeModuleEncoding"</span>)
+                        <span class="macro">warn!</span>(target: LOG_CLIENT_NET_API, error = %decode_error, <span class="string">"Failed to decode SerdeModuleEncoding"</span>);
                     }
                 },
                 <span class="prelude-val">Err</span>(error) =&gt; {

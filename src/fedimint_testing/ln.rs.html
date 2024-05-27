@@ -237,6 +237,8 @@
 <a href="#237" id="237">237</a>
 <a href="#238" id="238">238</a>
 <a href="#239" id="239">239</a>
+<a href="#240" id="240">240</a>
+<a href="#241" id="241">241</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::sync::{Arc, Mutex};
 <span class="kw">use </span>std::time::Duration;
 
@@ -298,7 +300,7 @@
 }
 
 <span class="kw">impl </span>FakeLightningTest {
-    <span class="kw">pub async fn </span>invoice(
+    <span class="kw">pub fn </span>invoice(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         amount: Amount,
         expiry_time: <span class="prelude-ty">Option</span>&lt;u64&gt;,
@@ -306,7 +308,7 @@
         <span class="kw">let </span>ctx = bitcoin::secp256k1::Secp256k1::new();
 
         <span class="prelude-val">Ok</span>(InvoiceBuilder::new(Currency::Regtest)
-            .description(<span class="string">""</span>.to_string())
+            .description(String::new())
             .payment_hash(sha256::Hash::hash(<span class="kw-2">&amp;</span>[<span class="number">0</span>; <span class="number">32</span>]))
             .current_timestamp()
             .min_final_cltv_expiry_delta(<span class="number">0</span>)
@@ -429,13 +431,15 @@
         <span class="kw">let </span>payment_hash = sha256::Hash::from_slice(<span class="kw-2">&amp;</span>create_invoice_request.payment_hash)
             .expect(<span class="string">"Failed to lookup FederationId"</span>);
         <span class="kw">let </span>invoice = InvoiceBuilder::new(Currency::Regtest)
-            .description(<span class="string">""</span>.to_string())
+            .description(String::new())
             .payment_hash(payment_hash)
             .current_timestamp()
             .min_final_cltv_expiry_delta(<span class="number">0</span>)
             .payment_secret(PaymentSecret([<span class="number">0</span>; <span class="number">32</span>]))
             .amount_milli_satoshis(create_invoice_request.amount_msat)
-            .expiry_time(Duration::from_secs(create_invoice_request.expiry <span class="kw">as </span>u64))
+            .expiry_time(Duration::from_secs(u64::from(
+                create_invoice_request.expiry,
+            )))
             .build_signed(|m| ctx.sign_ecdsa_recoverable(m, <span class="kw-2">&amp;</span><span class="self">self</span>.gateway_node_sec_key))
             .unwrap();
 

@@ -937,10 +937,6 @@
 <a href="#937" id="937">937</a>
 <a href="#938" id="938">938</a>
 <a href="#939" id="939">939</a>
-<a href="#940" id="940">940</a>
-<a href="#941" id="941">941</a>
-<a href="#942" id="942">942</a>
-<a href="#943" id="943">943</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::fmt;
 <span class="kw">use </span>std::str::FromStr;
 <span class="kw">use </span>std::sync::Arc;
@@ -997,7 +993,7 @@
 }
 
 <span class="kw">impl </span>GatewayLndClient {
-    <span class="kw">pub async fn </span>new(
+    <span class="kw">pub fn </span>new(
         address: String,
         tls_cert: String,
         macaroon: String,
@@ -1294,7 +1290,7 @@
         channels.truncate(num_route_hints);
 
         <span class="kw">let </span><span class="kw-2">mut </span>route_hints: Vec&lt;RouteHint&gt; = <span class="macro">vec!</span>[];
-        <span class="kw">for </span>chan <span class="kw">in </span>channels.iter() {
+        <span class="kw">for </span>chan <span class="kw">in </span><span class="kw-2">&amp;</span>channels {
             <span class="kw">let </span>info = client
                 .lightning()
                 .get_chan_info(ChanInfoRequest {
@@ -1306,9 +1302,8 @@
                 })<span class="question-mark">?
                 </span>.into_inner();
 
-            <span class="kw">let </span>policy = <span class="kw">match </span>info.node1_policy.clone() {
-                <span class="prelude-val">Some</span>(policy) =&gt; policy,
-                <span class="prelude-val">None </span>=&gt; <span class="kw">continue</span>,
+            <span class="kw">let </span><span class="prelude-val">Some</span>(policy) = info.node1_policy.clone() <span class="kw">else </span>{
+                <span class="kw">continue</span>;
             };
             <span class="kw">let </span>src_node_id = PublicKey::from_str(<span class="kw-2">&amp;</span>chan.remote_pubkey)
                 .unwrap()
@@ -1506,15 +1501,12 @@
             gateway_sender.clone(),
         )
         .<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">let </span>new_client = Arc::new(
-            <span class="self">Self</span>::new(
-                <span class="self">self</span>.address.clone(),
-                <span class="self">self</span>.tls_cert.clone(),
-                <span class="self">self</span>.macaroon.clone(),
-                <span class="prelude-val">Some</span>(lnd_sender.clone()),
-            )
-            .<span class="kw">await</span>,
-        );
+        <span class="kw">let </span>new_client = Arc::new(<span class="self">Self</span>::new(
+            <span class="self">self</span>.address.clone(),
+            <span class="self">self</span>.tls_cert.clone(),
+            <span class="self">self</span>.macaroon.clone(),
+            <span class="prelude-val">Some</span>(lnd_sender.clone()),
+        ));
         <span class="prelude-val">Ok</span>((Box::pin(ReceiverStream::new(gateway_receiver)), new_client))
     }
 
@@ -1579,14 +1571,14 @@
                 memo: description,
                 hash: create_invoice_request.payment_hash,
                 value_msat: create_invoice_request.amount_msat <span class="kw">as </span>i64,
-                expiry: create_invoice_request.expiry <span class="kw">as </span>i64,
+                expiry: i64::from(create_invoice_request.expiry),
                 ..Default::default()
             },
             Description::Hash(desc_hash) =&gt; AddHoldInvoiceRequest {
                 description_hash: desc_hash,
                 hash: create_invoice_request.payment_hash,
                 value_msat: create_invoice_request.amount_msat <span class="kw">as </span>i64,
-                expiry: create_invoice_request.expiry <span class="kw">as </span>i64,
+                expiry: i64::from(create_invoice_request.expiry),
                 ..Default::default()
             },
         };
@@ -1635,8 +1627,8 @@
         <span class="kw">match </span>client
             .wallet()
             .next_addr(AddrRequest {
-                account: <span class="string">""</span>.to_string(), <span class="comment">// Default wallet account.
-                </span>r#type: <span class="number">4</span>,               <span class="comment">// Taproot address.
+                account: String::new(), <span class="comment">// Default wallet account.
+                </span>r#type: <span class="number">4</span>,              <span class="comment">// Taproot address.
                 </span>change: <span class="bool-val">false</span>,
             })
             .<span class="kw">await
@@ -1816,7 +1808,7 @@
                     chan_id: hop.short_channel_id,
                     fee_base_msat: hop.base_msat,
                     fee_proportional_millionths: hop.proportional_millionths,
-                    cltv_expiry_delta: hop.cltv_expiry_delta <span class="kw">as </span>u32,
+                    cltv_expiry_delta: u32::from(hop.cltv_expiry_delta),
                 })
                 .collect(),
         })

@@ -1295,9 +1295,6 @@
 <a href="#1295" id="1295">1295</a>
 <a href="#1296" id="1296">1296</a>
 <a href="#1297" id="1297">1297</a>
-<a href="#1298" id="1298">1298</a>
-<a href="#1299" id="1299">1299</a>
-<a href="#1300" id="1300">1300</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::net::SocketAddr;
 <span class="kw">use </span>std::sync::Arc;
@@ -1404,7 +1401,7 @@
     ) -&gt; ApiResult&lt;MutexGuard&lt;ConfigGenState&gt;&gt; {
         <span class="kw">let </span>state = <span class="self">self</span>.state.lock().<span class="kw">await</span>;
         <span class="kw">if </span>!statuses.contains(<span class="kw-2">&amp;</span>state.status) {
-            <span class="kw">return </span><span class="self">Self</span>::bad_request(<span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">"Expected to be in one of {:?} states"</span>, statuses));
+            <span class="kw">return </span><span class="self">Self</span>::bad_request(<span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">"Expected to be in one of {statuses:?} states"</span>));
         }
         <span class="prelude-val">Ok</span>(state)
     }
@@ -1741,22 +1738,19 @@
     </span><span class="kw">async fn </span>await_leader_restart(<span class="kw-2">&amp;</span><span class="self">self</span>, client: <span class="kw-2">&amp;</span>DynGlobalApi) -&gt; ApiResult&lt;()&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>retries = <span class="number">0</span>;
         <span class="kw">loop </span>{
-            <span class="kw">match </span>client.status().<span class="kw">await </span>{
-                <span class="prelude-val">Ok</span>(status) =&gt; {
-                    <span class="kw">if </span>status.server == ServerStatus::AwaitingPassword
-                        || status.server == ServerStatus::SharingConfigGenParams
-                    {
-                        <span class="kw">break </span><span class="prelude-val">Ok</span>(());
-                    }
+            <span class="kw">if let </span><span class="prelude-val">Ok</span>(status) = client.status().<span class="kw">await </span>{
+                <span class="kw">if </span>status.server == ServerStatus::AwaitingPassword
+                    || status.server == ServerStatus::SharingConfigGenParams
+                {
+                    <span class="kw">break </span><span class="prelude-val">Ok</span>(());
                 }
-                <span class="prelude-val">Err</span>(<span class="kw">_</span>) =&gt; {
-                    <span class="kw">if </span>retries &gt; <span class="number">3 </span>{
-                        <span class="kw">return </span><span class="prelude-val">Err</span>(ApiError::not_found(
-                            <span class="string">"Unable to connect to the leader"</span>.to_string(),
-                        ));
-                    }
-                    retries += <span class="number">1</span>;
+            } <span class="kw">else </span>{
+                <span class="kw">if </span>retries &gt; <span class="number">3 </span>{
+                    <span class="kw">return </span><span class="prelude-val">Err</span>(ApiError::not_found(
+                        <span class="string">"Unable to connect to the leader"</span>.to_string(),
+                    ));
                 }
+                retries += <span class="number">1</span>;
             }
             sleep(Duration::from_millis(<span class="number">100</span>)).<span class="kw">await</span>;
         }
@@ -2003,7 +1997,7 @@
         <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.db.begin_transaction().<span class="kw">await</span>;
         <span class="kw">if let </span><span class="prelude-val">Some</span>(id) = id {
             db = <span class="self">self</span>.db.with_prefix_module_id(id);
-            dbtx = dbtx.with_prefix_module_id(id)
+            dbtx = dbtx.with_prefix_module_id(id);
         }
         <span class="kw">let </span>state = <span class="self">self</span>.state.lock().<span class="kw">await</span>;
         <span class="kw">let </span>auth = request.auth.as_ref();
@@ -2357,7 +2351,7 @@
         <span class="doccomment">/// reads the dummy module config from the filesystem
         </span><span class="kw">fn </span>read_config(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ServerConfig {
             <span class="kw">let </span>auth = fs::read_to_string(<span class="self">self</span>.dir.join(PLAINTEXT_PASSWORD));
-            read_server_config(<span class="kw-2">&amp;</span>auth.unwrap(), <span class="self">self</span>.dir.clone()).unwrap()
+            read_server_config(<span class="kw-2">&amp;</span>auth.unwrap(), <span class="kw-2">&amp;</span><span class="self">self</span>.dir).unwrap()
         }
     }
 

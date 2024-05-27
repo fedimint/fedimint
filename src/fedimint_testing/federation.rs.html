@@ -468,7 +468,7 @@
 }
 
 <span class="kw">impl </span>FederationTestBuilder {
-    <span class="kw">pub async fn </span>new(
+    <span class="kw">pub fn </span>new(
         params: ServerModuleConfigGenParamsRegistry,
         server_init: ServerModuleInitRegistry,
         client_init: ClientModuleInitRegistry,
@@ -519,11 +519,11 @@
             <span class="string">"too many peers offline ({num_offline}) to reach consensus"
         </span>);
         <span class="kw">let </span>peers = (<span class="number">0</span>..<span class="self">self</span>.num_peers).map(PeerId::from).collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
-        <span class="kw">let </span>params = local_config_gen_params(<span class="kw-2">&amp;</span>peers, <span class="self">self</span>.base_port, <span class="self">self</span>.params)
+        <span class="kw">let </span>params = local_config_gen_params(<span class="kw-2">&amp;</span>peers, <span class="self">self</span>.base_port, <span class="kw-2">&amp;</span><span class="self">self</span>.params)
             .expect(<span class="string">"Generates local config"</span>);
 
         <span class="kw">let </span>configs =
-            ServerConfig::trusted_dealer_gen(<span class="kw-2">&amp;</span>params, <span class="self">self</span>.server_init.clone(), <span class="self">self</span>.version_hash);
+            ServerConfig::trusted_dealer_gen(<span class="kw-2">&amp;</span>params, <span class="kw-2">&amp;</span><span class="self">self</span>.server_init, <span class="kw-2">&amp;</span><span class="self">self</span>.version_hash);
 
         <span class="kw">let </span>task_group = TaskGroup::new();
         <span class="kw">for </span>(peer_id, config) <span class="kw">in </span>configs.clone() {
@@ -590,7 +590,7 @@
 </span><span class="kw">pub fn </span>local_config_gen_params(
     peers: <span class="kw-2">&amp;</span>[PeerId],
     base_port: u16,
-    server_config_gen: ServerModuleConfigGenParamsRegistry,
+    server_config_gen: <span class="kw-2">&amp;</span>ServerModuleConfigGenParamsRegistry,
 ) -&gt; anyhow::Result&lt;HashMap&lt;PeerId, ConfigGenParams&gt;&gt; {
     <span class="comment">// Generate TLS cert and private key
     </span><span class="kw">let </span>tls_keys: HashMap&lt;PeerId, (rustls::Certificate, rustls::PrivateKey)&gt; = peers
@@ -625,8 +625,8 @@
     peers
         .iter()
         .map(|peer| {
-            <span class="kw">let </span>p2p_bind = parse_host_port(connections[peer].clone().p2p_url)<span class="question-mark">?</span>;
-            <span class="kw">let </span>api_bind = parse_host_port(connections[peer].clone().api_url)<span class="question-mark">?</span>;
+            <span class="kw">let </span>p2p_bind = parse_host_port(<span class="kw-2">&amp;</span>connections[peer].clone().p2p_url)<span class="question-mark">?</span>;
+            <span class="kw">let </span>api_bind = parse_host_port(<span class="kw-2">&amp;</span>connections[peer].clone().api_url)<span class="question-mark">?</span>;
 
             <span class="kw">let </span>params = ConfigGenParams {
                 local: ConfigGenParamsLocal {

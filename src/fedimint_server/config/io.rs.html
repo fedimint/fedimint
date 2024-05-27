@@ -129,7 +129,7 @@
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::fmt::Display;
 <span class="kw">use </span>std::fs;
 <span class="kw">use </span>std::io::Write;
-<span class="kw">use </span>std::path::{Path, PathBuf};
+<span class="kw">use </span>std::path::Path;
 
 <span class="kw">use </span>fedimint_aead::{encrypted_read, encrypted_write, get_encryption_key, LessSafeKey};
 <span class="kw">use </span>fedimint_core::config::ServerModuleInitRegistry;
@@ -173,19 +173,19 @@
 </span><span class="kw">pub const </span>CONFIG_STAGING_DIR: <span class="kw-2">&amp;</span>str = <span class="string">"cfg_staging"</span>;
 
 <span class="doccomment">/// Reads the server from the local, private, and consensus cfg files
-</span><span class="kw">pub fn </span>read_server_config(password: <span class="kw-2">&amp;</span>str, path: PathBuf) -&gt; anyhow::Result&lt;ServerConfig&gt; {
+</span><span class="kw">pub fn </span>read_server_config(password: <span class="kw-2">&amp;</span>str, path: <span class="kw-2">&amp;</span>Path) -&gt; anyhow::Result&lt;ServerConfig&gt; {
     <span class="kw">let </span>salt = fs::read_to_string(path.join(SALT_FILE))<span class="question-mark">?</span>;
     <span class="kw">let </span>key = get_encryption_key(password, <span class="kw-2">&amp;</span>salt)<span class="question-mark">?</span>;
 
     <span class="prelude-val">Ok</span>(ServerConfig {
-        consensus: plaintext_json_read(path.join(CONSENSUS_CONFIG))<span class="question-mark">?</span>,
-        local: plaintext_json_read(path.join(LOCAL_CONFIG))<span class="question-mark">?</span>,
-        private: encrypted_json_read(<span class="kw-2">&amp;</span>key, path.join(PRIVATE_CONFIG))<span class="question-mark">?</span>,
+        consensus: plaintext_json_read(<span class="kw-2">&amp;</span>path.join(CONSENSUS_CONFIG))<span class="question-mark">?</span>,
+        local: plaintext_json_read(<span class="kw-2">&amp;</span>path.join(LOCAL_CONFIG))<span class="question-mark">?</span>,
+        private: encrypted_json_read(<span class="kw-2">&amp;</span>key, <span class="kw-2">&amp;</span>path.join(PRIVATE_CONFIG))<span class="question-mark">?</span>,
     })
 }
 
 <span class="doccomment">/// Reads a plaintext json file into a struct
-</span><span class="kw">fn </span>plaintext_json_read&lt;T: Serialize + DeserializeOwned&gt;(path: PathBuf) -&gt; anyhow::Result&lt;T&gt; {
+</span><span class="kw">fn </span>plaintext_json_read&lt;T: Serialize + DeserializeOwned&gt;(path: <span class="kw-2">&amp;</span>Path) -&gt; anyhow::Result&lt;T&gt; {
     <span class="kw">let </span>string = fs::read_to_string(path.with_extension(JSON_EXT))<span class="question-mark">?</span>;
     <span class="prelude-val">Ok</span>(serde_json::from_str(<span class="kw-2">&amp;</span>string)<span class="question-mark">?</span>)
 }
@@ -193,7 +193,7 @@
 <span class="doccomment">/// Reads an encrypted json file into a struct
 </span><span class="kw">fn </span>encrypted_json_read&lt;T: Serialize + DeserializeOwned&gt;(
     key: <span class="kw-2">&amp;</span>LessSafeKey,
-    path: PathBuf,
+    path: <span class="kw-2">&amp;</span>Path,
 ) -&gt; anyhow::Result&lt;T&gt; {
     <span class="kw">let </span>decrypted = encrypted_read(key, path.with_extension(ENCRYPTED_EXT));
     <span class="kw">let </span>string = String::from_utf8(decrypted<span class="question-mark">?</span>)<span class="question-mark">?</span>;
@@ -203,7 +203,7 @@
 <span class="doccomment">/// Writes the server into configuration files (private keys encrypted)
 </span><span class="kw">pub fn </span>write_server_config(
     server: <span class="kw-2">&amp;</span>ServerConfig,
-    path: PathBuf,
+    path: <span class="kw-2">&amp;</span>Path,
     password: <span class="kw-2">&amp;</span>str,
     module_config_gens: <span class="kw-2">&amp;</span>ServerModuleInitRegistry,
     api_secret: <span class="prelude-ty">Option</span>&lt;String&gt;,
@@ -212,20 +212,20 @@
     <span class="kw">let </span>key = get_encryption_key(password, <span class="kw-2">&amp;</span>salt)<span class="question-mark">?</span>;
 
     <span class="kw">let </span>client_config = server.consensus.to_client_config(module_config_gens)<span class="question-mark">?</span>;
-    plaintext_json_write(<span class="kw-2">&amp;</span>server.local, path.join(LOCAL_CONFIG))<span class="question-mark">?</span>;
-    plaintext_json_write(<span class="kw-2">&amp;</span>server.consensus, path.join(CONSENSUS_CONFIG))<span class="question-mark">?</span>;
+    plaintext_json_write(<span class="kw-2">&amp;</span>server.local, <span class="kw-2">&amp;</span>path.join(LOCAL_CONFIG))<span class="question-mark">?</span>;
+    plaintext_json_write(<span class="kw-2">&amp;</span>server.consensus, <span class="kw-2">&amp;</span>path.join(CONSENSUS_CONFIG))<span class="question-mark">?</span>;
     plaintext_display_write(
         <span class="kw-2">&amp;</span>server.get_invite_code(api_secret),
         <span class="kw-2">&amp;</span>path.join(CLIENT_INVITE_CODE_FILE),
     )<span class="question-mark">?</span>;
-    plaintext_json_write(<span class="kw-2">&amp;</span>client_config, path.join(CLIENT_CONFIG))<span class="question-mark">?</span>;
-    encrypted_json_write(<span class="kw-2">&amp;</span>server.private, <span class="kw-2">&amp;</span>key, path.join(PRIVATE_CONFIG))
+    plaintext_json_write(<span class="kw-2">&amp;</span>client_config, <span class="kw-2">&amp;</span>path.join(CLIENT_CONFIG))<span class="question-mark">?</span>;
+    encrypted_json_write(<span class="kw-2">&amp;</span>server.private, <span class="kw-2">&amp;</span>key, <span class="kw-2">&amp;</span>path.join(PRIVATE_CONFIG))
 }
 
 <span class="doccomment">/// Writes struct into a plaintext json file
 </span><span class="kw">fn </span>plaintext_json_write&lt;T: Serialize + DeserializeOwned&gt;(
     obj: <span class="kw-2">&amp;</span>T,
-    path: PathBuf,
+    path: <span class="kw-2">&amp;</span>Path,
 ) -&gt; anyhow::Result&lt;()&gt; {
     <span class="kw">let </span>file = fs::File::options()
         .create_new(<span class="bool-val">true</span>)
@@ -249,7 +249,7 @@
 </span><span class="kw">fn </span>encrypted_json_write&lt;T: Serialize + DeserializeOwned&gt;(
     obj: <span class="kw-2">&amp;</span>T,
     key: <span class="kw-2">&amp;</span>LessSafeKey,
-    path: PathBuf,
+    path: <span class="kw-2">&amp;</span>Path,
 ) -&gt; anyhow::Result&lt;()&gt; {
     <span class="kw">let </span>bytes = serde_json::to_string(obj)<span class="question-mark">?</span>.into_bytes();
     encrypted_write(bytes, key, path.with_extension(ENCRYPTED_EXT))

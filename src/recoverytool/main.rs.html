@@ -493,7 +493,6 @@
 <a href="#493" id="493">493</a>
 <a href="#494" id="494">494</a>
 <a href="#495" id="495">495</a>
-<a href="#496" id="496">496</a>
 </pre></div><pre class="rust"><code><span class="kw">pub mod </span>envs;
 
 <span class="kw">use </span>std::cmp::Ordering;
@@ -629,7 +628,7 @@
     <span class="kw">let </span>opts: RecoveryTool = RecoveryTool::parse();
 
     <span class="kw">let </span>(base_descriptor, base_key, network) = <span class="kw">if let </span><span class="prelude-val">Some</span>(config) = opts.config {
-        <span class="kw">let </span>cfg = read_server_config(<span class="kw-2">&amp;</span>opts.password, config).expect(<span class="string">"Could not read config file"</span>);
+        <span class="kw">let </span>cfg = read_server_config(<span class="kw-2">&amp;</span>opts.password, <span class="kw-2">&amp;</span>config).expect(<span class="string">"Could not read config file"</span>);
         <span class="kw">let </span>wallet_cfg: WalletConfig = cfg
             .get_module_config_typed(LEGACY_HARDCODED_INSTANCE_ID_WALLET)
             .expect(<span class="string">"Malformed wallet config"</span>);
@@ -650,7 +649,7 @@
             <span class="kw">let </span>wallets = <span class="macro">vec!</span>[ImportableWalletMin { descriptor }];
 
             serde_json::to_writer(std::io::stdout().lock(), <span class="kw-2">&amp;</span>wallets)
-                .expect(<span class="string">"Could not encode to stdout"</span>)
+                .expect(<span class="string">"Could not encode to stdout"</span>);
         }
         TweakSource::Utxos { legacy, db } =&gt; {
             <span class="kw">let </span>db = get_db(opts.readonly, <span class="kw-2">&amp;</span>db, Default::default());
@@ -679,7 +678,7 @@
                 .<span class="kw">await</span>;
 
             serde_json::to_writer(std::io::stdout().lock(), <span class="kw-2">&amp;</span>utxos)
-                .expect(<span class="string">"Could not encode to stdout"</span>)
+                .expect(<span class="string">"Could not encode to stdout"</span>);
         }
         TweakSource::Epochs { db } =&gt; {
             <span class="kw">let </span>decoders = ModuleDecoderRegistry::from_iter([
@@ -721,8 +720,7 @@
                             .into_iter()
                             .filter_map(|item| <span class="kw">match </span>item.item {
                                 ConsensusItem::Transaction(tx) =&gt; <span class="prelude-val">Some</span>(tx),
-                                ConsensusItem::Module(<span class="kw">_</span>) =&gt; <span class="prelude-val">None</span>,
-                                ConsensusItem::Default { .. } =&gt; <span class="prelude-val">None</span>,
+                                ConsensusItem::Module(<span class="kw">_</span>) | ConsensusItem::Default { .. } =&gt; <span class="prelude-val">None</span>,
                             })
                             .collect();
 
@@ -750,7 +748,7 @@
                 .<span class="kw">await</span>;
 
             serde_json::to_writer(std::io::stdout().lock(), <span class="kw-2">&amp;</span>wallets)
-                .expect(<span class="string">"Could not encode to stdout"</span>)
+                .expect(<span class="string">"Could not encode to stdout"</span>);
         }
     }
 
@@ -863,7 +861,7 @@
 
 <span class="kw">impl </span>std::hash::Hash <span class="kw">for </span>Key {
     <span class="kw">fn </span>hash&lt;H: Hasher&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, state: <span class="kw-2">&amp;mut </span>H) {
-        <span class="self">self</span>.to_compressed_public_key().hash(state)
+        <span class="self">self</span>.to_compressed_public_key().hash(state);
     }
 }
 

@@ -134,7 +134,7 @@
         // parity_scale_codec::Encode to serialize it such that Message can
         // implement Encodable
         </span><span class="self">self</span>.connections
-            .send_sync(Message(network_data.encode()), recipient);
+            .send_sync(<span class="kw-2">&amp;</span>Message(network_data.encode()), recipient);
     }
 
     <span class="kw">async fn </span>next_event(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;NetworkData&gt; {

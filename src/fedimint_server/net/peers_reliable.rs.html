@@ -834,21 +834,6 @@
 <a href="#834" id="834">834</a>
 <a href="#835" id="835">835</a>
 <a href="#836" id="836">836</a>
-<a href="#837" id="837">837</a>
-<a href="#838" id="838">838</a>
-<a href="#839" id="839">839</a>
-<a href="#840" id="840">840</a>
-<a href="#841" id="841">841</a>
-<a href="#842" id="842">842</a>
-<a href="#843" id="843">843</a>
-<a href="#844" id="844">844</a>
-<a href="#845" id="845">845</a>
-<a href="#846" id="846">846</a>
-<a href="#847" id="847">847</a>
-<a href="#848" id="848">848</a>
-<a href="#849" id="849">849</a>
-<a href="#850" id="850">850</a>
-<a href="#851" id="851">851</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! Implements a connection manager for communication with other federation
 //! members
 //!
@@ -1023,8 +1008,7 @@
                 connection_receiver,
                 status_query_receiver,
                 task_group,
-            )
-            .<span class="kw">await</span>;
+            );
 
             connection_senders.insert(<span class="kw-2">*</span>peer, connection_sender);
             status_query_senders.insert(<span class="kw-2">*</span>peer, status_query_sender);
@@ -1108,8 +1092,8 @@
         // never going to be any message. This avoids panic on `select_all` with
         // no futures.
         </span><span class="kw">if </span><span class="self">self</span>.connections.is_empty() {
-            std::future::pending().<span class="kw">await
-        </span>}
+            std::future::pending::&lt;T&gt;().<span class="kw">await</span>;
+        }
 
         <span class="comment">// TODO: optimize, don't throw away remaining futures
 
@@ -1189,28 +1173,22 @@
     ) -&gt; <span class="prelude-ty">Option</span>&lt;PeerConnectionState&lt;M&gt;&gt; {
         <span class="prelude-val">Some</span>(<span class="macro">tokio::select!</span> {
             maybe_msg = <span class="self">self</span>.outgoing.recv() =&gt; {
-                <span class="kw">match </span>maybe_msg {
-                    <span class="prelude-val">Some</span>(msg) =&gt; {
-                        <span class="self">self</span>.send_message_connected(connected, msg).<span class="kw">await
-                    </span>},
-                    <span class="prelude-val">None </span>=&gt; {
-                        <span class="macro">debug!</span>(target: LOG_NET_PEER, <span class="string">"Exiting peer connection IO task - parent disconnected"</span>);
-                        <span class="kw">return </span><span class="prelude-val">None</span>;
-                    },
+                <span class="kw">if let </span><span class="prelude-val">Some</span>(msg) = maybe_msg {
+                    <span class="self">self</span>.send_message_connected(connected, msg).<span class="kw">await
+                </span>} <span class="kw">else </span>{
+                    <span class="macro">debug!</span>(target: LOG_NET_PEER, <span class="string">"Exiting peer connection IO task - parent disconnected"</span>);
+                    <span class="kw">return </span><span class="prelude-val">None</span>;
                 }
             },
             new_connection_res = <span class="self">self</span>.incoming_connections.recv() =&gt; {
-                <span class="kw">match </span>new_connection_res {
-                    <span class="prelude-val">Some</span>(new_connection) =&gt; {
-                        <span class="macro">debug!</span>(target: LOG_NET_PEER, <span class="string">"Replacing existing connection"</span>);
-                        <span class="self">self</span>.connect(new_connection, <span class="number">0</span>).<span class="kw">await
-                    </span>},
-                    <span class="prelude-val">None </span>=&gt; {
-                        <span class="macro">debug!</span>(
-                        target: LOG_NET_PEER,
-                            <span class="string">"Exiting peer connection IO task - parent disconnected"</span>);
-                        <span class="kw">return </span><span class="prelude-val">None</span>;
-                    },
+                <span class="kw">if let </span><span class="prelude-val">Some</span>(new_connection) = new_connection_res {
+                    <span class="macro">debug!</span>(target: LOG_NET_PEER, <span class="string">"Replacing existing connection"</span>);
+                    <span class="self">self</span>.connect(new_connection, <span class="number">0</span>).<span class="kw">await
+                </span>} <span class="kw">else </span>{
+                    <span class="macro">debug!</span>(
+                    target: LOG_NET_PEER,
+                        <span class="string">"Exiting peer connection IO task - parent disconnected"</span>);
+                    <span class="kw">return </span><span class="prelude-val">None</span>;
                 }
             },
             <span class="prelude-val">Some</span>(status_query) = <span class="self">self</span>.status_query_receiver.recv() =&gt; {
@@ -1247,7 +1225,7 @@
                 connection: new_connection,
                 next_ping: Instant::now(),
             }),
-            <span class="prelude-val">Err</span>(e) =&gt; <span class="self">self</span>.disconnect_err(e, disconnect_count),
+            <span class="prelude-val">Err</span>(e) =&gt; <span class="self">self</span>.disconnect_err(<span class="kw-2">&amp;</span>e, disconnect_count),
         }
     }
 
@@ -1261,8 +1239,8 @@
                     msg: <span class="prelude-val">Some</span>(msg),
                     ack: <span class="self">self</span>.last_received,
                 })
-                .<span class="kw">await</span><span class="question-mark">?
-        </span>}
+                .<span class="kw">await</span><span class="question-mark">?</span>;
+        }
 
         <span class="prelude-val">Ok</span>(())
     }
@@ -1290,7 +1268,7 @@
         })
     }
 
-    <span class="kw">fn </span>disconnect_err(<span class="kw-2">&amp;</span><span class="self">self</span>, err: anyhow::Error, disconnect_count: u64) -&gt; PeerConnectionState&lt;M&gt; {
+    <span class="kw">fn </span>disconnect_err(<span class="kw-2">&amp;</span><span class="self">self</span>, err: <span class="kw-2">&amp;</span>anyhow::Error, disconnect_count: u64) -&gt; PeerConnectionState&lt;M&gt; {
         <span class="macro">debug!</span>(target: LOG_NET_PEER,
             our_id = <span class="question-mark">?</span><span class="self">self</span>.our_id,
             peer = <span class="question-mark">?</span><span class="self">self</span>.peer_id, %err, %disconnect_count, <span class="string">"Peer disconnected"</span>);
@@ -1330,14 +1308,14 @@
             })
             .<span class="kw">await
         </span>{
-            <span class="kw">return </span><span class="self">self</span>.disconnect_err(e, <span class="number">0</span>);
+            <span class="kw">return </span><span class="self">self</span>.disconnect_err(<span class="kw-2">&amp;</span>e, <span class="number">0</span>);
         }
 
         connected.next_ping = Instant::now() + PING_INTERVAL;
 
         <span class="kw">match </span>connected.connection.flush().<span class="kw">await </span>{
             <span class="prelude-val">Ok</span>(()) =&gt; PeerConnectionState::Connected(connected),
-            <span class="prelude-val">Err</span>(e) =&gt; <span class="self">self</span>.disconnect_err(e, <span class="number">0</span>),
+            <span class="prelude-val">Err</span>(e) =&gt; <span class="self">self</span>.disconnect_err(<span class="kw-2">&amp;</span>e, <span class="number">0</span>),
         }
     }
 
@@ -1350,7 +1328,7 @@
             <span class="prelude-val">Ok</span>(()) =&gt; PeerConnectionState::Connected(connected),
             <span class="prelude-val">Err</span>(e) =&gt; {
                 <span class="self">self</span>.last_received = <span class="prelude-val">None</span>;
-                <span class="self">self</span>.disconnect_err(e, <span class="number">0</span>)
+                <span class="self">self</span>.disconnect_err(<span class="kw-2">&amp;</span>e, <span class="number">0</span>)
             }
         }
     }
@@ -1370,10 +1348,7 @@
         <span class="kw">if let </span><span class="prelude-val">Some</span>(msg) = msg {
             <span class="macro">trace!</span>(target: LOG_NET_PEER, peer = <span class="question-mark">?</span><span class="self">self</span>.peer_id, id = <span class="question-mark">?</span>msg.id, <span class="string">"Received incoming message"</span>);
 
-            <span class="kw">let </span>expected = <span class="self">self
-                </span>.last_received
-                .map(|last_id| last_id.increment())
-                .unwrap_or(msg.id);
+            <span class="kw">let </span>expected = <span class="self">self</span>.last_received.map_or(msg.id, MessageId::increment);
 
             <span class="kw">if </span>msg.id &lt; expected {
                 <span class="macro">info!</span>(target: LOG_NET_PEER,
@@ -1409,24 +1384,19 @@
     ) -&gt; <span class="prelude-ty">Option</span>&lt;PeerConnectionState&lt;M&gt;&gt; {
         <span class="prelude-val">Some</span>(<span class="macro">tokio::select!</span> {
             maybe_msg = <span class="self">self</span>.outgoing.recv() =&gt; {
-                <span class="kw">match </span>maybe_msg {
-                    <span class="prelude-val">Some</span>(msg) =&gt; {
-                        <span class="self">self</span>.send_message(disconnected, msg).<span class="kw">await</span>}
-                    <span class="prelude-val">None </span>=&gt; {
-                        <span class="macro">debug!</span>(target: LOG_NET_PEER, <span class="string">"Exiting peer connection IO task - parent disconnected"</span>);
-                        <span class="kw">return </span><span class="prelude-val">None</span>;
-                    }
+                <span class="kw">if let </span><span class="prelude-val">Some</span>(msg) = maybe_msg {
+                    <span class="self">self</span>.send_message(disconnected, msg)
+                } <span class="kw">else </span>{
+                    <span class="macro">debug!</span>(target: LOG_NET_PEER, <span class="string">"Exiting peer connection IO task - parent disconnected"</span>);
+                    <span class="kw">return </span><span class="prelude-val">None</span>;
                 }
             },
             new_connection_res = <span class="self">self</span>.incoming_connections.recv() =&gt; {
-                <span class="kw">match </span>new_connection_res {
-                    <span class="prelude-val">Some</span>(new_connection) =&gt; {
-                        <span class="self">self</span>.receive_connection(disconnected, new_connection).<span class="kw">await
-                    </span>},
-                    <span class="prelude-val">None </span>=&gt; {
-                        <span class="macro">debug!</span>(target: LOG_NET_PEER, <span class="string">"Exiting peer connection IO task - parent disconnected"</span>);
-                        <span class="kw">return </span><span class="prelude-val">None</span>;
-                    },
+                <span class="kw">if let </span><span class="prelude-val">Some</span>(new_connection) = new_connection_res {
+                    <span class="self">self</span>.receive_connection(disconnected, new_connection).<span class="kw">await
+                </span>} <span class="kw">else </span>{
+                    <span class="macro">debug!</span>(target: LOG_NET_PEER, <span class="string">"Exiting peer connection IO task - parent disconnected"</span>);
+                    <span class="kw">return </span><span class="prelude-val">None</span>;
                 }
             },
             <span class="prelude-val">Some</span>(status_query) = <span class="self">self</span>.status_query_receiver.recv() =&gt; {
@@ -1446,7 +1416,7 @@
         })
     }
 
-    <span class="kw">async fn </span>send_message(
+    <span class="kw">fn </span>send_message(
         <span class="kw-2">&amp;mut </span><span class="self">self</span>,
         disconnected: DisconnectedPeerConnectionState,
         msg: M,
@@ -1474,7 +1444,7 @@
                 <span class="self">self</span>.connect(conn, disconnected.failed_reconnect_counter)
                     .<span class="kw">await
             </span>}
-            <span class="prelude-val">Err</span>(e) =&gt; <span class="self">self</span>.disconnect_err(e, disconnected.failed_reconnect_counter),
+            <span class="prelude-val">Err</span>(e) =&gt; <span class="self">self</span>.disconnect_err(<span class="kw-2">&amp;</span>e, disconnected.failed_reconnect_counter),
         }
     }
 
@@ -1499,7 +1469,7 @@
     </span>M: Debug + Clone + Send + Sync + <span class="lifetime">'static</span>,
 {
     <span class="attr">#[allow(clippy::too_many_arguments)]
-    </span><span class="kw">async fn </span>new(
+    </span><span class="kw">fn </span>new(
         our_id: PeerId,
         peer_id: PeerId,
         peer_address: SafeUrl,
@@ -1527,8 +1497,8 @@
                     status_query_receiver,
                     <span class="kw-2">&amp;</span>handle,
                 )
-                .<span class="kw">await
-            </span>},
+                .<span class="kw">await</span>;
+            },
         );
 
         PeerConnection {

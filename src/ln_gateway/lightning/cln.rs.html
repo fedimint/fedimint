@@ -279,7 +279,7 @@
 }
 
 <span class="kw">impl </span>NetworkLnRpcClient {
-    <span class="kw">pub async fn </span>new(url: SafeUrl) -&gt; <span class="self">Self </span>{
+    <span class="kw">pub fn </span>new(url: SafeUrl) -&gt; <span class="self">Self </span>{
         <span class="macro">info!</span>(
             <span class="string">"Gateway configured to connect to remote LnRpcClient at \n cln extension address: {} "</span>,
             url.to_string()
@@ -370,7 +370,7 @@
             })<span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>((
             Box::pin(res.into_inner()),
-            Arc::new(<span class="self">Self</span>::new(<span class="self">self</span>.connection_url.clone()).<span class="kw">await</span>),
+            Arc::new(<span class="self">Self</span>::new(<span class="self">self</span>.connection_url.clone())),
         ))
     }
 

@@ -672,7 +672,7 @@
                 <span class="kw">break</span>;
             }
             LnPayState::WaitingForRefund { error_reason } =&gt; {
-                <span class="macro">warn!</span>(<span class="string">"{prefix} Waiting for refund: {error_reason:?}"</span>)
+                <span class="macro">warn!</span>(<span class="string">"{prefix} Waiting for refund: {error_reason:?}"</span>);
             }
             LnPayState::UnexpectedError { error_message } =&gt; {
                 <span class="macro">bail!</span>(<span class="string">"Failed to pay invoice: {error_message:?}"</span>)
@@ -782,7 +782,7 @@
     <span class="kw">for </span>i <span class="kw">in </span><span class="number">0</span>..quantity {
         <span class="kw">let </span>out_point = OutPoint {
             txid,
-            out_idx: i <span class="kw">as </span>u64,
+            out_idx: u64::from(i),
         };
         mint_client
             .await_output_finalized(operation_id, out_point)

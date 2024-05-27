@@ -674,7 +674,7 @@
     decoder: <span class="kw-2">&amp;</span>Decoder,
     peer_tbs_pks: <span class="kw-2">&amp;</span>BTreeMap&lt;PeerId, Tiered&lt;PublicKeyShare&gt;&gt;,
 ) -&gt; anyhow::Result&lt;BlindedSignatureShare&gt; {
-    <span class="kw">let </span>outcome = deserialize_outcome::&lt;MintOutputOutcome&gt;(outcome.clone(), decoder)<span class="question-mark">?</span>;
+    <span class="kw">let </span>outcome = deserialize_outcome::&lt;MintOutputOutcome&gt;(<span class="kw-2">&amp;</span>outcome, decoder)<span class="question-mark">?</span>;
 
     <span class="kw">let </span>blinded_signature_share = outcome
         .ensure_v0_ref()

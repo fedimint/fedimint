@@ -458,8 +458,6 @@
 <a href="#458" id="458">458</a>
 <a href="#459" id="459">459</a>
 <a href="#460" id="460">460</a>
-<a href="#461" id="461">461</a>
-<a href="#462" id="462">462</a>
 </pre></div><pre class="rust"><code><span class="attr">#![cfg_attr(feature = <span class="string">"diagnostics"</span>, feature(proc_macro_diagnostic))]
 
 </span><span class="kw">use </span>itertools::Itertools;
@@ -481,9 +479,10 @@
 }
 
 <span class="kw">fn </span>panic_if_ignored(field: <span class="kw-2">&amp;</span>Field) -&gt; bool {
-    <span class="kw">if </span>!do_not_ignore(field) {
-        <span class="macro">panic!</span>(<span class="string">"Trying to derive decodable from a struct with ignored fields"</span>);
-    }
+    <span class="macro">assert!</span>(
+        do_not_ignore(field),
+        <span class="string">"Trying to derive decodable from a struct with ignored fields"
+    </span>);
     <span class="bool-val">true
 </span>}
 
@@ -503,7 +502,7 @@
         <span class="kw">let </span>field_names = variant
             .fields
             .iter()
-            .filter_map(|field| field.ident.as_ref().map(|ident| ident.to_string()))
+            .filter_map(|field| field.ident.as_ref().map(ToString::to_string))
             .sorted()
             .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
         <span class="kw">let </span>correct_fields = field_names == <span class="macro">vec!</span>[<span class="string">"bytes"</span>.to_string(), <span class="string">"variant"</span>.to_string()];
@@ -575,25 +574,22 @@
 <span class="doccomment">/// Extracts the u64 index from an attribute if it matches `#[encodable(index =
 /// &lt;u64&gt;)]`.
 </span><span class="kw">fn </span>parse_index_attribute(attributes: <span class="kw-2">&amp;</span>[Attribute]) -&gt; <span class="prelude-ty">Option</span>&lt;u64&gt; {
-    attributes
-        .iter()
-        .filter_map(|attr| {
-            <span class="kw">if </span>attr.path().is_ident(<span class="string">"encodable"</span>) {
-                attr.parse_args_with(|input: syn::parse::ParseStream| {
-                    input.parse::&lt;syn::Ident&gt;()<span class="question-mark">?</span>.span(); <span class="comment">// consume the ident 'index'
-                    </span>input.parse::&lt;<span class="macro">Token!</span>[=]&gt;()<span class="question-mark">?</span>; <span class="comment">// consume the '='
-                    </span><span class="kw">if let </span>Lit::Int(lit_int) = input.parse::&lt;Lit&gt;()<span class="question-mark">? </span>{
-                        lit_int.base10_parse()
-                    } <span class="kw">else </span>{
-                        <span class="prelude-val">Err</span>(input.error(<span class="string">"Expected an integer for 'index'"</span>))
-                    }
-                })
-                .ok()
-            } <span class="kw">else </span>{
-                <span class="prelude-val">None
-            </span>}
-        })
-        .next()
+    attributes.iter().find_map(|attr| {
+        <span class="kw">if </span>attr.path().is_ident(<span class="string">"encodable"</span>) {
+            attr.parse_args_with(|input: syn::parse::ParseStream| {
+                input.parse::&lt;syn::Ident&gt;()<span class="question-mark">?</span>.span(); <span class="comment">// consume the ident 'index'
+                </span>input.parse::&lt;<span class="macro">Token!</span>[=]&gt;()<span class="question-mark">?</span>; <span class="comment">// consume the '='
+                </span><span class="kw">if let </span>Lit::Int(lit_int) = input.parse::&lt;Lit&gt;()<span class="question-mark">? </span>{
+                    lit_int.base10_parse()
+                } <span class="kw">else </span>{
+                    <span class="prelude-val">Err</span>(input.error(<span class="string">"Expected an integer for 'index'"</span>))
+                }
+            })
+            .ok()
+        } <span class="kw">else </span>{
+            <span class="prelude-val">None
+        </span>}
+    })
 }
 
 <span class="doccomment">/// Processes all variants in a `Punctuated` list extracting any specified
@@ -752,7 +748,7 @@
 
 <span class="kw">fn </span>derive_struct_decode(ident: <span class="kw-2">&amp;</span>Ident, fields: <span class="kw-2">&amp;</span>Fields) -&gt; TokenStream2 {
     <span class="kw">let </span>decode_block =
-        derive_tuple_or_named_decode_block(ident, <span class="macro">quote!</span> { #ident }, <span class="macro">quote!</span> { d }, fields);
+        derive_tuple_or_named_decode_block(ident, <span class="kw-2">&amp;</span><span class="macro">quote!</span> { #ident }, <span class="kw-2">&amp;</span><span class="macro">quote!</span> { d }, fields);
 
     <span class="macro">quote!</span> {
         <span class="prelude-val">Ok</span>(#decode_block)
@@ -771,8 +767,8 @@
             <span class="kw">let </span>variant_ident = variant.ident.clone();
             <span class="kw">let </span>decode_block = derive_tuple_or_named_decode_block(
                 ident,
-                <span class="macro">quote!</span> { #ident::#variant_ident },
-                <span class="macro">quote!</span> { <span class="kw-2">&amp;mut </span>cursor },
+                <span class="kw-2">&amp;</span><span class="macro">quote!</span> { #ident::#variant_ident },
+                <span class="kw-2">&amp;</span><span class="macro">quote!</span> { <span class="kw-2">&amp;mut </span>cursor },
                 <span class="kw-2">&amp;</span>variant.fields,
             );
 
@@ -855,8 +851,8 @@
 // as idents
 </span><span class="kw">fn </span>derive_tuple_or_named_decode_block(
     ident: <span class="kw-2">&amp;</span>Ident,
-    constructor: TokenStream2,
-    reader: TokenStream2,
+    constructor: <span class="kw-2">&amp;</span>TokenStream2,
+    reader: <span class="kw-2">&amp;</span>TokenStream2,
     fields: <span class="kw-2">&amp;</span>Fields,
 ) -&gt; TokenStream2 {
     <span class="kw">if </span>is_tuple_struct(fields) {
@@ -868,8 +864,8 @@
 
 <span class="kw">fn </span>derive_tuple_decode_block(
     ident: <span class="kw-2">&amp;</span>Ident,
-    constructor: TokenStream2,
-    reader: TokenStream2,
+    constructor: <span class="kw-2">&amp;</span>TokenStream2,
+    reader: <span class="kw-2">&amp;</span>TokenStream2,
     fields: <span class="kw-2">&amp;</span>Fields,
 ) -&gt; TokenStream2 {
     <span class="kw">let </span>field_names = fields
@@ -896,8 +892,8 @@
 
 <span class="kw">fn </span>derive_named_decode_block(
     ident: <span class="kw-2">&amp;</span>Ident,
-    constructor: TokenStream2,
-    reader: TokenStream2,
+    constructor: <span class="kw-2">&amp;</span>TokenStream2,
+    reader: <span class="kw-2">&amp;</span>TokenStream2,
     fields: <span class="kw-2">&amp;</span>Fields,
 ) -&gt; TokenStream2 {
     <span class="kw">let </span>variant_fields = fields

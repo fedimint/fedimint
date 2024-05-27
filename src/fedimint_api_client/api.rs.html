@@ -1622,13 +1622,6 @@
 <a href="#1622" id="1622">1622</a>
 <a href="#1623" id="1623">1623</a>
 <a href="#1624" id="1624">1624</a>
-<a href="#1625" id="1625">1625</a>
-<a href="#1626" id="1626">1626</a>
-<a href="#1627" id="1627">1627</a>
-<a href="#1628" id="1628">1628</a>
-<a href="#1629" id="1629">1629</a>
-<a href="#1630" id="1630">1630</a>
-<a href="#1631" id="1631">1631</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap};
 <span class="kw">use </span>std::fmt::{<span class="self">self</span>, Debug, Display};
 <span class="kw">use </span>std::num::NonZeroUsize;
@@ -1722,30 +1715,29 @@
     /// there's a problem.
     </span><span class="kw">pub fn </span>report_if_important(<span class="kw-2">&amp;</span><span class="self">self</span>, peer_id: PeerId) {
         <span class="kw">let </span>important = <span class="kw">match </span><span class="self">self </span>{
-            PeerError::ResponseDeserialization(<span class="kw">_</span>) =&gt; <span class="bool-val">true</span>,
-            PeerError::InvalidPeerId { peer_id: <span class="kw">_ </span>} =&gt; <span class="bool-val">true</span>,
+            PeerError::ResponseDeserialization(<span class="kw">_</span>)
+            | PeerError::InvalidPeerId { .. }
+            | PeerError::InvalidResponse(<span class="kw">_</span>) =&gt; <span class="bool-val">true</span>,
             PeerError::Rpc(rpc_e) =&gt; <span class="kw">match </span>rpc_e {
                 <span class="comment">// TODO: Does this cover all retryable cases?
-                </span>JsonRpcClientError::Transport(<span class="kw">_</span>) =&gt; <span class="bool-val">false</span>,
-                JsonRpcClientError::MaxSlotsExceeded =&gt; <span class="bool-val">true</span>,
-                JsonRpcClientError::RequestTimeout =&gt; <span class="bool-val">false</span>,
-                JsonRpcClientError::RestartNeeded(<span class="kw">_</span>) =&gt; <span class="bool-val">true</span>,
-                JsonRpcClientError::Call(<span class="kw">_</span>) =&gt; <span class="bool-val">true</span>,
-                JsonRpcClientError::ParseError(<span class="kw">_</span>) =&gt; <span class="bool-val">true</span>,
-                JsonRpcClientError::InvalidSubscriptionId =&gt; <span class="bool-val">true</span>,
-                JsonRpcClientError::InvalidRequestId(<span class="kw">_</span>) =&gt; <span class="bool-val">true</span>,
-                JsonRpcClientError::Custom(<span class="kw">_</span>) =&gt; <span class="bool-val">true</span>,
-                JsonRpcClientError::HttpNotImplemented =&gt; <span class="bool-val">true</span>,
-                JsonRpcClientError::EmptyBatchRequest(<span class="kw">_</span>) =&gt; <span class="bool-val">true</span>,
-                JsonRpcClientError::RegisterMethod(<span class="kw">_</span>) =&gt; <span class="bool-val">true</span>,
+                </span>JsonRpcClientError::Transport(<span class="kw">_</span>) | JsonRpcClientError::RequestTimeout =&gt; <span class="bool-val">false</span>,
+                JsonRpcClientError::MaxSlotsExceeded
+                | JsonRpcClientError::RestartNeeded(<span class="kw">_</span>)
+                | JsonRpcClientError::Call(<span class="kw">_</span>)
+                | JsonRpcClientError::ParseError(<span class="kw">_</span>)
+                | JsonRpcClientError::InvalidSubscriptionId
+                | JsonRpcClientError::InvalidRequestId(<span class="kw">_</span>)
+                | JsonRpcClientError::Custom(<span class="kw">_</span>)
+                | JsonRpcClientError::HttpNotImplemented
+                | JsonRpcClientError::EmptyBatchRequest(<span class="kw">_</span>)
+                | JsonRpcClientError::RegisterMethod(<span class="kw">_</span>) =&gt; <span class="bool-val">true</span>,
             },
-            PeerError::InvalidResponse(<span class="kw">_</span>) =&gt; <span class="bool-val">true</span>,
         };
 
         <span class="macro">trace!</span>(target: LOG_CLIENT_NET_API, error = %<span class="self">self</span>, <span class="string">"PeerError"</span>);
 
         <span class="kw">if </span>important {
-            <span class="macro">warn!</span>(target: LOG_CLIENT_NET_API, error = %<span class="self">self</span>, %peer_id, <span class="string">"Unusual PeerError"</span>)
+            <span class="macro">warn!</span>(target: LOG_CLIENT_NET_API, error = %<span class="self">self</span>, %peer_id, <span class="string">"Unusual PeerError"</span>);
         }
     }
 }
@@ -1820,7 +1812,7 @@
             <span class="macro">warn!</span>(target: LOG_CLIENT_NET_API, %error, <span class="string">"General FederationError"</span>);
         }
         <span class="kw">for </span>(peer_id, e) <span class="kw">in </span><span class="kw-2">&amp;</span><span class="self">self</span>.peers {
-            e.report_if_important(<span class="kw-2">*</span>peer_id)
+            e.report_if_important(<span class="kw-2">*</span>peer_id);
         }
     }
 
@@ -1856,18 +1848,14 @@
 <span class="kw">impl </span>OutputOutcomeError {
     <span class="kw">pub fn </span>report_if_important(<span class="kw-2">&amp;</span><span class="self">self</span>) {
         <span class="kw">let </span>important = <span class="kw">match </span><span class="self">self </span>{
-            OutputOutcomeError::ResponseDeserialization(<span class="kw">_</span>) =&gt; <span class="bool-val">true</span>,
             OutputOutcomeError::Federation(e) =&gt; {
                 e.report_if_important();
                 <span class="kw">return</span>;
             }
-            OutputOutcomeError::Core(<span class="kw">_</span>) =&gt; <span class="bool-val">true</span>,
-            OutputOutcomeError::Rejected(<span class="kw">_</span>) =&gt; <span class="bool-val">false</span>,
-            OutputOutcomeError::InvalidVout {
-                out_idx: <span class="kw">_</span>,
-                outputs_num: <span class="kw">_</span>,
-            } =&gt; <span class="bool-val">true</span>,
-            OutputOutcomeError::Timeout(<span class="kw">_</span>) =&gt; <span class="bool-val">false</span>,
+            OutputOutcomeError::Core(<span class="kw">_</span>)
+            | OutputOutcomeError::InvalidVout { .. }
+            | OutputOutcomeError::ResponseDeserialization(<span class="kw">_</span>) =&gt; <span class="bool-val">true</span>,
+            OutputOutcomeError::Rejected(<span class="kw">_</span>) | OutputOutcomeError::Timeout(<span class="kw">_</span>) =&gt; <span class="bool-val">false</span>,
         };
 
         <span class="macro">trace!</span>(target: LOG_CLIENT_NET_API, error = %<span class="self">self</span>, <span class="string">"OutputOutcomeError"</span>);
@@ -2239,7 +2227,7 @@
                 .<span class="kw">await
                 </span>.map_err(OutputOutcomeError::Federation)<span class="question-mark">?</span>;
 
-            deserialize_outcome(outcome, module_decoder)
+            deserialize_outcome(<span class="kw-2">&amp;</span>outcome, module_decoder)
         })
         .<span class="kw">await
         </span>.map_err(|<span class="kw">_</span>| OutputOutcomeError::Timeout(timeout))<span class="question-mark">?
@@ -2374,7 +2362,7 @@
 }
 
 <span class="kw">pub fn </span>deserialize_outcome&lt;R&gt;(
-    outcome: SerdeOutputOutcome,
+    outcome: <span class="kw-2">&amp;</span>SerdeOutputOutcome,
     module_decoder: <span class="kw-2">&amp;</span>Decoder,
 ) -&gt; OutputOutcomeResult&lt;R&gt;
 <span class="kw">where
@@ -2796,10 +2784,10 @@
     </span><span class="kw">async fn </span>wait_and_inc_reconnect(<span class="kw-2">&amp;mut </span><span class="self">self</span>) {
         <span class="self">self</span>.wait().<span class="kw">await</span>;
         <span class="self">self</span>.connection_attempts = <span class="self">self</span>.connection_attempts.saturating_add(<span class="number">1</span>);
-        <span class="self">self</span>.last_connection_attempt = now()
+        <span class="self">self</span>.last_connection_attempt = now();
     }
 
-    <span class="kw">async fn </span>reset(<span class="kw-2">&amp;mut </span><span class="self">self</span>) {
+    <span class="kw">fn </span>reset(<span class="kw-2">&amp;mut </span><span class="self">self</span>) {
         <span class="self">self</span>.connection_attempts = <span class="number">0</span>;
     }
 }
@@ -2843,7 +2831,7 @@
 
             <span class="kw">match </span><span class="kw-2">&amp;</span>res {
                 <span class="prelude-val">Ok</span>(<span class="kw">_</span>) =&gt; {
-                    shared.lock().<span class="kw">await</span>.reset().<span class="kw">await</span>;
+                    shared.lock().<span class="kw">await</span>.reset();
                     <span class="macro">debug!</span>(
                             target: LOG_CLIENT_NET_API,
                             peer_id = %peer_id,
@@ -2862,7 +2850,7 @@
         })
     }
 
-    <span class="kw">pub async fn </span>reconnect(<span class="kw-2">&amp;mut </span><span class="self">self</span>, peer_id: PeerId, url: SafeUrl, api_secret: <span class="prelude-ty">Option</span>&lt;String&gt;) {
+    <span class="kw">pub fn </span>reconnect(<span class="kw-2">&amp;mut </span><span class="self">self</span>, peer_id: PeerId, url: SafeUrl, api_secret: <span class="prelude-ty">Option</span>&lt;String&gt;) {
         <span class="self">self</span>.client = <span class="self">Self</span>::new_jit_client(peer_id, url, api_secret, <span class="self">self</span>.shared.clone());
     }
 }
@@ -3098,9 +3086,7 @@
                     </span><span class="macro">trace!</span>(target: LOG_CLIENT_NET_API, <span class="string">"Some other request reconnected client, retrying"</span>);
                 }
                 <span class="kw">_ </span>=&gt; {
-                    wclient
-                        .reconnect(<span class="self">self</span>.peer_id, <span class="self">self</span>.url.clone(), <span class="self">self</span>.api_secret.clone())
-                        .<span class="kw">await</span>;
+                    wclient.reconnect(<span class="self">self</span>.peer_id, <span class="self">self</span>.url.clone(), <span class="self">self</span>.api_secret.clone());
                 }
             }
         }

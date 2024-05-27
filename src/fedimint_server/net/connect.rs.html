@@ -1104,7 +1104,7 @@
 <span class="kw">impl </span>TlsTcpConnector {
     <span class="kw">pub fn </span>new(cfg: TlsConfig, our_id: PeerId) -&gt; TlsTcpConnector {
         <span class="kw">let </span><span class="kw-2">mut </span>cert_store = RootCertStore::empty();
-        <span class="kw">for </span>(<span class="kw">_</span>, cert) <span class="kw">in </span>cfg.peer_certs.iter() {
+        <span class="kw">for </span>cert <span class="kw">in </span>cfg.peer_certs.values() {
             cert_store
                 .add(cert)
                 .expect(<span class="string">"Could not add peer certificate"</span>);
@@ -1199,7 +1199,7 @@
         <span class="kw">let </span>tls_conn = connector
             .connect(
                 fake_domain,
-                TcpStream::connect(parse_host_port(destination)<span class="question-mark">?</span>).<span class="kw">await</span><span class="question-mark">?</span>,
+                TcpStream::connect(parse_host_port(<span class="kw-2">&amp;</span>destination)<span class="question-mark">?</span>).<span class="kw">await</span><span class="question-mark">?</span>,
             )
             .<span class="kw">await</span><span class="question-mark">?</span>;
 
@@ -1254,7 +1254,7 @@
 }
 
 <span class="doccomment">/// Parses the host and port from a url
-</span><span class="kw">pub fn </span>parse_host_port(url: SafeUrl) -&gt; anyhow::Result&lt;String&gt; {
+</span><span class="kw">pub fn </span>parse_host_port(url: <span class="kw-2">&amp;</span>SafeUrl) -&gt; anyhow::Result&lt;String&gt; {
     <span class="kw">let </span>host = url
         .host_str()
         .ok_or_else(|| <span class="macro">format_err!</span>(<span class="string">"Missing host in {url}"</span>))<span class="question-mark">?</span>;
@@ -1662,7 +1662,7 @@
             <span class="kw">let </span><span class="kw-2">mut </span>clients_lock = <span class="self">self</span>.clients.try_lock().map_err(|e| {
                 <span class="macro">anyhow!</span>(<span class="string">"Mock network mutex busy or poisoned, the network stack will re-try anyway: {e:?}"</span>)
             })<span class="question-mark">?</span>;
-            <span class="kw">if let </span><span class="prelude-val">Some</span>(client) = clients_lock.get_mut(<span class="kw-2">&amp;</span>parse_host_port(destination)<span class="question-mark">?</span>) {
+            <span class="kw">if let </span><span class="prelude-val">Some</span>(client) = clients_lock.get_mut(<span class="kw-2">&amp;</span>parse_host_port(<span class="kw-2">&amp;</span>destination)<span class="question-mark">?</span>) {
                 <span class="kw">let </span>(stream_our, stream_theirs) = tokio::io::duplex(<span class="number">43_689</span>);
                 <span class="kw">let </span><span class="kw-2">mut </span>stream_our = UnreliableDuplexStream::new(stream_our, <span class="self">self</span>.reliability);
                 <span class="kw">let </span>stream_theirs = UnreliableDuplexStream::new(stream_theirs, <span class="self">self</span>.reliability);

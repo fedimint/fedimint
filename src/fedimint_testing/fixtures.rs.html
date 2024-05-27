@@ -220,8 +220,6 @@
 <a href="#220" id="220">220</a>
 <a href="#221" id="221">221</a>
 <a href="#222" id="222">222</a>
-<a href="#223" id="223">223</a>
-<a href="#224" id="224">224</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::path::PathBuf;
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
@@ -349,19 +347,17 @@
             <span class="self">self</span>.params.clone(),
             ServerModuleInitRegistry::from(<span class="self">self</span>.servers.clone()),
             ClientModuleInitRegistry::from(<span class="self">self</span>.clients.clone()),
-        )
-        .<span class="kw">await</span>;
+        );
         federation_builder.build().<span class="kw">await
     </span>}
 
-    <span class="kw">pub async fn </span>new_fed_builder(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FederationTestBuilder {
+    <span class="kw">pub fn </span>new_fed_builder(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FederationTestBuilder {
         FederationTestBuilder::new(
             <span class="self">self</span>.params.clone(),
             ServerModuleInitRegistry::from(<span class="self">self</span>.servers.clone()),
             ClientModuleInitRegistry::from(<span class="self">self</span>.clients.clone()),
         )
-        .<span class="kw">await
-    </span>}
+    }
 
     <span class="doccomment">/// Starts a new gateway with a given lightning node
     </span><span class="kw">pub async fn </span>new_gateway(
@@ -406,16 +402,17 @@
     </span><span class="comment">// TODO: Right now we only support mocks or esplora, we should support others in
     // the future
     </span><span class="kw">pub fn </span>bitcoin_client(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; BitcoinRpcConfig {
-        <span class="kw">match </span>Fixtures::is_real_test() {
-            <span class="bool-val">true </span>=&gt; BitcoinRpcConfig {
+        <span class="kw">if </span>Fixtures::is_real_test() {
+            BitcoinRpcConfig {
                 kind: <span class="string">"esplora"</span>.to_string(),
                 url: SafeUrl::parse(<span class="kw-2">&amp;</span><span class="macro">format!</span>(
                     <span class="string">"http://127.0.0.1:{}/"</span>,
                     env::var(FM_PORT_ESPLORA_ENV).unwrap_or(String::from(<span class="string">"50002"</span>))
                 ))
                 .expect(<span class="string">"Failed to parse default esplora server"</span>),
-            },
-            <span class="bool-val">false </span>=&gt; <span class="self">self</span>.bitcoin_rpc.clone(),
+            }
+        } <span class="kw">else </span>{
+            <span class="self">self</span>.bitcoin_rpc.clone()
         }
     }
 
@@ -433,14 +430,13 @@
 ///
 /// Callers must hold onto the tempdir until it is no longer needed
 </span><span class="kw">pub fn </span>test_dir(pathname: <span class="kw-2">&amp;</span>str) -&gt; (PathBuf, <span class="prelude-ty">Option</span>&lt;TempDir&gt;) {
-    <span class="kw">let </span>(parent, maybe_tmp_dir_guard) = <span class="kw">match </span>env::var(FM_TEST_DIR_ENV) {
-        <span class="prelude-val">Ok</span>(directory) =&gt; (directory, <span class="prelude-val">None</span>),
-        <span class="prelude-val">Err</span>(<span class="kw">_</span>) =&gt; {
-            <span class="kw">let </span>random = <span class="macro">format!</span>(<span class="string">"test-{}"</span>, rand::random::&lt;u64&gt;());
-            <span class="kw">let </span>guard = tempfile::Builder::new().prefix(<span class="kw-2">&amp;</span>random).tempdir().unwrap();
-            <span class="kw">let </span>directory = guard.path().to_str().unwrap().to_owned();
-            (directory, <span class="prelude-val">Some</span>(guard))
-        }
+    <span class="kw">let </span>(parent, maybe_tmp_dir_guard) = <span class="kw">if let </span><span class="prelude-val">Ok</span>(directory) = env::var(FM_TEST_DIR_ENV) {
+        (directory, <span class="prelude-val">None</span>)
+    } <span class="kw">else </span>{
+        <span class="kw">let </span>random = <span class="macro">format!</span>(<span class="string">"test-{}"</span>, rand::random::&lt;u64&gt;());
+        <span class="kw">let </span>guard = tempfile::Builder::new().prefix(<span class="kw-2">&amp;</span>random).tempdir().unwrap();
+        <span class="kw">let </span>directory = guard.path().to_str().unwrap().to_owned();
+        (directory, <span class="prelude-val">Some</span>(guard))
     };
     <span class="kw">let </span>fullpath = PathBuf::from(parent).join(pathname);
     fs::create_dir_all(fullpath.clone()).expect(<span class="string">"Can make dirs"</span>);

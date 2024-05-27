@@ -665,8 +665,8 @@
                 .set_configuration(SetConfigurationPayload {
                     password,
                     num_route_hints,
-                    network,
                     routing_fees,
+                    network,
                     per_federation_routing_fees,
                 })
                 .<span class="kw">await</span><span class="question-mark">?</span>;
@@ -744,6 +744,6 @@
     <span class="macro">println!</span>(
         <span class="string">"{}"</span>,
         serde_json::to_string_pretty(<span class="kw-2">&amp;</span>val).expect(<span class="string">"Cannot serialize"</span>)
-    )
+    );
 }
 </code></pre></div></section></main></body></html>

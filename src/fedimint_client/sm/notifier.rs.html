@@ -357,7 +357,7 @@
 
         <span class="comment">// It's important to start the subscription first and then query the database to
         // not lose any transitions in the meantime.
-        </span><span class="kw">let </span>new_transitions = <span class="self">self</span>.subscribe_all_operations().<span class="kw">await</span>;
+        </span><span class="kw">let </span>new_transitions = <span class="self">self</span>.subscribe_all_operations();
 
         <span class="kw">let </span>db_states = {
             <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.db.begin_transaction().<span class="kw">await</span>;
@@ -433,7 +433,7 @@
     }
 
     <span class="doccomment">/// Subscribe to all state transitions belonging to the module instance.
-    </span><span class="kw">pub async fn </span>subscribe_all_operations(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; BoxStream&lt;<span class="lifetime">'static</span>, S&gt; {
+    </span><span class="kw">pub fn </span>subscribe_all_operations(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; BoxStream&lt;<span class="lifetime">'static</span>, S&gt; {
         <span class="kw">let </span>module_instance_id = <span class="self">self</span>.module_instance;
         Box::pin(
             BroadcastStream::new(<span class="self">self</span>.broadcast.subscribe())

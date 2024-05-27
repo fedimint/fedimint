@@ -819,7 +819,6 @@
 <a href="#819" id="819">819</a>
 <a href="#820" id="820">820</a>
 <a href="#821" id="821">821</a>
-<a href="#822" id="822">822</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap};
 <span class="kw">use </span>std::env;
 <span class="kw">use </span>std::net::SocketAddr;
@@ -1114,7 +1113,7 @@
     }
 
     <span class="kw">pub fn </span>add_modules(<span class="kw-2">&amp;mut </span><span class="self">self</span>, modules: BTreeMap&lt;ModuleInstanceId, ServerModuleConfig&gt;) {
-        <span class="kw">for </span>(name, config) <span class="kw">in </span>modules.into_iter() {
+        <span class="kw">for </span>(name, config) <span class="kw">in </span>modules {
             <span class="kw">let </span>ServerModuleConfig {
                 local,
                 private,
@@ -1205,21 +1204,20 @@
         <span class="kw">if </span><span class="prelude-val">Some</span>(<span class="kw-2">&amp;</span>my_public_key) != consensus.broadcast_public_keys.get(identity) {
             <span class="macro">bail!</span>(<span class="string">"Broadcast secret key doesn't match corresponding public key"</span>);
         }
-        <span class="kw">if </span>peers.keys().max().copied().map(|id| id.to_usize()) != <span class="prelude-val">Some</span>(peers.len() - <span class="number">1</span>) {
+        <span class="kw">if </span>peers.keys().max().copied().map(PeerId::to_usize) != <span class="prelude-val">Some</span>(peers.len() - <span class="number">1</span>) {
             <span class="macro">bail!</span>(<span class="string">"Peer ids are not indexed from 0"</span>);
         }
         <span class="kw">if </span>peers.keys().min().copied() != <span class="prelude-val">Some</span>(PeerId::from(<span class="number">0</span>)) {
             <span class="macro">bail!</span>(<span class="string">"Peer ids are not indexed from 0"</span>);
         }
 
-        <span class="kw">for </span>(module_id, module_kind) <span class="kw">in </span><span class="self">self
+        <span class="kw">for </span>(module_id, module_kind) <span class="kw">in </span><span class="kw-2">&amp;</span><span class="self">self
             </span>.consensus
             .modules
             .iter()
             .map(|(id, config)| <span class="prelude-val">Ok</span>((<span class="kw-2">*</span>id, config.kind.clone())))
             .collect::&lt;anyhow::Result&lt;BTreeSet&lt;<span class="kw">_</span>&gt;&gt;&gt;()<span class="question-mark">?
-            </span>.iter()
-        {
+        </span>{
             module_config_gens
                 .get(module_kind)
                 .ok_or_else(|| <span class="macro">format_err!</span>(<span class="string">"module config gen not found {module_kind}"</span>))<span class="question-mark">?
@@ -1231,8 +1229,8 @@
 
     <span class="kw">pub fn </span>trusted_dealer_gen(
         params: <span class="kw-2">&amp;</span>HashMap&lt;PeerId, ConfigGenParams&gt;,
-        registry: ServerModuleInitRegistry,
-        code_version_str: String,
+        registry: <span class="kw-2">&amp;</span>ServerModuleInitRegistry,
+        code_version_str: <span class="kw-2">&amp;</span>str,
     ) -&gt; BTreeMap&lt;PeerId, <span class="self">Self</span>&gt; {
         <span class="kw">let </span>peer0 = <span class="kw-2">&amp;</span>params[<span class="kw-2">&amp;</span>PeerId::from(<span class="number">0</span>)];
 
@@ -1270,7 +1268,7 @@
                         .iter()
                         .map(|(module_id, cfgs)| (<span class="kw-2">*</span>module_id, cfgs[<span class="kw-2">&amp;</span>id].clone()))
                         .collect(),
-                    code_version_str.clone(),
+                    code_version_str.to_string(),
                 );
                 (id, config)
             })
@@ -1317,8 +1315,8 @@
         </span><span class="kw">if </span>peers.len() == <span class="number">1 </span>{
             <span class="kw">let </span>server = <span class="self">Self</span>::trusted_dealer_gen(
                 <span class="kw-2">&amp;</span>HashMap::from([(<span class="kw-2">*</span>our_id, params.clone())]),
-                registry,
-                code_version_str,
+                <span class="kw-2">&amp;</span>registry,
+                <span class="kw-2">&amp;</span>code_version_str,
             );
             <span class="kw">return </span><span class="prelude-val">Ok</span>(server[our_id].clone());
         }
@@ -1459,7 +1457,7 @@
 
 <span class="kw">impl </span>ConfigGenParams {
     <span class="kw">pub fn </span>peer_ids(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Vec&lt;PeerId&gt; {
-        <span class="self">self</span>.consensus.peers.keys().cloned().collect()
+        <span class="self">self</span>.consensus.peers.keys().copied().collect()
     }
 
     <span class="kw">pub fn </span>p2p_network(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; NetworkConfig {
@@ -1592,7 +1590,7 @@
         </span>S: Serializer,
     {
         <span class="kw">let </span><span class="kw-2">mut </span>serializer = serializer.serialize_map(<span class="prelude-val">Some</span>(certs.len()))<span class="question-mark">?</span>;
-        <span class="kw">for </span>(key, value) <span class="kw">in </span>certs.iter() {
+        <span class="kw">for </span>(key, value) <span class="kw">in </span>certs {
             serializer.serialize_key(key)<span class="question-mark">?</span>;
             <span class="kw">let </span>hex_str = value.<span class="number">0</span>.encode_hex::&lt;String&gt;();
             serializer.serialize_value(<span class="kw-2">&amp;</span>hex_str)<span class="question-mark">?</span>;

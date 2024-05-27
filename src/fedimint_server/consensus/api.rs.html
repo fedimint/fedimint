@@ -579,9 +579,6 @@
 <a href="#579" id="579">579</a>
 <a href="#580" id="580">580</a>
 <a href="#581" id="581">581</a>
-<a href="#582" id="582">582</a>
-<a href="#583" id="583">583</a>
-<a href="#584" id="584">584</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! Implements the client API through which users interact with the federation
 </span><span class="kw">use </span>std::cmp::Ordering;
 <span class="kw">use </span>std::collections::{BTreeMap, HashMap};
@@ -781,7 +778,7 @@
         <span class="kw">let </span>status_by_peer = peers_connection_status
             .into_iter()
             .map(|(peer, connection_status)| {
-                <span class="kw">let </span>last_contribution = last_ci_by_peer.get(<span class="kw-2">&amp;</span>peer).cloned();
+                <span class="kw">let </span>last_contribution = last_ci_by_peer.get(<span class="kw-2">&amp;</span>peer).copied();
                 <span class="kw">let </span>flagged = last_contribution.unwrap_or(<span class="number">0</span>) + <span class="number">1 </span>&lt; session_count;
 
                 <span class="kw">let </span>consensus_status = PeerStatus {
@@ -839,8 +836,8 @@
                     <span class="kw-2">&amp;mut </span>audit,
                     module_instance_id,
                 )
-                .<span class="kw">await
-        </span>}
+                .<span class="kw">await</span>;
+        }
         <span class="prelude-val">Ok</span>(AuditSummary::from_audit(
             <span class="kw-2">&amp;</span>audit,
             <span class="kw-2">&amp;</span>module_instance_id_to_kind,
@@ -851,10 +848,7 @@
     /// guardians can download. Private keys are encrypted with the guardian
     /// password, so it should be safe to store anywhere, this also means the
     /// backup is useless without the password.
-    </span><span class="kw">async fn </span>get_guardian_config_backup(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        password: String,
-    ) -&gt; ApiResult&lt;GuardianConfigBackup&gt; {
+    </span><span class="kw">fn </span>get_guardian_config_backup(<span class="kw-2">&amp;</span><span class="self">self</span>, password: <span class="kw-2">&amp;</span>str) -&gt; GuardianConfigBackup {
         <span class="kw">let </span><span class="kw-2">mut </span>tar_archive_builder = tar::Builder::new(Vec::new());
 
         <span class="kw">let </span><span class="kw-2">mut </span>append = |name: <span class="kw-2">&amp;</span>Path, data: <span class="kw-2">&amp;</span>[u8]| {
@@ -888,7 +882,7 @@
 
         <span class="kw">let </span>private_config_bytes =
             serde_json::to_vec(<span class="kw-2">&amp;</span><span class="self">self</span>.cfg.private).expect(<span class="string">"Error encoding private config"</span>);
-        <span class="kw">let </span>encryption_key = get_encryption_key(<span class="kw-2">&amp;</span>password, <span class="kw-2">&amp;</span>encryption_salt)
+        <span class="kw">let </span>encryption_key = get_encryption_key(password, <span class="kw-2">&amp;</span>encryption_salt)
             .expect(<span class="string">"Generating key from password failed"</span>);
         <span class="kw">let </span>private_config_encrypted =
             hex::encode(encrypt(private_config_bytes, <span class="kw-2">&amp;</span>encryption_key).expect(<span class="string">"Encryption failed"</span>));
@@ -901,7 +895,7 @@
             .into_inner()
             .expect(<span class="string">"Error building tar archive"</span>);
 
-        <span class="prelude-val">Ok</span>(GuardianConfigBackup { tar_archive_bytes })
+        GuardianConfigBackup { tar_archive_bytes }
     }
 
     <span class="kw">async fn </span>handle_backup_request&lt;<span class="lifetime">'s</span>, <span class="lifetime">'dbtx</span>, <span class="lifetime">'a</span>&gt;(
@@ -930,7 +924,7 @@
                 <span class="kw-2">&amp;</span>ClientBackupKey(request.id),
                 <span class="kw-2">&amp;</span>ClientBackupSnapshot {
                     timestamp: request.timestamp,
-                    data: request.payload.to_vec(),
+                    data: request.payload.clone(),
                 },
             )
             .<span class="kw">await
@@ -963,7 +957,7 @@
         <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.db.begin_transaction().<span class="kw">await</span>;
         <span class="kw">if let </span><span class="prelude-val">Some</span>(id) = id {
             db = <span class="self">self</span>.db.with_prefix_module_id(id);
-            dbtx = dbtx.with_prefix_module_id(id)
+            dbtx = dbtx.with_prefix_module_id(id);
         }
         (
             <span class="self">self</span>,
@@ -1128,7 +1122,7 @@
             <span class="kw">async </span>|fedimint: <span class="kw-2">&amp;</span>ConsensusApi, context, _v: ()| -&gt; GuardianConfigBackup {
                 check_auth(context)<span class="question-mark">?</span>;
                 <span class="kw">let </span>password = context.request_auth().expect(<span class="string">"Auth was checked before"</span>).<span class="number">0</span>;
-                <span class="prelude-val">Ok</span>(fedimint.get_guardian_config_backup(password).<span class="kw">await</span><span class="question-mark">?</span>)
+                <span class="prelude-val">Ok</span>(fedimint.get_guardian_config_backup(<span class="kw-2">&amp;</span>password))
             }
         },
         <span class="macro">api_endpoint!</span> {

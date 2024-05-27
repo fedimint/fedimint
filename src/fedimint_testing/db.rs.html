@@ -429,9 +429,6 @@
 <a href="#429" id="429">429</a>
 <a href="#430" id="430">430</a>
 <a href="#431" id="431">431</a>
-<a href="#432" id="432">432</a>
-<a href="#433" id="433">433</a>
-<a href="#434" id="434">434</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::io::ErrorKind;
 <span class="kw">use </span>std::path::{Path, PathBuf};
@@ -488,21 +485,21 @@
 <span class="doccomment">/// Opens the backup database in the `snapshot_dir`. If the `is_isolated` flag
 /// is set, the database will be opened as an isolated database with
 /// `TEST_MODULE_INSTANCE_ID` as the prefix.
-</span><span class="kw">async fn </span>open_snapshot_db(
+</span><span class="kw">fn </span>open_snapshot_db(
     decoders: ModuleDecoderRegistry,
-    snapshot_dir: PathBuf,
+    snapshot_dir: <span class="kw-2">&amp;</span>Path,
     is_isolated: bool,
 ) -&gt; anyhow::Result&lt;Database&gt; {
     <span class="kw">if </span>is_isolated {
         <span class="prelude-val">Ok</span>(Database::new(
-            RocksDb::open(<span class="kw-2">&amp;</span>snapshot_dir)
+            RocksDb::open(snapshot_dir)
                 .with_context(|| <span class="macro">format!</span>(<span class="string">"Preparing snapshot in {}"</span>, snapshot_dir.display()))<span class="question-mark">?</span>,
             decoders,
         )
         .with_prefix_module_id(TEST_MODULE_INSTANCE_ID))
     } <span class="kw">else </span>{
         <span class="prelude-val">Ok</span>(Database::new(
-            RocksDb::open(<span class="kw-2">&amp;</span>snapshot_dir)
+            RocksDb::open(snapshot_dir)
                 .with_context(|| <span class="macro">format!</span>(<span class="string">"Preparing snapshot in {}"</span>, snapshot_dir.display()))<span class="question-mark">?</span>,
             decoders,
         ))
@@ -529,7 +526,7 @@
     ) {
         (<span class="prelude-val">Some</span>(<span class="string">"force"</span>), <span class="bool-val">true</span>) =&gt; {
             tokio::fs::remove_dir_all(<span class="kw-2">&amp;</span>snapshot_dir).<span class="kw">await</span><span class="question-mark">?</span>;
-            <span class="kw">let </span>db = open_snapshot_db(decoders, snapshot_dir, is_isolated).<span class="kw">await</span><span class="question-mark">?</span>;
+            <span class="kw">let </span>db = open_snapshot_db(decoders, <span class="kw-2">&amp;</span>snapshot_dir, is_isolated)<span class="question-mark">?</span>;
             prepare_fn(db).<span class="kw">await</span>;
         }
         (<span class="prelude-val">Some</span>(<span class="kw">_</span>), <span class="bool-val">true</span>) =&gt; {
@@ -537,7 +534,7 @@
         }
         (<span class="prelude-val">Some</span>(<span class="kw">_</span>), <span class="bool-val">false</span>) =&gt; {
             <span class="macro">debug!</span>(dir = %snapshot_dir.display(), <span class="string">"Snapshot dir does not exist. Creating."</span>);
-            <span class="kw">let </span>db = open_snapshot_db(decoders, snapshot_dir, is_isolated).<span class="kw">await</span><span class="question-mark">?</span>;
+            <span class="kw">let </span>db = open_snapshot_db(decoders, <span class="kw-2">&amp;</span>snapshot_dir, is_isolated)<span class="question-mark">?</span>;
             prepare_fn(db).<span class="kw">await</span>;
         }
         (<span class="prelude-val">None</span>, <span class="bool-val">true</span>) =&gt; {
@@ -675,9 +672,9 @@
 <span class="doccomment">/// Retrieves a temporary database from the database backup directory.
 /// The first folder that starts with `db_prefix` will return as a temporary
 /// database.
-</span><span class="kw">async fn </span>get_temp_database(
+</span><span class="kw">fn </span>get_temp_database(
     db_prefix: <span class="kw-2">&amp;</span>str,
-    decoders: ModuleDecoderRegistry,
+    decoders: <span class="kw-2">&amp;</span>ModuleDecoderRegistry,
 ) -&gt; anyhow::Result&lt;(Database, TempDir)&gt; {
     <span class="kw">let </span>snapshot_dirs = get_project_root().unwrap().join(<span class="string">"db/migrations"</span>);
     <span class="kw">if </span>snapshot_dirs.exists() {
@@ -691,11 +688,10 @@
                 .map_err(|_e| <span class="macro">format_err!</span>(<span class="string">"Invalid path name"</span>))<span class="question-mark">?</span>;
             <span class="kw">if </span>name.starts_with(db_prefix) {
                 <span class="kw">let </span>temp_path = <span class="macro">format!</span>(<span class="string">"{}-{}"</span>, name.as_str(), OsRng.next_u64());
-                <span class="kw">let </span>temp_db =
-                    open_temp_db_and_copy(temp_path.clone(), <span class="kw-2">&amp;</span>file.path(), decoders.clone())
-                        .with_context(|| {
-                            <span class="macro">format!</span>(<span class="string">"Opening temp db for {name}. Copying to {temp_path}"</span>)
-                        })<span class="question-mark">?</span>;
+                <span class="kw">let </span>temp_db = open_temp_db_and_copy(<span class="kw-2">&amp;</span>temp_path, <span class="kw-2">&amp;</span>file.path(), decoders.clone())
+                    .with_context(|| {
+                        <span class="macro">format!</span>(<span class="string">"Opening temp db for {name}. Copying to {temp_path}"</span>)
+                    })<span class="question-mark">?</span>;
                 <span class="kw">return </span><span class="prelude-val">Ok</span>(temp_db);
             }
         }
@@ -721,7 +717,7 @@
     </span>F: Fn(Database) -&gt; Fut,
     Fut: futures::Future&lt;Output = anyhow::Result&lt;()&gt;&gt;,
 {
-    <span class="kw">let </span>(db, _tmp_dir) = get_temp_database(db_prefix, decoders).<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="kw">let </span>(db, _tmp_dir) = get_temp_database(db_prefix, <span class="kw-2">&amp;</span>decoders)<span class="question-mark">?</span>;
     apply_migrations_server(<span class="kw-2">&amp;</span>db, db_prefix.to_string(), target_db_version, migrations)
         .<span class="kw">await
         </span>.context(<span class="string">"Error applying migrations to temp database"</span>)<span class="question-mark">?</span>;
@@ -749,7 +745,7 @@
         module.module_kind(),
         module.decoder(),
     )]);
-    <span class="kw">let </span>(db, _tmp_dir) = get_temp_database(db_prefix, decoders).<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="kw">let </span>(db, _tmp_dir) = get_temp_database(db_prefix, <span class="kw-2">&amp;</span>decoders)<span class="question-mark">?</span>;
     apply_migrations(
         <span class="kw-2">&amp;</span>db,
         module.module_kind().to_string(),
@@ -788,7 +784,7 @@
         module.as_common().module_kind(),
         T::decoder(),
     )]);
-    <span class="kw">let </span>(db, _tmp_dir) = get_temp_database(db_prefix, decoders.clone()).<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="kw">let </span>(db, _tmp_dir) = get_temp_database(db_prefix, <span class="kw-2">&amp;</span>decoders)<span class="question-mark">?</span>;
     apply_migrations_client(
         <span class="kw-2">&amp;</span>db,
         module.as_common().module_kind().to_string(),
@@ -829,15 +825,13 @@
 <span class="doccomment">/// Open a temporary database located at `temp_path` and copy the contents from
 /// the folder `src_dir` to the temporary database's path.
 </span><span class="kw">fn </span>open_temp_db_and_copy(
-    temp_path: String,
+    temp_path: <span class="kw-2">&amp;</span>str,
     src_dir: <span class="kw-2">&amp;</span>Path,
     decoders: ModuleDecoderRegistry,
 ) -&gt; anyhow::Result&lt;(Database, TempDir)&gt; {
     <span class="comment">// First copy the contents from src_dir to the path where the database will be
     // opened
-    </span><span class="kw">let </span>tmp_dir = tempfile::Builder::new()
-        .prefix(temp_path.as_str())
-        .tempdir()<span class="question-mark">?</span>;
+    </span><span class="kw">let </span>tmp_dir = tempfile::Builder::new().prefix(temp_path).tempdir()<span class="question-mark">?</span>;
     copy_directory(src_dir, tmp_dir.path())
         .context(<span class="string">"Error copying database to temporary directory"</span>)<span class="question-mark">?</span>;
 

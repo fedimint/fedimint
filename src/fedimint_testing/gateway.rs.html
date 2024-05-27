@@ -244,7 +244,6 @@
 <a href="#244" id="244">244</a>
 <a href="#245" id="245">245</a>
 <a href="#246" id="246">246</a>
-<a href="#247" id="247">247</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::fmt::{Display, Formatter};
 <span class="kw">use </span>std::net::SocketAddr;
 <span class="kw">use </span>std::str::FromStr;
@@ -296,7 +295,7 @@
 
 <span class="kw">impl </span>GatewayTest {
     <span class="doccomment">/// RPC client for communicating with the gateway admin API
-    </span><span class="kw">pub async fn </span>get_rpc(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; GatewayRpcClient {
+    </span><span class="kw">pub fn </span>get_rpc(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; GatewayRpcClient {
         GatewayRpcClient::new(<span class="self">self</span>.versioned_api.clone(), <span class="prelude-val">None</span>)
     }
 
@@ -314,8 +313,7 @@
         <span class="kw">let </span>invite_code = fed.invite_code().to_string();
         <span class="kw">let </span>rpc = <span class="self">self
             </span>.get_rpc()
-            .<span class="kw">await
-            </span>.with_password(<span class="prelude-val">Some</span>(DEFAULT_GATEWAY_PASSWORD.to_string()));
+            .with_password(<span class="prelude-val">Some</span>(DEFAULT_GATEWAY_PASSWORD.to_string()));
         rpc.connect_federation(ConnectFedPayload { invite_code })
             .<span class="kw">await
             </span>.unwrap()
@@ -450,9 +448,9 @@
         block_in_place(<span class="kw">move </span>|| {
             block_on(<span class="kw">async move </span>{
                 <span class="kw">if let </span><span class="prelude-val">Err</span>(e) = <span class="self">self</span>.task_group.clone().shutdown_join_all(<span class="prelude-val">None</span>).<span class="kw">await </span>{
-                    <span class="macro">warn!</span>(<span class="string">"Got error shutting down GatewayTest: {e:?}"</span>)
+                    <span class="macro">warn!</span>(<span class="string">"Got error shutting down GatewayTest: {e:?}"</span>);
                 }
-            })
+            });
         });
     }
 }
@@ -478,7 +476,7 @@
         <span class="kw">match </span>s.to_lowercase().as_str() {
             <span class="string">"cln" </span>=&gt; <span class="prelude-val">Ok</span>(LightningNodeType::Cln),
             <span class="string">"lnd" </span>=&gt; <span class="prelude-val">Ok</span>(LightningNodeType::Lnd),
-            <span class="kw">_ </span>=&gt; <span class="prelude-val">Err</span>(<span class="macro">format!</span>(<span class="string">"Invalid value for LightningNodeType: {}"</span>, s)),
+            <span class="kw">_ </span>=&gt; <span class="prelude-val">Err</span>(<span class="macro">format!</span>(<span class="string">"Invalid value for LightningNodeType: {s}"</span>)),
         }
     }
 }

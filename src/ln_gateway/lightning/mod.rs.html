@@ -217,6 +217,9 @@
 <a href="#217" id="217">217</a>
 <a href="#218" id="218">218</a>
 <a href="#219" id="219">219</a>
+<a href="#220" id="220">220</a>
+<a href="#221" id="221">221</a>
+<a href="#222" id="222">222</a>
 </pre></div><pre class="rust"><code><span class="kw">pub mod </span>cln;
 <span class="kw">pub mod </span>lnd;
 
@@ -424,15 +427,18 @@
     <span class="kw">async fn </span>build(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Box&lt;<span class="kw">dyn </span>ILnRpcClient&gt; {
         <span class="kw">match </span><span class="self">self</span>.lightning_mode.clone() {
             LightningMode::Cln { cln_extension_addr } =&gt; {
-                Box::new(NetworkLnRpcClient::new(cln_extension_addr).<span class="kw">await</span>)
+                Box::new(NetworkLnRpcClient::new(cln_extension_addr))
             }
             LightningMode::Lnd {
                 lnd_rpc_addr,
                 lnd_tls_cert,
                 lnd_macaroon,
-            } =&gt; Box::new(
-                GatewayLndClient::new(lnd_rpc_addr, lnd_tls_cert, lnd_macaroon, <span class="prelude-val">None</span>).<span class="kw">await</span>,
-            ),
+            } =&gt; Box::new(GatewayLndClient::new(
+                lnd_rpc_addr,
+                lnd_tls_cert,
+                lnd_macaroon,
+                <span class="prelude-val">None</span>,
+            )),
         }
     }
 }

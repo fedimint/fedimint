@@ -387,7 +387,6 @@
 <a href="#387" id="387">387</a>
 <a href="#388" id="388">388</a>
 <a href="#389" id="389">389</a>
-<a href="#390" id="390">390</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::iter::repeat;
 <span class="kw">use </span>std::sync::Arc;
@@ -494,7 +493,7 @@
     }
 
     <span class="kw">fn </span>pending_merkle_tree(pending: <span class="kw-2">&amp;</span>[Transaction]) -&gt; PartialMerkleTree {
-        <span class="kw">let </span>txs = pending.iter().map(|tx| tx.txid()).collect::&lt;Vec&lt;Txid&gt;&gt;();
+        <span class="kw">let </span>txs = pending.iter().map(Transaction::txid).collect::&lt;Vec&lt;Txid&gt;&gt;();
         <span class="kw">let </span>matches = repeat(<span class="bool-val">true</span>).take(txs.len()).collect::&lt;Vec&lt;bool&gt;&gt;();
         PartialMerkleTree::from_txids(txs.as_slice(), matches.as_slice())
     }
@@ -537,7 +536,7 @@
         <span class="kw">let </span>block = Block {
             header: BlockHeader {
                 version: Version::from_consensus(<span class="number">0</span>),
-                prev_blockhash: blocks.last().map(|b| b.header.block_hash()).unwrap_or(root),
+                prev_blockhash: blocks.last().map_or(root, |b| b.header.block_hash()),
                 merkle_root,
                 time: <span class="number">0</span>,
                 bits: CompactTarget::from_consensus(<span class="number">0</span>),
@@ -638,8 +637,7 @@
             .iter()
             .flat_map(|block| block.txdata.iter().flat_map(|tx| tx.output.clone()))
             .find(|out| out.script_pubkey == address.payload.script_pubkey())
-            .map(|tx| tx.value)
-            .unwrap_or(<span class="number">0</span>);
+            .map_or(<span class="number">0</span>, |tx| tx.value);
         Amount::from_sats(sats)
     }
 
@@ -661,13 +659,13 @@
                 <span class="prelude-val">Some</span>(tx) =&gt; tx,
             };
 
-            <span class="kw">for </span>input <span class="kw">in </span>tx.input.iter() {
+            <span class="kw">for </span>input <span class="kw">in </span><span class="kw-2">&amp;</span>tx.input {
                 fee += <span class="kw-2">*</span>addresses
                     .get(<span class="kw-2">&amp;</span>input.previous_output.txid)
                     .expect(<span class="string">"previous transaction should be known"</span>);
             }
 
-            <span class="kw">for </span>output <span class="kw">in </span>tx.output.iter() {
+            <span class="kw">for </span>output <span class="kw">in </span><span class="kw-2">&amp;</span>tx.output {
                 fee -= Amount::from_sats(output.value);
             }
 
@@ -715,7 +713,7 @@
         // TODO: This looks borked, should remove from `filtered` on higher fee or
         // something, and check per-input anyway. Probably doesn't matter, and I
         // don't want to touch it.
-        </span><span class="kw">for </span>tx <span class="kw">in </span>inner.pending.iter() {
+        </span><span class="kw">for </span>tx <span class="kw">in </span><span class="kw-2">&amp;</span>inner.pending {
             <span class="kw">match </span>filtered.get(<span class="kw-2">&amp;</span>inputs(tx)) {
                 <span class="prelude-val">Some</span>(found) <span class="kw">if </span>output_sum(tx) &gt; output_sum(found) =&gt; {}
                 <span class="kw">_ </span>=&gt; {

@@ -4951,7 +4951,7 @@
                 </span>.map(|(key, val)| {
                     (
                         <span class="macro-nonterminal">$crate::encoding::Encodable::consensus_encode_to_hex</span>(<span class="kw-2">&amp;</span>key),
-                        SerdeWrapper::from_encodable(val),
+                        SerdeWrapper::from_encodable(<span class="kw-2">&amp;</span>val),
                     )
                 })
                 .collect::&lt;BTreeMap&lt;<span class="kw">_</span>, <span class="kw">_</span>&gt;&gt;()

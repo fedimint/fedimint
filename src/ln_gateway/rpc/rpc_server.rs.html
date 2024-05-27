@@ -716,7 +716,7 @@
     Extension(gateway): Extension&lt;Gateway&gt;,
     Json(payload): Json&lt;BackupPayload&gt;,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="kw">impl </span>IntoResponse, GatewayError&gt; {
-    gateway.handle_backup_msg(payload).<span class="kw">await</span><span class="question-mark">?</span>;
+    gateway.handle_backup_msg(payload)<span class="question-mark">?</span>;
     <span class="prelude-val">Ok</span>(())
 }
 
@@ -726,7 +726,7 @@
     Extension(gateway): Extension&lt;Gateway&gt;,
     Json(payload): Json&lt;RestorePayload&gt;,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="kw">impl </span>IntoResponse, GatewayError&gt; {
-    gateway.handle_restore_msg(payload).<span class="kw">await</span><span class="question-mark">?</span>;
+    gateway.handle_restore_msg(payload)<span class="question-mark">?</span>;
     <span class="prelude-val">Ok</span>(())
 }
 

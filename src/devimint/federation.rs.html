@@ -1370,7 +1370,7 @@
         <span class="kw">let </span>params: HashMap&lt;PeerId, ConfigGenParams&gt; = local_config_gen_params(
             <span class="kw-2">&amp;</span>peers,
             process_mgr.globals.FM_PORT_FEDIMINTD_BASE,
-            ServerModuleConfigGenParamsRegistry::default(),
+            <span class="kw-2">&amp;</span>ServerModuleConfigGenParamsRegistry::default(),
         )<span class="question-mark">?</span>;
 
         <span class="kw">let </span><span class="kw-2">mut </span>admin_clients: BTreeMap&lt;PeerId, DynGlobalApi&gt; = BTreeMap::new();

@@ -1320,7 +1320,7 @@
                                         .<span class="kw">await</span>;
                                 }
                                 <span class="prelude-val">Err</span>(AddStateMachinesError::StateAlreadyExists) =&gt; {
-                                    <span class="macro">info!</span>(<span class="string">"State machine for operation {} already exists, will not add a new one"</span>, operation_id.fmt_short())
+                                    <span class="macro">info!</span>(<span class="string">"State machine for operation {} already exists, will not add a new one"</span>, operation_id.fmt_short());
                                 }
                                 <span class="prelude-val">Err</span>(other) =&gt; {
                                     <span class="macro">anyhow::bail!</span>(<span class="string">"Failed to add state machines: {other:?}"</span>)

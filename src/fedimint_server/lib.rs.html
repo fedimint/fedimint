@@ -208,7 +208,7 @@
     module_init_registry: <span class="kw-2">&amp;</span>ServerModuleInitRegistry,
     task_group: TaskGroup,
 ) -&gt; anyhow::Result&lt;()&gt; {
-    <span class="kw">let </span>cfg = <span class="kw">match </span>get_config(<span class="kw-2">&amp;</span>data_dir).<span class="kw">await</span><span class="question-mark">? </span>{
+    <span class="kw">let </span>cfg = <span class="kw">match </span>get_config(<span class="kw-2">&amp;</span>data_dir)<span class="question-mark">? </span>{
         <span class="prelude-val">Some</span>(cfg) =&gt; cfg,
         <span class="prelude-val">None </span>=&gt; {
             run_config_gen(
@@ -250,10 +250,10 @@
     <span class="prelude-val">Ok</span>(())
 }
 
-<span class="kw">pub async fn </span>get_config(data_dir: <span class="kw-2">&amp;</span>Path) -&gt; anyhow::Result&lt;<span class="prelude-ty">Option</span>&lt;ServerConfig&gt;&gt; {
+<span class="kw">pub fn </span>get_config(data_dir: <span class="kw-2">&amp;</span>Path) -&gt; anyhow::Result&lt;<span class="prelude-ty">Option</span>&lt;ServerConfig&gt;&gt; {
     <span class="comment">// Attempt get the config with local password, otherwise start config gen
     </span><span class="kw">if let </span><span class="prelude-val">Ok</span>(password) = fs::read_to_string(data_dir.join(PLAINTEXT_PASSWORD)) {
-        <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(read_server_config(<span class="kw-2">&amp;</span>password, data_dir.to_owned())<span class="question-mark">?</span>));
+        <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(read_server_config(<span class="kw-2">&amp;</span>password, data_dir)<span class="question-mark">?</span>));
     }
 
     <span class="prelude-val">Ok</span>(<span class="prelude-val">None</span>)
@@ -308,7 +308,7 @@
     write_new(data_dir.join(SALT_FILE), random_salt())<span class="question-mark">?</span>;
     write_server_config(
         <span class="kw-2">&amp;</span>cfg,
-        data_dir.clone(),
+        <span class="kw-2">&amp;</span>data_dir,
         <span class="kw-2">&amp;</span>cfg.private.api_auth.<span class="number">0</span>,
         <span class="kw-2">&amp;</span>settings.registry,
         force_api_secrets.get_active(),
