@@ -87,13 +87,9 @@ impl State for TxSubmissionStates {
                     ),
                 ]
             }
-            TxSubmissionStates::Accepted(..) => {
-                vec![]
-            }
-            TxSubmissionStates::Rejected(..) => {
-                vec![]
-            }
-            TxSubmissionStates::NonRetryableError(..) => {
+            TxSubmissionStates::Accepted(..)
+            | TxSubmissionStates::Rejected(..)
+            | TxSubmissionStates::NonRetryableError(..) => {
                 vec![]
             }
         }
@@ -115,7 +111,7 @@ impl TxSubmissionStates {
                         }
                     }
                     Err(decode_error) => {
-                        warn!(target: LOG_CLIENT_NET_API, error = %decode_error, "Failed to decode SerdeModuleEncoding")
+                        warn!(target: LOG_CLIENT_NET_API, error = %decode_error, "Failed to decode SerdeModuleEncoding");
                     }
                 },
                 Err(error) => {

@@ -25,7 +25,7 @@ use strum::IntoEnumIterator;
 struct SerdeWrapper(#[serde(with = "hex::serde")] Vec<u8>);
 
 impl SerdeWrapper {
-    fn from_encodable<T: Encodable>(e: T) -> SerdeWrapper {
+    fn from_encodable<T: Encodable>(e: &T) -> SerdeWrapper {
         let mut bytes = vec![];
         e.consensus_encode(&mut bytes)
             .expect("Write to vec can't fail");
@@ -64,7 +64,7 @@ impl DatabaseDump {
         };
 
         let (server_cfg, client_cfg, decoders) = if let Ok(cfg) =
-            read_server_config(&password, cfg_dir).context("Failed to read server config")
+            read_server_config(&password, &cfg_dir).context("Failed to read server config")
         {
             // Successfully read the server's config, that means this database is a server
             // db

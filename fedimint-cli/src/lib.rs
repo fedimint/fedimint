@@ -182,7 +182,7 @@ impl fmt::Display for CliError {
         let json = serde_json::to_value(self).expect("CliError is valid json");
         let json_as_string =
             serde_json::to_string_pretty(&json).expect("valid json is serializable");
-        write!(f, "{}", json_as_string)
+        write!(f, "{json_as_string}")
     }
 }
 
@@ -248,7 +248,6 @@ impl Opts {
         let db_path = self.data_dir_create().await?.join("client.db");
         let lock_path = db_path.with_extension("db.lock");
         Ok(LockedBuilder::new(&lock_path)
-            .await
             .map_err_cli_msg("could not lock database")?
             .with_db(
                 fedimint_rocksdb::RocksDb::open(db_path)
@@ -260,16 +259,15 @@ impl Opts {
 
 async fn load_or_generate_mnemonic(db: &Database) -> Result<Mnemonic, CliError> {
     Ok(
-        match Client::load_decodable_client_secret::<Vec<u8>>(db).await {
-            Ok(entropy) => Mnemonic::from_entropy(&entropy).map_err_cli()?,
-            Err(_) => {
-                info!("Generating mnemonic and writing entropy to client storage");
-                let mnemonic = Bip39RootSecretStrategy::<12>::random(&mut thread_rng());
-                Client::store_encodable_client_secret(db, mnemonic.to_entropy())
-                    .await
-                    .map_err_cli()?;
-                mnemonic
-            }
+        if let Ok(entropy) = Client::load_decodable_client_secret::<Vec<u8>>(db).await {
+            Mnemonic::from_entropy(&entropy).map_err_cli()?
+        } else {
+            info!("Generating mnemonic and writing entropy to client storage");
+            let mnemonic = Bip39RootSecretStrategy::<12>::random(&mut thread_rng());
+            Client::store_encodable_client_secret(db, mnemonic.to_entropy())
+                .await
+                .map_err_cli()?;
+            mnemonic
         },
     )
 }
@@ -331,11 +329,9 @@ struct DkgAdminArgs {
 }
 
 impl DkgAdminArgs {
-    fn ws_admin_client(&self, api_secret: Option<String>) -> CliResult<DynGlobalApi> {
+    fn ws_admin_client(&self, api_secret: Option<String>) -> DynGlobalApi {
         let ws = self.ws.clone();
-        Ok(DynGlobalApi::from_pre_peer_id_admin_endpoint(
-            ws, api_secret,
-        ))
+        DynGlobalApi::from_pre_peer_id_admin_endpoint(ws, api_secret)
     }
 }
 
@@ -674,7 +670,7 @@ impl FedimintCli {
         builder
             .recover(
                 root_secret,
-                client_config.to_owned(),
+                client_config.clone(),
                 invite_code.api_secret(),
                 backup,
             )
@@ -799,7 +795,7 @@ impl FedimintCli {
 
                 let mut params = ApiRequestErased::new(params);
                 if let Some(auth) = auth {
-                    params = params.with_auth(ApiAuth(auth))
+                    params = params.with_auth(ApiAuth(auth));
                 }
                 let client = self.client_open(&cli).await?;
 
@@ -1003,12 +999,8 @@ impl FedimintCli {
         }
     }
 
-    async fn handle_admin_dkg_command(
-        &self,
-        cli: Opts,
-        dkg_args: DkgAdminArgs,
-    ) -> Result<CliOutput, CliError> {
-        let client = dkg_args.ws_admin_client(dkg_args.api_secret.clone())?;
+    async fn handle_admin_dkg_command(&self, cli: Opts, dkg_args: DkgAdminArgs) -> CliOutputResult {
+        let client = dkg_args.ws_admin_client(dkg_args.api_secret.clone());
         match &dkg_args.subcommand {
             DkgAdminCmd::WsStatus => {
                 let status = client.status().await?;

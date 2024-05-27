@@ -409,10 +409,10 @@ impl GatewayClientModuleV2 {
             if let Some(GatewayClientStateMachinesV2::Receive(state)) = stream.next().await {
                 match state.state {
                     ReceiveSMState::Funding => {}
-                    ReceiveSMState::Rejected(..) => return None,
                     ReceiveSMState::Success(preimage) => return Some(preimage),
-                    ReceiveSMState::Failure => return None,
-                    ReceiveSMState::Refunding(..) => return None,
+                    ReceiveSMState::Rejected(..)
+                    | ReceiveSMState::Failure
+                    | ReceiveSMState::Refunding(..) => return None,
                 }
             }
         }

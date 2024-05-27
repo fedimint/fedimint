@@ -292,7 +292,7 @@ impl ServerConfig {
     }
 
     pub fn add_modules(&mut self, modules: BTreeMap<ModuleInstanceId, ServerModuleConfig>) {
-        for (name, config) in modules.into_iter() {
+        for (name, config) in modules {
             let ServerModuleConfig {
                 local,
                 private,
@@ -383,20 +383,19 @@ impl ServerConfig {
         if Some(&my_public_key) != consensus.broadcast_public_keys.get(identity) {
             bail!("Broadcast secret key doesn't match corresponding public key");
         }
-        if peers.keys().max().copied().map(|id| id.to_usize()) != Some(peers.len() - 1) {
+        if peers.keys().max().copied().map(PeerId::to_usize) != Some(peers.len() - 1) {
             bail!("Peer ids are not indexed from 0");
         }
         if peers.keys().min().copied() != Some(PeerId::from(0)) {
             bail!("Peer ids are not indexed from 0");
         }
 
-        for (module_id, module_kind) in self
+        for (module_id, module_kind) in &self
             .consensus
             .modules
             .iter()
             .map(|(id, config)| Ok((*id, config.kind.clone())))
             .collect::<anyhow::Result<BTreeSet<_>>>()?
-            .iter()
         {
             module_config_gens
                 .get(module_kind)
@@ -409,8 +408,8 @@ impl ServerConfig {
 
     pub fn trusted_dealer_gen(
         params: &HashMap<PeerId, ConfigGenParams>,
-        registry: ServerModuleInitRegistry,
-        code_version_str: String,
+        registry: &ServerModuleInitRegistry,
+        code_version_str: &str,
     ) -> BTreeMap<PeerId, Self> {
         let peer0 = &params[&PeerId::from(0)];
 
@@ -448,7 +447,7 @@ impl ServerConfig {
                         .iter()
                         .map(|(module_id, cfgs)| (*module_id, cfgs[&id].clone()))
                         .collect(),
-                    code_version_str.clone(),
+                    code_version_str.to_string(),
                 );
                 (id, config)
             })
@@ -495,8 +494,8 @@ impl ServerConfig {
         if peers.len() == 1 {
             let server = Self::trusted_dealer_gen(
                 &HashMap::from([(*our_id, params.clone())]),
-                registry,
-                code_version_str,
+                &registry,
+                &code_version_str,
             );
             return Ok(server[our_id].clone());
         }
@@ -637,7 +636,7 @@ impl ServerConfig {
 
 impl ConfigGenParams {
     pub fn peer_ids(&self) -> Vec<PeerId> {
-        self.consensus.peers.keys().cloned().collect()
+        self.consensus.peers.keys().copied().collect()
     }
 
     pub fn p2p_network(&self) -> NetworkConfig {
@@ -770,7 +769,7 @@ mod serde_tls_cert_map {
         S: Serializer,
     {
         let mut serializer = serializer.serialize_map(Some(certs.len()))?;
-        for (key, value) in certs.iter() {
+        for (key, value) in certs {
             serializer.serialize_key(key)?;
             let hex_str = value.0.encode_hex::<String>();
             serializer.serialize_value(&hex_str)?;

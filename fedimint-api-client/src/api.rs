@@ -91,30 +91,29 @@ impl PeerError {
     /// there's a problem.
     pub fn report_if_important(&self, peer_id: PeerId) {
         let important = match self {
-            PeerError::ResponseDeserialization(_) => true,
-            PeerError::InvalidPeerId { peer_id: _ } => true,
+            PeerError::ResponseDeserialization(_)
+            | PeerError::InvalidPeerId { .. }
+            | PeerError::InvalidResponse(_) => true,
             PeerError::Rpc(rpc_e) => match rpc_e {
                 // TODO: Does this cover all retryable cases?
-                JsonRpcClientError::Transport(_) => false,
-                JsonRpcClientError::MaxSlotsExceeded => true,
-                JsonRpcClientError::RequestTimeout => false,
-                JsonRpcClientError::RestartNeeded(_) => true,
-                JsonRpcClientError::Call(_) => true,
-                JsonRpcClientError::ParseError(_) => true,
-                JsonRpcClientError::InvalidSubscriptionId => true,
-                JsonRpcClientError::InvalidRequestId(_) => true,
-                JsonRpcClientError::Custom(_) => true,
-                JsonRpcClientError::HttpNotImplemented => true,
-                JsonRpcClientError::EmptyBatchRequest(_) => true,
-                JsonRpcClientError::RegisterMethod(_) => true,
+                JsonRpcClientError::Transport(_) | JsonRpcClientError::RequestTimeout => false,
+                JsonRpcClientError::MaxSlotsExceeded
+                | JsonRpcClientError::RestartNeeded(_)
+                | JsonRpcClientError::Call(_)
+                | JsonRpcClientError::ParseError(_)
+                | JsonRpcClientError::InvalidSubscriptionId
+                | JsonRpcClientError::InvalidRequestId(_)
+                | JsonRpcClientError::Custom(_)
+                | JsonRpcClientError::HttpNotImplemented
+                | JsonRpcClientError::EmptyBatchRequest(_)
+                | JsonRpcClientError::RegisterMethod(_) => true,
             },
-            PeerError::InvalidResponse(_) => true,
         };
 
         trace!(target: LOG_CLIENT_NET_API, error = %self, "PeerError");
 
         if important {
-            warn!(target: LOG_CLIENT_NET_API, error = %self, %peer_id, "Unusual PeerError")
+            warn!(target: LOG_CLIENT_NET_API, error = %self, %peer_id, "Unusual PeerError");
         }
     }
 }
@@ -189,7 +188,7 @@ impl FederationError {
             warn!(target: LOG_CLIENT_NET_API, %error, "General FederationError");
         }
         for (peer_id, e) in &self.peers {
-            e.report_if_important(*peer_id)
+            e.report_if_important(*peer_id);
         }
     }
 
@@ -225,18 +224,14 @@ pub enum OutputOutcomeError {
 impl OutputOutcomeError {
     pub fn report_if_important(&self) {
         let important = match self {
-            OutputOutcomeError::ResponseDeserialization(_) => true,
             OutputOutcomeError::Federation(e) => {
                 e.report_if_important();
                 return;
             }
-            OutputOutcomeError::Core(_) => true,
-            OutputOutcomeError::Rejected(_) => false,
-            OutputOutcomeError::InvalidVout {
-                out_idx: _,
-                outputs_num: _,
-            } => true,
-            OutputOutcomeError::Timeout(_) => false,
+            OutputOutcomeError::Core(_)
+            | OutputOutcomeError::InvalidVout { .. }
+            | OutputOutcomeError::ResponseDeserialization(_) => true,
+            OutputOutcomeError::Rejected(_) | OutputOutcomeError::Timeout(_) => false,
         };
 
         trace!(target: LOG_CLIENT_NET_API, error = %self, "OutputOutcomeError");
@@ -608,7 +603,7 @@ impl DynGlobalApi {
                 .await
                 .map_err(OutputOutcomeError::Federation)?;
 
-            deserialize_outcome(outcome, module_decoder)
+            deserialize_outcome(&outcome, module_decoder)
         })
         .await
         .map_err(|_| OutputOutcomeError::Timeout(timeout))?
@@ -743,7 +738,7 @@ pub trait IGlobalFederationApi: IRawFederationApi {
 }
 
 pub fn deserialize_outcome<R>(
-    outcome: SerdeOutputOutcome,
+    outcome: &SerdeOutputOutcome,
     module_decoder: &Decoder,
 ) -> OutputOutcomeResult<R>
 where
@@ -1165,10 +1160,10 @@ impl FederationPeerClientShared {
     async fn wait_and_inc_reconnect(&mut self) {
         self.wait().await;
         self.connection_attempts = self.connection_attempts.saturating_add(1);
-        self.last_connection_attempt = now()
+        self.last_connection_attempt = now();
     }
 
-    async fn reset(&mut self) {
+    fn reset(&mut self) {
         self.connection_attempts = 0;
     }
 }
@@ -1212,7 +1207,7 @@ where
 
             match &res {
                 Ok(_) => {
-                    shared.lock().await.reset().await;
+                    shared.lock().await.reset();
                     debug!(
                             target: LOG_CLIENT_NET_API,
                             peer_id = %peer_id,
@@ -1231,7 +1226,7 @@ where
         })
     }
 
-    pub async fn reconnect(&mut self, peer_id: PeerId, url: SafeUrl, api_secret: Option<String>) {
+    pub fn reconnect(&mut self, peer_id: PeerId, url: SafeUrl, api_secret: Option<String>) {
         self.client = Self::new_jit_client(peer_id, url, api_secret, self.shared.clone());
     }
 }
@@ -1467,9 +1462,7 @@ where
                     trace!(target: LOG_CLIENT_NET_API, "Some other request reconnected client, retrying");
                 }
                 _ => {
-                    wclient
-                        .reconnect(self.peer_id, self.url.clone(), self.api_secret.clone())
-                        .await;
+                    wclient.reconnect(self.peer_id, self.url.clone(), self.api_secret.clone());
                 }
             }
         }

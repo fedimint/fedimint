@@ -54,21 +54,21 @@ pub fn get_project_root() -> io::Result<PathBuf> {
 /// Opens the backup database in the `snapshot_dir`. If the `is_isolated` flag
 /// is set, the database will be opened as an isolated database with
 /// `TEST_MODULE_INSTANCE_ID` as the prefix.
-async fn open_snapshot_db(
+fn open_snapshot_db(
     decoders: ModuleDecoderRegistry,
-    snapshot_dir: PathBuf,
+    snapshot_dir: &Path,
     is_isolated: bool,
 ) -> anyhow::Result<Database> {
     if is_isolated {
         Ok(Database::new(
-            RocksDb::open(&snapshot_dir)
+            RocksDb::open(snapshot_dir)
                 .with_context(|| format!("Preparing snapshot in {}", snapshot_dir.display()))?,
             decoders,
         )
         .with_prefix_module_id(TEST_MODULE_INSTANCE_ID))
     } else {
         Ok(Database::new(
-            RocksDb::open(&snapshot_dir)
+            RocksDb::open(snapshot_dir)
                 .with_context(|| format!("Preparing snapshot in {}", snapshot_dir.display()))?,
             decoders,
         ))
@@ -95,7 +95,7 @@ where
     ) {
         (Some("force"), true) => {
             tokio::fs::remove_dir_all(&snapshot_dir).await?;
-            let db = open_snapshot_db(decoders, snapshot_dir, is_isolated).await?;
+            let db = open_snapshot_db(decoders, &snapshot_dir, is_isolated)?;
             prepare_fn(db).await;
         }
         (Some(_), true) => {
@@ -103,7 +103,7 @@ where
         }
         (Some(_), false) => {
             debug!(dir = %snapshot_dir.display(), "Snapshot dir does not exist. Creating.");
-            let db = open_snapshot_db(decoders, snapshot_dir, is_isolated).await?;
+            let db = open_snapshot_db(decoders, &snapshot_dir, is_isolated)?;
             prepare_fn(db).await;
         }
         (None, true) => {
@@ -241,9 +241,9 @@ pub const TEST_MODULE_INSTANCE_ID: u16 = 0;
 /// Retrieves a temporary database from the database backup directory.
 /// The first folder that starts with `db_prefix` will return as a temporary
 /// database.
-async fn get_temp_database(
+fn get_temp_database(
     db_prefix: &str,
-    decoders: ModuleDecoderRegistry,
+    decoders: &ModuleDecoderRegistry,
 ) -> anyhow::Result<(Database, TempDir)> {
     let snapshot_dirs = get_project_root().unwrap().join("db/migrations");
     if snapshot_dirs.exists() {
@@ -257,11 +257,10 @@ async fn get_temp_database(
                 .map_err(|_e| format_err!("Invalid path name"))?;
             if name.starts_with(db_prefix) {
                 let temp_path = format!("{}-{}", name.as_str(), OsRng.next_u64());
-                let temp_db =
-                    open_temp_db_and_copy(temp_path.clone(), &file.path(), decoders.clone())
-                        .with_context(|| {
-                            format!("Opening temp db for {name}. Copying to {temp_path}")
-                        })?;
+                let temp_db = open_temp_db_and_copy(&temp_path, &file.path(), decoders.clone())
+                    .with_context(|| {
+                        format!("Opening temp db for {name}. Copying to {temp_path}")
+                    })?;
                 return Ok(temp_db);
             }
         }
@@ -287,7 +286,7 @@ where
     F: Fn(Database) -> Fut,
     Fut: futures::Future<Output = anyhow::Result<()>>,
 {
-    let (db, _tmp_dir) = get_temp_database(db_prefix, decoders).await?;
+    let (db, _tmp_dir) = get_temp_database(db_prefix, &decoders)?;
     apply_migrations_server(&db, db_prefix.to_string(), target_db_version, migrations)
         .await
         .context("Error applying migrations to temp database")?;
@@ -315,7 +314,7 @@ where
         module.module_kind(),
         module.decoder(),
     )]);
-    let (db, _tmp_dir) = get_temp_database(db_prefix, decoders).await?;
+    let (db, _tmp_dir) = get_temp_database(db_prefix, &decoders)?;
     apply_migrations(
         &db,
         module.module_kind().to_string(),
@@ -354,7 +353,7 @@ where
         module.as_common().module_kind(),
         T::decoder(),
     )]);
-    let (db, _tmp_dir) = get_temp_database(db_prefix, decoders.clone()).await?;
+    let (db, _tmp_dir) = get_temp_database(db_prefix, &decoders)?;
     apply_migrations_client(
         &db,
         module.as_common().module_kind().to_string(),
@@ -395,15 +394,13 @@ where
 /// Open a temporary database located at `temp_path` and copy the contents from
 /// the folder `src_dir` to the temporary database's path.
 fn open_temp_db_and_copy(
-    temp_path: String,
+    temp_path: &str,
     src_dir: &Path,
     decoders: ModuleDecoderRegistry,
 ) -> anyhow::Result<(Database, TempDir)> {
     // First copy the contents from src_dir to the path where the database will be
     // opened
-    let tmp_dir = tempfile::Builder::new()
-        .prefix(temp_path.as_str())
-        .tempdir()?;
+    let tmp_dir = tempfile::Builder::new().prefix(temp_path).tempdir()?;
     copy_directory(src_dir, tmp_dir.path())
         .context("Error copying database to temporary directory")?;
 

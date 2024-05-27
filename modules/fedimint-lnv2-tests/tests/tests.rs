@@ -73,7 +73,7 @@ async fn can_pay_external_invoice_exactly_once() -> anyhow::Result<()> {
     let gateway_api = gateway_test.gateway.versioned_api.clone();
 
     let other_ln = FakeLightningTest::new();
-    let invoice = other_ln.invoice(Amount::from_sats(100), None).await?;
+    let invoice = other_ln.invoice(Amount::from_sats(100), None)?;
 
     let client = fed.new_client().await;
 

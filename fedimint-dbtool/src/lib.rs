@@ -219,8 +219,8 @@ impl FedimintDBTool {
                 };
 
                 let mut dbdump = DatabaseDump::new(
-                    cfg_dir.to_path_buf(),
-                    options.database.to_owned(),
+                    cfg_dir.clone(),
+                    options.database.clone(),
                     password.to_string(),
                     module_inits,
                     client_module_inits,

@@ -19,9 +19,10 @@ fn do_not_ignore(field: &Field) -> bool {
 }
 
 fn panic_if_ignored(field: &Field) -> bool {
-    if !do_not_ignore(field) {
-        panic!("Trying to derive decodable from a struct with ignored fields");
-    }
+    assert!(
+        do_not_ignore(field),
+        "Trying to derive decodable from a struct with ignored fields"
+    );
     true
 }
 
@@ -41,7 +42,7 @@ fn is_default_variant_enforce_valid(variant: &Variant) -> bool {
         let field_names = variant
             .fields
             .iter()
-            .filter_map(|field| field.ident.as_ref().map(|ident| ident.to_string()))
+            .filter_map(|field| field.ident.as_ref().map(ToString::to_string))
             .sorted()
             .collect::<Vec<_>>();
         let correct_fields = field_names == vec!["bytes".to_string(), "variant".to_string()];
@@ -113,25 +114,22 @@ fn derive_struct_encode(fields: &Fields) -> TokenStream2 {
 /// Extracts the u64 index from an attribute if it matches `#[encodable(index =
 /// <u64>)]`.
 fn parse_index_attribute(attributes: &[Attribute]) -> Option<u64> {
-    attributes
-        .iter()
-        .filter_map(|attr| {
-            if attr.path().is_ident("encodable") {
-                attr.parse_args_with(|input: syn::parse::ParseStream| {
-                    input.parse::<syn::Ident>()?.span(); // consume the ident 'index'
-                    input.parse::<Token![=]>()?; // consume the '='
-                    if let Lit::Int(lit_int) = input.parse::<Lit>()? {
-                        lit_int.base10_parse()
-                    } else {
-                        Err(input.error("Expected an integer for 'index'"))
-                    }
-                })
-                .ok()
-            } else {
-                None
-            }
-        })
-        .next()
+    attributes.iter().find_map(|attr| {
+        if attr.path().is_ident("encodable") {
+            attr.parse_args_with(|input: syn::parse::ParseStream| {
+                input.parse::<syn::Ident>()?.span(); // consume the ident 'index'
+                input.parse::<Token![=]>()?; // consume the '='
+                if let Lit::Int(lit_int) = input.parse::<Lit>()? {
+                    lit_int.base10_parse()
+                } else {
+                    Err(input.error("Expected an integer for 'index'"))
+                }
+            })
+            .ok()
+        } else {
+            None
+        }
+    })
 }
 
 /// Processes all variants in a `Punctuated` list extracting any specified
@@ -290,7 +288,7 @@ fn error(ident: &Ident, message: &str) -> TokenStream2 {
 
 fn derive_struct_decode(ident: &Ident, fields: &Fields) -> TokenStream2 {
     let decode_block =
-        derive_tuple_or_named_decode_block(ident, quote! { #ident }, quote! { d }, fields);
+        derive_tuple_or_named_decode_block(ident, &quote! { #ident }, &quote! { d }, fields);
 
     quote! {
         Ok(#decode_block)
@@ -309,8 +307,8 @@ fn derive_enum_decode(ident: &Ident, variants: &Punctuated<Variant, Comma>) -> T
             let variant_ident = variant.ident.clone();
             let decode_block = derive_tuple_or_named_decode_block(
                 ident,
-                quote! { #ident::#variant_ident },
-                quote! { &mut cursor },
+                &quote! { #ident::#variant_ident },
+                &quote! { &mut cursor },
                 &variant.fields,
             );
 
@@ -393,8 +391,8 @@ fn is_tuple_struct(fields: &Fields) -> bool {
 // as idents
 fn derive_tuple_or_named_decode_block(
     ident: &Ident,
-    constructor: TokenStream2,
-    reader: TokenStream2,
+    constructor: &TokenStream2,
+    reader: &TokenStream2,
     fields: &Fields,
 ) -> TokenStream2 {
     if is_tuple_struct(fields) {
@@ -406,8 +404,8 @@ fn derive_tuple_or_named_decode_block(
 
 fn derive_tuple_decode_block(
     ident: &Ident,
-    constructor: TokenStream2,
-    reader: TokenStream2,
+    constructor: &TokenStream2,
+    reader: &TokenStream2,
     fields: &Fields,
 ) -> TokenStream2 {
     let field_names = fields
@@ -434,8 +432,8 @@ fn derive_tuple_decode_block(
 
 fn derive_named_decode_block(
     ident: &Ident,
-    constructor: TokenStream2,
-    reader: TokenStream2,
+    constructor: &TokenStream2,
+    reader: &TokenStream2,
     fields: &Fields,
 ) -> TokenStream2 {
     let variant_fields = fields

@@ -133,7 +133,7 @@ async fn main() -> anyhow::Result<()> {
     let opts: RecoveryTool = RecoveryTool::parse();
 
     let (base_descriptor, base_key, network) = if let Some(config) = opts.config {
-        let cfg = read_server_config(&opts.password, config).expect("Could not read config file");
+        let cfg = read_server_config(&opts.password, &config).expect("Could not read config file");
         let wallet_cfg: WalletConfig = cfg
             .get_module_config_typed(LEGACY_HARDCODED_INSTANCE_ID_WALLET)
             .expect("Malformed wallet config");
@@ -154,7 +154,7 @@ async fn main() -> anyhow::Result<()> {
             let wallets = vec![ImportableWalletMin { descriptor }];
 
             serde_json::to_writer(std::io::stdout().lock(), &wallets)
-                .expect("Could not encode to stdout")
+                .expect("Could not encode to stdout");
         }
         TweakSource::Utxos { legacy, db } => {
             let db = get_db(opts.readonly, &db, Default::default());
@@ -183,7 +183,7 @@ async fn main() -> anyhow::Result<()> {
                 .await;
 
             serde_json::to_writer(std::io::stdout().lock(), &utxos)
-                .expect("Could not encode to stdout")
+                .expect("Could not encode to stdout");
         }
         TweakSource::Epochs { db } => {
             let decoders = ModuleDecoderRegistry::from_iter([
@@ -225,8 +225,7 @@ async fn main() -> anyhow::Result<()> {
                             .into_iter()
                             .filter_map(|item| match item.item {
                                 ConsensusItem::Transaction(tx) => Some(tx),
-                                ConsensusItem::Module(_) => None,
-                                ConsensusItem::Default { .. } => None,
+                                ConsensusItem::Module(_) | ConsensusItem::Default { .. } => None,
                             })
                             .collect();
 
@@ -254,7 +253,7 @@ async fn main() -> anyhow::Result<()> {
                 .await;
 
             serde_json::to_writer(std::io::stdout().lock(), &wallets)
-                .expect("Could not encode to stdout")
+                .expect("Could not encode to stdout");
         }
     }
 
@@ -367,7 +366,7 @@ impl PartialEq for Key {
 
 impl std::hash::Hash for Key {
     fn hash<H: Hasher>(&self, state: &mut H) {
-        self.to_compressed_public_key().hash(state)
+        self.to_compressed_public_key().hash(state);
     }
 }
 

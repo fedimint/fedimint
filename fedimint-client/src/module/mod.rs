@@ -161,7 +161,7 @@ where
             .get()
             .operation_log()
             .add_operation_log_entry(self.dbtx, operation_id, operation_type, operation_meta)
-            .await
+            .await;
     }
 
     pub async fn add_state_machines_dbtx(

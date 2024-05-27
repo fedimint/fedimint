@@ -128,8 +128,7 @@ pub async fn run(
             kind.clone(),
             module.clone(),
             submission_sender.clone(),
-        )
-        .await;
+        );
     }
 
     info!(target: LOG_CONSENSUS, "Starting Consensus Engine");
@@ -187,7 +186,7 @@ async fn start_consensus_api(
 
 const CONSENSUS_PROPOSAL_TIMEOUT: Duration = Duration::from_secs(30);
 
-async fn submit_module_ci_proposals(
+fn submit_module_ci_proposals(
     task_group: &TaskGroup,
     db: Database,
     module_id: ModuleInstanceId,

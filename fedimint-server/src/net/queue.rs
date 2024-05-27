@@ -51,12 +51,7 @@ where
 
     pub fn ack(&mut self, msg_id: MessageId) {
         debug!("Received ACK for {:?}", msg_id);
-        while self
-            .queue
-            .front()
-            .map(|msg| msg.id <= msg_id)
-            .unwrap_or(false)
-        {
+        while self.queue.front().is_some_and(|msg| msg.id <= msg_id) {
             let msg = self.queue.pop_front().expect("Checked in while head");
             trace!("Removing message {:?} from resend buffer", msg.id);
         }

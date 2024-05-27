@@ -62,7 +62,8 @@ impl IBitcoindRpc for ElectrumClient {
     }
 
     async fn get_block_hash(&self, height: u64) -> anyhow::Result<BlockHash> {
-        let result = block_in_place(|| self.0.block_headers(height as usize, 1))?;
+        let height = usize::try_from(height)?;
+        let result = block_in_place(|| self.0.block_headers(height, 1))?;
         Ok(result
             .headers
             .first()
@@ -156,7 +157,7 @@ impl IBitcoindRpc for ElectrumClient {
     ) -> anyhow::Result<Vec<bitcoin::Transaction>> {
         let mut results = vec![];
         let transactions = block_in_place(|| self.0.script_get_history(script))?;
-        for history in transactions.into_iter() {
+        for history in transactions {
             results.push(block_in_place(|| self.0.transaction_get(&history.tx_hash))?);
         }
         Ok(results)

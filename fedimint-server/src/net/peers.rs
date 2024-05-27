@@ -201,8 +201,7 @@ where
                 connection_receiver,
                 status_channels.clone(),
                 task_group,
-            )
-            .await;
+            );
 
             connection_senders.insert(*peer, connection_sender);
             connections.insert(*peer, connection);
@@ -267,7 +266,7 @@ where
             }
         }
     }
-    pub fn send_sync(&self, msg: T, recipient: Recipient) {
+    pub fn send_sync(&self, msg: &T, recipient: Recipient) {
         match recipient {
             Recipient::Everyone => {
                 for connection in self.connections.values() {
@@ -308,7 +307,7 @@ where
         // never going to be any message. This avoids panic on `select_all` with
         // no futures.
         if self.connections.is_empty() {
-            std::future::pending().await
+            std::future::pending::<T>().await;
         }
 
         let futures_non_banned = self.connections.iter_mut().map(|(&peer, connection)| {
@@ -410,29 +409,22 @@ where
     ) -> Option<PeerConnectionState<M>> {
         Some(tokio::select! {
             maybe_msg = self.outgoing.recv() => {
-                match maybe_msg {
-                    Ok(msg) => {
-                        self.send_message_connected(connected, PeerMessage::Message(msg))
-                            .await
-                    },
-                    Err(_) => {
-                        debug!(target: LOG_NET_PEER, "Exiting peer connection IO task - parent disconnected");
-                        return None;
-                    },
+                if let Ok(msg) = maybe_msg {
+                    self.send_message_connected(connected, PeerMessage::Message(msg)).await
+                } else {
+                    debug!(target: LOG_NET_PEER, "Exiting peer connection IO task - parent disconnected");
+                    return None;
                 }
             },
             new_connection_res = self.incoming_connections.recv() => {
-                match new_connection_res {
-                    Some(new_connection) => {
-                        debug!(target: LOG_NET_PEER, "Replacing existing connection");
-                        self.connect(new_connection, 0).await
-                    },
-                    None => {
-                        debug!(
-                        target: LOG_NET_PEER,
-                            "Exiting peer connection IO task - parent disconnected");
-                        return None;
-                    },
+                if let Some(new_connection) = new_connection_res {
+                    debug!(target: LOG_NET_PEER, "Replacing existing connection");
+                    self.connect(new_connection, 0).await
+                } else {
+                    debug!(
+                    target: LOG_NET_PEER,
+                        "Exiting peer connection IO task - parent disconnected");
+                    return None;
                 }
             },
             Some(message_res) = connected.connection.next() => {
@@ -447,7 +439,7 @@ where
 
                         PeerConnectionState::Connected(connected)
                     },
-                    Err(e) => self.disconnect_err(e, 0),
+                    Err(e) => self.disconnect_err(&e, 0),
                 }
             },
             _ = sleep_until(connected.next_ping) => {
@@ -475,7 +467,7 @@ where
                 connection: new_connection,
                 next_ping: Instant::now(),
             }),
-            Err(e) => self.disconnect_err(e, disconnect_count),
+            Err(e) => self.disconnect_err(&e, disconnect_count),
         }
     }
 
@@ -505,7 +497,7 @@ where
         })
     }
 
-    fn disconnect_err(&self, err: anyhow::Error, disconnect_count: u64) -> PeerConnectionState<M> {
+    fn disconnect_err(&self, err: &anyhow::Error, disconnect_count: u64) -> PeerConnectionState<M> {
         debug!(target: LOG_NET_PEER,
             our_id = ?self.our_id,
             peer = ?self.peer_id, %err, %disconnect_count, "Peer disconnected");
@@ -523,14 +515,14 @@ where
             .inc();
 
         if let Err(e) = connected.connection.send(peer_message).await {
-            return self.disconnect_err(e, 0);
+            return self.disconnect_err(&e, 0);
         }
 
         connected.next_ping = Instant::now() + PING_INTERVAL;
 
         match connected.connection.flush().await {
             Ok(()) => PeerConnectionState::Connected(connected),
-            Err(e) => self.disconnect_err(e, 0),
+            Err(e) => self.disconnect_err(&e, 0),
         }
     }
 
@@ -541,16 +533,12 @@ where
     ) -> Option<PeerConnectionState<M>> {
         Some(tokio::select! {
             new_connection_res = self.incoming_connections.recv() => {
-                match new_connection_res {
-                    Some(new_connection) => {
-                        PEER_CONNECT_COUNT.with_label_values(&[&self.our_id_str, &self.peer_id_str, "incoming"])
-                        .inc();
-                        self.receive_connection(disconnected, new_connection).await
-                    },
-                    None => {
-                        debug!(target: LOG_NET_PEER, "Exiting peer connection IO task - parent disconnected");
-                        return None;
-                    },
+                if let Some(new_connection) = new_connection_res {
+                    PEER_CONNECT_COUNT.with_label_values(&[&self.our_id_str, &self.peer_id_str, "incoming"]).inc();
+                    self.receive_connection(disconnected, new_connection).await
+                } else {
+                    debug!(target: LOG_NET_PEER, "Exiting peer connection IO task - parent disconnected");
+                    return None;
                 }
             },
             () = tokio::time::sleep_until(disconnected.reconnect_at), if self.our_id < self.peer_id => {
@@ -584,7 +572,7 @@ where
                 self.connect(conn, disconnected.failed_reconnect_counter)
                     .await
             }
-            Err(e) => self.disconnect_err(e, disconnected.failed_reconnect_counter),
+            Err(e) => self.disconnect_err(&e, disconnected.failed_reconnect_counter),
         }
     }
 
@@ -611,7 +599,7 @@ where
     M: Debug + Clone + Send + Sync + 'static,
 {
     #[allow(clippy::too_many_arguments)]
-    async fn new(
+    fn new(
         our_id: PeerId,
         peer_id: PeerId,
         peer_address: SafeUrl,
@@ -639,7 +627,7 @@ where
                     status_channels,
                     &handle,
                 )
-                .await
+                .await;
             },
         );
 

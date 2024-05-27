@@ -420,8 +420,7 @@ where
                 total: (common_state.end_session - common_state.start_session)
                     .try_into()
                     .unwrap_or(u32::MAX),
-            })
-            .await
+            });
         }
 
         debug!(

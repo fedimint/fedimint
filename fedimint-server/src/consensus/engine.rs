@@ -8,7 +8,7 @@ use anyhow::{anyhow, bail};
 use async_channel::Receiver;
 use fedimint_api_client::api::{DynGlobalApi, FederationApiExt, PeerConnectionStatus};
 use fedimint_api_client::query::FilterMap;
-use fedimint_core::core::MODULE_INSTANCE_ID_GLOBAL;
+use fedimint_core::core::{DynOutput, MODULE_INSTANCE_ID_GLOBAL};
 use fedimint_core::db::{Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped};
 use fedimint_core::encoding::Decodable;
 use fedimint_core::endpoint_constants::AWAIT_SIGNED_SESSION_OUTCOME_ENDPOINT;
@@ -198,7 +198,7 @@ impl ConsensusEngine {
                     return Ok(());
                 }
                 Err(e) => {
-                    warn!(target: LOG_CONSENSUS, "Could not check consensus config hash: {}", OptStacktrace(e))
+                    warn!(target: LOG_CONSENSUS, "Could not check consensus config hash: {}", OptStacktrace(e));
                 }
             }
 
@@ -229,7 +229,7 @@ impl ConsensusEngine {
 
         let expected_rounds = 3 * self.cfg.consensus.broadcast_expected_rounds_per_session as usize;
         let max_round = 3 * self.cfg.consensus.broadcast_max_rounds_per_session;
-        let round_delay = self.cfg.local.broadcast_round_delay_ms as f64;
+        let round_delay = f64::from(self.cfg.local.broadcast_round_delay_ms);
 
         let exp_slowdown_offset = 3 * expected_rounds;
 
@@ -529,9 +529,10 @@ impl ConsensusEngine {
             timing_prom.observe_duration();
         }
 
-        if audit.net_assets().milli_sat < 0 {
-            panic!("Balance sheet of the fed has gone negative, this should never happen! {audit}")
-        }
+        assert!(
+            audit.net_assets().milli_sat >= 0,
+            "Balance sheet of the fed has gone negative, this should never happen! {audit}"
+        );
 
         dbtx.commit_tx_result()
             .await
@@ -579,7 +580,7 @@ impl ConsensusEngine {
                 let modules_ids = transaction
                     .outputs
                     .iter()
-                    .map(|output| output.module_instance_id())
+                    .map(DynOutput::module_instance_id)
                     .collect::<Vec<_>>();
 
                 process_transaction_with_dbtx(self.modules.clone(), dbtx, transaction)
@@ -615,7 +616,7 @@ impl ConsensusEngine {
             .try_into_inner(&decoders)
         {
             Ok(signed_session_outcome) => {
-                match signed_session_outcome.signatures.len() == keychain.threshold()
+                if signed_session_outcome.signatures.len() == keychain.threshold()
                     && signed_session_outcome
                         .signatures
                         .iter()
@@ -625,9 +626,11 @@ impl ConsensusEngine {
                                 sig,
                                 to_node_index(*peer_id),
                             )
-                        }) {
-                    true => Ok(signed_session_outcome),
-                    false => Err(anyhow!("Invalid signatures")),
+                        })
+                {
+                    Ok(signed_session_outcome)
+                } else {
+                    Err(anyhow!("Invalid signatures"))
                 }
             }
             Err(error) => Err(anyhow!(error.to_string())),
@@ -650,7 +653,7 @@ impl ConsensusEngine {
             match result {
                 Ok(signed_session_outcome) => return signed_session_outcome,
                 Err(error) => {
-                    tracing::error!(target: LOG_CONSENSUS, "Error while requesting signed session outcome: {}", error)
+                    tracing::error!(target: LOG_CONSENSUS, "Error while requesting signed session outcome: {}", error);
                 }
             }
         }
@@ -668,6 +671,5 @@ pub async fn get_finished_session_count_static(dbtx: &mut DatabaseTransaction<'_
         .await
         .next()
         .await
-        .map(|entry| (entry.0 .0) + 1)
-        .unwrap_or(0)
+        .map_or(0, |entry| (entry.0 .0) + 1)
 }

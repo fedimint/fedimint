@@ -54,7 +54,7 @@ pub struct GatewayLndClient {
 }
 
 impl GatewayLndClient {
-    pub async fn new(
+    pub fn new(
         address: String,
         tls_cert: String,
         macaroon: String,
@@ -351,7 +351,7 @@ impl ILnRpcClient for GatewayLndClient {
         channels.truncate(num_route_hints);
 
         let mut route_hints: Vec<RouteHint> = vec![];
-        for chan in channels.iter() {
+        for chan in &channels {
             let info = client
                 .lightning()
                 .get_chan_info(ChanInfoRequest {
@@ -363,9 +363,8 @@ impl ILnRpcClient for GatewayLndClient {
                 })?
                 .into_inner();
 
-            let policy = match info.node1_policy.clone() {
-                Some(policy) => policy,
-                None => continue,
+            let Some(policy) = info.node1_policy.clone() else {
+                continue;
             };
             let src_node_id = PublicKey::from_str(&chan.remote_pubkey)
                 .unwrap()
@@ -563,15 +562,12 @@ impl ILnRpcClient for GatewayLndClient {
             gateway_sender.clone(),
         )
         .await?;
-        let new_client = Arc::new(
-            Self::new(
-                self.address.clone(),
-                self.tls_cert.clone(),
-                self.macaroon.clone(),
-                Some(lnd_sender.clone()),
-            )
-            .await,
-        );
+        let new_client = Arc::new(Self::new(
+            self.address.clone(),
+            self.tls_cert.clone(),
+            self.macaroon.clone(),
+            Some(lnd_sender.clone()),
+        ));
         Ok((Box::pin(ReceiverStream::new(gateway_receiver)), new_client))
     }
 
@@ -636,14 +632,14 @@ impl ILnRpcClient for GatewayLndClient {
                 memo: description,
                 hash: create_invoice_request.payment_hash,
                 value_msat: create_invoice_request.amount_msat as i64,
-                expiry: create_invoice_request.expiry as i64,
+                expiry: i64::from(create_invoice_request.expiry),
                 ..Default::default()
             },
             Description::Hash(desc_hash) => AddHoldInvoiceRequest {
                 description_hash: desc_hash,
                 hash: create_invoice_request.payment_hash,
                 value_msat: create_invoice_request.amount_msat as i64,
-                expiry: create_invoice_request.expiry as i64,
+                expiry: i64::from(create_invoice_request.expiry),
                 ..Default::default()
             },
         };
@@ -692,8 +688,8 @@ impl ILnRpcClient for GatewayLndClient {
         match client
             .wallet()
             .next_addr(AddrRequest {
-                account: "".to_string(), // Default wallet account.
-                r#type: 4,               // Taproot address.
+                account: String::new(), // Default wallet account.
+                r#type: 4,              // Taproot address.
                 change: false,
             })
             .await
@@ -873,7 +869,7 @@ fn route_hints_to_lnd(
                     chan_id: hop.short_channel_id,
                     fee_base_msat: hop.base_msat,
                     fee_proportional_millionths: hop.proportional_millionths,
-                    cltv_expiry_delta: hop.cltv_expiry_delta as u32,
+                    cltv_expiry_delta: u32::from(hop.cltv_expiry_delta),
                 })
                 .collect(),
         })

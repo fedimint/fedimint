@@ -197,7 +197,7 @@ impl ConsensusApi {
         let status_by_peer = peers_connection_status
             .into_iter()
             .map(|(peer, connection_status)| {
-                let last_contribution = last_ci_by_peer.get(&peer).cloned();
+                let last_contribution = last_ci_by_peer.get(&peer).copied();
                 let flagged = last_contribution.unwrap_or(0) + 1 < session_count;
 
                 let consensus_status = PeerStatus {
@@ -255,7 +255,7 @@ impl ConsensusApi {
                     &mut audit,
                     module_instance_id,
                 )
-                .await
+                .await;
         }
         Ok(AuditSummary::from_audit(
             &audit,
@@ -267,10 +267,7 @@ impl ConsensusApi {
     /// guardians can download. Private keys are encrypted with the guardian
     /// password, so it should be safe to store anywhere, this also means the
     /// backup is useless without the password.
-    async fn get_guardian_config_backup(
-        &self,
-        password: String,
-    ) -> ApiResult<GuardianConfigBackup> {
+    fn get_guardian_config_backup(&self, password: &str) -> GuardianConfigBackup {
         let mut tar_archive_builder = tar::Builder::new(Vec::new());
 
         let mut append = |name: &Path, data: &[u8]| {
@@ -304,7 +301,7 @@ impl ConsensusApi {
 
         let private_config_bytes =
             serde_json::to_vec(&self.cfg.private).expect("Error encoding private config");
-        let encryption_key = get_encryption_key(&password, &encryption_salt)
+        let encryption_key = get_encryption_key(password, &encryption_salt)
             .expect("Generating key from password failed");
         let private_config_encrypted =
             hex::encode(encrypt(private_config_bytes, &encryption_key).expect("Encryption failed"));
@@ -317,7 +314,7 @@ impl ConsensusApi {
             .into_inner()
             .expect("Error building tar archive");
 
-        Ok(GuardianConfigBackup { tar_archive_bytes })
+        GuardianConfigBackup { tar_archive_bytes }
     }
 
     async fn handle_backup_request<'s, 'dbtx, 'a>(
@@ -346,7 +343,7 @@ impl ConsensusApi {
                 &ClientBackupKey(request.id),
                 &ClientBackupSnapshot {
                     timestamp: request.timestamp,
-                    data: request.payload.to_vec(),
+                    data: request.payload.clone(),
                 },
             )
             .await
@@ -379,7 +376,7 @@ impl HasApiContext<ConsensusApi> for ConsensusApi {
         let mut dbtx = self.db.begin_transaction().await;
         if let Some(id) = id {
             db = self.db.with_prefix_module_id(id);
-            dbtx = dbtx.with_prefix_module_id(id)
+            dbtx = dbtx.with_prefix_module_id(id);
         }
         (
             self,
@@ -544,7 +541,7 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConsensusApi>> {
             async |fedimint: &ConsensusApi, context, _v: ()| -> GuardianConfigBackup {
                 check_auth(context)?;
                 let password = context.request_auth().expect("Auth was checked before").0;
-                Ok(fedimint.get_guardian_config_backup(password).await?)
+                Ok(fedimint.get_guardian_config_backup(&password))
             }
         },
         api_endpoint! {

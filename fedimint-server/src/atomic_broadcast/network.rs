@@ -57,7 +57,7 @@ impl aleph_bft::Network<NetworkData> for Network {
         // parity_scale_codec::Encode to serialize it such that Message can
         // implement Encodable
         self.connections
-            .send_sync(Message(network_data.encode()), recipient);
+            .send_sync(&Message(network_data.encode()), recipient);
     }
 
     async fn next_event(&mut self) -> Option<NetworkData> {

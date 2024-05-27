@@ -60,7 +60,7 @@ impl<F: Future<Output = MethodResponse>> Future for ResponseFuture<F> {
                             "default"
                         },
                     ])
-                    .inc()
+                    .inc();
             }
         }
         res

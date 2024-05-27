@@ -24,11 +24,11 @@ impl<'ci> fmt::Debug for FmtDbgConsensusItem<'ci> {
                 ))?;
                 // TODO: This is kind of lengthy, and maybe could be conditionally enabled
                 // via an env var or something.
-                for input in tx.inputs.iter() {
+                for input in &tx.inputs {
                     // TODO: add pretty print fn to interface
                     f.write_fmt(format_args!("\n    Input: {input}"))?;
                 }
-                for output in tx.outputs.iter() {
+                for output in &tx.outputs {
                     f.write_fmt(format_args!("\n    Output: {output}")).unwrap();
                 }
             }

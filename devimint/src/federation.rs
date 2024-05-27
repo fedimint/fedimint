@@ -226,7 +226,7 @@ impl Federation {
         let params: HashMap<PeerId, ConfigGenParams> = local_config_gen_params(
             &peers,
             process_mgr.globals.FM_PORT_FEDIMINTD_BASE,
-            ServerModuleConfigGenParamsRegistry::default(),
+            &ServerModuleConfigGenParamsRegistry::default(),
         )?;
 
         let mut admin_clients: BTreeMap<PeerId, DynGlobalApi> = BTreeMap::new();

@@ -27,7 +27,7 @@ pub struct LockedBuilder {
 
 impl LockedBuilder {
     /// Create a [`Self`] by acquiring a lock file
-    pub async fn new(lock_path: &Path) -> anyhow::Result<LockedBuilder> {
+    pub fn new(lock_path: &Path) -> anyhow::Result<LockedBuilder> {
         block_in_place(|| {
             let file = std::fs::OpenOptions::new()
                 .write(true)

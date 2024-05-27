@@ -205,15 +205,18 @@ impl LightningBuilder for GatewayLightningBuilder {
     async fn build(&self) -> Box<dyn ILnRpcClient> {
         match self.lightning_mode.clone() {
             LightningMode::Cln { cln_extension_addr } => {
-                Box::new(NetworkLnRpcClient::new(cln_extension_addr).await)
+                Box::new(NetworkLnRpcClient::new(cln_extension_addr))
             }
             LightningMode::Lnd {
                 lnd_rpc_addr,
                 lnd_tls_cert,
                 lnd_macaroon,
-            } => Box::new(
-                GatewayLndClient::new(lnd_rpc_addr, lnd_tls_cert, lnd_macaroon, None).await,
-            ),
+            } => Box::new(GatewayLndClient::new(
+                lnd_rpc_addr,
+                lnd_tls_cert,
+                lnd_macaroon,
+                None,
+            )),
         }
     }
 }

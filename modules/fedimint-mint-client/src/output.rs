@@ -290,7 +290,7 @@ pub fn verify_blind_share(
     decoder: &Decoder,
     peer_tbs_pks: &BTreeMap<PeerId, Tiered<PublicKeyShare>>,
 ) -> anyhow::Result<BlindedSignatureShare> {
-    let outcome = deserialize_outcome::<MintOutputOutcome>(outcome.clone(), decoder)?;
+    let outcome = deserialize_outcome::<MintOutputOutcome>(&outcome, decoder)?;
 
     let blinded_signature_share = outcome
         .ensure_v0_ref()

@@ -741,7 +741,6 @@ impl ClientModule for MintClientModule {
         Box::pin(
             self.notifier
                 .subscribe_all_operations()
-                .await
                 .filter_map(|state| async move {
                     match state {
                         MintClientStateMachines::Output(MintOutputStateMachine {

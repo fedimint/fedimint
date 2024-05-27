@@ -548,12 +548,12 @@ impl ClientHandle {
     }
 
     pub async fn start_executor(&self) {
-        self.as_inner().start_executor().await
+        self.as_inner().start_executor().await;
     }
 
     /// Shutdown the client.
     pub async fn shutdown(mut self) {
-        self.shutdown_inner().await
+        self.shutdown_inner().await;
     }
 
     async fn shutdown_inner(&mut self) {
@@ -810,16 +810,15 @@ impl Client {
         let mut dbtx = db.begin_transaction().await;
 
         // Don't overwrite an existing secret
-        match dbtx.get_value(&EncodedClientSecretKey).await {
-            Some(_) => bail!("Encoded client secret already exists, cannot overwrite"),
-            None => {
-                let encoded_secret = T::consensus_encode_to_vec(&secret);
-                dbtx.insert_entry(&EncodedClientSecretKey, &encoded_secret)
-                    .await;
-                dbtx.commit_tx().await;
-                Ok(())
-            }
+        if dbtx.get_value(&EncodedClientSecretKey).await.is_some() {
+            bail!("Encoded client secret already exists, cannot overwrite")
         }
+
+        let encoded_secret = T::consensus_encode_to_vec(&secret);
+        dbtx.insert_entry(&EncodedClientSecretKey, &encoded_secret)
+            .await;
+        dbtx.commit_tx().await;
+        Ok(())
     }
 
     pub async fn load_decodable_client_secret<T: Decodable>(db: &Database) -> anyhow::Result<T> {
@@ -846,16 +845,16 @@ impl Client {
     }
 
     pub async fn load_or_generate_client_secret(db: &Database) -> anyhow::Result<[u8; 64]> {
-        let client_secret = match Self::load_decodable_client_secret::<[u8; 64]>(db).await {
-            Ok(secret) => secret,
-            Err(_) => {
+        let client_secret =
+            if let Ok(secret) = Self::load_decodable_client_secret::<[u8; 64]>(db).await {
+                secret
+            } else {
                 let secret = PlainRootSecretStrategy::random(&mut thread_rng());
                 Self::store_encodable_client_secret(db, secret)
                     .await
                     .expect("Storing client secret must work");
                 secret
-            }
-        };
+            };
         Ok(client_secret)
     }
 
@@ -1258,8 +1257,7 @@ impl Client {
         if self
             .modules
             .get_with_kind(self.primary_module_instance)
-            .map(|(kind, _)| kind == module_kind)
-            .unwrap_or(false)
+            .is_some_and(|(kind, _)| kind == module_kind)
         {
             return Some(self.primary_module_instance);
         }
@@ -1319,8 +1317,9 @@ impl Client {
                             config
                                 .clone()
                                 .decoded()
-                                .map(|decoded| decoded.to_json().into())
-                                .unwrap_or(serde_json::Value::Null),
+                                .map_or(serde_json::Value::Null, |decoded| {
+                                    decoded.to_json().into()
+                                }),
                         ),
                     )
                 })
@@ -1448,7 +1447,7 @@ impl Client {
     }
 
     /// [`SupportedApiVersionsSummary`] that the client and its modules support
-    pub async fn supported_api_versions_summary_static(
+    pub fn supported_api_versions_summary_static(
         config: &ClientConfig,
         client_module_init: &ClientModuleInitRegistry,
     ) -> SupportedApiVersionsSummary {
@@ -1577,7 +1576,7 @@ impl Client {
         let peer_api_version_sets = Self::load_peers_last_api_versions(db, num_peers).await;
 
         let common_api_versions = discover_common_api_versions_set(
-            &Self::supported_api_versions_summary_static(config, client_module_init).await,
+            &Self::supported_api_versions_summary_static(config, client_module_init),
             peer_api_version_sets,
         )?;
 
@@ -1624,10 +1623,10 @@ impl Client {
                 None,
             )
             .await
-            .expect("Failed to autocommit metadata")
+            .expect("Failed to autocommit metadata");
     }
 
-    pub async fn has_pending_recoveries(&self) -> bool {
+    pub fn has_pending_recoveries(&self) -> bool {
         !self
             .client_recovery_progress_receiver
             .borrow()
@@ -1702,7 +1701,7 @@ impl Client {
         dbtx.insert_new_entry(&ClientMetadataKey, metadata).await;
     }
 
-    async fn spawn_module_recoveries_task(
+    fn spawn_module_recoveries_task(
         &self,
         recovery_sender: watch::Sender<BTreeMap<ModuleInstanceId, RecoveryProgress>>,
         module_recoveries: BTreeMap<
@@ -1723,7 +1722,7 @@ impl Client {
                     module_recoveries,
                     module_recovery_progress_receivers,
                 )
-                .await
+                .await;
             });
     }
 
@@ -1743,7 +1742,7 @@ impl Client {
         let mut completed_stream = Vec::new();
         let progress_stream = futures::stream::FuturesUnordered::new();
 
-        for (module_instance_id, f) in module_recoveries.into_iter() {
+        for (module_instance_id, f) in module_recoveries {
             completed_stream.push(futures::stream::once(Box::pin(async move {
                 match f.await {
                     Ok(_) => (module_instance_id, None),
@@ -1759,7 +1758,7 @@ impl Client {
             })));
         }
 
-        for (module_instance_id, rx) in module_recovery_progress_receivers.into_iter() {
+        for (module_instance_id, rx) in module_recovery_progress_receivers {
             progress_stream.push(
                 tokio_stream::wrappers::WatchStream::new(rx)
                     .fuse()
@@ -1923,7 +1922,7 @@ impl ClientBuilder {
         assert!(
             !was_replaced,
             "Only one primary module can be given to the builder."
-        )
+        );
     }
 
     pub fn with_meta_service(&mut self, meta_service: Arc<MetaService>) {
@@ -2006,8 +2005,7 @@ impl ClientBuilder {
             let metadata = init_state
                 .does_require_recovery()
                 .flatten()
-                .map(|s| s.metadata)
-                .unwrap_or(Metadata::empty());
+                .map_or(Metadata::empty(), |s| s.metadata);
 
             dbtx.insert_new_entry(&ClientMetadataKey, &metadata).await;
 
@@ -2156,7 +2154,7 @@ impl ClientBuilder {
         let api_secret = Client::get_api_secret_from_db(&self.db_no_decoders).await;
         let stopped = self.stopped;
 
-        let client = self.build_stopped(root_secret, config, api_secret).await?;
+        let client = self.build_stopped(root_secret, &config, api_secret).await?;
         if !stopped {
             client.as_inner().start_executor().await;
         }
@@ -2171,7 +2169,7 @@ impl ClientBuilder {
         api_secret: Option<String>,
         stopped: bool,
     ) -> anyhow::Result<ClientHandle> {
-        let client = self.build_stopped(root_secret, config, api_secret).await?;
+        let client = self.build_stopped(root_secret, &config, api_secret).await?;
         if !stopped {
             client.as_inner().start_executor().await;
         }
@@ -2183,10 +2181,10 @@ impl ClientBuilder {
     async fn build_stopped(
         self,
         root_secret: DerivableSecret,
-        config: ClientConfig,
+        config: &ClientConfig,
         api_secret: Option<String>,
     ) -> anyhow::Result<ClientHandle> {
-        let decoders = self.decoders(&config);
+        let decoders = self.decoders(config);
         let config = Self::config_decoded(config, &decoders)?;
         let fed_id = config.calculate_federation_id();
         let db = self.db_no_decoders.with_decoders(decoders.clone());
@@ -2287,7 +2285,7 @@ impl ClientBuilder {
                                             notifier.clone(),
                                             api.clone(),
                                         admin_auth,
-                                            snapshot.as_ref().and_then(|s| s.modules.get(&module_instance_id).to_owned()),
+                                            snapshot.as_ref().and_then(|s| s.modules.get(&module_instance_id)),
                                             progress_tx,
                                         )
                                         .await
@@ -2393,20 +2391,17 @@ impl ClientBuilder {
                 executor_builder.with_module_dyn(module.context(module_instance_id));
             }
 
-            for (module_instance_id, _) in module_recoveries.iter() {
+            for module_instance_id in module_recoveries.keys() {
                 executor_builder.with_valid_module_id(*module_instance_id);
             }
 
-            executor_builder
-                .build(db.clone(), notifier, task_group.clone())
-                .await
+            executor_builder.build(db.clone(), notifier, task_group.clone())
         };
 
-        let recovery_receiver_init_val = BTreeMap::from_iter(
-            module_recovery_progress_receivers
-                .iter()
-                .map(|(module_instance_id, rx)| (*module_instance_id, *rx.borrow())),
-        );
+        let recovery_receiver_init_val = module_recovery_progress_receivers
+            .iter()
+            .map(|(module_instance_id, rx)| (*module_instance_id, *rx.borrow()))
+            .collect::<BTreeMap<_, _>>();
         let (client_recovery_progress_sender, client_recovery_progress_receiver) =
             watch::channel(recovery_receiver_init_val);
 
@@ -2437,7 +2432,7 @@ impl ClientBuilder {
                     client_inner
                         .meta_service
                         .update_continuously(&client_inner)
-                        .await
+                        .await;
                 }
             });
 
@@ -2446,13 +2441,11 @@ impl ClientBuilder {
         final_client.set(client_arc.downgrade());
 
         if !module_recoveries.is_empty() {
-            client_arc
-                .spawn_module_recoveries_task(
-                    client_recovery_progress_sender,
-                    module_recoveries,
-                    module_recovery_progress_receivers,
-                )
-                .await;
+            client_arc.spawn_module_recoveries_task(
+                client_recovery_progress_sender,
+                module_recoveries,
+                module_recovery_progress_receivers,
+            );
         }
 
         Ok(client_arc)
@@ -2489,7 +2482,7 @@ impl ClientBuilder {
     }
 
     fn config_decoded(
-        config: ClientConfig,
+        config: &ClientConfig,
         decoders: &ModuleDecoderRegistry,
     ) -> Result<ClientConfig, fedimint_core::encoding::DecodeError> {
         config.clone().redecode_raw(decoders)

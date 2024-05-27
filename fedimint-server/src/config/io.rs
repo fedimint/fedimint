@@ -1,7 +1,7 @@
 use std::fmt::Display;
 use std::fs;
 use std::io::Write;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use fedimint_aead::{encrypted_read, encrypted_write, get_encryption_key, LessSafeKey};
 use fedimint_core::config::ServerModuleInitRegistry;
@@ -45,19 +45,19 @@ pub const ENCRYPTED_EXT: &str = "encrypt";
 pub const CONFIG_STAGING_DIR: &str = "cfg_staging";
 
 /// Reads the server from the local, private, and consensus cfg files
-pub fn read_server_config(password: &str, path: PathBuf) -> anyhow::Result<ServerConfig> {
+pub fn read_server_config(password: &str, path: &Path) -> anyhow::Result<ServerConfig> {
     let salt = fs::read_to_string(path.join(SALT_FILE))?;
     let key = get_encryption_key(password, &salt)?;
 
     Ok(ServerConfig {
-        consensus: plaintext_json_read(path.join(CONSENSUS_CONFIG))?,
-        local: plaintext_json_read(path.join(LOCAL_CONFIG))?,
-        private: encrypted_json_read(&key, path.join(PRIVATE_CONFIG))?,
+        consensus: plaintext_json_read(&path.join(CONSENSUS_CONFIG))?,
+        local: plaintext_json_read(&path.join(LOCAL_CONFIG))?,
+        private: encrypted_json_read(&key, &path.join(PRIVATE_CONFIG))?,
     })
 }
 
 /// Reads a plaintext json file into a struct
-fn plaintext_json_read<T: Serialize + DeserializeOwned>(path: PathBuf) -> anyhow::Result<T> {
+fn plaintext_json_read<T: Serialize + DeserializeOwned>(path: &Path) -> anyhow::Result<T> {
     let string = fs::read_to_string(path.with_extension(JSON_EXT))?;
     Ok(serde_json::from_str(&string)?)
 }
@@ -65,7 +65,7 @@ fn plaintext_json_read<T: Serialize + DeserializeOwned>(path: PathBuf) -> anyhow
 /// Reads an encrypted json file into a struct
 fn encrypted_json_read<T: Serialize + DeserializeOwned>(
     key: &LessSafeKey,
-    path: PathBuf,
+    path: &Path,
 ) -> anyhow::Result<T> {
     let decrypted = encrypted_read(key, path.with_extension(ENCRYPTED_EXT));
     let string = String::from_utf8(decrypted?)?;
@@ -75,7 +75,7 @@ fn encrypted_json_read<T: Serialize + DeserializeOwned>(
 /// Writes the server into configuration files (private keys encrypted)
 pub fn write_server_config(
     server: &ServerConfig,
-    path: PathBuf,
+    path: &Path,
     password: &str,
     module_config_gens: &ServerModuleInitRegistry,
     api_secret: Option<String>,
@@ -84,20 +84,20 @@ pub fn write_server_config(
     let key = get_encryption_key(password, &salt)?;
 
     let client_config = server.consensus.to_client_config(module_config_gens)?;
-    plaintext_json_write(&server.local, path.join(LOCAL_CONFIG))?;
-    plaintext_json_write(&server.consensus, path.join(CONSENSUS_CONFIG))?;
+    plaintext_json_write(&server.local, &path.join(LOCAL_CONFIG))?;
+    plaintext_json_write(&server.consensus, &path.join(CONSENSUS_CONFIG))?;
     plaintext_display_write(
         &server.get_invite_code(api_secret),
         &path.join(CLIENT_INVITE_CODE_FILE),
     )?;
-    plaintext_json_write(&client_config, path.join(CLIENT_CONFIG))?;
-    encrypted_json_write(&server.private, &key, path.join(PRIVATE_CONFIG))
+    plaintext_json_write(&client_config, &path.join(CLIENT_CONFIG))?;
+    encrypted_json_write(&server.private, &key, &path.join(PRIVATE_CONFIG))
 }
 
 /// Writes struct into a plaintext json file
 fn plaintext_json_write<T: Serialize + DeserializeOwned>(
     obj: &T,
-    path: PathBuf,
+    path: &Path,
 ) -> anyhow::Result<()> {
     let file = fs::File::options()
         .create_new(true)
@@ -121,7 +121,7 @@ fn plaintext_display_write<T: Display>(obj: &T, path: &Path) -> anyhow::Result<(
 fn encrypted_json_write<T: Serialize + DeserializeOwned>(
     obj: &T,
     key: &LessSafeKey,
-    path: PathBuf,
+    path: &Path,
 ) -> anyhow::Result<()> {
     let bytes = serde_json::to_string(obj)?.into_bytes();
     encrypted_write(bytes, key, path.with_extension(ENCRYPTED_EXT))

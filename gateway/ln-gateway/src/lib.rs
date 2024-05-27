@@ -383,7 +383,7 @@ impl Gateway {
         registry.attach(MintClientInit);
         registry.attach(WalletClientInit::default());
 
-        let decoders = registry.available_decoders(DEFAULT_MODULE_KINDS.iter().cloned())?;
+        let decoders = registry.available_decoders(DEFAULT_MODULE_KINDS.iter().copied())?;
 
         let gateway_db = Database::new(
             fedimint_rocksdb::RocksDb::open(opts.data_dir.join(DB_FILE))?,
@@ -516,9 +516,9 @@ impl Gateway {
     /// begins listening for intercepted HTLCs, and starts the webserver to
     /// service requests.
     pub async fn run(mut self, tg: &mut TaskGroup) -> anyhow::Result<TaskShutdownToken> {
-        self.register_clients_timer(tg).await;
+        self.register_clients_timer(tg);
         self.load_clients().await;
-        self.start_gateway(tg).await?;
+        self.start_gateway(tg);
         // start webserver last to avoid handling requests before fully initialized
         run_webserver(self.clone(), tg).await?;
         let handle = tg.make_handle();
@@ -528,7 +528,7 @@ impl Gateway {
 
     /// Begins the task for listening for intercepted HTLCs from the Lightning
     /// node.
-    async fn start_gateway(&self, task_group: &mut TaskGroup) -> Result<()> {
+    fn start_gateway(&self, task_group: &mut TaskGroup) {
         let mut self_copy = self.clone();
         let tg = task_group.clone();
         task_group.spawn("Subscribe to intercepted HTLCs in stream", move |handle| async move {
@@ -591,15 +591,12 @@ impl Gateway {
                                 }).await;
 
                                 // Blocks until the connection to the lightning node breaks or we receive the shutdown signal
-                                match handle.cancel_on_shutdown(self_copy.handle_htlc_stream(stream, handle.clone())).await {
-                                    Ok(_) => {
-                                        warn!("HTLC Stream Lightning connection broken. Gateway is disconnected");
-                                    },
-                                    Err(_) => {
-                                        info!("Received shutdown signal");
-                                        self_copy.handle_disconnect(htlc_task_group).await;
-                                        break;
-                                    }
+                                if handle.cancel_on_shutdown(self_copy.handle_htlc_stream(stream, handle.clone())).await.is_ok() {
+                                    warn!("HTLC Stream Lightning connection broken. Gateway is disconnected");
+                                } else {
+                                    info!("Received shutdown signal");
+                                    self_copy.handle_disconnect(htlc_task_group).await;
+                                    break;
                                 }
                             }
                             Err(e) => {
@@ -618,8 +615,6 @@ impl Gateway {
                 sleep(Duration::from_secs(5)).await;
             }
         });
-
-        Ok(())
     }
 
     /// Utility function for waiting for the task that is listening for
@@ -709,13 +704,11 @@ impl Gateway {
                                                     return Some(ControlFlow::<(), ()>::Continue(()))
                                                 }
                                                 Err(e) => {
-                                                    info!(
-                                                    "Got error intercepting HTLC: {e:?}, will retry..."
-                                                )
+                                                    info!("Got error intercepting HTLC: {e:?}, will retry...");
                                                 }
                                             }
                                         } else {
-                                            info!("Got no HTLC result")
+                                            info!("Got no HTLC result");
                                         }
                                         None
                                     })
@@ -724,7 +717,7 @@ impl Gateway {
                                     continue;
                                 }
                             } else {
-                                info!("Got no client result")
+                                info!("Got no client result");
                             }
                         }
                     }
@@ -1044,8 +1037,7 @@ impl Gateway {
                 routing_fees: Some(gateway_config.routing_fees.into()),
             };
 
-            self.check_federation_network(&federation_info, gateway_config.network)
-                .await?;
+            Self::check_federation_network(&federation_info, gateway_config.network)?;
 
             client
                 .get_first_module::<GatewayClientModule>()
@@ -1128,7 +1120,7 @@ impl Gateway {
 
     /// Handles a request for the gateway to backup a connected federation's
     /// ecash. Not currently supported.
-    pub async fn handle_backup_msg(
+    pub fn handle_backup_msg(
         &self,
         BackupPayload { federation_id: _ }: BackupPayload,
     ) -> Result<()> {
@@ -1137,7 +1129,7 @@ impl Gateway {
 
     /// Handles a request for the gateway to restore a connected federation's
     /// ecash. Not currently supported.
-    pub async fn handle_restore_msg(
+    pub fn handle_restore_msg(
         &self,
         RestorePayload { federation_id: _ }: RestorePayload,
     ) -> Result<()> {
@@ -1226,7 +1218,7 @@ impl Gateway {
 
         let mut register_federations: Vec<(FederationId, FederationConfig)> = Vec::new();
         if let Some(per_federation_routing_fees) = per_federation_routing_fees {
-            for (federation_id, routing_fees) in per_federation_routing_fees.iter() {
+            for (federation_id, routing_fees) in &per_federation_routing_fees {
                 let federation_key = FederationIdKey { id: *federation_id };
                 if let Some(mut federation_config) = dbtx.get_value(&federation_key).await {
                     federation_config.fees = routing_fees.clone().into();
@@ -1281,7 +1273,7 @@ impl Gateway {
         let context = self.get_lightning_context().await?;
         let response = context.lnrpc.get_funding_address().await?;
         Address::from_str(&response.address)
-            .map(|address| address.assume_checked())
+            .map(Address::assume_checked)
             .map_err(|e| GatewayError::LightningResponseParseError(e.into()))
     }
 
@@ -1359,7 +1351,7 @@ impl Gateway {
                             REGISTER_GATEWAY_ENDPOINT,
                             serde_json::Value::Null,
                             anyhow::anyhow!("Error registering federation {federation_id}: {e:?}"),
-                        )))?
+                        )))?;
                     }
                 }
             }
@@ -1502,7 +1494,7 @@ impl Gateway {
     /// connected federations every 8.5 mins. Only registers the Gateway if it
     /// has successfully connected to the Lightning node, so that it can
     /// include route hints in the registration.
-    async fn register_clients_timer(&mut self, task_group: &mut TaskGroup) {
+    fn register_clients_timer(&mut self, task_group: &mut TaskGroup) {
         let gateway = self.clone();
         task_group.spawn_cancellable("register clients", async move {
             loop {
@@ -1602,11 +1594,7 @@ impl Gateway {
 
     /// Verifies that the supplied `network` matches the Bitcoin network in the
     /// connected client's configuration.
-    async fn check_federation_network(
-        &self,
-        info: &FederationInfo,
-        network: Network,
-    ) -> Result<()> {
+    fn check_federation_network(info: &FederationInfo, network: Network) -> Result<()> {
         let cfg = info
             .config
             .modules

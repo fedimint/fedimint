@@ -160,5 +160,5 @@ pub(crate) async fn initialize_gauge_metrics(db: &Database) {
             .await
             .count()
             .await as i64,
-    )
+    );
 }

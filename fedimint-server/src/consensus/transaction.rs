@@ -22,7 +22,7 @@ pub async fn process_transaction_with_dbtx(
     let mut funding_verifier = FundingVerifier::default();
     let mut public_keys = Vec::new();
 
-    for input in transaction.inputs.iter() {
+    for input in &transaction.inputs {
         let meta = modules
             .get_expect(input.module_instance_id())
             .process_input(

@@ -172,8 +172,7 @@ where
                 connection_receiver,
                 status_query_receiver,
                 task_group,
-            )
-            .await;
+            );
 
             connection_senders.insert(*peer, connection_sender);
             status_query_senders.insert(*peer, status_query_sender);
@@ -257,7 +256,7 @@ where
         // never going to be any message. This avoids panic on `select_all` with
         // no futures.
         if self.connections.is_empty() {
-            std::future::pending().await
+            std::future::pending::<T>().await;
         }
 
         // TODO: optimize, don't throw away remaining futures
@@ -338,28 +337,22 @@ where
     ) -> Option<PeerConnectionState<M>> {
         Some(tokio::select! {
             maybe_msg = self.outgoing.recv() => {
-                match maybe_msg {
-                    Some(msg) => {
-                        self.send_message_connected(connected, msg).await
-                    },
-                    None => {
-                        debug!(target: LOG_NET_PEER, "Exiting peer connection IO task - parent disconnected");
-                        return None;
-                    },
+                if let Some(msg) = maybe_msg {
+                    self.send_message_connected(connected, msg).await
+                } else {
+                    debug!(target: LOG_NET_PEER, "Exiting peer connection IO task - parent disconnected");
+                    return None;
                 }
             },
             new_connection_res = self.incoming_connections.recv() => {
-                match new_connection_res {
-                    Some(new_connection) => {
-                        debug!(target: LOG_NET_PEER, "Replacing existing connection");
-                        self.connect(new_connection, 0).await
-                    },
-                    None => {
-                        debug!(
-                        target: LOG_NET_PEER,
-                            "Exiting peer connection IO task - parent disconnected");
-                        return None;
-                    },
+                if let Some(new_connection) = new_connection_res {
+                    debug!(target: LOG_NET_PEER, "Replacing existing connection");
+                    self.connect(new_connection, 0).await
+                } else {
+                    debug!(
+                    target: LOG_NET_PEER,
+                        "Exiting peer connection IO task - parent disconnected");
+                    return None;
                 }
             },
             Some(status_query) = self.status_query_receiver.recv() => {
@@ -396,7 +389,7 @@ where
                 connection: new_connection,
                 next_ping: Instant::now(),
             }),
-            Err(e) => self.disconnect_err(e, disconnect_count),
+            Err(e) => self.disconnect_err(&e, disconnect_count),
         }
     }
 
@@ -410,7 +403,7 @@ where
                     msg: Some(msg),
                     ack: self.last_received,
                 })
-                .await?
+                .await?;
         }
 
         Ok(())
@@ -439,7 +432,7 @@ where
         })
     }
 
-    fn disconnect_err(&self, err: anyhow::Error, disconnect_count: u64) -> PeerConnectionState<M> {
+    fn disconnect_err(&self, err: &anyhow::Error, disconnect_count: u64) -> PeerConnectionState<M> {
         debug!(target: LOG_NET_PEER,
             our_id = ?self.our_id,
             peer = ?self.peer_id, %err, %disconnect_count, "Peer disconnected");
@@ -479,14 +472,14 @@ where
             })
             .await
         {
-            return self.disconnect_err(e, 0);
+            return self.disconnect_err(&e, 0);
         }
 
         connected.next_ping = Instant::now() + PING_INTERVAL;
 
         match connected.connection.flush().await {
             Ok(()) => PeerConnectionState::Connected(connected),
-            Err(e) => self.disconnect_err(e, 0),
+            Err(e) => self.disconnect_err(&e, 0),
         }
     }
 
@@ -499,7 +492,7 @@ where
             Ok(()) => PeerConnectionState::Connected(connected),
             Err(e) => {
                 self.last_received = None;
-                self.disconnect_err(e, 0)
+                self.disconnect_err(&e, 0)
             }
         }
     }
@@ -519,10 +512,7 @@ where
         if let Some(msg) = msg {
             trace!(target: LOG_NET_PEER, peer = ?self.peer_id, id = ?msg.id, "Received incoming message");
 
-            let expected = self
-                .last_received
-                .map(|last_id| last_id.increment())
-                .unwrap_or(msg.id);
+            let expected = self.last_received.map_or(msg.id, MessageId::increment);
 
             if msg.id < expected {
                 info!(target: LOG_NET_PEER,
@@ -558,24 +548,19 @@ where
     ) -> Option<PeerConnectionState<M>> {
         Some(tokio::select! {
             maybe_msg = self.outgoing.recv() => {
-                match maybe_msg {
-                    Some(msg) => {
-                        self.send_message(disconnected, msg).await}
-                    None => {
-                        debug!(target: LOG_NET_PEER, "Exiting peer connection IO task - parent disconnected");
-                        return None;
-                    }
+                if let Some(msg) = maybe_msg {
+                    self.send_message(disconnected, msg)
+                } else {
+                    debug!(target: LOG_NET_PEER, "Exiting peer connection IO task - parent disconnected");
+                    return None;
                 }
             },
             new_connection_res = self.incoming_connections.recv() => {
-                match new_connection_res {
-                    Some(new_connection) => {
-                        self.receive_connection(disconnected, new_connection).await
-                    },
-                    None => {
-                        debug!(target: LOG_NET_PEER, "Exiting peer connection IO task - parent disconnected");
-                        return None;
-                    },
+                if let Some(new_connection) = new_connection_res {
+                    self.receive_connection(disconnected, new_connection).await
+                } else {
+                    debug!(target: LOG_NET_PEER, "Exiting peer connection IO task - parent disconnected");
+                    return None;
                 }
             },
             Some(status_query) = self.status_query_receiver.recv() => {
@@ -595,7 +580,7 @@ where
         })
     }
 
-    async fn send_message(
+    fn send_message(
         &mut self,
         disconnected: DisconnectedPeerConnectionState,
         msg: M,
@@ -623,7 +608,7 @@ where
                 self.connect(conn, disconnected.failed_reconnect_counter)
                     .await
             }
-            Err(e) => self.disconnect_err(e, disconnected.failed_reconnect_counter),
+            Err(e) => self.disconnect_err(&e, disconnected.failed_reconnect_counter),
         }
     }
 
@@ -648,7 +633,7 @@ where
     M: Debug + Clone + Send + Sync + 'static,
 {
     #[allow(clippy::too_many_arguments)]
-    async fn new(
+    fn new(
         our_id: PeerId,
         peer_id: PeerId,
         peer_address: SafeUrl,
@@ -676,7 +661,7 @@ where
                     status_query_receiver,
                     &handle,
                 )
-                .await
+                .await;
             },
         );
 

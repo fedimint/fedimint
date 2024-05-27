@@ -19,7 +19,7 @@ impl DeriveableSecretClientExt for DerivableSecret {
     fn derive_module_secret(&self, module_instance_id: ModuleInstanceId) -> DerivableSecret {
         assert_eq!(self.level(), 0);
         self.child_key(TYPE_MODULE)
-            .child_key(ChildId(module_instance_id as u64))
+            .child_key(ChildId(u64::from(module_instance_id)))
     }
 
     fn derive_backup_secret(&self) -> DerivableSecret {
