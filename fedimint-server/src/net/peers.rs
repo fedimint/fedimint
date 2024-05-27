@@ -30,7 +30,7 @@ use tokio::sync::RwLock;
 use tokio::time::Instant;
 use tracing::{debug, info, instrument, trace, warn};
 
-use crate::atomic_broadcast::Recipient;
+use crate::consensus::aleph_bft::Recipient;
 use crate::metrics::{
     PEER_BANS_COUNT, PEER_CONNECT_COUNT, PEER_DISCONNECT_COUNT, PEER_MESSAGES_COUNT,
 };

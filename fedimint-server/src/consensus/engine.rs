@@ -29,13 +29,14 @@ use rand::Rng;
 use tokio::sync::{watch, RwLock};
 use tracing::{debug, info, instrument, warn, Level};
 
-use crate::atomic_broadcast::backup::{BackupReader, BackupWriter};
-use crate::atomic_broadcast::data_provider::{DataProvider, UnitData};
-use crate::atomic_broadcast::finalization_handler::FinalizationHandler;
-use crate::atomic_broadcast::network::Network;
-use crate::atomic_broadcast::spawner::Spawner;
-use crate::atomic_broadcast::{to_node_index, Keychain, Message};
 use crate::config::ServerConfig;
+use crate::consensus::aleph_bft::backup::{BackupReader, BackupWriter};
+use crate::consensus::aleph_bft::data_provider::{DataProvider, UnitData};
+use crate::consensus::aleph_bft::finalization_handler::FinalizationHandler;
+use crate::consensus::aleph_bft::keychain::Keychain;
+use crate::consensus::aleph_bft::network::Network;
+use crate::consensus::aleph_bft::spawner::Spawner;
+use crate::consensus::aleph_bft::{to_node_index, Message};
 use crate::consensus::db::{
     AcceptedItemKey, AcceptedItemPrefix, AcceptedTransactionKey, AlephUnitsPrefix,
     SignedSessionOutcomeKey, SignedSessionOutcomePrefix,
@@ -301,7 +302,7 @@ impl ConsensusEngine {
 
         // This method removes the backup of the current session from the database
         // and therefore has to be called after we have waited for the session to
-        // shutdown or we risk write-write conflicts with the UnitSaver
+        // shut down, or we risk write-write conflicts with the UnitSaver
         self.complete_session(session_index, signed_session_outcome)
             .await;
 
@@ -399,7 +400,7 @@ impl ConsensusEngine {
                 }
                 signed_session_outcome = self.request_signed_session_outcome(&self.federation_api, session_index) => {
                     // We check that the session outcome we have created agrees with the federations consensus
-                    assert!(header == signed_session_outcome.session_outcome.header(session_index));
+                    assert_eq!(header, signed_session_outcome.session_outcome.header(session_index));
 
                     return Ok(signed_session_outcome);
                 }
@@ -483,9 +484,9 @@ impl ConsensusEngine {
 
         dbtx.ignore_uncommitted();
 
-        // When we recover from a mid session crash aleph bft will replay the units that
-        // already were processed before the crash. We therefore skip all consensus
-        // items until we have seen all previously accepted items again.
+        // When we recover from a mid-session crash aleph bft will replay the units that
+        // were already processed before the crash. We therefore skip all consensus
+        // items until we have seen every previously accepted items again.
         if let Some(accepted_item) = dbtx
             .get_value(&AcceptedItemKey(item_index.to_owned()))
             .await
@@ -500,7 +501,7 @@ impl ConsensusEngine {
         self.process_consensus_item_with_db_transaction(&mut dbtx.to_ref_nc(), item.clone(), peer)
             .await?;
 
-        // After this point the we have to commit the database transaction since the
+        // After this point we have to commit the database transaction since the
         // item has been fully processed without errors
         dbtx.warn_uncommitted();
 

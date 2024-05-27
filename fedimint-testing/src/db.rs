@@ -407,8 +407,8 @@ fn open_temp_db_and_copy(
     Ok((Database::new(RocksDb::open(&tmp_dir)?, decoders), tmp_dir))
 }
 
-/// Helper function that recursively copies all of the contents from
-/// `atomic_broadcast` to `dst`.
+/// Helper function that recursively copies all contents from
+/// `src` to `dst`.
 pub fn copy_directory(src: &Path, dst: &Path) -> io::Result<()> {
     trace!(target: LOG_TEST, src = %src.display(), dst = %dst.display(), "Copy dir");
 

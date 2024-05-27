@@ -1,5 +1,6 @@
 #![allow(clippy::let_unit_value)]
 
+pub mod aleph_bft;
 pub mod api;
 pub mod db;
 pub mod debug_fmt;
@@ -29,8 +30,8 @@ use tokio::sync::watch;
 use tracing::info;
 use tracing::log::warn;
 
-use crate::atomic_broadcast::Keychain;
 use crate::config::{ServerConfig, ServerConfigLocal};
+use crate::consensus::aleph_bft::keychain::Keychain;
 use crate::consensus::api::ConsensusApi;
 use crate::consensus::engine::ConsensusEngine;
 use crate::net;
