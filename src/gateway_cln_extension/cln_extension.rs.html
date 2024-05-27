@@ -1625,7 +1625,7 @@
             .<span class="kw">await
             </span>.map_err(|e| Status::internal(e.to_string()))<span class="question-mark">?
             </span>.call(cln_rpc::Request::NewAddr(model::requests::NewaddrRequest {
-                addresstype: <span class="prelude-val">Some</span>(cln_rpc::model::requests::NewaddrAddresstype::BECH32),
+                addresstype: <span class="prelude-val">None</span>,
             }))
             .<span class="kw">await
             </span>.map(|response| <span class="kw">match </span>response {

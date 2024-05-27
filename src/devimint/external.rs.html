@@ -884,16 +884,6 @@
 <a href="#884" id="884">884</a>
 <a href="#885" id="885">885</a>
 <a href="#886" id="886">886</a>
-<a href="#887" id="887">887</a>
-<a href="#888" id="888">888</a>
-<a href="#889" id="889">889</a>
-<a href="#890" id="890">890</a>
-<a href="#891" id="891">891</a>
-<a href="#892" id="892">892</a>
-<a href="#893" id="893">893</a>
-<a href="#894" id="894">894</a>
-<a href="#895" id="895">895</a>
-<a href="#896" id="896">896</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::ops::{ControlFlow, Deref <span class="kw">as _</span>};
 <span class="kw">use </span>std::path::Path;
 <span class="kw">use </span>std::str::FromStr;
@@ -915,8 +905,7 @@
 <span class="kw">use </span>tokio::fs;
 <span class="kw">use </span>tokio::sync::{MappedMutexGuard, Mutex, MutexGuard};
 <span class="kw">use </span>tokio::time::Instant;
-<span class="kw">use </span>tonic_lnd::lnrpc::policy_update_request::Scope;
-<span class="kw">use </span>tonic_lnd::lnrpc::{ChanInfoRequest, GetInfoRequest, ListChannelsRequest, PolicyUpdateRequest};
+<span class="kw">use </span>tonic_lnd::lnrpc::{ChanInfoRequest, GetInfoRequest, ListChannelsRequest};
 <span class="kw">use </span>tonic_lnd::Client <span class="kw">as </span>LndClient;
 <span class="kw">use </span>tracing::{debug, info, trace, warn};
 
@@ -1480,9 +1469,12 @@
     <span class="kw">let </span>cln_pubkey = cln.pub_key().<span class="kw">await</span><span class="question-mark">?</span>;
 
     cln.request(cln_rpc::model::requests::ConnectRequest {
-        id: lnd_pubkey.parse()<span class="question-mark">?</span>,
-        host: <span class="prelude-val">Some</span>(<span class="string">"127.0.0.1"</span>.to_owned()),
-        port: <span class="prelude-val">Some</span>(process_mgr.globals.FM_PORT_LND_LISTEN),
+        id: <span class="macro">format!</span>(
+            <span class="string">"{}@127.0.0.1:{}"</span>,
+            lnd_pubkey, process_mgr.globals.FM_PORT_LND_LISTEN
+        ),
+        host: <span class="prelude-val">None</span>,
+        port: <span class="prelude-val">None</span>,
     })
     .<span class="kw">await
     </span>.context(<span class="string">"connect request"</span>)<span class="question-mark">?</span>;
@@ -1569,41 +1561,20 @@
 ) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
     <span class="kw">let </span>gateway_cli_version = <span class="kw">crate</span>::util::GatewayCli::version_or_default().<span class="kw">await</span>;
     <span class="kw">let </span>gatewayd_version = <span class="kw">crate</span>::util::Gatewayd::version_or_default().<span class="kw">await</span>;
-    <span class="attr">#[allow(clippy::overly_complex_bool_expr)]
-    </span><span class="kw">if </span>gateway_cli_version &lt; <span class="kw-2">*</span>VERSION_0_4_0_ALPHA || gatewayd_version &lt; <span class="kw-2">*</span>VERSION_0_4_0_ALPHA
-        <span class="comment">// FIXME: The new way is actually slower and require more things to initialize, and
-        // due to more dependency chains lead to flaky CI pipeline
-        </span>|| <span class="bool-val">true
-    </span>{
+    <span class="kw">if </span>gateway_cli_version &lt; <span class="kw-2">*</span>VERSION_0_4_0_ALPHA || gatewayd_version &lt; <span class="kw-2">*</span>VERSION_0_4_0_ALPHA {
         <span class="macro">debug!</span>(target: LOG_DEVIMINT, <span class="string">"Opening channel between gateways (the old way)"</span>);
         <span class="kw">return </span>open_channel(process_mgr, bitcoind, cln, lnd).<span class="kw">await</span>;
     }
-
-    <span class="macro">debug!</span>(target: LOG_DEVIMINT, <span class="string">"Opening channel between gateways (the new way)"</span>);
-    lnd.client
-        .lock()
-        .<span class="kw">await
-        </span>.lightning()
-        .update_channel_policy(PolicyUpdateRequest {
-            min_htlc_msat: <span class="number">1</span>,
-            scope: <span class="prelude-val">Some</span>(Scope::Global(<span class="bool-val">true</span>)),
-            time_lock_delta: <span class="number">80</span>,
-            base_fee_msat: <span class="number">0</span>,
-            fee_rate: <span class="number">0.0</span>,
-            fee_rate_ppm: <span class="number">0</span>,
-            max_htlc_msat: <span class="number">10_000_000_000</span>,
-            min_htlc_msat_specified: <span class="bool-val">true</span>,
-        })
-        .<span class="kw">await</span><span class="question-mark">?</span>;
-
     <span class="kw">let </span>gw_lnd = gw_lnd.get_try().<span class="kw">await</span><span class="question-mark">?</span>.deref().clone();
     <span class="kw">let </span>gw_cln = gw_cln.get_try().<span class="kw">await</span><span class="question-mark">?</span>.deref().clone();
 
+    <span class="macro">debug!</span>(target: LOG_DEVIMINT, <span class="string">"Await block ln nodes block processing"</span>);
     <span class="macro">tokio::try_join!</span>(
         gw_cln.wait_for_chain_sync(bitcoind),
         gw_lnd.wait_for_chain_sync(bitcoind)
     )<span class="question-mark">?</span>;
-    <span class="macro">info!</span>(target: LOG_DEVIMINT, <span class="string">"block sync done"</span>);
+
+    <span class="macro">debug!</span>(target: LOG_DEVIMINT, <span class="string">"Opening LN channel between the nodes..."</span>);
     <span class="kw">let </span>cln_addr = gw_cln.get_funding_address().<span class="kw">await</span><span class="question-mark">?</span>;
 
     bitcoind.send_to(cln_addr, <span class="number">100_000_000</span>).<span class="kw">await</span><span class="question-mark">?</span>;
@@ -1619,9 +1590,17 @@
         )
         .<span class="kw">await</span><span class="question-mark">?</span>;
 
-    gw_cln
-        .open_channel(lnd_pubkey.clone(), <span class="number">10_000_000</span>, <span class="prelude-val">Some</span>(<span class="number">5_000_000</span>))
-        .<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="comment">// TODO: We're currently polling for the channel to be opened to avoid
+    // flakiness, but this shouldn't ever fail. This is likely needed because
+    // the node is not fully synced yet. In that case, we should wait for the
+    // node to be fully synced before opening the channel.
+    </span>poll(<span class="string">"fund channel"</span>, || <span class="kw">async </span>{
+        gw_cln
+            .open_channel(lnd_pubkey.clone(), <span class="number">10_000_000</span>, <span class="prelude-val">Some</span>(<span class="number">5_000_000</span>))
+            .<span class="kw">await
+            </span>.map_err(ControlFlow::Continue)
+    })
+    .<span class="kw">await</span><span class="question-mark">?</span>;
 
     bitcoind.mine_blocks(<span class="number">10</span>).<span class="kw">await</span><span class="question-mark">?</span>;
 
@@ -1629,7 +1608,8 @@
         <span class="kw">let </span>channels = gw_lnd
             .list_active_channels()
             .<span class="kw">await
-            </span>.map_err(ControlFlow::Break)<span class="question-mark">?</span>;
+            </span>.context(<span class="string">"lnd list channels"</span>)
+            .map_err(ControlFlow::Break)<span class="question-mark">?</span>;
 
         <span class="kw">if </span>channels
             .iter()
