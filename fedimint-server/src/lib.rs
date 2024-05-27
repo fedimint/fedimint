@@ -25,8 +25,6 @@ use crate::net::connect::TlsTcpConnector;
 pub mod envs;
 pub mod metrics;
 
-pub mod atomic_broadcast;
-
 /// The actual implementation of consensus
 pub mod consensus;
 
