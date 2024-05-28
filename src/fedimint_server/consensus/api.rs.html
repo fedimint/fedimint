@@ -579,6 +579,7 @@
 <a href="#579" id="579">579</a>
 <a href="#580" id="580">580</a>
 <a href="#581" id="581">581</a>
+<a href="#582" id="582">582</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! Implements the client API through which users interact with the federation
 </span><span class="kw">use </span>std::cmp::Ordering;
 <span class="kw">use </span>std::collections::{BTreeMap, HashMap};
@@ -594,7 +595,7 @@
 };
 <span class="kw">use </span>fedimint_core::admin_client::ServerStatus;
 <span class="kw">use </span>fedimint_core::backup::{ClientBackupKey, ClientBackupSnapshot};
-<span class="kw">use </span>fedimint_core::config::ClientConfig;
+<span class="kw">use </span>fedimint_core::config::{ClientConfig, JsonClientConfig};
 <span class="kw">use </span>fedimint_core::core::backup::{SignedBackupRequest, BACKUP_REQUEST_MAX_PAYLOAD_SIZE_BYTES};
 <span class="kw">use </span>fedimint_core::core::{DynOutputOutcome, ModuleInstanceId};
 <span class="kw">use </span>fedimint_core::db::{
@@ -603,8 +604,8 @@
 <span class="kw">use </span>fedimint_core::endpoint_constants::{
     AUDIT_ENDPOINT, AUTH_ENDPOINT, AWAIT_OUTPUT_OUTCOME_ENDPOINT, AWAIT_SESSION_OUTCOME_ENDPOINT,
     AWAIT_SIGNED_SESSION_OUTCOME_ENDPOINT, AWAIT_TRANSACTION_ENDPOINT, BACKUP_ENDPOINT,
-    CLIENT_CONFIG_ENDPOINT, FEDERATION_ID_ENDPOINT, GUARDIAN_CONFIG_BACKUP_ENDPOINT,
-    INVITE_CODE_ENDPOINT, MODULES_CONFIG_JSON_ENDPOINT, RECOVER_ENDPOINT,
+    CLIENT_CONFIG_ENDPOINT, CLIENT_CONFIG_JSON_ENDPOINT, FEDERATION_ID_ENDPOINT,
+    GUARDIAN_CONFIG_BACKUP_ENDPOINT, INVITE_CODE_ENDPOINT, RECOVER_ENDPOINT,
     SERVER_CONFIG_CONSENSUS_HASH_ENDPOINT, SESSION_COUNT_ENDPOINT, SESSION_STATUS_ENDPOINT,
     SHUTDOWN_ENDPOINT, STATUS_ENDPOINT, SUBMIT_TRANSACTION_ENDPOINT, VERSION_ENDPOINT,
 };
@@ -630,7 +631,7 @@
 <span class="kw">use </span><span class="kw">crate</span>::config::io::{
     CONSENSUS_CONFIG, ENCRYPTED_EXT, JSON_EXT, LOCAL_CONFIG, PRIVATE_CONFIG, SALT_FILE,
 };
-<span class="kw">use </span><span class="kw">crate</span>::config::{JsonWithKind, ServerConfig};
+<span class="kw">use </span><span class="kw">crate</span>::config::ServerConfig;
 <span class="kw">use </span><span class="kw">crate</span>::consensus::db::{AcceptedItemPrefix, AcceptedTransactionKey, SignedSessionOutcomeKey};
 <span class="kw">use </span><span class="kw">crate</span>::consensus::engine::get_finished_session_count_static;
 <span class="kw">use </span><span class="kw">crate</span>::consensus::transaction::process_transaction_with_dbtx;
@@ -1054,6 +1055,14 @@
                 <span class="prelude-val">Ok</span>(fedimint.client_cfg.clone())
             }
         },
+        <span class="comment">// Helper endpoint for Admin UI that can't parse consensus encoding
+        </span><span class="macro">api_endpoint!</span> {
+            CLIENT_CONFIG_JSON_ENDPOINT,
+            ApiVersion::new(<span class="number">0</span>, <span class="number">0</span>),
+            <span class="kw">async </span>|fedimint: <span class="kw-2">&amp;</span>ConsensusApi, _context, _v: ()| -&gt; JsonClientConfig {
+                <span class="prelude-val">Ok</span>(fedimint.client_cfg.to_json())
+            }
+        },
         <span class="macro">api_endpoint!</span> {
             SERVER_CONFIG_CONSENSUS_HASH_ENDPOINT,
             ApiVersion::new(<span class="number">0</span>, <span class="number">0</span>),
@@ -1149,13 +1158,6 @@
             <span class="kw">async </span>|_fedimint: <span class="kw-2">&amp;</span>ConsensusApi, context, _v: ()| -&gt; () {
                 check_auth(context)<span class="question-mark">?</span>;
                 <span class="prelude-val">Ok</span>(())
-            }
-        },
-        <span class="macro">api_endpoint!</span> {
-            MODULES_CONFIG_JSON_ENDPOINT,
-            ApiVersion::new(<span class="number">0</span>, <span class="number">0</span>),
-            <span class="kw">async </span>|fedimint: <span class="kw-2">&amp;</span>ConsensusApi, _context, _v: ()| -&gt; BTreeMap&lt;ModuleInstanceId, JsonWithKind&gt; {
-                <span class="prelude-val">Ok</span>(fedimint.cfg.consensus.modules_json.clone())
             }
         },
     ]

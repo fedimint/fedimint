@@ -805,20 +805,6 @@
 <a href="#805" id="805">805</a>
 <a href="#806" id="806">806</a>
 <a href="#807" id="807">807</a>
-<a href="#808" id="808">808</a>
-<a href="#809" id="809">809</a>
-<a href="#810" id="810">810</a>
-<a href="#811" id="811">811</a>
-<a href="#812" id="812">812</a>
-<a href="#813" id="813">813</a>
-<a href="#814" id="814">814</a>
-<a href="#815" id="815">815</a>
-<a href="#816" id="816">816</a>
-<a href="#817" id="817">817</a>
-<a href="#818" id="818">818</a>
-<a href="#819" id="819">819</a>
-<a href="#820" id="820">820</a>
-<a href="#821" id="821">821</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap};
 <span class="kw">use </span>std::env;
 <span class="kw">use </span>std::net::SocketAddr;
@@ -955,10 +941,6 @@
     </span><span class="kw">pub </span>tls_certs: BTreeMap&lt;PeerId, rustls::Certificate&gt;,
     <span class="doccomment">/// All configuration that needs to be the same for modules
     </span><span class="kw">pub </span>modules: BTreeMap&lt;ModuleInstanceId, ServerModuleConsensusConfig&gt;,
-    <span class="attr">#[encodable_ignore]
-    </span><span class="comment">// FIXME: Make modules encodable or we will not check module keys
-    </span><span class="doccomment">/// Human readable representation of [`Self::modules`]
-    </span><span class="kw">pub </span>modules_json: BTreeMap&lt;ModuleInstanceId, JsonWithKind&gt;,
     <span class="doccomment">/// Additional config the federation wants to transmit to the clients
     </span><span class="kw">pub </span>meta: BTreeMap&lt;String, String&gt;,
 }
@@ -1085,7 +1067,6 @@
             api_endpoints: params.api_urls(),
             tls_certs: params.tls_certs(),
             modules: Default::default(),
-            modules_json: Default::default(),
             meta: params.consensus.meta,
         };
         <span class="kw">let </span><span class="kw-2">mut </span>cfg = <span class="self">Self </span>{
@@ -1118,13 +1099,11 @@
                 local,
                 private,
                 consensus,
-                consensus_json,
             } = config;
 
             <span class="self">self</span>.local.modules.insert(name, local);
             <span class="self">self</span>.private.modules.insert(name, private);
             <span class="self">self</span>.consensus.modules.insert(name, consensus);
-            <span class="self">self</span>.consensus.modules_json.insert(name, consensus_json);
         }
     }
 
@@ -1141,8 +1120,7 @@
             .get(<span class="kw-2">&amp;</span>id)
             .ok_or_else(|| <span class="macro">format_err!</span>(<span class="string">"Module {id} not found"</span>))<span class="question-mark">?
             </span>.clone();
-        <span class="kw">let </span>consensus_json = <span class="self">Self</span>::get_module_cfg_by_instance_id(<span class="kw-2">&amp;</span><span class="self">self</span>.consensus.modules_json, id)<span class="question-mark">?</span>;
-        <span class="kw">let </span>module = ServerModuleConfig::from(local, private, consensus, consensus_json);
+        <span class="kw">let </span>module = ServerModuleConfig::from(local, private, consensus);
 
         module.to_typed()
     }
@@ -1170,13 +1148,7 @@
             .get(<span class="kw-2">&amp;</span>id)
             .ok_or_else(|| <span class="macro">format_err!</span>(<span class="string">"Module {id} not found"</span>))<span class="question-mark">?
             </span>.clone();
-        <span class="kw">let </span>consensus_json = <span class="self">Self</span>::get_module_cfg_by_instance_id(<span class="kw-2">&amp;</span><span class="self">self</span>.consensus.modules_json, id)<span class="question-mark">?</span>;
-        <span class="prelude-val">Ok</span>(ServerModuleConfig::from(
-            local,
-            private,
-            consensus,
-            consensus_json,
-        ))
+        <span class="prelude-val">Ok</span>(ServerModuleConfig::from(local, private, consensus))
     }
 
     <span class="kw">fn </span>get_module_cfg_by_instance_id(
@@ -1347,7 +1319,7 @@
         });
         <span class="kw">for </span>(module_instance_id, config) <span class="kw">in </span>join_all(modules_runner).<span class="kw">await </span>{
             <span class="kw">let </span>config = config<span class="question-mark">?</span>;
-            registered_modules.remove(config.consensus_json.kind());
+            registered_modules.remove(<span class="kw-2">&amp;</span>config.consensus.kind);
             module_cfgs.insert(module_instance_id, config);
         }
         <span class="kw">if </span>!registered_modules.is_empty() {

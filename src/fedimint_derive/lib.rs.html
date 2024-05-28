@@ -437,27 +437,6 @@
 <a href="#437" id="437">437</a>
 <a href="#438" id="438">438</a>
 <a href="#439" id="439">439</a>
-<a href="#440" id="440">440</a>
-<a href="#441" id="441">441</a>
-<a href="#442" id="442">442</a>
-<a href="#443" id="443">443</a>
-<a href="#444" id="444">444</a>
-<a href="#445" id="445">445</a>
-<a href="#446" id="446">446</a>
-<a href="#447" id="447">447</a>
-<a href="#448" id="448">448</a>
-<a href="#449" id="449">449</a>
-<a href="#450" id="450">450</a>
-<a href="#451" id="451">451</a>
-<a href="#452" id="452">452</a>
-<a href="#453" id="453">453</a>
-<a href="#454" id="454">454</a>
-<a href="#455" id="455">455</a>
-<a href="#456" id="456">456</a>
-<a href="#457" id="457">457</a>
-<a href="#458" id="458">458</a>
-<a href="#459" id="459">459</a>
-<a href="#460" id="460">460</a>
 </pre></div><pre class="rust"><code><span class="attr">#![cfg_attr(feature = <span class="string">"diagnostics"</span>, feature(proc_macro_diagnostic))]
 
 </span><span class="kw">use </span>itertools::Itertools;
@@ -467,24 +446,9 @@
 <span class="kw">use </span>syn::punctuated::Punctuated;
 <span class="kw">use </span>syn::token::Comma;
 <span class="kw">use </span>syn::{
-    parse_macro_input, Attribute, Data, DataEnum, DataStruct, DeriveInput, Field, Fields, Index,
-    Lit, Token, Variant,
+    parse_macro_input, Attribute, Data, DataEnum, DataStruct, DeriveInput, Fields, Index, Lit,
+    Token, Variant,
 };
-
-<span class="kw">fn </span>do_not_ignore(field: <span class="kw-2">&amp;</span>Field) -&gt; bool {
-    !field
-        .attrs
-        .iter()
-        .any(|attr| attr.path().is_ident(<span class="string">"encodable_ignore"</span>))
-}
-
-<span class="kw">fn </span>panic_if_ignored(field: <span class="kw-2">&amp;</span>Field) -&gt; bool {
-    <span class="macro">assert!</span>(
-        do_not_ignore(field),
-        <span class="string">"Trying to derive decodable from a struct with ignored fields"
-    </span>);
-    <span class="bool-val">true
-</span>}
 
 <span class="kw">fn </span>is_default_variant_enforce_valid(variant: <span class="kw-2">&amp;</span>Variant) -&gt; bool {
     <span class="kw">let </span>is_default = variant
@@ -513,9 +477,9 @@
     is_default
 }
 
-<span class="comment">// TODO: use encodable attr for everything: #[encodable(ignore)],
-// #[encodable(index = 42)], …
-</span><span class="attr">#[proc_macro_derive(Encodable, attributes(encodable_ignore, encodable_default, encodable))]
+<span class="comment">// TODO: use encodable attr for everything: #[encodable(index = 42)],
+// #[encodable(default)], …
+</span><span class="attr">#[proc_macro_derive(Encodable, attributes(encodable_default, encodable))]
 </span><span class="kw">pub fn </span>derive_encodable(input: TokenStream) -&gt; TokenStream {
     <span class="kw">let </span>DeriveInput {
         ident,
@@ -548,7 +512,6 @@
         </span><span class="kw">let </span>field_names = fields
             .iter()
             .enumerate()
-            .filter(|(<span class="kw">_</span>, f)| do_not_ignore(f))
             .map(|(idx, <span class="kw">_</span>)| Index::from(idx))
             .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
         <span class="macro">quote!</span> {
@@ -560,7 +523,6 @@
         <span class="comment">// Named struct
         </span><span class="kw">let </span>field_names = fields
             .iter()
-            .filter(|f| do_not_ignore(f))
             .map(|field| field.ident.clone().unwrap())
             .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
         <span class="macro">quote!</span> {
@@ -653,7 +615,6 @@
                         .fields
                         .iter()
                         .enumerate()
-                        .filter(|(<span class="kw">_</span>, f)| do_not_ignore(f))
                         .map(|(idx, <span class="kw">_</span>)| <span class="macro">format_ident!</span>(<span class="string">"bound_{}"</span>, idx))
                         .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
                     <span class="kw">let </span>variant_encode_block =
@@ -667,7 +628,6 @@
                     <span class="kw">let </span>variant_fields = variant
                         .fields
                         .iter()
-                        .filter(|f| do_not_ignore(f))
                         .map(|field| field.ident.clone().unwrap())
                         .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
                     <span class="kw">let </span>variant_encode_block =
@@ -870,7 +830,6 @@
 ) -&gt; TokenStream2 {
     <span class="kw">let </span>field_names = fields
         .iter()
-        .filter(|f| panic_if_ignored(f))
         .enumerate()
         .map(|(idx, <span class="kw">_</span>)| <span class="macro">format_ident!</span>(<span class="string">"field_{}"</span>, idx))
         .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
@@ -898,7 +857,6 @@
 ) -&gt; TokenStream2 {
     <span class="kw">let </span>variant_fields = fields
         .iter()
-        .filter(|f| panic_if_ignored(f))
         .map(|field| field.ident.clone().unwrap())
         .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
     <span class="macro">quote!</span> {

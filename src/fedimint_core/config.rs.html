@@ -1054,6 +1054,28 @@
 <a href="#1054" id="1054">1054</a>
 <a href="#1055" id="1055">1055</a>
 <a href="#1056" id="1056">1056</a>
+<a href="#1057" id="1057">1057</a>
+<a href="#1058" id="1058">1058</a>
+<a href="#1059" id="1059">1059</a>
+<a href="#1060" id="1060">1060</a>
+<a href="#1061" id="1061">1061</a>
+<a href="#1062" id="1062">1062</a>
+<a href="#1063" id="1063">1063</a>
+<a href="#1064" id="1064">1064</a>
+<a href="#1065" id="1065">1065</a>
+<a href="#1066" id="1066">1066</a>
+<a href="#1067" id="1067">1067</a>
+<a href="#1068" id="1068">1068</a>
+<a href="#1069" id="1069">1069</a>
+<a href="#1070" id="1070">1070</a>
+<a href="#1071" id="1071">1071</a>
+<a href="#1072" id="1072">1072</a>
+<a href="#1073" id="1073">1073</a>
+<a href="#1074" id="1074">1074</a>
+<a href="#1075" id="1075">1075</a>
+<a href="#1076" id="1076">1076</a>
+<a href="#1077" id="1077">1077</a>
+<a href="#1078" id="1078">1078</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet};
 <span class="kw">use </span>std::fmt::{Debug, Display};
 <span class="kw">use </span>std::hash::Hash;
@@ -1077,6 +1099,7 @@
 <span class="kw">use </span>serde::de::DeserializeOwned;
 <span class="kw">use </span>serde::ser::SerializeMap;
 <span class="kw">use </span>serde::{Deserialize, Deserializer, Serialize, Serializer};
+<span class="kw">use </span>serde_json::json;
 <span class="kw">use </span>thiserror::Error;
 <span class="kw">use </span>threshold_crypto::group::{Curve, Group, GroupEncoding};
 <span class="kw">use </span>threshold_crypto::{G1Projective, G2Projective};
@@ -1293,6 +1316,34 @@
                 api_secret.clone(),
             )
         })
+    }
+
+    <span class="doccomment">/// Converts a consensus-encoded client config struct to a client config
+    /// struct that when encoded as JSON shows the fields of module configs
+    /// instead of a consensus-encoded hex string.
+    ///
+    /// In case of unknown module the config value is a hex string.
+    </span><span class="kw">pub fn </span>to_json(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; JsonClientConfig {
+        JsonClientConfig {
+            global: <span class="self">self</span>.global.clone(),
+            modules: <span class="self">self
+                </span>.modules
+                .iter()
+                .map(|(<span class="kw-2">&amp;</span>module_instance_id, module_config)| {
+                    <span class="kw">let </span>module_config_json = JsonWithKind {
+                    kind: module_config.kind.clone(),
+                    value: module_config.config
+                        .clone()
+                        .decoded()
+                        .and_then(|dyn_cfg| dyn_cfg.to_json())
+                        .unwrap_or_else(|| <span class="macro">json!</span>({
+                            <span class="string">"unknown_module_hex"</span>: module_config.config.consensus_encode_to_hex()
+                        })),
+                };
+                    (module_instance_id, module_config_json)
+                })
+                .collect(),
+        }
     }
 }
 
@@ -1777,7 +1828,6 @@
     <span class="kw">pub </span>local: JsonWithKind,
     <span class="kw">pub </span>private: JsonWithKind,
     <span class="kw">pub </span>consensus: ServerModuleConsensusConfig,
-    <span class="kw">pub </span>consensus_json: JsonWithKind,
 }
 
 <span class="kw">impl </span>ServerModuleConfig {
@@ -1785,13 +1835,11 @@
         local: JsonWithKind,
         private: JsonWithKind,
         consensus: ServerModuleConsensusConfig,
-        consensus_json: JsonWithKind,
     ) -&gt; <span class="self">Self </span>{
         <span class="self">Self </span>{
             local,
             private,
             consensus,
-            consensus_json,
         }
     }
 
@@ -1857,10 +1905,6 @@
                 version: consensus.version(),
                 config: consensus.consensus_encode_to_vec(),
             },
-            consensus_json: JsonWithKind::new(
-                kind,
-                serde_json::to_value(consensus).expect(<span class="string">"serialization can't fail"</span>),
-            ),
         }
     }
 }
