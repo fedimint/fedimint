@@ -7,24 +7,9 @@ use quote::{format_ident, quote};
 use syn::punctuated::Punctuated;
 use syn::token::Comma;
 use syn::{
-    parse_macro_input, Attribute, Data, DataEnum, DataStruct, DeriveInput, Field, Fields, Index,
-    Lit, Token, Variant,
+    parse_macro_input, Attribute, Data, DataEnum, DataStruct, DeriveInput, Fields, Index, Lit,
+    Token, Variant,
 };
-
-fn do_not_ignore(field: &Field) -> bool {
-    !field
-        .attrs
-        .iter()
-        .any(|attr| attr.path().is_ident("encodable_ignore"))
-}
-
-fn panic_if_ignored(field: &Field) -> bool {
-    assert!(
-        do_not_ignore(field),
-        "Trying to derive decodable from a struct with ignored fields"
-    );
-    true
-}
 
 fn is_default_variant_enforce_valid(variant: &Variant) -> bool {
     let is_default = variant
@@ -53,9 +38,9 @@ fn is_default_variant_enforce_valid(variant: &Variant) -> bool {
     is_default
 }
 
-// TODO: use encodable attr for everything: #[encodable(ignore)],
-// #[encodable(index = 42)], …
-#[proc_macro_derive(Encodable, attributes(encodable_ignore, encodable_default, encodable))]
+// TODO: use encodable attr for everything: #[encodable(index = 42)],
+// #[encodable(default)], …
+#[proc_macro_derive(Encodable, attributes(encodable_default, encodable))]
 pub fn derive_encodable(input: TokenStream) -> TokenStream {
     let DeriveInput {
         ident,
@@ -88,7 +73,6 @@ fn derive_struct_encode(fields: &Fields) -> TokenStream2 {
         let field_names = fields
             .iter()
             .enumerate()
-            .filter(|(_, f)| do_not_ignore(f))
             .map(|(idx, _)| Index::from(idx))
             .collect::<Vec<_>>();
         quote! {
@@ -100,7 +84,6 @@ fn derive_struct_encode(fields: &Fields) -> TokenStream2 {
         // Named struct
         let field_names = fields
             .iter()
-            .filter(|f| do_not_ignore(f))
             .map(|field| field.ident.clone().unwrap())
             .collect::<Vec<_>>();
         quote! {
@@ -193,7 +176,6 @@ fn derive_enum_encode(ident: &Ident, variants: &Punctuated<Variant, Comma>) -> T
                         .fields
                         .iter()
                         .enumerate()
-                        .filter(|(_, f)| do_not_ignore(f))
                         .map(|(idx, _)| format_ident!("bound_{}", idx))
                         .collect::<Vec<_>>();
                     let variant_encode_block =
@@ -207,7 +189,6 @@ fn derive_enum_encode(ident: &Ident, variants: &Punctuated<Variant, Comma>) -> T
                     let variant_fields = variant
                         .fields
                         .iter()
-                        .filter(|f| do_not_ignore(f))
                         .map(|field| field.ident.clone().unwrap())
                         .collect::<Vec<_>>();
                     let variant_encode_block =
@@ -410,7 +391,6 @@ fn derive_tuple_decode_block(
 ) -> TokenStream2 {
     let field_names = fields
         .iter()
-        .filter(|f| panic_if_ignored(f))
         .enumerate()
         .map(|(idx, _)| format_ident!("field_{}", idx))
         .collect::<Vec<_>>();
@@ -438,7 +418,6 @@ fn derive_named_decode_block(
 ) -> TokenStream2 {
     let variant_fields = fields
         .iter()
-        .filter(|f| panic_if_ignored(f))
         .map(|field| field.ident.clone().unwrap())
         .collect::<Vec<_>>();
     quote! {

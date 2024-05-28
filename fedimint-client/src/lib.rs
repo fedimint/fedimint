@@ -85,10 +85,7 @@ use db::{
 use fedimint_api_client::api::{
     ApiVersionSet, DynGlobalApi, DynModuleApi, FederationApiExt, IGlobalFederationApi,
 };
-use fedimint_core::config::{
-    ClientConfig, ClientModuleConfig, FederationId, JsonClientConfig, JsonWithKind,
-    ModuleInitRegistry,
-};
+use fedimint_core::config::{ClientConfig, FederationId, JsonClientConfig, ModuleInitRegistry};
 use fedimint_core::core::{
     DynInput, DynOutput, IInput, IOutput, ModuleInstanceId, ModuleKind, OperationId,
 };
@@ -1303,28 +1300,7 @@ impl Client {
     /// encoded this format cannot be cryptographically verified but is easier
     /// to consume and to some degree human-readable.
     pub fn get_config_json(&self) -> JsonClientConfig {
-        JsonClientConfig {
-            global: self.get_config().global.clone(),
-            modules: self
-                .get_config()
-                .modules
-                .iter()
-                .map(|(instance_id, ClientModuleConfig { kind, config, .. })| {
-                    (
-                        *instance_id,
-                        JsonWithKind::new(
-                            kind.clone(),
-                            config
-                                .clone()
-                                .decoded()
-                                .map_or(serde_json::Value::Null, |decoded| {
-                                    decoded.to_json().into()
-                                }),
-                        ),
-                    )
-                })
-                .collect(),
-        }
+        self.get_config().to_json()
     }
 
     /// Get the primary module
