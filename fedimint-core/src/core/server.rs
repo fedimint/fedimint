@@ -42,10 +42,10 @@ pub trait IServerModule: Debug {
     /// This function is called once for every consensus item. The function
     /// returns an error if any only if the consensus item does not change
     /// our state and therefore may be safely discarded by the atomic broadcast.
-    async fn process_consensus_item<'a>(
+    async fn process_consensus_item<'a, 'b>(
         &self,
         dbtx: &mut DatabaseTransaction<'a>,
-        consensus_item: DynModuleConsensusItem,
+        consensus_item: &'b DynModuleConsensusItem,
         peer_id: PeerId,
     ) -> anyhow::Result<()>;
 
@@ -140,10 +140,10 @@ where
     /// This function is called once for every consensus item. The function
     /// returns an error if any only if the consensus item does not change
     /// our state and therefore may be safely discarded by the atomic broadcast.
-    async fn process_consensus_item<'a>(
+    async fn process_consensus_item<'a, 'b>(
         &self,
         dbtx: &mut DatabaseTransaction<'a>,
-        consensus_item: DynModuleConsensusItem,
+        consensus_item: &'b DynModuleConsensusItem,
         peer_id: PeerId,
     ) -> anyhow::Result<()> {
         <Self as ServerModule>::process_consensus_item(

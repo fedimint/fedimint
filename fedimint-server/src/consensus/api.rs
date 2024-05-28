@@ -113,7 +113,7 @@ impl ConsensusApi {
         // We ignore any writes, as we only verify if the transaction is valid here
         dbtx.ignore_uncommitted();
 
-        process_transaction_with_dbtx(self.modules.clone(), &mut dbtx, transaction.clone()).await?;
+        process_transaction_with_dbtx(self.modules.clone(), &mut dbtx, &transaction).await?;
 
         self.submission_sender
             .send(ConsensusItem::Transaction(transaction))
