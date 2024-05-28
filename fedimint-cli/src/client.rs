@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 use std::ffi;
 use std::str::FromStr;
-use std::time::{Duration, UNIX_EPOCH};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use anyhow::{anyhow, bail, Context};
 use bip39::Mnemonic;
@@ -497,24 +497,13 @@ pub async fn handle_command(
                 outcome: Option<serde_json::Value>,
             }
 
-            const ISO8601_CONFIG: iso8601::EncodedConfig = iso8601::Config::DEFAULT
-                .set_formatted_components(iso8601::FormattedComponents::DateTime)
-                .encode();
             let operations = client
                 .operation_log()
                 .list_operations(limit, None)
                 .await
                 .into_iter()
                 .map(|(k, v)| {
-                    let creation_time = OffsetDateTime::from_unix_timestamp(
-                        k.creation_time
-                            .duration_since(UNIX_EPOCH)
-                            .expect("Couldn't convert time from SystemTime to timestamp")
-                            .as_secs() as i64,
-                    )
-                    .expect("Couldn't convert time from SystemTime to OffsetDateTime")
-                    .format(&iso8601::Iso8601::<ISO8601_CONFIG>)
-                    .expect("Couldn't format OffsetDateTime as ISO8601");
+                    let creation_time = time_to_iso8601(&k.creation_time);
 
                     OperationOutput {
                         id: k.operation_id,
@@ -823,4 +812,21 @@ struct PayInvoiceResponse {
     operation_id: OperationId,
     contract_id: ContractId,
     preimage: String,
+}
+
+pub(crate) fn time_to_iso8601(time: &SystemTime) -> String {
+    const ISO8601_CONFIG: iso8601::EncodedConfig = iso8601::Config::DEFAULT
+        .set_formatted_components(iso8601::FormattedComponents::DateTime)
+        .encode();
+
+    OffsetDateTime::from_unix_timestamp_nanos(
+        time.duration_since(UNIX_EPOCH)
+            .expect("Couldn't convert time from SystemTime to timestamp")
+            .as_nanos()
+            .try_into()
+            .expect("Time overflowed"),
+    )
+    .expect("Couldn't convert time from SystemTime to OffsetDateTime")
+    .format(&iso8601::Iso8601::<ISO8601_CONFIG>)
+    .expect("Couldn't format OffsetDateTime as ISO8601")
 }
