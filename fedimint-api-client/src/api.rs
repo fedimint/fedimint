@@ -1521,11 +1521,9 @@ mod tests {
     use std::str::FromStr as _;
 
     use fedimint_core::config::FederationId;
-    use fedimint_core::invite_code::InviteCode;
     use jsonrpsee_core::client::BatchResponse;
     use jsonrpsee_core::params::BatchRequestBuilder;
     use jsonrpsee_core::traits::ToRpcParams;
-    use serde::de::DeserializeOwned;
 
     use super::*;
 

@@ -1,6 +1,5 @@
 use std::fmt::Debug;
 
-use bitcoin::secp256k1;
 use bitcoin_hashes::{sha256, Hash};
 use fedimint_core::encoding::{Decodable, Encodable};
 use secp256k1::{Secp256k1, Signing, Verification};
