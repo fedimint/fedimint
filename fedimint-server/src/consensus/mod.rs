@@ -2,6 +2,7 @@
 
 pub mod aleph_bft;
 pub mod api;
+mod consensus_checksum;
 pub mod db;
 pub mod debug;
 pub mod engine;
@@ -33,6 +34,7 @@ use tracing::log::warn;
 use crate::config::{ServerConfig, ServerConfigLocal};
 use crate::consensus::aleph_bft::keychain::Keychain;
 use crate::consensus::api::ConsensusApi;
+use crate::consensus::consensus_checksum::ConsensusChecksumTracker;
 use crate::consensus::engine::ConsensusEngine;
 use crate::net;
 use crate::net::api::{ApiSecrets, RpcHandlerCtx};
@@ -134,6 +136,9 @@ pub async fn run(
 
     info!(target: LOG_CONSENSUS, "Starting Consensus Engine");
 
+    let consensus_checksum =
+        ConsensusChecksumTracker::new(&mut db.begin_transaction_nc().await).await;
+
     ConsensusEngine {
         db,
         keychain: Keychain::new(&cfg),
@@ -149,6 +154,7 @@ pub async fn run(
         last_ci_by_peer,
         modules: module_registry,
         task_group: task_group.clone(),
+        consensus_checksum,
     }
     .run()
     .await?;

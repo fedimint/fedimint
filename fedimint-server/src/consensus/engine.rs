@@ -1,4 +1,5 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
+use std::default::Default;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -7,7 +8,7 @@ use anyhow::{anyhow, bail};
 use async_channel::Receiver;
 use fedimint_api_client::api::{DynGlobalApi, FederationApiExt, PeerConnectionStatus};
 use fedimint_api_client::query::FilterMap;
-use fedimint_core::core::{DynOutput, MODULE_INSTANCE_ID_GLOBAL};
+use fedimint_core::core::{DynInput, DynOutput, MODULE_INSTANCE_ID_GLOBAL};
 use fedimint_core::db::{Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped};
 use fedimint_core::encoding::Decodable;
 use fedimint_core::endpoint_constants::AWAIT_SIGNED_SESSION_OUTCOME_ENDPOINT;
@@ -28,6 +29,7 @@ use rand::Rng;
 use tokio::sync::{watch, RwLock};
 use tracing::{debug, info, instrument, warn, Level};
 
+use super::consensus_checksum::ConsensusChecksumTracker;
 use crate::config::ServerConfig;
 use crate::consensus::aleph_bft::backup::{BackupReader, BackupWriter};
 use crate::consensus::aleph_bft::data_provider::{DataProvider, UnitData};
@@ -68,11 +70,13 @@ pub struct ConsensusEngine {
     pub peer_id_str: Vec<String>,
     pub connection_status_channels: Arc<RwLock<BTreeMap<PeerId, PeerConnectionStatus>>>,
     pub task_group: TaskGroup,
+
+    pub consensus_checksum: ConsensusChecksumTracker,
 }
 
 impl ConsensusEngine {
     #[instrument(name = "run", skip_all, fields(id=%self.cfg.local.identity))]
-    pub async fn run(self) -> anyhow::Result<()> {
+    pub async fn run(mut self) -> anyhow::Result<()> {
         if self.cfg.consensus.broadcast_public_keys.len() == 1 {
             self.run_single_guardian(self.task_group.make_handle())
                 .await
@@ -81,7 +85,7 @@ impl ConsensusEngine {
         }
     }
 
-    pub async fn run_single_guardian(&self, task_handle: TaskHandle) -> anyhow::Result<()> {
+    pub async fn run_single_guardian(&mut self, task_handle: TaskHandle) -> anyhow::Result<()> {
         assert_eq!(self.cfg.consensus.broadcast_public_keys.len(), 1);
 
         while !task_handle.is_shutting_down() {
@@ -142,7 +146,7 @@ impl ConsensusEngine {
         Ok(())
     }
 
-    pub async fn run_consensus(&self, task_handle: TaskHandle) -> anyhow::Result<()> {
+    pub async fn run_consensus(&mut self, task_handle: TaskHandle) -> anyhow::Result<()> {
         // We need four peers to run the atomic broadcast
         assert!(self.cfg.consensus.broadcast_public_keys.len() >= 4);
 
@@ -207,7 +211,7 @@ impl ConsensusEngine {
     }
 
     pub async fn run_session(
-        &self,
+        &mut self,
         connections: ReconnectPeerConnections<Message>,
         session_index: u64,
     ) -> anyhow::Result<()> {
@@ -309,7 +313,7 @@ impl ConsensusEngine {
     }
 
     pub async fn complete_signed_session_outcome(
-        &self,
+        &mut self,
         session_index: u64,
         batches_per_session_outcome: usize,
         unit_data_receiver: Receiver<(UnitData, PeerId)>,
@@ -432,6 +436,8 @@ impl ConsensusEngine {
         session_index: u64,
         signed_session_outcome: SignedSessionOutcome,
     ) {
+        self.consensus_checksum.report(session_index);
+
         let mut dbtx = self.db.begin_transaction().await;
 
         dbtx.remove_by_prefix(&AlephUnitsPrefix).await;
@@ -456,7 +462,7 @@ impl ConsensusEngine {
 
     #[instrument(target = "fm::consensus", skip(self, item), level = "info")]
     pub async fn process_consensus_item(
-        &self,
+        &mut self,
         session_index: u64,
         item_index: u64,
         item: ConsensusItem,
@@ -479,7 +485,8 @@ impl ConsensusEngine {
             .with_label_values(&[&self.self_id_str, peer_id_str])
             .set(session_index as i64);
 
-        let mut dbtx = self.db.begin_transaction().await;
+        let db = self.db.clone();
+        let mut dbtx = db.begin_transaction().await;
 
         dbtx.ignore_uncommitted();
 
@@ -539,7 +546,7 @@ impl ConsensusEngine {
             .expect("Committing consensus epoch failed");
 
         CONSENSUS_ITEMS_PROCESSED_TOTAL
-            .with_label_values(&[peer_id_str])
+            .with_label_values(&[&self.peer_id_str[peer.to_usize()]])
             .inc();
         timing_prom.observe_duration();
 
@@ -547,7 +554,7 @@ impl ConsensusEngine {
     }
 
     async fn process_consensus_item_with_db_transaction(
-        &self,
+        &mut self,
         dbtx: &mut DatabaseTransaction<'_>,
         consensus_item: ConsensusItem,
         peer_id: PeerId,
@@ -559,12 +566,20 @@ impl ConsensusEngine {
         match consensus_item {
             ConsensusItem::Module(module_item) => {
                 let instance_id = module_item.module_instance_id();
-                let module_dbtx = &mut dbtx.to_ref_with_prefix_module_id(instance_id);
 
-                self.modules
-                    .get_expect(instance_id)
-                    .process_consensus_item(module_dbtx, module_item, peer_id)
-                    .await
+                {
+                    let module_dbtx = &mut dbtx.to_ref_with_prefix_module_id(instance_id);
+
+                    self.modules
+                        .get_expect(instance_id)
+                        .process_consensus_item(module_dbtx, &module_item, peer_id)
+                        .await?;
+                }
+
+                self.consensus_checksum
+                    .track_module_citem(dbtx, instance_id, &module_item)
+                    .await;
+                Ok(())
             }
             ConsensusItem::Transaction(transaction) => {
                 let txid = transaction.tx_hash();
@@ -583,12 +598,27 @@ impl ConsensusEngine {
                     .map(DynOutput::module_instance_id)
                     .collect::<Vec<_>>();
 
-                process_transaction_with_dbtx(self.modules.clone(), dbtx, transaction)
+                process_transaction_with_dbtx(self.modules.clone(), dbtx, &transaction)
                     .await
                     .map_err(|error| anyhow!(error.to_string()))?;
 
                 debug!(target: LOG_CONSENSUS, %txid,  "Transaction accepted");
                 dbtx.insert_entry(&AcceptedTransactionKey(txid), &modules_ids)
+                    .await;
+
+                let input_module_ids: BTreeSet<_> = transaction
+                    .inputs
+                    .iter()
+                    .map(DynInput::module_instance_id)
+                    .collect();
+                let output_module_ids: BTreeSet<_> = transaction
+                    .outputs
+                    .iter()
+                    .map(DynOutput::module_instance_id)
+                    .collect();
+
+                self.consensus_checksum
+                    .track_tx(dbtx, &txid, &input_module_ids, &output_module_ids)
                     .await;
 
                 Ok(())

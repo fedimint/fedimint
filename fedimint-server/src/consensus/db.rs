@@ -18,6 +18,7 @@ pub enum DbKeyPrefix {
     AcceptedTransaction = 0x02,
     SignedSessionOutcome = 0x04,
     AlephUnits = 0x05,
+    ConsensusChecksum = 0x06,
     Module = MODULE_GLOBAL_PREFIX,
 }
 
@@ -88,6 +89,28 @@ impl_db_record!(
     notify_on_modify = false,
 );
 impl_db_lookup!(key = AlephUnitsKey, query_prefix = AlephUnitsPrefix);
+
+#[derive(Copy, Debug, Encodable, Decodable, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub enum ConsensusChecksumKey {
+    TxInput(ModuleInstanceId),
+    TxOutput(ModuleInstanceId),
+    CItem(ModuleInstanceId),
+}
+
+#[derive(Debug, Encodable, Decodable)]
+pub struct ConsensusChecksumPrefix;
+
+impl_db_record!(
+    key = ConsensusChecksumKey,
+    value = [u8; 32],
+    db_prefix = DbKeyPrefix::ConsensusChecksum,
+    notify_on_modify = false,
+);
+
+impl_db_lookup!(
+    key = ConsensusChecksumKey,
+    query_prefix = ConsensusChecksumPrefix
+);
 
 pub fn get_global_database_migrations() -> BTreeMap<DatabaseVersion, ServerMigrationFn> {
     BTreeMap::new()
@@ -286,6 +309,8 @@ mod fedimint_migration_tests {
                             );
                             info!(target: LOG_DB, "Validated AlephUnits");
                         }
+                        // These are diagnostic caches ATM
+                        DbKeyPrefix::ConsensusChecksum => {}
                         // Module prefix is reserved for modules, no migration testing is needed
                         DbKeyPrefix::Module => {}
                     }

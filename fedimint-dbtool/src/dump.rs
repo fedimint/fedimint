@@ -293,6 +293,16 @@ impl DatabaseDump {
                         "Aleph Units"
                     );
                 }
+                ConsensusRange::DbKeyPrefix::ConsensusChecksum => {
+                    push_db_pair_items_no_serde!(
+                        dbtx,
+                        ConsensusRange::ConsensusChecksumPrefix,
+                        ConsensusRange::ConsensusChecksumKey,
+                        Vec<u8>,
+                        consensus,
+                        "Consensus Checksum"
+                    );
+                }
                 // Module is a global prefix for all module data
                 ConsensusRange::DbKeyPrefix::Module => {}
             }
