@@ -106,7 +106,13 @@
 <a href="#106" id="106">106</a>
 <a href="#107" id="107">107</a>
 <a href="#108" id="108">108</a>
-</pre></div><pre class="rust"><code><span class="kw">use </span>std::fmt;
+<a href="#109" id="109">109</a>
+<a href="#110" id="110">110</a>
+<a href="#111" id="111">111</a>
+</pre></div><pre class="rust"><code><span class="attr">#![warn(clippy::pedantic)]
+#![allow(clippy::module_name_repetitions)]
+
+</span><span class="kw">use </span>std::fmt;
 
 <span class="kw">use </span>config::EmptyClientConfig;
 <span class="kw">use </span>fedimint_core::core::{Decoder, ModuleInstanceId, ModuleKind};

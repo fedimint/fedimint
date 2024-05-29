@@ -753,7 +753,7 @@
             .map(|(g, h)| g + h)
             .collect();
 
-        <span class="kw">let </span>hashed = dkg.hash(<span class="kw-2">&amp;</span>commit);
+        <span class="kw">let </span>hashed = Dkg::hash(<span class="kw-2">&amp;</span>commit);
         dkg.commitments.insert(our_id, commit);
         dkg.hashed_commits.insert(our_id, hashed);
         <span class="kw">let </span>step = dkg.broadcast(<span class="kw-2">&amp;</span>DkgMessage::HashedCommit(hashed));
@@ -778,7 +778,7 @@
                 }
             }
             DkgMessage::Commit(commit) =&gt; {
-                <span class="kw">let </span>hash = <span class="self">self</span>.hash(<span class="kw-2">&amp;</span>commit);
+                <span class="kw">let </span>hash = <span class="self">Self</span>::hash(<span class="kw-2">&amp;</span>commit);
                 <span class="macro">ensure!</span>(<span class="self">self</span>.threshold == commit.len(), <span class="string">"wrong degree from {peer}"</span>);
                 <span class="macro">ensure!</span>(hash == <span class="self">self</span>.hashed_commits[<span class="kw-2">&amp;</span>peer], <span class="string">"wrong hash from {peer}"</span>);
 
@@ -881,7 +881,7 @@
         <span class="prelude-val">Ok</span>(DkgStep::Messages(<span class="macro">vec!</span>[]))
     }
 
-    <span class="kw">fn </span>hash(<span class="kw-2">&amp;</span><span class="self">self</span>, poly: <span class="kw-2">&amp;</span>[G]) -&gt; Sha256 {
+    <span class="kw">fn </span>hash(poly: <span class="kw-2">&amp;</span>[G]) -&gt; Sha256 {
         <span class="kw">let </span><span class="kw-2">mut </span>engine = HashEngine::default();
         <span class="kw">for </span>element <span class="kw">in </span>poly {
             engine

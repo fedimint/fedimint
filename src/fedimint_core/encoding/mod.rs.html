@@ -1911,7 +1911,7 @@
         <span class="kw">let </span><span class="kw-2">mut </span>len = <span class="number">0</span>;
         len += (<span class="self">self</span>.len() <span class="kw">as </span>u64).consensus_encode(writer)<span class="question-mark">?</span>;
 
-        <span class="kw">for </span>item <span class="kw">in </span><span class="self">self</span>.iter() {
+        <span class="kw">for </span>item <span class="kw">in </span><span class="kw-2">*</span><span class="self">self </span>{
             len += item.consensus_encode(writer)<span class="question-mark">?</span>;
         }
         <span class="prelude-val">Ok</span>(len)
@@ -2004,7 +2004,7 @@
 
 <span class="comment">// From &lt;https://github.com/rust-lang/rust/issues/61956&gt;
 </span><span class="kw">unsafe fn </span>horribe_array_transmute_workaround&lt;<span class="kw">const </span>N: usize, A, B&gt;(<span class="kw-2">mut </span>arr: [A; N]) -&gt; [B; N] {
-    <span class="kw">let </span>ptr = <span class="kw-2">&amp;mut </span>arr <span class="kw">as </span><span class="kw-2">*mut </span><span class="kw">_ as </span><span class="kw-2">*mut </span>[B; N];
+    <span class="kw">let </span>ptr = std::ptr::from_mut(<span class="kw-2">&amp;mut </span>arr) <span class="kw">as </span><span class="kw-2">*mut </span>[B; N];
     <span class="kw">let </span>res = <span class="kw">unsafe </span>{ ptr.read() };
     core::mem::forget(arr);
     res

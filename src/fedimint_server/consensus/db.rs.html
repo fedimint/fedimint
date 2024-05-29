@@ -483,7 +483,7 @@
         <span class="kw">let </span>module_ids = transaction
             .outputs
             .iter()
-            .map(|output| output.module_instance_id())
+            .map(DynOutput::module_instance_id)
             .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
 
         dbtx.insert_new_entry(<span class="kw-2">&amp;</span>accepted_tx_id, <span class="kw-2">&amp;</span>module_ids).<span class="kw">await</span>;

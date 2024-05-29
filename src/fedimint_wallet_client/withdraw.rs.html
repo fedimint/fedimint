@@ -143,9 +143,6 @@
 <a href="#143" id="143">143</a>
 <a href="#144" id="144">144</a>
 <a href="#145" id="145">145</a>
-<a href="#146" id="146">146</a>
-<a href="#147" id="147">147</a>
-<a href="#148" id="148">148</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::time::Duration;
 
 <span class="kw">use </span>bitcoin::Txid;
@@ -193,10 +190,7 @@
                     |_dbtx, res, old_state| Box::pin(transition_withdraw_processed(res, old_state)),
                 )]
             }
-            WithdrawStates::Success(<span class="kw">_</span>) =&gt; {
-                <span class="macro">vec!</span>[]
-            }
-            WithdrawStates::Aborted(<span class="kw">_</span>) =&gt; {
+            WithdrawStates::Success(<span class="kw">_</span>) | WithdrawStates::Aborted(<span class="kw">_</span>) =&gt; {
                 <span class="macro">vec!</span>[]
             }
         }

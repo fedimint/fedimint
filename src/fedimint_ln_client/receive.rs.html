@@ -439,9 +439,6 @@
 <a href="#439" id="439">439</a>
 <a href="#440" id="440">440</a>
 <a href="#441" id="441">441</a>
-<a href="#442" id="442">442</a>
-<a href="#443" id="443">443</a>
-<a href="#444" id="444">444</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
 
@@ -509,14 +506,11 @@
             LightningReceiveStates::SubmittedOffer(submitted_offer) =&gt; {
                 submitted_offer.transitions(global_context)
             }
-            LightningReceiveStates::Canceled(<span class="kw">_</span>) =&gt; {
-                <span class="macro">vec!</span>[]
-            }
             LightningReceiveStates::ConfirmedInvoice(confirmed_invoice) =&gt; {
                 confirmed_invoice.transitions(global_context)
             }
             LightningReceiveStates::Funded(funded) =&gt; funded.transitions(global_context),
-            LightningReceiveStates::Success(<span class="kw">_</span>) =&gt; {
+            LightningReceiveStates::Success(<span class="kw">_</span>) | LightningReceiveStates::Canceled(<span class="kw">_</span>) =&gt; {
                 <span class="macro">vec!</span>[]
             }
         }
@@ -876,7 +870,7 @@
         <span class="kw">let </span>ctx = secp256k1::Secp256k1::new();
         <span class="kw">let </span>secret_key = SecretKey::new(<span class="kw-2">&amp;mut </span>rand::thread_rng());
         <span class="prelude-val">Ok</span>(InvoiceBuilder::new(Currency::Regtest)
-            .description(<span class="string">""</span>.to_string())
+            .description(String::new())
             .payment_hash(sha256::Hash::hash(<span class="kw-2">&amp;</span>[<span class="number">0</span>; <span class="number">32</span>]))
             .duration_since_epoch(now_epoch)
             .min_final_cltv_expiry_delta(<span class="number">0</span>)

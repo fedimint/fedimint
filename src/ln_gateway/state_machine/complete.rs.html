@@ -227,7 +227,6 @@
 <a href="#227" id="227">227</a>
 <a href="#228" id="228">228</a>
 <a href="#229" id="229">229</a>
-<a href="#230" id="230">230</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::time::Duration;
 
 <span class="kw">use </span>fedimint_client::sm::{State, StateTransition};
@@ -298,8 +297,8 @@
         _global_context: <span class="kw-2">&amp;</span>DynGlobalClientContext,
     ) -&gt; Vec&lt;fedimint_client::sm::StateTransition&lt;<span class="self">Self</span>&gt;&gt; {
         <span class="kw">match </span><span class="kw-2">&amp;</span><span class="self">self</span>.state {
-            GatewayCompleteStates::WaitForPreimage(state) =&gt; {
-                state.transitions(context.clone(), <span class="self">self</span>.common.clone())
+            GatewayCompleteStates::WaitForPreimage(_state) =&gt; {
+                WaitForPreimageState::transitions(context.clone(), <span class="self">self</span>.common.clone())
             }
             GatewayCompleteStates::CompleteHtlc(state) =&gt; {
                 state.transitions(context.clone(), <span class="self">self</span>.common.clone())
@@ -318,7 +317,6 @@
 
 <span class="kw">impl </span>WaitForPreimageState {
     <span class="kw">fn </span>transitions(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
         context: GatewayClientContext,
         common: GatewayCompleteCommon,
     ) -&gt; Vec&lt;StateTransition&lt;GatewayCompleteStateMachine&gt;&gt; {

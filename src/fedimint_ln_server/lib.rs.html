@@ -1481,7 +1481,26 @@
 <a href="#1481" id="1481">1481</a>
 <a href="#1482" id="1482">1482</a>
 <a href="#1483" id="1483">1483</a>
-</pre></div><pre class="rust"><code><span class="kw">pub mod </span>db;
+<a href="#1484" id="1484">1484</a>
+<a href="#1485" id="1485">1485</a>
+<a href="#1486" id="1486">1486</a>
+<a href="#1487" id="1487">1487</a>
+<a href="#1488" id="1488">1488</a>
+<a href="#1489" id="1489">1489</a>
+<a href="#1490" id="1490">1490</a>
+<a href="#1491" id="1491">1491</a>
+</pre></div><pre class="rust"><code><span class="attr">#![warn(clippy::pedantic)]
+#![allow(clippy::cast_possible_truncation)]
+#![allow(clippy::cast_possible_wrap)]
+#![allow(clippy::default_trait_access)]
+#![allow(clippy::doc_markdown)]
+#![allow(clippy::ignored_unit_patterns)]
+#![allow(clippy::manual_let_else)]
+#![allow(clippy::module_name_repetitions)]
+#![allow(clippy::must_use_candidate)]
+#![allow(clippy::too_many_lines)]
+
+</span><span class="kw">pub mod </span>db;
 <span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::time::Duration;
 
@@ -1898,19 +1917,16 @@
 
                 <span class="macro">debug!</span>(<span class="string">"Beginning to decrypt preimage"</span>);
 
-                <span class="kw">let </span>preimage_vec = <span class="kw">match </span><span class="self">self</span>.cfg.consensus.threshold_pub_keys.decrypt(
+                <span class="kw">let </span><span class="prelude-val">Ok</span>(preimage_vec) = <span class="self">self</span>.cfg.consensus.threshold_pub_keys.decrypt(
                     decryption_shares
                         .iter()
                         .map(|(peer, share)| (peer.to_usize(), <span class="kw-2">&amp;</span>share.<span class="number">0</span>)),
                     <span class="kw-2">&amp;</span>contract.encrypted_preimage.<span class="number">0</span>,
-                ) {
-                    <span class="prelude-val">Ok</span>(preimage_vec) =&gt; preimage_vec,
-                    <span class="prelude-val">Err</span>(<span class="kw">_</span>) =&gt; {
-                        <span class="comment">// TODO: check if that can happen even though shares are verified
-                        // before
-                        </span><span class="macro">error!</span>(contract_hash = %contract.hash, <span class="string">"Failed to decrypt preimage"</span>);
-                        <span class="kw">return </span><span class="prelude-val">Ok</span>(());
-                    }
+                ) <span class="kw">else </span>{
+                    <span class="comment">// TODO: check if that can happen even though shares are verified
+                    // before
+                    </span><span class="macro">error!</span>(contract_hash = %contract.hash, <span class="string">"Failed to decrypt preimage"</span>);
+                    <span class="kw">return </span><span class="prelude-val">Ok</span>(());
                 };
 
                 <span class="comment">// Delete decryption shares once we've decrypted the preimage
@@ -1950,7 +1966,9 @@
                     </span>.expect(<span class="string">"checked before that it exists"</span>);
                 <span class="kw">let </span>incoming = <span class="kw">match </span><span class="kw-2">&amp;mut </span>contract_account.contract {
                     FundedContract::Incoming(incoming) =&gt; incoming,
-                    <span class="kw">_ </span>=&gt; <span class="macro">unreachable!</span>(<span class="string">"previously checked that it's an incoming contract"</span>),
+                    FundedContract::Outgoing(<span class="kw">_</span>) =&gt; {
+                        <span class="macro">unreachable!</span>(<span class="string">"previously checked that it's an incoming contract"</span>)
+                    }
                 };
                 incoming.contract.decrypted_preimage = decrypted_preimage.clone();
                 <span class="macro">trace!</span>(<span class="question-mark">?</span>contract_account, <span class="string">"Updating contract account"</span>);
@@ -2021,7 +2039,7 @@
 
         <span class="kw">let </span>pub_key = <span class="kw">match </span><span class="kw-2">&amp;</span>account.contract {
             FundedContract::Outgoing(outgoing) =&gt; {
-                <span class="kw">if </span>outgoing.timelock <span class="kw">as </span>u64 + <span class="number">1 </span>&gt; consensus_block_count &amp;&amp; !outgoing.cancelled {
+                <span class="kw">if </span>u64::from(outgoing.timelock) + <span class="number">1 </span>&gt; consensus_block_count &amp;&amp; !outgoing.cancelled {
                     <span class="comment">// If the timelock hasn't expired yet …
                     </span><span class="kw">let </span>preimage_hash = bitcoin_hashes::sha256::Hash::hash(
                         <span class="kw-2">&amp;</span>input
@@ -2114,17 +2132,16 @@
 
                 <span class="kw">let </span>contract_db_key = ContractKey(contract.contract.contract_id());
 
-                <span class="kw">let </span>updated_contract_account = dbtx
-                    .get_value(<span class="kw-2">&amp;</span>contract_db_key)
-                    .<span class="kw">await
-                    </span>.map(|<span class="kw-2">mut </span>value: ContractAccount| {
-                        value.amount += contract.amount;
-                        value
-                    })
-                    .unwrap_or_else(|| ContractAccount {
+                <span class="kw">let </span>updated_contract_account = dbtx.get_value(<span class="kw-2">&amp;</span>contract_db_key).<span class="kw">await</span>.map_or_else(
+                    || ContractAccount {
                         amount: contract.amount,
                         contract: contract.contract.clone().to_funded(out_point),
-                    });
+                    },
+                    |<span class="kw-2">mut </span>value: ContractAccount| {
+                        value.amount += contract.amount;
+                        value
+                    },
+                );
 
                 dbtx.insert_entry(
                     <span class="kw-2">&amp;</span>LightningAuditItemKey::from_funded_contract(
@@ -2140,8 +2157,8 @@
                     </span>.is_none()
                 {
                     dbtx.on_commit(<span class="kw">move </span>|| {
-                        record_funded_contract_metric(updated_contract_account);
-                    })
+                        record_funded_contract_metric(<span class="kw-2">&amp;</span>updated_contract_account);
+                    });
                 }
 
                 dbtx.insert_new_entry(
@@ -2224,7 +2241,7 @@
 
                 <span class="kw">let </span>outgoing_contract = <span class="kw">match </span><span class="kw-2">&amp;</span>contract_account.contract {
                     FundedContract::Outgoing(contract) =&gt; contract,
-                    <span class="kw">_ </span>=&gt; {
+                    FundedContract::Incoming(<span class="kw">_</span>) =&gt; {
                         <span class="kw">return </span><span class="prelude-val">Err</span>(LightningOutputError::NotOutgoingContract);
                     }
                 };
@@ -2245,7 +2262,7 @@
 
                     <span class="kw">let </span>outgoing_contract = <span class="kw">match </span><span class="kw-2">&amp;mut </span>contract_account.contract {
                         FundedContract::Outgoing(contract) =&gt; contract,
-                        <span class="kw">_ </span>=&gt; {
+                        FundedContract::Incoming(<span class="kw">_</span>) =&gt; {
                             <span class="macro">panic!</span>(<span class="string">"Contract type was checked in validate_output"</span>);
                         }
                     };
@@ -2520,7 +2537,7 @@
             context.wait_value_matches(ContractKey(contract_id), |contract| {
                 <span class="kw">match </span><span class="kw-2">&amp;</span>contract.contract {
                     FundedContract::Outgoing(c) =&gt; c.cancelled,
-                    <span class="kw">_ </span>=&gt; <span class="bool-val">false</span>,
+                    FundedContract::Incoming(<span class="kw">_</span>) =&gt; <span class="bool-val">false</span>,
                 }
             });
         future.<span class="kw">await
@@ -2536,7 +2553,7 @@
         <span class="kw">let </span>incoming_contract_account = <span class="self">Self</span>::get_incoming_contract_account(contract);
         <span class="kw">match </span><span class="kw-2">&amp;</span>incoming_contract_account.contract.decrypted_preimage {
             DecryptedPreimage::Some(key) =&gt; (
-                incoming_contract_account.to_owned(),
+                incoming_contract_account.clone(),
                 DecryptedPreimageStatus::Some(Preimage(sha256::Hash::hash(<span class="kw-2">&amp;</span>key.<span class="number">0</span>).to_byte_array())),
             ),
             DecryptedPreimage::Pending =&gt; {
@@ -2558,10 +2575,9 @@
                 <span class="kw">match </span><span class="kw-2">&amp;</span>contract.contract {
                     FundedContract::Incoming(c) =&gt; <span class="kw">match </span>c.contract.decrypted_preimage {
                         DecryptedPreimage::Pending =&gt; <span class="bool-val">false</span>,
-                        DecryptedPreimage::Some(<span class="kw">_</span>) =&gt; <span class="bool-val">true</span>,
-                        DecryptedPreimage::Invalid =&gt; <span class="bool-val">true</span>,
+                        DecryptedPreimage::Some(<span class="kw">_</span>) | DecryptedPreimage::Invalid =&gt; <span class="bool-val">true</span>,
                     },
-                    <span class="kw">_ </span>=&gt; <span class="bool-val">false</span>,
+                    FundedContract::Outgoing(<span class="kw">_</span>) =&gt; <span class="bool-val">false</span>,
                 }
             });
 
@@ -2598,16 +2614,16 @@
         <span class="kw">let </span>stream = dbtx.find_by_prefix(<span class="kw-2">&amp;</span>LightningGatewayKeyPrefix).<span class="kw">await</span>;
         stream
             .filter_map(|(<span class="kw">_</span>, gw)| <span class="kw">async </span>{
-                <span class="kw">if </span>!gw.is_expired() {
-                    <span class="prelude-val">Some</span>(gw)
-                } <span class="kw">else </span>{
+                <span class="kw">if </span>gw.is_expired() {
                     <span class="prelude-val">None
-                </span>}
+                </span>} <span class="kw">else </span>{
+                    <span class="prelude-val">Some</span>(gw)
+                }
             })
             .collect::&lt;Vec&lt;LightningGatewayRegistration&gt;&gt;()
             .<span class="kw">await
             </span>.into_iter()
-            .map(|gw| gw.unanchor())
+            .map(LightningGatewayRegistration::unanchor)
             .collect::&lt;Vec&lt;LightningGatewayAnnouncement&gt;&gt;()
     }
 
@@ -2708,7 +2724,7 @@
     }
 }
 
-<span class="kw">fn </span>record_funded_contract_metric(updated_contract_account: ContractAccount) {
+<span class="kw">fn </span>record_funded_contract_metric(updated_contract_account: <span class="kw-2">&amp;</span>ContractAccount) {
     LN_FUNDED_CONTRACT_SATS
         .with_label_values(<span class="kw-2">&amp;</span>[<span class="kw">match </span>updated_contract_account.contract {
             FundedContract::Incoming(<span class="kw">_</span>) =&gt; <span class="string">"incoming"</span>,
@@ -2925,7 +2941,7 @@
         <span class="kw">let </span>outgoing_contract = FundedContract::Outgoing(OutgoingContract {
             hash: preimage.consensus_hash(),
             gateway_key,
-            timelock: <span class="number">1000000</span>,
+            timelock: <span class="number">1_000_000</span>,
             user_key: random_pub_key(),
             cancelled: <span class="bool-val">false</span>,
         });

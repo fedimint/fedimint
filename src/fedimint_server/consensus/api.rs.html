@@ -783,8 +783,8 @@
                 <span class="kw">let </span>flagged = last_contribution.unwrap_or(<span class="number">0</span>) + <span class="number">1 </span>&lt; session_count;
 
                 <span class="kw">let </span>consensus_status = PeerStatus {
-                    connection_status,
                     last_contribution,
+                    connection_status,
                     flagged,
                 };
 
@@ -809,10 +809,10 @@
 
         <span class="prelude-val">Ok</span>(FederationStatus {
             session_count,
+            status_by_peer,
             peers_online,
             peers_offline,
             peers_flagged,
-            status_by_peer,
         })
     }
 

@@ -171,14 +171,6 @@
 
     <span class="attr">#[test]
     </span><span class="kw">fn </span>test_queue() {
-        <span class="kw">let </span><span class="kw-2">mut </span>queue = MessageQueue::default();
-
-        <span class="kw">for </span>i <span class="kw">in </span><span class="number">0u64</span>..<span class="number">10 </span>{
-            <span class="kw">let </span>umsg = queue.push(<span class="number">42 </span>* i);
-            <span class="macro">assert_eq!</span>(umsg.msg, <span class="number">42 </span>* i);
-            <span class="macro">assert_eq!</span>(umsg.id.<span class="number">0</span>, i + <span class="number">1</span>);
-        }
-
         <span class="kw">fn </span>assert_contains(queue: <span class="kw-2">&amp;</span>MessageQueue&lt;u64&gt;, iter: <span class="kw">impl </span>Iterator&lt;Item = u64&gt;) {
             <span class="kw">let </span><span class="kw-2">mut </span>queue_iter = queue.iter();
 
@@ -189,6 +181,14 @@
             }
 
             <span class="macro">assert_eq!</span>(queue_iter.next(), <span class="prelude-val">None</span>);
+        }
+
+        <span class="kw">let </span><span class="kw-2">mut </span>queue = MessageQueue::default();
+
+        <span class="kw">for </span>i <span class="kw">in </span><span class="number">0u64</span>..<span class="number">10 </span>{
+            <span class="kw">let </span>umsg = queue.push(<span class="number">42 </span>* i);
+            <span class="macro">assert_eq!</span>(umsg.msg, <span class="number">42 </span>* i);
+            <span class="macro">assert_eq!</span>(umsg.id.<span class="number">0</span>, i + <span class="number">1</span>);
         }
 
         <span class="macro">assert_eq!</span>(queue.iter().count(), <span class="number">10</span>);

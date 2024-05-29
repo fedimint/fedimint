@@ -1115,7 +1115,25 @@
 <a href="#1115" id="1115">1115</a>
 <a href="#1116" id="1116">1116</a>
 <a href="#1117" id="1117">1117</a>
-</pre></div><pre class="rust"><code><span class="kw">mod </span>client;
+<a href="#1118" id="1118">1118</a>
+<a href="#1119" id="1119">1119</a>
+<a href="#1120" id="1120">1120</a>
+<a href="#1121" id="1121">1121</a>
+<a href="#1122" id="1122">1122</a>
+<a href="#1123" id="1123">1123</a>
+<a href="#1124" id="1124">1124</a>
+<a href="#1125" id="1125">1125</a>
+<a href="#1126" id="1126">1126</a>
+</pre></div><pre class="rust"><code><span class="attr">#![warn(clippy::pedantic)]
+#![allow(clippy::doc_markdown)]
+#![allow(clippy::missing_errors_doc)]
+#![allow(clippy::missing_panics_doc)]
+#![allow(clippy::module_name_repetitions)]
+#![allow(clippy::must_use_candidate)]
+#![allow(clippy::return_self_not_must_use)]
+#![allow(clippy::too_many_lines)]
+
+</span><span class="kw">mod </span>client;
 <span class="kw">mod </span>db_locked;
 <span class="kw">pub mod </span>envs;
 <span class="kw">mod </span>utils;
@@ -1346,7 +1364,7 @@
     <span class="kw">fn </span>admin_client(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         cfg: <span class="kw-2">&amp;</span>ClientConfig,
-        api_secret: <span class="prelude-ty">Option</span>&lt;String&gt;,
+        api_secret: <span class="kw-2">&amp;</span><span class="prelude-ty">Option</span>&lt;String&gt;,
     ) -&gt; CliResult&lt;DynGlobalApi&gt; {
         <span class="kw">let </span>our_id = <span class="self">self</span>.our_id.ok_or_cli_msg(<span class="string">"Admin client needs our-id set"</span>)<span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(DynGlobalApi::from_config_admin(cfg, api_secret, our_id))
@@ -1446,7 +1464,7 @@
 }
 
 <span class="kw">impl </span>DkgAdminArgs {
-    <span class="kw">fn </span>ws_admin_client(<span class="kw-2">&amp;</span><span class="self">self</span>, api_secret: <span class="prelude-ty">Option</span>&lt;String&gt;) -&gt; DynGlobalApi {
+    <span class="kw">fn </span>ws_admin_client(<span class="kw-2">&amp;</span><span class="self">self</span>, api_secret: <span class="kw-2">&amp;</span><span class="prelude-ty">Option</span>&lt;String&gt;) -&gt; DynGlobalApi {
         <span class="kw">let </span>ws = <span class="self">self</span>.ws.clone();
         DynGlobalApi::from_pre_peer_id_admin_endpoint(ws, api_secret)
     }
@@ -1806,7 +1824,7 @@ Examples:
                 <span class="kw">let </span>api_secret = Client::get_api_secret_from_db(<span class="kw-2">&amp;</span>db).<span class="kw">await</span>;
 
                 <span class="kw">let </span>invite_code = client_config
-                    .invite_code(<span class="kw-2">&amp;</span>peer, api_secret)
+                    .invite_code(<span class="kw-2">&amp;</span>peer, <span class="kw-2">&amp;</span>api_secret)
                     .ok_or_cli_msg(<span class="string">"peer not found"</span>)<span class="question-mark">?</span>;
 
                 <span class="prelude-val">Ok</span>(CliOutput::InviteCode { invite_code })
@@ -1860,7 +1878,7 @@ Examples:
                 <span class="kw">let </span>client = <span class="self">self</span>.client_open(<span class="kw-2">&amp;</span>cli).<span class="kw">await</span><span class="question-mark">?</span>;
 
                 <span class="kw">let </span>audit = cli
-                    .admin_client(client.get_config(), client.api_secret().clone())<span class="question-mark">?
+                    .admin_client(client.get_config(), client.api_secret())<span class="question-mark">?
                     </span>.audit(cli.auth()<span class="question-mark">?</span>)
                     .<span class="kw">await</span><span class="question-mark">?</span>;
                 <span class="prelude-val">Ok</span>(CliOutput::Raw(
@@ -1871,7 +1889,7 @@ Examples:
                 <span class="kw">let </span>client = <span class="self">self</span>.client_open(<span class="kw-2">&amp;</span>cli).<span class="kw">await</span><span class="question-mark">?</span>;
 
                 <span class="kw">let </span>status = cli
-                    .admin_client(client.get_config(), client.api_secret().clone())<span class="question-mark">?
+                    .admin_client(client.get_config(), client.api_secret())<span class="question-mark">?
                     </span>.status()
                     .<span class="kw">await</span><span class="question-mark">?</span>;
                 <span class="prelude-val">Ok</span>(CliOutput::Raw(
@@ -1882,7 +1900,7 @@ Examples:
                 <span class="kw">let </span>client = <span class="self">self</span>.client_open(<span class="kw-2">&amp;</span>cli).<span class="kw">await</span><span class="question-mark">?</span>;
 
                 <span class="kw">let </span>guardian_config_backup = cli
-                    .admin_client(client.get_config(), client.api_secret().clone())<span class="question-mark">?
+                    .admin_client(client.get_config(), client.api_secret())<span class="question-mark">?
                     </span>.guardian_config_backup(cli.auth()<span class="question-mark">?</span>)
                     .<span class="kw">await</span><span class="question-mark">?</span>;
                 <span class="prelude-val">Ok</span>(CliOutput::Raw(
@@ -1917,8 +1935,7 @@ Examples:
                 <span class="kw">let </span>client = <span class="self">self</span>.client_open(<span class="kw-2">&amp;</span>cli).<span class="kw">await</span><span class="question-mark">?</span>;
 
                 <span class="kw">let </span>ws_api: Arc&lt;<span class="kw">_</span>&gt; =
-                    WsFederationApi::from_config(client.get_config(), client.api_secret().clone())
-                        .into();
+                    WsFederationApi::from_config(client.get_config(), client.api_secret()).into();
                 <span class="kw">let </span>response: Value = <span class="kw">match </span>peer_id {
                     <span class="prelude-val">Some</span>(peer_id) =&gt; ws_api
                         .request_raw(peer_id.into(), <span class="kw-2">&amp;</span>method, <span class="kw-2">&amp;</span>[params.to_json()])
@@ -1967,10 +1984,10 @@ Examples:
             Command::Dev(DevCmd::Wait { seconds }) =&gt; {
                 <span class="kw">let </span>_client = <span class="self">self</span>.client_open(<span class="kw-2">&amp;</span>cli).<span class="kw">await</span><span class="question-mark">?</span>;
                 <span class="kw">if let </span><span class="prelude-val">Some</span>(secs) = seconds {
-                    runtime::sleep(Duration::from_secs_f32(secs)).<span class="kw">await
-                </span>} <span class="kw">else </span>{
-                    pending().<span class="kw">await
-                </span>}
+                    runtime::sleep(Duration::from_secs_f32(secs)).<span class="kw">await</span>;
+                } <span class="kw">else </span>{
+                    pending::&lt;()&gt;().<span class="kw">await</span>;
+                }
                 <span class="prelude-val">Ok</span>(CliOutput::Raw(serde_json::Value::Null))
             }
             Command::Dev(DevCmd::Decode { decode_type }) =&gt; <span class="kw">match </span>decode_type {
@@ -2060,7 +2077,6 @@ Examples:
                 <span class="prelude-val">Ok</span>(CliOutput::ConfigEncrypt)
             }
             Command::Dev(DevCmd::ListOperationStates { operation_id }) =&gt; {
-                <span class="kw">let </span>client = <span class="self">self</span>.client_open(<span class="kw-2">&amp;</span>cli).<span class="kw">await</span><span class="question-mark">?</span>;
                 <span class="attr">#[derive(Serialize)]
                 </span><span class="kw">struct </span>ReactorLogState {
                     active: bool,
@@ -2070,6 +2086,8 @@ Examples:
                     </span>end_time: <span class="prelude-ty">Option</span>&lt;String&gt;,
                     state: String,
                 }
+
+                <span class="kw">let </span>client = <span class="self">self</span>.client_open(<span class="kw-2">&amp;</span>cli).<span class="kw">await</span><span class="question-mark">?</span>;
 
                 <span class="kw">let </span>(active_states, inactive_states) =
                     client.executor().get_operation_states(operation_id).<span class="kw">await</span>;
@@ -2117,7 +2135,7 @@ Examples:
     }
 
     <span class="kw">async fn </span>handle_admin_dkg_command(<span class="kw-2">&amp;</span><span class="self">self</span>, cli: Opts, dkg_args: DkgAdminArgs) -&gt; CliOutputResult {
-        <span class="kw">let </span>client = dkg_args.ws_admin_client(dkg_args.api_secret.clone());
+        <span class="kw">let </span>client = dkg_args.ws_admin_client(<span class="kw-2">&amp;</span>dkg_args.api_secret);
         <span class="kw">match </span><span class="kw-2">&amp;</span>dkg_args.subcommand {
             DkgAdminCmd::WsStatus =&gt; {
                 <span class="kw">let </span>status = client.status().<span class="kw">await</span><span class="question-mark">?</span>;

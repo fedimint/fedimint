@@ -381,7 +381,21 @@
 <a href="#381" id="381">381</a>
 <a href="#382" id="382">382</a>
 <a href="#383" id="383">383</a>
-</pre></div><pre class="rust"><code><span class="kw">use </span>core::cmp::Ordering;
+<a href="#384" id="384">384</a>
+<a href="#385" id="385">385</a>
+<a href="#386" id="386">386</a>
+<a href="#387" id="387">387</a>
+<a href="#388" id="388">388</a>
+<a href="#389" id="389">389</a>
+<a href="#390" id="390">390</a>
+</pre></div><pre class="rust"><code><span class="attr">#![warn(clippy::pedantic)]
+#![allow(clippy::ignored_unit_patterns)]
+#![allow(clippy::missing_errors_doc)]
+#![allow(clippy::missing_panics_doc)]
+#![allow(clippy::module_name_repetitions)]
+#![allow(clippy::must_use_candidate)]
+
+</span><span class="kw">use </span>core::cmp::Ordering;
 <span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
@@ -565,9 +579,9 @@
                 .subscribe_all_operations()
                 .filter_map(|state| <span class="kw">async move </span>{
                     <span class="kw">match </span>state {
-                        DummyStateMachine::OutputDone(<span class="kw">_</span>, <span class="kw">_</span>) =&gt; <span class="prelude-val">Some</span>(()),
-                        DummyStateMachine::Input { .. } =&gt; <span class="prelude-val">Some</span>(()),
-                        DummyStateMachine::Refund(<span class="kw">_</span>) =&gt; <span class="prelude-val">Some</span>(()),
+                        DummyStateMachine::OutputDone(<span class="kw">_</span>, <span class="kw">_</span>)
+                        | DummyStateMachine::Input { .. }
+                        | DummyStateMachine::Refund(<span class="kw">_</span>) =&gt; <span class="prelude-val">Some</span>(()),
                         <span class="kw">_ </span>=&gt; <span class="prelude-val">None</span>,
                     }
                 }),

@@ -1828,7 +1828,26 @@
 <a href="#1828" id="1828">1828</a>
 <a href="#1829" id="1829">1829</a>
 <a href="#1830" id="1830">1830</a>
-</pre></div><pre class="rust"><code><span class="kw">pub mod </span>db;
+<a href="#1831" id="1831">1831</a>
+<a href="#1832" id="1832">1832</a>
+<a href="#1833" id="1833">1833</a>
+<a href="#1834" id="1834">1834</a>
+<a href="#1835" id="1835">1835</a>
+<a href="#1836" id="1836">1836</a>
+<a href="#1837" id="1837">1837</a>
+<a href="#1838" id="1838">1838</a>
+</pre></div><pre class="rust"><code><span class="attr">#![warn(clippy::pedantic)]
+#![allow(clippy::cast_possible_truncation)]
+#![allow(clippy::cast_possible_wrap)]
+#![allow(clippy::default_trait_access)]
+#![allow(clippy::doc_markdown)]
+#![allow(clippy::missing_errors_doc)]
+#![allow(clippy::missing_panics_doc)]
+#![allow(clippy::module_name_repetitions)]
+#![allow(clippy::must_use_candidate)]
+#![allow(clippy::too_many_lines)]
+
+</span><span class="kw">pub mod </span>db;
 
 <span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap};
 <span class="kw">use </span>std::convert::Infallible;
@@ -2057,7 +2076,7 @@
 
         <span class="prelude-val">Ok</span>(Wallet::new(
             args.cfg().to_typed()<span class="question-mark">?</span>,
-            args.db().clone(),
+            args.db(),
             <span class="kw-2">&amp;mut </span>args.task_group().clone(),
             args.our_peer_id(),
         )
@@ -2194,7 +2213,7 @@
         // node is delayed processing of change outputs for the federation, which is an
         // acceptable risk since subsequent rounds of consensus will reattempt to fetch
         // the latest block count.
-        </span><span class="kw">if let </span><span class="prelude-val">Ok</span>(block_count) = <span class="self">self</span>.get_block_count().<span class="kw">await </span>{
+        </span><span class="kw">if let </span><span class="prelude-val">Ok</span>(block_count) = <span class="self">self</span>.get_block_count() {
             <span class="kw">let </span>block_count_vote = block_count.saturating_sub(<span class="self">self</span>.cfg.consensus.finality_delay);
 
             <span class="kw">let </span>current_vote = dbtx
@@ -2209,7 +2228,7 @@
                 <span class="string">"Proposing block count"
             </span>);
 
-            WALLET_BLOCK_COUNT.set(block_count_vote <span class="kw">as </span>i64);
+            WALLET_BLOCK_COUNT.set(i64::from(block_count_vote));
             items.push(WalletConsensusItem::BlockCount(block_count_vote));
         }
 
@@ -2296,7 +2315,7 @@
                     .<span class="kw">await
                     </span>.context(<span class="string">"Unsigned transaction does not exist"</span>)<span class="question-mark">?</span>;
 
-                <span class="self">self</span>.sign_peg_out_psbt(<span class="kw-2">&amp;mut </span>unsigned.psbt, <span class="kw-2">&amp;</span>peer, <span class="kw-2">&amp;</span>peg_out_signature)
+                <span class="self">self</span>.sign_peg_out_psbt(<span class="kw-2">&amp;mut </span>unsigned.psbt, peer, <span class="kw-2">&amp;</span>peg_out_signature)
                     .context(<span class="string">"Peg out signature is invalid"</span>)<span class="question-mark">?</span>;
 
                 dbtx.insert_entry(<span class="kw-2">&amp;</span>UnsignedTransactionKey(txid), <span class="kw-2">&amp;</span>unsigned)
@@ -2375,8 +2394,7 @@
 
         <span class="kw">let </span>fee_rate = <span class="self">self</span>.consensus_fee_rate(dbtx).<span class="kw">await</span>;
 
-        <span class="self">self</span>.offline_wallet()
-            .validate_tx(<span class="kw-2">&amp;</span>tx, output, fee_rate, <span class="self">self</span>.cfg.consensus.network)<span class="question-mark">?</span>;
+        StatelessWallet::validate_tx(<span class="kw-2">&amp;</span>tx, output, fee_rate, <span class="self">self</span>.cfg.consensus.network)<span class="question-mark">?</span>;
 
         <span class="self">self</span>.offline_wallet().sign_psbt(<span class="kw-2">&amp;mut </span>tx.psbt);
 
@@ -2414,7 +2432,7 @@
             .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
 
         <span class="comment">// Delete used UTXOs
-        </span><span class="kw">for </span>input <span class="kw">in </span>tx.psbt.unsigned_tx.input.iter() {
+        </span><span class="kw">for </span>input <span class="kw">in </span><span class="kw-2">&amp;</span>tx.psbt.unsigned_tx.input {
             dbtx.remove_entry(<span class="kw-2">&amp;</span>UTXOKey(input.previous_output)).<span class="kw">await</span>;
         }
 
@@ -2579,7 +2597,7 @@
 <span class="kw">impl </span>Wallet {
     <span class="kw">pub async fn </span>new(
         cfg: WalletConfig,
-        db: Database,
+        db: <span class="kw-2">&amp;</span>Database,
         task_group: <span class="kw-2">&amp;mut </span>TaskGroup,
         our_peer_id: PeerId,
     ) -&gt; anyhow::Result&lt;Wallet&gt; {
@@ -2589,7 +2607,7 @@
 
     <span class="kw">pub async fn </span>new_with_bitcoind(
         cfg: WalletConfig,
-        db: Database,
+        db: <span class="kw-2">&amp;</span>Database,
         bitcoind: DynBitcoindRpc,
         task_group: <span class="kw-2">&amp;mut </span>TaskGroup,
         our_peer_id: PeerId,
@@ -2629,14 +2647,14 @@
     </span><span class="kw">fn </span>sign_peg_out_psbt(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         psbt: <span class="kw-2">&amp;mut </span>PartiallySignedTransaction,
-        peer: <span class="kw-2">&amp;</span>PeerId,
+        peer: PeerId,
         signature: <span class="kw-2">&amp;</span>PegOutSignatureItem,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;(), ProcessPegOutSigError&gt; {
         <span class="kw">let </span>peer_key = <span class="self">self
             </span>.cfg
             .consensus
             .peer_peg_in_keys
-            .get(peer)
+            .get(<span class="kw-2">&amp;</span>peer)
             .expect(<span class="string">"always called with valid peer id"</span>);
 
         <span class="kw">if </span>psbt.inputs.len() != signature.signature.len() {
@@ -2703,8 +2721,7 @@
             .psbt
             .outputs
             .iter()
-            .flat_map(|output| output.proprietary.get(<span class="kw-2">&amp;</span>proprietary_tweak_key()).cloned())
-            .next()
+            .find_map(|output| output.proprietary.get(<span class="kw-2">&amp;</span>proprietary_tweak_key()).cloned())
             .ok_or(ProcessPegOutSigError::MissingOrMalformedChangeTweak)<span class="question-mark">?
             </span>.try_into()
             .map_err(|<span class="kw">_</span>| ProcessPegOutSigError::MissingOrMalformedChangeTweak)<span class="question-mark">?</span>;
@@ -2727,7 +2744,7 @@
         })
     }
 
-    <span class="kw">async fn </span>get_block_count(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; anyhow::Result&lt;u32&gt; {
+    <span class="kw">fn </span>get_block_count(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; anyhow::Result&lt;u32&gt; {
         <span class="self">self</span>.block_count_rx
             .borrow()
             .ok_or_else(|| <span class="macro">format_err!</span>(<span class="string">"Block count not available yet"</span>))
@@ -2805,19 +2822,18 @@
 
             <span class="comment">// TODO: use batching for mainnet syncing
             </span><span class="macro">trace!</span>(block = height, <span class="string">"Fetching block hash"</span>);
-            <span class="kw">let </span>block_hash =
-                retry(
-                    <span class="string">"get_block_hash"</span>,
-                    FibonacciBackoff::default()
-                        .with_min_delay(Duration::from_secs(<span class="number">1</span>))
-                        .with_max_delay(Duration::from_secs(<span class="number">10 </span>* <span class="number">60</span>))
-                        .with_max_times(usize::MAX),
-                    || {
-                        <span class="self">self</span>.btc_rpc.get_block_hash(height <span class="kw">as </span>u64) <span class="comment">// TODO: use u64 for height everywhere
-                    </span>},
-                )
-                .<span class="kw">await
-                </span>.expect(<span class="string">"bitcoind rpc to get block hash"</span>);
+            <span class="kw">let </span>block_hash = retry(
+                <span class="string">"get_block_hash"</span>,
+                FibonacciBackoff::default()
+                    .with_min_delay(Duration::from_secs(<span class="number">1</span>))
+                    .with_max_delay(Duration::from_secs(<span class="number">10 </span>* <span class="number">60</span>))
+                    .with_max_times(usize::MAX),
+                || {
+                    <span class="self">self</span>.btc_rpc.get_block_hash(u64::from(height)) <span class="comment">// TODO: use u64 for height everywhere
+                </span>},
+            )
+            .<span class="kw">await
+            </span>.expect(<span class="string">"bitcoind rpc to get block hash"</span>);
 
             <span class="kw">let </span>pending_transactions = dbtx
                 .find_by_prefix(<span class="kw-2">&amp;</span>PendingTransactionPrefixKey)
@@ -2841,7 +2857,7 @@
                         .with_max_times(usize::MAX),
                     || {
                         <span class="self">self</span>.btc_rpc
-                            .is_tx_in_block(txid, <span class="kw-2">&amp;</span>block_hash, height <span class="kw">as </span>u64)
+                            .is_tx_in_block(txid, <span class="kw-2">&amp;</span>block_hash, u64::from(height))
                     },
                 )
                 .<span class="kw">await
@@ -3008,7 +3024,7 @@
     <span class="kw">fn </span>spawn_broadcast_pending_task(
         task_group: <span class="kw-2">&amp;mut </span>TaskGroup,
         bitcoind: <span class="kw-2">&amp;</span>DynBitcoindRpc,
-        db: Database,
+        db: <span class="kw-2">&amp;</span>Database,
     ) {
         task_group.spawn(<span class="string">"broadcast pending"</span>, {
             <span class="kw">let </span>bitcoind = bitcoind.clone();
@@ -3141,7 +3157,6 @@
     <span class="doccomment">/// Given a tx created from an `WalletOutput`, validate there will be no
     /// issues submitting the transaction to the Bitcoin network
     </span><span class="kw">fn </span>validate_tx(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
         tx: <span class="kw-2">&amp;</span>UnsignedTransaction,
         output: <span class="kw-2">&amp;</span>WalletOutputV0,
         consensus_fee_rate: Feerate,
@@ -3175,7 +3190,7 @@
             WalletOutputV0::PegOut(pegout) =&gt; pegout.fees,
             WalletOutputV0::Rbf(rbf) =&gt; rbf.fees,
         };
-        <span class="kw">if </span>fees.fee_rate.sats_per_kvb &lt; DEFAULT_MIN_RELAY_TX_FEE <span class="kw">as </span>u64 {
+        <span class="kw">if </span>fees.fee_rate.sats_per_kvb &lt; u64::from(DEFAULT_MIN_RELAY_TX_FEE) {
             <span class="kw">return </span><span class="prelude-val">Err</span>(WalletOutputError::BelowMinRelayFee);
         }
 
@@ -3614,20 +3629,21 @@
             .expect(<span class="string">"is ok"</span>);
 
         <span class="comment">// peg out weight is incorrectly set to 0
-        </span><span class="kw">let </span>res = wallet.validate_tx(<span class="kw-2">&amp;</span>tx, <span class="kw-2">&amp;</span>rbf(fee.sats_per_kvb, <span class="number">0</span>), fee, Network::Bitcoin);
+        </span><span class="kw">let </span>res =
+            StatelessWallet::validate_tx(<span class="kw-2">&amp;</span>tx, <span class="kw-2">&amp;</span>rbf(fee.sats_per_kvb, <span class="number">0</span>), fee, Network::Bitcoin);
         <span class="macro">assert_eq!</span>(res, <span class="prelude-val">Err</span>(WalletOutputError::TxWeightIncorrect(<span class="number">0</span>, weight)));
 
         <span class="comment">// fee rate set below min relay fee to 0
-        </span><span class="kw">let </span>res = wallet.validate_tx(<span class="kw-2">&amp;</span>tx, <span class="kw-2">&amp;</span>rbf(<span class="number">0</span>, weight), fee, Bitcoin);
+        </span><span class="kw">let </span>res = StatelessWallet::validate_tx(<span class="kw-2">&amp;</span>tx, <span class="kw-2">&amp;</span>rbf(<span class="number">0</span>, weight), fee, Bitcoin);
         <span class="macro">assert_eq!</span>(res, <span class="prelude-val">Err</span>(WalletOutputError::BelowMinRelayFee));
 
         <span class="comment">// fees are okay
-        </span><span class="kw">let </span>res = wallet.validate_tx(<span class="kw-2">&amp;</span>tx, <span class="kw-2">&amp;</span>rbf(fee.sats_per_kvb, weight), fee, Bitcoin);
+        </span><span class="kw">let </span>res = StatelessWallet::validate_tx(<span class="kw-2">&amp;</span>tx, <span class="kw-2">&amp;</span>rbf(fee.sats_per_kvb, weight), fee, Bitcoin);
         <span class="macro">assert_eq!</span>(res, <span class="prelude-val">Ok</span>(()));
 
         <span class="comment">// tx has fee below consensus
         </span>tx.fees = PegOutFees::new(<span class="number">0</span>, weight);
-        <span class="kw">let </span>res = wallet.validate_tx(<span class="kw-2">&amp;</span>tx, <span class="kw-2">&amp;</span>rbf(fee.sats_per_kvb, weight), fee, Bitcoin);
+        <span class="kw">let </span>res = StatelessWallet::validate_tx(<span class="kw-2">&amp;</span>tx, <span class="kw-2">&amp;</span>rbf(fee.sats_per_kvb, weight), fee, Bitcoin);
         <span class="macro">assert_eq!</span>(
             res,
             <span class="prelude-val">Err</span>(WalletOutputError::PegOutFeeBelowConsensus(
@@ -3638,7 +3654,7 @@
 
         <span class="comment">// tx has peg-out amount under dust limit
         </span>tx.peg_out_amount = Amount::ZERO;
-        <span class="kw">let </span>res = wallet.validate_tx(<span class="kw-2">&amp;</span>tx, <span class="kw-2">&amp;</span>rbf(fee.sats_per_kvb, weight), fee, Bitcoin);
+        <span class="kw">let </span>res = StatelessWallet::validate_tx(<span class="kw-2">&amp;</span>tx, <span class="kw-2">&amp;</span>rbf(fee.sats_per_kvb, weight), fee, Bitcoin);
         <span class="macro">assert_eq!</span>(res, <span class="prelude-val">Err</span>(WalletOutputError::PegOutUnderDustLimit));
 
         <span class="comment">// tx is invalid for network
@@ -3647,7 +3663,7 @@
             amount: Amount::from_sat(<span class="number">1000</span>),
             fees: PegOutFees::new(<span class="number">100</span>, weight),
         });
-        <span class="kw">let </span>res = wallet.validate_tx(<span class="kw-2">&amp;</span>tx, <span class="kw-2">&amp;</span>output, fee, Testnet);
+        <span class="kw">let </span>res = StatelessWallet::validate_tx(<span class="kw-2">&amp;</span>tx, <span class="kw-2">&amp;</span>output, fee, Testnet);
         <span class="macro">assert_eq!</span>(res, <span class="prelude-val">Err</span>(WalletOutputError::WrongNetwork(Testnet, Bitcoin)));
     }
 

@@ -1390,7 +1390,7 @@
             );
             <span class="kw">let </span>admin_client = DynGlobalApi::from_pre_peer_id_admin_endpoint(
                 SafeUrl::parse(<span class="kw-2">&amp;</span>peer_env_vars.FM_API_URL)<span class="question-mark">?</span>,
-                process_mgr.globals.FM_FORCE_API_SECRETS.get_active(),
+                <span class="kw-2">&amp;</span>process_mgr.globals.FM_FORCE_API_SECRETS.get_active(),
             );
             endpoints.insert(<span class="kw-2">*</span>peer, peer_env_vars.FM_API_URL.clone());
             admin_clients.insert(<span class="kw-2">*</span>peer, admin_client);

@@ -377,11 +377,6 @@
 <a href="#377" id="377">377</a>
 <a href="#378" id="378">378</a>
 <a href="#379" id="379">379</a>
-<a href="#380" id="380">380</a>
-<a href="#381" id="381">381</a>
-<a href="#382" id="382">382</a>
-<a href="#383" id="383">383</a>
-<a href="#384" id="384">384</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::hash;
 <span class="kw">use </span>std::time::Duration;
@@ -476,13 +471,9 @@
             MintOutputStates::Created(created) =&gt; {
                 created.transitions(context, global_context, <span class="self">self</span>.common)
             }
-            MintOutputStates::Aborted(<span class="kw">_</span>) =&gt; {
-                <span class="macro">vec!</span>[]
-            }
-            MintOutputStates::Failed(<span class="kw">_</span>) =&gt; {
-                <span class="macro">vec!</span>[]
-            }
-            MintOutputStates::Succeeded(<span class="kw">_</span>) =&gt; {
+            MintOutputStates::Aborted(<span class="kw">_</span>)
+            | MintOutputStates::Failed(<span class="kw">_</span>)
+            | MintOutputStates::Succeeded(<span class="kw">_</span>) =&gt; {
                 <span class="macro">vec!</span>[]
             }
         }
@@ -546,8 +537,8 @@
         {
             <span class="kw">return</span>;
         }
-        std::future::pending().<span class="kw">await
-    </span>}
+        std::future::pending::&lt;()&gt;().<span class="kw">await</span>;
+    }
 
     <span class="kw">async fn </span>transition_tx_rejected&lt;<span class="lifetime">'a</span>&gt;(
         old_state: MintOutputStateMachine,
@@ -578,7 +569,7 @@
                     <span class="comment">// this query collects a threshold of 2f + 1 valid blind signature shares
                     </span>FilterMapThreshold::new(
                         <span class="kw">move </span>|peer, outcome| {
-                            verify_blind_share(peer, outcome, amount, message, <span class="kw-2">&amp;</span>decoder, <span class="kw-2">&amp;</span>pks)
+                            verify_blind_share(peer, <span class="kw-2">&amp;</span>outcome, amount, message, <span class="kw-2">&amp;</span>decoder, <span class="kw-2">&amp;</span>pks)
                         },
                         NumPeers::from(global_context.api().all_peers().total()),
                     ),
@@ -606,9 +597,8 @@
         <span class="comment">// we combine the shares, finalize the issuance request with the blind signature
         // and store the resulting note in the database
 
-        </span><span class="kw">let </span>created = <span class="kw">match </span>old_state.state {
-            MintOutputStates::Created(created) =&gt; created,
-            <span class="kw">_ </span>=&gt; <span class="macro">panic!</span>(<span class="string">"Unexpected prior state"</span>),
+        </span><span class="kw">let </span>MintOutputStates::Created(created) = old_state.state <span class="kw">else </span>{
+            <span class="macro">panic!</span>(<span class="string">"Unexpected prior state"</span>)
         };
 
         <span class="kw">let </span>agg_blind_signature = aggregate_signature_shares(
@@ -652,7 +642,7 @@
             )
             .<span class="kw">await
         </span>{
-            <span class="macro">error!</span>(<span class="question-mark">?</span>note, <span class="string">"E-cash note was replaced in DB"</span>)
+            <span class="macro">error!</span>(<span class="question-mark">?</span>note, <span class="string">"E-cash note was replaced in DB"</span>);
         }
 
         MintOutputStateMachine {
@@ -668,13 +658,13 @@
 /// If the given `outcome` is not a [`MintOutputOutcome::V0`] outcome.
 </span><span class="kw">pub fn </span>verify_blind_share(
     peer: PeerId,
-    outcome: SerdeOutputOutcome,
+    outcome: <span class="kw-2">&amp;</span>SerdeOutputOutcome,
     amount: Amount,
     blinded_message: BlindedMessage,
     decoder: <span class="kw-2">&amp;</span>Decoder,
     peer_tbs_pks: <span class="kw-2">&amp;</span>BTreeMap&lt;PeerId, Tiered&lt;PublicKeyShare&gt;&gt;,
 ) -&gt; anyhow::Result&lt;BlindedSignatureShare&gt; {
-    <span class="kw">let </span>outcome = deserialize_outcome::&lt;MintOutputOutcome&gt;(<span class="kw-2">&amp;</span>outcome, decoder)<span class="question-mark">?</span>;
+    <span class="kw">let </span>outcome = deserialize_outcome::&lt;MintOutputOutcome&gt;(outcome, decoder)<span class="question-mark">?</span>;
 
     <span class="kw">let </span>blinded_signature_share = outcome
         .ensure_v0_ref()
@@ -732,7 +722,7 @@
 <span class="kw">impl </span>NoteIssuanceRequest {
     <span class="doccomment">/// Generate a request session for a single note and returns it plus the
     /// corresponding blinded message
-    </span><span class="kw">pub fn </span>new&lt;C&gt;(ctx: <span class="kw-2">&amp;</span>Secp256k1&lt;C&gt;, secret: DerivableSecret) -&gt; (NoteIssuanceRequest, BlindNonce)
+    </span><span class="kw">pub fn </span>new&lt;C&gt;(ctx: <span class="kw-2">&amp;</span>Secp256k1&lt;C&gt;, secret: <span class="kw-2">&amp;</span>DerivableSecret) -&gt; (NoteIssuanceRequest, BlindNonce)
     <span class="kw">where
         </span>C: Signing,
     {

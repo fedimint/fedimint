@@ -414,9 +414,9 @@
 <span class="kw">use </span>axum::routing::{get, post};
 <span class="kw">use </span>axum::{Extension, Json, Router};
 <span class="kw">use </span>axum_macros::debug_handler;
-<span class="kw">use </span>bitcoin::consensus::Encodable;
 <span class="kw">use </span>bitcoin_hashes::{sha256, Hash};
 <span class="kw">use </span>fedimint_core::config::FederationId;
+<span class="kw">use </span>fedimint_core::encoding::Encodable;
 <span class="kw">use </span>fedimint_core::task::TaskGroup;
 <span class="kw">use </span>fedimint_ln_client::pay::PayInvoicePayload;
 <span class="kw">use </span>fedimint_ln_common::gateway_endpoint_constants::{
@@ -539,7 +539,7 @@
     next: Next,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;axum::response::Response, StatusCode&gt; {
     <span class="kw">let </span>token = extract_bearer_token(<span class="kw-2">&amp;</span>request)<span class="question-mark">?</span>;
-    <span class="kw">let </span>hashed_password = hash_password(token, password_salt);
+    <span class="kw">let </span>hashed_password = hash_password(<span class="kw-2">&amp;</span>token, password_salt);
     <span class="kw">if </span>gateway_hashed_password == hashed_password {
         <span class="kw">return </span><span class="prelude-val">Ok</span>(next.run(request).<span class="kw">await</span>);
     }
@@ -604,7 +604,7 @@
 
 <span class="doccomment">/// Creates a password hash by appending a 4 byte salt to the plaintext
 /// password.
-</span><span class="kw">pub fn </span>hash_password(plaintext_password: String, salt: [u8; <span class="number">16</span>]) -&gt; sha256::Hash {
+</span><span class="kw">pub fn </span>hash_password(plaintext_password: <span class="kw-2">&amp;</span>str, salt: [u8; <span class="number">16</span>]) -&gt; sha256::Hash {
     <span class="kw">let </span><span class="kw-2">mut </span>bytes = Vec::&lt;u8&gt;::new();
     plaintext_password
         .consensus_encode(<span class="kw-2">&amp;mut </span>bytes)

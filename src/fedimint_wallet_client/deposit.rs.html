@@ -339,10 +339,6 @@
 <a href="#339" id="339">339</a>
 <a href="#340" id="340">340</a>
 <a href="#341" id="341">341</a>
-<a href="#342" id="342">342</a>
-<a href="#343" id="343">343</a>
-<a href="#344" id="344">344</a>
-<a href="#345" id="345">345</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::cmp;
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::{Duration, SystemTime};
@@ -428,10 +424,7 @@
                     },
                 )]
             }
-            DepositStates::Claiming(<span class="kw">_</span>) =&gt; {
-                <span class="macro">vec!</span>[]
-            }
-            DepositStates::TimedOut(<span class="kw">_</span>) =&gt; {
+            DepositStates::Claiming(<span class="kw">_</span>) | DepositStates::TimedOut(<span class="kw">_</span>) =&gt; {
                 <span class="macro">vec!</span>[]
             }
         }
@@ -486,9 +479,9 @@
                         .expect(<span class="string">"TODO: handle invalid tx returned by API"</span>);
 
                     <span class="kw">return </span>(transaction, out_idx);
-                } <span class="kw">else </span>{
-                    <span class="macro">trace!</span>(<span class="string">"No transactions received yet for script {script:?}"</span>);
                 }
+
+                <span class="macro">trace!</span>(<span class="string">"No transactions received yet for script {script:?}"</span>);
             }
             <span class="prelude-val">Err</span>(e) =&gt; {
                 <span class="macro">warn!</span>(<span class="string">"Error fetching transaction history for {script:?}: {e}"</span>);
@@ -582,10 +575,9 @@
             <span class="string">"Fetched confirmation block count"
         </span>);
 
-        <span class="kw">if </span>!confirmation_block_count
-            .map(|confirmation_block_count| consensus_block_count &gt;= confirmation_block_count)
-            .unwrap_or(<span class="bool-val">false</span>)
-        {
+        <span class="kw">if </span>!confirmation_block_count.is_some_and(|confirmation_block_count| {
+            consensus_block_count &gt;= confirmation_block_count
+        }) {
             <span class="macro">trace!</span>(<span class="string">"Not confirmed yet, confirmation_block_count={confirmation_block_count:?}, consensus_block_count={consensus_block_count}"</span>);
             sleep(TRANSACTION_STATUS_FETCH_INTERVAL).<span class="kw">await</span>;
             <span class="kw">continue</span>;
@@ -617,9 +609,9 @@
     old_state: DepositStateMachine,
     txout_proof: TxOutProof,
 ) -&gt; DepositStateMachine {
-    <span class="kw">let </span>awaiting_confirmation_state = <span class="kw">match </span>old_state.state {
-        DepositStates::WaitingForConfirmations(s) =&gt; s,
-        <span class="kw">_ </span>=&gt; <span class="macro">panic!</span>(<span class="string">"Invalid previous state"</span>),
+    <span class="kw">let </span>DepositStates::WaitingForConfirmations(awaiting_confirmation_state) = old_state.state
+    <span class="kw">else </span>{
+        <span class="macro">panic!</span>(<span class="string">"Invalid previous state"</span>)
     };
 
     <span class="kw">let </span>pegin_proof = PegInProof::new(

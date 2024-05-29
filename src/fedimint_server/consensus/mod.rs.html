@@ -379,7 +379,7 @@
     ConsensusEngine {
         db,
         keychain: Keychain::new(<span class="kw-2">&amp;</span>cfg),
-        federation_api: DynGlobalApi::from_config(<span class="kw-2">&amp;</span>client_cfg, force_api_secrets.get_active()),
+        federation_api: DynGlobalApi::from_config(<span class="kw-2">&amp;</span>client_cfg, <span class="kw-2">&amp;</span>force_api_secrets.get_active()),
         self_id_str: cfg.local.identity.to_string(),
         peer_id_str: (<span class="number">0</span>..cfg.consensus.api_endpoints.len())
             .map(|x| x.to_string())

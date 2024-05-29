@@ -2649,19 +2649,19 @@
     <span class="macro">assert!</span>(!v.is_empty());
     v.sort();
     <span class="kw">let </span>n = v.len();
-    <span class="kw">let </span>max = v.iter().last().unwrap().to_owned();
     <span class="kw">let </span>min = v.first().unwrap().to_owned();
+    <span class="kw">let </span>max = v.iter().last().unwrap().to_owned();
     <span class="kw">let </span>median = v[n / <span class="number">2</span>];
     <span class="kw">let </span>sum: Duration = v.iter().sum();
     <span class="kw">let </span>avg = sum / n <span class="kw">as </span>u32;
     <span class="kw">let </span>p90 = v[(n <span class="kw">as </span>f32 * <span class="number">0.9</span>) <span class="kw">as </span>usize];
     Stats {
-        max,
         min,
-        sum,
-        median,
         avg,
+        median,
         p90,
+        max,
+        sum,
     }
 }
 

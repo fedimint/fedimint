@@ -313,12 +313,6 @@
 <a href="#313" id="313">313</a>
 <a href="#314" id="314">314</a>
 <a href="#315" id="315">315</a>
-<a href="#316" id="316">316</a>
-<a href="#317" id="317">317</a>
-<a href="#318" id="318">318</a>
-<a href="#319" id="319">319</a>
-<a href="#320" id="320">320</a>
-<a href="#321" id="321">321</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
 
@@ -389,7 +383,7 @@
 /// classDef virtual fill:#fff,stroke-dasharray: 5 5
 ///
 ///     Funding -- funding tx is rejected --&gt; Rejected
-///     Funding -- funding tx is accepted --&gt; Funded    
+///     Funding -- funding tx is accepted --&gt; Funded
 ///     Funded -- post invoice returns preimage  --&gt; Success
 ///     Funded -- post invoice returns forfeit tx --&gt; Refunding
 ///     Funded -- await_preimage returns preimage --&gt; Success
@@ -444,13 +438,7 @@
                     ),
                 ]
             }
-            SendSMState::Refunding(..) =&gt; {
-                <span class="macro">vec!</span>[]
-            }
-            SendSMState::Success(..) =&gt; {
-                <span class="macro">vec!</span>[]
-            }
-            SendSMState::Rejected(..) =&gt; {
+            SendSMState::Refunding(..) | SendSMState::Success(..) | SendSMState::Rejected(..) =&gt; {
                 <span class="macro">vec!</span>[]
             }
         }
@@ -498,16 +486,16 @@
                     <span class="prelude-val">Ok</span>(gateway_response) =&gt; {
                         <span class="kw">if </span>contract.verify_gateway_response(<span class="kw-2">&amp;</span>gateway_response) {
                             <span class="kw">return </span>gateway_response;
-                        } <span class="kw">else </span>{
-                            <span class="macro">error!</span>(
-                                <span class="question-mark">?</span>gateway_response,
-                                <span class="question-mark">?</span>contract,
-                                <span class="question-mark">?</span>invoice,
-                                <span class="question-mark">?</span>federation_id,
-                                <span class="question-mark">?</span>gateway_api,
-                                <span class="string">"Invalid gateway response"
-                            </span>);
                         }
+
+                        <span class="macro">error!</span>(
+                            <span class="question-mark">?</span>gateway_response,
+                            <span class="question-mark">?</span>contract,
+                            <span class="question-mark">?</span>invoice,
+                            <span class="question-mark">?</span>federation_id,
+                            <span class="question-mark">?</span>gateway_api,
+                            <span class="string">"Invalid gateway response"
+                        </span>);
                     }
                     <span class="prelude-val">Err</span>(error) =&gt; {
                         <span class="macro">error!</span>(
@@ -517,7 +505,7 @@
                             <span class="question-mark">?</span>federation_id,
                             <span class="question-mark">?</span>gateway_api,
                             <span class="string">"Gateway returned error"
-                        </span>)
+                        </span>);
                     }
                 },
                 <span class="prelude-val">Err</span>(error) =&gt; {

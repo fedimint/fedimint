@@ -329,7 +329,23 @@
 <a href="#329" id="329">329</a>
 <a href="#330" id="330">330</a>
 <a href="#331" id="331">331</a>
-</pre></div><pre class="rust"><code><span class="kw">use </span>std::hash::Hasher;
+<a href="#332" id="332">332</a>
+<a href="#333" id="333">333</a>
+<a href="#334" id="334">334</a>
+<a href="#335" id="335">335</a>
+<a href="#336" id="336">336</a>
+<a href="#337" id="337">337</a>
+<a href="#338" id="338">338</a>
+<a href="#339" id="339">339</a>
+</pre></div><pre class="rust"><code><span class="attr">#![warn(clippy::pedantic)]
+#![allow(clippy::default_trait_access)]
+#![allow(clippy::missing_errors_doc)]
+#![allow(clippy::missing_panics_doc)]
+#![allow(clippy::module_name_repetitions)]
+#![allow(clippy::must_use_candidate)]
+#![allow(clippy::return_self_not_must_use)]
+
+</span><span class="kw">use </span>std::hash::Hasher;
 
 <span class="kw">use </span>bitcoin::address::NetworkUnchecked;
 <span class="kw">use </span>bitcoin::psbt::raw::ProprietaryKey;
@@ -576,7 +592,7 @@
 <span class="kw">impl </span>std::hash::Hash <span class="kw">for </span>PegOutSignatureItem {
     <span class="kw">fn </span>hash&lt;H: Hasher&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, state: <span class="kw-2">&amp;mut </span>H) {
         <span class="self">self</span>.txid.hash(state);
-        <span class="kw">for </span>sig <span class="kw">in </span><span class="self">self</span>.signature.iter() {
+        <span class="kw">for </span>sig <span class="kw">in </span><span class="kw-2">&amp;</span><span class="self">self</span>.signature {
             sig.serialize_der().hash(state);
         }
     }

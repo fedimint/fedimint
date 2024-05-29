@@ -758,7 +758,17 @@
 <a href="#758" id="758">758</a>
 <a href="#759" id="759">759</a>
 <a href="#760" id="760">760</a>
-</pre></div><pre class="rust"><code><span class="kw">mod </span>db;
+<a href="#761" id="761">761</a>
+<a href="#762" id="762">762</a>
+<a href="#763" id="763">763</a>
+<a href="#764" id="764">764</a>
+<a href="#765" id="765">765</a>
+</pre></div><pre class="rust"><code><span class="attr">#![warn(clippy::pedantic)]
+#![allow(clippy::cast_possible_wrap)]
+#![allow(clippy::default_trait_access)]
+#![allow(clippy::module_name_repetitions)]
+
+</span><span class="kw">mod </span>db;
 
 <span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::time::Duration;
@@ -948,7 +958,7 @@
 
         <span class="kw">let </span>(tpe_agg_pk, pks, sks) = dealer_keygen(peers.threshold(), peers.len());
 
-        <span class="kw">let </span>tpe_pks: BTreeMap&lt;PeerId, PublicKeyShare&gt; = peers.iter().cloned().zip(pks).collect();
+        <span class="kw">let </span>tpe_pks: BTreeMap&lt;PeerId, PublicKeyShare&gt; = peers.iter().copied().zip(pks).collect();
 
         <span class="kw">let </span>server_cfg = peers
             .iter()
@@ -1061,7 +1071,7 @@
 <span class="kw">fn </span>eval_polynomial(coefficients: <span class="kw-2">&amp;</span>[Scalar], x: <span class="kw-2">&amp;</span>Scalar) -&gt; Scalar {
     coefficients
         .iter()
-        .cloned()
+        .copied()
         .rev()
         .reduce(|acc, coefficient| acc * x + coefficient)
         .expect(<span class="string">"We have at least one coefficient"</span>)
@@ -1248,7 +1258,7 @@
             .<span class="kw">await
             </span>.is_some()
         {
-            <span class="macro">panic!</span>(<span class="string">"Output Outcome for {:?} already exists"</span>, out_point);
+            <span class="macro">panic!</span>(<span class="string">"Output Outcome for {out_point:?} already exists"</span>);
         }
 
         <span class="prelude-val">Ok</span>(TransactionItemAmount {

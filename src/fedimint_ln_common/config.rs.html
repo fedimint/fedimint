@@ -209,9 +209,6 @@
 <a href="#209" id="209">209</a>
 <a href="#210" id="210">210</a>
 <a href="#211" id="211">211</a>
-<a href="#212" id="212">212</a>
-<a href="#213" id="213">213</a>
-<a href="#214" id="214">214</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::str::FromStr;
 
 <span class="kw">use </span>anyhow::Context;
@@ -372,9 +369,9 @@
 
 <span class="kw">impl </span>FeeToAmount <span class="kw">for </span>RoutingFees {
     <span class="kw">fn </span>to_amount(<span class="kw-2">&amp;</span><span class="self">self</span>, payment: <span class="kw-2">&amp;</span>Amount) -&gt; Amount {
-        <span class="kw">let </span>base_fee = <span class="self">self</span>.base_msat <span class="kw">as </span>u64;
+        <span class="kw">let </span>base_fee = u64::from(<span class="self">self</span>.base_msat);
         <span class="kw">let </span>margin_fee: u64 = <span class="kw">if </span><span class="self">self</span>.proportional_millionths &gt; <span class="number">0 </span>{
-            <span class="kw">let </span>fee_percent = <span class="number">1000000 </span>/ <span class="self">self</span>.proportional_millionths <span class="kw">as </span>u64;
+            <span class="kw">let </span>fee_percent = <span class="number">1_000_000 </span>/ u64::from(<span class="self">self</span>.proportional_millionths);
             payment.msats / fee_percent
         } <span class="kw">else </span>{
             <span class="number">0
@@ -407,21 +404,18 @@
             (<span class="string">"xpto"</span>, <span class="prelude-val">None</span>),
         ];
         <span class="kw">for </span>(input, expected) <span class="kw">in </span>test_cases {
-            <span class="kw">match </span>expected {
-                <span class="prelude-val">Some</span>((base_msat, proportional_millionths)) =&gt; {
-                    <span class="kw">let </span>actual = parse_routing_fees(input).expect(<span class="string">"parsed routing fees"</span>);
-                    <span class="macro">assert_eq!</span>(
-                        actual,
-                        RoutingFees {
-                            base_msat,
-                            proportional_millionths
-                        }
-                    );
-                }
-                <span class="prelude-val">None </span>=&gt; {
-                    <span class="kw">let </span>result = parse_routing_fees(input);
-                    <span class="macro">assert!</span>(result.is_err());
-                }
+            <span class="kw">if let </span><span class="prelude-val">Some</span>((base_msat, proportional_millionths)) = expected {
+                <span class="kw">let </span>actual = parse_routing_fees(input).expect(<span class="string">"parsed routing fees"</span>);
+                <span class="macro">assert_eq!</span>(
+                    actual,
+                    RoutingFees {
+                        base_msat,
+                        proportional_millionths
+                    }
+                );
+            } <span class="kw">else </span>{
+                <span class="kw">let </span>result = parse_routing_fees(input);
+                <span class="macro">assert!</span>(result.is_err());
             }
         }
     }

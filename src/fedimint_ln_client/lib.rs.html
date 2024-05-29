@@ -2009,7 +2009,46 @@
 <a href="#2009" id="2009">2009</a>
 <a href="#2010" id="2010">2010</a>
 <a href="#2011" id="2011">2011</a>
-</pre></div><pre class="rust"><code><span class="kw">pub mod </span>api;
+<a href="#2012" id="2012">2012</a>
+<a href="#2013" id="2013">2013</a>
+<a href="#2014" id="2014">2014</a>
+<a href="#2015" id="2015">2015</a>
+<a href="#2016" id="2016">2016</a>
+<a href="#2017" id="2017">2017</a>
+<a href="#2018" id="2018">2018</a>
+<a href="#2019" id="2019">2019</a>
+<a href="#2020" id="2020">2020</a>
+<a href="#2021" id="2021">2021</a>
+<a href="#2022" id="2022">2022</a>
+<a href="#2023" id="2023">2023</a>
+<a href="#2024" id="2024">2024</a>
+<a href="#2025" id="2025">2025</a>
+<a href="#2026" id="2026">2026</a>
+<a href="#2027" id="2027">2027</a>
+<a href="#2028" id="2028">2028</a>
+<a href="#2029" id="2029">2029</a>
+<a href="#2030" id="2030">2030</a>
+</pre></div><pre class="rust"><code><span class="attr">#![warn(clippy::pedantic)]
+#![allow(clippy::cast_possible_truncation)]
+#![allow(clippy::cast_possible_wrap)]
+#![allow(clippy::cast_sign_loss)]
+#![allow(clippy::default_trait_access)]
+#![allow(clippy::doc_markdown)]
+#![allow(clippy::ignored_unit_patterns)]
+#![allow(clippy::large_futures)]
+#![allow(clippy::missing_errors_doc)]
+#![allow(clippy::missing_fields_in_debug)]
+#![allow(clippy::missing_panics_doc)]
+#![allow(clippy::module_name_repetitions)]
+#![allow(clippy::must_use_candidate)]
+#![allow(clippy::return_self_not_must_use)]
+#![allow(clippy::similar_names)]
+#![allow(clippy::struct_field_names)]
+#![allow(clippy::too_many_lines)]
+#![allow(clippy::unused_async)]
+#![allow(clippy::wildcard_imports)]
+
+</span><span class="kw">pub mod </span>api;
 <span class="attr">#[cfg(feature = <span class="string">"cli"</span>)]
 </span><span class="kw">pub mod </span>cli;
 <span class="kw">pub mod </span>db;
@@ -2292,8 +2331,8 @@
 
         <span class="kw">for </span>table <span class="kw">in </span>filtered_prefixes {
             <span class="kw">match </span>table {
-                DbKeyPrefix::ActiveGateway =&gt; {
-                    <span class="comment">// Active gateway is deprecated
+                DbKeyPrefix::ActiveGateway | DbKeyPrefix::MetaOverridesDeprecated =&gt; {
+                    <span class="comment">// Deprecated
                 </span>}
                 DbKeyPrefix::PaymentResult =&gt; {
                     <span class="macro">push_db_pair_items!</span>(
@@ -2305,9 +2344,6 @@
                         <span class="string">"Payment Result"
                     </span>);
                 }
-                DbKeyPrefix::MetaOverridesDeprecated =&gt; {
-                    <span class="comment">// Deprecated
-                </span>}
                 DbKeyPrefix::LightningGateway =&gt; {
                     <span class="macro">push_db_pair_items!</span>(
                         dbtx,
@@ -2493,7 +2529,7 @@
         })
     }
 
-    <span class="kw">fn </span>get_payment_operation_id(<span class="kw-2">&amp;</span><span class="self">self</span>, payment_hash: <span class="kw-2">&amp;</span>sha256::Hash, index: u16) -&gt; OperationId {
+    <span class="kw">fn </span>get_payment_operation_id(payment_hash: <span class="kw-2">&amp;</span>sha256::Hash, index: u16) -&gt; OperationId {
         <span class="comment">// Copy the 32 byte payment hash and a 2 byte index to make every payment
         // attempt have a unique `OperationId`
         </span><span class="kw">let </span><span class="kw-2">mut </span>bytes = [<span class="number">0</span>; <span class="number">34</span>];
@@ -2682,8 +2718,7 @@
                     }
                     <span class="kw">_ </span>=&gt; {}
                 },
-                <span class="prelude-val">Some</span>(<span class="kw">_</span>) =&gt; {}
-                <span class="prelude-val">None </span>=&gt; {}
+                <span class="prelude-val">Some</span>(<span class="kw">_</span>) | <span class="prelude-val">None </span>=&gt; {}
             }
         }
     }
@@ -2702,8 +2737,7 @@
                     }
                     <span class="kw">_ </span>=&gt; {}
                 },
-                <span class="prelude-val">Some</span>(<span class="kw">_</span>) =&gt; {}
-                <span class="prelude-val">None </span>=&gt; {}
+                <span class="prelude-val">Some</span>(<span class="kw">_</span>) | <span class="prelude-val">None </span>=&gt; {}
             }
         }
     }
@@ -2804,7 +2838,7 @@
             amount,
             hash: payment_hash,
             encrypted_preimage: EncryptedPreimage::new(
-                PreimageKey(preimage_key),
+                <span class="kw-2">&amp;</span>PreimageKey(preimage_key),
                 <span class="kw-2">&amp;</span><span class="self">self</span>.cfg.threshold_pub_key,
             ),
             expiry_time,
@@ -2851,7 +2885,7 @@
                 <span class="comment">// Remove all previous gateway entries
                 </span>dbtx.remove_by_prefix(<span class="kw-2">&amp;</span>LightningGatewayKeyPrefix).<span class="kw">await</span>;
 
-                <span class="kw">for </span>gw <span class="kw">in </span>gateways.iter() {
+                <span class="kw">for </span>gw <span class="kw">in </span><span class="kw-2">&amp;</span>gateways {
                     dbtx.insert_entry(
                         <span class="kw-2">&amp;</span>LightningGatewayKey(gw.info.gateway_id),
                         <span class="kw-2">&amp;</span>gw.clone().anchor(),
@@ -2877,10 +2911,11 @@
     <span class="kw">where
         </span>Fut: Future&lt;Output = Vec&lt;LightningGatewayAnnouncement&gt;&gt;,
     {
-        <span class="kw">let </span><span class="kw-2">mut </span>first_time = <span class="bool-val">true</span>;
-
         <span class="kw">const </span>ABOUT_TO_EXPIRE: Duration = Duration::from_secs(<span class="number">30</span>);
         <span class="kw">const </span>EMPTY_GATEWAY_SLEEP: Duration = Duration::from_secs(<span class="number">10 </span>* <span class="number">60</span>);
+
+        <span class="kw">let </span><span class="kw-2">mut </span>first_time = <span class="bool-val">true</span>;
+
         <span class="kw">loop </span>{
             <span class="kw">let </span>gateways = <span class="self">self</span>.list_gateways().<span class="kw">await</span>;
             <span class="kw">let </span>sleep_time = gateways_filter(gateways)
@@ -2945,8 +2980,10 @@
         }
 
         <span class="comment">// Verify that no previous payment attempt is still running
-        </span><span class="kw">let </span>prev_operation_id =
-            <span class="self">self</span>.get_payment_operation_id(invoice.payment_hash(), prev_payment_result.index);
+        </span><span class="kw">let </span>prev_operation_id = LightningClientModule::get_payment_operation_id(
+            invoice.payment_hash(),
+            prev_payment_result.index,
+        );
         <span class="kw">if </span><span class="self">self</span>.client_ctx.has_active_states(prev_operation_id).<span class="kw">await </span>{
             <span class="macro">bail!</span>(
                 PayBolt11InvoiceError::PreviousPaymentAttemptStillInProgress {
@@ -2956,7 +2993,8 @@
         }
 
         <span class="kw">let </span>next_index = prev_payment_result.index + <span class="number">1</span>;
-        <span class="kw">let </span>operation_id = <span class="self">self</span>.get_payment_operation_id(invoice.payment_hash(), next_index);
+        <span class="kw">let </span>operation_id =
+            LightningClientModule::get_payment_operation_id(invoice.payment_hash(), next_index);
 
         <span class="kw">let </span>new_payment_result = PaymentResult {
             index: next_index,
@@ -3126,19 +3164,6 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         operation_id: OperationId,
     ) -&gt; anyhow::Result&lt;UpdateStreamOrOutcome&lt;LnPayState&gt;&gt; {
-        <span class="kw">let </span>operation = <span class="self">self</span>.client_ctx.get_operation(operation_id).<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">let </span>(<span class="kw">_</span>, <span class="kw">_</span>, change) = <span class="kw">match </span>operation.meta::&lt;LightningOperationMeta&gt;().variant {
-            LightningOperationMetaVariant::Pay(LightningOperationMetaPay {
-                out_point,
-                invoice,
-                change,
-                ..
-            }) =&gt; (out_point, invoice, change),
-            <span class="kw">_ </span>=&gt; <span class="macro">bail!</span>(<span class="string">"Operation is not a lightning payment"</span>),
-        };
-
-        <span class="kw">let </span>client_ctx = <span class="self">self</span>.client_ctx.clone();
-
         <span class="kw">async fn </span>get_next_pay_state(
             stream: <span class="kw-2">&amp;mut </span>fedimint_core::util::BoxStream&lt;<span class="lifetime">'_</span>, LightningClientStateMachines&gt;,
         ) -&gt; <span class="prelude-ty">Option</span>&lt;LightningPayStates&gt; {
@@ -3148,6 +3173,19 @@
                 <span class="prelude-val">None </span>=&gt; <span class="prelude-val">None</span>,
             }
         }
+
+        <span class="kw">let </span>operation = <span class="self">self</span>.client_ctx.get_operation(operation_id).<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>LightningOperationMetaVariant::Pay(LightningOperationMetaPay {
+            out_point: <span class="kw">_</span>,
+            invoice: <span class="kw">_</span>,
+            change,
+            ..
+        }) = operation.meta::&lt;LightningOperationMeta&gt;().variant
+        <span class="kw">else </span>{
+            <span class="macro">bail!</span>(<span class="string">"Operation is not a lightning payment"</span>)
+        };
+
+        <span class="kw">let </span>client_ctx = <span class="self">self</span>.client_ctx.clone();
 
         <span class="prelude-val">Ok</span>(operation.outcome_or_updates(<span class="kw-2">&amp;</span><span class="self">self</span>.client_ctx.global_db(), operation_id, <span class="kw">move </span>|| {
             <span class="macro">stream!</span> {
@@ -3191,7 +3229,9 @@
                 <span class="kw">let </span>state = get_next_pay_state(<span class="kw-2">&amp;mut </span>stream).<span class="kw">await</span>;
                 <span class="kw">match </span>state {
                     <span class="prelude-val">Some</span>(LightningPayStates::Success(preimage)) =&gt; {
-                        <span class="kw">if </span>!change.is_empty() {
+                        <span class="kw">if </span>change.is_empty() {
+                            <span class="kw">yield </span>LnPayState::Success { preimage };
+                        } <span class="kw">else </span>{
                             <span class="kw">yield </span>LnPayState::AwaitingChange;
                             <span class="kw">match </span>client_ctx.await_primary_module_outputs(operation_id, change.clone()).<span class="kw">await </span>{
                                 <span class="prelude-val">Ok</span>(<span class="kw">_</span>) =&gt; {
@@ -3201,8 +3241,6 @@
                                     <span class="kw">yield </span>LnPayState::UnexpectedError { error_message: <span class="macro">format!</span>(<span class="string">"Error occurred while waiting for the change: {e:?}"</span>) };
                                 }
                             }
-                        } <span class="kw">else </span>{
-                            <span class="kw">yield </span>LnPayState::Success { preimage };
                         }
                     }
                     <span class="prelude-val">Some</span>(LightningPayStates::Refund(refund)) =&gt; {
@@ -3390,17 +3428,16 @@
         gateway: <span class="prelude-ty">Option</span>&lt;LightningGateway&gt;,
     ) -&gt; anyhow::Result&lt;(OperationId, Bolt11Invoice, [u8; <span class="number">32</span>])&gt; {
         <span class="kw">let </span>gateway_id = gateway.as_ref().map(|g| g.gateway_id);
-        <span class="kw">let </span>(src_node_id, short_channel_id, route_hints) = <span class="kw">match </span>gateway {
-            <span class="prelude-val">Some</span>(current_gateway) =&gt; (
+        <span class="kw">let </span>(src_node_id, short_channel_id, route_hints) = <span class="kw">if let </span><span class="prelude-val">Some</span>(current_gateway) = gateway {
+            (
                 current_gateway.node_pub_key,
                 current_gateway.mint_channel_id,
                 current_gateway.route_hints,
-            ),
-            <span class="prelude-val">None </span>=&gt; {
-                <span class="comment">// If no gateway is provided, this is assumed to be an internal payment.
-                </span><span class="kw">let </span>markers = <span class="self">self</span>.client_ctx.get_internal_payment_markers()<span class="question-mark">?</span>;
-                (markers.<span class="number">0</span>, markers.<span class="number">1</span>, <span class="macro">vec!</span>[])
-            }
+            )
+        } <span class="kw">else </span>{
+            <span class="comment">// If no gateway is provided, this is assumed to be an internal payment.
+            </span><span class="kw">let </span>markers = <span class="self">self</span>.client_ctx.get_internal_payment_markers()<span class="question-mark">?</span>;
+            (markers.<span class="number">0</span>, markers.<span class="number">1</span>, <span class="macro">vec!</span>[])
         };
 
         <span class="macro">debug!</span>(target: LOG_CLIENT_MODULE_LN, <span class="question-mark">?</span>gateway_id, %amount, <span class="string">"Selected LN gateway for invoice generation"</span>);
@@ -3460,9 +3497,10 @@
         operation_id: OperationId,
     ) -&gt; anyhow::Result&lt;UpdateStreamOrOutcome&lt;LnReceiveState&gt;&gt; {
         <span class="kw">let </span>operation = <span class="self">self</span>.client_ctx.get_operation(operation_id).<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">let </span>out_points = <span class="kw">match </span>operation.meta::&lt;LightningOperationMeta&gt;().variant {
-            LightningOperationMetaVariant::Claim { out_points } =&gt; out_points,
-            <span class="kw">_ </span>=&gt; <span class="macro">bail!</span>(<span class="string">"Operation is not a lightning claim"</span>),
+        <span class="kw">let </span>LightningOperationMetaVariant::Claim { out_points } =
+            operation.meta::&lt;LightningOperationMeta&gt;().variant
+        <span class="kw">else </span>{
+            <span class="macro">bail!</span>(<span class="string">"Operation is not a lightning claim"</span>)
         };
 
         <span class="kw">let </span>client_ctx = <span class="self">self</span>.client_ctx.clone();
@@ -3485,11 +3523,11 @@
         operation_id: OperationId,
     ) -&gt; anyhow::Result&lt;UpdateStreamOrOutcome&lt;LnReceiveState&gt;&gt; {
         <span class="kw">let </span>operation = <span class="self">self</span>.client_ctx.get_operation(operation_id).<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">let </span>(out_point, invoice) = <span class="kw">match </span>operation.meta::&lt;LightningOperationMeta&gt;().variant {
-            LightningOperationMetaVariant::Receive {
-                out_point, invoice, ..
-            } =&gt; (out_point, invoice),
-            <span class="kw">_ </span>=&gt; <span class="macro">bail!</span>(<span class="string">"Operation is not a lightning payment"</span>),
+        <span class="kw">let </span>LightningOperationMetaVariant::Receive {
+            out_point, invoice, ..
+        } = operation.meta::&lt;LightningOperationMeta&gt;().variant
+        <span class="kw">else </span>{
+            <span class="macro">bail!</span>(<span class="string">"Operation is not a lightning payment"</span>)
         };
 
         <span class="kw">let </span>tx_accepted_future = <span class="self">self
@@ -3607,9 +3645,9 @@
                         }
                         InternalPayState::RefundSuccess { out_points, error } =&gt; {
                             <span class="kw">let </span>e = <span class="macro">format!</span>(
-                            <span class="string">"Internal payment failed. A refund was issued to {:?} Error: {error}"</span>,
-                            out_points
-                        );
+                            <span class="string">"Internal payment failed. A refund was issued to {out_points:?} Error: {error}"
+
+                        </span>);
                             <span class="macro">bail!</span>(<span class="string">"{e}"</span>);
                         }
                         InternalPayState::UnexpectedError(e) =&gt; {
@@ -3652,13 +3690,13 @@
                                 }
                             }));
                         }
-                        LnPayState::Created
-                        | LnPayState::AwaitingChange
-                        | LnPayState::WaitingForRefund { .. } =&gt; {}
                         LnPayState::Funded { block_height: <span class="kw">_ </span>} <span class="kw">if </span>return_on_funding =&gt; {
                             <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="prelude-val">None</span>)
                         }
-                        LnPayState::Funded { block_height: <span class="kw">_ </span>} =&gt; {}
+                        LnPayState::Created
+                        | LnPayState::AwaitingChange
+                        | LnPayState::WaitingForRefund { .. }
+                        | LnPayState::Funded { block_height: <span class="kw">_ </span>} =&gt; {}
                         LnPayState::UnexpectedError { error_message } =&gt; {
                             <span class="macro">bail!</span>(<span class="string">"UnexpectedError: {error_message}"</span>)
                         }

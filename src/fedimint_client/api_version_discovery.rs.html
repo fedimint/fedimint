@@ -264,7 +264,7 @@
 
 <span class="kw">fn </span>discover_common_core_api_version(
     client_versions: <span class="kw-2">&amp;</span>SupportedCoreApiVersions,
-    peer_versions: BTreeMap&lt;PeerId, SupportedCoreApiVersions&gt;,
+    peer_versions: <span class="kw-2">&amp;</span>BTreeMap&lt;PeerId, SupportedCoreApiVersions&gt;,
 ) -&gt; <span class="prelude-ty">Option</span>&lt;ApiVersion&gt; {
     <span class="kw">let </span><span class="kw-2">mut </span>best_major = <span class="prelude-val">None</span>;
     <span class="kw">let </span><span class="kw-2">mut </span>best_major_peer_num = <span class="number">0</span>;
@@ -319,11 +319,11 @@
         .unwrap(),
     };
 
-    <span class="macro">assert!</span>(discover_common_core_api_version(<span class="kw-2">&amp;</span>client_versions, BTreeMap::from([])).is_none());
+    <span class="macro">assert!</span>(discover_common_core_api_version(<span class="kw-2">&amp;</span>client_versions, <span class="kw-2">&amp;</span>BTreeMap::from([])).is_none());
     <span class="macro">assert_eq!</span>(
         discover_common_core_api_version(
             <span class="kw-2">&amp;</span>client_versions,
-            BTreeMap::from([(
+            <span class="kw-2">&amp;</span>BTreeMap::from([(
                 PeerId::from(<span class="number">0</span>),
                 SupportedCoreApiVersions {
                     core_consensus: fedimint_core::module::CoreConsensusVersion::new(<span class="number">0</span>, <span class="number">0</span>),
@@ -337,7 +337,7 @@
     <span class="macro">assert_eq!</span>(
         discover_common_core_api_version(
             <span class="kw-2">&amp;</span>client_versions,
-            BTreeMap::from([(
+            <span class="kw-2">&amp;</span>BTreeMap::from([(
                 PeerId::from(<span class="number">0</span>),
                 SupportedCoreApiVersions {
                     core_consensus: fedimint_core::module::CoreConsensusVersion::new(<span class="number">0</span>, <span class="number">1</span>), <span class="comment">/* different minor consensus version, we don't care */
@@ -351,7 +351,7 @@
     <span class="macro">assert_eq!</span>(
         discover_common_core_api_version(
             <span class="kw-2">&amp;</span>client_versions,
-            BTreeMap::from([(
+            <span class="kw-2">&amp;</span>BTreeMap::from([(
                 PeerId::from(<span class="number">0</span>),
                 SupportedCoreApiVersions {
                     core_consensus: fedimint_core::module::CoreConsensusVersion::new(<span class="number">1</span>, <span class="number">0</span>), <span class="comment">/* wrong consensus version */
@@ -365,7 +365,7 @@
     <span class="macro">assert_eq!</span>(
         discover_common_core_api_version(
             <span class="kw-2">&amp;</span>client_versions,
-            BTreeMap::from([
+            <span class="kw-2">&amp;</span>BTreeMap::from([
                 (
                     PeerId::from(<span class="number">0</span>),
                     SupportedCoreApiVersions {
@@ -397,7 +397,7 @@
     <span class="macro">assert_eq!</span>(
         discover_common_core_api_version(
             <span class="kw-2">&amp;</span>client_versions,
-            BTreeMap::from([
+            <span class="kw-2">&amp;</span>BTreeMap::from([
                 (
                     PeerId::from(<span class="number">0</span>),
                     SupportedCoreApiVersions {
@@ -422,7 +422,7 @@
 
 <span class="kw">fn </span>discover_common_module_api_version(
     client_versions: <span class="kw-2">&amp;</span>SupportedModuleApiVersions,
-    peer_versions: BTreeMap&lt;PeerId, SupportedModuleApiVersions&gt;,
+    peer_versions: <span class="kw-2">&amp;</span>BTreeMap&lt;PeerId, SupportedModuleApiVersions&gt;,
 ) -&gt; <span class="prelude-ty">Option</span>&lt;ApiVersion&gt; {
     <span class="kw">let </span><span class="kw-2">mut </span>best_major = <span class="prelude-val">None</span>;
     <span class="kw">let </span><span class="kw-2">mut </span>best_major_peer_num = <span class="number">0</span>;
@@ -472,12 +472,12 @@
 
 <span class="kw">pub fn </span>discover_common_api_versions_set(
     client_versions: <span class="kw-2">&amp;</span>SupportedApiVersionsSummary,
-    peer_versions: BTreeMap&lt;PeerId, SupportedApiVersionsSummary&gt;,
+    peer_versions: <span class="kw-2">&amp;</span>BTreeMap&lt;PeerId, SupportedApiVersionsSummary&gt;,
 ) -&gt; anyhow::Result&lt;ApiVersionSet&gt; {
     <span class="prelude-val">Ok</span>(ApiVersionSet {
         core: discover_common_core_api_version(
             <span class="kw-2">&amp;</span>client_versions.core,
-            peer_versions
+            <span class="kw-2">&amp;</span>peer_versions
                 .iter()
                 .map(|(peer_id, peer_supported_api_versions)| {
                     (<span class="kw-2">*</span>peer_id, peer_supported_api_versions.core.clone())
@@ -492,7 +492,7 @@
                 |(module_instance_id, client_supported_module_api_versions)| {
                     <span class="kw">let </span>discover_common_module_api_version = discover_common_module_api_version(
                         client_supported_module_api_versions,
-                        peer_versions
+                        <span class="kw-2">&amp;</span>peer_versions
                             .iter()
                             .filter_map(|(peer_id, peer_supported_api_versions_summary)| {
                                 peer_supported_api_versions_summary

@@ -443,7 +443,7 @@
     <span class="comment">// If there is no old gateway configuration, there is nothing to do.
     </span><span class="kw">if let </span><span class="prelude-val">Some</span>(old_gateway_config) = dbtx.remove_entry(<span class="kw-2">&amp;</span>GatewayConfigurationKeyV0).<span class="kw">await </span>{
         <span class="kw">let </span>password_salt: [u8; <span class="number">16</span>] = rand::thread_rng().gen();
-        <span class="kw">let </span>hashed_password = hash_password(old_gateway_config.password, password_salt);
+        <span class="kw">let </span>hashed_password = hash_password(<span class="kw-2">&amp;</span>old_gateway_config.password, password_salt);
         <span class="kw">let </span>new_gateway_config = GatewayConfiguration {
             hashed_password,
             num_route_hints: old_gateway_config.num_route_hints,

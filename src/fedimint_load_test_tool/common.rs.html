@@ -602,9 +602,9 @@
         <span class="kw">let </span>state = result[<span class="string">"state"</span>].as_str().context(<span class="string">"Missing state field"</span>)<span class="question-mark">?</span>;
         <span class="kw">if </span>state == <span class="string">"SETTLED" </span>{
             <span class="kw">return </span><span class="prelude-val">Ok</span>(());
-        } <span class="kw">else </span>{
-            fedimint_core::task::sleep(Duration::from_millis(<span class="number">500</span>)).<span class="kw">await</span>;
         }
+
+        fedimint_core::task::sleep(Duration::from_millis(<span class="number">500</span>)).<span class="kw">await</span>;
     }
     <span class="macro">anyhow::bail!</span>(<span class="string">"Timeout waiting for invoice to settle: {r_hash}"</span>)
 }

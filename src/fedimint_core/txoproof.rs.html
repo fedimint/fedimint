@@ -183,15 +183,15 @@
             .extract_matches(<span class="kw-2">&amp;mut </span>transactions, <span class="kw-2">&amp;mut </span>indices)
             .map_err(|<span class="kw">_</span>| DecodeError::from_str(<span class="string">"Invalid partial merkle tree"</span>))<span class="question-mark">?</span>;
 
-        <span class="kw">if </span>block_header.merkle_root != root {
-            <span class="prelude-val">Err</span>(DecodeError::from_str(
-                <span class="string">"Partial merkle tree does not belong to block header"</span>,
-            ))
-        } <span class="kw">else </span>{
+        <span class="kw">if </span>block_header.merkle_root == root {
             <span class="prelude-val">Ok</span>(TxOutProof {
                 block_header,
                 merkle_proof,
             })
+        } <span class="kw">else </span>{
+            <span class="prelude-val">Err</span>(DecodeError::from_str(
+                <span class="string">"Partial merkle tree does not belong to block header"</span>,
+            ))
         }
     }
 }

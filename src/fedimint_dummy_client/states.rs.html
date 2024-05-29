@@ -208,21 +208,21 @@
                     </span><span class="prelude-val">Err</span>(<span class="kw">_</span>) =&gt; Box::pin(<span class="kw">async move </span>{ DummyStateMachine::Refund(id) }),
                 },
             )],
-            DummyStateMachine::InputDone(<span class="kw">_</span>) =&gt; <span class="macro">vec!</span>[],
-            DummyStateMachine::OutputDone(<span class="kw">_</span>, <span class="kw">_</span>) =&gt; <span class="macro">vec!</span>[],
-            DummyStateMachine::Refund(<span class="kw">_</span>) =&gt; <span class="macro">vec!</span>[],
-            DummyStateMachine::Unreachable(<span class="kw">_</span>, <span class="kw">_</span>) =&gt; <span class="macro">vec!</span>[],
+            DummyStateMachine::InputDone(<span class="kw">_</span>)
+            | DummyStateMachine::OutputDone(<span class="kw">_</span>, <span class="kw">_</span>)
+            | DummyStateMachine::Refund(<span class="kw">_</span>)
+            | DummyStateMachine::Unreachable(<span class="kw">_</span>, <span class="kw">_</span>) =&gt; <span class="macro">vec!</span>[],
         }
     }
 
     <span class="kw">fn </span>operation_id(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; OperationId {
         <span class="kw">match </span><span class="self">self </span>{
-            DummyStateMachine::Input(<span class="kw">_</span>, <span class="kw">_</span>, id) =&gt; <span class="kw-2">*</span>id,
-            DummyStateMachine::Output(<span class="kw">_</span>, <span class="kw">_</span>, id) =&gt; <span class="kw-2">*</span>id,
-            DummyStateMachine::InputDone(id) =&gt; <span class="kw-2">*</span>id,
-            DummyStateMachine::OutputDone(<span class="kw">_</span>, id) =&gt; <span class="kw-2">*</span>id,
-            DummyStateMachine::Refund(id) =&gt; <span class="kw-2">*</span>id,
-            DummyStateMachine::Unreachable(id, <span class="kw">_</span>) =&gt; <span class="kw-2">*</span>id,
+            DummyStateMachine::Input(<span class="kw">_</span>, <span class="kw">_</span>, id)
+            | DummyStateMachine::Output(<span class="kw">_</span>, <span class="kw">_</span>, id)
+            | DummyStateMachine::InputDone(id)
+            | DummyStateMachine::OutputDone(<span class="kw">_</span>, id)
+            | DummyStateMachine::Refund(id)
+            | DummyStateMachine::Unreachable(id, <span class="kw">_</span>) =&gt; <span class="kw-2">*</span>id,
         }
     }
 }

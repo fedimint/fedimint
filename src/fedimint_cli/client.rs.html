@@ -697,7 +697,6 @@
 <a href="#697" id="697">697</a>
 <a href="#698" id="698">698</a>
 <a href="#699" id="699">699</a>
-<a href="#700" id="700">700</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::ffi;
 <span class="kw">use </span>std::str::FromStr;
@@ -982,8 +981,7 @@
         ClientCmd::Validate { oob_notes } =&gt; {
             <span class="kw">let </span>amount = client
                 .get_first_module::&lt;MintClientModule&gt;()
-                .validate_notes(oob_notes)
-                .<span class="kw">await</span><span class="question-mark">?</span>;
+                .validate_notes(<span class="kw-2">&amp;</span>oob_notes)<span class="question-mark">?</span>;
 
             <span class="prelude-val">Ok</span>(<span class="macro">json!</span>({
                 <span class="string">"amount_msat"</span>: amount,
@@ -1298,7 +1296,7 @@
                     WithdrawState::Failed(e) =&gt; {
                         <span class="macro">bail!</span>(<span class="string">"Withdraw failed: {e}"</span>);
                     }
-                    <span class="kw">_ </span>=&gt; {}
+                    WithdrawState::Created =&gt; {}
                 }
             }
 

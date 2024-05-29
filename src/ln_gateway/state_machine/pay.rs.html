@@ -921,7 +921,6 @@
 <a href="#921" id="921">921</a>
 <a href="#922" id="922">922</a>
 <a href="#923" id="923">923</a>
-<a href="#924" id="924">924</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::fmt::Display;
 <span class="kw">use </span>std::sync::Arc;
 
@@ -1281,8 +1280,7 @@
                 <span class="kw-2">&amp;</span>payment_data,
                 routing_fees,
             )
-            .<span class="kw">await
-            </span>.map_err(|e| {
+            .map_err(|e| {
                 <span class="macro">warn!</span>(<span class="string">"Invalid outgoing contract: {e:?}"</span>);
                 OutgoingPaymentError {
                     contract_id,
@@ -1491,7 +1489,7 @@
         <span class="prelude-val">Ok</span>(())
     }
 
-    <span class="kw">async fn </span>validate_outgoing_account(
+    <span class="kw">fn </span>validate_outgoing_account(
         account: <span class="kw-2">&amp;</span>OutgoingContractAccount,
         redeem_key: bitcoin::key::KeyPair,
         timelock_delta: u64,

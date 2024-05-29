@@ -181,7 +181,15 @@
 <a href="#181" id="181">181</a>
 <a href="#182" id="182">182</a>
 <a href="#183" id="183">183</a>
-</pre></div><pre class="rust"><code><span class="kw">pub mod </span>api;
+<a href="#184" id="184">184</a>
+<a href="#185" id="185">185</a>
+<a href="#186" id="186">186</a>
+<a href="#187" id="187">187</a>
+</pre></div><pre class="rust"><code><span class="attr">#![warn(clippy::pedantic)]
+#![allow(clippy::missing_errors_doc)]
+#![allow(clippy::module_name_repetitions)]
+
+</span><span class="kw">pub mod </span>api;
 <span class="attr">#[cfg(feature = <span class="string">"cli"</span>)]
 </span><span class="kw">pub mod </span>cli;
 <span class="kw">pub mod </span>db;
@@ -335,8 +343,8 @@
         });
 
         <span class="attr">#[allow(clippy::never_loop)]
-        </span><span class="kw">for </span>_table <span class="kw">in </span>filtered_prefixes {
-            <span class="kw">match </span>_table {}
+        </span><span class="kw">for </span>table <span class="kw">in </span>filtered_prefixes {
+            <span class="kw">match </span>table {}
         }
 
         Box::new(items.into_iter())

@@ -254,7 +254,7 @@
 
         <span class="kw">let </span>secrets = s
             .split(<span class="string">','</span>)
-            .map(|s| s.trim())
+            .map(str::trim)
             .map(|s| {
                 <span class="kw">if </span>s.is_empty() {
                     <span class="macro">bail!</span>(<span class="string">"Empty Api Secret is not allowed"</span>)
@@ -277,9 +277,9 @@
     }
 
     <span class="doccomment">/// Get all secrets
-    </span><span class="kw">pub fn </span>get_all(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Vec&lt;String&gt; {
-        <span class="self">self</span>.<span class="number">0</span>.clone()
-    }
+    </span><span class="kw">pub fn </span>get_all(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>[String] {
+        <span class="kw-2">&amp;</span><span class="self">self</span>.<span class="number">0
+    </span>}
 
     <span class="doccomment">/// Get empty value - meaning no secrets to use
     </span><span class="kw">pub fn </span>none() -&gt; ApiSecrets {
@@ -326,10 +326,10 @@
 <span class="kw">pub type </span>ApiResult&lt;T&gt; = <span class="prelude-ty">Result</span>&lt;T, ApiError&gt;;
 
 <span class="kw">pub fn </span>check_auth(context: <span class="kw-2">&amp;mut </span>ApiEndpointContext) -&gt; ApiResult&lt;()&gt; {
-    <span class="kw">if </span>!context.has_auth() {
-        <span class="prelude-val">Err</span>(ApiError::unauthorized())
-    } <span class="kw">else </span>{
+    <span class="kw">if </span>context.has_auth() {
         <span class="prelude-val">Ok</span>(())
+    } <span class="kw">else </span>{
+        <span class="prelude-val">Err</span>(ApiError::unauthorized())
     }
 }
 

@@ -180,7 +180,7 @@
     <span class="kw">pub fn </span>gen_denominations(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Vec&lt;Amount&gt; {
         Tiered::gen_denominations(<span class="self">self</span>.denomination_base, MAX_DENOMINATION_SIZE)
             .tiers()
-            .cloned()
+            .copied()
             .collect()
     }
 }

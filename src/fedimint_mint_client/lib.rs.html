@@ -2381,7 +2381,28 @@
 <a href="#2381" id="2381">2381</a>
 <a href="#2382" id="2382">2382</a>
 <a href="#2383" id="2383">2383</a>
-</pre></div><pre class="rust"><code><span class="comment">// Backup and restore logic
+<a href="#2384" id="2384">2384</a>
+<a href="#2385" id="2385">2385</a>
+<a href="#2386" id="2386">2386</a>
+<a href="#2387" id="2387">2387</a>
+<a href="#2388" id="2388">2388</a>
+<a href="#2389" id="2389">2389</a>
+<a href="#2390" id="2390">2390</a>
+<a href="#2391" id="2391">2391</a>
+</pre></div><pre class="rust"><code><span class="attr">#![warn(clippy::pedantic)]
+#![allow(clippy::cast_possible_truncation)]
+#![allow(clippy::default_trait_access)]
+#![allow(clippy::doc_markdown)]
+#![allow(clippy::ignored_unit_patterns)]
+#![allow(clippy::match_same_arms)]
+#![allow(clippy::missing_errors_doc)]
+#![allow(clippy::missing_panics_doc)]
+#![allow(clippy::module_name_repetitions)]
+#![allow(clippy::must_use_candidate)]
+#![allow(clippy::return_self_not_must_use)]
+#![allow(clippy::unused_async)]
+
+</span><span class="comment">// Backup and restore logic
 </span><span class="kw">pub mod </span>backup;
 <span class="doccomment">/// Database keys used throughout the mint client module
 </span><span class="kw">pub mod </span>client_db;
@@ -2506,7 +2527,7 @@
         ])
     }
 
-    <span class="kw">pub fn </span>new_with_invite(notes: TieredMulti&lt;SpendableNote&gt;, invite: InviteCode) -&gt; <span class="self">Self </span>{
+    <span class="kw">pub fn </span>new_with_invite(notes: TieredMulti&lt;SpendableNote&gt;, invite: <span class="kw-2">&amp;</span>InviteCode) -&gt; <span class="self">Self </span>{
         <span class="kw">let </span><span class="kw-2">mut </span>data = <span class="macro">vec!</span>[
             <span class="comment">// FIXME: once we can break compatibility with 0.2 we can remove the prefix in case an
             // invite is present
@@ -2518,7 +2539,7 @@
             },
         ];
         <span class="kw">if let </span><span class="prelude-val">Some</span>(api_secret) = invite.api_secret() {
-            data.push(OOBNotesData::ApiSecret(api_secret))
+            data.push(OOBNotesData::ApiSecret(api_secret));
         }
         <span class="self">Self</span>(data)
     }
@@ -2546,7 +2567,7 @@
 
     <span class="kw">pub fn </span>notes_json(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;serde_json::Value, serde_json::Error&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>notes_map = serde_json::Map::new();
-        <span class="kw">for </span>notes <span class="kw">in </span><span class="self">self</span>.<span class="number">0</span>.iter() {
+        <span class="kw">for </span>notes <span class="kw">in </span><span class="kw-2">&amp;</span><span class="self">self</span>.<span class="number">0 </span>{
             <span class="kw">match </span>notes {
                 OOBNotesData::Notes(notes) =&gt; {
                     <span class="kw">let </span>notes_json = serde_json::to_value(notes)<span class="question-mark">?</span>;
@@ -2579,7 +2600,7 @@
                 OOBNotesData::ApiSecret(<span class="kw">_</span>) =&gt; { <span class="comment">/* already covered inside `Invite` */ </span>}
                 OOBNotesData::Default { variant, bytes } =&gt; {
                     notes_map.insert(
-                        <span class="macro">format!</span>(<span class="string">"default_{}"</span>, variant),
+                        <span class="macro">format!</span>(<span class="string">"default_{variant}"</span>),
                         serde_json::to_value(bytes.encode_hex::&lt;String&gt;())<span class="question-mark">?</span>,
                     );
                 }
@@ -2867,8 +2888,7 @@
                         <span class="string">"CancelledOOBSpendKey"
                     </span>);
                 }
-                DbKeyPrefix::RecoveryState =&gt; {}
-                DbKeyPrefix::RecoveryFinalized =&gt; {}
+                DbKeyPrefix::RecoveryState | DbKeyPrefix::RecoveryFinalized =&gt; {}
             }
         }
 
@@ -3191,9 +3211,7 @@
             MintClientModule::delete_spendable_note(dbtx, amount, note).<span class="kw">await</span>;
         }
 
-        <span class="kw">let </span>inputs = <span class="self">self
-            </span>.create_input_from_notes(operation_id, selected_notes)
-            .<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>inputs = <span class="self">self</span>.create_input_from_notes(operation_id, selected_notes)<span class="question-mark">?</span>;
 
         <span class="macro">assert!</span>(!inputs.is_empty());
 
@@ -3340,7 +3358,7 @@
                         <span class="string">"Failed to finalize transaction: {}"</span>,
                         failed.error
                     ))),
-                    <span class="kw">_ </span>=&gt; <span class="prelude-val">None</span>,
+                    MintOutputStates::Created(<span class="kw">_</span>) =&gt; <span class="prelude-val">None</span>,
                 }
             });
         <span class="macro">pin_mut!</span>(stream);
@@ -3364,14 +3382,14 @@
         </span><span class="kw">const </span>MAX_NOTES_PER_TIER_TRIGGER: usize = <span class="number">8</span>;
         <span class="doccomment">/// Number of notes per tier to leave after threshold was crossed
         </span><span class="kw">const </span>MIN_NOTES_PER_TIER: usize = <span class="number">4</span>;
+        <span class="doccomment">/// Maximum number of notes to consolidate per one tx,
+        /// to limit the size of a transaction produced.
+        </span><span class="kw">const </span>MAX_NOTES_TO_CONSOLIDATE_IN_TX: usize = <span class="number">20</span>;
         <span class="comment">// it's fine, it's just documentation
         </span><span class="attr">#[allow(clippy::assertions_on_constants)]
         </span>{
             <span class="macro">assert!</span>(MIN_NOTES_PER_TIER &lt;= MAX_NOTES_PER_TIER_TRIGGER);
         }
-        <span class="doccomment">/// Maximum number of notes to consolidate per one tx,
-        /// to limit the size of a transaction produced.
-        </span><span class="kw">const </span>MAX_NOTES_TO_CONSOLIDATE_IN_TX: usize = <span class="number">20</span>;
 
         <span class="kw">let </span>counts = <span class="self">self</span>.get_notes_tier_counts(dbtx).<span class="kw">await</span>;
 
@@ -3420,22 +3438,21 @@
         <span class="prelude-val">Ok</span>((
             <span class="self">self</span>.create_input_from_notes(
                 operation_id,
-                TieredMulti::from_iter(selected_notes_decoded.into_iter()),
-            )
-            .<span class="kw">await</span><span class="question-mark">?</span>,
+                selected_notes_decoded.into_iter().collect(),
+            )<span class="question-mark">?</span>,
             sum,
         ))
     }
 
     <span class="doccomment">/// Create a mint input from external, potentially untrusted notes
-    </span><span class="kw">pub async fn </span>create_input_from_notes(
+    </span><span class="kw">pub fn </span>create_input_from_notes(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         operation_id: OperationId,
         notes: TieredMulti&lt;SpendableNote&gt;,
     ) -&gt; anyhow::Result&lt;Vec&lt;ClientInput&lt;MintInput, MintClientStateMachines&gt;&gt;&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>inputs = Vec::new();
 
-        <span class="kw">for </span>(amount, spendable_note) <span class="kw">in </span>notes.into_iter() {
+        <span class="kw">for </span>(amount, spendable_note) <span class="kw">in </span>notes {
             <span class="kw">let </span>key = <span class="self">self
                 </span>.cfg
                 .tbs_pks
@@ -3564,15 +3581,14 @@
     <span class="kw">async fn </span>get_all_spendable_notes(
         dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>&gt;,
     ) -&gt; TieredMulti&lt;SpendableNoteUndecoded&gt; {
-        TieredMulti::from_iter(
-            (dbtx
-                .find_by_prefix(<span class="kw-2">&amp;</span>NoteKeyPrefix)
-                .<span class="kw">await
-                </span>.map(|(key, note)| (key.amount, note))
-                .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;()
-                .<span class="kw">await</span>)
-                .into_iter(),
-        )
+        (dbtx
+            .find_by_prefix(<span class="kw-2">&amp;</span>NoteKeyPrefix)
+            .<span class="kw">await
+            </span>.map(|(key, note)| (key.amount, note))
+            .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;()
+            .<span class="kw">await</span>)
+            .into_iter()
+            .collect()
     }
 
     <span class="kw">async fn </span>get_next_note_index(
@@ -3635,7 +3651,7 @@
         dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>&gt;,
     ) -&gt; (NoteIssuanceRequest, BlindNonce) {
         <span class="kw">let </span>secret = <span class="self">self</span>.new_note_secret(amount, dbtx).<span class="kw">await</span>;
-        NoteIssuanceRequest::new(<span class="kw-2">&amp;</span><span class="self">self</span>.secp, secret)
+        NoteIssuanceRequest::new(<span class="kw-2">&amp;</span><span class="self">self</span>.secp, <span class="kw-2">&amp;</span>secret)
     }
 
     <span class="doccomment">/// Try to reissue e-cash notes received from a third party to receive them
@@ -3666,7 +3682,7 @@
         );
 
         <span class="kw">let </span>amount = notes.total_amount();
-        <span class="kw">let </span>mint_input = <span class="self">self</span>.create_input_from_notes(operation_id, notes).<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>mint_input = <span class="self">self</span>.create_input_from_notes(operation_id, notes)<span class="question-mark">?</span>;
 
         <span class="kw">let </span>tx =
             TransactionBuilder::new().with_inputs(<span class="self">self</span>.client_ctx.map_dyn(mint_input).collect());
@@ -3733,7 +3749,7 @@
 
                 (txid, out_points)
             }
-            <span class="kw">_ </span>=&gt; <span class="macro">bail!</span>(<span class="string">"Operation is not a reissuance"</span>),
+            MintOperationMetaVariant::SpendOOB { .. } =&gt; <span class="macro">bail!</span>(<span class="string">"Operation is not a reissuance"</span>),
         };
 
         <span class="kw">let </span>client_ctx = <span class="self">self</span>.client_ctx.clone();
@@ -3824,7 +3840,7 @@
                             .<span class="kw">await</span><span class="question-mark">?</span>;
 
                         <span class="kw">let </span>oob_notes = <span class="kw">if </span>include_invite {
-                            OOBNotes::new_with_invite(notes, <span class="self">self</span>.client_ctx.get_invite_code())
+                            OOBNotes::new_with_invite(notes, <span class="kw-2">&amp;</span><span class="self">self</span>.client_ctx.get_invite_code())
                         } <span class="kw">else </span>{
                             OOBNotes::new(federation_id_prefix, notes)
                         };
@@ -3864,7 +3880,7 @@
     /// - the federation ID is correct
     /// - the note has a valid signature
     /// - the spend key is correct.
-    </span><span class="kw">pub async fn </span>validate_notes(<span class="kw-2">&amp;</span><span class="self">self</span>, oob_notes: OOBNotes) -&gt; anyhow::Result&lt;Amount&gt; {
+    </span><span class="kw">pub fn </span>validate_notes(<span class="kw-2">&amp;</span><span class="self">self</span>, oob_notes: <span class="kw-2">&amp;</span>OOBNotes) -&gt; anyhow::Result&lt;Amount&gt; {
         <span class="kw">let </span>federation_id_prefix = oob_notes.federation_id_prefix();
         <span class="kw">let </span>notes = oob_notes.notes().clone();
 
@@ -4110,7 +4126,7 @@
                     <span class="comment">// keep adding notes until we have enough
                     </span>pending_amount += fee_per_note_input;
                     pending_amount -= note_amount;
-                    selected.push((note_amount, note))
+                    selected.push((note_amount, note));
                 }
                 Ordering::Greater =&gt; {
                     <span class="comment">// probably we don't need this big note, but we'll keep it in case the
@@ -4152,14 +4168,14 @@
 
                 <span class="comment">// so now we have enough to cover the requested amount, return
                 </span><span class="kw">return </span><span class="prelude-val">Ok</span>(notes);
-            } <span class="kw">else </span>{
-                <span class="kw">let </span>total_amount = requested_amount - pending_amount;
-                <span class="comment">// not enough notes, return
-                </span><span class="kw">return </span><span class="prelude-val">Err</span>(InsufficientBalanceError {
-                    requested_amount,
-                    total_amount,
-                });
             }
+
+            <span class="kw">let </span>total_amount = requested_amount - pending_amount;
+            <span class="comment">// not enough notes, return
+            </span><span class="kw">return </span><span class="prelude-val">Err</span>(InsufficientBalanceError {
+                requested_amount,
+                total_amount,
+            });
         }
     }
 }
@@ -4391,7 +4407,7 @@
     }
 
     <span class="kw">pub fn </span>advance(<span class="kw-2">&amp;mut </span><span class="self">self</span>) {
-        <span class="kw-2">*</span><span class="self">self </span>= <span class="self">self</span>.next()
+        <span class="kw-2">*</span><span class="self">self </span>= <span class="self">self</span>.next();
     }
 }
 
@@ -4438,7 +4454,7 @@
     <span class="comment">// try to hit the target `denomination_sets`
     </span><span class="kw">for </span>tier <span class="kw">in </span>tiers.tiers() {
         <span class="kw">let </span>notes = current_denominations.get(<span class="kw-2">*</span>tier);
-        <span class="kw">let </span>missing_notes = (denomination_sets <span class="kw">as </span>u64).saturating_sub(notes <span class="kw">as </span>u64);
+        <span class="kw">let </span>missing_notes = u64::from(denomination_sets).saturating_sub(notes <span class="kw">as </span>u64);
         <span class="kw">let </span>possible_notes = remaining_amount / <span class="kw-2">*</span>tier;
 
         <span class="kw">let </span>add_notes = min(possible_notes, missing_notes);
@@ -4517,7 +4533,7 @@
 
     <span class="attr">#[test_log::test(tokio::test)]
     </span><span class="kw">async fn </span>select_notes_avg_test() {
-        <span class="kw">let </span>max_amount = Amount::from_sats(<span class="number">1000000</span>);
+        <span class="kw">let </span>max_amount = Amount::from_sats(<span class="number">1_000_000</span>);
         <span class="kw">let </span>tiers = Tiered::gen_denominations(<span class="number">2</span>, max_amount);
         <span class="kw">let </span>tiered = represent_amount::&lt;()&gt;(max_amount, <span class="kw-2">&amp;</span>Default::default(), <span class="kw-2">&amp;</span>tiers, <span class="number">3</span>);
 
@@ -4670,7 +4686,7 @@
             federation_id_1,
             <span class="prelude-val">None</span>,
         );
-        <span class="kw">let </span>notes_invite = OOBNotes::new_with_invite(notes.clone(), invite.clone());
+        <span class="kw">let </span>notes_invite = OOBNotes::new_with_invite(notes.clone(), <span class="kw-2">&amp;</span>invite);
         test_roundtrip_serialize_str(notes_invite, |oob_notes| {
             <span class="macro">assert_eq!</span>(oob_notes.notes(), <span class="kw-2">&amp;</span>notes);
             <span class="macro">assert_eq!</span>(oob_notes.federation_id_prefix(), federation_id_prefix_1);

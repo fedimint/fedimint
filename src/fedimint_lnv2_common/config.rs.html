@@ -269,7 +269,7 @@
 
 <span class="attr">#[allow(dead_code)]
 </span><span class="kw">fn </span>migrate_config_consensus(
-    config: fedimint_ln_common::config::LightningConfigConsensus,
+    config: <span class="kw-2">&amp;</span>fedimint_ln_common::config::LightningConfigConsensus,
     peer_count: u16,
 ) -&gt; LightningConfigConsensus {
     LightningConfigConsensus {
@@ -299,7 +299,7 @@
 
 <span class="attr">#[allow(dead_code)]
 </span><span class="kw">fn </span>migrate_config_private(
-    config: fedimint_ln_common::config::LightningConfigPrivate,
+    config: <span class="kw-2">&amp;</span>fedimint_ln_common::config::LightningConfigPrivate,
 ) -&gt; LightningConfigPrivate {
     LightningConfigPrivate {
         sk: SecretKeyShare(config.threshold_sec_key.<span class="number">0 </span>.<span class="number">0 </span>.<span class="number">0</span>),

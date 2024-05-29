@@ -315,7 +315,6 @@
 <a href="#315" id="315">315</a>
 <a href="#316" id="316">316</a>
 <a href="#317" id="317">317</a>
-<a href="#318" id="318">318</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::io::Cursor;
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
@@ -469,10 +468,9 @@
         <span class="kw">loop </span>{
             <span class="kw">if let </span><span class="prelude-val">Ok</span>(tx) = <span class="self">self</span>.client.get_mempool_entry(txid) {
                 <span class="kw">return </span>tx.fees.base.into();
-            } <span class="kw">else </span>{
-                sleep_in_test(<span class="string">"could not get mempool tx fee"</span>, Duration::from_millis(<span class="number">100</span>)).<span class="kw">await</span>;
-                <span class="kw">continue</span>;
             }
+
+            sleep_in_test(<span class="string">"could not get mempool tx fee"</span>, Duration::from_millis(<span class="number">100</span>)).<span class="kw">await</span>;
         }
     }
 

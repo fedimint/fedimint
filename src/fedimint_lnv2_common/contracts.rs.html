@@ -168,6 +168,7 @@
 <a href="#168" id="168">168</a>
 <a href="#169" id="169">169</a>
 <a href="#170" id="170">170</a>
+<a href="#171" id="171">171</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>bitcoin_hashes::sha256;
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::Amount;
@@ -276,10 +277,11 @@
     ) -&gt; <span class="prelude-ty">Option</span>&lt;[u8; <span class="number">32</span>]&gt; {
         <span class="kw">let </span>preimage = decrypt_preimage(<span class="kw-2">&amp;</span><span class="self">self</span>.ciphertext, agg_decryption_key);
 
-        <span class="kw">match </span><span class="self">self</span>.verify_preimage(<span class="kw-2">&amp;</span>preimage) {
-            <span class="bool-val">true </span>=&gt; <span class="prelude-val">Some</span>(preimage),
-            <span class="bool-val">false </span>=&gt; <span class="prelude-val">None</span>,
-        }
+        <span class="kw">if </span><span class="self">self</span>.verify_preimage(<span class="kw-2">&amp;</span>preimage) {
+            <span class="prelude-val">Some</span>(preimage)
+        } <span class="kw">else </span>{
+            <span class="prelude-val">None
+        </span>}
     }
 
     <span class="kw">pub fn </span>create_decryption_key_share(<span class="kw-2">&amp;</span><span class="self">self</span>, sk: <span class="kw-2">&amp;</span>SecretKeyShare) -&gt; DecryptionKeyShare {

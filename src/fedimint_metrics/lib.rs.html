@@ -68,7 +68,13 @@
 <a href="#68" id="68">68</a>
 <a href="#69" id="69">69</a>
 <a href="#70" id="70">70</a>
-</pre></div><pre class="rust"><code><span class="kw">use </span>std::net::SocketAddr;
+<a href="#71" id="71">71</a>
+<a href="#72" id="72">72</a>
+<a href="#73" id="73">73</a>
+</pre></div><pre class="rust"><code><span class="attr">#![warn(clippy::pedantic)]
+#![allow(clippy::missing_errors_doc)]
+
+</span><span class="kw">use </span>std::net::SocketAddr;
 
 <span class="kw">use </span>axum::http::StatusCode;
 <span class="kw">use </span>axum::routing::get;

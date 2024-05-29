@@ -285,7 +285,7 @@
 
 <span class="attr">#[derive(Clone)]
 </span><span class="kw">pub struct </span>Gatewayd {
-    <span class="kw">pub</span>(<span class="kw">crate</span>) _process: ProcessHandle,
+    <span class="kw">pub</span>(<span class="kw">crate</span>) process: ProcessHandle,
     <span class="kw">pub </span>ln: <span class="prelude-ty">Option</span>&lt;LightningNode&gt;,
     <span class="kw">pub</span>(<span class="kw">crate</span>) addr: String,
 }
@@ -319,7 +319,7 @@
 
         <span class="kw">let </span>gatewayd = <span class="self">Self </span>{
             ln: <span class="prelude-val">Some</span>(ln),
-            _process: process,
+            process,
             addr,
         };
         poll(
@@ -352,7 +352,7 @@
         process_mgr: <span class="kw-2">&amp;</span>ProcessManager,
         bin_path: <span class="kw-2">&amp;</span>PathBuf,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-        <span class="self">self</span>._process.terminate().<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="self">self</span>.process.terminate().<span class="kw">await</span><span class="question-mark">?</span>;
         std::env::set_var(<span class="string">"FM_GATEWAYD_BASE_EXECUTABLE"</span>, bin_path);
         <span class="kw">let </span>ln = <span class="self">self
             </span>.ln
@@ -360,7 +360,7 @@
             .expect(<span class="string">"gateway already had an associated ln node"</span>)
             .clone();
         <span class="kw">let </span>new_gw = <span class="self">Self</span>::new(process_mgr, ln).<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="self">self</span>._process = new_gw._process;
+        <span class="self">self</span>.process = new_gw.process;
         <span class="kw">let </span>gatewayd_version = <span class="kw">crate</span>::util::Gatewayd::version_or_default().<span class="kw">await</span>;
         <span class="macro">info!</span>(<span class="string">"upgraded gatewayd to version: {}"</span>, gatewayd_version);
         <span class="prelude-val">Ok</span>(())

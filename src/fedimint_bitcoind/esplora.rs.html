@@ -271,7 +271,7 @@
 
         <span class="kw">let </span>is_in_block_height = tx_status
             .block_height
-            .is_some_and(|height| height <span class="kw">as </span>u64 == block_height);
+            .is_some_and(|height| u64::from(height) == block_height);
 
         <span class="kw">if </span>is_in_block_height {
             <span class="kw">let </span>tx_block_hash = tx_status.block_hash.ok_or(<span class="macro">anyhow::format_err!</span>(

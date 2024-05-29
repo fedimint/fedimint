@@ -1307,7 +1307,7 @@
 
     <span class="doccomment">/// Create an invite code with the api endpoint of the given peer which can
     /// be used to download this client config
-    </span><span class="kw">pub fn </span>invite_code(<span class="kw-2">&amp;</span><span class="self">self</span>, peer: <span class="kw-2">&amp;</span>PeerId, api_secret: <span class="prelude-ty">Option</span>&lt;String&gt;) -&gt; <span class="prelude-ty">Option</span>&lt;InviteCode&gt; {
+    </span><span class="kw">pub fn </span>invite_code(<span class="kw-2">&amp;</span><span class="self">self</span>, peer: <span class="kw-2">&amp;</span>PeerId, api_secret: <span class="kw-2">&amp;</span><span class="prelude-ty">Option</span>&lt;String&gt;) -&gt; <span class="prelude-ty">Option</span>&lt;InviteCode&gt; {
         <span class="self">self</span>.global.api_endpoints.get(peer).map(|peer_url| {
             InviteCode::new(
                 peer_url.url.clone(),

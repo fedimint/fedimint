@@ -1530,6 +1530,27 @@
         <span class="kw">let </span>task_group = TaskGroup::new();
 
         {
+            <span class="kw">async fn </span>wait_for_connection(
+                name: <span class="kw-2">&amp;</span>str,
+                status_channels: <span class="kw-2">&amp;</span>Arc&lt;RwLock&lt;BTreeMap&lt;PeerId, PeerConnectionStatus&gt;&gt;&gt;,
+            ) {
+                retry(
+                    <span class="macro">format!</span>(<span class="string">"wait for client {name}"</span>),
+                    fedimint_core::util::FibonacciBackoff::default()
+                        .with_min_delay(Duration::from_millis(<span class="number">200</span>))
+                        .with_max_delay(Duration::from_secs(<span class="number">5</span>))
+                        .with_max_times(<span class="number">10</span>),
+                    || <span class="kw">async </span>{
+                        <span class="kw">let </span>status = status_channels.read().<span class="kw">await</span>;
+                        <span class="macro">ensure!</span>(status.len() == <span class="number">2</span>);
+                        <span class="prelude-val">Ok</span>(())
+                    },
+                )
+                .<span class="kw">await
+                </span>.context(<span class="string">"peer couldn't connect"</span>)
+                .unwrap();
+            }
+
             <span class="kw">let </span>net = MockNetwork::new();
 
             <span class="kw">let </span>peers = [
@@ -1573,27 +1594,6 @@
                 build_peers(<span class="string">"127.0.0.1:1000"</span>, <span class="number">1</span>, task_group.clone()).<span class="kw">await</span>;
             <span class="kw">let </span>(_peers_b, peer_status_client_b) =
                 build_peers(<span class="string">"127.0.0.1:2000"</span>, <span class="number">2</span>, task_group.clone()).<span class="kw">await</span>;
-
-            <span class="kw">async fn </span>wait_for_connection(
-                name: <span class="kw-2">&amp;</span>str,
-                status_channels: <span class="kw-2">&amp;</span>Arc&lt;RwLock&lt;BTreeMap&lt;PeerId, PeerConnectionStatus&gt;&gt;&gt;,
-            ) {
-                retry(
-                    <span class="macro">format!</span>(<span class="string">"wait for client {}"</span>, name),
-                    fedimint_core::util::FibonacciBackoff::default()
-                        .with_min_delay(Duration::from_millis(<span class="number">200</span>))
-                        .with_max_delay(Duration::from_secs(<span class="number">5</span>))
-                        .with_max_times(<span class="number">10</span>),
-                    || <span class="kw">async </span>{
-                        <span class="kw">let </span>status = status_channels.read().<span class="kw">await</span>;
-                        <span class="macro">ensure!</span>(status.len() == <span class="number">2</span>);
-                        <span class="prelude-val">Ok</span>(())
-                    },
-                )
-                .<span class="kw">await
-                </span>.context(<span class="string">"peer couldn't connect"</span>)
-                .unwrap();
-            }
 
             wait_for_connection(<span class="string">"a"</span>, <span class="kw-2">&amp;</span>peer_status_client_a).<span class="kw">await</span>;
             wait_for_connection(<span class="string">"b"</span>, <span class="kw-2">&amp;</span>peer_status_client_b).<span class="kw">await</span>;

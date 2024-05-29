@@ -1630,12 +1630,12 @@
             <span class="macro">assert_eq!</span>(recv.<span class="number">1</span>, <span class="number">42</span>);
             <span class="kw">let </span>status = peer_status_client_a.get_all_status().<span class="kw">await</span>;
             <span class="macro">assert_eq!</span>(status.len(), <span class="number">2</span>);
-            <span class="macro">assert!</span>(status.values().all(|s| s.is_ok()));
+            <span class="macro">assert!</span>(status.values().all(Result::is_ok));
 
             peers_a.send(<span class="kw-2">&amp;</span>[PeerId::from(<span class="number">3</span>)], <span class="number">21</span>).<span class="kw">await</span>.unwrap();
             <span class="kw">let </span>status = peer_status_client_b.get_all_status().<span class="kw">await</span>;
             <span class="macro">assert_eq!</span>(status.len(), <span class="number">2</span>);
-            <span class="macro">assert!</span>(status.values().all(|s| s.is_ok()));
+            <span class="macro">assert!</span>(status.values().all(Result::is_ok));
 
             <span class="kw">let </span>(<span class="kw-2">mut </span>peers_c, peer_status_client_c) =
                 build_peers(<span class="string">"127.0.0.1:3000"</span>, <span class="number">3</span>, task_group.clone()).<span class="kw">await</span>;
@@ -1647,7 +1647,7 @@
             <span class="macro">assert_eq!</span>(recv.<span class="number">1</span>, <span class="number">21</span>);
             <span class="kw">let </span>status = peer_status_client_c.get_all_status().<span class="kw">await</span>;
             <span class="macro">assert_eq!</span>(status.len(), <span class="number">2</span>);
-            <span class="macro">assert!</span>(status.values().all(|s| s.is_ok()));
+            <span class="macro">assert!</span>(status.values().all(Result::is_ok));
         }
 
         task_group.shutdown();

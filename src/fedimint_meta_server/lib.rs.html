@@ -524,7 +524,13 @@
 <a href="#524" id="524">524</a>
 <a href="#525" id="525">525</a>
 <a href="#526" id="526">526</a>
-</pre></div><pre class="rust"><code><span class="kw">pub mod </span>db;
+<a href="#527" id="527">527</a>
+<a href="#528" id="528">528</a>
+<a href="#529" id="529">529</a>
+</pre></div><pre class="rust"><code><span class="attr">#![warn(clippy::pedantic)]
+#![allow(clippy::module_name_repetitions)]
+
+</span><span class="kw">pub mod </span>db;
 
 <span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::future;
@@ -773,7 +779,7 @@
         <span class="kw">let </span>revision = revision.map(|r| r.wrapping_add(<span class="number">1</span>)).unwrap_or_default();
         dbtx.insert_entry(
             <span class="kw-2">&amp;</span>MetaConsensusKey(key),
-            <span class="kw-2">&amp;</span>MetaConsensusValue { value, revision },
+            <span class="kw-2">&amp;</span>MetaConsensusValue { revision, value },
         )
         .<span class="kw">await</span>;
 
@@ -863,7 +869,7 @@
     ) -&gt; anyhow::Result&lt;()&gt; {
         <span class="macro">debug!</span>(target: LOG_MODULE_META, %peer_id, %key, %value, %salt, <span class="string">"Received a submission"</span>);
 
-        <span class="kw">let </span>new_value = MetaSubmissionValue { value, salt };
+        <span class="kw">let </span>new_value = MetaSubmissionValue { salt, value };
         <span class="comment">// first of all: any new submission overrides previous submission
         </span><span class="kw">if let </span><span class="prelude-val">Some</span>(prev_value) = <span class="self">Self</span>::get_submission(dbtx, key, peer_id).<span class="kw">await </span>{
             <span class="kw">if </span>prev_value != new_value {

@@ -887,7 +887,14 @@
 <a href="#887" id="887">887</a>
 <a href="#888" id="888">888</a>
 <a href="#889" id="889">889</a>
-</pre></div><pre class="rust"><code><span class="kw">pub mod </span>api;
+</pre></div><pre class="rust"><code><span class="attr">#![warn(clippy::pedantic)]
+#![allow(clippy::missing_errors_doc)]
+#![allow(clippy::missing_panics_doc)]
+#![allow(clippy::module_name_repetitions)]
+#![allow(clippy::must_use_candidate)]
+#![allow(clippy::unused_async)]
+
+</span><span class="kw">pub mod </span>api;
 <span class="attr">#[cfg(feature = <span class="string">"cli"</span>)]
 </span><span class="kw">mod </span>cli;
 <span class="kw">mod </span>receive_sm;
@@ -1371,29 +1378,26 @@
                             SendSMState::Refunding(out_points) =&gt; {
                                 <span class="kw">yield </span>SendState::Refunding;
 
-                                <span class="kw">match </span>client_ctx.await_primary_module_outputs(operation_id, out_points.clone()).<span class="kw">await </span>{
-                                    <span class="prelude-val">Ok</span>(..) =&gt; {
-                                        <span class="kw">yield </span>SendState::Refunded;
-                                        <span class="kw">return</span>;
-                                    },
-                                    <span class="prelude-val">Err</span>(..) =&gt; {
-                                        <span class="comment">// The gateway may have incorrectly claimed the outgoing contract thereby causing
-                                        // our refund transaction to be rejected. Therefore, we check one last time if
-                                        // the preimage is available before we enter the failure state.
-                                        </span><span class="kw">if let </span><span class="prelude-val">Some</span>(preimage) = module_api.await_preimage(
-                                            <span class="kw-2">&amp;</span>state.common.contract.contract_id(),
-                                            <span class="number">0
-                                        </span>).<span class="kw">await </span>{
-                                            <span class="kw">if </span>state.common.contract.verify_preimage(<span class="kw-2">&amp;</span>preimage) {
-                                                <span class="kw">yield </span>SendState::Success(preimage);
-                                                <span class="kw">return</span>;
-                                            }
-                                        }
-
-                                        <span class="kw">yield </span>SendState::Failure;
-                                        <span class="kw">return</span>;
-                                    },
+                                <span class="kw">if </span>client_ctx.await_primary_module_outputs(operation_id, out_points.clone()).<span class="kw">await</span>.is_ok() {
+                                    <span class="kw">yield </span>SendState::Refunded;
+                                    <span class="kw">return</span>;
                                 }
+
+                                <span class="comment">// The gateway may have incorrectly claimed the outgoing contract thereby causing
+                                // our refund transaction to be rejected. Therefore, we check one last time if
+                                // the preimage is available before we enter the failure state.
+                                </span><span class="kw">if let </span><span class="prelude-val">Some</span>(preimage) = module_api.await_preimage(
+                                    <span class="kw-2">&amp;</span>state.common.contract.contract_id(),
+                                    <span class="number">0
+                                </span>).<span class="kw">await </span>{
+                                    <span class="kw">if </span>state.common.contract.verify_preimage(<span class="kw-2">&amp;</span>preimage) {
+                                        <span class="kw">yield </span>SendState::Success(preimage);
+                                        <span class="kw">return</span>;
+                                    }
+                                }
+
+                                <span class="kw">yield </span>SendState::Failure;
+                                <span class="kw">return</span>;
                             },
                             SendSMState::Rejected(..) =&gt; {
                                 <span class="kw">yield </span>SendState::FundingRejected;
@@ -1500,7 +1504,7 @@
 
         <span class="kw">let </span>expiration = duration_since_epoch()
             .as_secs()
-            .saturating_add(expiry_time <span class="kw">as </span>u64);
+            .saturating_add(u64::from(expiry_time));
 
         <span class="kw">let </span>claim_pk = recipient_static_pk
             .mul_tweak(
@@ -1578,7 +1582,7 @@
     ) -&gt; <span class="prelude-ty">Option</span>&lt;OperationId&gt; {
         <span class="kw">let </span>operation_id = OperationId::from_encodable(<span class="kw-2">&amp;</span>contract.clone());
 
-        <span class="kw">let </span>(claim_keypair, agg_decryption_key) = <span class="self">self</span>.recover_contract_keys(<span class="kw-2">&amp;</span>contract).<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>(claim_keypair, agg_decryption_key) = <span class="self">self</span>.recover_contract_keys(<span class="kw-2">&amp;</span>contract)<span class="question-mark">?</span>;
 
         <span class="kw">let </span>receive_sm = LightningClientStateMachines::Receive(ReceiveStateMachine {
             common: ReceiveSMCommon {
@@ -1605,7 +1609,7 @@
         <span class="prelude-val">Some</span>(operation_id)
     }
 
-    <span class="kw">async fn </span>recover_contract_keys(
+    <span class="kw">fn </span>recover_contract_keys(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         contract: <span class="kw-2">&amp;</span>IncomingContract,
     ) -&gt; <span class="prelude-ty">Option</span>&lt;(KeyPair, AggregateDecryptionKey)&gt; {
@@ -1659,16 +1663,12 @@
                             ReceiveSMState::Claiming(out_points) =&gt; {
                                 <span class="kw">yield </span>ReceiveState::Claiming;
 
-                                <span class="kw">match </span>client_ctx.await_primary_module_outputs(operation_id, out_points).<span class="kw">await </span>{
-                                    <span class="prelude-val">Ok</span>(..) =&gt; {
-                                        <span class="kw">yield </span>ReceiveState::Claimed;
-                                        <span class="kw">return</span>;
-                                    }
-                                    <span class="prelude-val">Err</span>(..) =&gt; {
-                                        <span class="kw">yield </span>ReceiveState::Failure;
-                                        <span class="kw">return</span>;
-                                    }
+                                <span class="kw">if </span>client_ctx.await_primary_module_outputs(operation_id, out_points).<span class="kw">await</span>.is_ok() {
+                                    <span class="kw">yield </span>ReceiveState::Claimed;
+                                } <span class="kw">else </span>{
+                                    <span class="kw">yield </span>ReceiveState::Failure;
                                 }
+                                <span class="kw">return</span>;
                             },
                             ReceiveSMState::Expired =&gt; {
                                 <span class="kw">yield </span>ReceiveState::Expired;

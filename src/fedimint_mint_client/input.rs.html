@@ -227,9 +227,6 @@
 <a href="#227" id="227">227</a>
 <a href="#228" id="228">228</a>
 <a href="#229" id="229">229</a>
-<a href="#230" id="230">230</a>
-<a href="#231" id="231">231</a>
-<a href="#232" id="232">232</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::sync::Arc;
 
 <span class="kw">use </span>fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
@@ -289,15 +286,13 @@
         global_context: <span class="kw-2">&amp;</span>DynGlobalClientContext,
     ) -&gt; Vec&lt;StateTransition&lt;<span class="self">Self</span>&gt;&gt; {
         <span class="kw">match </span><span class="kw-2">&amp;</span><span class="self">self</span>.state {
-            MintInputStates::Created(created) =&gt; created.transitions(<span class="kw-2">&amp;</span><span class="self">self</span>.common, global_context),
+            MintInputStates::Created(<span class="kw">_</span>) =&gt; {
+                MintInputStateCreated::transitions(<span class="kw-2">&amp;</span><span class="self">self</span>.common, global_context)
+            }
             MintInputStates::Refund(refund) =&gt; refund.transitions(global_context),
-            MintInputStates::Success(<span class="kw">_</span>) =&gt; {
-                <span class="macro">vec!</span>[]
-            }
-            MintInputStates::Error(<span class="kw">_</span>) =&gt; {
-                <span class="macro">vec!</span>[]
-            }
-            MintInputStates::RefundSuccess(<span class="kw">_</span>) =&gt; {
+            MintInputStates::Success(<span class="kw">_</span>)
+            | MintInputStates::Error(<span class="kw">_</span>)
+            | MintInputStates::RefundSuccess(<span class="kw">_</span>) =&gt; {
                 <span class="macro">vec!</span>[]
             }
         }
@@ -316,7 +311,6 @@
 
 <span class="kw">impl </span>MintInputStateCreated {
     <span class="kw">fn </span>transitions(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
         common: <span class="kw-2">&amp;</span>MintInputCommon,
         global_context: <span class="kw-2">&amp;</span>DynGlobalClientContext,
     ) -&gt; Vec&lt;StateTransition&lt;MintInputStateMachine&gt;&gt; {

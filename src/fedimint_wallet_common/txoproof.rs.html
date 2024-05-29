@@ -343,7 +343,7 @@
 
         <span class="kw">if </span>transaction.output.get(output_idx <span class="kw">as </span>usize).is_none() {
             <span class="kw">return </span><span class="prelude-val">Err</span>(PegInProofError::OutputIndexOutOfRange(
-                output_idx <span class="kw">as </span>u64,
+                u64::from(output_idx),
                 transaction.output.len() <span class="kw">as </span>u64,
             ));
         }
@@ -531,7 +531,7 @@
             <span class="string">"efa0daf2b6a985bb78a2546b0d51ca878949e3baff106b8bed892284138b2acd"
                 </span>.parse()
                 .unwrap()
-        ))
+        ));
     }
 }
 </code></pre></div></section></main></body></html>

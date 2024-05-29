@@ -1932,7 +1932,47 @@
 <a href="#1932" id="1932">1932</a>
 <a href="#1933" id="1933">1933</a>
 <a href="#1934" id="1934">1934</a>
-</pre></div><pre class="rust"><code><span class="kw">pub mod </span>client;
+<a href="#1935" id="1935">1935</a>
+<a href="#1936" id="1936">1936</a>
+<a href="#1937" id="1937">1937</a>
+<a href="#1938" id="1938">1938</a>
+<a href="#1939" id="1939">1939</a>
+<a href="#1940" id="1940">1940</a>
+<a href="#1941" id="1941">1941</a>
+<a href="#1942" id="1942">1942</a>
+<a href="#1943" id="1943">1943</a>
+<a href="#1944" id="1944">1944</a>
+<a href="#1945" id="1945">1945</a>
+<a href="#1946" id="1946">1946</a>
+<a href="#1947" id="1947">1947</a>
+<a href="#1948" id="1948">1948</a>
+<a href="#1949" id="1949">1949</a>
+<a href="#1950" id="1950">1950</a>
+<a href="#1951" id="1951">1951</a>
+<a href="#1952" id="1952">1952</a>
+<a href="#1953" id="1953">1953</a>
+<a href="#1954" id="1954">1954</a>
+</pre></div><pre class="rust"><code><span class="attr">#![warn(clippy::pedantic)]
+#![allow(clippy::cast_possible_truncation)]
+#![allow(clippy::cast_possible_wrap)]
+#![allow(clippy::cast_sign_loss)]
+#![allow(clippy::default_trait_access)]
+#![allow(clippy::doc_markdown)]
+#![allow(clippy::ignored_unit_patterns)]
+#![allow(clippy::large_futures)]
+#![allow(clippy::missing_errors_doc)]
+#![allow(clippy::missing_fields_in_debug)]
+#![allow(clippy::missing_panics_doc)]
+#![allow(clippy::module_name_repetitions)]
+#![allow(clippy::must_use_candidate)]
+#![allow(clippy::return_self_not_must_use)]
+#![allow(clippy::similar_names)]
+#![allow(clippy::struct_field_names)]
+#![allow(clippy::too_many_lines)]
+#![allow(clippy::unused_async)]
+#![allow(clippy::wildcard_imports)]
+
+</span><span class="kw">pub mod </span>client;
 <span class="kw">mod </span>db;
 <span class="kw">pub mod </span>envs;
 <span class="kw">pub mod </span>gateway_module_v2;
@@ -2851,7 +2891,7 @@
                 WithdrawState::Failed(e) =&gt; {
                     <span class="kw">return </span><span class="prelude-val">Err</span>(GatewayError::UnexpectedState(e));
                 }
-                <span class="kw">_ </span>=&gt; {}
+                WithdrawState::Created =&gt; {}
             }
         }
 
@@ -3106,7 +3146,7 @@
 
         <span class="kw">let </span>prev_gateway_config = <span class="self">self</span>.gateway_config.read().<span class="kw">await</span>.clone();
         <span class="kw">let </span>new_gateway_config = <span class="kw">if let </span><span class="prelude-val">Some</span>(<span class="kw-2">mut </span>prev_config) = prev_gateway_config {
-            <span class="kw">if let </span><span class="prelude-val">Some</span>(password) = password {
+            <span class="kw">if let </span><span class="prelude-val">Some</span>(password) = password.as_ref() {
                 <span class="kw">let </span>hashed_password = hash_password(password, prev_config.password_salt);
                 prev_config.hashed_password = hashed_password;
             }
@@ -3137,7 +3177,7 @@
                 <span class="string">"The password field is required when initially configuring the gateway"</span>.to_string(),
             ))<span class="question-mark">?</span>;
             <span class="kw">let </span>password_salt: [u8; <span class="number">16</span>] = rand::thread_rng().gen();
-            <span class="kw">let </span>hashed_password = hash_password(password, password_salt);
+            <span class="kw">let </span>hashed_password = hash_password(<span class="kw-2">&amp;</span>password, password_salt);
 
             GatewayConfiguration {
                 hashed_password,
@@ -3323,7 +3363,7 @@
             .unwrap_or(GatewayFee(DEFAULT_FEES));
         <span class="kw">let </span>network = gateway_parameters.network.unwrap_or(DEFAULT_NETWORK);
         <span class="kw">let </span>password_salt: [u8; <span class="number">16</span>] = rand::thread_rng().gen();
-        <span class="kw">let </span>hashed_password = hash_password(password.clone(), password_salt);
+        <span class="kw">let </span>hashed_password = hash_password(password, password_salt);
         <span class="kw">let </span>gateway_config = GatewayConfiguration {
             hashed_password,
             network,

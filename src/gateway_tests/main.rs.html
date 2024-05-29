@@ -74,7 +74,11 @@
 <a href="#74" id="74">74</a>
 <a href="#75" id="75">75</a>
 <a href="#76" id="76">76</a>
-</pre></div><pre class="rust"><code><span class="kw">use </span>clap::{Parser, Subcommand};
+<a href="#77" id="77">77</a>
+<a href="#78" id="78">78</a>
+</pre></div><pre class="rust"><code><span class="attr">#![warn(clippy::pedantic)]
+
+</span><span class="kw">use </span>clap::{Parser, Subcommand};
 <span class="kw">use </span>devimint::version_constants::VERSION_0_3_0;
 <span class="kw">use </span>devimint::{cmd, util};
 <span class="kw">use </span>fedimint_testing::gateway::LightningNodeType;

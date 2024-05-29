@@ -503,6 +503,7 @@
 <a href="#503" id="503">503</a>
 <a href="#504" id="504">504</a>
 <a href="#505" id="505">505</a>
+<a href="#506" id="506">506</a>
 </pre></div><pre class="rust"><code><span class="kw">mod </span>metrics;
 
 <span class="kw">use </span>std::collections::BTreeMap;
@@ -743,9 +744,10 @@
             server_gens: ServerModuleInitRegistry::new(),
             server_gen_params: ServerModuleConfigGenParamsRegistry::default(),
             code_version_hash: code_version_hash.to_owned(),
-            code_version_str: code_version_vendor_suffix
-                .map(|suffix| <span class="macro">format!</span>(<span class="string">"{fedimint_version}.{suffix}"</span>))
-                .unwrap_or_else(|| fedimint_version.to_string()),
+            code_version_str: code_version_vendor_suffix.map_or_else(
+                || fedimint_version.to_string(),
+                |suffix| <span class="macro">format!</span>(<span class="string">"{fedimint_version}.{suffix}"</span>),
+            ),
         })
     }
 
@@ -825,11 +827,11 @@
                 },
             );
 
-        <span class="kw">let </span>s = <span class="kw">if </span>!is_env_var_set(FM_DISABLE_META_MODULE_ENV) {
+        <span class="kw">let </span>s = <span class="kw">if </span>is_env_var_set(FM_DISABLE_META_MODULE_ENV) {
+            s
+        } <span class="kw">else </span>{
             s.with_module_kind(MetaInit)
                 .with_module_instance(MetaInit::kind(), MetaGenParams::default())
-        } <span class="kw">else </span>{
-            s
         };
 
         <span class="kw">if </span>is_env_var_set(FM_USE_UNKNOWN_MODULE_ENV) {

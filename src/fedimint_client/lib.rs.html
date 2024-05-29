@@ -2513,7 +2513,37 @@
 <a href="#2513" id="2513">2513</a>
 <a href="#2514" id="2514">2514</a>
 <a href="#2515" id="2515">2515</a>
-</pre></div><pre class="rust"><code><span class="doccomment">//! # Client library for fedimintd
+<a href="#2516" id="2516">2516</a>
+<a href="#2517" id="2517">2517</a>
+<a href="#2518" id="2518">2518</a>
+<a href="#2519" id="2519">2519</a>
+<a href="#2520" id="2520">2520</a>
+<a href="#2521" id="2521">2521</a>
+<a href="#2522" id="2522">2522</a>
+<a href="#2523" id="2523">2523</a>
+<a href="#2524" id="2524">2524</a>
+<a href="#2525" id="2525">2525</a>
+<a href="#2526" id="2526">2526</a>
+<a href="#2527" id="2527">2527</a>
+<a href="#2528" id="2528">2528</a>
+<a href="#2529" id="2529">2529</a>
+<a href="#2530" id="2530">2530</a>
+</pre></div><pre class="rust"><code><span class="attr">#![warn(clippy::pedantic)]
+#![allow(clippy::cast_possible_truncation)]
+#![allow(clippy::default_trait_access)]
+#![allow(clippy::doc_markdown)]
+#![allow(clippy::explicit_deref_methods)]
+#![allow(clippy::ignored_unit_patterns)]
+#![allow(clippy::items_after_statements)]
+#![allow(clippy::missing_errors_doc)]
+#![allow(clippy::missing_panics_doc)]
+#![allow(clippy::module_name_repetitions)]
+#![allow(clippy::must_use_candidate)]
+#![allow(clippy::return_self_not_must_use)]
+#![allow(clippy::too_many_lines)]
+#![allow(clippy::unused_async)]
+
+</span><span class="doccomment">//! # Client library for fedimintd
 //!
 //! This library provides a client interface to build module clients that can be
 //! plugged together into a fedimint client that exposes a high-level interface
@@ -3898,7 +3928,7 @@
         }
 
         <span class="kw">for </span>peer_id <span class="kw">in </span>num_peers.peer_ids() {
-            requests.push(make_request(Duration::ZERO, peer_id, <span class="kw-2">&amp;</span>api))
+            requests.push(make_request(Duration::ZERO, peer_id, <span class="kw-2">&amp;</span>api));
         }
 
         <span class="kw">let </span><span class="kw-2">mut </span>num_responses = <span class="number">0</span>;
@@ -3916,7 +3946,7 @@
                         <span class="macro">debug!</span>(target: LOG_CLIENT, %peer_id, %err, <span class="string">"Failed to refresh API versions of a peer, but we have a previous response"</span>);
                     } <span class="kw">else </span>{
                         <span class="macro">debug!</span>(target: LOG_CLIENT, %peer_id, %err, <span class="string">"Failed to refresh API versions of a peer, will retry"</span>);
-                        requests.push(make_request(Duration::from_secs(<span class="number">15</span>), peer_id, <span class="kw-2">&amp;</span>api))
+                        requests.push(make_request(Duration::from_secs(<span class="number">15</span>), peer_id, <span class="kw-2">&amp;</span>api));
                     }
                 }
                 <span class="prelude-val">Ok</span>(o) =&gt; {
@@ -4068,7 +4098,7 @@
 
         <span class="kw">let </span>common_api_versions = discover_common_api_versions_set(
             <span class="kw-2">&amp;</span><span class="self">Self</span>::supported_api_versions_summary_static(config, client_module_init),
-            peer_api_version_sets,
+            <span class="kw-2">&amp;</span>peer_api_version_sets,
         )<span class="question-mark">?</span>;
 
         <span class="macro">debug!</span>(
@@ -4597,7 +4627,7 @@
         config: <span class="kw-2">&amp;</span>ClientConfig,
         api_secret: <span class="prelude-ty">Option</span>&lt;String&gt;,
     ) -&gt; anyhow::Result&lt;<span class="prelude-ty">Option</span>&lt;ClientBackup&gt;&gt; {
-        <span class="kw">let </span>api = DynGlobalApi::from_config(config, api_secret);
+        <span class="kw">let </span>api = DynGlobalApi::from_config(config, <span class="kw-2">&amp;</span>api_secret);
         Client::download_backup_from_federation_static(
             <span class="kw-2">&amp;</span>api,
             <span class="kw-2">&amp;</span><span class="self">Self</span>::federation_root_secret(root_secret, config),
@@ -4680,9 +4710,9 @@
         <span class="kw">let </span>fed_id = config.calculate_federation_id();
         <span class="kw">let </span>db = <span class="self">self</span>.db_no_decoders.with_decoders(decoders.clone());
         <span class="kw">let </span>api = <span class="kw">if let </span><span class="prelude-val">Some</span>(admin_creds) = <span class="self">self</span>.admin_creds.as_ref() {
-            DynGlobalApi::from_config_admin(<span class="kw-2">&amp;</span>config, api_secret.clone(), admin_creds.peer_id)
+            DynGlobalApi::from_config_admin(<span class="kw-2">&amp;</span>config, <span class="kw-2">&amp;</span>api_secret, admin_creds.peer_id)
         } <span class="kw">else </span>{
-            DynGlobalApi::from_config(<span class="kw-2">&amp;</span>config, api_secret.clone())
+            DynGlobalApi::from_config(<span class="kw-2">&amp;</span>config, <span class="kw-2">&amp;</span>api_secret)
         };
         <span class="kw">let </span>task_group = TaskGroup::new();
 

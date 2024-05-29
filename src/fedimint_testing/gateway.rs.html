@@ -240,10 +240,6 @@
 <a href="#240" id="240">240</a>
 <a href="#241" id="241">241</a>
 <a href="#242" id="242">242</a>
-<a href="#243" id="243">243</a>
-<a href="#244" id="244">244</a>
-<a href="#245" id="245">245</a>
-<a href="#246" id="246">246</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::fmt::{Display, Formatter};
 <span class="kw">use </span>std::net::SocketAddr;
 <span class="kw">use </span>std::str::FromStr;
@@ -268,7 +264,6 @@
 <span class="kw">use </span>ln_gateway::rpc::rpc_client::GatewayRpcClient;
 <span class="kw">use </span>ln_gateway::rpc::{ConnectFedPayload, FederationInfo, V1_API_ENDPOINT};
 <span class="kw">use </span>ln_gateway::{Gateway, GatewayState};
-<span class="kw">use </span>tempfile::TempDir;
 <span class="kw">use </span>tracing::{info, warn};
 
 <span class="kw">use </span><span class="kw">crate</span>::federation::FederationTest;
@@ -283,8 +278,6 @@
     </span><span class="kw">pub </span>versioned_api: SafeUrl,
     <span class="doccomment">/// Handle of the running gateway
     </span><span class="kw">pub </span>gateway: Gateway,
-    <span class="doccomment">/// Temporary dir that stores the gateway config
-    </span>_config_dir: <span class="prelude-ty">Option</span>&lt;TempDir&gt;,
     <span class="comment">// Public key of the lightning node
     </span><span class="kw">pub </span>node_pub_key: PublicKey,
     <span class="comment">// Listening address of the lightning node
@@ -391,7 +384,6 @@
 
         <span class="self">Self </span>{
             versioned_api,
-            _config_dir,
             gateway,
             node_pub_key: PublicKey::from_slice(info.pub_key.as_slice()).unwrap(),
             listening_addr,

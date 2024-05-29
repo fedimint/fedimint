@@ -560,7 +560,7 @@
                 .to_client_config(<span class="kw-2">&amp;</span><span class="self">self</span>.server_init)
                 .unwrap();
 
-            <span class="kw">let </span>api = DynGlobalApi::from_config_admin(<span class="kw-2">&amp;</span>client_config, <span class="prelude-val">None</span>, peer_id);
+            <span class="kw">let </span>api = DynGlobalApi::from_config_admin(<span class="kw-2">&amp;</span>client_config, <span class="kw-2">&amp;</span><span class="prelude-val">None</span>, peer_id);
 
             <span class="kw">while let </span><span class="prelude-val">Err</span>(e) = api
                 .request_admin_no_auth::&lt;u64&gt;(SESSION_COUNT_ENDPOINT, ApiRequestErased::default())

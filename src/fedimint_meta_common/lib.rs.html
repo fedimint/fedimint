@@ -256,7 +256,17 @@
 <a href="#256" id="256">256</a>
 <a href="#257" id="257">257</a>
 <a href="#258" id="258">258</a>
-</pre></div><pre class="rust"><code><span class="kw">pub mod </span>endpoint;
+<a href="#259" id="259">259</a>
+<a href="#260" id="260">260</a>
+<a href="#261" id="261">261</a>
+<a href="#262" id="262">262</a>
+<a href="#263" id="263">263</a>
+</pre></div><pre class="rust"><code><span class="attr">#![warn(clippy::pedantic)]
+#![allow(clippy::missing_errors_doc)]
+#![allow(clippy::module_name_repetitions)]
+#![allow(clippy::must_use_candidate)]
+
+</span><span class="kw">pub mod </span>endpoint;
 
 <span class="kw">use </span>std::fmt;
 <span class="kw">use </span>std::str::FromStr;

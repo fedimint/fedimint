@@ -219,7 +219,6 @@
 <a href="#219" id="219">219</a>
 <a href="#220" id="220">220</a>
 <a href="#221" id="221">221</a>
-<a href="#222" id="222">222</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::path::PathBuf;
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
@@ -377,17 +376,16 @@
             cli_password,
             FakeLightningTest::new(),
             decoders,
-            ClientModuleInitRegistry::from_iter(
-                clients
-                    .filter(|client| {
-                        <span class="comment">// Remove LN module because the gateway adds one
-                        </span>client.to_dyn_common().module_kind() != ModuleKind::from_static_str(<span class="string">"ln"</span>)
-                    })
-                    .filter(|client| {
-                        <span class="comment">// Remove LN NG module because the gateway adds one
-                        </span>client.to_dyn_common().module_kind() != ModuleKind::from_static_str(<span class="string">"lnv2"</span>)
-                    }),
-            ),
+            clients
+                .filter(|client| {
+                    <span class="comment">// Remove LN module because the gateway adds one
+                    </span>client.to_dyn_common().module_kind() != ModuleKind::from_static_str(<span class="string">"ln"</span>)
+                })
+                .filter(|client| {
+                    <span class="comment">// Remove LN NG module because the gateway adds one
+                    </span>client.to_dyn_common().module_kind() != ModuleKind::from_static_str(<span class="string">"lnv2"</span>)
+                })
+                .collect(),
             num_route_hints,
         )
         .<span class="kw">await

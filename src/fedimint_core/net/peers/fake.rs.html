@@ -122,9 +122,9 @@
         </span><span class="kw">while </span>!<span class="self">self</span>.task_handle.is_shutting_down() {
             <span class="kw">if let </span><span class="prelude-val">Some</span>(msg) = <span class="self">self</span>.rx.recv().<span class="kw">await </span>{
                 <span class="kw">return </span><span class="prelude-val">Ok</span>((<span class="self">self</span>.peer_id, msg));
-            } <span class="kw">else </span>{
-                sleep(Duration::from_secs(<span class="number">10</span>)).<span class="kw">await</span>;
             }
+
+            sleep(Duration::from_secs(<span class="number">10</span>)).<span class="kw">await</span>;
         }
         <span class="prelude-val">Err</span>(Cancelled)
     }

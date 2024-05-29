@@ -472,11 +472,11 @@
         <span class="self">self</span>.<span class="number">0
             </span>.iter()
             .filter_map(|(amt, notes)| {
-                <span class="kw">if </span>amt != except {
-                    <span class="prelude-val">Some</span>(notes.len())
-                } <span class="kw">else </span>{
+                <span class="kw">if </span>amt == except {
                     <span class="prelude-val">None
-                </span>}
+                </span>} <span class="kw">else </span>{
+                    <span class="prelude-val">Some</span>(notes.len())
+                }
             })
             .max()
             .unwrap_or_default()

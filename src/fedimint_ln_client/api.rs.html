@@ -546,7 +546,7 @@
 
         <span class="comment">// Filter out duplicate gateways so that we don't have to deal with
         // multiple guardians having different TTLs for the same gateway.
-        </span><span class="prelude-val">Ok</span>(filter_duplicate_gateways(gateway_announcements))
+        </span><span class="prelude-val">Ok</span>(filter_duplicate_gateways(<span class="kw-2">&amp;</span>gateway_announcements))
     }
 
     <span class="kw">async fn </span>register_gateway(
@@ -627,7 +627,7 @@
                 amount: account.amount,
                 contract: c.contract,
             }),
-            <span class="kw">_ </span>=&gt; <span class="prelude-val">Err</span>(FederationError::general(
+            FundedContract::Outgoing(<span class="kw">_</span>) =&gt; <span class="prelude-val">Err</span>(FederationError::general(
                 AWAIT_ACCOUNT_ENDPOINT,
                 id,
                 <span class="macro">anyhow::anyhow!</span>(<span class="string">"WrongAccountType"</span>),
@@ -645,7 +645,7 @@
                 amount: account.amount,
                 contract: c,
             }),
-            <span class="kw">_ </span>=&gt; <span class="prelude-val">Err</span>(FederationError::general(
+            FundedContract::Incoming(<span class="kw">_</span>) =&gt; <span class="prelude-val">Err</span>(FederationError::general(
                 AWAIT_ACCOUNT_ENDPOINT,
                 id,
                 <span class="macro">anyhow::anyhow!</span>(<span class="string">"WrongAccountType"</span>),
@@ -659,7 +659,7 @@
 /// `LightningGatewayAnnouncement`s representing the same gateway registration
 /// may not be equal.
 </span><span class="kw">fn </span>filter_duplicate_gateways(
-    gateways: BTreeMap&lt;PeerId, Vec&lt;LightningGatewayAnnouncement&gt;&gt;,
+    gateways: <span class="kw-2">&amp;</span>BTreeMap&lt;PeerId, Vec&lt;LightningGatewayAnnouncement&gt;&gt;,
 ) -&gt; Vec&lt;LightningGatewayAnnouncement&gt; {
     <span class="kw">let </span>gateways_by_gateway_id = gateways
         .values()
