@@ -1,10 +1,12 @@
 use std::io::Cursor;
 
 use bitcoin::hashes::sha256;
+use fedimint_core::config::FederationId;
 use fedimint_core::core::OperationId;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::registry::ModuleDecoderRegistry;
-use fedimint_core::{impl_db_lookup, impl_db_record, OutPoint, TransactionId};
+use fedimint_core::{impl_db_lookup, impl_db_record, Amount, OutPoint, TransactionId};
+use fedimint_ln_common::contracts::outgoing::OutgoingContractData;
 use fedimint_ln_common::{LightningGateway, LightningGatewayRegistration};
 use lightning_invoice::Bolt11Invoice;
 use secp256k1::{KeyPair, PublicKey};
@@ -12,10 +14,7 @@ use serde::Serialize;
 use strum_macros::EnumIter;
 
 use crate::pay::lightningpay::LightningPayStates;
-use crate::pay::{
-    LightningPayCommon, LightningPayFunded, LightningPayRefund, LightningPayStateMachine,
-    PayInvoicePayload,
-};
+use crate::pay::{LightningPayFunded, LightningPayRefund, PayInvoicePayload};
 use crate::receive::{
     LightningReceiveConfirmedInvoice, LightningReceiveStateMachine, LightningReceiveStates,
     LightningReceiveSubmittedOffer, LightningReceiveSubmittedOfferV0,
@@ -193,6 +192,22 @@ pub(crate) fn get_v3_migrated_state(
     operation_id: OperationId,
     cursor: &mut Cursor<&[u8]>,
 ) -> anyhow::Result<Option<(Vec<u8>, OperationId)>> {
+    #[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
+    pub struct LightningPayCommonOld {
+        pub operation_id: OperationId,
+        pub federation_id: FederationId,
+        pub contract: OutgoingContractData,
+        pub gateway_fee: Amount,
+        pub preimage_auth: sha256::Hash,
+        pub invoice: Bolt11Invoice,
+    }
+
+    #[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
+    pub struct LightningPayStateMachineOld {
+        pub common: LightningPayCommonOld,
+        pub state: LightningPayStates,
+    }
+
     let decoders = ModuleDecoderRegistry::default();
     let ln_sm_variant = u16::consensus_decode(cursor, &decoders)?;
 
@@ -202,7 +217,7 @@ pub(crate) fn get_v3_migrated_state(
     }
 
     let _ln_sm_len = u16::consensus_decode(cursor, &decoders)?;
-    let common = LightningPayCommon::consensus_decode(cursor, &decoders)?;
+    let common = LightningPayCommonOld::consensus_decode(cursor, &decoders)?;
     let pay_sm_variant = u16::consensus_decode(cursor, &decoders)?;
 
     let _pay_sm_len = u16::consensus_decode(cursor, &decoders)?;
@@ -226,13 +241,17 @@ pub(crate) fn get_v3_migrated_state(
                 funding_time: fedimint_core::time::now(),
             };
 
-            let new_pay = LightningPayStateMachine {
+            let new_pay = LightningPayStateMachineOld {
                 common,
                 state: LightningPayStates::Funded(v1),
             };
-            let new_sm = LightningClientStateMachines::LightningPay(new_pay);
-            let bytes = new_sm.consensus_encode_to_vec();
-            Ok(Some((bytes, operation_id)))
+            let pay_bytes = new_pay.consensus_encode_to_vec();
+            let mut sm_bytes: Vec<u8> = Vec::new();
+            1_u16.consensus_encode(&mut sm_bytes).unwrap();
+            let len = u16::try_from(pay_bytes.len()).unwrap();
+            len.consensus_encode(&mut sm_bytes).unwrap();
+            sm_bytes.extend_from_slice(&pay_bytes);
+            Ok(Some((sm_bytes, operation_id)))
         }
         // Refund
         5 => {
@@ -248,13 +267,17 @@ pub(crate) fn get_v3_migrated_state(
                 out_points: v0.out_points,
                 error_reason: "unknown error (database migration)".to_string(),
             };
-            let new_pay = LightningPayStateMachine {
+            let new_pay = LightningPayStateMachineOld {
                 common,
                 state: LightningPayStates::Refund(v1),
             };
-            let new_sm = LightningClientStateMachines::LightningPay(new_pay);
-            let bytes = new_sm.consensus_encode_to_vec();
-            Ok(Some((bytes, operation_id)))
+            let pay_bytes = new_pay.consensus_encode_to_vec();
+            let mut sm_bytes: Vec<u8> = Vec::new();
+            1_u16.consensus_encode(&mut sm_bytes).unwrap();
+            let len = u16::try_from(pay_bytes.len()).unwrap();
+            len.consensus_encode(&mut sm_bytes).unwrap();
+            sm_bytes.extend_from_slice(&pay_bytes);
+            Ok(Some((sm_bytes, operation_id)))
         }
         _ => Ok(None),
     }
