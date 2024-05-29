@@ -1,5 +1,4 @@
 use std::collections::BTreeMap;
-use std::default::Default;
 use std::sync::Arc;
 use std::time::Duration;
 
