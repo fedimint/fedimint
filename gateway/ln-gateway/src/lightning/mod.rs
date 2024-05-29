@@ -10,7 +10,7 @@ use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::task::TaskGroup;
 use fedimint_core::util::SafeUrl;
 use fedimint_core::{secp256k1, Amount};
-use fedimint_ln_common::PrunedInvoice;
+pub use fedimint_ln_common::PrunedInvoice;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
