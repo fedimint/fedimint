@@ -89,6 +89,7 @@ pub struct LightningPayCommon {
     pub gateway_fee: Amount,
     pub preimage_auth: sha256::Hash,
     pub invoice: lightning_invoice::Bolt11Invoice,
+    pub amount: Option<Amount>,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
@@ -239,7 +240,7 @@ impl LightningPayCreatedOutgoingLnContract {
                 // Success case: funding transaction is accepted
                 let common = old_state.common.clone();
                 let payload = if gateway.supports_private_payments {
-                    PayInvoicePayload::new_pruned(common.clone())
+                    PayInvoicePayload::new_pruned(&common)
                 } else {
                     PayInvoicePayload::new(common.clone())
                 };
@@ -591,14 +592,20 @@ impl PayInvoicePayload {
         }
     }
 
-    fn new_pruned(common: LightningPayCommon) -> Self {
+    fn new_pruned(common: &LightningPayCommon) -> Self {
         Self {
             contract_id: common.contract.contract_account.contract.contract_id(),
             federation_id: common.federation_id,
             preimage_auth: common.preimage_auth,
-            payment_data: PaymentData::PrunedInvoice(
-                common.invoice.try_into().expect("Invoice has amount"),
-            ),
+            payment_data: PaymentData::PrunedInvoice(PrunedInvoice::new(
+                &common.invoice,
+                common.amount.unwrap_or(Amount::from_msats(
+                    common
+                        .invoice
+                        .amount_milli_satoshis()
+                        .expect("Invoice has amount"),
+                )),
+            )),
         }
     }
 }
@@ -618,7 +625,11 @@ impl PaymentData {
             PaymentData::Invoice(invoice) => {
                 invoice.amount_milli_satoshis().map(Amount::from_msats)
             }
-            PaymentData::PrunedInvoice(PrunedInvoice { amount, .. }) => Some(*amount),
+            PaymentData::PrunedInvoice(PrunedInvoice {
+                amount,
+                send_amount,
+                ..
+            }) => Some(send_amount.unwrap_or(*amount)),
         }
     }
 

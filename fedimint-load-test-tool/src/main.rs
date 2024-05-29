@@ -948,7 +948,7 @@ async fn do_self_payment(
     let lightning_module = client.get_first_module::<LightningClientModule>();
     //let gateway = lightning_module.select_active_gateway_opt().await;
     lightning_module
-        .pay_bolt11_invoice(None, invoice, ())
+        .pay_bolt11_invoice(None, invoice, Some(invoice_amount), ())
         .await?;
     wait_invoice_payment(
         prefix,
@@ -977,7 +977,7 @@ async fn do_partner_ping_pong(
     // TODO: Select random gateway?
     //let gateway = lightning_module.select_active_gateway_opt().await;
     lightning_module
-        .pay_bolt11_invoice(None, invoice, ())
+        .pay_bolt11_invoice(None, invoice, Some(invoice_amount), ())
         .await?;
     wait_invoice_payment(
         prefix,
@@ -996,7 +996,7 @@ async fn do_partner_ping_pong(
     //let gateway = partner_lightning_module.select_active_gateway_opt().await;
     // TODO: Select random gateway?
     partner_lightning_module
-        .pay_bolt11_invoice(None, invoice, ())
+        .pay_bolt11_invoice(None, invoice, Some(invoice_amount), ())
         .await?;
     wait_invoice_payment(
         prefix,

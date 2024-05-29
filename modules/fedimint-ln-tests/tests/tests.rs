@@ -2,6 +2,7 @@ use std::str::FromStr;
 use std::sync::Arc;
 
 use assert_matches::assert_matches;
+use bitcoin_hashes::{sha256, Hash};
 use fedimint_client::Client;
 use fedimint_core::util::NextOrPending;
 use fedimint_core::{sats, Amount};
@@ -13,13 +14,15 @@ use fedimint_ln_client::{
     LnPayState, LnReceiveState, MockGatewayConnection, OutgoingLightningPayment, PayType,
 };
 use fedimint_ln_common::config::LightningGenParams;
-use fedimint_ln_common::ln_operation;
+use fedimint_ln_common::{bitcoin, ln_operation};
 use fedimint_ln_server::LightningInit;
 use fedimint_testing::federation::FederationTest;
 use fedimint_testing::fixtures::Fixtures;
 use fedimint_testing::ln::FakeLightningTest;
 use fedimint_testing::Gateway;
-use lightning_invoice::{Bolt11Invoice, Bolt11InvoiceDescription, Description};
+use lightning_invoice::{
+    Bolt11Invoice, Bolt11InvoiceDescription, Currency, Description, InvoiceBuilder, PaymentSecret,
+};
 use rand::rngs::OsRng;
 use secp256k1::KeyPair;
 
@@ -53,7 +56,26 @@ async fn pay_invoice(
     } else {
         None
     };
-    ln_module.pay_bolt11_invoice(gateway, invoice, ()).await
+    ln_module
+        .pay_bolt11_invoice(gateway, invoice, None, ())
+        .await
+}
+
+async fn pay_invoice_with_amount(
+    client: &Client,
+    invoice: Bolt11Invoice,
+    amount: Amount,
+    gateway_id: Option<secp256k1::PublicKey>,
+) -> anyhow::Result<OutgoingLightningPayment> {
+    let ln_module = client.get_first_module::<LightningClientModule>();
+    let gateway = if let Some(gateway_id) = gateway_id {
+        ln_module.select_gateway(&gateway_id).await
+    } else {
+        None
+    };
+    ln_module
+        .pay_bolt11_invoice(gateway, invoice, Some(amount), ())
+        .await
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -259,6 +281,98 @@ async fn cannot_pay_same_external_invoice_twice() -> anyhow::Result<()> {
 
     let same_balance = client.get_balance().await;
     assert_eq!(prev_balance, same_balance);
+
+    drop(gw);
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn can_pay_partial_invoice() -> anyhow::Result<()> {
+    let fixtures = fixtures();
+    let fed = fixtures.new_default_fed().await;
+    let gw = gateway(&fixtures, &fed).await;
+    let (client1, client2) = fed.two_clients().await;
+
+    // Print money for client1
+    let dummy_module = client1.get_first_module::<DummyClientModule>();
+    let (op, outpoint) = dummy_module.print_money(sats(1000)).await?;
+    client1.await_primary_module_output(op, outpoint).await?;
+
+    // Print money for client2
+    let dummy_module = client2.get_first_module::<DummyClientModule>();
+    let (op, outpoint) = dummy_module.print_money(sats(1000)).await?;
+    client2.await_primary_module_output(op, outpoint).await?;
+
+    let ctx = bitcoin::secp256k1::Secp256k1::new();
+    let (sk, _) = ctx.generate_keypair(&mut rand::thread_rng());
+
+    let invoice = InvoiceBuilder::new(Currency::Regtest)
+        .description(String::new())
+        .payment_hash(sha256::Hash::hash(&[0; 32]))
+        .current_timestamp()
+        .min_final_cltv_expiry_delta(0)
+        .payment_secret(PaymentSecret([0; 32]))
+        .amount_milli_satoshis(100 * 1000)
+        .basic_mpp()
+        .build_signed(|m| ctx.sign_ecdsa_recoverable(m, &sk))
+        .unwrap();
+
+    // Pay the invoice from the first client
+    let OutgoingLightningPayment {
+        payment_type: payment_type1,
+        contract_id: _,
+        fee: _,
+    } = pay_invoice_with_amount(
+        &client1,
+        invoice.clone(),
+        Amount::from_sats(70),
+        Some(gw.gateway_id()),
+    )
+    .await?;
+
+    // Pay the invoice from second client
+    let OutgoingLightningPayment {
+        payment_type: payment_type2,
+        contract_id: _,
+        fee: _,
+    } = pay_invoice_with_amount(
+        &client2,
+        invoice.clone(),
+        Amount::from_sats(30),
+        Some(gw.gateway_id()),
+    )
+    .await?;
+
+    match payment_type1 {
+        PayType::Lightning(operation_id) => {
+            let mut sub = client1
+                .get_first_module::<LightningClientModule>()
+                .subscribe_ln_pay(operation_id)
+                .await?
+                .into_stream();
+
+            assert_eq!(sub.ok().await?, LnPayState::Created);
+            assert_matches!(sub.ok().await?, LnPayState::Funded { .. });
+            assert_matches!(sub.ok().await?, LnPayState::Success { .. });
+        }
+        _ => panic!("Expected lightning payment!"),
+    }
+
+    match payment_type2 {
+        PayType::Lightning(operation_id) => {
+            let mut sub = client2
+                .get_first_module::<LightningClientModule>()
+                .subscribe_ln_pay(operation_id)
+                .await?
+                .into_stream();
+
+            assert_eq!(sub.ok().await?, LnPayState::Created);
+            assert_matches!(sub.ok().await?, LnPayState::Funded { .. });
+            assert_matches!(sub.ok().await?, LnPayState::Success { .. });
+        }
+        _ => panic!("Expected lightning payment!"),
+    }
 
     drop(gw);
 
@@ -954,6 +1068,7 @@ mod fedimint_migration_tests {
             gateway_fee: Amount::from_msats(1000),
             preimage_auth: sha256::Hash::hash(&BYTE_32),
             invoice: invoice.clone(),
+            amount: None,
         };
 
         let mut refund_state = Vec::new();

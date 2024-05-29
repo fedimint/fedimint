@@ -186,6 +186,16 @@ pub(crate) fn get_v2_migrated_state(
     Ok(Some((bytes, operation_id)))
 }
 
+/// Writes the Pay State into the state machine byte encoding
+pub(crate) fn write_new_pay_state(pay_bytes: &[u8]) -> anyhow::Result<Vec<u8>> {
+    let mut sm_bytes: Vec<u8> = Vec::with_capacity(pay_bytes.len() + 8);
+    1_u16.consensus_encode(&mut sm_bytes)?;
+    let len = u16::try_from(pay_bytes.len())?;
+    len.consensus_encode(&mut sm_bytes)?;
+    sm_bytes.extend_from_slice(pay_bytes);
+    Ok(sm_bytes)
+}
+
 /// Migrates `Refund` state with enum prefix 5 to contain the `error_reason`
 /// field
 pub(crate) fn get_v3_migrated_state(
@@ -246,11 +256,7 @@ pub(crate) fn get_v3_migrated_state(
                 state: LightningPayStates::Funded(v1),
             };
             let pay_bytes = new_pay.consensus_encode_to_vec();
-            let mut sm_bytes: Vec<u8> = Vec::new();
-            1_u16.consensus_encode(&mut sm_bytes).unwrap();
-            let len = u16::try_from(pay_bytes.len()).unwrap();
-            len.consensus_encode(&mut sm_bytes).unwrap();
-            sm_bytes.extend_from_slice(&pay_bytes);
+            let sm_bytes: Vec<u8> = write_new_pay_state(&pay_bytes)?;
             Ok(Some((sm_bytes, operation_id)))
         }
         // Refund
@@ -272,30 +278,95 @@ pub(crate) fn get_v3_migrated_state(
                 state: LightningPayStates::Refund(v1),
             };
             let pay_bytes = new_pay.consensus_encode_to_vec();
-            let mut sm_bytes: Vec<u8> = Vec::new();
-            1_u16.consensus_encode(&mut sm_bytes).unwrap();
-            let len = u16::try_from(pay_bytes.len()).unwrap();
-            len.consensus_encode(&mut sm_bytes).unwrap();
-            sm_bytes.extend_from_slice(&pay_bytes);
+            let sm_bytes: Vec<u8> = write_new_pay_state(&pay_bytes)?;
             Ok(Some((sm_bytes, operation_id)))
         }
         _ => Ok(None),
     }
 }
 
+/// Adds the `amount` field to `LightningPayCommon`
+pub(crate) fn get_v4_migrated_state(
+    operation_id: OperationId,
+    cursor: &mut Cursor<&[u8]>,
+) -> anyhow::Result<Option<(Vec<u8>, OperationId)>> {
+    #[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
+    pub struct LightningPayCommonOld {
+        pub operation_id: OperationId,
+        pub federation_id: FederationId,
+        pub contract: OutgoingContractData,
+        pub gateway_fee: Amount,
+        pub preimage_auth: sha256::Hash,
+        pub invoice: Bolt11Invoice,
+    }
+
+    #[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
+    pub struct LightningPayCommonNew {
+        pub operation_id: OperationId,
+        pub federation_id: FederationId,
+        pub contract: OutgoingContractData,
+        pub gateway_fee: Amount,
+        pub preimage_auth: sha256::Hash,
+        pub invoice: Bolt11Invoice,
+        pub amount: Option<Amount>,
+    }
+
+    #[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
+    pub struct LightningPayStateMachineNew {
+        pub common: LightningPayCommonNew,
+        pub state: LightningPayStates,
+    }
+
+    let decoders = ModuleDecoderRegistry::default();
+    let ln_sm_variant = u16::consensus_decode(cursor, &decoders)?;
+
+    // If the state machine is not a pay state machine, return None
+    if ln_sm_variant != 1 {
+        return Ok(None);
+    }
+
+    let _ln_sm_len = u16::consensus_decode(cursor, &decoders)?;
+    let common = LightningPayCommonOld::consensus_decode(cursor, &decoders)?;
+    let state = LightningPayStates::consensus_decode(cursor, &decoders)?;
+
+    let new_common = LightningPayCommonNew {
+        operation_id: common.operation_id,
+        federation_id: common.federation_id,
+        contract: common.contract,
+        gateway_fee: common.gateway_fee,
+        preimage_auth: common.preimage_auth,
+        invoice: common.invoice,
+        amount: None,
+    };
+
+    let new_pay = LightningPayStateMachineNew {
+        common: new_common,
+        state,
+    };
+    let pay_bytes = new_pay.consensus_encode_to_vec();
+    let sm_bytes: Vec<u8> = write_new_pay_state(&pay_bytes)?;
+    Ok(Some((sm_bytes, operation_id)))
+}
+
 #[cfg(test)]
 mod tests {
     use std::str::FromStr;
 
+    use bitcoin::hashes::sha256;
     use fedimint_client::db::migrate_state;
+    use fedimint_core::config::FederationId;
     use fedimint_core::core::{IntoDynInstance, OperationId};
     use fedimint_core::encoding::Encodable;
-    use fedimint_core::{BitcoinHash, TransactionId};
+    use fedimint_core::{Amount, BitcoinHash, TransactionId};
+    use fedimint_ln_common::contracts::outgoing::{
+        OutgoingContract, OutgoingContractAccount, OutgoingContractData,
+    };
     use lightning_invoice::Bolt11Invoice;
     use rand::thread_rng;
     use secp256k1::KeyPair;
 
-    use crate::db::{get_v1_migrated_state, get_v2_migrated_state};
+    use crate::db::{get_v1_migrated_state, get_v2_migrated_state, get_v4_migrated_state};
+    use crate::pay::{LightningPayCommon, LightningPayStateMachine, LightningPayStates};
     use crate::receive::{
         LightningReceiveConfirmedInvoice, LightningReceiveStateMachine, LightningReceiveStates,
         LightningReceiveSubmittedOffer,
@@ -517,6 +588,116 @@ mod tests {
 
         let (new_active_states, new_inactive_states) =
             migrate_state(old_states.clone(), old_states, get_v2_migrated_state)
+                .expect("Migration failed")
+                .expect("Migration produced output");
+
+        assert_eq!(new_inactive_states.len(), 1);
+        assert_eq!(
+            new_inactive_states[0],
+            (new_state.consensus_encode_to_vec(), operation_id)
+        );
+
+        assert_eq!(new_active_states.len(), 1);
+        assert_eq!(
+            new_active_states[0],
+            (new_state.consensus_encode_to_vec(), operation_id)
+        );
+    }
+
+    #[tokio::test]
+    async fn test_sm_migration_to_v4() {
+        #[derive(Debug, Clone, Eq, PartialEq, Hash, Encodable)]
+        pub struct LightningPayCommonOld {
+            pub operation_id: OperationId,
+            pub federation_id: FederationId,
+            pub contract: OutgoingContractData,
+            pub gateway_fee: Amount,
+            pub preimage_auth: sha256::Hash,
+            pub invoice: Bolt11Invoice,
+        }
+
+        #[derive(Debug, Clone, Eq, PartialEq, Hash, Encodable)]
+        pub struct LightningPayStateMachineOld {
+            pub common: LightningPayCommonOld,
+            pub state: LightningPayStates,
+        }
+
+        let instance_id = 0x42;
+
+        let federation_id = FederationId::dummy();
+        let dummy_invoice = Bolt11Invoice::from_str("lntbs1u1pj8308gsp5xhxz908q5usddjjm6mfq6nwc2nu62twwm6za69d32kyx8h49a4hqpp5j5egfqw9kf5e96nk\
+        6htr76a8kggl0xyz3pzgemv887pya4flguzsdp5235xzmntwvsxvmmjypex2en4dejxjmn8yp6xsefqvesh2cm9wsss\
+        cqp2rzjq0ag45qspt2vd47jvj3t5nya5vsn0hlhf5wel8h779npsrspm6eeuqtjuuqqqqgqqyqqqqqqqqqqqqqqqc9q\
+        yysgqddrv0jqhyf3q6z75rt7nrwx0crxme87s8rx2rt8xr9slzu0p3xg3f3f0zmqavtmsnqaj5v0y5mdzszah7thrmg\
+        2we42dvjggjkf44egqheymyw").expect("Invalid invoice");
+        let claim_key = KeyPair::new(secp256k1::SECP256K1, &mut thread_rng());
+        let operation_id = OperationId::new_random();
+
+        let outgoing_contract = OutgoingContract {
+            hash: *dummy_invoice.payment_hash(),
+            gateway_key: claim_key.public_key(),
+            timelock: 1,
+            user_key: claim_key.public_key(),
+            cancelled: false,
+        };
+
+        let outgoing_contract_data = OutgoingContractData {
+            recovery_key: claim_key,
+            contract_account: OutgoingContractAccount {
+                amount: Amount::from_sats(1000),
+                contract: outgoing_contract,
+            },
+        };
+
+        let gateway_fee = Amount::from_msats(1000);
+        let preimage_auth = sha256::Hash::hash(&[0; 32]);
+
+        let pay_common = LightningPayCommonOld {
+            operation_id,
+            federation_id,
+            contract: outgoing_contract_data.clone(),
+            gateway_fee,
+            preimage_auth,
+            invoice: dummy_invoice.clone(),
+        };
+
+        let old_pay = LightningPayStateMachineOld {
+            common: pay_common,
+            state: LightningPayStates::FundingRejected,
+        };
+
+        let old_state = {
+            let mut sm_bytes = Vec::<u8>::new();
+            instance_id
+                .consensus_encode(&mut sm_bytes)
+                .expect("u16 is encodable");
+            1u64.consensus_encode(&mut sm_bytes)
+                .expect("u64 is encodable"); // Pay state machine variant
+            let pay_bytes = old_pay.consensus_encode_to_vec();
+            pay_bytes
+                .consensus_encode(&mut sm_bytes)
+                .expect("pay variant is encodable");
+            sm_bytes
+        };
+
+        let old_states = vec![(old_state, operation_id)];
+
+        let new_state = LightningClientStateMachines::LightningPay(LightningPayStateMachine {
+            common: LightningPayCommon {
+                operation_id,
+                federation_id,
+                contract: outgoing_contract_data,
+                gateway_fee,
+                preimage_auth,
+                invoice: dummy_invoice,
+                amount: None,
+            },
+            state: LightningPayStates::FundingRejected,
+        })
+        .into_dyn(instance_id);
+
+        let (new_active_states, new_inactive_states) =
+            migrate_state(old_states.clone(), old_states, get_v4_migrated_state)
                 .expect("Migration failed")
                 .expect("Migration produced output");
 

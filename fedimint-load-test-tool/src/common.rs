@@ -226,7 +226,7 @@ pub async fn gateway_pay_invoice(
         contract_id: _,
         fee: _,
     } = lightning_module
-        .pay_bolt11_invoice(ln_gateway, invoice, ())
+        .pay_bolt11_invoice(ln_gateway, invoice, None, ())
         .await?;
     let operation_id = match payment_type {
         fedimint_ln_client::PayType::Internal(_) => bail!("Internal payment not expected"),
