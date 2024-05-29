@@ -357,7 +357,6 @@ impl GatewayPayInvoice {
                 &payment_data,
                 routing_fees,
             )
-            .await
             .map_err(|e| {
                 warn!("Invalid outgoing contract: {e:?}");
                 OutgoingPaymentError {
@@ -567,7 +566,7 @@ impl GatewayPayInvoice {
         Ok(())
     }
 
-    async fn validate_outgoing_account(
+    fn validate_outgoing_account(
         account: &OutgoingContractAccount,
         redeem_key: bitcoin::key::KeyPair,
         timelock_delta: u64,

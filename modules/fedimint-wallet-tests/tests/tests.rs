@@ -445,7 +445,7 @@ async fn peg_ins_that_are_unconfirmed_are_rejected() -> anyhow::Result<()> {
 
     let mut wallet = fedimint_wallet_server::Wallet::new_with_bitcoind(
         wallet_server_cfg[0].to_typed()?,
-        db.clone(),
+        &db,
         dyn_bitcoin_rpc.clone(),
         &mut task_group,
         PeerId::from(0),

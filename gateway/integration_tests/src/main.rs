@@ -1,3 +1,5 @@
+#![warn(clippy::pedantic)]
+
 use clap::{Parser, Subcommand};
 use devimint::version_constants::VERSION_0_3_0;
 use devimint::{cmd, util};

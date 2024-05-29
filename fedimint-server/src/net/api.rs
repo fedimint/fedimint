@@ -43,7 +43,7 @@ impl FromStr for ApiSecrets {
 
         let secrets = s
             .split(',')
-            .map(|s| s.trim())
+            .map(str::trim)
             .map(|s| {
                 if s.is_empty() {
                     bail!("Empty Api Secret is not allowed")
@@ -66,8 +66,8 @@ impl ApiSecrets {
     }
 
     /// Get all secrets
-    pub fn get_all(&self) -> Vec<String> {
-        self.0.clone()
+    pub fn get_all(&self) -> &[String] {
+        &self.0
     }
 
     /// Get empty value - meaning no secrets to use
@@ -115,10 +115,10 @@ pub trait HasApiContext<State> {
 pub type ApiResult<T> = Result<T, ApiError>;
 
 pub fn check_auth(context: &mut ApiEndpointContext) -> ApiResult<()> {
-    if !context.has_auth() {
-        Err(ApiError::unauthorized())
-    } else {
+    if context.has_auth() {
         Ok(())
+    } else {
+        Err(ApiError::unauthorized())
     }
 }
 

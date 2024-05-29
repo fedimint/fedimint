@@ -238,9 +238,10 @@ impl Fedimintd {
             server_gens: ServerModuleInitRegistry::new(),
             server_gen_params: ServerModuleConfigGenParamsRegistry::default(),
             code_version_hash: code_version_hash.to_owned(),
-            code_version_str: code_version_vendor_suffix
-                .map(|suffix| format!("{fedimint_version}.{suffix}"))
-                .unwrap_or_else(|| fedimint_version.to_string()),
+            code_version_str: code_version_vendor_suffix.map_or_else(
+                || fedimint_version.to_string(),
+                |suffix| format!("{fedimint_version}.{suffix}"),
+            ),
         })
     }
 
@@ -320,11 +321,11 @@ impl Fedimintd {
                 },
             );
 
-        let s = if !is_env_var_set(FM_DISABLE_META_MODULE_ENV) {
+        let s = if is_env_var_set(FM_DISABLE_META_MODULE_ENV) {
+            s
+        } else {
             s.with_module_kind(MetaInit)
                 .with_module_instance(MetaInit::kind(), MetaGenParams::default())
-        } else {
-            s
         };
 
         if is_env_var_set(FM_USE_UNKNOWN_MODULE_ENV) {

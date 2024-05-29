@@ -436,7 +436,7 @@ where
         let mut len = 0;
         len += (self.len() as u64).consensus_encode(writer)?;
 
-        for item in self.iter() {
+        for item in *self {
             len += item.consensus_encode(writer)?;
         }
         Ok(len)
@@ -529,7 +529,7 @@ where
 
 // From <https://github.com/rust-lang/rust/issues/61956>
 unsafe fn horribe_array_transmute_workaround<const N: usize, A, B>(mut arr: [A; N]) -> [B; N] {
-    let ptr = &mut arr as *mut _ as *mut [B; N];
+    let ptr = std::ptr::from_mut(&mut arr) as *mut [B; N];
     let res = unsafe { ptr.read() };
     core::mem::forget(arr);
     res

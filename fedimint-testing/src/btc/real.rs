@@ -151,10 +151,9 @@ impl BitcoinTest for RealBitcoinTestNoLock {
         loop {
             if let Ok(tx) = self.client.get_mempool_entry(txid) {
                 return tx.fees.base.into();
-            } else {
-                sleep_in_test("could not get mempool tx fee", Duration::from_millis(100)).await;
-                continue;
             }
+
+            sleep_in_test("could not get mempool tx fee", Duration::from_millis(100)).await;
         }
     }
 

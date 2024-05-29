@@ -79,10 +79,7 @@ impl State for ReceiveStateMachine {
                     },
                 )]
             }
-            ReceiveSMState::Claiming(..) => {
-                vec![]
-            }
-            ReceiveSMState::Expired => {
+            ReceiveSMState::Claiming(..) | ReceiveSMState::Expired => {
                 vec![]
             }
         }

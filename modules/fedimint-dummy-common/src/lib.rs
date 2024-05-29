@@ -1,3 +1,8 @@
+#![warn(clippy::pedantic)]
+#![allow(clippy::missing_panics_doc)]
+#![allow(clippy::module_name_repetitions)]
+#![allow(clippy::must_use_candidate)]
+
 use std::fmt;
 
 use config::DummyClientConfig;

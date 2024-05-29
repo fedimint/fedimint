@@ -28,13 +28,12 @@ impl UpdateMerge {
             // already running concurrently
             // wait for other call to return
             let guard = self.last_failed.lock().await;
-            match *guard {
-                // last call completed successfully
-                // => merge the call
-                false => return Ok(()),
-                // last call failed
-                // => run again
-                true => guard,
+            if *guard {
+                // Last call failed. Run again.
+                guard
+            } else {
+                // Last call completed successfully. Merge the call.
+                return Ok(());
             }
         };
         // future may panic, use mark as failed initially

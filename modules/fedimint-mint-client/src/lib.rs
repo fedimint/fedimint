@@ -1,3 +1,16 @@
+#![warn(clippy::pedantic)]
+#![allow(clippy::cast_possible_truncation)]
+#![allow(clippy::default_trait_access)]
+#![allow(clippy::doc_markdown)]
+#![allow(clippy::ignored_unit_patterns)]
+#![allow(clippy::match_same_arms)]
+#![allow(clippy::missing_errors_doc)]
+#![allow(clippy::missing_panics_doc)]
+#![allow(clippy::module_name_repetitions)]
+#![allow(clippy::must_use_candidate)]
+#![allow(clippy::return_self_not_must_use)]
+#![allow(clippy::unused_async)]
+
 // Backup and restore logic
 pub mod backup;
 /// Database keys used throughout the mint client module
@@ -123,7 +136,7 @@ impl OOBNotes {
         ])
     }
 
-    pub fn new_with_invite(notes: TieredMulti<SpendableNote>, invite: InviteCode) -> Self {
+    pub fn new_with_invite(notes: TieredMulti<SpendableNote>, invite: &InviteCode) -> Self {
         let mut data = vec![
             // FIXME: once we can break compatibility with 0.2 we can remove the prefix in case an
             // invite is present
@@ -135,7 +148,7 @@ impl OOBNotes {
             },
         ];
         if let Some(api_secret) = invite.api_secret() {
-            data.push(OOBNotesData::ApiSecret(api_secret))
+            data.push(OOBNotesData::ApiSecret(api_secret));
         }
         Self(data)
     }
@@ -163,7 +176,7 @@ impl OOBNotes {
 
     pub fn notes_json(&self) -> Result<serde_json::Value, serde_json::Error> {
         let mut notes_map = serde_json::Map::new();
-        for notes in self.0.iter() {
+        for notes in &self.0 {
             match notes {
                 OOBNotesData::Notes(notes) => {
                     let notes_json = serde_json::to_value(notes)?;
@@ -196,7 +209,7 @@ impl OOBNotes {
                 OOBNotesData::ApiSecret(_) => { /* already covered inside `Invite` */ }
                 OOBNotesData::Default { variant, bytes } => {
                     notes_map.insert(
-                        format!("default_{}", variant),
+                        format!("default_{variant}"),
                         serde_json::to_value(bytes.encode_hex::<String>())?,
                     );
                 }
@@ -484,8 +497,7 @@ impl ModuleInit for MintClientInit {
                         "CancelledOOBSpendKey"
                     );
                 }
-                DbKeyPrefix::RecoveryState => {}
-                DbKeyPrefix::RecoveryFinalized => {}
+                DbKeyPrefix::RecoveryState | DbKeyPrefix::RecoveryFinalized => {}
             }
         }
 
@@ -808,9 +820,7 @@ impl MintClientModule {
             MintClientModule::delete_spendable_note(dbtx, amount, note).await;
         }
 
-        let inputs = self
-            .create_input_from_notes(operation_id, selected_notes)
-            .await?;
+        let inputs = self.create_input_from_notes(operation_id, selected_notes)?;
 
         assert!(!inputs.is_empty());
 
@@ -957,7 +967,7 @@ impl MintClientModule {
                         "Failed to finalize transaction: {}",
                         failed.error
                     ))),
-                    _ => None,
+                    MintOutputStates::Created(_) => None,
                 }
             });
         pin_mut!(stream);
@@ -981,14 +991,14 @@ impl MintClientModule {
         const MAX_NOTES_PER_TIER_TRIGGER: usize = 8;
         /// Number of notes per tier to leave after threshold was crossed
         const MIN_NOTES_PER_TIER: usize = 4;
+        /// Maximum number of notes to consolidate per one tx,
+        /// to limit the size of a transaction produced.
+        const MAX_NOTES_TO_CONSOLIDATE_IN_TX: usize = 20;
         // it's fine, it's just documentation
         #[allow(clippy::assertions_on_constants)]
         {
             assert!(MIN_NOTES_PER_TIER <= MAX_NOTES_PER_TIER_TRIGGER);
         }
-        /// Maximum number of notes to consolidate per one tx,
-        /// to limit the size of a transaction produced.
-        const MAX_NOTES_TO_CONSOLIDATE_IN_TX: usize = 20;
 
         let counts = self.get_notes_tier_counts(dbtx).await;
 
@@ -1037,22 +1047,21 @@ impl MintClientModule {
         Ok((
             self.create_input_from_notes(
                 operation_id,
-                TieredMulti::from_iter(selected_notes_decoded.into_iter()),
-            )
-            .await?,
+                selected_notes_decoded.into_iter().collect(),
+            )?,
             sum,
         ))
     }
 
     /// Create a mint input from external, potentially untrusted notes
-    pub async fn create_input_from_notes(
+    pub fn create_input_from_notes(
         &self,
         operation_id: OperationId,
         notes: TieredMulti<SpendableNote>,
     ) -> anyhow::Result<Vec<ClientInput<MintInput, MintClientStateMachines>>> {
         let mut inputs = Vec::new();
 
-        for (amount, spendable_note) in notes.into_iter() {
+        for (amount, spendable_note) in notes {
             let key = self
                 .cfg
                 .tbs_pks
@@ -1181,15 +1190,14 @@ impl MintClientModule {
     async fn get_all_spendable_notes(
         dbtx: &mut DatabaseTransaction<'_>,
     ) -> TieredMulti<SpendableNoteUndecoded> {
-        TieredMulti::from_iter(
-            (dbtx
-                .find_by_prefix(&NoteKeyPrefix)
-                .await
-                .map(|(key, note)| (key.amount, note))
-                .collect::<Vec<_>>()
-                .await)
-                .into_iter(),
-        )
+        (dbtx
+            .find_by_prefix(&NoteKeyPrefix)
+            .await
+            .map(|(key, note)| (key.amount, note))
+            .collect::<Vec<_>>()
+            .await)
+            .into_iter()
+            .collect()
     }
 
     async fn get_next_note_index(
@@ -1252,7 +1260,7 @@ impl MintClientModule {
         dbtx: &mut DatabaseTransaction<'_>,
     ) -> (NoteIssuanceRequest, BlindNonce) {
         let secret = self.new_note_secret(amount, dbtx).await;
-        NoteIssuanceRequest::new(&self.secp, secret)
+        NoteIssuanceRequest::new(&self.secp, &secret)
     }
 
     /// Try to reissue e-cash notes received from a third party to receive them
@@ -1283,7 +1291,7 @@ impl MintClientModule {
         );
 
         let amount = notes.total_amount();
-        let mint_input = self.create_input_from_notes(operation_id, notes).await?;
+        let mint_input = self.create_input_from_notes(operation_id, notes)?;
 
         let tx =
             TransactionBuilder::new().with_inputs(self.client_ctx.map_dyn(mint_input).collect());
@@ -1350,7 +1358,7 @@ impl MintClientModule {
 
                 (txid, out_points)
             }
-            _ => bail!("Operation is not a reissuance"),
+            MintOperationMetaVariant::SpendOOB { .. } => bail!("Operation is not a reissuance"),
         };
 
         let client_ctx = self.client_ctx.clone();
@@ -1441,7 +1449,7 @@ impl MintClientModule {
                             .await?;
 
                         let oob_notes = if include_invite {
-                            OOBNotes::new_with_invite(notes, self.client_ctx.get_invite_code())
+                            OOBNotes::new_with_invite(notes, &self.client_ctx.get_invite_code())
                         } else {
                             OOBNotes::new(federation_id_prefix, notes)
                         };
@@ -1481,7 +1489,7 @@ impl MintClientModule {
     /// - the federation ID is correct
     /// - the note has a valid signature
     /// - the spend key is correct.
-    pub async fn validate_notes(&self, oob_notes: OOBNotes) -> anyhow::Result<Amount> {
+    pub fn validate_notes(&self, oob_notes: &OOBNotes) -> anyhow::Result<Amount> {
         let federation_id_prefix = oob_notes.federation_id_prefix();
         let notes = oob_notes.notes().clone();
 
@@ -1727,7 +1735,7 @@ async fn select_notes_from_stream<Note>(
                     // keep adding notes until we have enough
                     pending_amount += fee_per_note_input;
                     pending_amount -= note_amount;
-                    selected.push((note_amount, note))
+                    selected.push((note_amount, note));
                 }
                 Ordering::Greater => {
                     // probably we don't need this big note, but we'll keep it in case the
@@ -1769,14 +1777,14 @@ async fn select_notes_from_stream<Note>(
 
                 // so now we have enough to cover the requested amount, return
                 return Ok(notes);
-            } else {
-                let total_amount = requested_amount - pending_amount;
-                // not enough notes, return
-                return Err(InsufficientBalanceError {
-                    requested_amount,
-                    total_amount,
-                });
             }
+
+            let total_amount = requested_amount - pending_amount;
+            // not enough notes, return
+            return Err(InsufficientBalanceError {
+                requested_amount,
+                total_amount,
+            });
         }
     }
 }
@@ -2008,7 +2016,7 @@ impl NoteIndex {
     }
 
     pub fn advance(&mut self) {
-        *self = self.next()
+        *self = self.next();
     }
 }
 
@@ -2055,7 +2063,7 @@ pub fn represent_amount<K>(
     // try to hit the target `denomination_sets`
     for tier in tiers.tiers() {
         let notes = current_denominations.get(*tier);
-        let missing_notes = (denomination_sets as u64).saturating_sub(notes as u64);
+        let missing_notes = u64::from(denomination_sets).saturating_sub(notes as u64);
         let possible_notes = remaining_amount / *tier;
 
         let add_notes = min(possible_notes, missing_notes);
@@ -2134,7 +2142,7 @@ mod tests {
 
     #[test_log::test(tokio::test)]
     async fn select_notes_avg_test() {
-        let max_amount = Amount::from_sats(1000000);
+        let max_amount = Amount::from_sats(1_000_000);
         let tiers = Tiered::gen_denominations(2, max_amount);
         let tiered = represent_amount::<()>(max_amount, &Default::default(), &tiers, 3);
 
@@ -2287,7 +2295,7 @@ mod tests {
             federation_id_1,
             None,
         );
-        let notes_invite = OOBNotes::new_with_invite(notes.clone(), invite.clone());
+        let notes_invite = OOBNotes::new_with_invite(notes.clone(), &invite);
         test_roundtrip_serialize_str(notes_invite, |oob_notes| {
             assert_eq!(oob_notes.notes(), &notes);
             assert_eq!(oob_notes.federation_id_prefix(), federation_id_prefix_1);

@@ -1,3 +1,5 @@
+#![warn(clippy::pedantic)]
+
 use std::sync::Arc;
 
 use anyhow::Result;

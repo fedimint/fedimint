@@ -68,14 +68,6 @@ mod tests {
 
     #[test]
     fn test_queue() {
-        let mut queue = MessageQueue::default();
-
-        for i in 0u64..10 {
-            let umsg = queue.push(42 * i);
-            assert_eq!(umsg.msg, 42 * i);
-            assert_eq!(umsg.id.0, i + 1);
-        }
-
         fn assert_contains(queue: &MessageQueue<u64>, iter: impl Iterator<Item = u64>) {
             let mut queue_iter = queue.iter();
 
@@ -86,6 +78,14 @@ mod tests {
             }
 
             assert_eq!(queue_iter.next(), None);
+        }
+
+        let mut queue = MessageQueue::default();
+
+        for i in 0u64..10 {
+            let umsg = queue.push(42 * i);
+            assert_eq!(umsg.msg, 42 * i);
+            assert_eq!(umsg.id.0, i + 1);
         }
 
         assert_eq!(queue.iter().count(), 10);

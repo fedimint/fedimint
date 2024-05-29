@@ -206,9 +206,9 @@ pub async fn lnd_wait_invoice_payment(r_hash: String) -> anyhow::Result<()> {
         let state = result["state"].as_str().context("Missing state field")?;
         if state == "SETTLED" {
             return Ok(());
-        } else {
-            fedimint_core::task::sleep(Duration::from_millis(500)).await;
         }
+
+        fedimint_core::task::sleep(Duration::from_millis(500)).await;
     }
     anyhow::bail!("Timeout waiting for invoice to settle: {r_hash}")
 }

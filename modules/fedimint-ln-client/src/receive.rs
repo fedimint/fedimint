@@ -65,14 +65,11 @@ impl State for LightningReceiveStateMachine {
             LightningReceiveStates::SubmittedOffer(submitted_offer) => {
                 submitted_offer.transitions(global_context)
             }
-            LightningReceiveStates::Canceled(_) => {
-                vec![]
-            }
             LightningReceiveStates::ConfirmedInvoice(confirmed_invoice) => {
                 confirmed_invoice.transitions(global_context)
             }
             LightningReceiveStates::Funded(funded) => funded.transitions(global_context),
-            LightningReceiveStates::Success(_) => {
+            LightningReceiveStates::Success(_) | LightningReceiveStates::Canceled(_) => {
                 vec![]
             }
         }
@@ -432,7 +429,7 @@ mod tests {
         let ctx = secp256k1::Secp256k1::new();
         let secret_key = SecretKey::new(&mut rand::thread_rng());
         Ok(InvoiceBuilder::new(Currency::Regtest)
-            .description("".to_string())
+            .description(String::new())
             .payment_hash(sha256::Hash::hash(&[0; 32]))
             .duration_since_epoch(now_epoch)
             .min_final_cltv_expiry_delta(0)

@@ -1,3 +1,6 @@
+#![warn(clippy::pedantic)]
+#![allow(clippy::module_name_repetitions)]
+
 use std::collections::BTreeMap;
 
 use db::DbKeyPrefix;
@@ -89,8 +92,8 @@ impl ModuleInit for EmptyClientInit {
         });
 
         #[allow(clippy::never_loop)]
-        for _table in filtered_prefixes {
-            match _table {}
+        for table in filtered_prefixes {
+            match table {}
         }
 
         Box::new(items.into_iter())

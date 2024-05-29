@@ -37,9 +37,9 @@ where
         while !self.task_handle.is_shutting_down() {
             if let Some(msg) = self.rx.recv().await {
                 return Ok((self.peer_id, msg));
-            } else {
-                sleep(Duration::from_secs(10)).await;
             }
+
+            sleep(Duration::from_secs(10)).await;
         }
         Err(Cancelled)
     }

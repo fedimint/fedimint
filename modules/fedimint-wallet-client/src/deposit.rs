@@ -83,10 +83,7 @@ impl State for DepositStateMachine {
                     },
                 )]
             }
-            DepositStates::Claiming(_) => {
-                vec![]
-            }
-            DepositStates::TimedOut(_) => {
+            DepositStates::Claiming(_) | DepositStates::TimedOut(_) => {
                 vec![]
             }
         }
@@ -141,9 +138,9 @@ async fn await_created_btc_transaction_submitted(
                         .expect("TODO: handle invalid tx returned by API");
 
                     return (transaction, out_idx);
-                } else {
-                    trace!("No transactions received yet for script {script:?}");
                 }
+
+                trace!("No transactions received yet for script {script:?}");
             }
             Err(e) => {
                 warn!("Error fetching transaction history for {script:?}: {e}");
@@ -237,10 +234,9 @@ async fn await_btc_transaction_confirmed(
             "Fetched confirmation block count"
         );
 
-        if !confirmation_block_count
-            .map(|confirmation_block_count| consensus_block_count >= confirmation_block_count)
-            .unwrap_or(false)
-        {
+        if !confirmation_block_count.is_some_and(|confirmation_block_count| {
+            consensus_block_count >= confirmation_block_count
+        }) {
             trace!("Not confirmed yet, confirmation_block_count={confirmation_block_count:?}, consensus_block_count={consensus_block_count}");
             sleep(TRANSACTION_STATUS_FETCH_INTERVAL).await;
             continue;
@@ -272,9 +268,9 @@ async fn transition_btc_tx_confirmed(
     old_state: DepositStateMachine,
     txout_proof: TxOutProof,
 ) -> DepositStateMachine {
-    let awaiting_confirmation_state = match old_state.state {
-        DepositStates::WaitingForConfirmations(s) => s,
-        _ => panic!("Invalid previous state"),
+    let DepositStates::WaitingForConfirmations(awaiting_confirmation_state) = old_state.state
+    else {
+        panic!("Invalid previous state")
     };
 
     let pegin_proof = PegInProof::new(

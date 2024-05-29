@@ -111,7 +111,7 @@ impl Default for FeeConsensus {
 
 #[allow(dead_code)]
 fn migrate_config_consensus(
-    config: fedimint_ln_common::config::LightningConfigConsensus,
+    config: &fedimint_ln_common::config::LightningConfigConsensus,
     peer_count: u16,
 ) -> LightningConfigConsensus {
     LightningConfigConsensus {
@@ -141,7 +141,7 @@ fn migrate_config_consensus(
 
 #[allow(dead_code)]
 fn migrate_config_private(
-    config: fedimint_ln_common::config::LightningConfigPrivate,
+    config: &fedimint_ln_common::config::LightningConfigPrivate,
 ) -> LightningConfigPrivate {
     LightningConfigPrivate {
         sk: SecretKeyShare(config.threshold_sec_key.0 .0 .0),

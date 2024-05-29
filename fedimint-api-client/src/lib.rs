@@ -1,3 +1,10 @@
+#![warn(clippy::pedantic)]
+#![allow(clippy::missing_errors_doc)]
+#![allow(clippy::missing_panics_doc)]
+#![allow(clippy::module_name_repetitions)]
+#![allow(clippy::must_use_candidate)]
+#![allow(clippy::return_self_not_must_use)]
+
 use std::time::Duration;
 
 use anyhow::{bail, Context as _};
@@ -64,7 +71,7 @@ pub async fn try_download_client_config(invite_code: &InviteCode) -> anyhow::Res
         .map(|(peer, url)| (peer, url.url))
         .collect();
 
-    let client_config = WsFederationApi::new(api_endpoints, invite_code.api_secret())
+    let client_config = WsFederationApi::new(api_endpoints, &invite_code.api_secret())
         .request_current_consensus::<ClientConfig>(
             CLIENT_CONFIG_ENDPOINT.to_owned(),
             ApiRequestErased::default(),

@@ -487,7 +487,7 @@ mod fedimint_migration_tests {
                 out_idx: 0,
             },
             Amount::from_sats(10000),
-            NoteIssuanceRequest::new(secp256k1::SECP256K1, secret).0,
+            NoteIssuanceRequest::new(secp256k1::SECP256K1, &secret).0,
         );
         let pending_notes = vec![pending_note];
         let session_count = 0;

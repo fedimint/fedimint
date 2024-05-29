@@ -22,7 +22,7 @@ pub struct HttpAuthLayer {
 }
 
 impl HttpAuthLayer {
-    pub fn new(secrets: Vec<String>) -> Self {
+    pub fn new(secrets: &[String]) -> Self {
         if secrets.is_empty() {
             info!(target: LOG_NET_AUTH, "Api available for public access");
         } else {
@@ -72,7 +72,7 @@ impl<S> HttpAuthService<S> {
         }
         a.bytes()
             .zip(b.bytes())
-            .fold(0u64, |acc, (a, b)| acc + ((a ^ b) as u64))
+            .fold(0u64, |acc, (a, b)| acc + u64::from(a ^ b))
             == 0
     }
 
@@ -111,8 +111,7 @@ fn sanity_const_eq() {
         assert_eq!(
             HttpAuthService::<()>::const_eq(a, b),
             res,
-            "{a} {b} {:?}",
-            res
+            "{a} {b} {res:?}"
         );
     }
 }

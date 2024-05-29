@@ -45,10 +45,7 @@ impl State for WithdrawStateMachine {
                     |_dbtx, res, old_state| Box::pin(transition_withdraw_processed(res, old_state)),
                 )]
             }
-            WithdrawStates::Success(_) => {
-                vec![]
-            }
-            WithdrawStates::Aborted(_) => {
+            WithdrawStates::Success(_) | WithdrawStates::Aborted(_) => {
                 vec![]
             }
         }

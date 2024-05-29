@@ -517,12 +517,12 @@ impl Database {
                     value,
                     DatabaseTransaction::new(tx, self.module_decoders.clone()),
                 );
-            } else {
-                // key not found, try again
-                notify.await;
-                // if miss a notification between await and next register, it is
-                // fine. because we are going check the database
             }
+
+            // key not found, try again
+            notify.await;
+            // if miss a notification between await and next register, it is
+            // fine. because we are going check the database
         }
     }
 
@@ -944,15 +944,11 @@ where
         if let Some(prev) = self.insert_entry(key, value).await {
             debug_assert!(
                 false,
-                "Database overwriting element when expecting insertion of new entry. Key: {:?} Prev Value: {:?}",
-                key,
-                prev,
+                "Database overwriting element when expecting insertion of new entry. Key: {key:?} Prev Value: {prev:?}"
             );
             warn!(
                 target: LOG_DB,
-                "Database overwriting element when expecting insertion of new
-            entry. Key: {:?} Prev Value: {:?}",             key,
-                prev,
+                "Database overwriting element when expecting insertion of new entry. Key: {key:?} Prev Value: {prev:?}"
             );
         }
     }

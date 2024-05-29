@@ -1,3 +1,4 @@
+#![warn(clippy::pedantic)]
 #![cfg_attr(feature = "diagnostics", feature(proc_macro_diagnostic))]
 
 use itertools::Itertools;

@@ -1,3 +1,23 @@
+#![warn(clippy::pedantic)]
+#![allow(clippy::cast_possible_truncation)]
+#![allow(clippy::cast_possible_wrap)]
+#![allow(clippy::cast_sign_loss)]
+#![allow(clippy::default_trait_access)]
+#![allow(clippy::doc_markdown)]
+#![allow(clippy::ignored_unit_patterns)]
+#![allow(clippy::large_futures)]
+#![allow(clippy::missing_errors_doc)]
+#![allow(clippy::missing_fields_in_debug)]
+#![allow(clippy::missing_panics_doc)]
+#![allow(clippy::module_name_repetitions)]
+#![allow(clippy::must_use_candidate)]
+#![allow(clippy::return_self_not_must_use)]
+#![allow(clippy::similar_names)]
+#![allow(clippy::struct_field_names)]
+#![allow(clippy::too_many_lines)]
+#![allow(clippy::unused_async)]
+#![allow(clippy::wildcard_imports)]
+
 pub mod api;
 #[cfg(feature = "cli")]
 pub mod cli;
@@ -281,8 +301,8 @@ impl ModuleInit for LightningClientInit {
 
         for table in filtered_prefixes {
             match table {
-                DbKeyPrefix::ActiveGateway => {
-                    // Active gateway is deprecated
+                DbKeyPrefix::ActiveGateway | DbKeyPrefix::MetaOverridesDeprecated => {
+                    // Deprecated
                 }
                 DbKeyPrefix::PaymentResult => {
                     push_db_pair_items!(
@@ -293,9 +313,6 @@ impl ModuleInit for LightningClientInit {
                         ln_client_items,
                         "Payment Result"
                     );
-                }
-                DbKeyPrefix::MetaOverridesDeprecated => {
-                    // Deprecated
                 }
                 DbKeyPrefix::LightningGateway => {
                     push_db_pair_items!(
@@ -482,7 +499,7 @@ impl LightningClientModule {
         })
     }
 
-    fn get_payment_operation_id(&self, payment_hash: &sha256::Hash, index: u16) -> OperationId {
+    fn get_payment_operation_id(payment_hash: &sha256::Hash, index: u16) -> OperationId {
         // Copy the 32 byte payment hash and a 2 byte index to make every payment
         // attempt have a unique `OperationId`
         let mut bytes = [0; 34];
@@ -671,8 +688,7 @@ impl LightningClientModule {
                     }
                     _ => {}
                 },
-                Some(_) => {}
-                None => {}
+                Some(_) | None => {}
             }
         }
     }
@@ -691,8 +707,7 @@ impl LightningClientModule {
                     }
                     _ => {}
                 },
-                Some(_) => {}
-                None => {}
+                Some(_) | None => {}
             }
         }
     }
@@ -793,7 +808,7 @@ impl LightningClientModule {
             amount,
             hash: payment_hash,
             encrypted_preimage: EncryptedPreimage::new(
-                PreimageKey(preimage_key),
+                &PreimageKey(preimage_key),
                 &self.cfg.threshold_pub_key,
             ),
             expiry_time,
@@ -840,7 +855,7 @@ impl LightningClientModule {
                 // Remove all previous gateway entries
                 dbtx.remove_by_prefix(&LightningGatewayKeyPrefix).await;
 
-                for gw in gateways.iter() {
+                for gw in &gateways {
                     dbtx.insert_entry(
                         &LightningGatewayKey(gw.info.gateway_id),
                         &gw.clone().anchor(),
@@ -866,10 +881,11 @@ impl LightningClientModule {
     where
         Fut: Future<Output = Vec<LightningGatewayAnnouncement>>,
     {
-        let mut first_time = true;
-
         const ABOUT_TO_EXPIRE: Duration = Duration::from_secs(30);
         const EMPTY_GATEWAY_SLEEP: Duration = Duration::from_secs(10 * 60);
+
+        let mut first_time = true;
+
         loop {
             let gateways = self.list_gateways().await;
             let sleep_time = gateways_filter(gateways)
@@ -934,8 +950,10 @@ impl LightningClientModule {
         }
 
         // Verify that no previous payment attempt is still running
-        let prev_operation_id =
-            self.get_payment_operation_id(invoice.payment_hash(), prev_payment_result.index);
+        let prev_operation_id = LightningClientModule::get_payment_operation_id(
+            invoice.payment_hash(),
+            prev_payment_result.index,
+        );
         if self.client_ctx.has_active_states(prev_operation_id).await {
             bail!(
                 PayBolt11InvoiceError::PreviousPaymentAttemptStillInProgress {
@@ -945,7 +963,8 @@ impl LightningClientModule {
         }
 
         let next_index = prev_payment_result.index + 1;
-        let operation_id = self.get_payment_operation_id(invoice.payment_hash(), next_index);
+        let operation_id =
+            LightningClientModule::get_payment_operation_id(invoice.payment_hash(), next_index);
 
         let new_payment_result = PaymentResult {
             index: next_index,
@@ -1115,19 +1134,6 @@ impl LightningClientModule {
         &self,
         operation_id: OperationId,
     ) -> anyhow::Result<UpdateStreamOrOutcome<LnPayState>> {
-        let operation = self.client_ctx.get_operation(operation_id).await?;
-        let (_, _, change) = match operation.meta::<LightningOperationMeta>().variant {
-            LightningOperationMetaVariant::Pay(LightningOperationMetaPay {
-                out_point,
-                invoice,
-                change,
-                ..
-            }) => (out_point, invoice, change),
-            _ => bail!("Operation is not a lightning payment"),
-        };
-
-        let client_ctx = self.client_ctx.clone();
-
         async fn get_next_pay_state(
             stream: &mut fedimint_core::util::BoxStream<'_, LightningClientStateMachines>,
         ) -> Option<LightningPayStates> {
@@ -1137,6 +1143,19 @@ impl LightningClientModule {
                 None => None,
             }
         }
+
+        let operation = self.client_ctx.get_operation(operation_id).await?;
+        let LightningOperationMetaVariant::Pay(LightningOperationMetaPay {
+            out_point: _,
+            invoice: _,
+            change,
+            ..
+        }) = operation.meta::<LightningOperationMeta>().variant
+        else {
+            bail!("Operation is not a lightning payment")
+        };
+
+        let client_ctx = self.client_ctx.clone();
 
         Ok(operation.outcome_or_updates(&self.client_ctx.global_db(), operation_id, move || {
             stream! {
@@ -1180,7 +1199,9 @@ impl LightningClientModule {
                 let state = get_next_pay_state(&mut stream).await;
                 match state {
                     Some(LightningPayStates::Success(preimage)) => {
-                        if !change.is_empty() {
+                        if change.is_empty() {
+                            yield LnPayState::Success { preimage };
+                        } else {
                             yield LnPayState::AwaitingChange;
                             match client_ctx.await_primary_module_outputs(operation_id, change.clone()).await {
                                 Ok(_) => {
@@ -1190,8 +1211,6 @@ impl LightningClientModule {
                                     yield LnPayState::UnexpectedError { error_message: format!("Error occurred while waiting for the change: {e:?}") };
                                 }
                             }
-                        } else {
-                            yield LnPayState::Success { preimage };
                         }
                     }
                     Some(LightningPayStates::Refund(refund)) => {
@@ -1379,17 +1398,16 @@ impl LightningClientModule {
         gateway: Option<LightningGateway>,
     ) -> anyhow::Result<(OperationId, Bolt11Invoice, [u8; 32])> {
         let gateway_id = gateway.as_ref().map(|g| g.gateway_id);
-        let (src_node_id, short_channel_id, route_hints) = match gateway {
-            Some(current_gateway) => (
+        let (src_node_id, short_channel_id, route_hints) = if let Some(current_gateway) = gateway {
+            (
                 current_gateway.node_pub_key,
                 current_gateway.mint_channel_id,
                 current_gateway.route_hints,
-            ),
-            None => {
-                // If no gateway is provided, this is assumed to be an internal payment.
-                let markers = self.client_ctx.get_internal_payment_markers()?;
-                (markers.0, markers.1, vec![])
-            }
+            )
+        } else {
+            // If no gateway is provided, this is assumed to be an internal payment.
+            let markers = self.client_ctx.get_internal_payment_markers()?;
+            (markers.0, markers.1, vec![])
         };
 
         debug!(target: LOG_CLIENT_MODULE_LN, ?gateway_id, %amount, "Selected LN gateway for invoice generation");
@@ -1449,9 +1467,10 @@ impl LightningClientModule {
         operation_id: OperationId,
     ) -> anyhow::Result<UpdateStreamOrOutcome<LnReceiveState>> {
         let operation = self.client_ctx.get_operation(operation_id).await?;
-        let out_points = match operation.meta::<LightningOperationMeta>().variant {
-            LightningOperationMetaVariant::Claim { out_points } => out_points,
-            _ => bail!("Operation is not a lightning claim"),
+        let LightningOperationMetaVariant::Claim { out_points } =
+            operation.meta::<LightningOperationMeta>().variant
+        else {
+            bail!("Operation is not a lightning claim")
         };
 
         let client_ctx = self.client_ctx.clone();
@@ -1474,11 +1493,11 @@ impl LightningClientModule {
         operation_id: OperationId,
     ) -> anyhow::Result<UpdateStreamOrOutcome<LnReceiveState>> {
         let operation = self.client_ctx.get_operation(operation_id).await?;
-        let (out_point, invoice) = match operation.meta::<LightningOperationMeta>().variant {
-            LightningOperationMetaVariant::Receive {
-                out_point, invoice, ..
-            } => (out_point, invoice),
-            _ => bail!("Operation is not a lightning payment"),
+        let LightningOperationMetaVariant::Receive {
+            out_point, invoice, ..
+        } = operation.meta::<LightningOperationMeta>().variant
+        else {
+            bail!("Operation is not a lightning payment")
         };
 
         let tx_accepted_future = self
@@ -1596,8 +1615,8 @@ impl LightningClientModule {
                         }
                         InternalPayState::RefundSuccess { out_points, error } => {
                             let e = format!(
-                            "Internal payment failed. A refund was issued to {:?} Error: {error}",
-                            out_points
+                            "Internal payment failed. A refund was issued to {out_points:?} Error: {error}"
+
                         );
                             bail!("{e}");
                         }
@@ -1641,13 +1660,13 @@ impl LightningClientModule {
                                 }
                             }));
                         }
-                        LnPayState::Created
-                        | LnPayState::AwaitingChange
-                        | LnPayState::WaitingForRefund { .. } => {}
                         LnPayState::Funded { block_height: _ } if return_on_funding => {
                             return Ok(None)
                         }
-                        LnPayState::Funded { block_height: _ } => {}
+                        LnPayState::Created
+                        | LnPayState::AwaitingChange
+                        | LnPayState::WaitingForRefund { .. }
+                        | LnPayState::Funded { block_height: _ } => {}
                         LnPayState::UnexpectedError { error_message } => {
                             bail!("UnexpectedError: {error_message}")
                         }

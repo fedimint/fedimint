@@ -85,7 +85,7 @@ impl<G: DkgGroup> Dkg<G> {
             .map(|(g, h)| g + h)
             .collect();
 
-        let hashed = dkg.hash(&commit);
+        let hashed = Dkg::hash(&commit);
         dkg.commitments.insert(our_id, commit);
         dkg.hashed_commits.insert(our_id, hashed);
         let step = dkg.broadcast(&DkgMessage::HashedCommit(hashed));
@@ -110,7 +110,7 @@ impl<G: DkgGroup> Dkg<G> {
                 }
             }
             DkgMessage::Commit(commit) => {
-                let hash = self.hash(&commit);
+                let hash = Self::hash(&commit);
                 ensure!(self.threshold == commit.len(), "wrong degree from {peer}");
                 ensure!(hash == self.hashed_commits[&peer], "wrong hash from {peer}");
 
@@ -213,7 +213,7 @@ impl<G: DkgGroup> Dkg<G> {
         Ok(DkgStep::Messages(vec![]))
     }
 
-    fn hash(&self, poly: &[G]) -> Sha256 {
+    fn hash(poly: &[G]) -> Sha256 {
         let mut engine = HashEngine::default();
         for element in poly {
             engine

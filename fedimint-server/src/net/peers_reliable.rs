@@ -794,12 +794,12 @@ mod tests {
             assert_eq!(recv.1, 42);
             let status = peer_status_client_a.get_all_status().await;
             assert_eq!(status.len(), 2);
-            assert!(status.values().all(|s| s.is_ok()));
+            assert!(status.values().all(Result::is_ok));
 
             peers_a.send(&[PeerId::from(3)], 21).await.unwrap();
             let status = peer_status_client_b.get_all_status().await;
             assert_eq!(status.len(), 2);
-            assert!(status.values().all(|s| s.is_ok()));
+            assert!(status.values().all(Result::is_ok));
 
             let (mut peers_c, peer_status_client_c) =
                 build_peers("127.0.0.1:3000", 3, task_group.clone()).await;
@@ -811,7 +811,7 @@ mod tests {
             assert_eq!(recv.1, 21);
             let status = peer_status_client_c.get_all_status().await;
             assert_eq!(status.len(), 2);
-            assert!(status.values().all(|s| s.is_ok()));
+            assert!(status.values().all(Result::is_ok));
         }
 
         task_group.shutdown();

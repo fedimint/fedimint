@@ -1,3 +1,10 @@
+#![warn(clippy::pedantic)]
+#![allow(clippy::ignored_unit_patterns)]
+#![allow(clippy::missing_errors_doc)]
+#![allow(clippy::missing_panics_doc)]
+#![allow(clippy::module_name_repetitions)]
+#![allow(clippy::must_use_candidate)]
+
 use core::cmp::Ordering;
 use std::collections::BTreeMap;
 use std::sync::Arc;
@@ -182,9 +189,9 @@ impl ClientModule for DummyClientModule {
                 .subscribe_all_operations()
                 .filter_map(|state| async move {
                     match state {
-                        DummyStateMachine::OutputDone(_, _) => Some(()),
-                        DummyStateMachine::Input { .. } => Some(()),
-                        DummyStateMachine::Refund(_) => Some(()),
+                        DummyStateMachine::OutputDone(_, _)
+                        | DummyStateMachine::Input { .. }
+                        | DummyStateMachine::Refund(_) => Some(()),
                         _ => None,
                     }
                 }),

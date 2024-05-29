@@ -82,8 +82,8 @@ impl State for IncomingStateMachine {
     ) -> Vec<fedimint_client::sm::StateTransition<Self>> {
         match &self.state {
             IncomingSmStates::FundingOffer(state) => state.transitions(global_context, context),
-            IncomingSmStates::DecryptingPreimage(state) => {
-                state.transitions(&self.common, global_context, context)
+            IncomingSmStates::DecryptingPreimage(_state) => {
+                DecryptingPreimageState::transitions(&self.common, global_context, context)
             }
             _ => {
                 vec![]
@@ -220,7 +220,6 @@ pub struct DecryptingPreimageState {
 
 impl DecryptingPreimageState {
     fn transitions(
-        &self,
         common: &IncomingSmCommon,
         global_context: &DynGlobalClientContext,
         context: &LightningClientContext,
@@ -255,18 +254,17 @@ impl DecryptingPreimageState {
                 .wait_preimage_decrypted(contract_id)
                 .await
             {
-                Ok((incoming_contract_account, preimage)) => match preimage {
-                    Some(preimage) => {
+                Ok((incoming_contract_account, preimage)) => {
+                    if let Some(preimage) = preimage {
                         debug!("Preimage decrypted for contract {contract_id:?}");
                         return Ok(preimage);
                     }
-                    None => {
-                        info!("Invalid preimage for contract {contract_id:?}");
-                        return Err(IncomingSmError::InvalidPreimage {
-                            contract: Box::new(incoming_contract_account),
-                        });
-                    }
-                },
+
+                    info!("Invalid preimage for contract {contract_id:?}");
+                    return Err(IncomingSmError::InvalidPreimage {
+                        contract: Box::new(incoming_contract_account),
+                    });
+                }
                 Err(error) => {
                     warn!("Incoming contract {contract_id:?} error waiting for preimage decryption: {error:?}, will keep retrying...");
                 }

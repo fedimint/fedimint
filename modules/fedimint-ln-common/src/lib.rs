@@ -1,3 +1,10 @@
+#![warn(clippy::pedantic)]
+#![allow(clippy::doc_markdown)]
+#![allow(clippy::missing_errors_doc)]
+#![allow(clippy::missing_panics_doc)]
+#![allow(clippy::module_name_repetitions)]
+#![allow(clippy::must_use_candidate)]
+
 //! # Lightning Module
 //!
 //! This module allows to atomically and trustlessly (in the federated trust
@@ -222,8 +229,8 @@ impl LightningOutputOutcomeV0 {
     pub fn is_permanent(&self) -> bool {
         match self {
             LightningOutputOutcomeV0::Contract { id: _, outcome } => outcome.is_permanent(),
-            LightningOutputOutcomeV0::Offer { .. } => true,
-            LightningOutputOutcomeV0::CancelOutgoingContract { .. } => true,
+            LightningOutputOutcomeV0::Offer { .. }
+            | LightningOutputOutcomeV0::CancelOutgoingContract { .. } => true,
         }
     }
 }
@@ -665,10 +672,7 @@ impl TryFrom<Bolt11Invoice> for PrunedInvoice {
     fn try_from(invoice: Bolt11Invoice) -> Result<Self, Self::Error> {
         // We use expires_at since it doesn't rely on the std feature in
         // lightning-invoice. See #3838.
-        let expiry_timestamp = invoice
-            .expires_at()
-            .map(|t| t.as_secs())
-            .unwrap_or(u64::MAX);
+        let expiry_timestamp = invoice.expires_at().map_or(u64::MAX, |t| t.as_secs());
 
         let destination_features = if let Some(features) = invoice.features() {
             let mut feature_bytes = vec![];
@@ -688,7 +692,7 @@ impl TryFrom<Bolt11Invoice> for PrunedInvoice {
             ),
             destination: invoice
                 .payee_pub_key()
-                .cloned()
+                .copied()
                 .unwrap_or_else(|| invoice.recover_payee_pub_key()),
             destination_features,
             payment_hash: *invoice.payment_hash(),

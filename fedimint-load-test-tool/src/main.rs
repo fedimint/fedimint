@@ -1,3 +1,11 @@
+#![warn(clippy::pedantic)]
+#![allow(clippy::cast_possible_truncation)]
+#![allow(clippy::cast_precision_loss)]
+#![allow(clippy::default_trait_access)]
+#![allow(clippy::if_not_else)]
+#![allow(clippy::missing_errors_doc)]
+#![allow(clippy::too_many_lines)]
+
 use std::collections::{BTreeMap, HashMap};
 use std::path::PathBuf;
 use std::str::FromStr;
@@ -1111,6 +1119,9 @@ async fn test_connect_raw_client(
     limit_endpoints: Option<usize>,
     event_sender: mpsc::UnboundedSender<MetricEvent>,
 ) -> anyhow::Result<Vec<BoxFuture<'static, anyhow::Result<()>>>> {
+    use jsonrpsee_core::client::ClientT;
+    use jsonrpsee_ws_client::WsClientBuilder;
+
     let mut cfg = fedimint_api_client::download_from_invite_code(&invite_code).await?;
 
     if let Some(limit_endpoints) = limit_endpoints {
@@ -1122,8 +1133,6 @@ async fn test_connect_raw_client(
             .collect();
         info!("Limiting endpoints to {:?}", cfg.global.api_endpoints);
     }
-    use jsonrpsee_core::client::ClientT;
-    use jsonrpsee_ws_client::WsClientBuilder;
 
     info!("Connecting to {users} clients");
     let clients = (0..users)

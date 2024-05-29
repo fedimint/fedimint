@@ -137,7 +137,7 @@ pub async fn run(
     ConsensusEngine {
         db,
         keychain: Keychain::new(&cfg),
-        federation_api: DynGlobalApi::from_config(&client_cfg, force_api_secrets.get_active()),
+        federation_api: DynGlobalApi::from_config(&client_cfg, &force_api_secrets.get_active()),
         self_id_str: cfg.local.identity.to_string(),
         peer_id_str: (0..cfg.consensus.api_endpoints.len())
             .map(|x| x.to_string())

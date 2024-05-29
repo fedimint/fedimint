@@ -1,3 +1,8 @@
+#![warn(clippy::pedantic)]
+#![allow(clippy::doc_markdown)]
+#![allow(clippy::missing_panics_doc)]
+#![allow(clippy::too_many_lines)]
+
 use std::time::Duration;
 
 use anyhow::bail;

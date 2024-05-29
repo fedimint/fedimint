@@ -158,9 +158,9 @@ pub trait FeeToAmount {
 
 impl FeeToAmount for RoutingFees {
     fn to_amount(&self, payment: &Amount) -> Amount {
-        let base_fee = self.base_msat as u64;
+        let base_fee = u64::from(self.base_msat);
         let margin_fee: u64 = if self.proportional_millionths > 0 {
-            let fee_percent = 1000000 / self.proportional_millionths as u64;
+            let fee_percent = 1_000_000 / u64::from(self.proportional_millionths);
             payment.msats / fee_percent
         } else {
             0
@@ -193,21 +193,18 @@ mod tests {
             ("xpto", None),
         ];
         for (input, expected) in test_cases {
-            match expected {
-                Some((base_msat, proportional_millionths)) => {
-                    let actual = parse_routing_fees(input).expect("parsed routing fees");
-                    assert_eq!(
-                        actual,
-                        RoutingFees {
-                            base_msat,
-                            proportional_millionths
-                        }
-                    );
-                }
-                None => {
-                    let result = parse_routing_fees(input);
-                    assert!(result.is_err());
-                }
+            if let Some((base_msat, proportional_millionths)) = expected {
+                let actual = parse_routing_fees(input).expect("parsed routing fees");
+                assert_eq!(
+                    actual,
+                    RoutingFees {
+                        base_msat,
+                        proportional_millionths
+                    }
+                );
+            } else {
+                let result = parse_routing_fees(input);
+                assert!(result.is_err());
             }
         }
     }

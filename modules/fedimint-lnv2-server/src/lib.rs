@@ -1,3 +1,8 @@
+#![warn(clippy::pedantic)]
+#![allow(clippy::cast_possible_wrap)]
+#![allow(clippy::default_trait_access)]
+#![allow(clippy::module_name_repetitions)]
+
 mod db;
 
 use std::collections::BTreeMap;
@@ -188,7 +193,7 @@ impl ServerModuleInit for LightningInit {
 
         let (tpe_agg_pk, pks, sks) = dealer_keygen(peers.threshold(), peers.len());
 
-        let tpe_pks: BTreeMap<PeerId, PublicKeyShare> = peers.iter().cloned().zip(pks).collect();
+        let tpe_pks: BTreeMap<PeerId, PublicKeyShare> = peers.iter().copied().zip(pks).collect();
 
         let server_cfg = peers
             .iter()
@@ -301,7 +306,7 @@ fn dealer_keygen(
 fn eval_polynomial(coefficients: &[Scalar], x: &Scalar) -> Scalar {
     coefficients
         .iter()
-        .cloned()
+        .copied()
         .rev()
         .reduce(|acc, coefficient| acc * x + coefficient)
         .expect("We have at least one coefficient")
@@ -488,7 +493,7 @@ impl ServerModule for Lightning {
             .await
             .is_some()
         {
-            panic!("Output Outcome for {:?} already exists", out_point);
+            panic!("Output Outcome for {out_point:?} already exists");
         }
 
         Ok(TransactionItemAmount {

@@ -1,3 +1,8 @@
+#![warn(clippy::pedantic)]
+#![allow(clippy::default_trait_access)]
+#![allow(clippy::missing_panics_doc)]
+#![allow(clippy::must_use_candidate)]
+
 use std::fmt;
 
 use fedimint_core::encoding::{self, Decodable, Encodable};
@@ -33,7 +38,7 @@ pub fn test_decodable<T>(data: &[u8])
 where
     T: Decodable + Encodable,
 {
-    test_decodable_with_decoders::<T>(data, &Default::default())
+    test_decodable_with_decoders::<T>(data, &Default::default());
 }
 
 pub fn test_decodable_with_decoders<T>(data: &[u8], decoders: &ModuleDecoderRegistry)

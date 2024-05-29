@@ -1,3 +1,7 @@
+#![warn(clippy::pedantic)]
+#![allow(clippy::missing_errors_doc)]
+#![allow(clippy::missing_panics_doc)]
+
 //! Constants for categorizing the logging type
 //!
 //! To help stabilize logging targets, avoid typos and improve consistency,

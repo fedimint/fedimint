@@ -106,9 +106,10 @@ impl IncomingContract {
     ) -> Option<[u8; 32]> {
         let preimage = decrypt_preimage(&self.ciphertext, agg_decryption_key);
 
-        match self.verify_preimage(&preimage) {
-            true => Some(preimage),
-            false => None,
+        if self.verify_preimage(&preimage) {
+            Some(preimage)
+        } else {
+            None
         }
     }
 

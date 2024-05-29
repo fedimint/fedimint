@@ -350,7 +350,7 @@ impl MintRecoveryState {
 
         let (note_issuance_request, blind_nonce) = NoteIssuanceRequest::new(
             secp256k1_zkp::SECP256K1,
-            MintClientModule::new_note_secret_static(secret, amount, *note_idx_ref),
+            &MintClientModule::new_note_secret_static(secret, amount, *note_idx_ref),
         );
         assert!(self
             .pending_nonces
@@ -407,7 +407,7 @@ impl MintRecoveryState {
         if let Some((issuance_request, note_idx, pending_amount)) = self
             .pending_nonces
             .get(&output.blind_nonce.0.into())
-            .cloned()
+            .copied()
         {
             // the moment we see our blind nonce in the epoch history, correctly or
             // incorrectly used, we know that we must have used
@@ -479,11 +479,11 @@ impl MintRecoveryState {
             spendable_notes: self.spendable_notes.into_values().collect(),
             unconfirmed_notes: self.pending_outputs.into_values().collect(),
             // next note idx is the last one detected as used + 1
-            next_note_idx: Tiered::from_iter(
-                self.last_mined_nonce_idx
-                    .iter()
-                    .map(|(amount, value)| (amount, value.next())),
-            ),
+            next_note_idx: self
+                .last_mined_nonce_idx
+                .iter()
+                .map(|(amount, value)| (amount, value.next()))
+                .collect(),
         }
     }
 }

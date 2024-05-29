@@ -1,4 +1,12 @@
-#![allow(where_clauses_object_safety)] // https://github.com/dtolnay/async-trait/issues/228
+#![warn(clippy::pedantic)]
+#![allow(clippy::default_trait_access)]
+#![allow(clippy::doc_markdown)]
+#![allow(clippy::match_wild_err_arm)]
+#![allow(clippy::missing_errors_doc)]
+#![allow(clippy::missing_panics_doc)]
+#![allow(clippy::module_name_repetitions)]
+#![allow(clippy::return_self_not_must_use)]
+
 pub mod envs;
 
 use std::path::PathBuf;

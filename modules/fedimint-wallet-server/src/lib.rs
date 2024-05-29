@@ -1,3 +1,14 @@
+#![warn(clippy::pedantic)]
+#![allow(clippy::cast_possible_truncation)]
+#![allow(clippy::cast_possible_wrap)]
+#![allow(clippy::default_trait_access)]
+#![allow(clippy::doc_markdown)]
+#![allow(clippy::missing_errors_doc)]
+#![allow(clippy::missing_panics_doc)]
+#![allow(clippy::module_name_repetitions)]
+#![allow(clippy::must_use_candidate)]
+#![allow(clippy::too_many_lines)]
+
 pub mod db;
 
 use std::collections::{BTreeMap, BTreeSet, HashMap};
@@ -227,7 +238,7 @@ impl ServerModuleInit for WalletInit {
 
         Ok(Wallet::new(
             args.cfg().to_typed()?,
-            args.db().clone(),
+            args.db(),
             &mut args.task_group().clone(),
             args.our_peer_id(),
         )
@@ -364,7 +375,7 @@ impl ServerModule for Wallet {
         // node is delayed processing of change outputs for the federation, which is an
         // acceptable risk since subsequent rounds of consensus will reattempt to fetch
         // the latest block count.
-        if let Ok(block_count) = self.get_block_count().await {
+        if let Ok(block_count) = self.get_block_count() {
             let block_count_vote = block_count.saturating_sub(self.cfg.consensus.finality_delay);
 
             let current_vote = dbtx
@@ -379,7 +390,7 @@ impl ServerModule for Wallet {
                 "Proposing block count"
             );
 
-            WALLET_BLOCK_COUNT.set(block_count_vote as i64);
+            WALLET_BLOCK_COUNT.set(i64::from(block_count_vote));
             items.push(WalletConsensusItem::BlockCount(block_count_vote));
         }
 
@@ -466,7 +477,7 @@ impl ServerModule for Wallet {
                     .await
                     .context("Unsigned transaction does not exist")?;
 
-                self.sign_peg_out_psbt(&mut unsigned.psbt, &peer, &peg_out_signature)
+                self.sign_peg_out_psbt(&mut unsigned.psbt, peer, &peg_out_signature)
                     .context("Peg out signature is invalid")?;
 
                 dbtx.insert_entry(&UnsignedTransactionKey(txid), &unsigned)
@@ -545,8 +556,7 @@ impl ServerModule for Wallet {
 
         let fee_rate = self.consensus_fee_rate(dbtx).await;
 
-        self.offline_wallet()
-            .validate_tx(&tx, output, fee_rate, self.cfg.consensus.network)?;
+        StatelessWallet::validate_tx(&tx, output, fee_rate, self.cfg.consensus.network)?;
 
         self.offline_wallet().sign_psbt(&mut tx.psbt);
 
@@ -584,7 +594,7 @@ impl ServerModule for Wallet {
             .collect::<Vec<_>>();
 
         // Delete used UTXOs
-        for input in tx.psbt.unsigned_tx.input.iter() {
+        for input in &tx.psbt.unsigned_tx.input {
             dbtx.remove_entry(&UTXOKey(input.previous_output)).await;
         }
 
@@ -749,7 +759,7 @@ pub struct Wallet {
 impl Wallet {
     pub async fn new(
         cfg: WalletConfig,
-        db: Database,
+        db: &Database,
         task_group: &mut TaskGroup,
         our_peer_id: PeerId,
     ) -> anyhow::Result<Wallet> {
@@ -759,7 +769,7 @@ impl Wallet {
 
     pub async fn new_with_bitcoind(
         cfg: WalletConfig,
-        db: Database,
+        db: &Database,
         bitcoind: DynBitcoindRpc,
         task_group: &mut TaskGroup,
         our_peer_id: PeerId,
@@ -799,14 +809,14 @@ impl Wallet {
     fn sign_peg_out_psbt(
         &self,
         psbt: &mut PartiallySignedTransaction,
-        peer: &PeerId,
+        peer: PeerId,
         signature: &PegOutSignatureItem,
     ) -> Result<(), ProcessPegOutSigError> {
         let peer_key = self
             .cfg
             .consensus
             .peer_peg_in_keys
-            .get(peer)
+            .get(&peer)
             .expect("always called with valid peer id");
 
         if psbt.inputs.len() != signature.signature.len() {
@@ -873,8 +883,7 @@ impl Wallet {
             .psbt
             .outputs
             .iter()
-            .flat_map(|output| output.proprietary.get(&proprietary_tweak_key()).cloned())
-            .next()
+            .find_map(|output| output.proprietary.get(&proprietary_tweak_key()).cloned())
             .ok_or(ProcessPegOutSigError::MissingOrMalformedChangeTweak)?
             .try_into()
             .map_err(|_| ProcessPegOutSigError::MissingOrMalformedChangeTweak)?;
@@ -897,7 +906,7 @@ impl Wallet {
         })
     }
 
-    async fn get_block_count(&self) -> anyhow::Result<u32> {
+    fn get_block_count(&self) -> anyhow::Result<u32> {
         self.block_count_rx
             .borrow()
             .ok_or_else(|| format_err!("Block count not available yet"))
@@ -975,19 +984,18 @@ impl Wallet {
 
             // TODO: use batching for mainnet syncing
             trace!(block = height, "Fetching block hash");
-            let block_hash =
-                retry(
-                    "get_block_hash",
-                    FibonacciBackoff::default()
-                        .with_min_delay(Duration::from_secs(1))
-                        .with_max_delay(Duration::from_secs(10 * 60))
-                        .with_max_times(usize::MAX),
-                    || {
-                        self.btc_rpc.get_block_hash(height as u64) // TODO: use u64 for height everywhere
-                    },
-                )
-                .await
-                .expect("bitcoind rpc to get block hash");
+            let block_hash = retry(
+                "get_block_hash",
+                FibonacciBackoff::default()
+                    .with_min_delay(Duration::from_secs(1))
+                    .with_max_delay(Duration::from_secs(10 * 60))
+                    .with_max_times(usize::MAX),
+                || {
+                    self.btc_rpc.get_block_hash(u64::from(height)) // TODO: use u64 for height everywhere
+                },
+            )
+            .await
+            .expect("bitcoind rpc to get block hash");
 
             let pending_transactions = dbtx
                 .find_by_prefix(&PendingTransactionPrefixKey)
@@ -1011,7 +1019,7 @@ impl Wallet {
                         .with_max_times(usize::MAX),
                     || {
                         self.btc_rpc
-                            .is_tx_in_block(txid, &block_hash, height as u64)
+                            .is_tx_in_block(txid, &block_hash, u64::from(height))
                     },
                 )
                 .await
@@ -1178,7 +1186,7 @@ impl Wallet {
     fn spawn_broadcast_pending_task(
         task_group: &mut TaskGroup,
         bitcoind: &DynBitcoindRpc,
-        db: Database,
+        db: &Database,
     ) {
         task_group.spawn("broadcast pending", {
             let bitcoind = bitcoind.clone();
@@ -1311,7 +1319,6 @@ impl<'a> StatelessWallet<'a> {
     /// Given a tx created from an `WalletOutput`, validate there will be no
     /// issues submitting the transaction to the Bitcoin network
     fn validate_tx(
-        &self,
         tx: &UnsignedTransaction,
         output: &WalletOutputV0,
         consensus_fee_rate: Feerate,
@@ -1345,7 +1352,7 @@ impl<'a> StatelessWallet<'a> {
             WalletOutputV0::PegOut(pegout) => pegout.fees,
             WalletOutputV0::Rbf(rbf) => rbf.fees,
         };
-        if fees.fee_rate.sats_per_kvb < DEFAULT_MIN_RELAY_TX_FEE as u64 {
+        if fees.fee_rate.sats_per_kvb < u64::from(DEFAULT_MIN_RELAY_TX_FEE) {
             return Err(WalletOutputError::BelowMinRelayFee);
         }
 
@@ -1784,20 +1791,21 @@ mod tests {
             .expect("is ok");
 
         // peg out weight is incorrectly set to 0
-        let res = wallet.validate_tx(&tx, &rbf(fee.sats_per_kvb, 0), fee, Network::Bitcoin);
+        let res =
+            StatelessWallet::validate_tx(&tx, &rbf(fee.sats_per_kvb, 0), fee, Network::Bitcoin);
         assert_eq!(res, Err(WalletOutputError::TxWeightIncorrect(0, weight)));
 
         // fee rate set below min relay fee to 0
-        let res = wallet.validate_tx(&tx, &rbf(0, weight), fee, Bitcoin);
+        let res = StatelessWallet::validate_tx(&tx, &rbf(0, weight), fee, Bitcoin);
         assert_eq!(res, Err(WalletOutputError::BelowMinRelayFee));
 
         // fees are okay
-        let res = wallet.validate_tx(&tx, &rbf(fee.sats_per_kvb, weight), fee, Bitcoin);
+        let res = StatelessWallet::validate_tx(&tx, &rbf(fee.sats_per_kvb, weight), fee, Bitcoin);
         assert_eq!(res, Ok(()));
 
         // tx has fee below consensus
         tx.fees = PegOutFees::new(0, weight);
-        let res = wallet.validate_tx(&tx, &rbf(fee.sats_per_kvb, weight), fee, Bitcoin);
+        let res = StatelessWallet::validate_tx(&tx, &rbf(fee.sats_per_kvb, weight), fee, Bitcoin);
         assert_eq!(
             res,
             Err(WalletOutputError::PegOutFeeBelowConsensus(
@@ -1808,7 +1816,7 @@ mod tests {
 
         // tx has peg-out amount under dust limit
         tx.peg_out_amount = Amount::ZERO;
-        let res = wallet.validate_tx(&tx, &rbf(fee.sats_per_kvb, weight), fee, Bitcoin);
+        let res = StatelessWallet::validate_tx(&tx, &rbf(fee.sats_per_kvb, weight), fee, Bitcoin);
         assert_eq!(res, Err(WalletOutputError::PegOutUnderDustLimit));
 
         // tx is invalid for network
@@ -1817,7 +1825,7 @@ mod tests {
             amount: Amount::from_sat(1000),
             fees: PegOutFees::new(100, weight),
         });
-        let res = wallet.validate_tx(&tx, &output, fee, Testnet);
+        let res = StatelessWallet::validate_tx(&tx, &output, fee, Testnet);
         assert_eq!(res, Err(WalletOutputError::WrongNetwork(Testnet, Bitcoin)));
     }
 

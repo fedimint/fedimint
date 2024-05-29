@@ -1,3 +1,23 @@
+#![warn(clippy::pedantic)]
+#![allow(clippy::cast_possible_truncation)]
+#![allow(clippy::cast_possible_wrap)]
+#![allow(clippy::cast_sign_loss)]
+#![allow(clippy::default_trait_access)]
+#![allow(clippy::doc_markdown)]
+#![allow(clippy::ignored_unit_patterns)]
+#![allow(clippy::large_futures)]
+#![allow(clippy::missing_errors_doc)]
+#![allow(clippy::missing_fields_in_debug)]
+#![allow(clippy::missing_panics_doc)]
+#![allow(clippy::module_name_repetitions)]
+#![allow(clippy::must_use_candidate)]
+#![allow(clippy::return_self_not_must_use)]
+#![allow(clippy::similar_names)]
+#![allow(clippy::struct_field_names)]
+#![allow(clippy::too_many_lines)]
+#![allow(clippy::unused_async)]
+#![allow(clippy::wildcard_imports)]
+
 pub mod client;
 mod db;
 pub mod envs;
@@ -917,7 +937,7 @@ impl Gateway {
                 WithdrawState::Failed(e) => {
                     return Err(GatewayError::UnexpectedState(e));
                 }
-                _ => {}
+                WithdrawState::Created => {}
             }
         }
 
@@ -1172,7 +1192,7 @@ impl Gateway {
 
         let prev_gateway_config = self.gateway_config.read().await.clone();
         let new_gateway_config = if let Some(mut prev_config) = prev_gateway_config {
-            if let Some(password) = password {
+            if let Some(password) = password.as_ref() {
                 let hashed_password = hash_password(password, prev_config.password_salt);
                 prev_config.hashed_password = hashed_password;
             }
@@ -1203,7 +1223,7 @@ impl Gateway {
                 "The password field is required when initially configuring the gateway".to_string(),
             ))?;
             let password_salt: [u8; 16] = rand::thread_rng().gen();
-            let hashed_password = hash_password(password, password_salt);
+            let hashed_password = hash_password(&password, password_salt);
 
             GatewayConfiguration {
                 hashed_password,
@@ -1389,7 +1409,7 @@ impl Gateway {
             .unwrap_or(GatewayFee(DEFAULT_FEES));
         let network = gateway_parameters.network.unwrap_or(DEFAULT_NETWORK);
         let password_salt: [u8; 16] = rand::thread_rng().gen();
-        let hashed_password = hash_password(password.clone(), password_salt);
+        let hashed_password = hash_password(password, password_salt);
         let gateway_config = GatewayConfiguration {
             hashed_password,
             network,

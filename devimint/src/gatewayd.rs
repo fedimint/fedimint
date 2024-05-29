@@ -18,7 +18,7 @@ use crate::vars::utf8;
 
 #[derive(Clone)]
 pub struct Gatewayd {
-    pub(crate) _process: ProcessHandle,
+    pub(crate) process: ProcessHandle,
     pub ln: Option<LightningNode>,
     pub(crate) addr: String,
 }
@@ -52,7 +52,7 @@ impl Gatewayd {
 
         let gatewayd = Self {
             ln: Some(ln),
-            _process: process,
+            process,
             addr,
         };
         poll(
@@ -85,7 +85,7 @@ impl Gatewayd {
         process_mgr: &ProcessManager,
         bin_path: &PathBuf,
     ) -> Result<()> {
-        self._process.terminate().await?;
+        self.process.terminate().await?;
         std::env::set_var("FM_GATEWAYD_BASE_EXECUTABLE", bin_path);
         let ln = self
             .ln
@@ -93,7 +93,7 @@ impl Gatewayd {
             .expect("gateway already had an associated ln node")
             .clone();
         let new_gw = Self::new(process_mgr, ln).await?;
-        self._process = new_gw._process;
+        self.process = new_gw.process;
         let gatewayd_version = crate::util::Gatewayd::version_or_default().await;
         info!("upgraded gatewayd to version: {}", gatewayd_version);
         Ok(())

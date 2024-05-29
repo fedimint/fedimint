@@ -112,10 +112,10 @@ impl<T> TieredMulti<T> {
         self.0
             .iter()
             .filter_map(|(amt, notes)| {
-                if amt != except {
-                    Some(notes.len())
-                } else {
+                if amt == except {
                     None
+                } else {
+                    Some(notes.len())
                 }
             })
             .max()
