@@ -35,7 +35,7 @@ use fedimint_wallet_server::common::tweakable::Tweakable;
 use fedimint_wallet_server::common::{
     PegInDescriptor, SpendableUTXO, WalletCommonInit, WalletInput,
 };
-use fedimint_wallet_server::db::{UTXOKey, UTXOPrefixKey};
+use fedimint_wallet_server::db::{PendingTransactionPrefixKey, UTXOKey, UTXOPrefixKey};
 use fedimint_wallet_server::{nonce_from_idx, Wallet};
 use futures::stream::StreamExt;
 use hex::FromHex;
@@ -89,6 +89,16 @@ enum TweakSource {
     /// Derive all wallet descriptors of confirmed UTXOs in the on-chain wallet.
     /// Note that unconfirmed change UTXOs will not appear here.
     Utxos {
+        /// Extract UTXOs from a database without module partitioning
+        #[arg(long)]
+        legacy: bool,
+        /// Path to database
+        #[arg(long)]
+        db: PathBuf,
+    },
+    /// One-off fix for consensus bug preventing change outputs from being
+    /// recognized - not intended for use outside of this scope
+    ScanPending {
         /// Extract UTXOs from a database without module partitioning
         #[arg(long)]
         legacy: bool,
@@ -185,6 +195,76 @@ async fn main() -> anyhow::Result<()> {
             serde_json::to_writer(std::io::stdout().lock(), &utxos)
                 .expect("Could not encode to stdout")
         }
+        TweakSource::ScanPending { legacy, db } => {
+            let db = get_db(opts.readonly, &db, Default::default());
+
+            let db = if legacy {
+                db
+            } else {
+                db.with_prefix_module_id(LEGACY_HARDCODED_INSTANCE_ID_WALLET)
+            };
+
+            let pending_utxos = db
+                .begin_transaction()
+                .await
+                .find_by_prefix(&PendingTransactionPrefixKey)
+                .await
+                .collect::<Vec<_>>()
+                .await;
+
+            let mut pending_importable: Vec<ImportableWallet> = Vec::new();
+            for (_pending_key, pending_tx) in pending_utxos {
+                let script_pk = base_descriptor
+                    .tweak(&pending_tx.tweak, secp256k1::SECP256K1)
+                    .script_pubkey();
+                for (idx, output) in pending_tx.tx.output.iter().enumerate() {
+                    if output.script_pubkey == script_pk {
+                        let descriptor = tweak_descriptor(
+                            &base_descriptor,
+                            &base_key,
+                            &pending_tx.tweak,
+                            network,
+                        );
+                        let outpoint = bitcoin::OutPoint {
+                            txid: pending_tx.tx.txid(),
+                            vout: idx as u32,
+                        };
+                        let amount = bitcoin::Amount::from_sat(output.value);
+                        let importable = ImportableWallet {
+                            outpoint,
+                            descriptor,
+                            amount_sat: amount,
+                        };
+                        pending_importable.push(importable);
+                    }
+                }
+            }
+
+            let utxos: Vec<ImportableWallet> = db
+                .begin_transaction()
+                .await
+                .find_by_prefix(&UTXOPrefixKey)
+                .await
+                .map(|(UTXOKey(outpoint), SpendableUTXO { tweak, amount })| {
+                    let descriptor = tweak_descriptor(&base_descriptor, &base_key, &tweak, network);
+
+                    ImportableWallet {
+                        outpoint,
+                        descriptor,
+                        amount_sat: amount,
+                    }
+                })
+                .collect()
+                .await;
+
+            let all_importable = utxos
+                .into_iter()
+                .chain(pending_importable.into_iter())
+                .collect::<Vec<_>>();
+
+            serde_json::to_writer(std::io::stdout().lock(), &all_importable)
+                .expect("Could not encode to stdout")
+        }
         TweakSource::Epochs { db } => {
             let decoders = ModuleDecoderRegistry::from_iter([
                 (
@@ -235,6 +315,7 @@ async fn main() -> anyhow::Result<()> {
                         let (mut peg_in_tweaks, peg_out_present) =
                             input_tweaks_output_present(transaction_cis.into_iter());
 
+                        // TODO: update to support multiple withdrawals per session outcome
                         if peg_out_present {
                             info!("Found change output, adding tweak {change_tweak_idx} to list");
                             peg_in_tweaks.insert(nonce_from_idx(change_tweak_idx));

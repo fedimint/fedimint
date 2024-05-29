@@ -2151,6 +2151,192 @@ pub async fn recoverytool_test(dev_fed: DevFed) -> Result<()> {
     Ok(())
 }
 
+pub async fn recoverytool_stuck_change_test(dev_fed: DevFed) -> Result<()> {
+    log_binary_versions().await?;
+
+    #[allow(unused_variables)]
+    let DevFed {
+        bitcoind,
+        cln,
+        lnd,
+        fed,
+        gw_cln,
+        gw_lnd,
+        electrs,
+        esplora,
+    } = dev_fed;
+
+    let data_dir = env::var(FM_DATA_DIR_ENV)?;
+    let client = fed
+        .new_joined_client("recoverytool-stuck-change-test-client")
+        .await?;
+
+    let mut fed_utxos_sats = HashSet::from([12_345_000, 23_456_000, 34_567_000]);
+    let deposit_fees = fed.deposit_fees().await?.msats / 1000;
+    for sats in &fed_utxos_sats {
+        // pegin_client automatically adds fees, so we need to counteract that
+        fed.pegin_client(*sats - deposit_fees, &client).await?;
+    }
+
+    // Initiate a withdrawal to verify the recoverytool recognizes change outputs
+    let withdrawal_address = bitcoind.get_new_address().await?;
+    let withdraw_res = cmd!(
+        client,
+        "withdraw",
+        "--address",
+        &withdrawal_address,
+        "--amount",
+        "5000 sat"
+    )
+    .out_json()
+    .await?;
+
+    let fees_sat = withdraw_res["fees_sat"]
+        .as_u64()
+        .expect("withdrawal should contain fees");
+    let txid: Txid = withdraw_res["txid"]
+        .as_str()
+        .expect("withdrawal should contain txid string")
+        .parse()
+        .expect("txid should be parsable");
+    let tx_hex = poll("Waiting for transaction in mempool", || async {
+        bitcoind
+            .get_raw_transaction(&txid)
+            .await
+            .context("getrawtransaction")
+            .map_err(ControlFlow::Continue)
+    })
+    .await
+    .expect("withdrawal tx failed to reach mempool");
+
+    let tx = bitcoin::Transaction::consensus_decode_hex(&tx_hex, &Default::default())?;
+    assert_eq!(tx.input.len(), 1);
+    assert_eq!(tx.output.len(), 2);
+
+    let change_output = tx
+        .output
+        .iter()
+        .find(|o| o.to_owned().script_pubkey != withdrawal_address.script_pubkey())
+        .expect("withdrawal must have change output");
+    assert!(fed_utxos_sats.insert(change_output.value));
+
+    // Remove the utxo consumed from the withdrawal tx
+    let total_output_sats = tx.output.iter().map(|o| o.value).sum::<u64>();
+    let input_sats = total_output_sats + fees_sat;
+    assert!(fed_utxos_sats.remove(&input_sats));
+
+    let total_fed_sats = fed_utxos_sats.iter().sum::<u64>();
+    fed.finalize_mempool_tx().await?;
+
+    // We are done transacting and save the current session id so we can wait for
+    // the next session later on. We already save it here so that if in the meantime
+    // a session is generated we don't wait for another.
+    let last_tx_session = client.get_session_count().await?;
+
+    fedimint_core::task::sleep_in_test(
+        "let's see if giving some time helps",
+        Duration::from_secs(15),
+    )
+    .await;
+
+    info!("Recovering using utxos method");
+    let output = cmd!(
+        crate::util::Recoverytool,
+        "--readonly",
+        "--cfg",
+        "{data_dir}/fedimintd-0",
+        "scan-pending",
+        "--db",
+        "{data_dir}/fedimintd-0/database"
+    )
+    .env(FM_PASSWORD_ENV, "pass")
+    .out_json()
+    .await?;
+    let outputs = output.as_array().context("expected an array")?;
+    assert_eq!(outputs.len(), fed_utxos_sats.len());
+
+    assert_eq!(
+        outputs
+            .iter()
+            .map(|o| o["amount_sat"].as_u64().unwrap())
+            .collect::<HashSet<_>>(),
+        fed_utxos_sats
+    );
+    let utxos_descriptors = outputs
+        .iter()
+        .map(|o| o["descriptor"].as_str().unwrap())
+        .collect::<HashSet<_>>();
+
+    info!(target: LOG_DEVIMINT, ?utxos_descriptors, "recoverytool descriptors using UTXOs method");
+
+    let descriptors_json = [serde_json::value::to_raw_value(&serde_json::Value::Array(
+        utxos_descriptors
+            .iter()
+            .map(|d| {
+                let object = json!({
+                    "desc": d,
+                    "timestamp": 0,
+                });
+                object
+            })
+            .collect::<Vec<_>>(),
+    ))?];
+    info!("Getting wallet balances before import");
+    let bitcoin_client = bitcoind.wallet_client().await?;
+    let balances_before = bitcoin_client.get_balances().await?;
+    info!("Importing descriptors into bitcoin wallet");
+    let request = bitcoin_client
+        .get_jsonrpc_client()
+        .build_request("importdescriptors", &descriptors_json);
+    let response = block_in_place(|| bitcoin_client.get_jsonrpc_client().send_request(request))?;
+    response.check_error()?;
+    info!("Getting wallet balances after import");
+    let balances_after = bitcoin_client.get_balances().await?;
+    let diff = balances_after.mine.immature + balances_after.mine.trusted
+        - balances_before.mine.immature
+        - balances_before.mine.trusted;
+
+    // We need to wait for a session to be generated to make sure we have the signed
+    // session outcome in our DB. If there ever is another problem here: wait for
+    // fedimintd-0 specifically to acknowledge the session switch. In practice this
+    // should be sufficiently synchronous though.
+    wait_session_outcome(&client, last_tx_session).await?;
+
+    // Funds from descriptors should match the fed's utxos
+    assert_eq!(diff.to_sat(), total_fed_sats);
+    info!("Recovering using epochs method");
+
+    let outputs = cmd!(
+        crate::util::Recoverytool,
+        "--readonly",
+        "--cfg",
+        "{data_dir}/fedimintd-0",
+        "epochs",
+        "--db",
+        "{data_dir}/fedimintd-0/database"
+    )
+    .env(FM_PASSWORD_ENV, "pass")
+    .out_json()
+    .await?
+    .as_array()
+    .context("expected an array")?
+    .clone();
+
+    let epochs_descriptors = outputs
+        .iter()
+        .map(|o| o["descriptor"].as_str().unwrap())
+        .collect::<HashSet<_>>();
+
+    info!(target: LOG_DEVIMINT, ?epochs_descriptors, "recoverytool descriptors using epochs method");
+
+    // Epochs method includes descriptors from spent outputs, so we only need to
+    // verify the epochs method includes all available utxos
+    for utxo_descriptor in utxos_descriptors.iter() {
+        assert!(epochs_descriptors.contains(*utxo_descriptor))
+    }
+    Ok(())
+}
+
 pub async fn guardian_backup_test(dev_fed: DevFed, process_mgr: &ProcessManager) -> Result<()> {
     log_binary_versions().await?;
 
@@ -2447,6 +2633,7 @@ pub enum TestCmd {
     GatewayRebootTest,
     /// `devfed` then tests if the recovery tool is able to do a basic recovery
     RecoverytoolTests,
+    RecoverytoolStuckChangeTests,
     /// `devfed` then spawns faucet for wasm tests
     WasmTestSetup {
         #[arg(long, trailing_var_arg = true, allow_hyphen_values = true, num_args=1..)]
@@ -2568,6 +2755,11 @@ pub async fn handle_command(cmd: TestCmd, common_args: CommonArgs) -> Result<()>
             let (process_mgr, _) = setup(common_args).await?;
             let dev_fed = dev_fed(&process_mgr).await?;
             recoverytool_test(dev_fed).await?;
+        }
+        TestCmd::RecoverytoolStuckChangeTests => {
+            let (process_mgr, _) = setup(common_args).await?;
+            let dev_fed = dev_fed(&process_mgr).await?;
+            recoverytool_stuck_change_test(dev_fed).await?;
         }
         TestCmd::GuardianBackup => {
             let (process_mgr, _) = setup(common_args).await?;

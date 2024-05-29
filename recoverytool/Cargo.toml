@@ -29,6 +29,7 @@ fedimint-ln-common = { version = "=0.4.0-alpha", path = "../modules/fedimint-ln-
 fedimint-ln-server = { version = "=0.4.0-alpha", path = "../modules/fedimint-ln-server" }
 fedimint-mint-server = { version = "=0.4.0-alpha", path = "../modules/fedimint-mint-server" }
 futures = { workspace = true }
+esplora-client = { version = "0.7.0", default-features = false, features = ["async", "async-https-rustls"] }
 hex = { workspace = true }
 miniscript = { version = "10.0.0" }
 secp256k1 = { version = "0.27.0", features = [ "serde", "global-context" ] }
