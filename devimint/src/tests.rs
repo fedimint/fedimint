@@ -2002,52 +2002,65 @@ pub async fn recoverytool_test(dev_fed: DevFed) -> Result<()> {
         fed.pegin_client(*sats - deposit_fees, &client).await?;
     }
 
-    // Initiate a withdrawal to verify the recoverytool recognizes change outputs
-    let withdrawal_address = bitcoind.get_new_address().await?;
-    let withdraw_res = cmd!(
-        client,
-        "withdraw",
-        "--address",
-        &withdrawal_address,
-        "--amount",
-        "5000 sat"
-    )
-    .out_json()
-    .await?;
+    async fn withdraw(
+        client: &Client,
+        bitcoind: &crate::external::Bitcoind,
+        fed_utxos_sats: &mut HashSet<u64>,
+    ) -> Result<()> {
+        let withdrawal_address = bitcoind.get_new_address().await?;
+        let withdraw_res = cmd!(
+            client,
+            "withdraw",
+            "--address",
+            &withdrawal_address,
+            "--amount",
+            "5000 sat"
+        )
+        .out_json()
+        .await?;
 
-    let fees_sat = withdraw_res["fees_sat"]
-        .as_u64()
-        .expect("withdrawal should contain fees");
-    let txid: Txid = withdraw_res["txid"]
-        .as_str()
-        .expect("withdrawal should contain txid string")
-        .parse()
-        .expect("txid should be parsable");
-    let tx_hex = poll("Waiting for transaction in mempool", || async {
-        bitcoind
-            .get_raw_transaction(&txid)
-            .await
-            .context("getrawtransaction")
-            .map_err(ControlFlow::Continue)
-    })
-    .await
-    .expect("withdrawal tx failed to reach mempool");
+        let fees_sat = withdraw_res["fees_sat"]
+            .as_u64()
+            .expect("withdrawal should contain fees");
+        let txid: Txid = withdraw_res["txid"]
+            .as_str()
+            .expect("withdrawal should contain txid string")
+            .parse()
+            .expect("txid should be parsable");
+        let tx_hex = poll("Waiting for transaction in mempool", || async {
+            bitcoind
+                .get_raw_transaction(&txid)
+                .await
+                .context("getrawtransaction")
+                .map_err(ControlFlow::Continue)
+        })
+        .await
+        .expect("withdrawal tx failed to reach mempool");
 
-    let tx = bitcoin::Transaction::consensus_decode_hex(&tx_hex, &Default::default())?;
-    assert_eq!(tx.input.len(), 1);
-    assert_eq!(tx.output.len(), 2);
+        let tx = bitcoin::Transaction::consensus_decode_hex(&tx_hex, &Default::default())?;
+        assert_eq!(tx.input.len(), 1);
+        assert_eq!(tx.output.len(), 2);
 
-    let change_output = tx
-        .output
-        .iter()
-        .find(|o| o.to_owned().script_pubkey != withdrawal_address.script_pubkey())
-        .expect("withdrawal must have change output");
-    assert!(fed_utxos_sats.insert(change_output.value));
+        let change_output = tx
+            .output
+            .iter()
+            .find(|o| o.to_owned().script_pubkey != withdrawal_address.script_pubkey())
+            .expect("withdrawal must have change output");
+        assert!(fed_utxos_sats.insert(change_output.value));
 
-    // Remove the utxo consumed from the withdrawal tx
-    let total_output_sats = tx.output.iter().map(|o| o.value).sum::<u64>();
-    let input_sats = total_output_sats + fees_sat;
-    assert!(fed_utxos_sats.remove(&input_sats));
+        // Remove the utxo consumed from the withdrawal tx
+        let total_output_sats = tx.output.iter().map(|o| o.value).sum::<u64>();
+        let input_sats = total_output_sats + fees_sat;
+        assert!(fed_utxos_sats.remove(&input_sats));
+
+        Ok(())
+    }
+
+    // Initiate multiple withdrawals in a session to verify the recoverytool
+    // recognizes change outputs
+    for _ in 0..2 {
+        withdraw(&client, &bitcoind, &mut fed_utxos_sats).await?;
+    }
 
     let total_fed_sats = fed_utxos_sats.iter().sum::<u64>();
     fed.finalize_mempool_tx().await?;
