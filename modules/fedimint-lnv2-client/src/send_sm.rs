@@ -68,7 +68,7 @@ pub enum SendSMState {
 /// classDef virtual fill:#fff,stroke-dasharray: 5 5
 ///
 ///     Funding -- funding tx is rejected --> Rejected
-///     Funding -- funding tx is accepted --> Funded    
+///     Funding -- funding tx is accepted --> Funded
 ///     Funded -- post invoice returns preimage  --> Success
 ///     Funded -- post invoice returns forfeit tx --> Refunding
 ///     Funded -- await_preimage returns preimage --> Success
@@ -123,13 +123,7 @@ impl State for SendStateMachine {
                     ),
                 ]
             }
-            SendSMState::Refunding(..) => {
-                vec![]
-            }
-            SendSMState::Success(..) => {
-                vec![]
-            }
-            SendSMState::Rejected(..) => {
+            SendSMState::Refunding(..) | SendSMState::Success(..) | SendSMState::Rejected(..) => {
                 vec![]
             }
         }
@@ -177,16 +171,16 @@ impl SendStateMachine {
                     Ok(gateway_response) => {
                         if contract.verify_gateway_response(&gateway_response) {
                             return gateway_response;
-                        } else {
-                            error!(
-                                ?gateway_response,
-                                ?contract,
-                                ?invoice,
-                                ?federation_id,
-                                ?gateway_api,
-                                "Invalid gateway response"
-                            );
                         }
+
+                        error!(
+                            ?gateway_response,
+                            ?contract,
+                            ?invoice,
+                            ?federation_id,
+                            ?gateway_api,
+                            "Invalid gateway response"
+                        );
                     }
                     Err(error) => {
                         error!(
@@ -196,7 +190,7 @@ impl SendStateMachine {
                             ?federation_id,
                             ?gateway_api,
                             "Gateway returned error"
-                        )
+                        );
                     }
                 },
                 Err(error) => {

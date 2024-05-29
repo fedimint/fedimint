@@ -22,7 +22,6 @@ use ln_gateway::lightning::{ILnRpcClient, LightningBuilder};
 use ln_gateway::rpc::rpc_client::GatewayRpcClient;
 use ln_gateway::rpc::{ConnectFedPayload, FederationInfo, V1_API_ENDPOINT};
 use ln_gateway::{Gateway, GatewayState};
-use tempfile::TempDir;
 use tracing::{info, warn};
 
 use crate::federation::FederationTest;
@@ -37,8 +36,6 @@ pub struct GatewayTest {
     pub versioned_api: SafeUrl,
     /// Handle of the running gateway
     pub gateway: Gateway,
-    /// Temporary dir that stores the gateway config
-    _config_dir: Option<TempDir>,
     // Public key of the lightning node
     pub node_pub_key: PublicKey,
     // Listening address of the lightning node
@@ -145,7 +142,6 @@ impl GatewayTest {
 
         Self {
             versioned_api,
-            _config_dir,
             gateway,
             node_pub_key: PublicKey::from_slice(info.pub_key.as_slice()).unwrap(),
             listening_addr,

@@ -244,14 +244,14 @@ impl DevJitFed {
             lnd,
             fed,
             gw_cln,
-            gw_cln_registered,
             gw_lnd,
-            gw_lnd_registered,
             electrs,
             esplora,
-            channel_opened,
-            fed_epoch_generated,
             start_time,
+            gw_cln_registered,
+            gw_lnd_registered,
+            fed_epoch_generated,
+            channel_opened,
         })
     }
 

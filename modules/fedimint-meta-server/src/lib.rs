@@ -1,3 +1,6 @@
+#![warn(clippy::pedantic)]
+#![allow(clippy::module_name_repetitions)]
+
 pub mod db;
 
 use std::collections::BTreeMap;
@@ -247,7 +250,7 @@ impl Meta {
         let revision = revision.map(|r| r.wrapping_add(1)).unwrap_or_default();
         dbtx.insert_entry(
             &MetaConsensusKey(key),
-            &MetaConsensusValue { value, revision },
+            &MetaConsensusValue { revision, value },
         )
         .await;
 
@@ -337,7 +340,7 @@ impl ServerModule for Meta {
     ) -> anyhow::Result<()> {
         debug!(target: LOG_MODULE_META, %peer_id, %key, %value, %salt, "Received a submission");
 
-        let new_value = MetaSubmissionValue { value, salt };
+        let new_value = MetaSubmissionValue { salt, value };
         // first of all: any new submission overrides previous submission
         if let Some(prev_value) = Self::get_submission(dbtx, key, peer_id).await {
             if prev_value != new_value {

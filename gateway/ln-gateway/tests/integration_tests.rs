@@ -776,7 +776,7 @@ async fn test_gateway_client_intercept_htlc_invalid_offer() -> anyhow::Result<()
                 amount,
                 hash: *invoice.payment_hash(),
                 encrypted_preimage: EncryptedPreimage::new(
-                    PreimageKey(preimage),
+                    &PreimageKey(preimage),
                     &user_lightning_module.cfg.threshold_pub_key,
                 ),
                 expiry_time: None,
@@ -989,7 +989,7 @@ async fn test_gateway_configuration() -> anyhow::Result<()> {
         .expect("Gateway config should be set");
     assert_eq!(
         gateway_config.hashed_password,
-        hash_password(test_password.clone(), gateway_config.password_salt)
+        hash_password(&test_password, gateway_config.password_salt)
     );
 
     // Verify client with no password fails since the password has been set

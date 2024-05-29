@@ -194,7 +194,7 @@ where
 
         // Filter out duplicate gateways so that we don't have to deal with
         // multiple guardians having different TTLs for the same gateway.
-        Ok(filter_duplicate_gateways(gateway_announcements))
+        Ok(filter_duplicate_gateways(&gateway_announcements))
     }
 
     async fn register_gateway(
@@ -275,7 +275,7 @@ where
                 amount: account.amount,
                 contract: c.contract,
             }),
-            _ => Err(FederationError::general(
+            FundedContract::Outgoing(_) => Err(FederationError::general(
                 AWAIT_ACCOUNT_ENDPOINT,
                 id,
                 anyhow::anyhow!("WrongAccountType"),
@@ -293,7 +293,7 @@ where
                 amount: account.amount,
                 contract: c,
             }),
-            _ => Err(FederationError::general(
+            FundedContract::Incoming(_) => Err(FederationError::general(
                 AWAIT_ACCOUNT_ENDPOINT,
                 id,
                 anyhow::anyhow!("WrongAccountType"),
@@ -307,7 +307,7 @@ where
 /// `LightningGatewayAnnouncement`s representing the same gateway registration
 /// may not be equal.
 fn filter_duplicate_gateways(
-    gateways: BTreeMap<PeerId, Vec<LightningGatewayAnnouncement>>,
+    gateways: &BTreeMap<PeerId, Vec<LightningGatewayAnnouncement>>,
 ) -> Vec<LightningGatewayAnnouncement> {
     let gateways_by_gateway_id = gateways
         .values()

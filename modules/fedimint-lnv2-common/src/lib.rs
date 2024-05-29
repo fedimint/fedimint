@@ -1,3 +1,7 @@
+#![warn(clippy::pedantic)]
+#![allow(clippy::module_name_repetitions)]
+#![allow(clippy::must_use_candidate)]
+
 //! # Lightning Module
 //!
 //! This module allows to atomically and trustlessly (in the federated trust

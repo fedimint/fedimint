@@ -92,13 +92,9 @@ impl State for MintOutputStateMachine {
             MintOutputStates::Created(created) => {
                 created.transitions(context, global_context, self.common)
             }
-            MintOutputStates::Aborted(_) => {
-                vec![]
-            }
-            MintOutputStates::Failed(_) => {
-                vec![]
-            }
-            MintOutputStates::Succeeded(_) => {
+            MintOutputStates::Aborted(_)
+            | MintOutputStates::Failed(_)
+            | MintOutputStates::Succeeded(_) => {
                 vec![]
             }
         }
@@ -162,7 +158,7 @@ impl MintOutputStatesCreated {
         {
             return;
         }
-        std::future::pending().await
+        std::future::pending::<()>().await;
     }
 
     async fn transition_tx_rejected<'a>(
@@ -194,7 +190,7 @@ impl MintOutputStatesCreated {
                     // this query collects a threshold of 2f + 1 valid blind signature shares
                     FilterMapThreshold::new(
                         move |peer, outcome| {
-                            verify_blind_share(peer, outcome, amount, message, &decoder, &pks)
+                            verify_blind_share(peer, &outcome, amount, message, &decoder, &pks)
                         },
                         NumPeers::from(global_context.api().all_peers().total()),
                     ),
@@ -222,9 +218,8 @@ impl MintOutputStatesCreated {
         // we combine the shares, finalize the issuance request with the blind signature
         // and store the resulting note in the database
 
-        let created = match old_state.state {
-            MintOutputStates::Created(created) => created,
-            _ => panic!("Unexpected prior state"),
+        let MintOutputStates::Created(created) = old_state.state else {
+            panic!("Unexpected prior state")
         };
 
         let agg_blind_signature = aggregate_signature_shares(
@@ -268,7 +263,7 @@ impl MintOutputStatesCreated {
             )
             .await
         {
-            error!(?note, "E-cash note was replaced in DB")
+            error!(?note, "E-cash note was replaced in DB");
         }
 
         MintOutputStateMachine {
@@ -284,13 +279,13 @@ impl MintOutputStatesCreated {
 /// If the given `outcome` is not a [`MintOutputOutcome::V0`] outcome.
 pub fn verify_blind_share(
     peer: PeerId,
-    outcome: SerdeOutputOutcome,
+    outcome: &SerdeOutputOutcome,
     amount: Amount,
     blinded_message: BlindedMessage,
     decoder: &Decoder,
     peer_tbs_pks: &BTreeMap<PeerId, Tiered<PublicKeyShare>>,
 ) -> anyhow::Result<BlindedSignatureShare> {
-    let outcome = deserialize_outcome::<MintOutputOutcome>(&outcome, decoder)?;
+    let outcome = deserialize_outcome::<MintOutputOutcome>(outcome, decoder)?;
 
     let blinded_signature_share = outcome
         .ensure_v0_ref()
@@ -348,7 +343,7 @@ impl hash::Hash for NoteIssuanceRequest {
 impl NoteIssuanceRequest {
     /// Generate a request session for a single note and returns it plus the
     /// corresponding blinded message
-    pub fn new<C>(ctx: &Secp256k1<C>, secret: DerivableSecret) -> (NoteIssuanceRequest, BlindNonce)
+    pub fn new<C>(ctx: &Secp256k1<C>, secret: &DerivableSecret) -> (NoteIssuanceRequest, BlindNonce)
     where
         C: Signing,
     {

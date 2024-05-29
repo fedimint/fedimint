@@ -234,7 +234,7 @@ impl FederationTestBuilder {
                 .to_client_config(&self.server_init)
                 .unwrap();
 
-            let api = DynGlobalApi::from_config_admin(&client_config, None, peer_id);
+            let api = DynGlobalApi::from_config_admin(&client_config, &None, peer_id);
 
             while let Err(e) = api
                 .request_admin_no_auth::<u64>(SESSION_COUNT_ENDPOINT, ApiRequestErased::default())

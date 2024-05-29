@@ -1,3 +1,7 @@
+#![warn(clippy::pedantic)]
+#![allow(clippy::default_trait_access)]
+#![allow(clippy::too_many_lines)]
+
 pub mod envs;
 
 use std::cmp::Ordering;

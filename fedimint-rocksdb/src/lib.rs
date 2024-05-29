@@ -1,4 +1,7 @@
-#![allow(where_clauses_object_safety)] // https://github.com/dtolnay/async-trait/issues/228
+#![warn(clippy::pedantic)]
+#![allow(clippy::default_trait_access)]
+#![allow(clippy::missing_errors_doc)]
+#![allow(clippy::must_use_candidate)]
 
 pub mod envs;
 

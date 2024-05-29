@@ -51,15 +51,15 @@ impl Decodable for TxOutProof {
             .extract_matches(&mut transactions, &mut indices)
             .map_err(|_| DecodeError::from_str("Invalid partial merkle tree"))?;
 
-        if block_header.merkle_root != root {
-            Err(DecodeError::from_str(
-                "Partial merkle tree does not belong to block header",
-            ))
-        } else {
+        if block_header.merkle_root == root {
             Ok(TxOutProof {
                 block_header,
                 merkle_proof,
             })
+        } else {
+            Err(DecodeError::from_str(
+                "Partial merkle tree does not belong to block header",
+            ))
         }
     }
 }

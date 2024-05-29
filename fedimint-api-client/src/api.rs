@@ -164,7 +164,7 @@ impl FederationError {
             method: method.into(),
             params: serde_json::to_value(params).unwrap_or_default(),
             general: Some(e.into()),
-            peers: Default::default(),
+            peers: BTreeMap::default(),
         }
     }
 
@@ -542,7 +542,7 @@ impl AsRef<dyn IGlobalFederationApi + 'static> for DynGlobalApi {
 }
 
 impl DynGlobalApi {
-    pub fn from_pre_peer_id_admin_endpoint(url: SafeUrl, api_secret: Option<String>) -> Self {
+    pub fn from_pre_peer_id_admin_endpoint(url: SafeUrl, api_secret: &Option<String>) -> Self {
         // PeerIds are used only for informational purposes, but just in case, make a
         // big number so it stands out
         let peer_id = PeerId::from(1024);
@@ -552,22 +552,22 @@ impl DynGlobalApi {
         .into()
     }
 
-    pub fn from_single_endpoint(peer: PeerId, url: SafeUrl, api_secret: Option<String>) -> Self {
+    pub fn from_single_endpoint(peer: PeerId, url: SafeUrl, api_secret: &Option<String>) -> Self {
         GlobalFederationApiWithCache::new(WsFederationApi::new(vec![(peer, url)], api_secret))
             .into()
     }
 
-    pub fn from_endpoints(peers: Vec<(PeerId, SafeUrl)>, api_secret: Option<String>) -> Self {
+    pub fn from_endpoints(peers: Vec<(PeerId, SafeUrl)>, api_secret: &Option<String>) -> Self {
         GlobalFederationApiWithCache::new(WsFederationApi::new(peers, api_secret)).into()
     }
 
-    pub fn from_config(config: &ClientConfig, api_secret: Option<String>) -> Self {
+    pub fn from_config(config: &ClientConfig, api_secret: &Option<String>) -> Self {
         GlobalFederationApiWithCache::new(WsFederationApi::from_config(config, api_secret)).into()
     }
 
     pub fn from_config_admin(
         config: &ClientConfig,
-        api_secret: Option<String>,
+        api_secret: &Option<String>,
         self_peer_id: PeerId,
     ) -> Self {
         GlobalFederationApiWithCache::new(
@@ -579,7 +579,7 @@ impl DynGlobalApi {
     pub fn from_invite_code(invite_code: &InviteCode) -> Self {
         GlobalFederationApiWithCache::new(WsFederationApi::new(
             invite_code.peers().into_iter().collect_vec(),
-            invite_code.api_secret(),
+            &invite_code.api_secret(),
         ))
         .into()
     }
@@ -1347,12 +1347,12 @@ impl JsonRpcClient for WsClient {
 
 impl WsFederationApi<WsClient> {
     /// Creates a new API client
-    pub fn new(peers: Vec<(PeerId, SafeUrl)>, api_secret: Option<String>) -> Self {
+    pub fn new(peers: Vec<(PeerId, SafeUrl)>, api_secret: &Option<String>) -> Self {
         Self::new_with_client(peers, None, api_secret)
     }
 
     /// Creates a new API client from a client config
-    pub fn from_config(config: &ClientConfig, api_secret: Option<String>) -> Self {
+    pub fn from_config(config: &ClientConfig, api_secret: &Option<String>) -> Self {
         Self::new(
             config
                 .global
@@ -1384,7 +1384,7 @@ where
     pub fn new_with_client(
         peers: Vec<(PeerId, SafeUrl)>,
         self_peer_id: Option<PeerId>,
-        api_secret: Option<String>,
+        api_secret: &Option<String>,
     ) -> Self {
         WsFederationApi {
             peer_ids: peers.iter().map(|m| m.0).collect(),

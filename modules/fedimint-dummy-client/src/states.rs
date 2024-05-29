@@ -65,21 +65,21 @@ impl State for DummyStateMachine {
                     Err(_) => Box::pin(async move { DummyStateMachine::Refund(id) }),
                 },
             )],
-            DummyStateMachine::InputDone(_) => vec![],
-            DummyStateMachine::OutputDone(_, _) => vec![],
-            DummyStateMachine::Refund(_) => vec![],
-            DummyStateMachine::Unreachable(_, _) => vec![],
+            DummyStateMachine::InputDone(_)
+            | DummyStateMachine::OutputDone(_, _)
+            | DummyStateMachine::Refund(_)
+            | DummyStateMachine::Unreachable(_, _) => vec![],
         }
     }
 
     fn operation_id(&self) -> OperationId {
         match self {
-            DummyStateMachine::Input(_, _, id) => *id,
-            DummyStateMachine::Output(_, _, id) => *id,
-            DummyStateMachine::InputDone(id) => *id,
-            DummyStateMachine::OutputDone(_, id) => *id,
-            DummyStateMachine::Refund(id) => *id,
-            DummyStateMachine::Unreachable(id, _) => *id,
+            DummyStateMachine::Input(_, _, id)
+            | DummyStateMachine::Output(_, _, id)
+            | DummyStateMachine::InputDone(id)
+            | DummyStateMachine::OutputDone(_, id)
+            | DummyStateMachine::Refund(id)
+            | DummyStateMachine::Unreachable(id, _) => *id,
         }
     }
 }

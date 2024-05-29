@@ -57,15 +57,13 @@ impl State for MintInputStateMachine {
         global_context: &DynGlobalClientContext,
     ) -> Vec<StateTransition<Self>> {
         match &self.state {
-            MintInputStates::Created(created) => created.transitions(&self.common, global_context),
+            MintInputStates::Created(_) => {
+                MintInputStateCreated::transitions(&self.common, global_context)
+            }
             MintInputStates::Refund(refund) => refund.transitions(global_context),
-            MintInputStates::Success(_) => {
-                vec![]
-            }
-            MintInputStates::Error(_) => {
-                vec![]
-            }
-            MintInputStates::RefundSuccess(_) => {
+            MintInputStates::Success(_)
+            | MintInputStates::Error(_)
+            | MintInputStates::RefundSuccess(_) => {
                 vec![]
             }
         }
@@ -84,7 +82,6 @@ pub struct MintInputStateCreated {
 
 impl MintInputStateCreated {
     fn transitions(
-        &self,
         common: &MintInputCommon,
         global_context: &DynGlobalClientContext,
     ) -> Vec<StateTransition<MintInputStateMachine>> {

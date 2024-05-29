@@ -201,8 +201,8 @@ impl ConsensusApi {
                 let flagged = last_contribution.unwrap_or(0) + 1 < session_count;
 
                 let consensus_status = PeerStatus {
-                    connection_status,
                     last_contribution,
+                    connection_status,
                     flagged,
                 };
 
@@ -227,10 +227,10 @@ impl ConsensusApi {
 
         Ok(FederationStatus {
             session_count,
+            status_by_peer,
             peers_online,
             peers_offline,
             peers_flagged,
-            status_by_peer,
         })
     }
 

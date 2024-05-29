@@ -763,7 +763,7 @@ mod fedimint_migration_tests {
         let (_, pk) = secp256k1::generate_keypair(&mut OsRng);
         let incoming_contract = IncomingContract {
             hash: secp256k1::hashes::sha256::Hash::hash(&BYTE_8),
-            encrypted_preimage: EncryptedPreimage::new(PreimageKey(BYTE_33), &threshold_key),
+            encrypted_preimage: EncryptedPreimage::new(&PreimageKey(BYTE_33), &threshold_key),
             decrypted_preimage: DecryptedPreimage::Some(PreimageKey(BYTE_33)),
             gateway_key: pk,
         };
@@ -802,7 +802,7 @@ mod fedimint_migration_tests {
         let incoming_offer = IncomingContractOffer {
             amount: fedimint_core::Amount { msats: 1000 },
             hash: secp256k1::hashes::sha256::Hash::hash(&BYTE_8),
-            encrypted_preimage: EncryptedPreimage::new(PreimageKey(BYTE_33), &threshold_key),
+            encrypted_preimage: EncryptedPreimage::new(&PreimageKey(BYTE_33), &threshold_key),
             expiry_time: None,
         };
         dbtx.insert_new_entry(&OfferKey(incoming_offer.hash), &incoming_offer)

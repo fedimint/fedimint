@@ -71,10 +71,7 @@ impl State for MintOOBStateMachine {
             MintOOBStates::Created(created) => {
                 created.transitions(self.operation_id, context, global_context)
             }
-            MintOOBStates::UserRefund(_) => {
-                vec![]
-            }
-            MintOOBStates::TimeoutRefund(_) => {
+            MintOOBStates::UserRefund(_) | MintOOBStates::TimeoutRefund(_) => {
                 vec![]
             }
         }

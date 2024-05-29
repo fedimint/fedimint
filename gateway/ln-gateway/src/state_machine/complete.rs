@@ -68,8 +68,8 @@ impl State for GatewayCompleteStateMachine {
         _global_context: &DynGlobalClientContext,
     ) -> Vec<fedimint_client::sm::StateTransition<Self>> {
         match &self.state {
-            GatewayCompleteStates::WaitForPreimage(state) => {
-                state.transitions(context.clone(), self.common.clone())
+            GatewayCompleteStates::WaitForPreimage(_state) => {
+                WaitForPreimageState::transitions(context.clone(), self.common.clone())
             }
             GatewayCompleteStates::CompleteHtlc(state) => {
                 state.transitions(context.clone(), self.common.clone())
@@ -88,7 +88,6 @@ pub struct WaitForPreimageState;
 
 impl WaitForPreimageState {
     fn transitions(
-        &self,
         context: GatewayClientContext,
         common: GatewayCompleteCommon,
     ) -> Vec<StateTransition<GatewayCompleteStateMachine>> {

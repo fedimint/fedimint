@@ -138,7 +138,7 @@ async fn migrate_to_v1(dbtx: &mut DatabaseTransaction<'_>) -> Result<(), anyhow:
     // If there is no old gateway configuration, there is nothing to do.
     if let Some(old_gateway_config) = dbtx.remove_entry(&GatewayConfigurationKeyV0).await {
         let password_salt: [u8; 16] = rand::thread_rng().gen();
-        let hashed_password = hash_password(old_gateway_config.password, password_salt);
+        let hashed_password = hash_password(&old_gateway_config.password, password_salt);
         let new_gateway_config = GatewayConfiguration {
             hashed_password,
             num_route_hints: old_gateway_config.num_route_hints,

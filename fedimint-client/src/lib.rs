@@ -1,3 +1,18 @@
+#![warn(clippy::pedantic)]
+#![allow(clippy::cast_possible_truncation)]
+#![allow(clippy::default_trait_access)]
+#![allow(clippy::doc_markdown)]
+#![allow(clippy::explicit_deref_methods)]
+#![allow(clippy::ignored_unit_patterns)]
+#![allow(clippy::items_after_statements)]
+#![allow(clippy::missing_errors_doc)]
+#![allow(clippy::missing_panics_doc)]
+#![allow(clippy::module_name_repetitions)]
+#![allow(clippy::must_use_candidate)]
+#![allow(clippy::return_self_not_must_use)]
+#![allow(clippy::too_many_lines)]
+#![allow(clippy::unused_async)]
+
 //! # Client library for fedimintd
 //!
 //! This library provides a client interface to build module clients that can be
@@ -1383,7 +1398,7 @@ impl Client {
         }
 
         for peer_id in num_peers.peer_ids() {
-            requests.push(make_request(Duration::ZERO, peer_id, &api))
+            requests.push(make_request(Duration::ZERO, peer_id, &api));
         }
 
         let mut num_responses = 0;
@@ -1401,7 +1416,7 @@ impl Client {
                         debug!(target: LOG_CLIENT, %peer_id, %err, "Failed to refresh API versions of a peer, but we have a previous response");
                     } else {
                         debug!(target: LOG_CLIENT, %peer_id, %err, "Failed to refresh API versions of a peer, will retry");
-                        requests.push(make_request(Duration::from_secs(15), peer_id, &api))
+                        requests.push(make_request(Duration::from_secs(15), peer_id, &api));
                     }
                 }
                 Ok(o) => {
@@ -1553,7 +1568,7 @@ impl Client {
 
         let common_api_versions = discover_common_api_versions_set(
             &Self::supported_api_versions_summary_static(config, client_module_init),
-            peer_api_version_sets,
+            &peer_api_version_sets,
         )?;
 
         debug!(
@@ -2082,7 +2097,7 @@ impl ClientBuilder {
         config: &ClientConfig,
         api_secret: Option<String>,
     ) -> anyhow::Result<Option<ClientBackup>> {
-        let api = DynGlobalApi::from_config(config, api_secret);
+        let api = DynGlobalApi::from_config(config, &api_secret);
         Client::download_backup_from_federation_static(
             &api,
             &Self::federation_root_secret(root_secret, config),
@@ -2165,9 +2180,9 @@ impl ClientBuilder {
         let fed_id = config.calculate_federation_id();
         let db = self.db_no_decoders.with_decoders(decoders.clone());
         let api = if let Some(admin_creds) = self.admin_creds.as_ref() {
-            DynGlobalApi::from_config_admin(&config, api_secret.clone(), admin_creds.peer_id)
+            DynGlobalApi::from_config_admin(&config, &api_secret, admin_creds.peer_id)
         } else {
-            DynGlobalApi::from_config(&config, api_secret.clone())
+            DynGlobalApi::from_config(&config, &api_secret)
         };
         let task_group = TaskGroup::new();
 

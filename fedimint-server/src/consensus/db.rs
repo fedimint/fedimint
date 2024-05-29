@@ -177,7 +177,7 @@ mod fedimint_migration_tests {
         let module_ids = transaction
             .outputs
             .iter()
-            .map(|output| output.module_instance_id())
+            .map(DynOutput::module_instance_id)
             .collect::<Vec<_>>();
 
         dbtx.insert_new_entry(&accepted_tx_id, &module_ids).await;

@@ -1,3 +1,7 @@
+#![warn(clippy::pedantic)]
+#![allow(clippy::missing_errors_doc)]
+#![allow(clippy::module_name_repetitions)]
+
 pub mod api;
 #[cfg(feature = "cli")]
 pub mod cli;
@@ -152,8 +156,8 @@ impl ModuleInit for MetaClientInit {
         });
 
         #[allow(clippy::never_loop)]
-        for _table in filtered_prefixes {
-            match _table {}
+        for table in filtered_prefixes {
+            match table {}
         }
 
         Box::new(items.into_iter())

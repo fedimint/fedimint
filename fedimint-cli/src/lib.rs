@@ -1,3 +1,12 @@
+#![warn(clippy::pedantic)]
+#![allow(clippy::doc_markdown)]
+#![allow(clippy::missing_errors_doc)]
+#![allow(clippy::missing_panics_doc)]
+#![allow(clippy::module_name_repetitions)]
+#![allow(clippy::must_use_candidate)]
+#![allow(clippy::return_self_not_must_use)]
+#![allow(clippy::too_many_lines)]
+
 mod client;
 mod db_locked;
 pub mod envs;
@@ -229,7 +238,7 @@ impl Opts {
     fn admin_client(
         &self,
         cfg: &ClientConfig,
-        api_secret: Option<String>,
+        api_secret: &Option<String>,
     ) -> CliResult<DynGlobalApi> {
         let our_id = self.our_id.ok_or_cli_msg("Admin client needs our-id set")?;
         Ok(DynGlobalApi::from_config_admin(cfg, api_secret, our_id))
@@ -329,7 +338,7 @@ struct DkgAdminArgs {
 }
 
 impl DkgAdminArgs {
-    fn ws_admin_client(&self, api_secret: Option<String>) -> DynGlobalApi {
+    fn ws_admin_client(&self, api_secret: &Option<String>) -> DynGlobalApi {
         let ws = self.ws.clone();
         DynGlobalApi::from_pre_peer_id_admin_endpoint(ws, api_secret)
     }
@@ -689,7 +698,7 @@ impl FedimintCli {
                 let api_secret = Client::get_api_secret_from_db(&db).await;
 
                 let invite_code = client_config
-                    .invite_code(&peer, api_secret)
+                    .invite_code(&peer, &api_secret)
                     .ok_or_cli_msg("peer not found")?;
 
                 Ok(CliOutput::InviteCode { invite_code })
@@ -743,7 +752,7 @@ impl FedimintCli {
                 let client = self.client_open(&cli).await?;
 
                 let audit = cli
-                    .admin_client(client.get_config(), client.api_secret().clone())?
+                    .admin_client(client.get_config(), client.api_secret())?
                     .audit(cli.auth()?)
                     .await?;
                 Ok(CliOutput::Raw(
@@ -754,7 +763,7 @@ impl FedimintCli {
                 let client = self.client_open(&cli).await?;
 
                 let status = cli
-                    .admin_client(client.get_config(), client.api_secret().clone())?
+                    .admin_client(client.get_config(), client.api_secret())?
                     .status()
                     .await?;
                 Ok(CliOutput::Raw(
@@ -765,7 +774,7 @@ impl FedimintCli {
                 let client = self.client_open(&cli).await?;
 
                 let guardian_config_backup = cli
-                    .admin_client(client.get_config(), client.api_secret().clone())?
+                    .admin_client(client.get_config(), client.api_secret())?
                     .guardian_config_backup(cli.auth()?)
                     .await?;
                 Ok(CliOutput::Raw(
@@ -800,8 +809,7 @@ impl FedimintCli {
                 let client = self.client_open(&cli).await?;
 
                 let ws_api: Arc<_> =
-                    WsFederationApi::from_config(client.get_config(), client.api_secret().clone())
-                        .into();
+                    WsFederationApi::from_config(client.get_config(), client.api_secret()).into();
                 let response: Value = match peer_id {
                     Some(peer_id) => ws_api
                         .request_raw(peer_id.into(), &method, &[params.to_json()])
@@ -850,9 +858,9 @@ impl FedimintCli {
             Command::Dev(DevCmd::Wait { seconds }) => {
                 let _client = self.client_open(&cli).await?;
                 if let Some(secs) = seconds {
-                    runtime::sleep(Duration::from_secs_f32(secs)).await
+                    runtime::sleep(Duration::from_secs_f32(secs)).await;
                 } else {
-                    pending().await
+                    pending::<()>().await;
                 }
                 Ok(CliOutput::Raw(serde_json::Value::Null))
             }
@@ -943,7 +951,6 @@ impl FedimintCli {
                 Ok(CliOutput::ConfigEncrypt)
             }
             Command::Dev(DevCmd::ListOperationStates { operation_id }) => {
-                let client = self.client_open(&cli).await?;
                 #[derive(Serialize)]
                 struct ReactorLogState {
                     active: bool,
@@ -953,6 +960,8 @@ impl FedimintCli {
                     end_time: Option<String>,
                     state: String,
                 }
+
+                let client = self.client_open(&cli).await?;
 
                 let (active_states, inactive_states) =
                     client.executor().get_operation_states(operation_id).await;
@@ -1000,7 +1009,7 @@ impl FedimintCli {
     }
 
     async fn handle_admin_dkg_command(&self, cli: Opts, dkg_args: DkgAdminArgs) -> CliOutputResult {
-        let client = dkg_args.ws_admin_client(dkg_args.api_secret.clone());
+        let client = dkg_args.ws_admin_client(&dkg_args.api_secret);
         match &dkg_args.subcommand {
             DkgAdminCmd::WsStatus => {
                 let status = client.status().await?;

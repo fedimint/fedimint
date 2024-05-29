@@ -1,3 +1,14 @@
+#![warn(clippy::pedantic)]
+#![allow(clippy::cast_possible_truncation)]
+#![allow(clippy::cast_possible_wrap)]
+#![allow(clippy::default_trait_access)]
+#![allow(clippy::doc_markdown)]
+#![allow(clippy::ignored_unit_patterns)]
+#![allow(clippy::manual_let_else)]
+#![allow(clippy::module_name_repetitions)]
+#![allow(clippy::must_use_candidate)]
+#![allow(clippy::too_many_lines)]
+
 pub mod db;
 use std::collections::BTreeMap;
 use std::time::Duration;
@@ -415,19 +426,16 @@ impl ServerModule for Lightning {
 
                 debug!("Beginning to decrypt preimage");
 
-                let preimage_vec = match self.cfg.consensus.threshold_pub_keys.decrypt(
+                let Ok(preimage_vec) = self.cfg.consensus.threshold_pub_keys.decrypt(
                     decryption_shares
                         .iter()
                         .map(|(peer, share)| (peer.to_usize(), &share.0)),
                     &contract.encrypted_preimage.0,
-                ) {
-                    Ok(preimage_vec) => preimage_vec,
-                    Err(_) => {
-                        // TODO: check if that can happen even though shares are verified
-                        // before
-                        error!(contract_hash = %contract.hash, "Failed to decrypt preimage");
-                        return Ok(());
-                    }
+                ) else {
+                    // TODO: check if that can happen even though shares are verified
+                    // before
+                    error!(contract_hash = %contract.hash, "Failed to decrypt preimage");
+                    return Ok(());
                 };
 
                 // Delete decryption shares once we've decrypted the preimage
@@ -467,7 +475,9 @@ impl ServerModule for Lightning {
                     .expect("checked before that it exists");
                 let incoming = match &mut contract_account.contract {
                     FundedContract::Incoming(incoming) => incoming,
-                    _ => unreachable!("previously checked that it's an incoming contract"),
+                    FundedContract::Outgoing(_) => {
+                        unreachable!("previously checked that it's an incoming contract")
+                    }
                 };
                 incoming.contract.decrypted_preimage = decrypted_preimage.clone();
                 trace!(?contract_account, "Updating contract account");
@@ -538,7 +548,7 @@ impl ServerModule for Lightning {
 
         let pub_key = match &account.contract {
             FundedContract::Outgoing(outgoing) => {
-                if outgoing.timelock as u64 + 1 > consensus_block_count && !outgoing.cancelled {
+                if u64::from(outgoing.timelock) + 1 > consensus_block_count && !outgoing.cancelled {
                     // If the timelock hasn't expired yet …
                     let preimage_hash = bitcoin_hashes::sha256::Hash::hash(
                         &input
@@ -631,17 +641,16 @@ impl ServerModule for Lightning {
 
                 let contract_db_key = ContractKey(contract.contract.contract_id());
 
-                let updated_contract_account = dbtx
-                    .get_value(&contract_db_key)
-                    .await
-                    .map(|mut value: ContractAccount| {
-                        value.amount += contract.amount;
-                        value
-                    })
-                    .unwrap_or_else(|| ContractAccount {
+                let updated_contract_account = dbtx.get_value(&contract_db_key).await.map_or_else(
+                    || ContractAccount {
                         amount: contract.amount,
                         contract: contract.contract.clone().to_funded(out_point),
-                    });
+                    },
+                    |mut value: ContractAccount| {
+                        value.amount += contract.amount;
+                        value
+                    },
+                );
 
                 dbtx.insert_entry(
                     &LightningAuditItemKey::from_funded_contract(
@@ -657,8 +666,8 @@ impl ServerModule for Lightning {
                     .is_none()
                 {
                     dbtx.on_commit(move || {
-                        record_funded_contract_metric(updated_contract_account);
-                    })
+                        record_funded_contract_metric(&updated_contract_account);
+                    });
                 }
 
                 dbtx.insert_new_entry(
@@ -741,7 +750,7 @@ impl ServerModule for Lightning {
 
                 let outgoing_contract = match &contract_account.contract {
                     FundedContract::Outgoing(contract) => contract,
-                    _ => {
+                    FundedContract::Incoming(_) => {
                         return Err(LightningOutputError::NotOutgoingContract);
                     }
                 };
@@ -762,7 +771,7 @@ impl ServerModule for Lightning {
 
                     let outgoing_contract = match &mut contract_account.contract {
                         FundedContract::Outgoing(contract) => contract,
-                        _ => {
+                        FundedContract::Incoming(_) => {
                             panic!("Contract type was checked in validate_output");
                         }
                     };
@@ -1037,7 +1046,7 @@ impl Lightning {
             context.wait_value_matches(ContractKey(contract_id), |contract| {
                 match &contract.contract {
                     FundedContract::Outgoing(c) => c.cancelled,
-                    _ => false,
+                    FundedContract::Incoming(_) => false,
                 }
             });
         future.await
@@ -1053,7 +1062,7 @@ impl Lightning {
         let incoming_contract_account = Self::get_incoming_contract_account(contract);
         match &incoming_contract_account.contract.decrypted_preimage {
             DecryptedPreimage::Some(key) => (
-                incoming_contract_account.to_owned(),
+                incoming_contract_account.clone(),
                 DecryptedPreimageStatus::Some(Preimage(sha256::Hash::hash(&key.0).to_byte_array())),
             ),
             DecryptedPreimage::Pending => {
@@ -1075,10 +1084,9 @@ impl Lightning {
                 match &contract.contract {
                     FundedContract::Incoming(c) => match c.contract.decrypted_preimage {
                         DecryptedPreimage::Pending => false,
-                        DecryptedPreimage::Some(_) => true,
-                        DecryptedPreimage::Invalid => true,
+                        DecryptedPreimage::Some(_) | DecryptedPreimage::Invalid => true,
                     },
-                    _ => false,
+                    FundedContract::Outgoing(_) => false,
                 }
             });
 
@@ -1115,16 +1123,16 @@ impl Lightning {
         let stream = dbtx.find_by_prefix(&LightningGatewayKeyPrefix).await;
         stream
             .filter_map(|(_, gw)| async {
-                if !gw.is_expired() {
-                    Some(gw)
-                } else {
+                if gw.is_expired() {
                     None
+                } else {
+                    Some(gw)
                 }
             })
             .collect::<Vec<LightningGatewayRegistration>>()
             .await
             .into_iter()
-            .map(|gw| gw.unanchor())
+            .map(LightningGatewayRegistration::unanchor)
             .collect::<Vec<LightningGatewayAnnouncement>>()
     }
 
@@ -1225,7 +1233,7 @@ impl Lightning {
     }
 }
 
-fn record_funded_contract_metric(updated_contract_account: ContractAccount) {
+fn record_funded_contract_metric(updated_contract_account: &ContractAccount) {
     LN_FUNDED_CONTRACT_SATS
         .with_label_values(&[match updated_contract_account.contract {
             FundedContract::Incoming(_) => "incoming",
@@ -1442,7 +1450,7 @@ mod tests {
         let outgoing_contract = FundedContract::Outgoing(OutgoingContract {
             hash: preimage.consensus_hash(),
             gateway_key,
-            timelock: 1000000,
+            timelock: 1_000_000,
             user_key: random_pub_key(),
             cancelled: false,
         });

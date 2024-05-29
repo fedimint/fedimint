@@ -9,7 +9,7 @@ use fedimint_core::PeerId;
 
 fn discover_common_core_api_version(
     client_versions: &SupportedCoreApiVersions,
-    peer_versions: BTreeMap<PeerId, SupportedCoreApiVersions>,
+    peer_versions: &BTreeMap<PeerId, SupportedCoreApiVersions>,
 ) -> Option<ApiVersion> {
     let mut best_major = None;
     let mut best_major_peer_num = 0;
@@ -64,11 +64,11 @@ fn discover_common_core_api_version_sanity() {
         .unwrap(),
     };
 
-    assert!(discover_common_core_api_version(&client_versions, BTreeMap::from([])).is_none());
+    assert!(discover_common_core_api_version(&client_versions, &BTreeMap::from([])).is_none());
     assert_eq!(
         discover_common_core_api_version(
             &client_versions,
-            BTreeMap::from([(
+            &BTreeMap::from([(
                 PeerId::from(0),
                 SupportedCoreApiVersions {
                     core_consensus: fedimint_core::module::CoreConsensusVersion::new(0, 0),
@@ -82,7 +82,7 @@ fn discover_common_core_api_version_sanity() {
     assert_eq!(
         discover_common_core_api_version(
             &client_versions,
-            BTreeMap::from([(
+            &BTreeMap::from([(
                 PeerId::from(0),
                 SupportedCoreApiVersions {
                     core_consensus: fedimint_core::module::CoreConsensusVersion::new(0, 1), /* different minor consensus version, we don't care */
@@ -96,7 +96,7 @@ fn discover_common_core_api_version_sanity() {
     assert_eq!(
         discover_common_core_api_version(
             &client_versions,
-            BTreeMap::from([(
+            &BTreeMap::from([(
                 PeerId::from(0),
                 SupportedCoreApiVersions {
                     core_consensus: fedimint_core::module::CoreConsensusVersion::new(1, 0), /* wrong consensus version */
@@ -110,7 +110,7 @@ fn discover_common_core_api_version_sanity() {
     assert_eq!(
         discover_common_core_api_version(
             &client_versions,
-            BTreeMap::from([
+            &BTreeMap::from([
                 (
                     PeerId::from(0),
                     SupportedCoreApiVersions {
@@ -142,7 +142,7 @@ fn discover_common_core_api_version_sanity() {
     assert_eq!(
         discover_common_core_api_version(
             &client_versions,
-            BTreeMap::from([
+            &BTreeMap::from([
                 (
                     PeerId::from(0),
                     SupportedCoreApiVersions {
@@ -167,7 +167,7 @@ fn discover_common_core_api_version_sanity() {
 
 fn discover_common_module_api_version(
     client_versions: &SupportedModuleApiVersions,
-    peer_versions: BTreeMap<PeerId, SupportedModuleApiVersions>,
+    peer_versions: &BTreeMap<PeerId, SupportedModuleApiVersions>,
 ) -> Option<ApiVersion> {
     let mut best_major = None;
     let mut best_major_peer_num = 0;
@@ -217,12 +217,12 @@ fn discover_common_module_api_version(
 
 pub fn discover_common_api_versions_set(
     client_versions: &SupportedApiVersionsSummary,
-    peer_versions: BTreeMap<PeerId, SupportedApiVersionsSummary>,
+    peer_versions: &BTreeMap<PeerId, SupportedApiVersionsSummary>,
 ) -> anyhow::Result<ApiVersionSet> {
     Ok(ApiVersionSet {
         core: discover_common_core_api_version(
             &client_versions.core,
-            peer_versions
+            &peer_versions
                 .iter()
                 .map(|(peer_id, peer_supported_api_versions)| {
                     (*peer_id, peer_supported_api_versions.core.clone())
@@ -237,7 +237,7 @@ pub fn discover_common_api_versions_set(
                 |(module_instance_id, client_supported_module_api_versions)| {
                     let discover_common_module_api_version = discover_common_module_api_version(
                         client_supported_module_api_versions,
-                        peer_versions
+                        &peer_versions
                             .iter()
                             .filter_map(|(peer_id, peer_supported_api_versions_summary)| {
                                 peer_supported_api_versions_summary

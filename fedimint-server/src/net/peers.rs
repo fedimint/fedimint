@@ -717,6 +717,27 @@ mod tests {
         let task_group = TaskGroup::new();
 
         {
+            async fn wait_for_connection(
+                name: &str,
+                status_channels: &Arc<RwLock<BTreeMap<PeerId, PeerConnectionStatus>>>,
+            ) {
+                retry(
+                    format!("wait for client {name}"),
+                    fedimint_core::util::FibonacciBackoff::default()
+                        .with_min_delay(Duration::from_millis(200))
+                        .with_max_delay(Duration::from_secs(5))
+                        .with_max_times(10),
+                    || async {
+                        let status = status_channels.read().await;
+                        ensure!(status.len() == 2);
+                        Ok(())
+                    },
+                )
+                .await
+                .context("peer couldn't connect")
+                .unwrap();
+            }
+
             let net = MockNetwork::new();
 
             let peers = [
@@ -760,27 +781,6 @@ mod tests {
                 build_peers("127.0.0.1:1000", 1, task_group.clone()).await;
             let (_peers_b, peer_status_client_b) =
                 build_peers("127.0.0.1:2000", 2, task_group.clone()).await;
-
-            async fn wait_for_connection(
-                name: &str,
-                status_channels: &Arc<RwLock<BTreeMap<PeerId, PeerConnectionStatus>>>,
-            ) {
-                retry(
-                    format!("wait for client {}", name),
-                    fedimint_core::util::FibonacciBackoff::default()
-                        .with_min_delay(Duration::from_millis(200))
-                        .with_max_delay(Duration::from_secs(5))
-                        .with_max_times(10),
-                    || async {
-                        let status = status_channels.read().await;
-                        ensure!(status.len() == 2);
-                        Ok(())
-                    },
-                )
-                .await
-                .context("peer couldn't connect")
-                .unwrap();
-            }
 
             wait_for_connection("a", &peer_status_client_a).await;
             wait_for_connection("b", &peer_status_client_b).await;

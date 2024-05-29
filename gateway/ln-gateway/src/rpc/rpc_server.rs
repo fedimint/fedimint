@@ -5,9 +5,9 @@ use axum::response::IntoResponse;
 use axum::routing::{get, post};
 use axum::{Extension, Json, Router};
 use axum_macros::debug_handler;
-use bitcoin::consensus::Encodable;
 use bitcoin_hashes::{sha256, Hash};
 use fedimint_core::config::FederationId;
+use fedimint_core::encoding::Encodable;
 use fedimint_core::task::TaskGroup;
 use fedimint_ln_client::pay::PayInvoicePayload;
 use fedimint_ln_common::gateway_endpoint_constants::{
@@ -130,7 +130,7 @@ async fn authenticate(
     next: Next,
 ) -> Result<axum::response::Response, StatusCode> {
     let token = extract_bearer_token(&request)?;
-    let hashed_password = hash_password(token, password_salt);
+    let hashed_password = hash_password(&token, password_salt);
     if gateway_hashed_password == hashed_password {
         return Ok(next.run(request).await);
     }
@@ -195,7 +195,7 @@ fn v1_routes(gateway: Gateway) -> Router {
 
 /// Creates a password hash by appending a 4 byte salt to the plaintext
 /// password.
-pub fn hash_password(plaintext_password: String, salt: [u8; 16]) -> sha256::Hash {
+pub fn hash_password(plaintext_password: &str, salt: [u8; 16]) -> sha256::Hash {
     let mut bytes = Vec::<u8>::new();
     plaintext_password
         .consensus_encode(&mut bytes)

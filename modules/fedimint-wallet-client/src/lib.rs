@@ -1,3 +1,13 @@
+#![warn(clippy::pedantic)]
+#![allow(clippy::cast_possible_truncation)]
+#![allow(clippy::default_trait_access)]
+#![allow(clippy::ignored_unit_patterns)]
+#![allow(clippy::missing_errors_doc)]
+#![allow(clippy::missing_panics_doc)]
+#![allow(clippy::module_name_repetitions)]
+#![allow(clippy::must_use_candidate)]
+#![allow(clippy::unused_async)]
+
 pub mod api;
 
 pub mod client_db;
@@ -255,10 +265,10 @@ impl WalletClientModule {
         if let Ok(rpc_config) = BitcoinRpcConfig::get_defaults_from_env_vars() {
             // TODO: Wallet client cannot support bitcoind RPC until the bitcoin dep is
             // updated to 0.30
-            if rpc_config.kind != "bitcoind" {
-                rpc_config
-            } else {
+            if rpc_config.kind == "bitcoind" {
                 cfg.default_bitcoin_rpc.clone()
+            } else {
+                rpc_config
             }
         } else {
             cfg.default_bitcoin_rpc.clone()
@@ -324,7 +334,7 @@ impl WalletClientModule {
             .context("Federation didn't return peg-out fees")
     }
 
-    pub async fn create_withdraw_output(
+    pub fn create_withdraw_output(
         &self,
         operation_id: OperationId,
         address: bitcoin::Address<NetworkUnchecked>,
@@ -353,10 +363,10 @@ impl WalletClientModule {
         })
     }
 
-    pub async fn create_rbf_withdraw_output(
+    pub fn create_rbf_withdraw_output(
         &self,
         operation_id: OperationId,
-        rbf: Rbf,
+        rbf: &Rbf,
     ) -> anyhow::Result<ClientOutput<WalletOutput, WalletClientStates>> {
         let output = WalletOutput::new_v0_rbf(rbf.fees, rbf.txid);
 
@@ -529,9 +539,8 @@ impl WalletClientModule {
         {
             let operation_id = OperationId(thread_rng().gen());
 
-            let withdraw_output = self
-                .create_withdraw_output(operation_id, address.clone(), amount, fee)
-                .await?;
+            let withdraw_output =
+                self.create_withdraw_output(operation_id, address.clone(), amount, fee)?;
             let tx_builder = TransactionBuilder::new()
                 .with_output(self.client_ctx.make_client_output(withdraw_output));
 
@@ -569,9 +578,7 @@ impl WalletClientModule {
     ) -> anyhow::Result<OperationId> {
         let operation_id = OperationId(thread_rng().gen());
 
-        let withdraw_output = self
-            .create_rbf_withdraw_output(operation_id, rbf.clone())
-            .await?;
+        let withdraw_output = self.create_rbf_withdraw_output(operation_id, &rbf)?;
         let tx_builder = TransactionBuilder::new()
             .with_output(self.client_ctx.make_client_output(withdraw_output));
 

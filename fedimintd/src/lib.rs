@@ -1,3 +1,12 @@
+#![warn(clippy::pedantic)]
+#![allow(clippy::cast_possible_wrap)]
+#![allow(clippy::default_trait_access)]
+#![allow(clippy::ignored_unit_patterns)]
+#![allow(clippy::missing_errors_doc)]
+#![allow(clippy::missing_panics_doc)]
+#![allow(clippy::must_use_candidate)]
+#![allow(clippy::return_self_not_must_use)]
+
 /// Module for creating `fedimintd` binary with custom modules
 use bitcoin::Network;
 use fedimint_core::envs::BitcoinRpcConfig;

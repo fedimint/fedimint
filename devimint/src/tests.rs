@@ -57,19 +57,19 @@ pub fn stats_for(mut v: Vec<Duration>) -> Stats {
     assert!(!v.is_empty());
     v.sort();
     let n = v.len();
-    let max = v.iter().last().unwrap().to_owned();
     let min = v.first().unwrap().to_owned();
+    let max = v.iter().last().unwrap().to_owned();
     let median = v[n / 2];
     let sum: Duration = v.iter().sum();
     let avg = sum / n as u32;
     let p90 = v[(n as f32 * 0.9) as usize];
     Stats {
-        max,
         min,
-        sum,
-        median,
         avg,
+        median,
         p90,
+        max,
+        sum,
     }
 }
 

@@ -1,3 +1,7 @@
+#![warn(clippy::pedantic)]
+#![allow(clippy::module_name_repetitions)]
+#![allow(clippy::must_use_candidate)]
+
 use std::collections::BTreeMap;
 
 use anyhow::bail;

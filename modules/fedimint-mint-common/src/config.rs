@@ -46,7 +46,7 @@ impl MintGenParamsConsensus {
     pub fn gen_denominations(&self) -> Vec<Amount> {
         Tiered::gen_denominations(self.denomination_base, MAX_DENOMINATION_SIZE)
             .tiers()
-            .cloned()
+            .copied()
             .collect()
     }
 }

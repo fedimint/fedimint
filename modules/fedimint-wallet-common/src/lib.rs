@@ -1,3 +1,11 @@
+#![warn(clippy::pedantic)]
+#![allow(clippy::default_trait_access)]
+#![allow(clippy::missing_errors_doc)]
+#![allow(clippy::missing_panics_doc)]
+#![allow(clippy::module_name_repetitions)]
+#![allow(clippy::must_use_candidate)]
+#![allow(clippy::return_self_not_must_use)]
+
 use std::hash::Hasher;
 
 use bitcoin::address::NetworkUnchecked;
@@ -245,7 +253,7 @@ pub fn proprietary_tweak_key() -> ProprietaryKey {
 impl std::hash::Hash for PegOutSignatureItem {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.txid.hash(state);
-        for sig in self.signature.iter() {
+        for sig in &self.signature {
             sig.serialize_der().hash(state);
         }
     }

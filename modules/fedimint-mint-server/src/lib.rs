@@ -1,3 +1,11 @@
+#![warn(clippy::pedantic)]
+#![allow(clippy::cast_possible_truncation)]
+#![allow(clippy::cast_possible_wrap)]
+#![allow(clippy::default_trait_access)]
+#![allow(clippy::module_name_repetitions)]
+#![allow(clippy::must_use_candidate)]
+#![allow(clippy::similar_names)]
+
 pub mod db;
 mod metrics;
 
@@ -285,15 +293,11 @@ impl ServerModuleInit for MintInit {
         // can be obtained by evaluating the polynomial returned by the DKG at
         // zero
         let pub_keys = TieredMultiZip::new(
-            config
-                .peer_tbs_pks
-                .values()
-                .map(|keys| keys.iter())
-                .collect(),
+            config.peer_tbs_pks.values().map(Tiered::iter).collect(),
         )
         .map(|(amt, keys)| {
             let keys = (1_u64..)
-                .zip(keys.into_iter().cloned())
+                .zip(keys.into_iter().copied())
                 .take(config.peer_tbs_pks.threshold())
                 .collect();
 
@@ -301,7 +305,7 @@ impl ServerModuleInit for MintInit {
         });
 
         Ok(MintClientConfig {
-            tbs_pks: Tiered::from_iter(pub_keys),
+            tbs_pks: pub_keys.collect(),
             fee_consensus: config.fee_consensus.clone(),
             peer_tbs_pks: config.peer_tbs_pks.clone(),
             max_notes_per_denomination: config.max_notes_per_denomination,
@@ -333,7 +337,7 @@ fn dealer_keygen(
 fn eval_polynomial(coefficients: &[Scalar], x: &Scalar) -> Scalar {
     coefficients
         .iter()
-        .cloned()
+        .copied()
         .rev()
         .reduce(|acc, coefficient| acc * x + coefficient)
         .expect("We have at least one coefficient")
@@ -454,10 +458,12 @@ impl ServerModule for Mint {
             .await
             .map(|(key, amount)| {
                 match key {
-                    MintAuditItemKey::Issuance(_) => issuances += amount,
-                    MintAuditItemKey::IssuanceTotal => issuances += amount,
-                    MintAuditItemKey::Redemption(_) => redemptions += amount,
-                    MintAuditItemKey::RedemptionTotal => redemptions += amount,
+                    MintAuditItemKey::Issuance(_) | MintAuditItemKey::IssuanceTotal => {
+                        issuances += amount;
+                    }
+                    MintAuditItemKey::Redemption(_) | MintAuditItemKey::RedemptionTotal => {
+                        redemptions += amount;
+                    }
                 }
                 key
             })
@@ -479,10 +485,12 @@ impl ServerModule for Mint {
                 module_instance_id,
                 &MintAuditItemKeyPrefix,
                 |k, v| match k {
-                    MintAuditItemKey::Issuance(_) => -(v.msats as i64),
-                    MintAuditItemKey::IssuanceTotal => -(v.msats as i64),
-                    MintAuditItemKey::Redemption(_) => v.msats as i64,
-                    MintAuditItemKey::RedemptionTotal => v.msats as i64,
+                    MintAuditItemKey::Issuance(_) | MintAuditItemKey::IssuanceTotal => {
+                        -(v.msats as i64)
+                    }
+                    MintAuditItemKey::Redemption(_) | MintAuditItemKey::RedemptionTotal => {
+                        v.msats as i64
+                    }
                 },
             )
             .await;
@@ -534,7 +542,7 @@ impl Mint {
             &EcashBackupKey(request.id),
             &ECashUserBackupSnapshot {
                 timestamp: request.timestamp,
-                data: request.payload.to_vec(),
+                data: request.payload.clone(),
             },
         )
         .await;
@@ -604,12 +612,12 @@ impl Mint {
             .values()
             .all(|pk| pk.structural_eq(&cfg.private.tbs_sks)));
 
-        let ref_pub_key = Tiered::from_iter(
-            cfg.private
-                .tbs_sks
-                .iter()
-                .map(|(amt, key)| (amt, key.to_pub_key_share())),
-        );
+        let ref_pub_key = cfg
+            .private
+            .tbs_sks
+            .iter()
+            .map(|(amt, key)| (amt, key.to_pub_key_share()))
+            .collect();
 
         // Find our key index and make sure we know the private key for all our public
         // key shares
@@ -636,12 +644,12 @@ impl Mint {
             cfg.consensus
                 .peer_tbs_pks
                 .values()
-                .map(|keys| keys.iter())
+                .map(Tiered::iter)
                 .collect(),
         )
         .map(|(amt, keys)| {
             let keys = (1_u64..)
-                .zip(keys.into_iter().cloned())
+                .zip(keys.into_iter().copied())
                 .take(cfg.consensus.peer_tbs_pks.threshold())
                 .collect();
 

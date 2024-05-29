@@ -35,7 +35,7 @@ const RETRY_DELAY: Duration = Duration::from_secs(1);
 /// classDef virtual fill:#fff,stroke-dasharray: 5 5
 ///
 ///  CreatedOutgoingLnContract -- await transaction failed --> Canceled
-///  CreatedOutgoingLnContract -- await transaction acceptance --> Funded    
+///  CreatedOutgoingLnContract -- await transaction acceptance --> Funded
 ///  Funded -- await gateway payment success  --> Success
 ///  Funded -- await gateway payment failed --> Refundable
 ///  Refundable -- gateway issued refunded --> Refund
@@ -92,23 +92,17 @@ impl State for LightningPayStateMachine {
             LightningPayStates::CreatedOutgoingLnContract(created_outgoing_ln_contract) => {
                 created_outgoing_ln_contract.transitions(context, global_context)
             }
-            LightningPayStates::FundingRejected => {
-                vec![]
-            }
             LightningPayStates::Funded(funded) => {
                 funded.transitions(self.common.clone(), context.clone(), global_context.clone())
-            }
-            LightningPayStates::Success(_) => {
-                vec![]
             }
             LightningPayStates::Refundable(refundable) => {
                 refundable.transitions(self.common.clone(), global_context.clone())
             }
-            LightningPayStates::Refund(_) => vec![],
-            LightningPayStates::Refunded(_) => {
-                vec![]
-            }
-            LightningPayStates::Failure(_) => {
+            LightningPayStates::Success(_)
+            | LightningPayStates::FundingRejected
+            | LightningPayStates::Refund(_)
+            | LightningPayStates::Refunded(_)
+            | LightningPayStates::Failure(_) => {
                 vec![]
             }
         }
@@ -311,7 +305,7 @@ impl LightningPayFunded {
                         common.clone(),
                         dbtx,
                         global_context.clone(),
-                        format!("Gateway cancelled contract: {}", contract_id),
+                        format!("Gateway cancelled contract: {contract_id}"),
                     ))
                 },
             ),
@@ -323,7 +317,7 @@ impl LightningPayFunded {
                         timeout_common.clone(),
                         dbtx,
                         timeout_global_context.clone(),
-                        format!("Outgoing contract timed out, BlockHeight: {}", timelock),
+                        format!("Outgoing contract timed out, BlockHeight: {timelock}"),
                     ))
                 },
             ),
@@ -457,7 +451,7 @@ impl LightningPayRefundable {
                         common.clone(),
                         dbtx,
                         global_context.clone(),
-                        format!("Refundable: Gateway cancelled contract: {}", contract_id),
+                        format!("Refundable: Gateway cancelled contract: {contract_id}"),
                     ))
                 },
             ),
@@ -469,7 +463,7 @@ impl LightningPayRefundable {
                         timeout_common.clone(),
                         dbtx,
                         timeout_global_context.clone(),
-                        format!("Refundable: Outgoing contract timed out. ContractId: {} BlockHeight: {}", contract_id, timelock),
+                        format!("Refundable: Outgoing contract timed out. ContractId: {contract_id} BlockHeight: {timelock}"),
                     ))
                 },
             ),
@@ -503,7 +497,7 @@ async fn await_contract_timeout(global_context: DynGlobalClientContext, timelock
     loop {
         match global_context
             .module_api()
-            .wait_block_height(timelock as u64)
+            .wait_block_height(u64::from(timelock))
             .await
         {
             Ok(_) => return,
@@ -614,7 +608,7 @@ impl PaymentData {
         match self {
             PaymentData::Invoice(invoice) => invoice
                 .payee_pub_key()
-                .cloned()
+                .copied()
                 .unwrap_or_else(|| invoice.recover_payee_pub_key()),
             PaymentData::PrunedInvoice(PrunedInvoice { destination, .. }) => *destination,
         }
@@ -643,10 +637,7 @@ impl PaymentData {
     /// Returns the expiry timestamp in seconds since the UNIX epoch
     pub fn expiry_timestamp(&self) -> u64 {
         match self {
-            PaymentData::Invoice(invoice) => invoice
-                .expires_at()
-                .map(|t| t.as_secs())
-                .unwrap_or(u64::MAX),
+            PaymentData::Invoice(invoice) => invoice.expires_at().map_or(u64::MAX, |t| t.as_secs()),
             PaymentData::PrunedInvoice(PrunedInvoice {
                 expiry_timestamp, ..
             }) => *expiry_timestamp,

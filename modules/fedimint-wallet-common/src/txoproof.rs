@@ -75,7 +75,7 @@ impl PegInProof {
 
         if transaction.output.get(output_idx as usize).is_none() {
             return Err(PegInProofError::OutputIndexOutOfRange(
-                output_idx as u64,
+                u64::from(output_idx),
                 transaction.output.len() as u64,
             ));
         }
@@ -263,6 +263,6 @@ mod tests {
             "efa0daf2b6a985bb78a2546b0d51ca878949e3baff106b8bed892284138b2acd"
                 .parse()
                 .unwrap()
-        ))
+        ));
     }
 }

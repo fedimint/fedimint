@@ -282,8 +282,7 @@ pub async fn handle_command(
         ClientCmd::Validate { oob_notes } => {
             let amount = client
                 .get_first_module::<MintClientModule>()
-                .validate_notes(oob_notes)
-                .await?;
+                .validate_notes(&oob_notes)?;
 
             Ok(json!({
                 "amount_msat": amount,
@@ -598,7 +597,7 @@ pub async fn handle_command(
                     WithdrawState::Failed(e) => {
                         bail!("Withdraw failed: {e}");
                     }
-                    _ => {}
+                    WithdrawState::Created => {}
                 }
             }
 

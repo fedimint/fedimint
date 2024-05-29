@@ -160,8 +160,7 @@ impl DecryptedPreimage {
     pub fn is_permanent(&self) -> bool {
         match self {
             DecryptedPreimage::Pending => false,
-            DecryptedPreimage::Some(_) => true,
-            DecryptedPreimage::Invalid => true,
+            DecryptedPreimage::Some(_) | DecryptedPreimage::Invalid => true,
         }
     }
 }
@@ -174,7 +173,7 @@ pub struct EncryptedPreimage(pub threshold_crypto::Ciphertext);
 pub struct PreimageDecryptionShare(pub threshold_crypto::DecryptionShare);
 
 impl EncryptedPreimage {
-    pub fn new(preimage_key: PreimageKey, key: &threshold_crypto::PublicKey) -> EncryptedPreimage {
+    pub fn new(preimage_key: &PreimageKey, key: &threshold_crypto::PublicKey) -> EncryptedPreimage {
         EncryptedPreimage(key.encrypt(preimage_key.0))
     }
 }

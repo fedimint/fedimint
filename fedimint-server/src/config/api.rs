@@ -130,7 +130,7 @@ impl ConfigGenApi {
         let local = state.local.clone();
 
         if let Some(url) = local.and_then(|local| local.leader_api_url) {
-            DynGlobalApi::from_pre_peer_id_admin_endpoint(url, self.api_secret.clone())
+            DynGlobalApi::from_pre_peer_id_admin_endpoint(url, &self.api_secret)
                 .add_config_gen_peer(state.our_peer_info()?)
                 .await
                 .map_err(|_| ApiError::not_found("Unable to connect to the leader".to_string()))?;
@@ -194,7 +194,7 @@ impl ConfigGenApi {
             Some(leader_url) => {
                 let client = DynGlobalApi::from_pre_peer_id_admin_endpoint(
                     leader_url.clone(),
-                    self.api_secret.clone(),
+                    &self.api_secret,
                 );
                 let response = client.consensus_config_gen_params().await;
                 response
@@ -236,7 +236,7 @@ impl ConfigGenApi {
             // Create a WSClient for the leader
             state.local.clone().and_then(|local| {
                 local.leader_api_url.map(|url| {
-                    DynGlobalApi::from_pre_peer_id_admin_endpoint(url, self.api_secret.clone())
+                    DynGlobalApi::from_pre_peer_id_admin_endpoint(url, &self.api_secret.clone())
                 })
             })
         };
@@ -408,9 +408,9 @@ impl ConfigGenApi {
             );
             // Create a WSClient for the leader
             state.local.clone().and_then(|local| {
-                local.leader_api_url.map(|url| {
-                    DynGlobalApi::from_pre_peer_id_admin_endpoint(url, self.api_secret.clone())
-                })
+                local
+                    .leader_api_url
+                    .map(|url| DynGlobalApi::from_pre_peer_id_admin_endpoint(url, &self.api_secret))
             })
         };
 
@@ -843,7 +843,7 @@ mod tests {
 
     use std::collections::{BTreeMap, BTreeSet, HashSet};
     use std::fs;
-    use std::path::PathBuf;
+    use std::path::{Path, PathBuf};
     use std::sync::Arc;
     use std::time::Duration;
 
@@ -887,7 +887,7 @@ mod tests {
     impl TestConfigApi {
         /// Creates a new test API taking up a port, with P2P endpoint on the
         /// next port
-        async fn new(port: u16, name_suffix: u16, data_dir: PathBuf) -> TestConfigApi {
+        fn new(port: u16, name_suffix: u16, data_dir: &Path) -> TestConfigApi {
             let db = MemDatabase::new().into_database();
 
             let name = format!("peer{name_suffix}");
@@ -940,14 +940,14 @@ mod tests {
 
             // our id doesn't really exist at this point
             let auth = ApiAuth(format!("password-{port}"));
-            let client = DynGlobalApi::from_pre_peer_id_admin_endpoint(api_url, None);
+            let client = DynGlobalApi::from_pre_peer_id_admin_endpoint(api_url, &None);
 
             TestConfigApi {
                 client,
                 auth,
                 name,
                 settings,
-                amount: Amount::from_sats(port as u64),
+                amount: Amount::from_sats(u64::from(port)),
                 dir,
             }
         }
@@ -975,7 +975,7 @@ mod tests {
                 info!(
                     target: fedimint_logging::LOG_TEST,
                     "Test retrying server status"
-                )
+                );
             }
         }
 
@@ -1067,11 +1067,11 @@ mod tests {
         let base_port = port_alloc(PEER_NUM * PORTS_PER_PEER).unwrap();
 
         let mut followers = vec![];
-        let mut test_config = TestConfigApi::new(base_port, 0, data_dir.clone()).await;
+        let mut test_config = TestConfigApi::new(base_port, 0, &data_dir);
 
         for i in 1..PEER_NUM {
             let port = base_port + (i * PORTS_PER_PEER);
-            let follower = TestConfigApi::new(port, i, data_dir.clone()).await;
+            let follower = TestConfigApi::new(port, i, &data_dir);
             followers.push(follower);
         }
 
@@ -1109,11 +1109,11 @@ mod tests {
         let base_port = port_alloc(PEER_NUM * PORTS_PER_PEER).unwrap();
 
         let mut followers = vec![];
-        let mut test_config = TestConfigApi::new(base_port, 0, data_dir.clone()).await;
+        let mut test_config = TestConfigApi::new(base_port, 0, &data_dir);
 
         for i in 1..PEER_NUM {
             let port = base_port + (i * PORTS_PER_PEER);
-            let follower = TestConfigApi::new(port, i, data_dir.clone()).await;
+            let follower = TestConfigApi::new(port, i, &data_dir);
             followers.push(follower);
         }
 

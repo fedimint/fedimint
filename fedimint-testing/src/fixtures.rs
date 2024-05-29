@@ -155,17 +155,16 @@ impl Fixtures {
             cli_password,
             FakeLightningTest::new(),
             decoders,
-            ClientModuleInitRegistry::from_iter(
-                clients
-                    .filter(|client| {
-                        // Remove LN module because the gateway adds one
-                        client.to_dyn_common().module_kind() != ModuleKind::from_static_str("ln")
-                    })
-                    .filter(|client| {
-                        // Remove LN NG module because the gateway adds one
-                        client.to_dyn_common().module_kind() != ModuleKind::from_static_str("lnv2")
-                    }),
-            ),
+            clients
+                .filter(|client| {
+                    // Remove LN module because the gateway adds one
+                    client.to_dyn_common().module_kind() != ModuleKind::from_static_str("ln")
+                })
+                .filter(|client| {
+                    // Remove LN NG module because the gateway adds one
+                    client.to_dyn_common().module_kind() != ModuleKind::from_static_str("lnv2")
+                })
+                .collect(),
             num_route_hints,
         )
         .await

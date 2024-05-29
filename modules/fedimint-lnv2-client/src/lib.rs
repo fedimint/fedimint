@@ -1,3 +1,10 @@
+#![warn(clippy::pedantic)]
+#![allow(clippy::missing_errors_doc)]
+#![allow(clippy::missing_panics_doc)]
+#![allow(clippy::module_name_repetitions)]
+#![allow(clippy::must_use_candidate)]
+#![allow(clippy::unused_async)]
+
 pub mod api;
 #[cfg(feature = "cli")]
 mod cli;
@@ -482,29 +489,26 @@ impl LightningClientModule {
                             SendSMState::Refunding(out_points) => {
                                 yield SendState::Refunding;
 
-                                match client_ctx.await_primary_module_outputs(operation_id, out_points.clone()).await {
-                                    Ok(..) => {
-                                        yield SendState::Refunded;
-                                        return;
-                                    },
-                                    Err(..) => {
-                                        // The gateway may have incorrectly claimed the outgoing contract thereby causing
-                                        // our refund transaction to be rejected. Therefore, we check one last time if
-                                        // the preimage is available before we enter the failure state.
-                                        if let Some(preimage) = module_api.await_preimage(
-                                            &state.common.contract.contract_id(),
-                                            0
-                                        ).await {
-                                            if state.common.contract.verify_preimage(&preimage) {
-                                                yield SendState::Success(preimage);
-                                                return;
-                                            }
-                                        }
-
-                                        yield SendState::Failure;
-                                        return;
-                                    },
+                                if client_ctx.await_primary_module_outputs(operation_id, out_points.clone()).await.is_ok() {
+                                    yield SendState::Refunded;
+                                    return;
                                 }
+
+                                // The gateway may have incorrectly claimed the outgoing contract thereby causing
+                                // our refund transaction to be rejected. Therefore, we check one last time if
+                                // the preimage is available before we enter the failure state.
+                                if let Some(preimage) = module_api.await_preimage(
+                                    &state.common.contract.contract_id(),
+                                    0
+                                ).await {
+                                    if state.common.contract.verify_preimage(&preimage) {
+                                        yield SendState::Success(preimage);
+                                        return;
+                                    }
+                                }
+
+                                yield SendState::Failure;
+                                return;
                             },
                             SendSMState::Rejected(..) => {
                                 yield SendState::FundingRejected;
@@ -611,7 +615,7 @@ impl LightningClientModule {
 
         let expiration = duration_since_epoch()
             .as_secs()
-            .saturating_add(expiry_time as u64);
+            .saturating_add(u64::from(expiry_time));
 
         let claim_pk = recipient_static_pk
             .mul_tweak(
@@ -689,7 +693,7 @@ impl LightningClientModule {
     ) -> Option<OperationId> {
         let operation_id = OperationId::from_encodable(&contract.clone());
 
-        let (claim_keypair, agg_decryption_key) = self.recover_contract_keys(&contract).await?;
+        let (claim_keypair, agg_decryption_key) = self.recover_contract_keys(&contract)?;
 
         let receive_sm = LightningClientStateMachines::Receive(ReceiveStateMachine {
             common: ReceiveSMCommon {
@@ -716,7 +720,7 @@ impl LightningClientModule {
         Some(operation_id)
     }
 
-    async fn recover_contract_keys(
+    fn recover_contract_keys(
         &self,
         contract: &IncomingContract,
     ) -> Option<(KeyPair, AggregateDecryptionKey)> {
@@ -770,16 +774,12 @@ impl LightningClientModule {
                             ReceiveSMState::Claiming(out_points) => {
                                 yield ReceiveState::Claiming;
 
-                                match client_ctx.await_primary_module_outputs(operation_id, out_points).await {
-                                    Ok(..) => {
-                                        yield ReceiveState::Claimed;
-                                        return;
-                                    }
-                                    Err(..) => {
-                                        yield ReceiveState::Failure;
-                                        return;
-                                    }
+                                if client_ctx.await_primary_module_outputs(operation_id, out_points).await.is_ok() {
+                                    yield ReceiveState::Claimed;
+                                } else {
+                                    yield ReceiveState::Failure;
                                 }
+                                return;
                             },
                             ReceiveSMState::Expired => {
                                 yield ReceiveState::Expired;

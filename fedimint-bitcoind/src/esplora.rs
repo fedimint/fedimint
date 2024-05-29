@@ -111,7 +111,7 @@ impl IBitcoindRpc for EsploraClient {
 
         let is_in_block_height = tx_status
             .block_height
-            .is_some_and(|height| height as u64 == block_height);
+            .is_some_and(|height| u64::from(height) == block_height);
 
         if is_in_block_height {
             let tx_block_hash = tx_status.block_hash.ok_or(anyhow::format_err!(
