@@ -185,7 +185,8 @@ impl SendStateMachine {
             lightning_context
                 .lnrpc
                 .pay_private(
-                    PrunedInvoice::try_from(invoice).expect("Invoice has amount"),
+                    // todo support override amount
+                    PrunedInvoice::try_from_invoice(&invoice, None).expect("Invoice has amount"),
                     max_delay,
                     max_fee,
                 )

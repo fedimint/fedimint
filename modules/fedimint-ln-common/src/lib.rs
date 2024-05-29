@@ -666,10 +666,11 @@ pub struct PrunedInvoice {
     pub expiry_timestamp: u64,
 }
 
-impl TryFrom<Bolt11Invoice> for PrunedInvoice {
-    type Error = anyhow::Error;
-
-    fn try_from(invoice: Bolt11Invoice) -> Result<Self, Self::Error> {
+impl PrunedInvoice {
+    pub fn try_from_invoice(
+        invoice: &Bolt11Invoice,
+        amount: Option<Amount>,
+    ) -> Result<Self, anyhow::Error> {
         // We use expires_at since it doesn't rely on the std feature in
         // lightning-invoice. See #3838.
         let expiry_timestamp = invoice.expires_at().map_or(u64::MAX, |t| t.as_secs());
@@ -685,11 +686,11 @@ impl TryFrom<Bolt11Invoice> for PrunedInvoice {
         };
 
         Ok(PrunedInvoice {
-            amount: Amount::from_msats(
+            amount: amount.unwrap_or(Amount::from_msats(
                 invoice
                     .amount_milli_satoshis()
                     .context("invoice amount is missing")?,
-            ),
+            )),
             destination: invoice
                 .payee_pub_key()
                 .copied()
