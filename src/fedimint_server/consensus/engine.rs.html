@@ -673,6 +673,7 @@
 <a href="#673" id="673">673</a>
 <a href="#674" id="674">674</a>
 <a href="#675" id="675">675</a>
+<a href="#676" id="676">676</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
@@ -1214,7 +1215,7 @@
             </span>.expect(<span class="string">"Committing consensus epoch failed"</span>);
 
         CONSENSUS_ITEMS_PROCESSED_TOTAL
-            .with_label_values(<span class="kw-2">&amp;</span>[peer_id_str])
+            .with_label_values(<span class="kw-2">&amp;</span>[<span class="kw-2">&amp;</span><span class="self">self</span>.peer_id_str[peer.to_usize()]])
             .inc();
         timing_prom.observe_duration();
 
@@ -1234,11 +1235,12 @@
         <span class="kw">match </span>consensus_item {
             ConsensusItem::Module(module_item) =&gt; {
                 <span class="kw">let </span>instance_id = module_item.module_instance_id();
+
                 <span class="kw">let </span>module_dbtx = <span class="kw-2">&amp;mut </span>dbtx.to_ref_with_prefix_module_id(instance_id);
 
                 <span class="self">self</span>.modules
                     .get_expect(instance_id)
-                    .process_consensus_item(module_dbtx, module_item, peer_id)
+                    .process_consensus_item(module_dbtx, <span class="kw-2">&amp;</span>module_item, peer_id)
                     .<span class="kw">await
             </span>}
             ConsensusItem::Transaction(transaction) =&gt; {
@@ -1258,7 +1260,7 @@
                     .map(DynOutput::module_instance_id)
                     .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
 
-                process_transaction_with_dbtx(<span class="self">self</span>.modules.clone(), dbtx, transaction)
+                process_transaction_with_dbtx(<span class="self">self</span>.modules.clone(), dbtx, <span class="kw-2">&amp;</span>transaction)
                     .<span class="kw">await
                     </span>.map_err(|error| <span class="macro">anyhow!</span>(error.to_string()))<span class="question-mark">?</span>;
 

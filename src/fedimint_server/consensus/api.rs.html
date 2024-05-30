@@ -695,7 +695,7 @@
         <span class="comment">// We ignore any writes, as we only verify if the transaction is valid here
         </span>dbtx.ignore_uncommitted();
 
-        process_transaction_with_dbtx(<span class="self">self</span>.modules.clone(), <span class="kw-2">&amp;mut </span>dbtx, transaction.clone()).<span class="kw">await</span><span class="question-mark">?</span>;
+        process_transaction_with_dbtx(<span class="self">self</span>.modules.clone(), <span class="kw-2">&amp;mut </span>dbtx, <span class="kw-2">&amp;</span>transaction).<span class="kw">await</span><span class="question-mark">?</span>;
 
         <span class="self">self</span>.submission_sender
             .send(ConsensusItem::Transaction(transaction))
