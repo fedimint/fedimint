@@ -2372,22 +2372,22 @@ mod test_utils {
     }
 
     pub async fn verify_snapshot_isolation(db: Database) {
+        async fn random_yield() {
+            let times = if rand::thread_rng().gen_bool(0.5) {
+                0
+            } else {
+                10
+            };
+            for _ in 0..times {
+                tokio::task::yield_now().await;
+            }
+        }
+
         // This scenario is taken straight out of https://github.com/fedimint/fedimint/issues/5195 bug
         for i in 0..1000 {
             let base_key = i * 2;
             let tx_accepted_key = base_key;
             let spent_input_key = base_key + 1;
-
-            async fn random_yield() {
-                let times = if rand::thread_rng().gen_bool(0.5) {
-                    0
-                } else {
-                    10
-                };
-                for _ in 0..times {
-                    tokio::task::yield_now().await;
-                }
-            }
 
             join!(
                 async {

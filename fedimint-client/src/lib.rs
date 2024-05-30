@@ -4,7 +4,6 @@
 #![allow(clippy::doc_markdown)]
 #![allow(clippy::explicit_deref_methods)]
 #![allow(clippy::ignored_unit_patterns)]
-#![allow(clippy::items_after_statements)]
 #![allow(clippy::missing_errors_doc)]
 #![allow(clippy::missing_panics_doc)]
 #![allow(clippy::module_name_repetitions)]
@@ -1370,8 +1369,6 @@ impl Client {
         db: Database,
         num_responses_sender: watch::Sender<usize>,
     ) {
-        let mut requests = FuturesUnordered::new();
-
         // Make a single request to a peer after a delay
         //
         // The delay is here to unify the type of a future both for initial request and
@@ -1396,6 +1393,8 @@ impl Client {
                 .await,
             )
         }
+
+        let mut requests = FuturesUnordered::new();
 
         for peer_id in num_peers.peer_ids() {
             requests.push(make_request(Duration::ZERO, peer_id, &api));

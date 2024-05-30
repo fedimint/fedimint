@@ -1393,11 +1393,16 @@ mod tests {
     fn test_lexicographical_sorting() {
         #[derive(Ord, PartialOrd, Eq, PartialEq, Debug, Encodable, Decodable)]
         struct TestAmount(u64);
-        let amounts = (0..20000).map(TestAmount).collect::<Vec<_>>();
-        keeps_ordering_after_serialization(amounts);
 
         #[derive(Ord, PartialOrd, Eq, PartialEq, Debug, Encodable, Decodable)]
         struct TestComplexAmount(u16, u32, u64);
+
+        #[derive(Ord, PartialOrd, Eq, PartialEq, Debug, Encodable, Decodable)]
+        struct Text(String);
+
+        let amounts = (0..20000).map(TestAmount).collect::<Vec<_>>();
+        keeps_ordering_after_serialization(amounts);
+
         let complex_amounts = (10..20000)
             .flat_map(|i| {
                 (i - 1..=i + 1).flat_map(move |j| {
@@ -1407,8 +1412,6 @@ mod tests {
             .collect::<Vec<_>>();
         keeps_ordering_after_serialization(complex_amounts);
 
-        #[derive(Ord, PartialOrd, Eq, PartialEq, Debug, Encodable, Decodable)]
-        struct Text(String);
         let texts = (' '..'~')
             .flat_map(|i| {
                 (' '..'~')

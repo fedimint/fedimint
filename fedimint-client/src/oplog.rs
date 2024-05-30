@@ -450,6 +450,18 @@ mod tests {
 
     #[tokio::test]
     async fn test_pagination() {
+        fn assert_page_entries(
+            page: Vec<(ChronologicalOperationLogKey, OperationLogEntry)>,
+            page_idx: u8,
+        ) {
+            for (entry_idx, (_key, entry)) in page.into_iter().enumerate() {
+                let actual_meta = entry.meta::<u8>();
+                let expected_meta = 97 - (page_idx * 10 + entry_idx as u8);
+
+                assert_eq!(actual_meta, expected_meta);
+            }
+        }
+
         let db = Database::new(MemDatabase::new(), Default::default());
         let op_log = OperationLog::new(db.clone());
 
@@ -464,18 +476,6 @@ mod tests {
                 )
                 .await;
             dbtx.commit_tx().await;
-        }
-
-        fn assert_page_entries(
-            page: Vec<(ChronologicalOperationLogKey, OperationLogEntry)>,
-            page_idx: u8,
-        ) {
-            for (entry_idx, (_key, entry)) in page.into_iter().enumerate() {
-                let actual_meta = entry.meta::<u8>();
-                let expected_meta = 97 - (page_idx * 10 + entry_idx as u8);
-
-                assert_eq!(actual_meta, expected_meta);
-            }
         }
 
         let mut previous_last_element = None;

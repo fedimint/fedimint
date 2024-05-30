@@ -448,14 +448,6 @@ impl ExecutorInner {
         global_context_gen: ContextGen,
         mut sm_update_rx: tokio::sync::mpsc::UnboundedReceiver<DynState>,
     ) -> anyhow::Result<()> {
-        let active_states = self.get_active_states().await;
-        trace!(target: LOG_CLIENT_REACTOR, "Starting active states: {:?}", active_states);
-        for (state, _meta) in active_states {
-            self.sm_update_tx
-                .send(state)
-                .expect("Must be able to send state machine to own opened channel");
-        }
-
         /// All futures in the executor resolve to this type, so the handling
         /// code can tell them apart.
         enum ExecutorLoopEvent {
@@ -472,6 +464,14 @@ impl ExecutorInner {
             },
             /// New job receiver disconnected, that can only mean termination
             Disconnected,
+        }
+
+        let active_states = self.get_active_states().await;
+        trace!(target: LOG_CLIENT_REACTOR, "Starting active states: {:?}", active_states);
+        for (state, _meta) in active_states {
+            self.sm_update_tx
+                .send(state)
+                .expect("Must be able to send state machine to own opened channel");
         }
 
         // Keeps track of things already running, so we can deduplicate, just

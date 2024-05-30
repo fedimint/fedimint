@@ -6,7 +6,6 @@
 #![allow(clippy::default_trait_access)]
 #![allow(clippy::doc_markdown)]
 #![allow(clippy::ignored_unit_patterns)]
-#![allow(clippy::items_after_statements)]
 #![allow(clippy::missing_errors_doc)]
 #![allow(clippy::missing_panics_doc)]
 #![allow(clippy::module_name_repetitions)]
