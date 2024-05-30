@@ -49,7 +49,6 @@ pub struct SendSMCommon {
     pub refund_keypair: KeyPair,
 }
 
-#[allow(clippy::large_enum_variant)]
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
 pub enum SendSMState {
     Funding,

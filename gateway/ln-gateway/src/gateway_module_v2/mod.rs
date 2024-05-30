@@ -139,7 +139,6 @@ impl ClientModule for GatewayClientModuleV2 {
     }
 }
 
-#[allow(clippy::large_enum_variant)]
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
 pub enum GatewayClientStateMachinesV2 {
     Send(SendStateMachine),

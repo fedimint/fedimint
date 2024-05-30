@@ -840,7 +840,6 @@ pub enum FetchInvoiceError {
     InvalidInvoiceAmount,
 }
 
-#[allow(clippy::large_enum_variant)]
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
 pub enum LightningClientStateMachines {
     Send(SendStateMachine),

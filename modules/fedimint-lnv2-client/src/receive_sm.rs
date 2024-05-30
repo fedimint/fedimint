@@ -37,7 +37,6 @@ pub struct ReceiveSMCommon {
     pub agg_decryption_key: AggregateDecryptionKey,
 }
 
-#[allow(clippy::large_enum_variant)]
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
 pub enum ReceiveSMState {
     Pending,
