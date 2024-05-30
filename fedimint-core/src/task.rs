@@ -201,7 +201,7 @@ impl TaskGroup {
         rx
     }
 
-    pub async fn spawn_local<Fut>(
+    pub fn spawn_local<Fut>(
         &self,
         name: impl Into<String>,
         f: impl FnOnce(TaskHandle) -> Fut + 'static,

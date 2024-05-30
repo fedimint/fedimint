@@ -15,7 +15,6 @@
 #![allow(clippy::needless_pass_by_value)]
 #![allow(clippy::return_self_not_must_use)]
 #![allow(clippy::too_many_lines)]
-#![allow(clippy::unused_async)]
 
 use std::ffi;
 

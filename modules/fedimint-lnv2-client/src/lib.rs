@@ -3,7 +3,6 @@
 #![allow(clippy::missing_panics_doc)]
 #![allow(clippy::module_name_repetitions)]
 #![allow(clippy::must_use_candidate)]
-#![allow(clippy::unused_async)]
 
 pub mod api;
 #[cfg(feature = "cli")]

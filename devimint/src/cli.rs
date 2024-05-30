@@ -273,9 +273,7 @@ pub async fn handle_command(cmd: Cmd, common_args: CommonArgs) -> Result<()> {
                                 let pegin_addr = dev_fed
                                     .gw_cln_registered()
                                     .await?
-                                    .get_pegin_addr(
-                                        &dev_fed.fed().await?.calculate_federation_id().await,
-                                    )
+                                    .get_pegin_addr(&dev_fed.fed().await?.calculate_federation_id())
                                     .await?;
                                 dev_fed
                                     .bitcoind()
@@ -288,9 +286,7 @@ pub async fn handle_command(cmd: Cmd, common_args: CommonArgs) -> Result<()> {
                                 let pegin_addr = dev_fed
                                     .gw_lnd_registered()
                                     .await?
-                                    .get_pegin_addr(
-                                        &dev_fed.fed().await?.calculate_federation_id().await,
-                                    )
+                                    .get_pegin_addr(&dev_fed.fed().await?.calculate_federation_id())
                                     .await?;
                                 dev_fed
                                     .bitcoind()

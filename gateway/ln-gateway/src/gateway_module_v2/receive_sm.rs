@@ -91,7 +91,9 @@ impl State for ReceiveStateMachine {
                             self.common.out_point.txid,
                         ),
                         move |_, error, old_state| {
-                            Box::pin(Self::transition_funding_rejected(error, old_state))
+                            Box::pin(
+                                async move { Self::transition_funding_rejected(error, &old_state) },
+                            )
                         },
                     ),
                     StateTransition::new(
@@ -139,9 +141,9 @@ impl ReceiveStateMachine {
         }
     }
 
-    async fn transition_funding_rejected(
+    fn transition_funding_rejected(
         error: String,
-        old_state: ReceiveStateMachine,
+        old_state: &ReceiveStateMachine,
     ) -> ReceiveStateMachine {
         old_state.update(ReceiveSMState::Rejected(error))
     }

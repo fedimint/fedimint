@@ -53,7 +53,7 @@ async fn config_test(gw_type: LightningNodeType) -> anyhow::Result<()> {
         // TODO: Add more configuration verification here
 
         // Leave federation
-        let fed_id = dev_fed.fed().await?.calculate_federation_id().await;
+        let fed_id = dev_fed.fed().await?.calculate_federation_id();
         let fedimint_cli_version = util::FedimintCli::version_or_default().await;
         let gatewayd_version = util::Gatewayd::version_or_default().await;
 

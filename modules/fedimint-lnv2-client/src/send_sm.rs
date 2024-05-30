@@ -89,7 +89,9 @@ impl State for SendStateMachine {
             SendSMState::Funding => {
                 vec![StateTransition::new(
                     Self::await_funding(global_context.clone(), self.common.funding_txid),
-                    move |_, error, old_state| Box::pin(Self::transition_funding(error, old_state)),
+                    move |_, error, old_state| {
+                        Box::pin(async move { Self::transition_funding(error, &old_state) })
+                    },
                 )]
             }
             SendSMState::Funded => {
@@ -142,9 +144,9 @@ impl SendStateMachine {
         global_context.await_tx_accepted(txid).await
     }
 
-    async fn transition_funding(
+    fn transition_funding(
         result: Result<(), String>,
-        old_state: SendStateMachine,
+        old_state: &SendStateMachine,
     ) -> SendStateMachine {
         old_state.update(match result {
             Ok(()) => SendSMState::Funded,

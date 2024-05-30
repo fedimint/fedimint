@@ -34,7 +34,7 @@ use fedimint_dummy_common::{
     fed_key_pair, DummyCommonInit, DummyInput, DummyModuleTypes, DummyOutput, DummyOutputOutcome,
     KIND,
 };
-use futures::{pin_mut, FutureExt, StreamExt};
+use futures::{pin_mut, StreamExt};
 use states::DummyStateMachine;
 use strum::IntoEnumIterator;
 
@@ -374,13 +374,15 @@ impl ClientModuleInit for DummyClientInit {
     fn get_database_migrations(&self) -> BTreeMap<DatabaseVersion, ClientMigrationFn> {
         let mut migrations: BTreeMap<DatabaseVersion, ClientMigrationFn> = BTreeMap::new();
         migrations.insert(DatabaseVersion(0), move |dbtx, _, _| {
-            migrate_to_v1(dbtx).boxed()
+            Box::pin(migrate_to_v1(dbtx))
         });
 
         migrations.insert(
             DatabaseVersion(1),
             move |_, active_states, inactive_states| {
-                migrate_state(active_states, inactive_states, db::get_v1_migrated_state).boxed()
+                Box::pin(async {
+                    migrate_state(active_states, inactive_states, db::get_v1_migrated_state)
+                })
             },
         );
 

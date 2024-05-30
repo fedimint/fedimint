@@ -13,7 +13,6 @@
 #![allow(clippy::similar_names)]
 #![allow(clippy::transmute_ptr_to_ptr)]
 #![allow(clippy::unsafe_derive_deserialize)]
-#![allow(clippy::unused_async)]
 
 //! Fedimint Core library
 //!

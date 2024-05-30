@@ -170,7 +170,9 @@ impl MintInputStateRefund {
     ) -> Vec<StateTransition<MintInputStateMachine>> {
         vec![StateTransition::new(
             Self::await_refund_success(global_context.clone(), self.refund_txid),
-            |_dbtx, result, old_state| Box::pin(Self::transition_refund_success(result, old_state)),
+            |_dbtx, result, old_state| {
+                Box::pin(async { Self::transition_refund_success(result, old_state) })
+            },
         )]
     }
 
@@ -181,7 +183,7 @@ impl MintInputStateRefund {
         global_context.await_tx_accepted(refund_txid).await
     }
 
-    async fn transition_refund_success(
+    fn transition_refund_success(
         result: Result<(), String>,
         old_state: MintInputStateMachine,
     ) -> MintInputStateMachine {

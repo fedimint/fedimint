@@ -397,7 +397,7 @@ macro_rules! cmd {
         {
             #[allow(unused)]
             use $crate::util::ToCmdExt;
-            $this.cmd().await
+            $this.cmd()
                 $(.arg($arg))*
                 .kill_on_drop(true)
                 .env("RUST_BACKTRACE", "1")
@@ -520,27 +520,22 @@ where
 
 // used to add `cmd` method.
 pub trait ToCmdExt {
-    type Fut;
-    fn cmd(self) -> Self::Fut;
+    fn cmd(self) -> Command;
 }
 
 // a command that uses self as program name
 impl ToCmdExt for &'_ str {
-    type Fut = std::future::Ready<Command>;
-
-    fn cmd(self) -> Self::Fut {
-        std::future::ready(Command {
+    fn cmd(self) -> Command {
+        Command {
             cmd: tokio::process::Command::new(self),
             args_debug: vec![self.to_owned()],
-        })
+        }
     }
 }
 
 impl ToCmdExt for Vec<String> {
-    type Fut = std::future::Ready<Command>;
-
-    fn cmd(self) -> Self::Fut {
-        std::future::ready(to_command(self))
+    fn cmd(self) -> Command {
+        to_command(self)
     }
 }
 
@@ -636,7 +631,7 @@ fn version_hash_to_version(version_hash: &str) -> Result<Version> {
 
 pub struct FedimintdCmd;
 impl FedimintdCmd {
-    pub async fn cmd(self) -> Command {
+    pub fn cmd(self) -> Command {
         to_command(get_command_str_for_alias(
             &[FM_FEDIMINTD_BASE_EXECUTABLE_ENV],
             &[FEDIMINTD_FALLBACK],
@@ -658,7 +653,7 @@ impl FedimintdCmd {
 
 pub struct Gatewayd;
 impl Gatewayd {
-    pub async fn cmd(self) -> Command {
+    pub fn cmd(self) -> Command {
         to_command(get_command_str_for_alias(
             &[FM_GATEWAYD_BASE_EXECUTABLE_ENV],
             &[GATEWAYD_FALLBACK],
@@ -680,7 +675,7 @@ impl Gatewayd {
 
 pub struct FedimintCli;
 impl FedimintCli {
-    pub async fn cmd(self) -> Command {
+    pub fn cmd(self) -> Command {
         to_command(get_command_str_for_alias(
             &[FM_MINT_CLIENT_ENV],
             &get_fedimint_cli_path()
@@ -896,7 +891,7 @@ impl FedimintCli {
 
 pub struct LoadTestTool;
 impl LoadTestTool {
-    pub async fn cmd(self) -> Command {
+    pub fn cmd(self) -> Command {
         to_command(get_command_str_for_alias(
             &[FM_LOAD_TEST_TOOL_BASE_EXECUTABLE_ENV],
             &[LOAD_TEST_TOOL_FALLBACK],
@@ -906,7 +901,7 @@ impl LoadTestTool {
 
 pub struct GatewayCli;
 impl GatewayCli {
-    pub async fn cmd(self) -> Command {
+    pub fn cmd(self) -> Command {
         to_command(get_command_str_for_alias(
             &[],
             &get_gateway_cli_path()
@@ -927,7 +922,7 @@ impl GatewayCli {
 
 pub struct GatewayClnCli;
 impl GatewayClnCli {
-    pub async fn cmd(self) -> Command {
+    pub fn cmd(self) -> Command {
         to_command(get_command_str_for_alias(
             &[FM_GWCLI_CLN_ENV],
             &["gateway-cln"],
@@ -937,7 +932,7 @@ impl GatewayClnCli {
 
 pub struct GatewayLndCli;
 impl GatewayLndCli {
-    pub async fn cmd(self) -> Command {
+    pub fn cmd(self) -> Command {
         to_command(get_command_str_for_alias(
             &[FM_GWCLI_LND_ENV],
             &["gateway-lnd"],
@@ -947,7 +942,7 @@ impl GatewayLndCli {
 
 pub struct LnCli;
 impl LnCli {
-    pub async fn cmd(self) -> Command {
+    pub fn cmd(self) -> Command {
         to_command(get_command_str_for_alias(
             &[FM_LNCLI_ENV],
             &get_lncli_path()
@@ -960,7 +955,7 @@ impl LnCli {
 
 pub struct ClnLightningCli;
 impl ClnLightningCli {
-    pub async fn cmd(self) -> Command {
+    pub fn cmd(self) -> Command {
         to_command(get_command_str_for_alias(
             &[FM_LIGHTNING_CLI_ENV],
             &get_lightning_cli_path()
@@ -973,7 +968,7 @@ impl ClnLightningCli {
 
 pub struct BitcoinCli;
 impl BitcoinCli {
-    pub async fn cmd(self) -> Command {
+    pub fn cmd(self) -> Command {
         to_command(get_command_str_for_alias(
             &[FM_BTC_CLIENT_ENV],
             &get_bitcoin_cli_path()
@@ -986,7 +981,7 @@ impl BitcoinCli {
 
 pub struct Bitcoind;
 impl Bitcoind {
-    pub async fn cmd(self) -> Command {
+    pub fn cmd(self) -> Command {
         to_command(get_command_str_for_alias(
             &[FM_BITCOIND_BASE_EXECUTABLE_ENV],
             &[BITCOIND_FALLBACK],
@@ -996,7 +991,7 @@ impl Bitcoind {
 
 pub struct Lightningd;
 impl Lightningd {
-    pub async fn cmd(self) -> Command {
+    pub fn cmd(self) -> Command {
         to_command(get_command_str_for_alias(
             &[FM_LIGHTNINGD_BASE_EXECUTABLE_ENV],
             &[LIGHTNINGD_FALLBACK],
@@ -1006,7 +1001,7 @@ impl Lightningd {
 
 pub struct Lnd;
 impl Lnd {
-    pub async fn cmd(self) -> Command {
+    pub fn cmd(self) -> Command {
         to_command(get_command_str_for_alias(
             &[FM_LND_BASE_EXECUTABLE_ENV],
             &[LND_FALLBACK],
@@ -1016,7 +1011,7 @@ impl Lnd {
 
 pub struct Electrs;
 impl Electrs {
-    pub async fn cmd(self) -> Command {
+    pub fn cmd(self) -> Command {
         to_command(get_command_str_for_alias(
             &[FM_ELECTRS_BASE_EXECUTABLE_ENV],
             &[ELECTRS_FALLBACK],
@@ -1026,7 +1021,7 @@ impl Electrs {
 
 pub struct Esplora;
 impl Esplora {
-    pub async fn cmd(self) -> Command {
+    pub fn cmd(self) -> Command {
         to_command(get_command_str_for_alias(
             &[FM_ESPLORA_BASE_EXECUTABLE_ENV],
             &[ESPLORA_FALLBACK],
@@ -1036,7 +1031,7 @@ impl Esplora {
 
 pub struct Recoverytool;
 impl Recoverytool {
-    pub async fn cmd(self) -> Command {
+    pub fn cmd(self) -> Command {
         to_command(get_command_str_for_alias(
             &[FM_RECOVERYTOOL_BASE_EXECUTABLE_ENV],
             &[RECOVERYTOOL_FALLBACK],
@@ -1046,7 +1041,7 @@ impl Recoverytool {
 
 pub struct Faucet;
 impl Faucet {
-    pub async fn cmd(self) -> Command {
+    pub fn cmd(self) -> Command {
         to_command(get_command_str_for_alias(
             &[FM_FAUCET_BASE_EXECUTABLE_ENV],
             &[FAUCET_FALLBACK],

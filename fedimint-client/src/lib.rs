@@ -9,7 +9,7 @@
 #![allow(clippy::must_use_candidate)]
 #![allow(clippy::return_self_not_must_use)]
 #![allow(clippy::too_many_lines)]
-#![allow(clippy::unused_async)]
+#![allow(clippy::type_complexity)]
 
 //! # Client library for fedimintd
 //!

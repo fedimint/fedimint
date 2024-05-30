@@ -147,7 +147,7 @@ impl FundingOfferState {
                 context.clone(),
             ),
             move |_dbtx, result, old_state| {
-                Box::pin(Self::transition_funding_success(result, old_state))
+                Box::pin(async { Self::transition_funding_success(result, old_state) })
             },
         )]
     }
@@ -191,7 +191,7 @@ impl FundingOfferState {
         unreachable!("there is too many u64s to ever get here")
     }
 
-    async fn transition_funding_success(
+    fn transition_funding_success(
         result: Result<(), IncomingSmError>,
         old_state: IncomingStateMachine,
     ) -> IncomingStateMachine {

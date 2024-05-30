@@ -94,7 +94,8 @@ impl WaitForPreimageState {
         vec![StateTransition::new(
             Self::await_preimage(context, common.clone()),
             move |_dbtx, result, _old_state| {
-                Box::pin(Self::transition_complete_htlc(result, common.clone()))
+                let common = common.clone();
+                Box::pin(async { Self::transition_complete_htlc(result, common) })
             },
         )]
     }
@@ -126,7 +127,7 @@ impl WaitForPreimageState {
         }
     }
 
-    async fn transition_complete_htlc(
+    fn transition_complete_htlc(
         result: Result<Preimage, CompleteHtlcError>,
         common: GatewayCompleteCommon,
     ) -> GatewayCompleteStateMachine {
@@ -166,7 +167,10 @@ impl CompleteHtlcState {
     ) -> Vec<StateTransition<GatewayCompleteStateMachine>> {
         vec![StateTransition::new(
             Self::await_complete_htlc(context, common.clone(), self.outcome.clone()),
-            move |_dbtx, result, _| Box::pin(Self::transition_success(result, common.clone())),
+            move |_dbtx, result, _| {
+                let common = common.clone();
+                Box::pin(async move { Self::transition_success(&result, common) })
+            },
         )]
     }
 
@@ -211,8 +215,8 @@ impl CompleteHtlcState {
         }
     }
 
-    async fn transition_success(
-        result: Result<(), CompleteHtlcError>,
+    fn transition_success(
+        result: &Result<(), CompleteHtlcError>,
         common: GatewayCompleteCommon,
     ) -> GatewayCompleteStateMachine {
         match result {

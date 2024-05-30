@@ -56,12 +56,14 @@ impl State for DepositStateMachine {
                             created_state.tweak_key,
                         ),
                         |_db, (btc_tx, out_idx), old_state| {
-                            Box::pin(transition_tx_seen(old_state, btc_tx, out_idx))
+                            Box::pin(async move { transition_tx_seen(old_state, btc_tx, out_idx) })
                         },
                     ),
                     StateTransition::new(
                         await_deposit_address_timeout(created_state.timeout_at),
-                        |_db, (), old_state| Box::pin(transition_deposit_timeout(old_state)),
+                        |_db, (), old_state| {
+                            Box::pin(async move { transition_deposit_timeout(&old_state) })
+                        },
                     ),
                 ]
             }
@@ -151,7 +153,7 @@ async fn await_created_btc_transaction_submitted(
     unreachable!()
 }
 
-async fn transition_tx_seen(
+fn transition_tx_seen(
     old_state: DepositStateMachine,
     btc_transaction: bitcoin::Transaction,
     out_idx: u32,
@@ -180,7 +182,7 @@ async fn await_deposit_address_timeout(timeout_at: SystemTime) {
     }
 }
 
-async fn transition_deposit_timeout(old_state: DepositStateMachine) -> DepositStateMachine {
+fn transition_deposit_timeout(old_state: &DepositStateMachine) -> DepositStateMachine {
     assert!(
         matches!(old_state.state, DepositStates::Created(_)),
         "Invalid previous state"

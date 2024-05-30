@@ -732,12 +732,11 @@ impl GatewayPayWaitForSwapPreimage {
         vec![StateTransition::new(
             Self::await_preimage(context, federation_id, operation_id, contract.clone()),
             move |_dbtx, result, _old_state| {
-                let c2 = contract.clone();
-                Box::pin(Self::transition_claim_outgoing_contract(
-                    common.clone(),
-                    result,
-                    c2,
-                ))
+                let common = common.clone();
+                let contract = contract.clone();
+                Box::pin(async move {
+                    Self::transition_claim_outgoing_contract(common, result, contract)
+                })
             },
         )]
     }
@@ -818,7 +817,7 @@ impl GatewayPayWaitForSwapPreimage {
         .await
     }
 
-    async fn transition_claim_outgoing_contract(
+    fn transition_claim_outgoing_contract(
         common: GatewayPayCommon,
         result: Result<Preimage, OutgoingPaymentError>,
         contract: OutgoingContractAccount,

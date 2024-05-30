@@ -126,7 +126,7 @@ impl MintOutputStatesCreated {
             // Check if transaction was rejected
             StateTransition::new(
                 Self::await_tx_rejected(global_context.clone(), common),
-                |_dbtx, (), state| Box::pin(Self::transition_tx_rejected(state)),
+                |_dbtx, (), state| Box::pin(async move { Self::transition_tx_rejected(&state) }),
             ),
             // Check for output outcome
             StateTransition::new(
@@ -161,9 +161,7 @@ impl MintOutputStatesCreated {
         std::future::pending::<()>().await;
     }
 
-    async fn transition_tx_rejected<'a>(
-        old_state: MintOutputStateMachine,
-    ) -> MintOutputStateMachine {
+    fn transition_tx_rejected(old_state: &MintOutputStateMachine) -> MintOutputStateMachine {
         assert!(matches!(old_state.state, MintOutputStates::Created(_)));
 
         MintOutputStateMachine {

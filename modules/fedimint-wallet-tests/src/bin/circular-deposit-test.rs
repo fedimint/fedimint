@@ -44,7 +44,6 @@ async fn assert_withdrawal(
     let tx_hex = poll("Waiting for transaction in mempool", || async {
         bitcoind
             .get_raw_transaction(&txid)
-            .await
             .context("getrawtransaction")
             .map_err(ControlFlow::Continue)
     })
@@ -66,7 +65,7 @@ async fn assert_withdrawal(
     // Balance checks
     let send_client_post_balance = send_client.balance().await?;
     let receive_client_post_balance = receive_client.balance().await?;
-    let fed_deposit_fees_msats = fed.deposit_fees().await?.msats;
+    let fed_deposit_fees_msats = fed.deposit_fees()?.msats;
     let onchain_fees_msats = withdraw_res["fees_sat"].as_u64().unwrap() * 1000;
 
     let expected_send_client_balance = if send_client.get_name() == receive_client.get_name() {

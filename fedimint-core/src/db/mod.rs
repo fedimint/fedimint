@@ -263,7 +263,7 @@ impl<RawDatabase: IRawDatabase + MaybeSend + 'static> IDatabase for BaseDatabase
         self.notifications.register(key).await;
     }
     async fn notify(&self, key: &[u8]) {
-        self.notifications.notify(key).await;
+        self.notifications.notify(key);
     }
 
     fn prefix_len(&self) -> usize {

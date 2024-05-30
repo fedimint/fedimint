@@ -13,7 +13,6 @@
 #![allow(clippy::similar_names)]
 #![allow(clippy::struct_field_names)]
 #![allow(clippy::too_many_lines)]
-#![allow(clippy::unused_async)]
 #![allow(clippy::wildcard_imports)]
 
 pub mod client;

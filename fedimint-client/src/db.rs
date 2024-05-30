@@ -638,7 +638,7 @@ type MigrateStateFn =
 /// Migrates a particular state by looping over all active and inactive states.
 /// If the `migrate` closure returns `None`, this state was not migrated and
 /// should be added to the new state machine vectors.
-pub async fn migrate_state(
+pub fn migrate_state(
     active_states: Vec<(Vec<u8>, OperationId)>,
     inactive_states: Vec<(Vec<u8>, OperationId)>,
     migrate: MigrateStateFn,
