@@ -2636,6 +2636,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "fedimint-webkv"
+version = "0.4.0-alpha"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "fedimint-core",
+ "futures",
+ "tempfile",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+ "webkv",
+]
+
+[[package]]
 name = "fedimintd"
 version = "0.4.0-alpha"
 dependencies = [
@@ -3485,6 +3500,15 @@ name = "itertools"
 version = "0.12.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ba291022dbbd398a455acf126c1e341954079855bc60dfdda641363bd6922569"
+dependencies = [
+ "either",
+]
+
+[[package]]
+name = "itertools"
+version = "0.13.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "413ee7dfc52ee1a4949ceeb7dbc8a33f2d6c088194d9f922fb8318faf1f01186"
 dependencies = [
  "either",
 ]
@@ -5934,6 +5958,16 @@ checksum = "5a6580f308b1fad9207618087a65c04e7a10bc77e02c8e84e9b00dd4b12fa0bb"
 dependencies = [
  "js-sys",
  "wasm-bindgen",
+]
+
+[[package]]
+name = "webkv"
+version = "0.1.0"
+source = "git+https://github.com/elsirion/webkv#c51821d4c6c688052d89e8014cf7ef312d4cfe09"
+dependencies = [
+ "anyhow",
+ "itertools 0.13.0",
+ "tracing",
 ]
 
 [[package]]
