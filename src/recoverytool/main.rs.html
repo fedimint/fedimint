@@ -496,7 +496,6 @@
 <a href="#496" id="496">496</a>
 <a href="#497" id="497">497</a>
 <a href="#498" id="498">498</a>
-<a href="#499" id="499">499</a>
 </pre></div><pre class="rust"><code><span class="attr">#![warn(clippy::pedantic)]
 #![allow(clippy::default_trait_access)]
 #![allow(clippy::too_many_lines)]
@@ -732,12 +731,12 @@
                             })
                             .collect();
 
-                        <span class="comment">// Get all user-submitted tweaks and if we did a peg-out tx also return the
-                        // consensus round's tweak used for change
-                        </span><span class="kw">let </span>(<span class="kw-2">mut </span>peg_in_tweaks, peg_out_present) =
-                            input_tweaks_output_present(transaction_cis.into_iter());
+                        <span class="comment">// Get all user-submitted tweaks and number of peg-out transactions in
+                        // session
+                        </span><span class="kw">let </span>(<span class="kw-2">mut </span>peg_in_tweaks, peg_out_count) =
+                            input_tweaks_and_peg_out_count(transaction_cis.into_iter());
 
-                        <span class="kw">if </span>peg_out_present {
+                        <span class="kw">for _ in </span><span class="number">0</span>..=peg_out_count {
                             <span class="macro">info!</span>(<span class="string">"Found change output, adding tweak {change_tweak_idx} to list"</span>);
                             peg_in_tweaks.insert(nonce_from_idx(change_tweak_idx));
                             change_tweak_idx += <span class="number">1</span>;
@@ -763,40 +762,39 @@
     <span class="prelude-val">Ok</span>(())
 }
 
-<span class="kw">fn </span>input_tweaks_output_present(
+<span class="kw">fn </span>input_tweaks_and_peg_out_count(
     transactions: <span class="kw">impl </span>Iterator&lt;Item = Transaction&gt;,
-) -&gt; (BTreeSet&lt;[u8; <span class="number">33</span>]&gt;, bool) {
-    <span class="kw">let </span><span class="kw-2">mut </span>contains_peg_out = <span class="bool-val">false</span>;
-    <span class="kw">let </span>tweaks =
-        transactions
-            .flat_map(|tx| {
-                <span class="kw">if </span>tx.outputs.iter().any(|output| {
-                    output.module_instance_id() == LEGACY_HARDCODED_INSTANCE_ID_WALLET
-                }) {
-                    contains_peg_out = <span class="bool-val">true</span>;
+) -&gt; (BTreeSet&lt;[u8; <span class="number">33</span>]&gt;, u64) {
+    <span class="kw">let </span><span class="kw-2">mut </span>peg_out_count = <span class="number">0</span>;
+    <span class="kw">let </span>tweaks = transactions
+        .flat_map(|tx| {
+            tx.outputs.iter().for_each(|output| {
+                <span class="kw">if </span>output.module_instance_id() == LEGACY_HARDCODED_INSTANCE_ID_WALLET {
+                    peg_out_count += <span class="number">1</span>;
+                }
+            });
+
+            tx.inputs.into_iter().filter_map(|input| {
+                <span class="kw">if </span>input.module_instance_id() != LEGACY_HARDCODED_INSTANCE_ID_WALLET {
+                    <span class="kw">return </span><span class="prelude-val">None</span>;
                 }
 
-                tx.inputs.into_iter().filter_map(|input| {
-                    <span class="kw">if </span>input.module_instance_id() != LEGACY_HARDCODED_INSTANCE_ID_WALLET {
-                        <span class="kw">return </span><span class="prelude-val">None</span>;
-                    }
-
-                    <span class="prelude-val">Some</span>(
-                        input
-                            .as_any()
-                            .downcast_ref::&lt;WalletInput&gt;()
-                            .expect(<span class="string">"Instance id mapping incorrect"</span>)
-                            .ensure_v0_ref()
-                            .expect(<span class="string">"recoverytool only supports v0 wallet inputs"</span>)
-                            .<span class="number">0
-                            </span>.tweak_contract_key()
-                            .serialize(),
-                    )
-                })
+                <span class="prelude-val">Some</span>(
+                    input
+                        .as_any()
+                        .downcast_ref::&lt;WalletInput&gt;()
+                        .expect(<span class="string">"Instance id mapping incorrect"</span>)
+                        .ensure_v0_ref()
+                        .expect(<span class="string">"recoverytool only supports v0 wallet inputs"</span>)
+                        .<span class="number">0
+                        </span>.tweak_contract_key()
+                        .serialize(),
+                )
             })
-            .collect::&lt;BTreeSet&lt;<span class="kw">_</span>&gt;&gt;();
+        })
+        .collect::&lt;BTreeSet&lt;<span class="kw">_</span>&gt;&gt;();
 
-    (tweaks, contains_peg_out)
+    (tweaks, peg_out_count)
 }
 
 <span class="kw">fn </span>tweak_descriptor(

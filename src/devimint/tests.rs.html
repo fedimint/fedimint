@@ -2590,6 +2590,19 @@
 <a href="#2590" id="2590">2590</a>
 <a href="#2591" id="2591">2591</a>
 <a href="#2592" id="2592">2592</a>
+<a href="#2593" id="2593">2593</a>
+<a href="#2594" id="2594">2594</a>
+<a href="#2595" id="2595">2595</a>
+<a href="#2596" id="2596">2596</a>
+<a href="#2597" id="2597">2597</a>
+<a href="#2598" id="2598">2598</a>
+<a href="#2599" id="2599">2599</a>
+<a href="#2600" id="2600">2600</a>
+<a href="#2601" id="2601">2601</a>
+<a href="#2602" id="2602">2602</a>
+<a href="#2603" id="2603">2603</a>
+<a href="#2604" id="2604">2604</a>
+<a href="#2605" id="2605">2605</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashSet};
 <span class="kw">use </span>std::io::Write;
 <span class="kw">use </span>std::ops::ControlFlow;
@@ -4594,52 +4607,65 @@
         </span>fed.pegin_client(<span class="kw-2">*</span>sats - deposit_fees, <span class="kw-2">&amp;</span>client).<span class="kw">await</span><span class="question-mark">?</span>;
     }
 
-    <span class="comment">// Initiate a withdrawal to verify the recoverytool recognizes change outputs
-    </span><span class="kw">let </span>withdrawal_address = bitcoind.get_new_address().<span class="kw">await</span><span class="question-mark">?</span>;
-    <span class="kw">let </span>withdraw_res = <span class="macro">cmd!</span>(
-        client,
-        <span class="string">"withdraw"</span>,
-        <span class="string">"--address"</span>,
-        <span class="kw-2">&amp;</span>withdrawal_address,
-        <span class="string">"--amount"</span>,
-        <span class="string">"5000 sat"
-    </span>)
-    .out_json()
-    .<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="kw">async fn </span>withdraw(
+        client: <span class="kw-2">&amp;</span>Client,
+        bitcoind: <span class="kw-2">&amp;</span><span class="kw">crate</span>::external::Bitcoind,
+        fed_utxos_sats: <span class="kw-2">&amp;mut </span>HashSet&lt;u64&gt;,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+        <span class="kw">let </span>withdrawal_address = bitcoind.get_new_address().<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>withdraw_res = <span class="macro">cmd!</span>(
+            client,
+            <span class="string">"withdraw"</span>,
+            <span class="string">"--address"</span>,
+            <span class="kw-2">&amp;</span>withdrawal_address,
+            <span class="string">"--amount"</span>,
+            <span class="string">"5000 sat"
+        </span>)
+        .out_json()
+        .<span class="kw">await</span><span class="question-mark">?</span>;
 
-    <span class="kw">let </span>fees_sat = withdraw_res[<span class="string">"fees_sat"</span>]
-        .as_u64()
-        .expect(<span class="string">"withdrawal should contain fees"</span>);
-    <span class="kw">let </span>txid: Txid = withdraw_res[<span class="string">"txid"</span>]
-        .as_str()
-        .expect(<span class="string">"withdrawal should contain txid string"</span>)
-        .parse()
-        .expect(<span class="string">"txid should be parsable"</span>);
-    <span class="kw">let </span>tx_hex = poll(<span class="string">"Waiting for transaction in mempool"</span>, || <span class="kw">async </span>{
-        bitcoind
-            .get_raw_transaction(<span class="kw-2">&amp;</span>txid)
-            .<span class="kw">await
-            </span>.context(<span class="string">"getrawtransaction"</span>)
-            .map_err(ControlFlow::Continue)
-    })
-    .<span class="kw">await
-    </span>.expect(<span class="string">"withdrawal tx failed to reach mempool"</span>);
+        <span class="kw">let </span>fees_sat = withdraw_res[<span class="string">"fees_sat"</span>]
+            .as_u64()
+            .expect(<span class="string">"withdrawal should contain fees"</span>);
+        <span class="kw">let </span>txid: Txid = withdraw_res[<span class="string">"txid"</span>]
+            .as_str()
+            .expect(<span class="string">"withdrawal should contain txid string"</span>)
+            .parse()
+            .expect(<span class="string">"txid should be parsable"</span>);
+        <span class="kw">let </span>tx_hex = poll(<span class="string">"Waiting for transaction in mempool"</span>, || <span class="kw">async </span>{
+            bitcoind
+                .get_raw_transaction(<span class="kw-2">&amp;</span>txid)
+                .<span class="kw">await
+                </span>.context(<span class="string">"getrawtransaction"</span>)
+                .map_err(ControlFlow::Continue)
+        })
+        .<span class="kw">await
+        </span>.expect(<span class="string">"withdrawal tx failed to reach mempool"</span>);
 
-    <span class="kw">let </span>tx = bitcoin::Transaction::consensus_decode_hex(<span class="kw-2">&amp;</span>tx_hex, <span class="kw-2">&amp;</span>Default::default())<span class="question-mark">?</span>;
-    <span class="macro">assert_eq!</span>(tx.input.len(), <span class="number">1</span>);
-    <span class="macro">assert_eq!</span>(tx.output.len(), <span class="number">2</span>);
+        <span class="kw">let </span>tx = bitcoin::Transaction::consensus_decode_hex(<span class="kw-2">&amp;</span>tx_hex, <span class="kw-2">&amp;</span>Default::default())<span class="question-mark">?</span>;
+        <span class="macro">assert_eq!</span>(tx.input.len(), <span class="number">1</span>);
+        <span class="macro">assert_eq!</span>(tx.output.len(), <span class="number">2</span>);
 
-    <span class="kw">let </span>change_output = tx
-        .output
-        .iter()
-        .find(|o| o.to_owned().script_pubkey != withdrawal_address.script_pubkey())
-        .expect(<span class="string">"withdrawal must have change output"</span>);
-    <span class="macro">assert!</span>(fed_utxos_sats.insert(change_output.value));
+        <span class="kw">let </span>change_output = tx
+            .output
+            .iter()
+            .find(|o| o.to_owned().script_pubkey != withdrawal_address.script_pubkey())
+            .expect(<span class="string">"withdrawal must have change output"</span>);
+        <span class="macro">assert!</span>(fed_utxos_sats.insert(change_output.value));
 
-    <span class="comment">// Remove the utxo consumed from the withdrawal tx
-    </span><span class="kw">let </span>total_output_sats = tx.output.iter().map(|o| o.value).sum::&lt;u64&gt;();
-    <span class="kw">let </span>input_sats = total_output_sats + fees_sat;
-    <span class="macro">assert!</span>(fed_utxos_sats.remove(<span class="kw-2">&amp;</span>input_sats));
+        <span class="comment">// Remove the utxo consumed from the withdrawal tx
+        </span><span class="kw">let </span>total_output_sats = tx.output.iter().map(|o| o.value).sum::&lt;u64&gt;();
+        <span class="kw">let </span>input_sats = total_output_sats + fees_sat;
+        <span class="macro">assert!</span>(fed_utxos_sats.remove(<span class="kw-2">&amp;</span>input_sats));
+
+        <span class="prelude-val">Ok</span>(())
+    }
+
+    <span class="comment">// Initiate multiple withdrawals in a session to verify the recoverytool
+    // recognizes change outputs
+    </span><span class="kw">for _ in </span><span class="number">0</span>..<span class="number">2 </span>{
+        withdraw(<span class="kw-2">&amp;</span>client, <span class="kw-2">&amp;</span>bitcoind, <span class="kw-2">&amp;mut </span>fed_utxos_sats).<span class="kw">await</span><span class="question-mark">?</span>;
+    }
 
     <span class="kw">let </span>total_fed_sats = fed_utxos_sats.iter().sum::&lt;u64&gt;();
     fed.finalize_mempool_tx().<span class="kw">await</span><span class="question-mark">?</span>;
