@@ -39,6 +39,7 @@ async fn handle_command() -> anyhow::Result<()> {
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
+    println!("asfdasfd");
     let start_time = Instant::now();
     handle_version_hash_command(fedimint_build_code_version_env!());
     let res = match handle_command().await {
