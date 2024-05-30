@@ -539,7 +539,7 @@ impl ConsensusEngine {
             .expect("Committing consensus epoch failed");
 
         CONSENSUS_ITEMS_PROCESSED_TOTAL
-            .with_label_values(&[peer_id_str])
+            .with_label_values(&[&self.peer_id_str[peer.to_usize()]])
             .inc();
         timing_prom.observe_duration();
 
@@ -559,11 +559,12 @@ impl ConsensusEngine {
         match consensus_item {
             ConsensusItem::Module(module_item) => {
                 let instance_id = module_item.module_instance_id();
+
                 let module_dbtx = &mut dbtx.to_ref_with_prefix_module_id(instance_id);
 
                 self.modules
                     .get_expect(instance_id)
-                    .process_consensus_item(module_dbtx, module_item, peer_id)
+                    .process_consensus_item(module_dbtx, &module_item, peer_id)
                     .await
             }
             ConsensusItem::Transaction(transaction) => {
@@ -583,7 +584,7 @@ impl ConsensusEngine {
                     .map(DynOutput::module_instance_id)
                     .collect::<Vec<_>>();
 
-                process_transaction_with_dbtx(self.modules.clone(), dbtx, transaction)
+                process_transaction_with_dbtx(self.modules.clone(), dbtx, &transaction)
                     .await
                     .map_err(|error| anyhow!(error.to_string()))?;
 
