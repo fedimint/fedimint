@@ -2598,7 +2598,7 @@ pub async fn handle_command(cmd: TestCmd, common_args: CommonArgs) -> Result<()>
         }
         TestCmd::UpgradeTests { binary } => {
             let (process_mgr, _) = setup(common_args).await?;
-            upgrade_tests(&process_mgr, binary).await?;
+            Box::pin(upgrade_tests(&process_mgr, binary)).await?;
         }
     }
     Ok(())

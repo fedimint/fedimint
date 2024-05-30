@@ -334,7 +334,7 @@ pub async fn handle_command(cmd: Cmd, common_args: CommonArgs) -> Result<()> {
                 let daemons = write_ready_file(&process_mgr.globals, result).await?;
                 Ok::<_, anyhow::Error>(daemons)
             };
-            cleanup_on_exit(main, task_group).await?;
+            Box::pin(cleanup_on_exit(main, task_group)).await?;
         }
     }
     Ok(())

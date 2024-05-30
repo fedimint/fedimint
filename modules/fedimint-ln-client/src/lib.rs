@@ -5,7 +5,6 @@
 #![allow(clippy::default_trait_access)]
 #![allow(clippy::doc_markdown)]
 #![allow(clippy::ignored_unit_patterns)]
-#![allow(clippy::large_futures)]
 #![allow(clippy::missing_errors_doc)]
 #![allow(clippy::missing_fields_in_debug)]
 #![allow(clippy::missing_panics_doc)]
