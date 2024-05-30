@@ -6,11 +6,8 @@
 #![allow(clippy::default_trait_access)]
 #![allow(clippy::doc_markdown)]
 #![allow(clippy::explicit_deref_methods)]
-#![allow(clippy::if_not_else)]
-#![allow(clippy::ignored_unit_patterns)]
 #![allow(clippy::implicit_hasher)]
 #![allow(clippy::items_after_statements)]
-#![allow(clippy::large_futures)]
 #![allow(clippy::missing_errors_doc)]
 #![allow(clippy::missing_panics_doc)]
 #![allow(clippy::module_name_repetitions)]
@@ -18,7 +15,6 @@
 #![allow(clippy::needless_pass_by_value)]
 #![allow(clippy::return_self_not_must_use)]
 #![allow(clippy::too_many_lines)]
-#![allow(clippy::unused_async)]
 
 use std::ffi;
 

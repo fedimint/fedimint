@@ -49,7 +49,6 @@ pub struct ReceiveSMCommon {
     pub refund_keypair: KeyPair,
 }
 
-#[allow(clippy::large_enum_variant)]
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
 pub enum ReceiveSMState {
     Funding,
@@ -91,7 +90,9 @@ impl State for ReceiveStateMachine {
                             self.common.out_point.txid,
                         ),
                         move |_, error, old_state| {
-                            Box::pin(Self::transition_funding_rejected(error, old_state))
+                            Box::pin(
+                                async move { Self::transition_funding_rejected(error, &old_state) },
+                            )
                         },
                     ),
                     StateTransition::new(
@@ -134,14 +135,14 @@ impl ReceiveStateMachine {
         txid: TransactionId,
     ) -> String {
         match global_context.await_tx_accepted(txid).await {
-            Ok(()) => pending::<String>().await,
+            Ok(()) => pending().await,
             Err(error) => error,
         }
     }
 
-    async fn transition_funding_rejected(
+    fn transition_funding_rejected(
         error: String,
-        old_state: ReceiveStateMachine,
+        old_state: &ReceiveStateMachine,
     ) -> ReceiveStateMachine {
         old_state.update(ReceiveSMState::Rejected(error))
     }

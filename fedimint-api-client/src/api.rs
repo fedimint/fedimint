@@ -781,7 +781,6 @@ struct GlobalFederationApiWithCache<T> {
     /// potentially long-blocking operation, while the other non-blocking one.
     /// Given how tiny they are, it's not worth complicating things to unify
     /// them.
-    #[allow(clippy::type_complexity)]
     get_session_status_lru:
         Arc<tokio::sync::Mutex<lru::LruCache<u64, Arc<OnceCell<SessionOutcome>>>>>,
 }

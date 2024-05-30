@@ -172,7 +172,6 @@ fn lagrange_multipliers(scalars: Vec<Scalar>) -> Vec<Scalar> {
 
 macro_rules! impl_hash_with_serialized_compressed {
     ($type:ty) => {
-        #[allow(clippy::derived_hash_with_manual_eq)]
         impl std::hash::Hash for $type {
             fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
                 state.write(&self.0.to_compressed());

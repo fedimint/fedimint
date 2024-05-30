@@ -151,17 +151,15 @@ pub async fn build_client(
         Client::load_or_generate_client_secret(client_builder.db_no_decoders()).await?;
     let root_secret = PlainRootSecretStrategy::to_root_secret(&client_secret);
 
-    let client = if !Client::is_initialized(client_builder.db_no_decoders()).await {
-        if let Some(invite_code) = &invite_code {
-            let client_config = fedimint_api_client::download_from_invite_code(invite_code).await?;
-            client_builder
-                .join(root_secret, client_config.clone(), invite_code.api_secret())
-                .await
-        } else {
-            bail!("Database not initialize and invite code not provided");
-        }
-    } else {
+    let client = if Client::is_initialized(client_builder.db_no_decoders()).await {
         client_builder.open(root_secret).await
+    } else if let Some(invite_code) = &invite_code {
+        let client_config = fedimint_api_client::download_from_invite_code(invite_code).await?;
+        client_builder
+            .join(root_secret, client_config.clone(), invite_code.api_secret())
+            .await
+    } else {
+        bail!("Database not initialize and invite code not provided");
     }?;
     Ok((Arc::new(client), invite_code))
 }

@@ -57,7 +57,7 @@ impl Notifications {
     /// Notify a key.
     ///
     /// All the waiters for this keys will be notified.
-    pub async fn notify<K>(&self, key: K)
+    pub fn notify<K>(&self, key: K)
     where
         K: Hash,
     {
@@ -110,7 +110,7 @@ mod tests {
         let notifs = Notifications::new();
         let key = 1;
         let sub = notifs.register(key);
-        notifs.notify(&key).await;
+        notifs.notify(key);
         assert!(future_returns_shortly(sub).await.is_some(), "should notify");
     }
 
@@ -132,8 +132,8 @@ mod tests {
         let key2 = 2;
         let sub1 = notifs.register(key1);
         let sub2 = notifs.register(key2);
-        notifs.notify(&key1).await;
-        notifs.notify(&key2).await;
+        notifs.notify(key1);
+        notifs.notify(key2);
         assert!(
             future_returns_shortly(sub1).await.is_some(),
             "should notify"

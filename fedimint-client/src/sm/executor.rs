@@ -306,9 +306,9 @@ impl Executor {
         let task_runner_inner = self.inner.clone();
         let _handle = self.inner.client_task_group.spawn("sm-executor", |task_handle| async move {
             let executor_runner = task_runner_inner.run(context_gen, sm_update_rx);
-            let task_group_shutdown_rx = task_handle.make_shutdown_rx().await;
+            let task_group_shutdown_rx = task_handle.make_shutdown_rx();
             select! {
-                _ = task_group_shutdown_rx => {
+                () = task_group_shutdown_rx => {
                     debug!("Shutting down state machine executor runner due to task group shutdown signal");
                 },
                 shutdown_happened_sender = shutdown_receiver => {
@@ -321,7 +321,7 @@ impl Executor {
                         }
                     }
                 },
-                _ = executor_runner => {
+                () = executor_runner => {
                     error!("State machine executor runner exited unexpectedly!");
                 },
             };
@@ -448,14 +448,6 @@ impl ExecutorInner {
         global_context_gen: ContextGen,
         mut sm_update_rx: tokio::sync::mpsc::UnboundedReceiver<DynState>,
     ) -> anyhow::Result<()> {
-        let active_states = self.get_active_states().await;
-        trace!(target: LOG_CLIENT_REACTOR, "Starting active states: {:?}", active_states);
-        for (state, _meta) in active_states {
-            self.sm_update_tx
-                .send(state)
-                .expect("Must be able to send state machine to own opened channel");
-        }
-
         /// All futures in the executor resolve to this type, so the handling
         /// code can tell them apart.
         enum ExecutorLoopEvent {
@@ -472,6 +464,14 @@ impl ExecutorInner {
             },
             /// New job receiver disconnected, that can only mean termination
             Disconnected,
+        }
+
+        let active_states = self.get_active_states().await;
+        trace!(target: LOG_CLIENT_REACTOR, "Starting active states: {:?}", active_states);
+        for (state, _meta) in active_states {
+            self.sm_update_tx
+                .send(state)
+                .expect("Must be able to send state machine to own opened channel");
         }
 
         // Keeps track of things already running, so we can deduplicate, just

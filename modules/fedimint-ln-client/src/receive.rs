@@ -130,12 +130,10 @@ impl LightningReceiveSubmittedOffer {
         vec![StateTransition::new(
             Self::await_invoice_confirmation(global_context, txid),
             move |_dbtx, result, old_state| {
-                Box::pin(Self::transition_confirmed_invoice(
-                    result,
-                    old_state,
-                    invoice.clone(),
-                    receiving_key,
-                ))
+                let invoice = invoice.clone();
+                Box::pin(async move {
+                    Self::transition_confirmed_invoice(&result, &old_state, invoice, receiving_key)
+                })
             },
         )]
     }
@@ -149,14 +147,14 @@ impl LightningReceiveSubmittedOffer {
         global_context.await_tx_accepted(txid).await
     }
 
-    async fn transition_confirmed_invoice(
-        result: Result<(), String>,
-        old_state: LightningReceiveStateMachine,
+    fn transition_confirmed_invoice(
+        result: &Result<(), String>,
+        old_state: &LightningReceiveStateMachine,
         invoice: Bolt11Invoice,
         receiving_key: ReceivingKey,
     ) -> LightningReceiveStateMachine {
         match result {
-            Ok(_) => LightningReceiveStateMachine {
+            Ok(()) => LightningReceiveStateMachine {
                 operation_id: old_state.operation_id,
                 state: LightningReceiveStates::ConfirmedInvoice(LightningReceiveConfirmedInvoice {
                     invoice,
@@ -347,9 +345,9 @@ impl LightningReceiveFunded {
             Self::await_claim_success(global_context.clone(), self.txid),
             move |_dbtx, result, old_state| {
                 let out_points = out_points.clone();
-                Box::pin(Self::transition_claim_success(
-                    result, old_state, out_points,
-                ))
+                Box::pin(
+                    async move { Self::transition_claim_success(&result, &old_state, out_points) },
+                )
             },
         )]
     }
@@ -363,13 +361,13 @@ impl LightningReceiveFunded {
         global_context.await_tx_accepted(txid).await
     }
 
-    async fn transition_claim_success(
-        result: Result<(), String>,
-        old_state: LightningReceiveStateMachine,
+    fn transition_claim_success(
+        result: &Result<(), String>,
+        old_state: &LightningReceiveStateMachine,
         out_points: Vec<OutPoint>,
     ) -> LightningReceiveStateMachine {
         match result {
-            Ok(_) => {
+            Ok(()) => {
                 // Claim successful
                 LightningReceiveStateMachine {
                     operation_id: old_state.operation_id,

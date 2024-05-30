@@ -382,14 +382,12 @@ impl Fedimintd {
             }
         });
 
-        let shutdown_future =
-            root_task_group
-                .make_handle()
-                .make_shutdown_rx()
-                .await
-                .then(|_| async {
-                    info!("Shutdown called");
-                });
+        let shutdown_future = root_task_group
+            .make_handle()
+            .make_shutdown_rx()
+            .then(|()| async {
+                info!("Shutdown called");
+            });
 
         shutdown_future.await;
         debug!("Terminating main task");

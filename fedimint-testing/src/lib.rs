@@ -2,7 +2,6 @@
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::default_trait_access)]
 #![allow(clippy::doc_markdown)]
-#![allow(clippy::large_futures)]
 #![allow(clippy::missing_errors_doc)]
 #![allow(clippy::missing_panics_doc)]
 #![allow(clippy::module_name_repetitions)]

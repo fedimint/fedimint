@@ -354,7 +354,7 @@ pub async fn latency_tests(
 
             let start_time = Instant::now();
             if *VERSION_0_3_0_ALPHA <= fedimint_cli_version {
-                let restore_client = Client::create("restore").await?;
+                let restore_client = Client::create("restore")?;
                 cmd!(
                     restore_client,
                     "restore",
@@ -619,7 +619,7 @@ pub async fn cli_tests(dev_fed: DevFed) -> Result<()> {
 
     fed.pegin_gateway(10_000_000, &gw_cln).await?;
 
-    let fed_id = fed.calculate_federation_id().await;
+    let fed_id = fed.calculate_federation_id();
     let invite = fed.invite_code()?;
 
     let fedimint_cli_version = crate::util::FedimintCli::version_or_default().await;
@@ -1028,7 +1028,7 @@ pub async fn cli_tests(dev_fed: DevFed) -> Result<()> {
         try_join!(cln.await_block_processing(), lnd.await_block_processing())?;
     }
     ln_pay(&client, invoice.clone(), lnd_gw_id.clone(), false).await?;
-    let fed_id = fed.calculate_federation_id().await;
+    let fed_id = fed.calculate_federation_id();
 
     let invoice_status = cln
         .request(cln_rpc::model::requests::WaitanyinvoiceRequest {
@@ -1167,7 +1167,6 @@ pub async fn cli_tests(dev_fed: DevFed) -> Result<()> {
         // TODO: distinguish errors from not found
         bitcoind
             .get_raw_transaction(&txid)
-            .await
             .context("getrawtransaction")
             .map_err(ControlFlow::Continue)
     })
@@ -1475,7 +1474,7 @@ pub async fn cli_tests_backup_and_restore(
     // which is a larger refactor.
     {
         let post_balance = if fedimint_cli_version >= *VERSION_0_3_0_ALPHA {
-            let client = Client::create("restore-without-backup").await?;
+            let client = Client::create("restore-without-backup")?;
             let _ = cmd!(
                 client,
                 "restore",
@@ -1524,7 +1523,7 @@ pub async fn cli_tests_backup_and_restore(
     {
         let post_balance = if fedimint_cli_version >= *VERSION_0_3_0_ALPHA {
             let _ = cmd!(reference_client, "backup",).out_json().await?;
-            let client = Client::create("restore-with-backup").await?;
+            let client = Client::create("restore-with-backup")?;
 
             let _ = cmd!(
                 client,
@@ -1627,7 +1626,7 @@ pub async fn lightning_gw_reconnect_test(
     for gw in gateways {
         for i in 0..MAX_RETRIES {
             match do_try_create_and_pay_invoice(&gw, &client, &new_cln, &new_lnd).await {
-                Ok(_) => break,
+                Ok(()) => break,
                 Err(e) => {
                     if i == MAX_RETRIES - 1 {
                         return Err(e);
@@ -1996,7 +1995,7 @@ pub async fn recoverytool_test(dev_fed: DevFed) -> Result<()> {
     let client = fed.new_joined_client("recoverytool-test-client").await?;
 
     let mut fed_utxos_sats = HashSet::from([12_345_000, 23_456_000, 34_567_000]);
-    let deposit_fees = fed.deposit_fees().await?.msats / 1000;
+    let deposit_fees = fed.deposit_fees()?.msats / 1000;
     for sats in &fed_utxos_sats {
         // pegin_client automatically adds fees, so we need to counteract that
         fed.pegin_client(*sats - deposit_fees, &client).await?;
@@ -2030,7 +2029,6 @@ pub async fn recoverytool_test(dev_fed: DevFed) -> Result<()> {
         let tx_hex = poll("Waiting for transaction in mempool", || async {
             bitcoind
                 .get_raw_transaction(&txid)
-                .await
                 .context("getrawtransaction")
                 .map_err(ControlFlow::Continue)
         })
@@ -2502,7 +2500,7 @@ async fn wait_session_outcome(
                 .await
             {
                 Err(e) => Err(ControlFlow::Continue(e)),
-                Ok(_) => Ok(()),
+                Ok(()) => Ok(()),
             }
         },
     )
@@ -2520,7 +2518,7 @@ pub async fn handle_command(cmd: TestCmd, common_args: CommonArgs) -> Result<()>
                 let task_group = task_group.clone();
                 async move {
                     let dev_fed = dev_fed(&process_mgr).await?;
-                    let (_, _, faucet) = try_join!(
+                    let ((), (), faucet) = try_join!(
                         dev_fed.fed.pegin_gateway(20_000, &dev_fed.gw_cln),
                         dev_fed.fed.pegin_gateway(20_000, &dev_fed.gw_lnd),
                         async {
@@ -2598,7 +2596,7 @@ pub async fn handle_command(cmd: TestCmd, common_args: CommonArgs) -> Result<()>
         }
         TestCmd::UpgradeTests { binary } => {
             let (process_mgr, _) = setup(common_args).await?;
-            upgrade_tests(&process_mgr, binary).await?;
+            Box::pin(upgrade_tests(&process_mgr, binary)).await?;
         }
     }
     Ok(())

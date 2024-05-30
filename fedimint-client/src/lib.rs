@@ -3,15 +3,13 @@
 #![allow(clippy::default_trait_access)]
 #![allow(clippy::doc_markdown)]
 #![allow(clippy::explicit_deref_methods)]
-#![allow(clippy::ignored_unit_patterns)]
-#![allow(clippy::items_after_statements)]
 #![allow(clippy::missing_errors_doc)]
 #![allow(clippy::missing_panics_doc)]
 #![allow(clippy::module_name_repetitions)]
 #![allow(clippy::must_use_candidate)]
 #![allow(clippy::return_self_not_must_use)]
 #![allow(clippy::too_many_lines)]
-#![allow(clippy::unused_async)]
+#![allow(clippy::type_complexity)]
 
 //! # Client library for fedimintd
 //!
@@ -1370,8 +1368,6 @@ impl Client {
         db: Database,
         num_responses_sender: watch::Sender<usize>,
     ) {
-        let mut requests = FuturesUnordered::new();
-
         // Make a single request to a peer after a delay
         //
         // The delay is here to unify the type of a future both for initial request and
@@ -1396,6 +1392,8 @@ impl Client {
                 .await,
             )
         }
+
+        let mut requests = FuturesUnordered::new();
 
         for peer_id in num_peers.peer_ids() {
             requests.push(make_request(Duration::ZERO, peer_id, &api));
@@ -1736,13 +1734,13 @@ impl Client {
         for (module_instance_id, f) in module_recoveries {
             completed_stream.push(futures::stream::once(Box::pin(async move {
                 match f.await {
-                    Ok(_) => (module_instance_id, None),
+                    Ok(()) => (module_instance_id, None),
                     Err(err) => {
                         warn!(%err, module_instance_id, "Module recovery failed");
                         // a module recovery that failed reports and error and
                         // just never finishes, so we don't need a separate state
                         // for it
-                        futures::future::pending::<Option<RecoveryProgress>>().await;
+                        futures::future::pending::<()>().await;
                         unreachable!()
                     }
                 }

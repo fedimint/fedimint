@@ -102,7 +102,7 @@ impl Client {
     }
 
     /// Create a [`Client`] that starts with a fresh state.
-    pub async fn create(name: &str) -> Result<Client> {
+    pub fn create(name: &str) -> Result<Client> {
         block_in_place(|| {
             let _lock = Self::client_name_lock(name);
             for i in 0u64.. {
@@ -120,7 +120,7 @@ impl Client {
     }
 
     /// Open or create a [`Client`] that starts with a fresh state.
-    pub async fn open_or_create(name: &str) -> Result<Client> {
+    pub fn open_or_create(name: &str) -> Result<Client> {
         block_in_place(|| {
             let _lock = Self::client_name_lock(name);
             let client = Self {
@@ -144,7 +144,7 @@ impl Client {
     /// Create a [`Client`] that starts with a state that is a copy of
     /// of another one.
     pub async fn new_forked(&self, name: &str) -> Result<Client> {
-        let new = Client::create(name).await?;
+        let new = Client::create(name)?;
 
         cmd!(
             "cp",
@@ -193,7 +193,7 @@ impl Client {
         cmd!(self, "await-deposit", operation_id).run().await
     }
 
-    pub async fn cmd(&self) -> Command {
+    pub fn cmd(&self) -> Command {
         cmd!(
             crate::util::get_fedimint_cli_path(),
             format!("--data-dir={}", self.client_dir().display())
@@ -295,7 +295,7 @@ impl Federation {
 
         let client = JitTryAnyhow::new_try({
             move || async move {
-                let client = Client::open_or_create("default").await?;
+                let client = Client::open_or_create("default")?;
                 let invite_code = Self::invite_code_static()?;
                 if !skip_setup {
                     cmd!(client, "join-federation", invite_code).run().await?;
@@ -312,16 +312,15 @@ impl Federation {
         })
     }
 
-    pub async fn client_config(&self) -> Result<ClientConfig> {
+    pub fn client_config(&self) -> Result<ClientConfig> {
         let cfg_path = self.vars[&0].FM_DATA_DIR.join("client.json");
         load_from_file(&cfg_path)
     }
 
-    pub async fn module_client_config<M: ClientModule>(
+    pub fn module_client_config<M: ClientModule>(
         &self,
     ) -> Result<Option<<M::Common as ModuleCommon>::ClientConfig>> {
-        self.client_config()
-            .await?
+        self.client_config()?
             .modules
             .iter()
             .find_map(|(module_instance_id, module_cfg)| {
@@ -350,10 +349,9 @@ impl Federation {
             .transpose()
     }
 
-    pub async fn deposit_fees(&self) -> Result<Amount> {
+    pub fn deposit_fees(&self) -> Result<Amount> {
         Ok(self
-            .module_client_config::<WalletClientModule>()
-            .await?
+            .module_client_config::<WalletClientModule>()?
             .context("No wallet module found")?
             .fee_consensus
             .peg_in_abs)
@@ -395,7 +393,7 @@ impl Federation {
 
     /// New [`Client`] that already joined `self`
     pub async fn new_joined_client(&self, name: &str) -> Result<Client> {
-        let client = Client::create(name).await?;
+        let client = Client::create(name)?;
         client.join_federation(self.invite_code()?).await?;
         Ok(client)
     }
@@ -509,7 +507,7 @@ impl Federation {
     }
 
     pub async fn pegin_client(&self, amount: u64, client: &Client) -> Result<()> {
-        let deposit_fees_msat = self.deposit_fees().await?.msats;
+        let deposit_fees_msat = self.deposit_fees()?.msats;
         assert_eq!(
             deposit_fees_msat % 1000,
             0,
@@ -530,7 +528,7 @@ impl Federation {
     }
 
     pub async fn pegin_gateway(&self, amount: u64, gw: &super::gatewayd::Gatewayd) -> Result<()> {
-        let deposit_fees_msat = self.deposit_fees().await?.msats;
+        let deposit_fees_msat = self.deposit_fees()?.msats;
         assert_eq!(
             deposit_fees_msat % 1000,
             0,
@@ -538,7 +536,7 @@ impl Federation {
         );
         let deposit_fees = deposit_fees_msat / 1000;
         info!(amount, deposit_fees, "Pegging-in gateway funds");
-        let fed_id = self.calculate_federation_id().await;
+        let fed_id = self.calculate_federation_id();
         let pegin_addr = gw.get_pegin_addr(&fed_id).await?;
         self.bitcoind
             .send_to(pegin_addr, amount + deposit_fees)
@@ -557,9 +555,8 @@ impl Federation {
         Ok(())
     }
 
-    pub async fn calculate_federation_id(&self) -> String {
+    pub fn calculate_federation_id(&self) -> String {
         self.client_config()
-            .await
             .unwrap()
             .global
             .calculate_federation_id()
@@ -567,8 +564,8 @@ impl Federation {
     }
 
     pub async fn await_block_sync(&self) -> Result<u64> {
-        let finality_delay = self.get_finality_delay().await?;
-        let block_count = self.bitcoind.get_block_count().await?;
+        let finality_delay = self.get_finality_delay()?;
+        let block_count = self.bitcoind.get_block_count()?;
         let expected = block_count.saturating_sub(finality_delay.into());
         cmd!(
             self.internal_client().await?,
@@ -581,8 +578,8 @@ impl Federation {
         Ok(expected)
     }
 
-    async fn get_finality_delay(&self) -> Result<u32, anyhow::Error> {
-        let client_config = &self.client_config().await?;
+    fn get_finality_delay(&self) -> Result<u32, anyhow::Error> {
+        let client_config = &self.client_config()?;
         let wallet_cfg = client_config
             .modules
             .get(&LEGACY_HARDCODED_INSTANCE_ID_WALLET)
@@ -662,7 +659,7 @@ impl Federation {
     ///   tx included in block 101
     ///   highest finalized height = 111 - 10 = 101
     pub async fn finalize_mempool_tx(&self) -> Result<()> {
-        let finality_delay = self.get_finality_delay().await?;
+        let finality_delay = self.get_finality_delay()?;
         let blocks_to_mine = finality_delay + 1;
         self.bitcoind.mine_blocks(blocks_to_mine.into()).await?;
         self.await_block_sync().await?;

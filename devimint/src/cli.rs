@@ -163,7 +163,9 @@ pub async fn update_test_dir_link(
     test_dir: &Path,
 ) -> Result<(), anyhow::Error> {
     let make_link = if let Ok(existing) = fs::read_link(link_test_dir).await {
-        if existing != test_dir {
+        if existing == test_dir {
+            false
+        } else {
             debug!(
                 old = %existing.display(),
                 new = %test_dir.display(),
@@ -173,8 +175,6 @@ pub async fn update_test_dir_link(
 
             fs::remove_file(link_test_dir).await?;
             true
-        } else {
-            false
         }
     } else {
         true
@@ -235,7 +235,7 @@ pub async fn handle_command(cmd: Cmd, common_args: CommonArgs) -> Result<()> {
                 exec_user_command(exec).await?;
                 task_group.shutdown();
             }
-            task_group.make_handle().make_shutdown_rx().await.await;
+            task_group.make_handle().make_shutdown_rx().await;
         }
         Cmd::DevFed { exec } => {
             trace!(target: LOG_DEVIMINT, "Starting dev fed");
@@ -253,7 +253,7 @@ pub async fn handle_command(cmd: Cmd, common_args: CommonArgs) -> Result<()> {
                     let gw_pegin_amount = 1_000_000;
                     let client_pegin_amount = 1_000_000;
                     if !skip_setup {
-                        let (_, _, _) = tokio::try_join!(
+                        let ((), _, _) = tokio::try_join!(
                             async {
                                 let (address, operation_id) =
                                     dev_fed.internal_client().await?.get_deposit_addr().await?;
@@ -273,9 +273,7 @@ pub async fn handle_command(cmd: Cmd, common_args: CommonArgs) -> Result<()> {
                                 let pegin_addr = dev_fed
                                     .gw_cln_registered()
                                     .await?
-                                    .get_pegin_addr(
-                                        &dev_fed.fed().await?.calculate_federation_id().await,
-                                    )
+                                    .get_pegin_addr(&dev_fed.fed().await?.calculate_federation_id())
                                     .await?;
                                 dev_fed
                                     .bitcoind()
@@ -288,9 +286,7 @@ pub async fn handle_command(cmd: Cmd, common_args: CommonArgs) -> Result<()> {
                                 let pegin_addr = dev_fed
                                     .gw_lnd_registered()
                                     .await?
-                                    .get_pegin_addr(
-                                        &dev_fed.fed().await?.calculate_federation_id().await,
-                                    )
+                                    .get_pegin_addr(&dev_fed.fed().await?.calculate_federation_id())
                                     .await?;
                                 dev_fed
                                     .bitcoind()
@@ -334,7 +330,7 @@ pub async fn handle_command(cmd: Cmd, common_args: CommonArgs) -> Result<()> {
                 let daemons = write_ready_file(&process_mgr.globals, result).await?;
                 Ok::<_, anyhow::Error>(daemons)
             };
-            cleanup_on_exit(main, task_group).await?;
+            Box::pin(cleanup_on_exit(main, task_group)).await?;
         }
     }
     Ok(())

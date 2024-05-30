@@ -160,7 +160,6 @@ impl Bitcoind {
     pub async fn poll_ready(&self) -> anyhow::Result<()> {
         poll("bitcoind rpc ready", || async {
             self.get_block_count()
-                .await
                 .map_err(ControlFlow::Continue::<anyhow::Error, _>)?;
             Ok(())
         })
@@ -179,7 +178,7 @@ impl Bitcoind {
     /// Fedimint's IBitcoindRpc considers block count the total number of
     /// blocks, where bitcoind's rpc returns the height. Since the genesis
     /// block has height 0, we need to add 1 to get the total block count.
-    pub async fn get_block_count(&self) -> Result<u64> {
+    pub fn get_block_count(&self) -> Result<u64> {
         Ok(block_in_place(|| self.client.get_block_count())? + 1)
     }
 
@@ -187,7 +186,7 @@ impl Bitcoind {
         let start_time = Instant::now();
         debug!(target: LOG_DEVIMINT, ?block_num, "Mining bitcoin blocks");
         let addr = self.get_new_address().await?;
-        let initial_block_count = self.get_block_count().await?;
+        let initial_block_count = self.get_block_count()?;
         self.generate_to_address(block_num, &addr).await?;
         debug!(target: LOG_DEVIMINT,
             elapsed_ms = %start_time.elapsed().as_millis(),
@@ -200,9 +199,9 @@ impl Bitcoind {
         let start_time = Instant::now();
         debug!(target: LOG_DEVIMINT, ?block_num, "Mining bitcoin blocks");
         let addr = self.get_new_address().await?;
-        let initial_block_count = self.get_block_count().await?;
+        let initial_block_count = self.get_block_count()?;
         self.generate_to_address(block_num, &addr).await?;
-        while self.get_block_count().await? < initial_block_count + block_num {
+        while self.get_block_count()? < initial_block_count + block_num {
             trace!(target: LOG_DEVIMINT, ?block_num, "Waiting for blocks to be mined");
             sleep(Duration::from_millis(100)).await;
         }
@@ -230,7 +229,7 @@ impl Bitcoind {
         Ok(proof.encode_hex())
     }
 
-    pub async fn get_raw_transaction(&self, txid: &bitcoin::Txid) -> Result<String> {
+    pub fn get_raw_transaction(&self, txid: &bitcoin::Txid) -> Result<String> {
         let tx = block_in_place(|| self.client.get_raw_transaction(txid, None))?;
         let bytes = tx.consensus_encode_to_vec();
         Ok(bytes.encode_hex())
@@ -264,7 +263,7 @@ impl Bitcoind {
         })?)
     }
 
-    pub async fn get_blockchain_info(&self) -> anyhow::Result<GetBlockchainInfoResult> {
+    pub fn get_blockchain_info(&self) -> anyhow::Result<GetBlockchainInfoResult> {
         Ok(block_in_place(|| self.client.get_blockchain_info())?)
     }
 
@@ -397,7 +396,6 @@ impl Lightningd {
             let btc_height = self
                 .bitcoind
                 .get_blockchain_info()
-                .await
                 .context("bitcoind getblockchaininfo")
                 .map_err(ControlFlow::Continue)?
                 .blocks;

@@ -4,8 +4,6 @@
 #![allow(clippy::cast_sign_loss)]
 #![allow(clippy::default_trait_access)]
 #![allow(clippy::doc_markdown)]
-#![allow(clippy::ignored_unit_patterns)]
-#![allow(clippy::large_futures)]
 #![allow(clippy::missing_errors_doc)]
 #![allow(clippy::missing_fields_in_debug)]
 #![allow(clippy::missing_panics_doc)]
@@ -15,7 +13,6 @@
 #![allow(clippy::similar_names)]
 #![allow(clippy::struct_field_names)]
 #![allow(clippy::too_many_lines)]
-#![allow(clippy::unused_async)]
 #![allow(clippy::wildcard_imports)]
 
 pub mod api;
@@ -80,7 +77,7 @@ use fedimint_ln_common::{
     LightningOutputV0,
 };
 use fedimint_logging::LOG_CLIENT_MODULE_LN;
-use futures::{Future, FutureExt, StreamExt};
+use futures::{Future, StreamExt};
 use incoming::IncomingSmError;
 use lightning_invoice::{
     Bolt11Invoice, Currency, InvoiceBuilder, PaymentSecret, RouteHint, RouteHintHop, RoutingFees,
@@ -363,21 +360,27 @@ impl ClientModuleInit for LightningClientInit {
         migrations.insert(
             DatabaseVersion(1),
             move |_, active_states, inactive_states| {
-                migrate_state(active_states, inactive_states, db::get_v1_migrated_state).boxed()
+                Box::pin(async {
+                    migrate_state(active_states, inactive_states, db::get_v1_migrated_state)
+                })
             },
         );
 
         migrations.insert(
             DatabaseVersion(2),
             move |_, active_states, inactive_states| {
-                migrate_state(active_states, inactive_states, db::get_v2_migrated_state).boxed()
+                Box::pin(async {
+                    migrate_state(active_states, inactive_states, db::get_v2_migrated_state)
+                })
             },
         );
 
         migrations.insert(
             DatabaseVersion(3),
             move |_, active_states, inactive_states| {
-                migrate_state(active_states, inactive_states, db::get_v3_migrated_state).boxed()
+                Box::pin(async {
+                    migrate_state(active_states, inactive_states, db::get_v3_migrated_state)
+                })
             },
         );
 
@@ -713,7 +716,8 @@ impl LightningClientModule {
     }
 
     #[allow(clippy::too_many_arguments)]
-    async fn create_lightning_receive_output<'a>(
+    #[allow(clippy::type_complexity)]
+    fn create_lightning_receive_output<'a>(
         &'a self,
         amount: Amount,
         description: lightning_invoice::Bolt11InvoiceDescription<'a>,
@@ -722,7 +726,7 @@ impl LightningClientModule {
         expiry_time: Option<u64>,
         src_node_id: secp256k1::PublicKey,
         short_channel_id: u64,
-        route_hints: Vec<fedimint_ln_common::route_hints::RouteHint>,
+        route_hints: &[fedimint_ln_common::route_hints::RouteHint],
         network: Network,
     ) -> anyhow::Result<(
         OperationId,
@@ -1412,19 +1416,17 @@ impl LightningClientModule {
 
         debug!(target: LOG_CLIENT_MODULE_LN, ?gateway_id, %amount, "Selected LN gateway for invoice generation");
 
-        let (operation_id, invoice, output, preimage) = self
-            .create_lightning_receive_output(
-                amount,
-                description,
-                receiving_key,
-                rand::rngs::OsRng,
-                expiry_time,
-                src_node_id,
-                short_channel_id,
-                route_hints,
-                self.cfg.network,
-            )
-            .await?;
+        let (operation_id, invoice, output, preimage) = self.create_lightning_receive_output(
+            amount,
+            description,
+            receiving_key,
+            rand::rngs::OsRng,
+            expiry_time,
+            src_node_id,
+            short_channel_id,
+            &route_hints,
+            self.cfg.network,
+        )?;
 
         let tx = TransactionBuilder::new().with_output(self.client_ctx.make_client_output(output));
         let extra_meta = serde_json::to_value(extra_meta).expect("extra_meta is serializable");

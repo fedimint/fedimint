@@ -345,7 +345,6 @@ mod tests {
 
         let (new_active_states, new_inactive_states) =
             migrate_state(old_states.clone(), old_states, get_v1_migrated_state)
-                .await
                 .expect("Migration failed")
                 .expect("Migration produced output");
 
@@ -409,7 +408,6 @@ mod tests {
 
         let (new_active_states, new_inactive_states) =
             migrate_state(old_states.clone(), old_states, get_v1_migrated_state)
-                .await
                 .expect("Migration failed")
                 .expect("Migration produced output");
 
@@ -495,7 +493,6 @@ mod tests {
 
         let (new_active_states, new_inactive_states) =
             migrate_state(old_states.clone(), old_states, get_v2_migrated_state)
-                .await
                 .expect("Migration failed")
                 .expect("Migration produced output");
 

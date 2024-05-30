@@ -4,8 +4,6 @@
 #![allow(clippy::cast_sign_loss)]
 #![allow(clippy::default_trait_access)]
 #![allow(clippy::doc_markdown)]
-#![allow(clippy::ignored_unit_patterns)]
-#![allow(clippy::large_futures)]
 #![allow(clippy::missing_errors_doc)]
 #![allow(clippy::missing_fields_in_debug)]
 #![allow(clippy::missing_panics_doc)]
@@ -15,7 +13,6 @@
 #![allow(clippy::similar_names)]
 #![allow(clippy::struct_field_names)]
 #![allow(clippy::too_many_lines)]
-#![allow(clippy::unused_async)]
 #![allow(clippy::wildcard_imports)]
 
 pub mod client;
@@ -537,12 +534,12 @@ impl Gateway {
     /// service requests.
     pub async fn run(mut self, tg: &mut TaskGroup) -> anyhow::Result<TaskShutdownToken> {
         self.register_clients_timer(tg);
-        self.load_clients().await;
+        Box::pin(self.load_clients()).await;
         self.start_gateway(tg);
         // start webserver last to avoid handling requests before fully initialized
         run_webserver(self.clone(), tg).await?;
         let handle = tg.make_handle();
-        let shutdown_receiver = handle.make_shutdown_rx().await;
+        let shutdown_receiver = handle.make_shutdown_rx();
         Ok(shutdown_receiver)
     }
 
@@ -1484,10 +1481,10 @@ impl Gateway {
             let federation_id = config.invite_code.federation_id();
             let scid = config.mint_channel_id;
 
-            if let Ok(client) = Spanned::try_new(
+            if let Ok(client) = Box::pin(Spanned::try_new(
                 info_span!("client", federation_id  = %federation_id.clone()),
                 self.client_builder.build(config.clone(), self.clone()),
-            )
+            ))
             .await
             {
                 // Registering each client happens in the background, since we're loading

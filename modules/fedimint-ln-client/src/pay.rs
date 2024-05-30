@@ -138,11 +138,10 @@ impl LightningPayCreatedOutgoingLnContract {
                 contract_id,
             ),
             move |_dbtx, result, old_state| {
-                Box::pin(Self::transition_outgoing_contract_funded(
-                    result,
-                    old_state,
-                    gateway.clone(),
-                ))
+                let gateway = gateway.clone();
+                Box::pin(async move {
+                    Self::transition_outgoing_contract_funded(&result, old_state, gateway)
+                })
             },
         )]
     }
@@ -206,8 +205,8 @@ impl LightningPayCreatedOutgoingLnContract {
         Ok(contract.contract.timelock)
     }
 
-    async fn transition_outgoing_contract_funded(
-        result: Result<u32, GatewayPayError>,
+    fn transition_outgoing_contract_funded(
+        result: &Result<u32, GatewayPayError>,
         old_state: LightningPayStateMachine,
         gateway: LightningGateway,
     ) -> LightningPayStateMachine {
@@ -230,7 +229,7 @@ impl LightningPayCreatedOutgoingLnContract {
                     state: LightningPayStates::Funded(LightningPayFunded {
                         payload,
                         gateway,
-                        timelock,
+                        timelock: *timelock,
                         funding_time: fedimint_core::time::now(),
                     }),
                 }
@@ -500,7 +499,7 @@ async fn await_contract_timeout(global_context: DynGlobalClientContext, timelock
             .wait_block_height(u64::from(timelock))
             .await
         {
-            Ok(_) => return,
+            Ok(()) => return,
             Err(error) => error!("Error waiting for block height: {timelock} {error:?}"),
         }
 

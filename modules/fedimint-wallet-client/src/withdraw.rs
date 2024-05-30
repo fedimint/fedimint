@@ -42,7 +42,9 @@ impl State for WithdrawStateMachine {
                         self.operation_id,
                         created.clone(),
                     ),
-                    |_dbtx, res, old_state| Box::pin(transition_withdraw_processed(res, old_state)),
+                    |_dbtx, res, old_state| {
+                        Box::pin(async move { transition_withdraw_processed(res, &old_state) })
+                    },
                 )]
             }
             WithdrawStates::Success(_) | WithdrawStates::Aborted(_) => {
@@ -101,9 +103,9 @@ async fn await_withdraw_processed(
     }
 }
 
-async fn transition_withdraw_processed(
+fn transition_withdraw_processed(
     res: Result<Txid, String>,
-    old_state: WithdrawStateMachine,
+    old_state: &WithdrawStateMachine,
 ) -> WithdrawStateMachine {
     assert!(
         matches!(old_state.state, WithdrawStates::Created(_)),

@@ -199,12 +199,12 @@ where
             .with_context(|| anyhow::anyhow!("Failed to listen on {}", cfg.bind_addr))
             .expect("Could not bind port");
 
-        let mut shutdown_rx = task_handle.make_shutdown_rx().await;
+        let mut shutdown_rx = task_handle.make_shutdown_rx();
 
         while !task_handle.is_shutting_down() {
             let new_connection = tokio::select! {
                 maybe_msg = listener.next() => { maybe_msg },
-                _ = &mut shutdown_rx => { break; },
+                () = &mut shutdown_rx => { break; },
             };
 
             let (peer, connection) = match new_connection.expect("Listener closed") {
@@ -256,7 +256,7 @@ where
         // never going to be any message. This avoids panic on `select_all` with
         // no futures.
         if self.connections.is_empty() {
-            std::future::pending::<T>().await;
+            std::future::pending::<()>().await;
         }
 
         // TODO: optimize, don't throw away remaining futures
@@ -365,10 +365,10 @@ where
             Some(msg_res) = connected.connection.next() => {
                 self.receive_message(connected, msg_res).await
             },
-            _ = sleep_until(connected.next_ping) => {
+            () = sleep_until(connected.next_ping) => {
                 self.send_ping(connected).await
             },
-            _ = task_handle.make_shutdown_rx().await => {
+            () = task_handle.make_shutdown_rx() => {
                 return None;
             },
         })
@@ -574,7 +574,7 @@ where
                 // to prevent "reconnection ping-pongs", only the side with lower PeerId is responsible for reconnecting
                 self.reconnect(disconnected).await
             },
-            _ = task_handle.make_shutdown_rx().await => {
+            () = task_handle.make_shutdown_rx() => {
                 return None;
             },
         })

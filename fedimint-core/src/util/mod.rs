@@ -321,7 +321,7 @@ impl<T> Spanned<T> {
         }
     }
 
-    pub async fn borrow_mut(&mut self) -> Spanned<&mut T> {
+    pub fn borrow_mut(&mut self) -> Spanned<&mut T> {
         Spanned {
             value: &mut self.value,
             span: self.span.clone(),
