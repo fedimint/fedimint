@@ -4603,7 +4603,7 @@
     </span>}
 
     <span class="doccomment">/// Register a hook that will be run after commit succeeds.
-    </span><span class="attr">#[instrument(level = <span class="string">"debug"</span>, skip_all, ret)]
+    </span><span class="attr">#[instrument(level = <span class="string">"trace"</span>, skip_all)]
     </span><span class="kw">pub fn </span>on_commit(<span class="kw-2">&amp;mut </span><span class="self">self</span>, f: <span class="macro">maybe_add_send!</span>(<span class="kw">impl </span>FnOnce() + <span class="lifetime">'static</span>)) {
         <span class="self">self</span>.on_commit_hooks.push(Box::new(f));
     }
