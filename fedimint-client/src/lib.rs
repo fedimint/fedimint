@@ -1740,7 +1740,7 @@ impl Client {
                         // a module recovery that failed reports and error and
                         // just never finishes, so we don't need a separate state
                         // for it
-                        futures::future::pending::<Option<RecoveryProgress>>().await;
+                        futures::future::pending::<()>().await;
                         unreachable!()
                     }
                 }

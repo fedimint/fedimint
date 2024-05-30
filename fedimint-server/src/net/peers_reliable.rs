@@ -256,7 +256,7 @@ where
         // never going to be any message. This avoids panic on `select_all` with
         // no futures.
         if self.connections.is_empty() {
-            std::future::pending::<T>().await;
+            std::future::pending::<()>().await;
         }
 
         // TODO: optimize, don't throw away remaining futures

@@ -134,7 +134,7 @@ impl ReceiveStateMachine {
         txid: TransactionId,
     ) -> String {
         match global_context.await_tx_accepted(txid).await {
-            Ok(()) => pending::<String>().await,
+            Ok(()) => pending().await,
             Err(error) => error,
         }
     }

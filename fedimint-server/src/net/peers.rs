@@ -307,7 +307,7 @@ where
         // never going to be any message. This avoids panic on `select_all` with
         // no futures.
         if self.connections.is_empty() {
-            std::future::pending::<T>().await;
+            std::future::pending::<()>().await;
         }
 
         let futures_non_banned = self.connections.iter_mut().map(|(&peer, connection)| {
