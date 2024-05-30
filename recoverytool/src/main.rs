@@ -233,12 +233,12 @@ async fn main() -> anyhow::Result<()> {
                             })
                             .collect();
 
-                        // Get all user-submitted tweaks and if we did a peg-out tx also return the
-                        // consensus round's tweak used for change
-                        let (mut peg_in_tweaks, peg_out_present) =
-                            input_tweaks_output_present(transaction_cis.into_iter());
+                        // Get all user-submitted tweaks and number of peg-out transactions in
+                        // session
+                        let (mut peg_in_tweaks, peg_out_count) =
+                            input_tweaks_and_peg_out_count(transaction_cis.into_iter());
 
-                        if peg_out_present {
+                        for _ in 0..=peg_out_count {
                             info!("Found change output, adding tweak {change_tweak_idx} to list");
                             peg_in_tweaks.insert(nonce_from_idx(change_tweak_idx));
                             change_tweak_idx += 1;
@@ -264,40 +264,39 @@ async fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
-fn input_tweaks_output_present(
+fn input_tweaks_and_peg_out_count(
     transactions: impl Iterator<Item = Transaction>,
-) -> (BTreeSet<[u8; 33]>, bool) {
-    let mut contains_peg_out = false;
-    let tweaks =
-        transactions
-            .flat_map(|tx| {
-                if tx.outputs.iter().any(|output| {
-                    output.module_instance_id() == LEGACY_HARDCODED_INSTANCE_ID_WALLET
-                }) {
-                    contains_peg_out = true;
+) -> (BTreeSet<[u8; 33]>, u64) {
+    let mut peg_out_count = 0;
+    let tweaks = transactions
+        .flat_map(|tx| {
+            tx.outputs.iter().for_each(|output| {
+                if output.module_instance_id() == LEGACY_HARDCODED_INSTANCE_ID_WALLET {
+                    peg_out_count += 1;
+                }
+            });
+
+            tx.inputs.into_iter().filter_map(|input| {
+                if input.module_instance_id() != LEGACY_HARDCODED_INSTANCE_ID_WALLET {
+                    return None;
                 }
 
-                tx.inputs.into_iter().filter_map(|input| {
-                    if input.module_instance_id() != LEGACY_HARDCODED_INSTANCE_ID_WALLET {
-                        return None;
-                    }
-
-                    Some(
-                        input
-                            .as_any()
-                            .downcast_ref::<WalletInput>()
-                            .expect("Instance id mapping incorrect")
-                            .ensure_v0_ref()
-                            .expect("recoverytool only supports v0 wallet inputs")
-                            .0
-                            .tweak_contract_key()
-                            .serialize(),
-                    )
-                })
+                Some(
+                    input
+                        .as_any()
+                        .downcast_ref::<WalletInput>()
+                        .expect("Instance id mapping incorrect")
+                        .ensure_v0_ref()
+                        .expect("recoverytool only supports v0 wallet inputs")
+                        .0
+                        .tweak_contract_key()
+                        .serialize(),
+                )
             })
-            .collect::<BTreeSet<_>>();
+        })
+        .collect::<BTreeSet<_>>();
 
-    (tweaks, contains_peg_out)
+    (tweaks, peg_out_count)
 }
 
 fn tweak_descriptor(
