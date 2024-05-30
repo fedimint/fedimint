@@ -365,7 +365,7 @@ impl TaskHandle {
     ///
     /// Tasks can use `select` on the return value to handle shutdown
     /// signal during otherwise blocking operation.
-    pub async fn make_shutdown_rx(&self) -> TaskShutdownToken {
+    pub fn make_shutdown_rx(&self) -> TaskShutdownToken {
         TaskShutdownToken::new(self.inner.on_shutdown_rx.clone())
     }
 
@@ -543,7 +543,7 @@ mod tests {
     async fn shutdown_task_group_after() -> anyhow::Result<()> {
         let tg = TaskGroup::new();
         tg.spawn("shutdown waiter", |handle| async move {
-            handle.make_shutdown_rx().await.await;
+            handle.make_shutdown_rx().await;
         });
         sleep(Duration::from_millis(10)).await;
         tg.shutdown_join_all(None).await?;
@@ -555,7 +555,7 @@ mod tests {
         let tg = TaskGroup::new();
         tg.spawn("shutdown waiter", |handle| async move {
             sleep(Duration::from_millis(10)).await;
-            handle.make_shutdown_rx().await.await;
+            handle.make_shutdown_rx().await;
         });
         tg.shutdown_join_all(None).await?;
         Ok(())
@@ -566,7 +566,7 @@ mod tests {
         let tg = TaskGroup::new();
         tg.make_subgroup()
             .spawn("shutdown waiter", |handle| async move {
-                handle.make_shutdown_rx().await.await;
+                handle.make_shutdown_rx().await;
             });
         sleep(Duration::from_millis(10)).await;
         tg.shutdown_join_all(None).await?;
@@ -579,7 +579,7 @@ mod tests {
         tg.make_subgroup()
             .spawn("shutdown waiter", |handle| async move {
                 sleep(Duration::from_millis(10)).await;
-                handle.make_shutdown_rx().await.await;
+                handle.make_shutdown_rx().await;
             });
         tg.shutdown_join_all(None).await?;
         Ok(())

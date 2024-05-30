@@ -136,7 +136,7 @@ impl GatewayLndClient {
                             }
                         }
                     },
-                    () = handle.make_shutdown_rx().await => {
+                    () = handle.make_shutdown_rx() => {
                         info!("LND HTLC Subscription received shutdown signal while trying to intercept HTLC stream, exiting...");
                         return;
                     }
@@ -152,7 +152,7 @@ impl GatewayLndClient {
                 // not process until another message arrives from the HTLC stream, which may
                 // take a long time, or never.
                 while let Some(htlc) = tokio::select! {
-                    () = handle.make_shutdown_rx().await => {
+                    () = handle.make_shutdown_rx() => {
                         info!("LND HTLC Subscription task received shutdown signal");
                         None
                     }

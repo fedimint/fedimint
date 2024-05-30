@@ -160,7 +160,7 @@ impl ILnRpcClient for FakeLightningTest {
         task_group: &mut TaskGroup,
     ) -> Result<(RouteHtlcStream<'a>, Arc<dyn ILnRpcClient>), LightningRpcError> {
         let handle = task_group.make_handle();
-        let shutdown_receiver = handle.make_shutdown_rx().await;
+        let shutdown_receiver = handle.make_shutdown_rx();
 
         // `FakeLightningTest` will never intercept any HTLCs because there is no
         // lightning connection, so instead we just create a stream that blocks

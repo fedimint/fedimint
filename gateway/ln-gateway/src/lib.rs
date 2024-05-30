@@ -540,7 +540,7 @@ impl Gateway {
         // start webserver last to avoid handling requests before fully initialized
         run_webserver(self.clone(), tg).await?;
         let handle = tg.make_handle();
-        let shutdown_receiver = handle.make_shutdown_rx().await;
+        let shutdown_receiver = handle.make_shutdown_rx();
         Ok(shutdown_receiver)
     }
 

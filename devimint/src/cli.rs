@@ -235,7 +235,7 @@ pub async fn handle_command(cmd: Cmd, common_args: CommonArgs) -> Result<()> {
                 exec_user_command(exec).await?;
                 task_group.shutdown();
             }
-            task_group.make_handle().make_shutdown_rx().await.await;
+            task_group.make_handle().make_shutdown_rx().await;
         }
         Cmd::DevFed { exec } => {
             trace!(target: LOG_DEVIMINT, "Starting dev fed");

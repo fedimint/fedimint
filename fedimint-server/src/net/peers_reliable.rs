@@ -199,7 +199,7 @@ where
             .with_context(|| anyhow::anyhow!("Failed to listen on {}", cfg.bind_addr))
             .expect("Could not bind port");
 
-        let mut shutdown_rx = task_handle.make_shutdown_rx().await;
+        let mut shutdown_rx = task_handle.make_shutdown_rx();
 
         while !task_handle.is_shutting_down() {
             let new_connection = tokio::select! {
@@ -368,7 +368,7 @@ where
             () = sleep_until(connected.next_ping) => {
                 self.send_ping(connected).await
             },
-            () = task_handle.make_shutdown_rx().await => {
+            () = task_handle.make_shutdown_rx() => {
                 return None;
             },
         })
@@ -574,7 +574,7 @@ where
                 // to prevent "reconnection ping-pongs", only the side with lower PeerId is responsible for reconnecting
                 self.reconnect(disconnected).await
             },
-            () = task_handle.make_shutdown_rx().await => {
+            () = task_handle.make_shutdown_rx() => {
                 return None;
             },
         })
