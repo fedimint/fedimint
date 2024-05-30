@@ -3358,7 +3358,7 @@
         <span class="self">self</span>.notifications.register(key).<span class="kw">await</span>;
     }
     <span class="kw">async fn </span>notify(<span class="kw-2">&amp;</span><span class="self">self</span>, key: <span class="kw-2">&amp;</span>[u8]) {
-        <span class="self">self</span>.notifications.notify(key).<span class="kw">await</span>;
+        <span class="self">self</span>.notifications.notify(key);
     }
 
     <span class="kw">fn </span>prefix_len(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; usize {
@@ -5467,22 +5467,22 @@
     }
 
     <span class="kw">pub async fn </span>verify_snapshot_isolation(db: Database) {
+        <span class="kw">async fn </span>random_yield() {
+            <span class="kw">let </span>times = <span class="kw">if </span>rand::thread_rng().gen_bool(<span class="number">0.5</span>) {
+                <span class="number">0
+            </span>} <span class="kw">else </span>{
+                <span class="number">10
+            </span>};
+            <span class="kw">for _ in </span><span class="number">0</span>..times {
+                tokio::task::yield_now().<span class="kw">await</span>;
+            }
+        }
+
         <span class="comment">// This scenario is taken straight out of https://github.com/fedimint/fedimint/issues/5195 bug
         </span><span class="kw">for </span>i <span class="kw">in </span><span class="number">0</span>..<span class="number">1000 </span>{
             <span class="kw">let </span>base_key = i * <span class="number">2</span>;
             <span class="kw">let </span>tx_accepted_key = base_key;
             <span class="kw">let </span>spent_input_key = base_key + <span class="number">1</span>;
-
-            <span class="kw">async fn </span>random_yield() {
-                <span class="kw">let </span>times = <span class="kw">if </span>rand::thread_rng().gen_bool(<span class="number">0.5</span>) {
-                    <span class="number">0
-                </span>} <span class="kw">else </span>{
-                    <span class="number">10
-                </span>};
-                <span class="kw">for _ in </span><span class="number">0</span>..times {
-                    tokio::task::yield_now().<span class="kw">await</span>;
-                }
-            }
 
             <span class="macro">join!</span>(
                 <span class="kw">async </span>{

@@ -453,7 +453,7 @@
         </span>.merge(v1_routes);
 
     <span class="kw">let </span>handle = task_group.make_handle();
-    <span class="kw">let </span>shutdown_rx = handle.make_shutdown_rx().<span class="kw">await</span>;
+    <span class="kw">let </span>shutdown_rx = handle.make_shutdown_rx();
     <span class="kw">let </span>listener = TcpListener::bind(<span class="kw-2">&amp;</span>gateway.listen).<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="kw">let </span>serve = axum::serve(listener, api_v1.into_make_service());
     task_group.spawn(<span class="string">"Gateway Webserver"</span>, <span class="kw">move </span>|<span class="kw">_</span>| <span class="kw">async move </span>{

@@ -388,8 +388,8 @@
 <a href="#388" id="388">388</a>
 <a href="#389" id="389">389</a>
 <a href="#390" id="390">390</a>
+<a href="#391" id="391">391</a>
 </pre></div><pre class="rust"><code><span class="attr">#![warn(clippy::pedantic)]
-#![allow(clippy::ignored_unit_patterns)]
 #![allow(clippy::missing_errors_doc)]
 #![allow(clippy::missing_panics_doc)]
 #![allow(clippy::module_name_repetitions)]
@@ -425,7 +425,7 @@
     fed_key_pair, DummyCommonInit, DummyInput, DummyModuleTypes, DummyOutput, DummyOutputOutcome,
     KIND,
 };
-<span class="kw">use </span>futures::{pin_mut, FutureExt, StreamExt};
+<span class="kw">use </span>futures::{pin_mut, StreamExt};
 <span class="kw">use </span>states::DummyStateMachine;
 <span class="kw">use </span>strum::IntoEnumIterator;
 
@@ -765,13 +765,15 @@
     <span class="kw">fn </span>get_database_migrations(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; BTreeMap&lt;DatabaseVersion, ClientMigrationFn&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>migrations: BTreeMap&lt;DatabaseVersion, ClientMigrationFn&gt; = BTreeMap::new();
         migrations.insert(DatabaseVersion(<span class="number">0</span>), <span class="kw">move </span>|dbtx, <span class="kw">_</span>, <span class="kw">_</span>| {
-            migrate_to_v1(dbtx).boxed()
+            Box::pin(migrate_to_v1(dbtx))
         });
 
         migrations.insert(
             DatabaseVersion(<span class="number">1</span>),
             <span class="kw">move </span>|<span class="kw">_</span>, active_states, inactive_states| {
-                migrate_state(active_states, inactive_states, db::get_v1_migrated_state).boxed()
+                Box::pin(<span class="kw">async </span>{
+                    migrate_state(active_states, inactive_states, db::get_v1_migrated_state)
+                })
             },
         );
 

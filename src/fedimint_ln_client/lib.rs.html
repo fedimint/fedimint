@@ -2028,14 +2028,14 @@
 <a href="#2028" id="2028">2028</a>
 <a href="#2029" id="2029">2029</a>
 <a href="#2030" id="2030">2030</a>
+<a href="#2031" id="2031">2031</a>
+<a href="#2032" id="2032">2032</a>
 </pre></div><pre class="rust"><code><span class="attr">#![warn(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::cast_possible_wrap)]
 #![allow(clippy::cast_sign_loss)]
 #![allow(clippy::default_trait_access)]
 #![allow(clippy::doc_markdown)]
-#![allow(clippy::ignored_unit_patterns)]
-#![allow(clippy::large_futures)]
 #![allow(clippy::missing_errors_doc)]
 #![allow(clippy::missing_fields_in_debug)]
 #![allow(clippy::missing_panics_doc)]
@@ -2045,7 +2045,6 @@
 #![allow(clippy::similar_names)]
 #![allow(clippy::struct_field_names)]
 #![allow(clippy::too_many_lines)]
-#![allow(clippy::unused_async)]
 #![allow(clippy::wildcard_imports)]
 
 </span><span class="kw">pub mod </span>api;
@@ -2110,7 +2109,7 @@
     LightningOutputV0,
 };
 <span class="kw">use </span>fedimint_logging::LOG_CLIENT_MODULE_LN;
-<span class="kw">use </span>futures::{Future, FutureExt, StreamExt};
+<span class="kw">use </span>futures::{Future, StreamExt};
 <span class="kw">use </span>incoming::IncomingSmError;
 <span class="kw">use </span>lightning_invoice::{
     Bolt11Invoice, Currency, InvoiceBuilder, PaymentSecret, RouteHint, RouteHintHop, RoutingFees,
@@ -2393,21 +2392,27 @@
         migrations.insert(
             DatabaseVersion(<span class="number">1</span>),
             <span class="kw">move </span>|<span class="kw">_</span>, active_states, inactive_states| {
-                migrate_state(active_states, inactive_states, db::get_v1_migrated_state).boxed()
+                Box::pin(<span class="kw">async </span>{
+                    migrate_state(active_states, inactive_states, db::get_v1_migrated_state)
+                })
             },
         );
 
         migrations.insert(
             DatabaseVersion(<span class="number">2</span>),
             <span class="kw">move </span>|<span class="kw">_</span>, active_states, inactive_states| {
-                migrate_state(active_states, inactive_states, db::get_v2_migrated_state).boxed()
+                Box::pin(<span class="kw">async </span>{
+                    migrate_state(active_states, inactive_states, db::get_v2_migrated_state)
+                })
             },
         );
 
         migrations.insert(
             DatabaseVersion(<span class="number">3</span>),
             <span class="kw">move </span>|<span class="kw">_</span>, active_states, inactive_states| {
-                migrate_state(active_states, inactive_states, db::get_v3_migrated_state).boxed()
+                Box::pin(<span class="kw">async </span>{
+                    migrate_state(active_states, inactive_states, db::get_v3_migrated_state)
+                })
             },
         );
 
@@ -2743,7 +2748,8 @@
     }
 
     <span class="attr">#[allow(clippy::too_many_arguments)]
-    </span><span class="kw">async fn </span>create_lightning_receive_output&lt;<span class="lifetime">'a</span>&gt;(
+    #[allow(clippy::type_complexity)]
+    </span><span class="kw">fn </span>create_lightning_receive_output&lt;<span class="lifetime">'a</span>&gt;(
         <span class="kw-2">&amp;</span><span class="lifetime">'a </span><span class="self">self</span>,
         amount: Amount,
         description: lightning_invoice::Bolt11InvoiceDescription&lt;<span class="lifetime">'a</span>&gt;,
@@ -2752,7 +2758,7 @@
         expiry_time: <span class="prelude-ty">Option</span>&lt;u64&gt;,
         src_node_id: secp256k1::PublicKey,
         short_channel_id: u64,
-        route_hints: Vec&lt;fedimint_ln_common::route_hints::RouteHint&gt;,
+        route_hints: <span class="kw-2">&amp;</span>[fedimint_ln_common::route_hints::RouteHint],
         network: Network,
     ) -&gt; anyhow::Result&lt;(
         OperationId,
@@ -3442,19 +3448,17 @@
 
         <span class="macro">debug!</span>(target: LOG_CLIENT_MODULE_LN, <span class="question-mark">?</span>gateway_id, %amount, <span class="string">"Selected LN gateway for invoice generation"</span>);
 
-        <span class="kw">let </span>(operation_id, invoice, output, preimage) = <span class="self">self
-            </span>.create_lightning_receive_output(
-                amount,
-                description,
-                receiving_key,
-                rand::rngs::OsRng,
-                expiry_time,
-                src_node_id,
-                short_channel_id,
-                route_hints,
-                <span class="self">self</span>.cfg.network,
-            )
-            .<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>(operation_id, invoice, output, preimage) = <span class="self">self</span>.create_lightning_receive_output(
+            amount,
+            description,
+            receiving_key,
+            rand::rngs::OsRng,
+            expiry_time,
+            src_node_id,
+            short_channel_id,
+            <span class="kw-2">&amp;</span>route_hints,
+            <span class="self">self</span>.cfg.network,
+        )<span class="question-mark">?</span>;
 
         <span class="kw">let </span>tx = TransactionBuilder::new().with_output(<span class="self">self</span>.client_ctx.make_client_output(output));
         <span class="kw">let </span>extra_meta = serde_json::to_value(extra_meta).expect(<span class="string">"extra_meta is serializable"</span>);

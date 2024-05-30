@@ -884,7 +884,7 @@
         }
     }
 
-    <span class="kw">pub async fn </span>borrow_mut(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; Spanned&lt;<span class="kw-2">&amp;mut </span>T&gt; {
+    <span class="kw">pub fn </span>borrow_mut(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; Spanned&lt;<span class="kw-2">&amp;mut </span>T&gt; {
         Spanned {
             value: <span class="kw-2">&amp;mut </span><span class="self">self</span>.value,
             span: <span class="self">self</span>.span.clone(),

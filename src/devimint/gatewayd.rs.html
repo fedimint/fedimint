@@ -261,10 +261,6 @@
 <a href="#261" id="261">261</a>
 <a href="#262" id="262">262</a>
 <a href="#263" id="263">263</a>
-<a href="#264" id="264">264</a>
-<a href="#265" id="265">265</a>
-<a href="#266" id="266">266</a>
-<a href="#267" id="267">267</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::HashMap;
 <span class="kw">use </span>std::ops::ControlFlow;
 <span class="kw">use </span>std::path::PathBuf;
@@ -366,7 +362,7 @@
         <span class="prelude-val">Ok</span>(())
     }
 
-    <span class="kw">pub async fn </span>cmd(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Command {
+    <span class="kw">pub fn </span>cmd(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Command {
         <span class="macro">cmd!</span>(
             <span class="kw">crate</span>::util::get_gateway_cli_path(),
             <span class="string">"--rpcpassword=theresnosecondbest"</span>,
@@ -511,11 +507,7 @@
 
     <span class="kw">pub async fn </span>wait_for_chain_sync(<span class="kw-2">&amp;</span><span class="self">self</span>, bitcoind: <span class="kw-2">&amp;</span>Bitcoind) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
         poll(<span class="string">"lightning node block processing"</span>, || <span class="kw">async </span>{
-            <span class="kw">let </span>block_height = bitcoind
-                .get_block_count()
-                .<span class="kw">await
-                </span>.map_err(ControlFlow::Continue)<span class="question-mark">?
-                </span>- <span class="number">1</span>;
+            <span class="kw">let </span>block_height = bitcoind.get_block_count().map_err(ControlFlow::Continue)<span class="question-mark">? </span>- <span class="number">1</span>;
             <span class="macro">cmd!</span>(
                 <span class="self">self</span>,
                 <span class="string">"lightning"</span>,

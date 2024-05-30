@@ -401,7 +401,7 @@
         task_group: <span class="kw-2">&amp;mut </span>TaskGroup,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;(RouteHtlcStream&lt;<span class="lifetime">'a</span>&gt;, Arc&lt;<span class="kw">dyn </span>ILnRpcClient&gt;), LightningRpcError&gt; {
         <span class="kw">let </span>handle = task_group.make_handle();
-        <span class="kw">let </span>shutdown_receiver = handle.make_shutdown_rx().<span class="kw">await</span>;
+        <span class="kw">let </span>shutdown_receiver = handle.make_shutdown_rx();
 
         <span class="comment">// `FakeLightningTest` will never intercept any HTLCs because there is no
         // lightning connection, so instead we just create a stream that blocks

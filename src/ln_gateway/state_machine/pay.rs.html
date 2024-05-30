@@ -920,7 +920,6 @@
 <a href="#920" id="920">920</a>
 <a href="#921" id="921">921</a>
 <a href="#922" id="922">922</a>
-<a href="#923" id="923">923</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::fmt::Display;
 <span class="kw">use </span>std::sync::Arc;
 
@@ -1597,7 +1596,7 @@
         <span class="kw">let </span>preimage = <span class="self">self</span>.preimage.clone();
         <span class="macro">vec!</span>[StateTransition::new(
             future::ready(()),
-            <span class="kw">move </span>|dbtx, <span class="kw">_</span>, <span class="kw">_</span>| {
+            <span class="kw">move </span>|dbtx, (), <span class="kw">_</span>| {
                 Box::pin(<span class="self">Self</span>::transition_claim_outgoing_contract(
                     dbtx,
                     global_context.clone(),
@@ -1655,12 +1654,11 @@
         <span class="macro">vec!</span>[StateTransition::new(
             <span class="self">Self</span>::await_preimage(context, federation_id, operation_id, contract.clone()),
             <span class="kw">move </span>|_dbtx, result, _old_state| {
-                <span class="kw">let </span>c2 = contract.clone();
-                Box::pin(<span class="self">Self</span>::transition_claim_outgoing_contract(
-                    common.clone(),
-                    result,
-                    c2,
-                ))
+                <span class="kw">let </span>common = common.clone();
+                <span class="kw">let </span>contract = contract.clone();
+                Box::pin(<span class="kw">async move </span>{
+                    <span class="self">Self</span>::transition_claim_outgoing_contract(common, result, contract)
+                })
             },
         )]
     }
@@ -1741,7 +1739,7 @@
         .<span class="kw">await
     </span>}
 
-    <span class="kw">async fn </span>transition_claim_outgoing_contract(
+    <span class="kw">fn </span>transition_claim_outgoing_contract(
         common: GatewayPayCommon,
         result: <span class="prelude-ty">Result</span>&lt;Preimage, OutgoingPaymentError&gt;,
         contract: OutgoingContractAccount,
@@ -1781,7 +1779,7 @@
         <span class="kw">let </span>error = <span class="self">self</span>.error.clone();
         <span class="macro">vec!</span>[StateTransition::new(
             future::ready(()),
-            <span class="kw">move </span>|dbtx, <span class="kw">_</span>, <span class="kw">_</span>| {
+            <span class="kw">move </span>|dbtx, (), <span class="kw">_</span>| {
                 Box::pin(<span class="self">Self</span>::transition_canceled(
                     dbtx,
                     contract.clone(),

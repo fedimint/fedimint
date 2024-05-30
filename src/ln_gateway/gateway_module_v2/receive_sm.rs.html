@@ -247,6 +247,7 @@
 <a href="#247" id="247">247</a>
 <a href="#248" id="248">248</a>
 <a href="#249" id="249">249</a>
+<a href="#250" id="250">250</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::future::pending;
 <span class="kw">use </span>std::sync::Arc;
@@ -298,8 +299,7 @@
     <span class="kw">pub </span>refund_keypair: KeyPair,
 }
 
-<span class="attr">#[allow(clippy::large_enum_variant)]
-#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
+<span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
 </span><span class="kw">pub enum </span>ReceiveSMState {
     Funding,
     Rejected(String),
@@ -340,7 +340,9 @@
                             <span class="self">self</span>.common.out_point.txid,
                         ),
                         <span class="kw">move </span>|<span class="kw">_</span>, error, old_state| {
-                            Box::pin(<span class="self">Self</span>::transition_funding_rejected(error, old_state))
+                            Box::pin(
+                                <span class="kw">async move </span>{ <span class="self">Self</span>::transition_funding_rejected(error, <span class="kw-2">&amp;</span>old_state) },
+                            )
                         },
                     ),
                     StateTransition::new(
@@ -383,14 +385,14 @@
         txid: TransactionId,
     ) -&gt; String {
         <span class="kw">match </span>global_context.await_tx_accepted(txid).<span class="kw">await </span>{
-            <span class="prelude-val">Ok</span>(()) =&gt; pending::&lt;String&gt;().<span class="kw">await</span>,
+            <span class="prelude-val">Ok</span>(()) =&gt; pending().<span class="kw">await</span>,
             <span class="prelude-val">Err</span>(error) =&gt; error,
         }
     }
 
-    <span class="kw">async fn </span>transition_funding_rejected(
+    <span class="kw">fn </span>transition_funding_rejected(
         error: String,
-        old_state: ReceiveStateMachine,
+        old_state: <span class="kw-2">&amp;</span>ReceiveStateMachine,
     ) -&gt; ReceiveStateMachine {
         old_state.update(ReceiveSMState::Rejected(error))
     }

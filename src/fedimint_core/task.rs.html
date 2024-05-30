@@ -733,8 +733,8 @@
             </span><span class="kw">let </span>terminate = std::future::pending::&lt;()&gt;();
 
             <span class="macro">tokio::select!</span> {
-                <span class="kw">_ </span>= ctrl_c =&gt; {},
-                <span class="kw">_ </span>= terminate =&gt; {},
+                () = ctrl_c =&gt; {},
+                () = terminate =&gt; {},
             }
         }
         runtime::spawn(<span class="string">"kill handlers"</span>, {
@@ -788,7 +788,7 @@
         rx
     }
 
-    <span class="kw">pub async fn </span>spawn_local&lt;Fut&gt;(
+    <span class="kw">pub fn </span>spawn_local&lt;Fut&gt;(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         name: <span class="kw">impl </span>Into&lt;String&gt;,
         f: <span class="kw">impl </span>FnOnce(TaskHandle) -&gt; Fut + <span class="lifetime">'static</span>,
@@ -952,7 +952,7 @@
     ///
     /// Tasks can use `select` on the return value to handle shutdown
     /// signal during otherwise blocking operation.
-    </span><span class="kw">pub async fn </span>make_shutdown_rx(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; TaskShutdownToken {
+    </span><span class="kw">pub fn </span>make_shutdown_rx(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; TaskShutdownToken {
         TaskShutdownToken::new(<span class="self">self</span>.inner.on_shutdown_rx.clone())
     }
 
@@ -1130,7 +1130,7 @@
     </span><span class="kw">async fn </span>shutdown_task_group_after() -&gt; anyhow::Result&lt;()&gt; {
         <span class="kw">let </span>tg = TaskGroup::new();
         tg.spawn(<span class="string">"shutdown waiter"</span>, |handle| <span class="kw">async move </span>{
-            handle.make_shutdown_rx().<span class="kw">await</span>.<span class="kw">await</span>;
+            handle.make_shutdown_rx().<span class="kw">await</span>;
         });
         sleep(Duration::from_millis(<span class="number">10</span>)).<span class="kw">await</span>;
         tg.shutdown_join_all(<span class="prelude-val">None</span>).<span class="kw">await</span><span class="question-mark">?</span>;
@@ -1142,7 +1142,7 @@
         <span class="kw">let </span>tg = TaskGroup::new();
         tg.spawn(<span class="string">"shutdown waiter"</span>, |handle| <span class="kw">async move </span>{
             sleep(Duration::from_millis(<span class="number">10</span>)).<span class="kw">await</span>;
-            handle.make_shutdown_rx().<span class="kw">await</span>.<span class="kw">await</span>;
+            handle.make_shutdown_rx().<span class="kw">await</span>;
         });
         tg.shutdown_join_all(<span class="prelude-val">None</span>).<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(())
@@ -1153,7 +1153,7 @@
         <span class="kw">let </span>tg = TaskGroup::new();
         tg.make_subgroup()
             .spawn(<span class="string">"shutdown waiter"</span>, |handle| <span class="kw">async move </span>{
-                handle.make_shutdown_rx().<span class="kw">await</span>.<span class="kw">await</span>;
+                handle.make_shutdown_rx().<span class="kw">await</span>;
             });
         sleep(Duration::from_millis(<span class="number">10</span>)).<span class="kw">await</span>;
         tg.shutdown_join_all(<span class="prelude-val">None</span>).<span class="kw">await</span><span class="question-mark">?</span>;
@@ -1166,7 +1166,7 @@
         tg.make_subgroup()
             .spawn(<span class="string">"shutdown waiter"</span>, |handle| <span class="kw">async move </span>{
                 sleep(Duration::from_millis(<span class="number">10</span>)).<span class="kw">await</span>;
-                handle.make_shutdown_rx().<span class="kw">await</span>.<span class="kw">await</span>;
+                handle.make_shutdown_rx().<span class="kw">await</span>;
             });
         tg.shutdown_join_all(<span class="prelude-val">None</span>).<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(())

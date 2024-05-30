@@ -339,6 +339,8 @@
 <a href="#339" id="339">339</a>
 <a href="#340" id="340">340</a>
 <a href="#341" id="341">341</a>
+<a href="#342" id="342">342</a>
+<a href="#343" id="343">343</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::cmp;
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::{Duration, SystemTime};
@@ -397,12 +399,14 @@
                             created_state.tweak_key,
                         ),
                         |_db, (btc_tx, out_idx), old_state| {
-                            Box::pin(transition_tx_seen(old_state, btc_tx, out_idx))
+                            Box::pin(<span class="kw">async move </span>{ transition_tx_seen(old_state, btc_tx, out_idx) })
                         },
                     ),
                     StateTransition::new(
                         await_deposit_address_timeout(created_state.timeout_at),
-                        |_db, (), old_state| Box::pin(transition_deposit_timeout(old_state)),
+                        |_db, (), old_state| {
+                            Box::pin(<span class="kw">async move </span>{ transition_deposit_timeout(<span class="kw-2">&amp;</span>old_state) })
+                        },
                     ),
                 ]
             }
@@ -445,7 +449,7 @@
         .script_pubkey();
     <span class="kw">loop </span>{
         <span class="kw">match </span>context.rpc.watch_script_history(<span class="kw-2">&amp;</span>script).<span class="kw">await </span>{
-            <span class="prelude-val">Ok</span>(<span class="kw">_</span>) =&gt; <span class="kw">break</span>,
+            <span class="prelude-val">Ok</span>(()) =&gt; <span class="kw">break</span>,
             <span class="prelude-val">Err</span>(e) =&gt; <span class="macro">warn!</span>(<span class="string">"Error while awaiting btc tx submitting: {e}"</span>),
         }
         sleep(TRANSACTION_STATUS_FETCH_INTERVAL).<span class="kw">await</span>;
@@ -492,7 +496,7 @@
     <span class="macro">unreachable!</span>()
 }
 
-<span class="kw">async fn </span>transition_tx_seen(
+<span class="kw">fn </span>transition_tx_seen(
     old_state: DepositStateMachine,
     btc_transaction: bitcoin::Transaction,
     out_idx: u32,
@@ -521,7 +525,7 @@
     }
 }
 
-<span class="kw">async fn </span>transition_deposit_timeout(old_state: DepositStateMachine) -&gt; DepositStateMachine {
+<span class="kw">fn </span>transition_deposit_timeout(old_state: <span class="kw-2">&amp;</span>DepositStateMachine) -&gt; DepositStateMachine {
     <span class="macro">assert!</span>(
         <span class="macro">matches!</span>(old_state.state, DepositStates::Created(<span class="kw">_</span>)),
         <span class="string">"Invalid previous state"

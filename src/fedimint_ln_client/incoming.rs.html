@@ -509,7 +509,7 @@
                 context.clone(),
             ),
             <span class="kw">move </span>|_dbtx, result, old_state| {
-                Box::pin(<span class="self">Self</span>::transition_funding_success(result, old_state))
+                Box::pin(<span class="kw">async </span>{ <span class="self">Self</span>::transition_funding_success(result, old_state) })
             },
         )]
     }
@@ -553,7 +553,7 @@
         <span class="macro">unreachable!</span>(<span class="string">"there is too many u64s to ever get here"</span>)
     }
 
-    <span class="kw">async fn </span>transition_funding_success(
+    <span class="kw">fn </span>transition_funding_success(
         result: <span class="prelude-ty">Result</span>&lt;(), IncomingSmError&gt;,
         old_state: IncomingStateMachine,
     ) -&gt; IncomingStateMachine {
@@ -563,7 +563,7 @@
         };
 
         <span class="kw">match </span>result {
-            <span class="prelude-val">Ok</span>(<span class="kw">_</span>) =&gt; IncomingStateMachine {
+            <span class="prelude-val">Ok</span>(()) =&gt; IncomingStateMachine {
                 common: old_state.common,
                 state: IncomingSmStates::DecryptingPreimage(DecryptingPreimageState { txid }),
             },

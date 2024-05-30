@@ -131,7 +131,7 @@
         <span class="comment">// TODO: Add more configuration verification here
 
         // Leave federation
-        </span><span class="kw">let </span>fed_id = dev_fed.fed().<span class="kw">await</span><span class="question-mark">?</span>.calculate_federation_id().<span class="kw">await</span>;
+        </span><span class="kw">let </span>fed_id = dev_fed.fed().<span class="kw">await</span><span class="question-mark">?</span>.calculate_federation_id();
         <span class="kw">let </span>fedimint_cli_version = util::FedimintCli::version_or_default().<span class="kw">await</span>;
         <span class="kw">let </span>gatewayd_version = util::Gatewayd::version_or_default().<span class="kw">await</span>;
 

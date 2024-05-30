@@ -2526,22 +2526,18 @@
 <a href="#2526" id="2526">2526</a>
 <a href="#2527" id="2527">2527</a>
 <a href="#2528" id="2528">2528</a>
-<a href="#2529" id="2529">2529</a>
-<a href="#2530" id="2530">2530</a>
 </pre></div><pre class="rust"><code><span class="attr">#![warn(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::default_trait_access)]
 #![allow(clippy::doc_markdown)]
 #![allow(clippy::explicit_deref_methods)]
-#![allow(clippy::ignored_unit_patterns)]
-#![allow(clippy::items_after_statements)]
 #![allow(clippy::missing_errors_doc)]
 #![allow(clippy::missing_panics_doc)]
 #![allow(clippy::module_name_repetitions)]
 #![allow(clippy::must_use_candidate)]
 #![allow(clippy::return_self_not_must_use)]
 #![allow(clippy::too_many_lines)]
-#![allow(clippy::unused_async)]
+#![allow(clippy::type_complexity)]
 
 </span><span class="doccomment">//! # Client library for fedimintd
 //!
@@ -3900,8 +3896,6 @@
         db: Database,
         num_responses_sender: watch::Sender&lt;usize&gt;,
     ) {
-        <span class="kw">let </span><span class="kw-2">mut </span>requests = FuturesUnordered::new();
-
         <span class="comment">// Make a single request to a peer after a delay
         //
         // The delay is here to unify the type of a future both for initial request and
@@ -3926,6 +3920,8 @@
                 .<span class="kw">await</span>,
             )
         }
+
+        <span class="kw">let </span><span class="kw-2">mut </span>requests = FuturesUnordered::new();
 
         <span class="kw">for </span>peer_id <span class="kw">in </span>num_peers.peer_ids() {
             requests.push(make_request(Duration::ZERO, peer_id, <span class="kw-2">&amp;</span>api));
@@ -4266,13 +4262,13 @@
         <span class="kw">for </span>(module_instance_id, f) <span class="kw">in </span>module_recoveries {
             completed_stream.push(futures::stream::once(Box::pin(<span class="kw">async move </span>{
                 <span class="kw">match </span>f.<span class="kw">await </span>{
-                    <span class="prelude-val">Ok</span>(<span class="kw">_</span>) =&gt; (module_instance_id, <span class="prelude-val">None</span>),
+                    <span class="prelude-val">Ok</span>(()) =&gt; (module_instance_id, <span class="prelude-val">None</span>),
                     <span class="prelude-val">Err</span>(err) =&gt; {
                         <span class="macro">warn!</span>(%err, module_instance_id, <span class="string">"Module recovery failed"</span>);
                         <span class="comment">// a module recovery that failed reports and error and
                         // just never finishes, so we don't need a separate state
                         // for it
-                        </span>futures::future::pending::&lt;<span class="prelude-ty">Option</span>&lt;RecoveryProgress&gt;&gt;().<span class="kw">await</span>;
+                        </span>futures::future::pending::&lt;()&gt;().<span class="kw">await</span>;
                         <span class="macro">unreachable!</span>()
                     }
                 }

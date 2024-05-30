@@ -885,14 +885,11 @@
 <a href="#885" id="885">885</a>
 <a href="#886" id="886">886</a>
 <a href="#887" id="887">887</a>
-<a href="#888" id="888">888</a>
-<a href="#889" id="889">889</a>
 </pre></div><pre class="rust"><code><span class="attr">#![warn(clippy::pedantic)]
 #![allow(clippy::missing_errors_doc)]
 #![allow(clippy::missing_panics_doc)]
 #![allow(clippy::module_name_repetitions)]
 #![allow(clippy::must_use_candidate)]
-#![allow(clippy::unused_async)]
 
 </span><span class="kw">pub mod </span>api;
 <span class="attr">#[cfg(feature = <span class="string">"cli"</span>)]
@@ -1730,8 +1727,7 @@
     </span>InvalidInvoiceAmount,
 }
 
-<span class="attr">#[allow(clippy::large_enum_variant)]
-#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
+<span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
 </span><span class="kw">pub enum </span>LightningClientStateMachines {
     Send(SendStateMachine),
     Receive(ReceiveStateMachine),

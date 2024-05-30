@@ -1473,6 +1473,9 @@
 <a href="#1473" id="1473">1473</a>
 <a href="#1474" id="1474">1474</a>
 <a href="#1475" id="1475">1475</a>
+<a href="#1476" id="1476">1476</a>
+<a href="#1477" id="1477">1477</a>
+<a href="#1478" id="1478">1478</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! This module defines a binary encoding interface which is more suitable for
 //! consensus critical encoding than e.g. `bincode`. Over time all structs that
 //! need to be encoded to binary will be migrated to this interface.
@@ -2004,7 +2007,7 @@
 
 <span class="comment">// From &lt;https://github.com/rust-lang/rust/issues/61956&gt;
 </span><span class="kw">unsafe fn </span>horribe_array_transmute_workaround&lt;<span class="kw">const </span>N: usize, A, B&gt;(<span class="kw-2">mut </span>arr: [A; N]) -&gt; [B; N] {
-    <span class="kw">let </span>ptr = std::ptr::from_mut(<span class="kw-2">&amp;mut </span>arr) <span class="kw">as </span><span class="kw-2">*mut </span>[B; N];
+    <span class="kw">let </span>ptr = std::ptr::from_mut(<span class="kw-2">&amp;mut </span>arr).cast::&lt;[B; N]&gt;();
     <span class="kw">let </span>res = <span class="kw">unsafe </span>{ ptr.read() };
     core::mem::forget(arr);
     res
@@ -2868,11 +2871,16 @@
     </span><span class="kw">fn </span>test_lexicographical_sorting() {
         <span class="attr">#[derive(Ord, PartialOrd, Eq, PartialEq, Debug, Encodable, Decodable)]
         </span><span class="kw">struct </span>TestAmount(u64);
-        <span class="kw">let </span>amounts = (<span class="number">0</span>..<span class="number">20000</span>).map(TestAmount).collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
-        keeps_ordering_after_serialization(amounts);
 
         <span class="attr">#[derive(Ord, PartialOrd, Eq, PartialEq, Debug, Encodable, Decodable)]
         </span><span class="kw">struct </span>TestComplexAmount(u16, u32, u64);
+
+        <span class="attr">#[derive(Ord, PartialOrd, Eq, PartialEq, Debug, Encodable, Decodable)]
+        </span><span class="kw">struct </span>Text(String);
+
+        <span class="kw">let </span>amounts = (<span class="number">0</span>..<span class="number">20000</span>).map(TestAmount).collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
+        keeps_ordering_after_serialization(amounts);
+
         <span class="kw">let </span>complex_amounts = (<span class="number">10</span>..<span class="number">20000</span>)
             .flat_map(|i| {
                 (i - <span class="number">1</span>..=i + <span class="number">1</span>).flat_map(<span class="kw">move </span>|j| {
@@ -2882,8 +2890,6 @@
             .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
         keeps_ordering_after_serialization(complex_amounts);
 
-        <span class="attr">#[derive(Ord, PartialOrd, Eq, PartialEq, Debug, Encodable, Decodable)]
-        </span><span class="kw">struct </span>Text(String);
         <span class="kw">let </span>texts = (<span class="string">' '</span>..<span class="string">'~'</span>)
             .flat_map(|i| {
                 (<span class="string">' '</span>..<span class="string">'~'</span>)

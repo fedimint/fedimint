@@ -1103,11 +1103,6 @@
 <a href="#1103" id="1103">1103</a>
 <a href="#1104" id="1104">1104</a>
 <a href="#1105" id="1105">1105</a>
-<a href="#1106" id="1106">1106</a>
-<a href="#1107" id="1107">1107</a>
-<a href="#1108" id="1108">1108</a>
-<a href="#1109" id="1109">1109</a>
-<a href="#1110" id="1110">1110</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::ffi::OsStr;
 <span class="kw">use </span>std::future::Future;
@@ -1507,8 +1502,8 @@
         {
             <span class="attr">#[allow(unused)]
             </span><span class="kw">use </span><span class="macro-nonterminal">$crate::util::ToCmdExt</span>;
-            <span class="macro-nonterminal">$this</span>.cmd().<span class="kw">await
-                </span>$(.arg(<span class="macro-nonterminal">$arg</span>))*
+            <span class="macro-nonterminal">$this</span>.cmd()
+                $(.arg(<span class="macro-nonterminal">$arg</span>))*
                 .kill_on_drop(<span class="bool-val">true</span>)
                 .env(<span class="string">"RUST_BACKTRACE"</span>, <span class="string">"1"</span>)
         }
@@ -1630,27 +1625,22 @@
 
 <span class="comment">// used to add `cmd` method.
 </span><span class="kw">pub trait </span>ToCmdExt {
-    <span class="kw">type </span>Fut;
-    <span class="kw">fn </span>cmd(<span class="self">self</span>) -&gt; <span class="self">Self</span>::Fut;
+    <span class="kw">fn </span>cmd(<span class="self">self</span>) -&gt; Command;
 }
 
 <span class="comment">// a command that uses self as program name
 </span><span class="kw">impl </span>ToCmdExt <span class="kw">for </span><span class="kw-2">&amp;</span><span class="lifetime">'_ </span>str {
-    <span class="kw">type </span>Fut = std::future::Ready&lt;Command&gt;;
-
-    <span class="kw">fn </span>cmd(<span class="self">self</span>) -&gt; <span class="self">Self</span>::Fut {
-        std::future::ready(Command {
+    <span class="kw">fn </span>cmd(<span class="self">self</span>) -&gt; Command {
+        Command {
             cmd: tokio::process::Command::new(<span class="self">self</span>),
             args_debug: <span class="macro">vec!</span>[<span class="self">self</span>.to_owned()],
-        })
+        }
     }
 }
 
 <span class="kw">impl </span>ToCmdExt <span class="kw">for </span>Vec&lt;String&gt; {
-    <span class="kw">type </span>Fut = std::future::Ready&lt;Command&gt;;
-
-    <span class="kw">fn </span>cmd(<span class="self">self</span>) -&gt; <span class="self">Self</span>::Fut {
-        std::future::ready(to_command(<span class="self">self</span>))
+    <span class="kw">fn </span>cmd(<span class="self">self</span>) -&gt; Command {
+        to_command(<span class="self">self</span>)
     }
 }
 
@@ -1746,7 +1736,7 @@
 
 <span class="kw">pub struct </span>FedimintdCmd;
 <span class="kw">impl </span>FedimintdCmd {
-    <span class="kw">pub async fn </span>cmd(<span class="self">self</span>) -&gt; Command {
+    <span class="kw">pub fn </span>cmd(<span class="self">self</span>) -&gt; Command {
         to_command(get_command_str_for_alias(
             <span class="kw-2">&amp;</span>[FM_FEDIMINTD_BASE_EXECUTABLE_ENV],
             <span class="kw-2">&amp;</span>[FEDIMINTD_FALLBACK],
@@ -1768,7 +1758,7 @@
 
 <span class="kw">pub struct </span>Gatewayd;
 <span class="kw">impl </span>Gatewayd {
-    <span class="kw">pub async fn </span>cmd(<span class="self">self</span>) -&gt; Command {
+    <span class="kw">pub fn </span>cmd(<span class="self">self</span>) -&gt; Command {
         to_command(get_command_str_for_alias(
             <span class="kw-2">&amp;</span>[FM_GATEWAYD_BASE_EXECUTABLE_ENV],
             <span class="kw-2">&amp;</span>[GATEWAYD_FALLBACK],
@@ -1790,7 +1780,7 @@
 
 <span class="kw">pub struct </span>FedimintCli;
 <span class="kw">impl </span>FedimintCli {
-    <span class="kw">pub async fn </span>cmd(<span class="self">self</span>) -&gt; Command {
+    <span class="kw">pub fn </span>cmd(<span class="self">self</span>) -&gt; Command {
         to_command(get_command_str_for_alias(
             <span class="kw-2">&amp;</span>[FM_MINT_CLIENT_ENV],
             <span class="kw-2">&amp;</span>get_fedimint_cli_path()
@@ -2006,7 +1996,7 @@
 
 <span class="kw">pub struct </span>LoadTestTool;
 <span class="kw">impl </span>LoadTestTool {
-    <span class="kw">pub async fn </span>cmd(<span class="self">self</span>) -&gt; Command {
+    <span class="kw">pub fn </span>cmd(<span class="self">self</span>) -&gt; Command {
         to_command(get_command_str_for_alias(
             <span class="kw-2">&amp;</span>[FM_LOAD_TEST_TOOL_BASE_EXECUTABLE_ENV],
             <span class="kw-2">&amp;</span>[LOAD_TEST_TOOL_FALLBACK],
@@ -2016,7 +2006,7 @@
 
 <span class="kw">pub struct </span>GatewayCli;
 <span class="kw">impl </span>GatewayCli {
-    <span class="kw">pub async fn </span>cmd(<span class="self">self</span>) -&gt; Command {
+    <span class="kw">pub fn </span>cmd(<span class="self">self</span>) -&gt; Command {
         to_command(get_command_str_for_alias(
             <span class="kw-2">&amp;</span>[],
             <span class="kw-2">&amp;</span>get_gateway_cli_path()
@@ -2037,7 +2027,7 @@
 
 <span class="kw">pub struct </span>GatewayClnCli;
 <span class="kw">impl </span>GatewayClnCli {
-    <span class="kw">pub async fn </span>cmd(<span class="self">self</span>) -&gt; Command {
+    <span class="kw">pub fn </span>cmd(<span class="self">self</span>) -&gt; Command {
         to_command(get_command_str_for_alias(
             <span class="kw-2">&amp;</span>[FM_GWCLI_CLN_ENV],
             <span class="kw-2">&amp;</span>[<span class="string">"gateway-cln"</span>],
@@ -2047,7 +2037,7 @@
 
 <span class="kw">pub struct </span>GatewayLndCli;
 <span class="kw">impl </span>GatewayLndCli {
-    <span class="kw">pub async fn </span>cmd(<span class="self">self</span>) -&gt; Command {
+    <span class="kw">pub fn </span>cmd(<span class="self">self</span>) -&gt; Command {
         to_command(get_command_str_for_alias(
             <span class="kw-2">&amp;</span>[FM_GWCLI_LND_ENV],
             <span class="kw-2">&amp;</span>[<span class="string">"gateway-lnd"</span>],
@@ -2057,7 +2047,7 @@
 
 <span class="kw">pub struct </span>LnCli;
 <span class="kw">impl </span>LnCli {
-    <span class="kw">pub async fn </span>cmd(<span class="self">self</span>) -&gt; Command {
+    <span class="kw">pub fn </span>cmd(<span class="self">self</span>) -&gt; Command {
         to_command(get_command_str_for_alias(
             <span class="kw-2">&amp;</span>[FM_LNCLI_ENV],
             <span class="kw-2">&amp;</span>get_lncli_path()
@@ -2070,7 +2060,7 @@
 
 <span class="kw">pub struct </span>ClnLightningCli;
 <span class="kw">impl </span>ClnLightningCli {
-    <span class="kw">pub async fn </span>cmd(<span class="self">self</span>) -&gt; Command {
+    <span class="kw">pub fn </span>cmd(<span class="self">self</span>) -&gt; Command {
         to_command(get_command_str_for_alias(
             <span class="kw-2">&amp;</span>[FM_LIGHTNING_CLI_ENV],
             <span class="kw-2">&amp;</span>get_lightning_cli_path()
@@ -2083,7 +2073,7 @@
 
 <span class="kw">pub struct </span>BitcoinCli;
 <span class="kw">impl </span>BitcoinCli {
-    <span class="kw">pub async fn </span>cmd(<span class="self">self</span>) -&gt; Command {
+    <span class="kw">pub fn </span>cmd(<span class="self">self</span>) -&gt; Command {
         to_command(get_command_str_for_alias(
             <span class="kw-2">&amp;</span>[FM_BTC_CLIENT_ENV],
             <span class="kw-2">&amp;</span>get_bitcoin_cli_path()
@@ -2096,7 +2086,7 @@
 
 <span class="kw">pub struct </span>Bitcoind;
 <span class="kw">impl </span>Bitcoind {
-    <span class="kw">pub async fn </span>cmd(<span class="self">self</span>) -&gt; Command {
+    <span class="kw">pub fn </span>cmd(<span class="self">self</span>) -&gt; Command {
         to_command(get_command_str_for_alias(
             <span class="kw-2">&amp;</span>[FM_BITCOIND_BASE_EXECUTABLE_ENV],
             <span class="kw-2">&amp;</span>[BITCOIND_FALLBACK],
@@ -2106,7 +2096,7 @@
 
 <span class="kw">pub struct </span>Lightningd;
 <span class="kw">impl </span>Lightningd {
-    <span class="kw">pub async fn </span>cmd(<span class="self">self</span>) -&gt; Command {
+    <span class="kw">pub fn </span>cmd(<span class="self">self</span>) -&gt; Command {
         to_command(get_command_str_for_alias(
             <span class="kw-2">&amp;</span>[FM_LIGHTNINGD_BASE_EXECUTABLE_ENV],
             <span class="kw-2">&amp;</span>[LIGHTNINGD_FALLBACK],
@@ -2116,7 +2106,7 @@
 
 <span class="kw">pub struct </span>Lnd;
 <span class="kw">impl </span>Lnd {
-    <span class="kw">pub async fn </span>cmd(<span class="self">self</span>) -&gt; Command {
+    <span class="kw">pub fn </span>cmd(<span class="self">self</span>) -&gt; Command {
         to_command(get_command_str_for_alias(
             <span class="kw-2">&amp;</span>[FM_LND_BASE_EXECUTABLE_ENV],
             <span class="kw-2">&amp;</span>[LND_FALLBACK],
@@ -2126,7 +2116,7 @@
 
 <span class="kw">pub struct </span>Electrs;
 <span class="kw">impl </span>Electrs {
-    <span class="kw">pub async fn </span>cmd(<span class="self">self</span>) -&gt; Command {
+    <span class="kw">pub fn </span>cmd(<span class="self">self</span>) -&gt; Command {
         to_command(get_command_str_for_alias(
             <span class="kw-2">&amp;</span>[FM_ELECTRS_BASE_EXECUTABLE_ENV],
             <span class="kw-2">&amp;</span>[ELECTRS_FALLBACK],
@@ -2136,7 +2126,7 @@
 
 <span class="kw">pub struct </span>Esplora;
 <span class="kw">impl </span>Esplora {
-    <span class="kw">pub async fn </span>cmd(<span class="self">self</span>) -&gt; Command {
+    <span class="kw">pub fn </span>cmd(<span class="self">self</span>) -&gt; Command {
         to_command(get_command_str_for_alias(
             <span class="kw-2">&amp;</span>[FM_ESPLORA_BASE_EXECUTABLE_ENV],
             <span class="kw-2">&amp;</span>[ESPLORA_FALLBACK],
@@ -2146,7 +2136,7 @@
 
 <span class="kw">pub struct </span>Recoverytool;
 <span class="kw">impl </span>Recoverytool {
-    <span class="kw">pub async fn </span>cmd(<span class="self">self</span>) -&gt; Command {
+    <span class="kw">pub fn </span>cmd(<span class="self">self</span>) -&gt; Command {
         to_command(get_command_str_for_alias(
             <span class="kw-2">&amp;</span>[FM_RECOVERYTOOL_BASE_EXECUTABLE_ENV],
             <span class="kw-2">&amp;</span>[RECOVERYTOOL_FALLBACK],
@@ -2156,7 +2146,7 @@
 
 <span class="kw">pub struct </span>Faucet;
 <span class="kw">impl </span>Faucet {
-    <span class="kw">pub async fn </span>cmd(<span class="self">self</span>) -&gt; Command {
+    <span class="kw">pub fn </span>cmd(<span class="self">self</span>) -&gt; Command {
         to_command(get_command_str_for_alias(
             <span class="kw-2">&amp;</span>[FM_FAUCET_BASE_EXECUTABLE_ENV],
             <span class="kw-2">&amp;</span>[FAUCET_FALLBACK],

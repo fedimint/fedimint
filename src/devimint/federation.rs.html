@@ -1139,9 +1139,6 @@
 <a href="#1139" id="1139">1139</a>
 <a href="#1140" id="1140">1140</a>
 <a href="#1141" id="1141">1141</a>
-<a href="#1142" id="1142">1142</a>
-<a href="#1143" id="1143">1143</a>
-<a href="#1144" id="1144">1144</a>
 </pre></div><pre class="rust"><code><span class="kw">mod </span>config;
 
 <span class="kw">use </span>std::collections::{BTreeMap, HashMap, HashSet};
@@ -1246,7 +1243,7 @@
     }
 
     <span class="doccomment">/// Create a [`Client`] that starts with a fresh state.
-    </span><span class="kw">pub async fn </span>create(name: <span class="kw-2">&amp;</span>str) -&gt; <span class="prelude-ty">Result</span>&lt;Client&gt; {
+    </span><span class="kw">pub fn </span>create(name: <span class="kw-2">&amp;</span>str) -&gt; <span class="prelude-ty">Result</span>&lt;Client&gt; {
         block_in_place(|| {
             <span class="kw">let </span>_lock = <span class="self">Self</span>::client_name_lock(name);
             <span class="kw">for </span>i <span class="kw">in </span><span class="number">0u64</span>.. {
@@ -1264,7 +1261,7 @@
     }
 
     <span class="doccomment">/// Open or create a [`Client`] that starts with a fresh state.
-    </span><span class="kw">pub async fn </span>open_or_create(name: <span class="kw-2">&amp;</span>str) -&gt; <span class="prelude-ty">Result</span>&lt;Client&gt; {
+    </span><span class="kw">pub fn </span>open_or_create(name: <span class="kw-2">&amp;</span>str) -&gt; <span class="prelude-ty">Result</span>&lt;Client&gt; {
         block_in_place(|| {
             <span class="kw">let </span>_lock = <span class="self">Self</span>::client_name_lock(name);
             <span class="kw">let </span>client = <span class="self">Self </span>{
@@ -1288,7 +1285,7 @@
     <span class="doccomment">/// Create a [`Client`] that starts with a state that is a copy of
     /// of another one.
     </span><span class="kw">pub async fn </span>new_forked(<span class="kw-2">&amp;</span><span class="self">self</span>, name: <span class="kw-2">&amp;</span>str) -&gt; <span class="prelude-ty">Result</span>&lt;Client&gt; {
-        <span class="kw">let </span>new = Client::create(name).<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>new = Client::create(name)<span class="question-mark">?</span>;
 
         <span class="macro">cmd!</span>(
             <span class="string">"cp"</span>,
@@ -1337,7 +1334,7 @@
         <span class="macro">cmd!</span>(<span class="self">self</span>, <span class="string">"await-deposit"</span>, operation_id).run().<span class="kw">await
     </span>}
 
-    <span class="kw">pub async fn </span>cmd(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Command {
+    <span class="kw">pub fn </span>cmd(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Command {
         <span class="macro">cmd!</span>(
             <span class="kw">crate</span>::util::get_fedimint_cli_path(),
             <span class="macro">format!</span>(<span class="string">"--data-dir={}"</span>, <span class="self">self</span>.client_dir().display())
@@ -1439,7 +1436,7 @@
 
         <span class="kw">let </span>client = JitTryAnyhow::new_try({
             <span class="kw">move </span>|| <span class="kw">async move </span>{
-                <span class="kw">let </span>client = Client::open_or_create(<span class="string">"default"</span>).<span class="kw">await</span><span class="question-mark">?</span>;
+                <span class="kw">let </span>client = Client::open_or_create(<span class="string">"default"</span>)<span class="question-mark">?</span>;
                 <span class="kw">let </span>invite_code = <span class="self">Self</span>::invite_code_static()<span class="question-mark">?</span>;
                 <span class="kw">if </span>!skip_setup {
                     <span class="macro">cmd!</span>(client, <span class="string">"join-federation"</span>, invite_code).run().<span class="kw">await</span><span class="question-mark">?</span>;
@@ -1456,16 +1453,15 @@
         })
     }
 
-    <span class="kw">pub async fn </span>client_config(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;ClientConfig&gt; {
+    <span class="kw">pub fn </span>client_config(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;ClientConfig&gt; {
         <span class="kw">let </span>cfg_path = <span class="self">self</span>.vars[<span class="kw-2">&amp;</span><span class="number">0</span>].FM_DATA_DIR.join(<span class="string">"client.json"</span>);
         load_from_file(<span class="kw-2">&amp;</span>cfg_path)
     }
 
-    <span class="kw">pub async fn </span>module_client_config&lt;M: ClientModule&gt;(
+    <span class="kw">pub fn </span>module_client_config&lt;M: ClientModule&gt;(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;&lt;M::Common <span class="kw">as </span>ModuleCommon&gt;::ClientConfig&gt;&gt; {
-        <span class="self">self</span>.client_config()
-            .<span class="kw">await</span><span class="question-mark">?
+        <span class="self">self</span>.client_config()<span class="question-mark">?
             </span>.modules
             .iter()
             .find_map(|(module_instance_id, module_cfg)| {
@@ -1494,10 +1490,9 @@
             .transpose()
     }
 
-    <span class="kw">pub async fn </span>deposit_fees(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;Amount&gt; {
+    <span class="kw">pub fn </span>deposit_fees(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;Amount&gt; {
         <span class="prelude-val">Ok</span>(<span class="self">self
-            </span>.module_client_config::&lt;WalletClientModule&gt;()
-            .<span class="kw">await</span><span class="question-mark">?
+            </span>.module_client_config::&lt;WalletClientModule&gt;()<span class="question-mark">?
             </span>.context(<span class="string">"No wallet module found"</span>)<span class="question-mark">?
             </span>.fee_consensus
             .peg_in_abs)
@@ -1539,7 +1534,7 @@
 
     <span class="doccomment">/// New [`Client`] that already joined `self`
     </span><span class="kw">pub async fn </span>new_joined_client(<span class="kw-2">&amp;</span><span class="self">self</span>, name: <span class="kw-2">&amp;</span>str) -&gt; <span class="prelude-ty">Result</span>&lt;Client&gt; {
-        <span class="kw">let </span>client = Client::create(name).<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>client = Client::create(name)<span class="question-mark">?</span>;
         client.join_federation(<span class="self">self</span>.invite_code()<span class="question-mark">?</span>).<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(client)
     }
@@ -1653,7 +1648,7 @@
     }
 
     <span class="kw">pub async fn </span>pegin_client(<span class="kw-2">&amp;</span><span class="self">self</span>, amount: u64, client: <span class="kw-2">&amp;</span>Client) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-        <span class="kw">let </span>deposit_fees_msat = <span class="self">self</span>.deposit_fees().<span class="kw">await</span><span class="question-mark">?</span>.msats;
+        <span class="kw">let </span>deposit_fees_msat = <span class="self">self</span>.deposit_fees()<span class="question-mark">?</span>.msats;
         <span class="macro">assert_eq!</span>(
             deposit_fees_msat % <span class="number">1000</span>,
             <span class="number">0</span>,
@@ -1674,7 +1669,7 @@
     }
 
     <span class="kw">pub async fn </span>pegin_gateway(<span class="kw-2">&amp;</span><span class="self">self</span>, amount: u64, gw: <span class="kw-2">&amp;</span><span class="kw">super</span>::gatewayd::Gatewayd) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-        <span class="kw">let </span>deposit_fees_msat = <span class="self">self</span>.deposit_fees().<span class="kw">await</span><span class="question-mark">?</span>.msats;
+        <span class="kw">let </span>deposit_fees_msat = <span class="self">self</span>.deposit_fees()<span class="question-mark">?</span>.msats;
         <span class="macro">assert_eq!</span>(
             deposit_fees_msat % <span class="number">1000</span>,
             <span class="number">0</span>,
@@ -1682,7 +1677,7 @@
         </span>);
         <span class="kw">let </span>deposit_fees = deposit_fees_msat / <span class="number">1000</span>;
         <span class="macro">info!</span>(amount, deposit_fees, <span class="string">"Pegging-in gateway funds"</span>);
-        <span class="kw">let </span>fed_id = <span class="self">self</span>.calculate_federation_id().<span class="kw">await</span>;
+        <span class="kw">let </span>fed_id = <span class="self">self</span>.calculate_federation_id();
         <span class="kw">let </span>pegin_addr = gw.get_pegin_addr(<span class="kw-2">&amp;</span>fed_id).<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="self">self</span>.bitcoind
             .send_to(pegin_addr, amount + deposit_fees)
@@ -1701,18 +1696,17 @@
         <span class="prelude-val">Ok</span>(())
     }
 
-    <span class="kw">pub async fn </span>calculate_federation_id(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; String {
+    <span class="kw">pub fn </span>calculate_federation_id(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; String {
         <span class="self">self</span>.client_config()
-            .<span class="kw">await
-            </span>.unwrap()
+            .unwrap()
             .global
             .calculate_federation_id()
             .to_string()
     }
 
     <span class="kw">pub async fn </span>await_block_sync(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;u64&gt; {
-        <span class="kw">let </span>finality_delay = <span class="self">self</span>.get_finality_delay().<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">let </span>block_count = <span class="self">self</span>.bitcoind.get_block_count().<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>finality_delay = <span class="self">self</span>.get_finality_delay()<span class="question-mark">?</span>;
+        <span class="kw">let </span>block_count = <span class="self">self</span>.bitcoind.get_block_count()<span class="question-mark">?</span>;
         <span class="kw">let </span>expected = block_count.saturating_sub(finality_delay.into());
         <span class="macro">cmd!</span>(
             <span class="self">self</span>.internal_client().<span class="kw">await</span><span class="question-mark">?</span>,
@@ -1725,8 +1719,8 @@
         <span class="prelude-val">Ok</span>(expected)
     }
 
-    <span class="kw">async fn </span>get_finality_delay(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;u32, anyhow::Error&gt; {
-        <span class="kw">let </span>client_config = <span class="kw-2">&amp;</span><span class="self">self</span>.client_config().<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="kw">fn </span>get_finality_delay(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;u32, anyhow::Error&gt; {
+        <span class="kw">let </span>client_config = <span class="kw-2">&amp;</span><span class="self">self</span>.client_config()<span class="question-mark">?</span>;
         <span class="kw">let </span>wallet_cfg = client_config
             .modules
             .get(<span class="kw-2">&amp;</span>LEGACY_HARDCODED_INSTANCE_ID_WALLET)
@@ -1806,7 +1800,7 @@
     ///   tx included in block 101
     ///   highest finalized height = 111 - 10 = 101
     </span><span class="kw">pub async fn </span>finalize_mempool_tx(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-        <span class="kw">let </span>finality_delay = <span class="self">self</span>.get_finality_delay().<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>finality_delay = <span class="self">self</span>.get_finality_delay()<span class="question-mark">?</span>;
         <span class="kw">let </span>blocks_to_mine = finality_delay + <span class="number">1</span>;
         <span class="self">self</span>.bitcoind.mine_blocks(blocks_to_mine.into()).<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="self">self</span>.await_block_sync().<span class="kw">await</span><span class="question-mark">?</span>;

@@ -417,7 +417,6 @@
 <a href="#417" id="417">417</a>
 <a href="#418" id="418">418</a>
 <a href="#419" id="419">419</a>
-<a href="#420" id="420">420</a>
 </pre></div><pre class="rust"><code><span class="kw">mod </span>complete_sm;
 <span class="kw">mod </span>receive_sm;
 <span class="kw">mod </span>send_sm;
@@ -559,8 +558,7 @@
     }
 }
 
-<span class="attr">#[allow(clippy::large_enum_variant)]
-#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
+<span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
 </span><span class="kw">pub enum </span>GatewayClientStateMachinesV2 {
     Send(SendStateMachine),
     Receive(ReceiveStateMachine),

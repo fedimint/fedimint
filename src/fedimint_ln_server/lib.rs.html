@@ -1488,13 +1488,11 @@
 <a href="#1488" id="1488">1488</a>
 <a href="#1489" id="1489">1489</a>
 <a href="#1490" id="1490">1490</a>
-<a href="#1491" id="1491">1491</a>
 </pre></div><pre class="rust"><code><span class="attr">#![warn(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::cast_possible_wrap)]
 #![allow(clippy::default_trait_access)]
 #![allow(clippy::doc_markdown)]
-#![allow(clippy::ignored_unit_patterns)]
 #![allow(clippy::manual_let_else)]
 #![allow(clippy::module_name_repetitions)]
 #![allow(clippy::must_use_candidate)]
@@ -2419,7 +2417,7 @@
                 ApiVersion::new(<span class="number">0</span>, <span class="number">1</span>),
                 <span class="kw">async </span>|module: <span class="kw-2">&amp;</span>Lightning, context, remove_gateway_request: RemoveGatewayRequest| -&gt; bool {
                     <span class="kw">match </span>module.remove_gateway(remove_gateway_request.clone(), <span class="kw-2">&amp;mut </span>context.dbtx().into_nc()).<span class="kw">await </span>{
-                        <span class="prelude-val">Ok</span>(<span class="kw">_</span>) =&gt; <span class="prelude-val">Ok</span>(<span class="bool-val">true</span>),
+                        <span class="prelude-val">Ok</span>(()) =&gt; <span class="prelude-val">Ok</span>(<span class="bool-val">true</span>),
                         <span class="prelude-val">Err</span>(e) =&gt; {
                             <span class="macro">warn!</span>(<span class="string">"Unable to remove gateway registration {remove_gateway_request:?} Error: {e:?}"</span>);
                             <span class="prelude-val">Ok</span>(<span class="bool-val">false</span>)

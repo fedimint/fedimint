@@ -1075,7 +1075,7 @@
                             }
                         }
                     },
-                    <span class="kw">_ </span>= handle.make_shutdown_rx().<span class="kw">await </span>=&gt; {
+                    () = handle.make_shutdown_rx() =&gt; {
                         <span class="macro">info!</span>(<span class="string">"LND HTLC Subscription received shutdown signal while trying to intercept HTLC stream, exiting..."</span>);
                         <span class="kw">return</span>;
                     }
@@ -1091,7 +1091,7 @@
                 // not process until another message arrives from the HTLC stream, which may
                 // take a long time, or never.
                 </span><span class="kw">while let </span><span class="prelude-val">Some</span>(htlc) = <span class="macro">tokio::select!</span> {
-                    <span class="kw">_ </span>= handle.make_shutdown_rx().<span class="kw">await </span>=&gt; {
+                    () = handle.make_shutdown_rx() =&gt; {
                         <span class="macro">info!</span>(<span class="string">"LND HTLC Subscription task received shutdown signal"</span>);
                         <span class="prelude-val">None
                     </span>}
@@ -1125,7 +1125,7 @@
                     };
 
                     <span class="kw">match </span>gateway_sender.send(<span class="prelude-val">Ok</span>(intercept)).<span class="kw">await </span>{
-                        <span class="prelude-val">Ok</span>(<span class="kw">_</span>) =&gt; {}
+                        <span class="prelude-val">Ok</span>(()) =&gt; {}
                         <span class="prelude-val">Err</span>(e) =&gt; {
                             <span class="macro">error!</span>(<span class="string">"Failed to send HTLC to gatewayd for processing: {:?}"</span>, e);
                             <span class="kw">let _ </span>= <span class="self">Self</span>::cancel_htlc(incoming_circuit_key, lnd_sender.clone())

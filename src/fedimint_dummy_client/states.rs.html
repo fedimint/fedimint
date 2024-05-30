@@ -184,7 +184,7 @@
                 await_tx_accepted(global_context.clone(), txid),
                 <span class="kw">move </span>|dbtx, res, _state: <span class="self">Self</span>| <span class="kw">match </span>res {
                     <span class="comment">// accepted, we are done
-                    </span><span class="prelude-val">Ok</span>(<span class="kw">_</span>) =&gt; Box::pin(<span class="kw">async move </span>{ DummyStateMachine::InputDone(id) }),
+                    </span><span class="prelude-val">Ok</span>(()) =&gt; Box::pin(<span class="kw">async move </span>{ DummyStateMachine::InputDone(id) }),
                     <span class="comment">// tx rejected, we refund ourselves
                     </span><span class="prelude-val">Err</span>(<span class="kw">_</span>) =&gt; Box::pin(<span class="kw">async move </span>{
                         add_funds(amount, dbtx.module_tx()).<span class="kw">await</span>;
@@ -200,7 +200,7 @@
                 ),
                 <span class="kw">move </span>|dbtx, res, _state: <span class="self">Self</span>| <span class="kw">match </span>res {
                     <span class="comment">// output accepted, add funds
-                    </span><span class="prelude-val">Ok</span>(<span class="kw">_</span>) =&gt; Box::pin(<span class="kw">async move </span>{
+                    </span><span class="prelude-val">Ok</span>(()) =&gt; Box::pin(<span class="kw">async move </span>{
                         add_funds(amount, dbtx.module_tx()).<span class="kw">await</span>;
                         DummyStateMachine::OutputDone(amount, id)
                     }),

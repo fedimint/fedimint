@@ -560,7 +560,7 @@
         <span class="kw">let </span>operations: Vec&lt;ChronologicalOperationLogKey&gt; = dbtx
             .find_by_prefix_sorted_descending(<span class="kw-2">&amp;</span>ChronologicalOperationLogKeyPrefix)
             .<span class="kw">await
-            </span>.map(|(key, <span class="kw">_</span>)| key)
+            </span>.map(|(key, ())| key)
             <span class="comment">// FIXME: this is a schlemil-the-painter algorithm that will take longer the further
             // back in history one goes. To avoid that I see two options:
             //   1. Add a reference to the previous operation to each operation log entry,
@@ -943,6 +943,18 @@
 
     <span class="attr">#[tokio::test]
     </span><span class="kw">async fn </span>test_pagination() {
+        <span class="kw">fn </span>assert_page_entries(
+            page: Vec&lt;(ChronologicalOperationLogKey, OperationLogEntry)&gt;,
+            page_idx: u8,
+        ) {
+            <span class="kw">for </span>(entry_idx, (_key, entry)) <span class="kw">in </span>page.into_iter().enumerate() {
+                <span class="kw">let </span>actual_meta = entry.meta::&lt;u8&gt;();
+                <span class="kw">let </span>expected_meta = <span class="number">97 </span>- (page_idx * <span class="number">10 </span>+ entry_idx <span class="kw">as </span>u8);
+
+                <span class="macro">assert_eq!</span>(actual_meta, expected_meta);
+            }
+        }
+
         <span class="kw">let </span>db = Database::new(MemDatabase::new(), Default::default());
         <span class="kw">let </span>op_log = OperationLog::new(db.clone());
 
@@ -957,18 +969,6 @@
                 )
                 .<span class="kw">await</span>;
             dbtx.commit_tx().<span class="kw">await</span>;
-        }
-
-        <span class="kw">fn </span>assert_page_entries(
-            page: Vec&lt;(ChronologicalOperationLogKey, OperationLogEntry)&gt;,
-            page_idx: u8,
-        ) {
-            <span class="kw">for </span>(entry_idx, (_key, entry)) <span class="kw">in </span>page.into_iter().enumerate() {
-                <span class="kw">let </span>actual_meta = entry.meta::&lt;u8&gt;();
-                <span class="kw">let </span>expected_meta = <span class="number">97 </span>- (page_idx * <span class="number">10 </span>+ entry_idx <span class="kw">as </span>u8);
-
-                <span class="macro">assert_eq!</span>(actual_meta, expected_meta);
-            }
         }
 
         <span class="kw">let </span><span class="kw-2">mut </span>previous_last_element = <span class="prelude-val">None</span>;

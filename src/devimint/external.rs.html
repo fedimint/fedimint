@@ -882,8 +882,6 @@
 <a href="#882" id="882">882</a>
 <a href="#883" id="883">883</a>
 <a href="#884" id="884">884</a>
-<a href="#885" id="885">885</a>
-<a href="#886" id="886">886</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::ops::{ControlFlow, Deref <span class="kw">as _</span>};
 <span class="kw">use </span>std::path::Path;
 <span class="kw">use </span>std::str::FromStr;
@@ -1046,8 +1044,7 @@
     </span><span class="kw">pub async fn </span>poll_ready(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; anyhow::Result&lt;()&gt; {
         poll(<span class="string">"bitcoind rpc ready"</span>, || <span class="kw">async </span>{
             <span class="self">self</span>.get_block_count()
-                .<span class="kw">await
-                </span>.map_err(ControlFlow::Continue::&lt;anyhow::Error, <span class="kw">_</span>&gt;)<span class="question-mark">?</span>;
+                .map_err(ControlFlow::Continue::&lt;anyhow::Error, <span class="kw">_</span>&gt;)<span class="question-mark">?</span>;
             <span class="prelude-val">Ok</span>(())
         })
         .<span class="kw">await
@@ -1065,7 +1062,7 @@
     /// Fedimint's IBitcoindRpc considers block count the total number of
     /// blocks, where bitcoind's rpc returns the height. Since the genesis
     /// block has height 0, we need to add 1 to get the total block count.
-    </span><span class="kw">pub async fn </span>get_block_count(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;u64&gt; {
+    </span><span class="kw">pub fn </span>get_block_count(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;u64&gt; {
         <span class="prelude-val">Ok</span>(block_in_place(|| <span class="self">self</span>.client.get_block_count())<span class="question-mark">? </span>+ <span class="number">1</span>)
     }
 
@@ -1073,7 +1070,7 @@
         <span class="kw">let </span>start_time = Instant::now();
         <span class="macro">debug!</span>(target: LOG_DEVIMINT, <span class="question-mark">?</span>block_num, <span class="string">"Mining bitcoin blocks"</span>);
         <span class="kw">let </span>addr = <span class="self">self</span>.get_new_address().<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">let </span>initial_block_count = <span class="self">self</span>.get_block_count().<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>initial_block_count = <span class="self">self</span>.get_block_count()<span class="question-mark">?</span>;
         <span class="self">self</span>.generate_to_address(block_num, <span class="kw-2">&amp;</span>addr).<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="macro">debug!</span>(target: LOG_DEVIMINT,
             elapsed_ms = %start_time.elapsed().as_millis(),
@@ -1086,9 +1083,9 @@
         <span class="kw">let </span>start_time = Instant::now();
         <span class="macro">debug!</span>(target: LOG_DEVIMINT, <span class="question-mark">?</span>block_num, <span class="string">"Mining bitcoin blocks"</span>);
         <span class="kw">let </span>addr = <span class="self">self</span>.get_new_address().<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">let </span>initial_block_count = <span class="self">self</span>.get_block_count().<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>initial_block_count = <span class="self">self</span>.get_block_count()<span class="question-mark">?</span>;
         <span class="self">self</span>.generate_to_address(block_num, <span class="kw-2">&amp;</span>addr).<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">while </span><span class="self">self</span>.get_block_count().<span class="kw">await</span><span class="question-mark">? </span>&lt; initial_block_count + block_num {
+        <span class="kw">while </span><span class="self">self</span>.get_block_count()<span class="question-mark">? </span>&lt; initial_block_count + block_num {
             <span class="macro">trace!</span>(target: LOG_DEVIMINT, <span class="question-mark">?</span>block_num, <span class="string">"Waiting for blocks to be mined"</span>);
             sleep(Duration::from_millis(<span class="number">100</span>)).<span class="kw">await</span>;
         }
@@ -1116,7 +1113,7 @@
         <span class="prelude-val">Ok</span>(proof.encode_hex())
     }
 
-    <span class="kw">pub async fn </span>get_raw_transaction(<span class="kw-2">&amp;</span><span class="self">self</span>, txid: <span class="kw-2">&amp;</span>bitcoin::Txid) -&gt; <span class="prelude-ty">Result</span>&lt;String&gt; {
+    <span class="kw">pub fn </span>get_raw_transaction(<span class="kw-2">&amp;</span><span class="self">self</span>, txid: <span class="kw-2">&amp;</span>bitcoin::Txid) -&gt; <span class="prelude-ty">Result</span>&lt;String&gt; {
         <span class="kw">let </span>tx = block_in_place(|| <span class="self">self</span>.client.get_raw_transaction(txid, <span class="prelude-val">None</span>))<span class="question-mark">?</span>;
         <span class="kw">let </span>bytes = tx.consensus_encode_to_vec();
         <span class="prelude-val">Ok</span>(bytes.encode_hex())
@@ -1150,7 +1147,7 @@
         })<span class="question-mark">?</span>)
     }
 
-    <span class="kw">pub async fn </span>get_blockchain_info(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; anyhow::Result&lt;GetBlockchainInfoResult&gt; {
+    <span class="kw">pub fn </span>get_blockchain_info(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; anyhow::Result&lt;GetBlockchainInfoResult&gt; {
         <span class="prelude-val">Ok</span>(block_in_place(|| <span class="self">self</span>.client.get_blockchain_info())<span class="question-mark">?</span>)
     }
 
@@ -1283,8 +1280,7 @@
             <span class="kw">let </span>btc_height = <span class="self">self
                 </span>.bitcoind
                 .get_blockchain_info()
-                .<span class="kw">await
-                </span>.context(<span class="string">"bitcoind getblockchaininfo"</span>)
+                .context(<span class="string">"bitcoind getblockchaininfo"</span>)
                 .map_err(ControlFlow::Continue)<span class="question-mark">?
                 </span>.blocks;
             <span class="kw">let </span>lnd_height = <span class="self">self

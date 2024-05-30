@@ -2544,7 +2544,7 @@
         <span class="kw">let </span>leader_name = leader.name.clone();
         followers.push(leader);
         <span class="kw">let </span>all_peers = Arc::new(followers);
-        <span class="kw">let </span>(results, <span class="kw">_</span>) = <span class="macro">tokio::join!</span>(
+        <span class="kw">let </span>(results, ()) = <span class="macro">tokio::join!</span>(
             join_all(
                 all_peers
                     .iter()

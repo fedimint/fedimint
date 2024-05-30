@@ -1679,9 +1679,9 @@
         <span class="kw">let </span>task_runner_inner = <span class="self">self</span>.inner.clone();
         <span class="kw">let </span>_handle = <span class="self">self</span>.inner.client_task_group.spawn(<span class="string">"sm-executor"</span>, |task_handle| <span class="kw">async move </span>{
             <span class="kw">let </span>executor_runner = task_runner_inner.run(context_gen, sm_update_rx);
-            <span class="kw">let </span>task_group_shutdown_rx = task_handle.make_shutdown_rx().<span class="kw">await</span>;
+            <span class="kw">let </span>task_group_shutdown_rx = task_handle.make_shutdown_rx();
             <span class="macro">select!</span> {
-                <span class="kw">_ </span>= task_group_shutdown_rx =&gt; {
+                () = task_group_shutdown_rx =&gt; {
                     <span class="macro">debug!</span>(<span class="string">"Shutting down state machine executor runner due to task group shutdown signal"</span>);
                 },
                 shutdown_happened_sender = shutdown_receiver =&gt; {
@@ -1694,7 +1694,7 @@
                         }
                     }
                 },
-                <span class="kw">_ </span>= executor_runner =&gt; {
+                () = executor_runner =&gt; {
                     <span class="macro">error!</span>(<span class="string">"State machine executor runner exited unexpectedly!"</span>);
                 },
             };
@@ -1821,14 +1821,6 @@
         global_context_gen: ContextGen,
         <span class="kw-2">mut </span>sm_update_rx: tokio::sync::mpsc::UnboundedReceiver&lt;DynState&gt;,
     ) -&gt; anyhow::Result&lt;()&gt; {
-        <span class="kw">let </span>active_states = <span class="self">self</span>.get_active_states().<span class="kw">await</span>;
-        <span class="macro">trace!</span>(target: LOG_CLIENT_REACTOR, <span class="string">"Starting active states: {:?}"</span>, active_states);
-        <span class="kw">for </span>(state, _meta) <span class="kw">in </span>active_states {
-            <span class="self">self</span>.sm_update_tx
-                .send(state)
-                .expect(<span class="string">"Must be able to send state machine to own opened channel"</span>);
-        }
-
         <span class="doccomment">/// All futures in the executor resolve to this type, so the handling
         /// code can tell them apart.
         </span><span class="kw">enum </span>ExecutorLoopEvent {
@@ -1845,6 +1837,14 @@
             },
             <span class="doccomment">/// New job receiver disconnected, that can only mean termination
             </span>Disconnected,
+        }
+
+        <span class="kw">let </span>active_states = <span class="self">self</span>.get_active_states().<span class="kw">await</span>;
+        <span class="macro">trace!</span>(target: LOG_CLIENT_REACTOR, <span class="string">"Starting active states: {:?}"</span>, active_states);
+        <span class="kw">for </span>(state, _meta) <span class="kw">in </span>active_states {
+            <span class="self">self</span>.sm_update_tx
+                .send(state)
+                .expect(<span class="string">"Must be able to send state machine to own opened channel"</span>);
         }
 
         <span class="comment">// Keeps track of things already running, so we can deduplicate, just

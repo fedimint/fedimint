@@ -224,7 +224,7 @@
     <span class="doccomment">/// Notify a key.
     ///
     /// All the waiters for this keys will be notified.
-    </span><span class="kw">pub async fn </span>notify&lt;K&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, key: K)
+    </span><span class="kw">pub fn </span>notify&lt;K&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, key: K)
     <span class="kw">where
         </span>K: Hash,
     {
@@ -277,7 +277,7 @@
         <span class="kw">let </span>notifs = Notifications::new();
         <span class="kw">let </span>key = <span class="number">1</span>;
         <span class="kw">let </span>sub = notifs.register(key);
-        notifs.notify(<span class="kw-2">&amp;</span>key).<span class="kw">await</span>;
+        notifs.notify(key);
         <span class="macro">assert!</span>(future_returns_shortly(sub).<span class="kw">await</span>.is_some(), <span class="string">"should notify"</span>);
     }
 
@@ -299,8 +299,8 @@
         <span class="kw">let </span>key2 = <span class="number">2</span>;
         <span class="kw">let </span>sub1 = notifs.register(key1);
         <span class="kw">let </span>sub2 = notifs.register(key2);
-        notifs.notify(<span class="kw-2">&amp;</span>key1).<span class="kw">await</span>;
-        notifs.notify(<span class="kw-2">&amp;</span>key2).<span class="kw">await</span>;
+        notifs.notify(key1);
+        notifs.notify(key2);
         <span class="macro">assert!</span>(
             future_returns_shortly(sub1).<span class="kw">await</span>.is_some(),
             <span class="string">"should notify"

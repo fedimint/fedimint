@@ -143,6 +143,8 @@
 <a href="#143" id="143">143</a>
 <a href="#144" id="144">144</a>
 <a href="#145" id="145">145</a>
+<a href="#146" id="146">146</a>
+<a href="#147" id="147">147</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::time::Duration;
 
 <span class="kw">use </span>bitcoin::Txid;
@@ -187,7 +189,9 @@
                         <span class="self">self</span>.operation_id,
                         created.clone(),
                     ),
-                    |_dbtx, res, old_state| Box::pin(transition_withdraw_processed(res, old_state)),
+                    |_dbtx, res, old_state| {
+                        Box::pin(<span class="kw">async move </span>{ transition_withdraw_processed(res, <span class="kw-2">&amp;</span>old_state) })
+                    },
                 )]
             }
             WithdrawStates::Success(<span class="kw">_</span>) | WithdrawStates::Aborted(<span class="kw">_</span>) =&gt; {
@@ -246,9 +250,9 @@
     }
 }
 
-<span class="kw">async fn </span>transition_withdraw_processed(
+<span class="kw">fn </span>transition_withdraw_processed(
     res: <span class="prelude-ty">Result</span>&lt;Txid, String&gt;,
-    old_state: WithdrawStateMachine,
+    old_state: <span class="kw-2">&amp;</span>WithdrawStateMachine,
 ) -&gt; WithdrawStateMachine {
     <span class="macro">assert!</span>(
         <span class="macro">matches!</span>(old_state.state, WithdrawStates::Created(<span class="kw">_</span>)),

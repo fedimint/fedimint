@@ -1949,17 +1949,12 @@
 <a href="#1949" id="1949">1949</a>
 <a href="#1950" id="1950">1950</a>
 <a href="#1951" id="1951">1951</a>
-<a href="#1952" id="1952">1952</a>
-<a href="#1953" id="1953">1953</a>
-<a href="#1954" id="1954">1954</a>
 </pre></div><pre class="rust"><code><span class="attr">#![warn(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::cast_possible_wrap)]
 #![allow(clippy::cast_sign_loss)]
 #![allow(clippy::default_trait_access)]
 #![allow(clippy::doc_markdown)]
-#![allow(clippy::ignored_unit_patterns)]
-#![allow(clippy::large_futures)]
 #![allow(clippy::missing_errors_doc)]
 #![allow(clippy::missing_fields_in_debug)]
 #![allow(clippy::missing_panics_doc)]
@@ -1969,7 +1964,6 @@
 #![allow(clippy::similar_names)]
 #![allow(clippy::struct_field_names)]
 #![allow(clippy::too_many_lines)]
-#![allow(clippy::unused_async)]
 #![allow(clippy::wildcard_imports)]
 
 </span><span class="kw">pub mod </span>client;
@@ -2491,12 +2485,12 @@
     /// service requests.
     </span><span class="kw">pub async fn </span>run(<span class="kw-2">mut </span><span class="self">self</span>, tg: <span class="kw-2">&amp;mut </span>TaskGroup) -&gt; anyhow::Result&lt;TaskShutdownToken&gt; {
         <span class="self">self</span>.register_clients_timer(tg);
-        <span class="self">self</span>.load_clients().<span class="kw">await</span>;
+        Box::pin(<span class="self">self</span>.load_clients()).<span class="kw">await</span>;
         <span class="self">self</span>.start_gateway(tg);
         <span class="comment">// start webserver last to avoid handling requests before fully initialized
         </span>run_webserver(<span class="self">self</span>.clone(), tg).<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>handle = tg.make_handle();
-        <span class="kw">let </span>shutdown_receiver = handle.make_shutdown_rx().<span class="kw">await</span>;
+        <span class="kw">let </span>shutdown_receiver = handle.make_shutdown_rx();
         <span class="prelude-val">Ok</span>(shutdown_receiver)
     }
 
@@ -3438,10 +3432,10 @@
             <span class="kw">let </span>federation_id = config.invite_code.federation_id();
             <span class="kw">let </span>scid = config.mint_channel_id;
 
-            <span class="kw">if let </span><span class="prelude-val">Ok</span>(client) = Spanned::try_new(
+            <span class="kw">if let </span><span class="prelude-val">Ok</span>(client) = Box::pin(Spanned::try_new(
                 <span class="macro">info_span!</span>(<span class="string">"client"</span>, federation_id  = %federation_id.clone()),
                 <span class="self">self</span>.client_builder.build(config.clone(), <span class="self">self</span>.clone()),
-            )
+            ))
             .<span class="kw">await
             </span>{
                 <span class="comment">// Registering each client happens in the background, since we're loading

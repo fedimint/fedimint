@@ -437,8 +437,6 @@
 <a href="#437" id="437">437</a>
 <a href="#438" id="438">438</a>
 <a href="#439" id="439">439</a>
-<a href="#440" id="440">440</a>
-<a href="#441" id="441">441</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
 
@@ -571,12 +569,10 @@
         <span class="macro">vec!</span>[StateTransition::new(
             <span class="self">Self</span>::await_invoice_confirmation(global_context, txid),
             <span class="kw">move </span>|_dbtx, result, old_state| {
-                Box::pin(<span class="self">Self</span>::transition_confirmed_invoice(
-                    result,
-                    old_state,
-                    invoice.clone(),
-                    receiving_key,
-                ))
+                <span class="kw">let </span>invoice = invoice.clone();
+                Box::pin(<span class="kw">async move </span>{
+                    <span class="self">Self</span>::transition_confirmed_invoice(<span class="kw-2">&amp;</span>result, <span class="kw-2">&amp;</span>old_state, invoice, receiving_key)
+                })
             },
         )]
     }
@@ -590,14 +586,14 @@
         </span>global_context.await_tx_accepted(txid).<span class="kw">await
     </span>}
 
-    <span class="kw">async fn </span>transition_confirmed_invoice(
-        result: <span class="prelude-ty">Result</span>&lt;(), String&gt;,
-        old_state: LightningReceiveStateMachine,
+    <span class="kw">fn </span>transition_confirmed_invoice(
+        result: <span class="kw-2">&amp;</span><span class="prelude-ty">Result</span>&lt;(), String&gt;,
+        old_state: <span class="kw-2">&amp;</span>LightningReceiveStateMachine,
         invoice: Bolt11Invoice,
         receiving_key: ReceivingKey,
     ) -&gt; LightningReceiveStateMachine {
         <span class="kw">match </span>result {
-            <span class="prelude-val">Ok</span>(<span class="kw">_</span>) =&gt; LightningReceiveStateMachine {
+            <span class="prelude-val">Ok</span>(()) =&gt; LightningReceiveStateMachine {
                 operation_id: old_state.operation_id,
                 state: LightningReceiveStates::ConfirmedInvoice(LightningReceiveConfirmedInvoice {
                     invoice,
@@ -788,9 +784,9 @@
             <span class="self">Self</span>::await_claim_success(global_context.clone(), <span class="self">self</span>.txid),
             <span class="kw">move </span>|_dbtx, result, old_state| {
                 <span class="kw">let </span>out_points = out_points.clone();
-                Box::pin(<span class="self">Self</span>::transition_claim_success(
-                    result, old_state, out_points,
-                ))
+                Box::pin(
+                    <span class="kw">async move </span>{ <span class="self">Self</span>::transition_claim_success(<span class="kw-2">&amp;</span>result, <span class="kw-2">&amp;</span>old_state, out_points) },
+                )
             },
         )]
     }
@@ -804,13 +800,13 @@
         </span>global_context.await_tx_accepted(txid).<span class="kw">await
     </span>}
 
-    <span class="kw">async fn </span>transition_claim_success(
-        result: <span class="prelude-ty">Result</span>&lt;(), String&gt;,
-        old_state: LightningReceiveStateMachine,
+    <span class="kw">fn </span>transition_claim_success(
+        result: <span class="kw-2">&amp;</span><span class="prelude-ty">Result</span>&lt;(), String&gt;,
+        old_state: <span class="kw-2">&amp;</span>LightningReceiveStateMachine,
         out_points: Vec&lt;OutPoint&gt;,
     ) -&gt; LightningReceiveStateMachine {
         <span class="kw">match </span>result {
-            <span class="prelude-val">Ok</span>(<span class="kw">_</span>) =&gt; {
+            <span class="prelude-val">Ok</span>(()) =&gt; {
                 <span class="comment">// Claim successful
                 </span>LightningReceiveStateMachine {
                     operation_id: old_state.operation_id,

@@ -451,6 +451,7 @@
 <a href="#451" id="451">451</a>
 <a href="#452" id="452">452</a>
 <a href="#453" id="453">453</a>
+<a href="#454" id="454">454</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::time::Duration;
 <span class="kw">use </span>std::{cmp, ops};
 
@@ -722,11 +723,12 @@
                                     <span class="kw">break </span>block
                                 },
                                 <span class="prelude-val">Err</span>(e) =&gt; {
+                                    <span class="kw">const </span>MAX_SLEEP: Duration = Duration::from_secs(<span class="number">120</span>);
+
                                     <span class="macro">warn!</span>(target: LOG_CLIENT_RECOVERY, e = %e, session_idx, <span class="string">"Error trying to fetch signed block"</span>);
                                     <span class="comment">// We don't want PARALLISM_LEVEL tasks hammering Federation
                                     // with requests, so max sleep is significant
-                                    </span><span class="kw">const </span>MAX_SLEEP: Duration = Duration::from_secs(<span class="number">120</span>);
-                                    <span class="kw">if </span>retry_sleep &lt;= MAX_SLEEP {
+                                    </span><span class="kw">if </span>retry_sleep &lt;= MAX_SLEEP {
                                         retry_sleep = retry_sleep
                                             + thread_rng().gen_range(Duration::ZERO..=retry_sleep);
                                     }

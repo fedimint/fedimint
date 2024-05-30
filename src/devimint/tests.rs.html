@@ -2601,8 +2601,6 @@
 <a href="#2601" id="2601">2601</a>
 <a href="#2602" id="2602">2602</a>
 <a href="#2603" id="2603">2603</a>
-<a href="#2604" id="2604">2604</a>
-<a href="#2605" id="2605">2605</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashSet};
 <span class="kw">use </span>std::io::Write;
 <span class="kw">use </span>std::ops::ControlFlow;
@@ -2959,7 +2957,7 @@
 
             <span class="kw">let </span>start_time = Instant::now();
             <span class="kw">if </span><span class="kw-2">*</span>VERSION_0_3_0_ALPHA &lt;= fedimint_cli_version {
-                <span class="kw">let </span>restore_client = Client::create(<span class="string">"restore"</span>).<span class="kw">await</span><span class="question-mark">?</span>;
+                <span class="kw">let </span>restore_client = Client::create(<span class="string">"restore"</span>)<span class="question-mark">?</span>;
                 <span class="macro">cmd!</span>(
                     restore_client,
                     <span class="string">"restore"</span>,
@@ -3224,7 +3222,7 @@
 
     fed.pegin_gateway(<span class="number">10_000_000</span>, <span class="kw-2">&amp;</span>gw_cln).<span class="kw">await</span><span class="question-mark">?</span>;
 
-    <span class="kw">let </span>fed_id = fed.calculate_federation_id().<span class="kw">await</span>;
+    <span class="kw">let </span>fed_id = fed.calculate_federation_id();
     <span class="kw">let </span>invite = fed.invite_code()<span class="question-mark">?</span>;
 
     <span class="kw">let </span>fedimint_cli_version = <span class="kw">crate</span>::util::FedimintCli::version_or_default().<span class="kw">await</span>;
@@ -3633,7 +3631,7 @@
         <span class="macro">try_join!</span>(cln.await_block_processing(), lnd.await_block_processing())<span class="question-mark">?</span>;
     }
     ln_pay(<span class="kw-2">&amp;</span>client, invoice.clone(), lnd_gw_id.clone(), <span class="bool-val">false</span>).<span class="kw">await</span><span class="question-mark">?</span>;
-    <span class="kw">let </span>fed_id = fed.calculate_federation_id().<span class="kw">await</span>;
+    <span class="kw">let </span>fed_id = fed.calculate_federation_id();
 
     <span class="kw">let </span>invoice_status = cln
         .request(cln_rpc::model::requests::WaitanyinvoiceRequest {
@@ -3772,8 +3770,7 @@
         <span class="comment">// TODO: distinguish errors from not found
         </span>bitcoind
             .get_raw_transaction(<span class="kw-2">&amp;</span>txid)
-            .<span class="kw">await
-            </span>.context(<span class="string">"getrawtransaction"</span>)
+            .context(<span class="string">"getrawtransaction"</span>)
             .map_err(ControlFlow::Continue)
     })
     .<span class="kw">await
@@ -4080,7 +4077,7 @@
     // which is a larger refactor.
     </span>{
         <span class="kw">let </span>post_balance = <span class="kw">if </span>fedimint_cli_version &gt;= <span class="kw-2">*</span>VERSION_0_3_0_ALPHA {
-            <span class="kw">let </span>client = Client::create(<span class="string">"restore-without-backup"</span>).<span class="kw">await</span><span class="question-mark">?</span>;
+            <span class="kw">let </span>client = Client::create(<span class="string">"restore-without-backup"</span>)<span class="question-mark">?</span>;
             <span class="kw">let _ </span>= <span class="macro">cmd!</span>(
                 client,
                 <span class="string">"restore"</span>,
@@ -4129,7 +4126,7 @@
     </span>{
         <span class="kw">let </span>post_balance = <span class="kw">if </span>fedimint_cli_version &gt;= <span class="kw-2">*</span>VERSION_0_3_0_ALPHA {
             <span class="kw">let _ </span>= <span class="macro">cmd!</span>(reference_client, <span class="string">"backup"</span>,).out_json().<span class="kw">await</span><span class="question-mark">?</span>;
-            <span class="kw">let </span>client = Client::create(<span class="string">"restore-with-backup"</span>).<span class="kw">await</span><span class="question-mark">?</span>;
+            <span class="kw">let </span>client = Client::create(<span class="string">"restore-with-backup"</span>)<span class="question-mark">?</span>;
 
             <span class="kw">let _ </span>= <span class="macro">cmd!</span>(
                 client,
@@ -4232,7 +4229,7 @@
     <span class="kw">for </span>gw <span class="kw">in </span>gateways {
         <span class="kw">for </span>i <span class="kw">in </span><span class="number">0</span>..MAX_RETRIES {
             <span class="kw">match </span>do_try_create_and_pay_invoice(<span class="kw-2">&amp;</span>gw, <span class="kw-2">&amp;</span>client, <span class="kw-2">&amp;</span>new_cln, <span class="kw-2">&amp;</span>new_lnd).<span class="kw">await </span>{
-                <span class="prelude-val">Ok</span>(<span class="kw">_</span>) =&gt; <span class="kw">break</span>,
+                <span class="prelude-val">Ok</span>(()) =&gt; <span class="kw">break</span>,
                 <span class="prelude-val">Err</span>(e) =&gt; {
                     <span class="kw">if </span>i == MAX_RETRIES - <span class="number">1 </span>{
                         <span class="kw">return </span><span class="prelude-val">Err</span>(e);
@@ -4601,7 +4598,7 @@
     <span class="kw">let </span>client = fed.new_joined_client(<span class="string">"recoverytool-test-client"</span>).<span class="kw">await</span><span class="question-mark">?</span>;
 
     <span class="kw">let </span><span class="kw-2">mut </span>fed_utxos_sats = HashSet::from([<span class="number">12_345_000</span>, <span class="number">23_456_000</span>, <span class="number">34_567_000</span>]);
-    <span class="kw">let </span>deposit_fees = fed.deposit_fees().<span class="kw">await</span><span class="question-mark">?</span>.msats / <span class="number">1000</span>;
+    <span class="kw">let </span>deposit_fees = fed.deposit_fees()<span class="question-mark">?</span>.msats / <span class="number">1000</span>;
     <span class="kw">for </span>sats <span class="kw">in </span><span class="kw-2">&amp;</span>fed_utxos_sats {
         <span class="comment">// pegin_client automatically adds fees, so we need to counteract that
         </span>fed.pegin_client(<span class="kw-2">*</span>sats - deposit_fees, <span class="kw-2">&amp;</span>client).<span class="kw">await</span><span class="question-mark">?</span>;
@@ -4635,8 +4632,7 @@
         <span class="kw">let </span>tx_hex = poll(<span class="string">"Waiting for transaction in mempool"</span>, || <span class="kw">async </span>{
             bitcoind
                 .get_raw_transaction(<span class="kw-2">&amp;</span>txid)
-                .<span class="kw">await
-                </span>.context(<span class="string">"getrawtransaction"</span>)
+                .context(<span class="string">"getrawtransaction"</span>)
                 .map_err(ControlFlow::Continue)
         })
         .<span class="kw">await
@@ -5107,7 +5103,7 @@
                 .<span class="kw">await
             </span>{
                 <span class="prelude-val">Err</span>(e) =&gt; <span class="prelude-val">Err</span>(ControlFlow::Continue(e)),
-                <span class="prelude-val">Ok</span>(<span class="kw">_</span>) =&gt; <span class="prelude-val">Ok</span>(()),
+                <span class="prelude-val">Ok</span>(()) =&gt; <span class="prelude-val">Ok</span>(()),
             }
         },
     )
@@ -5125,7 +5121,7 @@
                 <span class="kw">let </span>task_group = task_group.clone();
                 <span class="kw">async move </span>{
                     <span class="kw">let </span>dev_fed = dev_fed(<span class="kw-2">&amp;</span>process_mgr).<span class="kw">await</span><span class="question-mark">?</span>;
-                    <span class="kw">let </span>(<span class="kw">_</span>, <span class="kw">_</span>, faucet) = <span class="macro">try_join!</span>(
+                    <span class="kw">let </span>((), (), faucet) = <span class="macro">try_join!</span>(
                         dev_fed.fed.pegin_gateway(<span class="number">20_000</span>, <span class="kw-2">&amp;</span>dev_fed.gw_cln),
                         dev_fed.fed.pegin_gateway(<span class="number">20_000</span>, <span class="kw-2">&amp;</span>dev_fed.gw_lnd),
                         <span class="kw">async </span>{
@@ -5203,7 +5199,7 @@
         }
         TestCmd::UpgradeTests { binary } =&gt; {
             <span class="kw">let </span>(process_mgr, <span class="kw">_</span>) = setup(common_args).<span class="kw">await</span><span class="question-mark">?</span>;
-            upgrade_tests(<span class="kw-2">&amp;</span>process_mgr, binary).<span class="kw">await</span><span class="question-mark">?</span>;
+            Box::pin(upgrade_tests(<span class="kw-2">&amp;</span>process_mgr, binary)).<span class="kw">await</span><span class="question-mark">?</span>;
         }
     }
     <span class="prelude-val">Ok</span>(())

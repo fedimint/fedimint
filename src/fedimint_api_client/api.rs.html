@@ -1619,7 +1619,6 @@
 <a href="#1619" id="1619">1619</a>
 <a href="#1620" id="1620">1620</a>
 <a href="#1621" id="1621">1621</a>
-<a href="#1622" id="1622">1622</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap};
 <span class="kw">use </span>std::fmt::{<span class="self">self</span>, Debug, Display};
 <span class="kw">use </span>std::num::NonZeroUsize;
@@ -2403,7 +2402,6 @@
     /// potentially long-blocking operation, while the other non-blocking one.
     /// Given how tiny they are, it's not worth complicating things to unify
     /// them.
-    </span><span class="attr">#[allow(clippy::type_complexity)]
     </span>get_session_status_lru:
         Arc&lt;tokio::sync::Mutex&lt;lru::LruCache&lt;u64, Arc&lt;OnceCell&lt;SessionOutcome&gt;&gt;&gt;&gt;&gt;,
 }

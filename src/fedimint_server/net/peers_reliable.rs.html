@@ -1035,12 +1035,12 @@
             </span>.with_context(|| <span class="macro">anyhow::anyhow!</span>(<span class="string">"Failed to listen on {}"</span>, cfg.bind_addr))
             .expect(<span class="string">"Could not bind port"</span>);
 
-        <span class="kw">let </span><span class="kw-2">mut </span>shutdown_rx = task_handle.make_shutdown_rx().<span class="kw">await</span>;
+        <span class="kw">let </span><span class="kw-2">mut </span>shutdown_rx = task_handle.make_shutdown_rx();
 
         <span class="kw">while </span>!task_handle.is_shutting_down() {
             <span class="kw">let </span>new_connection = <span class="macro">tokio::select!</span> {
                 maybe_msg = listener.next() =&gt; { maybe_msg },
-                <span class="kw">_ </span>= <span class="kw-2">&amp;mut </span>shutdown_rx =&gt; { <span class="kw">break</span>; },
+                () = <span class="kw-2">&amp;mut </span>shutdown_rx =&gt; { <span class="kw">break</span>; },
             };
 
             <span class="kw">let </span>(peer, connection) = <span class="kw">match </span>new_connection.expect(<span class="string">"Listener closed"</span>) {
@@ -1092,7 +1092,7 @@
         // never going to be any message. This avoids panic on `select_all` with
         // no futures.
         </span><span class="kw">if </span><span class="self">self</span>.connections.is_empty() {
-            std::future::pending::&lt;T&gt;().<span class="kw">await</span>;
+            std::future::pending::&lt;()&gt;().<span class="kw">await</span>;
         }
 
         <span class="comment">// TODO: optimize, don't throw away remaining futures
@@ -1201,10 +1201,10 @@
             <span class="prelude-val">Some</span>(msg_res) = connected.connection.next() =&gt; {
                 <span class="self">self</span>.receive_message(connected, msg_res).<span class="kw">await
             </span>},
-            <span class="kw">_ </span>= sleep_until(connected.next_ping) =&gt; {
+            () = sleep_until(connected.next_ping) =&gt; {
                 <span class="self">self</span>.send_ping(connected).<span class="kw">await
             </span>},
-            <span class="kw">_ </span>= task_handle.make_shutdown_rx().<span class="kw">await </span>=&gt; {
+            () = task_handle.make_shutdown_rx() =&gt; {
                 <span class="kw">return </span><span class="prelude-val">None</span>;
             },
         })
@@ -1410,7 +1410,7 @@
                 <span class="comment">// to prevent "reconnection ping-pongs", only the side with lower PeerId is responsible for reconnecting
                 </span><span class="self">self</span>.reconnect(disconnected).<span class="kw">await
             </span>},
-            <span class="kw">_ </span>= task_handle.make_shutdown_rx().<span class="kw">await </span>=&gt; {
+            () = task_handle.make_shutdown_rx() =&gt; {
                 <span class="kw">return </span><span class="prelude-val">None</span>;
             },
         })
