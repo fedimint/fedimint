@@ -67,7 +67,7 @@ impl OperationLog {
         let operations: Vec<ChronologicalOperationLogKey> = dbtx
             .find_by_prefix_sorted_descending(&ChronologicalOperationLogKeyPrefix)
             .await
-            .map(|(key, _)| key)
+            .map(|(key, ())| key)
             // FIXME: this is a schlemil-the-painter algorithm that will take longer the further
             // back in history one goes. To avoid that I see two options:
             //   1. Add a reference to the previous operation to each operation log entry,

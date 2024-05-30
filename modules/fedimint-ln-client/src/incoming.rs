@@ -201,7 +201,7 @@ impl FundingOfferState {
         };
 
         match result {
-            Ok(_) => IncomingStateMachine {
+            Ok(()) => IncomingStateMachine {
                 common: old_state.common,
                 state: IncomingSmStates::DecryptingPreimage(DecryptingPreimageState { txid }),
             },

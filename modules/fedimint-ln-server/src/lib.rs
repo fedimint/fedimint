@@ -3,7 +3,6 @@
 #![allow(clippy::cast_possible_wrap)]
 #![allow(clippy::default_trait_access)]
 #![allow(clippy::doc_markdown)]
-#![allow(clippy::ignored_unit_patterns)]
 #![allow(clippy::manual_let_else)]
 #![allow(clippy::module_name_repetitions)]
 #![allow(clippy::must_use_candidate)]
@@ -928,7 +927,7 @@ impl ServerModule for Lightning {
                 ApiVersion::new(0, 1),
                 async |module: &Lightning, context, remove_gateway_request: RemoveGatewayRequest| -> bool {
                     match module.remove_gateway(remove_gateway_request.clone(), &mut context.dbtx().into_nc()).await {
-                        Ok(_) => Ok(true),
+                        Ok(()) => Ok(true),
                         Err(e) => {
                             warn!("Unable to remove gateway registration {remove_gateway_request:?} Error: {e:?}");
                             Ok(false)

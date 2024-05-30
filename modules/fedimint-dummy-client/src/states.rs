@@ -41,7 +41,7 @@ impl State for DummyStateMachine {
                 await_tx_accepted(global_context.clone(), txid),
                 move |dbtx, res, _state: Self| match res {
                     // accepted, we are done
-                    Ok(_) => Box::pin(async move { DummyStateMachine::InputDone(id) }),
+                    Ok(()) => Box::pin(async move { DummyStateMachine::InputDone(id) }),
                     // tx rejected, we refund ourselves
                     Err(_) => Box::pin(async move {
                         add_funds(amount, dbtx.module_tx()).await;
@@ -57,7 +57,7 @@ impl State for DummyStateMachine {
                 ),
                 move |dbtx, res, _state: Self| match res {
                     // output accepted, add funds
-                    Ok(_) => Box::pin(async move {
+                    Ok(()) => Box::pin(async move {
                         add_funds(amount, dbtx.module_tx()).await;
                         DummyStateMachine::OutputDone(amount, id)
                     }),

@@ -308,7 +308,7 @@ impl Executor {
             let executor_runner = task_runner_inner.run(context_gen, sm_update_rx);
             let task_group_shutdown_rx = task_handle.make_shutdown_rx().await;
             select! {
-                _ = task_group_shutdown_rx => {
+                () = task_group_shutdown_rx => {
                     debug!("Shutting down state machine executor runner due to task group shutdown signal");
                 },
                 shutdown_happened_sender = shutdown_receiver => {
@@ -321,7 +321,7 @@ impl Executor {
                         }
                     }
                 },
-                _ = executor_runner => {
+                () = executor_runner => {
                     error!("State machine executor runner exited unexpectedly!");
                 },
             };

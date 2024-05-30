@@ -674,7 +674,7 @@ impl GatewayPayClaimOutgoingContract {
         let preimage = self.preimage.clone();
         vec![StateTransition::new(
             future::ready(()),
-            move |dbtx, _, _| {
+            move |dbtx, (), _| {
                 Box::pin(Self::transition_claim_outgoing_contract(
                     dbtx,
                     global_context.clone(),
@@ -858,7 +858,7 @@ impl GatewayPayCancelContract {
         let error = self.error.clone();
         vec![StateTransition::new(
             future::ready(()),
-            move |dbtx, _, _| {
+            move |dbtx, (), _| {
                 Box::pin(Self::transition_canceled(
                     dbtx,
                     contract.clone(),

@@ -216,7 +216,7 @@ impl CompleteHtlcState {
         common: GatewayCompleteCommon,
     ) -> GatewayCompleteStateMachine {
         match result {
-            Ok(_) => GatewayCompleteStateMachine {
+            Ok(()) => GatewayCompleteStateMachine {
                 common,
                 state: GatewayCompleteStates::HtlcFinished,
             },

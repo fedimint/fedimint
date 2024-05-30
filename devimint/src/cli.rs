@@ -253,7 +253,7 @@ pub async fn handle_command(cmd: Cmd, common_args: CommonArgs) -> Result<()> {
                     let gw_pegin_amount = 1_000_000;
                     let client_pegin_amount = 1_000_000;
                     if !skip_setup {
-                        let (_, _, _) = tokio::try_join!(
+                        let ((), _, _) = tokio::try_join!(
                             async {
                                 let (address, operation_id) =
                                     dev_fed.internal_client().await?.get_deposit_addr().await?;

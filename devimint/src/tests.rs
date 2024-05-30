@@ -1627,7 +1627,7 @@ pub async fn lightning_gw_reconnect_test(
     for gw in gateways {
         for i in 0..MAX_RETRIES {
             match do_try_create_and_pay_invoice(&gw, &client, &new_cln, &new_lnd).await {
-                Ok(_) => break,
+                Ok(()) => break,
                 Err(e) => {
                     if i == MAX_RETRIES - 1 {
                         return Err(e);
@@ -2502,7 +2502,7 @@ async fn wait_session_outcome(
                 .await
             {
                 Err(e) => Err(ControlFlow::Continue(e)),
-                Ok(_) => Ok(()),
+                Ok(()) => Ok(()),
             }
         },
     )
@@ -2520,7 +2520,7 @@ pub async fn handle_command(cmd: TestCmd, common_args: CommonArgs) -> Result<()>
                 let task_group = task_group.clone();
                 async move {
                     let dev_fed = dev_fed(&process_mgr).await?;
-                    let (_, _, faucet) = try_join!(
+                    let ((), (), faucet) = try_join!(
                         dev_fed.fed.pegin_gateway(20_000, &dev_fed.gw_cln),
                         dev_fed.fed.pegin_gateway(20_000, &dev_fed.gw_lnd),
                         async {

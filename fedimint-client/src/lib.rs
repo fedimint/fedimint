@@ -3,7 +3,6 @@
 #![allow(clippy::default_trait_access)]
 #![allow(clippy::doc_markdown)]
 #![allow(clippy::explicit_deref_methods)]
-#![allow(clippy::ignored_unit_patterns)]
 #![allow(clippy::missing_errors_doc)]
 #![allow(clippy::missing_panics_doc)]
 #![allow(clippy::module_name_repetitions)]
@@ -1735,7 +1734,7 @@ impl Client {
         for (module_instance_id, f) in module_recoveries {
             completed_stream.push(futures::stream::once(Box::pin(async move {
                 match f.await {
-                    Ok(_) => (module_instance_id, None),
+                    Ok(()) => (module_instance_id, None),
                     Err(err) => {
                         warn!(%err, module_instance_id, "Module recovery failed");
                         // a module recovery that failed reports and error and

@@ -500,7 +500,7 @@ async fn await_contract_timeout(global_context: DynGlobalClientContext, timelock
             .wait_block_height(u64::from(timelock))
             .await
         {
-            Ok(_) => return,
+            Ok(()) => return,
             Err(error) => error!("Error waiting for block height: {timelock} {error:?}"),
         }
 

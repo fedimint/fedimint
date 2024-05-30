@@ -239,7 +239,7 @@ where
         while !task_handle.is_shutting_down() {
             let new_connection = tokio::select! {
                 maybe_msg = listener.next() => { maybe_msg },
-                _ = &mut shutdown_rx => { break; },
+                () = &mut shutdown_rx => { break; },
             };
 
             let (peer, connection) = match new_connection.expect("Listener closed") {
@@ -442,12 +442,12 @@ where
                     Err(e) => self.disconnect_err(&e, 0),
                 }
             },
-            _ = sleep_until(connected.next_ping) => {
+            () = sleep_until(connected.next_ping) => {
                 trace!(target: LOG_NET_PEER, our_id = ?self.our_id, peer = ?self.peer_id, "Sending ping");
                 self.send_message_connected(connected, PeerMessage::Ping)
                     .await
             },
-            _ = task_handle.make_shutdown_rx().await => {
+            () = task_handle.make_shutdown_rx().await => {
                 return None;
             },
         })
@@ -545,7 +545,7 @@ where
                 // to prevent "reconnection ping-pongs", only the side with lower PeerId is responsible for reconnecting
                 self.reconnect(disconnected).await
             },
-            _ = task_handle.make_shutdown_rx().await => {
+            () = task_handle.make_shutdown_rx().await => {
                 return None;
             },
         })

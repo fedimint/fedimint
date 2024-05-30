@@ -115,7 +115,7 @@ impl MintInputStateCreated {
         assert!(matches!(old_state.state, MintInputStates::Created(_)));
 
         match result {
-            Ok(_) => {
+            Ok(()) => {
                 // Success case: containing transaction is accepted
                 MintInputStateMachine {
                     common: old_state.common,
@@ -191,7 +191,7 @@ impl MintInputStateRefund {
         };
 
         match result {
-            Ok(_) => {
+            Ok(()) => {
                 // Refund successful
                 MintInputStateMachine {
                     common: old_state.common,

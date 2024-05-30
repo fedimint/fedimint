@@ -1,5 +1,4 @@
 #![warn(clippy::pedantic)]
-#![allow(clippy::ignored_unit_patterns)]
 #![allow(clippy::missing_errors_doc)]
 #![allow(clippy::missing_panics_doc)]
 #![allow(clippy::module_name_repetitions)]

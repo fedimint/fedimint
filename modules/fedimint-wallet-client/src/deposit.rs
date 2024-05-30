@@ -104,7 +104,7 @@ async fn await_created_btc_transaction_submitted(
         .script_pubkey();
     loop {
         match context.rpc.watch_script_history(&script).await {
-            Ok(_) => break,
+            Ok(()) => break,
             Err(e) => warn!("Error while awaiting btc tx submitting: {e}"),
         }
         sleep(TRANSACTION_STATUS_FETCH_INTERVAL).await;

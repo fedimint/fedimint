@@ -75,7 +75,7 @@ impl State for CompleteStateMachine {
                     self.common.htlc_id,
                     result.clone(),
                 ),
-                move |_, _, old_state| Box::pin(Self::transition_completion(old_state)),
+                move |_, (), old_state| Box::pin(Self::transition_completion(old_state)),
             )],
             CompleteSMState::Completed => Vec::new(),
         }

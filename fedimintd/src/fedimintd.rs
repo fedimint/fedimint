@@ -387,7 +387,7 @@ impl Fedimintd {
                 .make_handle()
                 .make_shutdown_rx()
                 .await
-                .then(|_| async {
+                .then(|()| async {
                     info!("Shutdown called");
                 });
 

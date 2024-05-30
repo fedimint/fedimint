@@ -156,7 +156,7 @@ impl LightningReceiveSubmittedOffer {
         receiving_key: ReceivingKey,
     ) -> LightningReceiveStateMachine {
         match result {
-            Ok(_) => LightningReceiveStateMachine {
+            Ok(()) => LightningReceiveStateMachine {
                 operation_id: old_state.operation_id,
                 state: LightningReceiveStates::ConfirmedInvoice(LightningReceiveConfirmedInvoice {
                     invoice,
@@ -369,7 +369,7 @@ impl LightningReceiveFunded {
         out_points: Vec<OutPoint>,
     ) -> LightningReceiveStateMachine {
         match result {
-            Ok(_) => {
+            Ok(()) => {
                 // Claim successful
                 LightningReceiveStateMachine {
                     operation_id: old_state.operation_id,

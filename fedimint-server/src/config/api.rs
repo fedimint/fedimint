@@ -1247,7 +1247,7 @@ mod tests {
         let leader_name = leader.name.clone();
         followers.push(leader);
         let all_peers = Arc::new(followers);
-        let (results, _) = tokio::join!(
+        let (results, ()) = tokio::join!(
             join_all(
                 all_peers
                     .iter()
