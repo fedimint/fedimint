@@ -6,7 +6,6 @@
 #![allow(clippy::default_trait_access)]
 #![allow(clippy::doc_markdown)]
 #![allow(clippy::explicit_deref_methods)]
-#![allow(clippy::if_not_else)]
 #![allow(clippy::implicit_hasher)]
 #![allow(clippy::items_after_statements)]
 #![allow(clippy::missing_errors_doc)]

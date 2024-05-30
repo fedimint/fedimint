@@ -163,7 +163,9 @@ pub async fn update_test_dir_link(
     test_dir: &Path,
 ) -> Result<(), anyhow::Error> {
     let make_link = if let Ok(existing) = fs::read_link(link_test_dir).await {
-        if existing != test_dir {
+        if existing == test_dir {
+            false
+        } else {
             debug!(
                 old = %existing.display(),
                 new = %test_dir.display(),
@@ -173,8 +175,6 @@ pub async fn update_test_dir_link(
 
             fs::remove_file(link_test_dir).await?;
             true
-        } else {
-            false
         }
     } else {
         true
