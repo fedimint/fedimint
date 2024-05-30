@@ -7,6 +7,9 @@ reasponse= "response"
 # useful for "in/out" in the code
 inout="inout"
 
+# metric id that typos doesn't like
+"Fo"="Fo"
+
 [files]
 extend-exclude = [
   "db/**",

@@ -63,7 +63,7 @@ jobs:
             nix shell github:rustshop/fs-dir-cache -c \
             nix run 'github:rustshop/perfit?rev=a2ea3bae86b0e70d2ebdbca1fd16a843b7f0a3bd#perfit' -- \
               run \
-                --metric L3yA_sgbQ_mc2t-IWtKI4g \
+                --metric aPuCAjrFT7uE5Oax_T4sMw \
                 --metadata "commit=${LAST_COMMIT_SHA}" \
                 -- \
             scripts/ci/run-in-fs-dir-cache.sh backward-compat \
