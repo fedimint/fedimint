@@ -46,19 +46,18 @@ pub mod io;
 
 /// The default maximum open connections the API can handle
 const DEFAULT_MAX_CLIENT_CONNECTIONS: u32 = 1000;
-// if all nodes are correct the session will take 45 to 60 seconds. The
-// more nodes go offline the longer the session will take to complete.
-const DEFAULT_BROADCAST_EXPECTED_ROUNDS_PER_SESSION: u16 = 45 * 20;
-const DEFAULT_BROADCAST_ROUND_DELAY_MS: u16 = 50;
-const DEFAULT_BROADCAST_MAX_ROUNDS_PER_SESSION: u16 = 5000;
 
-/// Set of consensus broadcast settings that results in around 10s session time,
-/// that is useful for testing purposes. Not that all the values here together
-/// need to satisfy bunch of constrains in alephbft, so tweaking them
-/// separately will most probably result in panics and other misbehavior.
-const DEFAULT_TEST_BROADCAST_EXPECTED_ROUNDS_PER_SESSION: u16 = 3 * 20;
+/// Consensus broadcast settings that result in 3 minutes session time
+const DEFAULT_BROADCAST_ROUND_DELAY_MS: u16 = 50;
+const DEFAULT_BROADCAST_ROUNDS_PER_SESSION: u16 = 3600;
+
+fn default_broadcast_rounds_per_session() -> u16 {
+    DEFAULT_BROADCAST_ROUNDS_PER_SESSION
+}
+
+/// Consensus broadcast settings that result in 10 seconds session time
 const DEFAULT_TEST_BROADCAST_ROUND_DELAY_MS: u16 = 50;
-const DEFAULT_TEST_BROADCAST_MAX_ROUNDS_PER_SESSION: u16 = 2700;
+const DEFAULT_TEST_BROADCAST_ROUNDS_PER_SESSION: u16 = 200;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 /// All the serializable configuration for the fedimint server
@@ -122,11 +121,9 @@ pub struct ServerConfigConsensus {
     pub version: CoreConsensusVersion,
     /// Public keys for the atomic broadcast to authenticate messages
     pub broadcast_public_keys: BTreeMap<PeerId, PublicKey>,
-    /// Determines how long a session is expected to run. Has to be less than
-    /// 1000.
-    pub broadcast_expected_rounds_per_session: u16,
-    /// Maximum number of rounds permitted per session.
-    pub broadcast_max_rounds_per_session: u16,
+    /// Number of rounds per session.
+    #[serde(default = "default_broadcast_rounds_per_session")]
+    pub broadcast_rounds_per_session: u16,
     /// Network addresses and names for all peer APIs
     pub api_endpoints: BTreeMap<PeerId, PeerUrl>,
     /// Certs for TLS communication, required for peer authentication
@@ -150,14 +147,10 @@ pub struct ServerConfigLocal {
     pub api_bind: SocketAddr,
     /// How many API connections we will accept
     pub max_connections: u32,
-    /// Influences the atomic broadcast latency, should be higher than the
-    /// expected latency between peers so everyone can get proposed consensus
-    /// items confirmed. This is only relevant for byzantine faults.
-    ///
-    /// If you are changing this value you likely also want to change
-    /// [`ServerConfigConsensus::broadcast_expected_rounds_per_session`]. To
-    /// keep the session time constant these two have to behave inversely
-    /// proportional.
+    /// Influences the atomic broadcast ordering latency, should be higher than
+    /// the expected latency between peers so everyone can get proposed
+    /// consensus items confirmed. This is only relevant for byzantine
+    /// faults.
     pub broadcast_round_delay_ms: u16,
     /// Non-consensus, non-private configuration from modules
     pub modules: BTreeMap<ModuleInstanceId, JsonWithKind>,
@@ -247,15 +240,10 @@ impl ServerConfig {
             code_version: code_version_str,
             version: CORE_CONSENSUS_VERSION,
             broadcast_public_keys,
-            broadcast_expected_rounds_per_session: if is_running_in_test_env() {
-                DEFAULT_TEST_BROADCAST_EXPECTED_ROUNDS_PER_SESSION
+            broadcast_rounds_per_session: if is_running_in_test_env() {
+                DEFAULT_TEST_BROADCAST_ROUNDS_PER_SESSION
             } else {
-                DEFAULT_BROADCAST_EXPECTED_ROUNDS_PER_SESSION
-            },
-            broadcast_max_rounds_per_session: if is_running_in_test_env() {
-                DEFAULT_TEST_BROADCAST_MAX_ROUNDS_PER_SESSION
-            } else {
-                DEFAULT_BROADCAST_MAX_ROUNDS_PER_SESSION
+                DEFAULT_BROADCAST_ROUNDS_PER_SESSION
             },
             api_endpoints: params.api_urls(),
             tls_certs: params.tls_certs(),
