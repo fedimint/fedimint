@@ -695,20 +695,18 @@ pub async fn open_channel_between_gateways(
     let lnd_pubkey = gw_lnd.lightning_pubkey().await?;
     let cln_pubkey = gw_cln.lightning_pubkey().await?;
 
-    gw_cln
-        .connect_to_peer(
-            lnd_pubkey.parse()?,
-            format!("{}:{}", "127.0.0.1", process_mgr.globals.FM_PORT_LND_LISTEN),
-        )
-        .await?;
-
     // TODO: We're currently polling for the channel to be opened to avoid
     // flakiness, but this shouldn't ever fail. This is likely needed because
     // the node is not fully synced yet. In that case, we should wait for the
     // node to be fully synced before opening the channel.
     poll("fund channel", || async {
         gw_cln
-            .open_channel(lnd_pubkey.clone(), 10_000_000, Some(5_000_000))
+            .open_channel(
+                lnd_pubkey.clone(),
+                format!("127.0.0.1:{}", process_mgr.globals.FM_PORT_LND_LISTEN),
+                10_000_000,
+                Some(5_000_000),
+            )
             .await
             .map_err(ControlFlow::Continue)
     })

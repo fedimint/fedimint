@@ -28,11 +28,11 @@ use ln_gateway::gateway_lnrpc::get_route_hints_response::{RouteHint, RouteHintHo
 use ln_gateway::gateway_lnrpc::intercept_htlc_response::{Action, Cancel, Forward, Settle};
 use ln_gateway::gateway_lnrpc::list_active_channels_response::ChannelInfo;
 use ln_gateway::gateway_lnrpc::{
-    CloseChannelsWithPeerRequest, CloseChannelsWithPeerResponse, ConnectToPeerRequest,
-    CreateInvoiceRequest, CreateInvoiceResponse, EmptyRequest, EmptyResponse,
-    GetFundingAddressResponse, GetNodeInfoResponse, GetRouteHintsRequest, GetRouteHintsResponse,
-    InterceptHtlcRequest, InterceptHtlcResponse, ListActiveChannelsResponse, OpenChannelRequest,
-    PayInvoiceRequest, PayInvoiceResponse,
+    CloseChannelsWithPeerRequest, CloseChannelsWithPeerResponse, CreateInvoiceRequest,
+    CreateInvoiceResponse, EmptyRequest, EmptyResponse, GetFundingAddressResponse,
+    GetNodeInfoResponse, GetRouteHintsRequest, GetRouteHintsResponse, InterceptHtlcRequest,
+    InterceptHtlcResponse, ListActiveChannelsResponse, OpenChannelRequest, PayInvoiceRequest,
+    PayInvoiceResponse,
 };
 use rand::rngs::OsRng;
 use rand::Rng;
@@ -608,29 +608,6 @@ impl GatewayLightning for ClnRpcService {
         Ok(tonic::Response::new(response))
     }
 
-    async fn connect_to_peer(
-        &self,
-        request: tonic::Request<ConnectToPeerRequest>,
-    ) -> Result<tonic::Response<EmptyResponse>, Status> {
-        let request_inner = request.into_inner();
-
-        self.rpc_client()
-            .await
-            .map_err(|e| Status::internal(e.to_string()))?
-            .call(cln_rpc::Request::Connect(model::requests::ConnectRequest {
-                id: format!("{}@{}", request_inner.pubkey, request_inner.host),
-                host: None,
-                port: None,
-            }))
-            .await
-            .map_err(|e| {
-                error!("cln connect rpc returned error {:?}", e);
-                tonic::Status::internal(e.to_string())
-            })?;
-
-        Ok(tonic::Response::new(EmptyResponse {}))
-    }
-
     async fn get_funding_address(
         &self,
         _request: tonic::Request<EmptyRequest>,
@@ -666,6 +643,20 @@ impl GatewayLightning for ClnRpcService {
         request: tonic::Request<OpenChannelRequest>,
     ) -> Result<tonic::Response<EmptyResponse>, Status> {
         let request_inner = request.into_inner();
+
+        self.rpc_client()
+            .await
+            .map_err(|e| Status::internal(e.to_string()))?
+            .call(cln_rpc::Request::Connect(model::requests::ConnectRequest {
+                id: format!("{}@{}", request_inner.pubkey, request_inner.host),
+                host: None,
+                port: None,
+            }))
+            .await
+            .map_err(|e| {
+                error!("cln connect rpc returned error {:?}", e);
+                tonic::Status::internal(e.to_string())
+            })?;
 
         self.rpc_client()
             .await

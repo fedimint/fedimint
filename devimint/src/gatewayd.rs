@@ -161,21 +161,6 @@ impl Gatewayd {
             .to_owned())
     }
 
-    pub async fn connect_to_peer(&self, pubkey: String, host: String) -> Result<()> {
-        cmd!(
-            self,
-            "lightning",
-            "connect-to-peer",
-            "--pubkey",
-            pubkey,
-            "--host",
-            host
-        )
-        .run()
-        .await?;
-        Ok(())
-    }
-
     pub async fn get_funding_address(&self) -> Result<String> {
         let address = cmd!(self, "lightning", "get-funding-address")
             .out_string()
@@ -186,6 +171,7 @@ impl Gatewayd {
     pub async fn open_channel(
         &self,
         pubkey: String,
+        host: String,
         channel_size_sats: u64,
         push_amount_sats: Option<u64>,
     ) -> Result<()> {
@@ -195,6 +181,8 @@ impl Gatewayd {
             "open-channel",
             "--pubkey",
             pubkey,
+            "--host",
+            host,
             "--channel-size-sats",
             channel_size_sats,
             "--push-amount-sats",

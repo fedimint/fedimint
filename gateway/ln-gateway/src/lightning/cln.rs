@@ -14,11 +14,10 @@ use tracing::info;
 use super::{ChannelInfo, ILnRpcClient, LightningRpcError};
 use crate::gateway_lnrpc::gateway_lightning_client::GatewayLightningClient;
 use crate::gateway_lnrpc::{
-    CloseChannelsWithPeerRequest, CloseChannelsWithPeerResponse, ConnectToPeerRequest,
-    CreateInvoiceRequest, CreateInvoiceResponse, EmptyRequest, EmptyResponse,
-    GetFundingAddressResponse, GetNodeInfoResponse, GetRouteHintsRequest, GetRouteHintsResponse,
-    InterceptHtlcRequest, InterceptHtlcResponse, OpenChannelRequest, PayInvoiceRequest,
-    PayInvoiceResponse,
+    CloseChannelsWithPeerRequest, CloseChannelsWithPeerResponse, CreateInvoiceRequest,
+    CreateInvoiceResponse, EmptyRequest, EmptyResponse, GetFundingAddressResponse,
+    GetNodeInfoResponse, GetRouteHintsRequest, GetRouteHintsResponse, InterceptHtlcRequest,
+    InterceptHtlcResponse, OpenChannelRequest, PayInvoiceRequest, PayInvoiceResponse,
 };
 use crate::lightning::MAX_LIGHTNING_RETRIES;
 pub type HtlcResult = std::result::Result<InterceptHtlcRequest, tonic::Status>;
@@ -156,24 +155,6 @@ impl ILnRpcClient for NetworkLnRpcClient {
         Ok(res.into_inner())
     }
 
-    async fn connect_to_peer(
-        &self,
-        pubkey: secp256k1::PublicKey,
-        host: String,
-    ) -> Result<EmptyResponse, LightningRpcError> {
-        let mut client = self.connect().await?;
-        let res = client
-            .connect_to_peer(ConnectToPeerRequest {
-                pubkey: pubkey.to_string(),
-                host,
-            })
-            .await
-            .map_err(|status| LightningRpcError::FailedToConnectToPeer {
-                failure_reason: status.message().to_string(),
-            })?;
-        Ok(res.into_inner())
-    }
-
     async fn get_funding_address(&self) -> Result<GetFundingAddressResponse, LightningRpcError> {
         let mut client = self.connect().await?;
         let res = client
@@ -188,13 +169,16 @@ impl ILnRpcClient for NetworkLnRpcClient {
     async fn open_channel(
         &self,
         pubkey: secp256k1::PublicKey,
+        host: String,
         channel_size_sats: u64,
         push_amount_sats: u64,
     ) -> Result<EmptyResponse, LightningRpcError> {
         let mut client = self.connect().await?;
+
         let res = client
             .open_channel(OpenChannelRequest {
                 pubkey: pubkey.to_string(),
+                host,
                 channel_size_sats,
                 push_amount_sats,
             })

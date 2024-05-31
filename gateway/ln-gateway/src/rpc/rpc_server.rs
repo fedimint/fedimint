@@ -12,12 +12,11 @@ use fedimint_core::task::TaskGroup;
 use fedimint_ln_client::pay::PayInvoicePayload;
 use fedimint_ln_common::gateway_endpoint_constants::{
     ADDRESS_ENDPOINT, BACKUP_ENDPOINT, BALANCE_ENDPOINT, CLOSE_CHANNELS_WITH_PEER_ENDPOINT,
-    CONFIGURATION_ENDPOINT, CONNECT_FED_ENDPOINT, CONNECT_TO_PEER_ENDPOINT,
-    CREATE_INVOICE_V2_ENDPOINT, GATEWAY_INFO_ENDPOINT, GATEWAY_INFO_POST_ENDPOINT,
-    GET_FUNDING_ADDRESS_ENDPOINT, GET_GATEWAY_ID_ENDPOINT, LEAVE_FED_ENDPOINT,
-    LIST_ACTIVE_CHANNELS_ENDPOINT, OPEN_CHANNEL_ENDPOINT, PAYMENT_INFO_V2_ENDPOINT,
-    PAY_INVOICE_ENDPOINT, RESTORE_ENDPOINT, SEND_PAYMENT_V2_ENDPOINT, SET_CONFIGURATION_ENDPOINT,
-    WITHDRAW_ENDPOINT,
+    CONFIGURATION_ENDPOINT, CONNECT_FED_ENDPOINT, CREATE_INVOICE_V2_ENDPOINT,
+    GATEWAY_INFO_ENDPOINT, GATEWAY_INFO_POST_ENDPOINT, GET_FUNDING_ADDRESS_ENDPOINT,
+    GET_GATEWAY_ID_ENDPOINT, LEAVE_FED_ENDPOINT, LIST_ACTIVE_CHANNELS_ENDPOINT,
+    OPEN_CHANNEL_ENDPOINT, PAYMENT_INFO_V2_ENDPOINT, PAY_INVOICE_ENDPOINT, RESTORE_ENDPOINT,
+    SEND_PAYMENT_V2_ENDPOINT, SET_CONFIGURATION_ENDPOINT, WITHDRAW_ENDPOINT,
 };
 use fedimint_lnv2_client::{CreateInvoicePayload, SendPaymentPayload};
 use hex::ToHex;
@@ -28,9 +27,8 @@ use tracing::{error, info, instrument};
 
 use super::{
     BackupPayload, BalancePayload, CloseChannelsWithPeerPayload, ConnectFedPayload,
-    ConnectToPeerPayload, DepositAddressPayload, GetFundingAddressPayload, InfoPayload,
-    LeaveFedPayload, OpenChannelPayload, RestorePayload, SetConfigurationPayload, WithdrawPayload,
-    V1_API_ENDPOINT,
+    DepositAddressPayload, GetFundingAddressPayload, InfoPayload, LeaveFedPayload,
+    OpenChannelPayload, RestorePayload, SetConfigurationPayload, WithdrawPayload, V1_API_ENDPOINT,
 };
 use crate::rpc::ConfigPayload;
 use crate::{Gateway, GatewayError};
@@ -165,7 +163,6 @@ fn v1_routes(gateway: Gateway) -> Router {
         .route(LEAVE_FED_ENDPOINT, post(leave_fed))
         .route(BACKUP_ENDPOINT, post(backup))
         .route(RESTORE_ENDPOINT, post(restore))
-        .route(CONNECT_TO_PEER_ENDPOINT, post(connect_to_peer))
         .route(GET_FUNDING_ADDRESS_ENDPOINT, post(get_funding_address))
         .route(OPEN_CHANNEL_ENDPOINT, post(open_channel))
         .route(
@@ -327,15 +324,6 @@ async fn set_configuration(
     Json(payload): Json<SetConfigurationPayload>,
 ) -> Result<impl IntoResponse, GatewayError> {
     gateway.handle_set_configuration_msg(payload).await?;
-    Ok(Json(json!(())))
-}
-
-#[instrument(skip_all, err, fields(?payload))]
-async fn connect_to_peer(
-    Extension(gateway): Extension<Gateway>,
-    Json(payload): Json<ConnectToPeerPayload>,
-) -> Result<impl IntoResponse, GatewayError> {
-    gateway.handle_connect_to_peer_msg(payload).await?;
     Ok(Json(json!(())))
 }
 

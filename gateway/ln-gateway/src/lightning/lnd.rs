@@ -656,32 +656,6 @@ impl ILnRpcClient for GatewayLndClient {
         Ok(CreateInvoiceResponse { invoice })
     }
 
-    async fn connect_to_peer(
-        &self,
-        pubkey: PublicKey,
-        host: String,
-    ) -> Result<EmptyResponse, LightningRpcError> {
-        let mut client = self.connect().await?;
-
-        match client
-            .lightning()
-            .connect_peer(ConnectPeerRequest {
-                addr: Some(LightningAddress {
-                    pubkey: pubkey.to_string(),
-                    host,
-                }),
-                perm: false,
-                timeout: 10,
-            })
-            .await
-        {
-            Ok(_) => Ok(EmptyResponse {}),
-            Err(e) => Err(LightningRpcError::FailedToConnectToPeer {
-                failure_reason: format!("Failed to connect to peer {e:?}"),
-            }),
-        }
-    }
-
     async fn get_funding_address(&self) -> Result<GetFundingAddressResponse, LightningRpcError> {
         let mut client = self.connect().await?;
 
@@ -706,11 +680,29 @@ impl ILnRpcClient for GatewayLndClient {
     async fn open_channel(
         &self,
         pubkey: PublicKey,
+        host: String,
         channel_size_sats: u64,
         push_amount_sats: u64,
     ) -> Result<EmptyResponse, LightningRpcError> {
         let mut client = self.connect().await?;
 
+        // Connect to the peer first
+        client
+            .lightning()
+            .connect_peer(ConnectPeerRequest {
+                addr: Some(LightningAddress {
+                    pubkey: pubkey.to_string(),
+                    host,
+                }),
+                perm: false,
+                timeout: 10,
+            })
+            .await
+            .map_err(|e| LightningRpcError::FailedToConnectToPeer {
+                failure_reason: format!("Failed to connect to peer {e:?}"),
+            })?;
+
+        // Open the channel
         match client
             .lightning()
             .open_channel(OpenChannelRequest {
