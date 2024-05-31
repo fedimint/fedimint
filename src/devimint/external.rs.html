@@ -880,8 +880,6 @@
 <a href="#880" id="880">880</a>
 <a href="#881" id="881">881</a>
 <a href="#882" id="882">882</a>
-<a href="#883" id="883">883</a>
-<a href="#884" id="884">884</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::ops::{ControlFlow, Deref <span class="kw">as _</span>};
 <span class="kw">use </span>std::path::Path;
 <span class="kw">use </span>std::str::FromStr;
@@ -1579,20 +1577,18 @@
     <span class="kw">let </span>lnd_pubkey = gw_lnd.lightning_pubkey().<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="kw">let </span>cln_pubkey = gw_cln.lightning_pubkey().<span class="kw">await</span><span class="question-mark">?</span>;
 
-    gw_cln
-        .connect_to_peer(
-            lnd_pubkey.parse()<span class="question-mark">?</span>,
-            <span class="macro">format!</span>(<span class="string">"{}:{}"</span>, <span class="string">"127.0.0.1"</span>, process_mgr.globals.FM_PORT_LND_LISTEN),
-        )
-        .<span class="kw">await</span><span class="question-mark">?</span>;
-
     <span class="comment">// TODO: We're currently polling for the channel to be opened to avoid
     // flakiness, but this shouldn't ever fail. This is likely needed because
     // the node is not fully synced yet. In that case, we should wait for the
     // node to be fully synced before opening the channel.
     </span>poll(<span class="string">"fund channel"</span>, || <span class="kw">async </span>{
         gw_cln
-            .open_channel(lnd_pubkey.clone(), <span class="number">10_000_000</span>, <span class="prelude-val">Some</span>(<span class="number">5_000_000</span>))
+            .open_channel(
+                lnd_pubkey.clone(),
+                <span class="macro">format!</span>(<span class="string">"127.0.0.1:{}"</span>, process_mgr.globals.FM_PORT_LND_LISTEN),
+                <span class="number">10_000_000</span>,
+                <span class="prelude-val">Some</span>(<span class="number">5_000_000</span>),
+            )
             .<span class="kw">await
             </span>.map_err(ControlFlow::Continue)
     })

@@ -214,12 +214,6 @@
 <a href="#214" id="214">214</a>
 <a href="#215" id="215">215</a>
 <a href="#216" id="216">216</a>
-<a href="#217" id="217">217</a>
-<a href="#218" id="218">218</a>
-<a href="#219" id="219">219</a>
-<a href="#220" id="220">220</a>
-<a href="#221" id="221">221</a>
-<a href="#222" id="222">222</a>
 </pre></div><pre class="rust"><code><span class="kw">pub mod </span>cln;
 <span class="kw">pub mod </span>lnd;
 
@@ -350,13 +344,6 @@
         create_invoice_request: CreateInvoiceRequest,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;CreateInvoiceResponse, LightningRpcError&gt;;
 
-    <span class="doccomment">/// Connect to a peer lightning node from the gateway's lightning node.
-    </span><span class="kw">async fn </span>connect_to_peer(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        pubkey: secp256k1::PublicKey,
-        host: String,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;EmptyResponse, LightningRpcError&gt;;
-
     <span class="doccomment">/// Get a funding address belonging to the gateway's lightning node
     /// wallet.
     </span><span class="kw">async fn </span>get_funding_address(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;GetFundingAddressResponse, LightningRpcError&gt;;
@@ -366,6 +353,7 @@
     </span><span class="kw">async fn </span>open_channel(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         pubkey: secp256k1::PublicKey,
+        host: String,
         channel_size_sats: u64,
         push_amount_sats: u64,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;EmptyResponse, LightningRpcError&gt;;

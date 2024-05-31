@@ -368,15 +368,6 @@
 <a href="#368" id="368">368</a>
 <a href="#369" id="369">369</a>
 <a href="#370" id="370">370</a>
-<a href="#371" id="371">371</a>
-<a href="#372" id="372">372</a>
-<a href="#373" id="373">373</a>
-<a href="#374" id="374">374</a>
-<a href="#375" id="375">375</a>
-<a href="#376" id="376">376</a>
-<a href="#377" id="377">377</a>
-<a href="#378" id="378">378</a>
-<a href="#379" id="379">379</a>
 </pre></div><pre class="rust"><code><span class="attr">#![warn(clippy::pedantic)]
 #![allow(clippy::doc_markdown)]
 #![allow(clippy::missing_panics_doc)]
@@ -395,9 +386,8 @@
 <span class="kw">use </span>ln_gateway::rpc::rpc_client::GatewayRpcClient;
 <span class="kw">use </span>ln_gateway::rpc::{
     BackupPayload, BalancePayload, CloseChannelsWithPeerPayload, ConfigPayload, ConnectFedPayload,
-    ConnectToPeerPayload, DepositAddressPayload, FederationRoutingFees, GetFundingAddressPayload,
-    LeaveFedPayload, OpenChannelPayload, RestorePayload, SetConfigurationPayload, WithdrawPayload,
-    V1_API_ENDPOINT,
+    DepositAddressPayload, FederationRoutingFees, GetFundingAddressPayload, LeaveFedPayload,
+    OpenChannelPayload, RestorePayload, SetConfigurationPayload, WithdrawPayload, V1_API_ENDPOINT,
 };
 <span class="kw">use </span>serde::Serialize;
 
@@ -501,14 +491,6 @@
 /// in a test environment.
 </span><span class="attr">#[derive(Subcommand)]
 </span><span class="kw">pub enum </span>LightningCommands {
-    <span class="doccomment">/// Connect to another lightning node
-    </span>ConnectToPeer {
-        <span class="attr">#[clap(long)]
-        </span>pubkey: bitcoin::secp256k1::PublicKey,
-
-        <span class="attr">#[clap(long)]
-        </span>host: String,
-    },
     <span class="doccomment">/// Get a Bitcoin address to fund the gateway
     </span>GetFundingAddress,
     <span class="doccomment">/// Open a channel with another lightning node
@@ -516,6 +498,9 @@
         <span class="doccomment">/// The public key of the node to open a channel with
         </span><span class="attr">#[clap(long)]
         </span>pubkey: bitcoin::secp256k1::PublicKey,
+
+        <span class="attr">#[clap(long)]
+        </span>host: String,
 
         <span class="doccomment">/// The amount to fund the channel with
         </span><span class="attr">#[clap(long)]
@@ -683,11 +668,6 @@
         }
 
         Commands::Lightning(lightning_command) =&gt; <span class="kw">match </span>lightning_command {
-            LightningCommands::ConnectToPeer { pubkey, host } =&gt; {
-                client()
-                    .connect_to_peer(ConnectToPeerPayload { pubkey, host })
-                    .<span class="kw">await</span><span class="question-mark">?</span>;
-            }
             LightningCommands::GetFundingAddress =&gt; {
                 <span class="kw">let </span>response = client()
                     .get_funding_address(GetFundingAddressPayload {})
@@ -697,12 +677,14 @@
             }
             LightningCommands::OpenChannel {
                 pubkey,
+                host,
                 channel_size_sats,
                 push_amount_sats,
             } =&gt; {
                 client()
                     .open_channel(OpenChannelPayload {
                         pubkey,
+                        host,
                         channel_size_sats,
                         push_amount_sats: push_amount_sats.unwrap_or(<span class="number">0</span>),
                     })

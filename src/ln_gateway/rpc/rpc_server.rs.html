@@ -395,18 +395,6 @@
 <a href="#395" id="395">395</a>
 <a href="#396" id="396">396</a>
 <a href="#397" id="397">397</a>
-<a href="#398" id="398">398</a>
-<a href="#399" id="399">399</a>
-<a href="#400" id="400">400</a>
-<a href="#401" id="401">401</a>
-<a href="#402" id="402">402</a>
-<a href="#403" id="403">403</a>
-<a href="#404" id="404">404</a>
-<a href="#405" id="405">405</a>
-<a href="#406" id="406">406</a>
-<a href="#407" id="407">407</a>
-<a href="#408" id="408">408</a>
-<a href="#409" id="409">409</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>axum::extract::Request;
 <span class="kw">use </span>axum::http::{header, StatusCode};
 <span class="kw">use </span>axum::middleware::{<span class="self">self</span>, Next};
@@ -421,12 +409,11 @@
 <span class="kw">use </span>fedimint_ln_client::pay::PayInvoicePayload;
 <span class="kw">use </span>fedimint_ln_common::gateway_endpoint_constants::{
     ADDRESS_ENDPOINT, BACKUP_ENDPOINT, BALANCE_ENDPOINT, CLOSE_CHANNELS_WITH_PEER_ENDPOINT,
-    CONFIGURATION_ENDPOINT, CONNECT_FED_ENDPOINT, CONNECT_TO_PEER_ENDPOINT,
-    CREATE_INVOICE_V2_ENDPOINT, GATEWAY_INFO_ENDPOINT, GATEWAY_INFO_POST_ENDPOINT,
-    GET_FUNDING_ADDRESS_ENDPOINT, GET_GATEWAY_ID_ENDPOINT, LEAVE_FED_ENDPOINT,
-    LIST_ACTIVE_CHANNELS_ENDPOINT, OPEN_CHANNEL_ENDPOINT, PAYMENT_INFO_V2_ENDPOINT,
-    PAY_INVOICE_ENDPOINT, RESTORE_ENDPOINT, SEND_PAYMENT_V2_ENDPOINT, SET_CONFIGURATION_ENDPOINT,
-    WITHDRAW_ENDPOINT,
+    CONFIGURATION_ENDPOINT, CONNECT_FED_ENDPOINT, CREATE_INVOICE_V2_ENDPOINT,
+    GATEWAY_INFO_ENDPOINT, GATEWAY_INFO_POST_ENDPOINT, GET_FUNDING_ADDRESS_ENDPOINT,
+    GET_GATEWAY_ID_ENDPOINT, LEAVE_FED_ENDPOINT, LIST_ACTIVE_CHANNELS_ENDPOINT,
+    OPEN_CHANNEL_ENDPOINT, PAYMENT_INFO_V2_ENDPOINT, PAY_INVOICE_ENDPOINT, RESTORE_ENDPOINT,
+    SEND_PAYMENT_V2_ENDPOINT, SET_CONFIGURATION_ENDPOINT, WITHDRAW_ENDPOINT,
 };
 <span class="kw">use </span>fedimint_lnv2_client::{CreateInvoicePayload, SendPaymentPayload};
 <span class="kw">use </span>hex::ToHex;
@@ -437,9 +424,8 @@
 
 <span class="kw">use super</span>::{
     BackupPayload, BalancePayload, CloseChannelsWithPeerPayload, ConnectFedPayload,
-    ConnectToPeerPayload, DepositAddressPayload, GetFundingAddressPayload, InfoPayload,
-    LeaveFedPayload, OpenChannelPayload, RestorePayload, SetConfigurationPayload, WithdrawPayload,
-    V1_API_ENDPOINT,
+    DepositAddressPayload, GetFundingAddressPayload, InfoPayload, LeaveFedPayload,
+    OpenChannelPayload, RestorePayload, SetConfigurationPayload, WithdrawPayload, V1_API_ENDPOINT,
 };
 <span class="kw">use </span><span class="kw">crate</span>::rpc::ConfigPayload;
 <span class="kw">use crate</span>::{Gateway, GatewayError};
@@ -574,7 +560,6 @@
         .route(LEAVE_FED_ENDPOINT, post(leave_fed))
         .route(BACKUP_ENDPOINT, post(backup))
         .route(RESTORE_ENDPOINT, post(restore))
-        .route(CONNECT_TO_PEER_ENDPOINT, post(connect_to_peer))
         .route(GET_FUNDING_ADDRESS_ENDPOINT, post(get_funding_address))
         .route(OPEN_CHANNEL_ENDPOINT, post(open_channel))
         .route(
@@ -736,15 +721,6 @@
     Json(payload): Json&lt;SetConfigurationPayload&gt;,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="kw">impl </span>IntoResponse, GatewayError&gt; {
     gateway.handle_set_configuration_msg(payload).<span class="kw">await</span><span class="question-mark">?</span>;
-    <span class="prelude-val">Ok</span>(Json(<span class="macro">json!</span>(())))
-}
-
-<span class="attr">#[instrument(skip_all, err, fields(<span class="question-mark">?</span>payload))]
-</span><span class="kw">async fn </span>connect_to_peer(
-    Extension(gateway): Extension&lt;Gateway&gt;,
-    Json(payload): Json&lt;ConnectToPeerPayload&gt;,
-) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="kw">impl </span>IntoResponse, GatewayError&gt; {
-    gateway.handle_connect_to_peer_msg(payload).<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="prelude-val">Ok</span>(Json(<span class="macro">json!</span>(())))
 }
 

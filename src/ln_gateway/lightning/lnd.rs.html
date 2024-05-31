@@ -929,14 +929,6 @@
 <a href="#929" id="929">929</a>
 <a href="#930" id="930">930</a>
 <a href="#931" id="931">931</a>
-<a href="#932" id="932">932</a>
-<a href="#933" id="933">933</a>
-<a href="#934" id="934">934</a>
-<a href="#935" id="935">935</a>
-<a href="#936" id="936">936</a>
-<a href="#937" id="937">937</a>
-<a href="#938" id="938">938</a>
-<a href="#939" id="939">939</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::fmt;
 <span class="kw">use </span>std::str::FromStr;
 <span class="kw">use </span>std::sync::Arc;
@@ -1595,32 +1587,6 @@
         <span class="prelude-val">Ok</span>(CreateInvoiceResponse { invoice })
     }
 
-    <span class="kw">async fn </span>connect_to_peer(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        pubkey: PublicKey,
-        host: String,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;EmptyResponse, LightningRpcError&gt; {
-        <span class="kw">let </span><span class="kw-2">mut </span>client = <span class="self">self</span>.connect().<span class="kw">await</span><span class="question-mark">?</span>;
-
-        <span class="kw">match </span>client
-            .lightning()
-            .connect_peer(ConnectPeerRequest {
-                addr: <span class="prelude-val">Some</span>(LightningAddress {
-                    pubkey: pubkey.to_string(),
-                    host,
-                }),
-                perm: <span class="bool-val">false</span>,
-                timeout: <span class="number">10</span>,
-            })
-            .<span class="kw">await
-        </span>{
-            <span class="prelude-val">Ok</span>(<span class="kw">_</span>) =&gt; <span class="prelude-val">Ok</span>(EmptyResponse {}),
-            <span class="prelude-val">Err</span>(e) =&gt; <span class="prelude-val">Err</span>(LightningRpcError::FailedToConnectToPeer {
-                failure_reason: <span class="macro">format!</span>(<span class="string">"Failed to connect to peer {e:?}"</span>),
-            }),
-        }
-    }
-
     <span class="kw">async fn </span>get_funding_address(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;GetFundingAddressResponse, LightningRpcError&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>client = <span class="self">self</span>.connect().<span class="kw">await</span><span class="question-mark">?</span>;
 
@@ -1645,12 +1611,30 @@
     <span class="kw">async fn </span>open_channel(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         pubkey: PublicKey,
+        host: String,
         channel_size_sats: u64,
         push_amount_sats: u64,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;EmptyResponse, LightningRpcError&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>client = <span class="self">self</span>.connect().<span class="kw">await</span><span class="question-mark">?</span>;
 
-        <span class="kw">match </span>client
+        <span class="comment">// Connect to the peer first
+        </span>client
+            .lightning()
+            .connect_peer(ConnectPeerRequest {
+                addr: <span class="prelude-val">Some</span>(LightningAddress {
+                    pubkey: pubkey.to_string(),
+                    host,
+                }),
+                perm: <span class="bool-val">false</span>,
+                timeout: <span class="number">10</span>,
+            })
+            .<span class="kw">await
+            </span>.map_err(|e| LightningRpcError::FailedToConnectToPeer {
+                failure_reason: <span class="macro">format!</span>(<span class="string">"Failed to connect to peer {e:?}"</span>),
+            })<span class="question-mark">?</span>;
+
+        <span class="comment">// Open the channel
+        </span><span class="kw">match </span>client
             .lightning()
             .open_channel(OpenChannelRequest {
                 node_pubkey: pubkey.serialize().to_vec(),

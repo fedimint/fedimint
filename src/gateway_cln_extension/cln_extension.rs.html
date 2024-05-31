@@ -974,15 +974,6 @@
 <a href="#974" id="974">974</a>
 <a href="#975" id="975">975</a>
 <a href="#976" id="976">976</a>
-<a href="#977" id="977">977</a>
-<a href="#978" id="978">978</a>
-<a href="#979" id="979">979</a>
-<a href="#980" id="980">980</a>
-<a href="#981" id="981">981</a>
-<a href="#982" id="982">982</a>
-<a href="#983" id="983">983</a>
-<a href="#984" id="984">984</a>
-<a href="#985" id="985">985</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::array::TryFromSliceError;
 <span class="kw">use </span>std::collections::{BTreeMap, HashMap};
 <span class="kw">use </span>std::net::SocketAddr;
@@ -1013,11 +1004,11 @@
 <span class="kw">use </span>ln_gateway::gateway_lnrpc::intercept_htlc_response::{Action, Cancel, Forward, Settle};
 <span class="kw">use </span>ln_gateway::gateway_lnrpc::list_active_channels_response::ChannelInfo;
 <span class="kw">use </span>ln_gateway::gateway_lnrpc::{
-    CloseChannelsWithPeerRequest, CloseChannelsWithPeerResponse, ConnectToPeerRequest,
-    CreateInvoiceRequest, CreateInvoiceResponse, EmptyRequest, EmptyResponse,
-    GetFundingAddressResponse, GetNodeInfoResponse, GetRouteHintsRequest, GetRouteHintsResponse,
-    InterceptHtlcRequest, InterceptHtlcResponse, ListActiveChannelsResponse, OpenChannelRequest,
-    PayInvoiceRequest, PayInvoiceResponse,
+    CloseChannelsWithPeerRequest, CloseChannelsWithPeerResponse, CreateInvoiceRequest,
+    CreateInvoiceResponse, EmptyRequest, EmptyResponse, GetFundingAddressResponse,
+    GetNodeInfoResponse, GetRouteHintsRequest, GetRouteHintsResponse, InterceptHtlcRequest,
+    InterceptHtlcResponse, ListActiveChannelsResponse, OpenChannelRequest, PayInvoiceRequest,
+    PayInvoiceResponse,
 };
 <span class="kw">use </span>rand::rngs::OsRng;
 <span class="kw">use </span>rand::Rng;
@@ -1593,29 +1584,6 @@
         <span class="prelude-val">Ok</span>(tonic::Response::new(response))
     }
 
-    <span class="kw">async fn </span>connect_to_peer(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        request: tonic::Request&lt;ConnectToPeerRequest&gt;,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;tonic::Response&lt;EmptyResponse&gt;, Status&gt; {
-        <span class="kw">let </span>request_inner = request.into_inner();
-
-        <span class="self">self</span>.rpc_client()
-            .<span class="kw">await
-            </span>.map_err(|e| Status::internal(e.to_string()))<span class="question-mark">?
-            </span>.call(cln_rpc::Request::Connect(model::requests::ConnectRequest {
-                id: <span class="macro">format!</span>(<span class="string">"{}@{}"</span>, request_inner.pubkey, request_inner.host),
-                host: <span class="prelude-val">None</span>,
-                port: <span class="prelude-val">None</span>,
-            }))
-            .<span class="kw">await
-            </span>.map_err(|e| {
-                <span class="macro">error!</span>(<span class="string">"cln connect rpc returned error {:?}"</span>, e);
-                tonic::Status::internal(e.to_string())
-            })<span class="question-mark">?</span>;
-
-        <span class="prelude-val">Ok</span>(tonic::Response::new(EmptyResponse {}))
-    }
-
     <span class="kw">async fn </span>get_funding_address(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         _request: tonic::Request&lt;EmptyRequest&gt;,
@@ -1651,6 +1619,20 @@
         request: tonic::Request&lt;OpenChannelRequest&gt;,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;tonic::Response&lt;EmptyResponse&gt;, Status&gt; {
         <span class="kw">let </span>request_inner = request.into_inner();
+
+        <span class="self">self</span>.rpc_client()
+            .<span class="kw">await
+            </span>.map_err(|e| Status::internal(e.to_string()))<span class="question-mark">?
+            </span>.call(cln_rpc::Request::Connect(model::requests::ConnectRequest {
+                id: <span class="macro">format!</span>(<span class="string">"{}@{}"</span>, request_inner.pubkey, request_inner.host),
+                host: <span class="prelude-val">None</span>,
+                port: <span class="prelude-val">None</span>,
+            }))
+            .<span class="kw">await
+            </span>.map_err(|e| {
+                <span class="macro">error!</span>(<span class="string">"cln connect rpc returned error {:?}"</span>, e);
+                tonic::Status::internal(e.to_string())
+            })<span class="question-mark">?</span>;
 
         <span class="self">self</span>.rpc_client()
             .<span class="kw">await
