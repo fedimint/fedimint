@@ -162,7 +162,7 @@ jobs:
             PERFIT_ACCESS_TOKEN="${{ secrets.PERFIT_ACCESS_TOKEN }}" \
             nix run 'github:rustshop/perfit?rev=a2ea3bae86b0e70d2ebdbca1fd16a843b7f0a3bd#perfit' -- \
               run \
-                --metric U6-uakhBSo6AHQg5tmB_bg \
+                --metric Ym4MS7aDRj6b64woEHq4bw \
                 --metadata "commit=${LAST_COMMIT_SHA}" \
                 -- \
               nix build -L .#ci.workspaceBuild
@@ -186,7 +186,7 @@ jobs:
             PERFIT_ACCESS_TOKEN="${{ secrets.PERFIT_ACCESS_TOKEN }}" \
             nix run 'github:rustshop/perfit?rev=a2ea3bae86b0e70d2ebdbca1fd16a843b7f0a3bd#perfit' -- \
               run \
-                --metric eNKLuiKcRc2Q6_eTIhLuJQ \
+                --metric HEnBvtqET8iKgJOMMkFoXw \
                 --metadata "commit=${LAST_COMMIT_SHA}" \
                 -- \
               nix build -L .#wasm32-unknown.ci.ciTestAll
@@ -198,7 +198,7 @@ jobs:
             PERFIT_ACCESS_TOKEN="${{ secrets.PERFIT_ACCESS_TOKEN }}" \
             nix run 'github:rustshop/perfit?rev=a2ea3bae86b0e70d2ebdbca1fd16a843b7f0a3bd#perfit' -- \
               run \
-                --metric 50K9greJRzCdxpsFj842Bw \
+                --metric _fJdigFYTj6zSGjwx3-WUg \
                 --metadata "commit=${LAST_COMMIT_SHA}" \
                 -- \
             nix build -L .#wasm32-unknown.ci.ciTestAll5Times
@@ -210,7 +210,7 @@ jobs:
             PERFIT_ACCESS_TOKEN="${{ secrets.PERFIT_ACCESS_TOKEN }}" \
             nix run 'github:rustshop/perfit?rev=a2ea3bae86b0e70d2ebdbca1fd16a843b7f0a3bd#perfit' -- \
               run \
-                --metric 8H0d2B59Q1KYIz0b4Nkh-Q \
+                --metric 4DtvtPWIQWe--cY6K-wSCg \
                 --metadata "commit=${LAST_COMMIT_SHA}" \
                 -- \
           nix build -L .#wasm32-unknown.ci.wasmTest
@@ -279,7 +279,7 @@ jobs:
             PERFIT_ACCESS_TOKEN="${{ secrets.PERFIT_ACCESS_TOKEN }}" \
             nix run 'github:rustshop/perfit?rev=a2ea3bae86b0e70d2ebdbca1fd16a843b7f0a3bd#perfit' -- \
               run \
-                --metric pLyTAwXFShaeO0sJlNGaVA \
+                --metric pq4AyxybSD--isFtVmPGpg \
                 --metadata "commit=${LAST_COMMIT_SHA}" \
                 -- \
             nix build -L .#ci.workspaceTestCov
