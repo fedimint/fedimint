@@ -19,7 +19,7 @@
   <a href="https://docs.fedimint.org">
     <img src="https://img.shields.io/static/v1?label=Docs&message=master&color=007ec6&logo=GitBook&logoColor=ffffff" alt="docs built from master">
   </a>
-  <img alt="Lines of code" src="https://img.shields.io/tokei/lines/github/fedimint/fedimint">
+  <img alt="Lines of code" src="https://tokei.rs/b1/github/fedimint/fedimint">
 </p>
 
 [Fedimint](https://fedimint.org) is a module based system for building federated applications. It is designed to be a trust-minimized, censorship-resistant, and private alternative to centralized applications.
