@@ -4,7 +4,9 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::{anyhow, bail};
-use fedimint_api_client::api::{deserialize_outcome, FederationApiExt, SerdeOutputOutcome};
+use fedimint_api_client::api::{
+    deserialize_outcome, CallError, FederationApiExt, SerdeOutputOutcome,
+};
 use fedimint_api_client::query::FilterMapThreshold;
 use fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
 use fedimint_client::transaction::ClientInput;
@@ -153,25 +155,27 @@ impl ReceiveStateMachine {
         out_point: OutPoint,
         decryption_contract: IncomingContract,
     ) -> BTreeMap<PeerId, DecryptionKeyShare> {
-        let verify_decryption_share = move |peer, outcome: SerdeOutputOutcome| {
-            let outcome = deserialize_outcome::<LightningOutputOutcome>(&outcome, &module_decoder)?;
+        let verify_decryption_share =
+            move |peer, outcome: Result<SerdeOutputOutcome, CallError>| {
+                let outcome =
+                    deserialize_outcome::<LightningOutputOutcome>(&outcome?, &module_decoder)?;
 
-            match outcome {
-                LightningOutputOutcome::Incoming(share) => {
-                    if !decryption_contract.verify_decryption_share(
-                        tpe_pks.get(&peer).ok_or(anyhow!("Unknown peer pk"))?,
-                        &share,
-                    ) {
-                        bail!("Invalid decryption share");
+                match outcome {
+                    LightningOutputOutcome::Incoming(share) => {
+                        if !decryption_contract.verify_decryption_share(
+                            tpe_pks.get(&peer).ok_or(anyhow!("Unknown peer pk"))?,
+                            &share,
+                        ) {
+                            bail!("Invalid decryption share");
+                        }
+
+                        Ok(share)
                     }
-
-                    Ok(share)
+                    LightningOutputOutcome::Outgoing => {
+                        bail!("Unexpected outcome variant");
+                    }
                 }
-                LightningOutputOutcome::Outgoing => {
-                    bail!("Unexpected outcome variant");
-                }
-            }
-        };
+            };
 
         loop {
             match global_context

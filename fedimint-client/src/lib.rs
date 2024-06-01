@@ -98,7 +98,8 @@ use db::{
     EncodedClientSecretKey, InitMode, PeerLastApiVersionsSummary, PeerLastApiVersionsSummaryKey,
 };
 use fedimint_api_client::api::{
-    ApiVersionSet, DynGlobalApi, DynModuleApi, FederationApiExt, IGlobalFederationApi,
+    ApiVersionSet, CallResultExt, DynGlobalApi, DynModuleApi, FederationApiExt,
+    IGlobalFederationApi,
 };
 use fedimint_core::config::{ClientConfig, FederationId, JsonClientConfig, ModuleInitRegistry};
 use fedimint_core::core::{
@@ -1389,11 +1390,12 @@ impl Client {
                 peer_id,
                 api.request_single_peer_typed::<SupportedApiVersionsSummary>(
                     None,
-                    VERSION_ENDPOINT.to_owned(),
-                    ApiRequestErased::default(),
+                    VERSION_ENDPOINT,
+                    &ApiRequestErased::default(),
                     peer_id,
                 )
-                .await,
+                .await
+                .flatten(),
             )
         }
 

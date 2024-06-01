@@ -30,7 +30,8 @@ use db_locked::LockedBuilder;
 use envs::FM_API_SECRET_ENV;
 use fedimint_aead::{encrypted_read, encrypted_write, get_encryption_key};
 use fedimint_api_client::api::{
-    DynGlobalApi, FederationApiExt, FederationError, IRawFederationApi, WsFederationApi,
+    CallResultExt, DynGlobalApi, FederationApiExt, FederationError, IRawFederationApi,
+    WsFederationApi,
 };
 use fedimint_bip39::Bip39RootSecretStrategy;
 use fedimint_client::module::init::{ClientModuleInit, ClientModuleInitRegistry};
@@ -814,10 +815,12 @@ impl FedimintCli {
                     Some(peer_id) => ws_api
                         .request_raw(peer_id.into(), &method, &[params.to_json()])
                         .await
+                        .flatten()
                         .map_err_cli()?,
                     None => ws_api
                         .request_current_consensus(method, params)
                         .await
+                        .flatten()
                         .map_err_cli()?,
                 };
 

@@ -190,7 +190,7 @@ impl MintOutputStatesCreated {
                     // this query collects a threshold of 2f + 1 valid blind signature shares
                     FilterMapThreshold::new(
                         move |peer, outcome| {
-                            verify_blind_share(peer, &outcome, amount, message, &decoder, &pks)
+                            verify_blind_share(peer, &outcome?, amount, message, &decoder, &pks)
                         },
                         NumPeers::from(global_context.api().all_peers().total()),
                     ),

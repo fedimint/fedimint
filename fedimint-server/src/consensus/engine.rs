@@ -5,7 +5,7 @@ use std::time::Duration;
 use aleph_bft::Keychain as KeychainTrait;
 use anyhow::{anyhow, bail};
 use async_channel::Receiver;
-use fedimint_api_client::api::{DynGlobalApi, FederationApiExt, PeerConnectionStatus};
+use fedimint_api_client::api::{CallError, DynGlobalApi, FederationApiExt, PeerConnectionStatus};
 use fedimint_api_client::query::FilterMap;
 use fedimint_core::core::{DynOutput, MODULE_INSTANCE_ID_GLOBAL};
 use fedimint_core::db::{Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped};
@@ -612,9 +612,10 @@ impl ConsensusEngine {
         let total_peers = self.keychain.peer_count();
         let decoders = self.decoders();
 
-        let filter_map = move |response: SerdeModuleEncoding<SignedSessionOutcome>| match response
-            .try_into_inner(&decoders)
-        {
+        let filter_map = move |response: Result<
+            SerdeModuleEncoding<SignedSessionOutcome>,
+            CallError,
+        >| match response?.try_into_inner(&decoders) {
             Ok(signed_session_outcome) => {
                 if signed_session_outcome.signatures.len() == keychain.threshold()
                     && signed_session_outcome

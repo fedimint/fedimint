@@ -6,7 +6,7 @@ use anyhow::anyhow;
 use fedimint_core::task::{MaybeSend, MaybeSync};
 use fedimint_core::{maybe_add_send_sync, NumPeers, NumPeersExt, PeerId};
 
-use crate::api::{self, PeerError, PeerResult};
+use crate::api::PeerError;
 
 /// Fedimint query strategy
 ///
@@ -15,7 +15,7 @@ use crate::api::{self, PeerError, PeerResult};
 /// responses from the Federation members. This trait abstracts away the details
 /// of each specific strategy for the generic client Api code.
 pub trait QueryStrategy<IR, OR = IR> {
-    fn process(&mut self, peer_id: PeerId, response: api::PeerResult<IR>) -> QueryStep<OR>;
+    fn process(&mut self, peer_id: PeerId, response: Result<IR, PeerError>) -> QueryStep<OR>;
 }
 
 /// Results from the strategy handling a response from a peer
@@ -105,7 +105,7 @@ impl<R, T> FilterMap<R, T> {
 }
 
 impl<R, T> QueryStrategy<R, T> for FilterMap<R, T> {
-    fn process(&mut self, peer: PeerId, result: PeerResult<R>) -> QueryStep<T> {
+    fn process(&mut self, peer: PeerId, result: Result<R, PeerError>) -> QueryStep<T> {
         match result {
             Ok(response) => match (self.filter_map)(response) {
                 Ok(value) => QueryStep::Success(value),
@@ -142,7 +142,11 @@ impl<R, T> FilterMapThreshold<R, T> {
 }
 
 impl<R, T> QueryStrategy<R, BTreeMap<PeerId, T>> for FilterMapThreshold<R, T> {
-    fn process(&mut self, peer: PeerId, result: PeerResult<R>) -> QueryStep<BTreeMap<PeerId, T>> {
+    fn process(
+        &mut self,
+        peer: PeerId,
+        result: Result<R, PeerError>,
+    ) -> QueryStep<BTreeMap<PeerId, T>> {
         match result {
             Ok(response) => match (self.filter_map)(peer, response) {
                 Ok(response) => {
@@ -186,7 +190,7 @@ impl<R> ThresholdConsensus<R> {
 }
 
 impl<R: Eq> QueryStrategy<R> for ThresholdConsensus<R> {
-    fn process(&mut self, peer: PeerId, result: PeerResult<R>) -> QueryStep<R> {
+    fn process(&mut self, peer: PeerId, result: Result<R, PeerError>) -> QueryStep<R> {
         match result {
             Ok(response) => {
                 let current_count = self.responses.values().filter(|r| **r == response).count();

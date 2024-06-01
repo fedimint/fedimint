@@ -12,7 +12,6 @@ use fedimint_core::task::sleep;
 use fedimint_core::{OutPoint, TransactionId};
 use fedimint_ln_common::contracts::incoming::IncomingContractAccount;
 use fedimint_ln_common::contracts::{DecryptedPreimage, FundedContract};
-use fedimint_ln_common::federation_endpoint_constants::ACCOUNT_ENDPOINT;
 use fedimint_ln_common::LightningInput;
 use lightning_invoice::Bolt11Invoice;
 use serde::{Deserialize, Serialize};
@@ -320,8 +319,6 @@ pub async fn get_incoming_contract(
                 }))
             } else {
                 Err(fedimint_api_client::api::FederationError::general(
-                    ACCOUNT_ENDPOINT,
-                    contract_id,
                     anyhow::anyhow!("Contract {contract_id} is not an incoming contract"),
                 ))
             }

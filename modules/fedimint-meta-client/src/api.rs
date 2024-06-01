@@ -1,4 +1,6 @@
-use fedimint_api_client::api::{FederationApiExt as _, FederationResult, IModuleFederationApi};
+use fedimint_api_client::api::{
+    CallResultExt as _, FederationApiExt as _, FederationResult, IModuleFederationApi,
+};
 use fedimint_core::module::{ApiAuth, ApiRequestErased};
 use fedimint_core::task::{MaybeSend, MaybeSync};
 use fedimint_core::{apply, async_trait_maybe_send};
@@ -36,6 +38,7 @@ where
             ApiRequestErased::new(GetConsensusRequest(key)),
         )
         .await
+        .flatten()
     }
     async fn get_consensus_rev(&self, key: MetaKey) -> FederationResult<Option<u64>> {
         self.request_current_consensus(
@@ -43,6 +46,7 @@ where
             ApiRequestErased::new(GetConsensusRequest(key)),
         )
         .await
+        .flatten()
     }
 
     async fn get_submissions(
@@ -56,6 +60,7 @@ where
             auth,
         )
         .await
+        .flatten()
     }
     async fn submit(
         &self,
@@ -69,5 +74,6 @@ where
             auth,
         )
         .await
+        .flatten()
     }
 }
