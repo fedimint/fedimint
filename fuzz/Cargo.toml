@@ -2,7 +2,7 @@
 name = "fedimint-fuzz"
 edition = "2021"
 authors = ["The Fedimint Developers"]
-version = {workspace = true}
+version = { workspace = true }
 publish = false
 license = "MIT"
 readme = "../README.md"
@@ -13,7 +13,7 @@ cargo-fuzz = true
 
 [dependencies]
 # needs to be pinned to the same version `cargo-fuzz` binary uses
-honggfuzz = { version = "=0.5.56", default-features = false }
+honggfuzz = { version = "=0.5.55", default-features = false }
 fedimint-core = { workspace = true }
 fedimint-wallet-common = { workspace = true }
 fedimint-ln-common = { workspace = true }
