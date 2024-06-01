@@ -32,7 +32,7 @@ serde = { workspace = true }
 strum = { workspace = true }
 strum_macros = { workspace = true }
 threshold_crypto = { workspace = true }
-tokio = { version = "1.37", features = ["full"] }
+tokio = { version = "1.38", features = ["full"] }
 tracing = { workspace = true }
 rand = { workspace = true }
 fedimint-server = { version = "=0.4.0-alpha", path = "../../fedimint-server" }

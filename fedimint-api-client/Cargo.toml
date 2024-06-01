@@ -24,7 +24,7 @@ jsonrpsee-core = "0.22.5"
 lru = "0.12.3"
 serde = { workspace = true }
 serde_json = { workspace = true }
-tokio = { version = "1.37.0", features = ["sync", "io-util"] }
+tokio = { version = "1.38.0", features = ["sync", "io-util"] }
 thiserror = { workspace = true }
 tracing = { workspace = true }
 bitcoin = { workspace = true }
@@ -33,7 +33,7 @@ fedimint-logging = { workspace = true }
 
 [target.'cfg(not(target_family = "wasm"))'.dependencies]
 jsonrpsee-ws-client = { version = "0.22.5", features = ["webpki-tls"], default-features = false }
-tokio = { version = "1.36.0", features = ["full", "tracing"] }
+tokio = { version = "1.38.0", features = ["full", "tracing"] }
 tokio-rustls = { workspace = true }
 
 [target.'cfg(target_family = "wasm")'.dependencies]

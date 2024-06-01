@@ -51,7 +51,7 @@ hex = { workspace = true }
 rand = { workspace = true }
 serde = { workspace = true }
 thiserror = { workspace = true }
-tokio = { version = "1.37.0", features = ["full", "tracing"] }
+tokio = { version = "1.38.0", features = ["full", "tracing"] }
 tracing = { workspace = true }
 tracing-subscriber = { version = "0.3.18", features = [ "env-filter" ] }
 serde_json = { version = "1.0.117", features = ["preserve_order"] }

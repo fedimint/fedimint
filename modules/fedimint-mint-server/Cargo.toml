@@ -38,5 +38,5 @@ fedimint-logging = { workspace = true }
 
 [dev-dependencies]
 assert_matches = { workspace = true }
-tokio = {version = "1.37.0", features = [ "full" ] }
+tokio = {version = "1.38.0", features = [ "full" ] }
 test-log = { version = "0.2", features = [ "trace" ], default-features = false }
