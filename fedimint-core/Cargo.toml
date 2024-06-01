@@ -54,13 +54,13 @@ imbl = "3.0.0"
 backon = "=0.4.4" # don't upgrade unless really needed
 
 [target.'cfg(not(target_family = "wasm"))'.dependencies]
-tokio = { version = "1.36.0", features = ["full", "tracing"] }
+tokio = { version = "1.38.0", features = ["full", "tracing"] }
 tokio-rustls = { workspace = true }
 
 [target.'cfg(target_family = "wasm")'.dependencies]
 jsonrpsee-wasm-client = { version = "0.22.5", default-features = false }
 async-lock = "3.3"
-tokio = "1.37.0"
+tokio = "1.38.0"
 futures-util = { workspace = true }
 # getrandom is transitive dependency of rand
 # on wasm, we need to enable the js backend

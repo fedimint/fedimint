@@ -25,4 +25,4 @@ fedimint-ln-server = { path = "../fedimint-ln-server" }
 fedimint-testing = { workspace = true }
 fedimint-client = { workspace = true }
 fedimint-core = { workspace = true }
-tokio = { version = "1.37.0", features = ["sync"] }
+tokio = { version = "1.38.0", features = ["sync"] }

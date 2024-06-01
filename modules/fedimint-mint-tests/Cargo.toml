@@ -24,7 +24,7 @@ fedimint-client = { workspace = true }
 fedimint-core = { workspace = true }
 fedimint-logging = { workspace = true }
 futures = { workspace = true }
-tokio = { version = "1.37.0", features = ["sync"] }
+tokio = { version = "1.38.0", features = ["sync"] }
 tracing = { workspace = true }
 rand = { workspace = true }
 serde = { workspace = true }

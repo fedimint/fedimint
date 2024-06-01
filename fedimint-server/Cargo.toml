@@ -54,7 +54,7 @@ tracing = { workspace = true }
 url = { version = "2.5.0", features = ["serde"] }
 threshold_crypto = { workspace = true }
 jsonrpsee = { version = "0.22.5", features = ["server"] }
-tokio = { version = "1.37.0", features = ["full", "tracing"] }
+tokio = { version = "1.38.0", features = ["full", "tracing"] }
 tokio-stream = "0.1.15"
 tokio-rustls = { workspace = true }
 tokio-util = { version = "0.7.11", features = [ "codec" ] }
