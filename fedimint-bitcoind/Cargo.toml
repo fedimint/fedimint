@@ -21,7 +21,7 @@ anyhow = { workspace = true }
 async-trait = { workspace = true }
 bitcoin = { workspace = true }
 bitcoincore-rpc = { version = "0.17.0", optional = true }
-electrum-client = { version = "0.18.0", optional = true }
+electrum-client = { version = "0.20.0", optional = true }
 esplora-client = { version = "0.6.0", default-features = false, features = ["async", "async-https-rustls"], optional = true }
 hex = "0.4.3"
 lazy_static = "1.4.0"
