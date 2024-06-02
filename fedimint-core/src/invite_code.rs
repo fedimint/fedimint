@@ -23,7 +23,7 @@ use crate::{NumPeersExt as _, PeerId};
 /// Constructors have to guarantee that:
 ///   * At least one Api entry is present
 ///   * At least one Federation ID is present
-#[derive(Clone, Debug, Eq, PartialEq, Encodable)]
+#[derive(Clone, Debug, Eq, PartialEq, Encodable, Hash, Ord, PartialOrd)]
 pub struct InviteCode(Vec<InviteCodeData>);
 
 impl Decodable for InviteCode {
@@ -152,7 +152,7 @@ impl InviteCode {
 /// one `Api` and one `FederationId` variant in an invite code, but more can be
 /// added in the future while still keeping the invite code readable for older
 /// clients, which will just ignore the new fields.
-#[derive(Clone, Debug, Eq, PartialEq, Encodable, Decodable)]
+#[derive(Clone, Debug, Eq, PartialEq, Encodable, Decodable, Hash, Ord, PartialOrd)]
 enum InviteCodeData {
     /// API endpoint of one of the guardians
     Api {
