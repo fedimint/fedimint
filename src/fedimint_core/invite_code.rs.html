@@ -283,7 +283,7 @@
 /// Constructors have to guarantee that:
 ///   * At least one Api entry is present
 ///   * At least one Federation ID is present
-</span><span class="attr">#[derive(Clone, Debug, Eq, PartialEq, Encodable)]
+</span><span class="attr">#[derive(Clone, Debug, Eq, PartialEq, Encodable, Hash, Ord, PartialOrd)]
 </span><span class="kw">pub struct </span>InviteCode(Vec&lt;InviteCodeData&gt;);
 
 <span class="kw">impl </span>Decodable <span class="kw">for </span>InviteCode {
@@ -412,7 +412,7 @@
 /// one `Api` and one `FederationId` variant in an invite code, but more can be
 /// added in the future while still keeping the invite code readable for older
 /// clients, which will just ignore the new fields.
-</span><span class="attr">#[derive(Clone, Debug, Eq, PartialEq, Encodable, Decodable)]
+</span><span class="attr">#[derive(Clone, Debug, Eq, PartialEq, Encodable, Decodable, Hash, Ord, PartialOrd)]
 </span><span class="kw">enum </span>InviteCodeData {
     <span class="doccomment">/// API endpoint of one of the guardians
     </span>Api {
