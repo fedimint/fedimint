@@ -24,18 +24,18 @@ use crate::{NumPeersExt as _, PeerId};
 ///   * At least one Api entry is present
 ///   * At least one Federation ID is present
 #[derive(Clone, Debug, Eq, PartialEq, Encodable, Hash, Ord, PartialOrd)]
-pub struct InviteCode(Vec<InviteCodeData>);
+pub struct InviteCode(Vec<InviteCodePart>);
 
 impl Decodable for InviteCode {
     fn consensus_decode<R: Read>(
         r: &mut R,
         modules: &ModuleDecoderRegistry,
     ) -> Result<Self, DecodeError> {
-        let inner: Vec<InviteCodeData> = Decodable::consensus_decode(r, modules)?;
+        let inner: Vec<InviteCodePart> = Decodable::consensus_decode(r, modules)?;
 
         if !inner
             .iter()
-            .any(|data| matches!(data, InviteCodeData::Api { .. }))
+            .any(|data| matches!(data, InviteCodePart::Api { .. }))
         {
             return Err(DecodeError::from_str(
                 "No API was provided in the invite code",
@@ -44,7 +44,7 @@ impl Decodable for InviteCode {
 
         if !inner
             .iter()
-            .any(|data| matches!(data, InviteCodeData::FederationId(_)))
+            .any(|data| matches!(data, InviteCodePart::FederationId(_)))
         {
             return Err(DecodeError::from_str(
                 "No Federation ID provided in invite code",
@@ -63,12 +63,12 @@ impl InviteCode {
         api_secret: Option<String>,
     ) -> Self {
         let mut s = InviteCode(vec![
-            InviteCodeData::Api { url, peer },
-            InviteCodeData::FederationId(federation_id),
+            InviteCodePart::Api { url, peer },
+            InviteCodePart::FederationId(federation_id),
         ]);
 
         if let Some(api_secret) = api_secret {
-            s.0.push(InviteCodeData::ApiSecret(api_secret));
+            s.0.push(InviteCodePart::ApiSecret(api_secret));
         }
 
         s
@@ -81,15 +81,15 @@ impl InviteCode {
         federation_id: FederationId,
     ) -> Self {
         let max_size = peer_to_url_map.max_evil() + 1;
-        let mut code_vec: Vec<InviteCodeData> = peer_to_url_map
+        let mut code_vec: Vec<InviteCodePart> = peer_to_url_map
             .iter()
             .take(max_size)
-            .map(|(peer, url)| InviteCodeData::Api {
+            .map(|(peer, url)| InviteCodePart::Api {
                 url: url.clone(),
                 peer: *peer,
             })
             .collect();
-        code_vec.push(InviteCodeData::FederationId(federation_id));
+        code_vec.push(InviteCodePart::FederationId(federation_id));
 
         InviteCode(code_vec)
     }
@@ -99,7 +99,7 @@ impl InviteCode {
         self.0
             .iter()
             .find_map(|data| match data {
-                InviteCodeData::Api { url, .. } => Some(url.clone()),
+                InviteCodePart::Api { url, .. } => Some(url.clone()),
                 _ => None,
             })
             .expect("Ensured by constructor")
@@ -108,7 +108,7 @@ impl InviteCode {
     /// Api secret, if needed, to use when communicating with the federation
     pub fn api_secret(&self) -> Option<String> {
         self.0.iter().find_map(|data| match data {
-            InviteCodeData::ApiSecret(api_secret) => Some(api_secret.clone()),
+            InviteCodePart::ApiSecret(api_secret) => Some(api_secret.clone()),
             _ => None,
         })
     }
@@ -118,7 +118,7 @@ impl InviteCode {
         self.0
             .iter()
             .find_map(|data| match data {
-                InviteCodeData::Api { peer, .. } => Some(*peer),
+                InviteCodePart::Api { peer, .. } => Some(*peer),
                 _ => None,
             })
             .expect("Ensured by constructor")
@@ -129,7 +129,7 @@ impl InviteCode {
         self.0
             .iter()
             .filter_map(|entry| match entry {
-                InviteCodeData::Api { url, peer } => Some((*peer, url.clone())),
+                InviteCodePart::Api { url, peer } => Some((*peer, url.clone())),
                 _ => None,
             })
             .collect()
@@ -141,19 +141,23 @@ impl InviteCode {
         self.0
             .iter()
             .find_map(|data| match data {
-                InviteCodeData::FederationId(federation_id) => Some(*federation_id),
+                InviteCodePart::FederationId(federation_id) => Some(*federation_id),
                 _ => None,
             })
             .expect("Ensured by constructor")
     }
 }
 
-/// Data that can be encoded in the invite code. Currently we always just use
-/// one `Api` and one `FederationId` variant in an invite code, but more can be
-/// added in the future while still keeping the invite code readable for older
-/// clients, which will just ignore the new fields.
+/// For extendability [`InviteCode`] consists of parts, where client can ignore
+/// ones they don't understand.
+///
+/// ones they don't understand Data that can be encoded in the invite code.
+/// Currently we always just use one `Api` and one `FederationId` variant in an
+/// invite code, but more can be added in the future while still keeping the
+/// invite code readable for older clients, which will just ignore the new
+/// fields.
 #[derive(Clone, Debug, Eq, PartialEq, Encodable, Decodable, Hash, Ord, PartialOrd)]
-enum InviteCodeData {
+enum InviteCodePart {
     /// API endpoint of one of the guardians
     Api {
         /// URL to reach an API that we can download configs from
@@ -244,11 +248,11 @@ mod tests {
         assert_eq!(
             invite_code.0,
             [
-                crate::invite_code::InviteCodeData::Api {
+                crate::invite_code::InviteCodePart::Api {
                     url: "wss://fedimintd.mplsfed.foo/".parse().expect("valid url"),
                     peer: crate::PeerId(0),
                 },
-                crate::invite_code::InviteCodeData::FederationId(FederationId(
+                crate::invite_code::InviteCodePart::FederationId(FederationId(
                     bitcoin_hashes::sha256::Hash::from_str(
                         "bea7ff4116f2b1d324c7b5d699cce4ac7408cee41db2c88027e21b76fff3b9f4"
                     )
