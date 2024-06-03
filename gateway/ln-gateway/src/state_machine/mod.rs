@@ -290,6 +290,7 @@ impl GatewayClientModule {
                     GatewayClientStateMachines::Complete(GatewayCompleteStateMachine {
                         common: GatewayCompleteCommon {
                             operation_id,
+                            payment_hash: htlc.payment_hash,
                             incoming_chan_id: htlc.incoming_chan_id,
                             htlc_id: htlc.htlc_id,
                         },
