@@ -674,6 +674,12 @@
 <a href="#674" id="674">674</a>
 <a href="#675" id="675">675</a>
 <a href="#676" id="676">676</a>
+<a href="#677" id="677">677</a>
+<a href="#678" id="678">678</a>
+<a href="#679" id="679">679</a>
+<a href="#680" id="680">680</a>
+<a href="#681" id="681">681</a>
+<a href="#682" id="682">682</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
@@ -702,7 +708,7 @@
 <span class="kw">use </span>futures::StreamExt;
 <span class="kw">use </span>rand::Rng;
 <span class="kw">use </span>tokio::sync::{watch, RwLock};
-<span class="kw">use </span>tracing::{debug, info, instrument, warn, Level};
+<span class="kw">use </span>tracing::{debug, error, info, instrument, warn, Level};
 
 <span class="kw">use </span><span class="kw">crate</span>::config::ServerConfig;
 <span class="kw">use </span><span class="kw">crate</span>::consensus::aleph_bft::backup::{BackupReader, BackupWriter};
@@ -1026,7 +1032,10 @@
                         .items
                         .split_at(pending_accepted_items.len());
 
-                    <span class="macro">assert!</span>(processed.iter().eq(pending_accepted_items.iter()));
+                    <span class="macro">assert!</span>(
+                        processed.iter().eq(pending_accepted_items.iter()),
+                        <span class="string">"Consensus Failure: pending accepted items disagree with federation consensus"
+                    </span>);
 
                     <span class="kw">for </span>accepted_item <span class="kw">in </span>unprocessed {
                         <span class="kw">if </span><span class="self">self</span>.process_consensus_item(
@@ -1035,7 +1044,7 @@
                             accepted_item.item.clone(),
                             accepted_item.peer
                         ).<span class="kw">await</span>.is_err(){
-                            <span class="macro">panic!</span>(<span class="string">"Rejected accepted consensus item {:?}"</span>, DebugConsensusItem(<span class="kw-2">&amp;</span>accepted_item.item));
+                            <span class="macro">panic!</span>(<span class="string">"Consensus Failure: rejected item accepted by federation consensus"</span>);
                         }
 
                         item_index += <span class="number">1</span>;
@@ -1069,13 +1078,16 @@
                         <span class="kw">if </span><span class="self">self</span>.keychain.verify(<span class="kw-2">&amp;</span>header, <span class="kw-2">&amp;</span>signature, to_node_index(peer)){
                             signatures.insert(peer, signature);
                         } <span class="kw">else </span>{
-                            <span class="macro">warn!</span>(target: LOG_CONSENSUS, <span class="string">"Received invalid signature from peer {peer}"</span>);
+                            <span class="macro">error!</span>(target: LOG_CONSENSUS, <span class="string">"Consensus Failure: invalid header signature from {peer}"</span>);
                         }
                     }
                 }
                 signed_session_outcome = <span class="self">self</span>.request_signed_session_outcome(<span class="kw-2">&amp;</span><span class="self">self</span>.federation_api, session_index) =&gt; {
-                    <span class="comment">// We check that the session outcome we have created agrees with the federations consensus
-                    </span><span class="macro">assert_eq!</span>(header, signed_session_outcome.session_outcome.header(session_index));
+                    <span class="macro">assert_eq!</span>(
+                        header,
+                        signed_session_outcome.session_outcome.header(session_index),
+                        <span class="string">"Consensus Failure: header disagrees with federation consensus"
+                    </span>);
 
                     <span class="kw">return </span><span class="prelude-val">Ok</span>(signed_session_outcome);
                 }
