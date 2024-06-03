@@ -159,7 +159,7 @@ impl<S> StateTransition<S> {
             + 'static,
     {
         StateTransition {
-            trigger: Box::pin(async move {
+            trigger: Box::pin(async {
                 let val = trigger.await;
                 serde_json::to_value(val).expect("Value could not be serialized")
             }),

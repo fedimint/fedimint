@@ -783,7 +783,7 @@ async fn test_gateway_client_intercept_htlc_invalid_offer() -> anyhow::Result<()
             });
             // The client's receive state machine can be empty because the gateway should
             // not fund this contract
-            let state_machines = Arc::new(move |_txid: TransactionId, _input_idx: u64| {
+            let state_machines = Arc::new(|_txid: TransactionId, _input_idx: u64| {
                 Vec::<LightningClientStateMachines>::new()
             });
             let client_output = ClientOutput {

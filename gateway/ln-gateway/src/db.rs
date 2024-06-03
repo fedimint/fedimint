@@ -130,7 +130,7 @@ impl_db_lookup!(
 
 pub fn get_gatewayd_database_migrations() -> BTreeMap<DatabaseVersion, ServerMigrationFn> {
     let mut migrations: BTreeMap<DatabaseVersion, ServerMigrationFn> = BTreeMap::new();
-    migrations.insert(DatabaseVersion(0), move |dbtx| migrate_to_v1(dbtx).boxed());
+    migrations.insert(DatabaseVersion(0), |dbtx| migrate_to_v1(dbtx).boxed());
     migrations
 }
 
@@ -243,7 +243,7 @@ mod fedimint_migration_tests {
         snapshot_db_migrations_with_decoders(
             "gatewayd",
             |db| {
-                Box::pin(async move {
+                Box::pin(async {
                     create_gatewayd_db_data(db).await;
                 })
             },

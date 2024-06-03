@@ -90,7 +90,7 @@ where
     where
         Fut: Future<Output = std::result::Result<T, E>> + 'static + MaybeSend,
     {
-        let handle = crate::runtime::spawn("jit-value", async move { f().await });
+        let handle = crate::runtime::spawn("jit-value", async { f().await });
 
         Self {
             inner: JitInner {

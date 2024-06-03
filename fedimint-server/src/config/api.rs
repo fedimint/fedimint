@@ -245,7 +245,7 @@ impl ConfigGenApi {
 
         let self_clone = self.clone();
         let sub_group = self.task_group.make_subgroup();
-        sub_group.spawn("run dkg", move |_handle| async move {
+        sub_group.spawn("run dkg", |_handle| async move {
             // Followers wait for leader to signal readiness for DKG
             if let Some(client) = leader {
                 loop {
@@ -420,7 +420,7 @@ impl ConfigGenApi {
         // The leader will signal this by setting it's status to AwaitingPassword
         let self_clone = self.clone();
         let sub_group = self.task_group.make_subgroup();
-        sub_group.spawn("restart", move |_handle| async move {
+        sub_group.spawn("restart", |_handle| async move {
             if let Some(client) = leader {
                 self_clone.await_leader_restart(&client).await?;
             } else {

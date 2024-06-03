@@ -146,7 +146,7 @@ impl FundingOfferState {
                 OutPoint { txid, out_idx: 0 },
                 context.clone(),
             ),
-            move |_dbtx, result, old_state| {
+            |_dbtx, result, old_state| {
                 Box::pin(async { Self::transition_funding_success(result, old_state) })
             },
         )]

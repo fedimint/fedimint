@@ -351,7 +351,7 @@ pub trait FederationApiExt: IRawFederationApi {
             .and_then(|v| {
                 serde_json::from_value(v).map_err(|e| PeerError::ResponseDeserialization(e.into()))
             })
-            .map_err(move |e| FederationError::new_one_peer(peer_id, method, params, e))?)
+            .map_err(|e| FederationError::new_one_peer(peer_id, method, params, e))?)
     }
 
     /// Make an aggregate request to federation, using `strategy` to logically
@@ -593,7 +593,7 @@ impl DynGlobalApi {
     where
         R: OutputOutcome,
     {
-        fedimint_core::runtime::timeout(timeout, async move {
+        fedimint_core::runtime::timeout(timeout, async {
             let outcome: SerdeOutputOutcome = self
                 .inner
                 .request_current_consensus(

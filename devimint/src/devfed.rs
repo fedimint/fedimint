@@ -107,7 +107,7 @@ impl DevJitFed {
         let cln = JitTry::new_try({
             let process_mgr = process_mgr.to_owned();
             let bitcoind = bitcoind.clone();
-            move || async move {
+            || async move {
                 Ok(Arc::new(
                     Lightningd::new(&process_mgr, bitcoind.get_try().await?.deref().clone())
                         .await?,
@@ -117,7 +117,7 @@ impl DevJitFed {
         let lnd = JitTry::new_try({
             let process_mgr = process_mgr.to_owned();
             let bitcoind = bitcoind.clone();
-            move || async move {
+            || async move {
                 Ok(Arc::new(
                     Lnd::new(&process_mgr, bitcoind.get_try().await?.deref().clone()).await?,
                 ))
@@ -126,7 +126,7 @@ impl DevJitFed {
         let electrs = JitTryAnyhow::new_try({
             let process_mgr = process_mgr.to_owned();
             let bitcoind = bitcoind.clone();
-            move || async move {
+            || async move {
                 let bitcoind = bitcoind.get_try().await?.deref().clone();
                 Ok(Arc::new(Electrs::new(&process_mgr, bitcoind).await?))
             }
@@ -134,7 +134,7 @@ impl DevJitFed {
         let esplora = JitTryAnyhow::new_try({
             let process_mgr = process_mgr.to_owned();
             let bitcoind = bitcoind.clone();
-            move || async move {
+            || async move {
                 let bitcoind = bitcoind.get_try().await?.deref().clone();
                 Ok(Arc::new(Esplora::new(&process_mgr, bitcoind).await?))
             }
@@ -157,7 +157,7 @@ impl DevJitFed {
         let gw_cln = JitTryAnyhow::new_try({
             let process_mgr = process_mgr.to_owned();
             let cln = cln.clone();
-            move || async move {
+            || async move {
                 let cln = cln.get_try().await?.deref().clone();
                 Ok(Arc::new(
                     Gatewayd::new(&process_mgr, LightningNode::Cln(cln)).await?,
@@ -180,7 +180,7 @@ impl DevJitFed {
         let gw_lnd = JitTryAnyhow::new_try({
             let process_mgr = process_mgr.to_owned();
             let lnd = lnd.clone();
-            move || async move {
+            || async move {
                 let lnd = lnd.get_try().await?.deref().clone();
                 Ok(Arc::new(
                     Gatewayd::new(&process_mgr, LightningNode::Lnd(lnd)).await?,
@@ -207,7 +207,7 @@ impl DevJitFed {
             let cln = cln.clone();
             let gw_cln = gw_cln.clone();
             let bitcoind = bitcoind.clone();
-            move || async move {
+            || async move {
                 let bitcoind = bitcoind.get_try().await?.deref().clone();
                 let lnd = lnd.get_try().await?.deref().clone();
                 let cln = cln.get_try().await?.deref().clone();

@@ -548,7 +548,7 @@ impl Gateway {
     fn start_gateway(&self, task_group: &mut TaskGroup) {
         let mut self_copy = self.clone();
         let tg = task_group.clone();
-        task_group.spawn("Subscribe to intercepted HTLCs in stream", move |handle| async move {
+        task_group.spawn("Subscribe to intercepted HTLCs in stream", |handle| async move {
             loop {
                 if handle.is_shutting_down() {
                     info!("Gateway HTLC handler loop is shutting down");
@@ -1072,7 +1072,7 @@ impl Gateway {
                 federation_id,
                 Spanned::new(
                     info_span!("client", federation_id=%federation_id.clone()),
-                    async move { client },
+                    async { client },
                 )
                 .await,
             );

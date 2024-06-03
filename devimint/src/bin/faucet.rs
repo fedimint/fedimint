@@ -125,7 +125,7 @@ async fn main() -> anyhow::Result<()> {
     let router = Router::new()
         .route(
             "/connect-string",
-            get(|| async move {
+            get(|| async {
                 get_invite_code(cmd.invite_code)
                     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("{e:?}")))
             }),

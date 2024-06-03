@@ -118,7 +118,7 @@ impl GatewayLndClient {
                 failure_reason: format!("Failed to get node info {status:?}"),
             })?;
 
-        task_group.spawn("LND HTLC Subscription", move |handle| async move {
+        task_group.spawn("LND HTLC Subscription", |handle| async move {
                 let future_stream = client
                     .router()
                     .htlc_interceptor(ReceiverStream::new(lnd_rx));

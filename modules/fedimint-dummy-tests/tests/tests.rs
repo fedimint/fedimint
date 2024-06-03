@@ -93,7 +93,7 @@ async fn federation_should_abort_if_balance_sheet_is_negative() -> anyhow::Resul
         },
         amount: sats(1000),
         keys: vec![account_kp],
-        state_machines: Arc::new(move |_, _| Vec::<DummyStateMachine>::new()),
+        state_machines: Arc::new(|_, _| Vec::<DummyStateMachine>::new()),
     };
 
     let tx = TransactionBuilder::new().with_input(input.into_dyn(dummy.id));
@@ -124,7 +124,7 @@ async fn unbalanced_transactions_get_rejected() -> anyhow::Result<()> {
             account: dummy_module.account(),
         },
         amount: sats(1000),
-        state_machines: Arc::new(move |_, _| Vec::<DummyStateMachine>::new()),
+        state_machines: Arc::new(|_, _| Vec::<DummyStateMachine>::new()),
     };
     let tx = TransactionBuilder::new().with_output(output.into_dyn(dummy_module.id));
     let (tx, _) = tx.build(&Secp256k1::new(), rand::thread_rng());
@@ -279,7 +279,7 @@ mod fedimint_migration_tests {
     #[tokio::test(flavor = "multi_thread")]
     async fn snapshot_server_db_migrations() -> anyhow::Result<()> {
         snapshot_db_migrations::<_, DummyCommonInit>("dummy-server-v0", |db| {
-            Box::pin(async move {
+            Box::pin(async {
                 create_server_db_with_v0_data(db).await;
             })
         })
@@ -333,7 +333,7 @@ mod fedimint_migration_tests {
     async fn snapshot_client_db_migrations() -> anyhow::Result<()> {
         snapshot_db_migrations_client::<_, _, DummyCommonInit>(
             "dummy-client-v0",
-            |db| Box::pin(async move { create_client_db_with_v0_data(db).await }),
+            |db| Box::pin(async { create_client_db_with_v0_data(db).await }),
             create_client_states,
         )
         .await

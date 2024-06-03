@@ -1603,8 +1603,8 @@ impl Client {
     pub async fn set_metadata(&self, metadata: &Metadata) {
         self.db
             .autocommit::<_, _, anyhow::Error>(
-                move |dbtx, _| {
-                    Box::pin(async move {
+                |dbtx, _| {
+                    Box::pin(async {
                         Self::set_metadata_dbtx(dbtx, metadata).await;
                         Ok(())
                     })
@@ -1704,7 +1704,7 @@ impl Client {
     ) {
         let db = self.db.clone();
         self.task_group
-            .spawn("module recoveries", move |_task_handle| async move {
+            .spawn("module recoveries", |_task_handle| async {
                 Self::run_module_recoveries_task(
                     db,
                     recovery_sender,

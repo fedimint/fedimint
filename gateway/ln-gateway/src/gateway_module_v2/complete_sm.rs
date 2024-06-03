@@ -66,7 +66,7 @@ impl State for CompleteStateMachine {
         match &self.state {
             CompleteSMState::Pending => vec![StateTransition::new(
                 Self::await_receive(context.clone(), self.common.operation_id),
-                move |_, result, old_state| {
+                |_, result, old_state| {
                     Box::pin(async move { Self::transition_receive(result, &old_state) })
                 },
             )],
@@ -77,9 +77,7 @@ impl State for CompleteStateMachine {
                     self.common.htlc_id,
                     result.clone(),
                 ),
-                move |_, (), old_state| {
-                    Box::pin(async move { Self::transition_completion(&old_state) })
-                },
+                |_, (), old_state| Box::pin(async move { Self::transition_completion(&old_state) }),
             )],
             CompleteSMState::Completed => Vec::new(),
         }

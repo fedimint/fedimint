@@ -325,7 +325,7 @@ pub async fn handle_command(cmd: Cmd, common_args: CommonArgs) -> Result<()> {
         Cmd::Rpc(rpc_cmd) => rpc_command(rpc_cmd, common_args).await?,
         Cmd::RunUi => {
             let (process_mgr, task_group) = setup(common_args).await?;
-            let main = async move {
+            let main = async {
                 let result = run_ui(&process_mgr).await;
                 let daemons = write_ready_file(&process_mgr.globals, result).await?;
                 Ok::<_, anyhow::Error>(daemons)

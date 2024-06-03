@@ -732,7 +732,7 @@ impl ServerModule for Lightning {
                 dbtx.insert_new_entry(&OfferKey(offer.hash), &(*offer).clone())
                     .await;
 
-                dbtx.on_commit(move || {
+                dbtx.on_commit(|| {
                     LN_INCOMING_OFFER.inc();
                 });
 
@@ -789,7 +789,7 @@ impl ServerModule for Lightning {
                 )
                 .await;
 
-                dbtx.on_commit(move || {
+                dbtx.on_commit(|| {
                     LN_CANCEL_OUTGOING_CONTRACTS.inc();
                 });
 

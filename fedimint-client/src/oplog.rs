@@ -76,7 +76,7 @@ impl OperationLog {
             //
             // The current implementation may also skip operations due to `SystemTime` not being
             // guaranteed to be monotonous. The linked list approach would also fix that.
-            .skip_while(move |key| {
+            .skip_while(|key| {
                 let skip = if let Some(start_after) = start_after {
                     key.creation_time >= start_after.creation_time
                 } else {

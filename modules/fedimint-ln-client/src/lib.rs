@@ -350,39 +350,30 @@ impl ClientModuleInit for LightningClientInit {
 
     fn get_database_migrations(&self) -> BTreeMap<DatabaseVersion, ClientMigrationFn> {
         let mut migrations: BTreeMap<DatabaseVersion, ClientMigrationFn> = BTreeMap::new();
-        migrations.insert(DatabaseVersion(0), move |dbtx, _, _| {
+        migrations.insert(DatabaseVersion(0), |dbtx, _, _| {
             Box::pin(async {
                 dbtx.remove_entry(&crate::db::ActiveGatewayKey).await;
                 Ok(None)
             })
         });
 
-        migrations.insert(
-            DatabaseVersion(1),
-            move |_, active_states, inactive_states| {
-                Box::pin(async {
-                    migrate_state(active_states, inactive_states, db::get_v1_migrated_state)
-                })
-            },
-        );
+        migrations.insert(DatabaseVersion(1), |_, active_states, inactive_states| {
+            Box::pin(async {
+                migrate_state(active_states, inactive_states, db::get_v1_migrated_state)
+            })
+        });
 
-        migrations.insert(
-            DatabaseVersion(2),
-            move |_, active_states, inactive_states| {
-                Box::pin(async {
-                    migrate_state(active_states, inactive_states, db::get_v2_migrated_state)
-                })
-            },
-        );
+        migrations.insert(DatabaseVersion(2), |_, active_states, inactive_states| {
+            Box::pin(async {
+                migrate_state(active_states, inactive_states, db::get_v2_migrated_state)
+            })
+        });
 
-        migrations.insert(
-            DatabaseVersion(3),
-            move |_, active_states, inactive_states| {
-                Box::pin(async {
-                    migrate_state(active_states, inactive_states, db::get_v3_migrated_state)
-                })
-            },
-        );
+        migrations.insert(DatabaseVersion(3), |_, active_states, inactive_states| {
+            Box::pin(async {
+                migrate_state(active_states, inactive_states, db::get_v3_migrated_state)
+            })
+        });
 
         migrations
     }
@@ -1106,7 +1097,7 @@ impl LightningClientModule {
         let mut stream = self.notifier.subscribe(operation_id).await;
         let client_ctx = self.client_ctx.clone();
 
-        Ok(operation.outcome_or_updates(&self.client_ctx.global_db(), operation_id, move || {
+        Ok(operation.outcome_or_updates(&self.client_ctx.global_db(), operation_id, || {
             stream! {
                 yield InternalPayState::Funding;
 
@@ -1161,7 +1152,7 @@ impl LightningClientModule {
 
         let client_ctx = self.client_ctx.clone();
 
-        Ok(operation.outcome_or_updates(&self.client_ctx.global_db(), operation_id, move || {
+        Ok(operation.outcome_or_updates(&self.client_ctx.global_db(), operation_id, || {
             stream! {
                 let self_ref = client_ctx.self_ref();
 
@@ -1477,7 +1468,7 @@ impl LightningClientModule {
 
         let client_ctx = self.client_ctx.clone();
 
-        Ok(operation.outcome_or_updates(&self.client_ctx.global_db(), operation_id, move || {
+        Ok(operation.outcome_or_updates(&self.client_ctx.global_db(), operation_id, || {
             stream! {
                 yield LnReceiveState::AwaitingFunds;
 
@@ -1510,7 +1501,7 @@ impl LightningClientModule {
 
         let client_ctx = self.client_ctx.clone();
 
-        Ok(operation.outcome_or_updates(&self.client_ctx.global_db(), operation_id, move || {
+        Ok(operation.outcome_or_updates(&self.client_ctx.global_db(), operation_id, || {
             stream! {
 
                 let self_ref = client_ctx.self_ref();

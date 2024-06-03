@@ -215,7 +215,7 @@ impl DummyClientModule {
             },
             amount,
             keys: vec![account_kp],
-            state_machines: Arc::new(move |_, _| Vec::<DummyStateMachine>::new()),
+            state_machines: Arc::new(|_, _| Vec::<DummyStateMachine>::new()),
         };
 
         // Build and send tx to the fed
@@ -258,7 +258,7 @@ impl DummyClientModule {
         let output = ClientOutput {
             output: DummyOutput { amount, account },
             amount,
-            state_machines: Arc::new(move |_, _| Vec::<DummyStateMachine>::new()),
+            state_machines: Arc::new(|_, _| Vec::<DummyStateMachine>::new()),
         };
 
         // Build and send tx to the fed
@@ -373,18 +373,15 @@ impl ClientModuleInit for DummyClientInit {
 
     fn get_database_migrations(&self) -> BTreeMap<DatabaseVersion, ClientMigrationFn> {
         let mut migrations: BTreeMap<DatabaseVersion, ClientMigrationFn> = BTreeMap::new();
-        migrations.insert(DatabaseVersion(0), move |dbtx, _, _| {
+        migrations.insert(DatabaseVersion(0), |dbtx, _, _| {
             Box::pin(migrate_to_v1(dbtx))
         });
 
-        migrations.insert(
-            DatabaseVersion(1),
-            move |_, active_states, inactive_states| {
-                Box::pin(async {
-                    migrate_state(active_states, inactive_states, db::get_v1_migrated_state)
-                })
-            },
-        );
+        migrations.insert(DatabaseVersion(1), |_, active_states, inactive_states| {
+            Box::pin(async {
+                migrate_state(active_states, inactive_states, db::get_v1_migrated_state)
+            })
+        });
 
         migrations
     }

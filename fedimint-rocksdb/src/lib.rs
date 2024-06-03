@@ -197,10 +197,10 @@ impl<'a> IDatabaseTransactionOpsCore for RocksDbTransaction<'a> {
             I: Iterator + Send + 'i,
             I::Item: Send,
         {
-            stream::unfold(iter, |mut iter| async move {
-                fedimint_core::runtime::block_in_place(move || {
+            stream::unfold(iter, |mut iter| async {
+                fedimint_core::runtime::block_in_place(|| {
                     let item = iter.next();
-                    item.map(move |item| (item, iter))
+                    item.map(|item| (item, iter))
                 })
             })
         }
@@ -235,7 +235,7 @@ impl<'a> IDatabaseTransactionOpsCore for RocksDbTransaction<'a> {
                     rocksdb::IteratorMode::From(key_prefix, rocksdb::Direction::Forward),
                     options,
                 )
-                .map_while(move |res| {
+                .map_while(|res| {
                     res.map(|(key_bytes, _)| {
                         key_bytes
                             .starts_with(key_prefix)
@@ -326,10 +326,10 @@ impl<'a> IDatabaseTransactionOpsCore for RocksDbReadOnlyTransaction<'a> {
             I: Iterator + Send + 'i,
             I::Item: Send,
         {
-            stream::unfold(iter, |mut iter| async move {
-                fedimint_core::runtime::block_in_place(move || {
+            stream::unfold(iter, |mut iter| async {
+                fedimint_core::runtime::block_in_place(|| {
                     let item = iter.next();
-                    item.map(move |item| (item, iter))
+                    item.map(|item| (item, iter))
                 })
             })
         }

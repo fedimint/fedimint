@@ -211,7 +211,7 @@ mod fedimint_migration_tests {
         snapshot_db_migrations_with_decoders(
             "fedimint-server",
             |db| {
-                Box::pin(async move {
+                Box::pin(async {
                     create_server_db_with_v0_data(db).await;
                 })
             },

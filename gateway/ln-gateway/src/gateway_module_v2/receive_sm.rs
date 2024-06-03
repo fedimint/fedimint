@@ -89,7 +89,7 @@ impl State for ReceiveStateMachine {
                             global_context.clone(),
                             self.common.out_point.txid,
                         ),
-                        move |_, error, old_state| {
+                        |_, error, old_state| {
                             Box::pin(
                                 async move { Self::transition_funding_rejected(error, &old_state) },
                             )

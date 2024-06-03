@@ -178,7 +178,7 @@ where
             status_query_senders.insert(*peer, status_query_sender);
             connections.insert(*peer, connection);
         }
-        task_group.spawn("listen task", move |handle| {
+        task_group.spawn("listen task", |handle| {
             Self::run_listen_task(cfg, shared_connector, connection_senders, handle)
         });
         (
@@ -765,7 +765,7 @@ mod tests {
 
             let peers_ref = &peers;
             let net_ref = &net;
-            let build_peers = move |bind: &'static str, id: u16, mut task_group: TaskGroup| async move {
+            let build_peers = |bind: &'static str, id: u16, mut task_group: TaskGroup| async move {
                 let cfg = NetworkConfig {
                     identity: PeerId::from(id),
                     bind_addr: bind.parse().unwrap(),
