@@ -654,6 +654,8 @@ pub async fn ln_operation(
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Decodable, Encodable)]
 pub struct PrunedInvoice {
     pub amount: Amount,
+    /// Used if doing a partial payment of an invoice, otherwise `None`
+    pub send_amount: Option<Amount>,
     pub destination: secp256k1::PublicKey,
     /// Wire-format encoding of feature bit vector
     #[serde(with = "fedimint_core::hex::serde", default)]
@@ -669,7 +671,7 @@ pub struct PrunedInvoice {
 impl PrunedInvoice {
     pub fn try_from_invoice(
         invoice: &Bolt11Invoice,
-        amount: Option<Amount>,
+        send_amount: Option<Amount>,
     ) -> Result<Self, anyhow::Error> {
         // We use expires_at since it doesn't rely on the std feature in
         // lightning-invoice. See #3838.
@@ -686,11 +688,12 @@ impl PrunedInvoice {
         };
 
         Ok(PrunedInvoice {
-            amount: amount.unwrap_or(Amount::from_msats(
+            send_amount,
+            amount: Amount::from_msats(
                 invoice
                     .amount_milli_satoshis()
                     .context("invoice amount is missing")?,
-            )),
+            ),
             destination: invoice
                 .payee_pub_key()
                 .copied()
