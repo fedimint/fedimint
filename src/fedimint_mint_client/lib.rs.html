@@ -2387,6 +2387,7 @@
 <a href="#2387" id="2387">2387</a>
 <a href="#2388" id="2388">2388</a>
 <a href="#2389" id="2389">2389</a>
+<a href="#2390" id="2390">2390</a>
 </pre></div><pre class="rust"><code><span class="attr">#![warn(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::default_trait_access)]
@@ -2705,10 +2706,11 @@
 
     <span class="doccomment">/// Decode a set of out-of-band e-cash notes from a base64 string.
     </span><span class="kw">fn </span>from_str(s: <span class="kw-2">&amp;</span>str) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, <span class="self">Self</span>::Err&gt; {
-        <span class="kw">let </span>bytes = <span class="kw">if let </span><span class="prelude-val">Ok</span>(bytes) = BASE64_URL_SAFE.decode(s) {
+        <span class="kw">let </span>s: String = s.chars().filter(|<span class="kw-2">&amp;</span>c| !c.is_whitespace()).collect();
+        <span class="kw">let </span>bytes = <span class="kw">if let </span><span class="prelude-val">Ok</span>(bytes) = BASE64_URL_SAFE.decode(<span class="kw-2">&amp;</span>s) {
             bytes
         } <span class="kw">else </span>{
-            base64::engine::general_purpose::STANDARD.decode(s)<span class="question-mark">?
+            base64::engine::general_purpose::STANDARD.decode(<span class="kw-2">&amp;</span>s)<span class="question-mark">?
         </span>};
         <span class="kw">let </span>oob_notes: OOBNotes = Decodable::consensus_decode(
             <span class="kw-2">&amp;mut </span>std::io::Cursor::new(bytes),
