@@ -204,7 +204,7 @@ impl From<&'static str> for ModuleKind {
 ///
 /// This allows parsing and handling of dyn-types of modules which
 /// are not available.
-#[derive(Debug, Hash, PartialEq, Clone)]
+#[derive(Debug, Hash, PartialEq, Eq, Clone)]
 pub struct DynUnknown(pub Vec<u8>);
 
 impl fmt::Display for DynUnknown {

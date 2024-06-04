@@ -382,20 +382,18 @@ impl ClientConfig {
     }
 
     pub fn get_module<T: Decodable + 'static>(&self, id: ModuleInstanceId) -> anyhow::Result<&T> {
-        if let Some(client_cfg) = self.modules.get(&id) {
-            client_cfg.cast()
-        } else {
-            Err(format_err!("Client config for module id {id} not found"))
-        }
+        self.modules.get(&id).map_or_else(
+            || Err(format_err!("Client config for module id {id} not found")),
+            |client_cfg| client_cfg.cast(),
+        )
     }
 
     // TODO: rename this and one above
     pub fn get_module_cfg(&self, id: ModuleInstanceId) -> anyhow::Result<ClientModuleConfig> {
-        if let Some(client_cfg) = self.modules.get(&id) {
-            Ok(client_cfg.clone())
-        } else {
-            Err(format_err!("Client config for module id {id} not found"))
-        }
+        self.modules.get(&id).map_or_else(
+            || Err(format_err!("Client config for module id {id} not found")),
+            |client_cfg| Ok(client_cfg.clone()),
+        )
     }
 
     /// (soft-deprecated): Get the first instance of a module of a given kind in
@@ -819,7 +817,7 @@ pub trait TypedServerModuleConfig: DeserializeOwned + Serialize {
                 serde_json::to_value(local).expect("serialization can't fail"),
             ),
             private: JsonWithKind::new(
-                kind.clone(),
+                kind,
                 serde_json::to_value(private).expect("serialization can't fail"),
             ),
             consensus: ServerModuleConsensusConfig {
