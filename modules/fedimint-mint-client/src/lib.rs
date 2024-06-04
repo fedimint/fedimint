@@ -316,10 +316,11 @@ impl FromStr for OOBNotes {
 
     /// Decode a set of out-of-band e-cash notes from a base64 string.
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let bytes = if let Ok(bytes) = BASE64_URL_SAFE.decode(s) {
+        let s: String = s.chars().filter(|&c| !c.is_whitespace()).collect();
+        let bytes = if let Ok(bytes) = BASE64_URL_SAFE.decode(&s) {
             bytes
         } else {
-            base64::engine::general_purpose::STANDARD.decode(s)?
+            base64::engine::general_purpose::STANDARD.decode(&s)?
         };
         let oob_notes: OOBNotes = Decodable::consensus_decode(
             &mut std::io::Cursor::new(bytes),
