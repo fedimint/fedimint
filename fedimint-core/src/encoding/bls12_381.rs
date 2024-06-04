@@ -17,7 +17,7 @@ impl Decodable for Scalar {
         let byte_array = <[u8; 32]>::consensus_decode(d, modules)?;
 
         Option::from(Scalar::from_bytes(&byte_array))
-            .ok_or(DecodeError::from_str("Error decoding Scalar"))
+            .ok_or_else(|| DecodeError::from_str("Error decoding Scalar"))
     }
 }
 
@@ -35,7 +35,7 @@ impl Decodable for G1Affine {
         let byte_array = <[u8; 48]>::consensus_decode(d, modules)?;
 
         Option::from(G1Affine::from_compressed(&byte_array))
-            .ok_or(DecodeError::from_str("Error decoding G1Affine"))
+            .ok_or_else(|| DecodeError::from_str("Error decoding G1Affine"))
     }
 }
 
@@ -53,6 +53,6 @@ impl Decodable for G2Affine {
         let byte_array = <[u8; 96]>::consensus_decode(d, modules)?;
 
         Option::from(G2Affine::from_compressed(&byte_array))
-            .ok_or(DecodeError::from_str("Error decoding G2Affine"))
+            .ok_or_else(|| DecodeError::from_str("Error decoding G2Affine"))
     }
 }

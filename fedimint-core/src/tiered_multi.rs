@@ -125,10 +125,10 @@ impl<T> TieredMulti<T> {
     /// Verifies that all keys in `self` are present in the keys of the given
     /// parameter `Tiered`
     pub fn all_tiers_exist_in<K>(&self, keys: &Tiered<K>) -> Result<(), InvalidAmountTierError> {
-        match self.0.keys().find(|&amt| keys.get(*amt).is_none()) {
-            Some(amt) => Err(InvalidAmountTierError(*amt)),
-            None => Ok(()),
-        }
+        self.0
+            .keys()
+            .find(|&amt| keys.get(*amt).is_none())
+            .map_or(Ok(()), |amt| Err(InvalidAmountTierError(*amt)))
     }
 
     /// Returns an `Option` with a reference to the vector of the given `Amount`
@@ -266,7 +266,7 @@ where
     }
 }
 
-#[derive(Debug, PartialEq, Default, Serialize, Deserialize, Clone)]
+#[derive(Debug, PartialEq, Eq, Default, Serialize, Deserialize, Clone)]
 pub struct TieredCounts(Tiered<usize>);
 
 impl TieredCounts {

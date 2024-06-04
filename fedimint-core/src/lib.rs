@@ -1,18 +1,24 @@
-#![warn(clippy::pedantic)]
+#![warn(clippy::pedantic, clippy::nursery)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::cast_possible_wrap)]
 #![allow(clippy::cast_precision_loss)]
 #![allow(clippy::cast_sign_loss)]
+#![allow(clippy::cognitive_complexity)]
 #![allow(clippy::default_trait_access)]
 #![allow(clippy::doc_markdown)]
+#![allow(clippy::future_not_send)]
+#![allow(clippy::missing_const_for_fn)]
 #![allow(clippy::missing_errors_doc)]
 #![allow(clippy::missing_panics_doc)]
 #![allow(clippy::module_name_repetitions)]
 #![allow(clippy::must_use_candidate)]
+#![allow(clippy::redundant_pub_crate)]
 #![allow(clippy::return_self_not_must_use)]
+#![allow(clippy::significant_drop_tightening)]
 #![allow(clippy::similar_names)]
 #![allow(clippy::transmute_ptr_to_ptr)]
 #![allow(clippy::unsafe_derive_deserialize)]
+#![allow(clippy::use_self)]
 
 //! Fedimint Core library
 //!
@@ -185,7 +191,7 @@ impl Amount {
     }
 
     pub fn from_str_in(s: &str, denom: Denomination) -> Result<Amount, ParseAmountError> {
-        if let Denomination::MilliSatoshi = denom {
+        if denom == Denomination::MilliSatoshi {
             return Ok(Self::from_msats(s.parse()?));
         }
         let btc_amt = bitcoin::amount::Amount::from_str_in(s, denom)?;

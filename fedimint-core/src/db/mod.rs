@@ -1207,9 +1207,8 @@ impl<Tx: IRawDatabaseTransaction> IDatabaseTransactionOps for BaseDatabaseTransa
 }
 
 #[apply(async_trait_maybe_send!)]
-impl<Tx: IRawDatabaseTransaction> IDatabaseTransaction for BaseDatabaseTransaction<Tx>
-where
-    Tx: fmt::Debug,
+impl<Tx: IRawDatabaseTransaction + fmt::Debug> IDatabaseTransaction
+    for BaseDatabaseTransaction<Tx>
 {
     async fn commit_tx(&mut self) -> Result<()> {
         self.raw
@@ -2055,11 +2054,10 @@ async fn remove_current_db_version_if_exists(
 /// return 0xff for the global namespace.
 fn module_instance_id_or_global(module_instance_id: Option<ModuleInstanceId>) -> ModuleInstanceId {
     // Use 0xff for fedimint-server and the `module_instance_id` for each module
-    if let Some(module_instance_id) = module_instance_id {
-        module_instance_id
-    } else {
-        MODULE_GLOBAL_PREFIX.into()
-    }
+    module_instance_id.map_or_else(
+        || MODULE_GLOBAL_PREFIX.into(),
+        |module_instance_id| module_instance_id,
+    )
 }
 
 #[allow(unused_imports)]
@@ -2361,7 +2359,7 @@ mod test_utils {
             .find_by_prefix(&DbPrefixTestPrefix)
             .await
             .fold(0, |returned_keys, (key, value)| async move {
-                if let TestKey(100) = key {
+                if key == TestKey(100) {
                     assert!(value.eq(&TestVal(101)));
                 }
                 returned_keys + 1
@@ -2559,7 +2557,7 @@ mod test_utils {
             .find_by_prefix(&PercentPrefixTestPrefix)
             .await
             .fold(0, |returned_keys, (key, value)| async move {
-                if let PercentTestKey(101) = key {
+                if matches!(key, PercentTestKey(101)) {
                     assert!(value.eq(&TestVal(100)));
                 }
                 returned_keys + 1

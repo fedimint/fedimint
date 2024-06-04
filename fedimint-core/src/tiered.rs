@@ -137,7 +137,7 @@ mod tests {
         let denominations = Tiered::gen_denominations(2, max_amount);
 
         // should produce [1, 2, 4, 8, 16]
-        assert_eq!(denominations.tiers().collect::<Vec<&Amount>>().len(), 5);
+        assert_eq!(denominations.tiers().count(), 5);
     }
 
     #[test]
@@ -146,6 +146,6 @@ mod tests {
         let denominations = Tiered::gen_denominations(10, max_amount);
 
         // should produce [1, 10, 100, 1000, 10_000]
-        assert_eq!(denominations.tiers().collect::<Vec<&Amount>>().len(), 5);
+        assert_eq!(denominations.tiers().count(), 5);
     }
 }

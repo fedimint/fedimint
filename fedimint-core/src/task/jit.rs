@@ -26,8 +26,7 @@ pub enum OneTimeError<E> {
 
 impl<E> std::error::Error for OneTimeError<E>
 where
-    E: fmt::Debug,
-    E: fmt::Display,
+    E: fmt::Debug + fmt::Display,
 {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         None

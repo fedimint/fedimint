@@ -50,10 +50,9 @@ where
     /// Waits for the next item in a stream. If the stream is closed while
     /// waiting, returns an error.  Useful when expecting a stream to progress.
     async fn ok(&mut self) -> anyhow::Result<Self::Output> {
-        match self.next().await {
-            Some(item) => Ok(item),
-            None => Err(format_err!("Stream was unexpectedly closed")),
-        }
+        self.next()
+            .await
+            .map_or_else(|| Err(format_err!("Stream was unexpectedly closed")), Ok)
     }
 
     /// Waits for the next item in a stream. If the stream is closed while
@@ -317,7 +316,7 @@ impl<T> Spanned<T> {
     pub fn map<U>(self, map: impl Fn(T) -> U) -> Spanned<U> {
         Spanned {
             value: map(self.value),
-            span: self.span.clone(),
+            span: self.span,
         }
     }
 

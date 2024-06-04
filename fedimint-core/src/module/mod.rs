@@ -53,7 +53,7 @@ use crate::{
     PeerId,
 };
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct InputMeta {
     pub amount: TransactionItemAmount,
     pub pub_key: secp256k1_zkp::PublicKey,
