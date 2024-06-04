@@ -258,6 +258,10 @@
 <a href="#258" id="258">258</a>
 <a href="#259" id="259">259</a>
 <a href="#260" id="260">260</a>
+<a href="#261" id="261">261</a>
+<a href="#262" id="262">262</a>
+<a href="#263" id="263">263</a>
+<a href="#264" id="264">264</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>core::fmt;
 <span class="kw">use </span>std::borrow::Cow;
 <span class="kw">use </span>std::collections::BTreeMap;
@@ -284,18 +288,18 @@
 ///   * At least one Api entry is present
 ///   * At least one Federation ID is present
 </span><span class="attr">#[derive(Clone, Debug, Eq, PartialEq, Encodable, Hash, Ord, PartialOrd)]
-</span><span class="kw">pub struct </span>InviteCode(Vec&lt;InviteCodeData&gt;);
+</span><span class="kw">pub struct </span>InviteCode(Vec&lt;InviteCodePart&gt;);
 
 <span class="kw">impl </span>Decodable <span class="kw">for </span>InviteCode {
     <span class="kw">fn </span>consensus_decode&lt;R: Read&gt;(
         r: <span class="kw-2">&amp;mut </span>R,
         modules: <span class="kw-2">&amp;</span>ModuleDecoderRegistry,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
-        <span class="kw">let </span>inner: Vec&lt;InviteCodeData&gt; = Decodable::consensus_decode(r, modules)<span class="question-mark">?</span>;
+        <span class="kw">let </span>inner: Vec&lt;InviteCodePart&gt; = Decodable::consensus_decode(r, modules)<span class="question-mark">?</span>;
 
         <span class="kw">if </span>!inner
             .iter()
-            .any(|data| <span class="macro">matches!</span>(data, InviteCodeData::Api { .. }))
+            .any(|data| <span class="macro">matches!</span>(data, InviteCodePart::Api { .. }))
         {
             <span class="kw">return </span><span class="prelude-val">Err</span>(DecodeError::from_str(
                 <span class="string">"No API was provided in the invite code"</span>,
@@ -304,7 +308,7 @@
 
         <span class="kw">if </span>!inner
             .iter()
-            .any(|data| <span class="macro">matches!</span>(data, InviteCodeData::FederationId(<span class="kw">_</span>)))
+            .any(|data| <span class="macro">matches!</span>(data, InviteCodePart::FederationId(<span class="kw">_</span>)))
         {
             <span class="kw">return </span><span class="prelude-val">Err</span>(DecodeError::from_str(
                 <span class="string">"No Federation ID provided in invite code"</span>,
@@ -323,12 +327,12 @@
         api_secret: <span class="prelude-ty">Option</span>&lt;String&gt;,
     ) -&gt; <span class="self">Self </span>{
         <span class="kw">let </span><span class="kw-2">mut </span>s = InviteCode(<span class="macro">vec!</span>[
-            InviteCodeData::Api { url, peer },
-            InviteCodeData::FederationId(federation_id),
+            InviteCodePart::Api { url, peer },
+            InviteCodePart::FederationId(federation_id),
         ]);
 
         <span class="kw">if let </span><span class="prelude-val">Some</span>(api_secret) = api_secret {
-            s.<span class="number">0</span>.push(InviteCodeData::ApiSecret(api_secret));
+            s.<span class="number">0</span>.push(InviteCodePart::ApiSecret(api_secret));
         }
 
         s
@@ -341,15 +345,15 @@
         federation_id: FederationId,
     ) -&gt; <span class="self">Self </span>{
         <span class="kw">let </span>max_size = peer_to_url_map.max_evil() + <span class="number">1</span>;
-        <span class="kw">let </span><span class="kw-2">mut </span>code_vec: Vec&lt;InviteCodeData&gt; = peer_to_url_map
+        <span class="kw">let </span><span class="kw-2">mut </span>code_vec: Vec&lt;InviteCodePart&gt; = peer_to_url_map
             .iter()
             .take(max_size)
-            .map(|(peer, url)| InviteCodeData::Api {
+            .map(|(peer, url)| InviteCodePart::Api {
                 url: url.clone(),
                 peer: <span class="kw-2">*</span>peer,
             })
             .collect();
-        code_vec.push(InviteCodeData::FederationId(federation_id));
+        code_vec.push(InviteCodePart::FederationId(federation_id));
 
         InviteCode(code_vec)
     }
@@ -359,7 +363,7 @@
         <span class="self">self</span>.<span class="number">0
             </span>.iter()
             .find_map(|data| <span class="kw">match </span>data {
-                InviteCodeData::Api { url, .. } =&gt; <span class="prelude-val">Some</span>(url.clone()),
+                InviteCodePart::Api { url, .. } =&gt; <span class="prelude-val">Some</span>(url.clone()),
                 <span class="kw">_ </span>=&gt; <span class="prelude-val">None</span>,
             })
             .expect(<span class="string">"Ensured by constructor"</span>)
@@ -368,7 +372,7 @@
     <span class="doccomment">/// Api secret, if needed, to use when communicating with the federation
     </span><span class="kw">pub fn </span>api_secret(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;String&gt; {
         <span class="self">self</span>.<span class="number">0</span>.iter().find_map(|data| <span class="kw">match </span>data {
-            InviteCodeData::ApiSecret(api_secret) =&gt; <span class="prelude-val">Some</span>(api_secret.clone()),
+            InviteCodePart::ApiSecret(api_secret) =&gt; <span class="prelude-val">Some</span>(api_secret.clone()),
             <span class="kw">_ </span>=&gt; <span class="prelude-val">None</span>,
         })
     }
@@ -378,7 +382,7 @@
         <span class="self">self</span>.<span class="number">0
             </span>.iter()
             .find_map(|data| <span class="kw">match </span>data {
-                InviteCodeData::Api { peer, .. } =&gt; <span class="prelude-val">Some</span>(<span class="kw-2">*</span>peer),
+                InviteCodePart::Api { peer, .. } =&gt; <span class="prelude-val">Some</span>(<span class="kw-2">*</span>peer),
                 <span class="kw">_ </span>=&gt; <span class="prelude-val">None</span>,
             })
             .expect(<span class="string">"Ensured by constructor"</span>)
@@ -389,7 +393,7 @@
         <span class="self">self</span>.<span class="number">0
             </span>.iter()
             .filter_map(|entry| <span class="kw">match </span>entry {
-                InviteCodeData::Api { url, peer } =&gt; <span class="prelude-val">Some</span>((<span class="kw-2">*</span>peer, url.clone())),
+                InviteCodePart::Api { url, peer } =&gt; <span class="prelude-val">Some</span>((<span class="kw-2">*</span>peer, url.clone())),
                 <span class="kw">_ </span>=&gt; <span class="prelude-val">None</span>,
             })
             .collect()
@@ -401,19 +405,23 @@
         <span class="self">self</span>.<span class="number">0
             </span>.iter()
             .find_map(|data| <span class="kw">match </span>data {
-                InviteCodeData::FederationId(federation_id) =&gt; <span class="prelude-val">Some</span>(<span class="kw-2">*</span>federation_id),
+                InviteCodePart::FederationId(federation_id) =&gt; <span class="prelude-val">Some</span>(<span class="kw-2">*</span>federation_id),
                 <span class="kw">_ </span>=&gt; <span class="prelude-val">None</span>,
             })
             .expect(<span class="string">"Ensured by constructor"</span>)
     }
 }
 
-<span class="doccomment">/// Data that can be encoded in the invite code. Currently we always just use
-/// one `Api` and one `FederationId` variant in an invite code, but more can be
-/// added in the future while still keeping the invite code readable for older
-/// clients, which will just ignore the new fields.
+<span class="doccomment">/// For extendability [`InviteCode`] consists of parts, where client can ignore
+/// ones they don't understand.
+///
+/// ones they don't understand Data that can be encoded in the invite code.
+/// Currently we always just use one `Api` and one `FederationId` variant in an
+/// invite code, but more can be added in the future while still keeping the
+/// invite code readable for older clients, which will just ignore the new
+/// fields.
 </span><span class="attr">#[derive(Clone, Debug, Eq, PartialEq, Encodable, Decodable, Hash, Ord, PartialOrd)]
-</span><span class="kw">enum </span>InviteCodeData {
+</span><span class="kw">enum </span>InviteCodePart {
     <span class="doccomment">/// API endpoint of one of the guardians
     </span>Api {
         <span class="doccomment">/// URL to reach an API that we can download configs from
@@ -504,11 +512,11 @@
         <span class="macro">assert_eq!</span>(
             invite_code.<span class="number">0</span>,
             [
-                <span class="kw">crate</span>::invite_code::InviteCodeData::Api {
+                <span class="kw">crate</span>::invite_code::InviteCodePart::Api {
                     url: <span class="string">"wss://fedimintd.mplsfed.foo/"</span>.parse().expect(<span class="string">"valid url"</span>),
                     peer: <span class="kw">crate</span>::PeerId(<span class="number">0</span>),
                 },
-                <span class="kw">crate</span>::invite_code::InviteCodeData::FederationId(FederationId(
+                <span class="kw">crate</span>::invite_code::InviteCodePart::FederationId(FederationId(
                     bitcoin_hashes::sha256::Hash::from_str(
                         <span class="string">"bea7ff4116f2b1d324c7b5d699cce4ac7408cee41db2c88027e21b76fff3b9f4"
                     </span>)

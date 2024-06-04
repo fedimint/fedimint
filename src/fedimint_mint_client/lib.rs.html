@@ -2387,6 +2387,8 @@
 <a href="#2387" id="2387">2387</a>
 <a href="#2388" id="2388">2388</a>
 <a href="#2389" id="2389">2389</a>
+<a href="#2390" id="2390">2390</a>
+<a href="#2391" id="2391">2391</a>
 </pre></div><pre class="rust"><code><span class="attr">#![warn(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::default_trait_access)]
@@ -2490,15 +2492,17 @@
 /// * Has to contain at least one `Notes` item
 /// * Has to contain at least one `FederationIdPrefix` item
 </span><span class="attr">#[derive(Clone, Debug, Encodable, PartialEq, Eq)]
-</span><span class="kw">pub struct </span>OOBNotes(Vec&lt;OOBNotesData&gt;);
+</span><span class="kw">pub struct </span>OOBNotes(Vec&lt;OOBNotesPart&gt;);
 
-<span class="attr">#[derive(Clone, Debug, Decodable, Encodable, PartialEq, Eq)]
-</span><span class="kw">enum </span>OOBNotesData {
+<span class="doccomment">/// For extendability [`OOBNotes`] consists of parts, where client can ignore
+/// ones they don't understand.
+</span><span class="attr">#[derive(Clone, Debug, Decodable, Encodable, PartialEq, Eq)]
+</span><span class="kw">enum </span>OOBNotesPart {
     Notes(TieredMulti&lt;SpendableNote&gt;),
     FederationIdPrefix(FederationIdPrefix),
     <span class="doccomment">/// Invite code to join the federation by which the e-cash was issued
     ///
-    /// Introduce in 0.3.0
+    /// Introduced in 0.3.0
     </span>Invite {
         <span class="comment">// This is a vec for future-proofness, in case we want to include multiple guardian APIs
         </span>peer_apis: Vec&lt;(PeerId, SafeUrl)&gt;,
@@ -2518,8 +2522,8 @@
         notes: TieredMulti&lt;SpendableNote&gt;,
     ) -&gt; <span class="self">Self </span>{
         <span class="self">Self</span>(<span class="macro">vec!</span>[
-            OOBNotesData::FederationIdPrefix(federation_id_prefix),
-            OOBNotesData::Notes(notes),
+            OOBNotesPart::FederationIdPrefix(federation_id_prefix),
+            OOBNotesPart::Notes(notes),
         ])
     }
 
@@ -2527,15 +2531,15 @@
         <span class="kw">let </span><span class="kw-2">mut </span>data = <span class="macro">vec!</span>[
             <span class="comment">// FIXME: once we can break compatibility with 0.2 we can remove the prefix in case an
             // invite is present
-            </span>OOBNotesData::FederationIdPrefix(invite.federation_id().to_prefix()),
-            OOBNotesData::Notes(notes),
-            OOBNotesData::Invite {
+            </span>OOBNotesPart::FederationIdPrefix(invite.federation_id().to_prefix()),
+            OOBNotesPart::Notes(notes),
+            OOBNotesPart::Invite {
                 peer_apis: <span class="macro">vec!</span>[(invite.peer(), invite.url())],
                 federation_id: invite.federation_id(),
             },
         ];
         <span class="kw">if let </span><span class="prelude-val">Some</span>(api_secret) = invite.api_secret() {
-            data.push(OOBNotesData::ApiSecret(api_secret));
+            data.push(OOBNotesPart::ApiSecret(api_secret));
         }
         <span class="self">Self</span>(data)
     }
@@ -2544,8 +2548,8 @@
         <span class="self">self</span>.<span class="number">0
             </span>.iter()
             .find_map(|data| <span class="kw">match </span>data {
-                OOBNotesData::FederationIdPrefix(prefix) =&gt; <span class="prelude-val">Some</span>(<span class="kw-2">*</span>prefix),
-                OOBNotesData::Invite { federation_id, .. } =&gt; <span class="prelude-val">Some</span>(federation_id.to_prefix()),
+                OOBNotesPart::FederationIdPrefix(prefix) =&gt; <span class="prelude-val">Some</span>(<span class="kw-2">*</span>prefix),
+                OOBNotesPart::Invite { federation_id, .. } =&gt; <span class="prelude-val">Some</span>(federation_id.to_prefix()),
                 <span class="kw">_ </span>=&gt; <span class="prelude-val">None</span>,
             })
             .expect(<span class="string">"Invariant violated: OOBNotes does not contain a FederationIdPrefix"</span>)
@@ -2555,7 +2559,7 @@
         <span class="self">self</span>.<span class="number">0
             </span>.iter()
             .find_map(|data| <span class="kw">match </span>data {
-                OOBNotesData::Notes(notes) =&gt; <span class="prelude-val">Some</span>(notes),
+                OOBNotesPart::Notes(notes) =&gt; <span class="prelude-val">Some</span>(notes),
                 <span class="kw">_ </span>=&gt; <span class="prelude-val">None</span>,
             })
             .expect(<span class="string">"Invariant violated: OOBNotes does not contain any notes"</span>)
@@ -2565,17 +2569,17 @@
         <span class="kw">let </span><span class="kw-2">mut </span>notes_map = serde_json::Map::new();
         <span class="kw">for </span>notes <span class="kw">in </span><span class="kw-2">&amp;</span><span class="self">self</span>.<span class="number">0 </span>{
             <span class="kw">match </span>notes {
-                OOBNotesData::Notes(notes) =&gt; {
+                OOBNotesPart::Notes(notes) =&gt; {
                     <span class="kw">let </span>notes_json = serde_json::to_value(notes)<span class="question-mark">?</span>;
                     notes_map.insert(<span class="string">"notes"</span>.to_string(), notes_json);
                 }
-                OOBNotesData::FederationIdPrefix(prefix) =&gt; {
+                OOBNotesPart::FederationIdPrefix(prefix) =&gt; {
                     notes_map.insert(
                         <span class="string">"federation_id_prefix"</span>.to_string(),
                         serde_json::to_value(prefix.to_string())<span class="question-mark">?</span>,
                     );
                 }
-                OOBNotesData::Invite {
+                OOBNotesPart::Invite {
                     peer_apis,
                     federation_id,
                 } =&gt; {
@@ -2593,8 +2597,8 @@
                         ))<span class="question-mark">?</span>,
                     );
                 }
-                OOBNotesData::ApiSecret(<span class="kw">_</span>) =&gt; { <span class="comment">/* already covered inside `Invite` */ </span>}
-                OOBNotesData::Default { variant, bytes } =&gt; {
+                OOBNotesPart::ApiSecret(<span class="kw">_</span>) =&gt; { <span class="comment">/* already covered inside `Invite` */ </span>}
+                OOBNotesPart::Default { variant, bytes } =&gt; {
                     notes_map.insert(
                         <span class="macro">format!</span>(<span class="string">"default_{variant}"</span>),
                         serde_json::to_value(bytes.encode_hex::&lt;String&gt;())<span class="question-mark">?</span>,
@@ -2607,7 +2611,7 @@
 
     <span class="kw">pub fn </span>federation_invite(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;InviteCode&gt; {
         <span class="self">self</span>.<span class="number">0</span>.iter().find_map(|data| {
-            <span class="kw">let </span>OOBNotesData::Invite {
+            <span class="kw">let </span>OOBNotesPart::Invite {
                 peer_apis,
                 federation_id,
             } = data
@@ -2629,7 +2633,7 @@
 
     <span class="kw">fn </span>api_secret(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;String&gt; {
         <span class="self">self</span>.<span class="number">0</span>.iter().find_map(|data| {
-            <span class="kw">let </span>OOBNotesData::ApiSecret(api_secret) = data <span class="kw">else </span>{
+            <span class="kw">let </span>OOBNotesPart::ApiSecret(api_secret) = data <span class="kw">else </span>{
                 <span class="kw">return </span><span class="prelude-val">None</span>;
             };
             <span class="prelude-val">Some</span>(api_secret.clone())
@@ -2642,12 +2646,12 @@
         r: <span class="kw-2">&amp;mut </span>R,
         _modules: <span class="kw-2">&amp;</span>ModuleDecoderRegistry,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
-        <span class="kw">let </span>inner = Vec::&lt;OOBNotesData&gt;::consensus_decode(r, <span class="kw-2">&amp;</span>ModuleDecoderRegistry::default())<span class="question-mark">?</span>;
+        <span class="kw">let </span>inner = Vec::&lt;OOBNotesPart&gt;::consensus_decode(r, <span class="kw-2">&amp;</span>ModuleDecoderRegistry::default())<span class="question-mark">?</span>;
 
         <span class="comment">// TODO: maybe write some macros for defining TLV structs?
         </span><span class="kw">if </span>!inner
             .iter()
-            .any(|data| <span class="macro">matches!</span>(data, OOBNotesData::Notes(<span class="kw">_</span>)))
+            .any(|data| <span class="macro">matches!</span>(data, OOBNotesPart::Notes(<span class="kw">_</span>)))
         {
             <span class="kw">return </span><span class="prelude-val">Err</span>(DecodeError::from_str(
                 <span class="string">"No e-cash notes were found in OOBNotes data"</span>,
@@ -2655,12 +2659,12 @@
         }
 
         <span class="kw">let </span>maybe_federation_id_prefix = inner.iter().find_map(|data| <span class="kw">match </span>data {
-            OOBNotesData::FederationIdPrefix(prefix) =&gt; <span class="prelude-val">Some</span>(<span class="kw-2">*</span>prefix),
+            OOBNotesPart::FederationIdPrefix(prefix) =&gt; <span class="prelude-val">Some</span>(<span class="kw-2">*</span>prefix),
             <span class="kw">_ </span>=&gt; <span class="prelude-val">None</span>,
         });
 
         <span class="kw">let </span>maybe_invite = inner.iter().find_map(|data| <span class="kw">match </span>data {
-            OOBNotesData::Invite {
+            OOBNotesPart::Invite {
                 federation_id,
                 peer_apis,
             } =&gt; <span class="prelude-val">Some</span>((federation_id, peer_apis)),
@@ -4490,7 +4494,7 @@
 
     <span class="kw">use crate</span>::{
         represent_amount, select_notes_from_stream, MintOperationMetaVariant, OOBNotes,
-        OOBNotesData, SpendableNote, SpendableNoteUndecoded,
+        OOBNotesPart, SpendableNote, SpendableNoteUndecoded,
     };
 
     <span class="attr">#[test]
@@ -4692,8 +4696,8 @@
         <span class="comment">// Can decode notes without federation id prefix, so we can optionally remove it
         // in the future
         </span><span class="kw">let </span>notes_no_prefix = OOBNotes(<span class="macro">vec!</span>[
-            OOBNotesData::Notes(notes.clone()),
-            OOBNotesData::Invite {
+            OOBNotesPart::Notes(notes.clone()),
+            OOBNotesPart::Invite {
                 peer_apis: <span class="macro">vec!</span>[(PeerId::from(<span class="number">0</span>), <span class="string">"wss://foo.bar"</span>.parse().unwrap())],
                 federation_id: federation_id_1,
             },
@@ -4705,12 +4709,12 @@
 
         <span class="comment">// Rejects notes with inconsistent federation id
         </span><span class="kw">let </span>notes_inconsistent = OOBNotes(<span class="macro">vec!</span>[
-            OOBNotesData::Notes(notes),
-            OOBNotesData::Invite {
+            OOBNotesPart::Notes(notes),
+            OOBNotesPart::Invite {
                 peer_apis: <span class="macro">vec!</span>[(PeerId::from(<span class="number">0</span>), <span class="string">"wss://foo.bar"</span>.parse().unwrap())],
                 federation_id: federation_id_1,
             },
-            OOBNotesData::FederationIdPrefix(federation_id_prefix_2),
+            OOBNotesPart::FederationIdPrefix(federation_id_prefix_2),
         ]);
         <span class="kw">let </span>notes_inconsistent_str = notes_inconsistent.to_string();
         <span class="macro">assert!</span>(notes_inconsistent_str.parse::&lt;OOBNotes&gt;().is_err());
