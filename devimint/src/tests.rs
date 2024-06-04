@@ -124,6 +124,7 @@ pub async fn latency_tests(
         fed,
         gw_cln,
         gw_lnd,
+        gw_ldk,
         electrs,
         esplora,
     } = dev_fed;
@@ -577,6 +578,7 @@ pub async fn cli_tests(dev_fed: DevFed) -> Result<()> {
         fed,
         gw_cln,
         gw_lnd,
+        gw_ldk, // TODO: Wire up ldk gateway to the rest of this test.
         electrs,
         esplora,
     } = dev_fed;
@@ -1485,6 +1487,7 @@ pub async fn lightning_gw_reconnect_test(
         fed,
         gw_cln,
         gw_lnd,
+        gw_ldk,
         electrs,
         esplora,
     } = dev_fed;
@@ -1498,13 +1501,14 @@ pub async fn lightning_gw_reconnect_test(
     try_join!(
         fed.pegin_gateway(99_999, &gw_cln),
         fed.pegin_gateway(99_999, &gw_lnd),
+        fed.pegin_gateway(99_999, &gw_ldk),
     )?;
 
     // Drop other references to CLN and LND so that the test can kill them
     drop(cln);
     drop(lnd);
 
-    let mut gateways = vec![gw_cln, gw_lnd];
+    let mut gateways = vec![gw_cln, gw_lnd, gw_ldk];
 
     tracing::info!("Stopping all lightning nodes");
     for gw in &mut gateways {
@@ -1579,6 +1583,7 @@ pub async fn gw_reboot_test(dev_fed: DevFed, process_mgr: &ProcessManager) -> Re
         fed,
         gw_cln,
         gw_lnd,
+        gw_ldk,
         electrs,
         esplora,
     } = dev_fed;
@@ -1588,12 +1593,14 @@ pub async fn gw_reboot_test(dev_fed: DevFed, process_mgr: &ProcessManager) -> Re
     fed.pegin_client(10_000, &client).await?;
 
     // Query current gateway infos
-    let (cln_value, lnd_value) = try_join!(gw_cln.get_info(), gw_lnd.get_info())?;
+    let (cln_value, lnd_value, ldk_value) =
+        try_join!(gw_cln.get_info(), gw_lnd.get_info(), gw_ldk.get_info())?;
 
     // Drop references to cln and lnd gateways so the test can kill them
     let cln_gateway_id = gw_cln.gateway_id().await?;
     drop(gw_cln);
     drop(gw_lnd);
+    drop(gw_ldk);
 
     // Verify that making a payment while the gateways are down does not result in
     // funds being stuck
@@ -1608,9 +1615,10 @@ pub async fn gw_reboot_test(dev_fed: DevFed, process_mgr: &ProcessManager) -> Re
 
     // Reboot gateways with the same Lightning node instances
     info!("Rebooting gateways...");
-    let (new_gw_cln, new_gw_lnd) = try_join!(
+    let (new_gw_cln, new_gw_lnd, new_gw_ldk) = try_join!(
         Gatewayd::new(process_mgr, LightningNode::Cln(cln.clone())),
-        Gatewayd::new(process_mgr, LightningNode::Lnd(lnd.clone()))
+        Gatewayd::new(process_mgr, LightningNode::Lnd(lnd.clone())),
+        Gatewayd::new(process_mgr, LightningNode::Ldk)
     )?;
 
     let cln_info: GatewayInfo = serde_json::from_value(cln_value)?;
@@ -1646,6 +1654,25 @@ pub async fn gw_reboot_test(dev_fed: DevFed, process_mgr: &ProcessManager) -> Re
                 info!(target: LOG_DEVIMINT, "LND Gateway restarted, with auto-rejoin to federation");
                 // Assert that the gateway info is the same as before the reboot
                 assert_eq!(lnd_info, reboot_info);
+                return Ok(());
+            }
+            Err(ControlFlow::Continue(anyhow!("gateway not running")))
+        },
+    )
+    .await?;
+
+    let ldk_info: GatewayInfo = serde_json::from_value(ldk_value)?;
+    poll(
+        "Waiting for LDK Gateway Running state after reboot",
+        || async {
+            let mut new_ldk_cmd = cmd!(new_gw_ldk, "info");
+            let ldk_value = new_ldk_cmd.out_json().await.map_err(ControlFlow::Continue)?;
+            let reboot_info: GatewayInfo = serde_json::from_value(ldk_value).context("json invalid").map_err(ControlFlow::Break)?;
+
+            if reboot_info.gateway_state == "Running" {
+                info!(target: LOG_DEVIMINT, "LDK Gateway restarted, with auto-rejoin to federation");
+                // Assert that the gateway info is the same as before the reboot
+                assert_eq!(ldk_info, reboot_info);
                 return Ok(());
             }
             Err(ControlFlow::Continue(anyhow!("gateway not running")))
@@ -1695,6 +1722,9 @@ pub async fn do_try_create_and_pay_invoice(
         Some(LightningNode::Lnd(_lnd)) => {
             // Pay the invoice using CLN
             new_cln.pay_bolt11_invoice(invoice).await?;
+        }
+        Some(LightningNode::Ldk) => {
+            unimplemented!();
         }
         None => {
             panic!("Lightning node did not come back up correctly");
@@ -1801,6 +1831,7 @@ pub async fn reconnect_test(dev_fed: DevFed, process_mgr: &ProcessManager) -> Re
         mut fed,
         gw_cln,
         gw_lnd,
+        gw_ldk,
         electrs,
         esplora,
     } = dev_fed;
@@ -1864,6 +1895,7 @@ pub async fn recoverytool_test(dev_fed: DevFed) -> Result<()> {
         fed,
         gw_cln,
         gw_lnd,
+        gw_ldk,
         electrs,
         esplora,
     } = dev_fed;
@@ -2063,6 +2095,7 @@ pub async fn guardian_backup_test(dev_fed: DevFed, process_mgr: &ProcessManager)
         mut fed,
         gw_cln,
         gw_lnd,
+        gw_ldk,
         electrs,
         esplora,
     } = dev_fed;
@@ -2210,6 +2243,7 @@ pub async fn cannot_replay_tx_test(dev_fed: DevFed) -> Result<()> {
         fed,
         gw_cln,
         gw_lnd,
+        gw_ldk,
         electrs,
         esplora,
     } = dev_fed;
@@ -2395,9 +2429,10 @@ pub async fn handle_command(cmd: TestCmd, common_args: CommonArgs) -> Result<()>
                 let task_group = task_group.clone();
                 async move {
                     let dev_fed = dev_fed(&process_mgr).await?;
-                    let ((), (), faucet) = try_join!(
+                    let ((), (), (), faucet) = try_join!(
                         dev_fed.fed.pegin_gateway(20_000, &dev_fed.gw_cln),
                         dev_fed.fed.pegin_gateway(20_000, &dev_fed.gw_lnd),
+                        dev_fed.fed.pegin_gateway(20_000, &dev_fed.gw_ldk),
                         async {
                             let faucet = process_mgr
                                 .spawn_daemon("faucet", cmd!(crate::util::Faucet))
