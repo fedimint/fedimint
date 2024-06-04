@@ -102,7 +102,7 @@ impl IBitcoindRpc for ElectrumClient {
                 let output = tx
                     .output
                     .first()
-                    .ok_or(format_err!("Transaction must contain at least one output"))?;
+                    .ok_or_else(|| format_err!("Transaction must contain at least one output"))?;
                 let history = block_in_place(|| self.0.script_get_history(&output.script_pubkey))?;
                 Ok(history.first().map(|history| history.height as u64))
             }
@@ -125,7 +125,7 @@ impl IBitcoindRpc for ElectrumClient {
                     .output
                     // use last since that's the change output we've constructed
                     .last()
-                    .ok_or(format_err!("Transaction must contain at least one output"))?;
+                    .ok_or_else(|| format_err!("Transaction must contain at least one output"))?;
 
                 match block_in_place(|| self.0.script_get_history(&output.script_pubkey))?
                     .iter()
@@ -184,10 +184,12 @@ fn is_already_submitted_error(error: &Map<String, Value>) -> bool {
     // TODO: Filter `electrs` errors using codes instead of string when available in
     // `electrum-client`
     // https://github.com/fedimint/fedimint/issues/3731
-    match error.get("message").and_then(|value| value.as_str()) {
-        Some(message) => message == "Transaction already in block chain",
-        None => false,
-    }
+    error
+        .get("message")
+        .and_then(|value| value.as_str())
+        .map_or(false, |message| {
+            message == "Transaction already in block chain"
+        })
 }
 
 #[cfg(test)]

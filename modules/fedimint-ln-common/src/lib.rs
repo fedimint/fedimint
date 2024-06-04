@@ -1,9 +1,11 @@
-#![warn(clippy::pedantic)]
+#![warn(clippy::pedantic, clippy::nursery)]
 #![allow(clippy::doc_markdown)]
+#![allow(clippy::missing_const_for_fn)]
 #![allow(clippy::missing_errors_doc)]
 #![allow(clippy::missing_panics_doc)]
 #![allow(clippy::module_name_repetitions)]
 #![allow(clippy::must_use_candidate)]
+#![allow(clippy::use_self)]
 
 //! # Lightning Module
 //!
@@ -638,7 +640,7 @@ pub async fn ln_operation(
         .operation_log()
         .get_operation(operation_id)
         .await
-        .ok_or(anyhow::anyhow!("Operation not found"))?;
+        .ok_or_else(|| anyhow::anyhow!("Operation not found"))?;
 
     if operation.operation_module_kind() != LightningCommonInit::KIND.as_str() {
         bail!("Operation is not a lightning operation");
@@ -674,15 +676,13 @@ impl TryFrom<Bolt11Invoice> for PrunedInvoice {
         // lightning-invoice. See #3838.
         let expiry_timestamp = invoice.expires_at().map_or(u64::MAX, |t| t.as_secs());
 
-        let destination_features = if let Some(features) = invoice.features() {
+        let destination_features = invoice.features().map_or_else(Vec::new, |features| {
             let mut feature_bytes = vec![];
             WithoutLength(features)
                 .write(&mut feature_bytes)
                 .expect("Writing to byte vec can't fail");
             feature_bytes
-        } else {
-            vec![]
-        };
+        });
 
         Ok(PrunedInvoice {
             amount: Amount::from_msats(
@@ -726,7 +726,7 @@ pub fn create_gateway_remove_message(
     peer_id: PeerId,
     challenge: sha256::Hash,
 ) -> Message {
-    let mut message_preimage = "remove-gateway".as_bytes().to_vec();
+    let mut message_preimage = b"remove-gateway".to_vec();
     message_preimage.append(&mut federation_public_key.consensus_encode_to_vec());
     let guardian_id: u16 = peer_id.into();
     message_preimage.append(&mut guardian_id.consensus_encode_to_vec());

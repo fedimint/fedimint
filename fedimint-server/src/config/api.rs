@@ -62,7 +62,7 @@ impl ConfigGenApi {
         settings: ConfigGenSettings,
         db: Database,
         config_generated_tx: Sender<ServerConfig>,
-        task_group: &mut TaskGroup,
+        task_group: &TaskGroup,
         code_version_str: String,
         api_secret: Option<String>,
     ) -> Self {
@@ -177,9 +177,9 @@ impl ConfigGenApi {
 
     async fn get_requested_params(&self) -> ApiResult<ConfigGenParamsRequest> {
         let state = self.state.lock().await.clone();
-        state.requested_params.ok_or(ApiError::bad_request(
-            "Config params were not set on this guardian".to_string(),
-        ))
+        state.requested_params.ok_or_else(|| {
+            ApiError::bad_request("Config params were not set on this guardian".to_string())
+        })
     }
 
     /// Gets the consensus config gen params
@@ -331,7 +331,7 @@ impl ConfigGenApi {
         let config = state
             .config
             .clone()
-            .ok_or(ApiError::bad_request("Missing config".to_string()))?;
+            .ok_or_else(|| ApiError::bad_request("Missing config".to_string()))?;
 
         let verification_hashes = config
             .consensus
@@ -579,15 +579,15 @@ impl ConfigGenState {
     }
 
     fn local_connection(&self) -> ApiResult<ConfigGenLocalConnection> {
-        self.local.clone().ok_or(ApiError::bad_request(
-            "Our connection info not set yet".to_string(),
-        ))
+        self.local
+            .clone()
+            .ok_or_else(|| ApiError::bad_request("Our connection info not set yet".to_string()))
     }
 
     fn auth(&self) -> ApiResult<ApiAuth> {
         self.auth
             .clone()
-            .ok_or(ApiError::bad_request("Missing auth".to_string()))
+            .ok_or_else(|| ApiError::bad_request("Missing auth".to_string()))
     }
 
     fn our_peer_info(&self) -> ApiResult<PeerServerParams> {
@@ -636,9 +636,9 @@ impl ConfigGenState {
             .peers
             .iter()
             .find(|(_, param)| local_connection.tls_cert == param.cert)
-            .ok_or(ApiError::bad_request(
-                "Our TLS cert not found among peers".to_string(),
-            ))?;
+            .ok_or_else(|| {
+                ApiError::bad_request("Our TLS cert not found among peers".to_string())
+            })?;
 
         let mut combined_params = vec![];
         let default_params = self.settings.default_params.modules.clone();
@@ -704,11 +704,10 @@ impl HasApiContext<ConfigGenApi> for ConfigGenApi {
         }
         let state = self.state.lock().await;
         let auth = request.auth.as_ref();
-        let has_auth = match state.auth.clone() {
-            // The first client to connect gets the set the password
-            None => true,
-            Some(configured_auth) => Some(&configured_auth) == auth,
-        };
+        let has_auth = state
+            .auth
+            .clone()
+            .map_or(true, |configured_auth| Some(&configured_auth) == auth);
 
         (
             self,
@@ -1010,13 +1009,12 @@ mod tests {
         async fn wait_status(&self, status: ServerStatus) {
             loop {
                 let response = self.client.consensus_config_gen_params().await.unwrap();
-                let mismatched: Vec<_> = response
+                if !response
                     .consensus
                     .peers
                     .iter()
-                    .filter(|(_, param)| param.status != Some(status.clone()))
-                    .collect();
-                if mismatched.is_empty() {
+                    .any(|(_, param)| param.status != Some(status.clone()))
+                {
                     break;
                 }
                 info!(

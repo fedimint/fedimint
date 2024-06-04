@@ -1,4 +1,4 @@
-#![warn(clippy::pedantic)]
+#![warn(clippy::pedantic, clippy::nursery)]
 
 use clap::{Parser, Subcommand};
 use devimint::version_constants::VERSION_0_3_0;

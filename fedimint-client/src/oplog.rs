@@ -77,11 +77,9 @@ impl OperationLog {
             // The current implementation may also skip operations due to `SystemTime` not being
             // guaranteed to be monotonous. The linked list approach would also fix that.
             .skip_while(|key| {
-                let skip = if let Some(start_after) = start_after {
+                let skip = start_after.map_or(false, |start_after| {
                     key.creation_time >= start_after.creation_time
-                } else {
-                    false
-                };
+                });
 
                 std::future::ready(skip)
             })
@@ -234,14 +232,16 @@ impl OperationLogEntry {
         U: Clone + Serialize + DeserializeOwned + Debug + MaybeSend + MaybeSync + 'static,
         S: Stream<Item = U> + MaybeSend + 'static,
     {
-        match self.outcome::<U>() {
-            Some(outcome) => UpdateStreamOrOutcome::Outcome(outcome),
-            None => UpdateStreamOrOutcome::UpdateStream(caching_operation_update_stream(
-                db.clone(),
-                operation_id,
-                stream_gen(),
-            )),
-        }
+        self.outcome::<U>().map_or_else(
+            || {
+                UpdateStreamOrOutcome::UpdateStream(caching_operation_update_stream(
+                    db.clone(),
+                    operation_id,
+                    stream_gen(),
+                ))
+            },
+            |outcome| UpdateStreamOrOutcome::Outcome(outcome),
+        )
     }
 }
 

@@ -74,7 +74,7 @@ impl_db_lookup!(
 /// In contrast to the mint module, the total number of LN audit keys with a
 /// non-zero amount will not grow linearly, so querying the LN audit keys with a
 /// non-zero amount should remain quick.
-#[derive(Debug, Clone, Encodable, Decodable, Serialize, PartialEq)]
+#[derive(Debug, Clone, Encodable, Decodable, Serialize, PartialEq, Eq)]
 pub enum LightningAuditItemKey {
     Incoming(ContractId),
     Outgoing(ContractId),

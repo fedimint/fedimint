@@ -53,11 +53,10 @@ impl RecoveryFromHistory for MintRecovery {
         let config = args.cfg();
 
         let secret = args.module_root_secret().clone();
-        let (snapshot, starting_session) = if let Some(snapshot) = snapshot_v0 {
-            (snapshot.clone(), snapshot.session_count)
-        } else {
-            (EcashBackupV0::new_empty(), 0)
-        };
+        let (snapshot, starting_session) = snapshot_v0.map_or_else(
+            || (EcashBackupV0::new_empty(), 0),
+            |snapshot| (snapshot.clone(), snapshot.session_count),
+        );
 
         Ok((
             MintRecovery {

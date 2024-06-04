@@ -1,17 +1,21 @@
-#![warn(clippy::pedantic)]
+#![warn(clippy::pedantic, clippy::nursery)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::cast_possible_wrap)]
 #![allow(clippy::cast_precision_loss)]
 #![allow(clippy::cast_sign_loss)]
 #![allow(clippy::default_trait_access)]
 #![allow(clippy::doc_markdown)]
+#![allow(clippy::future_not_send)]
+#![allow(clippy::missing_const_for_fn)]
 #![allow(clippy::missing_errors_doc)]
 #![allow(clippy::missing_panics_doc)]
 #![allow(clippy::module_name_repetitions)]
 #![allow(clippy::must_use_candidate)]
 #![allow(clippy::return_self_not_must_use)]
+#![allow(clippy::significant_drop_tightening)]
 #![allow(clippy::similar_names)]
 #![allow(clippy::too_many_lines)]
+#![allow(clippy::use_self)]
 
 extern crate fedimint_core;
 
@@ -116,7 +120,7 @@ pub async fn run_config_gen(
     settings: ConfigGenSettings,
     db: Database,
     code_version_str: String,
-    mut task_group: TaskGroup,
+    task_group: TaskGroup,
     force_api_secrets: ApiSecrets,
 ) -> anyhow::Result<ServerConfig> {
     info!(target: LOG_CONSENSUS, "Starting config gen");
@@ -129,7 +133,7 @@ pub async fn run_config_gen(
         settings.clone(),
         db.clone(),
         cfg_sender,
-        &mut task_group,
+        &task_group,
         code_version_str.clone(),
         force_api_secrets.get_active(),
     );

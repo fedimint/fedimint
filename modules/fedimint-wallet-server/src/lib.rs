@@ -1,13 +1,16 @@
-#![warn(clippy::pedantic)]
+#![warn(clippy::pedantic, clippy::nursery)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::cast_possible_wrap)]
 #![allow(clippy::default_trait_access)]
 #![allow(clippy::doc_markdown)]
+#![allow(clippy::missing_const_for_fn)]
 #![allow(clippy::missing_errors_doc)]
 #![allow(clippy::missing_panics_doc)]
 #![allow(clippy::module_name_repetitions)]
 #![allow(clippy::must_use_candidate)]
+#![allow(clippy::redundant_pub_crate)]
 #![allow(clippy::too_many_lines)]
+#![allow(clippy::use_self)]
 
 pub mod db;
 
@@ -239,7 +242,7 @@ impl ServerModuleInit for WalletInit {
         Ok(Wallet::new(
             args.cfg().to_typed()?,
             args.db(),
-            &mut args.task_group().clone(),
+            &args.task_group().clone(),
             args.our_peer_id(),
         )
         .await?
@@ -760,7 +763,7 @@ impl Wallet {
     pub async fn new(
         cfg: WalletConfig,
         db: &Database,
-        task_group: &mut TaskGroup,
+        task_group: &TaskGroup,
         our_peer_id: PeerId,
     ) -> anyhow::Result<Wallet> {
         let btc_rpc = create_bitcoind(&cfg.local.bitcoin_rpc, task_group.make_handle())?;
@@ -771,7 +774,7 @@ impl Wallet {
         cfg: WalletConfig,
         db: &Database,
         bitcoind: DynBitcoindRpc,
-        task_group: &mut TaskGroup,
+        task_group: &TaskGroup,
         our_peer_id: PeerId,
     ) -> Result<Wallet, WalletCreationError> {
         Self::spawn_broadcast_pending_task(task_group, &bitcoind, db);
@@ -1184,7 +1187,7 @@ impl Wallet {
     }
 
     fn spawn_broadcast_pending_task(
-        task_group: &mut TaskGroup,
+        task_group: &TaskGroup,
         bitcoind: &DynBitcoindRpc,
         db: &Database,
     ) {
@@ -1199,7 +1202,7 @@ impl Wallet {
 
     fn spawn_bitcoin_update_task(
         cfg: &WalletConfig,
-        task_group: &mut TaskGroup,
+        task_group: &TaskGroup,
         bitcoind: &DynBitcoindRpc,
     ) -> (watch::Receiver<Option<u32>>, watch::Receiver<Feerate>) {
         let (block_count_tx, block_count_rx) = watch::channel(None);

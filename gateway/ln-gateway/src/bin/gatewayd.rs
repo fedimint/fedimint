@@ -19,10 +19,10 @@ use tracing::info;
 async fn main() -> Result<(), anyhow::Error> {
     handle_version_hash_command(fedimint_build_code_version_env!());
     TracingSetup::default().init()?;
-    let mut tg = TaskGroup::new();
+    let tg = TaskGroup::new();
     tg.install_kill_handler();
     let gatewayd = Gateway::new_with_default_modules().await?;
-    let shutdown_receiver = gatewayd.clone().run(&mut tg).await?;
+    let shutdown_receiver = gatewayd.clone().run(&tg).await?;
     shutdown_receiver.await;
     gatewayd.leave_all_federations().await;
     info!("Gatewayd exiting...");

@@ -1,18 +1,23 @@
-#![warn(clippy::pedantic)]
+#![warn(clippy::pedantic, clippy::nursery)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::cast_possible_wrap)]
 #![allow(clippy::cast_sign_loss)]
 #![allow(clippy::default_trait_access)]
 #![allow(clippy::doc_markdown)]
+#![allow(clippy::future_not_send)]
+#![allow(clippy::missing_const_for_fn)]
 #![allow(clippy::missing_errors_doc)]
 #![allow(clippy::missing_fields_in_debug)]
 #![allow(clippy::missing_panics_doc)]
 #![allow(clippy::module_name_repetitions)]
 #![allow(clippy::must_use_candidate)]
 #![allow(clippy::return_self_not_must_use)]
+#![allow(clippy::significant_drop_in_scrutinee)]
+#![allow(clippy::significant_drop_tightening)]
 #![allow(clippy::similar_names)]
 #![allow(clippy::struct_field_names)]
 #![allow(clippy::too_many_lines)]
+#![allow(clippy::use_self)]
 #![allow(clippy::wildcard_imports)]
 
 pub mod client;
@@ -532,7 +537,7 @@ impl Gateway {
     /// timer, loads the federation clients from the persisted config,
     /// begins listening for intercepted HTLCs, and starts the webserver to
     /// service requests.
-    pub async fn run(mut self, tg: &mut TaskGroup) -> anyhow::Result<TaskShutdownToken> {
+    pub async fn run(mut self, tg: &TaskGroup) -> anyhow::Result<TaskShutdownToken> {
         self.register_clients_timer(tg);
         Box::pin(self.load_clients()).await;
         self.start_gateway(tg);
@@ -545,7 +550,7 @@ impl Gateway {
 
     /// Begins the task for listening for intercepted HTLCs from the Lightning
     /// node.
-    fn start_gateway(&self, task_group: &mut TaskGroup) {
+    fn start_gateway(&self, task_group: &TaskGroup) {
         let mut self_copy = self.clone();
         let tg = task_group.clone();
         task_group.spawn("Subscribe to intercepted HTLCs in stream", |handle| async move {
@@ -730,7 +735,7 @@ impl Gateway {
                                         None
                                     })
                                     .await;
-                                if let Some(ControlFlow::Continue(())) = cf {
+                                if cf == Some(ControlFlow::Continue(())) {
                                     continue;
                                 }
                             } else {
@@ -1499,7 +1504,7 @@ impl Gateway {
     /// connected federations every 8.5 mins. Only registers the Gateway if it
     /// has successfully connected to the Lightning node, so that it can
     /// include route hints in the registration.
-    fn register_clients_timer(&mut self, task_group: &mut TaskGroup) {
+    fn register_clients_timer(&mut self, task_group: &TaskGroup) {
         let gateway = self.clone();
         task_group.spawn_cancellable("register clients", async move {
             loop {
@@ -1716,7 +1721,7 @@ impl Gateway {
 
         let client = clients
             .get(&payload.federation_id)
-            .ok_or(anyhow!("Federation client not available"))?
+            .ok_or_else(|| anyhow!("Federation client not available"))?
             .value();
 
         client
@@ -1740,7 +1745,7 @@ impl Gateway {
         let payment_info = self
             .payment_info_v2(&payload.federation_id)
             .await
-            .ok_or(anyhow!("Payment Info not available"))?;
+            .ok_or_else(|| anyhow!("Payment Info not available"))?;
 
         if payload.contract.commitment.refund_pk != payment_info.public_key {
             bail!("The outgoing contract keyed to another gateway");
@@ -1841,7 +1846,7 @@ impl Gateway {
             .await
             .get_value(&CreateInvoicePayloadKey(payment_hash))
             .await
-            .ok_or(anyhow!("No corresponding decryption contract available"))?;
+            .ok_or_else(|| anyhow!("No corresponding decryption contract available"))?;
 
         if payload.invoice_amount.msats != amount_msats {
             bail!("The available decryption contract's amount is not equal the requested amount")
@@ -1851,7 +1856,7 @@ impl Gateway {
 
         let client = clients
             .get(&payload.federation_id)
-            .ok_or(anyhow!("Federation client not available"))?
+            .ok_or_else(|| anyhow!("Federation client not available"))?
             .value()
             .clone();
 

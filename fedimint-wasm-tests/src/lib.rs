@@ -1,4 +1,5 @@
-#![warn(clippy::pedantic)]
+#![warn(clippy::pedantic, clippy::nursery)]
+#![allow(clippy::future_not_send)]
 
 use std::sync::Arc;
 

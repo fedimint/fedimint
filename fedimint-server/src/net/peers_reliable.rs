@@ -641,7 +641,7 @@ where
         connect: SharedAnyConnector<PeerMessage<M>>,
         incoming_connections: Receiver<AnyFramedTransport<PeerMessage<M>>>,
         status_query_receiver: PeerStatusChannelReceiver,
-        task_group: &mut TaskGroup,
+        task_group: &TaskGroup,
     ) -> PeerConnection<M> {
         let (outgoing_sender, outgoing_receiver) = tokio::sync::mpsc::channel::<M>(1024);
         let (incoming_sender, incoming_receiver) = tokio::sync::mpsc::channel::<M>(1024);

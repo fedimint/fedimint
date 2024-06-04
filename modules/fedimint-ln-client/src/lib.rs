@@ -1,9 +1,11 @@
-#![warn(clippy::pedantic)]
+#![warn(clippy::pedantic, clippy::nursery)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::cast_possible_wrap)]
 #![allow(clippy::cast_sign_loss)]
 #![allow(clippy::default_trait_access)]
 #![allow(clippy::doc_markdown)]
+#![allow(clippy::future_not_send)]
+#![allow(clippy::missing_const_for_fn)]
 #![allow(clippy::missing_errors_doc)]
 #![allow(clippy::missing_fields_in_debug)]
 #![allow(clippy::missing_panics_doc)]
@@ -13,6 +15,7 @@
 #![allow(clippy::similar_names)]
 #![allow(clippy::struct_field_names)]
 #![allow(clippy::too_many_lines)]
+#![allow(clippy::use_self)]
 #![allow(clippy::wildcard_imports)]
 
 pub mod api;
@@ -547,7 +550,7 @@ impl LightningClientModule {
             .module_api
             .fetch_consensus_block_count()
             .await?
-            .ok_or(format_err!("Cannot get consensus block count"))?;
+            .ok_or_else(|| format_err!("Cannot get consensus block count"))?;
         let absolute_timelock = consensus_count + OUTGOING_LN_CONTRACT_TIMELOCK - 1;
 
         // Compute amount to lock in the outgoing contract
@@ -1026,7 +1029,7 @@ impl LightningClientModule {
                     .checked_sub(
                         invoice
                             .amount_milli_satoshis()
-                            .ok_or(anyhow!("MissingInvoiceAmount"))?,
+                            .ok_or_else(|| anyhow!("MissingInvoiceAmount"))?,
                     )
                     .expect("Contract amount should be greater or equal than invoice amount");
                 Amount::from_msats(fee_msat)
@@ -1283,7 +1286,7 @@ impl LightningClientModule {
     ) -> anyhow::Result<OperationId> {
         let incoming_contract_account = get_incoming_contract(self.module_api.clone(), contract_id)
             .await?
-            .ok_or(anyhow!("No contract account found"))
+            .ok_or_else(|| anyhow!("No contract account found"))
             .with_context(|| format!("No contract found for {contract_id:?}"))?;
 
         let input = incoming_contract_account.claim();

@@ -151,19 +151,22 @@ impl IBitcoindRpc for BitcoinClient {
 // TODO: Make private
 pub fn from_url_to_url_auth(url: &SafeUrl) -> anyhow::Result<(String, Auth)> {
     Ok((
-        (if let Some(port) = url.port() {
-            format!(
-                "{}://{}:{port}",
-                url.scheme(),
-                url.host_str().unwrap_or("127.0.0.1")
-            )
-        } else {
-            format!(
-                "{}://{}",
-                url.scheme(),
-                url.host_str().unwrap_or("127.0.0.1")
-            )
-        }),
+        (url.port().map_or_else(
+            || {
+                format!(
+                    "{}://{}",
+                    url.scheme(),
+                    url.host_str().unwrap_or("127.0.0.1")
+                )
+            },
+            |port| {
+                format!(
+                    "{}://{}:{port}",
+                    url.scheme(),
+                    url.host_str().unwrap_or("127.0.0.1")
+                )
+            },
+        )),
         match (
             !url.username().is_empty(),
             env::var(FM_BITCOIND_COOKIE_FILE_ENV),

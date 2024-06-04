@@ -229,13 +229,13 @@ impl GatewayClientModuleV2 {
         let invoice_msats = payload
             .invoice
             .amount_milli_satoshis()
-            .ok_or(anyhow!("Invoice is missing amount"))?;
+            .ok_or_else(|| anyhow!("Invoice is missing amount"))?;
 
         let min_contract_amount = self
             .gateway
             .payment_info_v2(&payload.federation_id)
             .await
-            .ok_or(anyhow!("Payment Info not available"))?
+            .ok_or_else(|| anyhow!("Payment Info not available"))?
             .send_fee_minimum
             .add_fee(invoice_msats);
 
@@ -246,7 +246,7 @@ impl GatewayClientModuleV2 {
             .outgoing_contract_expiration(&payload.contract.contract_id())
             .await
             .map_err(|_| anyhow!("The gateway can not reach the federation"))?
-            .ok_or(anyhow!("The outgoing contract has not yet been confirmed"))?
+            .ok_or_else(|| anyhow!("The outgoing contract has not yet been confirmed"))?
             .saturating_sub(EXPIRATION_DELTA_MINIMUM_V2);
 
         let send_sm = GatewayClientStateMachinesV2::Send(SendStateMachine {
@@ -363,7 +363,7 @@ impl GatewayClientModuleV2 {
             return self
                 .subscribe_receive(operation_id)
                 .await
-                .ok_or(anyhow!("The internal send failed"));
+                .ok_or_else(|| anyhow!("The internal send failed"));
         }
 
         let refund_keypair = self.keypair;
@@ -398,7 +398,7 @@ impl GatewayClientModuleV2 {
 
         self.subscribe_receive(operation_id)
             .await
-            .ok_or(anyhow!("The internal send failed"))
+            .ok_or_else(|| anyhow!("The internal send failed"))
     }
 
     async fn subscribe_receive(&self, operation_id: OperationId) -> Option<[u8; 32]> {

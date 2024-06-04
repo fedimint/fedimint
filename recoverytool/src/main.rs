@@ -1,6 +1,7 @@
-#![warn(clippy::pedantic)]
+#![warn(clippy::pedantic, clippy::nursery)]
 #![allow(clippy::default_trait_access)]
 #![allow(clippy::too_many_lines)]
+#![allow(clippy::use_self)]
 
 pub mod envs;
 
@@ -224,19 +225,16 @@ async fn main() -> anyhow::Result<()> {
                             ..
                         },
                     )| {
-                        let transaction_cis: Vec<Transaction> = block
-                            .items
-                            .into_iter()
-                            .filter_map(|item| match item.item {
+                        let transaction_cis =
+                            block.items.into_iter().filter_map(|item| match item.item {
                                 ConsensusItem::Transaction(tx) => Some(tx),
                                 ConsensusItem::Module(_) | ConsensusItem::Default { .. } => None,
-                            })
-                            .collect();
+                            });
 
                         // Get all user-submitted tweaks and number of peg-out transactions in
                         // session
                         let (mut peg_in_tweaks, peg_out_count) =
-                            input_tweaks_and_peg_out_count(transaction_cis.into_iter());
+                            input_tweaks_and_peg_out_count(transaction_cis);
 
                         for _ in 0..=peg_out_count {
                             info!("Found change output, adding tweak {change_tweak_idx} to list");

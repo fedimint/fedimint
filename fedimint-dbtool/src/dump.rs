@@ -56,12 +56,12 @@ impl DatabaseDump {
         modules: Vec<String>,
         prefixes: Vec<String>,
     ) -> anyhow::Result<DatabaseDump> {
-        let read_only = match RocksDbReadOnly::open_read_only(data_dir.clone()) {
-            Ok(db) => Database::new(db, Default::default()),
-            Err(_) => {
+        let read_only = RocksDbReadOnly::open_read_only(data_dir.clone()).map_or_else(
+            |_| {
                 panic!("Error reading RocksDB database. Quitting...");
-            }
-        };
+            },
+            |db| Database::new(db, Default::default()),
+        );
 
         let (server_cfg, client_cfg, decoders) = if let Ok(cfg) =
             read_server_config(&password, &cfg_dir).context("Failed to read server config")
@@ -76,12 +76,12 @@ impl DatabaseDump {
         } else {
             // Check if this database is a client database by reading the `ClientConfig`
             // from the database.
-            let db = match RocksDbReadOnly::open_read_only(data_dir) {
-                Ok(db) => Database::new(db, Default::default()),
-                Err(_) => {
+            let db = RocksDbReadOnly::open_read_only(data_dir).map_or_else(
+                |_| {
                     panic!("Error reading RocksDB database. Quitting...");
-                }
-            };
+                },
+                |db| Database::new(db, Default::default()),
+            );
 
             let mut dbtx = db.begin_transaction().await;
             let client_cfg = dbtx

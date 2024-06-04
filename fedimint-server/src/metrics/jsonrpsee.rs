@@ -47,11 +47,8 @@ impl<F: Future<Output = MethodResponse>> Future for ResponseFuture<F> {
                 JSONRPC_API_REQUEST_RESPONSE_CODE
                     .with_label_values(&[
                         &projected.method,
-                        &if let Some(code) = res.as_error_code() {
-                            Cow::Owned(code.to_string())
-                        } else {
-                            Cow::Borrowed("0")
-                        },
+                        &res.as_error_code()
+                            .map_or(Cow::Borrowed("0"), |code| Cow::Owned(code.to_string())),
                         if res.is_subscription() {
                             "subscription"
                         } else if res.is_batch() {

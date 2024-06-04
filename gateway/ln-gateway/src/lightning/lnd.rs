@@ -101,7 +101,7 @@ impl GatewayLndClient {
 
     async fn spawn_interceptor(
         &self,
-        task_group: &mut TaskGroup,
+        task_group: &TaskGroup,
         lnd_sender: mpsc::Sender<ForwardHtlcInterceptResponse>,
         lnd_rx: mpsc::Receiver<ForwardHtlcInterceptResponse>,
         gateway_sender: HtlcSubscriptionSender,
@@ -799,10 +799,9 @@ impl ILnRpcClient for GatewayLndClient {
 
                     let local_balance_sats: u64 =
                         channel.local_balance.try_into().expect("i64 -> u64");
-                    let local_channel_reserve_sats: u64 = match channel.local_constraints {
-                        Some(constraints) => constraints.chan_reserve_sat,
-                        None => 0,
-                    };
+                    let local_channel_reserve_sats: u64 = channel
+                        .local_constraints
+                        .map_or(0, |constraints| constraints.chan_reserve_sat);
 
                     let outbound_liquidity_sats =
                         if local_balance_sats >= local_channel_reserve_sats {
@@ -816,10 +815,9 @@ impl ILnRpcClient for GatewayLndClient {
 
                     let remote_balance_sats: u64 =
                         channel.remote_balance.try_into().expect("i64 -> u64");
-                    let remote_channel_reserve_sats: u64 = match channel.remote_constraints {
-                        Some(constraints) => constraints.chan_reserve_sat,
-                        None => 0,
-                    };
+                    let remote_channel_reserve_sats: u64 = channel
+                        .remote_constraints
+                        .map_or(0, |constraints| constraints.chan_reserve_sat);
 
                     let inbound_liquidity_sats =
                         if remote_balance_sats >= remote_channel_reserve_sats {

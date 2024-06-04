@@ -389,7 +389,7 @@ where
             .operation_log()
             .get_operation(operation_id)
             .await
-            .ok_or(anyhow::anyhow!("Operation not found"))?;
+            .ok_or_else(|| anyhow::anyhow!("Operation not found"))?;
 
         if operation.operation_module_kind() != M::kind().as_str() {
             bail!("Operation is not a lightning operation");

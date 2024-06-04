@@ -292,7 +292,7 @@ pub fn verify_blind_share(
 
     let amount_key = peer_tbs_pks
         .get(&peer)
-        .ok_or(anyhow!("Unknown peer"))?
+        .ok_or_else(|| anyhow!("Unknown peer"))?
         .tier(&amount)
         .map_err(|_| anyhow!("Invalid Amount Tier"))?;
 

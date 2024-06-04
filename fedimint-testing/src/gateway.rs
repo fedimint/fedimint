@@ -116,12 +116,9 @@ impl GatewayTest {
 
         let gateway_run = gateway.clone();
         let root_group = TaskGroup::new();
-        let mut tg = root_group.clone();
+        let tg = root_group.clone();
         root_group.spawn("Gateway Run", |_handle| async move {
-            gateway_run
-                .run(&mut tg)
-                .await
-                .expect("Failed to start gateway");
+            gateway_run.run(&tg).await.expect("Failed to start gateway");
         });
 
         // Wait for the gateway web server to be available

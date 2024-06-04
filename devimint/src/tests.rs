@@ -2252,10 +2252,7 @@ pub async fn guardian_backup_test(dev_fed: DevFed, process_mgr: &ProcessManager)
     };
 
     write_file("backup.tar", &backup_tar);
-    write_file(
-        fedimint_server::config::io::PLAINTEXT_PASSWORD,
-        "pass".as_bytes(),
-    );
+    write_file(fedimint_server::config::io::PLAINTEXT_PASSWORD, b"pass");
 
     assert_eq!(
         std::process::Command::new("tar")

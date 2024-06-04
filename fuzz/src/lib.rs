@@ -1,4 +1,4 @@
-#![warn(clippy::pedantic)]
+#![warn(clippy::pedantic, clippy::nursery)]
 #![allow(clippy::default_trait_access)]
 #![allow(clippy::missing_panics_doc)]
 #![allow(clippy::must_use_candidate)]

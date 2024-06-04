@@ -66,15 +66,14 @@ pub(crate) async fn handle_cli_command(
                 serde_json::Value::Null
             }
         }
-        Opts::GetRev { key } => {
-            if let Some(rev) = meta.module_api.get_consensus_rev(key).await? {
+        Opts::GetRev { key } => meta.module_api.get_consensus_rev(key).await?.map_or_else(
+            || serde_json::Value::Null,
+            |rev| {
                 json!({
                     "revision": rev,
                 })
-            } else {
-                serde_json::Value::Null
-            }
-        }
+            },
+        ),
         Opts::GetSubmissions { key, hex } => {
             let submissions = meta
                 .module_api

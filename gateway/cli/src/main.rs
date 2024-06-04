@@ -1,7 +1,8 @@
-#![warn(clippy::pedantic)]
+#![warn(clippy::pedantic, clippy::nursery)]
 #![allow(clippy::doc_markdown)]
 #![allow(clippy::missing_panics_doc)]
 #![allow(clippy::too_many_lines)]
+#![allow(clippy::use_self)]
 
 use std::time::Duration;
 

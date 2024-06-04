@@ -483,15 +483,7 @@ impl ExecutorInner {
 
         loop {
             let event = tokio::select! {
-                new = sm_update_rx.recv() => {
-                    if let Some(new) = new {
-                        ExecutorLoopEvent::New {
-                            state: new,
-                        }
-                    } else {
-                        ExecutorLoopEvent::Disconnected
-                    }
-                },
+                new = sm_update_rx.recv() => new.map_or_else(|| ExecutorLoopEvent::Disconnected, |new| ExecutorLoopEvent::New { state: new }),
 
                 event = futures.next(), if !futures.is_empty() => event.expect("we only .next() if there are pending futures"),
             };

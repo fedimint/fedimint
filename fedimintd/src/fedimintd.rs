@@ -308,7 +308,7 @@ impl Fedimintd {
                 WalletInit::kind(),
                 WalletGenParams {
                     local: WalletGenParamsLocal {
-                        bitcoin_rpc: bitcoind_rpc.clone(),
+                        bitcoin_rpc: bitcoind_rpc,
                     },
                     consensus: WalletGenParamsConsensus {
                         network,

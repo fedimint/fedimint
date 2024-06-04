@@ -160,7 +160,9 @@ impl ReceiveStateMachine {
             match outcome {
                 LightningOutputOutcome::Incoming(share) => {
                     if !decryption_contract.verify_decryption_share(
-                        tpe_pks.get(&peer).ok_or(anyhow!("Unknown peer pk"))?,
+                        tpe_pks
+                            .get(&peer)
+                            .ok_or_else(|| anyhow!("Unknown peer pk"))?,
                         &share,
                     ) {
                         bail!("Invalid decryption share");

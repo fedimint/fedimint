@@ -376,7 +376,7 @@ impl IBitcoindRpc for FakeBitcoinTest {
     async fn get_txout_proof(&self, txid: bitcoin::Txid) -> BitcoinRpcResult<TxOutProof> {
         let inner = self.inner.read().unwrap();
         let proof = inner.proofs.get(&txid);
-        Ok(proof.ok_or(format_err!("No proof stored"))?.clone())
+        Ok(proof.ok_or_else(|| format_err!("No proof stored"))?.clone())
     }
 }
 

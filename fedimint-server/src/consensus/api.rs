@@ -141,7 +141,7 @@ impl ConsensusApi {
         let module_id = module_ids
             .into_iter()
             .nth(outpoint.out_idx as usize)
-            .ok_or(anyhow!("Outpoint index out of bounds {:?}", outpoint))?;
+            .ok_or_else(|| anyhow!("Outpoint index out of bounds {:?}", outpoint))?;
 
         let outcome = self
             .modules

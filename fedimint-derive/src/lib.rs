@@ -1,4 +1,4 @@
-#![warn(clippy::pedantic)]
+#![warn(clippy::pedantic, clippy::nursery)]
 #![cfg_attr(feature = "diagnostics", feature(proc_macro_diagnostic))]
 
 use itertools::Itertools;
@@ -170,7 +170,7 @@ fn derive_enum_encode(ident: &Ident, variants: &Punctuated<Variant, Comma>) -> T
         non_default_variant_indices(variants)
             .into_iter()
             .map(|(variant_idx, variant)| {
-                let variant_ident = variant.ident.clone();
+                let variant_ident = variant.ident;
 
                 if is_tuple_struct(&variant.fields) {
                     let variant_fields = variant
@@ -286,6 +286,7 @@ fn derive_enum_decode(ident: &Ident, variants: &Punctuated<Variant, Comma>) -> T
 
     let non_default_match_arms = non_default_variant_indices(variants).into_iter()
         .map(|(variant_idx, variant)| {
+            #[allow(clippy::redundant_clone)]
             let variant_ident = variant.ident.clone();
             let decode_block = derive_tuple_or_named_decode_block(
                 ident,

@@ -687,10 +687,10 @@ impl FedimintCli {
 
     /// Returns the fedimint-cli version from clap or default min version
     pub async fn version_or_default() -> Version {
-        match cmd!(FedimintCli, "--version").out_string().await {
-            Ok(version) => parse_clap_version(&version),
-            Err(_) => DEFAULT_VERSION,
-        }
+        cmd!(FedimintCli, "--version")
+            .out_string()
+            .await
+            .map_or(DEFAULT_VERSION, |version| parse_clap_version(&version))
     }
 
     pub async fn ws_status(self, endpoint: &str) -> Result<StatusResponse> {
@@ -913,10 +913,10 @@ impl GatewayCli {
 
     /// Returns the gateway-cli version from clap or default min version
     pub async fn version_or_default() -> Version {
-        match cmd!(GatewayCli, "--version").out_string().await {
-            Ok(version) => parse_clap_version(&version),
-            Err(_) => DEFAULT_VERSION,
-        }
+        cmd!(GatewayCli, "--version")
+            .out_string()
+            .await
+            .map_or(DEFAULT_VERSION, |version| parse_clap_version(&version))
     }
 }
 

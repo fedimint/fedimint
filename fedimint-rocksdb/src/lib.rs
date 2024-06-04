@@ -1,7 +1,10 @@
-#![warn(clippy::pedantic)]
+#![warn(clippy::pedantic, clippy::nursery)]
 #![allow(clippy::default_trait_access)]
+#![allow(clippy::missing_const_for_fn)]
 #![allow(clippy::missing_errors_doc)]
 #![allow(clippy::must_use_candidate)]
+#![allow(clippy::redundant_pub_crate)]
+#![allow(clippy::use_self)]
 
 pub mod envs;
 
@@ -259,11 +262,11 @@ impl<'a> IDatabaseTransactionOpsCore for RocksDbTransaction<'a> {
     ) -> Result<PrefixStream<'_>> {
         let prefix = key_prefix.to_vec();
         let next_prefix = next_prefix(&prefix);
-        let iterator_mode = if let Some(next_prefix) = &next_prefix {
-            rocksdb::IteratorMode::From(next_prefix, rocksdb::Direction::Reverse)
-        } else {
-            rocksdb::IteratorMode::End
-        };
+        let iterator_mode = next_prefix
+            .as_ref()
+            .map_or(rocksdb::IteratorMode::End, |next_prefix| {
+                rocksdb::IteratorMode::From(next_prefix, rocksdb::Direction::Reverse)
+            });
         Ok(fedimint_core::runtime::block_in_place(|| {
             let mut options = rocksdb::ReadOptions::default();
             options.set_iterate_range(rocksdb::PrefixRange(prefix.clone()));
@@ -362,11 +365,11 @@ impl<'a> IDatabaseTransactionOpsCore for RocksDbReadOnlyTransaction<'a> {
     ) -> Result<PrefixStream<'_>> {
         let prefix = key_prefix.to_vec();
         let next_prefix = next_prefix(&prefix);
-        let iterator_mode = if let Some(next_prefix) = &next_prefix {
-            rocksdb::IteratorMode::From(next_prefix, rocksdb::Direction::Reverse)
-        } else {
-            rocksdb::IteratorMode::End
-        };
+        let iterator_mode = next_prefix
+            .as_ref()
+            .map_or(rocksdb::IteratorMode::End, |next_prefix| {
+                rocksdb::IteratorMode::From(next_prefix, rocksdb::Direction::Reverse)
+            });
         Ok(fedimint_core::runtime::block_in_place(|| {
             let mut options = rocksdb::ReadOptions::default();
             options.set_iterate_range(rocksdb::PrefixRange(prefix.clone()));

@@ -61,7 +61,7 @@ pub struct WithdrawPayload {
 }
 
 /// Information about one of the feds we are connected to
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct FederationInfo {
     pub federation_id: FederationId,
     pub balance_msat: Amount,
@@ -70,7 +70,7 @@ pub struct FederationInfo {
     pub routing_fees: Option<FederationRoutingFees>,
 }
 
-#[derive(Debug, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct GatewayInfo {
     pub version_hash: String,
     pub federations: Vec<FederationInfo>,
@@ -93,7 +93,7 @@ pub struct GatewayInfo {
     pub synced_to_chain: bool,
 }
 
-#[derive(Debug, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct GatewayFedConfig {
     pub federations: BTreeMap<FederationId, JsonClientConfig>,
 }

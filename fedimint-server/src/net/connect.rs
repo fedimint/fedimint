@@ -133,7 +133,7 @@ impl PeerCertStore {
 
     async fn accept_connection<M>(
         &self,
-        listener: &mut TcpListener,
+        listener: &TcpListener,
         acceptor: &TlsAcceptor,
     ) -> Result<(PeerId, AnyFramedTransport<M>), anyhow::Error>
     where
@@ -212,12 +212,12 @@ where
         let listener = TcpListener::bind(bind_addr).await?;
         let peer_certs = self.peer_certs.clone();
 
-        let stream = futures::stream::unfold(listener, move |mut listener| {
+        let stream = futures::stream::unfold(listener, move |listener| {
             let acceptor = TlsAcceptor::from(Arc::new(config.clone()));
             let peer_certs = peer_certs.clone();
 
             Box::pin(async move {
-                let res = peer_certs.accept_connection(&mut listener, &acceptor).await;
+                let res = peer_certs.accept_connection(&listener, &acceptor).await;
                 Some((res, listener))
             })
         });

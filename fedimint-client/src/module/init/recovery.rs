@@ -242,7 +242,7 @@ where
             const VERSION_THAT_INTRODUCED_GET_SESSION_STATUS: ApiVersion =
                 ApiVersion { major: 0, minor: 1 };
 
-            futures::stream::iter(epoch_range.clone())
+            futures::stream::iter(epoch_range)
                 .map(move |session_idx| {
                     let api = api.clone();
                     let decoders = decoders.clone();

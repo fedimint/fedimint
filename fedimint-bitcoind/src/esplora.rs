@@ -114,9 +114,9 @@ impl IBitcoindRpc for EsploraClient {
             .is_some_and(|height| u64::from(height) == block_height);
 
         if is_in_block_height {
-            let tx_block_hash = tx_status.block_hash.ok_or(anyhow::format_err!(
-                "Tx has a block height without a block hash"
-            ))?;
+            let tx_block_hash = tx_status
+                .block_hash
+                .ok_or_else(|| anyhow::format_err!("Tx has a block height without a block hash"))?;
             anyhow::ensure!(
                 *block_hash == tx_block_hash,
                 "Block height for block hash does not match expected height"
@@ -150,7 +150,7 @@ impl IBitcoindRpc for EsploraClient {
             .0
             .get_merkle_block(&txid)
             .await?
-            .ok_or(format_err!("No merkle proof found"))?;
+            .ok_or_else(|| format_err!("No merkle proof found"))?;
 
         Ok(TxOutProof {
             block_header: proof.header,

@@ -1,13 +1,16 @@
-#![warn(clippy::pedantic)]
+#![warn(clippy::pedantic, clippy::nursery)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::default_trait_access)]
 #![allow(clippy::doc_markdown)]
+#![allow(clippy::future_not_send)]
 #![allow(clippy::match_same_arms)]
+#![allow(clippy::missing_const_for_fn)]
 #![allow(clippy::missing_errors_doc)]
 #![allow(clippy::missing_panics_doc)]
 #![allow(clippy::module_name_repetitions)]
 #![allow(clippy::must_use_candidate)]
 #![allow(clippy::return_self_not_must_use)]
+#![allow(clippy::use_self)]
 
 // Backup and restore logic
 pub mod backup;
@@ -1067,7 +1070,7 @@ impl MintClientModule {
                 .cfg
                 .tbs_pks
                 .get(amount)
-                .ok_or(anyhow!("Invalid amount tier: {amount}"))?;
+                .ok_or_else(|| anyhow!("Invalid amount tier: {amount}"))?;
 
             let note = spendable_note.note();
 
@@ -1348,7 +1351,7 @@ impl MintClientModule {
                 // Either txid or legacy_out_point will be present, so we should always
                 // have a source for the txid
                 let txid = txid
-                    .or(legacy_out_point.map(|out_point| out_point.txid))
+                    .or_else(|| legacy_out_point.map(|out_point| out_point.txid))
                     .context("Empty reissuance not permitted, this should never happen")?;
 
                 let out_points = out_point_indices

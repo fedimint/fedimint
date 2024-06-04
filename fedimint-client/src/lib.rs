@@ -1,15 +1,20 @@
-#![warn(clippy::pedantic)]
+#![warn(clippy::pedantic, clippy::nursery)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::default_trait_access)]
 #![allow(clippy::doc_markdown)]
 #![allow(clippy::explicit_deref_methods)]
+#![allow(clippy::future_not_send)]
+#![allow(clippy::missing_const_for_fn)]
 #![allow(clippy::missing_errors_doc)]
 #![allow(clippy::missing_panics_doc)]
 #![allow(clippy::module_name_repetitions)]
 #![allow(clippy::must_use_candidate)]
+#![allow(clippy::redundant_pub_crate)]
 #![allow(clippy::return_self_not_must_use)]
+#![allow(clippy::significant_drop_tightening)]
 #![allow(clippy::too_many_lines)]
 #![allow(clippy::type_complexity)]
+#![allow(clippy::use_self)]
 
 //! # Client library for fedimintd
 //!
@@ -1264,7 +1269,7 @@ impl Client {
         instance_id: ModuleInstanceId,
     ) -> anyhow::Result<&maybe_add_send_sync!(dyn IClientModule)> {
         self.try_get_module(instance_id)
-            .ok_or(anyhow!("Unknown module instance {}", instance_id))
+            .ok_or_else(|| anyhow!("Unknown module instance {}", instance_id))
     }
 
     pub fn db(&self) -> &Database {
@@ -1364,7 +1369,7 @@ impl Client {
         Box::pin(stream! {
             yield initial_balance;
             let mut prev_balance = initial_balance;
-            while let Some(()) = balance_changes.next().await {
+            while balance_changes.next().await == Some(()) {
                 let mut dbtx = db.begin_transaction_nc().await;
                 let balance = primary_module
                     .get_balance(primary_module_instance, &mut dbtx)
@@ -2013,7 +2018,7 @@ impl ClientBuilder {
             let metadata = init_state
                 .does_require_recovery()
                 .flatten()
-                .map_or(Metadata::empty(), |s| s.metadata);
+                .map_or_else(Metadata::empty, |s| s.metadata);
 
             dbtx.insert_new_entry(&ClientMetadataKey, &metadata).await;
 
@@ -2196,11 +2201,12 @@ impl ClientBuilder {
         let config = Self::config_decoded(config, &decoders)?;
         let fed_id = config.calculate_federation_id();
         let db = self.db_no_decoders.with_decoders(decoders.clone());
-        let api = if let Some(admin_creds) = self.admin_creds.as_ref() {
-            DynGlobalApi::from_config_admin(&config, &api_secret, admin_creds.peer_id)
-        } else {
-            DynGlobalApi::from_config(&config, &api_secret)
-        };
+        let api = self.admin_creds.as_ref().map_or_else(
+            || DynGlobalApi::from_config(&config, &api_secret),
+            |admin_creds| {
+                DynGlobalApi::from_config_admin(&config, &api_secret, admin_creds.peer_id)
+            },
+        );
         let task_group = TaskGroup::new();
 
         // Migrate the database before interacting with it in case any on-disk data
@@ -2211,7 +2217,7 @@ impl ClientBuilder {
 
         let primary_module_instance = self
             .primary_module_instance
-            .ok_or(anyhow!("No primary module instance id was provided"))?;
+            .ok_or_else(|| anyhow!("No primary module instance id was provided"))?;
 
         let notifier = Notifier::new(db.clone());
 

@@ -178,7 +178,7 @@ impl FederationError {
             method: method.into(),
             params: serde_json::to_value(params).expect("Serialization of valid params won't fail"),
             general: None,
-            peers: [(peer_id, error)].into_iter().collect(),
+            peers: std::iter::once((peer_id, error)).collect(),
         }
     }
 
@@ -520,7 +520,7 @@ pub trait FederationApiExt: IRawFederationApi {
 }
 
 #[apply(async_trait_maybe_send!)]
-impl<T: ?Sized> FederationApiExt for T where T: IRawFederationApi {}
+impl<T: ?Sized + IRawFederationApi> FederationApiExt for T {}
 
 /// Trait marker for the module (non-global) endpoints
 pub trait IModuleFederationApi: IRawFederationApi {}
@@ -1274,10 +1274,9 @@ impl<C: JsonRpcClient + Debug + 'static> IRawFederationApi for WsFederationApi<C
             .find(|m| m.peer_id == peer_id)
             .ok_or_else(|| JsonRpcClientError::Custom(format!("Invalid peer_id: {peer_id}")))?;
 
-        let method = match self.module_id {
-            None => method.to_string(),
-            Some(id) => format!("module_{id}_{method}"),
-        };
+        let method = self
+            .module_id
+            .map_or_else(|| method.to_string(), |id| format!("module_{id}_{method}"));
         peer.request(&method, params).await
     }
 }

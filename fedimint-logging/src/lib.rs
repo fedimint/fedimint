@@ -1,4 +1,4 @@
-#![warn(clippy::pedantic)]
+#![warn(clippy::pedantic, clippy::nursery)]
 #![allow(clippy::missing_errors_doc)]
 #![allow(clippy::missing_panics_doc)]
 
@@ -127,11 +127,10 @@ impl TracingSetup {
             self.extra_directives.as_deref().unwrap_or(""),
         ))?;
 
-        let fmt_writer = if let Some(file) = self.with_file.take() {
-            BoxMakeWriter::new(Tee::new(io::stderr, file))
-        } else {
-            BoxMakeWriter::new(io::stderr)
-        };
+        let fmt_writer = self.with_file.take().map_or_else(
+            || BoxMakeWriter::new(io::stderr),
+            |file| BoxMakeWriter::new(Tee::new(io::stderr, file)),
+        );
 
         let fmt_layer = tracing_subscriber::fmt::layer()
             .with_thread_names(false) // can be enabled for debugging

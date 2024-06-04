@@ -1,11 +1,13 @@
-#![warn(clippy::pedantic)]
+#![warn(clippy::pedantic, clippy::nursery)]
 #![allow(clippy::default_trait_access)]
 #![allow(clippy::doc_markdown)]
+#![allow(clippy::future_not_send)]
 #![allow(clippy::match_wild_err_arm)]
 #![allow(clippy::missing_errors_doc)]
 #![allow(clippy::missing_panics_doc)]
 #![allow(clippy::module_name_repetitions)]
 #![allow(clippy::return_self_not_must_use)]
+#![allow(clippy::use_self)]
 
 pub mod envs;
 
@@ -198,21 +200,18 @@ impl FedimintDBTool {
                 prefixes,
                 password,
             } => {
-                let modules = match modules {
-                    Some(mods) => mods
-                        .split(',')
+                let modules = modules.as_ref().map_or_else(Vec::new, |mods| {
+                    mods.split(',')
                         .map(|s| s.to_string().to_lowercase())
-                        .collect::<Vec<String>>(),
-                    None => Vec::new(),
-                };
+                        .collect::<Vec<String>>()
+                });
 
-                let prefix_names = match prefixes {
-                    Some(db_prefixes) => db_prefixes
+                let prefix_names = prefixes.as_ref().map_or_else(Vec::new, |db_prefixes| {
+                    db_prefixes
                         .split(',')
                         .map(|s| s.to_string().to_lowercase())
-                        .collect::<Vec<String>>(),
-                    None => Vec::new(),
-                };
+                        .collect::<Vec<String>>()
+                });
 
                 let (module_inits, client_module_inits) = if options.no_modules {
                     (

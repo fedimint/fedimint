@@ -1,10 +1,12 @@
-#![warn(clippy::pedantic)]
+#![warn(clippy::pedantic, clippy::nursery)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::cast_possible_wrap)]
 #![allow(clippy::default_trait_access)]
 #![allow(clippy::module_name_repetitions)]
 #![allow(clippy::must_use_candidate)]
+#![allow(clippy::redundant_pub_crate)]
 #![allow(clippy::similar_names)]
+#![allow(clippy::use_self)]
 
 pub mod db;
 mod metrics;

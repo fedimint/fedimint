@@ -1,10 +1,13 @@
-#![warn(clippy::pedantic)]
+#![warn(clippy::pedantic, clippy::nursery)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::default_trait_access)]
+#![allow(clippy::future_not_send)]
+#![allow(clippy::missing_const_for_fn)]
 #![allow(clippy::missing_errors_doc)]
 #![allow(clippy::missing_panics_doc)]
 #![allow(clippy::module_name_repetitions)]
 #![allow(clippy::must_use_candidate)]
+#![allow(clippy::use_self)]
 
 pub mod api;
 
@@ -165,7 +168,7 @@ impl ClientModuleInit for WalletClientInit {
         let rpc_config = self
             .0
             .clone()
-            .unwrap_or(WalletClientModule::get_rpc_config(args.cfg()));
+            .unwrap_or_else(|| WalletClientModule::get_rpc_config(args.cfg()));
 
         // FIXME: reactivate key derivation once we implement recovery
         let random_root_secret = {
