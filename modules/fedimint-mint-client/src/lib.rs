@@ -101,15 +101,17 @@ pub const LOG_TARGET: &str = "client::module::mint";
 /// * Has to contain at least one `Notes` item
 /// * Has to contain at least one `FederationIdPrefix` item
 #[derive(Clone, Debug, Encodable, PartialEq, Eq)]
-pub struct OOBNotes(Vec<OOBNotesData>);
+pub struct OOBNotes(Vec<OOBNotesPart>);
 
+/// For extendability [`OOBNotes`] consists of parts, where client can ignore
+/// ones they don't understand.
 #[derive(Clone, Debug, Decodable, Encodable, PartialEq, Eq)]
-enum OOBNotesData {
+enum OOBNotesPart {
     Notes(TieredMulti<SpendableNote>),
     FederationIdPrefix(FederationIdPrefix),
     /// Invite code to join the federation by which the e-cash was issued
     ///
-    /// Introduce in 0.3.0
+    /// Introduced in 0.3.0
     Invite {
         // This is a vec for future-proofness, in case we want to include multiple guardian APIs
         peer_apis: Vec<(PeerId, SafeUrl)>,
@@ -129,8 +131,8 @@ impl OOBNotes {
         notes: TieredMulti<SpendableNote>,
     ) -> Self {
         Self(vec![
-            OOBNotesData::FederationIdPrefix(federation_id_prefix),
-            OOBNotesData::Notes(notes),
+            OOBNotesPart::FederationIdPrefix(federation_id_prefix),
+            OOBNotesPart::Notes(notes),
         ])
     }
 
@@ -138,15 +140,15 @@ impl OOBNotes {
         let mut data = vec![
             // FIXME: once we can break compatibility with 0.2 we can remove the prefix in case an
             // invite is present
-            OOBNotesData::FederationIdPrefix(invite.federation_id().to_prefix()),
-            OOBNotesData::Notes(notes),
-            OOBNotesData::Invite {
+            OOBNotesPart::FederationIdPrefix(invite.federation_id().to_prefix()),
+            OOBNotesPart::Notes(notes),
+            OOBNotesPart::Invite {
                 peer_apis: vec![(invite.peer(), invite.url())],
                 federation_id: invite.federation_id(),
             },
         ];
         if let Some(api_secret) = invite.api_secret() {
-            data.push(OOBNotesData::ApiSecret(api_secret));
+            data.push(OOBNotesPart::ApiSecret(api_secret));
         }
         Self(data)
     }
@@ -155,8 +157,8 @@ impl OOBNotes {
         self.0
             .iter()
             .find_map(|data| match data {
-                OOBNotesData::FederationIdPrefix(prefix) => Some(*prefix),
-                OOBNotesData::Invite { federation_id, .. } => Some(federation_id.to_prefix()),
+                OOBNotesPart::FederationIdPrefix(prefix) => Some(*prefix),
+                OOBNotesPart::Invite { federation_id, .. } => Some(federation_id.to_prefix()),
                 _ => None,
             })
             .expect("Invariant violated: OOBNotes does not contain a FederationIdPrefix")
@@ -166,7 +168,7 @@ impl OOBNotes {
         self.0
             .iter()
             .find_map(|data| match data {
-                OOBNotesData::Notes(notes) => Some(notes),
+                OOBNotesPart::Notes(notes) => Some(notes),
                 _ => None,
             })
             .expect("Invariant violated: OOBNotes does not contain any notes")
@@ -176,17 +178,17 @@ impl OOBNotes {
         let mut notes_map = serde_json::Map::new();
         for notes in &self.0 {
             match notes {
-                OOBNotesData::Notes(notes) => {
+                OOBNotesPart::Notes(notes) => {
                     let notes_json = serde_json::to_value(notes)?;
                     notes_map.insert("notes".to_string(), notes_json);
                 }
-                OOBNotesData::FederationIdPrefix(prefix) => {
+                OOBNotesPart::FederationIdPrefix(prefix) => {
                     notes_map.insert(
                         "federation_id_prefix".to_string(),
                         serde_json::to_value(prefix.to_string())?,
                     );
                 }
-                OOBNotesData::Invite {
+                OOBNotesPart::Invite {
                     peer_apis,
                     federation_id,
                 } => {
@@ -204,8 +206,8 @@ impl OOBNotes {
                         ))?,
                     );
                 }
-                OOBNotesData::ApiSecret(_) => { /* already covered inside `Invite` */ }
-                OOBNotesData::Default { variant, bytes } => {
+                OOBNotesPart::ApiSecret(_) => { /* already covered inside `Invite` */ }
+                OOBNotesPart::Default { variant, bytes } => {
                     notes_map.insert(
                         format!("default_{variant}"),
                         serde_json::to_value(bytes.encode_hex::<String>())?,
@@ -218,7 +220,7 @@ impl OOBNotes {
 
     pub fn federation_invite(&self) -> Option<InviteCode> {
         self.0.iter().find_map(|data| {
-            let OOBNotesData::Invite {
+            let OOBNotesPart::Invite {
                 peer_apis,
                 federation_id,
             } = data
@@ -240,7 +242,7 @@ impl OOBNotes {
 
     fn api_secret(&self) -> Option<String> {
         self.0.iter().find_map(|data| {
-            let OOBNotesData::ApiSecret(api_secret) = data else {
+            let OOBNotesPart::ApiSecret(api_secret) = data else {
                 return None;
             };
             Some(api_secret.clone())
@@ -253,12 +255,12 @@ impl Decodable for OOBNotes {
         r: &mut R,
         _modules: &ModuleDecoderRegistry,
     ) -> Result<Self, DecodeError> {
-        let inner = Vec::<OOBNotesData>::consensus_decode(r, &ModuleDecoderRegistry::default())?;
+        let inner = Vec::<OOBNotesPart>::consensus_decode(r, &ModuleDecoderRegistry::default())?;
 
         // TODO: maybe write some macros for defining TLV structs?
         if !inner
             .iter()
-            .any(|data| matches!(data, OOBNotesData::Notes(_)))
+            .any(|data| matches!(data, OOBNotesPart::Notes(_)))
         {
             return Err(DecodeError::from_str(
                 "No e-cash notes were found in OOBNotes data",
@@ -266,12 +268,12 @@ impl Decodable for OOBNotes {
         }
 
         let maybe_federation_id_prefix = inner.iter().find_map(|data| match data {
-            OOBNotesData::FederationIdPrefix(prefix) => Some(*prefix),
+            OOBNotesPart::FederationIdPrefix(prefix) => Some(*prefix),
             _ => None,
         });
 
         let maybe_invite = inner.iter().find_map(|data| match data {
-            OOBNotesData::Invite {
+            OOBNotesPart::Invite {
                 federation_id,
                 peer_apis,
             } => Some((federation_id, peer_apis)),
@@ -2101,7 +2103,7 @@ mod tests {
 
     use crate::{
         represent_amount, select_notes_from_stream, MintOperationMetaVariant, OOBNotes,
-        OOBNotesData, SpendableNote, SpendableNoteUndecoded,
+        OOBNotesPart, SpendableNote, SpendableNoteUndecoded,
     };
 
     #[test]
@@ -2303,8 +2305,8 @@ mod tests {
         // Can decode notes without federation id prefix, so we can optionally remove it
         // in the future
         let notes_no_prefix = OOBNotes(vec![
-            OOBNotesData::Notes(notes.clone()),
-            OOBNotesData::Invite {
+            OOBNotesPart::Notes(notes.clone()),
+            OOBNotesPart::Invite {
                 peer_apis: vec![(PeerId::from(0), "wss://foo.bar".parse().unwrap())],
                 federation_id: federation_id_1,
             },
@@ -2316,12 +2318,12 @@ mod tests {
 
         // Rejects notes with inconsistent federation id
         let notes_inconsistent = OOBNotes(vec![
-            OOBNotesData::Notes(notes),
-            OOBNotesData::Invite {
+            OOBNotesPart::Notes(notes),
+            OOBNotesPart::Invite {
                 peer_apis: vec![(PeerId::from(0), "wss://foo.bar".parse().unwrap())],
                 federation_id: federation_id_1,
             },
-            OOBNotesData::FederationIdPrefix(federation_id_prefix_2),
+            OOBNotesPart::FederationIdPrefix(federation_id_prefix_2),
         ]);
         let notes_inconsistent_str = notes_inconsistent.to_string();
         assert!(notes_inconsistent_str.parse::<OOBNotes>().is_err());
