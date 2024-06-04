@@ -87,7 +87,7 @@ use std::pin::Pin;
 use std::sync::{Arc, Weak};
 use std::time::Duration;
 
-use anyhow::{anyhow, bail, ensure, Context};
+use anyhow::{anyhow, bail, Context};
 use async_stream::stream;
 use backup::ClientBackup;
 use db::{
@@ -1129,10 +1129,29 @@ impl Client {
             .finalize_transaction(&mut dbtx.to_ref_nc(), operation_id, tx_builder)
             .await?;
 
-        ensure!(
-            transaction.consensus_encode_to_vec().len() <= Transaction::MAX_TX_SIZE,
-            "The generated transaction would be rejected by the federation for being too large."
-        );
+        if transaction.consensus_encode_to_vec().len() > Transaction::MAX_TX_SIZE {
+            let inputs = transaction
+                .inputs
+                .iter()
+                .map(DynInput::module_instance_id)
+                .collect::<Vec<_>>();
+            let outputs = transaction
+                .outputs
+                .iter()
+                .map(DynOutput::module_instance_id)
+                .collect::<Vec<_>>();
+            warn!(
+                target: LOG_CLIENT_NET_API,
+                size=%transaction.consensus_encode_to_vec().len(),
+                ?inputs,
+                ?outputs,
+                "Transaction too large",
+            );
+            debug!(target: LOG_CLIENT_NET_API, ?transaction, "transaction details");
+            bail!(
+                "The generated transaction would be rejected by the federation for being too large."
+            );
+        }
 
         let txid = transaction.tx_hash();
 
