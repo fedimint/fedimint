@@ -39,6 +39,7 @@ async fn config_test(gw_type: LightningNodeType) -> anyhow::Result<()> {
             let gw = match gw_type {
                 LightningNodeType::Lnd => dev_fed.gw_lnd_registered().await?,
                 LightningNodeType::Cln => dev_fed.gw_cln_registered().await?,
+                LightningNodeType::Ldk => dev_fed.gw_ldk_registered().await?,
             };
 
             let fedimint_cli_version = crate::util::FedimintCli::version_or_default().await;
