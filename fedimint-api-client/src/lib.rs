@@ -8,7 +8,7 @@
 use std::time::Duration;
 
 use anyhow::{bail, Context as _};
-use api::{DynGlobalApi, FederationApiExt as _, WsFederationApi};
+use api::{CallError, CallResultExt, DynGlobalApi, FederationApiExt as _, WsFederationApi};
 use fedimint_core::config::ClientConfig;
 use fedimint_core::encoding::Encodable as _;
 use fedimint_core::endpoint_constants::CLIENT_CONFIG_ENDPOINT;
@@ -47,7 +47,8 @@ pub async fn try_download_client_config(invite_code: &InviteCode) -> anyhow::Res
     let federation_id = invite_code.federation_id();
 
     let query_strategy = FilterMap::new(
-        move |cfg: ClientConfig| {
+        move |cfg: Result<ClientConfig, CallError>| {
+            let cfg = cfg?;
             if federation_id.0 != cfg.global.api_endpoints.consensus_hash() {
                 bail!("Guardian api endpoint map does not hash to FederationId")
             }
@@ -76,7 +77,8 @@ pub async fn try_download_client_config(invite_code: &InviteCode) -> anyhow::Res
             CLIENT_CONFIG_ENDPOINT.to_owned(),
             ApiRequestErased::default(),
         )
-        .await?;
+        .await
+        .flatten()?;
 
     if client_config.calculate_federation_id() != federation_id {
         bail!("Obtained client config has different federation id");

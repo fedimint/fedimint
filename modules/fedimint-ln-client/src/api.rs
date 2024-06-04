@@ -3,7 +3,7 @@ use std::time::Duration;
 
 use bitcoin::hashes::sha256::{self, Hash as Sha256Hash};
 use fedimint_api_client::api::{
-    FederationApiExt, FederationError, FederationResult, IModuleFederationApi,
+    CallResultExt as _, FederationApiExt, FederationError, FederationResult, IModuleFederationApi,
 };
 use fedimint_api_client::query::FilterMapThreshold;
 use fedimint_core::module::ApiRequestErased;
@@ -104,6 +104,7 @@ where
             ApiRequestErased::default(),
         )
         .await
+        .flatten()
     }
 
     async fn fetch_contract(
@@ -115,6 +116,7 @@ where
             ApiRequestErased::new(contract),
         )
         .await
+        .flatten()
     }
 
     async fn wait_contract(&self, contract: ContractId) -> FederationResult<ContractAccount> {
@@ -123,6 +125,7 @@ where
             ApiRequestErased::new(contract),
         )
         .await
+        .flatten()
     }
 
     async fn wait_block_height(&self, block_height: u64) -> FederationResult<()> {
@@ -131,6 +134,7 @@ where
             ApiRequestErased::new(block_height),
         )
         .await
+        .flatten()
     }
 
     async fn wait_outgoing_contract_cancelled(
@@ -142,6 +146,7 @@ where
             ApiRequestErased::new(contract),
         )
         .await
+        .flatten()
     }
 
     async fn get_decrypted_preimage_status(
@@ -153,6 +158,7 @@ where
             ApiRequestErased::new(contract),
         )
         .await
+        .flatten()
     }
 
     async fn wait_preimage_decrypted(
@@ -164,6 +170,7 @@ where
             ApiRequestErased::new(contract),
         )
         .await
+        .flatten()
     }
 
     async fn fetch_offer(
@@ -175,6 +182,7 @@ where
             ApiRequestErased::new(payment_hash),
         )
         .await
+        .flatten()
     }
 
     /// There is no consensus within Fedimint on the gateways, each guardian
@@ -184,7 +192,7 @@ where
         let gateway_announcements = self
             .request_with_strategy(
                 FilterMapThreshold::new(
-                    |_, gateways| Ok(gateways),
+                    |_, gateways| Ok(gateways?),
                     NumPeers::from(self.all_peers().total()),
                 ),
                 LIST_GATEWAYS_ENDPOINT.to_string(),
@@ -206,6 +214,7 @@ where
             ApiRequestErased::new(gateway),
         )
         .await
+        .flatten()
     }
 
     async fn get_remove_gateway_challenge(
@@ -219,11 +228,12 @@ where
                 // Only wait a second since removing a gateway is "best effort"
                 .request_single_peer_federation::<Option<sha256::Hash>>(
                     Some(Duration::from_secs(1)),
-                    REMOVE_GATEWAY_CHALLENGE_ENDPOINT.to_string(),
-                    ApiRequestErased::new(gateway_id),
+                    REMOVE_GATEWAY_CHALLENGE_ENDPOINT,
+                    &ApiRequestErased::new(gateway_id),
                     *peer,
                 )
                 .await
+                .flatten()
             {
                 responses.insert(*peer, response);
             }
@@ -240,11 +250,12 @@ where
                 .request_single_peer_federation::<bool>(
                     // Only wait a second since removing a gateway is "best effort"
                     Some(Duration::from_secs(1)),
-                    REMOVE_GATEWAY_ENDPOINT.to_string(),
-                    ApiRequestErased::new(remove_gateway_request.clone()),
+                    REMOVE_GATEWAY_ENDPOINT,
+                    &ApiRequestErased::new(remove_gateway_request.clone()),
                     *peer,
                 )
                 .await
+                .flatten()
             {
                 if response {
                     info!("Successfully removed {gateway_id} gateway from peer: {peer}",);
@@ -261,7 +272,8 @@ where
                 OFFER_ENDPOINT.to_string(),
                 ApiRequestErased::new(payment_hash),
             )
-            .await?
+            .await
+            .flatten()?
             .is_some())
     }
 
@@ -275,11 +287,9 @@ where
                 amount: account.amount,
                 contract: c.contract,
             }),
-            FundedContract::Outgoing(_) => Err(FederationError::general(
-                AWAIT_ACCOUNT_ENDPOINT,
-                id,
-                anyhow::anyhow!("WrongAccountType"),
-            )),
+            FundedContract::Outgoing(_) => Err(FederationError::general(anyhow::anyhow!(
+                "WrongAccountType"
+            ))),
         }
     }
 
@@ -293,11 +303,9 @@ where
                 amount: account.amount,
                 contract: c,
             }),
-            FundedContract::Incoming(_) => Err(FederationError::general(
-                AWAIT_ACCOUNT_ENDPOINT,
-                id,
-                anyhow::anyhow!("WrongAccountType"),
-            )),
+            FundedContract::Incoming(_) => Err(FederationError::general(anyhow::anyhow!(
+                "WrongAccountType"
+            ))),
         }
     }
 }

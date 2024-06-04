@@ -1,5 +1,7 @@
 use bitcoin::Address;
-use fedimint_api_client::api::{FederationApiExt, FederationResult, IModuleFederationApi};
+use fedimint_api_client::api::{
+    CallResultExt as _, FederationApiExt, FederationResult, IModuleFederationApi,
+};
 use fedimint_core::module::ApiRequestErased;
 use fedimint_core::task::{MaybeSend, MaybeSync};
 use fedimint_core::{apply, async_trait_maybe_send};
@@ -27,6 +29,7 @@ where
             ApiRequestErased::default(),
         )
         .await
+        .flatten()
     }
 
     async fn fetch_peg_out_fees(
@@ -39,5 +42,6 @@ where
             ApiRequestErased::new((address, amount.to_sat())),
         )
         .await
+        .flatten()
     }
 }

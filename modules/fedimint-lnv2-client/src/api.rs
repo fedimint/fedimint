@@ -1,7 +1,9 @@
 use std::collections::BTreeMap;
 use std::time::Duration;
 
-use fedimint_api_client::api::{FederationApiExt, FederationResult, IModuleFederationApi};
+use fedimint_api_client::api::{
+    CallResultExt as _, FederationApiExt, FederationResult, IModuleFederationApi,
+};
 use fedimint_api_client::query::FilterMapThreshold;
 use fedimint_core::module::ApiRequestErased;
 use fedimint_core::task::{sleep, MaybeSend, MaybeSync};
@@ -43,6 +45,7 @@ where
             ApiRequestErased::new(()),
         )
         .await
+        .flatten()
     }
 
     async fn await_incoming_contract(&self, contract_id: &ContractId, expiration: u64) -> bool {
@@ -53,6 +56,7 @@ where
                     ApiRequestErased::new((contract_id, expiration)),
                 )
                 .await
+                .flatten()
             {
                 Ok(response) => return response.is_some(),
                 Err(error) => error.report_if_important(),
@@ -70,6 +74,7 @@ where
                     ApiRequestErased::new((contract_id, expiration)),
                 )
                 .await
+                .flatten()
             {
                 Ok(expiration) => return expiration,
                 Err(error) => error.report_if_important(),
@@ -88,13 +93,14 @@ where
             ApiRequestErased::new(contract_id),
         )
         .await
+        .flatten()
     }
 
     async fn fetch_gateways(&self) -> FederationResult<Vec<SafeUrl>> {
         let gateways: BTreeMap<PeerId, Vec<SafeUrl>> = self
             .request_with_strategy(
                 FilterMapThreshold::new(
-                    |_, gateways| Ok(gateways),
+                    |_, gateways| Ok(gateways?),
                     NumPeers::from(self.all_peers().total()),
                 ),
                 GATEWAYS_ENDPOINT.to_string(),

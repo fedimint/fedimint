@@ -61,7 +61,6 @@ use fedimint_core::core::{
 use fedimint_core::db::{
     apply_migrations_server, Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped,
 };
-use fedimint_core::endpoint_constants::REGISTER_GATEWAY_ENDPOINT;
 use fedimint_core::fmt_utils::OptStacktrace;
 use fedimint_core::invite_code::InviteCode;
 use fedimint_core::module::CommonModuleInit;
@@ -1353,8 +1352,6 @@ impl Gateway {
                     .await
                     {
                         Err(GatewayError::FederationError(FederationError::general(
-                            REGISTER_GATEWAY_ENDPOINT,
-                            serde_json::Value::Null,
                             anyhow::anyhow!("Error registering federation {federation_id}: {e:?}"),
                         )))?;
                     }
