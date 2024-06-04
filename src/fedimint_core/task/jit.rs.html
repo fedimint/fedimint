@@ -203,7 +203,6 @@
 <a href="#203" id="203">203</a>
 <a href="#204" id="204">204</a>
 <a href="#205" id="205">205</a>
-<a href="#206" id="206">206</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::convert::Infallible;
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::{fmt, panic};
@@ -232,8 +231,7 @@
 
 <span class="kw">impl</span>&lt;E&gt; std::error::Error <span class="kw">for </span>OneTimeError&lt;E&gt;
 <span class="kw">where
-    </span>E: fmt::Debug,
-    E: fmt::Display,
+    </span>E: fmt::Debug + fmt::Display,
 {
     <span class="kw">fn </span>source(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>(<span class="kw">dyn </span>std::error::Error + <span class="lifetime">'static</span>)&gt; {
         <span class="prelude-val">None

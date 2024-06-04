@@ -3091,8 +3091,6 @@
 <a href="#3091" id="3091">3091</a>
 <a href="#3092" id="3092">3092</a>
 <a href="#3093" id="3093">3093</a>
-<a href="#3094" id="3094">3094</a>
-<a href="#3095" id="3095">3095</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! Core Fedimint database traits and types
 //!
 //! # Isolation of database transactions
@@ -4302,9 +4300,8 @@
 }
 
 <span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
-</span><span class="kw">impl</span>&lt;Tx: IRawDatabaseTransaction&gt; IDatabaseTransaction <span class="kw">for </span>BaseDatabaseTransaction&lt;Tx&gt;
-<span class="kw">where
-    </span>Tx: fmt::Debug,
+</span><span class="kw">impl</span>&lt;Tx: IRawDatabaseTransaction + fmt::Debug&gt; IDatabaseTransaction
+    <span class="kw">for </span>BaseDatabaseTransaction&lt;Tx&gt;
 {
     <span class="kw">async fn </span>commit_tx(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
         <span class="self">self</span>.raw
@@ -5150,11 +5147,10 @@
 /// return 0xff for the global namespace.
 </span><span class="kw">fn </span>module_instance_id_or_global(module_instance_id: <span class="prelude-ty">Option</span>&lt;ModuleInstanceId&gt;) -&gt; ModuleInstanceId {
     <span class="comment">// Use 0xff for fedimint-server and the `module_instance_id` for each module
-    </span><span class="kw">if let </span><span class="prelude-val">Some</span>(module_instance_id) = module_instance_id {
-        module_instance_id
-    } <span class="kw">else </span>{
-        MODULE_GLOBAL_PREFIX.into()
-    }
+    </span>module_instance_id.map_or_else(
+        || MODULE_GLOBAL_PREFIX.into(),
+        |module_instance_id| module_instance_id,
+    )
 }
 
 <span class="attr">#[allow(unused_imports)]
@@ -5456,7 +5452,7 @@
             .find_by_prefix(<span class="kw-2">&amp;</span>DbPrefixTestPrefix)
             .<span class="kw">await
             </span>.fold(<span class="number">0</span>, |returned_keys, (key, value)| <span class="kw">async move </span>{
-                <span class="kw">if let </span>TestKey(<span class="number">100</span>) = key {
+                <span class="kw">if </span>key == TestKey(<span class="number">100</span>) {
                     <span class="macro">assert!</span>(value.eq(<span class="kw-2">&amp;</span>TestVal(<span class="number">101</span>)));
                 }
                 returned_keys + <span class="number">1
@@ -5654,7 +5650,7 @@
             .find_by_prefix(<span class="kw-2">&amp;</span>PercentPrefixTestPrefix)
             .<span class="kw">await
             </span>.fold(<span class="number">0</span>, |returned_keys, (key, value)| <span class="kw">async move </span>{
-                <span class="kw">if let </span>PercentTestKey(<span class="number">101</span>) = key {
+                <span class="kw">if </span><span class="macro">matches!</span>(key, PercentTestKey(<span class="number">101</span>)) {
                     <span class="macro">assert!</span>(value.eq(<span class="kw-2">&amp;</span>TestVal(<span class="number">100</span>)));
                 }
                 returned_keys + <span class="number">1

@@ -288,7 +288,7 @@
         <span class="kw">let </span>denominations = Tiered::gen_denominations(<span class="number">2</span>, max_amount);
 
         <span class="comment">// should produce [1, 2, 4, 8, 16]
-        </span><span class="macro">assert_eq!</span>(denominations.tiers().collect::&lt;Vec&lt;<span class="kw-2">&amp;</span>Amount&gt;&gt;().len(), <span class="number">5</span>);
+        </span><span class="macro">assert_eq!</span>(denominations.tiers().count(), <span class="number">5</span>);
     }
 
     <span class="attr">#[test]
@@ -297,7 +297,7 @@
         <span class="kw">let </span>denominations = Tiered::gen_denominations(<span class="number">10</span>, max_amount);
 
         <span class="comment">// should produce [1, 10, 100, 1000, 10_000]
-        </span><span class="macro">assert_eq!</span>(denominations.tiers().collect::&lt;Vec&lt;<span class="kw-2">&amp;</span>Amount&gt;&gt;().len(), <span class="number">5</span>);
+        </span><span class="macro">assert_eq!</span>(denominations.tiers().count(), <span class="number">5</span>);
     }
 }
 </code></pre></div></section></main></body></html>

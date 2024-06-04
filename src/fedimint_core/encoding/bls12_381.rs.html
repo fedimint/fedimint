@@ -75,7 +75,7 @@
         <span class="kw">let </span>byte_array = &lt;[u8; <span class="number">32</span>]&gt;::consensus_decode(d, modules)<span class="question-mark">?</span>;
 
         Option::from(Scalar::from_bytes(<span class="kw-2">&amp;</span>byte_array))
-            .ok_or(DecodeError::from_str(<span class="string">"Error decoding Scalar"</span>))
+            .ok_or_else(|| DecodeError::from_str(<span class="string">"Error decoding Scalar"</span>))
     }
 }
 
@@ -93,7 +93,7 @@
         <span class="kw">let </span>byte_array = &lt;[u8; <span class="number">48</span>]&gt;::consensus_decode(d, modules)<span class="question-mark">?</span>;
 
         Option::from(G1Affine::from_compressed(<span class="kw-2">&amp;</span>byte_array))
-            .ok_or(DecodeError::from_str(<span class="string">"Error decoding G1Affine"</span>))
+            .ok_or_else(|| DecodeError::from_str(<span class="string">"Error decoding G1Affine"</span>))
     }
 }
 
@@ -111,7 +111,7 @@
         <span class="kw">let </span>byte_array = &lt;[u8; <span class="number">96</span>]&gt;::consensus_decode(d, modules)<span class="question-mark">?</span>;
 
         Option::from(G2Affine::from_compressed(<span class="kw-2">&amp;</span>byte_array))
-            .ok_or(DecodeError::from_str(<span class="string">"Error decoding G2Affine"</span>))
+            .ok_or_else(|| DecodeError::from_str(<span class="string">"Error decoding G2Affine"</span>))
     }
 }
 </code></pre></div></section></main></body></html>

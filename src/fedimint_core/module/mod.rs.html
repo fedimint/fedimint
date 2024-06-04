@@ -1058,7 +1058,7 @@
     PeerId,
 };
 
-<span class="attr">#[derive(Debug, PartialEq)]
+<span class="attr">#[derive(Debug, PartialEq, Eq)]
 </span><span class="kw">pub struct </span>InputMeta {
     <span class="kw">pub </span>amount: TransactionItemAmount,
     <span class="kw">pub </span>pub_key: secp256k1_zkp::PublicKey,

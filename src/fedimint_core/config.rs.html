@@ -1074,8 +1074,6 @@
 <a href="#1074" id="1074">1074</a>
 <a href="#1075" id="1075">1075</a>
 <a href="#1076" id="1076">1076</a>
-<a href="#1077" id="1077">1077</a>
-<a href="#1078" id="1078">1078</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet};
 <span class="kw">use </span>std::fmt::{Debug, Display};
 <span class="kw">use </span>std::hash::Hash;
@@ -1460,20 +1458,18 @@
     }
 
     <span class="kw">pub fn </span>get_module&lt;T: Decodable + <span class="lifetime">'static</span>&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, id: ModuleInstanceId) -&gt; anyhow::Result&lt;<span class="kw-2">&amp;</span>T&gt; {
-        <span class="kw">if let </span><span class="prelude-val">Some</span>(client_cfg) = <span class="self">self</span>.modules.get(<span class="kw-2">&amp;</span>id) {
-            client_cfg.cast()
-        } <span class="kw">else </span>{
-            <span class="prelude-val">Err</span>(<span class="macro">format_err!</span>(<span class="string">"Client config for module id {id} not found"</span>))
-        }
+        <span class="self">self</span>.modules.get(<span class="kw-2">&amp;</span>id).map_or_else(
+            || <span class="prelude-val">Err</span>(<span class="macro">format_err!</span>(<span class="string">"Client config for module id {id} not found"</span>)),
+            |client_cfg| client_cfg.cast(),
+        )
     }
 
     <span class="comment">// TODO: rename this and one above
     </span><span class="kw">pub fn </span>get_module_cfg(<span class="kw-2">&amp;</span><span class="self">self</span>, id: ModuleInstanceId) -&gt; anyhow::Result&lt;ClientModuleConfig&gt; {
-        <span class="kw">if let </span><span class="prelude-val">Some</span>(client_cfg) = <span class="self">self</span>.modules.get(<span class="kw-2">&amp;</span>id) {
-            <span class="prelude-val">Ok</span>(client_cfg.clone())
-        } <span class="kw">else </span>{
-            <span class="prelude-val">Err</span>(<span class="macro">format_err!</span>(<span class="string">"Client config for module id {id} not found"</span>))
-        }
+        <span class="self">self</span>.modules.get(<span class="kw-2">&amp;</span>id).map_or_else(
+            || <span class="prelude-val">Err</span>(<span class="macro">format_err!</span>(<span class="string">"Client config for module id {id} not found"</span>)),
+            |client_cfg| <span class="prelude-val">Ok</span>(client_cfg.clone()),
+        )
     }
 
     <span class="doccomment">/// (soft-deprecated): Get the first instance of a module of a given kind in
@@ -1897,7 +1893,7 @@
                 serde_json::to_value(local).expect(<span class="string">"serialization can't fail"</span>),
             ),
             private: JsonWithKind::new(
-                kind.clone(),
+                kind,
                 serde_json::to_value(private).expect(<span class="string">"serialization can't fail"</span>),
             ),
             consensus: ServerModuleConsensusConfig {

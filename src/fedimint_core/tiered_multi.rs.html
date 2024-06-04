@@ -485,10 +485,10 @@
     <span class="doccomment">/// Verifies that all keys in `self` are present in the keys of the given
     /// parameter `Tiered`
     </span><span class="kw">pub fn </span>all_tiers_exist_in&lt;K&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, keys: <span class="kw-2">&amp;</span>Tiered&lt;K&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;(), InvalidAmountTierError&gt; {
-        <span class="kw">match </span><span class="self">self</span>.<span class="number">0</span>.keys().find(|<span class="kw-2">&amp;</span>amt| keys.get(<span class="kw-2">*</span>amt).is_none()) {
-            <span class="prelude-val">Some</span>(amt) =&gt; <span class="prelude-val">Err</span>(InvalidAmountTierError(<span class="kw-2">*</span>amt)),
-            <span class="prelude-val">None </span>=&gt; <span class="prelude-val">Ok</span>(()),
-        }
+        <span class="self">self</span>.<span class="number">0
+            </span>.keys()
+            .find(|<span class="kw-2">&amp;</span>amt| keys.get(<span class="kw-2">*</span>amt).is_none())
+            .map_or(<span class="prelude-val">Ok</span>(()), |amt| <span class="prelude-val">Err</span>(InvalidAmountTierError(<span class="kw-2">*</span>amt)))
     }
 
     <span class="doccomment">/// Returns an `Option` with a reference to the vector of the given `Amount`
@@ -626,7 +626,7 @@
     }
 }
 
-<span class="attr">#[derive(Debug, PartialEq, Default, Serialize, Deserialize, Clone)]
+<span class="attr">#[derive(Debug, PartialEq, Eq, Default, Serialize, Deserialize, Clone)]
 </span><span class="kw">pub struct </span>TieredCounts(Tiered&lt;usize&gt;);
 
 <span class="kw">impl </span>TieredCounts {

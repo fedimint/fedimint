@@ -861,7 +861,7 @@
 ///
 /// This allows parsing and handling of dyn-types of modules which
 /// are not available.
-</span><span class="attr">#[derive(Debug, Hash, PartialEq, Clone)]
+</span><span class="attr">#[derive(Debug, Hash, PartialEq, Eq, Clone)]
 </span><span class="kw">pub struct </span>DynUnknown(<span class="kw">pub </span>Vec&lt;u8&gt;);
 
 <span class="kw">impl </span>fmt::Display <span class="kw">for </span>DynUnknown {
