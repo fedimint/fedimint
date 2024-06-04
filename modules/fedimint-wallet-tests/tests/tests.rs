@@ -806,7 +806,7 @@ mod fedimint_migration_tests {
     #[tokio::test(flavor = "multi_thread")]
     async fn snapshot_server_db_migrations() -> anyhow::Result<()> {
         snapshot_db_migrations::<_, WalletCommonInit>("wallet-server-v0", |db| {
-            Box::pin(async move {
+            Box::pin(async {
                 create_server_db_with_v0_data(db).await;
             })
         })
@@ -948,7 +948,7 @@ mod fedimint_migration_tests {
     async fn snapshot_client_db_migrations() -> anyhow::Result<()> {
         snapshot_db_migrations_client::<_, _, WalletCommonInit>(
             "wallet-client-v0",
-            |db| Box::pin(async move { create_client_db_with_v0_data(db).await }),
+            |db| Box::pin(async { create_client_db_with_v0_data(db).await }),
             || (Vec::new(), Vec::new()),
         )
         .await

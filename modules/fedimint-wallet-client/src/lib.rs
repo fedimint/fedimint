@@ -398,7 +398,7 @@ impl WalletClientModule {
             .module_autocommit(
                 |dbtx, _| {
                     let extra_meta_inner = extra_meta.clone();
-                    Box::pin(async move {
+                    Box::pin(async {
                         let (operation_id, sm, address) = self
                             .get_deposit_address_inner(valid_until, &mut dbtx.module_dbtx())
                             .await;
@@ -469,7 +469,7 @@ impl WalletClientModule {
 
         let client_ctx = self.client_ctx.clone();
         Ok(
-            operation_log_entry.outcome_or_updates(&self.client_ctx.global_db(), operation_id, move || {
+            operation_log_entry.outcome_or_updates(&self.client_ctx.global_db(), operation_id, || {
                 stream! {
 
                     match next_deposit_state(&mut operation_stream).await {
@@ -548,7 +548,7 @@ impl WalletClientModule {
                 .finalize_and_submit_transaction(
                     operation_id,
                     WalletCommonInit::KIND.as_str(),
-                    move |_, change| WalletOperationMeta {
+                    |_, change| WalletOperationMeta {
                         variant: WalletOperationMetaVariant::Withdraw {
                             address: address.clone(),
                             amount,
@@ -585,7 +585,7 @@ impl WalletClientModule {
             .finalize_and_submit_transaction(
                 operation_id,
                 WalletCommonInit::KIND.as_str(),
-                move |_, change| WalletOperationMeta {
+                |_, change| WalletOperationMeta {
                     variant: WalletOperationMetaVariant::RbfWithdraw {
                         rbf: rbf.clone(),
                         change,
@@ -625,7 +625,7 @@ impl WalletClientModule {
         let client_ctx = self.client_ctx.clone();
 
         Ok(
-            operation.outcome_or_updates(&self.client_ctx.global_db(), operation_id, move || {
+            operation.outcome_or_updates(&self.client_ctx.global_db(), operation_id, || {
                 stream! {
                     match next_withdraw_state(&mut operation_stream).await {
                         Some(WithdrawStates::Created(_)) => {

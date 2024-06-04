@@ -45,7 +45,7 @@ pub async fn run_webserver(gateway: Gateway, task_group: &mut TaskGroup) -> anyh
     let shutdown_rx = handle.make_shutdown_rx();
     let listener = TcpListener::bind(&gateway.listen).await?;
     let serve = axum::serve(listener, api_v1.into_make_service());
-    task_group.spawn("Gateway Webserver", move |_| async move {
+    task_group.spawn("Gateway Webserver", |_| async {
         let graceful = serve.with_graceful_shutdown(async {
             shutdown_rx.await;
         });

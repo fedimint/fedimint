@@ -216,7 +216,7 @@ impl TaskGroup {
         };
         let handle = self.make_handle();
 
-        let handle = runtime::spawn_local(name.as_str(), async move {
+        let handle = runtime::spawn_local(name.as_str(), async {
             f(handle).await;
         });
         self.inner
@@ -237,7 +237,7 @@ impl TaskGroup {
     where
         R: MaybeSend + 'static,
     {
-        self.spawn(name, move |handle| async move {
+        self.spawn(name, |handle| async move {
             let value = handle.cancel_on_shutdown(future).await;
             if value.is_err() {
                 // name will part of span
@@ -289,14 +289,14 @@ impl TaskGroup {
                 if let Some(timeout) = timeout {
                     Box::pin(runtime::timeout(timeout, join))
                 } else {
-                    Box::pin(async move { Ok(join.await) })
+                    Box::pin(async { Ok(join.await) })
                 };
 
             #[cfg(target_family = "wasm")]
             let join_future: Pin<Box<dyn Future<Output = _>>> = if let Some(timeout) = timeout {
                 Box::pin(runtime::timeout(timeout, join))
             } else {
-                Box::pin(async move { Ok(join.await) })
+                Box::pin(async { Ok(join.await) })
             };
 
             match join_future.await {

@@ -299,7 +299,7 @@ async fn main() -> anyhow::Result<()> {
     let (event_sender, event_receiver) = tokio::sync::mpsc::unbounded_channel();
     let summary_handle = spawn("handle metrics summary", {
         let opts = opts.clone();
-        async move { handle_metrics_summary(opts, event_receiver).await }
+        async { handle_metrics_summary(opts, event_receiver).await }
     });
     let futures = match opts.command.clone() {
         Command::TestConnect {

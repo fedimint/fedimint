@@ -195,8 +195,8 @@ impl GatewayTest {
 
 impl Drop for GatewayTest {
     fn drop(&mut self) {
-        block_in_place(move || {
-            block_on(async move {
+        block_in_place(|| {
+            block_on(async {
                 if let Err(e) = self.task_group.clone().shutdown_join_all(None).await {
                     warn!("Got error shutting down GatewayTest: {e:?}");
                 }

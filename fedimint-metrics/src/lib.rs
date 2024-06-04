@@ -58,7 +58,7 @@ pub async fn run_api_server(
 
     let handle = task_group.make_handle();
     let shutdown_rx = handle.make_shutdown_rx();
-    task_group.spawn("Metrics Api", move |_| async move {
+    task_group.spawn("Metrics Api", |_| async {
         let graceful = serve.with_graceful_shutdown(async {
             shutdown_rx.await;
         });

@@ -192,7 +192,7 @@ impl GatewayPayInvoice {
                 context.clone(),
                 common.clone(),
             ),
-            move |_dbtx, result, _old_state| Box::pin(futures::future::ready(result)),
+            |_dbtx, result, _old_state| Box::pin(futures::future::ready(result)),
         )]
     }
 
@@ -734,7 +734,7 @@ impl GatewayPayWaitForSwapPreimage {
             move |_dbtx, result, _old_state| {
                 let common = common.clone();
                 let contract = contract.clone();
-                Box::pin(async move {
+                Box::pin(async {
                     Self::transition_claim_outgoing_contract(common, result, contract)
                 })
             },

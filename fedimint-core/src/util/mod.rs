@@ -297,7 +297,7 @@ impl<T> Spanned<T> {
         make: F,
     ) -> Result<Self, E> {
         let span2 = span.clone();
-        async move {
+        async {
             Ok(Self {
                 value: make.await?,
                 span: span2,

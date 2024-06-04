@@ -62,7 +62,7 @@ impl Drop for Federation {
                 let mut set = JoinSet::new();
 
                 while let Some((_id, fedimintd)) = self.members.pop_first() {
-                    set.spawn(async move { drop(fedimintd) });
+                    set.spawn(async { drop(fedimintd) });
                 }
                 while (set.join_next().await).is_some() {}
             });

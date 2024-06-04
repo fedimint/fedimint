@@ -519,7 +519,7 @@ impl ExecutorInner {
 
                     let transitions_num = transitions.len();
                     currently_running_sms.insert(state.clone());
-                    futures.push(Box::pin(async move {
+                    futures.push(Box::pin(async {
                         let (first_completed_result, _index, _unused_transitions) =
                             select_all(transitions).await;
                         ExecutorLoopEvent::Triggered(first_completed_result)
@@ -1223,7 +1223,7 @@ mod tests {
                                     }
                                 }
                             },
-                            |_dbtx, (), _state| Box::pin(async move { MockStateMachine::Final }),
+                            |_dbtx, (), _state| Box::pin(async { MockStateMachine::Final }),
                         ),
                         StateTransition::new(
                             async move {
@@ -1254,7 +1254,7 @@ mod tests {
                                 }
                             }
                         },
-                        |_dbtx, (), _state| Box::pin(async move { MockStateMachine::Final }),
+                        |_dbtx, (), _state| Box::pin(async { MockStateMachine::Final }),
                     )]
                 }
                 MockStateMachine::Final => {

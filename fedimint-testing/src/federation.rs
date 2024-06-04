@@ -211,7 +211,7 @@ impl FederationTestBuilder {
             let module_init_registry = self.server_init.clone();
             let subgroup = task_group.make_subgroup();
 
-            task_group.spawn("fedimintd", move |_| async move {
+            task_group.spawn("fedimintd", |_| async move {
                 consensus::run(
                     config.clone(),
                     db.clone(),

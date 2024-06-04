@@ -182,7 +182,7 @@ impl ServerModuleInit for DummyInit {
     /// DB migrations to move from old to newer versions
     fn get_database_migrations(&self) -> BTreeMap<DatabaseVersion, ServerMigrationFn> {
         let mut migrations: BTreeMap<DatabaseVersion, ServerMigrationFn> = BTreeMap::new();
-        migrations.insert(DatabaseVersion(0), move |dbtx| migrate_to_v1(dbtx).boxed());
+        migrations.insert(DatabaseVersion(0), |dbtx| migrate_to_v1(dbtx).boxed());
         migrations
     }
 }

@@ -677,8 +677,8 @@ impl ClientModule for MintClientModule {
     async fn backup(&self) -> anyhow::Result<EcashBackup> {
         self.client_ctx
             .module_autocommit(
-                move |dbtx_ctx, _| {
-                    Box::pin(async move { self.prepare_plaintext_ecash_backup(dbtx_ctx).await })
+                |dbtx_ctx, _| {
+                    Box::pin(async { self.prepare_plaintext_ecash_backup(dbtx_ctx).await })
                 },
                 None,
             )
@@ -951,7 +951,7 @@ impl MintClientModule {
             .notifier
             .subscribe(operation_id)
             .await
-            .filter_map(|state| async move {
+            .filter_map(|state| async {
                 let MintClientStateMachines::Output(state) = state else {
                     return None;
                 };
@@ -1145,7 +1145,7 @@ impl MintClientModule {
             self.notifier
                 .subscribe(operation_id)
                 .await
-                .filter_map(|state| async move {
+                .filter_map(|state| async {
                     let MintClientStateMachines::OOB(state) = state else {
                         return None;
                     };
@@ -1298,7 +1298,7 @@ impl MintClientModule {
 
         let extra_meta = serde_json::to_value(extra_meta)
             .expect("MintClientModule::reissue_external_notes extra_meta is serializable");
-        let operation_meta_gen = move |txid, out_points: Vec<OutPoint>| {
+        let operation_meta_gen = |txid, out_points: Vec<OutPoint>| {
             assert!(
                 out_points.iter().all(|out_point| out_point.txid == txid),
                 "Change outpoints didn't all have consistent transaction id."
@@ -1363,7 +1363,7 @@ impl MintClientModule {
 
         let client_ctx = self.client_ctx.clone();
 
-        Ok(operation.outcome_or_updates(&self.client_ctx.global_db(), operation_id, move || {
+        Ok(operation.outcome_or_updates(&self.client_ctx.global_db(), operation_id, || {
             stream! {
                 yield ReissueExternalNotesState::Created;
 
@@ -1436,9 +1436,9 @@ impl MintClientModule {
 
         self.client_ctx
             .module_autocommit(
-                move |dbtx, _| {
+                |dbtx, _| {
                     let extra_meta = extra_meta.clone();
-                    Box::pin(async move {
+                    Box::pin(async {
                         let (operation_id, states, notes) = self
                             .spend_notes_oob(
                                 &mut dbtx.module_dbtx(),
@@ -1548,51 +1548,49 @@ impl MintClientModule {
         let client_ctx = self.client_ctx.clone();
 
         let global_db = self.client_ctx.global_db();
-        Ok(
-            operation.outcome_or_updates(&global_db, operation_id, move || {
-                stream! {
-                    yield SpendOOBState::Created;
+        Ok(operation.outcome_or_updates(&global_db, operation_id, || {
+            stream! {
+                yield SpendOOBState::Created;
 
-                    let self_ref = client_ctx.self_ref();
+                let self_ref = client_ctx.self_ref();
 
-                    let refund = self_ref
-                        .await_spend_oob_refund(operation_id)
-                        .await;
+                let refund = self_ref
+                    .await_spend_oob_refund(operation_id)
+                    .await;
 
-                    if refund.user_triggered {
-                        yield SpendOOBState::UserCanceledProcessing;
+                if refund.user_triggered {
+                    yield SpendOOBState::UserCanceledProcessing;
 
-                        match client_ctx
-                            .transaction_updates(operation_id)
-                            .await
-                            .await_tx_accepted(refund.transaction_id)
-                            .await
-                        {
-                            Ok(()) => {
-                                yield SpendOOBState::UserCanceledSuccess;
-                            },
-                            Err(_) => {
-                                yield SpendOOBState::UserCanceledFailure;
-                            }
+                    match client_ctx
+                        .transaction_updates(operation_id)
+                        .await
+                        .await_tx_accepted(refund.transaction_id)
+                        .await
+                    {
+                        Ok(()) => {
+                            yield SpendOOBState::UserCanceledSuccess;
+                        },
+                        Err(_) => {
+                            yield SpendOOBState::UserCanceledFailure;
                         }
-                    } else {
-                        match client_ctx
-                            .transaction_updates(operation_id)
-                            .await
-                            .await_tx_accepted(refund.transaction_id)
-                            .await
-                        {
-                            Ok(()) => {
-                                yield SpendOOBState::Refunded;
-                            },
-                            Err(_) => {
-                                yield SpendOOBState::Success;
-                            }
+                    }
+                } else {
+                    match client_ctx
+                        .transaction_updates(operation_id)
+                        .await
+                        .await_tx_accepted(refund.transaction_id)
+                        .await
+                    {
+                        Ok(()) => {
+                            yield SpendOOBState::Refunded;
+                        },
+                        Err(_) => {
+                            yield SpendOOBState::Success;
                         }
                     }
                 }
-            }),
-        )
+            }
+        }))
     }
 
     async fn mint_operation(&self, operation_id: OperationId) -> anyhow::Result<OperationLogEntry> {

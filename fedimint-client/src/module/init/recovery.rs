@@ -433,7 +433,7 @@ where
         client_ctx
             .clone()
             .module_autocommit_2(
-                move |dbtx, _| {
+                |dbtx, _| {
                     let state = state.clone();
                     {
                         Box::pin(async move {

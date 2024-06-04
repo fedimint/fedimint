@@ -147,8 +147,8 @@ impl Drop for ProcessHandleInner {
             return;
         }
 
-        block_in_place(move || {
-            block_on(async move {
+        block_in_place(|| {
+            block_on(async {
                 if let Err(err) = self.terminate().await {
                     warn!(target: LOG_DEVIMINT,
                         name=%self.name,

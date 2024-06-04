@@ -127,7 +127,7 @@ async fn sends_ecash_oob_highly_parallel() -> anyhow::Result<()> {
     }
 
     let note_bags = futures::stream::iter(spend_tasks)
-        .then(|handle| async move { handle.await.expect("Spend task failed") })
+        .then(|handle| async { handle.await.expect("Spend task failed") })
         .collect::<Vec<_>>()
         .await;
     // Since we are overspending as soon as the right denominations aren't available
@@ -506,7 +506,7 @@ mod fedimint_migration_tests {
     #[tokio::test(flavor = "multi_thread")]
     async fn snapshot_server_db_migrations() -> anyhow::Result<()> {
         snapshot_db_migrations::<_, MintCommonInit>("mint-server-v0", |db| {
-            Box::pin(async move {
+            Box::pin(async {
                 create_server_db_with_v0_data(db).await;
             })
         })
@@ -587,7 +587,7 @@ mod fedimint_migration_tests {
     async fn snapshot_client_db_migrations() -> anyhow::Result<()> {
         snapshot_db_migrations_client::<_, _, MintCommonInit>(
             "mint-client-v0",
-            |dbtx| Box::pin(async move { create_client_db_with_v0_data(dbtx).await }),
+            |dbtx| Box::pin(async { create_client_db_with_v0_data(dbtx).await }),
             || (Vec::new(), Vec::new()),
         )
         .await

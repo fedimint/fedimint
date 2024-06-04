@@ -813,11 +813,11 @@ pub mod mock {
         assert_eq!(auth_peer_a, peer_b);
         assert_eq!(auth_peer_b, peer_a);
 
-        let send_future = async move {
+        let send_future = async {
             conn_a.send(vec![42; 16000]).await.unwrap();
         }
         .boxed();
-        let receive_future = async move {
+        let receive_future = async {
             assert_eq!(
                 timeout(conn_b.next()).await.unwrap().unwrap().unwrap(),
                 vec![42; 16000]

@@ -391,7 +391,7 @@ impl ApiEndpoint<()> {
         ApiEndpoint {
             path: E::PATH,
             handler: Box::new(|m, mut context, request| {
-                Box::pin(async move {
+                Box::pin(async {
                     let request = request
                         .to_typed()
                         .map_err(|e| ApiError::bad_request(e.to_string()))?;

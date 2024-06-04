@@ -2760,7 +2760,7 @@ mod test_utils {
 
         let mut migrations: BTreeMap<DatabaseVersion, ServerMigrationFn> = BTreeMap::new();
 
-        migrations.insert(DatabaseVersion(0), move |dbtx| {
+        migrations.insert(DatabaseVersion(0), |dbtx| {
             migrate_test_db_version_0(dbtx).boxed()
         });
 

@@ -90,7 +90,7 @@ impl<T> TieredMulti<T> {
         // order of the elements stays consistent.
         self.0
             .iter()
-            .flat_map(|(amt, notes)| notes.iter().map(move |c| (*amt, c)))
+            .flat_map(|(amt, notes)| notes.iter().map(|c| (*amt, c)))
     }
 
     /// Returns an consuming iterator over every `(Amount, T)`

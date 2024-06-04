@@ -241,7 +241,7 @@ where
         'i: 'o,
         's: 'o,
     {
-        typed.into_iter().map(move |i| self.make_dyn(i))
+        typed.into_iter().map(|i| self.make_dyn(i))
     }
 
     /// Turn a typed output into a dyn version
@@ -304,8 +304,8 @@ where
         let tx_fn = &tx_fn;
         self.global_db()
             .autocommit(
-                move |dbtx, _| {
-                    Box::pin(async move {
+                |dbtx, _| {
+                    Box::pin(async {
                         tx_fn(&mut ClientDbTxContext { dbtx, client: self }, PhantomData).await
                     })
                 },
