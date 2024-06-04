@@ -435,7 +435,7 @@
 
 <span class="kw">pub fn </span>get_gatewayd_database_migrations() -&gt; BTreeMap&lt;DatabaseVersion, ServerMigrationFn&gt; {
     <span class="kw">let </span><span class="kw-2">mut </span>migrations: BTreeMap&lt;DatabaseVersion, ServerMigrationFn&gt; = BTreeMap::new();
-    migrations.insert(DatabaseVersion(<span class="number">0</span>), <span class="kw">move </span>|dbtx| migrate_to_v1(dbtx).boxed());
+    migrations.insert(DatabaseVersion(<span class="number">0</span>), |dbtx| migrate_to_v1(dbtx).boxed());
     migrations
 }
 
@@ -548,7 +548,7 @@
         snapshot_db_migrations_with_decoders(
             <span class="string">"gatewayd"</span>,
             |db| {
-                Box::pin(<span class="kw">async move </span>{
+                Box::pin(<span class="kw">async </span>{
                     create_gatewayd_db_data(db).<span class="kw">await</span>;
                 })
             },

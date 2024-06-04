@@ -1203,7 +1203,7 @@
                 <span class="kw">let </span><span class="kw-2">mut </span>set = JoinSet::new();
 
                 <span class="kw">while let </span><span class="prelude-val">Some</span>((_id, fedimintd)) = <span class="self">self</span>.members.pop_first() {
-                    set.spawn(<span class="kw">async move </span>{ drop(fedimintd) });
+                    set.spawn(<span class="kw">async </span>{ drop(fedimintd) });
                 }
                 <span class="kw">while </span>(set.join_next().<span class="kw">await</span>).is_some() {}
             });

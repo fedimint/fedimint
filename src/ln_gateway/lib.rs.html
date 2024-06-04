@@ -2487,7 +2487,7 @@
     </span><span class="kw">fn </span>start_gateway(<span class="kw-2">&amp;</span><span class="self">self</span>, task_group: <span class="kw-2">&amp;mut </span>TaskGroup) {
         <span class="kw">let </span><span class="kw-2">mut </span>self_copy = <span class="self">self</span>.clone();
         <span class="kw">let </span>tg = task_group.clone();
-        task_group.spawn(<span class="string">"Subscribe to intercepted HTLCs in stream"</span>, <span class="kw">move </span>|handle| <span class="kw">async move </span>{
+        task_group.spawn(<span class="string">"Subscribe to intercepted HTLCs in stream"</span>, |handle| <span class="kw">async move </span>{
             <span class="kw">loop </span>{
                 <span class="kw">if </span>handle.is_shutting_down() {
                     <span class="macro">info!</span>(<span class="string">"Gateway HTLC handler loop is shutting down"</span>);
@@ -3011,7 +3011,7 @@
                 federation_id,
                 Spanned::new(
                     <span class="macro">info_span!</span>(<span class="string">"client"</span>, federation_id=%federation_id.clone()),
-                    <span class="kw">async move </span>{ client },
+                    <span class="kw">async </span>{ client },
                 )
                 .<span class="kw">await</span>,
             );

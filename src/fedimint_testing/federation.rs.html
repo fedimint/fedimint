@@ -537,7 +537,7 @@
             <span class="kw">let </span>module_init_registry = <span class="self">self</span>.server_init.clone();
             <span class="kw">let </span>subgroup = task_group.make_subgroup();
 
-            task_group.spawn(<span class="string">"fedimintd"</span>, <span class="kw">move </span>|<span class="kw">_</span>| <span class="kw">async move </span>{
+            task_group.spawn(<span class="string">"fedimintd"</span>, |<span class="kw">_</span>| <span class="kw">async move </span>{
                 consensus::run(
                     config.clone(),
                     db.clone(),

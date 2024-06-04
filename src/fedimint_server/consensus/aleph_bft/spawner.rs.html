@@ -53,7 +53,7 @@
 
 <span class="kw">impl </span>aleph_bft::SpawnHandle <span class="kw">for </span>Spawner {
     <span class="kw">fn </span>spawn(<span class="kw-2">&amp;</span><span class="self">self</span>, name: <span class="kw-2">&amp;</span>str, task: <span class="kw">impl </span>futures::Future&lt;Output = ()&gt; + Send + <span class="lifetime">'static</span>) {
-        <span class="self">self</span>.task_group.spawn(name, <span class="kw">move </span>|<span class="kw">_</span>| task);
+        <span class="self">self</span>.task_group.spawn(name, |<span class="kw">_</span>| task);
     }
 
     <span class="kw">fn </span>spawn_essential(
@@ -63,7 +63,7 @@
     ) -&gt; aleph_bft::TaskHandle {
         <span class="kw">let </span>(sender, receiver) = futures::channel::oneshot::channel();
 
-        <span class="self">self</span>.task_group.spawn(name, <span class="kw">move </span>|<span class="kw">_</span>| <span class="kw">async </span>{
+        <span class="self">self</span>.task_group.spawn(name, |<span class="kw">_</span>| <span class="kw">async </span>{
             task.<span class="kw">await</span>;
 
             <span class="kw">if </span>sender.send(()).is_err() {
@@ -71,7 +71,7 @@
             }
         });
 
-        Box::pin(<span class="kw">async move </span>{ receiver.<span class="kw">await</span>.map_err(|<span class="kw">_</span>| ()) })
+        Box::pin(<span class="kw">async </span>{ receiver.<span class="kw">await</span>.map_err(|<span class="kw">_</span>| ()) })
     }
 }
 </code></pre></div></section></main></body></html>

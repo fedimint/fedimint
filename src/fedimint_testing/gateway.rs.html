@@ -437,8 +437,8 @@
 
 <span class="kw">impl </span>Drop <span class="kw">for </span>GatewayTest {
     <span class="kw">fn </span>drop(<span class="kw-2">&amp;mut </span><span class="self">self</span>) {
-        block_in_place(<span class="kw">move </span>|| {
-            block_on(<span class="kw">async move </span>{
+        block_in_place(|| {
+            block_on(<span class="kw">async </span>{
                 <span class="kw">if let </span><span class="prelude-val">Err</span>(e) = <span class="self">self</span>.task_group.clone().shutdown_join_all(<span class="prelude-val">None</span>).<span class="kw">await </span>{
                     <span class="macro">warn!</span>(<span class="string">"Got error shutting down GatewayTest: {e:?}"</span>);
                 }

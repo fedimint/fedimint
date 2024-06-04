@@ -1049,7 +1049,7 @@
                 failure_reason: <span class="macro">format!</span>(<span class="string">"Failed to get node info {status:?}"</span>),
             })<span class="question-mark">?</span>;
 
-        task_group.spawn(<span class="string">"LND HTLC Subscription"</span>, <span class="kw">move </span>|handle| <span class="kw">async move </span>{
+        task_group.spawn(<span class="string">"LND HTLC Subscription"</span>, |handle| <span class="kw">async move </span>{
                 <span class="kw">let </span>future_stream = client
                     .router()
                     .htlc_interceptor(ReceiverStream::new(lnd_rx));

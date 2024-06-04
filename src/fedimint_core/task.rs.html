@@ -803,7 +803,7 @@
         };
         <span class="kw">let </span>handle = <span class="self">self</span>.make_handle();
 
-        <span class="kw">let </span>handle = runtime::spawn_local(name.as_str(), <span class="kw">async move </span>{
+        <span class="kw">let </span>handle = runtime::spawn_local(name.as_str(), <span class="kw">async </span>{
             f(handle).<span class="kw">await</span>;
         });
         <span class="self">self</span>.inner
@@ -824,7 +824,7 @@
     <span class="kw">where
         </span>R: MaybeSend + <span class="lifetime">'static</span>,
     {
-        <span class="self">self</span>.spawn(name, <span class="kw">move </span>|handle| <span class="kw">async move </span>{
+        <span class="self">self</span>.spawn(name, |handle| <span class="kw">async move </span>{
             <span class="kw">let </span>value = handle.cancel_on_shutdown(future).<span class="kw">await</span>;
             <span class="kw">if </span>value.is_err() {
                 <span class="comment">// name will part of span
@@ -876,14 +876,14 @@
                 <span class="kw">if let </span><span class="prelude-val">Some</span>(timeout) = timeout {
                     Box::pin(runtime::timeout(timeout, join))
                 } <span class="kw">else </span>{
-                    Box::pin(<span class="kw">async move </span>{ <span class="prelude-val">Ok</span>(join.<span class="kw">await</span>) })
+                    Box::pin(<span class="kw">async </span>{ <span class="prelude-val">Ok</span>(join.<span class="kw">await</span>) })
                 };
 
             <span class="attr">#[cfg(target_family = <span class="string">"wasm"</span>)]
             </span><span class="kw">let </span>join_future: Pin&lt;Box&lt;<span class="kw">dyn </span>Future&lt;Output = <span class="kw">_</span>&gt;&gt;&gt; = <span class="kw">if let </span><span class="prelude-val">Some</span>(timeout) = timeout {
                 Box::pin(runtime::timeout(timeout, join))
             } <span class="kw">else </span>{
-                Box::pin(<span class="kw">async move </span>{ <span class="prelude-val">Ok</span>(join.<span class="kw">await</span>) })
+                Box::pin(<span class="kw">async </span>{ <span class="prelude-val">Ok</span>(join.<span class="kw">await</span>) })
             };
 
             <span class="kw">match </span>join_future.<span class="kw">await </span>{

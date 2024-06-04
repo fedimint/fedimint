@@ -4131,8 +4131,8 @@
     </span><span class="kw">pub async fn </span>set_metadata(<span class="kw-2">&amp;</span><span class="self">self</span>, metadata: <span class="kw-2">&amp;</span>Metadata) {
         <span class="self">self</span>.db
             .autocommit::&lt;<span class="kw">_</span>, <span class="kw">_</span>, anyhow::Error&gt;(
-                <span class="kw">move </span>|dbtx, <span class="kw">_</span>| {
-                    Box::pin(<span class="kw">async move </span>{
+                |dbtx, <span class="kw">_</span>| {
+                    Box::pin(<span class="kw">async </span>{
                         <span class="self">Self</span>::set_metadata_dbtx(dbtx, metadata).<span class="kw">await</span>;
                         <span class="prelude-val">Ok</span>(())
                     })
@@ -4232,7 +4232,7 @@
     ) {
         <span class="kw">let </span>db = <span class="self">self</span>.db.clone();
         <span class="self">self</span>.task_group
-            .spawn(<span class="string">"module recoveries"</span>, <span class="kw">move </span>|_task_handle| <span class="kw">async move </span>{
+            .spawn(<span class="string">"module recoveries"</span>, |_task_handle| <span class="kw">async </span>{
                 <span class="self">Self</span>::run_module_recoveries_task(
                     db,
                     recovery_sender,

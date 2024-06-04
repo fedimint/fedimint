@@ -339,7 +339,7 @@
                             global_context.clone(),
                             <span class="self">self</span>.common.out_point.txid,
                         ),
-                        <span class="kw">move </span>|<span class="kw">_</span>, error, old_state| {
+                        |<span class="kw">_</span>, error, old_state| {
                             Box::pin(
                                 <span class="kw">async move </span>{ <span class="self">Self</span>::transition_funding_rejected(error, <span class="kw-2">&amp;</span>old_state) },
                             )

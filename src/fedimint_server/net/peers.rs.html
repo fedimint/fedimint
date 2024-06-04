@@ -1025,7 +1025,7 @@
                 </span>.insert(<span class="kw-2">*</span>peer, PeerConnectionStatus::Disconnected);
         }
 
-        task_group.spawn(<span class="string">"listen task"</span>, <span class="kw">move </span>|handle| {
+        task_group.spawn(<span class="string">"listen task"</span>, |handle| {
             <span class="self">Self</span>::run_listen_task(cfg, shared_connector, connection_senders, handle)
         });
 
@@ -1568,7 +1568,7 @@
 
             <span class="kw">let </span>peers_ref = <span class="kw-2">&amp;</span>peers;
             <span class="kw">let </span>net_ref = <span class="kw-2">&amp;</span>net;
-            <span class="kw">let </span>build_peers = <span class="kw">move </span>|bind: <span class="kw-2">&amp;</span><span class="lifetime">'static </span>str, id: u16, task_group: TaskGroup| <span class="kw">async move </span>{
+            <span class="kw">let </span>build_peers = |bind: <span class="kw-2">&amp;</span><span class="lifetime">'static </span>str, id: u16, task_group: TaskGroup| <span class="kw">async move </span>{
                 <span class="kw">let </span>cfg = NetworkConfig {
                     identity: PeerId::from(id),
                     bind_addr: bind.parse().unwrap(),

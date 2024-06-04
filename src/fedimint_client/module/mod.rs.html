@@ -1119,7 +1119,7 @@
         <span class="lifetime">'i</span>: <span class="lifetime">'o</span>,
         <span class="lifetime">'s</span>: <span class="lifetime">'o</span>,
     {
-        typed.into_iter().map(<span class="kw">move </span>|i| <span class="self">self</span>.make_dyn(i))
+        typed.into_iter().map(|i| <span class="self">self</span>.make_dyn(i))
     }
 
     <span class="doccomment">/// Turn a typed output into a dyn version
@@ -1182,8 +1182,8 @@
         <span class="kw">let </span>tx_fn = <span class="kw-2">&amp;</span>tx_fn;
         <span class="self">self</span>.global_db()
             .autocommit(
-                <span class="kw">move </span>|dbtx, <span class="kw">_</span>| {
-                    Box::pin(<span class="kw">async move </span>{
+                |dbtx, <span class="kw">_</span>| {
+                    Box::pin(<span class="kw">async </span>{
                         tx_fn(<span class="kw-2">&amp;mut </span>ClientDbTxContext { dbtx, client: <span class="self">self </span>}, PhantomData).<span class="kw">await
                     </span>})
                 },

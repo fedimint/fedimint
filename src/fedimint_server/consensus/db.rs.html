@@ -517,7 +517,7 @@
         snapshot_db_migrations_with_decoders(
             <span class="string">"fedimint-server"</span>,
             |db| {
-                Box::pin(<span class="kw">async move </span>{
+                Box::pin(<span class="kw">async </span>{
                     create_server_db_with_v0_data(db).<span class="kw">await</span>;
                 })
             },

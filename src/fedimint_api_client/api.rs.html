@@ -1972,7 +1972,7 @@
             .and_then(|v| {
                 serde_json::from_value(v).map_err(|e| PeerError::ResponseDeserialization(e.into()))
             })
-            .map_err(<span class="kw">move </span>|e| FederationError::new_one_peer(peer_id, method, params, e))<span class="question-mark">?</span>)
+            .map_err(|e| FederationError::new_one_peer(peer_id, method, params, e))<span class="question-mark">?</span>)
     }
 
     <span class="doccomment">/// Make an aggregate request to federation, using `strategy` to logically
@@ -2214,7 +2214,7 @@
     <span class="kw">where
         </span>R: OutputOutcome,
     {
-        fedimint_core::runtime::timeout(timeout, <span class="kw">async move </span>{
+        fedimint_core::runtime::timeout(timeout, <span class="kw">async </span>{
             <span class="kw">let </span>outcome: SerdeOutputOutcome = <span class="self">self
                 </span>.inner
                 .request_current_consensus(

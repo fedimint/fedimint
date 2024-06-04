@@ -515,7 +515,7 @@
     <span class="doccomment">/// DB migrations to move from old to newer versions
     </span><span class="kw">fn </span>get_database_migrations(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; BTreeMap&lt;DatabaseVersion, ServerMigrationFn&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>migrations: BTreeMap&lt;DatabaseVersion, ServerMigrationFn&gt; = BTreeMap::new();
-        migrations.insert(DatabaseVersion(<span class="number">0</span>), <span class="kw">move </span>|dbtx| migrate_to_v1(dbtx).boxed());
+        migrations.insert(DatabaseVersion(<span class="number">0</span>), |dbtx| migrate_to_v1(dbtx).boxed());
         migrations
     }
 }

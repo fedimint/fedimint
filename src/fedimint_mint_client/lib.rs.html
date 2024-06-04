@@ -2387,8 +2387,6 @@
 <a href="#2387" id="2387">2387</a>
 <a href="#2388" id="2388">2388</a>
 <a href="#2389" id="2389">2389</a>
-<a href="#2390" id="2390">2390</a>
-<a href="#2391" id="2391">2391</a>
 </pre></div><pre class="rust"><code><span class="attr">#![warn(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::default_trait_access)]
@@ -3068,8 +3066,8 @@
     <span class="kw">async fn </span>backup(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; anyhow::Result&lt;EcashBackup&gt; {
         <span class="self">self</span>.client_ctx
             .module_autocommit(
-                <span class="kw">move </span>|dbtx_ctx, <span class="kw">_</span>| {
-                    Box::pin(<span class="kw">async move </span>{ <span class="self">self</span>.prepare_plaintext_ecash_backup(dbtx_ctx).<span class="kw">await </span>})
+                |dbtx_ctx, <span class="kw">_</span>| {
+                    Box::pin(<span class="kw">async </span>{ <span class="self">self</span>.prepare_plaintext_ecash_backup(dbtx_ctx).<span class="kw">await </span>})
                 },
                 <span class="prelude-val">None</span>,
             )
@@ -3342,7 +3340,7 @@
             </span>.notifier
             .subscribe(operation_id)
             .<span class="kw">await
-            </span>.filter_map(|state| <span class="kw">async move </span>{
+            </span>.filter_map(|state| <span class="kw">async </span>{
                 <span class="kw">let </span>MintClientStateMachines::Output(state) = state <span class="kw">else </span>{
                     <span class="kw">return </span><span class="prelude-val">None</span>;
                 };
@@ -3536,7 +3534,7 @@
             <span class="self">self</span>.notifier
                 .subscribe(operation_id)
                 .<span class="kw">await
-                </span>.filter_map(|state| <span class="kw">async move </span>{
+                </span>.filter_map(|state| <span class="kw">async </span>{
                     <span class="kw">let </span>MintClientStateMachines::OOB(state) = state <span class="kw">else </span>{
                         <span class="kw">return </span><span class="prelude-val">None</span>;
                     };
@@ -3689,7 +3687,7 @@
 
         <span class="kw">let </span>extra_meta = serde_json::to_value(extra_meta)
             .expect(<span class="string">"MintClientModule::reissue_external_notes extra_meta is serializable"</span>);
-        <span class="kw">let </span>operation_meta_gen = <span class="kw">move </span>|txid, out_points: Vec&lt;OutPoint&gt;| {
+        <span class="kw">let </span>operation_meta_gen = |txid, out_points: Vec&lt;OutPoint&gt;| {
             <span class="macro">assert!</span>(
                 out_points.iter().all(|out_point| out_point.txid == txid),
                 <span class="string">"Change outpoints didn't all have consistent transaction id."
@@ -3754,7 +3752,7 @@
 
         <span class="kw">let </span>client_ctx = <span class="self">self</span>.client_ctx.clone();
 
-        <span class="prelude-val">Ok</span>(operation.outcome_or_updates(<span class="kw-2">&amp;</span><span class="self">self</span>.client_ctx.global_db(), operation_id, <span class="kw">move </span>|| {
+        <span class="prelude-val">Ok</span>(operation.outcome_or_updates(<span class="kw-2">&amp;</span><span class="self">self</span>.client_ctx.global_db(), operation_id, || {
             <span class="macro">stream!</span> {
                 <span class="kw">yield </span>ReissueExternalNotesState::Created;
 
@@ -3827,9 +3825,9 @@
 
         <span class="self">self</span>.client_ctx
             .module_autocommit(
-                <span class="kw">move </span>|dbtx, <span class="kw">_</span>| {
+                |dbtx, <span class="kw">_</span>| {
                     <span class="kw">let </span>extra_meta = extra_meta.clone();
-                    Box::pin(<span class="kw">async move </span>{
+                    Box::pin(<span class="kw">async </span>{
                         <span class="kw">let </span>(operation_id, states, notes) = <span class="self">self
                             </span>.spend_notes_oob(
                                 <span class="kw-2">&amp;mut </span>dbtx.module_dbtx(),
@@ -3939,51 +3937,49 @@
         <span class="kw">let </span>client_ctx = <span class="self">self</span>.client_ctx.clone();
 
         <span class="kw">let </span>global_db = <span class="self">self</span>.client_ctx.global_db();
-        <span class="prelude-val">Ok</span>(
-            operation.outcome_or_updates(<span class="kw-2">&amp;</span>global_db, operation_id, <span class="kw">move </span>|| {
-                <span class="macro">stream!</span> {
-                    <span class="kw">yield </span>SpendOOBState::Created;
+        <span class="prelude-val">Ok</span>(operation.outcome_or_updates(<span class="kw-2">&amp;</span>global_db, operation_id, || {
+            <span class="macro">stream!</span> {
+                <span class="kw">yield </span>SpendOOBState::Created;
 
-                    <span class="kw">let </span>self_ref = client_ctx.self_ref();
+                <span class="kw">let </span>self_ref = client_ctx.self_ref();
 
-                    <span class="kw">let </span>refund = self_ref
-                        .await_spend_oob_refund(operation_id)
-                        .<span class="kw">await</span>;
+                <span class="kw">let </span>refund = self_ref
+                    .await_spend_oob_refund(operation_id)
+                    .<span class="kw">await</span>;
 
-                    <span class="kw">if </span>refund.user_triggered {
-                        <span class="kw">yield </span>SpendOOBState::UserCanceledProcessing;
+                <span class="kw">if </span>refund.user_triggered {
+                    <span class="kw">yield </span>SpendOOBState::UserCanceledProcessing;
 
-                        <span class="kw">match </span>client_ctx
-                            .transaction_updates(operation_id)
-                            .<span class="kw">await
-                            </span>.await_tx_accepted(refund.transaction_id)
-                            .<span class="kw">await
-                        </span>{
-                            <span class="prelude-val">Ok</span>(()) =&gt; {
-                                <span class="kw">yield </span>SpendOOBState::UserCanceledSuccess;
-                            },
-                            <span class="prelude-val">Err</span>(<span class="kw">_</span>) =&gt; {
-                                <span class="kw">yield </span>SpendOOBState::UserCanceledFailure;
-                            }
+                    <span class="kw">match </span>client_ctx
+                        .transaction_updates(operation_id)
+                        .<span class="kw">await
+                        </span>.await_tx_accepted(refund.transaction_id)
+                        .<span class="kw">await
+                    </span>{
+                        <span class="prelude-val">Ok</span>(()) =&gt; {
+                            <span class="kw">yield </span>SpendOOBState::UserCanceledSuccess;
+                        },
+                        <span class="prelude-val">Err</span>(<span class="kw">_</span>) =&gt; {
+                            <span class="kw">yield </span>SpendOOBState::UserCanceledFailure;
                         }
-                    } <span class="kw">else </span>{
-                        <span class="kw">match </span>client_ctx
-                            .transaction_updates(operation_id)
-                            .<span class="kw">await
-                            </span>.await_tx_accepted(refund.transaction_id)
-                            .<span class="kw">await
-                        </span>{
-                            <span class="prelude-val">Ok</span>(()) =&gt; {
-                                <span class="kw">yield </span>SpendOOBState::Refunded;
-                            },
-                            <span class="prelude-val">Err</span>(<span class="kw">_</span>) =&gt; {
-                                <span class="kw">yield </span>SpendOOBState::Success;
-                            }
+                    }
+                } <span class="kw">else </span>{
+                    <span class="kw">match </span>client_ctx
+                        .transaction_updates(operation_id)
+                        .<span class="kw">await
+                        </span>.await_tx_accepted(refund.transaction_id)
+                        .<span class="kw">await
+                    </span>{
+                        <span class="prelude-val">Ok</span>(()) =&gt; {
+                            <span class="kw">yield </span>SpendOOBState::Refunded;
+                        },
+                        <span class="prelude-val">Err</span>(<span class="kw">_</span>) =&gt; {
+                            <span class="kw">yield </span>SpendOOBState::Success;
                         }
                     }
                 }
-            }),
-        )
+            }
+        }))
     }
 
     <span class="kw">async fn </span>mint_operation(<span class="kw-2">&amp;</span><span class="self">self</span>, operation_id: OperationId) -&gt; anyhow::Result&lt;OperationLogEntry&gt; {

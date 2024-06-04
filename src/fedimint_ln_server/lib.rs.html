@@ -2222,7 +2222,7 @@
                 </span>dbtx.insert_new_entry(<span class="kw-2">&amp;</span>OfferKey(offer.hash), <span class="kw-2">&amp;</span>(<span class="kw-2">*</span>offer).clone())
                     .<span class="kw">await</span>;
 
-                dbtx.on_commit(<span class="kw">move </span>|| {
+                dbtx.on_commit(|| {
                     LN_INCOMING_OFFER.inc();
                 });
 
@@ -2279,7 +2279,7 @@
                 )
                 .<span class="kw">await</span>;
 
-                dbtx.on_commit(<span class="kw">move </span>|| {
+                dbtx.on_commit(|| {
                     LN_CANCEL_OUTGOING_CONTRACTS.inc();
                 });
 

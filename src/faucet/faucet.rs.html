@@ -291,7 +291,7 @@
     <span class="kw">let </span>router = Router::new()
         .route(
             <span class="string">"/connect-string"</span>,
-            get(|| <span class="kw">async move </span>{
+            get(|| <span class="kw">async </span>{
                 get_invite_code(cmd.invite_code)
                     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, <span class="macro">format!</span>(<span class="string">"{e:?}"</span>)))
             }),

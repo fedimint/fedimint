@@ -1114,7 +1114,7 @@
                 context.clone(),
                 common.clone(),
             ),
-            <span class="kw">move </span>|_dbtx, result, _old_state| Box::pin(futures::future::ready(result)),
+            |_dbtx, result, _old_state| Box::pin(futures::future::ready(result)),
         )]
     }
 
@@ -1656,7 +1656,7 @@
             <span class="kw">move </span>|_dbtx, result, _old_state| {
                 <span class="kw">let </span>common = common.clone();
                 <span class="kw">let </span>contract = contract.clone();
-                Box::pin(<span class="kw">async move </span>{
+                Box::pin(<span class="kw">async </span>{
                     <span class="self">Self</span>::transition_claim_outgoing_contract(common, result, contract)
                 })
             },

@@ -169,8 +169,6 @@
 <a href="#169" id="169">169</a>
 <a href="#170" id="170">170</a>
 <a href="#171" id="171">171</a>
-<a href="#172" id="172">172</a>
-<a href="#173" id="173">173</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::time::Duration;
 
 <span class="kw">use </span>fedimint_client::sm::{State, StateTransition};
@@ -239,7 +237,7 @@
         <span class="kw">match </span><span class="kw-2">&amp;</span><span class="self">self</span>.state {
             CompleteSMState::Pending =&gt; <span class="macro">vec!</span>[StateTransition::new(
                 <span class="self">Self</span>::await_receive(context.clone(), <span class="self">self</span>.common.operation_id),
-                <span class="kw">move </span>|<span class="kw">_</span>, result, old_state| {
+                |<span class="kw">_</span>, result, old_state| {
                     Box::pin(<span class="kw">async move </span>{ <span class="self">Self</span>::transition_receive(result, <span class="kw-2">&amp;</span>old_state) })
                 },
             )],
@@ -250,9 +248,7 @@
                     <span class="self">self</span>.common.htlc_id,
                     result.clone(),
                 ),
-                <span class="kw">move </span>|<span class="kw">_</span>, (), old_state| {
-                    Box::pin(<span class="kw">async move </span>{ <span class="self">Self</span>::transition_completion(<span class="kw-2">&amp;</span>old_state) })
-                },
+                |<span class="kw">_</span>, (), old_state| Box::pin(<span class="kw">async move </span>{ <span class="self">Self</span>::transition_completion(<span class="kw-2">&amp;</span>old_state) }),
             )],
             CompleteSMState::Completed =&gt; Vec::new(),
         }

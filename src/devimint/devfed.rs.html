@@ -478,7 +478,7 @@
         <span class="kw">let </span>cln = JitTry::new_try({
             <span class="kw">let </span>process_mgr = process_mgr.to_owned();
             <span class="kw">let </span>bitcoind = bitcoind.clone();
-            <span class="kw">move </span>|| <span class="kw">async move </span>{
+            || <span class="kw">async move </span>{
                 <span class="prelude-val">Ok</span>(Arc::new(
                     Lightningd::new(<span class="kw-2">&amp;</span>process_mgr, bitcoind.get_try().<span class="kw">await</span><span class="question-mark">?</span>.deref().clone())
                         .<span class="kw">await</span><span class="question-mark">?</span>,
@@ -488,7 +488,7 @@
         <span class="kw">let </span>lnd = JitTry::new_try({
             <span class="kw">let </span>process_mgr = process_mgr.to_owned();
             <span class="kw">let </span>bitcoind = bitcoind.clone();
-            <span class="kw">move </span>|| <span class="kw">async move </span>{
+            || <span class="kw">async move </span>{
                 <span class="prelude-val">Ok</span>(Arc::new(
                     Lnd::new(<span class="kw-2">&amp;</span>process_mgr, bitcoind.get_try().<span class="kw">await</span><span class="question-mark">?</span>.deref().clone()).<span class="kw">await</span><span class="question-mark">?</span>,
                 ))
@@ -497,7 +497,7 @@
         <span class="kw">let </span>electrs = JitTryAnyhow::new_try({
             <span class="kw">let </span>process_mgr = process_mgr.to_owned();
             <span class="kw">let </span>bitcoind = bitcoind.clone();
-            <span class="kw">move </span>|| <span class="kw">async move </span>{
+            || <span class="kw">async move </span>{
                 <span class="kw">let </span>bitcoind = bitcoind.get_try().<span class="kw">await</span><span class="question-mark">?</span>.deref().clone();
                 <span class="prelude-val">Ok</span>(Arc::new(Electrs::new(<span class="kw-2">&amp;</span>process_mgr, bitcoind).<span class="kw">await</span><span class="question-mark">?</span>))
             }
@@ -505,7 +505,7 @@
         <span class="kw">let </span>esplora = JitTryAnyhow::new_try({
             <span class="kw">let </span>process_mgr = process_mgr.to_owned();
             <span class="kw">let </span>bitcoind = bitcoind.clone();
-            <span class="kw">move </span>|| <span class="kw">async move </span>{
+            || <span class="kw">async move </span>{
                 <span class="kw">let </span>bitcoind = bitcoind.get_try().<span class="kw">await</span><span class="question-mark">?</span>.deref().clone();
                 <span class="prelude-val">Ok</span>(Arc::new(Esplora::new(<span class="kw-2">&amp;</span>process_mgr, bitcoind).<span class="kw">await</span><span class="question-mark">?</span>))
             }
@@ -528,7 +528,7 @@
         <span class="kw">let </span>gw_cln = JitTryAnyhow::new_try({
             <span class="kw">let </span>process_mgr = process_mgr.to_owned();
             <span class="kw">let </span>cln = cln.clone();
-            <span class="kw">move </span>|| <span class="kw">async move </span>{
+            || <span class="kw">async move </span>{
                 <span class="kw">let </span>cln = cln.get_try().<span class="kw">await</span><span class="question-mark">?</span>.deref().clone();
                 <span class="prelude-val">Ok</span>(Arc::new(
                     Gatewayd::new(<span class="kw-2">&amp;</span>process_mgr, LightningNode::Cln(cln)).<span class="kw">await</span><span class="question-mark">?</span>,
@@ -551,7 +551,7 @@
         <span class="kw">let </span>gw_lnd = JitTryAnyhow::new_try({
             <span class="kw">let </span>process_mgr = process_mgr.to_owned();
             <span class="kw">let </span>lnd = lnd.clone();
-            <span class="kw">move </span>|| <span class="kw">async move </span>{
+            || <span class="kw">async move </span>{
                 <span class="kw">let </span>lnd = lnd.get_try().<span class="kw">await</span><span class="question-mark">?</span>.deref().clone();
                 <span class="prelude-val">Ok</span>(Arc::new(
                     Gatewayd::new(<span class="kw-2">&amp;</span>process_mgr, LightningNode::Lnd(lnd)).<span class="kw">await</span><span class="question-mark">?</span>,
@@ -578,7 +578,7 @@
             <span class="kw">let </span>cln = cln.clone();
             <span class="kw">let </span>gw_cln = gw_cln.clone();
             <span class="kw">let </span>bitcoind = bitcoind.clone();
-            <span class="kw">move </span>|| <span class="kw">async move </span>{
+            || <span class="kw">async move </span>{
                 <span class="kw">let </span>bitcoind = bitcoind.get_try().<span class="kw">await</span><span class="question-mark">?</span>.deref().clone();
                 <span class="kw">let </span>lnd = lnd.get_try().<span class="kw">await</span><span class="question-mark">?</span>.deref().clone();
                 <span class="kw">let </span>cln = cln.get_try().<span class="kw">await</span><span class="question-mark">?</span>.deref().clone();

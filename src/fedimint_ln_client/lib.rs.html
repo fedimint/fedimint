@@ -2021,15 +2021,6 @@
 <a href="#2021" id="2021">2021</a>
 <a href="#2022" id="2022">2022</a>
 <a href="#2023" id="2023">2023</a>
-<a href="#2024" id="2024">2024</a>
-<a href="#2025" id="2025">2025</a>
-<a href="#2026" id="2026">2026</a>
-<a href="#2027" id="2027">2027</a>
-<a href="#2028" id="2028">2028</a>
-<a href="#2029" id="2029">2029</a>
-<a href="#2030" id="2030">2030</a>
-<a href="#2031" id="2031">2031</a>
-<a href="#2032" id="2032">2032</a>
 </pre></div><pre class="rust"><code><span class="attr">#![warn(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::cast_possible_wrap)]
@@ -2382,39 +2373,30 @@
 
     <span class="kw">fn </span>get_database_migrations(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; BTreeMap&lt;DatabaseVersion, ClientMigrationFn&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>migrations: BTreeMap&lt;DatabaseVersion, ClientMigrationFn&gt; = BTreeMap::new();
-        migrations.insert(DatabaseVersion(<span class="number">0</span>), <span class="kw">move </span>|dbtx, <span class="kw">_</span>, <span class="kw">_</span>| {
+        migrations.insert(DatabaseVersion(<span class="number">0</span>), |dbtx, <span class="kw">_</span>, <span class="kw">_</span>| {
             Box::pin(<span class="kw">async </span>{
                 dbtx.remove_entry(<span class="kw-2">&amp;</span><span class="kw">crate</span>::db::ActiveGatewayKey).<span class="kw">await</span>;
                 <span class="prelude-val">Ok</span>(<span class="prelude-val">None</span>)
             })
         });
 
-        migrations.insert(
-            DatabaseVersion(<span class="number">1</span>),
-            <span class="kw">move </span>|<span class="kw">_</span>, active_states, inactive_states| {
-                Box::pin(<span class="kw">async </span>{
-                    migrate_state(active_states, inactive_states, db::get_v1_migrated_state)
-                })
-            },
-        );
+        migrations.insert(DatabaseVersion(<span class="number">1</span>), |<span class="kw">_</span>, active_states, inactive_states| {
+            Box::pin(<span class="kw">async </span>{
+                migrate_state(active_states, inactive_states, db::get_v1_migrated_state)
+            })
+        });
 
-        migrations.insert(
-            DatabaseVersion(<span class="number">2</span>),
-            <span class="kw">move </span>|<span class="kw">_</span>, active_states, inactive_states| {
-                Box::pin(<span class="kw">async </span>{
-                    migrate_state(active_states, inactive_states, db::get_v2_migrated_state)
-                })
-            },
-        );
+        migrations.insert(DatabaseVersion(<span class="number">2</span>), |<span class="kw">_</span>, active_states, inactive_states| {
+            Box::pin(<span class="kw">async </span>{
+                migrate_state(active_states, inactive_states, db::get_v2_migrated_state)
+            })
+        });
 
-        migrations.insert(
-            DatabaseVersion(<span class="number">3</span>),
-            <span class="kw">move </span>|<span class="kw">_</span>, active_states, inactive_states| {
-                Box::pin(<span class="kw">async </span>{
-                    migrate_state(active_states, inactive_states, db::get_v3_migrated_state)
-                })
-            },
-        );
+        migrations.insert(DatabaseVersion(<span class="number">3</span>), |<span class="kw">_</span>, active_states, inactive_states| {
+            Box::pin(<span class="kw">async </span>{
+                migrate_state(active_states, inactive_states, db::get_v3_migrated_state)
+            })
+        });
 
         migrations
     }
@@ -3138,7 +3120,7 @@
         <span class="kw">let </span><span class="kw-2">mut </span>stream = <span class="self">self</span>.notifier.subscribe(operation_id).<span class="kw">await</span>;
         <span class="kw">let </span>client_ctx = <span class="self">self</span>.client_ctx.clone();
 
-        <span class="prelude-val">Ok</span>(operation.outcome_or_updates(<span class="kw-2">&amp;</span><span class="self">self</span>.client_ctx.global_db(), operation_id, <span class="kw">move </span>|| {
+        <span class="prelude-val">Ok</span>(operation.outcome_or_updates(<span class="kw-2">&amp;</span><span class="self">self</span>.client_ctx.global_db(), operation_id, || {
             <span class="macro">stream!</span> {
                 <span class="kw">yield </span>InternalPayState::Funding;
 
@@ -3193,7 +3175,7 @@
 
         <span class="kw">let </span>client_ctx = <span class="self">self</span>.client_ctx.clone();
 
-        <span class="prelude-val">Ok</span>(operation.outcome_or_updates(<span class="kw-2">&amp;</span><span class="self">self</span>.client_ctx.global_db(), operation_id, <span class="kw">move </span>|| {
+        <span class="prelude-val">Ok</span>(operation.outcome_or_updates(<span class="kw-2">&amp;</span><span class="self">self</span>.client_ctx.global_db(), operation_id, || {
             <span class="macro">stream!</span> {
                 <span class="kw">let </span>self_ref = client_ctx.self_ref();
 
@@ -3509,7 +3491,7 @@
 
         <span class="kw">let </span>client_ctx = <span class="self">self</span>.client_ctx.clone();
 
-        <span class="prelude-val">Ok</span>(operation.outcome_or_updates(<span class="kw-2">&amp;</span><span class="self">self</span>.client_ctx.global_db(), operation_id, <span class="kw">move </span>|| {
+        <span class="prelude-val">Ok</span>(operation.outcome_or_updates(<span class="kw-2">&amp;</span><span class="self">self</span>.client_ctx.global_db(), operation_id, || {
             <span class="macro">stream!</span> {
                 <span class="kw">yield </span>LnReceiveState::AwaitingFunds;
 
@@ -3542,7 +3524,7 @@
 
         <span class="kw">let </span>client_ctx = <span class="self">self</span>.client_ctx.clone();
 
-        <span class="prelude-val">Ok</span>(operation.outcome_or_updates(<span class="kw-2">&amp;</span><span class="self">self</span>.client_ctx.global_db(), operation_id, <span class="kw">move </span>|| {
+        <span class="prelude-val">Ok</span>(operation.outcome_or_updates(<span class="kw-2">&amp;</span><span class="self">self</span>.client_ctx.global_db(), operation_id, || {
             <span class="macro">stream!</span> {
 
                 <span class="kw">let </span>self_ref = client_ctx.self_ref();

@@ -450,7 +450,7 @@
         // order of the elements stays consistent.
         </span><span class="self">self</span>.<span class="number">0
             </span>.iter()
-            .flat_map(|(amt, notes)| notes.iter().map(<span class="kw">move </span>|c| (<span class="kw-2">*</span>amt, c)))
+            .flat_map(|(amt, notes)| notes.iter().map(|c| (<span class="kw-2">*</span>amt, c)))
     }
 
     <span class="doccomment">/// Returns an consuming iterator over every `(Amount, T)`

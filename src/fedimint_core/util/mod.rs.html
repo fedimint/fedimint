@@ -860,7 +860,7 @@
         make: F,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, E&gt; {
         <span class="kw">let </span>span2 = span.clone();
-        <span class="kw">async move </span>{
+        <span class="kw">async </span>{
             <span class="prelude-val">Ok</span>(<span class="self">Self </span>{
                 value: make.<span class="kw">await</span><span class="question-mark">?</span>,
                 span: span2,

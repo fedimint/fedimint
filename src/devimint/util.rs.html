@@ -1252,8 +1252,8 @@
             <span class="kw">return</span>;
         }
 
-        block_in_place(<span class="kw">move </span>|| {
-            block_on(<span class="kw">async move </span>{
+        block_in_place(|| {
+            block_on(<span class="kw">async </span>{
                 <span class="kw">if let </span><span class="prelude-val">Err</span>(err) = <span class="self">self</span>.terminate().<span class="kw">await </span>{
                     <span class="macro">warn!</span>(target: LOG_DEVIMINT,
                         name=%<span class="self">self</span>.name,

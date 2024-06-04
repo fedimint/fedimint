@@ -296,7 +296,7 @@
     </span><span class="kw">where
         </span>Fut: Future&lt;Output = std::result::Result&lt;T, E&gt;&gt; + <span class="lifetime">'static </span>+ MaybeSend,
     {
-        <span class="kw">let </span>handle = <span class="kw">crate</span>::runtime::spawn(<span class="string">"jit-value"</span>, <span class="kw">async move </span>{ f().<span class="kw">await </span>});
+        <span class="kw">let </span>handle = <span class="kw">crate</span>::runtime::spawn(<span class="string">"jit-value"</span>, <span class="kw">async </span>{ f().<span class="kw">await </span>});
 
         <span class="self">Self </span>{
             inner: JitInner {

@@ -508,7 +508,7 @@
                 OutPoint { txid, out_idx: <span class="number">0 </span>},
                 context.clone(),
             ),
-            <span class="kw">move </span>|_dbtx, result, old_state| {
+            |_dbtx, result, old_state| {
                 Box::pin(<span class="kw">async </span>{ <span class="self">Self</span>::transition_funding_success(result, old_state) })
             },
         )]

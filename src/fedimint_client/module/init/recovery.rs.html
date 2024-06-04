@@ -887,7 +887,7 @@
         client_ctx
             .clone()
             .module_autocommit_2(
-                <span class="kw">move </span>|dbtx, <span class="kw">_</span>| {
+                |dbtx, <span class="kw">_</span>| {
                     <span class="kw">let </span>state = state.clone();
                     {
                         Box::pin(<span class="kw">async move </span>{

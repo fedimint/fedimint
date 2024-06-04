@@ -1542,7 +1542,7 @@
 
         <span class="kw">let </span>self_clone = <span class="self">self</span>.clone();
         <span class="kw">let </span>sub_group = <span class="self">self</span>.task_group.make_subgroup();
-        sub_group.spawn(<span class="string">"run dkg"</span>, <span class="kw">move </span>|_handle| <span class="kw">async move </span>{
+        sub_group.spawn(<span class="string">"run dkg"</span>, |_handle| <span class="kw">async move </span>{
             <span class="comment">// Followers wait for leader to signal readiness for DKG
             </span><span class="kw">if let </span><span class="prelude-val">Some</span>(client) = leader {
                 <span class="kw">loop </span>{
@@ -1717,7 +1717,7 @@
         // The leader will signal this by setting it's status to AwaitingPassword
         </span><span class="kw">let </span>self_clone = <span class="self">self</span>.clone();
         <span class="kw">let </span>sub_group = <span class="self">self</span>.task_group.make_subgroup();
-        sub_group.spawn(<span class="string">"restart"</span>, <span class="kw">move </span>|_handle| <span class="kw">async move </span>{
+        sub_group.spawn(<span class="string">"restart"</span>, |_handle| <span class="kw">async move </span>{
             <span class="kw">if let </span><span class="prelude-val">Some</span>(client) = leader {
                 self_clone.await_leader_restart(<span class="kw-2">&amp;</span>client).<span class="kw">await</span><span class="question-mark">?</span>;
             } <span class="kw">else </span>{

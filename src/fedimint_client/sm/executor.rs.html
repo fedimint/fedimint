@@ -1892,7 +1892,7 @@
 
                     <span class="kw">let </span>transitions_num = transitions.len();
                     currently_running_sms.insert(state.clone());
-                    futures.push(Box::pin(<span class="kw">async move </span>{
+                    futures.push(Box::pin(<span class="kw">async </span>{
                         <span class="kw">let </span>(first_completed_result, _index, _unused_transitions) =
                             select_all(transitions).<span class="kw">await</span>;
                         ExecutorLoopEvent::Triggered(first_completed_result)
@@ -2596,7 +2596,7 @@
                                     }
                                 }
                             },
-                            |_dbtx, (), _state| Box::pin(<span class="kw">async move </span>{ MockStateMachine::Final }),
+                            |_dbtx, (), _state| Box::pin(<span class="kw">async </span>{ MockStateMachine::Final }),
                         ),
                         StateTransition::new(
                             <span class="kw">async move </span>{
@@ -2627,7 +2627,7 @@
                                 }
                             }
                         },
-                        |_dbtx, (), _state| Box::pin(<span class="kw">async move </span>{ MockStateMachine::Final }),
+                        |_dbtx, (), _state| Box::pin(<span class="kw">async </span>{ MockStateMachine::Final }),
                     )]
                 }
                 MockStateMachine::Final =&gt; {

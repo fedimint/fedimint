@@ -877,10 +877,10 @@
             </span>I: Iterator + Send + <span class="lifetime">'i</span>,
             I::Item: Send,
         {
-            stream::unfold(iter, |<span class="kw-2">mut </span>iter| <span class="kw">async move </span>{
-                fedimint_core::runtime::block_in_place(<span class="kw">move </span>|| {
+            stream::unfold(iter, |<span class="kw-2">mut </span>iter| <span class="kw">async </span>{
+                fedimint_core::runtime::block_in_place(|| {
                     <span class="kw">let </span>item = iter.next();
-                    item.map(<span class="kw">move </span>|item| (item, iter))
+                    item.map(|item| (item, iter))
                 })
             })
         }
@@ -915,7 +915,7 @@
                     rocksdb::IteratorMode::From(key_prefix, rocksdb::Direction::Forward),
                     options,
                 )
-                .map_while(<span class="kw">move </span>|res| {
+                .map_while(|res| {
                     res.map(|(key_bytes, <span class="kw">_</span>)| {
                         key_bytes
                             .starts_with(key_prefix)
@@ -1006,10 +1006,10 @@
             </span>I: Iterator + Send + <span class="lifetime">'i</span>,
             I::Item: Send,
         {
-            stream::unfold(iter, |<span class="kw-2">mut </span>iter| <span class="kw">async move </span>{
-                fedimint_core::runtime::block_in_place(<span class="kw">move </span>|| {
+            stream::unfold(iter, |<span class="kw-2">mut </span>iter| <span class="kw">async </span>{
+                fedimint_core::runtime::block_in_place(|| {
                     <span class="kw">let </span>item = iter.next();
-                    item.map(<span class="kw">move </span>|item| (item, iter))
+                    item.map(|item| (item, iter))
                 })
             })
         }

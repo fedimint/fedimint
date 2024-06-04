@@ -1126,7 +1126,7 @@
             .module_autocommit(
                 |dbtx, <span class="kw">_</span>| {
                     <span class="kw">let </span>extra_meta_inner = extra_meta.clone();
-                    Box::pin(<span class="kw">async move </span>{
+                    Box::pin(<span class="kw">async </span>{
                         <span class="kw">let </span>(operation_id, sm, address) = <span class="self">self
                             </span>.get_deposit_address_inner(valid_until, <span class="kw-2">&amp;mut </span>dbtx.module_dbtx())
                             .<span class="kw">await</span>;
@@ -1197,7 +1197,7 @@
 
         <span class="kw">let </span>client_ctx = <span class="self">self</span>.client_ctx.clone();
         <span class="prelude-val">Ok</span>(
-            operation_log_entry.outcome_or_updates(<span class="kw-2">&amp;</span><span class="self">self</span>.client_ctx.global_db(), operation_id, <span class="kw">move </span>|| {
+            operation_log_entry.outcome_or_updates(<span class="kw-2">&amp;</span><span class="self">self</span>.client_ctx.global_db(), operation_id, || {
                 <span class="macro">stream!</span> {
 
                     <span class="kw">match </span>next_deposit_state(<span class="kw-2">&amp;mut </span>operation_stream).<span class="kw">await </span>{
@@ -1276,7 +1276,7 @@
                 .finalize_and_submit_transaction(
                     operation_id,
                     WalletCommonInit::KIND.as_str(),
-                    <span class="kw">move </span>|<span class="kw">_</span>, change| WalletOperationMeta {
+                    |<span class="kw">_</span>, change| WalletOperationMeta {
                         variant: WalletOperationMetaVariant::Withdraw {
                             address: address.clone(),
                             amount,
@@ -1313,7 +1313,7 @@
             .finalize_and_submit_transaction(
                 operation_id,
                 WalletCommonInit::KIND.as_str(),
-                <span class="kw">move </span>|<span class="kw">_</span>, change| WalletOperationMeta {
+                |<span class="kw">_</span>, change| WalletOperationMeta {
                     variant: WalletOperationMetaVariant::RbfWithdraw {
                         rbf: rbf.clone(),
                         change,
@@ -1353,7 +1353,7 @@
         <span class="kw">let </span>client_ctx = <span class="self">self</span>.client_ctx.clone();
 
         <span class="prelude-val">Ok</span>(
-            operation.outcome_or_updates(<span class="kw-2">&amp;</span><span class="self">self</span>.client_ctx.global_db(), operation_id, <span class="kw">move </span>|| {
+            operation.outcome_or_updates(<span class="kw-2">&amp;</span><span class="self">self</span>.client_ctx.global_db(), operation_id, || {
                 <span class="macro">stream!</span> {
                     <span class="kw">match </span>next_withdraw_state(<span class="kw-2">&amp;mut </span>operation_stream).<span class="kw">await </span>{
                         <span class="prelude-val">Some</span>(WithdrawStates::Created(<span class="kw">_</span>)) =&gt; {

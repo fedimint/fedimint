@@ -1396,7 +1396,7 @@
         ApiEndpoint {
             path: E::PATH,
             handler: Box::new(|m, <span class="kw-2">mut </span>context, request| {
-                Box::pin(<span class="kw">async move </span>{
+                Box::pin(<span class="kw">async </span>{
                     <span class="kw">let </span>request = request
                         .to_typed()
                         .map_err(|e| ApiError::bad_request(e.to_string()))<span class="question-mark">?</span>;

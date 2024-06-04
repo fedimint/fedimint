@@ -631,7 +631,7 @@
             + <span class="lifetime">'static</span>,
     {
         StateTransition {
-            trigger: Box::pin(<span class="kw">async move </span>{
+            trigger: Box::pin(<span class="kw">async </span>{
                 <span class="kw">let </span>val = trigger.<span class="kw">await</span>;
                 serde_json::to_value(val).expect(<span class="string">"Value could not be serialized"</span>)
             }),

@@ -569,7 +569,7 @@
             //
             // The current implementation may also skip operations due to `SystemTime` not being
             // guaranteed to be monotonous. The linked list approach would also fix that.
-            </span>.skip_while(<span class="kw">move </span>|key| {
+            </span>.skip_while(|key| {
                 <span class="kw">let </span>skip = <span class="kw">if let </span><span class="prelude-val">Some</span>(start_after) = start_after {
                     key.creation_time &gt;= start_after.creation_time
                 } <span class="kw">else </span>{

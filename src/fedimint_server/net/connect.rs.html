@@ -1835,11 +1835,11 @@
         <span class="macro">assert_eq!</span>(auth_peer_a, peer_b);
         <span class="macro">assert_eq!</span>(auth_peer_b, peer_a);
 
-        <span class="kw">let </span>send_future = <span class="kw">async move </span>{
+        <span class="kw">let </span>send_future = <span class="kw">async </span>{
             conn_a.send(<span class="macro">vec!</span>[<span class="number">42</span>; <span class="number">16000</span>]).<span class="kw">await</span>.unwrap();
         }
         .boxed();
-        <span class="kw">let </span>receive_future = <span class="kw">async move </span>{
+        <span class="kw">let </span>receive_future = <span class="kw">async </span>{
             <span class="macro">assert_eq!</span>(
                 timeout(conn_b.next()).<span class="kw">await</span>.unwrap().unwrap().unwrap(),
                 <span class="macro">vec!</span>[<span class="number">42</span>; <span class="number">16000</span>]
