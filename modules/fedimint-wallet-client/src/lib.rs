@@ -43,7 +43,7 @@ use fedimint_core::module::{
     ApiVersion, CommonModuleInit, ModuleCommon, ModuleInit, MultiApiVersion,
 };
 use fedimint_core::task::{MaybeSend, MaybeSync, TaskGroup};
-use fedimint_core::{apply, async_trait_maybe_send, Amount, OutPoint};
+use fedimint_core::{apply, async_trait_maybe_send, push_db_pair_items, Amount, OutPoint};
 use fedimint_wallet_common::config::{FeeConsensus, WalletClientConfig};
 use fedimint_wallet_common::tweakable::Tweakable;
 pub use fedimint_wallet_common::*;
@@ -54,7 +54,10 @@ use serde::{Deserialize, Serialize};
 use strum::IntoEnumIterator;
 
 use crate::api::WalletFederationApi;
-use crate::client_db::NextPegInTweakIndexKey;
+use crate::client_db::{
+    ClaimedPegInData, ClaimedPegInPrefix, NextPegInTweakIndexKey, PegInTweakIndexData,
+    PegInTweakIndexPrefix,
+};
 use crate::deposit::{CreatedDepositState, DepositStateMachine, DepositStates};
 use crate::withdraw::{CreatedWithdrawState, WithdrawStateMachine, WithdrawStates};
 
@@ -144,6 +147,26 @@ impl ModuleInit for WalletClientInit {
                         wallet_client_items
                             .insert("NextPegInTweakIndex".to_string(), Box::new(index));
                     }
+                }
+                DbKeyPrefix::PegInTweakIndex => {
+                    push_db_pair_items!(
+                        dbtx,
+                        PegInTweakIndexPrefix,
+                        PegInTweakIndexKey,
+                        PegInTweakIndexData,
+                        wallet_client_items,
+                        "Peg-In Tweak Index"
+                    );
+                }
+                DbKeyPrefix::ClaimedPegIn => {
+                    push_db_pair_items!(
+                        dbtx,
+                        ClaimedPegInPrefix,
+                        ClaimedPegInKey,
+                        ClaimedPegInData,
+                        wallet_client_items,
+                        "Claimed Peg-In"
+                    );
                 }
             }
         }
