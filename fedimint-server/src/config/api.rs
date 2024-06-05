@@ -703,16 +703,13 @@ impl HasApiContext<ConfigGenApi> for ConfigGenApi {
             dbtx = dbtx.with_prefix_module_id(id);
         }
         let state = self.state.lock().await;
-        let auth = request.auth.as_ref();
-        let has_auth = state
-            .auth
-            .clone()
-            .map_or(true, |configured_auth| Some(&configured_auth) == auth);
+        let auth = request.auth.clone();
+        // The first client to connect gets to set the password
+        let has_auth = state.auth.as_ref().map_or(true, |configured_auth| {
+            Some(configured_auth) == auth.as_ref()
+        });
 
-        (
-            self,
-            ApiEndpointContext::new(db, dbtx, has_auth, request.auth.clone()),
-        )
+        (self, ApiEndpointContext::new(db, dbtx, has_auth, auth))
     }
 }
 

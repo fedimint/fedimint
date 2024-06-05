@@ -150,27 +150,20 @@ impl IBitcoindRpc for BitcoinClient {
 
 // TODO: Make private
 pub fn from_url_to_url_auth(url: &SafeUrl) -> anyhow::Result<(String, Auth)> {
+    let has_username = !url.username().is_empty();
+
+    let url_without_port = format!(
+        "{}://{}",
+        url.scheme(),
+        url.host_str().unwrap_or("127.0.0.1")
+    );
+
     Ok((
-        (url.port().map_or_else(
-            || {
-                format!(
-                    "{}://{}",
-                    url.scheme(),
-                    url.host_str().unwrap_or("127.0.0.1")
-                )
-            },
-            |port| {
-                format!(
-                    "{}://{}:{port}",
-                    url.scheme(),
-                    url.host_str().unwrap_or("127.0.0.1")
-                )
-            },
-        )),
-        match (
-            !url.username().is_empty(),
-            env::var(FM_BITCOIND_COOKIE_FILE_ENV),
-        ) {
+        match url.port() {
+            Some(port) => format!("{url_without_port}:{port}"),
+            None => url_without_port,
+        },
+        match (has_username, env::var(FM_BITCOIND_COOKIE_FILE_ENV)) {
             (true, Ok(_)) => {
                 bail!("When {FM_BITCOIND_COOKIE_FILE_ENV} is set, the url auth part must be empty.")
             }

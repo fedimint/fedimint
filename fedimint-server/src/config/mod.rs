@@ -539,6 +539,7 @@ impl ServerConfig {
             target: LOG_NET_PEER_DKG,
             "Waiting for confirmations from other peers."
         );
+
         let wait_for_peers = async {
             let mut done_peers = BTreeSet::from([*our_id]);
 
@@ -556,13 +557,11 @@ impl ServerConfig {
                     Ok((peer_id, msg)) => {
                         error!(target: LOG_NET_PEER_DKG, %peer_id, ?msg, "Received incorrect message after dkg was supposed to be finished. Probably dkg multiplexing bug.");
                     }
-                    Err(Cancelled) => {
-                        /* ignore shutdown for time being, we'll timeout soon
-                         * anyway */
-                    }
+                    Err(Cancelled) => { /* Ignore shutdown. We'll timeout soon anyway. */ }
                 }
             }
         };
+
         if matches!(
             timeout(Duration::from_secs(30), wait_for_peers).await,
             Err(Elapsed)
