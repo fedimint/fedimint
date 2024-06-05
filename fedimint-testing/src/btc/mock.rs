@@ -109,10 +109,14 @@ impl FakeBitcoinTest {
         PartialMerkleTree::from_txids(txs.as_slice(), matches.as_slice())
     }
 
-    fn new_transaction(out: Vec<TxOut>) -> Transaction {
+    /// Create a fake bitcoin transaction with given outputs
+    ///
+    /// Nonce is used to avoid same txids for transactions with same outputs,
+    /// which can accidenatally happen due to how simplicit our fakes are.
+    fn new_transaction(out: Vec<TxOut>, nonce: u32) -> Transaction {
         Transaction {
             version: 0,
-            lock_time: LockTime::ZERO,
+            lock_time: LockTime::from_height(nonce).unwrap(),
             input: vec![],
             output: out,
         }
@@ -139,7 +143,7 @@ impl FakeBitcoinTest {
         }
         // all blocks need at least one transaction
         if pending.is_empty() {
-            pending.push(Self::new_transaction(vec![]));
+            pending.push(Self::new_transaction(vec![], blocks.len() as u32));
         }
         let merkle_root = Self::pending_merkle_tree(pending)
             .extract_matches(&mut vec![], &mut vec![])
@@ -201,10 +205,13 @@ impl BitcoinTest for FakeBitcoinTest {
     ) -> (TxOutProof, Transaction) {
         let mut inner = self.inner.write().unwrap();
 
-        let transaction = FakeBitcoinTest::new_transaction(vec![TxOut {
-            value: amount.to_sat(),
-            script_pubkey: address.payload.script_pubkey(),
-        }]);
+        let transaction = FakeBitcoinTest::new_transaction(
+            vec![TxOut {
+                value: amount.to_sat(),
+                script_pubkey: address.payload.script_pubkey(),
+            }],
+            inner.blocks.len() as u32,
+        );
         inner.addresses.insert(transaction.txid(), amount.into());
 
         inner.pending.push(transaction.clone());

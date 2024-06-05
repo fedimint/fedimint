@@ -17,6 +17,7 @@ use secp256k1::KeyPair;
 use tracing::{debug, instrument, trace, warn};
 
 use crate::api::WalletFederationApi;
+use crate::pegin_monitor::filter_onchain_deposit_outputs;
 use crate::{WalletClientContext, WalletClientStates};
 
 const TRANSACTION_STATUS_FETCH_INTERVAL: Duration = Duration::from_secs(1);
@@ -125,20 +126,9 @@ async fn await_created_btc_transaction_submitted(
                     warn!("More than one transaction was sent to deposit address, only considering the first one");
                 }
 
-                if let Some(transaction) = received.into_iter().next() {
-                    let out_idx = transaction
-                        .output
-                        .iter()
-                        .enumerate()
-                        .find_map(|(idx, output)| {
-                            if output.script_pubkey == script {
-                                Some(idx as u32)
-                            } else {
-                                None
-                            }
-                        })
-                        .expect("TODO: handle invalid tx returned by API");
-
+                if let Some((transaction, out_idx)) =
+                    filter_onchain_deposit_outputs(received.into_iter(), &script).next()
+                {
                     return (transaction, out_idx);
                 }
 
@@ -264,7 +254,7 @@ async fn await_btc_transaction_confirmed(
     }
 }
 
-async fn transition_btc_tx_confirmed(
+pub(crate) async fn transition_btc_tx_confirmed(
     dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
     global_context: DynGlobalClientContext,
     old_state: DepositStateMachine,

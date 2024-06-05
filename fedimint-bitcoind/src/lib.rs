@@ -161,16 +161,16 @@ pub trait IBitcoindRpc: Debug {
 
     /// Watches for a script and returns any transactions associated with it
     ///
-    /// Should be called once prior to transactions being submitted or watching
-    /// may not occur on backends that need it
+    /// Should be called at least prior to transactions being submitted or
+    /// watching may not occur on backends that need it
     /// TODO: bitcoind backend is broken
     /// `<https://github.com/fedimint/fedimint/issues/5329>`
     async fn watch_script_history(&self, script: &ScriptBuf) -> Result<()>;
 
     /// Get script transaction history
     ///
-    /// Note: should call `watch_script_history` at least once (and ideally only
-    /// once), before calling this.
+    /// Note: should call `watch_script_history` at least once, before calling
+    /// this.
     async fn get_script_history(&self, script: &ScriptBuf) -> Result<Vec<Transaction>>;
 
     /// Returns a proof that a tx is included in the bitcoin blockchain

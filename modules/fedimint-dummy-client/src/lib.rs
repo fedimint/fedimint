@@ -37,7 +37,6 @@ use fedimint_dummy_common::{
 use futures::{pin_mut, StreamExt};
 use states::DummyStateMachine;
 use strum::IntoEnumIterator;
-use tracing::debug;
 
 pub mod api;
 pub mod db;
