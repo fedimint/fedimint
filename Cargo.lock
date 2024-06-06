@@ -51,9 +51,9 @@ dependencies = [
 
 [[package]]
 name = "aleph-bft-crypto"
-version = "0.7.1"
+version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "de73b5bd99955d8728d2cce8199b02f938c2b44f2d2b738e6bea287a70500bad"
+checksum = "7fdf0c124883ef234a6262e43b9ed1d214e9f9c8744a88f1f2451c2b6efe4290"
 dependencies = [
  "async-trait",
  "bit-vec",
@@ -64,11 +64,12 @@ dependencies = [
 
 [[package]]
 name = "aleph-bft-rmc"
-version = "0.10.0"
+version = "0.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4470671c60202933de1945c7208125accd42f2cbd45fc8dcb5dd15d1d053ddd2"
+checksum = "5e9a4418a90817c8c4929d55019eeb2bdf1d4a6030d557f17b3f580723ab40f8"
 dependencies = [
  "aleph-bft-crypto",
+ "aleph-bft-types 0.12.0",
  "async-trait",
  "futures",
  "futures-timer",
@@ -78,14 +79,25 @@ dependencies = [
 
 [[package]]
 name = "aleph-bft-types"
-version = "0.10.0"
+version = "0.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a01d898329af9530cc10526b212eaa4365a4f199257e85ca712e959a24cb67fc"
+checksum = "7afbf87383e06ccfe9386cda59e57ac9d899267cc765fee654d921e4ba779f92"
 dependencies = [
  "aleph-bft-crypto",
  "async-trait",
  "futures",
- "log",
+ "parity-scale-codec",
+]
+
+[[package]]
+name = "aleph-bft-types"
+version = "0.13.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2bca9d19f587215da2b6c50b5e71f9addbf2305153f850dad3f9496ed67e28bb"
+dependencies = [
+ "aleph-bft-crypto",
+ "async-trait",
+ "futures",
  "parity-scale-codec",
 ]
 
@@ -1359,18 +1371,18 @@ dependencies = [
 
 [[package]]
 name = "fedimint-aleph-bft"
-version = "0.30.0"
+version = "0.36.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f6b6d7cad3a5af85956e9f1739fb8e27668652f523ccf3b8aeb20ed788a98c2a"
+checksum = "8b21015ab681cdddedd866fe4af9169901012e9a8bd4745da8423131cccae025"
 dependencies = [
  "aleph-bft-rmc",
- "aleph-bft-types",
+ "aleph-bft-types 0.13.0",
  "anyhow",
  "async-trait",
  "derivative",
  "futures",
  "futures-timer",
- "itertools 0.11.0",
+ "itertools 0.12.1",
  "log",
  "parity-scale-codec",
  "parking_lot",
@@ -2333,7 +2345,7 @@ dependencies = [
 name = "fedimint-server"
 version = "0.4.0-alpha"
 dependencies = [
- "aleph-bft-types",
+ "aleph-bft-types 0.13.0",
  "anyhow",
  "async-channel",
  "async-trait",

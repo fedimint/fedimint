@@ -26,12 +26,12 @@ use fedimint_core::{timing, NumPeers, PeerId};
 use futures::StreamExt;
 use rand::Rng;
 use tokio::sync::{watch, RwLock};
-use tracing::{debug, error, info, instrument, warn, Level};
+use tracing::{debug, info, instrument, warn, Level};
 
 use crate::config::ServerConfig;
 use crate::consensus::aleph_bft::backup::{BackupReader, BackupWriter};
 use crate::consensus::aleph_bft::data_provider::{DataProvider, UnitData};
-use crate::consensus::aleph_bft::finalization_handler::FinalizationHandler;
+use crate::consensus::aleph_bft::finalization_handler::{FinalizationHandler, OrderedUnit};
 use crate::consensus::aleph_bft::keychain::Keychain;
 use crate::consensus::aleph_bft::network::Network;
 use crate::consensus::aleph_bft::spawner::Spawner;
@@ -218,20 +218,21 @@ impl ConsensusEngine {
         // memory by preventing the creation of a threshold signature, thereby
         // keeping the session open indefinitely. Hence, after a certain round
         // index, we increase the delay between rounds exponentially such that
-        // max_round would only be reached after a minimum of 100 years. In case
-        // of such an attack the broadcast stops ordering any items until the
-        // attack subsides as no items are ordered while the signatures are
-        // collected. The maximum RAM consumption of a peer is bound by:
+        // the end of the aleph bft session would only be reached after a minimum
+        // of 10 years. In case of such an attack the broadcast stops ordering any
+        // items until the attack subsides as no items are ordered while the
+        // signatures are collected. The maximum RAM consumption of the aleph bft
+        // broadcast instance is therefore bound by:
         //
-        // self.keychain.peer_count() * max_round * ALEPH_BFT_UNIT_BYTE_LIMIT
+        // self.keychain.peer_count()
+        //      * (broadcast_rounds_per_session + EXP_SLOWDOWN_ROUNDS)
+        //      * ALEPH_BFT_UNIT_BYTE_LIMIT
 
-        const BASE: f64 = 1.005;
+        const EXP_SLOWDOWN_ROUNDS: u16 = 1000;
+        const BASE: f64 = 1.02;
 
-        let expected_rounds = 3 * self.cfg.consensus.broadcast_expected_rounds_per_session as usize;
-        let max_round = 3 * self.cfg.consensus.broadcast_max_rounds_per_session;
+        let rounds_per_session = self.cfg.consensus.broadcast_rounds_per_session;
         let round_delay = f64::from(self.cfg.local.broadcast_round_delay_ms);
-
-        let exp_slowdown_offset = 3 * expected_rounds;
 
         let mut delay_config = aleph_bft::default_delay_config();
 
@@ -240,7 +241,7 @@ impl ConsensusEngine {
                 0.0
             } else {
                 round_delay
-                    * BASE.powf(round_index.saturating_sub(exp_slowdown_offset) as f64)
+                    * BASE.powf(round_index.saturating_sub(rounds_per_session as usize) as f64)
                     * rand::thread_rng().gen_range(0.5..=1.5)
             };
 
@@ -251,11 +252,15 @@ impl ConsensusEngine {
             self.keychain.peer_count().into(),
             self.keychain.peer_id().to_usize().into(),
             session_index,
-            max_round,
+            self.cfg
+                .consensus
+                .broadcast_rounds_per_session
+                .checked_add(EXP_SLOWDOWN_ROUNDS)
+                .expect("Rounds per session exceed maximum of u16::Max - EXP_SLOWDOWN_ROUNDS"),
             delay_config,
-            Duration::from_secs(100 * 365 * 24 * 60 * 60),
+            Duration::from_secs(10 * 365 * 24 * 60 * 60),
         )
-        .expect("The exponential slowdown we defined exceeds 100 years");
+        .expect("The exponential slowdown exceeds 10 years");
 
         // we can use an unbounded channel here since the number and size of units
         // ordered in a single aleph session is bounded as described above
@@ -276,22 +281,12 @@ impl ConsensusEngine {
                 Network::new(connections),
                 self.keychain.clone(),
                 Spawner::new(self.task_group.make_subgroup()),
-                aleph_bft_types::Terminator::create_root(terminator_receiver, "Terminator"),
+                aleph_bft::Terminator::create_root(terminator_receiver, "Terminator"),
             ),
         );
 
-        // this is the minimum number of batches data that will be ordered before we
-        // reach the exponential_slowdown_offset since at least f + 1 batches are
-        // ordered every round
-        let batches_per_session = expected_rounds * self.keychain.peer_count();
-
         let signed_session_outcome = self
-            .complete_signed_session_outcome(
-                session_index,
-                batches_per_session,
-                unit_data_receiver,
-                signature_sender,
-            )
+            .complete_signed_session_outcome(session_index, unit_data_receiver, signature_sender)
             .await?;
 
         // We can terminate the session instead of waiting for other peers to complete
@@ -311,34 +306,37 @@ impl ConsensusEngine {
     pub async fn complete_signed_session_outcome(
         &self,
         session_index: u64,
-        batches_per_session_outcome: usize,
-        unit_data_receiver: Receiver<(UnitData, PeerId)>,
+        ordered_unit_receiver: Receiver<OrderedUnit>,
         signature_sender: watch::Sender<Option<SchnorrSignature>>,
     ) -> anyhow::Result<SignedSessionOutcome> {
-        let mut num_batches = 0;
         let mut item_index = 0;
 
         // We build a session outcome out of the ordered batches until either we have
-        // processed batches_per_session_outcome of batches or a threshold signed
+        // processed broadcast_rounds_per_session rounds or a threshold signed
         // session outcome is obtained from our peers
-        while num_batches < batches_per_session_outcome {
+        loop {
             tokio::select! {
-                unit_data = unit_data_receiver.recv() => {
-                    if let (UnitData::Batch(bytes), peer) = unit_data? {
+                ordered_unit = ordered_unit_receiver.recv() => {
+                    let ordered_unit = ordered_unit?;
+
+                    if ordered_unit.round >= self.cfg.consensus.broadcast_rounds_per_session {
+                        break;
+                    }
+
+                    if let Some(UnitData::Batch(bytes)) = ordered_unit.data {
                         if let Ok(items) = Vec::<ConsensusItem>::consensus_decode(&mut bytes.as_slice(), &self.decoders()){
                             for item in items {
                                 if self.process_consensus_item(
                                     session_index,
                                     item_index,
                                     item.clone(),
-                                    peer
+                                    ordered_unit.creator
                                 ).await
                                 .is_ok() {
                                     item_index += 1;
                                 }
                             }
                         }
-                        num_batches += 1;
                     }
                 },
                 signed_session_outcome = self.request_signed_session_outcome(&self.federation_api, session_index) => {
@@ -391,12 +389,14 @@ impl ConsensusEngine {
         // signature or a signed session outcome arrives from our peers
         while signatures.len() < self.keychain.threshold() {
             tokio::select! {
-                unit_data = unit_data_receiver.recv() => {
-                    if let (UnitData::Signature(signature), peer) = unit_data? {
-                        if self.keychain.verify(&header, &signature, to_node_index(peer)){
-                            signatures.insert(peer, signature);
+                ordered_unit = ordered_unit_receiver.recv() => {
+                    let ordered_unit = ordered_unit?;
+
+                    if let Some(UnitData::Signature(signature)) = ordered_unit.data {
+                        if self.keychain.verify(&header, &signature, to_node_index(ordered_unit.creator)){
+                            signatures.insert(ordered_unit.creator, signature);
                         } else {
-                            error!(target: LOG_CONSENSUS, "Consensus Failure: invalid header signature from {peer}");
+                            warn!(target: LOG_CONSENSUS, "Consensus Failure: invalid header signature from {}", ordered_unit.creator);
                         }
                     }
                 }

@@ -92,10 +92,14 @@ impl aleph_bft::DataProvider<UnitData> for DataProvider {
             }
         }
 
+        if items.is_empty() {
+            return None;
+        }
+
         let bytes = items.consensus_encode_to_vec();
 
         assert!(bytes.len() <= ALEPH_BFT_UNIT_BYTE_LIMIT);
 
-        return Some(UnitData::Batch(bytes));
+        Some(UnitData::Batch(bytes))
     }
 }

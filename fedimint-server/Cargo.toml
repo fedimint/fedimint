@@ -1,6 +1,6 @@
 [package]
 name = "fedimint-server"
-version = {workspace = true}
+version = { workspace = true }
 authors = ["The Fedimint Developers"]
 edition = "2021"
 description = "fedimint-server' facilitates federated consensus with atomic broadcast and distributed configuration."
@@ -57,10 +57,10 @@ jsonrpsee = { version = "0.22.5", features = ["server"] }
 tokio = { version = "1.38.0", features = ["full", "tracing"] }
 tokio-stream = "0.1.15"
 tokio-rustls = { workspace = true }
-tokio-util = { version = "0.7.11", features = [ "codec" ] }
-tracing-subscriber = { version = "0.3.18", features = [ "env-filter" ] }
-aleph-bft = { package = "fedimint-aleph-bft", version = "0.30.0", default-features = false }
-aleph-bft-types = "0.10.0"
+tokio-util = { version = "0.7.11", features = ["codec"] }
+tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
+aleph-bft = { package = "fedimint-aleph-bft", version = "0.36.0", default-features = false }
+aleph-bft-types = "0.13.0"
 parity-scale-codec = "3.6.12"
 
 
