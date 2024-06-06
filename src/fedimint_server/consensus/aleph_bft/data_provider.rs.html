@@ -99,6 +99,10 @@
 <a href="#99" id="99">99</a>
 <a href="#100" id="100">100</a>
 <a href="#101" id="101">101</a>
+<a href="#102" id="102">102</a>
+<a href="#103" id="103">103</a>
+<a href="#104" id="104">104</a>
+<a href="#105" id="105">105</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeSet;
 
 <span class="kw">use </span>fedimint_core::config::ALEPH_BFT_UNIT_BYTE_LIMIT;
@@ -193,11 +197,15 @@
             }
         }
 
+        <span class="kw">if </span>items.is_empty() {
+            <span class="kw">return </span><span class="prelude-val">None</span>;
+        }
+
         <span class="kw">let </span>bytes = items.consensus_encode_to_vec();
 
         <span class="macro">assert!</span>(bytes.len() &lt;= ALEPH_BFT_UNIT_BYTE_LIMIT);
 
-        <span class="kw">return </span><span class="prelude-val">Some</span>(UnitData::Batch(bytes));
+        <span class="prelude-val">Some</span>(UnitData::Batch(bytes))
     }
 }
 </code></pre></div></section></main></body></html>

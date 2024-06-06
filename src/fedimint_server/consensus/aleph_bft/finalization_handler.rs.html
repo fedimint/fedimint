@@ -20,25 +20,55 @@
 <a href="#20" id="20">20</a>
 <a href="#21" id="21">21</a>
 <a href="#22" id="22">22</a>
-</pre></div><pre class="rust"><code><span class="kw">use </span>fedimint_core::PeerId;
+<a href="#23" id="23">23</a>
+<a href="#24" id="24">24</a>
+<a href="#25" id="25">25</a>
+<a href="#26" id="26">26</a>
+<a href="#27" id="27">27</a>
+<a href="#28" id="28">28</a>
+<a href="#29" id="29">29</a>
+<a href="#30" id="30">30</a>
+<a href="#31" id="31">31</a>
+<a href="#32" id="32">32</a>
+<a href="#33" id="33">33</a>
+<a href="#34" id="34">34</a>
+<a href="#35" id="35">35</a>
+<a href="#36" id="36">36</a>
+<a href="#37" id="37">37</a>
+</pre></div><pre class="rust"><code><span class="kw">use </span>aleph_bft::{NodeIndex, Round};
+<span class="kw">use </span>fedimint_core::PeerId;
 
 <span class="kw">use </span><span class="kw">super</span>::data_provider::UnitData;
 
+<span class="kw">pub struct </span>OrderedUnit {
+    <span class="kw">pub </span>creator: PeerId,
+    <span class="kw">pub </span>round: Round,
+    <span class="kw">pub </span>data: <span class="prelude-ty">Option</span>&lt;UnitData&gt;,
+}
+
 <span class="kw">pub struct </span>FinalizationHandler {
-    sender: async_channel::Sender&lt;(UnitData, PeerId)&gt;,
+    sender: async_channel::Sender&lt;OrderedUnit&gt;,
 }
 
 <span class="kw">impl </span>FinalizationHandler {
-    <span class="kw">pub fn </span>new(sender: async_channel::Sender&lt;(UnitData, PeerId)&gt;) -&gt; <span class="self">Self </span>{
+    <span class="kw">pub fn </span>new(sender: async_channel::Sender&lt;OrderedUnit&gt;) -&gt; <span class="self">Self </span>{
         <span class="self">Self </span>{ sender }
     }
 }
 
 <span class="kw">impl </span>aleph_bft::FinalizationHandler&lt;UnitData&gt; <span class="kw">for </span>FinalizationHandler {
-    <span class="kw">fn </span>data_finalized(<span class="kw-2">&amp;mut </span><span class="self">self</span>, unit_data: UnitData, creator: aleph_bft::NodeIndex) {
+    <span class="kw">fn </span>data_finalized(<span class="kw-2">&amp;mut </span><span class="self">self</span>, _data: UnitData) {
+        <span class="macro">unreachable!</span>(<span class="string">"This method is not called"</span>)
+    }
+
+    <span class="kw">fn </span>unit_finalized(<span class="kw-2">&amp;mut </span><span class="self">self</span>, creator: NodeIndex, round: Round, data: <span class="prelude-ty">Option</span>&lt;UnitData&gt;) {
         <span class="comment">// the channel is unbounded
         </span><span class="self">self</span>.sender
-            .try_send((unit_data, <span class="kw">super</span>::to_peer_id(creator)))
+            .try_send(OrderedUnit {
+                creator: <span class="kw">super</span>::to_peer_id(creator),
+                round,
+                data,
+            })
             .ok();
     }
 }
