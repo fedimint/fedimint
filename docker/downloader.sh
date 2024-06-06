@@ -291,34 +291,6 @@ EXTERNAL_IP=$(curl -4 -sSL ifconfig.me)
 REMOTE_USER=$(whoami)
 
 if [[ $SETUP_TLS == true ]]; then
-  if [[ $INSTALL_TYPE == "guardian" ]]; then
-    echo "Do you want to setup an xmpp chat server on this instance? [yes/no]"
-    while true; do
-      read -r -n 1 -p "Your choice (yes/no): " choice </dev/tty
-      echo
-      case $choice in
-      yes)
-        SETUP_XMPP=true
-        break
-        ;;
-      no)
-        SETUP_XMPP=false
-        # remove xmpp service from services list
-        SERVICES=$(echo $SERVICES | sed -e 's/xmpp//g')
-        # remove xmpp meta from fedimintd setup
-        sed -i '/FM_EXTRA_DKG_META=chat_server_domain=xmpp.fedimint.my-super-host.com/d' $path
-        # remove xmpp section from docker-compose.yaml
-        sed -i '/### START_XMPP ###/,/### END_XMPP ###/d' $path
-        # remove prosody volume from docker-compose.yaml
-        sed -i '/prosody_datadir:/d' $path
-        break
-        ;;
-      *)
-        echo "Invalid option. Please type 'yes' or 'no'."
-        ;;
-      esac
-    done
-  fi
   # All the TLS setup steps go here
   echo
   echo "Fedimint ${INSTALL_TYPE} setup with TLS certificates by Let's Encrypt:"
