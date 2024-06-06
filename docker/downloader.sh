@@ -125,48 +125,25 @@ while true; do
 done
 
 echo
-echo "Do you want to setup TLS certificates with Let's Encrypt? [yes/no]"
-echo "(to also set up xmpp chat on this instance you must use TLS)"
-while true; do
-  read -p "Type 'yes' to setup TLS certificates or 'no' to skip: " SETUP_TLS </dev/tty
-
-  case $SETUP_TLS in
-  yes)
-    SETUP_TLS=true
-    TLS_DIR="tls"
-    break
-    ;;
-  no)
-    SETUP_TLS=false
-    TLS_DIR="no-tls"
-    break
-    ;;
-  *)
-    echo "Invalid option. Please type 'yes' or 'no'."
-    ;;
-  esac
-done
-
-DOCKER_COMPOSE_FILE="https://raw.githubusercontent.com/Kodylow/fedimint/kl/docker-deploy/docker/${INSTALL_TYPE}/${TLS_DIR}/docker-compose.yaml"
-
-echo
-echo "Which Bitcoin network are you using? [mainnet/mutinynet]"
+echo "Which Bitcoin network are you setting up for? [mainnet/mutinynet]"
 while true; do
   read -p "Type your choice: " NETWORK_TYPE </dev/tty
 
   case $NETWORK_TYPE in
   mainnet)
     echo "Warning: Fedimint is alpha software. Running mainnet is currently recommended only for experienced developers who understand the risks."
+    echo "You MUST setup with TLS if you are running mainnet."
     read -p "Do you acknowledge this and wish to continue? (Type the word 'yes' to acknowledge): " ACKNOWLEDGE </dev/tty
     if [[ $ACKNOWLEDGE != "yes" ]]; then
       echo "Installation aborted. Please reconsider the network choice if you are not ready for mainnet."
       exit 1
     else
+      SETUP_TLS=true
+      TLS_DIR="tls"
       break
     fi
     ;;
   mutinynet)
-    echo "Setting up for $NETWORK_TYPE. Proceeding with installation."
     break
     ;;
   *)
@@ -174,6 +151,35 @@ while true; do
     ;;
   esac
 done
+
+echo "Setting up for $NETWORK_TYPE. Proceeding with installation."
+
+if [[ -z $SETUP_TLS ]] || [[ -z $TLS_DIR ]]; then
+  echo
+  echo "Do you want to setup TLS certificates with Let's Encrypt? [yes/no]"
+  while true; do
+    read -p "Type 'yes' to setup TLS certificates or 'no' to skip: " SETUP_TLS </dev/tty
+    case $SETUP_TLS in
+    yes)
+      SETUP_TLS=true
+      TLS_DIR="tls"
+      break
+      ;;
+    no)
+      SETUP_TLS=false
+      TLS_DIR="no-tls"
+      break
+      ;;
+    *)
+      echo "Invalid option. Please type 'yes' or 'no'."
+      ;;
+    esac
+  done
+else
+  echo "Running mainnet, you must setup with TLS."
+fi
+
+DOCKER_COMPOSE_FILE="https://raw.githubusercontent.com/Kodylow/fedimint/kl/docker-deploy/docker/${INSTALL_TYPE}/${TLS_DIR}/docker-compose.yaml"
 
 echo
 if [ "$IS_GATEWAY" = false ]; then
