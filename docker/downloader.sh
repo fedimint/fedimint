@@ -511,7 +511,7 @@ else # Is Guardian
     echo "Using Esplora URL: $ESPLORA_URL"
 
     # Set the esplora URL in the docker-compose file
-    sed -i "s|FM_BITCOIN_RPC_URL=|FM_BITCOIN_RPC_URL=$ESPLORA_URL|" ./docker-compose.yaml
+    sed -i "s|FM_BITCOIN_RPC_URL=http://bitcoin:bitcoin@bitcoind:38332|FM_BITCOIN_RPC_URL=$ESPLORA_URL|" ./docker-compose.yaml
 
     # Set the bitcoin network in the docker-compose file (mainnet is bitcoin for network)
     case $NETWORK_TYPE in
