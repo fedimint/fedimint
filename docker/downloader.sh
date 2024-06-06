@@ -109,7 +109,7 @@ while true; do
 
   case $INSTALL_TYPE in
   guardian)
-    SERVICES="fedimintd guardian-ui bitcoindxmpp"
+    SERVICES="fedimintd guardian-ui bitcoind"
     IS_GATEWAY=false
     break
     ;;
@@ -193,6 +193,7 @@ if [ "$IS_GATEWAY" = false ]; then
     case $choice in
     1)
       USE_ESPLORA=true
+      SERVICES="fedimintd guardian-ui"
       break
       ;;
     2)
@@ -290,6 +291,8 @@ count_dots() {
 EXTERNAL_IP=$(curl -4 -sSL ifconfig.me)
 REMOTE_USER=$(whoami)
 
+download $DOCKER_COMPOSE_FILE ./docker-compose.yaml
+
 if [[ $SETUP_TLS == true ]]; then
   # All the TLS setup steps go here
   echo
@@ -386,17 +389,16 @@ if [[ $SETUP_TLS == true ]]; then
       fi
     fi
   done
+  replace_host "${host_name[@]}" ./docker-compose.yaml
 fi
-
-download $DOCKER_COMPOSE_FILE ./docker-compose.yaml
 
 rename_localhost() {
   local path=$1
   local ip=$2
   if [[ "$(uname)" == "Darwin" ]]; then # macOS uses BSD sed
-    sed -i '' "s/127.0.0.1/$ip/g" "$path"
+    sed -i '' "s/fedimint.my-super-host.com/$ip/g" "$path"
   else
-    sed -i "s/127.0.0.1/$ip/g" "$path"
+    sed -i "s/fedimint.my-super-host.com/$ip/g" "$path"
   fi
 }
 
