@@ -4,7 +4,7 @@ use std::mem;
 
 use anyhow::anyhow;
 use fedimint_core::task::{MaybeSend, MaybeSync};
-use fedimint_core::{maybe_add_send_sync, NumPeers, NumPeersExt, PeerId};
+use fedimint_core::{maybe_add_send_sync, NumPeers, PeerId};
 
 use crate::api::{self, PeerError, PeerResult};
 

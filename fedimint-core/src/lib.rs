@@ -340,19 +340,48 @@ impl From<usize> for NumPeers {
         Self(value)
     }
 }
-impl NumPeers {
-    pub fn as_usize(&self) -> usize {
-        self.0
-    }
 
-    pub fn peer_ids(&self) -> impl Iterator<Item = PeerId> {
-        (0u16..(self.0 as u16)).map(PeerId)
+impl<T> From<T> for NumPeers
+where
+    T: NumPeersExt,
+{
+    fn from(value: T) -> Self {
+        value.to_num_peers()
     }
 }
 
-impl NumPeersExt for NumPeers {
-    fn total(&self) -> usize {
+impl NumPeers {
+    pub fn as_usize(self) -> usize {
         self.0
+    }
+
+    pub fn peer_ids(self) -> impl Iterator<Item = PeerId> {
+        (0u16..(self.0 as u16)).map(PeerId)
+    }
+
+    pub fn total(self) -> usize {
+        self.0
+    }
+
+    /// number of peers that can be evil without disrupting the federation
+    pub fn max_evil(self) -> usize {
+        (self.total() - 1) / 3
+    }
+
+    /// number of peers to select such that one is honest (under our
+    /// assumptions)
+    pub fn one_honest(self) -> usize {
+        self.max_evil() + 1
+    }
+
+    /// Degree of a underlying polynomial to require `threshold` signatures
+    pub fn degree(self) -> usize {
+        self.threshold() - 1
+    }
+
+    /// number of peers required for a signature
+    pub fn threshold(self) -> usize {
+        self.total() - self.max_evil()
     }
 }
 
@@ -382,25 +411,39 @@ impl NumPeersExt for BTreeSet<PeerId> {
 
 /// for consensus-related calculations given the number of peers
 pub trait NumPeersExt {
+    fn to_num_peers(&self) -> NumPeers {
+        #[allow(deprecated)]
+        NumPeers(self.total())
+    }
+
+    #[deprecated(note = "use `to_num_peers` instead")]
     fn total(&self) -> usize;
 
     /// number of peers that can be evil without disrupting the federation
+    #[deprecated(note = "use `to_num_peers` instead")]
+    #[allow(deprecated)]
     fn max_evil(&self) -> usize {
         (self.total() - 1) / 3
     }
 
     /// number of peers to select such that one is honest (under our
     /// assumptions)
+    #[deprecated(note = "use `to_num_peers` instead")]
+    #[allow(deprecated)]
     fn one_honest(&self) -> usize {
         self.max_evil() + 1
     }
 
     /// Degree of a underlying polynomial to require `threshold` signatures
+    #[deprecated(note = "use `to_num_peers` instead")]
+    #[allow(deprecated)]
     fn degree(&self) -> usize {
         self.threshold() - 1
     }
 
     /// number of peers required for a signature
+    #[deprecated(note = "use `to_num_peers` instead")]
+    #[allow(deprecated)]
     fn threshold(&self) -> usize {
         self.total() - self.max_evil()
     }

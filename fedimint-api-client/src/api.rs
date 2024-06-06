@@ -42,8 +42,8 @@ use fedimint_core::time::now;
 use fedimint_core::transaction::{SerdeTransaction, Transaction, TransactionSubmissionOutcome};
 use fedimint_core::util::SafeUrl;
 use fedimint_core::{
-    apply, async_trait_maybe_send, dyn_newtype_define, runtime, NumPeers, NumPeersExt, OutPoint,
-    PeerId, TransactionId,
+    apply, async_trait_maybe_send, dyn_newtype_define, runtime, NumPeersExt, OutPoint, PeerId,
+    TransactionId,
 };
 use fedimint_logging::LOG_CLIENT_NET_API;
 use futures::stream::FuturesUnordered;
@@ -466,7 +466,7 @@ pub trait FederationApiExt: IRawFederationApi {
         Ret: serde::de::DeserializeOwned + Eq + Debug + Clone + MaybeSend,
     {
         self.request_with_strategy(
-            ThresholdConsensus::new(NumPeers::from(self.all_peers().total())),
+            ThresholdConsensus::new(self.all_peers().to_num_peers()),
             method,
             params,
         )
@@ -972,10 +972,7 @@ where
         id: &secp256k1::PublicKey,
     ) -> FederationResult<BTreeMap<PeerId, Option<ClientBackupSnapshot>>> {
         self.request_with_strategy(
-            FilterMapThreshold::new(
-                |_, snapshot| Ok(snapshot),
-                NumPeers::from(self.all_peers().total()),
-            ),
+            FilterMapThreshold::new(|_, snapshot| Ok(snapshot), self.all_peers().to_num_peers()),
             RECOVER_ENDPOINT.to_owned(),
             ApiRequestErased::new(id),
         )
@@ -1607,7 +1604,7 @@ mod tests {
         peer_to_url_map.insert(PeerId::from(1), "ws://test2".parse().expect("URL fail"));
         peer_to_url_map.insert(PeerId::from(2), "ws://test3".parse().expect("URL fail"));
         peer_to_url_map.insert(PeerId::from(3), "ws://test4".parse().expect("URL fail"));
-        let max_size = peer_to_url_map.max_evil() + 1;
+        let max_size = peer_to_url_map.to_num_peers().max_evil() + 1;
 
         let code =
             InviteCode::new_with_essential_num_guardians(&peer_to_url_map, FederationId::dummy());

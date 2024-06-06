@@ -27,9 +27,7 @@ use fedimint_core::module::{
     SupportedModuleApiVersions, TransactionItemAmount, CORE_CONSENSUS_VERSION,
 };
 use fedimint_core::server::DynServerModule;
-use fedimint_core::{
-    push_db_pair_items, NumPeers, NumPeersExt as _, OutPoint, PeerId, ServerModule,
-};
+use fedimint_core::{push_db_pair_items, NumPeers, OutPoint, PeerId, ServerModule};
 use fedimint_logging::LOG_MODULE_META;
 use fedimint_meta_common::config::{
     MetaClientConfig, MetaConfig, MetaConfigConsensus, MetaConfigLocal, MetaConfigPrivate,
