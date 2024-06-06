@@ -36,7 +36,6 @@ echo
 echo "Welcome to the Fedimint Docker Installer. This script will:"
 echo "1. Download/check docker and other required dependencies."
 echo "2. Ask some questions to set:"
-echo "   - The version of Fedimint to install."
 echo "   - The type of installation (guardian or gateway)."
 echo "   - Which services to install or use an external source for."
 echo "   - Whether to install and use Let's Encrypt TLS certificates."
@@ -54,35 +53,6 @@ while true; do
     break
   fi
 
-done
-
-echo "Which version of Fedimint do you want to install?"
-echo "0.3.1 is the latest version and is recommended for most users."
-while true; do
-  echo
-  read -p "Hit enter to install the latest version, or type a specific version: " FEDIMINT_VERSION </dev/tty
-  FEDIMINT_VERSION=${FEDIMINT_VERSION:-0.3.1}
-  case $FEDIMINT_VERSION in
-  0.3.1)
-    FEDIMINT_VERSION="0.3.1"
-    break
-    ;;
-  0.3.0)
-    FEDIMINT_VERSION="0.3.0"
-    break
-    ;;
-  0.2.2)
-    FEDIMINT_VERSION="0.2.2"
-    break
-    ;;
-  0.2.1)
-    FEDIMINT_VERSION="0.2.1"
-    break
-    ;;
-  *)
-    echo "Invalid version. Please run the script again and select a valid version."
-    ;;
-  esac
 done
 
 echo "Checking docker and other required dependencies..."
@@ -441,18 +411,6 @@ if [[ $SETUP_TLS == true ]]; then
 fi
 
 download $DOCKER_COMPOSE_FILE ./docker-compose.yaml
-
-rename_version() {
-  local path=$1
-  local version=$2
-  if [[ "$(uname)" == "Darwin" ]]; then # macOS uses BSD sed
-    sed -i '' "s/0.3.0/$version/g" $path
-  else
-    sed -i "s/0.3.0/$version/g" $path
-  fi
-}
-
-rename_version ./docker-compose.yaml $FEDIMINT_VERSION
 
 rename_localhost() {
   local path=$1
