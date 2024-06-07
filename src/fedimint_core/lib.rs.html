@@ -694,6 +694,49 @@
 <a href="#694" id="694">694</a>
 <a href="#695" id="695">695</a>
 <a href="#696" id="696">696</a>
+<a href="#697" id="697">697</a>
+<a href="#698" id="698">698</a>
+<a href="#699" id="699">699</a>
+<a href="#700" id="700">700</a>
+<a href="#701" id="701">701</a>
+<a href="#702" id="702">702</a>
+<a href="#703" id="703">703</a>
+<a href="#704" id="704">704</a>
+<a href="#705" id="705">705</a>
+<a href="#706" id="706">706</a>
+<a href="#707" id="707">707</a>
+<a href="#708" id="708">708</a>
+<a href="#709" id="709">709</a>
+<a href="#710" id="710">710</a>
+<a href="#711" id="711">711</a>
+<a href="#712" id="712">712</a>
+<a href="#713" id="713">713</a>
+<a href="#714" id="714">714</a>
+<a href="#715" id="715">715</a>
+<a href="#716" id="716">716</a>
+<a href="#717" id="717">717</a>
+<a href="#718" id="718">718</a>
+<a href="#719" id="719">719</a>
+<a href="#720" id="720">720</a>
+<a href="#721" id="721">721</a>
+<a href="#722" id="722">722</a>
+<a href="#723" id="723">723</a>
+<a href="#724" id="724">724</a>
+<a href="#725" id="725">725</a>
+<a href="#726" id="726">726</a>
+<a href="#727" id="727">727</a>
+<a href="#728" id="728">728</a>
+<a href="#729" id="729">729</a>
+<a href="#730" id="730">730</a>
+<a href="#731" id="731">731</a>
+<a href="#732" id="732">732</a>
+<a href="#733" id="733">733</a>
+<a href="#734" id="734">734</a>
+<a href="#735" id="735">735</a>
+<a href="#736" id="736">736</a>
+<a href="#737" id="737">737</a>
+<a href="#738" id="738">738</a>
+<a href="#739" id="739">739</a>
 </pre></div><pre class="rust"><code><span class="attr">#![warn(clippy::pedantic, clippy::nursery)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::cast_possible_wrap)]
@@ -1036,20 +1079,49 @@
         <span class="self">Self</span>(value)
     }
 }
-<span class="kw">impl </span>NumPeers {
-    <span class="kw">pub fn </span>as_usize(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; usize {
-        <span class="self">self</span>.<span class="number">0
-    </span>}
 
-    <span class="kw">pub fn </span>peer_ids(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw">impl </span>Iterator&lt;Item = PeerId&gt; {
-        (<span class="number">0u16</span>..(<span class="self">self</span>.<span class="number">0 </span><span class="kw">as </span>u16)).map(PeerId)
+<span class="kw">impl</span>&lt;T&gt; From&lt;T&gt; <span class="kw">for </span>NumPeers
+<span class="kw">where
+    </span>T: NumPeersExt,
+{
+    <span class="kw">fn </span>from(value: T) -&gt; <span class="self">Self </span>{
+        value.to_num_peers()
     }
 }
 
-<span class="kw">impl </span>NumPeersExt <span class="kw">for </span>NumPeers {
-    <span class="kw">fn </span>total(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; usize {
+<span class="kw">impl </span>NumPeers {
+    <span class="kw">pub fn </span>as_usize(<span class="self">self</span>) -&gt; usize {
         <span class="self">self</span>.<span class="number">0
     </span>}
+
+    <span class="kw">pub fn </span>peer_ids(<span class="self">self</span>) -&gt; <span class="kw">impl </span>Iterator&lt;Item = PeerId&gt; {
+        (<span class="number">0u16</span>..(<span class="self">self</span>.<span class="number">0 </span><span class="kw">as </span>u16)).map(PeerId)
+    }
+
+    <span class="kw">pub fn </span>total(<span class="self">self</span>) -&gt; usize {
+        <span class="self">self</span>.<span class="number">0
+    </span>}
+
+    <span class="doccomment">/// number of peers that can be evil without disrupting the federation
+    </span><span class="kw">pub fn </span>max_evil(<span class="self">self</span>) -&gt; usize {
+        (<span class="self">self</span>.total() - <span class="number">1</span>) / <span class="number">3
+    </span>}
+
+    <span class="doccomment">/// number of peers to select such that one is honest (under our
+    /// assumptions)
+    </span><span class="kw">pub fn </span>one_honest(<span class="self">self</span>) -&gt; usize {
+        <span class="self">self</span>.max_evil() + <span class="number">1
+    </span>}
+
+    <span class="doccomment">/// Degree of a underlying polynomial to require `threshold` signatures
+    </span><span class="kw">pub fn </span>degree(<span class="self">self</span>) -&gt; usize {
+        <span class="self">self</span>.threshold() - <span class="number">1
+    </span>}
+
+    <span class="doccomment">/// number of peers required for a signature
+    </span><span class="kw">pub fn </span>threshold(<span class="self">self</span>) -&gt; usize {
+        <span class="self">self</span>.total() - <span class="self">self</span>.max_evil()
+    }
 }
 
 <span class="kw">impl </span>NumPeersExt <span class="kw">for </span><span class="kw-2">&amp;</span>[PeerId] {
@@ -1078,25 +1150,39 @@
 
 <span class="doccomment">/// for consensus-related calculations given the number of peers
 </span><span class="kw">pub trait </span>NumPeersExt {
-    <span class="kw">fn </span>total(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; usize;
+    <span class="kw">fn </span>to_num_peers(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; NumPeers {
+        <span class="attr">#[allow(deprecated)]
+        </span>NumPeers(<span class="self">self</span>.total())
+    }
+
+    <span class="attr">#[deprecated(note = <span class="string">"use `to_num_peers` instead"</span>)]
+    </span><span class="kw">fn </span>total(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; usize;
 
     <span class="doccomment">/// number of peers that can be evil without disrupting the federation
+    </span><span class="attr">#[deprecated(note = <span class="string">"use `to_num_peers` instead"</span>)]
+    #[allow(deprecated)]
     </span><span class="kw">fn </span>max_evil(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; usize {
         (<span class="self">self</span>.total() - <span class="number">1</span>) / <span class="number">3
     </span>}
 
     <span class="doccomment">/// number of peers to select such that one is honest (under our
     /// assumptions)
+    </span><span class="attr">#[deprecated(note = <span class="string">"use `to_num_peers` instead"</span>)]
+    #[allow(deprecated)]
     </span><span class="kw">fn </span>one_honest(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; usize {
         <span class="self">self</span>.max_evil() + <span class="number">1
     </span>}
 
     <span class="doccomment">/// Degree of a underlying polynomial to require `threshold` signatures
+    </span><span class="attr">#[deprecated(note = <span class="string">"use `to_num_peers` instead"</span>)]
+    #[allow(deprecated)]
     </span><span class="kw">fn </span>degree(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; usize {
         <span class="self">self</span>.threshold() - <span class="number">1
     </span>}
 
     <span class="doccomment">/// number of peers required for a signature
+    </span><span class="attr">#[deprecated(note = <span class="string">"use `to_num_peers` instead"</span>)]
+    #[allow(deprecated)]
     </span><span class="kw">fn </span>threshold(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; usize {
         <span class="self">self</span>.total() - <span class="self">self</span>.max_evil()
     }

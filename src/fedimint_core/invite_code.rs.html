@@ -277,7 +277,7 @@
 <span class="kw">use </span><span class="kw">crate</span>::encoding::{Decodable, DecodeError, Encodable};
 <span class="kw">use </span><span class="kw">crate</span>::module::registry::ModuleDecoderRegistry;
 <span class="kw">use </span><span class="kw">crate</span>::util::SafeUrl;
-<span class="kw">use crate</span>::{NumPeersExt <span class="kw">as _</span>, PeerId};
+<span class="kw">use crate</span>::{NumPeersExt, PeerId};
 
 <span class="doccomment">/// Information required for client to join Federation
 ///
@@ -344,7 +344,7 @@
         peer_to_url_map: <span class="kw-2">&amp;</span>BTreeMap&lt;PeerId, SafeUrl&gt;,
         federation_id: FederationId,
     ) -&gt; <span class="self">Self </span>{
-        <span class="kw">let </span>max_size = peer_to_url_map.max_evil() + <span class="number">1</span>;
+        <span class="kw">let </span>max_size = peer_to_url_map.to_num_peers().max_evil() + <span class="number">1</span>;
         <span class="kw">let </span><span class="kw-2">mut </span>code_vec: Vec&lt;InviteCodePart&gt; = peer_to_url_map
             .iter()
             .take(max_size)

@@ -525,8 +525,6 @@
 <a href="#525" id="525">525</a>
 <a href="#526" id="526">526</a>
 <a href="#527" id="527">527</a>
-<a href="#528" id="528">528</a>
-<a href="#529" id="529">529</a>
 </pre></div><pre class="rust"><code><span class="attr">#![warn(clippy::pedantic)]
 #![allow(clippy::module_name_repetitions)]
 
@@ -556,9 +554,7 @@
     SupportedModuleApiVersions, TransactionItemAmount, CORE_CONSENSUS_VERSION,
 };
 <span class="kw">use </span>fedimint_core::server::DynServerModule;
-<span class="kw">use </span>fedimint_core::{
-    push_db_pair_items, NumPeers, NumPeersExt <span class="kw">as _</span>, OutPoint, PeerId, ServerModule,
-};
+<span class="kw">use </span>fedimint_core::{push_db_pair_items, NumPeers, OutPoint, PeerId, ServerModule};
 <span class="kw">use </span>fedimint_logging::LOG_MODULE_META;
 <span class="kw">use </span>fedimint_meta_common::config::{
     MetaClientConfig, MetaConfig, MetaConfigConsensus, MetaConfigLocal, MetaConfigPrivate,

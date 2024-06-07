@@ -265,7 +265,7 @@
 <span class="kw">use </span>fedimint_core::module::ApiRequestErased;
 <span class="kw">use </span>fedimint_core::secp256k1::KeyPair;
 <span class="kw">use </span>fedimint_core::task::sleep;
-<span class="kw">use </span>fedimint_core::{NumPeers, NumPeersExt, OutPoint, PeerId, TransactionId};
+<span class="kw">use </span>fedimint_core::{NumPeersExt, OutPoint, PeerId, TransactionId};
 <span class="kw">use </span>fedimint_lnv2_client::LightningClientStateMachines;
 <span class="kw">use </span>fedimint_lnv2_common::contracts::IncomingContract;
 <span class="kw">use </span>fedimint_lnv2_common::{LightningInput, LightningInputV0, LightningOutputOutcome};
@@ -430,7 +430,7 @@
                 .request_with_strategy(
                     FilterMapThreshold::new(
                         verify_decryption_share.clone(),
-                        NumPeers::from(global_context.api().all_peers().total()),
+                        global_context.api().all_peers().to_num_peers(),
                     ),
                     AWAIT_OUTPUT_OUTCOME_ENDPOINT.to_owned(),
                     ApiRequestErased::new(out_point),
