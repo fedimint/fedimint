@@ -726,6 +726,21 @@
 <a href="#726" id="726">726</a>
 <a href="#727" id="727">727</a>
 <a href="#728" id="728">728</a>
+<a href="#729" id="729">729</a>
+<a href="#730" id="730">730</a>
+<a href="#731" id="731">731</a>
+<a href="#732" id="732">732</a>
+<a href="#733" id="733">733</a>
+<a href="#734" id="734">734</a>
+<a href="#735" id="735">735</a>
+<a href="#736" id="736">736</a>
+<a href="#737" id="737">737</a>
+<a href="#738" id="738">738</a>
+<a href="#739" id="739">739</a>
+<a href="#740" id="740">740</a>
+<a href="#741" id="741">741</a>
+<a href="#742" id="742">742</a>
+<a href="#743" id="743">743</a>
 </pre></div><pre class="rust"><code><span class="attr">#![warn(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::default_trait_access)]
@@ -907,7 +922,6 @@
             module_api: args.module_api().clone(),
             notifier: args.notifier().clone(),
             rpc: create_bitcoind(<span class="kw-2">&amp;</span>rpc_config, TaskGroup::new().make_handle())<span class="question-mark">?</span>,
-            secp: Default::default(),
             client_ctx: args.context(),
         })
     }
@@ -947,7 +961,6 @@
     module_api: DynModuleApi,
     notifier: ModuleNotifier&lt;WalletClientStates&gt;,
     rpc: DynBitcoindRpc,
-    secp: Secp256k1&lt;All&gt;,
     client_ctx: ClientContext&lt;<span class="self">Self</span>&gt;,
 }
 
@@ -1014,21 +1027,9 @@
         valid_until: SystemTime,
         dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>&gt;,
     ) -&gt; (OperationId, WalletClientStates, Address) {
-        <span class="kw">let </span>secret_tweak_key = <span class="self">self
-            </span>.module_root_secret
-            .child_key(WALLET_TWEAK_CHILD_ID)
-            .child_key(get_next_peg_in_tweak_child_id(dbtx).<span class="kw">await</span>)
-            .to_secp_key(<span class="kw-2">&amp;</span><span class="self">self</span>.secp);
-
-        <span class="kw">let </span>public_tweak_key = secret_tweak_key.public_key();
-        <span class="kw">let </span>operation_id = OperationId(public_tweak_key.x_only_public_key().<span class="number">0</span>.serialize()); <span class="comment">// TODO: make hash?
-
-        </span><span class="kw">let </span>address = <span class="self">self
-            </span>.cfg
-            .peg_in_descriptor
-            .tweak(<span class="kw-2">&amp;</span>public_tweak_key, secp256k1::SECP256K1)
-            .address(<span class="self">self</span>.cfg.network)
-            .unwrap();
+        <span class="kw">let </span>deposit_idx = get_next_peg_in_tweak_child_id(dbtx).<span class="kw">await</span>;
+        <span class="kw">let </span>(secret_tweak_key, <span class="kw">_</span>, address, operation_id) =
+            <span class="self">Self</span>::derive_deposit_address_static(<span class="kw-2">&amp;</span><span class="self">self</span>.cfg, <span class="kw-2">&amp;</span><span class="self">self</span>.module_root_secret, deposit_idx);
 
         <span class="kw">let </span>deposit_sm = WalletClientStates::Deposit(DepositStateMachine {
             operation_id,
@@ -1039,6 +1040,35 @@
         });
 
         (operation_id, deposit_sm, address)
+    }
+
+    <span class="kw">fn </span>derive_deposit_address_static(
+        cfg: <span class="kw-2">&amp;</span>WalletClientConfig,
+        module_root_secret: <span class="kw-2">&amp;</span>DerivableSecret,
+        idx: ChildId,
+    ) -&gt; (
+        secp256k1::KeyPair,
+        secp256k1::PublicKey,
+        Address,
+        OperationId,
+    ) {
+        <span class="kw">let </span>secret_tweak_key = module_root_secret
+            .child_key(WALLET_TWEAK_CHILD_ID)
+            .child_key(idx)
+            .to_secp_key(secp256k1::SECP256K1);
+
+        <span class="kw">let </span>public_tweak_key = secret_tweak_key.public_key();
+
+        <span class="kw">let </span>address = cfg
+            .peg_in_descriptor
+            .tweak(<span class="kw-2">&amp;</span>public_tweak_key, secp256k1::SECP256K1)
+            .address(cfg.network)
+            .unwrap();
+
+        <span class="comment">// TODO: make hash?
+        </span><span class="kw">let </span>operation_id = OperationId(public_tweak_key.x_only_public_key().<span class="number">0</span>.serialize());
+
+        (secret_tweak_key, public_tweak_key, address, operation_id)
     }
 
     <span class="doccomment">/// Fetches the fees that would need to be paid to make the withdraw request
