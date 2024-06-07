@@ -1,4 +1,5 @@
 use std::collections::BTreeSet;
+use std::time::Instant;
 
 use fedimint_core::config::ALEPH_BFT_UNIT_BYTE_LIMIT;
 use fedimint_core::encoding::Encodable;
@@ -33,18 +34,25 @@ pub struct DataProvider {
     signature_receiver: watch::Receiver<Option<SchnorrSignature>>,
     submitted_transactions: BTreeSet<TransactionId>,
     leftover_item: Option<ConsensusItem>,
+    // Since it's possible that `fedimintd` after restart will receive citems it
+    // sent before restart, we use the item's length in bytes, as a simple method
+    // to self-synchronize. See <https://github.com/fedimint/fedimint/pull/5432#issuecomment-2176860609>
+    // for discussion about it.
+    timestamp_sender: async_channel::Sender<(Instant, usize)>,
 }
 
 impl DataProvider {
     pub fn new(
         mempool_item_receiver: async_channel::Receiver<ConsensusItem>,
         signature_receiver: watch::Receiver<Option<SchnorrSignature>>,
+        timestamp_sender: async_channel::Sender<(Instant, usize)>,
     ) -> Self {
         Self {
             mempool_item_receiver,
             signature_receiver,
             submitted_transactions: BTreeSet::new(),
             leftover_item: None,
+            timestamp_sender,
         }
     }
 }
@@ -99,6 +107,11 @@ impl aleph_bft::DataProvider<UnitData> for DataProvider {
         let bytes = items.consensus_encode_to_vec();
 
         assert!(bytes.len() <= ALEPH_BFT_UNIT_BYTE_LIMIT);
+
+        self.timestamp_sender
+            .send((Instant::now(), bytes.len()))
+            .await
+            .ok();
 
         Some(UnitData::Batch(bytes))
     }

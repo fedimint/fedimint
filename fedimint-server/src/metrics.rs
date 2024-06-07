@@ -75,6 +75,18 @@ pub(crate) static CONSENSUS_ITEM_PROCESSING_MODULE_AUDIT_DURATION_SECONDS: Lazy<
         )
         .unwrap()
     });
+
+pub(crate) static CONSENSUS_ORDERING_LATENCY_SECONDS: Lazy<Histogram> = Lazy::new(|| {
+    register_histogram_with_registry!(
+        histogram_opts!(
+            "consensus_ordering_latency_seconds",
+            "Duration of ordering a batch of consensus items",
+        ),
+        REGISTRY
+    )
+    .unwrap()
+});
+
 pub(crate) static JSONRPC_API_REQUEST_DURATION_SECONDS: Lazy<HistogramVec> = Lazy::new(|| {
     register_histogram_vec_with_registry!(
         histogram_opts!(
