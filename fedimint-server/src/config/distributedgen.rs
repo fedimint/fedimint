@@ -508,7 +508,12 @@ impl<'a> PeerHandleOps for PeerHandle<'a> {
     where
         T: Serialize + DeserializeOwned + Unpin + Send + Clone + Eq + Hash + Sync,
     {
-        let mut dkg = DkgRunner::new(v, self.peers.threshold(), &self.our_id, &self.peers);
+        let mut dkg = DkgRunner::new(
+            v,
+            self.peers.to_num_peers().threshold(),
+            &self.our_id,
+            &self.peers,
+        );
         dkg.run_g1(self.module_instance_id, self.connections).await
     }
 
@@ -516,7 +521,12 @@ impl<'a> PeerHandleOps for PeerHandle<'a> {
     where
         T: Serialize + DeserializeOwned + Unpin + Send + Clone + Eq + Hash + Sync,
     {
-        let mut dkg = DkgRunner::multi(v, self.peers.threshold(), &self.our_id, &self.peers);
+        let mut dkg = DkgRunner::multi(
+            v,
+            self.peers.to_num_peers().threshold(),
+            &self.our_id,
+            &self.peers,
+        );
 
         dkg.run_g2(self.module_instance_id, self.connections).await
     }

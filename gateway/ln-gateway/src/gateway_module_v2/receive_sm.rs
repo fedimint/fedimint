@@ -15,7 +15,7 @@ use fedimint_core::endpoint_constants::AWAIT_OUTPUT_OUTCOME_ENDPOINT;
 use fedimint_core::module::ApiRequestErased;
 use fedimint_core::secp256k1::KeyPair;
 use fedimint_core::task::sleep;
-use fedimint_core::{NumPeers, NumPeersExt, OutPoint, PeerId, TransactionId};
+use fedimint_core::{NumPeersExt, OutPoint, PeerId, TransactionId};
 use fedimint_lnv2_client::LightningClientStateMachines;
 use fedimint_lnv2_common::contracts::IncomingContract;
 use fedimint_lnv2_common::{LightningInput, LightningInputV0, LightningOutputOutcome};
@@ -180,7 +180,7 @@ impl ReceiveStateMachine {
                 .request_with_strategy(
                     FilterMapThreshold::new(
                         verify_decryption_share.clone(),
-                        NumPeers::from(global_context.api().all_peers().total()),
+                        global_context.api().all_peers().to_num_peers(),
                     ),
                     AWAIT_OUTPUT_OUTCOME_ENDPOINT.to_owned(),
                     ApiRequestErased::new(out_point),

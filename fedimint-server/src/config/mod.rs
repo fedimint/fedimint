@@ -479,9 +479,14 @@ impl ServerConfig {
         );
 
         // BFT uses a lower threshold of signing keys (f+1)
-        let mut dkg = DkgRunner::new(KeyType::Bft, peers.one_honest(), our_id, peers);
-        dkg.add(KeyType::Auth, peers.threshold());
-        dkg.add(KeyType::Epoch, peers.threshold());
+        let mut dkg = DkgRunner::new(
+            KeyType::Bft,
+            peers.to_num_peers().one_honest(),
+            our_id,
+            peers,
+        );
+        dkg.add(KeyType::Auth, peers.to_num_peers().threshold());
+        dkg.add(KeyType::Epoch, peers.to_num_peers().threshold());
 
         let mut registered_modules = registry.kinds();
         let mut module_cfgs: BTreeMap<ModuleInstanceId, ServerModuleConfig> = Default::default();

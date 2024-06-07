@@ -13,7 +13,7 @@ use crate::config::FederationId;
 use crate::encoding::{Decodable, DecodeError, Encodable};
 use crate::module::registry::ModuleDecoderRegistry;
 use crate::util::SafeUrl;
-use crate::{NumPeersExt as _, PeerId};
+use crate::{NumPeersExt, PeerId};
 
 /// Information required for client to join Federation
 ///
@@ -80,7 +80,7 @@ impl InviteCode {
         peer_to_url_map: &BTreeMap<PeerId, SafeUrl>,
         federation_id: FederationId,
     ) -> Self {
-        let max_size = peer_to_url_map.max_evil() + 1;
+        let max_size = peer_to_url_map.to_num_peers().max_evil() + 1;
         let mut code_vec: Vec<InviteCodePart> = peer_to_url_map
             .iter()
             .take(max_size)

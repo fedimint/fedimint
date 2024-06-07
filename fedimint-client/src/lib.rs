@@ -117,7 +117,7 @@ use fedimint_core::transaction::Transaction;
 use fedimint_core::util::{BoxStream, NextOrPending};
 use fedimint_core::{
     apply, async_trait_maybe_send, dyn_newtype_define, fedimint_build_code_version_env,
-    maybe_add_send, maybe_add_send_sync, runtime, Amount, NumPeers, NumPeersExt, OutPoint, PeerId,
+    maybe_add_send, maybe_add_send_sync, runtime, Amount, NumPeers, OutPoint, PeerId,
     TransactionId,
 };
 pub use fedimint_derive_secret as derivable_secret;
