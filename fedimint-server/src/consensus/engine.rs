@@ -22,7 +22,7 @@ use fedimint_core::session_outcome::{
 };
 use fedimint_core::task::{sleep, TaskGroup, TaskHandle};
 use fedimint_core::timing::TimeReporter;
-use fedimint_core::{timing, NumPeers, PeerId};
+use fedimint_core::{timing, NumPeers, NumPeersExt, PeerId};
 use futures::StreamExt;
 use rand::Rng;
 use tokio::sync::{watch, RwLock};
@@ -56,7 +56,6 @@ use crate::LOG_CONSENSUS;
 pub struct ConsensusEngine {
     pub modules: ServerModuleRegistry,
     pub db: Database,
-    pub keychain: Keychain,
     pub federation_api: DynGlobalApi,
     pub cfg: ServerConfig,
     pub submission_receiver: Receiver<ConsensusItem>,
@@ -71,9 +70,21 @@ pub struct ConsensusEngine {
 }
 
 impl ConsensusEngine {
+    fn total_peers(&self) -> usize {
+        self.cfg.consensus.broadcast_public_keys.total()
+    }
+
+    fn threshold_peers(&self) -> usize {
+        self.cfg.consensus.broadcast_public_keys.threshold()
+    }
+
+    fn identity(&self) -> PeerId {
+        self.cfg.local.identity
+    }
+
     #[instrument(name = "run", skip_all, fields(id=%self.cfg.local.identity))]
     pub async fn run(self) -> anyhow::Result<()> {
-        if self.cfg.consensus.broadcast_public_keys.len() == 1 {
+        if self.total_peers() == 1 {
             self.run_single_guardian(self.task_group.make_handle())
                 .await
         } else {
@@ -82,7 +93,7 @@ impl ConsensusEngine {
     }
 
     pub async fn run_single_guardian(&self, task_handle: TaskHandle) -> anyhow::Result<()> {
-        assert_eq!(self.cfg.consensus.broadcast_public_keys.len(), 1);
+        assert_eq!(self.total_peers(), 1);
 
         while !task_handle.is_shutting_down() {
             let session_index = self.get_finished_session_count().await;
@@ -95,12 +106,7 @@ impl ConsensusEngine {
 
             while let Ok(item) = self.submission_receiver.recv().await {
                 if self
-                    .process_consensus_item(
-                        session_index,
-                        item_index,
-                        item,
-                        self.cfg.local.identity,
-                    )
+                    .process_consensus_item(session_index, item_index, item, self.identity())
                     .await
                     .is_ok()
                 {
@@ -118,8 +124,8 @@ impl ConsensusEngine {
             };
 
             let header = session_outcome.header(session_index);
-            let signature = self.keychain.sign(&header);
-            let signatures = BTreeMap::from_iter([(self.cfg.local.identity, signature)]);
+            let signature = Keychain::new(&self.cfg).sign(&header);
+            let signatures = BTreeMap::from_iter([(self.identity(), signature)]);
 
             self.complete_session(
                 session_index,
@@ -144,7 +150,7 @@ impl ConsensusEngine {
 
     pub async fn run_consensus(&self, task_handle: TaskHandle) -> anyhow::Result<()> {
         // We need four peers to run the atomic broadcast
-        assert!(self.cfg.consensus.broadcast_public_keys.len() >= 4);
+        assert!(self.total_peers() >= 4);
 
         self.confirm_server_config_consensus_hash().await?;
 
@@ -152,7 +158,7 @@ impl ConsensusEngine {
         let connections = ReconnectPeerConnections::new(
             self.cfg.network_config(),
             DelayCalculator::PROD_DEFAULT,
-            TlsTcpConnector::new(self.cfg.tls_config(), self.cfg.local.identity).into_dyn(),
+            TlsTcpConnector::new(self.cfg.tls_config(), self.identity()).into_dyn(),
             &self.task_group,
             Arc::clone(&self.connection_status_channels),
         )
@@ -249,8 +255,8 @@ impl ConsensusEngine {
         });
 
         let config = aleph_bft::create_config(
-            self.keychain.peer_count().into(),
-            self.keychain.peer_id().to_usize().into(),
+            self.total_peers().into(),
+            self.identity().to_usize().into(),
             session_index,
             self.cfg
                 .consensus
@@ -279,7 +285,7 @@ impl ConsensusEngine {
                     BackupReader::new(self.db.clone()),
                 ),
                 Network::new(connections),
-                self.keychain.clone(),
+                Keychain::new(&self.cfg),
                 Spawner::new(self.task_group.make_subgroup()),
                 aleph_bft::Terminator::create_root(terminator_receiver, "Terminator"),
             ),
@@ -379,9 +385,11 @@ impl ConsensusEngine {
 
         let header = session_outcome.header(session_index);
 
+        let keychain = Keychain::new(&self.cfg);
+
         // We send our own signature to the data provider to be submitted to the atomic
         // broadcast and collected by our peers
-        signature_sender.send(Some(self.keychain.sign(&header)))?;
+        signature_sender.send(Some(keychain.sign(&header)))?;
 
         let mut signatures = BTreeMap::new();
 
@@ -389,13 +397,13 @@ impl ConsensusEngine {
 
         // We collect the ordered signatures until we either obtain a threshold
         // signature or a signed session outcome arrives from our peers
-        while signatures.len() < self.keychain.threshold() {
+        while signatures.len() < self.threshold_peers() {
             tokio::select! {
                 ordered_unit = ordered_unit_receiver.recv() => {
                     let ordered_unit = ordered_unit?;
 
                     if let Some(UnitData::Signature(signature)) = ordered_unit.data {
-                        if self.keychain.verify(&header, &signature, to_node_index(ordered_unit.creator)){
+                        if keychain.verify(&header, &signature, to_node_index(ordered_unit.creator)){
                             signatures.insert(ordered_unit.creator, signature);
                         } else {
                             warn!(target: LOG_CONSENSUS, "Consensus Failure: invalid header signature from {}", ordered_unit.creator);
@@ -623,15 +631,15 @@ impl ConsensusEngine {
         federation_api: &DynGlobalApi,
         index: u64,
     ) -> SignedSessionOutcome {
-        let keychain = self.keychain.clone();
-        let total_peers = self.keychain.peer_count();
         let decoders = self.decoders();
+        let keychain = Keychain::new(&self.cfg);
+        let threshold = self.threshold_peers();
 
         let filter_map = move |response: SerdeModuleEncoding<SignedSessionOutcome>| match response
             .try_into_inner(&decoders)
         {
             Ok(signed_session_outcome) => {
-                if signed_session_outcome.signatures.len() == keychain.threshold()
+                if signed_session_outcome.signatures.len() == threshold
                     && signed_session_outcome
                         .signatures
                         .iter()
@@ -659,7 +667,7 @@ impl ConsensusEngine {
 
             let result = federation_api
                 .request_with_strategy(
-                    FilterMap::new(filter_map.clone(), NumPeers::from(total_peers)),
+                    FilterMap::new(filter_map.clone(), NumPeers::from(self.total_peers())),
                     AWAIT_SIGNED_SESSION_OUTCOME_ENDPOINT.to_string(),
                     ApiRequestErased::new(index),
                 )

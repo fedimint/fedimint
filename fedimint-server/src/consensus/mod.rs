@@ -31,7 +31,6 @@ use tracing::info;
 use tracing::log::warn;
 
 use crate::config::{ServerConfig, ServerConfigLocal};
-use crate::consensus::aleph_bft::keychain::Keychain;
 use crate::consensus::api::ConsensusApi;
 use crate::consensus::engine::ConsensusEngine;
 use crate::net;
@@ -136,7 +135,6 @@ pub async fn run(
 
     ConsensusEngine {
         db,
-        keychain: Keychain::new(&cfg),
         federation_api: DynGlobalApi::from_config(&client_cfg, &force_api_secrets.get_active()),
         self_id_str: cfg.local.identity.to_string(),
         peer_id_str: (0..cfg.consensus.api_endpoints.len())
