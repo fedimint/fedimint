@@ -179,7 +179,6 @@ impl ClientModuleInit for WalletClientInit {
             module_api: args.module_api().clone(),
             notifier: args.notifier().clone(),
             rpc: create_bitcoind(&rpc_config, TaskGroup::new().make_handle())?,
-            secp: Default::default(),
             client_ctx: args.context(),
         })
     }
@@ -219,7 +218,6 @@ pub struct WalletClientModule {
     module_api: DynModuleApi,
     notifier: ModuleNotifier<WalletClientStates>,
     rpc: DynBitcoindRpc,
-    secp: Secp256k1<All>,
     client_ctx: ClientContext<Self>,
 }
 
@@ -286,21 +284,9 @@ impl WalletClientModule {
         valid_until: SystemTime,
         dbtx: &mut DatabaseTransaction<'_>,
     ) -> (OperationId, WalletClientStates, Address) {
-        let secret_tweak_key = self
-            .module_root_secret
-            .child_key(WALLET_TWEAK_CHILD_ID)
-            .child_key(get_next_peg_in_tweak_child_id(dbtx).await)
-            .to_secp_key(&self.secp);
-
-        let public_tweak_key = secret_tweak_key.public_key();
-        let operation_id = OperationId(public_tweak_key.x_only_public_key().0.serialize()); // TODO: make hash?
-
-        let address = self
-            .cfg
-            .peg_in_descriptor
-            .tweak(&public_tweak_key, secp256k1::SECP256K1)
-            .address(self.cfg.network)
-            .unwrap();
+        let deposit_idx = get_next_peg_in_tweak_child_id(dbtx).await;
+        let (secret_tweak_key, _, address, operation_id) =
+            Self::derive_deposit_address_static(&self.cfg, &self.module_root_secret, deposit_idx);
 
         let deposit_sm = WalletClientStates::Deposit(DepositStateMachine {
             operation_id,
@@ -311,6 +297,35 @@ impl WalletClientModule {
         });
 
         (operation_id, deposit_sm, address)
+    }
+
+    fn derive_deposit_address_static(
+        cfg: &WalletClientConfig,
+        module_root_secret: &DerivableSecret,
+        idx: ChildId,
+    ) -> (
+        secp256k1::KeyPair,
+        secp256k1::PublicKey,
+        Address,
+        OperationId,
+    ) {
+        let secret_tweak_key = module_root_secret
+            .child_key(WALLET_TWEAK_CHILD_ID)
+            .child_key(idx)
+            .to_secp_key(secp256k1::SECP256K1);
+
+        let public_tweak_key = secret_tweak_key.public_key();
+
+        let address = cfg
+            .peg_in_descriptor
+            .tweak(&public_tweak_key, secp256k1::SECP256K1)
+            .address(cfg.network)
+            .unwrap();
+
+        // TODO: make hash?
+        let operation_id = OperationId(public_tweak_key.x_only_public_key().0.serialize());
+
+        (secret_tweak_key, public_tweak_key, address, operation_id)
     }
 
     /// Fetches the fees that would need to be paid to make the withdraw request
