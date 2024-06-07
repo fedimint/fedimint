@@ -118,23 +118,14 @@
 <a href="#118" id="118">118</a>
 <a href="#119" id="119">119</a>
 <a href="#120" id="120">120</a>
-<a href="#121" id="121">121</a>
-<a href="#122" id="122">122</a>
-<a href="#123" id="123">123</a>
-<a href="#124" id="124">124</a>
-<a href="#125" id="125">125</a>
-<a href="#126" id="126">126</a>
-<a href="#127" id="127">127</a>
-<a href="#128" id="128">128</a>
-<a href="#129" id="129">129</a>
-<a href="#130" id="130">130</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::io::Write;
 
 <span class="kw">use </span>aleph_bft::Keychain <span class="kw">as </span>KeychainTrait;
+<span class="kw">use </span>bitcoin_hashes::Hash;
 <span class="kw">use </span>fedimint_core::encoding::Encodable;
 <span class="kw">use </span>fedimint_core::session_outcome::SchnorrSignature;
-<span class="kw">use </span>fedimint_core::{secp256k1, BitcoinHash, NumPeersExt, PeerId};
+<span class="kw">use </span>fedimint_core::{secp256k1, NumPeersExt, PeerId};
 <span class="kw">use </span>secp256k1::hashes::sha256;
 <span class="kw">use </span>secp256k1::{schnorr, KeyPair, Message, PublicKey};
 
@@ -142,16 +133,18 @@
 
 <span class="attr">#[derive(Clone, Debug)]
 </span><span class="kw">pub struct </span>Keychain {
-    peer_id: PeerId,
-    public_keys: BTreeMap&lt;PeerId, PublicKey&gt;,
+    identity: PeerId,
+    pks: BTreeMap&lt;PeerId, PublicKey&gt;,
+    message_tag: sha256::Hash,
     keypair: KeyPair,
 }
 
 <span class="kw">impl </span>Keychain {
     <span class="kw">pub fn </span>new(cfg: <span class="kw-2">&amp;</span>ServerConfig) -&gt; <span class="self">Self </span>{
         Keychain {
-            peer_id: cfg.local.identity,
-            public_keys: cfg.consensus.broadcast_public_keys.clone(),
+            identity: cfg.local.identity,
+            pks: cfg.consensus.broadcast_public_keys.clone(),
+            message_tag: cfg.consensus.broadcast_public_keys.consensus_hash(),
             keypair: cfg
                 .private
                 .broadcast_secret_key
@@ -159,25 +152,14 @@
         }
     }
 
-    <span class="kw">pub fn </span>peer_id(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; PeerId {
-        <span class="self">self</span>.peer_id
-    }
-
-    <span class="kw">pub fn </span>peer_count(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; usize {
-        <span class="self">self</span>.public_keys.total()
-    }
-
-    <span class="kw">pub fn </span>threshold(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; usize {
-        <span class="self">self</span>.public_keys.threshold()
-    }
-
-    <span class="kw">fn </span>tagged_hash(<span class="kw-2">&amp;</span><span class="self">self</span>, message: <span class="kw-2">&amp;</span>[u8]) -&gt; Message {
+    <span class="comment">// Tagging messages with the hash of the public key set ensures that peers with
+    // an incorrect public key set cannot create signatures that are accepted by
+    // their peers.
+    </span><span class="kw">fn </span>tagged_message(<span class="kw-2">&amp;</span><span class="self">self</span>, message: <span class="kw-2">&amp;</span>[u8]) -&gt; Message {
         <span class="kw">let </span><span class="kw-2">mut </span>engine = sha256::HashEngine::default();
 
-        <span class="kw">let </span>public_key_tag = <span class="self">self</span>.public_keys.consensus_hash::&lt;sha256::Hash&gt;();
-
         engine
-            .write_all(public_key_tag.as_ref())
+            .write_all(<span class="self">self</span>.message_tag.as_ref())
             .expect(<span class="string">"Writing to a hash engine can not fail"</span>);
 
         engine
@@ -192,7 +174,7 @@
 
 <span class="kw">impl </span>aleph_bft::Index <span class="kw">for </span>Keychain {
     <span class="kw">fn </span>index(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; aleph_bft::NodeIndex {
-        <span class="self">self</span>.peer_id.to_usize().into()
+        <span class="self">self</span>.identity.to_usize().into()
     }
 }
 
@@ -201,13 +183,13 @@
     <span class="kw">type </span>Signature = SchnorrSignature;
 
     <span class="kw">fn </span>node_count(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; aleph_bft::NodeCount {
-        <span class="self">self</span>.peer_count().into()
+        <span class="self">self</span>.pks.total().into()
     }
 
     <span class="kw">fn </span>sign(<span class="kw-2">&amp;</span><span class="self">self</span>, message: <span class="kw-2">&amp;</span>[u8]) -&gt; <span class="self">Self</span>::Signature {
         SchnorrSignature(
             <span class="self">self</span>.keypair
-                .sign_schnorr(<span class="self">self</span>.tagged_hash(message))
+                .sign_schnorr(<span class="self">self</span>.tagged_message(message))
                 .as_ref()
                 .to_owned(),
         )
@@ -219,14 +201,12 @@
         signature: <span class="kw-2">&amp;</span><span class="self">Self</span>::Signature,
         node_index: aleph_bft::NodeIndex,
     ) -&gt; bool {
-        <span class="kw">let </span>peer_id = <span class="kw">super</span>::to_peer_id(node_index);
-
-        <span class="kw">if let </span><span class="prelude-val">Some</span>(public_key) = <span class="self">self</span>.public_keys.get(<span class="kw-2">&amp;</span>peer_id) {
+        <span class="kw">if let </span><span class="prelude-val">Some</span>(public_key) = <span class="self">self</span>.pks.get(<span class="kw-2">&amp;</span><span class="kw">super</span>::to_peer_id(node_index)) {
             <span class="kw">if let </span><span class="prelude-val">Ok</span>(sig) = schnorr::Signature::from_slice(<span class="kw-2">&amp;</span>signature.<span class="number">0</span>) {
                 <span class="kw">return </span>secp256k1::SECP256K1
                     .verify_schnorr(
                         <span class="kw-2">&amp;</span>sig,
-                        <span class="kw-2">&amp;</span><span class="self">self</span>.tagged_hash(message),
+                        <span class="kw-2">&amp;</span><span class="self">self</span>.tagged_message(message),
                         <span class="kw-2">&amp;</span>public_key.x_only_public_key().<span class="number">0</span>,
                     )
                     .is_ok();
@@ -245,13 +225,13 @@
         signature: <span class="kw-2">&amp;</span><span class="self">Self</span>::Signature,
         index: aleph_bft::NodeIndex,
     ) -&gt; <span class="self">Self</span>::PartialMultisignature {
-        <span class="kw">let </span><span class="kw-2">mut </span>partial = aleph_bft::NodeMap::with_size(<span class="self">self</span>.peer_count().into());
+        <span class="kw">let </span><span class="kw-2">mut </span>partial = aleph_bft::NodeMap::with_size(<span class="self">self</span>.pks.total().into());
         partial.insert(index, signature.clone());
         partial
     }
 
     <span class="kw">fn </span>is_complete(<span class="kw-2">&amp;</span><span class="self">self</span>, msg: <span class="kw-2">&amp;</span>[u8], partial: <span class="kw-2">&amp;</span><span class="self">Self</span>::PartialMultisignature) -&gt; bool {
-        <span class="kw">if </span>partial.iter().count() &lt; <span class="self">self</span>.threshold() {
+        <span class="kw">if </span>partial.iter().count() &lt; <span class="self">self</span>.pks.threshold() {
             <span class="kw">return </span><span class="bool-val">false</span>;
         }
 

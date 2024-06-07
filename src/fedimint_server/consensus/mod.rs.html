@@ -238,8 +238,6 @@
 <a href="#238" id="238">238</a>
 <a href="#239" id="239">239</a>
 <a href="#240" id="240">240</a>
-<a href="#241" id="241">241</a>
-<a href="#242" id="242">242</a>
 </pre></div><pre class="rust"><code><span class="attr">#![allow(clippy::let_unit_value)]
 
 </span><span class="kw">pub mod </span>aleph_bft;
@@ -273,7 +271,6 @@
 <span class="kw">use </span>tracing::log::warn;
 
 <span class="kw">use </span><span class="kw">crate</span>::config::{ServerConfig, ServerConfigLocal};
-<span class="kw">use </span><span class="kw">crate</span>::consensus::aleph_bft::keychain::Keychain;
 <span class="kw">use </span><span class="kw">crate</span>::consensus::api::ConsensusApi;
 <span class="kw">use </span><span class="kw">crate</span>::consensus::engine::ConsensusEngine;
 <span class="kw">use </span><span class="kw">crate</span>::net;
@@ -378,7 +375,6 @@
 
     ConsensusEngine {
         db,
-        keychain: Keychain::new(<span class="kw-2">&amp;</span>cfg),
         federation_api: DynGlobalApi::from_config(<span class="kw-2">&amp;</span>client_cfg, <span class="kw-2">&amp;</span>force_api_secrets.get_active()),
         self_id_str: cfg.local.identity.to_string(),
         peer_id_str: (<span class="number">0</span>..cfg.consensus.api_endpoints.len())
