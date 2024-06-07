@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"struct":["DebugConsensusItem"]};
+window.SIDEBAR_ITEMS = {"struct":["DebugConsensusItem","DebugConsensusItemCompact"]};

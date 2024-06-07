@@ -680,6 +680,14 @@
 <a href="#680" id="680">680</a>
 <a href="#681" id="681">681</a>
 <a href="#682" id="682">682</a>
+<a href="#683" id="683">683</a>
+<a href="#684" id="684">684</a>
+<a href="#685" id="685">685</a>
+<a href="#686" id="686">686</a>
+<a href="#687" id="687">687</a>
+<a href="#688" id="688">688</a>
+<a href="#689" id="689">689</a>
+<a href="#690" id="690">690</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
@@ -722,7 +730,7 @@
     AcceptedItemKey, AcceptedItemPrefix, AcceptedTransactionKey, AlephUnitsPrefix,
     SignedSessionOutcomeKey, SignedSessionOutcomePrefix,
 };
-<span class="kw">use </span><span class="kw">crate</span>::consensus::debug::DebugConsensusItem;
+<span class="kw">use </span><span class="kw">crate</span>::consensus::debug::{DebugConsensusItem, DebugConsensusItemCompact};
 <span class="kw">use </span><span class="kw">crate</span>::consensus::transaction::process_transaction_with_dbtx;
 <span class="kw">use </span><span class="kw">crate</span>::fedimint_core::encoding::Encodable;
 <span class="kw">use </span><span class="kw">crate</span>::metrics::{
@@ -1067,6 +1075,8 @@
 
         <span class="kw">let </span><span class="kw-2">mut </span>signatures = BTreeMap::new();
 
+        <span class="kw">let </span>items_dump = tokio::sync::OnceCell::new();
+
         <span class="comment">// We collect the ordered signatures until we either obtain a threshold
         // signature or a signed session outcome arrives from our peers
         </span><span class="kw">while </span>signatures.len() &lt; <span class="self">self</span>.keychain.threshold() {
@@ -1079,6 +1089,12 @@
                             signatures.insert(ordered_unit.creator, signature);
                         } <span class="kw">else </span>{
                             <span class="macro">warn!</span>(target: LOG_CONSENSUS, <span class="string">"Consensus Failure: invalid header signature from {}"</span>, ordered_unit.creator);
+
+                            items_dump.get_or_init(|| <span class="kw">async </span>{
+                                <span class="kw">for </span>(idx, item) <span class="kw">in </span>session_outcome.items.iter().enumerate() {
+                                    <span class="macro">info!</span>(target: LOG_CONSENSUS, idx, item = %DebugConsensusItemCompact(item), <span class="string">"Item"</span>);
+                                }
+                            }).<span class="kw">await</span>;
                         }
                     }
                 }
