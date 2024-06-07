@@ -40,7 +40,7 @@ use crate::consensus::db::{
     AcceptedItemKey, AcceptedItemPrefix, AcceptedTransactionKey, AlephUnitsPrefix,
     SignedSessionOutcomeKey, SignedSessionOutcomePrefix,
 };
-use crate::consensus::debug::DebugConsensusItem;
+use crate::consensus::debug::{DebugConsensusItem, DebugConsensusItemCompact};
 use crate::consensus::transaction::process_transaction_with_dbtx;
 use crate::fedimint_core::encoding::Encodable;
 use crate::metrics::{
@@ -385,6 +385,8 @@ impl ConsensusEngine {
 
         let mut signatures = BTreeMap::new();
 
+        let items_dump = tokio::sync::OnceCell::new();
+
         // We collect the ordered signatures until we either obtain a threshold
         // signature or a signed session outcome arrives from our peers
         while signatures.len() < self.keychain.threshold() {
@@ -397,6 +399,12 @@ impl ConsensusEngine {
                             signatures.insert(ordered_unit.creator, signature);
                         } else {
                             warn!(target: LOG_CONSENSUS, "Consensus Failure: invalid header signature from {}", ordered_unit.creator);
+
+                            items_dump.get_or_init(|| async {
+                                for (idx, item) in session_outcome.items.iter().enumerate() {
+                                    info!(target: LOG_CONSENSUS, idx, item = %DebugConsensusItemCompact(item), "Item");
+                                }
+                            }).await;
                         }
                     }
                 }
