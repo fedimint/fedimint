@@ -256,25 +256,51 @@ impl<T> DkgRunner<T>
 where
     T: Serialize + DeserializeOwned + Unpin + Send + Clone + Eq + Hash,
 {
-    /// Create multiple DKGs with the same `threshold` signatures required
-    pub fn multi(keys: Vec<T>, threshold: usize, our_id: &PeerId, peers: &[PeerId]) -> Self {
-        let dkg_config = keys.into_iter().map(|key| (key, threshold)).collect();
-
+    /// Create a new DKG runner
+    pub fn new(our_id: &PeerId, peers: &[PeerId]) -> Self {
         Self {
             our_id: *our_id,
             peers: peers.to_vec(),
-            dkg_config,
+            dkg_config: HashMap::new(),
         }
     }
 
-    /// Create a single DKG with `threshold` signatures required
-    pub fn new(key: T, threshold: usize, our_id: &PeerId, peers: &[PeerId]) -> Self {
-        Self::multi(vec![key], threshold, our_id, peers)
+    pub fn new_threshold(our_id: &PeerId, peers: &[PeerId]) -> Self {
+        Self {
+            our_id: *our_id,
+            peers: peers.to_vec(),
+            dkg_config: HashMap::new(),
+        }
     }
 
-    /// Create another DKG with `threshold` signatures required
-    pub fn add(&mut self, key: T, threshold: usize) {
-        self.dkg_config.insert(key, threshold);
+    /// Add DKG key with `threshold` signatures required
+    pub fn add_with_threshold(mut self, key: T) -> Self {
+        self.dkg_config
+            .insert(key, self.peers.to_num_peers().threshold());
+        self
+    }
+
+    /// Add DKG key with `one_honest` signatures required
+    pub fn add_with_one_honest(mut self, key: T) -> Self {
+        self.dkg_config
+            .insert(key, self.peers.to_num_peers().one_honest());
+        self
+    }
+
+    /// Add DKGs with `threshold` signatures required
+    pub fn add_multi_with_threshold(mut self, keys: Vec<T>) -> Self {
+        for key in keys {
+            self = self.add_with_threshold(key);
+        }
+        self
+    }
+
+    /// Add DKGs with `one_honest` signatures required
+    pub fn add_multi_with_one_honest(mut self, keys: Vec<T>) -> Self {
+        for key in keys {
+            self = self.add_with_one_honest(key);
+        }
+        self
     }
 
     /// Create keys from G2 (96B keys, 48B messages) used in `tbs`
@@ -508,27 +534,20 @@ impl<'a> PeerHandleOps for PeerHandle<'a> {
     where
         T: Serialize + DeserializeOwned + Unpin + Send + Clone + Eq + Hash + Sync,
     {
-        let mut dkg = DkgRunner::new(
-            v,
-            self.peers.to_num_peers().threshold(),
-            &self.our_id,
-            &self.peers,
-        );
-        dkg.run_g1(self.module_instance_id, self.connections).await
+        DkgRunner::new_threshold(&self.our_id, &self.peers)
+            .add_with_threshold(v)
+            .run_g1(self.module_instance_id, self.connections)
+            .await
     }
 
     async fn run_dkg_multi_g2<T>(&self, v: Vec<T>) -> DkgResult<HashMap<T, DkgKeys<G2Projective>>>
     where
         T: Serialize + DeserializeOwned + Unpin + Send + Clone + Eq + Hash + Sync,
     {
-        let mut dkg = DkgRunner::multi(
-            v,
-            self.peers.to_num_peers().threshold(),
-            &self.our_id,
-            &self.peers,
-        );
-
-        dkg.run_g2(self.module_instance_id, self.connections).await
+        DkgRunner::new(&self.our_id, &self.peers)
+            .add_multi_with_threshold(v)
+            .run_g2(self.module_instance_id, self.connections)
+            .await
     }
 
     async fn exchange_pubkeys(

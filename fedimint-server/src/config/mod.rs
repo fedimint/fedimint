@@ -30,10 +30,9 @@ use tokio_rustls::rustls;
 use tracing::{error, info};
 
 use crate::config::api::ConfigGenParamsLocal;
-use crate::config::distributedgen::{DkgRunner, PeerHandleOps};
+use crate::config::distributedgen::PeerHandleOps;
 use crate::envs::FM_MAX_CLIENT_CONNECTIONS_ENV;
 use crate::fedimint_core::encoding::Encodable;
-use crate::fedimint_core::NumPeersExt;
 use crate::multiplexed::PeerConnectionMultiplexer;
 use crate::net::connect::{dns_sanitize, Connector, TlsConfig};
 use crate::net::peers::{DelayCalculator, NetworkConfig};
@@ -477,16 +476,6 @@ impl ServerConfig {
             target: LOG_NET_PEER_DKG,
             "Peer {} running distributed key generation...", our_id
         );
-
-        // BFT uses a lower threshold of signing keys (f+1)
-        let mut dkg = DkgRunner::new(
-            KeyType::Bft,
-            peers.to_num_peers().one_honest(),
-            our_id,
-            peers,
-        );
-        dkg.add(KeyType::Auth, peers.to_num_peers().threshold());
-        dkg.add(KeyType::Epoch, peers.to_num_peers().threshold());
 
         let mut registered_modules = registry.kinds();
         let mut module_cfgs: BTreeMap<ModuleInstanceId, ServerModuleConfig> = Default::default();
