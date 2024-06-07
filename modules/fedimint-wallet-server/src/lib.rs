@@ -268,7 +268,7 @@ impl ServerModuleInit for WalletInit {
                         .map(|(peer_id, (_, pk))| (*peer_id, CompressedPublicKey { key: *pk }))
                         .collect(),
                     *sk,
-                    peers.threshold(),
+                    peers.to_num_peers().threshold(),
                     params.consensus.network,
                     params.consensus.finality_delay,
                     params.local.bitcoin_rpc.clone(),
@@ -304,7 +304,7 @@ impl ServerModuleInit for WalletInit {
         let wallet_cfg = WalletConfig::new(
             peer_peg_in_keys,
             sk,
-            peers.peer_ids().threshold(),
+            peers.peer_ids().to_num_peers().threshold(),
             params.consensus.network,
             params.consensus.finality_delay,
             params.local.bitcoin_rpc.clone(),
@@ -917,7 +917,7 @@ impl Wallet {
     }
 
     pub async fn consensus_block_count(&self, dbtx: &mut DatabaseTransaction<'_>) -> u32 {
-        let peer_count = self.cfg.consensus.peer_peg_in_keys.total();
+        let peer_count = self.cfg.consensus.peer_peg_in_keys.to_num_peers().total();
 
         let mut counts = dbtx
             .find_by_prefix(&BlockCountVotePrefix)
@@ -938,7 +938,7 @@ impl Wallet {
     }
 
     pub async fn consensus_fee_rate(&self, dbtx: &mut DatabaseTransaction<'_>) -> Feerate {
-        let peer_count = self.cfg.consensus.peer_peg_in_keys.total();
+        let peer_count = self.cfg.consensus.peer_peg_in_keys.to_num_peers().total();
 
         let mut rates = dbtx
             .find_by_prefix(&FeeRateVotePrefix)

@@ -323,7 +323,7 @@ impl MintRecoveryState {
             pending_nonces: BTreeMap::default(),
             next_pending_note_idx: backup.next_note_idx.clone(),
             last_mined_nonce_idx: backup.next_note_idx,
-            threshold: pub_key_shares.threshold() as u64,
+            threshold: pub_key_shares.to_num_peers().threshold() as u64,
             gap_limit,
             tbs_pks,
             pub_key_shares,

@@ -232,7 +232,7 @@ impl ServerModuleInit for LightningInit {
         params: &ConfigGenModuleParams,
     ) -> BTreeMap<PeerId, ServerModuleConfig> {
         let params = self.parse_params(params).unwrap();
-        let sks = threshold_crypto::SecretKeySet::random(peers.degree(), &mut OsRng);
+        let sks = threshold_crypto::SecretKeySet::random(peers.to_num_peers().degree(), &mut OsRng);
         let pks = sks.public_keys();
 
         let server_cfg = peers

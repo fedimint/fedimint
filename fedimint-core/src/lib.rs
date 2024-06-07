@@ -327,8 +327,8 @@ pub enum ParseAmountError {
 }
 
 impl<T> NumPeersExt for BTreeMap<PeerId, T> {
-    fn total(&self) -> usize {
-        self.len()
+    fn to_num_peers(&self) -> NumPeers {
+        NumPeers(self.len())
     }
 }
 
@@ -386,67 +386,32 @@ impl NumPeers {
 }
 
 impl NumPeersExt for &[PeerId] {
-    fn total(&self) -> usize {
-        self.len()
+    fn to_num_peers(&self) -> NumPeers {
+        NumPeers(self.len())
     }
 }
 
 impl NumPeersExt for Vec<PeerId> {
-    fn total(&self) -> usize {
-        self.len()
+    fn to_num_peers(&self) -> NumPeers {
+        NumPeers(self.len())
     }
 }
 
 impl NumPeersExt for Vec<PeerUrl> {
-    fn total(&self) -> usize {
-        self.len()
+    fn to_num_peers(&self) -> NumPeers {
+        NumPeers(self.len())
     }
 }
 
 impl NumPeersExt for BTreeSet<PeerId> {
-    fn total(&self) -> usize {
-        self.len()
+    fn to_num_peers(&self) -> NumPeers {
+        NumPeers(self.len())
     }
 }
 
-/// for consensus-related calculations given the number of peers
+/// Types that can be easily converted to [`NumPeers`]
 pub trait NumPeersExt {
-    fn to_num_peers(&self) -> NumPeers {
-        #[allow(deprecated)]
-        NumPeers(self.total())
-    }
-
-    #[deprecated(note = "use `to_num_peers` instead")]
-    fn total(&self) -> usize;
-
-    /// number of peers that can be evil without disrupting the federation
-    #[deprecated(note = "use `to_num_peers` instead")]
-    #[allow(deprecated)]
-    fn max_evil(&self) -> usize {
-        (self.total() - 1) / 3
-    }
-
-    /// number of peers to select such that one is honest (under our
-    /// assumptions)
-    #[deprecated(note = "use `to_num_peers` instead")]
-    #[allow(deprecated)]
-    fn one_honest(&self) -> usize {
-        self.max_evil() + 1
-    }
-
-    /// Degree of a underlying polynomial to require `threshold` signatures
-    #[deprecated(note = "use `to_num_peers` instead")]
-    #[allow(deprecated)]
-    fn degree(&self) -> usize {
-        self.threshold() - 1
-    }
-
-    /// number of peers required for a signature
-    #[deprecated(note = "use `to_num_peers` instead")]
-    #[allow(deprecated)]
-    fn threshold(&self) -> usize {
-        self.total() - self.max_evil()
-    }
+    fn to_num_peers(&self) -> NumPeers;
 }
 
 impl PeerId {

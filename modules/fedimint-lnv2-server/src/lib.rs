@@ -191,7 +191,7 @@ impl ServerModuleInit for LightningInit {
     ) -> BTreeMap<PeerId, ServerModuleConfig> {
         let params = self.parse_params(params).unwrap();
 
-        let (tpe_agg_pk, pks, sks) = dealer_keygen(peers.threshold(), peers.len());
+        let (tpe_agg_pk, pks, sks) = dealer_keygen(peers.to_num_peers().threshold(), peers.len());
 
         let tpe_pks: BTreeMap<PeerId, PublicKeyShare> = peers.iter().copied().zip(pks).collect();
 
