@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use aleph_bft::Keychain as KeychainTrait;
 use anyhow::{anyhow, bail};
@@ -26,7 +26,7 @@ use fedimint_core::{timing, NumPeers, NumPeersExt, PeerId};
 use futures::StreamExt;
 use rand::Rng;
 use tokio::sync::{watch, RwLock};
-use tracing::{debug, info, instrument, warn, Level};
+use tracing::{debug, error, info, instrument, warn, Level};
 
 use crate::config::ServerConfig;
 use crate::consensus::aleph_bft::backup::{BackupReader, BackupWriter};
@@ -45,7 +45,7 @@ use crate::consensus::transaction::process_transaction_with_dbtx;
 use crate::fedimint_core::encoding::Encodable;
 use crate::metrics::{
     CONSENSUS_ITEMS_PROCESSED_TOTAL, CONSENSUS_ITEM_PROCESSING_DURATION_SECONDS,
-    CONSENSUS_ITEM_PROCESSING_MODULE_AUDIT_DURATION_SECONDS,
+    CONSENSUS_ITEM_PROCESSING_MODULE_AUDIT_DURATION_SECONDS, CONSENSUS_ORDERING_LATENCY_SECONDS,
     CONSENSUS_PEER_CONTRIBUTION_SESSION_IDX, CONSENSUS_SESSION_COUNT,
 };
 use crate::net::connect::{Connector, TlsTcpConnector};
@@ -272,6 +272,7 @@ impl ConsensusEngine {
         // ordered in a single aleph session is bounded as described above
         let (unit_data_sender, unit_data_receiver) = async_channel::unbounded();
         let (signature_sender, signature_receiver) = watch::channel(None);
+        let (timestamp_sender, timestamp_receiver) = async_channel::unbounded();
         let (terminator_sender, terminator_receiver) = futures::channel::oneshot::channel();
 
         let aleph_handle = spawn(
@@ -279,7 +280,11 @@ impl ConsensusEngine {
             aleph_bft::run_session(
                 config,
                 aleph_bft::LocalIO::new(
-                    DataProvider::new(self.submission_receiver.clone(), signature_receiver),
+                    DataProvider::new(
+                        self.submission_receiver.clone(),
+                        signature_receiver,
+                        timestamp_sender,
+                    ),
                     FinalizationHandler::new(unit_data_sender),
                     BackupWriter::new(self.db.clone()),
                     BackupReader::new(self.db.clone()),
@@ -292,7 +297,12 @@ impl ConsensusEngine {
         );
 
         let signed_session_outcome = self
-            .complete_signed_session_outcome(session_index, unit_data_receiver, signature_sender)
+            .complete_signed_session_outcome(
+                session_index,
+                unit_data_receiver,
+                signature_sender,
+                timestamp_receiver,
+            )
             .await?;
 
         // We can terminate the session instead of waiting for other peers to complete
@@ -314,6 +324,7 @@ impl ConsensusEngine {
         session_index: u64,
         ordered_unit_receiver: Receiver<OrderedUnit>,
         signature_sender: watch::Sender<Option<SchnorrSignature>>,
+        timestamp_receiver: Receiver<Instant>,
     ) -> anyhow::Result<SignedSessionOutcome> {
         let mut item_index = 0;
 
@@ -330,6 +341,17 @@ impl ConsensusEngine {
                     }
 
                     if let Some(UnitData::Batch(bytes)) = ordered_unit.data {
+                        if ordered_unit.creator == self.identity() {
+                             match timestamp_receiver.try_recv(){
+                                Ok(timestamp) => {
+                                    CONSENSUS_ORDERING_LATENCY_SECONDS.observe(timestamp.elapsed().as_secs_f64());
+                                }
+                                Err(e) => {
+                                    error!(target: LOG_CONSENSUS, "Missing submission timestamp: {e}");
+                                }
+                            }
+                        }
+
                         if let Ok(items) = Vec::<ConsensusItem>::consensus_decode(&mut bytes.as_slice(), &self.decoders()){
                             for item in items {
                                 if self.process_consensus_item(

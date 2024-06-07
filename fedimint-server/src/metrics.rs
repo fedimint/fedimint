@@ -56,6 +56,15 @@ lazy_static! {
             REGISTRY
         )
         .unwrap();
+    pub(crate) static ref CONSENSUS_ORDERING_LATENCY_SECONDS: Histogram =
+        register_histogram_with_registry!(
+            histogram_opts!(
+                "consensus_ordering_latency_seconds",
+                "Duration of ordering a batch of consensus items",
+            ),
+            REGISTRY
+        )
+        .unwrap();
     pub(crate) static ref CONSENSUS_ITEM_PROCESSING_MODULE_AUDIT_DURATION_SECONDS: HistogramVec =
         register_histogram_vec_with_registry!(
             histogram_opts!(
