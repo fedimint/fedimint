@@ -37,7 +37,7 @@ tokio = { version = "1.38.0", features = ["full", "tracing"] }
 tokio-rustls = { workspace = true }
 
 [target.'cfg(target_family = "wasm")'.dependencies]
-jsonrpsee-wasm-client = { version = "0.22.5", default-features = false }
+jsonrpsee-wasm-client = { version = "0.23.0", default-features = false }
 async-lock = "3.4"
 # getrandom is transitive dependency of rand
 # on wasm, we need to enable the js backend
