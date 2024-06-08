@@ -33,7 +33,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Check Nix flake inputs
-        uses: DeterminateSystems/flake-checker-action@v7
+        uses: DeterminateSystems/flake-checker-action@v8
         with:
           fail-mode: true
           nixpkgs-keys: nixpkgs
