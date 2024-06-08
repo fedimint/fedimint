@@ -1,6 +1,7 @@
 use std::sync::Arc;
 use std::time::Duration;
 
+use bitcoin::hashes::sha256;
 use fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
 use fedimint_client::transaction::ClientInput;
 use fedimint_client::DynGlobalClientContext;
@@ -114,6 +115,7 @@ impl State for SendStateMachine {
                             context.federation_id,
                             self.common.contract.clone(),
                             self.common.invoice.bolt11().clone(),
+                            self.common.refund_keypair,
                         ),
                         move |dbtx, response, old_state| {
                             Box::pin(Self::transition_gateway_send_payment(
@@ -171,6 +173,7 @@ impl SendStateMachine {
         federation_id: FederationId,
         contract: OutgoingContract,
         invoice: Bolt11Invoice,
+        refund_keypair: KeyPair,
     ) -> Result<[u8; 32], Signature> {
         loop {
             match Self::try_gateway_send_payment(
@@ -178,6 +181,7 @@ impl SendStateMachine {
                 federation_id,
                 contract.clone(),
                 invoice.clone(),
+                refund_keypair.sign_schnorr(invoice.consensus_hash::<sha256::Hash>().into()),
             )
             .await
             {
@@ -228,6 +232,7 @@ impl SendStateMachine {
         federation_id: FederationId,
         contract: OutgoingContract,
         invoice: Bolt11Invoice,
+        auth: Signature,
     ) -> anyhow::Result<Result<Result<[u8; 32], Signature>, String>> {
         let result = reqwest::Client::new()
             .post(
@@ -240,6 +245,7 @@ impl SendStateMachine {
                 federation_id,
                 contract,
                 invoice,
+                auth,
             })
             .send()
             .await?

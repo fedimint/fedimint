@@ -202,7 +202,7 @@ impl GatewayClientModuleV2 {
         // The operation id is equal to the contract id which also doubles as the
         // message signed by the gateway via the forfeit signature to forfeit
         // the gateways claim to a contract in case of cancellation. We only create a
-        // forfeit signature after the we have started the send state machine to
+        // forfeit signature after we have started the send state machine to
         // prevent replay attacks with a previously cancelled outgoing contract
         let operation_id = OperationId::from_encodable(&payload.contract.clone());
 
@@ -221,10 +221,16 @@ impl GatewayClientModuleV2 {
             bail!("The invoices payment hash does not match the contracts payment hash");
         }
 
-        // The outgoing contract commits to the invoice it is intended for via a hash to
-        // prevent DOS attacks where an attacker submits a different invoice.
-        if payload.invoice.consensus_hash::<sha256::Hash>() != payload.contract.invoice_hash {
-            bail!("The invoices consensus hash does not match the contracts invoice commitment");
+        // This prevents DOS attacks where an attacker submits a different invoice.
+        if secp256k1::SECP256K1
+            .verify_schnorr(
+                &payload.auth,
+                &payload.invoice.consensus_hash::<sha256::Hash>().into(),
+                &payload.contract.refund_pk.x_only_public_key().0,
+            )
+            .is_err()
+        {
+            bail!("Invalid auth signature for the invoice");
         }
 
         let invoice_msats = payload

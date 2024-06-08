@@ -126,7 +126,6 @@ pub struct OutgoingContract {
     pub claim_pk: PublicKey,
     pub refund_pk: PublicKey,
     pub ephemeral_pk: PublicKey,
-    pub invoice_hash: sha256::Hash,
 }
 
 impl OutgoingContract {

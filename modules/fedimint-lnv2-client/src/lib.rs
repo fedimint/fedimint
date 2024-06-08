@@ -41,6 +41,7 @@ use fedimint_lnv2_common::{
 };
 use futures::StreamExt;
 use lightning_invoice::Bolt11Invoice;
+use secp256k1::schnorr::Signature;
 use secp256k1::{ecdh, KeyPair, PublicKey, Scalar, SecretKey};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -141,6 +142,7 @@ pub struct PayBolt11InvoicePayload {
     pub federation_id: FederationId,
     pub contract: OutgoingContract,
     pub invoice: Bolt11Invoice,
+    pub auth: Signature,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Decodable, Encodable)]
@@ -382,7 +384,6 @@ impl LightningClientModule {
             claim_pk: payment_info.public_key,
             refund_pk: refund_keypair.public_key(),
             ephemeral_pk,
-            invoice_hash: invoice.consensus_hash(),
         };
 
         let contract_clone = contract.clone();
