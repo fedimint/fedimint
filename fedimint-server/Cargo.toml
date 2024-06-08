@@ -53,7 +53,7 @@ tower = { version = "0.4.13", default-features = false }
 tracing = { workspace = true }
 url = { version = "2.5.0", features = ["serde"] }
 threshold_crypto = { workspace = true }
-jsonrpsee = { version = "0.22.5", features = ["server"] }
+jsonrpsee = { version = "0.23.0", features = ["server"] }
 tokio = { version = "1.38.0", features = ["full", "tracing"] }
 tokio-stream = "0.1.15"
 tokio-rustls = { workspace = true }
