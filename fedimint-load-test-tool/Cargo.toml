@@ -28,7 +28,7 @@ fedimint-rocksdb = { version = "=0.4.0-alpha", path = "../fedimint-rocksdb" }
 fedimint-wallet-client = { version = "=0.4.0-alpha", path = "../modules/fedimint-wallet-client" }
 futures = { workspace = true }
 jsonrpsee-core = { version = "0.22.5", features = [ "client" ] }
-jsonrpsee-types = { version = "0.22.5" }
+jsonrpsee-types = { version = "0.23.0" }
 lightning-invoice = { workspace = true }
 rand = { workspace = true }
 serde = { workspace = true }
