@@ -183,7 +183,7 @@
     <span class="kw">type </span>Signature = SchnorrSignature;
 
     <span class="kw">fn </span>node_count(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; aleph_bft::NodeCount {
-        <span class="self">self</span>.pks.total().into()
+        <span class="self">self</span>.pks.len().into()
     }
 
     <span class="kw">fn </span>sign(<span class="kw-2">&amp;</span><span class="self">self</span>, message: <span class="kw-2">&amp;</span>[u8]) -&gt; <span class="self">Self</span>::Signature {
@@ -225,13 +225,13 @@
         signature: <span class="kw-2">&amp;</span><span class="self">Self</span>::Signature,
         index: aleph_bft::NodeIndex,
     ) -&gt; <span class="self">Self</span>::PartialMultisignature {
-        <span class="kw">let </span><span class="kw-2">mut </span>partial = aleph_bft::NodeMap::with_size(<span class="self">self</span>.pks.total().into());
+        <span class="kw">let </span><span class="kw-2">mut </span>partial = aleph_bft::NodeMap::with_size(<span class="self">self</span>.pks.len().into());
         partial.insert(index, signature.clone());
         partial
     }
 
     <span class="kw">fn </span>is_complete(<span class="kw-2">&amp;</span><span class="self">self</span>, msg: <span class="kw-2">&amp;</span>[u8], partial: <span class="kw-2">&amp;</span><span class="self">Self</span>::PartialMultisignature) -&gt; bool {
-        <span class="kw">if </span>partial.iter().count() &lt; <span class="self">self</span>.pks.threshold() {
+        <span class="kw">if </span>partial.iter().count() &lt; <span class="self">self</span>.pks.to_num_peers().threshold() {
             <span class="kw">return </span><span class="bool-val">false</span>;
         }
 

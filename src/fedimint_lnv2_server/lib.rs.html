@@ -956,7 +956,7 @@
     ) -&gt; BTreeMap&lt;PeerId, ServerModuleConfig&gt; {
         <span class="kw">let </span>params = <span class="self">self</span>.parse_params(params).unwrap();
 
-        <span class="kw">let </span>(tpe_agg_pk, pks, sks) = dealer_keygen(peers.threshold(), peers.len());
+        <span class="kw">let </span>(tpe_agg_pk, pks, sks) = dealer_keygen(peers.to_num_peers().threshold(), peers.len());
 
         <span class="kw">let </span>tpe_pks: BTreeMap&lt;PeerId, PublicKeyShare&gt; = peers.iter().copied().zip(pks).collect();
 

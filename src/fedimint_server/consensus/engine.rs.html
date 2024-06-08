@@ -692,10 +692,6 @@
 <a href="#692" id="692">692</a>
 <a href="#693" id="693">693</a>
 <a href="#694" id="694">694</a>
-<a href="#695" id="695">695</a>
-<a href="#696" id="696">696</a>
-<a href="#697" id="697">697</a>
-<a href="#698" id="698">698</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
@@ -768,12 +764,8 @@
 }
 
 <span class="kw">impl </span>ConsensusEngine {
-    <span class="kw">fn </span>total_peers(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; usize {
-        <span class="self">self</span>.cfg.consensus.broadcast_public_keys.total()
-    }
-
-    <span class="kw">fn </span>threshold_peers(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; usize {
-        <span class="self">self</span>.cfg.consensus.broadcast_public_keys.threshold()
+    <span class="kw">fn </span>num_peers(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; NumPeers {
+        <span class="self">self</span>.cfg.consensus.broadcast_public_keys.to_num_peers()
     }
 
     <span class="kw">fn </span>identity(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; PeerId {
@@ -782,7 +774,7 @@
 
     <span class="attr">#[instrument(name = <span class="string">"run"</span>, skip_all, fields(id=%<span class="self">self</span>.cfg.local.identity))]
     </span><span class="kw">pub async fn </span>run(<span class="self">self</span>) -&gt; anyhow::Result&lt;()&gt; {
-        <span class="kw">if </span><span class="self">self</span>.total_peers() == <span class="number">1 </span>{
+        <span class="kw">if </span><span class="self">self</span>.num_peers().total() == <span class="number">1 </span>{
             <span class="self">self</span>.run_single_guardian(<span class="self">self</span>.task_group.make_handle())
                 .<span class="kw">await
         </span>} <span class="kw">else </span>{
@@ -791,7 +783,7 @@
     }
 
     <span class="kw">pub async fn </span>run_single_guardian(<span class="kw-2">&amp;</span><span class="self">self</span>, task_handle: TaskHandle) -&gt; anyhow::Result&lt;()&gt; {
-        <span class="macro">assert_eq!</span>(<span class="self">self</span>.total_peers(), <span class="number">1</span>);
+        <span class="macro">assert_eq!</span>(<span class="self">self</span>.num_peers(), NumPeers::from(<span class="number">1</span>));
 
         <span class="kw">while </span>!task_handle.is_shutting_down() {
             <span class="kw">let </span>session_index = <span class="self">self</span>.get_finished_session_count().<span class="kw">await</span>;
@@ -848,7 +840,7 @@
 
     <span class="kw">pub async fn </span>run_consensus(<span class="kw-2">&amp;</span><span class="self">self</span>, task_handle: TaskHandle) -&gt; anyhow::Result&lt;()&gt; {
         <span class="comment">// We need four peers to run the atomic broadcast
-        </span><span class="macro">assert!</span>(<span class="self">self</span>.total_peers() &gt;= <span class="number">4</span>);
+        </span><span class="macro">assert!</span>(<span class="self">self</span>.num_peers().total() &gt;= <span class="number">4</span>);
 
         <span class="self">self</span>.confirm_server_config_consensus_hash().<span class="kw">await</span><span class="question-mark">?</span>;
 
@@ -953,7 +945,7 @@
         });
 
         <span class="kw">let </span>config = aleph_bft::create_config(
-            <span class="self">self</span>.total_peers().into(),
+            <span class="self">self</span>.num_peers().total().into(),
             <span class="self">self</span>.identity().to_usize().into(),
             session_index,
             <span class="self">self</span>.cfg
@@ -1095,7 +1087,7 @@
 
         <span class="comment">// We collect the ordered signatures until we either obtain a threshold
         // signature or a signed session outcome arrives from our peers
-        </span><span class="kw">while </span>signatures.len() &lt; <span class="self">self</span>.threshold_peers() {
+        </span><span class="kw">while </span>signatures.len() &lt; <span class="self">self</span>.num_peers().threshold() {
             <span class="macro">tokio::select!</span> {
                 ordered_unit = ordered_unit_receiver.recv() =&gt; {
                     <span class="kw">let </span>ordered_unit = ordered_unit<span class="question-mark">?</span>;
@@ -1331,7 +1323,7 @@
     ) -&gt; SignedSessionOutcome {
         <span class="kw">let </span>decoders = <span class="self">self</span>.decoders();
         <span class="kw">let </span>keychain = Keychain::new(<span class="kw-2">&amp;</span><span class="self">self</span>.cfg);
-        <span class="kw">let </span>threshold = <span class="self">self</span>.threshold_peers();
+        <span class="kw">let </span>threshold = <span class="self">self</span>.num_peers().threshold();
 
         <span class="kw">let </span>filter_map = <span class="kw">move </span>|response: SerdeModuleEncoding&lt;SignedSessionOutcome&gt;| <span class="kw">match </span>response
             .try_into_inner(<span class="kw-2">&amp;</span>decoders)
@@ -1365,7 +1357,7 @@
 
             <span class="kw">let </span>result = federation_api
                 .request_with_strategy(
-                    FilterMap::new(filter_map.clone(), NumPeers::from(<span class="self">self</span>.total_peers())),
+                    FilterMap::new(filter_map.clone(), <span class="self">self</span>.num_peers()),
                     AWAIT_SIGNED_SESSION_OUTCOME_ENDPOINT.to_string(),
                     ApiRequestErased::new(index),
                 )

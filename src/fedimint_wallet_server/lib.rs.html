@@ -2106,7 +2106,7 @@
                         .map(|(peer_id, (<span class="kw">_</span>, pk))| (<span class="kw-2">*</span>peer_id, CompressedPublicKey { key: <span class="kw-2">*</span>pk }))
                         .collect(),
                     <span class="kw-2">*</span>sk,
-                    peers.threshold(),
+                    peers.to_num_peers().threshold(),
                     params.consensus.network,
                     params.consensus.finality_delay,
                     params.local.bitcoin_rpc.clone(),
@@ -2142,7 +2142,7 @@
         <span class="kw">let </span>wallet_cfg = WalletConfig::new(
             peer_peg_in_keys,
             sk,
-            peers.peer_ids().threshold(),
+            peers.peer_ids().to_num_peers().threshold(),
             params.consensus.network,
             params.consensus.finality_delay,
             params.local.bitcoin_rpc.clone(),
@@ -2755,7 +2755,7 @@
     }
 
     <span class="kw">pub async fn </span>consensus_block_count(<span class="kw-2">&amp;</span><span class="self">self</span>, dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>&gt;) -&gt; u32 {
-        <span class="kw">let </span>peer_count = <span class="self">self</span>.cfg.consensus.peer_peg_in_keys.total();
+        <span class="kw">let </span>peer_count = <span class="self">self</span>.cfg.consensus.peer_peg_in_keys.to_num_peers().total();
 
         <span class="kw">let </span><span class="kw-2">mut </span>counts = dbtx
             .find_by_prefix(<span class="kw-2">&amp;</span>BlockCountVotePrefix)
@@ -2776,7 +2776,7 @@
     }
 
     <span class="kw">pub async fn </span>consensus_fee_rate(<span class="kw-2">&amp;</span><span class="self">self</span>, dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>&gt;) -&gt; Feerate {
-        <span class="kw">let </span>peer_count = <span class="self">self</span>.cfg.consensus.peer_peg_in_keys.total();
+        <span class="kw">let </span>peer_count = <span class="self">self</span>.cfg.consensus.peer_peg_in_keys.to_num_peers().total();
 
         <span class="kw">let </span><span class="kw-2">mut </span>rates = dbtx
             .find_by_prefix(<span class="kw-2">&amp;</span>FeeRateVotePrefix)

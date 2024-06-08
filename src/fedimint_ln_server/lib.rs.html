@@ -1722,7 +1722,7 @@
         params: <span class="kw-2">&amp;</span>ConfigGenModuleParams,
     ) -&gt; BTreeMap&lt;PeerId, ServerModuleConfig&gt; {
         <span class="kw">let </span>params = <span class="self">self</span>.parse_params(params).unwrap();
-        <span class="kw">let </span>sks = threshold_crypto::SecretKeySet::random(peers.degree(), <span class="kw-2">&amp;mut </span>OsRng);
+        <span class="kw">let </span>sks = threshold_crypto::SecretKeySet::random(peers.to_num_peers().degree(), <span class="kw-2">&amp;mut </span>OsRng);
         <span class="kw">let </span>pks = sks.public_keys();
 
         <span class="kw">let </span>server_cfg = peers

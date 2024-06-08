@@ -360,7 +360,7 @@
 <span class="kw">use </span>fedimint_api_client::query::FilterMapThreshold;
 <span class="kw">use </span>fedimint_core::module::ApiRequestErased;
 <span class="kw">use </span>fedimint_core::task::{MaybeSend, MaybeSync};
-<span class="kw">use </span>fedimint_core::{apply, async_trait_maybe_send, NumPeers, NumPeersExt, PeerId};
+<span class="kw">use </span>fedimint_core::{apply, async_trait_maybe_send, NumPeersExt, PeerId};
 <span class="kw">use </span>fedimint_ln_common::contracts::incoming::{IncomingContractAccount, IncomingContractOffer};
 <span class="kw">use </span>fedimint_ln_common::contracts::outgoing::OutgoingContractAccount;
 <span class="kw">use </span>fedimint_ln_common::contracts::{
@@ -537,7 +537,7 @@
             </span>.request_with_strategy(
                 FilterMapThreshold::new(
                     |<span class="kw">_</span>, gateways| <span class="prelude-val">Ok</span>(gateways),
-                    NumPeers::from(<span class="self">self</span>.all_peers().total()),
+                    <span class="self">self</span>.all_peers().to_num_peers(),
                 ),
                 LIST_GATEWAYS_ENDPOINT.to_string(),
                 ApiRequestErased::default(),
