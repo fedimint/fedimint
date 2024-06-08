@@ -70,12 +70,8 @@ pub struct ConsensusEngine {
 }
 
 impl ConsensusEngine {
-    fn total_peers(&self) -> usize {
-        self.cfg.consensus.broadcast_public_keys.total()
-    }
-
-    fn threshold_peers(&self) -> usize {
-        self.cfg.consensus.broadcast_public_keys.threshold()
+    fn num_peers(&self) -> NumPeers {
+        self.cfg.consensus.broadcast_public_keys.to_num_peers()
     }
 
     fn identity(&self) -> PeerId {
@@ -84,7 +80,7 @@ impl ConsensusEngine {
 
     #[instrument(name = "run", skip_all, fields(id=%self.cfg.local.identity))]
     pub async fn run(self) -> anyhow::Result<()> {
-        if self.total_peers() == 1 {
+        if self.num_peers().total() == 1 {
             self.run_single_guardian(self.task_group.make_handle())
                 .await
         } else {
@@ -93,7 +89,7 @@ impl ConsensusEngine {
     }
 
     pub async fn run_single_guardian(&self, task_handle: TaskHandle) -> anyhow::Result<()> {
-        assert_eq!(self.total_peers(), 1);
+        assert_eq!(self.num_peers(), NumPeers::from(1));
 
         while !task_handle.is_shutting_down() {
             let session_index = self.get_finished_session_count().await;
@@ -150,7 +146,7 @@ impl ConsensusEngine {
 
     pub async fn run_consensus(&self, task_handle: TaskHandle) -> anyhow::Result<()> {
         // We need four peers to run the atomic broadcast
-        assert!(self.total_peers() >= 4);
+        assert!(self.num_peers().total() >= 4);
 
         self.confirm_server_config_consensus_hash().await?;
 
@@ -255,7 +251,7 @@ impl ConsensusEngine {
         });
 
         let config = aleph_bft::create_config(
-            self.total_peers().into(),
+            self.num_peers().total().into(),
             self.identity().to_usize().into(),
             session_index,
             self.cfg
@@ -397,7 +393,7 @@ impl ConsensusEngine {
 
         // We collect the ordered signatures until we either obtain a threshold
         // signature or a signed session outcome arrives from our peers
-        while signatures.len() < self.threshold_peers() {
+        while signatures.len() < self.num_peers().threshold() {
             tokio::select! {
                 ordered_unit = ordered_unit_receiver.recv() => {
                     let ordered_unit = ordered_unit?;
@@ -633,7 +629,7 @@ impl ConsensusEngine {
     ) -> SignedSessionOutcome {
         let decoders = self.decoders();
         let keychain = Keychain::new(&self.cfg);
-        let threshold = self.threshold_peers();
+        let threshold = self.num_peers().threshold();
 
         let filter_map = move |response: SerdeModuleEncoding<SignedSessionOutcome>| match response
             .try_into_inner(&decoders)
@@ -667,7 +663,7 @@ impl ConsensusEngine {
 
             let result = federation_api
                 .request_with_strategy(
-                    FilterMap::new(filter_map.clone(), NumPeers::from(self.total_peers())),
+                    FilterMap::new(filter_map.clone(), self.num_peers()),
                     AWAIT_SIGNED_SESSION_OUTCOME_ENDPOINT.to_string(),
                     ApiRequestErased::new(index),
                 )

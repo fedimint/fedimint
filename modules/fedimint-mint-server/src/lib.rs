@@ -160,7 +160,8 @@ impl ServerModuleInit for MintInit {
             .gen_denominations()
             .iter()
             .map(|&amount| {
-                let (tbs_pk, tbs_pks, tbs_sks) = dealer_keygen(peers.threshold(), peers.len());
+                let (tbs_pk, tbs_pks, tbs_sks) =
+                    dealer_keygen(peers.to_num_peers().threshold(), peers.len());
                 (amount, (tbs_pk, tbs_pks, tbs_sks))
             })
             .collect::<HashMap<_, _>>();
@@ -298,7 +299,7 @@ impl ServerModuleInit for MintInit {
         .map(|(amt, keys)| {
             let keys = (1_u64..)
                 .zip(keys.into_iter().copied())
-                .take(config.peer_tbs_pks.threshold())
+                .take(config.peer_tbs_pks.to_num_peers().threshold())
                 .collect();
 
             (amt, aggregate_public_key_shares(&keys))
@@ -650,7 +651,7 @@ impl Mint {
         .map(|(amt, keys)| {
             let keys = (1_u64..)
                 .zip(keys.into_iter().copied())
-                .take(cfg.consensus.peer_tbs_pks.threshold())
+                .take(cfg.consensus.peer_tbs_pks.to_num_peers().threshold())
                 .collect();
 
             (amt, aggregate_public_key_shares(&keys))

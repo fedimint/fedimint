@@ -63,7 +63,7 @@ impl aleph_bft::Keychain for Keychain {
     type Signature = SchnorrSignature;
 
     fn node_count(&self) -> aleph_bft::NodeCount {
-        self.pks.total().into()
+        self.pks.len().into()
     }
 
     fn sign(&self, message: &[u8]) -> Self::Signature {
@@ -105,13 +105,13 @@ impl aleph_bft::MultiKeychain for Keychain {
         signature: &Self::Signature,
         index: aleph_bft::NodeIndex,
     ) -> Self::PartialMultisignature {
-        let mut partial = aleph_bft::NodeMap::with_size(self.pks.total().into());
+        let mut partial = aleph_bft::NodeMap::with_size(self.pks.len().into());
         partial.insert(index, signature.clone());
         partial
     }
 
     fn is_complete(&self, msg: &[u8], partial: &Self::PartialMultisignature) -> bool {
-        if partial.iter().count() < self.pks.threshold() {
+        if partial.iter().count() < self.pks.to_num_peers().threshold() {
             return false;
         }
 

@@ -13,7 +13,7 @@ use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::ApiRequestErased;
 use fedimint_core::secp256k1::KeyPair;
 use fedimint_core::task::sleep;
-use fedimint_core::{Amount, NumPeers, NumPeersExt, OutPoint, PeerId, Tiered};
+use fedimint_core::{Amount, NumPeersExt, OutPoint, PeerId, Tiered};
 use fedimint_derive_secret::{ChildId, DerivableSecret};
 use fedimint_logging::LOG_CLIENT_MODULE_MINT;
 use fedimint_mint_common::endpoint_constants::AWAIT_OUTPUT_OUTCOME_ENDPOINT;
@@ -190,7 +190,7 @@ impl MintOutputStatesCreated {
                         move |peer, outcome| {
                             verify_blind_share(peer, &outcome, amount, message, &decoder, &pks)
                         },
-                        NumPeers::from(global_context.api().all_peers().total()),
+                        global_context.api().all_peers().to_num_peers(),
                     ),
                     AWAIT_OUTPUT_OUTCOME_ENDPOINT.to_owned(),
                     ApiRequestErased::new(common.out_point),

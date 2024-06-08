@@ -8,7 +8,7 @@ use fedimint_api_client::api::{
 use fedimint_api_client::query::FilterMapThreshold;
 use fedimint_core::module::ApiRequestErased;
 use fedimint_core::task::{MaybeSend, MaybeSync};
-use fedimint_core::{apply, async_trait_maybe_send, NumPeers, NumPeersExt, PeerId};
+use fedimint_core::{apply, async_trait_maybe_send, NumPeersExt, PeerId};
 use fedimint_ln_common::contracts::incoming::{IncomingContractAccount, IncomingContractOffer};
 use fedimint_ln_common::contracts::outgoing::OutgoingContractAccount;
 use fedimint_ln_common::contracts::{
@@ -185,7 +185,7 @@ where
             .request_with_strategy(
                 FilterMapThreshold::new(
                     |_, gateways| Ok(gateways),
-                    NumPeers::from(self.all_peers().total()),
+                    self.all_peers().to_num_peers(),
                 ),
                 LIST_GATEWAYS_ENDPOINT.to_string(),
                 ApiRequestErased::default(),
