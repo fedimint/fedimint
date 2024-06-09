@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"constant":["RETRY_DELAY"],"enum":["SendSMState"],"struct":["SendSMCommon","SendStateMachine"]};
+window.SIDEBAR_ITEMS = {"constant":["RETRY_DELAY"],"enum":["Invoice","SendSMState"],"struct":["SendSMCommon","SendStateMachine"]};

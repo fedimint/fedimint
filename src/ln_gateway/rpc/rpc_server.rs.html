@@ -395,6 +395,9 @@
 <a href="#395" id="395">395</a>
 <a href="#396" id="396">396</a>
 <a href="#397" id="397">397</a>
+<a href="#398" id="398">398</a>
+<a href="#399" id="399">399</a>
+<a href="#400" id="400">400</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>axum::extract::Request;
 <span class="kw">use </span>axum::http::{header, StatusCode};
 <span class="kw">use </span>axum::middleware::{<span class="self">self</span>, Next};
@@ -409,13 +412,13 @@
 <span class="kw">use </span>fedimint_ln_client::pay::PayInvoicePayload;
 <span class="kw">use </span>fedimint_ln_common::gateway_endpoint_constants::{
     ADDRESS_ENDPOINT, BACKUP_ENDPOINT, BALANCE_ENDPOINT, CLOSE_CHANNELS_WITH_PEER_ENDPOINT,
-    CONFIGURATION_ENDPOINT, CONNECT_FED_ENDPOINT, CREATE_INVOICE_V2_ENDPOINT,
+    CONFIGURATION_ENDPOINT, CONNECT_FED_ENDPOINT, CREATE_BOLT11_INVOICE_V2_ENDPOINT,
     GATEWAY_INFO_ENDPOINT, GATEWAY_INFO_POST_ENDPOINT, GET_FUNDING_ADDRESS_ENDPOINT,
     GET_GATEWAY_ID_ENDPOINT, LEAVE_FED_ENDPOINT, LIST_ACTIVE_CHANNELS_ENDPOINT,
-    OPEN_CHANNEL_ENDPOINT, PAYMENT_INFO_V2_ENDPOINT, PAY_INVOICE_ENDPOINT, RESTORE_ENDPOINT,
-    SEND_PAYMENT_V2_ENDPOINT, SET_CONFIGURATION_ENDPOINT, WITHDRAW_ENDPOINT,
+    OPEN_CHANNEL_ENDPOINT, PAY_BOLT11_INVOICE_V2_ENDPOINT, PAY_INVOICE_ENDPOINT, RESTORE_ENDPOINT,
+    ROUTING_INFO_V2_ENDPOINT, SET_CONFIGURATION_ENDPOINT, WITHDRAW_ENDPOINT,
 };
-<span class="kw">use </span>fedimint_lnv2_client::{CreateInvoicePayload, SendPaymentPayload};
+<span class="kw">use </span>fedimint_lnv2_client::{CreateBolt11InvoicePayload, PayBolt11InvoicePayload};
 <span class="kw">use </span>hex::ToHex;
 <span class="kw">use </span>serde_json::{json, Value};
 <span class="kw">use </span>tokio::net::TcpListener;
@@ -547,9 +550,12 @@
         .route(PAY_INVOICE_ENDPOINT, post(pay_invoice))
         .route(GET_GATEWAY_ID_ENDPOINT, get(get_gateway_id))
         <span class="comment">// These routes are for next generation lightning
-        </span>.route(PAYMENT_INFO_V2_ENDPOINT, post(payment_info_v2))
-        .route(SEND_PAYMENT_V2_ENDPOINT, post(send_payment_v2))
-        .route(CREATE_INVOICE_V2_ENDPOINT, post(create_invoice_v2));
+        </span>.route(ROUTING_INFO_V2_ENDPOINT, post(routing_info_v2))
+        .route(PAY_BOLT11_INVOICE_V2_ENDPOINT, post(pay_bolt11_invoice_v2))
+        .route(
+            CREATE_BOLT11_INVOICE_V2_ENDPOINT,
+            post(create_bolt11_invoice_v2),
+        );
 
     <span class="comment">// Authenticated, public routes used for gateway administration
     </span><span class="kw">let </span>always_authenticated_routes = Router::new()
@@ -766,29 +772,29 @@
     <span class="prelude-val">Ok</span>(Json(<span class="macro">json!</span>(gateway.gateway_id)))
 }
 
-<span class="kw">async fn </span>payment_info_v2(
+<span class="kw">async fn </span>routing_info_v2(
     Extension(gateway): Extension&lt;Gateway&gt;,
     Json(federation_id): Json&lt;FederationId&gt;,
 ) -&gt; Json&lt;Value&gt; {
-    Json(<span class="macro">json!</span>(gateway.payment_info_v2(<span class="kw-2">&amp;</span>federation_id).<span class="kw">await</span>))
+    Json(<span class="macro">json!</span>(gateway.routing_info_v2(<span class="kw-2">&amp;</span>federation_id).<span class="kw">await</span>))
 }
 
-<span class="kw">async fn </span>send_payment_v2(
+<span class="kw">async fn </span>pay_bolt11_invoice_v2(
     Extension(gateway): Extension&lt;Gateway&gt;,
-    Json(payload): Json&lt;SendPaymentPayload&gt;,
+    Json(payload): Json&lt;PayBolt11InvoicePayload&gt;,
 ) -&gt; Json&lt;Value&gt; {
     Json(<span class="macro">json!</span>(gateway
-        .send_payment_v2(payload)
+        .pay_bolt11_invoice(payload)
         .<span class="kw">await
         </span>.map_err(|e| e.to_string())))
 }
 
-<span class="kw">async fn </span>create_invoice_v2(
+<span class="kw">async fn </span>create_bolt11_invoice_v2(
     Extension(gateway): Extension&lt;Gateway&gt;,
-    Json(payload): Json&lt;CreateInvoicePayload&gt;,
+    Json(payload): Json&lt;CreateBolt11InvoicePayload&gt;,
 ) -&gt; Json&lt;Value&gt; {
     Json(<span class="macro">json!</span>(gateway
-        .create_invoice_v2(payload)
+        .create_bolt11_invoice_v2(payload)
         .<span class="kw">await
         </span>.map_err(|e| e.to_string())))
 }

@@ -303,6 +303,13 @@
 <a href="#303" id="303">303</a>
 <a href="#304" id="304">304</a>
 <a href="#305" id="305">305</a>
+<a href="#306" id="306">306</a>
+<a href="#307" id="307">307</a>
+<a href="#308" id="308">308</a>
+<a href="#309" id="309">309</a>
+<a href="#310" id="310">310</a>
+<a href="#311" id="311">311</a>
+<a href="#312" id="312">312</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 
 <span class="kw">use </span>bitcoin::Network;
@@ -315,7 +322,7 @@
 <span class="kw">use </span>fedimint_core::invite_code::InviteCode;
 <span class="kw">use </span>fedimint_core::{impl_db_lookup, impl_db_record, secp256k1};
 <span class="kw">use </span>fedimint_ln_common::serde_routing_fees;
-<span class="kw">use </span>fedimint_lnv2_client::CreateInvoicePayload;
+<span class="kw">use </span>fedimint_lnv2_common::contracts::IncomingContract;
 <span class="kw">use </span>futures::FutureExt;
 <span class="kw">use </span>lightning_invoice::RoutingFees;
 <span class="kw">use </span>rand::Rng;
@@ -333,7 +340,7 @@
     GatewayPublicKey = <span class="number">0x06</span>,
     GatewayConfiguration = <span class="number">0x07</span>,
     PreimageAuthentication = <span class="number">0x08</span>,
-    CreateInvoicePayload = <span class="number">0x09</span>,
+    RegisteredIncomingContract = <span class="number">0x09</span>,
 }
 
 <span class="kw">impl </span>std::fmt::Display <span class="kw">for </span>DbKeyPrefix {
@@ -459,12 +466,19 @@
 }
 
 <span class="attr">#[derive(Debug, Encodable, Decodable)]
-</span><span class="kw">pub struct </span>CreateInvoicePayloadKey(<span class="kw">pub </span>[u8; <span class="number">32</span>]);
+</span><span class="kw">pub struct </span>RegisteredIncomingContractKey(<span class="kw">pub </span>[u8; <span class="number">32</span>]);
+
+<span class="attr">#[derive(Debug, Encodable, Decodable)]
+</span><span class="kw">pub struct </span>RegisteredIncomingContract {
+    <span class="kw">pub </span>federation_id: FederationId,
+    <span class="kw">pub </span>incoming_amount: u64,
+    <span class="kw">pub </span>contract: IncomingContract,
+}
 
 <span class="macro">impl_db_record!</span>(
-    key = CreateInvoicePayloadKey,
-    value = CreateInvoicePayload,
-    db_prefix = DbKeyPrefix::CreateInvoicePayload,
+    key = RegisteredIncomingContractKey,
+    value = RegisteredIncomingContract,
+    db_prefix = DbKeyPrefix::RegisteredIncomingContract,
 );
 
 <span class="attr">#[cfg(test)]
@@ -595,7 +609,7 @@
                             <span class="macro">ensure!</span>(gateway_configuration.is_some(), <span class="string">"validate_migrations was not able to read GatewayConfiguration"</span>);
                             <span class="macro">info!</span>(<span class="string">"Validated GatewayConfiguration"</span>);
                         }
-                        DbKeyPrefix::CreateInvoicePayload =&gt; {}
+                        DbKeyPrefix::RegisteredIncomingContract =&gt; {}
                     }
                 }
                 <span class="prelude-val">Ok</span>(())

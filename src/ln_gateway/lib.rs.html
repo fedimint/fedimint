@@ -1937,6 +1937,14 @@
 <a href="#1937" id="1937">1937</a>
 <a href="#1938" id="1938">1938</a>
 <a href="#1939" id="1939">1939</a>
+<a href="#1940" id="1940">1940</a>
+<a href="#1941" id="1941">1941</a>
+<a href="#1942" id="1942">1942</a>
+<a href="#1943" id="1943">1943</a>
+<a href="#1944" id="1944">1944</a>
+<a href="#1945" id="1945">1945</a>
+<a href="#1946" id="1946">1946</a>
+<a href="#1947" id="1947">1947</a>
 </pre></div><pre class="rust"><code><span class="attr">#![warn(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::cast_possible_wrap)]
@@ -2018,8 +2026,10 @@
 <span class="kw">use </span>fedimint_ln_common::route_hints::RouteHint;
 <span class="kw">use </span>fedimint_ln_common::LightningCommonInit;
 <span class="kw">use </span>fedimint_lnv2_client::{
-    Bolt11InvoiceDescription, CreateInvoicePayload, PaymentFee, PaymentInfo, SendPaymentPayload,
+    Bolt11InvoiceDescription, CreateBolt11InvoicePayload, PayBolt11InvoicePayload, PaymentFee,
+    RoutingInfo,
 };
+<span class="kw">use </span>fedimint_lnv2_common::contracts::IncomingContract;
 <span class="kw">use </span>fedimint_mint_client::{MintClientInit, MintCommonInit};
 <span class="kw">use </span>fedimint_wallet_client::{
     WalletClientInit, WalletClientModule, WalletCommonInit, WithdrawState,
@@ -2047,8 +2057,8 @@
 <span class="kw">use </span>tracing::{debug, error, info, info_span, warn, Instrument};
 
 <span class="kw">use </span><span class="kw">crate</span>::db::{
-    get_gatewayd_database_migrations, CreateInvoicePayloadKey, FederationConfig,
-    FederationIdKeyPrefix,
+    get_gatewayd_database_migrations, FederationConfig, FederationIdKeyPrefix,
+    RegisteredIncomingContract, RegisteredIncomingContractKey,
 };
 <span class="kw">use </span><span class="kw">crate</span>::gateway_lnrpc::create_invoice_request::Description;
 <span class="kw">use </span><span class="kw">crate</span>::gateway_lnrpc::intercept_htlc_response::Forward;
@@ -2606,8 +2616,8 @@
                     // using the LNv2 protocol. If the `payment_hash` is not registered,
                     // this HTLC is either a legacy Lightning payment or the end destination is not
                     // a Fedimint.
-                    </span><span class="kw">if let </span><span class="prelude-val">Ok</span>((payload, client)) = <span class="self">self
-                        </span>.get_payload_and_client_v2(
+                    </span><span class="kw">if let </span><span class="prelude-val">Ok</span>((contract, client)) = <span class="self">self
+                        </span>.get_registered_incoming_contract_and_client_v2(
                             htlc_request
                                 .payment_hash
                                 .clone()
@@ -2622,7 +2632,7 @@
                             .relay_incoming_htlc(
                                 htlc_request.incoming_chan_id,
                                 htlc_request.htlc_id,
-                                payload,
+                                contract,
                             )
                             .<span class="kw">await
                         </span>{
@@ -3634,8 +3644,8 @@
 
     <span class="doccomment">/// Returns payment information that LNv2 clients can use to instruct this
     /// Gateway to pay an invoice or receive a payment.
-    </span><span class="kw">pub async fn </span>payment_info_v2(<span class="kw-2">&amp;</span><span class="self">self</span>, federation_id: <span class="kw-2">&amp;</span>FederationId) -&gt; <span class="prelude-ty">Option</span>&lt;PaymentInfo&gt; {
-        <span class="prelude-val">Some</span>(PaymentInfo {
+    </span><span class="kw">pub async fn </span>routing_info_v2(<span class="kw-2">&amp;</span><span class="self">self</span>, federation_id: <span class="kw-2">&amp;</span>FederationId) -&gt; <span class="prelude-ty">Option</span>&lt;RoutingInfo&gt; {
+        <span class="prelude-val">Some</span>(RoutingInfo {
             public_key: <span class="self">self</span>.public_key_v2(federation_id).<span class="kw">await</span><span class="question-mark">?</span>,
             send_fee_default: PaymentFee::one_percent(),
             send_fee_minimum: PaymentFee::half_of_one_percent(),
@@ -3647,9 +3657,9 @@
 
     <span class="doccomment">/// Instructs this gateway to pay a Lightning network invoice via the LNv2
     /// protocol.
-    </span><span class="kw">async fn </span>send_payment_v2(
+    </span><span class="kw">async fn </span>pay_bolt11_invoice(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        payload: SendPaymentPayload,
+        payload: PayBolt11InvoicePayload,
     ) -&gt; anyhow::Result&lt;std::result::Result&lt;[u8; <span class="number">32</span>], Signature&gt;&gt; {
         <span class="kw">let </span>clients = <span class="self">self</span>.clients.read().<span class="kw">await</span>;
 
@@ -3668,16 +3678,16 @@
     /// the connected Lightning node, then save the payment hash so that
     /// incoming HTLCs can be matched as a receive attempt to a specific
     /// federation.
-    </span><span class="kw">async fn </span>create_invoice_v2(
+    </span><span class="kw">async fn </span>create_bolt11_invoice_v2(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        payload: CreateInvoicePayload,
+        payload: CreateBolt11InvoicePayload,
     ) -&gt; anyhow::Result&lt;Bolt11Invoice&gt; {
         <span class="kw">if </span>!payload.contract.verify() {
             <span class="macro">bail!</span>(<span class="string">"The contract is invalid"</span>)
         }
 
         <span class="kw">let </span>payment_info = <span class="self">self
-            </span>.payment_info_v2(<span class="kw-2">&amp;</span>payload.federation_id)
+            </span>.routing_info_v2(<span class="kw-2">&amp;</span>payload.federation_id)
             .<span class="kw">await
             </span>.ok_or(<span class="macro">anyhow!</span>(<span class="string">"Payment Info not available"</span>))<span class="question-mark">?</span>;
 
@@ -3711,8 +3721,14 @@
 
         <span class="kw">if </span>dbtx
             .insert_entry(
-                <span class="kw-2">&amp;</span>CreateInvoicePayloadKey(payload.contract.commitment.payment_hash.to_byte_array()),
-                <span class="kw-2">&amp;</span>payload,
+                <span class="kw-2">&amp;</span>RegisteredIncomingContractKey(
+                    payload.contract.commitment.payment_hash.to_byte_array(),
+                ),
+                <span class="kw-2">&amp;</span>RegisteredIncomingContract {
+                    federation_id: payload.federation_id,
+                    incoming_amount: payload.invoice_amount.msats,
+                    contract: payload.contract.clone(),
+                },
             )
             .<span class="kw">await
             </span>.is_some()
@@ -3769,32 +3785,32 @@
     <span class="doccomment">/// Retrieves the persisted `CreateInvoicePayload` from the database
     /// specified by the `payment_hash` and the `ClientHandleArc` specified
     /// by the payload's `federation_id`.
-    </span><span class="kw">pub async fn </span>get_payload_and_client_v2(
+    </span><span class="kw">pub async fn </span>get_registered_incoming_contract_and_client_v2(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         payment_hash: [u8; <span class="number">32</span>],
         amount_msats: u64,
-    ) -&gt; anyhow::Result&lt;(CreateInvoicePayload, ClientHandleArc)&gt; {
-        <span class="kw">let </span>payload = <span class="self">self
+    ) -&gt; anyhow::Result&lt;(IncomingContract, ClientHandleArc)&gt; {
+        <span class="kw">let </span>registered_incoming_contract = <span class="self">self
             </span>.gateway_db
             .begin_transaction_nc()
             .<span class="kw">await
-            </span>.get_value(<span class="kw-2">&amp;</span>CreateInvoicePayloadKey(payment_hash))
+            </span>.get_value(<span class="kw-2">&amp;</span>RegisteredIncomingContractKey(payment_hash))
             .<span class="kw">await
             </span>.ok_or(<span class="macro">anyhow!</span>(<span class="string">"No corresponding decryption contract available"</span>))<span class="question-mark">?</span>;
 
-        <span class="kw">if </span>payload.invoice_amount.msats != amount_msats {
+        <span class="kw">if </span>registered_incoming_contract.incoming_amount != amount_msats {
             <span class="macro">bail!</span>(<span class="string">"The available decryption contract's amount is not equal the requested amount"</span>)
         }
 
         <span class="kw">let </span>clients = <span class="self">self</span>.clients.read().<span class="kw">await</span>;
 
         <span class="kw">let </span>client = clients
-            .get(<span class="kw-2">&amp;</span>payload.federation_id)
+            .get(<span class="kw-2">&amp;</span>registered_incoming_contract.federation_id)
             .ok_or(<span class="macro">anyhow!</span>(<span class="string">"Federation client not available"</span>))<span class="question-mark">?
             </span>.value()
             .clone();
 
-        <span class="prelude-val">Ok</span>((payload, client))
+        <span class="prelude-val">Ok</span>((registered_incoming_contract.contract, client))
     }
 }
 

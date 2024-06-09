@@ -417,6 +417,10 @@
 <a href="#417" id="417">417</a>
 <a href="#418" id="418">418</a>
 <a href="#419" id="419">419</a>
+<a href="#420" id="420">420</a>
+<a href="#421" id="421">421</a>
+<a href="#422" id="422">422</a>
+<a href="#423" id="423">423</a>
 </pre></div><pre class="rust"><code><span class="kw">mod </span>complete_sm;
 <span class="kw">mod </span>receive_sm;
 <span class="kw">mod </span>send_sm;
@@ -443,8 +447,9 @@
 };
 <span class="kw">use </span>fedimint_core::{apply, async_trait_maybe_send, secp256k1, Amount, OutPoint, PeerId};
 <span class="kw">use </span>fedimint_lnv2_client::api::LnFederationApi;
-<span class="kw">use </span>fedimint_lnv2_client::{CreateInvoicePayload, SendPaymentPayload};
+<span class="kw">use </span>fedimint_lnv2_client::PayBolt11InvoicePayload;
 <span class="kw">use </span>fedimint_lnv2_common::config::LightningClientConfig;
+<span class="kw">use </span>fedimint_lnv2_common::contracts::IncomingContract;
 <span class="kw">use </span>fedimint_lnv2_common::{
     LightningCommonInit, LightningModuleTypes, LightningOutput, LightningOutputV0,
 };
@@ -461,7 +466,7 @@
     CompleteSMCommon, CompleteSMState, CompleteStateMachine,
 };
 <span class="kw">use </span><span class="kw">crate</span>::gateway_module_v2::receive_sm::ReceiveSMCommon;
-<span class="kw">use </span><span class="kw">crate</span>::gateway_module_v2::send_sm::SendSMCommon;
+<span class="kw">use </span><span class="kw">crate</span>::gateway_module_v2::send_sm::{Invoice, SendSMCommon};
 <span class="kw">use crate</span>::{Gateway, EXPIRATION_DELTA_MINIMUM_V2};
 
 <span class="attr">#[derive(Debug, Clone, Serialize, Deserialize)]
@@ -615,12 +620,12 @@
 <span class="kw">impl </span>GatewayClientModuleV2 {
     <span class="kw">pub async fn </span>send_payment(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        payload: SendPaymentPayload,
+        payload: PayBolt11InvoicePayload,
     ) -&gt; anyhow::Result&lt;<span class="prelude-ty">Result</span>&lt;[u8; <span class="number">32</span>], Signature&gt;&gt; {
         <span class="comment">// The operation id is equal to the contract id which also doubles as the
         // message signed by the gateway via the forfeit signature to forfeit
         // the gateways claim to a contract in case of cancellation. We only create a
-        // forfeit signature after the we have started the send state machine to
+        // forfeit signature after we have started the send state machine to
         // prevent replay attacks with a previously cancelled outgoing contract
         </span><span class="kw">let </span>operation_id = OperationId::from_encodable(<span class="kw-2">&amp;</span>payload.contract.clone());
 
@@ -639,10 +644,16 @@
             <span class="macro">bail!</span>(<span class="string">"The invoices payment hash does not match the contracts payment hash"</span>);
         }
 
-        <span class="comment">// The outgoing contract commits to the invoice it is intended for via a hash to
-        // prevent DOS attacks where an attacker submits a different invoice.
-        </span><span class="kw">if </span>payload.invoice.consensus_hash::&lt;sha256::Hash&gt;() != payload.contract.invoice_hash {
-            <span class="macro">bail!</span>(<span class="string">"The invoices consensus hash does not match the contracts invoice commitment"</span>);
+        <span class="comment">// This prevents DOS attacks where an attacker submits a different invoice.
+        </span><span class="kw">if </span>secp256k1::SECP256K1
+            .verify_schnorr(
+                <span class="kw-2">&amp;</span>payload.auth,
+                <span class="kw-2">&amp;</span>payload.invoice.consensus_hash::&lt;sha256::Hash&gt;().into(),
+                <span class="kw-2">&amp;</span>payload.contract.refund_pk.x_only_public_key().<span class="number">0</span>,
+            )
+            .is_err()
+        {
+            <span class="macro">bail!</span>(<span class="string">"Invalid auth signature for the invoice"</span>);
         }
 
         <span class="kw">let </span>invoice_msats = payload
@@ -652,7 +663,7 @@
 
         <span class="kw">let </span>min_contract_amount = <span class="self">self
             </span>.gateway
-            .payment_info_v2(<span class="kw-2">&amp;</span>payload.federation_id)
+            .routing_info_v2(<span class="kw-2">&amp;</span>payload.federation_id)
             .<span class="kw">await
             </span>.ok_or(<span class="macro">anyhow!</span>(<span class="string">"Payment Info not available"</span>))<span class="question-mark">?
             </span>.send_fee_minimum
@@ -674,7 +685,7 @@
                 contract: payload.contract.clone(),
                 max_delay,
                 min_contract_amount,
-                invoice: payload.invoice,
+                invoice: Invoice::Bolt11(payload.invoice),
                 claim_keypair: <span class="self">self</span>.keypair,
             },
             state: SendSMState::Sending,
@@ -721,9 +732,9 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         incoming_chan_id: u64,
         htlc_id: u64,
-        payload: CreateInvoicePayload,
+        contract: IncomingContract,
     ) -&gt; anyhow::Result&lt;()&gt; {
-        <span class="kw">let </span>operation_id = OperationId::from_encodable(<span class="kw-2">&amp;</span>payload.clone());
+        <span class="kw">let </span>operation_id = OperationId::from_encodable(<span class="kw-2">&amp;</span>contract);
 
         <span class="kw">if </span><span class="self">self</span>.client_ctx.operation_exists(operation_id).<span class="kw">await </span>{
             <span class="kw">return </span><span class="prelude-val">Ok</span>(());
@@ -732,14 +743,14 @@
         <span class="kw">let </span>refund_keypair = <span class="self">self</span>.keypair;
 
         <span class="kw">let </span>client_output = ClientOutput::&lt;LightningOutput, GatewayClientStateMachinesV2&gt; {
-            output: LightningOutput::V0(LightningOutputV0::Incoming(payload.contract.clone())),
-            amount: payload.contract.commitment.amount,
+            output: LightningOutput::V0(LightningOutputV0::Incoming(contract.clone())),
+            amount: contract.commitment.amount,
             state_machines: Arc::new(<span class="kw">move </span>|txid, out_idx| {
                 <span class="macro">vec!</span>[
                     GatewayClientStateMachinesV2::Receive(ReceiveStateMachine {
                         common: ReceiveSMCommon {
                             operation_id,
-                            contract: payload.contract.clone(),
+                            contract: contract.clone(),
                             out_point: OutPoint { txid, out_idx },
                             refund_keypair,
                         },
@@ -772,11 +783,8 @@
         <span class="prelude-val">Ok</span>(())
     }
 
-    <span class="kw">pub async fn </span>relay_direct_swap(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        payload: CreateInvoicePayload,
-    ) -&gt; anyhow::Result&lt;[u8; <span class="number">32</span>]&gt; {
-        <span class="kw">let </span>operation_id = OperationId::from_encodable(<span class="kw-2">&amp;</span>payload.clone());
+    <span class="kw">pub async fn </span>relay_direct_swap(<span class="kw-2">&amp;</span><span class="self">self</span>, contract: IncomingContract) -&gt; anyhow::Result&lt;[u8; <span class="number">32</span>]&gt; {
+        <span class="kw">let </span>operation_id = OperationId::from_encodable(<span class="kw-2">&amp;</span>contract);
 
         <span class="kw">if </span><span class="self">self</span>.client_ctx.operation_exists(operation_id).<span class="kw">await </span>{
             <span class="kw">return </span><span class="self">self
@@ -788,13 +796,13 @@
         <span class="kw">let </span>refund_keypair = <span class="self">self</span>.keypair;
 
         <span class="kw">let </span>client_output = ClientOutput::&lt;LightningOutput, GatewayClientStateMachinesV2&gt; {
-            output: LightningOutput::V0(LightningOutputV0::Incoming(payload.contract.clone())),
-            amount: payload.contract.commitment.amount,
+            output: LightningOutput::V0(LightningOutputV0::Incoming(contract.clone())),
+            amount: contract.commitment.amount,
             state_machines: Arc::new(<span class="kw">move </span>|txid, out_idx| {
                 <span class="macro">vec!</span>[GatewayClientStateMachinesV2::Receive(ReceiveStateMachine {
                     common: ReceiveSMCommon {
                         operation_id,
-                        contract: payload.contract.clone(),
+                        contract: contract.clone(),
                         out_point: OutPoint { txid, out_idx },
                         refund_keypair,
                     },

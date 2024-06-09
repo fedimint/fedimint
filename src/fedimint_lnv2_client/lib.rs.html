@@ -885,6 +885,7 @@
 <a href="#885" id="885">885</a>
 <a href="#886" id="886">886</a>
 <a href="#887" id="887">887</a>
+<a href="#888" id="888">888</a>
 </pre></div><pre class="rust"><code><span class="attr">#![warn(clippy::pedantic)]
 #![allow(clippy::missing_errors_doc)]
 #![allow(clippy::missing_panics_doc)]
@@ -928,6 +929,7 @@
 };
 <span class="kw">use </span>futures::StreamExt;
 <span class="kw">use </span>lightning_invoice::Bolt11Invoice;
+<span class="kw">use </span>secp256k1::schnorr::Signature;
 <span class="kw">use </span>secp256k1::{ecdh, KeyPair, PublicKey, Scalar, SecretKey};
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>thiserror::Error;
@@ -935,7 +937,7 @@
 
 <span class="kw">use </span><span class="kw">crate</span>::api::LnFederationApi;
 <span class="kw">use </span><span class="kw">crate</span>::receive_sm::{ReceiveSMCommon, ReceiveSMState, ReceiveStateMachine};
-<span class="kw">use </span><span class="kw">crate</span>::send_sm::{SendSMCommon, SendSMState, SendStateMachine};
+<span class="kw">use </span><span class="kw">crate</span>::send_sm::{Invoice, SendSMCommon, SendSMState, SendStateMachine};
 
 <span class="attr">#[derive(Debug, Clone, Serialize, Deserialize)]
 </span><span class="kw">pub enum </span>LightningOperationMeta {
@@ -1009,7 +1011,7 @@
 }
 
 <span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize, Decodable, Encodable)]
-</span><span class="kw">pub struct </span>CreateInvoicePayload {
+</span><span class="kw">pub struct </span>CreateBolt11InvoicePayload {
     <span class="kw">pub </span>federation_id: FederationId,
     <span class="kw">pub </span>contract: IncomingContract,
     <span class="kw">pub </span>invoice_amount: Amount,
@@ -1024,14 +1026,15 @@
 }
 
 <span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Decodable, Encodable)]
-</span><span class="kw">pub struct </span>SendPaymentPayload {
+</span><span class="kw">pub struct </span>PayBolt11InvoicePayload {
     <span class="kw">pub </span>federation_id: FederationId,
     <span class="kw">pub </span>contract: OutgoingContract,
     <span class="kw">pub </span>invoice: Bolt11Invoice,
+    <span class="kw">pub </span>auth: Signature,
 }
 
 <span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Decodable, Encodable)]
-</span><span class="kw">pub struct </span>PaymentInfo {
+</span><span class="kw">pub struct </span>RoutingInfo {
     <span class="kw">pub </span>public_key: PublicKey,
     <span class="kw">pub </span>send_fee_minimum: PaymentFee,
     <span class="kw">pub </span>send_fee_default: PaymentFee,
@@ -1181,22 +1184,22 @@
 }
 
 <span class="kw">impl </span>LightningClientModule {
-    <span class="kw">pub async fn </span>fetch_payment_info(
+    <span class="kw">pub async fn </span>fetch_routing_info(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         gateway_api: SafeUrl,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;PaymentInfo&gt;, GatewayError&gt; {
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;RoutingInfo&gt;, GatewayError&gt; {
         reqwest::Client::new()
             .post(
                 gateway_api
-                    .join(<span class="string">"payment_info"</span>)
-                    .expect(<span class="string">"'payment_info' contains no invalid characters for a URL"</span>)
+                    .join(<span class="string">"routing_info"</span>)
+                    .expect(<span class="string">"'routing_info' contains no invalid characters for a URL"</span>)
                     .as_str(),
             )
             .json(<span class="kw-2">&amp;</span><span class="self">self</span>.federation_id)
             .send()
             .<span class="kw">await
             </span>.map_err(|e| GatewayError::Unreachable(e.to_string()))<span class="question-mark">?
-            </span>.json::&lt;<span class="prelude-ty">Option</span>&lt;PaymentInfo&gt;&gt;()
+            </span>.json::&lt;<span class="prelude-ty">Option</span>&lt;RoutingInfo&gt;&gt;()
             .<span class="kw">await
             </span>.map_err(|e| GatewayError::InvalidJsonResponse(e.to_string()))
     }
@@ -1239,7 +1242,7 @@
             .keypair(secp256k1::SECP256K1);
 
         <span class="kw">let </span>payment_info = <span class="self">self
-            </span>.fetch_payment_info(gateway_api.clone())
+            </span>.fetch_routing_info(gateway_api.clone())
             .<span class="kw">await
             </span>.map_err(SendPaymentError::GatewayError)<span class="question-mark">?
             </span>.ok_or(SendPaymentError::UnknownFederation)<span class="question-mark">?</span>;
@@ -1269,7 +1272,6 @@
             claim_pk: payment_info.public_key,
             refund_pk: refund_keypair.public_key(),
             ephemeral_pk,
-            invoice_hash: invoice.consensus_hash(),
         };
 
         <span class="kw">let </span>contract_clone = contract.clone();
@@ -1286,7 +1288,7 @@
                         funding_txid,
                         gateway_api: gateway_api_clone.clone(),
                         contract: contract_clone.clone(),
-                        invoice: invoice_clone.clone(),
+                        invoice: Invoice::Bolt11(invoice_clone.clone()),
                         refund_keypair,
                     },
                     state: SendSMState::Funding,
@@ -1486,7 +1488,7 @@
             .to_byte_array();
 
         <span class="kw">let </span>payment_info = <span class="self">self
-            </span>.fetch_payment_info(gateway_api.clone())
+            </span>.fetch_routing_info(gateway_api.clone())
             .<span class="kw">await
             </span>.map_err(FetchInvoiceError::GatewayError)<span class="question-mark">?
             </span>.ok_or(FetchInvoiceError::UnknownFederation)<span class="question-mark">?</span>;
@@ -1521,7 +1523,7 @@
             ephemeral_pk,
         );
 
-        <span class="kw">let </span>payload = CreateInvoicePayload {
+        <span class="kw">let </span>payload = CreateBolt11InvoicePayload {
             federation_id: <span class="self">self</span>.federation_id,
             contract: contract.clone(),
             invoice_amount,
@@ -1549,13 +1551,13 @@
     <span class="kw">async fn </span>fetch_invoice(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         gateway_api: SafeUrl,
-        payload: CreateInvoicePayload,
+        payload: CreateBolt11InvoicePayload,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Result</span>&lt;Bolt11Invoice, String&gt;, GatewayError&gt; {
         reqwest::Client::new()
             .post(
                 gateway_api
-                    .join(<span class="string">"create_invoice"</span>)
-                    .expect(<span class="string">"'create_invoice' contains no invalid characters for a URL"</span>)
+                    .join(<span class="string">"create_bolt11_invoice"</span>)
+                    .expect(<span class="string">"'create_bolt11_invoice' contains no invalid characters for a URL"</span>)
                     .as_str(),
             )
             .json(<span class="kw-2">&amp;</span>payload)

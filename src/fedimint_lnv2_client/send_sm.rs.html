@@ -314,9 +314,29 @@
 <a href="#314" id="314">314</a>
 <a href="#315" id="315">315</a>
 <a href="#316" id="316">316</a>
+<a href="#317" id="317">317</a>
+<a href="#318" id="318">318</a>
+<a href="#319" id="319">319</a>
+<a href="#320" id="320">320</a>
+<a href="#321" id="321">321</a>
+<a href="#322" id="322">322</a>
+<a href="#323" id="323">323</a>
+<a href="#324" id="324">324</a>
+<a href="#325" id="325">325</a>
+<a href="#326" id="326">326</a>
+<a href="#327" id="327">327</a>
+<a href="#328" id="328">328</a>
+<a href="#329" id="329">329</a>
+<a href="#330" id="330">330</a>
+<a href="#331" id="331">331</a>
+<a href="#332" id="332">332</a>
+<a href="#333" id="333">333</a>
+<a href="#334" id="334">334</a>
+<a href="#335" id="335">335</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
 
+<span class="kw">use </span>bitcoin::hashes::sha256;
 <span class="kw">use </span>fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
 <span class="kw">use </span>fedimint_client::transaction::ClientInput;
 <span class="kw">use </span>fedimint_client::DynGlobalClientContext;
@@ -336,7 +356,7 @@
 <span class="kw">use </span>tracing::error;
 
 <span class="kw">use </span><span class="kw">crate</span>::api::LnFederationApi;
-<span class="kw">use crate</span>::{LightningClientStateMachines, SendPaymentPayload};
+<span class="kw">use crate</span>::{LightningClientStateMachines, PayBolt11InvoicePayload};
 
 <span class="kw">const </span>RETRY_DELAY: Duration = Duration::from_secs(<span class="number">1</span>);
 
@@ -361,8 +381,21 @@
     <span class="kw">pub </span>funding_txid: TransactionId,
     <span class="kw">pub </span>gateway_api: SafeUrl,
     <span class="kw">pub </span>contract: OutgoingContract,
-    <span class="kw">pub </span>invoice: Bolt11Invoice,
+    <span class="kw">pub </span>invoice: Invoice,
     <span class="kw">pub </span>refund_keypair: KeyPair,
+}
+
+<span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
+</span><span class="kw">pub enum </span>Invoice {
+    Bolt11(Bolt11Invoice),
+}
+
+<span class="kw">impl </span>Invoice {
+    <span class="kw">pub fn </span>bolt11(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>Bolt11Invoice {
+        <span class="kw">match </span><span class="self">self </span>{
+            Invoice::Bolt11(invoice) =&gt; invoice,
+        }
+    }
 }
 
 <span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
@@ -416,7 +449,8 @@
                             <span class="self">self</span>.common.gateway_api.clone(),
                             context.federation_id,
                             <span class="self">self</span>.common.contract.clone(),
-                            <span class="self">self</span>.common.invoice.clone(),
+                            <span class="self">self</span>.common.invoice.bolt11().clone(),
+                            <span class="self">self</span>.common.refund_keypair,
                         ),
                         <span class="kw">move </span>|dbtx, response, old_state| {
                             Box::pin(<span class="self">Self</span>::transition_gateway_send_payment(
@@ -474,6 +508,7 @@
         federation_id: FederationId,
         contract: OutgoingContract,
         invoice: Bolt11Invoice,
+        refund_keypair: KeyPair,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;[u8; <span class="number">32</span>], Signature&gt; {
         <span class="kw">loop </span>{
             <span class="kw">match </span><span class="self">Self</span>::try_gateway_send_payment(
@@ -481,6 +516,7 @@
                 federation_id,
                 contract.clone(),
                 invoice.clone(),
+                refund_keypair.sign_schnorr(invoice.consensus_hash::&lt;sha256::Hash&gt;().into()),
             )
             .<span class="kw">await
             </span>{
@@ -531,18 +567,20 @@
         federation_id: FederationId,
         contract: OutgoingContract,
         invoice: Bolt11Invoice,
+        auth: Signature,
     ) -&gt; anyhow::Result&lt;<span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Result</span>&lt;[u8; <span class="number">32</span>], Signature&gt;, String&gt;&gt; {
         <span class="kw">let </span>result = reqwest::Client::new()
             .post(
                 gateway_api
-                    .join(<span class="string">"send_payment"</span>)
-                    .expect(<span class="string">"'send_payment' contains no invalid characters for a URL"</span>)
+                    .join(<span class="string">"pay_bolt11_invoice"</span>)
+                    .expect(<span class="string">"'pay_bolt11_invoice' contains no invalid characters for a URL"</span>)
                     .as_str(),
             )
-            .json(<span class="kw-2">&amp;</span>SendPaymentPayload {
+            .json(<span class="kw-2">&amp;</span>PayBolt11InvoicePayload {
                 federation_id,
                 contract,
                 invoice,
+                auth,
             })
             .send()
             .<span class="kw">await</span><span class="question-mark">?
