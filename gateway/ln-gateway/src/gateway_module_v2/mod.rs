@@ -24,8 +24,9 @@ use fedimint_core::module::{
 };
 use fedimint_core::{apply, async_trait_maybe_send, secp256k1, Amount, OutPoint, PeerId};
 use fedimint_lnv2_client::api::LnFederationApi;
-use fedimint_lnv2_client::{CreateInvoicePayload, SendPaymentPayload};
+use fedimint_lnv2_client::PayBolt11InvoicePayload;
 use fedimint_lnv2_common::config::LightningClientConfig;
+use fedimint_lnv2_common::contracts::IncomingContract;
 use fedimint_lnv2_common::{
     LightningCommonInit, LightningModuleTypes, LightningOutput, LightningOutputV0,
 };
@@ -42,7 +43,7 @@ use crate::gateway_module_v2::complete_sm::{
     CompleteSMCommon, CompleteSMState, CompleteStateMachine,
 };
 use crate::gateway_module_v2::receive_sm::ReceiveSMCommon;
-use crate::gateway_module_v2::send_sm::SendSMCommon;
+use crate::gateway_module_v2::send_sm::{Invoice, SendSMCommon};
 use crate::{Gateway, EXPIRATION_DELTA_MINIMUM_V2};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -196,12 +197,12 @@ impl State for GatewayClientStateMachinesV2 {
 impl GatewayClientModuleV2 {
     pub async fn send_payment(
         &self,
-        payload: SendPaymentPayload,
+        payload: PayBolt11InvoicePayload,
     ) -> anyhow::Result<Result<[u8; 32], Signature>> {
         // The operation id is equal to the contract id which also doubles as the
         // message signed by the gateway via the forfeit signature to forfeit
         // the gateways claim to a contract in case of cancellation. We only create a
-        // forfeit signature after the we have started the send state machine to
+        // forfeit signature after we have started the send state machine to
         // prevent replay attacks with a previously cancelled outgoing contract
         let operation_id = OperationId::from_encodable(&payload.contract.clone());
 
@@ -220,10 +221,16 @@ impl GatewayClientModuleV2 {
             bail!("The invoices payment hash does not match the contracts payment hash");
         }
 
-        // The outgoing contract commits to the invoice it is intended for via a hash to
-        // prevent DOS attacks where an attacker submits a different invoice.
-        if payload.invoice.consensus_hash::<sha256::Hash>() != payload.contract.invoice_hash {
-            bail!("The invoices consensus hash does not match the contracts invoice commitment");
+        // This prevents DOS attacks where an attacker submits a different invoice.
+        if secp256k1::SECP256K1
+            .verify_schnorr(
+                &payload.auth,
+                &payload.invoice.consensus_hash::<sha256::Hash>().into(),
+                &payload.contract.refund_pk.x_only_public_key().0,
+            )
+            .is_err()
+        {
+            bail!("Invalid auth signature for the invoice");
         }
 
         let invoice_msats = payload
@@ -233,7 +240,7 @@ impl GatewayClientModuleV2 {
 
         let min_contract_amount = self
             .gateway
-            .payment_info_v2(&payload.federation_id)
+            .routing_info_v2(&payload.federation_id)
             .await
             .ok_or(anyhow!("Payment Info not available"))?
             .send_fee_minimum
@@ -255,7 +262,7 @@ impl GatewayClientModuleV2 {
                 contract: payload.contract.clone(),
                 max_delay,
                 min_contract_amount,
-                invoice: payload.invoice,
+                invoice: Invoice::Bolt11(payload.invoice),
                 claim_keypair: self.keypair,
             },
             state: SendSMState::Sending,
@@ -302,9 +309,9 @@ impl GatewayClientModuleV2 {
         &self,
         incoming_chan_id: u64,
         htlc_id: u64,
-        payload: CreateInvoicePayload,
+        contract: IncomingContract,
     ) -> anyhow::Result<()> {
-        let operation_id = OperationId::from_encodable(&payload.clone());
+        let operation_id = OperationId::from_encodable(&contract);
 
         if self.client_ctx.operation_exists(operation_id).await {
             return Ok(());
@@ -313,14 +320,14 @@ impl GatewayClientModuleV2 {
         let refund_keypair = self.keypair;
 
         let client_output = ClientOutput::<LightningOutput, GatewayClientStateMachinesV2> {
-            output: LightningOutput::V0(LightningOutputV0::Incoming(payload.contract.clone())),
-            amount: payload.contract.commitment.amount,
+            output: LightningOutput::V0(LightningOutputV0::Incoming(contract.clone())),
+            amount: contract.commitment.amount,
             state_machines: Arc::new(move |txid, out_idx| {
                 vec![
                     GatewayClientStateMachinesV2::Receive(ReceiveStateMachine {
                         common: ReceiveSMCommon {
                             operation_id,
-                            contract: payload.contract.clone(),
+                            contract: contract.clone(),
                             out_point: OutPoint { txid, out_idx },
                             refund_keypair,
                         },
@@ -353,11 +360,8 @@ impl GatewayClientModuleV2 {
         Ok(())
     }
 
-    pub async fn relay_direct_swap(
-        &self,
-        payload: CreateInvoicePayload,
-    ) -> anyhow::Result<[u8; 32]> {
-        let operation_id = OperationId::from_encodable(&payload.clone());
+    pub async fn relay_direct_swap(&self, contract: IncomingContract) -> anyhow::Result<[u8; 32]> {
+        let operation_id = OperationId::from_encodable(&contract);
 
         if self.client_ctx.operation_exists(operation_id).await {
             return self
@@ -369,13 +373,13 @@ impl GatewayClientModuleV2 {
         let refund_keypair = self.keypair;
 
         let client_output = ClientOutput::<LightningOutput, GatewayClientStateMachinesV2> {
-            output: LightningOutput::V0(LightningOutputV0::Incoming(payload.contract.clone())),
-            amount: payload.contract.commitment.amount,
+            output: LightningOutput::V0(LightningOutputV0::Incoming(contract.clone())),
+            amount: contract.commitment.amount,
             state_machines: Arc::new(move |txid, out_idx| {
                 vec![GatewayClientStateMachinesV2::Receive(ReceiveStateMachine {
                     common: ReceiveSMCommon {
                         operation_id,
-                        contract: payload.contract.clone(),
+                        contract: contract.clone(),
                         out_point: OutPoint { txid, out_idx },
                         refund_keypair,
                     },

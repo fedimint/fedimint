@@ -10,7 +10,7 @@ use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::invite_code::InviteCode;
 use fedimint_core::{impl_db_lookup, impl_db_record, secp256k1};
 use fedimint_ln_common::serde_routing_fees;
-use fedimint_lnv2_client::CreateInvoicePayload;
+use fedimint_lnv2_common::contracts::IncomingContract;
 use futures::FutureExt;
 use lightning_invoice::RoutingFees;
 use rand::Rng;
@@ -28,7 +28,7 @@ pub enum DbKeyPrefix {
     GatewayPublicKey = 0x06,
     GatewayConfiguration = 0x07,
     PreimageAuthentication = 0x08,
-    CreateInvoicePayload = 0x09,
+    RegisteredIncomingContract = 0x09,
 }
 
 impl std::fmt::Display for DbKeyPrefix {
@@ -154,12 +154,19 @@ async fn migrate_to_v1(dbtx: &mut DatabaseTransaction<'_>) -> Result<(), anyhow:
 }
 
 #[derive(Debug, Encodable, Decodable)]
-pub struct CreateInvoicePayloadKey(pub [u8; 32]);
+pub struct RegisteredIncomingContractKey(pub [u8; 32]);
+
+#[derive(Debug, Encodable, Decodable)]
+pub struct RegisteredIncomingContract {
+    pub federation_id: FederationId,
+    pub incoming_amount: u64,
+    pub contract: IncomingContract,
+}
 
 impl_db_record!(
-    key = CreateInvoicePayloadKey,
-    value = CreateInvoicePayload,
-    db_prefix = DbKeyPrefix::CreateInvoicePayload,
+    key = RegisteredIncomingContractKey,
+    value = RegisteredIncomingContract,
+    db_prefix = DbKeyPrefix::RegisteredIncomingContract,
 );
 
 #[cfg(test)]
@@ -290,7 +297,7 @@ mod fedimint_migration_tests {
                             ensure!(gateway_configuration.is_some(), "validate_migrations was not able to read GatewayConfiguration");
                             info!("Validated GatewayConfiguration");
                         }
-                        DbKeyPrefix::CreateInvoicePayload => {}
+                        DbKeyPrefix::RegisteredIncomingContract => {}
                     }
                 }
                 Ok(())

@@ -41,6 +41,7 @@ use fedimint_lnv2_common::{
 };
 use futures::StreamExt;
 use lightning_invoice::Bolt11Invoice;
+use secp256k1::schnorr::Signature;
 use secp256k1::{ecdh, KeyPair, PublicKey, Scalar, SecretKey};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -48,7 +49,7 @@ use tpe::{derive_agg_decryption_key, AggregateDecryptionKey};
 
 use crate::api::LnFederationApi;
 use crate::receive_sm::{ReceiveSMCommon, ReceiveSMState, ReceiveStateMachine};
-use crate::send_sm::{SendSMCommon, SendSMState, SendStateMachine};
+use crate::send_sm::{Invoice, SendSMCommon, SendSMState, SendStateMachine};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum LightningOperationMeta {
@@ -122,7 +123,7 @@ pub enum ReceiveState {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize, Decodable, Encodable)]
-pub struct CreateInvoicePayload {
+pub struct CreateBolt11InvoicePayload {
     pub federation_id: FederationId,
     pub contract: IncomingContract,
     pub invoice_amount: Amount,
@@ -137,14 +138,15 @@ pub enum Bolt11InvoiceDescription {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Decodable, Encodable)]
-pub struct SendPaymentPayload {
+pub struct PayBolt11InvoicePayload {
     pub federation_id: FederationId,
     pub contract: OutgoingContract,
     pub invoice: Bolt11Invoice,
+    pub auth: Signature,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Decodable, Encodable)]
-pub struct PaymentInfo {
+pub struct RoutingInfo {
     pub public_key: PublicKey,
     pub send_fee_minimum: PaymentFee,
     pub send_fee_default: PaymentFee,
@@ -294,22 +296,22 @@ fn generate_ephemeral_tweak(static_pk: PublicKey) -> ([u8; 32], PublicKey) {
 }
 
 impl LightningClientModule {
-    pub async fn fetch_payment_info(
+    pub async fn fetch_routing_info(
         &self,
         gateway_api: SafeUrl,
-    ) -> Result<Option<PaymentInfo>, GatewayError> {
+    ) -> Result<Option<RoutingInfo>, GatewayError> {
         reqwest::Client::new()
             .post(
                 gateway_api
-                    .join("payment_info")
-                    .expect("'payment_info' contains no invalid characters for a URL")
+                    .join("routing_info")
+                    .expect("'routing_info' contains no invalid characters for a URL")
                     .as_str(),
             )
             .json(&self.federation_id)
             .send()
             .await
             .map_err(|e| GatewayError::Unreachable(e.to_string()))?
-            .json::<Option<PaymentInfo>>()
+            .json::<Option<RoutingInfo>>()
             .await
             .map_err(|e| GatewayError::InvalidJsonResponse(e.to_string()))
     }
@@ -352,7 +354,7 @@ impl LightningClientModule {
             .keypair(secp256k1::SECP256K1);
 
         let payment_info = self
-            .fetch_payment_info(gateway_api.clone())
+            .fetch_routing_info(gateway_api.clone())
             .await
             .map_err(SendPaymentError::GatewayError)?
             .ok_or(SendPaymentError::UnknownFederation)?;
@@ -382,7 +384,6 @@ impl LightningClientModule {
             claim_pk: payment_info.public_key,
             refund_pk: refund_keypair.public_key(),
             ephemeral_pk,
-            invoice_hash: invoice.consensus_hash(),
         };
 
         let contract_clone = contract.clone();
@@ -399,7 +400,7 @@ impl LightningClientModule {
                         funding_txid,
                         gateway_api: gateway_api_clone.clone(),
                         contract: contract_clone.clone(),
-                        invoice: invoice_clone.clone(),
+                        invoice: Invoice::Bolt11(invoice_clone.clone()),
                         refund_keypair,
                     },
                     state: SendSMState::Funding,
@@ -599,7 +600,7 @@ impl LightningClientModule {
             .to_byte_array();
 
         let payment_info = self
-            .fetch_payment_info(gateway_api.clone())
+            .fetch_routing_info(gateway_api.clone())
             .await
             .map_err(FetchInvoiceError::GatewayError)?
             .ok_or(FetchInvoiceError::UnknownFederation)?;
@@ -634,7 +635,7 @@ impl LightningClientModule {
             ephemeral_pk,
         );
 
-        let payload = CreateInvoicePayload {
+        let payload = CreateBolt11InvoicePayload {
             federation_id: self.federation_id,
             contract: contract.clone(),
             invoice_amount,
@@ -662,13 +663,13 @@ impl LightningClientModule {
     async fn fetch_invoice(
         &self,
         gateway_api: SafeUrl,
-        payload: CreateInvoicePayload,
+        payload: CreateBolt11InvoicePayload,
     ) -> Result<Result<Bolt11Invoice, String>, GatewayError> {
         reqwest::Client::new()
             .post(
                 gateway_api
-                    .join("create_invoice")
-                    .expect("'create_invoice' contains no invalid characters for a URL")
+                    .join("create_bolt11_invoice")
+                    .expect("'create_bolt11_invoice' contains no invalid characters for a URL")
                     .as_str(),
             )
             .json(&payload)

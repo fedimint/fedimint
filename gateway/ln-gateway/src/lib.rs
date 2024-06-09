@@ -79,8 +79,10 @@ use fedimint_ln_common::contracts::Preimage;
 use fedimint_ln_common::route_hints::RouteHint;
 use fedimint_ln_common::LightningCommonInit;
 use fedimint_lnv2_client::{
-    Bolt11InvoiceDescription, CreateInvoicePayload, PaymentFee, PaymentInfo, SendPaymentPayload,
+    Bolt11InvoiceDescription, CreateBolt11InvoicePayload, PayBolt11InvoicePayload, PaymentFee,
+    RoutingInfo,
 };
+use fedimint_lnv2_common::contracts::IncomingContract;
 use fedimint_mint_client::{MintClientInit, MintCommonInit};
 use fedimint_wallet_client::{
     WalletClientInit, WalletClientModule, WalletCommonInit, WithdrawState,
@@ -108,8 +110,8 @@ use tokio::sync::{Mutex, MutexGuard, RwLock};
 use tracing::{debug, error, info, info_span, warn, Instrument};
 
 use crate::db::{
-    get_gatewayd_database_migrations, CreateInvoicePayloadKey, FederationConfig,
-    FederationIdKeyPrefix,
+    get_gatewayd_database_migrations, FederationConfig, FederationIdKeyPrefix,
+    RegisteredIncomingContract, RegisteredIncomingContractKey,
 };
 use crate::gateway_lnrpc::create_invoice_request::Description;
 use crate::gateway_lnrpc::intercept_htlc_response::Forward;
@@ -667,8 +669,8 @@ impl Gateway {
                     // using the LNv2 protocol. If the `payment_hash` is not registered,
                     // this HTLC is either a legacy Lightning payment or the end destination is not
                     // a Fedimint.
-                    if let Ok((payload, client)) = self
-                        .get_payload_and_client_v2(
+                    if let Ok((contract, client)) = self
+                        .get_registered_incoming_contract_and_client_v2(
                             htlc_request
                                 .payment_hash
                                 .clone()
@@ -683,7 +685,7 @@ impl Gateway {
                             .relay_incoming_htlc(
                                 htlc_request.incoming_chan_id,
                                 htlc_request.htlc_id,
-                                payload,
+                                contract,
                             )
                             .await
                         {
@@ -1695,8 +1697,8 @@ impl Gateway {
 
     /// Returns payment information that LNv2 clients can use to instruct this
     /// Gateway to pay an invoice or receive a payment.
-    pub async fn payment_info_v2(&self, federation_id: &FederationId) -> Option<PaymentInfo> {
-        Some(PaymentInfo {
+    pub async fn routing_info_v2(&self, federation_id: &FederationId) -> Option<RoutingInfo> {
+        Some(RoutingInfo {
             public_key: self.public_key_v2(federation_id).await?,
             send_fee_default: PaymentFee::one_percent(),
             send_fee_minimum: PaymentFee::half_of_one_percent(),
@@ -1708,9 +1710,9 @@ impl Gateway {
 
     /// Instructs this gateway to pay a Lightning network invoice via the LNv2
     /// protocol.
-    async fn send_payment_v2(
+    async fn pay_bolt11_invoice(
         &self,
-        payload: SendPaymentPayload,
+        payload: PayBolt11InvoicePayload,
     ) -> anyhow::Result<std::result::Result<[u8; 32], Signature>> {
         let clients = self.clients.read().await;
 
@@ -1729,16 +1731,16 @@ impl Gateway {
     /// the connected Lightning node, then save the payment hash so that
     /// incoming HTLCs can be matched as a receive attempt to a specific
     /// federation.
-    async fn create_invoice_v2(
+    async fn create_bolt11_invoice_v2(
         &self,
-        payload: CreateInvoicePayload,
+        payload: CreateBolt11InvoicePayload,
     ) -> anyhow::Result<Bolt11Invoice> {
         if !payload.contract.verify() {
             bail!("The contract is invalid")
         }
 
         let payment_info = self
-            .payment_info_v2(&payload.federation_id)
+            .routing_info_v2(&payload.federation_id)
             .await
             .ok_or(anyhow!("Payment Info not available"))?;
 
@@ -1772,8 +1774,14 @@ impl Gateway {
 
         if dbtx
             .insert_entry(
-                &CreateInvoicePayloadKey(payload.contract.commitment.payment_hash.to_byte_array()),
-                &payload,
+                &RegisteredIncomingContractKey(
+                    payload.contract.commitment.payment_hash.to_byte_array(),
+                ),
+                &RegisteredIncomingContract {
+                    federation_id: payload.federation_id,
+                    incoming_amount: payload.invoice_amount.msats,
+                    contract: payload.contract.clone(),
+                },
             )
             .await
             .is_some()
@@ -1830,32 +1838,32 @@ impl Gateway {
     /// Retrieves the persisted `CreateInvoicePayload` from the database
     /// specified by the `payment_hash` and the `ClientHandleArc` specified
     /// by the payload's `federation_id`.
-    pub async fn get_payload_and_client_v2(
+    pub async fn get_registered_incoming_contract_and_client_v2(
         &self,
         payment_hash: [u8; 32],
         amount_msats: u64,
-    ) -> anyhow::Result<(CreateInvoicePayload, ClientHandleArc)> {
-        let payload = self
+    ) -> anyhow::Result<(IncomingContract, ClientHandleArc)> {
+        let registered_incoming_contract = self
             .gateway_db
             .begin_transaction_nc()
             .await
-            .get_value(&CreateInvoicePayloadKey(payment_hash))
+            .get_value(&RegisteredIncomingContractKey(payment_hash))
             .await
             .ok_or(anyhow!("No corresponding decryption contract available"))?;
 
-        if payload.invoice_amount.msats != amount_msats {
+        if registered_incoming_contract.incoming_amount != amount_msats {
             bail!("The available decryption contract's amount is not equal the requested amount")
         }
 
         let clients = self.clients.read().await;
 
         let client = clients
-            .get(&payload.federation_id)
+            .get(&registered_incoming_contract.federation_id)
             .ok_or(anyhow!("Federation client not available"))?
             .value()
             .clone();
 
-        Ok((payload, client))
+        Ok((registered_incoming_contract.contract, client))
     }
 }
 
