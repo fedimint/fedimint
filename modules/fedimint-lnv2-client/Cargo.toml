@@ -17,7 +17,7 @@ name = "fedimint_lnv2_client"
 path = "src/lib.rs"
 
 [features]
-default =[]
+default = []
 cli = ["dep:clap", "dep:serde_json"]
 
 [dependencies]
@@ -34,12 +34,13 @@ lightning-invoice = { workspace = true }
 fedimint-client = { workspace = true }
 fedimint-core = { workspace = true }
 fedimint-api-client = { workspace = true }
-fedimint-lnv2-common ={ path = "../fedimint-lnv2-common" }
-secp256k1 = { version="0.27.0", default-features=false }
+fedimint-lnv2-common = { path = "../fedimint-lnv2-common" }
+fedimint-ln-common = { path = "../fedimint-ln-common" }
+secp256k1 = { version = "0.27.0", default-features = false }
 serde = { workspace = true }
 serde_json = { workspace = true, optional = true }
 thiserror = "1.0.61"
 tracing = "0.1.37"
 rand = { workspace = true }
 tpe = { package = "fedimint-tpe", version = "=0.4.0-alpha", path = "../../crypto/tpe" }
-reqwest = { version = "0.11.14", features = [ "json", "rustls-tls" ], default-features = false }
+reqwest = { version = "0.11.14", features = ["json", "rustls-tls"], default-features = false }

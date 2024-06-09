@@ -24,7 +24,7 @@ use fedimint_core::module::{
 };
 use fedimint_core::{apply, async_trait_maybe_send, secp256k1, Amount, OutPoint, PeerId};
 use fedimint_lnv2_client::api::LnFederationApi;
-use fedimint_lnv2_client::PayBolt11InvoicePayload;
+use fedimint_lnv2_client::PayPrunedBolt11InvoicePayload;
 use fedimint_lnv2_common::config::LightningClientConfig;
 use fedimint_lnv2_common::contracts::IncomingContract;
 use fedimint_lnv2_common::{
@@ -197,7 +197,7 @@ impl State for GatewayClientStateMachinesV2 {
 impl GatewayClientModuleV2 {
     pub async fn send_payment(
         &self,
-        payload: PayBolt11InvoicePayload,
+        payload: PayPrunedBolt11InvoicePayload,
     ) -> anyhow::Result<Result<[u8; 32], Signature>> {
         // The operation id is equal to the contract id which also doubles as the
         // message signed by the gateway via the forfeit signature to forfeit
@@ -217,7 +217,7 @@ impl GatewayClientModuleV2 {
             bail!("The outgoing contract is keyed to another gateway");
         }
 
-        if *payload.invoice.payment_hash() != payload.contract.payment_hash {
+        if payload.invoice.payment_hash != payload.contract.payment_hash {
             bail!("The invoices payment hash does not match the contracts payment hash");
         }
 
@@ -233,18 +233,13 @@ impl GatewayClientModuleV2 {
             bail!("Invalid auth signature for the invoice");
         }
 
-        let invoice_msats = payload
-            .invoice
-            .amount_milli_satoshis()
-            .ok_or(anyhow!("Invoice is missing amount"))?;
-
         let min_contract_amount = self
             .gateway
             .routing_info_v2(&payload.federation_id)
             .await
             .ok_or(anyhow!("Payment Info not available"))?
             .send_fee_minimum
-            .add_fee(invoice_msats);
+            .add_fee(payload.invoice.amount.msats);
 
         // We need to check that the contract has been confirmed by the federation
         // before we start the state machine to prevent DOS attacks.
@@ -262,7 +257,7 @@ impl GatewayClientModuleV2 {
                 contract: payload.contract.clone(),
                 max_delay,
                 min_contract_amount,
-                invoice: Invoice::Bolt11(payload.invoice),
+                invoice: Invoice::PrunedBolt11(payload.invoice),
                 claim_keypair: self.keypair,
             },
             state: SendSMState::Sending,

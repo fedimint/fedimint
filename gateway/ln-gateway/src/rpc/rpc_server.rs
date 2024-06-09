@@ -15,10 +15,10 @@ use fedimint_ln_common::gateway_endpoint_constants::{
     CONFIGURATION_ENDPOINT, CONNECT_FED_ENDPOINT, CREATE_BOLT11_INVOICE_V2_ENDPOINT,
     GATEWAY_INFO_ENDPOINT, GATEWAY_INFO_POST_ENDPOINT, GET_FUNDING_ADDRESS_ENDPOINT,
     GET_GATEWAY_ID_ENDPOINT, LEAVE_FED_ENDPOINT, LIST_ACTIVE_CHANNELS_ENDPOINT,
-    OPEN_CHANNEL_ENDPOINT, PAY_BOLT11_INVOICE_V2_ENDPOINT, PAY_INVOICE_ENDPOINT, RESTORE_ENDPOINT,
-    ROUTING_INFO_V2_ENDPOINT, SET_CONFIGURATION_ENDPOINT, WITHDRAW_ENDPOINT,
+    OPEN_CHANNEL_ENDPOINT, PAY_INVOICE_ENDPOINT, PAY_PRUNED_BOLT11_INVOICE_V2_ENDPOINT,
+    RESTORE_ENDPOINT, ROUTING_INFO_V2_ENDPOINT, SET_CONFIGURATION_ENDPOINT, WITHDRAW_ENDPOINT,
 };
-use fedimint_lnv2_client::{CreateBolt11InvoicePayload, PayBolt11InvoicePayload};
+use fedimint_lnv2_client::{CreateBolt11InvoicePayload, PayPrunedBolt11InvoicePayload};
 use hex::ToHex;
 use serde_json::{json, Value};
 use tokio::net::TcpListener;
@@ -151,7 +151,10 @@ fn v1_routes(gateway: Gateway) -> Router {
         .route(GET_GATEWAY_ID_ENDPOINT, get(get_gateway_id))
         // These routes are for next generation lightning
         .route(ROUTING_INFO_V2_ENDPOINT, post(routing_info_v2))
-        .route(PAY_BOLT11_INVOICE_V2_ENDPOINT, post(pay_bolt11_invoice_v2))
+        .route(
+            PAY_PRUNED_BOLT11_INVOICE_V2_ENDPOINT,
+            post(pay_bolt11_invoice_v2),
+        )
         .route(
             CREATE_BOLT11_INVOICE_V2_ENDPOINT,
             post(create_bolt11_invoice_v2),
@@ -381,7 +384,7 @@ async fn routing_info_v2(
 
 async fn pay_bolt11_invoice_v2(
     Extension(gateway): Extension<Gateway>,
-    Json(payload): Json<PayBolt11InvoicePayload>,
+    Json(payload): Json<PayPrunedBolt11InvoicePayload>,
 ) -> Json<Value> {
     Json(json!(gateway
         .pay_bolt11_invoice(payload)

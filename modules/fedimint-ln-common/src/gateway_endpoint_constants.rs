@@ -17,6 +17,6 @@ pub const CLOSE_CHANNELS_WITH_PEER_ENDPOINT: &str = "/close_channels_with_peer";
 pub const ROUTING_INFO_V2_ENDPOINT: &str = "/routing_info";
 pub const PAY_INVOICE_ENDPOINT: &str = "/pay_invoice";
 pub const RESTORE_ENDPOINT: &str = "/restore";
-pub const PAY_BOLT11_INVOICE_V2_ENDPOINT: &str = "/pay_bolt11_invoice";
+pub const PAY_PRUNED_BOLT11_INVOICE_V2_ENDPOINT: &str = "/pay_pruned_bolt11_invoice";
 pub const SET_CONFIGURATION_ENDPOINT: &str = "/set_configuration";
 pub const WITHDRAW_ENDPOINT: &str = "/withdraw";

@@ -9,10 +9,11 @@ use bitcoin::secp256k1::{PublicKey, SecretKey};
 use fedimint_core::task::TaskGroup;
 use fedimint_core::util::BoxStream;
 use fedimint_core::{secp256k1, Amount};
+use fedimint_ln_common::PrunedInvoice;
 use fedimint_logging::LOG_TEST;
 use lightning_invoice::{
-    Bolt11Invoice, Bolt11InvoiceDescription, Currency, Description, InvoiceBuilder, PaymentSecret,
-    SignedRawBolt11Invoice, DEFAULT_EXPIRY_TIME,
+    Bolt11Invoice, Currency, InvoiceBuilder, PaymentSecret, SignedRawBolt11Invoice,
+    DEFAULT_EXPIRY_TIME,
 };
 use ln_gateway::gateway_lnrpc::{
     self, CloseChannelsWithPeerResponse, CreateInvoiceRequest, CreateInvoiceResponse,
@@ -25,7 +26,7 @@ use rand::rngs::OsRng;
 use tokio::sync::mpsc;
 use tracing::info;
 
-pub const INVALID_INVOICE_DESCRIPTION: &str = "INVALID";
+const INVALID_INVOICE_PAYMENT_SECRET: [u8; 32] = [212; 32];
 
 #[derive(Debug)]
 pub struct FakeLightningTest {
@@ -93,11 +94,11 @@ impl FakeLightningTest {
         // `INVALID_INVOICE_DESCRIPTION` in the description of the invoice.
         InvoiceBuilder::new(Currency::Regtest)
             .payee_pub_key(kp.public_key())
-            .description(INVALID_INVOICE_DESCRIPTION.to_string())
+            .description("INVALID INVOICE DESCRIPTION".to_string())
             .payment_hash(sha256::Hash::hash(&[0; 32]))
             .current_timestamp()
             .min_final_cltv_expiry_delta(0)
-            .payment_secret(PaymentSecret([0; 32]))
+            .payment_secret(PaymentSecret(INVALID_INVOICE_PAYMENT_SECRET))
             .amount_milli_satoshis(amount.msats)
             .expiry_time(Duration::from_secs(
                 expiry_time.unwrap_or(DEFAULT_EXPIRY_TIME),
@@ -140,13 +141,32 @@ impl ILnRpcClient for FakeLightningTest {
         let invoice = Bolt11Invoice::from_signed(signed).unwrap();
         *self.amount_sent.lock().unwrap() += invoice.amount_milli_satoshis().unwrap();
 
-        if invoice.description()
-            == Bolt11InvoiceDescription::Direct(
-                &Description::new(INVALID_INVOICE_DESCRIPTION.into()).unwrap(),
-            )
-        {
+        if *invoice.payment_secret() == PaymentSecret(INVALID_INVOICE_PAYMENT_SECRET) {
             return Err(LightningRpcError::FailedPayment {
-                failure_reason: "Description was invalid".to_string(),
+                failure_reason: "Invoice was invalid".to_string(),
+            });
+        }
+
+        Ok(PayInvoiceResponse {
+            preimage: [0; 32].to_vec(),
+        })
+    }
+
+    fn supports_private_payments(&self) -> bool {
+        true
+    }
+
+    async fn pay_private(
+        &self,
+        invoice: PrunedInvoice,
+        _max_delay: u64,
+        _max_fee: Amount,
+    ) -> Result<PayInvoiceResponse, LightningRpcError> {
+        *self.amount_sent.lock().unwrap() += invoice.amount.msats;
+
+        if invoice.payment_secret == INVALID_INVOICE_PAYMENT_SECRET {
+            return Err(LightningRpcError::FailedPayment {
+                failure_reason: "Invoice was invalid".to_string(),
             });
         }
 

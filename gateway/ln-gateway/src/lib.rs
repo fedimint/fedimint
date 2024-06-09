@@ -79,8 +79,8 @@ use fedimint_ln_common::contracts::Preimage;
 use fedimint_ln_common::route_hints::RouteHint;
 use fedimint_ln_common::LightningCommonInit;
 use fedimint_lnv2_client::{
-    Bolt11InvoiceDescription, CreateBolt11InvoicePayload, PayBolt11InvoicePayload, PaymentFee,
-    RoutingInfo,
+    Bolt11InvoiceDescription, CreateBolt11InvoicePayload, PayPrunedBolt11InvoicePayload,
+    PaymentFee, RoutingInfo,
 };
 use fedimint_lnv2_common::contracts::IncomingContract;
 use fedimint_mint_client::{MintClientInit, MintCommonInit};
@@ -1712,7 +1712,7 @@ impl Gateway {
     /// protocol.
     async fn pay_bolt11_invoice(
         &self,
-        payload: PayBolt11InvoicePayload,
+        payload: PayPrunedBolt11InvoicePayload,
     ) -> anyhow::Result<std::result::Result<[u8; 32], Signature>> {
         let clients = self.clients.read().await;
 
