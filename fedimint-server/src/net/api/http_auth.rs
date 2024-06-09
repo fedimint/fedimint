@@ -49,6 +49,7 @@ impl<S> tower::Layer<S> for HttpAuthLayer {
     }
 }
 
+#[derive(Clone)]
 pub struct HttpAuthService<S> {
     inner: S,
     auth_base64: Arc<Vec<String>>,
@@ -115,9 +116,9 @@ fn sanity_const_eq() {
         );
     }
 }
-impl<S> Service<Request<Body>> for HttpAuthService<S>
+impl<S, B: Body + 'static> Service<Request<B>> for HttpAuthService<S>
 where
-    S: Service<Request<Body>, Response = Response<Body>>,
+    S: Service<Request<B>, Response = jsonrpsee::core::http_helpers::Response>,
     S::Response: 'static,
     S::Error: Into<Box<dyn StdError + Send + Sync>> + 'static,
     S::Future: Send + 'static,
@@ -131,7 +132,7 @@ where
         self.inner.poll_ready(cx).map_err(Into::into)
     }
 
-    fn call(&mut self, req: Request<Body>) -> Self::Future {
+    fn call(&mut self, req: Request<B>) -> Self::Future {
         let needs_auth = self.needs_auth();
 
         if !needs_auth {
@@ -147,7 +148,9 @@ where
         }
 
         debug!(target: LOG_NET_AUTH, "Access denied to incoming api connection");
-        let mut response = Response::new("Unauthorized".into());
+        let mut response = Response::new(jsonrpsee::core::http_helpers::Body::new(
+            "Unauthorized".to_string(),
+        ));
         *response.status_mut() = http::StatusCode::UNAUTHORIZED;
         response.headers_mut().insert(
             http::header::WWW_AUTHENTICATE,

@@ -174,7 +174,7 @@ pub fn attach_endpoints<State, T>(
         let handler: &'static _ = Box::leak(endpoint.handler);
 
         rpc_module
-            .register_async_method(path, move |params, rpc_state| async move {
+            .register_async_method(path, move |params, rpc_state, _extensions| async move {
                 let params = params.one::<serde_json::Value>()?;
                 let rpc_context = &rpc_state.rpc_context;
 
