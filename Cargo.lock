@@ -2401,6 +2401,7 @@ dependencies = [
  "fedimint-bitcoind",
  "fedimint-client",
  "fedimint-core",
+ "fedimint-ln-common",
  "fedimint-ln-gateway",
  "fedimint-logging",
  "fedimint-portalloc",

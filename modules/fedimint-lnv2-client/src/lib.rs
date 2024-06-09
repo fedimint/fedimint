@@ -49,7 +49,7 @@ use tpe::{derive_agg_decryption_key, AggregateDecryptionKey};
 
 use crate::api::LnFederationApi;
 use crate::receive_sm::{ReceiveSMCommon, ReceiveSMState, ReceiveStateMachine};
-use crate::send_sm::{Invoice, SendSMCommon, SendSMState, SendStateMachine};
+use crate::send_sm::{SendSMCommon, SendSMState, SendStateMachine};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum LightningOperationMeta {
@@ -138,11 +138,16 @@ pub enum Bolt11InvoiceDescription {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Decodable, Encodable)]
-pub struct PayBolt11InvoicePayload {
+pub struct SendPaymentPayload {
     pub federation_id: FederationId,
     pub contract: OutgoingContract,
-    pub invoice: Bolt11Invoice,
+    pub invoice: LightningInvoice,
     pub auth: Signature,
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Decodable, Encodable)]
+pub enum LightningInvoice {
+    Bolt11(Bolt11Invoice, Amount),
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Decodable, Encodable)]
@@ -230,7 +235,6 @@ impl ClientModuleInit for LightningClientInit {
                 .module_root_secret()
                 .clone()
                 .to_secp_key(secp256k1::SECP256K1),
-
             admin_auth: args.admin_auth().cloned(),
         })
     }
@@ -326,6 +330,7 @@ impl LightningClientModule {
             invoice,
             PaymentFee::one_percent(),
             EXPIRATION_DELTA_LIMIT_DEFAULT,
+            None,
         )
         .await
     }
@@ -336,10 +341,13 @@ impl LightningClientModule {
         invoice: Bolt11Invoice,
         payment_fee_limit: PaymentFee,
         expiration_delta_limit: u64,
+        partial_amount: Option<Amount>,
     ) -> Result<OperationId, SendPaymentError> {
-        let invoice_msats = invoice
-            .amount_milli_satoshis()
-            .ok_or(SendPaymentError::InvoiceMissingAmount)?;
+        let amount = partial_amount.unwrap_or(Amount::from_msats(
+            invoice
+                .amount_milli_satoshis()
+                .ok_or(SendPaymentError::InvoiceMissingAmount)?,
+        ));
 
         if invoice.is_expired() {
             return Err(SendPaymentError::InvoiceExpired);
@@ -379,7 +387,7 @@ impl LightningClientModule {
 
         let contract = OutgoingContract {
             payment_hash: *invoice.payment_hash(),
-            amount: payment_info.send_fee_default.add_fee(invoice_msats),
+            amount: payment_info.send_fee_default.add_fee(amount.msats),
             expiration: consensus_block_count + payment_info.expiration_delta_default,
             claim_pk: payment_info.public_key,
             refund_pk: refund_keypair.public_key(),
@@ -400,7 +408,7 @@ impl LightningClientModule {
                         funding_txid,
                         gateway_api: gateway_api_clone.clone(),
                         contract: contract_clone.clone(),
-                        invoice: Invoice::Bolt11(invoice_clone.clone()),
+                        invoice: LightningInvoice::Bolt11(invoice_clone.clone(), amount),
                         refund_keypair,
                     },
                     state: SendSMState::Funding,
