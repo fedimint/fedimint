@@ -1613,9 +1613,6 @@
 <a href="#1613" id="1613">1613</a>
 <a href="#1614" id="1614">1614</a>
 <a href="#1615" id="1615">1615</a>
-<a href="#1616" id="1616">1616</a>
-<a href="#1617" id="1617">1617</a>
-<a href="#1618" id="1618">1618</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap};
 <span class="kw">use </span>std::fmt::{<span class="self">self</span>, Debug, Display};
 <span class="kw">use </span>std::num::NonZeroUsize;
@@ -1715,8 +1712,7 @@
             PeerError::Rpc(rpc_e) =&gt; <span class="kw">match </span>rpc_e {
                 <span class="comment">// TODO: Does this cover all retryable cases?
                 </span>JsonRpcClientError::Transport(<span class="kw">_</span>) | JsonRpcClientError::RequestTimeout =&gt; <span class="bool-val">false</span>,
-                JsonRpcClientError::MaxSlotsExceeded
-                | JsonRpcClientError::RestartNeeded(<span class="kw">_</span>)
+                JsonRpcClientError::RestartNeeded(<span class="kw">_</span>)
                 | JsonRpcClientError::Call(<span class="kw">_</span>)
                 | JsonRpcClientError::ParseError(<span class="kw">_</span>)
                 | JsonRpcClientError::InvalidSubscriptionId
@@ -2913,9 +2909,7 @@
         api_secret: <span class="prelude-ty">Option</span>&lt;String&gt;,
     ) -&gt; result::Result&lt;<span class="self">Self</span>, JsonRpcClientError&gt; {
         <span class="attr">#[cfg(not(target_family = <span class="string">"wasm"</span>))]
-        </span><span class="kw">let </span><span class="kw-2">mut </span>client = WsClientBuilder::default()
-            .use_webpki_rustls()
-            .max_concurrent_requests(u16::MAX <span class="kw">as </span>usize);
+        </span><span class="kw">let </span><span class="kw-2">mut </span>client = WsClientBuilder::default().max_concurrent_requests(u16::MAX <span class="kw">as </span>usize);
 
         <span class="attr">#[cfg(target_family = <span class="string">"wasm"</span>)]
         </span><span class="kw">let </span>client = WsClientBuilder::default().max_concurrent_requests(u16::MAX <span class="kw">as </span>usize);

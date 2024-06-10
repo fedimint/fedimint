@@ -156,6 +156,9 @@
 <a href="#156" id="156">156</a>
 <a href="#157" id="157">157</a>
 <a href="#158" id="158">158</a>
+<a href="#159" id="159">159</a>
+<a href="#160" id="160">160</a>
+<a href="#161" id="161">161</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::error::Error <span class="kw">as </span>StdError;
 <span class="kw">use </span>std::pin::Pin;
 <span class="kw">use </span>std::sync::Arc;
@@ -207,7 +210,8 @@
     }
 }
 
-<span class="kw">pub struct </span>HttpAuthService&lt;S&gt; {
+<span class="attr">#[derive(Clone)]
+</span><span class="kw">pub struct </span>HttpAuthService&lt;S&gt; {
     inner: S,
     auth_base64: Arc&lt;Vec&lt;String&gt;&gt;,
 }
@@ -273,9 +277,9 @@
         </span>);
     }
 }
-<span class="kw">impl</span>&lt;S&gt; Service&lt;Request&lt;Body&gt;&gt; <span class="kw">for </span>HttpAuthService&lt;S&gt;
+<span class="kw">impl</span>&lt;S, B: Body + <span class="lifetime">'static</span>&gt; Service&lt;Request&lt;B&gt;&gt; <span class="kw">for </span>HttpAuthService&lt;S&gt;
 <span class="kw">where
-    </span>S: Service&lt;Request&lt;Body&gt;, Response = Response&lt;Body&gt;&gt;,
+    </span>S: Service&lt;Request&lt;B&gt;, Response = jsonrpsee::core::http_helpers::Response&gt;,
     S::Response: <span class="lifetime">'static</span>,
     S::Error: Into&lt;Box&lt;<span class="kw">dyn </span>StdError + Send + Sync&gt;&gt; + <span class="lifetime">'static</span>,
     S::Future: Send + <span class="lifetime">'static</span>,
@@ -289,7 +293,7 @@
         <span class="self">self</span>.inner.poll_ready(cx).map_err(Into::into)
     }
 
-    <span class="kw">fn </span>call(<span class="kw-2">&amp;mut </span><span class="self">self</span>, req: Request&lt;Body&gt;) -&gt; <span class="self">Self</span>::Future {
+    <span class="kw">fn </span>call(<span class="kw-2">&amp;mut </span><span class="self">self</span>, req: Request&lt;B&gt;) -&gt; <span class="self">Self</span>::Future {
         <span class="kw">let </span>needs_auth = <span class="self">self</span>.needs_auth();
 
         <span class="kw">if </span>!needs_auth {
@@ -305,7 +309,9 @@
         }
 
         <span class="macro">debug!</span>(target: LOG_NET_AUTH, <span class="string">"Access denied to incoming api connection"</span>);
-        <span class="kw">let </span><span class="kw-2">mut </span>response = Response::new(<span class="string">"Unauthorized"</span>.into());
+        <span class="kw">let </span><span class="kw-2">mut </span>response = Response::new(jsonrpsee::core::http_helpers::Body::new(
+            <span class="string">"Unauthorized"</span>.to_string(),
+        ));
         <span class="kw-2">*</span>response.status_mut() = http::StatusCode::UNAUTHORIZED;
         response.headers_mut().insert(
             http::header::WWW_AUTHENTICATE,

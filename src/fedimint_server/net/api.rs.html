@@ -385,7 +385,7 @@
         </span><span class="kw">let </span>handler: <span class="kw-2">&amp;</span><span class="lifetime">'static </span><span class="kw">_ </span>= Box::leak(endpoint.handler);
 
         rpc_module
-            .register_async_method(path, <span class="kw">move </span>|params, rpc_state| <span class="kw">async move </span>{
+            .register_async_method(path, <span class="kw">move </span>|params, rpc_state, _extensions| <span class="kw">async move </span>{
                 <span class="kw">let </span>params = params.one::&lt;serde_json::Value&gt;()<span class="question-mark">?</span>;
                 <span class="kw">let </span>rpc_context = <span class="kw-2">&amp;</span>rpc_state.rpc_context;
 
