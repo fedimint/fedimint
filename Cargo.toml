@@ -92,6 +92,7 @@ esplora-client = { version = "0.6.0", default-features = false, features = [
 reqwest = { version = "0.12.4", features = [
     "json",
     "rustls-tls",
+    "charset",
     "http2",
 ], default-features = false }
 serde = { version = "1.0.203", features = ["derive"] }
