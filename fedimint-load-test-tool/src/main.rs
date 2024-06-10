@@ -1138,7 +1138,6 @@ async fn test_connect_raw_client(
         .flat_map(|_| {
             let clients = cfg.global.api_endpoints.values().map(|url| async {
                 let ws_client = WsClientBuilder::default()
-                    .use_webpki_rustls()
                     .request_timeout(timeout)
                     .connection_timeout(timeout)
                     .build(url_to_string_with_default_port(&url.url))

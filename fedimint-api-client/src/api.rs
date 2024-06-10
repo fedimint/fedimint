@@ -97,8 +97,7 @@ impl PeerError {
             PeerError::Rpc(rpc_e) => match rpc_e {
                 // TODO: Does this cover all retryable cases?
                 JsonRpcClientError::Transport(_) | JsonRpcClientError::RequestTimeout => false,
-                JsonRpcClientError::MaxSlotsExceeded
-                | JsonRpcClientError::RestartNeeded(_)
+                JsonRpcClientError::RestartNeeded(_)
                 | JsonRpcClientError::Call(_)
                 | JsonRpcClientError::ParseError(_)
                 | JsonRpcClientError::InvalidSubscriptionId
@@ -1295,9 +1294,7 @@ impl JsonRpcClient for WsClient {
         api_secret: Option<String>,
     ) -> result::Result<Self, JsonRpcClientError> {
         #[cfg(not(target_family = "wasm"))]
-        let mut client = WsClientBuilder::default()
-            .use_webpki_rustls()
-            .max_concurrent_requests(u16::MAX as usize);
+        let mut client = WsClientBuilder::default().max_concurrent_requests(u16::MAX as usize);
 
         #[cfg(target_family = "wasm")]
         let client = WsClientBuilder::default().max_concurrent_requests(u16::MAX as usize);
