@@ -219,9 +219,17 @@ impl DevJitFed {
             let process_mgr = process_mgr.to_owned();
             move || async move {
                 esplora.get_try().await?;
-                Ok(Arc::new(
-                    Gatewayd::new(&process_mgr, LightningNode::Ldk).await?,
-                ))
+                let gatewayd = Arc::new(Gatewayd::new(&process_mgr, LightningNode::Ldk).await?);
+
+                // TODO: Find out why we need to wait here.
+                loop {
+                    if gatewayd.get_funding_address().await.is_ok() {
+                        break;
+                    }
+                    fedimint_core::runtime::sleep(std::time::Duration::from_secs(1)).await;
+                }
+
+                Ok(gatewayd)
             }
         });
         let gw_ldk_registered = JitTryAnyhow::new_try({
@@ -243,9 +251,10 @@ impl DevJitFed {
             let gw_lnd = gw_lnd.clone();
             let cln = cln.clone();
             let gw_cln = gw_cln.clone();
+            let gw_ldk = gw_ldk.clone();
             let bitcoind = bitcoind.clone();
             || async move {
-                // Note: We open new channel even if starting from existing state
+                // Note: We open new channels even if starting from existing state
                 // as ports change on every start, and without this nodes will not find each
                 // other.
 
@@ -263,6 +272,7 @@ impl DevJitFed {
                     open_channel(&process_mgr, &bitcoind, &cln, &lnd).await?;
                 } else {
                     open_channel_between_gateways(&bitcoind, &gw_cln, &gw_lnd).await?;
+                    open_channel_between_gateways(&bitcoind, &gw_ldk, &gw_lnd).await?;
                 }
 
                 Ok(Arc::new(()))

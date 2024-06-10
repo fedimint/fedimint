@@ -890,7 +890,7 @@ pub async fn open_channel_between_gateways(
     )
     .await?;
 
-    bitcoind.mine_blocks(10).await?;
+    bitcoind.mine_blocks(20).await?;
 
     let gw_a_node_pubkey = gw_a.lightning_pubkey().await?;
 
