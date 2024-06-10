@@ -83,7 +83,7 @@ base64 = "0.22.1"
 criterion = { version = "0.5.1" }
 threshold_crypto = { version = "0.2.1", package = "fedimint-threshold-crypto" }
 tonic_lnd = { version = "0.2.0", package="fedimint-tonic-lnd", features = ["lightningrpc", "routerrpc"] }
-cln-rpc = "0.1.8"
+cln-rpc = "0.1.9"
 clap = { version = "4.5.4", features = ["derive", "std", "help", "usage", "error-context", "suggestions", "env"], default-features = false }
 serde = { version = "1.0.203", features = ["derive"] }
 serde-big-array = "0.5.1"

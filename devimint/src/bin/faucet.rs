@@ -71,6 +71,7 @@ impl Faucet {
                 exclude: None,
                 maxfee: None,
                 description: None,
+                partial_msat: None,
             })
             .await?
             .status;
@@ -99,6 +100,7 @@ impl Faucet {
                 preimage: None,
                 cltv: None,
                 deschashonly: None,
+                exposeprivatechannels: None,
             })
             .await?
             .bolt11)

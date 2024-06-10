@@ -285,18 +285,13 @@ impl GatewayLightning for ClnRpcService {
             _ => Err(ClnExtensionError::RpcWrongResponse),
         }
         .map_err(|err| tonic::Status::internal(err.to_string()))?
-        .unwrap_or(Vec::new())
         .into_iter()
         .filter_map(|chan| {
-            if let Some(state) = chan.state {
-                if matches!(
-                    state,
-                    model::responses::ListpeerchannelsChannelsState::CHANNELD_NORMAL
-                ) {
-                    if let Some(peer_id) = chan.peer_id {
-                        return chan.short_channel_id.map(|scid| (peer_id, scid));
-                    }
-                }
+            if matches!(
+                chan.state,
+                model::responses::ListpeerchannelsChannelsState::CHANNELD_NORMAL
+            ) {
+                return chan.short_channel_id.map(|scid| (chan.peer_id, scid));
             }
 
             None
@@ -405,6 +400,7 @@ impl GatewayLightning for ClnRpcService {
                 maxfee: Some(cln_rpc::primitives::Amount::from_msat(max_fee_msat)),
                 maxfeepercent: None,
                 description: None,
+                partial_msat: None,
             }))
             .await
             .map(|response| match response {
@@ -718,13 +714,10 @@ impl GatewayLightning for ClnRpcService {
                 cln_rpc::Response::ListPeerChannels(
                     model::responses::ListpeerchannelsResponse { channels },
                 ) => Ok(channels
-                    .unwrap_or_default()
                     .into_iter()
                     .filter(|channel| {
                         channel.state
-                            == Some(
-                                model::responses::ListpeerchannelsChannelsState::CHANNELD_NORMAL,
-                            )
+                            == model::responses::ListpeerchannelsChannelsState::CHANNELD_NORMAL
                     })
                     .collect()),
                 _ => Err(ClnExtensionError::RpcWrongResponse),
@@ -779,39 +772,31 @@ impl GatewayLightning for ClnRpcService {
                 cln_rpc::Response::ListPeerChannels(
                     model::responses::ListpeerchannelsResponse { channels },
                 ) => Ok(channels
-                    .unwrap_or_default()
                     .into_iter()
                     .filter_map(|channel| {
-                        if let Some(state) = channel.state {
-                            if matches!(
-                                state,
-                                model::responses::ListpeerchannelsChannelsState::CHANNELD_NORMAL
-                            ) {
-                                Some(ChannelInfo {
-                                    remote_pubkey: match channel.peer_id {
-                                        Some(peer_id) => format!("{}", peer_id),
-                                        None => return None,
-                                    },
-                                    channel_size_sats: channel
-                                        .total_msat
-                                        .map(|value| value.msat() / 1000)
-                                        .unwrap_or(0),
-                                    outbound_liquidity_sats: channel
-                                        .spendable_msat
-                                        .map(|value| value.msat() / 1000)
-                                        .unwrap_or(0),
-                                    inbound_liquidity_sats: channel
-                                        .receivable_msat
-                                        .map(|value| value.msat() / 1000)
-                                        .unwrap_or(0),
-                                    short_channel_id: match channel.short_channel_id {
-                                        Some(scid) => scid_to_u64(scid),
-                                        None => return None,
-                                    },
-                                })
-                            } else {
-                                None
-                            }
+                        if matches!(
+                            channel.state,
+                            model::responses::ListpeerchannelsChannelsState::CHANNELD_NORMAL
+                        ) {
+                            Some(ChannelInfo {
+                                remote_pubkey: format!("{}", channel.peer_id),
+                                channel_size_sats: channel
+                                    .total_msat
+                                    .map(|value| value.msat() / 1000)
+                                    .unwrap_or(0),
+                                outbound_liquidity_sats: channel
+                                    .spendable_msat
+                                    .map(|value| value.msat() / 1000)
+                                    .unwrap_or(0),
+                                inbound_liquidity_sats: channel
+                                    .receivable_msat
+                                    .map(|value| value.msat() / 1000)
+                                    .unwrap_or(0),
+                                short_channel_id: match channel.short_channel_id {
+                                    Some(scid) => scid_to_u64(scid),
+                                    None => return None,
+                                },
+                            })
                         } else {
                             None
                         }
