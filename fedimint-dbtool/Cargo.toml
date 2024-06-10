@@ -24,7 +24,7 @@ path = "src/lib.rs"
 anyhow = { workspace = true }
 fedimint-aead = { version = "=0.4.0-alpha", path = "../crypto/aead" }
 bytes = "1.6.0"
-clap = { version = "4.5.4", features = ["derive", "env"] }
+clap = { version = "4.5.6", features = ["derive", "env"] }
 fedimint-core = { workspace = true }
 fedimint-client = { workspace = true }
 fedimint-server = { version = "=0.4.0-alpha", path = "../fedimint-server" }

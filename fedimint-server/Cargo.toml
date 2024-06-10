@@ -46,7 +46,7 @@ serde_json = { workspace = true }
 sha3 = "0.10.8"
 strum = { workspace = true }
 strum_macros = { workspace = true }
-tar = "0.4.40"
+tar = "0.4.41"
 tbs = { package = "fedimint-tbs", version = "=0.4.0-alpha", path = "../crypto/tbs" }
 thiserror = { workspace = true }
 tower = { version = "0.4.13", default-features = false }
