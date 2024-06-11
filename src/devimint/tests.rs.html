@@ -2601,6 +2601,11 @@
 <a href="#2601" id="2601">2601</a>
 <a href="#2602" id="2602">2602</a>
 <a href="#2603" id="2603">2603</a>
+<a href="#2604" id="2604">2604</a>
+<a href="#2605" id="2605">2605</a>
+<a href="#2606" id="2606">2606</a>
+<a href="#2607" id="2607">2607</a>
+<a href="#2608" id="2608">2608</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashSet};
 <span class="kw">use </span>std::io::Write;
 <span class="kw">use </span>std::ops::ControlFlow;
@@ -3280,6 +3285,7 @@
             preimage: <span class="prelude-val">None</span>,
             cltv: <span class="prelude-val">None</span>,
             deschashonly: <span class="prelude-val">None</span>,
+            exposeprivatechannels: <span class="prelude-val">None</span>,
         })
         .<span class="kw">await</span><span class="question-mark">?
         </span>.bolt11;
@@ -3329,6 +3335,7 @@
         exclude: <span class="prelude-val">None</span>,
         maxfee: <span class="prelude-val">None</span>,
         description: <span class="prelude-val">None</span>,
+        partial_msat: <span class="prelude-val">None</span>,
     })
     .<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="kw">let </span>invoice_status = lnd
@@ -3617,6 +3624,7 @@
             preimage: <span class="prelude-val">None</span>,
             cltv: <span class="prelude-val">None</span>,
             deschashonly: <span class="prelude-val">None</span>,
+            exposeprivatechannels: <span class="prelude-val">None</span>,
         })
         .<span class="kw">await</span><span class="question-mark">?
         </span>.bolt11;
@@ -3687,6 +3695,7 @@
             exclude: <span class="prelude-val">None</span>,
             maxfee: <span class="prelude-val">None</span>,
             description: <span class="prelude-val">None</span>,
+            partial_msat: <span class="prelude-val">None</span>,
         })
         .<span class="kw">await</span><span class="question-mark">?
         </span>.status;
@@ -4429,6 +4438,7 @@
                     exclude: <span class="prelude-val">None</span>,
                     maxfee: <span class="prelude-val">None</span>,
                     description: <span class="prelude-val">None</span>,
+                    partial_msat: <span class="prelude-val">None</span>,
                 })
                 .<span class="kw">await</span><span class="question-mark">?
                 </span>.status;

@@ -164,6 +164,8 @@
 <a href="#164" id="164">164</a>
 <a href="#165" id="165">165</a>
 <a href="#166" id="166">166</a>
+<a href="#167" id="167">167</a>
+<a href="#168" id="168">168</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::path::PathBuf;
 <span class="kw">use </span>std::sync::Arc;
 
@@ -237,6 +239,7 @@
                 exclude: <span class="prelude-val">None</span>,
                 maxfee: <span class="prelude-val">None</span>,
                 description: <span class="prelude-val">None</span>,
+                partial_msat: <span class="prelude-val">None</span>,
             })
             .<span class="kw">await</span><span class="question-mark">?
             </span>.status;
@@ -265,6 +268,7 @@
                 preimage: <span class="prelude-val">None</span>,
                 cltv: <span class="prelude-val">None</span>,
                 deschashonly: <span class="prelude-val">None</span>,
+                exposeprivatechannels: <span class="prelude-val">None</span>,
             })
             .<span class="kw">await</span><span class="question-mark">?
             </span>.bolt11)

@@ -959,21 +959,6 @@
 <a href="#959" id="959">959</a>
 <a href="#960" id="960">960</a>
 <a href="#961" id="961">961</a>
-<a href="#962" id="962">962</a>
-<a href="#963" id="963">963</a>
-<a href="#964" id="964">964</a>
-<a href="#965" id="965">965</a>
-<a href="#966" id="966">966</a>
-<a href="#967" id="967">967</a>
-<a href="#968" id="968">968</a>
-<a href="#969" id="969">969</a>
-<a href="#970" id="970">970</a>
-<a href="#971" id="971">971</a>
-<a href="#972" id="972">972</a>
-<a href="#973" id="973">973</a>
-<a href="#974" id="974">974</a>
-<a href="#975" id="975">975</a>
-<a href="#976" id="976">976</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::array::TryFromSliceError;
 <span class="kw">use </span>std::collections::{BTreeMap, HashMap};
 <span class="kw">use </span>std::net::SocketAddr;
@@ -1261,18 +1246,13 @@
             <span class="kw">_ </span>=&gt; <span class="prelude-val">Err</span>(ClnExtensionError::RpcWrongResponse),
         }
         .map_err(|err| tonic::Status::internal(err.to_string()))<span class="question-mark">?
-        </span>.unwrap_or(Vec::new())
-        .into_iter()
+        </span>.into_iter()
         .filter_map(|chan| {
-            <span class="kw">if let </span><span class="prelude-val">Some</span>(state) = chan.state {
-                <span class="kw">if </span><span class="macro">matches!</span>(
-                    state,
-                    model::responses::ListpeerchannelsChannelsState::CHANNELD_NORMAL
-                ) {
-                    <span class="kw">if let </span><span class="prelude-val">Some</span>(peer_id) = chan.peer_id {
-                        <span class="kw">return </span>chan.short_channel_id.map(|scid| (peer_id, scid));
-                    }
-                }
+            <span class="kw">if </span><span class="macro">matches!</span>(
+                chan.state,
+                model::responses::ListpeerchannelsChannelsState::CHANNELD_NORMAL
+            ) {
+                <span class="kw">return </span>chan.short_channel_id.map(|scid| (chan.peer_id, scid));
             }
 
             <span class="prelude-val">None
@@ -1381,6 +1361,7 @@
                 maxfee: <span class="prelude-val">Some</span>(cln_rpc::primitives::Amount::from_msat(max_fee_msat)),
                 maxfeepercent: <span class="prelude-val">None</span>,
                 description: <span class="prelude-val">None</span>,
+                partial_msat: <span class="prelude-val">None</span>,
             }))
             .<span class="kw">await
             </span>.map(|response| <span class="kw">match </span>response {
@@ -1694,13 +1675,10 @@
                 cln_rpc::Response::ListPeerChannels(
                     model::responses::ListpeerchannelsResponse { channels },
                 ) =&gt; <span class="prelude-val">Ok</span>(channels
-                    .unwrap_or_default()
                     .into_iter()
                     .filter(|channel| {
                         channel.state
-                            == <span class="prelude-val">Some</span>(
-                                model::responses::ListpeerchannelsChannelsState::CHANNELD_NORMAL,
-                            )
+                            == model::responses::ListpeerchannelsChannelsState::CHANNELD_NORMAL
                     })
                     .collect()),
                 <span class="kw">_ </span>=&gt; <span class="prelude-val">Err</span>(ClnExtensionError::RpcWrongResponse),
@@ -1755,39 +1733,31 @@
                 cln_rpc::Response::ListPeerChannels(
                     model::responses::ListpeerchannelsResponse { channels },
                 ) =&gt; <span class="prelude-val">Ok</span>(channels
-                    .unwrap_or_default()
                     .into_iter()
                     .filter_map(|channel| {
-                        <span class="kw">if let </span><span class="prelude-val">Some</span>(state) = channel.state {
-                            <span class="kw">if </span><span class="macro">matches!</span>(
-                                state,
-                                model::responses::ListpeerchannelsChannelsState::CHANNELD_NORMAL
-                            ) {
-                                <span class="prelude-val">Some</span>(ChannelInfo {
-                                    remote_pubkey: <span class="kw">match </span>channel.peer_id {
-                                        <span class="prelude-val">Some</span>(peer_id) =&gt; <span class="macro">format!</span>(<span class="string">"{}"</span>, peer_id),
-                                        <span class="prelude-val">None </span>=&gt; <span class="kw">return </span><span class="prelude-val">None</span>,
-                                    },
-                                    channel_size_sats: channel
-                                        .total_msat
-                                        .map(|value| value.msat() / <span class="number">1000</span>)
-                                        .unwrap_or(<span class="number">0</span>),
-                                    outbound_liquidity_sats: channel
-                                        .spendable_msat
-                                        .map(|value| value.msat() / <span class="number">1000</span>)
-                                        .unwrap_or(<span class="number">0</span>),
-                                    inbound_liquidity_sats: channel
-                                        .receivable_msat
-                                        .map(|value| value.msat() / <span class="number">1000</span>)
-                                        .unwrap_or(<span class="number">0</span>),
-                                    short_channel_id: <span class="kw">match </span>channel.short_channel_id {
-                                        <span class="prelude-val">Some</span>(scid) =&gt; scid_to_u64(scid),
-                                        <span class="prelude-val">None </span>=&gt; <span class="kw">return </span><span class="prelude-val">None</span>,
-                                    },
-                                })
-                            } <span class="kw">else </span>{
-                                <span class="prelude-val">None
-                            </span>}
+                        <span class="kw">if </span><span class="macro">matches!</span>(
+                            channel.state,
+                            model::responses::ListpeerchannelsChannelsState::CHANNELD_NORMAL
+                        ) {
+                            <span class="prelude-val">Some</span>(ChannelInfo {
+                                remote_pubkey: <span class="macro">format!</span>(<span class="string">"{}"</span>, channel.peer_id),
+                                channel_size_sats: channel
+                                    .total_msat
+                                    .map(|value| value.msat() / <span class="number">1000</span>)
+                                    .unwrap_or(<span class="number">0</span>),
+                                outbound_liquidity_sats: channel
+                                    .spendable_msat
+                                    .map(|value| value.msat() / <span class="number">1000</span>)
+                                    .unwrap_or(<span class="number">0</span>),
+                                inbound_liquidity_sats: channel
+                                    .receivable_msat
+                                    .map(|value| value.msat() / <span class="number">1000</span>)
+                                    .unwrap_or(<span class="number">0</span>),
+                                short_channel_id: <span class="kw">match </span>channel.short_channel_id {
+                                    <span class="prelude-val">Some</span>(scid) =&gt; scid_to_u64(scid),
+                                    <span class="prelude-val">None </span>=&gt; <span class="kw">return </span><span class="prelude-val">None</span>,
+                                },
+                            })
                         } <span class="kw">else </span>{
                             <span class="prelude-val">None
                         </span>}
