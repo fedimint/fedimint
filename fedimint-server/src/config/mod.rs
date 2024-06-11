@@ -135,6 +135,8 @@ pub struct ServerConfigConsensus {
     pub meta: BTreeMap<String, String>,
 }
 
+// FIXME: (@leonardo) Should this have another field for the expected transport
+// ? (e.g. clearnet/tor/...)
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ServerConfigLocal {
     /// Network addresses and names for all p2p connections

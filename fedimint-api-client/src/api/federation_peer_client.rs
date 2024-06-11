@@ -10,7 +10,7 @@ use fedimint_logging::LOG_CLIENT_NET_API;
 use tokio::sync::{Mutex, RwLock};
 use tracing::debug;
 
-use super::JsonRpcClient;
+use super::{Connector, JsonRpcClient};
 
 // TODO(tvolk131): Merge this with `FederationPeerClient`.
 #[derive(Debug)]
@@ -19,14 +19,21 @@ pub struct FederationPeer<C> {
     pub peer_id: PeerId,
     pub api_secret: Option<String>,
     pub client: RwLock<FederationPeerClient<C>>,
+    pub connector: Connector,
 }
 
 impl<C> FederationPeer<C>
 where
     C: JsonRpcClient + 'static,
 {
-    pub fn new(url: SafeUrl, peer_id: PeerId, api_secret: Option<String>) -> Self {
+    pub fn new(
+        connector: Connector,
+        url: SafeUrl,
+        peer_id: PeerId,
+        api_secret: Option<String>,
+    ) -> Self {
         let client = RwLock::new(FederationPeerClient::new(
+            connector,
             peer_id,
             url.clone(),
             api_secret.clone(),
@@ -37,6 +44,7 @@ where
             peer_id,
             api_secret,
             client,
+            connector,
         }
     }
 }
@@ -53,18 +61,30 @@ impl<C> FederationPeerClient<C>
 where
     C: JsonRpcClient + 'static,
 {
-    fn new(peer_id: PeerId, url: SafeUrl, api_secret: Option<String>) -> Self {
+    fn new(
+        connector: Connector,
+        peer_id: PeerId,
+        url: SafeUrl,
+        api_secret: Option<String>,
+    ) -> Self {
         let connection_state = Arc::new(tokio::sync::Mutex::new(
             FederationPeerClientConnectionState::new(),
         ));
 
         Self {
-            client: Self::new_jit_client(peer_id, url, api_secret, connection_state.clone()),
+            client: Self::new_jit_client(
+                connector,
+                peer_id,
+                url,
+                api_secret,
+                connection_state.clone(),
+            ),
             connection_state,
         }
     }
 
     fn new_jit_client(
+        connector: Connector,
         peer_id: PeerId,
         url: SafeUrl,
         api_secret: Option<String>,
@@ -73,7 +93,13 @@ where
         JitTryAnyhow::new_try(move || async move {
             Self::wait(&peer_id, &url, &connection_state).await;
 
-            let res = C::connect(&url, api_secret).await;
+            let res = match connector {
+                Connector::Tcp => C::connect(&url, api_secret).await,
+                #[cfg(not(target_family = "wasm"))]
+                Connector::Tor => C::connect_with_tor(&url, api_secret).await,
+                #[cfg(target_family = "wasm")]
+                Connector::Tor => unimplemented!(),
+            };
 
             match &res {
                 Ok(_) => {
@@ -96,8 +122,20 @@ where
         })
     }
 
-    pub fn reconnect(&mut self, peer_id: PeerId, url: SafeUrl, api_secret: Option<String>) {
-        self.client = Self::new_jit_client(peer_id, url, api_secret, self.connection_state.clone());
+    pub fn reconnect(
+        &mut self,
+        connector: Connector,
+        peer_id: PeerId,
+        url: SafeUrl,
+        api_secret: Option<String>,
+    ) {
+        self.client = Self::new_jit_client(
+            connector,
+            peer_id,
+            url,
+            api_secret,
+            self.connection_state.clone(),
+        );
     }
 
     async fn wait(

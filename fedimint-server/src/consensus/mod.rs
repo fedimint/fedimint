@@ -16,7 +16,7 @@ use std::time::Duration;
 use anyhow::bail;
 use async_channel::Sender;
 use db::{get_global_database_migrations, GLOBAL_DATABASE_VERSION};
-use fedimint_api_client::api::DynGlobalApi;
+use fedimint_api_client::api::{Connector, DynGlobalApi};
 use fedimint_core::config::ServerModuleInitRegistry;
 use fedimint_core::core::{ModuleInstanceId, ModuleKind};
 use fedimint_core::db::{apply_migrations, apply_migrations_server, Database};
@@ -143,9 +143,15 @@ pub async fn run(
 
     info!(target: LOG_CONSENSUS, "Starting Consensus Engine");
 
+    // FIXME: (@leonardo) How should this be handled ?
+    // Using the `Connector::default()` for now!
     ConsensusEngine {
         db,
-        federation_api: DynGlobalApi::from_config(&client_cfg, &force_api_secrets.get_active()),
+        federation_api: DynGlobalApi::from_config(
+            &client_cfg,
+            &force_api_secrets.get_active(),
+            &Connector::default(),
+        ),
         self_id_str: cfg.local.identity.to_string(),
         peer_id_str: (0..cfg.consensus.api_endpoints.len())
             .map(|x| x.to_string())

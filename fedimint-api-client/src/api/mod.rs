@@ -1,11 +1,14 @@
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::fmt::{self, Debug, Display};
 use std::pin::Pin;
+use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
 use std::{cmp, result};
 
 use anyhow::anyhow;
+#[cfg(not(target_family = "wasm"))]
+use arti_client::{TorAddr, TorClient, TorClientConfig};
 use base64::Engine as _;
 use bitcoin::hashes::sha256;
 use bitcoin::secp256k1;
@@ -47,6 +50,10 @@ use jsonrpsee_ws_client::{WsClient, WsClientBuilder};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use thiserror::Error;
+#[cfg(not(target_family = "wasm"))]
+use tokio_rustls::rustls::{ClientConfig as TlsClientConfig, RootCertStore};
+#[cfg(not(target_family = "wasm"))]
+use tokio_rustls::TlsConnector;
 use tracing::{debug, error, instrument, trace, warn};
 
 use crate::query::{QueryStep, QueryStrategy, ThresholdConsensus};
@@ -111,7 +118,7 @@ impl PeerError {
 
 /// An API request error when calling an entire federation
 ///
-/// Generally all Federation errors are retriable.
+/// Generally all Federation errors are retryable.
 #[derive(Debug, Error)]
 pub struct FederationError {
     method: String,
@@ -532,43 +539,67 @@ impl AsRef<dyn IGlobalFederationApi + 'static> for DynGlobalApi {
     }
 }
 
+// FIXME: (@leonardo) how should this handle the different [`Connector`]'s ?
+// Using [`Connector::default()`] for now.
 impl DynGlobalApi {
     pub fn from_pre_peer_id_admin_endpoint(url: SafeUrl, api_secret: &Option<String>) -> Self {
         // PeerIds are used only for informational purposes, but just in case, make a
         // big number so it stands out
         let peer_id = PeerId::from(1024);
         GlobalFederationApiWithCache::new(
-            WsFederationApi::new(vec![(peer_id, url)], api_secret).with_self_peer_id(peer_id),
+            WsFederationApi::new(&Connector::default(), vec![(peer_id, url)], api_secret)
+                .with_self_peer_id(peer_id),
         )
         .into()
     }
 
     pub fn from_single_endpoint(peer: PeerId, url: SafeUrl, api_secret: &Option<String>) -> Self {
-        GlobalFederationApiWithCache::new(WsFederationApi::new(vec![(peer, url)], api_secret))
-            .into()
+        GlobalFederationApiWithCache::new(WsFederationApi::new(
+            &Connector::default(),
+            vec![(peer, url)],
+            api_secret,
+        ))
+        .into()
     }
 
     pub fn from_endpoints(peers: Vec<(PeerId, SafeUrl)>, api_secret: &Option<String>) -> Self {
-        GlobalFederationApiWithCache::new(WsFederationApi::new(peers, api_secret)).into()
+        GlobalFederationApiWithCache::new(WsFederationApi::new(
+            &Connector::default(),
+            peers,
+            api_secret,
+        ))
+        .into()
     }
 
-    pub fn from_config(config: &ClientConfig, api_secret: &Option<String>) -> Self {
-        GlobalFederationApiWithCache::new(WsFederationApi::from_config(config, api_secret)).into()
+    pub fn from_config(
+        config: &ClientConfig,
+        api_secret: &Option<String>,
+        connector: &Connector,
+    ) -> Self {
+        GlobalFederationApiWithCache::new(WsFederationApi::from_config(
+            connector, config, api_secret,
+        ))
+        .into()
     }
 
     pub fn from_config_admin(
         config: &ClientConfig,
         api_secret: &Option<String>,
         self_peer_id: PeerId,
+        connector: &Connector,
     ) -> Self {
         GlobalFederationApiWithCache::new(
-            WsFederationApi::from_config(config, api_secret).with_self_peer_id(self_peer_id),
+            WsFederationApi::from_config(connector, config, api_secret)
+                .with_self_peer_id(self_peer_id),
         )
         .into()
     }
 
+    // FIXME: (@leonardo) should the `Connector` be encoded in the `InviteCode`
+    // somehow ?
     pub fn from_invite_code(invite_code: &InviteCode) -> Self {
         GlobalFederationApiWithCache::new(WsFederationApi::new(
+            &Connector::default(),
             invite_code.peers().into_iter().collect_vec(),
             &invite_code.api_secret(),
         ))
@@ -598,6 +629,55 @@ impl DynGlobalApi {
         })
         .await
         .map_err(|_| OutputOutcomeError::Timeout(timeout))?
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+pub enum Connector {
+    Tcp,
+    Tor,
+}
+
+impl Default for Connector {
+    fn default() -> Self {
+        Self::Tcp
+    }
+}
+
+#[allow(dead_code)]
+impl Connector {
+    /// Returns `true` if the connector is [`Tcp`].
+    ///
+    /// [`Tcp`]: Connector::Tcp
+    #[must_use]
+    fn is_tcp(self) -> bool {
+        matches!(self, Self::Tcp)
+    }
+
+    /// Returns `true` if the connector is [`Tor`].
+    ///
+    /// [`Tor`]: Connector::Tor
+    #[must_use]
+    fn is_tor(self) -> bool {
+        matches!(self, Self::Tor)
+    }
+}
+
+impl fmt::Display for Connector {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{self:?}")
+    }
+}
+
+impl FromStr for Connector {
+    type Err = &'static str;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "Tcp" => Ok(Connector::Tcp),
+            "Tor" => Ok(Connector::Tor),
+            _ => Err("invalid connector!"),
+        }
     }
 }
 
@@ -762,7 +842,7 @@ pub struct WsFederationApi<C = WsClient> {
 
 impl<C: JsonRpcClient + Debug + 'static> IModuleFederationApi for WsFederationApi<C> {}
 
-/// Implementation of API calls over websockets
+/// Implementation of API calls over WebSockets
 ///
 /// Can function as either the global or module API
 #[apply(async_trait_maybe_send!)]
@@ -811,6 +891,13 @@ pub trait JsonRpcClient: ClientT + Sized + MaybeSend + MaybeSync {
         url: &SafeUrl,
         api_secret: Option<String>,
     ) -> result::Result<Self, JsonRpcClientError>;
+
+    #[cfg(not(target_family = "wasm"))]
+    async fn connect_with_tor(
+        url: &SafeUrl,
+        api_secret: Option<String>,
+    ) -> result::Result<Self, JsonRpcClientError>;
+
     fn is_connected(&self) -> bool;
 }
 
@@ -860,6 +947,109 @@ impl JsonRpcClient for WsClient {
         client.build(url.as_str()).await
     }
 
+    #[cfg(not(target_family = "wasm"))]
+    async fn connect_with_tor(
+        url: &SafeUrl,
+        api_secret: Option<String>,
+    ) -> result::Result<Self, JsonRpcClientError> {
+        // TODO: (@leonardo) should we use the default one ?
+        let tor_config = TorClientConfig::default();
+        let tor_client = TorClient::create_bootstrapped(tor_config)
+            .await
+            .map_err(|e| JsonRpcClientError::Transport(e.into()))?;
+
+        // TODO: (@leonardo) should we implement our `IntoTorAddr` for `SafeUrl`
+        // instead?
+        let addr = (
+            url.host_str()
+                .expect("It should've asserted for `host` on construction"),
+            url.port_or_known_default()
+                .expect("It should've asserted for `port`, or used a default one, on construction"),
+        );
+        let tor_addr = TorAddr::from(addr).map_err(|e| JsonRpcClientError::Transport(e.into()))?;
+
+        // TODO: (@leonardo) how to handle the arti_client::Error
+        let anonymized_stream = tor_client
+            .connect(tor_addr)
+            .await
+            .map_err(|e| JsonRpcClientError::Transport(e.into()))?;
+
+        let is_tls = match url.scheme() {
+            "wss" => true,
+            "ws" => false,
+            unexpected_scheme => {
+                let error =
+                    format!("`{unexpected_scheme}` not supported, it's expected `ws` or `wss`!");
+                return Err(JsonRpcClientError::Transport(anyhow!(error)));
+            }
+        };
+
+        let tls_connector = if is_tls {
+            let webpki_roots = webpki_roots::TLS_SERVER_ROOTS.iter().cloned();
+            let mut root_certs = RootCertStore::empty();
+            root_certs.extend(webpki_roots);
+
+            let tls_config = TlsClientConfig::builder()
+                .with_root_certificates(root_certs)
+                .with_no_client_auth();
+            let tls_connector = TlsConnector::from(Arc::new(tls_config));
+            Some(tls_connector)
+        } else {
+            None
+        };
+
+        // TODO: (@leonardo) Should we iterate through the sockaddrs, instead of
+        // using only the hostname ? Will it leak the the IP address
+        // during lookup ? Should we avoid it at all costs ?
+
+        let mut ws_client_builder =
+            WsClientBuilder::default().max_concurrent_requests(u16::MAX as usize);
+
+        if let Some(api_secret) = api_secret {
+            // on native platforms, jsonrpsee-client ignores `user:pass@...` in the Url,
+            // but we can set up the headers manually
+            let mut headers = HeaderMap::new();
+
+            let auth =
+                base64::engine::general_purpose::STANDARD.encode(format!("fedimint:{api_secret}"));
+
+            headers.insert(
+                "Authorization",
+                HeaderValue::from_str(&format!("Basic {auth}")).expect("Can't fail"),
+            );
+
+            ws_client_builder = ws_client_builder.set_headers(headers);
+        }
+
+        match tls_connector {
+            None => {
+                return ws_client_builder
+                    .build_with_stream(url.as_str(), anonymized_stream)
+                    .await;
+            }
+            Some(tls_connector) => {
+                let host = url
+                    .host_str()
+                    .map(ToOwned::to_owned)
+                    .ok_or_else(|| JsonRpcClientError::Transport(anyhow!("Invalid host!")))?;
+
+                // FIXME: (@leonardo) Is this leaking any data ? Should investigate it further
+                // if it's really needed.
+                let server_name = rustls_pki_types::ServerName::try_from(host)
+                    .map_err(|e| JsonRpcClientError::Transport(e.into()))?;
+
+                let anonymized_tls_stream = tls_connector
+                    .connect(server_name, anonymized_stream)
+                    .await
+                    .map_err(|e| JsonRpcClientError::Transport(e.into()))?;
+
+                return ws_client_builder
+                    .build_with_stream(url.as_str(), anonymized_tls_stream)
+                    .await;
+            }
+        }
+    }
+
     fn is_connected(&self) -> bool {
         self.is_connected()
     }
@@ -867,13 +1057,22 @@ impl JsonRpcClient for WsClient {
 
 impl WsFederationApi<WsClient> {
     /// Creates a new API client
-    pub fn new(peers: Vec<(PeerId, SafeUrl)>, api_secret: &Option<String>) -> Self {
-        Self::new_with_client(peers, None, api_secret)
+    pub fn new(
+        connector: &Connector,
+        peers: Vec<(PeerId, SafeUrl)>,
+        api_secret: &Option<String>,
+    ) -> Self {
+        Self::new_with_client(connector, peers, None, api_secret)
     }
 
     /// Creates a new API client from a client config
-    pub fn from_config(config: &ClientConfig, api_secret: &Option<String>) -> Self {
+    pub fn from_config(
+        connector: &Connector,
+        config: &ClientConfig,
+        api_secret: &Option<String>,
+    ) -> Self {
         Self::new(
+            connector,
             config
                 .global
                 .api_endpoints
@@ -896,12 +1095,14 @@ impl<C> WsFederationApi<C>
 where
     C: JsonRpcClient + 'static,
 {
+    /// Returns the [`PeerId`]'s for the current [`WsFederationApi`]
     pub fn peers(&self) -> Vec<PeerId> {
         self.peers.iter().map(|peer| peer.peer_id).collect()
     }
 
-    /// Creates a new API client
+    /// Creates a new [`WsFederationApi`] client, for given [`Connector`].
     pub fn new_with_client(
+        connector: &Connector,
         peers: Vec<(PeerId, SafeUrl)>,
         self_peer_id: Option<PeerId>,
         api_secret: &Option<String>,
@@ -919,7 +1120,7 @@ where
                         );
                         assert!(url.host().is_some(), "API client requires a target host");
 
-                        FederationPeer::new(url, peer_id, api_secret.clone())
+                        FederationPeer::new(*connector, url, peer_id, api_secret.clone())
                     })
                     .collect(),
             ),
@@ -973,7 +1174,12 @@ where
                     trace!(target: LOG_CLIENT_NET_API, "Some other request reconnected client, retrying");
                 }
                 _ => {
-                    wclient.reconnect(self.peer_id, self.url.clone(), self.api_secret.clone());
+                    wclient.reconnect(
+                        self.connector,
+                        self.peer_id,
+                        self.url.clone(),
+                        self.api_secret.clone(),
+                    );
                 }
             }
         }
@@ -983,7 +1189,6 @@ where
 }
 
 impl<C: JsonRpcClient> WsFederationApi<C> {}
-
 /// The status of a server, including how it views its peers
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
 pub struct FederationStatus {
@@ -1043,6 +1248,7 @@ mod tests {
     #[apply(async_trait_maybe_send!)]
     trait SimpleClient: Sized {
         async fn connect() -> Result<Self>;
+        async fn connect_with_tor() -> Result<Self>;
         fn is_connected(&self) -> bool {
             true
         }
@@ -1054,12 +1260,16 @@ mod tests {
 
     #[apply(async_trait_maybe_send!)]
     impl<C: SimpleClient + MaybeSend + MaybeSync> JsonRpcClient for Client<C> {
-        fn is_connected(&self) -> bool {
-            self.0.is_connected()
-        }
-
         async fn connect(_url: &SafeUrl, _api_secret: Option<String>) -> Result<Self> {
             Ok(Self(C::connect().await?))
+        }
+
+        async fn connect_with_tor(_url: &SafeUrl, _api_secret: Option<String>) -> Result<Self> {
+            Ok(Self(C::connect_with_tor().await?))
+        }
+
+        fn is_connected(&self) -> bool {
+            self.0.is_connected()
         }
     }
 

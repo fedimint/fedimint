@@ -154,7 +154,11 @@ pub async fn build_client(
     let client = if Client::is_initialized(client_builder.db_no_decoders()).await {
         client_builder.open(root_secret).await
     } else if let Some(invite_code) = &invite_code {
-        let client_config = fedimint_api_client::download_from_invite_code(invite_code).await?;
+        let client_config = fedimint_api_client::download_from_invite_code(
+            fedimint_api_client::api::Connector::default(),
+            invite_code,
+        )
+        .await?;
         client_builder
             .join(root_secret, client_config.clone(), invite_code.api_secret())
             .await

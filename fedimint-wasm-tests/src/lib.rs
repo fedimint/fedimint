@@ -37,7 +37,11 @@ fn make_client_builder() -> fedimint_client::ClientBuilder {
 }
 
 async fn client(invite_code: &InviteCode) -> Result<fedimint_client::ClientHandleArc> {
-    let client_config = fedimint_api_client::download_from_invite_code(invite_code).await?;
+    let client_config = fedimint_api_client::download_from_invite_code(
+        fedimint_api_client::api::Connector::default(),
+        invite_code,
+    )
+    .await?;
     let mut builder = make_client_builder();
     let client_secret = load_or_generate_mnemonic(builder.db_no_decoders()).await?;
     builder.stopped();
