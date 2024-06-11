@@ -27,10 +27,10 @@ use anyhow::{format_err, Context};
 use bip39::Mnemonic;
 use clap::{Args, CommandFactory, Parser, Subcommand};
 use db_locked::LockedBuilder;
-use envs::{FM_API_SECRET_ENV, SALT_FILE};
+use envs::{FM_API_SECRET_ENV, FM_CONNECTOR_ENV, SALT_FILE};
 use fedimint_aead::{encrypted_read, encrypted_write, get_encryption_key};
 use fedimint_api_client::api::{
-    DynGlobalApi, FederationApiExt, FederationError, IRawFederationApi, WsFederationApi,
+    Connector, DynGlobalApi, FederationApiExt, FederationError, IRawFederationApi, WsFederationApi,
 };
 use fedimint_bip39::Bip39RootSecretStrategy;
 use fedimint_client::meta::{FetchKind, MetaSource};
@@ -61,7 +61,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use thiserror::Error;
 use tracing::{debug, info};
-use utils::parse_peer_id;
+use utils::{parse_connector, parse_peer_id};
 
 use crate::client::ClientCmd;
 use crate::envs::{FM_CLIENT_DIR_ENV, FM_OUR_ID_ENV, FM_PASSWORD_ENV};
@@ -210,6 +210,10 @@ struct Opts {
     #[arg(long, env = FM_PASSWORD_ENV)]
     password: Option<String>,
 
+    /// Connector (e.g. Tcp / Tor)
+    #[arg(env = FM_CONNECTOR_ENV, value_parser = parse_connector)]
+    connector: Option<Connector>,
+
     /// Activate more verbose logging, for full control use the RUST_LOG env
     /// variable
     #[arg(short = 'v', long)]
@@ -235,12 +239,17 @@ impl Opts {
         Ok(dir)
     }
 
+    // FIXME: (@leonardo) How should the connector selection should be handled here
+    // ?
     fn admin_client(
         &self,
         peer_urls: &BTreeMap<PeerId, SafeUrl>,
         api_secret: &Option<String>,
     ) -> CliResult<DynGlobalApi> {
         let our_id = self.our_id.ok_or_cli_msg("Admin client needs our-id set")?;
+        let connector = self
+            .connector
+            .ok_or_cli_msg("Admin client needs connector set")?;
         Ok(DynGlobalApi::new_admin(
             our_id,
             peer_urls
@@ -249,6 +258,7 @@ impl Opts {
                 .context("Our peer URL not found in config")
                 .map_err_cli()?,
             api_secret,
+            &connector,
         ))
     }
 
@@ -618,9 +628,12 @@ impl FedimintCli {
         cli: &Opts,
         invite_code: InviteCode,
     ) -> CliResult<ClientHandleArc> {
-        let client_config = fedimint_api_client::download_from_invite_code(&invite_code)
-            .await
-            .map_err_cli()?;
+        let client_config = fedimint_api_client::download_from_invite_code(
+            fedimint_api_client::api::Connector::default(),
+            &invite_code,
+        )
+        .await
+        .map_err_cli()?;
 
         let client_builder = self.make_client_builder(cli).await?;
 
@@ -679,9 +692,12 @@ impl FedimintCli {
     ) -> CliResult<ClientHandleArc> {
         let builder = self.make_client_builder(cli).await?;
 
-        let client_config = fedimint_api_client::download_from_invite_code(&invite_code)
-            .await
-            .map_err_cli()?;
+        let client_config = fedimint_api_client::download_from_invite_code(
+            fedimint_api_client::api::Connector::default(),
+            &invite_code,
+        )
+        .await
+        .map_err_cli()?;
 
         match Client::load_decodable_client_secret_opt::<Vec<u8>>(builder.db_no_decoders())
             .await
@@ -877,8 +893,13 @@ impl FedimintCli {
                 }
                 let client = self.client_open(&cli).await?;
 
-                let ws_api: Arc<_> =
-                    WsFederationApi::new(client.get_peer_urls().await, client.api_secret()).into();
+                // FIXME: Should the connector be fetched from the client somehow ?
+                let ws_api: Arc<_> = WsFederationApi::new(
+                    &Connector::default(),
+                    client.get_peer_urls().await,
+                    client.api_secret(),
+                )
+                .into();
                 let response: Value = match peer_id {
                     Some(peer_id) => ws_api
                         .request_raw(peer_id.into(), &method, &[params.to_json()])
