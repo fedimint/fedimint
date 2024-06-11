@@ -131,6 +131,7 @@ let
       openssl
       pkg-config
       protobuf
+      sqlite
     ] ++ lib.optionals (!stdenv.isDarwin) [
       util-linux
       iproute2

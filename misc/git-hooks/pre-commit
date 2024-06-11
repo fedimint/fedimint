@@ -87,6 +87,7 @@ function check_check_forbidden_dependencies() {
         return 1
       fi
     done
+    # FIXME: (@leonardo) temporally allow the `openssl`, it's currently being brought by tor-proto -...-> native-tls.
     find ./ -name Cargo.lock | while read -r cargo_lock ; do
       if grep -E "openssl" "$cargo_lock" >&2 ; then
         >&2 echo "$cargo_lock must not depend on openssl"
