@@ -46,12 +46,12 @@ serde_json = { workspace = true }
 sha3 = "0.10.8"
 strum = { workspace = true }
 strum_macros = { workspace = true }
-tar = "0.4.40"
+tar = "0.4.41"
 tbs = { package = "fedimint-tbs", version = "=0.4.0-alpha", path = "../crypto/tbs" }
 thiserror = { workspace = true }
 tower = { version = "0.4.13", default-features = false }
 tracing = { workspace = true }
-url = { version = "2.5.0", features = ["serde"] }
+url = { version = "2.5.1", features = ["serde"] }
 threshold_crypto = { workspace = true }
 jsonrpsee = { version = "0.23.0", features = ["server"] }
 tokio = { version = "1.38.0", features = ["full", "tracing"] }
