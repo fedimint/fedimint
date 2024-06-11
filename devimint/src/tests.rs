@@ -677,6 +677,7 @@ pub async fn cli_tests(dev_fed: DevFed) -> Result<()> {
             preimage: None,
             cltv: None,
             deschashonly: None,
+            exposeprivatechannels: None,
         })
         .await?
         .bolt11;
@@ -726,6 +727,7 @@ pub async fn cli_tests(dev_fed: DevFed) -> Result<()> {
         exclude: None,
         maxfee: None,
         description: None,
+        partial_msat: None,
     })
     .await?;
     let invoice_status = lnd
@@ -1014,6 +1016,7 @@ pub async fn cli_tests(dev_fed: DevFed) -> Result<()> {
             preimage: None,
             cltv: None,
             deschashonly: None,
+            exposeprivatechannels: None,
         })
         .await?
         .bolt11;
@@ -1084,6 +1087,7 @@ pub async fn cli_tests(dev_fed: DevFed) -> Result<()> {
             exclude: None,
             maxfee: None,
             description: None,
+            partial_msat: None,
         })
         .await?
         .status;
@@ -1826,6 +1830,7 @@ pub async fn do_try_create_and_pay_invoice(
                     exclude: None,
                     maxfee: None,
                     description: None,
+                    partial_msat: None,
                 })
                 .await?
                 .status;
