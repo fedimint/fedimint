@@ -2,7 +2,7 @@ use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
 use std::time::Duration;
 
-use fedimint_api_client::api::{DynGlobalApi, FederationApiExt};
+use fedimint_api_client::api::{Connector, DynGlobalApi, FederationApiExt};
 use fedimint_client::module::init::ClientModuleInitRegistry;
 use fedimint_client::secret::{PlainRootSecretStrategy, RootSecretStrategy};
 use fedimint_client::{AdminCreds, Client, ClientHandleArc};
@@ -246,10 +246,13 @@ impl FederationTestBuilder {
                 continue;
             }
 
+            // FIXME: (@leonardo) Currently there is no support for Tor while testing,
+            // defaulting to Tcp variant.
             let api = DynGlobalApi::new_admin(
                 peer_id,
                 config.consensus.api_endpoints[&peer_id].url.clone(),
                 &None,
+                &Connector::default(),
             );
 
             while let Err(e) = api

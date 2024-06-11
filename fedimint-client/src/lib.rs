@@ -97,7 +97,7 @@ use db::{
     PeerLastApiVersionsSummary, PeerLastApiVersionsSummaryKey, CORE_CLIENT_DATABASE_VERSION,
 };
 use fedimint_api_client::api::{
-    ApiVersionSet, DynGlobalApi, DynModuleApi, FederationApiExt, IGlobalFederationApi,
+    ApiVersionSet, Connector, DynGlobalApi, DynModuleApi, FederationApiExt, IGlobalFederationApi,
 };
 use fedimint_core::config::{
     ClientConfig, FederationId, GlobalClientConfig, JsonClientConfig, ModuleInitRegistry,
@@ -769,6 +769,7 @@ pub struct Client {
     operation_log: OperationLog,
     secp_ctx: Secp256k1<secp256k1_zkp::All>,
     meta_service: Arc<MetaService>,
+    connector: Connector,
 
     task_group: TaskGroup,
 
@@ -1962,6 +1963,7 @@ pub struct ClientBuilder {
     admin_creds: Option<AdminCreds>,
     db_no_decoders: Database,
     meta_service: Arc<MetaService>,
+    connector: Connector,
     stopped: bool,
 }
 
@@ -1971,6 +1973,7 @@ impl ClientBuilder {
         ClientBuilder {
             module_inits: ModuleInitRegistry::new(),
             primary_module_instance: None,
+            connector: Connector::default(),
             admin_creds: None,
             db_no_decoders: db,
             stopped: false,
@@ -1987,6 +1990,7 @@ impl ClientBuilder {
             stopped: false,
             // non unique
             meta_service: client.meta_service.clone(),
+            connector: client.connector,
         }
     }
 
@@ -2064,6 +2068,14 @@ impl ClientBuilder {
 
     pub fn set_admin_creds(&mut self, creds: AdminCreds) {
         self.admin_creds = Some(creds);
+    }
+
+    pub fn with_connector(&mut self, connector: Connector) {
+        self.connector = connector;
+    }
+
+    pub fn with_tor_connector(&mut self) {
+        self.with_connector(Connector::Tor);
     }
 
     async fn init(
@@ -2149,7 +2161,7 @@ impl ClientBuilder {
     /// // Get invite code from user
     /// let invite_code = InviteCode::from_str("fed11qgqpw9thwvaz7te3xgmjuvpwxqhrzw3jxumrvvf0qqqjpetvlg8glnpvzcufhffgzhv8m75f7y34ryk7suamh8x7zetly8h0v9v0rm")
     ///     .expect("Invalid invite code");
-    /// let config = fedimint_api_client::download_from_invite_code(&invite_code).await
+    /// let config = fedimint_api_client::download_from_invite_code(fedimint_api_client::api::Connector::default(), &invite_code).await
     ///     .expect("Error downloading config");
     ///
     /// // Tell the user the federation name, bitcoin network
@@ -2202,6 +2214,7 @@ impl ClientBuilder {
         config: &ClientConfig,
         api_secret: Option<String>,
     ) -> anyhow::Result<Option<ClientBackup>> {
+        let connector = self.connector;
         let api = DynGlobalApi::from_endpoints(
             // TODO: change join logic to use FederationId v2
             config
@@ -2210,6 +2223,7 @@ impl ClientBuilder {
                 .iter()
                 .map(|(peer_id, peer_url)| (*peer_id, peer_url.url.clone())),
             &api_secret,
+            &connector,
         );
         Client::download_backup_from_federation_static(
             &api,
@@ -2320,6 +2334,7 @@ impl ClientBuilder {
         let config = Self::config_decoded(config, &decoders)?;
         let fed_id = config.calculate_federation_id();
         let db = self.db_no_decoders.with_decoders(decoders.clone());
+        let connector = self.connector;
         let peer_urls = get_api_urls(&db, &config).await;
         let api = if let Some(admin_creds) = self.admin_creds.as_ref() {
             DynGlobalApi::new_admin(
@@ -2329,9 +2344,10 @@ impl ClientBuilder {
                     .find_map(|(peer, api_url)| (admin_creds.peer_id == peer).then_some(api_url))
                     .context("Admin creds should match a peer")?,
                 &api_secret,
+                &connector,
             )
         } else {
-            DynGlobalApi::from_endpoints(peer_urls, &api_secret)
+            DynGlobalApi::from_endpoints(peer_urls, &api_secret, &connector)
         };
         let task_group = TaskGroup::new();
 
@@ -2563,6 +2579,7 @@ impl ClientBuilder {
             operation_log: OperationLog::new(db),
             client_recovery_progress_receiver,
             meta_service: self.meta_service,
+            connector,
         });
         client_inner
             .task_group

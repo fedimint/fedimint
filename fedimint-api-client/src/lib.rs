@@ -6,7 +6,7 @@
 #![allow(clippy::return_self_not_must_use)]
 
 use anyhow::{bail, Context as _};
-use api::{DynGlobalApi, FederationApiExt as _, WsFederationApi};
+use api::{Connector, DynGlobalApi, FederationApiExt as _, WsFederationApi};
 use fedimint_core::config::{ClientConfig, FederationId};
 use fedimint_core::endpoint_constants::CLIENT_CONFIG_ENDPOINT;
 use fedimint_core::invite_code::InviteCode;
@@ -20,19 +20,26 @@ pub mod api;
 /// Client query system
 pub mod query;
 
-/// Tries to download the client config from the federation,
-/// attempts to retry teb times before giving up.
-pub async fn download_from_invite_code(invite_code: &InviteCode) -> anyhow::Result<ClientConfig> {
+// FIXME: (@leonardo) how should this fns handle different [`Connector`]'s
+
+/// Tries to download the [`ClientConfig`] from the federation,
+/// attempts to retry ten times before giving up.
+pub async fn download_from_invite_code(
+    connector: Connector,
+    invite_code: &InviteCode,
+) -> anyhow::Result<ClientConfig> {
     debug!("Downloading client config from {:?}", invite_code);
 
     let federation_id = invite_code.federation_id();
+    // FIXME: (@leonardo) should fetch all the api_endpoints with proper
+    // [`Connector`] too!
     let api = DynGlobalApi::from_invite_code(invite_code);
     let api_secret = invite_code.api_secret();
 
     fedimint_core::util::retry(
         "Downloading client config",
         backoff_util::aggressive_backoff(),
-        || try_download_client_config(&api, federation_id, api_secret.clone()),
+        || try_download_client_config(&api, connector, federation_id, api_secret.clone()),
     )
     .await
     .context("Failed to download client config")
@@ -41,6 +48,7 @@ pub async fn download_from_invite_code(invite_code: &InviteCode) -> anyhow::Resu
 /// Tries to download the client config only once.
 pub async fn try_download_client_config(
     api: &DynGlobalApi,
+    connector: Connector,
     federation_id: FederationId,
     api_secret: Option<String>,
 ) -> anyhow::Result<ClientConfig> {
@@ -67,7 +75,7 @@ pub async fn try_download_client_config(
     // now we can build an api for all guardians and download the client config
     let api_endpoints = api_endpoints.into_iter().map(|(peer, url)| (peer, url.url));
 
-    let client_config = WsFederationApi::new(api_endpoints, &api_secret)
+    let client_config = WsFederationApi::new(&connector, api_endpoints, &api_secret)
         .request_current_consensus::<ClientConfig>(
             CLIENT_CONFIG_ENDPOINT.to_owned(),
             ApiRequestErased::default(),
