@@ -22,7 +22,7 @@ async-trait = { workspace = true }
 axum = "0.7.5"
 axum-macros = "0.4.1"
 bitcoin = { workspace = true }
-clap = { version = "4.5.4", features = ["derive", "std", "help", "usage", "error-context", "suggestions"], default-features = false }
+clap = { version = "4.5.7", features = ["derive", "std", "help", "usage", "error-context", "suggestions"], default-features = false }
 ln-gateway = { version = "=0.4.0-alpha", package = "fedimint-ln-gateway", path= "../ln-gateway" }
 fedimint-core = { workspace = true }
 fedimint-logging = { workspace = true }
@@ -31,8 +31,8 @@ serde = { workspace = true}
 serde_json = { workspace = true }
 tokio = {version = "1.38", features = ["full"]}
 tracing = { version = "0.1.40", default-features = false, features= ["log", "attributes", "std"] }
-url = { version = "2.5.0", features = ["serde"] }
-clap_complete = "4.5.2"
+url = { version = "2.5.1", features = ["serde"] }
+clap_complete = "4.5.5"
 
 [build-dependencies]
 fedimint-build = { version = "=0.4.0-alpha", path = "../../fedimint-build" }

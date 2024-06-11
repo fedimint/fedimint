@@ -48,7 +48,7 @@ reqwest = { version = "0.12.2", features = ["json", "rustls-tls"], default-featu
 ring = { version = "0.17.8", features = ["wasm32_unknown_unknown_js"] }
 
 [dev-dependencies]
-tracing-test = "0.2.4"
+tracing-test = "0.2.5"
 
 [build-dependencies]
 fedimint-build = { version = "=0.4.0-alpha", path = "../fedimint-build" }
