@@ -74,4 +74,8 @@ where
     ) -> <Locked<DB> as fedimint_core::db::IRawDatabase>::Transaction<'_> {
         self.inner.begin_transaction().await
     }
+
+    fn checkpoint(&self, backup_path: &Path) -> anyhow::Result<()> {
+        self.inner.checkpoint(backup_path)
+    }
 }

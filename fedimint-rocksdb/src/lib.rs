@@ -9,7 +9,7 @@ use std::fmt;
 use std::path::Path;
 use std::str::FromStr;
 
-use anyhow::{bail, Context, Result};
+use anyhow::{anyhow, bail, Context, Result};
 use async_trait::async_trait;
 use fedimint_core::db::{
     IDatabaseTransactionOps, IDatabaseTransactionOpsCore, IRawDatabase, IRawDatabaseTransaction,
@@ -157,6 +157,12 @@ impl IRawDatabase for RocksDb {
 
         rocksdb_tx
     }
+
+    fn checkpoint(&self, backup_path: &Path) -> Result<()> {
+        let checkpoint = rocksdb::checkpoint::Checkpoint::new(&self.0)?;
+        checkpoint.create_checkpoint(backup_path)?;
+        Ok(())
+    }
 }
 
 #[async_trait]
@@ -164,6 +170,10 @@ impl IRawDatabase for RocksDbReadOnly {
     type Transaction<'a> = RocksDbReadOnlyTransaction<'a>;
     async fn begin_transaction<'a>(&'a self) -> RocksDbReadOnlyTransaction<'a> {
         RocksDbReadOnlyTransaction(&self.0)
+    }
+
+    fn checkpoint(&self, _backup_path: &Path) -> Result<()> {
+        Err(anyhow!("Cannot checkpoint a read only database"))
     }
 }
 

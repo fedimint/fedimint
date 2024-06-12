@@ -210,6 +210,7 @@ impl FederationTestBuilder {
             let db = Database::new(MemDatabase::new(), decoders);
             let module_init_registry = self.server_init.clone();
             let subgroup = task_group.make_subgroup();
+            let checkpoint_dir = tempfile::Builder::new().tempdir().unwrap().into_path();
 
             task_group.spawn("fedimintd", |_| async move {
                 consensus::run(
@@ -218,6 +219,7 @@ impl FederationTestBuilder {
                     module_init_registry,
                     &subgroup,
                     fedimint_server::net::api::ApiSecrets::default(),
+                    checkpoint_dir,
                 )
                 .await
                 .expect("Could not initialise consensus");

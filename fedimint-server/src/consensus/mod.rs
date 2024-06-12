@@ -8,6 +8,7 @@ pub mod engine;
 pub mod transaction;
 
 use std::collections::BTreeMap;
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -45,6 +46,7 @@ pub async fn run(
     module_init_registry: ServerModuleInitRegistry,
     task_group: &TaskGroup,
     force_api_secrets: ApiSecrets,
+    data_dir: PathBuf,
 ) -> anyhow::Result<()> {
     cfg.validate_config(&cfg.local.identity, &module_init_registry)?;
 
@@ -147,6 +149,7 @@ pub async fn run(
         last_ci_by_peer,
         modules: module_registry,
         task_group: task_group.clone(),
+        data_dir,
     }
     .run()
     .await?;
