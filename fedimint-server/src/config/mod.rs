@@ -710,21 +710,19 @@ where
 pub fn gen_cert_and_key(
     name: &str,
 ) -> Result<(rustls::Certificate, rustls::PrivateKey), anyhow::Error> {
-    let keypair = rcgen::KeyPair::generate(&rcgen::PKCS_ECDSA_P256_SHA256)?;
+    let keypair = rcgen::KeyPair::generate()?;
     let keypair_ser = keypair.serialize_der();
-    let mut params = rcgen::CertificateParams::new(vec![dns_sanitize(name)]);
+    let mut params = rcgen::CertificateParams::new(vec![dns_sanitize(name)])?;
 
-    params.key_pair = Some(keypair);
-    params.alg = &rcgen::PKCS_ECDSA_P256_SHA256;
     params.is_ca = rcgen::IsCa::NoCa;
     params
         .distinguished_name
         .push(rcgen::DnType::CommonName, dns_sanitize(name));
 
-    let cert = rcgen::Certificate::from_params(params)?;
+    let cert = params.self_signed(&keypair)?;
 
     Ok((
-        rustls::Certificate(cert.serialize_der()?),
+        rustls::Certificate(cert.der().to_vec()),
         rustls::PrivateKey(keypair_ser),
     ))
 }
