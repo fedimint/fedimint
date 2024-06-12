@@ -11,6 +11,7 @@ use bitcoin_hashes::{sha256, Hash};
 use clap::Parser;
 use cln_plugin::{options, Builder, Plugin};
 use cln_rpc::model;
+use cln_rpc::model::requests::SendpayRoute;
 use cln_rpc::model::responses::ListpeerchannelsChannels;
 use cln_rpc::primitives::ShortChannelId;
 use fedimint_core::secp256k1::{All, PublicKey, Secp256k1, SecretKey};
@@ -32,7 +33,7 @@ use ln_gateway::gateway_lnrpc::{
     CreateInvoiceResponse, EmptyRequest, EmptyResponse, GetFundingAddressResponse,
     GetNodeInfoResponse, GetRouteHintsRequest, GetRouteHintsResponse, InterceptHtlcRequest,
     InterceptHtlcResponse, ListActiveChannelsResponse, OpenChannelRequest, PayInvoiceRequest,
-    PayInvoiceResponse,
+    PayInvoiceResponse, PayPrunedInvoiceRequest, PrunedInvoice,
 };
 use rand::rngs::OsRng;
 use rand::Rng;
@@ -233,6 +234,130 @@ impl ClnRpcService {
             })
             .map_err(ClnExtensionError::RpcError)?
     }
+
+    /// Requests a route for a payment. Payment route will be passed to
+    /// `pay_with_route` to initiate the payment.
+    async fn get_route(
+        &self,
+        pruned_invoice: PrunedInvoice,
+        riskfactor: u64,
+    ) -> Result<Vec<SendpayRoute>, ClnExtensionError> {
+        let response = self
+            .rpc_client()
+            .await?
+            .call(cln_rpc::Request::GetRoute(
+                model::requests::GetrouteRequest {
+                    id: PublicKey::from_slice(&pruned_invoice.destination)
+                        .expect("Should parse public key"),
+                    amount_msat: cln_rpc::primitives::Amount::from_msat(pruned_invoice.amount_msat),
+                    riskfactor,
+                    cltv: Some(pruned_invoice.min_final_cltv_delta as u32),
+                    fromid: None,
+                    fuzzpercent: None,
+                    exclude: None,
+                    maxhops: None,
+                },
+            ))
+            .await?;
+
+        match response {
+            cln_rpc::Response::GetRoute(model::responses::GetrouteResponse { route }) => Ok(route
+                .into_iter()
+                .map(|r| SendpayRoute {
+                    amount_msat: r.amount_msat,
+                    id: r.id,
+                    delay: r.delay,
+                    channel: r.channel,
+                })
+                .collect::<Vec<_>>()),
+            _ => Err(ClnExtensionError::RpcWrongResponse),
+        }
+    }
+
+    /// Initiates a payment of a pruned invoice given a payment route. Waits for
+    /// the payment to be successful or return an error.
+    async fn pay_with_route(
+        &self,
+        pruned_invoice: PrunedInvoice,
+        payment_hash: sha256::Hash,
+        route: Vec<SendpayRoute>,
+    ) -> Result<Vec<u8>, ClnExtensionError> {
+        let payment_secret = Some(
+            cln_rpc::primitives::Secret::try_from(pruned_invoice.payment_secret)
+                .map_err(ClnExtensionError::Error)?,
+        );
+        let amount_msat = Some(cln_rpc::primitives::Amount::from_msat(
+            pruned_invoice.amount_msat,
+        ));
+
+        info!(
+            ?payment_hash,
+            ?amount_msat,
+            "Attempting to pay pruned invoice..."
+        );
+
+        let response = self
+            .rpc_client()
+            .await?
+            .call(cln_rpc::Request::SendPay(model::requests::SendpayRequest {
+                amount_msat,
+                bolt11: None,
+                description: None,
+                groupid: None,
+                label: None,
+                localinvreqid: None,
+                partid: None,
+                payment_metadata: None,
+                payment_secret,
+                payment_hash,
+                route,
+            }))
+            .await?;
+
+        let status = match response {
+            cln_rpc::Response::SendPay(model::responses::SendpayResponse { status, .. }) => {
+                Ok(status)
+            }
+            _ => Err(ClnExtensionError::RpcWrongResponse),
+        }?;
+
+        info!(?payment_hash, ?status, "Initiated payment");
+
+        let response = self
+            .rpc_client()
+            .await?
+            .call(cln_rpc::Request::WaitSendPay(
+                model::requests::WaitsendpayRequest {
+                    groupid: None,
+                    partid: None,
+                    timeout: None,
+                    payment_hash,
+                },
+            ))
+            .await?;
+
+        let (preimage, amount_sent_msat) = match response {
+            cln_rpc::Response::WaitSendPay(model::responses::WaitsendpayResponse {
+                payment_preimage,
+                amount_sent_msat,
+                ..
+            }) => Ok((payment_preimage, amount_sent_msat)),
+            _ => Err(ClnExtensionError::RpcWrongResponse),
+        }?;
+
+        info!(
+            ?preimage,
+            ?payment_hash,
+            ?amount_sent_msat,
+            "Finished payment"
+        );
+
+        let preimage = preimage.ok_or_else(|| {
+            error!(?payment_hash, "WaitSendPay did not return a preimage");
+            ClnExtensionError::RpcWrongResponse
+        })?;
+        Ok(preimage.to_vec())
+    }
 }
 
 #[tonic::async_trait]
@@ -418,6 +543,75 @@ impl GatewayLightning for ClnRpcService {
             .map_err(|e| tonic::Status::internal(e.to_string()))?;
 
         Ok(tonic::Response::new(outcome))
+    }
+
+    async fn pay_pruned_invoice(
+        &self,
+        request: tonic::Request<PayPrunedInvoiceRequest>,
+    ) -> Result<tonic::Response<PayInvoiceResponse>, tonic::Status> {
+        let PayPrunedInvoiceRequest {
+            pruned_invoice,
+            max_delay,
+            max_fee_msat,
+        } = request.into_inner();
+
+        let pruned_invoice = pruned_invoice
+            .ok_or_else(|| tonic::Status::internal("Pruned Invoice was not supplied"))?;
+        let payment_hash = sha256::Hash::from_slice(&pruned_invoice.payment_hash)
+            .map_err(|err| tonic::Status::internal(err.to_string()))?;
+
+        // Use a `riskfactor` of 10, which is the default for lightning-pay
+        let route = self
+            .get_route(pruned_invoice.clone(), 10)
+            .await
+            .map_err(|err| tonic::Status::internal(err.to_string()))?;
+
+        // Verify `max_delay` is greater than the worst case timeout for the payment
+        // failure in blocks
+        let delay = route
+            .first()
+            .ok_or_else(|| {
+                tonic::Status::internal(format!(
+                    "Returned route did not have any hops for payment_hash: {payment_hash}"
+                ))
+            })?
+            .delay;
+        if max_delay < delay.into() {
+            return Err(tonic::Status::internal(format!("Worst case timeout for the payment is too long. max_delay: {max_delay} delay: {delay} payment_hash: {payment_hash}")));
+        }
+
+        // Verify the total fee is less than `max_fee_msat`
+        let first_hop_amount = route
+            .first()
+            .ok_or_else(|| {
+                tonic::Status::internal(format!(
+                    "Returned route did not have any hops for payment_hash: {payment_hash}"
+                ))
+            })?
+            .amount_msat;
+        let last_hop_amount = route
+            .last()
+            .ok_or_else(|| {
+                tonic::Status::internal(format!(
+                    "Returned route did not have any hops for payment_hash: {payment_hash}"
+                ))
+            })?
+            .amount_msat;
+        let fee = first_hop_amount - last_hop_amount;
+        if max_fee_msat < fee.msat() {
+            return Err(tonic::Status::internal(format!(
+                "Fee: {} for payment {payment_hash} is greater than max_fee_msat: {max_fee_msat}",
+                fee.msat()
+            )));
+        }
+
+        let preimage = self
+            .pay_with_route(pruned_invoice, payment_hash, route)
+            .await
+            .map_err(|err| tonic::Status::internal(err.to_string()))?;
+        let response = PayInvoiceResponse { preimage };
+
+        Ok(tonic::Response::new(response))
     }
 
     type RouteHtlcsStream = ReceiverStream<Result<InterceptHtlcRequest, Status>>;

@@ -19,6 +19,11 @@ service GatewayLightning {
   rpc PayInvoice(PayInvoiceRequest) returns (PayInvoiceResponse) {}
 
   /*
+   * PayPrunedInvoice attempts to pay a pruned invoice, which is an invoice without a description, using the associated lightning node.
+   */
+  rpc PayPrunedInvoice(PayPrunedInvoiceRequest) returns (PayInvoiceResponse) {}
+
+  /*
    * RouteHtlcs opens a bi-directional stream for the client to receive intercepted
    * HTLCs. `InterceptHtlcRequest` is sent from the server to alert the client that
    * an HTLC has been intercepted and needs to be processed. The client is expected
@@ -82,6 +87,37 @@ message PayInvoiceRequest {
 
   // The hash of the payment
   bytes payment_hash = 4;
+}
+
+message PayPrunedInvoiceRequest {
+  // A BOLT11 invoice without a description
+  PrunedInvoice pruned_invoice = 1;
+
+  // The maximum delay, in blocks, that the payment route can be locked for
+  uint64 max_delay = 2;
+
+  // The maximum fee, in millisats, that will be paid as a lightning routing fee
+  uint64 max_fee_msat = 3;
+}
+
+message PrunedInvoice {
+  // The amount in msats to be paid
+  uint64 amount_msat = 1;
+
+  // The receiver's public key
+  bytes destination = 2;
+
+  // The features the the receiver supports
+  bytes destination_features = 3;
+
+  // The hash of the preimage for this payment
+  bytes payment_hash = 4;
+
+  // The payment secret for this payment
+  bytes payment_secret = 5;
+
+  // Minimum CLTV delta for this payment
+  uint64 min_final_cltv_delta = 6;
 }
 
 message PayInvoiceResponse {
