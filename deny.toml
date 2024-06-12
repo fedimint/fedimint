@@ -110,7 +110,8 @@ allow = [
     "ISC",
     "CC0-1.0",
     "Unlicense",
-    "MITNFA"
+    "MITNFA",
+    "Unicode-3.0",
 ]
 # List of explicitly disallowed licenses
 # See https://spdx.org/licenses/ for list of possible licenses
@@ -148,7 +149,7 @@ exceptions = [
     ], name = "unicode-ident" },
     { allow = [
         "OpenSSL",
-    ], name = "ring" }
+    ], name = "ring" },
 ]
 
 # Some crates don't have (easily) machine readable licensing information,
