@@ -454,18 +454,15 @@ mod fedimint_migration_tests {
         let secret = DerivableSecret::new_root(&BYTE_8, &BYTE_8)
             .child_key(ChildId(0))
             .child_key(ChildId(1));
-        let mut pub_key_shares = BTreeMap::new();
         let mut keys = Tiered::default();
         keys.insert(Amount::from_sats(1000), key_share);
-        pub_key_shares.insert(1.into(), keys);
 
         let mut tbs_pks = Tiered::default();
         tbs_pks.insert(Amount::from_sats(1000), agg_pub_key);
 
         let backup = create_ecash_backup_v0(spendable_note, secret.clone());
 
-        let mint_recovery_state =
-            MintRecoveryState::from_backup(backup, 10, tbs_pks, pub_key_shares, &secret);
+        let mint_recovery_state = MintRecoveryState::from_backup(backup, 10, &tbs_pks, &secret);
 
         MintRecovery::store_finalized(&mut dbtx.to_ref_nc(), true).await;
         dbtx.insert_new_entry(
@@ -486,8 +483,7 @@ mod fedimint_migration_tests {
                 txid: TransactionId::from_slice(&BYTE_32).expect("TransactionId from slice failed"),
                 out_idx: 0,
             },
-            Amount::from_sats(10000),
-            NoteIssuanceRequest::new(secp256k1::SECP256K1, &secret).0,
+            NoteIssuanceRequest::new(Amount::from_sats(10000), secp256k1::SECP256K1, &secret),
         );
         let pending_notes = vec![pending_note];
         let session_count = 0;

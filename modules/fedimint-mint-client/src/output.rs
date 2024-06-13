@@ -17,7 +17,7 @@ use fedimint_core::{Amount, NumPeersExt, OutPoint, PeerId, Tiered};
 use fedimint_derive_secret::{ChildId, DerivableSecret};
 use fedimint_logging::LOG_CLIENT_MODULE_MINT;
 use fedimint_mint_common::endpoint_constants::AWAIT_OUTPUT_OUTCOME_ENDPOINT;
-use fedimint_mint_common::{BlindNonce, MintOutputOutcome, Nonce};
+use fedimint_mint_common::{MintOutputOutcome, Nonce};
 use secp256k1_zkp::{Secp256k1, Signing};
 use serde::{Deserialize, Serialize};
 use tbs::{
@@ -108,7 +108,6 @@ impl State for MintOutputStateMachine {
 /// See [`MintOutputStates`]
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
 pub struct MintOutputStatesCreated {
-    pub(crate) amount: Amount,
     pub(crate) issuance_request: NoteIssuanceRequest,
 }
 
@@ -134,7 +133,7 @@ impl MintOutputStatesCreated {
                     global_context.clone(),
                     common,
                     context.mint_decoder.clone(),
-                    self.amount,
+                    self.issuance_request.amount(),
                     self.issuance_request.blinded_message(),
                     context.peer_tbs_pks.clone(),
                 ),
@@ -228,7 +227,7 @@ impl MintOutputStatesCreated {
         );
 
         let amount_key = tbs_pks
-            .tier(&created.amount)
+            .tier(&created.issuance_request.amount())
             .expect("We obtained this amount from tbs_pks when we created the output");
 
         // this implies that the mint client config's public keys are inconsistent
@@ -249,12 +248,17 @@ impl MintOutputStatesCreated {
 
         assert!(spendable_note.note().verify(*amount_key));
 
-        debug!(target: LOG_CLIENT_MODULE_MINT, amount = %created.amount, note=%spendable_note, "Adding new note from transaction output");
+        debug!(
+            target: LOG_CLIENT_MODULE_MINT,
+            amount = %created.issuance_request.amount(),
+            note=%spendable_note, "Adding new note from transaction output"
+        );
+
         if let Some(note) = dbtx
             .module_tx()
             .insert_entry(
                 &NoteKey {
-                    amount: created.amount,
+                    amount: created.issuance_request.amount(),
                     nonce: spendable_note.nonce(),
                 },
                 &spendable_note.to_undecoded(),
@@ -267,7 +271,7 @@ impl MintOutputStatesCreated {
         MintOutputStateMachine {
             common: old_state.common,
             state: MintOutputStates::Succeeded(MintOutputStatesSucceeded {
-                amount: created.amount,
+                amount: created.issuance_request.amount(),
             }),
         }
     }
@@ -320,10 +324,10 @@ pub struct MintOutputStatesSucceeded {
 }
 
 /// Keeps the data to generate [`SpendableNote`] once the
-/// mint successfully processed the transaction signing the corresponding
-/// [`BlindNonce`].
+/// mint successfully processed the transaction
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Deserialize, Serialize, Encodable, Decodable)]
 pub struct NoteIssuanceRequest {
+    amount: Amount,
     /// Spend key from which the note nonce (corresponding public key) is
     /// derived
     spend_key: KeyPair,
@@ -341,21 +345,23 @@ impl hash::Hash for NoteIssuanceRequest {
 impl NoteIssuanceRequest {
     /// Generate a request session for a single note and returns it plus the
     /// corresponding blinded message
-    pub fn new<C>(ctx: &Secp256k1<C>, secret: &DerivableSecret) -> (NoteIssuanceRequest, BlindNonce)
+    pub fn new<C>(
+        amount: Amount,
+        ctx: &Secp256k1<C>,
+        secret: &DerivableSecret,
+    ) -> NoteIssuanceRequest
     where
         C: Signing,
     {
-        let spend_key = secret.child_key(SPEND_KEY_CHILD_ID).to_secp_key(ctx);
-        let nonce = Nonce(spend_key.public_key());
-        let blinding_key = BlindingKey(secret.child_key(BLINDING_KEY_CHILD_ID).to_bls12_381_key());
-        let blinded_nonce = blind_message(nonce.to_message(), blinding_key);
+        NoteIssuanceRequest {
+            amount,
+            spend_key: secret.child_key(SPEND_KEY_CHILD_ID).to_secp_key(ctx),
+            blinding_key: BlindingKey(secret.child_key(BLINDING_KEY_CHILD_ID).to_bls12_381_key()),
+        }
+    }
 
-        let cr = NoteIssuanceRequest {
-            spend_key,
-            blinding_key,
-        };
-
-        (cr, BlindNonce(blinded_nonce))
+    pub fn amount(&self) -> Amount {
+        self.amount
     }
 
     /// Return nonce of the e-cash note being requested

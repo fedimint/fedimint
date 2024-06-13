@@ -893,20 +893,7 @@ impl MintClientModule {
 
         for (amount, num) in denominations.iter() {
             for _ in 0..num {
-                let (issuance_request, blind_nonce) = self.new_ecash_note(amount, dbtx).await;
-
-                let state_generator = Arc::new(move |txid, out_idx| {
-                    vec![MintClientStateMachines::Output(MintOutputStateMachine {
-                        common: MintOutputCommon {
-                            operation_id,
-                            out_point: OutPoint { txid, out_idx },
-                        },
-                        state: MintOutputStates::Created(MintOutputStatesCreated {
-                            amount,
-                            issuance_request,
-                        }),
-                    })]
-                });
+                let issuance_request = self.new_ecash_note(amount, dbtx).await;
 
                 debug!(
                     %amount,
@@ -914,9 +901,22 @@ impl MintClientModule {
                 );
 
                 outputs.push(ClientOutput {
-                    output: MintOutput::new_v0(amount, blind_nonce),
+                    output: MintOutput::new_v0(
+                        amount,
+                        BlindNonce(issuance_request.blinded_message()),
+                    ),
                     amount,
-                    state_machines: state_generator,
+                    state_machines: Arc::new(move |txid, out_idx| {
+                        vec![MintClientStateMachines::Output(MintOutputStateMachine {
+                            common: MintOutputCommon {
+                                operation_id,
+                                out_point: OutPoint { txid, out_idx },
+                            },
+                            state: MintOutputStates::Created(MintOutputStatesCreated {
+                                issuance_request,
+                            }),
+                        })]
+                    }),
                 });
             }
         }
@@ -1259,9 +1259,12 @@ impl MintClientModule {
         &self,
         amount: Amount,
         dbtx: &mut DatabaseTransaction<'_>,
-    ) -> (NoteIssuanceRequest, BlindNonce) {
-        let secret = self.new_note_secret(amount, dbtx).await;
-        NoteIssuanceRequest::new(&self.secp, &secret)
+    ) -> NoteIssuanceRequest {
+        NoteIssuanceRequest::new(
+            amount,
+            &self.secp,
+            &self.new_note_secret(amount, dbtx).await,
+        )
     }
 
     /// Try to reissue e-cash notes received from a third party to receive them

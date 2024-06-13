@@ -2,8 +2,7 @@ use fedimint_client::module::recovery::{DynModuleBackup, ModuleBackup};
 use fedimint_client::module::ClientDbTxContext;
 use fedimint_core::core::{IntoDynInstance, ModuleInstanceId};
 use fedimint_core::encoding::{Decodable, Encodable};
-use fedimint_core::{Amount, OutPoint, Tiered, TieredMulti};
-use serde::{Deserialize, Serialize};
+use fedimint_core::{OutPoint, Tiered, TieredMulti};
 
 use super::MintClientModule;
 use crate::output::{MintOutputStateMachine, NoteIssuanceRequest};
@@ -11,7 +10,7 @@ use crate::{MintClientStateMachines, NoteIndex, SpendableNote};
 
 pub mod recovery;
 
-#[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Debug, Encodable, Decodable)]
+#[derive(Clone, PartialEq, Eq, Debug, Encodable, Decodable)]
 pub enum EcashBackup {
     V0(EcashBackupV0),
     #[encodable_default]
@@ -24,7 +23,7 @@ pub enum EcashBackup {
 impl EcashBackup {
     pub fn new_v0(
         spendable_notes: TieredMulti<SpendableNote>,
-        pending_notes: Vec<(OutPoint, Amount, NoteIssuanceRequest)>,
+        pending_notes: Vec<(OutPoint, NoteIssuanceRequest)>,
         session_count: u64,
         next_note_idx: Tiered<NoteIndex>,
     ) -> EcashBackup {
@@ -41,10 +40,10 @@ impl EcashBackup {
 ///
 /// Used to speed up and improve privacy of ecash recovery,
 /// by avoiding scanning the whole history.
-#[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Debug, Encodable, Decodable)]
+#[derive(Clone, PartialEq, Eq, Debug, Encodable, Decodable)]
 pub struct EcashBackupV0 {
     spendable_notes: TieredMulti<SpendableNote>,
-    pending_notes: Vec<(OutPoint, Amount, NoteIssuanceRequest)>,
+    pending_notes: Vec<(OutPoint, NoteIssuanceRequest)>,
     session_count: u64,
     next_note_idx: Tiered<NoteIndex>,
 }
@@ -81,13 +80,13 @@ impl MintClientModule {
 
         let notes = Self::get_all_spendable_notes(&mut dbtx_ctx.module_dbtx()).await;
 
-        let pending_notes: Vec<(OutPoint, Amount, NoteIssuanceRequest)> = self.client_ctx.get_own_active_states().await.into_iter()
+        let pending_notes: Vec<(OutPoint, NoteIssuanceRequest)> = self.client_ctx.get_own_active_states().await.into_iter()
             .filter_map(|(state, _active_state)| {
 
                 match state {
                     MintClientStateMachines::Output(MintOutputStateMachine { common, state }) => {
                         match state {
-                            crate::output::MintOutputStates::Created(state) => Some((common.out_point, state.amount, state.issuance_request)),
+                            crate::output::MintOutputStates::Created(state) => Some((common.out_point, state.issuance_request)),
                             crate::output::MintOutputStates::Succeeded(_) => None /* we back these via get_all_spendable_notes */,
                             _ => None,
                         }

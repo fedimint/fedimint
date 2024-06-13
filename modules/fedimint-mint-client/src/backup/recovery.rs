@@ -8,14 +8,12 @@ use fedimint_client::module::{ClientContext, ClientDbTxContext};
 use fedimint_core::core::OperationId;
 use fedimint_core::db::{DatabaseTransaction, IDatabaseTransactionOpsCoreTyped as _};
 use fedimint_core::encoding::{Decodable, Encodable};
-use fedimint_core::{
-    apply, async_trait_maybe_send, Amount, NumPeersExt, OutPoint, PeerId, Tiered, TieredMulti,
-};
+use fedimint_core::{apply, async_trait_maybe_send, Amount, OutPoint, Tiered, TieredMulti};
 use fedimint_derive_secret::DerivableSecret;
 use fedimint_logging::{LOG_CLIENT_MODULE_MINT, LOG_CLIENT_RECOVERY_MINT};
 use fedimint_mint_common::{MintInput, MintOutput, Nonce};
 use serde::{Deserialize, Serialize};
-use tbs::{AggregatePublicKey, BlindedMessage, PublicKeyShare};
+use tbs::{AggregatePublicKey, BlindedMessage};
 use threshold_crypto::G1Affine;
 use tracing::{debug, info, trace, warn};
 
@@ -61,13 +59,7 @@ impl RecoveryFromHistory for MintRecovery {
 
         Ok((
             MintRecovery {
-                state: MintRecoveryState::from_backup(
-                    snapshot,
-                    30,
-                    config.tbs_pks.clone(),
-                    config.peer_tbs_pks.clone(),
-                    &secret,
-                ),
+                state: MintRecoveryState::from_backup(snapshot, 30, &config.tbs_pks, &secret),
                 secret,
             },
             starting_session,
@@ -142,7 +134,7 @@ impl RecoveryFromHistory for MintRecovery {
         let restored_amount = finalized
             .unconfirmed_notes
             .iter()
-            .map(|entry| entry.1)
+            .map(|entry| entry.1.amount())
             .sum::<Amount>()
             + finalized.spendable_notes.total_amount();
 
@@ -182,7 +174,7 @@ impl RecoveryFromHistory for MintRecovery {
             "Restoring unconfigured notes state machines"
         );
 
-        for (out_point, amount, issuance_request) in finalized.unconfirmed_notes {
+        for (out_point, issuance_request) in finalized.unconfirmed_notes {
             let client_ctx = dbtx.client_ctx();
             dbtx.add_state_machines(
                 client_ctx
@@ -193,10 +185,7 @@ impl RecoveryFromHistory for MintRecovery {
                                 out_point,
                             },
                             state: crate::output::MintOutputStates::Created(
-                                MintOutputStatesCreated {
-                                    amount,
-                                    issuance_request,
-                                },
+                                MintOutputStatesCreated { issuance_request },
                             ),
                         },
                     )])
@@ -218,7 +207,7 @@ impl RecoveryFromHistory for MintRecovery {
 pub struct EcashRecoveryFinalState {
     pub spendable_notes: TieredMulti<SpendableNote>,
     /// Unsigned notes
-    pub unconfirmed_notes: Vec<(OutPoint, Amount, NoteIssuanceRequest)>,
+    pub unconfirmed_notes: Vec<(OutPoint, NoteIssuanceRequest)>,
     /// Note index to derive next note in a given amount tier
     pub next_note_idx: Tiered<NoteIndex>,
 }
@@ -251,18 +240,18 @@ impl From<CompressedBlindedMessage> for BlindedMessage {
 /// The caller is responsible for creating it, and then feeding it in order all
 /// valid consensus items from the epoch history between time taken (or even
 /// somewhat before it) and present time.
-#[derive(Clone, Eq, PartialEq, Decodable, Encodable, Serialize, Deserialize)]
+#[derive(Clone, Eq, PartialEq, Decodable, Encodable)]
 pub struct MintRecoveryState {
     spendable_notes: BTreeMap<Nonce, (Amount, SpendableNote)>,
     /// Nonces that we track that are currently spendable.
-    pending_outputs: BTreeMap<Nonce, (OutPoint, Amount, NoteIssuanceRequest)>,
+    pending_outputs: BTreeMap<Nonce, (OutPoint, NoteIssuanceRequest)>,
     /// Next nonces that we expect might soon get used.
     /// Once we see them, we move the tracking to `pending_outputs`
     ///
     /// Note: since looking up nonces is going to be the most common operation
     /// the pool is kept shared (so only one lookup is enough), and
     /// replenishment is done each time a note is consumed.
-    pending_nonces: BTreeMap<CompressedBlindedMessage, (NoteIssuanceRequest, NoteIndex, Amount)>,
+    pending_nonces: BTreeMap<CompressedBlindedMessage, (NoteIssuanceRequest, NoteIndex)>,
     /// Tail of `pending`. `pending_notes` is filled by generating note with
     /// this index and incrementing it.
     next_pending_note_idx: Tiered<NoteIndex>,
@@ -272,14 +261,6 @@ pub struct MintRecoveryState {
     /// issued but not get any partial sigs yet. Very unlikely in real life
     /// scenario, but worth considering.
     last_mined_nonce_idx: Tiered<NoteIndex>,
-    /// Threshold
-    threshold: u64,
-    /// Public key shares for each peer
-    ///
-    /// Used to validate contributed consensus items
-    pub_key_shares: BTreeMap<PeerId, Tiered<PublicKeyShare>>,
-    /// Aggregate public key for each amount tier
-    tbs_pks: Tiered<AggregatePublicKey>,
     /// The number of nonces we look-ahead when looking for mints (per each
     /// amount).
     gap_limit: u64,
@@ -299,11 +280,9 @@ impl MintRecoveryState {
     pub fn from_backup(
         backup: EcashBackupV0,
         gap_limit: u64,
-        tbs_pks: Tiered<AggregatePublicKey>,
-        pub_key_shares: BTreeMap<PeerId, Tiered<PublicKeyShare>>,
+        tbs_pks: &Tiered<AggregatePublicKey>,
         secret: &DerivableSecret,
     ) -> Self {
-        let amount_tiers: Vec<_> = tbs_pks.tiers().copied().collect();
         let mut s = Self {
             spendable_notes: backup
                 .spendable_notes
@@ -313,24 +292,18 @@ impl MintRecoveryState {
             pending_outputs: backup
                 .pending_notes
                 .into_iter()
-                .map(|(outpoint, amount, issuance_request)| {
-                    (
-                        issuance_request.nonce(),
-                        (outpoint, amount, issuance_request),
-                    )
+                .map(|(outpoint, issuance_request)| {
+                    (issuance_request.nonce(), (outpoint, issuance_request))
                 })
                 .collect(),
             pending_nonces: BTreeMap::default(),
             next_pending_note_idx: backup.next_note_idx.clone(),
             last_mined_nonce_idx: backup.next_note_idx,
-            threshold: pub_key_shares.to_num_peers().threshold() as u64,
             gap_limit,
-            tbs_pks,
-            pub_key_shares,
         };
 
-        for amount in amount_tiers {
-            s.fill_initial_pending_nonces(amount, secret);
+        for amount in tbs_pks.tiers() {
+            s.fill_initial_pending_nonces(*amount, secret);
         }
 
         s
@@ -348,15 +321,16 @@ impl MintRecoveryState {
     fn add_next_pending_nonce_in_pending_pool(&mut self, amount: Amount, secret: &DerivableSecret) {
         let note_idx_ref = self.next_pending_note_idx.get_mut_or_default(amount);
 
-        let (note_issuance_request, blind_nonce) = NoteIssuanceRequest::new(
+        let note_issuance_request = NoteIssuanceRequest::new(
+            amount,
             secp256k1_zkp::SECP256K1,
             &MintClientModule::new_note_secret_static(secret, amount, *note_idx_ref),
         );
         assert!(self
             .pending_nonces
             .insert(
-                blind_nonce.0.into(),
-                (note_issuance_request, *note_idx_ref, amount)
+                note_issuance_request.blinded_message().into(),
+                (note_issuance_request, *note_idx_ref)
             )
             .is_none());
 
@@ -404,7 +378,7 @@ impl MintRecoveryState {
         // greedy no matter what and take what we can, and just report
         // anything suspicious.
 
-        if let Some((issuance_request, note_idx, pending_amount)) = self
+        if let Some((issuance_request, note_idx)) = self
             .pending_nonces
             .get(&output.blind_nonce.0.into())
             .copied()
@@ -412,29 +386,25 @@ impl MintRecoveryState {
             // the moment we see our blind nonce in the epoch history, correctly or
             // incorrectly used, we know that we must have used
             // already
-            self.observe_nonce_idx_being_used(pending_amount, note_idx, secret);
+            self.observe_nonce_idx_being_used(issuance_request.amount(), note_idx, secret);
 
-            if pending_amount == output.amount {
+            if issuance_request.amount() == output.amount {
                 assert!(self
                     .pending_nonces
                     .remove(&output.blind_nonce.0.into())
                     .is_some());
 
-                self.pending_outputs.insert(
-                    issuance_request.nonce(),
-                    (out_point, output.amount, issuance_request),
-                );
+                self.pending_outputs
+                    .insert(issuance_request.nonce(), (out_point, issuance_request));
             } else {
                 // put it back, incorrect amount
-                self.pending_nonces.insert(
-                    output.blind_nonce.0.into(),
-                    (issuance_request, note_idx, pending_amount),
-                );
+                self.pending_nonces
+                    .insert(output.blind_nonce.0.into(), (issuance_request, note_idx));
 
                 warn!(
                     output = ?out_point,
                     blind_nonce = ?output.blind_nonce.0,
-                    expected_amount = %pending_amount,
+                    expected_amount = %issuance_request.amount(),
                     found_amount = %output.amount,
                     "Transaction output contains blind nonce that looks like ours but is of the wrong amount. Ignoring."
                 );
