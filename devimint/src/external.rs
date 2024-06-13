@@ -837,12 +837,36 @@ impl Esplora {
             "--jsonrpc-import", // Workaround for incompatible on-disk format
         );
         let process = process_mgr.spawn_daemon("esplora", cmd).await?;
+
+        Self::wait_for_ready(process_mgr).await?;
         debug!(target: LOG_DEVIMINT, "Esplora ready");
 
         Ok(Self {
             _bitcoind: bitcoind,
             _process: process,
         })
+    }
+
+    /// Wait until the server is able to respond to requests.
+    async fn wait_for_ready(process_mgr: &ProcessManager) -> Result<()> {
+        let client = esplora_client::Builder::new(&format!(
+            "http://localhost:{}",
+            process_mgr.globals.FM_PORT_ESPLORA
+        ))
+        .build_async()
+        .expect("esplora client build failed");
+
+        poll("esplora server ready", || async {
+            client
+                .get_fee_estimates()
+                .await
+                .map_err(|e| ControlFlow::Continue(anyhow::anyhow!(e)))?;
+
+            Ok(())
+        })
+        .await?;
+
+        Ok(())
     }
 }
 
