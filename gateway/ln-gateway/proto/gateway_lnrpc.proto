@@ -91,7 +91,7 @@ message PayInvoiceResponse {
 
 message InterceptHtlcRequest {
   // The HTLC payment hash.
-  // Value is not guaranteed to be unique per intercepted HTLC
+  // HTLCs corresponding to the same payment will have the same payment hash.
   bytes payment_hash = 1;
 
   // The incoming HTLC amount in millisatoshi.
@@ -162,6 +162,10 @@ message InterceptHtlcResponse {
 
   // The index of the incoming htlc in the incoming channel
   uint64 htlc_id = 5;
+
+  // The HTLC payment hash.
+  // HTLCs corresponding to the same payment will have the same payment hash.
+  bytes payment_hash = 6;
 }
 
 message GetRouteHintsResponse {

@@ -307,6 +307,7 @@ impl GatewayClientModuleV2 {
 
     pub async fn relay_incoming_htlc(
         &self,
+        payment_hash: bitcoin_hashes::sha256::Hash,
         incoming_chan_id: u64,
         htlc_id: u64,
         contract: IncomingContract,
@@ -336,6 +337,7 @@ impl GatewayClientModuleV2 {
                     GatewayClientStateMachinesV2::Complete(CompleteStateMachine {
                         common: CompleteSMCommon {
                             operation_id,
+                            payment_hash,
                             incoming_chan_id,
                             htlc_id,
                         },

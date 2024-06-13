@@ -664,6 +664,10 @@ impl Gateway {
                         break;
                     }
 
+                    let payment_hash =
+                        bitcoin_hashes::sha256::Hash::from_slice(&htlc_request.payment_hash)
+                            .expect("32 bytes");
+
                     // If `payment_hash` has been registered as a LNv2 payment, we try to complete
                     // the payment by getting the preimage from the federation
                     // using the LNv2 protocol. If the `payment_hash` is not registered,
@@ -671,11 +675,7 @@ impl Gateway {
                     // a Fedimint.
                     if let Ok((contract, client)) = self
                         .get_registered_incoming_contract_and_client_v2(
-                            htlc_request
-                                .payment_hash
-                                .clone()
-                                .try_into()
-                                .expect("32 bytes"),
+                            payment_hash.to_byte_array(),
                             htlc_request.incoming_amount_msat,
                         )
                         .await
@@ -683,6 +683,7 @@ impl Gateway {
                         if let Err(error) = client
                             .get_first_module::<GatewayClientModuleV2>()
                             .relay_incoming_htlc(
+                                payment_hash,
                                 htlc_request.incoming_chan_id,
                                 htlc_request.htlc_id,
                                 contract,
@@ -743,6 +744,7 @@ impl Gateway {
 
                     let outcome = InterceptHtlcResponse {
                         action: Some(Action::Forward(Forward {})),
+                        payment_hash: htlc_request.payment_hash,
                         incoming_chan_id: htlc_request.incoming_chan_id,
                         htlc_id: htlc_request.htlc_id,
                     };

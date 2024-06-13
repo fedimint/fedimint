@@ -1,5 +1,6 @@
 use std::time::Duration;
 
+use bitcoin_hashes::Hash;
 use fedimint_client::sm::{State, StateTransition};
 use fedimint_client::DynGlobalClientContext;
 use fedimint_core::core::OperationId;
@@ -49,6 +50,7 @@ pub enum GatewayCompleteStates {
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
 pub struct GatewayCompleteCommon {
     pub operation_id: OperationId,
+    pub payment_hash: bitcoin_hashes::sha256::Hash,
     pub incoming_chan_id: u64,
     pub htlc_id: u64,
 }
@@ -190,11 +192,13 @@ impl CompleteHtlcState {
                             action: Some(Action::Settle(Settle {
                                 preimage: preimage.0.to_vec(),
                             })),
+                            payment_hash: common.payment_hash.to_byte_array().to_vec(),
                             incoming_chan_id: common.incoming_chan_id,
                             htlc_id: common.htlc_id,
                         },
                         HtlcOutcome::Failure(reason) => InterceptHtlcResponse {
                             action: Some(Action::Cancel(Cancel { reason })),
+                            payment_hash: common.payment_hash.to_byte_array().to_vec(),
                             incoming_chan_id: common.incoming_chan_id,
                             htlc_id: common.htlc_id,
                         },

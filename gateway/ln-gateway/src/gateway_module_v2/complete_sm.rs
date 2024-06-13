@@ -1,5 +1,6 @@
 use std::time::Duration;
 
+use bitcoin_hashes::Hash;
 use fedimint_client::sm::{State, StateTransition};
 use fedimint_client::DynGlobalClientContext;
 use fedimint_core::core::OperationId;
@@ -44,6 +45,7 @@ impl CompleteStateMachine {
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
 pub struct CompleteSMCommon {
     pub operation_id: OperationId,
+    pub payment_hash: bitcoin_hashes::sha256::Hash,
     pub incoming_chan_id: u64,
     pub htlc_id: u64,
 }
@@ -73,6 +75,7 @@ impl State for CompleteStateMachine {
             CompleteSMState::Completing(result) => vec![StateTransition::new(
                 Self::await_completion(
                     context.clone(),
+                    self.common.payment_hash,
                     self.common.incoming_chan_id,
                     self.common.htlc_id,
                     result.clone(),
@@ -125,6 +128,7 @@ impl CompleteStateMachine {
 
     async fn await_completion(
         context: GatewayClientContextV2,
+        payment_hash: bitcoin_hashes::sha256::Hash,
         incoming_chan_id: u64,
         htlc_id: u64,
         result: Result<[u8; 32], String>,
@@ -138,6 +142,7 @@ impl CompleteStateMachine {
 
         let intercept_htlc_response = InterceptHtlcResponse {
             action: Some(action),
+            payment_hash: payment_hash.to_byte_array().to_vec(),
             incoming_chan_id,
             htlc_id,
         };

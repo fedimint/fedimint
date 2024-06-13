@@ -578,6 +578,7 @@ impl ILnRpcClient for GatewayLndClient {
         if let Some(lnd_sender) = self.lnd_sender.clone() {
             let InterceptHtlcResponse {
                 action,
+                payment_hash: _,
                 incoming_chan_id,
                 htlc_id,
             } = htlc;
