@@ -95,6 +95,8 @@ impl ConsensusEngine {
     pub async fn run_single_guardian(&self, task_handle: TaskHandle) -> anyhow::Result<()> {
         assert_eq!(self.num_peers(), NumPeers::from(1));
 
+        self.create_checkpoint_directory()?;
+
         while !task_handle.is_shutting_down() {
             let session_index = self.get_finished_session_count().await;
 
@@ -165,6 +167,8 @@ impl ConsensusEngine {
             Arc::clone(&self.connection_status_channels),
         )
         .await;
+
+        self.create_checkpoint_directory()?;
 
         while !task_handle.is_shutting_down() {
             let session_index = self.get_finished_session_count().await;
@@ -480,6 +484,18 @@ impl ConsensusEngine {
             .expect("This is the only place where we write to this key");
     }
 
+    /// Creates the directory within the data directory for storing the database
+    /// checkpoints.
+    fn create_checkpoint_directory(&self) -> anyhow::Result<()> {
+        let checkpoint_dir = self.data_dir.join("db_checkpoints");
+
+        if !checkpoint_dir.exists() {
+            fs::create_dir_all(&checkpoint_dir)?;
+        }
+
+        Ok(())
+    }
+
     /// Creates a backup of the database in the checkpoint directory. The
     /// frequency of the checkpoints is controlled by
     /// `FM_DB_CHECKPOINT_FREQ_ENV`. These checkpoints can be used to
@@ -493,64 +509,54 @@ impl ConsensusEngine {
 
         if session_index % checkpoint_frequency == 0 {
             let checkpoint_dir = self.data_dir.join("db_checkpoints");
-
-            if !checkpoint_dir.exists() {
-                if let Err(e) = fs::create_dir_all(&checkpoint_dir) {
-                    warn!(target: LOG_CONSENSUS, ?checkpoint_dir, ?e, "Could not create checkpoint directory");
-                    return;
-                }
-            }
-
             let session_checkpoint_dir = checkpoint_dir.join(format!("{session_index}"));
 
-            match self.db.checkpoint(&session_checkpoint_dir) {
-                Ok(()) => {
-                    info!(target: LOG_CONSENSUS, ?session_checkpoint_dir, ?session_index, "Created db checkpoint");
-                }
-                Err(e) => {
-                    warn!(target: LOG_CONSENSUS, ?session_checkpoint_dir, ?session_index, ?e, "Could not create db checkpoint");
+            {
+                let _timing /* logs on drop */ = timing::TimeReporter::new("database-checkpoint").info();
+                match self.db.checkpoint(&session_checkpoint_dir) {
+                    Ok(()) => {
+                        info!(target: LOG_CONSENSUS, ?session_checkpoint_dir, ?session_index, "Created db checkpoint");
+                    }
+                    Err(e) => {
+                        warn!(target: LOG_CONSENSUS, ?session_checkpoint_dir, ?session_index, ?e, "Could not create db checkpoint");
+                    }
                 }
             }
 
-            // Check if any old checkpoints need to be cleaned up
-            match Self::delete_old_database_checkpoints(session_index, &checkpoint_dir) {
-                Ok(session_threshold_index) => {
-                    info!(target: LOG_CONSENSUS, ?session_threshold_index, "Deleted all checkpoints before the threshold");
-                }
-                Err(e) => {
+            {
+                // Check if any old checkpoint need to be cleaned up
+                let _timing /* logs on drop */ = timing::TimeReporter::new("remove-database-checkpoint").info();
+                if let Err(e) =
+                    Self::delete_old_database_checkpoints(session_index, &checkpoint_dir)
+                {
                     warn!(target: LOG_CONSENSUS, ?e, "Could not delete old checkpoints");
                 }
             }
         }
     }
 
-    /// Iterates through the db checkpoint directory and deletes any checkpoint
-    /// that is less than `session_index` - `session_diff`. By default,
-    /// checkpoints that are older than 50 sessions are deleted.
+    /// Iterates through the db checkpoint directory and deletes the checkpoint
+    /// equal to `session_index` - `session_diff`.
     fn delete_old_database_checkpoints(
         session_index: u64,
         checkpoint_dir: &Path,
-    ) -> anyhow::Result<u64> {
-        // By default, cleanup any checkpoint that is older than 50 sessions
+    ) -> anyhow::Result<()> {
+        // By default, cleanup the checkpoint that is 50 sessions old
         let session_diff: u64 = env::var(FM_DB_CHECKPOINT_SESSION_DIFFERENCE_ENV)
             .unwrap_or(50.to_string())
             .parse()
             .expect("FM_DB_CHECKPOINT_SESSION_DIFFERENCE var is invalid");
-        let session_threshold_index = session_index.saturating_sub(session_diff);
-
-        for entry in fs::read_dir(checkpoint_dir)? {
-            let entry = entry?;
-            let session_idx: u64 = entry
-                .file_name()
-                .into_string()
-                .map_err(|_| anyhow!("Could not convert OsString to String"))?
-                .parse()?;
-            if session_idx < session_threshold_index {
-                fs::remove_dir_all(entry.path())?;
-            }
+        if session_diff > session_index {
+            return Ok(());
         }
 
-        Ok(session_threshold_index)
+        let delete_session_index = session_index - session_diff;
+        let checkpoint_to_delete = checkpoint_dir.join(delete_session_index.to_string());
+        if checkpoint_to_delete.exists() {
+            fs::remove_dir_all(checkpoint_to_delete)?;
+        }
+
+        Ok(())
     }
 
     #[instrument(target = "fm::consensus", skip(self, item), level = "info")]
