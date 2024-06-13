@@ -17,10 +17,7 @@ axum = { version = "0.7.5", features = ["tracing"] }
 bitcoincore-rpc = { workspace = true }
 clap = { version = "4.5.7", features = ["derive", "env", "std", "help", "usage", "error-context", "suggestions"], default-features = false }
 cln-rpc = { workspace = true }
-esplora-client = { version = "0.6.0", default-features = false, features = [
-    "async",
-    "async-https-rustls",
-] }
+esplora-client = { workspace = true }
 fedimint-aead = { path = "../crypto/aead" }
 fedimintd = { path = "../fedimintd" }
 fedimint-core = { workspace = true }
