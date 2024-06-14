@@ -11,9 +11,10 @@ use secp256k1::{KeyPair, PublicKey};
 use serde::Serialize;
 use strum_macros::EnumIter;
 
+use crate::pay::lightningpay::LightningPayStates;
 use crate::pay::{
     LightningPayCommon, LightningPayFunded, LightningPayRefund, LightningPayStateMachine,
-    LightningPayStates, PayInvoicePayload,
+    PayInvoicePayload,
 };
 use crate::receive::{
     LightningReceiveConfirmedInvoice, LightningReceiveStateMachine, LightningReceiveStates,

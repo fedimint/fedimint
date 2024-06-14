@@ -96,9 +96,10 @@ use crate::db::PaymentResultPrefix;
 use crate::incoming::{
     FundingOfferState, IncomingSmCommon, IncomingSmStates, IncomingStateMachine,
 };
+use crate::pay::lightningpay::LightningPayStates;
 use crate::pay::{
     GatewayPayError, LightningPayCommon, LightningPayCreatedOutgoingLnContract,
-    LightningPayStateMachine, LightningPayStates,
+    LightningPayStateMachine,
 };
 use crate::receive::{
     get_incoming_contract, LightningReceiveError, LightningReceiveStateMachine,
