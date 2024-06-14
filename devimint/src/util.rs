@@ -148,14 +148,12 @@ impl Drop for ProcessHandleInner {
         }
 
         block_in_place(|| {
-            block_on(async {
-                if let Err(err) = self.terminate().await {
-                    warn!(target: LOG_DEVIMINT,
+            if let Err(err) = block_on(self.terminate()) {
+                warn!(target: LOG_DEVIMINT,
                         name=%self.name,
                         %err,
                         "Error terminating process on drop");
-                }
-            });
+            }
         });
     }
 }
