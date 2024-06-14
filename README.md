@@ -10,11 +10,11 @@
 
 <p align="center">
   <a href="https://github.com/fedimint/fedimint/actions/workflows/ci-nix.yml">
-      <img src="https://github.com/fedimint/fedimint/actions/workflows/ci-nix.yml/badge.svg" alt="Github Actions CI Build Status">
+      <img src="https://github.com/fedimint/fedimint/actions/workflows/ci-nix.yml/badge.svg" alt="GitHub Actions CI Build Status">
   </a>
-  <a href="https://chat.fedimint.org"><img alt="Chat for developers on Discord" src="https://img.shields.io/discord/990354215060795454?label=dev%20chat"></a>
+  <a href="https://chat.fedimint.org"><img alt="Developer Discord Chat" src="https://img.shields.io/discord/990354215060795454?label=dev%20chat"></a>
   <a href="https://github.com/fedimint/fedimint/discussions">
-    <img src="https://img.shields.io/badge/commmunity-discussion-blue" alt="github discussion">
+    <img src="https://img.shields.io/badge/community-discussion-blue" alt="GitHub Discussion">
   </a>
   <a href="https://docs.fedimint.org">
     <img src="https://img.shields.io/static/v1?label=Docs&message=master&color=007ec6&logo=GitBook&logoColor=ffffff" alt="docs built from master">
@@ -26,21 +26,21 @@
 
 > **Fedimint is alpha software released under an [MIT License](https://github.com/fedimint/fedimint/blob/master/LICENSE). This means that the software here is provided "as is", without warranty of any kind. We are a small development team with limited resources. If you experience a loss of funds due to a bug in this software, we may not have the means to help you recover the funds. We recommend you run Fedimint on testnets like mutinynet, or on mainnet with small amounts of money. You can find our latest release [here](https://github.com/fedimint/fedimint/releases/latest).**
 
-Fedimint ships with 3 default modules: [Bitcoin](https://github.com/bitcoin/bitcoin), [Lightning](https://github.com/lightning/bolts), and [Chaumian Ecash](https://en.wikipedia.org/wiki/Ecash), for out-of-the-box best practices for private and trust-minimized payments. [You can write custom modules](https://github.com/fedimint/fedimint-custom-modules-example) that define further consensus items and transaction types leveraging the payments modules to build your own federated applications.
+Fedimint ships with 3 default modules - [Bitcoin](https://github.com/bitcoin/bitcoin), [Lightning](https://github.com/lightning/bolts), and [Chaumian Ecash](https://en.wikipedia.org/wiki/Ecash) - for out-of-the-box best practices for private and trust-minimized payments. [You can write custom modules](https://github.com/fedimint/fedimint-custom-modules-example) that define further consensus items and transaction types leveraging the payments modules to build your own federated applications.
 
-The Fedimint Developer Discord is the best place to get help and ask questions. [Join the Discord](https://discord.gg/cEVEmqCgWG) and say hi! We are extremely active and work to onboard developers or all skill levels to Fedimint and associated open-source Bitcoin projects. Fedimint touches many different areas of Bitcoin development, so there is something for everyone. See below for more information on how to get involved.
+The Fedimint Developer Discord is the best place to get help and ask questions. [Join the Discord](https://discord.gg/cEVEmqCgWG) and say hi! We are extremely active and work to onboard developers of all skill levels to Fedimint and associated open-source Bitcoin projects. Fedimint touches many different areas of Bitcoin development, so there is something for everyone. See below for more information on how to get involved.
 
 ## Running your own Fedimint
 
 It's easy to set up and run your own federations. Fedimint is designed to be [Byzantine Fault Tolerant](https://en.wikipedia.org/wiki/Byzantine_fault) so is resilient to `m` malicious nodes in a federation of `3m + 1` nodes. If you run a federation of 4 guardians you are resilient to 1 malicious guardian, if you run a federation of 7 guardians you are resilient to 2 guardians, etc.
 
-[Fedimint's 0.2 release](https://github.com/fedimint/fedimint/releases/latest) can also be run in "solo mode" with a single guardian. This is useful for testing and development, but is not recommended for production use.
+Fedimint can also be run in "solo mode" with a single guardian. This is useful for testing and development, but is not recommended for production use.
 
-To do lightning payments, Fedimint requires a [Lightning Gateway](https://github.com/fedimint/fedimint/blob/master/docs/gateway.md): a user of the federation that accepts ecash in exchange for sending/receiving lightning payments. The Lightning Gateway is not a guardian and acts as an untrusted economic actor serving the federation.
+To do lightning payments, Fedimint requires a [Lightning Gateway](https://github.com/fedimint/fedimint/blob/master/docs/gateway.md): a user of the federation that is willing to swap ecash in exchange for sending/receiving lightning payments. The Lightning Gateway is not a guardian and acts as an untrusted economic actor serving the federation.
 
 ### Running Fedimint on Mutinynet
 
-See the [Fedimint Mutinynet Setup Guide](./docs/setup-docs.md). You can modify the configuration options to deploy it on.
+See the [Fedimint Mutinynet Setup Guide](./docs/setup-docs.md). You can modify the configuration options to deploy it with.
 
 ## For Developers
 
@@ -49,9 +49,9 @@ We are actively looking for developers to help build Fedimint and associated ope
 - [The Fedimint Developer Discord](https://discord.gg/cEVEmqCgWG): the best place to get help and ask questions.
 - [Fedimint Technical Reference Documentation](https://docs.fedimint.org)
 - [Fedimint Contributor Calendar](https://calendar.google.com/calendar/u/0/embed?src=fedimintcalendar@gmail.com): This calendar contains all the developer calls and events.
-- [Fedimint Developer Calls](https://meet.jit.si/fedimintdevcall): We have developer calls every monday at 4PM UTC to review PRs and discuss current development priorities. As a new developer, this is a great place to find good first issues and mentorship from the core team on how to get started contributing to Fedimint.
-- [PR Review Club](https://meet.jit.si/fedimintdevcall): We have PR review calls every tuesday at 4PM UTC.
-- [Weekly Deep Dive](https://meet.jit.si/fedimintdevcall): We have a deep dive every thursday at 4PM UTC to discuss technical topics relating to Fedimint in depth: cryptography, Rust programming, consensus, networking, etc. This is a great place to learn about the internals of Fedimint and Bitcoin. We normally plan these calls based off requests from contributors on aspects of Fedimint they want to learn more about, so please reach out if you have a topic you want to learn more about.
+- [Fedimint Developer Calls](https://meet.jit.si/fedimintdevcall): We have developer calls every Monday at 4PM UTC to review PRs and discuss current development priorities. As a new developer, this is a great place to find good first issues and mentorship from the core team on how to get started contributing to Fedimint.
+- [PR Review Club](https://meet.jit.si/fedimintdevcall): We have PR review calls every Tuesday at 4PM UTC.
+- [Weekly Deep Dive](https://meet.jit.si/fedimintdevcall): We have a deep dive every Thursday at 4PM UTC to discuss technical topics relating to Fedimint in depth: cryptography, Rust programming, consensus, networking, etc. This is a great place to learn about the internals of Fedimint and Bitcoin. We normally plan these calls based off requests from contributors on aspects of Fedimint they want to learn more about, so please reach out if you have a topic you want to learn more about.
 
 ### Fedimint Repos and Projects to Contribute To
 
@@ -68,7 +68,7 @@ Fedimint is a Rust project and uses the [Nix package manager](https://nixos.org/
 
 We have a detailed tutorial on how to use the cli to send/receive ecash, lightning payments, and perform other developer operations in the [Fedimint Developer Tutorial](https://github.com/fedimint/fedimint/blob/master/docs/tutorial.md).
 
-Fedimint's developer environment and rust build pipeline is managed through Nix flakebox (https://github.com/rustshop/flakebox). To get started, install Nix.
+Fedimint's developer environment and rust build pipeline is managed through [Nix Flakebox](https://github.com/rustshop/flakebox). To get started, install Nix.
 
 ```bash
 curl --proto '=https' --tlsv1.2 -sSf -L https://install.determinate.systems/nix | sh -s -- install
