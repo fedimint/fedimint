@@ -1129,6 +1129,7 @@ dependencies = [
  "bitcoincore-rpc",
  "clap",
  "cln-rpc",
+ "esplora-client",
  "fedimint-aead",
  "fedimint-api-client",
  "fedimint-bitcoind",
