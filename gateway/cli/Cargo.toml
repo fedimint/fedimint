@@ -26,7 +26,7 @@ clap = { version = "4.5.7", features = ["derive", "std", "help", "usage", "error
 ln-gateway = { version = "=0.4.0-alpha", package = "fedimint-ln-gateway", path= "../ln-gateway" }
 fedimint-core = { workspace = true }
 fedimint-logging = { workspace = true }
-reqwest = { version = "0.11.26", features = [ "json", "rustls-tls" ], default-features = false }
+reqwest = { workspace = true }
 serde = { workspace = true}
 serde_json = { workspace = true }
 tokio = {version = "1.38", features = ["full"]}
