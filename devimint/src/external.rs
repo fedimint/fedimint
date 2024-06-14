@@ -313,14 +313,11 @@ impl LightningdProcessHandle {
 
 impl Drop for LightningdProcessHandle {
     fn drop(&mut self) {
-        // cln don't like to be killed and may leave running processes. So let's
-        // terminate it in a controlled way
+        // Terminate cln in a controlled way, otherwise it may leave running processes.
         block_in_place(|| {
-            block_on(async {
-                if let Err(e) = self.terminate().await {
-                    warn!(target: LOG_DEVIMINT, "failed to terminate lightningd: {e:?}");
-                }
-            });
+            if let Err(e) = block_on(self.terminate()) {
+                warn!(target: LOG_DEVIMINT, "failed to terminate lightningd: {e:?}");
+            }
         });
     }
 }
