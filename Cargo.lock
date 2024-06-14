@@ -1300,7 +1300,7 @@ dependencies = [
  "bitcoin 0.30.2",
  "bitcoin-internals",
  "log",
- "reqwest 0.11.26",
+ "reqwest 0.11.27",
  "serde",
 ]
 
@@ -1466,7 +1466,7 @@ dependencies = [
  "itertools 0.12.1",
  "lightning-invoice",
  "rand",
- "reqwest 0.11.26",
+ "reqwest 0.11.27",
  "serde",
  "serde_json",
  "thiserror",
@@ -1760,7 +1760,7 @@ dependencies = [
  "fedimint-core",
  "fedimint-ln-gateway",
  "fedimint-logging",
- "reqwest 0.11.26",
+ "reqwest 0.11.27",
  "serde",
  "serde_json",
  "tokio",
@@ -1796,7 +1796,7 @@ dependencies = [
  "lightning-invoice",
  "lnurl-rs",
  "rand",
- "reqwest 0.11.26",
+ "reqwest 0.11.27",
  "secp256k1 0.27.0",
  "serde",
  "serde_json",
@@ -1872,7 +1872,7 @@ dependencies = [
  "lightning-invoice",
  "prost",
  "rand",
- "reqwest 0.11.26",
+ "reqwest 0.11.27",
  "secp256k1-zkp",
  "serde",
  "serde_json",
@@ -1962,7 +1962,7 @@ dependencies = [
  "itertools 0.12.1",
  "lightning-invoice",
  "rand",
- "reqwest 0.11.26",
+ "reqwest 0.11.27",
  "secp256k1 0.27.0",
  "serde",
  "serde_json",
@@ -3890,7 +3890,7 @@ dependencies = [
  "bitcoin 0.30.2",
  "cbc",
  "email_address",
- "reqwest 0.11.26",
+ "reqwest 0.11.27",
  "serde",
  "serde_json",
  "url",
@@ -4678,9 +4678,9 @@ checksum = "c08c74e62047bb2de4ff487b251e4a92e24f48745648451635cec7d591162d9f"
 
 [[package]]
 name = "reqwest"
-version = "0.11.26"
+version = "0.11.27"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "78bf93c4af7a8bb7d879d51cebe797356ff10ae8516ace542b5182d9dcac10b2"
+checksum = "dd67538700a17451e7cba03ac727fb961abb7607553461627b97de0b89cf4a62"
 dependencies = [
  "base64 0.21.7",
  "bytes",
