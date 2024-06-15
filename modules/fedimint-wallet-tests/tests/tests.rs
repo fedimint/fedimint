@@ -46,38 +46,48 @@ async fn peg_in<'a>(
     client: &'a ClientHandleArc,
     bitcoin: &dyn BitcoinTest,
     finality_delay: u64,
+    num_peg_ins: u64,
 ) -> anyhow::Result<BoxStream<'a, Amount>> {
     let valid_until = time::now() + PEG_IN_TIMEOUT;
 
     let mut balance_sub = client.subscribe_balance_changes().await;
-    assert_eq!(balance_sub.ok().await?, sats(0));
+    let initial_balance = balance_sub.ok().await?;
 
     let wallet_module = &client.get_first_module::<WalletClientModule>();
-    let (op, address) = wallet_module.get_deposit_address(valid_until, ()).await?;
-    info!(?address, "Peg-in address generated");
-    let (_proof, tx) = bitcoin
-        .send_and_mine_block(
-            &address,
-            bsats(PEG_IN_AMOUNT_SATS)
-                + bsats(wallet_module.get_fee_consensus().peg_in_abs.msats / 1000),
-        )
-        .await;
-    let height = bitcoin
-        .get_tx_block_height(&tx.txid())
-        .await
-        .context("expected tx to be mined")?;
-    info!(?height, ?tx, "Peg-in transaction mined");
-    let sub = wallet_module.subscribe_deposit_updates(op).await?;
-    let mut sub = sub.into_stream();
-    assert_eq!(sub.ok().await?, DepositState::WaitingForTransaction);
-    assert_matches!(sub.ok().await?, DepositState::WaitingForConfirmation { .. });
 
-    bitcoin.mine_blocks(finality_delay).await;
-    assert!(matches!(sub.ok().await?, DepositState::Confirmed(_)));
-    assert!(matches!(sub.ok().await?, DepositState::Claimed(_)));
-    assert_eq!(client.get_balance().await, sats(PEG_IN_AMOUNT_SATS));
-    assert_eq!(balance_sub.ok().await?, sats(PEG_IN_AMOUNT_SATS));
-    info!(?height, ?tx, "Peg-in transaction claimed");
+    for i in 1..=num_peg_ins {
+        let (op, address) = wallet_module.get_deposit_address(valid_until, ()).await?;
+        info!(?address, "Peg-in address generated");
+        let (_proof, tx) = bitcoin
+            .send_and_mine_block(
+                &address,
+                bsats(PEG_IN_AMOUNT_SATS)
+                    + bsats(wallet_module.get_fee_consensus().peg_in_abs.msats / 1000),
+            )
+            .await;
+        let height = bitcoin
+            .get_tx_block_height(&tx.txid())
+            .await
+            .context("expected tx to be mined")?;
+        info!(?height, ?tx, "Peg-in transaction mined");
+        let sub = wallet_module.subscribe_deposit_updates(op).await?;
+        let mut sub = sub.into_stream();
+        assert_eq!(sub.ok().await?, DepositState::WaitingForTransaction);
+        assert_matches!(sub.ok().await?, DepositState::WaitingForConfirmation { .. });
+
+        bitcoin.mine_blocks(finality_delay).await;
+        assert!(matches!(sub.ok().await?, DepositState::Confirmed(_)));
+        assert!(matches!(sub.ok().await?, DepositState::Claimed(_)));
+        assert_eq!(
+            client.get_balance().await,
+            sats(PEG_IN_AMOUNT_SATS) * i + initial_balance
+        );
+        assert_eq!(
+            balance_sub.ok().await?,
+            sats(PEG_IN_AMOUNT_SATS) * i + initial_balance
+        );
+        info!(?height, ?tx, "Peg-in transaction claimed");
+    }
 
     Ok(balance_sub)
 }
@@ -158,7 +168,7 @@ async fn on_chain_peg_in_and_peg_out_happy_case() -> anyhow::Result<()> {
     bitcoin.mine_blocks(finality_delay).await;
     await_consensus_to_catch_up(&client, 1).await?;
 
-    let mut balance_sub = peg_in(&client, bitcoin.as_ref(), finality_delay).await?;
+    let mut balance_sub = peg_in(&client, bitcoin.as_ref(), finality_delay, 1).await?;
 
     info!("Peg-in finished for test on_chain_peg_in_and_peg_out_happy_case");
     // Peg-out test, requires block to recognize change UTXOs
@@ -218,7 +228,7 @@ async fn peg_out_fail_refund() -> anyhow::Result<()> {
     bitcoin.mine_blocks(finality_delay).await;
     await_consensus_to_catch_up(&client, 1).await?;
 
-    let mut balance_sub = peg_in(&client, bitcoin.as_ref(), finality_delay).await?;
+    let mut balance_sub = peg_in(&client, bitcoin.as_ref(), finality_delay, 1).await?;
 
     info!("Peg-in finished for test peg_out_fail_refund");
     // Peg-out test, requires block to recognize change UTXOs
@@ -266,7 +276,8 @@ async fn peg_outs_support_rbf() -> anyhow::Result<()> {
     bitcoin.mine_blocks(finality_delay).await;
     await_consensus_to_catch_up(&client, 1).await?;
 
-    let mut balance_sub = peg_in(&client, bitcoin.as_ref(), finality_delay).await?;
+    let num_peg_ins = 2;
+    let mut balance_sub = peg_in(&client, bitcoin.as_ref(), finality_delay, num_peg_ins).await?;
 
     info!("Peg-in finished for test peg_outs_support_rbf");
     let address = checked_address_to_unchecked_address(&bitcoin.get_new_address().await);
@@ -291,7 +302,7 @@ async fn peg_outs_support_rbf() -> anyhow::Result<()> {
         fees.amount().into()
     );
     let balance_after_normal_peg_out =
-        sats(PEG_IN_AMOUNT_SATS - PEG_OUT_AMOUNT_SATS - fees.amount().to_sat());
+        sats(num_peg_ins * PEG_IN_AMOUNT_SATS - PEG_OUT_AMOUNT_SATS - fees.amount().to_sat());
     assert_eq!(client.get_balance().await, balance_after_normal_peg_out);
     assert_eq!(balance_sub.ok().await?, balance_after_normal_peg_out);
 
@@ -318,7 +329,7 @@ async fn peg_outs_support_rbf() -> anyhow::Result<()> {
         sats(PEG_OUT_AMOUNT_SATS)
     );
     let balance_after_rbf_peg_out =
-        sats(PEG_IN_AMOUNT_SATS - PEG_OUT_AMOUNT_SATS - total_fees.to_sat());
+        sats(num_peg_ins * PEG_IN_AMOUNT_SATS - PEG_OUT_AMOUNT_SATS - total_fees.to_sat());
     let current_balance = client.get_balance().await;
     assert_eq!(balance_sub.ok().await?, current_balance);
     // So we don't know which transaction will get mined first, it could be
@@ -349,7 +360,7 @@ async fn peg_outs_must_wait_for_available_utxos() -> anyhow::Result<()> {
     bitcoin.mine_blocks(finality_delay).await;
     await_consensus_to_catch_up(&client, 1).await?;
 
-    let mut balance_sub = peg_in(&client, bitcoin.as_ref(), finality_delay).await?;
+    let mut balance_sub = peg_in(&client, bitcoin.as_ref(), finality_delay, 1).await?;
 
     info!("Peg-in finished for test peg_outs_must_wait_for_available_utxos");
     let address = checked_address_to_unchecked_address(&bitcoin.get_new_address().await);
