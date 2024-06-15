@@ -190,6 +190,7 @@ async fn main() -> anyhow::Result<()> {
                 .expect("Could not encode to stdout");
         }
         TweakSource::Epochs { db } => {
+            // FIXME: read config to figure out instance ids
             let decoders = ModuleDecoderRegistry::from_iter([
                 (
                     LEGACY_HARDCODED_INSTANCE_ID_LN,
@@ -206,7 +207,8 @@ async fn main() -> anyhow::Result<()> {
                     WalletCommonInit::KIND,
                     <Wallet as ServerModule>::decoder(),
                 ),
-            ]);
+            ])
+            .with_fallback();
 
             let db = get_db(opts.readonly, &db, decoders);
             let mut dbtx = db.begin_transaction().await;

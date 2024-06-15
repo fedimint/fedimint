@@ -1,12 +1,12 @@
 use std::{ffi, iter};
 
 use clap::Parser;
-use fedimint_core::api::FederationApiExt;
-use fedimint_core::endpoint_constants::{
-    ADD_GATEWAY_ENDPOINT, GATEWAYS_ENDPOINT, REMOVE_GATEWAY_ENDPOINT,
-};
+use fedimint_api_client::api::FederationApiExt;
 use fedimint_core::module::ApiRequestErased;
 use fedimint_core::util::SafeUrl;
+use fedimint_lnv2_common::endpoint_constants::{
+    ADD_GATEWAY_ENDPOINT, GATEWAYS_ENDPOINT, REMOVE_GATEWAY_ENDPOINT,
+};
 use serde::Serialize;
 use serde_json::Value;
 

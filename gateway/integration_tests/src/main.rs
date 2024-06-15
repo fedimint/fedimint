@@ -36,6 +36,13 @@ async fn config_test(gw_type: LightningNodeType) -> anyhow::Result<()> {
             LightningNodeType::Cln => dev_fed.gw_cln_registered().await?,
         };
 
+        let fedimint_cli_version = crate::util::FedimintCli::version_or_default().await;
+        let gatewayd_version = crate::util::Gatewayd::version_or_default().await;
+        if fedimint_cli_version < *VERSION_0_3_0 || gatewayd_version < *VERSION_0_3_0 {
+            info!("fedmint-cli version that didn't support unknown modules");
+            return Ok(());
+        }
+
         // Try to connect to already connected federation
         let gatewayd_version = util::Gatewayd::version_or_default().await;
         if gatewayd_version >= *VERSION_0_3_0 {

@@ -319,6 +319,18 @@ impl Fedimintd {
                         fee_consensus: Default::default(),
                     },
                 },
+            )
+            .with_module_kind(fedimint_lnv2_server::LightningInit)
+            .with_module_instance(
+                fedimint_lnv2_server::LightningInit::kind(),
+                fedimint_lnv2_common::config::LightningGenParams {
+                    local: fedimint_lnv2_common::config::LightningGenParamsLocal {
+                        bitcoin_rpc: bitcoind_rpc.clone(),
+                    },
+                    consensus: fedimint_lnv2_common::config::LightningGenParamsConsensus {
+                        network,
+                    },
+                },
             );
 
         let s = if is_env_var_set(FM_DISABLE_META_MODULE_ENV) {

@@ -40,7 +40,7 @@ use fedimint_lnv2_common::contracts::{IncomingContract, OutgoingContract};
 use fedimint_lnv2_common::endpoint_constants::{
     ADD_GATEWAY_ENDPOINT, AWAIT_INCOMING_CONTRACT_ENDPOINT, AWAIT_PREIMAGE_ENDPOINT,
     CONSENSUS_BLOCK_COUNT_ENDPOINT, GATEWAYS_ENDPOINT, OUTGOING_CONTRACT_EXPIRATION_ENDPOINT,
-    REMOVE_GATEWAY_ENDPOINT_V2,
+    REMOVE_GATEWAY_ENDPOINT,
 };
 use fedimint_lnv2_common::{
     ContractId, LightningCommonInit, LightningConsensusItem, LightningInput, LightningInputError,
@@ -591,7 +591,7 @@ impl ServerModule for Lightning {
                 }
             },
             api_endpoint! {
-                REMOVE_GATEWAY_ENDPOINT_V2,
+                REMOVE_GATEWAY_ENDPOINT,
                 ApiVersion::new(0, 0),
                 async |_module: &Lightning, context, gateway: SafeUrl| -> bool {
                     check_auth(context)?;
