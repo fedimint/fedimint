@@ -1,6 +1,6 @@
 [package]
 name = "fedimint-build"
-version = {workspace = true}
+version = { workspace = true }
 authors = ["The Fedimint Developers"]
 edition = "2021"
 description = "Fedimint build script utilities for including git version information in builds"

@@ -22,9 +22,10 @@ bitcoin = { workspace = true }
 erased-serde = { workspace = true }
 fedimint-bitcoind = { version = "=0.4.0-alpha", path = "../../fedimint-bitcoind" }
 fedimint-core = { workspace = true }
-fedimint-metrics = { version = "=0.4.0-alpha", path = "../../fedimint-metrics" }
-fedimint-wallet-common = { version = "=0.4.0-alpha", path = "../fedimint-wallet-common" }
 fedimint-logging = { workspace = true }
+fedimint-metrics = { version = "=0.4.0-alpha", path = "../../fedimint-metrics" }
+fedimint-server = { version = "=0.4.0-alpha", path = "../../fedimint-server" }
+fedimint-wallet-common = { version = "=0.4.0-alpha", path = "../fedimint-wallet-common" }
 futures = { workspace = true }
 hex = { workspace = true }
 miniscript = { version = "10.0.0", features = [ "compiler", "serde" ] }
@@ -35,4 +36,3 @@ strum = { workspace = true }
 strum_macros = { workspace = true }
 tokio = { version = "1.38.0", features = ["sync"] }
 tracing = { workspace = true }
-fedimint-server = { version = "=0.4.0-alpha", path = "../../fedimint-server" }

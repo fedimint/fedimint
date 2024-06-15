@@ -15,22 +15,22 @@ path = "tests/tests.rs"
 anyhow = { workspace = true }
 assert_matches = { workspace = true }
 bitcoin_hashes = { workspace = true }
-fedimint-dummy-common = { path = "../fedimint-dummy-common" }
-fedimint-dummy-client = { path = "../fedimint-dummy-client" }
-fedimint-dummy-server = { path = "../fedimint-dummy-server" }
-fedimint-ln-common = { path = "../fedimint-ln-common" }
-fedimint-ln-client = { workspace = true }
-fedimint-ln-server = { path = "../fedimint-ln-server" }
-fedimint-testing = { workspace = true }
 fedimint-client = { workspace = true }
 fedimint-core = { workspace = true }
+fedimint-dummy-client = { path = "../fedimint-dummy-client" }
+fedimint-dummy-common = { path = "../fedimint-dummy-common" }
+fedimint-dummy-server = { path = "../fedimint-dummy-server" }
+fedimint-ln-client = { workspace = true }
+fedimint-ln-common = { path = "../fedimint-ln-common" }
+fedimint-ln-server = { path = "../fedimint-ln-server" }
 fedimint-logging = { workspace = true }
+fedimint-testing = { workspace = true }
 futures = { workspace = true }
 lightning-invoice = { workspace = true }
+rand = { workspace = true }
+secp256k1 = { version = "0.27.0", default-features = false }
+serde_json = { workspace = true }
+strum = { workspace = true }
 threshold_crypto = { workspace = true }
 tokio = { version = "1.38.0", features = ["sync"] }
 tracing = { workspace = true }
-secp256k1 = { version="0.27.0", default-features=false }
-serde_json = { workspace = true }
-rand = { workspace = true }
-strum = { workspace = true }

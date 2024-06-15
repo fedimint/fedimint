@@ -13,16 +13,16 @@ path = "tests/tests.rs"
 
 [dependencies]
 anyhow = "1.0.86"
-fedimint-dummy-common = { path = "../fedimint-dummy-common" }
-fedimint-dummy-client = { path = "../fedimint-dummy-client" }
-fedimint-dummy-server = { path = "../fedimint-dummy-server" }
-fedimint-lnv2-common = { path = "../fedimint-lnv2-common" }
-fedimint-lnv2-client = { path = "../fedimint-lnv2-client" }
-fedimint-lnv2-server = { path = "../fedimint-lnv2-server" }
-fedimint-ln-common = { path = "../fedimint-ln-common" }
-fedimint-ln-client = { workspace = true }
-fedimint-ln-server = { path = "../fedimint-ln-server" }
-fedimint-testing = { workspace = true }
 fedimint-client = { workspace = true }
 fedimint-core = { workspace = true }
+fedimint-dummy-client = { path = "../fedimint-dummy-client" }
+fedimint-dummy-common = { path = "../fedimint-dummy-common" }
+fedimint-dummy-server = { path = "../fedimint-dummy-server" }
+fedimint-ln-client = { workspace = true }
+fedimint-ln-common = { path = "../fedimint-ln-common" }
+fedimint-ln-server = { path = "../fedimint-ln-server" }
+fedimint-lnv2-client = { path = "../fedimint-lnv2-client" }
+fedimint-lnv2-common = { path = "../fedimint-lnv2-common" }
+fedimint-lnv2-server = { path = "../fedimint-lnv2-server" }
+fedimint-testing = { workspace = true }
 tokio = { version = "1.38.0", features = ["sync"] }

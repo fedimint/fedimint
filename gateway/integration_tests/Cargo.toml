@@ -7,7 +7,6 @@ description = "gateway-tests contain integration tests for the gateway"
 license = "MIT"
 publish = false
 
-
 # workaround: cargo-deny in Nix needs to see at least one
 # artifact here
 [[bin]]
@@ -18,10 +17,10 @@ path = "src/main.rs"
 anyhow = { workspace = true }
 clap = { workspace = true }
 devimint = { workspace = true }
-tokio = { workspace = true }
 fedimint-core = { workspace = true }
 fedimint-testing = { workspace = true }
-ln-gateway = { version = "=0.4.0-alpha", package = "fedimint-ln-gateway", path= "../ln-gateway" }
-tracing = { workspace = true }
-serde_json = { workspace = true }
+ln-gateway = { version = "=0.4.0-alpha", package = "fedimint-ln-gateway", path = "../ln-gateway" }
 semver = { workspace = true }
+serde_json = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }

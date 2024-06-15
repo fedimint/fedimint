@@ -1,6 +1,6 @@
 [package]
 name = "fedimint-metrics"
-version = {workspace = true}
+version = { workspace = true }
 edition = "2021"
 license = "MIT"
 readme = "README.md"

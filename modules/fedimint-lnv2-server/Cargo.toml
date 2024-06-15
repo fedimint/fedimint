@@ -5,7 +5,6 @@ authors = ["The Fedimint Developers"]
 edition = "2021"
 description = "fedimint-ln is a lightning payment service module."
 license = "MIT"
-
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [lib]
@@ -15,16 +14,16 @@ path = "src/lib.rs"
 [dependencies]
 anyhow = "1.0.86"
 async-trait = "0.1.80"
+bls12_381 = { workspace = true }
 erased-serde = { workspace = true }
-futures = "0.3.24"
 fedimint-bitcoind = { path = "../../fedimint-bitcoind" }
 fedimint-core = { workspace = true }
 fedimint-lnv2-common = { path = "../fedimint-lnv2-common" }
+fedimint-server = { path = "../../fedimint-server" }
+futures = "0.3.24"
+group = { workspace = true }
+rand = { workspace = true }
 serde = { workspace = true }
 strum = "0.26"
 strum_macros = "0.26"
 tpe = { package = "fedimint-tpe", version = "=0.4.0-alpha", path = "../../crypto/tpe" }
-group = { workspace = true }
-rand = { workspace = true }
-fedimint-server = { path = "../../fedimint-server" }
-bls12_381 = { workspace = true }
