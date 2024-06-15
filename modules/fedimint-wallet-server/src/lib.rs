@@ -1423,7 +1423,7 @@ impl<'a> StatelessWallet<'a> {
         // Ensure deterministic ordering of UTXOs for all peers
         included_utxos.sort_by_key(|(_, utxo)| utxo.amount);
         remaining_utxos.sort_by_key(|(_, utxo)| utxo.amount);
-        included_utxos.extend(remaining_utxos);
+        remaining_utxos.extend(included_utxos);
 
         // Finally we initialize our accumulator for selected input amounts
         let mut total_selected_value = bitcoin::Amount::from_sat(0);
@@ -1431,7 +1431,7 @@ impl<'a> StatelessWallet<'a> {
         let mut fees = fee_rate.calculate_fee(total_weight);
 
         while total_selected_value < peg_out_amount + change_script.dust_value() + fees {
-            match included_utxos.pop() {
+            match remaining_utxos.pop() {
                 Some((utxo_key, utxo)) => {
                     total_selected_value += utxo.amount;
                     total_weight += max_input_weight;
