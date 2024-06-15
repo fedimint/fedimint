@@ -16,17 +16,17 @@ name = "fedimint_dummy_client"
 path = "src/lib.rs"
 
 [dependencies]
-async-trait = { workspace = true }
 anyhow = { workspace = true }
-fedimint-dummy-common = { version = "=0.4.0-alpha", path = "../fedimint-dummy-common" }
+async-trait = { workspace = true }
+erased-serde = { workspace = true }
+fedimint-api-client = { workspace = true }
 fedimint-client = { workspace = true }
 fedimint-core = { workspace = true }
-fedimint-api-client = { workspace = true }
+fedimint-dummy-common = { version = "=0.4.0-alpha", path = "../fedimint-dummy-common" }
 futures = { workspace = true }
-erased-serde = { workspace = true }
 rand = { workspace = true }
 serde = { workspace = true }
 strum = { workspace = true }
 strum_macros = { workspace = true }
-tracing = { workspace = true }
 thiserror = { workspace = true }
+tracing = { workspace = true }

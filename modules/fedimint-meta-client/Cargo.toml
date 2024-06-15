@@ -20,16 +20,16 @@ default =[]
 cli = ["dep:clap", "dep:serde_json"]
 
 [dependencies]
-async-trait = "0.1.80"
 anyhow = { workspace = true }
+async-trait = "0.1.80"
 clap = { workspace = true, optional = true }
-serde_json = { workspace = true, optional = true }
-fedimint-meta-common = { version = "=0.4.0-alpha", path = "../fedimint-meta-common" }
+erased-serde = { workspace = true }
+fedimint-api-client = { workspace = true }
 fedimint-client = { workspace = true }
 fedimint-core = { workspace = true }
-fedimint-api-client = { workspace = true }
-erased-serde = { workspace = true }
+fedimint-meta-common = { version = "=0.4.0-alpha", path = "../fedimint-meta-common" }
 serde = { workspace = true }
+serde_json = { workspace = true, optional = true }
 strum = { workspace = true }
 strum_macros = { workspace = true }
 thiserror = { workspace = true }

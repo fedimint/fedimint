@@ -18,6 +18,6 @@ path = "src/lib.rs"
 [dependencies]
 anyhow = { workspace = true }
 argon2 = { version = "0.5.3", features = ["password-hash", "alloc"] }
-ring = "0.17.8"
 hex = { workspace = true }
 rand = { workspace = true }
+ring = "0.17.8"

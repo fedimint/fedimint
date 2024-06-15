@@ -1,6 +1,6 @@
 [package]
 name = "fedimint-derive"
-version = {workspace = true}
+version = { workspace = true }
 authors = ["The Fedimint Developers"]
 edition = "2021"
 description = "fedimint-derive provides helper macros for serialization."

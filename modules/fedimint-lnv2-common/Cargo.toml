@@ -5,7 +5,6 @@ authors = ["The Fedimint Developers"]
 edition = "2021"
 description = "fedimint-ln is a lightning payment service module."
 license = "MIT"
-
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [package.metadata.cargo-udeps.ignore]
@@ -18,15 +17,15 @@ path = "src/lib.rs"
 
 [dependencies]
 anyhow = "1.0.86"
-bitcoin_hashes = { workspace = true }
 bitcoin = { workspace = true }
+bitcoin_hashes = { workspace = true }
 fedimint-client = { workspace = true }
 fedimint-core = { workspace = true }
 fedimint-ln-common ={ path = "../fedimint-ln-common" }
-secp256k1 = { version="0.27.0", default-features=false }
+# crypto deps
+group = { workspace = true }
+secp256k1 = { version = "0.27.0", default-features = false }
 serde = { workspace = true }
 serde_json = "1.0.117"
 thiserror = "1.0.61"
-# crypto deps
-group = { workspace = true }
 tpe = { package = "fedimint-tpe", version = "=0.4.0-alpha", path = "../../crypto/tpe" }

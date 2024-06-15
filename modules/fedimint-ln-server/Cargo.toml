@@ -10,7 +10,6 @@ repository = "https://github.com/fedimint/fedimint"
 
 [package.metadata.docs.rs]
 rustc-args = ["--cfg", "tokio_unstable"]
-
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [lib]
@@ -22,20 +21,20 @@ anyhow = { workspace = true }
 async-trait = { workspace = true }
 bitcoin_hashes = { workspace = true }
 erased-serde = { workspace = true }
-futures = { workspace = true }
 fedimint-bitcoind = { version = "=0.4.0-alpha", path = "../../fedimint-bitcoind" }
 fedimint-core = { workspace = true }
 fedimint-ln-common = { version = "=0.4.0-alpha", path = "../fedimint-ln-common" }
 fedimint-metrics = { version = "=0.4.0-alpha", path = "../../fedimint-metrics" }
-secp256k1 = { version="0.27.0", default-features=false }
+fedimint-server = { version = "=0.4.0-alpha", path = "../../fedimint-server" }
+futures = { workspace = true }
+rand = { workspace = true }
+secp256k1 = { version = "0.27.0", default-features = false }
 serde = { workspace = true }
 strum = { workspace = true }
 strum_macros = { workspace = true }
 threshold_crypto = { workspace = true }
 tokio = { version = "1.38", features = ["full"] }
 tracing = { workspace = true }
-rand = { workspace = true }
-fedimint-server = { version = "=0.4.0-alpha", path = "../../fedimint-server" }
 
 [dev-dependencies]
 assert_matches = { workspace = true }

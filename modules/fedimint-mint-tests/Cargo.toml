@@ -16,24 +16,24 @@ anyhow = { workspace = true }
 bitcoin_hashes = { workspace = true }
 bls12_381 = { workspace = true }
 devimint = { workspace = true }
-fedimint-mint-common = { path = "../fedimint-mint-common" }
-fedimint-mint-client = { path = "../fedimint-mint-client" }
-fedimint-mint-server = { path = "../fedimint-mint-server" }
-fedimint-testing = { workspace = true }
 fedimint-client = { workspace = true }
 fedimint-core = { workspace = true }
 fedimint-logging = { workspace = true }
+fedimint-mint-client = { path = "../fedimint-mint-client" }
+fedimint-mint-common = { path = "../fedimint-mint-common" }
+fedimint-mint-server = { path = "../fedimint-mint-server" }
+fedimint-testing = { workspace = true }
+ff = "0.13.0"
 futures = { workspace = true }
-tokio = { version = "1.38.0", features = ["sync"] }
-tracing = { workspace = true }
 rand = { workspace = true }
 serde = { workspace = true }
+strum = { workspace = true }
 tbs = { package = "fedimint-tbs", version = "=0.4.0-alpha", path = "../../crypto/tbs" }
 threshold_crypto = { workspace = true }
-ff = "0.13.0"
-strum = { workspace = true }
+tokio = { version = "1.38.0", features = ["sync"] }
+tracing = { workspace = true }
 
 [dev-dependencies]
-fedimint-dummy-common = { path = "../fedimint-dummy-common" }
 fedimint-dummy-client = { path = "../fedimint-dummy-client" }
+fedimint-dummy-common = { path = "../fedimint-dummy-common" }
 fedimint-dummy-server = { path = "../fedimint-dummy-server" }

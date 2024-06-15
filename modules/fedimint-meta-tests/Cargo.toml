@@ -7,7 +7,6 @@ description = "fedimint-mint-tests contains integration tests for the meta modul
 license = "MIT"
 publish = false
 
-
 # workaround: cargo-deny in Nix needs to see at least one
 # artifact here
 [[bin]]
@@ -17,8 +16,8 @@ path = "src/bin/meta-sanity-test.rs"
 [dependencies]
 anyhow = { workspace = true }
 devimint = { workspace = true }
-tokio = { workspace = true }
 fedimint-core = { workspace = true }
-tracing = { workspace = true }
-serde_json = { workspace = true }
 semver = { workspace = true }
+serde_json = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }

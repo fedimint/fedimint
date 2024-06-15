@@ -5,7 +5,6 @@ authors = ["The Fedimint Developers"]
 edition = "2021"
 description = "tpe is a helper cryptography library for threshold point encryption"
 license = "MIT"
-
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [features]
@@ -17,11 +16,11 @@ name = "tpe"
 path = "src/lib.rs"
 
 [dependencies]
-fedimint-core  = { version = "=0.4.0-alpha", path = "../../fedimint-core/" }
+bitcoin_hashes = { workspace = true }
 bls12_381 = { workspace = true }
+fedimint-core  = { version = "=0.4.0-alpha", path = "../../fedimint-core/" }
 group = { workspace = true }
 rand = { workspace = true }
 rand_chacha = { workspace = true }
-bitcoin_hashes = { workspace = true }
 serde = { workspace = true }
 serde-big-array = { workspace = true }

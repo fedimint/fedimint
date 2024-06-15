@@ -16,13 +16,13 @@ name = "fedimint_empty_client"
 path = "src/lib.rs"
 
 [dependencies]
-async-trait = { workspace = true }
 anyhow = { workspace = true }
-fedimint-empty-common = { workspace = true }
+async-trait = { workspace = true }
+erased-serde = { workspace = true }
+fedimint-api-client = { workspace = true }
 fedimint-client = { workspace = true }
 fedimint-core = { workspace = true }
-fedimint-api-client = { workspace = true }
-erased-serde = { workspace = true }
+fedimint-empty-common = { workspace = true }
 serde = { workspace = true }
 strum = { workspace = true }
 strum_macros = { workspace = true }
