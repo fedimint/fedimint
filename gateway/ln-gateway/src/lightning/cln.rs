@@ -3,9 +3,11 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use async_trait::async_trait;
-use fedimint_core::secp256k1;
+use fedimint_core::encoding::Encodable;
 use fedimint_core::task::{sleep, TaskGroup};
 use fedimint_core::util::SafeUrl;
+use fedimint_core::{secp256k1, Amount};
+use fedimint_ln_common::PrunedInvoice;
 use futures::stream::BoxStream;
 use tonic::transport::{Channel, Endpoint};
 use tonic::Request;
@@ -14,10 +16,11 @@ use tracing::info;
 use super::{ChannelInfo, ILnRpcClient, LightningRpcError};
 use crate::gateway_lnrpc::gateway_lightning_client::GatewayLightningClient;
 use crate::gateway_lnrpc::{
-    CloseChannelsWithPeerRequest, CloseChannelsWithPeerResponse, CreateInvoiceRequest,
+    self, CloseChannelsWithPeerRequest, CloseChannelsWithPeerResponse, CreateInvoiceRequest,
     CreateInvoiceResponse, EmptyRequest, EmptyResponse, GetFundingAddressResponse,
     GetNodeInfoResponse, GetRouteHintsRequest, GetRouteHintsResponse, InterceptHtlcRequest,
     InterceptHtlcResponse, OpenChannelRequest, PayInvoiceRequest, PayInvoiceResponse,
+    PayPrunedInvoiceRequest,
 };
 use crate::lightning::MAX_LIGHTNING_RETRIES;
 pub type HtlcResult = std::result::Result<InterceptHtlcRequest, tonic::Status>;
@@ -109,6 +112,37 @@ impl ILnRpcClient for NetworkLnRpcClient {
                     failure_reason: status.message().to_string(),
                 })?;
         Ok(res.into_inner())
+    }
+
+    async fn pay_private(
+        &self,
+        invoice: PrunedInvoice,
+        max_delay: u64,
+        max_fee: Amount,
+    ) -> Result<PayInvoiceResponse, LightningRpcError> {
+        let req = Request::new(PayPrunedInvoiceRequest {
+            pruned_invoice: Some(gateway_lnrpc::PrunedInvoice {
+                amount_msat: invoice.amount.msats,
+                destination: invoice.destination.consensus_encode_to_vec(),
+                destination_features: invoice.destination_features,
+                payment_hash: invoice.payment_hash.consensus_encode_to_vec(),
+                payment_secret: invoice.payment_secret.to_vec(),
+                min_final_cltv_delta: invoice.min_final_cltv_delta,
+            }),
+            max_delay,
+            max_fee_msat: max_fee.msats,
+        });
+        let mut client = self.connect().await?;
+        let res = client.pay_pruned_invoice(req).await.map_err(|status| {
+            LightningRpcError::FailedPayment {
+                failure_reason: status.message().to_string(),
+            }
+        })?;
+        Ok(res.into_inner())
+    }
+
+    fn supports_private_payments(&self) -> bool {
+        true
     }
 
     async fn route_htlcs<'a>(
