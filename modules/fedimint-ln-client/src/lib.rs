@@ -31,7 +31,7 @@ use std::time::Duration;
 
 use anyhow::{anyhow, bail, ensure, format_err, Context};
 use api::LnFederationApi;
-use async_stream::stream;
+use async_stream::{stream, try_stream};
 use bitcoin::hashes::{sha256, Hash, HashEngine, Hmac, HmacEngine};
 use bitcoin::key::KeyPair;
 use bitcoin::Network;
@@ -58,7 +58,7 @@ use fedimint_core::module::{
 };
 use fedimint_core::task::{timeout, MaybeSend, MaybeSync};
 use fedimint_core::util::update_merge::UpdateMerge;
-use fedimint_core::util::{backon, retry};
+use fedimint_core::util::{backon, retry, BoxStream};
 use fedimint_core::{
     apply, async_trait_maybe_send, push_db_pair_items, runtime, Amount, OutPoint, TransactionId,
 };
@@ -433,6 +433,104 @@ impl ClientModule for LightningClientModule {
     ) -> anyhow::Result<serde_json::Value> {
         cli::handle_cli_command(self, args).await
     }
+
+    async fn handle_rpc(
+        &self,
+        method: String,
+        payload: serde_json::Value,
+    ) -> BoxStream<'_, anyhow::Result<serde_json::Value>> {
+        Box::pin(try_stream! {
+            match method.as_str() {
+                "create_bolt11_invoice" => {
+                    let req: CreateBolt11InvoiceRequest = serde_json::from_value(payload)?;
+                    let (op, invoice, _) = self
+                        .create_bolt11_invoice(
+                            req.amount,
+                            lightning_invoice::Bolt11InvoiceDescription::Direct(
+                                &lightning_invoice::Description::new(req.description)?,
+                            ),
+                            req.expiry_time,
+                            req.extra_meta,
+                            req.gateway,
+                        )
+                        .await?;
+                    yield serde_json::json!({
+                        "operation_id": op,
+                        "invoice": invoice,
+                    });
+                }
+                "pay_bolt11_invoice" => {
+                    let req: PayBolt11InvoiceRequest = serde_json::from_value(payload)?;
+                    let outgoing_payment = self
+                        .pay_bolt11_invoice(req.maybe_gateway, req.invoice, req.extra_meta)
+                        .await?;
+                    yield serde_json::to_value(outgoing_payment)?;
+                }
+                "subscribe_ln_pay" => {
+                    let req: SubscribeLnPayRequest = serde_json::from_value(payload)?;
+                    for await state in self.subscribe_ln_pay(req.operation_id).await?.into_stream() {
+                        yield serde_json::to_value(state)?;
+                    }
+                }
+                "subscribe_ln_receive" => {
+                    let req: SubscribeLnReceiveRequest = serde_json::from_value(payload)?;
+                    for await state in self.subscribe_ln_receive(req.operation_id).await?.into_stream()
+                    {
+                        yield serde_json::to_value(state)?;
+                    }
+                }
+                "get_gateway" => {
+                    let req: GetGatewayRequest = serde_json::from_value(payload)?;
+                    let gateway = self.get_gateway(req.gateway_id, req.force_internal).await?;
+                    yield serde_json::to_value(gateway)?;
+                }
+                "list_gateways" => {
+                    let gateways = self.list_gateways().await;
+                    yield serde_json::to_value(gateways)?;
+                }
+                "update_gateway_cache" => {
+                    self.update_gateway_cache().await?;
+                    yield serde_json::Value::Null;
+                }
+                _ => {
+                    Err(anyhow::format_err!("Unknown method: {}", method))?;
+                    unreachable!()
+                },
+            }
+        })
+    }
+}
+
+#[derive(Deserialize)]
+struct CreateBolt11InvoiceRequest {
+    amount: Amount,
+    description: String,
+    expiry_time: Option<u64>,
+    extra_meta: serde_json::Value,
+    gateway: Option<LightningGateway>,
+}
+
+#[derive(Deserialize)]
+struct PayBolt11InvoiceRequest {
+    maybe_gateway: Option<LightningGateway>,
+    invoice: Bolt11Invoice,
+    extra_meta: Option<serde_json::Value>,
+}
+
+#[derive(Deserialize)]
+struct SubscribeLnPayRequest {
+    operation_id: OperationId,
+}
+
+#[derive(Deserialize)]
+struct SubscribeLnReceiveRequest {
+    operation_id: OperationId,
+}
+
+#[derive(Deserialize)]
+struct GetGatewayRequest {
+    gateway_id: Option<secp256k1::PublicKey>,
+    force_internal: bool,
 }
 
 #[derive(thiserror::Error, Debug, Clone)]
@@ -1131,7 +1229,7 @@ impl LightningClientModule {
         operation_id: OperationId,
     ) -> anyhow::Result<UpdateStreamOrOutcome<LnPayState>> {
         async fn get_next_pay_state(
-            stream: &mut fedimint_core::util::BoxStream<'_, LightningClientStateMachines>,
+            stream: &mut BoxStream<'_, LightningClientStateMachines>,
         ) -> Option<LightningPayStates> {
             match stream.next().await {
                 Some(LightningClientStateMachines::LightningPay(state)) => Some(state.state),
