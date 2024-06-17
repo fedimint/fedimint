@@ -33,7 +33,7 @@ test-upgrades *VERSIONS="v0.2.2 releases/v0.3":
 
 # `cargo udeps` check
 udeps:
-  nix build -L .#debug.workspaceCargoUdeps
+  nix build -L .#nightly.test.workspaceCargoUdeps
 
 bench:
   cargo bench
