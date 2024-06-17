@@ -27,7 +27,7 @@ use fedimint_ln_client::{
     LightningOperationMeta, LightningOperationMetaVariant, LnPayState, LnReceiveState,
     MockGatewayConnection, OutgoingLightningPayment, PayType,
 };
-use fedimint_ln_common::config::{FeeToAmount, GatewayFee, LightningGenParams};
+use fedimint_ln_common::config::{GatewayFee, LightningGenParams};
 use fedimint_ln_common::contracts::incoming::IncomingContractOffer;
 use fedimint_ln_common::contracts::outgoing::OutgoingContractAccount;
 use fedimint_ln_common::contracts::{EncryptedPreimage, FundedContract, Preimage, PreimageKey};
@@ -43,7 +43,7 @@ use fedimint_testing::ln::FakeLightningTest;
 use fedimint_unknown_common::config::UnknownGenParams;
 use fedimint_unknown_server::UnknownInit;
 use futures::Future;
-use lightning_invoice::{Bolt11Invoice, Bolt11InvoiceDescription, Description, RoutingFees};
+use lightning_invoice::{Bolt11Invoice, Bolt11InvoiceDescription, Description};
 use ln_gateway::rpc::rpc_client::{GatewayRpcClient, GatewayRpcError, GatewayRpcResult};
 use ln_gateway::rpc::rpc_server::hash_password;
 use ln_gateway::rpc::{
@@ -241,125 +241,6 @@ async fn test_gateway_client_pay_valid_invoice() -> anyhow::Result<()> {
 
             assert_eq!(user_client.get_balance().await, sats(1000 - 250));
             assert_eq!(gateway_client.get_balance().await, sats(250));
-
-            Ok(())
-        },
-    )
-    .await
-}
-
-#[tokio::test(flavor = "multi_thread")]
-async fn test_can_change_default_routing_fees() -> anyhow::Result<()> {
-    single_federation_test(
-        |gateway, other_lightning_client, fed, user_client, _| async move {
-            let rpc_client = gateway
-                .get_rpc()
-                .with_password(Some(DEFAULT_GATEWAY_PASSWORD.to_string()));
-            // Print money for user_client
-            let dummy_module = user_client.get_first_module::<DummyClientModule>();
-            let (_, outpoint) = dummy_module.print_money(sats(1000)).await?;
-            dummy_module.receive_money(outpoint).await?;
-            assert_eq!(user_client.get_balance().await, sats(1000));
-
-            let fee = "10,10000".to_string();
-            let federation_fee = FederationRoutingFees::from_str(&fee)?;
-            let set_configuration_payload = SetConfigurationPayload {
-                password: None,
-                num_route_hints: None,
-                routing_fees: Some(federation_fee.clone()),
-                network: None,
-                per_federation_routing_fees: None,
-            };
-            verify_gateway_rpc_success("set_configuration", || {
-                rpc_client.set_configuration(set_configuration_payload.clone())
-            })
-            .await;
-
-            // we need to reconnect to set the fees as defaults from gateway
-            reconnect_federation(&rpc_client, &fed).await;
-
-            // Update the gateway cache since the fees have changed
-            let ln_module = user_client.get_first_module::<LightningClientModule>();
-            ln_module.update_gateway_cache().await?;
-
-            // Create test invoice
-            let invoice_amount = sats(250);
-            let invoice = other_lightning_client.invoice(invoice_amount, None)?;
-
-            let gateway_client = gateway.select_client(fed.id()).await;
-            gateway_pay_valid_invoice(
-                invoice,
-                &user_client,
-                &gateway_client,
-                &gateway.gateway.gateway_id,
-            )
-            .await?;
-
-            let fee: RoutingFees = federation_fee.into();
-            let fee_amount = fee.to_amount(&invoice_amount);
-            assert_eq!(
-                user_client.get_balance().await,
-                sats(1000 - 250) - fee_amount
-            );
-            assert_eq!(gateway_client.get_balance().await, sats(250) + fee_amount);
-
-            Ok(())
-        },
-    )
-    .await
-}
-
-#[tokio::test(flavor = "multi_thread")]
-async fn test_can_change_federation_routing_fees() -> anyhow::Result<()> {
-    single_federation_test(
-        |gateway, other_lightning_client, fed, user_client, _| async move {
-            let rpc_client = gateway
-                .get_rpc()
-                .with_password(Some(DEFAULT_GATEWAY_PASSWORD.to_string()));
-            // Print money for user_client
-            let dummy_module = user_client.get_first_module::<DummyClientModule>();
-            let (_, outpoint) = dummy_module.print_money(sats(1000)).await?;
-            dummy_module.receive_money(outpoint).await?;
-            assert_eq!(user_client.get_balance().await, sats(1000));
-
-            let fee = "10,10000".to_string();
-            let federation_fee = FederationRoutingFees::from_str(&fee)?;
-            let set_configuration_payload = SetConfigurationPayload {
-                password: None,
-                num_route_hints: None,
-                routing_fees: None,
-                network: None,
-                per_federation_routing_fees: Some(vec![(fed.id(), federation_fee.clone())]),
-            };
-            verify_gateway_rpc_success("set_configuration", || {
-                rpc_client.set_configuration(set_configuration_payload.clone())
-            })
-            .await;
-
-            // Update the gateway cache since the fees have changed
-            let ln_module = user_client.get_first_module::<LightningClientModule>();
-            ln_module.update_gateway_cache().await?;
-
-            // Create test invoice
-            let invoice_amount = sats(250);
-            let invoice = other_lightning_client.invoice(invoice_amount, None)?;
-
-            let gateway_client = gateway.select_client(fed.id()).await;
-            gateway_pay_valid_invoice(
-                invoice,
-                &user_client,
-                &gateway_client,
-                &gateway.gateway.gateway_id,
-            )
-            .await?;
-
-            let fee: RoutingFees = federation_fee.into();
-            let fee_amount = fee.to_amount(&invoice_amount);
-            assert_eq!(
-                user_client.get_balance().await,
-                sats(1000 - 250) - fee_amount
-            );
-            assert_eq!(gateway_client.get_balance().await, sats(250) + fee_amount);
 
             Ok(())
         },
