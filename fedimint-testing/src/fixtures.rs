@@ -121,12 +121,7 @@ impl Fixtures {
 
     /// Starts a new federation with default number of peers for testing
     pub async fn new_default_fed(&self) -> FederationTest {
-        let federation_builder = FederationTestBuilder::new(
-            self.params.clone(),
-            ServerModuleInitRegistry::from(self.servers.clone()),
-            ClientModuleInitRegistry::from(self.clients.clone()),
-        );
-        federation_builder.build().await
+        self.new_fed_builder().build().await
     }
 
     pub fn new_fed_builder(&self) -> FederationTestBuilder {
