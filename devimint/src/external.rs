@@ -700,7 +700,7 @@ pub async fn open_channel_between_gateways(
     gw_cln
         .open_channel(
             lnd_pubkey.clone(),
-            format!("127.0.0.1:{}", process_mgr.globals.FM_PORT_LND_LISTEN),
+            gw_lnd.lightning_node_addr.clone(),
             10_000_000,
             Some(5_000_000),
         )
