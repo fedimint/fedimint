@@ -13,6 +13,7 @@ members = [
     "fedimint-build",
     "fedimint-cli",
     "fedimint-client",
+    "fedimint-client-wasm",
     "fedimint-core",
     "fedimint-dbtool",
     "fedimint-derive",

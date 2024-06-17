@@ -732,6 +732,13 @@ pub struct ClientModuleInstance<'m, M: ClientModule> {
     module: &'m M,
 }
 
+impl<'m, M: ClientModule> ClientModuleInstance<'m, M> {
+    /// Get a reference to the module
+    pub fn inner(&self) -> &'m M {
+        self.module
+    }
+}
+
 impl<'m, M> ops::Deref for ClientModuleInstance<'m, M>
 where
     M: ClientModule,
