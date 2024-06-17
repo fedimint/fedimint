@@ -21,17 +21,26 @@ pub struct Gatewayd {
     pub(crate) process: ProcessHandle,
     pub ln: Option<LightningNode>,
     pub(crate) addr: String,
+    pub(crate) lightning_node_addr: String,
 }
 
 impl Gatewayd {
     pub async fn new(process_mgr: &ProcessManager, ln: LightningNode) -> Result<Self> {
         let ln_name = ln.name();
         let test_dir = &process_mgr.globals.FM_TEST_DIR;
+
         let port = match ln {
             LightningNode::Cln(_) => process_mgr.globals.FM_PORT_GW_CLN,
             LightningNode::Lnd(_) => process_mgr.globals.FM_PORT_GW_LND,
         };
         let addr = format!("http://127.0.0.1:{port}/{V1_API_ENDPOINT}");
+
+        let lightning_node_port = match ln {
+            LightningNode::Cln(_) => process_mgr.globals.FM_PORT_CLN,
+            LightningNode::Lnd(_) => process_mgr.globals.FM_PORT_LND_LISTEN,
+        };
+        let lightning_node_addr = format!("127.0.0.1:{lightning_node_port}");
+
         let gateway_env: HashMap<String, String> = HashMap::from_iter([
             (
                 FM_GATEWAY_DATA_DIR_ENV.to_owned(),
@@ -54,6 +63,7 @@ impl Gatewayd {
             ln: Some(ln),
             process,
             addr,
+            lightning_node_addr,
         };
         poll(
             "waiting for gateway to be ready to respond to rpc",
