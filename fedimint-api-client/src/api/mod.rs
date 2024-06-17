@@ -739,6 +739,14 @@ impl JsonRpcClient for WsClient {
             .map_err(|e| JsonRpcClientError::Transport(e.into()))?
             .isolated_client();
 
+        // let tor_config_clone = tor_config.clone();
+        // let tor_client_clone = tor_client.clone();
+        debug!(
+            // ?tor_config,
+            // ?tor_client,
+            "Created and bootstrapped the TorClient, for given TorConfig"
+        );
+
         // TODO: (@leonardo) should we implement our `IntoTorAddr` for `SafeUrl`
         // instead?
         let addr = (
@@ -748,12 +756,44 @@ impl JsonRpcClient for WsClient {
                 .expect("It should've asserted for `port`, or used a default one, on construction"),
         );
         let tor_addr = TorAddr::from(addr).map_err(|e| JsonRpcClientError::Transport(e.into()))?;
+        let tor_addr_clone = tor_addr.clone();
 
-        // TODO: (@leonardo) how to handle the arti_client::Error
-        let anonymized_stream = tor_client
-            .connect(tor_addr)
-            .await
-            .map_err(|e| JsonRpcClientError::Transport(e.into()))?;
+        debug!(
+            ?tor_addr,
+            ?addr,
+            "Successfully created the tor_addr, for given address (i.e. host and port)"
+        );
+
+        // TODO: (@leonardo) It can be updated to use `is_onion_address()` implementation, once https://gitlab.torproject.org/tpo/core/arti/-/merge_requests/2214 lands.
+        let anonymized_stream = if url.is_onion_address() {
+            let mut stream_prefs = arti_client::StreamPrefs::default();
+            stream_prefs.connect_to_onion_services(arti_client::config::BoolOrAuto::Explicit(true));
+
+            let anonymized_stream = tor_client
+                .connect_with_prefs(tor_addr, &stream_prefs)
+                .await
+                .map_err(|e| JsonRpcClientError::Transport(e.into()))?;
+
+            debug!(
+                ?tor_addr_clone,
+                "Successfully connected to onion_address tor_addr, and created the an anonymized data stream"
+            );
+
+            anonymized_stream
+        } else {
+            // TODO: (@leonardo) how to handle the arti_client::Error
+            let anonymized_stream = tor_client
+                .connect(tor_addr)
+                .await
+                .map_err(|e| JsonRpcClientError::Transport(e.into()))?;
+
+            debug!(
+                            ?tor_addr_clone,
+                            "Successfully connected to hostname/ip tor_addr, and created the an anonymized data stream"
+                        );
+
+            anonymized_stream
+        };
 
         let is_tls = match url.scheme() {
             "wss" => true,
@@ -761,7 +801,7 @@ impl JsonRpcClient for WsClient {
             unexpected_scheme => {
                 let error =
                     format!("`{unexpected_scheme}` not supported, it's expected `ws` or `wss`!");
-                return Err(JsonRpcClientError::Transport(anyhow!(error)));
+                return Err(JsonRpcClientError::Transport(anyhow!(error).into()));
             }
         };
 
@@ -809,10 +849,9 @@ impl JsonRpcClient for WsClient {
                     .await;
             }
             Some(tls_connector) => {
-                let host = url
-                    .host_str()
-                    .map(ToOwned::to_owned)
-                    .ok_or_else(|| JsonRpcClientError::Transport(anyhow!("Invalid host!")))?;
+                let host = url.host_str().map(ToOwned::to_owned).ok_or_else(|| {
+                    JsonRpcClientError::Transport(anyhow!("Invalid host!").into())
+                })?;
 
                 // FIXME: (@leonardo) Is this leaking any data ? Should investigate it further
                 // if it's really needed.
@@ -939,9 +978,9 @@ where
                 }
                 Ok(_client) => {
                     if 0 < attempts {
-                        return Err(JsonRpcClientError::Transport(anyhow::format_err!(
-                            "Disconnected"
-                        )));
+                        return Err(JsonRpcClientError::Transport(
+                            anyhow::format_err!("Disconnected").into(),
+                        ));
                     }
                     debug!(target: LOG_CLIENT_NET_API, "Triggering reconnection after disconnection");
                 }
