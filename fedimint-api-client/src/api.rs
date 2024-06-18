@@ -1138,7 +1138,7 @@ impl FederationPeerClientShared {
     }
 
     /// Wait (if needed) before reconnection attempt based on number of previous
-    /// attempts
+    /// attempts and update reconnection stats.
     async fn wait(&mut self) {
         let desired_timeout = self.connection_backoff.next().unwrap_or(Self::MAX_BACKOFF);
         let since_last_connect = now()
@@ -1153,11 +1153,7 @@ impl FederationPeerClientShared {
                 "Waiting before reconnecting");
         }
         fedimint_core::runtime::sleep(sleep_duration).await;
-    }
 
-    /// Wait (if needed) + update reconnection stats
-    async fn wait_and_inc_reconnect(&mut self) {
-        self.wait().await;
         self.last_connection_attempt = now();
     }
 
@@ -1201,7 +1197,7 @@ where
         shared: Arc<Mutex<FederationPeerClientShared>>,
     ) -> JitTryAnyhow<C> {
         JitTryAnyhow::new_try(move || async move {
-            shared.lock().await.wait_and_inc_reconnect().await;
+            shared.lock().await.wait().await;
 
             debug!(
                 target: LOG_CLIENT_NET_API,
