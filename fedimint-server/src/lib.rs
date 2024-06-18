@@ -64,7 +64,7 @@ pub async fn run(
         Some(cfg) => cfg,
         None => {
             run_config_gen(
-                data_dir,
+                data_dir.clone(),
                 settings,
                 db.clone(),
                 code_version_str,
@@ -92,6 +92,7 @@ pub async fn run(
         module_init_registry.clone(),
         &task_group,
         force_api_secrets,
+        data_dir,
     )
     .await?;
 

@@ -8,6 +8,8 @@ pub mod engine;
 pub mod transaction;
 
 use std::collections::BTreeMap;
+use std::env;
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -33,6 +35,7 @@ use tracing::log::warn;
 use crate::config::{ServerConfig, ServerConfigLocal};
 use crate::consensus::api::ConsensusApi;
 use crate::consensus::engine::ConsensusEngine;
+use crate::envs::{FM_DB_CHECKPOINT_RETENTION_DEFAULT, FM_DB_CHECKPOINT_RETENTION_ENV};
 use crate::net;
 use crate::net::api::{ApiSecrets, RpcHandlerCtx};
 
@@ -45,6 +48,7 @@ pub async fn run(
     module_init_registry: ServerModuleInitRegistry,
     task_group: &TaskGroup,
     force_api_secrets: ApiSecrets,
+    data_dir: PathBuf,
 ) -> anyhow::Result<()> {
     cfg.validate_config(&cfg.local.identity, &module_init_registry)?;
 
@@ -131,6 +135,12 @@ pub async fn run(
         );
     }
 
+    let checkpoint_retention: String = env::var(FM_DB_CHECKPOINT_RETENTION_ENV)
+        .unwrap_or(FM_DB_CHECKPOINT_RETENTION_DEFAULT.to_string());
+    let checkpoint_retention = checkpoint_retention.parse().unwrap_or_else(|_| {
+        panic!("FM_DB_CHECKPOINT_RETENTION_ENV var is invalid: {checkpoint_retention}")
+    });
+
     info!(target: LOG_CONSENSUS, "Starting Consensus Engine");
 
     ConsensusEngine {
@@ -147,6 +157,8 @@ pub async fn run(
         last_ci_by_peer,
         modules: module_registry,
         task_group: task_group.clone(),
+        data_dir,
+        checkpoint_retention,
     }
     .run()
     .await?;

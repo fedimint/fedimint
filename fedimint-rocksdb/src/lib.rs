@@ -157,6 +157,12 @@ impl IRawDatabase for RocksDb {
 
         rocksdb_tx
     }
+
+    fn checkpoint(&self, backup_path: &Path) -> Result<()> {
+        let checkpoint = rocksdb::checkpoint::Checkpoint::new(&self.0)?;
+        checkpoint.create_checkpoint(backup_path)?;
+        Ok(())
+    }
 }
 
 #[async_trait]
@@ -164,6 +170,12 @@ impl IRawDatabase for RocksDbReadOnly {
     type Transaction<'a> = RocksDbReadOnlyTransaction<'a>;
     async fn begin_transaction<'a>(&'a self) -> RocksDbReadOnlyTransaction<'a> {
         RocksDbReadOnlyTransaction(&self.0)
+    }
+
+    fn checkpoint(&self, backup_path: &Path) -> Result<()> {
+        let checkpoint = rocksdb::checkpoint::Checkpoint::new(&self.0)?;
+        checkpoint.create_checkpoint(backup_path)?;
+        Ok(())
     }
 }
 
