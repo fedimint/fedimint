@@ -8,6 +8,7 @@ pub mod engine;
 pub mod transaction;
 
 use std::collections::BTreeMap;
+use std::env;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
@@ -34,11 +35,15 @@ use tracing::log::warn;
 use crate::config::{ServerConfig, ServerConfigLocal};
 use crate::consensus::api::ConsensusApi;
 use crate::consensus::engine::ConsensusEngine;
+use crate::envs::FM_DB_CHECKPOINT_RETENTION_ENV;
 use crate::net;
 use crate::net::api::{ApiSecrets, RpcHandlerCtx};
 
 /// How many txs can be stored in memory before blocking the API
 const TRANSACTION_BUFFER: usize = 1000;
+
+// How many checkpoints from the current session should be retained on disk.
+const FM_DB_CHECKPOINT_RETENTION_DEFAULT: u64 = 1;
 
 pub async fn run(
     cfg: ServerConfig,
@@ -133,6 +138,11 @@ pub async fn run(
         );
     }
 
+    let checkpoint_retention: u64 = env::var(FM_DB_CHECKPOINT_RETENTION_ENV)
+        .unwrap_or(FM_DB_CHECKPOINT_RETENTION_DEFAULT.to_string())
+        .parse()
+        .expect("FM_DB_CHECKPOINT_SESSION_DIFFERENCE var is invalid");
+
     info!(target: LOG_CONSENSUS, "Starting Consensus Engine");
 
     ConsensusEngine {
@@ -150,6 +160,7 @@ pub async fn run(
         modules: module_registry,
         task_group: task_group.clone(),
         data_dir,
+        checkpoint_retention,
     }
     .run()
     .await?;
