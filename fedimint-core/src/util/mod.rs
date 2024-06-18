@@ -13,6 +13,7 @@ use std::str::FromStr;
 use std::{fs, io};
 
 use anyhow::format_err;
+pub use backon;
 use fedimint_logging::LOG_CORE;
 use futures::StreamExt;
 use serde::Serialize;
@@ -365,22 +366,17 @@ pub fn handle_version_hash_command(version_hash: &str) {
     }
 }
 
-pub use backon::{
-    BackoffBuilder, ConstantBuilder as ConstantBackoff, ExponentialBuilder as ExponentialBackoff,
-    FibonacciBuilder as FibonacciBackoff,
-};
-
 /// Run the supplied closure `op_fn` until it succeeds. Frequency and number of
 /// retries is determined by the specified strategy.
 ///
 /// ```
 /// use std::time::Duration;
 ///
-/// use fedimint_core::util::{retry, FibonacciBackoff};
+/// use fedimint_core::util::{backon, retry};
 /// # tokio_test::block_on(async {
 /// retry(
 ///     "Gateway balance after swap".to_string(),
-///     FibonacciBackoff::default()
+///     backon::FibonacciBuilder::default()
 ///         .with_min_delay(Duration::from_millis(200))
 ///         .with_max_delay(Duration::from_secs(3))
 ///         .with_max_times(10),
@@ -528,7 +524,7 @@ mod tests {
 
         let _ = retry(
             "Run once",
-            ConstantBackoff::default()
+            backon::ConstantBuilder::default()
                 .with_delay(Duration::ZERO)
                 .with_max_times(3),
             closure,
@@ -549,7 +545,7 @@ mod tests {
 
         let _ = retry(
             "Run 3 once",
-            ConstantBackoff::default()
+            backon::ConstantBuilder::default()
                 .with_delay(Duration::ZERO)
                 // retry two error
                 .with_max_times(2),

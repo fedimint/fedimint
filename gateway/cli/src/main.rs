@@ -10,7 +10,7 @@ use bitcoin::address::NetworkUnchecked;
 use bitcoin::Address;
 use clap::{CommandFactory, Parser, Subcommand};
 use fedimint_core::config::FederationId;
-use fedimint_core::util::{retry, ConstantBackoff, SafeUrl};
+use fedimint_core::util::{backon, retry, SafeUrl};
 use fedimint_core::{fedimint_build_code_version_env, BitcoinAmountOrAll};
 use fedimint_logging::TracingSetup;
 use ln_gateway::rpc::rpc_client::GatewayRpcClient;
@@ -337,7 +337,7 @@ async fn main() -> anyhow::Result<()> {
             } => {
                 retry(
                     "Wait for chain sync",
-                    ConstantBackoff::default()
+                    backon::ConstantBuilder::default()
                         .with_delay(Duration::from_secs(
                             retry_delay_seconds
                                 .unwrap_or(DEFAULT_WAIT_FOR_CHAIN_SYNC_RETRY_DELAY_SECONDS),

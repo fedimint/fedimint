@@ -58,7 +58,7 @@ use fedimint_core::module::{
 };
 use fedimint_core::task::{timeout, MaybeSend, MaybeSync};
 use fedimint_core::util::update_merge::UpdateMerge;
-use fedimint_core::util::{retry, FibonacciBackoff};
+use fedimint_core::util::{backon, retry};
 use fedimint_core::{
     apply, async_trait_maybe_send, push_db_pair_items, runtime, Amount, OutPoint, TransactionId,
 };
@@ -900,7 +900,7 @@ impl LightningClientModule {
             // should never fail with usize::MAX attempts.
             let _ = retry(
                 "update_gateway_cache",
-                FibonacciBackoff::default()
+                backon::FibonacciBuilder::default()
                     .with_min_delay(Duration::from_secs(1))
                     .with_max_delay(Duration::from_secs(10 * 60))
                     .with_max_times(usize::MAX),
