@@ -1,6 +1,6 @@
 [package]
 name = "fedimint-core"
-version = {workspace = true}
+version = { workspace = true }
 authors = ["The Fedimint Developers"]
 edition = "2021"
 description = "fedimint-core provides common code used by both client and server."
@@ -22,6 +22,7 @@ futures = { workspace = true }
 backtrace = "0.3.73"
 bincode = { workspace = true }
 bech32 = "0.11.0"
+base64-url = "3.0.0"
 bls12_381 = { workspace = true }
 serdect = { workspace = true }
 itertools = { workspace = true }

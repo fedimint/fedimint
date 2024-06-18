@@ -74,6 +74,30 @@ impl InviteCode {
         s
     }
 
+    pub fn from_map(
+        peer_to_url_map: &BTreeMap<PeerId, SafeUrl>,
+        federation_id: FederationId,
+        api_secret: Option<String>,
+    ) -> Self {
+        let max_size = peer_to_url_map.to_num_peers().max_evil() + 1;
+        let mut code_vec: Vec<InviteCodePart> = peer_to_url_map
+            .iter()
+            .take(max_size)
+            .map(|(peer, url)| InviteCodePart::Api {
+                url: url.clone(),
+                peer: *peer,
+            })
+            .collect();
+
+        code_vec.push(InviteCodePart::FederationId(federation_id));
+
+        if let Some(api_secret) = api_secret {
+            code_vec.push(InviteCodePart::ApiSecret(api_secret));
+        }
+
+        InviteCode(code_vec)
+    }
+
     /// Constructs an [`InviteCode`] which contains as many guardian URLs as
     /// needed to always be able to join a working federation
     pub fn new_with_essential_num_guardians(
@@ -190,6 +214,10 @@ impl FromStr for InviteCode {
     type Err = anyhow::Error;
 
     fn from_str(encoded: &str) -> Result<Self, Self::Err> {
+        if let Ok(invite_code_v2) = InviteCodeV2::decode_base64(encoded) {
+            return invite_code_v2.into_v1();
+        }
+
         let (hrp, data) = bech32::decode(encoded)?;
 
         ensure!(hrp == BECH32_HRP, "Invalid HRP in bech32 encoding");
@@ -234,10 +262,14 @@ impl<'de> Deserialize<'de> for InviteCode {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::BTreeMap;
     use std::str::FromStr;
 
+    use fedimint_core::util::SafeUrl;
+    use fedimint_core::PeerId;
+
     use crate::config::FederationId;
-    use crate::invite_code::InviteCode;
+    use crate::invite_code::{InviteCode, InviteCodeV2};
 
     #[test]
     fn test_invite_code_to_from_string() {
@@ -260,5 +292,56 @@ mod tests {
                 ))
             ]
         );
+    }
+
+    #[test]
+    fn invite_code_v2_encode_base64_roundtrip() {
+        let invite_code = InviteCodeV2 {
+            id: FederationId::dummy(),
+            peers: BTreeMap::from_iter([(
+                PeerId::from(0),
+                SafeUrl::parse("https://mint.com").expect("Url is valid"),
+            )]),
+            api_secret: None,
+        };
+
+        let encoded = invite_code.encode_base64();
+        let decoded = InviteCodeV2::decode_base64(&encoded).expect("Failed to decode");
+
+        assert_eq!(invite_code, decoded);
+
+        InviteCode::from_str(&encoded).expect("Failed to decode to legacy");
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Encodable, Decodable)]
+pub struct InviteCodeV2 {
+    pub id: FederationId,
+    pub peers: BTreeMap<PeerId, SafeUrl>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default)]
+    pub api_secret: Option<String>,
+}
+
+impl InviteCodeV2 {
+    pub fn into_v1(self) -> anyhow::Result<InviteCode> {
+        Ok(InviteCode::from_map(&self.peers, self.id, self.api_secret))
+    }
+
+    pub fn encode_base64(&self) -> String {
+        let json = &serde_json::to_string(self).expect("Encoding to JSON cannot fail");
+        let base_64 = base64_url::encode(json);
+
+        format!("fedimintA{base_64}")
+    }
+
+    pub fn decode_base64(s: &str) -> anyhow::Result<Self> {
+        ensure!(s.starts_with("fedimintA"), "Invalid Prefix");
+
+        let invite_code: Self = serde_json::from_slice(&base64_url::decode(&s[9..])?)?;
+
+        ensure!(!invite_code.peers.is_empty(), "Invite code has no peer");
+
+        Ok(invite_code)
     }
 }
