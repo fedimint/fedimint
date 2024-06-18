@@ -29,8 +29,8 @@ use bitcoin::{Address, BlockHash, Network, ScriptBuf, Sequence, Transaction, TxI
 use common::config::WalletConfigConsensus;
 use common::{
     proprietary_tweak_key, PegOutFees, PegOutSignatureItem, ProcessPegOutSigError, SpendableUTXO,
-    WalletCommonInit, WalletConsensusItem, WalletCreationError, WalletInput, WalletModuleTypes,
-    WalletOutput, WalletOutputOutcome, CONFIRMATION_TARGET,
+    UnknownWalletOutputVariantError, WalletCommonInit, WalletConsensusItem, WalletCreationError,
+    WalletInput, WalletModuleTypes, WalletOutput, WalletOutputOutcome, CONFIRMATION_TARGET,
 };
 use fedimint_bitcoind::{create_bitcoind, DynBitcoindRpc};
 use fedimint_core::config::{
@@ -556,7 +556,7 @@ impl ServerModule for Wallet {
         // is not necessary.
         // see: https://github.com/fedimint/fedimint/issues/5453
         if let WalletOutputV0::Rbf(_) = output {
-            return Err(WalletOutputError::RbfWithdrawalsDeprecated);
+            return Err(UnknownWalletOutputVariantError { variant: 1 }.into());
         }
 
         let change_tweak = self.consensus_nonce(dbtx).await;
@@ -1141,7 +1141,7 @@ impl Wallet {
                 peg_out.fees.fee_rate,
                 change_tweak,
             ),
-            WalletOutputV0::Rbf(_) => Err(WalletOutputError::RbfWithdrawalsDeprecated),
+            WalletOutputV0::Rbf(_) => Err(UnknownWalletOutputVariantError { variant: 1 }.into()),
         }
     }
 

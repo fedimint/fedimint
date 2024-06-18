@@ -308,7 +308,9 @@ async fn rbf_withdrawals_are_rejected() -> anyhow::Result<()> {
 
     assert_eq!(rbf_sub.ok().await?, WithdrawState::Created);
     match rbf_sub.ok().await? {
-        WithdrawState::Failed(err) => assert!(err.contains("RBF transactions are deprecated")),
+        WithdrawState::Failed(err) => {
+            assert!(err.contains("The wallet output version is not supported by this federation"))
+        }
         other => panic!("Unexpected state: {other:?}"),
     }
 
