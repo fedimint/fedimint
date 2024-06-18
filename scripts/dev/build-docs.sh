@@ -7,7 +7,7 @@ source "./scripts/_common.sh"
 fm_index_md=${FM_RUSTDOC_INDEX_MD:-./docs/rustdoc-index.md}
 index_html="${CARGO_BUILD_TARGET_DIR:-target}/doc/index.html"
 
-export RUSTDOCFLAGS='-D rustdoc::broken_intra_doc_links -D warnings'
+export RUSTDOCFLAGS='-D rustdoc::broken_intra_doc_links -D warnings -A unknown-lints'
 if cargo version | grep -q nightly ; then
   RUSTDOCFLAGS="$RUSTDOCFLAGS -Z unstable-options --enable-index-page"
   # broken: https://github.com/rust-lang/rust/issues/97881
