@@ -1174,7 +1174,7 @@ impl FederationPeerClientConnectionState {
 #[derive(Debug)]
 struct FederationPeerClient<C> {
     client: JitTryAnyhow<C>,
-    shared: Arc<tokio::sync::Mutex<FederationPeerClientConnectionState>>,
+    connection_state: Arc<tokio::sync::Mutex<FederationPeerClientConnectionState>>,
 }
 
 impl<C> FederationPeerClient<C>
@@ -1182,12 +1182,13 @@ where
     C: JsonRpcClient + 'static,
 {
     pub fn new(peer_id: PeerId, url: SafeUrl, api_secret: Option<String>) -> Self {
-        let shared: Arc<_> =
-            tokio::sync::Mutex::new(FederationPeerClientConnectionState::new()).into();
+        let connection_state = Arc::new(tokio::sync::Mutex::new(
+            FederationPeerClientConnectionState::new(),
+        ));
 
         Self {
-            client: Self::new_jit_client(peer_id, url, api_secret, shared.clone()),
-            shared,
+            client: Self::new_jit_client(peer_id, url, api_secret, connection_state.clone()),
+            connection_state,
         }
     }
 
@@ -1195,10 +1196,10 @@ where
         peer_id: PeerId,
         url: SafeUrl,
         api_secret: Option<String>,
-        shared: Arc<Mutex<FederationPeerClientConnectionState>>,
+        connection_state: Arc<Mutex<FederationPeerClientConnectionState>>,
     ) -> JitTryAnyhow<C> {
         JitTryAnyhow::new_try(move || async move {
-            shared.lock().await.wait().await;
+            connection_state.lock().await.wait().await;
 
             debug!(
                 target: LOG_CLIENT_NET_API,
@@ -1209,7 +1210,7 @@ where
 
             match &res {
                 Ok(_) => {
-                    shared.lock().await.reset();
+                    connection_state.lock().await.reset();
                     debug!(
                             target: LOG_CLIENT_NET_API,
                             peer_id = %peer_id,
@@ -1229,7 +1230,7 @@ where
     }
 
     pub fn reconnect(&mut self, peer_id: PeerId, url: SafeUrl, api_secret: Option<String>) {
-        self.client = Self::new_jit_client(peer_id, url, api_secret, self.shared.clone());
+        self.client = Self::new_jit_client(peer_id, url, api_secret, self.connection_state.clone());
     }
 }
 
