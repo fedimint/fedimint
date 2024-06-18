@@ -550,6 +550,15 @@ impl ServerModule for Wallet {
     ) -> Result<TransactionItemAmount, WalletOutputError> {
         let output = output.ensure_v0_ref()?;
 
+        // A bug motivated deprecating RBF withdrawals, so we explicitly fail any
+        // attempts to maintain backwards-compatibility. The wallet will set an
+        // aggressive feerate, so introducing the complexity of RBF withdrawals
+        // is not necessary.
+        // see: https://github.com/fedimint/fedimint/issues/5453
+        if let WalletOutputV0::Rbf(_) = output {
+            return Err(WalletOutputError::RbfWithdrawalsDeprecated);
+        }
+
         let change_tweak = self.consensus_nonce(dbtx).await;
 
         let mut tx = self.create_peg_out_tx(dbtx, output, &change_tweak).await?;
@@ -687,11 +696,9 @@ impl ServerModule for Wallet {
                     let tx = module.offline_wallet().create_tx(
                         bitcoin::Amount::from_sat(sats),
                         address.assume_checked().script_pubkey(),
-                        vec![],
                         module.available_utxos(&mut context.dbtx().into_nc()).await,
                         feerate,
                         &dummy_tweak,
-                        None
                     );
 
                     match tx {
@@ -1130,28 +1137,11 @@ impl Wallet {
             WalletOutputV0::PegOut(peg_out) => self.offline_wallet().create_tx(
                 peg_out.amount,
                 peg_out.recipient.clone().assume_checked().script_pubkey(),
-                vec![],
                 self.available_utxos(dbtx).await,
                 peg_out.fees.fee_rate,
                 change_tweak,
-                None,
             ),
-            WalletOutputV0::Rbf(rbf) => {
-                let tx = dbtx
-                    .get_value(&PendingTransactionKey(rbf.txid))
-                    .await
-                    .ok_or(WalletOutputError::RbfTransactionIdNotFound)?;
-
-                self.offline_wallet().create_tx(
-                    tx.peg_out_amount,
-                    tx.destination,
-                    tx.selected_utxos,
-                    self.available_utxos(dbtx).await,
-                    tx.fees.fee_rate,
-                    change_tweak,
-                    Some(rbf.clone()),
-                )
-            }
+            WalletOutputV0::Rbf(_) => Err(WalletOutputError::RbfWithdrawalsDeprecated),
         }
     }
 
@@ -1381,17 +1371,10 @@ impl<'a> StatelessWallet<'a> {
         &self,
         peg_out_amount: bitcoin::Amount,
         destination: ScriptBuf,
-        mut included_utxos: Vec<(UTXOKey, SpendableUTXO)>,
-        mut remaining_utxos: Vec<(UTXOKey, SpendableUTXO)>,
-        mut fee_rate: Feerate,
+        mut available_utxos: Vec<(UTXOKey, SpendableUTXO)>,
+        fee_rate: Feerate,
         change_tweak: &[u8; 33],
-        rbf: Option<Rbf>,
     ) -> Result<UnsignedTransaction, WalletOutputError> {
-        // Add the rbf fees to the existing tx fees
-        if let Some(rbf) = &rbf {
-            fee_rate.sats_per_kvb += rbf.fees.fee_rate.sats_per_kvb;
-        }
-
         // When building a transaction we need to take care of two things:
         //  * We need enough input amount to fund all outputs
         //  * We need to keep an eye on the tx weight so we can factor the fees into out
@@ -1421,9 +1404,7 @@ impl<'a> StatelessWallet<'a> {
             16) as u64; // sequence
 
         // Ensure deterministic ordering of UTXOs for all peers
-        included_utxos.sort_by_key(|(_, utxo)| utxo.amount);
-        remaining_utxos.sort_by_key(|(_, utxo)| utxo.amount);
-        included_utxos.extend(remaining_utxos);
+        available_utxos.sort_by_key(|(_, utxo)| utxo.amount);
 
         // Finally we initialize our accumulator for selected input amounts
         let mut total_selected_value = bitcoin::Amount::from_sat(0);
@@ -1431,7 +1412,7 @@ impl<'a> StatelessWallet<'a> {
         let mut fees = fee_rate.calculate_fee(total_weight);
 
         while total_selected_value < peg_out_amount + change_script.dust_value() + fees {
-            match included_utxos.pop() {
+            match available_utxos.pop() {
                 Some((utxo_key, utxo)) => {
                     total_selected_value += utxo.amount;
                     total_weight += max_input_weight;
@@ -1551,7 +1532,7 @@ impl<'a> StatelessWallet<'a> {
             destination,
             selected_utxos,
             peg_out_amount,
-            rbf,
+            rbf: None, // TODO: note
         })
     }
 
@@ -1769,11 +1750,9 @@ mod tests {
         let tx = wallet.create_tx(
             Amount::from_sat(2452),
             recipient.clone().assume_checked().script_pubkey(),
-            vec![],
             vec![(UTXOKey(OutPoint::null()), spendable.clone())],
             fee,
             &[0; 33],
-            None,
         );
         assert_eq!(tx, Err(WalletOutputError::NotEnoughSpendableUTXO));
 
@@ -1782,11 +1761,9 @@ mod tests {
             .create_tx(
                 Amount::from_sat(1000),
                 recipient.clone().assume_checked().script_pubkey(),
-                vec![],
                 vec![(UTXOKey(OutPoint::null()), spendable)],
                 fee,
                 &[0; 33],
-                None,
             )
             .expect("is ok");
 

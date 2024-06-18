@@ -33,7 +33,7 @@ pub mod tweakable;
 pub mod txoproof;
 
 pub const KIND: ModuleKind = ModuleKind::from_static_str("wallet");
-pub const MODULE_CONSENSUS_VERSION: ModuleConsensusVersion = ModuleConsensusVersion::new(2, 0);
+pub const MODULE_CONSENSUS_VERSION: ModuleConsensusVersion = ModuleConsensusVersion::new(3, 0);
 
 pub const CONFIRMATION_TARGET: u16 = 10;
 
@@ -314,6 +314,8 @@ pub enum WalletOutputError {
     TxWeightIncorrect(u64, u64),
     #[error("Peg-out fee rate is below min relay fee")]
     BelowMinRelayFee,
+    #[error("RBF transactions are deprecated")]
+    RbfWithdrawalsDeprecated,
     #[error("The wallet output version is not supported by this federation")]
     UnknownOutputVariant(#[from] UnknownWalletOutputVariantError),
 }

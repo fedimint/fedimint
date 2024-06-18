@@ -253,14 +253,14 @@ async fn peg_out_fail_refund() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn peg_outs_support_rbf() -> anyhow::Result<()> {
+async fn rbf_withdrawals_are_rejected() -> anyhow::Result<()> {
     let fixtures = fixtures();
     let fed = fixtures.new_default_fed().await;
     let client = fed.new_client().await;
     let bitcoin = fixtures.bitcoin();
     // Need lock to keep tx in mempool from getting mined
     let bitcoin = bitcoin.lock_exclusive().await;
-    info!("Starting test peg_outs_support_rbf");
+    info!("Starting test rbf_withdrawals_are_rejected");
 
     let finality_delay = 10;
     bitcoin.mine_blocks(finality_delay).await;
@@ -300,36 +300,31 @@ async fn peg_outs_support_rbf() -> anyhow::Result<()> {
         fees: PegOutFees::new(1000, fees.total_weight),
         txid,
     };
+
     let wallet_module = client.get_first_module::<WalletClientModule>();
-    let op = wallet_module.rbf_withdraw(rbf.clone(), ()).await?;
-    let sub = wallet_module.subscribe_withdraw_updates(op).await?;
-    let mut sub = sub.into_stream();
-    assert_eq!(sub.ok().await?, WithdrawState::Created);
-    let txid = match sub.ok().await? {
-        WithdrawState::Succeeded(txid) => txid,
+    let rbf_op = wallet_module.rbf_withdraw(rbf.clone(), ()).await?;
+    let rbf_sub = wallet_module.subscribe_withdraw_updates(rbf_op).await?;
+    let mut rbf_sub = rbf_sub.into_stream();
+
+    assert_eq!(rbf_sub.ok().await?, WithdrawState::Created);
+    match rbf_sub.ok().await? {
+        WithdrawState::Failed(err) => assert!(err.contains("RBF transactions are deprecated")),
         other => panic!("Unexpected state: {other:?}"),
-    };
-    let total_fees = fees.amount() + rbf.fees.amount();
-    assert_eq!(bitcoin.get_mempool_tx_fee(&txid).await, total_fees.into());
+    }
+
     assert_eq!(
         bitcoin
             .mine_block_and_get_received(&address.clone().assume_checked())
             .await,
         sats(PEG_OUT_AMOUNT_SATS)
     );
-    let balance_after_rbf_peg_out =
-        sats(PEG_IN_AMOUNT_SATS - PEG_OUT_AMOUNT_SATS - total_fees.to_sat());
+
     let current_balance = client.get_balance().await;
-    assert_eq!(balance_sub.ok().await?, current_balance);
-    // So we don't know which transaction will get mined first, it could be
-    // any one of the two, so we accept both
-    if current_balance != balance_after_rbf_peg_out
-        && current_balance != balance_after_normal_peg_out
-    {
-        bail!(
-            "Balance is {current_balance}, expected {balance_after_rbf_peg_out} or {balance_after_normal_peg_out}"
-        )
-    }
+    assert_eq!(
+        current_balance, balance_after_normal_peg_out,
+        "Balance is {current_balance}, expected {balance_after_normal_peg_out}"
+    );
+
     Ok(())
 }
 
