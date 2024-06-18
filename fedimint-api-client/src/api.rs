@@ -1118,15 +1118,15 @@ pub struct WsFederationApi<C = WsClient> {
     module_id: Option<ModuleInstanceId>,
 }
 
-/// Some data shared/preserved between [`FederationPeerClient`] and
+/// Connection state shared/preserved between [`FederationPeerClient`] and the
 /// Jit tasks it spawns.
 #[derive(Debug)]
-struct FederationPeerClientShared {
+struct FederationPeerClientConnectionState {
     last_connection_attempt: SystemTime,
     connection_backoff: backon::FibonacciBackoff,
 }
 
-impl FederationPeerClientShared {
+impl FederationPeerClientConnectionState {
     const MIN_BACKOFF: Duration = Duration::from_millis(100);
     const MAX_BACKOFF: Duration = Duration::from_secs(5);
 
@@ -1174,7 +1174,7 @@ impl FederationPeerClientShared {
 #[derive(Debug)]
 struct FederationPeerClient<C> {
     client: JitTryAnyhow<C>,
-    shared: Arc<tokio::sync::Mutex<FederationPeerClientShared>>,
+    shared: Arc<tokio::sync::Mutex<FederationPeerClientConnectionState>>,
 }
 
 impl<C> FederationPeerClient<C>
@@ -1182,7 +1182,8 @@ where
     C: JsonRpcClient + 'static,
 {
     pub fn new(peer_id: PeerId, url: SafeUrl, api_secret: Option<String>) -> Self {
-        let shared: Arc<_> = tokio::sync::Mutex::new(FederationPeerClientShared::new()).into();
+        let shared: Arc<_> =
+            tokio::sync::Mutex::new(FederationPeerClientConnectionState::new()).into();
 
         Self {
             client: Self::new_jit_client(peer_id, url, api_secret, shared.clone()),
@@ -1194,7 +1195,7 @@ where
         peer_id: PeerId,
         url: SafeUrl,
         api_secret: Option<String>,
-        shared: Arc<Mutex<FederationPeerClientShared>>,
+        shared: Arc<Mutex<FederationPeerClientConnectionState>>,
     ) -> JitTryAnyhow<C> {
         JitTryAnyhow::new_try(move || async move {
             shared.lock().await.wait().await;
