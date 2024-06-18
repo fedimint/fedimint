@@ -40,7 +40,8 @@ use fedimint_core::task::jit::JitTryAnyhow;
 use fedimint_core::task::{MaybeSend, MaybeSync};
 use fedimint_core::time::now;
 use fedimint_core::transaction::{SerdeTransaction, Transaction, TransactionSubmissionOutcome};
-use fedimint_core::util::SafeUrl;
+use fedimint_core::util::backon::BackoffBuilder;
+use fedimint_core::util::{backon, SafeUrl};
 use fedimint_core::{
     apply, async_trait_maybe_send, dyn_newtype_define, runtime, NumPeersExt, OutPoint, PeerId,
     TransactionId,
@@ -1122,21 +1123,24 @@ pub struct WsFederationApi<C = WsClient> {
 #[derive(Debug)]
 struct FederationPeerClientShared {
     last_connection_attempt: SystemTime,
-    connection_attempts: u64,
+    connection_backoff: backon::FibonacciBackoff,
 }
 
 impl FederationPeerClientShared {
+    const MIN_BACKOFF: Duration = Duration::from_millis(100);
+    const MAX_BACKOFF: Duration = Duration::from_secs(5);
+
     pub fn new() -> Self {
         Self {
             last_connection_attempt: now(),
-            connection_attempts: 0,
+            connection_backoff: Self::new_backoff(),
         }
     }
 
     /// Wait (if needed) before reconnection attempt based on number of previous
     /// attempts
     async fn wait(&mut self) {
-        let desired_timeout = Duration::from_millis((self.connection_attempts * 100).min(5000));
+        let desired_timeout = self.connection_backoff.next().unwrap_or(Self::MAX_BACKOFF);
         let since_last_connect = now()
             .duration_since(self.last_connection_attempt)
             .unwrap_or_default();
@@ -1154,12 +1158,18 @@ impl FederationPeerClientShared {
     /// Wait (if needed) + update reconnection stats
     async fn wait_and_inc_reconnect(&mut self) {
         self.wait().await;
-        self.connection_attempts = self.connection_attempts.saturating_add(1);
         self.last_connection_attempt = now();
     }
 
     fn reset(&mut self) {
-        self.connection_attempts = 0;
+        self.connection_backoff = Self::new_backoff();
+    }
+
+    fn new_backoff() -> backon::FibonacciBackoff {
+        backon::FibonacciBuilder::default()
+            .with_min_delay(Self::MIN_BACKOFF)
+            .with_max_delay(Self::MAX_BACKOFF)
+            .build()
     }
 }
 
