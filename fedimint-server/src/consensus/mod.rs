@@ -35,15 +35,12 @@ use tracing::log::warn;
 use crate::config::{ServerConfig, ServerConfigLocal};
 use crate::consensus::api::ConsensusApi;
 use crate::consensus::engine::ConsensusEngine;
-use crate::envs::FM_DB_CHECKPOINT_RETENTION_ENV;
+use crate::envs::{FM_DB_CHECKPOINT_RETENTION_DEFAULT, FM_DB_CHECKPOINT_RETENTION_ENV};
 use crate::net;
 use crate::net::api::{ApiSecrets, RpcHandlerCtx};
 
 /// How many txs can be stored in memory before blocking the API
 const TRANSACTION_BUFFER: usize = 1000;
-
-// How many checkpoints from the current session should be retained on disk.
-const FM_DB_CHECKPOINT_RETENTION_DEFAULT: u64 = 1;
 
 pub async fn run(
     cfg: ServerConfig,
@@ -138,10 +135,11 @@ pub async fn run(
         );
     }
 
-    let checkpoint_retention: u64 = env::var(FM_DB_CHECKPOINT_RETENTION_ENV)
-        .unwrap_or(FM_DB_CHECKPOINT_RETENTION_DEFAULT.to_string())
-        .parse()
-        .expect("FM_DB_CHECKPOINT_SESSION_DIFFERENCE var is invalid");
+    let checkpoint_retention: String = env::var(FM_DB_CHECKPOINT_RETENTION_ENV)
+        .unwrap_or(FM_DB_CHECKPOINT_RETENTION_DEFAULT.to_string());
+    let checkpoint_retention = checkpoint_retention.parse().unwrap_or_else(|_| {
+        panic!("FM_DB_CHECKPOINT_RETENTION_ENV var is invalid: {checkpoint_retention}")
+    });
 
     info!(target: LOG_CONSENSUS, "Starting Consensus Engine");
 

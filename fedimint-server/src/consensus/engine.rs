@@ -54,6 +54,9 @@ use crate::net::connect::{Connector, TlsTcpConnector};
 use crate::net::peers::{DelayCalculator, ReconnectPeerConnections};
 use crate::LOG_CONSENSUS;
 
+// The name of the directory where the database checkpoints are stored.
+const DB_CHECKPOINTS_DIR: &str = "db_checkpoints";
+
 /// Runs the main server consensus loop
 pub struct ConsensusEngine {
     pub modules: ServerModuleRegistry,
@@ -484,11 +487,16 @@ impl ConsensusEngine {
             .expect("This is the only place where we write to this key");
     }
 
+    /// Returns the full path where the database checkpoints are stored.
+    fn db_checkpoints_dir(&self) -> PathBuf {
+        self.data_dir.join(DB_CHECKPOINTS_DIR)
+    }
+
     /// Creates the directory within the data directory for storing the database
     /// checkpoints or deletes checkpoints before `current_session` -
     /// `checkpoint_retention`.
     fn initialize_checkpoint_directory(&self, current_session: u64) -> anyhow::Result<()> {
-        let checkpoint_dir = self.data_dir.join("db_checkpoints");
+        let checkpoint_dir = self.db_checkpoints_dir();
 
         if checkpoint_dir.exists() {
             debug!(
@@ -500,7 +508,9 @@ impl ConsensusEngine {
                 // Validate that the directory is a session index
                 if let Ok(file_name) = checkpoint.file_name().into_string() {
                     if let Ok(session) = file_name.parse::<u64>() {
-                        if session < current_session - self.checkpoint_retention {
+                        if current_session >= self.checkpoint_retention
+                            && session < current_session - self.checkpoint_retention
+                        {
                             fs::remove_dir_all(checkpoint.path())?;
                         }
                     }
@@ -523,7 +533,7 @@ impl ConsensusEngine {
             return;
         }
 
-        let checkpoint_dir = self.data_dir.join("db_checkpoints");
+        let checkpoint_dir = self.db_checkpoints_dir();
         let session_checkpoint_dir = checkpoint_dir.join(format!("{session_index}"));
 
         {
