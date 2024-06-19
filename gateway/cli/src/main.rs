@@ -346,7 +346,8 @@ async fn main() -> anyhow::Result<()> {
                             max_retries.unwrap_or(DEFAULT_WAIT_FOR_CHAIN_SYNC_RETRIES) as usize
                         ),
                     || async {
-                        if client().get_info().await?.block_height.unwrap_or(0) >= block_height {
+                        let info = client().get_info().await?;
+                        if info.block_height.unwrap_or(0) >= block_height && info.synced_to_chain {
                             Ok(())
                         } else {
                             Err(anyhow::anyhow!("Not synced yet"))
