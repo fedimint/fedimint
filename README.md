@@ -150,6 +150,7 @@ If you want to run with UIs, see the [UI](https://github.com/fedimint/ui) repo f
 
 | Area              | Lead-Maintainer    | Co-Maintainers               | Status                                |
 |-------------------|--------------------|------------------------------|---------------------------------------|
+| Project Lead      | @elsirion          | @dpc @joschisan              | X                                     | 
 | Core Server       | @joschisan         | X                            | mostly well factored, no known issues | 
 | Core Consensus    | @joschisan         | @bradleystachurski           | polished and documented               | 
 | Lightning Module  | @joschisan         | @m1sterc001guy               | active development, known issues      |
@@ -160,6 +161,6 @@ If you want to run with UIs, see the [UI](https://github.com/fedimint/ui) repo f
 | Database          | @m1sterc001guy     | X                            | X                                     |
 | Networking        | X                  | X                            | X                                     |
 | CI / Nix          | @dpc               | @maan2003 @bradleystachurski | X                                     |
-| Testing           | X                  | X                            | X                                     |
+| Testing           | @bradleystachurski | X                            | X                                     |
 | Devimint          | @maan2003          | X                            | X                                     |
 | Config Generation | X                  | X                            | X                                     |
