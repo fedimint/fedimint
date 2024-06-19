@@ -21,8 +21,8 @@ use ln_gateway::rpc::{
 };
 use serde::Serialize;
 
-const DEFAULT_WAIT_FOR_CHAIN_SYNC_RETRIES: u32 = 12;
-const DEFAULT_WAIT_FOR_CHAIN_SYNC_RETRY_DELAY_SECONDS: u64 = 10;
+const DEFAULT_WAIT_FOR_CHAIN_SYNC_RETRIES: u32 = 60;
+const DEFAULT_WAIT_FOR_CHAIN_SYNC_RETRY_DELAY_SECONDS: u64 = 2;
 
 #[derive(Parser)]
 #[command(version)]
