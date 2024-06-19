@@ -139,6 +139,46 @@ pub async fn latency_tests(
     let initial_balance_sats = 100_000_000;
     fed.pegin_client(initial_balance_sats, &client).await?;
 
+    info!("Testing client withdraw");
+
+    let initial_walletng_balance = client.balance().await?;
+
+    let address = bitcoind.get_new_address().await?;
+    let withdraw_res = cmd!(
+        client,
+        "withdraw",
+        "--address",
+        &address,
+        "--amount",
+        "50000 sat"
+    )
+    .out_json()
+    .await?;
+
+    let txid: Txid = withdraw_res["txid"].as_str().unwrap().parse().unwrap();
+    let fees_sat = withdraw_res["fees_sat"].as_u64().unwrap();
+
+    let tx_hex = poll("Waiting for transaction in mempool", || async {
+        // TODO: distinguish errors from not found
+        bitcoind
+            .get_raw_transaction(&txid)
+            .context("getrawtransaction")
+            .map_err(ControlFlow::Continue)
+    })
+    .await
+    .expect("cannot fail, gets stuck");
+
+    let tx = bitcoin::Transaction::consensus_decode_hex(&tx_hex, &Default::default()).unwrap();
+    assert!(tx
+        .output
+        .iter()
+        .any(|o| o.script_pubkey == address.script_pubkey() && o.value == 50000));
+
+    let post_withdraw_walletng_balance = client.balance().await?;
+    let expected_wallet_balance = initial_walletng_balance - 50_000_000 - (fees_sat * 1000);
+
+    assert_eq!(post_withdraw_walletng_balance, expected_wallet_balance);
+
     let cln_gw_id = gw_cln.gateway_id().await?;
 
     match r#type {

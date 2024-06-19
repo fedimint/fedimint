@@ -531,7 +531,7 @@ mod fedimint_migration_tests {
     use fedimint_wallet_client::client_db::NextPegInTweakIndexKey;
     use fedimint_wallet_client::{WalletClientInit, WalletClientModule};
     use fedimint_wallet_common::{
-        PegOutFees, Rbf, SpendableUTXO, WalletCommonInit, WalletOutputOutcome,
+        PegOutFees, SpendableUTXO, WalletCommonInit, WalletOutputOutcome,
     };
     use fedimint_wallet_server::db::{
         BlockCountVoteKey, BlockCountVotePrefix, BlockHashKey, BlockHashKeyPrefix, DbKeyPrefix,
@@ -657,7 +657,6 @@ mod fedimint_migration_tests {
             destination: destination.clone(),
             selected_utxos: selected_utxos.clone(),
             peg_out_amount: Amount::from_sat(10000),
-            rbf: None,
         };
 
         dbtx.insert_new_entry(&unsigned_transaction_key, &unsigned_transaction)
@@ -676,13 +675,6 @@ mod fedimint_migration_tests {
             },
             selected_utxos: selected_utxos.clone(),
             peg_out_amount: Amount::from_sat(10000),
-            rbf: Some(Rbf {
-                fees: PegOutFees {
-                    fee_rate: Feerate { sats_per_kvb: 1000 },
-                    total_weight: 40000,
-                },
-                txid: Txid::from_byte_array(BYTE_32),
-            }),
         };
         dbtx.insert_new_entry(&pending_transaction_key, &pending_tx)
             .await;

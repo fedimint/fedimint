@@ -204,13 +204,6 @@ pub enum WalletOperationMetaVariant {
         fee: PegOutFees,
         change: Vec<OutPoint>,
     },
-
-    // TODO: note that we need to keep due to back-comapt if this approach works
-    // also update for other enum variants, not worth making todos everywhere
-    RbfWithdraw {
-        rbf: Rbf,
-        change: Vec<OutPoint>,
-    },
 }
 
 #[derive(Debug)]

@@ -30,7 +30,7 @@ use common::config::WalletConfigConsensus;
 use common::{
     proprietary_tweak_key, PegOutFees, PegOutSignatureItem, ProcessPegOutSigError, SpendableUTXO,
     WalletCommonInit, WalletConsensusItem, WalletCreationError, WalletInput, WalletModuleTypes,
-    WalletOutput, WalletOutputOutcome, CONFIRMATION_TARGET, DEPRECATED_RBF_ERROR,
+    WalletOutput, WalletOutputOutcome, CONFIRMATION_TARGET,
 };
 use fedimint_bitcoind::{create_bitcoind, DynBitcoindRpc};
 use fedimint_core::config::{
@@ -69,7 +69,7 @@ use fedimint_wallet_common::endpoint_constants::{
 use fedimint_wallet_common::keys::CompressedPublicKey;
 use fedimint_wallet_common::tweakable::Tweakable;
 use fedimint_wallet_common::{
-    Rbf, WalletInputError, WalletOutputError, WalletOutputV0, MODULE_CONSENSUS_VERSION,
+    WalletInputError, WalletOutputError, WalletOutputV0, MODULE_CONSENSUS_VERSION,
 };
 use futures::StreamExt;
 use hex::ToHex;
@@ -550,15 +550,6 @@ impl ServerModule for Wallet {
     ) -> Result<TransactionItemAmount, WalletOutputError> {
         let output = output.ensure_v0_ref()?;
 
-        // A bug motivated deprecating RBF withdrawals, so we explicitly fail any
-        // attempts to maintain backwards-compatibility. The wallet will set an
-        // aggressive feerate, so introducing the complexity of RBF withdrawals
-        // is not necessary.
-        // see: https://github.com/fedimint/fedimint/issues/5453
-        if let WalletOutputV0::Rbf(_) = output {
-            return Err(DEPRECATED_RBF_ERROR);
-        }
-
         let change_tweak = self.consensus_nonce(dbtx).await;
 
         let mut tx = self.create_peg_out_tx(dbtx, output, &change_tweak).await?;
@@ -903,7 +894,7 @@ impl Wallet {
             fees: unsigned.fees,
             selected_utxos: unsigned.selected_utxos,
             peg_out_amount: unsigned.peg_out_amount,
-            rbf: unsigned.rbf,
+            // rbf: unsigned.rbf,
         })
     }
 
@@ -1100,7 +1091,6 @@ impl Wallet {
                 peg_out.fees.fee_rate,
                 change_tweak,
             ),
-            WalletOutputV0::Rbf(_) => Err(DEPRECATED_RBF_ERROR),
         }
     }
 
@@ -1276,7 +1266,6 @@ impl<'a> StatelessWallet<'a> {
                     ));
                 }
             }
-            WalletOutputV0::Rbf(_) => return Err(DEPRECATED_RBF_ERROR),
         }
 
         // Validate the tx amount is over the dust limit
@@ -1296,8 +1285,8 @@ impl<'a> StatelessWallet<'a> {
         // BIP-0125 requires 1 sat/vb for RBF by default (same as normal txs)
         let fees = match output {
             WalletOutputV0::PegOut(pegout) => pegout.fees,
-            WalletOutputV0::Rbf(_) => return Err(DEPRECATED_RBF_ERROR),
         };
+
         if fees.fee_rate.sats_per_kvb < u64::from(DEFAULT_MIN_RELAY_TX_FEE) {
             return Err(WalletOutputError::BelowMinRelayFee);
         }
@@ -1486,7 +1475,7 @@ impl<'a> StatelessWallet<'a> {
             destination,
             selected_utxos,
             peg_out_amount,
-            rbf: None, // TODO: note
+            // rbf: None, // TODO: note
         })
     }
 
@@ -1599,7 +1588,9 @@ pub struct PendingTransaction {
     pub fees: PegOutFees,
     pub selected_utxos: Vec<(UTXOKey, SpendableUTXO)>,
     pub peg_out_amount: bitcoin::Amount,
-    pub rbf: Option<Rbf>,
+    // dang, it might be worth considering migrations to cleanly remove all rbf withdrawal
+    // references
+    // pub rbf: Option<Rbf>,
 }
 
 impl Serialize for PendingTransaction {
@@ -1629,7 +1620,7 @@ pub struct UnsignedTransaction {
     pub destination: ScriptBuf,
     pub selected_utxos: Vec<(UTXOKey, SpendableUTXO)>,
     pub peg_out_amount: bitcoin::Amount,
-    pub rbf: Option<Rbf>,
+    // pub rbf: Option<Rbf>,
 }
 
 impl Serialize for UnsignedTransaction {

@@ -200,23 +200,12 @@ impl WalletOutput {
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
 pub enum WalletOutputV0 {
     PegOut(PegOut),
-    Rbf(Rbf),
-}
-
-/// Allows a user to bump the fees of a `PendingTransaction`
-#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
-pub struct Rbf {
-    /// Fees expressed as an increase over existing peg-out fees
-    pub fees: PegOutFees,
-    /// Bitcoin tx id to bump the fees for
-    pub txid: Txid,
 }
 
 impl WalletOutputV0 {
     pub fn amount(&self) -> Amount {
         match self {
             WalletOutputV0::PegOut(pegout) => pegout.amount + pegout.fees.amount(),
-            WalletOutputV0::Rbf(rbf) => rbf.fees.amount(),
         }
     }
 }
@@ -232,7 +221,6 @@ impl std::fmt::Display for WalletOutputV0 {
                     pegout.recipient.clone().assume_checked()
                 )
             }
-            WalletOutputV0::Rbf(rbf) => write!(f, "Wallet RBF {:?} to {}", rbf.fees, rbf.txid),
         }
     }
 }
