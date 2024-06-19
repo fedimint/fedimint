@@ -1516,7 +1516,7 @@
     <span class="kw">use </span>anyhow::{ensure, Context <span class="kw">as _</span>};
     <span class="kw">use </span>fedimint_api_client::api::PeerConnectionStatus;
     <span class="kw">use </span>fedimint_core::task::TaskGroup;
-    <span class="kw">use </span>fedimint_core::util::retry;
+    <span class="kw">use </span>fedimint_core::util::{backon, retry};
     <span class="kw">use </span>fedimint_core::PeerId;
     <span class="kw">use </span>tokio::sync::RwLock;
 
@@ -1536,7 +1536,7 @@
             ) {
                 retry(
                     <span class="macro">format!</span>(<span class="string">"wait for client {name}"</span>),
-                    fedimint_core::util::FibonacciBackoff::default()
+                    backon::FibonacciBuilder::default()
                         .with_min_delay(Duration::from_millis(<span class="number">200</span>))
                         .with_max_delay(Duration::from_secs(<span class="number">5</span>))
                         .with_max_times(<span class="number">10</span>),

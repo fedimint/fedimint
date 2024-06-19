@@ -84,6 +84,7 @@
 <a href="#84" id="84">84</a>
 <a href="#85" id="85">85</a>
 <a href="#86" id="86">86</a>
+<a href="#87" id="87">87</a>
 </pre></div><pre class="rust"><code><span class="attr">#![warn(clippy::pedantic)]
 #![allow(clippy::missing_errors_doc)]
 #![allow(clippy::missing_panics_doc)]
@@ -100,6 +101,7 @@
 <span class="kw">use </span>fedimint_core::endpoint_constants::CLIENT_CONFIG_ENDPOINT;
 <span class="kw">use </span>fedimint_core::invite_code::InviteCode;
 <span class="kw">use </span>fedimint_core::module::ApiRequestErased;
+<span class="kw">use </span>fedimint_core::util::backon;
 <span class="kw">use </span>fedimint_core::NumPeers;
 <span class="kw">use </span>query::FilterMap;
 <span class="kw">use </span>tracing::debug;
@@ -117,7 +119,7 @@
         <span class="string">"Downloading client config"</span>,
         <span class="comment">// 0.2, 0.2, 0.4, 0.6, 1.0, 1.6, ...
         // sum = 21.2
-        </span>fedimint_core::util::FibonacciBackoff::default()
+        </span>backon::FibonacciBuilder::default()
             .with_min_delay(Duration::from_millis(<span class="number">200</span>))
             .with_max_delay(Duration::from_secs(<span class="number">5</span>))
             .with_max_times(<span class="number">10</span>),

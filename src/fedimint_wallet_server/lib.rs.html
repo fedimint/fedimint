@@ -1892,7 +1892,7 @@
 </span><span class="kw">use </span>fedimint_core::task::sleep;
 <span class="kw">use </span>fedimint_core::task::{TaskGroup, TaskHandle};
 <span class="kw">use </span>fedimint_core::time::now;
-<span class="kw">use </span>fedimint_core::util::{retry, FibonacciBackoff};
+<span class="kw">use </span>fedimint_core::util::{backon, retry};
 <span class="kw">use </span>fedimint_core::{
     apply, async_trait_maybe_send, push_db_key_items, push_db_pair_items, Feerate, NumPeersExt,
     OutPoint, PeerId, ServerModule,
@@ -2824,7 +2824,7 @@
             </span><span class="macro">trace!</span>(block = height, <span class="string">"Fetching block hash"</span>);
             <span class="kw">let </span>block_hash = retry(
                 <span class="string">"get_block_hash"</span>,
-                FibonacciBackoff::default()
+                backon::FibonacciBuilder::default()
                     .with_min_delay(Duration::from_secs(<span class="number">1</span>))
                     .with_max_delay(Duration::from_secs(<span class="number">10 </span>* <span class="number">60</span>))
                     .with_max_times(usize::MAX),
@@ -2851,7 +2851,7 @@
             <span class="kw">for </span>(txid, tx) <span class="kw">in </span><span class="kw-2">&amp;</span>pending_transactions {
                 <span class="kw">let </span>is_tx_in_block = retry(
                     <span class="string">"is_tx_in_block"</span>,
-                    FibonacciBackoff::default()
+                    backon::FibonacciBuilder::default()
                         .with_min_delay(Duration::from_secs(<span class="number">1</span>))
                         .with_max_delay(Duration::from_secs(<span class="number">10 </span>* <span class="number">60</span>))
                         .with_max_times(usize::MAX),

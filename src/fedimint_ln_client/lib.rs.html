@@ -2082,7 +2082,7 @@
 };
 <span class="kw">use </span>fedimint_core::task::{timeout, MaybeSend, MaybeSync};
 <span class="kw">use </span>fedimint_core::util::update_merge::UpdateMerge;
-<span class="kw">use </span>fedimint_core::util::{retry, FibonacciBackoff};
+<span class="kw">use </span>fedimint_core::util::{backon, retry};
 <span class="kw">use </span>fedimint_core::{
     apply, async_trait_maybe_send, push_db_pair_items, runtime, Amount, OutPoint, TransactionId,
 };
@@ -2924,7 +2924,7 @@
             <span class="comment">// should never fail with usize::MAX attempts.
             </span><span class="kw">let _ </span>= retry(
                 <span class="string">"update_gateway_cache"</span>,
-                FibonacciBackoff::default()
+                backon::FibonacciBuilder::default()
                     .with_min_delay(Duration::from_secs(<span class="number">1</span>))
                     .with_max_delay(Duration::from_secs(<span class="number">10 </span>* <span class="number">60</span>))
                     .with_max_times(usize::MAX),

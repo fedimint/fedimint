@@ -1171,7 +1171,7 @@
 <span class="kw">use </span>fedimint_core::db::{Database, DatabaseValue};
 <span class="kw">use </span>fedimint_core::invite_code::InviteCode;
 <span class="kw">use </span>fedimint_core::module::{ApiAuth, ApiRequestErased};
-<span class="kw">use </span>fedimint_core::util::{handle_version_hash_command, retry, ConstantBackoff, SafeUrl};
+<span class="kw">use </span>fedimint_core::util::{backon, handle_version_hash_command, retry, SafeUrl};
 <span class="kw">use </span>fedimint_core::{fedimint_build_code_version_env, runtime, PeerId, TieredMulti};
 <span class="kw">use </span>fedimint_ln_client::LightningClientInit;
 <span class="kw">use </span>fedimint_logging::{TracingSetup, LOG_CLIENT};
@@ -1951,7 +1951,7 @@ Examples:
             }
             Command::Dev(DevCmd::WaitBlockCount { count: target }) =&gt; retry(
                 <span class="string">"wait_block_count"</span>,
-                ConstantBackoff::default()
+                backon::ConstantBuilder::default()
                     .with_delay(Duration::from_millis(<span class="number">100</span>))
                     .with_max_times(usize::MAX),
                 || <span class="kw">async </span>{

@@ -556,10 +556,6 @@
 <a href="#556" id="556">556</a>
 <a href="#557" id="557">557</a>
 <a href="#558" id="558">558</a>
-<a href="#559" id="559">559</a>
-<a href="#560" id="560">560</a>
-<a href="#561" id="561">561</a>
-<a href="#562" id="562">562</a>
 </pre></div><pre class="rust"><code><span class="doccomment">/// Copied from `tokio_stream` 0.1.12 to use our optional Send bounds
 </span><span class="kw">pub mod </span>broadcaststream;
 <span class="kw">pub mod </span>update_merge;
@@ -575,6 +571,7 @@
 <span class="kw">use </span>std::{fs, io};
 
 <span class="kw">use </span>anyhow::format_err;
+<span class="kw">pub use </span>backon;
 <span class="kw">use </span>fedimint_logging::LOG_CORE;
 <span class="kw">use </span>futures::StreamExt;
 <span class="kw">use </span>serde::Serialize;
@@ -927,22 +924,17 @@
     }
 }
 
-<span class="kw">pub use </span>backon::{
-    BackoffBuilder, ConstantBuilder <span class="kw">as </span>ConstantBackoff, ExponentialBuilder <span class="kw">as </span>ExponentialBackoff,
-    FibonacciBuilder <span class="kw">as </span>FibonacciBackoff,
-};
-
 <span class="doccomment">/// Run the supplied closure `op_fn` until it succeeds. Frequency and number of
 /// retries is determined by the specified strategy.
 ///
 /// ```
 /// use std::time::Duration;
 ///
-/// use fedimint_core::util::{retry, FibonacciBackoff};
+/// use fedimint_core::util::{backon, retry};
 /// # tokio_test::block_on(async {
 /// retry(
 ///     "Gateway balance after swap".to_string(),
-///     FibonacciBackoff::default()
+///     backon::FibonacciBuilder::default()
 ///         .with_min_delay(Duration::from_millis(200))
 ///         .with_max_delay(Duration::from_secs(3))
 ///         .with_max_times(10),
@@ -1090,7 +1082,7 @@
 
         <span class="kw">let _ </span>= retry(
             <span class="string">"Run once"</span>,
-            ConstantBackoff::default()
+            backon::ConstantBuilder::default()
                 .with_delay(Duration::ZERO)
                 .with_max_times(<span class="number">3</span>),
             closure,
@@ -1111,7 +1103,7 @@
 
         <span class="kw">let _ </span>= retry(
             <span class="string">"Run 3 once"</span>,
-            ConstantBackoff::default()
+            backon::ConstantBuilder::default()
                 .with_delay(Duration::ZERO)
                 <span class="comment">// retry two error
                 </span>.with_max_times(<span class="number">2</span>),

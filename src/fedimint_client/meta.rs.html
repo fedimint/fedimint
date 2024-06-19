@@ -348,7 +348,7 @@
 <span class="kw">use </span>fedimint_core::db::{Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped};
 <span class="kw">use </span>fedimint_core::task::waiter::Waiter;
 <span class="kw">use </span>fedimint_core::task::{MaybeSend, MaybeSync};
-<span class="kw">use </span>fedimint_core::util::{retry, FibonacciBackoff};
+<span class="kw">use </span>fedimint_core::util::{backon, retry};
 <span class="kw">use </span>fedimint_core::{apply, async_trait_maybe_send};
 <span class="kw">use </span>serde::de::DeserializeOwned;
 <span class="kw">use </span>tokio::sync::Notify;
@@ -588,11 +588,11 @@
             .map(|(key, value)| (MetaFieldKey(key.to_owned()), MetaFieldValue(value.clone())));
         <span class="kw">let </span>backoff = <span class="kw">match </span>fetch_kind {
             <span class="comment">// need to be fast the first time.
-            </span>FetchKind::Initial =&gt; FibonacciBackoff::default()
+            </span>FetchKind::Initial =&gt; backon::FibonacciBuilder::default()
                 .with_min_delay(Duration::from_millis(<span class="number">300</span>))
                 .with_max_delay(Duration::from_secs(<span class="number">3</span>))
                 .with_max_times(<span class="number">10</span>),
-            FetchKind::Background =&gt; FibonacciBackoff::default()
+            FetchKind::Background =&gt; backon::FibonacciBuilder::default()
                 .with_min_delay(Duration::from_secs(<span class="number">10</span>))
                 .with_max_delay(Duration::from_secs(<span class="number">10 </span>* <span class="number">60</span>))
                 .with_max_times(usize::MAX),
