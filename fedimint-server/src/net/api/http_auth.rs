@@ -11,6 +11,7 @@ use futures::{Future, FutureExt as _, TryFutureExt as _};
 use http::HeaderValue;
 use hyper::body::Body;
 use hyper::{http, Request, Response};
+use subtle::ConstantTimeEq as _;
 use tower::Service;
 use tracing::{debug, info};
 
@@ -63,18 +64,7 @@ impl<S> HttpAuthService<S> {
     fn check_auth(&self, base64_auth: &str) -> bool {
         self.auth_base64
             .iter()
-            .any(|p| Self::const_eq(p, base64_auth))
-    }
-
-    /// Constant time (hopefully) string comparison
-    fn const_eq(a: &str, b: &str) -> bool {
-        if a.len() != b.len() {
-            return false;
-        }
-        a.bytes()
-            .zip(b.bytes())
-            .fold(0u64, |acc, (a, b)| acc + u64::from(a ^ b))
-            == 0
+            .any(|p| p.as_bytes().ct_eq(base64_auth.as_bytes()).into())
     }
 
     fn check_auth_header_value(&self, auth_header: &HeaderValue) -> anyhow::Result<bool> {
@@ -99,23 +89,6 @@ impl<S> HttpAuthService<S> {
     }
 }
 
-#[test]
-fn sanity_const_eq() {
-    for (a, b, res) in [
-        ("", "", true),
-        ("", "aa", false),
-        ("a", "", false),
-        ("a", "aa", false),
-        ("aa", "a", false),
-        ("aa", "aa", true),
-    ] {
-        assert_eq!(
-            HttpAuthService::<()>::const_eq(a, b),
-            res,
-            "{a} {b} {res:?}"
-        );
-    }
-}
 impl<S, B: Body + 'static> Service<Request<B>> for HttpAuthService<S>
 where
     S: Service<Request<B>, Response = jsonrpsee::core::http_helpers::Response>,
