@@ -11,7 +11,7 @@
 
 pub mod db;
 
-use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::collections::{BTreeMap, HashMap};
 use std::convert::Infallible;
 #[cfg(not(target_family = "wasm"))]
 use std::time::Duration;
@@ -29,8 +29,8 @@ use bitcoin::{Address, BlockHash, Network, ScriptBuf, Sequence, Transaction, TxI
 use common::config::WalletConfigConsensus;
 use common::{
     proprietary_tweak_key, PegOutFees, PegOutSignatureItem, ProcessPegOutSigError, SpendableUTXO,
-    UnknownWalletOutputVariantError, WalletCommonInit, WalletConsensusItem, WalletCreationError,
-    WalletInput, WalletModuleTypes, WalletOutput, WalletOutputOutcome, CONFIRMATION_TARGET,
+    WalletCommonInit, WalletConsensusItem, WalletCreationError, WalletInput, WalletModuleTypes,
+    WalletOutput, WalletOutputOutcome, CONFIRMATION_TARGET, DEPRECATED_RBF_ERROR,
 };
 use fedimint_bitcoind::{create_bitcoind, DynBitcoindRpc};
 use fedimint_core::config::{
@@ -556,7 +556,7 @@ impl ServerModule for Wallet {
         // is not necessary.
         // see: https://github.com/fedimint/fedimint/issues/5453
         if let WalletOutputV0::Rbf(_) = output {
-            return Err(UnknownWalletOutputVariantError { variant: 1 }.into());
+            return Err(DEPRECATED_RBF_ERROR);
         }
 
         let change_tweak = self.consensus_nonce(dbtx).await;
@@ -648,10 +648,7 @@ impl ServerModule for Wallet {
                 dbtx,
                 module_instance_id,
                 &UnsignedTransactionPrefixKey,
-                |_, v| match v.rbf {
-                    None => v.change.to_sat() as i64 * 1000,
-                    Some(rbf) => rbf.fees.amount().to_sat() as i64 * -1000,
-                },
+                |_, v| v.change.to_sat() as i64 * 1000,
             )
             .await;
         audit
@@ -659,10 +656,7 @@ impl ServerModule for Wallet {
                 dbtx,
                 module_instance_id,
                 &PendingTransactionPrefixKey,
-                |_, v| match v.rbf {
-                    None => v.change.to_sat() as i64 * 1000,
-                    Some(rbf) => rbf.fees.amount().to_sat() as i64 * -1000,
-                },
+                |_, v| v.change.to_sat() as i64 * 1000,
             )
             .await;
     }
@@ -1017,6 +1011,7 @@ impl Wallet {
                 ?pending_transactions_len,
                 "Recognizing change UTXOs"
             );
+
             for (txid, tx) in &pending_transactions {
                 let is_tx_in_block = retry(
                     "is_tx_in_block",
@@ -1033,8 +1028,8 @@ impl Wallet {
                 .unwrap_or_else(|_| panic!("Failed checking if tx is in block height {height}"));
 
                 if is_tx_in_block {
-                    debug!(?txid, ?height, ?block_hash, "Recognizing change UTXO");
-                    self.recognize_change_utxo(dbtx, tx).await;
+                    debug!(?txid, ?height, ?block_hash, "Recognizing change UTXOs");
+                    self.recognize_change_utxos(dbtx, tx).await;
                 } else {
                     debug!(
                         ?txid,
@@ -1049,14 +1044,15 @@ impl Wallet {
         }
     }
 
-    /// Add a change UTXO to our spendable UTXO database after it was included
-    /// in a block that we got consensus on.
-    async fn recognize_change_utxo<'a>(
+    /// Add change UTXOs to our spendable UTXO database after the tx was
+    /// included in a block that we got consensus on.
+    async fn recognize_change_utxos<'a>(
         &self,
         dbtx: &mut DatabaseTransaction<'a>,
         pending_tx: &PendingTransaction,
     ) {
-        self.remove_rbf_transactions(dbtx, pending_tx).await;
+        dbtx.remove_entry(&PendingTransactionKey(pending_tx.tx.txid()))
+            .await;
 
         let script_pk = self
             .cfg
@@ -1064,6 +1060,7 @@ impl Wallet {
             .peg_in_descriptor
             .tweak(&pending_tx.tweak, &self.secp)
             .script_pubkey();
+
         for (idx, output) in pending_tx.tx.output.iter().enumerate() {
             if output.script_pubkey == script_pk {
                 dbtx.insert_entry(
@@ -1077,44 +1074,6 @@ impl Wallet {
                     },
                 )
                 .await;
-            }
-        }
-    }
-
-    /// Removes the `PendingTransaction` and any transactions tied to it via RBF
-    async fn remove_rbf_transactions<'a>(
-        &self,
-        dbtx: &mut DatabaseTransaction<'a>,
-        pending_tx: &PendingTransaction,
-    ) {
-        let mut all_transactions: BTreeMap<Txid, PendingTransaction> = dbtx
-            .find_by_prefix(&PendingTransactionPrefixKey)
-            .await
-            .map(|(key, val)| (key.0, val))
-            .collect::<BTreeMap<Txid, PendingTransaction>>()
-            .await;
-
-        // We need to search and remove all `PendingTransactions` invalidated by RBF
-        let mut pending_to_remove = vec![pending_tx.clone()];
-        while let Some(removed) = pending_to_remove.pop() {
-            all_transactions.remove(&removed.tx.txid());
-            dbtx.remove_entry(&PendingTransactionKey(removed.tx.txid()))
-                .await;
-
-            // Search for tx that this `removed` has as RBF
-            if let Some(rbf) = &removed.rbf {
-                if let Some(tx) = all_transactions.get(&rbf.txid) {
-                    pending_to_remove.push(tx.clone());
-                }
-            }
-
-            // Search for tx that wanted to RBF the `removed` one
-            for tx in all_transactions.values() {
-                if let Some(rbf) = &tx.rbf {
-                    if rbf.txid == removed.tx.txid() {
-                        pending_to_remove.push(tx.clone());
-                    }
-                }
             }
         }
     }
@@ -1141,7 +1100,7 @@ impl Wallet {
                 peg_out.fees.fee_rate,
                 change_tweak,
             ),
-            WalletOutputV0::Rbf(_) => Err(UnknownWalletOutputVariantError { variant: 1 }.into()),
+            WalletOutputV0::Rbf(_) => Err(DEPRECATED_RBF_ERROR),
         }
     }
 
@@ -1275,27 +1234,21 @@ pub async fn broadcast_pending_tx(mut dbtx: DatabaseTransaction<'_>, rpc: &DynBi
         .map(|(_, val)| val)
         .collect::<Vec<_>>()
         .await;
-    let rbf_txids: BTreeSet<Txid> = pending_tx
-        .iter()
-        .filter_map(|tx| tx.rbf.clone().map(|rbf| rbf.txid))
-        .collect();
+
     debug!(
-        "Broadcasting pending transactions (total={}, rbf={})",
+        "Broadcasting pending transactions (total={})",
         pending_tx.len(),
-        rbf_txids.len()
     );
 
     for PendingTransaction { tx, .. } in pending_tx {
-        if !rbf_txids.contains(&tx.txid()) {
-            debug!(
-                tx = %tx.txid(),
-                weight = tx.weight().to_wu(),
-                output = ?tx.output,
-                "Broadcasting peg-out",
-            );
-            trace!(transaction = ?tx);
-            rpc.submit_transaction(tx).await;
-        }
+        debug!(
+            tx = %tx.txid(),
+            weight = tx.weight().to_wu(),
+            output = ?tx.output,
+            "Broadcasting peg-out",
+        );
+        trace!(transaction = ?tx);
+        rpc.submit_transaction(tx).await;
     }
 }
 
@@ -1314,13 +1267,16 @@ impl<'a> StatelessWallet<'a> {
         consensus_fee_rate: Feerate,
         network: Network,
     ) -> Result<(), WalletOutputError> {
-        if let WalletOutputV0::PegOut(peg_out) = output {
-            if !peg_out.recipient.is_valid_for_network(network) {
-                return Err(WalletOutputError::WrongNetwork(
-                    network,
-                    peg_out.recipient.network,
-                ));
+        match output {
+            WalletOutputV0::PegOut(peg_out) => {
+                if !peg_out.recipient.is_valid_for_network(network) {
+                    return Err(WalletOutputError::WrongNetwork(
+                        network,
+                        peg_out.recipient.network,
+                    ));
+                }
             }
+            WalletOutputV0::Rbf(_) => return Err(DEPRECATED_RBF_ERROR),
         }
 
         // Validate the tx amount is over the dust limit
@@ -1340,7 +1296,7 @@ impl<'a> StatelessWallet<'a> {
         // BIP-0125 requires 1 sat/vb for RBF by default (same as normal txs)
         let fees = match output {
             WalletOutputV0::PegOut(pegout) => pegout.fees,
-            WalletOutputV0::Rbf(rbf) => rbf.fees,
+            WalletOutputV0::Rbf(_) => return Err(DEPRECATED_RBF_ERROR),
         };
         if fees.fee_rate.sats_per_kvb < u64::from(DEFAULT_MIN_RELAY_TX_FEE) {
             return Err(WalletOutputError::BelowMinRelayFee);
@@ -1361,11 +1317,9 @@ impl<'a> StatelessWallet<'a> {
     //
     // * `peg_out_amount`: How much the peg-out should be
     // * `destination`: The address the user is pegging-out to
-    // * `included_utxos`: UXTOs that must be included (for RBF)
-    // * `remaining_utxos`: All other spendable UXTOs
+    // * `available_utxos`: All spendable UXTOs
     // * `fee_rate`: How much needs to be spent on fees
     // * `change_tweak`: How the federation can recognize it's change UTXO
-    // * `rbf`: If this is an RBF transaction
     #[allow(clippy::too_many_arguments)]
     fn create_tx(
         &self,
@@ -1699,10 +1653,11 @@ mod tests {
 
     use std::str::FromStr;
 
+    use bitcoin::address::NetworkUnchecked;
     use bitcoin::Network::{Bitcoin, Testnet};
-    use bitcoin::{Address, Amount, Network, OutPoint, Txid};
-    use fedimint_core::{BitcoinHash, Feerate};
-    use fedimint_wallet_common::{PegOut, PegOutFees, Rbf, WalletOutputV0};
+    use bitcoin::{Address, Amount, Network, OutPoint};
+    use fedimint_core::Feerate;
+    use fedimint_wallet_common::{PegOut, PegOutFees, WalletOutputV0};
     use miniscript::descriptor::Wsh;
 
     use crate::common::PegInDescriptor;
@@ -1768,21 +1723,36 @@ mod tests {
             .expect("is ok");
 
         // peg out weight is incorrectly set to 0
-        let res =
-            StatelessWallet::validate_tx(&tx, &rbf(fee.sats_per_kvb, 0), fee, Network::Bitcoin);
+        let res = StatelessWallet::validate_tx(
+            &tx,
+            &peg_out(recipient.clone(), fee.sats_per_kvb, 0),
+            fee,
+            Network::Bitcoin,
+        );
         assert_eq!(res, Err(WalletOutputError::TxWeightIncorrect(0, weight)));
 
         // fee rate set below min relay fee to 0
-        let res = StatelessWallet::validate_tx(&tx, &rbf(0, weight), fee, Bitcoin);
+        let res =
+            StatelessWallet::validate_tx(&tx, &peg_out(recipient.clone(), 0, weight), fee, Bitcoin);
         assert_eq!(res, Err(WalletOutputError::BelowMinRelayFee));
 
         // fees are okay
-        let res = StatelessWallet::validate_tx(&tx, &rbf(fee.sats_per_kvb, weight), fee, Bitcoin);
+        let res = StatelessWallet::validate_tx(
+            &tx,
+            &peg_out(recipient.clone(), fee.sats_per_kvb, weight),
+            fee,
+            Bitcoin,
+        );
         assert_eq!(res, Ok(()));
 
         // tx has fee below consensus
         tx.fees = PegOutFees::new(0, weight);
-        let res = StatelessWallet::validate_tx(&tx, &rbf(fee.sats_per_kvb, weight), fee, Bitcoin);
+        let res = StatelessWallet::validate_tx(
+            &tx,
+            &peg_out(recipient.clone(), fee.sats_per_kvb, weight),
+            fee,
+            Bitcoin,
+        );
         assert_eq!(
             res,
             Err(WalletOutputError::PegOutFeeBelowConsensus(
@@ -1793,7 +1763,12 @@ mod tests {
 
         // tx has peg-out amount under dust limit
         tx.peg_out_amount = Amount::ZERO;
-        let res = StatelessWallet::validate_tx(&tx, &rbf(fee.sats_per_kvb, weight), fee, Bitcoin);
+        let res = StatelessWallet::validate_tx(
+            &tx,
+            &peg_out(recipient.clone(), fee.sats_per_kvb, weight),
+            fee,
+            Bitcoin,
+        );
         assert_eq!(res, Err(WalletOutputError::PegOutUnderDustLimit));
 
         // tx is invalid for network
@@ -1806,10 +1781,15 @@ mod tests {
         assert_eq!(res, Err(WalletOutputError::WrongNetwork(Testnet, Bitcoin)));
     }
 
-    fn rbf(sats_per_kvb: u64, total_weight: u64) -> WalletOutputV0 {
-        WalletOutputV0::Rbf(Rbf {
+    fn peg_out(
+        recipient: Address<NetworkUnchecked>,
+        sats_per_kvb: u64,
+        total_weight: u64,
+    ) -> WalletOutputV0 {
+        WalletOutputV0::PegOut(PegOut {
+            recipient,
+            amount: Amount::from_sat(1000),
             fees: PegOutFees::new(sats_per_kvb, total_weight),
-            txid: Txid::all_zeros(),
         })
     }
 }

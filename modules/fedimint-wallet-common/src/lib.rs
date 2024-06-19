@@ -195,9 +195,6 @@ impl WalletOutput {
             fees,
         }))
     }
-    pub fn new_v0_rbf(fees: PegOutFees, txid: Txid) -> WalletOutput {
-        WalletOutput::V0(WalletOutputV0::Rbf(Rbf { fees, txid }))
-    }
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
@@ -317,6 +314,18 @@ pub enum WalletOutputError {
     #[error("The wallet output version is not supported by this federation")]
     UnknownOutputVariant(#[from] UnknownWalletOutputVariantError),
 }
+
+// TODO: docs if works
+// TODO: explain why we need to use UnknownOutputVariant for
+// backwards-compatibility with old clients
+//
+// A bug motivated deprecating RBF
+// withdrawals, so we explicitly fail any attempts to maintain
+// backwards-compatibility. The wallet will set an aggressive feerate, so
+// introducing the complexity of RBF withdrawals is not necessary.
+// see: https://github.com/fedimint/fedimint/issues/5453
+pub const DEPRECATED_RBF_ERROR: WalletOutputError =
+    WalletOutputError::UnknownOutputVariant(UnknownWalletOutputVariantError { variant: 1 });
 
 #[derive(Debug, Error)]
 pub enum ProcessPegOutSigError {

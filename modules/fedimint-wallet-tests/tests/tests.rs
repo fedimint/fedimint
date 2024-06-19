@@ -22,7 +22,7 @@ use fedimint_wallet_client::{DepositState, WalletClientInit, WalletClientModule,
 use fedimint_wallet_common::config::{WalletConfig, WalletGenParams};
 use fedimint_wallet_common::tweakable::Tweakable;
 use fedimint_wallet_common::txoproof::PegInProof;
-use fedimint_wallet_common::{PegOutFees, Rbf};
+use fedimint_wallet_common::PegOutFees;
 use fedimint_wallet_server::WalletInit;
 use futures::stream::StreamExt;
 use tracing::info;
@@ -248,84 +248,6 @@ async fn peg_out_fail_refund() -> anyhow::Result<()> {
     // Check that we get our money back if the peg-out fails
     assert_eq!(balance_sub.next().await.unwrap(), sats(PEG_IN_AMOUNT_SATS));
     assert_eq!(client.get_balance().await, sats(PEG_IN_AMOUNT_SATS));
-
-    Ok(())
-}
-
-#[tokio::test(flavor = "multi_thread")]
-async fn rbf_withdrawals_are_rejected() -> anyhow::Result<()> {
-    let fixtures = fixtures();
-    let fed = fixtures.new_default_fed().await;
-    let client = fed.new_client().await;
-    let bitcoin = fixtures.bitcoin();
-    // Need lock to keep tx in mempool from getting mined
-    let bitcoin = bitcoin.lock_exclusive().await;
-    info!("Starting test rbf_withdrawals_are_rejected");
-
-    let finality_delay = 10;
-    bitcoin.mine_blocks(finality_delay).await;
-    await_consensus_to_catch_up(&client, 1).await?;
-
-    let mut balance_sub = peg_in(&client, bitcoin.as_ref(), finality_delay).await?;
-
-    info!("Peg-in finished for test peg_outs_support_rbf");
-    let address = checked_address_to_unchecked_address(&bitcoin.get_new_address().await);
-    let peg_out = bsats(PEG_OUT_AMOUNT_SATS);
-    let wallet_module = client.get_first_module::<WalletClientModule>();
-    let fees = wallet_module
-        .get_withdraw_fees(address.clone(), peg_out)
-        .await?;
-    let op = wallet_module
-        .withdraw(address.clone(), peg_out, fees, ())
-        .await?;
-
-    let sub = wallet_module.subscribe_withdraw_updates(op).await?;
-    let mut sub = sub.into_stream();
-    assert_eq!(sub.ok().await?, WithdrawState::Created);
-    let state = sub.ok().await?;
-    let WithdrawState::Succeeded(txid) = state else {
-        bail!("Unexpected state: {state:?}")
-    };
-    assert_eq!(
-        bitcoin.get_mempool_tx_fee(&txid).await,
-        fees.amount().into()
-    );
-    let balance_after_normal_peg_out =
-        sats(PEG_IN_AMOUNT_SATS - PEG_OUT_AMOUNT_SATS - fees.amount().to_sat());
-    assert_eq!(client.get_balance().await, balance_after_normal_peg_out);
-    assert_eq!(balance_sub.ok().await?, balance_after_normal_peg_out);
-
-    // RBF by increasing sats per kvb by 1000
-    let rbf = Rbf {
-        fees: PegOutFees::new(1000, fees.total_weight),
-        txid,
-    };
-
-    let wallet_module = client.get_first_module::<WalletClientModule>();
-    let rbf_op = wallet_module.rbf_withdraw(rbf.clone(), ()).await?;
-    let rbf_sub = wallet_module.subscribe_withdraw_updates(rbf_op).await?;
-    let mut rbf_sub = rbf_sub.into_stream();
-
-    assert_eq!(rbf_sub.ok().await?, WithdrawState::Created);
-    match rbf_sub.ok().await? {
-        WithdrawState::Failed(err) => {
-            assert!(err.contains("The wallet output version is not supported by this federation"))
-        }
-        other => panic!("Unexpected state: {other:?}"),
-    }
-
-    assert_eq!(
-        bitcoin
-            .mine_block_and_get_received(&address.clone().assume_checked())
-            .await,
-        sats(PEG_OUT_AMOUNT_SATS)
-    );
-
-    let current_balance = client.get_balance().await;
-    assert_eq!(
-        current_balance, balance_after_normal_peg_out,
-        "Balance is {current_balance}, expected {balance_after_normal_peg_out}"
-    );
 
     Ok(())
 }

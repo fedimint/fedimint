@@ -205,6 +205,8 @@ pub enum WalletOperationMetaVariant {
         change: Vec<OutPoint>,
     },
 
+    // TODO: note that we need to keep due to back-comapt if this approach works
+    // also update for other enum variants, not worth making todos everywhere
     RbfWithdraw {
         rbf: Rbf,
         change: Vec<OutPoint>,
@@ -357,31 +359,6 @@ impl WalletClientModule {
         check_address(&address, self.cfg.network)?;
 
         let output = WalletOutput::new_v0_peg_out(address, amount, fees);
-
-        let amount = output.maybe_v0_ref().expect("v0 output").amount().into();
-
-        let sm_gen = move |txid, out_idx| {
-            vec![WalletClientStates::Withdraw(WithdrawStateMachine {
-                operation_id,
-                state: WithdrawStates::Created(CreatedWithdrawState {
-                    fm_outpoint: OutPoint { txid, out_idx },
-                }),
-            })]
-        };
-
-        Ok(ClientOutput::<WalletOutput, WalletClientStates> {
-            output,
-            amount,
-            state_machines: Arc::new(sm_gen),
-        })
-    }
-
-    pub fn create_rbf_withdraw_output(
-        &self,
-        operation_id: OperationId,
-        rbf: &Rbf,
-    ) -> anyhow::Result<ClientOutput<WalletOutput, WalletClientStates>> {
-        let output = WalletOutput::new_v0_rbf(rbf.fees, rbf.txid);
 
         let amount = output.maybe_v0_ref().expect("v0 output").amount().into();
 
@@ -580,40 +557,6 @@ impl WalletClientModule {
         }
     }
 
-    /// Attempt to increase the fee of a onchain withdraw transaction using
-    /// replace by fee (RBF).
-    /// This can prevent transactions from getting stuck
-    /// in the mempool
-    pub async fn rbf_withdraw<M: Serialize + MaybeSync + MaybeSend>(
-        &self,
-        rbf: Rbf,
-        extra_meta: M,
-    ) -> anyhow::Result<OperationId> {
-        let operation_id = OperationId(thread_rng().gen());
-
-        let withdraw_output = self.create_rbf_withdraw_output(operation_id, &rbf)?;
-        let tx_builder = TransactionBuilder::new()
-            .with_output(self.client_ctx.make_client_output(withdraw_output));
-
-        let extra_meta = serde_json::to_value(extra_meta).expect("Failed to serialize extra meta");
-        self.client_ctx
-            .finalize_and_submit_transaction(
-                operation_id,
-                WalletCommonInit::KIND.as_str(),
-                |_, change| WalletOperationMeta {
-                    variant: WalletOperationMetaVariant::RbfWithdraw {
-                        rbf: rbf.clone(),
-                        change,
-                    },
-                    extra_meta: extra_meta.clone(),
-                },
-                tx_builder,
-            )
-            .await?;
-
-        Ok(operation_id)
-    }
-
     pub async fn subscribe_withdraw_updates(
         &self,
         operation_id: OperationId,
@@ -630,9 +573,7 @@ impl WalletClientModule {
 
         let operation_meta = operation.meta::<WalletOperationMeta>();
 
-        let (WalletOperationMetaVariant::Withdraw { change, .. }
-        | WalletOperationMetaVariant::RbfWithdraw { change, .. }) = operation_meta.variant
-        else {
+        let WalletOperationMetaVariant::Withdraw { change, .. } = operation_meta.variant else {
             bail!("Operation is not a withdraw operation");
         };
 
