@@ -125,7 +125,7 @@ pub enum ClientCmd {
     LnPay {
         /// Lightning invoice or lnurl
         payment_info: String,
-        /// Amount to pay, used for lnurl
+        /// Amount to pay, used for lnurl or for a partial payment of an invoice
         #[clap(long)]
         amount: Option<Amount>,
         /// Invoice comment/description, used on lnurl
@@ -414,7 +414,7 @@ pub async fn handle_command(
                 contract_id,
                 fee,
             } = lightning_module
-                .pay_bolt11_invoice(ln_gateway, bolt11, ())
+                .pay_bolt11_invoice(ln_gateway, bolt11, amount, ())
                 .await?;
             let operation_id = payment_type.operation_id();
             info!(

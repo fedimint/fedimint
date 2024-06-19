@@ -20,7 +20,7 @@ use ln_gateway::gateway_lnrpc::{
     InterceptHtlcResponse, PayInvoiceRequest, PayInvoiceResponse,
 };
 use ln_gateway::lightning::cln::{HtlcResult, RouteHtlcStream};
-use ln_gateway::lightning::{ChannelInfo, ILnRpcClient, LightningRpcError};
+use ln_gateway::lightning::{ChannelInfo, ILnRpcClient, LightningRpcError, PrunedInvoice};
 use rand::rngs::OsRng;
 use tokio::sync::mpsc;
 use tracing::info;
@@ -94,7 +94,7 @@ impl FakeLightningTest {
         InvoiceBuilder::new(Currency::Regtest)
             .payee_pub_key(kp.public_key())
             .description(INVALID_INVOICE_DESCRIPTION.to_string())
-            .payment_hash(sha256::Hash::hash(&[0; 32]))
+            .payment_hash(sha256::Hash::from_slice(&[1; 32]).unwrap())
             .current_timestamp()
             .min_final_cltv_expiry_delta(0)
             .payment_secret(PaymentSecret([0; 32]))
@@ -153,6 +153,29 @@ impl ILnRpcClient for FakeLightningTest {
         Ok(PayInvoiceResponse {
             preimage: [0; 32].to_vec(),
         })
+    }
+
+    async fn pay_private(
+        &self,
+        invoice: PrunedInvoice,
+        _max_delay: u64,
+        _max_fee: Amount,
+    ) -> Result<PayInvoiceResponse, LightningRpcError> {
+        *self.amount_sent.lock().unwrap() += invoice.amount.msats;
+
+        if invoice.payment_hash == sha256::Hash::from_slice(&[1; 32]).unwrap() {
+            return Err(LightningRpcError::FailedPayment {
+                failure_reason: "Payment hash was invalid".to_string(),
+            });
+        }
+
+        Ok(PayInvoiceResponse {
+            preimage: [0; 32].to_vec(),
+        })
+    }
+
+    fn supports_private_payments(&self) -> bool {
+        true
     }
 
     async fn route_htlcs<'a>(
