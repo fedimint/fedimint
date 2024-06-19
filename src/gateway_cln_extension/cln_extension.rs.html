@@ -1,4 +1,4 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `gateway/ln-gateway/src/bin/cln_extension.rs`."><title>cln_extension.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-dd39b87e5fcfba68.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="gateway_cln_extension" data-themes="" data-resource-suffix="" data-rustdoc-version="1.80.0-nightly (ef0027897 2024-05-12)" data-channel="nightly" data-search-js="search-d52510db62a78183.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../../static.files/src-script-e66d777a5a92e9b2.js"></script><script defer src="../../src-files.js"></script><script defer src="../../static.files/main-20a3ad099b048cf2.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer"></div><main><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `gateway/ln-gateway/src/bin/cln_extension.rs`."><title>cln_extension.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-dd39b87e5fcfba68.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="gateway_cln_extension" data-themes="" data-resource-suffix="" data-rustdoc-version="1.80.0-nightly (804421dff 2024-06-07)" data-channel="nightly" data-search-js="search-d52510db62a78183.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../../static.files/src-script-e66d777a5a92e9b2.js"></script><script defer src="../../src-files.js"></script><script defer src="../../static.files/main-20a3ad099b048cf2.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer"></div><main><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
 <a href="#2" id="2">2</a>
 <a href="#3" id="3">3</a>
 <a href="#4" id="4">4</a>
@@ -959,6 +959,200 @@
 <a href="#959" id="959">959</a>
 <a href="#960" id="960">960</a>
 <a href="#961" id="961">961</a>
+<a href="#962" id="962">962</a>
+<a href="#963" id="963">963</a>
+<a href="#964" id="964">964</a>
+<a href="#965" id="965">965</a>
+<a href="#966" id="966">966</a>
+<a href="#967" id="967">967</a>
+<a href="#968" id="968">968</a>
+<a href="#969" id="969">969</a>
+<a href="#970" id="970">970</a>
+<a href="#971" id="971">971</a>
+<a href="#972" id="972">972</a>
+<a href="#973" id="973">973</a>
+<a href="#974" id="974">974</a>
+<a href="#975" id="975">975</a>
+<a href="#976" id="976">976</a>
+<a href="#977" id="977">977</a>
+<a href="#978" id="978">978</a>
+<a href="#979" id="979">979</a>
+<a href="#980" id="980">980</a>
+<a href="#981" id="981">981</a>
+<a href="#982" id="982">982</a>
+<a href="#983" id="983">983</a>
+<a href="#984" id="984">984</a>
+<a href="#985" id="985">985</a>
+<a href="#986" id="986">986</a>
+<a href="#987" id="987">987</a>
+<a href="#988" id="988">988</a>
+<a href="#989" id="989">989</a>
+<a href="#990" id="990">990</a>
+<a href="#991" id="991">991</a>
+<a href="#992" id="992">992</a>
+<a href="#993" id="993">993</a>
+<a href="#994" id="994">994</a>
+<a href="#995" id="995">995</a>
+<a href="#996" id="996">996</a>
+<a href="#997" id="997">997</a>
+<a href="#998" id="998">998</a>
+<a href="#999" id="999">999</a>
+<a href="#1000" id="1000">1000</a>
+<a href="#1001" id="1001">1001</a>
+<a href="#1002" id="1002">1002</a>
+<a href="#1003" id="1003">1003</a>
+<a href="#1004" id="1004">1004</a>
+<a href="#1005" id="1005">1005</a>
+<a href="#1006" id="1006">1006</a>
+<a href="#1007" id="1007">1007</a>
+<a href="#1008" id="1008">1008</a>
+<a href="#1009" id="1009">1009</a>
+<a href="#1010" id="1010">1010</a>
+<a href="#1011" id="1011">1011</a>
+<a href="#1012" id="1012">1012</a>
+<a href="#1013" id="1013">1013</a>
+<a href="#1014" id="1014">1014</a>
+<a href="#1015" id="1015">1015</a>
+<a href="#1016" id="1016">1016</a>
+<a href="#1017" id="1017">1017</a>
+<a href="#1018" id="1018">1018</a>
+<a href="#1019" id="1019">1019</a>
+<a href="#1020" id="1020">1020</a>
+<a href="#1021" id="1021">1021</a>
+<a href="#1022" id="1022">1022</a>
+<a href="#1023" id="1023">1023</a>
+<a href="#1024" id="1024">1024</a>
+<a href="#1025" id="1025">1025</a>
+<a href="#1026" id="1026">1026</a>
+<a href="#1027" id="1027">1027</a>
+<a href="#1028" id="1028">1028</a>
+<a href="#1029" id="1029">1029</a>
+<a href="#1030" id="1030">1030</a>
+<a href="#1031" id="1031">1031</a>
+<a href="#1032" id="1032">1032</a>
+<a href="#1033" id="1033">1033</a>
+<a href="#1034" id="1034">1034</a>
+<a href="#1035" id="1035">1035</a>
+<a href="#1036" id="1036">1036</a>
+<a href="#1037" id="1037">1037</a>
+<a href="#1038" id="1038">1038</a>
+<a href="#1039" id="1039">1039</a>
+<a href="#1040" id="1040">1040</a>
+<a href="#1041" id="1041">1041</a>
+<a href="#1042" id="1042">1042</a>
+<a href="#1043" id="1043">1043</a>
+<a href="#1044" id="1044">1044</a>
+<a href="#1045" id="1045">1045</a>
+<a href="#1046" id="1046">1046</a>
+<a href="#1047" id="1047">1047</a>
+<a href="#1048" id="1048">1048</a>
+<a href="#1049" id="1049">1049</a>
+<a href="#1050" id="1050">1050</a>
+<a href="#1051" id="1051">1051</a>
+<a href="#1052" id="1052">1052</a>
+<a href="#1053" id="1053">1053</a>
+<a href="#1054" id="1054">1054</a>
+<a href="#1055" id="1055">1055</a>
+<a href="#1056" id="1056">1056</a>
+<a href="#1057" id="1057">1057</a>
+<a href="#1058" id="1058">1058</a>
+<a href="#1059" id="1059">1059</a>
+<a href="#1060" id="1060">1060</a>
+<a href="#1061" id="1061">1061</a>
+<a href="#1062" id="1062">1062</a>
+<a href="#1063" id="1063">1063</a>
+<a href="#1064" id="1064">1064</a>
+<a href="#1065" id="1065">1065</a>
+<a href="#1066" id="1066">1066</a>
+<a href="#1067" id="1067">1067</a>
+<a href="#1068" id="1068">1068</a>
+<a href="#1069" id="1069">1069</a>
+<a href="#1070" id="1070">1070</a>
+<a href="#1071" id="1071">1071</a>
+<a href="#1072" id="1072">1072</a>
+<a href="#1073" id="1073">1073</a>
+<a href="#1074" id="1074">1074</a>
+<a href="#1075" id="1075">1075</a>
+<a href="#1076" id="1076">1076</a>
+<a href="#1077" id="1077">1077</a>
+<a href="#1078" id="1078">1078</a>
+<a href="#1079" id="1079">1079</a>
+<a href="#1080" id="1080">1080</a>
+<a href="#1081" id="1081">1081</a>
+<a href="#1082" id="1082">1082</a>
+<a href="#1083" id="1083">1083</a>
+<a href="#1084" id="1084">1084</a>
+<a href="#1085" id="1085">1085</a>
+<a href="#1086" id="1086">1086</a>
+<a href="#1087" id="1087">1087</a>
+<a href="#1088" id="1088">1088</a>
+<a href="#1089" id="1089">1089</a>
+<a href="#1090" id="1090">1090</a>
+<a href="#1091" id="1091">1091</a>
+<a href="#1092" id="1092">1092</a>
+<a href="#1093" id="1093">1093</a>
+<a href="#1094" id="1094">1094</a>
+<a href="#1095" id="1095">1095</a>
+<a href="#1096" id="1096">1096</a>
+<a href="#1097" id="1097">1097</a>
+<a href="#1098" id="1098">1098</a>
+<a href="#1099" id="1099">1099</a>
+<a href="#1100" id="1100">1100</a>
+<a href="#1101" id="1101">1101</a>
+<a href="#1102" id="1102">1102</a>
+<a href="#1103" id="1103">1103</a>
+<a href="#1104" id="1104">1104</a>
+<a href="#1105" id="1105">1105</a>
+<a href="#1106" id="1106">1106</a>
+<a href="#1107" id="1107">1107</a>
+<a href="#1108" id="1108">1108</a>
+<a href="#1109" id="1109">1109</a>
+<a href="#1110" id="1110">1110</a>
+<a href="#1111" id="1111">1111</a>
+<a href="#1112" id="1112">1112</a>
+<a href="#1113" id="1113">1113</a>
+<a href="#1114" id="1114">1114</a>
+<a href="#1115" id="1115">1115</a>
+<a href="#1116" id="1116">1116</a>
+<a href="#1117" id="1117">1117</a>
+<a href="#1118" id="1118">1118</a>
+<a href="#1119" id="1119">1119</a>
+<a href="#1120" id="1120">1120</a>
+<a href="#1121" id="1121">1121</a>
+<a href="#1122" id="1122">1122</a>
+<a href="#1123" id="1123">1123</a>
+<a href="#1124" id="1124">1124</a>
+<a href="#1125" id="1125">1125</a>
+<a href="#1126" id="1126">1126</a>
+<a href="#1127" id="1127">1127</a>
+<a href="#1128" id="1128">1128</a>
+<a href="#1129" id="1129">1129</a>
+<a href="#1130" id="1130">1130</a>
+<a href="#1131" id="1131">1131</a>
+<a href="#1132" id="1132">1132</a>
+<a href="#1133" id="1133">1133</a>
+<a href="#1134" id="1134">1134</a>
+<a href="#1135" id="1135">1135</a>
+<a href="#1136" id="1136">1136</a>
+<a href="#1137" id="1137">1137</a>
+<a href="#1138" id="1138">1138</a>
+<a href="#1139" id="1139">1139</a>
+<a href="#1140" id="1140">1140</a>
+<a href="#1141" id="1141">1141</a>
+<a href="#1142" id="1142">1142</a>
+<a href="#1143" id="1143">1143</a>
+<a href="#1144" id="1144">1144</a>
+<a href="#1145" id="1145">1145</a>
+<a href="#1146" id="1146">1146</a>
+<a href="#1147" id="1147">1147</a>
+<a href="#1148" id="1148">1148</a>
+<a href="#1149" id="1149">1149</a>
+<a href="#1150" id="1150">1150</a>
+<a href="#1151" id="1151">1151</a>
+<a href="#1152" id="1152">1152</a>
+<a href="#1153" id="1153">1153</a>
+<a href="#1154" id="1154">1154</a>
+<a href="#1155" id="1155">1155</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::array::TryFromSliceError;
 <span class="kw">use </span>std::collections::{BTreeMap, HashMap};
 <span class="kw">use </span>std::net::SocketAddr;
@@ -972,6 +1166,7 @@
 <span class="kw">use </span>clap::Parser;
 <span class="kw">use </span>cln_plugin::{options, Builder, Plugin};
 <span class="kw">use </span>cln_rpc::model;
+<span class="kw">use </span>cln_rpc::model::requests::SendpayRoute;
 <span class="kw">use </span>cln_rpc::model::responses::ListpeerchannelsChannels;
 <span class="kw">use </span>cln_rpc::primitives::ShortChannelId;
 <span class="kw">use </span>fedimint_core::secp256k1::{All, PublicKey, Secp256k1, SecretKey};
@@ -993,7 +1188,7 @@
     CreateInvoiceResponse, EmptyRequest, EmptyResponse, GetFundingAddressResponse,
     GetNodeInfoResponse, GetRouteHintsRequest, GetRouteHintsResponse, InterceptHtlcRequest,
     InterceptHtlcResponse, ListActiveChannelsResponse, OpenChannelRequest, PayInvoiceRequest,
-    PayInvoiceResponse,
+    PayInvoiceResponse, PayPrunedInvoiceRequest, PrunedInvoice,
 };
 <span class="kw">use </span>rand::rngs::OsRng;
 <span class="kw">use </span>rand::Rng;
@@ -1194,6 +1389,130 @@
             })
             .map_err(ClnExtensionError::RpcError)<span class="question-mark">?
     </span>}
+
+    <span class="doccomment">/// Requests a route for a payment. Payment route will be passed to
+    /// `pay_with_route` to initiate the payment.
+    </span><span class="kw">async fn </span>get_route(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        pruned_invoice: PrunedInvoice,
+        riskfactor: u64,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;Vec&lt;SendpayRoute&gt;, ClnExtensionError&gt; {
+        <span class="kw">let </span>response = <span class="self">self
+            </span>.rpc_client()
+            .<span class="kw">await</span><span class="question-mark">?
+            </span>.call(cln_rpc::Request::GetRoute(
+                model::requests::GetrouteRequest {
+                    id: PublicKey::from_slice(<span class="kw-2">&amp;</span>pruned_invoice.destination)
+                        .expect(<span class="string">"Should parse public key"</span>),
+                    amount_msat: cln_rpc::primitives::Amount::from_msat(pruned_invoice.amount_msat),
+                    riskfactor,
+                    cltv: <span class="prelude-val">Some</span>(pruned_invoice.min_final_cltv_delta <span class="kw">as </span>u32),
+                    fromid: <span class="prelude-val">None</span>,
+                    fuzzpercent: <span class="prelude-val">None</span>,
+                    exclude: <span class="prelude-val">None</span>,
+                    maxhops: <span class="prelude-val">None</span>,
+                },
+            ))
+            .<span class="kw">await</span><span class="question-mark">?</span>;
+
+        <span class="kw">match </span>response {
+            cln_rpc::Response::GetRoute(model::responses::GetrouteResponse { route }) =&gt; <span class="prelude-val">Ok</span>(route
+                .into_iter()
+                .map(|r| SendpayRoute {
+                    amount_msat: r.amount_msat,
+                    id: r.id,
+                    delay: r.delay,
+                    channel: r.channel,
+                })
+                .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;()),
+            <span class="kw">_ </span>=&gt; <span class="prelude-val">Err</span>(ClnExtensionError::RpcWrongResponse),
+        }
+    }
+
+    <span class="doccomment">/// Initiates a payment of a pruned invoice given a payment route. Waits for
+    /// the payment to be successful or return an error.
+    </span><span class="kw">async fn </span>pay_with_route(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        pruned_invoice: PrunedInvoice,
+        payment_hash: sha256::Hash,
+        route: Vec&lt;SendpayRoute&gt;,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;Vec&lt;u8&gt;, ClnExtensionError&gt; {
+        <span class="kw">let </span>payment_secret = <span class="prelude-val">Some</span>(
+            cln_rpc::primitives::Secret::try_from(pruned_invoice.payment_secret)
+                .map_err(ClnExtensionError::Error)<span class="question-mark">?</span>,
+        );
+        <span class="kw">let </span>amount_msat = <span class="prelude-val">Some</span>(cln_rpc::primitives::Amount::from_msat(
+            pruned_invoice.amount_msat,
+        ));
+
+        <span class="macro">info!</span>(
+            <span class="question-mark">?</span>payment_hash,
+            <span class="question-mark">?</span>amount_msat,
+            <span class="string">"Attempting to pay pruned invoice..."
+        </span>);
+
+        <span class="kw">let </span>response = <span class="self">self
+            </span>.rpc_client()
+            .<span class="kw">await</span><span class="question-mark">?
+            </span>.call(cln_rpc::Request::SendPay(model::requests::SendpayRequest {
+                amount_msat,
+                bolt11: <span class="prelude-val">None</span>,
+                description: <span class="prelude-val">None</span>,
+                groupid: <span class="prelude-val">None</span>,
+                label: <span class="prelude-val">None</span>,
+                localinvreqid: <span class="prelude-val">None</span>,
+                partid: <span class="prelude-val">None</span>,
+                payment_metadata: <span class="prelude-val">None</span>,
+                payment_secret,
+                payment_hash,
+                route,
+            }))
+            .<span class="kw">await</span><span class="question-mark">?</span>;
+
+        <span class="kw">let </span>status = <span class="kw">match </span>response {
+            cln_rpc::Response::SendPay(model::responses::SendpayResponse { status, .. }) =&gt; {
+                <span class="prelude-val">Ok</span>(status)
+            }
+            <span class="kw">_ </span>=&gt; <span class="prelude-val">Err</span>(ClnExtensionError::RpcWrongResponse),
+        }<span class="question-mark">?</span>;
+
+        <span class="macro">info!</span>(<span class="question-mark">?</span>payment_hash, <span class="question-mark">?</span>status, <span class="string">"Initiated payment"</span>);
+
+        <span class="kw">let </span>response = <span class="self">self
+            </span>.rpc_client()
+            .<span class="kw">await</span><span class="question-mark">?
+            </span>.call(cln_rpc::Request::WaitSendPay(
+                model::requests::WaitsendpayRequest {
+                    groupid: <span class="prelude-val">None</span>,
+                    partid: <span class="prelude-val">None</span>,
+                    timeout: <span class="prelude-val">None</span>,
+                    payment_hash,
+                },
+            ))
+            .<span class="kw">await</span><span class="question-mark">?</span>;
+
+        <span class="kw">let </span>(preimage, amount_sent_msat) = <span class="kw">match </span>response {
+            cln_rpc::Response::WaitSendPay(model::responses::WaitsendpayResponse {
+                payment_preimage,
+                amount_sent_msat,
+                ..
+            }) =&gt; <span class="prelude-val">Ok</span>((payment_preimage, amount_sent_msat)),
+            <span class="kw">_ </span>=&gt; <span class="prelude-val">Err</span>(ClnExtensionError::RpcWrongResponse),
+        }<span class="question-mark">?</span>;
+
+        <span class="macro">info!</span>(
+            <span class="question-mark">?</span>preimage,
+            <span class="question-mark">?</span>payment_hash,
+            <span class="question-mark">?</span>amount_sent_msat,
+            <span class="string">"Finished payment"
+        </span>);
+
+        <span class="kw">let </span>preimage = preimage.ok_or_else(|| {
+            <span class="macro">error!</span>(<span class="question-mark">?</span>payment_hash, <span class="string">"WaitSendPay did not return a preimage"</span>);
+            ClnExtensionError::RpcWrongResponse
+        })<span class="question-mark">?</span>;
+        <span class="prelude-val">Ok</span>(preimage.to_vec())
+    }
 }
 
 <span class="attr">#[tonic::async_trait]
@@ -1379,6 +1698,75 @@
             </span>.map_err(|e| tonic::Status::internal(e.to_string()))<span class="question-mark">?</span>;
 
         <span class="prelude-val">Ok</span>(tonic::Response::new(outcome))
+    }
+
+    <span class="kw">async fn </span>pay_pruned_invoice(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        request: tonic::Request&lt;PayPrunedInvoiceRequest&gt;,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;tonic::Response&lt;PayInvoiceResponse&gt;, tonic::Status&gt; {
+        <span class="kw">let </span>PayPrunedInvoiceRequest {
+            pruned_invoice,
+            max_delay,
+            max_fee_msat,
+        } = request.into_inner();
+
+        <span class="kw">let </span>pruned_invoice = pruned_invoice
+            .ok_or_else(|| tonic::Status::internal(<span class="string">"Pruned Invoice was not supplied"</span>))<span class="question-mark">?</span>;
+        <span class="kw">let </span>payment_hash = sha256::Hash::from_slice(<span class="kw-2">&amp;</span>pruned_invoice.payment_hash)
+            .map_err(|err| tonic::Status::internal(err.to_string()))<span class="question-mark">?</span>;
+
+        <span class="comment">// Use a `riskfactor` of 10, which is the default for lightning-pay
+        </span><span class="kw">let </span>route = <span class="self">self
+            </span>.get_route(pruned_invoice.clone(), <span class="number">10</span>)
+            .<span class="kw">await
+            </span>.map_err(|err| tonic::Status::internal(err.to_string()))<span class="question-mark">?</span>;
+
+        <span class="comment">// Verify `max_delay` is greater than the worst case timeout for the payment
+        // failure in blocks
+        </span><span class="kw">let </span>delay = route
+            .first()
+            .ok_or_else(|| {
+                tonic::Status::internal(<span class="macro">format!</span>(
+                    <span class="string">"Returned route did not have any hops for payment_hash: {payment_hash}"
+                </span>))
+            })<span class="question-mark">?
+            </span>.delay;
+        <span class="kw">if </span>max_delay &lt; delay.into() {
+            <span class="kw">return </span><span class="prelude-val">Err</span>(tonic::Status::internal(<span class="macro">format!</span>(<span class="string">"Worst case timeout for the payment is too long. max_delay: {max_delay} delay: {delay} payment_hash: {payment_hash}"</span>)));
+        }
+
+        <span class="comment">// Verify the total fee is less than `max_fee_msat`
+        </span><span class="kw">let </span>first_hop_amount = route
+            .first()
+            .ok_or_else(|| {
+                tonic::Status::internal(<span class="macro">format!</span>(
+                    <span class="string">"Returned route did not have any hops for payment_hash: {payment_hash}"
+                </span>))
+            })<span class="question-mark">?
+            </span>.amount_msat;
+        <span class="kw">let </span>last_hop_amount = route
+            .last()
+            .ok_or_else(|| {
+                tonic::Status::internal(<span class="macro">format!</span>(
+                    <span class="string">"Returned route did not have any hops for payment_hash: {payment_hash}"
+                </span>))
+            })<span class="question-mark">?
+            </span>.amount_msat;
+        <span class="kw">let </span>fee = first_hop_amount - last_hop_amount;
+        <span class="kw">if </span>max_fee_msat &lt; fee.msat() {
+            <span class="kw">return </span><span class="prelude-val">Err</span>(tonic::Status::internal(<span class="macro">format!</span>(
+                <span class="string">"Fee: {} for payment {payment_hash} is greater than max_fee_msat: {max_fee_msat}"</span>,
+                fee.msat()
+            )));
+        }
+
+        <span class="kw">let </span>preimage = <span class="self">self
+            </span>.pay_with_route(pruned_invoice, payment_hash, route)
+            .<span class="kw">await
+            </span>.map_err(|err| tonic::Status::internal(err.to_string()))<span class="question-mark">?</span>;
+        <span class="kw">let </span>response = PayInvoiceResponse { preimage };
+
+        <span class="prelude-val">Ok</span>(tonic::Response::new(response))
     }
 
     <span class="kw">type </span>RouteHtlcsStream = ReceiverStream&lt;<span class="prelude-ty">Result</span>&lt;InterceptHtlcRequest, Status&gt;&gt;;

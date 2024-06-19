@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"fn":["get_finished_session_count_static"],"struct":["ConsensusEngine"]};
+window.SIDEBAR_ITEMS = {"constant":["DB_CHECKPOINTS_DIR"],"fn":["get_finished_session_count_static"],"struct":["ConsensusEngine"]};

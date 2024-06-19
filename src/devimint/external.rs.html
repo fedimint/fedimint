@@ -1,4 +1,4 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `devimint/src/external.rs`."><title>external.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-dd39b87e5fcfba68.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="devimint" data-themes="" data-resource-suffix="" data-rustdoc-version="1.80.0-nightly (ef0027897 2024-05-12)" data-channel="nightly" data-search-js="search-d52510db62a78183.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../../static.files/src-script-e66d777a5a92e9b2.js"></script><script defer src="../../src-files.js"></script><script defer src="../../static.files/main-20a3ad099b048cf2.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer"></div><main><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `devimint/src/external.rs`."><title>external.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../static.files/rustdoc-dd39b87e5fcfba68.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="devimint" data-themes="" data-resource-suffix="" data-rustdoc-version="1.80.0-nightly (804421dff 2024-06-07)" data-channel="nightly" data-search-js="search-d52510db62a78183.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../../static.files/src-script-e66d777a5a92e9b2.js"></script><script defer src="../../src-files.js"></script><script defer src="../../static.files/main-20a3ad099b048cf2.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer"></div><main><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
 <a href="#2" id="2">2</a>
 <a href="#3" id="3">3</a>
 <a href="#4" id="4">4</a>
@@ -880,6 +880,24 @@
 <a href="#880" id="880">880</a>
 <a href="#881" id="881">881</a>
 <a href="#882" id="882">882</a>
+<a href="#883" id="883">883</a>
+<a href="#884" id="884">884</a>
+<a href="#885" id="885">885</a>
+<a href="#886" id="886">886</a>
+<a href="#887" id="887">887</a>
+<a href="#888" id="888">888</a>
+<a href="#889" id="889">889</a>
+<a href="#890" id="890">890</a>
+<a href="#891" id="891">891</a>
+<a href="#892" id="892">892</a>
+<a href="#893" id="893">893</a>
+<a href="#894" id="894">894</a>
+<a href="#895" id="895">895</a>
+<a href="#896" id="896">896</a>
+<a href="#897" id="897">897</a>
+<a href="#898" id="898">898</a>
+<a href="#899" id="899">899</a>
+<a href="#900" id="900">900</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::ops::{ControlFlow, Deref <span class="kw">as _</span>};
 <span class="kw">use </span>std::path::Path;
 <span class="kw">use </span>std::str::FromStr;
@@ -1195,14 +1213,11 @@
 
 <span class="kw">impl </span>Drop <span class="kw">for </span>LightningdProcessHandle {
     <span class="kw">fn </span>drop(<span class="kw-2">&amp;mut </span><span class="self">self</span>) {
-        <span class="comment">// cln don't like to be killed and may leave running processes. So let's
-        // terminate it in a controlled way
+        <span class="comment">// Terminate cln in a controlled way, otherwise it may leave running processes.
         </span>block_in_place(|| {
-            block_on(<span class="kw">async </span>{
-                <span class="kw">if let </span><span class="prelude-val">Err</span>(e) = <span class="self">self</span>.terminate().<span class="kw">await </span>{
-                    <span class="macro">warn!</span>(target: LOG_DEVIMINT, <span class="string">"failed to terminate lightningd: {e:?}"</span>);
-                }
-            });
+            <span class="kw">if let </span><span class="prelude-val">Err</span>(e) = block_on(<span class="self">self</span>.terminate()) {
+                <span class="macro">warn!</span>(target: LOG_DEVIMINT, <span class="string">"failed to terminate lightningd: {e:?}"</span>);
+            }
         });
     }
 }
@@ -1574,25 +1589,22 @@
     bitcoind.send_to(cln_addr, <span class="number">100_000_000</span>).<span class="kw">await</span><span class="question-mark">?</span>;
     bitcoind.mine_blocks(<span class="number">10</span>).<span class="kw">await</span><span class="question-mark">?</span>;
 
+    <span class="macro">tokio::try_join!</span>(
+        gw_cln.wait_for_chain_sync(bitcoind),
+        gw_lnd.wait_for_chain_sync(bitcoind)
+    )<span class="question-mark">?</span>;
+
     <span class="kw">let </span>lnd_pubkey = gw_lnd.lightning_pubkey().<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="kw">let </span>cln_pubkey = gw_cln.lightning_pubkey().<span class="kw">await</span><span class="question-mark">?</span>;
 
-    <span class="comment">// TODO: We're currently polling for the channel to be opened to avoid
-    // flakiness, but this shouldn't ever fail. This is likely needed because
-    // the node is not fully synced yet. In that case, we should wait for the
-    // node to be fully synced before opening the channel.
-    </span>poll(<span class="string">"fund channel"</span>, || <span class="kw">async </span>{
-        gw_cln
-            .open_channel(
-                lnd_pubkey.clone(),
-                <span class="macro">format!</span>(<span class="string">"127.0.0.1:{}"</span>, process_mgr.globals.FM_PORT_LND_LISTEN),
-                <span class="number">10_000_000</span>,
-                <span class="prelude-val">Some</span>(<span class="number">5_000_000</span>),
-            )
-            .<span class="kw">await
-            </span>.map_err(ControlFlow::Continue)
-    })
-    .<span class="kw">await</span><span class="question-mark">?</span>;
+    gw_cln
+        .open_channel(
+            lnd_pubkey.clone(),
+            gw_lnd.lightning_node_addr.clone(),
+            <span class="number">10_000_000</span>,
+            <span class="prelude-val">Some</span>(<span class="number">5_000_000</span>),
+        )
+        .<span class="kw">await</span><span class="question-mark">?</span>;
 
     bitcoind.mine_blocks(<span class="number">10</span>).<span class="kw">await</span><span class="question-mark">?</span>;
 
@@ -1719,12 +1731,36 @@
             <span class="string">"--jsonrpc-import"</span>, <span class="comment">// Workaround for incompatible on-disk format
         </span>);
         <span class="kw">let </span>process = process_mgr.spawn_daemon(<span class="string">"esplora"</span>, cmd).<span class="kw">await</span><span class="question-mark">?</span>;
+
+        <span class="self">Self</span>::wait_for_ready(process_mgr).<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="macro">debug!</span>(target: LOG_DEVIMINT, <span class="string">"Esplora ready"</span>);
 
         <span class="prelude-val">Ok</span>(<span class="self">Self </span>{
             _bitcoind: bitcoind,
             _process: process,
         })
+    }
+
+    <span class="doccomment">/// Wait until the server is able to respond to requests.
+    </span><span class="kw">async fn </span>wait_for_ready(process_mgr: <span class="kw-2">&amp;</span>ProcessManager) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+        <span class="kw">let </span>client = esplora_client::Builder::new(<span class="kw-2">&amp;</span><span class="macro">format!</span>(
+            <span class="string">"http://localhost:{}"</span>,
+            process_mgr.globals.FM_PORT_ESPLORA
+        ))
+        .build_async()
+        .expect(<span class="string">"esplora client build failed"</span>);
+
+        poll(<span class="string">"esplora server ready"</span>, || <span class="kw">async </span>{
+            client
+                .get_fee_estimates()
+                .<span class="kw">await
+                </span>.map_err(|e| ControlFlow::Continue(<span class="macro">anyhow::anyhow!</span>(e)))<span class="question-mark">?</span>;
+
+            <span class="prelude-val">Ok</span>(())
+        })
+        .<span class="kw">await</span><span class="question-mark">?</span>;
+
+        <span class="prelude-val">Ok</span>(())
     }
 }
 

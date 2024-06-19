@@ -1,4 +1,4 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `fedimint-core/src/db/mod.rs`."><title>mod.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../static.files/rustdoc-dd39b87e5fcfba68.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="fedimint_core" data-themes="" data-resource-suffix="" data-rustdoc-version="1.80.0-nightly (ef0027897 2024-05-12)" data-channel="nightly" data-search-js="search-d52510db62a78183.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../../../static.files/src-script-e66d777a5a92e9b2.js"></script><script defer src="../../../src-files.js"></script><script defer src="../../../static.files/main-20a3ad099b048cf2.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer"></div><main><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `fedimint-core/src/db/mod.rs`."><title>mod.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../static.files/rustdoc-dd39b87e5fcfba68.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="fedimint_core" data-themes="" data-resource-suffix="" data-rustdoc-version="1.80.0-nightly (804421dff 2024-06-07)" data-channel="nightly" data-search-js="search-d52510db62a78183.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../../../static.files/src-script-e66d777a5a92e9b2.js"></script><script defer src="../../../src-files.js"></script><script defer src="../../../static.files/main-20a3ad099b048cf2.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer"></div><main><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
 <a href="#2" id="2">2</a>
 <a href="#3" id="3">3</a>
 <a href="#4" id="4">4</a>
@@ -3091,6 +3091,38 @@
 <a href="#3091" id="3091">3091</a>
 <a href="#3092" id="3092">3092</a>
 <a href="#3093" id="3093">3093</a>
+<a href="#3094" id="3094">3094</a>
+<a href="#3095" id="3095">3095</a>
+<a href="#3096" id="3096">3096</a>
+<a href="#3097" id="3097">3097</a>
+<a href="#3098" id="3098">3098</a>
+<a href="#3099" id="3099">3099</a>
+<a href="#3100" id="3100">3100</a>
+<a href="#3101" id="3101">3101</a>
+<a href="#3102" id="3102">3102</a>
+<a href="#3103" id="3103">3103</a>
+<a href="#3104" id="3104">3104</a>
+<a href="#3105" id="3105">3105</a>
+<a href="#3106" id="3106">3106</a>
+<a href="#3107" id="3107">3107</a>
+<a href="#3108" id="3108">3108</a>
+<a href="#3109" id="3109">3109</a>
+<a href="#3110" id="3110">3110</a>
+<a href="#3111" id="3111">3111</a>
+<a href="#3112" id="3112">3112</a>
+<a href="#3113" id="3113">3113</a>
+<a href="#3114" id="3114">3114</a>
+<a href="#3115" id="3115">3115</a>
+<a href="#3116" id="3116">3116</a>
+<a href="#3117" id="3117">3117</a>
+<a href="#3118" id="3118">3118</a>
+<a href="#3119" id="3119">3119</a>
+<a href="#3120" id="3120">3120</a>
+<a href="#3121" id="3121">3121</a>
+<a href="#3122" id="3122">3122</a>
+<a href="#3123" id="3123">3123</a>
+<a href="#3124" id="3124">3124</a>
+<a href="#3125" id="3125">3125</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! Core Fedimint database traits and types
 //!
 //! # Isolation of database transactions
@@ -3133,6 +3165,7 @@
 <span class="kw">use </span>std::fmt::{<span class="self">self</span>, Debug};
 <span class="kw">use </span>std::marker::{<span class="self">self</span>, PhantomData};
 <span class="kw">use </span>std::ops::{<span class="self">self</span>, DerefMut};
+<span class="kw">use </span>std::path::Path;
 <span class="kw">use </span>std::pin::Pin;
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
@@ -3260,6 +3293,9 @@
 
     <span class="doccomment">/// Start a database transaction
     </span><span class="kw">async fn </span>begin_transaction&lt;<span class="lifetime">'a</span>&gt;(<span class="kw-2">&amp;</span><span class="lifetime">'a </span><span class="self">self</span>) -&gt; <span class="self">Self</span>::Transaction&lt;<span class="lifetime">'a</span>&gt;;
+
+    <span class="comment">// Checkpoint the database to a backup directory
+    </span><span class="kw">fn </span>checkpoint(<span class="kw-2">&amp;</span><span class="self">self</span>, backup_path: <span class="kw-2">&amp;</span>Path) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt;;
 }
 
 <span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
@@ -3272,6 +3308,10 @@
     <span class="kw">async fn </span>begin_transaction&lt;<span class="lifetime">'a</span>&gt;(<span class="kw-2">&amp;</span><span class="lifetime">'a </span><span class="self">self</span>) -&gt; <span class="self">Self</span>::Transaction&lt;<span class="lifetime">'a</span>&gt; {
         (<span class="kw-2">**</span><span class="self">self</span>).begin_transaction().<span class="kw">await
     </span>}
+
+    <span class="kw">fn </span>checkpoint(<span class="kw-2">&amp;</span><span class="self">self</span>, backup_path: <span class="kw-2">&amp;</span>Path) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+        (<span class="kw-2">**</span><span class="self">self</span>).checkpoint(backup_path)
+    }
 }
 
 <span class="doccomment">/// An extension trait with convenience operations on [`IRawDatabase`]
@@ -3308,6 +3348,9 @@
 
     <span class="doccomment">/// The prefix len of this database instance
     </span><span class="kw">fn </span>prefix_len(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; usize;
+
+    <span class="doccomment">/// Checkpoints the database to a backup directory
+    </span><span class="kw">fn </span>checkpoint(<span class="kw-2">&amp;</span><span class="self">self</span>, backup_path: <span class="kw-2">&amp;</span>Path) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt;;
 }
 
 <span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
@@ -3327,6 +3370,10 @@
 
     <span class="kw">fn </span>prefix_len(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; usize {
         (<span class="kw-2">**</span><span class="self">self</span>).prefix_len()
+    }
+
+    <span class="kw">fn </span>checkpoint(<span class="kw-2">&amp;</span><span class="self">self</span>, backup_path: <span class="kw-2">&amp;</span>Path) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+        (<span class="kw-2">**</span><span class="self">self</span>).checkpoint(backup_path)
     }
 }
 
@@ -3362,6 +3409,10 @@
     <span class="kw">fn </span>prefix_len(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; usize {
         <span class="number">0
     </span>}
+
+    <span class="kw">fn </span>checkpoint(<span class="kw-2">&amp;</span><span class="self">self</span>, backup_path: <span class="kw-2">&amp;</span>Path) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+        <span class="self">self</span>.raw.checkpoint(backup_path)
+    }
 }
 
 <span class="doccomment">/// A public-facing newtype over `IDatabase`
@@ -3477,6 +3528,10 @@
         </span><span class="lifetime">'s</span>: <span class="lifetime">'tx</span>,
     {
         <span class="self">self</span>.begin_transaction().<span class="kw">await</span>.into_nc()
+    }
+
+    <span class="kw">pub fn </span>checkpoint(<span class="kw-2">&amp;</span><span class="self">self</span>, backup_path: <span class="kw-2">&amp;</span>Path) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+        <span class="self">self</span>.inner.checkpoint(backup_path)
     }
 
     <span class="doccomment">/// Runs a closure with a reference to a database transaction and tries to
@@ -3682,6 +3737,10 @@
 
     <span class="kw">fn </span>prefix_len(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; usize {
         <span class="self">self</span>.inner.prefix_len() + <span class="self">self</span>.prefix.len()
+    }
+
+    <span class="kw">fn </span>checkpoint(<span class="kw-2">&amp;</span><span class="self">self</span>, backup_path: <span class="kw-2">&amp;</span>Path) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+        <span class="self">self</span>.inner.checkpoint(backup_path)
     }
 }
 
@@ -5909,6 +5968,7 @@
     #[tokio::test]
     </span><span class="kw">async fn </span>test_autocommit() {
         <span class="kw">use </span>std::marker::PhantomData;
+        <span class="kw">use </span>std::path::Path;
 
         <span class="kw">use </span>anyhow::anyhow;
         <span class="kw">use </span>async_trait::async_trait;
@@ -5928,6 +5988,10 @@
             <span class="kw">type </span>Transaction&lt;<span class="lifetime">'a</span>&gt; = FakeTransaction&lt;<span class="lifetime">'a</span>&gt;;
             <span class="kw">async fn </span>begin_transaction(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FakeTransaction {
                 FakeTransaction(PhantomData)
+            }
+
+            <span class="kw">fn </span>checkpoint(<span class="kw-2">&amp;</span><span class="self">self</span>, _backup_path: <span class="kw-2">&amp;</span>Path) -&gt; anyhow::Result&lt;()&gt; {
+                <span class="prelude-val">Ok</span>(())
             }
         }
 

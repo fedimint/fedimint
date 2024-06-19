@@ -1,4 +1,4 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `/build/source/target/ci/build/fedimint-ln-gateway-61ce07cdb62596ce/out/gateway_lnrpc.rs`."><title>gateway_lnrpc.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../../../../../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../../../../../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../../../../../../../static.files/rustdoc-dd39b87e5fcfba68.css"><meta name="rustdoc-vars" data-root-path="../../../../../../../../../" data-static-root-path="../../../../../../../../../static.files/" data-current-crate="ln_gateway" data-themes="" data-resource-suffix="" data-rustdoc-version="1.80.0-nightly (ef0027897 2024-05-12)" data-channel="nightly" data-search-js="search-d52510db62a78183.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../../../../../../../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../../../../../../../../../static.files/src-script-e66d777a5a92e9b2.js"></script><script defer src="../../../../../../../../../src-files.js"></script><script defer src="../../../../../../../../../static.files/main-20a3ad099b048cf2.js"></script><noscript><link rel="stylesheet" href="../../../../../../../../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../../../../../../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../../../../../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer"></div><main><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `/build/source/target/ci/build/fedimint-ln-gateway-61ce07cdb62596ce/out/gateway_lnrpc.rs`."><title>gateway_lnrpc.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../../../../../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../../../../../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../../../../../../../static.files/rustdoc-dd39b87e5fcfba68.css"><meta name="rustdoc-vars" data-root-path="../../../../../../../../../" data-static-root-path="../../../../../../../../../static.files/" data-current-crate="ln_gateway" data-themes="" data-resource-suffix="" data-rustdoc-version="1.80.0-nightly (804421dff 2024-06-07)" data-channel="nightly" data-search-js="search-d52510db62a78183.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../../../../../../../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../../../../../../../../../static.files/src-script-e66d777a5a92e9b2.js"></script><script defer src="../../../../../../../../../src-files.js"></script><script defer src="../../../../../../../../../static.files/main-20a3ad099b048cf2.js"></script><noscript><link rel="stylesheet" href="../../../../../../../../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../../../../../../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../../../../../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer"></div><main><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
 <a href="#2" id="2">2</a>
 <a href="#3" id="3">3</a>
 <a href="#4" id="4">4</a>
@@ -1371,6 +1371,132 @@
 <a href="#1371" id="1371">1371</a>
 <a href="#1372" id="1372">1372</a>
 <a href="#1373" id="1373">1373</a>
+<a href="#1374" id="1374">1374</a>
+<a href="#1375" id="1375">1375</a>
+<a href="#1376" id="1376">1376</a>
+<a href="#1377" id="1377">1377</a>
+<a href="#1378" id="1378">1378</a>
+<a href="#1379" id="1379">1379</a>
+<a href="#1380" id="1380">1380</a>
+<a href="#1381" id="1381">1381</a>
+<a href="#1382" id="1382">1382</a>
+<a href="#1383" id="1383">1383</a>
+<a href="#1384" id="1384">1384</a>
+<a href="#1385" id="1385">1385</a>
+<a href="#1386" id="1386">1386</a>
+<a href="#1387" id="1387">1387</a>
+<a href="#1388" id="1388">1388</a>
+<a href="#1389" id="1389">1389</a>
+<a href="#1390" id="1390">1390</a>
+<a href="#1391" id="1391">1391</a>
+<a href="#1392" id="1392">1392</a>
+<a href="#1393" id="1393">1393</a>
+<a href="#1394" id="1394">1394</a>
+<a href="#1395" id="1395">1395</a>
+<a href="#1396" id="1396">1396</a>
+<a href="#1397" id="1397">1397</a>
+<a href="#1398" id="1398">1398</a>
+<a href="#1399" id="1399">1399</a>
+<a href="#1400" id="1400">1400</a>
+<a href="#1401" id="1401">1401</a>
+<a href="#1402" id="1402">1402</a>
+<a href="#1403" id="1403">1403</a>
+<a href="#1404" id="1404">1404</a>
+<a href="#1405" id="1405">1405</a>
+<a href="#1406" id="1406">1406</a>
+<a href="#1407" id="1407">1407</a>
+<a href="#1408" id="1408">1408</a>
+<a href="#1409" id="1409">1409</a>
+<a href="#1410" id="1410">1410</a>
+<a href="#1411" id="1411">1411</a>
+<a href="#1412" id="1412">1412</a>
+<a href="#1413" id="1413">1413</a>
+<a href="#1414" id="1414">1414</a>
+<a href="#1415" id="1415">1415</a>
+<a href="#1416" id="1416">1416</a>
+<a href="#1417" id="1417">1417</a>
+<a href="#1418" id="1418">1418</a>
+<a href="#1419" id="1419">1419</a>
+<a href="#1420" id="1420">1420</a>
+<a href="#1421" id="1421">1421</a>
+<a href="#1422" id="1422">1422</a>
+<a href="#1423" id="1423">1423</a>
+<a href="#1424" id="1424">1424</a>
+<a href="#1425" id="1425">1425</a>
+<a href="#1426" id="1426">1426</a>
+<a href="#1427" id="1427">1427</a>
+<a href="#1428" id="1428">1428</a>
+<a href="#1429" id="1429">1429</a>
+<a href="#1430" id="1430">1430</a>
+<a href="#1431" id="1431">1431</a>
+<a href="#1432" id="1432">1432</a>
+<a href="#1433" id="1433">1433</a>
+<a href="#1434" id="1434">1434</a>
+<a href="#1435" id="1435">1435</a>
+<a href="#1436" id="1436">1436</a>
+<a href="#1437" id="1437">1437</a>
+<a href="#1438" id="1438">1438</a>
+<a href="#1439" id="1439">1439</a>
+<a href="#1440" id="1440">1440</a>
+<a href="#1441" id="1441">1441</a>
+<a href="#1442" id="1442">1442</a>
+<a href="#1443" id="1443">1443</a>
+<a href="#1444" id="1444">1444</a>
+<a href="#1445" id="1445">1445</a>
+<a href="#1446" id="1446">1446</a>
+<a href="#1447" id="1447">1447</a>
+<a href="#1448" id="1448">1448</a>
+<a href="#1449" id="1449">1449</a>
+<a href="#1450" id="1450">1450</a>
+<a href="#1451" id="1451">1451</a>
+<a href="#1452" id="1452">1452</a>
+<a href="#1453" id="1453">1453</a>
+<a href="#1454" id="1454">1454</a>
+<a href="#1455" id="1455">1455</a>
+<a href="#1456" id="1456">1456</a>
+<a href="#1457" id="1457">1457</a>
+<a href="#1458" id="1458">1458</a>
+<a href="#1459" id="1459">1459</a>
+<a href="#1460" id="1460">1460</a>
+<a href="#1461" id="1461">1461</a>
+<a href="#1462" id="1462">1462</a>
+<a href="#1463" id="1463">1463</a>
+<a href="#1464" id="1464">1464</a>
+<a href="#1465" id="1465">1465</a>
+<a href="#1466" id="1466">1466</a>
+<a href="#1467" id="1467">1467</a>
+<a href="#1468" id="1468">1468</a>
+<a href="#1469" id="1469">1469</a>
+<a href="#1470" id="1470">1470</a>
+<a href="#1471" id="1471">1471</a>
+<a href="#1472" id="1472">1472</a>
+<a href="#1473" id="1473">1473</a>
+<a href="#1474" id="1474">1474</a>
+<a href="#1475" id="1475">1475</a>
+<a href="#1476" id="1476">1476</a>
+<a href="#1477" id="1477">1477</a>
+<a href="#1478" id="1478">1478</a>
+<a href="#1479" id="1479">1479</a>
+<a href="#1480" id="1480">1480</a>
+<a href="#1481" id="1481">1481</a>
+<a href="#1482" id="1482">1482</a>
+<a href="#1483" id="1483">1483</a>
+<a href="#1484" id="1484">1484</a>
+<a href="#1485" id="1485">1485</a>
+<a href="#1486" id="1486">1486</a>
+<a href="#1487" id="1487">1487</a>
+<a href="#1488" id="1488">1488</a>
+<a href="#1489" id="1489">1489</a>
+<a href="#1490" id="1490">1490</a>
+<a href="#1491" id="1491">1491</a>
+<a href="#1492" id="1492">1492</a>
+<a href="#1493" id="1493">1493</a>
+<a href="#1494" id="1494">1494</a>
+<a href="#1495" id="1495">1495</a>
+<a href="#1496" id="1496">1496</a>
+<a href="#1497" id="1497">1497</a>
+<a href="#1498" id="1498">1498</a>
+<a href="#1499" id="1499">1499</a>
 </pre></div><pre class="rust"><code><span class="attr">#[derive(serde::Serialize, serde::Deserialize)]
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -1427,6 +1553,43 @@
 <span class="attr">#[derive(serde::Serialize, serde::Deserialize)]
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
+</span><span class="kw">pub struct </span>PayPrunedInvoiceRequest {
+    <span class="doccomment">/// A BOLT11 invoice without a description
+    </span><span class="attr">#[prost(message, optional, tag = <span class="string">"1"</span>)]
+    </span><span class="kw">pub </span>pruned_invoice: ::core::option::Option&lt;PrunedInvoice&gt;,
+    <span class="doccomment">/// The maximum delay, in blocks, that the payment route can be locked for
+    </span><span class="attr">#[prost(uint64, tag = <span class="string">"2"</span>)]
+    </span><span class="kw">pub </span>max_delay: u64,
+    <span class="doccomment">/// The maximum fee, in millisats, that will be paid as a lightning routing fee
+    </span><span class="attr">#[prost(uint64, tag = <span class="string">"3"</span>)]
+    </span><span class="kw">pub </span>max_fee_msat: u64,
+}
+<span class="attr">#[derive(serde::Serialize, serde::Deserialize)]
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+</span><span class="kw">pub struct </span>PrunedInvoice {
+    <span class="doccomment">/// The amount in msats to be paid
+    </span><span class="attr">#[prost(uint64, tag = <span class="string">"1"</span>)]
+    </span><span class="kw">pub </span>amount_msat: u64,
+    <span class="doccomment">/// The receiver's public key
+    </span><span class="attr">#[prost(bytes = <span class="string">"vec"</span>, tag = <span class="string">"2"</span>)]
+    </span><span class="kw">pub </span>destination: ::prost::alloc::vec::Vec&lt;u8&gt;,
+    <span class="doccomment">/// The features the the receiver supports
+    </span><span class="attr">#[prost(bytes = <span class="string">"vec"</span>, tag = <span class="string">"3"</span>)]
+    </span><span class="kw">pub </span>destination_features: ::prost::alloc::vec::Vec&lt;u8&gt;,
+    <span class="doccomment">/// The hash of the preimage for this payment
+    </span><span class="attr">#[prost(bytes = <span class="string">"vec"</span>, tag = <span class="string">"4"</span>)]
+    </span><span class="kw">pub </span>payment_hash: ::prost::alloc::vec::Vec&lt;u8&gt;,
+    <span class="doccomment">/// The payment secret for this payment
+    </span><span class="attr">#[prost(bytes = <span class="string">"vec"</span>, tag = <span class="string">"5"</span>)]
+    </span><span class="kw">pub </span>payment_secret: ::prost::alloc::vec::Vec&lt;u8&gt;,
+    <span class="doccomment">/// Minimum CLTV delta for this payment
+    </span><span class="attr">#[prost(uint64, tag = <span class="string">"6"</span>)]
+    </span><span class="kw">pub </span>min_final_cltv_delta: u64,
+}
+<span class="attr">#[derive(serde::Serialize, serde::Deserialize)]
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
 </span><span class="kw">pub struct </span>PayInvoiceResponse {
     <span class="doccomment">/// The preimage of the invoice
     </span><span class="attr">#[prost(bytes = <span class="string">"vec"</span>, tag = <span class="string">"1"</span>)]
@@ -1437,7 +1600,7 @@
 #[derive(Clone, PartialEq, ::prost::Message)]
 </span><span class="kw">pub struct </span>InterceptHtlcRequest {
     <span class="doccomment">/// The HTLC payment hash.
-    /// Value is not guaranteed to be unique per intercepted HTLC
+    /// HTLCs corresponding to the same payment will have the same payment hash.
     </span><span class="attr">#[prost(bytes = <span class="string">"vec"</span>, tag = <span class="string">"1"</span>)]
     </span><span class="kw">pub </span>payment_hash: ::prost::alloc::vec::Vec&lt;u8&gt;,
     <span class="doccomment">/// The incoming HTLC amount in millisatoshi.
@@ -1476,6 +1639,10 @@
     <span class="doccomment">/// The index of the incoming htlc in the incoming channel
     </span><span class="attr">#[prost(uint64, tag = <span class="string">"5"</span>)]
     </span><span class="kw">pub </span>htlc_id: u64,
+    <span class="doccomment">/// The HTLC payment hash.
+    /// HTLCs corresponding to the same payment will have the same payment hash.
+    </span><span class="attr">#[prost(bytes = <span class="string">"vec"</span>, tag = <span class="string">"6"</span>)]
+    </span><span class="kw">pub </span>payment_hash: ::prost::alloc::vec::Vec&lt;u8&gt;,
     <span class="attr">#[prost(oneof = <span class="string">"intercept_htlc_response::Action"</span>, tags = <span class="string">"1, 2, 3"</span>)]
     </span><span class="kw">pub </span>action: ::core::option::Option&lt;intercept_htlc_response::Action&gt;,
 }
@@ -1854,6 +2021,35 @@
             <span class="self">self</span>.inner.unary(req, path, codec).<span class="kw">await
         </span>}
         <span class="doccomment">///
+        /// PayPrunedInvoice attempts to pay a pruned invoice, which is an invoice without a description, using the associated lightning node.
+        </span><span class="kw">pub async fn </span>pay_pruned_invoice(
+            <span class="kw-2">&amp;mut </span><span class="self">self</span>,
+            request: <span class="kw">impl </span>tonic::IntoRequest&lt;<span class="kw">super</span>::PayPrunedInvoiceRequest&gt;,
+        ) -&gt; std::result::Result&lt;
+            tonic::Response&lt;<span class="kw">super</span>::PayInvoiceResponse&gt;,
+            tonic::Status,
+        &gt; {
+            <span class="self">self</span>.inner
+                .ready()
+                .<span class="kw">await
+                </span>.map_err(|e| {
+                    tonic::Status::new(
+                        tonic::Code::Unknown,
+                        <span class="macro">format!</span>(<span class="string">"Service was not ready: {}"</span>, e.into()),
+                    )
+                })<span class="question-mark">?</span>;
+            <span class="kw">let </span>codec = tonic::codec::ProstCodec::default();
+            <span class="kw">let </span>path = http::uri::PathAndQuery::from_static(
+                <span class="string">"/gateway_lnrpc.GatewayLightning/PayPrunedInvoice"</span>,
+            );
+            <span class="kw">let </span><span class="kw-2">mut </span>req = request.into_request();
+            req.extensions_mut()
+                .insert(
+                    GrpcMethod::new(<span class="string">"gateway_lnrpc.GatewayLightning"</span>, <span class="string">"PayPrunedInvoice"</span>),
+                );
+            <span class="self">self</span>.inner.unary(req, path, codec).<span class="kw">await
+        </span>}
+        <span class="doccomment">///
         /// RouteHtlcs opens a bi-directional stream for the client to receive intercepted
         /// HTLCs. `InterceptHtlcRequest` is sent from the server to alert the client that
         /// an HTLC has been intercepted and needs to be processed. The client is expected
@@ -2083,6 +2279,15 @@
         </span><span class="kw">async fn </span>pay_invoice(
             <span class="kw-2">&amp;</span><span class="self">self</span>,
             request: tonic::Request&lt;<span class="kw">super</span>::PayInvoiceRequest&gt;,
+        ) -&gt; std::result::Result&lt;
+            tonic::Response&lt;<span class="kw">super</span>::PayInvoiceResponse&gt;,
+            tonic::Status,
+        &gt;;
+        <span class="doccomment">///
+        /// PayPrunedInvoice attempts to pay a pruned invoice, which is an invoice without a description, using the associated lightning node.
+        </span><span class="kw">async fn </span>pay_pruned_invoice(
+            <span class="kw-2">&amp;</span><span class="self">self</span>,
+            request: tonic::Request&lt;<span class="kw">super</span>::PayPrunedInvoiceRequest&gt;,
         ) -&gt; std::result::Result&lt;
             tonic::Response&lt;<span class="kw">super</span>::PayInvoiceResponse&gt;,
             tonic::Status,
@@ -2351,6 +2556,53 @@
                     <span class="kw">let </span>fut = <span class="kw">async move </span>{
                         <span class="kw">let </span>inner = inner.<span class="number">0</span>;
                         <span class="kw">let </span>method = PayInvoiceSvc(inner);
+                        <span class="kw">let </span>codec = tonic::codec::ProstCodec::default();
+                        <span class="kw">let </span><span class="kw-2">mut </span>grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            )
+                            .apply_max_message_size_config(
+                                max_decoding_message_size,
+                                max_encoding_message_size,
+                            );
+                        <span class="kw">let </span>res = grpc.unary(method, req).<span class="kw">await</span>;
+                        <span class="prelude-val">Ok</span>(res)
+                    };
+                    Box::pin(fut)
+                }
+                <span class="string">"/gateway_lnrpc.GatewayLightning/PayPrunedInvoice" </span>=&gt; {
+                    <span class="attr">#[allow(non_camel_case_types)]
+                    </span><span class="kw">struct </span>PayPrunedInvoiceSvc&lt;T: GatewayLightning&gt;(<span class="kw">pub </span>Arc&lt;T&gt;);
+                    <span class="kw">impl</span>&lt;
+                        T: GatewayLightning,
+                    &gt; tonic::server::UnaryService&lt;<span class="kw">super</span>::PayPrunedInvoiceRequest&gt;
+                    <span class="kw">for </span>PayPrunedInvoiceSvc&lt;T&gt; {
+                        <span class="kw">type </span>Response = <span class="kw">super</span>::PayInvoiceResponse;
+                        <span class="kw">type </span>Future = BoxFuture&lt;
+                            tonic::Response&lt;<span class="self">Self</span>::Response&gt;,
+                            tonic::Status,
+                        &gt;;
+                        <span class="kw">fn </span>call(
+                            <span class="kw-2">&amp;mut </span><span class="self">self</span>,
+                            request: tonic::Request&lt;<span class="kw">super</span>::PayPrunedInvoiceRequest&gt;,
+                        ) -&gt; <span class="self">Self</span>::Future {
+                            <span class="kw">let </span>inner = Arc::clone(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="number">0</span>);
+                            <span class="kw">let </span>fut = <span class="kw">async move </span>{
+                                &lt;T <span class="kw">as </span>GatewayLightning&gt;::pay_pruned_invoice(<span class="kw-2">&amp;</span>inner, request)
+                                    .<span class="kw">await
+                            </span>};
+                            Box::pin(fut)
+                        }
+                    }
+                    <span class="kw">let </span>accept_compression_encodings = <span class="self">self</span>.accept_compression_encodings;
+                    <span class="kw">let </span>send_compression_encodings = <span class="self">self</span>.send_compression_encodings;
+                    <span class="kw">let </span>max_decoding_message_size = <span class="self">self</span>.max_decoding_message_size;
+                    <span class="kw">let </span>max_encoding_message_size = <span class="self">self</span>.max_encoding_message_size;
+                    <span class="kw">let </span>inner = <span class="self">self</span>.inner.clone();
+                    <span class="kw">let </span>fut = <span class="kw">async move </span>{
+                        <span class="kw">let </span>inner = inner.<span class="number">0</span>;
+                        <span class="kw">let </span>method = PayPrunedInvoiceSvc(inner);
                         <span class="kw">let </span>codec = tonic::codec::ProstCodec::default();
                         <span class="kw">let </span><span class="kw-2">mut </span>grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
