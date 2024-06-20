@@ -232,6 +232,8 @@ impl Fedimintd {
 
         let bitcoind_rpc = BitcoinRpcConfig::get_defaults_from_env_vars()?;
 
+        println!("Display Module/consensus version here."); // return Module/CoreVersion here
+
         Ok(Self {
             opts,
             bitcoind_rpc,
