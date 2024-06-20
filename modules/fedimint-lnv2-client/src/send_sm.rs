@@ -15,13 +15,12 @@ use fedimint_lnv2_common::contracts::OutgoingContract;
 use fedimint_lnv2_common::{
     LightningClientContext, LightningInput, LightningInputV0, OutgoingWitness,
 };
-use lightning_invoice::Bolt11Invoice;
 use secp256k1::schnorr::Signature;
 use secp256k1::KeyPair;
 use tracing::error;
 
 use crate::api::LnFederationApi;
-use crate::{LightningClientStateMachines, PayBolt11InvoicePayload};
+use crate::{LightningClientStateMachines, LightningInvoice, SendPaymentPayload};
 
 const RETRY_DELAY: Duration = Duration::from_secs(1);
 
@@ -46,21 +45,8 @@ pub struct SendSMCommon {
     pub funding_txid: TransactionId,
     pub gateway_api: SafeUrl,
     pub contract: OutgoingContract,
-    pub invoice: Invoice,
+    pub invoice: LightningInvoice,
     pub refund_keypair: KeyPair,
-}
-
-#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
-pub enum Invoice {
-    Bolt11(Bolt11Invoice),
-}
-
-impl Invoice {
-    pub fn bolt11(&self) -> &Bolt11Invoice {
-        match self {
-            Invoice::Bolt11(invoice) => invoice,
-        }
-    }
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
@@ -114,7 +100,7 @@ impl State for SendStateMachine {
                             self.common.gateway_api.clone(),
                             context.federation_id,
                             self.common.contract.clone(),
-                            self.common.invoice.bolt11().clone(),
+                            self.common.invoice.clone(),
                             self.common.refund_keypair,
                         ),
                         move |dbtx, response, old_state| {
@@ -172,7 +158,7 @@ impl SendStateMachine {
         gateway_api: SafeUrl,
         federation_id: FederationId,
         contract: OutgoingContract,
-        invoice: Bolt11Invoice,
+        invoice: LightningInvoice,
         refund_keypair: KeyPair,
     ) -> Result<[u8; 32], Signature> {
         loop {
@@ -231,17 +217,17 @@ impl SendStateMachine {
         gateway_api: SafeUrl,
         federation_id: FederationId,
         contract: OutgoingContract,
-        invoice: Bolt11Invoice,
+        invoice: LightningInvoice,
         auth: Signature,
     ) -> anyhow::Result<Result<Result<[u8; 32], Signature>, String>> {
         let result = reqwest::Client::new()
             .post(
                 gateway_api
-                    .join("pay_bolt11_invoice")
-                    .expect("'pay_bolt11_invoice' contains no invalid characters for a URL")
+                    .join("send_payment")
+                    .expect("'send_payment' contains no invalid characters for a URL")
                     .as_str(),
             )
-            .json(&PayBolt11InvoicePayload {
+            .json(&SendPaymentPayload {
                 federation_id,
                 contract,
                 invoice,
