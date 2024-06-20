@@ -1249,11 +1249,14 @@ impl LightningClientModule {
         let mut claims = Vec::new();
         for i in indices {
             let key_pair_tweaked = tweak_user_secret_key(&self.secp, key_pair, i);
-            if let Ok(operation_id) = self
+            match self
                 .scan_receive_for_user(key_pair_tweaked, extra_meta.clone())
                 .await
             {
-                claims.push(operation_id);
+                Ok(operation_id) => claims.push(operation_id),
+                Err(e) => {
+                    error!(?e, ?i, "Failed to scan tweaked key at index i");
+                }
             }
         }
 
