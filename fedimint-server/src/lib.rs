@@ -59,6 +59,7 @@ pub async fn run(
     code_version_str: String,
     module_init_registry: &ServerModuleInitRegistry,
     task_group: TaskGroup,
+    network: bitcoin::Network,
 ) -> anyhow::Result<()> {
     let cfg = match get_config(&data_dir)? {
         Some(cfg) => cfg,
@@ -70,6 +71,7 @@ pub async fn run(
                 code_version_str,
                 task_group.make_subgroup(),
                 force_api_secrets.clone(),
+                network,
             )
             .await?
         }
@@ -119,6 +121,7 @@ pub async fn run_config_gen(
     code_version_str: String,
     mut task_group: TaskGroup,
     force_api_secrets: ApiSecrets,
+    network: bitcoin::Network,
 ) -> anyhow::Result<ServerConfig> {
     info!(target: LOG_CONSENSUS, "Starting config gen");
 
@@ -133,6 +136,7 @@ pub async fn run_config_gen(
         &mut task_group,
         code_version_str.clone(),
         force_api_secrets.get_active(),
+        network,
     );
 
     let mut rpc_module = RpcHandlerCtx::new_module(config_gen);

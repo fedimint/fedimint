@@ -357,6 +357,7 @@ impl Fedimintd {
 
     /// Block thread and run a Fedimintd server
     pub async fn run(self) -> ! {
+        let network = self.opts.network;
         // handle optional subcommand
         if let Some(subcommand) = &self.opts.subcommand {
             match subcommand {
@@ -390,6 +391,7 @@ impl Fedimintd {
                 self.server_gens,
                 self.server_gen_params,
                 self.code_version_str,
+                network,
             )
             .await
             {
@@ -470,6 +472,7 @@ async fn run(
     module_inits: ServerModuleInitRegistry,
     module_inits_params: ServerModuleConfigGenParamsRegistry,
     code_version_str: String,
+    network: bitcoin::Network,
 ) -> anyhow::Result<()> {
     if let Some(socket_addr) = opts.bind_metrics_api.as_ref() {
         task_group.spawn_cancellable("metrics-server", {
@@ -516,6 +519,7 @@ async fn run(
         code_version_str,
         &module_inits,
         task_group.clone(),
+        network,
     )
     .await?;
 

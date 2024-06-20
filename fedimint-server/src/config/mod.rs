@@ -133,6 +133,8 @@ pub struct ServerConfigConsensus {
     pub modules: BTreeMap<ModuleInstanceId, ServerModuleConsensusConfig>,
     /// Additional config the federation wants to transmit to the clients
     pub meta: BTreeMap<String, String>,
+    /// The Bitcoin network
+    pub network: bitcoin::Network,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -216,6 +218,7 @@ impl ServerConfig {
         broadcast_secret_key: SecretKey,
         modules: BTreeMap<ModuleInstanceId, ServerModuleConfig>,
         code_version_str: String,
+        network: bitcoin::Network,
     ) -> Self {
         let private = ServerConfigPrivate {
             api_auth: params.local.api_auth.clone(),
@@ -249,6 +252,7 @@ impl ServerConfig {
             tls_certs: params.tls_certs(),
             modules: Default::default(),
             meta: params.consensus.meta,
+            network,
         };
         let mut cfg = Self {
             consensus,
@@ -384,6 +388,7 @@ impl ServerConfig {
         params: &HashMap<PeerId, ConfigGenParams>,
         registry: &ServerModuleInitRegistry,
         code_version_str: &str,
+        network: bitcoin::Network,
     ) -> BTreeMap<PeerId, Self> {
         let peer0 = &params[&PeerId::from(0)];
 
@@ -422,6 +427,7 @@ impl ServerConfig {
                         .map(|(module_id, cfgs)| (*module_id, cfgs[&id].clone()))
                         .collect(),
                     code_version_str.to_string(),
+                    network,
                 );
                 (id, config)
             })
@@ -437,6 +443,7 @@ impl ServerConfig {
         delay_calculator: DelayCalculator,
         task_group: &mut TaskGroup,
         code_version_str: String,
+        network: bitcoin::Network,
     ) -> DkgResult<Self> {
         let _timing /* logs on drop */ = timing::TimeReporter::new("distributed-gen").info();
         let server_conn = connect(
@@ -470,6 +477,7 @@ impl ServerConfig {
                 &HashMap::from([(*our_id, params.clone())]),
                 &registry,
                 &code_version_str,
+                network,
             );
             return Ok(server[our_id].clone());
         }
@@ -562,6 +570,7 @@ impl ServerConfig {
             broadcast_sk,
             module_cfgs,
             code_version_str,
+            network,
         );
 
         info!(
