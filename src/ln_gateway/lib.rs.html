@@ -2028,8 +2028,8 @@
 <span class="kw">use </span>fedimint_ln_common::route_hints::RouteHint;
 <span class="kw">use </span>fedimint_ln_common::LightningCommonInit;
 <span class="kw">use </span>fedimint_lnv2_client::{
-    Bolt11InvoiceDescription, CreateBolt11InvoicePayload, PayBolt11InvoicePayload, PaymentFee,
-    RoutingInfo,
+    Bolt11InvoiceDescription, CreateBolt11InvoicePayload, PaymentFee, RoutingInfo,
+    SendPaymentPayload,
 };
 <span class="kw">use </span>fedimint_lnv2_common::contracts::IncomingContract;
 <span class="kw">use </span>fedimint_mint_client::{MintClientInit, MintCommonInit};
@@ -3661,9 +3661,9 @@
 
     <span class="doccomment">/// Instructs this gateway to pay a Lightning network invoice via the LNv2
     /// protocol.
-    </span><span class="kw">async fn </span>pay_bolt11_invoice(
+    </span><span class="kw">async fn </span>send_payment_v2(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        payload: PayBolt11InvoicePayload,
+        payload: SendPaymentPayload,
     ) -&gt; anyhow::Result&lt;std::result::Result&lt;[u8; <span class="number">32</span>], Signature&gt;&gt; {
         <span class="kw">let </span>clients = <span class="self">self</span>.clients.read().<span class="kw">await</span>;
 

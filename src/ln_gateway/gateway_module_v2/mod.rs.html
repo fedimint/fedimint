@@ -423,6 +423,7 @@
 <a href="#423" id="423">423</a>
 <a href="#424" id="424">424</a>
 <a href="#425" id="425">425</a>
+<a href="#426" id="426">426</a>
 </pre></div><pre class="rust"><code><span class="kw">mod </span>complete_sm;
 <span class="kw">mod </span>receive_sm;
 <span class="kw">mod </span>send_sm;
@@ -430,7 +431,7 @@
 <span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::sync::Arc;
 
-<span class="kw">use </span>anyhow::{anyhow, bail};
+<span class="kw">use </span>anyhow::{anyhow, ensure};
 <span class="kw">use </span>bitcoin_hashes::sha256;
 <span class="kw">use </span>fedimint_api_client::api::DynModuleApi;
 <span class="kw">use </span>fedimint_client::module::init::{ClientModuleInit, ClientModuleInitArgs};
@@ -449,7 +450,7 @@
 };
 <span class="kw">use </span>fedimint_core::{apply, async_trait_maybe_send, secp256k1, Amount, OutPoint, PeerId};
 <span class="kw">use </span>fedimint_lnv2_client::api::LnFederationApi;
-<span class="kw">use </span>fedimint_lnv2_client::PayBolt11InvoicePayload;
+<span class="kw">use </span>fedimint_lnv2_client::{LightningInvoice, SendPaymentPayload};
 <span class="kw">use </span>fedimint_lnv2_common::config::LightningClientConfig;
 <span class="kw">use </span>fedimint_lnv2_common::contracts::IncomingContract;
 <span class="kw">use </span>fedimint_lnv2_common::{
@@ -468,7 +469,7 @@
     CompleteSMCommon, CompleteSMState, CompleteStateMachine,
 };
 <span class="kw">use </span><span class="kw">crate</span>::gateway_module_v2::receive_sm::ReceiveSMCommon;
-<span class="kw">use </span><span class="kw">crate</span>::gateway_module_v2::send_sm::{Invoice, SendSMCommon};
+<span class="kw">use </span><span class="kw">crate</span>::gateway_module_v2::send_sm::SendSMCommon;
 <span class="kw">use crate</span>::{Gateway, EXPIRATION_DELTA_MINIMUM_V2};
 
 <span class="attr">#[derive(Debug, Clone, Serialize, Deserialize)]
@@ -622,7 +623,7 @@
 <span class="kw">impl </span>GatewayClientModuleV2 {
     <span class="kw">pub async fn </span>send_payment(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        payload: PayBolt11InvoicePayload,
+        payload: SendPaymentPayload,
     ) -&gt; anyhow::Result&lt;<span class="prelude-ty">Result</span>&lt;[u8; <span class="number">32</span>], Signature&gt;&gt; {
         <span class="comment">// The operation id is equal to the contract id which also doubles as the
         // message signed by the gateway via the forfeit signature to forfeit
@@ -638,38 +639,22 @@
         <span class="comment">// Since the following four checks may only fail due to client side
         // programming error we do not have to enable cancellation and can check
         // them before we start the state machine.
-        </span><span class="kw">if </span>payload.contract.claim_pk != <span class="self">self</span>.keypair.public_key() {
-            <span class="macro">bail!</span>(<span class="string">"The outgoing contract is keyed to another gateway"</span>);
-        }
-
-        <span class="kw">if </span><span class="kw-2">*</span>payload.invoice.payment_hash() != payload.contract.payment_hash {
-            <span class="macro">bail!</span>(<span class="string">"The invoices payment hash does not match the contracts payment hash"</span>);
-        }
+        </span><span class="macro">ensure!</span>(
+            payload.contract.claim_pk == <span class="self">self</span>.keypair.public_key(),
+            <span class="string">"The outgoing contract is keyed to another gateway"
+        </span>);
 
         <span class="comment">// This prevents DOS attacks where an attacker submits a different invoice.
-        </span><span class="kw">if </span>secp256k1::SECP256K1
-            .verify_schnorr(
-                <span class="kw-2">&amp;</span>payload.auth,
-                <span class="kw-2">&amp;</span>payload.invoice.consensus_hash::&lt;sha256::Hash&gt;().into(),
-                <span class="kw-2">&amp;</span>payload.contract.refund_pk.x_only_public_key().<span class="number">0</span>,
-            )
-            .is_err()
-        {
-            <span class="macro">bail!</span>(<span class="string">"Invalid auth signature for the invoice"</span>);
-        }
-
-        <span class="kw">let </span>invoice_msats = payload
-            .invoice
-            .amount_milli_satoshis()
-            .ok_or(<span class="macro">anyhow!</span>(<span class="string">"Invoice is missing amount"</span>))<span class="question-mark">?</span>;
-
-        <span class="kw">let </span>min_contract_amount = <span class="self">self
-            </span>.gateway
-            .routing_info_v2(<span class="kw-2">&amp;</span>payload.federation_id)
-            .<span class="kw">await
-            </span>.ok_or(<span class="macro">anyhow!</span>(<span class="string">"Payment Info not available"</span>))<span class="question-mark">?
-            </span>.send_fee_minimum
-            .add_fee(invoice_msats);
+        </span><span class="macro">ensure!</span>(
+            secp256k1::SECP256K1
+                .verify_schnorr(
+                    <span class="kw-2">&amp;</span>payload.auth,
+                    <span class="kw-2">&amp;</span>payload.invoice.consensus_hash::&lt;sha256::Hash&gt;().into(),
+                    <span class="kw-2">&amp;</span>payload.contract.refund_pk.x_only_public_key().<span class="number">0</span>,
+                )
+                .is_ok(),
+            <span class="string">"Invalid auth signature for the invoice data"
+        </span>);
 
         <span class="comment">// We need to check that the contract has been confirmed by the federation
         // before we start the state machine to prevent DOS attacks.
@@ -681,13 +666,30 @@
             </span>.ok_or(<span class="macro">anyhow!</span>(<span class="string">"The outgoing contract has not yet been confirmed"</span>))<span class="question-mark">?
             </span>.saturating_sub(EXPIRATION_DELTA_MINIMUM_V2);
 
+        <span class="kw">let </span>(payment_hash, amount) = <span class="kw">match </span><span class="kw-2">&amp;</span>payload.invoice {
+            LightningInvoice::Bolt11(invoice, amount) =&gt; (invoice.payment_hash(), amount),
+        };
+
+        <span class="macro">ensure!</span>(
+            payment_hash == <span class="kw-2">&amp;</span>payload.contract.payment_hash,
+            <span class="string">"The invoices payment hash does not match the contracts payment hash"
+        </span>);
+
+        <span class="kw">let </span>min_contract_amount = <span class="self">self
+            </span>.gateway
+            .routing_info_v2(<span class="kw-2">&amp;</span>payload.federation_id)
+            .<span class="kw">await
+            </span>.ok_or(<span class="macro">anyhow!</span>(<span class="string">"Routing Info not available"</span>))<span class="question-mark">?
+            </span>.send_fee_minimum
+            .add_fee(amount.msats);
+
         <span class="kw">let </span>send_sm = GatewayClientStateMachinesV2::Send(SendStateMachine {
             common: SendSMCommon {
                 operation_id,
                 contract: payload.contract.clone(),
                 max_delay,
                 min_contract_amount,
-                invoice: Invoice::Bolt11(payload.invoice),
+                invoice: payload.invoice,
                 claim_keypair: <span class="self">self</span>.keypair,
             },
             state: SendSMState::Sending,

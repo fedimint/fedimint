@@ -886,6 +886,14 @@
 <a href="#886" id="886">886</a>
 <a href="#887" id="887">887</a>
 <a href="#888" id="888">888</a>
+<a href="#889" id="889">889</a>
+<a href="#890" id="890">890</a>
+<a href="#891" id="891">891</a>
+<a href="#892" id="892">892</a>
+<a href="#893" id="893">893</a>
+<a href="#894" id="894">894</a>
+<a href="#895" id="895">895</a>
+<a href="#896" id="896">896</a>
 </pre></div><pre class="rust"><code><span class="attr">#![warn(clippy::pedantic)]
 #![allow(clippy::missing_errors_doc)]
 #![allow(clippy::missing_panics_doc)]
@@ -937,7 +945,7 @@
 
 <span class="kw">use </span><span class="kw">crate</span>::api::LnFederationApi;
 <span class="kw">use </span><span class="kw">crate</span>::receive_sm::{ReceiveSMCommon, ReceiveSMState, ReceiveStateMachine};
-<span class="kw">use </span><span class="kw">crate</span>::send_sm::{Invoice, SendSMCommon, SendSMState, SendStateMachine};
+<span class="kw">use </span><span class="kw">crate</span>::send_sm::{SendSMCommon, SendSMState, SendStateMachine};
 
 <span class="attr">#[derive(Debug, Clone, Serialize, Deserialize)]
 </span><span class="kw">pub enum </span>LightningOperationMeta {
@@ -1026,11 +1034,16 @@
 }
 
 <span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Decodable, Encodable)]
-</span><span class="kw">pub struct </span>PayBolt11InvoicePayload {
+</span><span class="kw">pub struct </span>SendPaymentPayload {
     <span class="kw">pub </span>federation_id: FederationId,
     <span class="kw">pub </span>contract: OutgoingContract,
-    <span class="kw">pub </span>invoice: Bolt11Invoice,
+    <span class="kw">pub </span>invoice: LightningInvoice,
     <span class="kw">pub </span>auth: Signature,
+}
+
+<span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Decodable, Encodable)]
+</span><span class="kw">pub enum </span>LightningInvoice {
+    Bolt11(Bolt11Invoice, Amount),
 }
 
 <span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Decodable, Encodable)]
@@ -1118,7 +1131,6 @@
                 .module_root_secret()
                 .clone()
                 .to_secp_key(secp256k1::SECP256K1),
-
             admin_auth: args.admin_auth().cloned(),
         })
     }
@@ -1214,6 +1226,7 @@
             invoice,
             PaymentFee::one_percent(),
             EXPIRATION_DELTA_LIMIT_DEFAULT,
+            <span class="prelude-val">None</span>,
         )
         .<span class="kw">await
     </span>}
@@ -1224,10 +1237,13 @@
         invoice: Bolt11Invoice,
         payment_fee_limit: PaymentFee,
         expiration_delta_limit: u64,
+        partial_amount: <span class="prelude-ty">Option</span>&lt;Amount&gt;,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;OperationId, SendPaymentError&gt; {
-        <span class="kw">let </span>invoice_msats = invoice
-            .amount_milli_satoshis()
-            .ok_or(SendPaymentError::InvoiceMissingAmount)<span class="question-mark">?</span>;
+        <span class="kw">let </span>amount = partial_amount.unwrap_or(Amount::from_msats(
+            invoice
+                .amount_milli_satoshis()
+                .ok_or(SendPaymentError::InvoiceMissingAmount)<span class="question-mark">?</span>,
+        ));
 
         <span class="kw">if </span>invoice.is_expired() {
             <span class="kw">return </span><span class="prelude-val">Err</span>(SendPaymentError::InvoiceExpired);
@@ -1267,7 +1283,7 @@
 
         <span class="kw">let </span>contract = OutgoingContract {
             payment_hash: <span class="kw-2">*</span>invoice.payment_hash(),
-            amount: payment_info.send_fee_default.add_fee(invoice_msats),
+            amount: payment_info.send_fee_default.add_fee(amount.msats),
             expiration: consensus_block_count + payment_info.expiration_delta_default,
             claim_pk: payment_info.public_key,
             refund_pk: refund_keypair.public_key(),
@@ -1288,7 +1304,7 @@
                         funding_txid,
                         gateway_api: gateway_api_clone.clone(),
                         contract: contract_clone.clone(),
-                        invoice: Invoice::Bolt11(invoice_clone.clone()),
+                        invoice: LightningInvoice::Bolt11(invoice_clone.clone(), amount),
                         refund_keypair,
                     },
                     state: SendSMState::Funding,
