@@ -45,7 +45,7 @@ use fedimint_core::core::{ModuleInstanceId, OperationId};
 use fedimint_core::db::{Database, DatabaseValue};
 use fedimint_core::invite_code::InviteCode;
 use fedimint_core::module::{ApiAuth, ApiRequestErased};
-use fedimint_core::util::{handle_version_hash_command, retry, ConstantBackoff, SafeUrl};
+use fedimint_core::util::{backon, handle_version_hash_command, retry, SafeUrl};
 use fedimint_core::{fedimint_build_code_version_env, runtime, PeerId, TieredMulti};
 use fedimint_ln_client::LightningClientInit;
 use fedimint_logging::{TracingSetup, LOG_CLIENT};
@@ -825,7 +825,7 @@ impl FedimintCli {
             }
             Command::Dev(DevCmd::WaitBlockCount { count: target }) => retry(
                 "wait_block_count",
-                ConstantBackoff::default()
+                backon::ConstantBuilder::default()
                     .with_delay(Duration::from_millis(100))
                     .with_max_times(usize::MAX),
                 || async {

@@ -14,6 +14,7 @@ use fedimint_core::encoding::Encodable as _;
 use fedimint_core::endpoint_constants::CLIENT_CONFIG_ENDPOINT;
 use fedimint_core::invite_code::InviteCode;
 use fedimint_core::module::ApiRequestErased;
+use fedimint_core::util::backon;
 use fedimint_core::NumPeers;
 use query::FilterMap;
 use tracing::debug;
@@ -31,7 +32,7 @@ pub async fn download_from_invite_code(invite_code: &InviteCode) -> anyhow::Resu
         "Downloading client config",
         // 0.2, 0.2, 0.4, 0.6, 1.0, 1.6, ...
         // sum = 21.2
-        fedimint_core::util::FibonacciBackoff::default()
+        backon::FibonacciBuilder::default()
             .with_min_delay(Duration::from_millis(200))
             .with_max_delay(Duration::from_secs(5))
             .with_max_times(10),

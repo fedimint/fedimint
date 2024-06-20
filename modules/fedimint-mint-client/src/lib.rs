@@ -51,7 +51,7 @@ use fedimint_core::db::{
     IDatabaseTransactionOpsCoreTyped,
 };
 use fedimint_core::encoding::{Decodable, DecodeError, Encodable};
-use fedimint_core::invite_code::InviteCode;
+use fedimint_core::invite_code::{InviteCode, InviteCodeV2};
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::module::{
     ApiVersion, CommonModuleInit, ModuleCommon, ModuleInit, MultiApiVersion,
@@ -71,7 +71,7 @@ use hex::ToHex;
 use secp256k1_zkp::{All, KeyPair, Secp256k1};
 use serde::{Deserialize, Serialize};
 use strum::IntoEnumIterator;
-use tbs::AggregatePublicKey;
+use tbs::{AggregatePublicKey, Signature};
 use thiserror::Error;
 use tracing::{debug, warn};
 
@@ -317,6 +317,11 @@ impl FromStr for OOBNotes {
     /// Decode a set of out-of-band e-cash notes from a base64 string.
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let s: String = s.chars().filter(|&c| !c.is_whitespace()).collect();
+
+        if let Ok(notes_v2) = OOBNotesV2::decode_base64(&s) {
+            return notes_v2.into_v1();
+        }
+
         let bytes = if let Ok(bytes) = BASE64_URL_SAFE.decode(&s) {
             bytes
         } else {
@@ -374,6 +379,60 @@ impl OOBNotes {
     /// Returns the total value of all notes in msat as `Amount`
     pub fn total_amount(&self) -> Amount {
         self.notes().total_amount()
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Encodable, Decodable)]
+pub struct OOBNoteV2 {
+    pub amount: Amount,
+    pub sig: Signature,
+    pub key: KeyPair,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Encodable, Decodable)]
+pub struct OOBNotesV2 {
+    pub mint: InviteCodeV2,
+    pub notes: Vec<OOBNoteV2>,
+    pub memo: String,
+}
+
+impl OOBNotesV2 {
+    pub fn into_v1(self) -> anyhow::Result<OOBNotes> {
+        let notes: TieredMulti<SpendableNote> = self
+            .notes
+            .iter()
+            .map(|n| {
+                (
+                    n.amount,
+                    SpendableNote {
+                        signature: n.sig,
+                        spend_key: n.key,
+                    },
+                )
+            })
+            .collect();
+
+        Ok(OOBNotes::new_with_invite(notes, &self.mint.into_v1()?))
+    }
+    pub fn total_amount(&self) -> Amount {
+        self.notes.iter().map(|note| note.amount).sum()
+    }
+
+    pub fn encode_base64(&self) -> String {
+        let json = &serde_json::to_string(self).expect("Encoding to JSON cannot fail");
+        let base_64 = base64_url::encode(json);
+
+        format!("fedimintA{base_64}")
+    }
+
+    pub fn decode_base64(s: &str) -> anyhow::Result<Self> {
+        ensure!(s.starts_with("fedimintA"), "Invalid Prefix");
+
+        let notes: Self = serde_json::from_slice(&base64_url::decode(&s[9..])?)?;
+
+        ensure!(!notes.mint.peers.is_empty(), "Invite code has no peer");
+
+        Ok(notes)
     }
 }
 
@@ -2087,22 +2146,28 @@ pub fn represent_amount<K>(
 
 #[cfg(test)]
 mod tests {
+    use std::collections::BTreeMap;
     use std::fmt::Display;
+    use std::iter;
     use std::str::FromStr;
 
     use bitcoin_hashes::Hash;
     use fedimint_core::config::FederationId;
     use fedimint_core::encoding::Decodable;
-    use fedimint_core::invite_code::InviteCode;
+    use fedimint_core::invite_code::{InviteCode, InviteCodeV2};
+    use fedimint_core::secp256k1::rand::rngs::OsRng;
+    use fedimint_core::secp256k1::SecretKey;
+    use fedimint_core::util::SafeUrl;
     use fedimint_core::{
-        Amount, OutPoint, PeerId, Tiered, TieredCounts, TieredMulti, TransactionId,
+        secp256k1, Amount, OutPoint, PeerId, Tiered, TieredCounts, TieredMulti, TransactionId,
     };
     use itertools::Itertools;
     use serde_json::json;
+    use tbs::Signature;
 
     use crate::{
-        represent_amount, select_notes_from_stream, MintOperationMetaVariant, OOBNotes,
-        OOBNotesPart, SpendableNote, SpendableNoteUndecoded,
+        represent_amount, select_notes_from_stream, MintOperationMetaVariant, OOBNoteV2, OOBNotes,
+        OOBNotesPart, OOBNotesV2, SpendableNote, SpendableNoteUndecoded,
     };
 
     #[test]
@@ -2326,6 +2391,37 @@ mod tests {
         ]);
         let notes_inconsistent_str = notes_inconsistent.to_string();
         assert!(notes_inconsistent_str.parse::<OOBNotes>().is_err());
+    }
+
+    #[test]
+    fn oob_notes_v2_encode_base64_roundtrip() {
+        const NUMBER_OF_NOTES: usize = 5;
+
+        let notes = OOBNotesV2 {
+            mint: InviteCodeV2 {
+                id: FederationId::dummy(),
+                peers: BTreeMap::from_iter([(
+                    PeerId::from(0),
+                    SafeUrl::parse("https://mint.com").expect("Url is valid"),
+                )]),
+                api_secret: None,
+            },
+            notes: iter::repeat(OOBNoteV2 {
+                amount: Amount::from_msats(1),
+                sig: Signature(bls12_381::G1Affine::generator()),
+                key: SecretKey::new(&mut OsRng).keypair(secp256k1::SECP256K1),
+            })
+            .take(NUMBER_OF_NOTES)
+            .collect(),
+            memo: "Here are your sats!".to_string(),
+        };
+
+        OOBNotes::from_str(&notes.encode_base64()).expect("Failed to decode to legacy OOBNotes");
+
+        let encoded = notes.encode_base64();
+        let decoded = OOBNotesV2::decode_base64(&encoded).unwrap();
+
+        assert_eq!(notes, decoded);
     }
 
     #[test]

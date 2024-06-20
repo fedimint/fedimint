@@ -703,7 +703,7 @@ mod tests {
     use anyhow::{ensure, Context as _};
     use fedimint_api_client::api::PeerConnectionStatus;
     use fedimint_core::task::TaskGroup;
-    use fedimint_core::util::retry;
+    use fedimint_core::util::{backon, retry};
     use fedimint_core::PeerId;
     use tokio::sync::RwLock;
 
@@ -723,7 +723,7 @@ mod tests {
             ) {
                 retry(
                     format!("wait for client {name}"),
-                    fedimint_core::util::FibonacciBackoff::default()
+                    backon::FibonacciBuilder::default()
                         .with_min_delay(Duration::from_millis(200))
                         .with_max_delay(Duration::from_secs(5))
                         .with_max_times(10),

@@ -40,7 +40,8 @@ use fedimint_core::task::jit::JitTryAnyhow;
 use fedimint_core::task::{MaybeSend, MaybeSync};
 use fedimint_core::time::now;
 use fedimint_core::transaction::{SerdeTransaction, Transaction, TransactionSubmissionOutcome};
-use fedimint_core::util::SafeUrl;
+use fedimint_core::util::backon::BackoffBuilder;
+use fedimint_core::util::{backon, SafeUrl};
 use fedimint_core::{
     apply, async_trait_maybe_send, dyn_newtype_define, runtime, NumPeersExt, OutPoint, PeerId,
     TransactionId,
@@ -1117,29 +1118,35 @@ pub struct WsFederationApi<C = WsClient> {
     module_id: Option<ModuleInstanceId>,
 }
 
-/// Some data shared/preserved between [`FederationPeerClient`] and
+/// Connection state shared/preserved between [`FederationPeerClient`] and the
 /// Jit tasks it spawns.
 #[derive(Debug)]
-struct FederationPeerClientShared {
-    last_connection_attempt: SystemTime,
-    connection_attempts: u64,
+struct FederationPeerClientConnectionState {
+    /// Last time a connection attempt was made, or `None` if no attempt has
+    /// been made yet.
+    last_connection_attempt_or: Option<SystemTime>,
+    connection_backoff: backon::FibonacciBackoff,
 }
 
-impl FederationPeerClientShared {
+impl FederationPeerClientConnectionState {
+    const MIN_BACKOFF: Duration = Duration::from_millis(100);
+    const MAX_BACKOFF: Duration = Duration::from_secs(5);
+
     pub fn new() -> Self {
         Self {
-            last_connection_attempt: now(),
-            connection_attempts: 0,
+            last_connection_attempt_or: None,
+            connection_backoff: Self::new_backoff(),
         }
     }
 
     /// Wait (if needed) before reconnection attempt based on number of previous
-    /// attempts
+    /// attempts and update reconnection stats.
     async fn wait(&mut self) {
-        let desired_timeout = Duration::from_millis((self.connection_attempts * 100).min(5000));
-        let since_last_connect = now()
-            .duration_since(self.last_connection_attempt)
-            .unwrap_or_default();
+        let desired_timeout = self.connection_backoff.next().unwrap_or(Self::MAX_BACKOFF);
+        let since_last_connect = match self.last_connection_attempt_or {
+            Some(last) => now().duration_since(last).unwrap_or_default(),
+            None => Duration::ZERO,
+        };
 
         let sleep_duration = desired_timeout.saturating_sub(since_last_connect);
         if Duration::ZERO < sleep_duration {
@@ -1149,17 +1156,19 @@ impl FederationPeerClientShared {
                 "Waiting before reconnecting");
         }
         fedimint_core::runtime::sleep(sleep_duration).await;
-    }
 
-    /// Wait (if needed) + update reconnection stats
-    async fn wait_and_inc_reconnect(&mut self) {
-        self.wait().await;
-        self.connection_attempts = self.connection_attempts.saturating_add(1);
-        self.last_connection_attempt = now();
+        self.last_connection_attempt_or = Some(now());
     }
 
     fn reset(&mut self) {
-        self.connection_attempts = 0;
+        *self = Self::new();
+    }
+
+    fn new_backoff() -> backon::FibonacciBackoff {
+        backon::FibonacciBuilder::default()
+            .with_min_delay(Self::MIN_BACKOFF)
+            .with_max_delay(Self::MAX_BACKOFF)
+            .build()
     }
 }
 
@@ -1168,7 +1177,7 @@ impl FederationPeerClientShared {
 #[derive(Debug)]
 struct FederationPeerClient<C> {
     client: JitTryAnyhow<C>,
-    shared: Arc<tokio::sync::Mutex<FederationPeerClientShared>>,
+    connection_state: Arc<tokio::sync::Mutex<FederationPeerClientConnectionState>>,
 }
 
 impl<C> FederationPeerClient<C>
@@ -1176,11 +1185,13 @@ where
     C: JsonRpcClient + 'static,
 {
     pub fn new(peer_id: PeerId, url: SafeUrl, api_secret: Option<String>) -> Self {
-        let shared: Arc<_> = tokio::sync::Mutex::new(FederationPeerClientShared::new()).into();
+        let connection_state = Arc::new(tokio::sync::Mutex::new(
+            FederationPeerClientConnectionState::new(),
+        ));
 
         Self {
-            client: Self::new_jit_client(peer_id, url, api_secret, shared.clone()),
-            shared,
+            client: Self::new_jit_client(peer_id, url, api_secret, connection_state.clone()),
+            connection_state,
         }
     }
 
@@ -1188,21 +1199,16 @@ where
         peer_id: PeerId,
         url: SafeUrl,
         api_secret: Option<String>,
-        shared: Arc<Mutex<FederationPeerClientShared>>,
+        connection_state: Arc<Mutex<FederationPeerClientConnectionState>>,
     ) -> JitTryAnyhow<C> {
         JitTryAnyhow::new_try(move || async move {
-            shared.lock().await.wait_and_inc_reconnect().await;
+            Self::wait(&peer_id, &url, &connection_state).await;
 
-            debug!(
-                target: LOG_CLIENT_NET_API,
-                peer_id = %peer_id,
-                url = %url,
-                "Connecting to peer");
             let res = C::connect(&url, api_secret).await;
 
             match &res {
                 Ok(_) => {
-                    shared.lock().await.reset();
+                    connection_state.lock().await.reset();
                     debug!(
                             target: LOG_CLIENT_NET_API,
                             peer_id = %peer_id,
@@ -1222,7 +1228,31 @@ where
     }
 
     pub fn reconnect(&mut self, peer_id: PeerId, url: SafeUrl, api_secret: Option<String>) {
-        self.client = Self::new_jit_client(peer_id, url, api_secret, self.shared.clone());
+        self.client = Self::new_jit_client(peer_id, url, api_secret, self.connection_state.clone());
+    }
+
+    async fn wait(
+        peer_id: &PeerId,
+        url: &SafeUrl,
+        connection_state: &Arc<Mutex<FederationPeerClientConnectionState>>,
+    ) {
+        let mut connection_state_guard = connection_state.lock().await;
+
+        if connection_state_guard.last_connection_attempt_or.is_none() {
+            debug!(
+                target: LOG_CLIENT_NET_API,
+                peer_id = %peer_id,
+                url = %url,
+                "Connecting to peer...");
+        } else {
+            debug!(
+                target: LOG_CLIENT_NET_API,
+                peer_id = %peer_id,
+                url = %url,
+                "Retrying connecting to peer...");
+        }
+
+        connection_state_guard.wait().await;
     }
 }
 

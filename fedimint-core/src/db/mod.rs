@@ -40,6 +40,7 @@ use std::error::Error;
 use std::fmt::{self, Debug};
 use std::marker::{self, PhantomData};
 use std::ops::{self, DerefMut};
+use std::path::Path;
 use std::pin::Pin;
 use std::sync::Arc;
 use std::time::Duration;
@@ -167,6 +168,9 @@ pub trait IRawDatabase: Debug + MaybeSend + MaybeSync + 'static {
 
     /// Start a database transaction
     async fn begin_transaction<'a>(&'a self) -> Self::Transaction<'a>;
+
+    // Checkpoint the database to a backup directory
+    fn checkpoint(&self, backup_path: &Path) -> Result<()>;
 }
 
 #[apply(async_trait_maybe_send!)]
@@ -178,6 +182,10 @@ where
 
     async fn begin_transaction<'a>(&'a self) -> Self::Transaction<'a> {
         (**self).begin_transaction().await
+    }
+
+    fn checkpoint(&self, backup_path: &Path) -> Result<()> {
+        (**self).checkpoint(backup_path)
     }
 }
 
@@ -215,6 +223,9 @@ pub trait IDatabase: Debug + MaybeSend + MaybeSync + 'static {
 
     /// The prefix len of this database instance
     fn prefix_len(&self) -> usize;
+
+    /// Checkpoints the database to a backup directory
+    fn checkpoint(&self, backup_path: &Path) -> Result<()>;
 }
 
 #[apply(async_trait_maybe_send!)]
@@ -234,6 +245,10 @@ where
 
     fn prefix_len(&self) -> usize {
         (**self).prefix_len()
+    }
+
+    fn checkpoint(&self, backup_path: &Path) -> Result<()> {
+        (**self).checkpoint(backup_path)
     }
 }
 
@@ -268,6 +283,10 @@ impl<RawDatabase: IRawDatabase + MaybeSend + 'static> IDatabase for BaseDatabase
 
     fn prefix_len(&self) -> usize {
         0
+    }
+
+    fn checkpoint(&self, backup_path: &Path) -> Result<()> {
+        self.raw.checkpoint(backup_path)
     }
 }
 
@@ -384,6 +403,10 @@ impl Database {
         's: 'tx,
     {
         self.begin_transaction().await.into_nc()
+    }
+
+    pub fn checkpoint(&self, backup_path: &Path) -> Result<()> {
+        self.inner.checkpoint(backup_path)
     }
 
     /// Runs a closure with a reference to a database transaction and tries to
@@ -589,6 +612,10 @@ where
 
     fn prefix_len(&self) -> usize {
         self.inner.prefix_len() + self.prefix.len()
+    }
+
+    fn checkpoint(&self, backup_path: &Path) -> Result<()> {
+        self.inner.checkpoint(backup_path)
     }
 }
 
@@ -2816,6 +2843,7 @@ mod test_utils {
     #[tokio::test]
     async fn test_autocommit() {
         use std::marker::PhantomData;
+        use std::path::Path;
 
         use anyhow::anyhow;
         use async_trait::async_trait;
@@ -2835,6 +2863,10 @@ mod test_utils {
             type Transaction<'a> = FakeTransaction<'a>;
             async fn begin_transaction(&self) -> FakeTransaction {
                 FakeTransaction(PhantomData)
+            }
+
+            fn checkpoint(&self, _backup_path: &Path) -> anyhow::Result<()> {
+                Ok(())
             }
         }
 

@@ -54,7 +54,7 @@ use fedimint_core::server::DynServerModule;
 use fedimint_core::task::sleep;
 use fedimint_core::task::{TaskGroup, TaskHandle};
 use fedimint_core::time::now;
-use fedimint_core::util::{retry, FibonacciBackoff};
+use fedimint_core::util::{backon, retry};
 use fedimint_core::{
     apply, async_trait_maybe_send, push_db_key_items, push_db_pair_items, Feerate, NumPeersExt,
     OutPoint, PeerId, ServerModule,
@@ -986,7 +986,7 @@ impl Wallet {
             trace!(block = height, "Fetching block hash");
             let block_hash = retry(
                 "get_block_hash",
-                FibonacciBackoff::default()
+                backon::FibonacciBuilder::default()
                     .with_min_delay(Duration::from_secs(1))
                     .with_max_delay(Duration::from_secs(10 * 60))
                     .with_max_times(usize::MAX),
@@ -1013,7 +1013,7 @@ impl Wallet {
             for (txid, tx) in &pending_transactions {
                 let is_tx_in_block = retry(
                     "is_tx_in_block",
-                    FibonacciBackoff::default()
+                    backon::FibonacciBuilder::default()
                         .with_min_delay(Duration::from_secs(1))
                         .with_max_delay(Duration::from_secs(10 * 60))
                         .with_max_times(usize::MAX),

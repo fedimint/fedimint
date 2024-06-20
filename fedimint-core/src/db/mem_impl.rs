@@ -1,4 +1,5 @@
 use std::fmt::{self, Debug};
+use std::path::Path;
 
 use anyhow::Result;
 use futures::{stream, StreamExt};
@@ -101,6 +102,10 @@ impl IRawDatabase for MemDatabase {
 
         memtx.set_tx_savepoint().await.expect("can't fail");
         memtx
+    }
+
+    fn checkpoint(&self, _backup_path: &Path) -> Result<()> {
+        Ok(())
     }
 }
 
