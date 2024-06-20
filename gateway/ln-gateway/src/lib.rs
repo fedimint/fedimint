@@ -36,6 +36,7 @@ use std::net::SocketAddr;
 use std::ops::ControlFlow;
 use std::path::PathBuf;
 use std::str::FromStr;
+use std::sync::atomic::AtomicU64;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -333,7 +334,7 @@ pub struct Gateway {
 
     // Tracker for short channel ID assignments. When connecting a new federation,
     // this value is incremented and assigned to the federation as the `mint_channel_id`
-    max_used_scid: Arc<Mutex<u64>>,
+    max_used_scid: Arc<AtomicU64>,
 
     // The Gateway's API URL.
     pub versioned_api: SafeUrl,
@@ -456,7 +457,7 @@ impl Gateway {
 
         Ok(Self {
             lightning_builder,
-            max_used_scid: Arc::new(Mutex::new(INITIAL_SCID)),
+            max_used_scid: Arc::new(AtomicU64::new(INITIAL_SCID)),
             gateway_config: Arc::new(RwLock::new(gateway_config)),
             state: Arc::new(RwLock::new(GatewayState::Initializing)),
             client_builder,
@@ -1025,16 +1026,7 @@ impl Gateway {
                 .clone()
                 .expect("Gateway configuration should be set");
 
-            // The gateway deterministically assigns a channel id (u64) to each federation
-            // connected.
-            let mut max_used_scid = self.max_used_scid.lock().await;
-            let mint_channel_id =
-                max_used_scid
-                    .checked_add(1)
-                    .ok_or(GatewayError::GatewayConfigurationError(
-                        "Too many connected federations".to_string(),
-                    ))?;
-            *max_used_scid = mint_channel_id;
+            let mint_channel_id = self.get_next_channel_id()?;
 
             let gw_client_cfg = FederationConfig {
                 invite_code,
@@ -1096,6 +1088,27 @@ impl Gateway {
         }
 
         Err(GatewayError::Disconnected)
+    }
+
+    /// Returns the next deterministic channel id for a new federation
+    /// connection.
+    fn get_next_channel_id(&self) -> Result<u64> {
+        // Note: `max_used_scid` contains the most recently assigned SCID, not the
+        // next available one. Since `fetch_add` returns the previous value before
+        // the increment, we need to add 1 to get the next available SCID.
+        let previous_mint_channel_id = self
+            .max_used_scid
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let mint_channel_id = previous_mint_channel_id + 1;
+
+        // Check for overflow.
+        if mint_channel_id < previous_mint_channel_id {
+            return Err(GatewayError::GatewayConfigurationError(
+                "Too many connected federations".to_string(),
+            ));
+        }
+
+        Ok(mint_channel_id)
     }
 
     /// Handle a request to have the Gateway leave a federation. The Gateway
@@ -1493,8 +1506,8 @@ impl Gateway {
         }
 
         if let Some(max_mint_channel_id) = configs.iter().map(|cfg| cfg.mint_channel_id).max() {
-            let mut max_used_scid = self.max_used_scid.lock().await;
-            *max_used_scid = max_mint_channel_id;
+            self.max_used_scid
+                .store(max_mint_channel_id, std::sync::atomic::Ordering::SeqCst);
         }
     }
 
