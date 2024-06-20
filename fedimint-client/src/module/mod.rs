@@ -26,7 +26,9 @@ use secp256k1_zkp::PublicKey;
 use self::init::ClientModuleInit;
 use crate::module::recovery::{DynModuleBackup, ModuleBackup};
 use crate::sm::{self, ActiveStateMeta, Context, DynContext, DynState, State};
-use crate::transaction::{ClientInput, ClientOutput, TransactionBuilder};
+use crate::transaction::{
+    ClientInput, ClientOutput, DynSchnorrSigner, SimpleSchnorrSigner, TransactionBuilder,
+};
 use crate::{oplog, AddStateMachinesResult, Client, ClientStrong, ClientWeak, TransactionUpdates};
 
 pub mod init;
@@ -272,8 +274,9 @@ where
     }
 
     /// Turn a typed [`ClientInput`] into a dyn version
-    pub fn make_client_input<O, S>(&self, input: ClientInput<O, S>) -> ClientInput
+    pub fn make_client_input<K, O, S>(&self, input: ClientInput<K, O, S>) -> ClientInput
     where
+        K: IntoDynInstance<DynType = DynSchnorrSigner> + 'static,
         O: IntoDynInstance<DynType = DynInput> + 'static,
         S: IntoDynInstance<DynType = DynState> + 'static,
     {
@@ -609,7 +612,7 @@ pub trait ClientModule: Debug + MaybeSend + MaybeSync + 'static {
         _input_amount: Amount,
         _output_amount: Amount,
     ) -> anyhow::Result<(
-        Vec<ClientInput<<Self::Common as ModuleCommon>::Input, Self::States>>,
+        Vec<ClientInput<SimpleSchnorrSigner, <Self::Common as ModuleCommon>::Input, Self::States>>,
         Vec<ClientOutput<<Self::Common as ModuleCommon>::Output, Self::States>>,
     )> {
         unimplemented!()

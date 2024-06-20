@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use bitcoin_hashes::Hash;
 use fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
-use fedimint_client::transaction::ClientInput;
+use fedimint_client::transaction::{ClientInput, SimpleSchnorrSigner};
 use fedimint_client::DynGlobalClientContext;
 use fedimint_core::core::OperationId;
 use fedimint_core::encoding::{Decodable, Encodable};
@@ -219,13 +219,17 @@ impl SendStateMachine {
     ) -> SendStateMachine {
         match result {
             Ok(preimage) => {
-                let client_input = ClientInput::<LightningInput, LightningClientStateMachines> {
+                let client_input = ClientInput::<
+                    SimpleSchnorrSigner,
+                    LightningInput,
+                    LightningClientStateMachines,
+                > {
                     input: LightningInput::V0(LightningInputV0::Outgoing(
                         old_state.common.contract.contract_id(),
                         OutgoingWitness::Claim(preimage),
                     )),
                     amount: old_state.common.contract.amount,
-                    keys: vec![old_state.common.claim_keypair],
+                    keys: vec![SimpleSchnorrSigner(old_state.common.claim_keypair)],
                     state_machines: Arc::new(|_, _| vec![]),
                 };
 

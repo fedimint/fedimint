@@ -17,7 +17,9 @@ use fedimint_client::module::init::{ClientModuleInit, ClientModuleInitArgs};
 use fedimint_client::module::recovery::NoModuleBackup;
 use fedimint_client::module::{ClientContext, ClientModule, IClientModule};
 use fedimint_client::sm::{Context, ModuleNotifier};
-use fedimint_client::transaction::{ClientInput, ClientOutput, TransactionBuilder};
+use fedimint_client::transaction::{
+    ClientInput, ClientOutput, SimpleSchnorrSigner, TransactionBuilder,
+};
 use fedimint_core::core::{Decoder, OperationId};
 use fedimint_core::db::{
     Database, DatabaseTransaction, DatabaseVersion, IDatabaseTransactionOpsCoreTyped,
@@ -93,7 +95,7 @@ impl ClientModule for DummyClientModule {
         input_amount: Amount,
         output_amount: Amount,
     ) -> anyhow::Result<(
-        Vec<ClientInput<DummyInput, DummyStateMachine>>,
+        Vec<ClientInput<SimpleSchnorrSigner, DummyInput, DummyStateMachine>>,
         Vec<ClientOutput<DummyOutput, DummyStateMachine>>,
     )> {
         dbtx.ensure_isolated().expect("must be isolated");
@@ -119,7 +121,7 @@ impl ClientModule for DummyClientModule {
                         account: self.key.public_key(),
                     },
                     amount: missing_input_amount,
-                    keys: vec![self.key],
+                    keys: vec![SimpleSchnorrSigner(self.key)],
                     state_machines: Arc::new(move |txid, _| {
                         vec![DummyStateMachine::Input(
                             missing_input_amount,
@@ -214,7 +216,7 @@ impl DummyClientModule {
                 account: account_kp.public_key(),
             },
             amount,
-            keys: vec![account_kp],
+            keys: vec![SimpleSchnorrSigner(account_kp)],
             state_machines: Arc::new(|_, _| Vec::<DummyStateMachine>::new()),
         };
 

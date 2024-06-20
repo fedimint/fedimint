@@ -42,7 +42,9 @@ use fedimint_client::module::{ClientContext, ClientModule, IClientModule};
 use fedimint_client::oplog::{OperationLogEntry, UpdateStreamOrOutcome};
 use fedimint_client::sm::util::MapStateTransitions;
 use fedimint_client::sm::{Context, DynState, ModuleNotifier, State, StateTransition};
-use fedimint_client::transaction::{ClientInput, ClientOutput, TransactionBuilder};
+use fedimint_client::transaction::{
+    ClientInput, ClientOutput, SimpleSchnorrSigner, TransactionBuilder,
+};
 use fedimint_client::{sm_enum_variant_translation, DynGlobalClientContext};
 use fedimint_core::config::{FederationId, FederationIdPrefix};
 use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, OperationId};
@@ -762,7 +764,7 @@ impl ClientModule for MintClientModule {
         input: Amount,
         output: Amount,
     ) -> anyhow::Result<(
-        Vec<ClientInput<MintInput, MintClientStateMachines>>,
+        Vec<ClientInput<SimpleSchnorrSigner, MintInput, MintClientStateMachines>>,
         Vec<ClientOutput<MintOutput, MintClientStateMachines>>,
     )> {
         let (mut consolidated_inputs, consolidated_amount) =
@@ -862,7 +864,8 @@ impl MintClientModule {
         dbtx: &mut DatabaseTransaction<'_>,
         operation_id: OperationId,
         min_amount: Amount,
-    ) -> anyhow::Result<Vec<ClientInput<MintInput, MintClientStateMachines>>> {
+    ) -> anyhow::Result<Vec<ClientInput<SimpleSchnorrSigner, MintInput, MintClientStateMachines>>>
+    {
         if min_amount == Amount::ZERO {
             return Ok(Vec::new());
         }
@@ -1045,7 +1048,10 @@ impl MintClientModule {
         &self,
         dbtx: &mut DatabaseTransaction<'_>,
         operation_id: OperationId,
-    ) -> anyhow::Result<(Vec<ClientInput<MintInput, MintClientStateMachines>>, Amount)> {
+    ) -> anyhow::Result<(
+        Vec<ClientInput<SimpleSchnorrSigner, MintInput, MintClientStateMachines>>,
+        Amount,
+    )> {
         /// At how many notes of the same denomination should we try to
         /// consolidate
         const MAX_NOTES_PER_TIER_TRIGGER: usize = 8;
@@ -1118,7 +1124,8 @@ impl MintClientModule {
         &self,
         operation_id: OperationId,
         notes: TieredMulti<SpendableNote>,
-    ) -> anyhow::Result<Vec<ClientInput<MintInput, MintClientStateMachines>>> {
+    ) -> anyhow::Result<Vec<ClientInput<SimpleSchnorrSigner, MintInput, MintClientStateMachines>>>
+    {
         let mut inputs = Vec::new();
 
         for (amount, spendable_note) in notes {
@@ -1150,7 +1157,7 @@ impl MintClientModule {
 
             inputs.push(ClientInput {
                 input: MintInput::new_v0(amount, note),
-                keys: vec![spendable_note.spend_key],
+                keys: vec![SimpleSchnorrSigner(spendable_note.spend_key)],
                 amount,
                 state_machines: sm_gen,
             });

@@ -47,7 +47,9 @@ use fedimint_client::module::{ClientContext, ClientModule, IClientModule};
 use fedimint_client::oplog::UpdateStreamOrOutcome;
 use fedimint_client::sm::util::MapStateTransitions;
 use fedimint_client::sm::{DynState, ModuleNotifier, State, StateTransition};
-use fedimint_client::transaction::{ClientInput, ClientOutput, TransactionBuilder};
+use fedimint_client::transaction::{
+    ClientInput, ClientOutput, SimpleSchnorrSigner, TransactionBuilder,
+};
 use fedimint_client::{sm_enum_variant_translation, DynGlobalClientContext};
 use fedimint_core::config::FederationId;
 use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, OperationId};
@@ -1288,12 +1290,13 @@ impl LightningClientModule {
             .with_context(|| format!("No contract found for {contract_id:?}"))?;
 
         let input = incoming_contract_account.claim();
-        let client_input = ClientInput::<LightningInput, LightningClientStateMachines> {
-            input,
-            amount: incoming_contract_account.amount,
-            keys: vec![key_pair],
-            state_machines: Arc::new(|_, _| vec![]),
-        };
+        let client_input =
+            ClientInput::<SimpleSchnorrSigner, LightningInput, LightningClientStateMachines> {
+                input,
+                amount: incoming_contract_account.amount,
+                keys: vec![SimpleSchnorrSigner(key_pair)],
+                state_machines: Arc::new(|_, _| vec![]),
+            };
 
         let tx =
             TransactionBuilder::new().with_input(self.client_ctx.make_client_input(client_input));

@@ -4,7 +4,7 @@ use std::time::Duration;
 use bitcoin::key::KeyPair;
 use fedimint_api_client::api::DynModuleApi;
 use fedimint_client::sm::{ClientSMDatabaseTransaction, DynState, State, StateTransition};
-use fedimint_client::transaction::ClientInput;
+use fedimint_client::transaction::{ClientInput, SimpleSchnorrSigner};
 use fedimint_client::DynGlobalClientContext;
 use fedimint_core::core::{IntoDynInstance, ModuleInstanceId, OperationId};
 use fedimint_core::encoding::{Decodable, Encodable};
@@ -282,14 +282,15 @@ impl LightningReceiveConfirmedInvoice {
         global_context: DynGlobalClientContext,
     ) -> (TransactionId, Vec<OutPoint>) {
         let input = contract.claim();
-        let client_input = ClientInput::<LightningInput, LightningClientStateMachines> {
-            input,
-            amount: contract.amount,
-            keys: vec![keypair],
-            // The input of the refund tx is managed by this state machine, so no new state machines
-            // need to be created
-            state_machines: Arc::new(|_, _| vec![]),
-        };
+        let client_input =
+            ClientInput::<SimpleSchnorrSigner, LightningInput, LightningClientStateMachines> {
+                input,
+                amount: contract.amount,
+                keys: vec![SimpleSchnorrSigner(keypair)],
+                // The input of the refund tx is managed by this state machine, so no new state
+                // machines need to be created
+                state_machines: Arc::new(|_, _| vec![]),
+            };
 
         global_context.claim_input(dbtx, client_input).await
     }

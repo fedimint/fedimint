@@ -125,6 +125,7 @@ use fedimint_derive_secret::DerivableSecret;
 use fedimint_logging::{LOG_CLIENT, LOG_CLIENT_NET_API, LOG_CLIENT_RECOVERY};
 use futures::stream::FuturesUnordered;
 use futures::{Future, Stream, StreamExt};
+use itertools::Itertools;
 use meta::{LegacyMetaSource, MetaService};
 use module::recovery::RecoveryProgress;
 use module::{DynClientModule, FinalClient};
@@ -153,8 +154,9 @@ use crate::sm::{
     ClientSMDatabaseTransaction, DynState, Executor, IState, Notifier, OperationState, State,
 };
 use crate::transaction::{
-    tx_submission_sm_decoder, ClientInput, ClientOutput, TransactionBuilder, TxSubmissionContext,
-    TxSubmissionStates, TRANSACTION_SUBMISSION_MODULE_INSTANCE,
+    tx_submission_sm_decoder, ClientInput, ClientOutput, DynSchnorrSigner, ISchnorrSigner,
+    SchnorrSigner, TransactionBuilder, TxSubmissionContext, TxSubmissionStates,
+    TRANSACTION_SUBMISSION_MODULE_INSTANCE,
 };
 
 /// Client backup
@@ -180,6 +182,7 @@ mod api_version_discovery;
 pub mod meta;
 
 pub type InstancelessDynClientInput = ClientInput<
+    Box<maybe_add_send_sync!(dyn ISchnorrSigner + 'static)>,
     Box<maybe_add_send_sync!(dyn IInput + 'static)>,
     Box<maybe_add_send_sync!(dyn IState + 'static)>,
 >;
@@ -329,12 +332,13 @@ impl DynGlobalClientContext {
     /// machines responsible for the generated output are generated
     /// automatically. The caller is responsible for the input's state machines,
     /// should there be any required.
-    pub async fn claim_input<I, S>(
+    pub async fn claim_input<K, I, S>(
         &self,
         dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
-        input: ClientInput<I, S>,
+        input: ClientInput<K, I, S>,
     ) -> (TransactionId, Vec<OutPoint>)
     where
+        K: ISchnorrSigner + MaybeSend + MaybeSync + 'static,
         I: IInput + MaybeSend + MaybeSync + 'static,
         S: IState + MaybeSend + MaybeSync + 'static,
     {
@@ -342,7 +346,7 @@ impl DynGlobalClientContext {
             dbtx,
             InstancelessDynClientInput {
                 input: Box::new(input.input),
-                keys: input.keys,
+                keys: input.keys.into_iter().map(box_up_signer).collect_vec(),
                 amount: input.amount,
                 state_machines: states_to_instanceless_dyn(input.state_machines),
             },
@@ -411,6 +415,12 @@ fn box_up_state(state: impl IState + 'static) -> Box<maybe_add_send_sync!(dyn IS
     Box::new(state)
 }
 
+pub(crate) fn box_up_signer(
+    state: impl ISchnorrSigner + 'static,
+) -> Box<maybe_add_send_sync!(dyn ISchnorrSigner + 'static)> {
+    Box::new(state)
+}
+
 impl<T> From<Arc<T>> for DynGlobalClientContext
 where
     T: IGlobalClientContext,
@@ -462,7 +472,11 @@ impl IGlobalClientContext for ModuleGlobalClientContext {
     ) -> (TransactionId, Vec<OutPoint>) {
         let instance_input = ClientInput {
             input: DynInput::from_parts(self.module_instance_id, input.input),
-            keys: input.keys,
+            keys: input
+                .keys
+                .into_iter()
+                .map(|x| DynSchnorrSigner(x))
+                .collect(),
             amount: input.amount,
             state_machines: states_add_instance(self.module_instance_id, input.state_machines),
         };
