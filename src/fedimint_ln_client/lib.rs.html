@@ -2022,6 +2022,9 @@
 <a href="#2022" id="2022">2022</a>
 <a href="#2023" id="2023">2023</a>
 <a href="#2024" id="2024">2024</a>
+<a href="#2025" id="2025">2025</a>
+<a href="#2026" id="2026">2026</a>
+<a href="#2027" id="2027">2027</a>
 </pre></div><pre class="rust"><code><span class="attr">#![warn(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::cast_possible_wrap)]
@@ -3273,11 +3276,14 @@
         <span class="kw">let </span><span class="kw-2">mut </span>claims = Vec::new();
         <span class="kw">for </span>i <span class="kw">in </span>indices {
             <span class="kw">let </span>key_pair_tweaked = tweak_user_secret_key(<span class="kw-2">&amp;</span><span class="self">self</span>.secp, key_pair, i);
-            <span class="kw">if let </span><span class="prelude-val">Ok</span>(operation_id) = <span class="self">self
+            <span class="kw">match </span><span class="self">self
                 </span>.scan_receive_for_user(key_pair_tweaked, extra_meta.clone())
                 .<span class="kw">await
             </span>{
-                claims.push(operation_id);
+                <span class="prelude-val">Ok</span>(operation_id) =&gt; claims.push(operation_id),
+                <span class="prelude-val">Err</span>(e) =&gt; {
+                    <span class="macro">error!</span>(<span class="question-mark">?</span>e, <span class="question-mark">?</span>i, <span class="string">"Failed to scan tweaked key at index i"</span>);
+                }
             }
         }
 
