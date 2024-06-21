@@ -131,6 +131,13 @@
 <a href="#131" id="131">131</a>
 <a href="#132" id="132">132</a>
 <a href="#133" id="133">133</a>
+<a href="#134" id="134">134</a>
+<a href="#135" id="135">135</a>
+<a href="#136" id="136">136</a>
+<a href="#137" id="137">137</a>
+<a href="#138" id="138">138</a>
+<a href="#139" id="139">139</a>
+<a href="#140" id="140">140</a>
 </pre></div><pre class="rust"><code><span class="attr">#![warn(clippy::pedantic)]
 
 </span><span class="kw">use </span>clap::{Parser, Subcommand};
@@ -168,6 +175,13 @@
             LightningNodeType::Lnd =&gt; dev_fed.gw_lnd_registered().<span class="kw">await</span><span class="question-mark">?</span>,
             LightningNodeType::Cln =&gt; dev_fed.gw_cln_registered().<span class="kw">await</span><span class="question-mark">?</span>,
         };
+
+        <span class="kw">let </span>fedimint_cli_version = <span class="kw">crate</span>::util::FedimintCli::version_or_default().<span class="kw">await</span>;
+        <span class="kw">let </span>gatewayd_version = <span class="kw">crate</span>::util::Gatewayd::version_or_default().<span class="kw">await</span>;
+        <span class="kw">if </span>fedimint_cli_version &lt; <span class="kw-2">*</span>VERSION_0_3_0 || gatewayd_version &lt; <span class="kw-2">*</span>VERSION_0_3_0 {
+            <span class="macro">info!</span>(<span class="string">"fedmint-cli version that didn't support unknown modules"</span>);
+            <span class="kw">return </span><span class="prelude-val">Ok</span>(());
+        }
 
         <span class="comment">// Try to connect to already connected federation
         </span><span class="kw">let </span>gatewayd_version = util::Gatewayd::version_or_default().<span class="kw">await</span>;

@@ -805,7 +805,7 @@
 <span class="kw">use </span>fedimint_lnv2_common::endpoint_constants::{
     ADD_GATEWAY_ENDPOINT, AWAIT_INCOMING_CONTRACT_ENDPOINT, AWAIT_PREIMAGE_ENDPOINT,
     CONSENSUS_BLOCK_COUNT_ENDPOINT, GATEWAYS_ENDPOINT, OUTGOING_CONTRACT_EXPIRATION_ENDPOINT,
-    REMOVE_GATEWAY_ENDPOINT_V2,
+    REMOVE_GATEWAY_ENDPOINT,
 };
 <span class="kw">use </span>fedimint_lnv2_common::{
     ContractId, LightningCommonInit, LightningConsensusItem, LightningInput, LightningInputError,
@@ -1356,7 +1356,7 @@
                 }
             },
             <span class="macro">api_endpoint!</span> {
-                REMOVE_GATEWAY_ENDPOINT_V2,
+                REMOVE_GATEWAY_ENDPOINT,
                 ApiVersion::new(<span class="number">0</span>, <span class="number">0</span>),
                 <span class="kw">async </span>|_module: <span class="kw-2">&amp;</span>Lightning, context, gateway: SafeUrl| -&gt; bool {
                     check_auth(context)<span class="question-mark">?</span>;

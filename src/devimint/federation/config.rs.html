@@ -68,6 +68,15 @@
 <a href="#68" id="68">68</a>
 <a href="#69" id="69">69</a>
 <a href="#70" id="70">70</a>
+<a href="#71" id="71">71</a>
+<a href="#72" id="72">72</a>
+<a href="#73" id="73">73</a>
+<a href="#74" id="74">74</a>
+<a href="#75" id="75">75</a>
+<a href="#76" id="76">76</a>
+<a href="#77" id="77">77</a>
+<a href="#78" id="78">78</a>
+<a href="#79" id="79">79</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>bitcoincore_rpc::bitcoin::Network;
 <span class="kw">use </span>fedimint_core::config::ServerModuleConfigGenParamsRegistry;
 <span class="kw">use </span>fedimint_core::envs::{is_env_var_set, BitcoinRpcConfig, FM_USE_UNKNOWN_MODULE_ENV};
@@ -126,6 +135,15 @@
                     client_default_bitcoin_rpc: default_esplora_server(network),
                     fee_consensus: Default::default(),
                 },
+            },
+        )
+        .attach_config_gen_params(
+            fedimint_lnv2_server::LightningInit::kind(),
+            fedimint_lnv2_common::config::LightningGenParams {
+                local: fedimint_lnv2_common::config::LightningGenParamsLocal {
+                    bitcoin_rpc: bitcoin_rpc.clone(),
+                },
+                consensus: fedimint_lnv2_common::config::LightningGenParamsConsensus { network },
             },
         );
 

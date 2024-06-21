@@ -96,6 +96,8 @@
 <a href="#96" id="96">96</a>
 <a href="#97" id="97">97</a>
 <a href="#98" id="98">98</a>
+<a href="#99" id="99">99</a>
+<a href="#100" id="100">100</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::env;
 
 <span class="kw">use </span>anyhow::Context;
@@ -113,6 +115,8 @@
 <span class="doccomment">/// In tests we want to routinely enable an extra unknown module to ensure
 /// all client code handles correct modules that client doesn't know about.
 </span><span class="kw">pub const </span>FM_USE_UNKNOWN_MODULE_ENV: <span class="kw-2">&amp;</span>str = <span class="string">"FM_USE_UNKNOWN_MODULE"</span>;
+
+<span class="kw">pub const </span>FM_ENABLE_MODULE_LNV2_ENV: <span class="kw-2">&amp;</span>str = <span class="string">"FM_ENABLE_MODULE_LNV2"</span>;
 
 <span class="doccomment">/// Check if env variable is set and not equal `0` or `false` which are common
 /// ways to disable something.

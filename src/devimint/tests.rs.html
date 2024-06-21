@@ -2606,6 +2606,50 @@
 <a href="#2606" id="2606">2606</a>
 <a href="#2607" id="2607">2607</a>
 <a href="#2608" id="2608">2608</a>
+<a href="#2609" id="2609">2609</a>
+<a href="#2610" id="2610">2610</a>
+<a href="#2611" id="2611">2611</a>
+<a href="#2612" id="2612">2612</a>
+<a href="#2613" id="2613">2613</a>
+<a href="#2614" id="2614">2614</a>
+<a href="#2615" id="2615">2615</a>
+<a href="#2616" id="2616">2616</a>
+<a href="#2617" id="2617">2617</a>
+<a href="#2618" id="2618">2618</a>
+<a href="#2619" id="2619">2619</a>
+<a href="#2620" id="2620">2620</a>
+<a href="#2621" id="2621">2621</a>
+<a href="#2622" id="2622">2622</a>
+<a href="#2623" id="2623">2623</a>
+<a href="#2624" id="2624">2624</a>
+<a href="#2625" id="2625">2625</a>
+<a href="#2626" id="2626">2626</a>
+<a href="#2627" id="2627">2627</a>
+<a href="#2628" id="2628">2628</a>
+<a href="#2629" id="2629">2629</a>
+<a href="#2630" id="2630">2630</a>
+<a href="#2631" id="2631">2631</a>
+<a href="#2632" id="2632">2632</a>
+<a href="#2633" id="2633">2633</a>
+<a href="#2634" id="2634">2634</a>
+<a href="#2635" id="2635">2635</a>
+<a href="#2636" id="2636">2636</a>
+<a href="#2637" id="2637">2637</a>
+<a href="#2638" id="2638">2638</a>
+<a href="#2639" id="2639">2639</a>
+<a href="#2640" id="2640">2640</a>
+<a href="#2641" id="2641">2641</a>
+<a href="#2642" id="2642">2642</a>
+<a href="#2643" id="2643">2643</a>
+<a href="#2644" id="2644">2644</a>
+<a href="#2645" id="2645">2645</a>
+<a href="#2646" id="2646">2646</a>
+<a href="#2647" id="2647">2647</a>
+<a href="#2648" id="2648">2648</a>
+<a href="#2649" id="2649">2649</a>
+<a href="#2650" id="2650">2650</a>
+<a href="#2651" id="2651">2651</a>
+<a href="#2652" id="2652">2652</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashSet};
 <span class="kw">use </span>std::io::Write;
 <span class="kw">use </span>std::ops::ControlFlow;
@@ -2716,6 +2760,13 @@
     iterations: usize,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
     log_binary_versions().<span class="kw">await</span><span class="question-mark">?</span>;
+
+    <span class="kw">let </span>fedimint_cli_version = <span class="kw">crate</span>::util::FedimintCli::version_or_default().<span class="kw">await</span>;
+    <span class="kw">let </span>gatewayd_version = <span class="kw">crate</span>::util::Gatewayd::version_or_default().<span class="kw">await</span>;
+    <span class="kw">if </span>fedimint_cli_version &lt; <span class="kw-2">*</span>VERSION_0_3_0 || gatewayd_version &lt; <span class="kw-2">*</span>VERSION_0_3_0 {
+        <span class="macro">info!</span>(<span class="string">"fedmint-cli version that didn't support unknown modules"</span>);
+        <span class="kw">return </span><span class="prelude-val">Ok</span>(());
+    }
 
     <span class="attr">#[allow(unused_variables)]
     </span><span class="kw">let </span>DevFed {
@@ -3177,6 +3228,13 @@
         electrs,
         esplora,
     } = dev_fed;
+
+    <span class="kw">let </span>fedimint_cli_version = <span class="kw">crate</span>::util::FedimintCli::version_or_default().<span class="kw">await</span>;
+    <span class="kw">let </span>gatewayd_version = <span class="kw">crate</span>::util::Gatewayd::version_or_default().<span class="kw">await</span>;
+    <span class="kw">if </span>fedimint_cli_version &lt; <span class="kw-2">*</span>VERSION_0_3_0 || gatewayd_version &lt; <span class="kw-2">*</span>VERSION_0_3_0 {
+        <span class="macro">info!</span>(<span class="string">"fedmint-cli version that didn't support unknown modules"</span>);
+        <span class="kw">return </span><span class="prelude-val">Ok</span>(());
+    }
 
     <span class="kw">let </span>client = fed.new_joined_client(<span class="string">"cli-tests-client"</span>).<span class="kw">await</span><span class="question-mark">?</span>;
     client.use_gateway(<span class="kw-2">&amp;</span>gw_cln).<span class="kw">await</span><span class="question-mark">?</span>;
@@ -4182,6 +4240,13 @@
     process_mgr: <span class="kw-2">&amp;</span>ProcessManager,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
     log_binary_versions().<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="kw">let </span>fedimint_cli_version = <span class="kw">crate</span>::util::FedimintCli::version_or_default().<span class="kw">await</span>;
+    <span class="kw">let </span>gatewayd_version = <span class="kw">crate</span>::util::Gatewayd::version_or_default().<span class="kw">await</span>;
+    <span class="kw">if </span>fedimint_cli_version &lt; <span class="kw-2">*</span>VERSION_0_3_0 || gatewayd_version &lt; <span class="kw-2">*</span>VERSION_0_3_0 {
+        <span class="macro">info!</span>(<span class="string">"fedmint-cli version that didn't support unknown modules"</span>);
+        <span class="kw">return </span><span class="prelude-val">Ok</span>(());
+    }
+
     <span class="attr">#[allow(unused_variables)]
     </span><span class="kw">let </span>DevFed {
         bitcoind,
@@ -4268,6 +4333,14 @@
 
 <span class="kw">pub async fn </span>gw_reboot_test(dev_fed: DevFed, process_mgr: <span class="kw-2">&amp;</span>ProcessManager) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
     log_binary_versions().<span class="kw">await</span><span class="question-mark">?</span>;
+
+    <span class="kw">let </span>fedimint_cli_version = <span class="kw">crate</span>::util::FedimintCli::version_or_default().<span class="kw">await</span>;
+    <span class="kw">let </span>gatewayd_version = <span class="kw">crate</span>::util::Gatewayd::version_or_default().<span class="kw">await</span>;
+    <span class="kw">if </span>fedimint_cli_version &lt; <span class="kw-2">*</span>VERSION_0_3_0 || gatewayd_version &lt; <span class="kw-2">*</span>VERSION_0_3_0 {
+        <span class="macro">info!</span>(<span class="string">"fedmint-cli version that didn't support unknown modules"</span>);
+        <span class="kw">return </span><span class="prelude-val">Ok</span>(());
+    }
+
     <span class="attr">#[allow(unused_variables)]
     </span><span class="kw">let </span>DevFed {
         bitcoind,
@@ -4536,6 +4609,14 @@
 
 <span class="kw">pub async fn </span>reconnect_test(dev_fed: DevFed, process_mgr: <span class="kw-2">&amp;</span>ProcessManager) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
     log_binary_versions().<span class="kw">await</span><span class="question-mark">?</span>;
+
+    <span class="kw">let </span>fedimint_cli_version = <span class="kw">crate</span>::util::FedimintCli::version_or_default().<span class="kw">await</span>;
+    <span class="kw">let </span>gatewayd_version = <span class="kw">crate</span>::util::Gatewayd::version_or_default().<span class="kw">await</span>;
+    <span class="kw">if </span>fedimint_cli_version &lt; <span class="kw-2">*</span>VERSION_0_3_0 || gatewayd_version &lt; <span class="kw-2">*</span>VERSION_0_3_0 {
+        <span class="macro">info!</span>(<span class="string">"fedmint-cli version that didn't support unknown modules"</span>);
+        <span class="kw">return </span><span class="prelude-val">Ok</span>(());
+    }
+
     <span class="attr">#[allow(unused_variables)]
     </span><span class="kw">let </span>DevFed {
         bitcoind,
@@ -4590,6 +4671,13 @@
         // recoverytool version corresponding to the version of fedimintd they were
         // using.
         </span><span class="kw">return </span><span class="prelude-val">Ok</span>(());
+    }
+
+    <span class="kw">let </span>fedimint_cli_version = <span class="kw">crate</span>::util::FedimintCli::version_or_default().<span class="kw">await</span>;
+    <span class="kw">let </span>gatewayd_version = <span class="kw">crate</span>::util::Gatewayd::version_or_default().<span class="kw">await</span>;
+    <span class="kw">if </span>fedimint_cli_version &lt; <span class="kw-2">*</span>VERSION_0_3_0 || gatewayd_version &lt; <span class="kw-2">*</span>VERSION_0_3_0 {
+        <span class="macro">info!</span>(<span class="string">"fedmint-cli version that didn't support unknown modules"</span>);
+        <span class="kw">return </span><span class="prelude-val">Ok</span>(());
     }
 
     <span class="attr">#[allow(unused_variables)]

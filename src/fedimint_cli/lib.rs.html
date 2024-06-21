@@ -1124,6 +1124,7 @@
 <a href="#1124" id="1124">1124</a>
 <a href="#1125" id="1125">1125</a>
 <a href="#1126" id="1126">1126</a>
+<a href="#1127" id="1127">1127</a>
 </pre></div><pre class="rust"><code><span class="attr">#![warn(clippy::pedantic)]
 #![allow(clippy::doc_markdown)]
 #![allow(clippy::missing_errors_doc)]
@@ -1680,6 +1681,7 @@ Examples:
             .with_module(MintClientInit)
             .with_module(WalletClientInit::default())
             .with_module(MetaClientInit)
+            .with_module(fedimint_lnv2_client::LightningClientInit)
     }
 
     <span class="kw">pub async fn </span>run(<span class="kw-2">&amp;mut </span><span class="self">self</span>) {

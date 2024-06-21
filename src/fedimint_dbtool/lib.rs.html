@@ -251,6 +251,8 @@
 <a href="#251" id="251">251</a>
 <a href="#252" id="252">252</a>
 <a href="#253" id="253">253</a>
+<a href="#254" id="254">254</a>
+<a href="#255" id="255">255</a>
 </pre></div><pre class="rust"><code><span class="attr">#![warn(clippy::pedantic)]
 #![allow(clippy::default_trait_access)]
 #![allow(clippy::doc_markdown)]
@@ -400,10 +402,12 @@
         <span class="self">self</span>.with_server_module_init(WalletInit)
             .with_server_module_init(MintInit)
             .with_server_module_init(LightningInit)
+            .with_server_module_init(fedimint_lnv2_server::LightningInit)
             .with_server_module_init(MetaInit)
             .with_client_module_init(WalletClientInit::default())
             .with_client_module_init(MintClientInit)
             .with_client_module_init(LightningClientInit::default())
+            .with_client_module_init(fedimint_lnv2_client::LightningClientInit)
             .with_client_module_init(MetaClientInit)
     }
 

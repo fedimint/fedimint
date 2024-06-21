@@ -496,6 +496,8 @@
 <a href="#496" id="496">496</a>
 <a href="#497" id="497">497</a>
 <a href="#498" id="498">498</a>
+<a href="#499" id="499">499</a>
+<a href="#500" id="500">500</a>
 </pre></div><pre class="rust"><code><span class="attr">#![warn(clippy::pedantic)]
 #![allow(clippy::default_trait_access)]
 #![allow(clippy::too_many_lines)]
@@ -688,7 +690,8 @@
                 .expect(<span class="string">"Could not encode to stdout"</span>);
         }
         TweakSource::Epochs { db } =&gt; {
-            <span class="kw">let </span>decoders = ModuleDecoderRegistry::from_iter([
+            <span class="comment">// FIXME: read config to figure out instance ids
+            </span><span class="kw">let </span>decoders = ModuleDecoderRegistry::from_iter([
                 (
                     LEGACY_HARDCODED_INSTANCE_ID_LN,
                     LightningCommonInit::KIND,
@@ -704,7 +707,8 @@
                     WalletCommonInit::KIND,
                     &lt;Wallet <span class="kw">as </span>ServerModule&gt;::decoder(),
                 ),
-            ]);
+            ])
+            .with_fallback();
 
             <span class="kw">let </span>db = get_db(opts.readonly, <span class="kw-2">&amp;</span>db, decoders);
             <span class="kw">let </span><span class="kw-2">mut </span>dbtx = db.begin_transaction().<span class="kw">await</span>;

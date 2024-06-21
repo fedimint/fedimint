@@ -222,10 +222,16 @@
 <a href="#222" id="222">222</a>
 <a href="#223" id="223">223</a>
 <a href="#224" id="224">224</a>
+<a href="#225" id="225">225</a>
+<a href="#226" id="226">226</a>
+<a href="#227" id="227">227</a>
+<a href="#228" id="228">228</a>
 </pre></div><pre class="rust"><code><span class="attr">#![allow(non_snake_case)]
 
 </span><span class="kw">use </span>std::path::{Path, PathBuf};
 <span class="kw">use </span>std::str::FromStr <span class="kw">as _</span>;
+
+<span class="kw">use </span>fedimint_core::envs::FM_ENABLE_MODULE_LNV2_ENV;
 
 <span class="kw">pub trait </span>ToEnvVar {
     <span class="kw">fn </span>to_env_value(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;String&gt;;
@@ -330,6 +336,8 @@
     Global = (test_dir: <span class="kw-2">&amp;</span>Path, fed_size: usize, offline_nodes: usize) =&gt;
     {
         FM_USE_UNKNOWN_MODULE: String = std::env::var(FM_USE_UNKNOWN_MODULE_ENV).unwrap_or_else(|<span class="kw">_</span>| <span class="string">"1"</span>.into()); env: <span class="string">"FM_USE_UNKNOWN_MODULE"</span>;
+        FM_ENABLE_MODULE_LNV2: String = std::env::var(FM_ENABLE_MODULE_LNV2_ENV).unwrap_or_else(|<span class="kw">_</span>| <span class="string">"1"</span>.into()); env: <span class="string">"FM_ENABLE_MODULE_LNV2"</span>;
+
 
         FM_FORCE_API_SECRETS: ApiSecrets = std::env::var(FM_FORCE_API_SECRETS_ENV).ok().and_then(|s| {
             ApiSecrets::from_str(<span class="kw-2">&amp;</span>s).ok()

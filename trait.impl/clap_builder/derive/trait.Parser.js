@@ -4,6 +4,7 @@
 "fedimint_cli":[["impl Parser for <a class=\"struct\" href=\"fedimint_cli/struct.Opts.html\" title=\"struct fedimint_cli::Opts\">Opts</a>"]],
 "fedimint_dbtool":[["impl Parser for <a class=\"struct\" href=\"fedimint_dbtool/struct.Options.html\" title=\"struct fedimint_dbtool::Options\">Options</a>"]],
 "fedimint_ln_client":[["impl Parser for <a class=\"enum\" href=\"fedimint_ln_client/cli/enum.Opts.html\" title=\"enum fedimint_ln_client::cli::Opts\">Opts</a>"]],
+"fedimint_lnv2_client":[["impl Parser for <a class=\"enum\" href=\"fedimint_lnv2_client/cli/enum.Opts.html\" title=\"enum fedimint_lnv2_client::cli::Opts\">Opts</a>"]],
 "fedimint_load_test_tool":[["impl Parser for <a class=\"struct\" href=\"fedimint_load_test_tool/struct.Opts.html\" title=\"struct fedimint_load_test_tool::Opts\">Opts</a>"]],
 "fedimint_meta_client":[["impl Parser for <a class=\"enum\" href=\"fedimint_meta_client/cli/enum.Opts.html\" title=\"enum fedimint_meta_client::cli::Opts\">Opts</a>"]],
 "fedimintd":[["impl Parser for <a class=\"struct\" href=\"fedimintd/fedimintd/struct.ServerOpts.html\" title=\"struct fedimintd::fedimintd::ServerOpts\">ServerOpts</a>"]],
