@@ -1,10 +1,11 @@
 #![cfg_attr(target_family = "wasm", allow(dead_code))]
 
+mod inner;
+
 /// Just-in-time initialization
 pub mod jit;
 pub mod waiter;
 
-use std::collections::VecDeque;
 use std::future::Future;
 use std::pin::{pin, Pin};
 use std::sync::Arc;
@@ -14,55 +15,15 @@ use anyhow::bail;
 use fedimint_core::time::now;
 use fedimint_logging::{LOG_TASK, LOG_TEST};
 use futures::future::{self, Either};
+use inner::TaskGroupInner;
 use thiserror::Error;
 use tokio::sync::{oneshot, watch};
-use tracing::{debug, error, info, warn};
+use tracing::{debug, error, info};
 
 use crate::runtime;
 // TODO: stop using `task::*`, and use `runtime::*` in the code
 // lots of churn though
 pub use crate::runtime::*;
-
-#[derive(Debug)]
-struct TaskGroupInner {
-    on_shutdown_tx: watch::Sender<bool>,
-    // It is necessary to keep at least one `Receiver` around,
-    // otherwise shutdown writes are lost.
-    on_shutdown_rx: watch::Receiver<bool>,
-    // using blocking Mutex to avoid `async` in `spawn`
-    // it's OK as we don't ever need to yield
-    join: std::sync::Mutex<VecDeque<(String, JoinHandle<()>)>>,
-    // using blocking Mutex to avoid `async` in `shutdown`
-    // it's OK as we don't ever need to yield
-    subgroups: std::sync::Mutex<Vec<TaskGroup>>,
-}
-
-impl Default for TaskGroupInner {
-    fn default() -> Self {
-        let (on_shutdown_tx, on_shutdown_rx) = watch::channel(false);
-        Self {
-            on_shutdown_tx,
-            on_shutdown_rx,
-            join: std::sync::Mutex::new(Default::default()),
-            subgroups: std::sync::Mutex::new(vec![]),
-        }
-    }
-}
-
-impl TaskGroupInner {
-    pub fn shutdown(&self) {
-        // Note: set the flag before starting to call shutdown handlers
-        // to avoid confusion.
-        self.on_shutdown_tx
-            .send(true)
-            .expect("We must have on_shutdown_rx around so this never fails");
-
-        let subgroups = self.subgroups.lock().expect("locking failed").clone();
-        for subgroup in subgroups {
-            subgroup.inner.shutdown();
-        }
-    }
-}
 /// A group of task working together
 ///
 /// Using this struct it is possible to spawn one or more
@@ -103,11 +64,7 @@ impl TaskGroup {
     /// detect any panics in the tasks spawned by the subgroup.
     pub fn make_subgroup(&self) -> TaskGroup {
         let new_tg = Self::new();
-        self.inner
-            .subgroups
-            .lock()
-            .expect("locking failed")
-            .push(new_tg.clone());
+        self.inner.add_subgroup(new_tg.clone());
         new_tg
     }
 
@@ -191,11 +148,7 @@ impl TaskGroup {
                 let _ = tx.send(r);
             }
         });
-        self.inner
-            .join
-            .lock()
-            .expect("lock poison")
-            .push_back((name, handle));
+        self.inner.add_join_handle(name, handle);
         guard.completed = true;
 
         rx
@@ -219,11 +172,7 @@ impl TaskGroup {
         let handle = runtime::spawn_local(name.as_str(), async {
             f(handle).await;
         });
-        self.inner
-            .join
-            .lock()
-            .expect("lock poison")
-            .push_back((name, handle));
+        self.inner.add_join_handle(name, handle);
         guard.completed = true;
     }
 
@@ -264,57 +213,7 @@ impl TaskGroup {
     #[cfg_attr(not(target_family = "wasm"), ::async_recursion::async_recursion)]
     #[cfg_attr(target_family = "wasm", ::async_recursion::async_recursion(?Send))]
     pub async fn join_all_inner(self, deadline: Option<SystemTime>, errors: &mut Vec<JoinError>) {
-        let subgroups = self.inner.subgroups.lock().expect("locking failed").clone();
-        for subgroup in subgroups {
-            info!(target: LOG_TASK, "Waiting for subgroup to finish");
-            subgroup.join_all_inner(deadline, errors).await;
-            info!(target: LOG_TASK, "Subgroup finished");
-        }
-
-        // drop lock early
-        while let Some((name, join)) = {
-            let mut lock = self.inner.join.lock().expect("lock poison");
-            lock.pop_front()
-        } {
-            debug!(target: LOG_TASK, task=%name, "Waiting for task to finish");
-
-            let timeout = deadline.map(|deadline| {
-                deadline
-                    .duration_since(now())
-                    .unwrap_or(Duration::from_millis(10))
-            });
-
-            #[cfg(not(target_family = "wasm"))]
-            let join_future: Pin<Box<dyn Future<Output = _> + Send>> =
-                if let Some(timeout) = timeout {
-                    Box::pin(runtime::timeout(timeout, join))
-                } else {
-                    Box::pin(async { Ok(join.await) })
-                };
-
-            #[cfg(target_family = "wasm")]
-            let join_future: Pin<Box<dyn Future<Output = _>>> = if let Some(timeout) = timeout {
-                Box::pin(runtime::timeout(timeout, join))
-            } else {
-                Box::pin(async { Ok(join.await) })
-            };
-
-            match join_future.await {
-                Ok(Ok(())) => {
-                    debug!(target: LOG_TASK, task=%name, "Task finished");
-                }
-                Ok(Err(e)) => {
-                    error!(target: LOG_TASK, task=%name, error=%e, "Task panicked");
-                    errors.push(e);
-                }
-                Err(_) => {
-                    warn!(
-                        target: LOG_TASK, task=%name,
-                        "Timeout waiting for task to shut down"
-                    );
-                }
-            }
-        }
+        self.inner.join_all(deadline, errors).await;
     }
 }
 
@@ -327,7 +226,7 @@ pub struct TaskPanicGuard {
 
 impl TaskPanicGuard {
     pub fn is_shutting_down(&self) -> bool {
-        *self.inner.on_shutdown_tx.borrow()
+        self.inner.is_shutting_down()
     }
 }
 
@@ -358,7 +257,7 @@ impl TaskHandle {
     ///
     /// Every task in a task group should detect and stop if `true`.
     pub fn is_shutting_down(&self) -> bool {
-        *self.inner.on_shutdown_tx.borrow()
+        self.inner.is_shutting_down()
     }
 
     /// Make a [`oneshot::Receiver`] that will fire on shutdown
@@ -366,7 +265,7 @@ impl TaskHandle {
     /// Tasks can use `select` on the return value to handle shutdown
     /// signal during otherwise blocking operation.
     pub fn make_shutdown_rx(&self) -> TaskShutdownToken {
-        TaskShutdownToken::new(self.inner.on_shutdown_rx.clone())
+        self.inner.make_shutdown_rx()
     }
 
     /// Run the future or cancel it if the [`TaskGroup`] shuts down.
@@ -374,7 +273,7 @@ impl TaskHandle {
         &self,
         fut: F,
     ) -> Result<F::Output, ShuttingDownError> {
-        let rx = TaskShutdownToken::new(self.inner.on_shutdown_rx.clone());
+        let rx = self.make_shutdown_rx();
         match future::select(pin!(rx), pin!(fut)).await {
             Either::Left(((), _)) => Err(ShuttingDownError {}),
             Either::Right((value, _)) => Ok(value),
