@@ -368,6 +368,7 @@
 <a href="#368" id="368">368</a>
 <a href="#369" id="369">369</a>
 <a href="#370" id="370">370</a>
+<a href="#371" id="371">371</a>
 </pre></div><pre class="rust"><code><span class="attr">#![warn(clippy::pedantic)]
 #![allow(clippy::doc_markdown)]
 #![allow(clippy::missing_panics_doc)]
@@ -391,8 +392,8 @@
 };
 <span class="kw">use </span>serde::Serialize;
 
-<span class="kw">const </span>DEFAULT_WAIT_FOR_CHAIN_SYNC_RETRIES: u32 = <span class="number">12</span>;
-<span class="kw">const </span>DEFAULT_WAIT_FOR_CHAIN_SYNC_RETRY_DELAY_SECONDS: u64 = <span class="number">10</span>;
+<span class="kw">const </span>DEFAULT_WAIT_FOR_CHAIN_SYNC_RETRIES: u32 = <span class="number">60</span>;
+<span class="kw">const </span>DEFAULT_WAIT_FOR_CHAIN_SYNC_RETRY_DELAY_SECONDS: u64 = <span class="number">2</span>;
 
 <span class="attr">#[derive(Parser)]
 #[command(version)]
@@ -716,7 +717,8 @@
                             max_retries.unwrap_or(DEFAULT_WAIT_FOR_CHAIN_SYNC_RETRIES) <span class="kw">as </span>usize
                         ),
                     || <span class="kw">async </span>{
-                        <span class="kw">if </span>client().get_info().<span class="kw">await</span><span class="question-mark">?</span>.block_height.unwrap_or(<span class="number">0</span>) &gt;= block_height {
+                        <span class="kw">let </span>info = client().get_info().<span class="kw">await</span><span class="question-mark">?</span>;
+                        <span class="kw">if </span>info.block_height.unwrap_or(<span class="number">0</span>) &gt;= block_height &amp;&amp; info.synced_to_chain {
                             <span class="prelude-val">Ok</span>(())
                         } <span class="kw">else </span>{
                             <span class="prelude-val">Err</span>(<span class="macro">anyhow::anyhow!</span>(<span class="string">"Not synced yet"</span>))
