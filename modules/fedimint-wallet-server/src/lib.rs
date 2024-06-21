@@ -30,7 +30,7 @@ use common::config::WalletConfigConsensus;
 use common::{
     proprietary_tweak_key, PegOutFees, PegOutSignatureItem, ProcessPegOutSigError, SpendableUTXO,
     WalletCommonInit, WalletConsensusItem, WalletCreationError, WalletInput, WalletModuleTypes,
-    WalletOutput, WalletOutputOutcome, CONFIRMATION_TARGET,
+    WalletOutput, WalletOutputOutcome, CONFIRMATION_TARGET, DEPRECATED_RBF_ERROR,
 };
 use fedimint_bitcoind::{create_bitcoind, DynBitcoindRpc};
 use fedimint_core::config::{
@@ -42,7 +42,7 @@ use fedimint_core::db::{
     Database, DatabaseTransaction, DatabaseVersion, IDatabaseTransactionOpsCoreTyped,
 };
 use fedimint_core::encoding::{Decodable, Encodable};
-use fedimint_core::envs::is_running_in_test_env;
+use fedimint_core::envs::{is_rbf_withdrawal_enabled, is_running_in_test_env};
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::{
     api_endpoint, ApiEndpoint, ApiVersion, CoreConsensusVersion, InputMeta, ModuleConsensusVersion,
@@ -549,6 +549,22 @@ impl ServerModule for Wallet {
         out_point: OutPoint,
     ) -> Result<TransactionItemAmount, WalletOutputError> {
         let output = output.ensure_v0_ref()?;
+
+        // In 0.4.0 we began preventing RBF withdrawals. Once we reach EoL support
+        // for 0.4.0, we can safely remove RBF withdrawal logic.
+        // see: https://github.com/fedimint/fedimint/issues/5453
+        if let WalletOutputV0::Rbf(_) = output {
+            // This exists as an escape hatch for any federations that successfully
+            // processed an RBF withdrawal due to having a single UTXO owned by the
+            // federation. If a peer needs to resync the federation's history, they can
+            // enable this variable until they've successfully synced, then restart with
+            // this disabled.
+            if is_rbf_withdrawal_enabled() {
+                warn!("processing rbf withdrawal");
+            } else {
+                return Err(DEPRECATED_RBF_ERROR);
+            }
+        }
 
         let change_tweak = self.consensus_nonce(dbtx).await;
 

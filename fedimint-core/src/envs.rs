@@ -30,6 +30,11 @@ pub fn is_running_in_test_env() -> bool {
     unit_test || is_env_var_set("NEXTEST") || is_env_var_set(FM_IN_DEVIMINT_ENV)
 }
 
+/// Use to allow `process_output` to process RBF withdrawal outputs.
+pub fn is_rbf_withdrawal_enabled() -> bool {
+    is_env_var_set("FM_UNSAFE_ENABLE_RBF_WITHDRAWAL")
+}
+
 /// Get value of [`FEDIMINT_BUILD_CODE_VERSION_ENV`] at compile time
 #[macro_export]
 macro_rules! fedimint_build_code_version_env {
