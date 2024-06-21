@@ -102,11 +102,7 @@
             };
           };
 
-          toolchainArgs = { } // lib.optionalAttrs pkgs.stdenv.isDarwin {
-            # on Darwin newest stdenv doesn't seem to work
-            # linking rocksdb
-            stdenv = pkgs.clang11Stdenv;
-          };
+          toolchainArgs = { };
 
           stdTargets = flakeboxLib.mkStdTargets { };
           stdToolchains = flakeboxLib.mkStdToolchains toolchainArgs;

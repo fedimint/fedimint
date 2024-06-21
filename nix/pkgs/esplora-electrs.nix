@@ -1,9 +1,6 @@
 { lib
 , stdenv
 , llvmPackages_12
-  # , clang11Stdenv
-  # , makeRustPlatform
-  # , buildPackages
 , fetchFromGitHub
 , rocksdb_8_3
 , Security
