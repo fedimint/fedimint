@@ -71,10 +71,6 @@
 <a href="#71" id="71">71</a>
 <a href="#72" id="72">72</a>
 <a href="#73" id="73">73</a>
-<a href="#74" id="74">74</a>
-<a href="#75" id="75">75</a>
-<a href="#76" id="76">76</a>
-<a href="#77" id="77">77</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::{ffi, iter};
 
 <span class="kw">use </span>clap::Parser;
@@ -85,7 +81,6 @@
     ADD_GATEWAY_ENDPOINT, GATEWAYS_ENDPOINT, REMOVE_GATEWAY_ENDPOINT,
 };
 <span class="kw">use </span>serde::Serialize;
-<span class="kw">use </span>serde_json::Value;
 
 <span class="kw">use </span><span class="kw">crate</span>::LightningClientModule;
 
@@ -112,12 +107,12 @@
                 .clone()
                 .ok_or(<span class="macro">anyhow::anyhow!</span>(<span class="string">"Admin auth not set"</span>))<span class="question-mark">?</span>;
 
-            <span class="kw">let </span>is_new_entry = lightning
+            <span class="kw">let </span>is_new_entry: bool = lightning
                 .module_api
                 .request_admin(ADD_GATEWAY_ENDPOINT, ApiRequestErased::new(gateway), auth)
                 .<span class="kw">await</span><span class="question-mark">?</span>;
 
-            <span class="prelude-val">Ok</span>(Value::Bool(is_new_entry))
+            <span class="prelude-val">Ok</span>(serde_json::to_value(is_new_entry).expect(<span class="string">"JSON serialization failed"</span>))
         }
         Opts::Remove { gateway } =&gt; {
             <span class="kw">let </span>auth = lightning
@@ -125,7 +120,7 @@
                 .clone()
                 .ok_or(<span class="macro">anyhow::anyhow!</span>(<span class="string">"Admin auth not set"</span>))<span class="question-mark">?</span>;
 
-            <span class="kw">let </span>entry_existed = lightning
+            <span class="kw">let </span>entry_existed: bool = lightning
                 .module_api
                 .request_admin(
                     REMOVE_GATEWAY_ENDPOINT,
@@ -134,7 +129,7 @@
                 )
                 .<span class="kw">await</span><span class="question-mark">?</span>;
 
-            <span class="prelude-val">Ok</span>(Value::Bool(entry_existed))
+            <span class="prelude-val">Ok</span>(serde_json::to_value(entry_existed).expect(<span class="string">"JSON serialization failed"</span>))
         }
         Opts::List =&gt; {
             <span class="kw">let </span>gateways = lightning
@@ -143,12 +138,9 @@
                     GATEWAYS_ENDPOINT,
                     ApiRequestErased::default(),
                 )
-                .<span class="kw">await</span><span class="question-mark">?
-                </span>.iter()
-                .map(|gateway| Value::String(gateway.to_string()))
-                .collect::&lt;Vec&lt;Value&gt;&gt;();
+                .<span class="kw">await</span><span class="question-mark">?</span>;
 
-            <span class="prelude-val">Ok</span>(Value::Array(gateways))
+            <span class="prelude-val">Ok</span>(serde_json::to_value(gateways).expect(<span class="string">"JSON serialization failed"</span>))
         }
     }
 }

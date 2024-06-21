@@ -48,6 +48,7 @@ var srcIndex = new Map(JSON.parse('[\
 ["fedimintd",["",[["fedimintd",[],["metrics.rs"]]],["envs.rs","fedimintd.rs","lib.rs"]]],\
 ["gateway_cli",["",[],["main.rs"]]],\
 ["gateway_cln_extension",["",[],["cln_extension.rs"]]],\
+["gateway_registration_sanity",["",[],["gateway_registration_sanity.rs"]]],\
 ["gateway_tests",["",[],["main.rs"]]],\
 ["gatewayd",["",[],["gatewayd.rs"]]],\
 ["hkdf",["",[],["lib.rs"]]],\

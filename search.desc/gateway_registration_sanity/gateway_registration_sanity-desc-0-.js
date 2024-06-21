@@ -1,0 +1,1 @@
+searchState.loadedDescShard("gateway_registration_sanity", 0, "")
