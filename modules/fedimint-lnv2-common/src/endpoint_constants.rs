@@ -4,4 +4,4 @@ pub const CONSENSUS_BLOCK_COUNT_ENDPOINT: &str = "consensus_block_count";
 pub const OUTGOING_CONTRACT_EXPIRATION_ENDPOINT: &str = "outgoing_contract_expiration";
 pub const GATEWAYS_ENDPOINT: &str = "gateways";
 pub const ADD_GATEWAY_ENDPOINT: &str = "add_gateway";
-pub const REMOVE_GATEWAY_ENDPOINT_V2: &str = "remove_gateway";
+pub const REMOVE_GATEWAY_ENDPOINT: &str = "remove_gateway";
