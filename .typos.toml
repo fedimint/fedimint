@@ -6,6 +6,11 @@ wel = "wel"
 reasponse= "response"
 # useful for "in/out" in the code
 inout="inout"
+# multi-user-chat
+muc="muc"
+
+# short for "backup"
+bck="bck"
 
 # metric id that typos doesn't like
 "Fo"="Fo"
