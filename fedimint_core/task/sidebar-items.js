@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"fn":["sleep_in_test"],"mod":["jit","waiter"],"struct":["Cancelled","ShuttingDownError","TaskGroup","TaskGroupInner","TaskHandle","TaskPanicGuard","TaskShutdownToken"],"trait":["MaybeSend","MaybeSync"],"type":["Cancellable"]};
+window.SIDEBAR_ITEMS = {"fn":["sleep_in_test"],"mod":["inner","jit","waiter"],"struct":["Cancelled","ShuttingDownError","TaskGroup","TaskHandle","TaskPanicGuard","TaskShutdownToken"],"trait":["MaybeSend","MaybeSync"],"type":["Cancellable"]};
