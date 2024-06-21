@@ -104,6 +104,11 @@ function meta_module() {
 }
 export -f meta_module
 
+function lnv2_module() {
+  fm-run-test "${FUNCNAME[0]}" env FM_OFFLINE_NODES=0 ./scripts/tests/lnv2-module-test.sh
+}
+export -f lnv2_module
+
 function mint_client_sanity() {
   fm-run-test "${FUNCNAME[0]}" env FM_OFFLINE_NODES=0 ./scripts/tests/mint-client-sanity.sh
 }
@@ -284,6 +289,7 @@ tests_to_run_in_parallel+=(
   "gateway_reboot_test"
   "gateway_config_test_cln"
   "gateway_config_test_lnd"
+  "lnv2_module"
   "devimint_cli_test"
   "devimint_cli_test_single"
   "load_test_tool_test"

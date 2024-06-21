@@ -2031,6 +2031,7 @@ name = "fedimint-lnv2-tests"
 version = "0.4.0-alpha"
 dependencies = [
  "anyhow",
+ "devimint",
  "fedimint-client",
  "fedimint-core",
  "fedimint-dummy-client",
@@ -2043,7 +2044,10 @@ dependencies = [
  "fedimint-lnv2-common",
  "fedimint-lnv2-server",
  "fedimint-testing",
+ "semver",
+ "serde_json",
  "tokio",
+ "tracing",
 ]
 
 [[package]]
