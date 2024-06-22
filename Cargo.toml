@@ -143,7 +143,7 @@ fedimint-wallet-common = { path = "./modules/fedimint-wallet-common" }
 #             https://github.com/ipetkov/crane/issues/370
 [profile.dev.build-override]
 debug = false
-opt-level = 1
+opt-level = 3
 
 [profile.ci.build-override]
 debug = false
