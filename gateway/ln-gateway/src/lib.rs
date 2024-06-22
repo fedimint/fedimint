@@ -126,9 +126,10 @@ use crate::rpc::{
 };
 use crate::state_machine::GatewayExtPayStates;
 
-/// This initial SCID is considered invalid by LND HTLC interceptor,
-/// So we should always increment the value before assigning a new SCID.
-const INITIAL_SCID: u64 = 0;
+/// The first SCID that the gateway will assign to a federation.
+/// Note: This starts at 1 because an SCID of 0 is considered invalid by LND's
+/// HTLC interceptor.
+const INITIAL_SCID: u64 = 1;
 
 /// How long a gateway announcement stays valid
 const GW_ANNOUNCEMENT_TTL: Duration = Duration::from_secs(600);
@@ -333,7 +334,7 @@ pub struct Gateway {
 
     // Tracker for short channel ID assignments. When connecting a new federation,
     // this value is incremented and assigned to the federation as the `mint_channel_id`
-    max_used_scid: Arc<Mutex<u64>>,
+    next_scid: Arc<Mutex<u64>>,
 
     // The Gateway's API URL.
     pub versioned_api: SafeUrl,
@@ -352,7 +353,7 @@ impl std::fmt::Debug for Gateway {
             .field("clients", &self.clients)
             .field("scid_to_federation", &self.scid_to_federation)
             .field("gateway_id", &self.gateway_id)
-            .field("max_used_scid", &self.max_used_scid)
+            .field("next_scid", &self.next_scid)
             .finish()
     }
 }
@@ -456,7 +457,7 @@ impl Gateway {
 
         Ok(Self {
             lightning_builder,
-            max_used_scid: Arc::new(Mutex::new(INITIAL_SCID)),
+            next_scid: Arc::new(Mutex::new(INITIAL_SCID)),
             gateway_config: Arc::new(RwLock::new(gateway_config)),
             state: Arc::new(RwLock::new(GatewayState::Initializing)),
             client_builder,
@@ -1027,14 +1028,14 @@ impl Gateway {
 
             // The gateway deterministically assigns a channel id (u64) to each federation
             // connected.
-            let mut max_used_scid = self.max_used_scid.lock().await;
-            let mint_channel_id =
-                max_used_scid
+            let mut next_scid = self.next_scid.lock().await;
+            let mint_channel_id = *next_scid;
+            *next_scid =
+                next_scid
                     .checked_add(1)
                     .ok_or(GatewayError::GatewayConfigurationError(
                         "Too many connected federations".to_string(),
                     ))?;
-            *max_used_scid = mint_channel_id;
 
             let gw_client_cfg = FederationConfig {
                 invite_code,
@@ -1493,8 +1494,8 @@ impl Gateway {
         }
 
         if let Some(max_mint_channel_id) = configs.iter().map(|cfg| cfg.mint_channel_id).max() {
-            let mut max_used_scid = self.max_used_scid.lock().await;
-            *max_used_scid = max_mint_channel_id;
+            let mut next_scid = self.next_scid.lock().await;
+            *next_scid = max_mint_channel_id + 1;
         }
     }
 
