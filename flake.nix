@@ -1,7 +1,7 @@
 {
   inputs = {
     nixpkgs = {
-      url = "github:nixos/nixpkgs/nixos-23.11";
+      url = "github:nixos/nixpkgs/nixos-24.05";
     };
     flake-utils.url = "github:numtide/flake-utils";
     fenix = {
@@ -102,11 +102,7 @@
             };
           };
 
-          toolchainArgs = { } // lib.optionalAttrs pkgs.stdenv.isDarwin {
-            # on Darwin newest stdenv doesn't seem to work
-            # linking rocksdb
-            stdenv = pkgs.clang11Stdenv;
-          };
+          toolchainArgs = { };
 
           stdTargets = flakeboxLib.mkStdTargets { };
           stdToolchains = flakeboxLib.mkStdToolchains toolchainArgs;

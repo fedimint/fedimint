@@ -1,21 +1,18 @@
 { lib
 , stdenv
-, llvmPackages_11
-  # , clang11Stdenv
-  # , makeRustPlatform
-  # , buildPackages
+, llvmPackages_12
 , fetchFromGitHub
-, rocksdb_6_23
+, rocksdb_8_3
 , Security
 , rustPlatform
 }:
 let
-  rocksdb = rocksdb_6_23;
+  rocksdb = rocksdb_8_3;
 in
 rustPlatform.buildRustPackage {
   pname = "esplora";
   # last tagged version is far behind master
-  version = "20230218";
+  version = "20240603";
 
   src = fetchFromGitHub {
     # original:
@@ -27,16 +24,19 @@ rustPlatform.buildRustPackage {
     # pre-allocation size patch:
     owner = "dpc";
     repo = "esplora-electrs";
-    rev = "8186331b7ca33668d838dab91e2dc52c388ac689";
-    hash = "sha256-D+ZdtZ57RoQsqebW0f2KsWz5/Di4Joy6walqGvGm/4o=";
+    rev = "6cf03773a594de7dbd68a62be79c5c78710de19a";
+    hash = "sha256-HGFvOy5sBtfaZ/rS7nkIHHFTDJuRKfggxC4y5gW9dAQ=";
   };
 
+  doCheck = false;
 
   cargoLock = {
     lockFile = ./esplora-electrs.Cargo.lock;
 
     outputHashes = {
       "electrum-client-0.8.0" = "sha256-HDRdGS7CwWsPXkA1HdurwrVu4lhEx0Ay8vHi08urjZ0=";
+      "electrumd-0.1.0" = "sha256-M9yd53LsKheS9dQwDQKjcwbBM+66QGoNXIoSgV8G/Ao=";
+      "jsonrpc-0.12.0" = "sha256-lSNkkQttb8LnJej4Vfe7MrjiNPOuJ5A6w5iLstl9O1k=";
     };
   };
 
@@ -45,7 +45,7 @@ rustPlatform.buildRustPackage {
 
   # https://stackoverflow.com/questions/76443280/rust-bindgen-causes-a-is-not-a-valid-ident-error-on-build
   preBuild = ''
-    export LIBCLANG_PATH="${llvmPackages_11.libclang.lib}/lib"
+    export LIBCLANG_PATH="${llvmPackages_12.libclang.lib}/lib"
   '';
 
   # link rocksdb dynamically

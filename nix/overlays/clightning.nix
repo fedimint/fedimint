@@ -11,6 +11,9 @@ final: prev: {
     };
     makeFlags = [ "VERSION=v${version}" ];
     configureFlags = [ "--enable-developer" "--disable-valgrind" ];
-    NIX_CFLAGS_COMPILE = "-w";
+    env = {
+      NIX_CFLAGS_COMPILE = "-w";
+    };
+    postInstall = "";
   });
 }
