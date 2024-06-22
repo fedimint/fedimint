@@ -52,6 +52,7 @@ fedimint-server = { version = "=0.4.0-alpha", path = "../fedimint-server" }
 fedimint-wallet-server = { version = "=0.4.0-alpha", path = "../modules/fedimint-wallet-server" }
 fedimint-unknown-server = { version = "=0.4.0-alpha", path = "../modules/fedimint-unknown-server" }
 fedimint-unknown-common = { version = "=0.4.0-alpha", path = "../modules/fedimint-unknown-common" }
+once_cell = { workspace = true }
 rand = { workspace = true }
 rcgen = "0.13.1"
 serde = { workspace = true }

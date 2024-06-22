@@ -26,7 +26,7 @@ use fedimint_core::txoproof::TxOutProof;
 use fedimint_core::util::SafeUrl;
 use fedimint_core::{apply, async_trait_maybe_send, dyn_newtype_define, Feerate};
 use fedimint_logging::{LOG_BLOCKCHAIN, LOG_CORE};
-use lazy_static::lazy_static;
+use once_cell::sync::Lazy;
 use tracing::{debug, info};
 
 #[cfg(feature = "bitcoincore-rpc")]
@@ -46,9 +46,9 @@ const TESTNET_GENESIS_BLOCK_HASH: &str =
 const SIGNET_GENESIS_BLOCK_HASH: &str =
     "00000008819873e925422c1ff0f99f7cc9bbb232af63a077a480a3633bee1ef6";
 
-lazy_static! {
-    /// Global factories for creating bitcoin RPCs
-    static ref BITCOIN_RPC_REGISTRY: Mutex<BTreeMap<String, DynBitcoindRpcFactory>> =
+/// Global factories for creating bitcoin RPCs
+static BITCOIN_RPC_REGISTRY: Lazy<Mutex<BTreeMap<String, DynBitcoindRpcFactory>>> =
+    Lazy::new(|| {
         Mutex::new(BTreeMap::from([
             #[cfg(feature = "esplora-client")]
             ("esplora".to_string(), esplora::EsploraFactory.into()),
@@ -56,8 +56,8 @@ lazy_static! {
             ("electrum".to_string(), electrum::ElectrumFactory.into()),
             #[cfg(feature = "bitcoincore-rpc")]
             ("bitcoind".to_string(), bitcoincore::BitcoindFactory.into()),
-        ]));
-}
+        ]))
+    });
 
 /// Create a bitcoin RPC of a given kind
 pub fn create_bitcoind(config: &BitcoinRpcConfig, handle: TaskHandle) -> Result<DynBitcoindRpc> {

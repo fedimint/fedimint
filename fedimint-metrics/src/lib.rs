@@ -7,7 +7,7 @@ use axum::http::StatusCode;
 use axum::routing::get;
 use axum::Router;
 use fedimint_core::task::{TaskGroup, TaskShutdownToken};
-pub use lazy_static::lazy_static;
+pub use once_cell::sync::Lazy;
 use prometheus::Registry;
 pub use prometheus::{
     self, histogram_opts, opts, register_histogram_with_registry,
@@ -17,9 +17,11 @@ pub use prometheus::{
 use tokio::net::TcpListener;
 use tracing::error;
 
-lazy_static! {
-    pub static ref REGISTRY: Registry = Registry::new_custom(Some("fm".into()), None).unwrap();
-    pub static ref AMOUNTS_BUCKETS_SATS: Vec<f64> = vec![
+pub static REGISTRY: Lazy<Registry> =
+    Lazy::new(|| Registry::new_custom(Some("fm".into()), None).unwrap());
+
+pub static AMOUNTS_BUCKETS_SATS: Lazy<Vec<f64>> = Lazy::new(|| {
+    vec![
         0.0,
         0.1,
         1.0,
@@ -30,9 +32,9 @@ lazy_static! {
         100_000.0,
         1_000_000.0,
         10_000_000.0,
-        100_000_000.0
-    ];
-}
+        100_000_000.0,
+    ]
+});
 
 async fn get_metrics() -> (StatusCode, String) {
     let metric_families = REGISTRY.gather();

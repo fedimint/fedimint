@@ -18,7 +18,7 @@ path = "./src/lib.rs"
 anyhow = { version = "1.0.86", features = ["backtrace"] }
 axum = "0.7.5"
 fedimint-core = { workspace = true }
-lazy_static = "1.5.0"
+once_cell = { workspace = true }
 prometheus = "0.13.4"
 tokio = "1"
 tracing = { workspace = true }

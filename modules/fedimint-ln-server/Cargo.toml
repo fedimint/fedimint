@@ -27,6 +27,7 @@ fedimint-ln-common = { version = "=0.4.0-alpha", path = "../fedimint-ln-common" 
 fedimint-metrics = { version = "=0.4.0-alpha", path = "../../fedimint-metrics" }
 fedimint-server = { version = "=0.4.0-alpha", path = "../../fedimint-server" }
 futures = { workspace = true }
+once_cell = { workspace = true }
 rand = { workspace = true }
 secp256k1 = { version = "0.27.0", default-features = false }
 serde = { workspace = true }
