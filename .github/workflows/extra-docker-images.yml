@@ -34,7 +34,7 @@ jobs:
             type=semver,pattern={{major}}.{{minor}}
             type=sha
       - name: Build and push mutinynet-bitcoind
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v6
         with:
           file: docker/latest/mutinynet-bitcoind-docker/Dockerfile
           push: true
@@ -53,7 +53,7 @@ jobs:
             type=semver,pattern={{major}}.{{minor}}
             type=sha
       - name: Build and push xmpp-prosody-chat-server
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v6
         with:
           context: "{{defaultContext}}:docker/latest/full-tls-mutinynet/prosody"
           push: true
