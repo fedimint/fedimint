@@ -1818,7 +1818,7 @@ impl Gateway {
                 .create_invoice(CreateInvoiceRequest {
                     payment_hash: payment_hash.to_byte_array().to_vec(),
                     amount_msat: amount.msats,
-                    expiry: expiry_time,
+                    expiry_secs: expiry_time,
                     description: Some(Description::Direct(description)),
                 })
                 .await
@@ -1827,7 +1827,7 @@ impl Gateway {
                 .create_invoice(CreateInvoiceRequest {
                     payment_hash: payment_hash.to_byte_array().to_vec(),
                     amount_msat: amount.msats,
-                    expiry: expiry_time,
+                    expiry_secs: expiry_time,
                     description: Some(Description::Hash(hash.to_byte_array().to_vec())),
                 })
                 .await
