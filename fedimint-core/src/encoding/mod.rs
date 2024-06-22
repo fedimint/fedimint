@@ -287,7 +287,7 @@ macro_rules! impl_encode_decode_num_as_bigsize {
     ($num_type:ty) => {
         impl Encodable for $num_type {
             fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<usize, Error> {
-                BigSize(*self as u64).consensus_encode(writer)
+                BigSize(u64::from(*self)).consensus_encode(writer)
             }
         }
 
