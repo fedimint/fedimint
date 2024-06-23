@@ -10,31 +10,68 @@ use std::fmt;
 
 /// Module for creating `fedimintd` binary with custom modules
 use bitcoin::Network;
+use config::FedimintdClientConfig;
 use fedimint_core::core::{Decoder, ModuleInstanceId, ModuleKind};
-use fedimint_core::db::{
-    Database, DatabaseTransaction, DatabaseVersion, IDatabaseTransactionOpsCoreTyped,
-};
+use fedimint_core::db::DatabaseVersion;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::envs::BitcoinRpcConfig;
-use fedimint_core::module::{
-    ApiEndpoint, CommonModuleInit, CoreConsensusVersion, InputMeta, ModuleCommon,
-    ModuleConsensusVersion, ModuleInit, PeerHandle, ServerModuleInit, ServerModuleInitArgs,
-    SupportedModuleApiVersions, TransactionItemAmount, CORE_CONSENSUS_VERSION,
-};
+use fedimint_core::module::{CommonModuleInit, ModuleCommon, ModuleConsensusVersion, ModuleInit};
+use fedimint_core::secp256k1::PublicKey;
 use fedimint_core::util::SafeUrl;
-use fedimint_core::{
-    plugin_types_trait_impl_common, plugin_types_trait_impl_config, Amount, Amount,
-};
+use fedimint_core::{plugin_types_trait_impl_common, Amount};
 pub use fedimintd::*;
 use serde::{Deserialize, Serialize};
+use thiserror::Error;
 
 mod fedimintd;
 
+pub mod config;
 pub mod envs;
+
 use crate::envs::FM_PORT_ESPLORA_ENV;
 
 pub const KIND: ModuleKind = ModuleKind::from_static_str("fedimintd");
 pub const MODULE_CONSENSUS_VERSION: ModuleConsensusVersion = ModuleConsensusVersion::new(2, 0);
+
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable, Decodable)]
+pub struct FedimintdConsensusItem;
+
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
+pub struct FedimintdInput {
+    pub amount: Amount,
+    pub account: PublicKey,
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
+pub struct FedimintdOutput {
+    pub amount: Amount,
+    pub account: PublicKey,
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
+pub struct FedimintdOutputOutcome(pub Amount, pub PublicKey);
+
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Error, Encodable, Decodable)]
+pub enum FedimintdInputError {
+    #[error("Not enough funds")]
+    NotEnoughFunds,
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Error, Encodable, Decodable)]
+pub enum FedimintdOutputError {}
+
+pub struct FedimintdModuleTypes;
+
+plugin_types_trait_impl_common!(
+    FedimintdModuleTypes,
+    FedimintdClientConfig,
+    FedimintdInput,
+    FedimintdOutput,
+    FedimintdOutputOutcome,
+    FedimintdConsensusItem,
+    FedimintdInputError,
+    FedimintdOutputError
+);
 
 #[derive(Debug)]
 pub struct FedimintdInit;
@@ -69,81 +106,36 @@ impl CommonModuleInit for FedimintdCommonInit {
     }
 }
 
-// -------------------------------------------------------
-
 impl fmt::Display for FedimintdClientConfig {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "FedimintdClientConfig")
     }
 }
 
-// -------------------------------------------------------
-// config.rs
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct FedimintdGenParams {
-    pub local: FedimintdGenParamsLocal,
-    pub consensus: FedimintdGenParamsConsensus,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct FedimintdGenParamsLocal;
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct FedimintdGenParamsConsensus {
-    pub tx_fee: Amount,
-}
-
-impl Default for FedimintdGenParams {
-    fn default() -> Self {
-        Self {
-            local: FedimintdGenParamsLocal,
-            consensus: FedimintdGenParamsConsensus {
-                tx_fee: Amount::ZERO,
-            },
-        }
+impl fmt::Display for FedimintdInput {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "FedimintdInput")
     }
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct FedimintdConfig {
-    pub local: FedimintdConfigLocal,
-    pub private: FedimintdConfigPrivate,
-    pub consensus: FedimintdConfigConsensus,
+impl fmt::Display for FedimintdOutput {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "FedimintdOutput")
+    }
 }
 
-#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize, Encodable, Decodable, Hash)]
-pub struct FedimintdClientConfig {
-    /// Accessible to clients
-    pub tx_fee: Amount,
+impl fmt::Display for FedimintdOutputOutcome {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "FedimintdOutputOutcome")
+    }
 }
 
-/// Locally unencrypted config unique to each member
-#[derive(Clone, Debug, Serialize, Deserialize, Decodable, Encodable)]
-pub struct FedimintdConfigLocal;
-
-/// Will be the same for every federation member
-#[derive(Clone, Debug, Serialize, Deserialize, Decodable, Encodable)]
-pub struct FedimintdConfigConsensus {
-    /// Will be the same for all peers
-    pub tx_fee: Amount,
+impl fmt::Display for FedimintdConsensusItem {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "FedimintdConsensusItem")
+    }
 }
 
-/// Will be encrypted and not shared such as private key material
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct FedimintdConfigPrivate;
-
-plugin_types_trait_impl_config!(
-    FedimintdCommonInit,
-    FedimintdGenParams,
-    FedimintdGenParamsLocal,
-    FedimintdGenParamsConsensus,
-    FedimintdConfig,
-    FedimintdConfigLocal,
-    FedimintdConfigPrivate,
-    FedimintdConfigConsensus,
-    FedimintdClientConfig
-);
 // -------------------------------------------------------
 
 pub fn default_esplora_server(network: Network) -> BitcoinRpcConfig {
