@@ -1,11 +1,8 @@
 use std::{ffi, iter};
 
 use clap::Parser;
-use fedimint_api_client::api::FederationApiExt;
-use fedimint_core::module::ApiRequestErased;
 use fedimint_core::util::SafeUrl;
 use fedimint_core::PeerId;
-use fedimint_lnv2_common::endpoint_constants::{ADD_GATEWAY_ENDPOINT, REMOVE_GATEWAY_ENDPOINT};
 use serde::Serialize;
 
 use crate::api::LnFederationApi;
@@ -42,10 +39,7 @@ pub(crate) async fn handle_cli_command(
                 .clone()
                 .ok_or(anyhow::anyhow!("Admin auth not set"))?;
 
-            let is_new_entry: bool = lightning
-                .module_api
-                .request_admin(ADD_GATEWAY_ENDPOINT, ApiRequestErased::new(gateway), auth)
-                .await?;
+            let is_new_entry = lightning.module_api.add_gateway(auth, gateway).await?;
 
             Ok(serde_json::to_value(is_new_entry).expect("JSON serialization failed"))
         }
@@ -55,14 +49,7 @@ pub(crate) async fn handle_cli_command(
                 .clone()
                 .ok_or(anyhow::anyhow!("Admin auth not set"))?;
 
-            let entry_existed: bool = lightning
-                .module_api
-                .request_admin(
-                    REMOVE_GATEWAY_ENDPOINT,
-                    ApiRequestErased::new(gateway),
-                    auth,
-                )
-                .await?;
+            let entry_existed = lightning.module_api.remove_gateway(auth, gateway).await?;
 
             Ok(serde_json::to_value(entry_existed).expect("JSON serialization failed"))
         }
