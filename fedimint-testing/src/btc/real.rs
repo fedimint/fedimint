@@ -14,15 +14,9 @@ use fedimint_core::txoproof::TxOutProof;
 use fedimint_core::util::SafeUrl;
 use fedimint_core::{task, Amount};
 use fedimint_logging::LOG_TEST;
-use lazy_static::lazy_static;
 use tracing::{debug, trace};
 
 use crate::btc::BitcoinTest;
-
-lazy_static! {
-    /// Global lock we use to isolate tests that need exclusive control over shared `bitcoind`
-    static ref REAL_BITCOIN_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::new(());
-}
 
 /// Fixture implementing bitcoin node under test by talking to a `bitcoind` with
 /// no locking considerations.

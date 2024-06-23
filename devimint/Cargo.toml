@@ -40,9 +40,9 @@ fedimintd = { path = "../fedimintd" }
 fs-lock = "0.1.3"
 futures = { workspace = true }
 hex = { workspace = true }
-lazy_static = "1.5.0"
 ln-gateway = { package = "fedimint-ln-gateway", path = "../gateway/ln-gateway" }
 nix = { version = "0.29.0", features = ["signal"] }
+once_cell = { workspace = true }
 rand = { workspace = true }
 semver = { workspace = true }
 serde = { workspace = true }
