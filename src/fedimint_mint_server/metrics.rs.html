@@ -66,15 +66,20 @@
 <a href="#66" id="66">66</a>
 <a href="#67" id="67">67</a>
 <a href="#68" id="68">68</a>
+<a href="#69" id="69">69</a>
+<a href="#70" id="70">70</a>
+<a href="#71" id="71">71</a>
+<a href="#72" id="72">72</a>
+<a href="#73" id="73">73</a>
+<a href="#74" id="74">74</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>fedimint_metrics::prometheus::{
     register_histogram_vec_with_registry, register_histogram_with_registry,
 };
-<span class="kw">use </span>fedimint_metrics::{
-    histogram_opts, lazy_static, Histogram, HistogramVec, AMOUNTS_BUCKETS_SATS, REGISTRY,
-};
+<span class="kw">use </span>fedimint_metrics::{histogram_opts, Histogram, HistogramVec, AMOUNTS_BUCKETS_SATS, REGISTRY};
+<span class="kw">use </span>once_cell::sync::Lazy;
 
-<span class="macro">lazy_static!</span> {
-    <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">static </span><span class="kw-2">ref </span>MINT_INOUT_SATS: HistogramVec = <span class="macro">register_histogram_vec_with_registry!</span>(
+<span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">static </span>MINT_INOUT_SATS: Lazy&lt;HistogramVec&gt; = Lazy::new(|| {
+    <span class="macro">register_histogram_vec_with_registry!</span>(
         <span class="macro">histogram_opts!</span>(
             <span class="string">"mint_inout_sats"</span>,
             <span class="string">"Value of input/output e-cash notes in sats"</span>,
@@ -83,19 +88,22 @@
         <span class="kw-2">&amp;</span>[<span class="string">"direction"</span>],
         REGISTRY
     )
-    .unwrap();
-    <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">static </span><span class="kw-2">ref </span>MINT_INOUT_FEES_SATS: HistogramVec =
-        <span class="macro">register_histogram_vec_with_registry!</span>(
-            <span class="macro">histogram_opts!</span>(
-                <span class="string">"mint_inout_fees_sats"</span>,
-                <span class="string">"Value of input/output e-cash fees in sats"</span>,
-                AMOUNTS_BUCKETS_SATS.clone()
-            ),
-            <span class="kw-2">&amp;</span>[<span class="string">"direction"</span>],
-            REGISTRY
-        )
-        .unwrap();
-    <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">static </span><span class="kw-2">ref </span>MINT_REDEEMED_ECASH_SATS: Histogram = <span class="macro">register_histogram_with_registry!</span>(
+    .unwrap()
+});
+<span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">static </span>MINT_INOUT_FEES_SATS: Lazy&lt;HistogramVec&gt; = Lazy::new(|| {
+    <span class="macro">register_histogram_vec_with_registry!</span>(
+        <span class="macro">histogram_opts!</span>(
+            <span class="string">"mint_inout_fees_sats"</span>,
+            <span class="string">"Value of input/output e-cash fees in sats"</span>,
+            AMOUNTS_BUCKETS_SATS.clone()
+        ),
+        <span class="kw-2">&amp;</span>[<span class="string">"direction"</span>],
+        REGISTRY
+    )
+    .unwrap()
+});
+<span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">static </span>MINT_REDEEMED_ECASH_SATS: Lazy&lt;Histogram&gt; = Lazy::new(|| {
+    <span class="macro">register_histogram_with_registry!</span>(
         <span class="macro">histogram_opts!</span>(
             <span class="string">"mint_redeemed_ecash_sats"</span>,
             <span class="string">"Value of redeemed e-cash notes in sats (deprecated - prefer mint_inout_sats)"</span>,
@@ -103,9 +111,10 @@
         ),
         REGISTRY
     )
-    .unwrap();
-    <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">static </span><span class="kw-2">ref </span>MINT_REDEEMED_ECASH_FEES_SATS: Histogram =
-        <span class="macro">register_histogram_with_registry!</span>(
+    .unwrap()
+});
+<span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">static </span>MINT_REDEEMED_ECASH_FEES_SATS: Lazy&lt;Histogram&gt; = Lazy::new(|| {
+    <span class="macro">register_histogram_with_registry!</span>(
             <span class="macro">histogram_opts!</span>(
                 <span class="string">"mint_redeemed_ecash_fees_sats"</span>,
                 <span class="string">"Value of e-cash fees during reissue in sats (deprecated - prefer mint_inout_fees_sats)"</span>,
@@ -113,8 +122,10 @@
             ),
             REGISTRY
         )
-        .unwrap();
-    <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">static </span><span class="kw-2">ref </span>MINT_ISSUED_ECASH_SATS: Histogram = <span class="macro">register_histogram_with_registry!</span>(
+        .unwrap()
+});
+<span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">static </span>MINT_ISSUED_ECASH_SATS: Lazy&lt;Histogram&gt; = Lazy::new(|| {
+    <span class="macro">register_histogram_with_registry!</span>(
         <span class="macro">histogram_opts!</span>(
             <span class="string">"mint_issued_ecash_sats"</span>,
             <span class="string">"Value of issued e-cash notes in sats (deprecated - prefer mint_inout_sats)"</span>,
@@ -122,16 +133,17 @@
         ),
         REGISTRY
     )
-    .unwrap();
-    <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">static </span><span class="kw-2">ref </span>MINT_ISSUED_ECASH_FEES_SATS: Histogram =
-        <span class="macro">register_histogram_with_registry!</span>(
-            <span class="macro">histogram_opts!</span>(
-                <span class="string">"mint_issued_ecash_fees_sats"</span>,
-                <span class="string">"Value of e-cash fees during issue in sats (deprecated - prefer mint_inout_fees_sats)"</span>,
-                AMOUNTS_BUCKETS_SATS.clone()
-            ),
-            REGISTRY
-        )
-        .unwrap();
-}
+    .unwrap()
+});
+<span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">static </span>MINT_ISSUED_ECASH_FEES_SATS: Lazy&lt;Histogram&gt; = Lazy::new(|| {
+    <span class="macro">register_histogram_with_registry!</span>(
+        <span class="macro">histogram_opts!</span>(
+            <span class="string">"mint_issued_ecash_fees_sats"</span>,
+            <span class="string">"Value of e-cash fees during issue in sats (deprecated - prefer mint_inout_fees_sats)"</span>,
+            AMOUNTS_BUCKETS_SATS.clone()
+        ),
+        REGISTRY
+    )
+    .unwrap()
+});
 </code></pre></div></section></main></body></html>

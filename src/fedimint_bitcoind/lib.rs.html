@@ -316,7 +316,7 @@
 <span class="kw">use </span>fedimint_core::util::SafeUrl;
 <span class="kw">use </span>fedimint_core::{apply, async_trait_maybe_send, dyn_newtype_define, Feerate};
 <span class="kw">use </span>fedimint_logging::{LOG_BLOCKCHAIN, LOG_CORE};
-<span class="kw">use </span>lazy_static::lazy_static;
+<span class="kw">use </span>once_cell::sync::Lazy;
 <span class="kw">use </span>tracing::{debug, info};
 
 <span class="attr">#[cfg(feature = <span class="string">"bitcoincore-rpc"</span>)]
@@ -336,9 +336,9 @@
 </span><span class="kw">const </span>SIGNET_GENESIS_BLOCK_HASH: <span class="kw-2">&amp;</span>str =
     <span class="string">"00000008819873e925422c1ff0f99f7cc9bbb232af63a077a480a3633bee1ef6"</span>;
 
-<span class="macro">lazy_static!</span> {
-    <span class="doccomment">/// Global factories for creating bitcoin RPCs
-    </span><span class="kw">static </span><span class="kw-2">ref </span>BITCOIN_RPC_REGISTRY: Mutex&lt;BTreeMap&lt;String, DynBitcoindRpcFactory&gt;&gt; =
+<span class="doccomment">/// Global factories for creating bitcoin RPCs
+</span><span class="kw">static </span>BITCOIN_RPC_REGISTRY: Lazy&lt;Mutex&lt;BTreeMap&lt;String, DynBitcoindRpcFactory&gt;&gt;&gt; =
+    Lazy::new(|| {
         Mutex::new(BTreeMap::from([
             <span class="attr">#[cfg(feature = <span class="string">"esplora-client"</span>)]
             </span>(<span class="string">"esplora"</span>.to_string(), esplora::EsploraFactory.into()),
@@ -346,8 +346,8 @@
             </span>(<span class="string">"electrum"</span>.to_string(), electrum::ElectrumFactory.into()),
             <span class="attr">#[cfg(feature = <span class="string">"bitcoincore-rpc"</span>)]
             </span>(<span class="string">"bitcoind"</span>.to_string(), bitcoincore::BitcoindFactory.into()),
-        ]));
-}
+        ]))
+    });
 
 <span class="doccomment">/// Create a bitcoin RPC of a given kind
 </span><span class="kw">pub fn </span>create_bitcoind(config: <span class="kw-2">&amp;</span>BitcoinRpcConfig, handle: TaskHandle) -&gt; <span class="prelude-ty">Result</span>&lt;DynBitcoindRpc&gt; {

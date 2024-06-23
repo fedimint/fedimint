@@ -162,6 +162,28 @@
 <a href="#162" id="162">162</a>
 <a href="#163" id="163">163</a>
 <a href="#164" id="164">164</a>
+<a href="#165" id="165">165</a>
+<a href="#166" id="166">166</a>
+<a href="#167" id="167">167</a>
+<a href="#168" id="168">168</a>
+<a href="#169" id="169">169</a>
+<a href="#170" id="170">170</a>
+<a href="#171" id="171">171</a>
+<a href="#172" id="172">172</a>
+<a href="#173" id="173">173</a>
+<a href="#174" id="174">174</a>
+<a href="#175" id="175">175</a>
+<a href="#176" id="176">176</a>
+<a href="#177" id="177">177</a>
+<a href="#178" id="178">178</a>
+<a href="#179" id="179">179</a>
+<a href="#180" id="180">180</a>
+<a href="#181" id="181">181</a>
+<a href="#182" id="182">182</a>
+<a href="#183" id="183">183</a>
+<a href="#184" id="184">184</a>
+<a href="#185" id="185">185</a>
+<a href="#186" id="186">186</a>
 </pre></div><pre class="rust"><code><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">mod </span>jsonrpsee;
 
 <span class="kw">use </span>fedimint_core::backup::ClientBackupKeyPrefix;
@@ -175,42 +197,48 @@
     Histogram, REGISTRY,
 };
 <span class="kw">use </span>futures::StreamExt <span class="kw">as _</span>;
-<span class="kw">use </span>lazy_static::lazy_static;
+<span class="kw">use </span>once_cell::sync::Lazy;
 
-<span class="macro">lazy_static!</span> {
-    <span class="kw">pub static </span><span class="kw-2">ref </span>TX_ELEMS_BUCKETS: Vec&lt;f64&gt; =
-        <span class="macro">vec!</span>[<span class="number">1.0</span>, <span class="number">2.0</span>, <span class="number">5.0</span>, <span class="number">10.0</span>, <span class="number">20.0</span>, <span class="number">50.0</span>, <span class="number">100.0</span>, <span class="number">200.0</span>, <span class="number">500.0</span>, <span class="number">1000.0</span>, <span class="number">2000.0</span>, <span class="number">5000.0</span>,];
-    <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">static </span><span class="kw-2">ref </span>CONSENSUS_TX_PROCESSED_INPUTS: Histogram =
-        <span class="macro">register_histogram_with_registry!</span>(
-            <span class="macro">histogram_opts!</span>(
-                <span class="string">"consensus_tx_processed_inputs"</span>,
-                <span class="string">"Number of inputs processed in a transaction"</span>,
-                TX_ELEMS_BUCKETS.clone()
-            ),
-            REGISTRY
-        )
-        .unwrap();
-    <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">static </span><span class="kw-2">ref </span>CONSENSUS_TX_PROCESSED_OUTPUTS: Histogram =
-        <span class="macro">register_histogram_with_registry!</span>(
-            <span class="macro">histogram_opts!</span>(
-                <span class="string">"consensus_tx_processed_outputs"</span>,
-                <span class="string">"Number of outputs processed in a transaction"</span>,
-                TX_ELEMS_BUCKETS.clone()
-            ),
-            REGISTRY
-        )
-        .unwrap();
-    <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">static </span><span class="kw-2">ref </span>CONSENSUS_ITEMS_PROCESSED_TOTAL: IntCounterVec =
-        <span class="macro">register_int_counter_vec_with_registry!</span>(
-            <span class="macro">opts!</span>(
-                <span class="string">"consensus_items_processed_total"</span>,
-                <span class="string">"Number of consensus items processed in the consensus"</span>,
-            ),
-            <span class="kw-2">&amp;</span>[<span class="string">"peer_id"</span>],
-            REGISTRY
-        )
-        .unwrap();
-    <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">static </span><span class="kw-2">ref </span>CONSENSUS_ITEM_PROCESSING_DURATION_SECONDS: HistogramVec =
+<span class="kw">pub static </span>TX_ELEMS_BUCKETS: Lazy&lt;Vec&lt;f64&gt;&gt; = Lazy::new(|| {
+    <span class="macro">vec!</span>[
+        <span class="number">1.0</span>, <span class="number">2.0</span>, <span class="number">5.0</span>, <span class="number">10.0</span>, <span class="number">20.0</span>, <span class="number">50.0</span>, <span class="number">100.0</span>, <span class="number">200.0</span>, <span class="number">500.0</span>, <span class="number">1000.0</span>, <span class="number">2000.0</span>, <span class="number">5000.0</span>,
+    ]
+});
+<span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">static </span>CONSENSUS_TX_PROCESSED_INPUTS: Lazy&lt;Histogram&gt; = Lazy::new(|| {
+    <span class="macro">register_histogram_with_registry!</span>(
+        <span class="macro">histogram_opts!</span>(
+            <span class="string">"consensus_tx_processed_inputs"</span>,
+            <span class="string">"Number of inputs processed in a transaction"</span>,
+            TX_ELEMS_BUCKETS.clone()
+        ),
+        REGISTRY
+    )
+    .unwrap()
+});
+<span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">static </span>CONSENSUS_TX_PROCESSED_OUTPUTS: Lazy&lt;Histogram&gt; = Lazy::new(|| {
+    <span class="macro">register_histogram_with_registry!</span>(
+        <span class="macro">histogram_opts!</span>(
+            <span class="string">"consensus_tx_processed_outputs"</span>,
+            <span class="string">"Number of outputs processed in a transaction"</span>,
+            TX_ELEMS_BUCKETS.clone()
+        ),
+        REGISTRY
+    )
+    .unwrap()
+});
+<span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">static </span>CONSENSUS_ITEMS_PROCESSED_TOTAL: Lazy&lt;IntCounterVec&gt; = Lazy::new(|| {
+    <span class="macro">register_int_counter_vec_with_registry!</span>(
+        <span class="macro">opts!</span>(
+            <span class="string">"consensus_items_processed_total"</span>,
+            <span class="string">"Number of consensus items processed in the consensus"</span>,
+        ),
+        <span class="kw-2">&amp;</span>[<span class="string">"peer_id"</span>],
+        REGISTRY
+    )
+    .unwrap()
+});
+<span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">static </span>CONSENSUS_ITEM_PROCESSING_DURATION_SECONDS: Lazy&lt;HistogramVec&gt; =
+    Lazy::new(|| {
         <span class="macro">register_histogram_vec_with_registry!</span>(
             <span class="macro">histogram_opts!</span>(
                 <span class="string">"consensus_item_processing_duration_seconds"</span>,
@@ -219,8 +247,10 @@
             <span class="kw-2">&amp;</span>[<span class="string">"peer_id"</span>],
             REGISTRY
         )
-        .unwrap();
-    <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">static </span><span class="kw-2">ref </span>CONSENSUS_ITEM_PROCESSING_MODULE_AUDIT_DURATION_SECONDS: HistogramVec =
+        .unwrap()
+    });
+<span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">static </span>CONSENSUS_ITEM_PROCESSING_MODULE_AUDIT_DURATION_SECONDS: Lazy&lt;HistogramVec&gt; =
+    Lazy::new(|| {
         <span class="macro">register_histogram_vec_with_registry!</span>(
             <span class="macro">histogram_opts!</span>(
                 <span class="string">"consensus_item_processing_module_audit_duration_seconds"</span>,
@@ -229,46 +259,53 @@
             <span class="kw-2">&amp;</span>[<span class="string">"module_id"</span>, <span class="string">"module_kind"</span>],
             REGISTRY
         )
-        .unwrap();
-    <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">static </span><span class="kw-2">ref </span>JSONRPC_API_REQUEST_DURATION_SECONDS: HistogramVec =
-        <span class="macro">register_histogram_vec_with_registry!</span>(
-            <span class="macro">histogram_opts!</span>(
-                <span class="string">"jsonrpc_api_request_duration_seconds"</span>,
-                <span class="string">"Duration of processing an rpc request"</span>,
-            ),
-            <span class="kw-2">&amp;</span>[<span class="string">"method"</span>],
-            REGISTRY
-        )
-        .unwrap();
-    <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">static </span><span class="kw-2">ref </span>JSONRPC_API_REQUEST_RESPONSE_CODE: IntCounterVec =
-        <span class="macro">register_int_counter_vec_with_registry!</span>(
-            <span class="macro">opts!</span>(
-                <span class="string">"jsonrpc_api_request_response_code_total"</span>,
-                <span class="string">"Count of response counts and types"</span>,
-            ),
-            <span class="kw-2">&amp;</span>[<span class="string">"method"</span>, <span class="string">"code"</span>, <span class="string">"type"</span>],
-            REGISTRY
-        )
-        .unwrap();
-    <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">static </span><span class="kw-2">ref </span>CONSENSUS_SESSION_COUNT: IntGauge = <span class="macro">register_int_gauge_with_registry!</span>(
+        .unwrap()
+    });
+<span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">static </span>JSONRPC_API_REQUEST_DURATION_SECONDS: Lazy&lt;HistogramVec&gt; = Lazy::new(|| {
+    <span class="macro">register_histogram_vec_with_registry!</span>(
+        <span class="macro">histogram_opts!</span>(
+            <span class="string">"jsonrpc_api_request_duration_seconds"</span>,
+            <span class="string">"Duration of processing an rpc request"</span>,
+        ),
+        <span class="kw-2">&amp;</span>[<span class="string">"method"</span>],
+        REGISTRY
+    )
+    .unwrap()
+});
+<span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">static </span>JSONRPC_API_REQUEST_RESPONSE_CODE: Lazy&lt;IntCounterVec&gt; = Lazy::new(|| {
+    <span class="macro">register_int_counter_vec_with_registry!</span>(
+        <span class="macro">opts!</span>(
+            <span class="string">"jsonrpc_api_request_response_code_total"</span>,
+            <span class="string">"Count of response counts and types"</span>,
+        ),
+        <span class="kw-2">&amp;</span>[<span class="string">"method"</span>, <span class="string">"code"</span>, <span class="string">"type"</span>],
+        REGISTRY
+    )
+    .unwrap()
+});
+<span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">static </span>CONSENSUS_SESSION_COUNT: Lazy&lt;IntGauge&gt; = Lazy::new(|| {
+    <span class="macro">register_int_gauge_with_registry!</span>(
         <span class="macro">opts!</span>(
             <span class="string">"consensus_session_count"</span>,
             <span class="string">"Fedimint consensus session count"</span>,
         ),
         REGISTRY
     )
-    .unwrap();
-    <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">static </span><span class="kw-2">ref </span>CONSENSUS_PEER_CONTRIBUTION_SESSION_IDX: IntGaugeVec =
-        <span class="macro">register_int_gauge_vec_with_registry!</span>(
-            <span class="macro">opts!</span>(
-                <span class="string">"consensus_peer_contribution_session_idx"</span>,
-                <span class="string">"Latest contribution session idx by peer_id"</span>,
-            ),
-            <span class="kw-2">&amp;</span>[<span class="string">"self_id"</span>, <span class="string">"peer_id"</span>],
-            REGISTRY
-        )
-        .unwrap();
-    <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">static </span><span class="kw-2">ref </span>BACKUP_WRITE_SIZE_BYTES: Histogram = <span class="macro">register_histogram_with_registry!</span>(
+    .unwrap()
+});
+<span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">static </span>CONSENSUS_PEER_CONTRIBUTION_SESSION_IDX: Lazy&lt;IntGaugeVec&gt; = Lazy::new(|| {
+    <span class="macro">register_int_gauge_vec_with_registry!</span>(
+        <span class="macro">opts!</span>(
+            <span class="string">"consensus_peer_contribution_session_idx"</span>,
+            <span class="string">"Latest contribution session idx by peer_id"</span>,
+        ),
+        <span class="kw-2">&amp;</span>[<span class="string">"self_id"</span>, <span class="string">"peer_id"</span>],
+        REGISTRY
+    )
+    .unwrap()
+});
+<span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">static </span>BACKUP_WRITE_SIZE_BYTES: Lazy&lt;Histogram&gt; = Lazy::new(|| {
+    <span class="macro">register_histogram_with_registry!</span>(
         <span class="macro">histogram_opts!</span>(
             <span class="string">"backup_write_size_bytes"</span>,
             <span class="string">"Size of every backup being written"</span>,
@@ -276,43 +313,50 @@
         ),
         REGISTRY
     )
-    .unwrap();
-    <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">static </span><span class="kw-2">ref </span>STORED_BACKUPS_COUNT: IntGauge = <span class="macro">register_int_gauge_with_registry!</span>(
+    .unwrap()
+});
+<span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">static </span>STORED_BACKUPS_COUNT: Lazy&lt;IntGauge&gt; = Lazy::new(|| {
+    <span class="macro">register_int_gauge_with_registry!</span>(
         <span class="macro">opts!</span>(<span class="string">"stored_backups_count"</span>, <span class="string">"Total amount of backups stored"</span>,),
         REGISTRY
     )
-    .unwrap();
-    <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">static </span><span class="kw-2">ref </span>PEER_CONNECT_COUNT: IntCounterVec =
-        <span class="macro">register_int_counter_vec_with_registry!</span>(
-            <span class="macro">opts!</span>(<span class="string">"peer_connect_total"</span>, <span class="string">"Number of times peer (re/)connected"</span>,),
-            <span class="kw-2">&amp;</span>[<span class="string">"self_id"</span>, <span class="string">"peer_id"</span>, <span class="string">"direction"</span>],
-            REGISTRY
-        )
-        .unwrap();
-    <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">static </span><span class="kw-2">ref </span>PEER_DISCONNECT_COUNT: IntCounterVec =
-        <span class="macro">register_int_counter_vec_with_registry!</span>(
-            <span class="macro">opts!</span>(
-                <span class="string">"peer_disconnect_total"</span>,
-                <span class="string">"Number of times peer (re/)connected"</span>,
-            ),
-            <span class="kw-2">&amp;</span>[<span class="string">"self_id"</span>, <span class="string">"peer_id"</span>],
-            REGISTRY
-        )
-        .unwrap();
-    <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">static </span><span class="kw-2">ref </span>PEER_MESSAGES_COUNT: IntCounterVec =
-        <span class="macro">register_int_counter_vec_with_registry!</span>(
-            <span class="macro">opts!</span>(<span class="string">"peer_messages_total"</span>, <span class="string">"Messages with the peer"</span>,),
-            <span class="kw-2">&amp;</span>[<span class="string">"self_id"</span>, <span class="string">"peer_id"</span>, <span class="string">"direction"</span>],
-            REGISTRY
-        )
-        .unwrap();
-    <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">static </span><span class="kw-2">ref </span>PEER_BANS_COUNT: IntCounterVec = <span class="macro">register_int_counter_vec_with_registry!</span>(
+    .unwrap()
+});
+<span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">static </span>PEER_CONNECT_COUNT: Lazy&lt;IntCounterVec&gt; = Lazy::new(|| {
+    <span class="macro">register_int_counter_vec_with_registry!</span>(
+        <span class="macro">opts!</span>(<span class="string">"peer_connect_total"</span>, <span class="string">"Number of times peer (re/)connected"</span>,),
+        <span class="kw-2">&amp;</span>[<span class="string">"self_id"</span>, <span class="string">"peer_id"</span>, <span class="string">"direction"</span>],
+        REGISTRY
+    )
+    .unwrap()
+});
+<span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">static </span>PEER_DISCONNECT_COUNT: Lazy&lt;IntCounterVec&gt; = Lazy::new(|| {
+    <span class="macro">register_int_counter_vec_with_registry!</span>(
+        <span class="macro">opts!</span>(
+            <span class="string">"peer_disconnect_total"</span>,
+            <span class="string">"Number of times peer (re/)connected"</span>,
+        ),
+        <span class="kw-2">&amp;</span>[<span class="string">"self_id"</span>, <span class="string">"peer_id"</span>],
+        REGISTRY
+    )
+    .unwrap()
+});
+<span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">static </span>PEER_MESSAGES_COUNT: Lazy&lt;IntCounterVec&gt; = Lazy::new(|| {
+    <span class="macro">register_int_counter_vec_with_registry!</span>(
+        <span class="macro">opts!</span>(<span class="string">"peer_messages_total"</span>, <span class="string">"Messages with the peer"</span>,),
+        <span class="kw-2">&amp;</span>[<span class="string">"self_id"</span>, <span class="string">"peer_id"</span>, <span class="string">"direction"</span>],
+        REGISTRY
+    )
+    .unwrap()
+});
+<span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">static </span>PEER_BANS_COUNT: Lazy&lt;IntCounterVec&gt; = Lazy::new(|| {
+    <span class="macro">register_int_counter_vec_with_registry!</span>(
         <span class="macro">opts!</span>(<span class="string">"peer_bans_total"</span>, <span class="string">"Peer bans"</span>,),
         <span class="kw-2">&amp;</span>[<span class="string">"self_id"</span>, <span class="string">"peer_id"</span>],
         REGISTRY
     )
-    .unwrap();
-}
+    .unwrap()
+});
 
 <span class="doccomment">/// Initialize gauges or other metrics that need eager initialization on start,
 /// e.g. because they are triggered infrequently.

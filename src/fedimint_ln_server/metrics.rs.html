@@ -30,28 +30,38 @@
 <a href="#30" id="30">30</a>
 <a href="#31" id="31">31</a>
 <a href="#32" id="32">32</a>
+<a href="#33" id="33">33</a>
+<a href="#34" id="34">34</a>
+<a href="#35" id="35">35</a>
+<a href="#36" id="36">36</a>
+<a href="#37" id="37">37</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>fedimint_metrics::prometheus::{
     register_histogram_vec_with_registry, register_int_counter_with_registry,
 };
 <span class="kw">use </span>fedimint_metrics::{
-    histogram_opts, lazy_static, opts, HistogramVec, IntCounter, AMOUNTS_BUCKETS_SATS, REGISTRY,
+    histogram_opts, opts, HistogramVec, IntCounter, AMOUNTS_BUCKETS_SATS, REGISTRY,
 };
+<span class="kw">use </span>once_cell::sync::Lazy;
 
-<span class="macro">lazy_static!</span> {
-    <span class="kw">pub static </span><span class="kw-2">ref </span>LN_INCOMING_OFFER: IntCounter = <span class="macro">register_int_counter_with_registry!</span>(
+<span class="kw">pub static </span>LN_INCOMING_OFFER: Lazy&lt;IntCounter&gt; = Lazy::new(|| {
+    <span class="macro">register_int_counter_with_registry!</span>(
         <span class="macro">opts!</span>(<span class="string">"ln_incoming_offer_total"</span>, <span class="string">"Incoming payment offer"</span>),
         REGISTRY
     )
-    .unwrap();
-    <span class="kw">pub static </span><span class="kw-2">ref </span>LN_CANCEL_OUTGOING_CONTRACTS: IntCounter = <span class="macro">register_int_counter_with_registry!</span>(
+    .unwrap()
+});
+<span class="kw">pub static </span>LN_CANCEL_OUTGOING_CONTRACTS: Lazy&lt;IntCounter&gt; = Lazy::new(|| {
+    <span class="macro">register_int_counter_with_registry!</span>(
         <span class="macro">opts!</span>(
             <span class="string">"ln_canceled_outgoing_contract_total"</span>,
             <span class="string">"Canceled outgoing contract"
         </span>),
         REGISTRY
     )
-    .unwrap();
-    <span class="kw">pub static </span><span class="kw-2">ref </span>LN_FUNDED_CONTRACT_SATS: HistogramVec = <span class="macro">register_histogram_vec_with_registry!</span>(
+    .unwrap()
+});
+<span class="kw">pub static </span>LN_FUNDED_CONTRACT_SATS: Lazy&lt;HistogramVec&gt; = Lazy::new(|| {
+    <span class="macro">register_histogram_vec_with_registry!</span>(
         <span class="macro">histogram_opts!</span>(
             <span class="string">"ln_funded_contract_sats"</span>,
             <span class="string">"Funded (with outgoing or incoming direction) contract amount in sats"</span>,
@@ -60,6 +70,6 @@
         <span class="kw-2">&amp;</span>[<span class="string">"direction"</span>],
         REGISTRY
     )
-    .unwrap();
-}
+    .unwrap()
+});
 </code></pre></div></section></main></body></html>

@@ -309,12 +309,6 @@
 <a href="#309" id="309">309</a>
 <a href="#310" id="310">310</a>
 <a href="#311" id="311">311</a>
-<a href="#312" id="312">312</a>
-<a href="#313" id="313">313</a>
-<a href="#314" id="314">314</a>
-<a href="#315" id="315">315</a>
-<a href="#316" id="316">316</a>
-<a href="#317" id="317">317</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::io::Cursor;
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
@@ -331,15 +325,9 @@
 <span class="kw">use </span>fedimint_core::util::SafeUrl;
 <span class="kw">use </span>fedimint_core::{task, Amount};
 <span class="kw">use </span>fedimint_logging::LOG_TEST;
-<span class="kw">use </span>lazy_static::lazy_static;
 <span class="kw">use </span>tracing::{debug, trace};
 
 <span class="kw">use </span><span class="kw">crate</span>::btc::BitcoinTest;
-
-<span class="macro">lazy_static!</span> {
-    <span class="doccomment">/// Global lock we use to isolate tests that need exclusive control over shared `bitcoind`
-    </span><span class="kw">static </span><span class="kw-2">ref </span>REAL_BITCOIN_LOCK: tokio::sync::Mutex&lt;()&gt; = tokio::sync::Mutex::new(());
-}
 
 <span class="doccomment">/// Fixture implementing bitcoin node under test by talking to a `bitcoind` with
 /// no locking considerations.

@@ -71,6 +71,8 @@
 <a href="#71" id="71">71</a>
 <a href="#72" id="72">72</a>
 <a href="#73" id="73">73</a>
+<a href="#74" id="74">74</a>
+<a href="#75" id="75">75</a>
 </pre></div><pre class="rust"><code><span class="attr">#![warn(clippy::pedantic)]
 #![allow(clippy::missing_errors_doc)]
 
@@ -80,7 +82,7 @@
 <span class="kw">use </span>axum::routing::get;
 <span class="kw">use </span>axum::Router;
 <span class="kw">use </span>fedimint_core::task::{TaskGroup, TaskShutdownToken};
-<span class="kw">pub use </span>lazy_static::lazy_static;
+<span class="kw">pub use </span>once_cell::sync::Lazy;
 <span class="kw">use </span>prometheus::Registry;
 <span class="kw">pub use </span>prometheus::{
     <span class="self">self</span>, histogram_opts, opts, register_histogram_with_registry,
@@ -90,9 +92,11 @@
 <span class="kw">use </span>tokio::net::TcpListener;
 <span class="kw">use </span>tracing::error;
 
-<span class="macro">lazy_static!</span> {
-    <span class="kw">pub static </span><span class="kw-2">ref </span>REGISTRY: Registry = Registry::new_custom(<span class="prelude-val">Some</span>(<span class="string">"fm"</span>.into()), <span class="prelude-val">None</span>).unwrap();
-    <span class="kw">pub static </span><span class="kw-2">ref </span>AMOUNTS_BUCKETS_SATS: Vec&lt;f64&gt; = <span class="macro">vec!</span>[
+<span class="kw">pub static </span>REGISTRY: Lazy&lt;Registry&gt; =
+    Lazy::new(|| Registry::new_custom(<span class="prelude-val">Some</span>(<span class="string">"fm"</span>.into()), <span class="prelude-val">None</span>).unwrap());
+
+<span class="kw">pub static </span>AMOUNTS_BUCKETS_SATS: Lazy&lt;Vec&lt;f64&gt;&gt; = Lazy::new(|| {
+    <span class="macro">vec!</span>[
         <span class="number">0.0</span>,
         <span class="number">0.1</span>,
         <span class="number">1.0</span>,
@@ -103,9 +107,9 @@
         <span class="number">100_000.0</span>,
         <span class="number">1_000_000.0</span>,
         <span class="number">10_000_000.0</span>,
-        <span class="number">100_000_000.0
-    </span>];
-}
+        <span class="number">100_000_000.0</span>,
+    ]
+});
 
 <span class="kw">async fn </span>get_metrics() -&gt; (StatusCode, String) {
     <span class="kw">let </span>metric_families = REGISTRY.gather();

@@ -12,18 +12,28 @@
 <a href="#12" id="12">12</a>
 <a href="#13" id="13">13</a>
 <a href="#14" id="14">14</a>
+<a href="#15" id="15">15</a>
+<a href="#16" id="16">16</a>
+<a href="#17" id="17">17</a>
+<a href="#18" id="18">18</a>
+<a href="#19" id="19">19</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>fedimint_metrics::prometheus::{register_int_gauge_vec_with_registry, IntGaugeVec};
-<span class="kw">use </span>fedimint_metrics::{lazy_static, opts, REGISTRY};
+<span class="kw">use </span>fedimint_metrics::{opts, REGISTRY};
+<span class="kw">use </span>once_cell::sync::Lazy;
 
-<span class="macro">lazy_static!</span> {
-    <span class="comment">// Note: we can't really use a counter for monitoring restarts of the application
-    // because such timer would always equal 1, and Prometheus would never actually add
-    // it up. But what we can do is to use a gauge with a timestamp, and then detect every time it changes.
-    </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">static </span><span class="kw-2">ref </span>APP_START_TS: IntGaugeVec = <span class="macro">register_int_gauge_vec_with_registry!</span>(
-        <span class="macro">opts!</span>(<span class="string">"app_start_ts"</span>, <span class="string">"Unix timestamp of the application time with version labels"</span>),
+<span class="comment">// Note: we can't really use a counter for monitoring restarts of the
+// application because such timer would always equal 1, and Prometheus would
+// never actually add it up. But what we can do is to use a gauge with a
+// timestamp, and then detect every time it changes.
+</span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">static </span>APP_START_TS: Lazy&lt;IntGaugeVec&gt; = Lazy::new(|| {
+    <span class="macro">register_int_gauge_vec_with_registry!</span>(
+        <span class="macro">opts!</span>(
+            <span class="string">"app_start_ts"</span>,
+            <span class="string">"Unix timestamp of the application time with version labels"
+        </span>),
         <span class="kw-2">&amp;</span>[<span class="string">"version"</span>, <span class="string">"version_hash"</span>],
         REGISTRY
     )
-    .unwrap();
-}
+    .unwrap()
+});
 </code></pre></div></section></main></body></html>

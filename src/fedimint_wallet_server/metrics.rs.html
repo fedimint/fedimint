@@ -73,16 +73,29 @@
 <a href="#73" id="73">73</a>
 <a href="#74" id="74">74</a>
 <a href="#75" id="75">75</a>
+<a href="#76" id="76">76</a>
+<a href="#77" id="77">77</a>
+<a href="#78" id="78">78</a>
+<a href="#79" id="79">79</a>
+<a href="#80" id="80">80</a>
+<a href="#81" id="81">81</a>
+<a href="#82" id="82">82</a>
+<a href="#83" id="83">83</a>
+<a href="#84" id="84">84</a>
+<a href="#85" id="85">85</a>
+<a href="#86" id="86">86</a>
+<a href="#87" id="87">87</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>fedimint_metrics::prometheus::{
     register_histogram_vec_with_registry, register_int_gauge_with_registry, IntGauge,
 };
 <span class="kw">use </span>fedimint_metrics::{
-    histogram_opts, lazy_static, opts, register_histogram_with_registry, Histogram, HistogramVec,
+    histogram_opts, opts, register_histogram_with_registry, Histogram, HistogramVec,
     AMOUNTS_BUCKETS_SATS, REGISTRY,
 };
+<span class="kw">use </span>once_cell::sync::Lazy;
 
-<span class="macro">lazy_static!</span> {
-    <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">static </span><span class="kw-2">ref </span>WALLET_INOUT_SATS: HistogramVec = <span class="macro">register_histogram_vec_with_registry!</span>(
+<span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">static </span>WALLET_INOUT_SATS: Lazy&lt;HistogramVec&gt; = Lazy::new(|| {
+    <span class="macro">register_histogram_vec_with_registry!</span>(
         <span class="macro">histogram_opts!</span>(
             <span class="string">"wallet_inout_sats"</span>,
             <span class="string">"Value of wallet input/out in sats"</span>,
@@ -91,19 +104,22 @@
         <span class="kw-2">&amp;</span>[<span class="string">"direction"</span>],
         REGISTRY
     )
-    .unwrap();
-    <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">static </span><span class="kw-2">ref </span>WALLET_INOUT_FEES_SATS: HistogramVec =
-        <span class="macro">register_histogram_vec_with_registry!</span>(
-            <span class="macro">histogram_opts!</span>(
-                <span class="string">"wallet_inout_fees_sats"</span>,
-                <span class="string">"Value of wallet input/output fees in sats"</span>,
-                AMOUNTS_BUCKETS_SATS.clone()
-            ),
-            <span class="kw-2">&amp;</span>[<span class="string">"direction"</span>],
-            REGISTRY
-        )
-        .unwrap();
-    <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">static </span><span class="kw-2">ref </span>WALLET_PEGIN_SATS: Histogram = <span class="macro">register_histogram_with_registry!</span>(
+    .unwrap()
+});
+<span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">static </span>WALLET_INOUT_FEES_SATS: Lazy&lt;HistogramVec&gt; = Lazy::new(|| {
+    <span class="macro">register_histogram_vec_with_registry!</span>(
+        <span class="macro">histogram_opts!</span>(
+            <span class="string">"wallet_inout_fees_sats"</span>,
+            <span class="string">"Value of wallet input/output fees in sats"</span>,
+            AMOUNTS_BUCKETS_SATS.clone()
+        ),
+        <span class="kw-2">&amp;</span>[<span class="string">"direction"</span>],
+        REGISTRY
+    )
+    .unwrap()
+});
+<span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">static </span>WALLET_PEGIN_SATS: Lazy&lt;Histogram&gt; = Lazy::new(|| {
+    <span class="macro">register_histogram_with_registry!</span>(
         <span class="macro">histogram_opts!</span>(
             <span class="string">"wallet_pegin_sats"</span>,
             <span class="string">"Value of peg-in transactions in sats (deprecated - prefer wallet_inout_sats)"</span>,
@@ -111,8 +127,10 @@
         ),
         REGISTRY
     )
-    .unwrap();
-    <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">static </span><span class="kw-2">ref </span>WALLET_PEGIN_FEES_SATS: Histogram = <span class="macro">register_histogram_with_registry!</span>(
+    .unwrap()
+});
+<span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">static </span>WALLET_PEGIN_FEES_SATS: Lazy&lt;Histogram&gt; = Lazy::new(|| {
+    <span class="macro">register_histogram_with_registry!</span>(
         <span class="macro">histogram_opts!</span>(
             <span class="string">"wallet_pegin_fees_sats"</span>,
             <span class="string">"Value of peg-in fees in sats (deprecated - prefer wallet_inout_fees_sats)"</span>,
@@ -120,8 +138,10 @@
         ),
         REGISTRY
     )
-    .unwrap();
-    <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">static </span><span class="kw-2">ref </span>WALLET_PEGOUT_SATS: Histogram = <span class="macro">register_histogram_with_registry!</span>(
+    .unwrap()
+});
+<span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">static </span>WALLET_PEGOUT_SATS: Lazy&lt;Histogram&gt; = Lazy::new(|| {
+    <span class="macro">register_histogram_with_registry!</span>(
         <span class="macro">histogram_opts!</span>(
             <span class="string">"wallet_pegout_sats"</span>,
             <span class="string">"Value of peg-out transactions in sats (deprecated - prefer wallet_inout_sats)"</span>,
@@ -129,8 +149,10 @@
         ),
         REGISTRY
     )
-    .unwrap();
-    <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">static </span><span class="kw-2">ref </span>WALLET_PEGOUT_FEES_SATS: Histogram = <span class="macro">register_histogram_with_registry!</span>(
+    .unwrap()
+});
+<span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">static </span>WALLET_PEGOUT_FEES_SATS: Lazy&lt;Histogram&gt; = Lazy::new(|| {
+    <span class="macro">register_histogram_with_registry!</span>(
         <span class="macro">histogram_opts!</span>(
             <span class="string">"wallet_pegout_fees_sats"</span>,
             <span class="string">"Value of peg-out fees in sats (deprecated - prefer wallet_inout_fees_sats)"</span>,
@@ -138,14 +160,16 @@
         ),
         REGISTRY
     )
-    .unwrap();
-    <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">static </span><span class="kw-2">ref </span>WALLET_BLOCK_COUNT: IntGauge = <span class="macro">register_int_gauge_with_registry!</span>(
+    .unwrap()
+});
+<span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">static </span>WALLET_BLOCK_COUNT: Lazy&lt;IntGauge&gt; = Lazy::new(|| {
+    <span class="macro">register_int_gauge_with_registry!</span>(
         <span class="macro">opts!</span>(
             <span class="string">"wallet_block_count"</span>,
             <span class="string">"Blockchain block count as monitored by wallet module"</span>,
         ),
         REGISTRY
     )
-    .unwrap();
-}
+    .unwrap()
+});
 </code></pre></div></section></main></body></html>

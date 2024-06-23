@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"struct":["APP_START_TS"]};
+window.SIDEBAR_ITEMS = {"static":["APP_START_TS"]};
