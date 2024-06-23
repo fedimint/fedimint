@@ -35,7 +35,7 @@ hex = { version = "0.4.3", features = ["serde"] }
 thiserror = { workspace = true }
 tracing = { workspace = true }
 threshold_crypto = { workspace = true }
-url = { version = "2.5.1", features = ["serde"] }
+url = { version = "2.5.2", features = ["serde"] }
 bitcoin29 = { package = "bitcoin", version = "0.29.2", features = ["rand", "serde"] }
 bitcoin = { workspace = true }
 bitcoin_hashes = { workspace = true }

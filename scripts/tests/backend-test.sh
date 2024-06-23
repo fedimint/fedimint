@@ -62,7 +62,7 @@ function run_tests() {
     >&2 echo "### Testing against bitcoind for ln-gateway"
 
     # since it's being ran serially, these tests take a while, so we split them into two
-    # parts that test-ci-alll runs in parallel
+    # parts that test-ci-all runs in parallel
 
     if [ -z "${FM_BITCOIND_GW_TEST_ONLY:-}" ] || [ "${FM_BITCOIND_GW_TEST_ONLY:-}" = "gateway-client" ]; then
       cargo nextest run --locked --workspace --all-targets \

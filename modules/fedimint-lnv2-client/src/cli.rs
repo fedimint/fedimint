@@ -1,14 +1,13 @@
 use std::{ffi, iter};
 
 use clap::Parser;
-use fedimint_core::api::FederationApiExt;
-use fedimint_core::endpoint_constants::{
-    ADD_GATEWAY_ENDPOINT, GATEWAYS_ENDPOINT, REMOVE_GATEWAY_ENDPOINT,
-};
+use fedimint_api_client::api::FederationApiExt;
 use fedimint_core::module::ApiRequestErased;
 use fedimint_core::util::SafeUrl;
+use fedimint_lnv2_common::endpoint_constants::{
+    ADD_GATEWAY_ENDPOINT, GATEWAYS_ENDPOINT, REMOVE_GATEWAY_ENDPOINT,
+};
 use serde::Serialize;
-use serde_json::Value;
 
 use crate::LightningClientModule;
 
@@ -35,12 +34,12 @@ pub(crate) async fn handle_cli_command(
                 .clone()
                 .ok_or(anyhow::anyhow!("Admin auth not set"))?;
 
-            let is_new_entry = lightning
+            let is_new_entry: bool = lightning
                 .module_api
                 .request_admin(ADD_GATEWAY_ENDPOINT, ApiRequestErased::new(gateway), auth)
                 .await?;
 
-            Ok(Value::Bool(is_new_entry))
+            Ok(serde_json::to_value(is_new_entry).expect("JSON serialization failed"))
         }
         Opts::Remove { gateway } => {
             let auth = lightning
@@ -48,7 +47,7 @@ pub(crate) async fn handle_cli_command(
                 .clone()
                 .ok_or(anyhow::anyhow!("Admin auth not set"))?;
 
-            let entry_existed = lightning
+            let entry_existed: bool = lightning
                 .module_api
                 .request_admin(
                     REMOVE_GATEWAY_ENDPOINT,
@@ -57,7 +56,7 @@ pub(crate) async fn handle_cli_command(
                 )
                 .await?;
 
-            Ok(Value::Bool(entry_existed))
+            Ok(serde_json::to_value(entry_existed).expect("JSON serialization failed"))
         }
         Opts::List => {
             let gateways = lightning
@@ -66,12 +65,9 @@ pub(crate) async fn handle_cli_command(
                     GATEWAYS_ENDPOINT,
                     ApiRequestErased::default(),
                 )
-                .await?
-                .iter()
-                .map(|gateway| Value::String(gateway.to_string()))
-                .collect::<Vec<Value>>();
+                .await?;
 
-            Ok(Value::Array(gateways))
+            Ok(serde_json::to_value(gateways).expect("JSON serialization failed"))
         }
     }
 }

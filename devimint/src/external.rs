@@ -677,18 +677,12 @@ pub async fn open_channel_between_gateways(
     let gw_lnd = gw_lnd.get_try().await?.deref().clone();
     let gw_cln = gw_cln.get_try().await?.deref().clone();
 
-    debug!(target: LOG_DEVIMINT, "Await block ln nodes block processing");
-    tokio::try_join!(
-        gw_cln.wait_for_chain_sync(bitcoind),
-        gw_lnd.wait_for_chain_sync(bitcoind)
-    )?;
-
-    debug!(target: LOG_DEVIMINT, "Opening LN channel between the nodes...");
     let cln_addr = gw_cln.get_funding_address().await?;
 
     bitcoind.send_to(cln_addr, 100_000_000).await?;
     bitcoind.mine_blocks(10).await?;
 
+    debug!(target: LOG_DEVIMINT, "Await block ln nodes block processing");
     tokio::try_join!(
         gw_cln.wait_for_chain_sync(bitcoind),
         gw_lnd.wait_for_chain_sync(bitcoind)
@@ -697,6 +691,7 @@ pub async fn open_channel_between_gateways(
     let lnd_pubkey = gw_lnd.lightning_pubkey().await?;
     let cln_pubkey = gw_cln.lightning_pubkey().await?;
 
+    debug!(target: LOG_DEVIMINT, "Opening LN channel between the nodes...");
     gw_cln
         .open_channel(
             lnd_pubkey.clone(),

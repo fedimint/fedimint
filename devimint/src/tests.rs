@@ -109,6 +109,13 @@ pub async fn latency_tests(
 ) -> Result<()> {
     log_binary_versions().await?;
 
+    let fedimint_cli_version = crate::util::FedimintCli::version_or_default().await;
+    let gatewayd_version = crate::util::Gatewayd::version_or_default().await;
+    if fedimint_cli_version < *VERSION_0_3_0 || gatewayd_version < *VERSION_0_3_0 {
+        info!("fedmint-cli version that didn't support unknown modules");
+        return Ok(());
+    }
+
     #[allow(unused_variables)]
     let DevFed {
         bitcoind,
@@ -569,6 +576,13 @@ pub async fn cli_tests(dev_fed: DevFed) -> Result<()> {
         electrs,
         esplora,
     } = dev_fed;
+
+    let fedimint_cli_version = crate::util::FedimintCli::version_or_default().await;
+    let gatewayd_version = crate::util::Gatewayd::version_or_default().await;
+    if fedimint_cli_version < *VERSION_0_3_0 || gatewayd_version < *VERSION_0_3_0 {
+        info!("fedmint-cli version that didn't support unknown modules");
+        return Ok(());
+    }
 
     let client = fed.new_joined_client("cli-tests-client").await?;
     client.use_gateway(&gw_cln).await?;
@@ -1574,6 +1588,13 @@ pub async fn lightning_gw_reconnect_test(
     process_mgr: &ProcessManager,
 ) -> Result<()> {
     log_binary_versions().await?;
+    let fedimint_cli_version = crate::util::FedimintCli::version_or_default().await;
+    let gatewayd_version = crate::util::Gatewayd::version_or_default().await;
+    if fedimint_cli_version < *VERSION_0_3_0 || gatewayd_version < *VERSION_0_3_0 {
+        info!("fedmint-cli version that didn't support unknown modules");
+        return Ok(());
+    }
+
     #[allow(unused_variables)]
     let DevFed {
         bitcoind,
@@ -1660,6 +1681,14 @@ pub async fn lightning_gw_reconnect_test(
 
 pub async fn gw_reboot_test(dev_fed: DevFed, process_mgr: &ProcessManager) -> Result<()> {
     log_binary_versions().await?;
+
+    let fedimint_cli_version = crate::util::FedimintCli::version_or_default().await;
+    let gatewayd_version = crate::util::Gatewayd::version_or_default().await;
+    if fedimint_cli_version < *VERSION_0_3_0 || gatewayd_version < *VERSION_0_3_0 {
+        info!("fedmint-cli version that didn't support unknown modules");
+        return Ok(());
+    }
+
     #[allow(unused_variables)]
     let DevFed {
         bitcoind,
@@ -1928,6 +1957,14 @@ async fn ln_invoice(
 
 pub async fn reconnect_test(dev_fed: DevFed, process_mgr: &ProcessManager) -> Result<()> {
     log_binary_versions().await?;
+
+    let fedimint_cli_version = crate::util::FedimintCli::version_or_default().await;
+    let gatewayd_version = crate::util::Gatewayd::version_or_default().await;
+    if fedimint_cli_version < *VERSION_0_3_0 || gatewayd_version < *VERSION_0_3_0 {
+        info!("fedmint-cli version that didn't support unknown modules");
+        return Ok(());
+    }
+
     #[allow(unused_variables)]
     let DevFed {
         bitcoind,
@@ -1981,6 +2018,13 @@ pub async fn recoverytool_test(dev_fed: DevFed) -> Result<()> {
         // And worst comes to worst, users that want to recover can just use a
         // recoverytool version corresponding to the version of fedimintd they were
         // using.
+        return Ok(());
+    }
+
+    let fedimint_cli_version = crate::util::FedimintCli::version_or_default().await;
+    let gatewayd_version = crate::util::Gatewayd::version_or_default().await;
+    if fedimint_cli_version < *VERSION_0_3_0 || gatewayd_version < *VERSION_0_3_0 {
+        info!("fedmint-cli version that didn't support unknown modules");
         return Ok(());
     }
 

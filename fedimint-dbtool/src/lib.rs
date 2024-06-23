@@ -147,10 +147,12 @@ impl FedimintDBTool {
         self.with_server_module_init(WalletInit)
             .with_server_module_init(MintInit)
             .with_server_module_init(LightningInit)
+            .with_server_module_init(fedimint_lnv2_server::LightningInit)
             .with_server_module_init(MetaInit)
             .with_client_module_init(WalletClientInit::default())
             .with_client_module_init(MintClientInit)
             .with_client_module_init(LightningClientInit::default())
+            .with_client_module_init(fedimint_lnv2_client::LightningClientInit)
             .with_client_module_init(MetaClientInit)
     }
 

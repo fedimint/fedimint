@@ -26,3 +26,7 @@ fedimint-lnv2-common = { path = "../fedimint-lnv2-common" }
 fedimint-lnv2-server = { path = "../fedimint-lnv2-server" }
 fedimint-testing = { workspace = true }
 tokio = { version = "1.38.0", features = ["sync"] }
+serde_json = { workspace = true }
+devimint = { workspace = true }
+semver = { workspace = true }
+tracing = { workspace = true }

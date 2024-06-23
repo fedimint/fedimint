@@ -21,8 +21,8 @@ use ln_gateway::rpc::{
 };
 use serde::Serialize;
 
-const DEFAULT_WAIT_FOR_CHAIN_SYNC_RETRIES: u32 = 12;
-const DEFAULT_WAIT_FOR_CHAIN_SYNC_RETRY_DELAY_SECONDS: u64 = 10;
+const DEFAULT_WAIT_FOR_CHAIN_SYNC_RETRIES: u32 = 60;
+const DEFAULT_WAIT_FOR_CHAIN_SYNC_RETRY_DELAY_SECONDS: u64 = 2;
 
 #[derive(Parser)]
 #[command(version)]
@@ -346,7 +346,8 @@ async fn main() -> anyhow::Result<()> {
                             max_retries.unwrap_or(DEFAULT_WAIT_FOR_CHAIN_SYNC_RETRIES) as usize
                         ),
                     || async {
-                        if client().get_info().await?.block_height.unwrap_or(0) >= block_height {
+                        let info = client().get_info().await?;
+                        if info.block_height.unwrap_or(0) >= block_height && info.synced_to_chain {
                             Ok(())
                         } else {
                             Err(anyhow::anyhow!("Not synced yet"))

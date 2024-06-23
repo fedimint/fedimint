@@ -3,6 +3,8 @@
 use std::path::{Path, PathBuf};
 use std::str::FromStr as _;
 
+use fedimint_core::envs::FM_ENABLE_MODULE_LNV2_ENV;
+
 pub trait ToEnvVar {
     fn to_env_value(&self) -> Option<String>;
 }
@@ -106,6 +108,8 @@ declare_vars! {
     Global = (test_dir: &Path, fed_size: usize, offline_nodes: usize) =>
     {
         FM_USE_UNKNOWN_MODULE: String = std::env::var(FM_USE_UNKNOWN_MODULE_ENV).unwrap_or_else(|_| "1".into()); env: "FM_USE_UNKNOWN_MODULE";
+        FM_ENABLE_MODULE_LNV2: String = std::env::var(FM_ENABLE_MODULE_LNV2_ENV).unwrap_or_else(|_| "1".into()); env: "FM_ENABLE_MODULE_LNV2";
+
 
         FM_FORCE_API_SECRETS: ApiSecrets = std::env::var(FM_FORCE_API_SECRETS_ENV).ok().and_then(|s| {
             ApiSecrets::from_str(&s).ok()

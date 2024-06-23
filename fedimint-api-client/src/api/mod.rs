@@ -1,9 +1,8 @@
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::fmt::{self, Debug, Display};
-use std::num::NonZeroUsize;
 use std::pin::Pin;
 use std::sync::Arc;
-use std::time::{Duration, SystemTime};
+use std::time::Duration;
 use std::{cmp, result};
 
 use anyhow::anyhow;
@@ -19,29 +18,16 @@ use fedimint_core::config::ClientConfig;
 use fedimint_core::core::backup::SignedBackupRequest;
 use fedimint_core::core::{Decoder, DynOutputOutcome, ModuleInstanceId, OutputOutcome};
 use fedimint_core::encoding::{Decodable, Encodable};
-use fedimint_core::endpoint_constants::{
-    ADD_CONFIG_GEN_PEER_ENDPOINT, AUDIT_ENDPOINT, AUTH_ENDPOINT, AWAIT_OUTPUT_OUTCOME_ENDPOINT,
-    AWAIT_SESSION_OUTCOME_ENDPOINT, AWAIT_TRANSACTION_ENDPOINT, BACKUP_ENDPOINT,
-    CONFIG_GEN_PEERS_ENDPOINT, CONSENSUS_CONFIG_GEN_PARAMS_ENDPOINT,
-    DEFAULT_CONFIG_GEN_PARAMS_ENDPOINT, GUARDIAN_CONFIG_BACKUP_ENDPOINT, RECOVER_ENDPOINT,
-    RESTART_FEDERATION_SETUP_ENDPOINT, RUN_DKG_ENDPOINT, SERVER_CONFIG_CONSENSUS_HASH_ENDPOINT,
-    SESSION_COUNT_ENDPOINT, SESSION_STATUS_ENDPOINT, SET_CONFIG_GEN_CONNECTIONS_ENDPOINT,
-    SET_CONFIG_GEN_PARAMS_ENDPOINT, SET_PASSWORD_ENDPOINT, START_CONSENSUS_ENDPOINT,
-    STATUS_ENDPOINT, SUBMIT_TRANSACTION_ENDPOINT, VERIFIED_CONFIGS_ENDPOINT,
-    VERIFY_CONFIG_HASH_ENDPOINT,
-};
+use fedimint_core::endpoint_constants::AWAIT_OUTPUT_OUTCOME_ENDPOINT;
 use fedimint_core::fmt_utils::{AbbreviateDebug, AbbreviateJson};
 use fedimint_core::invite_code::InviteCode;
 use fedimint_core::module::audit::AuditSummary;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::module::{ApiAuth, ApiRequestErased, ApiVersion, SerdeModuleEncoding};
-use fedimint_core::session_outcome::{AcceptedItem, SessionOutcome, SessionStatus};
-use fedimint_core::task::jit::JitTryAnyhow;
+use fedimint_core::session_outcome::{SessionOutcome, SessionStatus};
 use fedimint_core::task::{MaybeSend, MaybeSync};
-use fedimint_core::time::now;
-use fedimint_core::transaction::{SerdeTransaction, Transaction, TransactionSubmissionOutcome};
-use fedimint_core::util::backon::BackoffBuilder;
-use fedimint_core::util::{backon, SafeUrl};
+use fedimint_core::transaction::{Transaction, TransactionSubmissionOutcome};
+use fedimint_core::util::SafeUrl;
 use fedimint_core::{
     apply, async_trait_maybe_send, dyn_newtype_define, runtime, NumPeersExt, OutPoint, PeerId,
     TransactionId,
@@ -61,10 +47,15 @@ use jsonrpsee_ws_client::{WsClient, WsClientBuilder};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use thiserror::Error;
-use tokio::sync::{Mutex, OnceCell, RwLock};
 use tracing::{debug, error, instrument, trace, warn};
 
-use crate::query::{FilterMapThreshold, QueryStep, QueryStrategy, ThresholdConsensus};
+use crate::query::{QueryStep, QueryStrategy, ThresholdConsensus};
+
+mod federation_peer_client;
+mod global_federation_api_with_cache;
+
+use federation_peer_client::FederationPeer;
+use global_federation_api_with_cache::GlobalFederationApiWithCache;
 
 pub type PeerResult<T> = Result<T, PeerError>;
 pub type JsonRpcResult<T> = Result<T, JsonRpcClientError>;
@@ -758,355 +749,6 @@ where
     })
 }
 
-/// [`IGlobalFederationApi`] wrapping some `T: IRawFederationApi` and adding
-/// a tiny bit of caching.
-#[derive(Debug)]
-struct GlobalFederationApiWithCache<T> {
-    inner: T,
-    /// Small LRU used as [`IGlobalFederationApi::await_block`] cache.
-    ///
-    /// This is mostly to avoid multiple client module recovery processes
-    /// re-requesting same blocks and putting burden on the federation.
-    ///
-    /// The LRU can be be fairly small, as if the modules are
-    /// (near-)bottlenecked on fetching blocks they will naturally
-    /// synchronize, or split into a handful of groups. And if they are not,
-    /// no LRU here is going to help them.
-    await_session_lru: Arc<tokio::sync::Mutex<lru::LruCache<u64, Arc<OnceCell<SessionOutcome>>>>>,
-
-    /// Like [`Self::await_session_lru`], but for
-    /// [`IGlobalFederationApi::get_session_status`].
-    ///
-    /// In theory these two LRUs have the same content, but one is locked by
-    /// potentially long-blocking operation, while the other non-blocking one.
-    /// Given how tiny they are, it's not worth complicating things to unify
-    /// them.
-    get_session_status_lru:
-        Arc<tokio::sync::Mutex<lru::LruCache<u64, Arc<OnceCell<SessionOutcome>>>>>,
-}
-
-impl<T> GlobalFederationApiWithCache<T> {
-    pub fn new(inner: T) -> GlobalFederationApiWithCache<T> {
-        Self {
-            inner,
-            await_session_lru: Arc::new(tokio::sync::Mutex::new(lru::LruCache::new(
-                NonZeroUsize::new(32).expect("is non-zero"),
-            ))),
-            get_session_status_lru: Arc::new(tokio::sync::Mutex::new(lru::LruCache::new(
-                NonZeroUsize::new(32).expect("is non-zero"),
-            ))),
-        }
-    }
-}
-
-impl<T> GlobalFederationApiWithCache<T>
-where
-    T: IRawFederationApi + MaybeSend + MaybeSync + 'static,
-{
-    async fn await_block_raw(
-        &self,
-        block_index: u64,
-        decoders: &ModuleDecoderRegistry,
-    ) -> anyhow::Result<SessionOutcome> {
-        debug!(block_index, "Awaiting block's outcome from Federation");
-        self.request_current_consensus::<SerdeModuleEncoding<SessionOutcome>>(
-            AWAIT_SESSION_OUTCOME_ENDPOINT.to_string(),
-            ApiRequestErased::new(block_index),
-        )
-        .await?
-        .try_into_inner(decoders)
-        .map_err(|e| anyhow!(e.to_string()))
-    }
-
-    async fn get_session_status_raw(
-        &self,
-        block_index: u64,
-        decoders: &ModuleDecoderRegistry,
-    ) -> anyhow::Result<SessionStatus> {
-        debug!(block_index, "Fetching block's outcome from Federation");
-        self.request_current_consensus::<SerdeModuleEncoding<SessionStatus>>(
-            SESSION_STATUS_ENDPOINT.to_string(),
-            ApiRequestErased::new(block_index),
-        )
-        .await?
-        .try_into_inner(&decoders.clone().with_fallback())
-        .map_err(|e| anyhow!(e))
-    }
-}
-
-#[apply(async_trait_maybe_send!)]
-impl<T> IRawFederationApi for GlobalFederationApiWithCache<T>
-where
-    T: IRawFederationApi + MaybeSend + MaybeSync + 'static,
-{
-    fn all_peers(&self) -> &BTreeSet<PeerId> {
-        self.inner.all_peers()
-    }
-
-    fn self_peer(&self) -> Option<PeerId> {
-        self.inner.self_peer()
-    }
-
-    fn with_module(&self, id: ModuleInstanceId) -> DynModuleApi {
-        self.inner.with_module(id)
-    }
-
-    /// Make request to a specific federation peer by `peer_id`
-    async fn request_raw(
-        &self,
-        peer_id: PeerId,
-        method: &str,
-        params: &[Value],
-    ) -> result::Result<Value, JsonRpcClientError> {
-        self.inner.request_raw(peer_id, method, params).await
-    }
-}
-
-#[apply(async_trait_maybe_send!)]
-impl<T> IGlobalFederationApi for GlobalFederationApiWithCache<T>
-where
-    T: IRawFederationApi + MaybeSend + MaybeSync + 'static,
-{
-    async fn await_block(
-        &self,
-        session_idx: u64,
-        decoders: &ModuleDecoderRegistry,
-    ) -> anyhow::Result<SessionOutcome> {
-        let mut lru_lock = self.await_session_lru.lock().await;
-
-        let entry_arc = lru_lock
-            .get_or_insert(session_idx, || Arc::new(OnceCell::new()))
-            .clone();
-
-        // we drop the lru lock so requests for other `session_idx` can work in parallel
-        drop(lru_lock);
-
-        entry_arc
-            .get_or_try_init(|| self.await_block_raw(session_idx, decoders))
-            .await
-            .cloned()
-    }
-
-    async fn get_session_status(
-        &self,
-        session_idx: u64,
-        decoders: &ModuleDecoderRegistry,
-    ) -> anyhow::Result<SessionStatus> {
-        let mut lru_lock = self.get_session_status_lru.lock().await;
-
-        let entry_arc = lru_lock
-            .get_or_insert(session_idx, || Arc::new(OnceCell::new()))
-            .clone();
-
-        // we drop the lru lock so requests for other `session_idx` can work in parallel
-        drop(lru_lock);
-
-        enum NoCacheErr {
-            Initial,
-            Pending(Vec<AcceptedItem>),
-            Err(anyhow::Error),
-        }
-        match entry_arc
-            .get_or_try_init(|| async {
-                match self.get_session_status_raw(session_idx, decoders).await {
-                    Err(e) => Err(NoCacheErr::Err(e)),
-                    Ok(SessionStatus::Initial) => Err(NoCacheErr::Initial),
-                    Ok(SessionStatus::Pending(s)) => Err(NoCacheErr::Pending(s)),
-                    // only status we can cache (hance outer Ok)
-                    Ok(SessionStatus::Complete(s)) => Ok(s),
-                }
-            })
-            .await
-            .cloned()
-        {
-            Ok(s) => Ok(SessionStatus::Complete(s)),
-            Err(NoCacheErr::Initial) => Ok(SessionStatus::Initial),
-            Err(NoCacheErr::Pending(s)) => Ok(SessionStatus::Pending(s)),
-            Err(NoCacheErr::Err(e)) => Err(e),
-        }
-    }
-
-    /// Submit a transaction for inclusion
-    async fn submit_transaction(
-        &self,
-        tx: Transaction,
-    ) -> FederationResult<SerdeModuleEncoding<TransactionSubmissionOutcome>> {
-        self.request_current_consensus(
-            SUBMIT_TRANSACTION_ENDPOINT.to_owned(),
-            ApiRequestErased::new(&SerdeTransaction::from(&tx)),
-        )
-        .await
-    }
-
-    async fn session_count(&self) -> FederationResult<u64> {
-        self.request_current_consensus(
-            SESSION_COUNT_ENDPOINT.to_owned(),
-            ApiRequestErased::default(),
-        )
-        .await
-    }
-
-    async fn await_transaction(&self, txid: TransactionId) -> FederationResult<TransactionId> {
-        self.request_current_consensus(
-            AWAIT_TRANSACTION_ENDPOINT.to_owned(),
-            ApiRequestErased::new(txid),
-        )
-        .await
-    }
-
-    async fn server_config_consensus_hash(&self) -> FederationResult<sha256::Hash> {
-        self.request_current_consensus(
-            SERVER_CONFIG_CONSENSUS_HASH_ENDPOINT.to_owned(),
-            ApiRequestErased::default(),
-        )
-        .await
-    }
-
-    async fn upload_backup(&self, request: &SignedBackupRequest) -> FederationResult<()> {
-        self.request_current_consensus(BACKUP_ENDPOINT.to_owned(), ApiRequestErased::new(request))
-            .await
-    }
-
-    async fn download_backup(
-        &self,
-        id: &secp256k1::PublicKey,
-    ) -> FederationResult<BTreeMap<PeerId, Option<ClientBackupSnapshot>>> {
-        self.request_with_strategy(
-            FilterMapThreshold::new(|_, snapshot| Ok(snapshot), self.all_peers().to_num_peers()),
-            RECOVER_ENDPOINT.to_owned(),
-            ApiRequestErased::new(id),
-        )
-        .await
-    }
-
-    async fn set_password(&self, auth: ApiAuth) -> FederationResult<()> {
-        self.request_admin(SET_PASSWORD_ENDPOINT, ApiRequestErased::default(), auth)
-            .await
-    }
-
-    async fn set_config_gen_connections(
-        &self,
-        info: ConfigGenConnectionsRequest,
-        auth: ApiAuth,
-    ) -> FederationResult<()> {
-        self.request_admin(
-            SET_CONFIG_GEN_CONNECTIONS_ENDPOINT,
-            ApiRequestErased::new(info),
-            auth,
-        )
-        .await
-    }
-
-    async fn add_config_gen_peer(&self, peer: PeerServerParams) -> FederationResult<()> {
-        self.request_admin_no_auth(ADD_CONFIG_GEN_PEER_ENDPOINT, ApiRequestErased::new(peer))
-            .await
-    }
-
-    async fn get_config_gen_peers(&self) -> FederationResult<Vec<PeerServerParams>> {
-        self.request_admin_no_auth(CONFIG_GEN_PEERS_ENDPOINT, ApiRequestErased::default())
-            .await
-    }
-
-    async fn get_default_config_gen_params(
-        &self,
-        auth: ApiAuth,
-    ) -> FederationResult<ConfigGenParamsRequest> {
-        self.request_admin(
-            DEFAULT_CONFIG_GEN_PARAMS_ENDPOINT,
-            ApiRequestErased::default(),
-            auth,
-        )
-        .await
-    }
-
-    async fn set_config_gen_params(
-        &self,
-        requested: ConfigGenParamsRequest,
-        auth: ApiAuth,
-    ) -> FederationResult<()> {
-        self.request_admin(
-            SET_CONFIG_GEN_PARAMS_ENDPOINT,
-            ApiRequestErased::new(requested),
-            auth,
-        )
-        .await
-    }
-
-    async fn consensus_config_gen_params(&self) -> FederationResult<ConfigGenParamsResponse> {
-        self.request_admin_no_auth(
-            CONSENSUS_CONFIG_GEN_PARAMS_ENDPOINT,
-            ApiRequestErased::default(),
-        )
-        .await
-    }
-
-    async fn run_dkg(&self, auth: ApiAuth) -> FederationResult<()> {
-        self.request_admin(RUN_DKG_ENDPOINT, ApiRequestErased::default(), auth)
-            .await
-    }
-
-    async fn get_verify_config_hash(
-        &self,
-        auth: ApiAuth,
-    ) -> FederationResult<BTreeMap<PeerId, sha256::Hash>> {
-        self.request_admin(
-            VERIFY_CONFIG_HASH_ENDPOINT,
-            ApiRequestErased::default(),
-            auth,
-        )
-        .await
-    }
-
-    async fn verified_configs(
-        &self,
-        auth: ApiAuth,
-    ) -> FederationResult<BTreeMap<PeerId, sha256::Hash>> {
-        self.request_admin(VERIFIED_CONFIGS_ENDPOINT, ApiRequestErased::default(), auth)
-            .await
-    }
-
-    async fn start_consensus(&self, auth: ApiAuth) -> FederationResult<()> {
-        self.request_admin(START_CONSENSUS_ENDPOINT, ApiRequestErased::default(), auth)
-            .await
-    }
-
-    async fn status(&self) -> FederationResult<StatusResponse> {
-        self.request_admin_no_auth(STATUS_ENDPOINT, ApiRequestErased::default())
-            .await
-    }
-
-    async fn audit(&self, auth: ApiAuth) -> FederationResult<AuditSummary> {
-        self.request_admin(AUDIT_ENDPOINT, ApiRequestErased::default(), auth)
-            .await
-    }
-
-    async fn guardian_config_backup(
-        &self,
-        auth: ApiAuth,
-    ) -> FederationResult<GuardianConfigBackup> {
-        self.request_admin(
-            GUARDIAN_CONFIG_BACKUP_ENDPOINT,
-            ApiRequestErased::default(),
-            auth,
-        )
-        .await
-    }
-
-    async fn auth(&self, auth: ApiAuth) -> FederationResult<()> {
-        self.request_admin(AUTH_ENDPOINT, ApiRequestErased::default(), auth)
-            .await
-    }
-
-    async fn restart_federation_setup(&self, auth: ApiAuth) -> FederationResult<()> {
-        self.request_admin(
-            RESTART_FEDERATION_SETUP_ENDPOINT,
-            ApiRequestErased::default(),
-            auth,
-        )
-        .await
-    }
-}
-
 /// Mint API client that will try to run queries against all `peers` expecting
 /// equal results from at least `min_eq_results` of them. Peers that return
 /// differing results are returned as a peer faults list.
@@ -1118,151 +760,6 @@ pub struct WsFederationApi<C = WsClient> {
     module_id: Option<ModuleInstanceId>,
 }
 
-/// Connection state shared/preserved between [`FederationPeerClient`] and the
-/// Jit tasks it spawns.
-#[derive(Debug)]
-struct FederationPeerClientConnectionState {
-    /// Last time a connection attempt was made, or `None` if no attempt has
-    /// been made yet.
-    last_connection_attempt_or: Option<SystemTime>,
-    connection_backoff: backon::FibonacciBackoff,
-}
-
-impl FederationPeerClientConnectionState {
-    const MIN_BACKOFF: Duration = Duration::from_millis(100);
-    const MAX_BACKOFF: Duration = Duration::from_secs(5);
-
-    pub fn new() -> Self {
-        Self {
-            last_connection_attempt_or: None,
-            connection_backoff: Self::new_backoff(),
-        }
-    }
-
-    /// Wait (if needed) before reconnection attempt based on number of previous
-    /// attempts and update reconnection stats.
-    async fn wait(&mut self) {
-        let desired_timeout = self.connection_backoff.next().unwrap_or(Self::MAX_BACKOFF);
-        let since_last_connect = match self.last_connection_attempt_or {
-            Some(last) => now().duration_since(last).unwrap_or_default(),
-            None => Duration::ZERO,
-        };
-
-        let sleep_duration = desired_timeout.saturating_sub(since_last_connect);
-        if Duration::ZERO < sleep_duration {
-            debug!(
-                target: LOG_CLIENT_NET_API,
-                duration_ms=sleep_duration.as_millis(),
-                "Waiting before reconnecting");
-        }
-        fedimint_core::runtime::sleep(sleep_duration).await;
-
-        self.last_connection_attempt_or = Some(now());
-    }
-
-    fn reset(&mut self) {
-        *self = Self::new();
-    }
-
-    fn new_backoff() -> backon::FibonacciBackoff {
-        backon::FibonacciBuilder::default()
-            .with_min_delay(Self::MIN_BACKOFF)
-            .with_max_delay(Self::MAX_BACKOFF)
-            .build()
-    }
-}
-
-/// The client in [`FederationPeer`], that takes care of reconnecting by
-/// starting background Jit task
-#[derive(Debug)]
-struct FederationPeerClient<C> {
-    client: JitTryAnyhow<C>,
-    connection_state: Arc<tokio::sync::Mutex<FederationPeerClientConnectionState>>,
-}
-
-impl<C> FederationPeerClient<C>
-where
-    C: JsonRpcClient + 'static,
-{
-    pub fn new(peer_id: PeerId, url: SafeUrl, api_secret: Option<String>) -> Self {
-        let connection_state = Arc::new(tokio::sync::Mutex::new(
-            FederationPeerClientConnectionState::new(),
-        ));
-
-        Self {
-            client: Self::new_jit_client(peer_id, url, api_secret, connection_state.clone()),
-            connection_state,
-        }
-    }
-
-    fn new_jit_client(
-        peer_id: PeerId,
-        url: SafeUrl,
-        api_secret: Option<String>,
-        connection_state: Arc<Mutex<FederationPeerClientConnectionState>>,
-    ) -> JitTryAnyhow<C> {
-        JitTryAnyhow::new_try(move || async move {
-            Self::wait(&peer_id, &url, &connection_state).await;
-
-            let res = C::connect(&url, api_secret).await;
-
-            match &res {
-                Ok(_) => {
-                    connection_state.lock().await.reset();
-                    debug!(
-                            target: LOG_CLIENT_NET_API,
-                            peer_id = %peer_id,
-                            url = %url,
-                            "Connected to peer");
-                }
-                Err(err) => {
-                    debug!(
-                            target: LOG_CLIENT_NET_API,
-                            peer_id = %peer_id,
-                            url = %url,
-                            %err, "Unable to connect to peer");
-                }
-            }
-            Ok(res?)
-        })
-    }
-
-    pub fn reconnect(&mut self, peer_id: PeerId, url: SafeUrl, api_secret: Option<String>) {
-        self.client = Self::new_jit_client(peer_id, url, api_secret, self.connection_state.clone());
-    }
-
-    async fn wait(
-        peer_id: &PeerId,
-        url: &SafeUrl,
-        connection_state: &Arc<Mutex<FederationPeerClientConnectionState>>,
-    ) {
-        let mut connection_state_guard = connection_state.lock().await;
-
-        if connection_state_guard.last_connection_attempt_or.is_none() {
-            debug!(
-                target: LOG_CLIENT_NET_API,
-                peer_id = %peer_id,
-                url = %url,
-                "Connecting to peer...");
-        } else {
-            debug!(
-                target: LOG_CLIENT_NET_API,
-                peer_id = %peer_id,
-                url = %url,
-                "Retrying connecting to peer...");
-        }
-
-        connection_state_guard.wait().await;
-    }
-}
-
-#[derive(Debug)]
-struct FederationPeer<C> {
-    url: SafeUrl,
-    peer_id: PeerId,
-    api_secret: Option<String>,
-    client: RwLock<FederationPeerClient<C>>,
-}
 impl<C: JsonRpcClient + Debug + 'static> IModuleFederationApi for WsFederationApi<C> {}
 
 /// Implementation of API calls over websockets
@@ -1422,16 +919,7 @@ where
                         );
                         assert!(url.host().is_some(), "API client requires a target host");
 
-                        FederationPeer {
-                            peer_id,
-                            client: RwLock::new(FederationPeerClient::new(
-                                peer_id,
-                                url.clone(),
-                                api_secret.clone(),
-                            )),
-                            url,
-                            api_secret: api_secret.clone(),
-                        }
+                        FederationPeer::new(url, peer_id, api_secret.clone())
                     })
                     .collect(),
             ),

@@ -13,7 +13,9 @@ use fedimint_core::config::{
 };
 use fedimint_core::core::ModuleKind;
 use fedimint_core::db::Database;
-use fedimint_core::envs::{is_env_var_set, BitcoinRpcConfig, FM_USE_UNKNOWN_MODULE_ENV};
+use fedimint_core::envs::{
+    is_env_var_set, BitcoinRpcConfig, FM_ENABLE_MODULE_LNV2_ENV, FM_USE_UNKNOWN_MODULE_ENV,
+};
 use fedimint_core::module::{ServerApiVersionsSummary, ServerDbVersionsSummary, ServerModuleInit};
 use fedimint_core::task::TaskGroup;
 use fedimint_core::timing;
@@ -322,6 +324,23 @@ impl Fedimintd {
                     },
                 },
             );
+
+        let s = if is_env_var_set(FM_ENABLE_MODULE_LNV2_ENV) {
+            s.with_module_kind(fedimint_lnv2_server::LightningInit)
+                .with_module_instance(
+                    fedimint_lnv2_server::LightningInit::kind(),
+                    fedimint_lnv2_common::config::LightningGenParams {
+                        local: fedimint_lnv2_common::config::LightningGenParamsLocal {
+                            bitcoin_rpc: bitcoind_rpc.clone(),
+                        },
+                        consensus: fedimint_lnv2_common::config::LightningGenParamsConsensus {
+                            network,
+                        },
+                    },
+                )
+        } else {
+            s
+        };
 
         let s = if is_env_var_set(FM_DISABLE_META_MODULE_ENV) {
             s
