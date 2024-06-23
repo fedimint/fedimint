@@ -5,9 +5,7 @@ use fedimint_api_client::api::FederationApiExt;
 use fedimint_core::module::ApiRequestErased;
 use fedimint_core::util::SafeUrl;
 use fedimint_core::PeerId;
-use fedimint_lnv2_common::endpoint_constants::{
-    ADD_GATEWAY_ENDPOINT, GATEWAYS_ENDPOINT, REMOVE_GATEWAY_ENDPOINT,
-};
+use fedimint_lnv2_common::endpoint_constants::{ADD_GATEWAY_ENDPOINT, REMOVE_GATEWAY_ENDPOINT};
 use serde::Serialize;
 
 use crate::api::LnFederationApi;
@@ -32,17 +30,7 @@ pub(crate) async fn handle_cli_command(
     match opts {
         Opts::Gateways { peer } => {
             let gateways = match peer {
-                Some(peer) => {
-                    lightning
-                        .module_api
-                        .request_single_peer_typed::<Vec<SafeUrl>>(
-                            None,
-                            GATEWAYS_ENDPOINT.to_string(),
-                            ApiRequestErased::default(),
-                            peer,
-                        )
-                        .await?
-                }
+                Some(peer) => lightning.module_api.fetch_gateways_from_peer(peer).await?,
                 None => lightning.module_api.fetch_gateways().await?,
             };
 

@@ -1,7 +1,9 @@
 use std::collections::BTreeMap;
 use std::time::Duration;
 
-use fedimint_api_client::api::{FederationApiExt, FederationResult, IModuleFederationApi};
+use fedimint_api_client::api::{
+    FederationApiExt, FederationResult, IModuleFederationApi, PeerResult,
+};
 use fedimint_api_client::query::FilterMapThreshold;
 use fedimint_core::module::ApiRequestErased;
 use fedimint_core::task::{sleep, MaybeSend, MaybeSync};
@@ -30,6 +32,8 @@ pub trait LnFederationApi {
     ) -> FederationResult<Option<u64>>;
 
     async fn fetch_gateways(&self) -> FederationResult<Vec<SafeUrl>>;
+
+    async fn fetch_gateways_from_peer(&self, peer: PeerId) -> PeerResult<Vec<SafeUrl>>;
 }
 
 #[apply(async_trait_maybe_send!)]
@@ -117,5 +121,18 @@ where
         });
 
         Ok(union)
+    }
+
+    async fn fetch_gateways_from_peer(&self, peer: PeerId) -> PeerResult<Vec<SafeUrl>> {
+        let gateways = self
+            .request_single_peer_typed::<Vec<SafeUrl>>(
+                None,
+                GATEWAYS_ENDPOINT.to_string(),
+                ApiRequestErased::default(),
+                peer,
+            )
+            .await?;
+
+        Ok(gateways)
     }
 }
