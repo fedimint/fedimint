@@ -55,43 +55,24 @@
 <a href="#55" id="55">55</a>
 <a href="#56" id="56">56</a>
 <a href="#57" id="57">57</a>
-<a href="#58" id="58">58</a>
-<a href="#59" id="59">59</a>
-<a href="#60" id="60">60</a>
-<a href="#61" id="61">61</a>
-<a href="#62" id="62">62</a>
-<a href="#63" id="63">63</a>
-<a href="#64" id="64">64</a>
-<a href="#65" id="65">65</a>
-<a href="#66" id="66">66</a>
-<a href="#67" id="67">67</a>
-<a href="#68" id="68">68</a>
-<a href="#69" id="69">69</a>
-<a href="#70" id="70">70</a>
-<a href="#71" id="71">71</a>
-<a href="#72" id="72">72</a>
-<a href="#73" id="73">73</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::{ffi, iter};
 
 <span class="kw">use </span>clap::Parser;
-<span class="kw">use </span>fedimint_api_client::api::FederationApiExt;
-<span class="kw">use </span>fedimint_core::module::ApiRequestErased;
 <span class="kw">use </span>fedimint_core::util::SafeUrl;
-<span class="kw">use </span>fedimint_lnv2_common::endpoint_constants::{
-    ADD_GATEWAY_ENDPOINT, GATEWAYS_ENDPOINT, REMOVE_GATEWAY_ENDPOINT,
-};
+<span class="kw">use </span>fedimint_core::PeerId;
 <span class="kw">use </span>serde::Serialize;
 
+<span class="kw">use </span><span class="kw">crate</span>::api::LnFederationApi;
 <span class="kw">use </span><span class="kw">crate</span>::LightningClientModule;
 
 <span class="attr">#[derive(Parser, Serialize)]
 </span><span class="kw">enum </span>Opts {
+    <span class="doccomment">/// Fetch vetted gateways
+    </span>Gateways { peer: <span class="prelude-ty">Option</span>&lt;PeerId&gt; },
     <span class="doccomment">/// Add a vetted gateway
-    </span>Add { gateway: SafeUrl },
+    </span>AddGateway { gateway: SafeUrl },
     <span class="doccomment">/// Remove a vetted gateway
-    </span>Remove { gateway: SafeUrl },
-    <span class="doccomment">/// List our own vetted gateways
-    </span>List,
+    </span>RemoveGateway { gateway: SafeUrl },
 }
 
 <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">async fn </span>handle_cli_command(
@@ -101,46 +82,33 @@
     <span class="kw">let </span>opts = Opts::parse_from(iter::once(<span class="kw-2">&amp;</span>ffi::OsString::from(<span class="string">"lnv2"</span>)).chain(args.iter()));
 
     <span class="kw">match </span>opts {
-        Opts::Add { gateway } =&gt; {
+        Opts::Gateways { peer } =&gt; {
+            <span class="kw">let </span>gateways = <span class="kw">match </span>peer {
+                <span class="prelude-val">Some</span>(peer) =&gt; lightning.module_api.fetch_gateways_from_peer(peer).<span class="kw">await</span><span class="question-mark">?</span>,
+                <span class="prelude-val">None </span>=&gt; lightning.module_api.fetch_gateways().<span class="kw">await</span><span class="question-mark">?</span>,
+            };
+
+            <span class="prelude-val">Ok</span>(serde_json::to_value(gateways).expect(<span class="string">"JSON serialization failed"</span>))
+        }
+        Opts::AddGateway { gateway } =&gt; {
             <span class="kw">let </span>auth = lightning
                 .admin_auth
                 .clone()
                 .ok_or(<span class="macro">anyhow::anyhow!</span>(<span class="string">"Admin auth not set"</span>))<span class="question-mark">?</span>;
 
-            <span class="kw">let </span>is_new_entry: bool = lightning
-                .module_api
-                .request_admin(ADD_GATEWAY_ENDPOINT, ApiRequestErased::new(gateway), auth)
-                .<span class="kw">await</span><span class="question-mark">?</span>;
+            <span class="kw">let </span>is_new_entry = lightning.module_api.add_gateway(auth, gateway).<span class="kw">await</span><span class="question-mark">?</span>;
 
             <span class="prelude-val">Ok</span>(serde_json::to_value(is_new_entry).expect(<span class="string">"JSON serialization failed"</span>))
         }
-        Opts::Remove { gateway } =&gt; {
+        Opts::RemoveGateway { gateway } =&gt; {
             <span class="kw">let </span>auth = lightning
                 .admin_auth
                 .clone()
                 .ok_or(<span class="macro">anyhow::anyhow!</span>(<span class="string">"Admin auth not set"</span>))<span class="question-mark">?</span>;
 
-            <span class="kw">let </span>entry_existed: bool = lightning
-                .module_api
-                .request_admin(
-                    REMOVE_GATEWAY_ENDPOINT,
-                    ApiRequestErased::new(gateway),
-                    auth,
-                )
-                .<span class="kw">await</span><span class="question-mark">?</span>;
+            <span class="kw">let </span>entry_existed = lightning.module_api.remove_gateway(auth, gateway).<span class="kw">await</span><span class="question-mark">?</span>;
 
             <span class="prelude-val">Ok</span>(serde_json::to_value(entry_existed).expect(<span class="string">"JSON serialization failed"</span>))
-        }
-        Opts::List =&gt; {
-            <span class="kw">let </span>gateways = lightning
-                .module_api
-                .request_admin_no_auth::&lt;Vec&lt;SafeUrl&gt;&gt;(
-                    GATEWAYS_ENDPOINT,
-                    ApiRequestErased::default(),
-                )
-                .<span class="kw">await</span><span class="question-mark">?</span>;
-
-            <span class="prelude-val">Ok</span>(serde_json::to_value(gateways).expect(<span class="string">"JSON serialization failed"</span>))
         }
     }
 }
