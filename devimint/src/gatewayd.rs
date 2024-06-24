@@ -20,7 +20,7 @@ use crate::vars::utf8;
 pub struct Gatewayd {
     pub(crate) process: ProcessHandle,
     pub ln: Option<LightningNode>,
-    pub(crate) addr: String,
+    pub addr: String,
     pub(crate) lightning_node_addr: String,
 }
 
