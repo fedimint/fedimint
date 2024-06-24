@@ -633,14 +633,14 @@ impl ILnRpcClient for GatewayLndClient {
                 memo: description,
                 hash: create_invoice_request.payment_hash,
                 value_msat: create_invoice_request.amount_msat as i64,
-                expiry: i64::from(create_invoice_request.expiry),
+                expiry: i64::from(create_invoice_request.expiry_secs),
                 ..Default::default()
             },
             Description::Hash(desc_hash) => AddHoldInvoiceRequest {
                 description_hash: desc_hash,
                 hash: create_invoice_request.payment_hash,
                 value_msat: create_invoice_request.amount_msat as i64,
-                expiry: i64::from(create_invoice_request.expiry),
+                expiry: i64::from(create_invoice_request.expiry_secs),
                 ..Default::default()
             },
         };

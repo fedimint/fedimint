@@ -246,7 +246,7 @@ message CreateInvoiceRequest {
   uint64 amount_msat = 2;
 
   // The time in seconds this invoice is valid for.
-  uint32 expiry = 3;
+  uint32 expiry_secs = 3;
 
   // A description or a description hash must be provided.
   oneof description {

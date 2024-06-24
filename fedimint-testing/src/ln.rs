@@ -217,7 +217,7 @@ impl ILnRpcClient for FakeLightningTest {
             .payment_secret(PaymentSecret([0; 32]))
             .amount_milli_satoshis(create_invoice_request.amount_msat)
             .expiry_time(Duration::from_secs(u64::from(
-                create_invoice_request.expiry,
+                create_invoice_request.expiry_secs,
             )))
             .build_signed(|m| ctx.sign_ecdsa_recoverable(m, &self.gateway_node_sec_key))
             .unwrap();

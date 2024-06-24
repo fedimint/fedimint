@@ -713,7 +713,7 @@ impl GatewayLightning for ClnRpcService {
         let CreateInvoiceRequest {
             payment_hash,
             amount_msat,
-            expiry,
+            expiry_secs,
             description,
         } = create_invoice_request.into_inner();
 
@@ -742,7 +742,7 @@ impl GatewayLightning for ClnRpcService {
                 .payment_secret(PaymentSecret(OsRng.gen()))
                 .duration_since_epoch(duration_since_epoch)
                 .min_final_cltv_expiry_delta(18)
-                .expiry_time(Duration::from_secs(expiry.into()))
+                .expiry_time(Duration::from_secs(expiry_secs.into()))
                 // Temporarily sign with an ephemeral private key, we will request CLN to sign this
                 // invoice next.
                 .build_signed(|m| {
@@ -762,7 +762,7 @@ impl GatewayLightning for ClnRpcService {
                 .payment_secret(PaymentSecret(OsRng.gen()))
                 .duration_since_epoch(duration_since_epoch)
                 .min_final_cltv_expiry_delta(18)
-                .expiry_time(Duration::from_secs(expiry.into()))
+                .expiry_time(Duration::from_secs(expiry_secs.into()))
                 // Temporarily sign with an ephemeral private key, we will request CLN to sign this
                 // invoice next.
                 .build_signed(|m| {
