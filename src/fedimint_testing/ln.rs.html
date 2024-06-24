@@ -471,7 +471,7 @@
             .payment_secret(PaymentSecret([<span class="number">0</span>; <span class="number">32</span>]))
             .amount_milli_satoshis(create_invoice_request.amount_msat)
             .expiry_time(Duration::from_secs(u64::from(
-                create_invoice_request.expiry,
+                create_invoice_request.expiry_secs,
             )))
             .build_signed(|m| ctx.sign_ecdsa_recoverable(m, <span class="kw-2">&amp;</span><span class="self">self</span>.gateway_node_sec_key))
             .unwrap();

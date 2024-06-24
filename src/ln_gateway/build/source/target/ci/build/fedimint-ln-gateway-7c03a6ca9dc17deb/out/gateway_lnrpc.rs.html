@@ -1751,7 +1751,7 @@
     </span><span class="kw">pub </span>amount_msat: u64,
     <span class="doccomment">/// The time in seconds this invoice is valid for.
     </span><span class="attr">#[prost(uint32, tag = <span class="string">"3"</span>)]
-    </span><span class="kw">pub </span>expiry: u32,
+    </span><span class="kw">pub </span>expiry_secs: u32,
     <span class="doccomment">/// A description or a description hash must be provided.
     </span><span class="attr">#[prost(oneof = <span class="string">"create_invoice_request::Description"</span>, tags = <span class="string">"4, 5"</span>)]
     </span><span class="kw">pub </span>description: ::core::option::Option&lt;create_invoice_request::Description&gt;,

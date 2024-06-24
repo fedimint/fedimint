@@ -3767,7 +3767,7 @@
                 .create_invoice(CreateInvoiceRequest {
                     payment_hash: payment_hash.to_byte_array().to_vec(),
                     amount_msat: amount.msats,
-                    expiry: expiry_time,
+                    expiry_secs: expiry_time,
                     description: <span class="prelude-val">Some</span>(Description::Direct(description)),
                 })
                 .<span class="kw">await
@@ -3776,7 +3776,7 @@
                 .create_invoice(CreateInvoiceRequest {
                     payment_hash: payment_hash.to_byte_array().to_vec(),
                     amount_msat: amount.msats,
-                    expiry: expiry_time,
+                    expiry_secs: expiry_time,
                     description: <span class="prelude-val">Some</span>(Description::Hash(hash.to_byte_array().to_vec())),
                 })
                 .<span class="kw">await
