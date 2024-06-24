@@ -552,7 +552,7 @@ impl FedimintCli {
         let db = cli.load_rocks_db().await?;
         let mut client_builder = Client::builder(db);
         client_builder.with_module_inits(self.module_inits.clone());
-        client_builder.with_primary_module(1);
+        // client_builder.with_primary_module(1);
 
         Ok(client_builder)
     }
