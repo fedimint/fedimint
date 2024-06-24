@@ -71,6 +71,8 @@
           flakeboxLib = flakebox.lib.${system} {
             # customizations will go here in the future
             config = {
+              direnv.enable = false;
+
               toolchain.components = [
                 "rustc"
                 "cargo"
@@ -79,6 +81,18 @@
                 "rust-src"
                 "llvm-tools"
               ];
+
+              just.rules.clippy = {
+                content = lib.mkForce ''
+                  # run `cargo clippy` on everything
+                  clippy *ARGS="--locked --offline --workspace --all-targets":
+                    cargo clippy {{ARGS}}
+
+                  # run `cargo clippy --fix` on everything
+                  clippy-fix *ARGS="--locked --offline --workspace --all-targets":
+                    cargo clippy {{ARGS}} --fix
+                '';
+              };
 
               motd = {
                 enable = true;
