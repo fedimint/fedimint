@@ -55,18 +55,48 @@
 <a href="#55" id="55">55</a>
 <a href="#56" id="56">56</a>
 <a href="#57" id="57">57</a>
+<a href="#58" id="58">58</a>
+<a href="#59" id="59">59</a>
+<a href="#60" id="60">60</a>
+<a href="#61" id="61">61</a>
+<a href="#62" id="62">62</a>
+<a href="#63" id="63">63</a>
+<a href="#64" id="64">64</a>
+<a href="#65" id="65">65</a>
+<a href="#66" id="66">66</a>
+<a href="#67" id="67">67</a>
+<a href="#68" id="68">68</a>
+<a href="#69" id="69">69</a>
+<a href="#70" id="70">70</a>
+<a href="#71" id="71">71</a>
+<a href="#72" id="72">72</a>
+<a href="#73" id="73">73</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::{ffi, iter};
 
 <span class="kw">use </span>clap::Parser;
+<span class="kw">use </span>fedimint_core::core::OperationId;
 <span class="kw">use </span>fedimint_core::util::SafeUrl;
-<span class="kw">use </span>fedimint_core::PeerId;
+<span class="kw">use </span>fedimint_core::{Amount, PeerId};
+<span class="kw">use </span>lightning_invoice::Bolt11Invoice;
 <span class="kw">use </span>serde::Serialize;
+<span class="kw">use </span>serde_json::Value;
 
 <span class="kw">use </span><span class="kw">crate</span>::api::LnFederationApi;
 <span class="kw">use </span><span class="kw">crate</span>::LightningClientModule;
 
 <span class="attr">#[derive(Parser, Serialize)]
 </span><span class="kw">enum </span>Opts {
+    <span class="doccomment">/// Pay an invoice
+    </span>Send {
+        gateway: SafeUrl,
+        invoice: Bolt11Invoice,
+    },
+    <span class="doccomment">/// Await the final state of the send operation
+    </span>AwaitSend { operation_id: OperationId },
+    <span class="doccomment">/// Request an invoice
+    </span>Receive { gateway: SafeUrl, amount: Amount },
+    <span class="doccomment">/// Await the final state of the receive operation
+    </span>AwaitReceive { operation_id: OperationId },
     <span class="doccomment">/// Fetch vetted gateways
     </span>Gateways { peer: <span class="prelude-ty">Option</span>&lt;PeerId&gt; },
     <span class="doccomment">/// Add a vetted gateway
@@ -81,24 +111,22 @@
 ) -&gt; anyhow::Result&lt;serde_json::Value&gt; {
     <span class="kw">let </span>opts = Opts::parse_from(iter::once(<span class="kw-2">&amp;</span>ffi::OsString::from(<span class="string">"lnv2"</span>)).chain(args.iter()));
 
-    <span class="kw">match </span>opts {
-        Opts::Gateways { peer } =&gt; {
-            <span class="kw">let </span>gateways = <span class="kw">match </span>peer {
-                <span class="prelude-val">Some</span>(peer) =&gt; lightning.module_api.fetch_gateways_from_peer(peer).<span class="kw">await</span><span class="question-mark">?</span>,
-                <span class="prelude-val">None </span>=&gt; lightning.module_api.fetch_gateways().<span class="kw">await</span><span class="question-mark">?</span>,
-            };
-
-            <span class="prelude-val">Ok</span>(serde_json::to_value(gateways).expect(<span class="string">"JSON serialization failed"</span>))
-        }
+    <span class="kw">let </span>value = <span class="kw">match </span>opts {
+        Opts::Send { gateway, invoice } =&gt; json(lightning.send(gateway, invoice).<span class="kw">await</span><span class="question-mark">?</span>),
+        Opts::AwaitSend { operation_id } =&gt; json(lightning.await_send(operation_id).<span class="kw">await</span><span class="question-mark">?</span>),
+        Opts::Receive { gateway, amount } =&gt; json(lightning.receive(gateway, amount).<span class="kw">await</span><span class="question-mark">?</span>),
+        Opts::AwaitReceive { operation_id } =&gt; json(lightning.await_receive(operation_id).<span class="kw">await</span><span class="question-mark">?</span>),
+        Opts::Gateways { peer } =&gt; <span class="kw">match </span>peer {
+            <span class="prelude-val">Some</span>(peer) =&gt; json(lightning.module_api.fetch_gateways_from_peer(peer).<span class="kw">await</span><span class="question-mark">?</span>),
+            <span class="prelude-val">None </span>=&gt; json(lightning.module_api.fetch_gateways().<span class="kw">await</span><span class="question-mark">?</span>),
+        },
         Opts::AddGateway { gateway } =&gt; {
             <span class="kw">let </span>auth = lightning
                 .admin_auth
                 .clone()
                 .ok_or(<span class="macro">anyhow::anyhow!</span>(<span class="string">"Admin auth not set"</span>))<span class="question-mark">?</span>;
 
-            <span class="kw">let </span>is_new_entry = lightning.module_api.add_gateway(auth, gateway).<span class="kw">await</span><span class="question-mark">?</span>;
-
-            <span class="prelude-val">Ok</span>(serde_json::to_value(is_new_entry).expect(<span class="string">"JSON serialization failed"</span>))
+            json(lightning.module_api.add_gateway(auth, gateway).<span class="kw">await</span><span class="question-mark">?</span>)
         }
         Opts::RemoveGateway { gateway } =&gt; {
             <span class="kw">let </span>auth = lightning
@@ -106,10 +134,14 @@
                 .clone()
                 .ok_or(<span class="macro">anyhow::anyhow!</span>(<span class="string">"Admin auth not set"</span>))<span class="question-mark">?</span>;
 
-            <span class="kw">let </span>entry_existed = lightning.module_api.remove_gateway(auth, gateway).<span class="kw">await</span><span class="question-mark">?</span>;
-
-            <span class="prelude-val">Ok</span>(serde_json::to_value(entry_existed).expect(<span class="string">"JSON serialization failed"</span>))
+            json(lightning.module_api.remove_gateway(auth, gateway).<span class="kw">await</span><span class="question-mark">?</span>)
         }
-    }
+    };
+
+    <span class="prelude-val">Ok</span>(value)
+}
+
+<span class="kw">fn </span>json&lt;T: Serialize&gt;(value: T) -&gt; Value {
+    serde_json::to_value(value).expect(<span class="string">"JSON serialization failed"</span>)
 }
 </code></pre></div></section></main></body></html>

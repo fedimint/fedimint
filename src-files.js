@@ -56,6 +56,7 @@ var srcIndex = new Map(JSON.parse('[\
 ["meta_sanity_test",["",[],["meta-sanity-test.rs"]]],\
 ["mint_client_sanity",["",[],["mint-client-sanity.rs"]]],\
 ["recoverytool",["",[],["envs.rs","main.rs"]]],\
+["self_payment_with_one_gateway",["",[],["self_payment_with_one_gateway.rs"]]],\
 ["tbs",["",[],["lib.rs"]]],\
 ["tpe",["",[],["lib.rs"]]]\
 ]'));
