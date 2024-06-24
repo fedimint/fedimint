@@ -384,15 +384,15 @@
 );
 
 <span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Encodable, Decodable)]
-</span><span class="kw">pub struct </span>GatewayConfigurationKeyV0;
+</span><span class="kw">struct </span>GatewayConfigurationKeyV0;
 
 <span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Encodable, Decodable, Serialize, Deserialize)]
-</span><span class="kw">pub struct </span>GatewayConfigurationV0 {
-    <span class="kw">pub </span>password: String,
-    <span class="kw">pub </span>num_route_hints: u32,
+</span><span class="kw">struct </span>GatewayConfigurationV0 {
+    password: String,
+    num_route_hints: u32,
     <span class="attr">#[serde(with = <span class="string">"serde_routing_fees"</span>)]
-    </span><span class="kw">pub </span>routing_fees: RoutingFees,
-    <span class="kw">pub </span>network: Network,
+    </span>routing_fees: RoutingFees,
+    network: Network,
 }
 
 <span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Encodable, Decodable)]
