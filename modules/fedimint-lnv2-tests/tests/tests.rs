@@ -108,7 +108,7 @@ async fn can_pay_external_invoice_exactly_once() -> anyhow::Result<()> {
 
     assert_eq!(sub.ok().await?, SendState::Funding);
     assert_eq!(sub.ok().await?, SendState::Funded);
-    assert!(std::matches!(sub.ok().await?, SendState::Success(..)));
+    assert_eq!(sub.ok().await?, SendState::Success);
 
     let send_result = client
         .get_first_module::<LightningClientModule>()
@@ -312,7 +312,7 @@ async fn verify_payment_success(
 
     assert_eq!(send_sub.ok().await?, SendState::Funding);
     assert_eq!(send_sub.ok().await?, SendState::Funded);
-    assert!(std::matches!(send_sub.ok().await?, SendState::Success(..)));
+    assert_eq!(send_sub.ok().await?, SendState::Success);
 
     Ok(())
 }
