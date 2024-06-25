@@ -593,8 +593,8 @@ pub async fn cli_tests(dev_fed: DevFed) -> Result<()> {
         client,
         "dev",
         "config-decrypt",
-        "--in-file={data_dir}/fedimintd-0/private.encrypt",
-        "--out-file={data_dir}/fedimintd-0/config-plaintext.json"
+        "--in-file={data_dir}/fedimintd-default-0/private.encrypt",
+        "--out-file={data_dir}/fedimintd-default-0/config-plaintext.json"
     )
     .env(FM_PASSWORD_ENV, "pass")
     .run()
@@ -604,8 +604,8 @@ pub async fn cli_tests(dev_fed: DevFed) -> Result<()> {
         client,
         "dev",
         "config-encrypt",
-        "--in-file={data_dir}/fedimintd-0/config-plaintext.json",
-        "--out-file={data_dir}/fedimintd-0/config-2"
+        "--in-file={data_dir}/fedimintd-default-0/config-plaintext.json",
+        "--out-file={data_dir}/fedimintd-default-0/config-2"
     )
     .env(FM_PASSWORD_ENV, "pass-foo")
     .run()
@@ -615,17 +615,21 @@ pub async fn cli_tests(dev_fed: DevFed) -> Result<()> {
         client,
         "dev",
         "config-decrypt",
-        "--in-file={data_dir}/fedimintd-0/config-2",
-        "--out-file={data_dir}/fedimintd-0/config-plaintext-2.json"
+        "--in-file={data_dir}/fedimintd-default-0/config-2",
+        "--out-file={data_dir}/fedimintd-default-0/config-plaintext-2.json"
     )
     .env(FM_PASSWORD_ENV, "pass-foo")
     .run()
     .await?;
 
-    let plaintext_one =
-        fs::read_to_string(format!("{data_dir}/fedimintd-0/config-plaintext.json")).await?;
-    let plaintext_two =
-        fs::read_to_string(format!("{data_dir}/fedimintd-0/config-plaintext-2.json")).await?;
+    let plaintext_one = fs::read_to_string(format!(
+        "{data_dir}/fedimintd-default-0/config-plaintext.json"
+    ))
+    .await?;
+    let plaintext_two = fs::read_to_string(format!(
+        "{data_dir}/fedimintd-default-0/config-plaintext-2.json"
+    ))
+    .await?;
     anyhow::ensure!(
         plaintext_one == plaintext_two,
         "config-decrypt/encrypt failed"
@@ -2122,10 +2126,10 @@ pub async fn recoverytool_test(dev_fed: DevFed) -> Result<()> {
         crate::util::Recoverytool,
         "--readonly",
         "--cfg",
-        "{data_dir}/fedimintd-0",
+        "{data_dir}/fedimintd-default-0",
         "utxos",
         "--db",
-        "{data_dir}/fedimintd-0/database"
+        "{data_dir}/fedimintd-default-0/database"
     )
     .env(FM_PASSWORD_ENV, "pass")
     .out_json()
@@ -2188,10 +2192,10 @@ pub async fn recoverytool_test(dev_fed: DevFed) -> Result<()> {
         crate::util::Recoverytool,
         "--readonly",
         "--cfg",
-        "{data_dir}/fedimintd-0",
+        "{data_dir}/fedimintd-default-0",
         "epochs",
         "--db",
-        "{data_dir}/fedimintd-0/database"
+        "{data_dir}/fedimintd-default-0/database"
     )
     .env(FM_PASSWORD_ENV, "pass")
     .out_json()
