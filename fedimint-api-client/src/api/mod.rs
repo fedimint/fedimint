@@ -411,11 +411,9 @@ impl DynGlobalApi {
         GlobalFederationApiWithCache::new(WsFederationApi::new(connector, peers, api_secret)).into()
     }
 
-    // FIXME: (@leonardo) should the `Connector` be encoded in the `InviteCode`
-    // somehow ?
-    pub fn from_invite_code(invite_code: &InviteCode) -> Self {
+    pub fn from_invite_code(connector: &Connector, invite_code: &InviteCode) -> Self {
         GlobalFederationApiWithCache::new(WsFederationApi::new(
-            &Connector::default(),
+            connector,
             invite_code.peers().into_iter().collect_vec(),
             &invite_code.api_secret(),
         ))
