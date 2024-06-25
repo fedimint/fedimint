@@ -379,9 +379,14 @@ impl DynGlobalApi {
         .into()
     }
 
-    pub fn from_single_endpoint(peer: PeerId, url: SafeUrl, api_secret: &Option<String>) -> Self {
+    pub fn from_single_endpoint(
+        peer: PeerId,
+        url: SafeUrl,
+        api_secret: &Option<String>,
+        connector: &Connector,
+    ) -> Self {
         GlobalFederationApiWithCache::new(WsFederationApi::new(
-            &Connector::default(),
+            connector,
             vec![(peer, url)],
             api_secret,
         ))
