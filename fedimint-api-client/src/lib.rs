@@ -32,9 +32,7 @@ impl Connector {
         debug!("Downloading client config from {:?}", invite_code);
 
         let federation_id = invite_code.federation_id();
-        // FIXME: (@leonardo) should fetch all the api_endpoints with proper
-        // [`Connector`] too!
-        let api = DynGlobalApi::from_invite_code(invite_code);
+        let api = DynGlobalApi::from_invite_code(self, invite_code);
         let api_secret = invite_code.api_secret();
 
         fedimint_core::util::retry(
