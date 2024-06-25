@@ -407,12 +407,12 @@ impl Gateway {
 
         let gateway_db = Database::new(
             fedimint_rocksdb::RocksDb::open(opts.data_dir.join(DB_FILE))?,
-            decoders.clone(),
+            decoders,
         );
 
         let client_builder = GatewayClientBuilder::new(
             opts.data_dir.clone(),
-            registry.clone(),
+            registry,
             LEGACY_HARDCODED_INSTANCE_ID_MINT,
         );
 
@@ -421,11 +421,13 @@ impl Gateway {
             fedimint_build_code_version_env!()
         );
 
+        let gateway_parameters = opts.to_gateway_parameters()?;
+
         Gateway::new(
             Arc::new(GatewayLightningBuilder {
-                lightning_mode: opts.mode.clone(),
+                lightning_mode: opts.mode,
             }),
-            opts.to_gateway_parameters()?,
+            gateway_parameters,
             gateway_db,
             client_builder,
         )
@@ -461,7 +463,7 @@ impl Gateway {
             gateway_config: Arc::new(RwLock::new(gateway_config)),
             state: Arc::new(RwLock::new(GatewayState::Initializing)),
             client_builder,
-            gateway_id: Self::load_gateway_id(gateway_db.clone()).await,
+            gateway_id: Self::load_gateway_id(&gateway_db).await,
             gateway_db,
             clients: Arc::new(RwLock::new(BTreeMap::new())),
             scid_to_federation: Arc::new(RwLock::new(BTreeMap::new())),
@@ -472,7 +474,7 @@ impl Gateway {
     }
 
     /// Returns a `PublicKey` that uniquely identifies the Gateway.
-    async fn load_gateway_id(gateway_db: Database) -> PublicKey {
+    async fn load_gateway_id(gateway_db: &Database) -> PublicKey {
         let mut dbtx = gateway_db.begin_transaction().await;
         if let Some(key_pair) = dbtx.get_value(&GatewayPublicKey {}).await {
             key_pair.public_key()
@@ -556,7 +558,7 @@ impl Gateway {
         Box::pin(self.load_clients()).await;
         self.start_gateway(tg);
         // start webserver last to avoid handling requests before fully initialized
-        run_webserver(Arc::new(self.clone()), tg).await?;
+        run_webserver(Arc::new(self), tg).await?;
         let handle = tg.make_handle();
         let shutdown_receiver = handle.make_shutdown_rx();
         Ok(shutdown_receiver)
@@ -1100,9 +1102,7 @@ impl Gateway {
                 .insert(mint_channel_id, federation_id);
 
             let dbtx = self.gateway_db.begin_transaction().await;
-            self.client_builder
-                .save_config(gw_client_cfg.clone(), dbtx)
-                .await?;
+            self.client_builder.save_config(gw_client_cfg, dbtx).await?;
             debug!("Federation with ID: {federation_id} connected and assigned channel id: {mint_channel_id}");
 
             return Ok(federation_info);
@@ -1226,7 +1226,7 @@ impl Gateway {
 
             // Using this routing fee config as a default for all federation that has none
             // routing fees specified.
-            if let Some(fees) = routing_fees.clone() {
+            if let Some(fees) = routing_fees {
                 let routing_fees = GatewayFee(fees.into()).0;
                 prev_config.routing_fees = routing_fees;
             }
@@ -1488,8 +1488,7 @@ impl Gateway {
 
             if let Ok(client) = Box::pin(Spanned::try_new(
                 info_span!("client", federation_id  = %federation_id.clone()),
-                self.client_builder
-                    .build(config.clone(), Arc::new(self.clone())),
+                self.client_builder.build(config, Arc::new(self.clone())),
             ))
             .await
             {
@@ -1622,7 +1621,7 @@ impl Gateway {
             .config
             .modules
             .values()
-            .find(|m| LightningCommonInit::KIND == m.kind.clone())
+            .find(|m| LightningCommonInit::KIND == m.kind)
             .ok_or_else(|| {
                 GatewayError::InvalidMetadata(format!(
                     "Federation {} does not have a lightning module",
@@ -1796,7 +1795,7 @@ impl Gateway {
                 &RegisteredIncomingContract {
                     federation_id: payload.federation_id,
                     incoming_amount: payload.invoice_amount.msats,
-                    contract: payload.contract.clone(),
+                    contract: payload.contract,
                 },
             )
             .await

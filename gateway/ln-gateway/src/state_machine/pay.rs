@@ -188,7 +188,7 @@ impl GatewayPayInvoice {
         vec![StateTransition::new(
             Self::fetch_parameters_and_pay(
                 global_context,
-                payload.clone(),
+                payload,
                 context.clone(),
                 common.clone(),
             ),
