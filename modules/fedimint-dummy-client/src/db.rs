@@ -4,7 +4,7 @@ use fedimint_core::core::{ModuleInstanceId, OperationId};
 use fedimint_core::db::{DatabaseTransaction, IDatabaseTransactionOpsCoreTyped};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::registry::ModuleDecoderRegistry;
-use fedimint_core::{impl_db_record, Amount};
+use fedimint_core::{impl_db_record, Amount, TransactionId};
 use strum_macros::EnumIter;
 use tracing::warn;
 
@@ -85,7 +85,11 @@ pub(crate) fn get_v1_migrated_state(
 
     // Migrate `Unreachable` states to `OutputDone`
     let unreachable = Unreachable::consensus_decode(cursor, &decoders)?;
-    let new_state = DummyStateMachine::OutputDone(unreachable.amount, unreachable.operation_id);
+    let new_state = DummyStateMachine::OutputDone(
+        unreachable.amount,
+        unreachable.txid,
+        unreachable.operation_id,
+    );
     let bytes = new_state.consensus_encode_to_vec();
     Ok(Some((bytes, operation_id)))
 }
@@ -94,6 +98,7 @@ pub(crate) fn get_v1_migrated_state(
 struct Unreachable {
     _module_instance_id: ModuleInstanceId,
     operation_id: OperationId,
+    txid: TransactionId,
     amount: Amount,
 }
 
@@ -104,11 +109,13 @@ impl Decodable for Unreachable {
     ) -> Result<Self, fedimint_core::encoding::DecodeError> {
         let module_instance_id = ModuleInstanceId::consensus_decode(reader, modules)?;
         let operation_id = OperationId::consensus_decode(reader, modules)?;
+        let txid = TransactionId::consensus_decode(reader, modules)?;
         let amount = Amount::consensus_decode(reader, modules)?;
 
         Ok(Unreachable {
             _module_instance_id: module_instance_id,
             operation_id,
+            txid,
             amount,
         })
     }

@@ -251,6 +251,9 @@ mod fedimint_migration_tests {
             unreachable_operation_id
                 .consensus_encode(&mut unreachable)
                 .expect("OperationId is encodable");
+            TransactionId::all_zeros()
+                .consensus_encode(&mut unreachable)
+                .expect("Amount is encodable");
             Amount::from_sats(1000)
                 .consensus_encode(&mut unreachable)
                 .expect("Amount is encodable");
