@@ -23,9 +23,9 @@ impl FromStr for Connector {
     type Err = &'static str;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s {
-            "Tcp" => Ok(Connector::Tcp),
-            "Tor" => Ok(Connector::Tor),
+        match s.to_lowercase().as_str() {
+            "tcp" => Ok(Connector::Tcp),
+            "tor" => Ok(Connector::Tor),
             _ => Err("invalid connector!"),
         }
     }
