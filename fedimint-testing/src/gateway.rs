@@ -179,7 +179,7 @@ impl GatewayTest {
         func: impl Fn(GatewayState) -> bool,
     ) -> anyhow::Result<()> {
         for _ in 0..30 {
-            let gw_state = gateway.state.read().await.clone();
+            let gw_state = gateway.get_state().await;
             if func(gw_state) {
                 return Ok(());
             }
