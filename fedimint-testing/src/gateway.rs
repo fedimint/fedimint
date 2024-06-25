@@ -71,7 +71,7 @@ impl GatewayTest {
     }
 
     pub fn get_gateway_id(&self) -> PublicKey {
-        self.gateway.gateway_id
+        self.gateway.gateway_id()
     }
 
     pub(crate) async fn new(

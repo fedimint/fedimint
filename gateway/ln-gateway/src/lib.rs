@@ -330,7 +330,7 @@ pub struct Gateway {
     scid_to_federation: ScidToFederationMap,
 
     // A public key representing the identity of the gateway. Private key is not used.
-    pub gateway_id: PublicKey,
+    gateway_id: PublicKey,
 
     // Tracker for short channel ID assignments. When connecting a new federation,
     // this value is incremented and assigned to the federation as the `mint_channel_id`
@@ -484,6 +484,10 @@ impl Gateway {
             dbtx.commit_tx().await;
             public
         }
+    }
+
+    pub fn gateway_id(&self) -> PublicKey {
+        self.gateway_id
     }
 
     /// Reads and serializes structures from the Gateway's database for the
