@@ -29,8 +29,9 @@ use clap::{Args, CommandFactory, Parser, Subcommand};
 use db_locked::LockedBuilder;
 use envs::{FM_API_SECRET_ENV, FM_CONNECTOR_ENV, SALT_FILE};
 use fedimint_aead::{encrypted_read, encrypted_write, get_encryption_key};
+use fedimint_api_client::api::net::Connector;
 use fedimint_api_client::api::{
-    Connector, DynGlobalApi, FederationApiExt, FederationError, IRawFederationApi, WsFederationApi,
+    DynGlobalApi, FederationApiExt, FederationError, IRawFederationApi, WsFederationApi,
 };
 use fedimint_bip39::Bip39RootSecretStrategy;
 use fedimint_client::meta::{FetchKind, MetaSource};
@@ -628,12 +629,10 @@ impl FedimintCli {
         cli: &Opts,
         invite_code: InviteCode,
     ) -> CliResult<ClientHandleArc> {
-        let client_config = fedimint_api_client::download_from_invite_code(
-            fedimint_api_client::api::Connector::default(),
-            &invite_code,
-        )
-        .await
-        .map_err_cli()?;
+        let client_config = Connector::default()
+            .download_from_invite_code(&invite_code)
+            .await
+            .map_err_cli()?;
 
         let client_builder = self.make_client_builder(cli).await?;
 
@@ -692,12 +691,10 @@ impl FedimintCli {
     ) -> CliResult<ClientHandleArc> {
         let builder = self.make_client_builder(cli).await?;
 
-        let client_config = fedimint_api_client::download_from_invite_code(
-            fedimint_api_client::api::Connector::default(),
-            &invite_code,
-        )
-        .await
-        .map_err_cli()?;
+        let client_config = fedimint_api_client::api::net::Connector::default()
+            .download_from_invite_code(&invite_code)
+            .await
+            .map_err_cli()?;
 
         match Client::load_decodable_client_secret_opt::<Vec<u8>>(builder.db_no_decoders())
             .await

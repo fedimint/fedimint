@@ -1,6 +1,6 @@
 use std::num::ParseIntError;
 
-use fedimint_api_client::api::Connector;
+use fedimint_api_client::api::net::Connector;
 use fedimint_core::PeerId;
 
 pub fn parse_peer_id(s: &str) -> Result<PeerId, ParseIntError> {
