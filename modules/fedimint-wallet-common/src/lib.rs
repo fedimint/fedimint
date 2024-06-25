@@ -33,7 +33,7 @@ pub mod tweakable;
 pub mod txoproof;
 
 pub const KIND: ModuleKind = ModuleKind::from_static_str("wallet");
-pub const MODULE_CONSENSUS_VERSION: ModuleConsensusVersion = ModuleConsensusVersion::new(2, 0);
+pub const MODULE_CONSENSUS_VERSION: ModuleConsensusVersion = ModuleConsensusVersion::new(2, 1);
 
 pub const CONFIRMATION_TARGET: u16 = 10;
 
@@ -317,6 +317,12 @@ pub enum WalletOutputError {
     #[error("The wallet output version is not supported by this federation")]
     UnknownOutputVariant(#[from] UnknownWalletOutputVariantError),
 }
+
+// For backwards-compatibility with old clients, we use an UnknownOutputVariant
+// error when a client attempts a deprecated RBF withdrawal.
+// see: https://github.com/fedimint/fedimint/issues/5453
+pub const DEPRECATED_RBF_ERROR: WalletOutputError =
+    WalletOutputError::UnknownOutputVariant(UnknownWalletOutputVariantError { variant: 1 });
 
 #[derive(Debug, Error)]
 pub enum ProcessPegOutSigError {

@@ -584,6 +584,10 @@ impl WalletClientModule {
     /// replace by fee (RBF).
     /// This can prevent transactions from getting stuck
     /// in the mempool
+    #[deprecated(
+        since = "0.4.0",
+        note = "RBF withdrawals are rejected by the federation"
+    )]
     pub async fn rbf_withdraw<M: Serialize + MaybeSync + MaybeSend>(
         &self,
         rbf: Rbf,
