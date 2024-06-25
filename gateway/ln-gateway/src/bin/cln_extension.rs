@@ -728,11 +728,12 @@ impl GatewayLightning for ClnRpcService {
             .info()
             .await
             .map_err(|e| Status::internal(e.to_string()))?;
-        let network =
-            Currency::from_str(info.2.as_str()).map_err(|e| Status::internal(e.to_string()))?;
+        let network = bitcoin::Network::from_str(info.2.as_str())
+            .map_err(|e| Status::internal(e.to_string()))?;
+        let currency = Currency::from(network);
 
         let invoice = match description {
-            Description::Direct(description) => InvoiceBuilder::new(network)
+            Description::Direct(description) => InvoiceBuilder::new(currency)
                 .amount_milli_satoshis(amount_msat)
                 .invoice_description(lightning_invoice::Bolt11InvoiceDescription::Direct(
                     &lightning_invoice::Description::new(description)
@@ -750,7 +751,7 @@ impl GatewayLightning for ClnRpcService {
                         .sign_ecdsa_recoverable(m, &SecretKey::new(&mut OsRng))
                 })
                 .map_err(|e| Status::internal(e.to_string()))?,
-            Description::Hash(hash) => InvoiceBuilder::new(network)
+            Description::Hash(hash) => InvoiceBuilder::new(currency)
                 .amount_milli_satoshis(amount_msat)
                 .invoice_description(lightning_invoice::Bolt11InvoiceDescription::Hash(
                     &lightning_invoice::Sha256(
