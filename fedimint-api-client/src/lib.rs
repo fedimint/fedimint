@@ -67,9 +67,7 @@ impl Connector {
             NumPeers::from(1),
         );
 
-        // FIXME: (@leonardo) should fetch all the api_endpoints with proper
-        // [`Connector`] too!
-        let api_endpoints = DynGlobalApi::from_invite_code(invite_code)
+        let api_endpoints = DynGlobalApi::from_invite_code(self, invite_code)
             .request_with_strategy(
                 query_strategy,
                 CLIENT_CONFIG_ENDPOINT.to_owned(),
