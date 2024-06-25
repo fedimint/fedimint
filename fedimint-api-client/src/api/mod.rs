@@ -388,13 +388,12 @@ impl DynGlobalApi {
         .into()
     }
 
-    pub fn from_endpoints(peers: Vec<(PeerId, SafeUrl)>, api_secret: &Option<String>) -> Self {
-        GlobalFederationApiWithCache::new(WsFederationApi::new(
-            &Connector::default(),
-            peers,
-            api_secret,
-        ))
-        .into()
+    pub fn from_endpoints(
+        peers: Vec<(PeerId, SafeUrl)>,
+        api_secret: &Option<String>,
+        connector: &Connector,
+    ) -> Self {
+        GlobalFederationApiWithCache::new(WsFederationApi::new(connector, peers, api_secret)).into()
     }
 
     pub fn from_config(
