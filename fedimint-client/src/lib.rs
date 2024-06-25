@@ -95,8 +95,9 @@ use db::{
     ClientConfigKey, ClientConfigKeyPrefix, ClientInitStateKey, ClientModuleRecovery,
     EncodedClientSecretKey, InitMode, PeerLastApiVersionsSummary, PeerLastApiVersionsSummaryKey,
 };
+use fedimint_api_client::api::net::Connector;
 use fedimint_api_client::api::{
-    ApiVersionSet, Connector, DynGlobalApi, DynModuleApi, FederationApiExt, IGlobalFederationApi,
+    ApiVersionSet, DynGlobalApi, DynModuleApi, FederationApiExt, IGlobalFederationApi,
 };
 use fedimint_core::config::{ClientConfig, FederationId, JsonClientConfig, ModuleInitRegistry};
 use fedimint_core::core::{
@@ -2076,7 +2077,7 @@ impl ClientBuilder {
     /// // Get invite code from user
     /// let invite_code = InviteCode::from_str("fed11qgqpw9thwvaz7te3xgmjuvpwxqhrzw3jxumrvvf0qqqjpetvlg8glnpvzcufhffgzhv8m75f7y34ryk7suamh8x7zetly8h0v9v0rm")
     ///     .expect("Invalid invite code");
-    /// let config = fedimint_api_client::download_from_invite_code(fedimint_api_client::api::Connector::default(), &invite_code).await
+    /// let config = fedimint_api_client::api::net::Connector::default().download_from_invite_code(&invite_code).await
     ///     .expect("Error downloading config");
     ///
     /// // Tell the user the federation name, bitcoin network

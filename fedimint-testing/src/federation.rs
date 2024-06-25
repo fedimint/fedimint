@@ -2,7 +2,8 @@ use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
 use std::time::Duration;
 
-use fedimint_api_client::api::{Connector, DynGlobalApi, FederationApiExt};
+use fedimint_api_client::api::net::Connector;
+use fedimint_api_client::api::{DynGlobalApi, FederationApiExt};
 use fedimint_client::module::init::ClientModuleInitRegistry;
 use fedimint_client::secret::{PlainRootSecretStrategy, RootSecretStrategy};
 use fedimint_client::{AdminCreds, Client, ClientHandleArc};

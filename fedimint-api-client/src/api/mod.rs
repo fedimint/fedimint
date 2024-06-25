@@ -1,7 +1,6 @@
 use std::collections::{BTreeMap, BTreeSet, HashMap};
-use std::fmt::{self, Debug};
+use std::fmt::Debug;
 use std::pin::Pin;
-use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
 use std::{cmp, result};
@@ -48,6 +47,7 @@ use jsonrpsee_wasm_client::{Client as WsClient, WasmClientBuilder as WsClientBui
 use jsonrpsee_ws_client::{HeaderMap, HeaderValue};
 #[cfg(not(target_family = "wasm"))]
 use jsonrpsee_ws_client::{WsClient, WsClientBuilder};
+use net::Connector;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 #[cfg(not(target_family = "wasm"))]
@@ -60,6 +60,7 @@ use crate::query::{QueryStep, QueryStrategy, ThresholdConsensus};
 
 mod error;
 mod global_api;
+pub mod net;
 mod peer;
 
 use global_api::GlobalFederationApiWithCache;
@@ -79,36 +80,6 @@ pub type OutputOutcomeResult<O> = result::Result<O, OutputOutcomeError>;
 pub struct ApiVersionSet {
     pub core: ApiVersion,
     pub modules: BTreeMap<ModuleInstanceId, ApiVersion>,
-}
-
-#[derive(Clone, Copy, Debug)]
-pub enum Connector {
-    Tcp,
-    Tor,
-}
-
-impl Default for Connector {
-    fn default() -> Self {
-        Self::Tcp
-    }
-}
-
-impl fmt::Display for Connector {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{self:?}")
-    }
-}
-
-impl FromStr for Connector {
-    type Err = &'static str;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s {
-            "Tcp" => Ok(Connector::Tcp),
-            "Tor" => Ok(Connector::Tor),
-            _ => Err("invalid connector!"),
-        }
-    }
 }
 
 /// An API (module or global) that can query a federation
@@ -1041,6 +1012,7 @@ pub struct GuardianConfigBackup {
 
 #[cfg(test)]
 mod tests {
+    use std::fmt;
     use std::str::FromStr as _;
 
     use fedimint_core::config::FederationId;
