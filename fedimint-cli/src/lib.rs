@@ -27,7 +27,7 @@ use anyhow::format_err;
 use bip39::Mnemonic;
 use clap::{Args, CommandFactory, Parser, Subcommand};
 use db_locked::LockedBuilder;
-use envs::{FM_API_SECRET_ENV, FM_CONNECTOR_ENV};
+use envs::{FM_API_SECRET_ENV, FM_USE_TOR_ENV};
 use fedimint_aead::{encrypted_read, encrypted_write, get_encryption_key};
 use fedimint_api_client::api::net::Connector;
 use fedimint_api_client::api::{
@@ -62,7 +62,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use thiserror::Error;
 use tracing::{debug, info};
-use utils::{parse_connector, parse_peer_id};
+use utils::parse_peer_id;
 
 use crate::client::ClientCmd;
 use crate::envs::{FM_CLIENT_DIR_ENV, FM_OUR_ID_ENV, FM_PASSWORD_ENV};
@@ -211,9 +211,9 @@ struct Opts {
     #[arg(long, env = FM_PASSWORD_ENV)]
     password: Option<String>,
 
-    /// Connector (e.g. Tcp / Tor)
-    #[arg(env = FM_CONNECTOR_ENV, value_parser = parse_connector)]
-    connector: Option<Connector>,
+    /// Activate usage of Tor as the Connector when building the Client
+    #[arg(long, env = FM_USE_TOR_ENV)]
+    use_tor: bool,
 
     /// Activate more verbose logging, for full control use the RUST_LOG env
     /// variable
@@ -240,17 +240,14 @@ impl Opts {
         Ok(dir)
     }
 
-    // FIXME: (@leonardo) How should the connector selection should be handled here
-    // ?
     fn admin_client(
         &self,
         cfg: &ClientConfig,
         api_secret: &Option<String>,
     ) -> CliResult<DynGlobalApi> {
         let our_id = self.our_id.ok_or_cli_msg("Admin client needs our-id set")?;
-        let connector = self
-            .connector
-            .ok_or_cli_msg("Admin client needs connector set")?;
+        let connector = self.connector();
+
         Ok(DynGlobalApi::from_config_admin(
             cfg, api_secret, our_id, &connector,
         ))
@@ -275,6 +272,14 @@ impl Opts {
                     .map_err_cli_msg("could not open database")?,
             )
             .into())
+    }
+
+    fn connector(&self) -> Connector {
+        if self.use_tor {
+            Connector::Tor
+        } else {
+            Connector::default()
+        }
     }
 }
 
@@ -585,9 +590,14 @@ impl FedimintCli {
 
     async fn make_client_builder(&self, cli: &Opts) -> CliResult<ClientBuilder> {
         let db = cli.load_rocks_db().await?;
+
         let mut client_builder = Client::builder(db);
         client_builder.with_module_inits(self.module_inits.clone());
         client_builder.with_primary_module(1);
+
+        if cli.use_tor {
+            client_builder.with_tor_connector();
+        }
 
         Ok(client_builder)
     }
@@ -597,7 +607,8 @@ impl FedimintCli {
         cli: &Opts,
         invite_code: InviteCode,
     ) -> CliResult<ClientHandleArc> {
-        let client_config = Connector::default()
+        let client_config = cli
+            .connector()
             .download_from_invite_code(&invite_code)
             .await
             .map_err_cli()?;
@@ -659,7 +670,8 @@ impl FedimintCli {
     ) -> CliResult<ClientHandleArc> {
         let builder = self.make_client_builder(cli).await?;
 
-        let client_config = fedimint_api_client::api::net::Connector::default()
+        let client_config = cli
+            .connector()
             .download_from_invite_code(&invite_code)
             .await
             .map_err_cli()?;
@@ -823,9 +835,8 @@ impl FedimintCli {
                 }
                 let client = self.client_open(&cli).await?;
 
-                // FIXME: Should the connector be fetched from the client somehow ?
                 let ws_api: Arc<_> = WsFederationApi::from_config(
-                    &Connector::default(),
+                    &cli.connector(),
                     client.get_config(),
                     client.api_secret(),
                 )
