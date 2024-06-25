@@ -337,7 +337,7 @@ pub struct Gateway {
     next_scid: Arc<Mutex<u64>>,
 
     // The Gateway's API URL.
-    pub versioned_api: SafeUrl,
+    versioned_api: SafeUrl,
 
     // The socket the gateway listens on.
     listen: SocketAddr,
@@ -488,6 +488,10 @@ impl Gateway {
 
     pub fn gateway_id(&self) -> PublicKey {
         self.gateway_id
+    }
+
+    pub fn versioned_api(&self) -> &SafeUrl {
+        &self.versioned_api
     }
 
     /// Reads and serializes structures from the Gateway's database for the
