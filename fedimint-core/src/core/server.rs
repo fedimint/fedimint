@@ -60,6 +60,13 @@ pub trait IServerModule: Debug {
         module_instance_id: ModuleInstanceId,
     ) -> Result<InputMeta, DynInputError>;
 
+    async fn verify_input<'a, 'b, 'c>(
+        &'a self,
+        dbtx: &mut DatabaseTransaction<'c>,
+        input: &'b DynInput,
+        module_instance_id: ModuleInstanceId,
+    ) -> Result<InputMeta, DynInputError>;
+
     /// Try to create an output (e.g. issue notes, peg-out BTC, …). On success
     /// all necessary updates to the database will be part of the database
     /// transaction. On failure (e.g. double spend) the database transaction
@@ -69,6 +76,14 @@ pub trait IServerModule: Debug {
     /// note issuance) and can be used to retrieve its outcome later using
     /// `output_status`.
     async fn process_output<'a>(
+        &self,
+        dbtx: &mut DatabaseTransaction<'a>,
+        output: &DynOutput,
+        out_point: OutPoint,
+        module_instance_id: ModuleInstanceId,
+    ) -> Result<TransactionItemAmount, DynOutputError>;
+
+    async fn verify_output<'a>(
         &self,
         dbtx: &mut DatabaseTransaction<'a>,
         output: &DynOutput,
@@ -182,6 +197,25 @@ where
         .map_err(|v| DynInputError::from_typed(module_instance_id, v))
     }
 
+    async fn verify_input<'a, 'b, 'c>(
+        &'a self,
+        dbtx: &mut DatabaseTransaction<'c>,
+        input: &'b DynInput,
+        module_instance_id: ModuleInstanceId,
+    ) -> Result<InputMeta, DynInputError> {
+        <Self as ServerModule>::verify_input(
+            self,
+            dbtx,
+            input
+                .as_any()
+                .downcast_ref::<<<Self as ServerModule>::Common as ModuleCommon>::Input>()
+                .expect("incorrect input type passed to module plugin"),
+        )
+        .await
+        .map(Into::into)
+        .map_err(|v| DynInputError::from_typed(module_instance_id, v))
+    }
+
     /// Try to create an output (e.g. issue notes, peg-out BTC, …). On success
     /// all necessary updates to the database will be part of the database
     /// transaction. On failure (e.g. double spend) the database transaction
@@ -198,6 +232,26 @@ where
         module_instance_id: ModuleInstanceId,
     ) -> Result<TransactionItemAmount, DynOutputError> {
         <Self as ServerModule>::process_output(
+            self,
+            dbtx,
+            output
+                .as_any()
+                .downcast_ref::<<<Self as ServerModule>::Common as ModuleCommon>::Output>()
+                .expect("incorrect output type passed to module plugin"),
+            out_point,
+        )
+        .await
+        .map_err(|v| DynOutputError::from_typed(module_instance_id, v))
+    }
+
+    async fn verify_output<'a>(
+        &self,
+        dbtx: &mut DatabaseTransaction<'a>,
+        output: &DynOutput,
+        out_point: OutPoint,
+        module_instance_id: ModuleInstanceId,
+    ) -> Result<TransactionItemAmount, DynOutputError> {
+        <Self as ServerModule>::verify_output(
             self,
             dbtx,
             output

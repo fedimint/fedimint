@@ -863,6 +863,14 @@ pub trait ServerModule: Debug + Sized {
         input: &'b <Self::Common as ModuleCommon>::Input,
     ) -> Result<InputMeta, <Self::Common as ModuleCommon>::InputError>;
 
+    async fn verify_input<'a, 'b, 'c>(
+        &'a self,
+        dbtx: &mut DatabaseTransaction<'c>,
+        input: &'b <Self::Common as ModuleCommon>::Input,
+    ) -> Result<InputMeta, <Self::Common as ModuleCommon>::InputError> {
+        self.process_input(dbtx, input).await
+    }
+
     /// Try to create an output (e.g. issue notes, peg-out BTC, …). On success
     /// all necessary updates to the database will be part of the database
     /// transaction. On failure (e.g. double spend) the database transaction
@@ -877,6 +885,15 @@ pub trait ServerModule: Debug + Sized {
         output: &'a <Self::Common as ModuleCommon>::Output,
         out_point: OutPoint,
     ) -> Result<TransactionItemAmount, <Self::Common as ModuleCommon>::OutputError>;
+
+    async fn verify_output<'a, 'b>(
+        &'a self,
+        dbtx: &mut DatabaseTransaction<'b>,
+        output: &'a <Self::Common as ModuleCommon>::Output,
+        out_point: OutPoint,
+    ) -> Result<TransactionItemAmount, <Self::Common as ModuleCommon>::OutputError> {
+        self.process_output(dbtx, output, out_point).await
+    }
 
     /// Retrieve the current status of the output. Depending on the module this
     /// might contain data needed by the client to access funds or give an

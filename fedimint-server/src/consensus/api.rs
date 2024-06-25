@@ -52,7 +52,7 @@ use crate::config::io::{
 use crate::config::ServerConfig;
 use crate::consensus::db::{AcceptedItemPrefix, AcceptedTransactionKey, SignedSessionOutcomeKey};
 use crate::consensus::engine::get_finished_session_count_static;
-use crate::consensus::transaction::process_transaction_with_dbtx;
+use crate::consensus::transaction::verify_transaction_with_dbtx;
 use crate::fedimint_core::encoding::Encodable;
 use crate::metrics::{BACKUP_WRITE_SIZE_BYTES, STORED_BACKUPS_COUNT};
 use crate::net::api::{check_auth, ApiResult, HasApiContext};
@@ -113,7 +113,7 @@ impl ConsensusApi {
         // We ignore any writes, as we only verify if the transaction is valid here
         dbtx.ignore_uncommitted();
 
-        process_transaction_with_dbtx(self.modules.clone(), &mut dbtx, &transaction).await?;
+        verify_transaction_with_dbtx(self.modules.clone(), &mut dbtx, &transaction).await?;
 
         self.submission_sender
             .send(ConsensusItem::Transaction(transaction))

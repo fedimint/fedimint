@@ -6,10 +6,11 @@ use fedimint_core::{Amount, OutPoint};
 
 use crate::metrics::{CONSENSUS_TX_PROCESSED_INPUTS, CONSENSUS_TX_PROCESSED_OUTPUTS};
 
-pub async fn process_transaction_with_dbtx(
+async fn inner_transaction_with_dbtx(
     modules: ServerModuleRegistry,
     dbtx: &mut DatabaseTransaction<'_>,
     transaction: &Transaction,
+    verify_only: bool,
 ) -> Result<(), TransactionError> {
     let in_count = transaction.inputs.len();
     let out_count = transaction.outputs.len();
@@ -23,15 +24,26 @@ pub async fn process_transaction_with_dbtx(
     let mut public_keys = Vec::new();
 
     for input in &transaction.inputs {
-        let meta = modules
-            .get_expect(input.module_instance_id())
-            .process_input(
-                &mut dbtx.to_ref_with_prefix_module_id(input.module_instance_id()),
-                input,
-                input.module_instance_id(),
-            )
-            .await
-            .map_err(TransactionError::Input)?;
+        let module_data = modules.get_expect(input.module_instance_id());
+        let meta = if verify_only {
+            module_data
+                .verify_input(
+                    &mut dbtx.to_ref_with_prefix_module_id(input.module_instance_id()),
+                    input,
+                    input.module_instance_id(),
+                )
+                .await
+                .map_err(TransactionError::Input)?
+        } else {
+            module_data
+                .process_input(
+                    &mut dbtx.to_ref_with_prefix_module_id(input.module_instance_id()),
+                    input,
+                    input.module_instance_id(),
+                )
+                .await
+                .map_err(TransactionError::Input)?
+        };
 
         funding_verifier.add_input(meta.amount);
         public_keys.push(meta.pub_key);
@@ -42,16 +54,28 @@ pub async fn process_transaction_with_dbtx(
     let txid = transaction.tx_hash();
 
     for (output, out_idx) in transaction.outputs.iter().zip(0u64..) {
-        let amount = modules
-            .get_expect(output.module_instance_id())
-            .process_output(
-                &mut dbtx.to_ref_with_prefix_module_id(output.module_instance_id()),
-                output,
-                OutPoint { txid, out_idx },
-                output.module_instance_id(),
-            )
-            .await
-            .map_err(TransactionError::Output)?;
+        let module_data = modules.get_expect(output.module_instance_id());
+        let amount = if verify_only {
+            module_data
+                .verify_output(
+                    &mut dbtx.to_ref_with_prefix_module_id(output.module_instance_id()),
+                    output,
+                    OutPoint { txid, out_idx },
+                    output.module_instance_id(),
+                )
+                .await
+                .map_err(TransactionError::Output)?
+        } else {
+            module_data
+                .process_output(
+                    &mut dbtx.to_ref_with_prefix_module_id(output.module_instance_id()),
+                    output,
+                    OutPoint { txid, out_idx },
+                    output.module_instance_id(),
+                )
+                .await
+                .map_err(TransactionError::Output)?
+        };
 
         funding_verifier.add_output(amount);
     }
@@ -59,6 +83,22 @@ pub async fn process_transaction_with_dbtx(
     funding_verifier.verify_funding()?;
 
     Ok(())
+}
+
+pub async fn process_transaction_with_dbtx(
+    modules: ServerModuleRegistry,
+    dbtx: &mut DatabaseTransaction<'_>,
+    transaction: &Transaction,
+) -> Result<(), TransactionError> {
+    inner_transaction_with_dbtx(modules, dbtx, transaction, false).await
+}
+
+pub async fn verify_transaction_with_dbtx(
+    modules: ServerModuleRegistry,
+    dbtx: &mut DatabaseTransaction<'_>,
+    transaction: &Transaction,
+) -> Result<(), TransactionError> {
+    inner_transaction_with_dbtx(modules, dbtx, transaction, true).await
 }
 
 pub struct FundingVerifier {
