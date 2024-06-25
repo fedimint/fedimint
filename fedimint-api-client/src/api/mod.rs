@@ -365,9 +365,10 @@ impl AsRef<dyn IGlobalFederationApi + 'static> for DynGlobalApi {
     }
 }
 
-// FIXME: (@leonardo) how should this handle the different [`Connector`]'s ?
-// Using [`Connector::default()`] for now.
 impl DynGlobalApi {
+    // FIXME: (@leonardo) Should we have the option to do DKG and config related
+    // actions through Tor ? Should we add the `Connector` choice to
+    // ConfigParams then ?
     pub fn from_pre_peer_id_admin_endpoint(url: SafeUrl, api_secret: &Option<String>) -> Self {
         // PeerIds are used only for informational purposes, but just in case, make a
         // big number so it stands out
