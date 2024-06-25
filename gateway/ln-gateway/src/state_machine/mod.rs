@@ -111,7 +111,7 @@ pub enum GatewayMeta {
 pub struct GatewayClientInit {
     pub timelock_delta: u64,
     pub mint_channel_id: u64,
-    pub gateway: Gateway,
+    pub gateway: Arc<Gateway>,
 }
 
 impl ModuleInit for GatewayClientInit {
@@ -160,7 +160,7 @@ pub struct GatewayClientContext {
     secp: Secp256k1<All>,
     pub ln_decoder: Decoder,
     notifier: ModuleNotifier<GatewayClientStateMachines>,
-    gateway: Gateway,
+    gateway: Arc<Gateway>,
 }
 
 impl Context for GatewayClientContext {}
@@ -188,7 +188,7 @@ pub struct GatewayClientModule {
     mint_channel_id: u64,
     module_api: DynModuleApi,
     client_ctx: ClientContext<Self>,
-    gateway: Gateway,
+    gateway: Arc<Gateway>,
 }
 
 impl ClientModule for GatewayClientModule {

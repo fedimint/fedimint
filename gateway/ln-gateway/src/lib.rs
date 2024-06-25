@@ -540,7 +540,7 @@ impl Gateway {
         Box::pin(self.load_clients()).await;
         self.start_gateway(tg);
         // start webserver last to avoid handling requests before fully initialized
-        run_webserver(self.clone(), tg).await?;
+        run_webserver(Arc::new(self.clone()), tg).await?;
         let handle = tg.make_handle();
         let shutdown_receiver = handle.make_shutdown_rx();
         Ok(shutdown_receiver)
@@ -1046,7 +1046,7 @@ impl Gateway {
 
             let client = self
                 .client_builder
-                .build(gw_client_cfg.clone(), self.clone())
+                .build(gw_client_cfg.clone(), Arc::new(self.clone()))
                 .await?;
 
             // Instead of using `make_federation_info`, we manually create federation info
@@ -1476,7 +1476,8 @@ impl Gateway {
 
             if let Ok(client) = Box::pin(Spanned::try_new(
                 info_span!("client", federation_id  = %federation_id.clone()),
-                self.client_builder.build(config.clone(), self.clone()),
+                self.client_builder
+                    .build(config.clone(), Arc::new(self.clone())),
             ))
             .await
             {
