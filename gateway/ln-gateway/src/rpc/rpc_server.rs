@@ -284,7 +284,7 @@ async fn pay_invoice(
 /// Connect a new federation
 #[instrument(skip_all, err, fields(?payload))]
 async fn connect_fed(
-    Extension(mut gateway): Extension<Gateway>,
+    Extension(gateway): Extension<Gateway>,
     Json(payload): Json<ConnectFedPayload>,
 ) -> Result<impl IntoResponse, GatewayError> {
     let fed = gateway.handle_connect_federation(payload).await?;
@@ -294,7 +294,7 @@ async fn connect_fed(
 /// Leave a federation
 #[instrument(skip_all, err, fields(?payload))]
 async fn leave_fed(
-    Extension(mut gateway): Extension<Gateway>,
+    Extension(gateway): Extension<Gateway>,
     Json(payload): Json<LeaveFedPayload>,
 ) -> Result<impl IntoResponse, GatewayError> {
     let fed = gateway.handle_leave_federation(payload).await?;

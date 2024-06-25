@@ -535,7 +535,7 @@ impl Gateway {
     /// timer, loads the federation clients from the persisted config,
     /// begins listening for intercepted HTLCs, and starts the webserver to
     /// service requests.
-    pub async fn run(mut self, tg: &mut TaskGroup) -> anyhow::Result<TaskShutdownToken> {
+    pub async fn run(self, tg: &mut TaskGroup) -> anyhow::Result<TaskShutdownToken> {
         self.register_clients_timer(tg);
         Box::pin(self.load_clients()).await;
         self.start_gateway(tg);
@@ -549,7 +549,7 @@ impl Gateway {
     /// Begins the task for listening for intercepted HTLCs from the Lightning
     /// node.
     fn start_gateway(&self, task_group: &mut TaskGroup) {
-        let mut self_copy = self.clone();
+        let self_copy = self.clone();
         let tg = task_group.clone();
         task_group.spawn("Subscribe to intercepted HTLCs in stream", |handle| async move {
             loop {
@@ -639,7 +639,7 @@ impl Gateway {
 
     /// Utility function for waiting for the task that is listening for
     /// intercepted HTLCs to shutdown.
-    async fn handle_disconnect(&mut self, htlc_task_group: TaskGroup) {
+    async fn handle_disconnect(&self, htlc_task_group: TaskGroup) {
         self.set_gateway_state(GatewayState::Disconnected).await;
         if let Err(e) = htlc_task_group.shutdown_join_all(None).await {
             error!("HTLC task group shutdown errors: {}", e);
@@ -763,7 +763,7 @@ impl Gateway {
     }
 
     /// Helper function for atomically changing the Gateway's internal state.
-    async fn set_gateway_state(&mut self, state: GatewayState) {
+    async fn set_gateway_state(&self, state: GatewayState) {
         let mut lock = self.state.write().await;
         *lock = state;
     }
@@ -1001,7 +1001,7 @@ impl Gateway {
     /// client, registers, the gateway with the federation, and persists the
     /// necessary config to reconstruct the client when restarting the gateway.
     async fn handle_connect_federation(
-        &mut self,
+        &self,
         payload: ConnectFedPayload,
     ) -> Result<FederationInfo> {
         if let GatewayState::Running { lightning_context } = self.state.read().await.clone() {
@@ -1104,7 +1104,7 @@ impl Gateway {
     /// the gateway will remove the configuration needed to construct the
     /// federation client.
     pub async fn handle_leave_federation(
-        &mut self,
+        &self,
         payload: LeaveFedPayload,
     ) -> Result<FederationInfo> {
         let client_joining_lock = self.client_joining_lock.lock().await;
@@ -1464,7 +1464,7 @@ impl Gateway {
     /// Reads the connected federation client configs from the Gateway's
     /// database and reconstructs the clients necessary for interacting with
     /// connection federations.
-    async fn load_clients(&mut self) {
+    async fn load_clients(&self) {
         let dbtx = self.gateway_db.begin_transaction().await;
         let configs = self.client_builder.load_configs(dbtx.into_nc()).await;
 
@@ -1504,7 +1504,7 @@ impl Gateway {
     /// connected federations every 8.5 mins. Only registers the Gateway if it
     /// has successfully connected to the Lightning node, so that it can
     /// include route hints in the registration.
-    fn register_clients_timer(&mut self, task_group: &mut TaskGroup) {
+    fn register_clients_timer(&self, task_group: &mut TaskGroup) {
         let gateway = self.clone();
         task_group.spawn_cancellable("register clients", async move {
             loop {
