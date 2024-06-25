@@ -91,10 +91,8 @@ async fn auth_middleware(
 ) -> Result<impl IntoResponse, StatusCode> {
     // These routes are not available unless the gateway's configuration is set.
     let gateway_config = gateway
-        .gateway_config
-        .read()
+        .clone_gateway_config()
         .await
-        .clone()
         .ok_or(StatusCode::NOT_FOUND)?;
     let gateway_hashed_password = gateway_config.hashed_password;
     let password_salt = gateway_config.password_salt;
@@ -112,7 +110,7 @@ async fn auth_after_config_middleware(
 ) -> Result<impl IntoResponse, StatusCode> {
     // If the gateway's config has not been set, allow the request to continue, so
     // that the gateway can be configured
-    let gateway_config = gateway.gateway_config.read().await.clone();
+    let gateway_config = gateway.clone_gateway_config().await;
     if gateway_config.is_none() {
         return Ok(next.run(request).await);
     }

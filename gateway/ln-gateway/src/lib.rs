@@ -304,7 +304,7 @@ pub struct Gateway {
     lightning_builder: Arc<dyn LightningBuilder + Send + Sync>,
 
     // The gateway's current configuration
-    pub gateway_config: Arc<RwLock<Option<GatewayConfiguration>>>,
+    gateway_config: Arc<RwLock<Option<GatewayConfiguration>>>,
 
     // The current state of the Gateway.
     pub state: Arc<RwLock<GatewayState>>,
@@ -494,6 +494,10 @@ impl Gateway {
         &self.versioned_api
     }
 
+    pub async fn clone_gateway_config(&self) -> Option<GatewayConfiguration> {
+        self.gateway_config.read().await.clone()
+    }
+
     /// Reads and serializes structures from the Gateway's database for the
     /// purpose for serializing to JSON for inspection.
     pub async fn dump_database<'a>(
@@ -582,7 +586,7 @@ impl Gateway {
 
                         match fetch_lightning_node_info(ln_client.clone()).await {
                             Ok((lightning_public_key, lightning_alias, lightning_network, _block_height, _synced_to_chain)) => {
-                                let gateway_config = self_copy.gateway_config.read().await.clone();
+                                let gateway_config = self_copy.clone_gateway_config().await;
                                 let gateway_config = if let Some(config) = gateway_config {
                                     config
                                 } else {
@@ -783,10 +787,8 @@ impl Gateway {
             // `GatewayConfiguration` should always exist in the database when we are in the
             // `Running` state.
             let gateway_config = self
-                .gateway_config
-                .read()
+                .clone_gateway_config()
                 .await
-                .clone()
                 .expect("Gateway configuration should be set");
             let mut federations = Vec::new();
             let federation_clients = self.clients.read().await.clone().into_iter();
@@ -1028,10 +1030,8 @@ impl Gateway {
             // `GatewayConfiguration` should always exist in the database when we are in the
             // `Running` state.
             let gateway_config = self
-                .gateway_config
-                .read()
+                .clone_gateway_config()
                 .await
-                .clone()
                 .expect("Gateway configuration should be set");
 
             // The gateway deterministically assigns a channel id (u64) to each federation
@@ -1200,7 +1200,7 @@ impl Gateway {
 
         let mut dbtx = self.gateway_db.begin_transaction().await;
 
-        let prev_gateway_config = self.gateway_config.read().await.clone();
+        let prev_gateway_config = self.clone_gateway_config().await;
         let new_gateway_config = if let Some(mut prev_config) = prev_gateway_config {
             if let Some(password) = password.as_ref() {
                 let hashed_password = hash_password(password, prev_config.password_salt);
@@ -1518,7 +1518,7 @@ impl Gateway {
         task_group.spawn_cancellable("register clients", async move {
             loop {
                 let mut registration_result: Option<Result<()>> = None;
-                let gateway_config = gateway.gateway_config.read().await.clone();
+                let gateway_config = gateway.clone_gateway_config().await;
                 if let Some(gateway_config) = gateway_config {
                     let gateway_state = gateway.state.read().await.clone();
                     if let GatewayState::Running { .. } = &gateway_state {
