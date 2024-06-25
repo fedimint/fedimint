@@ -1,5 +1,5 @@
 use std::collections::{BTreeMap, BTreeSet, HashMap};
-use std::fmt::{self, Debug, Display};
+use std::fmt::{self, Debug};
 use std::pin::Pin;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -12,6 +12,7 @@ use arti_client::{TorAddr, TorClient, TorClientConfig};
 use base64::Engine as _;
 use bitcoin::hashes::sha256;
 use bitcoin::secp256k1;
+pub use error::{FederationError, OutputOutcomeError, PeerError};
 use fedimint_core::admin_client::{
     ConfigGenConnectionsRequest, ConfigGenParamsRequest, ConfigGenParamsResponse, PeerServerParams,
     ServerStatus,
@@ -22,7 +23,7 @@ use fedimint_core::core::backup::SignedBackupRequest;
 use fedimint_core::core::{Decoder, DynOutputOutcome, ModuleInstanceId, OutputOutcome};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::endpoint_constants::AWAIT_OUTPUT_OUTCOME_ENDPOINT;
-use fedimint_core::fmt_utils::{AbbreviateDebug, AbbreviateJson};
+use fedimint_core::fmt_utils::AbbreviateDebug;
 use fedimint_core::invite_code::InviteCode;
 use fedimint_core::module::audit::AuditSummary;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
@@ -49,204 +50,67 @@ use jsonrpsee_ws_client::{HeaderMap, HeaderValue};
 use jsonrpsee_ws_client::{WsClient, WsClientBuilder};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use thiserror::Error;
 #[cfg(not(target_family = "wasm"))]
 use tokio_rustls::rustls::{ClientConfig as TlsClientConfig, RootCertStore};
 #[cfg(not(target_family = "wasm"))]
 use tokio_rustls::TlsConnector;
-use tracing::{debug, error, instrument, trace, warn};
+use tracing::{debug, instrument, trace};
 
 use crate::query::{QueryStep, QueryStrategy, ThresholdConsensus};
 
-mod federation_peer_client;
-mod global_federation_api_with_cache;
+mod error;
+mod global_api;
+mod peer;
 
-use federation_peer_client::FederationPeer;
-use global_federation_api_with_cache::GlobalFederationApiWithCache;
+use global_api::GlobalFederationApiWithCache;
+use peer::FederationPeer;
 
 pub type PeerResult<T> = Result<T, PeerError>;
 pub type JsonRpcResult<T> = Result<T, JsonRpcClientError>;
 pub type FederationResult<T> = Result<T, FederationError>;
 pub type SerdeOutputOutcome = SerdeModuleEncoding<DynOutputOutcome>;
 
-/// An API request error when calling a single federation peer
-#[derive(Debug, Error)]
-pub enum PeerError {
-    #[error("Response deserialization error: {0}")]
-    ResponseDeserialization(anyhow::Error),
-    #[error("Invalid peer id: {peer_id}")]
-    InvalidPeerId { peer_id: PeerId },
-    #[error("Rpc error: {0}")]
-    Rpc(#[from] JsonRpcClientError),
-    #[error("Invalid response: {0}")]
-    InvalidResponse(String),
-}
+pub type OutputOutcomeResult<O> = result::Result<O, OutputOutcomeError>;
 
-impl PeerError {
-    /// Report errors that are worth reporting
-    ///
-    /// The goal here is to avoid spamming logs with errors that happen commonly
-    /// for all sorts of expected reasons, while printing ones that suggest
-    /// there's a problem.
-    pub fn report_if_important(&self, peer_id: PeerId) {
-        let important = match self {
-            PeerError::ResponseDeserialization(_)
-            | PeerError::InvalidPeerId { .. }
-            | PeerError::InvalidResponse(_) => true,
-            PeerError::Rpc(rpc_e) => match rpc_e {
-                // TODO: Does this cover all retryable cases?
-                JsonRpcClientError::Transport(_) | JsonRpcClientError::RequestTimeout => false,
-                JsonRpcClientError::RestartNeeded(_)
-                | JsonRpcClientError::Call(_)
-                | JsonRpcClientError::ParseError(_)
-                | JsonRpcClientError::InvalidSubscriptionId
-                | JsonRpcClientError::InvalidRequestId(_)
-                | JsonRpcClientError::Custom(_)
-                | JsonRpcClientError::HttpNotImplemented
-                | JsonRpcClientError::EmptyBatchRequest(_)
-                | JsonRpcClientError::RegisterMethod(_) => true,
-            },
-        };
-
-        trace!(target: LOG_CLIENT_NET_API, error = %self, "PeerError");
-
-        if important {
-            warn!(target: LOG_CLIENT_NET_API, error = %self, %peer_id, "Unusual PeerError");
-        }
-    }
-}
-
-/// An API request error when calling an entire federation
+/// Set of api versions for each component (core + modules)
 ///
-/// Generally all Federation errors are retryable.
-#[derive(Debug, Error)]
-pub struct FederationError {
-    method: String,
-    params: serde_json::Value,
-    general: Option<anyhow::Error>,
-    peers: BTreeMap<PeerId, PeerError>,
+/// E.g. result of federated common api versions discovery.
+#[derive(Debug, Clone, Serialize, Deserialize, Encodable, Decodable)]
+pub struct ApiVersionSet {
+    pub core: ApiVersion,
+    pub modules: BTreeMap<ModuleInstanceId, ApiVersion>,
 }
 
-impl Display for FederationError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str("Federation rpc error {")?;
-        if let Some(general) = self.general.as_ref() {
-            f.write_fmt(format_args!("method => {}), ", self.method))?;
-            f.write_fmt(format_args!(
-                "params => {:?}), ",
-                AbbreviateJson(&self.params)
-            ))?;
-            f.write_fmt(format_args!("general => {general})"))?;
-            if !self.peers.is_empty() {
-                f.write_str(", ")?;
-            }
-        }
-        for (i, (peer, e)) in self.peers.iter().enumerate() {
-            f.write_fmt(format_args!("{peer} => {e})"))?;
-            if i == self.peers.len() - 1 {
-                f.write_str(", ")?;
-            }
-        }
-        f.write_str("}")?;
-        Ok(())
+#[derive(Clone, Copy, Debug)]
+pub enum Connector {
+    Tcp,
+    Tor,
+}
+
+impl Default for Connector {
+    fn default() -> Self {
+        Self::Tcp
     }
 }
 
-impl FederationError {
-    pub fn general(
-        method: impl Into<String>,
-        params: impl Serialize,
-        e: impl Into<anyhow::Error>,
-    ) -> FederationError {
-        FederationError {
-            method: method.into(),
-            params: serde_json::to_value(params).unwrap_or_default(),
-            general: Some(e.into()),
-            peers: BTreeMap::default(),
-        }
-    }
-
-    pub fn new_one_peer(
-        peer_id: PeerId,
-        method: impl Into<String>,
-        params: impl Serialize,
-        error: PeerError,
-    ) -> Self {
-        Self {
-            method: method.into(),
-            params: serde_json::to_value(params).expect("Serialization of valid params won't fail"),
-            general: None,
-            peers: [(peer_id, error)].into_iter().collect(),
-        }
-    }
-
-    /// Report any errors
-    pub fn report_if_important(&self) {
-        if let Some(error) = self.general.as_ref() {
-            warn!(target: LOG_CLIENT_NET_API, %error, "General FederationError");
-        }
-        for (peer_id, e) in &self.peers {
-            e.report_if_important(*peer_id);
-        }
-    }
-
-    /// Get the general error if any.
-    pub fn get_general_error(&self) -> Option<&anyhow::Error> {
-        self.general.as_ref()
-    }
-
-    /// Get errors from different peers.
-    pub fn get_peer_errors(&self) -> impl Iterator<Item = (PeerId, &PeerError)> {
-        self.peers.iter().map(|(peer, error)| (*peer, error))
+impl fmt::Display for Connector {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{self:?}")
     }
 }
 
-type OutputOutcomeResult<O> = result::Result<O, OutputOutcomeError>;
+impl FromStr for Connector {
+    type Err = &'static str;
 
-#[derive(Debug, Error)]
-pub enum OutputOutcomeError {
-    #[error("Response deserialization error: {0}")]
-    ResponseDeserialization(anyhow::Error),
-    #[error("Federation error: {0}")]
-    Federation(#[from] FederationError),
-    #[error("Core error: {0}")]
-    Core(#[from] anyhow::Error),
-    #[error("Transaction rejected: {0}")]
-    Rejected(String),
-    #[error("Invalid output index {out_idx}, larger than {outputs_num} in the transaction")]
-    InvalidVout { out_idx: u64, outputs_num: usize },
-    #[error("Timeout reached after waiting {}s", .0.as_secs())]
-    Timeout(Duration),
-}
-
-impl OutputOutcomeError {
-    pub fn report_if_important(&self) {
-        let important = match self {
-            OutputOutcomeError::Federation(e) => {
-                e.report_if_important();
-                return;
-            }
-            OutputOutcomeError::Core(_)
-            | OutputOutcomeError::InvalidVout { .. }
-            | OutputOutcomeError::ResponseDeserialization(_) => true,
-            OutputOutcomeError::Rejected(_) | OutputOutcomeError::Timeout(_) => false,
-        };
-
-        trace!(target: LOG_CLIENT_NET_API, error = %self, "OutputOutcomeError");
-
-        if important {
-            warn!(target: LOG_CLIENT_NET_API, error = %self, "Uncommon OutputOutcomeError");
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "Tcp" => Ok(Connector::Tcp),
+            "Tor" => Ok(Connector::Tor),
+            _ => Err("invalid connector!"),
         }
     }
-
-    /// Was the transaction rejected (which is final)
-    pub fn is_rejected(&self) -> bool {
-        matches!(
-            self,
-            OutputOutcomeError::Rejected(_) | OutputOutcomeError::InvalidVout { .. }
-        )
-    }
 }
+
 /// An API (module or global) that can query a federation
 #[apply(async_trait_maybe_send!)]
 pub trait IRawFederationApi: Debug + MaybeSend + MaybeSync {
@@ -274,15 +138,6 @@ pub trait IRawFederationApi: Debug + MaybeSend + MaybeSync {
         method: &str,
         params: &[Value],
     ) -> result::Result<Value, JsonRpcClientError>;
-}
-
-/// Set of api versions for each component (core + modules)
-///
-/// E.g. result of federated common api versions discovery.
-#[derive(Debug, Clone, Serialize, Deserialize, Encodable, Decodable)]
-pub struct ApiVersionSet {
-    pub core: ApiVersion,
-    pub modules: BTreeMap<ModuleInstanceId, ApiVersion>,
 }
 
 /// An extension trait allowing to making federation-wide API call on top
@@ -349,7 +204,7 @@ pub trait FederationApiExt: IRawFederationApi {
             .and_then(|v| {
                 serde_json::from_value(v).map_err(|e| PeerError::ResponseDeserialization(e.into()))
             })
-            .map_err(|e| FederationError::new_one_peer(peer_id, method, params, e))?)
+            .map_err(|e| error::FederationError::new_one_peer(peer_id, method, params, e))?)
     }
 
     /// Make an aggregate request to federation, using `strategy` to logically
@@ -629,55 +484,6 @@ impl DynGlobalApi {
         })
         .await
         .map_err(|_| OutputOutcomeError::Timeout(timeout))?
-    }
-}
-
-#[derive(Clone, Copy, Debug)]
-pub enum Connector {
-    Tcp,
-    Tor,
-}
-
-impl Default for Connector {
-    fn default() -> Self {
-        Self::Tcp
-    }
-}
-
-#[allow(dead_code)]
-impl Connector {
-    /// Returns `true` if the connector is [`Tcp`].
-    ///
-    /// [`Tcp`]: Connector::Tcp
-    #[must_use]
-    fn is_tcp(self) -> bool {
-        matches!(self, Self::Tcp)
-    }
-
-    /// Returns `true` if the connector is [`Tor`].
-    ///
-    /// [`Tor`]: Connector::Tor
-    #[must_use]
-    fn is_tor(self) -> bool {
-        matches!(self, Self::Tor)
-    }
-}
-
-impl fmt::Display for Connector {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{self:?}")
-    }
-}
-
-impl FromStr for Connector {
-    type Err = &'static str;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s {
-            "Tcp" => Ok(Connector::Tcp),
-            "Tor" => Ok(Connector::Tor),
-            _ => Err("invalid connector!"),
-        }
     }
 }
 
@@ -1189,6 +995,7 @@ where
 }
 
 impl<C: JsonRpcClient> WsFederationApi<C> {}
+
 /// The status of a server, including how it views its peers
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
 pub struct FederationStatus {
