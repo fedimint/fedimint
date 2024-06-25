@@ -9,7 +9,8 @@ use fedimint_logging::LOG_CLIENT_NET_API;
 use tokio::sync::{Mutex, RwLock};
 use tracing::debug;
 
-use super::{Connector, JsonRpcClient};
+use super::net::Connector;
+use super::JsonRpcClient;
 
 // TODO(tvolk131): Merge this with `FederationPeerClient`.
 #[derive(Debug)]
