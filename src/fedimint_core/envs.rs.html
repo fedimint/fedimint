@@ -98,6 +98,11 @@
 <a href="#98" id="98">98</a>
 <a href="#99" id="99">99</a>
 <a href="#100" id="100">100</a>
+<a href="#101" id="101">101</a>
+<a href="#102" id="102">102</a>
+<a href="#103" id="103">103</a>
+<a href="#104" id="104">104</a>
+<a href="#105" id="105">105</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::env;
 
 <span class="kw">use </span>anyhow::Context;
@@ -130,6 +135,11 @@
     <span class="kw">let </span>unit_test = <span class="macro">cfg!</span>(test);
 
     unit_test || is_env_var_set(<span class="string">"NEXTEST"</span>) || is_env_var_set(FM_IN_DEVIMINT_ENV)
+}
+
+<span class="doccomment">/// Use to allow `process_output` to process RBF withdrawal outputs.
+</span><span class="kw">pub fn </span>is_rbf_withdrawal_enabled() -&gt; bool {
+    is_env_var_set(<span class="string">"FM_UNSAFE_ENABLE_RBF_WITHDRAWAL"</span>)
 }
 
 <span class="doccomment">/// Get value of [`FEDIMINT_BUILD_CODE_VERSION_ENV`] at compile time

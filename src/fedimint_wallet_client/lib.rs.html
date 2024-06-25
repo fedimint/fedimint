@@ -741,6 +741,10 @@
 <a href="#741" id="741">741</a>
 <a href="#742" id="742">742</a>
 <a href="#743" id="743">743</a>
+<a href="#744" id="744">744</a>
+<a href="#745" id="745">745</a>
+<a href="#746" id="746">746</a>
+<a href="#747" id="747">747</a>
 </pre></div><pre class="rust"><code><span class="attr">#![warn(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::default_trait_access)]
@@ -1327,6 +1331,10 @@
     /// replace by fee (RBF).
     /// This can prevent transactions from getting stuck
     /// in the mempool
+    </span><span class="attr">#[deprecated(
+        since = <span class="string">"0.4.0"</span>,
+        note = <span class="string">"RBF withdrawals are rejected by the federation"
+    </span>)]
     </span><span class="kw">pub async fn </span>rbf_withdraw&lt;M: Serialize + MaybeSync + MaybeSend&gt;(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         rbf: Rbf,

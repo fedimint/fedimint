@@ -1836,6 +1836,22 @@
 <a href="#1836" id="1836">1836</a>
 <a href="#1837" id="1837">1837</a>
 <a href="#1838" id="1838">1838</a>
+<a href="#1839" id="1839">1839</a>
+<a href="#1840" id="1840">1840</a>
+<a href="#1841" id="1841">1841</a>
+<a href="#1842" id="1842">1842</a>
+<a href="#1843" id="1843">1843</a>
+<a href="#1844" id="1844">1844</a>
+<a href="#1845" id="1845">1845</a>
+<a href="#1846" id="1846">1846</a>
+<a href="#1847" id="1847">1847</a>
+<a href="#1848" id="1848">1848</a>
+<a href="#1849" id="1849">1849</a>
+<a href="#1850" id="1850">1850</a>
+<a href="#1851" id="1851">1851</a>
+<a href="#1852" id="1852">1852</a>
+<a href="#1853" id="1853">1853</a>
+<a href="#1854" id="1854">1854</a>
 </pre></div><pre class="rust"><code><span class="attr">#![warn(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::cast_possible_wrap)]
@@ -1868,7 +1884,7 @@
 <span class="kw">use </span>common::{
     proprietary_tweak_key, PegOutFees, PegOutSignatureItem, ProcessPegOutSigError, SpendableUTXO,
     WalletCommonInit, WalletConsensusItem, WalletCreationError, WalletInput, WalletModuleTypes,
-    WalletOutput, WalletOutputOutcome, CONFIRMATION_TARGET,
+    WalletOutput, WalletOutputOutcome, CONFIRMATION_TARGET, DEPRECATED_RBF_ERROR,
 };
 <span class="kw">use </span>fedimint_bitcoind::{create_bitcoind, DynBitcoindRpc};
 <span class="kw">use </span>fedimint_core::config::{
@@ -1880,7 +1896,7 @@
     Database, DatabaseTransaction, DatabaseVersion, IDatabaseTransactionOpsCoreTyped,
 };
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
-<span class="kw">use </span>fedimint_core::envs::is_running_in_test_env;
+<span class="kw">use </span>fedimint_core::envs::{is_rbf_withdrawal_enabled, is_running_in_test_env};
 <span class="kw">use </span>fedimint_core::module::audit::Audit;
 <span class="kw">use </span>fedimint_core::module::{
     api_endpoint, ApiEndpoint, ApiVersion, CoreConsensusVersion, InputMeta, ModuleConsensusVersion,
@@ -2387,6 +2403,22 @@
         out_point: OutPoint,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;TransactionItemAmount, WalletOutputError&gt; {
         <span class="kw">let </span>output = output.ensure_v0_ref()<span class="question-mark">?</span>;
+
+        <span class="comment">// In 0.4.0 we began preventing RBF withdrawals. Once we reach EoL support
+        // for 0.4.0, we can safely remove RBF withdrawal logic.
+        // see: https://github.com/fedimint/fedimint/issues/5453
+        </span><span class="kw">if let </span>WalletOutputV0::Rbf(<span class="kw">_</span>) = output {
+            <span class="comment">// This exists as an escape hatch for any federations that successfully
+            // processed an RBF withdrawal due to having a single UTXO owned by the
+            // federation. If a peer needs to resync the federation's history, they can
+            // enable this variable until they've successfully synced, then restart with
+            // this disabled.
+            </span><span class="kw">if </span>is_rbf_withdrawal_enabled() {
+                <span class="macro">warn!</span>(<span class="string">"processing rbf withdrawal"</span>);
+            } <span class="kw">else </span>{
+                <span class="kw">return </span><span class="prelude-val">Err</span>(DEPRECATED_RBF_ERROR);
+            }
+        }
 
         <span class="kw">let </span>change_tweak = <span class="self">self</span>.consensus_nonce(dbtx).<span class="kw">await</span>;
 

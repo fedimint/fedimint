@@ -337,6 +337,12 @@
 <a href="#337" id="337">337</a>
 <a href="#338" id="338">338</a>
 <a href="#339" id="339">339</a>
+<a href="#340" id="340">340</a>
+<a href="#341" id="341">341</a>
+<a href="#342" id="342">342</a>
+<a href="#343" id="343">343</a>
+<a href="#344" id="344">344</a>
+<a href="#345" id="345">345</a>
 </pre></div><pre class="rust"><code><span class="attr">#![warn(clippy::pedantic)]
 #![allow(clippy::default_trait_access)]
 #![allow(clippy::missing_errors_doc)]
@@ -372,7 +378,7 @@
 <span class="kw">pub mod </span>txoproof;
 
 <span class="kw">pub const </span>KIND: ModuleKind = ModuleKind::from_static_str(<span class="string">"wallet"</span>);
-<span class="kw">pub const </span>MODULE_CONSENSUS_VERSION: ModuleConsensusVersion = ModuleConsensusVersion::new(<span class="number">2</span>, <span class="number">0</span>);
+<span class="kw">pub const </span>MODULE_CONSENSUS_VERSION: ModuleConsensusVersion = ModuleConsensusVersion::new(<span class="number">2</span>, <span class="number">1</span>);
 
 <span class="kw">pub const </span>CONFIRMATION_TARGET: u16 = <span class="number">10</span>;
 
@@ -656,6 +662,12 @@
     <span class="attr">#[error(<span class="string">"The wallet output version is not supported by this federation"</span>)]
     </span>UnknownOutputVariant(<span class="attr">#[from] </span>UnknownWalletOutputVariantError),
 }
+
+<span class="comment">// For backwards-compatibility with old clients, we use an UnknownOutputVariant
+// error when a client attempts a deprecated RBF withdrawal.
+// see: https://github.com/fedimint/fedimint/issues/5453
+</span><span class="kw">pub const </span>DEPRECATED_RBF_ERROR: WalletOutputError =
+    WalletOutputError::UnknownOutputVariant(UnknownWalletOutputVariantError { variant: <span class="number">1 </span>});
 
 <span class="attr">#[derive(Debug, Error)]
 </span><span class="kw">pub enum </span>ProcessPegOutSigError {
