@@ -461,7 +461,7 @@ impl Gateway {
             gateway_config: Arc::new(RwLock::new(gateway_config)),
             state: Arc::new(RwLock::new(GatewayState::Initializing)),
             client_builder,
-            gateway_id: Self::get_gateway_id(gateway_db.clone()).await,
+            gateway_id: Self::load_gateway_id(gateway_db.clone()).await,
             gateway_db,
             clients: Arc::new(RwLock::new(BTreeMap::new())),
             scid_to_federation: Arc::new(RwLock::new(BTreeMap::new())),
@@ -472,7 +472,7 @@ impl Gateway {
     }
 
     /// Returns a `PublicKey` that uniquely identifies the Gateway.
-    pub async fn get_gateway_id(gateway_db: Database) -> PublicKey {
+    async fn load_gateway_id(gateway_db: Database) -> PublicKey {
         let mut dbtx = gateway_db.begin_transaction().await;
         if let Some(key_pair) = dbtx.get_value(&GatewayPublicKey {}).await {
             key_pair.public_key()
