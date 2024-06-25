@@ -1947,6 +1947,7 @@
 <a href="#1947" id="1947">1947</a>
 <a href="#1948" id="1948">1948</a>
 <a href="#1949" id="1949">1949</a>
+<a href="#1950" id="1950">1950</a>
 </pre></div><pre class="rust"><code><span class="attr">#![warn(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::cast_possible_wrap)]
@@ -2075,9 +2076,10 @@
 };
 <span class="kw">use </span><span class="kw">crate</span>::state_machine::GatewayExtPayStates;
 
-<span class="doccomment">/// This initial SCID is considered invalid by LND HTLC interceptor,
-/// So we should always increment the value before assigning a new SCID.
-</span><span class="kw">const </span>INITIAL_SCID: u64 = <span class="number">0</span>;
+<span class="doccomment">/// The first SCID that the gateway will assign to a federation.
+/// Note: This starts at 1 because an SCID of 0 is considered invalid by LND's
+/// HTLC interceptor.
+</span><span class="kw">const </span>INITIAL_SCID: u64 = <span class="number">1</span>;
 
 <span class="doccomment">/// How long a gateway announcement stays valid
 </span><span class="kw">const </span>GW_ANNOUNCEMENT_TTL: Duration = Duration::from_secs(<span class="number">600</span>);
@@ -2282,7 +2284,7 @@
 
     <span class="comment">// Tracker for short channel ID assignments. When connecting a new federation,
     // this value is incremented and assigned to the federation as the `mint_channel_id`
-    </span>max_used_scid: Arc&lt;Mutex&lt;u64&gt;&gt;,
+    </span>next_scid: Arc&lt;Mutex&lt;u64&gt;&gt;,
 
     <span class="comment">// The Gateway's API URL.
     </span><span class="kw">pub </span>versioned_api: SafeUrl,
@@ -2301,7 +2303,7 @@
             .field(<span class="string">"clients"</span>, <span class="kw-2">&amp;</span><span class="self">self</span>.clients)
             .field(<span class="string">"scid_to_federation"</span>, <span class="kw-2">&amp;</span><span class="self">self</span>.scid_to_federation)
             .field(<span class="string">"gateway_id"</span>, <span class="kw-2">&amp;</span><span class="self">self</span>.gateway_id)
-            .field(<span class="string">"max_used_scid"</span>, <span class="kw-2">&amp;</span><span class="self">self</span>.max_used_scid)
+            .field(<span class="string">"next_scid"</span>, <span class="kw-2">&amp;</span><span class="self">self</span>.next_scid)
             .finish()
     }
 }
@@ -2405,7 +2407,7 @@
 
         <span class="prelude-val">Ok</span>(<span class="self">Self </span>{
             lightning_builder,
-            max_used_scid: Arc::new(Mutex::new(INITIAL_SCID)),
+            next_scid: Arc::new(Mutex::new(INITIAL_SCID)),
             gateway_config: Arc::new(RwLock::new(gateway_config)),
             state: Arc::new(RwLock::new(GatewayState::Initializing)),
             client_builder,
@@ -2976,14 +2978,14 @@
 
             <span class="comment">// The gateway deterministically assigns a channel id (u64) to each federation
             // connected.
-            </span><span class="kw">let </span><span class="kw-2">mut </span>max_used_scid = <span class="self">self</span>.max_used_scid.lock().<span class="kw">await</span>;
-            <span class="kw">let </span>mint_channel_id =
-                max_used_scid
+            </span><span class="kw">let </span><span class="kw-2">mut </span>next_scid = <span class="self">self</span>.next_scid.lock().<span class="kw">await</span>;
+            <span class="kw">let </span>mint_channel_id = <span class="kw-2">*</span>next_scid;
+            <span class="kw-2">*</span>next_scid =
+                next_scid
                     .checked_add(<span class="number">1</span>)
                     .ok_or(GatewayError::GatewayConfigurationError(
                         <span class="string">"Too many connected federations"</span>.to_string(),
                     ))<span class="question-mark">?</span>;
-            <span class="kw-2">*</span>max_used_scid = mint_channel_id;
 
             <span class="kw">let </span>gw_client_cfg = FederationConfig {
                 invite_code,
@@ -3442,8 +3444,8 @@
         }
 
         <span class="kw">if let </span><span class="prelude-val">Some</span>(max_mint_channel_id) = configs.iter().map(|cfg| cfg.mint_channel_id).max() {
-            <span class="kw">let </span><span class="kw-2">mut </span>max_used_scid = <span class="self">self</span>.max_used_scid.lock().<span class="kw">await</span>;
-            <span class="kw-2">*</span>max_used_scid = max_mint_channel_id;
+            <span class="kw">let </span><span class="kw-2">mut </span>next_scid = <span class="self">self</span>.next_scid.lock().<span class="kw">await</span>;
+            <span class="kw-2">*</span>next_scid = max_mint_channel_id + <span class="number">1</span>;
         }
     }
 
