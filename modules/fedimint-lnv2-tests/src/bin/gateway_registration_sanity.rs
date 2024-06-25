@@ -5,7 +5,7 @@ use tracing::info;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    devimint::run_devfed_test(|dev_fed| async move {
+    devimint::run_devfed_test(|dev_fed, _process_mgr| async move {
         let fedimint_cli_version = util::FedimintCli::version_or_default().await;
         let fedimintd_version = util::FedimintdCmd::version_or_default().await;
         let gatewayd_version = util::Gatewayd::version_or_default().await;

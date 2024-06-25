@@ -29,6 +29,7 @@ pub use external::{
 use futures::Future;
 pub use gatewayd::Gatewayd;
 use tests::log_binary_versions;
+use util::ProcessManager;
 
 pub mod cli;
 pub mod devfed;
@@ -43,7 +44,7 @@ pub mod version_constants;
 
 pub async fn run_devfed_test<F, FF>(f: F) -> anyhow::Result<()>
 where
-    F: FnOnce(DevJitFed) -> FF,
+    F: FnOnce(DevJitFed, ProcessManager) -> FF,
     FF: Future<Output = anyhow::Result<()>>,
 {
     let args = cli::CommonArgs::parse_from::<_, ffi::OsString>(vec![]);
@@ -51,7 +52,7 @@ where
     let (process_mgr, task_group) = cli::setup(args).await?;
     log_binary_versions().await?;
     let dev_fed = devfed::DevJitFed::new(&process_mgr, false)?;
-    let res = cleanup_on_exit(f(dev_fed.clone()), task_group).await;
+    let res = cleanup_on_exit(f(dev_fed.clone(), process_mgr.clone()), task_group).await;
     // workaround https://github.com/tokio-rs/tokio/issues/6463
     // by waiting on all jits to complete, we make it less likely
     // that something is not finished yet and will block in `on_block`

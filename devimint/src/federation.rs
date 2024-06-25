@@ -24,6 +24,7 @@ use fedimint_core::task::jit::JitTryAnyhow;
 use fedimint_core::util::SafeUrl;
 use fedimint_core::{Amount, PeerId};
 use fedimint_logging::LOG_DEVIMINT;
+use fedimint_portalloc::port_alloc;
 use fedimint_server::config::ConfigGenParams;
 use fedimint_testing::federation::local_config_gen_params;
 use fedimint_wallet_client::config::WalletClientConfig;
@@ -218,22 +219,28 @@ impl Federation {
         bitcoind: Bitcoind,
         servers: usize,
         skip_setup: bool,
+        federation_name: String,
     ) -> Result<Self> {
         let mut members = BTreeMap::new();
         let mut peer_to_env_vars_map = BTreeMap::new();
 
         let peers: Vec<_> = (0..servers).map(|id| PeerId::from(id as u16)).collect();
+        let base_port = port_alloc((3 * servers).try_into().unwrap())?;
         let params: HashMap<PeerId, ConfigGenParams> = local_config_gen_params(
             &peers,
-            process_mgr.globals.FM_PORT_FEDIMINTD_BASE,
+            base_port,
             &ServerModuleConfigGenParamsRegistry::default(),
         )?;
 
         let mut admin_clients: BTreeMap<PeerId, DynGlobalApi> = BTreeMap::new();
         let mut endpoints: BTreeMap<PeerId, _> = BTreeMap::new();
         for (peer, peer_params) in &params {
-            let peer_env_vars =
-                vars::Fedimintd::init(&process_mgr.globals, peer_params.to_owned()).await?;
+            let peer_env_vars = vars::Fedimintd::init(
+                &process_mgr.globals,
+                peer_params.to_owned(),
+                federation_name.clone(),
+            )
+            .await?;
             members.insert(
                 peer.to_usize(),
                 Fedimintd::new(
@@ -295,7 +302,7 @@ impl Federation {
 
         let client = JitTryAnyhow::new_try({
             move || async move {
-                let client = Client::open_or_create("default")?;
+                let client = Client::open_or_create(federation_name.as_str())?;
                 let invite_code = Self::invite_code_static()?;
                 if !skip_setup {
                     cmd!(client, "join-federation", invite_code).run().await?;

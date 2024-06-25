@@ -4,7 +4,7 @@ use tracing::info;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    devimint::run_devfed_test(|fed| async move {
+    devimint::run_devfed_test(|fed, _process_mgr| async move {
         let fed = fed.fed().await?;
 
         test_note_consoliation(fed).await?;

@@ -88,7 +88,7 @@ async fn assert_withdrawal(
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    devimint::run_devfed_test(|dev_fed| async move {
+    devimint::run_devfed_test(|dev_fed, _process_mgr| async move {
         let (fed, bitcoind) = try_join!(dev_fed.fed(), dev_fed.bitcoind())?;
 
         let send_client = fed

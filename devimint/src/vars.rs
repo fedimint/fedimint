@@ -15,7 +15,7 @@ macro_rules! declare_vars {
             $($name:ident : $ty:ty = $value:expr; env: $env:expr;)*
         }
     ) => {
-        #[derive(Clone)]
+        #[derive(Clone, Debug)]
         pub struct $struct {
             $(
                 #[allow(unused)]
@@ -212,13 +212,13 @@ impl Global {
 }
 
 declare_vars! {
-    Fedimintd = (globals: &Global, params: ConfigGenParams) => {
+    Fedimintd = (globals: &Global, params: ConfigGenParams, federation_name: String) => {
         FM_BIND_P2P: String = params.local.p2p_bind.to_string(); env: "FM_BIND_P2P";
         FM_BIND_API: String = params.local.api_bind.to_string(); env: "FM_BIND_API";
         FM_P2P_URL: String = params.consensus.peers[&params.local.our_id].p2p_url.to_string(); env: "FM_P2P_URL";
         FM_API_URL: String = params.consensus.peers[&params.local.our_id].api_url.to_string(); env: "FM_API_URL";
         FM_BIND_METRICS_API: String = format!("127.0.0.1:{}", globals.FM_PORT_FEDIMINTD_BASE as usize + 2 * globals.FM_FED_SIZE + params.local.our_id.to_usize()); env: "FM_BIND_METRICS_API";
-        FM_DATA_DIR: PathBuf = mkdir(globals.FM_DATA_DIR.join(format!("fedimintd-{}", params.local.our_id.to_usize()))).await?; env: "FM_DATA_DIR";
+        FM_DATA_DIR: PathBuf = mkdir(globals.FM_DATA_DIR.join(format!("fedimintd-{}-{}", federation_name, params.local.our_id.to_usize()))).await?; env: "FM_DATA_DIR";
 
         // We only need to force the current bitcoind rpc on fedimintd, other daemons take their
         // rpc settings over command-line etc. so always will use the right ones.
