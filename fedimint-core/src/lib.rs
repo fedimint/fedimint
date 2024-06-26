@@ -609,7 +609,7 @@ impl Feerate {
     }
 }
 
-const WITNESS_SCALE_FACTOR: u64 = bitcoin::blockdata::constants::WITNESS_SCALE_FACTOR as u64;
+const WITNESS_SCALE_FACTOR: u64 = bitcoin::constants::WITNESS_SCALE_FACTOR as u64;
 
 /// Converts weight to virtual bytes, defined in [BIP-141] as weight / 4
 /// (rounded up to the next integer).

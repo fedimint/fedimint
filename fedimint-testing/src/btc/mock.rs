@@ -7,7 +7,7 @@ use anyhow::format_err;
 use async_trait::async_trait;
 use bitcoin::absolute::LockTime;
 use bitcoin::block::{Header as BlockHeader, Version};
-use bitcoin::blockdata::constants::genesis_block;
+use bitcoin::constants::genesis_block;
 use bitcoin::hash_types::Txid;
 use bitcoin::hashes::Hash;
 use bitcoin::merkle_tree::PartialMerkleTree;
