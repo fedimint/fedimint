@@ -283,7 +283,7 @@ impl Opts {
 
     fn connector(&self) -> Connector {
         if self.use_tor {
-            Connector::Tor
+            Connector::tor()
         } else {
             Connector::default()
         }
