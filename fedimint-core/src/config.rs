@@ -167,7 +167,7 @@ pub struct GlobalClientConfig {
 
 impl GlobalClientConfig {
     pub fn calculate_federation_id(&self) -> FederationId {
-        FederationId(self.api_endpoints.consensus_hash())
+        FederationId(self.broadcast_public_keys.consensus_hash())
     }
 
     /// Federation name from config metadata (if set)
