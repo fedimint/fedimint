@@ -176,28 +176,28 @@ struct GatewayOpts {
 
     /// Path to folder containing gateway config and data files
     #[arg(long = "data-dir", env = envs::FM_GATEWAY_DATA_DIR_ENV)]
-    pub data_dir: PathBuf,
+    data_dir: PathBuf,
 
     /// Gateway webserver listen address
     #[arg(long = "listen", env = envs::FM_GATEWAY_LISTEN_ADDR_ENV)]
-    pub listen: SocketAddr,
+    listen: SocketAddr,
 
     /// Public URL from which the webserver API is reachable
     #[arg(long = "api-addr", env = envs::FM_GATEWAY_API_ADDR_ENV)]
-    pub api_addr: SafeUrl,
+    api_addr: SafeUrl,
 
     /// Gateway webserver authentication password
     #[arg(long = "password", env = envs::FM_GATEWAY_PASSWORD_ENV)]
-    pub password: Option<String>,
+    password: Option<String>,
 
     /// Bitcoin network this gateway will be running on
     #[arg(long = "network", env = envs::FM_GATEWAY_NETWORK_ENV)]
-    pub network: Option<Network>,
+    network: Option<Network>,
 
     /// Configured gateway routing fees
     /// Format: <base_msat>,<proportional_millionths>
     #[arg(long = "fees", env = envs::FM_GATEWAY_FEES_ENV)]
-    pub fees: Option<GatewayFee>,
+    fees: Option<GatewayFee>,
 
     /// Number of route hints to return in invoices
     #[arg(
@@ -205,7 +205,7 @@ struct GatewayOpts {
         env = envs::FM_NUMBER_OF_ROUTE_HINTS_ENV,
         default_value_t = DEFAULT_NUM_ROUTE_HINTS
     )]
-    pub num_route_hints: u32,
+    num_route_hints: u32,
 }
 
 impl GatewayOpts {
