@@ -18,6 +18,7 @@ use fedimint_core::util::SafeUrl;
 use fedimint_core::{BitcoinHash, ModuleDecoderRegistry};
 use fedimint_logging::LOG_CORE;
 use hex::FromHex;
+use secp256k1::PublicKey;
 use serde::de::DeserializeOwned;
 use serde::ser::SerializeMap;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
@@ -155,6 +156,8 @@ pub struct GlobalClientConfig {
     /// API endpoints for each federation member
     #[serde(deserialize_with = "de_int_key")]
     pub api_endpoints: BTreeMap<PeerId, PeerUrl>,
+    /// Signing session keys for each federation member
+    pub broadcast_public_keys: BTreeMap<PeerId, PublicKey>,
     /// Core consensus version
     pub consensus_version: CoreConsensusVersion,
     // TODO: make it a String -> serde_json::Value map?
@@ -1035,6 +1038,7 @@ mod tests {
         let config = ClientConfig {
             global: GlobalClientConfig {
                 api_endpoints: Default::default(),
+                broadcast_public_keys: Default::default(),
                 consensus_version: CoreConsensusVersion { major: 0, minor: 0 },
                 meta: vec![
                     ("foo".to_string(), "bar".to_string()),
