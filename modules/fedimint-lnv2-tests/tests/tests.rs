@@ -70,7 +70,7 @@ async fn can_pay_external_invoice_exactly_once() -> anyhow::Result<()> {
     let fixtures = fixtures();
     let fed = fixtures.new_default_fed().await;
     let gateway_test = gateway(&fixtures, &fed).await;
-    let gateway_api = gateway_test.gateway.versioned_api.clone();
+    let gateway_api = gateway_test.gateway.versioned_api().clone();
 
     let other_ln = FakeLightningTest::new();
     let invoice = other_ln.invoice(Amount::from_sats(100), None)?;
@@ -128,7 +128,7 @@ async fn refund_unpayable_invoice() -> anyhow::Result<()> {
     let fixtures = fixtures();
     let fed = fixtures.new_default_fed().await;
     let gateway_test = gateway(&fixtures, &fed).await;
-    let gateway_api = gateway_test.gateway.versioned_api.clone();
+    let gateway_api = gateway_test.gateway.versioned_api().clone();
 
     let other_ln = FakeLightningTest::new();
     let invoice = other_ln.unpayable_invoice(Amount::from_sats(100), None);
@@ -167,7 +167,7 @@ async fn can_make_self_payment_exactly_once() -> anyhow::Result<()> {
     let fixtures = fixtures();
     let fed = fixtures.new_default_fed().await;
     let gateway_test = gateway(&fixtures, &fed).await;
-    let gateway_api = gateway_test.gateway.versioned_api.clone();
+    let gateway_api = gateway_test.gateway.versioned_api().clone();
 
     let client = fed.new_client().await;
 
@@ -250,7 +250,7 @@ async fn direct_swap() -> anyhow::Result<()> {
     let fed_receive = fixtures.new_default_fed().await;
 
     let mut gateway_test = gateway(&fixtures, &fed_send).await;
-    let gateway_api = gateway_test.gateway.versioned_api.clone();
+    let gateway_api = gateway_test.gateway.versioned_api().clone();
 
     gateway_test.connect_fed(&fed_receive).await;
 

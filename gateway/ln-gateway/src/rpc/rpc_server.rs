@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use axum::extract::Request;
 use axum::http::{header, StatusCode};
 use axum::middleware::{self, Next};
@@ -34,7 +36,7 @@ use crate::rpc::ConfigPayload;
 use crate::{Gateway, GatewayError};
 
 /// Creates the webserver's routes and spawns the webserver in a separate task.
-pub async fn run_webserver(gateway: Gateway, task_group: &mut TaskGroup) -> anyhow::Result<()> {
+pub async fn run_webserver(gateway: Arc<Gateway>, task_group: &TaskGroup) -> anyhow::Result<()> {
     let v1_routes = v1_routes(gateway.clone());
     let api_v1 = Router::new()
         .nest(&format!("/{V1_API_ENDPOINT}"), v1_routes.clone())
@@ -80,16 +82,14 @@ fn extract_bearer_token(request: &Request) -> Result<String, StatusCode> {
 /// authenticated with this middleware always require a Bearer token to be
 /// supplied in the Authorization header.
 async fn auth_middleware(
-    Extension(gateway): Extension<Gateway>,
+    Extension(gateway): Extension<Arc<Gateway>>,
     request: Request,
     next: Next,
 ) -> Result<impl IntoResponse, StatusCode> {
     // These routes are not available unless the gateway's configuration is set.
     let gateway_config = gateway
-        .gateway_config
-        .read()
+        .clone_gateway_config()
         .await
-        .clone()
         .ok_or(StatusCode::NOT_FOUND)?;
     let gateway_hashed_password = gateway_config.hashed_password;
     let password_salt = gateway_config.password_salt;
@@ -101,13 +101,13 @@ async fn auth_middleware(
 /// not yet been configured. After the gateway is configured, this middleware
 /// enforces that a Bearer token must be supplied in the Authorization header.
 async fn auth_after_config_middleware(
-    Extension(gateway): Extension<Gateway>,
+    Extension(gateway): Extension<Arc<Gateway>>,
     request: Request,
     next: Next,
 ) -> Result<impl IntoResponse, StatusCode> {
     // If the gateway's config has not been set, allow the request to continue, so
     // that the gateway can be configured
-    let gateway_config = gateway.gateway_config.read().await.clone();
+    let gateway_config = gateway.clone_gateway_config().await;
     if gateway_config.is_none() {
         return Ok(next.run(request).await);
     }
@@ -144,7 +144,7 @@ async fn authenticate(
 /// to set a password. After setting the password, they become authenticated.
 /// - Un-authenticated: anyone can request these routes. Used by fedimint
 ///   clients.
-fn v1_routes(gateway: Gateway) -> Router {
+fn v1_routes(gateway: Arc<Gateway>) -> Router {
     // Public routes on gateway webserver
     let public_routes = Router::new()
         .route(PAY_INVOICE_ENDPOINT, post(pay_invoice))
@@ -211,7 +211,7 @@ pub fn hash_password(plaintext_password: &str, salt: [u8; 16]) -> sha256::Hash {
 #[debug_handler]
 #[instrument(skip_all, err)]
 async fn handle_post_info(
-    Extension(gateway): Extension<Gateway>,
+    Extension(gateway): Extension<Arc<Gateway>>,
     Json(_payload): Json<InfoPayload>,
 ) -> Result<impl IntoResponse, GatewayError> {
     let info = gateway.handle_get_info().await?;
@@ -221,7 +221,9 @@ async fn handle_post_info(
 /// Display high-level information about the Gateway
 #[debug_handler]
 #[instrument(skip_all, err)]
-async fn info(Extension(gateway): Extension<Gateway>) -> Result<impl IntoResponse, GatewayError> {
+async fn info(
+    Extension(gateway): Extension<Arc<Gateway>>,
+) -> Result<impl IntoResponse, GatewayError> {
     let info = gateway.handle_get_info().await?;
     Ok(Json(json!(info)))
 }
@@ -230,7 +232,7 @@ async fn info(Extension(gateway): Extension<Gateway>) -> Result<impl IntoRespons
 #[debug_handler]
 #[instrument(skip_all, err, fields(?payload))]
 async fn configuration(
-    Extension(gateway): Extension<Gateway>,
+    Extension(gateway): Extension<Arc<Gateway>>,
     Json(payload): Json<ConfigPayload>,
 ) -> Result<impl IntoResponse, GatewayError> {
     let gateway_fed_config = gateway
@@ -243,7 +245,7 @@ async fn configuration(
 #[debug_handler]
 #[instrument(skip_all, err, fields(?payload))]
 async fn balance(
-    Extension(gateway): Extension<Gateway>,
+    Extension(gateway): Extension<Arc<Gateway>>,
     Json(payload): Json<BalancePayload>,
 ) -> Result<impl IntoResponse, GatewayError> {
     let amount = gateway.handle_balance_msg(payload).await?;
@@ -254,7 +256,7 @@ async fn balance(
 #[debug_handler]
 #[instrument(skip_all, err, fields(?payload))]
 async fn address(
-    Extension(gateway): Extension<Gateway>,
+    Extension(gateway): Extension<Arc<Gateway>>,
     Json(payload): Json<DepositAddressPayload>,
 ) -> Result<impl IntoResponse, GatewayError> {
     let address = gateway.handle_address_msg(payload).await?;
@@ -265,7 +267,7 @@ async fn address(
 #[debug_handler]
 #[instrument(skip_all, err, fields(?payload))]
 async fn withdraw(
-    Extension(gateway): Extension<Gateway>,
+    Extension(gateway): Extension<Arc<Gateway>>,
     Json(payload): Json<WithdrawPayload>,
 ) -> Result<impl IntoResponse, GatewayError> {
     let txid = gateway.handle_withdraw_msg(payload).await?;
@@ -274,7 +276,7 @@ async fn withdraw(
 
 #[instrument(skip_all, err, fields(?payload))]
 async fn pay_invoice(
-    Extension(gateway): Extension<Gateway>,
+    Extension(gateway): Extension<Arc<Gateway>>,
     Json(payload): Json<PayInvoicePayload>,
 ) -> Result<impl IntoResponse, GatewayError> {
     let preimage = gateway.handle_pay_invoice_msg(payload).await?;
@@ -284,7 +286,7 @@ async fn pay_invoice(
 /// Connect a new federation
 #[instrument(skip_all, err, fields(?payload))]
 async fn connect_fed(
-    Extension(mut gateway): Extension<Gateway>,
+    Extension(gateway): Extension<Arc<Gateway>>,
     Json(payload): Json<ConnectFedPayload>,
 ) -> Result<impl IntoResponse, GatewayError> {
     let fed = gateway.handle_connect_federation(payload).await?;
@@ -294,7 +296,7 @@ async fn connect_fed(
 /// Leave a federation
 #[instrument(skip_all, err, fields(?payload))]
 async fn leave_fed(
-    Extension(mut gateway): Extension<Gateway>,
+    Extension(gateway): Extension<Arc<Gateway>>,
     Json(payload): Json<LeaveFedPayload>,
 ) -> Result<impl IntoResponse, GatewayError> {
     let fed = gateway.handle_leave_federation(payload).await?;
@@ -304,7 +306,7 @@ async fn leave_fed(
 /// Backup a gateway actor state
 #[instrument(skip_all, err, fields(?payload))]
 async fn backup(
-    Extension(gateway): Extension<Gateway>,
+    Extension(gateway): Extension<Arc<Gateway>>,
     Json(payload): Json<BackupPayload>,
 ) -> Result<impl IntoResponse, GatewayError> {
     gateway.handle_backup_msg(payload)?;
@@ -314,7 +316,7 @@ async fn backup(
 // Restore a gateway actor state
 #[instrument(skip_all, err, fields(?payload))]
 async fn restore(
-    Extension(gateway): Extension<Gateway>,
+    Extension(gateway): Extension<Arc<Gateway>>,
     Json(payload): Json<RestorePayload>,
 ) -> Result<impl IntoResponse, GatewayError> {
     gateway.handle_restore_msg(payload)?;
@@ -323,7 +325,7 @@ async fn restore(
 
 #[instrument(skip_all, err, fields(?payload))]
 async fn set_configuration(
-    Extension(gateway): Extension<Gateway>,
+    Extension(gateway): Extension<Arc<Gateway>>,
     Json(payload): Json<SetConfigurationPayload>,
 ) -> Result<impl IntoResponse, GatewayError> {
     gateway.handle_set_configuration_msg(payload).await?;
@@ -332,7 +334,7 @@ async fn set_configuration(
 
 #[instrument(skip_all, err)]
 async fn get_funding_address(
-    Extension(gateway): Extension<Gateway>,
+    Extension(gateway): Extension<Arc<Gateway>>,
     Json(_payload): Json<GetFundingAddressPayload>,
 ) -> Result<impl IntoResponse, GatewayError> {
     let address = gateway.handle_get_funding_address_msg().await?;
@@ -341,7 +343,7 @@ async fn get_funding_address(
 
 #[instrument(skip_all, err, fields(?payload))]
 async fn open_channel(
-    Extension(gateway): Extension<Gateway>,
+    Extension(gateway): Extension<Arc<Gateway>>,
     Json(payload): Json<OpenChannelPayload>,
 ) -> Result<impl IntoResponse, GatewayError> {
     gateway.handle_open_channel_msg(payload).await?;
@@ -350,7 +352,7 @@ async fn open_channel(
 
 #[instrument(skip_all, err, fields(?payload))]
 async fn close_channels_with_peer(
-    Extension(gateway): Extension<Gateway>,
+    Extension(gateway): Extension<Arc<Gateway>>,
     Json(payload): Json<CloseChannelsWithPeerPayload>,
 ) -> Result<impl IntoResponse, GatewayError> {
     let response = gateway.handle_close_channels_with_peer_msg(payload).await?;
@@ -359,7 +361,7 @@ async fn close_channels_with_peer(
 
 #[instrument(skip_all, err)]
 async fn list_active_channels(
-    Extension(gateway): Extension<Gateway>,
+    Extension(gateway): Extension<Arc<Gateway>>,
 ) -> Result<impl IntoResponse, GatewayError> {
     let channels = gateway.handle_list_active_channels_msg().await?;
     Ok(Json(json!(channels)))
@@ -367,20 +369,20 @@ async fn list_active_channels(
 
 #[instrument(skip_all, err)]
 async fn get_gateway_id(
-    Extension(gateway): Extension<Gateway>,
+    Extension(gateway): Extension<Arc<Gateway>>,
 ) -> Result<impl IntoResponse, GatewayError> {
     Ok(Json(json!(gateway.gateway_id)))
 }
 
 async fn routing_info_v2(
-    Extension(gateway): Extension<Gateway>,
+    Extension(gateway): Extension<Arc<Gateway>>,
     Json(federation_id): Json<FederationId>,
 ) -> Json<Value> {
     Json(json!(gateway.routing_info_v2(&federation_id).await))
 }
 
 async fn pay_bolt11_invoice_v2(
-    Extension(gateway): Extension<Gateway>,
+    Extension(gateway): Extension<Arc<Gateway>>,
     Json(payload): Json<SendPaymentPayload>,
 ) -> Json<Value> {
     Json(json!(gateway
@@ -390,7 +392,7 @@ async fn pay_bolt11_invoice_v2(
 }
 
 async fn create_bolt11_invoice_v2(
-    Extension(gateway): Extension<Gateway>,
+    Extension(gateway): Extension<Arc<Gateway>>,
     Json(payload): Json<CreateBolt11InvoicePayload>,
 ) -> Json<Value> {
     Json(json!(gateway

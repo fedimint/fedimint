@@ -45,7 +45,7 @@ impl GatewayClientBuilder {
     pub async fn build(
         &self,
         config: FederationConfig,
-        gateway: Gateway,
+        gateway: Arc<Gateway>,
     ) -> Result<fedimint_client::ClientHandleArc> {
         let FederationConfig {
             invite_code,

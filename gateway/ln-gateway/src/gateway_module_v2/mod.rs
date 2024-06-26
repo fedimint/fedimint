@@ -51,7 +51,7 @@ pub struct GatewayOperationMetaV2;
 
 #[derive(Debug, Clone)]
 pub struct GatewayClientInitV2 {
-    pub gateway: Gateway,
+    pub gateway: Arc<Gateway>,
 }
 
 impl ModuleInit for GatewayClientInitV2 {
@@ -100,7 +100,7 @@ pub struct GatewayClientModuleV2 {
     pub client_ctx: ClientContext<Self>,
     pub module_api: DynModuleApi,
     pub keypair: KeyPair,
-    pub gateway: Gateway,
+    pub gateway: Arc<Gateway>,
 }
 
 #[derive(Debug, Clone)]
@@ -109,7 +109,7 @@ pub struct GatewayClientContextV2 {
     pub notifier: ModuleNotifier<GatewayClientStateMachinesV2>,
     pub tpe_agg_pk: AggregatePublicKey,
     pub tpe_pks: BTreeMap<PeerId, PublicKeyShare>,
-    pub gateway: Gateway,
+    pub gateway: Arc<Gateway>,
 }
 
 impl Context for GatewayClientContextV2 {}
