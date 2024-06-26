@@ -49,7 +49,7 @@ pub async fn try_download_client_config(invite_code: &InviteCode) -> anyhow::Res
 
     let query_strategy = FilterMap::new(
         move |cfg: ClientConfig| {
-            if federation_id.0 != cfg.global.api_endpoints.consensus_hash() {
+            if federation_id.0 != cfg.global.broadcast_public_keys.consensus_hash() {
                 bail!("Guardian api endpoint map does not hash to FederationId")
             }
 
