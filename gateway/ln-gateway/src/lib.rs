@@ -299,25 +299,25 @@ struct ClientsJoinLock;
 
 #[derive(Clone)]
 pub struct Gateway {
-    // Builder struct that allows the gateway to build a `ILnRpcClient`, which represents a
-    // connection to a lightning node.
+    /// Builder struct that allows the gateway to build a `ILnRpcClient`, which
+    /// represents a connection to a lightning node.
     lightning_builder: Arc<dyn LightningBuilder + Send + Sync>,
 
-    // The gateway's current configuration
+    /// The gateway's current configuration
     gateway_config: Arc<RwLock<Option<GatewayConfiguration>>>,
 
-    // The current state of the Gateway.
+    /// The current state of the Gateway.
     state: Arc<RwLock<GatewayState>>,
 
-    // Builder struct that allows the gateway to build a Fedimint client, which handles the
-    // communication with a federation.
+    /// Builder struct that allows the gateway to build a Fedimint client, which
+    /// handles the communication with a federation.
     client_builder: GatewayClientBuilder,
 
-    // Database for Gateway metadata.
+    /// Database for Gateway metadata.
     gateway_db: Database,
 
-    // Map of `FederationId` -> `Client`. Used for efficient retrieval of the client while handling
-    // incoming HTLCs.
+    /// Map of `FederationId` -> `Client`. Used for efficient retrieval of the
+    /// client while handling incoming HTLCs.
     clients: FederationToClientMap,
 
     /// Joining or leaving Federation is protected by this lock to prevent
@@ -325,21 +325,23 @@ pub struct Gateway {
     /// Could be more granular (per id), but shouldn't matter in practice.
     client_joining_lock: Arc<tokio::sync::Mutex<ClientsJoinLock>>,
 
-    // Map of short channel ids to `FederationId`. Use for efficient retrieval of the client while
-    // handling incoming HTLCs.
+    /// Map of short channel ids to `FederationId`. Use for efficient retrieval
+    /// of the client while handling incoming HTLCs.
     scid_to_federation: ScidToFederationMap,
 
-    // A public key representing the identity of the gateway. Private key is not used.
+    /// A public key representing the identity of the gateway. Private key is
+    /// not used.
     gateway_id: PublicKey,
 
-    // Tracker for short channel ID assignments. When connecting a new federation,
-    // this value is incremented and assigned to the federation as the `mint_channel_id`
+    /// Tracker for short channel ID assignments. When connecting a new
+    /// federation, this value is incremented and assigned to the federation
+    /// as the `mint_channel_id`
     next_scid: Arc<Mutex<u64>>,
 
-    // The Gateway's API URL.
+    /// The Gateway's API URL.
     versioned_api: SafeUrl,
 
-    // The socket the gateway listens on.
+    /// The socket the gateway listens on.
     listen: SocketAddr,
 }
 
