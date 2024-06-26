@@ -92,7 +92,7 @@ impl FederationTest {
         admin_creds: Option<AdminCreds>,
     ) -> ClientHandleArc {
         info!(target: LOG_TEST, "Setting new client with config");
-        let mut client_builder = Client::builder(db);
+        let mut client_builder = Client::builder(db).await.expect("Failed to build client");
         client_builder.with_module_inits(self.client_init.clone());
         client_builder.with_primary_module(self.primary_client);
         if let Some(admin_creds) = admin_creds {

@@ -1898,19 +1898,20 @@ macro_rules! push_db_key_items {
     };
 }
 
-/// `ServerMigrationFn` that modules can implement to "migrate" the database
+/// `CoreMigrationFn` that modules can implement to "migrate" the database
 /// to the next database version.
-pub type ServerMigrationFn =
-    for<'r, 'tx> fn(
-        &'r mut DatabaseTransaction<'tx>,
-    ) -> Pin<Box<dyn futures::Future<Output = anyhow::Result<()>> + Send + 'r>>;
+pub type CoreMigrationFn = for<'r, 'tx> fn(
+    &'r mut DatabaseTransaction<'tx>,
+) -> Pin<
+    Box<maybe_add_send!(dyn futures::Future<Output = anyhow::Result<()>> + 'r)>,
+>;
 
 /// Applies the database migrations to a non-isolated database.
 pub async fn apply_migrations_server(
     db: &Database,
     kind: String,
     target_db_version: DatabaseVersion,
-    migrations: BTreeMap<DatabaseVersion, ServerMigrationFn>,
+    migrations: BTreeMap<DatabaseVersion, CoreMigrationFn>,
 ) -> Result<(), anyhow::Error> {
     apply_migrations(db, kind, target_db_version, migrations, None).await
 }
@@ -1927,7 +1928,7 @@ pub async fn apply_migrations(
     db: &Database,
     kind: String,
     target_db_version: DatabaseVersion,
-    migrations: BTreeMap<DatabaseVersion, ServerMigrationFn>,
+    migrations: BTreeMap<DatabaseVersion, CoreMigrationFn>,
     module_instance_id: Option<ModuleInstanceId>,
 ) -> Result<(), anyhow::Error> {
     // Newly created databases will not have any data since they have just been
@@ -2019,7 +2020,8 @@ pub async fn create_database_version(
         .is_none()
     {
         // If it exists, read and remove the legacy `DatabaseVersion`, which used to be
-        // in the module's isolated namespace (but not for fedimint-server).
+        // in the module's isolated namespace (but not for fedimint-server or
+        // fedimint-client).
         //
         // Otherwise, if the previous database contains data and no legacy database
         // version, use `DatabaseVersion(0)` so that all database migrations are
@@ -2098,8 +2100,8 @@ mod test_utils {
     use tokio::join;
 
     use super::{
-        apply_migrations, Database, DatabaseTransaction, DatabaseVersion, DatabaseVersionKey,
-        DatabaseVersionKeyV0, ServerMigrationFn,
+        apply_migrations, CoreMigrationFn, Database, DatabaseTransaction, DatabaseVersion,
+        DatabaseVersionKey, DatabaseVersionKeyV0,
     };
     use crate::core::ModuleKind;
     use crate::db::mem_impl::MemDatabase;
@@ -2783,7 +2785,7 @@ mod test_utils {
             .await;
         dbtx.commit_tx().await;
 
-        let mut migrations: BTreeMap<DatabaseVersion, ServerMigrationFn> = BTreeMap::new();
+        let mut migrations: BTreeMap<DatabaseVersion, CoreMigrationFn> = BTreeMap::new();
 
         migrations.insert(DatabaseVersion(0), |dbtx| {
             migrate_test_db_version_0(dbtx).boxed()

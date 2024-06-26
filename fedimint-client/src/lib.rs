@@ -91,9 +91,10 @@ use anyhow::{anyhow, bail, Context};
 use async_stream::stream;
 use backup::ClientBackup;
 use db::{
-    apply_migrations_client, ApiSecretKey, CachedApiVersionSet, CachedApiVersionSetKey,
-    ClientConfigKey, ClientConfigKeyPrefix, ClientInitStateKey, ClientModuleRecovery,
-    EncodedClientSecretKey, InitMode, PeerLastApiVersionsSummary, PeerLastApiVersionsSummaryKey,
+    apply_migrations_client, apply_migrations_core_client, get_core_client_database_migrations,
+    ApiSecretKey, CachedApiVersionSet, CachedApiVersionSetKey, ClientConfigKey, ClientInitStateKey,
+    ClientModuleRecovery, EncodedClientSecretKey, InitMode, PeerLastApiVersionsSummary,
+    PeerLastApiVersionsSummaryKey, CORE_CLIENT_DATABASE_VERSION,
 };
 use fedimint_api_client::api::{
     ApiVersionSet, DynGlobalApi, DynModuleApi, FederationApiExt, IGlobalFederationApi,
@@ -773,8 +774,15 @@ pub struct Client {
 impl Client {
     /// Initialize a client builder that can be configured to create a new
     /// client.
-    pub fn builder(db: Database) -> ClientBuilder {
-        ClientBuilder::new(db)
+    pub async fn builder(db: Database) -> anyhow::Result<ClientBuilder> {
+        apply_migrations_core_client(
+            &db,
+            "fedimint-client".to_string(),
+            CORE_CLIENT_DATABASE_VERSION,
+            get_core_client_database_migrations(),
+        )
+        .await?;
+        Ok(ClientBuilder::new(db))
     }
 
     pub fn api(&self) -> &(dyn IGlobalFederationApi + 'static) {
@@ -798,14 +806,7 @@ impl Client {
 
     pub async fn get_config_from_db(db: &Database) -> Option<ClientConfig> {
         let mut dbtx = db.begin_transaction_nc().await;
-        #[allow(clippy::let_and_return)]
-        let config = dbtx
-            .find_by_prefix(&ClientConfigKeyPrefix)
-            .await
-            .next()
-            .await
-            .map(|(_, config)| config);
-        config
+        dbtx.get_value(&ClientConfigKey).await
     }
 
     pub async fn get_api_secret_from_db(db: &Database) -> Option<String> {
@@ -1943,6 +1944,7 @@ impl ClientBuilder {
     async fn migrate_database(&self, db: &Database) -> anyhow::Result<()> {
         // Only apply the client database migrations if the database has been
         // initialized.
+        // This only works as long as you don't change the client config
         if let Ok(client_config) = self.load_existing_config().await {
             for (module_id, module_cfg) in client_config.modules {
                 let kind = module_cfg.kind.clone();
@@ -1998,13 +2000,7 @@ impl ClientBuilder {
             debug!(target: LOG_CLIENT, "Initializing client database");
             let mut dbtx = self.db_no_decoders.begin_transaction().await;
             // Save config to DB
-            dbtx.insert_new_entry(
-                &ClientConfigKey {
-                    id: config.calculate_federation_id(),
-                },
-                &config,
-            )
-            .await;
+            dbtx.insert_new_entry(&ClientConfigKey, &config).await;
 
             if let Some(api_secret) = api_secret.as_ref() {
                 dbtx.insert_new_entry(&ApiSecretKey, api_secret).await;
@@ -2090,7 +2086,7 @@ impl ClientBuilder {
     /// // let db = RocksDb::open(db_path).expect("error opening DB");
     /// # let db: Database = unimplemented!();
     ///
-    /// let client = Client::builder(db)
+    /// let client = Client::builder(db).await.expect("Error building client")
     ///     // Mount the modules the client should support:
     ///     // .with_module(LightningClientInit)
     ///     // .with_module(MintClientInit)

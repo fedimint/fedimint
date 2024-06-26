@@ -3,7 +3,7 @@ use std::path::PathBuf;
 
 use anyhow::Context;
 use erased_serde::Serialize;
-use fedimint_client::db::ClientConfigKeyPrefix;
+use fedimint_client::db::ClientConfigKey;
 use fedimint_client::module::init::ClientModuleInitRegistry;
 use fedimint_core::config::{ClientConfig, CommonModuleInitRegistry, ServerModuleInitRegistry};
 use fedimint_core::core::ModuleKind;
@@ -84,12 +84,7 @@ impl DatabaseDump {
             };
 
             let mut dbtx = db.begin_transaction_nc().await;
-            let client_cfg = dbtx
-                .find_by_prefix(&ClientConfigKeyPrefix)
-                .await
-                .next()
-                .await
-                .map(|(_, client_cfg)| client_cfg);
+            let client_cfg = dbtx.get_value(&ClientConfigKey).await;
 
             if let Some(client_cfg) = client_cfg {
                 // Successfully read the client config, that means this database is a client db
