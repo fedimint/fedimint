@@ -1,0 +1,21 @@
+[package]
+edition = "2021"
+name = "fedimint-client-wasm"
+version.workspace = true
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+anyhow.workspace = true
+fedimint-core.workspace = true
+fedimint-ln-client = { workspace = true, features = ["cli"] }
+fedimint-mint-client = { version = "=0.4.0-alpha", path = "../modules/fedimint-mint-client" }
+fedimint-client = { workspace = true }
+wasm-bindgen = "=0.2.92"                                                                      # must match the nix provided wasm-bindgen-cli version
+wasm-bindgen-futures = "0.4.42"
+wasm-bindgen-test = "0.3.42"
+fedimint-api-client.workspace = true
+serde_json.workspace = true
+js-sys = "0.3.69"
+futures.workspace = true

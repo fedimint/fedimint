@@ -59,7 +59,8 @@ members = [
     "modules/fedimint-wallet-tests",
     "recoverytool"
 ,
-    "utils/portalloc"]
+    "utils/portalloc",
+    "fedimint-client-wasm"]
 resolver = "2"
 
 [workspace.package]

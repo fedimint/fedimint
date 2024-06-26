@@ -39,6 +39,7 @@ use db::{
     DbKeyPrefix, LightningGatewayKey, LightningGatewayKeyPrefix, PaymentResult, PaymentResultKey,
 };
 use fedimint_api_client::api::DynModuleApi;
+use fedimint_client::client_rpc::ClientRpcSingleHandler;
 use fedimint_client::db::{migrate_state, ClientMigrationFn};
 use fedimint_client::derivable_secret::ChildId;
 use fedimint_client::module::init::{ClientModuleInit, ClientModuleInitArgs};
@@ -2025,3 +2026,38 @@ impl GatewayConnection for MockGatewayConnection {
         Ok("00000000".to_string())
     }
 }
+
+pub struct PayBolt11InvoiceRpc;
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PayBolt11InvoiceRequest {
+    pub maybe_gateway: Option<LightningGateway>,
+    pub invoice: String,
+    pub extra_meta: Option<serde_json::Value>,
+}
+
+#[apply(async_trait_maybe_send!)]
+impl ClientRpcSingleHandler<LightningClientModule> for PayBolt11InvoiceRpc {
+    // FIXME: doesn't need to exist here
+    const MODULE: &'static str = "ln";
+    const METHOD: &'static str = "pay_bolt11_invoice";
+    type Response = OutgoingLightningPayment;
+    type Request = PayBolt11InvoiceRequest;
+
+    async fn handle(
+        &self,
+        ln: &LightningClientModule,
+        request: Self::Request,
+    ) -> anyhow::Result<Self::Response> {
+        ln.pay_bolt11_invoice(
+            request.maybe_gateway,
+            request.invoice.parse().context("failed to parse invoice")?,
+            request.extra_meta,
+        )
+        .await
+    }
+}
+
+// impl ClientRpcHandler<LightningClientModule> for SubscribeToPayBolt11Invoice {
+//
+// }

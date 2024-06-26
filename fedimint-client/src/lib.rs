@@ -159,6 +159,8 @@ use crate::transaction::{
 
 /// Client backup
 pub mod backup;
+/// client rpc
+pub mod client_rpc;
 /// Database keys used by the client
 pub mod db;
 /// Environment variables
@@ -722,7 +724,7 @@ pub struct ClientModuleInstance<'m, M: ClientModule> {
     /// Module-specific API
     pub api: DynModuleApi,
 
-    module: &'m M,
+    pub module: &'m M,
 }
 
 impl<'m, M> ops::Deref for ClientModuleInstance<'m, M>

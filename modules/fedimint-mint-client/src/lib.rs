@@ -35,6 +35,7 @@ use backup::recovery::MintRecovery;
 use base64::Engine as _;
 use bitcoin_hashes::{sha256, sha256t, Hash, HashEngine as BitcoinHashEngine};
 use client_db::{DbKeyPrefix, NoteKeyPrefix};
+use fedimint_client::client_rpc::ClientRpcSingleHandler;
 use fedimint_client::module::init::{
     ClientModuleInit, ClientModuleInitArgs, ClientModuleRecoverArgs,
 };
@@ -2482,5 +2483,31 @@ mod tests {
                 }
             })
         );
+    }
+}
+
+pub struct MintReissueExternalNotesRpc;
+
+#[derive(serde::Serialize, serde::Deserialize)]
+pub struct MintReissueExternalNotesRequest {
+    notes: OOBNotes,
+}
+
+#[apply(async_trait_maybe_send!)]
+impl ClientRpcSingleHandler<MintClientModule> for MintReissueExternalNotesRpc {
+    const MODULE: &'static str = "mint";
+
+    const METHOD: &'static str = "reissue_external_notes";
+
+    type Response = OperationId;
+
+    type Request = MintReissueExternalNotesRequest;
+
+    async fn handle(
+        &self,
+        ctx: &MintClientModule,
+        request: Self::Request,
+    ) -> anyhow::Result<Self::Response> {
+        ctx.reissue_external_notes(request.notes, ()).await
     }
 }
