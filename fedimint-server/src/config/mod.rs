@@ -180,6 +180,7 @@ impl ServerConfigConsensus {
         let client = ClientConfig {
             global: GlobalClientConfig {
                 api_endpoints: self.api_endpoints.clone(),
+                broadcast_public_keys: self.broadcast_public_keys.clone(),
                 consensus_version: self.version,
                 meta: self.meta.clone(),
             },
