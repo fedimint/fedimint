@@ -91,9 +91,11 @@ use anyhow::{anyhow, bail, Context};
 use async_stream::stream;
 use backup::ClientBackup;
 use db::{
-    apply_migrations_client, ApiSecretKey, CachedApiVersionSet, CachedApiVersionSetKey,
-    ClientConfigKey, ClientConfigKeyPrefix, ClientInitStateKey, ClientModuleRecovery,
-    EncodedClientSecretKey, InitMode, PeerLastApiVersionsSummary, PeerLastApiVersionsSummaryKey,
+    apply_migrations_client, apply_migrations_core_client, get_core_client_database_migrations,
+    ApiSecretKey, CachedApiVersionSet, CachedApiVersionSetKey, ClientConfigKey,
+    ClientConfigKeyPrefix, ClientInitStateKey, ClientModuleRecovery, EncodedClientSecretKey,
+    InitMode, PeerLastApiVersionsSummary, PeerLastApiVersionsSummaryKey,
+    CORE_CLIENT_DATABASE_VERSION,
 };
 use fedimint_api_client::api::{
     ApiVersionSet, DynGlobalApi, DynModuleApi, FederationApiExt, IGlobalFederationApi,
@@ -1941,8 +1943,16 @@ impl ClientBuilder {
     }
 
     async fn migrate_database(&self, db: &Database) -> anyhow::Result<()> {
+        apply_migrations_core_client(
+            &db,
+            "fedimint-client".to_string(),
+            CORE_CLIENT_DATABASE_VERSION,
+            get_core_client_database_migrations(),
+        )
+        .await?;
         // Only apply the client database migrations if the database has been
         // initialized.
+        // This only works as long as you don't change the client config
         if let Ok(client_config) = self.load_existing_config().await {
             for (module_id, module_cfg) in client_config.modules {
                 let kind = module_cfg.kind.clone();
