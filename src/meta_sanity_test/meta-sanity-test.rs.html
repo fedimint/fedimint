@@ -196,7 +196,7 @@
 
 <span class="attr">#[tokio::main]
 </span><span class="kw">async fn </span>main() -&gt; anyhow::Result&lt;()&gt; {
-    devimint::run_devfed_test(|dev_fed| <span class="kw">async move </span>{
+    devimint::run_devfed_test(|dev_fed, _process_mgr| <span class="kw">async move </span>{
         <span class="kw">let </span>fedimint_cli_version = util::FedimintCli::version_or_default().<span class="kw">await</span>;
         <span class="kw">let </span>fedimintd_version = util::FedimintdCmd::version_or_default().<span class="kw">await</span>;
 

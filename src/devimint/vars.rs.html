@@ -243,7 +243,7 @@
             $(<span class="macro-nonterminal">$name</span>:ident : <span class="macro-nonterminal">$ty</span>:ty = <span class="macro-nonterminal">$value</span>:expr; env: <span class="macro-nonterminal">$env</span>:expr;)*
         }
     ) =&gt; {
-        <span class="attr">#[derive(Clone)]
+        <span class="attr">#[derive(Clone, Debug)]
         </span><span class="kw">pub struct </span><span class="macro-nonterminal">$</span><span class="kw">struct </span>{
             $(
                 <span class="attr">#[<span class="macro-nonterminal">allow</span>(unused)]
@@ -440,13 +440,13 @@
 }
 
 <span class="macro">declare_vars!</span> {
-    Fedimintd = (globals: <span class="kw-2">&amp;</span>Global, params: ConfigGenParams) =&gt; {
+    Fedimintd = (globals: <span class="kw-2">&amp;</span>Global, params: ConfigGenParams, federation_name: String, base_port: u16) =&gt; {
         FM_BIND_P2P: String = params.local.p2p_bind.to_string(); env: <span class="string">"FM_BIND_P2P"</span>;
         FM_BIND_API: String = params.local.api_bind.to_string(); env: <span class="string">"FM_BIND_API"</span>;
         FM_P2P_URL: String = params.consensus.peers[<span class="kw-2">&amp;</span>params.local.our_id].p2p_url.to_string(); env: <span class="string">"FM_P2P_URL"</span>;
         FM_API_URL: String = params.consensus.peers[<span class="kw-2">&amp;</span>params.local.our_id].api_url.to_string(); env: <span class="string">"FM_API_URL"</span>;
-        FM_BIND_METRICS_API: String = <span class="macro">format!</span>(<span class="string">"127.0.0.1:{}"</span>, globals.FM_PORT_FEDIMINTD_BASE <span class="kw">as </span>usize + <span class="number">2 </span>* globals.FM_FED_SIZE + params.local.our_id.to_usize()); env: <span class="string">"FM_BIND_METRICS_API"</span>;
-        FM_DATA_DIR: PathBuf = mkdir(globals.FM_DATA_DIR.join(<span class="macro">format!</span>(<span class="string">"fedimintd-{}"</span>, params.local.our_id.to_usize()))).<span class="kw">await</span><span class="question-mark">?</span>; env: <span class="string">"FM_DATA_DIR"</span>;
+        FM_BIND_METRICS_API: String = <span class="macro">format!</span>(<span class="string">"127.0.0.1:{}"</span>, base_port <span class="kw">as </span>usize + <span class="number">2 </span>* globals.FM_FED_SIZE + params.local.our_id.to_usize()); env: <span class="string">"FM_BIND_METRICS_API"</span>;
+        FM_DATA_DIR: PathBuf = mkdir(globals.FM_DATA_DIR.join(<span class="macro">format!</span>(<span class="string">"fedimintd-{}-{}"</span>, federation_name, params.local.our_id.to_usize()))).<span class="kw">await</span><span class="question-mark">?</span>; env: <span class="string">"FM_DATA_DIR"</span>;
 
         <span class="comment">// We only need to force the current bitcoind rpc on fedimintd, other daemons take their
         // rpc settings over command-line etc. so always will use the right ones.

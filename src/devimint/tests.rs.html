@@ -2650,6 +2650,10 @@
 <a href="#2650" id="2650">2650</a>
 <a href="#2651" id="2651">2651</a>
 <a href="#2652" id="2652">2652</a>
+<a href="#2653" id="2653">2653</a>
+<a href="#2654" id="2654">2654</a>
+<a href="#2655" id="2655">2655</a>
+<a href="#2656" id="2656">2656</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashSet};
 <span class="kw">use </span>std::io::Write;
 <span class="kw">use </span>std::ops::ControlFlow;
@@ -3245,8 +3249,8 @@
         client,
         <span class="string">"dev"</span>,
         <span class="string">"config-decrypt"</span>,
-        <span class="string">"--in-file={data_dir}/fedimintd-0/private.encrypt"</span>,
-        <span class="string">"--out-file={data_dir}/fedimintd-0/config-plaintext.json"
+        <span class="string">"--in-file={data_dir}/fedimintd-default-0/private.encrypt"</span>,
+        <span class="string">"--out-file={data_dir}/fedimintd-default-0/config-plaintext.json"
     </span>)
     .env(FM_PASSWORD_ENV, <span class="string">"pass"</span>)
     .run()
@@ -3256,8 +3260,8 @@
         client,
         <span class="string">"dev"</span>,
         <span class="string">"config-encrypt"</span>,
-        <span class="string">"--in-file={data_dir}/fedimintd-0/config-plaintext.json"</span>,
-        <span class="string">"--out-file={data_dir}/fedimintd-0/config-2"
+        <span class="string">"--in-file={data_dir}/fedimintd-default-0/config-plaintext.json"</span>,
+        <span class="string">"--out-file={data_dir}/fedimintd-default-0/config-2"
     </span>)
     .env(FM_PASSWORD_ENV, <span class="string">"pass-foo"</span>)
     .run()
@@ -3267,17 +3271,21 @@
         client,
         <span class="string">"dev"</span>,
         <span class="string">"config-decrypt"</span>,
-        <span class="string">"--in-file={data_dir}/fedimintd-0/config-2"</span>,
-        <span class="string">"--out-file={data_dir}/fedimintd-0/config-plaintext-2.json"
+        <span class="string">"--in-file={data_dir}/fedimintd-default-0/config-2"</span>,
+        <span class="string">"--out-file={data_dir}/fedimintd-default-0/config-plaintext-2.json"
     </span>)
     .env(FM_PASSWORD_ENV, <span class="string">"pass-foo"</span>)
     .run()
     .<span class="kw">await</span><span class="question-mark">?</span>;
 
-    <span class="kw">let </span>plaintext_one =
-        fs::read_to_string(<span class="macro">format!</span>(<span class="string">"{data_dir}/fedimintd-0/config-plaintext.json"</span>)).<span class="kw">await</span><span class="question-mark">?</span>;
-    <span class="kw">let </span>plaintext_two =
-        fs::read_to_string(<span class="macro">format!</span>(<span class="string">"{data_dir}/fedimintd-0/config-plaintext-2.json"</span>)).<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="kw">let </span>plaintext_one = fs::read_to_string(<span class="macro">format!</span>(
+        <span class="string">"{data_dir}/fedimintd-default-0/config-plaintext.json"
+    </span>))
+    .<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="kw">let </span>plaintext_two = fs::read_to_string(<span class="macro">format!</span>(
+        <span class="string">"{data_dir}/fedimintd-default-0/config-plaintext-2.json"
+    </span>))
+    .<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="macro">anyhow::ensure!</span>(
         plaintext_one == plaintext_two,
         <span class="string">"config-decrypt/encrypt failed"
@@ -4774,10 +4782,10 @@
         <span class="kw">crate</span>::util::Recoverytool,
         <span class="string">"--readonly"</span>,
         <span class="string">"--cfg"</span>,
-        <span class="string">"{data_dir}/fedimintd-0"</span>,
+        <span class="string">"{data_dir}/fedimintd-default-0"</span>,
         <span class="string">"utxos"</span>,
         <span class="string">"--db"</span>,
-        <span class="string">"{data_dir}/fedimintd-0/database"
+        <span class="string">"{data_dir}/fedimintd-default-0/database"
     </span>)
     .env(FM_PASSWORD_ENV, <span class="string">"pass"</span>)
     .out_json()
@@ -4840,10 +4848,10 @@
         <span class="kw">crate</span>::util::Recoverytool,
         <span class="string">"--readonly"</span>,
         <span class="string">"--cfg"</span>,
-        <span class="string">"{data_dir}/fedimintd-0"</span>,
+        <span class="string">"{data_dir}/fedimintd-default-0"</span>,
         <span class="string">"epochs"</span>,
         <span class="string">"--db"</span>,
-        <span class="string">"{data_dir}/fedimintd-0/database"
+        <span class="string">"{data_dir}/fedimintd-default-0/database"
     </span>)
     .env(FM_PASSWORD_ENV, <span class="string">"pass"</span>)
     .out_json()

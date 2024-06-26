@@ -1139,6 +1139,23 @@
 <a href="#1139" id="1139">1139</a>
 <a href="#1140" id="1140">1140</a>
 <a href="#1141" id="1141">1141</a>
+<a href="#1142" id="1142">1142</a>
+<a href="#1143" id="1143">1143</a>
+<a href="#1144" id="1144">1144</a>
+<a href="#1145" id="1145">1145</a>
+<a href="#1146" id="1146">1146</a>
+<a href="#1147" id="1147">1147</a>
+<a href="#1148" id="1148">1148</a>
+<a href="#1149" id="1149">1149</a>
+<a href="#1150" id="1150">1150</a>
+<a href="#1151" id="1151">1151</a>
+<a href="#1152" id="1152">1152</a>
+<a href="#1153" id="1153">1153</a>
+<a href="#1154" id="1154">1154</a>
+<a href="#1155" id="1155">1155</a>
+<a href="#1156" id="1156">1156</a>
+<a href="#1157" id="1157">1157</a>
+<a href="#1158" id="1158">1158</a>
 </pre></div><pre class="rust"><code><span class="kw">mod </span>config;
 
 <span class="kw">use </span>std::collections::{BTreeMap, HashMap, HashSet};
@@ -1165,6 +1182,7 @@
 <span class="kw">use </span>fedimint_core::util::SafeUrl;
 <span class="kw">use </span>fedimint_core::{Amount, PeerId};
 <span class="kw">use </span>fedimint_logging::LOG_DEVIMINT;
+<span class="kw">use </span>fedimint_portalloc::port_alloc;
 <span class="kw">use </span>fedimint_server::config::ConfigGenParams;
 <span class="kw">use </span>fedimint_testing::federation::local_config_gen_params;
 <span class="kw">use </span>fedimint_wallet_client::config::WalletClientConfig;
@@ -1359,22 +1377,29 @@
         bitcoind: Bitcoind,
         servers: usize,
         skip_setup: bool,
+        federation_name: String,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>members = BTreeMap::new();
         <span class="kw">let </span><span class="kw-2">mut </span>peer_to_env_vars_map = BTreeMap::new();
 
         <span class="kw">let </span>peers: Vec&lt;<span class="kw">_</span>&gt; = (<span class="number">0</span>..servers).map(|id| PeerId::from(id <span class="kw">as </span>u16)).collect();
+        <span class="kw">let </span>base_port = port_alloc((<span class="number">3 </span>* servers).try_into().unwrap())<span class="question-mark">?</span>;
         <span class="kw">let </span>params: HashMap&lt;PeerId, ConfigGenParams&gt; = local_config_gen_params(
             <span class="kw-2">&amp;</span>peers,
-            process_mgr.globals.FM_PORT_FEDIMINTD_BASE,
+            base_port,
             <span class="kw-2">&amp;</span>ServerModuleConfigGenParamsRegistry::default(),
         )<span class="question-mark">?</span>;
 
         <span class="kw">let </span><span class="kw-2">mut </span>admin_clients: BTreeMap&lt;PeerId, DynGlobalApi&gt; = BTreeMap::new();
         <span class="kw">let </span><span class="kw-2">mut </span>endpoints: BTreeMap&lt;PeerId, <span class="kw">_</span>&gt; = BTreeMap::new();
         <span class="kw">for </span>(peer, peer_params) <span class="kw">in </span><span class="kw-2">&amp;</span>params {
-            <span class="kw">let </span>peer_env_vars =
-                vars::Fedimintd::init(<span class="kw-2">&amp;</span>process_mgr.globals, peer_params.to_owned()).<span class="kw">await</span><span class="question-mark">?</span>;
+            <span class="kw">let </span>peer_env_vars = vars::Fedimintd::init(
+                <span class="kw-2">&amp;</span>process_mgr.globals,
+                peer_params.to_owned(),
+                federation_name.clone(),
+                base_port,
+            )
+            .<span class="kw">await</span><span class="question-mark">?</span>;
             members.insert(
                 peer.to_usize(),
                 Fedimintd::new(
@@ -1382,6 +1407,7 @@
                     bitcoind.clone(),
                     peer.to_usize(),
                     <span class="kw-2">&amp;</span>peer_env_vars,
+                    federation_name.clone(),
                 )
                 .<span class="kw">await</span><span class="question-mark">?</span>,
             );
@@ -1436,7 +1462,7 @@
 
         <span class="kw">let </span>client = JitTryAnyhow::new_try({
             <span class="kw">move </span>|| <span class="kw">async move </span>{
-                <span class="kw">let </span>client = Client::open_or_create(<span class="string">"default"</span>)<span class="question-mark">?</span>;
+                <span class="kw">let </span>client = Client::open_or_create(federation_name.as_str())<span class="question-mark">?</span>;
                 <span class="kw">let </span>invite_code = <span class="self">Self</span>::invite_code_static()<span class="question-mark">?</span>;
                 <span class="kw">if </span>!skip_setup {
                     <span class="macro">cmd!</span>(client, <span class="string">"join-federation"</span>, invite_code).run().<span class="kw">await</span><span class="question-mark">?</span>;
@@ -1545,7 +1571,14 @@
         }
         <span class="self">self</span>.members.insert(
             peer,
-            Fedimintd::new(process_mgr, <span class="self">self</span>.bitcoind.clone(), peer, <span class="kw-2">&amp;</span><span class="self">self</span>.vars[<span class="kw-2">&amp;</span>peer]).<span class="kw">await</span><span class="question-mark">?</span>,
+            Fedimintd::new(
+                process_mgr,
+                <span class="self">self</span>.bitcoind.clone(),
+                peer,
+                <span class="kw-2">&amp;</span><span class="self">self</span>.vars[<span class="kw-2">&amp;</span>peer],
+                <span class="string">"default"</span>.to_string(),
+            )
+            .<span class="kw">await</span><span class="question-mark">?</span>,
         );
         <span class="prelude-val">Ok</span>(())
     }
@@ -1836,11 +1869,12 @@
         bitcoind: Bitcoind,
         peer_id: usize,
         env: <span class="kw-2">&amp;</span>vars::Fedimintd,
+        fed_name: String,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>&gt; {
-        <span class="macro">debug!</span>(target: LOG_DEVIMINT, <span class="string">"Starting fedimintd-{peer_id}"</span>);
+        <span class="macro">debug!</span>(target: LOG_DEVIMINT, <span class="string">"Starting fedimintd-{fed_name}-{peer_id}"</span>);
         <span class="kw">let </span>process = process_mgr
             .spawn_daemon(
-                <span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">"fedimintd-{peer_id}"</span>),
+                <span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">"fedimintd-{fed_name}-{peer_id}"</span>),
                 <span class="macro">cmd!</span>(FedimintdCmd).envs(env.vars()),
             )
             .<span class="kw">await</span><span class="question-mark">?</span>;

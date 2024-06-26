@@ -369,6 +369,13 @@
 <a href="#369" id="369">369</a>
 <a href="#370" id="370">370</a>
 <a href="#371" id="371">371</a>
+<a href="#372" id="372">372</a>
+<a href="#373" id="373">373</a>
+<a href="#374" id="374">374</a>
+<a href="#375" id="375">375</a>
+<a href="#376" id="376">376</a>
+<a href="#377" id="377">377</a>
+<a href="#378" id="378">378</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::ops::Deref <span class="kw">as _</span>;
 <span class="kw">use </span>std::sync::Arc;
 
@@ -516,7 +523,14 @@
             <span class="kw">let </span>bitcoind = bitcoind.clone();
             <span class="kw">move </span>|| <span class="kw">async move </span>{
                 <span class="kw">let </span>bitcoind = bitcoind.get_try().<span class="kw">await</span><span class="question-mark">?</span>.deref().clone();
-                <span class="kw">let </span><span class="kw-2">mut </span>fed = Federation::new(<span class="kw-2">&amp;</span>process_mgr, bitcoind, fed_size, skip_setup).<span class="kw">await</span><span class="question-mark">?</span>;
+                <span class="kw">let </span><span class="kw-2">mut </span>fed = Federation::new(
+                    <span class="kw-2">&amp;</span>process_mgr,
+                    bitcoind,
+                    fed_size,
+                    skip_setup,
+                    <span class="string">"default"</span>.to_string(),
+                )
+                .<span class="kw">await</span><span class="question-mark">?</span>;
 
                 <span class="comment">// Create a degraded federation if there are offline nodes
                 </span>fed.degrade_federation(<span class="kw-2">&amp;</span>process_mgr).<span class="kw">await</span><span class="question-mark">?</span>;

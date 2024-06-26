@@ -61,6 +61,7 @@
 <a href="#61" id="61">61</a>
 <a href="#62" id="62">62</a>
 <a href="#63" id="63">63</a>
+<a href="#64" id="64">64</a>
 </pre></div><pre class="rust"><code><span class="attr">#![warn(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::cast_possible_wrap)]
@@ -92,6 +93,7 @@
 <span class="kw">use </span>futures::Future;
 <span class="kw">pub use </span>gatewayd::Gatewayd;
 <span class="kw">use </span>tests::log_binary_versions;
+<span class="kw">use </span>util::ProcessManager;
 
 <span class="kw">pub mod </span>cli;
 <span class="kw">pub mod </span>devfed;
@@ -106,7 +108,7 @@
 
 <span class="kw">pub async fn </span>run_devfed_test&lt;F, FF&gt;(f: F) -&gt; anyhow::Result&lt;()&gt;
 <span class="kw">where
-    </span>F: FnOnce(DevJitFed) -&gt; FF,
+    </span>F: FnOnce(DevJitFed, ProcessManager) -&gt; FF,
     FF: Future&lt;Output = anyhow::Result&lt;()&gt;&gt;,
 {
     <span class="kw">let </span>args = cli::CommonArgs::parse_from::&lt;<span class="kw">_</span>, ffi::OsString&gt;(<span class="macro">vec!</span>[]);
@@ -114,7 +116,7 @@
     <span class="kw">let </span>(process_mgr, task_group) = cli::setup(args).<span class="kw">await</span><span class="question-mark">?</span>;
     log_binary_versions().<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="kw">let </span>dev_fed = devfed::DevJitFed::new(<span class="kw-2">&amp;</span>process_mgr, <span class="bool-val">false</span>)<span class="question-mark">?</span>;
-    <span class="kw">let </span>res = cleanup_on_exit(f(dev_fed.clone()), task_group).<span class="kw">await</span>;
+    <span class="kw">let </span>res = cleanup_on_exit(f(dev_fed.clone(), process_mgr.clone()), task_group).<span class="kw">await</span>;
     <span class="comment">// workaround https://github.com/tokio-rs/tokio/issues/6463
     // by waiting on all jits to complete, we make it less likely
     // that something is not finished yet and will block in `on_block`

@@ -198,7 +198,7 @@
 
 <span class="attr">#[tokio::main]
 </span><span class="kw">async fn </span>main() -&gt; anyhow::Result&lt;()&gt; {
-    devimint::run_devfed_test(|dev_fed| <span class="kw">async move </span>{
+    devimint::run_devfed_test(|dev_fed, _process_mgr| <span class="kw">async move </span>{
         <span class="kw">let </span>(fed, bitcoind) = <span class="macro">try_join!</span>(dev_fed.fed(), dev_fed.bitcoind())<span class="question-mark">?</span>;
 
         <span class="kw">let </span>send_client = fed

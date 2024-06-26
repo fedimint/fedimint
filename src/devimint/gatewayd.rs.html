@@ -259,6 +259,19 @@
 <a href="#259" id="259">259</a>
 <a href="#260" id="260">260</a>
 <a href="#261" id="261">261</a>
+<a href="#262" id="262">262</a>
+<a href="#263" id="263">263</a>
+<a href="#264" id="264">264</a>
+<a href="#265" id="265">265</a>
+<a href="#266" id="266">266</a>
+<a href="#267" id="267">267</a>
+<a href="#268" id="268">268</a>
+<a href="#269" id="269">269</a>
+<a href="#270" id="270">270</a>
+<a href="#271" id="271">271</a>
+<a href="#272" id="272">272</a>
+<a href="#273" id="273">273</a>
+<a href="#274" id="274">274</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::HashMap;
 <span class="kw">use </span>std::ops::ControlFlow;
 <span class="kw">use </span>std::path::PathBuf;
@@ -376,6 +389,19 @@
             <span class="string">"--rpcpassword=theresnosecondbest"</span>,
             <span class="string">"-a"</span>,
             <span class="kw-2">&amp;</span><span class="self">self</span>.addr
+        )
+    }
+
+    <span class="kw">pub fn </span>change_password(<span class="kw-2">&amp;</span><span class="self">self</span>, old_password: <span class="kw-2">&amp;</span>str, new_password: <span class="kw-2">&amp;</span>str) -&gt; Command {
+        <span class="macro">cmd!</span>(
+            <span class="kw">crate</span>::util::get_gateway_cli_path(),
+            <span class="string">"--rpcpassword"</span>,
+            old_password,
+            <span class="string">"-a"</span>,
+            <span class="kw-2">&amp;</span><span class="self">self</span>.addr,
+            <span class="string">"set-configuration"</span>,
+            <span class="string">"--password"</span>,
+            new_password,
         )
     }
 
