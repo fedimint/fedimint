@@ -758,7 +758,8 @@ impl JsonRpcClient for WsClient {
         let tor_config = TorClientConfig::default();
         let tor_client = TorClient::create_bootstrapped(tor_config)
             .await
-            .map_err(|e| JsonRpcClientError::Transport(e.into()))?;
+            .map_err(|e| JsonRpcClientError::Transport(e.into()))?
+            .isolated_client();
 
         // TODO: (@leonardo) should we implement our `IntoTorAddr` for `SafeUrl`
         // instead?
