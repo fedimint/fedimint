@@ -157,6 +157,7 @@ pub struct GlobalClientConfig {
     #[serde(deserialize_with = "de_int_key")]
     pub api_endpoints: BTreeMap<PeerId, PeerUrl>,
     /// Signing session keys for each federation member
+    /// Optional for 0.3.x backwards compatibility
     pub broadcast_public_keys: Option<BTreeMap<PeerId, PublicKey>>,
     /// Core consensus version
     pub consensus_version: CoreConsensusVersion,
