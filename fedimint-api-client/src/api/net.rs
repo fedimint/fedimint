@@ -7,6 +7,12 @@ pub enum Connector {
     Tor,
 }
 
+impl Connector {
+    pub fn tor() -> Connector {
+        Connector::Tor
+    }
+}
+
 impl Default for Connector {
     fn default() -> Self {
         Self::Tcp
