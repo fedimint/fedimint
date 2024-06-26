@@ -101,7 +101,7 @@ impl GatewayLndClient {
 
     async fn spawn_interceptor(
         &self,
-        task_group: &mut TaskGroup,
+        task_group: &TaskGroup,
         lnd_sender: mpsc::Sender<ForwardHtlcInterceptResponse>,
         lnd_rx: mpsc::Receiver<ForwardHtlcInterceptResponse>,
         gateway_sender: HtlcSubscriptionSender,

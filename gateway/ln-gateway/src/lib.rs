@@ -553,7 +553,7 @@ impl Gateway {
     /// timer, loads the federation clients from the persisted config,
     /// begins listening for intercepted HTLCs, and starts the webserver to
     /// service requests.
-    pub async fn run(self, tg: &mut TaskGroup) -> anyhow::Result<TaskShutdownToken> {
+    pub async fn run(self, tg: &TaskGroup) -> anyhow::Result<TaskShutdownToken> {
         self.register_clients_timer(tg);
         Box::pin(self.load_clients()).await;
         self.start_gateway(tg);
@@ -566,7 +566,7 @@ impl Gateway {
 
     /// Begins the task for listening for intercepted HTLCs from the Lightning
     /// node.
-    fn start_gateway(&self, task_group: &mut TaskGroup) {
+    fn start_gateway(&self, task_group: &TaskGroup) {
         let self_copy = self.clone();
         let tg = task_group.clone();
         task_group.spawn("Subscribe to intercepted HTLCs in stream", |handle| async move {
@@ -1516,7 +1516,7 @@ impl Gateway {
     /// connected federations every 8.5 mins. Only registers the Gateway if it
     /// has successfully connected to the Lightning node, so that it can
     /// include route hints in the registration.
-    fn register_clients_timer(&self, task_group: &mut TaskGroup) {
+    fn register_clients_timer(&self, task_group: &TaskGroup) {
         let gateway = self.clone();
         task_group.spawn_cancellable("register clients", async move {
             loop {
