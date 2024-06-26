@@ -398,7 +398,11 @@
 <a href="#398" id="398">398</a>
 <a href="#399" id="399">399</a>
 <a href="#400" id="400">400</a>
-</pre></div><pre class="rust"><code><span class="kw">use </span>axum::extract::Request;
+<a href="#401" id="401">401</a>
+<a href="#402" id="402">402</a>
+</pre></div><pre class="rust"><code><span class="kw">use </span>std::sync::Arc;
+
+<span class="kw">use </span>axum::extract::Request;
 <span class="kw">use </span>axum::http::{header, StatusCode};
 <span class="kw">use </span>axum::middleware::{<span class="self">self</span>, Next};
 <span class="kw">use </span>axum::response::IntoResponse;
@@ -434,7 +438,7 @@
 <span class="kw">use crate</span>::{Gateway, GatewayError};
 
 <span class="doccomment">/// Creates the webserver's routes and spawns the webserver in a separate task.
-</span><span class="kw">pub async fn </span>run_webserver(gateway: Gateway, task_group: <span class="kw-2">&amp;mut </span>TaskGroup) -&gt; anyhow::Result&lt;()&gt; {
+</span><span class="kw">pub async fn </span>run_webserver(gateway: Arc&lt;Gateway&gt;, task_group: <span class="kw-2">&amp;</span>TaskGroup) -&gt; anyhow::Result&lt;()&gt; {
     <span class="kw">let </span>v1_routes = v1_routes(gateway.clone());
     <span class="kw">let </span>api_v1 = Router::new()
         .nest(<span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">"/{V1_API_ENDPOINT}"</span>), v1_routes.clone())
@@ -480,17 +484,15 @@
 /// authenticated with this middleware always require a Bearer token to be
 /// supplied in the Authorization header.
 </span><span class="kw">async fn </span>auth_middleware(
-    Extension(gateway): Extension&lt;Gateway&gt;,
+    Extension(gateway): Extension&lt;Arc&lt;Gateway&gt;&gt;,
     request: Request,
     next: Next,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="kw">impl </span>IntoResponse, StatusCode&gt; {
     <span class="comment">// These routes are not available unless the gateway's configuration is set.
     </span><span class="kw">let </span>gateway_config = gateway
-        .gateway_config
-        .read()
+        .clone_gateway_config()
         .<span class="kw">await
-        </span>.clone()
-        .ok_or(StatusCode::NOT_FOUND)<span class="question-mark">?</span>;
+        </span>.ok_or(StatusCode::NOT_FOUND)<span class="question-mark">?</span>;
     <span class="kw">let </span>gateway_hashed_password = gateway_config.hashed_password;
     <span class="kw">let </span>password_salt = gateway_config.password_salt;
     authenticate(gateway_hashed_password, password_salt, request, next).<span class="kw">await
@@ -501,13 +503,13 @@
 /// not yet been configured. After the gateway is configured, this middleware
 /// enforces that a Bearer token must be supplied in the Authorization header.
 </span><span class="kw">async fn </span>auth_after_config_middleware(
-    Extension(gateway): Extension&lt;Gateway&gt;,
+    Extension(gateway): Extension&lt;Arc&lt;Gateway&gt;&gt;,
     request: Request,
     next: Next,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="kw">impl </span>IntoResponse, StatusCode&gt; {
     <span class="comment">// If the gateway's config has not been set, allow the request to continue, so
     // that the gateway can be configured
-    </span><span class="kw">let </span>gateway_config = gateway.gateway_config.read().<span class="kw">await</span>.clone();
+    </span><span class="kw">let </span>gateway_config = gateway.clone_gateway_config().<span class="kw">await</span>;
     <span class="kw">if </span>gateway_config.is_none() {
         <span class="kw">return </span><span class="prelude-val">Ok</span>(next.run(request).<span class="kw">await</span>);
     }
@@ -544,7 +546,7 @@
 /// to set a password. After setting the password, they become authenticated.
 /// - Un-authenticated: anyone can request these routes. Used by fedimint
 ///   clients.
-</span><span class="kw">fn </span>v1_routes(gateway: Gateway) -&gt; Router {
+</span><span class="kw">fn </span>v1_routes(gateway: Arc&lt;Gateway&gt;) -&gt; Router {
     <span class="comment">// Public routes on gateway webserver
     </span><span class="kw">let </span>public_routes = Router::new()
         .route(PAY_INVOICE_ENDPOINT, post(pay_invoice))
@@ -611,7 +613,7 @@
 </span><span class="attr">#[debug_handler]
 #[instrument(skip_all, err)]
 </span><span class="kw">async fn </span>handle_post_info(
-    Extension(gateway): Extension&lt;Gateway&gt;,
+    Extension(gateway): Extension&lt;Arc&lt;Gateway&gt;&gt;,
     Json(_payload): Json&lt;InfoPayload&gt;,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="kw">impl </span>IntoResponse, GatewayError&gt; {
     <span class="kw">let </span>info = gateway.handle_get_info().<span class="kw">await</span><span class="question-mark">?</span>;
@@ -621,7 +623,9 @@
 <span class="doccomment">/// Display high-level information about the Gateway
 </span><span class="attr">#[debug_handler]
 #[instrument(skip_all, err)]
-</span><span class="kw">async fn </span>info(Extension(gateway): Extension&lt;Gateway&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="kw">impl </span>IntoResponse, GatewayError&gt; {
+</span><span class="kw">async fn </span>info(
+    Extension(gateway): Extension&lt;Arc&lt;Gateway&gt;&gt;,
+) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="kw">impl </span>IntoResponse, GatewayError&gt; {
     <span class="kw">let </span>info = gateway.handle_get_info().<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="prelude-val">Ok</span>(Json(<span class="macro">json!</span>(info)))
 }
@@ -630,7 +634,7 @@
 </span><span class="attr">#[debug_handler]
 #[instrument(skip_all, err, fields(<span class="question-mark">?</span>payload))]
 </span><span class="kw">async fn </span>configuration(
-    Extension(gateway): Extension&lt;Gateway&gt;,
+    Extension(gateway): Extension&lt;Arc&lt;Gateway&gt;&gt;,
     Json(payload): Json&lt;ConfigPayload&gt;,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="kw">impl </span>IntoResponse, GatewayError&gt; {
     <span class="kw">let </span>gateway_fed_config = gateway
@@ -643,7 +647,7 @@
 </span><span class="attr">#[debug_handler]
 #[instrument(skip_all, err, fields(<span class="question-mark">?</span>payload))]
 </span><span class="kw">async fn </span>balance(
-    Extension(gateway): Extension&lt;Gateway&gt;,
+    Extension(gateway): Extension&lt;Arc&lt;Gateway&gt;&gt;,
     Json(payload): Json&lt;BalancePayload&gt;,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="kw">impl </span>IntoResponse, GatewayError&gt; {
     <span class="kw">let </span>amount = gateway.handle_balance_msg(payload).<span class="kw">await</span><span class="question-mark">?</span>;
@@ -654,7 +658,7 @@
 </span><span class="attr">#[debug_handler]
 #[instrument(skip_all, err, fields(<span class="question-mark">?</span>payload))]
 </span><span class="kw">async fn </span>address(
-    Extension(gateway): Extension&lt;Gateway&gt;,
+    Extension(gateway): Extension&lt;Arc&lt;Gateway&gt;&gt;,
     Json(payload): Json&lt;DepositAddressPayload&gt;,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="kw">impl </span>IntoResponse, GatewayError&gt; {
     <span class="kw">let </span>address = gateway.handle_address_msg(payload).<span class="kw">await</span><span class="question-mark">?</span>;
@@ -665,7 +669,7 @@
 </span><span class="attr">#[debug_handler]
 #[instrument(skip_all, err, fields(<span class="question-mark">?</span>payload))]
 </span><span class="kw">async fn </span>withdraw(
-    Extension(gateway): Extension&lt;Gateway&gt;,
+    Extension(gateway): Extension&lt;Arc&lt;Gateway&gt;&gt;,
     Json(payload): Json&lt;WithdrawPayload&gt;,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="kw">impl </span>IntoResponse, GatewayError&gt; {
     <span class="kw">let </span>txid = gateway.handle_withdraw_msg(payload).<span class="kw">await</span><span class="question-mark">?</span>;
@@ -674,7 +678,7 @@
 
 <span class="attr">#[instrument(skip_all, err, fields(<span class="question-mark">?</span>payload))]
 </span><span class="kw">async fn </span>pay_invoice(
-    Extension(gateway): Extension&lt;Gateway&gt;,
+    Extension(gateway): Extension&lt;Arc&lt;Gateway&gt;&gt;,
     Json(payload): Json&lt;PayInvoicePayload&gt;,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="kw">impl </span>IntoResponse, GatewayError&gt; {
     <span class="kw">let </span>preimage = gateway.handle_pay_invoice_msg(payload).<span class="kw">await</span><span class="question-mark">?</span>;
@@ -684,7 +688,7 @@
 <span class="doccomment">/// Connect a new federation
 </span><span class="attr">#[instrument(skip_all, err, fields(<span class="question-mark">?</span>payload))]
 </span><span class="kw">async fn </span>connect_fed(
-    Extension(<span class="kw-2">mut </span>gateway): Extension&lt;Gateway&gt;,
+    Extension(gateway): Extension&lt;Arc&lt;Gateway&gt;&gt;,
     Json(payload): Json&lt;ConnectFedPayload&gt;,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="kw">impl </span>IntoResponse, GatewayError&gt; {
     <span class="kw">let </span>fed = gateway.handle_connect_federation(payload).<span class="kw">await</span><span class="question-mark">?</span>;
@@ -694,7 +698,7 @@
 <span class="doccomment">/// Leave a federation
 </span><span class="attr">#[instrument(skip_all, err, fields(<span class="question-mark">?</span>payload))]
 </span><span class="kw">async fn </span>leave_fed(
-    Extension(<span class="kw-2">mut </span>gateway): Extension&lt;Gateway&gt;,
+    Extension(gateway): Extension&lt;Arc&lt;Gateway&gt;&gt;,
     Json(payload): Json&lt;LeaveFedPayload&gt;,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="kw">impl </span>IntoResponse, GatewayError&gt; {
     <span class="kw">let </span>fed = gateway.handle_leave_federation(payload).<span class="kw">await</span><span class="question-mark">?</span>;
@@ -704,7 +708,7 @@
 <span class="doccomment">/// Backup a gateway actor state
 </span><span class="attr">#[instrument(skip_all, err, fields(<span class="question-mark">?</span>payload))]
 </span><span class="kw">async fn </span>backup(
-    Extension(gateway): Extension&lt;Gateway&gt;,
+    Extension(gateway): Extension&lt;Arc&lt;Gateway&gt;&gt;,
     Json(payload): Json&lt;BackupPayload&gt;,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="kw">impl </span>IntoResponse, GatewayError&gt; {
     gateway.handle_backup_msg(payload)<span class="question-mark">?</span>;
@@ -714,7 +718,7 @@
 <span class="comment">// Restore a gateway actor state
 </span><span class="attr">#[instrument(skip_all, err, fields(<span class="question-mark">?</span>payload))]
 </span><span class="kw">async fn </span>restore(
-    Extension(gateway): Extension&lt;Gateway&gt;,
+    Extension(gateway): Extension&lt;Arc&lt;Gateway&gt;&gt;,
     Json(payload): Json&lt;RestorePayload&gt;,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="kw">impl </span>IntoResponse, GatewayError&gt; {
     gateway.handle_restore_msg(payload)<span class="question-mark">?</span>;
@@ -723,7 +727,7 @@
 
 <span class="attr">#[instrument(skip_all, err, fields(<span class="question-mark">?</span>payload))]
 </span><span class="kw">async fn </span>set_configuration(
-    Extension(gateway): Extension&lt;Gateway&gt;,
+    Extension(gateway): Extension&lt;Arc&lt;Gateway&gt;&gt;,
     Json(payload): Json&lt;SetConfigurationPayload&gt;,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="kw">impl </span>IntoResponse, GatewayError&gt; {
     gateway.handle_set_configuration_msg(payload).<span class="kw">await</span><span class="question-mark">?</span>;
@@ -732,7 +736,7 @@
 
 <span class="attr">#[instrument(skip_all, err)]
 </span><span class="kw">async fn </span>get_funding_address(
-    Extension(gateway): Extension&lt;Gateway&gt;,
+    Extension(gateway): Extension&lt;Arc&lt;Gateway&gt;&gt;,
     Json(_payload): Json&lt;GetFundingAddressPayload&gt;,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="kw">impl </span>IntoResponse, GatewayError&gt; {
     <span class="kw">let </span>address = gateway.handle_get_funding_address_msg().<span class="kw">await</span><span class="question-mark">?</span>;
@@ -741,7 +745,7 @@
 
 <span class="attr">#[instrument(skip_all, err, fields(<span class="question-mark">?</span>payload))]
 </span><span class="kw">async fn </span>open_channel(
-    Extension(gateway): Extension&lt;Gateway&gt;,
+    Extension(gateway): Extension&lt;Arc&lt;Gateway&gt;&gt;,
     Json(payload): Json&lt;OpenChannelPayload&gt;,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="kw">impl </span>IntoResponse, GatewayError&gt; {
     gateway.handle_open_channel_msg(payload).<span class="kw">await</span><span class="question-mark">?</span>;
@@ -750,7 +754,7 @@
 
 <span class="attr">#[instrument(skip_all, err, fields(<span class="question-mark">?</span>payload))]
 </span><span class="kw">async fn </span>close_channels_with_peer(
-    Extension(gateway): Extension&lt;Gateway&gt;,
+    Extension(gateway): Extension&lt;Arc&lt;Gateway&gt;&gt;,
     Json(payload): Json&lt;CloseChannelsWithPeerPayload&gt;,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="kw">impl </span>IntoResponse, GatewayError&gt; {
     <span class="kw">let </span>response = gateway.handle_close_channels_with_peer_msg(payload).<span class="kw">await</span><span class="question-mark">?</span>;
@@ -759,7 +763,7 @@
 
 <span class="attr">#[instrument(skip_all, err)]
 </span><span class="kw">async fn </span>list_active_channels(
-    Extension(gateway): Extension&lt;Gateway&gt;,
+    Extension(gateway): Extension&lt;Arc&lt;Gateway&gt;&gt;,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="kw">impl </span>IntoResponse, GatewayError&gt; {
     <span class="kw">let </span>channels = gateway.handle_list_active_channels_msg().<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="prelude-val">Ok</span>(Json(<span class="macro">json!</span>(channels)))
@@ -767,20 +771,20 @@
 
 <span class="attr">#[instrument(skip_all, err)]
 </span><span class="kw">async fn </span>get_gateway_id(
-    Extension(gateway): Extension&lt;Gateway&gt;,
+    Extension(gateway): Extension&lt;Arc&lt;Gateway&gt;&gt;,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="kw">impl </span>IntoResponse, GatewayError&gt; {
     <span class="prelude-val">Ok</span>(Json(<span class="macro">json!</span>(gateway.gateway_id)))
 }
 
 <span class="kw">async fn </span>routing_info_v2(
-    Extension(gateway): Extension&lt;Gateway&gt;,
+    Extension(gateway): Extension&lt;Arc&lt;Gateway&gt;&gt;,
     Json(federation_id): Json&lt;FederationId&gt;,
 ) -&gt; Json&lt;Value&gt; {
     Json(<span class="macro">json!</span>(gateway.routing_info_v2(<span class="kw-2">&amp;</span>federation_id).<span class="kw">await</span>))
 }
 
 <span class="kw">async fn </span>pay_bolt11_invoice_v2(
-    Extension(gateway): Extension&lt;Gateway&gt;,
+    Extension(gateway): Extension&lt;Arc&lt;Gateway&gt;&gt;,
     Json(payload): Json&lt;SendPaymentPayload&gt;,
 ) -&gt; Json&lt;Value&gt; {
     Json(<span class="macro">json!</span>(gateway
@@ -790,7 +794,7 @@
 }
 
 <span class="kw">async fn </span>create_bolt11_invoice_v2(
-    Extension(gateway): Extension&lt;Gateway&gt;,
+    Extension(gateway): Extension&lt;Arc&lt;Gateway&gt;&gt;,
     Json(payload): Json&lt;CreateBolt11InvoicePayload&gt;,
 ) -&gt; Json&lt;Value&gt; {
     Json(<span class="macro">json!</span>(gateway

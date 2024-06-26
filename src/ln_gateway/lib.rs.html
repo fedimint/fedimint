@@ -1948,6 +1948,18 @@
 <a href="#1948" id="1948">1948</a>
 <a href="#1949" id="1949">1949</a>
 <a href="#1950" id="1950">1950</a>
+<a href="#1951" id="1951">1951</a>
+<a href="#1952" id="1952">1952</a>
+<a href="#1953" id="1953">1953</a>
+<a href="#1954" id="1954">1954</a>
+<a href="#1955" id="1955">1955</a>
+<a href="#1956" id="1956">1956</a>
+<a href="#1957" id="1957">1957</a>
+<a href="#1958" id="1958">1958</a>
+<a href="#1959" id="1959">1959</a>
+<a href="#1960" id="1960">1960</a>
+<a href="#1961" id="1961">1961</a>
+<a href="#1962" id="1962">1962</a>
 </pre></div><pre class="rust"><code><span class="attr">#![warn(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::cast_possible_wrap)]
@@ -2126,28 +2138,28 @@
 
     <span class="doccomment">/// Path to folder containing gateway config and data files
     </span><span class="attr">#[arg(long = <span class="string">"data-dir"</span>, env = envs::FM_GATEWAY_DATA_DIR_ENV)]
-    </span><span class="kw">pub </span>data_dir: PathBuf,
+    </span>data_dir: PathBuf,
 
     <span class="doccomment">/// Gateway webserver listen address
     </span><span class="attr">#[arg(long = <span class="string">"listen"</span>, env = envs::FM_GATEWAY_LISTEN_ADDR_ENV)]
-    </span><span class="kw">pub </span>listen: SocketAddr,
+    </span>listen: SocketAddr,
 
     <span class="doccomment">/// Public URL from which the webserver API is reachable
     </span><span class="attr">#[arg(long = <span class="string">"api-addr"</span>, env = envs::FM_GATEWAY_API_ADDR_ENV)]
-    </span><span class="kw">pub </span>api_addr: SafeUrl,
+    </span>api_addr: SafeUrl,
 
     <span class="doccomment">/// Gateway webserver authentication password
     </span><span class="attr">#[arg(long = <span class="string">"password"</span>, env = envs::FM_GATEWAY_PASSWORD_ENV)]
-    </span><span class="kw">pub </span>password: <span class="prelude-ty">Option</span>&lt;String&gt;,
+    </span>password: <span class="prelude-ty">Option</span>&lt;String&gt;,
 
     <span class="doccomment">/// Bitcoin network this gateway will be running on
     </span><span class="attr">#[arg(long = <span class="string">"network"</span>, env = envs::FM_GATEWAY_NETWORK_ENV)]
-    </span><span class="kw">pub </span>network: <span class="prelude-ty">Option</span>&lt;Network&gt;,
+    </span>network: <span class="prelude-ty">Option</span>&lt;Network&gt;,
 
     <span class="doccomment">/// Configured gateway routing fees
     /// Format: &lt;base_msat&gt;,&lt;proportional_millionths&gt;
     </span><span class="attr">#[arg(long = <span class="string">"fees"</span>, env = envs::FM_GATEWAY_FEES_ENV)]
-    </span><span class="kw">pub </span>fees: <span class="prelude-ty">Option</span>&lt;GatewayFee&gt;,
+    </span>fees: <span class="prelude-ty">Option</span>&lt;GatewayFee&gt;,
 
     <span class="doccomment">/// Number of route hints to return in invoices
     </span><span class="attr">#[arg(
@@ -2155,7 +2167,7 @@
         env = envs::FM_NUMBER_OF_ROUTE_HINTS_ENV,
         default_value_t = DEFAULT_NUM_ROUTE_HINTS
     )]
-    </span><span class="kw">pub </span>num_route_hints: u32,
+    </span>num_route_hints: u32,
 }
 
 <span class="kw">impl </span>GatewayOpts {
@@ -2254,10 +2266,10 @@
     </span>lightning_builder: Arc&lt;<span class="kw">dyn </span>LightningBuilder + Send + Sync&gt;,
 
     <span class="comment">// The gateway's current configuration
-    </span><span class="kw">pub </span>gateway_config: Arc&lt;RwLock&lt;<span class="prelude-ty">Option</span>&lt;GatewayConfiguration&gt;&gt;&gt;,
+    </span>gateway_config: Arc&lt;RwLock&lt;<span class="prelude-ty">Option</span>&lt;GatewayConfiguration&gt;&gt;&gt;,
 
     <span class="comment">// The current state of the Gateway.
-    </span><span class="kw">pub </span>state: Arc&lt;RwLock&lt;GatewayState&gt;&gt;,
+    </span>state: Arc&lt;RwLock&lt;GatewayState&gt;&gt;,
 
     <span class="comment">// Builder struct that allows the gateway to build a Fedimint client, which handles the
     // communication with a federation.
@@ -2280,14 +2292,14 @@
     </span>scid_to_federation: ScidToFederationMap,
 
     <span class="comment">// A public key representing the identity of the gateway. Private key is not used.
-    </span><span class="kw">pub </span>gateway_id: PublicKey,
+    </span>gateway_id: PublicKey,
 
     <span class="comment">// Tracker for short channel ID assignments. When connecting a new federation,
     // this value is incremented and assigned to the federation as the `mint_channel_id`
     </span>next_scid: Arc&lt;Mutex&lt;u64&gt;&gt;,
 
     <span class="comment">// The Gateway's API URL.
-    </span><span class="kw">pub </span>versioned_api: SafeUrl,
+    </span>versioned_api: SafeUrl,
 
     <span class="comment">// The socket the gateway listens on.
     </span>listen: SocketAddr,
@@ -2304,7 +2316,7 @@
             .field(<span class="string">"scid_to_federation"</span>, <span class="kw-2">&amp;</span><span class="self">self</span>.scid_to_federation)
             .field(<span class="string">"gateway_id"</span>, <span class="kw-2">&amp;</span><span class="self">self</span>.gateway_id)
             .field(<span class="string">"next_scid"</span>, <span class="kw-2">&amp;</span><span class="self">self</span>.next_scid)
-            .finish()
+            .finish_non_exhaustive()
     }
 }
 
@@ -2357,12 +2369,12 @@
 
         <span class="kw">let </span>gateway_db = Database::new(
             fedimint_rocksdb::RocksDb::open(opts.data_dir.join(DB_FILE))<span class="question-mark">?</span>,
-            decoders.clone(),
+            decoders,
         );
 
         <span class="kw">let </span>client_builder = GatewayClientBuilder::new(
             opts.data_dir.clone(),
-            registry.clone(),
+            registry,
             LEGACY_HARDCODED_INSTANCE_ID_MINT,
         );
 
@@ -2371,11 +2383,13 @@
             <span class="macro">fedimint_build_code_version_env!</span>()
         );
 
+        <span class="kw">let </span>gateway_parameters = opts.to_gateway_parameters()<span class="question-mark">?</span>;
+
         Gateway::new(
             Arc::new(GatewayLightningBuilder {
-                lightning_mode: opts.mode.clone(),
+                lightning_mode: opts.mode,
             }),
-            opts.to_gateway_parameters()<span class="question-mark">?</span>,
+            gateway_parameters,
             gateway_db,
             client_builder,
         )
@@ -2411,7 +2425,7 @@
             gateway_config: Arc::new(RwLock::new(gateway_config)),
             state: Arc::new(RwLock::new(GatewayState::Initializing)),
             client_builder,
-            gateway_id: <span class="self">Self</span>::get_gateway_id(gateway_db.clone()).<span class="kw">await</span>,
+            gateway_id: <span class="self">Self</span>::load_gateway_id(<span class="kw-2">&amp;</span>gateway_db).<span class="kw">await</span>,
             gateway_db,
             clients: Arc::new(RwLock::new(BTreeMap::new())),
             scid_to_federation: Arc::new(RwLock::new(BTreeMap::new())),
@@ -2422,7 +2436,7 @@
     }
 
     <span class="doccomment">/// Returns a `PublicKey` that uniquely identifies the Gateway.
-    </span><span class="kw">pub async fn </span>get_gateway_id(gateway_db: Database) -&gt; PublicKey {
+    </span><span class="kw">async fn </span>load_gateway_id(gateway_db: <span class="kw-2">&amp;</span>Database) -&gt; PublicKey {
         <span class="kw">let </span><span class="kw-2">mut </span>dbtx = gateway_db.begin_transaction().<span class="kw">await</span>;
         <span class="kw">if let </span><span class="prelude-val">Some</span>(key_pair) = dbtx.get_value(<span class="kw-2">&amp;</span>GatewayPublicKey {}).<span class="kw">await </span>{
             key_pair.public_key()
@@ -2434,6 +2448,22 @@
             dbtx.commit_tx().<span class="kw">await</span>;
             public
         }
+    }
+
+    <span class="kw">pub fn </span>gateway_id(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; PublicKey {
+        <span class="self">self</span>.gateway_id
+    }
+
+    <span class="kw">pub fn </span>versioned_api(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>SafeUrl {
+        <span class="kw-2">&amp;</span><span class="self">self</span>.versioned_api
+    }
+
+    <span class="kw">pub async fn </span>clone_gateway_config(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;GatewayConfiguration&gt; {
+        <span class="self">self</span>.gateway_config.read().<span class="kw">await</span>.clone()
+    }
+
+    <span class="kw">pub async fn </span>get_state(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; GatewayState {
+        <span class="self">self</span>.state.read().<span class="kw">await</span>.clone()
     }
 
     <span class="doccomment">/// Reads and serializes structures from the Gateway's database for the
@@ -2485,12 +2515,12 @@
     /// timer, loads the federation clients from the persisted config,
     /// begins listening for intercepted HTLCs, and starts the webserver to
     /// service requests.
-    </span><span class="kw">pub async fn </span>run(<span class="kw-2">mut </span><span class="self">self</span>, tg: <span class="kw-2">&amp;mut </span>TaskGroup) -&gt; anyhow::Result&lt;TaskShutdownToken&gt; {
+    </span><span class="kw">pub async fn </span>run(<span class="self">self</span>, tg: <span class="kw-2">&amp;</span>TaskGroup) -&gt; anyhow::Result&lt;TaskShutdownToken&gt; {
         <span class="self">self</span>.register_clients_timer(tg);
         Box::pin(<span class="self">self</span>.load_clients()).<span class="kw">await</span>;
         <span class="self">self</span>.start_gateway(tg);
         <span class="comment">// start webserver last to avoid handling requests before fully initialized
-        </span>run_webserver(<span class="self">self</span>.clone(), tg).<span class="kw">await</span><span class="question-mark">?</span>;
+        </span>run_webserver(Arc::new(<span class="self">self</span>), tg).<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>handle = tg.make_handle();
         <span class="kw">let </span>shutdown_receiver = handle.make_shutdown_rx();
         <span class="prelude-val">Ok</span>(shutdown_receiver)
@@ -2498,8 +2528,8 @@
 
     <span class="doccomment">/// Begins the task for listening for intercepted HTLCs from the Lightning
     /// node.
-    </span><span class="kw">fn </span>start_gateway(<span class="kw-2">&amp;</span><span class="self">self</span>, task_group: <span class="kw-2">&amp;mut </span>TaskGroup) {
-        <span class="kw">let </span><span class="kw-2">mut </span>self_copy = <span class="self">self</span>.clone();
+    </span><span class="kw">fn </span>start_gateway(<span class="kw-2">&amp;</span><span class="self">self</span>, task_group: <span class="kw-2">&amp;</span>TaskGroup) {
+        <span class="kw">let </span>self_copy = <span class="self">self</span>.clone();
         <span class="kw">let </span>tg = task_group.clone();
         task_group.spawn(<span class="string">"Subscribe to intercepted HTLCs in stream"</span>, |handle| <span class="kw">async move </span>{
             <span class="kw">loop </span>{
@@ -2524,7 +2554,7 @@
 
                         <span class="kw">match </span>fetch_lightning_node_info(ln_client.clone()).<span class="kw">await </span>{
                             <span class="prelude-val">Ok</span>((lightning_public_key, lightning_alias, lightning_network, _block_height, _synced_to_chain)) =&gt; {
-                                <span class="kw">let </span>gateway_config = self_copy.gateway_config.read().<span class="kw">await</span>.clone();
+                                <span class="kw">let </span>gateway_config = self_copy.clone_gateway_config().<span class="kw">await</span>;
                                 <span class="kw">let </span>gateway_config = <span class="kw">if let </span><span class="prelude-val">Some</span>(config) = gateway_config {
                                     config
                                 } <span class="kw">else </span>{
@@ -2589,7 +2619,7 @@
 
     <span class="doccomment">/// Utility function for waiting for the task that is listening for
     /// intercepted HTLCs to shutdown.
-    </span><span class="kw">async fn </span>handle_disconnect(<span class="kw-2">&amp;mut </span><span class="self">self</span>, htlc_task_group: TaskGroup) {
+    </span><span class="kw">async fn </span>handle_disconnect(<span class="kw-2">&amp;</span><span class="self">self</span>, htlc_task_group: TaskGroup) {
         <span class="self">self</span>.set_gateway_state(GatewayState::Disconnected).<span class="kw">await</span>;
         <span class="kw">if let </span><span class="prelude-val">Err</span>(e) = htlc_task_group.shutdown_join_all(<span class="prelude-val">None</span>).<span class="kw">await </span>{
             <span class="macro">error!</span>(<span class="string">"HTLC task group shutdown errors: {}"</span>, e);
@@ -2601,7 +2631,7 @@
     /// HTLC depending on if the gateway is able to acquire the preimage from
     /// the federation.
     </span><span class="kw">pub async fn </span>handle_htlc_stream(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="kw-2">mut </span>stream: RouteHtlcStream&lt;<span class="lifetime">'_</span>&gt;, handle: TaskHandle) {
-        <span class="kw">let </span>GatewayState::Running { lightning_context } = <span class="self">self</span>.state.read().<span class="kw">await</span>.clone() <span class="kw">else </span>{
+        <span class="kw">let </span>GatewayState::Running { lightning_context } = <span class="self">self</span>.get_state().<span class="kw">await else </span>{
             <span class="macro">panic!</span>(<span class="string">"Gateway isn't in a running state"</span>)
         };
         <span class="kw">loop </span>{
@@ -2713,7 +2743,7 @@
     }
 
     <span class="doccomment">/// Helper function for atomically changing the Gateway's internal state.
-    </span><span class="kw">async fn </span>set_gateway_state(<span class="kw-2">&amp;mut </span><span class="self">self</span>, state: GatewayState) {
+    </span><span class="kw">async fn </span>set_gateway_state(<span class="kw-2">&amp;</span><span class="self">self</span>, state: GatewayState) {
         <span class="kw">let </span><span class="kw-2">mut </span>lock = <span class="self">self</span>.state.write().<span class="kw">await</span>;
         <span class="kw-2">*</span>lock = state;
     }
@@ -2721,15 +2751,13 @@
     <span class="doccomment">/// Returns information about the Gateway back to the client when requested
     /// via the webserver.
     </span><span class="kw">pub async fn </span>handle_get_info(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;GatewayInfo&gt; {
-        <span class="kw">if let </span>GatewayState::Running { lightning_context } = <span class="self">self</span>.state.read().<span class="kw">await</span>.clone() {
+        <span class="kw">if let </span>GatewayState::Running { lightning_context } = <span class="self">self</span>.get_state().<span class="kw">await </span>{
             <span class="comment">// `GatewayConfiguration` should always exist in the database when we are in the
             // `Running` state.
             </span><span class="kw">let </span>gateway_config = <span class="self">self
-                </span>.gateway_config
-                .read()
+                </span>.clone_gateway_config()
                 .<span class="kw">await
-                </span>.clone()
-                .expect(<span class="string">"Gateway configuration should be set"</span>);
+                </span>.expect(<span class="string">"Gateway configuration should be set"</span>);
             <span class="kw">let </span><span class="kw-2">mut </span>federations = Vec::new();
             <span class="kw">let </span>federation_clients = <span class="self">self</span>.clients.read().<span class="kw">await</span>.clone().into_iter();
             <span class="kw">let </span>route_hints = <span class="self">Self</span>::fetch_lightning_route_hints(
@@ -2785,7 +2813,7 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         federation_id: <span class="prelude-ty">Option</span>&lt;FederationId&gt;,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;GatewayFedConfig&gt; {
-        <span class="kw">if let </span>GatewayState::Running { .. } = <span class="self">self</span>.state.read().<span class="kw">await</span>.clone() {
+        <span class="kw">if let </span>GatewayState::Running { .. } = <span class="self">self</span>.get_state().<span class="kw">await </span>{
             <span class="kw">let </span><span class="kw-2">mut </span>federations = BTreeMap::new();
             <span class="kw">if let </span><span class="prelude-val">Some</span>(federation_id) = federation_id {
                 <span class="kw">let </span>client = <span class="self">self</span>.select_client(federation_id).<span class="kw">await</span><span class="question-mark">?</span>;
@@ -2901,7 +2929,7 @@
     <span class="doccomment">/// Requests the gateway to pay an outgoing LN invoice on behalf of a
     /// Fedimint client. Returns the payment hash's preimage on success.
     </span><span class="kw">async fn </span>handle_pay_invoice_msg(<span class="kw-2">&amp;</span><span class="self">self</span>, payload: PayInvoicePayload) -&gt; <span class="prelude-ty">Result</span>&lt;Preimage&gt; {
-        <span class="kw">if let </span>GatewayState::Running { .. } = <span class="self">self</span>.state.read().<span class="kw">await</span>.clone() {
+        <span class="kw">if let </span>GatewayState::Running { .. } = <span class="self">self</span>.get_state().<span class="kw">await </span>{
             <span class="macro">debug!</span>(<span class="string">"Handling pay invoice message: {payload:?}"</span>);
             <span class="kw">let </span>client = <span class="self">self</span>.select_client(payload.federation_id).<span class="kw">await</span><span class="question-mark">?</span>;
             <span class="kw">let </span>contract_id = payload.contract_id;
@@ -2951,10 +2979,10 @@
     /// client, registers, the gateway with the federation, and persists the
     /// necessary config to reconstruct the client when restarting the gateway.
     </span><span class="kw">async fn </span>handle_connect_federation(
-        <span class="kw-2">&amp;mut </span><span class="self">self</span>,
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
         payload: ConnectFedPayload,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;FederationInfo&gt; {
-        <span class="kw">if let </span>GatewayState::Running { lightning_context } = <span class="self">self</span>.state.read().<span class="kw">await</span>.clone() {
+        <span class="kw">if let </span>GatewayState::Running { lightning_context } = <span class="self">self</span>.get_state().<span class="kw">await </span>{
             <span class="kw">let </span>invite_code = InviteCode::from_str(<span class="kw-2">&amp;</span>payload.invite_code).map_err(|e| {
                 GatewayError::InvalidMetadata(<span class="macro">format!</span>(<span class="string">"Invalid federation member string {e:?}"</span>))
             })<span class="question-mark">?</span>;
@@ -2970,11 +2998,9 @@
             <span class="comment">// `GatewayConfiguration` should always exist in the database when we are in the
             // `Running` state.
             </span><span class="kw">let </span>gateway_config = <span class="self">self
-                </span>.gateway_config
-                .read()
+                </span>.clone_gateway_config()
                 .<span class="kw">await
-                </span>.clone()
-                .expect(<span class="string">"Gateway configuration should be set"</span>);
+                </span>.expect(<span class="string">"Gateway configuration should be set"</span>);
 
             <span class="comment">// The gateway deterministically assigns a channel id (u64) to each federation
             // connected.
@@ -2996,7 +3022,7 @@
 
             <span class="kw">let </span>client = <span class="self">self
                 </span>.client_builder
-                .build(gw_client_cfg.clone(), <span class="self">self</span>.clone())
+                .build(gw_client_cfg.clone(), Arc::new(<span class="self">self</span>.clone()))
                 .<span class="kw">await</span><span class="question-mark">?</span>;
 
             <span class="comment">// Instead of using `make_federation_info`, we manually create federation info
@@ -3038,9 +3064,7 @@
                 </span>.insert(mint_channel_id, federation_id);
 
             <span class="kw">let </span>dbtx = <span class="self">self</span>.gateway_db.begin_transaction().<span class="kw">await</span>;
-            <span class="self">self</span>.client_builder
-                .save_config(gw_client_cfg.clone(), dbtx)
-                .<span class="kw">await</span><span class="question-mark">?</span>;
+            <span class="self">self</span>.client_builder.save_config(gw_client_cfg, dbtx).<span class="kw">await</span><span class="question-mark">?</span>;
             <span class="macro">debug!</span>(<span class="string">"Federation with ID: {federation_id} connected and assigned channel id: {mint_channel_id}"</span>);
 
             <span class="kw">return </span><span class="prelude-val">Ok</span>(federation_info);
@@ -3054,7 +3078,7 @@
     /// the gateway will remove the configuration needed to construct the
     /// federation client.
     </span><span class="kw">pub async fn </span>handle_leave_federation(
-        <span class="kw-2">&amp;mut </span><span class="self">self</span>,
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
         payload: LeaveFedPayload,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;FederationInfo&gt; {
         <span class="kw">let </span>client_joining_lock = <span class="self">self</span>.client_joining_lock.lock().<span class="kw">await</span>;
@@ -3123,7 +3147,7 @@
             per_federation_routing_fees,
         }: SetConfigurationPayload,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-        <span class="kw">let </span>gw_state = <span class="self">self</span>.state.read().<span class="kw">await</span>.clone();
+        <span class="kw">let </span>gw_state = <span class="self">self</span>.get_state().<span class="kw">await</span>;
         <span class="kw">let </span>lightning_network = <span class="kw">match </span>gw_state {
             GatewayState::Running { lightning_context } =&gt; {
                 <span class="kw">if </span>network.is_some() &amp;&amp; network != <span class="prelude-val">Some</span>(lightning_context.lightning_network) {
@@ -3142,7 +3166,7 @@
 
         <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.gateway_db.begin_transaction().<span class="kw">await</span>;
 
-        <span class="kw">let </span>prev_gateway_config = <span class="self">self</span>.gateway_config.read().<span class="kw">await</span>.clone();
+        <span class="kw">let </span>prev_gateway_config = <span class="self">self</span>.clone_gateway_config().<span class="kw">await</span>;
         <span class="kw">let </span>new_gateway_config = <span class="kw">if let </span><span class="prelude-val">Some</span>(<span class="kw-2">mut </span>prev_config) = prev_gateway_config {
             <span class="kw">if let </span><span class="prelude-val">Some</span>(password) = password.as_ref() {
                 <span class="kw">let </span>hashed_password = hash_password(password, prev_config.password_salt);
@@ -3164,7 +3188,7 @@
 
             <span class="comment">// Using this routing fee config as a default for all federation that has none
             // routing fees specified.
-            </span><span class="kw">if let </span><span class="prelude-val">Some</span>(fees) = routing_fees.clone() {
+            </span><span class="kw">if let </span><span class="prelude-val">Some</span>(fees) = routing_fees {
                 <span class="kw">let </span>routing_fees = GatewayFee(fees.into()).<span class="number">0</span>;
                 prev_config.routing_fees = routing_fees;
             }
@@ -3414,7 +3438,7 @@
     <span class="doccomment">/// Reads the connected federation client configs from the Gateway's
     /// database and reconstructs the clients necessary for interacting with
     /// connection federations.
-    </span><span class="kw">async fn </span>load_clients(<span class="kw-2">&amp;mut </span><span class="self">self</span>) {
+    </span><span class="kw">async fn </span>load_clients(<span class="kw-2">&amp;</span><span class="self">self</span>) {
         <span class="kw">let </span>dbtx = <span class="self">self</span>.gateway_db.begin_transaction().<span class="kw">await</span>;
         <span class="kw">let </span>configs = <span class="self">self</span>.client_builder.load_configs(dbtx.into_nc()).<span class="kw">await</span>;
 
@@ -3426,7 +3450,7 @@
 
             <span class="kw">if let </span><span class="prelude-val">Ok</span>(client) = Box::pin(Spanned::try_new(
                 <span class="macro">info_span!</span>(<span class="string">"client"</span>, federation_id  = %federation_id.clone()),
-                <span class="self">self</span>.client_builder.build(config.clone(), <span class="self">self</span>.clone()),
+                <span class="self">self</span>.client_builder.build(config, Arc::new(<span class="self">self</span>.clone())),
             ))
             .<span class="kw">await
             </span>{
@@ -3454,14 +3478,14 @@
     /// connected federations every 8.5 mins. Only registers the Gateway if it
     /// has successfully connected to the Lightning node, so that it can
     /// include route hints in the registration.
-    </span><span class="kw">fn </span>register_clients_timer(<span class="kw-2">&amp;mut </span><span class="self">self</span>, task_group: <span class="kw-2">&amp;mut </span>TaskGroup) {
+    </span><span class="kw">fn </span>register_clients_timer(<span class="kw-2">&amp;</span><span class="self">self</span>, task_group: <span class="kw-2">&amp;</span>TaskGroup) {
         <span class="kw">let </span>gateway = <span class="self">self</span>.clone();
         task_group.spawn_cancellable(<span class="string">"register clients"</span>, <span class="kw">async move </span>{
             <span class="kw">loop </span>{
                 <span class="kw">let </span><span class="kw-2">mut </span>registration_result: <span class="prelude-ty">Option</span>&lt;<span class="prelude-ty">Result</span>&lt;()&gt;&gt; = <span class="prelude-val">None</span>;
-                <span class="kw">let </span>gateway_config = gateway.gateway_config.read().<span class="kw">await</span>.clone();
+                <span class="kw">let </span>gateway_config = gateway.clone_gateway_config().<span class="kw">await</span>;
                 <span class="kw">if let </span><span class="prelude-val">Some</span>(gateway_config) = gateway_config {
-                    <span class="kw">let </span>gateway_state = gateway.state.read().<span class="kw">await</span>.clone();
+                    <span class="kw">let </span>gateway_state = gateway.get_state().<span class="kw">await</span>;
                     <span class="kw">if let </span>GatewayState::Running { .. } = <span class="kw-2">&amp;</span>gateway_state {
                         <span class="kw">let </span><span class="kw-2">mut </span>dbtx = gateway.gateway_db.begin_transaction_nc().<span class="kw">await</span>;
                         <span class="kw">let </span>all_federations_configs: Vec&lt;<span class="kw">_</span>&gt; = dbtx.find_by_prefix(<span class="kw-2">&amp;</span>FederationIdKeyPrefix).<span class="kw">await</span>.map(|(key, config)| (key.id, config)).collect().<span class="kw">await</span>;
@@ -3559,7 +3583,7 @@
             .config
             .modules
             .values()
-            .find(|m| LightningCommonInit::KIND == m.kind.clone())
+            .find(|m| LightningCommonInit::KIND == m.kind)
             .ok_or_else(|| {
                 GatewayError::InvalidMetadata(<span class="macro">format!</span>(
                     <span class="string">"Federation {} does not have a lightning module"</span>,
@@ -3585,7 +3609,7 @@
     </span><span class="kw">pub async fn </span>get_lightning_context(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
     ) -&gt; std::result::Result&lt;LightningContext, LightningRpcError&gt; {
-        <span class="kw">match </span><span class="self">self</span>.state.read().<span class="kw">await</span>.clone() {
+        <span class="kw">match </span><span class="self">self</span>.get_state().<span class="kw">await </span>{
             GatewayState::Running { lightning_context } =&gt; <span class="prelude-val">Ok</span>(lightning_context),
             <span class="kw">_ </span>=&gt; <span class="prelude-val">Err</span>(LightningRpcError::FailedToConnect),
         }
@@ -3733,7 +3757,7 @@
                 <span class="kw-2">&amp;</span>RegisteredIncomingContract {
                     federation_id: payload.federation_id,
                     incoming_amount: payload.invoice_amount.msats,
-                    contract: payload.contract.clone(),
+                    contract: payload.contract,
                 },
             )
             .<span class="kw">await

@@ -1033,7 +1033,7 @@
 
     <span class="kw">async fn </span>spawn_interceptor(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        task_group: <span class="kw-2">&amp;mut </span>TaskGroup,
+        task_group: <span class="kw-2">&amp;</span>TaskGroup,
         lnd_sender: mpsc::Sender&lt;ForwardHtlcInterceptResponse&gt;,
         lnd_rx: mpsc::Receiver&lt;ForwardHtlcInterceptResponse&gt;,
         gateway_sender: HtlcSubscriptionSender,

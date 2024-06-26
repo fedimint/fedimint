@@ -49,10 +49,10 @@
 </span><span class="kw">async fn </span>main() -&gt; <span class="prelude-ty">Result</span>&lt;(), anyhow::Error&gt; {
     handle_version_hash_command(<span class="macro">fedimint_build_code_version_env!</span>());
     TracingSetup::default().init()<span class="question-mark">?</span>;
-    <span class="kw">let </span><span class="kw-2">mut </span>tg = TaskGroup::new();
+    <span class="kw">let </span>tg = TaskGroup::new();
     tg.install_kill_handler();
     <span class="kw">let </span>gatewayd = Gateway::new_with_default_modules().<span class="kw">await</span><span class="question-mark">?</span>;
-    <span class="kw">let </span>shutdown_receiver = gatewayd.clone().run(<span class="kw-2">&amp;mut </span>tg).<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="kw">let </span>shutdown_receiver = gatewayd.clone().run(<span class="kw-2">&amp;</span>tg).<span class="kw">await</span><span class="question-mark">?</span>;
     shutdown_receiver.<span class="kw">await</span>;
     gatewayd.leave_all_federations().<span class="kw">await</span>;
     <span class="macro">info!</span>(<span class="string">"Gatewayd exiting..."</span>);

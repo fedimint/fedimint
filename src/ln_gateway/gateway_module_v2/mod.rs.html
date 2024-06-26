@@ -477,7 +477,7 @@
 
 <span class="attr">#[derive(Debug, Clone)]
 </span><span class="kw">pub struct </span>GatewayClientInitV2 {
-    <span class="kw">pub </span>gateway: Gateway,
+    <span class="kw">pub </span>gateway: Arc&lt;Gateway&gt;,
 }
 
 <span class="kw">impl </span>ModuleInit <span class="kw">for </span>GatewayClientInitV2 {
@@ -526,7 +526,7 @@
     <span class="kw">pub </span>client_ctx: ClientContext&lt;<span class="self">Self</span>&gt;,
     <span class="kw">pub </span>module_api: DynModuleApi,
     <span class="kw">pub </span>keypair: KeyPair,
-    <span class="kw">pub </span>gateway: Gateway,
+    <span class="kw">pub </span>gateway: Arc&lt;Gateway&gt;,
 }
 
 <span class="attr">#[derive(Debug, Clone)]
@@ -535,7 +535,7 @@
     <span class="kw">pub </span>notifier: ModuleNotifier&lt;GatewayClientStateMachinesV2&gt;,
     <span class="kw">pub </span>tpe_agg_pk: AggregatePublicKey,
     <span class="kw">pub </span>tpe_pks: BTreeMap&lt;PeerId, PublicKeyShare&gt;,
-    <span class="kw">pub </span>gateway: Gateway,
+    <span class="kw">pub </span>gateway: Arc&lt;Gateway&gt;,
 }
 
 <span class="kw">impl </span>Context <span class="kw">for </span>GatewayClientContextV2 {}

@@ -872,7 +872,7 @@
 </span><span class="kw">pub struct </span>GatewayClientInit {
     <span class="kw">pub </span>timelock_delta: u64,
     <span class="kw">pub </span>mint_channel_id: u64,
-    <span class="kw">pub </span>gateway: Gateway,
+    <span class="kw">pub </span>gateway: Arc&lt;Gateway&gt;,
 }
 
 <span class="kw">impl </span>ModuleInit <span class="kw">for </span>GatewayClientInit {
@@ -921,7 +921,7 @@
     secp: Secp256k1&lt;All&gt;,
     <span class="kw">pub </span>ln_decoder: Decoder,
     notifier: ModuleNotifier&lt;GatewayClientStateMachines&gt;,
-    gateway: Gateway,
+    gateway: Arc&lt;Gateway&gt;,
 }
 
 <span class="kw">impl </span>Context <span class="kw">for </span>GatewayClientContext {}
@@ -949,7 +949,7 @@
     mint_channel_id: u64,
     module_api: DynModuleApi,
     client_ctx: ClientContext&lt;<span class="self">Self</span>&gt;,
-    gateway: Gateway,
+    gateway: Arc&lt;Gateway&gt;,
 }
 
 <span class="kw">impl </span>ClientModule <span class="kw">for </span>GatewayClientModule {

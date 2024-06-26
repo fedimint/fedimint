@@ -175,7 +175,7 @@
     <span class="kw">pub async fn </span>build(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         config: FederationConfig,
-        gateway: Gateway,
+        gateway: Arc&lt;Gateway&gt;,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;fedimint_client::ClientHandleArc&gt; {
         <span class="kw">let </span>FederationConfig {
             invite_code,
