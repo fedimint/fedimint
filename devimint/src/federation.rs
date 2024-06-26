@@ -239,6 +239,7 @@ impl Federation {
                 &process_mgr.globals,
                 peer_params.to_owned(),
                 federation_name.clone(),
+                base_port,
             )
             .await?;
             members.insert(
@@ -248,6 +249,7 @@ impl Federation {
                     bitcoind.clone(),
                     peer.to_usize(),
                     &peer_env_vars,
+                    federation_name.clone(),
                 )
                 .await?,
             );
@@ -411,7 +413,14 @@ impl Federation {
         }
         self.members.insert(
             peer,
-            Fedimintd::new(process_mgr, self.bitcoind.clone(), peer, &self.vars[&peer]).await?,
+            Fedimintd::new(
+                process_mgr,
+                self.bitcoind.clone(),
+                peer,
+                &self.vars[&peer],
+                "default".to_string(),
+            )
+            .await?,
         );
         Ok(())
     }
@@ -702,11 +711,12 @@ impl Fedimintd {
         bitcoind: Bitcoind,
         peer_id: usize,
         env: &vars::Fedimintd,
+        fed_name: String,
     ) -> Result<Self> {
-        debug!(target: LOG_DEVIMINT, "Starting fedimintd-{peer_id}");
+        debug!(target: LOG_DEVIMINT, "Starting fedimintd-{fed_name}-{peer_id}");
         let process = process_mgr
             .spawn_daemon(
-                &format!("fedimintd-{peer_id}"),
+                &format!("fedimintd-{fed_name}-{peer_id}"),
                 cmd!(FedimintdCmd).envs(env.vars()),
             )
             .await?;

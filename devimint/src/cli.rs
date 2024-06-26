@@ -439,7 +439,14 @@ async fn run_ui(process_mgr: &ProcessManager) -> Result<(Vec<Fedimintd>, Externa
                 ),
                 FM_FORCE_BITCOIN_RPC_KIND: "bitcoind".into(),
             };
-            let fm = Fedimintd::new(process_mgr, bitcoind.clone(), peer, &vars).await?;
+            let fm = Fedimintd::new(
+                process_mgr,
+                bitcoind.clone(),
+                peer,
+                &vars,
+                "default".to_string(),
+            )
+            .await?;
             let server_addr = &vars.FM_BIND_API;
 
             poll("waiting for api startup", || async {
