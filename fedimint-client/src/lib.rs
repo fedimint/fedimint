@@ -2150,7 +2150,7 @@ impl ClientBuilder {
     }
 
     pub fn with_tor_connector(&mut self) {
-        self.with_connector(Connector::Tor);
+        self.with_connector(Connector::tor());
     }
 
     async fn init(
