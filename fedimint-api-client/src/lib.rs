@@ -10,7 +10,6 @@ use std::time::Duration;
 use anyhow::{bail, Context as _};
 use api::{DynGlobalApi, FederationApiExt as _, WsFederationApi};
 use fedimint_core::config::ClientConfig;
-use fedimint_core::encoding::Encodable as _;
 use fedimint_core::endpoint_constants::CLIENT_CONFIG_ENDPOINT;
 use fedimint_core::invite_code::InviteCode;
 use fedimint_core::module::ApiRequestErased;
@@ -49,8 +48,8 @@ pub async fn try_download_client_config(invite_code: &InviteCode) -> anyhow::Res
 
     let query_strategy = FilterMap::new(
         move |cfg: ClientConfig| {
-            if federation_id.0 != cfg.global.broadcast_public_keys.consensus_hash() {
-                bail!("Guardian api endpoint map does not hash to FederationId")
+            if federation_id != cfg.global.calculate_federation_id() {
+                bail!("FederationId in invite code does not match client config")
             }
 
             Ok(cfg.global.api_endpoints)
