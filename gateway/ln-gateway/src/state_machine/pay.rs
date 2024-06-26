@@ -3,7 +3,7 @@ use std::sync::Arc;
 
 use bitcoin_hashes::{sha256, Hash};
 use fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
-use fedimint_client::transaction::{ClientInput, ClientOutput};
+use fedimint_client::transaction::{ClientInput, ClientOutput, SimpleSchnorrSigner};
 use fedimint_client::{ClientHandleArc, DynGlobalClientContext};
 use fedimint_core::config::FederationId;
 use fedimint_core::core::OperationId;
@@ -697,12 +697,13 @@ impl GatewayPayClaimOutgoingContract {
     ) -> GatewayPayStateMachine {
         debug!("Claiming outgoing contract {contract:?}");
         let claim_input = contract.claim(preimage.clone());
-        let client_input = ClientInput::<LightningInput, GatewayClientStateMachines> {
-            input: claim_input,
-            state_machines: Arc::new(|_, _| vec![]),
-            amount: contract.amount,
-            keys: vec![context.redeem_key],
-        };
+        let client_input =
+            ClientInput::<SimpleSchnorrSigner, LightningInput, GatewayClientStateMachines> {
+                input: claim_input,
+                state_machines: Arc::new(|_, _| vec![]),
+                amount: contract.amount,
+                keys: vec![SimpleSchnorrSigner(context.redeem_key)],
+            };
 
         let out_points = global_context.claim_input(dbtx, client_input).await.1;
         debug!("Claimed outgoing contract {contract:?} with out points {out_points:?}");

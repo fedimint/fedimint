@@ -2,7 +2,7 @@ use std::sync::Arc;
 use std::time::SystemTime;
 
 use fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
-use fedimint_client::transaction::ClientInput;
+use fedimint_client::transaction::{ClientInput, SimpleSchnorrSigner};
 use fedimint_client::DynGlobalClientContext;
 use fedimint_core::core::OperationId;
 use fedimint_core::encoding::{Decodable, Encodable};
@@ -175,7 +175,7 @@ async fn try_cancel_oob_spend(
 ) -> TransactionId {
     let input = ClientInput {
         input: MintInput::new_v0(amount, spendable_note.note()),
-        keys: vec![spendable_note.spend_key],
+        keys: vec![SimpleSchnorrSigner(spendable_note.spend_key)],
         amount,
         state_machines: Arc::new(move |txid, input_idx| {
             vec![MintClientStateMachines::Input(MintInputStateMachine {

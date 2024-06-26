@@ -12,7 +12,7 @@ use std::time::Duration;
 
 use bitcoin::hashes::sha256;
 use fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
-use fedimint_client::transaction::ClientInput;
+use fedimint_client::transaction::{ClientInput, SimpleSchnorrSigner};
 use fedimint_client::DynGlobalClientContext;
 use fedimint_core::core::OperationId;
 use fedimint_core::encoding::{Decodable, Encodable};
@@ -326,11 +326,11 @@ impl DecryptingPreimageState {
     ) -> IncomingStateMachine {
         debug!("Refunding incoming contract {contract:?}");
         let claim_input = contract.claim();
-        let client_input = ClientInput::<LightningInput, IncomingStateMachine> {
+        let client_input = ClientInput::<SimpleSchnorrSigner, LightningInput, IncomingStateMachine> {
             input: claim_input,
             amount: contract.amount,
             state_machines: Arc::new(|_, _| vec![]),
-            keys: vec![context.redeem_key],
+            keys: vec![SimpleSchnorrSigner(context.redeem_key)],
         };
 
         let out_points = global_context.claim_input(dbtx, client_input).await.1;

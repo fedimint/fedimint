@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use bitcoin::key::KeyPair;
 use fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
-use fedimint_client::transaction::ClientInput;
+use fedimint_client::transaction::{ClientInput, SimpleSchnorrSigner};
 use fedimint_client::DynGlobalClientContext;
 use fedimint_core::core::OperationId;
 use fedimint_core::encoding::{Decodable, Encodable};
@@ -110,15 +110,16 @@ impl ReceiveStateMachine {
             return old_state.update(ReceiveSMState::Expired);
         }
 
-        let client_input = ClientInput::<LightningInput, LightningClientStateMachines> {
-            input: LightningInput::V0(LightningInputV0::Incoming(
-                old_state.common.contract.contract_id(),
-                old_state.common.agg_decryption_key,
-            )),
-            amount: old_state.common.contract.commitment.amount,
-            keys: vec![old_state.common.claim_keypair],
-            state_machines: Arc::new(|_, _| vec![]),
-        };
+        let client_input =
+            ClientInput::<SimpleSchnorrSigner, LightningInput, LightningClientStateMachines> {
+                input: LightningInput::V0(LightningInputV0::Incoming(
+                    old_state.common.contract.contract_id(),
+                    old_state.common.agg_decryption_key,
+                )),
+                amount: old_state.common.contract.commitment.amount,
+                keys: vec![SimpleSchnorrSigner(old_state.common.claim_keypair)],
+                state_machines: Arc::new(|_, _| vec![]),
+            };
 
         let out_points = global_context.claim_input(dbtx, client_input).await.1;
 

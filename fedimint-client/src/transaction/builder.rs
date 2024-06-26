@@ -1,6 +1,5 @@
 use std::sync::Arc;
 
-use bitcoin::key::KeyPair;
 use fedimint_core::core::{DynInput, DynOutput, IntoDynInstance, ModuleInstanceId};
 use fedimint_core::transaction::{Transaction, TransactionSignature};
 use fedimint_core::Amount;
@@ -10,17 +9,19 @@ use secp256k1_zkp::Secp256k1;
 
 use crate::module::StateGenerator;
 use crate::sm::DynState;
+use crate::transaction::DynSchnorrSigner;
 
 #[derive(Clone)]
-pub struct ClientInput<I = DynInput, S = DynState> {
+pub struct ClientInput<K = DynSchnorrSigner, I = DynInput, S = DynState> {
     pub input: I,
-    pub keys: Vec<KeyPair>,
+    pub keys: Vec<K>,
     pub amount: Amount,
     pub state_machines: StateGenerator<S>,
 }
 
-impl<I, S> IntoDynInstance for ClientInput<I, S>
+impl<K, I, S> IntoDynInstance for ClientInput<K, I, S>
 where
+    K: IntoDynInstance<DynType = DynSchnorrSigner> + 'static,
     I: IntoDynInstance<DynType = DynInput> + 'static,
     S: IntoDynInstance<DynType = DynState> + 'static,
 {
@@ -29,7 +30,11 @@ where
     fn into_dyn(self, module_instance_id: ModuleInstanceId) -> ClientInput {
         ClientInput {
             input: self.input.into_dyn(module_instance_id),
-            keys: self.keys,
+            keys: self
+                .keys
+                .into_iter()
+                .map(|k| k.into_dyn(module_instance_id))
+                .collect(),
             amount: self.amount,
             state_machines: state_gen_to_dyn(self.state_machines, module_instance_id),
         }
@@ -98,7 +103,7 @@ impl TransactionBuilder {
 
     pub fn build<C, R: RngCore + CryptoRng>(
         self,
-        secp_ctx: &Secp256k1<C>,
+        _secp_ctx: &Secp256k1<C>,
         mut rng: R,
     ) -> (Transaction, Vec<DynState>)
     where
@@ -120,10 +125,11 @@ impl TransactionBuilder {
         let txid = Transaction::tx_hash_from_parts(&inputs, &outputs, nonce);
         let msg = secp256k1_zkp::Message::from_slice(&txid[..]).expect("txid has right length");
 
+        let secp = Secp256k1::new(); // todo use provided one
         let signatures = input_keys
             .into_iter()
             .flatten()
-            .map(|keypair| secp_ctx.sign_schnorr(&msg, &keypair))
+            .map(|keypair| keypair.0.sign_schnorr(&secp, &msg))
             .collect();
 
         let transaction = Transaction {

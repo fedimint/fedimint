@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
-use fedimint_client::transaction::ClientInput;
+use fedimint_client::transaction::{ClientInput, SimpleSchnorrSigner};
 use fedimint_client::DynGlobalClientContext;
 use fedimint_core::core::OperationId;
 use fedimint_core::encoding::{Decodable, Encodable};
@@ -140,9 +140,9 @@ impl MintInputStateCreated {
             _ => panic!("Invalid state transition"),
         };
 
-        let refund_input = ClientInput::<MintInput, MintClientStateMachines> {
+        let refund_input = ClientInput::<SimpleSchnorrSigner, MintInput, MintClientStateMachines> {
             input: MintInput::new_v0(amount, spendable_note.note()),
-            keys: vec![spendable_note.spend_key],
+            keys: vec![SimpleSchnorrSigner(spendable_note.spend_key)],
             amount,
             // The input of the refund tx is managed by this state machine, so no new state machines
             // need to be created

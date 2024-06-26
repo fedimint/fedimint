@@ -3,7 +3,7 @@ use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 
 use fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
-use fedimint_client::transaction::ClientInput;
+use fedimint_client::transaction::{ClientInput, SimpleSchnorrSigner};
 use fedimint_client::DynGlobalClientContext;
 use fedimint_core::core::OperationId;
 use fedimint_core::encoding::{Decodable, Encodable};
@@ -287,9 +287,9 @@ async fn transition_btc_tx_confirmed(
 
     let wallet_input = WalletInput::new_v0(pegin_proof);
 
-    let client_input = ClientInput::<WalletInput, WalletClientStates> {
+    let client_input = ClientInput::<SimpleSchnorrSigner, WalletInput, WalletClientStates> {
         input: wallet_input,
-        keys: vec![awaiting_confirmation_state.tweak_key],
+        keys: vec![SimpleSchnorrSigner(awaiting_confirmation_state.tweak_key)],
         amount,
         state_machines: Arc::new(|_, _| vec![]),
     };
