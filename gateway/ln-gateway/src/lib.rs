@@ -354,7 +354,7 @@ impl std::fmt::Debug for Gateway {
             .field("scid_to_federation", &self.scid_to_federation)
             .field("gateway_id", &self.gateway_id)
             .field("next_scid", &self.next_scid)
-            .finish()
+            .finish_non_exhaustive()
     }
 }
 
