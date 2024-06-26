@@ -6,9 +6,9 @@ use fedimint_api_client::api::ApiVersionSet;
 use fedimint_core::config::{ClientConfig, FederationId};
 use fedimint_core::core::{ModuleInstanceId, OperationId};
 use fedimint_core::db::{
-    create_database_version, Database, DatabaseTransaction, DatabaseValue, DatabaseVersion,
-    DatabaseVersionKey, IDatabaseTransactionOpsCore, IDatabaseTransactionOpsCoreTyped,
-    MODULE_GLOBAL_PREFIX,
+    apply_migrations, create_database_version, Database, DatabaseTransaction, DatabaseValue,
+    DatabaseVersion, DatabaseVersionKey, IDatabaseTransactionOpsCore,
+    IDatabaseTransactionOpsCoreTyped, ServerMigrationFn, MODULE_GLOBAL_PREFIX,
 };
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::registry::ModuleDecoderRegistry;
@@ -29,6 +29,8 @@ use crate::sm::executor::{
     InactiveStateKeyPrefixBytes,
 };
 use crate::sm::{ActiveStateMeta, InactiveStateMeta};
+
+pub const CORE_CLIENT_DATABASE_VERSION: DatabaseVersion = DatabaseVersion(0);
 
 #[repr(u8)]
 #[derive(Clone, EnumIter, Debug)]
@@ -373,6 +375,19 @@ pub type ClientMigrationFn = for<'r, 'tx> fn(
     'r,
     anyhow::Result<Option<(Vec<(Vec<u8>, OperationId)>, Vec<(Vec<u8>, OperationId)>)>>,
 >;
+
+pub fn get_core_client_database_migrations() -> BTreeMap<DatabaseVersion, ServerMigrationFn> {
+    BTreeMap::new()
+}
+
+pub async fn apply_migrations_core_client(
+    db: &Database,
+    kind: String,
+    target_version: DatabaseVersion,
+    migrations: BTreeMap<DatabaseVersion, ServerMigrationFn>,
+) -> Result<(), anyhow::Error> {
+    apply_migrations(db, kind, target_version, migrations, None).await
+}
 
 /// `apply_migrations_client` iterates from the on disk database version for the
 /// client module up to `target_db_version` and executes all of the migrations
