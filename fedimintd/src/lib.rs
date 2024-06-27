@@ -79,18 +79,43 @@ pub struct FedimintdInit;
 impl ModuleInit for FedimintdInit {
     type Common = FedimintdCommonInit;
     const DATABASE_VERSION: DatabaseVersion = DatabaseVersion(1);
-    // fn dump_database(
-    //     &self,
-    //     dbtx: &mut DatabaseTransaction<'_>,
-    //     prefix_names: Vec<String>,
-    // ) -> maybe_add_send!(
-    //     impl Future<
-    //         Output = Box<
-    //             dyn Iterator<Item = (String, Box<dyn erased_serde::Serialize +
-    // Send>)> + '_,         >,
-    //     >
-    // ) {
-    // }
+    async fn dump_database(
+        &self,
+        dbtx: &mut DatabaseTransaction<'_>,
+        prefix_names: Vec<String>,
+    ) -> Box<dyn Iterator<Item = (String, Box<dyn erased_serde::Serialize + Send>)> + '_> {
+        let mut items: BTreeMap<String, Box<dyn erased_serde::Serialize + Send>> = BTreeMap::new();
+        let filtered_prefixes = DbKeyPrefix::iter().filter(|f| {
+            prefix_names.is_empty() || prefix_names.contains(&f.to_string().to_lowercase())
+        });
+
+        for table in filtered_prefixes {
+            match table {
+                DbKeyPrefix::Funds => {
+                    push_db_pair_items!(
+                        dbtx,
+                        DummyFundsPrefixV1,
+                        DummyFundsKeyV1,
+                        Amount,
+                        items,
+                        "Dummy Funds"
+                    );
+                }
+                DbKeyPrefix::Outcome => {
+                    push_db_pair_items!(
+                        dbtx,
+                        DummyOutcomePrefix,
+                        DummyOutcomeKey,
+                        DummyOutputOutcome,
+                        items,
+                        "Dummy Outputs"
+                    );
+                }
+            }
+        }
+
+        Box::new(items.into_iter())
+    }
 }
 
 #[derive(Debug)]

@@ -3,7 +3,6 @@ use fedimintd::Fedimintd;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    println!("fedimintd:bin:main.rs -");
     Fedimintd::new(fedimint_build_code_version_env!(), None)?
         .with_default_modules()
         .run()
