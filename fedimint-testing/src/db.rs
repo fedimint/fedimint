@@ -13,8 +13,8 @@ use fedimint_client::sm::{
 };
 use fedimint_core::core::OperationId;
 use fedimint_core::db::{
-    apply_migrations, apply_migrations_server, Database, DatabaseVersion,
-    IDatabaseTransactionOpsCoreTyped, ServerMigrationFn,
+    apply_migrations, apply_migrations_server, CoreMigrationFn, Database, DatabaseVersion,
+    IDatabaseTransactionOpsCoreTyped,
 };
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::module::{CommonModuleInit, DynServerModuleInit};
@@ -279,7 +279,7 @@ pub async fn validate_migrations_global<F, Fut>(
     validate: F,
     db_prefix: &str,
     target_db_version: DatabaseVersion,
-    migrations: BTreeMap<DatabaseVersion, ServerMigrationFn>,
+    migrations: BTreeMap<DatabaseVersion, CoreMigrationFn>,
     decoders: ModuleDecoderRegistry,
 ) -> anyhow::Result<()>
 where

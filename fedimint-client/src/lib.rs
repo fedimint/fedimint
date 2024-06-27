@@ -775,8 +775,15 @@ pub struct Client {
 impl Client {
     /// Initialize a client builder that can be configured to create a new
     /// client.
-    pub fn builder(db: Database) -> ClientBuilder {
-        ClientBuilder::new(db)
+    pub async fn builder(db: Database) -> anyhow::Result<ClientBuilder> {
+        apply_migrations_core_client(
+            &db,
+            "fedimint-client".to_string(),
+            CORE_CLIENT_DATABASE_VERSION,
+            get_core_client_database_migrations(),
+        )
+        .await?;
+        Ok(ClientBuilder::new(db))
     }
 
     pub fn api(&self) -> &(dyn IGlobalFederationApi + 'static) {
@@ -1943,13 +1950,6 @@ impl ClientBuilder {
     }
 
     async fn migrate_database(&self, db: &Database) -> anyhow::Result<()> {
-        apply_migrations_core_client(
-            &db,
-            "fedimint-client".to_string(),
-            CORE_CLIENT_DATABASE_VERSION,
-            get_core_client_database_migrations(),
-        )
-        .await?;
         // Only apply the client database migrations if the database has been
         // initialized.
         // This only works as long as you don't change the client config
