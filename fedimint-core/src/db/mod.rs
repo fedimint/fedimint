@@ -2019,7 +2019,8 @@ pub async fn create_database_version(
         .is_none()
     {
         // If it exists, read and remove the legacy `DatabaseVersion`, which used to be
-        // in the module's isolated namespace (but not for fedimint-server).
+        // in the module's isolated namespace (but not for fedimint-server or
+        // fedimint-client).
         //
         // Otherwise, if the previous database contains data and no legacy database
         // version, use `DatabaseVersion(0)` so that all database migrations are
