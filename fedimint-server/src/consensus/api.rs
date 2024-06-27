@@ -6,11 +6,13 @@ use std::sync::Arc;
 
 use anyhow::{anyhow, Result};
 use async_trait::async_trait;
+use bitcoin::key::{KeyPair, Secp256k1};
 use bitcoin_hashes::sha256;
 use fedimint_aead::{encrypt, get_encryption_key, random_salt};
 use fedimint_api_client::api::{
     FederationStatus, GuardianConfigBackup, PeerConnectionStatus, PeerStatus, StatusResponse,
 };
+use fedimint_api_client::{ClientConfigChallenge, ClientConfigChallengeResponse};
 use fedimint_core::admin_client::ServerStatus;
 use fedimint_core::backup::{ClientBackupKey, ClientBackupSnapshot};
 use fedimint_core::config::{ClientConfig, JsonClientConfig};
@@ -22,10 +24,11 @@ use fedimint_core::db::{
 use fedimint_core::endpoint_constants::{
     AUDIT_ENDPOINT, AUTH_ENDPOINT, AWAIT_OUTPUT_OUTCOME_ENDPOINT, AWAIT_SESSION_OUTCOME_ENDPOINT,
     AWAIT_SIGNED_SESSION_OUTCOME_ENDPOINT, AWAIT_TRANSACTION_ENDPOINT, BACKUP_ENDPOINT,
-    CLIENT_CONFIG_ENDPOINT, CLIENT_CONFIG_JSON_ENDPOINT, FEDERATION_ID_ENDPOINT,
-    GUARDIAN_CONFIG_BACKUP_ENDPOINT, INVITE_CODE_ENDPOINT, RECOVER_ENDPOINT,
-    SERVER_CONFIG_CONSENSUS_HASH_ENDPOINT, SESSION_COUNT_ENDPOINT, SESSION_STATUS_ENDPOINT,
-    SHUTDOWN_ENDPOINT, STATUS_ENDPOINT, SUBMIT_TRANSACTION_ENDPOINT, VERSION_ENDPOINT,
+    CLIENT_CONFIG_ENDPOINT, CLIENT_CONFIG_JSON_ENDPOINT, CLIENT_CONFIG_SIGNATURE_ENDPOINT,
+    FEDERATION_ID_ENDPOINT, GUARDIAN_CONFIG_BACKUP_ENDPOINT, INVITE_CODE_ENDPOINT,
+    RECOVER_ENDPOINT, SERVER_CONFIG_CONSENSUS_HASH_ENDPOINT, SESSION_COUNT_ENDPOINT,
+    SESSION_STATUS_ENDPOINT, SHUTDOWN_ENDPOINT, STATUS_ENDPOINT, SUBMIT_TRANSACTION_ENDPOINT,
+    VERSION_ENDPOINT,
 };
 use fedimint_core::epoch::ConsensusItem;
 use fedimint_core::module::audit::{Audit, AuditSummary};
@@ -471,6 +474,18 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConsensusApi>> {
             ApiVersion::new(0, 0),
             async |fedimint: &ConsensusApi, _context, _v: ()| -> ClientConfig {
                 Ok(fedimint.client_cfg.clone())
+            }
+        },
+        // Endpoint for Guardian to verify the client config
+        api_endpoint! {
+            CLIENT_CONFIG_SIGNATURE_ENDPOINT,
+            ApiVersion::new(0, 3),
+            async |fedimint: &ConsensusApi, _context, v: ClientConfigChallenge| -> ClientConfigChallengeResponse {
+                let client_config_bytes = serde_json::to_string(&fedimint.client_cfg).unwrap().as_bytes().to_vec();
+                let message = v.to_message(&fedimint.client_cfg);
+                let key_pair = KeyPair::from_secret_key(&Secp256k1::new(), &fedimint.cfg.private.broadcast_secret_key);
+                let signature = key_pair.sign_schnorr(message);
+                Ok(ClientConfigChallengeResponse { signature, serialized_config: client_config_bytes })
             }
         },
         // Helper endpoint for Admin UI that can't parse consensus encoding

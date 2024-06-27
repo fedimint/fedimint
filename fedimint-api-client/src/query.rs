@@ -88,13 +88,13 @@ impl ErrorStrategy {
 /// Returns when we obtain the first valid responses. RPC call errors or
 /// invalid responses are not retried.
 pub struct FilterMap<R, T> {
-    filter_map: Box<maybe_add_send_sync!(dyn Fn(R) -> anyhow::Result<T>)>,
+    filter_map: Box<maybe_add_send_sync!(dyn Fn(R, PeerId) -> anyhow::Result<T>)>,
     error_strategy: ErrorStrategy,
 }
 
 impl<R, T> FilterMap<R, T> {
     pub fn new(
-        filter_map: impl Fn(R) -> anyhow::Result<T> + MaybeSend + MaybeSync + 'static,
+        filter_map: impl Fn(R, PeerId) -> anyhow::Result<T> + MaybeSend + MaybeSync + 'static,
         num_peers: NumPeers,
     ) -> Self {
         Self {
@@ -107,7 +107,7 @@ impl<R, T> FilterMap<R, T> {
 impl<R, T> QueryStrategy<R, T> for FilterMap<R, T> {
     fn process(&mut self, peer: PeerId, result: PeerResult<R>) -> QueryStep<T> {
         match result {
-            Ok(response) => match (self.filter_map)(response) {
+            Ok(response) => match (self.filter_map)(response, peer) {
                 Ok(value) => QueryStep::Success(value),
                 Err(error) => self
                     .error_strategy
