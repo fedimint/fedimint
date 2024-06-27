@@ -30,7 +30,7 @@ use crate::sm::executor::{
 };
 use crate::sm::{ActiveStateMeta, InactiveStateMeta};
 
-pub const CORE_CLIENT_DATABASE_VERSION: DatabaseVersion = DatabaseVersion(0);
+pub const CORE_CLIENT_DATABASE_VERSION: DatabaseVersion = DatabaseVersion(1);
 
 #[repr(u8)]
 #[derive(Clone, EnumIter, Debug)]
@@ -418,8 +418,8 @@ pub fn get_core_client_database_migrations() -> BTreeMap<DatabaseVersion, CoreMi
                 };
 
                 let config_key = ClientConfigKey { id: id.id };
-                dbtx.insert_new_entry(&config_key, &config).await;
                 dbtx.remove_entry(&id).await;
+                dbtx.insert_new_entry(&config_key, &config).await;
             }
             Ok(())
         })
