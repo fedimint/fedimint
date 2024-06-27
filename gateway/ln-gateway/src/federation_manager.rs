@@ -1,6 +1,7 @@
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
+use fedimint_client::ClientHandleArc;
 use fedimint_core::config::FederationId;
 use fedimint_core::util::Spanned;
 use tokio::sync::{Mutex, RwLock};
@@ -100,5 +101,24 @@ impl FederationManager {
             .await
             .retain(|_, fid| *fid != federation_id);
         Ok(())
+    }
+
+    pub async fn get_client_for_scid(
+        &self,
+        short_channel_id: u64,
+    ) -> Option<Spanned<ClientHandleArc>> {
+        let scid_to_feds = self.scid_to_federation.read().await;
+        let clients = self.clients.read().await;
+
+        let federation_id = scid_to_feds.get(&short_channel_id)?;
+        // TODO(tvolk131): Cloning the client here could cause issues with client
+        // shutdown (see `remove_client` above). Perhaps this function should take a
+        // lambda and pass it into `client.with_sync`.
+        if let Some(client) = clients.get(federation_id).cloned() {
+            Some(client)
+        } else {
+            error!("`FederationManager.scid_to_federation` is out of sync with `FederationManager.clients`! This is a bug.");
+            None
+        }
     }
 }

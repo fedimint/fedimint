@@ -635,19 +635,11 @@ impl GatewayPayInvoice {
                         return None;
                     }
 
-                    let scid_to_feds = context
+                    context
                         .gateway
                         .federation_manager
-                        .scid_to_federation
-                        .read()
-                        .await;
-                    match scid_to_feds.get(&hop.short_channel_id).copied() {
-                        None => None,
-                        Some(federation_id) => {
-                            let clients = context.gateway.federation_manager.clients.read().await;
-                            clients.get(&federation_id).cloned()
-                        }
-                    }
+                        .get_client_for_scid(hop.short_channel_id)
+                        .await
                 }
                 _ => None,
             },
