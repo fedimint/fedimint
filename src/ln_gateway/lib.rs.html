@@ -2030,7 +2030,7 @@
 <span class="kw">use </span>fedimint_core::secp256k1::schnorr::Signature;
 <span class="kw">use </span>fedimint_core::secp256k1::{KeyPair, PublicKey, Secp256k1};
 <span class="kw">use </span>fedimint_core::task::{sleep, TaskGroup, TaskHandle, TaskShutdownToken};
-<span class="kw">use </span>fedimint_core::time::{duration_since_epoch, now};
+<span class="kw">use </span>fedimint_core::time::duration_since_epoch;
 <span class="kw">use </span>fedimint_core::util::{SafeUrl, Spanned};
 <span class="kw">use </span>fedimint_core::{
     fedimint_build_code_version_env, push_db_pair_items, Amount, BitcoinAmountOrAll, BitcoinHash,
@@ -2852,12 +2852,12 @@
     <span class="doccomment">/// Returns a Bitcoin deposit on-chain address for pegging in Bitcoin for a
     /// specific connected federation.
     </span><span class="kw">pub async fn </span>handle_address_msg(<span class="kw-2">&amp;</span><span class="self">self</span>, payload: DepositAddressPayload) -&gt; <span class="prelude-ty">Result</span>&lt;Address&gt; {
-        <span class="kw">let </span>(<span class="kw">_</span>, address) = <span class="self">self
+        <span class="kw">let </span>(<span class="kw">_</span>, address, <span class="kw">_</span>) = <span class="self">self
             </span>.select_client(payload.federation_id)
             .<span class="kw">await</span><span class="question-mark">?
             </span>.value()
             .get_first_module::&lt;WalletClientModule&gt;()
-            .get_deposit_address(now() + Duration::from_secs(<span class="number">86400 </span>* <span class="number">365</span>), ())
+            .allocate_deposit_address()
             .<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(address)
     }

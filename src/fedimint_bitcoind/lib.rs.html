@@ -451,16 +451,16 @@
 
     <span class="doccomment">/// Watches for a script and returns any transactions associated with it
     ///
-    /// Should be called once prior to transactions being submitted or watching
-    /// may not occur on backends that need it
+    /// Should be called at least prior to transactions being submitted or
+    /// watching may not occur on backends that need it
     /// TODO: bitcoind backend is broken
     /// `&lt;https://github.com/fedimint/fedimint/issues/5329&gt;`
     </span><span class="kw">async fn </span>watch_script_history(<span class="kw-2">&amp;</span><span class="self">self</span>, script: <span class="kw-2">&amp;</span>ScriptBuf) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt;;
 
     <span class="doccomment">/// Get script transaction history
     ///
-    /// Note: should call `watch_script_history` at least once (and ideally only
-    /// once), before calling this.
+    /// Note: should call `watch_script_history` at least once, before calling
+    /// this.
     </span><span class="kw">async fn </span>get_script_history(<span class="kw-2">&amp;</span><span class="self">self</span>, script: <span class="kw-2">&amp;</span>ScriptBuf) -&gt; <span class="prelude-ty">Result</span>&lt;Vec&lt;Transaction&gt;&gt;;
 
     <span class="doccomment">/// Returns a proof that a tx is included in the bitcoin blockchain

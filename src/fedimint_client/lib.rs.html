@@ -2545,6 +2545,13 @@
 <a href="#2545" id="2545">2545</a>
 <a href="#2546" id="2546">2546</a>
 <a href="#2547" id="2547">2547</a>
+<a href="#2548" id="2548">2548</a>
+<a href="#2549" id="2549">2549</a>
+<a href="#2550" id="2550">2550</a>
+<a href="#2551" id="2551">2551</a>
+<a href="#2552" id="2552">2552</a>
+<a href="#2553" id="2553">2553</a>
+<a href="#2554" id="2554">2554</a>
 </pre></div><pre class="rust"><code><span class="attr">#![warn(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::default_trait_access)]
@@ -4392,6 +4399,7 @@
     <span class="doccomment">/// Waits for the transaction to be accepted or rejected as part of the
     /// operation to which the `TransactionUpdates` object is subscribed.
     </span><span class="kw">pub async fn </span>await_tx_accepted(<span class="self">self</span>, await_txid: TransactionId) -&gt; <span class="prelude-ty">Result</span>&lt;(), String&gt; {
+        <span class="macro">debug!</span>(target: LOG_CLIENT, %await_txid, <span class="string">"Await tx accepted"</span>);
         <span class="self">self</span>.update_stream
             .filter_map(|tx_update| {
                 std::future::ready(<span class="kw">match </span>tx_update.state {
@@ -4403,8 +4411,10 @@
                 })
             })
             .next_or_pending()
-            .<span class="kw">await
-    </span>}
+            .<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="macro">debug!</span>(target: LOG_CLIENT, %await_txid, <span class="string">"Tx accepted"</span>);
+        <span class="prelude-val">Ok</span>(())
+    }
 }
 
 <span class="doccomment">/// Admin (guardian) identification and authentication
@@ -4992,6 +5002,10 @@
             });
 
         <span class="kw">let </span>client_arc = ClientHandle::new(client_inner);
+
+        <span class="kw">for </span>(<span class="kw">_</span>, <span class="kw">_</span>, module) <span class="kw">in </span>client_arc.modules.iter_modules() {
+            module.start().<span class="kw">await</span>;
+        }
 
         final_client.set(client_arc.downgrade());
 

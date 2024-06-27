@@ -142,8 +142,8 @@ Note: calling this method with bitcoind as a backend must first call
     Self: 'async_trait,
     'life0: 'async_trait,
     'life1: 'async_trait,</div></h4></section></summary><div class="docblock"><p>Watches for a script and returns any transactions associated with it</p>
-<p>Should be called once prior to transactions being submitted or watching
-may not occur on backends that need it
+<p>Should be called at least prior to transactions being submitted or
+watching may not occur on backends that need it
 TODO: bitcoind backend is broken
 <code>&lt;https://github.com/fedimint/fedimint/issues/5329&gt;</code></p>
 </div></details><details class="toggle method-toggle" open><summary><section id="tymethod.get_script_history" class="method"><a class="src rightside" href="../src/fedimint_bitcoind/lib.rs.html#174">source</a><h4 class="code-header">fn <a href="#tymethod.get_script_history" class="fn">get_script_history</a>&lt;'life0, 'life1, 'async_trait&gt;(
@@ -153,8 +153,8 @@ TODO: bitcoind backend is broken
     Self: 'async_trait,
     'life0: 'async_trait,
     'life1: 'async_trait,</div></h4></section></summary><div class="docblock"><p>Get script transaction history</p>
-<p>Note: should call <code>watch_script_history</code> at least once (and ideally only
-once), before calling this.</p>
+<p>Note: should call <code>watch_script_history</code> at least once, before calling
+this.</p>
 </div></details><details class="toggle method-toggle" open><summary><section id="tymethod.get_txout_proof" class="method"><a class="src rightside" href="../src/fedimint_bitcoind/lib.rs.html#177">source</a><h4 class="code-header">fn <a href="#tymethod.get_txout_proof" class="fn">get_txout_proof</a>&lt;'life0, 'async_trait&gt;(
     &amp;'life0 self,
     txid: Txid,

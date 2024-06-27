@@ -166,7 +166,7 @@
     Input(Amount, TransactionId, OperationId),
     Output(Amount, TransactionId, OperationId),
     InputDone(OperationId),
-    OutputDone(Amount, OperationId),
+    OutputDone(Amount, TransactionId, OperationId),
     Refund(OperationId),
     Unreachable(OperationId, Amount),
 }
@@ -202,14 +202,14 @@
                     <span class="comment">// output accepted, add funds
                     </span><span class="prelude-val">Ok</span>(()) =&gt; Box::pin(<span class="kw">async move </span>{
                         add_funds(amount, dbtx.module_tx()).<span class="kw">await</span>;
-                        DummyStateMachine::OutputDone(amount, id)
+                        DummyStateMachine::OutputDone(amount, txid, id)
                     }),
                     <span class="comment">// output rejected, do not add funds
                     </span><span class="prelude-val">Err</span>(<span class="kw">_</span>) =&gt; Box::pin(<span class="kw">async move </span>{ DummyStateMachine::Refund(id) }),
                 },
             )],
             DummyStateMachine::InputDone(<span class="kw">_</span>)
-            | DummyStateMachine::OutputDone(<span class="kw">_</span>, <span class="kw">_</span>)
+            | DummyStateMachine::OutputDone(<span class="kw">_</span>, <span class="kw">_</span>, <span class="kw">_</span>)
             | DummyStateMachine::Refund(<span class="kw">_</span>)
             | DummyStateMachine::Unreachable(<span class="kw">_</span>, <span class="kw">_</span>) =&gt; <span class="macro">vec!</span>[],
         }
@@ -220,7 +220,7 @@
             DummyStateMachine::Input(<span class="kw">_</span>, <span class="kw">_</span>, id)
             | DummyStateMachine::Output(<span class="kw">_</span>, <span class="kw">_</span>, id)
             | DummyStateMachine::InputDone(id)
-            | DummyStateMachine::OutputDone(<span class="kw">_</span>, id)
+            | DummyStateMachine::OutputDone(<span class="kw">_</span>, <span class="kw">_</span>, id)
             | DummyStateMachine::Refund(id)
             | DummyStateMachine::Unreachable(id, <span class="kw">_</span>) =&gt; <span class="kw-2">*</span>id,
         }

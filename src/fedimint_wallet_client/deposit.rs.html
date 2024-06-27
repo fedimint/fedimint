@@ -331,16 +331,6 @@
 <a href="#331" id="331">331</a>
 <a href="#332" id="332">332</a>
 <a href="#333" id="333">333</a>
-<a href="#334" id="334">334</a>
-<a href="#335" id="335">335</a>
-<a href="#336" id="336">336</a>
-<a href="#337" id="337">337</a>
-<a href="#338" id="338">338</a>
-<a href="#339" id="339">339</a>
-<a href="#340" id="340">340</a>
-<a href="#341" id="341">341</a>
-<a href="#342" id="342">342</a>
-<a href="#343" id="343">343</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::cmp;
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::{Duration, SystemTime};
@@ -360,6 +350,7 @@
 <span class="kw">use </span>tracing::{debug, instrument, trace, warn};
 
 <span class="kw">use </span><span class="kw">crate</span>::api::WalletFederationApi;
+<span class="kw">use </span><span class="kw">crate</span>::pegin_monitor::filter_onchain_deposit_outputs;
 <span class="kw">use crate</span>::{WalletClientContext, WalletClientStates};
 
 <span class="kw">const </span>TRANSACTION_STATUS_FETCH_INTERVAL: Duration = Duration::from_secs(<span class="number">1</span>);
@@ -468,20 +459,9 @@
                     <span class="macro">warn!</span>(<span class="string">"More than one transaction was sent to deposit address, only considering the first one"</span>);
                 }
 
-                <span class="kw">if let </span><span class="prelude-val">Some</span>(transaction) = received.into_iter().next() {
-                    <span class="kw">let </span>out_idx = transaction
-                        .output
-                        .iter()
-                        .enumerate()
-                        .find_map(|(idx, output)| {
-                            <span class="kw">if </span>output.script_pubkey == script {
-                                <span class="prelude-val">Some</span>(idx <span class="kw">as </span>u32)
-                            } <span class="kw">else </span>{
-                                <span class="prelude-val">None
-                            </span>}
-                        })
-                        .expect(<span class="string">"TODO: handle invalid tx returned by API"</span>);
-
+                <span class="kw">if let </span><span class="prelude-val">Some</span>((transaction, out_idx)) =
+                    filter_onchain_deposit_outputs(received.into_iter(), <span class="kw-2">&amp;</span>script).next()
+                {
                     <span class="kw">return </span>(transaction, out_idx);
                 }
 
@@ -607,7 +587,7 @@
     }
 }
 
-<span class="kw">async fn </span>transition_btc_tx_confirmed(
+<span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">async fn </span>transition_btc_tx_confirmed(
     dbtx: <span class="kw-2">&amp;mut </span>ClientSMDatabaseTransaction&lt;<span class="lifetime">'_</span>, <span class="lifetime">'_</span>&gt;,
     global_context: DynGlobalClientContext,
     old_state: DepositStateMachine,

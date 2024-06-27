@@ -386,6 +386,11 @@
 <a href="#386" id="386">386</a>
 <a href="#387" id="387">387</a>
 <a href="#388" id="388">388</a>
+<a href="#389" id="389">389</a>
+<a href="#390" id="390">390</a>
+<a href="#391" id="391">391</a>
+<a href="#392" id="392">392</a>
+<a href="#393" id="393">393</a>
 </pre></div><pre class="rust"><code><span class="attr">#![warn(clippy::pedantic)]
 #![allow(clippy::missing_errors_doc)]
 #![allow(clippy::missing_panics_doc)]
@@ -545,7 +550,7 @@
     <span class="kw">async fn </span>await_primary_module_output(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         operation_id: OperationId,
-        _out_point: OutPoint,
+        out_point: OutPoint,
     ) -&gt; anyhow::Result&lt;Amount&gt; {
         <span class="kw">let </span>stream = <span class="self">self
             </span>.notifier
@@ -553,7 +558,12 @@
             .<span class="kw">await
             </span>.filter_map(|state| <span class="kw">async move </span>{
                 <span class="kw">match </span>state {
-                    DummyStateMachine::OutputDone(amount, <span class="kw">_</span>) =&gt; <span class="prelude-val">Some</span>(<span class="prelude-val">Ok</span>(amount)),
+                    DummyStateMachine::OutputDone(amount, txid, <span class="kw">_</span>) =&gt; {
+                        <span class="kw">if </span>txid != out_point.txid {
+                            <span class="kw">return </span><span class="prelude-val">None</span>;
+                        }
+                        <span class="prelude-val">Some</span>(<span class="prelude-val">Ok</span>(amount))
+                    }
                     DummyStateMachine::Refund(<span class="kw">_</span>) =&gt; <span class="prelude-val">Some</span>(<span class="prelude-val">Err</span>(<span class="macro">anyhow::anyhow!</span>(
                         <span class="string">"Error occurred processing the dummy transaction"
                     </span>))),
@@ -576,7 +586,7 @@
                 .subscribe_all_operations()
                 .filter_map(|state| <span class="kw">async move </span>{
                     <span class="kw">match </span>state {
-                        DummyStateMachine::OutputDone(<span class="kw">_</span>, <span class="kw">_</span>)
+                        DummyStateMachine::OutputDone(<span class="kw">_</span>, <span class="kw">_</span>, <span class="kw">_</span>)
                         | DummyStateMachine::Input { .. }
                         | DummyStateMachine::Refund(<span class="kw">_</span>) =&gt; <span class="prelude-val">Some</span>(()),
                         <span class="kw">_ </span>=&gt; <span class="prelude-val">None</span>,
