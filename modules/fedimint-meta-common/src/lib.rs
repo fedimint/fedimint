@@ -5,6 +5,7 @@
 
 pub mod endpoint;
 
+use std::collections::BTreeMap;
 use std::fmt;
 use std::str::FromStr;
 
