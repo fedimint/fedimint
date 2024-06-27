@@ -1003,20 +1003,17 @@ impl Gateway {
                 .await?;
 
             // no need to enter span earlier, because connect-fed has a span
-            self.federation_manager.clients.write().await.insert(
-                federation_id,
-                Spanned::new(
-                    info_span!("client", federation_id=%federation_id.clone()),
-                    async { client },
-                )
-                .await,
-            );
-
             self.federation_manager
-                .scid_to_federation
-                .write()
-                .await
-                .insert(mint_channel_id, federation_id);
+                .add_client(
+                    mint_channel_id,
+                    federation_id,
+                    Spanned::new(
+                        info_span!("client", federation_id=%federation_id.clone()),
+                        async { client },
+                    )
+                    .await,
+                )
+                .await;
 
             let dbtx = self.gateway_db.begin_transaction().await;
             self.client_builder.save_config(gw_client_cfg, dbtx).await?;
@@ -1356,30 +1353,7 @@ impl Gateway {
         // `clients` and opened databases in sync
         _lock: &MutexGuard<'_, federation_manager::ClientsJoinLock>,
     ) -> Result<()> {
-        let client = self
-            .federation_manager
-            .clients
-            .write()
-            .await
-            .remove(&federation_id)
-            .ok_or(GatewayError::InvalidMetadata(format!(
-                "No federation with id {federation_id}"
-            )))?
-            .into_value();
-
-        if let Some(client) = Arc::into_inner(client) {
-            client.shutdown().await;
-        } else {
-            error!("client is not unique, failed to remove client");
-        }
-
-        // Remove previously assigned scid from `scid_to_federation` map
-        self.federation_manager
-            .scid_to_federation
-            .write()
-            .await
-            .retain(|_, fid| *fid != federation_id);
-        Ok(())
+        self.federation_manager.remove_client(federation_id).await
     }
 
     /// Retrieves a `ClientHandleArc` from the Gateway's in memory structures
@@ -1418,19 +1392,9 @@ impl Gateway {
             ))
             .await
             {
-                // Registering each client happens in the background, since we're loading
-                // the clients for the first time, just add them to
-                // the in-memory maps
                 self.federation_manager
-                    .clients
-                    .write()
-                    .await
-                    .insert(federation_id, client);
-                self.federation_manager
-                    .scid_to_federation
-                    .write()
-                    .await
-                    .insert(scid, federation_id);
+                    .add_client(scid, federation_id, client)
+                    .await;
             } else {
                 warn!("Failed to load client for federation: {federation_id}");
             }
