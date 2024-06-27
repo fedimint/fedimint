@@ -29,7 +29,7 @@ pub struct FederationManager {
 
     /// Map of short channel ids to `FederationId`. Use for efficient retrieval
     /// of the client while handling incoming HTLCs.
-    pub scid_to_federation: ScidToFederationMap,
+    scid_to_federation: ScidToFederationMap,
 
     /// Tracker for short channel ID assignments. When connecting a new
     /// federation, this value is incremented and assigned to the federation
@@ -114,5 +114,9 @@ impl FederationManager {
                     None
                 }
             })
+    }
+
+    pub async fn clone_scid_map(&self) -> BTreeMap<u64, FederationId> {
+        self.scid_to_federation.read().await.clone()
     }
 }
