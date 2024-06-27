@@ -25,20 +25,20 @@ async fn load_or_generate_mnemonic(db: &Database) -> anyhow::Result<[u8; 64]> {
     )
 }
 
-fn make_client_builder() -> fedimint_client::ClientBuilder {
+async fn make_client_builder() -> Result<fedimint_client::ClientBuilder> {
     let mem_database = MemDatabase::default();
-    let mut builder = fedimint_client::Client::builder(mem_database.into());
+    let mut builder = fedimint_client::Client::builder(mem_database.into()).await?;
     builder.with_module(LightningClientInit::default());
     builder.with_module(MintClientInit);
     builder.with_module(WalletClientInit::default());
     builder.with_primary_module(1);
 
-    builder
+    Ok(builder)
 }
 
 async fn client(invite_code: &InviteCode) -> Result<fedimint_client::ClientHandleArc> {
     let client_config = fedimint_api_client::download_from_invite_code(invite_code).await?;
-    let mut builder = make_client_builder();
+    let mut builder = make_client_builder().await?;
     let client_secret = load_or_generate_mnemonic(builder.db_no_decoders()).await?;
     builder.stopped();
     builder
