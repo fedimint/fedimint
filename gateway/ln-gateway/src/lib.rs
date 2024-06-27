@@ -704,13 +704,7 @@ impl Gateway {
 
             return Ok(GatewayInfo {
                 federations,
-                channels: Some(
-                    self.federation_manager
-                        .scid_to_federation
-                        .read()
-                        .await
-                        .clone(),
-                ),
+                channels: Some(self.federation_manager.clone_scid_map().await),
                 version_hash: fedimint_build_code_version_env!().to_string(),
                 lightning_pub_key: Some(lightning_context.lightning_public_key.to_string()),
                 lightning_alias: Some(lightning_context.lightning_alias.clone()),
