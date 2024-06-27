@@ -578,13 +578,13 @@ impl Gateway {
                     break;
                 }
 
-                let mut htlc_task_group = tg.make_subgroup();
+                let htlc_task_group = tg.make_subgroup();
                 let lnrpc_route = self_copy.lightning_builder.build().await;
 
                 debug!("Will try to intercept HTLC stream...");
                 // Re-create the HTLC stream if the connection breaks
                 match lnrpc_route
-                    .route_htlcs(&mut htlc_task_group)
+                    .route_htlcs(&htlc_task_group)
                     .await
                 {
                     Ok((stream, ln_client)) => {

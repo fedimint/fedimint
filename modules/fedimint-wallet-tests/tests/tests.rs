@@ -571,7 +571,7 @@ async fn peg_ins_that_are_unconfirmed_are_rejected() -> anyhow::Result<()> {
     let server_bitcoin_rpc_config = fixtures.bitcoin_server();
     let dyn_bitcoin_rpc = fixtures.dyn_bitcoin_rpc();
     let db = MemDatabase::new().into_database();
-    let mut task_group = fedimint_core::task::TaskGroup::new();
+    let task_group = fedimint_core::task::TaskGroup::new();
     info!("Starting test peg_ins_that_are_unconfirmed_are_rejected");
 
     let (wallet_server_cfg, _) = build_wallet_server_configs(server_bitcoin_rpc_config)?;
@@ -593,7 +593,7 @@ async fn peg_ins_that_are_unconfirmed_are_rejected() -> anyhow::Result<()> {
         wallet_server_cfg[0].to_typed()?,
         &db,
         dyn_bitcoin_rpc.clone(),
-        &mut task_group,
+        &task_group,
         PeerId::from(0),
     )
     .await?;

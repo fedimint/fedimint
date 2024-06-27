@@ -112,7 +112,7 @@ pub trait ILnRpcClient: Debug + Send + Sync {
     /// the `Arc` cannot be consumed.
     async fn route_htlcs<'a>(
         self: Box<Self>,
-        task_group: &mut TaskGroup,
+        task_group: &TaskGroup,
     ) -> Result<(RouteHtlcStream<'a>, Arc<dyn ILnRpcClient>), LightningRpcError>;
 
     /// Complete an HTLC that was intercepted by the gateway. Must be called for
