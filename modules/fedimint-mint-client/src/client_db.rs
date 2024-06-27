@@ -68,6 +68,7 @@ impl_db_record!(
     value = (MintRecoveryState, RecoveryFromHistoryCommon),
     db_prefix = DbKeyPrefix::RecoveryState,
 );
+
 #[derive(Debug, Clone, Encodable, Decodable, Serialize)]
 pub struct RecoveryFinalizedKey;
 
@@ -79,6 +80,7 @@ impl_db_record!(
     value = bool,
     db_prefix = DbKeyPrefix::RecoveryFinalized,
 );
+
 #[derive(Debug, Clone, Encodable, Decodable, Serialize)]
 pub struct CancelledOOBSpendKey(pub OperationId);
 

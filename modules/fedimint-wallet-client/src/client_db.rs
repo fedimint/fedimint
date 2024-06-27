@@ -1,4 +1,5 @@
 use core::fmt;
+use std::ops;
 use std::time::SystemTime;
 
 use fedimint_core::core::OperationId;
@@ -12,6 +13,7 @@ pub enum DbKeyPrefix {
     NextPegInTweakIndex = 0x2c,
     PegInTweakIndex = 0x2d,
     ClaimedPegIn = 0x2e,
+    RecoveryFinalized = 0x2f,
 }
 
 impl std::fmt::Display for DbKeyPrefix {
@@ -24,7 +26,9 @@ impl std::fmt::Display for DbKeyPrefix {
 ///
 /// Under the hood it's similar to `ChildId`, but in a wallet module
 /// it's used often enough to deserve own newtype.
-#[derive(Copy, Clone, Debug, Encodable, Decodable, Serialize, Default)]
+#[derive(
+    Copy, Clone, Debug, Encodable, Decodable, Serialize, Default, PartialEq, Eq, PartialOrd, Ord,
+)]
 pub struct TweakIdx(pub u64);
 
 impl fmt::Display for TweakIdx {
@@ -37,6 +41,19 @@ impl TweakIdx {
     #[must_use]
     pub fn next(self) -> Self {
         Self(self.0 + 1)
+    }
+
+    #[must_use]
+    pub fn advance(self, i: u64) -> Self {
+        Self(self.0 + i)
+    }
+}
+
+impl ops::Sub for TweakIdx {
+    type Output = u64;
+
+    fn sub(self, rhs: Self) -> Self::Output {
+        self.0 - rhs.0
     }
 }
 
@@ -99,3 +116,15 @@ impl_db_record!(
     db_prefix = DbKeyPrefix::ClaimedPegIn,
 );
 impl_db_lookup!(key = ClaimedPegInKey, query_prefix = ClaimedPegInPrefix);
+
+#[derive(Debug, Clone, Encodable, Decodable, Serialize)]
+pub struct RecoveryFinalizedKey;
+
+#[derive(Debug, Clone, Encodable, Decodable)]
+pub struct RecoveryFinalizedKeyPrefix;
+
+impl_db_record!(
+    key = RecoveryFinalizedKey,
+    value = bool,
+    db_prefix = DbKeyPrefix::RecoveryFinalized,
+);

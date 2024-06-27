@@ -142,6 +142,47 @@ impl Client {
         Ok(())
     }
 
+    /// Client to join a federation with a restore procedure
+    pub async fn restore_federation(&self, invite_code: String, mnemonic: String) -> Result<()> {
+        debug!(target: LOG_DEVIMINT, "Joining federation with restore procedure");
+        cmd!(
+            self,
+            "restore",
+            "--invite-code",
+            invite_code,
+            "--mnemonic",
+            mnemonic
+        )
+        .run()
+        .await?;
+
+        Ok(())
+    }
+
+    /// Client to join a federation
+    pub async fn new_restored(&self, name: &str, invite_code: String) -> Result<Self> {
+        let restored = Self::open_or_create(name)?;
+
+        let mnemonic = cmd!(self, "print-secret").out_json().await?["secret"]
+            .as_str()
+            .unwrap()
+            .to_owned();
+
+        debug!(target: LOG_DEVIMINT, name, "Restoring from mnemonic");
+        cmd!(
+            restored,
+            "restore",
+            "--invite-code",
+            invite_code,
+            "--mnemonic",
+            mnemonic
+        )
+        .run()
+        .await?;
+
+        Ok(restored)
+    }
+
     /// Create a [`Client`] that starts with a state that is a copy of
     /// of another one.
     pub async fn new_forked(&self, name: &str) -> Result<Client> {
@@ -210,6 +251,11 @@ impl Client {
         cmd!(self, "dev", "session-count").out_json().await?["count"]
             .as_u64()
             .context("count field wasn't a number")
+    }
+
+    /// Returns the current consensus session count
+    pub async fn wait_complete(&self) -> Result<()> {
+        cmd!(self, "dev", "wait-complete").run().await
     }
 }
 
@@ -522,7 +568,7 @@ impl Federation {
         Ok(())
     }
 
-    pub async fn pegin_client(&self, amount: u64, client: &Client) -> Result<()> {
+    pub async fn pegin_client_no_wait(&self, amount: u64, client: &Client) -> Result<String> {
         let deposit_fees_msat = self.deposit_fees()?.msats;
         assert_eq!(
             deposit_fees_msat % 1000,
@@ -538,6 +584,12 @@ impl Federation {
             .send_to(address, amount + deposit_fees)
             .await?;
         self.bitcoind.mine_blocks(21).await?;
+
+        Ok(operation_id)
+    }
+
+    pub async fn pegin_client(&self, amount: u64, client: &Client) -> Result<()> {
+        let operation_id = self.pegin_client_no_wait(amount, client).await?;
 
         client.await_deposit(&operation_id).await?;
         Ok(())

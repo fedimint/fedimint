@@ -7,6 +7,10 @@
 #![allow(clippy::must_use_candidate)]
 
 pub mod api;
+#[cfg(feature = "cli")]
+mod cli;
+
+mod backup;
 
 pub mod client_db;
 /// Legacy, state-machine based peg-ins, replaced by `pegin_monitor`
@@ -16,21 +20,24 @@ mod deposit;
 mod pegin_monitor;
 mod withdraw;
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::future;
 use std::sync::Arc;
 use std::time::SystemTime;
 
 use anyhow::{anyhow, bail, ensure, Context as AnyhowContext};
 use async_stream::stream;
+use backup::WalletModuleBackup;
 use bitcoin::address::NetworkUnchecked;
 use bitcoin::{Address, Network, ScriptBuf};
 use client_db::{DbKeyPrefix, PegInTweakIndexKey, TweakIdx};
 use fedimint_api_client::api::DynModuleApi;
 use fedimint_bitcoind::{create_bitcoind, DynBitcoindRpc};
 use fedimint_client::derivable_secret::{ChildId, DerivableSecret};
-use fedimint_client::module::init::{ClientModuleInit, ClientModuleInitArgs};
-use fedimint_client::module::recovery::NoModuleBackup;
+use fedimint_client::module::init::{
+    ClientModuleInit, ClientModuleInitArgs, ClientModuleRecoverArgs,
+};
+use fedimint_client::module::recovery::RecoveryProgress;
 use fedimint_client::module::{ClientContext, ClientModule, IClientModule};
 use fedimint_client::oplog::UpdateStreamOrOutcome;
 use fedimint_client::sm::util::MapStateTransitions;
@@ -66,7 +73,7 @@ use tracing::{debug, instrument};
 use crate::api::WalletFederationApi;
 use crate::client_db::{
     ClaimedPegInData, ClaimedPegInKey, ClaimedPegInPrefix, NextPegInTweakIndexKey,
-    PegInTweakIndexData, PegInTweakIndexPrefix,
+    PegInTweakIndexData, PegInTweakIndexPrefix, RecoveryFinalizedKey,
 };
 use crate::deposit::DepositStateMachine;
 use crate::withdraw::{CreatedWithdrawState, WithdrawStateMachine, WithdrawStates};
@@ -166,6 +173,7 @@ impl ModuleInit for WalletClientInit {
                         "Claimed Peg-In"
                     );
                 }
+                DbKeyPrefix::RecoveryFinalized => {}
             }
         }
 
@@ -214,6 +222,133 @@ impl ClientModuleInit for WalletClientInit {
             pegin_claimed_sender,
             task_group: args.task_group().clone(),
         })
+    }
+
+    /// Wallet recovery
+    ///
+    /// Query bitcoin rpc for history of addresses from last known used
+    /// addresses (or index 0) until MAX_GAP unused ones.
+    ///
+    /// Notably does not persist the progress of addresses being queried,
+    /// because it is not expected that it would take long enough to bother.
+    async fn recover(
+        &self,
+        args: &ClientModuleRecoverArgs<Self>,
+        snapshot: Option<&<Self::Module as ClientModule>::Backup>,
+    ) -> anyhow::Result<()> {
+        let db = args.db().clone();
+        if db
+            .begin_transaction_nc()
+            .await
+            .get_value(&RecoveryFinalizedKey)
+            .await
+            .unwrap_or_default()
+        {
+            debug!(target: LOG_CLIENT_MODULE_WALLET, max_gap=MAX_GAP, "Recovery already complete before");
+            return Ok(());
+        }
+
+        let start_tweak_idx = match snapshot {
+            Some(WalletModuleBackup::V0(backup)) => {
+                debug!(target: LOG_CLIENT_MODULE_WALLET, "Restoring starting from an existing backup");
+
+                Some(backup.next_tweak_idx)
+            }
+            _ => None,
+        };
+
+        /// We will check this many addresses ahead since last actually used
+        /// one before we give up
+        const MAX_GAP: u64 = 10;
+        /// New client will start deriving new addresses from last_used one
+        /// plus that many idexes. This should be less than
+        /// MAX_GAP, but more than 0: We want to make sure we detect
+        /// deposits that might have been made after multiple re-derivation,
+        /// but we want also to avoid accidental address re-use.
+        const NUM_IDX_SKIP_AFTER_LAST_USED: u64 = 3;
+
+        let data = WalletClientModuleData {
+            cfg: args.cfg().clone(),
+            module_root_secret: args.module_root_secret().clone(),
+        };
+
+        let rpc_config = self
+            .0
+            .clone()
+            .unwrap_or(WalletClientModule::get_rpc_config(args.cfg()));
+
+        let btc_rpc = create_bitcoind(&rpc_config, TaskGroup::new().make_handle())?;
+
+        let mut last_used_idx = start_tweak_idx;
+        let mut cur_tweak_idx = start_tweak_idx.unwrap_or_default();
+        let mut tweak_idxes_with_pegins = BTreeSet::new();
+
+        debug!(target: LOG_CLIENT_MODULE_WALLET, max_gap=MAX_GAP, ?start_tweak_idx, "Checking history");
+
+        let new_start_tweak_idx = loop {
+            let gap_since_last_used = cur_tweak_idx - last_used_idx.unwrap_or_default();
+
+            args.update_recovery_progress(RecoveryProgress {
+                complete: u32::try_from(cur_tweak_idx.0).unwrap_or(u32::MAX),
+                total: u32::try_from(cur_tweak_idx.0.saturating_add(MAX_GAP)).unwrap_or(u32::MAX),
+            });
+
+            if MAX_GAP < gap_since_last_used {
+                break last_used_idx
+                    .unwrap_or_default()
+                    .advance(NUM_IDX_SKIP_AFTER_LAST_USED);
+            }
+
+            let (script, address, _tweak_key, _operation_id) =
+                data.derive_peg_in_script(cur_tweak_idx);
+            btc_rpc.watch_script_history(&script).await?;
+            let history = btc_rpc.get_script_history(&script).await?;
+
+            debug!(target: LOG_CLIENT_MODULE_WALLET, %cur_tweak_idx, %address, history_len=history.len(), "Checked address");
+            if !history.is_empty() {
+                last_used_idx = Some(cur_tweak_idx);
+                tweak_idxes_with_pegins.insert(cur_tweak_idx);
+            }
+            cur_tweak_idx = cur_tweak_idx.next();
+        };
+
+        let now = fedimint_core::time::now();
+        let mut dbtx = db.begin_transaction().await;
+
+        let mut tweak_idx = TweakIdx(0);
+
+        while tweak_idx < new_start_tweak_idx {
+            let (_script, _address, _tweak_key, operation_id) =
+                data.derive_peg_in_script(tweak_idx);
+            dbtx.insert_new_entry(
+                &PegInTweakIndexKey(tweak_idx),
+                &PegInTweakIndexData {
+                    creation_time: now,
+                    next_check_time: if tweak_idxes_with_pegins.contains(&tweak_idx) {
+                        // The addresses that were already used before, or didn't seem to contain
+                        // anything don't need automatic peg-in attempt, and can be re-attempted
+                        // manually if needed.
+                        Some(now)
+                    } else {
+                        None
+                    },
+                    last_check_time: None,
+                    operation_id,
+                    claimed: vec![],
+                },
+            )
+            .await;
+            tweak_idx = tweak_idx.next();
+        }
+
+        dbtx.insert_new_entry(&NextPegInTweakIndexKey, &new_start_tweak_idx)
+            .await;
+        dbtx.insert_entry(&RecoveryFinalizedKey, &true).await;
+
+        dbtx.commit_tx().await;
+
+        debug!(target: LOG_CLIENT_MODULE_WALLET, %new_start_tweak_idx, ?last_used_idx, "Recovery complete");
+        Ok(())
     }
 }
 
@@ -323,7 +458,7 @@ pub struct WalletClientModule {
 impl ClientModule for WalletClientModule {
     type Init = WalletClientInit;
     type Common = WalletModuleTypes;
-    type Backup = NoModuleBackup;
+    type Backup = WalletModuleBackup;
     type ModuleStateMachineContext = WalletClientContext;
     type States = WalletClientStates;
 
@@ -357,12 +492,35 @@ impl ClientModule for WalletClientModule {
         });
     }
 
+    fn supports_backup(&self) -> bool {
+        true
+    }
+
+    async fn backup(&self) -> anyhow::Result<backup::WalletModuleBackup> {
+        Ok(backup::WalletModuleBackup::new_v0(
+            self.db
+                .begin_transaction_nc()
+                .await
+                .get_value(&NextPegInTweakIndexKey)
+                .await
+                .unwrap_or_default(),
+        ))
+    }
+
     fn input_fee(&self, _input: &<Self::Common as ModuleCommon>::Input) -> Option<Amount> {
         Some(self.cfg().fee_consensus.peg_in_abs)
     }
 
     fn output_fee(&self, _output: &<Self::Common as ModuleCommon>::Output) -> Option<Amount> {
         Some(self.cfg().fee_consensus.peg_out_abs)
+    }
+
+    #[cfg(feature = "cli")]
+    async fn handle_cli_command(
+        &self,
+        args: &[std::ffi::OsString],
+    ) -> anyhow::Result<serde_json::Value> {
+        cli::handle_cli_command(self, args).await
     }
 }
 
@@ -659,10 +817,14 @@ impl WalletClientModule {
         Ok(())
     }
 
-    /// Await for deposit
-    pub async fn await_deposit(&self, operation_id: OperationId) -> anyhow::Result<()> {
+    /// Await for num deposit by [`OperationId`]
+    pub async fn await_num_deposit_by_operation_id(
+        &self,
+        operation_id: OperationId,
+        num_deposits: usize,
+    ) -> anyhow::Result<()> {
         let tweak_idx = self.find_tweak_idx_by_operation_id(operation_id).await?;
-        self.await_num_deposits(tweak_idx, 1).await
+        self.await_num_deposits(tweak_idx, num_deposits).await
     }
 
     #[instrument(skip_all, fields(tweak_idx=?tweak_idx, num_deposists=num_deposits))]
