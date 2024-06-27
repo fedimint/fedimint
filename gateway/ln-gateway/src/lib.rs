@@ -437,7 +437,7 @@ impl Gateway {
                 {
                     Ok((stream, ln_client)) => {
                         // Successful calls to route_htlcs establish a connection
-                        self_copy.set_gateway_state(GatewayState::Connected).await;
+                        self_copy.lightning_manager.set_state(GatewayState::Connected).await;
                         info!("Established HTLC stream");
 
                         match fetch_lightning_node_info(ln_client.clone()).await {
@@ -446,7 +446,7 @@ impl Gateway {
                                 let gateway_config = if let Some(config) = gateway_config {
                                     config
                                 } else {
-                                    self_copy.set_gateway_state(GatewayState::Configuring).await;
+                                    self_copy.lightning_manager.set_state(GatewayState::Configuring).await;
                                     info!("Waiting for gateway to be configured...");
                                     self_copy.gateway_db
                                         .wait_key_exists(&GatewayConfigurationKey)
@@ -474,7 +474,7 @@ impl Gateway {
                                     lightning_alias,
                                     lightning_network,
                                 };
-                                self_copy.set_gateway_state(GatewayState::Running {
+                                self_copy.lightning_manager.set_state(GatewayState::Running {
                                     lightning_context
                                 }).await;
 
@@ -508,7 +508,9 @@ impl Gateway {
     /// Utility function for waiting for the task that is listening for
     /// intercepted HTLCs to shutdown.
     async fn handle_disconnect(&self, htlc_task_group: TaskGroup) {
-        self.set_gateway_state(GatewayState::Disconnected).await;
+        self.lightning_manager
+            .set_state(GatewayState::Disconnected)
+            .await;
         if let Err(e) = htlc_task_group.shutdown_join_all(None).await {
             error!("HTLC task group shutdown errors: {}", e);
         }
@@ -620,12 +622,6 @@ impl Gateway {
                 }
             }
         }
-    }
-
-    /// Helper function for atomically changing the Gateway's internal state.
-    async fn set_gateway_state(&self, state: GatewayState) {
-        let mut lock = self.lightning_manager.state.write().await;
-        *lock = state;
     }
 
     /// Returns information about the Gateway back to the client when requested

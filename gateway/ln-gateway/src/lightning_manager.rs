@@ -24,6 +24,12 @@ impl std::fmt::Debug for LightningManager {
     }
 }
 
+impl LightningManager {
+    pub async fn set_state(&self, state: GatewayState) {
+        *self.state.write().await = state;
+    }
+}
+
 #[cfg_attr(doc, aquamarine::aquamarine)]
 /// ```mermaid
 /// graph LR
