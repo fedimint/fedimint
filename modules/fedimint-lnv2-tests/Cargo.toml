@@ -30,3 +30,5 @@ serde_json = { workspace = true }
 devimint = { workspace = true }
 semver = { workspace = true }
 tracing = { workspace = true }
+substring = "1.4.5"
+lightning-invoice = { workspace = true }

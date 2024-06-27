@@ -71,7 +71,7 @@ impl GatewayTest {
     }
 
     pub fn get_gateway_id(&self) -> PublicKey {
-        self.gateway.gateway_id
+        self.gateway.gateway_id()
     }
 
     pub(crate) async fn new(
@@ -116,12 +116,9 @@ impl GatewayTest {
 
         let gateway_run = gateway.clone();
         let root_group = TaskGroup::new();
-        let mut tg = root_group.clone();
+        let tg = root_group.clone();
         root_group.spawn("Gateway Run", |_handle| async move {
-            gateway_run
-                .run(&mut tg)
-                .await
-                .expect("Failed to start gateway");
+            gateway_run.run(&tg).await.expect("Failed to start gateway");
         });
 
         // Wait for the gateway web server to be available
@@ -179,7 +176,7 @@ impl GatewayTest {
         func: impl Fn(GatewayState) -> bool,
     ) -> anyhow::Result<()> {
         for _ in 0..30 {
-            let gw_state = gateway.state.read().await.clone();
+            let gw_state = gateway.get_state().await;
             if func(gw_state) {
                 return Ok(());
             }

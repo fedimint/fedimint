@@ -7,7 +7,6 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use assert_matches::assert_matches;
-use bitcoin::Network;
 use bitcoin_hashes::{sha256, Hash};
 use fedimint_client::transaction::{ClientInput, ClientOutput, TransactionBuilder};
 use fedimint_client::ClientHandleArc;
@@ -27,7 +26,7 @@ use fedimint_ln_client::{
     LightningOperationMeta, LightningOperationMetaVariant, LnPayState, LnReceiveState,
     MockGatewayConnection, OutgoingLightningPayment, PayType,
 };
-use fedimint_ln_common::config::{GatewayFee, LightningGenParams};
+use fedimint_ln_common::config::LightningGenParams;
 use fedimint_ln_common::contracts::incoming::IncomingContractOffer;
 use fedimint_ln_common::contracts::outgoing::OutgoingContractAccount;
 use fedimint_ln_common::contracts::{EncryptedPreimage, FundedContract, Preimage, PreimageKey};
@@ -45,7 +44,6 @@ use fedimint_unknown_server::UnknownInit;
 use futures::Future;
 use lightning_invoice::{Bolt11Invoice, Bolt11InvoiceDescription, Description};
 use ln_gateway::rpc::rpc_client::{GatewayRpcClient, GatewayRpcError, GatewayRpcResult};
-use ln_gateway::rpc::rpc_server::hash_password;
 use ln_gateway::rpc::{
     BalancePayload, ConnectFedPayload, FederationRoutingFees, LeaveFedPayload,
     SetConfigurationPayload,
@@ -57,8 +55,6 @@ use ln_gateway::state_machine::{
     GatewayClientModule, GatewayClientStateMachines, GatewayExtPayStates, GatewayExtReceiveStates,
     GatewayMeta, Htlc,
 };
-use ln_gateway::{DEFAULT_FEES, DEFAULT_NETWORK};
-use reqwest::StatusCode;
 use tracing::info;
 
 async fn user_pay_invoice(
@@ -235,7 +231,7 @@ async fn test_gateway_client_pay_valid_invoice() -> anyhow::Result<()> {
                 invoice,
                 &user_client,
                 &gateway_client,
-                &gateway.gateway.gateway_id,
+                &gateway.gateway.gateway_id(),
             )
             .await?;
 
@@ -282,7 +278,7 @@ async fn test_gateway_enforces_fees() -> anyhow::Result<()> {
             info!("### Changed gateway routing fees");
 
             let user_lightning_module = user_client.get_first_module::<LightningClientModule>();
-            let gateway_id = gateway_test.gateway.gateway_id;
+            let gateway_id = gateway_test.gateway.gateway_id();
             let gateway = user_lightning_module.select_gateway(&gateway_id).await;
             let gateway_client = gateway_test.select_client(fed.id()).await;
 
@@ -355,7 +351,7 @@ async fn test_gateway_enforces_fees() -> anyhow::Result<()> {
 async fn test_gateway_cannot_claim_invalid_preimage() -> anyhow::Result<()> {
     single_federation_test(
         |gateway, other_lightning_client, fed, user_client, _| async move {
-            let gateway_id = gateway.gateway.gateway_id;
+            let gateway_id = gateway.gateway.gateway_id();
             let gateway_client = gateway.select_client(fed.id()).await;
             // Print money for user_client
             let dummy_module = user_client.get_first_module::<DummyClientModule>();
@@ -428,7 +424,7 @@ async fn test_gateway_cannot_claim_invalid_preimage() -> anyhow::Result<()> {
 async fn test_gateway_client_pay_unpayable_invoice() -> anyhow::Result<()> {
     single_federation_test(
         |gateway, other_lightning_client, fed, user_client, _| async move {
-            let gateway_id = gateway.gateway.gateway_id;
+            let gateway_id = gateway.gateway.gateway_id();
             let gateway_client = gateway.select_client(fed.id()).await;
             // Print money for user client
             let dummy_module = user_client.get_first_module::<DummyClientModule>();
@@ -489,7 +485,7 @@ async fn test_gateway_client_pay_unpayable_invoice() -> anyhow::Result<()> {
 #[tokio::test(flavor = "multi_thread")]
 async fn test_gateway_client_intercept_valid_htlc() -> anyhow::Result<()> {
     single_federation_test(|gateway, _, fed, user_client, _| async move {
-        let gateway_id = gateway.gateway.gateway_id;
+        let gateway_id = gateway.gateway.gateway_id();
         let gateway_client = gateway.select_client(fed.id()).await;
         // Print money for gateway client
         let initial_gateway_balance = sats(1000);
@@ -588,7 +584,7 @@ async fn test_gateway_client_intercept_offer_does_not_exist() -> anyhow::Result<
 #[tokio::test(flavor = "multi_thread")]
 async fn test_gateway_client_intercept_htlc_no_funds() -> anyhow::Result<()> {
     single_federation_test(|gateway, _, fed, user_client, _| async move {
-        let gateway_id = gateway.gateway.gateway_id;
+        let gateway_id = gateway.gateway.gateway_id();
         let gateway_client = gateway.select_client(fed.id()).await;
         // User client creates invoice in federation
         let ln_module = user_client.get_first_module::<LightningClientModule>();
@@ -749,7 +745,7 @@ async fn test_gateway_client_intercept_htlc_invalid_offer() -> anyhow::Result<()
 async fn test_gateway_cannot_pay_expired_invoice() -> anyhow::Result<()> {
     single_federation_test(
         |gateway, other_lightning_client, fed, user_client, _| async move {
-            let gateway_id = gateway.gateway.gateway_id;
+            let gateway_id = gateway.gateway.gateway_id();
             let gateway_client = gateway.select_client(fed.id()).await;
             let invoice = other_lightning_client
                 .invoice(sats(1000), 1.into())
@@ -815,349 +811,10 @@ async fn test_gateway_cannot_pay_expired_invoice() -> anyhow::Result<()> {
     .await
 }
 
-// TODO: fix and re-enable https://github.com/fedimint/fedimint/issues/5001
-#[ignore]
-#[tokio::test(flavor = "multi_thread")]
-async fn test_gateway_configuration() -> anyhow::Result<()> {
-    let fixtures = fixtures();
-
-    let fed = fixtures.new_default_fed().await;
-    let gateway = fixtures.new_gateway(0, None).await;
-    let initial_rpc_client = gateway.get_rpc();
-
-    // Verify that we can't join a federation yet because the configuration is not
-    // set
-    let join_payload = ConnectFedPayload {
-        invite_code: fed.invite_code().to_string(),
-    };
-
-    verify_gateway_rpc_failure(
-        "connect_federation",
-        || initial_rpc_client.connect_federation(join_payload.clone()),
-        StatusCode::NOT_FOUND,
-    )
-    .await;
-
-    // Verify that the gateway's state is "Configuring"
-    let gw_info = verify_gateway_rpc_success("get_info", || initial_rpc_client.get_info()).await;
-    assert_eq!(gw_info.gateway_state, "Configuring".to_string());
-
-    // Verify that the gateway's fees, and network are `None`
-    assert_eq!(gw_info.fees, None);
-    assert_eq!(gw_info.network, None);
-
-    let test_password = "test_password".to_string();
-    let set_configuration_payload = SetConfigurationPayload {
-        password: Some(test_password.clone()),
-        num_route_hints: None,
-        routing_fees: None,
-        network: None,
-        per_federation_routing_fees: None,
-    };
-    verify_gateway_rpc_success("set_configuration", || {
-        initial_rpc_client.set_configuration(set_configuration_payload.clone())
-    })
-    .await;
-
-    // Verify that the gateway's password is stored correctly (i.e. the stored hash
-    // and salt match the password)
-    let gateway_config = gateway
-        .gateway
-        .gateway_config
-        .read()
-        .await
-        .clone()
-        .expect("Gateway config should be set");
-    assert_eq!(
-        gateway_config.hashed_password,
-        hash_password(&test_password, gateway_config.password_salt)
-    );
-
-    // Verify client with no password fails since the password has been set
-    verify_gateway_rpc_failure(
-        "get_info",
-        || initial_rpc_client.get_info(),
-        StatusCode::UNAUTHORIZED,
-    )
-    .await;
-
-    // Verify the gateway's state is "Running" with default fee and default or
-    // lightning node network
-    let initial_rpc_client_with_password = initial_rpc_client.with_password(Some(test_password));
-    let gw_info =
-        verify_gateway_rpc_success("get_info", || initial_rpc_client_with_password.get_info())
-            .await;
-    assert_eq!(gw_info.gateway_state, "Running".to_string());
-    assert_eq!(gw_info.fees, Some(DEFAULT_FEES));
-    assert_eq!(gw_info.network, Some(DEFAULT_NETWORK));
-
-    // Verify we can change configurations when the gateway is running
-    let new_password = "new_password".to_string();
-    let fee = "10,10000".to_string();
-    let federation_fee = FederationRoutingFees::from_str(&fee)?;
-    let set_configuration_payload = SetConfigurationPayload {
-        password: Some(new_password.clone()),
-        num_route_hints: Some(1),
-        routing_fees: Some(federation_fee.clone()),
-        network: None,
-        per_federation_routing_fees: None,
-    };
-    verify_gateway_rpc_success("set_configuration", || {
-        initial_rpc_client_with_password.set_configuration(set_configuration_payload.clone())
-    })
-    .await;
-
-    // Verify info works with the new password.
-    let new_password_rpc_client = initial_rpc_client.with_password(Some(new_password.clone()));
-    let gw_info =
-        verify_gateway_rpc_success("get_info", || new_password_rpc_client.get_info()).await;
-
-    assert_eq!(gw_info.gateway_state, "Running".to_string());
-    assert_eq!(gw_info.fees, Some(GatewayFee(federation_fee.into()).0));
-    assert_eq!(gw_info.network, Some(DEFAULT_NETWORK));
-
-    // Verify that get_info with the old password fails
-    verify_gateway_rpc_failure(
-        "get_info",
-        || initial_rpc_client_with_password.get_info(),
-        StatusCode::UNAUTHORIZED,
-    )
-    .await;
-
-    // Verify we can configure gateway to a network same as than the lightning nodes
-    let set_configuration_payload = SetConfigurationPayload {
-        password: Some(new_password.clone()),
-        num_route_hints: None,
-        network: Some(DEFAULT_NETWORK), /* Same as connected
-                                         * lightning node's
-                                         * network */
-        routing_fees: None,
-        per_federation_routing_fees: None,
-    };
-    verify_gateway_rpc_success("set_configuration", || {
-        new_password_rpc_client.set_configuration(set_configuration_payload.clone())
-    })
-    .await;
-
-    // Verify we cannot reconfigure gateway to a network different than the
-    // lightning nodes
-    let set_configuration_payload = SetConfigurationPayload {
-        password: Some(new_password.clone()),
-        num_route_hints: None,
-        network: Some(Network::Testnet), /* Different from
-                                          * connected lightning
-                                          * node's network */
-        routing_fees: None,
-        per_federation_routing_fees: None,
-    };
-    verify_gateway_rpc_failure(
-        "set_configuration",
-        || new_password_rpc_client.set_configuration(set_configuration_payload.clone()),
-        StatusCode::INTERNAL_SERVER_ERROR,
-    )
-    .await;
-
-    // Verify we can connect to a federation if the gateway is configured to use
-    // the same network. Test federations are on Regtest by default
-    verify_gateway_rpc_success("connect_federation", || {
-        new_password_rpc_client.connect_federation(join_payload.clone())
-    })
-    .await;
-
-    verify_gateway_rpc_success("get_balance", || {
-        new_password_rpc_client.get_balance(BalancePayload {
-            federation_id: fed.invite_code().federation_id(),
-        })
-    })
-    .await;
-
-    // Verify we can configure gateway to charge fees for specific federation
-    let federation_routing_fees = FederationRoutingFees::from_str("10,10000")?;
-    let set_configuration_payload = SetConfigurationPayload {
-        password: None,
-        num_route_hints: None,
-        routing_fees: None,
-        network: None,
-        per_federation_routing_fees: Some(vec![(fed.id(), federation_routing_fees.clone())]),
-    };
-    verify_gateway_rpc_success("set_configuration", || {
-        new_password_rpc_client.set_configuration(set_configuration_payload.clone())
-    })
-    .await;
-    // Verify info has new per federation routing fees.
-    let new_password_rpc_client = initial_rpc_client.with_password(Some(new_password.clone()));
-    let gw_info =
-        verify_gateway_rpc_success("get_info", || new_password_rpc_client.get_info()).await;
-    assert_eq!(
-        gw_info
-            .federations
-            .iter()
-            .find(|f| f.federation_id == fed.id())
-            .and_then(|f| f.routing_fees.clone()),
-        Some(federation_routing_fees)
-    );
-
-    Ok(())
-}
-
-#[tokio::test(flavor = "multi_thread")]
-async fn test_gateway_supports_connecting_multiple_federations() -> anyhow::Result<()> {
-    multi_federation_test(|gateway, rpc, fed1, fed2, _| async move {
-        info!("Starting test_gateway_supports_connecting_multiple_federations");
-        assert_eq!(rpc.get_info().await.unwrap().federations.len(), 0);
-
-        let invite1 = fed1.invite_code();
-        let info = rpc
-            .connect_federation(ConnectFedPayload {
-                invite_code: invite1.to_string(),
-            })
-            .await
-            .unwrap();
-
-        assert_eq!(info.federation_id, invite1.federation_id());
-
-        let invite2 = fed2.invite_code();
-        let info = rpc
-            .connect_federation(ConnectFedPayload {
-                invite_code: invite2.to_string(),
-            })
-            .await
-            .unwrap();
-        assert_eq!(info.federation_id, invite2.federation_id());
-        drop(gateway); // keep until the end to avoid the gateway shutting down too early
-        Ok(())
-    })
-    .await
-}
-
-#[tokio::test(flavor = "multi_thread")]
-async fn test_gateway_shows_info_about_all_connected_federations() -> anyhow::Result<()> {
-    multi_federation_test(|gateway, rpc, fed1, fed2, _| async move {
-        assert_eq!(rpc.get_info().await.unwrap().federations.len(), 0);
-
-        let id1 = fed1.invite_code().federation_id();
-        let id2 = fed2.invite_code().federation_id();
-
-        connect_federations(&rpc, &[fed1, fed2]).await.unwrap();
-
-        let info = rpc.get_info().await.unwrap();
-
-        assert_eq!(info.federations.len(), 2);
-        assert!(info
-            .federations
-            .iter()
-            .any(|info| info.federation_id == id1 && info.balance_msat == Amount::ZERO));
-        assert!(info
-            .federations
-            .iter()
-            .any(|info| info.federation_id == id2 && info.balance_msat == Amount::ZERO));
-        drop(gateway); // keep until the end to avoid the gateway shutting down too early
-        Ok(())
-    })
-    .await
-}
-
-#[tokio::test(flavor = "multi_thread")]
-async fn test_gateway_can_leave_connected_federations() -> anyhow::Result<()> {
-    multi_federation_test(|gateway, rpc, fed1, fed2, _| async move {
-        assert_eq!(rpc.get_info().await.unwrap().federations.len(), 0);
-
-        let invite1 = fed1.invite_code();
-        let invite2 = fed2.invite_code();
-
-        let id1 = invite1.federation_id();
-        let id2 = invite2.federation_id();
-
-        connect_federations(&rpc, &[fed1, fed2]).await.unwrap();
-
-        let info = rpc.get_info().await.unwrap();
-        assert_eq!(info.federations.len(), 2);
-        assert!(info
-            .federations
-            .iter()
-            .any(|info| info.federation_id == id1 && info.channel_id == Some(1)));
-        assert!(info
-            .federations
-            .iter()
-            .any(|info| info.federation_id == id2 && info.channel_id == Some(2)));
-
-        // remove first connected federation
-        let fed_info = rpc
-            .leave_federation(LeaveFedPayload { federation_id: id1 })
-            .await
-            .unwrap();
-        assert_eq!(fed_info.federation_id, id1);
-        assert_eq!(fed_info.channel_id, Some(1));
-
-        // reconnect the first federation
-        let fed_info = rpc
-            .connect_federation(ConnectFedPayload {
-                invite_code: invite1.to_string(),
-            })
-            .await
-            .unwrap();
-        assert_eq!(fed_info.federation_id, id1);
-        assert_eq!(fed_info.channel_id, Some(3));
-
-        // remove second connected federation
-        let fed_info = rpc
-            .leave_federation(LeaveFedPayload { federation_id: id2 })
-            .await
-            .unwrap();
-        assert_eq!(fed_info.federation_id, id2);
-        assert_eq!(fed_info.channel_id, Some(2));
-
-        // reconnect the second federation
-        let fed_info = rpc
-            .connect_federation(ConnectFedPayload {
-                invite_code: invite2.to_string(),
-            })
-            .await
-            .unwrap();
-        assert_eq!(fed_info.federation_id, id2);
-        assert_eq!(fed_info.channel_id, Some(4));
-
-        let info = rpc.get_info().await.unwrap();
-        assert_eq!(info.federations.len(), 2);
-        assert_eq!(
-            info.channels.unwrap().keys().cloned().collect::<Vec<u64>>(),
-            vec![3, 4]
-        );
-
-        drop(gateway); // keep until the end to avoid the gateway shutting down too early
-        Ok(())
-    })
-    .await
-}
-
-#[tokio::test(flavor = "multi_thread")]
-async fn test_gateway_shows_balance_for_any_connected_federation() -> anyhow::Result<()> {
-    multi_federation_test(|gateway, rpc, fed1, fed2, _| async move {
-        let id1 = fed1.invite_code().federation_id();
-        let id2 = fed2.invite_code().federation_id();
-
-        connect_federations(&rpc, &[fed1, fed2]).await.unwrap();
-
-        let pre_balances = get_balances(&rpc, &[id1, id2]).await;
-
-        send_msats_to_gateway(&gateway, id1, 5_000).await;
-        send_msats_to_gateway(&gateway, id2, 1_000).await;
-
-        let post_balances = get_balances(&rpc, &[id1, id2]).await;
-
-        assert_eq!(pre_balances[0], 0);
-        assert_eq!(pre_balances[1], 0);
-        assert_eq!(post_balances[0], 5_000);
-        assert_eq!(post_balances[1], 1_000);
-        Ok(())
-    })
-    .await
-}
-
 #[tokio::test(flavor = "multi_thread")]
 async fn test_gateway_executes_swaps_between_connected_federations() -> anyhow::Result<()> {
     multi_federation_test(|gateway, rpc, fed1, fed2, _| async move {
-        let gateway_id = gateway.gateway.gateway_id;
+        let gateway_id = gateway.gateway.gateway_id();
         let id1 = fed1.invite_code().federation_id();
         let id2 = fed2.invite_code().federation_id();
 
@@ -1221,7 +878,7 @@ async fn test_gateway_executes_swaps_between_connected_federations() -> anyhow::
             invoice,
             &client1,
             &gateway_client,
-            &gateway.gateway.gateway_id,
+            &gateway.gateway.gateway_id(),
         )
         .await?;
 
@@ -1292,26 +949,6 @@ where
         Err(GatewayRpcError::RequestError(e)) => panic!("RequestError during {name}: {e:?}"),
         Err(GatewayRpcError::BadStatus(status)) => {
             panic!("{name} returned error code {status} when success was expected")
-        }
-    }
-}
-
-/// Verifies that a gateway RPC fails with a specific `StatusCode`
-async fn verify_gateway_rpc_failure<Fut, T>(
-    name: &str,
-    func: impl Fn() -> Fut,
-    status_code: StatusCode,
-) where
-    Fut: Future<Output = GatewayRpcResult<T>>,
-{
-    match func().await {
-        Ok(_) => panic!("{name} returned success, expected {status_code}"),
-        Err(GatewayRpcError::RequestError(e)) => panic!("RequestError during {name}: {e:?}"),
-        Err(GatewayRpcError::BadStatus(status)) => {
-            assert_eq!(
-                status, status_code,
-                "Unexpected status code returned. Expected: {status_code}, found {status}"
-            )
         }
     }
 }

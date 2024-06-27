@@ -26,7 +26,7 @@ esplora-client = { workspace = true, optional = true }
 fedimint-core  = { version = "=0.4.0-alpha", path = "../fedimint-core" }
 fedimint-logging = { workspace = true }
 hex = "0.4.3"
-lazy_static = "1.5.0"
+once_cell = { workspace = true }
 rand = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

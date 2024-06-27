@@ -72,15 +72,15 @@ impl_db_record!(
 );
 
 #[derive(Debug, Clone, Eq, PartialEq, Encodable, Decodable)]
-pub struct GatewayConfigurationKeyV0;
+struct GatewayConfigurationKeyV0;
 
 #[derive(Debug, Clone, Eq, PartialEq, Encodable, Decodable, Serialize, Deserialize)]
-pub struct GatewayConfigurationV0 {
-    pub password: String,
-    pub num_route_hints: u32,
+struct GatewayConfigurationV0 {
+    password: String,
+    num_route_hints: u32,
     #[serde(with = "serde_routing_fees")]
-    pub routing_fees: RoutingFees,
-    pub network: Network,
+    routing_fees: RoutingFees,
+    network: Network,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Encodable, Decodable)]

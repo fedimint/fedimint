@@ -713,7 +713,7 @@ impl GatewayLightning for ClnRpcService {
         let CreateInvoiceRequest {
             payment_hash,
             amount_msat,
-            expiry,
+            expiry_secs,
             description,
         } = create_invoice_request.into_inner();
 
@@ -728,11 +728,12 @@ impl GatewayLightning for ClnRpcService {
             .info()
             .await
             .map_err(|e| Status::internal(e.to_string()))?;
-        let network =
-            Currency::from_str(info.2.as_str()).map_err(|e| Status::internal(e.to_string()))?;
+        let network = bitcoin::Network::from_str(info.2.as_str())
+            .map_err(|e| Status::internal(e.to_string()))?;
+        let currency = Currency::from(network);
 
         let invoice = match description {
-            Description::Direct(description) => InvoiceBuilder::new(network)
+            Description::Direct(description) => InvoiceBuilder::new(currency)
                 .amount_milli_satoshis(amount_msat)
                 .invoice_description(lightning_invoice::Bolt11InvoiceDescription::Direct(
                     &lightning_invoice::Description::new(description)
@@ -742,7 +743,7 @@ impl GatewayLightning for ClnRpcService {
                 .payment_secret(PaymentSecret(OsRng.gen()))
                 .duration_since_epoch(duration_since_epoch)
                 .min_final_cltv_expiry_delta(18)
-                .expiry_time(Duration::from_secs(expiry.into()))
+                .expiry_time(Duration::from_secs(expiry_secs.into()))
                 // Temporarily sign with an ephemeral private key, we will request CLN to sign this
                 // invoice next.
                 .build_signed(|m| {
@@ -750,7 +751,7 @@ impl GatewayLightning for ClnRpcService {
                         .sign_ecdsa_recoverable(m, &SecretKey::new(&mut OsRng))
                 })
                 .map_err(|e| Status::internal(e.to_string()))?,
-            Description::Hash(hash) => InvoiceBuilder::new(network)
+            Description::Hash(hash) => InvoiceBuilder::new(currency)
                 .amount_milli_satoshis(amount_msat)
                 .invoice_description(lightning_invoice::Bolt11InvoiceDescription::Hash(
                     &lightning_invoice::Sha256(
@@ -762,7 +763,7 @@ impl GatewayLightning for ClnRpcService {
                 .payment_secret(PaymentSecret(OsRng.gen()))
                 .duration_since_epoch(duration_since_epoch)
                 .min_final_cltv_expiry_delta(18)
-                .expiry_time(Duration::from_secs(expiry.into()))
+                .expiry_time(Duration::from_secs(expiry_secs.into()))
                 // Temporarily sign with an ephemeral private key, we will request CLN to sign this
                 // invoice next.
                 .build_signed(|m| {

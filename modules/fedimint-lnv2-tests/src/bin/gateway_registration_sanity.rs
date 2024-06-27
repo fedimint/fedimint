@@ -5,7 +5,7 @@ use tracing::info;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    devimint::run_devfed_test(|dev_fed| async move {
+    devimint::run_devfed_test(|dev_fed, _process_mgr| async move {
         let fedimint_cli_version = util::FedimintCli::version_or_default().await;
         let fedimintd_version = util::FedimintdCmd::version_or_default().await;
         let gatewayd_version = util::Gatewayd::version_or_default().await;
@@ -42,7 +42,7 @@ async fn main() -> anyhow::Result<()> {
                 "pass",
                 "module",
                 "lnv2",
-                "add",
+                "add-gateway",
                 gateway.clone().to_string(),
             )
             .out_json()
@@ -51,18 +51,9 @@ async fn main() -> anyhow::Result<()> {
         );
 
         assert_eq!(
-            cmd!(
-                client,
-                "--our-id",
-                "0",
-                "--password",
-                "pass",
-                "module",
-                "lnv2",
-                "list",
-            )
-            .out_json()
-            .await?,
+            cmd!(client, "module", "lnv2", "gateways", "0")
+                .out_json()
+                .await?,
             serde_json::to_value(vec![gateway.clone()]).expect("JSON serialization failed")
         );
 
@@ -75,7 +66,7 @@ async fn main() -> anyhow::Result<()> {
                 "pass",
                 "module",
                 "lnv2",
-                "remove",
+                "remove-gateway",
                 gateway.to_string(),
             )
             .out_json()
@@ -84,18 +75,9 @@ async fn main() -> anyhow::Result<()> {
         );
 
         assert_eq!(
-            cmd!(
-                client,
-                "--our-id",
-                "0",
-                "--password",
-                "pass",
-                "module",
-                "lnv2",
-                "list",
-            )
-            .out_json()
-            .await?,
+            cmd!(client, "module", "lnv2", "gateways", "0",)
+                .out_json()
+                .await?,
             serde_json::to_value(Vec::<SafeUrl>::new()).expect("JSON serialization failed")
         );
 

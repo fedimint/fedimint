@@ -70,7 +70,7 @@ pub enum LightningOperationMeta {
 const EXPIRATION_DELTA_LIMIT_DEFAULT: u64 = 500;
 
 /// Default expiration time for lightning invoices
-const INVOICE_EXPIRATION_SECONDS_DEFAULT: u32 = 3600;
+const INVOICE_EXPIRATION_SECONDS_DEFAULT: u32 = 24 * 60 * 60;
 
 #[cfg_attr(doc, aquamarine::aquamarine)]
 /// The high-level state of sending a payment over lightning.
@@ -94,12 +94,20 @@ const INVOICE_EXPIRATION_SECONDS_DEFAULT: u32 = 3600;
 pub enum SendState {
     Funding,
     Funded,
-    Success([u8; 32]),
+    Success,
     Refunding,
     Refunded,
-    FundingRejected,
     Failure,
 }
+
+#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
+pub enum FinalSendState {
+    Success,
+    Refunded,
+    Failure,
+}
+
+pub type SendResult = Result<OperationId, SendPaymentError>;
 
 #[cfg_attr(doc, aquamarine::aquamarine)]
 /// The high-level state of receiving a payment over lightning.
@@ -121,6 +129,15 @@ pub enum ReceiveState {
     Claimed,
     Failure,
 }
+
+#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
+pub enum FinalReceiveState {
+    Expired,
+    Claimed,
+    Failure,
+}
+
+pub type ReceiveResult = Result<(Bolt11Invoice, OperationId), FetchInvoiceError>;
 
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize, Decodable, Encodable)]
 pub struct CreateBolt11InvoicePayload {
@@ -462,7 +479,7 @@ impl LightningClientModule {
             // This will not block since we checked for active states and there were none,
             // so by definition a final state has to have been assumed already.
             while let Some(state) = stream.next().await {
-                if let SendState::Success(..) = state {
+                if let SendState::Success = state {
                     return Err(SendPaymentError::SuccessfulPreviousPayment(operation_id));
                 }
             }
@@ -491,7 +508,7 @@ impl LightningClientModule {
                                 // the preimage has been verified by the state machine previously
                                 assert!(state.common.contract.verify_preimage(&preimage));
 
-                                yield SendState::Success(preimage);
+                                yield SendState::Success;
                                 return;
                             },
                             SendSMState::Refunding(out_points) => {
@@ -510,7 +527,7 @@ impl LightningClientModule {
                                     0
                                 ).await {
                                     if state.common.contract.verify_preimage(&preimage) {
-                                        yield SendState::Success(preimage);
+                                        yield SendState::Success;
                                         return;
                                     }
                                 }
@@ -519,7 +536,7 @@ impl LightningClientModule {
                                 return;
                             },
                             SendSMState::Rejected(..) => {
-                                yield SendState::FundingRejected;
+                                yield SendState::Failure;
                                 return;
                             },
                         }
@@ -529,11 +546,27 @@ impl LightningClientModule {
         }))
     }
 
-    pub async fn receive(
-        &self,
-        gateway_api: SafeUrl,
-        invoice_amount: Amount,
-    ) -> Result<(Bolt11Invoice, OperationId), FetchInvoiceError> {
+    pub async fn await_send(&self, operation_id: OperationId) -> anyhow::Result<FinalSendState> {
+        let state = self
+            .subscribe_send(operation_id)
+            .await?
+            .into_stream()
+            .filter_map(|state| {
+                futures::future::ready(match state {
+                    SendState::Success => Some(FinalSendState::Success),
+                    SendState::Refunded => Some(FinalSendState::Refunded),
+                    SendState::Failure => Some(FinalSendState::Failure),
+                    _ => None,
+                })
+            })
+            .next()
+            .await
+            .expect("Stream contains one final state");
+
+        Ok(state)
+    }
+
+    pub async fn receive(&self, gateway_api: SafeUrl, invoice_amount: Amount) -> ReceiveResult {
         self.receive_internal(
             gateway_api,
             invoice_amount,
@@ -798,6 +831,29 @@ impl LightningClientModule {
                 }
             }
         }))
+    }
+
+    pub async fn await_receive(
+        &self,
+        operation_id: OperationId,
+    ) -> anyhow::Result<FinalReceiveState> {
+        let state = self
+            .subscribe_receive(operation_id)
+            .await?
+            .into_stream()
+            .filter_map(|state| {
+                futures::future::ready(match state {
+                    ReceiveState::Expired => Some(FinalReceiveState::Expired),
+                    ReceiveState::Claimed => Some(FinalReceiveState::Claimed),
+                    ReceiveState::Failure => Some(FinalReceiveState::Failure),
+                    _ => None,
+                })
+            })
+            .next()
+            .await
+            .expect("Stream contains one final state");
+
+        Ok(state)
     }
 }
 

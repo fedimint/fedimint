@@ -20,7 +20,7 @@ use crate::vars::utf8;
 pub struct Gatewayd {
     pub(crate) process: ProcessHandle,
     pub ln: Option<LightningNode>,
-    pub(crate) addr: String,
+    pub addr: String,
     pub(crate) lightning_node_addr: String,
 }
 
@@ -115,6 +115,19 @@ impl Gatewayd {
             "--rpcpassword=theresnosecondbest",
             "-a",
             &self.addr
+        )
+    }
+
+    pub fn change_password(&self, old_password: &str, new_password: &str) -> Command {
+        cmd!(
+            crate::util::get_gateway_cli_path(),
+            "--rpcpassword",
+            old_password,
+            "-a",
+            &self.addr,
+            "set-configuration",
+            "--password",
+            new_password,
         )
     }
 
