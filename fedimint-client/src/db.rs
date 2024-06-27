@@ -3,12 +3,12 @@ use std::io::Cursor;
 use std::time::SystemTime;
 
 use fedimint_api_client::api::ApiVersionSet;
-use fedimint_core::config::{ClientConfig, FederationId};
+use fedimint_core::config::{ClientConfig, ClientConfigV0, FederationId, GlobalClientConfig};
 use fedimint_core::core::{ModuleInstanceId, OperationId};
 use fedimint_core::db::{
-    apply_migrations, create_database_version, Database, DatabaseTransaction, DatabaseValue,
-    DatabaseVersion, DatabaseVersionKey, IDatabaseTransactionOpsCore,
-    IDatabaseTransactionOpsCoreTyped, ServerMigrationFn, MODULE_GLOBAL_PREFIX,
+    apply_migrations, create_database_version, CoreMigrationFn, Database, DatabaseTransaction,
+    DatabaseValue, DatabaseVersion, DatabaseVersionKey, IDatabaseTransactionOpsCore,
+    IDatabaseTransactionOpsCoreTyped, MODULE_GLOBAL_PREFIX,
 };
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::registry::ModuleDecoderRegistry;
@@ -165,6 +165,25 @@ impl_db_record!(
 );
 
 impl_db_lookup!(key = ClientConfigKey, query_prefix = ClientConfigKeyPrefix);
+
+#[derive(Debug, Encodable, Decodable, Serialize)]
+pub struct ClientConfigKeyV0 {
+    pub id: FederationId,
+}
+
+#[derive(Debug, Encodable)]
+pub struct ClientConfigKeyPrefixV0;
+
+impl_db_record!(
+    key = ClientConfigKeyV0,
+    value = ClientConfigV0,
+    db_prefix = DbKeyPrefix::ClientConfig
+);
+
+impl_db_lookup!(
+    key = ClientConfigKeyV0,
+    query_prefix = ClientConfigKeyPrefixV0
+);
 
 #[derive(Debug, Encodable, Decodable, Serialize)]
 pub struct ApiSecretKey;
@@ -376,15 +395,44 @@ pub type ClientMigrationFn = for<'r, 'tx> fn(
     anyhow::Result<Option<(Vec<(Vec<u8>, OperationId)>, Vec<(Vec<u8>, OperationId)>)>>,
 >;
 
-pub fn get_core_client_database_migrations() -> BTreeMap<DatabaseVersion, ServerMigrationFn> {
-    BTreeMap::new()
+pub fn get_core_client_database_migrations() -> BTreeMap<DatabaseVersion, CoreMigrationFn> {
+    let mut migrations: BTreeMap<DatabaseVersion, CoreMigrationFn> = BTreeMap::new();
+    migrations.insert(DatabaseVersion(0), |dbtx| {
+        Box::pin(async {
+            let config_v0 = dbtx
+                .find_by_prefix(&ClientConfigKeyPrefixV0)
+                .await
+                .collect::<Vec<_>>()
+                .await;
+            for (id, config_v0) in config_v0.into_iter() {
+                let global = GlobalClientConfig {
+                    api_endpoints: config_v0.global.api_endpoints,
+                    broadcast_public_keys: None,
+                    consensus_version: config_v0.global.consensus_version,
+                    meta: config_v0.global.meta,
+                };
+
+                let config = ClientConfig {
+                    global,
+                    modules: config_v0.modules,
+                };
+
+                let config_key = ClientConfigKey { id: id.id };
+                dbtx.insert_new_entry(&config_key, &config).await;
+                dbtx.remove_entry(&id).await;
+            }
+            Ok(())
+        })
+    });
+
+    migrations
 }
 
 pub async fn apply_migrations_core_client(
     db: &Database,
     kind: String,
     target_version: DatabaseVersion,
-    migrations: BTreeMap<DatabaseVersion, ServerMigrationFn>,
+    migrations: BTreeMap<DatabaseVersion, CoreMigrationFn>,
 ) -> Result<(), anyhow::Error> {
     apply_migrations(db, kind, target_version, migrations, None).await
 }

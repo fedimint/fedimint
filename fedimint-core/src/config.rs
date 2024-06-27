@@ -112,6 +112,17 @@ pub struct PeerUrl {
     pub name: String,
 }
 
+/// Total client config v0 (<0.4.0). Does not contain broadcast public keys.
+///
+/// This includes global settings and client-side module configs.
+#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize, Encodable, Decodable)]
+pub struct ClientConfigV0 {
+    #[serde(flatten)]
+    pub global: GlobalClientConfigV0,
+    #[serde(deserialize_with = "de_int_key")]
+    pub modules: BTreeMap<ModuleInstanceId, ClientModuleConfig>,
+}
+
 /// Total client config
 ///
 /// This includes global settings and client-side module configs.
@@ -148,6 +159,19 @@ where
 pub struct JsonClientConfig {
     pub global: GlobalClientConfig,
     pub modules: BTreeMap<ModuleInstanceId, JsonWithKind>,
+}
+
+/// Federation-wide client config
+#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize, Encodable, Decodable)]
+pub struct GlobalClientConfigV0 {
+    /// API endpoints for each federation member
+    #[serde(deserialize_with = "de_int_key")]
+    pub api_endpoints: BTreeMap<PeerId, PeerUrl>,
+    /// Core consensus version
+    pub consensus_version: CoreConsensusVersion,
+    // TODO: make it a String -> serde_json::Value map?
+    /// Additional config the federation wants to transmit to the clients
+    pub meta: BTreeMap<String, String>,
 }
 
 /// Federation-wide client config
