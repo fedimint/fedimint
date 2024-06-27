@@ -1551,17 +1551,8 @@ impl Gateway {
         let config = client.config().await;
         let channel_id = self
             .federation_manager
-            .scid_to_federation
-            .read()
-            .await
-            .iter()
-            .find_map(|(scid, fid)| {
-                if *fid == federation_id {
-                    Some(*scid)
-                } else {
-                    None
-                }
-            });
+            .get_scid_for_federation(federation_id)
+            .await;
 
         let mut dbtx = self.gateway_db.begin_transaction_nc().await;
         let federation_key = FederationIdKey { id: federation_id };
