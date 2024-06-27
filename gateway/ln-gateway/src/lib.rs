@@ -310,10 +310,7 @@ impl Gateway {
 
         Ok(Self {
             federation_manager: Arc::new(FederationManager::new()),
-            lightning_manager: Arc::new(LightningManager {
-                lightning_builder,
-                state: Arc::new(RwLock::new(GatewayState::Initializing)),
-            }),
+            lightning_manager: Arc::new(LightningManager::new_initializing(lightning_builder)),
             gateway_config: Arc::new(RwLock::new(gateway_config)),
             client_builder,
             gateway_id: Self::load_gateway_id(&gateway_db).await,
@@ -351,7 +348,7 @@ impl Gateway {
     }
 
     pub async fn get_state(&self) -> GatewayState {
-        self.lightning_manager.state.read().await.clone()
+        self.lightning_manager.get_state().await
     }
 
     /// Reads and serializes structures from the Gateway's database for the
@@ -427,17 +424,14 @@ impl Gateway {
                 }
 
                 let mut htlc_task_group = tg.make_subgroup();
-                let lnrpc_route = self_copy.lightning_manager.lightning_builder.build().await;
 
                 debug!("Will try to intercept HTLC stream...");
                 // Re-create the HTLC stream if the connection breaks
-                match lnrpc_route
-                    .route_htlcs(&mut htlc_task_group)
+                match self_copy.lightning_manager.connect_route_htlcs(&mut htlc_task_group)
                     .await
                 {
                     Ok((stream, ln_client)) => {
                         // Successful calls to route_htlcs establish a connection
-                        self_copy.lightning_manager.set_state(GatewayState::Connected).await;
                         info!("Established HTLC stream");
 
                         match fetch_lightning_node_info(ln_client.clone()).await {
@@ -666,7 +660,7 @@ impl Gateway {
                 fees: Some(gateway_config.routing_fees),
                 route_hints,
                 gateway_id: self.gateway_id,
-                gateway_state: self.lightning_manager.state.read().await.to_string(),
+                gateway_state: self.lightning_manager.get_state().await.to_string(),
                 network: Some(gateway_config.network),
                 block_height: Some(node_info.3),
                 synced_to_chain: node_info.4,
@@ -682,7 +676,7 @@ impl Gateway {
             fees: None,
             route_hints: vec![],
             gateway_id: self.gateway_id,
-            gateway_state: self.lightning_manager.state.read().await.to_string(),
+            gateway_state: self.lightning_manager.get_state().await.to_string(),
             network: None,
             block_height: None,
             synced_to_chain: false,

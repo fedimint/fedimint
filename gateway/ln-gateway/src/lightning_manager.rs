@@ -3,17 +3,19 @@ use std::sync::Arc;
 
 use bitcoin::Network;
 use fedimint_core::secp256k1::PublicKey;
+use fedimint_core::task::TaskGroup;
 use tokio::sync::RwLock;
 
-use super::lightning::{ILnRpcClient, LightningBuilder};
+use super::lightning::{ILnRpcClient, LightningBuilder, LightningRpcError};
+use crate::lightning::cln::RouteHtlcStream;
 
 pub struct LightningManager {
     /// Builder struct that allows the gateway to build a `ILnRpcClient`, which
     /// represents a connection to a lightning node.
-    pub lightning_builder: Arc<dyn LightningBuilder + Send + Sync>,
+    lightning_builder: Arc<dyn LightningBuilder + Send + Sync>,
 
     /// The current state of the Gateway.
-    pub state: Arc<RwLock<GatewayState>>,
+    state: Arc<RwLock<GatewayState>>,
 }
 
 impl std::fmt::Debug for LightningManager {
@@ -25,6 +27,33 @@ impl std::fmt::Debug for LightningManager {
 }
 
 impl LightningManager {
+    pub fn new_initializing(lightning_builder: Arc<dyn LightningBuilder + Send + Sync>) -> Self {
+        Self {
+            lightning_builder,
+            state: Arc::new(RwLock::new(GatewayState::Initializing)),
+        }
+    }
+
+    pub async fn connect_route_htlcs(
+        &self,
+        task_group: &mut TaskGroup,
+    ) -> Result<(RouteHtlcStream, Arc<dyn ILnRpcClient>), LightningRpcError> {
+        let (stream, ln_client) = self
+            .lightning_builder
+            .build()
+            .await
+            .route_htlcs(task_group)
+            .await?;
+
+        self.set_state(GatewayState::Connected).await;
+
+        Ok((stream, ln_client))
+    }
+
+    pub async fn get_state(&self) -> GatewayState {
+        self.state.read().await.clone()
+    }
+
     pub async fn set_state(&self, state: GatewayState) {
         *self.state.write().await = state;
     }
