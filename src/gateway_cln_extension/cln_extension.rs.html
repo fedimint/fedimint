@@ -1153,6 +1153,7 @@
 <a href="#1153" id="1153">1153</a>
 <a href="#1154" id="1154">1154</a>
 <a href="#1155" id="1155">1155</a>
+<a href="#1156" id="1156">1156</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::array::TryFromSliceError;
 <span class="kw">use </span>std::collections::{BTreeMap, HashMap};
 <span class="kw">use </span>std::net::SocketAddr;
@@ -1883,11 +1884,12 @@
             </span>.info()
             .<span class="kw">await
             </span>.map_err(|e| Status::internal(e.to_string()))<span class="question-mark">?</span>;
-        <span class="kw">let </span>network =
-            Currency::from_str(info.<span class="number">2</span>.as_str()).map_err(|e| Status::internal(e.to_string()))<span class="question-mark">?</span>;
+        <span class="kw">let </span>network = bitcoin::Network::from_str(info.<span class="number">2</span>.as_str())
+            .map_err(|e| Status::internal(e.to_string()))<span class="question-mark">?</span>;
+        <span class="kw">let </span>currency = Currency::from(network);
 
         <span class="kw">let </span>invoice = <span class="kw">match </span>description {
-            Description::Direct(description) =&gt; InvoiceBuilder::new(network)
+            Description::Direct(description) =&gt; InvoiceBuilder::new(currency)
                 .amount_milli_satoshis(amount_msat)
                 .invoice_description(lightning_invoice::Bolt11InvoiceDescription::Direct(
                     <span class="kw-2">&amp;</span>lightning_invoice::Description::new(description)
@@ -1905,7 +1907,7 @@
                         .sign_ecdsa_recoverable(m, <span class="kw-2">&amp;</span>SecretKey::new(<span class="kw-2">&amp;mut </span>OsRng))
                 })
                 .map_err(|e| Status::internal(e.to_string()))<span class="question-mark">?</span>,
-            Description::Hash(hash) =&gt; InvoiceBuilder::new(network)
+            Description::Hash(hash) =&gt; InvoiceBuilder::new(currency)
                 .amount_milli_satoshis(amount_msat)
                 .invoice_description(lightning_invoice::Bolt11InvoiceDescription::Hash(
                     <span class="kw-2">&amp;</span>lightning_invoice::Sha256(
