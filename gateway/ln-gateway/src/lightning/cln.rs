@@ -147,7 +147,7 @@ impl ILnRpcClient for NetworkLnRpcClient {
 
     async fn route_htlcs<'a>(
         self: Box<Self>,
-        _task_group: &mut TaskGroup,
+        _task_group: &TaskGroup,
     ) -> Result<(RouteHtlcStream<'a>, Arc<dyn ILnRpcClient>), LightningRpcError> {
         let mut client = self.connect().await?;
         let res = client

@@ -545,7 +545,7 @@ impl ILnRpcClient for GatewayLndClient {
 
     async fn route_htlcs<'a>(
         self: Box<Self>,
-        task_group: &mut TaskGroup,
+        task_group: &TaskGroup,
     ) -> Result<(RouteHtlcStream<'a>, Arc<dyn ILnRpcClient>), LightningRpcError> {
         const CHANNEL_SIZE: usize = 100;
 

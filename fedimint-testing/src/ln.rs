@@ -177,7 +177,7 @@ impl ILnRpcClient for FakeLightningTest {
 
     async fn route_htlcs<'a>(
         mut self: Box<Self>,
-        task_group: &mut TaskGroup,
+        task_group: &TaskGroup,
     ) -> Result<(RouteHtlcStream<'a>, Arc<dyn ILnRpcClient>), LightningRpcError> {
         let handle = task_group.make_handle();
         let shutdown_receiver = handle.make_shutdown_rx();
