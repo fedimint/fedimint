@@ -2,14 +2,18 @@ pub mod cln;
 pub mod lnd;
 
 use std::fmt::Debug;
+use std::str::FromStr;
 use std::sync::Arc;
 
 use async_trait::async_trait;
+use bitcoin::Network;
 use clap::Subcommand;
 use fedimint_core::encoding::{Decodable, Encodable};
+use fedimint_core::secp256k1::PublicKey;
 use fedimint_core::task::TaskGroup;
 use fedimint_core::util::SafeUrl;
 use fedimint_core::{secp256k1, Amount};
+use fedimint_ln_common::route_hints::RouteHint;
 use fedimint_ln_common::PrunedInvoice;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -24,6 +28,7 @@ use crate::gateway_lnrpc::{
     GetFundingAddressResponse, GetNodeInfoResponse, GetRouteHintsResponse, InterceptHtlcResponse,
     PayInvoiceRequest, PayInvoiceResponse,
 };
+use crate::GatewayError;
 
 pub const MAX_LIGHTNING_RETRIES: u32 = 10;
 
@@ -150,6 +155,50 @@ pub trait ILnRpcClient: Debug + Send + Sync {
     ) -> Result<CloseChannelsWithPeerResponse, LightningRpcError>;
 
     async fn list_active_channels(&self) -> Result<Vec<ChannelInfo>, LightningRpcError>;
+}
+
+impl dyn ILnRpcClient {
+    /// Retrieve route hints from the Lightning node, capped at
+    /// `num_route_hints`. The route hints should be ordered based on liquidity
+    /// of incoming channels.
+    pub async fn parsed_route_hints(&self, num_route_hints: u32) -> Vec<RouteHint> {
+        if num_route_hints == 0 {
+            return vec![];
+        }
+
+        let route_hints =
+            self.routehints(num_route_hints as usize)
+                .await
+                .unwrap_or(GetRouteHintsResponse {
+                    route_hints: Vec::new(),
+                });
+        route_hints.try_into().expect("Could not parse route hints")
+    }
+
+    /// Retrieves the basic information about the Gateway's connected Lightning
+    /// node.
+    pub async fn parsed_node_info(&self) -> super::Result<(PublicKey, String, Network, u32, bool)> {
+        let GetNodeInfoResponse {
+            pub_key,
+            alias,
+            network,
+            block_height,
+            synced_to_chain,
+        } = self.info().await?;
+        let node_pub_key = PublicKey::from_slice(&pub_key)
+            .map_err(|e| GatewayError::InvalidMetadata(format!("Invalid node pubkey {e}")))?;
+        // TODO: create a fedimint Network that understands "mainnet"
+        let network = match network.as_str() {
+            // LND uses "mainnet", but rust-bitcoin uses "bitcoin".
+            // TODO(tvolk131): Push this detail down into the LND implementation of ILnRpcClient.
+            "mainnet" => "bitcoin",
+            other => other,
+        };
+        let network = Network::from_str(network).map_err(|e| {
+            GatewayError::InvalidMetadata(format!("Invalid network {network}: {e}"))
+        })?;
+        Ok((node_pub_key, alias, network, block_height, synced_to_chain))
+    }
 }
 
 #[derive(Serialize, Deserialize, Debug)]

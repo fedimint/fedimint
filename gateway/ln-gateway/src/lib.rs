@@ -76,7 +76,6 @@ use fedimint_core::{
 use fedimint_ln_client::pay::PayInvoicePayload;
 use fedimint_ln_common::config::{GatewayFee, LightningClientConfig};
 use fedimint_ln_common::contracts::Preimage;
-use fedimint_ln_common::route_hints::RouteHint;
 use fedimint_ln_common::LightningCommonInit;
 use fedimint_lnv2_client::{
     Bolt11InvoiceDescription, CreateBolt11InvoicePayload, PaymentFee, RoutingInfo,
@@ -89,10 +88,7 @@ use fedimint_wallet_client::{
 };
 use futures::stream::StreamExt;
 use gateway_lnrpc::intercept_htlc_response::Action;
-use gateway_lnrpc::{
-    CloseChannelsWithPeerResponse, GetNodeInfoResponse, GetRouteHintsResponse,
-    InterceptHtlcResponse,
-};
+use gateway_lnrpc::{CloseChannelsWithPeerResponse, InterceptHtlcResponse};
 use hex::ToHex;
 use lightning::{ILnRpcClient, LightningBuilder, LightningMode, LightningRpcError};
 use lightning_invoice::{Bolt11Invoice, RoutingFees};
@@ -592,7 +588,7 @@ impl Gateway {
                         self_copy.set_gateway_state(GatewayState::Connected).await;
                         info!("Established HTLC stream");
 
-                        match fetch_lightning_node_info(ln_client.clone()).await {
+                        match ln_client.parsed_node_info().await {
                             Ok((lightning_public_key, lightning_alias, lightning_network, _block_height, _synced_to_chain)) => {
                                 let gateway_config = self_copy.clone_gateway_config().await;
                                 let gateway_config = if let Some(config) = gateway_config {
@@ -800,12 +796,11 @@ impl Gateway {
                 .expect("Gateway configuration should be set");
             let mut federations = Vec::new();
             let federation_clients = self.clients.read().await.clone().into_iter();
-            let route_hints = Self::fetch_lightning_route_hints(
-                lightning_context.lnrpc.clone(),
-                gateway_config.num_route_hints,
-            )
-            .await;
-            let node_info = fetch_lightning_node_info(lightning_context.lnrpc.clone()).await?;
+            let route_hints = lightning_context
+                .lnrpc
+                .parsed_route_hints(gateway_config.num_route_hints)
+                .await;
+            let node_info = lightning_context.lnrpc.parsed_node_info().await?;
             for (federation_id, client) in federation_clients {
                 federations.push(
                     client
@@ -1345,11 +1340,10 @@ impl Gateway {
         federations: &[(FederationId, FederationConfig)],
     ) -> Result<()> {
         if let Ok(lightning_context) = self.get_lightning_context().await {
-            let route_hints = Self::fetch_lightning_route_hints(
-                lightning_context.lnrpc.clone(),
-                gateway_config.num_route_hints,
-            )
-            .await;
+            let route_hints = lightning_context
+                .lnrpc
+                .parsed_route_hints(gateway_config.num_route_hints)
+                .await;
             if route_hints.is_empty() {
                 warn!("Gateway did not retrieve any route hints, may reduce receive success rate.");
             }
@@ -1556,27 +1550,6 @@ impl Gateway {
         });
     }
 
-    /// Retrieve route hints from the Lightning node, capped at
-    /// `num_route_hints`. The route hints should be ordered based on liquidity
-    /// of incoming channels.
-    async fn fetch_lightning_route_hints(
-        lnrpc: Arc<dyn ILnRpcClient>,
-        num_route_hints: u32,
-    ) -> Vec<RouteHint> {
-        if num_route_hints == 0 {
-            return vec![];
-        }
-
-        let route_hints =
-            lnrpc
-                .routehints(num_route_hints as usize)
-                .await
-                .unwrap_or(GetRouteHintsResponse {
-                    route_hints: Vec::new(),
-                });
-        route_hints.try_into().expect("Could not parse route hints")
-    }
-
     /// Creates the `FederationInfo` struct from a given `federation_id` that is
     /// used to inform Gateway operators of basic data about their connected
     /// federations.
@@ -1671,30 +1644,6 @@ impl Gateway {
                 .await;
         }
     }
-}
-
-/// Retrieves the basic information about the Gateway's connected Lightning
-/// node.
-pub(crate) async fn fetch_lightning_node_info(
-    lnrpc: Arc<dyn ILnRpcClient>,
-) -> Result<(PublicKey, String, Network, u32, bool)> {
-    let GetNodeInfoResponse {
-        pub_key,
-        alias,
-        network,
-        block_height,
-        synced_to_chain,
-    } = lnrpc.info().await?;
-    let node_pub_key = PublicKey::from_slice(&pub_key)
-        .map_err(|e| GatewayError::InvalidMetadata(format!("Invalid node pubkey {e}")))?;
-    // TODO: create a fedimint Network that understands "mainnet"
-    let network = match network.as_str() {
-        "mainnet" => "bitcoin", // it seems LND will use "mainnet", but rust-bitcoin uses "bitcoin"
-        other => other,
-    };
-    let network = Network::from_str(network)
-        .map_err(|e| GatewayError::InvalidMetadata(format!("Invalid network {network}: {e}")))?;
-    Ok((node_pub_key, alias, network, block_height, synced_to_chain))
 }
 
 // LNv2 Gateway implementation
