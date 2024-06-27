@@ -519,6 +519,7 @@ rec {
       "fedimintd"
       "fedimint-cli"
       "fedimint-dbtool"
+      "fedimint-recoverytool"
     ];
   };
 
@@ -583,6 +584,12 @@ rec {
     {
       pkg = gateway-pkgs;
       bin = "gateway-cln-extension";
+    };
+
+  fedimint-recoverytool = flakeboxLib.pickBinary
+    {
+      pkg = fedimint-pkgs;
+      bin = "recoverytool";
     };
 
   container =
@@ -653,7 +660,7 @@ rec {
         pkgs.dockerTools.buildLayeredImage
           {
             name = "fedimint-devtools";
-            contents = [ devimint fedimint-dbtool fedimint-load-test-tool pkgs.bash pkgs.coreutils ];
+            contents = [ devimint fedimint-dbtool fedimint-load-test-tool pkgs.bash pkgs.coreutils fedimint-recoverytool ];
             config = {
               Cmd = [
                 "${pkgs.bash}/bin/bash"
