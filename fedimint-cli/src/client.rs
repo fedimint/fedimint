@@ -13,7 +13,6 @@ use fedimint_client::ClientHandleArc;
 use fedimint_core::config::{ClientModuleConfig, FederationId};
 use fedimint_core::core::{ModuleInstanceId, ModuleKind, OperationId};
 use fedimint_core::encoding::Encodable;
-use fedimint_core::time::now;
 use fedimint_core::{Amount, BitcoinAmountOrAll, TieredCounts, TieredMulti};
 use fedimint_ln_client::cli::LnInvoiceResponse;
 use fedimint_ln_client::{
@@ -148,12 +147,7 @@ pub enum ClientCmd {
         no_update: bool,
     },
     /// Generate a new deposit address, funds sent to it can later be claimed
-    DepositAddress {
-        /// How long the client should watch the address for incoming
-        /// transactions, time in seconds
-        #[clap(long, default_value_t = 60*60*24*7)]
-        timeout: u64,
-    },
+    DepositAddress,
     /// Wait for deposit on previously generated address
     AwaitDeposit { operation_id: OperationId },
     /// Withdraw funds from the federation
@@ -470,28 +464,24 @@ pub async fn handle_command(
 
             Ok(json!(&gateways))
         }
-        ClientCmd::DepositAddress { timeout } => {
-            let (operation_id, address) = client
+        ClientCmd::DepositAddress => {
+            let (operation_id, address, tweak_idx) = client
                 .get_first_module::<WalletClientModule>()
-                .get_deposit_address(now() + Duration::from_secs(timeout), ())
+                .allocate_deposit_address()
                 .await?;
             Ok(serde_json::json! {
                 {
                     "address": address,
                     "operation_id": operation_id,
+                    "idx": tweak_idx.0
                 }
             })
         }
         ClientCmd::AwaitDeposit { operation_id } => {
-            let mut updates = client
+            client
                 .get_first_module::<WalletClientModule>()
-                .subscribe_deposit_updates(operation_id)
-                .await?
-                .into_stream();
-
-            while let Some(update) = updates.next().await {
-                debug!(target: LOG_CLIENT, ?update, "Await deposit state update");
-            }
+                .await_deposit(operation_id)
+                .await?;
 
             Ok(serde_json::to_value(()).unwrap())
         }

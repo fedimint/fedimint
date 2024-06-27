@@ -68,7 +68,7 @@ use fedimint_core::module::CommonModuleInit;
 use fedimint_core::secp256k1::schnorr::Signature;
 use fedimint_core::secp256k1::{KeyPair, PublicKey, Secp256k1};
 use fedimint_core::task::{sleep, TaskGroup, TaskHandle, TaskShutdownToken};
-use fedimint_core::time::{duration_since_epoch, now};
+use fedimint_core::time::duration_since_epoch;
 use fedimint_core::util::{SafeUrl, Spanned};
 use fedimint_core::{
     fedimint_build_code_version_env, push_db_pair_items, Amount, BitcoinAmountOrAll, BitcoinHash,
@@ -890,12 +890,12 @@ impl Gateway {
     /// Returns a Bitcoin deposit on-chain address for pegging in Bitcoin for a
     /// specific connected federation.
     pub async fn handle_address_msg(&self, payload: DepositAddressPayload) -> Result<Address> {
-        let (_, address) = self
+        let (_, address, _) = self
             .select_client(payload.federation_id)
             .await?
             .value()
             .get_first_module::<WalletClientModule>()
-            .get_deposit_address(now() + Duration::from_secs(86400 * 365), ())
+            .allocate_deposit_address()
             .await?;
         Ok(address)
     }

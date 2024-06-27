@@ -33,7 +33,7 @@ test-upgrades *VERSIONS="v0.2.2 releases/v0.3":
 
 # `cargo udeps` check
 udeps:
-  nix build -L .#debug.workspaceCargoUdeps
+  nix build -L .#nightly.test.workspaceCargoUdeps
 
 bench:
   cargo bench
@@ -41,14 +41,14 @@ bench:
 # run all checks recommended before opening a PR
 final-check: lint
   # can't use nextest due to: https://github.com/nextest-rs/nextest/issues/16
-  cargo test --doc
+  cargo test --doc --workspace
   just check-wasm
   just test
 
 # run all/most checks a CI would run
 final-check-ci: lint
   just clippy
-  cargo test --doc
+  cargo test --doc --workspace
   just check-wasm
   ./scripts/tests/test-ci-all.sh
   just test-compatibility

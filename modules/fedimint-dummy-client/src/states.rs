@@ -23,7 +23,7 @@ pub enum DummyStateMachine {
     Input(Amount, TransactionId, OperationId),
     Output(Amount, TransactionId, OperationId),
     InputDone(OperationId),
-    OutputDone(Amount, OperationId),
+    OutputDone(Amount, TransactionId, OperationId),
     Refund(OperationId),
     Unreachable(OperationId, Amount),
 }
@@ -59,14 +59,14 @@ impl State for DummyStateMachine {
                     // output accepted, add funds
                     Ok(()) => Box::pin(async move {
                         add_funds(amount, dbtx.module_tx()).await;
-                        DummyStateMachine::OutputDone(amount, id)
+                        DummyStateMachine::OutputDone(amount, txid, id)
                     }),
                     // output rejected, do not add funds
                     Err(_) => Box::pin(async move { DummyStateMachine::Refund(id) }),
                 },
             )],
             DummyStateMachine::InputDone(_)
-            | DummyStateMachine::OutputDone(_, _)
+            | DummyStateMachine::OutputDone(_, _, _)
             | DummyStateMachine::Refund(_)
             | DummyStateMachine::Unreachable(_, _) => vec![],
         }
@@ -77,7 +77,7 @@ impl State for DummyStateMachine {
             DummyStateMachine::Input(_, _, id)
             | DummyStateMachine::Output(_, _, id)
             | DummyStateMachine::InputDone(id)
-            | DummyStateMachine::OutputDone(_, id)
+            | DummyStateMachine::OutputDone(_, _, id)
             | DummyStateMachine::Refund(id)
             | DummyStateMachine::Unreachable(id, _) => *id,
         }

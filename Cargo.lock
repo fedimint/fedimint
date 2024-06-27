@@ -2530,6 +2530,7 @@ dependencies = [
  "fedimint-bitcoind",
  "fedimint-client",
  "fedimint-core",
+ "fedimint-logging",
  "fedimint-wallet-common",
  "futures",
  "rand",

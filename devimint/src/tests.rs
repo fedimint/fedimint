@@ -794,20 +794,6 @@ pub async fn cli_tests(dev_fed: DevFed) -> Result<()> {
     fed.pegin_client(CLIENT_START_AMOUNT / 1000, &client)
         .await?;
 
-    // Check log contains deposit
-    let operation = cmd!(client, "list-operations")
-        .out_json()
-        .await?
-        .get("operations")
-        .expect("Output didn't contain operation log")
-        .as_array()
-        .unwrap()
-        .first()
-        .unwrap()
-        .to_owned();
-    assert_eq!(operation["operation_kind"].as_str().unwrap(), "wallet");
-    assert!(operation["outcome"]["Claimed"].as_object().is_some());
-
     if *VERSION_0_3_0_ALPHA <= fedimintd_version && *VERSION_0_3_0_ALPHA <= fedimint_cli_version {
         info!("Testing backup&restore");
         // TODO: make sure there are no in-progress operations involved

@@ -9,7 +9,8 @@ use anyhow::{anyhow, bail};
 use fedimint_api_client::api::DynGlobalApi;
 use fedimint_core::config::ClientConfig;
 use fedimint_core::core::{
-    Decoder, DynInput, DynOutput, IntoDynInstance, ModuleInstanceId, ModuleKind, OperationId,
+    Decoder, DynInput, DynOutput, IInput, IntoDynInstance, ModuleInstanceId, ModuleKind,
+    OperationId,
 };
 use fedimint_core::db::{AutocommitError, Database, DatabaseTransaction, PhantomBound};
 use fedimint_core::invite_code::InviteCode;
@@ -27,7 +28,10 @@ use self::init::ClientModuleInit;
 use crate::module::recovery::{DynModuleBackup, ModuleBackup};
 use crate::sm::{self, ActiveStateMeta, Context, DynContext, DynState, State};
 use crate::transaction::{ClientInput, ClientOutput, TransactionBuilder};
-use crate::{oplog, AddStateMachinesResult, Client, ClientStrong, ClientWeak, TransactionUpdates};
+use crate::{
+    oplog, states_add_instance, states_to_instanceless_dyn, AddStateMachinesResult, Client,
+    ClientStrong, ClientWeak, InstancelessDynClientInput, TransactionUpdates,
+};
 
 pub mod init;
 pub mod recovery;
@@ -162,6 +166,54 @@ where
             .operation_log()
             .add_operation_log_entry(self.dbtx, operation_id, operation_type, operation_meta)
             .await;
+    }
+
+    pub async fn claim_input<I, S>(
+        &mut self,
+        input: ClientInput<I, S>,
+        operation_id: OperationId,
+    ) -> (TransactionId, Vec<OutPoint>)
+    where
+        I: IInput + MaybeSend + MaybeSync + 'static,
+        S: sm::IState + MaybeSend + MaybeSync + 'static,
+    {
+        self.claim_input_dyn(
+            InstancelessDynClientInput {
+                input: Box::new(input.input),
+                keys: input.keys,
+                amount: input.amount,
+                state_machines: states_to_instanceless_dyn(input.state_machines),
+            },
+            operation_id,
+        )
+        .await
+    }
+
+    async fn claim_input_dyn(
+        &mut self,
+        input: InstancelessDynClientInput,
+        operation_id: OperationId,
+    ) -> (TransactionId, Vec<OutPoint>) {
+        let instance_input = ClientInput {
+            input: DynInput::from_parts(self.client.module_instance_id, input.input),
+            keys: input.keys,
+            amount: input.amount,
+            state_machines: states_add_instance(
+                self.client.module_instance_id,
+                input.state_machines,
+            ),
+        };
+
+        self.client
+            .client
+            .get()
+            .finalize_and_submit_transaction_inner(
+                self.dbtx,
+                operation_id,
+                TransactionBuilder::new().with_input(instance_input),
+            )
+            .await
+            .expect("Can only fail if additional funding is needed")
     }
 
     pub async fn add_state_machines_dbtx(
@@ -535,6 +587,13 @@ pub trait ClientModule: Debug + MaybeSend + MaybeSync + 'static {
 
     fn context(&self) -> Self::ModuleStateMachineContext;
 
+    /// Initialize client.
+    ///
+    /// Called by the core client code on start, after [`ClientContext`] is
+    /// fully initialized, so unlike during [`ClientModuleInit::init`],
+    /// access to global client is allowed.
+    async fn start(&self) {}
+
     async fn handle_cli_command(
         &self,
         _args: &[ffi::OsString],
@@ -708,6 +767,8 @@ pub trait IClientModule: Debug {
 
     fn context(&self, instance: ModuleInstanceId) -> DynContext;
 
+    async fn start(&self);
+
     async fn handle_cli_command(&self, args: &[ffi::OsString])
         -> anyhow::Result<serde_json::Value>;
 
@@ -761,6 +822,10 @@ where
 
     fn context(&self, instance: ModuleInstanceId) -> DynContext {
         DynContext::from_typed(instance, <T as ClientModule>::context(self))
+    }
+
+    async fn start(&self) {
+        <T as ClientModule>::start(self).await;
     }
 
     async fn handle_cli_command(

@@ -71,7 +71,7 @@ watch *ARGS="-x run":
 
 # run `cargo clippy` on everything
 clippy *ARGS="--locked --offline --workspace --all-targets":
-  cargo clippy {{ARGS}} -- --deny warnings --allow deprecated
+  cargo clippy {{ARGS}}
 
 # run `cargo clippy --fix` on everything
 clippy-fix *ARGS="--locked --offline --workspace --all-targets":

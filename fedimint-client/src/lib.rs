@@ -1845,6 +1845,7 @@ impl TransactionUpdates {
     /// Waits for the transaction to be accepted or rejected as part of the
     /// operation to which the `TransactionUpdates` object is subscribed.
     pub async fn await_tx_accepted(self, await_txid: TransactionId) -> Result<(), String> {
+        debug!(target: LOG_CLIENT, %await_txid, "Await tx accepted");
         self.update_stream
             .filter_map(|tx_update| {
                 std::future::ready(match tx_update.state {
@@ -1856,7 +1857,9 @@ impl TransactionUpdates {
                 })
             })
             .next_or_pending()
-            .await
+            .await?;
+        debug!(target: LOG_CLIENT, %await_txid, "Tx accepted");
+        Ok(())
     }
 }
 
@@ -2445,6 +2448,10 @@ impl ClientBuilder {
             });
 
         let client_arc = ClientHandle::new(client_inner);
+
+        for (_, _, module) in client_arc.modules.iter_modules() {
+            module.start().await;
+        }
 
         final_client.set(client_arc.downgrade());
 

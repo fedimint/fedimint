@@ -157,7 +157,7 @@ impl ClientModule for DummyClientModule {
     async fn await_primary_module_output(
         &self,
         operation_id: OperationId,
-        _out_point: OutPoint,
+        out_point: OutPoint,
     ) -> anyhow::Result<Amount> {
         let stream = self
             .notifier
@@ -165,7 +165,12 @@ impl ClientModule for DummyClientModule {
             .await
             .filter_map(|state| async move {
                 match state {
-                    DummyStateMachine::OutputDone(amount, _) => Some(Ok(amount)),
+                    DummyStateMachine::OutputDone(amount, txid, _) => {
+                        if txid != out_point.txid {
+                            return None;
+                        }
+                        Some(Ok(amount))
+                    }
                     DummyStateMachine::Refund(_) => Some(Err(anyhow::anyhow!(
                         "Error occurred processing the dummy transaction"
                     ))),
@@ -188,7 +193,7 @@ impl ClientModule for DummyClientModule {
                 .subscribe_all_operations()
                 .filter_map(|state| async move {
                     match state {
-                        DummyStateMachine::OutputDone(_, _)
+                        DummyStateMachine::OutputDone(_, _, _)
                         | DummyStateMachine::Input { .. }
                         | DummyStateMachine::Refund(_) => Some(()),
                         _ => None,

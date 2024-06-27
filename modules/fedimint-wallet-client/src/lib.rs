@@ -9,18 +9,23 @@
 pub mod api;
 
 pub mod client_db;
+/// Legacy, state-machine based peg-ins, replaced by `pegin_monitor`
+/// but retained for time being to ensure existing peg-ins complete.
 mod deposit;
+/// Peg-in monitor: a task monitoring deposit addresses for peg-ins.
+mod pegin_monitor;
 mod withdraw;
 
 use std::collections::BTreeMap;
+use std::future;
 use std::sync::Arc;
 use std::time::SystemTime;
 
 use anyhow::{anyhow, bail, ensure, Context as AnyhowContext};
 use async_stream::stream;
 use bitcoin::address::NetworkUnchecked;
-use bitcoin::{Address, Network};
-use client_db::DbKeyPrefix;
+use bitcoin::{Address, Network, ScriptBuf};
+use client_db::{DbKeyPrefix, PegInTweakIndexKey, TweakIdx};
 use fedimint_api_client::api::DynModuleApi;
 use fedimint_bitcoind::{create_bitcoind, DynBitcoindRpc};
 use fedimint_client::derivable_secret::{ChildId, DerivableSecret};
@@ -32,10 +37,10 @@ use fedimint_client::sm::util::MapStateTransitions;
 use fedimint_client::sm::{Context, DynState, ModuleNotifier, State, StateTransition};
 use fedimint_client::transaction::{ClientOutput, TransactionBuilder};
 use fedimint_client::{sm_enum_variant_translation, DynGlobalClientContext};
-use fedimint_core::bitcoin_migration::checked_address_to_unchecked_address;
 use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, OperationId};
 use fedimint_core::db::{
-    AutocommitError, DatabaseTransaction, DatabaseVersion, IDatabaseTransactionOpsCoreTyped,
+    AutocommitError, Database, DatabaseTransaction, DatabaseVersion,
+    IDatabaseTransactionOpsCoreTyped,
 };
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::envs::BitcoinRpcConfig;
@@ -43,19 +48,27 @@ use fedimint_core::module::{
     ApiVersion, CommonModuleInit, ModuleCommon, ModuleInit, MultiApiVersion,
 };
 use fedimint_core::task::{MaybeSend, MaybeSync, TaskGroup};
-use fedimint_core::{apply, async_trait_maybe_send, Amount, OutPoint};
+use fedimint_core::{
+    apply, async_trait_maybe_send, push_db_pair_items, Amount, OutPoint, TransactionId,
+};
+use fedimint_logging::LOG_CLIENT_MODULE_WALLET;
 use fedimint_wallet_common::config::{FeeConsensus, WalletClientConfig};
 use fedimint_wallet_common::tweakable::Tweakable;
 pub use fedimint_wallet_common::*;
 use futures::{Stream, StreamExt};
 use rand::{thread_rng, Rng};
-use secp256k1::{All, Secp256k1};
+use secp256k1::{All, KeyPair, Secp256k1, SECP256K1};
 use serde::{Deserialize, Serialize};
 use strum::IntoEnumIterator;
+use tokio::sync::watch;
+use tracing::{debug, instrument};
 
 use crate::api::WalletFederationApi;
-use crate::client_db::NextPegInTweakIndexKey;
-use crate::deposit::{CreatedDepositState, DepositStateMachine, DepositStates};
+use crate::client_db::{
+    ClaimedPegInData, ClaimedPegInKey, ClaimedPegInPrefix, NextPegInTweakIndexKey,
+    PegInTweakIndexData, PegInTweakIndexPrefix,
+};
+use crate::deposit::DepositStateMachine;
 use crate::withdraw::{CreatedWithdrawState, WithdrawStateMachine, WithdrawStates};
 
 const WALLET_TWEAK_CHILD_ID: ChildId = ChildId(0);
@@ -86,18 +99,6 @@ pub enum WithdrawState {
     // TODO: track refund
     // Refunded,
     // RefundFailed(String),
-}
-
-async fn next_deposit_state<S>(stream: &mut S) -> Option<DepositStates>
-where
-    S: Stream<Item = WalletClientStates> + Unpin,
-{
-    loop {
-        if let WalletClientStates::Deposit(ds) = stream.next().await? {
-            return Some(ds.state);
-        }
-        tokio::task::yield_now().await;
-    }
 }
 
 async fn next_withdraw_state<S>(stream: &mut S) -> Option<WithdrawStates>
@@ -145,6 +146,26 @@ impl ModuleInit for WalletClientInit {
                             .insert("NextPegInTweakIndex".to_string(), Box::new(index));
                     }
                 }
+                DbKeyPrefix::PegInTweakIndex => {
+                    push_db_pair_items!(
+                        dbtx,
+                        PegInTweakIndexPrefix,
+                        PegInTweakIndexKey,
+                        PegInTweakIndexData,
+                        wallet_client_items,
+                        "Peg-In Tweak Index"
+                    );
+                }
+                DbKeyPrefix::ClaimedPegIn => {
+                    push_db_pair_items!(
+                        dbtx,
+                        ClaimedPegInPrefix,
+                        ClaimedPegInKey,
+                        ClaimedPegInData,
+                        wallet_client_items,
+                        "Claimed Peg-In"
+                    );
+                }
             }
         }
 
@@ -162,24 +183,36 @@ impl ClientModuleInit for WalletClientInit {
     }
 
     async fn init(&self, args: &ClientModuleInitArgs<Self>) -> anyhow::Result<Self::Module> {
+        let data = WalletClientModuleData {
+            cfg: args.cfg().clone(),
+            module_root_secret: args.module_root_secret().clone(),
+        };
+
         let rpc_config = self
             .0
             .clone()
             .unwrap_or(WalletClientModule::get_rpc_config(args.cfg()));
 
-        // FIXME: reactivate key derivation once we implement recovery
-        let random_root_secret = {
-            let (key, salt): ([u8; 32], [u8; 32]) = thread_rng().gen();
-            DerivableSecret::new_root(&key, &salt)
-        };
+        let db = args.db().clone();
+
+        let btc_rpc = create_bitcoind(&rpc_config, TaskGroup::new().make_handle())?;
+        let module_api = args.module_api().clone();
+
+        let (pegin_claimed_sender, pegin_claimed_receiver) = watch::channel(());
+        let (pegin_monitor_wakeup_sender, pegin_monitor_wakeup_receiver) = watch::channel(());
 
         Ok(WalletClientModule {
-            cfg: args.cfg().clone(),
-            module_root_secret: random_root_secret,
-            module_api: args.module_api().clone(),
+            db,
+            data,
+            module_api,
             notifier: args.notifier().clone(),
-            rpc: create_bitcoind(&rpc_config, TaskGroup::new().make_handle())?,
+            rpc: btc_rpc,
             client_ctx: args.context(),
+            pegin_monitor_wakeup_sender,
+            pegin_monitor_wakeup_receiver,
+            pegin_claimed_receiver,
+            pegin_claimed_sender,
+            task_group: args.task_group().clone(),
         })
     }
 }
@@ -211,16 +244,82 @@ pub enum WalletOperationMetaVariant {
     },
 }
 
-#[derive(Debug)]
-pub struct WalletClientModule {
+/// The non-resource, just plain-data parts of [`WalletClientModule`]
+#[derive(Debug, Clone)]
+pub struct WalletClientModuleData {
     cfg: WalletClientConfig,
     module_root_secret: DerivableSecret,
+}
+
+impl WalletClientModuleData {
+    fn derive_deposit_address(
+        &self,
+        idx: TweakIdx,
+    ) -> (
+        secp256k1::KeyPair,
+        secp256k1::PublicKey,
+        Address,
+        OperationId,
+    ) {
+        let idx = ChildId(idx.0);
+
+        let secret_tweak_key = self
+            .module_root_secret
+            .child_key(WALLET_TWEAK_CHILD_ID)
+            .child_key(idx)
+            .to_secp_key(secp256k1::SECP256K1);
+
+        let public_tweak_key = secret_tweak_key.public_key();
+
+        let address = self
+            .cfg
+            .peg_in_descriptor
+            .tweak(&public_tweak_key, secp256k1::SECP256K1)
+            .address(self.cfg.network)
+            .unwrap();
+
+        // TODO: make hash?
+        let operation_id = OperationId(public_tweak_key.x_only_public_key().0.serialize());
+
+        (secret_tweak_key, public_tweak_key, address, operation_id)
+    }
+
+    fn derive_peg_in_script(
+        &self,
+        idx: TweakIdx,
+    ) -> (ScriptBuf, bitcoin::Address, KeyPair, OperationId) {
+        let (secret_tweak_key, _, address, operation_id) = self.derive_deposit_address(idx);
+
+        (
+            self.cfg
+                .peg_in_descriptor
+                .tweak(&secret_tweak_key.public_key(), SECP256K1)
+                .script_pubkey(),
+            address,
+            secret_tweak_key,
+            operation_id,
+        )
+    }
+}
+
+#[derive(Debug)]
+pub struct WalletClientModule {
+    data: WalletClientModuleData,
+    db: Database,
     module_api: DynModuleApi,
     notifier: ModuleNotifier<WalletClientStates>,
     rpc: DynBitcoindRpc,
     client_ctx: ClientContext<Self>,
+    /// Updated to wake up pegin monitor
+    pegin_monitor_wakeup_sender: watch::Sender<()>,
+    pegin_monitor_wakeup_receiver: watch::Receiver<()>,
+    /// Called every time a peg-in was claimed
+    pegin_claimed_sender: watch::Sender<()>,
+    pegin_claimed_receiver: watch::Receiver<()>,
+    task_group: TaskGroup,
 }
 
+#[apply(async_trait_maybe_send!)]
 impl ClientModule for WalletClientModule {
     type Init = WalletClientInit;
     type Common = WalletModuleTypes;
@@ -231,18 +330,39 @@ impl ClientModule for WalletClientModule {
     fn context(&self) -> Self::ModuleStateMachineContext {
         WalletClientContext {
             rpc: self.rpc.clone(),
-            wallet_descriptor: self.cfg.peg_in_descriptor.clone(),
+            wallet_descriptor: self.cfg().peg_in_descriptor.clone(),
             wallet_decoder: self.decoder(),
             secp: Default::default(),
         }
     }
 
+    async fn start(&self) {
+        self.task_group.spawn_cancellable("peg-in monitor", {
+            let client_ctx = self.client_ctx.clone();
+            let db = self.db.clone();
+            let btc_rpc = self.rpc.clone();
+            let module_api = self.module_api.clone();
+            let data = self.data.clone();
+            let pegin_claimed_sender = self.pegin_claimed_sender.clone();
+            let pegin_monitor_wakeup_receiver = self.pegin_monitor_wakeup_receiver.clone();
+            pegin_monitor::run_peg_in_monitor(
+                client_ctx,
+                db,
+                btc_rpc,
+                module_api,
+                data,
+                pegin_claimed_sender,
+                pegin_monitor_wakeup_receiver,
+            )
+        });
+    }
+
     fn input_fee(&self, _input: &<Self::Common as ModuleCommon>::Input) -> Option<Amount> {
-        Some(self.cfg.fee_consensus.peg_in_abs)
+        Some(self.cfg().fee_consensus.peg_in_abs)
     }
 
     fn output_fee(&self, _output: &<Self::Common as ModuleCommon>::Output) -> Option<Amount> {
-        Some(self.cfg.fee_consensus.peg_out_abs)
+        Some(self.cfg().fee_consensus.peg_out_abs)
     }
 }
 
@@ -257,6 +377,10 @@ pub struct WalletClientContext {
 impl Context for WalletClientContext {}
 
 impl WalletClientModule {
+    fn cfg(&self) -> &WalletClientConfig {
+        &self.data.cfg
+    }
+
     fn get_rpc_config(cfg: &WalletClientConfig) -> BitcoinRpcConfig {
         if let Ok(rpc_config) = BitcoinRpcConfig::get_defaults_from_env_vars() {
             // TODO: Wallet client cannot support bitcoind RPC until the bitcoin dep is
@@ -272,60 +396,36 @@ impl WalletClientModule {
     }
 
     pub fn get_network(&self) -> Network {
-        self.cfg.network
+        self.cfg().network
     }
 
     pub fn get_fee_consensus(&self) -> FeeConsensus {
-        self.cfg.fee_consensus
+        self.cfg().fee_consensus
     }
 
-    pub async fn get_deposit_address_inner(
+    async fn allocate_deposit_address_inner(
         &self,
-        valid_until: SystemTime,
         dbtx: &mut DatabaseTransaction<'_>,
-    ) -> (OperationId, WalletClientStates, Address) {
-        let deposit_idx = get_next_peg_in_tweak_child_id(dbtx).await;
-        let (secret_tweak_key, _, address, operation_id) =
-            Self::derive_deposit_address_static(&self.cfg, &self.module_root_secret, deposit_idx);
+    ) -> (OperationId, Address, TweakIdx) {
+        let tweak_idx = get_next_peg_in_tweak_child_id(dbtx).await;
+        let (_secret_tweak_key, _, address, operation_id) =
+            self.data.derive_deposit_address(tweak_idx);
 
-        let deposit_sm = WalletClientStates::Deposit(DepositStateMachine {
-            operation_id,
-            state: DepositStates::Created(CreatedDepositState {
-                tweak_key: secret_tweak_key,
-                timeout_at: valid_until,
-            }),
-        });
+        let now = fedimint_core::time::now();
 
-        (operation_id, deposit_sm, address)
-    }
+        dbtx.insert_new_entry(
+            &PegInTweakIndexKey(tweak_idx),
+            &PegInTweakIndexData {
+                creation_time: now,
+                next_check_time: Some(now),
+                last_check_time: None,
+                operation_id,
+                claimed: vec![],
+            },
+        )
+        .await;
 
-    fn derive_deposit_address_static(
-        cfg: &WalletClientConfig,
-        module_root_secret: &DerivableSecret,
-        idx: ChildId,
-    ) -> (
-        secp256k1::KeyPair,
-        secp256k1::PublicKey,
-        Address,
-        OperationId,
-    ) {
-        let secret_tweak_key = module_root_secret
-            .child_key(WALLET_TWEAK_CHILD_ID)
-            .child_key(idx)
-            .to_secp_key(secp256k1::SECP256K1);
-
-        let public_tweak_key = secret_tweak_key.public_key();
-
-        let address = cfg
-            .peg_in_descriptor
-            .tweak(&public_tweak_key, secp256k1::SECP256K1)
-            .address(cfg.network)
-            .unwrap();
-
-        // TODO: make hash?
-        let operation_id = OperationId(public_tweak_key.x_only_public_key().0.serialize());
-
-        (secret_tweak_key, public_tweak_key, address, operation_id)
+        (operation_id, address, tweak_idx)
     }
 
     /// Fetches the fees that would need to be paid to make the withdraw request
@@ -339,7 +439,7 @@ impl WalletClientModule {
         address: bitcoin::Address<NetworkUnchecked>,
         amount: bitcoin::Amount,
     ) -> anyhow::Result<PegOutFees> {
-        check_address(&address, self.cfg.network)?;
+        check_address(&address, self.cfg().network)?;
 
         self.module_api
             .fetch_peg_out_fees(&address.assume_checked(), amount)
@@ -354,7 +454,7 @@ impl WalletClientModule {
         amount: bitcoin::Amount,
         fees: PegOutFees,
     ) -> anyhow::Result<ClientOutput<WalletOutput, WalletClientStates>> {
-        check_address(&address, self.cfg.network)?;
+        check_address(&address, self.cfg().network)?;
 
         let output = WalletOutput::new_v0_peg_out(address, amount, fees);
 
@@ -401,45 +501,31 @@ impl WalletClientModule {
         })
     }
 
-    pub async fn get_deposit_address<M: Serialize + MaybeSend + MaybeSync>(
+    pub async fn allocate_deposit_address(
         &self,
-        valid_until: SystemTime,
-        extra_meta: M,
-    ) -> anyhow::Result<(OperationId, Address)> {
-        let extra_meta = serde_json::to_value(extra_meta).expect("extra meta is serializable");
-
-        let (operation_id, address) = self
+    ) -> anyhow::Result<(OperationId, Address, TweakIdx)> {
+        let (operation_id, address, tweak_idx) = self
             .client_ctx
             .module_autocommit(
                 |dbtx, _| {
-                    let extra_meta_inner = extra_meta.clone();
                     Box::pin(async {
-                        let (operation_id, sm, address) = self
-                            .get_deposit_address_inner(valid_until, &mut dbtx.module_dbtx())
+                        let (operation_id, address, tweak_idx) = self
+                            .allocate_deposit_address_inner( &mut dbtx.module_dbtx())
                             .await;
+
+                        debug!(target: LOG_CLIENT_MODULE_WALLET, %tweak_idx, %address, "Derived a new deposit address");
 
                         // Begin watching the script address
                         self.rpc
                             .watch_script_history(&address.script_pubkey())
                             .await?;
 
-                        dbtx.add_state_machines(vec![self.client_ctx.make_dyn_state(sm)])
-                            .await?;
+                        let sender = self.pegin_monitor_wakeup_sender.clone();
+                        dbtx.module_dbtx().on_commit(move || {
+                            let _ = sender.send(());
+                        });
 
-                        dbtx.add_operation_log_entry(
-                            operation_id,
-                            WalletCommonInit::KIND.as_str(),
-                            WalletOperationMeta {
-                                variant: WalletOperationMetaVariant::Deposit {
-                                    address: checked_address_to_unchecked_address(&address),
-                                    expires_at: valid_until,
-                                },
-                                extra_meta: extra_meta_inner,
-                            },
-                        )
-                        .await;
-
-                        Ok((operation_id, address))
+                        Ok((operation_id, address, tweak_idx))
                     })
                 },
                 Some(100),
@@ -453,89 +539,176 @@ impl WalletClientModule {
                 AutocommitError::ClosureError { error, .. } => error,
             })?;
 
-        Ok((operation_id, address))
+        Ok((operation_id, address, tweak_idx))
     }
 
-    pub async fn subscribe_deposit_updates(
+    pub async fn find_tweak_idx_by_operation_id(
         &self,
         operation_id: OperationId,
-    ) -> anyhow::Result<UpdateStreamOrOutcome<DepositState>> {
-        let operation_log_entry = self
+    ) -> anyhow::Result<TweakIdx> {
+        Ok(self
             .client_ctx
-            .get_operation(operation_id)
+            .module_db()
+            .clone()
+            .begin_transaction_nc()
             .await
-            .with_context(|| anyhow!("Operation not found: {}", operation_id.fmt_short()))?;
+            .find_by_prefix(&PegInTweakIndexPrefix)
+            .await
+            .filter(|(_k, v)| future::ready(v.operation_id == operation_id))
+            .next()
+            .await
+            .ok_or_else(|| anyhow::format_err!("OperationId not found"))?
+            .0
+             .0)
+    }
 
-        if operation_log_entry.operation_module_kind() != WalletCommonInit::KIND.as_str() {
-            bail!("Operation is not a wallet operation");
+    pub async fn get_pegin_tweak_idx(
+        &self,
+        tweak_idx: TweakIdx,
+    ) -> anyhow::Result<PegInTweakIndexData> {
+        self.client_ctx
+            .module_db()
+            .clone()
+            .begin_transaction_nc()
+            .await
+            .get_value(&PegInTweakIndexKey(tweak_idx))
+            .await
+            .ok_or_else(|| anyhow::format_err!("TweakIdx not found"))
+    }
+
+    pub async fn get_claimed_pegins(
+        &self,
+        dbtx: &mut DatabaseTransaction<'_>,
+        tweak_idx: TweakIdx,
+    ) -> Vec<(
+        bitcoin::OutPoint,
+        TransactionId,
+        Vec<fedimint_core::OutPoint>,
+    )> {
+        let outpoints = dbtx
+            .get_value(&PegInTweakIndexKey(tweak_idx))
+            .await
+            .map(|v| v.claimed)
+            .unwrap_or_default();
+
+        let mut res = vec![];
+
+        for outpoint in outpoints {
+            let claimed_peg_in_data = dbtx
+                .get_value(&ClaimedPegInKey {
+                    peg_in_index: tweak_idx,
+                    btc_out_point: outpoint,
+                })
+                .await
+                .expect("Must have a corresponding claim record");
+            res.push((
+                outpoint,
+                claimed_peg_in_data.claim_txid,
+                claimed_peg_in_data.change,
+            ));
         }
 
-        let operation_meta = operation_log_entry.meta::<WalletOperationMeta>();
+        res
+    }
 
-        if !matches!(
-            operation_meta.variant,
-            WalletOperationMetaVariant::Deposit { .. }
-        ) {
-            bail!("Operation is not a deposit operation");
-        }
+    /// Like [`Self::recheck_pegin_address`] but by `operation_id`
+    pub async fn recheck_pegin_address_by_op_id(
+        &self,
+        operation_id: OperationId,
+    ) -> anyhow::Result<()> {
+        let tweak_idx = self.find_tweak_idx_by_operation_id(operation_id).await?;
 
-        let mut operation_stream = self.notifier.subscribe(operation_id).await;
-        let tx_subscriber = self.client_ctx.transaction_updates(operation_id).await;
+        self.recheck_pegin_address(tweak_idx).await
+    }
 
-        let client_ctx = self.client_ctx.clone();
-        Ok(
-            operation_log_entry.outcome_or_updates(&self.client_ctx.global_db(), operation_id, || {
-                stream! {
+    /// Schedule given address for immediate re-check for deposits
+    pub async fn recheck_pegin_address(&self, tweak_idx: TweakIdx) -> anyhow::Result<()> {
+        self.client_ctx
+            .module_autocommit_2(
+                |dbtx, _| {
+                    Box::pin(async {
+                        let db_key = PegInTweakIndexKey(tweak_idx);
+                        let db_val = dbtx
+                            .module_dbtx()
+                            .get_value(&db_key)
+                            .await
+                            .ok_or_else(|| anyhow::format_err!("DBKey not found"))?;
 
-                    match next_deposit_state(&mut operation_stream).await {
-                        Some(DepositStates::Created(_)) => {
-                            yield DepositState::WaitingForTransaction;
-                        },
-                        Some(s) => {
-                            panic!("Unexpected state {s:?}")
-                        },
-                        None => return,
-                    }
+                        dbtx.module_dbtx()
+                            .insert_entry(
+                                &db_key,
+                                &PegInTweakIndexData {
+                                    next_check_time: Some(fedimint_core::time::now()),
+                                    ..db_val
+                                },
+                            )
+                            .await;
 
-                    let tx_data = match next_deposit_state(&mut operation_stream).await {
-                        Some(DepositStates::WaitingForConfirmations(inner)) => {
-                            let tx_data = BitcoinTransactionData { btc_transaction: inner.btc_transaction, out_idx: inner.out_idx };
-                            yield DepositState::WaitingForConfirmation(tx_data.clone());
-                            tx_data
-                        },
-                        Some(DepositStates::TimedOut(_)) => {
-                            yield DepositState::Failed("Deposit timed out".to_string());
-                            return;
-                        },
-                        Some(s) => {
-                            panic!("Unexpected state {s:?}")
-                        },
-                        None => return,
-                    };
+                        let sender = self.pegin_monitor_wakeup_sender.clone();
+                        dbtx.module_dbtx().on_commit(move || {
+                            let _ = sender.send(());
+                        });
 
-                    let claiming = match next_deposit_state(&mut operation_stream).await {
-                        Some(DepositStates::Claiming(claiming)) => claiming,
-                        Some(s) => {
-                            panic!("Unexpected state {s:?}")
-                        },
-                        None => return,
-                    };
-                    yield DepositState::Confirmed(tx_data.clone());
+                        Ok(())
+                    })
+                },
+                Some(100),
+            )
+            .await?;
 
-                    if let Err(e) = tx_subscriber.await_tx_accepted(claiming.transaction_id).await {
-                        yield DepositState::Failed(format!("Failed to claim: {e:?}"));
-                        return;
-                    }
+        Ok(())
+    }
 
+    /// Await for deposit
+    pub async fn await_deposit(&self, operation_id: OperationId) -> anyhow::Result<()> {
+        let tweak_idx = self.find_tweak_idx_by_operation_id(operation_id).await?;
+        self.await_num_deposits(tweak_idx, 1).await
+    }
 
-                    client_ctx.await_primary_module_outputs(operation_id, claiming.change)
-                        .await
-                        .expect("Cannot fail if tx was accepted and federation is honest");
+    #[instrument(skip_all, fields(tweak_idx=?tweak_idx, num_deposists=num_deposits))]
+    pub async fn await_num_deposits(
+        &self,
+        tweak_idx: TweakIdx,
+        num_deposits: usize,
+    ) -> anyhow::Result<()> {
+        let operation_id = self.get_pegin_tweak_idx(tweak_idx).await?.operation_id;
 
-                    yield DepositState::Claimed(tx_data.clone());
+        let mut receiver = self.pegin_claimed_receiver.clone();
+
+        loop {
+            let pegins = self
+                .get_claimed_pegins(
+                    &mut self.client_ctx.module_db().begin_transaction_nc().await,
+                    tweak_idx,
+                )
+                .await;
+
+            if pegins.len() < num_deposits {
+                debug!(target: LOG_CLIENT_MODULE_WALLET, has=pegins.len(), "Not enough deposits");
+                self.recheck_pegin_address(tweak_idx).await?;
+                receiver.changed().await?;
+                continue;
+            }
+
+            debug!(target: LOG_CLIENT_MODULE_WALLET, has=pegins.len(), "Enough deposits detected");
+
+            for (_outpoint, transaction_id, change) in pegins {
+                debug!(target: LOG_CLIENT_MODULE_WALLET, out_points=?change, "Ensuring deposists claimed");
+                let tx_subscriber = self.client_ctx.transaction_updates(operation_id).await;
+
+                if let Err(e) = tx_subscriber.await_tx_accepted(transaction_id).await {
+                    bail!("{}", e);
                 }
-            }),
-        )
+
+                debug!(target: LOG_CLIENT_MODULE_WALLET, out_points=?change, "Ensuring outputs claimed");
+                self.client_ctx
+                    .await_primary_module_outputs(operation_id, change)
+                    .await
+                    .expect("Cannot fail if tx was accepted and federation is honest");
+            }
+
+            return Ok(());
+        }
     }
 
     /// Attempt to withdraw a given `amount` of Bitcoin to a destination
@@ -693,11 +866,14 @@ fn check_address(address: &Address<NetworkUnchecked>, network: Network) -> anyho
 }
 
 /// Returns the child index to derive the next peg-in tweak key from.
-async fn get_next_peg_in_tweak_child_id(dbtx: &mut DatabaseTransaction<'_>) -> ChildId {
-    let index = dbtx.get_value(&NextPegInTweakIndexKey).await.unwrap_or(0);
-    dbtx.insert_entry(&NextPegInTweakIndexKey, &(index + 1))
+async fn get_next_peg_in_tweak_child_id(dbtx: &mut DatabaseTransaction<'_>) -> TweakIdx {
+    let index = dbtx
+        .get_value(&NextPegInTweakIndexKey)
+        .await
+        .unwrap_or_default();
+    dbtx.insert_entry(&NextPegInTweakIndexKey, &(index.next()))
         .await;
-    ChildId(index)
+    index
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
