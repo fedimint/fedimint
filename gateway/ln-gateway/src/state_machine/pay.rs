@@ -629,7 +629,7 @@ impl GatewayPayInvoice {
         let rhints = payment_data.route_hints();
         match rhints.first().and_then(|rh| rh.0.last()) {
             None => None,
-            Some(hop) => match context.gateway.state.read().await.clone() {
+            Some(hop) => match context.gateway.lightning_manager.state.read().await.clone() {
                 GatewayState::Running { lightning_context } => {
                     if hop.src_node_id != lightning_context.lightning_public_key {
                         return None;

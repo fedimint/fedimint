@@ -22,6 +22,7 @@ pub mod envs;
 mod federation_manager;
 pub mod gateway_module_v2;
 pub mod lightning;
+mod lightning_manager;
 pub mod rpc;
 pub mod state_machine;
 mod types;
@@ -99,6 +100,8 @@ use gateway_lnrpc::{
 use hex::ToHex;
 use lightning::{ILnRpcClient, LightningBuilder, LightningRpcError};
 use lightning_invoice::{Bolt11Invoice, RoutingFees};
+pub use lightning_manager::GatewayState;
+use lightning_manager::{LightningContext, LightningManager};
 use rand::rngs::OsRng;
 use rand::Rng;
 use rpc::{
@@ -164,62 +167,16 @@ const DEFAULT_MODULE_KINDS: [(ModuleInstanceId, &ModuleKind); 2] = [
     (LEGACY_HARDCODED_INSTANCE_ID_WALLET, &WalletCommonInit::KIND),
 ];
 
-#[cfg_attr(doc, aquamarine::aquamarine)]
-/// ```mermaid
-/// graph LR
-/// classDef virtual fill:#fff,stroke-dasharray: 5 5
-///
-///    Initializing -- begin intercepting HTLCs --> Connected
-///    Initializing -- gateway needs config --> Configuring
-///    Configuring -- configuration set --> Connected
-///    Connected -- load federation clients --> Running
-///    Running -- disconnected from lightning node --> Disconnected
-///    Disconnected -- re-established lightning connection --> Connected
-/// ```
-#[derive(Clone, Debug)]
-pub enum GatewayState {
-    Initializing,
-    Configuring,
-    Connected,
-    Running { lightning_context: LightningContext },
-    Disconnected,
-}
-
-impl Display for GatewayState {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        match self {
-            GatewayState::Initializing => write!(f, "Initializing"),
-            GatewayState::Configuring => write!(f, "Configuring"),
-            GatewayState::Connected => write!(f, "Connected"),
-            GatewayState::Running { .. } => write!(f, "Running"),
-            GatewayState::Disconnected => write!(f, "Disconnected"),
-        }
-    }
-}
-
-/// Represents an active connection to the lightning node.
-#[derive(Clone, Debug)]
-pub struct LightningContext {
-    pub lnrpc: Arc<dyn ILnRpcClient>,
-    pub lightning_public_key: PublicKey,
-    pub lightning_alias: String,
-    pub lightning_network: Network,
-}
-
 #[derive(Clone)]
 pub struct Gateway {
     /// The gateway's federation manager.
     federation_manager: Arc<FederationManager>,
 
-    /// Builder struct that allows the gateway to build a `ILnRpcClient`, which
-    /// represents a connection to a lightning node.
-    lightning_builder: Arc<dyn LightningBuilder + Send + Sync>,
+    /// The gateway's lightning manager.
+    lightning_manager: Arc<LightningManager>,
 
     /// The gateway's current configuration
     gateway_config: Arc<RwLock<Option<GatewayConfiguration>>>,
-
-    /// The current state of the Gateway.
-    state: Arc<RwLock<GatewayState>>,
 
     /// Builder struct that allows the gateway to build a Fedimint client, which
     /// handles the communication with a federation.
@@ -243,8 +200,8 @@ impl std::fmt::Debug for Gateway {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Gateway")
             .field("federation_manager", &self.federation_manager)
+            .field("lightning_manager", &self.lightning_manager)
             .field("gateway_config", &self.gateway_config)
-            .field("state", &self.state)
             .field("client_builder", &self.client_builder)
             .field("gateway_db", &self.gateway_db)
             .field("gateway_id", &self.gateway_id)
@@ -353,9 +310,11 @@ impl Gateway {
 
         Ok(Self {
             federation_manager: Arc::new(FederationManager::new()),
-            lightning_builder,
+            lightning_manager: Arc::new(LightningManager {
+                lightning_builder,
+                state: Arc::new(RwLock::new(GatewayState::Initializing)),
+            }),
             gateway_config: Arc::new(RwLock::new(gateway_config)),
-            state: Arc::new(RwLock::new(GatewayState::Initializing)),
             client_builder,
             gateway_id: Self::load_gateway_id(&gateway_db).await,
             gateway_db,
@@ -392,7 +351,7 @@ impl Gateway {
     }
 
     pub async fn get_state(&self) -> GatewayState {
-        self.state.read().await.clone()
+        self.lightning_manager.state.read().await.clone()
     }
 
     /// Reads and serializes structures from the Gateway's database for the
@@ -468,7 +427,7 @@ impl Gateway {
                 }
 
                 let mut htlc_task_group = tg.make_subgroup();
-                let lnrpc_route = self_copy.lightning_builder.build().await;
+                let lnrpc_route = self_copy.lightning_manager.lightning_builder.build().await;
 
                 debug!("Will try to intercept HTLC stream...");
                 // Re-create the HTLC stream if the connection breaks
@@ -665,7 +624,7 @@ impl Gateway {
 
     /// Helper function for atomically changing the Gateway's internal state.
     async fn set_gateway_state(&self, state: GatewayState) {
-        let mut lock = self.state.write().await;
+        let mut lock = self.lightning_manager.state.write().await;
         *lock = state;
     }
 
@@ -711,7 +670,7 @@ impl Gateway {
                 fees: Some(gateway_config.routing_fees),
                 route_hints,
                 gateway_id: self.gateway_id,
-                gateway_state: self.state.read().await.to_string(),
+                gateway_state: self.lightning_manager.state.read().await.to_string(),
                 network: Some(gateway_config.network),
                 block_height: Some(node_info.3),
                 synced_to_chain: node_info.4,
@@ -727,7 +686,7 @@ impl Gateway {
             fees: None,
             route_hints: vec![],
             gateway_id: self.gateway_id,
-            gateway_state: self.state.read().await.to_string(),
+            gateway_state: self.lightning_manager.state.read().await.to_string(),
             network: None,
             block_height: None,
             synced_to_chain: false,
