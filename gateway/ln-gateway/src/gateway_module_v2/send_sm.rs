@@ -143,6 +143,7 @@ impl SendStateMachine {
 
         let lightning_context = context
             .gateway
+            .lightning_manager
             .get_lightning_context()
             .await
             .map_err(|e| Cancelled::LightningRpcError(e.to_string()))?;

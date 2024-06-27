@@ -78,6 +78,18 @@ impl LightningManager {
         }
     }
 
+    /// Checks the current state and returns the proper `LightningContext` if it
+    /// is available. Sometimes the lightning node will not be connected and
+    /// this will return an error.
+    pub async fn get_lightning_context(
+        &self,
+    ) -> std::result::Result<LightningContext, LightningRpcError> {
+        match self.get_state().await {
+            GatewayState::Running { lightning_context } => Ok(lightning_context),
+            _ => Err(LightningRpcError::FailedToConnect),
+        }
+    }
+
     pub async fn get_state(&self) -> GatewayState {
         self.state.read().await.clone()
     }

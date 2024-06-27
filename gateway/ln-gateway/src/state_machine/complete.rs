@@ -184,7 +184,11 @@ impl CompleteHtlcState {
         // Wait until the lightning node is online to complete the HTLC
         loop {
             let htlc_outcome = outcome.clone();
-            let lightning_context = context.gateway.get_lightning_context().await;
+            let lightning_context = context
+                .gateway
+                .lightning_manager
+                .get_lightning_context()
+                .await;
             match lightning_context {
                 Ok(lightning_context) => {
                     let htlc = match htlc_outcome {

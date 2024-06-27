@@ -519,7 +519,11 @@ impl GatewayClientModule {
         pay_invoice_payload: PayInvoicePayload,
     ) -> anyhow::Result<OperationId> {
         let payload = pay_invoice_payload.clone();
-        let lightning_context = self.gateway.get_lightning_context().await?;
+        let lightning_context = self
+            .gateway
+            .lightning_manager
+            .get_lightning_context()
+            .await?;
 
         if matches!(
             pay_invoice_payload.payment_data,

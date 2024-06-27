@@ -1127,7 +1127,7 @@ impl Gateway {
     }
 
     pub async fn handle_get_funding_address_msg(&self) -> Result<Address> {
-        let context = self.get_lightning_context().await?;
+        let context = self.lightning_manager.get_lightning_context().await?;
         let response = context.lnrpc.get_funding_address().await?;
         Address::from_str(&response.address)
             .map(Address::assume_checked)
@@ -1145,7 +1145,7 @@ impl Gateway {
             push_amount_sats,
         }: OpenChannelPayload,
     ) -> Result<()> {
-        let context = self.get_lightning_context().await?;
+        let context = self.lightning_manager.get_lightning_context().await?;
         context
             .lnrpc
             .open_channel(pubkey, host, channel_size_sats, push_amount_sats)
@@ -1159,7 +1159,7 @@ impl Gateway {
         &self,
         CloseChannelsWithPeerPayload { pubkey }: CloseChannelsWithPeerPayload,
     ) -> Result<CloseChannelsWithPeerResponse> {
-        let context = self.get_lightning_context().await?;
+        let context = self.lightning_manager.get_lightning_context().await?;
         let response = context.lnrpc.close_channels_with_peer(pubkey).await?;
         Ok(response)
     }
@@ -1167,7 +1167,7 @@ impl Gateway {
     /// Returns a list of Lightning network channels from the Gateway's
     /// Lightning node.
     pub async fn handle_list_active_channels_msg(&self) -> Result<Vec<lightning::ChannelInfo>> {
-        let context = self.get_lightning_context().await?;
+        let context = self.lightning_manager.get_lightning_context().await?;
         let channels = context.lnrpc.list_active_channels().await?;
         Ok(channels)
     }
@@ -1178,7 +1178,7 @@ impl Gateway {
         gateway_config: &GatewayConfiguration,
         federations: &[(FederationId, FederationConfig)],
     ) -> Result<()> {
-        if let Ok(lightning_context) = self.get_lightning_context().await {
+        if let Ok(lightning_context) = self.lightning_manager.get_lightning_context().await {
             let route_hints = Self::fetch_lightning_route_hints(
                 lightning_context.lnrpc.clone(),
                 gateway_config.num_route_hints,
@@ -1450,18 +1450,6 @@ impl Gateway {
         Ok(())
     }
 
-    /// Checks the Gateway's current state and returns the proper
-    /// `LightningContext` if it is available. Sometimes the lightning node
-    /// will not be connected and this will return an error.
-    pub async fn get_lightning_context(
-        &self,
-    ) -> std::result::Result<LightningContext, LightningRpcError> {
-        match self.get_state().await {
-            GatewayState::Running { lightning_context } => Ok(lightning_context),
-            _ => Err(LightningRpcError::FailedToConnect),
-        }
-    }
-
     /// Iterates through all of the federations the gateway is registered with
     /// and requests to remove the registration record.
     pub async fn leave_all_federations(&self) {
@@ -1635,6 +1623,7 @@ impl Gateway {
         expiry_time: u32,
     ) -> std::result::Result<Bolt11Invoice, String> {
         let lnrpc = self
+            .lightning_manager
             .get_lightning_context()
             .await
             .map_err(|e| e.to_string())?

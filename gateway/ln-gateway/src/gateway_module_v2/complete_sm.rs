@@ -148,7 +148,12 @@ impl CompleteStateMachine {
         };
 
         loop {
-            match context.gateway.get_lightning_context().await {
+            match context
+                .gateway
+                .lightning_manager
+                .get_lightning_context()
+                .await
+            {
                 Ok(lightning_context) => {
                     match lightning_context
                         .lnrpc
