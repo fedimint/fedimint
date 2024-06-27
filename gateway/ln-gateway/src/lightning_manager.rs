@@ -5,6 +5,7 @@ use bitcoin::Network;
 use fedimint_core::secp256k1::PublicKey;
 use fedimint_core::task::TaskGroup;
 use tokio::sync::RwLock;
+use tracing::error;
 
 use super::lightning::{ILnRpcClient, LightningBuilder, LightningRpcError};
 use crate::lightning::cln::RouteHtlcStream;
@@ -16,6 +17,10 @@ pub struct LightningManager {
 
     /// The current state of the Gateway.
     state: Arc<RwLock<GatewayState>>,
+
+    /// Task group for managing HTLC interception.
+    /// Is `Some` when the gateway is intercepting HTLCs, `None` otherwise.
+    htlc_task_group_or: Arc<RwLock<Option<TaskGroup>>>,
 }
 
 impl std::fmt::Debug for LightningManager {
@@ -31,23 +36,46 @@ impl LightningManager {
         Self {
             lightning_builder,
             state: Arc::new(RwLock::new(GatewayState::Initializing)),
+            htlc_task_group_or: Arc::new(RwLock::new(None)),
         }
     }
 
     pub async fn connect_route_htlcs(
         &self,
-        task_group: &mut TaskGroup,
+        task_group: TaskGroup,
     ) -> Result<(RouteHtlcStream, Arc<dyn ILnRpcClient>), LightningRpcError> {
+        // If the gateway is already connected, stop the current HTLC interception.
+        self.stop_route_htlcs().await;
+
         let (stream, ln_client) = self
             .lightning_builder
             .build()
             .await
-            .route_htlcs(task_group)
+            .route_htlcs(&task_group)
             .await?;
 
         self.set_state(GatewayState::Connected).await;
 
+        *self.htlc_task_group_or.write().await = Some(task_group);
+
         Ok((stream, ln_client))
+    }
+
+    /// Sets the gateway state to `Disconnected` and shuts down the task that is
+    /// listening for intercepted HTLCs if it is running.
+    pub async fn disconnect_stop_route_htlcs(&self) {
+        self.set_state(GatewayState::Disconnected).await;
+        self.stop_route_htlcs().await;
+    }
+
+    /// Shuts down the task that is listening for intercepted HTLCs if it is
+    /// running.
+    async fn stop_route_htlcs(&self) {
+        if let Some(htlc_task_group) = self.htlc_task_group_or.write().await.take() {
+            if let Err(e) = htlc_task_group.shutdown_join_all(None).await {
+                error!("HTLC task group shutdown errors: {}", e);
+            }
+        }
     }
 
     pub async fn get_state(&self) -> GatewayState {

@@ -423,11 +423,9 @@ impl Gateway {
                     break;
                 }
 
-                let mut htlc_task_group = tg.make_subgroup();
-
                 debug!("Will try to intercept HTLC stream...");
                 // Re-create the HTLC stream if the connection breaks
-                match self_copy.lightning_manager.connect_route_htlcs(&mut htlc_task_group)
+                match self_copy.lightning_manager.connect_route_htlcs(tg.make_subgroup())
                     .await
                 {
                     Ok((stream, ln_client)) => {
@@ -450,7 +448,7 @@ impl Gateway {
                                 if gateway_config.network != lightning_network {
                                     warn!("Lightning node does not match previously configured gateway network : ({:?})", gateway_config.network);
                                     info!("Changing gateway network to match lightning node network : ({:?})", lightning_network);
-                                    self_copy.handle_disconnect(htlc_task_group).await;
+                                    self_copy.lightning_manager.disconnect_stop_route_htlcs().await;
                                     self_copy.handle_set_configuration_msg(SetConfigurationPayload {
                                         password: None,
                                         network: Some(lightning_network),
@@ -477,7 +475,7 @@ impl Gateway {
                                     warn!("HTLC Stream Lightning connection broken. Gateway is disconnected");
                                 } else {
                                     info!("Received shutdown signal");
-                                    self_copy.handle_disconnect(htlc_task_group).await;
+                                    self_copy.lightning_manager.disconnect_stop_route_htlcs().await;
                                     break;
                                 }
                             }
@@ -491,23 +489,12 @@ impl Gateway {
                     }
                 }
 
-                self_copy.handle_disconnect(htlc_task_group).await;
+                self_copy.lightning_manager.disconnect_stop_route_htlcs().await;
 
                 warn!("Disconnected from Lightning Node. Waiting 5 seconds and trying again");
                 sleep(Duration::from_secs(5)).await;
             }
         });
-    }
-
-    /// Utility function for waiting for the task that is listening for
-    /// intercepted HTLCs to shutdown.
-    async fn handle_disconnect(&self, htlc_task_group: TaskGroup) {
-        self.lightning_manager
-            .set_state(GatewayState::Disconnected)
-            .await;
-        if let Err(e) = htlc_task_group.shutdown_join_all(None).await {
-            error!("HTLC task group shutdown errors: {}", e);
-        }
     }
 
     /// Blocks waiting for intercepted HTLCs to be sent over the `stream`.
