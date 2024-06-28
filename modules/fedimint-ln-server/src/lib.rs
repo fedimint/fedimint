@@ -249,7 +249,6 @@ impl ServerModuleInit for LightningInit {
                         consensus: LightningConfigConsensus {
                             threshold_pub_keys: pks.clone(),
                             fee_consensus: FeeConsensus::default(),
-                            network: params.consensus.network,
                         },
                         private: LightningConfigPrivate {
                             threshold_sec_key: threshold_crypto::serde_impl::SerdeSecret(sk),
@@ -280,7 +279,6 @@ impl ServerModuleInit for LightningInit {
             consensus: LightningConfigConsensus {
                 threshold_pub_keys: keys.public_key_set,
                 fee_consensus: Default::default(),
-                network: params.consensus.network,
             },
             private: LightningConfigPrivate {
                 threshold_sec_key: keys.secret_key_share,
@@ -311,7 +309,6 @@ impl ServerModuleInit for LightningInit {
         Ok(LightningClientConfig {
             threshold_pub_key: config.threshold_pub_keys.public_key(),
             fee_consensus: config.fee_consensus,
-            network: config.network,
         })
     }
 }
@@ -1255,7 +1252,7 @@ mod tests {
     use fedimint_core::{Amount, OutPoint, PeerId, ServerModule, TransactionId};
     use fedimint_ln_common::config::{
         LightningClientConfig, LightningConfig, LightningGenParams, LightningGenParamsConsensus,
-        LightningGenParamsLocal, Network,
+        LightningGenParamsLocal,
     };
     use fedimint_ln_common::contracts::incoming::{
         FundedIncomingContract, IncomingContract, IncomingContractOffer,
@@ -1286,9 +1283,7 @@ mod tests {
                         url: "http://localhost:18332".parse().unwrap(),
                     },
                 },
-                consensus: LightningGenParamsConsensus {
-                    network: Network::Regtest,
-                },
+                consensus: LightningGenParamsConsensus,
             })
             .expect("valid config params"),
         );

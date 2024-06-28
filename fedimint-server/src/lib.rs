@@ -51,6 +51,7 @@ pub mod config;
 /// Implementation of multiplexed peer connections
 pub mod multiplexed;
 
+#[allow(clippy::too_many_arguments)]
 pub async fn run(
     data_dir: PathBuf,
     force_api_secrets: ApiSecrets,

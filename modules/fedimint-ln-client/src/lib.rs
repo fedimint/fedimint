@@ -395,6 +395,7 @@ pub struct LightningClientModule {
     client_ctx: ClientContext<Self>,
     update_gateway_cache_merge: UpdateMerge,
     gateway_conn: Arc<dyn GatewayConnection + Send + Sync>,
+    network: bitcoin::Network,
 }
 
 #[apply(async_trait_maybe_send!)]
@@ -467,6 +468,7 @@ impl LightningClientModule {
             client_ctx: args.context(),
             update_gateway_cache_merge: UpdateMerge::default(),
             gateway_conn: gateway_conn.clone(),
+            network: args.network(),
         };
 
         // Only initialize the gateway cache if it is empty
@@ -529,7 +531,7 @@ impl LightningClientModule {
         ClientOutput<LightningOutputV0, LightningClientStateMachines>,
         ContractId,
     )> {
-        let federation_currency: Currency = self.cfg.network.into();
+        let federation_currency: Currency = self.network.into();
         let invoice_currency = invoice.currency();
         ensure!(
             federation_currency == invoice_currency,
@@ -1420,7 +1422,7 @@ impl LightningClientModule {
             src_node_id,
             short_channel_id,
             &route_hints,
-            self.cfg.network,
+            self.network,
         )?;
 
         let tx = TransactionBuilder::new().with_output(self.client_ctx.make_client_output(output));

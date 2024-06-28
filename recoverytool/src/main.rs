@@ -143,7 +143,7 @@ async fn main() -> anyhow::Result<()> {
             .expect("Malformed wallet config");
         let base_descriptor = wallet_cfg.consensus.peg_in_descriptor;
         let base_key = wallet_cfg.private.peg_in_key;
-        let network = wallet_cfg.consensus.network;
+        let network = cfg.consensus.network;
 
         (base_descriptor, base_key, network)
     } else if let (Some(descriptor), Some(key)) = (opts.descriptor, opts.key) {

@@ -291,7 +291,7 @@ impl Fedimintd {
                     local: LightningGenParamsLocal {
                         bitcoin_rpc: bitcoind_rpc.clone(),
                     },
-                    consensus: LightningGenParamsConsensus { network },
+                    consensus: LightningGenParamsConsensus,
                 },
             )
             .with_module_kind(MintInit)
@@ -313,7 +313,6 @@ impl Fedimintd {
                         bitcoin_rpc: bitcoind_rpc.clone(),
                     },
                     consensus: WalletGenParamsConsensus {
-                        network,
                         // TODO this is not very elegant, but I'm planning to get rid of it in a
                         // next commit anyway
                         finality_delay,
@@ -331,9 +330,7 @@ impl Fedimintd {
                         local: fedimint_lnv2_common::config::LightningGenParamsLocal {
                             bitcoin_rpc: bitcoind_rpc.clone(),
                         },
-                        consensus: fedimint_lnv2_common::config::LightningGenParamsConsensus {
-                            network,
-                        },
+                        consensus: fedimint_lnv2_common::config::LightningGenParamsConsensus,
                     },
                 )
         } else {

@@ -567,6 +567,7 @@ async fn peg_outs_must_wait_for_available_utxos() -> anyhow::Result<()> {
 #[tokio::test(flavor = "multi_thread")]
 async fn peg_ins_that_are_unconfirmed_are_rejected() -> anyhow::Result<()> {
     let fixtures = fixtures();
+    let network = bitcoin::Network::Regtest;
     let bitcoin = fixtures.bitcoin();
     let server_bitcoin_rpc_config = fixtures.bitcoin_server();
     let dyn_bitcoin_rpc = fixtures.dyn_bitcoin_rpc();
@@ -587,7 +588,7 @@ async fn peg_ins_that_are_unconfirmed_are_rejected() -> anyhow::Result<()> {
 
     let peg_in_address = peg_in_descriptor
         .tweak(&pk, secp256k1::SECP256K1)
-        .address(wallet_config.consensus.network)?;
+        .address(network)?;
 
     let mut wallet = fedimint_wallet_server::Wallet::new_with_bitcoind(
         wallet_server_cfg[0].to_typed()?,
@@ -595,6 +596,7 @@ async fn peg_ins_that_are_unconfirmed_are_rejected() -> anyhow::Result<()> {
         dyn_bitcoin_rpc.clone(),
         &mut task_group,
         PeerId::from(0),
+        network,
     )
     .await?;
 
@@ -716,7 +718,6 @@ fn build_wallet_server_configs(
                 bitcoin_rpc: bitcoin_rpc.clone(),
             },
             consensus: fedimint_wallet_common::config::WalletGenParamsConsensus {
-                network: bitcoin::Network::Regtest,
                 finality_delay: 10,
                 client_default_bitcoin_rpc: bitcoin_rpc.clone(),
                 fee_consensus: Default::default(),

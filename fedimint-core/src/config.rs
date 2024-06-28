@@ -160,6 +160,9 @@ pub struct GlobalClientConfig {
     // TODO: make it a String -> serde_json::Value map?
     /// Additional config the federation wants to transmit to the clients
     pub meta: BTreeMap<String, String>,
+    // TODO: Add database migration for this
+    /// The Bitcoin Network
+    pub network: bitcoin::Network,
 }
 
 impl GlobalClientConfig {
@@ -1036,6 +1039,7 @@ mod tests {
             global: GlobalClientConfig {
                 api_endpoints: Default::default(),
                 consensus_version: CoreConsensusVersion { major: 0, minor: 0 },
+                network: bitcoin::Network::Regtest,
                 meta: vec![
                     ("foo".to_string(), "bar".to_string()),
                     ("baz".to_string(), "\"bam\"".to_string()),

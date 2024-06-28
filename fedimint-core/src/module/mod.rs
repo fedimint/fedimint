@@ -516,6 +516,7 @@ pub trait IServerModuleInit: IDynCommonModuleInit {
         db: Database,
         task_group: &TaskGroup,
         our_peer_id: PeerId,
+        network: bitcoin::Network,
     ) -> anyhow::Result<DynServerModule>;
 
     fn validate_params(&self, params: &ConfigGenModuleParams) -> anyhow::Result<()>;
@@ -596,6 +597,7 @@ where
     task_group: TaskGroup,
     our_peer_id: PeerId,
     num_peers: NumPeers,
+    network: bitcoin::Network,
     // ClientModuleInitArgs needs a bound because sometimes we need
     // to pass associated-types data, so let's just put it here right away
     _marker: marker::PhantomData<S>,
@@ -623,6 +625,10 @@ where
 
     pub fn our_peer_id(&self) -> PeerId {
         self.our_peer_id
+    }
+
+    pub fn network(&self) -> bitcoin::Network {
+        self.network
     }
 }
 /// Module Generation trait with associated types
@@ -710,6 +716,7 @@ where
         db: Database,
         task_group: &TaskGroup,
         our_peer_id: PeerId,
+        network: bitcoin::Network,
     ) -> anyhow::Result<DynServerModule> {
         <Self as ServerModuleInit>::init(
             self,
@@ -719,6 +726,7 @@ where
                 db,
                 task_group: task_group.clone(),
                 our_peer_id,
+                network,
                 _marker: Default::default(),
             },
         )

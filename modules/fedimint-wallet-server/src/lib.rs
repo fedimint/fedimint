@@ -241,6 +241,7 @@ impl ServerModuleInit for WalletInit {
             args.db(),
             &mut args.task_group().clone(),
             args.our_peer_id(),
+            args.network(),
         )
         .await?
         .into())
@@ -269,7 +270,6 @@ impl ServerModuleInit for WalletInit {
                         .collect(),
                     *sk,
                     peers.to_num_peers().threshold(),
-                    params.consensus.network,
                     params.consensus.finality_delay,
                     params.local.bitcoin_rpc.clone(),
                     params.consensus.client_default_bitcoin_rpc.clone(),
@@ -305,7 +305,6 @@ impl ServerModuleInit for WalletInit {
             peer_peg_in_keys,
             sk,
             peers.peer_ids().to_num_peers().threshold(),
-            params.consensus.network,
             params.consensus.finality_delay,
             params.local.bitcoin_rpc.clone(),
             params.consensus.client_default_bitcoin_rpc.clone(),
@@ -339,7 +338,6 @@ impl ServerModuleInit for WalletInit {
         let config = WalletConfigConsensus::from_erased(config)?;
         Ok(WalletClientConfig {
             peg_in_descriptor: config.peg_in_descriptor,
-            network: config.network,
             fee_consensus: config.fee_consensus,
             finality_delay: config.finality_delay,
             default_bitcoin_rpc: config.client_default_bitcoin_rpc,
@@ -572,7 +570,7 @@ impl ServerModule for Wallet {
 
         let fee_rate = self.consensus_fee_rate(dbtx).await;
 
-        StatelessWallet::validate_tx(&tx, output, fee_rate, self.cfg.consensus.network)?;
+        StatelessWallet::validate_tx(&tx, output, fee_rate, self.network)?;
 
         self.offline_wallet().sign_psbt(&mut tx.psbt);
 
@@ -770,6 +768,7 @@ pub struct Wallet {
     block_count_rx: watch::Receiver<Option<u32>>,
     /// Fee rate updated periodically by a background task
     fee_rate_rx: watch::Receiver<Feerate>,
+    network: bitcoin::Network,
 }
 
 impl Wallet {
@@ -778,9 +777,10 @@ impl Wallet {
         db: &Database,
         task_group: &mut TaskGroup,
         our_peer_id: PeerId,
+        network: bitcoin::Network,
     ) -> anyhow::Result<Wallet> {
         let btc_rpc = create_bitcoind(&cfg.local.bitcoin_rpc, task_group.make_handle())?;
-        Ok(Self::new_with_bitcoind(cfg, db, btc_rpc, task_group, our_peer_id).await?)
+        Ok(Self::new_with_bitcoind(cfg, db, btc_rpc, task_group, our_peer_id, network).await?)
     }
 
     pub async fn new_with_bitcoind(
@@ -789,6 +789,7 @@ impl Wallet {
         bitcoind: DynBitcoindRpc,
         task_group: &mut TaskGroup,
         our_peer_id: PeerId,
+        network: bitcoin::Network,
     ) -> Result<Wallet, WalletCreationError> {
         Self::spawn_broadcast_pending_task(task_group, &bitcoind, db);
 
@@ -801,11 +802,8 @@ impl Wallet {
             .get_network()
             .await
             .map_err(|e| WalletCreationError::RpcError(e.to_string()))?;
-        if bitcoind_net != cfg.consensus.network {
-            return Err(WalletCreationError::WrongNetwork(
-                cfg.consensus.network,
-                bitcoind_net,
-            ));
+        if bitcoind_net != network {
+            return Err(WalletCreationError::WrongNetwork(network, bitcoind_net));
         }
 
         let wallet = Wallet {
@@ -816,6 +814,7 @@ impl Wallet {
             our_peer_id,
             block_count_rx,
             fee_rate_rx,
+            network,
         };
 
         Ok(wallet)

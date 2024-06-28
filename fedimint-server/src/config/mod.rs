@@ -184,6 +184,7 @@ impl ServerConfigConsensus {
                 api_endpoints: self.api_endpoints.clone(),
                 consensus_version: self.version,
                 meta: self.meta.clone(),
+                network: self.network,
             },
             modules: self
                 .modules
