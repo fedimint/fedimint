@@ -1211,7 +1211,7 @@ impl Gateway {
             }
 
             if let Some(network) = network {
-                if self.federation_manager.clients.read().await.len() > 0 {
+                if !self.federation_manager.is_empty().await {
                     return Err(GatewayError::GatewayConfigurationError(
                         "Cannot change network while connected to a federation".to_string(),
                     ));
