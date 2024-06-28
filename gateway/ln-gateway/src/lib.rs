@@ -285,7 +285,7 @@ struct ClientsJoinLock;
 #[derive(Clone)]
 pub struct Gateway {
     /// The gateway's federation manager.
-    federation_manager: Arc<FederationManager>,
+    federation_manager: Arc<RwLock<FederationManager>>,
 
     /// Builder struct that allows the gateway to build a `ILnRpcClient`, which
     /// represents a connection to a lightning node.
@@ -433,7 +433,7 @@ impl Gateway {
             Self::get_gateway_configuration(gateway_db.clone(), &gateway_parameters).await;
 
         Ok(Self {
-            federation_manager: Arc::new(FederationManager::new()),
+            federation_manager: Arc::new(RwLock::new(FederationManager::new())),
             lightning_builder,
             gateway_config: Arc::new(RwLock::new(gateway_config)),
             state: Arc::new(RwLock::new(GatewayState::Initializing)),
@@ -700,8 +700,9 @@ impl Gateway {
                 // corresponds to the short channel id
                 if let Some(client) = self
                     .federation_manager
-                    .get_client_for_scid(short_channel_id)
+                    .read()
                     .await
+                    .get_client_for_scid(short_channel_id)
                 {
                     let cf = client
                         .borrow()
@@ -777,7 +778,13 @@ impl Gateway {
             .expect("Gateway configuration should be set");
 
         let mut federations = Vec::new();
-        for (federation_id, client) in self.federation_manager.borrow_clients().await.clone() {
+        for (federation_id, client) in self
+            .federation_manager
+            .read()
+            .await
+            .borrow_clients()
+            .clone()
+        {
             federations.push(
                 client
                     .borrow()
@@ -794,7 +801,7 @@ impl Gateway {
 
         Ok(GatewayInfo {
             federations,
-            channels: Some(self.federation_manager.clone_scid_map().await),
+            channels: Some(self.federation_manager.read().await.clone_scid_map()),
             version_hash: fedimint_build_code_version_env!().to_string(),
             lightning_pub_key: Some(lightning_context.lightning_public_key.to_string()),
             lightning_alias: Some(lightning_context.lightning_alias.clone()),
@@ -825,8 +832,9 @@ impl Gateway {
             } else {
                 let federation_clients = self
                     .federation_manager
-                    .borrow_clients()
+                    .read()
                     .await
+                    .borrow_clients()
                     .clone()
                     .into_iter();
                 for (federation_id, client) in federation_clients {
@@ -1000,7 +1008,12 @@ impl Gateway {
         let _join_federation = self.client_joining_lock.lock().await;
 
         // Check if this federation has already been registered
-        if self.federation_manager.has_federation(federation_id).await {
+        if self
+            .federation_manager
+            .read()
+            .await
+            .has_federation(federation_id)
+        {
             return Err(GatewayError::FederationAlreadyConnected);
         }
 
@@ -1013,7 +1026,7 @@ impl Gateway {
 
         // The gateway deterministically assigns a channel id (u64) to each federation
         // connected.
-        let mint_channel_id = self.federation_manager.pop_next_scid().await?;
+        let mint_channel_id = self.federation_manager.read().await.pop_next_scid()?;
 
         let gw_client_cfg = FederationConfig {
             invite_code,
@@ -1051,17 +1064,15 @@ impl Gateway {
             .await?;
 
         // no need to enter span earlier, because connect-fed has a span
-        self.federation_manager
-            .add_client(
-                mint_channel_id,
-                federation_id,
-                Spanned::new(
-                    info_span!("client", federation_id=%federation_id.clone()),
-                    async { client },
-                )
-                .await,
+        self.federation_manager.write().await.add_client(
+            mint_channel_id,
+            federation_id,
+            Spanned::new(
+                info_span!("client", federation_id=%federation_id.clone()),
+                async { client },
             )
-            .await;
+            .await,
+        );
 
         let dbtx = self.gateway_db.begin_transaction().await;
         GatewayClientBuilder::save_config(gw_client_cfg, dbtx).await?;
@@ -1171,7 +1182,7 @@ impl Gateway {
             }
 
             if let Some(network) = network {
-                if !self.federation_manager.is_empty().await {
+                if !self.federation_manager.read().await.is_empty() {
                     return Err(GatewayError::GatewayConfigurationError(
                         "Cannot change network while connected to a federation".to_string(),
                     ));
@@ -1313,8 +1324,9 @@ impl Gateway {
             for (federation_id, federation_config) in federations {
                 if let Some(client) = self
                     .federation_manager
-                    .borrow_clients()
+                    .read()
                     .await
+                    .borrow_clients()
                     .get(federation_id)
                 {
                     if let Err(e) = async {
@@ -1396,7 +1408,11 @@ impl Gateway {
         // `clients` and opened databases in sync
         _lock: &MutexGuard<'_, ClientsJoinLock>,
     ) -> Result<()> {
-        self.federation_manager.remove_client(federation_id).await
+        self.federation_manager
+            .write()
+            .await
+            .remove_client(federation_id)
+            .await
     }
 
     /// Retrieves a `ClientHandleArc` from the Gateway's in memory structures
@@ -1406,8 +1422,9 @@ impl Gateway {
         federation_id: FederationId,
     ) -> Result<Spanned<fedimint_client::ClientHandleArc>> {
         self.federation_manager
-            .borrow_clients()
+            .read()
             .await
+            .borrow_clients()
             .get(&federation_id)
             .cloned()
             .ok_or(GatewayError::InvalidMetadata(format!(
@@ -1435,8 +1452,9 @@ impl Gateway {
             .await
             {
                 self.federation_manager
-                    .add_client(scid, federation_id, client)
-                    .await;
+                    .write()
+                    .await
+                    .add_client(scid, federation_id, client);
             } else {
                 warn!("Failed to load client for federation: {federation_id}");
             }
@@ -1444,8 +1462,9 @@ impl Gateway {
 
         if let Some(max_mint_channel_id) = configs.iter().map(|cfg| cfg.mint_channel_id).max() {
             self.federation_manager
-                .set_next_scid(max_mint_channel_id + 1)
-                .await;
+                .read()
+                .await
+                .set_next_scid(max_mint_channel_id + 1);
         }
     }
 
@@ -1504,8 +1523,9 @@ impl Gateway {
         let config = client.get_config().clone();
         let channel_id = self
             .federation_manager
-            .get_scid_for_federation(federation_id)
-            .await;
+            .read()
+            .await
+            .get_scid_for_federation(federation_id);
 
         let mut dbtx = self.gateway_db.begin_transaction_nc().await;
         let federation_key = FederationIdKey { id: federation_id };
@@ -1570,7 +1590,13 @@ impl Gateway {
             .get_value(&GatewayPublicKey)
             .await
             .expect("Gateway keypair does not exist");
-        for (_, client) in self.federation_manager.borrow_clients().await.iter() {
+        for client in self
+            .federation_manager
+            .read()
+            .await
+            .borrow_clients()
+            .values()
+        {
             client
                 .value()
                 .get_first_module::<GatewayClientModule>()
@@ -1587,8 +1613,9 @@ impl Gateway {
     /// per-connected federation.
     async fn public_key_v2(&self, federation_id: &FederationId) -> Option<PublicKey> {
         self.federation_manager
-            .borrow_clients()
+            .read()
             .await
+            .borrow_clients()
             .get(federation_id)
             .map(|client| {
                 client
@@ -1618,14 +1645,13 @@ impl Gateway {
         &self,
         payload: SendPaymentPayload,
     ) -> anyhow::Result<std::result::Result<[u8; 32], Signature>> {
-        let clients = self.federation_manager.borrow_clients().await;
-
-        let client = clients
+        self.federation_manager
+            .read()
+            .await
+            .borrow_clients()
             .get(&payload.federation_id)
             .ok_or(anyhow!("Federation client not available"))?
-            .value();
-
-        client
+            .value()
             .get_first_module::<GatewayClientModuleV2>()
             .send_payment(payload)
             .await
@@ -1759,9 +1785,11 @@ impl Gateway {
             bail!("The available decryption contract's amount is not equal the requested amount")
         }
 
-        let clients = self.federation_manager.borrow_clients().await;
-
-        let client = clients
+        let client = self
+            .federation_manager
+            .read()
+            .await
+            .borrow_clients()
             .get(&registered_incoming_contract.federation_id)
             .ok_or(anyhow!("Federation client not available"))?
             .value()
