@@ -15,22 +15,26 @@ use fedimint_core::util::SafeUrl;
 use fedimint_core::{secp256k1, Amount};
 use fedimint_ln_common::route_hints::RouteHint;
 use fedimint_ln_common::PrunedInvoice;
+use futures::stream::BoxStream;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use self::cln::{NetworkLnRpcClient, RouteHtlcStream};
+use self::cln::NetworkLnRpcClient;
 use self::lnd::GatewayLndClient;
 use crate::envs::{
     FM_GATEWAY_LIGHTNING_ADDR_ENV, FM_LND_MACAROON_ENV, FM_LND_RPC_ADDR_ENV, FM_LND_TLS_CERT_ENV,
 };
 use crate::gateway_lnrpc::{
     CloseChannelsWithPeerResponse, CreateInvoiceRequest, CreateInvoiceResponse, EmptyResponse,
-    GetFundingAddressResponse, GetNodeInfoResponse, GetRouteHintsResponse, InterceptHtlcResponse,
-    PayInvoiceRequest, PayInvoiceResponse,
+    GetFundingAddressResponse, GetNodeInfoResponse, GetRouteHintsResponse, InterceptHtlcRequest,
+    InterceptHtlcResponse, PayInvoiceRequest, PayInvoiceResponse,
 };
 use crate::GatewayError;
 
 pub const MAX_LIGHTNING_RETRIES: u32 = 10;
+
+pub type HtlcResult = std::result::Result<InterceptHtlcRequest, tonic::Status>;
+pub type RouteHtlcStream<'a> = BoxStream<'a, HtlcResult>;
 
 #[derive(
     Error, Debug, Serialize, Deserialize, Encodable, Decodable, Clone, Eq, PartialEq, Hash,

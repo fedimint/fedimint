@@ -113,8 +113,7 @@ use crate::gateway_lnrpc::create_invoice_request::Description;
 use crate::gateway_lnrpc::intercept_htlc_response::Forward;
 use crate::gateway_lnrpc::CreateInvoiceRequest;
 use crate::gateway_module_v2::GatewayClientModuleV2;
-use crate::lightning::cln::RouteHtlcStream;
-use crate::lightning::GatewayLightningBuilder;
+use crate::lightning::{GatewayLightningBuilder, RouteHtlcStream};
 use crate::rpc::rpc_server::{hash_password, run_webserver};
 use crate::rpc::{
     BackupPayload, BalancePayload, ConnectFedPayload, DepositAddressPayload, RestorePayload,

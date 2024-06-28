@@ -30,8 +30,7 @@ use tonic_lnd::walletrpc::AddrRequest;
 use tonic_lnd::{connect, Client as LndClient};
 use tracing::{debug, error, info, trace, warn};
 
-use super::cln::RouteHtlcStream;
-use super::{ChannelInfo, ILnRpcClient, LightningRpcError, MAX_LIGHTNING_RETRIES};
+use super::{ChannelInfo, ILnRpcClient, LightningRpcError, RouteHtlcStream, MAX_LIGHTNING_RETRIES};
 use crate::gateway_lnrpc::create_invoice_request::Description;
 use crate::gateway_lnrpc::get_route_hints_response::{RouteHint, RouteHintHop};
 use crate::gateway_lnrpc::intercept_htlc_response::{Action, Cancel, Forward, Settle};
