@@ -1,3 +1,4 @@
+use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
@@ -11,12 +12,17 @@ use fedimint_core::config::{
     ModuleInitParams, ServerModuleConfigGenParamsRegistry, ServerModuleInitRegistry,
 };
 use fedimint_core::core::{ModuleInstanceId, ModuleKind};
+use fedimint_core::db::mem_impl::MemDatabase;
+use fedimint_core::db::Database;
 use fedimint_core::envs::BitcoinRpcConfig;
 use fedimint_core::module::{DynServerModuleInit, IServerModuleInit};
-use fedimint_core::runtime::block_in_place;
 use fedimint_core::task::{MaybeSend, MaybeSync, TaskGroup};
 use fedimint_core::util::SafeUrl;
 use fedimint_logging::TracingSetup;
+use lightning_invoice::RoutingFees;
+use ln_gateway::client::GatewayClientBuilder;
+use ln_gateway::lightning::{ILnRpcClient, LightningBuilder};
+use ln_gateway::{Gateway, LightningContext};
 use tempfile::TempDir;
 
 use crate::btc::mock::FakeBitcoinFactory;
@@ -26,8 +32,7 @@ use crate::envs::{
     FM_PORT_ESPLORA_ENV, FM_TEST_BITCOIND_RPC_ENV, FM_TEST_DIR_ENV, FM_TEST_USE_REAL_DAEMONS_ENV,
 };
 use crate::federation::{FederationTest, FederationTestBuilder};
-use crate::gateway::GatewayTest;
-use crate::ln::FakeLightningTest;
+use crate::gateway::{FakeLightningBuilder, DEFAULT_GATEWAY_PASSWORD};
 
 /// A default timeout for things happening in tests
 pub const TIMEOUT: Duration = Duration::from_secs(10);
@@ -124,6 +129,8 @@ impl Fixtures {
         self.new_fed_builder().build().await
     }
 
+    /// Creates a new `FederationTestBuilder` that can be used to build up a
+    /// `FederationTest` for module tests.
     pub fn new_fed_builder(&self) -> FederationTestBuilder {
         FederationTestBuilder::new(
             self.params.clone(),
@@ -132,37 +139,72 @@ impl Fixtures {
         )
     }
 
-    /// Starts a new gateway with a given lightning node
-    pub async fn new_gateway(
-        &self,
-        num_route_hints: u32,
-        cli_password: Option<String>,
-    ) -> GatewayTest {
-        // TODO: Make construction easier
+    /// Creates a new Gateway that can be used for module tests.
+    pub async fn new_gateway(&self) -> Gateway {
         let server_gens = ServerModuleInitRegistry::from(self.servers.clone());
         let module_kinds = self.params.iter_modules().map(|(id, kind, _)| (id, kind));
         let decoders = server_gens.available_decoders(module_kinds).unwrap();
+        let gateway_db = Database::new(MemDatabase::new(), decoders.clone());
         let clients = self.clients.clone().into_iter();
 
-        GatewayTest::new(
-            block_in_place(|| fedimint_portalloc::port_alloc(1))
-                .expect("Failed to allocate a port range"),
-            cli_password,
-            FakeLightningTest::new(),
-            decoders,
-            clients
-                .filter(|client| {
-                    // Remove LN module because the gateway adds one
-                    client.to_dyn_common().module_kind() != ModuleKind::from_static_str("ln")
-                })
-                .filter(|client| {
-                    // Remove LN NG module because the gateway adds one
-                    client.to_dyn_common().module_kind() != ModuleKind::from_static_str("lnv2")
-                })
-                .collect(),
-            num_route_hints,
+        let registry = clients
+            .filter(|client| {
+                // Remove LN module because the gateway adds one
+                client.to_dyn_common().module_kind() != ModuleKind::from_static_str("ln")
+            })
+            .filter(|client| {
+                // Remove LN NG module because the gateway adds one
+                client.to_dyn_common().module_kind() != ModuleKind::from_static_str("lnv2")
+            })
+            .collect();
+
+        let (path, _config_dir) = test_dir(&format!("gateway-{}", rand::random::<u64>()));
+
+        // Create federation client builder for the gateway
+        let client_builder: GatewayClientBuilder =
+            GatewayClientBuilder::new(path.clone(), registry, 0);
+
+        let lightning_builder: Arc<dyn LightningBuilder + Send + Sync> =
+            Arc::new(FakeLightningBuilder);
+
+        // Module tests do not use the webserver, so any port is ok
+        let listen: SocketAddr = format!("127.0.0.1:9000").parse().unwrap();
+        let address: SafeUrl = format!("http://{listen}").parse().unwrap();
+
+        let ln_client: Arc<dyn ILnRpcClient> = lightning_builder.build().await.into();
+        let (lightning_public_key, lightning_alias, lightning_network, _, _) = ln_client
+            .parsed_node_info()
+            .await
+            .expect("Could not get Lighytning info");
+        let lightning_context = LightningContext {
+            lnrpc: ln_client.clone(),
+            lightning_public_key,
+            lightning_alias,
+            lightning_network,
+        };
+
+        let gateway = Gateway::new_with_custom_registry(
+            lightning_builder,
+            client_builder,
+            listen,
+            address.clone(),
+            Some(DEFAULT_GATEWAY_PASSWORD.to_string()),
+            Some(bitcoin::Network::Regtest),
+            RoutingFees {
+                base_msat: 0,
+                proportional_millionths: 0,
+            },
+            0,
+            gateway_db,
+            // Manually set the gateway's state to `Running`. In tests, we do don't run the
+            // webserver or intercept HTLCs, so this is necessary for instructing the
+            // gateway that it is connected to the mock Lightning node.
+            ln_gateway::GatewayState::Running { lightning_context },
         )
         .await
+        .expect("Failed to create gateway");
+
+        gateway
     }
 
     /// Get a server bitcoin RPC config

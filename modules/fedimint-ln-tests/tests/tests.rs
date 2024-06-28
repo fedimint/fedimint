@@ -18,8 +18,8 @@ use fedimint_ln_common::ln_operation;
 use fedimint_ln_server::LightningInit;
 use fedimint_testing::federation::FederationTest;
 use fedimint_testing::fixtures::Fixtures;
-use fedimint_testing::gateway::{GatewayTest, DEFAULT_GATEWAY_PASSWORD};
 use fedimint_testing::ln::FakeLightningTest;
+use fedimint_testing::Gateway;
 use lightning_invoice::{Bolt11Invoice, Bolt11InvoiceDescription, Description};
 use rand::rngs::OsRng;
 use secp256k1::KeyPair;
@@ -37,11 +37,9 @@ fn fixtures() -> Fixtures {
 }
 
 /// Setup a gateway connected to the fed and client
-async fn gateway(fixtures: &Fixtures, fed: &FederationTest) -> GatewayTest {
-    let mut gateway = fixtures
-        .new_gateway(0, Some(DEFAULT_GATEWAY_PASSWORD.to_string()))
-        .await;
-    gateway.connect_fed(fed).await;
+async fn gateway(fixtures: &Fixtures, fed: &FederationTest) -> Gateway {
+    let gateway = fixtures.new_gateway().await;
+    fed.connect_gateway(&gateway).await;
     gateway
 }
 
@@ -235,7 +233,7 @@ async fn gateway_protects_preimage_for_payment() -> anyhow::Result<()> {
         payment_type,
         contract_id: _,
         fee: _,
-    } = pay_invoice(&client1, invoice.clone(), Some(gw.gateway.gateway_id())).await?;
+    } = pay_invoice(&client1, invoice.clone(), Some(gw.gateway_id())).await?;
     match payment_type {
         PayType::Lightning(operation_id) => {
             let mut sub = client1
@@ -257,7 +255,7 @@ async fn gateway_protects_preimage_for_payment() -> anyhow::Result<()> {
         payment_type,
         contract_id: _,
         fee: _,
-    } = pay_invoice(&client2, invoice.clone(), Some(gw.gateway.gateway_id())).await?;
+    } = pay_invoice(&client2, invoice.clone(), Some(gw.gateway_id())).await?;
     match payment_type {
         PayType::Lightning(operation_id) => {
             let mut sub = client2
@@ -298,7 +296,7 @@ async fn cannot_pay_same_external_invoice_twice() -> anyhow::Result<()> {
         payment_type,
         contract_id: _,
         fee: _,
-    } = pay_invoice(&client, invoice.clone(), Some(gw.gateway.gateway_id())).await?;
+    } = pay_invoice(&client, invoice.clone(), Some(gw.gateway_id())).await?;
     match payment_type {
         PayType::Lightning(operation_id) => {
             let mut sub = client
@@ -322,7 +320,7 @@ async fn cannot_pay_same_external_invoice_twice() -> anyhow::Result<()> {
         payment_type,
         contract_id: _,
         fee: _,
-    } = pay_invoice(&client, invoice, Some(gw.gateway.gateway_id())).await?;
+    } = pay_invoice(&client, invoice, Some(gw.gateway_id())).await?;
     match payment_type {
         PayType::Lightning(operation_id) => {
             let mut sub = client
@@ -402,7 +400,7 @@ async fn makes_internal_payments_within_federation() -> anyhow::Result<()> {
     let gw = gateway(&fixtures, &fed).await;
 
     let ln_module = client1.get_first_module::<LightningClientModule>();
-    let ln_gateway = ln_module.select_gateway(&gw.gateway.gateway_id()).await;
+    let ln_gateway = ln_module.select_gateway(&gw.gateway_id()).await;
     let desc = Description::new("with-gateway-hint".to_string())?;
     let (op, invoice, _) = ln_module
         .create_bolt11_invoice(
@@ -425,7 +423,7 @@ async fn makes_internal_payments_within_federation() -> anyhow::Result<()> {
         payment_type,
         contract_id: _,
         fee: _,
-    } = pay_invoice(&client2, invoice, Some(gw.gateway.gateway_id())).await?;
+    } = pay_invoice(&client2, invoice, Some(gw.gateway_id())).await?;
     match payment_type {
         PayType::Internal(op_id) => {
             let mut sub2 = client2
@@ -519,7 +517,7 @@ async fn can_receive_for_other_user() -> anyhow::Result<()> {
     let keypair = KeyPair::new_global(&mut OsRng);
 
     let ln_module = client1.get_first_module::<LightningClientModule>();
-    let ln_gateway = ln_module.select_gateway(&gw.gateway.gateway_id()).await;
+    let ln_gateway = ln_module.select_gateway(&gw.gateway_id()).await;
     let desc = Description::new("with-gateway-hint".to_string())?;
     let (op, invoice, _) = ln_module
         .create_bolt11_invoice_for_user(
@@ -543,7 +541,7 @@ async fn can_receive_for_other_user() -> anyhow::Result<()> {
         payment_type,
         contract_id: _,
         fee: _,
-    } = pay_invoice(&client2, invoice, Some(gw.gateway.gateway_id())).await?;
+    } = pay_invoice(&client2, invoice, Some(gw.gateway_id())).await?;
     match payment_type {
         PayType::Internal(op_id) => {
             let mut sub2 = client2
@@ -590,7 +588,7 @@ async fn can_receive_for_other_user_tweaked() -> anyhow::Result<()> {
     let keypair = KeyPair::new_global(&mut OsRng);
 
     let ln_module = client1.get_first_module::<LightningClientModule>();
-    let ln_gateway = ln_module.select_gateway(&gw.gateway.gateway_id()).await;
+    let ln_gateway = ln_module.select_gateway(&gw.gateway_id()).await;
     let desc = Description::new("with-gateway-hint-tweaked".to_string())?;
     let (op, invoice, _) = ln_module
         .create_bolt11_invoice_for_user_tweaked(
@@ -615,7 +613,7 @@ async fn can_receive_for_other_user_tweaked() -> anyhow::Result<()> {
         payment_type,
         contract_id: _,
         fee: _,
-    } = pay_invoice(&client2, invoice, Some(gw.gateway.gateway_id())).await?;
+    } = pay_invoice(&client2, invoice, Some(gw.gateway_id())).await?;
     match payment_type {
         PayType::Internal(op_id) => {
             let mut sub2 = client2
@@ -667,7 +665,7 @@ async fn rejects_wrong_network_invoice() -> anyhow::Result<()> {
     )
     .unwrap();
 
-    let error = pay_invoice(&client1, signet_invoice, Some(gw.gateway.gateway_id()))
+    let error = pay_invoice(&client1, signet_invoice, Some(gw.gateway_id()))
         .await
         .unwrap_err();
     assert_eq!(
