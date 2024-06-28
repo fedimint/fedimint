@@ -4,6 +4,9 @@ use std::sync::Arc;
 use fedimint_core::config::FederationId;
 use fedimint_core::util::Spanned;
 use tokio::sync::{Mutex, RwLock};
+use tracing::error;
+
+use crate::{GatewayError, Result};
 
 /// The first SCID that the gateway will assign to a federation.
 /// Note: This starts at 1 because an SCID of 0 is considered invalid by LND's
@@ -40,5 +43,42 @@ impl FederationManager {
             scid_to_federation: Arc::new(RwLock::new(BTreeMap::new())),
             next_scid: Arc::new(Mutex::new(INITIAL_SCID)),
         }
+    }
+
+    pub async fn add_client(
+        &self,
+        scid: u64,
+        federation_id: FederationId,
+        client: Spanned<fedimint_client::ClientHandleArc>,
+    ) {
+        self.clients.write().await.insert(federation_id, client);
+        self.scid_to_federation
+            .write()
+            .await
+            .insert(scid, federation_id);
+    }
+
+    pub async fn remove_client(&self, federation_id: FederationId) -> Result<()> {
+        let client = self
+            .clients
+            .write()
+            .await
+            .remove(&federation_id)
+            .ok_or(GatewayError::InvalidMetadata(format!(
+                "No federation with id {federation_id}"
+            )))?
+            .into_value();
+
+        if let Some(client) = Arc::into_inner(client) {
+            client.shutdown().await;
+        } else {
+            error!("client is not unique, failed to remove client");
+        }
+
+        self.scid_to_federation
+            .write()
+            .await
+            .retain(|_, fid| *fid != federation_id);
+        Ok(())
     }
 }
