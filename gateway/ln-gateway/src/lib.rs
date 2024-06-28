@@ -793,14 +793,9 @@ impl Gateway {
                 .clone_gateway_config()
                 .await
                 .expect("Gateway configuration should be set");
+
             let mut federations = Vec::new();
-            let federation_clients = self.clients.read().await.clone().into_iter();
-            let route_hints = lightning_context
-                .lnrpc
-                .parsed_route_hints(gateway_config.num_route_hints)
-                .await;
-            let node_info = lightning_context.lnrpc.parsed_node_info().await?;
-            for (federation_id, client) in federation_clients {
+            for (federation_id, client) in self.clients.read().await.clone() {
                 federations.push(
                     client
                         .borrow()
@@ -808,6 +803,12 @@ impl Gateway {
                         .await,
                 );
             }
+
+            let route_hints = lightning_context
+                .lnrpc
+                .parsed_route_hints(gateway_config.num_route_hints)
+                .await;
+            let node_info = lightning_context.lnrpc.parsed_node_info().await?;
 
             return Ok(GatewayInfo {
                 federations,
