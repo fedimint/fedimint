@@ -123,4 +123,8 @@ impl FederationManager {
     pub async fn clone_scid_map(&self) -> BTreeMap<u64, FederationId> {
         self.scid_to_federation.read().await.clone()
     }
+
+    pub async fn has_federation(&self, federation_id: FederationId) -> bool {
+        self.clients.read().await.contains_key(&federation_id)
+    }
 }
