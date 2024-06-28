@@ -1040,13 +1040,7 @@ impl Gateway {
 
         // The gateway deterministically assigns a channel id (u64) to each federation
         // connected.
-        let mut next_scid = self.federation_manager.next_scid.lock().await;
-        let mint_channel_id = *next_scid;
-        *next_scid = next_scid
-            .checked_add(1)
-            .ok_or(GatewayError::GatewayConfigurationError(
-                "Too many connected federations".to_string(),
-            ))?;
+        let mint_channel_id = self.federation_manager.pop_next_scid().await?;
 
         let gw_client_cfg = FederationConfig {
             invite_code,
@@ -1478,8 +1472,9 @@ impl Gateway {
         }
 
         if let Some(max_mint_channel_id) = configs.iter().map(|cfg| cfg.mint_channel_id).max() {
-            let mut next_scid = self.federation_manager.next_scid.lock().await;
-            *next_scid = max_mint_channel_id + 1;
+            self.federation_manager
+                .set_next_scid(max_mint_channel_id + 1)
+                .await;
         }
     }
 

@@ -34,7 +34,7 @@ pub struct FederationManager {
     /// Tracker for short channel ID assignments. When connecting a new
     /// federation, this value is incremented and assigned to the federation
     /// as the `mint_channel_id`
-    pub next_scid: Arc<Mutex<u64>>,
+    next_scid: Arc<Mutex<u64>>,
 }
 
 impl FederationManager {
@@ -126,5 +126,20 @@ impl FederationManager {
 
     pub async fn has_federation(&self, federation_id: FederationId) -> bool {
         self.clients.read().await.contains_key(&federation_id)
+    }
+
+    pub async fn set_next_scid(&self, next_scid: u64) {
+        *self.next_scid.lock().await = next_scid;
+    }
+
+    pub async fn pop_next_scid(&self) -> Result<u64> {
+        let mut next_scid = self.next_scid.lock().await;
+        let scid = *next_scid;
+        *next_scid = next_scid
+            .checked_add(1)
+            .ok_or(GatewayError::GatewayConfigurationError(
+                "Too many connected federations".to_string(),
+            ))?;
+        Ok(scid)
     }
 }
