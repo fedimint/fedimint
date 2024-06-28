@@ -1001,14 +1001,7 @@ impl Gateway {
         let _join_federation = self.client_joining_lock.lock().await;
 
         // Check if this federation has already been registered
-        if self
-            .federation_manager
-            .clients
-            .read()
-            .await
-            .get(&federation_id)
-            .is_some()
-        {
+        if self.federation_manager.has_federation(federation_id).await {
             return Err(GatewayError::FederationAlreadyConnected);
         }
 
