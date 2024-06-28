@@ -1,13 +1,26 @@
 { config, lib, pkgs, ... }:
-with lib;
-
 let
+  inherit (lib)
+    filterAttrs
+    flatten
+    mapAttrs'
+    mapAttrsToList
+    mkDefault
+    mkEnableOption
+    mkIf
+    mkOption
+    mkPackageOption
+    nameValuePair
+    types;
+
   eachFedimintd = filterAttrs (fedimintdName: cfg: cfg.enable) config.services.fedimintd;
+  eachFedimintdNginx = filterAttrs (fedimintdName: cfg: cfg.nginx.enable) eachFedimintd;
+
   fedimintdOpts = { config, lib, name, ... }: {
-
     options = {
+      enable = mkEnableOption "fedimintd";
 
-      enable = mkEnableOption (lib.mdDoc "fedimint");
+      package = mkPackageOption pkgs "fedimintd" { };
 
       user = mkOption {
         type = types.str;
@@ -33,19 +46,10 @@ let
         };
       };
 
-      package = mkOption {
-        type = types.nullOr types.package;
-        default = pkgs.fedimintd or null;
-        defaultText = lib.literalExpression "pkgs.fedimint (after available)";
-        description = lib.mdDoc ''
-          Package of the fedimintd to use.
-        '';
-      };
-
       p2p = {
         openFirewall = mkOption {
           type = types.bool;
-          default = false;
+          default = true;
           description = lib.mdDoc "Opens port in firewall for fedimintd's p2p port";
         };
         port = mkOption {
@@ -55,14 +59,24 @@ let
         };
         bind = mkOption {
           type = types.str;
-          default = "[::0]";
+          default = "0.0.0.0";
           description = lib.mdDoc "Address to bind on for p2p connections from peers";
+        };
+        fqdn = mkOption {
+          type = types.nullOr types.str;
+          default = null;
+          example = "p2p.myfedimint.com";
+          description = lib.mdDoc "Domain to host p2p over";
         };
         address = mkOption {
           type = types.nullOr types.str;
-          default = null;
+          default = "fedimint://${config.p2p.fqdn}";
           example = "fedimint://p2p.myfedimint.com";
-          description = lib.mdDoc "Public address for p2p connections from peers";
+          description = lib.mdDoc ''
+            Public address for p2p connections from peers
+
+            Typically you want to set `fqdn` instead.
+          '';
         };
       };
       api = {
@@ -78,14 +92,23 @@ let
         };
         bind = mkOption {
           type = types.str;
-          default = "[::0]";
+          default = "127.0.0.1";
           description = lib.mdDoc "Address to bind on for API connections relied by the reverse proxy/tls terminator. Usually starting with `fedimint://`";
+        };
+        fqdn = mkOption {
+          type = types.nullOr types.str;
+          default = null;
+          example = "api.myfedimint.com";
+          description = lib.mdDoc "Domain to host API on";
         };
         address = mkOption {
           type = types.nullOr types.str;
-          default = null;
-          example = "wss://api.myfedimint.com";
-          description = lib.mdDoc "Public URL of the API address of the reverse proxy/tls terminator. Usually starting with `wss://`.";
+          default = "wss://${config.api.fqdn}";
+          description = lib.mdDoc ''
+            Public URL of the API address of the reverse proxy/tls terminator. Usually starting with `wss://`.
+
+            Typically you want to override `fqdn` instead.
+          '';
         };
       };
       bitcoin = {
@@ -98,7 +121,7 @@ let
         rpc = {
           address = mkOption {
             type = types.str;
-            default = "http://[::1]:38332";
+            default = "http://127.0.0.1:38332";
             example = "signet";
             description = lib.mdDoc "Bitcoin node (bitcoind/electrum/esplora) address to connect to";
           };
@@ -133,13 +156,23 @@ let
 
       dataDir = mkOption {
         type = types.str;
-        default = "/var/lib/fedimintd/";
+        default = "/var/lib/fedimintd-${name}/";
         readOnly = true;
         description = lib.mdDoc ''
           Path to the data dir fedimintd will use to store its data.
           Note that due to using the DynamicUser feature of systemd, this value should not be changed
           and is set to be read only.
         '';
+      };
+
+      nginx = {
+        enable = mkEnableOption "fedimint";
+        config = mkOption {
+          # TODO: change to something like https://github.com/NixOS/nixpkgs/pull/314440/files#diff-47ed1acddaad94538b9ee7995ffa8d7cc1376f9667350acee9cec912cec6a3bfR201
+          type = types.attrs;
+          default = { };
+          description = lib.mdDoc "Overrides to the nginx vhost section for api";
+        };
       };
     };
   };
@@ -158,12 +191,6 @@ in
     assertions = flatten
       (mapAttrsToList
         (fedimintdName: cfg: [
-          {
-            assertion = cfg.package != null;
-            message = ''
-              `services.fedimintd.${fedimintdName}.package` must be set manually until `fedimintd` is available in nixpkgs.
-            '';
-          }
           {
             assertion = cfg.p2p.address != null;
             message = ''
@@ -262,10 +289,9 @@ in
                   "@system-service"
                   "~@privileged"
                 ];
-                StateDirectory = "fedimintd";
+                StateDirectory = "fedimintd-${fedimintdName}";
                 StateDirectoryMode = "0700";
                 ExecStart = startScript;
-
 
                 # Hardening measures
                 PrivateTmp = "true";
@@ -278,7 +304,6 @@ in
           )
         ))
         eachFedimintd;
-
 
     users.users = mapAttrs'
       (fedimintdName: cfg: (
@@ -297,5 +322,26 @@ in
         nameValuePair "${cfg.group}" { }
       ))
       eachFedimintd;
+
+    services.nginx.virtualHosts = mapAttrs'
+      (fedimintdName: cfg: (
+        nameValuePair cfg.api.fqdn (lib.mkMerge [
+
+          cfg.nginx.config
+
+          {
+            enableACME = mkDefault true;
+            forceSSL = mkDefault true;
+            locations."/ws/" = {
+              proxyPass = "http://127.0.0.1:${builtins.toString cfg.api.port}/";
+              proxyWebsockets = true;
+              extraConfig = "proxy_pass_header Authorization;";
+            };
+          }
+
+        ])
+      ))
+      eachFedimintdNginx;
   };
+
 }
