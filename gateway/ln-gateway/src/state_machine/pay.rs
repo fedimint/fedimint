@@ -748,8 +748,7 @@ impl GatewayPayWaitForSwapPreimage {
         let client = context
             .gateway
             .federation_manager
-            .clients
-            .read()
+            .borrow_clients()
             .await
             .get(&federation_id)
             .cloned()

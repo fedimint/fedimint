@@ -25,7 +25,7 @@ type FederationToClientMap =
 pub struct FederationManager {
     /// Map of `FederationId` -> `Client`. Used for efficient retrieval of the
     /// client while handling incoming HTLCs.
-    pub clients: FederationToClientMap,
+    clients: FederationToClientMap,
 
     /// Map of short channel ids to `FederationId`. Use for efficient retrieval
     /// of the client while handling incoming HTLCs.
@@ -126,6 +126,18 @@ impl FederationManager {
 
     pub async fn has_federation(&self, federation_id: FederationId) -> bool {
         self.clients.read().await.contains_key(&federation_id)
+    }
+
+    // TODO(tvolk131): Sharing read lock guards could lead to write contention since
+    // we don't know how long callers will hold the guard for. Replace this function
+    // with more granular accessors that don't share lock guards.
+    pub async fn borrow_clients(
+        &self,
+    ) -> tokio::sync::RwLockReadGuard<
+        '_,
+        BTreeMap<FederationId, Spanned<fedimint_client::ClientHandleArc>>,
+    > {
+        self.clients.read().await
     }
 
     pub async fn set_next_scid(&self, next_scid: u64) {
