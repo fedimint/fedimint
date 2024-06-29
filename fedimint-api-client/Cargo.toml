@@ -20,7 +20,7 @@ async-trait = { workspace = true }
 base64 = { workspace = true }
 futures = { workspace = true }
 itertools = { workspace = true }
-jsonrpsee-core = "0.23.1"
+jsonrpsee-core = "0.23.2"
 lru = "0.12.3"
 serde = { workspace = true }
 serde_json = { workspace = true }
@@ -32,12 +32,12 @@ fedimint-core = { workspace = true }
 fedimint-logging = { workspace = true }
 
 [target.'cfg(not(target_family = "wasm"))'.dependencies]
-jsonrpsee-ws-client = { version = "0.23.1", default-features = false }
+jsonrpsee-ws-client = { version = "0.23.2", default-features = false }
 tokio = { version = "1.38.0", features = ["full", "tracing"] }
 tokio-rustls = { workspace = true }
 
 [target.'cfg(target_family = "wasm")'.dependencies]
-jsonrpsee-wasm-client = "0.23.1"
+jsonrpsee-wasm-client = "0.23.2"
 async-lock = "3.4"
 # getrandom is transitive dependency of rand
 # on wasm, we need to enable the js backend

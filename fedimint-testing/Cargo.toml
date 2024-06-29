@@ -23,7 +23,7 @@ async-stream = "0.3.5"
 async-trait = { workspace = true }
 bitcoin = { workspace = true }
 bitcoincore-rpc = "0.17.0"
-clap = { version = "4.5.7", features = ["derive", "std", "help", "usage", "error-context", "suggestions"], default-features = false }
+clap = { version = "4.5.8", features = ["derive", "std", "help", "usage", "error-context", "suggestions"], default-features = false }
 fedimint-core = { workspace = true }
 fedimint-api-client = { workspace = true }
 fedimint-client = { version = "=0.4.0-alpha", path = "../fedimint-client" }

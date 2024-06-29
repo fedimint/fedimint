@@ -83,7 +83,7 @@ criterion = { version = "0.5.1" }
 threshold_crypto = { version = "0.2.1", package = "fedimint-threshold-crypto" }
 tonic_lnd = { version = "0.2.0", package = "fedimint-tonic-lnd", features = ["lightningrpc", "routerrpc"] }
 cln-rpc = "0.1.9"
-clap = { version = "4.5.7", features = ["derive", "std", "help", "usage", "error-context", "suggestions", "env"], default-features = false }
+clap = { version = "4.5.8", features = ["derive", "std", "help", "usage", "error-context", "suggestions", "env"], default-features = false }
 esplora-client = { version = "0.6.0", default-features = false, features = [
     "async",
     "async-https-rustls",
@@ -94,7 +94,7 @@ reqwest = { version = "0.11.27", features = [
 ], default-features = false }
 serde = { version = "1.0.203", features = ["derive"] }
 serde-big-array = "0.5.1"
-serde_json = "1.0.117"
+serde_json = "1.0.118"
 serdect = "0.2.0"
 bls12_381 = "0.8.0"
 group = "0.13.0"
@@ -110,7 +110,7 @@ bitcoincore-rpc = "0.17.0"
 semver = "1.0.23"
 strum = "0.26"
 strum_macros = "0.26"
-subtle = "2.6.0"
+subtle = "2.6.1"
 futures = "0.3.30"
 futures-util = "0.3.30"
 lightning = "0.0.123"
