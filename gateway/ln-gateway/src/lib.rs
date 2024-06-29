@@ -797,21 +797,22 @@ impl Gateway {
             .await
             .expect("Gateway configuration should be set");
 
-        let mut federations = Vec::new();
-        for (federation_id, client) in self
-            .federation_manager
-            .read()
-            .await
-            .borrow_clients()
-            .clone()
-        {
-            federations.push(
-                client
-                    .borrow()
-                    .with(|client| self.make_federation_info(client, federation_id))
-                    .await,
-            );
-        }
+        // Minimize the time we hold a lock on the federation manager.
+        let (federations, channels) = {
+            let federation_manager = self.federation_manager.read().await;
+
+            let mut federations = Vec::new();
+            for (federation_id, client) in federation_manager.borrow_clients().clone() {
+                federations.push(
+                    client
+                        .borrow()
+                        .with(|client| self.make_federation_info(client, federation_id))
+                        .await,
+                );
+            }
+
+            (federations, federation_manager.clone_scid_map())
+        };
 
         let route_hints = lightning_context
             .lnrpc
@@ -821,7 +822,7 @@ impl Gateway {
 
         Ok(GatewayInfo {
             federations,
-            channels: Some(self.federation_manager.read().await.clone_scid_map()),
+            channels: Some(channels),
             version_hash: fedimint_build_code_version_env!().to_string(),
             lightning_pub_key: Some(lightning_context.lightning_public_key.to_string()),
             lightning_alias: Some(lightning_context.lightning_alias.clone()),
@@ -853,14 +854,13 @@ impl Gateway {
                         .await,
                 );
             } else {
-                let federation_clients = self
+                for (federation_id, client) in self
                     .federation_manager
                     .read()
                     .await
                     .borrow_clients()
                     .clone()
-                    .into_iter();
-                for (federation_id, client) in federation_clients {
+                {
                     federations.insert(
                         federation_id,
                         client
