@@ -37,7 +37,7 @@ futures = { workspace = true }
 hex = { workspace = true }
 hyper = "1"
 itertools = { workspace = true }
-jsonrpsee = { version = "0.23.1", features = ["server"] }
+jsonrpsee = { version = "0.23.2", features = ["server"] }
 once_cell = { workspace = true }
 parity-scale-codec = "3.6.12"
 pin-project = "1.1.5"

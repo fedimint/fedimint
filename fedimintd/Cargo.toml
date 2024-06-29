@@ -36,7 +36,7 @@ bytes = "1.6.0"
 clap = { workspace = true }
 futures = { workspace = true }
 itertools = { workspace = true }
-jsonrpsee = { version = "0.23.1", features = ["server"] }
+jsonrpsee = { version = "0.23.2", features = ["server"] }
 fedimint-bitcoind = { version = "=0.4.0-alpha", path = "../fedimint-bitcoind" }
 fedimint-core = { workspace = true }
 fedimint-ln-common = { version = "=0.4.0-alpha", path = "../modules/fedimint-ln-common" }
