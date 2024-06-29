@@ -104,7 +104,7 @@ use state_machine::pay::OutgoingPaymentError;
 use state_machine::GatewayClientModule;
 use strum::IntoEnumIterator;
 use thiserror::Error;
-use tokio::sync::{Mutex, MutexGuard, RwLock};
+use tokio::sync::{Mutex, RwLock};
 use tracing::{debug, error, info, info_span, warn, Instrument};
 
 use crate::db::{
@@ -1115,7 +1115,7 @@ impl Gateway {
         &self,
         payload: LeaveFedPayload,
     ) -> Result<FederationInfo> {
-        let client_joining_lock = self.client_joining_lock.lock().await;
+        let _client_joining_lock = self.client_joining_lock.lock().await;
         let mut dbtx = self.gateway_db.begin_transaction().await;
 
         let federation_info = {
@@ -1136,7 +1136,10 @@ impl Gateway {
             federation_info
         };
 
-        self.remove_client(payload.federation_id, &client_joining_lock)
+        self.federation_manager
+            .write()
+            .await
+            .remove_client(payload.federation_id)
             .await?;
         dbtx.remove_entry(&FederationIdKey {
             id: payload.federation_id,
@@ -1422,23 +1425,6 @@ impl Gateway {
         };
 
         Some(gateway_config)
-    }
-
-    /// Removes a federation client from the Gateway's in memory structures that
-    /// keep track of available clients. Does not remove the persisted
-    /// client configuration in the database.
-    async fn remove_client(
-        &self,
-        federation_id: FederationId,
-        // Note: MUST be protected by a lock, to keep
-        // `clients` and opened databases in sync
-        _lock: &MutexGuard<'_, ClientsJoinLock>,
-    ) -> Result<()> {
-        self.federation_manager
-            .write()
-            .await
-            .remove_client(federation_id)
-            .await
     }
 
     /// Retrieves a `ClientHandleArc` from the Gateway's in memory structures
