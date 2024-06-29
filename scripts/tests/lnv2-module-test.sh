@@ -10,3 +10,4 @@ add_target_dir_to_path
 
 gateway_registration_sanity
 self_payment_with_one_gateway
+incoming_lightning_payment
