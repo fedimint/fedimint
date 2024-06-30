@@ -54,7 +54,7 @@
 //!
 //! [`ApiVersion`] and [`MultiApiVersion`] is used for API versioning.
 use std::collections::BTreeMap;
-use std::{cmp, result};
+use std::{cmp, fmt, result};
 
 use serde::{Deserialize, Serialize};
 
@@ -68,10 +68,16 @@ use crate::encoding::{Decodable, Encodable};
 ///
 /// See [`ModuleConsensusVersion`] for more details on how it interacts with
 /// module's consensus.
-#[derive(Debug, Copy, Clone, Serialize, Deserialize, Encodable, Decodable, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Serialize, Deserialize, Encodable, Decodable, PartialEq, Eq, Hash)]
 pub struct CoreConsensusVersion {
     pub major: u32,
     pub minor: u32,
+}
+
+impl fmt::Display for CoreConsensusVersion {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_fmt(format_args!("{}.{}", self.major, self.minor))
+    }
 }
 
 impl CoreConsensusVersion {
@@ -107,7 +113,7 @@ pub const CORE_CONSENSUS_VERSION: CoreConsensusVersion = CoreConsensusVersion::n
 /// the same time (each of different `ModuleKind` version), allow users to
 /// slowly migrate to a new one. This avoids complex and error-prone server-side
 /// consensus-migration logic.
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize, Encodable, Decodable)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize, Encodable, Decodable, Hash)]
 pub struct ModuleConsensusVersion {
     pub major: u32,
     pub minor: u32,
@@ -119,6 +125,11 @@ impl ModuleConsensusVersion {
     }
 }
 
+impl fmt::Display for ModuleConsensusVersion {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_fmt(format_args!("{}.{}", self.major, self.minor))
+    }
+}
 /// Api version supported by a core server or a client/server module at a given
 /// [`ModuleConsensusVersion`].
 ///
@@ -198,6 +209,15 @@ pub struct MultiApiVersion(Vec<ApiVersion>);
 impl MultiApiVersion {
     pub fn new() -> Self {
         Default::default()
+    }
+
+    pub fn from_raw(versions: impl IntoIterator<Item = (u32, u32)>) -> Self {
+        Self::try_from_iter(
+            versions
+                .into_iter()
+                .map(|(major, minor)| ApiVersion::new(major, minor)),
+        )
+        .expect("overlapping (conflicting) api versions when declaring SupportedModuleApiVersions")
     }
 
     /// Verify the invariant: sorted by unique major numbers
