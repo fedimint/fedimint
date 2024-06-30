@@ -24,6 +24,7 @@ use tracing_subscriber::{EnvFilter, Layer};
 pub const LOG_BLOCKCHAIN: &str = "fm::net::blockchain";
 pub const LOG_CONSENSUS: &str = "fm::consensus";
 pub const LOG_CORE: &str = "fm::core";
+pub const LOG_SERVER: &str = "fm::server";
 pub const LOG_DB: &str = "fm::db";
 pub const LOG_DEVIMINT: &str = "fm::devimint";
 pub const LOG_ECASH_RECOVERY: &str = "fm::ecash-recovery";

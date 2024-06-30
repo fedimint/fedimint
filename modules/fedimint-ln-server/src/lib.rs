@@ -22,9 +22,9 @@ use fedimint_core::db::{
 use fedimint_core::encoding::Encodable;
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::{
-    api_endpoint, ApiEndpoint, ApiEndpointContext, ApiVersion, CoreConsensusVersion, InputMeta,
-    ModuleConsensusVersion, ModuleInit, PeerHandle, ServerModuleInit, ServerModuleInitArgs,
-    SupportedModuleApiVersions, TransactionItemAmount, CORE_CONSENSUS_VERSION,
+    api_endpoint, ApiEndpoint, ApiEndpointContext, ApiVersion, InputMeta, ModuleConsensusVersion,
+    ModuleInit, MultiApiVersion, PeerHandle, ServerModuleInit, ServerModuleInitArgs,
+    TransactionItemAmount,
 };
 use fedimint_core::server::DynServerModule;
 use fedimint_core::task::{sleep, TaskGroup};
@@ -195,19 +195,16 @@ impl ModuleInit for LightningInit {
 impl ServerModuleInit for LightningInit {
     type Params = LightningGenParams;
 
-    fn versions(&self, _core: CoreConsensusVersion) -> &[ModuleConsensusVersion] {
+    fn supported_consensus_versions(&self) -> &[ModuleConsensusVersion] {
         &[MODULE_CONSENSUS_VERSION]
     }
 
-    fn supported_api_versions(&self) -> SupportedModuleApiVersions {
-        SupportedModuleApiVersions::from_raw(
-            (CORE_CONSENSUS_VERSION.major, CORE_CONSENSUS_VERSION.minor),
-            (
-                MODULE_CONSENSUS_VERSION.major,
-                MODULE_CONSENSUS_VERSION.minor,
-            ),
-            &[(0, 1)],
-        )
+    fn supported_api_versions(&self, major_module_consensus_version: u32) -> MultiApiVersion {
+        if major_module_consensus_version == MODULE_CONSENSUS_VERSION.major {
+            MultiApiVersion::from_raw([(0, 0)])
+        } else {
+            MultiApiVersion::from_raw([])
+        }
     }
 
     async fn init(&self, args: &ServerModuleInitArgs<Self>) -> anyhow::Result<DynServerModule> {

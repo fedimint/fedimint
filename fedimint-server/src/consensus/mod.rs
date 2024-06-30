@@ -110,14 +110,11 @@ pub async fn run(
         cfg: cfg.clone(),
         db: db.clone(),
         modules: module_registry.clone(),
+        module_inits: module_init_registry.clone(),
         client_cfg: client_cfg.clone(),
         submission_sender: submission_sender.clone(),
         shutdown_sender,
         shutdown_receiver: shutdown_receiver.clone(),
-        supported_api_versions: ServerConfig::supported_api_versions_summary(
-            &cfg.consensus.modules,
-            &module_init_registry,
-        ),
         last_ci_by_peer: last_ci_by_peer.clone(),
         connection_status_channels: connection_status_channels.clone(),
         force_api_secret: force_api_secrets.get_active(),
@@ -155,11 +152,8 @@ pub async fn run(
     info!(target: LOG_CONSENSUS, "Starting Consensus Engine");
 
     let api_urls = get_api_urls(&db, &cfg.consensus).await;
-
-    // FIXME: (@leonardo) How should this be handled ?
-    // Using the `Connector::default()` for now!
-    ConsensusEngine {
-        db,
+    let engine = ConsensusEngine {
+        db: db.clone(),
         federation_api: DynGlobalApi::from_endpoints(
             api_urls,
             &force_api_secrets.get_active(),
@@ -175,13 +169,18 @@ pub async fn run(
         shutdown_receiver,
         last_ci_by_peer,
         modules: module_registry,
+        module_inits: module_init_registry,
         task_group: task_group.clone(),
         data_dir,
         checkpoint_retention,
         p2p_bind_addr,
-    }
-    .run()
-    .await?;
+    };
+
+    engine
+        .submit_desired_consensus_version(&mut db.begin_transaction_nc().await, &submission_sender)
+        .await;
+
+    engine.run().await?;
 
     api_handler
         .stop()

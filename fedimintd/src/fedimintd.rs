@@ -31,7 +31,6 @@ use fedimint_mint_server::common::config::{MintGenParams, MintGenParamsConsensus
 use fedimint_mint_server::MintInit;
 use fedimint_server::config::api::ConfigGenSettings;
 use fedimint_server::config::io::{DB_FILE, PLAINTEXT_PASSWORD};
-use fedimint_server::config::ServerConfig;
 use fedimint_server::net::api::ApiSecrets;
 use fedimint_unknown_common::config::UnknownGenParams;
 use fedimint_unknown_server::UnknownInit;
@@ -381,26 +380,6 @@ impl Fedimintd {
 
     /// Block thread and run a Fedimintd server
     pub async fn run(self) -> ! {
-        // handle optional subcommand
-        if let Some(subcommand) = &self.opts.subcommand {
-            match subcommand {
-                ServerSubcommand::Dev(DevSubcommand::ListApiVersions) => {
-                    let api_versions = self.get_server_api_versions();
-                    let api_versions = serde_json::to_string_pretty(&api_versions)
-                        .expect("API versions struct is serializable");
-                    println!("{api_versions}");
-                    std::process::exit(0);
-                }
-                ServerSubcommand::Dev(DevSubcommand::ListDbVersions) => {
-                    let db_versions = self.get_server_db_versions();
-                    let db_versions = serde_json::to_string_pretty(&db_versions)
-                        .expect("API versions struct is serializable");
-                    println!("{db_versions}");
-                    std::process::exit(0);
-                }
-            }
-        }
-
         let root_task_group = TaskGroup::new();
         root_task_group.install_kill_handler();
 
@@ -449,9 +428,18 @@ impl Fedimintd {
         std::process::exit(-1);
     }
 
+    #[allow(unused, clippy::unused_self)]
     fn get_server_api_versions(&self) -> ServerApiVersionsSummary {
+        /*
+        let mut dbtx = db.begin_transaction_nc().await;
+        let core_consensus_version = dbtx.get_value(&ConsensusVersionKey(None)).await;
+
+        let mut module_consensus_versions = BTreeMap::new();
         ServerApiVersionsSummary {
-            core: ServerConfig::supported_api_versions().api,
+            core: SupportedCoreApiVersions {
+                core_consensus: CORE_CONSENSUS_VERSION,
+                api: ServerConfig::supported_api_versions(),
+            },
             modules: self
                 .server_gens
                 .kinds()
@@ -464,13 +452,16 @@ impl Fedimintd {
                 .map(|module_init| {
                     (
                         module_init.module_kind(),
-                        module_init.supported_api_versions().api,
+                        module_init.supported_api_versions(),
                     )
                 })
                 .collect(),
         }
+        */
+        unimplemented!()
     }
 
+    #[allow(unused, clippy::unused_self)]
     fn get_server_db_versions(&self) -> ServerDbVersionsSummary {
         ServerDbVersionsSummary {
             modules: self
@@ -562,6 +553,27 @@ async fn run(
         fedimint_rocksdb::RocksDb::open(data_dir.join(DB_FILE))?,
         ModuleRegistry::default(),
     );
+
+    // TODO: fixme
+    // handle optional subcommand
+    // if let Some(subcommand) = &opts.subcommand {
+    //     match subcommand {
+    //         ServerSubcommand::Dev(DevSubcommand::ListApiVersions) => {
+    //             let api_versions = self.get_server_api_versions(&db);
+    //             let api_versions = serde_json::to_string_pretty(&api_versions)
+    //                 .expect("API versions struct is serializable");
+    //             println!("{api_versions}");
+    //             std::process::exit(0);
+    //         }
+    //         ServerSubcommand::Dev(DevSubcommand::ListDbVersions) => {
+    //             let db_versions = self.get_server_db_versions(&db);
+    //             let db_versions = serde_json::to_string_pretty(&db_versions)
+    //                 .expect("API versions struct is serializable");
+    //             println!("{db_versions}");
+    //             std::process::exit(0);
+    //         }
+    //     }
+    // }
 
     fedimint_server::run(
         data_dir,

@@ -714,6 +714,7 @@ pub trait ModuleInitParams: serde::Serialize + serde::de::DeserializeOwned {
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize, Encodable, Decodable)]
 pub struct ServerModuleConsensusConfig {
     pub kind: ModuleKind,
+    /// Initial version of the consensus, estabilished during DKG
     pub version: ModuleConsensusVersion,
     #[serde(with = "::hex::serde")]
     pub config: Vec<u8>,

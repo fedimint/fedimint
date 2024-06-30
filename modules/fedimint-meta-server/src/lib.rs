@@ -22,9 +22,9 @@ use fedimint_core::db::{
 };
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::{
-    api_endpoint, ApiAuth, ApiEndpoint, ApiError, ApiVersion, CoreConsensusVersion, InputMeta,
-    ModuleConsensusVersion, ModuleInit, PeerHandle, ServerModuleInit, ServerModuleInitArgs,
-    SupportedModuleApiVersions, TransactionItemAmount, CORE_CONSENSUS_VERSION,
+    api_endpoint, ApiAuth, ApiEndpoint, ApiError, ApiVersion, InputMeta, ModuleConsensusVersion,
+    ModuleInit, MultiApiVersion, PeerHandle, ServerModuleInit, ServerModuleInitArgs,
+    TransactionItemAmount,
 };
 use fedimint_core::server::DynServerModule;
 use fedimint_core::{push_db_pair_items, NumPeers, OutPoint, PeerId, ServerModule};
@@ -118,19 +118,16 @@ impl ServerModuleInit for MetaInit {
     type Params = MetaGenParams;
 
     /// Returns the version of this module
-    fn versions(&self, _core: CoreConsensusVersion) -> &[ModuleConsensusVersion] {
+    fn supported_consensus_versions(&self) -> &[ModuleConsensusVersion] {
         &[MODULE_CONSENSUS_VERSION]
     }
 
-    fn supported_api_versions(&self) -> SupportedModuleApiVersions {
-        SupportedModuleApiVersions::from_raw(
-            (CORE_CONSENSUS_VERSION.major, CORE_CONSENSUS_VERSION.minor),
-            (
-                MODULE_CONSENSUS_VERSION.major,
-                MODULE_CONSENSUS_VERSION.minor,
-            ),
-            &[(0, 0)],
-        )
+    fn supported_api_versions(&self, major_module_consensus_version: u32) -> MultiApiVersion {
+        if major_module_consensus_version == MODULE_CONSENSUS_VERSION.major {
+            MultiApiVersion::from_raw([(0, 0)])
+        } else {
+            MultiApiVersion::from_raw([])
+        }
     }
 
     /// Initialize the module

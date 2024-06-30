@@ -13,7 +13,9 @@ use fedimint_api_client::api::{
 };
 use fedimint_core::admin_client::ServerStatus;
 use fedimint_core::backup::{ClientBackupKey, ClientBackupSnapshot};
-use fedimint_core::config::{ClientConfig, JsonClientConfig};
+use fedimint_core::config::{
+    ClientConfig, JsonClientConfig, ServerModuleConsensusConfig, ServerModuleInitRegistry,
+};
 use fedimint_core::core::backup::{SignedBackupRequest, BACKUP_REQUEST_MAX_PAYLOAD_SIZE_BYTES};
 use fedimint_core::core::{DynOutputOutcome, ModuleInstanceId};
 use fedimint_core::db::{
@@ -34,7 +36,8 @@ use fedimint_core::module::audit::{Audit, AuditSummary};
 use fedimint_core::module::registry::ServerModuleRegistry;
 use fedimint_core::module::{
     api_endpoint, ApiEndpoint, ApiEndpointContext, ApiError, ApiRequestErased, ApiVersion,
-    SerdeModuleEncoding, SupportedApiVersionsSummary,
+    CoreConsensusVersion, ModuleConsensusVersion, SerdeModuleEncoding, SupportedApiVersionsSummary,
+    SupportedCoreApiVersions, SupportedModuleApiVersions,
 };
 use fedimint_core::net::api_announcement::{
     ApiAnnouncement, SignedApiAnnouncement, SignedApiAnnouncementSubmission,
@@ -52,12 +55,13 @@ use futures::StreamExt;
 use tokio::sync::{watch, RwLock};
 use tracing::{debug, info};
 
+use super::db::DatabaseTransactionExt;
 use crate::config::io::{
     CONSENSUS_CONFIG, ENCRYPTED_EXT, JSON_EXT, LOCAL_CONFIG, PRIVATE_CONFIG, SALT_FILE,
 };
 use crate::config::ServerConfig;
 use crate::consensus::db::{AcceptedItemPrefix, AcceptedTransactionKey, SignedSessionOutcomeKey};
-use crate::consensus::engine::get_finished_session_count_static;
+use crate::consensus::engine::{get_finished_session_count_static, ConsensusEngine};
 use crate::consensus::transaction::process_transaction_with_dbtx;
 use crate::fedimint_core::encoding::Encodable;
 use crate::metrics::{BACKUP_WRITE_SIZE_BYTES, STORED_BACKUPS_COUNT};
@@ -72,6 +76,8 @@ pub struct ConsensusApi {
     pub db: Database,
     /// Modules registered with the federation
     pub modules: ServerModuleRegistry,
+    /// Module inits registered with the federation
+    pub module_inits: ServerModuleInitRegistry,
     /// Cached client config
     pub client_cfg: ClientConfig,
 
@@ -82,14 +88,75 @@ pub struct ConsensusApi {
     pub shutdown_sender: watch::Sender<Option<u64>>,
     pub connection_status_channels: Arc<RwLock<BTreeMap<PeerId, PeerConnectionStatus>>>,
     pub last_ci_by_peer: Arc<RwLock<BTreeMap<PeerId, u64>>>,
-    pub supported_api_versions: SupportedApiVersionsSummary,
 }
 
 impl ConsensusApi {
-    pub fn api_versions_summary(&self) -> &SupportedApiVersionsSummary {
-        &self.supported_api_versions
+    /// Calculate the [`VERSION_ENDPOINT`] response
+    pub async fn api_versions_summary(&self) -> SupportedApiVersionsSummary {
+        let mut dbtx = self.db.begin_transaction_nc().await;
+        let core_consensus_version = dbtx.get_consensus_version(None, &self.cfg.consensus).await;
+        let mut module_consensus_versions = BTreeMap::new();
+
+        for (module_id, _, _) in self.modules.iter_modules() {
+            module_consensus_versions.insert(
+                module_id,
+                dbtx.get_consensus_version(Some(module_id), &self.cfg.consensus)
+                    .await
+                    .into(),
+            );
+        }
+        drop(dbtx);
+        Self::supported_api_versions_summary(
+            core_consensus_version.into(),
+            &module_consensus_versions,
+            &self.cfg.consensus.modules,
+            &self.module_inits,
+        )
     }
 
+    /// Calculate the supported api version summary for the purpose of
+    /// [`VERSION_ENDPOINT`]
+    fn supported_api_versions_summary(
+        core_consensus: CoreConsensusVersion,
+        module_consensus: &BTreeMap<ModuleInstanceId, ModuleConsensusVersion>,
+        modules: &BTreeMap<ModuleInstanceId, ServerModuleConsensusConfig>,
+        module_inits: &ServerModuleInitRegistry,
+    ) -> SupportedApiVersionsSummary {
+        SupportedApiVersionsSummary {
+            core: SupportedCoreApiVersions {
+                core_consensus,
+                api: ServerConfig::supported_api_versions(core_consensus.major),
+            },
+
+            modules: modules
+                .iter()
+                .map(|(&id, config)| {
+                    (id, {
+                        let module_consensus_version = module_consensus
+                            .get(&id)
+                            .expect("Must have a config for each module");
+                        let api_versions = module_inits
+                            .get(&config.kind)
+                            .expect("missing module kind gen")
+                            .supported_api_versions(module_consensus_version.major);
+
+                        SupportedModuleApiVersions {
+                            core_consensus,
+                            module_consensus: ModuleConsensusVersion {
+                                major: module_consensus_version.major,
+                                // Minor module consensus version is irrelevant to the client, and
+                                // can change at runtime but since it's already here, we just
+                                // hardcode it to 0. In theory  we could read it at runtime for
+                                // information purposes.
+                                minor: 0,
+                            },
+                            api: api_versions,
+                        }
+                    })
+                })
+                .collect(),
+        }
+    }
     pub fn get_active_api_secret(&self) -> Option<String> {
         // TODO: In the future, we might want to fetch it from the DB, so it's possible
         // to customize from the UX
@@ -121,7 +188,20 @@ impl ConsensusApi {
         // We ignore any writes, as we only verify if the transaction is valid here
         dbtx.ignore_uncommitted();
 
-        process_transaction_with_dbtx(self.modules.clone(), &mut dbtx, &transaction).await?;
+        let consensus_version_cache = ConsensusEngine::load_consensus_version_cache_static(
+            &mut dbtx.to_ref_nc(),
+            &self.modules,
+            &self.module_inits,
+            &self.cfg,
+        )
+        .await;
+        process_transaction_with_dbtx(
+            self.modules.clone(),
+            &mut dbtx,
+            &transaction,
+            &consensus_version_cache,
+        )
+        .await?;
 
         self.submission_sender
             .send(ConsensusItem::Transaction(transaction))
@@ -511,7 +591,7 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConsensusApi>> {
             VERSION_ENDPOINT,
             ApiVersion::new(0, 0),
             async |fedimint: &ConsensusApi, _context, _v: ()| -> SupportedApiVersionsSummary {
-                Ok(fedimint.api_versions_summary().to_owned())
+                Ok(fedimint.api_versions_summary().await)
             }
         },
         api_endpoint! {

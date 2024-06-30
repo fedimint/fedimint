@@ -2,12 +2,21 @@ use std::collections::BTreeMap;
 use std::fmt::Debug;
 
 use fedimint_core::core::ModuleInstanceId;
-use fedimint_core::db::{CoreMigrationFn, DatabaseVersion, MODULE_GLOBAL_PREFIX};
+use fedimint_core::db::{
+    CoreMigrationFn, DatabaseTransaction, DatabaseVersion, IDatabaseTransactionOpsCoreTyped,
+    MODULE_GLOBAL_PREFIX,
+};
 use fedimint_core::encoding::{Decodable, Encodable};
+use fedimint_core::epoch::ConsensusVersionVote;
+use fedimint_core::module::ConsensusVersion;
 use fedimint_core::session_outcome::{AcceptedItem, SignedSessionOutcome};
-use fedimint_core::{impl_db_lookup, impl_db_record, TransactionId};
+use fedimint_core::{impl_db_lookup, impl_db_record, NumPeers, NumPeersExt, PeerId, TransactionId};
+use futures::stream;
 use serde::Serialize;
 use strum_macros::EnumIter;
+use tokio_stream::StreamExt as _;
+
+use crate::config::ServerConfigConsensus;
 
 pub const GLOBAL_DATABASE_VERSION: DatabaseVersion = DatabaseVersion(0);
 
@@ -20,6 +29,7 @@ pub enum DbKeyPrefix {
     AlephUnits = 0x05,
     // TODO: do we want to split the server DB into consensus/non-consensus?
     ApiAnnouncements = 0x06,
+    ConsensusVersionVote = 0x07,
     Module = MODULE_GLOBAL_PREFIX,
 }
 
@@ -93,6 +103,144 @@ impl_db_lookup!(key = AlephUnitsKey, query_prefix = AlephUnitsPrefix);
 
 pub fn get_global_database_migrations() -> BTreeMap<DatabaseVersion, CoreMigrationFn> {
     BTreeMap::new()
+}
+
+#[derive(Copy, Clone, Debug, Encodable, Decodable)]
+pub struct ConsensusVersionVoteKey {
+    pub module_id: Option<ModuleInstanceId>,
+    pub peer_id: PeerId,
+}
+
+impl From<(ConsensusVersionVote, PeerId)> for ConsensusVersionVoteKey {
+    fn from((vote, peer_id): (ConsensusVersionVote, PeerId)) -> Self {
+        Self {
+            module_id: vote.module_id,
+            peer_id,
+        }
+    }
+}
+
+#[derive(Copy, Clone, Debug, Encodable, Decodable, PartialEq, Eq, PartialOrd, Ord)]
+pub struct ConsensusVersionVoteValue {
+    pub desired: ConsensusVersion,
+    pub accelerate: bool,
+}
+
+impl From<ConsensusVersionVote> for ConsensusVersionVoteValue {
+    fn from(
+        ConsensusVersionVote {
+            module_id: _,
+            desired,
+            accelerate,
+        }: ConsensusVersionVote,
+    ) -> Self {
+        Self {
+            desired,
+            accelerate,
+        }
+    }
+}
+
+#[derive(Clone, Debug, Encodable, Decodable)]
+pub struct ConsensusVersionVotePrefixAll;
+
+#[derive(Clone, Debug, Encodable, Decodable)]
+pub struct ConsensusVersionVotePrefixByModuleId(Option<ModuleInstanceId>);
+
+impl_db_record!(
+    key = ConsensusVersionVoteKey,
+    value = ConsensusVersionVoteValue,
+    db_prefix = DbKeyPrefix::ConsensusVersionVote,
+    notify_on_modify = false,
+);
+
+impl_db_lookup!(
+    key = ConsensusVersionVoteKey,
+    query_prefix = ConsensusVersionVotePrefixAll
+);
+impl_db_lookup!(
+    key = ConsensusVersionVoteKey,
+    query_prefix = ConsensusVersionVotePrefixByModuleId
+);
+
+pub(crate) trait DatabaseTransactionExt {
+    async fn get_consensus_version_opt(
+        &mut self,
+        module_id: Option<ModuleInstanceId>,
+        num_peers: NumPeers,
+    ) -> Option<ConsensusVersion>;
+    async fn get_consensus_version(
+        &mut self,
+        module_id: Option<ModuleInstanceId>,
+        cfg: &ServerConfigConsensus,
+    ) -> ConsensusVersion;
+}
+
+impl<Cap: Send> DatabaseTransactionExt for DatabaseTransaction<'_, Cap> {
+    async fn get_consensus_version(
+        &mut self,
+        module_id: Option<ModuleInstanceId>,
+        cfg: &ServerConfigConsensus,
+    ) -> ConsensusVersion {
+        self.get_consensus_version_opt(module_id, cfg.api_endpoints.to_num_peers())
+            .await
+            .unwrap_or_else(|| {
+                if let Some(module_id) = module_id {
+                    cfg.modules
+                        .get(&module_id)
+                        .expect("Must have a matching module")
+                        .version
+                        .into()
+                } else {
+                    cfg.version.into()
+                }
+            })
+    }
+
+    async fn get_consensus_version_opt(
+        &mut self,
+        module_id: Option<ModuleInstanceId>,
+        num_peers: NumPeers,
+    ) -> Option<ConsensusVersion> {
+        let mut votes: Vec<_> = self
+            .find_by_prefix(&ConsensusVersionVotePrefixByModuleId(module_id))
+            .await
+            .map(|(_k, v)| Some(v))
+            .chain(stream::repeat(None))
+            .take(num_peers.total())
+            .collect::<Vec<_>>()
+            .await;
+
+        get_consensus_from_votes(&mut votes, num_peers)
+    }
+}
+
+/// Calculate the effective consensus version based on the votes of `num_peers`
+///
+/// The `votes.len()` must equal `num_peers`.
+fn get_consensus_from_votes(
+    votes: &mut [Option<ConsensusVersionVoteValue>],
+    num_peers: NumPeers,
+) -> Option<ConsensusVersion> {
+    assert_eq!(votes.len(), num_peers.total());
+
+    votes.sort();
+
+    // The desire version is one that threshold amount of peers are ready for.
+    let threshold_desired_version = votes[num_peers.max_evil()].map(|vote| vote.desired)?;
+
+    // If all peers are ready for the desired version, we accept it
+    if votes[0].map(|v| v.desired) == Some(threshold_desired_version) {
+        return Some(threshold_desired_version);
+    }
+
+    // If any peer voted to accelerate switching, we accept it
+    if votes.iter().any(|v| v.is_some_and(|v| v.accelerate)) {
+        return Some(threshold_desired_version);
+    }
+
+    // Otherwise, we proceed with the lowest vote
+    votes[0].map(|v| v.desired)
 }
 
 #[cfg(test)]
@@ -302,8 +450,6 @@ mod fedimint_migration_tests {
                             );
                             info!(target: LOG_DB, "Validated AlephUnits");
                         }
-                        // Module prefix is reserved for modules, no migration testing is needed
-                        DbKeyPrefix::Module => {}
                         DbKeyPrefix::ApiAnnouncements => {
                             let announcements = dbtx
                                 .find_by_prefix(&ApiAnnouncementPrefix)
@@ -313,6 +459,8 @@ mod fedimint_migration_tests {
 
                             assert_eq!(announcements.len(), 1);
                         }
+                        // Module prefix is reserved for modules, no migration testing is needed
+                        DbKeyPrefix::Module | DbKeyPrefix::ConsensusVersionVote => {}
                     }
                 }
                 Ok(())
