@@ -338,7 +338,12 @@ impl GatewayPayInvoice {
                 });
             }
 
-            let mut gateway_dbtx = context.gateway.gateway_db.begin_transaction_nc().await;
+            let mut gateway_dbtx = context
+                .gateway
+                .db_manager
+                .gateway_db
+                .begin_transaction_nc()
+                .await;
             let config = gateway_dbtx
                 .get_value(&FederationIdKey { id: federation_id })
                 .await
@@ -536,7 +541,12 @@ impl GatewayPayInvoice {
         preimage_auth: sha256::Hash,
         contract: OutgoingContractAccount,
     ) -> Result<(), OutgoingPaymentError> {
-        let mut dbtx = context.gateway.gateway_db.begin_transaction().await;
+        let mut dbtx = context
+            .gateway
+            .db_manager
+            .gateway_db
+            .begin_transaction()
+            .await;
         if let Some(secret_hash) = dbtx
             .get_value(&PreimageAuthentication { payment_hash })
             .await
