@@ -17,6 +17,7 @@
 
 pub mod client;
 mod db;
+mod db_manager;
 pub mod envs;
 mod federation_manager;
 pub mod gateway_module_v2;
@@ -49,8 +50,8 @@ use clap::Parser;
 use client::GatewayClientBuilder;
 use db::{
     DbKeyPrefix, FederationIdKey, GatewayConfiguration, GatewayConfigurationKey, GatewayPublicKey,
-    GATEWAYD_DATABASE_VERSION,
 };
+use db_manager::DbManager;
 use federation_manager::FederationManager;
 use fedimint_api_client::api::FederationError;
 use fedimint_client::module::init::ClientModuleInitRegistry;
@@ -60,15 +61,13 @@ use fedimint_core::core::{
     ModuleInstanceId, ModuleKind, LEGACY_HARDCODED_INSTANCE_ID_MINT,
     LEGACY_HARDCODED_INSTANCE_ID_WALLET,
 };
-use fedimint_core::db::{
-    apply_migrations_server, Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped,
-};
+use fedimint_core::db::{Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped};
 use fedimint_core::endpoint_constants::REGISTER_GATEWAY_ENDPOINT;
 use fedimint_core::fmt_utils::OptStacktrace;
 use fedimint_core::invite_code::InviteCode;
 use fedimint_core::module::CommonModuleInit;
 use fedimint_core::secp256k1::schnorr::Signature;
-use fedimint_core::secp256k1::{KeyPair, PublicKey, Secp256k1};
+use fedimint_core::secp256k1::PublicKey;
 use fedimint_core::task::{sleep, TaskGroup, TaskHandle, TaskShutdownToken};
 use fedimint_core::time::duration_since_epoch;
 use fedimint_core::util::{SafeUrl, Spanned};
@@ -94,7 +93,6 @@ use gateway_lnrpc::{CloseChannelsWithPeerResponse, InterceptHtlcResponse};
 use hex::ToHex;
 use lightning::{ILnRpcClient, LightningBuilder, LightningMode, LightningRpcError};
 use lightning_invoice::{Bolt11Invoice, RoutingFees};
-use rand::rngs::OsRng;
 use rand::Rng;
 use rpc::{
     CloseChannelsWithPeerPayload, FederationInfo, GatewayFedConfig, GatewayInfo, LeaveFedPayload,
@@ -104,12 +102,12 @@ use state_machine::pay::OutgoingPaymentError;
 use state_machine::GatewayClientModule;
 use strum::IntoEnumIterator;
 use thiserror::Error;
-use tokio::sync::{Mutex, RwLock};
+use tokio::sync::RwLock;
 use tracing::{debug, error, info, info_span, warn, Instrument};
 
 use crate::db::{
-    get_gatewayd_database_migrations, FederationConfig, FederationIdKeyPrefix,
-    RegisteredIncomingContract, RegisteredIncomingContractKey,
+    FederationConfig, FederationIdKeyPrefix, RegisteredIncomingContract,
+    RegisteredIncomingContractKey,
 };
 use crate::gateway_lnrpc::create_invoice_request::Description;
 use crate::gateway_lnrpc::intercept_htlc_response::Forward;
@@ -287,6 +285,9 @@ pub struct Gateway {
     /// The gateway's federation manager.
     federation_manager: Arc<RwLock<FederationManager>>,
 
+    /// The gateway's database manager.
+    db_manager: DbManager,
+
     /// Builder struct that allows the gateway to build a `ILnRpcClient`, which
     /// represents a connection to a lightning node.
     lightning_builder: Arc<dyn LightningBuilder + Send + Sync>,
@@ -300,9 +301,6 @@ pub struct Gateway {
     /// Builder struct that allows the gateway to build a Fedimint client, which
     /// handles the communication with a federation.
     client_builder: GatewayClientBuilder,
-
-    /// Database for Gateway metadata.
-    gateway_db: Database,
 
     /// Joining or leaving Federation is protected by this lock to prevent
     /// trying to use same database at the same time from multiple threads.
@@ -324,10 +322,10 @@ impl std::fmt::Debug for Gateway {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Gateway")
             .field("federation_manager", &self.federation_manager)
+            .field("db_manager", &self.db_manager)
             .field("gateway_config", &self.gateway_config)
             .field("state", &self.state)
             .field("client_builder", &self.client_builder)
-            .field("gateway_db", &self.gateway_db)
             .field("gateway_id", &self.gateway_id)
             .finish_non_exhaustive()
     }
@@ -422,48 +420,26 @@ impl Gateway {
         client_builder: GatewayClientBuilder,
         gateway_state: GatewayState,
     ) -> anyhow::Result<Gateway> {
-        // Apply database migrations before using the database to ensure old database
-        // structures are readable.
-        apply_migrations_server(
-            &gateway_db,
-            "gatewayd".to_string(),
-            GATEWAYD_DATABASE_VERSION,
-            get_gatewayd_database_migrations(),
-        )
-        .await?;
+        let db_manager = DbManager::new(gateway_db).await?;
 
         // Reads the `GatewayConfig` from the database if it exists or is provided from
         // the command line.
-        let gateway_config =
-            Self::get_gateway_configuration(gateway_db.clone(), &gateway_parameters).await;
+        let gateway_config = db_manager.get_gateway_config(&gateway_parameters).await;
+
+        let gateway_id = db_manager.load_gateway_id().await;
 
         Ok(Self {
             federation_manager: Arc::new(RwLock::new(FederationManager::new())),
+            db_manager,
             lightning_builder,
             gateway_config: Arc::new(RwLock::new(gateway_config)),
             state: Arc::new(RwLock::new(gateway_state)),
             client_builder,
-            gateway_id: Self::load_gateway_id(&gateway_db).await,
-            gateway_db,
-            client_joining_lock: Arc::new(Mutex::new(ClientsJoinLock)),
+            client_joining_lock: Arc::new(tokio::sync::Mutex::new(ClientsJoinLock)),
+            gateway_id,
             versioned_api: gateway_parameters.versioned_api,
             listen: gateway_parameters.listen,
         })
-    }
-
-    /// Returns a `PublicKey` that uniquely identifies the Gateway.
-    async fn load_gateway_id(gateway_db: &Database) -> PublicKey {
-        let mut dbtx = gateway_db.begin_transaction().await;
-        if let Some(key_pair) = dbtx.get_value(&GatewayPublicKey {}).await {
-            key_pair.public_key()
-        } else {
-            let context = Secp256k1::new();
-            let (secret, public) = context.generate_keypair(&mut OsRng);
-            let key_pair = KeyPair::from_secret_key(&context, &secret);
-            dbtx.insert_new_entry(&GatewayPublicKey, &key_pair).await;
-            dbtx.commit_tx().await;
-            public
-        }
     }
 
     pub fn gateway_id(&self) -> PublicKey {
@@ -576,8 +552,8 @@ impl Gateway {
                                 } else {
                                     self_copy.set_gateway_state(GatewayState::Configuring).await;
                                     info!("Waiting for gateway to be configured...");
-                                    self_copy.gateway_db
-                                        .wait_key_exists(&GatewayConfigurationKey)
+                                    self_copy.db_manager
+                                        .get_gateway_config_wait_until_exists()
                                         .await
                                 };
 
@@ -804,7 +780,7 @@ impl Gateway {
         let (federations, channels) = {
             let federation_manager = self.federation_manager.read().await;
 
-            let dbtx = self.gateway_db.begin_transaction_nc().await;
+            let dbtx = self.db_manager.gateway_db.begin_transaction_nc().await;
             let federations = federation_manager
                 .federation_info_all_federations(dbtx)
                 .await;
@@ -1090,8 +1066,7 @@ impl Gateway {
             .await,
         );
 
-        let dbtx = self.gateway_db.begin_transaction().await;
-        GatewayClientBuilder::save_config(gw_client_cfg, dbtx).await?;
+        self.db_manager.save_config(&gw_client_cfg).await?;
         debug!("Federation with ID: {federation_id} connected and assigned channel id: {mint_channel_id}");
 
         Ok(federation_info)
@@ -1106,7 +1081,7 @@ impl Gateway {
         payload: LeaveFedPayload,
     ) -> Result<FederationInfo> {
         let _client_joining_lock = self.client_joining_lock.lock().await;
-        let mut dbtx = self.gateway_db.begin_transaction().await;
+        let mut dbtx = self.db_manager.gateway_db.begin_transaction().await;
 
         let federation_info = self
             .federation_manager
@@ -1175,7 +1150,7 @@ impl Gateway {
             _ => DEFAULT_NETWORK,
         };
 
-        let mut dbtx = self.gateway_db.begin_transaction().await;
+        let mut dbtx = self.db_manager.gateway_db.begin_transaction().await;
 
         let prev_gateway_config = self.clone_gateway_config().await;
         let new_gateway_config = if let Some(mut prev_config) = prev_gateway_config {
@@ -1353,48 +1328,6 @@ impl Gateway {
         Ok(())
     }
 
-    /// This function will return a `GatewayConfiguration` one of two
-    /// ways. To avoid conflicting configs, the below order is the
-    /// order in which the gateway will respect configurations:
-    /// - `GatewayConfiguration` is read from the database.
-    /// - All cli or environment variables are set such that we can create a
-    ///   `GatewayConfiguration`
-    async fn get_gateway_configuration(
-        gateway_db: Database,
-        gateway_parameters: &GatewayParameters,
-    ) -> Option<GatewayConfiguration> {
-        let mut dbtx = gateway_db.begin_transaction_nc().await;
-
-        // Always use the gateway configuration from the database if it exists.
-        if let Some(gateway_config) = dbtx.get_value(&GatewayConfigurationKey).await {
-            return Some(gateway_config);
-        }
-
-        // If the password is not provided, return None
-        let password = gateway_parameters.password.as_ref()?;
-
-        // If the DB does not have the gateway configuration, we can construct one from
-        // the provided password (required) and the defaults.
-        // Use gateway parameters provided by the environment or CLI
-        let num_route_hints = gateway_parameters.num_route_hints;
-        let routing_fees = gateway_parameters
-            .fees
-            .clone()
-            .unwrap_or(GatewayFee(DEFAULT_FEES));
-        let network = gateway_parameters.network.unwrap_or(DEFAULT_NETWORK);
-        let password_salt: [u8; 16] = rand::thread_rng().gen();
-        let hashed_password = hash_password(password, password_salt);
-        let gateway_config = GatewayConfiguration {
-            hashed_password,
-            network,
-            num_route_hints,
-            routing_fees: routing_fees.0,
-            password_salt,
-        };
-
-        Some(gateway_config)
-    }
-
     /// Retrieves a `ClientHandleArc` from the Gateway's in memory structures
     /// that keep track of available clients, given a `federation_id`.
     pub async fn select_client(
@@ -1415,8 +1348,7 @@ impl Gateway {
     /// database and reconstructs the clients necessary for interacting with
     /// connection federations.
     async fn load_clients(&self) {
-        let dbtx = self.gateway_db.begin_transaction_nc().await;
-        let configs = GatewayClientBuilder::load_configs(dbtx).await;
+        let configs = self.db_manager.load_configs().await;
 
         let _join_federation = self.client_joining_lock.lock().await;
 
@@ -1461,7 +1393,7 @@ impl Gateway {
                 if let Some(gateway_config) = gateway_config {
                     let gateway_state = gateway.get_state().await;
                     if let GatewayState::Running { .. } = &gateway_state {
-                        let mut dbtx = gateway.gateway_db.begin_transaction_nc().await;
+                        let mut dbtx = gateway.db_manager.gateway_db.begin_transaction_nc().await;
                         let all_federations_configs: Vec<_> = dbtx.find_by_prefix(&FederationIdKeyPrefix).await.map(|(key, config)| (key.id, config)).collect().await;
                         let result = gateway.register_federations(&gateway_config, &all_federations_configs).await;
                         registration_result = Some(result);
@@ -1532,7 +1464,7 @@ impl Gateway {
     /// Iterates through all of the federations the gateway is registered with
     /// and requests to remove the registration record.
     pub async fn unannounce_from_all_federations(&self) {
-        let mut dbtx = self.gateway_db.begin_transaction_nc().await;
+        let mut dbtx = self.db_manager.gateway_db.begin_transaction_nc().await;
         let gateway_keypair = dbtx
             .get_value(&GatewayPublicKey)
             .await
@@ -1650,7 +1582,7 @@ impl Gateway {
             .await
             .map_err(|e| anyhow!(e))?;
 
-        let mut dbtx = self.gateway_db.begin_transaction().await;
+        let mut dbtx = self.db_manager.gateway_db.begin_transaction().await;
 
         if dbtx
             .insert_entry(
@@ -1724,6 +1656,7 @@ impl Gateway {
         amount_msats: u64,
     ) -> anyhow::Result<(IncomingContract, ClientHandleArc)> {
         let registered_incoming_contract = self
+            .db_manager
             .gateway_db
             .begin_transaction_nc()
             .await
