@@ -22,7 +22,7 @@ Using a public key tweak instead of querying the federation for a new address av
 - [Wallet::begin_consensus_epoch](../modules/fedimint-wallet-server/src/lib.rs) - determines the `RoundConsensus` containing the consensus block height which is delayed by a configurable `finality_delay` of 10 blocks after which peg-ins accepted.
 
 ### Pegging Out - User Client
-- [Client::new_peg_out_with_fees](../fedimint-client/src/lib.rs) - creates a new `PegOut` for users by requesting the current peg-out fees from the fed's wallet API which is estimated based on the on-chain size of the transaction and the sats/byte to confirm in a `CONFIRMATION_TARGET` of 10 blocks.
+- [Client::new_peg_out_with_fees](../fedimint-client/src/lib.rs) - creates a new `PegOut` for users by requesting the current peg-out fees from the fed's wallet API which is estimated based on the on-chain size of the transaction and the sats/byte to confirm in a `CONFIRMATION_TARGET` of 1 block.
 - [Client::peg_out](../fedimint-client/src/lib.rs) - submits a transaction to the fed to spend input ecash and receive bitcoin on-chain.
 
 ```rust
