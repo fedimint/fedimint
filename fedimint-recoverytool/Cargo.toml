@@ -3,7 +3,7 @@ name = "fedimint-recoverytool"
 version = { workspace = true }
 edition = "2021"
 authors = ["The Fedimint Developers"]
-description = "recoverytool allows retrieving on-chain funds from a offline federation"
+description = "Tool for retrieving on-chain funds from a decommissioned Fedimint federation"
 license = "MIT"
 readme = "README.md"
 repository = "https://github.com/fedimint/fedimint"
