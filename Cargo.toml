@@ -19,6 +19,7 @@ members = [
     "fedimint-load-test-tool",
     "fedimint-logging",
     "fedimint-metrics",
+    "fedimint-recoverytool",
     "fedimint-rocksdb",
     "fedimint-server",
     "fedimint-testing",
@@ -57,7 +58,6 @@ members = [
     "modules/fedimint-wallet-common",
     "modules/fedimint-wallet-server",
     "modules/fedimint-wallet-tests",
-    "recoverytool",
     "utils/portalloc"]
 resolver = "2"
 
