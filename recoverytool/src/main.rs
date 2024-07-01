@@ -14,10 +14,7 @@ use anyhow::anyhow;
 use bitcoin::network::constants::Network;
 use bitcoin::OutPoint;
 use clap::{ArgGroup, Parser, Subcommand};
-use fedimint_core::core::{
-    LEGACY_HARDCODED_INSTANCE_ID_LN, LEGACY_HARDCODED_INSTANCE_ID_MINT,
-    LEGACY_HARDCODED_INSTANCE_ID_WALLET,
-};
+use fedimint_core::core::LEGACY_HARDCODED_INSTANCE_ID_WALLET;
 use fedimint_core::db::{Database, IDatabaseTransactionOpsCoreTyped};
 use fedimint_core::epoch::ConsensusItem;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
@@ -25,11 +22,7 @@ use fedimint_core::module::CommonModuleInit;
 use fedimint_core::session_outcome::SignedSessionOutcome;
 use fedimint_core::transaction::Transaction;
 use fedimint_core::ServerModule;
-use fedimint_ln_common::LightningCommonInit;
-use fedimint_ln_server::Lightning;
 use fedimint_logging::TracingSetup;
-use fedimint_mint_server::common::MintCommonInit;
-use fedimint_mint_server::Mint;
 use fedimint_rocksdb::{RocksDb, RocksDbReadOnly};
 use fedimint_server::config::io::read_server_config;
 use fedimint_server::consensus::db::SignedSessionOutcomePrefix;
@@ -191,23 +184,11 @@ async fn main() -> anyhow::Result<()> {
         }
         TweakSource::Epochs { db } => {
             // FIXME: read config to figure out instance ids
-            let decoders = ModuleDecoderRegistry::from_iter([
-                (
-                    LEGACY_HARDCODED_INSTANCE_ID_LN,
-                    LightningCommonInit::KIND,
-                    <Lightning as ServerModule>::decoder(),
-                ),
-                (
-                    LEGACY_HARDCODED_INSTANCE_ID_MINT,
-                    MintCommonInit::KIND,
-                    <Mint as ServerModule>::decoder(),
-                ),
-                (
-                    LEGACY_HARDCODED_INSTANCE_ID_WALLET,
-                    WalletCommonInit::KIND,
-                    <Wallet as ServerModule>::decoder(),
-                ),
-            ])
+            let decoders = ModuleDecoderRegistry::from_iter([(
+                LEGACY_HARDCODED_INSTANCE_ID_WALLET,
+                WalletCommonInit::KIND,
+                <Wallet as ServerModule>::decoder(),
+            )])
             .with_fallback();
 
             let db = get_db(opts.readonly, &db, decoders);
