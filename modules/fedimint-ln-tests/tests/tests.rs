@@ -11,7 +11,6 @@ use fedimint_dummy_server::DummyInit;
 use fedimint_ln_client::{
     InternalPayState, LightningClientInit, LightningClientModule, LightningOperationMeta,
     LnPayState, LnReceiveState, MockGatewayConnection, OutgoingLightningPayment, PayType,
-    RealGatewayConnection,
 };
 use fedimint_ln_common::config::LightningGenParams;
 use fedimint_ln_common::ln_operation;
@@ -195,84 +194,6 @@ async fn cannot_pay_same_internal_invoice_twice() -> anyhow::Result<()> {
     let same_balance = client2.get_balance().await;
     assert_eq!(prev_balance, same_balance);
 
-    Ok(())
-}
-
-// TODO: This test verifies behavior between the client and the gateway, it
-// should be a devimint test
-#[tokio::test(flavor = "multi_thread")]
-async fn gateway_protects_preimage_for_payment() -> anyhow::Result<()> {
-    let fixtures = Fixtures::new_primary(DummyClientInit, DummyInit, DummyGenParams::default());
-    let ln_params = LightningGenParams::regtest(fixtures.bitcoin_server());
-    let fixtures = fixtures.with_module(
-        LightningClientInit {
-            gateway_conn: Arc::new(RealGatewayConnection),
-        },
-        LightningInit,
-        ln_params,
-    );
-    let fed = fixtures.new_default_fed().await;
-    let gw = gateway(&fixtures, &fed).await;
-    let (client1, client2) = fed.two_clients().await;
-    let client1_dummy_module = client1.get_first_module::<DummyClientModule>();
-    let client2_dummy_module = client2.get_first_module::<DummyClientModule>();
-
-    // Print money for client1
-    let (op, outpoint) = client1_dummy_module.print_money(sats(10000)).await?;
-    client1.await_primary_module_output(op, outpoint).await?;
-
-    // Print money for client2
-    let (op, outpoint) = client2_dummy_module.print_money(sats(10000)).await?;
-    client2.await_primary_module_output(op, outpoint).await?;
-
-    let other_ln = FakeLightningTest::new();
-    let invoice = other_ln.invoice(Amount::from_sats(100), None)?;
-
-    // Pay invoice with client1
-    let OutgoingLightningPayment {
-        payment_type,
-        contract_id: _,
-        fee: _,
-    } = pay_invoice(&client1, invoice.clone(), Some(gw.gateway_id())).await?;
-    match payment_type {
-        PayType::Lightning(operation_id) => {
-            let mut sub = client1
-                .get_first_module::<LightningClientModule>()
-                .subscribe_ln_pay(operation_id)
-                .await?
-                .into_stream();
-
-            assert_eq!(sub.ok().await?, LnPayState::Created);
-            assert_matches!(sub.ok().await?, LnPayState::Funded { .. });
-            assert_matches!(sub.ok().await?, LnPayState::Success { .. });
-        }
-        _ => panic!("Expected lightning payment!"),
-    }
-
-    // Verify that client2 cannot pay the same invoice and the preimage is not
-    // returned
-    let OutgoingLightningPayment {
-        payment_type,
-        contract_id: _,
-        fee: _,
-    } = pay_invoice(&client2, invoice.clone(), Some(gw.gateway_id())).await?;
-    match payment_type {
-        PayType::Lightning(operation_id) => {
-            let mut sub = client2
-                .get_first_module::<LightningClientModule>()
-                .subscribe_ln_pay(operation_id)
-                .await?
-                .into_stream();
-
-            assert_eq!(sub.ok().await?, LnPayState::Created);
-            assert_matches!(sub.ok().await?, LnPayState::Funded { .. });
-            assert_matches!(sub.ok().await?, LnPayState::WaitingForRefund { .. });
-            assert_matches!(sub.ok().await?, LnPayState::Refunded { .. });
-        }
-        _ => panic!("Expected lightning payment!"),
-    }
-
-    drop(gw);
     Ok(())
 }
 
