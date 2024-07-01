@@ -605,7 +605,7 @@ const ELECTRS_FALLBACK: &str = "electrs";
 
 const ESPLORA_FALLBACK: &str = "esplora";
 
-const RECOVERYTOOL_FALLBACK: &str = "recoverytool";
+const RECOVERYTOOL_FALLBACK: &str = "fedimint-recoverytool";
 
 const FAUCET_FALLBACK: &str = "faucet";
 

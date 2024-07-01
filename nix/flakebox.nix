@@ -590,7 +590,7 @@ rec {
   fedimint-recoverytool = flakeboxLib.pickBinary
     {
       pkg = fedimint-pkgs;
-      bin = "recoverytool";
+      bin = "fedimnint-recoverytool";
     };
 
   container =
