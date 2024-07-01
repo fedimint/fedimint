@@ -21,6 +21,7 @@ use fedimint_core::envs::{
     BitcoinRpcConfig, FM_FORCE_BITCOIN_RPC_KIND_ENV, FM_FORCE_BITCOIN_RPC_URL_ENV,
 };
 use fedimint_core::fmt_utils::OptStacktrace;
+use fedimint_core::runtime::sleep;
 use fedimint_core::task::TaskHandle;
 use fedimint_core::txoproof::TxOutProof;
 use fedimint_core::util::SafeUrl;
@@ -216,7 +217,7 @@ impl<C> RetryClient<C> {
                     }
 
                     info!(target: LOG_BLOCKCHAIN, "Bitcoind error {}, retrying", OptStacktrace(e));
-                    std::thread::sleep(retry_time);
+                    sleep(retry_time).await;
                     retry_time = min(RETRY_SLEEP_MAX_MS, retry_time * 2);
                 }
             }
