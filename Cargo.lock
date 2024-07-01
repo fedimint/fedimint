@@ -1864,6 +1864,7 @@ dependencies = [
  "fedimint-ln-server",
  "fedimint-lnv2-client",
  "fedimint-lnv2-common",
+ "fedimint-lnv2-server",
  "fedimint-logging",
  "fedimint-mint-client",
  "fedimint-rocksdb",

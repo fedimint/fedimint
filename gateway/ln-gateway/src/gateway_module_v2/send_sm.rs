@@ -14,6 +14,7 @@ use fedimint_lnv2_common::contracts::OutgoingContract;
 use fedimint_lnv2_common::{LightningInput, LightningInputV0, OutgoingWitness};
 use serde::{Deserialize, Serialize};
 
+use super::FinalReceiveState;
 use crate::gateway_module_v2::{GatewayClientContextV2, GatewayClientModuleV2};
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
@@ -59,8 +60,12 @@ pub enum Cancelled {
     InvoiceExpired,
     TimeoutTooClose,
     Underfunded,
+    RegistrationError(String),
+    FinalizationError(String),
+    Rejected,
+    Refunded,
+    Failure,
     LightningRpcError(String),
-    DirectSwapError(String),
 }
 
 #[cfg_attr(doc, aquamarine::aquamarine)]
@@ -155,13 +160,21 @@ impl SendStateMachine {
                     amount.msats,
                 )
                 .await
-                .map_err(|e| Cancelled::DirectSwapError(e.to_string()))?;
+                .map_err(|e| Cancelled::RegistrationError(e.to_string()))?;
 
-            return client
+            return match client
                 .get_first_module::<GatewayClientModuleV2>()
                 .relay_direct_swap(contract)
                 .await
-                .map_err(|e| Cancelled::DirectSwapError(e.to_string()));
+            {
+                Ok(final_receive_state) => match final_receive_state {
+                    FinalReceiveState::Rejected => Err(Cancelled::Rejected),
+                    FinalReceiveState::Success(preimage) => Ok(preimage),
+                    FinalReceiveState::Refunded => Err(Cancelled::Refunded),
+                    FinalReceiveState::Failure => Err(Cancelled::Failure),
+                },
+                Err(e) => Err(Cancelled::FinalizationError(e.to_string())),
+            };
         }
 
         lightning_context

@@ -92,7 +92,7 @@ impl ClientModuleInit for GatewayClientInitV2 {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct GatewayClientModuleV2 {
     pub federation_id: FederationId,
     pub cfg: LightningClientConfig,
@@ -105,8 +105,8 @@ pub struct GatewayClientModuleV2 {
 
 #[derive(Debug, Clone)]
 pub struct GatewayClientContextV2 {
+    pub module: GatewayClientModuleV2,
     pub decoder: Decoder,
-    pub notifier: ModuleNotifier<GatewayClientStateMachinesV2>,
     pub tpe_agg_pk: AggregatePublicKey,
     pub tpe_pks: BTreeMap<PeerId, PublicKeyShare>,
     pub gateway: Arc<Gateway>,
@@ -123,8 +123,8 @@ impl ClientModule for GatewayClientModuleV2 {
 
     fn context(&self) -> Self::ModuleStateMachineContext {
         GatewayClientContextV2 {
+            module: self.clone(),
             decoder: self.decoder(),
-            notifier: self.notifier.clone(),
             tpe_agg_pk: self.cfg.tpe_agg_pk,
             tpe_pks: self.cfg.tpe_pks.clone(),
             gateway: self.gateway.clone(),
@@ -187,11 +187,19 @@ impl State for GatewayClientStateMachinesV2 {
 
     fn operation_id(&self) -> OperationId {
         match self {
-            GatewayClientStateMachinesV2::Receive(state) => state.operation_id(),
             GatewayClientStateMachinesV2::Send(state) => state.operation_id(),
+            GatewayClientStateMachinesV2::Receive(state) => state.operation_id(),
             GatewayClientStateMachinesV2::Complete(state) => state.operation_id(),
         }
     }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Decodable, Encodable)]
+pub enum FinalReceiveState {
+    Rejected,
+    Success([u8; 32]),
+    Refunded,
+    Failure,
 }
 
 impl GatewayClientModuleV2 {
@@ -376,14 +384,14 @@ impl GatewayClientModuleV2 {
         Ok(())
     }
 
-    pub async fn relay_direct_swap(&self, contract: IncomingContract) -> anyhow::Result<[u8; 32]> {
+    pub async fn relay_direct_swap(
+        &self,
+        contract: IncomingContract,
+    ) -> anyhow::Result<FinalReceiveState> {
         let operation_id = OperationId::from_encodable(&contract);
 
         if self.client_ctx.operation_exists(operation_id).await {
-            return self
-                .subscribe_receive(operation_id)
-                .await
-                .ok_or(anyhow!("The internal send failed"));
+            return Ok(self.await_receive(operation_id).await);
         }
 
         let refund_keypair = self.keypair;
@@ -416,22 +424,33 @@ impl GatewayClientModuleV2 {
             )
             .await?;
 
-        self.subscribe_receive(operation_id)
-            .await
-            .ok_or(anyhow!("The internal send failed"))
+        Ok(self.await_receive(operation_id).await)
     }
 
-    async fn subscribe_receive(&self, operation_id: OperationId) -> Option<[u8; 32]> {
+    async fn await_receive(&self, operation_id: OperationId) -> FinalReceiveState {
         let mut stream = self.notifier.subscribe(operation_id).await;
 
         loop {
             if let Some(GatewayClientStateMachinesV2::Receive(state)) = stream.next().await {
                 match state.state {
                     ReceiveSMState::Funding => {}
-                    ReceiveSMState::Success(preimage) => return Some(preimage),
-                    ReceiveSMState::Rejected(..)
-                    | ReceiveSMState::Failure
-                    | ReceiveSMState::Refunding(..) => return None,
+                    ReceiveSMState::Rejected(..) => return FinalReceiveState::Rejected,
+                    ReceiveSMState::Success(preimage) => {
+                        return FinalReceiveState::Success(preimage)
+                    }
+                    ReceiveSMState::Refunding(out_points) => {
+                        if self
+                            .client_ctx
+                            .await_primary_module_outputs(operation_id, out_points)
+                            .await
+                            .is_err()
+                        {
+                            return FinalReceiveState::Failure;
+                        }
+
+                        return FinalReceiveState::Refunded;
+                    }
+                    ReceiveSMState::Failure => return FinalReceiveState::Failure,
                 }
             }
         }

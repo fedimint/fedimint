@@ -6,13 +6,12 @@ use fedimint_client::DynGlobalClientContext;
 use fedimint_core::core::OperationId;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::task::sleep;
-use futures::StreamExt;
 use tracing::warn;
 
+use super::FinalReceiveState;
 use crate::gateway_lnrpc::intercept_htlc_response::{Action, Cancel, Settle};
 use crate::gateway_lnrpc::InterceptHtlcResponse;
-use crate::gateway_module_v2::receive_sm::ReceiveSMState;
-use crate::gateway_module_v2::{GatewayClientContextV2, GatewayClientStateMachinesV2};
+use crate::gateway_module_v2::GatewayClientContextV2;
 
 #[cfg_attr(doc, aquamarine::aquamarine)]
 /// State machine that completes the incoming payment by contacting the
@@ -53,7 +52,7 @@ pub struct CompleteSMCommon {
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
 pub enum CompleteSMState {
     Pending,
-    Completing(Result<[u8; 32], String>),
+    Completing(FinalReceiveState),
     Completed,
 }
 
@@ -72,13 +71,13 @@ impl State for CompleteStateMachine {
                     Box::pin(async move { Self::transition_receive(result, &old_state) })
                 },
             )],
-            CompleteSMState::Completing(result) => vec![StateTransition::new(
+            CompleteSMState::Completing(finale_receive_state) => vec![StateTransition::new(
                 Self::await_completion(
                     context.clone(),
                     self.common.payment_hash,
+                    finale_receive_state.clone(),
                     self.common.incoming_chan_id,
                     self.common.htlc_id,
-                    result.clone(),
                 ),
                 |_, (), old_state| Box::pin(async move { Self::transition_completion(&old_state) }),
             )],
@@ -95,49 +94,37 @@ impl CompleteStateMachine {
     async fn await_receive(
         context: GatewayClientContextV2,
         operation_id: OperationId,
-    ) -> Result<[u8; 32], String> {
-        let mut stream = context.notifier.subscribe(operation_id).await;
-
-        loop {
-            if let Some(GatewayClientStateMachinesV2::Receive(state)) = stream.next().await {
-                match state.state {
-                    ReceiveSMState::Funding => {}
-                    ReceiveSMState::Rejected(error) => {
-                        return Err(error);
-                    }
-                    ReceiveSMState::Success(preimage) => {
-                        return Ok(preimage);
-                    }
-                    ReceiveSMState::Failure => {
-                        return Err("Failure".to_string());
-                    }
-                    ReceiveSMState::Refunding(..) => {
-                        return Err("Refunding".to_string());
-                    }
-                }
-            }
-        }
+    ) -> FinalReceiveState {
+        context.module.await_receive(operation_id).await
     }
 
     fn transition_receive(
-        result: Result<[u8; 32], String>,
+        final_receive_state: FinalReceiveState,
         old_state: &CompleteStateMachine,
     ) -> CompleteStateMachine {
-        old_state.update(CompleteSMState::Completing(result))
+        old_state.update(CompleteSMState::Completing(final_receive_state))
     }
 
     async fn await_completion(
         context: GatewayClientContextV2,
         payment_hash: bitcoin_hashes::sha256::Hash,
+        final_receive_state: FinalReceiveState,
         incoming_chan_id: u64,
         htlc_id: u64,
-        result: Result<[u8; 32], String>,
     ) {
-        let action = match result {
-            Ok(preimage) => Action::Settle(Settle {
+        let action = match final_receive_state {
+            FinalReceiveState::Rejected => Action::Cancel(Cancel {
+                reason: "Rejected".to_string(),
+            }),
+            FinalReceiveState::Success(preimage) => Action::Settle(Settle {
                 preimage: preimage.to_vec(),
             }),
-            Err(reason) => Action::Cancel(Cancel { reason }),
+            FinalReceiveState::Refunded => Action::Cancel(Cancel {
+                reason: "Refunded".to_string(),
+            }),
+            FinalReceiveState::Failure => Action::Cancel(Cancel {
+                reason: "Failure".to_string(),
+            }),
         };
 
         let intercept_htlc_response = InterceptHtlcResponse {

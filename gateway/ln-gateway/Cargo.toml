@@ -81,6 +81,7 @@ fedimint-unknown-common = { path = "../../modules/fedimint-unknown-common" }
 fedimint-ln-client = { workspace = true }
 fedimint-ln-server = { path = "../../modules/fedimint-ln-server" }
 fedimint-ln-common = { path = "../../modules/fedimint-ln-common" }
+fedimint-lnv2-server = { path = "../../modules/fedimint-lnv2-server" }
 fedimint-mint-client = { path = "../../modules/fedimint-mint-client" }
 fedimint-wallet-client = { path = "../../modules/fedimint-wallet-client" }
 fedimint-testing = { workspace = true }
