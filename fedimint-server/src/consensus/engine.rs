@@ -78,7 +78,7 @@ pub struct ConsensusEngine {
 
 impl ConsensusEngine {
     fn num_peers(&self) -> NumPeers {
-        self.cfg.consensus.broadcast_public_keys.to_num_peers()
+        self.cfg.consensus.guardian_public_keys.to_num_peers()
     }
 
     fn identity(&self) -> PeerId {

@@ -153,8 +153,13 @@ pub struct JsonClientConfig {
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize, Encodable, Decodable)]
 pub struct GlobalClientConfig {
     /// API endpoints for each federation member
+    // FIXME: deprecated >=0.4, made default so we can drop server side support once 0.3 clients are
+    // EOL
     #[serde(deserialize_with = "de_int_key")]
     pub api_endpoints: BTreeMap<PeerId, PeerUrl>,
+    // FIXME: make mandatory once 0.3 is deprecated
+    #[serde(default)]
+    pub guardian_public_keys: BTreeMap<PeerId, secp256k1::PublicKey>,
     /// Core consensus version
     pub consensus_version: CoreConsensusVersion,
     // TODO: make it a String -> serde_json::Value map?
@@ -165,6 +170,14 @@ pub struct GlobalClientConfig {
 impl GlobalClientConfig {
     pub fn calculate_federation_id(&self) -> FederationId {
         FederationId(self.api_endpoints.consensus_hash())
+    }
+
+    pub fn calculate_federation_id_v2(&self) -> Option<FederationIdV2> {
+        if self.guardian_public_keys.is_empty() {
+            return None;
+        }
+
+        Some(FederationIdV2(self.guardian_public_keys.consensus_hash()))
     }
 
     /// Federation name from config metadata (if set)
@@ -198,6 +211,10 @@ impl ClientConfig {
 
     pub fn calculate_federation_id(&self) -> FederationId {
         self.global.calculate_federation_id()
+    }
+
+    pub fn calculate_federation_id_v2(&self) -> Option<FederationIdV2> {
+        self.global.calculate_federation_id_v2()
     }
 
     /// Get the value of a given meta field
@@ -235,6 +252,7 @@ impl ClientConfig {
                 peer_url.url.clone(),
                 *peer,
                 self.calculate_federation_id(),
+                self.calculate_federation_id_v2(),
                 api_secret.clone(),
             )
         })
@@ -269,8 +287,7 @@ impl ClientConfig {
     }
 }
 
-/// The federation id is a copy of the authentication threshold public key of
-/// the federation
+/// The legacy federation id is a hash of the guardian API endpoint URLs
 ///
 /// Stable id so long as guardians membership does not change
 /// Unique id so long as guardians do not all collude
@@ -289,6 +306,26 @@ impl ClientConfig {
     PartialOrd,
 )]
 pub struct FederationId(pub sha256::Hash);
+
+/// The federation id is a consensus hash of the guardian public keys
+///
+/// Stable id so long as guardians membership does not change
+/// Unique id so long as guardians do not all collude
+#[derive(
+    Debug,
+    Copy,
+    Serialize,
+    Deserialize,
+    Clone,
+    Eq,
+    Hash,
+    PartialEq,
+    Encodable,
+    Decodable,
+    Ord,
+    PartialOrd,
+)]
+pub struct FederationIdV2(pub sha256::Hash);
 
 #[derive(
     Debug,
@@ -365,6 +402,24 @@ impl FederationId {
 }
 
 impl FromStr for FederationId {
+    type Err = anyhow::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(Self::from_byte_array(<[u8; 32]>::from_hex(s)?))
+    }
+}
+
+impl FederationIdV2 {
+    pub fn dummy() -> Self {
+        Self(sha256::Hash::from_byte_array([21; 32]))
+    }
+
+    pub(crate) fn from_byte_array(bytes: [u8; 32]) -> Self {
+        Self(sha256::Hash::from_byte_array(bytes))
+    }
+}
+
+impl FromStr for FederationIdV2 {
     type Err = anyhow::Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
@@ -1035,6 +1090,7 @@ mod tests {
         let config = ClientConfig {
             global: GlobalClientConfig {
                 api_endpoints: Default::default(),
+                guardian_public_keys: Default::default(),
                 consensus_version: CoreConsensusVersion { major: 0, minor: 0 },
                 meta: vec![
                     ("foo".to_string(), "bar".to_string()),

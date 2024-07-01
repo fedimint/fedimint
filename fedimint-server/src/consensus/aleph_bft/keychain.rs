@@ -23,8 +23,8 @@ impl Keychain {
     pub fn new(cfg: &ServerConfig) -> Self {
         Keychain {
             identity: cfg.local.identity,
-            pks: cfg.consensus.broadcast_public_keys.clone(),
-            message_tag: cfg.consensus.broadcast_public_keys.consensus_hash(),
+            pks: cfg.consensus.guardian_public_keys.clone(),
+            message_tag: cfg.consensus.guardian_public_keys.consensus_hash(),
             keypair: cfg
                 .private
                 .broadcast_secret_key

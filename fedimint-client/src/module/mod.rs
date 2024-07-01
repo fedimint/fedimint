@@ -503,6 +503,7 @@ where
             any_guardian_url.url.clone(),
             *any_guardian_id,
             cfg.calculate_federation_id(),
+            cfg.calculate_federation_id_v2(),
             self.client.get().api_secret().clone(),
         )
     }

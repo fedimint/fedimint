@@ -1098,6 +1098,7 @@ mod tests {
             "ws://test1".parse().unwrap(),
             PeerId::from(1),
             FederationId::dummy(),
+            None,
             Some("api_secret".into()),
         );
 
@@ -1113,6 +1114,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(deprecated)]
     fn creates_essential_guardians_invite_code() {
         let mut peer_to_url_map = BTreeMap::new();
         peer_to_url_map.insert(PeerId::from(0), "ws://test1".parse().expect("URL fail"));

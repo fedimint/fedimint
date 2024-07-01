@@ -5,6 +5,7 @@ use std::time::Duration;
 
 use anyhow::{bail, format_err};
 use fedimint_core::admin_client::ConfigGenParamsConsensus;
+use fedimint_core::config::FederationIdV2;
 pub use fedimint_core::config::{
     serde_binary_human_readable, ClientConfig, DkgError, DkgPeerMsg, DkgResult, FederationId,
     GlobalClientConfig, JsonWithKind, ModuleInitRegistry, PeerUrl, ServerModuleConfig,
@@ -119,8 +120,10 @@ pub struct ServerConfigConsensus {
     pub code_version: String,
     /// Agreed on core consensus version
     pub version: CoreConsensusVersion,
-    /// Public keys for the atomic broadcast to authenticate messages
-    pub broadcast_public_keys: BTreeMap<PeerId, PublicKey>,
+    /// Public keys for:
+    ///   * The atomic broadcast to authenticate messages
+    ///   * Signing client config
+    pub guardian_public_keys: BTreeMap<PeerId, PublicKey>,
     /// Number of rounds per session.
     #[serde(default = "default_broadcast_rounds_per_session")]
     pub broadcast_rounds_per_session: u16,
@@ -180,6 +183,7 @@ impl ServerConfigConsensus {
         let client = ClientConfig {
             global: GlobalClientConfig {
                 api_endpoints: self.api_endpoints.clone(),
+                guardian_public_keys: self.guardian_public_keys.clone(),
                 consensus_version: self.version,
                 meta: self.meta.clone(),
             },
@@ -239,7 +243,7 @@ impl ServerConfig {
         let consensus = ServerConfigConsensus {
             code_version: code_version_str,
             version: CORE_CONSENSUS_VERSION,
-            broadcast_public_keys,
+            guardian_public_keys: broadcast_public_keys,
             broadcast_rounds_per_session: if is_running_in_test_env() {
                 DEFAULT_TEST_BROADCAST_ROUNDS_PER_SESSION
             } else {
@@ -266,6 +270,9 @@ impl ServerConfig {
                 .clone(),
             self.local.identity,
             FederationId(self.consensus.api_endpoints.consensus_hash()),
+            Some(FederationIdV2(
+                self.consensus.guardian_public_keys.consensus_hash(),
+            )),
             api_secret,
         )
     }
@@ -354,7 +361,7 @@ impl ServerConfig {
 
         let my_public_key = private.broadcast_secret_key.public_key(&Secp256k1::new());
 
-        if Some(&my_public_key) != consensus.broadcast_public_keys.get(identity) {
+        if Some(&my_public_key) != consensus.guardian_public_keys.get(identity) {
             bail!("Broadcast secret key doesn't match corresponding public key");
         }
         if peers.keys().max().copied().map(PeerId::to_usize) != Some(peers.len() - 1) {

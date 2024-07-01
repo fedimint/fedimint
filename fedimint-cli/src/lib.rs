@@ -39,7 +39,8 @@ use fedimint_client::secret::{get_default_client_secret, RootSecretStrategy};
 use fedimint_client::{AdminCreds, Client, ClientBuilder, ClientHandleArc};
 use fedimint_core::admin_client::{ConfigGenConnectionsRequest, ConfigGenParamsRequest};
 use fedimint_core::config::{
-    ClientConfig, FederationId, FederationIdPrefix, ServerModuleConfigGenParamsRegistry,
+    ClientConfig, FederationId, FederationIdPrefix, FederationIdV2,
+    ServerModuleConfigGenParamsRegistry,
 };
 use fedimint_core::core::{ModuleInstanceId, OperationId};
 use fedimint_core::db::{Database, DatabaseValue};
@@ -400,6 +401,8 @@ enum EncodeType {
         url: SafeUrl,
         #[clap(long = "federation_id")]
         federation_id: FederationId,
+        #[clap(long = "federation_id_v2")]
+        federation_id_v2: Option<FederationIdV2>,
         #[clap(long = "peer")]
         peer: PeerId,
         #[arg(env = FM_API_SECRET_ENV)]
@@ -896,10 +899,17 @@ impl FedimintCli {
                 EncodeType::InviteCode {
                     url,
                     federation_id,
+                    federation_id_v2,
                     peer,
                     api_secret,
                 } => Ok(CliOutput::InviteCode {
-                    invite_code: InviteCode::new(url, peer, federation_id, api_secret),
+                    invite_code: InviteCode::new(
+                        url,
+                        peer,
+                        federation_id,
+                        federation_id_v2,
+                        api_secret,
+                    ),
                 }),
                 EncodeType::Notes { notes_json } => {
                     let notes = serde_json::from_str::<OOBNotesJson>(&notes_json)

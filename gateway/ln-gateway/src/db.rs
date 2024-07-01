@@ -209,6 +209,7 @@ mod fedimint_migration_tests {
             0.into(),
             federation_id,
             None,
+            None,
         );
         let federation_config = FederationConfig {
             invite_code,

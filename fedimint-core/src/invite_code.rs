@@ -9,7 +9,7 @@ use anyhow::ensure;
 use bech32::{Bech32m, Hrp};
 use serde::{Deserialize, Serialize};
 
-use crate::config::FederationId;
+use crate::config::{FederationId, FederationIdV2};
 use crate::encoding::{Decodable, DecodeError, Encodable};
 use crate::module::registry::ModuleDecoderRegistry;
 use crate::util::SafeUrl;
@@ -60,6 +60,7 @@ impl InviteCode {
         url: SafeUrl,
         peer: PeerId,
         federation_id: FederationId,
+        federation_id_v2: Option<FederationIdV2>,
         api_secret: Option<String>,
     ) -> Self {
         let mut s = InviteCode(vec![
@@ -71,12 +72,17 @@ impl InviteCode {
             s.0.push(InviteCodePart::ApiSecret(api_secret));
         }
 
+        if let Some(federation_id_v2) = federation_id_v2 {
+            s.0.push(InviteCodePart::FederationIdV2(federation_id_v2));
+        }
+
         s
     }
 
     pub fn from_map(
         peer_to_url_map: &BTreeMap<PeerId, SafeUrl>,
         federation_id: FederationId,
+        federation_id_v2: Option<FederationIdV2>,
         api_secret: Option<String>,
     ) -> Self {
         let max_size = peer_to_url_map.to_num_peers().max_evil() + 1;
@@ -95,11 +101,16 @@ impl InviteCode {
             code_vec.push(InviteCodePart::ApiSecret(api_secret));
         }
 
+        if let Some(federation_id_v2) = federation_id_v2 {
+            code_vec.push(InviteCodePart::FederationIdV2(federation_id_v2));
+        }
+
         InviteCode(code_vec)
     }
 
     /// Constructs an [`InviteCode`] which contains as many guardian URLs as
     /// needed to always be able to join a working federation
+    #[deprecated(since = "0.4.0", note = "Use from_map instead")]
     pub fn new_with_essential_num_guardians(
         peer_to_url_map: &BTreeMap<PeerId, SafeUrl>,
         federation_id: FederationId,
@@ -170,6 +181,16 @@ impl InviteCode {
             })
             .expect("Ensured by constructor")
     }
+
+    pub fn federation_id_v2(&self) -> FederationIdV2 {
+        self.0
+            .iter()
+            .find_map(|data| match data {
+                InviteCodePart::FederationIdV2(federation_id) => Some(*federation_id),
+                _ => None,
+            })
+            .expect("Ensured by constructor")
+    }
 }
 
 /// For extendability [`InviteCode`] consists of parts, where client can ignore
@@ -190,11 +211,15 @@ enum InviteCodePart {
         peer: PeerId,
     },
 
-    /// Authentication id for the federation
+    // FIXME: deprecated >=0.4
+    /// Authentication id for the federation (hash of API endpoints)
     FederationId(FederationId),
 
     /// Api secret to use
     ApiSecret(String),
+
+    /// Consensus hash of all guardian public keys
+    FederationIdV2(FederationIdV2),
 
     /// Unknown invite code fields to be defined in the future
     #[encodable_default]
@@ -325,7 +350,13 @@ pub struct InviteCodeV2 {
 
 impl InviteCodeV2 {
     pub fn into_v1(self) -> anyhow::Result<InviteCode> {
-        Ok(InviteCode::from_map(&self.peers, self.id, self.api_secret))
+        // TODO: support FederationID v2 in InviteCodeV2
+        Ok(InviteCode::from_map(
+            &self.peers,
+            self.id,
+            None,
+            self.api_secret,
+        ))
     }
 
     pub fn encode_base64(&self) -> String {

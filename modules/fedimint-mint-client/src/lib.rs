@@ -109,6 +109,7 @@ pub struct OOBNotes(Vec<OOBNotesPart>);
 enum OOBNotesPart {
     Notes(TieredMulti<SpendableNote>),
     FederationIdPrefix(FederationIdPrefix),
+    // FIXME: replace with invite v2 to support federation id v2
     /// Invite code to join the federation by which the e-cash was issued
     ///
     /// Introduced in 0.3.0
@@ -202,6 +203,7 @@ impl OOBNotes {
                             api,
                             peer_id,
                             *federation_id,
+                            None,
                             self.api_secret(),
                         ))?,
                     );
@@ -235,6 +237,7 @@ impl OOBNotes {
                 api,
                 peer_id,
                 *federation_id,
+                None,
                 self.api_secret(),
             ))
         })
@@ -2357,6 +2360,7 @@ mod tests {
             "wss://foo.bar".parse().unwrap(),
             PeerId::from(0),
             federation_id_1,
+            None,
             None,
         );
         let notes_invite = OOBNotes::new_with_invite(notes.clone(), &invite);
