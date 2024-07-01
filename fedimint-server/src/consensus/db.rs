@@ -18,6 +18,8 @@ pub enum DbKeyPrefix {
     AcceptedTransaction = 0x02,
     SignedSessionOutcome = 0x04,
     AlephUnits = 0x05,
+    // TODO: do we want to split the server DB into consensus/non-consensus?
+    ApiAnnouncements = 0x06,
     Module = MODULE_GLOBAL_PREFIX,
 }
 

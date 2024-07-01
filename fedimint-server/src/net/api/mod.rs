@@ -1,4 +1,5 @@
 mod http_auth;
+pub mod announcement;
 
 use std::fmt::{self, Debug, Formatter};
 use std::net::SocketAddr;
