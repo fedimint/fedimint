@@ -288,6 +288,7 @@
 <a href="#288" id="288">288</a>
 <a href="#289" id="289">289</a>
 <a href="#290" id="290">290</a>
+<a href="#291" id="291">291</a>
 </pre></div><pre class="rust"><code><span class="attr">#![warn(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::cast_sign_loss)]
@@ -311,6 +312,7 @@
     BitcoinRpcConfig, FM_FORCE_BITCOIN_RPC_KIND_ENV, FM_FORCE_BITCOIN_RPC_URL_ENV,
 };
 <span class="kw">use </span>fedimint_core::fmt_utils::OptStacktrace;
+<span class="kw">use </span>fedimint_core::runtime::sleep;
 <span class="kw">use </span>fedimint_core::task::TaskHandle;
 <span class="kw">use </span>fedimint_core::txoproof::TxOutProof;
 <span class="kw">use </span>fedimint_core::util::SafeUrl;
@@ -506,7 +508,7 @@
                     }
 
                     <span class="macro">info!</span>(target: LOG_BLOCKCHAIN, <span class="string">"Bitcoind error {}, retrying"</span>, OptStacktrace(e));
-                    std::thread::sleep(retry_time);
+                    sleep(retry_time).<span class="kw">await</span>;
                     retry_time = min(RETRY_SLEEP_MAX_MS, retry_time * <span class="number">2</span>);
                 }
             }
