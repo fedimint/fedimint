@@ -83,6 +83,7 @@ pub async fn run(
                         db.with_prefix_module_id(*module_id),
                         task_group,
                         cfg.local.identity,
+                        cfg.consensus.network,
                     )
                     .await?;
 

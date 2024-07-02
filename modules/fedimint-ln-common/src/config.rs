@@ -22,17 +22,13 @@ impl LightningGenParams {
     pub fn regtest(bitcoin_rpc: BitcoinRpcConfig) -> Self {
         Self {
             local: LightningGenParamsLocal { bitcoin_rpc },
-            consensus: LightningGenParamsConsensus {
-                network: Network::Regtest,
-            },
+            consensus: LightningGenParamsConsensus,
         }
     }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct LightningGenParamsConsensus {
-    pub network: Network,
-}
+pub struct LightningGenParamsConsensus;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LightningGenParamsLocal {
@@ -58,7 +54,6 @@ pub struct LightningConfigConsensus {
     pub threshold_pub_keys: threshold_crypto::PublicKeySet,
     /// Fees charged for LN transactions
     pub fee_consensus: FeeConsensus,
-    pub network: Network,
 }
 
 impl LightningConfigConsensus {
@@ -79,7 +74,6 @@ pub struct LightningConfigPrivate {
 pub struct LightningClientConfig {
     pub threshold_pub_key: threshold_crypto::PublicKey,
     pub fee_consensus: FeeConsensus,
-    pub network: Network,
 }
 
 impl std::fmt::Display for LightningClientConfig {

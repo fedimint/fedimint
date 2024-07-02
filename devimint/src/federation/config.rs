@@ -32,7 +32,7 @@ pub fn attach_default_module_init_params(
                 local: LightningGenParamsLocal {
                     bitcoin_rpc: bitcoin_rpc.clone(),
                 },
-                consensus: LightningGenParamsConsensus { network },
+                consensus: LightningGenParamsConsensus,
             },
         )
         .attach_config_gen_params(
@@ -49,7 +49,6 @@ pub fn attach_default_module_init_params(
                     bitcoin_rpc: bitcoin_rpc.clone(),
                 },
                 consensus: WalletGenParamsConsensus {
-                    network,
                     // TODO this is not very elegant, but I'm planning to get rid of it in a next
                     // commit anyway
                     finality_delay,
@@ -64,7 +63,7 @@ pub fn attach_default_module_init_params(
                 local: fedimint_lnv2_common::config::LightningGenParamsLocal {
                     bitcoin_rpc: bitcoin_rpc.clone(),
                 },
-                consensus: fedimint_lnv2_common::config::LightningGenParamsConsensus { network },
+                consensus: fedimint_lnv2_common::config::LightningGenParamsConsensus,
             },
         );
 

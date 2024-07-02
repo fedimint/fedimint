@@ -2371,6 +2371,7 @@ impl ClientBuilder {
                             api.clone(),
                             self.admin_creds.as_ref().map(|cred| cred.auth.clone()),
                             task_group.clone(),
+                            config.global.network,
                         )
                         .await?;
 

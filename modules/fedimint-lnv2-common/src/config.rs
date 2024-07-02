@@ -21,17 +21,13 @@ impl LightningGenParams {
     pub fn regtest(bitcoin_rpc: BitcoinRpcConfig) -> Self {
         Self {
             local: LightningGenParamsLocal { bitcoin_rpc },
-            consensus: LightningGenParamsConsensus {
-                network: Network::Regtest,
-            },
+            consensus: LightningGenParamsConsensus,
         }
     }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct LightningGenParamsConsensus {
-    pub network: Network,
-}
+pub struct LightningGenParamsConsensus;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LightningGenParamsLocal {
@@ -55,7 +51,6 @@ pub struct LightningConfigConsensus {
     pub tpe_agg_pk: AggregatePublicKey,
     pub tpe_pks: BTreeMap<PeerId, PublicKeyShare>,
     pub fee_consensus: FeeConsensus,
-    pub network: Network,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -68,7 +63,6 @@ pub struct LightningClientConfig {
     pub tpe_agg_pk: AggregatePublicKey,
     pub tpe_pks: BTreeMap<PeerId, PublicKeyShare>,
     pub fee_consensus: FeeConsensus,
-    pub network: Network,
 }
 
 impl std::fmt::Display for LightningClientConfig {
@@ -135,7 +129,6 @@ fn migrate_config_consensus(
             input: config.fee_consensus.contract_input,
             output: config.fee_consensus.contract_output,
         },
-        network: config.network,
     }
 }
 

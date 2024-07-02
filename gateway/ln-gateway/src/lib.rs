@@ -74,10 +74,9 @@ use fedimint_core::{
     fedimint_build_code_version_env, push_db_pair_items, Amount, BitcoinAmountOrAll, BitcoinHash,
 };
 use fedimint_ln_client::pay::PayInvoicePayload;
-use fedimint_ln_common::config::{GatewayFee, LightningClientConfig};
+use fedimint_ln_common::config::GatewayFee;
 use fedimint_ln_common::contracts::Preimage;
 use fedimint_ln_common::route_hints::RouteHint;
-use fedimint_ln_common::LightningCommonInit;
 use fedimint_lnv2_client::{
     Bolt11InvoiceDescription, CreateBolt11InvoicePayload, PaymentFee, RoutingInfo,
     SendPaymentPayload,
@@ -1617,25 +1616,14 @@ impl Gateway {
     /// Verifies that the supplied `network` matches the Bitcoin network in the
     /// connected client's configuration.
     fn check_federation_network(info: &FederationInfo, network: Network) -> Result<()> {
-        let cfg = info
-            .config
-            .modules
-            .values()
-            .find(|m| LightningCommonInit::KIND == m.kind)
-            .ok_or_else(|| {
-                GatewayError::InvalidMetadata(format!(
-                    "Federation {} does not have a lightning module",
-                    info.federation_id
-                ))
-            })?;
-        let ln_cfg: &LightningClientConfig = cfg.cast()?;
+        let ln_network = info.config.global.network;
 
-        if ln_cfg.network != network {
+        if ln_network != network {
             error!(
                 "Federation {} runs on {} but this gateway supports {}",
-                info.federation_id, ln_cfg.network, network,
+                info.federation_id, ln_network, network,
             );
-            return Err(GatewayError::UnsupportedNetwork(ln_cfg.network));
+            return Err(GatewayError::UnsupportedNetwork(ln_network));
         }
 
         Ok(())

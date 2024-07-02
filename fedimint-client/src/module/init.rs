@@ -43,6 +43,7 @@ where
     module_api: DynModuleApi,
     context: ClientContext<<C as ClientModuleInit>::Module>,
     task_group: TaskGroup,
+    network: bitcoin::Network,
 }
 
 impl<C> ClientModuleInitArgs<C>
@@ -112,6 +113,10 @@ where
 
     pub fn task_group(&self) -> &TaskGroup {
         &self.task_group
+    }
+
+    pub fn network(&self) -> bitcoin::Network {
+        self.network
     }
 }
 
@@ -296,6 +301,7 @@ pub trait IClientModuleInit: IDynCommonModuleInit + Debug + MaybeSend + MaybeSyn
         api: DynGlobalApi,
         admin_auth: Option<ApiAuth>,
         task_group: TaskGroup,
+        network: bitcoin::Network,
     ) -> anyhow::Result<DynClientModule>;
 
     fn get_database_migrations(&self) -> BTreeMap<DatabaseVersion, ClientMigrationFn>;
@@ -391,6 +397,7 @@ where
         api: DynGlobalApi,
         admin_auth: Option<ApiAuth>,
         task_group: TaskGroup,
+        network: bitcoin::Network,
     ) -> anyhow::Result<DynClientModule> {
         let typed_cfg: &<<T as fedimint_core::module::ModuleInit>::Common as CommonModuleInit>::ClientConfig = cfg.cast()?;
         Ok(self
@@ -413,6 +420,7 @@ where
                     _marker: marker::PhantomData,
                 },
                 task_group,
+                network,
             })
             .await?
             .into())

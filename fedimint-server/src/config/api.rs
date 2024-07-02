@@ -55,6 +55,8 @@ pub struct ConfigGenApi {
     code_version_str: String,
     /// Api secret to use
     api_secret: Option<String>,
+    /// The Bitcoin network,
+    network: bitcoin::Network,
 }
 
 impl ConfigGenApi {
@@ -65,6 +67,7 @@ impl ConfigGenApi {
         task_group: &mut TaskGroup,
         code_version_str: String,
         api_secret: Option<String>,
+        network: bitcoin::Network,
     ) -> Self {
         let config_gen_api = Self {
             state: Arc::new(Mutex::new(ConfigGenState::new(settings))),
@@ -73,6 +76,7 @@ impl ConfigGenApi {
             task_group: task_group.clone(),
             code_version_str,
             api_secret,
+            network,
         };
         info!(target: fedimint_logging::LOG_NET_PEER_DKG, "Created new config gen Api");
         config_gen_api
@@ -245,7 +249,8 @@ impl ConfigGenApi {
 
         let self_clone = self.clone();
         let sub_group = self.task_group.make_subgroup();
-        sub_group.spawn("run dkg", |_handle| async move {
+        let network = self.network;
+        sub_group.spawn("run dkg", move |_handle| async move {
             // Followers wait for leader to signal readiness for DKG
             if let Some(client) = leader {
                 loop {
@@ -279,6 +284,7 @@ impl ConfigGenApi {
                 DelayCalculator::PROD_DEFAULT,
                 &mut task_group,
                 self_clone.code_version_str.clone(),
+                network,
             )
             .await;
             task_group
@@ -933,6 +939,7 @@ mod tests {
                     "dummyversionhash".to_owned(),
                     &module_inits,
                     TaskGroup::new(),
+                    bitcoin::Network::Regtest,
                 )
                 .await
                 .expect("Failed to run fedimint server");

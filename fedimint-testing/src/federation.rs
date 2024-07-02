@@ -196,8 +196,12 @@ impl FederationTestBuilder {
         let params = local_config_gen_params(&peers, self.base_port, &self.params)
             .expect("Generates local config");
 
-        let configs =
-            ServerConfig::trusted_dealer_gen(&params, &self.server_init, &self.version_hash);
+        let configs = ServerConfig::trusted_dealer_gen(
+            &params,
+            &self.server_init,
+            &self.version_hash,
+            bitcoin::Network::Regtest,
+        );
 
         let task_group = TaskGroup::new();
         for (peer_id, config) in configs.clone() {

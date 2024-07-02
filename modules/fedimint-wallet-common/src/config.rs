@@ -1,6 +1,5 @@
 use std::collections::BTreeMap;
 
-use bitcoin::Network;
 use fedimint_core::core::ModuleKind;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::envs::BitcoinRpcConfig;
@@ -30,7 +29,6 @@ impl WalletGenParams {
         WalletGenParams {
             local: WalletGenParamsLocal { bitcoin_rpc },
             consensus: WalletGenParamsConsensus {
-                network: Network::Regtest,
                 finality_delay: 10,
                 client_default_bitcoin_rpc: BitcoinRpcConfig {
                     kind: "esplora".to_string(),
@@ -53,7 +51,6 @@ pub struct WalletGenParamsLocal {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WalletGenParamsConsensus {
-    pub network: Network,
     pub finality_delay: u32,
     /// See [`WalletConfigConsensus::client_default_bitcoin_rpc`].
     pub client_default_bitcoin_rpc: BitcoinRpcConfig,
@@ -85,8 +82,6 @@ pub struct WalletConfigPrivate {
 
 #[derive(Clone, Debug, Serialize, Deserialize, Encodable, Decodable)]
 pub struct WalletConfigConsensus {
-    /// Bitcoin network (e.g. testnet, bitcoin)
-    pub network: Network,
     /// The federations public peg-in-descriptor
     pub peg_in_descriptor: PegInDescriptor,
     /// The public keys for the bitcoin multisig
@@ -113,8 +108,6 @@ pub struct WalletConfigConsensus {
 pub struct WalletClientConfig {
     /// The federations public peg-in-descriptor
     pub peg_in_descriptor: PegInDescriptor,
-    /// The bitcoin network the client will use
-    pub network: Network,
     /// Confirmations required for a peg in to be accepted by federation
     pub finality_delay: u32,
     pub fee_consensus: FeeConsensus,
@@ -156,7 +149,6 @@ impl WalletConfig {
         pubkeys: BTreeMap<PeerId, CompressedPublicKey>,
         sk: SecretKey,
         threshold: usize,
-        network: Network,
         finality_delay: u32,
         bitcoin_rpc: BitcoinRpcConfig,
         client_default_bitcoin_rpc: BitcoinRpcConfig,
@@ -182,7 +174,6 @@ impl WalletConfig {
             local: WalletConfigLocal { bitcoin_rpc },
             private: WalletConfigPrivate { peg_in_key: sk },
             consensus: WalletConfigConsensus {
-                network,
                 peg_in_descriptor,
                 peer_peg_in_keys: pubkeys,
                 finality_delay,
@@ -197,13 +188,11 @@ impl WalletConfig {
 impl WalletClientConfig {
     pub fn new(
         peg_in_descriptor: PegInDescriptor,
-        network: bitcoin::network::constants::Network,
         finality_delay: u32,
         default_bitcoin_rpc: BitcoinRpcConfig,
     ) -> Self {
         Self {
             peg_in_descriptor,
-            network,
             finality_delay,
             fee_consensus: Default::default(),
             default_bitcoin_rpc,
