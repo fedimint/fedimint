@@ -92,10 +92,9 @@ use async_stream::stream;
 use backup::ClientBackup;
 use db::{
     apply_migrations_client, apply_migrations_core_client, get_core_client_database_migrations,
-    ApiSecretKey, CachedApiVersionSet, CachedApiVersionSetKey, ClientConfigKey,
-    ClientConfigKeyPrefix, ClientInitStateKey, ClientModuleRecovery, EncodedClientSecretKey,
-    InitMode, PeerLastApiVersionsSummary, PeerLastApiVersionsSummaryKey,
-    CORE_CLIENT_DATABASE_VERSION,
+    ApiSecretKey, CachedApiVersionSet, CachedApiVersionSetKey, ClientConfigKey, ClientInitStateKey,
+    ClientModuleRecovery, EncodedClientSecretKey, InitMode, PeerLastApiVersionsSummary,
+    PeerLastApiVersionsSummaryKey, CORE_CLIENT_DATABASE_VERSION,
 };
 use fedimint_api_client::api::{
     ApiVersionSet, DynGlobalApi, DynModuleApi, FederationApiExt, IGlobalFederationApi,
@@ -2008,13 +2007,7 @@ impl ClientBuilder {
             debug!(target: LOG_CLIENT, "Initializing client database");
             let mut dbtx = self.db_no_decoders.begin_transaction().await;
             // Save config to DB
-            dbtx.insert_new_entry(
-                &ClientConfigKey {
-                    id: config.calculate_federation_id(),
-                },
-                &config,
-            )
-            .await;
+            dbtx.insert_new_entry(&ClientConfigKey, &config).await;
 
             if let Some(api_secret) = api_secret.as_ref() {
                 dbtx.insert_new_entry(&ApiSecretKey, api_secret).await;

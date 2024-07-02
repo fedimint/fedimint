@@ -3,7 +3,7 @@ use std::path::PathBuf;
 
 use anyhow::Context;
 use erased_serde::Serialize;
-use fedimint_client::db::ClientConfigKeyPrefix;
+use fedimint_client::db::ClientConfigKey;
 use fedimint_client::module::init::ClientModuleInitRegistry;
 use fedimint_core::config::{ClientConfig, CommonModuleInitRegistry, ServerModuleInitRegistry};
 use fedimint_core::core::ModuleKind;
