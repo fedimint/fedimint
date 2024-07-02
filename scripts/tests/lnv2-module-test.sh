@@ -9,4 +9,4 @@ build_workspace
 add_target_dir_to_path
 
 gateway_registration_sanity
-self_payment_with_one_gateway
+self_payment
