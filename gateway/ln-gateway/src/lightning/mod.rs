@@ -1,10 +1,13 @@
 pub mod cln;
+pub mod ldk;
 pub mod lnd;
 
 use std::fmt::Debug;
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use async_trait::async_trait;
+use bitcoin::Network;
 use clap::Subcommand;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::task::TaskGroup;
@@ -17,7 +20,8 @@ use thiserror::Error;
 use self::cln::{NetworkLnRpcClient, RouteHtlcStream};
 use self::lnd::GatewayLndClient;
 use crate::envs::{
-    FM_GATEWAY_LIGHTNING_ADDR_ENV, FM_LND_MACAROON_ENV, FM_LND_RPC_ADDR_ENV, FM_LND_TLS_CERT_ENV,
+    FM_GATEWAY_LIGHTNING_ADDR_ENV, FM_LDK_ESPLORA_SERVER_URL, FM_LDK_NETWORK, FM_LND_MACAROON_ENV,
+    FM_LND_RPC_ADDR_ENV, FM_LND_TLS_CERT_ENV, FM_PORT_LDK,
 };
 use crate::gateway_lnrpc::{
     CloseChannelsWithPeerResponse, CreateInvoiceRequest, CreateInvoiceResponse, EmptyResponse,
@@ -182,6 +186,20 @@ pub enum LightningMode {
         #[arg(long = "cln-extension-addr", env = FM_GATEWAY_LIGHTNING_ADDR_ENV)]
         cln_extension_addr: SafeUrl,
     },
+    #[clap(name = "ldk")]
+    Ldk {
+        /// LDK esplora server URL
+        #[arg(long = "ldk-esplora-server-url", env = FM_LDK_ESPLORA_SERVER_URL)]
+        esplora_server_url: String,
+
+        /// LDK network (defaults to regtest if not provided)
+        #[arg(long = "ldk-network", env = FM_LDK_NETWORK)]
+        network_or: Option<Network>,
+
+        /// LDK lightning server port
+        #[arg(long = "ldk-lightning-port", env = FM_PORT_LDK)]
+        lightning_port: u16,
+    },
 }
 
 #[async_trait]
@@ -192,6 +210,7 @@ pub trait LightningBuilder {
 #[derive(Clone)]
 pub struct GatewayLightningBuilder {
     pub lightning_mode: LightningMode,
+    pub ldk_data_dir: PathBuf,
 }
 
 #[async_trait]
@@ -211,6 +230,24 @@ impl LightningBuilder for GatewayLightningBuilder {
                 lnd_macaroon,
                 None,
             )),
+            LightningMode::Ldk {
+                esplora_server_url,
+                network_or,
+                lightning_port,
+            } => {
+                // Default to regtest if network is not provided.
+                let network = network_or.unwrap_or(Network::Regtest);
+
+                Box::new(
+                    ldk::GatewayLdkClient::new(
+                        &self.ldk_data_dir,
+                        &esplora_server_url,
+                        network,
+                        lightning_port,
+                    )
+                    .unwrap(),
+                )
+            }
         }
     }
 }
