@@ -479,25 +479,6 @@
 <a href="#479" id="479">479</a>
 <a href="#480" id="480">480</a>
 <a href="#481" id="481">481</a>
-<a href="#482" id="482">482</a>
-<a href="#483" id="483">483</a>
-<a href="#484" id="484">484</a>
-<a href="#485" id="485">485</a>
-<a href="#486" id="486">486</a>
-<a href="#487" id="487">487</a>
-<a href="#488" id="488">488</a>
-<a href="#489" id="489">489</a>
-<a href="#490" id="490">490</a>
-<a href="#491" id="491">491</a>
-<a href="#492" id="492">492</a>
-<a href="#493" id="493">493</a>
-<a href="#494" id="494">494</a>
-<a href="#495" id="495">495</a>
-<a href="#496" id="496">496</a>
-<a href="#497" id="497">497</a>
-<a href="#498" id="498">498</a>
-<a href="#499" id="499">499</a>
-<a href="#500" id="500">500</a>
 </pre></div><pre class="rust"><code><span class="attr">#![warn(clippy::pedantic)]
 #![allow(clippy::default_trait_access)]
 #![allow(clippy::too_many_lines)]
@@ -514,10 +495,7 @@
 <span class="kw">use </span>bitcoin::network::constants::Network;
 <span class="kw">use </span>bitcoin::OutPoint;
 <span class="kw">use </span>clap::{ArgGroup, Parser, Subcommand};
-<span class="kw">use </span>fedimint_core::core::{
-    LEGACY_HARDCODED_INSTANCE_ID_LN, LEGACY_HARDCODED_INSTANCE_ID_MINT,
-    LEGACY_HARDCODED_INSTANCE_ID_WALLET,
-};
+<span class="kw">use </span>fedimint_core::core::LEGACY_HARDCODED_INSTANCE_ID_WALLET;
 <span class="kw">use </span>fedimint_core::db::{Database, IDatabaseTransactionOpsCoreTyped};
 <span class="kw">use </span>fedimint_core::epoch::ConsensusItem;
 <span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
@@ -525,11 +503,7 @@
 <span class="kw">use </span>fedimint_core::session_outcome::SignedSessionOutcome;
 <span class="kw">use </span>fedimint_core::transaction::Transaction;
 <span class="kw">use </span>fedimint_core::ServerModule;
-<span class="kw">use </span>fedimint_ln_common::LightningCommonInit;
-<span class="kw">use </span>fedimint_ln_server::Lightning;
 <span class="kw">use </span>fedimint_logging::TracingSetup;
-<span class="kw">use </span>fedimint_mint_server::common::MintCommonInit;
-<span class="kw">use </span>fedimint_mint_server::Mint;
 <span class="kw">use </span>fedimint_rocksdb::{RocksDb, RocksDbReadOnly};
 <span class="kw">use </span>fedimint_server::config::io::read_server_config;
 <span class="kw">use </span>fedimint_server::consensus::db::SignedSessionOutcomePrefix;
@@ -691,23 +665,11 @@
         }
         TweakSource::Epochs { db } =&gt; {
             <span class="comment">// FIXME: read config to figure out instance ids
-            </span><span class="kw">let </span>decoders = ModuleDecoderRegistry::from_iter([
-                (
-                    LEGACY_HARDCODED_INSTANCE_ID_LN,
-                    LightningCommonInit::KIND,
-                    &lt;Lightning <span class="kw">as </span>ServerModule&gt;::decoder(),
-                ),
-                (
-                    LEGACY_HARDCODED_INSTANCE_ID_MINT,
-                    MintCommonInit::KIND,
-                    &lt;Mint <span class="kw">as </span>ServerModule&gt;::decoder(),
-                ),
-                (
-                    LEGACY_HARDCODED_INSTANCE_ID_WALLET,
-                    WalletCommonInit::KIND,
-                    &lt;Wallet <span class="kw">as </span>ServerModule&gt;::decoder(),
-                ),
-            ])
+            </span><span class="kw">let </span>decoders = ModuleDecoderRegistry::from_iter([(
+                LEGACY_HARDCODED_INSTANCE_ID_WALLET,
+                WalletCommonInit::KIND,
+                &lt;Wallet <span class="kw">as </span>ServerModule&gt;::decoder(),
+            )])
             .with_fallback();
 
             <span class="kw">let </span>db = get_db(opts.readonly, <span class="kw-2">&amp;</span>db, decoders);
