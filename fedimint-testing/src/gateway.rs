@@ -203,6 +203,7 @@ impl Drop for GatewayTest {
 pub enum LightningNodeType {
     Cln,
     Lnd,
+    Ldk,
 }
 
 impl Display for LightningNodeType {
@@ -210,6 +211,7 @@ impl Display for LightningNodeType {
         match self {
             LightningNodeType::Cln => write!(f, "cln"),
             LightningNodeType::Lnd => write!(f, "lnd"),
+            LightningNodeType::Ldk => write!(f, "ldk"),
         }
     }
 }

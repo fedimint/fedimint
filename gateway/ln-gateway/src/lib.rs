@@ -160,6 +160,10 @@ pub type Result<T> = std::result::Result<T, GatewayError>;
 /// storage.
 const DB_FILE: &str = "gatewayd.db";
 
+/// Name of the folder that the gateway uses to store its node database when
+/// running in LDK mode.
+const LDK_NODE_DB_FOLDER: &str = "ldk_node";
+
 /// The non-lightning default module types that the Gateway supports.
 const DEFAULT_MODULE_KINDS: [(ModuleInstanceId, &ModuleKind); 2] = [
     (LEGACY_HARDCODED_INSTANCE_ID_MINT, &MintCommonInit::KIND),
@@ -426,6 +430,7 @@ impl Gateway {
         Gateway::new(
             Arc::new(GatewayLightningBuilder {
                 lightning_mode: opts.mode,
+                ldk_data_dir: opts.data_dir.join(LDK_NODE_DB_FOLDER),
             }),
             gateway_parameters,
             gateway_db,

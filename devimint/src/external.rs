@@ -701,7 +701,7 @@ pub async fn open_channel_between_gateways(
         )
         .await?;
 
-    bitcoind.mine_blocks(10).await?;
+    bitcoind.mine_blocks(20).await?;
 
     poll("Wait for channel update", || async {
         let channels = gw_lnd
@@ -728,6 +728,7 @@ pub async fn open_channel_between_gateways(
 pub enum LightningNode {
     Cln(Lightningd),
     Lnd(Lnd),
+    Ldk,
 }
 
 impl LightningNode {
@@ -735,6 +736,7 @@ impl LightningNode {
         match self {
             LightningNode::Cln(_) => LightningNodeType::Cln,
             LightningNode::Lnd(_) => LightningNodeType::Lnd,
+            LightningNode::Ldk => LightningNodeType::Ldk,
         }
     }
 }

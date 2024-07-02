@@ -253,7 +253,7 @@ pub async fn handle_command(cmd: Cmd, common_args: CommonArgs) -> Result<()> {
                     let gw_pegin_amount = 1_000_000;
                     let client_pegin_amount = 1_000_000;
                     if !skip_setup {
-                        let ((), _, _) = tokio::try_join!(
+                        let ((), _, _, _) = tokio::try_join!(
                             async {
                                 let (address, operation_id) =
                                     dev_fed.internal_client().await?.get_deposit_addr().await?;
@@ -285,6 +285,19 @@ pub async fn handle_command(cmd: Cmd, common_args: CommonArgs) -> Result<()> {
                             async {
                                 let pegin_addr = dev_fed
                                     .gw_lnd_registered()
+                                    .await?
+                                    .get_pegin_addr(&dev_fed.fed().await?.calculate_federation_id())
+                                    .await?;
+                                dev_fed
+                                    .bitcoind()
+                                    .await?
+                                    .send_to(pegin_addr, gw_pegin_amount)
+                                    .await?;
+                                dev_fed.bitcoind().await?.mine_blocks_no_wait(11).await
+                            },
+                            async {
+                                let pegin_addr = dev_fed
+                                    .gw_ldk_registered()
                                     .await?
                                     .get_pegin_addr(&dev_fed.fed().await?.calculate_federation_id())
                                     .await?;

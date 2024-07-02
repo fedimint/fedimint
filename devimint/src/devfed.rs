@@ -8,7 +8,7 @@ use fedimint_logging::LOG_DEVIMINT;
 use tokio::join;
 use tracing::debug;
 
-use crate::envs::{FM_GWID_CLN_ENV, FM_GWID_LND_ENV};
+use crate::envs::{FM_GWID_CLN_ENV, FM_GWID_LDK_ENV, FM_GWID_LND_ENV};
 use crate::external::{open_channel_between_gateways, Bitcoind, Electrs, Esplora, Lightningd, Lnd};
 use crate::federation::{Client, Federation};
 use crate::gatewayd::Gatewayd;
@@ -34,6 +34,7 @@ pub struct DevFed {
     pub fed: Federation,
     pub gw_cln: Gatewayd,
     pub gw_lnd: Gatewayd,
+    pub gw_ldk: Gatewayd,
     pub electrs: Electrs,
     pub esplora: Esplora,
 }
@@ -47,6 +48,7 @@ impl DevFed {
             fed,
             gw_cln,
             gw_lnd,
+            gw_ldk,
             electrs,
             esplora,
         } = self;
@@ -54,6 +56,7 @@ impl DevFed {
         join!(
             spawn_drop(gw_cln),
             spawn_drop(gw_lnd),
+            spawn_drop(gw_ldk),
             spawn_drop(fed),
             spawn_drop(lnd),
             spawn_drop(cln),
@@ -79,11 +82,13 @@ pub struct DevJitFed {
     fed: JitArc<Federation>,
     gw_cln: JitArc<Gatewayd>,
     gw_lnd: JitArc<Gatewayd>,
+    gw_ldk: JitArc<Gatewayd>,
     electrs: JitArc<Electrs>,
     esplora: JitArc<Esplora>,
     start_time: std::time::SystemTime,
     gw_cln_registered: JitArc<()>,
     gw_lnd_registered: JitArc<()>,
+    gw_ldk_registered: JitArc<()>,
     fed_epoch_generated: JitArc<()>,
     channel_opened: JitArc<()>,
 }
@@ -206,6 +211,36 @@ impl DevJitFed {
                 Ok(Arc::new(()))
             }
         });
+        let gw_ldk = JitTryAnyhow::new_try({
+            let esplora = esplora.clone();
+            let process_mgr = process_mgr.to_owned();
+            move || async move {
+                esplora.get_try().await?;
+                let gatewayd = Arc::new(Gatewayd::new(&process_mgr, LightningNode::Ldk).await?);
+
+                // TODO: Find out why we need to wait here.
+                loop {
+                    if gatewayd.get_funding_address().await.is_ok() {
+                        break;
+                    }
+                    fedimint_core::runtime::sleep(std::time::Duration::from_secs(1)).await;
+                }
+
+                Ok(gatewayd)
+            }
+        });
+        let gw_ldk_registered = JitTryAnyhow::new_try({
+            let gw_ldk = gw_ldk.clone();
+            let fed = fed.clone();
+            move || async move {
+                let gw_ldk = gw_ldk.get_try().await?.deref();
+                let fed = fed.get_try().await?.deref();
+                if !skip_setup {
+                    gw_ldk.connect_fed(fed).await?;
+                }
+                Ok(Arc::new(()))
+            }
+        });
 
         let channel_opened = JitTryAnyhow::new_try({
             let process_mgr = process_mgr.to_owned();
@@ -213,6 +248,7 @@ impl DevJitFed {
             let gw_lnd = gw_lnd.clone();
             let cln = cln.clone();
             let gw_cln = gw_cln.clone();
+            let gw_ldk = gw_ldk.clone();
             let bitcoind = bitcoind.clone();
             || async move {
                 let bitcoind = bitcoind.get_try().await?.deref().clone();
@@ -226,6 +262,15 @@ impl DevJitFed {
                     &bitcoind,
                     &cln,
                     &gw_cln,
+                    &lnd,
+                    &gw_lnd,
+                )
+                .await?;
+                open_channel_between_gateways(
+                    &process_mgr,
+                    &bitcoind,
+                    &cln,
+                    &gw_ldk,
                     &lnd,
                     &gw_lnd,
                 )
@@ -252,11 +297,13 @@ impl DevJitFed {
             fed,
             gw_cln,
             gw_lnd,
+            gw_ldk,
             electrs,
             esplora,
             start_time,
             gw_cln_registered,
             gw_lnd_registered,
+            gw_ldk_registered,
             fed_epoch_generated,
             channel_opened,
         })
@@ -288,6 +335,13 @@ impl DevJitFed {
         self.gw_lnd_registered.get_try().await?;
         Ok(self.gw_lnd.get_try().await?.deref())
     }
+    pub async fn gw_ldk(&self) -> anyhow::Result<&Gatewayd> {
+        Ok(self.gw_ldk.get_try().await?.deref())
+    }
+    pub async fn gw_ldk_registered(&self) -> anyhow::Result<&Gatewayd> {
+        self.gw_ldk_registered.get_try().await?;
+        Ok(self.gw_ldk.get_try().await?.deref())
+    }
     pub async fn fed(&self) -> anyhow::Result<&Federation> {
         Ok(self.fed.get_try().await?.deref())
     }
@@ -316,11 +370,13 @@ impl DevJitFed {
 
         std::env::set_var(FM_GWID_CLN_ENV, self.gw_cln().await?.gateway_id().await?);
         std::env::set_var(FM_GWID_LND_ENV, self.gw_lnd().await?.gateway_id().await?);
+        std::env::set_var(FM_GWID_LDK_ENV, self.gw_ldk().await?.gateway_id().await?);
 
         let _ = self.internal_client_gw_registered().await?;
         let _ = self.channel_opened.get_try().await?;
         let _ = self.gw_cln_registered().await?;
         let _ = self.gw_lnd_registered().await?;
+        let _ = self.gw_ldk_registered().await?;
         let _ = self.cln().await?;
         let _ = self.lnd().await?;
         let _ = self.electrs().await?;
@@ -346,6 +402,7 @@ impl DevJitFed {
             fed: self.fed().await?.to_owned(),
             gw_cln: self.gw_cln().await?.to_owned(),
             gw_lnd: self.gw_lnd().await?.to_owned(),
+            gw_ldk: self.gw_ldk().await?.to_owned(),
             esplora: self.esplora().await?.to_owned(),
             electrs: self.electrs().await?.to_owned(),
         })

@@ -30,6 +30,8 @@ windows:
           - tail -n +0 -F $FM_LOGS_DIR/gatewayd-cln.log
         - lnd-gw:
           - tail -n +0 -F $FM_LOGS_DIR/gatewayd-lnd.log
+        - ldk-gw:
+          - tail -n +0 -F $FM_LOGS_DIR/gatewayd-ldk.log
   - bitcoin:
       panes:
         - bitcoind:
