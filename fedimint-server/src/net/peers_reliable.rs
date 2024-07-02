@@ -150,7 +150,7 @@ where
         cfg: NetworkConfig,
         delay_calculator: DelayCalculator,
         connect: PeerConnector<T>,
-        task_group: &mut TaskGroup,
+        task_group: &TaskGroup,
     ) -> (Self, PeerStatusChannels) {
         let shared_connector: SharedAnyConnector<PeerMessage<T>> = connect.into();
         let mut connection_senders = HashMap::new();
@@ -641,7 +641,7 @@ where
         connect: SharedAnyConnector<PeerMessage<M>>,
         incoming_connections: Receiver<AnyFramedTransport<PeerMessage<M>>>,
         status_query_receiver: PeerStatusChannelReceiver,
-        task_group: &mut TaskGroup,
+        task_group: &TaskGroup,
     ) -> PeerConnection<M> {
         let (outgoing_sender, outgoing_receiver) = tokio::sync::mpsc::channel::<M>(1024);
         let (incoming_sender, incoming_receiver) = tokio::sync::mpsc::channel::<M>(1024);
@@ -765,7 +765,7 @@ mod tests {
 
             let peers_ref = &peers;
             let net_ref = &net;
-            let build_peers = |bind: &'static str, id: u16, mut task_group: TaskGroup| async move {
+            let build_peers = |bind: &'static str, id: u16, task_group: TaskGroup| async move {
                 let cfg = NetworkConfig {
                     identity: PeerId::from(id),
                     bind_addr: bind.parse().unwrap(),
@@ -778,7 +778,7 @@ mod tests {
                     cfg,
                     DelayCalculator::TEST_DEFAULT,
                     connect,
-                    &mut task_group,
+                    &task_group,
                 )
                 .await
             };
