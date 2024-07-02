@@ -36,6 +36,7 @@ var srcIndex = new Map(JSON.parse('[\
 ["fedimint_mint_common",["",[],["common.rs","config.rs","endpoint_constants.rs","lib.rs"]]],\
 ["fedimint_mint_server",["",[],["db.rs","lib.rs","metrics.rs"]]],\
 ["fedimint_portalloc",["",[["data",[],["dto.rs"]]],["data.rs","envs.rs","lib.rs","util.rs"]]],\
+["fedimint_recoverytool",["",[],["envs.rs","main.rs"]]],\
 ["fedimint_rocksdb",["",[],["envs.rs","lib.rs"]]],\
 ["fedimint_server",["",[["config",[],["api.rs","distributedgen.rs","io.rs","mod.rs"]],["consensus",[["aleph_bft",[],["backup.rs","data_provider.rs","finalization_handler.rs","keychain.rs","mod.rs","network.rs","spawner.rs"]]],["api.rs","db.rs","debug.rs","engine.rs","mod.rs","transaction.rs"]],["metrics",[],["jsonrpsee.rs"]],["net",[["api",[],["http_auth.rs"]]],["api.rs","connect.rs","framed.rs","mod.rs","peers.rs","peers_reliable.rs","queue.rs"]]],["envs.rs","lib.rs","metrics.rs","multiplexed.rs"]]],\
 ["fedimint_testing",["",[["btc",[],["mock.rs","mod.rs","real.rs"]]],["db.rs","envs.rs","federation.rs","fixtures.rs","gateway.rs","lib.rs","ln.rs"]]],\
@@ -55,7 +56,6 @@ var srcIndex = new Map(JSON.parse('[\
 ["ln_gateway",["",[["gateway_module_v2",[],["complete_sm.rs","mod.rs","receive_sm.rs","send_sm.rs"]],["lightning",[],["cln.rs","lnd.rs","mod.rs"]],["rpc",[],["mod.rs","rpc_client.rs","rpc_server.rs"]],["state_machine",[],["complete.rs","mod.rs","pay.rs"]]],["client.rs","db.rs","envs.rs","lib.rs","types.rs"]]],\
 ["meta_sanity_test",["",[],["meta-sanity-test.rs"]]],\
 ["mint_client_sanity",["",[],["mint-client-sanity.rs"]]],\
-["recoverytool",["",[],["envs.rs","main.rs"]]],\
 ["self_payment_with_one_gateway",["",[],["self_payment_with_one_gateway.rs"]]],\
 ["tbs",["",[],["lib.rs"]]],\
 ["tpe",["",[],["lib.rs"]]]\

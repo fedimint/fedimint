@@ -6,9 +6,9 @@
 "fedimint_lnv2_client":[["impl Subcommand for <a class=\"enum\" href=\"fedimint_lnv2_client/cli/enum.Opts.html\" title=\"enum fedimint_lnv2_client::cli::Opts\">Opts</a>"]],
 "fedimint_load_test_tool":[["impl Subcommand for <a class=\"enum\" href=\"fedimint_load_test_tool/enum.Command.html\" title=\"enum fedimint_load_test_tool::Command\">Command</a>"]],
 "fedimint_meta_client":[["impl Subcommand for <a class=\"enum\" href=\"fedimint_meta_client/cli/enum.Opts.html\" title=\"enum fedimint_meta_client::cli::Opts\">Opts</a>"]],
+"fedimint_recoverytool":[["impl Subcommand for <a class=\"enum\" href=\"fedimint_recoverytool/enum.TweakSource.html\" title=\"enum fedimint_recoverytool::TweakSource\">TweakSource</a>"]],
 "fedimintd":[["impl Subcommand for <a class=\"enum\" href=\"fedimintd/fedimintd/enum.DevSubcommand.html\" title=\"enum fedimintd::fedimintd::DevSubcommand\">DevSubcommand</a>"],["impl Subcommand for <a class=\"enum\" href=\"fedimintd/fedimintd/enum.ServerSubcommand.html\" title=\"enum fedimintd::fedimintd::ServerSubcommand\">ServerSubcommand</a>"]],
 "gateway_cli":[["impl Subcommand for <a class=\"enum\" href=\"gateway_cli/enum.Commands.html\" title=\"enum gateway_cli::Commands\">Commands</a>"],["impl Subcommand for <a class=\"enum\" href=\"gateway_cli/enum.LightningCommands.html\" title=\"enum gateway_cli::LightningCommands\">LightningCommands</a>"]],
 "gateway_tests":[["impl Subcommand for <a class=\"enum\" href=\"gateway_tests/enum.GatewayTest.html\" title=\"enum gateway_tests::GatewayTest\">GatewayTest</a>"]],
-"ln_gateway":[["impl Subcommand for <a class=\"enum\" href=\"ln_gateway/lightning/enum.LightningMode.html\" title=\"enum ln_gateway::lightning::LightningMode\">LightningMode</a>"]],
-"recoverytool":[["impl Subcommand for <a class=\"enum\" href=\"recoverytool/enum.TweakSource.html\" title=\"enum recoverytool::TweakSource\">TweakSource</a>"]]
+"ln_gateway":[["impl Subcommand for <a class=\"enum\" href=\"ln_gateway/lightning/enum.LightningMode.html\" title=\"enum ln_gateway::lightning::LightningMode\">LightningMode</a>"]]
 };if (window.register_implementors) {window.register_implementors(implementors);} else {window.pending_implementors = implementors;}})()
