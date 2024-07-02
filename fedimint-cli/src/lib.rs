@@ -573,7 +573,7 @@ impl FedimintCli {
 
     async fn make_client_builder(&self, cli: &Opts) -> CliResult<ClientBuilder> {
         let db = cli.load_rocks_db().await?;
-        let mut client_builder = Client::builder(db);
+        let mut client_builder = Client::builder(db).await.map_err_cli()?;
         client_builder.with_module_inits(self.module_inits.clone());
         client_builder.with_primary_module(1);
 

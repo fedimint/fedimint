@@ -4,7 +4,7 @@ use bitcoin::Network;
 use bitcoin_hashes::sha256;
 use fedimint_core::config::FederationId;
 use fedimint_core::db::{
-    DatabaseTransaction, DatabaseVersion, IDatabaseTransactionOpsCoreTyped, ServerMigrationFn,
+    CoreMigrationFn, DatabaseTransaction, DatabaseVersion, IDatabaseTransactionOpsCoreTyped,
 };
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::invite_code::InviteCode;
@@ -128,8 +128,8 @@ impl_db_lookup!(
     query_prefix = PreimageAuthenticationPrefix
 );
 
-pub fn get_gatewayd_database_migrations() -> BTreeMap<DatabaseVersion, ServerMigrationFn> {
-    let mut migrations: BTreeMap<DatabaseVersion, ServerMigrationFn> = BTreeMap::new();
+pub fn get_gatewayd_database_migrations() -> BTreeMap<DatabaseVersion, CoreMigrationFn> {
+    let mut migrations: BTreeMap<DatabaseVersion, CoreMigrationFn> = BTreeMap::new();
     migrations.insert(DatabaseVersion(0), |dbtx| migrate_to_v1(dbtx).boxed());
     migrations
 }
