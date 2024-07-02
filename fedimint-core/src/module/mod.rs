@@ -39,8 +39,8 @@ use crate::core::{
     ModuleInstanceId, ModuleKind, Output, OutputError, OutputOutcome,
 };
 use crate::db::{
-    Committable, Database, DatabaseKey, DatabaseKeyWithNotify, DatabaseRecord, DatabaseTransaction,
-    DatabaseVersion, ServerMigrationFn,
+    Committable, CoreMigrationFn, Database, DatabaseKey, DatabaseKeyWithNotify, DatabaseRecord,
+    DatabaseTransaction, DatabaseVersion,
 };
 use crate::encoding::{Decodable, DecodeError, Encodable};
 use crate::fmt_utils::AbbreviateHexBytes;
@@ -543,7 +543,7 @@ pub trait IServerModuleInit: IDynCommonModuleInit {
     /// Retrieves the migrations map from the server module to be applied to the
     /// database before the module is initialized. The migrations map is
     /// indexed on the from version.
-    fn get_database_migrations(&self) -> BTreeMap<DatabaseVersion, ServerMigrationFn>;
+    fn get_database_migrations(&self) -> BTreeMap<DatabaseVersion, CoreMigrationFn>;
 }
 
 dyn_newtype_define!(
@@ -685,7 +685,7 @@ pub trait ServerModuleInit: ModuleInit + Sized {
     /// Retrieves the migrations map from the server module to be applied to the
     /// database before the module is initialized. The migrations map is
     /// indexed on the from version.
-    fn get_database_migrations(&self) -> BTreeMap<DatabaseVersion, ServerMigrationFn> {
+    fn get_database_migrations(&self) -> BTreeMap<DatabaseVersion, CoreMigrationFn> {
         BTreeMap::new()
     }
 }
@@ -763,7 +763,7 @@ where
         )
     }
 
-    fn get_database_migrations(&self) -> BTreeMap<DatabaseVersion, ServerMigrationFn> {
+    fn get_database_migrations(&self) -> BTreeMap<DatabaseVersion, CoreMigrationFn> {
         <Self as ServerModuleInit>::get_database_migrations(self)
     }
 }

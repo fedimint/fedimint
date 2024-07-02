@@ -71,7 +71,9 @@ impl GatewayClientBuilder {
         })?;
         let db = Database::new(rocksdb, ModuleDecoderRegistry::default());
 
-        let mut client_builder = Client::builder(db);
+        let mut client_builder = Client::builder(db)
+            .await
+            .map_err(GatewayError::DatabaseError)?;
         client_builder.with_module_inits(registry);
         client_builder.with_primary_module(self.primary_module);
 

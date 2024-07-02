@@ -463,7 +463,7 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConsensusApi>> {
             FEDERATION_ID_ENDPOINT,
             ApiVersion::new(0, 2),
             async |fedimint: &ConsensusApi, _context,  _v: ()| -> String {
-                Ok(fedimint.cfg.get_federation_id().to_string())
+                Ok(fedimint.cfg.calculate_federation_id().to_string())
             }
         },
         api_endpoint! {

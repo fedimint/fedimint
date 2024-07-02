@@ -18,6 +18,7 @@ use fedimint_core::util::SafeUrl;
 use fedimint_core::{BitcoinHash, ModuleDecoderRegistry};
 use fedimint_logging::LOG_CORE;
 use hex::FromHex;
+use secp256k1::PublicKey;
 use serde::de::DeserializeOwned;
 use serde::ser::SerializeMap;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
@@ -111,6 +112,17 @@ pub struct PeerUrl {
     pub name: String,
 }
 
+/// Total client config v0 (<0.4.0). Does not contain broadcast public keys.
+///
+/// This includes global settings and client-side module configs.
+#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize, Encodable, Decodable)]
+pub struct ClientConfigV0 {
+    #[serde(flatten)]
+    pub global: GlobalClientConfigV0,
+    #[serde(deserialize_with = "de_int_key")]
+    pub modules: BTreeMap<ModuleInstanceId, ClientModuleConfig>,
+}
+
 /// Total client config
 ///
 /// This includes global settings and client-side module configs.
@@ -151,7 +163,7 @@ pub struct JsonClientConfig {
 
 /// Federation-wide client config
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize, Encodable, Decodable)]
-pub struct GlobalClientConfig {
+pub struct GlobalClientConfigV0 {
     /// API endpoints for each federation member
     #[serde(deserialize_with = "de_int_key")]
     pub api_endpoints: BTreeMap<PeerId, PeerUrl>,
@@ -162,7 +174,25 @@ pub struct GlobalClientConfig {
     pub meta: BTreeMap<String, String>,
 }
 
+/// Federation-wide client config
+#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize, Encodable, Decodable)]
+pub struct GlobalClientConfig {
+    /// API endpoints for each federation member
+    #[serde(deserialize_with = "de_int_key")]
+    pub api_endpoints: BTreeMap<PeerId, PeerUrl>,
+    /// Signing session keys for each federation member
+    /// Optional for 0.3.x backwards compatibility
+    pub broadcast_public_keys: Option<BTreeMap<PeerId, PublicKey>>,
+    /// Core consensus version
+    pub consensus_version: CoreConsensusVersion,
+    // TODO: make it a String -> serde_json::Value map?
+    /// Additional config the federation wants to transmit to the clients
+    pub meta: BTreeMap<String, String>,
+}
+
 impl GlobalClientConfig {
+    /// 0.4.0 and later uses a hash of broadcast public keys to calculate the
+    /// federation id. 0.3.x and earlier use a hash of api endpoints
     pub fn calculate_federation_id(&self) -> FederationId {
         FederationId(self.api_endpoints.consensus_hash())
     }
@@ -1035,6 +1065,7 @@ mod tests {
         let config = ClientConfig {
             global: GlobalClientConfig {
                 api_endpoints: Default::default(),
+                broadcast_public_keys: Default::default(),
                 consensus_version: CoreConsensusVersion { major: 0, minor: 0 },
                 meta: vec![
                     ("foo".to_string(), "bar".to_string()),
