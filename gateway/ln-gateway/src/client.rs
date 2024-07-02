@@ -106,8 +106,8 @@ impl GatewayClientBuilder {
         .map_err(GatewayError::ClientStateMachineError)
     }
 
+    // TODO(tvolk131): Move this to the DB code.
     pub async fn save_config(
-        &self,
         config: FederationConfig,
         mut dbtx: DatabaseTransaction<'_, Committable>,
     ) -> Result<()> {
@@ -118,7 +118,8 @@ impl GatewayClientBuilder {
             .map_err(GatewayError::DatabaseError)
     }
 
-    pub async fn load_configs(&self, mut dbtx: DatabaseTransaction<'_>) -> Vec<FederationConfig> {
+    // TODO(tvolk131): Move this to the DB code.
+    pub async fn load_configs(mut dbtx: DatabaseTransaction<'_>) -> Vec<FederationConfig> {
         dbtx.find_by_prefix(&FederationIdKeyPrefix)
             .await
             .collect::<BTreeMap<FederationIdKey, FederationConfig>>()
