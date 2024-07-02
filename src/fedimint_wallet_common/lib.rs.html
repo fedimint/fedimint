@@ -343,6 +343,14 @@
 <a href="#343" id="343">343</a>
 <a href="#344" id="344">344</a>
 <a href="#345" id="345">345</a>
+<a href="#346" id="346">346</a>
+<a href="#347" id="347">347</a>
+<a href="#348" id="348">348</a>
+<a href="#349" id="349">349</a>
+<a href="#350" id="350">350</a>
+<a href="#351" id="351">351</a>
+<a href="#352" id="352">352</a>
+<a href="#353" id="353">353</a>
 </pre></div><pre class="rust"><code><span class="attr">#![warn(clippy::pedantic)]
 #![allow(clippy::default_trait_access)]
 #![allow(clippy::missing_errors_doc)]
@@ -380,7 +388,15 @@
 <span class="kw">pub const </span>KIND: ModuleKind = ModuleKind::from_static_str(<span class="string">"wallet"</span>);
 <span class="kw">pub const </span>MODULE_CONSENSUS_VERSION: ModuleConsensusVersion = ModuleConsensusVersion::new(<span class="number">2</span>, <span class="number">1</span>);
 
-<span class="kw">pub const </span>CONFIRMATION_TARGET: u16 = <span class="number">10</span>;
+<span class="doccomment">/// Used for estimating a feerate that will confirm within a target number of
+/// blocks.
+///
+/// Since the wallet's UTXOs are a shared resource, we need to reduce the risk
+/// of a peg-out transaction getting stuck in the mempool, hence we use a low
+/// confirmation target. Other fee bumping techniques, such as RBF and CPFP, can
+/// help mitigate this problem but are out-of-scope for this version of the
+/// wallet.
+</span><span class="kw">pub const </span>CONFIRMATION_TARGET: u16 = <span class="number">1</span>;
 
 <span class="kw">pub type </span>PartialSig = Vec&lt;u8&gt;;
 
