@@ -35,7 +35,15 @@ pub mod txoproof;
 pub const KIND: ModuleKind = ModuleKind::from_static_str("wallet");
 pub const MODULE_CONSENSUS_VERSION: ModuleConsensusVersion = ModuleConsensusVersion::new(2, 1);
 
-pub const CONFIRMATION_TARGET: u16 = 10;
+/// Used for estimating a feerate that will confirm within a target number of
+/// blocks.
+///
+/// Since the wallet's UTXOs are a shared resource, we need to reduce the risk
+/// of a peg-out transaction getting stuck in the mempool, hence we use a low
+/// confirmation target. Other fee bumping techniques, such as RBF and CPFP, can
+/// help mitigate this problem but are out-of-scope for this version of the
+/// wallet.
+pub const CONFIRMATION_TARGET: u16 = 1;
 
 pub type PartialSig = Vec<u8>;
 
