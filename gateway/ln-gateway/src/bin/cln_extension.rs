@@ -15,7 +15,7 @@ use cln_rpc::model::requests::SendpayRoute;
 use cln_rpc::model::responses::ListpeerchannelsChannels;
 use cln_rpc::primitives::ShortChannelId;
 use fedimint_core::secp256k1::{All, PublicKey, Secp256k1, SecretKey};
-use fedimint_core::task::TaskGroup;
+use fedimint_core::task::{timeout, TaskGroup};
 use fedimint_core::util::handle_version_hash_command;
 use fedimint_core::{fedimint_build_code_version_env, Amount};
 use hex::ToHex;
@@ -47,6 +47,10 @@ use tonic::Status;
 use tracing::{debug, error, info, warn};
 
 const MAX_HTLC_PROCESSING_DURATION: Duration = Duration::MAX;
+// Amount of time to attempt making a payment before returning an error
+const PAYMENT_TIMEOUT_DURATION: Duration = Duration::from_secs(180);
+// Use a `riskfactor` of 10, which is the default for lightning-pay
+const ROUTE_RISK_FACTOR: u64 = 10;
 
 #[derive(Parser)]
 #[command(version)]
@@ -241,6 +245,7 @@ impl ClnRpcService {
         &self,
         pruned_invoice: PrunedInvoice,
         riskfactor: u64,
+        excluded_nodes: Vec<String>,
     ) -> Result<Vec<SendpayRoute>, ClnExtensionError> {
         let response = self
             .rpc_client()
@@ -254,7 +259,7 @@ impl ClnRpcService {
                     cltv: Some(pruned_invoice.min_final_cltv_delta as u32),
                     fromid: None,
                     fuzzpercent: None,
-                    exclude: None,
+                    exclude: Some(excluded_nodes),
                     maxhops: None,
                 },
             ))
@@ -559,59 +564,117 @@ impl GatewayLightning for ClnRpcService {
             .ok_or_else(|| tonic::Status::internal("Pruned Invoice was not supplied"))?;
         let payment_hash = sha256::Hash::from_slice(&pruned_invoice.payment_hash)
             .map_err(|err| tonic::Status::internal(err.to_string()))?;
+        let destination =
+            PublicKey::from_slice(&pruned_invoice.destination).expect("Should parse public key");
 
-        // Use a `riskfactor` of 10, which is the default for lightning-pay
-        let route = self
-            .get_route(pruned_invoice.clone(), 10)
-            .await
-            .map_err(|err| tonic::Status::internal(err.to_string()))?;
+        let mut excluded_nodes = vec![];
 
-        // Verify `max_delay` is greater than the worst case timeout for the payment
-        // failure in blocks
-        let delay = route
-            .first()
-            .ok_or_else(|| {
-                tonic::Status::internal(format!(
-                    "Returned route did not have any hops for payment_hash: {payment_hash}"
-                ))
-            })?
-            .delay;
-        if max_delay < delay.into() {
-            return Err(tonic::Status::internal(format!("Worst case timeout for the payment is too long. max_delay: {max_delay} delay: {delay} payment_hash: {payment_hash}")));
+        let payment_future = async {
+            let mut route_attempt = 0;
+
+            loop {
+                let route = self
+                    .get_route(
+                        pruned_invoice.clone(),
+                        ROUTE_RISK_FACTOR,
+                        excluded_nodes.clone(),
+                    )
+                    .await
+                    .map_err(|err| tonic::Status::internal(err.to_string()))?;
+
+                // Verify `max_delay` is greater than the worst case timeout for the payment
+                // failure in blocks
+                let delay = route
+                    .first()
+                    .ok_or_else(|| {
+                        tonic::Status::internal(format!(
+                            "Returned route did not have any hops for payment_hash: {payment_hash}"
+                        ))
+                    })?
+                    .delay;
+                if max_delay < delay.into() {
+                    return Err(tonic::Status::internal(format!("Worst case timeout for the payment is too long. max_delay: {max_delay} delay: {delay} payment_hash: {payment_hash}")));
+                }
+
+                // Verify the total fee is less than `max_fee_msat`
+                let first_hop_amount = route
+                    .first()
+                    .ok_or_else(|| {
+                        tonic::Status::internal(format!(
+                            "Returned route did not have any hops for payment_hash: {payment_hash}"
+                        ))
+                    })?
+                    .amount_msat;
+                let last_hop_amount = route
+                    .last()
+                    .ok_or_else(|| {
+                        tonic::Status::internal(format!(
+                            "Returned route did not have any hops for payment_hash: {payment_hash}"
+                        ))
+                    })?
+                    .amount_msat;
+                let fee = first_hop_amount - last_hop_amount;
+                if max_fee_msat < fee.msat() {
+                    return Err(tonic::Status::internal(format!(
+                        "Fee: {} for payment {payment_hash} is greater than max_fee_msat: {max_fee_msat}",
+                        fee.msat()
+                    )));
+                }
+
+                debug!(
+                    ?route_attempt,
+                    ?payment_hash,
+                    ?route,
+                    "Attempting payment with route"
+                );
+                match self
+                    .pay_with_route(pruned_invoice.clone(), payment_hash, route.clone())
+                    .await
+                {
+                    Ok(preimage) => {
+                        let response = PayInvoiceResponse { preimage };
+                        return Ok(tonic::Response::new(response));
+                    }
+                    Err(e) => {
+                        error!(
+                            ?route_attempt,
+                            ?payment_hash,
+                            ?e,
+                            "Pruned invoice payment attempt failure"
+                        );
+                        let mut failed_nodes = route
+                            .into_iter()
+                            .filter_map(|r| {
+                                // Do not exclude the destination node
+                                if r.id != destination {
+                                    Some(r.id.to_string())
+                                } else {
+                                    None
+                                }
+                            })
+                            .collect::<Vec<_>>();
+                        excluded_nodes.append(&mut failed_nodes);
+                    }
+                }
+
+                route_attempt += 1;
+            }
+        };
+
+        match timeout(PAYMENT_TIMEOUT_DURATION, payment_future).await {
+            Ok(preimage) => preimage,
+            Err(elapsed) => {
+                error!(
+                    ?PAYMENT_TIMEOUT_DURATION,
+                    ?elapsed,
+                    ?payment_hash,
+                    "Payment exceeded max attempt duration"
+                );
+                Err(tonic::Status::internal(format!(
+                    "Payment exceeded max attempt duration: {PAYMENT_TIMEOUT_DURATION:?}"
+                )))
+            }
         }
-
-        // Verify the total fee is less than `max_fee_msat`
-        let first_hop_amount = route
-            .first()
-            .ok_or_else(|| {
-                tonic::Status::internal(format!(
-                    "Returned route did not have any hops for payment_hash: {payment_hash}"
-                ))
-            })?
-            .amount_msat;
-        let last_hop_amount = route
-            .last()
-            .ok_or_else(|| {
-                tonic::Status::internal(format!(
-                    "Returned route did not have any hops for payment_hash: {payment_hash}"
-                ))
-            })?
-            .amount_msat;
-        let fee = first_hop_amount - last_hop_amount;
-        if max_fee_msat < fee.msat() {
-            return Err(tonic::Status::internal(format!(
-                "Fee: {} for payment {payment_hash} is greater than max_fee_msat: {max_fee_msat}",
-                fee.msat()
-            )));
-        }
-
-        let preimage = self
-            .pay_with_route(pruned_invoice, payment_hash, route)
-            .await
-            .map_err(|err| tonic::Status::internal(err.to_string()))?;
-        let response = PayInvoiceResponse { preimage };
-
-        Ok(tonic::Response::new(response))
     }
 
     type RouteHtlcsStream = ReceiverStream<Result<InterceptHtlcRequest, Status>>;
