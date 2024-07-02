@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 use std::fmt::Debug;
 
 use fedimint_core::core::ModuleInstanceId;
-use fedimint_core::db::{DatabaseVersion, ServerMigrationFn, MODULE_GLOBAL_PREFIX};
+use fedimint_core::db::{CoreMigrationFn, DatabaseVersion, MODULE_GLOBAL_PREFIX};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::session_outcome::{AcceptedItem, SignedSessionOutcome};
 use fedimint_core::{impl_db_lookup, impl_db_record, TransactionId};
@@ -18,6 +18,8 @@ pub enum DbKeyPrefix {
     AcceptedTransaction = 0x02,
     SignedSessionOutcome = 0x04,
     AlephUnits = 0x05,
+    // TODO: do we want to split the server DB into consensus/non-consensus?
+    ApiAnnouncements = 0x06,
     Module = MODULE_GLOBAL_PREFIX,
 }
 
@@ -89,7 +91,7 @@ impl_db_record!(
 );
 impl_db_lookup!(key = AlephUnitsKey, query_prefix = AlephUnitsPrefix);
 
-pub fn get_global_database_migrations() -> BTreeMap<DatabaseVersion, ServerMigrationFn> {
+pub fn get_global_database_migrations() -> BTreeMap<DatabaseVersion, CoreMigrationFn> {
     BTreeMap::new()
 }
 

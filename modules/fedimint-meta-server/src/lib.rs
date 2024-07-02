@@ -17,8 +17,8 @@ use fedimint_core::config::{
 };
 use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::db::{
-    Committable, DatabaseTransaction, DatabaseVersion, IDatabaseTransactionOpsCoreTyped,
-    NonCommittable, ServerMigrationFn,
+    Committable, CoreMigrationFn, DatabaseTransaction, DatabaseVersion,
+    IDatabaseTransactionOpsCoreTyped, NonCommittable,
 };
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::{
@@ -198,7 +198,7 @@ impl ServerModuleInit for MetaInit {
     }
 
     /// DB migrations to move from old to newer versions
-    fn get_database_migrations(&self) -> BTreeMap<DatabaseVersion, ServerMigrationFn> {
+    fn get_database_migrations(&self) -> BTreeMap<DatabaseVersion, CoreMigrationFn> {
         BTreeMap::new()
     }
 }
