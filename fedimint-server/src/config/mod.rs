@@ -266,13 +266,13 @@ impl ServerConfig {
                 .url
                 .clone(),
             self.local.identity,
-            self.get_federation_id(),
+            self.calculate_federation_id(),
             api_secret,
         )
     }
 
-    pub fn get_federation_id(&self) -> FederationId {
-        FederationId(self.consensus.broadcast_public_keys.consensus_hash())
+    pub fn calculate_federation_id(&self) -> FederationId {
+        FederationId(self.consensus.api_endpoints.consensus_hash())
     }
 
     pub fn add_modules(&mut self, modules: BTreeMap<ModuleInstanceId, ServerModuleConfig>) {

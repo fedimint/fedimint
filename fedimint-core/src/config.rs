@@ -194,11 +194,7 @@ impl GlobalClientConfig {
     /// 0.4.0 and later uses a hash of broadcast public keys to calculate the
     /// federation id. 0.3.x and earlier use a hash of api endpoints
     pub fn calculate_federation_id(&self) -> FederationId {
-        if let Some(broadcast_public_keys) = &self.broadcast_public_keys {
-            FederationId(broadcast_public_keys.consensus_hash())
-        } else {
-            FederationId(self.api_endpoints.consensus_hash())
-        }
+        FederationId(self.api_endpoints.consensus_hash())
     }
 
     /// Federation name from config metadata (if set)

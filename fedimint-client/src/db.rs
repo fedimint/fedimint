@@ -151,20 +151,13 @@ impl_db_record!(
 );
 
 #[derive(Debug, Encodable, Decodable, Serialize)]
-pub struct ClientConfigKey {
-    pub id: FederationId,
-}
-
-#[derive(Debug, Encodable)]
-pub struct ClientConfigKeyPrefix;
+pub struct ClientConfigKey;
 
 impl_db_record!(
     key = ClientConfigKey,
     value = ClientConfig,
     db_prefix = DbKeyPrefix::ClientConfig
 );
-
-impl_db_lookup!(key = ClientConfigKey, query_prefix = ClientConfigKeyPrefix);
 
 #[derive(Debug, Encodable, Decodable, Serialize)]
 pub struct ClientConfigKeyV0 {
@@ -404,23 +397,27 @@ pub fn get_core_client_database_migrations() -> BTreeMap<DatabaseVersion, CoreMi
                 .await
                 .collect::<Vec<_>>()
                 .await;
-            for (id, config_v0) in config_v0.into_iter() {
-                let global = GlobalClientConfig {
-                    api_endpoints: config_v0.global.api_endpoints,
-                    broadcast_public_keys: None,
-                    consensus_version: config_v0.global.consensus_version,
-                    meta: config_v0.global.meta,
-                };
 
-                let config = ClientConfig {
-                    global,
-                    modules: config_v0.modules,
-                };
+            assert_eq!(config_v0.len(), 1);
+            let (id, config_v0) = config_v0
+                .into_iter()
+                .next()
+                .expect("We asserted that the database contains exactly one config");
 
-                let config_key = ClientConfigKey { id: id.id };
-                dbtx.remove_entry(&id).await;
-                dbtx.insert_new_entry(&config_key, &config).await;
-            }
+            let global = GlobalClientConfig {
+                api_endpoints: config_v0.global.api_endpoints,
+                broadcast_public_keys: None,
+                consensus_version: config_v0.global.consensus_version,
+                meta: config_v0.global.meta,
+            };
+
+            let config = ClientConfig {
+                global,
+                modules: config_v0.modules,
+            };
+
+            dbtx.remove_entry(&id).await;
+            dbtx.insert_new_entry(&ClientConfigKey, &config).await;
             Ok(())
         })
     });
