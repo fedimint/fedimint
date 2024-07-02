@@ -50,6 +50,7 @@ fedimint-mint-client = { version = "=0.4.0-alpha", path = "../../modules/fedimin
 fedimint-wallet-client = { version = "=0.4.0-alpha", path = "../../modules/fedimint-wallet-client" }
 fedimint-lnv2-client = { path = "../../modules/fedimint-lnv2-client" }
 fedimint-lnv2-common = { path = "../../modules/fedimint-lnv2-common" }
+fedimint-lnv2-server = { path = "../../modules/fedimint-lnv2-server" }
 tpe = { package = "fedimint-tpe", version = "=0.4.0-alpha", path = "../../crypto/tpe" }
 futures = { workspace = true }
 hex = { workspace = true }
