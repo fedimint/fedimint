@@ -17,7 +17,9 @@
 
 pub mod client;
 mod db;
+mod db_manager;
 pub mod envs;
+mod federation_manager;
 pub mod gateway_module_v2;
 pub mod lightning;
 pub mod rpc;
@@ -48,8 +50,9 @@ use clap::Parser;
 use client::GatewayClientBuilder;
 use db::{
     DbKeyPrefix, FederationIdKey, GatewayConfiguration, GatewayConfigurationKey, GatewayPublicKey,
-    GATEWAYD_DATABASE_VERSION,
 };
+use db_manager::DbManager;
+use federation_manager::FederationManager;
 use fedimint_api_client::api::FederationError;
 use fedimint_client::module::init::ClientModuleInitRegistry;
 use fedimint_client::ClientHandleArc;
@@ -58,15 +61,13 @@ use fedimint_core::core::{
     ModuleInstanceId, ModuleKind, LEGACY_HARDCODED_INSTANCE_ID_MINT,
     LEGACY_HARDCODED_INSTANCE_ID_WALLET,
 };
-use fedimint_core::db::{
-    apply_migrations_server, Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped,
-};
+use fedimint_core::db::{Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped};
 use fedimint_core::endpoint_constants::REGISTER_GATEWAY_ENDPOINT;
 use fedimint_core::fmt_utils::OptStacktrace;
 use fedimint_core::invite_code::InviteCode;
 use fedimint_core::module::CommonModuleInit;
 use fedimint_core::secp256k1::schnorr::Signature;
-use fedimint_core::secp256k1::{KeyPair, PublicKey, Secp256k1};
+use fedimint_core::secp256k1::PublicKey;
 use fedimint_core::task::{sleep, TaskGroup, TaskHandle, TaskShutdownToken};
 use fedimint_core::time::duration_since_epoch;
 use fedimint_core::util::{SafeUrl, Spanned};
@@ -76,7 +77,6 @@ use fedimint_core::{
 use fedimint_ln_client::pay::PayInvoicePayload;
 use fedimint_ln_common::config::{GatewayFee, LightningClientConfig};
 use fedimint_ln_common::contracts::Preimage;
-use fedimint_ln_common::route_hints::RouteHint;
 use fedimint_ln_common::LightningCommonInit;
 use fedimint_lnv2_client::{
     Bolt11InvoiceDescription, CreateBolt11InvoicePayload, PaymentFee, RoutingInfo,
@@ -89,14 +89,10 @@ use fedimint_wallet_client::{
 };
 use futures::stream::StreamExt;
 use gateway_lnrpc::intercept_htlc_response::Action;
-use gateway_lnrpc::{
-    CloseChannelsWithPeerResponse, GetNodeInfoResponse, GetRouteHintsResponse,
-    InterceptHtlcResponse,
-};
+use gateway_lnrpc::{CloseChannelsWithPeerResponse, InterceptHtlcResponse};
 use hex::ToHex;
 use lightning::{ILnRpcClient, LightningBuilder, LightningMode, LightningRpcError};
 use lightning_invoice::{Bolt11Invoice, RoutingFees};
-use rand::rngs::OsRng;
 use rand::Rng;
 use rpc::{
     CloseChannelsWithPeerPayload, FederationInfo, GatewayFedConfig, GatewayInfo, LeaveFedPayload,
@@ -106,30 +102,24 @@ use state_machine::pay::OutgoingPaymentError;
 use state_machine::GatewayClientModule;
 use strum::IntoEnumIterator;
 use thiserror::Error;
-use tokio::sync::{Mutex, MutexGuard, RwLock};
+use tokio::sync::RwLock;
 use tracing::{debug, error, info, info_span, warn, Instrument};
 
 use crate::db::{
-    get_gatewayd_database_migrations, FederationConfig, FederationIdKeyPrefix,
-    RegisteredIncomingContract, RegisteredIncomingContractKey,
+    FederationConfig, FederationIdKeyPrefix, RegisteredIncomingContract,
+    RegisteredIncomingContractKey,
 };
 use crate::gateway_lnrpc::create_invoice_request::Description;
 use crate::gateway_lnrpc::intercept_htlc_response::Forward;
 use crate::gateway_lnrpc::CreateInvoiceRequest;
 use crate::gateway_module_v2::GatewayClientModuleV2;
-use crate::lightning::cln::RouteHtlcStream;
-use crate::lightning::GatewayLightningBuilder;
+use crate::lightning::{GatewayLightningBuilder, RouteHtlcStream};
 use crate::rpc::rpc_server::{hash_password, run_webserver};
 use crate::rpc::{
     BackupPayload, BalancePayload, ConnectFedPayload, DepositAddressPayload, RestorePayload,
     WithdrawPayload,
 };
 use crate::state_machine::GatewayExtPayStates;
-
-/// The first SCID that the gateway will assign to a federation.
-/// Note: This starts at 1 because an SCID of 0 is considered invalid by LND's
-/// HTLC interceptor.
-const INITIAL_SCID: u64 = 1;
 
 /// How long a gateway announcement stays valid
 const GW_ANNOUNCEMENT_TTL: Duration = Duration::from_secs(600);
@@ -278,13 +268,6 @@ impl Display for GatewayState {
     }
 }
 
-/// Type definition for looking up a `FederationId` from a short channel id.
-type ScidToFederationMap = Arc<RwLock<BTreeMap<u64, FederationId>>>;
-
-// Type definition for looking up a `Client` from a `FederationId`
-type FederationToClientMap =
-    Arc<RwLock<BTreeMap<FederationId, Spanned<fedimint_client::ClientHandleArc>>>>;
-
 /// Represents an active connection to the lightning node.
 #[derive(Clone, Debug)]
 pub struct LightningContext {
@@ -299,61 +282,51 @@ struct ClientsJoinLock;
 
 #[derive(Clone)]
 pub struct Gateway {
-    // Builder struct that allows the gateway to build a `ILnRpcClient`, which represents a
-    // connection to a lightning node.
+    /// The gateway's federation manager.
+    federation_manager: Arc<RwLock<FederationManager>>,
+
+    /// The gateway's database manager.
+    db_manager: DbManager,
+
+    /// Builder struct that allows the gateway to build a `ILnRpcClient`, which
+    /// represents a connection to a lightning node.
     lightning_builder: Arc<dyn LightningBuilder + Send + Sync>,
 
-    // The gateway's current configuration
+    /// The gateway's current configuration
     gateway_config: Arc<RwLock<Option<GatewayConfiguration>>>,
 
-    // The current state of the Gateway.
+    /// The current state of the Gateway.
     state: Arc<RwLock<GatewayState>>,
 
-    // Builder struct that allows the gateway to build a Fedimint client, which handles the
-    // communication with a federation.
+    /// Builder struct that allows the gateway to build a Fedimint client, which
+    /// handles the communication with a federation.
     client_builder: GatewayClientBuilder,
-
-    // Database for Gateway metadata.
-    gateway_db: Database,
-
-    // Map of `FederationId` -> `Client`. Used for efficient retrieval of the client while handling
-    // incoming HTLCs.
-    clients: FederationToClientMap,
 
     /// Joining or leaving Federation is protected by this lock to prevent
     /// trying to use same database at the same time from multiple threads.
     /// Could be more granular (per id), but shouldn't matter in practice.
     client_joining_lock: Arc<tokio::sync::Mutex<ClientsJoinLock>>,
 
-    // Map of short channel ids to `FederationId`. Use for efficient retrieval of the client while
-    // handling incoming HTLCs.
-    scid_to_federation: ScidToFederationMap,
-
-    // A public key representing the identity of the gateway. Private key is not used.
+    /// A public key representing the identity of the gateway. Private key is
+    /// not used.
     gateway_id: PublicKey,
 
-    // Tracker for short channel ID assignments. When connecting a new federation,
-    // this value is incremented and assigned to the federation as the `mint_channel_id`
-    next_scid: Arc<Mutex<u64>>,
-
-    // The Gateway's API URL.
+    /// The Gateway's API URL.
     versioned_api: SafeUrl,
 
-    // The socket the gateway listens on.
+    /// The socket the gateway listens on.
     listen: SocketAddr,
 }
 
 impl std::fmt::Debug for Gateway {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Gateway")
+            .field("federation_manager", &self.federation_manager)
+            .field("db_manager", &self.db_manager)
             .field("gateway_config", &self.gateway_config)
             .field("state", &self.state)
             .field("client_builder", &self.client_builder)
-            .field("gateway_db", &self.gateway_db)
-            .field("clients", &self.clients)
-            .field("scid_to_federation", &self.scid_to_federation)
             .field("gateway_id", &self.gateway_id)
-            .field("next_scid", &self.next_scid)
             .finish_non_exhaustive()
     }
 }
@@ -442,50 +415,26 @@ impl Gateway {
         gateway_db: Database,
         client_builder: GatewayClientBuilder,
     ) -> anyhow::Result<Gateway> {
-        // Apply database migrations before using the database to ensure old database
-        // structures are readable.
-        apply_migrations_server(
-            &gateway_db,
-            "gatewayd".to_string(),
-            GATEWAYD_DATABASE_VERSION,
-            get_gatewayd_database_migrations(),
-        )
-        .await?;
+        let db_manager = DbManager::new(gateway_db).await?;
 
         // Reads the `GatewayConfig` from the database if it exists or is provided from
         // the command line.
-        let gateway_config =
-            Self::get_gateway_configuration(gateway_db.clone(), &gateway_parameters).await;
+        let gateway_config = db_manager.get_gateway_config(&gateway_parameters).await;
+
+        let gateway_id = db_manager.load_gateway_id().await;
 
         Ok(Self {
+            federation_manager: Arc::new(RwLock::new(FederationManager::new())),
+            db_manager,
             lightning_builder,
-            next_scid: Arc::new(Mutex::new(INITIAL_SCID)),
             gateway_config: Arc::new(RwLock::new(gateway_config)),
             state: Arc::new(RwLock::new(GatewayState::Initializing)),
             client_builder,
-            gateway_id: Self::load_gateway_id(&gateway_db).await,
-            gateway_db,
-            clients: Arc::new(RwLock::new(BTreeMap::new())),
-            scid_to_federation: Arc::new(RwLock::new(BTreeMap::new())),
-            client_joining_lock: Arc::new(Mutex::new(ClientsJoinLock)),
+            client_joining_lock: Arc::new(tokio::sync::Mutex::new(ClientsJoinLock)),
+            gateway_id,
             versioned_api: gateway_parameters.versioned_api,
             listen: gateway_parameters.listen,
         })
-    }
-
-    /// Returns a `PublicKey` that uniquely identifies the Gateway.
-    async fn load_gateway_id(gateway_db: &Database) -> PublicKey {
-        let mut dbtx = gateway_db.begin_transaction().await;
-        if let Some(key_pair) = dbtx.get_value(&GatewayPublicKey {}).await {
-            key_pair.public_key()
-        } else {
-            let context = Secp256k1::new();
-            let (secret, public) = context.generate_keypair(&mut OsRng);
-            let key_pair = KeyPair::from_secret_key(&context, &secret);
-            dbtx.insert_new_entry(&GatewayPublicKey, &key_pair).await;
-            dbtx.commit_tx().await;
-            public
-        }
     }
 
     pub fn gateway_id(&self) -> PublicKey {
@@ -576,13 +525,13 @@ impl Gateway {
                     break;
                 }
 
-                let mut htlc_task_group = tg.make_subgroup();
+                let htlc_task_group = tg.make_subgroup();
                 let lnrpc_route = self_copy.lightning_builder.build().await;
 
                 debug!("Will try to intercept HTLC stream...");
                 // Re-create the HTLC stream if the connection breaks
                 match lnrpc_route
-                    .route_htlcs(&mut htlc_task_group)
+                    .route_htlcs(&htlc_task_group)
                     .await
                 {
                     Ok((stream, ln_client)) => {
@@ -590,7 +539,7 @@ impl Gateway {
                         self_copy.set_gateway_state(GatewayState::Connected).await;
                         info!("Established HTLC stream");
 
-                        match fetch_lightning_node_info(ln_client.clone()).await {
+                        match ln_client.parsed_node_info().await {
                             Ok((lightning_public_key, lightning_alias, lightning_network, _block_height, _synced_to_chain)) => {
                                 let gateway_config = self_copy.clone_gateway_config().await;
                                 let gateway_config = if let Some(config) = gateway_config {
@@ -598,8 +547,8 @@ impl Gateway {
                                 } else {
                                     self_copy.set_gateway_state(GatewayState::Configuring).await;
                                     info!("Waiting for gateway to be configured...");
-                                    self_copy.gateway_db
-                                        .wait_key_exists(&GatewayConfigurationKey)
+                                    self_copy.db_manager
+                                        .get_gateway_config_wait_until_exists()
                                         .await
                                 };
 
@@ -672,110 +621,101 @@ impl Gateway {
         let GatewayState::Running { lightning_context } = self.get_state().await else {
             panic!("Gateway isn't in a running state")
         };
+
         loop {
-            match stream.next().await {
-                Some(Ok(htlc_request)) => {
-                    info!(
-                        "Intercepting HTLC {}",
-                        PrettyInterceptHtlcRequest(&htlc_request)
-                    );
-                    if handle.is_shutting_down() {
-                        break;
-                    }
-
-                    let payment_hash =
-                        bitcoin_hashes::sha256::Hash::from_slice(&htlc_request.payment_hash)
-                            .expect("32 bytes");
-
-                    // If `payment_hash` has been registered as a LNv2 payment, we try to complete
-                    // the payment by getting the preimage from the federation
-                    // using the LNv2 protocol. If the `payment_hash` is not registered,
-                    // this HTLC is either a legacy Lightning payment or the end destination is not
-                    // a Fedimint.
-                    if let Ok((contract, client)) = self
-                        .get_registered_incoming_contract_and_client_v2(
-                            payment_hash.to_byte_array(),
-                            htlc_request.incoming_amount_msat,
-                        )
-                        .await
-                    {
-                        if let Err(error) = client
-                            .get_first_module::<GatewayClientModuleV2>()
-                            .relay_incoming_htlc(
-                                payment_hash,
-                                htlc_request.incoming_chan_id,
-                                htlc_request.htlc_id,
-                                contract,
-                            )
-                            .await
-                        {
-                            error!("Error relaying incoming HTLC: {error:?}");
-                        }
-
-                        continue;
-                    }
-
-                    // Check if the HTLC corresponds to a federation supporting legacy Lightning by
-                    // looking up the `Client` from the short channel id and
-                    // `FederationId` (scid -> FederationId -> Client).
-                    let scid_to_feds = self.scid_to_federation.read().await;
-                    if let Some(short_channel_id) = htlc_request.short_channel_id {
-                        let federation_id = scid_to_feds.get(&short_channel_id);
-                        // Just forward the HTLC if we do not have a federation that
-                        // corresponds to the short channel id
-                        if let Some(federation_id) = federation_id {
-                            let clients = self.clients.read().await;
-                            let client = clients.get(federation_id);
-                            // Just forward the HTLC if we do not have a client that
-                            // corresponds to the federation id
-                            if let Some(client) = client {
-                                let cf = client
-                                    .borrow()
-                                    .with(|client| async {
-                                        let htlc = htlc_request.clone().try_into();
-                                        if let Ok(htlc) = htlc {
-                                            match client
-                                                .get_first_module::<GatewayClientModule>()
-                                                .gateway_handle_intercepted_htlc(htlc)
-                                                .await
-                                            {
-                                                Ok(_) => {
-                                                    return Some(ControlFlow::<(), ()>::Continue(()))
-                                                }
-                                                Err(e) => {
-                                                    info!("Got error intercepting HTLC: {e:?}, will retry...");
-                                                }
-                                            }
-                                        } else {
-                                            info!("Got no HTLC result");
-                                        }
-                                        None
-                                    })
-                                    .await;
-                                if let Some(ControlFlow::Continue(())) = cf {
-                                    continue;
-                                }
-                            } else {
-                                info!("Got no client result");
-                            }
-                        }
-                    }
-
-                    let outcome = InterceptHtlcResponse {
-                        action: Some(Action::Forward(Forward {})),
-                        payment_hash: htlc_request.payment_hash,
-                        incoming_chan_id: htlc_request.incoming_chan_id,
-                        htlc_id: htlc_request.htlc_id,
-                    };
-
-                    if let Err(error) = lightning_context.lnrpc.complete_htlc(outcome).await {
-                        error!("Error sending HTLC response to lightning node: {error:?}");
-                    }
-                }
+            let htlc_request = match stream.next().await {
+                Some(Ok(htlc_request)) => htlc_request,
                 other => {
                     info!("Got {other:?} while handling HTLC stream, exiting from loop...");
                     break;
                 }
+            };
+
+            info!(
+                "Intercepting HTLC {}",
+                PrettyInterceptHtlcRequest(&htlc_request)
+            );
+            if handle.is_shutting_down() {
+                break;
+            }
+
+            let payment_hash = bitcoin_hashes::sha256::Hash::from_slice(&htlc_request.payment_hash)
+                .expect("32 bytes");
+
+            // If `payment_hash` has been registered as a LNv2 payment, we try to complete
+            // the payment by getting the preimage from the federation
+            // using the LNv2 protocol. If the `payment_hash` is not registered,
+            // this HTLC is either a legacy Lightning payment or the end destination is not
+            // a Fedimint.
+            if let Ok((contract, client)) = self
+                .get_registered_incoming_contract_and_client_v2(
+                    payment_hash.to_byte_array(),
+                    htlc_request.incoming_amount_msat,
+                )
+                .await
+            {
+                if let Err(error) = client
+                    .get_first_module::<GatewayClientModuleV2>()
+                    .relay_incoming_htlc(
+                        payment_hash,
+                        htlc_request.incoming_chan_id,
+                        htlc_request.htlc_id,
+                        contract,
+                    )
+                    .await
+                {
+                    error!("Error relaying incoming HTLC: {error:?}");
+                }
+
+                continue;
+            }
+
+            // Check if the HTLC corresponds to a federation supporting legacy Lightning.
+            if let Some(short_channel_id) = htlc_request.short_channel_id {
+                // Just forward the HTLC if we do not have a federation that
+                // corresponds to the short channel id
+                if let Some(client) = self
+                    .federation_manager
+                    .read()
+                    .await
+                    .get_client_for_scid(short_channel_id)
+                {
+                    let cf = client
+                        .borrow()
+                        .with(|client| async {
+                            let htlc = htlc_request.clone().try_into();
+                            if let Ok(htlc) = htlc {
+                                match client
+                                    .get_first_module::<GatewayClientModule>()
+                                    .gateway_handle_intercepted_htlc(htlc)
+                                    .await
+                                {
+                                    Ok(_) => return Some(ControlFlow::<(), ()>::Continue(())),
+                                    Err(e) => {
+                                        info!("Got error intercepting HTLC: {e:?}, will retry...");
+                                    }
+                                }
+                            } else {
+                                info!("Got no HTLC result");
+                            }
+                            None
+                        })
+                        .await;
+                    if let Some(ControlFlow::Continue(())) = cf {
+                        continue;
+                    }
+                }
+            }
+
+            let outcome = InterceptHtlcResponse {
+                action: Some(Action::Forward(Forward {})),
+                payment_hash: htlc_request.payment_hash,
+                incoming_chan_id: htlc_request.incoming_chan_id,
+                htlc_id: htlc_request.htlc_id,
+            };
+
+            if let Err(error) = lightning_context.lnrpc.complete_htlc(outcome).await {
+                error!("Error sending HTLC response to lightning node: {error:?}");
             }
         }
     }
@@ -789,22 +729,36 @@ impl Gateway {
     /// Returns information about the Gateway back to the client when requested
     /// via the webserver.
     pub async fn handle_get_info(&self) -> Result<GatewayInfo> {
-        if let GatewayState::Running { lightning_context } = self.get_state().await {
-            // `GatewayConfiguration` should always exist in the database when we are in the
-            // `Running` state.
-            let gateway_config = self
-                .clone_gateway_config()
-                .await
-                .expect("Gateway configuration should be set");
+        let GatewayState::Running { lightning_context } = self.get_state().await else {
+            return Ok(GatewayInfo {
+                federations: vec![],
+                channels: None,
+                version_hash: fedimint_build_code_version_env!().to_string(),
+                lightning_pub_key: None,
+                lightning_alias: None,
+                fees: None,
+                route_hints: vec![],
+                gateway_id: self.gateway_id,
+                gateway_state: self.state.read().await.to_string(),
+                network: None,
+                block_height: None,
+                synced_to_chain: false,
+            });
+        };
+
+        // `GatewayConfiguration` should always exist in the database when we are in the
+        // `Running` state.
+        let gateway_config = self
+            .clone_gateway_config()
+            .await
+            .expect("Gateway configuration should be set");
+
+        // Minimize the time we hold a lock on the federation manager.
+        let (federations, channels) = {
+            let federation_manager = self.federation_manager.read().await;
+
             let mut federations = Vec::new();
-            let federation_clients = self.clients.read().await.clone().into_iter();
-            let route_hints = Self::fetch_lightning_route_hints(
-                lightning_context.lnrpc.clone(),
-                gateway_config.num_route_hints,
-            )
-            .await;
-            let node_info = fetch_lightning_node_info(lightning_context.lnrpc.clone()).await?;
-            for (federation_id, client) in federation_clients {
+            for (federation_id, client) in federation_manager.borrow_clients().clone() {
                 federations.push(
                     client
                         .borrow()
@@ -813,35 +767,28 @@ impl Gateway {
                 );
             }
 
-            return Ok(GatewayInfo {
-                federations,
-                channels: Some(self.scid_to_federation.read().await.clone()),
-                version_hash: fedimint_build_code_version_env!().to_string(),
-                lightning_pub_key: Some(lightning_context.lightning_public_key.to_string()),
-                lightning_alias: Some(lightning_context.lightning_alias.clone()),
-                fees: Some(gateway_config.routing_fees),
-                route_hints,
-                gateway_id: self.gateway_id,
-                gateway_state: self.state.read().await.to_string(),
-                network: Some(gateway_config.network),
-                block_height: Some(node_info.3),
-                synced_to_chain: node_info.4,
-            });
-        }
+            (federations, federation_manager.clone_scid_map())
+        };
+
+        let route_hints = lightning_context
+            .lnrpc
+            .parsed_route_hints(gateway_config.num_route_hints)
+            .await;
+        let node_info = lightning_context.lnrpc.parsed_node_info().await?;
 
         Ok(GatewayInfo {
-            federations: vec![],
-            channels: None,
+            federations,
+            channels: Some(channels),
             version_hash: fedimint_build_code_version_env!().to_string(),
-            lightning_pub_key: None,
-            lightning_alias: None,
-            fees: None,
-            route_hints: vec![],
+            lightning_pub_key: Some(lightning_context.lightning_public_key.to_string()),
+            lightning_alias: Some(lightning_context.lightning_alias.clone()),
+            fees: Some(gateway_config.routing_fees),
+            route_hints,
             gateway_id: self.gateway_id,
             gateway_state: self.state.read().await.to_string(),
-            network: None,
-            block_height: None,
-            synced_to_chain: false,
+            network: Some(gateway_config.network),
+            block_height: Some(node_info.3),
+            synced_to_chain: node_info.4,
         })
     }
 
@@ -860,8 +807,13 @@ impl Gateway {
                     client.borrow().with_sync(|client| client.get_config_json()),
                 );
             } else {
-                let federation_clients = self.clients.read().await.clone().into_iter();
-                for (federation_id, client) in federation_clients {
+                for (federation_id, client) in self
+                    .federation_manager
+                    .read()
+                    .await
+                    .borrow_clients()
+                    .clone()
+                {
                     federations.insert(
                         federation_id,
                         client.borrow().with_sync(|client| client.get_config_json()),
@@ -1020,95 +972,88 @@ impl Gateway {
         &self,
         payload: ConnectFedPayload,
     ) -> Result<FederationInfo> {
-        if let GatewayState::Running { lightning_context } = self.get_state().await {
-            let invite_code = InviteCode::from_str(&payload.invite_code).map_err(|e| {
-                GatewayError::InvalidMetadata(format!("Invalid federation member string {e:?}"))
-            })?;
-            let federation_id = invite_code.federation_id();
+        let GatewayState::Running { lightning_context } = self.get_state().await else {
+            return Err(GatewayError::Disconnected);
+        };
 
-            let _join_federation = self.client_joining_lock.lock().await;
+        let invite_code = InviteCode::from_str(&payload.invite_code).map_err(|e| {
+            GatewayError::InvalidMetadata(format!("Invalid federation member string {e:?}"))
+        })?;
+        let federation_id = invite_code.federation_id();
 
-            // Check if this federation has already been registered
-            if self.clients.read().await.get(&federation_id).is_some() {
-                return Err(GatewayError::FederationAlreadyConnected);
-            }
+        let _join_federation = self.client_joining_lock.lock().await;
 
-            // `GatewayConfiguration` should always exist in the database when we are in the
-            // `Running` state.
-            let gateway_config = self
-                .clone_gateway_config()
-                .await
-                .expect("Gateway configuration should be set");
-
-            // The gateway deterministically assigns a channel id (u64) to each federation
-            // connected.
-            let mut next_scid = self.next_scid.lock().await;
-            let mint_channel_id = *next_scid;
-            *next_scid =
-                next_scid
-                    .checked_add(1)
-                    .ok_or(GatewayError::GatewayConfigurationError(
-                        "Too many connected federations".to_string(),
-                    ))?;
-
-            let gw_client_cfg = FederationConfig {
-                invite_code,
-                mint_channel_id,
-                timelock_delta: 10,
-                fees: gateway_config.routing_fees,
-            };
-
-            let client = self
-                .client_builder
-                .build(gw_client_cfg.clone(), Arc::new(self.clone()))
-                .await?;
-
-            // Instead of using `make_federation_info`, we manually create federation info
-            // here because short channel id is not yet persisted
-            let federation_info = FederationInfo {
-                federation_id,
-                balance_msat: client.get_balance().await,
-                config: client.get_config().clone(),
-                channel_id: Some(mint_channel_id),
-                routing_fees: Some(gateway_config.routing_fees.into()),
-            };
-
-            Self::check_federation_network(&federation_info, gateway_config.network)?;
-
-            client
-                .get_first_module::<GatewayClientModule>()
-                .register_with_federation(
-                    // Route hints will be updated in the background
-                    Vec::new(),
-                    GW_ANNOUNCEMENT_TTL,
-                    gw_client_cfg.fees,
-                    lightning_context,
-                )
-                .await?;
-
-            // no need to enter span earlier, because connect-fed has a span
-            self.clients.write().await.insert(
-                federation_id,
-                Spanned::new(
-                    info_span!("client", federation_id=%federation_id.clone()),
-                    async { client },
-                )
-                .await,
-            );
-
-            self.scid_to_federation
-                .write()
-                .await
-                .insert(mint_channel_id, federation_id);
-
-            let dbtx = self.gateway_db.begin_transaction().await;
-            self.client_builder.save_config(gw_client_cfg, dbtx).await?;
-            debug!("Federation with ID: {federation_id} connected and assigned channel id: {mint_channel_id}");
-
-            return Ok(federation_info);
+        // Check if this federation has already been registered
+        if self
+            .federation_manager
+            .read()
+            .await
+            .has_federation(federation_id)
+        {
+            return Err(GatewayError::FederationAlreadyConnected);
         }
 
-        Err(GatewayError::Disconnected)
+        // `GatewayConfiguration` should always exist in the database when we are in the
+        // `Running` state.
+        let gateway_config = self
+            .clone_gateway_config()
+            .await
+            .expect("Gateway configuration should be set");
+
+        // The gateway deterministically assigns a channel id (u64) to each federation
+        // connected.
+        let mint_channel_id = self.federation_manager.read().await.pop_next_scid()?;
+
+        let gw_client_cfg = FederationConfig {
+            invite_code,
+            mint_channel_id,
+            timelock_delta: 10,
+            fees: gateway_config.routing_fees,
+        };
+
+        let client = self
+            .client_builder
+            .build(gw_client_cfg.clone(), Arc::new(self.clone()))
+            .await?;
+
+        // Instead of using `make_federation_info`, we manually create federation info
+        // here because short channel id is not yet persisted
+        let federation_info = FederationInfo {
+            federation_id,
+            balance_msat: client.get_balance().await,
+            config: client.get_config().clone(),
+            channel_id: Some(mint_channel_id),
+            routing_fees: Some(gateway_config.routing_fees.into()),
+        };
+
+        Self::check_federation_network(&federation_info, gateway_config.network)?;
+
+        client
+            .get_first_module::<GatewayClientModule>()
+            .register_with_federation(
+                // Route hints will be updated in the background
+                Vec::new(),
+                GW_ANNOUNCEMENT_TTL,
+                gw_client_cfg.fees,
+                lightning_context,
+            )
+            .await?;
+
+        // no need to enter span earlier, because connect-fed has a span
+        self.federation_manager.write().await.add_client(
+            mint_channel_id,
+            federation_id,
+            Spanned::new(
+                info_span!("client", federation_id=%federation_id.clone()),
+                async { client },
+            )
+            .await,
+        );
+
+        self.db_manager.save_config(&gw_client_cfg).await?;
+        debug!("Federation with ID: {federation_id} connected and assigned channel id: {mint_channel_id}");
+
+        Ok(federation_info)
     }
 
     /// Handle a request to have the Gateway leave a federation. The Gateway
@@ -1119,8 +1064,8 @@ impl Gateway {
         &self,
         payload: LeaveFedPayload,
     ) -> Result<FederationInfo> {
-        let client_joining_lock = self.client_joining_lock.lock().await;
-        let mut dbtx = self.gateway_db.begin_transaction().await;
+        let _client_joining_lock = self.client_joining_lock.lock().await;
+        let mut dbtx = self.db_manager.gateway_db.begin_transaction().await;
 
         let federation_info = {
             let client = self.select_client(payload.federation_id).await?;
@@ -1140,7 +1085,10 @@ impl Gateway {
             federation_info
         };
 
-        self.remove_client(payload.federation_id, &client_joining_lock)
+        self.federation_manager
+            .write()
+            .await
+            .remove_client(payload.federation_id)
             .await?;
         dbtx.remove_entry(&FederationIdKey {
             id: payload.federation_id,
@@ -1202,7 +1150,7 @@ impl Gateway {
             _ => DEFAULT_NETWORK,
         };
 
-        let mut dbtx = self.gateway_db.begin_transaction().await;
+        let mut dbtx = self.db_manager.gateway_db.begin_transaction().await;
 
         let prev_gateway_config = self.clone_gateway_config().await;
         let new_gateway_config = if let Some(mut prev_config) = prev_gateway_config {
@@ -1212,7 +1160,7 @@ impl Gateway {
             }
 
             if let Some(network) = network {
-                if self.clients.read().await.len() > 0 {
+                if !self.federation_manager.read().await.is_empty() {
                     return Err(GatewayError::GatewayConfigurationError(
                         "Cannot change network while connected to a federation".to_string(),
                     ));
@@ -1343,17 +1291,22 @@ impl Gateway {
         federations: &[(FederationId, FederationConfig)],
     ) -> Result<()> {
         if let Ok(lightning_context) = self.get_lightning_context().await {
-            let route_hints = Self::fetch_lightning_route_hints(
-                lightning_context.lnrpc.clone(),
-                gateway_config.num_route_hints,
-            )
-            .await;
+            let route_hints = lightning_context
+                .lnrpc
+                .parsed_route_hints(gateway_config.num_route_hints)
+                .await;
             if route_hints.is_empty() {
                 warn!("Gateway did not retrieve any route hints, may reduce receive success rate.");
             }
 
             for (federation_id, federation_config) in federations {
-                if let Some(client) = self.clients.read().await.get(federation_id) {
+                if let Some(client) = self
+                    .federation_manager
+                    .read()
+                    .await
+                    .borrow_clients()
+                    .get(federation_id)
+                {
                     if let Err(e) = async {
                         client
                             .value()
@@ -1381,91 +1334,16 @@ impl Gateway {
         Ok(())
     }
 
-    /// This function will return a `GatewayConfiguration` one of two
-    /// ways. To avoid conflicting configs, the below order is the
-    /// order in which the gateway will respect configurations:
-    /// - `GatewayConfiguration` is read from the database.
-    /// - All cli or environment variables are set such that we can create a
-    ///   `GatewayConfiguration`
-    async fn get_gateway_configuration(
-        gateway_db: Database,
-        gateway_parameters: &GatewayParameters,
-    ) -> Option<GatewayConfiguration> {
-        let mut dbtx = gateway_db.begin_transaction().await;
-
-        // Always use the gateway configuration from the database if it exists.
-        if let Some(gateway_config) = dbtx.get_value(&GatewayConfigurationKey).await {
-            return Some(gateway_config);
-        }
-
-        // If the password is not provided, return None
-        let password = gateway_parameters.password.as_ref()?;
-
-        // If the DB does not have the gateway configuration, we can construct one from
-        // the provided password (required) and the defaults.
-        // Use gateway parameters provided by the environment or CLI
-        let num_route_hints = gateway_parameters.num_route_hints;
-        let routing_fees = gateway_parameters
-            .fees
-            .clone()
-            .unwrap_or(GatewayFee(DEFAULT_FEES));
-        let network = gateway_parameters.network.unwrap_or(DEFAULT_NETWORK);
-        let password_salt: [u8; 16] = rand::thread_rng().gen();
-        let hashed_password = hash_password(password, password_salt);
-        let gateway_config = GatewayConfiguration {
-            hashed_password,
-            network,
-            num_route_hints,
-            routing_fees: routing_fees.0,
-            password_salt,
-        };
-
-        Some(gateway_config)
-    }
-
-    /// Removes a federation client from the Gateway's in memory structures that
-    /// keep track of available clients. Does not remove the persisted
-    /// client configuration in the database.
-    async fn remove_client(
-        &self,
-        federation_id: FederationId,
-        // Note: MUST be protected by a lock, to keep
-        // `clients` and opened databases in sync
-        _lock: &MutexGuard<'_, ClientsJoinLock>,
-    ) -> Result<()> {
-        let client = self
-            .clients
-            .write()
-            .await
-            .remove(&federation_id)
-            .ok_or(GatewayError::InvalidMetadata(format!(
-                "No federation with id {federation_id}"
-            )))?
-            .into_value();
-
-        if let Some(client) = Arc::into_inner(client) {
-            client.shutdown().await;
-        } else {
-            error!("client is not unique, failed to remove client");
-        }
-
-        // Remove previously assigned scid from `scid_to_federation` map
-        self.scid_to_federation
-            .write()
-            .await
-            .retain(|_, fid| *fid != federation_id);
-        Ok(())
-    }
-
     /// Retrieves a `ClientHandleArc` from the Gateway's in memory structures
     /// that keep track of available clients, given a `federation_id`.
     pub async fn select_client(
         &self,
         federation_id: FederationId,
     ) -> Result<Spanned<fedimint_client::ClientHandleArc>> {
-        self.clients
+        self.federation_manager
             .read()
             .await
+            .borrow_clients()
             .get(&federation_id)
             .cloned()
             .ok_or(GatewayError::InvalidMetadata(format!(
@@ -1477,8 +1355,7 @@ impl Gateway {
     /// database and reconstructs the clients necessary for interacting with
     /// connection federations.
     async fn load_clients(&self) {
-        let dbtx = self.gateway_db.begin_transaction().await;
-        let configs = self.client_builder.load_configs(dbtx.into_nc()).await;
+        let configs = self.db_manager.load_configs().await;
 
         let _join_federation = self.client_joining_lock.lock().await;
 
@@ -1492,22 +1369,20 @@ impl Gateway {
             ))
             .await
             {
-                // Registering each client happens in the background, since we're loading
-                // the clients for the first time, just add them to
-                // the in-memory maps
-                self.clients.write().await.insert(federation_id, client);
-                self.scid_to_federation
+                self.federation_manager
                     .write()
                     .await
-                    .insert(scid, federation_id);
+                    .add_client(scid, federation_id, client);
             } else {
                 warn!("Failed to load client for federation: {federation_id}");
             }
         }
 
         if let Some(max_mint_channel_id) = configs.iter().map(|cfg| cfg.mint_channel_id).max() {
-            let mut next_scid = self.next_scid.lock().await;
-            *next_scid = max_mint_channel_id + 1;
+            self.federation_manager
+                .read()
+                .await
+                .set_next_scid(max_mint_channel_id + 1);
         }
     }
 
@@ -1525,7 +1400,7 @@ impl Gateway {
                 if let Some(gateway_config) = gateway_config {
                     let gateway_state = gateway.get_state().await;
                     if let GatewayState::Running { .. } = &gateway_state {
-                        let mut dbtx = gateway.gateway_db.begin_transaction_nc().await;
+                        let mut dbtx = gateway.db_manager.gateway_db.begin_transaction_nc().await;
                         let all_federations_configs: Vec<_> = dbtx.find_by_prefix(&FederationIdKeyPrefix).await.map(|(key, config)| (key.id, config)).collect().await;
                         let result = gateway.register_federations(&gateway_config, &all_federations_configs).await;
                         registration_result = Some(result);
@@ -1554,27 +1429,6 @@ impl Gateway {
         });
     }
 
-    /// Retrieve route hints from the Lightning node, capped at
-    /// `num_route_hints`. The route hints should be ordered based on liquidity
-    /// of incoming channels.
-    async fn fetch_lightning_route_hints(
-        lnrpc: Arc<dyn ILnRpcClient>,
-        num_route_hints: u32,
-    ) -> Vec<RouteHint> {
-        if num_route_hints == 0 {
-            return vec![];
-        }
-
-        let route_hints =
-            lnrpc
-                .routehints(num_route_hints as usize)
-                .await
-                .unwrap_or(GetRouteHintsResponse {
-                    route_hints: Vec::new(),
-                });
-        route_hints.try_into().expect("Could not parse route hints")
-    }
-
     /// Creates the `FederationInfo` struct from a given `federation_id` that is
     /// used to inform Gateway operators of basic data about their connected
     /// federations.
@@ -1586,19 +1440,12 @@ impl Gateway {
         let balance_msat = client.get_balance().await;
         let config = client.get_config().clone();
         let channel_id = self
-            .scid_to_federation
+            .federation_manager
             .read()
             .await
-            .iter()
-            .find_map(|(scid, fid)| {
-                if *fid == federation_id {
-                    Some(*scid)
-                } else {
-                    None
-                }
-            });
+            .get_scid_for_federation(federation_id);
 
-        let mut dbtx = self.gateway_db.begin_transaction_nc().await;
+        let mut dbtx = self.db_manager.gateway_db.begin_transaction_nc().await;
         let federation_key = FederationIdKey { id: federation_id };
         let routing_fees = dbtx
             .get_value(&federation_key)
@@ -1656,12 +1503,18 @@ impl Gateway {
     /// Iterates through all of the federations the gateway is registered with
     /// and requests to remove the registration record.
     pub async fn leave_all_federations(&self) {
-        let mut dbtx = self.gateway_db.begin_transaction_nc().await;
+        let mut dbtx = self.db_manager.gateway_db.begin_transaction_nc().await;
         let keypair = dbtx
             .get_value(&GatewayPublicKey)
             .await
             .expect("Gateway keypair does not exist");
-        for (_, client) in self.clients.read().await.iter() {
+        for client in self
+            .federation_manager
+            .read()
+            .await
+            .borrow_clients()
+            .values()
+        {
             client
                 .value()
                 .get_first_module::<GatewayClientModule>()
@@ -1671,43 +1524,24 @@ impl Gateway {
     }
 }
 
-/// Retrieves the basic information about the Gateway's connected Lightning
-/// node.
-pub(crate) async fn fetch_lightning_node_info(
-    lnrpc: Arc<dyn ILnRpcClient>,
-) -> Result<(PublicKey, String, Network, u32, bool)> {
-    let GetNodeInfoResponse {
-        pub_key,
-        alias,
-        network,
-        block_height,
-        synced_to_chain,
-    } = lnrpc.info().await?;
-    let node_pub_key = PublicKey::from_slice(&pub_key)
-        .map_err(|e| GatewayError::InvalidMetadata(format!("Invalid node pubkey {e}")))?;
-    // TODO: create a fedimint Network that understands "mainnet"
-    let network = match network.as_str() {
-        "mainnet" => "bitcoin", // it seems LND will use "mainnet", but rust-bitcoin uses "bitcoin"
-        other => other,
-    };
-    let network = Network::from_str(network)
-        .map_err(|e| GatewayError::InvalidMetadata(format!("Invalid network {network}: {e}")))?;
-    Ok((node_pub_key, alias, network, block_height, synced_to_chain))
-}
-
 // LNv2 Gateway implementation
 impl Gateway {
     /// Retrieves the `PublicKey` of the Gateway module for a given federation
     /// for LNv2. This is NOT the same as the `gateway_id`, it is different
     /// per-connected federation.
     async fn public_key_v2(&self, federation_id: &FederationId) -> Option<PublicKey> {
-        self.clients.read().await.get(federation_id).map(|client| {
-            client
-                .value()
-                .get_first_module::<GatewayClientModuleV2>()
-                .keypair
-                .public_key()
-        })
+        self.federation_manager
+            .read()
+            .await
+            .borrow_clients()
+            .get(federation_id)
+            .map(|client| {
+                client
+                    .value()
+                    .get_first_module::<GatewayClientModuleV2>()
+                    .keypair
+                    .public_key()
+            })
     }
 
     /// Returns payment information that LNv2 clients can use to instruct this
@@ -1729,14 +1563,13 @@ impl Gateway {
         &self,
         payload: SendPaymentPayload,
     ) -> anyhow::Result<std::result::Result<[u8; 32], Signature>> {
-        let clients = self.clients.read().await;
-
-        let client = clients
+        self.federation_manager
+            .read()
+            .await
+            .borrow_clients()
             .get(&payload.federation_id)
             .ok_or(anyhow!("Federation client not available"))?
-            .value();
-
-        client
+            .value()
             .get_first_module::<GatewayClientModuleV2>()
             .send_payment(payload)
             .await
@@ -1785,7 +1618,7 @@ impl Gateway {
             .await
             .map_err(|e| anyhow!(e))?;
 
-        let mut dbtx = self.gateway_db.begin_transaction().await;
+        let mut dbtx = self.db_manager.gateway_db.begin_transaction().await;
 
         if dbtx
             .insert_entry(
@@ -1859,6 +1692,7 @@ impl Gateway {
         amount_msats: u64,
     ) -> anyhow::Result<(IncomingContract, ClientHandleArc)> {
         let registered_incoming_contract = self
+            .db_manager
             .gateway_db
             .begin_transaction_nc()
             .await
@@ -1870,9 +1704,11 @@ impl Gateway {
             bail!("The available decryption contract's amount is not equal the requested amount")
         }
 
-        let clients = self.clients.read().await;
-
-        let client = clients
+        let client = self
+            .federation_manager
+            .read()
+            .await
+            .borrow_clients()
             .get(&registered_incoming_contract.federation_id)
             .ok_or(anyhow!("Federation client not available"))?
             .value()

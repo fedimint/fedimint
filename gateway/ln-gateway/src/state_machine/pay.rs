@@ -338,7 +338,12 @@ impl GatewayPayInvoice {
                 });
             }
 
-            let mut gateway_dbtx = context.gateway.gateway_db.begin_transaction_nc().await;
+            let mut gateway_dbtx = context
+                .gateway
+                .db_manager
+                .gateway_db
+                .begin_transaction_nc()
+                .await;
             let config = gateway_dbtx
                 .get_value(&FederationIdKey { id: federation_id })
                 .await
@@ -536,7 +541,12 @@ impl GatewayPayInvoice {
         preimage_auth: sha256::Hash,
         contract: OutgoingContractAccount,
     ) -> Result<(), OutgoingPaymentError> {
-        let mut dbtx = context.gateway.gateway_db.begin_transaction().await;
+        let mut dbtx = context
+            .gateway
+            .db_manager
+            .gateway_db
+            .begin_transaction()
+            .await;
         if let Some(secret_hash) = dbtx
             .get_value(&PreimageAuthentication { payment_hash })
             .await
@@ -635,14 +645,12 @@ impl GatewayPayInvoice {
                         return None;
                     }
 
-                    let scid_to_feds = context.gateway.scid_to_federation.read().await;
-                    match scid_to_feds.get(&hop.short_channel_id).copied() {
-                        None => None,
-                        Some(federation_id) => {
-                            let clients = context.gateway.clients.read().await;
-                            clients.get(&federation_id).cloned()
-                        }
-                    }
+                    context
+                        .gateway
+                        .federation_manager
+                        .read()
+                        .await
+                        .get_client_for_scid(hop.short_channel_id)
                 }
                 _ => None,
             },
@@ -750,9 +758,10 @@ impl GatewayPayWaitForSwapPreimage {
         debug!("Waiting preimage for contract {contract:?}");
         let client = context
             .gateway
-            .clients
+            .federation_manager
             .read()
             .await
+            .borrow_clients()
             .get(&federation_id)
             .cloned()
             .ok_or(OutgoingPaymentError {

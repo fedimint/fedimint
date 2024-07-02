@@ -435,7 +435,7 @@ impl ServerConfig {
         params: &ConfigGenParams,
         registry: ServerModuleInitRegistry,
         delay_calculator: DelayCalculator,
-        task_group: &mut TaskGroup,
+        task_group: &TaskGroup,
         code_version_str: String,
     ) -> DkgResult<Self> {
         let _timing /* logs on drop */ = timing::TimeReporter::new("distributed-gen").info();
@@ -695,7 +695,7 @@ pub async fn connect<T>(
     network: NetworkConfig,
     certs: TlsConfig,
     delay_calculator: DelayCalculator,
-    task_group: &mut TaskGroup,
+    task_group: &TaskGroup,
 ) -> PeerConnections<T>
 where
     T: std::fmt::Debug + Clone + Serialize + DeserializeOwned + Unpin + Send + Sync + 'static,

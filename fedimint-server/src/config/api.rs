@@ -62,7 +62,7 @@ impl ConfigGenApi {
         settings: ConfigGenSettings,
         db: Database,
         config_generated_tx: Sender<ServerConfig>,
-        task_group: &mut TaskGroup,
+        task_group: &TaskGroup,
         code_version_str: String,
         api_secret: Option<String>,
     ) -> Self {
@@ -272,12 +272,12 @@ impl ConfigGenApi {
             };
 
             // Run DKG
-            let mut task_group: TaskGroup = self_clone.task_group.make_subgroup();
+            let task_group: TaskGroup = self_clone.task_group.make_subgroup();
             let config = ServerConfig::distributed_gen(
                 &params,
                 registry,
                 DelayCalculator::PROD_DEFAULT,
-                &mut task_group,
+                &task_group,
                 self_clone.code_version_str.clone(),
             )
             .await;

@@ -181,7 +181,7 @@ impl ServerModuleInit for LightningInit {
     }
 
     async fn init(&self, args: &ServerModuleInitArgs<Self>) -> anyhow::Result<DynServerModule> {
-        Ok(Lightning::new(args.cfg().to_typed()?, &mut args.task_group().clone())?.into())
+        Ok(Lightning::new(args.cfg().to_typed()?, &args.task_group().clone())?.into())
     }
 
     fn trusted_dealer_gen(
@@ -615,7 +615,7 @@ impl ServerModule for Lightning {
 }
 
 impl Lightning {
-    fn new(cfg: LightningConfig, task_group: &mut TaskGroup) -> anyhow::Result<Self> {
+    fn new(cfg: LightningConfig, task_group: &TaskGroup) -> anyhow::Result<Self> {
         let btc_rpc = create_bitcoind(&cfg.local.bitcoin_rpc, task_group.make_handle())?;
 
         Ok(Lightning { cfg, btc_rpc })

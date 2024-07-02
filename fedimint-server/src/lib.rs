@@ -117,7 +117,7 @@ pub async fn run_config_gen(
     settings: ConfigGenSettings,
     db: Database,
     code_version_str: String,
-    mut task_group: TaskGroup,
+    task_group: TaskGroup,
     force_api_secrets: ApiSecrets,
 ) -> anyhow::Result<ServerConfig> {
     info!(target: LOG_CONSENSUS, "Starting config gen");
@@ -130,7 +130,7 @@ pub async fn run_config_gen(
         settings.clone(),
         db.clone(),
         cfg_sender,
-        &mut task_group,
+        &task_group,
         code_version_str.clone(),
         force_api_secrets.get_active(),
     );

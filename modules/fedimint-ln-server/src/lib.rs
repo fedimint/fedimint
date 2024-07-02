@@ -220,7 +220,7 @@ impl ServerModuleInit for LightningInit {
 
         Ok(Lightning::new(
             args.cfg().to_typed()?,
-            &mut args.task_group().clone(),
+            args.task_group(),
             args.our_peer_id(),
         )?
         .into())
@@ -942,7 +942,7 @@ impl ServerModule for Lightning {
 impl Lightning {
     fn new(
         cfg: LightningConfig,
-        task_group: &mut TaskGroup,
+        task_group: &TaskGroup,
         our_peer_id: PeerId,
     ) -> anyhow::Result<Self> {
         let btc_rpc = create_bitcoind(&cfg.local.bitcoin_rpc, task_group.make_handle())?;
@@ -1318,8 +1318,8 @@ mod tests {
     #[test_log::test(tokio::test)]
     async fn encrypted_preimage_only_usable_once() {
         let (server_cfg, client_cfg) = build_configs();
-        let mut tg = TaskGroup::new();
-        let server = Lightning::new(server_cfg[0].clone(), &mut tg, 0.into()).unwrap();
+        let tg = TaskGroup::new();
+        let server = Lightning::new(server_cfg[0].clone(), &tg, 0.into()).unwrap();
 
         let preimage = [42u8; 32];
         let encrypted_preimage = EncryptedPreimage(client_cfg.threshold_pub_key.encrypt([42; 32]));
@@ -1380,8 +1380,8 @@ mod tests {
         let db = Database::new(MemDatabase::new(), Default::default());
         let mut dbtx = db.begin_transaction().await;
         let mut module_dbtx = dbtx.to_ref_with_prefix_module_id(42);
-        let mut tg = TaskGroup::new();
-        let server = Lightning::new(server_cfg[0].clone(), &mut tg, 0.into()).unwrap();
+        let tg = TaskGroup::new();
+        let server = Lightning::new(server_cfg[0].clone(), &tg, 0.into()).unwrap();
 
         let preimage = PreimageKey(generate_keypair(&mut OsRng).1.serialize());
         let funded_incoming_contract = FundedContract::Incoming(FundedIncomingContract {
@@ -1441,8 +1441,8 @@ mod tests {
         let db = Database::new(MemDatabase::new(), Default::default());
         let mut dbtx = db.begin_transaction().await;
         let mut module_dbtx = dbtx.to_ref_with_prefix_module_id(42);
-        let mut tg = TaskGroup::new();
-        let server = Lightning::new(server_cfg[0].clone(), &mut tg, 0.into()).unwrap();
+        let tg = TaskGroup::new();
+        let server = Lightning::new(server_cfg[0].clone(), &tg, 0.into()).unwrap();
 
         let preimage = Preimage([42u8; 32]);
         let gateway_key = random_pub_key();
