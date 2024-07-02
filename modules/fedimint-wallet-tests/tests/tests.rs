@@ -65,7 +65,9 @@ async fn initial_peg_in<'a>(
         .context("expected tx to be mined")?;
     info!(?height, ?tx, txid = ?tx.txid(), "Peg-in transaction mined");
     bitcoin.mine_blocks(finality_delay).await;
-    wallet_module.await_deposit(op).await?;
+    wallet_module
+        .await_num_deposit_by_operation_id(op, 1)
+        .await?;
     assert_eq!(client.get_balance().await, sats(PEG_IN_AMOUNT_SATS));
     assert_eq!(balance_sub.ok().await?, sats(PEG_IN_AMOUNT_SATS));
     info!(?height, ?tx, "Peg-in transaction claimed");
@@ -231,7 +233,9 @@ async fn on_chain_peg_in_detects_multiple() -> anyhow::Result<()> {
             .context("expected tx to be mined")?;
         info!(?height, ?tx, txid = ?tx.txid(), "First peg-in transaction mined");
         bitcoin.mine_blocks(finality_delay).await;
-        wallet_module.await_deposit(op).await?;
+        wallet_module
+            .await_num_deposit_by_operation_id(op, 1)
+            .await?;
         assert_eq!(
             client.get_balance().await,
             sats(PEG_IN_AMOUNT_SATS) + starting_balance
@@ -1037,6 +1041,7 @@ mod fedimint_migration_tests {
                         }
                         client_db::DbKeyPrefix::PegInTweakIndex => {}
                         client_db::DbKeyPrefix::ClaimedPegIn => {}
+                        client_db::DbKeyPrefix::RecoveryFinalized => {}
                     }
                 }
 

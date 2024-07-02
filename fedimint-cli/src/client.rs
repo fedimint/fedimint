@@ -480,7 +480,7 @@ pub async fn handle_command(
         ClientCmd::AwaitDeposit { operation_id } => {
             client
                 .get_first_module::<WalletClientModule>()
-                .await_deposit(operation_id)
+                .await_num_deposit_by_operation_id(operation_id, 1)
                 .await?;
 
             Ok(serde_json::to_value(()).unwrap())

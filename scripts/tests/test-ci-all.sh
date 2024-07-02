@@ -130,6 +130,11 @@ function circular_deposit() {
 }
 export -f circular_deposit
 
+function wallet_recovery() {
+  fm-run-test "${FUNCNAME[0]}" ./scripts/tests/wallet-recovery-test.sh
+}
+export -f wallet_recovery
+
 function devimint_cli_test() {
   fm-run-test "${FUNCNAME[0]}" ./scripts/tests/devimint-cli-test.sh
 }
@@ -299,6 +304,7 @@ tests_to_run_in_parallel+=(
   "mint_client_sanity"
   "cannot_replay_tx"
   "circular_deposit"
+  "wallet_recovery"
 )
 done
 

@@ -42,7 +42,7 @@ fedimint-mint-common = { version = "=0.4.0-alpha", path = "../modules/fedimint-m
 fedimint-ln-client = { workspace = true, features = ["cli"] }
 fedimint-lnv2-client = { version = "=0.4.0-alpha", path = "../modules/fedimint-lnv2-client", features = ["cli"] }
 fedimint-ln-common = { version = "=0.4.0-alpha", path = "../modules/fedimint-ln-common" }
-fedimint-wallet-client = { version = "=0.4.0-alpha", path = "../modules/fedimint-wallet-client" }
+fedimint-wallet-client = { version = "=0.4.0-alpha", path = "../modules/fedimint-wallet-client", features = [ "cli" ] }
 fedimint-logging = { workspace = true }
 fedimint-server = { version = "=0.4.0-alpha", path = "../fedimint-server" }
 fedimint-meta-client = { version = "=0.4.0-alpha", path = "../modules/fedimint-meta-client", features = ["cli"] }
