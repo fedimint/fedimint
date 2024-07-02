@@ -12,7 +12,7 @@ repository = "https://github.com/fedimint/fedimint"
 rustc-args = ["--cfg", "tokio_unstable"]
 
 [[bin]]
-name = "recoverytool"
+name = "fedimint-recoverytool"
 path = "src/main.rs"
 
 [dependencies]
