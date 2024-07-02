@@ -1,4 +1,5 @@
-use std::sync::{Arc, Mutex};
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::Arc;
 use std::time::Duration;
 
 use async_stream::stream;
@@ -32,7 +33,7 @@ const INVALID_INVOICE_PAYMENT_SECRET: [u8; 32] = [212; 32];
 pub struct FakeLightningTest {
     pub gateway_node_pub_key: secp256k1::PublicKey,
     gateway_node_sec_key: secp256k1::SecretKey,
-    amount_sent: Arc<Mutex<u64>>,
+    amount_sent: AtomicU64,
     receiver: mpsc::Receiver<HtlcResult>,
 }
 
@@ -41,7 +42,7 @@ impl FakeLightningTest {
         info!(target: LOG_TEST, "Setting up fake lightning test fixture");
         let ctx = bitcoin::secp256k1::Secp256k1::new();
         let kp = KeyPair::new(&ctx, &mut OsRng);
-        let amount_sent = Arc::new(Mutex::new(0));
+        let amount_sent = AtomicU64::new(0);
         let (_, receiver) = mpsc::channel::<HtlcResult>(10);
 
         FakeLightningTest {
@@ -139,7 +140,8 @@ impl ILnRpcClient for FakeLightningTest {
     ) -> Result<PayInvoiceResponse, LightningRpcError> {
         let signed = invoice.invoice.parse::<SignedRawBolt11Invoice>().unwrap();
         let invoice = Bolt11Invoice::from_signed(signed).unwrap();
-        *self.amount_sent.lock().unwrap() += invoice.amount_milli_satoshis().unwrap();
+        self.amount_sent
+            .fetch_add(invoice.amount_milli_satoshis().unwrap(), Ordering::Relaxed);
 
         if *invoice.payment_secret() == PaymentSecret(INVALID_INVOICE_PAYMENT_SECRET) {
             return Err(LightningRpcError::FailedPayment {
@@ -162,7 +164,8 @@ impl ILnRpcClient for FakeLightningTest {
         _max_delay: u64,
         _max_fee: Amount,
     ) -> Result<PayInvoiceResponse, LightningRpcError> {
-        *self.amount_sent.lock().unwrap() += invoice.amount.msats;
+        self.amount_sent
+            .fetch_add(invoice.amount.msats, Ordering::Relaxed);
 
         if invoice.payment_secret == INVALID_INVOICE_PAYMENT_SECRET {
             return Err(LightningRpcError::FailedPayment {
