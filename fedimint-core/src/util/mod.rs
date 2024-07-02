@@ -159,6 +159,22 @@ impl SafeUrl {
     pub fn join(&self, input: &str) -> Result<SafeUrl, ParseError> {
         self.0.join(input).map(SafeUrl)
     }
+
+    pub fn is_onion_address(&self) -> bool {
+        let onion_suffix = ".onion";
+        let host = self
+            .host_str()
+            .expect("It should've asserted for `host` on construction");
+
+        let suffix_start = host
+            .len()
+            .checked_sub(onion_suffix.len())
+            .expect("It should not fail!");
+        host[suffix_start..]
+            .eq_ignore_ascii_case(onion_suffix)
+            .then(|| &host[..suffix_start])
+            .is_some()
+    }
 }
 
 impl Display for SafeUrl {

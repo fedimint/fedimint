@@ -758,7 +758,6 @@ impl ILnRpcClient for GatewayLndClient {
                         funding_txid: Some(
                             tonic_lnd::lnrpc::channel_point::FundingTxid::FundingTxidBytes(
                                 <bitcoin::Txid as AsRef<[u8]>>::as_ref(&channel_point.txid)
-                                    .as_ref()
                                     .to_vec(),
                             ),
                         ),

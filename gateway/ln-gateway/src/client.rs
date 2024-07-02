@@ -95,8 +95,11 @@ impl GatewayClientBuilder {
                 .open(root_secret)
                 .await
         } else {
-            let client_config =
-                fedimint_api_client::download_from_invite_code(&invite_code).await?;
+            // FIXME: (@leonardo) How should we handle the `Connector` usage for ln-gateway
+            // ?
+            let client_config = fedimint_api_client::api::net::Connector::default()
+                .download_from_invite_code(&invite_code)
+                .await?;
             client_builder
                 // TODO: make this configurable?
                 .join(root_secret, client_config.clone(), invite_code.api_secret())
