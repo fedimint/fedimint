@@ -15,8 +15,8 @@ use fedimint_lnv2_common::config::LightningGenParams;
 use fedimint_lnv2_server::LightningInit;
 use fedimint_testing::federation::FederationTest;
 use fedimint_testing::fixtures::Fixtures;
-use fedimint_testing::gateway::{GatewayTest, DEFAULT_GATEWAY_PASSWORD};
 use fedimint_testing::ln::FakeLightningTest;
+use fedimint_testing::Gateway;
 
 fn fixtures() -> Fixtures {
     let fixtures = Fixtures::new_primary(DummyClientInit, DummyInit, DummyGenParams::default());
@@ -40,16 +40,18 @@ fn fixtures() -> Fixtures {
 }
 
 /// Setup a gateway connected to the fed and client
-async fn gateway(fixtures: &Fixtures, fed: &FederationTest) -> GatewayTest {
-    let mut gateway = fixtures
-        .new_gateway(0, Some(DEFAULT_GATEWAY_PASSWORD.to_string()))
-        .await;
-    gateway.connect_fed(fed).await;
+async fn gateway(fixtures: &Fixtures, fed: &FederationTest) -> Gateway {
+    let gateway = fixtures.new_gateway().await;
+    fed.connect_gateway(&gateway).await;
     gateway
 }
 
-async fn print_liquidity(gateway: &GatewayTest, federation_id: FederationId) {
-    let client = gateway.select_client(federation_id).await;
+async fn print_liquidity(gateway: &Gateway, federation_id: FederationId) {
+    let client = gateway
+        .select_client(federation_id)
+        .await
+        .expect("Could not select client")
+        .into_value();
 
     let (op, outpoints) = client
         .get_first_module::<DummyClientModule>()
@@ -69,8 +71,8 @@ async fn print_liquidity(gateway: &GatewayTest, federation_id: FederationId) {
 async fn can_pay_external_invoice_exactly_once() -> anyhow::Result<()> {
     let fixtures = fixtures();
     let fed = fixtures.new_default_fed().await;
-    let gateway_test = gateway(&fixtures, &fed).await;
-    let gateway_api = gateway_test.gateway.versioned_api().clone();
+    let gateway = gateway(&fixtures, &fed).await;
+    let gateway_api = gateway.versioned_api().clone();
 
     let other_ln = FakeLightningTest::new();
     let invoice = other_ln.invoice(Amount::from_sats(100), None)?;
@@ -127,8 +129,8 @@ async fn can_pay_external_invoice_exactly_once() -> anyhow::Result<()> {
 async fn refund_unpayable_invoice() -> anyhow::Result<()> {
     let fixtures = fixtures();
     let fed = fixtures.new_default_fed().await;
-    let gateway_test = gateway(&fixtures, &fed).await;
-    let gateway_api = gateway_test.gateway.versioned_api().clone();
+    let gateway = gateway(&fixtures, &fed).await;
+    let gateway_api = gateway.versioned_api().clone();
 
     let other_ln = FakeLightningTest::new();
     let invoice = other_ln.unpayable_invoice(Amount::from_sats(100), None);
@@ -166,8 +168,8 @@ async fn refund_unpayable_invoice() -> anyhow::Result<()> {
 async fn can_make_self_payment_exactly_once() -> anyhow::Result<()> {
     let fixtures = fixtures();
     let fed = fixtures.new_default_fed().await;
-    let gateway_test = gateway(&fixtures, &fed).await;
-    let gateway_api = gateway_test.gateway.versioned_api().clone();
+    let gateway = gateway(&fixtures, &fed).await;
+    let gateway_api = gateway.versioned_api().clone();
 
     let client = fed.new_client().await;
 
@@ -204,7 +206,7 @@ async fn can_make_self_payment_exactly_once() -> anyhow::Result<()> {
     assert_eq!(sub.ok().await?, SendState::Refunded);
 
     // now we print liquidity such that the second payment attempt is successful
-    print_liquidity(&gateway_test, fed.id()).await;
+    print_liquidity(&gateway, fed.id()).await;
 
     let send_op = client
         .get_first_module::<LightningClientModule>()
@@ -249,12 +251,12 @@ async fn direct_swap() -> anyhow::Result<()> {
     let fed_send = fixtures.new_default_fed().await;
     let fed_receive = fixtures.new_default_fed().await;
 
-    let mut gateway_test = gateway(&fixtures, &fed_send).await;
-    let gateway_api = gateway_test.gateway.versioned_api().clone();
+    let mut gateway = gateway(&fixtures, &fed_send).await;
+    let gateway_api = gateway.versioned_api().clone();
 
-    gateway_test.connect_fed(&fed_receive).await;
+    fed_receive.connect_gateway(&mut gateway).await;
 
-    print_liquidity(&gateway_test, fed_receive.id()).await;
+    print_liquidity(&gateway, fed_receive.id()).await;
 
     let client_receive = fed_receive.new_client().await;
 

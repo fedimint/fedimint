@@ -15,3 +15,4 @@ pub mod federation;
 pub mod fixtures;
 pub mod gateway;
 pub mod ln;
+pub use ln_gateway::Gateway;
