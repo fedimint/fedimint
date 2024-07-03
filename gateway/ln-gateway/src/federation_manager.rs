@@ -2,11 +2,13 @@ use std::collections::BTreeMap;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 
+use bitcoin::secp256k1::KeyPair;
 use fedimint_client::ClientHandleArc;
 use fedimint_core::config::FederationId;
 use fedimint_core::util::Spanned;
 use tracing::error;
 
+use crate::state_machine::GatewayClientModule;
 use crate::{GatewayError, Result};
 
 /// The first SCID that the gateway will assign to a federation.
@@ -71,6 +73,24 @@ impl FederationManager {
         self.scid_to_federation
             .retain(|_, fid| *fid != federation_id);
         Ok(())
+    }
+
+    /// Iterates through all of the federations the gateway is registered with
+    /// and requests to remove the registration record.
+    pub async fn leave_all_federations(&self, gateway_keypair: KeyPair) {
+        let removal_futures = self
+            .clients
+            .values()
+            .map(|client| async {
+                client
+                    .value()
+                    .get_first_module::<GatewayClientModule>()
+                    .remove_from_federation(gateway_keypair)
+                    .await;
+            })
+            .collect::<Vec<_>>();
+
+        futures::future::join_all(removal_futures).await;
     }
 
     pub fn get_client_for_scid(&self, short_channel_id: u64) -> Option<Spanned<ClientHandleArc>> {

@@ -1598,23 +1598,16 @@ impl Gateway {
     /// and requests to remove the registration record.
     pub async fn leave_all_federations(&self) {
         let mut dbtx = self.gateway_db.begin_transaction_nc().await;
-        let keypair = dbtx
+        let gateway_keypair = dbtx
             .get_value(&GatewayPublicKey)
             .await
             .expect("Gateway keypair does not exist");
-        for client in self
-            .federation_manager
+
+        self.federation_manager
             .read()
             .await
-            .borrow_clients()
-            .values()
-        {
-            client
-                .value()
-                .get_first_module::<GatewayClientModule>()
-                .remove_from_federation(keypair)
-                .await;
-        }
+            .leave_all_federations(gateway_keypair)
+            .await;
     }
 }
 
