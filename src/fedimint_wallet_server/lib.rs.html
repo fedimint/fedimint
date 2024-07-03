@@ -2093,7 +2093,7 @@
         <span class="prelude-val">Ok</span>(Wallet::new(
             args.cfg().to_typed()<span class="question-mark">?</span>,
             args.db(),
-            <span class="kw-2">&amp;mut </span>args.task_group().clone(),
+            args.task_group(),
             args.our_peer_id(),
         )
         .<span class="kw">await</span><span class="question-mark">?
@@ -2630,7 +2630,7 @@
     <span class="kw">pub async fn </span>new(
         cfg: WalletConfig,
         db: <span class="kw-2">&amp;</span>Database,
-        task_group: <span class="kw-2">&amp;mut </span>TaskGroup,
+        task_group: <span class="kw-2">&amp;</span>TaskGroup,
         our_peer_id: PeerId,
     ) -&gt; anyhow::Result&lt;Wallet&gt; {
         <span class="kw">let </span>btc_rpc = create_bitcoind(<span class="kw-2">&amp;</span>cfg.local.bitcoin_rpc, task_group.make_handle())<span class="question-mark">?</span>;
@@ -2641,7 +2641,7 @@
         cfg: WalletConfig,
         db: <span class="kw-2">&amp;</span>Database,
         bitcoind: DynBitcoindRpc,
-        task_group: <span class="kw-2">&amp;mut </span>TaskGroup,
+        task_group: <span class="kw-2">&amp;</span>TaskGroup,
         our_peer_id: PeerId,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;Wallet, WalletCreationError&gt; {
         <span class="self">Self</span>::spawn_broadcast_pending_task(task_group, <span class="kw-2">&amp;</span>bitcoind, db);
@@ -3054,7 +3054,7 @@
     }
 
     <span class="kw">fn </span>spawn_broadcast_pending_task(
-        task_group: <span class="kw-2">&amp;mut </span>TaskGroup,
+        task_group: <span class="kw-2">&amp;</span>TaskGroup,
         bitcoind: <span class="kw-2">&amp;</span>DynBitcoindRpc,
         db: <span class="kw-2">&amp;</span>Database,
     ) {
@@ -3069,7 +3069,7 @@
 
     <span class="kw">fn </span>spawn_bitcoin_update_task(
         cfg: <span class="kw-2">&amp;</span>WalletConfig,
-        task_group: <span class="kw-2">&amp;mut </span>TaskGroup,
+        task_group: <span class="kw-2">&amp;</span>TaskGroup,
         bitcoind: <span class="kw-2">&amp;</span>DynBitcoindRpc,
     ) -&gt; (watch::Receiver&lt;<span class="prelude-ty">Option</span>&lt;u32&gt;&gt;, watch::Receiver&lt;Feerate&gt;) {
         <span class="kw">let </span>(block_count_tx, block_count_rx) = watch::channel(<span class="prelude-val">None</span>);

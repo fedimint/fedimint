@@ -1233,7 +1233,7 @@
         params: <span class="kw-2">&amp;</span>ConfigGenParams,
         registry: ServerModuleInitRegistry,
         delay_calculator: DelayCalculator,
-        task_group: <span class="kw-2">&amp;mut </span>TaskGroup,
+        task_group: <span class="kw-2">&amp;</span>TaskGroup,
         code_version_str: String,
     ) -&gt; DkgResult&lt;<span class="self">Self</span>&gt; {
         <span class="kw">let </span>_timing <span class="comment">/* logs on drop */ </span>= timing::TimeReporter::new(<span class="string">"distributed-gen"</span>).info();
@@ -1493,7 +1493,7 @@
     network: NetworkConfig,
     certs: TlsConfig,
     delay_calculator: DelayCalculator,
-    task_group: <span class="kw-2">&amp;mut </span>TaskGroup,
+    task_group: <span class="kw-2">&amp;</span>TaskGroup,
 ) -&gt; PeerConnections&lt;T&gt;
 <span class="kw">where
     </span>T: std::fmt::Debug + Clone + Serialize + DeserializeOwned + Unpin + Send + Sync + <span class="lifetime">'static</span>,

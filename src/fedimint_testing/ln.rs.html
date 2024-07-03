@@ -252,6 +252,7 @@
 <a href="#252" id="252">252</a>
 <a href="#253" id="253">253</a>
 <a href="#254" id="254">254</a>
+<a href="#255" id="255">255</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::sync::{Arc, Mutex};
 <span class="kw">use </span>std::time::Duration;
 
@@ -274,8 +275,9 @@
     EmptyResponse, GetFundingAddressResponse, GetNodeInfoResponse, GetRouteHintsResponse,
     InterceptHtlcResponse, PayInvoiceRequest, PayInvoiceResponse,
 };
-<span class="kw">use </span>ln_gateway::lightning::cln::{HtlcResult, RouteHtlcStream};
-<span class="kw">use </span>ln_gateway::lightning::{ChannelInfo, ILnRpcClient, LightningRpcError};
+<span class="kw">use </span>ln_gateway::lightning::{
+    ChannelInfo, HtlcResult, ILnRpcClient, LightningRpcError, RouteHtlcStream,
+};
 <span class="kw">use </span>rand::rngs::OsRng;
 <span class="kw">use </span>tokio::sync::mpsc;
 <span class="kw">use </span>tracing::info;
@@ -431,7 +433,7 @@
 
     <span class="kw">async fn </span>route_htlcs&lt;<span class="lifetime">'a</span>&gt;(
         <span class="kw-2">mut </span><span class="self">self</span>: Box&lt;<span class="self">Self</span>&gt;,
-        task_group: <span class="kw-2">&amp;mut </span>TaskGroup,
+        task_group: <span class="kw-2">&amp;</span>TaskGroup,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;(RouteHtlcStream&lt;<span class="lifetime">'a</span>&gt;, Arc&lt;<span class="kw">dyn </span>ILnRpcClient&gt;), LightningRpcError&gt; {
         <span class="kw">let </span>handle = task_group.make_handle();
         <span class="kw">let </span>shutdown_receiver = handle.make_shutdown_rx();

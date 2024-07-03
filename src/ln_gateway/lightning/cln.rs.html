@@ -257,10 +257,6 @@
 <a href="#257" id="257">257</a>
 <a href="#258" id="258">258</a>
 <a href="#259" id="259">259</a>
-<a href="#260" id="260">260</a>
-<a href="#261" id="261">261</a>
-<a href="#262" id="262">262</a>
-<a href="#263" id="263">263</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::fmt::Debug;
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
@@ -271,23 +267,19 @@
 <span class="kw">use </span>fedimint_core::util::SafeUrl;
 <span class="kw">use </span>fedimint_core::{secp256k1, Amount};
 <span class="kw">use </span>fedimint_ln_common::PrunedInvoice;
-<span class="kw">use </span>futures::stream::BoxStream;
 <span class="kw">use </span>tonic::transport::{Channel, Endpoint};
 <span class="kw">use </span>tonic::Request;
 <span class="kw">use </span>tracing::info;
 
-<span class="kw">use super</span>::{ChannelInfo, ILnRpcClient, LightningRpcError};
+<span class="kw">use super</span>::{ChannelInfo, ILnRpcClient, LightningRpcError, RouteHtlcStream};
 <span class="kw">use </span><span class="kw">crate</span>::gateway_lnrpc::gateway_lightning_client::GatewayLightningClient;
 <span class="kw">use </span><span class="kw">crate</span>::gateway_lnrpc::{
     <span class="self">self</span>, CloseChannelsWithPeerRequest, CloseChannelsWithPeerResponse, CreateInvoiceRequest,
     CreateInvoiceResponse, EmptyRequest, EmptyResponse, GetFundingAddressResponse,
-    GetNodeInfoResponse, GetRouteHintsRequest, GetRouteHintsResponse, InterceptHtlcRequest,
-    InterceptHtlcResponse, OpenChannelRequest, PayInvoiceRequest, PayInvoiceResponse,
-    PayPrunedInvoiceRequest,
+    GetNodeInfoResponse, GetRouteHintsRequest, GetRouteHintsResponse, InterceptHtlcResponse,
+    OpenChannelRequest, PayInvoiceRequest, PayInvoiceResponse, PayPrunedInvoiceRequest,
 };
 <span class="kw">use </span><span class="kw">crate</span>::lightning::MAX_LIGHTNING_RETRIES;
-<span class="kw">pub type </span>HtlcResult = std::result::Result&lt;InterceptHtlcRequest, tonic::Status&gt;;
-<span class="kw">pub type </span>RouteHtlcStream&lt;<span class="lifetime">'a</span>&gt; = BoxStream&lt;<span class="lifetime">'a</span>, HtlcResult&gt;;
 
 <span class="doccomment">/// An `ILnRpcClient` that wraps around `GatewayLightningClient` for
 /// convenience, and makes real RPC requests over the wire to a remote lightning
@@ -410,7 +402,7 @@
 
     <span class="kw">async fn </span>route_htlcs&lt;<span class="lifetime">'a</span>&gt;(
         <span class="self">self</span>: Box&lt;<span class="self">Self</span>&gt;,
-        _task_group: <span class="kw-2">&amp;mut </span>TaskGroup,
+        _task_group: <span class="kw-2">&amp;</span>TaskGroup,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;(RouteHtlcStream&lt;<span class="lifetime">'a</span>&gt;, Arc&lt;<span class="kw">dyn </span>ILnRpcClient&gt;), LightningRpcError&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>client = <span class="self">self</span>.connect().<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>res = client

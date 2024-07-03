@@ -288,7 +288,7 @@
     settings: ConfigGenSettings,
     db: Database,
     code_version_str: String,
-    <span class="kw-2">mut </span>task_group: TaskGroup,
+    task_group: TaskGroup,
     force_api_secrets: ApiSecrets,
 ) -&gt; anyhow::Result&lt;ServerConfig&gt; {
     <span class="macro">info!</span>(target: LOG_CONSENSUS, <span class="string">"Starting config gen"</span>);
@@ -301,7 +301,7 @@
         settings.clone(),
         db.clone(),
         cfg_sender,
-        <span class="kw-2">&amp;mut </span>task_group,
+        <span class="kw-2">&amp;</span>task_group,
         code_version_str.clone(),
         force_api_secrets.get_active(),
     );

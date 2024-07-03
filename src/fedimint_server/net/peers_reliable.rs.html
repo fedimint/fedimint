@@ -986,7 +986,7 @@
         cfg: NetworkConfig,
         delay_calculator: DelayCalculator,
         connect: PeerConnector&lt;T&gt;,
-        task_group: <span class="kw-2">&amp;mut </span>TaskGroup,
+        task_group: <span class="kw-2">&amp;</span>TaskGroup,
     ) -&gt; (<span class="self">Self</span>, PeerStatusChannels) {
         <span class="kw">let </span>shared_connector: SharedAnyConnector&lt;PeerMessage&lt;T&gt;&gt; = connect.into();
         <span class="kw">let </span><span class="kw-2">mut </span>connection_senders = HashMap::new();
@@ -1477,7 +1477,7 @@
         connect: SharedAnyConnector&lt;PeerMessage&lt;M&gt;&gt;,
         incoming_connections: Receiver&lt;AnyFramedTransport&lt;PeerMessage&lt;M&gt;&gt;&gt;,
         status_query_receiver: PeerStatusChannelReceiver,
-        task_group: <span class="kw-2">&amp;mut </span>TaskGroup,
+        task_group: <span class="kw-2">&amp;</span>TaskGroup,
     ) -&gt; PeerConnection&lt;M&gt; {
         <span class="kw">let </span>(outgoing_sender, outgoing_receiver) = tokio::sync::mpsc::channel::&lt;M&gt;(<span class="number">1024</span>);
         <span class="kw">let </span>(incoming_sender, incoming_receiver) = tokio::sync::mpsc::channel::&lt;M&gt;(<span class="number">1024</span>);
@@ -1601,7 +1601,7 @@
 
             <span class="kw">let </span>peers_ref = <span class="kw-2">&amp;</span>peers;
             <span class="kw">let </span>net_ref = <span class="kw-2">&amp;</span>net;
-            <span class="kw">let </span>build_peers = |bind: <span class="kw-2">&amp;</span><span class="lifetime">'static </span>str, id: u16, <span class="kw-2">mut </span>task_group: TaskGroup| <span class="kw">async move </span>{
+            <span class="kw">let </span>build_peers = |bind: <span class="kw-2">&amp;</span><span class="lifetime">'static </span>str, id: u16, task_group: TaskGroup| <span class="kw">async move </span>{
                 <span class="kw">let </span>cfg = NetworkConfig {
                     identity: PeerId::from(id),
                     bind_addr: bind.parse().unwrap(),
@@ -1614,7 +1614,7 @@
                     cfg,
                     DelayCalculator::TEST_DEFAULT,
                     connect,
-                    <span class="kw-2">&amp;mut </span>task_group,
+                    <span class="kw-2">&amp;</span>task_group,
                 )
                 .<span class="kw">await
             </span>};

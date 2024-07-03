@@ -1710,7 +1710,7 @@
 
         <span class="prelude-val">Ok</span>(Lightning::new(
             args.cfg().to_typed()<span class="question-mark">?</span>,
-            <span class="kw-2">&amp;mut </span>args.task_group().clone(),
+            args.task_group(),
             args.our_peer_id(),
         )<span class="question-mark">?
         </span>.into())
@@ -2432,7 +2432,7 @@
 <span class="kw">impl </span>Lightning {
     <span class="kw">fn </span>new(
         cfg: LightningConfig,
-        task_group: <span class="kw-2">&amp;mut </span>TaskGroup,
+        task_group: <span class="kw-2">&amp;</span>TaskGroup,
         our_peer_id: PeerId,
     ) -&gt; anyhow::Result&lt;<span class="self">Self</span>&gt; {
         <span class="kw">let </span>btc_rpc = create_bitcoind(<span class="kw-2">&amp;</span>cfg.local.bitcoin_rpc, task_group.make_handle())<span class="question-mark">?</span>;
@@ -2808,8 +2808,8 @@
     <span class="attr">#[test_log::test(tokio::test)]
     </span><span class="kw">async fn </span>encrypted_preimage_only_usable_once() {
         <span class="kw">let </span>(server_cfg, client_cfg) = build_configs();
-        <span class="kw">let </span><span class="kw-2">mut </span>tg = TaskGroup::new();
-        <span class="kw">let </span>server = Lightning::new(server_cfg[<span class="number">0</span>].clone(), <span class="kw-2">&amp;mut </span>tg, <span class="number">0</span>.into()).unwrap();
+        <span class="kw">let </span>tg = TaskGroup::new();
+        <span class="kw">let </span>server = Lightning::new(server_cfg[<span class="number">0</span>].clone(), <span class="kw-2">&amp;</span>tg, <span class="number">0</span>.into()).unwrap();
 
         <span class="kw">let </span>preimage = [<span class="number">42u8</span>; <span class="number">32</span>];
         <span class="kw">let </span>encrypted_preimage = EncryptedPreimage(client_cfg.threshold_pub_key.encrypt([<span class="number">42</span>; <span class="number">32</span>]));
@@ -2870,8 +2870,8 @@
         <span class="kw">let </span>db = Database::new(MemDatabase::new(), Default::default());
         <span class="kw">let </span><span class="kw-2">mut </span>dbtx = db.begin_transaction().<span class="kw">await</span>;
         <span class="kw">let </span><span class="kw-2">mut </span>module_dbtx = dbtx.to_ref_with_prefix_module_id(<span class="number">42</span>);
-        <span class="kw">let </span><span class="kw-2">mut </span>tg = TaskGroup::new();
-        <span class="kw">let </span>server = Lightning::new(server_cfg[<span class="number">0</span>].clone(), <span class="kw-2">&amp;mut </span>tg, <span class="number">0</span>.into()).unwrap();
+        <span class="kw">let </span>tg = TaskGroup::new();
+        <span class="kw">let </span>server = Lightning::new(server_cfg[<span class="number">0</span>].clone(), <span class="kw-2">&amp;</span>tg, <span class="number">0</span>.into()).unwrap();
 
         <span class="kw">let </span>preimage = PreimageKey(generate_keypair(<span class="kw-2">&amp;mut </span>OsRng).<span class="number">1</span>.serialize());
         <span class="kw">let </span>funded_incoming_contract = FundedContract::Incoming(FundedIncomingContract {
@@ -2931,8 +2931,8 @@
         <span class="kw">let </span>db = Database::new(MemDatabase::new(), Default::default());
         <span class="kw">let </span><span class="kw-2">mut </span>dbtx = db.begin_transaction().<span class="kw">await</span>;
         <span class="kw">let </span><span class="kw-2">mut </span>module_dbtx = dbtx.to_ref_with_prefix_module_id(<span class="number">42</span>);
-        <span class="kw">let </span><span class="kw-2">mut </span>tg = TaskGroup::new();
-        <span class="kw">let </span>server = Lightning::new(server_cfg[<span class="number">0</span>].clone(), <span class="kw-2">&amp;mut </span>tg, <span class="number">0</span>.into()).unwrap();
+        <span class="kw">let </span>tg = TaskGroup::new();
+        <span class="kw">let </span>server = Lightning::new(server_cfg[<span class="number">0</span>].clone(), <span class="kw-2">&amp;</span>tg, <span class="number">0</span>.into()).unwrap();
 
         <span class="kw">let </span>preimage = Preimage([<span class="number">42u8</span>; <span class="number">32</span>]);
         <span class="kw">let </span>gateway_key = random_pub_key();

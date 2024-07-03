@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"struct":["NetworkLnRpcClient"],"type":["HtlcResult","RouteHtlcStream"]};
+window.SIDEBAR_ITEMS = {"struct":["NetworkLnRpcClient"]};

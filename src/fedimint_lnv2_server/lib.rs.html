@@ -946,7 +946,7 @@
     }
 
     <span class="kw">async fn </span>init(<span class="kw-2">&amp;</span><span class="self">self</span>, args: <span class="kw-2">&amp;</span>ServerModuleInitArgs&lt;<span class="self">Self</span>&gt;) -&gt; anyhow::Result&lt;DynServerModule&gt; {
-        <span class="prelude-val">Ok</span>(Lightning::new(args.cfg().to_typed()<span class="question-mark">?</span>, <span class="kw-2">&amp;mut </span>args.task_group().clone())<span class="question-mark">?</span>.into())
+        <span class="prelude-val">Ok</span>(Lightning::new(args.cfg().to_typed()<span class="question-mark">?</span>, <span class="kw-2">&amp;</span>args.task_group().clone())<span class="question-mark">?</span>.into())
     }
 
     <span class="kw">fn </span>trusted_dealer_gen(
@@ -1380,7 +1380,7 @@
 }
 
 <span class="kw">impl </span>Lightning {
-    <span class="kw">fn </span>new(cfg: LightningConfig, task_group: <span class="kw-2">&amp;mut </span>TaskGroup) -&gt; anyhow::Result&lt;<span class="self">Self</span>&gt; {
+    <span class="kw">fn </span>new(cfg: LightningConfig, task_group: <span class="kw-2">&amp;</span>TaskGroup) -&gt; anyhow::Result&lt;<span class="self">Self</span>&gt; {
         <span class="kw">let </span>btc_rpc = create_bitcoind(<span class="kw-2">&amp;</span>cfg.local.bitcoin_rpc, task_group.make_handle())<span class="question-mark">?</span>;
 
         <span class="prelude-val">Ok</span>(Lightning { cfg, btc_rpc })

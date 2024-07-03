@@ -128,6 +128,9 @@
 <a href="#128" id="128">128</a>
 <a href="#129" id="129">129</a>
 <a href="#130" id="130">130</a>
+<a href="#131" id="131">131</a>
+<a href="#132" id="132">132</a>
+<a href="#133" id="133">133</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::fmt::Debug;
 <span class="kw">use </span>std::path::PathBuf;
@@ -236,8 +239,9 @@
         .map_err(GatewayError::ClientStateMachineError)
     }
 
-    <span class="kw">pub async fn </span>save_config(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
+    <span class="comment">// TODO(tvolk131): This code is purely database-related. Let's move it somewhere
+    // else.
+    </span><span class="kw">pub async fn </span>save_config(
         config: FederationConfig,
         <span class="kw-2">mut </span>dbtx: DatabaseTransaction&lt;<span class="lifetime">'_</span>, Committable&gt;,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
@@ -248,7 +252,9 @@
             </span>.map_err(GatewayError::DatabaseError)
     }
 
-    <span class="kw">pub async fn </span>load_configs(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="kw-2">mut </span>dbtx: DatabaseTransaction&lt;<span class="lifetime">'_</span>&gt;) -&gt; Vec&lt;FederationConfig&gt; {
+    <span class="comment">// TODO(tvolk131): This code is purely database-related. Let's move it somewhere
+    // else.
+    </span><span class="kw">pub async fn </span>load_configs(<span class="kw-2">mut </span>dbtx: DatabaseTransaction&lt;<span class="lifetime">'_</span>&gt;) -&gt; Vec&lt;FederationConfig&gt; {
         dbtx.find_by_prefix(<span class="kw-2">&amp;</span>FederationIdKeyPrefix)
             .<span class="kw">await
             </span>.collect::&lt;BTreeMap&lt;FederationIdKey, FederationConfig&gt;&gt;()
