@@ -1,4 +1,5 @@
-use fedimint_core::config::FederationId;
+use std::sync::Arc;
+
 use fedimint_core::util::NextOrPending;
 use fedimint_core::{sats, Amount};
 use fedimint_dummy_client::{DummyClientInit, DummyClientModule};
@@ -13,6 +14,9 @@ use fedimint_testing::federation::FederationTest;
 use fedimint_testing::fixtures::Fixtures;
 use fedimint_testing::gateway::{GatewayTest, DEFAULT_GATEWAY_PASSWORD};
 use fedimint_testing::ln::FakeLightningTest;
+use mock::MockGatewayConnection;
+
+mod mock;
 
 fn fixtures() -> Fixtures {
     let fixtures = Fixtures::new_primary(DummyClientInit, DummyInit, DummyGenParams::default());
@@ -20,7 +24,9 @@ fn fixtures() -> Fixtures {
     let bitcoin_server = fixtures.bitcoin_server();
 
     let fixtures = fixtures.with_module(
-        LightningClientInit,
+        LightningClientInit {
+            gateway_conn: Arc::new(MockGatewayConnection::default()),
+        },
         LightningInit,
         LightningGenParams::regtest(bitcoin_server.clone()),
     );

@@ -12,15 +12,13 @@ use fedimint_core::task::sleep;
 use fedimint_core::util::SafeUrl;
 use fedimint_core::{OutPoint, TransactionId};
 use fedimint_lnv2_common::contracts::OutgoingContract;
-use fedimint_lnv2_common::{
-    LightningClientContext, LightningInput, LightningInputV0, OutgoingWitness,
-};
+use fedimint_lnv2_common::{LightningInput, LightningInputV0, OutgoingWitness};
 use secp256k1::schnorr::Signature;
 use secp256k1::KeyPair;
 use tracing::error;
 
 use crate::api::LnFederationApi;
-use crate::{LightningClientStateMachines, LightningInvoice, SendPaymentPayload};
+use crate::{LightningClientContext, LightningClientStateMachines, LightningInvoice};
 
 const RETRY_DELAY: Duration = Duration::from_secs(1);
 
@@ -102,6 +100,7 @@ impl State for SendStateMachine {
                             self.common.contract.clone(),
                             self.common.invoice.clone(),
                             self.common.refund_keypair,
+                            context.clone(),
                         ),
                         move |dbtx, response, old_state| {
                             Box::pin(Self::transition_gateway_send_payment(
@@ -160,16 +159,19 @@ impl SendStateMachine {
         contract: OutgoingContract,
         invoice: LightningInvoice,
         refund_keypair: KeyPair,
+        context: LightningClientContext,
     ) -> Result<[u8; 32], Signature> {
         loop {
-            match Self::try_gateway_send_payment(
-                gateway_api.clone(),
-                federation_id,
-                contract.clone(),
-                invoice.clone(),
-                refund_keypair.sign_schnorr(invoice.consensus_hash::<sha256::Hash>().into()),
-            )
-            .await
+            match context
+                .gateway_conn
+                .try_gateway_send_payment(
+                    gateway_api.clone(),
+                    federation_id,
+                    contract.clone(),
+                    invoice.clone(),
+                    refund_keypair.sign_schnorr(invoice.consensus_hash::<sha256::Hash>().into()),
+                )
+                .await
             {
                 Ok(gateway_response) => match gateway_response {
                     Ok(gateway_response) => {
@@ -211,34 +213,6 @@ impl SendStateMachine {
 
             sleep(RETRY_DELAY).await;
         }
-    }
-
-    async fn try_gateway_send_payment(
-        gateway_api: SafeUrl,
-        federation_id: FederationId,
-        contract: OutgoingContract,
-        invoice: LightningInvoice,
-        auth: Signature,
-    ) -> anyhow::Result<Result<Result<[u8; 32], Signature>, String>> {
-        let result = reqwest::Client::new()
-            .post(
-                gateway_api
-                    .join("send_payment")
-                    .expect("'send_payment' contains no invalid characters for a URL")
-                    .as_str(),
-            )
-            .json(&SendPaymentPayload {
-                federation_id,
-                contract,
-                invoice,
-                auth,
-            })
-            .send()
-            .await?
-            .json::<Result<Result<[u8; 32], Signature>, String>>()
-            .await?;
-
-        Ok(result)
     }
 
     async fn transition_gateway_send_payment(

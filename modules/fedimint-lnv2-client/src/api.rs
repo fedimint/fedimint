@@ -5,10 +5,12 @@ use fedimint_api_client::api::{
     FederationApiExt, FederationResult, IModuleFederationApi, PeerResult,
 };
 use fedimint_api_client::query::FilterMapThreshold;
+use fedimint_core::config::FederationId;
 use fedimint_core::module::{ApiAuth, ApiRequestErased};
 use fedimint_core::task::{sleep, MaybeSend, MaybeSync};
 use fedimint_core::util::SafeUrl;
 use fedimint_core::{apply, async_trait_maybe_send, NumPeersExt, PeerId};
+use fedimint_lnv2_common::contracts::OutgoingContract;
 use fedimint_lnv2_common::endpoint_constants::{
     ADD_GATEWAY_ENDPOINT, AWAIT_INCOMING_CONTRACT_ENDPOINT, AWAIT_PREIMAGE_ENDPOINT,
     CONSENSUS_BLOCK_COUNT_ENDPOINT, GATEWAYS_ENDPOINT, OUTGOING_CONTRACT_EXPIRATION_ENDPOINT,
@@ -16,6 +18,12 @@ use fedimint_lnv2_common::endpoint_constants::{
 };
 use fedimint_lnv2_common::ContractId;
 use itertools::Itertools;
+use lightning_invoice::Bolt11Invoice;
+use secp256k1::schnorr::Signature;
+
+use crate::{
+    CreateBolt11InvoicePayload, GatewayError, LightningInvoice, RoutingInfo, SendPaymentPayload,
+};
 
 const RETRY_DELAY: Duration = Duration::from_secs(1);
 
@@ -159,5 +167,106 @@ where
             .await?;
 
         Ok(entry_existed)
+    }
+}
+
+#[apply(async_trait_maybe_send!)]
+pub trait GatewayConnection: std::fmt::Debug {
+    async fn fetch_routing_info(
+        &self,
+        gateway_api: SafeUrl,
+        federation_id: &FederationId,
+    ) -> Result<Option<RoutingInfo>, GatewayError>;
+
+    async fn fetch_invoice(
+        &self,
+        gateway_api: SafeUrl,
+        payload: CreateBolt11InvoicePayload,
+    ) -> Result<Result<Bolt11Invoice, String>, GatewayError>;
+
+    async fn try_gateway_send_payment(
+        &self,
+        gateway_api: SafeUrl,
+        federation_id: FederationId,
+        contract: OutgoingContract,
+        invoice: LightningInvoice,
+        auth: Signature,
+    ) -> anyhow::Result<Result<Result<[u8; 32], Signature>, String>>;
+}
+
+#[derive(Debug)]
+pub struct RealGatewayConnection;
+
+#[apply(async_trait_maybe_send!)]
+impl GatewayConnection for RealGatewayConnection {
+    async fn fetch_routing_info(
+        &self,
+        gateway_api: SafeUrl,
+        federation_id: &FederationId,
+    ) -> Result<Option<RoutingInfo>, GatewayError> {
+        reqwest::Client::new()
+            .post(
+                gateway_api
+                    .join("routing_info")
+                    .expect("'routing_info' contains no invalid characters for a URL")
+                    .as_str(),
+            )
+            .json(federation_id)
+            .send()
+            .await
+            .map_err(|e| GatewayError::Unreachable(e.to_string()))?
+            .json::<Option<RoutingInfo>>()
+            .await
+            .map_err(|e| GatewayError::InvalidJsonResponse(e.to_string()))
+    }
+
+    async fn fetch_invoice(
+        &self,
+        gateway_api: SafeUrl,
+        payload: CreateBolt11InvoicePayload,
+    ) -> Result<Result<Bolt11Invoice, String>, GatewayError> {
+        reqwest::Client::new()
+            .post(
+                gateway_api
+                    .join("create_bolt11_invoice")
+                    .expect("'create_bolt11_invoice' contains no invalid characters for a URL")
+                    .as_str(),
+            )
+            .json(&payload)
+            .send()
+            .await
+            .map_err(|e| GatewayError::Unreachable(e.to_string()))?
+            .json::<Result<Bolt11Invoice, String>>()
+            .await
+            .map_err(|e| GatewayError::InvalidJsonResponse(e.to_string()))
+    }
+
+    async fn try_gateway_send_payment(
+        &self,
+        gateway_api: SafeUrl,
+        federation_id: FederationId,
+        contract: OutgoingContract,
+        invoice: LightningInvoice,
+        auth: Signature,
+    ) -> anyhow::Result<Result<Result<[u8; 32], Signature>, String>> {
+        let result = reqwest::Client::new()
+            .post(
+                gateway_api
+                    .join("send_payment")
+                    .expect("'send_payment' contains no invalid characters for a URL")
+                    .as_str(),
+            )
+            .json(&SendPaymentPayload {
+                federation_id,
+                contract,
+                invoice,
+                auth,
+            })
+            .send()
+            .await?
+            .json::<Result<Result<[u8; 32], Signature>, String>>()
+            .await?;
+
+        Ok(result)
     }
 }

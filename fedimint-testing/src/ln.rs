@@ -26,7 +26,9 @@ use rand::rngs::OsRng;
 use tokio::sync::mpsc;
 use tracing::info;
 
-const INVALID_INVOICE_PAYMENT_SECRET: [u8; 32] = [212; 32];
+pub const INVALID_INVOICE_PAYMENT_SECRET: [u8; 32] = [212; 32];
+
+pub const MOCK_INVOICE_PREIMAGE: [u8; 32] = [1; 32];
 
 #[derive(Debug)]
 pub struct FakeLightningTest {
@@ -66,10 +68,11 @@ impl FakeLightningTest {
         expiry_time: Option<u64>,
     ) -> ln_gateway::Result<Bolt11Invoice> {
         let ctx = bitcoin::secp256k1::Secp256k1::new();
+        let payment_hash = sha256::Hash::hash(&MOCK_INVOICE_PREIMAGE);
 
         Ok(InvoiceBuilder::new(Currency::Regtest)
             .description(String::new())
-            .payment_hash(sha256::Hash::hash(&[0; 32]))
+            .payment_hash(payment_hash)
             .current_timestamp()
             .min_final_cltv_expiry_delta(0)
             .payment_secret(PaymentSecret([0; 32]))
@@ -89,13 +92,14 @@ impl FakeLightningTest {
         let ctx = bitcoin::secp256k1::Secp256k1::new();
         // Generate fake node keypair
         let kp = KeyPair::new(&ctx, &mut OsRng);
+        let payment_hash = sha256::Hash::hash(&MOCK_INVOICE_PREIMAGE);
 
         // `FakeLightningTest` will fail to pay any invoice with
         // `INVALID_INVOICE_DESCRIPTION` in the description of the invoice.
         InvoiceBuilder::new(Currency::Regtest)
             .payee_pub_key(kp.public_key())
             .description("INVALID INVOICE DESCRIPTION".to_string())
-            .payment_hash(sha256::Hash::hash(&[0; 32]))
+            .payment_hash(payment_hash)
             .current_timestamp()
             .min_final_cltv_expiry_delta(0)
             .payment_secret(PaymentSecret(INVALID_INVOICE_PAYMENT_SECRET))
@@ -148,7 +152,7 @@ impl ILnRpcClient for FakeLightningTest {
         }
 
         Ok(PayInvoiceResponse {
-            preimage: [0; 32].to_vec(),
+            preimage: MOCK_INVOICE_PREIMAGE.to_vec(),
         })
     }
 
@@ -171,7 +175,7 @@ impl ILnRpcClient for FakeLightningTest {
         }
 
         Ok(PayInvoiceResponse {
-            preimage: [0; 32].to_vec(),
+            preimage: MOCK_INVOICE_PREIMAGE.to_vec(),
         })
     }
 
