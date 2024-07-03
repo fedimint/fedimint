@@ -20,12 +20,13 @@ use fedimint_core::db::{
     Committable, Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped,
 };
 use fedimint_core::endpoint_constants::{
-    AUDIT_ENDPOINT, AUTH_ENDPOINT, AWAIT_OUTPUT_OUTCOME_ENDPOINT, AWAIT_SESSION_OUTCOME_ENDPOINT,
-    AWAIT_SIGNED_SESSION_OUTCOME_ENDPOINT, AWAIT_TRANSACTION_ENDPOINT, BACKUP_ENDPOINT,
-    CLIENT_CONFIG_ENDPOINT, CLIENT_CONFIG_JSON_ENDPOINT, FEDERATION_ID_ENDPOINT,
-    GUARDIAN_CONFIG_BACKUP_ENDPOINT, INVITE_CODE_ENDPOINT, RECOVER_ENDPOINT,
-    SERVER_CONFIG_CONSENSUS_HASH_ENDPOINT, SESSION_COUNT_ENDPOINT, SESSION_STATUS_ENDPOINT,
-    SHUTDOWN_ENDPOINT, STATUS_ENDPOINT, SUBMIT_TRANSACTION_ENDPOINT, VERSION_ENDPOINT,
+    API_ANNOUNCEMENTS_ENDPOINT, AUDIT_ENDPOINT, AUTH_ENDPOINT, AWAIT_OUTPUT_OUTCOME_ENDPOINT,
+    AWAIT_SESSION_OUTCOME_ENDPOINT, AWAIT_SIGNED_SESSION_OUTCOME_ENDPOINT,
+    AWAIT_TRANSACTION_ENDPOINT, BACKUP_ENDPOINT, CLIENT_CONFIG_ENDPOINT,
+    CLIENT_CONFIG_JSON_ENDPOINT, FEDERATION_ID_ENDPOINT, GUARDIAN_CONFIG_BACKUP_ENDPOINT,
+    INVITE_CODE_ENDPOINT, RECOVER_ENDPOINT, SERVER_CONFIG_CONSENSUS_HASH_ENDPOINT,
+    SESSION_COUNT_ENDPOINT, SESSION_STATUS_ENDPOINT, SHUTDOWN_ENDPOINT, STATUS_ENDPOINT,
+    SUBMIT_TRANSACTION_ENDPOINT, VERSION_ENDPOINT,
 };
 use fedimint_core::epoch::ConsensusItem;
 use fedimint_core::module::audit::{Audit, AuditSummary};
@@ -34,6 +35,7 @@ use fedimint_core::module::{
     api_endpoint, ApiEndpoint, ApiEndpointContext, ApiError, ApiRequestErased, ApiVersion,
     SerdeModuleEncoding, SupportedApiVersionsSummary,
 };
+use fedimint_core::net::api_announcement::SignedApiAnnouncement;
 use fedimint_core::secp256k1::{PublicKey, SECP256K1};
 use fedimint_core::server::DynServerModule;
 use fedimint_core::session_outcome::{SessionOutcome, SessionStatus, SignedSessionOutcome};
@@ -55,6 +57,7 @@ use crate::consensus::engine::get_finished_session_count_static;
 use crate::consensus::transaction::process_transaction_with_dbtx;
 use crate::fedimint_core::encoding::Encodable;
 use crate::metrics::{BACKUP_WRITE_SIZE_BYTES, STORED_BACKUPS_COUNT};
+use crate::net::api::announcement::ApiAnnouncementPrefix;
 use crate::net::api::{check_auth, ApiResult, HasApiContext};
 
 #[derive(Clone)]
@@ -363,6 +366,17 @@ impl ConsensusApi {
     ) -> Option<ClientBackupSnapshot> {
         dbtx.get_value(&ClientBackupKey(id)).await
     }
+
+    async fn api_announcements(&self) -> BTreeMap<PeerId, SignedApiAnnouncement> {
+        self.db
+            .begin_transaction_nc()
+            .await
+            .find_by_prefix(&ApiAnnouncementPrefix)
+            .await
+            .map(|(announcement_key, announcement)| (announcement_key.0, announcement))
+            .collect()
+            .await
+    }
 }
 
 #[async_trait]
@@ -576,6 +590,13 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConsensusApi>> {
             async |_fedimint: &ConsensusApi, context, _v: ()| -> () {
                 check_auth(context)?;
                 Ok(())
+            }
+        },
+        api_endpoint! {
+            API_ANNOUNCEMENTS_ENDPOINT,
+            ApiVersion::new(0, 3),
+            async |fedimint: &ConsensusApi, _context, _v: ()| -> BTreeMap<PeerId, SignedApiAnnouncement> {
+                Ok(fedimint.api_announcements().await)
             }
         },
     ]

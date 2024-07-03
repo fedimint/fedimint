@@ -18,6 +18,8 @@ pub enum DbKeyPrefix {
     AcceptedTransaction = 0x02,
     SignedSessionOutcome = 0x04,
     AlephUnits = 0x05,
+    // TODO: do we want to split the server DB into consensus/non-consensus?
+    ApiAnnouncements = 0x06,
     Module = MODULE_GLOBAL_PREFIX,
 }
 
@@ -109,6 +111,7 @@ mod fedimint_migration_tests {
     use fedimint_core::epoch::ConsensusItem;
     use fedimint_core::module::registry::ModuleDecoderRegistry;
     use fedimint_core::module::CommonModuleInit;
+    use fedimint_core::net::api_announcement::{ApiAnnouncement, SignedApiAnnouncement};
     use fedimint_core::session_outcome::{SessionOutcome, SignedSessionOutcome};
     use fedimint_core::transaction::{Transaction, TransactionSignature};
     use fedimint_core::{Amount, PeerId, ServerModule, TransactionId};
@@ -131,6 +134,7 @@ mod fedimint_migration_tests {
         AcceptedTransactionKey, AcceptedTransactionKeyPrefix, AlephUnitsKey, AlephUnitsPrefix,
         DbKeyPrefix, SignedSessionOutcomeKey, SignedSessionOutcomePrefix, GLOBAL_DATABASE_VERSION,
     };
+    use crate::net::api::announcement::{ApiAnnouncementKey, ApiAnnouncementPrefix};
 
     /// Create a database with version 0 data. The database produced is not
     /// intended to be real data or semantically correct. It is only
@@ -202,6 +206,18 @@ mod fedimint_migration_tests {
 
         dbtx.insert_new_entry(&AlephUnitsKey(0), &vec![42, 42, 42])
             .await;
+
+        dbtx.insert_new_entry(
+            &ApiAnnouncementKey(PeerId::from(42)),
+            &SignedApiAnnouncement {
+                api_announcement: ApiAnnouncement {
+                    api_url: "wss://foo.bar".parse().expect("valid url"),
+                    nonce: 0,
+                },
+                signature: bitcoin::secp256k1::schnorr::Signature::from_slice(&[42; 64]).unwrap(),
+            },
+        )
+        .await;
 
         dbtx.commit_tx().await;
     }
@@ -288,6 +304,15 @@ mod fedimint_migration_tests {
                         }
                         // Module prefix is reserved for modules, no migration testing is needed
                         DbKeyPrefix::Module => {}
+                        DbKeyPrefix::ApiAnnouncements => {
+                            let announcements = dbtx
+                                .find_by_prefix(&ApiAnnouncementPrefix)
+                                .await
+                                .collect::<Vec<_>>()
+                                .await;
+
+                            assert_eq!(announcements.len(), 1);
+                        }
                     }
                 }
                 Ok(())

@@ -17,6 +17,7 @@ use fedimint_rocksdb::RocksDbReadOnly;
 use fedimint_server::config::io::read_server_config;
 use fedimint_server::config::ServerConfig;
 use fedimint_server::consensus::db as ConsensusRange;
+use fedimint_server::net::api::announcement::ApiAnnouncementPrefix;
 use futures::StreamExt;
 use ln_gateway::Gateway;
 use strum::IntoEnumIterator;
@@ -290,6 +291,16 @@ impl DatabaseDump {
                 }
                 // Module is a global prefix for all module data
                 ConsensusRange::DbKeyPrefix::Module => {}
+                ConsensusRange::DbKeyPrefix::ApiAnnouncements => {
+                    push_db_pair_items_no_serde!(
+                        dbtx,
+                        ApiAnnouncementPrefix,
+                        ApiAnnouncementKey,
+                        fedimint_core::net::api_announcement::SignedApiAnnouncement,
+                        consensus,
+                        "API Announcements"
+                    );
+                }
             }
         }
 

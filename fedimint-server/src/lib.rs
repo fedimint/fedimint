@@ -33,6 +33,7 @@ use tracing::info;
 use crate::config::api::{ConfigGenApi, ConfigGenSettings};
 use crate::config::io::{write_server_config, SALT_FILE};
 use crate::metrics::initialize_gauge_metrics;
+use crate::net::api::announcement::sign_api_announcement_if_not_present;
 use crate::net::api::RpcHandlerCtx;
 use crate::net::connect::TlsTcpConnector;
 
@@ -85,6 +86,11 @@ pub async fn run(
     let db = db.with_decoders(decoders);
 
     initialize_gauge_metrics(&db).await;
+
+    // TODO: consider moving this out of here
+    // We could call this fn on config gen and in a DB migration, but putting it
+    // here for now avoids a lot of API changes for DB migrations and config gen.
+    sign_api_announcement_if_not_present(&db, &cfg).await;
 
     consensus::run(
         cfg,
