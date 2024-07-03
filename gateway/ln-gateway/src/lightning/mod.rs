@@ -2,30 +2,39 @@ pub mod cln;
 pub mod lnd;
 
 use std::fmt::Debug;
+use std::str::FromStr;
 use std::sync::Arc;
 
 use async_trait::async_trait;
+use bitcoin::Network;
 use clap::Subcommand;
 use fedimint_core::encoding::{Decodable, Encodable};
+use fedimint_core::secp256k1::PublicKey;
 use fedimint_core::task::TaskGroup;
 use fedimint_core::util::SafeUrl;
 use fedimint_core::{secp256k1, Amount};
+use fedimint_ln_common::route_hints::RouteHint;
 use fedimint_ln_common::PrunedInvoice;
+use futures::stream::BoxStream;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use self::cln::{NetworkLnRpcClient, RouteHtlcStream};
+use self::cln::NetworkLnRpcClient;
 use self::lnd::GatewayLndClient;
 use crate::envs::{
     FM_GATEWAY_LIGHTNING_ADDR_ENV, FM_LND_MACAROON_ENV, FM_LND_RPC_ADDR_ENV, FM_LND_TLS_CERT_ENV,
 };
 use crate::gateway_lnrpc::{
     CloseChannelsWithPeerResponse, CreateInvoiceRequest, CreateInvoiceResponse, EmptyResponse,
-    GetFundingAddressResponse, GetNodeInfoResponse, GetRouteHintsResponse, InterceptHtlcResponse,
-    PayInvoiceRequest, PayInvoiceResponse,
+    GetFundingAddressResponse, GetNodeInfoResponse, GetRouteHintsResponse, InterceptHtlcRequest,
+    InterceptHtlcResponse, PayInvoiceRequest, PayInvoiceResponse,
 };
+use crate::GatewayError;
 
 pub const MAX_LIGHTNING_RETRIES: u32 = 10;
+
+pub type HtlcResult = std::result::Result<InterceptHtlcRequest, tonic::Status>;
+pub type RouteHtlcStream<'a> = BoxStream<'a, HtlcResult>;
 
 #[derive(
     Error, Debug, Serialize, Deserialize, Encodable, Decodable, Clone, Eq, PartialEq, Hash,
@@ -112,7 +121,7 @@ pub trait ILnRpcClient: Debug + Send + Sync {
     /// the `Arc` cannot be consumed.
     async fn route_htlcs<'a>(
         self: Box<Self>,
-        task_group: &mut TaskGroup,
+        task_group: &TaskGroup,
     ) -> Result<(RouteHtlcStream<'a>, Arc<dyn ILnRpcClient>), LightningRpcError>;
 
     /// Complete an HTLC that was intercepted by the gateway. Must be called for
@@ -150,6 +159,50 @@ pub trait ILnRpcClient: Debug + Send + Sync {
     ) -> Result<CloseChannelsWithPeerResponse, LightningRpcError>;
 
     async fn list_active_channels(&self) -> Result<Vec<ChannelInfo>, LightningRpcError>;
+}
+
+impl dyn ILnRpcClient {
+    /// Retrieve route hints from the Lightning node, capped at
+    /// `num_route_hints`. The route hints should be ordered based on liquidity
+    /// of incoming channels.
+    pub async fn parsed_route_hints(&self, num_route_hints: u32) -> Vec<RouteHint> {
+        if num_route_hints == 0 {
+            return vec![];
+        }
+
+        let route_hints =
+            self.routehints(num_route_hints as usize)
+                .await
+                .unwrap_or(GetRouteHintsResponse {
+                    route_hints: Vec::new(),
+                });
+        route_hints.try_into().expect("Could not parse route hints")
+    }
+
+    /// Retrieves the basic information about the Gateway's connected Lightning
+    /// node.
+    pub async fn parsed_node_info(&self) -> super::Result<(PublicKey, String, Network, u32, bool)> {
+        let GetNodeInfoResponse {
+            pub_key,
+            alias,
+            network,
+            block_height,
+            synced_to_chain,
+        } = self.info().await?;
+        let node_pub_key = PublicKey::from_slice(&pub_key)
+            .map_err(|e| GatewayError::InvalidMetadata(format!("Invalid node pubkey {e}")))?;
+        // TODO: create a fedimint Network that understands "mainnet"
+        let network = match network.as_str() {
+            // LND uses "mainnet", but rust-bitcoin uses "bitcoin".
+            // TODO(tvolk131): Push this detail down into the LND implementation of ILnRpcClient.
+            "mainnet" => "bitcoin",
+            other => other,
+        };
+        let network = Network::from_str(network).map_err(|e| {
+            GatewayError::InvalidMetadata(format!("Invalid network {network}: {e}"))
+        })?;
+        Ok((node_pub_key, alias, network, block_height, synced_to_chain))
+    }
 }
 
 #[derive(Serialize, Deserialize, Debug)]

@@ -8,23 +8,19 @@ use fedimint_core::task::{sleep, TaskGroup};
 use fedimint_core::util::SafeUrl;
 use fedimint_core::{secp256k1, Amount};
 use fedimint_ln_common::PrunedInvoice;
-use futures::stream::BoxStream;
 use tonic::transport::{Channel, Endpoint};
 use tonic::Request;
 use tracing::info;
 
-use super::{ChannelInfo, ILnRpcClient, LightningRpcError};
+use super::{ChannelInfo, ILnRpcClient, LightningRpcError, RouteHtlcStream};
 use crate::gateway_lnrpc::gateway_lightning_client::GatewayLightningClient;
 use crate::gateway_lnrpc::{
     self, CloseChannelsWithPeerRequest, CloseChannelsWithPeerResponse, CreateInvoiceRequest,
     CreateInvoiceResponse, EmptyRequest, EmptyResponse, GetFundingAddressResponse,
-    GetNodeInfoResponse, GetRouteHintsRequest, GetRouteHintsResponse, InterceptHtlcRequest,
-    InterceptHtlcResponse, OpenChannelRequest, PayInvoiceRequest, PayInvoiceResponse,
-    PayPrunedInvoiceRequest,
+    GetNodeInfoResponse, GetRouteHintsRequest, GetRouteHintsResponse, InterceptHtlcResponse,
+    OpenChannelRequest, PayInvoiceRequest, PayInvoiceResponse, PayPrunedInvoiceRequest,
 };
 use crate::lightning::MAX_LIGHTNING_RETRIES;
-pub type HtlcResult = std::result::Result<InterceptHtlcRequest, tonic::Status>;
-pub type RouteHtlcStream<'a> = BoxStream<'a, HtlcResult>;
 
 /// An `ILnRpcClient` that wraps around `GatewayLightningClient` for
 /// convenience, and makes real RPC requests over the wire to a remote lightning
@@ -147,7 +143,7 @@ impl ILnRpcClient for NetworkLnRpcClient {
 
     async fn route_htlcs<'a>(
         self: Box<Self>,
-        _task_group: &mut TaskGroup,
+        _task_group: &TaskGroup,
     ) -> Result<(RouteHtlcStream<'a>, Arc<dyn ILnRpcClient>), LightningRpcError> {
         let mut client = self.connect().await?;
         let res = client
