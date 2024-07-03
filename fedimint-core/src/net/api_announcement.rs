@@ -1,6 +1,9 @@
 use bitcoin_hashes::{sha256, Hash};
 use fedimint_core::encoding::{Decodable, Encodable};
+use fedimint_core::PeerId;
 use jsonrpsee_core::Serialize;
+use miniscript::ToPublicKey;
+use secp256k1::{Message, Verification};
 use serde::Deserialize;
 
 use crate::util::SafeUrl;
@@ -17,6 +20,13 @@ pub struct ApiAnnouncement {
 pub struct SignedApiAnnouncement {
     pub api_announcement: ApiAnnouncement,
     pub signature: secp256k1::schnorr::Signature,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, Eq, Hash, PartialEq, Encodable, Decodable)]
+pub struct SignedApiAnnouncementSubmission {
+    #[serde(flatten)]
+    pub signed_api_announcement: SignedApiAnnouncement,
+    pub peer_id: PeerId,
 }
 
 impl ApiAnnouncement {
@@ -42,5 +52,18 @@ impl ApiAnnouncement {
             api_announcement: self.clone(),
             signature,
         }
+    }
+}
+
+impl SignedApiAnnouncement {
+    /// Returns true if the signature is valid for the given public key.
+    pub fn verify<C: Verification>(
+        &self,
+        ctx: &secp256k1::Secp256k1<C>,
+        pk: &secp256k1::PublicKey,
+    ) -> bool {
+        let msg: Message = self.api_announcement.tagged_hash().into();
+        ctx.verify_schnorr(&self.signature, &msg, &pk.to_x_only_pubkey())
+            .is_ok()
     }
 }
