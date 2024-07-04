@@ -53,12 +53,13 @@ pub type PartialSig = Vec<u8>;
 
 pub type PegInDescriptor = Descriptor<CompressedPublicKey>;
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, Encodable, Decodable)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Encodable, Decodable)]
 pub enum WalletConsensusItem {
     BlockCount(u32), /* FIXME: use block hash instead, but needs more complicated
                       * * verification logic */
     Feerate(Feerate),
     PegOutSignature(PegOutSignatureItem),
+    PegInMinimum(Amount),
     #[encodable_default]
     Default {
         variant: u64,
@@ -81,6 +82,9 @@ impl std::fmt::Display for WalletConsensusItem {
             }
             WalletConsensusItem::PegOutSignature(sig) => {
                 write!(f, "Wallet PegOut signature for Bitcoin TxId {}", sig.txid)
+            }
+            WalletConsensusItem::PegInMinimum(minimum) => {
+                write!(f, "Wallet Pegin Minimum {minimum}")
             }
             WalletConsensusItem::Default { variant, .. } => {
                 write!(f, "Unknown Wallet CI variant={variant}")
@@ -309,6 +313,8 @@ pub enum WalletInputError {
     PegInAlreadyClaimed,
     #[error("The wallet input version is not supported by this federation")]
     UnknownInputVariant(#[from] UnknownWalletInputVariantError),
+    #[error("The pegin amount is not economically viable for the federation")]
+    PegInUnderMinimum,
 }
 
 #[derive(Debug, Error, Encodable, Decodable, Hash, Clone, Eq, PartialEq)]

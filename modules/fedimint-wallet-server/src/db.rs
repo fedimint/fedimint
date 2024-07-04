@@ -1,4 +1,4 @@
-use bitcoin::{BlockHash, Txid};
+use bitcoin::{Amount, BlockHash, Txid};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::{impl_db_lookup, impl_db_record, PeerId};
 use secp256k1::ecdsa::Signature;
@@ -19,6 +19,7 @@ pub enum DbKeyPrefix {
     PegOutTxSigCi = 0x36,
     PegOutBitcoinOutPoint = 0x37,
     PegOutNonce = 0x38,
+    PegInMinimumVote = 0x39,
 }
 
 impl std::fmt::Display for DbKeyPrefix {
@@ -153,4 +154,21 @@ impl_db_record!(
     key = PegOutNonceKey,
     value = u64,
     db_prefix = DbKeyPrefix::PegOutNonce
+);
+
+#[derive(Clone, Debug, Encodable, Decodable, Serialize)]
+pub struct PegInMinimumVoteKey(pub PeerId);
+
+#[derive(Clone, Debug, Encodable, Decodable)]
+pub struct PegInMinimumVotePrefix;
+
+impl_db_record!(
+    key = PegInMinimumVoteKey,
+    value = Amount,
+    db_prefix = DbKeyPrefix::PegInMinimumVote
+);
+
+impl_db_lookup!(
+    key = PegInMinimumVoteKey,
+    query_prefix = PegInMinimumVotePrefix
 );
