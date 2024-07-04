@@ -253,7 +253,11 @@
 <a href="#253" id="253">253</a>
 <a href="#254" id="254">254</a>
 <a href="#255" id="255">255</a>
-</pre></div><pre class="rust"><code><span class="kw">use </span>std::sync::{Arc, Mutex};
+<a href="#256" id="256">256</a>
+<a href="#257" id="257">257</a>
+<a href="#258" id="258">258</a>
+</pre></div><pre class="rust"><code><span class="kw">use </span>std::sync::atomic::{AtomicU64, Ordering};
+<span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
 
 <span class="kw">use </span>async_stream::stream;
@@ -288,7 +292,7 @@
 </span><span class="kw">pub struct </span>FakeLightningTest {
     <span class="kw">pub </span>gateway_node_pub_key: secp256k1::PublicKey,
     gateway_node_sec_key: secp256k1::SecretKey,
-    amount_sent: Arc&lt;Mutex&lt;u64&gt;&gt;,
+    amount_sent: AtomicU64,
     receiver: mpsc::Receiver&lt;HtlcResult&gt;,
 }
 
@@ -297,7 +301,7 @@
         <span class="macro">info!</span>(target: LOG_TEST, <span class="string">"Setting up fake lightning test fixture"</span>);
         <span class="kw">let </span>ctx = bitcoin::secp256k1::Secp256k1::new();
         <span class="kw">let </span>kp = KeyPair::new(<span class="kw-2">&amp;</span>ctx, <span class="kw-2">&amp;mut </span>OsRng);
-        <span class="kw">let </span>amount_sent = Arc::new(Mutex::new(<span class="number">0</span>));
+        <span class="kw">let </span>amount_sent = AtomicU64::new(<span class="number">0</span>);
         <span class="kw">let </span>(<span class="kw">_</span>, receiver) = mpsc::channel::&lt;HtlcResult&gt;(<span class="number">10</span>);
 
         FakeLightningTest {
@@ -395,7 +399,8 @@
     ) -&gt; <span class="prelude-ty">Result</span>&lt;PayInvoiceResponse, LightningRpcError&gt; {
         <span class="kw">let </span>signed = invoice.invoice.parse::&lt;SignedRawBolt11Invoice&gt;().unwrap();
         <span class="kw">let </span>invoice = Bolt11Invoice::from_signed(signed).unwrap();
-        <span class="kw-2">*</span><span class="self">self</span>.amount_sent.lock().unwrap() += invoice.amount_milli_satoshis().unwrap();
+        <span class="self">self</span>.amount_sent
+            .fetch_add(invoice.amount_milli_satoshis().unwrap(), Ordering::Relaxed);
 
         <span class="kw">if </span><span class="kw-2">*</span>invoice.payment_secret() == PaymentSecret(INVALID_INVOICE_PAYMENT_SECRET) {
             <span class="kw">return </span><span class="prelude-val">Err</span>(LightningRpcError::FailedPayment {
@@ -418,7 +423,8 @@
         _max_delay: u64,
         _max_fee: Amount,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;PayInvoiceResponse, LightningRpcError&gt; {
-        <span class="kw-2">*</span><span class="self">self</span>.amount_sent.lock().unwrap() += invoice.amount.msats;
+        <span class="self">self</span>.amount_sent
+            .fetch_add(invoice.amount.msats, Ordering::Relaxed);
 
         <span class="kw">if </span>invoice.payment_secret == INVALID_INVOICE_PAYMENT_SECRET {
             <span class="kw">return </span><span class="prelude-val">Err</span>(LightningRpcError::FailedPayment {
