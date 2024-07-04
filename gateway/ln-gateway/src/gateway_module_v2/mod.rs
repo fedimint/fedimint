@@ -289,7 +289,20 @@ impl GatewayClientModuleV2 {
             if let Some(GatewayClientStateMachinesV2::Send(state)) = stream.next().await {
                 match state.state {
                     SendSMState::Sending => {}
-                    SendSMState::Claiming(claiming) => return Ok(claiming.preimage),
+                    SendSMState::Claiming(claiming) => {
+                        // This increases latency by one ordering and may eventually be removed;
+                        // however, at the current stage of lnv2 we prioritize the verification of
+                        // correctness above minimum latency.
+                        assert!(
+                            self.client_ctx
+                                .await_primary_module_outputs(operation_id, claiming.outpoints)
+                                .await
+                                .is_ok(),
+                            "Gateway Module V2 failed to claim outgoing contract with preimage"
+                        );
+
+                        return Ok(claiming.preimage);
+                    }
                     SendSMState::Cancelled(cancelled) => {
                         warn!("Outgoing lightning payment is cancelled {:?}", cancelled);
 
