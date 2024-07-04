@@ -256,6 +256,10 @@
 <a href="#256" id="256">256</a>
 <a href="#257" id="257">257</a>
 <a href="#258" id="258">258</a>
+<a href="#259" id="259">259</a>
+<a href="#260" id="260">260</a>
+<a href="#261" id="261">261</a>
+<a href="#262" id="262">262</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::sync::atomic::{AtomicU64, Ordering};
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
@@ -286,7 +290,9 @@
 <span class="kw">use </span>tokio::sync::mpsc;
 <span class="kw">use </span>tracing::info;
 
-<span class="kw">const </span>INVALID_INVOICE_PAYMENT_SECRET: [u8; <span class="number">32</span>] = [<span class="number">212</span>; <span class="number">32</span>];
+<span class="kw">pub const </span>INVALID_INVOICE_PAYMENT_SECRET: [u8; <span class="number">32</span>] = [<span class="number">212</span>; <span class="number">32</span>];
+
+<span class="kw">pub const </span>MOCK_INVOICE_PREIMAGE: [u8; <span class="number">32</span>] = [<span class="number">1</span>; <span class="number">32</span>];
 
 <span class="attr">#[derive(Debug)]
 </span><span class="kw">pub struct </span>FakeLightningTest {
@@ -326,10 +332,11 @@
         expiry_time: <span class="prelude-ty">Option</span>&lt;u64&gt;,
     ) -&gt; ln_gateway::Result&lt;Bolt11Invoice&gt; {
         <span class="kw">let </span>ctx = bitcoin::secp256k1::Secp256k1::new();
+        <span class="kw">let </span>payment_hash = sha256::Hash::hash(<span class="kw-2">&amp;</span>MOCK_INVOICE_PREIMAGE);
 
         <span class="prelude-val">Ok</span>(InvoiceBuilder::new(Currency::Regtest)
             .description(String::new())
-            .payment_hash(sha256::Hash::hash(<span class="kw-2">&amp;</span>[<span class="number">0</span>; <span class="number">32</span>]))
+            .payment_hash(payment_hash)
             .current_timestamp()
             .min_final_cltv_expiry_delta(<span class="number">0</span>)
             .payment_secret(PaymentSecret([<span class="number">0</span>; <span class="number">32</span>]))
@@ -349,13 +356,14 @@
         <span class="kw">let </span>ctx = bitcoin::secp256k1::Secp256k1::new();
         <span class="comment">// Generate fake node keypair
         </span><span class="kw">let </span>kp = KeyPair::new(<span class="kw-2">&amp;</span>ctx, <span class="kw-2">&amp;mut </span>OsRng);
+        <span class="kw">let </span>payment_hash = sha256::Hash::hash(<span class="kw-2">&amp;</span>MOCK_INVOICE_PREIMAGE);
 
         <span class="comment">// `FakeLightningTest` will fail to pay any invoice with
         // `INVALID_INVOICE_DESCRIPTION` in the description of the invoice.
         </span>InvoiceBuilder::new(Currency::Regtest)
             .payee_pub_key(kp.public_key())
             .description(<span class="string">"INVALID INVOICE DESCRIPTION"</span>.to_string())
-            .payment_hash(sha256::Hash::hash(<span class="kw-2">&amp;</span>[<span class="number">0</span>; <span class="number">32</span>]))
+            .payment_hash(payment_hash)
             .current_timestamp()
             .min_final_cltv_expiry_delta(<span class="number">0</span>)
             .payment_secret(PaymentSecret(INVALID_INVOICE_PAYMENT_SECRET))
@@ -409,7 +417,7 @@
         }
 
         <span class="prelude-val">Ok</span>(PayInvoiceResponse {
-            preimage: [<span class="number">0</span>; <span class="number">32</span>].to_vec(),
+            preimage: MOCK_INVOICE_PREIMAGE.to_vec(),
         })
     }
 
@@ -433,7 +441,7 @@
         }
 
         <span class="prelude-val">Ok</span>(PayInvoiceResponse {
-            preimage: [<span class="number">0</span>; <span class="number">32</span>].to_vec(),
+            preimage: MOCK_INVOICE_PREIMAGE.to_vec(),
         })
     }
 

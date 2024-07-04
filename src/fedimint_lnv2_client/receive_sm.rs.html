@@ -135,11 +135,11 @@
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::OutPoint;
 <span class="kw">use </span>fedimint_lnv2_common::contracts::IncomingContract;
-<span class="kw">use </span>fedimint_lnv2_common::{LightningClientContext, LightningInput, LightningInputV0};
+<span class="kw">use </span>fedimint_lnv2_common::{LightningInput, LightningInputV0};
 <span class="kw">use </span>tpe::AggregateDecryptionKey;
 
 <span class="kw">use </span><span class="kw">crate</span>::api::LnFederationApi;
-<span class="kw">use </span><span class="kw">crate</span>::LightningClientStateMachines;
+<span class="kw">use crate</span>::{LightningClientContext, LightningClientStateMachines};
 
 <span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
 </span><span class="kw">pub struct </span>ReceiveStateMachine {

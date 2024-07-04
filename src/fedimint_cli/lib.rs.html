@@ -1681,7 +1681,7 @@ Examples:
             .with_module(MintClientInit)
             .with_module(WalletClientInit::default())
             .with_module(MetaClientInit)
-            .with_module(fedimint_lnv2_client::LightningClientInit)
+            .with_module(fedimint_lnv2_client::LightningClientInit::default())
     }
 
     <span class="kw">pub async fn </span>run(<span class="kw-2">&amp;mut </span><span class="self">self</span>) {

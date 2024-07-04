@@ -937,19 +937,6 @@
 <a href="#937" id="937">937</a>
 <a href="#938" id="938">938</a>
 <a href="#939" id="939">939</a>
-<a href="#940" id="940">940</a>
-<a href="#941" id="941">941</a>
-<a href="#942" id="942">942</a>
-<a href="#943" id="943">943</a>
-<a href="#944" id="944">944</a>
-<a href="#945" id="945">945</a>
-<a href="#946" id="946">946</a>
-<a href="#947" id="947">947</a>
-<a href="#948" id="948">948</a>
-<a href="#949" id="949">949</a>
-<a href="#950" id="950">950</a>
-<a href="#951" id="951">951</a>
-<a href="#952" id="952">952</a>
 </pre></div><pre class="rust"><code><span class="attr">#![warn(clippy::pedantic)]
 #![allow(clippy::missing_errors_doc)]
 #![allow(clippy::missing_panics_doc)]
@@ -962,8 +949,10 @@
 <span class="kw">mod </span>receive_sm;
 <span class="kw">mod </span>send_sm;
 
+<span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::sync::Arc;
 
+<span class="kw">use </span>api::{GatewayConnection, RealGatewayConnection};
 <span class="kw">use </span>async_stream::stream;
 <span class="kw">use </span>bitcoin::hashes::{sha256, Hash};
 <span class="kw">use </span>fedimint_api_client::api::DynModuleApi;
@@ -972,11 +961,11 @@
 <span class="kw">use </span>fedimint_client::module::{ClientContext, ClientModule, IClientModule};
 <span class="kw">use </span>fedimint_client::oplog::UpdateStreamOrOutcome;
 <span class="kw">use </span>fedimint_client::sm::util::MapStateTransitions;
-<span class="kw">use </span>fedimint_client::sm::{DynState, ModuleNotifier, State, StateTransition};
+<span class="kw">use </span>fedimint_client::sm::{Context, DynState, ModuleNotifier, State, StateTransition};
 <span class="kw">use </span>fedimint_client::transaction::{ClientOutput, TransactionBuilder};
 <span class="kw">use </span>fedimint_client::{sm_enum_variant_translation, DynGlobalClientContext};
 <span class="kw">use </span>fedimint_core::config::FederationId;
-<span class="kw">use </span>fedimint_core::core::{IntoDynInstance, ModuleInstanceId, OperationId};
+<span class="kw">use </span>fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, OperationId};
 <span class="kw">use </span>fedimint_core::db::{DatabaseTransaction, DatabaseVersion};
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::module::{
@@ -984,12 +973,11 @@
 };
 <span class="kw">use </span>fedimint_core::time::duration_since_epoch;
 <span class="kw">use </span>fedimint_core::util::SafeUrl;
-<span class="kw">use </span>fedimint_core::{apply, async_trait_maybe_send, Amount, OutPoint, TransactionId};
+<span class="kw">use </span>fedimint_core::{apply, async_trait_maybe_send, Amount, OutPoint, PeerId, TransactionId};
 <span class="kw">use </span>fedimint_lnv2_common::config::LightningClientConfig;
 <span class="kw">use </span>fedimint_lnv2_common::contracts::{IncomingContract, OutgoingContract};
 <span class="kw">use </span>fedimint_lnv2_common::{
-    LightningClientContext, LightningCommonInit, LightningModuleTypes, LightningOutput,
-    LightningOutputV0,
+    LightningCommonInit, LightningModuleTypes, LightningOutput, LightningOutputV0,
 };
 <span class="kw">use </span>futures::StreamExt;
 <span class="kw">use </span>lightning_invoice::Bolt11Invoice;
@@ -997,7 +985,7 @@
 <span class="kw">use </span>secp256k1::{ecdh, KeyPair, PublicKey, Scalar, SecretKey};
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>thiserror::Error;
-<span class="kw">use </span>tpe::{derive_agg_decryption_key, AggregateDecryptionKey};
+<span class="kw">use </span>tpe::{derive_agg_decryption_key, AggregateDecryptionKey, AggregatePublicKey, PublicKeyShare};
 
 <span class="kw">use </span><span class="kw">crate</span>::api::LnFederationApi;
 <span class="kw">use </span><span class="kw">crate</span>::receive_sm::{ReceiveSMCommon, ReceiveSMState, ReceiveStateMachine};
@@ -1169,7 +1157,17 @@
 }
 
 <span class="attr">#[derive(Debug, Clone)]
-</span><span class="kw">pub struct </span>LightningClientInit;
+</span><span class="kw">pub struct </span>LightningClientInit {
+    <span class="kw">pub </span>gateway_conn: Arc&lt;<span class="kw">dyn </span>GatewayConnection + Send + Sync&gt;,
+}
+
+<span class="kw">impl </span>Default <span class="kw">for </span>LightningClientInit {
+    <span class="kw">fn </span>default() -&gt; <span class="self">Self </span>{
+        LightningClientInit {
+            gateway_conn: Arc::new(RealGatewayConnection),
+        }
+    }
+}
 
 <span class="kw">impl </span>ModuleInit <span class="kw">for </span>LightningClientInit {
     <span class="kw">type </span>Common = LightningCommonInit;
@@ -1205,9 +1203,21 @@
                 .clone()
                 .to_secp_key(secp256k1::SECP256K1),
             admin_auth: args.admin_auth().cloned(),
+            gateway_conn: <span class="self">self</span>.gateway_conn.clone(),
         })
     }
 }
+
+<span class="attr">#[derive(Debug, Clone)]
+</span><span class="kw">pub struct </span>LightningClientContext {
+    <span class="kw">pub </span>decoder: Decoder,
+    <span class="kw">pub </span>federation_id: FederationId,
+    <span class="kw">pub </span>tpe_agg_pk: AggregatePublicKey,
+    <span class="kw">pub </span>tpe_pks: BTreeMap&lt;PeerId, PublicKeyShare&gt;,
+    <span class="kw">pub </span>gateway_conn: Arc&lt;<span class="kw">dyn </span>GatewayConnection + Send + Sync&gt;,
+}
+
+<span class="kw">impl </span>Context <span class="kw">for </span>LightningClientContext {}
 
 <span class="doccomment">/// Client side lightning module
 ///
@@ -1222,6 +1232,7 @@
     <span class="kw">pub </span>module_api: DynModuleApi,
     <span class="kw">pub </span>keypair: KeyPair,
     <span class="kw">pub </span>admin_auth: <span class="prelude-ty">Option</span>&lt;ApiAuth&gt;,
+    <span class="kw">pub </span>gateway_conn: Arc&lt;<span class="kw">dyn </span>GatewayConnection + Send + Sync&gt;,
 }
 
 <span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
@@ -1238,6 +1249,7 @@
             federation_id: <span class="self">self</span>.federation_id,
             tpe_agg_pk: <span class="self">self</span>.cfg.tpe_agg_pk,
             tpe_pks: <span class="self">self</span>.cfg.tpe_pks.clone(),
+            gateway_conn: <span class="self">self</span>.gateway_conn.clone(),
         }
     }
 
@@ -1269,26 +1281,6 @@
 }
 
 <span class="kw">impl </span>LightningClientModule {
-    <span class="kw">pub async fn </span>fetch_routing_info(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        gateway_api: SafeUrl,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;RoutingInfo&gt;, GatewayError&gt; {
-        reqwest::Client::new()
-            .post(
-                gateway_api
-                    .join(<span class="string">"routing_info"</span>)
-                    .expect(<span class="string">"'routing_info' contains no invalid characters for a URL"</span>)
-                    .as_str(),
-            )
-            .json(<span class="kw-2">&amp;</span><span class="self">self</span>.federation_id)
-            .send()
-            .<span class="kw">await
-            </span>.map_err(|e| GatewayError::Unreachable(e.to_string()))<span class="question-mark">?
-            </span>.json::&lt;<span class="prelude-ty">Option</span>&lt;RoutingInfo&gt;&gt;()
-            .<span class="kw">await
-            </span>.map_err(|e| GatewayError::InvalidJsonResponse(e.to_string()))
-    }
-
     <span class="kw">pub async fn </span>send(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         gateway_api: SafeUrl,
@@ -1331,7 +1323,8 @@
             .keypair(secp256k1::SECP256K1);
 
         <span class="kw">let </span>payment_info = <span class="self">self
-            </span>.fetch_routing_info(gateway_api.clone())
+            </span>.gateway_conn
+            .fetch_routing_info(gateway_api.clone(), <span class="kw-2">&amp;</span><span class="self">self</span>.federation_id)
             .<span class="kw">await
             </span>.map_err(SendPaymentError::GatewayError)<span class="question-mark">?
             </span>.ok_or(SendPaymentError::UnknownFederation)<span class="question-mark">?</span>;
@@ -1593,7 +1586,8 @@
             .to_byte_array();
 
         <span class="kw">let </span>payment_info = <span class="self">self
-            </span>.fetch_routing_info(gateway_api.clone())
+            </span>.gateway_conn
+            .fetch_routing_info(gateway_api.clone(), <span class="kw-2">&amp;</span><span class="self">self</span>.federation_id)
             .<span class="kw">await
             </span>.map_err(FetchInvoiceError::GatewayError)<span class="question-mark">?
             </span>.ok_or(FetchInvoiceError::UnknownFederation)<span class="question-mark">?</span>;
@@ -1637,7 +1631,8 @@
         };
 
         <span class="kw">let </span>invoice = <span class="self">self
-            </span>.fetch_invoice(gateway_api, payload)
+            </span>.gateway_conn
+            .fetch_invoice(gateway_api, payload)
             .<span class="kw">await
             </span>.map_err(FetchInvoiceError::GatewayError)<span class="question-mark">?
             </span>.map_err(FetchInvoiceError::CreateInvoiceError)<span class="question-mark">?</span>;
@@ -1651,27 +1646,6 @@
         }
 
         <span class="prelude-val">Ok</span>((contract, preimage, invoice))
-    }
-
-    <span class="kw">async fn </span>fetch_invoice(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        gateway_api: SafeUrl,
-        payload: CreateBolt11InvoicePayload,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Result</span>&lt;Bolt11Invoice, String&gt;, GatewayError&gt; {
-        reqwest::Client::new()
-            .post(
-                gateway_api
-                    .join(<span class="string">"create_bolt11_invoice"</span>)
-                    .expect(<span class="string">"'create_bolt11_invoice' contains no invalid characters for a URL"</span>)
-                    .as_str(),
-            )
-            .json(<span class="kw-2">&amp;</span>payload)
-            .send()
-            .<span class="kw">await
-            </span>.map_err(|e| GatewayError::Unreachable(e.to_string()))<span class="question-mark">?
-            </span>.json::&lt;<span class="prelude-ty">Result</span>&lt;Bolt11Invoice, String&gt;&gt;()
-            .<span class="kw">await
-            </span>.map_err(|e| GatewayError::InvalidJsonResponse(e.to_string()))
     }
 
     <span class="kw">pub async fn </span>await_incoming_contract(<span class="kw-2">&amp;</span><span class="self">self</span>, contract: IncomingContract) -&gt; bool {

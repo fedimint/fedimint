@@ -293,32 +293,6 @@
 <a href="#293" id="293">293</a>
 <a href="#294" id="294">294</a>
 <a href="#295" id="295">295</a>
-<a href="#296" id="296">296</a>
-<a href="#297" id="297">297</a>
-<a href="#298" id="298">298</a>
-<a href="#299" id="299">299</a>
-<a href="#300" id="300">300</a>
-<a href="#301" id="301">301</a>
-<a href="#302" id="302">302</a>
-<a href="#303" id="303">303</a>
-<a href="#304" id="304">304</a>
-<a href="#305" id="305">305</a>
-<a href="#306" id="306">306</a>
-<a href="#307" id="307">307</a>
-<a href="#308" id="308">308</a>
-<a href="#309" id="309">309</a>
-<a href="#310" id="310">310</a>
-<a href="#311" id="311">311</a>
-<a href="#312" id="312">312</a>
-<a href="#313" id="313">313</a>
-<a href="#314" id="314">314</a>
-<a href="#315" id="315">315</a>
-<a href="#316" id="316">316</a>
-<a href="#317" id="317">317</a>
-<a href="#318" id="318">318</a>
-<a href="#319" id="319">319</a>
-<a href="#320" id="320">320</a>
-<a href="#321" id="321">321</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
 
@@ -333,15 +307,13 @@
 <span class="kw">use </span>fedimint_core::util::SafeUrl;
 <span class="kw">use </span>fedimint_core::{OutPoint, TransactionId};
 <span class="kw">use </span>fedimint_lnv2_common::contracts::OutgoingContract;
-<span class="kw">use </span>fedimint_lnv2_common::{
-    LightningClientContext, LightningInput, LightningInputV0, OutgoingWitness,
-};
+<span class="kw">use </span>fedimint_lnv2_common::{LightningInput, LightningInputV0, OutgoingWitness};
 <span class="kw">use </span>secp256k1::schnorr::Signature;
 <span class="kw">use </span>secp256k1::KeyPair;
 <span class="kw">use </span>tracing::error;
 
 <span class="kw">use </span><span class="kw">crate</span>::api::LnFederationApi;
-<span class="kw">use crate</span>::{LightningClientStateMachines, LightningInvoice, SendPaymentPayload};
+<span class="kw">use crate</span>::{LightningClientContext, LightningClientStateMachines, LightningInvoice};
 
 <span class="kw">const </span>RETRY_DELAY: Duration = Duration::from_secs(<span class="number">1</span>);
 
@@ -423,6 +395,7 @@
                             <span class="self">self</span>.common.contract.clone(),
                             <span class="self">self</span>.common.invoice.clone(),
                             <span class="self">self</span>.common.refund_keypair,
+                            context.clone(),
                         ),
                         <span class="kw">move </span>|dbtx, response, old_state| {
                             Box::pin(<span class="self">Self</span>::transition_gateway_send_payment(
@@ -481,16 +454,19 @@
         contract: OutgoingContract,
         invoice: LightningInvoice,
         refund_keypair: KeyPair,
+        context: LightningClientContext,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;[u8; <span class="number">32</span>], Signature&gt; {
         <span class="kw">loop </span>{
-            <span class="kw">match </span><span class="self">Self</span>::try_gateway_send_payment(
-                gateway_api.clone(),
-                federation_id,
-                contract.clone(),
-                invoice.clone(),
-                refund_keypair.sign_schnorr(invoice.consensus_hash::&lt;sha256::Hash&gt;().into()),
-            )
-            .<span class="kw">await
+            <span class="kw">match </span>context
+                .gateway_conn
+                .try_gateway_send_payment(
+                    gateway_api.clone(),
+                    federation_id,
+                    contract.clone(),
+                    invoice.clone(),
+                    refund_keypair.sign_schnorr(invoice.consensus_hash::&lt;sha256::Hash&gt;().into()),
+                )
+                .<span class="kw">await
             </span>{
                 <span class="prelude-val">Ok</span>(gateway_response) =&gt; <span class="kw">match </span>gateway_response {
                     <span class="prelude-val">Ok</span>(gateway_response) =&gt; {
@@ -532,34 +508,6 @@
 
             sleep(RETRY_DELAY).<span class="kw">await</span>;
         }
-    }
-
-    <span class="kw">async fn </span>try_gateway_send_payment(
-        gateway_api: SafeUrl,
-        federation_id: FederationId,
-        contract: OutgoingContract,
-        invoice: LightningInvoice,
-        auth: Signature,
-    ) -&gt; anyhow::Result&lt;<span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Result</span>&lt;[u8; <span class="number">32</span>], Signature&gt;, String&gt;&gt; {
-        <span class="kw">let </span>result = reqwest::Client::new()
-            .post(
-                gateway_api
-                    .join(<span class="string">"send_payment"</span>)
-                    .expect(<span class="string">"'send_payment' contains no invalid characters for a URL"</span>)
-                    .as_str(),
-            )
-            .json(<span class="kw-2">&amp;</span>SendPaymentPayload {
-                federation_id,
-                contract,
-                invoice,
-                auth,
-            })
-            .send()
-            .<span class="kw">await</span><span class="question-mark">?
-            </span>.json::&lt;<span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Result</span>&lt;[u8; <span class="number">32</span>], Signature&gt;, String&gt;&gt;()
-            .<span class="kw">await</span><span class="question-mark">?</span>;
-
-        <span class="prelude-val">Ok</span>(result)
     }
 
     <span class="kw">async fn </span>transition_gateway_send_payment(
