@@ -62,7 +62,7 @@ use fedimint_logging::LOG_CLIENT_MODULE_WALLET;
 use fedimint_wallet_common::config::{FeeConsensus, WalletClientConfig};
 use fedimint_wallet_common::tweakable::Tweakable;
 pub use fedimint_wallet_common::*;
-use futures::{Stream, StreamExt};
+use futures::{Future, Stream, StreamExt};
 use rand::{thread_rng, Rng};
 use secp256k1::{All, KeyPair, Secp256k1, SECP256K1};
 use serde::{Deserialize, Serialize};
@@ -244,32 +244,21 @@ impl ClientModuleInit for WalletClientInit {
             .await
             .unwrap_or_default()
         {
-            debug!(target: LOG_CLIENT_MODULE_WALLET, max_gap=MAX_GAP, "Recovery already complete before");
+            debug!(target: LOG_CLIENT_MODULE_WALLET, max_gap=RECOVER_MAX_GAP, "Recovery already complete before");
             return Ok(());
         }
 
-        let start_tweak_idx = match snapshot {
+        #[allow(clippy::single_match_else)]
+        let previous_next_unused_idx = match snapshot {
             Some(WalletModuleBackup::V0(backup)) => {
                 debug!(target: LOG_CLIENT_MODULE_WALLET, "Restoring starting from an existing backup");
 
-                Some(backup.next_tweak_idx)
+                backup.next_tweak_idx
             }
-            _ => None,
-        };
-
-        /// We will check this many addresses ahead since last actually used
-        /// one before we give up
-        const MAX_GAP: u64 = 10;
-        /// New client will start deriving new addresses from last_used one
-        /// plus that many idexes. This should be less than
-        /// MAX_GAP, but more than 0: We want to make sure we detect
-        /// deposits that might have been made after multiple re-derivation,
-        /// but we want also to avoid accidental address re-use.
-        const NUM_IDX_SKIP_AFTER_LAST_USED: u64 = 3;
-
-        let data = WalletClientModuleData {
-            cfg: args.cfg().clone(),
-            module_root_secret: args.module_root_secret().clone(),
+            _ => {
+                debug!(target: LOG_CLIENT_MODULE_WALLET, "Restoring without an existing backup");
+                TweakIdx(0)
+            }
         };
 
         let rpc_config = self
@@ -278,46 +267,37 @@ impl ClientModuleInit for WalletClientInit {
             .unwrap_or(WalletClientModule::get_rpc_config(args.cfg()));
 
         let btc_rpc = create_bitcoind(&rpc_config, TaskGroup::new().make_handle())?;
+        let btc_rpc = &btc_rpc;
 
-        let mut last_used_idx = start_tweak_idx;
-        let mut cur_tweak_idx = start_tweak_idx.unwrap_or_default();
-        let mut tweak_idxes_with_pegins = BTreeSet::new();
+        let data = WalletClientModuleData {
+            cfg: args.cfg().clone(),
+            module_root_secret: args.module_root_secret().clone(),
+        };
+        let data = &data;
 
-        debug!(target: LOG_CLIENT_MODULE_WALLET, max_gap=MAX_GAP, ?start_tweak_idx, "Checking history");
-
-        let new_start_tweak_idx = loop {
-            let gap_since_last_used = cur_tweak_idx - last_used_idx.unwrap_or_default();
-
+        let RecoverScanOutcome { last_used_idx, new_start_idx, tweak_idxes_with_pegins} = recover_scan_idxes_for_activity(previous_next_unused_idx, move |cur_tweak_idx: TweakIdx| async move {
             args.update_recovery_progress(RecoveryProgress {
                 complete: u32::try_from(cur_tweak_idx.0).unwrap_or(u32::MAX),
-                total: u32::try_from(cur_tweak_idx.0.saturating_add(MAX_GAP)).unwrap_or(u32::MAX),
+                total: u32::try_from(cur_tweak_idx.0.saturating_add(RECOVER_MAX_GAP)).unwrap_or(u32::MAX),
             });
 
-            if MAX_GAP < gap_since_last_used {
-                break last_used_idx
-                    .unwrap_or_default()
-                    .advance(NUM_IDX_SKIP_AFTER_LAST_USED);
-            }
+        let (script, address, _tweak_key, _operation_id) =
+            data.derive_peg_in_script(cur_tweak_idx);
 
-            let (script, address, _tweak_key, _operation_id) =
-                data.derive_peg_in_script(cur_tweak_idx);
             btc_rpc.watch_script_history(&script).await?;
             let history = btc_rpc.get_script_history(&script).await?;
 
             debug!(target: LOG_CLIENT_MODULE_WALLET, %cur_tweak_idx, %address, history_len=history.len(), "Checked address");
-            if !history.is_empty() {
-                last_used_idx = Some(cur_tweak_idx);
-                tweak_idxes_with_pegins.insert(cur_tweak_idx);
-            }
-            cur_tweak_idx = cur_tweak_idx.next();
-        };
+
+            Ok(history)
+        }).await?;
 
         let now = fedimint_core::time::now();
         let mut dbtx = db.begin_transaction().await;
 
         let mut tweak_idx = TweakIdx(0);
 
-        while tweak_idx < new_start_tweak_idx {
+        while tweak_idx < new_start_idx {
             let (_script, _address, _tweak_key, operation_id) =
                 data.derive_peg_in_script(tweak_idx);
             dbtx.insert_new_entry(
@@ -341,13 +321,13 @@ impl ClientModuleInit for WalletClientInit {
             tweak_idx = tweak_idx.next();
         }
 
-        dbtx.insert_new_entry(&NextPegInTweakIndexKey, &new_start_tweak_idx)
+        dbtx.insert_new_entry(&NextPegInTweakIndexKey, &new_start_idx)
             .await;
         dbtx.insert_entry(&RecoveryFinalizedKey, &true).await;
 
         dbtx.commit_tx().await;
 
-        debug!(target: LOG_CLIENT_MODULE_WALLET, %new_start_tweak_idx, ?last_used_idx, "Recovery complete");
+        debug!(target: LOG_CLIENT_MODULE_WALLET, %new_start_idx, ?last_used_idx, "Recovery complete");
         Ok(())
     }
 }
@@ -1081,5 +1061,186 @@ impl State for WalletClientStates {
             WalletClientStates::Deposit(sm) => sm.operation_id(),
             WalletClientStates::Withdraw(sm) => sm.operation_id(),
         }
+    }
+}
+
+/// We will check this many addresses after last actually used
+/// one before we give up
+const RECOVER_MAX_GAP: u64 = 10;
+/// New client will start deriving new addresses from last used one
+/// plus that many idexes. This should be (much) less than
+/// `MAX_GAP`, but more than 0: We want to make sure we detect
+/// deposits that might have been made after multiple successive recoveries,
+/// but we want also to avoid accidental address re-use.
+const RECOVER_NUM_IDX_ADD_TO_LAST_USED: u64 = RECOVER_MAX_GAP / 4 + 1;
+
+#[derive(Clone, PartialEq, Eq, Debug)]
+struct RecoverScanOutcome {
+    last_used_idx: Option<TweakIdx>,
+    new_start_idx: TweakIdx,
+    tweak_idxes_with_pegins: BTreeSet<TweakIdx>,
+}
+
+/// A part of [`WalletClientInit::recover`] extracted out to be easy to test,
+/// as a side-effect free.
+async fn recover_scan_idxes_for_activity<F, FF, T>(
+    previous_next_unused_idx: TweakIdx,
+    check_addr_history: F,
+) -> anyhow::Result<RecoverScanOutcome>
+where
+    F: Fn(TweakIdx) -> FF,
+    FF: Future<Output = anyhow::Result<Vec<T>>>,
+{
+    let mut last_used_idx = if previous_next_unused_idx == TweakIdx::ZERO {
+        None
+    } else {
+        Some(
+            previous_next_unused_idx
+                .prev()
+                .expect("Check for not being zero"),
+        )
+    };
+    let mut cur_tweak_idx = previous_next_unused_idx;
+    let mut tweak_idxes_with_pegins = BTreeSet::new();
+
+    let new_start_idx = loop {
+        let gap_since_last_used = cur_tweak_idx - last_used_idx.unwrap_or_default();
+
+        if RECOVER_MAX_GAP <= gap_since_last_used {
+            break last_used_idx
+                .unwrap_or_default()
+                .advance(RECOVER_NUM_IDX_ADD_TO_LAST_USED);
+        }
+
+        let history = check_addr_history(cur_tweak_idx).await?;
+
+        if !history.is_empty() {
+            last_used_idx = Some(cur_tweak_idx);
+            tweak_idxes_with_pegins.insert(cur_tweak_idx);
+        }
+        cur_tweak_idx = cur_tweak_idx.next();
+    };
+
+    Ok(RecoverScanOutcome {
+        last_used_idx,
+        new_start_idx,
+        tweak_idxes_with_pegins,
+    })
+}
+
+#[cfg(all(test, not(target_family = "wasm")))]
+mod tests {
+    use std::sync::atomic::{AtomicBool, Ordering};
+
+    use super::*;
+
+    #[allow(clippy::too_many_lines)] // shut-up clippy, it's a test
+    #[tokio::test(flavor = "multi_thread")]
+    async fn sanity_test_recover_inner() {
+        {
+            let last_checked = AtomicBool::new(false);
+            let last_checked = &last_checked;
+            assert_eq!(
+                recover_scan_idxes_for_activity(TweakIdx(0), |cur_idx| async move {
+                    Ok(match cur_idx {
+                        TweakIdx(9) => {
+                            last_checked.store(true, Ordering::SeqCst);
+                            vec![]
+                        }
+                        TweakIdx(10) => panic!("Shouldn't happen"),
+                        TweakIdx(11) => {
+                            vec![0usize] /* just for type inference */
+                        }
+                        _ => vec![],
+                    })
+                })
+                .await
+                .unwrap(),
+                RecoverScanOutcome {
+                    last_used_idx: None,
+                    new_start_idx: TweakIdx(RECOVER_NUM_IDX_ADD_TO_LAST_USED),
+                    tweak_idxes_with_pegins: BTreeSet::from([])
+                }
+            );
+            assert!(last_checked.load(Ordering::SeqCst));
+        }
+
+        {
+            let last_checked = AtomicBool::new(false);
+            let last_checked = &last_checked;
+            assert_eq!(
+                recover_scan_idxes_for_activity(TweakIdx(10), |cur_idx| async move {
+                    Ok(match cur_idx {
+                        TweakIdx(10) => vec![()],
+                        TweakIdx(19) => {
+                            last_checked.store(true, Ordering::SeqCst);
+                            vec![]
+                        }
+                        TweakIdx(20) => panic!("Shouldn't happen"),
+                        _ => vec![],
+                    })
+                })
+                .await
+                .unwrap(),
+                RecoverScanOutcome {
+                    last_used_idx: Some(TweakIdx(10)),
+                    new_start_idx: TweakIdx(10 + RECOVER_NUM_IDX_ADD_TO_LAST_USED),
+                    tweak_idxes_with_pegins: BTreeSet::from([TweakIdx(10)])
+                }
+            );
+            assert!(last_checked.load(Ordering::SeqCst));
+        }
+
+        assert_eq!(
+            recover_scan_idxes_for_activity(TweakIdx(0), |cur_idx| async move {
+                Ok(match cur_idx {
+                    TweakIdx(6 | 15) => vec![()],
+                    _ => vec![],
+                })
+            })
+            .await
+            .unwrap(),
+            RecoverScanOutcome {
+                last_used_idx: Some(TweakIdx(15)),
+                new_start_idx: TweakIdx(15 + RECOVER_NUM_IDX_ADD_TO_LAST_USED),
+                tweak_idxes_with_pegins: BTreeSet::from([TweakIdx(6), TweakIdx(15)])
+            }
+        );
+        assert_eq!(
+            recover_scan_idxes_for_activity(TweakIdx(10), |cur_idx| async move {
+                Ok(match cur_idx {
+                    TweakIdx(8) => {
+                        vec![()] /* for type inference only */
+                    }
+                    TweakIdx(9) => {
+                        panic!("Shouldn't happen")
+                    }
+                    _ => vec![],
+                })
+            })
+            .await
+            .unwrap(),
+            RecoverScanOutcome {
+                last_used_idx: Some(TweakIdx(9)),
+                new_start_idx: TweakIdx(9 + RECOVER_NUM_IDX_ADD_TO_LAST_USED),
+                tweak_idxes_with_pegins: BTreeSet::from([])
+            }
+        );
+        assert_eq!(
+            recover_scan_idxes_for_activity(TweakIdx(10), |cur_idx| async move {
+                Ok(match cur_idx {
+                    TweakIdx(9) => panic!("Shouldn't happen"),
+                    TweakIdx(15) => vec![()],
+                    _ => vec![],
+                })
+            })
+            .await
+            .unwrap(),
+            RecoverScanOutcome {
+                last_used_idx: Some(TweakIdx(15)),
+                new_start_idx: TweakIdx(15 + RECOVER_NUM_IDX_ADD_TO_LAST_USED),
+                tweak_idxes_with_pegins: BTreeSet::from([TweakIdx(15)])
+            }
+        );
     }
 }
