@@ -10,8 +10,10 @@ mod cli;
 mod receive_sm;
 mod send_sm;
 
+use std::collections::BTreeMap;
 use std::sync::Arc;
 
+use api::{GatewayConnection, RealGatewayConnection};
 use async_stream::stream;
 use bitcoin::hashes::{sha256, Hash};
 use fedimint_api_client::api::DynModuleApi;
@@ -20,11 +22,11 @@ use fedimint_client::module::recovery::NoModuleBackup;
 use fedimint_client::module::{ClientContext, ClientModule, IClientModule};
 use fedimint_client::oplog::UpdateStreamOrOutcome;
 use fedimint_client::sm::util::MapStateTransitions;
-use fedimint_client::sm::{DynState, ModuleNotifier, State, StateTransition};
+use fedimint_client::sm::{Context, DynState, ModuleNotifier, State, StateTransition};
 use fedimint_client::transaction::{ClientOutput, TransactionBuilder};
 use fedimint_client::{sm_enum_variant_translation, DynGlobalClientContext};
 use fedimint_core::config::FederationId;
-use fedimint_core::core::{IntoDynInstance, ModuleInstanceId, OperationId};
+use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, OperationId};
 use fedimint_core::db::{DatabaseTransaction, DatabaseVersion};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::{
@@ -32,12 +34,11 @@ use fedimint_core::module::{
 };
 use fedimint_core::time::duration_since_epoch;
 use fedimint_core::util::SafeUrl;
-use fedimint_core::{apply, async_trait_maybe_send, Amount, OutPoint, TransactionId};
+use fedimint_core::{apply, async_trait_maybe_send, Amount, OutPoint, PeerId, TransactionId};
 use fedimint_lnv2_common::config::LightningClientConfig;
 use fedimint_lnv2_common::contracts::{IncomingContract, OutgoingContract};
 use fedimint_lnv2_common::{
-    LightningClientContext, LightningCommonInit, LightningModuleTypes, LightningOutput,
-    LightningOutputV0,
+    LightningCommonInit, LightningModuleTypes, LightningOutput, LightningOutputV0,
 };
 use futures::StreamExt;
 use lightning_invoice::Bolt11Invoice;
@@ -45,7 +46,7 @@ use secp256k1::schnorr::Signature;
 use secp256k1::{ecdh, KeyPair, PublicKey, Scalar, SecretKey};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
-use tpe::{derive_agg_decryption_key, AggregateDecryptionKey};
+use tpe::{derive_agg_decryption_key, AggregateDecryptionKey, AggregatePublicKey, PublicKeyShare};
 
 use crate::api::LnFederationApi;
 use crate::receive_sm::{ReceiveSMCommon, ReceiveSMState, ReceiveStateMachine};
@@ -217,7 +218,17 @@ impl PaymentFee {
 }
 
 #[derive(Debug, Clone)]
-pub struct LightningClientInit;
+pub struct LightningClientInit {
+    pub gateway_conn: Arc<dyn GatewayConnection + Send + Sync>,
+}
+
+impl Default for LightningClientInit {
+    fn default() -> Self {
+        LightningClientInit {
+            gateway_conn: Arc::new(RealGatewayConnection),
+        }
+    }
+}
 
 impl ModuleInit for LightningClientInit {
     type Common = LightningCommonInit;
@@ -253,9 +264,21 @@ impl ClientModuleInit for LightningClientInit {
                 .clone()
                 .to_secp_key(secp256k1::SECP256K1),
             admin_auth: args.admin_auth().cloned(),
+            gateway_conn: self.gateway_conn.clone(),
         })
     }
 }
+
+#[derive(Debug, Clone)]
+pub struct LightningClientContext {
+    pub decoder: Decoder,
+    pub federation_id: FederationId,
+    pub tpe_agg_pk: AggregatePublicKey,
+    pub tpe_pks: BTreeMap<PeerId, PublicKeyShare>,
+    pub gateway_conn: Arc<dyn GatewayConnection + Send + Sync>,
+}
+
+impl Context for LightningClientContext {}
 
 /// Client side lightning module
 ///
@@ -270,6 +293,7 @@ pub struct LightningClientModule {
     pub module_api: DynModuleApi,
     pub keypair: KeyPair,
     pub admin_auth: Option<ApiAuth>,
+    pub gateway_conn: Arc<dyn GatewayConnection + Send + Sync>,
 }
 
 #[apply(async_trait_maybe_send!)]
@@ -286,6 +310,7 @@ impl ClientModule for LightningClientModule {
             federation_id: self.federation_id,
             tpe_agg_pk: self.cfg.tpe_agg_pk,
             tpe_pks: self.cfg.tpe_pks.clone(),
+            gateway_conn: self.gateway_conn.clone(),
         }
     }
 
@@ -317,26 +342,6 @@ fn generate_ephemeral_tweak(static_pk: PublicKey) -> ([u8; 32], PublicKey) {
 }
 
 impl LightningClientModule {
-    pub async fn fetch_routing_info(
-        &self,
-        gateway_api: SafeUrl,
-    ) -> Result<Option<RoutingInfo>, GatewayError> {
-        reqwest::Client::new()
-            .post(
-                gateway_api
-                    .join("routing_info")
-                    .expect("'routing_info' contains no invalid characters for a URL")
-                    .as_str(),
-            )
-            .json(&self.federation_id)
-            .send()
-            .await
-            .map_err(|e| GatewayError::Unreachable(e.to_string()))?
-            .json::<Option<RoutingInfo>>()
-            .await
-            .map_err(|e| GatewayError::InvalidJsonResponse(e.to_string()))
-    }
-
     pub async fn send(
         &self,
         gateway_api: SafeUrl,
@@ -379,7 +384,8 @@ impl LightningClientModule {
             .keypair(secp256k1::SECP256K1);
 
         let payment_info = self
-            .fetch_routing_info(gateway_api.clone())
+            .gateway_conn
+            .fetch_routing_info(gateway_api.clone(), &self.federation_id)
             .await
             .map_err(SendPaymentError::GatewayError)?
             .ok_or(SendPaymentError::UnknownFederation)?;
@@ -641,7 +647,8 @@ impl LightningClientModule {
             .to_byte_array();
 
         let payment_info = self
-            .fetch_routing_info(gateway_api.clone())
+            .gateway_conn
+            .fetch_routing_info(gateway_api.clone(), &self.federation_id)
             .await
             .map_err(FetchInvoiceError::GatewayError)?
             .ok_or(FetchInvoiceError::UnknownFederation)?;
@@ -685,6 +692,7 @@ impl LightningClientModule {
         };
 
         let invoice = self
+            .gateway_conn
             .fetch_invoice(gateway_api, payload)
             .await
             .map_err(FetchInvoiceError::GatewayError)?
@@ -699,27 +707,6 @@ impl LightningClientModule {
         }
 
         Ok((contract, preimage, invoice))
-    }
-
-    async fn fetch_invoice(
-        &self,
-        gateway_api: SafeUrl,
-        payload: CreateBolt11InvoicePayload,
-    ) -> Result<Result<Bolt11Invoice, String>, GatewayError> {
-        reqwest::Client::new()
-            .post(
-                gateway_api
-                    .join("create_bolt11_invoice")
-                    .expect("'create_bolt11_invoice' contains no invalid characters for a URL")
-                    .as_str(),
-            )
-            .json(&payload)
-            .send()
-            .await
-            .map_err(|e| GatewayError::Unreachable(e.to_string()))?
-            .json::<Result<Bolt11Invoice, String>>()
-            .await
-            .map_err(|e| GatewayError::InvalidJsonResponse(e.to_string()))
     }
 
     pub async fn await_incoming_contract(&self, contract: IncomingContract) -> bool {

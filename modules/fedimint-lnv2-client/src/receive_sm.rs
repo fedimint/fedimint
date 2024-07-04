@@ -8,11 +8,11 @@ use fedimint_core::core::OperationId;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::OutPoint;
 use fedimint_lnv2_common::contracts::IncomingContract;
-use fedimint_lnv2_common::{LightningClientContext, LightningInput, LightningInputV0};
+use fedimint_lnv2_common::{LightningInput, LightningInputV0};
 use tpe::AggregateDecryptionKey;
 
 use crate::api::LnFederationApi;
-use crate::LightningClientStateMachines;
+use crate::{LightningClientContext, LightningClientStateMachines};
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
 pub struct ReceiveStateMachine {

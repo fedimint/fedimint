@@ -13,20 +13,16 @@ pub mod config;
 pub mod contracts;
 pub mod endpoint_constants;
 
-use std::collections::BTreeMap;
-
 use bitcoin_hashes::sha256;
 use config::LightningClientConfig;
-use fedimint_client::sm::Context;
-use fedimint_core::config::FederationId;
 use fedimint_core::core::{Decoder, ModuleInstanceId, ModuleKind};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::{CommonModuleInit, ModuleCommon, ModuleConsensusVersion};
-use fedimint_core::{extensible_associated_module_type, plugin_types_trait_impl_common, PeerId};
+use fedimint_core::{extensible_associated_module_type, plugin_types_trait_impl_common};
 use secp256k1::schnorr::Signature;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
-use tpe::{AggregateDecryptionKey, AggregatePublicKey, DecryptionKeyShare, PublicKeyShare};
+use tpe::{AggregateDecryptionKey, DecryptionKeyShare};
 
 use crate::contracts::{IncomingContract, OutgoingContract};
 
@@ -160,13 +156,3 @@ plugin_types_trait_impl_common!(
     LightningInputError,
     LightningOutputError
 );
-
-#[derive(Debug, Clone)]
-pub struct LightningClientContext {
-    pub decoder: Decoder,
-    pub federation_id: FederationId,
-    pub tpe_agg_pk: AggregatePublicKey,
-    pub tpe_pks: BTreeMap<PeerId, PublicKeyShare>,
-}
-
-impl Context for LightningClientContext {}
