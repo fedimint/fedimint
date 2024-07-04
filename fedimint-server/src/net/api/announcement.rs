@@ -1,13 +1,17 @@
 use std::collections::BTreeMap;
+use std::time::Duration;
 
 use bitcoin::secp256k1;
+use fedimint_api_client::api::DynGlobalApi;
 use fedimint_core::db::{Database, IDatabaseTransactionOpsCoreTyped};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::net::api_announcement::{
     override_api_urls, ApiAnnouncement, SignedApiAnnouncement,
 };
+use fedimint_core::task::{sleep, TaskGroup};
 use fedimint_core::util::SafeUrl;
 use fedimint_core::{impl_db_lookup, impl_db_record, PeerId};
+use tracing::debug;
 
 use crate::config::{ServerConfig, ServerConfigConsensus};
 use crate::consensus::db::DbKeyPrefix;
@@ -29,9 +33,49 @@ impl_db_lookup!(
     query_prefix = ApiAnnouncementPrefix
 );
 
+pub async fn start_api_announcement_service(
+    db: &Database,
+    tg: &TaskGroup,
+    cfg: &ServerConfig,
+    api_secret: Option<String>,
+) {
+    const INITIAL_DEALY_SECONDS: u64 = 5;
+    const FAILURE_RETRY_SECONDS: u64 = 60;
+    const SUCCESS_RETRY_SECONDS: u64 = 600;
+
+    insert_signed_api_announcement_if_not_present(db, cfg).await;
+
+    let db = db.clone();
+    let api_client =
+        DynGlobalApi::from_endpoints(get_api_urls(&db, &cfg.consensus).await, &api_secret);
+    let our_peer_id = cfg.local.identity;
+    tg.spawn_cancellable("submit-api-url-announcement", async move {
+        // Give other servers some time to start up in case they were just restarted
+        // together
+        sleep(Duration::from_secs(INITIAL_DEALY_SECONDS)).await;
+        loop {
+            let announcement = db.begin_transaction_nc()
+                .await
+                .get_value(&ApiAnnouncementKey(our_peer_id))
+                .await
+                .expect("Our own API announcement should be present in the database");
+
+            if let Err(e) = api_client
+                .submit_api_announcement(our_peer_id, announcement.clone())
+                .await
+            {
+                debug!(?e, "Announcing our API URL did not succeed for all peers, retrying in {FAILURE_RETRY_SECONDS} seconds");
+                sleep(Duration::from_secs(FAILURE_RETRY_SECONDS)).await;
+            } else {
+                sleep(Duration::from_secs(SUCCESS_RETRY_SECONDS)).await;
+            }
+        }
+    });
+}
+
 /// Checks if we already have a signed API endpoint announcement for our own
 /// identity in the database and creates one if not.
-pub async fn sign_api_announcement_if_not_present(db: &Database, cfg: &ServerConfig) {
+async fn insert_signed_api_announcement_if_not_present(db: &Database, cfg: &ServerConfig) {
     let mut dbtx = db.begin_transaction().await;
     if dbtx
         .get_value(&ApiAnnouncementKey(cfg.local.identity))

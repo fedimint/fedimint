@@ -55,6 +55,7 @@ mod federation_peer_client;
 mod global_federation_api_with_cache;
 
 use federation_peer_client::FederationPeer;
+use fedimint_core::net::api_announcement::SignedApiAnnouncement;
 use global_federation_api_with_cache::GlobalFederationApiWithCache;
 
 pub type PeerResult<T> = Result<T, PeerError>;
@@ -733,6 +734,13 @@ pub trait IGlobalFederationApi: IRawFederationApi {
     async fn auth(&self, auth: ApiAuth) -> FederationResult<()>;
 
     async fn restart_federation_setup(&self, auth: ApiAuth) -> FederationResult<()>;
+
+    /// Publish our signed API announcement to other guardians
+    async fn submit_api_announcement(
+        &self,
+        peer_id: PeerId,
+        announcement: SignedApiAnnouncement,
+    ) -> FederationResult<()>;
 }
 
 pub fn deserialize_outcome<R>(
