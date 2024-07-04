@@ -1,9 +1,12 @@
 use std::time::Duration;
 
+use anyhow::bail;
+use bitcoin::hashes::{sha256, Hash};
+use bitcoin::secp256k1::{SecretKey, SECP256K1};
 use fedimint_core::config::FederationId;
 use fedimint_core::secp256k1::rand::rngs::OsRng;
 use fedimint_core::secp256k1::schnorr::Signature;
-use fedimint_core::secp256k1::{All, KeyPair, Secp256k1};
+use fedimint_core::secp256k1::KeyPair;
 use fedimint_core::util::SafeUrl;
 use fedimint_core::{apply, async_trait_maybe_send};
 use fedimint_ln_common::bitcoin;
@@ -12,20 +15,56 @@ use fedimint_lnv2_client::{
     CreateBolt11InvoicePayload, GatewayError, LightningInvoice, PaymentFee, RoutingInfo,
 };
 use fedimint_lnv2_common::contracts::OutgoingContract;
-use fedimint_testing::ln::{INVALID_INVOICE_PAYMENT_SECRET, MOCK_INVOICE_PREIMAGE};
-use lightning_invoice::{Bolt11Invoice, Currency, InvoiceBuilder, PaymentSecret};
+use lightning_invoice::{
+    Bolt11Invoice, Currency, InvoiceBuilder, PaymentSecret, DEFAULT_EXPIRY_TIME,
+};
+
+const PAYABLE_PAYMENT_SECRET: [u8; 32] = [211; 32];
+
+const UNPAYABLE_PAYMENT_SECRET: [u8; 32] = [212; 32];
+
+const GATEWAY_CRASH_PAYMENT_SECRET: [u8; 32] = [213; 32];
+
+pub const MOCK_INVOICE_PREIMAGE: [u8; 32] = [1; 32];
+
+pub fn payable_invoice() -> Bolt11Invoice {
+    bolt_11_invoice(PAYABLE_PAYMENT_SECRET)
+}
+
+pub fn unpayable_invoice() -> Bolt11Invoice {
+    bolt_11_invoice(UNPAYABLE_PAYMENT_SECRET)
+}
+
+pub fn crash_invoice() -> Bolt11Invoice {
+    bolt_11_invoice(GATEWAY_CRASH_PAYMENT_SECRET)
+}
+
+fn bolt_11_invoice(payment_secret: [u8; 32]) -> Bolt11Invoice {
+    let sk = SecretKey::new(&mut OsRng);
+    let payment_hash = sha256::Hash::hash(&MOCK_INVOICE_PREIMAGE);
+
+    InvoiceBuilder::new(Currency::Regtest)
+        .description(String::new())
+        .payment_hash(payment_hash)
+        .current_timestamp()
+        .min_final_cltv_expiry_delta(0)
+        .payment_secret(PaymentSecret(payment_secret))
+        .amount_milli_satoshis(100_000)
+        .expiry_time(Duration::from_secs(DEFAULT_EXPIRY_TIME))
+        .build_signed(|m| SECP256K1.sign_ecdsa_recoverable(m, &sk))
+        .expect("Invoice creation failed")
+}
 
 #[derive(Debug)]
 pub struct MockGatewayConnection {
-    ctx: Secp256k1<All>,
     keypair: KeyPair,
 }
 
 impl Default for MockGatewayConnection {
     fn default() -> Self {
-        let ctx = bitcoin::secp256k1::Secp256k1::new();
-        let keypair = KeyPair::new_global(&mut OsRng);
-        MockGatewayConnection { ctx, keypair }
+        MockGatewayConnection {
+            keypair: KeyPair::new_global(&mut OsRng),
+        }
     }
 }
 
@@ -59,10 +98,7 @@ impl GatewayConnection for MockGatewayConnection {
             .payment_secret(PaymentSecret([0; 32]))
             .amount_milli_satoshis(payload.invoice_amount.msats)
             .expiry_time(Duration::from_secs(payload.expiry_time as u64))
-            .build_signed(|m| {
-                self.ctx
-                    .sign_ecdsa_recoverable(m, &self.keypair.secret_key())
-            })
+            .build_signed(|m| SECP256K1.sign_ecdsa_recoverable(m, &self.keypair.secret_key()))
             .unwrap()))
     }
 
@@ -76,9 +112,14 @@ impl GatewayConnection for MockGatewayConnection {
     ) -> anyhow::Result<Result<Result<[u8; 32], Signature>, String>> {
         match invoice {
             LightningInvoice::Bolt11(invoice, _) => {
-                if *invoice.payment_secret() == PaymentSecret(INVALID_INVOICE_PAYMENT_SECRET) {
-                    let signature = self.keypair.sign_schnorr(contract.forfeit_message());
-                    return Ok(Ok(Err(signature)));
+                if *invoice.payment_secret() == PaymentSecret(GATEWAY_CRASH_PAYMENT_SECRET) {
+                    bail!("Failed to connect to gateway");
+                }
+
+                if *invoice.payment_secret() == PaymentSecret(UNPAYABLE_PAYMENT_SECRET) {
+                    return Ok(Ok(Err(self
+                        .keypair
+                        .sign_schnorr(contract.forfeit_message()))));
                 }
 
                 Ok(Ok(Ok(MOCK_INVOICE_PREIMAGE)))

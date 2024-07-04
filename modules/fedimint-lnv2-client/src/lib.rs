@@ -68,10 +68,10 @@ pub enum LightningOperationMeta {
 
 /// Number of blocks until outgoing lightning contracts time out and user
 /// client can refund it unilaterally
-const EXPIRATION_DELTA_LIMIT_DEFAULT: u64 = 500;
+pub const EXPIRATION_DELTA_LIMIT_DEFAULT: u64 = 500;
 
 /// Default expiration time for lightning invoices
-const INVOICE_EXPIRATION_SECONDS_DEFAULT: u32 = 24 * 60 * 60;
+pub const INVOICE_EXPIRATION_SECONDS_DEFAULT: u32 = 24 * 60 * 60;
 
 #[cfg_attr(doc, aquamarine::aquamarine)]
 /// The high-level state of sending a payment over lightning.
