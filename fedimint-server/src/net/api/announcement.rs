@@ -1,10 +1,15 @@
+use std::collections::BTreeMap;
+
 use bitcoin::secp256k1;
 use fedimint_core::db::{Database, IDatabaseTransactionOpsCoreTyped};
 use fedimint_core::encoding::{Decodable, Encodable};
-use fedimint_core::net::api_announcement::{ApiAnnouncement, SignedApiAnnouncement};
+use fedimint_core::net::api_announcement::{
+    override_api_urls, ApiAnnouncement, SignedApiAnnouncement,
+};
+use fedimint_core::util::SafeUrl;
 use fedimint_core::{impl_db_lookup, impl_db_record, PeerId};
 
-use crate::config::ServerConfig;
+use crate::config::{ServerConfig, ServerConfigConsensus};
 use crate::consensus::db::DbKeyPrefix;
 
 #[derive(Clone, Debug, Encodable, Decodable)]
@@ -50,4 +55,19 @@ pub async fn sign_api_announcement_if_not_present(db: &Database, cfg: &ServerCon
     )
     .await;
     dbtx.commit_tx().await;
+}
+
+/// Returns a list of all peers and their respective API URLs taking into
+/// account announcements overwriting the URLs contained in the original
+/// configuration.
+pub async fn get_api_urls(db: &Database, cfg: &ServerConfigConsensus) -> BTreeMap<PeerId, SafeUrl> {
+    override_api_urls(
+        db,
+        cfg.api_endpoints
+            .iter()
+            .map(|(peer_id, peer_url)| (*peer_id, peer_url.url.clone())),
+        &ApiAnnouncementPrefix,
+        |key| key.0,
+    )
+    .await
 }

@@ -1,11 +1,20 @@
+use std::collections::BTreeMap;
+
 use bitcoin_hashes::{sha256, Hash};
+use fedimint_core::db::DatabaseLookup;
 use fedimint_core::encoding::{Decodable, Encodable};
+use fedimint_core::task::MaybeSend;
 use fedimint_core::PeerId;
+use futures::StreamExt;
 use jsonrpsee_core::Serialize;
 use miniscript::ToPublicKey;
 use secp256k1::{Message, Verification};
 use serde::Deserialize;
 
+use crate::db::{
+    Database, DatabaseKey, DatabaseKeyPrefix, DatabaseRecord, IDatabaseTransactionOpsCoreTyped,
+};
+use crate::task::MaybeSync;
 use crate::util::SafeUrl;
 
 const API_ANNOUNCEMENT_MESSAGE_TAG: &[u8] = b"fedimint-api-announcement";
@@ -66,4 +75,31 @@ impl SignedApiAnnouncement {
         ctx.verify_schnorr(&self.signature, &msg, &pk.to_x_only_pubkey())
             .is_ok()
     }
+}
+
+pub async fn override_api_urls<P>(
+    db: &Database,
+    cfg_api_urls: impl IntoIterator<Item = (PeerId, SafeUrl)>,
+    db_key_prefix: &P,
+    key_to_peer_id: impl Fn(&P::Record) -> PeerId,
+) -> BTreeMap<PeerId, SafeUrl>
+where
+    P: DatabaseLookup + DatabaseKeyPrefix + MaybeSend + MaybeSync,
+    P::Record: DatabaseRecord<Value = SignedApiAnnouncement> + DatabaseKey + MaybeSend + MaybeSync,
+{
+    let mut db_api_urls = db
+        .begin_transaction_nc()
+        .await
+        .find_by_prefix(db_key_prefix)
+        .await
+        .map(|(key, announcement)| (key_to_peer_id(&key), announcement.api_announcement.api_url))
+        .collect::<BTreeMap<_, _>>()
+        .await;
+
+    cfg_api_urls
+        .into_iter()
+        .map(|(peer_id, cfg_api_url)| {
+            (peer_id, db_api_urls.remove(&peer_id).unwrap_or(cfg_api_url))
+        })
+        .collect::<BTreeMap<_, _>>()
 }

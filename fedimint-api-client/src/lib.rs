@@ -71,10 +71,7 @@ pub async fn try_download_client_config(
         .await?;
 
     // now we can build an api for all guardians and download the client config
-    let api_endpoints = api_endpoints
-        .into_iter()
-        .map(|(peer, url)| (peer, url.url))
-        .collect();
+    let api_endpoints = api_endpoints.into_iter().map(|(peer, url)| (peer, url.url));
 
     let client_config = WsFederationApi::new(api_endpoints, &api_secret)
         .request_current_consensus::<ClientConfig>(

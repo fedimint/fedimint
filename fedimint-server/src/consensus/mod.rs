@@ -37,6 +37,7 @@ use crate::consensus::api::ConsensusApi;
 use crate::consensus::engine::ConsensusEngine;
 use crate::envs::{FM_DB_CHECKPOINT_RETENTION_DEFAULT, FM_DB_CHECKPOINT_RETENTION_ENV};
 use crate::net;
+use crate::net::api::announcement::get_api_urls;
 use crate::net::api::{ApiSecrets, RpcHandlerCtx};
 
 /// How many txs can be stored in memory before blocking the API
@@ -143,9 +144,10 @@ pub async fn run(
 
     info!(target: LOG_CONSENSUS, "Starting Consensus Engine");
 
+    let api_urls = get_api_urls(&db, &cfg.consensus).await;
     ConsensusEngine {
         db,
-        federation_api: DynGlobalApi::from_config(&client_cfg, &force_api_secrets.get_active()),
+        federation_api: DynGlobalApi::from_endpoints(api_urls, &force_api_secrets.get_active()),
         self_id_str: cfg.local.identity.to_string(),
         peer_id_str: (0..cfg.consensus.api_endpoints.len())
             .map(|x| x.to_string())
