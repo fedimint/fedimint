@@ -66,20 +66,11 @@ elif ! [ -x "$(command -v docker-compose)" ]; then
     echo 'Error: docker-compose is not installed and we can not install it for you.' >&2
     exit 1
   fi
-  if [ -x "$(command -v apt)" ]; then
-    apt install -y docker-compose
-  elif [ -x "$(command -v yum)" ]; then
-    yum install -y docker-compose
-  elif [ -x "$(command -v dnf)" ]; then
-    dnf install -y docker-compose
-  elif [ -x "$(command -v pacman)" ]; then
-    pacman -S --noconfirm docker-compose
-  elif [ -x "$(command -v apk)" ]; then
-    apk add docker-compose
-  else
-    echo 'Error: docker-compose is not installed and we could not install it for you.' >&2
-    exit 1
-  fi
+
+  # Install Docker and Docker Compose using Docker's convenience script
+  curl -fsSL https://get.docker.com -o get-docker.sh
+  sh get-docker.sh
+
   if ! [ -x "$(command -v docker-compose)" ]; then
     echo 'Error: docker-compose is not installed and we could not install it for you.' >&2
     exit 1
