@@ -282,7 +282,7 @@ mod tests {
             [
                 crate::invite_code::InviteCodePart::Api {
                     url: "wss://fedimintd.mplsfed.foo/".parse().expect("valid url"),
-                    peer: crate::PeerId(0),
+                    peer: PeerId::new(0),
                 },
                 crate::invite_code::InviteCodePart::FederationId(FederationId(
                     bitcoin_hashes::sha256::Hash::from_str(
