@@ -38,10 +38,8 @@ impl_db_lookup!(
 /// Fetches API URL announcements from guardians, validates them and updates the
 /// DB if any new more upt to date ones are found.
 pub async fn run_api_announcement_sync(client_inner: Arc<Client>) {
-    let Some(guardian_pub_keys) = client_inner.config.global.broadcast_public_keys.clone() else {
-        warn!(target: LOG_CLIENT, "Can't fetch API announcements, config hasn't been completed with guardian keys yet");
-        return;
-    };
+    // Wait for the guardian keys to be available
+    let guardian_pub_keys = client_inner.get_guardian_public_keys_blocking().await;
     loop {
         let results = join_all(guardian_pub_keys.keys()
             .map(|peer_id| async {

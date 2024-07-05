@@ -486,14 +486,14 @@ where
             .collect()
     }
 
-    pub fn get_config(&self) -> ClientConfig {
-        self.client.get().get_config().clone()
+    pub async fn get_config(&self) -> ClientConfig {
+        self.client.get().config().await
     }
 
     /// Returns an invite code for the federation that points to an arbitrary
     /// guardian server for fetching the config
     pub async fn get_invite_code(&self) -> InviteCode {
-        let cfg = self.get_config().global;
+        let cfg = self.get_config().await.global;
         self.client
             .get()
             .invite_code(

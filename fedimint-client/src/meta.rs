@@ -242,10 +242,11 @@ impl MetaSource for LegacyMetaSource {
     ) -> anyhow::Result<MetaValues> {
         let config_iter = client
             .config()
+            .await
             .global
             .meta
-            .iter()
-            .map(|(key, value)| (MetaFieldKey(key.to_owned()), MetaFieldValue(value.clone())));
+            .into_iter()
+            .map(|(key, value)| (MetaFieldKey(key.clone()), MetaFieldValue(value.clone())));
         let backoff = match fetch_kind {
             // need to be fast the first time.
             FetchKind::Initial => backon::FibonacciBuilder::default()
@@ -273,7 +274,7 @@ pub async fn fetch_meta_overrides(
     client: &Client,
     field_name: &str,
 ) -> anyhow::Result<BTreeMap<MetaFieldKey, MetaFieldValue>> {
-    let Some(url) = client.config().meta::<String>(field_name)? else {
+    let Some(url) = client.config().await.meta::<String>(field_name)? else {
         return Ok(BTreeMap::new());
     };
     let response = reqwest

@@ -82,6 +82,7 @@
 
 use std::collections::{BTreeMap, HashSet};
 use std::fmt::{Debug, Formatter};
+use std::future::pending;
 use std::ops::{self, Range};
 use std::pin::Pin;
 use std::sync::{Arc, Weak};
@@ -99,7 +100,9 @@ use db::{
 use fedimint_api_client::api::{
     ApiVersionSet, DynGlobalApi, DynModuleApi, FederationApiExt, IGlobalFederationApi,
 };
-use fedimint_core::config::{ClientConfig, FederationId, JsonClientConfig, ModuleInitRegistry};
+use fedimint_core::config::{
+    ClientConfig, FederationId, GlobalClientConfig, JsonClientConfig, ModuleInitRegistry,
+};
 use fedimint_core::core::{
     DynInput, DynOutput, IInput, IOutput, ModuleInstanceId, ModuleKind, OperationId,
 };
@@ -107,16 +110,18 @@ use fedimint_core::db::{
     AutocommitError, Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped,
 };
 use fedimint_core::encoding::{Decodable, Encodable};
-use fedimint_core::endpoint_constants::VERSION_ENDPOINT;
+use fedimint_core::endpoint_constants::{CLIENT_CONFIG_ENDPOINT, VERSION_ENDPOINT};
 use fedimint_core::invite_code::InviteCode;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::module::{
     ApiAuth, ApiRequestErased, ApiVersion, MultiApiVersion, SupportedApiVersionsSummary,
     SupportedCoreApiVersions, SupportedModuleApiVersions,
 };
+use fedimint_core::net::api_announcement::SignedApiAnnouncement;
 use fedimint_core::task::{Elapsed, MaybeSend, MaybeSync, TaskGroup};
 use fedimint_core::transaction::Transaction;
-use fedimint_core::util::{BoxStream, NextOrPending, SafeUrl};
+use fedimint_core::util::backon::FibonacciBuilder;
+use fedimint_core::util::{retry, BoxStream, NextOrPending, SafeUrl};
 use fedimint_core::{
     apply, async_trait_maybe_send, dyn_newtype_define, fedimint_build_code_version_env,
     maybe_add_send, maybe_add_send_sync, runtime, Amount, NumPeers, OutPoint, PeerId,
@@ -136,11 +141,11 @@ use secret::{DeriveableSecretClientExt, PlainRootSecretStrategy, RootSecretStrat
 use thiserror::Error;
 #[cfg(not(target_family = "wasm"))]
 use tokio::runtime::{Handle as RuntimeHandle, RuntimeFlavor};
-use tokio::sync::watch;
+use tokio::sync::{watch, RwLock};
 use tokio_stream::wrappers::WatchStream;
 use tracing::{debug, error, info, warn};
 
-use crate::api_announcements::{get_api_urls, run_api_announcement_sync};
+use crate::api_announcements::{get_api_urls, run_api_announcement_sync, ApiAnnouncementPrefix};
 use crate::api_version_discovery::discover_common_api_versions_set;
 use crate::backup::Metadata;
 use crate::db::{ClientMetadataKey, ClientModuleRecoveryState, InitState, OperationLogKey};
@@ -209,7 +214,7 @@ pub trait IGlobalClientContext: Debug + MaybeSend + MaybeSync + 'static {
     /// calls can be made
     fn module_api(&self) -> DynModuleApi;
 
-    fn client_config(&self) -> &ClientConfig;
+    async fn client_config(&self) -> ClientConfig;
 
     /// Returns a reference to the client's federation API client. The provided
     /// interface [`IGlobalFederationApi`] typically does not provide the
@@ -256,7 +261,7 @@ impl IGlobalClientContext for () {
         unimplemented!("fake implementation, only for tests");
     }
 
-    fn client_config(&self) -> &ClientConfig {
+    async fn client_config(&self) -> ClientConfig {
         unimplemented!("fake implementation, only for tests");
     }
 
@@ -455,8 +460,8 @@ impl IGlobalClientContext for ModuleGlobalClientContext {
         self.client.decoders()
     }
 
-    fn client_config(&self) -> &ClientConfig {
-        self.client.config()
+    async fn client_config(&self) -> ClientConfig {
+        self.client.config().await
     }
 
     async fn claim_input_dyn(
@@ -617,7 +622,7 @@ impl ClientHandle {
                 .as_ref()
                 .ok_or_else(|| anyhow::format_err!("Already stopped"))?;
             let builder = ClientBuilder::from_existing(client);
-            let config = client.config.clone();
+            let config = client.config().await;
             let api_secret = client.api_secret.clone();
             let root_secret = client.root_secret.clone();
 
@@ -751,7 +756,7 @@ where
 /// [`ClientHandle`] is responsible for external lifecycle management
 /// and resource freeing of the [`Client`].
 pub struct Client {
-    config: ClientConfig,
+    config: RwLock<ClientConfig>,
     api_secret: Option<String>,
     decoders: ModuleDecoderRegistry,
     db: Database,
@@ -903,8 +908,8 @@ impl Client {
         })
     }
 
-    fn config(&self) -> &ClientConfig {
-        &self.config
+    pub async fn config(&self) -> ClientConfig {
+        self.config.read().await.clone()
     }
 
     pub fn api_secret(&self) -> &Option<String> {
@@ -1325,18 +1330,13 @@ impl Client {
         Ok(amount)
     }
 
-    /// Returns the config with which the client was initialized.
-    pub fn get_config(&self) -> &ClientConfig {
-        &self.config
-    }
-
     /// Returns the config of the client in JSON format.
     ///
     /// Compared to the consensus module format where module configs are binary
     /// encoded this format cannot be cryptographically verified but is easier
     /// to consume and to some degree human-readable.
-    pub fn get_config_json(&self) -> JsonClientConfig {
-        self.get_config().to_json()
+    pub async fn get_config_json(&self) -> JsonClientConfig {
+        self.config().await.to_json()
     }
 
     /// Get the primary module
@@ -1492,7 +1492,7 @@ impl Client {
 
     pub async fn load_and_refresh_common_api_version(&self) -> anyhow::Result<ApiVersionSet> {
         Self::load_and_refresh_common_api_version_static(
-            &self.config,
+            &self.config().await,
             &self.module_inits,
             &self.api,
             &self.db,
@@ -1683,12 +1683,13 @@ impl Client {
         module_kind: ModuleKind,
     ) -> anyhow::Result<()> {
         let mut recovery_receiver = self.client_recovery_progress_receiver.clone();
+        let config = self.config().await;
         recovery_receiver
             .wait_for(|in_progress| {
                 !in_progress
                     .iter()
                     .filter(|(module_instance_id, _progress)| {
-                        self.config.modules[module_instance_id].kind == module_kind
+                        config.modules[module_instance_id].kind == module_kind
                     })
                     .any(|(_id, progress)| !progress.is_done())
             })
@@ -1839,9 +1840,22 @@ impl Client {
         peer_api_version_sets
     }
 
+    /// You likely want to use [`Client::get_peer_urls`]. This function returns
+    /// only the announcements and doesn't use the config as fallback.
+    pub async fn get_peer_url_announcements(&self) -> BTreeMap<PeerId, SignedApiAnnouncement> {
+        self.db()
+            .begin_transaction_nc()
+            .await
+            .find_by_prefix(&ApiAnnouncementPrefix)
+            .await
+            .map(|(announcement_key, announcement)| (announcement_key.0, announcement))
+            .collect()
+            .await
+    }
+
     /// Returns a list of guardian API URLs
     pub async fn get_peer_urls(&self) -> BTreeMap<PeerId, SafeUrl> {
-        get_api_urls(&self.db, &self.config).await
+        get_api_urls(&self.db, &self.config().await).await
     }
 
     /// Create an invite code with the api endpoint of the given peer which can
@@ -1859,6 +1873,55 @@ impl Client {
                     self.api_secret.clone(),
                 )
             })
+    }
+
+    /// Blocks till the client has synced the guardian public key set
+    /// (introduced in version 0.4) and returns it. Once it has been fetched
+    /// once this function is guaranteed to return immediately.
+    pub async fn get_guardian_public_keys_blocking(
+        &self,
+    ) -> BTreeMap<PeerId, secp256k1_zkp::PublicKey> {
+        self.db.autocommit(|dbtx, _| Box::pin(async move {
+            let config = self.config().await;
+
+            let guardian_pub_keys = if let Some(guardian_pub_keys) = config.global.broadcast_public_keys {guardian_pub_keys}else{
+                let fetched_config = retry(
+                    "Fetching guardian public keys",
+                    FibonacciBuilder::default()
+                        .with_min_delay(Duration::from_secs(1))
+                        .with_max_delay(Duration::from_secs(60))
+                        .with_max_times(usize::MAX),
+                    || async {
+                        Ok(self.api.request_current_consensus::<ClientConfig>(
+                            CLIENT_CONFIG_ENDPOINT.to_owned(),
+                            ApiRequestErased::default(),
+                        ).await?)
+                    },
+                )
+                .await
+                .expect("Will never return on error");
+
+                let Some(guardian_pub_keys) = fetched_config.global.broadcast_public_keys else {
+                    warn!("Guardian public keys not found in fetched config, server not updated to 0.4 yet");
+                    pending::<()>().await;
+                    unreachable!("Pending will never return");
+                };
+
+                let new_config = ClientConfig {
+                    global: GlobalClientConfig {
+                        broadcast_public_keys: Some(guardian_pub_keys.clone()),
+                        ..config.global
+                    },
+                    modules: config.modules,
+                };
+
+                dbtx.insert_entry(&ClientConfigKey, &new_config).await;
+                *(self.config.write().await) = new_config;
+                guardian_pub_keys
+            };
+
+            Result::<_, ()>::Ok(guardian_pub_keys)
+        }), None).await.expect("Will retry forever")
     }
 }
 
@@ -2217,6 +2280,7 @@ impl ClientBuilder {
         Ok(client)
     }
 
+    // TODO: remove config argument
     /// Build a [`Client`] but do not start the executor
     async fn build_stopped(
         self,
@@ -2454,7 +2518,7 @@ impl ClientBuilder {
             watch::channel(recovery_receiver_init_val);
 
         let client_inner = Arc::new(Client {
-            config: config.clone(),
+            config: RwLock::new(config.clone()),
             api_secret,
             decoders,
             db: db.clone(),

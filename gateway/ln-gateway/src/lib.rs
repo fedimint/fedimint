@@ -857,14 +857,20 @@ impl Gateway {
                 let client = self.select_client(federation_id).await?;
                 federations.insert(
                     federation_id,
-                    client.borrow().with_sync(|client| client.get_config_json()),
+                    client
+                        .borrow()
+                        .with(|client| client.get_config_json())
+                        .await,
                 );
             } else {
                 let federation_clients = self.clients.read().await.clone().into_iter();
                 for (federation_id, client) in federation_clients {
                     federations.insert(
                         federation_id,
-                        client.borrow().with_sync(|client| client.get_config_json()),
+                        client
+                            .borrow()
+                            .with(|client| client.get_config_json())
+                            .await,
                     );
                 }
             }
@@ -1070,7 +1076,7 @@ impl Gateway {
         let federation_info = FederationInfo {
             federation_id,
             balance_msat: client.get_balance().await,
-            config: client.get_config().clone(),
+            config: client.config().await,
             channel_id: Some(mint_channel_id),
             routing_fees: Some(gateway_config.routing_fees.into()),
         };
@@ -1561,7 +1567,7 @@ impl Gateway {
         federation_id: FederationId,
     ) -> FederationInfo {
         let balance_msat = client.get_balance().await;
-        let config = client.get_config().clone();
+        let config = client.config().await;
         let channel_id = self
             .scid_to_federation
             .read()

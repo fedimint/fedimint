@@ -446,8 +446,12 @@ Examples:
         password: Option<String>,
     },
 
+    ApiAnnouncements,
+
     /// Wait for the fed to reach a consensus block count
-    WaitBlockCount { count: u64 },
+    WaitBlockCount {
+        count: u64,
+    },
 
     /// Just start the `Client` and wait
     Wait {
@@ -507,7 +511,9 @@ Examples:
 
     /// Lists active and inactive state machine states of the operation
     /// chronologically
-    ListOperationStates { operation_id: OperationId },
+    ListOperationStates {
+        operation_id: OperationId,
+    },
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -831,6 +837,13 @@ impl FedimintCli {
                 };
 
                 Ok(CliOutput::UntypedApiOutput { value: response })
+            }
+            Command::Dev(DevCmd::ApiAnnouncements) => {
+                let client = self.client_open(&cli).await?;
+                let announcements = client.get_peer_url_announcements().await;
+                Ok(CliOutput::Raw(
+                    serde_json::to_value(announcements).expect("Can be encoded"),
+                ))
             }
             Command::Dev(DevCmd::WaitBlockCount { count: target }) => retry(
                 "wait_block_count",
