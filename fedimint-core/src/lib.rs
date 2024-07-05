@@ -41,22 +41,19 @@
 #![allow(where_clauses_object_safety)] // https://github.com/dtolnay/async-trait/issues/228
 extern crate self as fedimint_core;
 
-use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::Debug;
 use std::io::Error;
-use std::num::ParseIntError;
 use std::str::FromStr;
 
+pub use amount::*;
 /// Mostly re-exported for [`Decodable`] macros.
 pub use anyhow;
-use anyhow::bail;
-use bitcoin::Denomination;
 use bitcoin_hashes::hash_newtype;
 use bitcoin_hashes::sha256::Hash as Sha256;
 pub use bitcoin_hashes::Hash as BitcoinHash;
-use fedimint_core::config::PeerUrl;
 pub use macro_rules_attribute::apply;
 pub use module::ServerModule;
+pub use peer_id::*;
 pub use secp256k1;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -69,6 +66,8 @@ use crate::module::registry::ModuleDecoderRegistry;
 
 /// Admin (guardian) client types
 pub mod admin_client;
+/// Bitcoin amount types
+mod amount;
 /// Federation-stored client backups
 pub mod backup;
 /// Gradual bitcoin dependency migration helpers
@@ -100,6 +99,8 @@ pub mod macros;
 pub mod module;
 /// Peer networking
 pub mod net;
+/// `PeerId` type
+mod peer_id;
 /// Runtime (wasm32 vs native) differences handling
 pub mod runtime;
 /// Task handling, including wasm safe logic
@@ -127,137 +128,6 @@ hash_newtype!(
     pub struct TransactionId(Sha256);
 );
 
-#[derive(
-    Debug,
-    Clone,
-    Copy,
-    PartialEq,
-    Eq,
-    Hash,
-    PartialOrd,
-    Ord,
-    Serialize,
-    Deserialize,
-    Encodable,
-    Decodable,
-)]
-pub struct PeerId(u16);
-
-impl FromStr for PeerId {
-    type Err = <u16 as FromStr>::Err;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        s.parse().map(PeerId)
-    }
-}
-
-pub const SATS_PER_BITCOIN: u64 = 100_000_000;
-
-/// Represents an amount of BTC. The base denomination is millisatoshis, which
-/// is why the `Amount` type from rust-bitcoin isn't used instead.
-#[derive(
-    Debug,
-    Clone,
-    Copy,
-    Eq,
-    PartialEq,
-    Ord,
-    PartialOrd,
-    Hash,
-    Deserialize,
-    Serialize,
-    Encodable,
-    Decodable,
-)]
-#[serde(transparent)]
-pub struct Amount {
-    pub msats: u64,
-}
-
-impl Amount {
-    pub const ZERO: Self = Self { msats: 0 };
-
-    /// Create an amount from a number of millisatoshis.
-    pub const fn from_msats(msats: u64) -> Amount {
-        Amount { msats }
-    }
-
-    /// Create an amount from a number of satoshis.
-    pub const fn from_sats(sats: u64) -> Amount {
-        Amount::from_msats(sats * 1000)
-    }
-
-    /// Create an amount from a number of whole bitcoins.
-    pub const fn from_bitcoins(bitcoins: u64) -> Amount {
-        Amount::from_sats(bitcoins * SATS_PER_BITCOIN)
-    }
-
-    /// Parse a decimal string as a value in the given denomination.
-    ///
-    /// Note: This only parses the value string.  If you want to parse a value
-    /// with denomination, use [FromStr].
-    pub fn from_str_in(s: &str, denom: Denomination) -> Result<Amount, ParseAmountError> {
-        if denom == Denomination::MilliSatoshi {
-            return Ok(Self::from_msats(s.parse()?));
-        }
-        let btc_amt = bitcoin::amount::Amount::from_str_in(s, denom)?;
-        Ok(Self::from(btc_amt))
-    }
-
-    pub fn saturating_sub(self, other: Amount) -> Self {
-        Amount {
-            msats: self.msats.saturating_sub(other.msats),
-        }
-    }
-
-    pub fn mul_u64(self, other: u64) -> Self {
-        Amount {
-            msats: self.msats * other,
-        }
-    }
-
-    /// Returns an error if the amount is more precise than satoshis (i.e. if it
-    /// has a milli-satoshi remainder). Otherwise, returns `Ok(())`.
-    pub fn ensure_sats_precision(&self) -> anyhow::Result<()> {
-        if self.msats % 1000 != 0 {
-            bail!("Amount is using a precision smaller than satoshi, cannot convert to satoshis");
-        }
-        Ok(())
-    }
-
-    pub fn try_into_sats(&self) -> anyhow::Result<u64> {
-        self.ensure_sats_precision()?;
-        Ok(self.msats / 1000)
-    }
-
-    pub const fn sats_round_down(&self) -> u64 {
-        self.msats / 1000
-    }
-
-    pub fn sats_f64(&self) -> f64 {
-        self.msats as f64 / 1000.0
-    }
-
-    pub fn checked_sub(self, other: Amount) -> Option<Self> {
-        Some(Self {
-            msats: self.msats.checked_sub(other.msats)?,
-        })
-    }
-}
-
-/// Shorthand for [`Amount::from_msats`]
-///
-/// Useful only for tests, but it's so common that it makes sense to have
-/// it in the main `fedimint-api` crate.
-pub fn msats(msats: u64) -> Amount {
-    Amount::from_msats(msats)
-}
-
-/// Shorthand for [`Amount::from_sats`]
-pub fn sats(amount: u64) -> Amount {
-    Amount::from_sats(amount)
-}
-
 /// Amount of bitcoin to send, or `All` to send all available funds
 #[derive(Debug, Eq, PartialEq, Copy, Hash, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -274,7 +144,7 @@ impl FromStr for BitcoinAmountOrAll {
         if s == "all" {
             Ok(BitcoinAmountOrAll::All)
         } else {
-            let amount = crate::Amount::from_str(s)?;
+            let amount = Amount::from_str(s)?;
             Ok(BitcoinAmountOrAll::Amount(amount.try_into()?))
         }
     }
@@ -305,256 +175,9 @@ pub struct OutPoint {
     pub out_idx: u64,
 }
 
-#[derive(Error, Debug)]
-pub enum ParseAmountError {
-    #[error("Error parsing string as integer: {0}")]
-    NotANumber(#[from] ParseIntError),
-    #[error("Error parsing string as a bitcoin amount: {0}")]
-    WrongBitcoinAmount(#[from] bitcoin::amount::ParseAmountError),
-}
-
-impl<T> NumPeersExt for BTreeMap<PeerId, T> {
-    fn to_num_peers(&self) -> NumPeers {
-        NumPeers(self.len())
-    }
-}
-
-/// The number of guardians in a federation.
-#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
-pub struct NumPeers(usize);
-
-impl From<usize> for NumPeers {
-    fn from(value: usize) -> Self {
-        Self(value)
-    }
-}
-
-impl<T> From<T> for NumPeers
-where
-    T: NumPeersExt,
-{
-    fn from(value: T) -> Self {
-        value.to_num_peers()
-    }
-}
-
-impl NumPeers {
-    pub fn as_usize(self) -> usize {
-        self.0
-    }
-
-    /// Returns an iterator over all peer IDs in the federation.
-    pub fn peer_ids(self) -> impl Iterator<Item = PeerId> {
-        (0u16..(self.0 as u16)).map(PeerId)
-    }
-
-    /// Returns the total number of guardians in the federation.
-    pub fn total(self) -> usize {
-        self.0
-    }
-
-    /// Returns the number of guardians that can be evil without disrupting the
-    /// federation.
-    pub fn max_evil(self) -> usize {
-        (self.total() - 1) / 3
-    }
-
-    /// Returns the number of guardians to select such that at least one is
-    /// honest (assuming the federation is not compromised).
-    pub fn one_honest(self) -> usize {
-        self.max_evil() + 1
-    }
-
-    /// Returns the degree of an underlying polynomial to require threshold
-    /// signatures.
-    pub fn degree(self) -> usize {
-        self.threshold() - 1
-    }
-
-    /// Returns the number of guardians required to achieve consensus and
-    /// produce valid signatures.
-    pub fn threshold(self) -> usize {
-        self.total() - self.max_evil()
-    }
-}
-
-impl NumPeersExt for &[PeerId] {
-    fn to_num_peers(&self) -> NumPeers {
-        NumPeers(self.len())
-    }
-}
-
-impl NumPeersExt for Vec<PeerId> {
-    fn to_num_peers(&self) -> NumPeers {
-        NumPeers(self.len())
-    }
-}
-
-impl NumPeersExt for Vec<PeerUrl> {
-    fn to_num_peers(&self) -> NumPeers {
-        NumPeers(self.len())
-    }
-}
-
-impl NumPeersExt for BTreeSet<PeerId> {
-    fn to_num_peers(&self) -> NumPeers {
-        NumPeers(self.len())
-    }
-}
-
-/// Types that can be easily converted to [`NumPeers`]
-pub trait NumPeersExt {
-    fn to_num_peers(&self) -> NumPeers;
-}
-
-impl PeerId {
-    pub fn to_usize(self) -> usize {
-        self.0 as usize
-    }
-}
-
-impl std::fmt::Display for PeerId {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.0)
-    }
-}
-
-impl From<u16> for PeerId {
-    fn from(id: u16) -> Self {
-        Self(id)
-    }
-}
-
-impl From<PeerId> for u16 {
-    fn from(peer: PeerId) -> u16 {
-        peer.0
-    }
-}
-
-impl std::fmt::Display for Amount {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{} msat", self.msats)
-    }
-}
-
 impl std::fmt::Display for OutPoint {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}:{}", self.txid, self.out_idx)
-    }
-}
-
-impl std::ops::Rem for Amount {
-    type Output = Amount;
-
-    fn rem(self, rhs: Self) -> Self::Output {
-        Amount {
-            msats: self.msats % rhs.msats,
-        }
-    }
-}
-
-impl std::ops::RemAssign for Amount {
-    fn rem_assign(&mut self, rhs: Self) {
-        self.msats %= rhs.msats;
-    }
-}
-
-impl std::ops::Div for Amount {
-    type Output = u64;
-
-    fn div(self, rhs: Self) -> Self::Output {
-        self.msats / rhs.msats
-    }
-}
-
-impl std::ops::SubAssign for Amount {
-    fn sub_assign(&mut self, rhs: Self) {
-        self.msats -= rhs.msats;
-    }
-}
-
-impl std::ops::Mul<u64> for Amount {
-    type Output = Amount;
-
-    fn mul(self, rhs: u64) -> Self::Output {
-        Amount {
-            msats: self.msats * rhs,
-        }
-    }
-}
-
-impl std::ops::Mul<Amount> for u64 {
-    type Output = Amount;
-
-    fn mul(self, rhs: Amount) -> Self::Output {
-        Amount {
-            msats: self * rhs.msats,
-        }
-    }
-}
-
-impl std::ops::Add for Amount {
-    type Output = Amount;
-
-    fn add(self, rhs: Self) -> Self::Output {
-        Amount {
-            msats: self.msats + rhs.msats,
-        }
-    }
-}
-
-impl std::ops::AddAssign for Amount {
-    fn add_assign(&mut self, rhs: Self) {
-        *self = *self + rhs;
-    }
-}
-
-impl std::iter::Sum for Amount {
-    fn sum<I: Iterator<Item = Amount>>(iter: I) -> Self {
-        Amount {
-            msats: iter.map(|amt| amt.msats).sum::<u64>(),
-        }
-    }
-}
-
-impl std::ops::Sub for Amount {
-    type Output = Amount;
-
-    fn sub(self, rhs: Self) -> Self::Output {
-        Amount {
-            msats: self.msats - rhs.msats,
-        }
-    }
-}
-
-impl FromStr for Amount {
-    type Err = ParseAmountError;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        if let Some(i) = s.find(char::is_alphabetic) {
-            let (amt, denom) = s.split_at(i);
-            Amount::from_str_in(amt.trim(), denom.trim().parse()?)
-        } else {
-            // default to millisatoshi
-            Amount::from_str_in(s.trim(), bitcoin::Denomination::MilliSatoshi)
-        }
-    }
-}
-
-impl From<bitcoin::Amount> for Amount {
-    fn from(amt: bitcoin::Amount) -> Self {
-        assert!(amt.to_sat() <= 2_100_000_000_000_000);
-        Amount {
-            msats: amt.to_sat() * 1000,
-        }
-    }
-}
-
-impl TryFrom<Amount> for bitcoin::Amount {
-    type Error = anyhow::Error;
-
-    fn try_from(value: Amount) -> anyhow::Result<Self> {
-        value.try_into_sats().map(bitcoin::Amount::from_sat)
     }
 }
 
@@ -623,16 +246,6 @@ mod tests {
     use super::*;
 
     #[test]
-    fn amount_multiplication_by_scalar() {
-        assert_eq!(Amount::from_msats(1000) * 123, Amount::from_msats(123_000));
-    }
-
-    #[test]
-    fn scalar_multiplication_by_amount() {
-        assert_eq!(123 * Amount::from_msats(1000), Amount::from_msats(123_000));
-    }
-
-    #[test]
     fn converts_weight_to_vbytes() {
         assert_eq!(1, weight_to_vbytes(4));
         assert_eq!(2, weight_to_vbytes(5));
@@ -643,44 +256,6 @@ mod tests {
         let feerate = Feerate { sats_per_kvb: 1000 };
         assert_eq!(bitcoin::Amount::from_sat(25), feerate.calculate_fee(100));
         assert_eq!(bitcoin::Amount::from_sat(26), feerate.calculate_fee(101));
-    }
-
-    #[test]
-    fn test_amount_parsing() {
-        // msats
-        assert_eq!(Amount::from_msats(123), Amount::from_str("123").unwrap());
-        assert_eq!(
-            Amount::from_msats(123),
-            Amount::from_str("123msat").unwrap()
-        );
-        assert_eq!(
-            Amount::from_msats(123),
-            Amount::from_str("123 msat").unwrap()
-        );
-        assert_eq!(
-            Amount::from_msats(123),
-            Amount::from_str("123 msats").unwrap()
-        );
-        // sats
-        assert_eq!(Amount::from_sats(123), Amount::from_str("123sat").unwrap());
-        assert_eq!(Amount::from_sats(123), Amount::from_str("123 sat").unwrap());
-        assert_eq!(
-            Amount::from_sats(123),
-            Amount::from_str("123satoshi").unwrap()
-        );
-        assert_eq!(
-            Amount::from_sats(123),
-            Amount::from_str("123satoshis").unwrap()
-        );
-        // btc
-        assert_eq!(
-            Amount::from_bitcoins(123),
-            Amount::from_str("123btc").unwrap()
-        );
-        assert_eq!(
-            Amount::from_sats(12_345_600_000),
-            Amount::from_str("123.456btc").unwrap()
-        );
     }
 
     #[test]
