@@ -629,7 +629,7 @@
             [
                 <span class="kw">crate</span>::invite_code::InviteCodePart::Api {
                     url: <span class="string">"wss://fedimintd.mplsfed.foo/"</span>.parse().expect(<span class="string">"valid url"</span>),
-                    peer: <span class="kw">crate</span>::PeerId(<span class="number">0</span>),
+                    peer: PeerId::new(<span class="number">0</span>),
                 },
                 <span class="kw">crate</span>::invite_code::InviteCodePart::FederationId(FederationId(
                     bitcoin_hashes::sha256::Hash::from_str(

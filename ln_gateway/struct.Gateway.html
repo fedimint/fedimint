@@ -86,7 +86,7 @@ via the webserver.</p>
 </div></details><details class="toggle method-toggle" open><summary><section id="method.handle_balance_msg" class="method"><a class="src rightside" href="../src/ln_gateway/lib.rs.html#880-888">source</a><h4 class="code-header">pub async fn <a href="#method.handle_balance_msg" class="fn">handle_balance_msg</a>(
     &amp;self,
     payload: <a class="struct" href="rpc/struct.BalancePayload.html" title="struct ln_gateway::rpc::BalancePayload">BalancePayload</a>,
-) -&gt; <a class="type" href="type.Result.html" title="type ln_gateway::Result">Result</a>&lt;<a class="struct" href="../fedimint_core/struct.Amount.html" title="struct fedimint_core::Amount">Amount</a>&gt;</h4></section></summary><div class="docblock"><p>Returns the balance of the requested federation that the Gateway is
+) -&gt; <a class="type" href="type.Result.html" title="type ln_gateway::Result">Result</a>&lt;<a class="struct" href="../fedimint_core/amount/struct.Amount.html" title="struct fedimint_core::amount::Amount">Amount</a>&gt;</h4></section></summary><div class="docblock"><p>Returns the balance of the requested federation that the Gateway is
 connected to.</p>
 </div></details><details class="toggle method-toggle" open><summary><section id="method.handle_address_msg" class="method"><a class="src rightside" href="../src/ln_gateway/lib.rs.html#892-901">source</a><h4 class="code-header">pub async fn <a href="#method.handle_address_msg" class="fn">handle_address_msg</a>(
     &amp;self,
@@ -222,7 +222,7 @@ federation.</p>
 </div></details><details class="toggle method-toggle" open><summary><section id="method.create_invoice_via_lnrpc_v2" class="method"><a class="src rightside" href="../src/ln_gateway/lib.rs.html#1769-1804">source</a><h4 class="code-header">pub async fn <a href="#method.create_invoice_via_lnrpc_v2" class="fn">create_invoice_via_lnrpc_v2</a>(
     &amp;self,
     payment_hash: Hash,
-    amount: <a class="struct" href="../fedimint_core/struct.Amount.html" title="struct fedimint_core::Amount">Amount</a>,
+    amount: <a class="struct" href="../fedimint_core/amount/struct.Amount.html" title="struct fedimint_core::amount::Amount">Amount</a>,
     description: <a class="enum" href="../fedimint_lnv2_client/enum.Bolt11InvoiceDescription.html" title="enum fedimint_lnv2_client::Bolt11InvoiceDescription">Bolt11InvoiceDescription</a>,
     expiry_time: <a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.u32.html">u32</a>,
 ) -&gt; <a class="enum" href="https://doc.rust-lang.org/nightly/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;Bolt11Invoice, <a class="struct" href="https://doc.rust-lang.org/nightly/alloc/string/struct.String.html" title="struct alloc::string::String">String</a>&gt;</h4></section></summary><div class="docblock"><p>Retrieves a BOLT11 invoice from the connected Lightning node with a

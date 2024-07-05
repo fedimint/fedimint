@@ -13,9 +13,9 @@
              'life1: 'async_trait</span>;
 <span class="item-spacer"></span>    fn <a href="#tymethod.trusted_dealer_gen" class="fn">trusted_dealer_gen</a>(
         &amp;self,
-        peers: &amp;[<a class="struct" href="../struct.PeerId.html" title="struct fedimint_core::PeerId">PeerId</a>],
+        peers: &amp;[<a class="struct" href="../peer_id/struct.PeerId.html" title="struct fedimint_core::peer_id::PeerId">PeerId</a>],
         params: &amp;<a class="struct" href="../config/struct.ConfigGenModuleParams.html" title="struct fedimint_core::config::ConfigGenModuleParams">ConfigGenModuleParams</a>,
-    ) -&gt; <a class="struct" href="https://doc.rust-lang.org/nightly/alloc/collections/btree/map/struct.BTreeMap.html" title="struct alloc::collections::btree::map::BTreeMap">BTreeMap</a>&lt;<a class="struct" href="../struct.PeerId.html" title="struct fedimint_core::PeerId">PeerId</a>, <a class="struct" href="../config/struct.ServerModuleConfig.html" title="struct fedimint_core::config::ServerModuleConfig">ServerModuleConfig</a>&gt;;
+    ) -&gt; <a class="struct" href="https://doc.rust-lang.org/nightly/alloc/collections/btree/map/struct.BTreeMap.html" title="struct alloc::collections::btree::map::BTreeMap">BTreeMap</a>&lt;<a class="struct" href="../peer_id/struct.PeerId.html" title="struct fedimint_core::peer_id::PeerId">PeerId</a>, <a class="struct" href="../config/struct.ServerModuleConfig.html" title="struct fedimint_core::config::ServerModuleConfig">ServerModuleConfig</a>&gt;;
 <span class="item-spacer"></span>    fn <a href="#tymethod.distributed_gen" class="fn">distributed_gen</a>&lt;'life0, 'life1, 'life2, 'async_trait&gt;(
         &amp;'life0 self,
         peer: &amp;'life1 <a class="struct" href="struct.PeerHandle.html" title="struct fedimint_core::module::PeerHandle">PeerHandle</a>&lt;'_&gt;,
@@ -27,7 +27,7 @@
              'life2: 'async_trait</span>;
 <span class="item-spacer"></span>    fn <a href="#tymethod.validate_config" class="fn">validate_config</a>(
         &amp;self,
-        identity: &amp;<a class="struct" href="../struct.PeerId.html" title="struct fedimint_core::PeerId">PeerId</a>,
+        identity: &amp;<a class="struct" href="../peer_id/struct.PeerId.html" title="struct fedimint_core::peer_id::PeerId">PeerId</a>,
         config: <a class="struct" href="../config/struct.ServerModuleConfig.html" title="struct fedimint_core::config::ServerModuleConfig">ServerModuleConfig</a>,
     ) -&gt; <a class="type" href="https://docs.rs/anyhow/1.0.85/anyhow/type.Result.html" title="type anyhow::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.unit.html">()</a>&gt;;
 <span class="item-spacer"></span>    fn <a href="#tymethod.get_client_config" class="fn">get_client_config</a>(
@@ -67,9 +67,9 @@ checking purposes.</p>
     'life1: 'async_trait,</div></h4></section></summary><div class="docblock"><p>Initialize the <a href="../core/server/struct.DynServerModule.html" title="struct fedimint_core::core::server::DynServerModule"><code>DynServerModule</code></a> instance from its config</p>
 </div></details><section id="tymethod.trusted_dealer_gen" class="method"><a class="src rightside" href="../../src/fedimint_core/module/mod.rs.html#665-669">source</a><h4 class="code-header">fn <a href="#tymethod.trusted_dealer_gen" class="fn">trusted_dealer_gen</a>(
     &amp;self,
-    peers: &amp;[<a class="struct" href="../struct.PeerId.html" title="struct fedimint_core::PeerId">PeerId</a>],
+    peers: &amp;[<a class="struct" href="../peer_id/struct.PeerId.html" title="struct fedimint_core::peer_id::PeerId">PeerId</a>],
     params: &amp;<a class="struct" href="../config/struct.ConfigGenModuleParams.html" title="struct fedimint_core::config::ConfigGenModuleParams">ConfigGenModuleParams</a>,
-) -&gt; <a class="struct" href="https://doc.rust-lang.org/nightly/alloc/collections/btree/map/struct.BTreeMap.html" title="struct alloc::collections::btree::map::BTreeMap">BTreeMap</a>&lt;<a class="struct" href="../struct.PeerId.html" title="struct fedimint_core::PeerId">PeerId</a>, <a class="struct" href="../config/struct.ServerModuleConfig.html" title="struct fedimint_core::config::ServerModuleConfig">ServerModuleConfig</a>&gt;</h4></section><section id="tymethod.distributed_gen" class="method"><a class="src rightside" href="../../src/fedimint_core/module/mod.rs.html#671-675">source</a><h4 class="code-header">fn <a href="#tymethod.distributed_gen" class="fn">distributed_gen</a>&lt;'life0, 'life1, 'life2, 'async_trait&gt;(
+) -&gt; <a class="struct" href="https://doc.rust-lang.org/nightly/alloc/collections/btree/map/struct.BTreeMap.html" title="struct alloc::collections::btree::map::BTreeMap">BTreeMap</a>&lt;<a class="struct" href="../peer_id/struct.PeerId.html" title="struct fedimint_core::peer_id::PeerId">PeerId</a>, <a class="struct" href="../config/struct.ServerModuleConfig.html" title="struct fedimint_core::config::ServerModuleConfig">ServerModuleConfig</a>&gt;</h4></section><section id="tymethod.distributed_gen" class="method"><a class="src rightside" href="../../src/fedimint_core/module/mod.rs.html#671-675">source</a><h4 class="code-header">fn <a href="#tymethod.distributed_gen" class="fn">distributed_gen</a>&lt;'life0, 'life1, 'life2, 'async_trait&gt;(
     &amp;'life0 self,
     peer: &amp;'life1 <a class="struct" href="struct.PeerHandle.html" title="struct fedimint_core::module::PeerHandle">PeerHandle</a>&lt;'_&gt;,
     params: &amp;'life2 <a class="struct" href="../config/struct.ConfigGenModuleParams.html" title="struct fedimint_core::config::ConfigGenModuleParams">ConfigGenModuleParams</a>,
@@ -79,7 +79,7 @@ checking purposes.</p>
     'life1: 'async_trait,
     'life2: 'async_trait,</div></h4></section><section id="tymethod.validate_config" class="method"><a class="src rightside" href="../../src/fedimint_core/module/mod.rs.html#677">source</a><h4 class="code-header">fn <a href="#tymethod.validate_config" class="fn">validate_config</a>(
     &amp;self,
-    identity: &amp;<a class="struct" href="../struct.PeerId.html" title="struct fedimint_core::PeerId">PeerId</a>,
+    identity: &amp;<a class="struct" href="../peer_id/struct.PeerId.html" title="struct fedimint_core::peer_id::PeerId">PeerId</a>,
     config: <a class="struct" href="../config/struct.ServerModuleConfig.html" title="struct fedimint_core::config::ServerModuleConfig">ServerModuleConfig</a>,
 ) -&gt; <a class="type" href="https://docs.rs/anyhow/1.0.85/anyhow/type.Result.html" title="type anyhow::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.unit.html">()</a>&gt;</h4></section><details class="toggle method-toggle" open><summary><section id="tymethod.get_client_config" class="method"><a class="src rightside" href="../../src/fedimint_core/module/mod.rs.html#680-683">source</a><h4 class="code-header">fn <a href="#tymethod.get_client_config" class="fn">get_client_config</a>(
     &amp;self,
