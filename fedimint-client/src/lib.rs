@@ -67,7 +67,7 @@
 //! module and its smart contracts are only used to incentivize LN payments, not
 //! to hold money. The mint module on the other hand holds e-cash note and can
 //! thus be used to fund transactions and to absorb change. Module clients with
-//! this ability should implement [`ClientModule::  supports_being_primary`] and
+//! this ability should implement [`ClientModule::supports_being_primary`] and
 //! related methods.
 //!
 //! For a example of a client module see [the mint client](https://github.com/fedimint/fedimint/blob/master/modules/fedimint-mint-client/src/lib.rs).
@@ -108,6 +108,7 @@ use fedimint_core::db::{
 };
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::endpoint_constants::VERSION_ENDPOINT;
+use fedimint_core::invite_code::InviteCode;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::module::{
     ApiAuth, ApiRequestErased, ApiVersion, MultiApiVersion, SupportedApiVersionsSummary,
@@ -115,7 +116,7 @@ use fedimint_core::module::{
 };
 use fedimint_core::task::{Elapsed, MaybeSend, MaybeSync, TaskGroup};
 use fedimint_core::transaction::Transaction;
-use fedimint_core::util::{BoxStream, NextOrPending};
+use fedimint_core::util::{BoxStream, NextOrPending, SafeUrl};
 use fedimint_core::{
     apply, async_trait_maybe_send, dyn_newtype_define, fedimint_build_code_version_env,
     maybe_add_send, maybe_add_send_sync, runtime, Amount, NumPeers, OutPoint, PeerId,
@@ -139,6 +140,7 @@ use tokio::sync::watch;
 use tokio_stream::wrappers::WatchStream;
 use tracing::{debug, error, info, warn};
 
+use crate::api_announcements::{get_api_urls, run_api_announcement_sync};
 use crate::api_version_discovery::discover_common_api_versions_set;
 use crate::backup::Metadata;
 use crate::db::{ClientMetadataKey, ClientModuleRecoveryState, InitState, OperationLogKey};
@@ -177,6 +179,7 @@ pub mod transaction;
 
 mod api_version_discovery;
 
+pub mod api_announcements;
 /// Management of meta fields
 pub mod meta;
 
@@ -1835,6 +1838,28 @@ impl Client {
         drop(dbtx);
         peer_api_version_sets
     }
+
+    /// Returns a list of guardian API URLs
+    pub async fn get_peer_urls(&self) -> BTreeMap<PeerId, SafeUrl> {
+        get_api_urls(&self.db, &self.config).await
+    }
+
+    /// Create an invite code with the api endpoint of the given peer which can
+    /// be used to download this client config
+    pub async fn invite_code(&self, peer: PeerId) -> Option<InviteCode> {
+        self.get_peer_urls()
+            .await
+            .into_iter()
+            .find_map(|(peer_id, url)| (peer == peer_id).then_some(url))
+            .map(|peer_url| {
+                InviteCode::new(
+                    peer_url.clone(),
+                    peer,
+                    self.federation_id(),
+                    self.api_secret.clone(),
+                )
+            })
+    }
 }
 
 /// See [`Client::transaction_updates`]
@@ -2113,7 +2138,15 @@ impl ClientBuilder {
         config: &ClientConfig,
         api_secret: Option<String>,
     ) -> anyhow::Result<Option<ClientBackup>> {
-        let api = DynGlobalApi::from_config(config, &api_secret);
+        let api = DynGlobalApi::from_endpoints(
+            // TODO: change join logic to use FederationId v2
+            config
+                .global
+                .api_endpoints
+                .iter()
+                .map(|(peer_id, peer_url)| (*peer_id, peer_url.url.clone())),
+            &api_secret,
+        );
         Client::download_backup_from_federation_static(
             &api,
             &Self::federation_root_secret(root_secret, config),
@@ -2195,10 +2228,18 @@ impl ClientBuilder {
         let config = Self::config_decoded(config, &decoders)?;
         let fed_id = config.calculate_federation_id();
         let db = self.db_no_decoders.with_decoders(decoders.clone());
+        let peer_urls = get_api_urls(&db, &config).await;
         let api = if let Some(admin_creds) = self.admin_creds.as_ref() {
-            DynGlobalApi::from_config_admin(&config, &api_secret, admin_creds.peer_id)
+            DynGlobalApi::new_admin(
+                admin_creds.peer_id,
+                peer_urls
+                    .into_iter()
+                    .find_map(|(peer, api_url)| (admin_creds.peer_id == peer).then_some(api_url))
+                    .context("Admin creds should match a peer")?,
+                &api_secret,
+            )
         } else {
-            DynGlobalApi::from_config(&config, &api_secret)
+            DynGlobalApi::from_endpoints(peer_urls, &api_secret)
         };
         let task_group = TaskGroup::new();
 
@@ -2279,29 +2320,29 @@ impl ClientBuilder {
                         (
                             Box::pin(async move {
                                 module_init
-                                        .recover(
-                                            final_client.clone(),
-                                            fed_id,
+                                    .recover(
+                                        final_client.clone(),
+                                        fed_id,
                                         num_peers,
-                                            module_config.clone(),
-                                            db.clone(),
-                                            module_instance_id,
-                                            common_api_versions.core,
-                                            api_version,
-                                            root_secret.derive_module_secret(module_instance_id),
-                                            notifier.clone(),
-                                            api.clone(),
+                                        module_config.clone(),
+                                        db.clone(),
+                                        module_instance_id,
+                                        common_api_versions.core,
+                                        api_version,
+                                        root_secret.derive_module_secret(module_instance_id),
+                                        notifier.clone(),
+                                        api.clone(),
                                         admin_auth,
-                                            snapshot.as_ref().and_then(|s| s.modules.get(&module_instance_id)),
-                                            progress_tx,
-                                        )
-                                        .await
-                                        .map_err(|err| {
-                                            warn!(
+                                        snapshot.as_ref().and_then(|s| s.modules.get(&module_instance_id)),
+                                        progress_tx,
+                                    )
+                                    .await
+                                    .map_err(|err| {
+                                        warn!(
                                                 module_id = module_instance_id, %kind, %err, "Module failed to recover"
                                             );
-                                            err
-                                        })
+                                        err
+                                    })
                             }),
                             progress_rx,
                         )
@@ -2442,6 +2483,11 @@ impl ClientBuilder {
                         .await;
                 }
             });
+
+        client_inner.task_group.spawn_cancellable(
+            "update-api-announcements",
+            run_api_announcement_sync(client_inner.clone()),
+        );
 
         let client_arc = ClientHandle::new(client_inner);
 

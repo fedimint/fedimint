@@ -492,19 +492,18 @@ where
 
     /// Returns an invite code for the federation that points to an arbitrary
     /// guardian server for fetching the config
-    pub fn get_invite_code(&self) -> InviteCode {
+    pub async fn get_invite_code(&self) -> InviteCode {
         let cfg = self.get_config().global;
-        let (any_guardian_id, any_guardian_url) = cfg
-            .api_endpoints
-            .iter()
-            .next()
-            .expect("A federation always has at least one guardian");
-        InviteCode::new(
-            any_guardian_url.url.clone(),
-            *any_guardian_id,
-            cfg.calculate_federation_id(),
-            self.client.get().api_secret().clone(),
-        )
+        self.client
+            .get()
+            .invite_code(
+                *cfg.api_endpoints
+                    .keys()
+                    .next()
+                    .expect("A federation always has at least one guardian"),
+            )
+            .await
+            .expect("The guardian we requested an invite code for exists")
     }
 
     pub fn get_internal_payment_markers(&self) -> anyhow::Result<(PublicKey, u64)> {

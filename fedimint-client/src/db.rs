@@ -49,6 +49,7 @@ pub enum DbKeyPrefix {
     ClientMetaServiceInfo = 0x35,
     ApiSecret = 0x36,
     PeerLastApiVersionsSummaryCache = 0x37,
+    ApiUrlAnnouncement = 0x38,
 
     /// Arbitrary data of the applications integrating Fedimint client and
     /// wanting to store some Federation-specific data in Fedimint client

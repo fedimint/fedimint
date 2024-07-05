@@ -282,6 +282,10 @@ impl ClientConfig {
 
     /// Create an invite code with the api endpoint of the given peer which can
     /// be used to download this client config
+    #[deprecated(
+        since = "0.4.0",
+        note = "API endpoints included in the config may be outdated, use Client::invite_code instead"
+    )]
     pub fn invite_code(&self, peer: &PeerId, api_secret: &Option<String>) -> Option<InviteCode> {
         self.global.api_endpoints.get(peer).map(|peer_url| {
             InviteCode::new(
@@ -306,15 +310,15 @@ impl ClientConfig {
                 .iter()
                 .map(|(&module_instance_id, module_config)| {
                     let module_config_json = JsonWithKind {
-                    kind: module_config.kind.clone(),
-                    value: module_config.config
-                        .clone()
-                        .decoded()
-                        .and_then(|dyn_cfg| dyn_cfg.to_json())
-                        .unwrap_or_else(|| json!({
+                        kind: module_config.kind.clone(),
+                        value: module_config.config
+                            .clone()
+                            .decoded()
+                            .and_then(|dyn_cfg| dyn_cfg.to_json())
+                            .unwrap_or_else(|| json!({
                             "unknown_module_hex": module_config.config.consensus_encode_to_hex()
                         })),
-                };
+                    };
                     (module_instance_id, module_config_json)
                 })
                 .collect(),

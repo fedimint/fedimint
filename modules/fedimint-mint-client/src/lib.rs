@@ -1509,7 +1509,10 @@ impl MintClientModule {
                             .await?;
 
                         let oob_notes = if include_invite {
-                            OOBNotes::new_with_invite(notes, &self.client_ctx.get_invite_code())
+                            OOBNotes::new_with_invite(
+                                notes,
+                                &self.client_ctx.get_invite_code().await,
+                            )
                         } else {
                             OOBNotes::new(federation_id_prefix, notes)
                         };

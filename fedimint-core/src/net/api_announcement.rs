@@ -77,6 +77,9 @@ impl SignedApiAnnouncement {
     }
 }
 
+/// Takes a list of peer IDs and their API URLs, and overrides the URLs with the
+/// ones stored in the respective database. This function is generic so it can
+/// be used with both the client and server databases.
 pub async fn override_api_urls<P>(
     db: &Database,
     cfg_api_urls: impl IntoIterator<Item = (PeerId, SafeUrl)>,

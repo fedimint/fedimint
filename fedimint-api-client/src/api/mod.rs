@@ -14,7 +14,6 @@ use fedimint_core::admin_client::{
     ServerStatus,
 };
 use fedimint_core::backup::ClientBackupSnapshot;
-use fedimint_core::config::ClientConfig;
 use fedimint_core::core::backup::SignedBackupRequest;
 use fedimint_core::core::{Decoder, DynOutputOutcome, ModuleInstanceId, OutputOutcome};
 use fedimint_core::encoding::{Decodable, Encodable};
@@ -241,6 +240,7 @@ impl OutputOutcomeError {
         )
     }
 }
+
 /// An API (module or global) that can query a federation
 #[apply(async_trait_maybe_send!)]
 pub trait IRawFederationApi: Debug + MaybeSend + MaybeSync {
@@ -534,6 +534,13 @@ impl AsRef<dyn IGlobalFederationApi + 'static> for DynGlobalApi {
 }
 
 impl DynGlobalApi {
+    pub fn new_admin(peer: PeerId, url: SafeUrl, api_secret: &Option<String>) -> DynGlobalApi {
+        GlobalFederationApiWithCache::new(
+            WsFederationApi::new(vec![(peer, url)], api_secret).with_self_peer_id(peer),
+        )
+        .into()
+    }
+
     pub fn from_pre_peer_id_admin_endpoint(url: SafeUrl, api_secret: &Option<String>) -> Self {
         // PeerIds are used only for informational purposes, but just in case, make a
         // big number so it stands out
@@ -554,25 +561,6 @@ impl DynGlobalApi {
         api_secret: &Option<String>,
     ) -> Self {
         GlobalFederationApiWithCache::new(WsFederationApi::new(peers, api_secret)).into()
-    }
-
-    #[deprecated(
-        since = "0.4.0",
-        note = "Use from_endpoints since the client config my contain outdated endpoints"
-    )]
-    pub fn from_config(config: &ClientConfig, api_secret: &Option<String>) -> Self {
-        GlobalFederationApiWithCache::new(WsFederationApi::from_config(config, api_secret)).into()
-    }
-
-    pub fn from_config_admin(
-        config: &ClientConfig,
-        api_secret: &Option<String>,
-        self_peer_id: PeerId,
-    ) -> Self {
-        GlobalFederationApiWithCache::new(
-            WsFederationApi::from_config(config, api_secret).with_self_peer_id(self_peer_id),
-        )
-        .into()
     }
 
     pub fn from_invite_code(invite_code: &InviteCode) -> Self {
@@ -741,6 +729,11 @@ pub trait IGlobalFederationApi: IRawFederationApi {
         peer_id: PeerId,
         announcement: SignedApiAnnouncement,
     ) -> FederationResult<()>;
+
+    async fn api_announcements(
+        &self,
+        guardian: PeerId,
+    ) -> PeerResult<BTreeMap<PeerId, SignedApiAnnouncement>>;
 }
 
 pub fn deserialize_outcome<R>(
@@ -887,18 +880,6 @@ impl WsFederationApi<WsClient> {
         api_secret: &Option<String>,
     ) -> Self {
         Self::new_with_client(peers, None, api_secret)
-    }
-
-    /// Creates a new API client from a client config
-    pub fn from_config(config: &ClientConfig, api_secret: &Option<String>) -> Self {
-        Self::new(
-            config
-                .global
-                .api_endpoints
-                .iter()
-                .map(|(id, peer)| (*id, peer.url.clone())),
-            api_secret,
-        )
     }
 
     pub fn with_self_peer_id(self, self_peer_id: PeerId) -> Self {

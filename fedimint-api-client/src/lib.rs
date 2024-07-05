@@ -51,6 +51,7 @@ pub async fn try_download_client_config(
     federation_id: FederationId,
     api_secret: Option<String>,
 ) -> anyhow::Result<ClientConfig> {
+    // TODO: use new download approach based on guardian PKs
     let query_strategy = FilterMap::new(
         move |cfg: ClientConfig| {
             if federation_id != cfg.global.calculate_federation_id() {
