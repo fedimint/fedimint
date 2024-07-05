@@ -19,6 +19,8 @@ use lightning_invoice::{
     Bolt11Invoice, Currency, InvoiceBuilder, PaymentSecret, DEFAULT_EXPIRY_TIME,
 };
 
+const GATEWAY_SECRET: [u8; 32] = [1; 32];
+
 const PAYABLE_PAYMENT_SECRET: [u8; 32] = [211; 32];
 
 const UNPAYABLE_PAYMENT_SECRET: [u8; 32] = [212; 32];
@@ -26,6 +28,12 @@ const UNPAYABLE_PAYMENT_SECRET: [u8; 32] = [212; 32];
 const GATEWAY_CRASH_PAYMENT_SECRET: [u8; 32] = [213; 32];
 
 pub const MOCK_INVOICE_PREIMAGE: [u8; 32] = [1; 32];
+
+pub fn gateway_keypair() -> KeyPair {
+    SecretKey::from_slice(&GATEWAY_SECRET)
+        .expect("32 bytes; within curve order")
+        .keypair(SECP256K1)
+}
 
 pub fn payable_invoice() -> Bolt11Invoice {
     bolt_11_invoice(PAYABLE_PAYMENT_SECRET)
@@ -63,7 +71,7 @@ pub struct MockGatewayConnection {
 impl Default for MockGatewayConnection {
     fn default() -> Self {
         MockGatewayConnection {
-            keypair: KeyPair::new_global(&mut OsRng),
+            keypair: gateway_keypair(),
         }
     }
 }
