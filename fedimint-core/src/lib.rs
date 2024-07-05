@@ -22,7 +22,7 @@
 
 //! Fedimint Core library
 //!
-//! `fedimint-core` contains are commonly used types, utilities and primitives,
+//! `fedimint-core` contains commonly used types, utilities and primitives,
 //! shared between both client and server code.
 //!
 //! Things that are server-side only typically live in `fedimint-server`, and
@@ -153,9 +153,8 @@ impl FromStr for PeerId {
 
 pub const SATS_PER_BITCOIN: u64 = 100_000_000;
 
-/// Represents an amount of BTC inside the system. The base denomination is
-/// milli satoshi for now, this is also why the amount type from rust-bitcoin
-/// isn't used instead.
+/// Represents an amount of BTC. The base denomination is millisatoshis, which
+/// is why the `Amount` type from rust-bitcoin isn't used instead.
 #[derive(
     Debug,
     Clone,
@@ -178,18 +177,25 @@ pub struct Amount {
 impl Amount {
     pub const ZERO: Self = Self { msats: 0 };
 
+    /// Create an amount from a number of millisatoshis.
     pub const fn from_msats(msats: u64) -> Amount {
         Amount { msats }
     }
 
+    /// Create an amount from a number of satoshis.
     pub const fn from_sats(sats: u64) -> Amount {
         Amount::from_msats(sats * 1000)
     }
 
+    /// Create an amount from a number of whole bitcoins.
     pub const fn from_bitcoins(bitcoins: u64) -> Amount {
         Amount::from_sats(bitcoins * SATS_PER_BITCOIN)
     }
 
+    /// Parse a decimal string as a value in the given denomination.
+    ///
+    /// Note: This only parses the value string.  If you want to parse a value
+    /// with denomination, use [FromStr].
     pub fn from_str_in(s: &str, denom: Denomination) -> Result<Amount, ParseAmountError> {
         if denom == Denomination::MilliSatoshi {
             return Ok(Self::from_msats(s.parse()?));
@@ -210,7 +216,8 @@ impl Amount {
         }
     }
 
-    // Makes sure we're dealing with a precision of satoshi or higher
+    /// Returns an error if the amount is more precise than satoshis (i.e. if it
+    /// has a milli-satoshi remainder). Otherwise, returns `Ok(())`.
     pub fn ensure_sats_precision(&self) -> anyhow::Result<()> {
         if self.msats % 1000 != 0 {
             bail!("Amount is using a precision smaller than satoshi, cannot convert to satoshis");
@@ -251,27 +258,7 @@ pub fn sats(amount: u64) -> Amount {
     Amount::from_sats(amount)
 }
 
-pub mod amount {
-    pub mod serde {
-        pub mod as_msat {
-            //! Serialize and deserialize [`Amount`](crate::Amount) as integers
-            //! denominated in milli-satoshi. Use with
-            //! `#[serde(with = "amount::serde::as_msat")]`.
-
-            use serde::{Deserialize, Deserializer, Serialize, Serializer};
-
-            pub fn serialize<S: Serializer>(a: &crate::Amount, s: S) -> Result<S::Ok, S::Error> {
-                u64::serialize(&a.msats, s)
-            }
-
-            pub fn deserialize<'d, D: Deserializer<'d>>(d: D) -> Result<crate::Amount, D::Error> {
-                Ok(crate::Amount::from_msats(u64::deserialize(d)?))
-            }
-        }
-    }
-}
-
-/// Amount of bitcoin to send, or "all" to send all available funds
+/// Amount of bitcoin to send, or `All` to send all available funds
 #[derive(Debug, Eq, PartialEq, Copy, Hash, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum BitcoinAmountOrAll {
@@ -332,6 +319,7 @@ impl<T> NumPeersExt for BTreeMap<PeerId, T> {
     }
 }
 
+/// The number of guardians in a federation.
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct NumPeers(usize);
 
@@ -355,31 +343,36 @@ impl NumPeers {
         self.0
     }
 
+    /// Returns an iterator over all peer IDs in the federation.
     pub fn peer_ids(self) -> impl Iterator<Item = PeerId> {
         (0u16..(self.0 as u16)).map(PeerId)
     }
 
+    /// Returns the total number of guardians in the federation.
     pub fn total(self) -> usize {
         self.0
     }
 
-    /// number of peers that can be evil without disrupting the federation
+    /// Returns the number of guardians that can be evil without disrupting the
+    /// federation.
     pub fn max_evil(self) -> usize {
         (self.total() - 1) / 3
     }
 
-    /// number of peers to select such that one is honest (under our
-    /// assumptions)
+    /// Returns the number of guardians to select such that at least one is
+    /// honest (assuming the federation is not compromised).
     pub fn one_honest(self) -> usize {
         self.max_evil() + 1
     }
 
-    /// Degree of a underlying polynomial to require `threshold` signatures
+    /// Returns the degree of an underlying polynomial to require threshold
+    /// signatures.
     pub fn degree(self) -> usize {
         self.threshold() - 1
     }
 
-    /// number of peers required for a signature
+    /// Returns the number of guardians required to achieve consensus and
+    /// produce valid signatures.
     pub fn threshold(self) -> usize {
         self.total() - self.max_evil()
     }
