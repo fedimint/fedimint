@@ -4,7 +4,14 @@ use std::net::TcpListener;
 use serde::{Deserialize, Serialize};
 use tracing::{debug, trace, warn};
 
-use crate::{HIGH, LOG_PORT_ALLOC, LOW};
+// Ports below 10k are typically used by normal software, increasing chance they
+// would get in a way.
+const LOW: u16 = 10000;
+// Ports above 32k are typically ephmeral, increasing a chance of random
+// conflicts after port was already tried.
+const HIGH: u16 = 32000;
+
+const LOG_PORT_ALLOC: &str = "port-alloc";
 
 #[derive(Serialize, Deserialize, Debug, Clone, Default)]
 #[serde(rename_all = "kebab-case")]
@@ -21,7 +28,7 @@ fn now_ts() -> UnixTimestamp {
 }
 
 fn default_next() -> u16 {
-    crate::LOW
+    LOW
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -35,7 +42,7 @@ pub struct RootData {
 impl Default for RootData {
     fn default() -> Self {
         Self {
-            next: crate::LOW,
+            next: LOW,
             keys: Default::default(),
         }
     }
@@ -43,6 +50,8 @@ impl Default for RootData {
 
 impl RootData {
     pub fn get_free_port_range(&mut self, range_size: u16) -> u16 {
+        trace!(target: LOG_PORT_ALLOC, range_size, "Looking for port");
+
         self.reclaim(now_ts());
 
         let mut base_port: u16 = self.next;

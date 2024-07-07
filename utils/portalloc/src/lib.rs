@@ -21,20 +21,10 @@ mod util;
 
 use std::path::PathBuf;
 
-// ports below 10k are typically used by normal software increasing change they
-// would get in a way
-const LOW: u16 = 10000;
-// ports above 32k are typically ephmeral increasing a chance of random conflict
-// after port was already tried
-const HIGH: u16 = 32000;
-
 use anyhow::bail;
-use tracing::trace;
 
 use crate::data::DataDir;
 use crate::envs::FM_PORTALLOC_DATA_DIR_ENV;
-
-const LOG_PORT_ALLOC: &str = "port-alloc";
 
 fn data_dir() -> anyhow::Result<PathBuf> {
     if let Some(env) = std::env::var_os(FM_PORTALLOC_DATA_DIR_ENV) {
@@ -47,7 +37,6 @@ fn data_dir() -> anyhow::Result<PathBuf> {
 }
 
 pub fn port_alloc(range_size: u16) -> anyhow::Result<u16> {
-    trace!(target: LOG_PORT_ALLOC, range_size, "Looking for port");
     if range_size == 0 {
         bail!("Can't allocate range of 0 bytes");
     }
