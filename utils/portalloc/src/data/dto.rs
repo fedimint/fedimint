@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Debug, Clone, Default)]
 #[serde(rename_all = "kebab-case")]
-pub struct RangeData {
+struct RangeData {
     size: u16,
     /// local time unix timestamp
     expires: u64,
@@ -19,7 +19,7 @@ fn default_next() -> u16 {
 pub struct RootData {
     #[serde(default = "default_next")]
     pub next: u16,
-    pub keys: BTreeMap<u16, RangeData>,
+    keys: BTreeMap<u16, RangeData>,
 }
 
 impl Default for RootData {

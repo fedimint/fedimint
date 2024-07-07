@@ -27,7 +27,7 @@ where
     .and_then(|res| res)?)
 }
 
-pub fn store_to_file_with<E, F>(path: &Path, f: F) -> io::Result<Result<(), E>>
+fn store_to_file_with<E, F>(path: &Path, f: F) -> io::Result<Result<(), E>>
 where
     F: Fn(&mut dyn io::Write) -> Result<(), E>,
 {

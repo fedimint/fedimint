@@ -1,8 +1,7 @@
 mod dto;
 
+use std::fs;
 use std::path::PathBuf;
-use std::time::Duration;
-use std::{fs, thread};
 
 use anyhow::{bail, Result};
 use fs2::FileExt;
@@ -84,14 +83,6 @@ impl<'a> LockedRoot<'a> {
         Ok(())
     }
 
-    fn unlock(&mut self) -> Result<()> {
-        self.ensure_locked()?;
-        debug!(path = %self.path.display(), "Releasing lock...");
-        self.lock_file.unlock()?;
-        self.locked = false;
-        Ok(())
-    }
-
     fn data_file_path(&self) -> PathBuf {
         self.path.join("fm-portalloc.json")
     }
@@ -103,12 +94,6 @@ impl<'a> LockedRoot<'a> {
         Ok(())
     }
 
-    pub fn r#yield(&mut self, duration: Duration) -> Result<()> {
-        self.unlock()?;
-        thread::sleep(duration);
-        self.lock()?;
-        Ok(())
-    }
     pub fn load_data(&self, now: u64) -> Result<dto::RootData> {
         self.ensure_locked()?;
         let path = self.data_file_path();
