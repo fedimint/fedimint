@@ -4,7 +4,7 @@ use std::net::TcpListener;
 use serde::{Deserialize, Serialize};
 use tracing::{debug, trace, warn};
 
-use crate::{now_ts, HIGH, LOG_PORT_ALLOC, LOW};
+use crate::{HIGH, LOG_PORT_ALLOC, LOW};
 
 #[derive(Serialize, Deserialize, Debug, Clone, Default)]
 #[serde(rename_all = "kebab-case")]
@@ -12,6 +12,12 @@ struct RangeData {
     size: u16,
     /// local time unix timestamp
     expires: u64,
+}
+
+type UnixTimestamp = u64;
+
+fn now_ts() -> UnixTimestamp {
+    fedimint_core::time::duration_since_epoch().as_secs()
 }
 
 fn default_next() -> u16 {
@@ -37,6 +43,8 @@ impl Default for RootData {
 
 impl RootData {
     pub fn get_free_port_range(&mut self, range_size: u16) -> u16 {
+        self.reclaim(now_ts());
+
         let mut base_port: u16 = self.next;
         'retry: loop {
             trace!(target: LOG_PORT_ALLOC, base_port, range_size, "Checking a port");
@@ -85,7 +93,7 @@ impl RootData {
         }
     }
 
-    pub fn reclaim(&mut self, now: u64) {
+    fn reclaim(&mut self, now: u64) {
         self.keys.retain(|_k, v| now < v.expires);
     }
 

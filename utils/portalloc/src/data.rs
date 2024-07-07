@@ -94,16 +94,13 @@ impl<'a> LockedRoot<'a> {
         Ok(())
     }
 
-    pub fn load_data(&self, now: u64) -> Result<dto::RootData> {
+    pub fn load_data(&self) -> Result<dto::RootData> {
         self.ensure_locked()?;
         let path = self.data_file_path();
         if !path.try_exists()? {
             return Ok(Default::default());
         }
-        let mut root_data: dto::RootData =
-            serde_json::from_reader::<_, _>(std::fs::File::open(path)?)?;
-        root_data.reclaim(now);
-        Ok(root_data)
+        Ok(serde_json::from_reader::<_, _>(std::fs::File::open(path)?)?)
     }
 
     pub fn store_data(&mut self, data: &dto::RootData) -> Result<()> {

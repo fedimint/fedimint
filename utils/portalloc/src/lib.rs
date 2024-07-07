@@ -36,12 +36,6 @@ use crate::envs::FM_PORTALLOC_DATA_DIR_ENV;
 
 const LOG_PORT_ALLOC: &str = "port-alloc";
 
-type UnixTimestamp = u64;
-
-fn now_ts() -> UnixTimestamp {
-    fedimint_core::time::duration_since_epoch().as_secs()
-}
-
 fn data_dir() -> anyhow::Result<PathBuf> {
     if let Some(env) = std::env::var_os(FM_PORTALLOC_DATA_DIR_ENV) {
         Ok(PathBuf::from(env))
@@ -61,7 +55,7 @@ pub fn port_alloc(range_size: u16) -> anyhow::Result<u16> {
     let mut data_dir = DataDir::new(data_dir()?)?;
 
     data_dir.with_lock(|data_dir| {
-        let mut data = data_dir.load_data(now_ts())?;
+        let mut data = data_dir.load_data()?;
         let base_port = data.get_free_port_range(range_size);
         data_dir.store_data(&data)?;
         Ok(base_port)
