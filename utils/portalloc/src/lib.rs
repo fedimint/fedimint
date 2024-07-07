@@ -19,7 +19,6 @@ mod data;
 mod envs;
 mod util;
 
-use std::net::TcpListener;
 use std::path::PathBuf;
 
 // ports below 10k are typically used by normal software increasing change they
@@ -30,7 +29,7 @@ const LOW: u16 = 10000;
 const HIGH: u16 = 32000;
 
 use anyhow::bail;
-use tracing::{debug, trace, warn};
+use tracing::trace;
 
 use crate::data::DataDir;
 use crate::envs::FM_PORTALLOC_DATA_DIR_ENV;
@@ -63,53 +62,8 @@ pub fn port_alloc(range_size: u16) -> anyhow::Result<u16> {
 
     data_dir.with_lock(|data_dir| {
         let mut data = data_dir.load_data(now_ts())?;
-        let mut base_port: u16 = data.next;
-        Ok('retry: loop {
-            trace!(target: LOG_PORT_ALLOC, base_port, range_size, "Checking a port");
-            if HIGH < base_port {
-                data.reclaim(now_ts());
-                base_port = LOW;
-            }
-            let range = base_port..base_port + range_size;
-            if let Some(next_port) = data.contains(range.clone()) {
-                warn!(
-                    base_port,
-                    range_size,
-                    "Could not use a port (already reserved). Will try a different range."
-                );
-                base_port = next_port;
-                continue 'retry;
-            }
-
-            for port in range.clone() {
-                match TcpListener::bind(("127.0.0.1", port)) {
-                    Err(error) => {
-                        warn!(
-                            ?error,
-                            port, "Could not use a port. Will try a different range"
-                        );
-                        base_port = port + 1;
-                        continue 'retry;
-                    }
-                    Ok(l) => l,
-                };
-            }
-
-            const ALLOCATION_TIME_SECS: u64 = 120;
-
-            // The caller gets some time actually start using the port (`bind`),
-            // to prevent other callers from re-using it. This could typically be
-            // much shorter, as portalloc will not only respect the allocation,
-            // but also try to bind before using a given port range. But for tests
-            // that temporarily release ports (e.g. restarts, failure simulations, etc.),
-            // there's a chance that this can expire and another tests snatches the test,
-            // so better to keep it around the time a longest test can take.
-            data.insert(range, now_ts() + ALLOCATION_TIME_SECS);
-
-            data_dir.store_data(&data)?;
-
-            debug!(target: LOG_PORT_ALLOC, base_port, range_size, "Allocated port range");
-            break base_port;
-        })
+        let base_port = data.get_free_port_range(range_size);
+        data_dir.store_data(&data)?;
+        Ok(base_port)
     })
 }
