@@ -32,15 +32,8 @@ impl Default for RootData {
 }
 
 impl RootData {
-    pub fn reclaim(self, now: u64) -> Self {
-        Self {
-            keys: self
-                .keys
-                .into_iter()
-                .filter(|(_k, v)| now < v.expires)
-                .collect(),
-            ..self
-        }
+    pub fn reclaim(&mut self, now: u64) {
+        self.keys.retain(|_k, v| now < v.expires);
     }
 
     /// Check if `range` conflicts with anything already reserved

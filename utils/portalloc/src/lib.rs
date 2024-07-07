@@ -67,7 +67,7 @@ pub fn port_alloc(range_size: u16) -> anyhow::Result<u16> {
         Ok('retry: loop {
             trace!(target: LOG_PORT_ALLOC, base_port, range_size, "Checking a port");
             if HIGH < base_port {
-                data = data.reclaim(now_ts());
+                data.reclaim(now_ts());
                 base_port = LOW;
             }
             let range = base_port..base_port + range_size;

@@ -100,8 +100,10 @@ impl<'a> LockedRoot<'a> {
         if !path.try_exists()? {
             return Ok(Default::default());
         }
-        let root_data: dto::RootData = serde_json::from_reader::<_, _>(std::fs::File::open(path)?)?;
-        Ok(root_data.reclaim(now))
+        let mut root_data: dto::RootData =
+            serde_json::from_reader::<_, _>(std::fs::File::open(path)?)?;
+        root_data.reclaim(now);
+        Ok(root_data)
     }
 
     pub fn store_data(&mut self, data: &dto::RootData) -> Result<()> {
