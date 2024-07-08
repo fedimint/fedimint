@@ -469,7 +469,7 @@ jobs:
       matrix:
         build:
           - flake-output: fedimint-pkgs
-            bins: fedimintd,fedimint-cli,fedimint-dbtool
+            bins: fedimintd,fedimint-cli,fedimint-dbtool,fedimint-recoverytool
             deb: fedimint
           - flake-output: gateway-pkgs
             bins: gateway-cli,gatewayd,gateway-cln-extension
