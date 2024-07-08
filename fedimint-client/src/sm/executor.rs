@@ -687,7 +687,7 @@ impl ExecutorInner {
 
     async fn get_active_states(&self) -> Vec<(DynState, ActiveStateMeta)> {
         self.db
-            .begin_transaction()
+            .begin_transaction_nc()
             .await
             .find_by_prefix(&ActiveStateKeyPrefix)
             .await
@@ -712,7 +712,7 @@ impl ExecutorInner {
             return None;
         }
         self.db
-            .begin_transaction()
+            .begin_transaction_nc()
             .await
             .get_value(&ActiveStateKey::from_state(state.clone()))
             .await
@@ -720,7 +720,7 @@ impl ExecutorInner {
 
     async fn get_inactive_states(&self) -> Vec<(DynState, InactiveStateMeta)> {
         self.db
-            .begin_transaction()
+            .begin_transaction_nc()
             .await
             .find_by_prefix(&InactiveStateKeyPrefix)
             .await

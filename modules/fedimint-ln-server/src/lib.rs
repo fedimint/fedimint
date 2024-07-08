@@ -1338,7 +1338,7 @@ mod tests {
         };
 
         let db = Database::new(MemDatabase::new(), Default::default());
-        let mut dbtx = db.begin_transaction().await;
+        let mut dbtx = db.begin_transaction_nc().await;
 
         server
             .process_output(
@@ -1378,7 +1378,7 @@ mod tests {
     async fn process_input_for_valid_incoming_contracts() {
         let (server_cfg, client_cfg) = build_configs();
         let db = Database::new(MemDatabase::new(), Default::default());
-        let mut dbtx = db.begin_transaction().await;
+        let mut dbtx = db.begin_transaction_nc().await;
         let mut module_dbtx = dbtx.to_ref_with_prefix_module_id(42);
         let tg = TaskGroup::new();
         let server = Lightning::new(server_cfg[0].clone(), &tg, 0.into()).unwrap();
@@ -1439,7 +1439,7 @@ mod tests {
     async fn process_input_for_valid_outgoing_contracts() {
         let (server_cfg, _) = build_configs();
         let db = Database::new(MemDatabase::new(), Default::default());
-        let mut dbtx = db.begin_transaction().await;
+        let mut dbtx = db.begin_transaction_nc().await;
         let mut module_dbtx = dbtx.to_ref_with_prefix_module_id(42);
         let tg = TaskGroup::new();
         let server = Lightning::new(server_cfg[0].clone(), &tg, 0.into()).unwrap();

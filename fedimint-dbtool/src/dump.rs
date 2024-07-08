@@ -83,7 +83,7 @@ impl DatabaseDump {
                 }
             };
 
-            let mut dbtx = db.begin_transaction().await;
+            let mut dbtx = db.begin_transaction_nc().await;
             let client_cfg = dbtx
                 .find_by_prefix(&ClientConfigKeyPrefix)
                 .await
@@ -133,7 +133,7 @@ impl DatabaseDump {
         if !self.modules.is_empty() && !self.modules.contains(&kind.to_string()) {
             return Ok(());
         }
-        let mut dbtx = self.read_only.begin_transaction().await;
+        let mut dbtx = self.read_only.begin_transaction_nc().await;
         let db_version = dbtx.get_value(&DatabaseVersionKey(*module_id)).await;
         let mut isolated_dbtx = dbtx.to_ref_with_prefix_module_id(*module_id);
 
@@ -244,7 +244,7 @@ impl DatabaseDump {
     /// retrieves the corresponding data.
     async fn retrieve_consensus_data(&mut self) {
         let mut consensus: BTreeMap<String, Box<dyn Serialize>> = BTreeMap::new();
-        let mut dbtx = self.read_only.begin_transaction().await;
+        let mut dbtx = self.read_only.begin_transaction_nc().await;
         let dbtx = &mut dbtx;
         let prefix_names = &self.prefixes;
 

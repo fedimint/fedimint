@@ -754,7 +754,7 @@ impl Lightning {
     }
 
     async fn gateways(db: Database) -> Vec<SafeUrl> {
-        db.begin_transaction()
+        db.begin_transaction_nc()
             .await
             .find_by_prefix(&GatewayPrefix)
             .await

@@ -1289,7 +1289,7 @@ impl Wallet {
 #[instrument(level = "debug", skip_all)]
 pub async fn run_broadcast_pending_tx(db: Database, rpc: DynBitcoindRpc, tg_handle: &TaskHandle) {
     while !tg_handle.is_shutting_down() {
-        broadcast_pending_tx(db.begin_transaction().await.into_nc(), &rpc).await;
+        broadcast_pending_tx(db.begin_transaction_nc().await, &rpc).await;
         sleep(Duration::from_secs(1)).await;
     }
 }

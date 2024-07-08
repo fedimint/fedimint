@@ -128,7 +128,7 @@ where
         let new_transitions = self.subscribe_all_operations();
 
         let db_states = {
-            let mut dbtx = self.db.begin_transaction().await;
+            let mut dbtx = self.db.begin_transaction_nc().await;
             let active_states = dbtx
                 .find_by_prefix(&ActiveModuleOperationStateKeyPrefix {
                     operation_id,

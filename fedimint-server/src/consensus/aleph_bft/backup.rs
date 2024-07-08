@@ -19,7 +19,7 @@ impl BackupReader {
 #[async_trait]
 impl aleph_bft::BackupReader for BackupReader {
     async fn read(&mut self) -> std::io::Result<Vec<u8>> {
-        let mut dbtx = self.db.begin_transaction().await;
+        let mut dbtx = self.db.begin_transaction_nc().await;
 
         let units = dbtx
             .find_by_prefix(&AlephUnitsPrefix)

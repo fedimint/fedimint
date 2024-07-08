@@ -264,7 +264,7 @@ mod fedimint_migration_tests {
         let _ = TracingSetup::default().init();
         validate_migrations_global(
             |db| async move {
-                let mut dbtx = db.begin_transaction().await;
+                let mut dbtx = db.begin_transaction_nc().await;
 
                 for prefix in DbKeyPrefix::iter() {
                     match prefix {

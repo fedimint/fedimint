@@ -63,7 +63,7 @@ impl OperationLog {
         limit: usize,
         start_after: Option<ChronologicalOperationLogKey>,
     ) -> Vec<(ChronologicalOperationLogKey, OperationLogEntry)> {
-        let mut dbtx = self.db.begin_transaction().await;
+        let mut dbtx = self.db.begin_transaction_nc().await;
         let operations: Vec<ChronologicalOperationLogKey> = dbtx
             .find_by_prefix_sorted_descending(&ChronologicalOperationLogKeyPrefix)
             .await
@@ -106,7 +106,7 @@ impl OperationLog {
 
     pub async fn get_operation(&self, operation_id: OperationId) -> Option<OperationLogEntry> {
         Self::get_operation_inner(
-            &mut self.db.begin_transaction().await.into_nc(),
+            &mut self.db.begin_transaction_nc().await.into_nc(),
             operation_id,
         )
         .await
