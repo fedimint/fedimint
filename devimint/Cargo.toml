@@ -34,7 +34,7 @@ fedimint-portalloc = { path = "../utils/portalloc" }
 fedimint-server = { path = "../fedimint-server" }
 fedimint-testing = { workspace = true }
 fedimint-unknown-server = { path = "../modules/fedimint-unknown-server" }
-fedimint-wallet-client = { path = "../modules/fedimint-wallet-client" }
+fedimint-wallet-client = { path = "../modules/fedimint-wallet-client", features = [ "cli" ] }
 fedimint-wallet-server = { path = "../modules/fedimint-wallet-server" }
 fedimintd = { path = "../fedimintd" }
 fs-lock = "0.1.3"

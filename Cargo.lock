@@ -2523,6 +2523,7 @@ dependencies = [
  "async-stream",
  "async-trait",
  "bitcoin 0.30.2",
+ "clap",
  "erased-serde",
  "fedimint-api-client",
  "fedimint-bitcoind",

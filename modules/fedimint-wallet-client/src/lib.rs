@@ -7,6 +7,10 @@
 #![allow(clippy::must_use_candidate)]
 
 pub mod api;
+#[cfg(feature = "cli")]
+mod cli;
+
+mod backup;
 
 pub mod client_db;
 /// Legacy, state-machine based peg-ins, replaced by `pegin_monitor`
@@ -16,21 +20,24 @@ mod deposit;
 mod pegin_monitor;
 mod withdraw;
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::future;
 use std::sync::Arc;
 use std::time::SystemTime;
 
 use anyhow::{anyhow, bail, ensure, Context as AnyhowContext};
 use async_stream::stream;
+use backup::WalletModuleBackup;
 use bitcoin::address::NetworkUnchecked;
 use bitcoin::{Address, Network, ScriptBuf};
 use client_db::{DbKeyPrefix, PegInTweakIndexKey, TweakIdx};
 use fedimint_api_client::api::DynModuleApi;
 use fedimint_bitcoind::{create_bitcoind, DynBitcoindRpc};
 use fedimint_client::derivable_secret::{ChildId, DerivableSecret};
-use fedimint_client::module::init::{ClientModuleInit, ClientModuleInitArgs};
-use fedimint_client::module::recovery::NoModuleBackup;
+use fedimint_client::module::init::{
+    ClientModuleInit, ClientModuleInitArgs, ClientModuleRecoverArgs,
+};
+use fedimint_client::module::recovery::RecoveryProgress;
 use fedimint_client::module::{ClientContext, ClientModule, IClientModule};
 use fedimint_client::oplog::UpdateStreamOrOutcome;
 use fedimint_client::sm::util::MapStateTransitions;
@@ -55,7 +62,7 @@ use fedimint_logging::LOG_CLIENT_MODULE_WALLET;
 use fedimint_wallet_common::config::{FeeConsensus, WalletClientConfig};
 use fedimint_wallet_common::tweakable::Tweakable;
 pub use fedimint_wallet_common::*;
-use futures::{Stream, StreamExt};
+use futures::{Future, Stream, StreamExt};
 use rand::{thread_rng, Rng};
 use secp256k1::{All, KeyPair, Secp256k1, SECP256K1};
 use serde::{Deserialize, Serialize};
@@ -66,7 +73,7 @@ use tracing::{debug, instrument};
 use crate::api::WalletFederationApi;
 use crate::client_db::{
     ClaimedPegInData, ClaimedPegInKey, ClaimedPegInPrefix, NextPegInTweakIndexKey,
-    PegInTweakIndexData, PegInTweakIndexPrefix,
+    PegInTweakIndexData, PegInTweakIndexPrefix, RecoveryFinalizedKey,
 };
 use crate::deposit::DepositStateMachine;
 use crate::withdraw::{CreatedWithdrawState, WithdrawStateMachine, WithdrawStates};
@@ -166,6 +173,7 @@ impl ModuleInit for WalletClientInit {
                         "Claimed Peg-In"
                     );
                 }
+                DbKeyPrefix::RecoveryFinalized => {}
             }
         }
 
@@ -214,6 +222,113 @@ impl ClientModuleInit for WalletClientInit {
             pegin_claimed_sender,
             task_group: args.task_group().clone(),
         })
+    }
+
+    /// Wallet recovery
+    ///
+    /// Query bitcoin rpc for history of addresses from last known used
+    /// addresses (or index 0) until MAX_GAP unused ones.
+    ///
+    /// Notably does not persist the progress of addresses being queried,
+    /// because it is not expected that it would take long enough to bother.
+    async fn recover(
+        &self,
+        args: &ClientModuleRecoverArgs<Self>,
+        snapshot: Option<&<Self::Module as ClientModule>::Backup>,
+    ) -> anyhow::Result<()> {
+        let db = args.db().clone();
+        if db
+            .begin_transaction_nc()
+            .await
+            .get_value(&RecoveryFinalizedKey)
+            .await
+            .unwrap_or_default()
+        {
+            debug!(target: LOG_CLIENT_MODULE_WALLET, max_gap=RECOVER_MAX_GAP, "Recovery already complete before");
+            return Ok(());
+        }
+
+        #[allow(clippy::single_match_else)]
+        let previous_next_unused_idx = match snapshot {
+            Some(WalletModuleBackup::V0(backup)) => {
+                debug!(target: LOG_CLIENT_MODULE_WALLET, "Restoring starting from an existing backup");
+
+                backup.next_tweak_idx
+            }
+            _ => {
+                debug!(target: LOG_CLIENT_MODULE_WALLET, "Restoring without an existing backup");
+                TweakIdx(0)
+            }
+        };
+
+        let rpc_config = self
+            .0
+            .clone()
+            .unwrap_or(WalletClientModule::get_rpc_config(args.cfg()));
+
+        let btc_rpc = create_bitcoind(&rpc_config, TaskGroup::new().make_handle())?;
+        let btc_rpc = &btc_rpc;
+
+        let data = WalletClientModuleData {
+            cfg: args.cfg().clone(),
+            module_root_secret: args.module_root_secret().clone(),
+        };
+        let data = &data;
+
+        let RecoverScanOutcome { last_used_idx, new_start_idx, tweak_idxes_with_pegins} = recover_scan_idxes_for_activity(previous_next_unused_idx, move |cur_tweak_idx: TweakIdx| async move {
+            args.update_recovery_progress(RecoveryProgress {
+                complete: u32::try_from(cur_tweak_idx.0).unwrap_or(u32::MAX),
+                total: u32::try_from(cur_tweak_idx.0.saturating_add(RECOVER_MAX_GAP)).unwrap_or(u32::MAX),
+            });
+
+        let (script, address, _tweak_key, _operation_id) =
+            data.derive_peg_in_script(cur_tweak_idx);
+
+            btc_rpc.watch_script_history(&script).await?;
+            let history = btc_rpc.get_script_history(&script).await?;
+
+            debug!(target: LOG_CLIENT_MODULE_WALLET, %cur_tweak_idx, %address, history_len=history.len(), "Checked address");
+
+            Ok(history)
+        }).await?;
+
+        let now = fedimint_core::time::now();
+        let mut dbtx = db.begin_transaction().await;
+
+        let mut tweak_idx = TweakIdx(0);
+
+        while tweak_idx < new_start_idx {
+            let (_script, _address, _tweak_key, operation_id) =
+                data.derive_peg_in_script(tweak_idx);
+            dbtx.insert_new_entry(
+                &PegInTweakIndexKey(tweak_idx),
+                &PegInTweakIndexData {
+                    creation_time: now,
+                    next_check_time: if tweak_idxes_with_pegins.contains(&tweak_idx) {
+                        // The addresses that were already used before, or didn't seem to contain
+                        // anything don't need automatic peg-in attempt, and can be re-attempted
+                        // manually if needed.
+                        Some(now)
+                    } else {
+                        None
+                    },
+                    last_check_time: None,
+                    operation_id,
+                    claimed: vec![],
+                },
+            )
+            .await;
+            tweak_idx = tweak_idx.next();
+        }
+
+        dbtx.insert_new_entry(&NextPegInTweakIndexKey, &new_start_idx)
+            .await;
+        dbtx.insert_entry(&RecoveryFinalizedKey, &true).await;
+
+        dbtx.commit_tx().await;
+
+        debug!(target: LOG_CLIENT_MODULE_WALLET, %new_start_idx, ?last_used_idx, "Recovery complete");
+        Ok(())
     }
 }
 
@@ -323,7 +438,7 @@ pub struct WalletClientModule {
 impl ClientModule for WalletClientModule {
     type Init = WalletClientInit;
     type Common = WalletModuleTypes;
-    type Backup = NoModuleBackup;
+    type Backup = WalletModuleBackup;
     type ModuleStateMachineContext = WalletClientContext;
     type States = WalletClientStates;
 
@@ -357,12 +472,35 @@ impl ClientModule for WalletClientModule {
         });
     }
 
+    fn supports_backup(&self) -> bool {
+        true
+    }
+
+    async fn backup(&self) -> anyhow::Result<backup::WalletModuleBackup> {
+        Ok(backup::WalletModuleBackup::new_v0(
+            self.db
+                .begin_transaction_nc()
+                .await
+                .get_value(&NextPegInTweakIndexKey)
+                .await
+                .unwrap_or_default(),
+        ))
+    }
+
     fn input_fee(&self, _input: &<Self::Common as ModuleCommon>::Input) -> Option<Amount> {
         Some(self.cfg().fee_consensus.peg_in_abs)
     }
 
     fn output_fee(&self, _output: &<Self::Common as ModuleCommon>::Output) -> Option<Amount> {
         Some(self.cfg().fee_consensus.peg_out_abs)
+    }
+
+    #[cfg(feature = "cli")]
+    async fn handle_cli_command(
+        &self,
+        args: &[std::ffi::OsString],
+    ) -> anyhow::Result<serde_json::Value> {
+        cli::handle_cli_command(self, args).await
     }
 }
 
@@ -659,10 +797,14 @@ impl WalletClientModule {
         Ok(())
     }
 
-    /// Await for deposit
-    pub async fn await_deposit(&self, operation_id: OperationId) -> anyhow::Result<()> {
+    /// Await for num deposit by [`OperationId`]
+    pub async fn await_num_deposit_by_operation_id(
+        &self,
+        operation_id: OperationId,
+        num_deposits: usize,
+    ) -> anyhow::Result<()> {
         let tweak_idx = self.find_tweak_idx_by_operation_id(operation_id).await?;
-        self.await_num_deposits(tweak_idx, 1).await
+        self.await_num_deposits(tweak_idx, num_deposits).await
     }
 
     #[instrument(skip_all, fields(tweak_idx=?tweak_idx, num_deposists=num_deposits))]
@@ -919,5 +1061,186 @@ impl State for WalletClientStates {
             WalletClientStates::Deposit(sm) => sm.operation_id(),
             WalletClientStates::Withdraw(sm) => sm.operation_id(),
         }
+    }
+}
+
+/// We will check this many addresses after last actually used
+/// one before we give up
+const RECOVER_MAX_GAP: u64 = 10;
+/// New client will start deriving new addresses from last used one
+/// plus that many idexes. This should be (much) less than
+/// `MAX_GAP`, but more than 0: We want to make sure we detect
+/// deposits that might have been made after multiple successive recoveries,
+/// but we want also to avoid accidental address re-use.
+const RECOVER_NUM_IDX_ADD_TO_LAST_USED: u64 = RECOVER_MAX_GAP / 4 + 1;
+
+#[derive(Clone, PartialEq, Eq, Debug)]
+struct RecoverScanOutcome {
+    last_used_idx: Option<TweakIdx>,
+    new_start_idx: TweakIdx,
+    tweak_idxes_with_pegins: BTreeSet<TweakIdx>,
+}
+
+/// A part of [`WalletClientInit::recover`] extracted out to be easy to test,
+/// as a side-effect free.
+async fn recover_scan_idxes_for_activity<F, FF, T>(
+    previous_next_unused_idx: TweakIdx,
+    check_addr_history: F,
+) -> anyhow::Result<RecoverScanOutcome>
+where
+    F: Fn(TweakIdx) -> FF,
+    FF: Future<Output = anyhow::Result<Vec<T>>>,
+{
+    let mut last_used_idx = if previous_next_unused_idx == TweakIdx::ZERO {
+        None
+    } else {
+        Some(
+            previous_next_unused_idx
+                .prev()
+                .expect("Check for not being zero"),
+        )
+    };
+    let mut cur_tweak_idx = previous_next_unused_idx;
+    let mut tweak_idxes_with_pegins = BTreeSet::new();
+
+    let new_start_idx = loop {
+        let gap_since_last_used = cur_tweak_idx - last_used_idx.unwrap_or_default();
+
+        if RECOVER_MAX_GAP <= gap_since_last_used {
+            break last_used_idx
+                .unwrap_or_default()
+                .advance(RECOVER_NUM_IDX_ADD_TO_LAST_USED);
+        }
+
+        let history = check_addr_history(cur_tweak_idx).await?;
+
+        if !history.is_empty() {
+            last_used_idx = Some(cur_tweak_idx);
+            tweak_idxes_with_pegins.insert(cur_tweak_idx);
+        }
+        cur_tweak_idx = cur_tweak_idx.next();
+    };
+
+    Ok(RecoverScanOutcome {
+        last_used_idx,
+        new_start_idx,
+        tweak_idxes_with_pegins,
+    })
+}
+
+#[cfg(all(test, not(target_family = "wasm")))]
+mod tests {
+    use std::sync::atomic::{AtomicBool, Ordering};
+
+    use super::*;
+
+    #[allow(clippy::too_many_lines)] // shut-up clippy, it's a test
+    #[tokio::test(flavor = "multi_thread")]
+    async fn sanity_test_recover_inner() {
+        {
+            let last_checked = AtomicBool::new(false);
+            let last_checked = &last_checked;
+            assert_eq!(
+                recover_scan_idxes_for_activity(TweakIdx(0), |cur_idx| async move {
+                    Ok(match cur_idx {
+                        TweakIdx(9) => {
+                            last_checked.store(true, Ordering::SeqCst);
+                            vec![]
+                        }
+                        TweakIdx(10) => panic!("Shouldn't happen"),
+                        TweakIdx(11) => {
+                            vec![0usize] /* just for type inference */
+                        }
+                        _ => vec![],
+                    })
+                })
+                .await
+                .unwrap(),
+                RecoverScanOutcome {
+                    last_used_idx: None,
+                    new_start_idx: TweakIdx(RECOVER_NUM_IDX_ADD_TO_LAST_USED),
+                    tweak_idxes_with_pegins: BTreeSet::from([])
+                }
+            );
+            assert!(last_checked.load(Ordering::SeqCst));
+        }
+
+        {
+            let last_checked = AtomicBool::new(false);
+            let last_checked = &last_checked;
+            assert_eq!(
+                recover_scan_idxes_for_activity(TweakIdx(10), |cur_idx| async move {
+                    Ok(match cur_idx {
+                        TweakIdx(10) => vec![()],
+                        TweakIdx(19) => {
+                            last_checked.store(true, Ordering::SeqCst);
+                            vec![]
+                        }
+                        TweakIdx(20) => panic!("Shouldn't happen"),
+                        _ => vec![],
+                    })
+                })
+                .await
+                .unwrap(),
+                RecoverScanOutcome {
+                    last_used_idx: Some(TweakIdx(10)),
+                    new_start_idx: TweakIdx(10 + RECOVER_NUM_IDX_ADD_TO_LAST_USED),
+                    tweak_idxes_with_pegins: BTreeSet::from([TweakIdx(10)])
+                }
+            );
+            assert!(last_checked.load(Ordering::SeqCst));
+        }
+
+        assert_eq!(
+            recover_scan_idxes_for_activity(TweakIdx(0), |cur_idx| async move {
+                Ok(match cur_idx {
+                    TweakIdx(6 | 15) => vec![()],
+                    _ => vec![],
+                })
+            })
+            .await
+            .unwrap(),
+            RecoverScanOutcome {
+                last_used_idx: Some(TweakIdx(15)),
+                new_start_idx: TweakIdx(15 + RECOVER_NUM_IDX_ADD_TO_LAST_USED),
+                tweak_idxes_with_pegins: BTreeSet::from([TweakIdx(6), TweakIdx(15)])
+            }
+        );
+        assert_eq!(
+            recover_scan_idxes_for_activity(TweakIdx(10), |cur_idx| async move {
+                Ok(match cur_idx {
+                    TweakIdx(8) => {
+                        vec![()] /* for type inference only */
+                    }
+                    TweakIdx(9) => {
+                        panic!("Shouldn't happen")
+                    }
+                    _ => vec![],
+                })
+            })
+            .await
+            .unwrap(),
+            RecoverScanOutcome {
+                last_used_idx: Some(TweakIdx(9)),
+                new_start_idx: TweakIdx(9 + RECOVER_NUM_IDX_ADD_TO_LAST_USED),
+                tweak_idxes_with_pegins: BTreeSet::from([])
+            }
+        );
+        assert_eq!(
+            recover_scan_idxes_for_activity(TweakIdx(10), |cur_idx| async move {
+                Ok(match cur_idx {
+                    TweakIdx(9) => panic!("Shouldn't happen"),
+                    TweakIdx(15) => vec![()],
+                    _ => vec![],
+                })
+            })
+            .await
+            .unwrap(),
+            RecoverScanOutcome {
+                last_used_idx: Some(TweakIdx(15)),
+                new_start_idx: TweakIdx(15 + RECOVER_NUM_IDX_ADD_TO_LAST_USED),
+                tweak_idxes_with_pegins: BTreeSet::from([TweakIdx(15)])
+            }
+        );
     }
 }
