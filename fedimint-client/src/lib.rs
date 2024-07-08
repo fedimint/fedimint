@@ -807,12 +807,7 @@ impl Client {
     pub async fn get_config_from_db(db: &Database) -> Option<ClientConfig> {
         let mut dbtx = db.begin_transaction_nc().await;
         #[allow(clippy::let_and_return)]
-        let config = dbtx
-            .find_by_prefix(&ClientConfigKeyPrefix)
-            .await
-            .next()
-            .await
-            .map(|(_, config)| config);
+        let config = dbtx.get_value(&ClientConfigKey).await;
         config
     }
 

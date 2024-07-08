@@ -84,12 +84,7 @@ impl DatabaseDump {
             };
 
             let mut dbtx = db.begin_transaction_nc().await;
-            let client_cfg = dbtx
-                .find_by_prefix(&ClientConfigKeyPrefix)
-                .await
-                .next()
-                .await
-                .map(|(_, client_cfg)| client_cfg);
+            let client_cfg = dbtx.get_value(&ClientConfigKey).await;
 
             if let Some(client_cfg) = client_cfg {
                 // Successfully read the client config, that means this database is a client db
