@@ -51,6 +51,8 @@ const MAX_HTLC_PROCESSING_DURATION: Duration = Duration::MAX;
 const PAYMENT_TIMEOUT_DURATION: Duration = Duration::from_secs(180);
 // Use a `riskfactor` of 10, which is the default for lightning-pay
 const ROUTE_RISK_FACTOR: u64 = 10;
+// Error code for a failure along a payment route: https://docs.corelightning.org/reference/lightning-waitsendpay
+const FAILURE_ALONG_ROUTE: i32 = 204;
 
 #[derive(Parser)]
 #[command(version)]
@@ -339,14 +341,32 @@ impl ClnRpcService {
                     payment_hash,
                 },
             ))
-            .await?;
+            .await;
 
         let (preimage, amount_sent_msat) = match response {
-            cln_rpc::Response::WaitSendPay(model::responses::WaitsendpayResponse {
+            Ok(cln_rpc::Response::WaitSendPay(model::responses::WaitsendpayResponse {
                 payment_preimage,
                 amount_sent_msat,
                 ..
-            }) => Ok((payment_preimage, amount_sent_msat)),
+            })) => Ok((payment_preimage, amount_sent_msat)),
+            Err(e)
+                if e.code.is_some() && e.code.expect("Already checked") == FAILURE_ALONG_ROUTE =>
+            {
+                match e.data {
+                    Some(route_failure) => {
+                        let erring_node = route_failure
+                            .get("erring_node")
+                            .expect("Route failure object did not have erring_node field")
+                            .to_string();
+                        Err(ClnExtensionError::FailedPayment { erring_node })
+                    }
+                    None => {
+                        error!(?e, "Returned RpcError did not contain route failure object");
+                        Err(ClnExtensionError::RpcWrongResponse)
+                    }
+                }
+            }
+            Err(e) => Err(ClnExtensionError::RpcError(e)),
             _ => Err(ClnExtensionError::RpcWrongResponse),
         }?;
 
@@ -564,8 +584,6 @@ impl GatewayLightning for ClnRpcService {
             .ok_or_else(|| tonic::Status::internal("Pruned Invoice was not supplied"))?;
         let payment_hash = sha256::Hash::from_slice(&pruned_invoice.payment_hash)
             .map_err(|err| tonic::Status::internal(err.to_string()))?;
-        let destination =
-            PublicKey::from_slice(&pruned_invoice.destination).expect("Should parse public key");
 
         let mut excluded_nodes = vec![];
 
@@ -635,25 +653,25 @@ impl GatewayLightning for ClnRpcService {
                         let response = PayInvoiceResponse { preimage };
                         return Ok(tonic::Response::new(response));
                     }
+                    Err(ClnExtensionError::FailedPayment { erring_node }) => {
+                        error!(
+                            ?route_attempt,
+                            ?payment_hash,
+                            ?erring_node,
+                            "Pruned invoice payment attempt failure"
+                        );
+                        excluded_nodes.push(erring_node);
+                    }
                     Err(e) => {
                         error!(
                             ?route_attempt,
                             ?payment_hash,
                             ?e,
-                            "Pruned invoice payment attempt failure"
+                            "Permanent Pruned invoice payment attempt failure"
                         );
-                        let mut failed_nodes = route
-                            .into_iter()
-                            .filter_map(|r| {
-                                // Do not exclude the destination node
-                                if r.id != destination {
-                                    Some(r.id.to_string())
-                                } else {
-                                    None
-                                }
-                            })
-                            .collect::<Vec<_>>();
-                        excluded_nodes.append(&mut failed_nodes);
+                        return Err(tonic::Status::internal(format!(
+                            "Permanent Pruned invoice payment attempt failure for {payment_hash}"
+                        )));
                     }
                 }
 
@@ -1082,6 +1100,8 @@ enum ClnExtensionError {
     RpcError(#[from] cln_rpc::RpcError),
     #[error("Gateway CLN Extension, CLN RPC Wrong Response")]
     RpcWrongResponse,
+    #[error("Gateway CLN Extension failed payment")]
+    FailedPayment { erring_node: String },
 }
 
 // TODO: upstream
