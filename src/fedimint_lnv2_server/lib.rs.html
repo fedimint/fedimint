@@ -1436,7 +1436,7 @@
     ) -&gt; <span class="prelude-ty">Option</span>&lt;ContractId&gt; {
         <span class="kw">loop </span>{
             timeout(
-                Duration::from_secs(<span class="number">60 </span>* <span class="number">10</span>),
+                Duration::from_secs(<span class="number">10</span>),
                 db.wait_key_exists(<span class="kw-2">&amp;</span>IncomingContractKey(contract_id)),
             )
             .<span class="kw">await
@@ -1464,7 +1464,7 @@
     ) -&gt; <span class="prelude-ty">Option</span>&lt;[u8; <span class="number">32</span>]&gt; {
         <span class="kw">loop </span>{
             timeout(
-                Duration::from_secs(<span class="number">60 </span>* <span class="number">10</span>),
+                Duration::from_secs(<span class="number">10</span>),
                 db.wait_key_exists(<span class="kw-2">&amp;</span>PreimageKey(contract_id)),
             )
             .<span class="kw">await

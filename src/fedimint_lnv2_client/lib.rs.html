@@ -937,6 +937,14 @@
 <a href="#937" id="937">937</a>
 <a href="#938" id="938">938</a>
 <a href="#939" id="939">939</a>
+<a href="#940" id="940">940</a>
+<a href="#941" id="941">941</a>
+<a href="#942" id="942">942</a>
+<a href="#943" id="943">943</a>
+<a href="#944" id="944">944</a>
+<a href="#945" id="945">945</a>
+<a href="#946" id="946">946</a>
+<a href="#947" id="947">947</a>
 </pre></div><pre class="rust"><code><span class="attr">#![warn(clippy::pedantic)]
 #![allow(clippy::missing_errors_doc)]
 #![allow(clippy::missing_panics_doc)]
@@ -993,24 +1001,30 @@
 
 <span class="attr">#[derive(Debug, Clone, Serialize, Deserialize)]
 </span><span class="kw">pub enum </span>LightningOperationMeta {
-    Send {
-        funding_txid: TransactionId,
-        funding_change_outpoints: Vec&lt;OutPoint&gt;,
-        gateway_api: SafeUrl,
-        contract: OutgoingContract,
-        invoice: Bolt11Invoice,
-    },
-    Receive {
-        contract: IncomingContract,
-    },
+    Send(SendOperationMeta),
+    Receive(ReceiveOperationMeta),
+}
+
+<span class="attr">#[derive(Debug, Clone, Serialize, Deserialize)]
+</span><span class="kw">pub struct </span>SendOperationMeta {
+    <span class="kw">pub </span>funding_txid: TransactionId,
+    <span class="kw">pub </span>funding_change_outpoints: Vec&lt;OutPoint&gt;,
+    <span class="kw">pub </span>gateway_api: SafeUrl,
+    <span class="kw">pub </span>contract: OutgoingContract,
+    <span class="kw">pub </span>invoice: Bolt11Invoice,
+}
+
+<span class="attr">#[derive(Debug, Clone, Serialize, Deserialize)]
+</span><span class="kw">pub struct </span>ReceiveOperationMeta {
+    <span class="kw">pub </span>contract: IncomingContract,
 }
 
 <span class="doccomment">/// Number of blocks until outgoing lightning contracts time out and user
 /// client can refund it unilaterally
-</span><span class="kw">const </span>EXPIRATION_DELTA_LIMIT_DEFAULT: u64 = <span class="number">500</span>;
+</span><span class="kw">pub const </span>EXPIRATION_DELTA_LIMIT_DEFAULT: u64 = <span class="number">500</span>;
 
 <span class="doccomment">/// Default expiration time for lightning invoices
-</span><span class="kw">const </span>INVOICE_EXPIRATION_SECONDS_DEFAULT: u32 = <span class="number">24 </span>* <span class="number">60 </span>* <span class="number">60</span>;
+</span><span class="kw">pub const </span>INVOICE_EXPIRATION_SECONDS_DEFAULT: u32 = <span class="number">24 </span>* <span class="number">60 </span>* <span class="number">60</span>;
 
 <span class="attr">#[cfg_attr(doc, aquamarine::aquamarine)]
 </span><span class="doccomment">/// The high-level state of sending a payment over lightning.
@@ -1385,12 +1399,14 @@
             .finalize_and_submit_transaction(
                 operation_id,
                 LightningCommonInit::KIND.as_str(),
-                |funding_txid, funding_change_outpoints| LightningOperationMeta::Send {
-                    funding_txid,
-                    funding_change_outpoints,
-                    gateway_api: gateway_api.clone(),
-                    contract: contract.clone(),
-                    invoice: invoice.clone(),
+                |funding_txid, funding_change_outpoints| {
+                    LightningOperationMeta::Send(SendOperationMeta {
+                        funding_txid,
+                        funding_change_outpoints,
+                        gateway_api: gateway_api.clone(),
+                        contract: contract.clone(),
+                        invoice: invoice.clone(),
+                    })
                 },
                 transaction,
             )
@@ -1678,7 +1694,7 @@
             .manual_operation_start(
                 operation_id,
                 LightningCommonInit::KIND.as_str(),
-                LightningOperationMeta::Receive { contract },
+                LightningOperationMeta::Receive(ReceiveOperationMeta { contract }),
                 <span class="macro">vec!</span>[<span class="self">self</span>.client_ctx.make_dyn_state(receive_sm)],
             )
             .<span class="kw">await
