@@ -687,7 +687,7 @@ impl ServerModule for Wallet {
                 BLOCK_COUNT_LOCAL_ENDPOINT,
                 ApiVersion::new(0, 0),
                 async |module: &Wallet, _context, _params: ()| -> Option<u32> {
-                    Ok(*module.block_count_local.lock().expect("Locking failed"))
+                    Ok(module.get_block_count().ok())
                 }
             },
             api_endpoint! {
@@ -763,8 +763,6 @@ pub struct Wallet {
     cfg: WalletConfig,
     secp: Secp256k1<All>,
     btc_rpc: DynBitcoindRpc,
-    /// The result of last successful get_block_count
-    block_count_local: std::sync::Mutex<Option<u32>>,
     our_peer_id: PeerId,
     /// Block count updated periodically by a background task
     block_count_rx: watch::Receiver<Option<u32>>,
@@ -811,7 +809,6 @@ impl Wallet {
         let wallet = Wallet {
             cfg,
             secp: Default::default(),
-            block_count_local: Default::default(),
             btc_rpc: bitcoind_rpc,
             our_peer_id,
             block_count_rx,
