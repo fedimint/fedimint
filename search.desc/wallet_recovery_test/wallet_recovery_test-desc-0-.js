@@ -1,0 +1,1 @@
+searchState.loadedDescShard("wallet_recovery_test", 0, "")

@@ -99,7 +99,44 @@
 <a href="#99" id="99">99</a>
 <a href="#100" id="100">100</a>
 <a href="#101" id="101">101</a>
+<a href="#102" id="102">102</a>
+<a href="#103" id="103">103</a>
+<a href="#104" id="104">104</a>
+<a href="#105" id="105">105</a>
+<a href="#106" id="106">106</a>
+<a href="#107" id="107">107</a>
+<a href="#108" id="108">108</a>
+<a href="#109" id="109">109</a>
+<a href="#110" id="110">110</a>
+<a href="#111" id="111">111</a>
+<a href="#112" id="112">112</a>
+<a href="#113" id="113">113</a>
+<a href="#114" id="114">114</a>
+<a href="#115" id="115">115</a>
+<a href="#116" id="116">116</a>
+<a href="#117" id="117">117</a>
+<a href="#118" id="118">118</a>
+<a href="#119" id="119">119</a>
+<a href="#120" id="120">120</a>
+<a href="#121" id="121">121</a>
+<a href="#122" id="122">122</a>
+<a href="#123" id="123">123</a>
+<a href="#124" id="124">124</a>
+<a href="#125" id="125">125</a>
+<a href="#126" id="126">126</a>
+<a href="#127" id="127">127</a>
+<a href="#128" id="128">128</a>
+<a href="#129" id="129">129</a>
+<a href="#130" id="130">130</a>
+<a href="#131" id="131">131</a>
+<a href="#132" id="132">132</a>
+<a href="#133" id="133">133</a>
+<a href="#134" id="134">134</a>
+<a href="#135" id="135">135</a>
+<a href="#136" id="136">136</a>
+<a href="#137" id="137">137</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>core::fmt;
+<span class="kw">use </span>std::ops;
 <span class="kw">use </span>std::time::SystemTime;
 
 <span class="kw">use </span>fedimint_core::core::OperationId;
@@ -113,6 +150,7 @@
     NextPegInTweakIndex = <span class="number">0x2c</span>,
     PegInTweakIndex = <span class="number">0x2d</span>,
     ClaimedPegIn = <span class="number">0x2e</span>,
+    RecoveryFinalized = <span class="number">0x2f</span>,
 }
 
 <span class="kw">impl </span>std::fmt::Display <span class="kw">for </span>DbKeyPrefix {
@@ -125,7 +163,9 @@
 ///
 /// Under the hood it's similar to `ChildId`, but in a wallet module
 /// it's used often enough to deserve own newtype.
-</span><span class="attr">#[derive(Copy, Clone, Debug, Encodable, Decodable, Serialize, Default)]
+</span><span class="attr">#[derive(
+    Copy, Clone, Debug, Encodable, Decodable, Serialize, Default, PartialEq, Eq, PartialOrd, Ord,
+)]
 </span><span class="kw">pub struct </span>TweakIdx(<span class="kw">pub </span>u64);
 
 <span class="kw">impl </span>fmt::Display <span class="kw">for </span>TweakIdx {
@@ -135,10 +175,30 @@
 }
 
 <span class="kw">impl </span>TweakIdx {
+    <span class="kw">pub const </span>ZERO: <span class="self">Self </span>= TweakIdx(<span class="number">0</span>);
+
     <span class="attr">#[must_use]
     </span><span class="kw">pub fn </span>next(<span class="self">self</span>) -&gt; <span class="self">Self </span>{
         <span class="self">Self</span>(<span class="self">self</span>.<span class="number">0 </span>+ <span class="number">1</span>)
     }
+
+    <span class="attr">#[must_use]
+    </span><span class="kw">pub fn </span>prev(<span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="self">Self</span>&gt; {
+        <span class="self">self</span>.<span class="number">0</span>.checked_sub(<span class="number">1</span>).map(<span class="self">Self</span>)
+    }
+
+    <span class="attr">#[must_use]
+    </span><span class="kw">pub fn </span>advance(<span class="self">self</span>, i: u64) -&gt; <span class="self">Self </span>{
+        <span class="self">Self</span>(<span class="self">self</span>.<span class="number">0 </span>+ i)
+    }
+}
+
+<span class="kw">impl </span>ops::Sub <span class="kw">for </span>TweakIdx {
+    <span class="kw">type </span>Output = u64;
+
+    <span class="kw">fn </span>sub(<span class="self">self</span>, rhs: <span class="self">Self</span>) -&gt; <span class="self">Self</span>::Output {
+        <span class="self">self</span>.<span class="number">0 </span>- rhs.<span class="number">0
+    </span>}
 }
 
 <span class="doccomment">/// A counter tracking next index to use to derive a peg-in address
@@ -200,4 +260,16 @@
     db_prefix = DbKeyPrefix::ClaimedPegIn,
 );
 <span class="macro">impl_db_lookup!</span>(key = ClaimedPegInKey, query_prefix = ClaimedPegInPrefix);
+
+<span class="attr">#[derive(Debug, Clone, Encodable, Decodable, Serialize)]
+</span><span class="kw">pub struct </span>RecoveryFinalizedKey;
+
+<span class="attr">#[derive(Debug, Clone, Encodable, Decodable)]
+</span><span class="kw">pub struct </span>RecoveryFinalizedKeyPrefix;
+
+<span class="macro">impl_db_record!</span>(
+    key = RecoveryFinalizedKey,
+    value = bool,
+    db_prefix = DbKeyPrefix::RecoveryFinalized,
+);
 </code></pre></div></section></main></body></html>

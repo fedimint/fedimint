@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["WalletModuleBackup"],"struct":["WalletModuleBackupV0"]};
