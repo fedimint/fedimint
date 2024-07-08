@@ -27,6 +27,7 @@ use fedimint_core::module::{ApiAuth, ApiRequestErased, ApiVersion, SerdeModuleEn
 use fedimint_core::session_outcome::{SessionOutcome, SessionStatus};
 use fedimint_core::task::{MaybeSend, MaybeSync};
 use fedimint_core::transaction::{Transaction, TransactionSubmissionOutcome};
+use fedimint_core::util::backon::{self, BackoffBuilder};
 use fedimint_core::util::SafeUrl;
 use fedimint_core::{
     apply, async_trait_maybe_send, dyn_newtype_define, runtime, NumPeersExt, OutPoint, PeerId,
@@ -940,7 +941,12 @@ where
 {
     #[instrument(level = "trace", fields(peer = %self.peer_id, %method), skip_all)]
     pub async fn request(&self, method: &str, params: &[Value]) -> JsonRpcResult<Value> {
-        for attempts in 0.. {
+        for (attempts, retry_delay) in backon::FibonacciBuilder::default()
+            .with_min_delay(Duration::from_millis(200))
+            .with_max_delay(Duration::from_secs(5))
+            .build()
+            .enumerate()
+        {
             debug_assert!(attempts <= 1);
             let rclient = self.client.read().await;
             match rclient.client.get_try().await {
@@ -976,6 +982,8 @@ where
                     wclient.reconnect(self.peer_id, self.url.clone(), self.api_secret.clone());
                 }
             }
+
+            fedimint_core::runtime::sleep(retry_delay).await;
         }
 
         unreachable!();
