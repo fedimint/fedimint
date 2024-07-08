@@ -788,7 +788,7 @@ mod test {
         let input = MintInput::new_v0(highest_denomination, note);
 
         // Double spend in same session is detected
-        let mut dbtx = db.begin_transaction().await;
+        let mut dbtx = db.begin_transaction_nc().await;
         mint.process_input(&mut dbtx.to_ref_with_prefix_module_id(42).into_nc(), &input)
             .await
             .expect("Spend of valid e-cash works");

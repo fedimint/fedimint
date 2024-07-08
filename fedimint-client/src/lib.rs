@@ -797,7 +797,7 @@ impl Client {
     }
 
     pub async fn get_config_from_db(db: &Database) -> Option<ClientConfig> {
-        let mut dbtx = db.begin_transaction().await;
+        let mut dbtx = db.begin_transaction_nc().await;
         #[allow(clippy::let_and_return)]
         let config = dbtx
             .find_by_prefix(&ClientConfigKeyPrefix)
@@ -809,7 +809,7 @@ impl Client {
     }
 
     pub async fn get_api_secret_from_db(db: &Database) -> Option<String> {
-        let mut dbtx = db.begin_transaction().await;
+        let mut dbtx = db.begin_transaction_nc().await;
         dbtx.get_value(&ApiSecretKey).await
     }
 
@@ -1218,7 +1218,7 @@ impl Client {
 
     pub async fn has_active_states(&self, operation_id: OperationId) -> bool {
         self.db
-            .begin_transaction()
+            .begin_transaction_nc()
             .await
             .find_by_prefix(&ActiveOperationStateKeyPrefix { operation_id })
             .await
@@ -1510,7 +1510,7 @@ impl Client {
         task_group: &TaskGroup,
     ) -> anyhow::Result<ApiVersionSet> {
         if let Some(v) = db
-            .begin_transaction()
+            .begin_transaction_nc()
             .await
             .get_value(&CachedApiVersionSetKey)
             .await
@@ -2518,9 +2518,8 @@ impl ClientBuilder {
 /// If an encoded client secret is not present in the database, or if
 /// decoding fails, an error is returned.
 pub async fn get_decoded_client_secret<T: Decodable>(db: &Database) -> anyhow::Result<T> {
-    let mut tx = db.begin_transaction().await;
+    let mut tx = db.begin_transaction_nc().await;
     let client_secret = tx.get_value(&EncodedClientSecretKey).await;
-    tx.commit_tx().await;
 
     match client_secret {
         Some(client_secret) => {

@@ -163,7 +163,7 @@ async fn main() -> anyhow::Result<()> {
             };
 
             let utxos: Vec<ImportableWallet> = db
-                .begin_transaction()
+                .begin_transaction_nc()
                 .await
                 .find_by_prefix(&UTXOPrefixKey)
                 .await
@@ -192,7 +192,7 @@ async fn main() -> anyhow::Result<()> {
             .with_fallback();
 
             let db = get_db(opts.readonly, &db, decoders);
-            let mut dbtx = db.begin_transaction().await;
+            let mut dbtx = db.begin_transaction_nc().await;
 
             let mut change_tweak_idx: u64 = 0;
 

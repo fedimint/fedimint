@@ -661,7 +661,7 @@ mod fedimint_rocksdb_tests {
         // Test readonly implementation
         let db_readonly = RocksDbReadOnly::open_read_only(path).unwrap();
         let db_readonly = Database::new(db_readonly, Default::default());
-        let mut dbtx = db_readonly.begin_transaction().await;
+        let mut dbtx = db_readonly.begin_transaction_nc().await;
         let query = dbtx
             .find_by_prefix_sorted_descending(&DbPrefixTestPrefix)
             .await

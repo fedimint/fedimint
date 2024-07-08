@@ -1389,7 +1389,7 @@ impl Gateway {
         gateway_db: Database,
         gateway_parameters: &GatewayParameters,
     ) -> Option<GatewayConfiguration> {
-        let mut dbtx = gateway_db.begin_transaction().await;
+        let mut dbtx = gateway_db.begin_transaction_nc().await;
 
         // Always use the gateway configuration from the database if it exists.
         if let Some(gateway_config) = dbtx.get_value(&GatewayConfigurationKey).await {
@@ -1475,8 +1475,8 @@ impl Gateway {
     /// database and reconstructs the clients necessary for interacting with
     /// connection federations.
     async fn load_clients(&self) {
-        let dbtx = self.gateway_db.begin_transaction().await;
-        let configs = GatewayClientBuilder::load_configs(dbtx.into_nc()).await;
+        let dbtx = self.gateway_db.begin_transaction_nc().await;
+        let configs = GatewayClientBuilder::load_configs(dbtx).await;
 
         let _join_federation = self.client_joining_lock.lock().await;
 
