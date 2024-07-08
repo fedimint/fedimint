@@ -87,7 +87,7 @@ use fedimint_wallet_client::{
     WalletClientInit, WalletClientModule, WalletCommonInit, WithdrawState,
 };
 use futures::stream::StreamExt;
-use gateway_lnrpc::intercept_htlc_response::Action;
+use gateway_lnrpc::intercept_htlc_response::{Action, Cancel};
 use gateway_lnrpc::{CloseChannelsWithPeerResponse, InterceptHtlcResponse};
 use hex::ToHex;
 use lightning::{ILnRpcClient, LightningBuilder, LightningMode, LightningRpcError};
@@ -716,6 +716,19 @@ impl Gateway {
                     .await
                 {
                     error!("Error relaying incoming HTLC: {error:?}");
+
+                    let outcome = InterceptHtlcResponse {
+                        action: Some(Action::Cancel(Cancel {
+                            reason: "Insufficient Liquidity".to_string(),
+                        })),
+                        payment_hash: htlc_request.payment_hash,
+                        incoming_chan_id: htlc_request.incoming_chan_id,
+                        htlc_id: htlc_request.htlc_id,
+                    };
+
+                    if let Err(error) = lightning_context.lnrpc.complete_htlc(outcome).await {
+                        error!("Error sending HTLC response to lightning node: {error:?}");
+                    }
                 }
 
                 continue;
