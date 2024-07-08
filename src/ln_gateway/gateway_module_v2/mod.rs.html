@@ -424,6 +424,19 @@
 <a href="#424" id="424">424</a>
 <a href="#425" id="425">425</a>
 <a href="#426" id="426">426</a>
+<a href="#427" id="427">427</a>
+<a href="#428" id="428">428</a>
+<a href="#429" id="429">429</a>
+<a href="#430" id="430">430</a>
+<a href="#431" id="431">431</a>
+<a href="#432" id="432">432</a>
+<a href="#433" id="433">433</a>
+<a href="#434" id="434">434</a>
+<a href="#435" id="435">435</a>
+<a href="#436" id="436">436</a>
+<a href="#437" id="437">437</a>
+<a href="#438" id="438">438</a>
+<a href="#439" id="439">439</a>
 </pre></div><pre class="rust"><code><span class="kw">mod </span>complete_sm;
 <span class="kw">mod </span>receive_sm;
 <span class="kw">mod </span>send_sm;
@@ -715,7 +728,20 @@
             <span class="kw">if let </span><span class="prelude-val">Some</span>(GatewayClientStateMachinesV2::Send(state)) = stream.next().<span class="kw">await </span>{
                 <span class="kw">match </span>state.state {
                     SendSMState::Sending =&gt; {}
-                    SendSMState::Claiming(claiming) =&gt; <span class="kw">return </span><span class="prelude-val">Ok</span>(claiming.preimage),
+                    SendSMState::Claiming(claiming) =&gt; {
+                        <span class="comment">// This increases latency by one ordering and may eventually be removed;
+                        // however, at the current stage of lnv2 we prioritize the verification of
+                        // correctness above minimum latency.
+                        </span><span class="macro">assert!</span>(
+                            <span class="self">self</span>.client_ctx
+                                .await_primary_module_outputs(operation_id, claiming.outpoints)
+                                .<span class="kw">await
+                                </span>.is_ok(),
+                            <span class="string">"Gateway Module V2 failed to claim outgoing contract with preimage"
+                        </span>);
+
+                        <span class="kw">return </span><span class="prelude-val">Ok</span>(claiming.preimage);
+                    }
                     SendSMState::Cancelled(cancelled) =&gt; {
                         <span class="macro">warn!</span>(<span class="string">"Outgoing lightning payment is cancelled {:?}"</span>, cancelled);
 
