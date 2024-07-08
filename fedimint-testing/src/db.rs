@@ -522,7 +522,7 @@ mod fedimint_migration_tests {
         validate_migrations_core_client("fedimint-client", |db| async move {
             let mut dbtx = db.begin_transaction_nc().await;
             // Checks that client config migrated to ClientConfig with broadcast_public_keys
-            let client_config_key = ClientConfigKey {
+            let client_config_key = ClientConfigKeyV0 {
                 id: FederationId::dummy(),
             };
 
