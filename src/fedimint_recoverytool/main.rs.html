@@ -644,7 +644,7 @@
             };
 
             <span class="kw">let </span>utxos: Vec&lt;ImportableWallet&gt; = db
-                .begin_transaction()
+                .begin_transaction_nc()
                 .<span class="kw">await
                 </span>.find_by_prefix(<span class="kw-2">&amp;</span>UTXOPrefixKey)
                 .<span class="kw">await
@@ -673,7 +673,7 @@
             .with_fallback();
 
             <span class="kw">let </span>db = get_db(opts.readonly, <span class="kw-2">&amp;</span>db, decoders);
-            <span class="kw">let </span><span class="kw-2">mut </span>dbtx = db.begin_transaction().<span class="kw">await</span>;
+            <span class="kw">let </span><span class="kw-2">mut </span>dbtx = db.begin_transaction_nc().<span class="kw">await</span>;
 
             <span class="kw">let </span><span class="kw-2">mut </span>change_tweak_idx: u64 = <span class="number">0</span>;
 

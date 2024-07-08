@@ -1589,7 +1589,7 @@
         <span class="kw">let </span>input = MintInput::new_v0(highest_denomination, note);
 
         <span class="comment">// Double spend in same session is detected
-        </span><span class="kw">let </span><span class="kw-2">mut </span>dbtx = db.begin_transaction().<span class="kw">await</span>;
+        </span><span class="kw">let </span><span class="kw-2">mut </span>dbtx = db.begin_transaction_nc().<span class="kw">await</span>;
         mint.process_input(<span class="kw-2">&amp;mut </span>dbtx.to_ref_with_prefix_module_id(<span class="number">42</span>).into_nc(), <span class="kw-2">&amp;</span>input)
             .<span class="kw">await
             </span>.expect(<span class="string">"Spend of valid e-cash works"</span>);

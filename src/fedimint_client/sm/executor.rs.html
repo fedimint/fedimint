@@ -2060,7 +2060,7 @@
 
     <span class="kw">async fn </span>get_active_states(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Vec&lt;(DynState, ActiveStateMeta)&gt; {
         <span class="self">self</span>.db
-            .begin_transaction()
+            .begin_transaction_nc()
             .<span class="kw">await
             </span>.find_by_prefix(<span class="kw-2">&amp;</span>ActiveStateKeyPrefix)
             .<span class="kw">await
@@ -2085,7 +2085,7 @@
             <span class="kw">return </span><span class="prelude-val">None</span>;
         }
         <span class="self">self</span>.db
-            .begin_transaction()
+            .begin_transaction_nc()
             .<span class="kw">await
             </span>.get_value(<span class="kw-2">&amp;</span>ActiveStateKey::from_state(state.clone()))
             .<span class="kw">await
@@ -2093,7 +2093,7 @@
 
     <span class="kw">async fn </span>get_inactive_states(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Vec&lt;(DynState, InactiveStateMeta)&gt; {
         <span class="self">self</span>.db
-            .begin_transaction()
+            .begin_transaction_nc()
             .<span class="kw">await
             </span>.find_by_prefix(<span class="kw-2">&amp;</span>InactiveStateKeyPrefix)
             .<span class="kw">await

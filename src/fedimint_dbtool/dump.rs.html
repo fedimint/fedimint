@@ -387,7 +387,7 @@
                 }
             };
 
-            <span class="kw">let </span><span class="kw-2">mut </span>dbtx = db.begin_transaction().<span class="kw">await</span>;
+            <span class="kw">let </span><span class="kw-2">mut </span>dbtx = db.begin_transaction_nc().<span class="kw">await</span>;
             <span class="kw">let </span>client_cfg = dbtx
                 .find_by_prefix(<span class="kw-2">&amp;</span>ClientConfigKeyPrefix)
                 .<span class="kw">await
@@ -437,7 +437,7 @@
         <span class="kw">if </span>!<span class="self">self</span>.modules.is_empty() &amp;&amp; !<span class="self">self</span>.modules.contains(<span class="kw-2">&amp;</span>kind.to_string()) {
             <span class="kw">return </span><span class="prelude-val">Ok</span>(());
         }
-        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.read_only.begin_transaction().<span class="kw">await</span>;
+        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.read_only.begin_transaction_nc().<span class="kw">await</span>;
         <span class="kw">let </span>db_version = dbtx.get_value(<span class="kw-2">&amp;</span>DatabaseVersionKey(<span class="kw-2">*</span>module_id)).<span class="kw">await</span>;
         <span class="kw">let </span><span class="kw-2">mut </span>isolated_dbtx = dbtx.to_ref_with_prefix_module_id(<span class="kw-2">*</span>module_id);
 
@@ -548,7 +548,7 @@
     /// retrieves the corresponding data.
     </span><span class="kw">async fn </span>retrieve_consensus_data(<span class="kw-2">&amp;mut </span><span class="self">self</span>) {
         <span class="kw">let </span><span class="kw-2">mut </span>consensus: BTreeMap&lt;String, Box&lt;<span class="kw">dyn </span>Serialize&gt;&gt; = BTreeMap::new();
-        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.read_only.begin_transaction().<span class="kw">await</span>;
+        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.read_only.begin_transaction_nc().<span class="kw">await</span>;
         <span class="kw">let </span>dbtx = <span class="kw-2">&amp;mut </span>dbtx;
         <span class="kw">let </span>prefix_names = <span class="kw-2">&amp;</span><span class="self">self</span>.prefixes;
 

@@ -2828,7 +2828,7 @@
         };
 
         <span class="kw">let </span>db = Database::new(MemDatabase::new(), Default::default());
-        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = db.begin_transaction().<span class="kw">await</span>;
+        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = db.begin_transaction_nc().<span class="kw">await</span>;
 
         server
             .process_output(
@@ -2868,7 +2868,7 @@
     </span><span class="kw">async fn </span>process_input_for_valid_incoming_contracts() {
         <span class="kw">let </span>(server_cfg, client_cfg) = build_configs();
         <span class="kw">let </span>db = Database::new(MemDatabase::new(), Default::default());
-        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = db.begin_transaction().<span class="kw">await</span>;
+        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = db.begin_transaction_nc().<span class="kw">await</span>;
         <span class="kw">let </span><span class="kw-2">mut </span>module_dbtx = dbtx.to_ref_with_prefix_module_id(<span class="number">42</span>);
         <span class="kw">let </span>tg = TaskGroup::new();
         <span class="kw">let </span>server = Lightning::new(server_cfg[<span class="number">0</span>].clone(), <span class="kw-2">&amp;</span>tg, <span class="number">0</span>.into()).unwrap();
@@ -2929,7 +2929,7 @@
     </span><span class="kw">async fn </span>process_input_for_valid_outgoing_contracts() {
         <span class="kw">let </span>(server_cfg, <span class="kw">_</span>) = build_configs();
         <span class="kw">let </span>db = Database::new(MemDatabase::new(), Default::default());
-        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = db.begin_transaction().<span class="kw">await</span>;
+        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = db.begin_transaction_nc().<span class="kw">await</span>;
         <span class="kw">let </span><span class="kw-2">mut </span>module_dbtx = dbtx.to_ref_with_prefix_module_id(<span class="number">42</span>);
         <span class="kw">let </span>tg = TaskGroup::new();
         <span class="kw">let </span>server = Lightning::new(server_cfg[<span class="number">0</span>].clone(), <span class="kw-2">&amp;</span>tg, <span class="number">0</span>.into()).unwrap();

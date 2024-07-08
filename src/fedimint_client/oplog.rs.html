@@ -556,7 +556,7 @@
         limit: usize,
         start_after: <span class="prelude-ty">Option</span>&lt;ChronologicalOperationLogKey&gt;,
     ) -&gt; Vec&lt;(ChronologicalOperationLogKey, OperationLogEntry)&gt; {
-        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.db.begin_transaction().<span class="kw">await</span>;
+        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.db.begin_transaction_nc().<span class="kw">await</span>;
         <span class="kw">let </span>operations: Vec&lt;ChronologicalOperationLogKey&gt; = dbtx
             .find_by_prefix_sorted_descending(<span class="kw-2">&amp;</span>ChronologicalOperationLogKeyPrefix)
             .<span class="kw">await
@@ -599,7 +599,7 @@
 
     <span class="kw">pub async fn </span>get_operation(<span class="kw-2">&amp;</span><span class="self">self</span>, operation_id: OperationId) -&gt; <span class="prelude-ty">Option</span>&lt;OperationLogEntry&gt; {
         <span class="self">Self</span>::get_operation_inner(
-            <span class="kw-2">&amp;mut </span><span class="self">self</span>.db.begin_transaction().<span class="kw">await</span>.into_nc(),
+            <span class="kw-2">&amp;mut </span><span class="self">self</span>.db.begin_transaction_nc().<span class="kw">await</span>.into_nc(),
             operation_id,
         )
         .<span class="kw">await

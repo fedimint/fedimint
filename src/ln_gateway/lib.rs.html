@@ -3304,7 +3304,7 @@
         gateway_db: Database,
         gateway_parameters: <span class="kw-2">&amp;</span>GatewayParameters,
     ) -&gt; <span class="prelude-ty">Option</span>&lt;GatewayConfiguration&gt; {
-        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = gateway_db.begin_transaction().<span class="kw">await</span>;
+        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = gateway_db.begin_transaction_nc().<span class="kw">await</span>;
 
         <span class="comment">// Always use the gateway configuration from the database if it exists.
         </span><span class="kw">if let </span><span class="prelude-val">Some</span>(gateway_config) = dbtx.get_value(<span class="kw-2">&amp;</span>GatewayConfigurationKey).<span class="kw">await </span>{
@@ -3390,8 +3390,8 @@
     /// database and reconstructs the clients necessary for interacting with
     /// connection federations.
     </span><span class="kw">async fn </span>load_clients(<span class="kw-2">&amp;</span><span class="self">self</span>) {
-        <span class="kw">let </span>dbtx = <span class="self">self</span>.gateway_db.begin_transaction().<span class="kw">await</span>;
-        <span class="kw">let </span>configs = GatewayClientBuilder::load_configs(dbtx.into_nc()).<span class="kw">await</span>;
+        <span class="kw">let </span>dbtx = <span class="self">self</span>.gateway_db.begin_transaction_nc().<span class="kw">await</span>;
+        <span class="kw">let </span>configs = GatewayClientBuilder::load_configs(dbtx).<span class="kw">await</span>;
 
         <span class="kw">let </span>_join_federation = <span class="self">self</span>.client_joining_lock.lock().<span class="kw">await</span>;
 

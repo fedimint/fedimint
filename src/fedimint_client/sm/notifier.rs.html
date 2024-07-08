@@ -360,7 +360,7 @@
         </span><span class="kw">let </span>new_transitions = <span class="self">self</span>.subscribe_all_operations();
 
         <span class="kw">let </span>db_states = {
-            <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.db.begin_transaction().<span class="kw">await</span>;
+            <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.db.begin_transaction_nc().<span class="kw">await</span>;
             <span class="kw">let </span>active_states = dbtx
                 .find_by_prefix(<span class="kw-2">&amp;</span>ActiveModuleOperationStateKeyPrefix {
                     operation_id,

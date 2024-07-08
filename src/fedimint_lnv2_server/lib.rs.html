@@ -1519,7 +1519,7 @@
     }
 
     <span class="kw">async fn </span>gateways(db: Database) -&gt; Vec&lt;SafeUrl&gt; {
-        db.begin_transaction()
+        db.begin_transaction_nc()
             .<span class="kw">await
             </span>.find_by_prefix(<span class="kw-2">&amp;</span>GatewayPrefix)
             .<span class="kw">await

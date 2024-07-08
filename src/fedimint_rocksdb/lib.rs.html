@@ -1353,7 +1353,7 @@
         <span class="comment">// Test readonly implementation
         </span><span class="kw">let </span>db_readonly = RocksDbReadOnly::open_read_only(path).unwrap();
         <span class="kw">let </span>db_readonly = Database::new(db_readonly, Default::default());
-        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = db_readonly.begin_transaction().<span class="kw">await</span>;
+        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = db_readonly.begin_transaction_nc().<span class="kw">await</span>;
         <span class="kw">let </span>query = dbtx
             .find_by_prefix_sorted_descending(<span class="kw-2">&amp;</span>DbPrefixTestPrefix)
             .<span class="kw">await

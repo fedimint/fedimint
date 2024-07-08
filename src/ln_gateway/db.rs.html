@@ -576,7 +576,7 @@
         <span class="kw">let _ </span>= TracingSetup::default().init();
         validate_migrations_global(
             |db| <span class="kw">async move </span>{
-                <span class="kw">let </span><span class="kw-2">mut </span>dbtx = db.begin_transaction().<span class="kw">await</span>;
+                <span class="kw">let </span><span class="kw-2">mut </span>dbtx = db.begin_transaction_nc().<span class="kw">await</span>;
 
                 <span class="kw">for </span>prefix <span class="kw">in </span>DbKeyPrefix::iter() {
                     <span class="kw">match </span>prefix {
