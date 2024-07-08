@@ -20,9 +20,9 @@ use fedimint_core::endpoint_constants::{
     DEFAULT_CONFIG_GEN_PARAMS_ENDPOINT, GUARDIAN_CONFIG_BACKUP_ENDPOINT, RECOVER_ENDPOINT,
     RESTART_FEDERATION_SETUP_ENDPOINT, RUN_DKG_ENDPOINT, SERVER_CONFIG_CONSENSUS_HASH_ENDPOINT,
     SESSION_COUNT_ENDPOINT, SESSION_STATUS_ENDPOINT, SET_CONFIG_GEN_CONNECTIONS_ENDPOINT,
-    SET_CONFIG_GEN_PARAMS_ENDPOINT, SET_PASSWORD_ENDPOINT, START_CONSENSUS_ENDPOINT,
-    STATUS_ENDPOINT, SUBMIT_API_ANNOUNCEMENT_ENDPOINT, SUBMIT_TRANSACTION_ENDPOINT,
-    VERIFIED_CONFIGS_ENDPOINT, VERIFY_CONFIG_HASH_ENDPOINT,
+    SET_CONFIG_GEN_PARAMS_ENDPOINT, SET_PASSWORD_ENDPOINT, SIGN_API_ANNOUNCEMENT_ENDPOINT,
+    START_CONSENSUS_ENDPOINT, STATUS_ENDPOINT, SUBMIT_API_ANNOUNCEMENT_ENDPOINT,
+    SUBMIT_TRANSACTION_ENDPOINT, VERIFIED_CONFIGS_ENDPOINT, VERIFY_CONFIG_HASH_ENDPOINT,
 };
 use fedimint_core::module::audit::AuditSummary;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
@@ -33,6 +33,7 @@ use fedimint_core::net::api_announcement::{
 use fedimint_core::session_outcome::{AcceptedItem, SessionOutcome, SessionStatus};
 use fedimint_core::task::{MaybeSend, MaybeSync};
 use fedimint_core::transaction::{SerdeTransaction, Transaction, TransactionSubmissionOutcome};
+use fedimint_core::util::SafeUrl;
 use fedimint_core::{apply, async_trait_maybe_send, NumPeersExt, PeerId, TransactionId};
 use futures::future::join_all;
 use jsonrpsee_core::client::Error as JsonRpcClientError;
@@ -446,6 +447,19 @@ where
             API_ANNOUNCEMENTS_ENDPOINT.to_owned(),
             ApiRequestErased::default(),
             guardian,
+        )
+        .await
+    }
+
+    async fn sign_api_announcement(
+        &self,
+        api_url: SafeUrl,
+        auth: ApiAuth,
+    ) -> FederationResult<SignedApiAnnouncement> {
+        self.request_admin(
+            SIGN_API_ANNOUNCEMENT_ENDPOINT,
+            ApiRequestErased::new(api_url),
+            auth,
         )
         .await
     }

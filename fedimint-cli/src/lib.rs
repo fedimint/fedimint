@@ -331,6 +331,16 @@ enum AdminCmd {
     GuardianConfigBackup,
 
     Dkg(DkgAdminArgs),
+    /// Sign and announce a new API endpoint. The previous one will be
+    /// invalidated
+    SignApiAnnouncement {
+        /// New API URL to announce
+        api_url: SafeUrl,
+        /// Provide the API url for the guardian directly in case the old one
+        /// isn't reachable anymore
+        #[clap(long)]
+        override_url: Option<SafeUrl>,
+    },
 }
 
 #[derive(Debug, Clone, Args)]
@@ -799,6 +809,35 @@ impl FedimintCli {
             }
             Command::Admin(AdminCmd::Dkg(dkg_args)) => {
                 self.handle_admin_dkg_command(cli, dkg_args).await
+            }
+            Command::Admin(AdminCmd::SignApiAnnouncement {
+                api_url,
+                override_url,
+            }) => {
+                let client = self.client_open(&cli).await?;
+
+                if !["ws", "wss"].contains(&api_url.scheme()) {
+                    return Err(CliError {
+                        error: format!(
+                            "Unsupported URL scheme {}, use ws:// or wss://",
+                            api_url.scheme()
+                        ),
+                    });
+                }
+
+                let announcement = cli
+                    .admin_client(
+                        &override_url
+                            .and_then(|url| Some(vec![(cli.our_id?, url)].into_iter().collect()))
+                            .unwrap_or(client.get_peer_urls().await),
+                        client.api_secret(),
+                    )?
+                    .sign_api_announcement(api_url, cli.auth()?)
+                    .await?;
+
+                Ok(CliOutput::Raw(
+                    serde_json::to_value(announcement).map_err_cli_msg("invalid response")?,
+                ))
             }
             Command::Dev(DevCmd::Api {
                 method,

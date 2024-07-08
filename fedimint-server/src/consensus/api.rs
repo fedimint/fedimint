@@ -25,8 +25,9 @@ use fedimint_core::endpoint_constants::{
     AWAIT_TRANSACTION_ENDPOINT, BACKUP_ENDPOINT, CLIENT_CONFIG_ENDPOINT,
     CLIENT_CONFIG_JSON_ENDPOINT, FEDERATION_ID_ENDPOINT, GUARDIAN_CONFIG_BACKUP_ENDPOINT,
     INVITE_CODE_ENDPOINT, RECOVER_ENDPOINT, SERVER_CONFIG_CONSENSUS_HASH_ENDPOINT,
-    SESSION_COUNT_ENDPOINT, SESSION_STATUS_ENDPOINT, SHUTDOWN_ENDPOINT, STATUS_ENDPOINT,
-    SUBMIT_API_ANNOUNCEMENT_ENDPOINT, SUBMIT_TRANSACTION_ENDPOINT, VERSION_ENDPOINT,
+    SESSION_COUNT_ENDPOINT, SESSION_STATUS_ENDPOINT, SHUTDOWN_ENDPOINT,
+    SIGN_API_ANNOUNCEMENT_ENDPOINT, STATUS_ENDPOINT, SUBMIT_API_ANNOUNCEMENT_ENDPOINT,
+    SUBMIT_TRANSACTION_ENDPOINT, VERSION_ENDPOINT,
 };
 use fedimint_core::epoch::ConsensusItem;
 use fedimint_core::module::audit::{Audit, AuditSummary};
@@ -36,7 +37,7 @@ use fedimint_core::module::{
     SerdeModuleEncoding, SupportedApiVersionsSummary,
 };
 use fedimint_core::net::api_announcement::{
-    SignedApiAnnouncement, SignedApiAnnouncementSubmission,
+    ApiAnnouncement, SignedApiAnnouncement, SignedApiAnnouncementSubmission,
 };
 use fedimint_core::secp256k1::{PublicKey, SECP256K1};
 use fedimint_core::server::DynServerModule;
@@ -44,7 +45,8 @@ use fedimint_core::session_outcome::{SessionOutcome, SessionStatus, SignedSessio
 use fedimint_core::transaction::{
     SerdeTransaction, Transaction, TransactionError, TransactionSubmissionOutcome,
 };
-use fedimint_core::{OutPoint, PeerId, TransactionId};
+use fedimint_core::util::SafeUrl;
+use fedimint_core::{secp256k1, OutPoint, PeerId, TransactionId};
 use fedimint_logging::LOG_NET_API;
 use futures::StreamExt;
 use tokio::sync::{watch, RwLock};
@@ -421,6 +423,39 @@ impl ConsensusApi {
         dbtx.commit_tx().await;
         Ok(())
     }
+
+    async fn sign_api_announcement(&self, new_url: SafeUrl) -> SignedApiAnnouncement {
+        self.db
+            .autocommit(
+                |dbtx, _| {
+                    let new_url_inner = new_url.clone();
+                    Box::pin(async move {
+                        let new_nonce = dbtx
+                            .get_value(&ApiAnnouncementKey(self.cfg.local.identity))
+                            .await
+                            .map_or(0, |a| a.api_announcement.nonce + 1);
+                        let announcement = ApiAnnouncement {
+                            api_url: new_url_inner,
+                            nonce: new_nonce,
+                        };
+                        let ctx = secp256k1::Secp256k1::new();
+                        let signed_announcement = announcement
+                            .sign(&ctx, &self.cfg.private.broadcast_secret_key.keypair(&ctx));
+
+                        dbtx.insert_entry(
+                            &ApiAnnouncementKey(self.cfg.local.identity),
+                            &signed_announcement,
+                        )
+                        .await;
+
+                        Result::<_, ()>::Ok(signed_announcement)
+                    })
+                },
+                None,
+            )
+            .await
+            .expect("Will not terminate on error")
+    }
 }
 
 #[async_trait]
@@ -648,6 +683,14 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConsensusApi>> {
             ApiVersion::new(0, 3),
             async |fedimint: &ConsensusApi, _context, submission: SignedApiAnnouncementSubmission| -> () {
                 fedimint.submit_api_announcement(submission.peer_id, submission.signed_api_announcement).await
+            }
+        },
+        api_endpoint! {
+            SIGN_API_ANNOUNCEMENT_ENDPOINT,
+            ApiVersion::new(0, 3),
+            async |fedimint: &ConsensusApi, context, new_url: SafeUrl| -> SignedApiAnnouncement {
+                check_auth(context)?;
+                Ok(fedimint.sign_api_announcement(new_url).await)
             }
         },
     ]

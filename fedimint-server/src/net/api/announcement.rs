@@ -11,6 +11,7 @@ use fedimint_core::net::api_announcement::{
 use fedimint_core::task::{sleep, TaskGroup};
 use fedimint_core::util::SafeUrl;
 use fedimint_core::{impl_db_lookup, impl_db_record, PeerId};
+use tokio::select;
 use tracing::debug;
 
 use crate::config::{ServerConfig, ServerConfigConsensus};
@@ -26,7 +27,7 @@ impl_db_record!(
     key = ApiAnnouncementKey,
     value = SignedApiAnnouncement,
     db_prefix = DbKeyPrefix::ApiAnnouncements,
-    notify_on_modify = false,
+    notify_on_modify = true,
 );
 impl_db_lookup!(
     key = ApiAnnouncementKey,
@@ -67,7 +68,19 @@ pub async fn start_api_announcement_service(
                 debug!(?e, "Announcing our API URL did not succeed for all peers, retrying in {FAILURE_RETRY_SECONDS} seconds");
                 sleep(Duration::from_secs(FAILURE_RETRY_SECONDS)).await;
             } else {
-                sleep(Duration::from_secs(SUCCESS_RETRY_SECONDS)).await;
+                let our_announcement_key = ApiAnnouncementKey(our_peer_id);
+                let new_announcement = db.wait_key_check(
+                    &our_announcement_key,
+                    |new_announcement| {
+                        new_announcement.and_then(
+                            |new_announcement| (new_announcement.api_announcement.nonce != announcement.api_announcement.nonce).then_some(())
+                        )
+                    });
+
+                select! {
+                    _ = new_announcement => {},
+                    () = sleep(Duration::from_secs(SUCCESS_RETRY_SECONDS)) => {},
+                }
             }
         }
     });

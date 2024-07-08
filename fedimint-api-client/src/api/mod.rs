@@ -734,6 +734,12 @@ pub trait IGlobalFederationApi: IRawFederationApi {
         &self,
         guardian: PeerId,
     ) -> PeerResult<BTreeMap<PeerId, SignedApiAnnouncement>>;
+
+    async fn sign_api_announcement(
+        &self,
+        api_url: SafeUrl,
+        auth: ApiAuth,
+    ) -> FederationResult<SignedApiAnnouncement>;
 }
 
 pub fn deserialize_outcome<R>(
