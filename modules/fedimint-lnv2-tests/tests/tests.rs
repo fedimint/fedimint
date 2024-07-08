@@ -1,22 +1,27 @@
+mod mock;
+
 use std::sync::Arc;
 
+use fedimint_client::transaction::{ClientInput, TransactionBuilder};
+use fedimint_core::core::OperationId;
 use fedimint_core::util::NextOrPending;
 use fedimint_core::{sats, Amount};
 use fedimint_dummy_client::{DummyClientInit, DummyClientModule};
 use fedimint_dummy_common::config::DummyGenParams;
 use fedimint_dummy_server::DummyInit;
 use fedimint_lnv2_client::{
-    LightningClientInit, LightningClientModule, SendPaymentError, SendState,
+    Bolt11InvoiceDescription, LightningClientInit, LightningClientModule,
+    LightningClientStateMachines, LightningOperationMeta, PaymentFee, ReceiveState,
+    SendPaymentError, SendState, EXPIRATION_DELTA_LIMIT_DEFAULT,
 };
 use fedimint_lnv2_common::config::LightningGenParams;
+use fedimint_lnv2_common::{LightningInput, LightningInputV0, OutgoingWitness};
 use fedimint_lnv2_server::LightningInit;
 use fedimint_testing::federation::FederationTest;
 use fedimint_testing::fixtures::Fixtures;
 use fedimint_testing::gateway::{GatewayTest, DEFAULT_GATEWAY_PASSWORD};
-use fedimint_testing::ln::FakeLightningTest;
-use mock::MockGatewayConnection;
 
-mod mock;
+use crate::mock::{MockGatewayConnection, MOCK_INVOICE_PREIMAGE};
 
 fn fixtures() -> Fixtures {
     let fixtures = Fixtures::new_primary(DummyClientInit, DummyInit, DummyGenParams::default());
@@ -57,9 +62,6 @@ async fn can_pay_external_invoice_exactly_once() -> anyhow::Result<()> {
     let gateway_test = gateway(&fixtures, &fed).await;
     let gateway_api = gateway_test.gateway.versioned_api().clone();
 
-    let other_ln = FakeLightningTest::new();
-    let invoice = other_ln.invoice(Amount::from_sats(100), None)?;
-
     let client = fed.new_client().await;
 
     // Print money for client
@@ -69,6 +71,8 @@ async fn can_pay_external_invoice_exactly_once() -> anyhow::Result<()> {
         .await?;
 
     client.await_primary_module_output(op, outpoint).await?;
+
+    let invoice = mock::payable_invoice();
 
     let operation_id = client
         .get_first_module::<LightningClientModule>()
@@ -105,14 +109,11 @@ async fn can_pay_external_invoice_exactly_once() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn refund_unpayable_invoice() -> anyhow::Result<()> {
+async fn refund_failed_payment() -> anyhow::Result<()> {
     let fixtures = fixtures();
     let fed = fixtures.new_default_fed().await;
     let gateway_test = gateway(&fixtures, &fed).await;
     let gateway_api = gateway_test.gateway.versioned_api().clone();
-
-    let other_ln = FakeLightningTest::new();
-    let invoice = other_ln.unpayable_invoice(Amount::from_sats(100), None);
 
     let client = fed.new_client().await;
 
@@ -126,7 +127,7 @@ async fn refund_unpayable_invoice() -> anyhow::Result<()> {
 
     let op = client
         .get_first_module::<LightningClientModule>()
-        .send(gateway_api, invoice)
+        .send(gateway_api, mock::unpayable_invoice())
         .await?;
 
     let mut sub = client
@@ -139,6 +140,153 @@ async fn refund_unpayable_invoice() -> anyhow::Result<()> {
     assert_eq!(sub.ok().await?, SendState::Funded);
     assert_eq!(sub.ok().await?, SendState::Refunding);
     assert_eq!(sub.ok().await?, SendState::Refunded);
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn unilateral_refund_of_outgoing_contracts() -> anyhow::Result<()> {
+    let fixtures = fixtures();
+    let fed = fixtures.new_default_fed().await;
+    let gateway_test = gateway(&fixtures, &fed).await;
+    let gateway_api = gateway_test.gateway.versioned_api().clone();
+
+    let client = fed.new_client().await;
+
+    // Print money for client
+    let (op, outpoint) = client
+        .get_first_module::<DummyClientModule>()
+        .print_money(sats(1000))
+        .await?;
+
+    client.await_primary_module_output(op, outpoint).await?;
+
+    let op = client
+        .get_first_module::<LightningClientModule>()
+        .send(gateway_api, mock::crash_invoice())
+        .await?;
+
+    let mut sub = client
+        .get_first_module::<LightningClientModule>()
+        .subscribe_send(op)
+        .await?
+        .into_stream();
+
+    assert_eq!(sub.ok().await?, SendState::Funding);
+    assert_eq!(sub.ok().await?, SendState::Funded);
+
+    fixtures
+        .bitcoin()
+        .mine_blocks(EXPIRATION_DELTA_LIMIT_DEFAULT)
+        .await;
+
+    assert_eq!(sub.ok().await?, SendState::Refunding);
+    assert_eq!(sub.ok().await?, SendState::Refunded);
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn claiming_outgoing_contract_triggers_success() -> anyhow::Result<()> {
+    let fixtures = fixtures();
+    let fed = fixtures.new_default_fed().await;
+    let gateway_test = gateway(&fixtures, &fed).await;
+    let gateway_api = gateway_test.gateway.versioned_api().clone();
+
+    let client = fed.new_client().await;
+
+    // Print money for client
+    let (op, outpoint) = client
+        .get_first_module::<DummyClientModule>()
+        .print_money(sats(1000))
+        .await?;
+
+    client.await_primary_module_output(op, outpoint).await?;
+
+    let op = client
+        .get_first_module::<LightningClientModule>()
+        .send(gateway_api, mock::crash_invoice())
+        .await?;
+
+    let mut sub = client
+        .get_first_module::<LightningClientModule>()
+        .subscribe_send(op)
+        .await?
+        .into_stream();
+
+    assert_eq!(sub.ok().await?, SendState::Funding);
+    assert_eq!(sub.ok().await?, SendState::Funded);
+
+    let operation = client
+        .get_first_module::<LightningClientModule>()
+        .client_ctx
+        .get_operation(op)
+        .await?;
+
+    let contract = match operation.meta::<LightningOperationMeta>() {
+        LightningOperationMeta::Send(send_operation_meta) => send_operation_meta.contract,
+        LightningOperationMeta::Receive(..) => panic!("Operation Meta is a Receive variant"),
+    };
+
+    let client_input = ClientInput::<LightningInput, LightningClientStateMachines> {
+        input: LightningInput::V0(LightningInputV0::Outgoing(
+            contract.contract_id(),
+            OutgoingWitness::Claim(MOCK_INVOICE_PREIMAGE),
+        )),
+        amount: contract.amount,
+        keys: vec![mock::gateway_keypair()],
+        state_machines: Arc::new(|_, _| vec![]),
+    };
+
+    client
+        .finalize_and_submit_transaction(
+            OperationId::new_random(),
+            "Claiming Outgoing Contract",
+            |_, _| (),
+            TransactionBuilder::new().with_input(
+                client
+                    .get_first_module::<LightningClientModule>()
+                    .client_ctx
+                    .make_client_input(client_input),
+            ),
+        )
+        .await
+        .expect("Failed to claim outgoing contract");
+
+    assert_eq!(sub.ok().await?, SendState::Success);
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn receive_operation_expires() -> anyhow::Result<()> {
+    let fixtures = fixtures();
+    let fed = fixtures.new_default_fed().await;
+    let gateway_test = gateway(&fixtures, &fed).await;
+    let gateway_api = gateway_test.gateway.versioned_api().clone();
+
+    let client = fed.new_client().await;
+
+    let op = client
+        .get_first_module::<LightningClientModule>()
+        .receive_internal(
+            gateway_api,
+            Amount::from_sats(1000),
+            5, // receive operation expires in 5 seconds
+            Bolt11InvoiceDescription::Direct(String::new()),
+            PaymentFee::one_percent(),
+        )
+        .await?
+        .1;
+
+    let mut sub = client
+        .get_first_module::<LightningClientModule>()
+        .subscribe_receive(op)
+        .await?
+        .into_stream();
+
+    assert_eq!(sub.ok().await?, ReceiveState::Pending);
+    assert_eq!(sub.ok().await?, ReceiveState::Expired);
 
     Ok(())
 }

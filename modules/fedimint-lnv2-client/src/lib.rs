@@ -54,24 +54,30 @@ use crate::send_sm::{SendSMCommon, SendSMState, SendStateMachine};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum LightningOperationMeta {
-    Send {
-        funding_txid: TransactionId,
-        funding_change_outpoints: Vec<OutPoint>,
-        gateway_api: SafeUrl,
-        contract: OutgoingContract,
-        invoice: Bolt11Invoice,
-    },
-    Receive {
-        contract: IncomingContract,
-    },
+    Send(SendOperationMeta),
+    Receive(ReceiveOperationMeta),
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SendOperationMeta {
+    pub funding_txid: TransactionId,
+    pub funding_change_outpoints: Vec<OutPoint>,
+    pub gateway_api: SafeUrl,
+    pub contract: OutgoingContract,
+    pub invoice: Bolt11Invoice,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ReceiveOperationMeta {
+    pub contract: IncomingContract,
 }
 
 /// Number of blocks until outgoing lightning contracts time out and user
 /// client can refund it unilaterally
-const EXPIRATION_DELTA_LIMIT_DEFAULT: u64 = 500;
+pub const EXPIRATION_DELTA_LIMIT_DEFAULT: u64 = 500;
 
 /// Default expiration time for lightning invoices
-const INVOICE_EXPIRATION_SECONDS_DEFAULT: u32 = 24 * 60 * 60;
+pub const INVOICE_EXPIRATION_SECONDS_DEFAULT: u32 = 24 * 60 * 60;
 
 #[cfg_attr(doc, aquamarine::aquamarine)]
 /// The high-level state of sending a payment over lightning.
@@ -446,12 +452,14 @@ impl LightningClientModule {
             .finalize_and_submit_transaction(
                 operation_id,
                 LightningCommonInit::KIND.as_str(),
-                |funding_txid, funding_change_outpoints| LightningOperationMeta::Send {
-                    funding_txid,
-                    funding_change_outpoints,
-                    gateway_api: gateway_api.clone(),
-                    contract: contract.clone(),
-                    invoice: invoice.clone(),
+                |funding_txid, funding_change_outpoints| {
+                    LightningOperationMeta::Send(SendOperationMeta {
+                        funding_txid,
+                        funding_change_outpoints,
+                        gateway_api: gateway_api.clone(),
+                        contract: contract.clone(),
+                        invoice: invoice.clone(),
+                    })
                 },
                 transaction,
             )
@@ -739,7 +747,7 @@ impl LightningClientModule {
             .manual_operation_start(
                 operation_id,
                 LightningCommonInit::KIND.as_str(),
-                LightningOperationMeta::Receive { contract },
+                LightningOperationMeta::Receive(ReceiveOperationMeta { contract }),
                 vec![self.client_ctx.make_dyn_state(receive_sm)],
             )
             .await

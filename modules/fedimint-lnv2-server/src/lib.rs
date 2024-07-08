@@ -671,7 +671,7 @@ impl Lightning {
     ) -> Option<ContractId> {
         loop {
             timeout(
-                Duration::from_secs(60 * 10),
+                Duration::from_secs(10),
                 db.wait_key_exists(&IncomingContractKey(contract_id)),
             )
             .await
@@ -699,7 +699,7 @@ impl Lightning {
     ) -> Option<[u8; 32]> {
         loop {
             timeout(
-                Duration::from_secs(60 * 10),
+                Duration::from_secs(10),
                 db.wait_key_exists(&PreimageKey(contract_id)),
             )
             .await
