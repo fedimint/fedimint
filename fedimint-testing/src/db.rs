@@ -465,7 +465,7 @@ pub fn copy_directory(src: &Path, dst: &Path) -> io::Result<()> {
 #[cfg(test)]
 mod fedimint_migration_tests {
     use anyhow::ensure;
-    use fedimint_client::db::{ClientConfigKey, ClientConfigKeyV0};
+    use fedimint_client::db::ClientConfigKeyV0;
     use fedimint_core::config::{ClientConfigV0, FederationId, GlobalClientConfigV0};
     use fedimint_core::db::{Database, IDatabaseTransactionOpsCoreTyped};
     use fedimint_core::module::registry::ModuleDecoderRegistry;

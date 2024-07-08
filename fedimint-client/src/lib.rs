@@ -2088,7 +2088,7 @@ impl ClientBuilder {
     /// // let db = RocksDb::open(db_path).expect("error opening DB");
     /// # let db: Database = unimplemented!();
     ///
-    /// let client = Client::builder(db).await.expect("Error building client");
+    /// let client = Client::builder(db).await.expect("Error building client")
     ///     // Mount the modules the client should support:
     ///     // .with_module(LightningClientInit)
     ///     // .with_module(MintClientInit)
