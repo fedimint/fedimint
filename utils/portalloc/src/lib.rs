@@ -26,19 +26,9 @@ use anyhow::bail;
 use crate::data::DataDir;
 use crate::envs::FM_PORTALLOC_DATA_DIR_ENV;
 
-fn data_dir() -> anyhow::Result<PathBuf> {
-    if let Some(env) = std::env::var_os(FM_PORTALLOC_DATA_DIR_ENV) {
-        Ok(PathBuf::from(env))
-    } else if let Some(dir) = dirs::cache_dir() {
-        Ok(dir.join("fm-portalloc"))
-    } else {
-        bail!("Could not determine port alloc data dir. Try setting FM_PORTALLOC_DATA_DIR");
-    }
-}
-
 pub fn port_alloc(range_size: u16) -> anyhow::Result<u16> {
     if range_size == 0 {
-        bail!("Can't allocate range of 0 bytes");
+        bail!("Can't allocate range of 0 ports");
     }
 
     let mut data_dir = DataDir::new(data_dir()?)?;
@@ -49,4 +39,14 @@ pub fn port_alloc(range_size: u16) -> anyhow::Result<u16> {
         data_dir.store_data(&data)?;
         Ok(base_port)
     })
+}
+
+fn data_dir() -> anyhow::Result<PathBuf> {
+    if let Some(env) = std::env::var_os(FM_PORTALLOC_DATA_DIR_ENV) {
+        Ok(PathBuf::from(env))
+    } else if let Some(dir) = dirs::cache_dir() {
+        Ok(dir.join("fm-portalloc"))
+    } else {
+        bail!("Could not determine port alloc data dir. Try setting FM_PORTALLOC_DATA_DIR");
+    }
 }

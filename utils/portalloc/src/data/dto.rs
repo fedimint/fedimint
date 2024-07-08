@@ -4,11 +4,12 @@ use std::net::TcpListener;
 use serde::{Deserialize, Serialize};
 use tracing::{debug, trace, warn};
 
-// Ports below 10k are typically used by normal software, increasing chance they
-// would get in a way.
+/// The lowest port number to try. Ports below 10k are typically used by normal
+/// software, increasing chance they would get in a way.
 const LOW: u16 = 10000;
-// Ports above 32k are typically ephmeral, increasing a chance of random
-// conflicts after port was already tried.
+
+// The highest port number to try. Ports above 32k are typically ephmeral,
+// increasing a chance of random conflicts after port was already tried.
 const HIGH: u16 = 32000;
 
 const LOG_PORT_ALLOC: &str = "port-alloc";
@@ -16,16 +17,14 @@ const LOG_PORT_ALLOC: &str = "port-alloc";
 #[derive(Serialize, Deserialize, Debug, Clone, Default)]
 #[serde(rename_all = "kebab-case")]
 struct RangeData {
+    /// Port range size.
     size: u16,
-    /// local time unix timestamp
-    expires: u64,
+
+    /// Unix timestamp when this range expires.
+    expires: UnixTimestamp,
 }
 
 type UnixTimestamp = u64;
-
-fn now_ts() -> UnixTimestamp {
-    fedimint_core::time::duration_since_epoch().as_secs()
-}
 
 fn default_next() -> u16 {
     LOW
@@ -34,8 +33,12 @@ fn default_next() -> u16 {
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all = "kebab-case")]
 pub struct RootData {
+    /// Next port to try.
     #[serde(default = "default_next")]
     next: u16,
+
+    /// Map of port ranges. For each range, the key is the first port in the
+    /// range and the range size and expiration time are stored in the value.
     keys: BTreeMap<u16, RangeData>,
 }
 
@@ -52,13 +55,13 @@ impl RootData {
     pub fn get_free_port_range(&mut self, range_size: u16) -> u16 {
         trace!(target: LOG_PORT_ALLOC, range_size, "Looking for port");
 
-        self.reclaim(now_ts());
+        self.reclaim();
 
         let mut base_port: u16 = self.next;
         'retry: loop {
             trace!(target: LOG_PORT_ALLOC, base_port, range_size, "Checking a port");
-            if HIGH < base_port {
-                self.reclaim(now_ts());
+            if base_port > HIGH {
+                self.reclaim();
                 base_port = LOW;
             }
             let range = base_port..base_port + range_size;
@@ -95,14 +98,16 @@ impl RootData {
             // that temporarily release ports (e.g. restarts, failure simulations, etc.),
             // there's a chance that this can expire and another tests snatches the test,
             // so better to keep it around the time a longest test can take.
-            self.insert(range, now_ts() + ALLOCATION_TIME_SECS);
+            self.insert(range, Self::now_ts() + ALLOCATION_TIME_SECS);
 
             debug!(target: LOG_PORT_ALLOC, base_port, range_size, "Allocated port range");
             break base_port;
         }
     }
 
-    fn reclaim(&mut self, now: u64) {
+    /// Remove expired entries from the map.
+    fn reclaim(&mut self) {
+        let now = Self::now_ts();
         self.keys.retain(|_k, v| now < v.expires);
     }
 
@@ -132,6 +137,10 @@ impl RootData {
             },
         );
         self.next = range.end;
+    }
+
+    fn now_ts() -> UnixTimestamp {
+        fedimint_core::time::duration_since_epoch().as_secs()
     }
 }
 
