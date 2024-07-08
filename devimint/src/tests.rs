@@ -13,6 +13,7 @@ use cln_rpc::primitives::{Amount as ClnRpcAmount, AmountOrAny};
 use fedimint_core::core::LEGACY_HARDCODED_INSTANCE_ID_WALLET;
 use fedimint_core::encoding::Decodable;
 use fedimint_core::envs::is_env_var_set;
+use fedimint_core::net::api_announcement::SignedApiAnnouncement;
 use fedimint_core::task::block_in_place;
 use fedimint_core::{Amount, BitcoinHash, PeerId};
 use fedimint_ln_client::cli::LnInvoiceResponse;
@@ -1191,6 +1192,83 @@ pub async fn cli_tests(dev_fed: DevFed) -> Result<()> {
     let expected_wallet_balance = initial_walletng_balance - 50_000_000 - (fees_sat * 1000);
 
     assert_eq!(post_withdraw_walletng_balance, expected_wallet_balance);
+
+    // # API URL announcements
+    if fedimint_cli_version >= *VERSION_0_4_0_ALPHA && fedimintd_version >= *VERSION_0_4_0_ALPHA {
+        let initial_announcements =
+            serde_json::from_value::<BTreeMap<PeerId, SignedApiAnnouncement>>(
+                cmd!(client, "dev", "api-announcements",).out_json().await?,
+            )
+            .expect("failed to parse API announcements");
+
+        assert_eq!(
+            fed.members.len(),
+            initial_announcements.len(),
+            "Not all guardians made an announcement"
+        );
+        assert!(
+            initial_announcements
+                .values()
+                .all(|announcement| announcement.api_announcement.nonce == 0),
+            "Not all announcements have their initial value"
+        );
+
+        const NEW_API_URL: &str = "ws://127.0.0.1:4242";
+        let new_announcement = serde_json::from_value::<SignedApiAnnouncement>(
+            cmd!(
+                client,
+                "--our-id",
+                "0",
+                "--password",
+                "pass",
+                "admin",
+                "sign-api-announcement",
+                NEW_API_URL
+            )
+            .out_json()
+            .await?,
+        )
+        .expect("Couldn't parse signed announcement");
+
+        assert_eq!(
+            new_announcement.api_announcement.nonce, 1,
+            "Nonce did not increment correctly"
+        );
+
+        info!("Testing if the client syncs the announcement");
+        let announcement = poll("Waiting for the announcement to propagate", || async {
+            cmd!(client, "dev", "wait", "1")
+                .run()
+                .await
+                .map_err(ControlFlow::Break)?;
+
+            let new_announcements_peer2 =
+                serde_json::from_value::<BTreeMap<PeerId, SignedApiAnnouncement>>(
+                    cmd!(client, "dev", "api-announcements",)
+                        .out_json()
+                        .await
+                        .map_err(ControlFlow::Break)?,
+                )
+                .expect("failed to parse API announcements");
+
+            let announcement = new_announcements_peer2[&PeerId::from(0)]
+                .api_announcement
+                .clone();
+            if announcement.nonce == 1 {
+                Ok(announcement)
+            } else {
+                Err(ControlFlow::Continue(anyhow!(
+                    "Haven't received updated announcement yet"
+                )))
+            }
+        })
+        .await?;
+
+        assert_eq!(
+            announcement.api_url,
+            NEW_API_URL.parse().expect("valid URL")
+        );
+    }
 
     Ok(())
 }
