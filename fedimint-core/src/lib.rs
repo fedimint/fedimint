@@ -54,11 +54,11 @@ pub use bitcoin_hashes::Hash as BitcoinHash;
 pub use macro_rules_attribute::apply;
 pub use module::ServerModule;
 pub use peer_id::*;
-pub use secp256k1;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 pub use tiered::Tiered;
 pub use tiered_multi::*;
+pub use {hex, secp256k1};
 
 pub use crate::core::server;
 use crate::encoding::{Decodable, DecodeError, Encodable};
@@ -88,8 +88,6 @@ pub mod envs;
 pub mod epoch;
 /// Formatting helpers
 pub mod fmt_utils;
-/// Hex encoding helpers
-pub mod hex;
 /// Federation invite code
 pub mod invite_code;
 /// Common macros
