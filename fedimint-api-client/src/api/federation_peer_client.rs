@@ -137,7 +137,7 @@ struct FederationPeerClientConnectionState {
 
 impl FederationPeerClientConnectionState {
     const MIN_BACKOFF: Duration = Duration::from_millis(100);
-    const MAX_BACKOFF: Duration = Duration::from_secs(5);
+    const MAX_BACKOFF: Duration = Duration::from_secs(15);
 
     fn new() -> Self {
         Self {
@@ -149,9 +149,10 @@ impl FederationPeerClientConnectionState {
     /// Wait (if needed) before reconnection attempt based on number of previous
     /// attempts and update reconnection stats.
     async fn wait(&mut self) {
+        let now_ts = now();
         let desired_timeout = self.connection_backoff.next().unwrap_or(Self::MAX_BACKOFF);
         let since_last_connect = match self.last_connection_attempt_or {
-            Some(last) => now().duration_since(last).unwrap_or_default(),
+            Some(last) => now_ts.duration_since(last).unwrap_or_default(),
             None => Duration::ZERO,
         };
 
@@ -164,7 +165,7 @@ impl FederationPeerClientConnectionState {
         }
         fedimint_core::runtime::sleep(sleep_duration).await;
 
-        self.last_connection_attempt_or = Some(now());
+        self.last_connection_attempt_or = Some(now_ts);
     }
 
     fn reset(&mut self) {
@@ -173,6 +174,8 @@ impl FederationPeerClientConnectionState {
 
     fn new_backoff() -> backon::FibonacciBackoff {
         backon::FibonacciBuilder::default()
+            .with_jitter()
+            .with_max_times(usize::MAX)
             .with_min_delay(Self::MIN_BACKOFF)
             .with_max_delay(Self::MAX_BACKOFF)
             .build()
