@@ -1849,9 +1849,6 @@
 <a href="#1849" id="1849">1849</a>
 <a href="#1850" id="1850">1850</a>
 <a href="#1851" id="1851">1851</a>
-<a href="#1852" id="1852">1852</a>
-<a href="#1853" id="1853">1853</a>
-<a href="#1854" id="1854">1854</a>
 </pre></div><pre class="rust"><code><span class="attr">#![warn(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::cast_possible_wrap)]
@@ -2541,7 +2538,7 @@
                 BLOCK_COUNT_LOCAL_ENDPOINT,
                 ApiVersion::new(<span class="number">0</span>, <span class="number">0</span>),
                 <span class="kw">async </span>|module: <span class="kw-2">&amp;</span>Wallet, _context, _params: ()| -&gt; <span class="prelude-ty">Option</span>&lt;u32&gt; {
-                    <span class="prelude-val">Ok</span>(<span class="kw-2">*</span>module.block_count_local.lock().expect(<span class="string">"Locking failed"</span>))
+                    <span class="prelude-val">Ok</span>(module.get_block_count().ok())
                 }
             },
             <span class="macro">api_endpoint!</span> {
@@ -2617,8 +2614,6 @@
     cfg: WalletConfig,
     secp: Secp256k1&lt;All&gt;,
     btc_rpc: DynBitcoindRpc,
-    <span class="doccomment">/// The result of last successful get_block_count
-    </span>block_count_local: std::sync::Mutex&lt;<span class="prelude-ty">Option</span>&lt;u32&gt;&gt;,
     our_peer_id: PeerId,
     <span class="doccomment">/// Block count updated periodically by a background task
     </span>block_count_rx: watch::Receiver&lt;<span class="prelude-ty">Option</span>&lt;u32&gt;&gt;,
@@ -2665,7 +2660,6 @@
         <span class="kw">let </span>wallet = Wallet {
             cfg,
             secp: Default::default(),
-            block_count_local: Default::default(),
             btc_rpc: bitcoind_rpc,
             our_peer_id,
             block_count_rx,
