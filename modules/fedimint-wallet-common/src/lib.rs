@@ -45,6 +45,11 @@ pub const MODULE_CONSENSUS_VERSION: ModuleConsensusVersion = ModuleConsensusVers
 /// wallet.
 pub const CONFIRMATION_TARGET: u16 = 1;
 
+/// To further mitigate the risk of a peg-out transaction getting stuck in the
+/// mempool, we multiply the feerate estimate returned from the backend by this
+/// value.
+pub const FEERATE_MULTIPLIER: u64 = 4;
+
 pub type PartialSig = Vec<u8>;
 
 pub type PegInDescriptor = Descriptor<CompressedPublicKey>;

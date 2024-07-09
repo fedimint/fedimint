@@ -31,6 +31,7 @@ use common::{
     proprietary_tweak_key, PegOutFees, PegOutSignatureItem, ProcessPegOutSigError, SpendableUTXO,
     WalletCommonInit, WalletConsensusItem, WalletCreationError, WalletInput, WalletModuleTypes,
     WalletOutput, WalletOutputOutcome, CONFIRMATION_TARGET, DEPRECATED_RBF_ERROR,
+    FEERATE_MULTIPLIER,
 };
 use fedimint_bitcoind::{create_bitcoind, DynBitcoindRpc};
 use fedimint_core::config::{
@@ -1256,7 +1257,8 @@ impl Wallet {
 
                     match res {
                         Ok(Some(r)) => {
-                            let _ = fee_rate_tx.send(r);
+                            let feerate_with_multiplier = Feerate { sats_per_kvb: r.sats_per_kvb * FEERATE_MULTIPLIER };
+                            let _ = fee_rate_tx.send(feerate_with_multiplier);
                         }
                         Ok(None) => {
                             debug!(target: LOG_MODULE_WALLET, "Bitcoin node did not return a fee rate");
