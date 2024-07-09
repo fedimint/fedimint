@@ -544,8 +544,8 @@
 };
 <span class="kw">use </span>fedimint_core::core::ModuleInstanceId;
 <span class="kw">use </span>fedimint_core::db::{
-    Committable, DatabaseTransaction, DatabaseVersion, IDatabaseTransactionOpsCoreTyped,
-    NonCommittable, ServerMigrationFn,
+    Committable, CoreMigrationFn, DatabaseTransaction, DatabaseVersion,
+    IDatabaseTransactionOpsCoreTyped, NonCommittable,
 };
 <span class="kw">use </span>fedimint_core::module::audit::Audit;
 <span class="kw">use </span>fedimint_core::module::{
@@ -725,7 +725,7 @@
     }
 
     <span class="doccomment">/// DB migrations to move from old to newer versions
-    </span><span class="kw">fn </span>get_database_migrations(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; BTreeMap&lt;DatabaseVersion, ServerMigrationFn&gt; {
+    </span><span class="kw">fn </span>get_database_migrations(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; BTreeMap&lt;DatabaseVersion, CoreMigrationFn&gt; {
         BTreeMap::new()
     }
 }

@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"constant":["STANDARD_FEDIMINT_P2P_PORT"],"mod":["peers"]};
+window.SIDEBAR_ITEMS = {"constant":["STANDARD_FEDIMINT_P2P_PORT"],"mod":["api_announcement","peers"]};

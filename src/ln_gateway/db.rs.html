@@ -316,7 +316,7 @@
 <span class="kw">use </span>bitcoin_hashes::sha256;
 <span class="kw">use </span>fedimint_core::config::FederationId;
 <span class="kw">use </span>fedimint_core::db::{
-    DatabaseTransaction, DatabaseVersion, IDatabaseTransactionOpsCoreTyped, ServerMigrationFn,
+    CoreMigrationFn, DatabaseTransaction, DatabaseVersion, IDatabaseTransactionOpsCoreTyped,
 };
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::invite_code::InviteCode;
@@ -440,8 +440,8 @@
     query_prefix = PreimageAuthenticationPrefix
 );
 
-<span class="kw">pub fn </span>get_gatewayd_database_migrations() -&gt; BTreeMap&lt;DatabaseVersion, ServerMigrationFn&gt; {
-    <span class="kw">let </span><span class="kw-2">mut </span>migrations: BTreeMap&lt;DatabaseVersion, ServerMigrationFn&gt; = BTreeMap::new();
+<span class="kw">pub fn </span>get_gatewayd_database_migrations() -&gt; BTreeMap&lt;DatabaseVersion, CoreMigrationFn&gt; {
+    <span class="kw">let </span><span class="kw-2">mut </span>migrations: BTreeMap&lt;DatabaseVersion, CoreMigrationFn&gt; = BTreeMap::new();
     migrations.insert(DatabaseVersion(<span class="number">0</span>), |dbtx| migrate_to_v1(dbtx).boxed());
     migrations
 }

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["API_ANNOUNCEMENT_MESSAGE_TAG"],"fn":["override_api_urls"],"struct":["ApiAnnouncement","SignedApiAnnouncement","SignedApiAnnouncementSubmission"]};

@@ -536,7 +536,7 @@
     } <span class="kw">else </span>{
         fedimint_core::db::mem_impl::MemDatabase::new().into()
     };
-    <span class="kw">let </span><span class="kw-2">mut </span>client_builder = Client::builder(db);
+    <span class="kw">let </span><span class="kw-2">mut </span>client_builder = Client::builder(db).<span class="kw">await</span><span class="question-mark">?</span>;
     client_builder.with_module(MintClientInit);
     client_builder.with_module(LightningClientInit::default());
     client_builder.with_module(WalletClientInit::default());

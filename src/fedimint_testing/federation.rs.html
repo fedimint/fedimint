@@ -336,7 +336,6 @@
 <a href="#336" id="336">336</a>
 <a href="#337" id="337">337</a>
 <a href="#338" id="338">338</a>
-<a href="#339" id="339">339</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap};
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
@@ -433,7 +432,7 @@
         admin_creds: <span class="prelude-ty">Option</span>&lt;AdminCreds&gt;,
     ) -&gt; ClientHandleArc {
         <span class="macro">info!</span>(target: LOG_TEST, <span class="string">"Setting new client with config"</span>);
-        <span class="kw">let </span><span class="kw-2">mut </span>client_builder = Client::builder(db);
+        <span class="kw">let </span><span class="kw-2">mut </span>client_builder = Client::builder(db).<span class="kw">await</span>.expect(<span class="string">"Failed to build client"</span>);
         client_builder.with_module_inits(<span class="self">self</span>.client_init.clone());
         client_builder.with_primary_module(<span class="self">self</span>.primary_client);
         <span class="kw">if let </span><span class="prelude-val">Some</span>(admin_creds) = admin_creds {
@@ -581,12 +580,11 @@
                 <span class="kw">continue</span>;
             }
 
-            <span class="kw">let </span>client_config = config
-                .consensus
-                .to_client_config(<span class="kw-2">&amp;</span><span class="self">self</span>.server_init)
-                .unwrap();
-
-            <span class="kw">let </span>api = DynGlobalApi::from_config_admin(<span class="kw-2">&amp;</span>client_config, <span class="kw-2">&amp;</span><span class="prelude-val">None</span>, peer_id);
+            <span class="kw">let </span>api = DynGlobalApi::new_admin(
+                peer_id,
+                config.consensus.api_endpoints[<span class="kw-2">&amp;</span>peer_id].url.clone(),
+                <span class="kw-2">&amp;</span><span class="prelude-val">None</span>,
+            );
 
             <span class="kw">while let </span><span class="prelude-val">Err</span>(e) = api
                 .request_admin_no_auth::&lt;u64&gt;(SESSION_COUNT_ENDPOINT, ApiRequestErased::default())

@@ -940,7 +940,6 @@
 <a href="#940" id="940">940</a>
 <a href="#941" id="941">941</a>
 <a href="#942" id="942">942</a>
-<a href="#943" id="943">943</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>core::fmt;
 <span class="kw">use </span>std::any::Any;
 <span class="kw">use </span>std::fmt::Debug;
@@ -1429,25 +1428,24 @@
             .collect()
     }
 
-    <span class="kw">pub fn </span>get_config(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ClientConfig {
-        <span class="self">self</span>.client.get().get_config().clone()
-    }
+    <span class="kw">pub async fn </span>get_config(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ClientConfig {
+        <span class="self">self</span>.client.get().config().<span class="kw">await
+    </span>}
 
     <span class="doccomment">/// Returns an invite code for the federation that points to an arbitrary
     /// guardian server for fetching the config
-    </span><span class="kw">pub fn </span>get_invite_code(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; InviteCode {
-        <span class="kw">let </span>cfg = <span class="self">self</span>.get_config().global;
-        <span class="kw">let </span>(any_guardian_id, any_guardian_url) = cfg
-            .api_endpoints
-            .iter()
-            .next()
-            .expect(<span class="string">"A federation always has at least one guardian"</span>);
-        InviteCode::new(
-            any_guardian_url.url.clone(),
-            <span class="kw-2">*</span>any_guardian_id,
-            cfg.calculate_federation_id(),
-            <span class="self">self</span>.client.get().api_secret().clone(),
-        )
+    </span><span class="kw">pub async fn </span>get_invite_code(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; InviteCode {
+        <span class="kw">let </span>cfg = <span class="self">self</span>.get_config().<span class="kw">await</span>.global;
+        <span class="self">self</span>.client
+            .get()
+            .invite_code(
+                <span class="kw-2">*</span>cfg.api_endpoints
+                    .keys()
+                    .next()
+                    .expect(<span class="string">"A federation always has at least one guardian"</span>),
+            )
+            .<span class="kw">await
+            </span>.expect(<span class="string">"The guardian we requested an invite code for exists"</span>)
     }
 
     <span class="kw">pub fn </span>get_internal_payment_markers(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; anyhow::Result&lt;(PublicKey, u64)&gt; {

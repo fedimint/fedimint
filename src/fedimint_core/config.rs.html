@@ -1074,6 +1074,64 @@
 <a href="#1074" id="1074">1074</a>
 <a href="#1075" id="1075">1075</a>
 <a href="#1076" id="1076">1076</a>
+<a href="#1077" id="1077">1077</a>
+<a href="#1078" id="1078">1078</a>
+<a href="#1079" id="1079">1079</a>
+<a href="#1080" id="1080">1080</a>
+<a href="#1081" id="1081">1081</a>
+<a href="#1082" id="1082">1082</a>
+<a href="#1083" id="1083">1083</a>
+<a href="#1084" id="1084">1084</a>
+<a href="#1085" id="1085">1085</a>
+<a href="#1086" id="1086">1086</a>
+<a href="#1087" id="1087">1087</a>
+<a href="#1088" id="1088">1088</a>
+<a href="#1089" id="1089">1089</a>
+<a href="#1090" id="1090">1090</a>
+<a href="#1091" id="1091">1091</a>
+<a href="#1092" id="1092">1092</a>
+<a href="#1093" id="1093">1093</a>
+<a href="#1094" id="1094">1094</a>
+<a href="#1095" id="1095">1095</a>
+<a href="#1096" id="1096">1096</a>
+<a href="#1097" id="1097">1097</a>
+<a href="#1098" id="1098">1098</a>
+<a href="#1099" id="1099">1099</a>
+<a href="#1100" id="1100">1100</a>
+<a href="#1101" id="1101">1101</a>
+<a href="#1102" id="1102">1102</a>
+<a href="#1103" id="1103">1103</a>
+<a href="#1104" id="1104">1104</a>
+<a href="#1105" id="1105">1105</a>
+<a href="#1106" id="1106">1106</a>
+<a href="#1107" id="1107">1107</a>
+<a href="#1108" id="1108">1108</a>
+<a href="#1109" id="1109">1109</a>
+<a href="#1110" id="1110">1110</a>
+<a href="#1111" id="1111">1111</a>
+<a href="#1112" id="1112">1112</a>
+<a href="#1113" id="1113">1113</a>
+<a href="#1114" id="1114">1114</a>
+<a href="#1115" id="1115">1115</a>
+<a href="#1116" id="1116">1116</a>
+<a href="#1117" id="1117">1117</a>
+<a href="#1118" id="1118">1118</a>
+<a href="#1119" id="1119">1119</a>
+<a href="#1120" id="1120">1120</a>
+<a href="#1121" id="1121">1121</a>
+<a href="#1122" id="1122">1122</a>
+<a href="#1123" id="1123">1123</a>
+<a href="#1124" id="1124">1124</a>
+<a href="#1125" id="1125">1125</a>
+<a href="#1126" id="1126">1126</a>
+<a href="#1127" id="1127">1127</a>
+<a href="#1128" id="1128">1128</a>
+<a href="#1129" id="1129">1129</a>
+<a href="#1130" id="1130">1130</a>
+<a href="#1131" id="1131">1131</a>
+<a href="#1132" id="1132">1132</a>
+<a href="#1133" id="1133">1133</a>
+<a href="#1134" id="1134">1134</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet};
 <span class="kw">use </span>std::fmt::{Debug, Display};
 <span class="kw">use </span>std::hash::Hash;
@@ -1094,6 +1152,7 @@
 <span class="kw">use </span>fedimint_core::{BitcoinHash, ModuleDecoderRegistry};
 <span class="kw">use </span>fedimint_logging::LOG_CORE;
 <span class="kw">use </span>hex::FromHex;
+<span class="kw">use </span>secp256k1::PublicKey;
 <span class="kw">use </span>serde::de::DeserializeOwned;
 <span class="kw">use </span>serde::ser::SerializeMap;
 <span class="kw">use </span>serde::{Deserialize, Deserializer, Serialize, Serializer};
@@ -1187,6 +1246,17 @@
     </span><span class="kw">pub </span>name: String,
 }
 
+<span class="doccomment">/// Total client config v0 (&lt;0.4.0). Does not contain broadcast public keys.
+///
+/// This includes global settings and client-side module configs.
+</span><span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize, Encodable, Decodable)]
+</span><span class="kw">pub struct </span>ClientConfigV0 {
+    <span class="attr">#[serde(flatten)]
+    </span><span class="kw">pub </span>global: GlobalClientConfigV0,
+    <span class="attr">#[serde(deserialize_with = <span class="string">"de_int_key"</span>)]
+    </span><span class="kw">pub </span>modules: BTreeMap&lt;ModuleInstanceId, ClientModuleConfig&gt;,
+}
+
 <span class="doccomment">/// Total client config
 ///
 /// This includes global settings and client-side module configs.
@@ -1217,6 +1287,28 @@
     <span class="prelude-val">Ok</span>(map)
 }
 
+<span class="kw">fn </span>optional_de_int_key&lt;<span class="lifetime">'de</span>, D, K, V&gt;(deserializer: D) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;BTreeMap&lt;K, V&gt;&gt;, D::Error&gt;
+<span class="kw">where
+    </span>D: Deserializer&lt;<span class="lifetime">'de</span>&gt;,
+    K: Eq + Ord + FromStr,
+    K::Err: Display,
+    V: Deserialize&lt;<span class="lifetime">'de</span>&gt;,
+{
+    <span class="kw">let </span><span class="prelude-val">Some</span>(string_map) = &lt;<span class="prelude-ty">Option</span>&lt;BTreeMap&lt;String, V&gt;&gt;&gt;::deserialize(deserializer)<span class="question-mark">? </span><span class="kw">else </span>{
+        <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="prelude-val">None</span>);
+    };
+
+    <span class="kw">let </span>map = string_map
+        .into_iter()
+        .map(|(key_str, value)| {
+            <span class="kw">let </span>key = K::from_str(<span class="kw-2">&amp;</span>key_str).map_err(serde::de::Error::custom)<span class="question-mark">?</span>;
+            <span class="prelude-val">Ok</span>((key, value))
+        })
+        .collect::&lt;<span class="prelude-ty">Result</span>&lt;BTreeMap&lt;<span class="kw">_</span>, <span class="kw">_</span>&gt;, <span class="kw">_</span>&gt;&gt;()<span class="question-mark">?</span>;
+
+    <span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(map))
+}
+
 <span class="doccomment">/// Client config that cannot be cryptographically verified but is easier to
 /// parse by external tools
 </span><span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
@@ -1227,7 +1319,7 @@
 
 <span class="doccomment">/// Federation-wide client config
 </span><span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize, Encodable, Decodable)]
-</span><span class="kw">pub struct </span>GlobalClientConfig {
+</span><span class="kw">pub struct </span>GlobalClientConfigV0 {
     <span class="doccomment">/// API endpoints for each federation member
     </span><span class="attr">#[serde(deserialize_with = <span class="string">"de_int_key"</span>)]
     </span><span class="kw">pub </span>api_endpoints: BTreeMap&lt;PeerId, PeerUrl&gt;,
@@ -1238,8 +1330,27 @@
     </span><span class="kw">pub </span>meta: BTreeMap&lt;String, String&gt;,
 }
 
+<span class="doccomment">/// Federation-wide client config
+</span><span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize, Encodable, Decodable)]
+</span><span class="kw">pub struct </span>GlobalClientConfig {
+    <span class="doccomment">/// API endpoints for each federation member
+    </span><span class="attr">#[serde(deserialize_with = <span class="string">"de_int_key"</span>)]
+    </span><span class="kw">pub </span>api_endpoints: BTreeMap&lt;PeerId, PeerUrl&gt;,
+    <span class="doccomment">/// Signing session keys for each federation member
+    /// Optional for 0.3.x backwards compatibility
+    </span><span class="attr">#[serde(default, deserialize_with = <span class="string">"optional_de_int_key"</span>)]
+    </span><span class="kw">pub </span>broadcast_public_keys: <span class="prelude-ty">Option</span>&lt;BTreeMap&lt;PeerId, PublicKey&gt;&gt;,
+    <span class="doccomment">/// Core consensus version
+    </span><span class="kw">pub </span>consensus_version: CoreConsensusVersion,
+    <span class="comment">// TODO: make it a String -&gt; serde_json::Value map?
+    </span><span class="doccomment">/// Additional config the federation wants to transmit to the clients
+    </span><span class="kw">pub </span>meta: BTreeMap&lt;String, String&gt;,
+}
+
 <span class="kw">impl </span>GlobalClientConfig {
-    <span class="kw">pub fn </span>calculate_federation_id(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FederationId {
+    <span class="doccomment">/// 0.4.0 and later uses a hash of broadcast public keys to calculate the
+    /// federation id. 0.3.x and earlier use a hash of api endpoints
+    </span><span class="kw">pub fn </span>calculate_federation_id(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FederationId {
         FederationId(<span class="self">self</span>.api_endpoints.consensus_hash())
     }
 
@@ -1305,6 +1416,10 @@
 
     <span class="doccomment">/// Create an invite code with the api endpoint of the given peer which can
     /// be used to download this client config
+    </span><span class="attr">#[deprecated(
+        since = <span class="string">"0.4.0"</span>,
+        note = <span class="string">"API endpoints included in the config may be outdated, use Client::invite_code instead"
+    </span>)]
     </span><span class="kw">pub fn </span>invite_code(<span class="kw-2">&amp;</span><span class="self">self</span>, peer: <span class="kw-2">&amp;</span>PeerId, api_secret: <span class="kw-2">&amp;</span><span class="prelude-ty">Option</span>&lt;String&gt;) -&gt; <span class="prelude-ty">Option</span>&lt;InviteCode&gt; {
         <span class="self">self</span>.global.api_endpoints.get(peer).map(|peer_url| {
             InviteCode::new(
@@ -1329,15 +1444,15 @@
                 .iter()
                 .map(|(<span class="kw-2">&amp;</span>module_instance_id, module_config)| {
                     <span class="kw">let </span>module_config_json = JsonWithKind {
-                    kind: module_config.kind.clone(),
-                    value: module_config.config
-                        .clone()
-                        .decoded()
-                        .and_then(|dyn_cfg| dyn_cfg.to_json())
-                        .unwrap_or_else(|| <span class="macro">json!</span>({
+                        kind: module_config.kind.clone(),
+                        value: module_config.config
+                            .clone()
+                            .decoded()
+                            .and_then(|dyn_cfg| dyn_cfg.to_json())
+                            .unwrap_or_else(|| <span class="macro">json!</span>({
                             <span class="string">"unknown_module_hex"</span>: module_config.config.consensus_encode_to_hex()
                         })),
-                };
+                    };
                     (module_instance_id, module_config_json)
                 })
                 .collect(),
@@ -2111,6 +2226,7 @@
         <span class="kw">let </span>config = ClientConfig {
             global: GlobalClientConfig {
                 api_endpoints: Default::default(),
+                broadcast_public_keys: Default::default(),
                 consensus_version: CoreConsensusVersion { major: <span class="number">0</span>, minor: <span class="number">0 </span>},
                 meta: <span class="macro">vec!</span>[
                     (<span class="string">"foo"</span>.to_string(), <span class="string">"bar"</span>.to_string()),

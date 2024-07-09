@@ -361,20 +361,20 @@
     )
 }
 
-<span class="kw">fn </span>make_client_builder() -&gt; fedimint_client::ClientBuilder {
+<span class="kw">async fn </span>make_client_builder() -&gt; <span class="prelude-ty">Result</span>&lt;fedimint_client::ClientBuilder&gt; {
     <span class="kw">let </span>mem_database = MemDatabase::default();
-    <span class="kw">let </span><span class="kw-2">mut </span>builder = fedimint_client::Client::builder(mem_database.into());
+    <span class="kw">let </span><span class="kw-2">mut </span>builder = fedimint_client::Client::builder(mem_database.into()).<span class="kw">await</span><span class="question-mark">?</span>;
     builder.with_module(LightningClientInit::default());
     builder.with_module(MintClientInit);
     builder.with_module(WalletClientInit::default());
     builder.with_primary_module(<span class="number">1</span>);
 
-    builder
+    <span class="prelude-val">Ok</span>(builder)
 }
 
 <span class="kw">async fn </span>client(invite_code: <span class="kw-2">&amp;</span>InviteCode) -&gt; <span class="prelude-ty">Result</span>&lt;fedimint_client::ClientHandleArc&gt; {
     <span class="kw">let </span>client_config = fedimint_api_client::download_from_invite_code(invite_code).<span class="kw">await</span><span class="question-mark">?</span>;
-    <span class="kw">let </span><span class="kw-2">mut </span>builder = make_client_builder();
+    <span class="kw">let </span><span class="kw-2">mut </span>builder = make_client_builder().<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="kw">let </span>client_secret = load_or_generate_mnemonic(builder.db_no_decoders()).<span class="kw">await</span><span class="question-mark">?</span>;
     builder.stopped();
     builder

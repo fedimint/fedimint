@@ -1145,6 +1145,13 @@
 <a href="#1145" id="1145">1145</a>
 <a href="#1146" id="1146">1146</a>
 <a href="#1147" id="1147">1147</a>
+<a href="#1148" id="1148">1148</a>
+<a href="#1149" id="1149">1149</a>
+<a href="#1150" id="1150">1150</a>
+<a href="#1151" id="1151">1151</a>
+<a href="#1152" id="1152">1152</a>
+<a href="#1153" id="1153">1153</a>
+<a href="#1154" id="1154">1154</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap};
 <span class="kw">use </span>std::fmt::{<span class="self">self</span>, Debug, Display};
 <span class="kw">use </span>std::pin::Pin;
@@ -1161,7 +1168,6 @@
     ServerStatus,
 };
 <span class="kw">use </span>fedimint_core::backup::ClientBackupSnapshot;
-<span class="kw">use </span>fedimint_core::config::ClientConfig;
 <span class="kw">use </span>fedimint_core::core::backup::SignedBackupRequest;
 <span class="kw">use </span>fedimint_core::core::{Decoder, DynOutputOutcome, ModuleInstanceId, OutputOutcome};
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
@@ -1204,6 +1210,7 @@
 <span class="kw">mod </span>global_federation_api_with_cache;
 
 <span class="kw">use </span>federation_peer_client::FederationPeer;
+<span class="kw">use </span>fedimint_core::net::api_announcement::SignedApiAnnouncement;
 <span class="kw">use </span>global_federation_api_with_cache::GlobalFederationApiWithCache;
 
 <span class="kw">pub type </span>PeerResult&lt;T&gt; = <span class="prelude-ty">Result</span>&lt;T, PeerError&gt;;
@@ -1389,6 +1396,7 @@
         )
     }
 }
+
 <span class="doccomment">/// An API (module or global) that can query a federation
 </span><span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
 </span><span class="kw">pub trait </span>IRawFederationApi: Debug + MaybeSend + MaybeSync {
@@ -1682,6 +1690,13 @@
 }
 
 <span class="kw">impl </span>DynGlobalApi {
+    <span class="kw">pub fn </span>new_admin(peer: PeerId, url: SafeUrl, api_secret: <span class="kw-2">&amp;</span><span class="prelude-ty">Option</span>&lt;String&gt;) -&gt; DynGlobalApi {
+        GlobalFederationApiWithCache::new(
+            WsFederationApi::new(<span class="macro">vec!</span>[(peer, url)], api_secret).with_self_peer_id(peer),
+        )
+        .into()
+    }
+
     <span class="kw">pub fn </span>from_pre_peer_id_admin_endpoint(url: SafeUrl, api_secret: <span class="kw-2">&amp;</span><span class="prelude-ty">Option</span>&lt;String&gt;) -&gt; <span class="self">Self </span>{
         <span class="comment">// PeerIds are used only for informational purposes, but just in case, make a
         // big number so it stands out
@@ -1697,23 +1712,11 @@
             .into()
     }
 
-    <span class="kw">pub fn </span>from_endpoints(peers: Vec&lt;(PeerId, SafeUrl)&gt;, api_secret: <span class="kw-2">&amp;</span><span class="prelude-ty">Option</span>&lt;String&gt;) -&gt; <span class="self">Self </span>{
-        GlobalFederationApiWithCache::new(WsFederationApi::new(peers, api_secret)).into()
-    }
-
-    <span class="kw">pub fn </span>from_config(config: <span class="kw-2">&amp;</span>ClientConfig, api_secret: <span class="kw-2">&amp;</span><span class="prelude-ty">Option</span>&lt;String&gt;) -&gt; <span class="self">Self </span>{
-        GlobalFederationApiWithCache::new(WsFederationApi::from_config(config, api_secret)).into()
-    }
-
-    <span class="kw">pub fn </span>from_config_admin(
-        config: <span class="kw-2">&amp;</span>ClientConfig,
+    <span class="kw">pub fn </span>from_endpoints(
+        peers: <span class="kw">impl </span>IntoIterator&lt;Item = (PeerId, SafeUrl)&gt;,
         api_secret: <span class="kw-2">&amp;</span><span class="prelude-ty">Option</span>&lt;String&gt;,
-        self_peer_id: PeerId,
     ) -&gt; <span class="self">Self </span>{
-        GlobalFederationApiWithCache::new(
-            WsFederationApi::from_config(config, api_secret).with_self_peer_id(self_peer_id),
-        )
-        .into()
+        GlobalFederationApiWithCache::new(WsFederationApi::new(peers, api_secret)).into()
     }
 
     <span class="kw">pub fn </span>from_invite_code(invite_code: <span class="kw-2">&amp;</span>InviteCode) -&gt; <span class="self">Self </span>{
@@ -1875,6 +1878,24 @@
     </span><span class="kw">async fn </span>auth(<span class="kw-2">&amp;</span><span class="self">self</span>, auth: ApiAuth) -&gt; FederationResult&lt;()&gt;;
 
     <span class="kw">async fn </span>restart_federation_setup(<span class="kw-2">&amp;</span><span class="self">self</span>, auth: ApiAuth) -&gt; FederationResult&lt;()&gt;;
+
+    <span class="doccomment">/// Publish our signed API announcement to other guardians
+    </span><span class="kw">async fn </span>submit_api_announcement(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        peer_id: PeerId,
+        announcement: SignedApiAnnouncement,
+    ) -&gt; FederationResult&lt;()&gt;;
+
+    <span class="kw">async fn </span>api_announcements(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        guardian: PeerId,
+    ) -&gt; PeerResult&lt;BTreeMap&lt;PeerId, SignedApiAnnouncement&gt;&gt;;
+
+    <span class="kw">async fn </span>sign_api_announcement(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        api_url: SafeUrl,
+        auth: ApiAuth,
+    ) -&gt; FederationResult&lt;SignedApiAnnouncement&gt;;
 }
 
 <span class="kw">pub fn </span>deserialize_outcome&lt;R&gt;(
@@ -2028,21 +2049,11 @@
 
 <span class="kw">impl </span>WsFederationApi&lt;WsClient&gt; {
     <span class="doccomment">/// Creates a new API client
-    </span><span class="kw">pub fn </span>new(peers: Vec&lt;(PeerId, SafeUrl)&gt;, api_secret: <span class="kw-2">&amp;</span><span class="prelude-ty">Option</span>&lt;String&gt;) -&gt; <span class="self">Self </span>{
+    </span><span class="kw">pub fn </span>new(
+        peers: <span class="kw">impl </span>IntoIterator&lt;Item = (PeerId, SafeUrl)&gt;,
+        api_secret: <span class="kw-2">&amp;</span><span class="prelude-ty">Option</span>&lt;String&gt;,
+    ) -&gt; <span class="self">Self </span>{
         <span class="self">Self</span>::new_with_client(peers, <span class="prelude-val">None</span>, api_secret)
-    }
-
-    <span class="doccomment">/// Creates a new API client from a client config
-    </span><span class="kw">pub fn </span>from_config(config: <span class="kw-2">&amp;</span>ClientConfig, api_secret: <span class="kw-2">&amp;</span><span class="prelude-ty">Option</span>&lt;String&gt;) -&gt; <span class="self">Self </span>{
-        <span class="self">Self</span>::new(
-            config
-                .global
-                .api_endpoints
-                .iter()
-                .map(|(id, peer)| (<span class="kw-2">*</span>id, peer.url.clone()))
-                .collect(),
-            api_secret,
-        )
     }
 
     <span class="kw">pub fn </span>with_self_peer_id(<span class="self">self</span>, self_peer_id: PeerId) -&gt; <span class="self">Self </span>{
@@ -2063,27 +2074,30 @@
 
     <span class="doccomment">/// Creates a new API client
     </span><span class="kw">pub fn </span>new_with_client(
-        peers: Vec&lt;(PeerId, SafeUrl)&gt;,
+        peers: <span class="kw">impl </span>IntoIterator&lt;Item = (PeerId, SafeUrl)&gt;,
         self_peer_id: <span class="prelude-ty">Option</span>&lt;PeerId&gt;,
         api_secret: <span class="kw-2">&amp;</span><span class="prelude-ty">Option</span>&lt;String&gt;,
     ) -&gt; <span class="self">Self </span>{
-        WsFederationApi {
-            peer_ids: peers.iter().map(|m| m.<span class="number">0</span>).collect(),
-            self_peer_id,
-            peers: Arc::new(
-                peers
-                    .into_iter()
-                    .map(|(peer_id, url)| {
-                        <span class="macro">assert!</span>(
-                            url.port_or_known_default().is_some(),
-                            <span class="string">"API client requires a port"
-                        </span>);
-                        <span class="macro">assert!</span>(url.host().is_some(), <span class="string">"API client requires a target host"</span>);
+        <span class="kw">let </span>(peer_connections, peer_ids) = peers
+            .into_iter()
+            .map(|(peer_id, url)| {
+                <span class="macro">assert!</span>(
+                    url.port_or_known_default().is_some(),
+                    <span class="string">"API client requires a port"
+                </span>);
+                <span class="macro">assert!</span>(url.host().is_some(), <span class="string">"API client requires a target host"</span>);
 
-                        FederationPeer::new(url, peer_id, api_secret.clone())
-                    })
-                    .collect(),
-            ),
+                (
+                    FederationPeer::new(url, peer_id, api_secret.clone()),
+                    peer_id,
+                )
+            })
+            .unzip();
+
+        WsFederationApi {
+            peer_ids,
+            self_peer_id,
+            peers: Arc::new(peer_connections),
             module_id: <span class="prelude-val">None</span>,
         }
     }

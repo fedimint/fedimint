@@ -338,6 +338,7 @@
 <a href="#338" id="338">338</a>
 <a href="#339" id="339">339</a>
 <a href="#340" id="340">340</a>
+<a href="#341" id="341">341</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::pin::pin;
 <span class="kw">use </span>std::sync::Arc;
@@ -582,10 +583,11 @@
     ) -&gt; anyhow::Result&lt;MetaValues&gt; {
         <span class="kw">let </span>config_iter = client
             .config()
-            .global
+            .<span class="kw">await
+            </span>.global
             .meta
-            .iter()
-            .map(|(key, value)| (MetaFieldKey(key.to_owned()), MetaFieldValue(value.clone())));
+            .into_iter()
+            .map(|(key, value)| (MetaFieldKey(key.clone()), MetaFieldValue(value.clone())));
         <span class="kw">let </span>backoff = <span class="kw">match </span>fetch_kind {
             <span class="comment">// need to be fast the first time.
             </span>FetchKind::Initial =&gt; backon::FibonacciBuilder::default()
@@ -613,7 +615,7 @@
     client: <span class="kw-2">&amp;</span>Client,
     field_name: <span class="kw-2">&amp;</span>str,
 ) -&gt; anyhow::Result&lt;BTreeMap&lt;MetaFieldKey, MetaFieldValue&gt;&gt; {
-    <span class="kw">let </span><span class="prelude-val">Some</span>(url) = client.config().meta::&lt;String&gt;(field_name)<span class="question-mark">? </span><span class="kw">else </span>{
+    <span class="kw">let </span><span class="prelude-val">Some</span>(url) = client.config().<span class="kw">await</span>.meta::&lt;String&gt;(field_name)<span class="question-mark">? </span><span class="kw">else </span>{
         <span class="kw">return </span><span class="prelude-val">Ok</span>(BTreeMap::new());
     };
     <span class="kw">let </span>response = reqwest

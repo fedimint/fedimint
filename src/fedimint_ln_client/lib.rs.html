@@ -2025,6 +2025,7 @@
 <a href="#2025" id="2025">2025</a>
 <a href="#2026" id="2026">2026</a>
 <a href="#2027" id="2027">2027</a>
+<a href="#2028" id="2028">2028</a>
 </pre></div><pre class="rust"><code><span class="attr">#![warn(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::cast_possible_wrap)]
@@ -3029,7 +3030,8 @@
                     gateway,
                     <span class="self">self</span>.client_ctx
                         .get_config()
-                        .global
+                        .<span class="kw">await
+                        </span>.global
                         .calculate_federation_id(),
                     rand::rngs::OsRng,
                 )

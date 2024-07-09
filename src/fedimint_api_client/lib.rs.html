@@ -87,9 +87,6 @@
 <a href="#87" id="87">87</a>
 <a href="#88" id="88">88</a>
 <a href="#89" id="89">89</a>
-<a href="#90" id="90">90</a>
-<a href="#91" id="91">91</a>
-<a href="#92" id="92">92</a>
 </pre></div><pre class="rust"><code><span class="attr">#![warn(clippy::pedantic)]
 #![allow(clippy::missing_errors_doc)]
 #![allow(clippy::missing_panics_doc)]
@@ -102,7 +99,6 @@
 <span class="kw">use </span>anyhow::{bail, Context <span class="kw">as _</span>};
 <span class="kw">use </span>api::{DynGlobalApi, FederationApiExt <span class="kw">as _</span>, WsFederationApi};
 <span class="kw">use </span>fedimint_core::config::{ClientConfig, FederationId};
-<span class="kw">use </span>fedimint_core::encoding::Encodable <span class="kw">as _</span>;
 <span class="kw">use </span>fedimint_core::endpoint_constants::CLIENT_CONFIG_ENDPOINT;
 <span class="kw">use </span>fedimint_core::invite_code::InviteCode;
 <span class="kw">use </span>fedimint_core::module::ApiRequestErased;
@@ -144,10 +140,11 @@
     federation_id: FederationId,
     api_secret: <span class="prelude-ty">Option</span>&lt;String&gt;,
 ) -&gt; anyhow::Result&lt;ClientConfig&gt; {
-    <span class="kw">let </span>query_strategy = FilterMap::new(
+    <span class="comment">// TODO: use new download approach based on guardian PKs
+    </span><span class="kw">let </span>query_strategy = FilterMap::new(
         <span class="kw">move </span>|cfg: ClientConfig| {
-            <span class="kw">if </span>federation_id.<span class="number">0 </span>!= cfg.global.api_endpoints.consensus_hash() {
-                <span class="macro">bail!</span>(<span class="string">"Guardian api endpoint map does not hash to FederationId"</span>)
+            <span class="kw">if </span>federation_id != cfg.global.calculate_federation_id() {
+                <span class="macro">bail!</span>(<span class="string">"FederationId in invite code does not match client config"</span>)
             }
 
             <span class="prelude-val">Ok</span>(cfg.global.api_endpoints)
@@ -164,10 +161,7 @@
         .<span class="kw">await</span><span class="question-mark">?</span>;
 
     <span class="comment">// now we can build an api for all guardians and download the client config
-    </span><span class="kw">let </span>api_endpoints = api_endpoints
-        .into_iter()
-        .map(|(peer, url)| (peer, url.url))
-        .collect();
+    </span><span class="kw">let </span>api_endpoints = api_endpoints.into_iter().map(|(peer, url)| (peer, url.url));
 
     <span class="kw">let </span>client_config = WsFederationApi::new(api_endpoints, <span class="kw-2">&amp;</span>api_secret)
         .request_current_consensus::&lt;ClientConfig&gt;(

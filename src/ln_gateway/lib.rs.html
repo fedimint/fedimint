@@ -1917,6 +1917,12 @@
 <a href="#1917" id="1917">1917</a>
 <a href="#1918" id="1918">1918</a>
 <a href="#1919" id="1919">1919</a>
+<a href="#1920" id="1920">1920</a>
+<a href="#1921" id="1921">1921</a>
+<a href="#1922" id="1922">1922</a>
+<a href="#1923" id="1923">1923</a>
+<a href="#1924" id="1924">1924</a>
+<a href="#1925" id="1925">1925</a>
 </pre></div><pre class="rust"><code><span class="attr">#![warn(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::cast_possible_wrap)]
@@ -2780,14 +2786,20 @@
                 <span class="kw">let </span>client = <span class="self">self</span>.select_client(federation_id).<span class="kw">await</span><span class="question-mark">?</span>;
                 federations.insert(
                     federation_id,
-                    client.borrow().with_sync(|client| client.get_config_json()),
+                    client
+                        .borrow()
+                        .with(|client| client.get_config_json())
+                        .<span class="kw">await</span>,
                 );
             } <span class="kw">else </span>{
                 <span class="kw">let </span>federation_clients = <span class="self">self</span>.clients.read().<span class="kw">await</span>.clone().into_iter();
                 <span class="kw">for </span>(federation_id, client) <span class="kw">in </span>federation_clients {
                     federations.insert(
                         federation_id,
-                        client.borrow().with_sync(|client| client.get_config_json()),
+                        client
+                            .borrow()
+                            .with(|client| client.get_config_json())
+                            .<span class="kw">await</span>,
                     );
                 }
             }
@@ -2993,7 +3005,7 @@
         </span><span class="kw">let </span>federation_info = FederationInfo {
             federation_id,
             balance_msat: client.get_balance().<span class="kw">await</span>,
-            config: client.get_config().clone(),
+            config: client.config().<span class="kw">await</span>,
             channel_id: <span class="prelude-val">Some</span>(mint_channel_id),
             routing_fees: <span class="prelude-val">Some</span>(gateway_config.routing_fees.into()),
         };
@@ -3484,7 +3496,7 @@
         federation_id: FederationId,
     ) -&gt; FederationInfo {
         <span class="kw">let </span>balance_msat = client.get_balance().<span class="kw">await</span>;
-        <span class="kw">let </span>config = client.get_config().clone();
+        <span class="kw">let </span>config = client.config().<span class="kw">await</span>;
         <span class="kw">let </span>channel_id = <span class="self">self
             </span>.scid_to_federation
             .read()

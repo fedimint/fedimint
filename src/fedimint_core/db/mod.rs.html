@@ -3123,6 +3123,8 @@
 <a href="#3123" id="3123">3123</a>
 <a href="#3124" id="3124">3124</a>
 <a href="#3125" id="3125">3125</a>
+<a href="#3126" id="3126">3126</a>
+<a href="#3127" id="3127">3127</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! Core Fedimint database traits and types
 //!
 //! # Isolation of database transactions
@@ -5023,19 +5025,20 @@
     };
 }
 
-<span class="doccomment">/// `ServerMigrationFn` that modules can implement to "migrate" the database
+<span class="doccomment">/// `CoreMigrationFn` that modules can implement to "migrate" the database
 /// to the next database version.
-</span><span class="kw">pub type </span>ServerMigrationFn =
-    <span class="kw">for</span>&lt;<span class="lifetime">'r</span>, <span class="lifetime">'tx</span>&gt; <span class="kw">fn</span>(
-        <span class="kw-2">&amp;</span><span class="lifetime">'r </span><span class="kw-2">mut </span>DatabaseTransaction&lt;<span class="lifetime">'tx</span>&gt;,
-    ) -&gt; Pin&lt;Box&lt;<span class="kw">dyn </span>futures::Future&lt;Output = anyhow::Result&lt;()&gt;&gt; + Send + <span class="lifetime">'r</span>&gt;&gt;;
+</span><span class="kw">pub type </span>CoreMigrationFn = <span class="kw">for</span>&lt;<span class="lifetime">'r</span>, <span class="lifetime">'tx</span>&gt; <span class="kw">fn</span>(
+    <span class="kw-2">&amp;</span><span class="lifetime">'r </span><span class="kw-2">mut </span>DatabaseTransaction&lt;<span class="lifetime">'tx</span>&gt;,
+) -&gt; Pin&lt;
+    Box&lt;<span class="macro">maybe_add_send!</span>(<span class="kw">dyn </span>futures::Future&lt;Output = anyhow::Result&lt;()&gt;&gt; + <span class="lifetime">'r</span>)&gt;,
+&gt;;
 
 <span class="doccomment">/// Applies the database migrations to a non-isolated database.
 </span><span class="kw">pub async fn </span>apply_migrations_server(
     db: <span class="kw-2">&amp;</span>Database,
     kind: String,
     target_db_version: DatabaseVersion,
-    migrations: BTreeMap&lt;DatabaseVersion, ServerMigrationFn&gt;,
+    migrations: BTreeMap&lt;DatabaseVersion, CoreMigrationFn&gt;,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;(), anyhow::Error&gt; {
     apply_migrations(db, kind, target_db_version, migrations, <span class="prelude-val">None</span>).<span class="kw">await
 </span>}
@@ -5052,7 +5055,7 @@
     db: <span class="kw-2">&amp;</span>Database,
     kind: String,
     target_db_version: DatabaseVersion,
-    migrations: BTreeMap&lt;DatabaseVersion, ServerMigrationFn&gt;,
+    migrations: BTreeMap&lt;DatabaseVersion, CoreMigrationFn&gt;,
     module_instance_id: <span class="prelude-ty">Option</span>&lt;ModuleInstanceId&gt;,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;(), anyhow::Error&gt; {
     <span class="comment">// Newly created databases will not have any data since they have just been
@@ -5144,7 +5147,8 @@
         </span>.is_none()
     {
         <span class="comment">// If it exists, read and remove the legacy `DatabaseVersion`, which used to be
-        // in the module's isolated namespace (but not for fedimint-server).
+        // in the module's isolated namespace (but not for fedimint-server or
+        // fedimint-client).
         //
         // Otherwise, if the previous database contains data and no legacy database
         // version, use `DatabaseVersion(0)` so that all database migrations are
@@ -5223,8 +5227,8 @@
     <span class="kw">use </span>tokio::join;
 
     <span class="kw">use super</span>::{
-        apply_migrations, Database, DatabaseTransaction, DatabaseVersion, DatabaseVersionKey,
-        DatabaseVersionKeyV0, ServerMigrationFn,
+        apply_migrations, CoreMigrationFn, Database, DatabaseTransaction, DatabaseVersion,
+        DatabaseVersionKey, DatabaseVersionKeyV0,
     };
     <span class="kw">use </span><span class="kw">crate</span>::core::ModuleKind;
     <span class="kw">use </span><span class="kw">crate</span>::db::mem_impl::MemDatabase;
@@ -5908,7 +5912,7 @@
             .<span class="kw">await</span>;
         dbtx.commit_tx().<span class="kw">await</span>;
 
-        <span class="kw">let </span><span class="kw-2">mut </span>migrations: BTreeMap&lt;DatabaseVersion, ServerMigrationFn&gt; = BTreeMap::new();
+        <span class="kw">let </span><span class="kw-2">mut </span>migrations: BTreeMap&lt;DatabaseVersion, CoreMigrationFn&gt; = BTreeMap::new();
 
         migrations.insert(DatabaseVersion(<span class="number">0</span>), |dbtx| {
             migrate_test_db_version_0(dbtx).boxed()

@@ -389,6 +389,81 @@
 <a href="#389" id="389">389</a>
 <a href="#390" id="390">390</a>
 <a href="#391" id="391">391</a>
+<a href="#392" id="392">392</a>
+<a href="#393" id="393">393</a>
+<a href="#394" id="394">394</a>
+<a href="#395" id="395">395</a>
+<a href="#396" id="396">396</a>
+<a href="#397" id="397">397</a>
+<a href="#398" id="398">398</a>
+<a href="#399" id="399">399</a>
+<a href="#400" id="400">400</a>
+<a href="#401" id="401">401</a>
+<a href="#402" id="402">402</a>
+<a href="#403" id="403">403</a>
+<a href="#404" id="404">404</a>
+<a href="#405" id="405">405</a>
+<a href="#406" id="406">406</a>
+<a href="#407" id="407">407</a>
+<a href="#408" id="408">408</a>
+<a href="#409" id="409">409</a>
+<a href="#410" id="410">410</a>
+<a href="#411" id="411">411</a>
+<a href="#412" id="412">412</a>
+<a href="#413" id="413">413</a>
+<a href="#414" id="414">414</a>
+<a href="#415" id="415">415</a>
+<a href="#416" id="416">416</a>
+<a href="#417" id="417">417</a>
+<a href="#418" id="418">418</a>
+<a href="#419" id="419">419</a>
+<a href="#420" id="420">420</a>
+<a href="#421" id="421">421</a>
+<a href="#422" id="422">422</a>
+<a href="#423" id="423">423</a>
+<a href="#424" id="424">424</a>
+<a href="#425" id="425">425</a>
+<a href="#426" id="426">426</a>
+<a href="#427" id="427">427</a>
+<a href="#428" id="428">428</a>
+<a href="#429" id="429">429</a>
+<a href="#430" id="430">430</a>
+<a href="#431" id="431">431</a>
+<a href="#432" id="432">432</a>
+<a href="#433" id="433">433</a>
+<a href="#434" id="434">434</a>
+<a href="#435" id="435">435</a>
+<a href="#436" id="436">436</a>
+<a href="#437" id="437">437</a>
+<a href="#438" id="438">438</a>
+<a href="#439" id="439">439</a>
+<a href="#440" id="440">440</a>
+<a href="#441" id="441">441</a>
+<a href="#442" id="442">442</a>
+<a href="#443" id="443">443</a>
+<a href="#444" id="444">444</a>
+<a href="#445" id="445">445</a>
+<a href="#446" id="446">446</a>
+<a href="#447" id="447">447</a>
+<a href="#448" id="448">448</a>
+<a href="#449" id="449">449</a>
+<a href="#450" id="450">450</a>
+<a href="#451" id="451">451</a>
+<a href="#452" id="452">452</a>
+<a href="#453" id="453">453</a>
+<a href="#454" id="454">454</a>
+<a href="#455" id="455">455</a>
+<a href="#456" id="456">456</a>
+<a href="#457" id="457">457</a>
+<a href="#458" id="458">458</a>
+<a href="#459" id="459">459</a>
+<a href="#460" id="460">460</a>
+<a href="#461" id="461">461</a>
+<a href="#462" id="462">462</a>
+<a href="#463" id="463">463</a>
+<a href="#464" id="464">464</a>
+<a href="#465" id="465">465</a>
+<a href="#466" id="466">466</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet};
 <span class="kw">use </span>std::fmt::Debug;
 <span class="kw">use </span>std::num::NonZeroUsize;
@@ -405,30 +480,36 @@
 <span class="kw">use </span>fedimint_core::core::backup::SignedBackupRequest;
 <span class="kw">use </span>fedimint_core::core::ModuleInstanceId;
 <span class="kw">use </span>fedimint_core::endpoint_constants::{
-    ADD_CONFIG_GEN_PEER_ENDPOINT, AUDIT_ENDPOINT, AUTH_ENDPOINT, AWAIT_SESSION_OUTCOME_ENDPOINT,
-    AWAIT_TRANSACTION_ENDPOINT, BACKUP_ENDPOINT, CONFIG_GEN_PEERS_ENDPOINT,
-    CONSENSUS_CONFIG_GEN_PARAMS_ENDPOINT, DEFAULT_CONFIG_GEN_PARAMS_ENDPOINT,
-    GUARDIAN_CONFIG_BACKUP_ENDPOINT, RECOVER_ENDPOINT, RESTART_FEDERATION_SETUP_ENDPOINT,
-    RUN_DKG_ENDPOINT, SERVER_CONFIG_CONSENSUS_HASH_ENDPOINT, SESSION_COUNT_ENDPOINT,
-    SESSION_STATUS_ENDPOINT, SET_CONFIG_GEN_CONNECTIONS_ENDPOINT, SET_CONFIG_GEN_PARAMS_ENDPOINT,
-    SET_PASSWORD_ENDPOINT, START_CONSENSUS_ENDPOINT, STATUS_ENDPOINT, SUBMIT_TRANSACTION_ENDPOINT,
-    VERIFIED_CONFIGS_ENDPOINT, VERIFY_CONFIG_HASH_ENDPOINT,
+    ADD_CONFIG_GEN_PEER_ENDPOINT, API_ANNOUNCEMENTS_ENDPOINT, AUDIT_ENDPOINT, AUTH_ENDPOINT,
+    AWAIT_SESSION_OUTCOME_ENDPOINT, AWAIT_TRANSACTION_ENDPOINT, BACKUP_ENDPOINT,
+    CONFIG_GEN_PEERS_ENDPOINT, CONSENSUS_CONFIG_GEN_PARAMS_ENDPOINT,
+    DEFAULT_CONFIG_GEN_PARAMS_ENDPOINT, GUARDIAN_CONFIG_BACKUP_ENDPOINT, RECOVER_ENDPOINT,
+    RESTART_FEDERATION_SETUP_ENDPOINT, RUN_DKG_ENDPOINT, SERVER_CONFIG_CONSENSUS_HASH_ENDPOINT,
+    SESSION_COUNT_ENDPOINT, SESSION_STATUS_ENDPOINT, SET_CONFIG_GEN_CONNECTIONS_ENDPOINT,
+    SET_CONFIG_GEN_PARAMS_ENDPOINT, SET_PASSWORD_ENDPOINT, SIGN_API_ANNOUNCEMENT_ENDPOINT,
+    START_CONSENSUS_ENDPOINT, STATUS_ENDPOINT, SUBMIT_API_ANNOUNCEMENT_ENDPOINT,
+    SUBMIT_TRANSACTION_ENDPOINT, VERIFIED_CONFIGS_ENDPOINT, VERIFY_CONFIG_HASH_ENDPOINT,
 };
 <span class="kw">use </span>fedimint_core::module::audit::AuditSummary;
 <span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
 <span class="kw">use </span>fedimint_core::module::{ApiAuth, ApiRequestErased, SerdeModuleEncoding};
+<span class="kw">use </span>fedimint_core::net::api_announcement::{
+    SignedApiAnnouncement, SignedApiAnnouncementSubmission,
+};
 <span class="kw">use </span>fedimint_core::session_outcome::{AcceptedItem, SessionOutcome, SessionStatus};
 <span class="kw">use </span>fedimint_core::task::{MaybeSend, MaybeSync};
 <span class="kw">use </span>fedimint_core::transaction::{SerdeTransaction, Transaction, TransactionSubmissionOutcome};
+<span class="kw">use </span>fedimint_core::util::SafeUrl;
 <span class="kw">use </span>fedimint_core::{apply, async_trait_maybe_send, NumPeersExt, PeerId, TransactionId};
+<span class="kw">use </span>futures::future::join_all;
 <span class="kw">use </span>jsonrpsee_core::client::Error <span class="kw">as </span>JsonRpcClientError;
 <span class="kw">use </span>serde_json::Value;
 <span class="kw">use </span>tokio::sync::OnceCell;
 <span class="kw">use </span>tracing::debug;
 
 <span class="kw">use super</span>::{
-    DynModuleApi, FederationApiExt, FederationResult, GuardianConfigBackup, IGlobalFederationApi,
-    IRawFederationApi, StatusResponse,
+    DynModuleApi, FederationApiExt, FederationError, FederationResult, GuardianConfigBackup,
+    IGlobalFederationApi, IRawFederationApi, PeerResult, StatusResponse,
 };
 <span class="kw">use </span><span class="kw">crate</span>::query::FilterMapThreshold;
 
@@ -775,6 +856,75 @@
         <span class="self">self</span>.request_admin(
             RESTART_FEDERATION_SETUP_ENDPOINT,
             ApiRequestErased::default(),
+            auth,
+        )
+        .<span class="kw">await
+    </span>}
+
+    <span class="kw">async fn </span>submit_api_announcement(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        announcement_peer_id: PeerId,
+        announcement: SignedApiAnnouncement,
+    ) -&gt; FederationResult&lt;()&gt; {
+        <span class="kw">let </span>peer_errors = join_all(<span class="self">self</span>.all_peers().iter().map(|<span class="kw-2">&amp;</span>peer_id| {
+            <span class="kw">let </span>announcement_inner = announcement.clone();
+            <span class="kw">async move </span>{
+                (
+                    peer_id,
+                    <span class="self">self</span>.request_single_peer(
+                        <span class="prelude-val">None</span>,
+                        SUBMIT_API_ANNOUNCEMENT_ENDPOINT.into(),
+                        ApiRequestErased::new(SignedApiAnnouncementSubmission {
+                            signed_api_announcement: announcement_inner,
+                            peer_id: announcement_peer_id,
+                        }),
+                        peer_id,
+                    )
+                    .<span class="kw">await</span>,
+                )
+            }
+        }))
+        .<span class="kw">await
+        </span>.into_iter()
+        .filter_map(|(peer_id, result)| <span class="kw">match </span>result {
+            <span class="prelude-val">Ok</span>(<span class="kw">_</span>) =&gt; <span class="prelude-val">None</span>,
+            <span class="prelude-val">Err</span>(e) =&gt; <span class="prelude-val">Some</span>((peer_id, e.into())),
+        })
+        .collect::&lt;BTreeMap&lt;<span class="kw">_</span>, <span class="kw">_</span>&gt;&gt;();
+
+        <span class="kw">if </span>peer_errors.is_empty() {
+            <span class="prelude-val">Ok</span>(())
+        } <span class="kw">else </span>{
+            <span class="prelude-val">Err</span>(FederationError {
+                method: SUBMIT_API_ANNOUNCEMENT_ENDPOINT.to_string(),
+                params: serde_json::to_value(announcement).expect(<span class="string">"can be serialized"</span>),
+                general: <span class="prelude-val">None</span>,
+                peers: peer_errors,
+            })
+        }
+    }
+
+    <span class="kw">async fn </span>api_announcements(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        guardian: PeerId,
+    ) -&gt; PeerResult&lt;BTreeMap&lt;PeerId, SignedApiAnnouncement&gt;&gt; {
+        <span class="self">self</span>.request_single_peer_typed(
+            <span class="prelude-val">None</span>,
+            API_ANNOUNCEMENTS_ENDPOINT.to_owned(),
+            ApiRequestErased::default(),
+            guardian,
+        )
+        .<span class="kw">await
+    </span>}
+
+    <span class="kw">async fn </span>sign_api_announcement(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        api_url: SafeUrl,
+        auth: ApiAuth,
+    ) -&gt; FederationResult&lt;SignedApiAnnouncement&gt; {
+        <span class="self">self</span>.request_admin(
+            SIGN_API_ANNOUNCEMENT_ENDPOINT,
+            ApiRequestErased::new(api_url),
             auth,
         )
         .<span class="kw">await

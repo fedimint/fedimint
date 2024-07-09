@@ -796,6 +796,7 @@
 <a href="#796" id="796">796</a>
 <a href="#797" id="797">797</a>
 <a href="#798" id="798">798</a>
+<a href="#799" id="799">799</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap};
 <span class="kw">use </span>std::env;
 <span class="kw">use </span>std::net::SocketAddr;
@@ -978,6 +979,7 @@
         <span class="kw">let </span>client = ClientConfig {
             global: GlobalClientConfig {
                 api_endpoints: <span class="self">self</span>.api_endpoints.clone(),
+                broadcast_public_keys: <span class="prelude-val">Some</span>(<span class="self">self</span>.broadcast_public_keys.clone()),
                 consensus_version: <span class="self">self</span>.version,
                 meta: <span class="self">self</span>.meta.clone(),
             },
@@ -1001,7 +1003,7 @@
     </span><span class="kw">pub fn </span>supported_api_versions() -&gt; SupportedCoreApiVersions {
         SupportedCoreApiVersions {
             core_consensus: CORE_CONSENSUS_VERSION,
-            api: MultiApiVersion::try_from_iter([ApiVersion { major: <span class="number">0</span>, minor: <span class="number">2 </span>}])
+            api: MultiApiVersion::try_from_iter([ApiVersion { major: <span class="number">0</span>, minor: <span class="number">3 </span>}])
                 .expect(<span class="string">"not version conflicts"</span>),
         }
     }
@@ -1063,12 +1065,12 @@
                 .url
                 .clone(),
             <span class="self">self</span>.local.identity,
-            FederationId(<span class="self">self</span>.consensus.api_endpoints.consensus_hash()),
+            <span class="self">self</span>.calculate_federation_id(),
             api_secret,
         )
     }
 
-    <span class="kw">pub fn </span>get_federation_id(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FederationId {
+    <span class="kw">pub fn </span>calculate_federation_id(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FederationId {
         FederationId(<span class="self">self</span>.consensus.api_endpoints.consensus_hash())
     }
 

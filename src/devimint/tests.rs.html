@@ -2649,6 +2649,84 @@
 <a href="#2649" id="2649">2649</a>
 <a href="#2650" id="2650">2650</a>
 <a href="#2651" id="2651">2651</a>
+<a href="#2652" id="2652">2652</a>
+<a href="#2653" id="2653">2653</a>
+<a href="#2654" id="2654">2654</a>
+<a href="#2655" id="2655">2655</a>
+<a href="#2656" id="2656">2656</a>
+<a href="#2657" id="2657">2657</a>
+<a href="#2658" id="2658">2658</a>
+<a href="#2659" id="2659">2659</a>
+<a href="#2660" id="2660">2660</a>
+<a href="#2661" id="2661">2661</a>
+<a href="#2662" id="2662">2662</a>
+<a href="#2663" id="2663">2663</a>
+<a href="#2664" id="2664">2664</a>
+<a href="#2665" id="2665">2665</a>
+<a href="#2666" id="2666">2666</a>
+<a href="#2667" id="2667">2667</a>
+<a href="#2668" id="2668">2668</a>
+<a href="#2669" id="2669">2669</a>
+<a href="#2670" id="2670">2670</a>
+<a href="#2671" id="2671">2671</a>
+<a href="#2672" id="2672">2672</a>
+<a href="#2673" id="2673">2673</a>
+<a href="#2674" id="2674">2674</a>
+<a href="#2675" id="2675">2675</a>
+<a href="#2676" id="2676">2676</a>
+<a href="#2677" id="2677">2677</a>
+<a href="#2678" id="2678">2678</a>
+<a href="#2679" id="2679">2679</a>
+<a href="#2680" id="2680">2680</a>
+<a href="#2681" id="2681">2681</a>
+<a href="#2682" id="2682">2682</a>
+<a href="#2683" id="2683">2683</a>
+<a href="#2684" id="2684">2684</a>
+<a href="#2685" id="2685">2685</a>
+<a href="#2686" id="2686">2686</a>
+<a href="#2687" id="2687">2687</a>
+<a href="#2688" id="2688">2688</a>
+<a href="#2689" id="2689">2689</a>
+<a href="#2690" id="2690">2690</a>
+<a href="#2691" id="2691">2691</a>
+<a href="#2692" id="2692">2692</a>
+<a href="#2693" id="2693">2693</a>
+<a href="#2694" id="2694">2694</a>
+<a href="#2695" id="2695">2695</a>
+<a href="#2696" id="2696">2696</a>
+<a href="#2697" id="2697">2697</a>
+<a href="#2698" id="2698">2698</a>
+<a href="#2699" id="2699">2699</a>
+<a href="#2700" id="2700">2700</a>
+<a href="#2701" id="2701">2701</a>
+<a href="#2702" id="2702">2702</a>
+<a href="#2703" id="2703">2703</a>
+<a href="#2704" id="2704">2704</a>
+<a href="#2705" id="2705">2705</a>
+<a href="#2706" id="2706">2706</a>
+<a href="#2707" id="2707">2707</a>
+<a href="#2708" id="2708">2708</a>
+<a href="#2709" id="2709">2709</a>
+<a href="#2710" id="2710">2710</a>
+<a href="#2711" id="2711">2711</a>
+<a href="#2712" id="2712">2712</a>
+<a href="#2713" id="2713">2713</a>
+<a href="#2714" id="2714">2714</a>
+<a href="#2715" id="2715">2715</a>
+<a href="#2716" id="2716">2716</a>
+<a href="#2717" id="2717">2717</a>
+<a href="#2718" id="2718">2718</a>
+<a href="#2719" id="2719">2719</a>
+<a href="#2720" id="2720">2720</a>
+<a href="#2721" id="2721">2721</a>
+<a href="#2722" id="2722">2722</a>
+<a href="#2723" id="2723">2723</a>
+<a href="#2724" id="2724">2724</a>
+<a href="#2725" id="2725">2725</a>
+<a href="#2726" id="2726">2726</a>
+<a href="#2727" id="2727">2727</a>
+<a href="#2728" id="2728">2728</a>
+<a href="#2729" id="2729">2729</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashSet};
 <span class="kw">use </span>std::io::Write;
 <span class="kw">use </span>std::ops::ControlFlow;
@@ -2664,6 +2742,7 @@
 <span class="kw">use </span>fedimint_core::core::LEGACY_HARDCODED_INSTANCE_ID_WALLET;
 <span class="kw">use </span>fedimint_core::encoding::Decodable;
 <span class="kw">use </span>fedimint_core::envs::is_env_var_set;
+<span class="kw">use </span>fedimint_core::net::api_announcement::SignedApiAnnouncement;
 <span class="kw">use </span>fedimint_core::task::block_in_place;
 <span class="kw">use </span>fedimint_core::{Amount, BitcoinHash, PeerId};
 <span class="kw">use </span>fedimint_ln_client::cli::LnInvoiceResponse;
@@ -3851,6 +3930,83 @@
     <span class="kw">let </span>expected_wallet_balance = initial_walletng_balance - <span class="number">50_000_000 </span>- (fees_sat * <span class="number">1000</span>);
 
     <span class="macro">assert_eq!</span>(post_withdraw_walletng_balance, expected_wallet_balance);
+
+    <span class="comment">// # API URL announcements
+    </span><span class="kw">if </span>fedimint_cli_version &gt;= <span class="kw-2">*</span>VERSION_0_4_0_ALPHA &amp;&amp; fedimintd_version &gt;= <span class="kw-2">*</span>VERSION_0_4_0_ALPHA {
+        <span class="kw">let </span>initial_announcements =
+            serde_json::from_value::&lt;BTreeMap&lt;PeerId, SignedApiAnnouncement&gt;&gt;(
+                <span class="macro">cmd!</span>(client, <span class="string">"dev"</span>, <span class="string">"api-announcements"</span>,).out_json().<span class="kw">await</span><span class="question-mark">?</span>,
+            )
+            .expect(<span class="string">"failed to parse API announcements"</span>);
+
+        <span class="macro">assert_eq!</span>(
+            fed.members.len(),
+            initial_announcements.len(),
+            <span class="string">"Not all guardians made an announcement"
+        </span>);
+        <span class="macro">assert!</span>(
+            initial_announcements
+                .values()
+                .all(|announcement| announcement.api_announcement.nonce == <span class="number">0</span>),
+            <span class="string">"Not all announcements have their initial value"
+        </span>);
+
+        <span class="kw">const </span>NEW_API_URL: <span class="kw-2">&amp;</span>str = <span class="string">"ws://127.0.0.1:4242"</span>;
+        <span class="kw">let </span>new_announcement = serde_json::from_value::&lt;SignedApiAnnouncement&gt;(
+            <span class="macro">cmd!</span>(
+                client,
+                <span class="string">"--our-id"</span>,
+                <span class="string">"0"</span>,
+                <span class="string">"--password"</span>,
+                <span class="string">"pass"</span>,
+                <span class="string">"admin"</span>,
+                <span class="string">"sign-api-announcement"</span>,
+                NEW_API_URL
+            )
+            .out_json()
+            .<span class="kw">await</span><span class="question-mark">?</span>,
+        )
+        .expect(<span class="string">"Couldn't parse signed announcement"</span>);
+
+        <span class="macro">assert_eq!</span>(
+            new_announcement.api_announcement.nonce, <span class="number">1</span>,
+            <span class="string">"Nonce did not increment correctly"
+        </span>);
+
+        <span class="macro">info!</span>(<span class="string">"Testing if the client syncs the announcement"</span>);
+        <span class="kw">let </span>announcement = poll(<span class="string">"Waiting for the announcement to propagate"</span>, || <span class="kw">async </span>{
+            <span class="macro">cmd!</span>(client, <span class="string">"dev"</span>, <span class="string">"wait"</span>, <span class="string">"1"</span>)
+                .run()
+                .<span class="kw">await
+                </span>.map_err(ControlFlow::Break)<span class="question-mark">?</span>;
+
+            <span class="kw">let </span>new_announcements_peer2 =
+                serde_json::from_value::&lt;BTreeMap&lt;PeerId, SignedApiAnnouncement&gt;&gt;(
+                    <span class="macro">cmd!</span>(client, <span class="string">"dev"</span>, <span class="string">"api-announcements"</span>,)
+                        .out_json()
+                        .<span class="kw">await
+                        </span>.map_err(ControlFlow::Break)<span class="question-mark">?</span>,
+                )
+                .expect(<span class="string">"failed to parse API announcements"</span>);
+
+            <span class="kw">let </span>announcement = new_announcements_peer2[<span class="kw-2">&amp;</span>PeerId::from(<span class="number">0</span>)]
+                .api_announcement
+                .clone();
+            <span class="kw">if </span>announcement.nonce == <span class="number">1 </span>{
+                <span class="prelude-val">Ok</span>(announcement)
+            } <span class="kw">else </span>{
+                <span class="prelude-val">Err</span>(ControlFlow::Continue(<span class="macro">anyhow!</span>(
+                    <span class="string">"Haven't received updated announcement yet"
+                </span>)))
+            }
+        })
+        .<span class="kw">await</span><span class="question-mark">?</span>;
+
+        <span class="macro">assert_eq!</span>(
+            announcement.api_url,
+            NEW_API_URL.parse().expect(<span class="string">"valid URL"</span>)
+        );
+    }
 
     <span class="prelude-val">Ok</span>(())
 }

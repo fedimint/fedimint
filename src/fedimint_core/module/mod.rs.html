@@ -1044,8 +1044,8 @@
     ModuleInstanceId, ModuleKind, Output, OutputError, OutputOutcome,
 };
 <span class="kw">use </span><span class="kw">crate</span>::db::{
-    Committable, Database, DatabaseKey, DatabaseKeyWithNotify, DatabaseRecord, DatabaseTransaction,
-    DatabaseVersion, ServerMigrationFn,
+    Committable, CoreMigrationFn, Database, DatabaseKey, DatabaseKeyWithNotify, DatabaseRecord,
+    DatabaseTransaction, DatabaseVersion,
 };
 <span class="kw">use </span><span class="kw">crate</span>::encoding::{Decodable, DecodeError, Encodable};
 <span class="kw">use </span><span class="kw">crate</span>::fmt_utils::AbbreviateHexBytes;
@@ -1548,7 +1548,7 @@
     <span class="doccomment">/// Retrieves the migrations map from the server module to be applied to the
     /// database before the module is initialized. The migrations map is
     /// indexed on the from version.
-    </span><span class="kw">fn </span>get_database_migrations(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; BTreeMap&lt;DatabaseVersion, ServerMigrationFn&gt;;
+    </span><span class="kw">fn </span>get_database_migrations(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; BTreeMap&lt;DatabaseVersion, CoreMigrationFn&gt;;
 }
 
 <span class="macro">dyn_newtype_define!</span>(
@@ -1690,7 +1690,7 @@
     <span class="doccomment">/// Retrieves the migrations map from the server module to be applied to the
     /// database before the module is initialized. The migrations map is
     /// indexed on the from version.
-    </span><span class="kw">fn </span>get_database_migrations(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; BTreeMap&lt;DatabaseVersion, ServerMigrationFn&gt; {
+    </span><span class="kw">fn </span>get_database_migrations(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; BTreeMap&lt;DatabaseVersion, CoreMigrationFn&gt; {
         BTreeMap::new()
     }
 }
@@ -1768,7 +1768,7 @@
         )
     }
 
-    <span class="kw">fn </span>get_database_migrations(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; BTreeMap&lt;DatabaseVersion, ServerMigrationFn&gt; {
+    <span class="kw">fn </span>get_database_migrations(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; BTreeMap&lt;DatabaseVersion, CoreMigrationFn&gt; {
         &lt;<span class="self">Self </span><span class="kw">as </span>ServerModuleInit&gt;::get_database_migrations(<span class="self">self</span>)
     }
 }

@@ -131,6 +131,8 @@
 <a href="#131" id="131">131</a>
 <a href="#132" id="132">132</a>
 <a href="#133" id="133">133</a>
+<a href="#134" id="134">134</a>
+<a href="#135" id="135">135</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::fmt::Debug;
 <span class="kw">use </span>std::path::PathBuf;
@@ -204,7 +206,9 @@
         })<span class="question-mark">?</span>;
         <span class="kw">let </span>db = Database::new(rocksdb, ModuleDecoderRegistry::default());
 
-        <span class="kw">let </span><span class="kw-2">mut </span>client_builder = Client::builder(db);
+        <span class="kw">let </span><span class="kw-2">mut </span>client_builder = Client::builder(db)
+            .<span class="kw">await
+            </span>.map_err(GatewayError::DatabaseError)<span class="question-mark">?</span>;
         client_builder.with_module_inits(registry);
         client_builder.with_primary_module(<span class="self">self</span>.primary_module);
 

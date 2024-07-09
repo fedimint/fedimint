@@ -2484,6 +2484,9 @@
 <a href="#2484" id="2484">2484</a>
 <a href="#2485" id="2485">2485</a>
 <a href="#2486" id="2486">2486</a>
+<a href="#2487" id="2487">2487</a>
+<a href="#2488" id="2488">2488</a>
+<a href="#2489" id="2489">2489</a>
 </pre></div><pre class="rust"><code><span class="attr">#![warn(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::default_trait_access)]
@@ -3995,7 +3998,10 @@
                             .<span class="kw">await</span><span class="question-mark">?</span>;
 
                         <span class="kw">let </span>oob_notes = <span class="kw">if </span>include_invite {
-                            OOBNotes::new_with_invite(notes, <span class="kw-2">&amp;</span><span class="self">self</span>.client_ctx.get_invite_code())
+                            OOBNotes::new_with_invite(
+                                notes,
+                                <span class="kw-2">&amp;</span><span class="self">self</span>.client_ctx.get_invite_code().<span class="kw">await</span>,
+                            )
                         } <span class="kw">else </span>{
                             OOBNotes::new(federation_id_prefix, notes)
                         };

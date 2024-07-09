@@ -759,6 +759,8 @@
 <a href="#759" id="759">759</a>
 <a href="#760" id="760">760</a>
 <a href="#761" id="761">761</a>
+<a href="#762" id="762">762</a>
+<a href="#763" id="763">763</a>
 </pre></div><pre class="rust"><code><span class="kw">mod </span>complete;
 <span class="kw">pub mod </span>pay;
 
@@ -1115,7 +1117,8 @@
         <span class="kw">let </span>federation_id = <span class="self">self
             </span>.client_ctx
             .get_config()
-            .global
+            .<span class="kw">await
+            </span>.global
             .calculate_federation_id();
         <span class="self">self</span>.module_api.register_gateway(<span class="kw-2">&amp;</span>registration_info).<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="macro">debug!</span>(<span class="string">"Successfully registered gateway {gateway_id} with federation {federation_id}"</span>);
@@ -1134,7 +1137,8 @@
             <span class="kw">let </span>federation_id = <span class="self">self
                 </span>.client_ctx
                 .get_config()
-                .global
+                .<span class="kw">await
+                </span>.global
                 .calculate_federation_id();
             <span class="macro">warn!</span>(<span class="string">"Failed to remove gateway {gateway_id} from federation {federation_id}: {e:?}"</span>);
         }
