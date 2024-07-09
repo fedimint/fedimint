@@ -849,10 +849,10 @@ impl JsonRpcClient for WsClient {
                 // `user:pass@...`
                 let mut url = url.clone();
                 url.set_username("fedimint").map_err(|_| {
-                    JsonRpcClientError::Transport(anyhow::format_err!("invalid username"))
+                    JsonRpcClientError::Transport(anyhow::format_err!("invalid username").into())
                 })?;
                 url.set_password(Some(&api_secret)).map_err(|_| {
-                    JsonRpcClientError::Transport(anyhow::format_err!("invalid secret"))
+                    JsonRpcClientError::Transport(anyhow::format_err!("invalid secret").into())
                 })?;
                 return client.build(url.as_str()).await;
             }
@@ -957,9 +957,9 @@ where
                 }
                 Ok(_client) => {
                     if 0 < attempts {
-                        return Err(JsonRpcClientError::Transport(anyhow::format_err!(
-                            "Disconnected"
-                        )));
+                        return Err(JsonRpcClientError::Transport(
+                            anyhow::format_err!("Disconnected").into(),
+                        ));
                     }
                     debug!(target: LOG_CLIENT_NET_API, "Triggering reconnection after disconnection");
                 }
