@@ -37,17 +37,12 @@ use fedimint_testing::btc::BitcoinTest;
 use fedimint_testing::db::BYTE_33;
 use fedimint_testing::federation::FederationTest;
 use fedimint_testing::fixtures::Fixtures;
-use fedimint_testing::gateway::{GatewayTest, DEFAULT_GATEWAY_PASSWORD};
 use fedimint_testing::ln::FakeLightningTest;
 use fedimint_unknown_common::config::UnknownGenParams;
 use fedimint_unknown_server::UnknownInit;
 use futures::Future;
 use lightning_invoice::{Bolt11Invoice, Bolt11InvoiceDescription, Description};
-use ln_gateway::rpc::rpc_client::{GatewayRpcClient, GatewayRpcError, GatewayRpcResult};
-use ln_gateway::rpc::{
-    BalancePayload, ConnectFedPayload, FederationRoutingFees, LeaveFedPayload,
-    SetConfigurationPayload,
-};
+use ln_gateway::rpc::{BalancePayload, FederationRoutingFees, SetConfigurationPayload};
 use ln_gateway::state_machine::pay::{
     OutgoingContractError, OutgoingPaymentError, OutgoingPaymentErrorType,
 };
@@ -55,6 +50,7 @@ use ln_gateway::state_machine::{
     GatewayClientModule, GatewayClientStateMachines, GatewayExtPayStates, GatewayExtReceiveStates,
     GatewayMeta, Htlc,
 };
+use ln_gateway::Gateway;
 use tracing::info;
 
 async fn user_pay_invoice(
@@ -82,7 +78,7 @@ fn fixtures() -> Fixtures {
 
 async fn single_federation_test<B>(
     f: impl FnOnce(
-            GatewayTest,
+            Gateway,
             FakeLightningTest,
             FederationTest,
             ClientHandleArc, // User Client
@@ -97,10 +93,8 @@ where
     let other_ln = FakeLightningTest::new();
 
     let fed = fixtures.new_default_fed().await;
-    let mut gateway = fixtures
-        .new_gateway(0, Some(DEFAULT_GATEWAY_PASSWORD.to_string()))
-        .await;
-    gateway.connect_fed(&fed).await;
+    let gateway = fixtures.new_gateway().await;
+    fed.connect_gateway(&gateway).await;
     let user_client = fed.new_client().await;
     let bitcoin = fixtures.bitcoin();
     f(gateway, other_ln, fed, user_client, bitcoin).await?;
@@ -109,14 +103,7 @@ where
 }
 
 async fn multi_federation_test<B>(
-    f: impl FnOnce(
-            GatewayTest,
-            GatewayRpcClient,
-            FederationTest,
-            FederationTest,
-            Arc<dyn BitcoinTest>,
-        ) -> B
-        + Copy,
+    f: impl FnOnce(Gateway, FederationTest, FederationTest, Arc<dyn BitcoinTest>) -> B + Copy,
 ) -> anyhow::Result<()>
 where
     B: Future<Output = anyhow::Result<()>>,
@@ -124,15 +111,9 @@ where
     let fixtures = fixtures();
     let fed1 = fixtures.new_default_fed().await;
     let fed2 = fixtures.new_default_fed().await;
+    let gateway = fixtures.new_gateway().await;
 
-    let gateway = fixtures
-        .new_gateway(0, Some(DEFAULT_GATEWAY_PASSWORD.to_string()))
-        .await;
-    let client = gateway
-        .get_rpc()
-        .with_password(Some(DEFAULT_GATEWAY_PASSWORD.to_string()));
-
-    f(gateway, client, fed1, fed2, fixtures.bitcoin()).await?;
+    f(gateway, fed1, fed2, fixtures.bitcoin()).await?;
     Ok(())
 }
 
@@ -217,7 +198,7 @@ async fn gateway_pay_valid_invoice(
 async fn test_gateway_client_pay_valid_invoice() -> anyhow::Result<()> {
     single_federation_test(
         |gateway, other_lightning_client, fed, user_client, _| async move {
-            let gateway_client = gateway.select_client(fed.id()).await;
+            let gateway_client = gateway.select_client(fed.id()).await?.into_value();
             // Print money for user_client
             let dummy_module = user_client.get_first_module::<DummyClientModule>();
             let (_, outpoint) = dummy_module.print_money(sats(1000)).await?;
@@ -231,7 +212,7 @@ async fn test_gateway_client_pay_valid_invoice() -> anyhow::Result<()> {
                 invoice,
                 &user_client,
                 &gateway_client,
-                &gateway.gateway.gateway_id(),
+                &gateway.gateway_id(),
             )
             .await?;
 
@@ -247,10 +228,7 @@ async fn test_gateway_client_pay_valid_invoice() -> anyhow::Result<()> {
 #[tokio::test(flavor = "multi_thread")]
 async fn test_gateway_enforces_fees() -> anyhow::Result<()> {
     single_federation_test(
-        |gateway_test, other_lightning_client, fed, user_client, _| async move {
-            let rpc_client = gateway_test
-                .get_rpc()
-                .with_password(Some(DEFAULT_GATEWAY_PASSWORD.to_string()));
+        |gateway, other_lightning_client, fed, user_client, _| async move {
             // Print money for user_client
             let dummy_module = user_client.get_first_module::<DummyClientModule>();
             let (_, outpoint) = dummy_module.print_money(sats(1000)).await?;
@@ -263,24 +241,20 @@ async fn test_gateway_enforces_fees() -> anyhow::Result<()> {
             let set_configuration_payload = SetConfigurationPayload {
                 password: None,
                 num_route_hints: None,
-                routing_fees: Some(federation_fee),
+                routing_fees: None,
                 network: None,
-                per_federation_routing_fees: None,
+                per_federation_routing_fees: Some(vec![(fed.id(), federation_fee)]),
             };
-            verify_gateway_rpc_success("set_configuration", || {
-                rpc_client.set_configuration(set_configuration_payload.clone())
-            })
-            .await;
-
-            // we need to reconnect to set the fees as defaults from gateway
-            reconnect_federation(&rpc_client, &fed).await;
+            gateway
+                .handle_set_configuration_msg(set_configuration_payload)
+                .await?;
 
             info!("### Changed gateway routing fees");
 
             let user_lightning_module = user_client.get_first_module::<LightningClientModule>();
-            let gateway_id = gateway_test.gateway.gateway_id();
-            let gateway = user_lightning_module.select_gateway(&gateway_id).await;
-            let gateway_client = gateway_test.select_client(fed.id()).await;
+            let gateway_id = gateway.gateway_id();
+            let ln_gateway = user_lightning_module.select_gateway(&gateway_id).await;
+            let gateway_client = gateway.select_client(fed.id()).await?.into_value();
 
             let invoice_amount = sats(250);
             let invoice = other_lightning_client.invoice(invoice_amount, None)?;
@@ -293,7 +267,7 @@ async fn test_gateway_enforces_fees() -> anyhow::Result<()> {
                 contract_id,
                 fee: _,
             } = user_lightning_module
-                .pay_bolt11_invoice(gateway.clone(), invoice.clone(), ())
+                .pay_bolt11_invoice(ln_gateway.clone(), invoice.clone(), ())
                 .await
                 .expect("No Lightning Payment was started");
             match payment_type {
@@ -310,7 +284,7 @@ async fn test_gateway_enforces_fees() -> anyhow::Result<()> {
                     let payload = PayInvoicePayload {
                         federation_id: user_client.federation_id(),
                         contract_id,
-                        payment_data: get_payment_data(gateway, invoice),
+                        payment_data: get_payment_data(ln_gateway, invoice),
                         preimage_auth: Hash::hash(&[0; 32]),
                     };
 
@@ -351,8 +325,8 @@ async fn test_gateway_enforces_fees() -> anyhow::Result<()> {
 async fn test_gateway_cannot_claim_invalid_preimage() -> anyhow::Result<()> {
     single_federation_test(
         |gateway, other_lightning_client, fed, user_client, _| async move {
-            let gateway_id = gateway.gateway.gateway_id();
-            let gateway_client = gateway.select_client(fed.id()).await;
+            let gateway_id = gateway.gateway_id();
+            let gateway_client = gateway.select_client(fed.id()).await?.into_value();
             // Print money for user_client
             let dummy_module = user_client.get_first_module::<DummyClientModule>();
             let (_, outpoint) = dummy_module.print_money(sats(1000)).await?;
@@ -424,8 +398,8 @@ async fn test_gateway_cannot_claim_invalid_preimage() -> anyhow::Result<()> {
 async fn test_gateway_client_pay_unpayable_invoice() -> anyhow::Result<()> {
     single_federation_test(
         |gateway, other_lightning_client, fed, user_client, _| async move {
-            let gateway_id = gateway.gateway.gateway_id();
-            let gateway_client = gateway.select_client(fed.id()).await;
+            let gateway_id = gateway.gateway_id();
+            let gateway_client = gateway.select_client(fed.id()).await?.into_value();
             // Print money for user client
             let dummy_module = user_client.get_first_module::<DummyClientModule>();
             let lightning_module = user_client.get_first_module::<LightningClientModule>();
@@ -485,8 +459,8 @@ async fn test_gateway_client_pay_unpayable_invoice() -> anyhow::Result<()> {
 #[tokio::test(flavor = "multi_thread")]
 async fn test_gateway_client_intercept_valid_htlc() -> anyhow::Result<()> {
     single_federation_test(|gateway, _, fed, user_client, _| async move {
-        let gateway_id = gateway.gateway.gateway_id();
-        let gateway_client = gateway.select_client(fed.id()).await;
+        let gateway_id = gateway.gateway_id();
+        let gateway_client = gateway.select_client(fed.id()).await?.into_value();
         // Print money for gateway client
         let initial_gateway_balance = sats(1000);
         let dummy_module = gateway_client.get_first_module::<DummyClientModule>();
@@ -546,7 +520,7 @@ async fn test_gateway_client_intercept_valid_htlc() -> anyhow::Result<()> {
 #[tokio::test(flavor = "multi_thread")]
 async fn test_gateway_client_intercept_offer_does_not_exist() -> anyhow::Result<()> {
     single_federation_test(|gateway, _, fed, _, _| async move {
-        let gateway_client = gateway.select_client(fed.id()).await;
+        let gateway_client = gateway.select_client(fed.id()).await?.into_value();
         // Print money for gateway client
         let initial_gateway_balance = sats(1000);
         let dummy_module = gateway_client.get_first_module::<DummyClientModule>();
@@ -584,8 +558,8 @@ async fn test_gateway_client_intercept_offer_does_not_exist() -> anyhow::Result<
 #[tokio::test(flavor = "multi_thread")]
 async fn test_gateway_client_intercept_htlc_no_funds() -> anyhow::Result<()> {
     single_federation_test(|gateway, _, fed, user_client, _| async move {
-        let gateway_id = gateway.gateway.gateway_id();
-        let gateway_client = gateway.select_client(fed.id()).await;
+        let gateway_id = gateway.gateway_id();
+        let gateway_client = gateway.select_client(fed.id()).await?.into_value();
         // User client creates invoice in federation
         let ln_module = user_client.get_first_module::<LightningClientModule>();
         let ln_gateway = ln_module.select_gateway(&gateway_id).await;
@@ -630,7 +604,7 @@ async fn test_gateway_client_intercept_htlc_no_funds() -> anyhow::Result<()> {
 async fn test_gateway_client_intercept_htlc_invalid_offer() -> anyhow::Result<()> {
     single_federation_test(
         |gateway, other_lightning_client, fed, user_client, _| async move {
-            let gateway_client = gateway.select_client(fed.id()).await;
+            let gateway_client = gateway.select_client(fed.id()).await?.into_value();
             // Print money for gateway client
             let initial_gateway_balance = sats(1000);
             let gateway_dummy_module = gateway_client.get_first_module::<DummyClientModule>();
@@ -745,8 +719,8 @@ async fn test_gateway_client_intercept_htlc_invalid_offer() -> anyhow::Result<()
 async fn test_gateway_cannot_pay_expired_invoice() -> anyhow::Result<()> {
     single_federation_test(
         |gateway, other_lightning_client, fed, user_client, _| async move {
-            let gateway_id = gateway.gateway.gateway_id();
-            let gateway_client = gateway.select_client(fed.id()).await;
+            let gateway_id = gateway.gateway_id();
+            let gateway_client = gateway.select_client(fed.id()).await?.into_value();
             let invoice = other_lightning_client
                 .invoice(sats(1000), 1.into())
                 .unwrap();
@@ -813,14 +787,13 @@ async fn test_gateway_cannot_pay_expired_invoice() -> anyhow::Result<()> {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_gateway_executes_swaps_between_connected_federations() -> anyhow::Result<()> {
-    multi_federation_test(|gateway, rpc, fed1, fed2, _| async move {
-        let gateway_id = gateway.gateway.gateway_id();
+    multi_federation_test(|gateway, fed1, fed2, _| async move {
+        let gateway_id = gateway.gateway_id();
         let id1 = fed1.invite_code().federation_id();
         let id2 = fed2.invite_code().federation_id();
 
-        connect_federations(&rpc, &[fed1.clone(), fed2.clone()])
-            .await
-            .unwrap();
+        fed1.connect_gateway(&gateway).await;
+        fed2.connect_gateway(&gateway).await;
 
         // setting specific routing fees for fed1
         let fed_routing_fees = FederationRoutingFees::from_str("10,10000")?;
@@ -831,10 +804,9 @@ async fn test_gateway_executes_swaps_between_connected_federations() -> anyhow::
             network: None,
             per_federation_routing_fees: Some(vec![(id1, fed_routing_fees.clone())]),
         };
-        verify_gateway_rpc_success("set_configuration", || {
-            rpc.set_configuration(set_configuration_payload.clone())
-        })
-        .await;
+        gateway
+            .handle_set_configuration_msg(set_configuration_payload)
+            .await?;
 
         send_msats_to_gateway(&gateway, id1, 10_000).await;
         send_msats_to_gateway(&gateway, id2, 10_000).await;
@@ -843,7 +815,7 @@ async fn test_gateway_executes_swaps_between_connected_federations() -> anyhow::
         let client2 = fed2.new_client().await;
 
         // Check gateway balances before facilitating direct swap between federations
-        let pre_balances = get_balances(&rpc, &[id1, id2]).await;
+        let pre_balances = get_balances(&gateway, &[id1, id2]).await;
         assert_eq!(pre_balances[0], 10_000);
         assert_eq!(pre_balances[1], 10_000);
 
@@ -873,14 +845,9 @@ async fn test_gateway_executes_swaps_between_connected_federations() -> anyhow::
             .into_stream();
 
         // A client pays invoice in federation 1
-        let gateway_client = gateway.select_client(id1).await;
-        gateway_pay_valid_invoice(
-            invoice,
-            &client1,
-            &gateway_client,
-            &gateway.gateway.gateway_id(),
-        )
-        .await?;
+        let gateway_client = gateway.select_client(id1).await?.into_value();
+        gateway_pay_valid_invoice(invoice, &client1, &gateway_client, &gateway.gateway_id())
+            .await?;
 
         // A client receives cash via swap in federation 2
         assert_eq!(receive_sub.ok().await?, LnReceiveState::Created);
@@ -896,7 +863,7 @@ async fn test_gateway_executes_swaps_between_connected_federations() -> anyhow::
 
         // Check gateway balances after facilitating direct swap between federations
         let gateway_fed1_balance = gateway_client.get_balance().await;
-        let gateway_fed2_client = gateway.select_client(id2).await;
+        let gateway_fed2_client = gateway.select_client(id2).await?.into_value();
         let gateway_fed2_balance = gateway_fed2_client.get_balance().await;
 
         // Balance in gateway of sending federation is deducted the invoice amount
@@ -923,70 +890,28 @@ fn routing_fees_in_msats(routing_fees: &FederationRoutingFees, amount: &Amount) 
         + routing_fees.base_msat as u64
 }
 
-async fn reconnect_federation(rpc: &GatewayRpcClient, fed: &FederationTest) {
-    verify_gateway_rpc_success("leave_federation", || {
-        rpc.leave_federation(LeaveFedPayload {
-            federation_id: fed.id(),
-        })
-    })
-    .await;
-    verify_gateway_rpc_success("connect_federation", || {
-        rpc.connect_federation(ConnectFedPayload {
-            invite_code: fed.invite_code().to_string(),
-        })
-    })
-    .await;
-}
-
-/// Verifies that a gateway RPC succeeds. If it fails, the status code of the
-/// RPC is printed.
-async fn verify_gateway_rpc_success<Fut, T>(name: &str, func: impl Fn() -> Fut) -> T
-where
-    Fut: Future<Output = GatewayRpcResult<T>>,
-{
-    match func().await {
-        Ok(ret) => ret,
-        Err(GatewayRpcError::RequestError(e)) => panic!("RequestError during {name}: {e:?}"),
-        Err(GatewayRpcError::BadStatus(status)) => {
-            panic!("{name} returned error code {status} when success was expected")
-        }
-    }
-}
-
-/// Connects the gateway to all federations in `feds`.
-async fn connect_federations(
-    rpc: &GatewayRpcClient,
-    feds: &[FederationTest],
-) -> anyhow::Result<()> {
-    for fed in feds {
-        let invite_code = fed.invite_code().to_string();
-        rpc.connect_federation(ConnectFedPayload { invite_code })
-            .await?;
-    }
-    Ok(())
-}
-
 /// Retrieves the balance of each federation the gateway is connected to.
-async fn get_balances(
-    rpc: &GatewayRpcClient,
-    ids: impl IntoIterator<Item = &FederationId>,
-) -> Vec<u64> {
+async fn get_balances(gw: &Gateway, ids: impl IntoIterator<Item = &FederationId>) -> Vec<u64> {
     let mut balances = vec![];
     for id in ids.into_iter() {
-        balances.push(
-            rpc.get_balance(BalancePayload { federation_id: *id })
-                .await
-                .unwrap()
-                .msats,
-        )
+        let balance_payload = BalancePayload { federation_id: *id };
+        let balance = gw
+            .handle_balance_msg(balance_payload)
+            .await
+            .expect("Could not get balance");
+        balances.push(balance.msats);
     }
 
     balances
 }
 
 /// Prints msats for the gateway using the dummy module.
-async fn send_msats_to_gateway(gateway: &GatewayTest, id: FederationId, msats: u64) {
-    let client = gateway.select_client(id).await;
+async fn send_msats_to_gateway(gateway: &Gateway, id: FederationId, msats: u64) {
+    let client = gateway
+        .select_client(id)
+        .await
+        .expect("Could not select client")
+        .into_value();
     let dummy_module = client.get_first_module::<DummyClientModule>();
     let (_, outpoint) = dummy_module
         .print_money(Amount::from_msats(msats))

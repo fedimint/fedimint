@@ -25,6 +25,8 @@ use fedimint_server::config::api::ConfigGenParamsLocal;
 use fedimint_server::config::{gen_cert_and_key, ConfigGenParams, ServerConfig};
 use fedimint_server::consensus;
 use fedimint_server::net::connect::parse_host_port;
+use ln_gateway::rpc::ConnectFedPayload;
+use ln_gateway::Gateway;
 use tokio_rustls::rustls;
 use tracing::info;
 
@@ -125,6 +127,15 @@ impl FederationTest {
             .unwrap()
             .global
             .calculate_federation_id()
+    }
+
+    /// Connects a gateway to this `FederationTest`
+    pub async fn connect_gateway(&self, gw: &Gateway) {
+        gw.handle_connect_federation(ConnectFedPayload {
+            invite_code: self.invite_code().to_string(),
+        })
+        .await
+        .expect("Failed to connect federation");
     }
 }
 

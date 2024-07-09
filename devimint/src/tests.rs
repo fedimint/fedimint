@@ -907,7 +907,7 @@ pub async fn cli_tests(dev_fed: DevFed) -> Result<()> {
         .into_inner();
     let invoice = add_invoice.payment_request;
     let payment_hash = add_invoice.r_hash;
-    ln_pay(&client, invoice, cln_gw_id.clone(), false).await?;
+    ln_pay(&client, invoice.clone(), cln_gw_id.clone(), false).await?;
 
     let invoice_status = lnd
         .lightning_client_lock()
@@ -920,6 +920,15 @@ pub async fn cli_tests(dev_fed: DevFed) -> Result<()> {
         .into_inner()
         .state();
     anyhow::ensure!(invoice_status == tonic_lnd::lnrpc::invoice::InvoiceState::Settled);
+
+    // Try to pay the same invoice with a different client
+    let new_client = fed.new_joined_client("pay_invoice").await?;
+    fed.pegin_client(CLIENT_START_AMOUNT / 1000, &new_client)
+        .await?;
+    info!("Testing re-payment of the same invoice");
+    ln_pay(&new_client, invoice, cln_gw_id.clone(), false)
+        .await
+        .expect_err("Re-payment of same invoice is expected to fail.");
 
     // Assert balances changed by 1_200_000 msat (amount sent) + 0 msat (fee)
     let final_cln_outgoing_client_balance = client.balance().await?;
@@ -1902,7 +1911,7 @@ async fn ln_pay(
 
     let operation_id = value["operation_id"]
         .as_str()
-        .expect("missing operation id")
+        .ok_or(anyhow!("Failed to pay invoice"))?
         .to_string();
     Ok(operation_id)
 }

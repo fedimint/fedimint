@@ -19,7 +19,7 @@ use fedimint_lnv2_common::{LightningInput, LightningInputV0, OutgoingWitness};
 use fedimint_lnv2_server::LightningInit;
 use fedimint_testing::federation::FederationTest;
 use fedimint_testing::fixtures::Fixtures;
-use fedimint_testing::gateway::{GatewayTest, DEFAULT_GATEWAY_PASSWORD};
+use fedimint_testing::Gateway;
 
 use crate::mock::{MockGatewayConnection, MOCK_INVOICE_PREIMAGE};
 
@@ -47,11 +47,9 @@ fn fixtures() -> Fixtures {
 }
 
 /// Setup a gateway connected to the fed and client
-async fn gateway(fixtures: &Fixtures, fed: &FederationTest) -> GatewayTest {
-    let mut gateway = fixtures
-        .new_gateway(0, Some(DEFAULT_GATEWAY_PASSWORD.to_string()))
-        .await;
-    gateway.connect_fed(fed).await;
+async fn gateway(fixtures: &Fixtures, fed: &FederationTest) -> Gateway {
+    let gateway = fixtures.new_gateway().await;
+    fed.connect_gateway(&gateway).await;
     gateway
 }
 
@@ -59,8 +57,8 @@ async fn gateway(fixtures: &Fixtures, fed: &FederationTest) -> GatewayTest {
 async fn can_pay_external_invoice_exactly_once() -> anyhow::Result<()> {
     let fixtures = fixtures();
     let fed = fixtures.new_default_fed().await;
-    let gateway_test = gateway(&fixtures, &fed).await;
-    let gateway_api = gateway_test.gateway.versioned_api().clone();
+    let gateway = gateway(&fixtures, &fed).await;
+    let gateway_api = gateway.versioned_api().clone();
 
     let client = fed.new_client().await;
 
@@ -112,8 +110,8 @@ async fn can_pay_external_invoice_exactly_once() -> anyhow::Result<()> {
 async fn refund_failed_payment() -> anyhow::Result<()> {
     let fixtures = fixtures();
     let fed = fixtures.new_default_fed().await;
-    let gateway_test = gateway(&fixtures, &fed).await;
-    let gateway_api = gateway_test.gateway.versioned_api().clone();
+    let gateway = gateway(&fixtures, &fed).await;
+    let gateway_api = gateway.versioned_api().clone();
 
     let client = fed.new_client().await;
 
@@ -148,8 +146,8 @@ async fn refund_failed_payment() -> anyhow::Result<()> {
 async fn unilateral_refund_of_outgoing_contracts() -> anyhow::Result<()> {
     let fixtures = fixtures();
     let fed = fixtures.new_default_fed().await;
-    let gateway_test = gateway(&fixtures, &fed).await;
-    let gateway_api = gateway_test.gateway.versioned_api().clone();
+    let gateway = gateway(&fixtures, &fed).await;
+    let gateway_api = gateway.versioned_api().clone();
 
     let client = fed.new_client().await;
 
@@ -190,8 +188,8 @@ async fn unilateral_refund_of_outgoing_contracts() -> anyhow::Result<()> {
 async fn claiming_outgoing_contract_triggers_success() -> anyhow::Result<()> {
     let fixtures = fixtures();
     let fed = fixtures.new_default_fed().await;
-    let gateway_test = gateway(&fixtures, &fed).await;
-    let gateway_api = gateway_test.gateway.versioned_api().clone();
+    let gateway = gateway(&fixtures, &fed).await;
+    let gateway_api = gateway.versioned_api().clone();
 
     let client = fed.new_client().await;
 
@@ -262,8 +260,8 @@ async fn claiming_outgoing_contract_triggers_success() -> anyhow::Result<()> {
 async fn receive_operation_expires() -> anyhow::Result<()> {
     let fixtures = fixtures();
     let fed = fixtures.new_default_fed().await;
-    let gateway_test = gateway(&fixtures, &fed).await;
-    let gateway_api = gateway_test.gateway.versioned_api().clone();
+    let gateway = gateway(&fixtures, &fed).await;
+    let gateway_api = gateway.versioned_api().clone();
 
     let client = fed.new_client().await;
 

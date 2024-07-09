@@ -369,6 +369,7 @@ impl Gateway {
         fees: RoutingFees,
         num_route_hints: u32,
         gateway_db: Database,
+        gateway_state: GatewayState,
     ) -> anyhow::Result<Gateway> {
         let versioned_api = api_addr
             .join(V1_API_ENDPOINT)
@@ -385,6 +386,7 @@ impl Gateway {
             },
             gateway_db,
             client_builder,
+            gateway_state,
         )
         .await
     }
@@ -427,6 +429,7 @@ impl Gateway {
             gateway_parameters,
             gateway_db,
             client_builder,
+            GatewayState::Initializing,
         )
         .await
     }
@@ -438,6 +441,7 @@ impl Gateway {
         gateway_parameters: GatewayParameters,
         gateway_db: Database,
         client_builder: GatewayClientBuilder,
+        gateway_state: GatewayState,
     ) -> anyhow::Result<Gateway> {
         // Apply database migrations before using the database to ensure old database
         // structures are readable.
@@ -458,7 +462,7 @@ impl Gateway {
             lightning_builder,
             next_scid: Arc::new(Mutex::new(INITIAL_SCID)),
             gateway_config: Arc::new(RwLock::new(gateway_config)),
-            state: Arc::new(RwLock::new(GatewayState::Initializing)),
+            state: Arc::new(RwLock::new(gateway_state)),
             client_builder,
             gateway_id: Self::load_gateway_id(&gateway_db).await,
             gateway_db,
@@ -1016,7 +1020,7 @@ impl Gateway {
     /// download the federation's client configuration, construct a new
     /// client, registers, the gateway with the federation, and persists the
     /// necessary config to reconstruct the client when restarting the gateway.
-    async fn handle_connect_federation(
+    pub async fn handle_connect_federation(
         &self,
         payload: ConnectFedPayload,
     ) -> Result<FederationInfo> {
