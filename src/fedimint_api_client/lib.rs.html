@@ -85,6 +85,11 @@
 <a href="#85" id="85">85</a>
 <a href="#86" id="86">86</a>
 <a href="#87" id="87">87</a>
+<a href="#88" id="88">88</a>
+<a href="#89" id="89">89</a>
+<a href="#90" id="90">90</a>
+<a href="#91" id="91">91</a>
+<a href="#92" id="92">92</a>
 </pre></div><pre class="rust"><code><span class="attr">#![warn(clippy::pedantic)]
 #![allow(clippy::missing_errors_doc)]
 #![allow(clippy::missing_panics_doc)]
@@ -96,7 +101,7 @@
 
 <span class="kw">use </span>anyhow::{bail, Context <span class="kw">as _</span>};
 <span class="kw">use </span>api::{DynGlobalApi, FederationApiExt <span class="kw">as _</span>, WsFederationApi};
-<span class="kw">use </span>fedimint_core::config::ClientConfig;
+<span class="kw">use </span>fedimint_core::config::{ClientConfig, FederationId};
 <span class="kw">use </span>fedimint_core::encoding::Encodable <span class="kw">as _</span>;
 <span class="kw">use </span>fedimint_core::endpoint_constants::CLIENT_CONFIG_ENDPOINT;
 <span class="kw">use </span>fedimint_core::invite_code::InviteCode;
@@ -115,6 +120,10 @@
 </span><span class="kw">pub async fn </span>download_from_invite_code(invite_code: <span class="kw-2">&amp;</span>InviteCode) -&gt; anyhow::Result&lt;ClientConfig&gt; {
     <span class="macro">debug!</span>(<span class="string">"Downloading client config from {:?}"</span>, invite_code);
 
+    <span class="kw">let </span>federation_id = invite_code.federation_id();
+    <span class="kw">let </span>api = DynGlobalApi::from_invite_code(invite_code);
+    <span class="kw">let </span>api_secret = invite_code.api_secret();
+
     fedimint_core::util::retry(
         <span class="string">"Downloading client config"</span>,
         <span class="comment">// 0.2, 0.2, 0.4, 0.6, 1.0, 1.6, ...
@@ -123,17 +132,18 @@
             .with_min_delay(Duration::from_millis(<span class="number">200</span>))
             .with_max_delay(Duration::from_secs(<span class="number">5</span>))
             .with_max_times(<span class="number">10</span>),
-        || try_download_client_config(invite_code),
+        || try_download_client_config(<span class="kw-2">&amp;</span>api, federation_id, api_secret.clone()),
     )
     .<span class="kw">await
     </span>.context(<span class="string">"Failed to download client config"</span>)
 }
 
 <span class="doccomment">/// Tries to download the client config only once.
-</span><span class="kw">pub async fn </span>try_download_client_config(invite_code: <span class="kw-2">&amp;</span>InviteCode) -&gt; anyhow::Result&lt;ClientConfig&gt; {
-    <span class="comment">// we have to download the api endpoints first
-    </span><span class="kw">let </span>federation_id = invite_code.federation_id();
-
+</span><span class="kw">pub async fn </span>try_download_client_config(
+    api: <span class="kw-2">&amp;</span>DynGlobalApi,
+    federation_id: FederationId,
+    api_secret: <span class="prelude-ty">Option</span>&lt;String&gt;,
+) -&gt; anyhow::Result&lt;ClientConfig&gt; {
     <span class="kw">let </span>query_strategy = FilterMap::new(
         <span class="kw">move </span>|cfg: ClientConfig| {
             <span class="kw">if </span>federation_id.<span class="number">0 </span>!= cfg.global.api_endpoints.consensus_hash() {
@@ -145,7 +155,7 @@
         NumPeers::from(<span class="number">1</span>),
     );
 
-    <span class="kw">let </span>api_endpoints = DynGlobalApi::from_invite_code(invite_code)
+    <span class="kw">let </span>api_endpoints = api
         .request_with_strategy(
             query_strategy,
             CLIENT_CONFIG_ENDPOINT.to_owned(),
@@ -159,7 +169,7 @@
         .map(|(peer, url)| (peer, url.url))
         .collect();
 
-    <span class="kw">let </span>client_config = WsFederationApi::new(api_endpoints, <span class="kw-2">&amp;</span>invite_code.api_secret())
+    <span class="kw">let </span>client_config = WsFederationApi::new(api_endpoints, <span class="kw-2">&amp;</span>api_secret)
         .request_current_consensus::&lt;ClientConfig&gt;(
             CLIENT_CONFIG_ENDPOINT.to_owned(),
             ApiRequestErased::default(),
