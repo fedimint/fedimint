@@ -1982,10 +1982,10 @@
                 // `user:pass@...`
                 </span><span class="kw">let </span><span class="kw-2">mut </span>url = url.clone();
                 url.set_username(<span class="string">"fedimint"</span>).map_err(|<span class="kw">_</span>| {
-                    JsonRpcClientError::Transport(<span class="macro">anyhow::format_err!</span>(<span class="string">"invalid username"</span>))
+                    JsonRpcClientError::Transport(<span class="macro">anyhow::format_err!</span>(<span class="string">"invalid username"</span>).into())
                 })<span class="question-mark">?</span>;
                 url.set_password(<span class="prelude-val">Some</span>(<span class="kw-2">&amp;</span>api_secret)).map_err(|<span class="kw">_</span>| {
-                    JsonRpcClientError::Transport(<span class="macro">anyhow::format_err!</span>(<span class="string">"invalid secret"</span>))
+                    JsonRpcClientError::Transport(<span class="macro">anyhow::format_err!</span>(<span class="string">"invalid secret"</span>).into())
                 })<span class="question-mark">?</span>;
                 <span class="kw">return </span>client.build(url.as_str()).<span class="kw">await</span>;
             }
@@ -2090,9 +2090,9 @@
                 }
                 <span class="prelude-val">Ok</span>(_client) =&gt; {
                     <span class="kw">if </span><span class="number">0 </span>&lt; attempts {
-                        <span class="kw">return </span><span class="prelude-val">Err</span>(JsonRpcClientError::Transport(<span class="macro">anyhow::format_err!</span>(
-                            <span class="string">"Disconnected"
-                        </span>)));
+                        <span class="kw">return </span><span class="prelude-val">Err</span>(JsonRpcClientError::Transport(
+                            <span class="macro">anyhow::format_err!</span>(<span class="string">"Disconnected"</span>).into(),
+                        ));
                     }
                     <span class="macro">debug!</span>(target: LOG_CLIENT_NET_API, <span class="string">"Triggering reconnection after disconnection"</span>);
                 }
