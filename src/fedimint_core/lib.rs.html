@@ -268,8 +268,6 @@
 <a href="#268" id="268">268</a>
 <a href="#269" id="269">269</a>
 <a href="#270" id="270">270</a>
-<a href="#271" id="271">271</a>
-<a href="#272" id="272">272</a>
 </pre></div><pre class="rust"><code><span class="attr">#![warn(clippy::pedantic, clippy::nursery)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::cast_possible_wrap)]
@@ -326,11 +324,11 @@
 <span class="kw">pub use </span>macro_rules_attribute::apply;
 <span class="kw">pub use </span>module::ServerModule;
 <span class="kw">pub use </span>peer_id::<span class="kw-2">*</span>;
-<span class="kw">pub use </span>secp256k1;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>thiserror::Error;
 <span class="kw">pub use </span>tiered::Tiered;
 <span class="kw">pub use </span>tiered_multi::<span class="kw-2">*</span>;
+<span class="kw">pub use </span>{hex, secp256k1};
 
 <span class="kw">pub use </span><span class="kw">crate</span>::core::server;
 <span class="kw">use </span><span class="kw">crate</span>::encoding::{Decodable, DecodeError, Encodable};
@@ -360,8 +358,6 @@
 <span class="kw">pub mod </span>epoch;
 <span class="doccomment">/// Formatting helpers
 </span><span class="kw">pub mod </span>fmt_utils;
-<span class="doccomment">/// Hex encoding helpers
-</span><span class="kw">pub mod </span>hex;
 <span class="doccomment">/// Federation invite code
 </span><span class="kw">pub mod </span>invite_code;
 <span class="doccomment">/// Common macros
