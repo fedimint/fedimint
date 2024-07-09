@@ -3,11 +3,11 @@
     "advisory-db": {
       "flake": false,
       "locked": {
-        "lastModified": 1717596017,
-        "narHash": "sha256-LHjTqlOLgtv43GVkeM7Hb5HcZG5i/vNHnWgYaUzu+Jg=",
+        "lastModified": 1720458342,
+        "narHash": "sha256-H8HeiVq7P3VEPxU0MUwh13xlcg0VXvKP5SQ37fs3QOs=",
         "owner": "rustsec",
         "repo": "advisory-db",
-        "rev": "af76d4423761499f954411bb3071dcc72e6b0450",
+        "rev": "502a1ba73728791a73e8b94cee6406ab79ec8ba5",
         "type": "github"
       },
       "original": {
