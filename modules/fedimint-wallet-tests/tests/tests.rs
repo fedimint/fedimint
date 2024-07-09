@@ -50,7 +50,7 @@ async fn initial_peg_in<'a>(
     assert_eq!(balance_sub.ok().await?, sats(0));
 
     let wallet_module = &client.get_first_module::<WalletClientModule>();
-    let (op, address, _) = wallet_module.allocate_deposit_address().await?;
+    let (op, address, _) = wallet_module.allocate_deposit_address_expert_only().await?;
     info!(?address, "Peg-in address generated");
     let (_proof, tx) = bitcoin
         .send_and_mine_block(
@@ -215,7 +215,7 @@ async fn on_chain_peg_in_detects_multiple() -> anyhow::Result<()> {
     info!(?starting_balance, "Starting balance");
 
     let wallet_module = &client.get_first_module::<WalletClientModule>();
-    let (op, address, tweak_idx) = wallet_module.allocate_deposit_address().await?;
+    let (op, address, tweak_idx) = wallet_module.allocate_deposit_address_expert_only().await?;
 
     // First peg-in
     {

@@ -639,7 +639,24 @@ impl WalletClientModule {
         })
     }
 
-    pub async fn allocate_deposit_address(
+    /// Allocates a deposit address that is controlled by the federation.
+    ///
+    /// This is an EXPERT ONLY method intended for power users such as Lightning
+    /// gateways allocating liquidity, and we discourage exposing peg-in
+    /// functionality to everyday users of a Fedimint wallet due to the
+    /// following two limitations:
+    ///
+    /// The transaction sending to this address needs to be smaller than 40KB in
+    /// order for the peg-in to be claimable. If the transaction is too large,
+    /// funds will be lost.
+    ///
+    /// In the future, federations will also enforce a minimum peg-in amount to
+    /// prevent accumulation of dust UTXOs. Peg-ins under this minimum cannot be
+    /// claimed and funds will be lost.
+    ///
+    /// Everyday users should rely on Lightning to move funds into the
+    /// federation.
+    pub async fn allocate_deposit_address_expert_only(
         &self,
     ) -> anyhow::Result<(OperationId, Address, TweakIdx)> {
         let (operation_id, address, tweak_idx) = self
