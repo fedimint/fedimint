@@ -1131,6 +1131,20 @@
 <a href="#1131" id="1131">1131</a>
 <a href="#1132" id="1132">1132</a>
 <a href="#1133" id="1133">1133</a>
+<a href="#1134" id="1134">1134</a>
+<a href="#1135" id="1135">1135</a>
+<a href="#1136" id="1136">1136</a>
+<a href="#1137" id="1137">1137</a>
+<a href="#1138" id="1138">1138</a>
+<a href="#1139" id="1139">1139</a>
+<a href="#1140" id="1140">1140</a>
+<a href="#1141" id="1141">1141</a>
+<a href="#1142" id="1142">1142</a>
+<a href="#1143" id="1143">1143</a>
+<a href="#1144" id="1144">1144</a>
+<a href="#1145" id="1145">1145</a>
+<a href="#1146" id="1146">1146</a>
+<a href="#1147" id="1147">1147</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap};
 <span class="kw">use </span>std::fmt::{<span class="self">self</span>, Debug, Display};
 <span class="kw">use </span>std::pin::Pin;
@@ -1174,12 +1188,14 @@
 <span class="attr">#[cfg(target_family = <span class="string">"wasm"</span>)]
 </span><span class="kw">use </span>jsonrpsee_wasm_client::{Client <span class="kw">as </span>WsClient, WasmClientBuilder <span class="kw">as </span>WsClientBuilder};
 <span class="attr">#[cfg(not(target_family = <span class="string">"wasm"</span>))]
-</span><span class="kw">use </span>jsonrpsee_ws_client::{HeaderMap, HeaderValue};
+</span><span class="kw">use </span>jsonrpsee_ws_client::{CustomCertStore, HeaderMap, HeaderValue};
 <span class="attr">#[cfg(not(target_family = <span class="string">"wasm"</span>))]
 </span><span class="kw">use </span>jsonrpsee_ws_client::{WsClient, WsClientBuilder};
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>serde_json::Value;
 <span class="kw">use </span>thiserror::Error;
+<span class="attr">#[cfg(not(target_family = <span class="string">"wasm"</span>))]
+</span><span class="kw">use </span>tokio_rustls::rustls::RootCertStore;
 <span class="kw">use </span>tracing::{debug, error, instrument, trace, warn};
 
 <span class="kw">use </span><span class="kw">crate</span>::query::{QueryStep, QueryStrategy, ThresholdConsensus};
@@ -1954,7 +1970,19 @@
         api_secret: <span class="prelude-ty">Option</span>&lt;String&gt;,
     ) -&gt; result::Result&lt;<span class="self">Self</span>, JsonRpcClientError&gt; {
         <span class="attr">#[cfg(not(target_family = <span class="string">"wasm"</span>))]
-        </span><span class="kw">let </span><span class="kw-2">mut </span>client = WsClientBuilder::default().max_concurrent_requests(u16::MAX <span class="kw">as </span>usize);
+        </span><span class="kw">let </span><span class="kw-2">mut </span>client = {
+            <span class="kw">let </span>webpki_roots = webpki_roots::TLS_SERVER_ROOTS.iter().cloned();
+            <span class="kw">let </span><span class="kw-2">mut </span>root_certs = RootCertStore::empty();
+            root_certs.extend(webpki_roots);
+
+            <span class="kw">let </span>tls_cfg = CustomCertStore::builder()
+                .with_root_certificates(root_certs)
+                .with_no_client_auth();
+
+            WsClientBuilder::default()
+                .max_concurrent_requests(u16::MAX <span class="kw">as </span>usize)
+                .with_custom_cert_store(tls_cfg)
+        };
 
         <span class="attr">#[cfg(target_family = <span class="string">"wasm"</span>)]
         </span><span class="kw">let </span>client = WsClientBuilder::default().max_concurrent_requests(u16::MAX <span class="kw">as </span>usize);
