@@ -178,6 +178,9 @@
 <a href="#178" id="178">178</a>
 <a href="#179" id="179">179</a>
 <a href="#180" id="180">180</a>
+<a href="#181" id="181">181</a>
+<a href="#182" id="182">182</a>
+<a href="#183" id="183">183</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::{Duration, SystemTime};
 
@@ -317,7 +320,7 @@
 
 <span class="kw">impl </span>FederationPeerClientConnectionState {
     <span class="kw">const </span>MIN_BACKOFF: Duration = Duration::from_millis(<span class="number">100</span>);
-    <span class="kw">const </span>MAX_BACKOFF: Duration = Duration::from_secs(<span class="number">5</span>);
+    <span class="kw">const </span>MAX_BACKOFF: Duration = Duration::from_secs(<span class="number">15</span>);
 
     <span class="kw">fn </span>new() -&gt; <span class="self">Self </span>{
         <span class="self">Self </span>{
@@ -329,9 +332,10 @@
     <span class="doccomment">/// Wait (if needed) before reconnection attempt based on number of previous
     /// attempts and update reconnection stats.
     </span><span class="kw">async fn </span>wait(<span class="kw-2">&amp;mut </span><span class="self">self</span>) {
+        <span class="kw">let </span>now_ts = now();
         <span class="kw">let </span>desired_timeout = <span class="self">self</span>.connection_backoff.next().unwrap_or(<span class="self">Self</span>::MAX_BACKOFF);
         <span class="kw">let </span>since_last_connect = <span class="kw">match </span><span class="self">self</span>.last_connection_attempt_or {
-            <span class="prelude-val">Some</span>(last) =&gt; now().duration_since(last).unwrap_or_default(),
+            <span class="prelude-val">Some</span>(last) =&gt; now_ts.duration_since(last).unwrap_or_default(),
             <span class="prelude-val">None </span>=&gt; Duration::ZERO,
         };
 
@@ -344,7 +348,7 @@
         }
         fedimint_core::runtime::sleep(sleep_duration).<span class="kw">await</span>;
 
-        <span class="self">self</span>.last_connection_attempt_or = <span class="prelude-val">Some</span>(now());
+        <span class="self">self</span>.last_connection_attempt_or = <span class="prelude-val">Some</span>(now_ts);
     }
 
     <span class="kw">fn </span>reset(<span class="kw-2">&amp;mut </span><span class="self">self</span>) {
@@ -353,6 +357,8 @@
 
     <span class="kw">fn </span>new_backoff() -&gt; backon::FibonacciBackoff {
         backon::FibonacciBuilder::default()
+            .with_jitter()
+            .with_max_times(usize::MAX)
             .with_min_delay(<span class="self">Self</span>::MIN_BACKOFF)
             .with_max_delay(<span class="self">Self</span>::MAX_BACKOFF)
             .build()
