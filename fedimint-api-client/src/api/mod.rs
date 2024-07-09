@@ -41,12 +41,14 @@ use jsonrpsee_core::DeserializeOwned;
 #[cfg(target_family = "wasm")]
 use jsonrpsee_wasm_client::{Client as WsClient, WasmClientBuilder as WsClientBuilder};
 #[cfg(not(target_family = "wasm"))]
-use jsonrpsee_ws_client::{HeaderMap, HeaderValue};
+use jsonrpsee_ws_client::{CustomCertStore, HeaderMap, HeaderValue};
 #[cfg(not(target_family = "wasm"))]
 use jsonrpsee_ws_client::{WsClient, WsClientBuilder};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use thiserror::Error;
+#[cfg(not(target_family = "wasm"))]
+use tokio_rustls::rustls::RootCertStore;
 use tracing::{debug, error, instrument, trace, warn};
 
 use crate::query::{QueryStep, QueryStrategy, ThresholdConsensus};
@@ -821,7 +823,19 @@ impl JsonRpcClient for WsClient {
         api_secret: Option<String>,
     ) -> result::Result<Self, JsonRpcClientError> {
         #[cfg(not(target_family = "wasm"))]
-        let mut client = WsClientBuilder::default().max_concurrent_requests(u16::MAX as usize);
+        let mut client = {
+            let webpki_roots = webpki_roots::TLS_SERVER_ROOTS.iter().cloned();
+            let mut root_certs = RootCertStore::empty();
+            root_certs.extend(webpki_roots);
+
+            let tls_cfg = CustomCertStore::builder()
+                .with_root_certificates(root_certs)
+                .with_no_client_auth();
+
+            WsClientBuilder::default()
+                .max_concurrent_requests(u16::MAX as usize)
+                .with_custom_cert_store(tls_cfg)
+        };
 
         #[cfg(target_family = "wasm")]
         let client = WsClientBuilder::default().max_concurrent_requests(u16::MAX as usize);
