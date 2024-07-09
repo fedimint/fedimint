@@ -9,7 +9,7 @@ use std::time::Duration;
 
 use anyhow::{bail, Context as _};
 use api::{DynGlobalApi, FederationApiExt as _, WsFederationApi};
-use fedimint_core::config::ClientConfig;
+use fedimint_core::config::{ClientConfig, FederationId};
 use fedimint_core::encoding::Encodable as _;
 use fedimint_core::endpoint_constants::CLIENT_CONFIG_ENDPOINT;
 use fedimint_core::invite_code::InviteCode;
@@ -28,6 +28,10 @@ pub mod query;
 pub async fn download_from_invite_code(invite_code: &InviteCode) -> anyhow::Result<ClientConfig> {
     debug!("Downloading client config from {:?}", invite_code);
 
+    let federation_id = invite_code.federation_id();
+    let api = DynGlobalApi::from_invite_code(invite_code);
+    let api_secret = invite_code.api_secret();
+
     fedimint_core::util::retry(
         "Downloading client config",
         // 0.2, 0.2, 0.4, 0.6, 1.0, 1.6, ...
@@ -36,17 +40,18 @@ pub async fn download_from_invite_code(invite_code: &InviteCode) -> anyhow::Resu
             .with_min_delay(Duration::from_millis(200))
             .with_max_delay(Duration::from_secs(5))
             .with_max_times(10),
-        || try_download_client_config(invite_code),
+        || try_download_client_config(&api, federation_id, api_secret.clone()),
     )
     .await
     .context("Failed to download client config")
 }
 
 /// Tries to download the client config only once.
-pub async fn try_download_client_config(invite_code: &InviteCode) -> anyhow::Result<ClientConfig> {
-    // we have to download the api endpoints first
-    let federation_id = invite_code.federation_id();
-
+pub async fn try_download_client_config(
+    api: &DynGlobalApi,
+    federation_id: FederationId,
+    api_secret: Option<String>,
+) -> anyhow::Result<ClientConfig> {
     let query_strategy = FilterMap::new(
         move |cfg: ClientConfig| {
             if federation_id.0 != cfg.global.api_endpoints.consensus_hash() {
@@ -58,7 +63,7 @@ pub async fn try_download_client_config(invite_code: &InviteCode) -> anyhow::Res
         NumPeers::from(1),
     );
 
-    let api_endpoints = DynGlobalApi::from_invite_code(invite_code)
+    let api_endpoints = api
         .request_with_strategy(
             query_strategy,
             CLIENT_CONFIG_ENDPOINT.to_owned(),
@@ -72,7 +77,7 @@ pub async fn try_download_client_config(invite_code: &InviteCode) -> anyhow::Res
         .map(|(peer, url)| (peer, url.url))
         .collect();
 
-    let client_config = WsFederationApi::new(api_endpoints, &invite_code.api_secret())
+    let client_config = WsFederationApi::new(api_endpoints, &api_secret)
         .request_current_consensus::<ClientConfig>(
             CLIENT_CONFIG_ENDPOINT.to_owned(),
             ApiRequestErased::default(),
