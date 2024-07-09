@@ -351,6 +351,11 @@
 <a href="#351" id="351">351</a>
 <a href="#352" id="352">352</a>
 <a href="#353" id="353">353</a>
+<a href="#354" id="354">354</a>
+<a href="#355" id="355">355</a>
+<a href="#356" id="356">356</a>
+<a href="#357" id="357">357</a>
+<a href="#358" id="358">358</a>
 </pre></div><pre class="rust"><code><span class="attr">#![warn(clippy::pedantic)]
 #![allow(clippy::default_trait_access)]
 #![allow(clippy::missing_errors_doc)]
@@ -397,6 +402,11 @@
 /// help mitigate this problem but are out-of-scope for this version of the
 /// wallet.
 </span><span class="kw">pub const </span>CONFIRMATION_TARGET: u16 = <span class="number">1</span>;
+
+<span class="doccomment">/// To further mitigate the risk of a peg-out transaction getting stuck in the
+/// mempool, we multiply the feerate estimate returned from the backend by this
+/// value.
+</span><span class="kw">pub const </span>FEERATE_MULTIPLIER: u64 = <span class="number">4</span>;
 
 <span class="kw">pub type </span>PartialSig = Vec&lt;u8&gt;;
 

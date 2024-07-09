@@ -1849,6 +1849,8 @@
 <a href="#1849" id="1849">1849</a>
 <a href="#1850" id="1850">1850</a>
 <a href="#1851" id="1851">1851</a>
+<a href="#1852" id="1852">1852</a>
+<a href="#1853" id="1853">1853</a>
 </pre></div><pre class="rust"><code><span class="attr">#![warn(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::cast_possible_wrap)]
@@ -1882,6 +1884,7 @@
     proprietary_tweak_key, PegOutFees, PegOutSignatureItem, ProcessPegOutSigError, SpendableUTXO,
     WalletCommonInit, WalletConsensusItem, WalletCreationError, WalletInput, WalletModuleTypes,
     WalletOutput, WalletOutputOutcome, CONFIRMATION_TARGET, DEPRECATED_RBF_ERROR,
+    FEERATE_MULTIPLIER,
 };
 <span class="kw">use </span>fedimint_bitcoind::{create_bitcoind, DynBitcoindRpc};
 <span class="kw">use </span>fedimint_core::config::{
@@ -3107,7 +3110,8 @@
 
                     <span class="kw">match </span>res {
                         <span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(r)) =&gt; {
-                            <span class="kw">let _ </span>= fee_rate_tx.send(r);
+                            <span class="kw">let </span>feerate_with_multiplier = Feerate { sats_per_kvb: r.sats_per_kvb * FEERATE_MULTIPLIER };
+                            <span class="kw">let _ </span>= fee_rate_tx.send(feerate_with_multiplier);
                         }
                         <span class="prelude-val">Ok</span>(<span class="prelude-val">None</span>) =&gt; {
                             <span class="macro">debug!</span>(target: LOG_MODULE_WALLET, <span class="string">"Bitcoin node did not return a fee rate"</span>);
