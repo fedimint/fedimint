@@ -38,7 +38,7 @@ fn bsats(satoshi: u64) -> bitcoin::Amount {
     bitcoin::Amount::from_sat(satoshi)
 }
 
-const PEG_IN_AMOUNT_SATS: u64 = 5000;
+const PEG_IN_AMOUNT_SATS: u64 = 10000;
 const PEG_OUT_AMOUNT_SATS: u64 = 1000;
 
 async fn initial_peg_in<'a>(
