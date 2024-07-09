@@ -180,6 +180,7 @@ impl ServerConfigConsensus {
         let client = ClientConfig {
             global: GlobalClientConfig {
                 api_endpoints: self.api_endpoints.clone(),
+                broadcast_public_keys: Some(self.broadcast_public_keys.clone()),
                 consensus_version: self.version,
                 meta: self.meta.clone(),
             },
@@ -203,7 +204,7 @@ impl ServerConfig {
     pub fn supported_api_versions() -> SupportedCoreApiVersions {
         SupportedCoreApiVersions {
             core_consensus: CORE_CONSENSUS_VERSION,
-            api: MultiApiVersion::try_from_iter([ApiVersion { major: 0, minor: 2 }])
+            api: MultiApiVersion::try_from_iter([ApiVersion { major: 0, minor: 3 }])
                 .expect("not version conflicts"),
         }
     }
@@ -265,12 +266,12 @@ impl ServerConfig {
                 .url
                 .clone(),
             self.local.identity,
-            FederationId(self.consensus.api_endpoints.consensus_hash()),
+            self.calculate_federation_id(),
             api_secret,
         )
     }
 
-    pub fn get_federation_id(&self) -> FederationId {
+    pub fn calculate_federation_id(&self) -> FederationId {
         FederationId(self.consensus.api_endpoints.consensus_hash())
     }
 

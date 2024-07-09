@@ -3,7 +3,7 @@ use std::path::PathBuf;
 
 use anyhow::Context;
 use erased_serde::Serialize;
-use fedimint_client::db::ClientConfigKeyPrefix;
+use fedimint_client::db::ClientConfigKey;
 use fedimint_client::module::init::ClientModuleInitRegistry;
 use fedimint_core::config::{ClientConfig, CommonModuleInitRegistry, ServerModuleInitRegistry};
 use fedimint_core::core::ModuleKind;
@@ -17,6 +17,7 @@ use fedimint_rocksdb::RocksDbReadOnly;
 use fedimint_server::config::io::read_server_config;
 use fedimint_server::config::ServerConfig;
 use fedimint_server::consensus::db as ConsensusRange;
+use fedimint_server::net::api::announcement::ApiAnnouncementPrefix;
 use futures::StreamExt;
 use ln_gateway::Gateway;
 use strum::IntoEnumIterator;
@@ -84,12 +85,7 @@ impl DatabaseDump {
             };
 
             let mut dbtx = db.begin_transaction_nc().await;
-            let client_cfg = dbtx
-                .find_by_prefix(&ClientConfigKeyPrefix)
-                .await
-                .next()
-                .await
-                .map(|(_, client_cfg)| client_cfg);
+            let client_cfg = dbtx.get_value(&ClientConfigKey).await;
 
             if let Some(client_cfg) = client_cfg {
                 // Successfully read the client config, that means this database is a client db
@@ -295,6 +291,16 @@ impl DatabaseDump {
                 }
                 // Module is a global prefix for all module data
                 ConsensusRange::DbKeyPrefix::Module => {}
+                ConsensusRange::DbKeyPrefix::ApiAnnouncements => {
+                    push_db_pair_items_no_serde!(
+                        dbtx,
+                        ApiAnnouncementPrefix,
+                        ApiAnnouncementKey,
+                        fedimint_core::net::api_announcement::SignedApiAnnouncement,
+                        consensus,
+                        "API Announcements"
+                    );
+                }
             }
         }
 

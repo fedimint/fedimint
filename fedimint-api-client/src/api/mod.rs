@@ -14,7 +14,6 @@ use fedimint_core::admin_client::{
     ServerStatus,
 };
 use fedimint_core::backup::ClientBackupSnapshot;
-use fedimint_core::config::ClientConfig;
 use fedimint_core::core::backup::SignedBackupRequest;
 use fedimint_core::core::{Decoder, DynOutputOutcome, ModuleInstanceId, OutputOutcome};
 use fedimint_core::encoding::{Decodable, Encodable};
@@ -57,6 +56,7 @@ mod federation_peer_client;
 mod global_federation_api_with_cache;
 
 use federation_peer_client::FederationPeer;
+use fedimint_core::net::api_announcement::SignedApiAnnouncement;
 use global_federation_api_with_cache::GlobalFederationApiWithCache;
 
 pub type PeerResult<T> = Result<T, PeerError>;
@@ -242,6 +242,7 @@ impl OutputOutcomeError {
         )
     }
 }
+
 /// An API (module or global) that can query a federation
 #[apply(async_trait_maybe_send!)]
 pub trait IRawFederationApi: Debug + MaybeSend + MaybeSync {
@@ -535,6 +536,13 @@ impl AsRef<dyn IGlobalFederationApi + 'static> for DynGlobalApi {
 }
 
 impl DynGlobalApi {
+    pub fn new_admin(peer: PeerId, url: SafeUrl, api_secret: &Option<String>) -> DynGlobalApi {
+        GlobalFederationApiWithCache::new(
+            WsFederationApi::new(vec![(peer, url)], api_secret).with_self_peer_id(peer),
+        )
+        .into()
+    }
+
     pub fn from_pre_peer_id_admin_endpoint(url: SafeUrl, api_secret: &Option<String>) -> Self {
         // PeerIds are used only for informational purposes, but just in case, make a
         // big number so it stands out
@@ -550,23 +558,11 @@ impl DynGlobalApi {
             .into()
     }
 
-    pub fn from_endpoints(peers: Vec<(PeerId, SafeUrl)>, api_secret: &Option<String>) -> Self {
-        GlobalFederationApiWithCache::new(WsFederationApi::new(peers, api_secret)).into()
-    }
-
-    pub fn from_config(config: &ClientConfig, api_secret: &Option<String>) -> Self {
-        GlobalFederationApiWithCache::new(WsFederationApi::from_config(config, api_secret)).into()
-    }
-
-    pub fn from_config_admin(
-        config: &ClientConfig,
+    pub fn from_endpoints(
+        peers: impl IntoIterator<Item = (PeerId, SafeUrl)>,
         api_secret: &Option<String>,
-        self_peer_id: PeerId,
     ) -> Self {
-        GlobalFederationApiWithCache::new(
-            WsFederationApi::from_config(config, api_secret).with_self_peer_id(self_peer_id),
-        )
-        .into()
+        GlobalFederationApiWithCache::new(WsFederationApi::new(peers, api_secret)).into()
     }
 
     pub fn from_invite_code(invite_code: &InviteCode) -> Self {
@@ -728,6 +724,24 @@ pub trait IGlobalFederationApi: IRawFederationApi {
     async fn auth(&self, auth: ApiAuth) -> FederationResult<()>;
 
     async fn restart_federation_setup(&self, auth: ApiAuth) -> FederationResult<()>;
+
+    /// Publish our signed API announcement to other guardians
+    async fn submit_api_announcement(
+        &self,
+        peer_id: PeerId,
+        announcement: SignedApiAnnouncement,
+    ) -> FederationResult<()>;
+
+    async fn api_announcements(
+        &self,
+        guardian: PeerId,
+    ) -> PeerResult<BTreeMap<PeerId, SignedApiAnnouncement>>;
+
+    async fn sign_api_announcement(
+        &self,
+        api_url: SafeUrl,
+        auth: ApiAuth,
+    ) -> FederationResult<SignedApiAnnouncement>;
 }
 
 pub fn deserialize_outcome<R>(
@@ -881,21 +895,11 @@ impl JsonRpcClient for WsClient {
 
 impl WsFederationApi<WsClient> {
     /// Creates a new API client
-    pub fn new(peers: Vec<(PeerId, SafeUrl)>, api_secret: &Option<String>) -> Self {
+    pub fn new(
+        peers: impl IntoIterator<Item = (PeerId, SafeUrl)>,
+        api_secret: &Option<String>,
+    ) -> Self {
         Self::new_with_client(peers, None, api_secret)
-    }
-
-    /// Creates a new API client from a client config
-    pub fn from_config(config: &ClientConfig, api_secret: &Option<String>) -> Self {
-        Self::new(
-            config
-                .global
-                .api_endpoints
-                .iter()
-                .map(|(id, peer)| (*id, peer.url.clone()))
-                .collect(),
-            api_secret,
-        )
     }
 
     pub fn with_self_peer_id(self, self_peer_id: PeerId) -> Self {
@@ -916,27 +920,30 @@ where
 
     /// Creates a new API client
     pub fn new_with_client(
-        peers: Vec<(PeerId, SafeUrl)>,
+        peers: impl IntoIterator<Item = (PeerId, SafeUrl)>,
         self_peer_id: Option<PeerId>,
         api_secret: &Option<String>,
     ) -> Self {
-        WsFederationApi {
-            peer_ids: peers.iter().map(|m| m.0).collect(),
-            self_peer_id,
-            peers: Arc::new(
-                peers
-                    .into_iter()
-                    .map(|(peer_id, url)| {
-                        assert!(
-                            url.port_or_known_default().is_some(),
-                            "API client requires a port"
-                        );
-                        assert!(url.host().is_some(), "API client requires a target host");
+        let (peer_connections, peer_ids) = peers
+            .into_iter()
+            .map(|(peer_id, url)| {
+                assert!(
+                    url.port_or_known_default().is_some(),
+                    "API client requires a port"
+                );
+                assert!(url.host().is_some(), "API client requires a target host");
 
-                        FederationPeer::new(url, peer_id, api_secret.clone())
-                    })
-                    .collect(),
-            ),
+                (
+                    FederationPeer::new(url, peer_id, api_secret.clone()),
+                    peer_id,
+                )
+            })
+            .unzip();
+
+        WsFederationApi {
+            peer_ids,
+            self_peer_id,
+            peers: Arc::new(peer_connections),
             module_id: None,
         }
     }

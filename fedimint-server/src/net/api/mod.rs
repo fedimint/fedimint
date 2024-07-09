@@ -1,3 +1,4 @@
+pub mod announcement;
 mod http_auth;
 
 use std::fmt::{self, Debug, Formatter};

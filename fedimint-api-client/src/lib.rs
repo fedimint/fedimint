@@ -10,7 +10,6 @@ use std::time::Duration;
 use anyhow::{bail, Context as _};
 use api::{DynGlobalApi, FederationApiExt as _, WsFederationApi};
 use fedimint_core::config::{ClientConfig, FederationId};
-use fedimint_core::encoding::Encodable as _;
 use fedimint_core::endpoint_constants::CLIENT_CONFIG_ENDPOINT;
 use fedimint_core::invite_code::InviteCode;
 use fedimint_core::module::ApiRequestErased;
@@ -52,10 +51,11 @@ pub async fn try_download_client_config(
     federation_id: FederationId,
     api_secret: Option<String>,
 ) -> anyhow::Result<ClientConfig> {
+    // TODO: use new download approach based on guardian PKs
     let query_strategy = FilterMap::new(
         move |cfg: ClientConfig| {
-            if federation_id.0 != cfg.global.api_endpoints.consensus_hash() {
-                bail!("Guardian api endpoint map does not hash to FederationId")
+            if federation_id != cfg.global.calculate_federation_id() {
+                bail!("FederationId in invite code does not match client config")
             }
 
             Ok(cfg.global.api_endpoints)
@@ -72,10 +72,7 @@ pub async fn try_download_client_config(
         .await?;
 
     // now we can build an api for all guardians and download the client config
-    let api_endpoints = api_endpoints
-        .into_iter()
-        .map(|(peer, url)| (peer, url.url))
-        .collect();
+    let api_endpoints = api_endpoints.into_iter().map(|(peer, url)| (peer, url.url));
 
     let client_config = WsFederationApi::new(api_endpoints, &api_secret)
         .request_current_consensus::<ClientConfig>(

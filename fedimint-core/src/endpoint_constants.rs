@@ -31,3 +31,6 @@ pub const AWAIT_TRANSACTION_ENDPOINT: &str = "await_transaction";
 pub const INVITE_CODE_ENDPOINT: &str = "invite_code";
 pub const FEDERATION_ID_ENDPOINT: &str = "federation_id";
 pub const RESTART_FEDERATION_SETUP_ENDPOINT: &str = "restart_federation_setup";
+pub const API_ANNOUNCEMENTS_ENDPOINT: &str = "api_announcements";
+pub const SUBMIT_API_ANNOUNCEMENT_ENDPOINT: &str = "submit_api_announcement";
+pub const SIGN_API_ANNOUNCEMENT_ENDPOINT: &str = "sign_api_announcement";

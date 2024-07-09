@@ -354,6 +354,7 @@ impl GatewayClientModule {
         let federation_id = self
             .client_ctx
             .get_config()
+            .await
             .global
             .calculate_federation_id();
         self.module_api.register_gateway(&registration_info).await?;
@@ -373,6 +374,7 @@ impl GatewayClientModule {
             let federation_id = self
                 .client_ctx
                 .get_config()
+                .await
                 .global
                 .calculate_federation_id();
             warn!("Failed to remove gateway {gateway_id} from federation {federation_id}: {e:?}");

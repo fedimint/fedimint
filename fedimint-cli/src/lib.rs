@@ -23,7 +23,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use std::{fs, result};
 
-use anyhow::format_err;
+use anyhow::{format_err, Context};
 use bip39::Mnemonic;
 use clap::{Args, CommandFactory, Parser, Subcommand};
 use db_locked::LockedBuilder;
@@ -39,7 +39,7 @@ use fedimint_client::secret::{get_default_client_secret, RootSecretStrategy};
 use fedimint_client::{AdminCreds, Client, ClientBuilder, ClientHandleArc};
 use fedimint_core::admin_client::{ConfigGenConnectionsRequest, ConfigGenParamsRequest};
 use fedimint_core::config::{
-    ClientConfig, FederationId, FederationIdPrefix, ServerModuleConfigGenParamsRegistry,
+    FederationId, FederationIdPrefix, ServerModuleConfigGenParamsRegistry,
 };
 use fedimint_core::core::{ModuleInstanceId, OperationId};
 use fedimint_core::db::{Database, DatabaseValue};
@@ -237,11 +237,19 @@ impl Opts {
 
     fn admin_client(
         &self,
-        cfg: &ClientConfig,
+        peer_urls: &BTreeMap<PeerId, SafeUrl>,
         api_secret: &Option<String>,
     ) -> CliResult<DynGlobalApi> {
         let our_id = self.our_id.ok_or_cli_msg("Admin client needs our-id set")?;
-        Ok(DynGlobalApi::from_config_admin(cfg, api_secret, our_id))
+        Ok(DynGlobalApi::new_admin(
+            our_id,
+            peer_urls
+                .get(&our_id)
+                .cloned()
+                .context("Our peer URL not found in config")
+                .map_err_cli()?,
+            api_secret,
+        ))
     }
 
     fn auth(&self) -> CliResult<ApiAuth> {
@@ -323,6 +331,16 @@ enum AdminCmd {
     GuardianConfigBackup,
 
     Dkg(DkgAdminArgs),
+    /// Sign and announce a new API endpoint. The previous one will be
+    /// invalidated
+    SignApiAnnouncement {
+        /// New API URL to announce
+        api_url: SafeUrl,
+        /// Provide the API url for the guardian directly in case the old one
+        /// isn't reachable anymore
+        #[clap(long)]
+        override_url: Option<SafeUrl>,
+    },
 }
 
 #[derive(Debug, Clone, Args)]
@@ -438,8 +456,12 @@ Examples:
         password: Option<String>,
     },
 
+    ApiAnnouncements,
+
     /// Wait for the fed to reach a consensus block count
-    WaitBlockCount { count: u64 },
+    WaitBlockCount {
+        count: u64,
+    },
 
     /// Just start the `Client` and wait
     Wait {
@@ -499,7 +521,9 @@ Examples:
 
     /// Lists active and inactive state machine states of the operation
     /// chronologically
-    ListOperationStates { operation_id: OperationId },
+    ListOperationStates {
+        operation_id: OperationId,
+    },
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -573,7 +597,7 @@ impl FedimintCli {
 
     async fn make_client_builder(&self, cli: &Opts) -> CliResult<ClientBuilder> {
         let db = cli.load_rocks_db().await?;
-        let mut client_builder = Client::builder(db);
+        let mut client_builder = Client::builder(db).await.map_err_cli()?;
         client_builder.with_module_inits(self.module_inits.clone());
         client_builder.with_primary_module(1);
 
@@ -753,7 +777,7 @@ impl FedimintCli {
                 let client = self.client_open(&cli).await?;
 
                 let audit = cli
-                    .admin_client(client.get_config(), client.api_secret())?
+                    .admin_client(&client.get_peer_urls().await, client.api_secret())?
                     .audit(cli.auth()?)
                     .await?;
                 Ok(CliOutput::Raw(
@@ -764,7 +788,7 @@ impl FedimintCli {
                 let client = self.client_open(&cli).await?;
 
                 let status = cli
-                    .admin_client(client.get_config(), client.api_secret())?
+                    .admin_client(&client.get_peer_urls().await, client.api_secret())?
                     .status()
                     .await?;
                 Ok(CliOutput::Raw(
@@ -775,7 +799,7 @@ impl FedimintCli {
                 let client = self.client_open(&cli).await?;
 
                 let guardian_config_backup = cli
-                    .admin_client(client.get_config(), client.api_secret())?
+                    .admin_client(&client.get_peer_urls().await, client.api_secret())?
                     .guardian_config_backup(cli.auth()?)
                     .await?;
                 Ok(CliOutput::Raw(
@@ -785,6 +809,35 @@ impl FedimintCli {
             }
             Command::Admin(AdminCmd::Dkg(dkg_args)) => {
                 self.handle_admin_dkg_command(cli, dkg_args).await
+            }
+            Command::Admin(AdminCmd::SignApiAnnouncement {
+                api_url,
+                override_url,
+            }) => {
+                let client = self.client_open(&cli).await?;
+
+                if !["ws", "wss"].contains(&api_url.scheme()) {
+                    return Err(CliError {
+                        error: format!(
+                            "Unsupported URL scheme {}, use ws:// or wss://",
+                            api_url.scheme()
+                        ),
+                    });
+                }
+
+                let announcement = cli
+                    .admin_client(
+                        &override_url
+                            .and_then(|url| Some(vec![(cli.our_id?, url)].into_iter().collect()))
+                            .unwrap_or(client.get_peer_urls().await),
+                        client.api_secret(),
+                    )?
+                    .sign_api_announcement(api_url, cli.auth()?)
+                    .await?;
+
+                Ok(CliOutput::Raw(
+                    serde_json::to_value(announcement).map_err_cli_msg("invalid response")?,
+                ))
             }
             Command::Dev(DevCmd::Api {
                 method,
@@ -810,7 +863,7 @@ impl FedimintCli {
                 let client = self.client_open(&cli).await?;
 
                 let ws_api: Arc<_> =
-                    WsFederationApi::from_config(client.get_config(), client.api_secret()).into();
+                    WsFederationApi::new(client.get_peer_urls().await, client.api_secret()).into();
                 let response: Value = match peer_id {
                     Some(peer_id) => ws_api
                         .request_raw(peer_id.into(), &method, &[params.to_json()])
@@ -823,6 +876,13 @@ impl FedimintCli {
                 };
 
                 Ok(CliOutput::UntypedApiOutput { value: response })
+            }
+            Command::Dev(DevCmd::ApiAnnouncements) => {
+                let client = self.client_open(&cli).await?;
+                let announcements = client.get_peer_url_announcements().await;
+                Ok(CliOutput::Raw(
+                    serde_json::to_value(announcements).expect("Can be encoded"),
+                ))
             }
             Command::Dev(DevCmd::WaitBlockCount { count: target }) => retry(
                 "wait_block_count",

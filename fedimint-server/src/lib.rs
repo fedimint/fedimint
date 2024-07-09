@@ -33,6 +33,7 @@ use tracing::info;
 use crate::config::api::{ConfigGenApi, ConfigGenSettings};
 use crate::config::io::{write_server_config, SALT_FILE};
 use crate::metrics::initialize_gauge_metrics;
+use crate::net::api::announcement::start_api_announcement_service;
 use crate::net::api::RpcHandlerCtx;
 use crate::net::connect::TlsTcpConnector;
 
@@ -85,6 +86,8 @@ pub async fn run(
     let db = db.with_decoders(decoders);
 
     initialize_gauge_metrics(&db).await;
+
+    start_api_announcement_service(&db, &task_group, &cfg, force_api_secrets.get_active()).await;
 
     consensus::run(
         cfg,

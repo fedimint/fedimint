@@ -14,30 +14,36 @@ use fedimint_core::backup::ClientBackupSnapshot;
 use fedimint_core::core::backup::SignedBackupRequest;
 use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::endpoint_constants::{
-    ADD_CONFIG_GEN_PEER_ENDPOINT, AUDIT_ENDPOINT, AUTH_ENDPOINT, AWAIT_SESSION_OUTCOME_ENDPOINT,
-    AWAIT_TRANSACTION_ENDPOINT, BACKUP_ENDPOINT, CONFIG_GEN_PEERS_ENDPOINT,
-    CONSENSUS_CONFIG_GEN_PARAMS_ENDPOINT, DEFAULT_CONFIG_GEN_PARAMS_ENDPOINT,
-    GUARDIAN_CONFIG_BACKUP_ENDPOINT, RECOVER_ENDPOINT, RESTART_FEDERATION_SETUP_ENDPOINT,
-    RUN_DKG_ENDPOINT, SERVER_CONFIG_CONSENSUS_HASH_ENDPOINT, SESSION_COUNT_ENDPOINT,
-    SESSION_STATUS_ENDPOINT, SET_CONFIG_GEN_CONNECTIONS_ENDPOINT, SET_CONFIG_GEN_PARAMS_ENDPOINT,
-    SET_PASSWORD_ENDPOINT, START_CONSENSUS_ENDPOINT, STATUS_ENDPOINT, SUBMIT_TRANSACTION_ENDPOINT,
-    VERIFIED_CONFIGS_ENDPOINT, VERIFY_CONFIG_HASH_ENDPOINT,
+    ADD_CONFIG_GEN_PEER_ENDPOINT, API_ANNOUNCEMENTS_ENDPOINT, AUDIT_ENDPOINT, AUTH_ENDPOINT,
+    AWAIT_SESSION_OUTCOME_ENDPOINT, AWAIT_TRANSACTION_ENDPOINT, BACKUP_ENDPOINT,
+    CONFIG_GEN_PEERS_ENDPOINT, CONSENSUS_CONFIG_GEN_PARAMS_ENDPOINT,
+    DEFAULT_CONFIG_GEN_PARAMS_ENDPOINT, GUARDIAN_CONFIG_BACKUP_ENDPOINT, RECOVER_ENDPOINT,
+    RESTART_FEDERATION_SETUP_ENDPOINT, RUN_DKG_ENDPOINT, SERVER_CONFIG_CONSENSUS_HASH_ENDPOINT,
+    SESSION_COUNT_ENDPOINT, SESSION_STATUS_ENDPOINT, SET_CONFIG_GEN_CONNECTIONS_ENDPOINT,
+    SET_CONFIG_GEN_PARAMS_ENDPOINT, SET_PASSWORD_ENDPOINT, SIGN_API_ANNOUNCEMENT_ENDPOINT,
+    START_CONSENSUS_ENDPOINT, STATUS_ENDPOINT, SUBMIT_API_ANNOUNCEMENT_ENDPOINT,
+    SUBMIT_TRANSACTION_ENDPOINT, VERIFIED_CONFIGS_ENDPOINT, VERIFY_CONFIG_HASH_ENDPOINT,
 };
 use fedimint_core::module::audit::AuditSummary;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::module::{ApiAuth, ApiRequestErased, SerdeModuleEncoding};
+use fedimint_core::net::api_announcement::{
+    SignedApiAnnouncement, SignedApiAnnouncementSubmission,
+};
 use fedimint_core::session_outcome::{AcceptedItem, SessionOutcome, SessionStatus};
 use fedimint_core::task::{MaybeSend, MaybeSync};
 use fedimint_core::transaction::{SerdeTransaction, Transaction, TransactionSubmissionOutcome};
+use fedimint_core::util::SafeUrl;
 use fedimint_core::{apply, async_trait_maybe_send, NumPeersExt, PeerId, TransactionId};
+use futures::future::join_all;
 use jsonrpsee_core::client::Error as JsonRpcClientError;
 use serde_json::Value;
 use tokio::sync::OnceCell;
 use tracing::debug;
 
 use super::{
-    DynModuleApi, FederationApiExt, FederationResult, GuardianConfigBackup, IGlobalFederationApi,
-    IRawFederationApi, StatusResponse,
+    DynModuleApi, FederationApiExt, FederationError, FederationResult, GuardianConfigBackup,
+    IGlobalFederationApi, IRawFederationApi, PeerResult, StatusResponse,
 };
 use crate::query::FilterMapThreshold;
 
@@ -384,6 +390,75 @@ where
         self.request_admin(
             RESTART_FEDERATION_SETUP_ENDPOINT,
             ApiRequestErased::default(),
+            auth,
+        )
+        .await
+    }
+
+    async fn submit_api_announcement(
+        &self,
+        announcement_peer_id: PeerId,
+        announcement: SignedApiAnnouncement,
+    ) -> FederationResult<()> {
+        let peer_errors = join_all(self.all_peers().iter().map(|&peer_id| {
+            let announcement_inner = announcement.clone();
+            async move {
+                (
+                    peer_id,
+                    self.request_single_peer(
+                        None,
+                        SUBMIT_API_ANNOUNCEMENT_ENDPOINT.into(),
+                        ApiRequestErased::new(SignedApiAnnouncementSubmission {
+                            signed_api_announcement: announcement_inner,
+                            peer_id: announcement_peer_id,
+                        }),
+                        peer_id,
+                    )
+                    .await,
+                )
+            }
+        }))
+        .await
+        .into_iter()
+        .filter_map(|(peer_id, result)| match result {
+            Ok(_) => None,
+            Err(e) => Some((peer_id, e.into())),
+        })
+        .collect::<BTreeMap<_, _>>();
+
+        if peer_errors.is_empty() {
+            Ok(())
+        } else {
+            Err(FederationError {
+                method: SUBMIT_API_ANNOUNCEMENT_ENDPOINT.to_string(),
+                params: serde_json::to_value(announcement).expect("can be serialized"),
+                general: None,
+                peers: peer_errors,
+            })
+        }
+    }
+
+    async fn api_announcements(
+        &self,
+        guardian: PeerId,
+    ) -> PeerResult<BTreeMap<PeerId, SignedApiAnnouncement>> {
+        self.request_single_peer_typed(
+            None,
+            API_ANNOUNCEMENTS_ENDPOINT.to_owned(),
+            ApiRequestErased::default(),
+            guardian,
+        )
+        .await
+    }
+
+    async fn sign_api_announcement(
+        &self,
+        api_url: SafeUrl,
+        auth: ApiAuth,
+    ) -> FederationResult<SignedApiAnnouncement> {
+        self.request_admin(
+            SIGN_API_ANNOUNCEMENT_ENDPOINT,
+            ApiRequestErased::new(api_url),
             auth,
         )
         .await

@@ -4,7 +4,10 @@ use std::path::{Path, PathBuf};
 use std::{env, fs, io};
 
 use anyhow::{bail, format_err, Context};
-use fedimint_client::db::apply_migrations_client;
+use fedimint_client::db::{
+    apply_migrations_client, apply_migrations_core_client, get_core_client_database_migrations,
+    CORE_CLIENT_DATABASE_VERSION,
+};
 use fedimint_client::module::init::DynClientModuleInit;
 use fedimint_client::module::ClientModule;
 use fedimint_client::sm::{
@@ -13,8 +16,8 @@ use fedimint_client::sm::{
 };
 use fedimint_core::core::OperationId;
 use fedimint_core::db::{
-    apply_migrations, apply_migrations_server, Database, DatabaseVersion,
-    IDatabaseTransactionOpsCoreTyped, ServerMigrationFn,
+    apply_migrations, apply_migrations_server, CoreMigrationFn, Database, DatabaseVersion,
+    IDatabaseTransactionOpsCoreTyped,
 };
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::module::{CommonModuleInit, DynServerModuleInit};
@@ -279,7 +282,7 @@ pub async fn validate_migrations_global<F, Fut>(
     validate: F,
     db_prefix: &str,
     target_db_version: DatabaseVersion,
-    migrations: BTreeMap<DatabaseVersion, ServerMigrationFn>,
+    migrations: BTreeMap<DatabaseVersion, CoreMigrationFn>,
     decoders: ModuleDecoderRegistry,
 ) -> anyhow::Result<()>
 where
@@ -327,6 +330,35 @@ where
 
     let module_db = db.with_prefix_module_id(TEST_MODULE_INSTANCE_ID);
     validate(module_db)
+        .await
+        .with_context(|| format!("Validating {db_prefix}"))?;
+
+    Ok(())
+}
+
+/// Validates the database migrations for the core client. First applies all
+/// database migrations to the core client. Then calls the `validate` function,
+/// including the new `active_states` and `inactive_states`, and is expected to
+/// confirm the database migrations were successful.
+pub async fn validate_migrations_core_client<F, Fut>(
+    db_prefix: &str,
+    validate: F,
+) -> anyhow::Result<()>
+where
+    F: Fn(Database) -> Fut,
+    Fut: futures::Future<Output = anyhow::Result<()>>,
+{
+    let (db, _tmp_dir) = get_temp_database(db_prefix, &ModuleDecoderRegistry::default())?;
+    apply_migrations_core_client(
+        &db,
+        db_prefix.to_string(),
+        CORE_CLIENT_DATABASE_VERSION,
+        get_core_client_database_migrations(),
+    )
+    .await
+    .context("Error applying core client migrations to temp database")?;
+
+    validate(db)
         .await
         .with_context(|| format!("Validating {db_prefix}"))?;
 
@@ -428,4 +460,77 @@ pub fn copy_directory(src: &Path, dst: &Path) -> io::Result<()> {
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod fedimint_migration_tests {
+    use anyhow::ensure;
+    use fedimint_client::db::{ClientConfigKey, ClientConfigKeyV0};
+    use fedimint_core::config::{ClientConfigV0, FederationId, GlobalClientConfigV0};
+    use fedimint_core::db::{Database, IDatabaseTransactionOpsCoreTyped};
+    use fedimint_core::module::registry::ModuleDecoderRegistry;
+    use fedimint_core::module::CoreConsensusVersion;
+    use fedimint_logging::TracingSetup;
+
+    use crate::db::{snapshot_db_migrations_with_decoders, validate_migrations_core_client};
+    /// Create a client database with version 0 data. The database produced is
+    /// not intended to be real data or semantically correct. It is only
+    /// intended to provide coverage when reading the database
+    /// in future code versions. This function should not be updated when
+    /// database keys/values change - instead a new function should be added
+    /// that creates a new database backup that can be tested.
+    async fn create_client_db_with_v0_data(db: Database) {
+        let mut dbtx = db.begin_transaction().await;
+
+        let federation_id = FederationId::dummy();
+
+        let client_config_v0 = ClientConfigV0 {
+            global: GlobalClientConfigV0 {
+                api_endpoints: Default::default(),
+                consensus_version: CoreConsensusVersion::new(0, 0),
+                meta: Default::default(),
+            },
+            modules: Default::default(),
+        };
+
+        let client_config_key_v0 = ClientConfigKeyV0 { id: federation_id };
+
+        dbtx.insert_new_entry(&client_config_key_v0, &client_config_v0)
+            .await;
+
+        dbtx.commit_tx().await;
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn snapshot_client_db_migrations() -> anyhow::Result<()> {
+        snapshot_db_migrations_with_decoders(
+            "fedimint-client",
+            |db| {
+                Box::pin(async {
+                    create_client_db_with_v0_data(db).await;
+                })
+            },
+            ModuleDecoderRegistry::default(),
+        )
+        .await
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_client_db_migrations() -> anyhow::Result<()> {
+        let _ = TracingSetup::default().init();
+
+        validate_migrations_core_client("fedimint-client", |db| async move {
+            let mut dbtx = db.begin_transaction_nc().await;
+            // Checks that client config migrated to ClientConfig with broadcast_public_keys
+            ensure!(
+                dbtx.get_value(&ClientConfigKey).await.is_some(),
+                "Client config migration to v0 failed"
+            );
+
+            Ok(())
+        })
+        .await?;
+
+        Ok(())
+    }
 }

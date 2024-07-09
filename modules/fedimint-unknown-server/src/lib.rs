@@ -11,7 +11,7 @@ use fedimint_core::config::{
     TypedServerModuleConfig, TypedServerModuleConsensusConfig,
 };
 use fedimint_core::core::ModuleInstanceId;
-use fedimint_core::db::{DatabaseTransaction, DatabaseVersion, ServerMigrationFn};
+use fedimint_core::db::{CoreMigrationFn, DatabaseTransaction, DatabaseVersion};
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::{
     ApiEndpoint, CoreConsensusVersion, InputMeta, ModuleConsensusVersion, ModuleInit, PeerHandle,
@@ -131,8 +131,8 @@ impl ServerModuleInit for UnknownInit {
     }
 
     /// DB migrations to move from old to newer versions
-    fn get_database_migrations(&self) -> BTreeMap<DatabaseVersion, ServerMigrationFn> {
-        let migrations: BTreeMap<DatabaseVersion, ServerMigrationFn> = BTreeMap::new();
+    fn get_database_migrations(&self) -> BTreeMap<DatabaseVersion, CoreMigrationFn> {
+        let migrations: BTreeMap<DatabaseVersion, CoreMigrationFn> = BTreeMap::new();
         migrations
     }
 }
