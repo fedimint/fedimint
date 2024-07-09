@@ -62,7 +62,7 @@ use crate::consensus::transaction::process_transaction_with_dbtx;
 use crate::fedimint_core::encoding::Encodable;
 use crate::metrics::{BACKUP_WRITE_SIZE_BYTES, STORED_BACKUPS_COUNT};
 use crate::net::api::announcement::{ApiAnnouncementKey, ApiAnnouncementPrefix};
-use crate::net::api::{check_auth, ApiResult, HasApiContext};
+use crate::net::api::{check_auth, ApiResult, GuardianAuthToken, HasApiContext};
 
 #[derive(Clone)]
 pub struct ConsensusApi {
@@ -245,7 +245,7 @@ impl ConsensusApi {
         self.shutdown_sender.send_replace(index);
     }
 
-    async fn get_federation_audit(&self) -> ApiResult<AuditSummary> {
+    async fn get_federation_audit(&self, _auth: &GuardianAuthToken) -> ApiResult<AuditSummary> {
         let mut dbtx = self.db.begin_transaction_nc().await;
         // Writes are related to compacting audit keys, which we can safely ignore
         // within an API request since the compaction will happen when constructing an
@@ -274,7 +274,11 @@ impl ConsensusApi {
     /// guardians can download. Private keys are encrypted with the guardian
     /// password, so it should be safe to store anywhere, this also means the
     /// backup is useless without the password.
-    fn get_guardian_config_backup(&self, password: &str) -> GuardianConfigBackup {
+    fn get_guardian_config_backup(
+        &self,
+        password: &str,
+        _auth: &GuardianAuthToken,
+    ) -> GuardianConfigBackup {
         let mut tar_archive_builder = tar::Builder::new(Vec::new());
 
         let mut append = |name: &Path, data: &[u8]| {
@@ -632,17 +636,17 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConsensusApi>> {
             AUDIT_ENDPOINT,
             ApiVersion::new(0, 0),
             async |fedimint: &ConsensusApi, context, _v: ()| -> AuditSummary {
-                check_auth(context)?;
-                Ok(fedimint.get_federation_audit().await?)
+                let auth = check_auth(context)?;
+                Ok(fedimint.get_federation_audit(&auth).await?)
             }
         },
         api_endpoint! {
             GUARDIAN_CONFIG_BACKUP_ENDPOINT,
             ApiVersion::new(0, 2),
             async |fedimint: &ConsensusApi, context, _v: ()| -> GuardianConfigBackup {
-                check_auth(context)?;
+                let auth = check_auth(context)?;
                 let password = context.request_auth().expect("Auth was checked before").0;
-                Ok(fedimint.get_guardian_config_backup(&password))
+                Ok(fedimint.get_guardian_config_backup(&password, &auth))
             }
         },
         api_endpoint! {
