@@ -479,6 +479,9 @@
 <a href="#479" id="479">479</a>
 <a href="#480" id="480">480</a>
 <a href="#481" id="481">481</a>
+<a href="#482" id="482">482</a>
+<a href="#483" id="483">483</a>
+<a href="#484" id="484">484</a>
 </pre></div><pre class="rust"><code><span class="attr">#![warn(clippy::pedantic)]
 #![allow(clippy::default_trait_access)]
 #![allow(clippy::too_many_lines)]
@@ -502,7 +505,8 @@
 <span class="kw">use </span>fedimint_core::module::CommonModuleInit;
 <span class="kw">use </span>fedimint_core::session_outcome::SignedSessionOutcome;
 <span class="kw">use </span>fedimint_core::transaction::Transaction;
-<span class="kw">use </span>fedimint_core::ServerModule;
+<span class="kw">use </span>fedimint_core::util::handle_version_hash_command;
+<span class="kw">use </span>fedimint_core::{fedimint_build_code_version_env, ServerModule};
 <span class="kw">use </span>fedimint_logging::TracingSetup;
 <span class="kw">use </span>fedimint_rocksdb::{RocksDb, RocksDbReadOnly};
 <span class="kw">use </span>fedimint_server::config::io::read_server_config;
@@ -607,6 +611,8 @@
 <span class="attr">#[tokio::main]
 </span><span class="kw">async fn </span>main() -&gt; anyhow::Result&lt;()&gt; {
     TracingSetup::default().init()<span class="question-mark">?</span>;
+
+    handle_version_hash_command(<span class="macro">fedimint_build_code_version_env!</span>());
 
     <span class="kw">let </span>opts: RecoveryTool = RecoveryTool::parse();
 
