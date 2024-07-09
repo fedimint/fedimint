@@ -21,7 +21,8 @@ use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::module::CommonModuleInit;
 use fedimint_core::session_outcome::SignedSessionOutcome;
 use fedimint_core::transaction::Transaction;
-use fedimint_core::ServerModule;
+use fedimint_core::util::handle_version_hash_command;
+use fedimint_core::{fedimint_build_code_version_env, ServerModule};
 use fedimint_logging::TracingSetup;
 use fedimint_rocksdb::{RocksDb, RocksDbReadOnly};
 use fedimint_server::config::io::read_server_config;
@@ -126,6 +127,8 @@ fn get_db(readonly: bool, path: &Path, module_decoders: ModuleDecoderRegistry) -
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     TracingSetup::default().init()?;
+
+    handle_version_hash_command(fedimint_build_code_version_env!());
 
     let opts: RecoveryTool = RecoveryTool::parse();
 
