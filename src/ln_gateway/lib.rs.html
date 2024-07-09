@@ -1913,6 +1913,10 @@
 <a href="#1913" id="1913">1913</a>
 <a href="#1914" id="1914">1914</a>
 <a href="#1915" id="1915">1915</a>
+<a href="#1916" id="1916">1916</a>
+<a href="#1917" id="1917">1917</a>
+<a href="#1918" id="1918">1918</a>
+<a href="#1919" id="1919">1919</a>
 </pre></div><pre class="rust"><code><span class="attr">#![warn(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::cast_possible_wrap)]
@@ -2284,6 +2288,7 @@
         fees: RoutingFees,
         num_route_hints: u32,
         gateway_db: Database,
+        gateway_state: GatewayState,
     ) -&gt; anyhow::Result&lt;Gateway&gt; {
         <span class="kw">let </span>versioned_api = api_addr
             .join(V1_API_ENDPOINT)
@@ -2300,6 +2305,7 @@
             },
             gateway_db,
             client_builder,
+            gateway_state,
         )
         .<span class="kw">await
     </span>}
@@ -2342,6 +2348,7 @@
             gateway_parameters,
             gateway_db,
             client_builder,
+            GatewayState::Initializing,
         )
         .<span class="kw">await
     </span>}
@@ -2353,6 +2360,7 @@
         gateway_parameters: GatewayParameters,
         gateway_db: Database,
         client_builder: GatewayClientBuilder,
+        gateway_state: GatewayState,
     ) -&gt; anyhow::Result&lt;Gateway&gt; {
         <span class="comment">// Apply database migrations before using the database to ensure old database
         // structures are readable.
@@ -2373,7 +2381,7 @@
             lightning_builder,
             next_scid: Arc::new(Mutex::new(INITIAL_SCID)),
             gateway_config: Arc::new(RwLock::new(gateway_config)),
-            state: Arc::new(RwLock::new(GatewayState::Initializing)),
+            state: Arc::new(RwLock::new(gateway_state)),
             client_builder,
             gateway_id: <span class="self">Self</span>::load_gateway_id(<span class="kw-2">&amp;</span>gateway_db).<span class="kw">await</span>,
             gateway_db,
@@ -2931,7 +2939,7 @@
     /// download the federation's client configuration, construct a new
     /// client, registers, the gateway with the federation, and persists the
     /// necessary config to reconstruct the client when restarting the gateway.
-    </span><span class="kw">async fn </span>handle_connect_federation(
+    </span><span class="kw">pub async fn </span>handle_connect_federation(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         payload: ConnectFedPayload,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;FederationInfo&gt; {

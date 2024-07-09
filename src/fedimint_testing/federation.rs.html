@@ -326,6 +326,17 @@
 <a href="#326" id="326">326</a>
 <a href="#327" id="327">327</a>
 <a href="#328" id="328">328</a>
+<a href="#329" id="329">329</a>
+<a href="#330" id="330">330</a>
+<a href="#331" id="331">331</a>
+<a href="#332" id="332">332</a>
+<a href="#333" id="333">333</a>
+<a href="#334" id="334">334</a>
+<a href="#335" id="335">335</a>
+<a href="#336" id="336">336</a>
+<a href="#337" id="337">337</a>
+<a href="#338" id="338">338</a>
+<a href="#339" id="339">339</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap};
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
@@ -353,6 +364,8 @@
 <span class="kw">use </span>fedimint_server::config::{gen_cert_and_key, ConfigGenParams, ServerConfig};
 <span class="kw">use </span>fedimint_server::consensus;
 <span class="kw">use </span>fedimint_server::net::connect::parse_host_port;
+<span class="kw">use </span>ln_gateway::rpc::ConnectFedPayload;
+<span class="kw">use </span>ln_gateway::Gateway;
 <span class="kw">use </span>tokio_rustls::rustls;
 <span class="kw">use </span>tracing::info;
 
@@ -453,6 +466,15 @@
             .unwrap()
             .global
             .calculate_federation_id()
+    }
+
+    <span class="doccomment">/// Connects a gateway to this `FederationTest`
+    </span><span class="kw">pub async fn </span>connect_gateway(<span class="kw-2">&amp;</span><span class="self">self</span>, gw: <span class="kw-2">&amp;</span>Gateway) {
+        gw.handle_connect_federation(ConnectFedPayload {
+            invite_code: <span class="self">self</span>.invite_code().to_string(),
+        })
+        .<span class="kw">await
+        </span>.expect(<span class="string">"Failed to connect federation"</span>);
     }
 }
 

@@ -2640,6 +2640,15 @@
 <a href="#2640" id="2640">2640</a>
 <a href="#2641" id="2641">2641</a>
 <a href="#2642" id="2642">2642</a>
+<a href="#2643" id="2643">2643</a>
+<a href="#2644" id="2644">2644</a>
+<a href="#2645" id="2645">2645</a>
+<a href="#2646" id="2646">2646</a>
+<a href="#2647" id="2647">2647</a>
+<a href="#2648" id="2648">2648</a>
+<a href="#2649" id="2649">2649</a>
+<a href="#2650" id="2650">2650</a>
+<a href="#2651" id="2651">2651</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashSet};
 <span class="kw">use </span>std::io::Write;
 <span class="kw">use </span>std::ops::ControlFlow;
@@ -3549,7 +3558,7 @@
         </span>.into_inner();
     <span class="kw">let </span>invoice = add_invoice.payment_request;
     <span class="kw">let </span>payment_hash = add_invoice.r_hash;
-    ln_pay(<span class="kw-2">&amp;</span>client, invoice, cln_gw_id.clone(), <span class="bool-val">false</span>).<span class="kw">await</span><span class="question-mark">?</span>;
+    ln_pay(<span class="kw-2">&amp;</span>client, invoice.clone(), cln_gw_id.clone(), <span class="bool-val">false</span>).<span class="kw">await</span><span class="question-mark">?</span>;
 
     <span class="kw">let </span>invoice_status = lnd
         .lightning_client_lock()
@@ -3562,6 +3571,15 @@
         </span>.into_inner()
         .state();
     <span class="macro">anyhow::ensure!</span>(invoice_status == tonic_lnd::lnrpc::invoice::InvoiceState::Settled);
+
+    <span class="comment">// Try to pay the same invoice with a different client
+    </span><span class="kw">let </span>new_client = fed.new_joined_client(<span class="string">"pay_invoice"</span>).<span class="kw">await</span><span class="question-mark">?</span>;
+    fed.pegin_client(CLIENT_START_AMOUNT / <span class="number">1000</span>, <span class="kw-2">&amp;</span>new_client)
+        .<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="macro">info!</span>(<span class="string">"Testing re-payment of the same invoice"</span>);
+    ln_pay(<span class="kw-2">&amp;</span>new_client, invoice, cln_gw_id.clone(), <span class="bool-val">false</span>)
+        .<span class="kw">await
+        </span>.expect_err(<span class="string">"Re-payment of same invoice is expected to fail."</span>);
 
     <span class="comment">// Assert balances changed by 1_200_000 msat (amount sent) + 0 msat (fee)
     </span><span class="kw">let </span>final_cln_outgoing_client_balance = client.balance().<span class="kw">await</span><span class="question-mark">?</span>;
@@ -4544,8 +4562,8 @@
 
     <span class="kw">let </span>operation_id = value[<span class="string">"operation_id"</span>]
         .as_str()
-        .expect(<span class="string">"missing operation id"</span>)
-        .to_string();
+        .ok_or(<span class="macro">anyhow!</span>(<span class="string">"Failed to pay invoice"</span>))<span class="question-mark">?
+        </span>.to_string();
     <span class="prelude-val">Ok</span>(operation_id)
 }
 

@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"mod":["btc","db","envs","federation","fixtures","gateway","ln"]};
+window.SIDEBAR_ITEMS = {"mod":["btc","db","envs","federation","fixtures","gateway","ln"],"struct":["Gateway"]};
