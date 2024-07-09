@@ -14,12 +14,18 @@ use secp256k1::PublicKey;
 use tokio::sync::mpsc;
 use tokio_stream::wrappers::ReceiverStream;
 use tonic::Status;
-use tonic_lnd::invoicesrpc::AddHoldInvoiceRequest;
+use tonic_lnd::invoicesrpc::lookup_invoice_msg::InvoiceRef;
+use tonic_lnd::invoicesrpc::{
+    AddHoldInvoiceRequest, CancelInvoiceMsg, LookupInvoiceMsg, SettleInvoiceMsg,
+    SubscribeSingleInvoiceRequest,
+};
 use tonic_lnd::lnrpc::failure::FailureCode;
+use tonic_lnd::lnrpc::invoice::InvoiceState;
 use tonic_lnd::lnrpc::payment::PaymentStatus;
 use tonic_lnd::lnrpc::{
     ChanInfoRequest, ChannelPoint, CloseChannelRequest, ConnectPeerRequest, GetInfoRequest,
-    LightningAddress, ListChannelsRequest, OpenChannelRequest,
+    InvoiceSubscription, LightningAddress, ListChannelsRequest, ListInvoiceRequest,
+    OpenChannelRequest,
 };
 use tonic_lnd::routerrpc::{
     CircuitKey, ForwardHtlcInterceptResponse, ResolveHoldForwardAction, SendPaymentRequest,
@@ -44,6 +50,7 @@ type HtlcSubscriptionSender = mpsc::Sender<Result<InterceptHtlcRequest, Status>>
 
 const LND_PAYMENT_TIMEOUT_SECONDS: i32 = 180;
 
+#[derive(Clone)]
 pub struct GatewayLndClient {
     /// LND client
     address: String,
@@ -98,7 +105,181 @@ impl GatewayLndClient {
         Ok(client)
     }
 
-    async fn spawn_interceptor(
+    async fn spawn_lnv2_hold_invoice_subscription(
+        &self,
+        task_group: &TaskGroup,
+        gateway_sender: HtlcSubscriptionSender,
+        payment_hash: Vec<u8>,
+    ) -> Result<(), LightningRpcError> {
+        let mut client = self.connect().await?;
+
+        let self_copy = self.clone();
+        task_group.spawn("LND HOLD Invoice Subscription", |handle| async move {
+            let future_stream =
+                client
+                    .invoices()
+                    .subscribe_single_invoice(SubscribeSingleInvoiceRequest {
+                        r_hash: payment_hash,
+                    });
+
+            let mut hold_stream = tokio::select! {
+                stream = future_stream => {
+                    match stream {
+                        Ok(stream) => stream.into_inner(),
+                        Err(e) => {
+                            error!(?e, "Failed to subscribe to hold invoice updates");
+                            return;
+                        }
+                    }
+                },
+                () = handle.make_shutdown_rx() => {
+                    info!("LND HOLD Invoice Subscription received shutdown signal");
+                    return;
+                }
+            };
+
+            while let Some(hold) = tokio::select! {
+                () = handle.make_shutdown_rx() => {
+                    None
+                }
+                hold_update = hold_stream.message() => {
+                    match hold_update {
+                        Ok(hold) => hold,
+                        Err(e) => {
+                            error!(?e, "Error received over hold invoice update stream");
+                            None
+                        }
+                    }
+                }
+            } {
+                debug!(?hold, "LND HOLD Invoice Update");
+
+                if hold.state() == InvoiceState::Accepted {
+                    let intercept = InterceptHtlcRequest {
+                        payment_hash: hold.r_hash.clone(),
+                        incoming_amount_msat: hold.amt_paid_msat as u64,
+                        // The rest of the fields are not used in LNv2 and can be removed once LNv1
+                        // support is over
+                        outgoing_amount_msat: hold.amt_paid_msat as u64,
+                        incoming_expiry: hold.expiry as u32,
+                        short_channel_id: Some(0),
+                        incoming_chan_id: 0,
+                        htlc_id: 0,
+                    };
+
+                    match gateway_sender.send(Ok(intercept)).await {
+                        Ok(()) => {}
+                        Err(e) => {
+                            error!(
+                                ?e,
+                                "Hold Invoice Subscription failed to send Intercept to gateway"
+                            );
+                            let _ = self_copy.cancel_hold_invoice(hold.r_hash).await;
+                        }
+                    }
+                }
+            }
+        });
+
+        Ok(())
+    }
+
+    async fn spawn_lnv2_invoice_subscription(
+        &self,
+        task_group: &TaskGroup,
+        gateway_sender: HtlcSubscriptionSender,
+    ) -> Result<(), LightningRpcError> {
+        let mut client = self.connect().await?;
+
+        let add_index = client
+            .lightning()
+            .list_invoices(ListInvoiceRequest {
+                pending_only: true,
+                index_offset: 0,
+                num_max_invoices: u64::MAX,
+                reversed: false,
+            })
+            .await
+            .map_err(|status| {
+                error!(?status, "Failed to list all invoices");
+                LightningRpcError::FailedToRouteHtlcs {
+                    failure_reason: "Failed to list all invoices".to_string(),
+                }
+            })?
+            .into_inner()
+            .first_index_offset;
+
+        let self_copy = self.clone();
+        let hold_group = task_group.make_subgroup();
+        task_group.spawn("LND Invoice Subscription", move |handle| async move {
+            let future_stream = client.lightning().subscribe_invoices(InvoiceSubscription {
+                add_index,
+                settle_index: u64::MAX, // we do not need settle invoice events
+            });
+            let mut invoice_stream = tokio::select! {
+                stream = future_stream => {
+                    match stream {
+                        Ok(stream) => stream.into_inner(),
+                        Err(e) => {
+                            error!(?e, "Failed to subscribe to all invoice updates");
+                            return;
+                        }
+                    }
+                },
+                () = handle.make_shutdown_rx() => {
+                    info!("LND Invoice Subscription received shutdown signal");
+                    return;
+                }
+            };
+
+            info!("LND Invoice Subscription: starting to process invoice updates");
+            while let Some(invoice) = tokio::select! {
+                () = handle.make_shutdown_rx() => {
+                    info!("LND Invoice Subscription task received shutdown signal");
+                    None
+                }
+                invoice_update = invoice_stream.message() => {
+                    match invoice_update {
+                        Ok(invoice) => invoice,
+                        Err(e) => {
+                            error!(?e, "Error received over invoice update stream");
+                            None
+                        }
+                    }
+                }
+            } {
+                debug!(?invoice, "LND Invoice Update");
+
+                // If the `r_preimage` is empty and the invoice is OPEN, this means a new HOLD
+                // invoice has been created, which is potentially an invoice destined for a
+                // federation. We will spawn a new task to monitor the status of
+                // the HOLD invoice. TODO: In the future, we can filter can by
+                // payment hash here.
+                if invoice.r_preimage.is_empty() && invoice.state() == InvoiceState::Open {
+                    let payment_hash = invoice.r_hash;
+                    info!(?payment_hash, "Spawning HOLD invoice subscription task");
+                    if let Err(e) = self_copy
+                        .spawn_lnv2_hold_invoice_subscription(
+                            &hold_group,
+                            gateway_sender.clone(),
+                            payment_hash.clone(),
+                        )
+                        .await
+                    {
+                        error!(
+                            ?payment_hash,
+                            ?e,
+                            "Failed to spawn HOLD invoice subscription task"
+                        );
+                    }
+                }
+            }
+        });
+
+        Ok(())
+    }
+
+    async fn spawn_lnv1_htlc_interceptor(
         &self,
         task_group: &TaskGroup,
         lnd_sender: mpsc::Sender<ForwardHtlcInterceptResponse>,
@@ -201,6 +382,22 @@ impl GatewayLndClient {
         Ok(())
     }
 
+    async fn spawn_interceptor(
+        &self,
+        task_group: &TaskGroup,
+        lnd_sender: mpsc::Sender<ForwardHtlcInterceptResponse>,
+        lnd_rx: mpsc::Receiver<ForwardHtlcInterceptResponse>,
+        gateway_sender: HtlcSubscriptionSender,
+    ) -> Result<(), LightningRpcError> {
+        self.spawn_lnv1_htlc_interceptor(task_group, lnd_sender, lnd_rx, gateway_sender.clone())
+            .await?;
+
+        self.spawn_lnv2_invoice_subscription(task_group, gateway_sender)
+            .await?;
+
+        Ok(())
+    }
+
     async fn cancel_htlc(
         key: CircuitKey,
         lnd_sender: mpsc::Sender<ForwardHtlcInterceptResponse>,
@@ -278,6 +475,84 @@ impl GatewayLndClient {
                 }
             }
         }
+    }
+
+    async fn settle_hold_invoice(
+        &self,
+        payment_hash: Vec<u8>,
+        preimage: Vec<u8>,
+    ) -> Result<(), LightningRpcError> {
+        let mut client = self.connect().await?;
+        let invoice = client
+            .invoices()
+            .lookup_invoice_v2(LookupInvoiceMsg {
+                invoice_ref: Some(InvoiceRef::PaymentHash(payment_hash.clone())),
+                lookup_modifier: 0,
+            })
+            .await
+            .map_err(|_| LightningRpcError::FailedToCompleteHtlc {
+                failure_reason: "Hold invoice does not exist".to_string(),
+            })?
+            .into_inner();
+
+        let state = invoice.state();
+        if state != InvoiceState::Accepted {
+            error!(?payment_hash, ?state, "HOLD invoice state is not accepted");
+            return Err(LightningRpcError::FailedToCompleteHtlc {
+                failure_reason: "HOLD invoice state is not accepted".to_string(),
+            });
+        }
+
+        client
+            .invoices()
+            .settle_invoice(SettleInvoiceMsg { preimage })
+            .await
+            .map_err(|e| {
+                error!(?payment_hash, ?e, "Failed to settle HOLD invoice");
+                LightningRpcError::FailedToCompleteHtlc {
+                    failure_reason: "Failed to settle HOLD invoice".to_string(),
+                }
+            })?;
+
+        Ok(())
+    }
+
+    async fn cancel_hold_invoice(&self, payment_hash: Vec<u8>) -> Result<(), LightningRpcError> {
+        let mut client = self.connect().await?;
+        let invoice = client
+            .invoices()
+            .lookup_invoice_v2(LookupInvoiceMsg {
+                invoice_ref: Some(InvoiceRef::PaymentHash(payment_hash.clone())),
+                lookup_modifier: 0,
+            })
+            .await
+            .map_err(|_| LightningRpcError::FailedToCompleteHtlc {
+                failure_reason: "Hold invoice does not exist".to_string(),
+            })?
+            .into_inner();
+
+        let state = invoice.state();
+        if state != InvoiceState::Open {
+            error!(?payment_hash, ?state, "HOLD invoice state is not accepted");
+            return Err(LightningRpcError::FailedToCompleteHtlc {
+                failure_reason: "HOLD invoice state is not accepted".to_string(),
+            });
+        }
+
+        client
+            .invoices()
+            .cancel_invoice(CancelInvoiceMsg {
+                payment_hash: payment_hash.clone(),
+            })
+            .await
+            .map_err(|e| {
+                error!(?payment_hash, ?e, "Failed to cancel HOLD invoice");
+                LightningRpcError::FailedToCompleteHtlc {
+                    failure_reason: "Failed to cancel HOLD invoice".to_string(),
+                }
+            })?;
+
+        Ok(())
     }
 }
 
@@ -574,33 +849,49 @@ impl ILnRpcClient for GatewayLndClient {
         &self,
         htlc: InterceptHtlcResponse,
     ) -> Result<EmptyResponse, LightningRpcError> {
+        let InterceptHtlcResponse {
+            action,
+            payment_hash,
+            incoming_chan_id,
+            htlc_id,
+        } = htlc;
+
+        let (action, preimage) = match action {
+            Some(Action::Settle(Settle { preimage })) => {
+                (ResolveHoldForwardAction::Settle, preimage)
+            }
+            Some(Action::Cancel(Cancel { reason: _ })) => (ResolveHoldForwardAction::Fail, vec![]),
+            Some(Action::Forward(Forward {})) => (ResolveHoldForwardAction::Resume, vec![]),
+            None => (ResolveHoldForwardAction::Fail, vec![]),
+        };
+
+        // First check if this completion request corresponds to a HOLD LNv2 invoice
+        match action {
+            ResolveHoldForwardAction::Settle => {
+                if let Ok(()) = self
+                    .settle_hold_invoice(payment_hash.clone(), preimage.clone())
+                    .await
+                {
+                    info!(?payment_hash, "Successfully settled HOLD invoice");
+                    return Ok(EmptyResponse {});
+                }
+            }
+            _ => {
+                if let Ok(()) = self.cancel_hold_invoice(payment_hash.clone()).await {
+                    info!(?payment_hash, "Successfully canceled HOLD invoice");
+                    return Ok(EmptyResponse {});
+                }
+            }
+        }
+
+        // If we can't settle/cancel the payment via LNv2, try LNv1
         if let Some(lnd_sender) = self.lnd_sender.clone() {
-            let InterceptHtlcResponse {
-                action,
-                payment_hash: _,
-                incoming_chan_id,
-                htlc_id,
-            } = htlc;
-
-            let (action, preimage) = match action {
-                Some(Action::Settle(Settle { preimage })) => {
-                    (ResolveHoldForwardAction::Settle.into(), preimage)
-                }
-                Some(Action::Cancel(Cancel { reason: _ })) => {
-                    (ResolveHoldForwardAction::Fail.into(), vec![])
-                }
-                Some(Action::Forward(Forward {})) => {
-                    (ResolveHoldForwardAction::Resume.into(), vec![])
-                }
-                None => (ResolveHoldForwardAction::Fail.into(), vec![]),
-            };
-
             let response = ForwardHtlcInterceptResponse {
                 incoming_circuit_key: Some(CircuitKey {
                     chan_id: incoming_chan_id,
                     htlc_id,
                 }),
-                action,
+                action: action.into(),
                 preimage,
                 failure_message: vec![],
                 failure_code: FailureCode::TemporaryChannelFailure.into(),

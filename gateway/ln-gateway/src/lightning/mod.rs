@@ -66,6 +66,8 @@ pub enum LightningRpcError {
     FailedToListActiveChannels { failure_reason: String },
     #[error("Failed to wait for chain sync: {failure_reason}")]
     FailedToWaitForChainSync { failure_reason: String },
+    #[error("Failed to subscribe to invoice updates: {failure_reason}")]
+    FailedToSubscribeToInvoiceUpdates { failure_reason: String },
 }
 
 /// A trait that the gateway uses to interact with a lightning node. This allows
