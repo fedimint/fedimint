@@ -1244,6 +1244,23 @@
 <a href="#1244" id="1244">1244</a>
 <a href="#1245" id="1245">1245</a>
 <a href="#1246" id="1246">1246</a>
+<a href="#1247" id="1247">1247</a>
+<a href="#1248" id="1248">1248</a>
+<a href="#1249" id="1249">1249</a>
+<a href="#1250" id="1250">1250</a>
+<a href="#1251" id="1251">1251</a>
+<a href="#1252" id="1252">1252</a>
+<a href="#1253" id="1253">1253</a>
+<a href="#1254" id="1254">1254</a>
+<a href="#1255" id="1255">1255</a>
+<a href="#1256" id="1256">1256</a>
+<a href="#1257" id="1257">1257</a>
+<a href="#1258" id="1258">1258</a>
+<a href="#1259" id="1259">1259</a>
+<a href="#1260" id="1260">1260</a>
+<a href="#1261" id="1261">1261</a>
+<a href="#1262" id="1262">1262</a>
+<a href="#1263" id="1263">1263</a>
 </pre></div><pre class="rust"><code><span class="attr">#![warn(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::default_trait_access)]
@@ -1885,7 +1902,24 @@
         })
     }
 
-    <span class="kw">pub async fn </span>allocate_deposit_address(
+    <span class="doccomment">/// Allocates a deposit address that is controlled by the federation.
+    ///
+    /// This is an EXPERT ONLY method intended for power users such as Lightning
+    /// gateways allocating liquidity, and we discourage exposing peg-in
+    /// functionality to everyday users of a Fedimint wallet due to the
+    /// following two limitations:
+    ///
+    /// The transaction sending to this address needs to be smaller than 40KB in
+    /// order for the peg-in to be claimable. If the transaction is too large,
+    /// funds will be lost.
+    ///
+    /// In the future, federations will also enforce a minimum peg-in amount to
+    /// prevent accumulation of dust UTXOs. Peg-ins under this minimum cannot be
+    /// claimed and funds will be lost.
+    ///
+    /// Everyday users should rely on Lightning to move funds into the
+    /// federation.
+    </span><span class="kw">pub async fn </span>allocate_deposit_address_expert_only(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
     ) -&gt; anyhow::Result&lt;(OperationId, Address, TweakIdx)&gt; {
         <span class="kw">let </span>(operation_id, address, tweak_idx) = <span class="self">self
