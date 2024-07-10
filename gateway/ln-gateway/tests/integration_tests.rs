@@ -44,11 +44,7 @@ use fedimint_unknown_server::UnknownInit;
 use futures::Future;
 use lightning_invoice::{Bolt11Invoice, Bolt11InvoiceDescription, Description};
 use ln_gateway::gateway_module_v2::{FinalReceiveState, GatewayClientModuleV2};
-use ln_gateway::rpc::rpc_client::{GatewayRpcClient, GatewayRpcError, GatewayRpcResult};
-use ln_gateway::rpc::{
-    BalancePayload, ConnectFedPayload, FederationRoutingFees, FederationRoutingFees,
-    LeaveFedPayload, SetConfigurationPayload, SetConfigurationPayload,
-};
+use ln_gateway::rpc::{BalancePayload, FederationRoutingFees, SetConfigurationPayload};
 use ln_gateway::state_machine::pay::{
     OutgoingContractError, OutgoingPaymentError, OutgoingPaymentErrorType,
 };
@@ -921,8 +917,11 @@ async fn get_balances(gw: &Gateway, ids: impl IntoIterator<Item = &FederationId>
 }
 
 /// Prints msats for the gateway using the dummy module.
-async fn send_msats_to_gateway(gateway: &GatewayTest, federation_id: FederationId, msats: u64) {
-    let client = gateway.select_client(federation_id).await;
+async fn send_msats_to_gateway(gateway: &Gateway, federation_id: FederationId, msats: u64) {
+    let client = gateway
+        .select_client_v2(federation_id)
+        .await
+        .expect("Failed to selcet gateway client");
 
     let (op, outpoints) = client
         .get_first_module::<DummyClientModule>()
@@ -943,7 +942,7 @@ async fn lnv2_incoming_contract_with_invalid_preimage_is_refunded() -> anyhow::R
     let fixtures = fixtures();
     let fed = fixtures.new_default_fed().await;
 
-    let mut gateway = fixtures.new_gateway().await;
+    let gateway = fixtures.new_gateway().await;
 
     fed.connect_gateway(&gateway).await;
 
@@ -986,7 +985,7 @@ async fn lnv2_expired_incoming_contract_is_rejected() -> anyhow::Result<()> {
     let fixtures = fixtures();
     let fed = fixtures.new_default_fed().await;
 
-    let mut gateway = fixtures.new_gateway().await;
+    let gateway = fixtures.new_gateway().await;
 
     fed.connect_gateway(&gateway).await;
 
@@ -1029,7 +1028,7 @@ async fn lnv2_malleated_incoming_contract_is_rejected() -> anyhow::Result<()> {
     let fixtures = fixtures();
     let fed = fixtures.new_default_fed().await;
 
-    let mut gateway = fixtures.new_gateway().await;
+    let gateway = fixtures.new_gateway().await;
 
     fed.connect_gateway(&gateway).await;
 
