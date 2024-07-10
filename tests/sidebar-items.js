@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["await_receive_claimed","fetch_invoice","main","test_gateway_registration","test_self_payment","test_send"]};
