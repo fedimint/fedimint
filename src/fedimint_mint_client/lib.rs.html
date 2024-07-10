@@ -2445,6 +2445,99 @@
 <a href="#2445" id="2445">2445</a>
 <a href="#2446" id="2446">2446</a>
 <a href="#2447" id="2447">2447</a>
+<a href="#2448" id="2448">2448</a>
+<a href="#2449" id="2449">2449</a>
+<a href="#2450" id="2450">2450</a>
+<a href="#2451" id="2451">2451</a>
+<a href="#2452" id="2452">2452</a>
+<a href="#2453" id="2453">2453</a>
+<a href="#2454" id="2454">2454</a>
+<a href="#2455" id="2455">2455</a>
+<a href="#2456" id="2456">2456</a>
+<a href="#2457" id="2457">2457</a>
+<a href="#2458" id="2458">2458</a>
+<a href="#2459" id="2459">2459</a>
+<a href="#2460" id="2460">2460</a>
+<a href="#2461" id="2461">2461</a>
+<a href="#2462" id="2462">2462</a>
+<a href="#2463" id="2463">2463</a>
+<a href="#2464" id="2464">2464</a>
+<a href="#2465" id="2465">2465</a>
+<a href="#2466" id="2466">2466</a>
+<a href="#2467" id="2467">2467</a>
+<a href="#2468" id="2468">2468</a>
+<a href="#2469" id="2469">2469</a>
+<a href="#2470" id="2470">2470</a>
+<a href="#2471" id="2471">2471</a>
+<a href="#2472" id="2472">2472</a>
+<a href="#2473" id="2473">2473</a>
+<a href="#2474" id="2474">2474</a>
+<a href="#2475" id="2475">2475</a>
+<a href="#2476" id="2476">2476</a>
+<a href="#2477" id="2477">2477</a>
+<a href="#2478" id="2478">2478</a>
+<a href="#2479" id="2479">2479</a>
+<a href="#2480" id="2480">2480</a>
+<a href="#2481" id="2481">2481</a>
+<a href="#2482" id="2482">2482</a>
+<a href="#2483" id="2483">2483</a>
+<a href="#2484" id="2484">2484</a>
+<a href="#2485" id="2485">2485</a>
+<a href="#2486" id="2486">2486</a>
+<a href="#2487" id="2487">2487</a>
+<a href="#2488" id="2488">2488</a>
+<a href="#2489" id="2489">2489</a>
+<a href="#2490" id="2490">2490</a>
+<a href="#2491" id="2491">2491</a>
+<a href="#2492" id="2492">2492</a>
+<a href="#2493" id="2493">2493</a>
+<a href="#2494" id="2494">2494</a>
+<a href="#2495" id="2495">2495</a>
+<a href="#2496" id="2496">2496</a>
+<a href="#2497" id="2497">2497</a>
+<a href="#2498" id="2498">2498</a>
+<a href="#2499" id="2499">2499</a>
+<a href="#2500" id="2500">2500</a>
+<a href="#2501" id="2501">2501</a>
+<a href="#2502" id="2502">2502</a>
+<a href="#2503" id="2503">2503</a>
+<a href="#2504" id="2504">2504</a>
+<a href="#2505" id="2505">2505</a>
+<a href="#2506" id="2506">2506</a>
+<a href="#2507" id="2507">2507</a>
+<a href="#2508" id="2508">2508</a>
+<a href="#2509" id="2509">2509</a>
+<a href="#2510" id="2510">2510</a>
+<a href="#2511" id="2511">2511</a>
+<a href="#2512" id="2512">2512</a>
+<a href="#2513" id="2513">2513</a>
+<a href="#2514" id="2514">2514</a>
+<a href="#2515" id="2515">2515</a>
+<a href="#2516" id="2516">2516</a>
+<a href="#2517" id="2517">2517</a>
+<a href="#2518" id="2518">2518</a>
+<a href="#2519" id="2519">2519</a>
+<a href="#2520" id="2520">2520</a>
+<a href="#2521" id="2521">2521</a>
+<a href="#2522" id="2522">2522</a>
+<a href="#2523" id="2523">2523</a>
+<a href="#2524" id="2524">2524</a>
+<a href="#2525" id="2525">2525</a>
+<a href="#2526" id="2526">2526</a>
+<a href="#2527" id="2527">2527</a>
+<a href="#2528" id="2528">2528</a>
+<a href="#2529" id="2529">2529</a>
+<a href="#2530" id="2530">2530</a>
+<a href="#2531" id="2531">2531</a>
+<a href="#2532" id="2532">2532</a>
+<a href="#2533" id="2533">2533</a>
+<a href="#2534" id="2534">2534</a>
+<a href="#2535" id="2535">2535</a>
+<a href="#2536" id="2536">2536</a>
+<a href="#2537" id="2537">2537</a>
+<a href="#2538" id="2538">2538</a>
+<a href="#2539" id="2539">2539</a>
+<a href="#2540" id="2540">2540</a>
 </pre></div><pre class="rust"><code><span class="attr">#![warn(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::default_trait_access)]
@@ -2479,7 +2572,7 @@
 <span class="kw">use </span>std::time::Duration;
 
 <span class="kw">use </span>anyhow::{anyhow, bail, ensure, Context <span class="kw">as _</span>};
-<span class="kw">use </span>async_stream::stream;
+<span class="kw">use </span>async_stream::{stream, try_stream};
 <span class="kw">use </span>backup::recovery::MintRecovery;
 <span class="kw">use </span>base64::Engine <span class="kw">as _</span>;
 <span class="kw">use </span>bitcoin_hashes::{sha256, sha256t, Hash, HashEngine <span class="kw">as </span>BitcoinHashEngine};
@@ -3251,6 +3344,98 @@
         }
         <span class="prelude-val">Ok</span>(())
     }
+    <span class="kw">async fn </span>handle_rpc(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        method: String,
+        request: serde_json::Value,
+    ) -&gt; BoxStream&lt;<span class="lifetime">'_</span>, anyhow::Result&lt;serde_json::Value&gt;&gt; {
+        Box::pin(<span class="macro">try_stream!</span> {
+            <span class="kw">match </span>method.as_str() {
+                <span class="string">"reissue_external_notes" </span>=&gt; {
+                    <span class="kw">let </span>req: ReissueExternalNotesRequest = serde_json::from_value(request)<span class="question-mark">?</span>;
+                    <span class="kw">let </span>result = <span class="self">self</span>.reissue_external_notes(req.oob_notes, req.extra_meta).<span class="kw">await</span><span class="question-mark">?</span>;
+                    <span class="kw">yield </span>serde_json::to_value(result)<span class="question-mark">?</span>;
+                }
+                <span class="string">"subscribe_reissue_external_notes" </span>=&gt; {
+                    <span class="kw">let </span>req: SubscribeReissueExternalNotesRequest = serde_json::from_value(request)<span class="question-mark">?</span>;
+                    <span class="kw">let </span>stream = <span class="self">self</span>.subscribe_reissue_external_notes(req.operation_id).<span class="kw">await</span><span class="question-mark">?</span>;
+                    <span class="kw">for await </span>state <span class="kw">in </span>stream.into_stream() {
+                        <span class="kw">yield </span>serde_json::to_value(state)<span class="question-mark">?</span>;
+                    }
+                }
+                <span class="string">"spend_notes" </span>=&gt; {
+                    <span class="kw">let </span>req: SpendNotesRequest = serde_json::from_value(request)<span class="question-mark">?</span>;
+                    <span class="kw">let </span>result = <span class="self">self</span>.spend_notes(req.min_amount, req.try_cancel_after, req.include_invite, req.extra_meta).<span class="kw">await</span><span class="question-mark">?</span>;
+                    <span class="kw">yield </span>serde_json::to_value(result)<span class="question-mark">?</span>;
+                }
+                <span class="string">"validate_notes" </span>=&gt; {
+                    <span class="kw">let </span>req: ValidateNotesRequest = serde_json::from_value(request)<span class="question-mark">?</span>;
+                    <span class="kw">let </span>result = <span class="self">self</span>.validate_notes(<span class="kw-2">&amp;</span>req.oob_notes)<span class="question-mark">?</span>;
+                    <span class="kw">yield </span>serde_json::to_value(result)<span class="question-mark">?</span>;
+                }
+                <span class="string">"try_cancel_spend_notes" </span>=&gt; {
+                    <span class="kw">let </span>req: TryCancelSpendNotesRequest = serde_json::from_value(request)<span class="question-mark">?</span>;
+                    <span class="kw">let </span>result = <span class="self">self</span>.try_cancel_spend_notes(req.operation_id).<span class="kw">await</span>;
+                    <span class="kw">yield </span>serde_json::to_value(result)<span class="question-mark">?</span>;
+                }
+                <span class="string">"subscribe_spend_notes" </span>=&gt; {
+                    <span class="kw">let </span>req: SubscribeSpendNotesRequest = serde_json::from_value(request)<span class="question-mark">?</span>;
+                    <span class="kw">let </span>stream = <span class="self">self</span>.subscribe_spend_notes(req.operation_id).<span class="kw">await</span><span class="question-mark">?</span>;
+                    <span class="kw">for await </span>state <span class="kw">in </span>stream.into_stream() {
+                        <span class="kw">yield </span>serde_json::to_value(state)<span class="question-mark">?</span>;
+                    }
+                }
+                <span class="string">"await_spend_oob_refund" </span>=&gt; {
+                    <span class="kw">let </span>req: AwaitSpendOobRefundRequest = serde_json::from_value(request)<span class="question-mark">?</span>;
+                    <span class="kw">let </span>value = <span class="self">self</span>.await_spend_oob_refund(req.operation_id).<span class="kw">await</span>;
+                    <span class="kw">yield </span>serde_json::to_value(value)<span class="question-mark">?</span>;
+                }
+                <span class="kw">_ </span>=&gt; {
+                    <span class="prelude-val">Err</span>(<span class="macro">anyhow::format_err!</span>(<span class="string">"Unknown method: {}"</span>, method))<span class="question-mark">?</span>;
+                    <span class="macro">unreachable!</span>()
+                },
+            }
+        })
+    }
+}
+
+<span class="attr">#[derive(Deserialize)]
+</span><span class="kw">struct </span>ReissueExternalNotesRequest {
+    oob_notes: OOBNotes,
+    extra_meta: serde_json::Value,
+}
+
+<span class="attr">#[derive(Deserialize)]
+</span><span class="kw">struct </span>SubscribeReissueExternalNotesRequest {
+    operation_id: OperationId,
+}
+
+<span class="attr">#[derive(Deserialize)]
+</span><span class="kw">struct </span>SpendNotesRequest {
+    min_amount: Amount,
+    try_cancel_after: Duration,
+    include_invite: bool,
+    extra_meta: serde_json::Value,
+}
+
+<span class="attr">#[derive(Deserialize)]
+</span><span class="kw">struct </span>ValidateNotesRequest {
+    oob_notes: OOBNotes,
+}
+
+<span class="attr">#[derive(Deserialize)]
+</span><span class="kw">struct </span>TryCancelSpendNotesRequest {
+    operation_id: OperationId,
+}
+
+<span class="attr">#[derive(Deserialize)]
+</span><span class="kw">struct </span>SubscribeSpendNotesRequest {
+    operation_id: OperationId,
+}
+
+<span class="attr">#[derive(Deserialize)]
+</span><span class="kw">struct </span>AwaitSpendOobRefundRequest {
+    operation_id: OperationId,
 }
 
 <span class="attr">#[derive(thiserror::Error, Debug, Clone)]
@@ -4095,7 +4280,8 @@
     )
 }
 
-<span class="kw">pub struct </span>SpendOOBRefund {
+<span class="attr">#[derive(Debug, Serialize, Deserialize, Clone)]
+</span><span class="kw">pub struct </span>SpendOOBRefund {
     <span class="kw">pub </span>user_triggered: bool,
     <span class="kw">pub </span>transaction_id: TransactionId,
 }
