@@ -105,6 +105,10 @@ impl GatewayLndClient {
         Ok(client)
     }
 
+    /// Spawns a new background task that subscribes to updates of a specific
+    /// HOLD invoice. When the HOLD invoice is ACCEPTED, we can request the
+    /// preimage from the Gateway. A new task is necessary because LND's
+    /// global `subscribe_invoices` does not currently emit updates for HOLD invoices: <https://github.com/lightningnetwork/lnd/issues/3120>
     async fn spawn_lnv2_hold_invoice_subscription(
         &self,
         task_group: &TaskGroup,
@@ -184,6 +188,11 @@ impl GatewayLndClient {
         Ok(())
     }
 
+    /// Spawns a new background task that subscribes to "add" updates for all
+    /// invoices. This is used to detect when a new invoice has been
+    /// created. If this invoice is a HOLD invoice, it is potentially destined
+    /// for a federation. At this point, we spawn a separate task to monitor the
+    /// status of the HOLD invoice.
     async fn spawn_lnv2_invoice_subscription(
         &self,
         task_group: &TaskGroup,
@@ -191,6 +200,7 @@ impl GatewayLndClient {
     ) -> Result<(), LightningRpcError> {
         let mut client = self.connect().await?;
 
+        // Compute the minimum `add_index` that we need to subscribe to updates for.
         let add_index = client
             .lightning()
             .list_invoices(ListInvoiceRequest {
@@ -279,6 +289,9 @@ impl GatewayLndClient {
         Ok(())
     }
 
+    /// Spawns a new background task that intercepts HTLCs from the LND node. In
+    /// the LNv1 protocol, this is used as a trigger mechanism for
+    /// requesting the Gateway to retrieve the preimage for a payment.
     async fn spawn_lnv1_htlc_interceptor(
         &self,
         task_group: &TaskGroup,
@@ -382,6 +395,7 @@ impl GatewayLndClient {
         Ok(())
     }
 
+    /// Spawns background tasks for monitoring the status of incoming payments.
     async fn spawn_interceptor(
         &self,
         task_group: &TaskGroup,
@@ -477,6 +491,9 @@ impl GatewayLndClient {
         }
     }
 
+    /// Settles a HOLD invoice that is specified by the `payment_hash` with the
+    /// given `preimage`. If there is no invoice corresponding to the
+    /// `payment_hash`, this function will return an error.
     async fn settle_hold_invoice(
         &self,
         payment_hash: Vec<u8>,
@@ -517,6 +534,9 @@ impl GatewayLndClient {
         Ok(())
     }
 
+    /// Cancels a HOLD invoice that is specified by the `payment_hash`.
+    /// If there is no invoice corresponding to the `payment_hash`, this
+    /// function will return an error.
     async fn cancel_hold_invoice(&self, payment_hash: Vec<u8>) -> Result<(), LightningRpcError> {
         let mut client = self.connect().await?;
         let invoice = client
