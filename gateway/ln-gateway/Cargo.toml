@@ -23,8 +23,8 @@ name = "gateway-cln-extension"
 path = "src/bin/cln_extension.rs"
 
 [[test]]
-name = "gatewayd-integration-tests"
-path = "tests/integration_tests.rs"
+name = "gatewayd-tests"
+path = "tests/tests.rs"
 
 [dependencies]
 anyhow = { workspace = true }
