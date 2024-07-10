@@ -6,6 +6,7 @@
 "fedimint_lnv2_client":[["impl Subcommand for <a class=\"enum\" href=\"fedimint_lnv2_client/cli/enum.Opts.html\" title=\"enum fedimint_lnv2_client::cli::Opts\">Opts</a>"]],
 "fedimint_load_test_tool":[["impl Subcommand for <a class=\"enum\" href=\"fedimint_load_test_tool/enum.Command.html\" title=\"enum fedimint_load_test_tool::Command\">Command</a>"]],
 "fedimint_meta_client":[["impl Subcommand for <a class=\"enum\" href=\"fedimint_meta_client/cli/enum.Opts.html\" title=\"enum fedimint_meta_client::cli::Opts\">Opts</a>"]],
+"fedimint_mint_client":[["impl Subcommand for <a class=\"enum\" href=\"fedimint_mint_client/cli/enum.Opts.html\" title=\"enum fedimint_mint_client::cli::Opts\">Opts</a>"]],
 "fedimint_recoverytool":[["impl Subcommand for <a class=\"enum\" href=\"fedimint_recoverytool/enum.TweakSource.html\" title=\"enum fedimint_recoverytool::TweakSource\">TweakSource</a>"]],
 "fedimint_wallet_client":[["impl Subcommand for <a class=\"enum\" href=\"fedimint_wallet_client/cli/enum.Opts.html\" title=\"enum fedimint_wallet_client::cli::Opts\">Opts</a>"]],
 "fedimintd":[["impl Subcommand for <a class=\"enum\" href=\"fedimintd/fedimintd/enum.DevSubcommand.html\" title=\"enum fedimintd::fedimintd::DevSubcommand\">DevSubcommand</a>"],["impl Subcommand for <a class=\"enum\" href=\"fedimintd/fedimintd/enum.ServerSubcommand.html\" title=\"enum fedimintd::fedimintd::ServerSubcommand\">ServerSubcommand</a>"]],

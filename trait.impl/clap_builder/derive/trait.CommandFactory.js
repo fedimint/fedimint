@@ -7,6 +7,7 @@
 "fedimint_lnv2_client":[["impl CommandFactory for <a class=\"enum\" href=\"fedimint_lnv2_client/cli/enum.Opts.html\" title=\"enum fedimint_lnv2_client::cli::Opts\">Opts</a>"]],
 "fedimint_load_test_tool":[["impl CommandFactory for <a class=\"struct\" href=\"fedimint_load_test_tool/struct.Opts.html\" title=\"struct fedimint_load_test_tool::Opts\">Opts</a>"]],
 "fedimint_meta_client":[["impl CommandFactory for <a class=\"enum\" href=\"fedimint_meta_client/cli/enum.Opts.html\" title=\"enum fedimint_meta_client::cli::Opts\">Opts</a>"]],
+"fedimint_mint_client":[["impl CommandFactory for <a class=\"enum\" href=\"fedimint_mint_client/cli/enum.Opts.html\" title=\"enum fedimint_mint_client::cli::Opts\">Opts</a>"]],
 "fedimint_recoverytool":[["impl CommandFactory for <a class=\"struct\" href=\"fedimint_recoverytool/struct.RecoveryTool.html\" title=\"struct fedimint_recoverytool::RecoveryTool\">RecoveryTool</a>"]],
 "fedimint_wallet_client":[["impl CommandFactory for <a class=\"enum\" href=\"fedimint_wallet_client/cli/enum.Opts.html\" title=\"enum fedimint_wallet_client::cli::Opts\">Opts</a>"]],
 "fedimintd":[["impl CommandFactory for <a class=\"struct\" href=\"fedimintd/fedimintd/struct.ServerOpts.html\" title=\"struct fedimintd::fedimintd::ServerOpts\">ServerOpts</a>"]],

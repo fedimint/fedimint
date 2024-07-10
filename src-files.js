@@ -32,7 +32,7 @@ var srcIndex = new Map(JSON.parse('[\
 ["fedimint_meta_common",["",[],["config.rs","endpoint.rs","lib.rs"]]],\
 ["fedimint_meta_server",["",[],["db.rs","lib.rs"]]],\
 ["fedimint_metrics",["",[],["lib.rs"]]],\
-["fedimint_mint_client",["",[["backup",[],["recovery.rs"]]],["backup.rs","client_db.rs","input.rs","lib.rs","oob.rs","output.rs"]]],\
+["fedimint_mint_client",["",[["backup",[],["recovery.rs"]]],["backup.rs","cli.rs","client_db.rs","input.rs","lib.rs","oob.rs","output.rs"]]],\
 ["fedimint_mint_common",["",[],["common.rs","config.rs","endpoint_constants.rs","lib.rs"]]],\
 ["fedimint_mint_server",["",[],["db.rs","lib.rs","metrics.rs"]]],\
 ["fedimint_portalloc",["",[["data",[],["dto.rs"]]],["data.rs","envs.rs","lib.rs","util.rs"]]],\

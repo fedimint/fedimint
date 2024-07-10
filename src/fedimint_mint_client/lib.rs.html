@@ -2445,48 +2445,6 @@
 <a href="#2445" id="2445">2445</a>
 <a href="#2446" id="2446">2446</a>
 <a href="#2447" id="2447">2447</a>
-<a href="#2448" id="2448">2448</a>
-<a href="#2449" id="2449">2449</a>
-<a href="#2450" id="2450">2450</a>
-<a href="#2451" id="2451">2451</a>
-<a href="#2452" id="2452">2452</a>
-<a href="#2453" id="2453">2453</a>
-<a href="#2454" id="2454">2454</a>
-<a href="#2455" id="2455">2455</a>
-<a href="#2456" id="2456">2456</a>
-<a href="#2457" id="2457">2457</a>
-<a href="#2458" id="2458">2458</a>
-<a href="#2459" id="2459">2459</a>
-<a href="#2460" id="2460">2460</a>
-<a href="#2461" id="2461">2461</a>
-<a href="#2462" id="2462">2462</a>
-<a href="#2463" id="2463">2463</a>
-<a href="#2464" id="2464">2464</a>
-<a href="#2465" id="2465">2465</a>
-<a href="#2466" id="2466">2466</a>
-<a href="#2467" id="2467">2467</a>
-<a href="#2468" id="2468">2468</a>
-<a href="#2469" id="2469">2469</a>
-<a href="#2470" id="2470">2470</a>
-<a href="#2471" id="2471">2471</a>
-<a href="#2472" id="2472">2472</a>
-<a href="#2473" id="2473">2473</a>
-<a href="#2474" id="2474">2474</a>
-<a href="#2475" id="2475">2475</a>
-<a href="#2476" id="2476">2476</a>
-<a href="#2477" id="2477">2477</a>
-<a href="#2478" id="2478">2478</a>
-<a href="#2479" id="2479">2479</a>
-<a href="#2480" id="2480">2480</a>
-<a href="#2481" id="2481">2481</a>
-<a href="#2482" id="2482">2482</a>
-<a href="#2483" id="2483">2483</a>
-<a href="#2484" id="2484">2484</a>
-<a href="#2485" id="2485">2485</a>
-<a href="#2486" id="2486">2486</a>
-<a href="#2487" id="2487">2487</a>
-<a href="#2488" id="2488">2488</a>
-<a href="#2489" id="2489">2489</a>
 </pre></div><pre class="rust"><code><span class="attr">#![warn(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::default_trait_access)]
@@ -2500,6 +2458,8 @@
 
 </span><span class="comment">// Backup and restore logic
 </span><span class="kw">pub mod </span>backup;
+<span class="doccomment">/// Modularized Cli for sending and receiving out-of-band ecash
+</span><span class="kw">mod </span>cli;
 <span class="doccomment">/// Database keys used throughout the mint client module
 </span><span class="kw">pub mod </span>client_db;
 <span class="doccomment">/// State machines for mint inputs
@@ -2511,12 +2471,12 @@
 
 <span class="kw">use </span>std::cmp::{min, Ordering};
 <span class="kw">use </span>std::collections::BTreeMap;
+<span class="kw">use </span>std::fmt;
 <span class="kw">use </span>std::fmt::{Display, Formatter};
 <span class="kw">use </span>std::io::Read;
 <span class="kw">use </span>std::str::FromStr;
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
-<span class="kw">use </span>std::{ffi, fmt};
 
 <span class="kw">use </span>anyhow::{anyhow, bail, ensure, Context <span class="kw">as _</span>};
 <span class="kw">use </span>async_stream::stream;
@@ -3170,54 +3130,10 @@
 
     <span class="kw">async fn </span>handle_cli_command(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        args: <span class="kw-2">&amp;</span>[ffi::OsString],
+        args: <span class="kw-2">&amp;</span>[std::ffi::OsString],
     ) -&gt; anyhow::Result&lt;serde_json::Value&gt; {
-        <span class="kw">if </span>args.is_empty() {
-            <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="macro">anyhow::format_err!</span>(
-                <span class="string">"Expected to be called with at leas 1 arguments: &lt;command&gt; …"
-            </span>));
-        }
-
-        <span class="kw">let </span>command = args[<span class="number">0</span>].to_string_lossy();
-
-        <span class="comment">// FIXME: make instance-aware
-        </span><span class="kw">match </span>command.as_ref() {
-            <span class="string">"reissue" </span>=&gt; {
-                <span class="kw">if </span>args.len() != <span class="number">2 </span>{
-                    <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="macro">anyhow::format_err!</span>(
-                        <span class="string">"`reissue` command expects 1 argument: &lt;notes&gt;"
-                    </span>));
-                }
-
-                <span class="kw">let </span>oob_notes = args[<span class="number">1</span>]
-                    .to_string_lossy()
-                    .parse::&lt;OOBNotes&gt;()
-                    .map_err(|e| <span class="macro">anyhow::format_err!</span>(<span class="string">"invalid notes format: {e}"</span>))<span class="question-mark">?</span>;
-
-                <span class="kw">let </span>amount = oob_notes.total_amount();
-
-                <span class="kw">let </span>operation_id = <span class="self">self</span>.reissue_external_notes(oob_notes, ()).<span class="kw">await</span><span class="question-mark">?</span>;
-                <span class="kw">let </span><span class="kw-2">mut </span>updates = <span class="self">self
-                    </span>.subscribe_reissue_external_notes(operation_id)
-                    .<span class="kw">await
-                    </span>.unwrap()
-                    .into_stream();
-
-                <span class="kw">while let </span><span class="prelude-val">Some</span>(update) = updates.next().<span class="kw">await </span>{
-                    <span class="kw">if let </span>ReissueExternalNotesState::Failed(e) = update {
-                        <span class="macro">bail!</span>(<span class="string">"Reissue failed: {e}"</span>);
-                    }
-
-                    <span class="macro">debug!</span>(target: LOG_CLIENT_MODULE_MINT, <span class="question-mark">?</span>update, <span class="string">"Reissue external notes update"</span>);
-                }
-
-                <span class="prelude-val">Ok</span>(serde_json::to_value(amount).unwrap())
-            }
-            command =&gt; <span class="prelude-val">Err</span>(<span class="macro">anyhow::format_err!</span>(
-                <span class="string">"Unknown command: {command}, supported commands: reissue"
-            </span>)),
-        }
-    }
+        cli::handle_cli_command(<span class="self">self</span>, args).<span class="kw">await
+    </span>}
 
     <span class="kw">fn </span>supports_backup(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
         <span class="bool-val">true
