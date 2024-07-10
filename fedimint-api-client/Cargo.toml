@@ -48,7 +48,7 @@ tokio-rustls = { version = "0.26.0", default-features = false, features = [
 ] }
 webpki-roots = { version = "0.26.3" }
 rustls-pki-types = { version = "1.8.0" }
-arti-client = { git = "https://github.com/oleonardolima/arti", branch = "feat/downgrade-rusqlite", version = "0.20.0", features = ["tokio", "rustls"], default-features = false }
+arti-client = { git = "https://github.com/oleonardolima/arti", branch = "feat/downgrade-rusqlite", version = "0.20.0", features = ["tokio", "rustls", "onion-service-client"], default-features = false }
 strum = { version = "0.26.3" }
 
 [target.'cfg(target_family = "wasm")'.dependencies]

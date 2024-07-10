@@ -59,11 +59,9 @@ impl WasmClient {
         // FIXME: add wallet module
         builder.with_primary_module(1);
         let invite_code = InviteCode::from_str(&invite_code)?;
-        let config = fedimint_api_client::download_from_invite_code(
-            fedimint_api_client::api::Connector::default(),
-            &invite_code,
-        )
-        .await?;
+        let config = fedimint_api_client::api::net::Connector::default()
+            .download_from_invite_code(&invite_code)
+            .await?;
         let client = Arc::new(builder.join(root_secret, config, None).await?);
         Ok(Self { client })
     }

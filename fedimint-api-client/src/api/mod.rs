@@ -761,6 +761,8 @@ impl JsonRpcClient for WsClient {
             .map_err(|e| JsonRpcClientError::Transport(e.into()))?
             .isolated_client();
 
+        debug!("Successfully created and bootstrapped the `TorClient`, for given `TorConfig`.");
+
         // TODO: (@leonardo) should we implement our `IntoTorAddr` for `SafeUrl`
         // instead?
         let addr = (
@@ -770,11 +772,39 @@ impl JsonRpcClient for WsClient {
                 .expect("It should've asserted for `port`, or used a default one, on construction"),
         );
         let tor_addr = TorAddr::from(addr).map_err(|e| JsonRpcClientError::Transport(e.into()))?;
+        let tor_addr_clone = tor_addr.clone();
 
-        let anonymized_stream = tor_client
-            .connect(tor_addr)
-            .await
-            .map_err(|e| JsonRpcClientError::Transport(e.into()))?;
+        debug!(
+            ?tor_addr,
+            ?addr,
+            "Successfully created `TorAddr` for given address (i.e. host and port)"
+        );
+
+        // TODO: It can be updated to use `is_onion_address()` implementation,
+        // once https://gitlab.torproject.org/tpo/core/arti/-/merge_requests/2214 lands.
+        let anonymized_stream = if url.is_onion_address() {
+            let mut stream_prefs = arti_client::StreamPrefs::default();
+            stream_prefs.connect_to_onion_services(arti_client::config::BoolOrAuto::Explicit(true));
+
+            let anonymized_stream = tor_client
+                .connect_with_prefs(tor_addr, &stream_prefs)
+                .await
+                .map_err(|e| JsonRpcClientError::Transport(e.into()))?;
+
+            debug!(
+                ?tor_addr_clone,
+                "Successfully connected to onion address `TorAddr`, and established an anonymized `DataStream`"
+            );
+            anonymized_stream
+        } else {
+            let anonymized_stream = tor_client
+                .connect(tor_addr)
+                .await
+                .map_err(|e| JsonRpcClientError::Transport(e.into()))?;
+
+            debug!(?tor_addr_clone, "Successfully connected to `Hostname`or `Ip` `TorAddr`, and established an anonymized `DataStream`");
+            anonymized_stream
+        };
 
         let is_tls = match url.scheme() {
             "wss" => true,
