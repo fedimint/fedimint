@@ -2177,6 +2177,7 @@ dependencies = [
  "bincode",
  "bitcoin_hashes 0.12.0",
  "bls12_381",
+ "clap",
  "criterion",
  "erased-serde",
  "fedimint-api-client",

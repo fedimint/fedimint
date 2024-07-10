@@ -11,6 +11,8 @@
 
 // Backup and restore logic
 pub mod backup;
+/// Modularized Cli for sending and receiving out-of-band ecash
+mod cli;
 /// Database keys used throughout the mint client module
 pub mod client_db;
 /// State machines for mint inputs
@@ -22,12 +24,12 @@ pub mod output;
 
 use std::cmp::{min, Ordering};
 use std::collections::BTreeMap;
+use std::fmt;
 use std::fmt::{Display, Formatter};
 use std::io::Read;
 use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
-use std::{ffi, fmt};
 
 use anyhow::{anyhow, bail, ensure, Context as _};
 use async_stream::stream;
@@ -681,53 +683,9 @@ impl ClientModule for MintClientModule {
 
     async fn handle_cli_command(
         &self,
-        args: &[ffi::OsString],
+        args: &[std::ffi::OsString],
     ) -> anyhow::Result<serde_json::Value> {
-        if args.is_empty() {
-            return Err(anyhow::format_err!(
-                "Expected to be called with at leas 1 arguments: <command> …"
-            ));
-        }
-
-        let command = args[0].to_string_lossy();
-
-        // FIXME: make instance-aware
-        match command.as_ref() {
-            "reissue" => {
-                if args.len() != 2 {
-                    return Err(anyhow::format_err!(
-                        "`reissue` command expects 1 argument: <notes>"
-                    ));
-                }
-
-                let oob_notes = args[1]
-                    .to_string_lossy()
-                    .parse::<OOBNotes>()
-                    .map_err(|e| anyhow::format_err!("invalid notes format: {e}"))?;
-
-                let amount = oob_notes.total_amount();
-
-                let operation_id = self.reissue_external_notes(oob_notes, ()).await?;
-                let mut updates = self
-                    .subscribe_reissue_external_notes(operation_id)
-                    .await
-                    .unwrap()
-                    .into_stream();
-
-                while let Some(update) = updates.next().await {
-                    if let ReissueExternalNotesState::Failed(e) = update {
-                        bail!("Reissue failed: {e}");
-                    }
-
-                    debug!(target: LOG_CLIENT_MODULE_MINT, ?update, "Reissue external notes update");
-                }
-
-                Ok(serde_json::to_value(amount).unwrap())
-            }
-            command => Err(anyhow::format_err!(
-                "Unknown command: {command}, supported commands: reissue"
-            )),
-        }
+        cli::handle_cli_command(self, args).await
     }
 
     fn supports_backup(&self) -> bool {
