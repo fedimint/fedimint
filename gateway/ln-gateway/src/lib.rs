@@ -1686,20 +1686,26 @@ impl Gateway {
         })
     }
 
+    pub async fn select_client_v2(
+        &self,
+        federation_id: FederationId,
+    ) -> anyhow::Result<ClientHandleArc> {
+        self.clients
+            .read()
+            .await
+            .get(&federation_id)
+            .map(|entry| entry.value().clone())
+            .ok_or(anyhow!("Federation client not available"))
+    }
+
     /// Instructs this gateway to pay a Lightning network invoice via the LNv2
     /// protocol.
     async fn send_payment_v2(
         &self,
         payload: SendPaymentPayload,
     ) -> anyhow::Result<std::result::Result<[u8; 32], Signature>> {
-        let clients = self.clients.read().await;
-
-        let client = clients
-            .get(&payload.federation_id)
-            .ok_or(anyhow!("Federation client not available"))?
-            .value();
-
-        client
+        self.select_client_v2(payload.federation_id)
+            .await?
             .get_first_module::<GatewayClientModuleV2>()
             .send_payment(payload)
             .await
@@ -1833,13 +1839,9 @@ impl Gateway {
             bail!("The available decryption contract's amount is not equal the requested amount")
         }
 
-        let clients = self.clients.read().await;
-
-        let client = clients
-            .get(&registered_incoming_contract.federation_id)
-            .ok_or(anyhow!("Federation client not available"))?
-            .value()
-            .clone();
+        let client = self
+            .select_client_v2(registered_incoming_contract.federation_id)
+            .await?;
 
         Ok((registered_incoming_contract.contract, client))
     }
