@@ -8,6 +8,7 @@ use anyhow::{anyhow, Context, Result};
 use bitcoincore_rpc::bitcoin::{Address, BlockHash};
 use bitcoincore_rpc::bitcoincore_rpc_json::{GetBalancesResult, GetBlockchainInfoResult};
 use bitcoincore_rpc::{bitcoin, RpcApi};
+use cln_rpc::primitives::{Amount as ClnRpcAmount, AmountOrAny};
 use cln_rpc::ClnRpc;
 use fedimint_core::encoding::Encodable;
 use fedimint_core::task::jit::{JitTry, JitTryAnyhow};
@@ -418,6 +419,73 @@ impl Lightningd {
     pub async fn terminate(self) -> Result<()> {
         self.process.terminate().await
     }
+
+    pub async fn invoice(
+        &self,
+        amount: u64,
+        description: String,
+        label: String,
+    ) -> anyhow::Result<String> {
+        let invoice = self
+            .request(cln_rpc::model::requests::InvoiceRequest {
+                amount_msat: AmountOrAny::Amount(ClnRpcAmount::from_msat(amount)),
+                description,
+                label,
+                expiry: Some(60),
+                fallbacks: None,
+                preimage: None,
+                cltv: None,
+                deschashonly: None,
+                exposeprivatechannels: None,
+            })
+            .await?
+            .bolt11;
+        Ok(invoice)
+    }
+
+    pub async fn pay_bolt11_invoice(&self, invoice: String) -> anyhow::Result<()> {
+        let invoice_status = self
+            .request(cln_rpc::model::requests::PayRequest {
+                bolt11: invoice,
+                amount_msat: None,
+                label: None,
+                riskfactor: None,
+                maxfeepercent: None,
+                retry_for: None,
+                maxdelay: None,
+                exemptfee: None,
+                localinvreqid: None,
+                exclude: None,
+                maxfee: None,
+                description: None,
+                partial_msat: None,
+            })
+            .await?
+            .status;
+
+        anyhow::ensure!(matches!(
+            invoice_status,
+            cln_rpc::model::responses::PayStatus::COMPLETE
+        ));
+
+        Ok(())
+    }
+
+    pub async fn wait_any_bolt11_invoice(&self) -> anyhow::Result<()> {
+        let invoice_status = self
+            .request(cln_rpc::model::requests::WaitanyinvoiceRequest {
+                lastpay_index: None,
+                timeout: None,
+            })
+            .await?
+            .status;
+        anyhow::ensure!(matches!(
+            invoice_status,
+            cln_rpc::model::responses::WaitanyinvoiceStatus::PAID
+        ));
+
+        Ok(())
+    }
 }
 
 #[derive(Clone)]
@@ -550,6 +618,66 @@ impl Lnd {
 
     pub async fn terminate(self) -> Result<()> {
         self.process.terminate().await
+    }
+
+    pub async fn invoice(&self, amount: u64) -> anyhow::Result<(String, Vec<u8>)> {
+        let add_invoice = self
+            .lightning_client_lock()
+            .await?
+            .add_invoice(tonic_lnd::lnrpc::Invoice {
+                value_msat: amount as i64,
+                ..Default::default()
+            })
+            .await?
+            .into_inner();
+        let invoice = add_invoice.payment_request;
+        let payment_hash = add_invoice.r_hash;
+        Ok((invoice, payment_hash))
+    }
+
+    pub async fn pay_bolt11_invoice(&self, invoice: String) -> anyhow::Result<()> {
+        let payment = self
+            .lightning_client_lock()
+            .await?
+            .send_payment_sync(tonic_lnd::lnrpc::SendRequest {
+                payment_request: invoice.clone(),
+                ..Default::default()
+            })
+            .await?
+            .into_inner();
+        let payment_status = self
+            .lightning_client_lock()
+            .await?
+            .list_payments(tonic_lnd::lnrpc::ListPaymentsRequest {
+                include_incomplete: true,
+                ..Default::default()
+            })
+            .await?
+            .into_inner()
+            .payments
+            .into_iter()
+            .find(|p| p.payment_hash == payment.payment_hash.encode_hex::<String>())
+            .context("payment not in list")?
+            .status();
+        anyhow::ensure!(payment_status == tonic_lnd::lnrpc::payment::PaymentStatus::Succeeded);
+
+        Ok(())
+    }
+
+    pub async fn wait_bolt11_invoice(&self, payment_hash: Vec<u8>) -> anyhow::Result<()> {
+        let invoice_status = self
+            .lightning_client_lock()
+            .await?
+            .lookup_invoice(tonic_lnd::lnrpc::PaymentHash {
+                r_hash: payment_hash,
+                ..Default::default()
+            })
+            .await?
+            .into_inner()
+            .state();
+        anyhow::ensure!(invoice_status == tonic_lnd::lnrpc::invoice::InvoiceState::Settled);
+
+        Ok(())
     }
 }
 
