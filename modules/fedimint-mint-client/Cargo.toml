@@ -34,6 +34,7 @@ base64-url = "3.0.0"
 bincode = { workspace = true }
 bls12_381 = { workspace = true }
 bitcoin_hashes = { workspace = true }
+clap = { workspace = true }
 erased-serde = { workspace = true }
 futures = { workspace = true }
 hex = { workspace = true }
