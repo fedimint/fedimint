@@ -437,6 +437,25 @@
 <a href="#437" id="437">437</a>
 <a href="#438" id="438">438</a>
 <a href="#439" id="439">439</a>
+<a href="#440" id="440">440</a>
+<a href="#441" id="441">441</a>
+<a href="#442" id="442">442</a>
+<a href="#443" id="443">443</a>
+<a href="#444" id="444">444</a>
+<a href="#445" id="445">445</a>
+<a href="#446" id="446">446</a>
+<a href="#447" id="447">447</a>
+<a href="#448" id="448">448</a>
+<a href="#449" id="449">449</a>
+<a href="#450" id="450">450</a>
+<a href="#451" id="451">451</a>
+<a href="#452" id="452">452</a>
+<a href="#453" id="453">453</a>
+<a href="#454" id="454">454</a>
+<a href="#455" id="455">455</a>
+<a href="#456" id="456">456</a>
+<a href="#457" id="457">457</a>
+<a href="#458" id="458">458</a>
 </pre></div><pre class="rust"><code><span class="kw">mod </span>complete_sm;
 <span class="kw">mod </span>receive_sm;
 <span class="kw">mod </span>send_sm;
@@ -531,7 +550,7 @@
     }
 }
 
-<span class="attr">#[derive(Debug)]
+<span class="attr">#[derive(Debug, Clone)]
 </span><span class="kw">pub struct </span>GatewayClientModuleV2 {
     <span class="kw">pub </span>federation_id: FederationId,
     <span class="kw">pub </span>cfg: LightningClientConfig,
@@ -544,8 +563,8 @@
 
 <span class="attr">#[derive(Debug, Clone)]
 </span><span class="kw">pub struct </span>GatewayClientContextV2 {
+    <span class="kw">pub </span>module: GatewayClientModuleV2,
     <span class="kw">pub </span>decoder: Decoder,
-    <span class="kw">pub </span>notifier: ModuleNotifier&lt;GatewayClientStateMachinesV2&gt;,
     <span class="kw">pub </span>tpe_agg_pk: AggregatePublicKey,
     <span class="kw">pub </span>tpe_pks: BTreeMap&lt;PeerId, PublicKeyShare&gt;,
     <span class="kw">pub </span>gateway: Arc&lt;Gateway&gt;,
@@ -562,8 +581,8 @@
 
     <span class="kw">fn </span>context(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="self">Self</span>::ModuleStateMachineContext {
         GatewayClientContextV2 {
+            module: <span class="self">self</span>.clone(),
             decoder: <span class="self">self</span>.decoder(),
-            notifier: <span class="self">self</span>.notifier.clone(),
             tpe_agg_pk: <span class="self">self</span>.cfg.tpe_agg_pk,
             tpe_pks: <span class="self">self</span>.cfg.tpe_pks.clone(),
             gateway: <span class="self">self</span>.gateway.clone(),
@@ -626,11 +645,19 @@
 
     <span class="kw">fn </span>operation_id(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; OperationId {
         <span class="kw">match </span><span class="self">self </span>{
-            GatewayClientStateMachinesV2::Receive(state) =&gt; state.operation_id(),
             GatewayClientStateMachinesV2::Send(state) =&gt; state.operation_id(),
+            GatewayClientStateMachinesV2::Receive(state) =&gt; state.operation_id(),
             GatewayClientStateMachinesV2::Complete(state) =&gt; state.operation_id(),
         }
     }
+}
+
+<span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Decodable, Encodable)]
+</span><span class="kw">pub enum </span>FinalReceiveState {
+    Rejected,
+    Success([u8; <span class="number">32</span>]),
+    Refunded,
+    Failure,
 }
 
 <span class="kw">impl </span>GatewayClientModuleV2 {
@@ -815,14 +842,14 @@
         <span class="prelude-val">Ok</span>(())
     }
 
-    <span class="kw">pub async fn </span>relay_direct_swap(<span class="kw-2">&amp;</span><span class="self">self</span>, contract: IncomingContract) -&gt; anyhow::Result&lt;[u8; <span class="number">32</span>]&gt; {
+    <span class="kw">pub async fn </span>relay_direct_swap(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        contract: IncomingContract,
+    ) -&gt; anyhow::Result&lt;FinalReceiveState&gt; {
         <span class="kw">let </span>operation_id = OperationId::from_encodable(<span class="kw-2">&amp;</span>contract);
 
         <span class="kw">if </span><span class="self">self</span>.client_ctx.operation_exists(operation_id).<span class="kw">await </span>{
-            <span class="kw">return </span><span class="self">self
-                </span>.subscribe_receive(operation_id)
-                .<span class="kw">await
-                </span>.ok_or(<span class="macro">anyhow!</span>(<span class="string">"The internal send failed"</span>));
+            <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="self">self</span>.await_receive(operation_id).<span class="kw">await</span>);
         }
 
         <span class="kw">let </span>refund_keypair = <span class="self">self</span>.keypair;
@@ -855,22 +882,33 @@
             )
             .<span class="kw">await</span><span class="question-mark">?</span>;
 
-        <span class="self">self</span>.subscribe_receive(operation_id)
-            .<span class="kw">await
-            </span>.ok_or(<span class="macro">anyhow!</span>(<span class="string">"The internal send failed"</span>))
+        <span class="prelude-val">Ok</span>(<span class="self">self</span>.await_receive(operation_id).<span class="kw">await</span>)
     }
 
-    <span class="kw">async fn </span>subscribe_receive(<span class="kw-2">&amp;</span><span class="self">self</span>, operation_id: OperationId) -&gt; <span class="prelude-ty">Option</span>&lt;[u8; <span class="number">32</span>]&gt; {
+    <span class="kw">async fn </span>await_receive(<span class="kw-2">&amp;</span><span class="self">self</span>, operation_id: OperationId) -&gt; FinalReceiveState {
         <span class="kw">let </span><span class="kw-2">mut </span>stream = <span class="self">self</span>.notifier.subscribe(operation_id).<span class="kw">await</span>;
 
         <span class="kw">loop </span>{
             <span class="kw">if let </span><span class="prelude-val">Some</span>(GatewayClientStateMachinesV2::Receive(state)) = stream.next().<span class="kw">await </span>{
                 <span class="kw">match </span>state.state {
                     ReceiveSMState::Funding =&gt; {}
-                    ReceiveSMState::Success(preimage) =&gt; <span class="kw">return </span><span class="prelude-val">Some</span>(preimage),
-                    ReceiveSMState::Rejected(..)
-                    | ReceiveSMState::Failure
-                    | ReceiveSMState::Refunding(..) =&gt; <span class="kw">return </span><span class="prelude-val">None</span>,
+                    ReceiveSMState::Rejected(..) =&gt; <span class="kw">return </span>FinalReceiveState::Rejected,
+                    ReceiveSMState::Success(preimage) =&gt; {
+                        <span class="kw">return </span>FinalReceiveState::Success(preimage)
+                    }
+                    ReceiveSMState::Refunding(out_points) =&gt; {
+                        <span class="kw">if </span><span class="self">self
+                            </span>.client_ctx
+                            .await_primary_module_outputs(operation_id, out_points)
+                            .<span class="kw">await
+                            </span>.is_err()
+                        {
+                            <span class="kw">return </span>FinalReceiveState::Failure;
+                        }
+
+                        <span class="kw">return </span>FinalReceiveState::Refunded;
+                    }
+                    ReceiveSMState::Failure =&gt; <span class="kw">return </span>FinalReceiveState::Failure,
                 }
             }
         }

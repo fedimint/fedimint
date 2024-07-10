@@ -1923,6 +1923,8 @@
 <a href="#1923" id="1923">1923</a>
 <a href="#1924" id="1924">1924</a>
 <a href="#1925" id="1925">1925</a>
+<a href="#1926" id="1926">1926</a>
+<a href="#1927" id="1927">1927</a>
 </pre></div><pre class="rust"><code><span class="attr">#![warn(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::cast_possible_wrap)]
@@ -3611,21 +3613,27 @@
         })
     }
 
+    <span class="kw">pub async fn </span>select_client_v2(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        federation_id: FederationId,
+    ) -&gt; anyhow::Result&lt;ClientHandleArc&gt; {
+        <span class="self">self</span>.clients
+            .read()
+            .<span class="kw">await
+            </span>.get(<span class="kw-2">&amp;</span>federation_id)
+            .map(|entry| entry.value().clone())
+            .ok_or(<span class="macro">anyhow!</span>(<span class="string">"Federation client not available"</span>))
+    }
+
     <span class="doccomment">/// Instructs this gateway to pay a Lightning network invoice via the LNv2
     /// protocol.
     </span><span class="kw">async fn </span>send_payment_v2(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         payload: SendPaymentPayload,
     ) -&gt; anyhow::Result&lt;std::result::Result&lt;[u8; <span class="number">32</span>], Signature&gt;&gt; {
-        <span class="kw">let </span>clients = <span class="self">self</span>.clients.read().<span class="kw">await</span>;
-
-        <span class="kw">let </span>client = clients
-            .get(<span class="kw-2">&amp;</span>payload.federation_id)
-            .ok_or(<span class="macro">anyhow!</span>(<span class="string">"Federation client not available"</span>))<span class="question-mark">?
-            </span>.value();
-
-        client
-            .get_first_module::&lt;GatewayClientModuleV2&gt;()
+        <span class="self">self</span>.select_client_v2(payload.federation_id)
+            .<span class="kw">await</span><span class="question-mark">?
+            </span>.get_first_module::&lt;GatewayClientModuleV2&gt;()
             .send_payment(payload)
             .<span class="kw">await
     </span>}
@@ -3758,13 +3766,9 @@
             <span class="macro">bail!</span>(<span class="string">"The available decryption contract's amount is not equal the requested amount"</span>)
         }
 
-        <span class="kw">let </span>clients = <span class="self">self</span>.clients.read().<span class="kw">await</span>;
-
-        <span class="kw">let </span>client = clients
-            .get(<span class="kw-2">&amp;</span>registered_incoming_contract.federation_id)
-            .ok_or(<span class="macro">anyhow!</span>(<span class="string">"Federation client not available"</span>))<span class="question-mark">?
-            </span>.value()
-            .clone();
+        <span class="kw">let </span>client = <span class="self">self
+            </span>.select_client_v2(registered_incoming_contract.federation_id)
+            .<span class="kw">await</span><span class="question-mark">?</span>;
 
         <span class="prelude-val">Ok</span>((registered_incoming_contract.contract, client))
     }

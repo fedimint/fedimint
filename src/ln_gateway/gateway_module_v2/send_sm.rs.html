@@ -211,6 +211,19 @@
 <a href="#211" id="211">211</a>
 <a href="#212" id="212">212</a>
 <a href="#213" id="213">213</a>
+<a href="#214" id="214">214</a>
+<a href="#215" id="215">215</a>
+<a href="#216" id="216">216</a>
+<a href="#217" id="217">217</a>
+<a href="#218" id="218">218</a>
+<a href="#219" id="219">219</a>
+<a href="#220" id="220">220</a>
+<a href="#221" id="221">221</a>
+<a href="#222" id="222">222</a>
+<a href="#223" id="223">223</a>
+<a href="#224" id="224">224</a>
+<a href="#225" id="225">225</a>
+<a href="#226" id="226">226</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::sync::Arc;
 
 <span class="kw">use </span>bitcoin_hashes::Hash;
@@ -227,6 +240,7 @@
 <span class="kw">use </span>fedimint_lnv2_common::{LightningInput, LightningInputV0, OutgoingWitness};
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 
+<span class="kw">use </span><span class="kw">super</span>::FinalReceiveState;
 <span class="kw">use </span><span class="kw">crate</span>::gateway_module_v2::{GatewayClientContextV2, GatewayClientModuleV2};
 
 <span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
@@ -272,8 +286,12 @@
     InvoiceExpired,
     TimeoutTooClose,
     Underfunded,
+    RegistrationError(String),
+    FinalizationError(String),
+    Rejected,
+    Refunded,
+    Failure,
     LightningRpcError(String),
-    DirectSwapError(String),
 }
 
 <span class="attr">#[cfg_attr(doc, aquamarine::aquamarine)]
@@ -368,13 +386,21 @@
                     amount.msats,
                 )
                 .<span class="kw">await
-                </span>.map_err(|e| Cancelled::DirectSwapError(e.to_string()))<span class="question-mark">?</span>;
+                </span>.map_err(|e| Cancelled::RegistrationError(e.to_string()))<span class="question-mark">?</span>;
 
-            <span class="kw">return </span>client
+            <span class="kw">return match </span>client
                 .get_first_module::&lt;GatewayClientModuleV2&gt;()
                 .relay_direct_swap(contract)
                 .<span class="kw">await
-                </span>.map_err(|e| Cancelled::DirectSwapError(e.to_string()));
+            </span>{
+                <span class="prelude-val">Ok</span>(final_receive_state) =&gt; <span class="kw">match </span>final_receive_state {
+                    FinalReceiveState::Rejected =&gt; <span class="prelude-val">Err</span>(Cancelled::Rejected),
+                    FinalReceiveState::Success(preimage) =&gt; <span class="prelude-val">Ok</span>(preimage),
+                    FinalReceiveState::Refunded =&gt; <span class="prelude-val">Err</span>(Cancelled::Refunded),
+                    FinalReceiveState::Failure =&gt; <span class="prelude-val">Err</span>(Cancelled::Failure),
+                },
+                <span class="prelude-val">Err</span>(e) =&gt; <span class="prelude-val">Err</span>(Cancelled::FinalizationError(e.to_string())),
+            };
         }
 
         lightning_context
