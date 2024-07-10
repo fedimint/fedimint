@@ -32,7 +32,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::{anyhow, bail, ensure, Context as _};
-use async_stream::stream;
+use async_stream::{stream, try_stream};
 use backup::recovery::MintRecovery;
 use base64::Engine as _;
 use bitcoin_hashes::{sha256, sha256t, Hash, HashEngine as BitcoinHashEngine};
@@ -804,6 +804,98 @@ impl ClientModule for MintClientModule {
         }
         Ok(())
     }
+    async fn handle_rpc(
+        &self,
+        method: String,
+        request: serde_json::Value,
+    ) -> BoxStream<'_, anyhow::Result<serde_json::Value>> {
+        Box::pin(try_stream! {
+            match method.as_str() {
+                "reissue_external_notes" => {
+                    let req: ReissueExternalNotesRequest = serde_json::from_value(request)?;
+                    let result = self.reissue_external_notes(req.oob_notes, req.extra_meta).await?;
+                    yield serde_json::to_value(result)?;
+                }
+                "subscribe_reissue_external_notes" => {
+                    let req: SubscribeReissueExternalNotesRequest = serde_json::from_value(request)?;
+                    let stream = self.subscribe_reissue_external_notes(req.operation_id).await?;
+                    for await state in stream.into_stream() {
+                        yield serde_json::to_value(state)?;
+                    }
+                }
+                "spend_notes" => {
+                    let req: SpendNotesRequest = serde_json::from_value(request)?;
+                    let result = self.spend_notes(req.min_amount, req.try_cancel_after, req.include_invite, req.extra_meta).await?;
+                    yield serde_json::to_value(result)?;
+                }
+                "validate_notes" => {
+                    let req: ValidateNotesRequest = serde_json::from_value(request)?;
+                    let result = self.validate_notes(&req.oob_notes)?;
+                    yield serde_json::to_value(result)?;
+                }
+                "try_cancel_spend_notes" => {
+                    let req: TryCancelSpendNotesRequest = serde_json::from_value(request)?;
+                    let result = self.try_cancel_spend_notes(req.operation_id).await;
+                    yield serde_json::to_value(result)?;
+                }
+                "subscribe_spend_notes" => {
+                    let req: SubscribeSpendNotesRequest = serde_json::from_value(request)?;
+                    let stream = self.subscribe_spend_notes(req.operation_id).await?;
+                    for await state in stream.into_stream() {
+                        yield serde_json::to_value(state)?;
+                    }
+                }
+                "await_spend_oob_refund" => {
+                    let req: AwaitSpendOobRefundRequest = serde_json::from_value(request)?;
+                    let value = self.await_spend_oob_refund(req.operation_id).await;
+                    yield serde_json::to_value(value)?;
+                }
+                _ => {
+                    Err(anyhow::format_err!("Unknown method: {}", method))?;
+                    unreachable!()
+                },
+            }
+        })
+    }
+}
+
+#[derive(Deserialize)]
+struct ReissueExternalNotesRequest {
+    oob_notes: OOBNotes,
+    extra_meta: serde_json::Value,
+}
+
+#[derive(Deserialize)]
+struct SubscribeReissueExternalNotesRequest {
+    operation_id: OperationId,
+}
+
+#[derive(Deserialize)]
+struct SpendNotesRequest {
+    min_amount: Amount,
+    try_cancel_after: Duration,
+    include_invite: bool,
+    extra_meta: serde_json::Value,
+}
+
+#[derive(Deserialize)]
+struct ValidateNotesRequest {
+    oob_notes: OOBNotes,
+}
+
+#[derive(Deserialize)]
+struct TryCancelSpendNotesRequest {
+    operation_id: OperationId,
+}
+
+#[derive(Deserialize)]
+struct SubscribeSpendNotesRequest {
+    operation_id: OperationId,
+}
+
+#[derive(Deserialize)]
+struct AwaitSpendOobRefundRequest {
+    operation_id: OperationId,
 }
 
 #[derive(thiserror::Error, Debug, Clone)]
@@ -1648,6 +1740,7 @@ pub fn spendable_notes_to_operation_id(
     )
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct SpendOOBRefund {
     pub user_triggered: bool,
     pub transaction_id: TransactionId,
