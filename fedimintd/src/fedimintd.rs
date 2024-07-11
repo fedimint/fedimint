@@ -5,7 +5,7 @@ use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::time::Duration;
 
-use anyhow::{format_err, Context};
+use anyhow::{bail, format_err, Context};
 use clap::{Parser, Subcommand};
 use fedimint_core::admin_client::ConfigGenParamsRequest;
 use fedimint_core::config::{
@@ -39,7 +39,7 @@ use fedimint_wallet_server::common::config::{
 };
 use fedimint_wallet_server::WalletInit;
 use futures::FutureExt;
-use tracing::{debug, error, info};
+use tracing::{debug, error, info, warn};
 
 use crate::default_esplora_server;
 use crate::envs::{
@@ -215,6 +215,7 @@ impl Fedimintd {
         );
 
         handle_version_hash_command(code_version_hash);
+        check_release_notes_ack()?;
 
         let fedimint_version = env!("CARGO_PKG_VERSION");
 
@@ -462,6 +463,37 @@ impl Fedimintd {
                 .collect(),
         }
     }
+}
+
+fn check_release_notes_ack() -> anyhow::Result<()> {
+    const VERSION: &str = "v0.4";
+    const FM_SKIP_REL_NOTES_ACK_ENV: &str = "FM_SKIP_REL_NOTES_ACK";
+    const FM_REL_NOTES_ACK_ENV: &str = "FM_REL_NOTES_ACK";
+    // the suffix here is to prevent people getting to smart and trying to
+    // automate-it-out change it for every release
+    const FM_REL_NOTES_CUR_VAL: &str = "0_4_xyz";
+
+    // This is here only for upgrade tests and other automated tests, where
+    // juggling different values might be impossible.
+    if is_env_var_set(FM_SKIP_REL_NOTES_ACK_ENV) {
+        warn!("Skipping release notes ack. This should never be happening in production");
+        return Ok(());
+    }
+
+    // The actual code-path we want end users to take
+    if std::env::var(FM_REL_NOTES_ACK_ENV).unwrap_or_default() == FM_REL_NOTES_CUR_VAL {
+        return Ok(());
+    }
+
+    eprintln!(
+        "This version of fedimintd has some criticallly important requirements you should be aware of."
+    );
+    eprintln!("Not following them will likely result in a consensus failure or other problems.");
+    eprintln!("To ensure you have read them, you must set specific environment variable to a specific value.");
+    eprintln!("Robustness and safety of your federations is our primary concern.");
+    eprintln!("See https://github.com/fedimint/fedimint/blob/releases/{VERSION}/docs/RELEASE_NOTES-{VERSION}.md");
+
+    bail!("Must acknowledge release notes. See details above.")
 }
 
 async fn run(
