@@ -945,6 +945,12 @@
 <a href="#945" id="945">945</a>
 <a href="#946" id="946">946</a>
 <a href="#947" id="947">947</a>
+<a href="#948" id="948">948</a>
+<a href="#949" id="949">949</a>
+<a href="#950" id="950">950</a>
+<a href="#951" id="951">951</a>
+<a href="#952" id="952">952</a>
+<a href="#953" id="953">953</a>
 </pre></div><pre class="rust"><code><span class="attr">#![warn(clippy::pedantic)]
 #![allow(clippy::missing_errors_doc)]
 #![allow(clippy::missing_panics_doc)]
@@ -1616,6 +1622,10 @@
 
         <span class="kw">let </span>contract_amount = payment_info.receive_fee.subtract_fee(invoice_amount.msats);
 
+        <span class="kw">if </span>contract_amount &lt; Amount::from_sats(<span class="number">100</span>) {
+            <span class="kw">return </span><span class="prelude-val">Err</span>(FetchInvoiceError::AmountIsUneconomical);
+        }
+
         <span class="kw">let </span>expiration = duration_since_epoch()
             .as_secs()
             .saturating_add(u64::from(expiry_time));
@@ -1839,6 +1849,8 @@
     </span>UnknownFederation,
     <span class="attr">#[error(<span class="string">"The gateways fee of {0:?} exceeds the supplied limit"</span>)]
     </span>PaymentFeeExceedsLimit(PaymentFee),
+    <span class="attr">#[error(<span class="string">"The total fees required to complete this payment exceed its value"</span>)]
+    </span>AmountIsUneconomical,
     <span class="attr">#[error(<span class="string">"The gateway considered our request for an invoice invalid: {0}"</span>)]
     </span>CreateInvoiceError(String),
     <span class="attr">#[error(<span class="string">"The invoice's payment hash is incorrect"</span>)]

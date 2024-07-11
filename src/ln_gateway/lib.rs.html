@@ -1938,6 +1938,10 @@
 <a href="#1938" id="1938">1938</a>
 <a href="#1939" id="1939">1939</a>
 <a href="#1940" id="1940">1940</a>
+<a href="#1941" id="1941">1941</a>
+<a href="#1942" id="1942">1942</a>
+<a href="#1943" id="1943">1943</a>
+<a href="#1944" id="1944">1944</a>
 </pre></div><pre class="rust"><code><span class="attr">#![warn(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::cast_possible_wrap)]
@@ -3683,6 +3687,10 @@
 
         <span class="kw">if </span>payload.contract.commitment.refund_pk != payment_info.public_key {
             <span class="macro">bail!</span>(<span class="string">"The outgoing contract keyed to another gateway"</span>);
+        }
+
+        <span class="kw">if </span>payload.contract.commitment.amount == Amount::ZERO {
+            <span class="macro">bail!</span>(<span class="string">"Zero amount incoming contracts are not supported"</span>);
         }
 
         <span class="kw">let </span>contract_amount = payment_info
