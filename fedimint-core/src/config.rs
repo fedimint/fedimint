@@ -30,7 +30,6 @@ use tracing::warn;
 
 use crate::core::DynClientConfig;
 use crate::encoding::Decodable;
-use crate::invite_code::InviteCode;
 use crate::module::{
     CoreConsensusVersion, DynCommonModuleInit, DynServerModuleInit, IDynCommonModuleInit,
     ModuleConsensusVersion,
@@ -278,23 +277,6 @@ impl ClientConfig {
         } else {
             res
         }
-    }
-
-    /// Create an invite code with the api endpoint of the given peer which can
-    /// be used to download this client config
-    #[deprecated(
-        since = "0.4.0",
-        note = "API endpoints included in the config may be outdated, use Client::invite_code instead"
-    )]
-    pub fn invite_code(&self, peer: &PeerId, api_secret: &Option<String>) -> Option<InviteCode> {
-        self.global.api_endpoints.get(peer).map(|peer_url| {
-            InviteCode::new(
-                peer_url.url.clone(),
-                *peer,
-                self.calculate_federation_id(),
-                api_secret.clone(),
-            )
-        })
     }
 
     /// Converts a consensus-encoded client config struct to a client config
