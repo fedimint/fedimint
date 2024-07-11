@@ -20,6 +20,6 @@ anyhow = { workspace = true }
 async-trait = { workspace = true }
 erased-serde = { workspace = true }
 fedimint-core = { workspace = true }
-fedimint-unknown-common = { version = "=0.4.0-alpha", path = "../fedimint-unknown-common" }
+fedimint-unknown-common = { version = "=0.4.0-rc.0", path = "../fedimint-unknown-common" }
 strum = { workspace = true }
 strum_macros = { workspace = true }

@@ -63,7 +63,7 @@ resolver = "2"
 
 [workspace.package]
 crane.name = "fedimint"
-version = "0.4.0-alpha"
+version = "0.4.0-rc.0"
 
 [workspace.metadata]
 name = "fedimint"
