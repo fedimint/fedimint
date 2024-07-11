@@ -669,6 +669,10 @@ impl LightningClientModule {
 
         let contract_amount = payment_info.receive_fee.subtract_fee(invoice_amount.msats);
 
+        if contract_amount < Amount::from_sats(100) {
+            return Err(FetchInvoiceError::AmountIsUneconomical);
+        }
+
         let expiration = duration_since_epoch()
             .as_secs()
             .saturating_add(u64::from(expiry_time));
@@ -892,6 +896,8 @@ pub enum FetchInvoiceError {
     UnknownFederation,
     #[error("The gateways fee of {0:?} exceeds the supplied limit")]
     PaymentFeeExceedsLimit(PaymentFee),
+    #[error("The total fees required to complete this payment exceed its value")]
+    AmountIsUneconomical,
     #[error("The gateway considered our request for an invoice invalid: {0}")]
     CreateInvoiceError(String),
     #[error("The invoice's payment hash is incorrect")]
