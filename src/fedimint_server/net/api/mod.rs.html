@@ -210,6 +210,14 @@
 <a href="#210" id="210">210</a>
 <a href="#211" id="211">211</a>
 <a href="#212" id="212">212</a>
+<a href="#213" id="213">213</a>
+<a href="#214" id="214">214</a>
+<a href="#215" id="215">215</a>
+<a href="#216" id="216">216</a>
+<a href="#217" id="217">217</a>
+<a href="#218" id="218">218</a>
+<a href="#219" id="219">219</a>
+<a href="#220" id="220">220</a>
 </pre></div><pre class="rust"><code><span class="kw">pub mod </span>announcement;
 <span class="kw">mod </span>http_auth;
 
@@ -325,11 +333,19 @@
     ) -&gt; (<span class="kw-2">&amp;</span>State, ApiEndpointContext&lt;<span class="lifetime">'_</span>&gt;);
 }
 
+<span class="doccomment">/// A token proving the the API call was authenticated
+///
+/// Api handlers are encouraged to take it as an argument to avoid sensitive
+/// guardian-only logic being accidentally unauthenticated.
+</span><span class="kw">pub struct </span>GuardianAuthToken {
+    _marker: (), <span class="comment">// private field just to make creating it outside impossible
+</span>}
+
 <span class="kw">pub type </span>ApiResult&lt;T&gt; = <span class="prelude-ty">Result</span>&lt;T, ApiError&gt;;
 
-<span class="kw">pub fn </span>check_auth(context: <span class="kw-2">&amp;mut </span>ApiEndpointContext) -&gt; ApiResult&lt;()&gt; {
+<span class="kw">pub fn </span>check_auth(context: <span class="kw-2">&amp;mut </span>ApiEndpointContext) -&gt; ApiResult&lt;GuardianAuthToken&gt; {
     <span class="kw">if </span>context.has_auth() {
-        <span class="prelude-val">Ok</span>(())
+        <span class="prelude-val">Ok</span>(GuardianAuthToken { _marker: () })
     } <span class="kw">else </span>{
         <span class="prelude-val">Err</span>(ApiError::unauthorized())
     }

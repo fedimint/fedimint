@@ -695,6 +695,10 @@
 <a href="#695" id="695">695</a>
 <a href="#696" id="696">696</a>
 <a href="#697" id="697">697</a>
+<a href="#698" id="698">698</a>
+<a href="#699" id="699">699</a>
+<a href="#700" id="700">700</a>
+<a href="#701" id="701">701</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! Implements the client API through which users interact with the federation
 </span><span class="kw">use </span>std::cmp::Ordering;
 <span class="kw">use </span>std::collections::{BTreeMap, HashMap};
@@ -759,7 +763,7 @@
 <span class="kw">use </span><span class="kw">crate</span>::fedimint_core::encoding::Encodable;
 <span class="kw">use </span><span class="kw">crate</span>::metrics::{BACKUP_WRITE_SIZE_BYTES, STORED_BACKUPS_COUNT};
 <span class="kw">use </span><span class="kw">crate</span>::net::api::announcement::{ApiAnnouncementKey, ApiAnnouncementPrefix};
-<span class="kw">use </span><span class="kw">crate</span>::net::api::{check_auth, ApiResult, HasApiContext};
+<span class="kw">use </span><span class="kw">crate</span>::net::api::{check_auth, ApiResult, GuardianAuthToken, HasApiContext};
 
 <span class="attr">#[derive(Clone)]
 </span><span class="kw">pub struct </span>ConsensusApi {
@@ -942,7 +946,7 @@
         <span class="self">self</span>.shutdown_sender.send_replace(index);
     }
 
-    <span class="kw">async fn </span>get_federation_audit(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ApiResult&lt;AuditSummary&gt; {
+    <span class="kw">async fn </span>get_federation_audit(<span class="kw-2">&amp;</span><span class="self">self</span>, _auth: <span class="kw-2">&amp;</span>GuardianAuthToken) -&gt; ApiResult&lt;AuditSummary&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.db.begin_transaction_nc().<span class="kw">await</span>;
         <span class="comment">// Writes are related to compacting audit keys, which we can safely ignore
         // within an API request since the compaction will happen when constructing an
@@ -971,7 +975,11 @@
     /// guardians can download. Private keys are encrypted with the guardian
     /// password, so it should be safe to store anywhere, this also means the
     /// backup is useless without the password.
-    </span><span class="kw">fn </span>get_guardian_config_backup(<span class="kw-2">&amp;</span><span class="self">self</span>, password: <span class="kw-2">&amp;</span>str) -&gt; GuardianConfigBackup {
+    </span><span class="kw">fn </span>get_guardian_config_backup(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        password: <span class="kw-2">&amp;</span>str,
+        _auth: <span class="kw-2">&amp;</span>GuardianAuthToken,
+    ) -&gt; GuardianConfigBackup {
         <span class="kw">let </span><span class="kw-2">mut </span>tar_archive_builder = tar::Builder::new(Vec::new());
 
         <span class="kw">let </span><span class="kw-2">mut </span>append = |name: <span class="kw-2">&amp;</span>Path, data: <span class="kw-2">&amp;</span>[u8]| {
@@ -1329,17 +1337,17 @@
             AUDIT_ENDPOINT,
             ApiVersion::new(<span class="number">0</span>, <span class="number">0</span>),
             <span class="kw">async </span>|fedimint: <span class="kw-2">&amp;</span>ConsensusApi, context, _v: ()| -&gt; AuditSummary {
-                check_auth(context)<span class="question-mark">?</span>;
-                <span class="prelude-val">Ok</span>(fedimint.get_federation_audit().<span class="kw">await</span><span class="question-mark">?</span>)
+                <span class="kw">let </span>auth = check_auth(context)<span class="question-mark">?</span>;
+                <span class="prelude-val">Ok</span>(fedimint.get_federation_audit(<span class="kw-2">&amp;</span>auth).<span class="kw">await</span><span class="question-mark">?</span>)
             }
         },
         <span class="macro">api_endpoint!</span> {
             GUARDIAN_CONFIG_BACKUP_ENDPOINT,
             ApiVersion::new(<span class="number">0</span>, <span class="number">2</span>),
             <span class="kw">async </span>|fedimint: <span class="kw-2">&amp;</span>ConsensusApi, context, _v: ()| -&gt; GuardianConfigBackup {
-                check_auth(context)<span class="question-mark">?</span>;
+                <span class="kw">let </span>auth = check_auth(context)<span class="question-mark">?</span>;
                 <span class="kw">let </span>password = context.request_auth().expect(<span class="string">"Auth was checked before"</span>).<span class="number">0</span>;
-                <span class="prelude-val">Ok</span>(fedimint.get_guardian_config_backup(<span class="kw-2">&amp;</span>password))
+                <span class="prelude-val">Ok</span>(fedimint.get_guardian_config_backup(<span class="kw-2">&amp;</span>password, <span class="kw-2">&amp;</span>auth))
             }
         },
         <span class="macro">api_endpoint!</span> {

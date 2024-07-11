@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"constant":["API_ENDPOINT_TIMEOUT"],"fn":["attach_endpoints","check_auth","spawn"],"mod":["announcement","http_auth"],"struct":["ApiSecrets","RpcHandlerCtx"],"trait":["HasApiContext"],"type":["ApiResult"]};
+window.SIDEBAR_ITEMS = {"constant":["API_ENDPOINT_TIMEOUT"],"fn":["attach_endpoints","check_auth","spawn"],"mod":["announcement","http_auth"],"struct":["ApiSecrets","GuardianAuthToken","RpcHandlerCtx"],"trait":["HasApiContext"],"type":["ApiResult"]};
