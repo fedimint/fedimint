@@ -3,13 +3,13 @@ procs:
     shell: bash --init-file scripts/dev/mprocs/user-shell.sh
     stop: SIGKILL
   fedimint0:
-    shell: tail -n +0 -F $FM_LOGS_DIR/fedimintd-0.log
+    shell: tail -n +0 -F $FM_LOGS_DIR/fedimintd-default-0.log
   fedimint1:
-    shell: tail -n +0 -F $FM_LOGS_DIR/fedimintd-1.log
+    shell: tail -n +0 -F $FM_LOGS_DIR/fedimintd-default-1.log
   fedimint2:
-    shell: tail -n +0 -F $FM_LOGS_DIR/fedimintd-2.log
+    shell: tail -n +0 -F $FM_LOGS_DIR/fedimintd-default-2.log
   fedimint3:
-    shell: tail -n +0 -F $FM_LOGS_DIR/fedimintd-3.log
+    shell: tail -n +0 -F $FM_LOGS_DIR/fedimintd-default-3.log
   cln-gw:
     shell: tail -n +0 -F $FM_LOGS_DIR/gatewayd-cln.log
   lnd-gw:
