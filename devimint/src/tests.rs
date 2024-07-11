@@ -14,14 +14,13 @@ use fedimint_core::encoding::Decodable;
 use fedimint_core::envs::is_env_var_set;
 use fedimint_core::net::api_announcement::SignedApiAnnouncement;
 use fedimint_core::task::block_in_place;
-use fedimint_core::{Amount, BitcoinHash, PeerId};
+use fedimint_core::{Amount, PeerId};
 use fedimint_ln_client::cli::LnInvoiceResponse;
 use fedimint_logging::LOG_DEVIMINT;
 use hex::ToHex;
 use ln_gateway::rpc::GatewayInfo;
 use serde_json::json;
 use tokio::net::TcpStream;
-use tokio::time::timeout;
 use tokio::{fs, try_join};
 use tracing::{debug, info};
 
@@ -1087,23 +1086,7 @@ pub async fn start_hold_invoice_payment(
     lnd: &Lnd,
 ) -> anyhow::Result<([u8; 32], cln_rpc::primitives::Sha256, String)> {
     client.use_gateway(gw_cln).await?;
-    let preimage = rand::random::<[u8; 32]>();
-    let hash = {
-        let mut engine = bitcoin::hashes::sha256::Hash::engine();
-        bitcoin::hashes::HashEngine::input(&mut engine, &preimage);
-        bitcoin::hashes::sha256::Hash::from_engine(engine)
-    };
-    let payment_request = lnd
-        .invoices_client_lock()
-        .await?
-        .add_hold_invoice(tonic_lnd::invoicesrpc::AddHoldInvoiceRequest {
-            value_msat: 1000,
-            hash: hash.to_byte_array().to_vec(),
-            ..Default::default()
-        })
-        .await?
-        .into_inner()
-        .payment_request;
+    let (preimage, payment_request, hash) = lnd.create_hold_invoice(1000).await?;
     let operation_id = ln_pay(client, payment_request, gw_cln_id, true).await?;
     Ok((preimage, hash, operation_id))
 }
@@ -1115,44 +1098,7 @@ pub async fn finish_hold_invoice_payment(
     hold_invoice_hash: cln_rpc::primitives::Sha256,
     hold_invoice_preimage: [u8; 32],
 ) -> anyhow::Result<()> {
-    let mut hold_invoice_subscription = lnd
-        .invoices_client_lock()
-        .await?
-        .subscribe_single_invoice(tonic_lnd::invoicesrpc::SubscribeSingleInvoiceRequest {
-            r_hash: hold_invoice_hash.to_byte_array().to_vec(),
-        })
-        .await?
-        .into_inner();
-    loop {
-        const WAIT_FOR_INVOICE_TIMEOUT: Duration = Duration::from_secs(60);
-        match timeout(
-            WAIT_FOR_INVOICE_TIMEOUT,
-            futures::StreamExt::next(&mut hold_invoice_subscription),
-        )
-        .await
-        {
-            Ok(Some(Ok(invoice))) => {
-                if invoice.state() == tonic_lnd::lnrpc::invoice::InvoiceState::Accepted {
-                    break;
-                }
-                debug!("hold invoice payment state: {:?}", invoice.state());
-            }
-            Ok(Some(Err(e))) => {
-                bail!("error in invoice subscription: {e:?}");
-            }
-            Ok(None) => {
-                bail!("invoice subscription ended before invoice was accepted");
-            }
-            Err(_) => {
-                bail!("timed out waiting for invoice to be accepted")
-            }
-        }
-    }
-    lnd.invoices_client_lock()
-        .await?
-        .settle_invoice(tonic_lnd::invoicesrpc::SettleInvoiceMsg {
-            preimage: hold_invoice_preimage.to_vec(),
-        })
+    lnd.settle_hold_invoice(hold_invoice_preimage, hold_invoice_hash)
         .await?;
     let received_preimage = cmd!(client, "await-ln-pay", hold_invoice_operation_id)
         .out_json()

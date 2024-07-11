@@ -7,6 +7,7 @@ use fedimint_core::util::SafeUrl;
 use fedimint_lnv2_client::{FinalReceiveState, FinalSendState};
 use lightning_invoice::Bolt11Invoice;
 use substring::Substring;
+use tokio::try_join;
 use tracing::info;
 
 #[tokio::main]
@@ -35,6 +36,8 @@ async fn main() -> anyhow::Result<()> {
 
         test_gateway_registration(&dev_fed).await?;
 
+        test_lightning_payment(&dev_fed).await?;
+
         Ok(())
     })
     .await
@@ -54,7 +57,7 @@ async fn test_self_payment(dev_fed: &DevJitFed) -> anyhow::Result<()> {
     // causes the second payment between gateways which should be successful to
     // also be refunded but only in CI
 
-    let inv_lnd = fetch_invoice(&client, &gw_lnd.addr).await?.0;
+    let inv_lnd = fetch_invoice(&client, &gw_lnd.addr, 1_000_000).await?.0;
 
     // payment will be refunded due to insufficient liquidity
 
@@ -65,8 +68,8 @@ async fn test_self_payment(dev_fed: &DevJitFed) -> anyhow::Result<()> {
     federation.pegin_gateway(1_000_000, gw_lnd).await?;
     federation.pegin_gateway(1_000_000, gw_cln).await?;
 
-    let (inv_lnd, receive_op_lnd) = fetch_invoice(&client, &gw_lnd.addr).await?;
-    let (inv_cln, receive_op_cln) = fetch_invoice(&client, &gw_cln.addr).await?;
+    let (inv_lnd, receive_op_lnd) = fetch_invoice(&client, &gw_lnd.addr, 1_000_000).await?;
+    let (inv_cln, receive_op_cln) = fetch_invoice(&client, &gw_cln.addr, 1_000_000).await?;
 
     // payments will be successful since the gateways now have sufficient liquidity
 
@@ -76,12 +79,67 @@ async fn test_self_payment(dev_fed: &DevJitFed) -> anyhow::Result<()> {
     await_receive_claimed(&client, receive_op_lnd).await?;
     await_receive_claimed(&client, receive_op_cln).await?;
 
+    info!("test_self_payment successful");
+    Ok(())
+}
+
+async fn test_lightning_payment(dev_fed: &DevJitFed) -> anyhow::Result<()> {
+    let fed = dev_fed.fed().await?;
+    let client = fed.new_joined_client("lnv2-lightning-test-client").await?;
+    let gw_lnd = dev_fed.gw_lnd().await?;
+    let gw_cln = dev_fed.gw_cln().await?;
+    let lnd = dev_fed.lnd().await?;
+    let cln = dev_fed.cln().await?;
+
+    // Verify HOLD invoices still work, create one now for payment later
+    let (hold_preimage, hold_invoice, hold_payment_hash) = lnd.create_hold_invoice(50000).await?;
+    info!("Lightning test: created hold invoice");
+
+    // CLN can pay LND directly
+    let (invoice, payment_hash) = lnd.invoice(5000).await?;
+    cln.pay_bolt11_invoice(invoice).await?;
+    lnd.wait_bolt11_invoice(payment_hash).await?;
+    info!("Lightning test: CLN paid LND directly");
+
+    // CLN can pay client via LND Gateway
+    let (inv_lnd, receive_op_lnd) = fetch_invoice(&client, &gw_lnd.addr, 500_000).await?;
+    cln.pay_bolt11_invoice(inv_lnd.to_string()).await?;
+    await_receive_claimed(&client, receive_op_lnd).await?;
+    info!("Lightning test: CLN paid client via LND gateway");
+
+    // LND can pay CLN directly
+    let invoice = cln
+        .invoice(
+            5000,
+            "lnd-pay-cln-directly".to_string(),
+            "lnd-pay-cln-directly".to_string(),
+        )
+        .await?;
+    lnd.pay_bolt11_invoice(invoice).await?;
+    cln.wait_any_bolt11_invoice().await?;
+    info!("Lightning test: LND paid CLN directly");
+
+    // LND can pay client via CLN gateway
+    let (inv_cln, receive_op_cln) = fetch_invoice(&client, &gw_cln.addr, 750_000).await?;
+    lnd.pay_bolt11_invoice(inv_cln.to_string()).await?;
+    await_receive_claimed(&client, receive_op_cln).await?;
+    info!("Lightning test: LND paid client via CLN gateway");
+
+    // CLN pay HOLD invoice, LND settle HOLD invoice
+    try_join!(
+        cln.pay_bolt11_invoice(hold_invoice),
+        lnd.settle_hold_invoice(hold_preimage, hold_payment_hash)
+    )?;
+    info!("Lightning test: CLN paid HOLD invoice");
+
+    info!("test_lightning_payment successful");
     Ok(())
 }
 
 async fn fetch_invoice(
     client: &Client,
     gw_address: &String,
+    amount: u64,
 ) -> anyhow::Result<(Bolt11Invoice, OperationId)> {
     Ok(serde_json::from_value::<(Bolt11Invoice, OperationId)>(
         cmd!(
@@ -90,7 +148,7 @@ async fn fetch_invoice(
             "lnv2",
             "receive",
             gw_address.clone(),
-            "1000000"
+            amount,
         )
         .out_json()
         .await?,
@@ -206,5 +264,6 @@ async fn test_gateway_registration(dev_fed: &DevJitFed) -> anyhow::Result<()> {
         serde_json::to_value(Vec::<SafeUrl>::new()).expect("JSON serialization failed")
     );
 
+    info!("test_gateway_registration successful");
     Ok(())
 }

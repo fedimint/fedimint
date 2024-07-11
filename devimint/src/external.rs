@@ -4,7 +4,7 @@ use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
 
-use anyhow::{anyhow, Context, Result};
+use anyhow::{anyhow, bail, Context, Result};
 use bitcoincore_rpc::bitcoin::{Address, BlockHash};
 use bitcoincore_rpc::bitcoincore_rpc_json::{GetBalancesResult, GetBlockchainInfoResult};
 use bitcoincore_rpc::{bitcoin, RpcApi};
@@ -12,8 +12,9 @@ use cln_rpc::primitives::{Amount as ClnRpcAmount, AmountOrAny};
 use cln_rpc::ClnRpc;
 use fedimint_core::encoding::Encodable;
 use fedimint_core::task::jit::{JitTry, JitTryAnyhow};
-use fedimint_core::task::{block_in_place, block_on, sleep};
+use fedimint_core::task::{block_in_place, block_on, sleep, timeout};
 use fedimint_core::util::write_overwrite_async;
+use fedimint_core::BitcoinHash;
 use fedimint_logging::LOG_DEVIMINT;
 use fedimint_testing::gateway::LightningNodeType;
 use hex::ToHex;
@@ -676,6 +677,79 @@ impl Lnd {
             .into_inner()
             .state();
         anyhow::ensure!(invoice_status == tonic_lnd::lnrpc::invoice::InvoiceState::Settled);
+
+        Ok(())
+    }
+
+    pub async fn create_hold_invoice(
+        &self,
+        amount: u64,
+    ) -> anyhow::Result<([u8; 32], String, cln_rpc::primitives::Sha256)> {
+        let preimage = rand::random::<[u8; 32]>();
+        let hash = {
+            let mut engine = bitcoin::hashes::sha256::Hash::engine();
+            bitcoin::hashes::HashEngine::input(&mut engine, &preimage);
+            bitcoin::hashes::sha256::Hash::from_engine(engine)
+        };
+        let hold_request = self
+            .invoices_client_lock()
+            .await?
+            .add_hold_invoice(tonic_lnd::invoicesrpc::AddHoldInvoiceRequest {
+                value_msat: amount as i64,
+                hash: hash.to_byte_array().to_vec(),
+                ..Default::default()
+            })
+            .await?
+            .into_inner();
+        let payment_request = hold_request.payment_request;
+        Ok((preimage, payment_request, hash))
+    }
+
+    pub async fn settle_hold_invoice(
+        &self,
+        preimage: [u8; 32],
+        payment_hash: cln_rpc::primitives::Sha256,
+    ) -> anyhow::Result<()> {
+        let mut hold_invoice_subscription = self
+            .invoices_client_lock()
+            .await?
+            .subscribe_single_invoice(tonic_lnd::invoicesrpc::SubscribeSingleInvoiceRequest {
+                r_hash: payment_hash.to_byte_array().to_vec(),
+            })
+            .await?
+            .into_inner();
+        loop {
+            const WAIT_FOR_INVOICE_TIMEOUT: Duration = Duration::from_secs(60);
+            match timeout(
+                WAIT_FOR_INVOICE_TIMEOUT,
+                futures::StreamExt::next(&mut hold_invoice_subscription),
+            )
+            .await
+            {
+                Ok(Some(Ok(invoice))) => {
+                    if invoice.state() == tonic_lnd::lnrpc::invoice::InvoiceState::Accepted {
+                        break;
+                    }
+                    debug!("hold invoice payment state: {:?}", invoice.state());
+                }
+                Ok(Some(Err(e))) => {
+                    bail!("error in invoice subscription: {e:?}");
+                }
+                Ok(None) => {
+                    bail!("invoice subscription ended before invoice was accepted");
+                }
+                Err(_) => {
+                    bail!("timed out waiting for invoice to be accepted")
+                }
+            }
+        }
+
+        self.invoices_client_lock()
+            .await?
+            .settle_invoice(tonic_lnd::invoicesrpc::SettleInvoiceMsg {
+                preimage: preimage.to_vec(),
+            })
+            .await?;
 
         Ok(())
     }

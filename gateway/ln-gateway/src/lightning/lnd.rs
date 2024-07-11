@@ -1,4 +1,5 @@
-use std::fmt;
+use std::collections::BTreeSet;
+use std::fmt::{self, Display};
 use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
@@ -12,7 +13,7 @@ use fedimint_core::{secp256k1, Amount};
 use fedimint_ln_common::PrunedInvoice;
 use hex::ToHex;
 use secp256k1::PublicKey;
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, RwLock};
 use tokio_stream::wrappers::ReceiverStream;
 use tonic::Status;
 use tonic_lnd::invoicesrpc::lookup_invoice_msg::InvoiceRef;
@@ -59,6 +60,7 @@ pub struct GatewayLndClient {
     macaroon: String,
     lnd_sender: Option<mpsc::Sender<ForwardHtlcInterceptResponse>>,
     gateway_db: Database,
+    payment_hashes: Arc<RwLock<BTreeSet<Vec<u8>>>>,
 }
 
 impl GatewayLndClient {
@@ -79,6 +81,7 @@ impl GatewayLndClient {
             macaroon,
             lnd_sender,
             gateway_db,
+            payment_hashes: Arc::new(RwLock::new(BTreeSet::new())),
         }
     }
 
@@ -122,12 +125,13 @@ impl GatewayLndClient {
         let mut client = self.connect().await?;
 
         let self_copy = self.clone();
+        let r_hash = payment_hash.clone();
         task_group.spawn("LND HOLD Invoice Subscription", |handle| async move {
             let future_stream =
                 client
                     .invoices()
                     .subscribe_single_invoice(SubscribeSingleInvoiceRequest {
-                        r_hash: payment_hash,
+                        r_hash: r_hash.clone(),
                     });
 
             let mut hold_stream = tokio::select! {
@@ -160,7 +164,11 @@ impl GatewayLndClient {
                     }
                 }
             } {
-                debug!(?hold, "LND HOLD Invoice Update");
+                debug!(
+                    ?hold,
+                    "LND HOLD Invoice Update {}",
+                    PrettyPaymentHash(&r_hash)
+                );
 
                 if hold.state() == InvoiceState::Accepted {
                     let intercept = InterceptHtlcRequest {
@@ -188,6 +196,10 @@ impl GatewayLndClient {
                 }
             }
         });
+
+        // Invoice monitor task has already spawned, we can safely remove it from the
+        // set
+        self.payment_hashes.write().await.remove(&payment_hash);
 
         Ok(())
     }
@@ -262,15 +274,18 @@ impl GatewayLndClient {
                     }
                 }
             } {
-                debug!(?invoice, "LND Invoice Update");
-
                 // If the `r_preimage` is empty and the invoice is OPEN, this means a new HOLD
                 // invoice has been created, which is potentially an invoice destined for a
                 // federation. We will spawn a new task to monitor the status of
                 // the HOLD invoice.
-
                 let payment_hash = invoice.r_hash.clone();
-                let contains_payment_hash = self_copy
+
+                let created_payment_hash = self_copy
+                    .payment_hashes
+                    .read()
+                    .await
+                    .contains(&payment_hash);
+                let db_contains_payment_hash = self_copy
                     .gateway_db
                     .begin_transaction_nc()
                     .await
@@ -282,13 +297,24 @@ impl GatewayLndClient {
                     ))
                     .await
                     .is_some();
+                let contains_payment_hash = created_payment_hash || db_contains_payment_hash;
+
+                debug!(
+                    ?invoice,
+                    ?created_payment_hash,
+                    ?db_contains_payment_hash,
+                    "LND Invoice Update {}",
+                    PrettyPaymentHash(&payment_hash),
+                );
 
                 if contains_payment_hash
                     && invoice.r_preimage.is_empty()
                     && invoice.state().clone() == InvoiceState::Open
                 {
-                    let pretty_hash = payment_hash.encode_hex::<String>();
-                    info!(?pretty_hash, "Spawning HOLD invoice subscription task");
+                    info!(
+                        "Monitoring new LNv2 invoice with {}",
+                        PrettyPaymentHash(&payment_hash)
+                    );
                     if let Err(e) = self_copy
                         .spawn_lnv2_hold_invoice_subscription(
                             &hold_group,
@@ -298,9 +324,9 @@ impl GatewayLndClient {
                         .await
                     {
                         error!(
-                            ?pretty_hash,
                             ?e,
-                            "Failed to spawn HOLD invoice subscription task"
+                            "Failed to spawn HOLD invoice subscription task {}",
+                            PrettyPaymentHash(&payment_hash),
                         );
                     }
                 }
@@ -374,7 +400,7 @@ impl GatewayLndClient {
                         match htlc_message {
                             Ok(htlc) => htlc,
                             Err(e) => {
-                                error!("Error received over HTLC stream: {:?}", e);
+                                error!(?e, "Error received over HTLC stream");
                                 None
                             }
                     }}
@@ -520,7 +546,6 @@ impl GatewayLndClient {
         payment_hash: Vec<u8>,
         preimage: Vec<u8>,
     ) -> Result<(), LightningRpcError> {
-        let pretty_hash = payment_hash.encode_hex::<String>();
         let mut client = self.connect().await?;
         let invoice = client
             .invoices()
@@ -536,7 +561,11 @@ impl GatewayLndClient {
 
         let state = invoice.state();
         if state != InvoiceState::Accepted {
-            error!(?pretty_hash, ?state, "HOLD invoice state is not accepted");
+            error!(
+                ?state,
+                "HOLD invoice state is not accepted {}",
+                PrettyPaymentHash(&payment_hash)
+            );
             return Err(LightningRpcError::FailedToCompleteHtlc {
                 failure_reason: "HOLD invoice state is not accepted".to_string(),
             });
@@ -547,7 +576,11 @@ impl GatewayLndClient {
             .settle_invoice(SettleInvoiceMsg { preimage })
             .await
             .map_err(|e| {
-                error!(?pretty_hash, ?e, "Failed to settle HOLD invoice");
+                error!(
+                    ?e,
+                    "Failed to settle HOLD invoice {}",
+                    PrettyPaymentHash(&payment_hash)
+                );
                 LightningRpcError::FailedToCompleteHtlc {
                     failure_reason: "Failed to settle HOLD invoice".to_string(),
                 }
@@ -560,7 +593,6 @@ impl GatewayLndClient {
     /// If there is no invoice corresponding to the `payment_hash`, this
     /// function will return an error.
     async fn cancel_hold_invoice(&self, payment_hash: Vec<u8>) -> Result<(), LightningRpcError> {
-        let pretty_hash = payment_hash.encode_hex::<String>();
         let mut client = self.connect().await?;
         let invoice = client
             .invoices()
@@ -576,7 +608,11 @@ impl GatewayLndClient {
 
         let state = invoice.state();
         if state != InvoiceState::Open {
-            error!(?pretty_hash, ?state, "HOLD invoice state is not accepted");
+            error!(
+                ?state,
+                "HOLD invoice state is not accepted {}",
+                PrettyPaymentHash(&payment_hash)
+            );
             return Err(LightningRpcError::FailedToCompleteHtlc {
                 failure_reason: "HOLD invoice state is not accepted".to_string(),
             });
@@ -589,7 +625,11 @@ impl GatewayLndClient {
             })
             .await
             .map_err(|e| {
-                error!(?pretty_hash, ?e, "Failed to cancel HOLD invoice");
+                error!(
+                    ?e,
+                    "Failed to cancel HOLD invoice {}",
+                    PrettyPaymentHash(&payment_hash)
+                );
                 LightningRpcError::FailedToCompleteHtlc {
                     failure_reason: "Failed to cancel HOLD invoice".to_string(),
                 }
@@ -713,9 +753,12 @@ impl ILnRpcClient for GatewayLndClient {
 
     async fn pay(
         &self,
-        _request: PayInvoiceRequest,
+        request: PayInvoiceRequest,
     ) -> Result<PayInvoiceResponse, LightningRpcError> {
-        error!("LND supports private payments, legacy `pay` should not be used.");
+        error!(
+            "LND supports private payments, legacy `pay` should not be used. {}",
+            PrettyPaymentHash(&request.payment_hash)
+        );
         Err(LightningRpcError::FailedPayment {
             failure_reason: "LND supports private payments, legacy `pay` should not be used."
                 .to_string(),
@@ -728,17 +771,27 @@ impl ILnRpcClient for GatewayLndClient {
         max_delay: u64,
         max_fee: Amount,
     ) -> Result<PayInvoiceResponse, LightningRpcError> {
-        info!("LND Paying invoice {invoice:?}");
+        let payment_hash = invoice.payment_hash.to_byte_array().to_vec();
+        info!(
+            "LND Paying invoice with {}",
+            PrettyPaymentHash(&payment_hash)
+        );
         let mut client = self.connect().await?;
 
-        debug!("LND got client to pay invoice {invoice:?}, will check if payment already exists");
+        debug!(
+            ?invoice,
+            "pay_private checking if payment for invoice exists"
+        );
 
         // If the payment exists, that means we've already tried to pay the invoice
         let preimage: Vec<u8> = if let Some(preimage) = self
             .lookup_payment(invoice.payment_hash.to_byte_array().to_vec(), &mut client)
             .await?
         {
-            info!("LND payment already exists for invoice {invoice:?}");
+            info!(
+                "LND payment already exists for invoice with {}",
+                PrettyPaymentHash(&payment_hash)
+            );
             hex::FromHex::from_hex(preimage.as_str()).map_err(|error| {
                 LightningRpcError::FailedPayment {
                     failure_reason: format!("Failed to convert preimage {error:?}"),
@@ -780,7 +833,10 @@ impl ILnRpcClient for GatewayLndClient {
                     failure_reason: e.to_string(),
                 })?;
 
-            debug!("LND payment does not exist for invoice {invoice:?}, will attempt to pay");
+            debug!(
+                "LND payment does not exist for invoice with {}, will attempt to pay",
+                PrettyPaymentHash(&payment_hash)
+            );
             let payments = client
                 .router()
                 .send_payment_v2(SendPaymentRequest {
@@ -799,14 +855,18 @@ impl ILnRpcClient for GatewayLndClient {
                 })
                 .await
                 .map_err(|status| {
-                    info!("LND payment request failed for invoice {invoice:?} with {status:?}");
+                    error!(
+                        "LND payment request failed for invoice with {} with {status:?}",
+                        PrettyPaymentHash(&payment_hash)
+                    );
                     LightningRpcError::FailedPayment {
                         failure_reason: format!("Failed to make outgoing payment {status:?}"),
                     }
                 })?;
 
             debug!(
-                "LND payment request sent for invoice {invoice:?}, waiting for payment status..."
+                "LND payment request sent for invoice with {}, waiting for payment status...",
+                PrettyPaymentHash(&payment_hash),
             );
             let mut messages = payments.into_inner();
             loop {
@@ -817,7 +877,10 @@ impl ILnRpcClient for GatewayLndClient {
                         failure_reason: format!("Failed to get payment status {error:?}"),
                     }) {
                     Ok(Some(payment)) if payment.status() == PaymentStatus::Succeeded => {
-                        info!("LND payment succeeded for invoice {invoice:?}");
+                        info!(
+                            "LND payment succeeded for invoice with {}",
+                            PrettyPaymentHash(&payment_hash)
+                        );
                         break hex::FromHex::from_hex(payment.payment_preimage.as_str()).map_err(
                             |error| LightningRpcError::FailedPayment {
                                 failure_reason: format!("Failed to convert preimage {error:?}"),
@@ -825,18 +888,27 @@ impl ILnRpcClient for GatewayLndClient {
                         )?;
                     }
                     Ok(Some(payment)) if payment.status() == PaymentStatus::InFlight => {
-                        debug!("LND payment is inflight");
+                        debug!(
+                            "LND payment for invoice with {} is inflight",
+                            PrettyPaymentHash(&payment_hash)
+                        );
                         continue;
                     }
                     Ok(Some(payment)) => {
-                        info!("LND payment failed for invoice {invoice:?} with {payment:?}");
+                        error!(
+                            "LND payment failed for invoice with {} with {payment:?}",
+                            PrettyPaymentHash(&payment_hash)
+                        );
                         let failure_reason = payment.failure_reason();
                         return Err(LightningRpcError::FailedPayment {
                             failure_reason: format!("{failure_reason:?}"),
                         });
                     }
                     Ok(None) => {
-                        info!("LND payment failed for invoice {invoice:?} with no payment status");
+                        error!(
+                            "LND payment failed for invoice with {} with no payment status",
+                            PrettyPaymentHash(&payment_hash)
+                        );
                         return Err(LightningRpcError::FailedPayment {
                             failure_reason: format!(
                                 "Failed to get payment status for payment hash {:?}",
@@ -845,7 +917,10 @@ impl ILnRpcClient for GatewayLndClient {
                         });
                     }
                     Err(e) => {
-                        info!("LND payment failed for invoice {invoice:?} with {e:?}");
+                        error!(
+                            "LND payment failed for invoice with {} with {e:?}",
+                            PrettyPaymentHash(&payment_hash)
+                        );
                         return Err(e);
                     }
                 }
@@ -879,13 +954,14 @@ impl ILnRpcClient for GatewayLndClient {
             gateway_sender.clone(),
         )
         .await?;
-        let new_client = Arc::new(Self::new(
-            self.address.clone(),
-            self.tls_cert.clone(),
-            self.macaroon.clone(),
-            Some(lnd_sender.clone()),
-            self.gateway_db.clone(),
-        ));
+        let new_client = Arc::new(Self {
+            address: self.address.clone(),
+            tls_cert: self.tls_cert.clone(),
+            macaroon: self.macaroon.clone(),
+            lnd_sender: Some(lnd_sender.clone()),
+            gateway_db: self.gateway_db.clone(),
+            payment_hashes: self.payment_hashes.clone(),
+        });
         Ok((Box::pin(ReceiverStream::new(gateway_receiver)), new_client))
     }
 
@@ -909,8 +985,6 @@ impl ILnRpcClient for GatewayLndClient {
             None => (ResolveHoldForwardAction::Fail, vec![]),
         };
 
-        let pretty_hash = payment_hash.encode_hex::<String>();
-
         // First check if this completion request corresponds to a HOLD LNv2 invoice
         match action {
             ResolveHoldForwardAction::Settle => {
@@ -918,13 +992,19 @@ impl ILnRpcClient for GatewayLndClient {
                     .settle_hold_invoice(payment_hash.clone(), preimage.clone())
                     .await
                 {
-                    info!(?pretty_hash, "Successfully settled HOLD invoice");
+                    info!(
+                        "Successfully settled HOLD invoice {}",
+                        PrettyPaymentHash(&payment_hash)
+                    );
                     return Ok(EmptyResponse {});
                 }
             }
             _ => {
                 if let Ok(()) = self.cancel_hold_invoice(payment_hash.clone()).await {
-                    info!(?pretty_hash, "Successfully canceled HOLD invoice");
+                    info!(
+                        "Successfully canceled HOLD invoice {}",
+                        PrettyPaymentHash(&payment_hash)
+                    );
                     return Ok(EmptyResponse {});
                 }
             }
@@ -947,6 +1027,7 @@ impl ILnRpcClient for GatewayLndClient {
             return Ok(EmptyResponse {});
         }
 
+        error!("Gatewayd has not started to route HTLCs");
         Err(LightningRpcError::FailedToCompleteHtlc {
             failure_reason: "Gatewayd has not started to route HTLCs".to_string(),
         })
@@ -967,19 +1048,24 @@ impl ILnRpcClient for GatewayLndClient {
         let hold_invoice_request = match description {
             Description::Direct(description) => AddHoldInvoiceRequest {
                 memo: description,
-                hash: create_invoice_request.payment_hash,
+                hash: create_invoice_request.payment_hash.clone(),
                 value_msat: create_invoice_request.amount_msat as i64,
                 expiry: i64::from(create_invoice_request.expiry_secs),
                 ..Default::default()
             },
             Description::Hash(desc_hash) => AddHoldInvoiceRequest {
                 description_hash: desc_hash,
-                hash: create_invoice_request.payment_hash,
+                hash: create_invoice_request.payment_hash.clone(),
                 value_msat: create_invoice_request.amount_msat as i64,
                 expiry: i64::from(create_invoice_request.expiry_secs),
                 ..Default::default()
             },
         };
+
+        self.payment_hashes
+            .write()
+            .await
+            .insert(create_invoice_request.payment_hash);
 
         let hold_invoice_response = client
             .invoices()
@@ -1230,6 +1316,15 @@ fn wire_features_to_lnd_feature_vec(features_wire_encoded: &[u8]) -> anyhow::Res
         .collect::<Vec<_>>();
 
     Ok(lnd_features)
+}
+
+/// Utility struct for logging payment hashes. Useful for debugging.
+struct PrettyPaymentHash<'a>(&'a Vec<u8>);
+
+impl Display for PrettyPaymentHash<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "payment_hash={}", self.0.encode_hex::<String>())
+    }
 }
 
 #[cfg(test)]
