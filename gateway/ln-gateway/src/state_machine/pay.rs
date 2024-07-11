@@ -751,8 +751,7 @@ impl GatewayPayWaitForSwapPreimage {
             .federation_manager
             .read()
             .await
-            .borrow_clients()
-            .get(&federation_id)
+            .client(&federation_id)
             .cloned()
             .ok_or(OutgoingPaymentError {
                 contract_id: contract.contract.contract_id(),

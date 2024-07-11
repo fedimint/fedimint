@@ -736,11 +736,11 @@ impl Gateway {
                                 {
                                     Ok(_) => return Some(ControlFlow::<(), ()>::Continue(())),
                                     Err(e) => {
-                                        info!("Got error intercepting HTLC: {e:?}, will retry...");
+                                        error!("Got error intercepting HTLC: {e:?}, will retry...");
                                     }
                                 }
                             } else {
-                                info!("Got no HTLC result");
+                                error!("Got no HTLC result");
                             }
                             None
                         })
@@ -798,18 +798,15 @@ impl Gateway {
             .expect("Gateway configuration should be set");
 
         // Minimize the time we hold a lock on the federation manager.
+        // TODO(tvolk131): See if we can make this block into a method on
+        // `FederationManager`.
         let (federations, channels) = {
             let federation_manager = self.federation_manager.read().await;
 
-            let mut federations = Vec::new();
-            for (federation_id, client) in federation_manager.borrow_clients().clone() {
-                federations.push(
-                    client
-                        .borrow()
-                        .with(|client| self.make_federation_info(client, federation_id))
-                        .await,
-                );
-            }
+            let dbtx = self.gateway_db.begin_transaction_nc().await;
+            let federations = federation_manager
+                .federation_info_all_federations(dbtx)
+                .await;
 
             (federations, federation_manager.clone_scid_map())
         };
@@ -840,41 +837,34 @@ impl Gateway {
     /// `ClientConfig` for each federation that the Gateway is connected to.
     pub async fn handle_get_federation_config(
         &self,
-        federation_id: Option<FederationId>,
+        federation_id_or: Option<FederationId>,
     ) -> Result<GatewayFedConfig> {
-        if let GatewayState::Running { .. } = self.get_state().await {
+        if !matches!(self.get_state().await, GatewayState::Running { .. }) {
+            return Ok(GatewayFedConfig {
+                federations: BTreeMap::new(),
+            });
+        }
+
+        let federations = if let Some(federation_id) = federation_id_or {
             let mut federations = BTreeMap::new();
-            if let Some(federation_id) = federation_id {
-                let client = self.select_client(federation_id).await?;
-                federations.insert(
-                    federation_id,
-                    client
-                        .borrow()
-                        .with(|client| client.get_config_json())
-                        .await,
-                );
-            } else {
-                for (federation_id, client) in self
-                    .federation_manager
+            federations.insert(
+                federation_id,
+                self.federation_manager
                     .read()
                     .await
-                    .borrow_clients()
-                    .clone()
-                {
-                    federations.insert(
-                        federation_id,
-                        client
-                            .borrow()
-                            .with(|client| client.get_config_json())
-                            .await,
-                    );
-                }
-            }
-            return Ok(GatewayFedConfig { federations });
-        }
-        Ok(GatewayFedConfig {
-            federations: BTreeMap::new(),
-        })
+                    .get_federation_config(federation_id)
+                    .await?,
+            );
+            federations
+        } else {
+            self.federation_manager
+                .read()
+                .await
+                .get_all_federation_configs()
+                .await
+        };
+
+        Ok(GatewayFedConfig { federations })
     }
 
     /// Returns the balance of the requested federation that the Gateway is
@@ -1066,8 +1056,8 @@ impl Gateway {
             .build(gw_client_cfg.clone(), Arc::new(self.clone()))
             .await?;
 
-        // Instead of using `make_federation_info`, we manually create federation info
-        // here because short channel id is not yet persisted
+        // Instead of using `FederationManager::federation_info`, we manually create
+        // federation info here because short channel id is not yet persisted.
         let federation_info = FederationInfo {
             federation_id,
             balance_msat: client.get_balance().await,
@@ -1092,7 +1082,6 @@ impl Gateway {
         // no need to enter span earlier, because connect-fed has a span
         self.federation_manager.write().await.add_client(
             mint_channel_id,
-            federation_id,
             Spanned::new(
                 info_span!("client", federation_id=%federation_id.clone()),
                 async { client },
@@ -1118,29 +1107,13 @@ impl Gateway {
         let _client_joining_lock = self.client_joining_lock.lock().await;
         let mut dbtx = self.gateway_db.begin_transaction().await;
 
-        let federation_info = {
-            let client = self.select_client(payload.federation_id).await?;
-            let federation_info = self
-                .make_federation_info(client.value(), payload.federation_id)
-                .await;
-
-            let keypair = dbtx
-                .get_value(&GatewayPublicKey)
-                .await
-                .expect("Gateway keypair does not exist");
-            client
-                .value()
-                .get_first_module::<GatewayClientModule>()
-                .remove_from_federation(keypair)
-                .await;
-            federation_info
-        };
-
-        self.federation_manager
+        let federation_info = self
+            .federation_manager
             .write()
             .await
-            .remove_client(payload.federation_id)
+            .leave_federation(payload.federation_id, &mut dbtx.to_ref_nc())
             .await?;
+
         dbtx.remove_entry(&FederationIdKey {
             id: payload.federation_id,
         })
@@ -1351,13 +1324,7 @@ impl Gateway {
             }
 
             for (federation_id, federation_config) in federations {
-                if let Some(client) = self
-                    .federation_manager
-                    .read()
-                    .await
-                    .borrow_clients()
-                    .get(federation_id)
-                {
+                if let Some(client) = self.federation_manager.read().await.client(federation_id) {
                     if let Err(e) = async {
                         client
                             .value()
@@ -1436,8 +1403,7 @@ impl Gateway {
         self.federation_manager
             .read()
             .await
-            .borrow_clients()
-            .get(&federation_id)
+            .client(&federation_id)
             .cloned()
             .ok_or(GatewayError::InvalidMetadata(format!(
                 "No federation with id {federation_id}"
@@ -1466,7 +1432,7 @@ impl Gateway {
                 self.federation_manager
                     .write()
                     .await
-                    .add_client(scid, federation_id, client);
+                    .add_client(scid, client);
             } else {
                 warn!("Failed to load client for federation: {federation_id}");
             }
@@ -1523,38 +1489,6 @@ impl Gateway {
         });
     }
 
-    /// Creates the `FederationInfo` struct from a given `federation_id` that is
-    /// used to inform Gateway operators of basic data about their connected
-    /// federations.
-    async fn make_federation_info(
-        &self,
-        client: &ClientHandleArc,
-        federation_id: FederationId,
-    ) -> FederationInfo {
-        let balance_msat = client.get_balance().await;
-        let config = client.config().await;
-        let channel_id = self
-            .federation_manager
-            .read()
-            .await
-            .get_scid_for_federation(federation_id);
-
-        let mut dbtx = self.gateway_db.begin_transaction_nc().await;
-        let federation_key = FederationIdKey { id: federation_id };
-        let routing_fees = dbtx
-            .get_value(&federation_key)
-            .await
-            .map(|config| config.fees.into());
-
-        FederationInfo {
-            federation_id,
-            balance_msat,
-            config,
-            channel_id,
-            routing_fees,
-        }
-    }
-
     /// Verifies that the supplied `network` matches the Bitcoin network in the
     /// connected client's configuration.
     fn check_federation_network(info: &FederationInfo, network: Network) -> Result<()> {
@@ -1596,7 +1530,7 @@ impl Gateway {
 
     /// Iterates through all of the federations the gateway is registered with
     /// and requests to remove the registration record.
-    pub async fn leave_all_federations(&self) {
+    pub async fn unannounce_from_all_federations(&self) {
         let mut dbtx = self.gateway_db.begin_transaction_nc().await;
         let gateway_keypair = dbtx
             .get_value(&GatewayPublicKey)
@@ -1606,7 +1540,7 @@ impl Gateway {
         self.federation_manager
             .read()
             .await
-            .leave_all_federations(gateway_keypair)
+            .unannounce_from_all_federations(gateway_keypair)
             .await;
     }
 }
@@ -1620,8 +1554,7 @@ impl Gateway {
         self.federation_manager
             .read()
             .await
-            .borrow_clients()
-            .get(federation_id)
+            .client(federation_id)
             .map(|client| {
                 client
                     .value()
@@ -1651,8 +1584,7 @@ impl Gateway {
         self.federation_manager
             .read()
             .await
-            .borrow_clients()
-            .get(&federation_id)
+            .client(&federation_id)
             .map(|entry| entry.value().clone())
             .ok_or(anyhow!("Federation client not available"))
     }
