@@ -635,14 +635,12 @@ impl GatewayPayInvoice {
                         return None;
                     }
 
-                    let scid_to_feds = context.gateway.scid_to_federation.read().await;
-                    match scid_to_feds.get(&hop.short_channel_id).copied() {
-                        None => None,
-                        Some(federation_id) => {
-                            let clients = context.gateway.clients.read().await;
-                            clients.get(&federation_id).cloned()
-                        }
-                    }
+                    context
+                        .gateway
+                        .federation_manager
+                        .read()
+                        .await
+                        .get_client_for_scid(hop.short_channel_id)
                 }
                 _ => None,
             },
@@ -750,10 +748,10 @@ impl GatewayPayWaitForSwapPreimage {
         debug!("Waiting preimage for contract {contract:?}");
         let client = context
             .gateway
-            .clients
+            .federation_manager
             .read()
             .await
-            .get(&federation_id)
+            .client(&federation_id)
             .cloned()
             .ok_or(OutgoingPaymentError {
                 contract_id: contract.contract.contract_id(),

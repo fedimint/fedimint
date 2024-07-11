@@ -24,7 +24,7 @@ async fn main() -> Result<(), anyhow::Error> {
     let gatewayd = Gateway::new_with_default_modules().await?;
     let shutdown_receiver = gatewayd.clone().run(&tg).await?;
     shutdown_receiver.await;
-    gatewayd.leave_all_federations().await;
+    gatewayd.unannounce_from_all_federations().await;
     info!("Gatewayd exiting...");
     Ok(())
 }
