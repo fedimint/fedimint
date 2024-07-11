@@ -76,7 +76,7 @@
     .and_then(|res| res)<span class="question-mark">?</span>)
 }
 
-<span class="kw">pub fn </span>store_to_file_with&lt;E, F&gt;(path: <span class="kw-2">&amp;</span>Path, f: F) -&gt; io::Result&lt;<span class="prelude-ty">Result</span>&lt;(), E&gt;&gt;
+<span class="kw">fn </span>store_to_file_with&lt;E, F&gt;(path: <span class="kw-2">&amp;</span>Path, f: F) -&gt; io::Result&lt;<span class="prelude-ty">Result</span>&lt;(), E&gt;&gt;
 <span class="kw">where
     </span>F: Fn(<span class="kw-2">&amp;mut </span><span class="kw">dyn </span>io::Write) -&gt; <span class="prelude-ty">Result</span>&lt;(), E&gt;,
 {

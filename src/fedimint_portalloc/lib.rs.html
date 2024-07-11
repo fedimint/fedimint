@@ -50,68 +50,6 @@
 <a href="#50" id="50">50</a>
 <a href="#51" id="51">51</a>
 <a href="#52" id="52">52</a>
-<a href="#53" id="53">53</a>
-<a href="#54" id="54">54</a>
-<a href="#55" id="55">55</a>
-<a href="#56" id="56">56</a>
-<a href="#57" id="57">57</a>
-<a href="#58" id="58">58</a>
-<a href="#59" id="59">59</a>
-<a href="#60" id="60">60</a>
-<a href="#61" id="61">61</a>
-<a href="#62" id="62">62</a>
-<a href="#63" id="63">63</a>
-<a href="#64" id="64">64</a>
-<a href="#65" id="65">65</a>
-<a href="#66" id="66">66</a>
-<a href="#67" id="67">67</a>
-<a href="#68" id="68">68</a>
-<a href="#69" id="69">69</a>
-<a href="#70" id="70">70</a>
-<a href="#71" id="71">71</a>
-<a href="#72" id="72">72</a>
-<a href="#73" id="73">73</a>
-<a href="#74" id="74">74</a>
-<a href="#75" id="75">75</a>
-<a href="#76" id="76">76</a>
-<a href="#77" id="77">77</a>
-<a href="#78" id="78">78</a>
-<a href="#79" id="79">79</a>
-<a href="#80" id="80">80</a>
-<a href="#81" id="81">81</a>
-<a href="#82" id="82">82</a>
-<a href="#83" id="83">83</a>
-<a href="#84" id="84">84</a>
-<a href="#85" id="85">85</a>
-<a href="#86" id="86">86</a>
-<a href="#87" id="87">87</a>
-<a href="#88" id="88">88</a>
-<a href="#89" id="89">89</a>
-<a href="#90" id="90">90</a>
-<a href="#91" id="91">91</a>
-<a href="#92" id="92">92</a>
-<a href="#93" id="93">93</a>
-<a href="#94" id="94">94</a>
-<a href="#95" id="95">95</a>
-<a href="#96" id="96">96</a>
-<a href="#97" id="97">97</a>
-<a href="#98" id="98">98</a>
-<a href="#99" id="99">99</a>
-<a href="#100" id="100">100</a>
-<a href="#101" id="101">101</a>
-<a href="#102" id="102">102</a>
-<a href="#103" id="103">103</a>
-<a href="#104" id="104">104</a>
-<a href="#105" id="105">105</a>
-<a href="#106" id="106">106</a>
-<a href="#107" id="107">107</a>
-<a href="#108" id="108">108</a>
-<a href="#109" id="109">109</a>
-<a href="#110" id="110">110</a>
-<a href="#111" id="111">111</a>
-<a href="#112" id="112">112</a>
-<a href="#113" id="113">113</a>
-<a href="#114" id="114">114</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! A library for cooperative port allocation between multiple processes.
 //!
 //! Fedimint tests in many places need to allocate ranges of unused ports for
@@ -129,35 +67,33 @@
 //! a shared file, protected by an advisory fs lock, and uses `bind` to make
 //! sure a given port is actually free
 
-</span><span class="kw">pub mod </span>data;
-<span class="kw">pub mod </span>envs;
-<span class="kw">pub mod </span>util;
+</span><span class="kw">mod </span>data;
+<span class="kw">mod </span>envs;
+<span class="kw">mod </span>util;
 
-<span class="kw">use </span>std::net::TcpListener;
 <span class="kw">use </span>std::path::PathBuf;
 
-<span class="comment">// ports below 10k are typically used by normal software increasing change they
-// would get in a way
-</span><span class="kw">pub const </span>LOW: u16 = <span class="number">10000</span>;
-<span class="comment">// ports above 32k are typically ephmeral increasing a chance of random conflict
-// after port was already tried
-</span><span class="kw">pub const </span>HIGH: u16 = <span class="number">32000</span>;
-
 <span class="kw">use </span>anyhow::bail;
-<span class="kw">use </span>tracing::{debug, trace, warn};
 
 <span class="kw">use </span><span class="kw">crate</span>::data::DataDir;
 <span class="kw">use </span><span class="kw">crate</span>::envs::FM_PORTALLOC_DATA_DIR_ENV;
 
-<span class="kw">const </span>LOG_PORT_ALLOC: <span class="kw-2">&amp;</span>str = <span class="string">"port-alloc"</span>;
+<span class="kw">pub fn </span>port_alloc(range_size: u16) -&gt; anyhow::Result&lt;u16&gt; {
+    <span class="kw">if </span>range_size == <span class="number">0 </span>{
+        <span class="macro">bail!</span>(<span class="string">"Can't allocate range of 0 ports"</span>);
+    }
 
-<span class="kw">type </span>UnixTimestamp = u64;
+    <span class="kw">let </span><span class="kw-2">mut </span>data_dir = DataDir::new(data_dir()<span class="question-mark">?</span>)<span class="question-mark">?</span>;
 
-<span class="kw">pub fn </span>now_ts() -&gt; UnixTimestamp {
-    fedimint_core::time::duration_since_epoch().as_secs()
+    data_dir.with_lock(|data_dir| {
+        <span class="kw">let </span><span class="kw-2">mut </span>data = data_dir.load_data()<span class="question-mark">?</span>;
+        <span class="kw">let </span>base_port = data.get_free_port_range(range_size);
+        data_dir.store_data(<span class="kw-2">&amp;</span>data)<span class="question-mark">?</span>;
+        <span class="prelude-val">Ok</span>(base_port)
+    })
 }
 
-<span class="kw">pub fn </span>data_dir() -&gt; anyhow::Result&lt;PathBuf&gt; {
+<span class="kw">fn </span>data_dir() -&gt; anyhow::Result&lt;PathBuf&gt; {
     <span class="kw">if let </span><span class="prelude-val">Some</span>(env) = std::env::var_os(FM_PORTALLOC_DATA_DIR_ENV) {
         <span class="prelude-val">Ok</span>(PathBuf::from(env))
     } <span class="kw">else if let </span><span class="prelude-val">Some</span>(dir) = dirs::cache_dir() {
@@ -165,65 +101,5 @@
     } <span class="kw">else </span>{
         <span class="macro">bail!</span>(<span class="string">"Could not determine port alloc data dir. Try setting FM_PORTALLOC_DATA_DIR"</span>);
     }
-}
-<span class="kw">pub fn </span>port_alloc(range_size: u16) -&gt; anyhow::Result&lt;u16&gt; {
-    <span class="macro">trace!</span>(target: LOG_PORT_ALLOC, range_size, <span class="string">"Looking for port"</span>);
-    <span class="kw">if </span>range_size == <span class="number">0 </span>{
-        <span class="macro">bail!</span>(<span class="string">"Can't allocate range of 0 bytes"</span>);
-    }
-
-    <span class="kw">let </span><span class="kw-2">mut </span>data_dir = DataDir::new(data_dir()<span class="question-mark">?</span>)<span class="question-mark">?</span>;
-
-    data_dir.with_lock(|data_dir| {
-        <span class="kw">let </span><span class="kw-2">mut </span>data = data_dir.load_data(now_ts())<span class="question-mark">?</span>;
-        <span class="kw">let </span><span class="kw-2">mut </span>base_port: u16 = data.next;
-        <span class="prelude-val">Ok</span>(<span class="lifetime">'retry</span>: <span class="kw">loop </span>{
-            <span class="macro">trace!</span>(target: LOG_PORT_ALLOC, base_port, range_size, <span class="string">"Checking a port"</span>);
-            <span class="kw">if </span>HIGH &lt; base_port {
-                data = data.reclaim(now_ts());
-                base_port = LOW;
-            }
-            <span class="kw">let </span>range = base_port..base_port + range_size;
-            <span class="kw">if let </span><span class="prelude-val">Some</span>(next_port) = data.contains(range.clone()) {
-                <span class="macro">warn!</span>(
-                    base_port,
-                    range_size,
-                    <span class="string">"Could not use a port (already reserved). Will try a different range."
-                </span>);
-                base_port = next_port;
-                <span class="kw">continue </span><span class="lifetime">'retry</span>;
-            }
-
-            <span class="kw">for </span>port <span class="kw">in </span>range.clone() {
-                <span class="kw">match </span>TcpListener::bind((<span class="string">"127.0.0.1"</span>, port)) {
-                    <span class="prelude-val">Err</span>(error) =&gt; {
-                        <span class="macro">warn!</span>(
-                            <span class="question-mark">?</span>error,
-                            port, <span class="string">"Could not use a port. Will try a different range"
-                        </span>);
-                        base_port = port + <span class="number">1</span>;
-                        <span class="kw">continue </span><span class="lifetime">'retry</span>;
-                    }
-                    <span class="prelude-val">Ok</span>(l) =&gt; l,
-                };
-            }
-
-            <span class="kw">const </span>ALLOCATION_TIME_SECS: u64 = <span class="number">120</span>;
-
-            <span class="comment">// The caller gets some time actually start using the port (`bind`),
-            // to prevent other callers from re-using it. This could typically be
-            // much shorter, as portalloc will not only respect the allocation,
-            // but also try to bind before using a given port range. But for tests
-            // that temporarily release ports (e.g. restarts, failure simulations, etc.),
-            // there's a chance that this can expire and another tests snatches the test,
-            // so better to keep it around the time a longest test can take.
-            </span>data.insert(range, now_ts() + ALLOCATION_TIME_SECS);
-
-            data_dir.store_data(<span class="kw-2">&amp;</span>data)<span class="question-mark">?</span>;
-
-            <span class="macro">debug!</span>(target: LOG_PORT_ALLOC, base_port, range_size, <span class="string">"Allocated port range"</span>);
-            <span class="kw">break </span>base_port;
-        })
-    })
 }
 </code></pre></div></section></main></body></html>
