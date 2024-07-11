@@ -81,7 +81,7 @@ async fn test_self_payment(dev_fed: &DevJitFed) -> anyhow::Result<()> {
 
 async fn fetch_invoice(
     client: &Client,
-    gw_address: &String,
+    gw_address: &str,
 ) -> anyhow::Result<(Bolt11Invoice, OperationId)> {
     Ok(serde_json::from_value::<(Bolt11Invoice, OperationId)>(
         cmd!(
@@ -89,7 +89,7 @@ async fn fetch_invoice(
             "module",
             "lnv2",
             "receive",
-            gw_address.clone(),
+            gw_address.to_owned(),
             "1000000"
         )
         .out_json()
