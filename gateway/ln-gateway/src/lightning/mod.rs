@@ -8,6 +8,7 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use bitcoin::Network;
 use clap::Subcommand;
+use fedimint_core::db::Database;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::secp256k1::PublicKey;
 use fedimint_core::task::TaskGroup;
@@ -247,6 +248,7 @@ pub trait LightningBuilder {
 #[derive(Clone)]
 pub struct GatewayLightningBuilder {
     pub lightning_mode: LightningMode,
+    pub gateway_db: Database,
 }
 
 #[async_trait]
@@ -265,6 +267,7 @@ impl LightningBuilder for GatewayLightningBuilder {
                 lnd_tls_cert,
                 lnd_macaroon,
                 None,
+                self.gateway_db.clone(),
             )),
         }
     }
