@@ -62,7 +62,9 @@ async fn user_pay_invoice(
     gateway_id: &PublicKey,
 ) -> anyhow::Result<OutgoingLightningPayment> {
     let gateway = ln_module.select_gateway(gateway_id).await;
-    ln_module.pay_bolt11_invoice(gateway, invoice, ()).await
+    ln_module
+        .pay_bolt11_invoice(gateway, invoice, None, ())
+        .await
 }
 
 fn fixtures() -> Fixtures {
@@ -138,7 +140,10 @@ fn sha256(data: &[u8]) -> sha256::Hash {
 fn get_payment_data(gateway: Option<LightningGateway>, invoice: Bolt11Invoice) -> PaymentData {
     match gateway {
         Some(g) if g.supports_private_payments => {
-            let pruned_invoice: PrunedInvoice = invoice.try_into().expect("Invoice has amount");
+            let pruned_invoice = PrunedInvoice::new(
+                &invoice,
+                Amount::from_msats(invoice.amount_milli_satoshis().expect("Invoice has amount")),
+            );
             PaymentData::PrunedInvoice(pruned_invoice)
         }
         _ => PaymentData::Invoice(invoice),
@@ -278,7 +283,7 @@ async fn test_gateway_enforces_fees() -> anyhow::Result<()> {
                 contract_id,
                 fee: _,
             } = user_lightning_module
-                .pay_bolt11_invoice(ln_gateway.clone(), invoice.clone(), ())
+                .pay_bolt11_invoice(ln_gateway.clone(), invoice.clone(), None, ())
                 .await
                 .expect("No Lightning Payment was started");
             match payment_type {

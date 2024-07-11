@@ -99,7 +99,9 @@ pub(crate) async fn handle_cli_command(
                 payment_type,
                 contract_id,
                 fee,
-            } = module.pay_bolt11_invoice(ln_gateway, bolt11, ()).await?;
+            } = module
+                .pay_bolt11_invoice(ln_gateway, bolt11, amount, ())
+                .await?;
             let operation_id = payment_type.operation_id();
             info!(
                 "Gateway fee: {fee}, payment operation id: {}",

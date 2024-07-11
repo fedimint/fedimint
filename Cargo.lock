@@ -1801,6 +1801,7 @@ dependencies = [
  "fedimint-logging",
  "futures",
  "itertools 0.12.1",
+ "lightning",
  "lightning-invoice",
  "lnurl-rs",
  "rand",

@@ -654,6 +654,8 @@ pub async fn ln_operation(
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Decodable, Encodable)]
 pub struct PrunedInvoice {
     pub amount: Amount,
+    /// Used if doing a partial payment of an invoice, otherwise `None`
+    pub send_amount: Option<Amount>,
     pub destination: secp256k1::PublicKey,
     /// Wire-format encoding of feature bit vector
     #[serde(with = "fedimint_core::hex::serde", default)]
@@ -682,8 +684,21 @@ impl PrunedInvoice {
             vec![]
         };
 
+        // If the invoice amount is the same as the requested amount, we don't
+        // need to send the amount in the invoice. Otherwise, we need to set the send
+        // amount, so we can properly create the HTLC onion.
+        let send_amount = if invoice
+            .amount_milli_satoshis()
+            .is_some_and(|msat| msat == amount.msats)
+        {
+            None
+        } else {
+            Some(amount)
+        };
+
         PrunedInvoice {
             amount,
+            send_amount,
             destination: invoice
                 .payee_pub_key()
                 .copied()

@@ -207,7 +207,7 @@ mod tests {
             contract_id: _,
             fee: _,
         } = lightning_module
-            .pay_bolt11_invoice(Some(ln_gateway), bolt11.parse()?, ())
+            .pay_bolt11_invoice(Some(ln_gateway), bolt11.parse()?, None, ())
             .await?;
         let PayType::Lightning(operation_id) = payment_type else {
             unreachable!("paying invoice over lightning");

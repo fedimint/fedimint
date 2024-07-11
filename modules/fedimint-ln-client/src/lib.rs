@@ -79,6 +79,7 @@ use fedimint_ln_common::{
 use fedimint_logging::LOG_CLIENT_MODULE_LN;
 use futures::{Future, StreamExt};
 use incoming::IncomingSmError;
+use lightning::ln::features::Features;
 use lightning_invoice::{
     Bolt11Invoice, Currency, InvoiceBuilder, PaymentSecret, RouteHint, RouteHintHop, RoutingFees,
 };
@@ -247,6 +248,7 @@ pub struct LightningOperationMetaPay {
     pub is_internal_payment: bool,
     pub contract_id: ContractId,
     pub gateway_id: Option<secp256k1::PublicKey>,
+    pub amount: Option<Amount>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -284,7 +286,7 @@ impl Default for LightningClientInit {
 
 impl ModuleInit for LightningClientInit {
     type Common = LightningCommonInit;
-    const DATABASE_VERSION: DatabaseVersion = DatabaseVersion(4);
+    const DATABASE_VERSION: DatabaseVersion = DatabaseVersion(5);
 
     async fn dump_database(
         &self,
@@ -376,6 +378,15 @@ impl ClientModuleInit for LightningClientInit {
             })
         });
 
+        migrations.insert(
+            DatabaseVersion(4),
+            move |_, active_states, inactive_states| {
+                Box::pin(async {
+                    migrate_state(active_states, inactive_states, db::get_v4_migrated_state)
+                })
+            },
+        );
+
         migrations
     }
 }
@@ -462,7 +473,7 @@ impl ClientModule for LightningClientModule {
                 "pay_bolt11_invoice" => {
                     let req: PayBolt11InvoiceRequest = serde_json::from_value(payload)?;
                     let outgoing_payment = self
-                        .pay_bolt11_invoice(req.maybe_gateway, req.invoice, req.extra_meta)
+                        .pay_bolt11_invoice(req.maybe_gateway, req.invoice, None, req.extra_meta)
                         .await?;
                     yield serde_json::to_value(outgoing_payment)?;
                 }
@@ -541,6 +552,12 @@ pub enum PayBolt11InvoiceError {
     NoLnGatewayAvailable,
     #[error("Funded contract already exists: {}", .contract_id)]
     FundedContractAlreadyExists { contract_id: ContractId },
+    #[error("Cannot do internal payment with custom amount specified")]
+    InternalPartialPayment,
+    #[error("Invoice must support basic mpp to pay a custom amount")]
+    MppNotSupported,
+    #[error("Gateway does not support private/partial payments")]
+    PrivatePaymentsNotSupported,
 }
 
 impl LightningClientModule {
@@ -620,6 +637,7 @@ impl LightningClientModule {
         &'a self,
         operation_id: OperationId,
         invoice: Bolt11Invoice,
+        override_amount: Option<Amount>,
         gateway: LightningGateway,
         fed_id: FederationId,
         mut rng: impl RngCore + CryptoRng + 'a,
@@ -636,6 +654,15 @@ impl LightningClientModule {
             invoice_currency
         );
 
+        let invoice_amount = invoice
+            .amount_milli_satoshis()
+            .context("MissingInvoiceAmount")?;
+
+        ensure!(
+            override_amount.is_none() || override_amount.unwrap().msats <= invoice_amount,
+            "Amount must be less than or equal to invoice amount"
+        );
+
         // Do not create the funding transaction if the gateway is not currently
         // available
         self.gateway_conn
@@ -650,14 +677,10 @@ impl LightningClientModule {
         let absolute_timelock = consensus_count + OUTGOING_LN_CONTRACT_TIMELOCK - 1;
 
         // Compute amount to lock in the outgoing contract
-        let invoice_amount = Amount::from_msats(
-            invoice
-                .amount_milli_satoshis()
-                .context("MissingInvoiceAmount")?,
-        );
+        let amount = override_amount.unwrap_or(Amount::from_msats(invoice_amount));
 
-        let gateway_fee = gateway.fees.to_amount(&invoice_amount);
-        let contract_amount = invoice_amount + gateway_fee;
+        let gateway_fee = gateway.fees.to_amount(&amount);
+        let contract_amount = amount + gateway_fee;
 
         let user_sk = KeyPair::new(&self.secp, &mut rng);
 
@@ -690,6 +713,7 @@ impl LightningClientModule {
                         gateway_fee,
                         preimage_auth,
                         invoice: invoice.clone(),
+                        amount: override_amount,
                     },
                     state: LightningPayStates::CreatedOutgoingLnContract(
                         LightningPayCreatedOutgoingLnContract {
@@ -1031,6 +1055,7 @@ impl LightningClientModule {
         &self,
         maybe_gateway: Option<LightningGateway>,
         invoice: Bolt11Invoice,
+        amount: Option<Amount>,
         extra_meta: M,
     ) -> anyhow::Result<OutgoingLightningPayment> {
         let mut dbtx = self.client_ctx.module_db().begin_transaction().await;
@@ -1086,17 +1111,40 @@ impl LightningClientModule {
             is_internal_payment = invoice_routes_back_to_federation(&invoice, gateways);
         }
 
+        // make sure the invoice amount is set
+        let invoice_amount = invoice
+            .amount_milli_satoshis()
+            .ok_or(anyhow!("MissingInvoiceAmount"))?;
+
         let (pay_type, client_output, contract_id) = if is_internal_payment {
+            if amount.is_some_and(|a| a.msats != invoice_amount) {
+                bail!(PayBolt11InvoiceError::InternalPartialPayment);
+            }
+
             let (output, contract_id) = self
                 .create_incoming_output(operation_id, invoice.clone())
                 .await?;
             (PayType::Internal(operation_id), output, contract_id)
         } else {
             let gateway = maybe_gateway.context(PayBolt11InvoiceError::NoLnGatewayAvailable)?;
+
+            if amount.is_some_and(|a| a.msats != invoice_amount)
+                && !invoice.features().is_some_and(Features::supports_basic_mpp)
+            {
+                bail!(PayBolt11InvoiceError::MppNotSupported);
+            }
+
+            if amount.is_some_and(|a| a.msats != invoice_amount)
+                && !gateway.supports_private_payments
+            {
+                bail!(PayBolt11InvoiceError::PrivatePaymentsNotSupported);
+            }
+
             let (output, contract_id) = self
                 .create_outgoing_output(
                     operation_id,
                     invoice.clone(),
+                    amount,
                     gateway,
                     self.client_ctx
                         .get_config()
@@ -1120,15 +1168,12 @@ impl LightningClientModule {
         // it/bounds for it
         let fee = match &client_output.output {
             LightningOutputV0::Contract(contract) => {
+                let amt = amount.map_or(invoice_amount, |a| a.msats);
                 let fee_msat = contract
                     .amount
                     .msats
-                    .checked_sub(
-                        invoice
-                            .amount_milli_satoshis()
-                            .ok_or(anyhow!("MissingInvoiceAmount"))?,
-                    )
-                    .expect("Contract amount should be greater or equal than invoice amount");
+                    .checked_sub(amt)
+                    .expect("Contract amount should be greater or equal than spending amount");
                 Amount::from_msats(fee_msat)
             }
             _ => unreachable!("User client will only create contract outputs on spend"),
@@ -1152,6 +1197,7 @@ impl LightningClientModule {
                 is_internal_payment,
                 contract_id,
                 gateway_id: maybe_gateway_id,
+                amount,
             }),
             extra_meta: extra_meta.clone(),
         };
