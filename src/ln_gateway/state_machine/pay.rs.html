@@ -918,8 +918,6 @@
 <a href="#918" id="918">918</a>
 <a href="#919" id="919">919</a>
 <a href="#920" id="920">920</a>
-<a href="#921" id="921">921</a>
-<a href="#922" id="922">922</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::fmt::Display;
 <span class="kw">use </span>std::sync::Arc;
 
@@ -1557,14 +1555,12 @@
                         <span class="kw">return </span><span class="prelude-val">None</span>;
                     }
 
-                    <span class="kw">let </span>scid_to_feds = context.gateway.scid_to_federation.read().<span class="kw">await</span>;
-                    <span class="kw">match </span>scid_to_feds.get(<span class="kw-2">&amp;</span>hop.short_channel_id).copied() {
-                        <span class="prelude-val">None </span>=&gt; <span class="prelude-val">None</span>,
-                        <span class="prelude-val">Some</span>(federation_id) =&gt; {
-                            <span class="kw">let </span>clients = context.gateway.clients.read().<span class="kw">await</span>;
-                            clients.get(<span class="kw-2">&amp;</span>federation_id).cloned()
-                        }
-                    }
+                    context
+                        .gateway
+                        .federation_manager
+                        .read()
+                        .<span class="kw">await
+                        </span>.get_client_for_scid(hop.short_channel_id)
                 }
                 <span class="kw">_ </span>=&gt; <span class="prelude-val">None</span>,
             },
@@ -1672,10 +1668,10 @@
         <span class="macro">debug!</span>(<span class="string">"Waiting preimage for contract {contract:?}"</span>);
         <span class="kw">let </span>client = context
             .gateway
-            .clients
+            .federation_manager
             .read()
             .<span class="kw">await
-            </span>.get(<span class="kw-2">&amp;</span>federation_id)
+            </span>.client(<span class="kw-2">&amp;</span>federation_id)
             .cloned()
             .ok_or(OutgoingPaymentError {
                 contract_id: contract.contract.contract_id(),
