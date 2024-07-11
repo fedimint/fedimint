@@ -1745,6 +1745,10 @@ impl Gateway {
             bail!("The outgoing contract keyed to another gateway");
         }
 
+        if payload.contract.commitment.amount == Amount::ZERO {
+            bail!("Zero amount incoming contracts are not supported");
+        }
+
         let contract_amount = payment_info
             .receive_fee
             .subtract_fee(payload.invoice_amount.msats);

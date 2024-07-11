@@ -90,7 +90,7 @@ async fn fetch_invoice(
             "lnv2",
             "receive",
             gw_address.clone(),
-            "1000"
+            "1000000"
         )
         .out_json()
         .await?,
