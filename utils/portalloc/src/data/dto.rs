@@ -89,19 +89,9 @@ impl RootData {
                 };
             }
 
-            const ALLOCATION_TIME_SECS: u64 = 120;
-
-            // The caller gets some time actually start using the port (`bind`),
-            // to prevent other callers from re-using it. This could typically be
-            // much shorter, as portalloc will not only respect the allocation,
-            // but also try to bind before using a given port range. But for tests
-            // that temporarily release ports (e.g. restarts, failure simulations, etc.),
-            // there's a chance that this can expire and another tests snatches the test,
-            // so better to keep it around the time a longest test can take.
-            self.insert(range, Self::now_ts() + ALLOCATION_TIME_SECS);
-
+            self.insert(range);
             debug!(target: LOG_PORT_ALLOC, base_port, range_size, "Allocated port range");
-            break base_port;
+            return base_port;
         }
     }
 
@@ -127,13 +117,23 @@ impl RootData {
         })
     }
 
-    fn insert(&mut self, range: std::ops::Range<u16>, now_ts: u64) {
+    fn insert(&mut self, range: std::ops::Range<u16>) {
+        const ALLOCATION_TIME_SECS: u64 = 120;
+
+        // The caller gets some time actually start using the port (`bind`),
+        // to prevent other callers from re-using it. This could typically be
+        // much shorter, as portalloc will not only respect the allocation,
+        // but also try to bind before using a given port range. But for tests
+        // that temporarily release ports (e.g. restarts, failure simulations, etc.),
+        // there's a chance that this can expire and another tests snatches the test,
+        // so better to keep it around the time a longest test can take.
+
         assert!(self.contains(range.clone()).is_none());
         self.keys.insert(
             range.start,
             RangeData {
                 size: range.len() as u16,
-                expires: now_ts,
+                expires: Self::now_ts() + ALLOCATION_TIME_SECS,
             },
         );
         self.next = range.end;
@@ -148,9 +148,9 @@ impl RootData {
 fn root_data_sanity() {
     let mut r = RootData::default();
 
-    r.insert(2..4, 0);
-    r.insert(6..8, 0);
-    r.insert(100..108, 0);
+    r.insert(2..4);
+    r.insert(6..8);
+    r.insert(100..108);
     assert_eq!(r.contains(0..2), None);
     assert_eq!(r.contains(0..3), Some(4));
     assert_eq!(r.contains(2..4), Some(4));
