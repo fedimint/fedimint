@@ -165,20 +165,13 @@ async fn test_lightning_payment(dev_fed: &DevJitFed) -> anyhow::Result<()> {
 
 async fn fetch_invoice(
     client: &Client,
-    gw_address: &String,
+    gw_address: &str,
     amount: u64,
 ) -> anyhow::Result<(Bolt11Invoice, OperationId)> {
     Ok(serde_json::from_value::<(Bolt11Invoice, OperationId)>(
-        cmd!(
-            client,
-            "module",
-            "lnv2",
-            "receive",
-            gw_address.clone(),
-            amount,
-        )
-        .out_json()
-        .await?,
+        cmd!(client, "module", "lnv2", "receive", gw_address, amount,)
+            .out_json()
+            .await?,
     )?)
 }
 

@@ -168,7 +168,7 @@ impl Fixtures {
             Arc::new(FakeLightningBuilder);
 
         // Module tests do not use the webserver, so any port is ok
-        let listen: SocketAddr = format!("127.0.0.1:9000").parse().unwrap();
+        let listen: SocketAddr = "127.0.0.1:9000".parse().unwrap();
         let address: SafeUrl = format!("http://{listen}").parse().unwrap();
 
         let ln_client: Arc<dyn ILnRpcClient> = lightning_builder.build().await.into();
@@ -183,7 +183,7 @@ impl Fixtures {
             lightning_network,
         };
 
-        let gateway = Gateway::new_with_custom_registry(
+        Gateway::new_with_custom_registry(
             lightning_builder,
             client_builder,
             listen,
@@ -202,9 +202,7 @@ impl Fixtures {
             ln_gateway::GatewayState::Running { lightning_context },
         )
         .await
-        .expect("Failed to create gateway");
-
-        gateway
+        .expect("Failed to create gateway")
     }
 
     /// Get a server bitcoin RPC config
