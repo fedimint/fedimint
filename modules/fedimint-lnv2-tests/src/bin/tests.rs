@@ -32,7 +32,11 @@ async fn main() -> anyhow::Result<()> {
             return Ok(());
         }
 
-        test_self_payment(&dev_fed).await?;
+        // TODO: test refund of payment between gateways - the refund works but it
+        // causes the second payment between gateways which should be successful to
+        // also be refunded but only in CI
+
+        test_self_payment_success(&dev_fed).await?;
 
         test_gateway_registration(&dev_fed).await?;
 
@@ -43,43 +47,36 @@ async fn main() -> anyhow::Result<()> {
     .await
 }
 
-async fn test_self_payment(dev_fed: &DevJitFed) -> anyhow::Result<()> {
+async fn test_self_payment_success(dev_fed: &DevJitFed) -> anyhow::Result<()> {
     let federation = dev_fed.fed().await?;
 
-    let client = federation.new_joined_client("lnv2-module-client").await?;
+    let client = federation
+        .new_joined_client("lnv2-self-payment-success-client")
+        .await?;
 
     federation.pegin_client(10_000, &client).await?;
 
     let gw_lnd = dev_fed.gw_lnd().await?;
     let gw_cln = dev_fed.gw_cln().await?;
 
-    // TODO: test refund of payment between gateways - the refund works but it
-    // causes the second payment between gateways which should be successful to
-    // also be refunded but only in CI
-
-    let inv_lnd = fetch_invoice(&client, &gw_lnd.addr, 1_000_000).await?.0;
-
-    // payment will be refunded due to insufficient liquidity
-
-    test_send(&client, &gw_lnd.addr, &inv_lnd, FinalSendState::Refunded).await?;
-
-    // only now pegin sufficient liquidity for the second payment attempts
-
     federation.pegin_gateway(1_000_000, gw_lnd).await?;
     federation.pegin_gateway(1_000_000, gw_cln).await?;
 
-    let (inv_lnd, receive_op_lnd) = fetch_invoice(&client, &gw_lnd.addr, 1_000_000).await?;
-    let (inv_cln, receive_op_cln) = fetch_invoice(&client, &gw_cln.addr, 1_000_000).await?;
+    for (gw_receive, gw_send) in [
+        (gw_lnd.addr.clone(), gw_lnd.addr.clone()),
+        (gw_lnd.addr.clone(), gw_cln.addr.clone()),
+        (gw_cln.addr.clone(), gw_lnd.addr.clone()),
+        (gw_cln.addr.clone(), gw_cln.addr.clone()),
+    ] {
+        let (invoice, receive_op) = fetch_invoice(&client, &gw_receive, 1_000_000).await?;
 
-    // payments will be successful since the gateways now have sufficient liquidity
+        test_send(&client, &gw_send, &invoice, FinalSendState::Success).await?;
 
-    test_send(&client, &gw_lnd.addr, &inv_lnd, FinalSendState::Success).await?;
-    test_send(&client, &gw_lnd.addr, &inv_cln, FinalSendState::Success).await?;
-
-    await_receive_claimed(&client, receive_op_lnd).await?;
-    await_receive_claimed(&client, receive_op_cln).await?;
+        await_receive_claimed(&client, receive_op).await?;
+    }
 
     info!("test_self_payment successful");
+
     Ok(())
 }
 
