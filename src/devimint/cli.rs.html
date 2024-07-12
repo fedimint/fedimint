@@ -464,6 +464,11 @@
 <a href="#464" id="464">464</a>
 <a href="#465" id="465">465</a>
 <a href="#466" id="466">466</a>
+<a href="#467" id="467">467</a>
+<a href="#468" id="468">468</a>
+<a href="#469" id="469">469</a>
+<a href="#470" id="470">470</a>
+<a href="#471" id="471">471</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::ffi;
 <span class="kw">use </span>std::fmt::Write;
 <span class="kw">use </span>std::ops::ControlFlow;
@@ -791,9 +796,14 @@
         Cmd::Rpc(rpc_cmd) =&gt; rpc_command(rpc_cmd, common_args).<span class="kw">await</span><span class="question-mark">?</span>,
         Cmd::RunUi =&gt; {
             <span class="kw">let </span>(process_mgr, task_group) = setup(common_args).<span class="kw">await</span><span class="question-mark">?</span>;
+            <span class="kw">let </span>task_group_clone = task_group.clone();
             <span class="kw">let </span>main = <span class="kw">async </span>{
                 <span class="kw">let </span>result = run_ui(<span class="kw-2">&amp;</span>process_mgr).<span class="kw">await</span>;
                 <span class="kw">let </span>daemons = write_ready_file(<span class="kw-2">&amp;</span>process_mgr.globals, result).<span class="kw">await</span><span class="question-mark">?</span>;
+
+                <span class="macro">debug!</span>(target: LOG_DEVIMINT, <span class="string">"Waiting for group task shutdown"</span>);
+                task_group_clone.make_handle().make_shutdown_rx().<span class="kw">await</span>;
+
                 <span class="prelude-val">Ok</span>::&lt;<span class="kw">_</span>, anyhow::Error&gt;(daemons)
             };
             Box::pin(cleanup_on_exit(main, task_group)).<span class="kw">await</span><span class="question-mark">?</span>;
