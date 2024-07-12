@@ -521,6 +521,38 @@
 <a href="#521" id="521">521</a>
 <a href="#522" id="522">522</a>
 <a href="#523" id="523">523</a>
+<a href="#524" id="524">524</a>
+<a href="#525" id="525">525</a>
+<a href="#526" id="526">526</a>
+<a href="#527" id="527">527</a>
+<a href="#528" id="528">528</a>
+<a href="#529" id="529">529</a>
+<a href="#530" id="530">530</a>
+<a href="#531" id="531">531</a>
+<a href="#532" id="532">532</a>
+<a href="#533" id="533">533</a>
+<a href="#534" id="534">534</a>
+<a href="#535" id="535">535</a>
+<a href="#536" id="536">536</a>
+<a href="#537" id="537">537</a>
+<a href="#538" id="538">538</a>
+<a href="#539" id="539">539</a>
+<a href="#540" id="540">540</a>
+<a href="#541" id="541">541</a>
+<a href="#542" id="542">542</a>
+<a href="#543" id="543">543</a>
+<a href="#544" id="544">544</a>
+<a href="#545" id="545">545</a>
+<a href="#546" id="546">546</a>
+<a href="#547" id="547">547</a>
+<a href="#548" id="548">548</a>
+<a href="#549" id="549">549</a>
+<a href="#550" id="550">550</a>
+<a href="#551" id="551">551</a>
+<a href="#552" id="552">552</a>
+<a href="#553" id="553">553</a>
+<a href="#554" id="554">554</a>
+<a href="#555" id="555">555</a>
 </pre></div><pre class="rust"><code><span class="kw">mod </span>metrics;
 
 <span class="kw">use </span>std::collections::BTreeMap;
@@ -528,7 +560,7 @@
 <span class="kw">use </span>std::path::PathBuf;
 <span class="kw">use </span>std::time::Duration;
 
-<span class="kw">use </span>anyhow::{format_err, Context};
+<span class="kw">use </span>anyhow::{bail, format_err, Context};
 <span class="kw">use </span>clap::{Parser, Subcommand};
 <span class="kw">use </span>fedimint_core::admin_client::ConfigGenParamsRequest;
 <span class="kw">use </span>fedimint_core::config::{
@@ -562,7 +594,7 @@
 };
 <span class="kw">use </span>fedimint_wallet_server::WalletInit;
 <span class="kw">use </span>futures::FutureExt;
-<span class="kw">use </span>tracing::{debug, error, info};
+<span class="kw">use </span>tracing::{debug, error, info, warn};
 
 <span class="kw">use </span><span class="kw">crate</span>::default_esplora_server;
 <span class="kw">use </span><span class="kw">crate</span>::envs::{
@@ -738,6 +770,7 @@
         </span>);
 
         handle_version_hash_command(code_version_hash);
+        check_release_notes_ack()<span class="question-mark">?</span>;
 
         <span class="kw">let </span>fedimint_version = <span class="macro">env!</span>(<span class="string">"CARGO_PKG_VERSION"</span>);
 
@@ -985,6 +1018,37 @@
                 .collect(),
         }
     }
+}
+
+<span class="kw">fn </span>check_release_notes_ack() -&gt; anyhow::Result&lt;()&gt; {
+    <span class="kw">const </span>VERSION: <span class="kw-2">&amp;</span>str = <span class="string">"v0.4"</span>;
+    <span class="kw">const </span>FM_SKIP_REL_NOTES_ACK_ENV: <span class="kw-2">&amp;</span>str = <span class="string">"FM_SKIP_REL_NOTES_ACK"</span>;
+    <span class="kw">const </span>FM_REL_NOTES_ACK_ENV: <span class="kw-2">&amp;</span>str = <span class="string">"FM_REL_NOTES_ACK"</span>;
+    <span class="comment">// the suffix here is to prevent people getting to smart and trying to
+    // automate-it-out change it for every release
+    </span><span class="kw">const </span>FM_REL_NOTES_CUR_VAL: <span class="kw-2">&amp;</span>str = <span class="string">"0_4_xyz"</span>;
+
+    <span class="comment">// This is here only for upgrade tests and other automated tests, where
+    // juggling different values might be impossible.
+    </span><span class="kw">if </span>is_env_var_set(FM_SKIP_REL_NOTES_ACK_ENV) {
+        <span class="macro">warn!</span>(<span class="string">"Skipping release notes ack. This should never be happening in production"</span>);
+        <span class="kw">return </span><span class="prelude-val">Ok</span>(());
+    }
+
+    <span class="comment">// The actual code-path we want end users to take
+    </span><span class="kw">if </span>std::env::var(FM_REL_NOTES_ACK_ENV).unwrap_or_default() == FM_REL_NOTES_CUR_VAL {
+        <span class="kw">return </span><span class="prelude-val">Ok</span>(());
+    }
+
+    <span class="macro">eprintln!</span>(
+        <span class="string">"This version of fedimintd has some criticallly important requirements you should be aware of."
+    </span>);
+    <span class="macro">eprintln!</span>(<span class="string">"Not following them will likely result in a consensus failure or other problems."</span>);
+    <span class="macro">eprintln!</span>(<span class="string">"To ensure you have read them, you must set specific environment variable to a specific value."</span>);
+    <span class="macro">eprintln!</span>(<span class="string">"Robustness and safety of your federations is our primary concern."</span>);
+    <span class="macro">eprintln!</span>(<span class="string">"See https://github.com/fedimint/fedimint/blob/releases/{VERSION}/docs/RELEASE_NOTES-{VERSION}.md"</span>);
+
+    <span class="macro">bail!</span>(<span class="string">"Must acknowledge release notes. See details above."</span>)
 }
 
 <span class="kw">async fn </span>run(

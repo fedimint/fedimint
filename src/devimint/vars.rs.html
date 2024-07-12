@@ -226,6 +226,7 @@
 <a href="#226" id="226">226</a>
 <a href="#227" id="227">227</a>
 <a href="#228" id="228">228</a>
+<a href="#229" id="229">229</a>
 </pre></div><pre class="rust"><code><span class="attr">#![allow(non_snake_case)]
 
 </span><span class="kw">use </span>std::path::{Path, PathBuf};
@@ -346,6 +347,7 @@
         FM_API_SECRET: <span class="prelude-ty">Option</span>&lt;String&gt; = std::env::var(<span class="string">"FM_API_SECRET"</span>).ok().or_else(|| FM_FORCE_API_SECRETS.get_active()); env: <span class="string">"FM_API_SECRET"</span>;
 
         FM_IN_DEVIMINT: String = <span class="string">"1"</span>.to_string(); env: FM_IN_DEVIMINT_ENV;
+        FM_SKIP_REL_NOTES_ACK: String = <span class="string">"1"</span>.to_string(); env: <span class="string">"FM_SKIP_REL_NOTES_ACK"</span>;
 
         FM_FED_SIZE: usize = fed_size; env: <span class="string">"FM_FED_SIZE"</span>;
         FM_OFFLINE_NODES: usize = offline_nodes; env: <span class="string">"FM_OFFLINE_NODES"</span>;

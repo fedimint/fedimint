@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"constant":["SHUTDOWN_TIMEOUT"],"enum":["DevSubcommand","ServerSubcommand"],"fn":["parse_map","run"],"mod":["metrics"],"struct":["Fedimintd","ServerOpts"]};
+window.SIDEBAR_ITEMS = {"constant":["SHUTDOWN_TIMEOUT"],"enum":["DevSubcommand","ServerSubcommand"],"fn":["check_release_notes_ack","parse_map","run"],"mod":["metrics"],"struct":["Fedimintd","ServerOpts"]};
