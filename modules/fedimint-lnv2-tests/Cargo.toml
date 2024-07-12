@@ -15,6 +15,7 @@ path = "tests/tests.rs"
 anyhow = "1.0.86"
 async-trait = "0.1.80"
 clap = { workspace = true }
+devimint = { workspace = true }
 fedimint-client = { workspace = true }
 fedimint-core = { workspace = true }
 fedimint-dummy-client = { path = "../fedimint-dummy-client" }
@@ -27,10 +28,9 @@ fedimint-lnv2-client = { path = "../fedimint-lnv2-client" }
 fedimint-lnv2-common = { path = "../fedimint-lnv2-common" }
 fedimint-lnv2-server = { path = "../fedimint-lnv2-server" }
 fedimint-testing = { workspace = true }
-tokio = { version = "1.38.0", features = ["sync"] }
-serde_json = { workspace = true }
-devimint = { workspace = true }
-semver = { workspace = true }
-tracing = { workspace = true }
-substring = "1.4.5"
 lightning-invoice = { workspace = true }
+semver = { workspace = true }
+serde_json = { workspace = true }
+substring = "1.4.5"
+tokio = { version = "1.38.0", features = ["sync"] }
+tracing = { workspace = true }

@@ -7,13 +7,13 @@ description = "fedimint-wallet-tests contains integration tests for the lightnin
 license = "MIT"
 publish = false
 
-[[test]]
-name = "fedimint_wallet_tests"
-path = "tests/tests.rs"
-
 [[bin]]
 name = "circular-deposit-test"
 path = "src/bin/circular-deposit-test.rs"
+
+[[test]]
+name = "fedimint_wallet_tests"
+path = "tests/tests.rs"
 
 [dependencies]
 anyhow = { workspace = true }

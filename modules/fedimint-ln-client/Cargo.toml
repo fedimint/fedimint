@@ -15,32 +15,34 @@ normal = ["aquamarine"]
 [package.metadata.docs.rs]
 rustc-args = ["--cfg", "tokio_unstable"]
 
+[features]
+default =[]
+cli = ["dep:clap"]
+
 [lib]
 name = "fedimint_ln_client"
 path = "src/lib.rs"
 
-[features]
-default =[]
-cli = ["dep:clap" ]
-
 [dependencies]
 anyhow = { workspace = true }
-clap = { workspace = true, optional = true }
-async-trait = { workspace = true }
-async-stream = "0.3.5"
 aquamarine = "0.5.0"
+async-stream = "0.3.5"
+async-trait = { workspace = true }
 bitcoin = { workspace = true }
+clap = { workspace = true, optional = true }
 erased-serde = { workspace = true }
+fedimint-api-client = { workspace = true }
+fedimint-client = { workspace = true }
+fedimint-core = { workspace = true }
+fedimint-ln-common = { version = "=0.4.0-alpha", path = "../fedimint-ln-common" }
+fedimint-logging = { workspace = true }
 futures = { workspace = true }
 itertools = { workspace = true }
 lightning-invoice = { version = "0.31.0", features = [ "serde" ] }
 lnurl-rs = { version = "0.4.1", features = ["async"], default-features = false }
-fedimint-client = { workspace = true }
-fedimint-core = { workspace = true }
-fedimint-api-client = { workspace = true }
-fedimint-ln-common = { version = "=0.4.0-alpha", path = "../fedimint-ln-common" }
-fedimint-logging = { workspace = true }
-secp256k1 = { version="0.27.0", default-features=false }
+rand = { workspace = true }
+reqwest = { workspace = true }
+secp256k1 = { version = "0.27.0", default-features = false }
 serde = { workspace = true }
 serde_json = { workspace = true }
 strum = { workspace = true }
@@ -48,5 +50,3 @@ strum_macros = { workspace = true }
 thiserror = { workspace = true }
 tokio = { version = "1.38.0", features = ["macros"] }
 tracing = { workspace = true }
-rand = { workspace = true }
-reqwest = { workspace = true }

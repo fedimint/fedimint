@@ -8,13 +8,13 @@ license = "MIT"
 readme = "../README.md"
 repository = "https://github.com/fedimint/fedimint"
 
+[features]
+diagnostics = []
+
 [lib]
 proc-macro = true
 name = "fedimint_derive"
 path = "src/lib.rs"
-
-[features]
-diagnostics = []
 
 [dependencies]
 itertools = { workspace = true }

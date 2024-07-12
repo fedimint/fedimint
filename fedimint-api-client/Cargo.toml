@@ -1,12 +1,15 @@
 [package]
 name = "fedimint-api-client"
-version = {workspace = true}
+version = { workspace = true }
 authors = ["The Fedimint Developers"]
 edition = "2021"
 description = "fedimint-api-client provides common code used by client."
 license = "MIT"
 readme = "../README.md"
 repository = "https://github.com/fedimint/fedimint"
+
+[package.metadata.cargo-udeps.ignore]
+development = ["tokio-test"]
 
 [lib]
 name = "fedimint_api_client"
@@ -16,18 +19,23 @@ path = "src/lib.rs"
 anyhow = { workspace = true }
 async-trait = { workspace = true }
 base64 = { workspace = true }
+bitcoin = { workspace = true }
+fedimint-core = { workspace = true }
+fedimint-logging = { workspace = true }
 futures = { workspace = true }
 itertools = { workspace = true }
 jsonrpsee-core = { version = "0.24.0" }
 lru = "0.12.3"
 serde = { workspace = true }
 serde_json = { workspace = true }
-tokio = { version = "1.38.0", features = ["sync", "io-util"] }
 thiserror = { workspace = true }
+tokio = { version = "1.38.0", features = ["sync", "io-util"] }
 tracing = { workspace = true }
-bitcoin = { workspace = true }
-fedimint-core = { workspace = true }
-fedimint-logging = { workspace = true }
+
+[dev-dependencies]
+once_cell = { workspace = true }
+tokio-test = "0.4.4"
+tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
 
 [target.'cfg(not(target_family = "wasm"))'.dependencies]
 jsonrpsee-ws-client = { version = "0.24.0", features = ["tls"], default-features = false }
@@ -46,11 +54,3 @@ getrandom = { version = "0.2.15", features = ["js"] }
 gloo-timers = { version = "0.3.0", features = ["futures"] }
 wasm-bindgen-futures = "0.4.42"
 js-sys = "0.3.69"
-
-[dev-dependencies]
-once_cell = { workspace = true }
-tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
-tokio-test = "0.4.4"
-
-[package.metadata.cargo-udeps.ignore]
-development = ["tokio-test"]

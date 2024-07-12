@@ -24,17 +24,17 @@ name = "fedimintd"
 path = "src/lib.rs"
 
 [dependencies]
-fedimint-aead = { version = "=0.4.0-alpha", path = "../crypto/aead" }
-ring = "0.17.8"
 anyhow = { workspace = true }
 async-trait = { workspace = true }
+
+# setup dependencies
+axum = { version = "0.7.5", default-features = false, features = ["form", "tokio"] }
 bincode = { workspace = true }
 bitcoin = { workspace = true }
 bytes = "1.6.0"
 clap = { workspace = true }
-futures = { workspace = true }
-itertools = { workspace = true }
-jsonrpsee = { version = "0.24.0", features = ["server"] }
+console-subscriber = "0.3.0"
+fedimint-aead = { version = "=0.4.0-alpha", path = "../crypto/aead" }
 fedimint-bitcoind = { version = "=0.4.0-alpha", path = "../fedimint-bitcoind" }
 fedimint-core = { workspace = true }
 fedimint-ln-common = { version = "=0.4.0-alpha", path = "../modules/fedimint-ln-common" }
@@ -42,36 +42,36 @@ fedimint-ln-server = { version = "=0.4.0-alpha", path = "../modules/fedimint-ln-
 fedimint-lnv2-common = { version = "=0.4.0-alpha", path = "../modules/fedimint-lnv2-common" }
 fedimint-lnv2-server = { version = "=0.4.0-alpha", path = "../modules/fedimint-lnv2-server" }
 fedimint-logging = { version = "=0.4.0-alpha", path = "../fedimint-logging" }
+fedimint-meta-server = { version = "=0.4.0-alpha", path = "../modules/fedimint-meta-server" }
 fedimint-metrics = { version = "=0.4.0-alpha", path = "../fedimint-metrics" }
 fedimint-mint-server = { version = "=0.4.0-alpha", path = "../modules/fedimint-mint-server" }
-fedimint-meta-server = { version = "=0.4.0-alpha", path = "../modules/fedimint-meta-server" }
 fedimint-rocksdb = { version = "=0.4.0-alpha", path = "../fedimint-rocksdb" }
 fedimint-server = { version = "=0.4.0-alpha", path = "../fedimint-server" }
-fedimint-wallet-server = { version = "=0.4.0-alpha", path = "../modules/fedimint-wallet-server" }
-fedimint-unknown-server = { version = "=0.4.0-alpha", path = "../modules/fedimint-unknown-server" }
 fedimint-unknown-common = { version = "=0.4.0-alpha", path = "../modules/fedimint-unknown-common" }
+fedimint-unknown-server = { version = "=0.4.0-alpha", path = "../modules/fedimint-unknown-server" }
+fedimint-wallet-server = { version = "=0.4.0-alpha", path = "../modules/fedimint-wallet-server" }
+futures = { workspace = true }
+http = "1.1"
+http-body = "1.0"
+hyper = { version = "1.4", features = ["full"] }
+itertools = { workspace = true }
+jsonrpsee = { version = "0.24.0", features = ["server"] }
 once_cell = { workspace = true }
 rand = { workspace = true }
 rcgen = "0.13.1"
+ring = "0.17.8"
 serde = { workspace = true }
 serde_json = { workspace = true }
 sha3 = "0.10.8"
 tbs = { package = "fedimint-tbs", version = "=0.4.0-alpha", path = "../crypto/tbs" }
 thiserror = { workspace = true }
+threshold_crypto = { workspace = true }
 tokio = { version = "1.38.0", features = ["full", "tracing"] }
 tokio-rustls = { workspace = true }
 tokio-util = { version = "0.7.11", features = ["codec"] }
+tower = { version = "0.4", features = ["util"] }
 tracing = { workspace = true }
 url = { version = "2.5.2", features = ["serde"] }
-threshold_crypto = { workspace = true }
-
-# setup dependencies
-axum = { version = "0.7.5", default-features = false, features = ["form", "tokio"] }
-http = "1.1"
-http-body = "1.0"
-hyper = { version = "1.4", features = ["full"] }
-tower = { version = "0.4", features = ["util"] }
-console-subscriber = "0.3.0"
 
 [build-dependencies]
 fedimint-build = { version = "=0.4.0-alpha", path = "../fedimint-build" }

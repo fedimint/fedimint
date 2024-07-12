@@ -11,13 +11,13 @@ repository = "https://github.com/fedimint/fedimint"
 [package.metadata.docs.rs]
 rustc-args = ["--cfg", "tokio_unstable"]
 
+[features]
+default =[]
+cli = ["dep:clap"]
+
 [lib]
 name = "fedimint_wallet_client"
 path = "src/lib.rs"
-
-[features]
-default =[]
-cli = ["dep:clap" ]
 
 [dependencies]
 anyhow = { workspace = true }
@@ -41,6 +41,9 @@ strum = { workspace = true }
 strum_macros = { workspace = true }
 tracing = { workspace = true }
 
+[dev-dependencies]
+tracing-subscriber = { version = "0.3.18", features = [ "env-filter" ] }
+
 [target.'cfg(not(target_family = "wasm"))'.dependencies]
 fedimint-bitcoind = { version = "=0.4.0-alpha", path = "../../fedimint-bitcoind", default-features = false, features = ["esplora-client", "bitcoincore-rpc"] }
 tokio = { version = "1.38.0", features = ["full", "tracing"] }
@@ -48,6 +51,3 @@ tokio = { version = "1.38.0", features = ["full", "tracing"] }
 [target.'cfg(target_family = "wasm")'.dependencies]
 fedimint-bitcoind = { version = "=0.4.0-alpha", path = "../../fedimint-bitcoind", default-features = false, features = ["esplora-client"] }
 tokio = { version = "1.38.0", features = [ "sync", "rt"] }
-
-[dev-dependencies]
-tracing-subscriber = { version = "0.3.18", features = [ "env-filter" ] }
