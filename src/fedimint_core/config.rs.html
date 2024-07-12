@@ -1114,24 +1114,6 @@
 <a href="#1114" id="1114">1114</a>
 <a href="#1115" id="1115">1115</a>
 <a href="#1116" id="1116">1116</a>
-<a href="#1117" id="1117">1117</a>
-<a href="#1118" id="1118">1118</a>
-<a href="#1119" id="1119">1119</a>
-<a href="#1120" id="1120">1120</a>
-<a href="#1121" id="1121">1121</a>
-<a href="#1122" id="1122">1122</a>
-<a href="#1123" id="1123">1123</a>
-<a href="#1124" id="1124">1124</a>
-<a href="#1125" id="1125">1125</a>
-<a href="#1126" id="1126">1126</a>
-<a href="#1127" id="1127">1127</a>
-<a href="#1128" id="1128">1128</a>
-<a href="#1129" id="1129">1129</a>
-<a href="#1130" id="1130">1130</a>
-<a href="#1131" id="1131">1131</a>
-<a href="#1132" id="1132">1132</a>
-<a href="#1133" id="1133">1133</a>
-<a href="#1134" id="1134">1134</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet};
 <span class="kw">use </span>std::fmt::{Debug, Display};
 <span class="kw">use </span>std::hash::Hash;
@@ -1164,7 +1146,6 @@
 
 <span class="kw">use </span><span class="kw">crate</span>::core::DynClientConfig;
 <span class="kw">use </span><span class="kw">crate</span>::encoding::Decodable;
-<span class="kw">use </span><span class="kw">crate</span>::invite_code::InviteCode;
 <span class="kw">use </span><span class="kw">crate</span>::module::{
     CoreConsensusVersion, DynCommonModuleInit, DynServerModuleInit, IDynCommonModuleInit,
     ModuleConsensusVersion,
@@ -1412,23 +1393,6 @@
         } <span class="kw">else </span>{
             res
         }
-    }
-
-    <span class="doccomment">/// Create an invite code with the api endpoint of the given peer which can
-    /// be used to download this client config
-    </span><span class="attr">#[deprecated(
-        since = <span class="string">"0.4.0"</span>,
-        note = <span class="string">"API endpoints included in the config may be outdated, use Client::invite_code instead"
-    </span>)]
-    </span><span class="kw">pub fn </span>invite_code(<span class="kw-2">&amp;</span><span class="self">self</span>, peer: <span class="kw-2">&amp;</span>PeerId, api_secret: <span class="kw-2">&amp;</span><span class="prelude-ty">Option</span>&lt;String&gt;) -&gt; <span class="prelude-ty">Option</span>&lt;InviteCode&gt; {
-        <span class="self">self</span>.global.api_endpoints.get(peer).map(|peer_url| {
-            InviteCode::new(
-                peer_url.url.clone(),
-                <span class="kw-2">*</span>peer,
-                <span class="self">self</span>.calculate_federation_id(),
-                api_secret.clone(),
-            )
-        })
     }
 
     <span class="doccomment">/// Converts a consensus-encoded client config struct to a client config

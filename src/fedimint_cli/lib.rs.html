@@ -1182,9 +1182,6 @@
 <a href="#1182" id="1182">1182</a>
 <a href="#1183" id="1183">1183</a>
 <a href="#1184" id="1184">1184</a>
-<a href="#1185" id="1185">1185</a>
-<a href="#1186" id="1186">1186</a>
-<a href="#1187" id="1187">1187</a>
 </pre></div><pre class="rust"><code><span class="attr">#![warn(clippy::pedantic)]
 #![allow(clippy::doc_markdown)]
 #![allow(clippy::missing_errors_doc)]
@@ -1903,15 +1900,12 @@ Examples:
     <span class="kw">async fn </span>handle_command(<span class="kw-2">&amp;mut </span><span class="self">self</span>, cli: Opts) -&gt; CliOutputResult {
         <span class="kw">match </span>cli.command.clone() {
             Command::InviteCode { peer } =&gt; {
-                <span class="kw">let </span>db = cli.load_rocks_db().<span class="kw">await</span><span class="question-mark">?</span>;
-                <span class="kw">let </span>client_config = Client::get_config_from_db(<span class="kw-2">&amp;</span>db)
-                    .<span class="kw">await
-                    </span>.ok_or_cli_msg(<span class="string">"client config code not found"</span>)<span class="question-mark">?</span>;
-                <span class="kw">let </span>api_secret = Client::get_api_secret_from_db(<span class="kw-2">&amp;</span>db).<span class="kw">await</span>;
+                <span class="kw">let </span>client = <span class="self">self</span>.client_open(<span class="kw-2">&amp;</span>cli).<span class="kw">await</span><span class="question-mark">?</span>;
 
-                <span class="kw">let </span>invite_code = client_config
-                    .invite_code(<span class="kw-2">&amp;</span>peer, <span class="kw-2">&amp;</span>api_secret)
-                    .ok_or_cli_msg(<span class="string">"peer not found"</span>)<span class="question-mark">?</span>;
+                <span class="kw">let </span>invite_code = client
+                    .invite_code(peer)
+                    .<span class="kw">await
+                    </span>.ok_or_cli_msg(<span class="string">"peer not found"</span>)<span class="question-mark">?</span>;
 
                 <span class="prelude-val">Ok</span>(CliOutput::InviteCode { invite_code })
             }
