@@ -22,5 +22,5 @@ fedimint-core = { workspace = true }
 fs2 = "0.4.3"
 rand = { workspace = true }
 serde = { workspace = true }
-serde_json = { version = "1.0.120", features = ["preserve_order"] }
+serde_json = { workspace = true }
 tracing = { workspace = true }
