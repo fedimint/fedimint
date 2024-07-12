@@ -12,5 +12,6 @@
 "fedimintd":[["impl Subcommand for <a class=\"enum\" href=\"fedimintd/fedimintd/enum.DevSubcommand.html\" title=\"enum fedimintd::fedimintd::DevSubcommand\">DevSubcommand</a>"],["impl Subcommand for <a class=\"enum\" href=\"fedimintd/fedimintd/enum.ServerSubcommand.html\" title=\"enum fedimintd::fedimintd::ServerSubcommand\">ServerSubcommand</a>"]],
 "gateway_cli":[["impl Subcommand for <a class=\"enum\" href=\"gateway_cli/enum.Commands.html\" title=\"enum gateway_cli::Commands\">Commands</a>"],["impl Subcommand for <a class=\"enum\" href=\"gateway_cli/enum.LightningCommands.html\" title=\"enum gateway_cli::LightningCommands\">LightningCommands</a>"]],
 "gateway_tests":[["impl Subcommand for <a class=\"enum\" href=\"gateway_tests/enum.GatewayTest.html\" title=\"enum gateway_tests::GatewayTest\">GatewayTest</a>"]],
-"ln_gateway":[["impl Subcommand for <a class=\"enum\" href=\"ln_gateway/lightning/enum.LightningMode.html\" title=\"enum ln_gateway::lightning::LightningMode\">LightningMode</a>"]]
+"ln_gateway":[["impl Subcommand for <a class=\"enum\" href=\"ln_gateway/lightning/enum.LightningMode.html\" title=\"enum ln_gateway::lightning::LightningMode\">LightningMode</a>"]],
+"tests":[["impl Subcommand for <a class=\"enum\" href=\"tests/enum.LnV2TestType.html\" title=\"enum tests::LnV2TestType\">LnV2TestType</a>"]]
 };if (window.register_implementors) {window.register_implementors(implementors);} else {window.pending_implementors = implementors;}})()

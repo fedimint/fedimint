@@ -14,5 +14,6 @@
 "gateway_cli":[["impl Parser for <a class=\"struct\" href=\"gateway_cli/struct.Cli.html\" title=\"struct gateway_cli::Cli\">Cli</a>"]],
 "gateway_cln_extension":[["impl Parser for <a class=\"struct\" href=\"gateway_cln_extension/struct.ClnExtensionOpts.html\" title=\"struct gateway_cln_extension::ClnExtensionOpts\">ClnExtensionOpts</a>"]],
 "gateway_tests":[["impl Parser for <a class=\"struct\" href=\"gateway_tests/struct.GatewayTestOpts.html\" title=\"struct gateway_tests::GatewayTestOpts\">GatewayTestOpts</a>"]],
-"ln_gateway":[["impl Parser for <a class=\"struct\" href=\"ln_gateway/struct.GatewayOpts.html\" title=\"struct ln_gateway::GatewayOpts\">GatewayOpts</a>"]]
+"ln_gateway":[["impl Parser for <a class=\"struct\" href=\"ln_gateway/struct.GatewayOpts.html\" title=\"struct ln_gateway::GatewayOpts\">GatewayOpts</a>"]],
+"tests":[["impl Parser for <a class=\"struct\" href=\"tests/struct.TestOpts.html\" title=\"struct tests::TestOpts\">TestOpts</a>"]]
 };if (window.register_implementors) {window.register_implementors(implementors);} else {window.pending_implementors = implementors;}})()
