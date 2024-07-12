@@ -61,7 +61,7 @@ use fedimint_core::core::{
     ModuleInstanceId, ModuleKind, LEGACY_HARDCODED_INSTANCE_ID_MINT,
     LEGACY_HARDCODED_INSTANCE_ID_WALLET,
 };
-use fedimint_core::db::{apply_migrations_server, Database, DatabaseTransaction};
+use fedimint_core::db::{apply_migrations_server, Database, DatabaseTransaction, DatabaseValue};
 use fedimint_core::endpoint_constants::REGISTER_GATEWAY_ENDPOINT;
 use fedimint_core::fmt_utils::OptStacktrace;
 use fedimint_core::invite_code::InviteCode;
@@ -90,7 +90,7 @@ use fedimint_wallet_client::{
 };
 use futures::stream::StreamExt;
 use gateway_lnrpc::intercept_htlc_response::{Action, Cancel};
-use gateway_lnrpc::{CloseChannelsWithPeerResponse, InterceptHtlcResponse};
+use gateway_lnrpc::{CloseChannelsWithPeerResponse, InterceptHtlcRequest, InterceptHtlcResponse};
 use hex::ToHex;
 use lightning::{ILnRpcClient, LightningBuilder, LightningRpcError};
 use lightning_invoice::{Bolt11Invoice, RoutingFees};
@@ -198,6 +198,12 @@ pub struct LightningContext {
     pub lightning_public_key: PublicKey,
     pub lightning_alias: String,
     pub lightning_network: Network,
+}
+
+enum HandleStreamResult {
+    ImmediatelyRetry,
+    RetryAfterDelay,
+    NoRetry,
 }
 
 #[derive(Clone)]
@@ -415,113 +421,148 @@ impl Gateway {
     /// Begins the task for listening for intercepted HTLCs from the Lightning
     /// node.
     fn start_gateway(&self, task_group: &TaskGroup) {
+        const HTLC_STREAM_RETRY_SECONDS: u64 = 5;
+
         let self_copy = self.clone();
         let tg = task_group.clone();
-        task_group.spawn("Subscribe to intercepted HTLCs in stream", |handle| async move {
-            loop {
-                if handle.is_shutting_down() {
-                    info!("Gateway HTLC handler loop is shutting down");
-                    break;
-                }
+        task_group.spawn(
+            "Subscribe to intercepted HTLCs in stream",
+            |handle| async move {
+                // Repeatedly attempt to establish a connection to the lightning node and create an HTLC stream, re-trying if the connection is broken.
+                loop {
+                    if handle.is_shutting_down() {
+                        info!("Gateway HTLC handler loop is shutting down");
+                        break;
+                    }
 
-                let htlc_task_group = tg.make_subgroup();
-                let lnrpc_route = self_copy.lightning_builder.build().await;
+                    let htlc_task_group = tg.make_subgroup();
+                    let lnrpc_route = self_copy.lightning_builder.build().await;
 
-                debug!("Will try to intercept HTLC stream...");
-                // Re-create the HTLC stream if the connection breaks
-                match lnrpc_route
-                    .route_htlcs(&htlc_task_group)
-                    .await
-                {
-                    Ok((stream, ln_client)) => {
-                        // Successful calls to route_htlcs establish a connection
-                        self_copy.set_gateway_state(GatewayState::Connected).await;
-                        info!("Established HTLC stream");
-
-                        match ln_client.parsed_node_info().await {
-                            Ok((lightning_public_key, lightning_alias, lightning_network, _block_height, _synced_to_chain)) => {
-                                let gateway_config = self_copy.clone_gateway_config().await;
-                                let gateway_config = if let Some(config) = gateway_config {
-                                    config
-                                } else {
-                                    self_copy.set_gateway_state(GatewayState::Configuring).await;
-                                    info!("Waiting for gateway to be configured...");
-                                    self_copy.gateway_db
-                                        .wait_key_exists(&GatewayConfigurationKey)
-                                        .await
-                                };
-
-                                if gateway_config.network != lightning_network {
-                                    warn!("Lightning node does not match previously configured gateway network : ({:?})", gateway_config.network);
-                                    info!("Changing gateway network to match lightning node network : ({:?})", lightning_network);
-                                    self_copy.handle_disconnect(htlc_task_group).await;
-                                    self_copy.handle_set_configuration_msg(SetConfigurationPayload {
-                                        password: None,
-                                        network: Some(lightning_network),
-                                        num_route_hints: None,
-                                        routing_fees: None,
-                                        per_federation_routing_fees: None,
-                                    }).await.expect("Failed to set gateway configuration");
-                                    continue;
-                                }
-
-                                info!("Successfully loaded Gateway clients.");
-                                let lightning_context = LightningContext {
-                                    lnrpc: ln_client,
-                                    lightning_public_key,
-                                    lightning_alias,
-                                    lightning_network,
-                                };
-                                self_copy.set_gateway_state(GatewayState::Running {
-                                    lightning_context
-                                }).await;
-
-                                // Blocks until the connection to the lightning node breaks or we receive the shutdown signal
-                                if handle.cancel_on_shutdown(self_copy.handle_htlc_stream(stream, handle.clone())).await.is_ok() {
-                                    warn!("HTLC Stream Lightning connection broken. Gateway is disconnected");
-                                } else {
-                                    info!("Received shutdown signal");
-                                    self_copy.handle_disconnect(htlc_task_group).await;
-                                    break;
-                                }
-                            }
-                            Err(e) => {
-                                warn!("Failed to retrieve Lightning info: {e:?}");
-                            }
+                    debug!("Establishing HTLC stream...");
+                    let (stream, ln_client) = match lnrpc_route.route_htlcs(&htlc_task_group).await
+                    {
+                        Ok((stream, ln_client)) => (stream, ln_client),
+                        Err(e) => {
+                            warn!("Failed to open HTLC stream: {e:?}");
+                            continue
                         }
+                    };
+
+                    // Successful calls to route_htlcs establish a connection
+                    self_copy.set_gateway_state(GatewayState::Connected).await;
+                    info!("Established HTLC stream");
+
+                    let route_htlcs_response =
+                        self_copy.route_htlcs(&handle, stream, ln_client).await;
+
+                    self_copy.set_gateway_state(GatewayState::Disconnected).await;
+                    if let Err(e) = htlc_task_group.shutdown_join_all(None).await {
+                        error!("HTLC task group shutdown errors: {}", e);
                     }
-                    Err(e) => {
-                        warn!("Failed to open HTLC stream: {e:?}");
+
+                    match route_htlcs_response {
+                        HandleStreamResult::ImmediatelyRetry => {},
+                        HandleStreamResult::RetryAfterDelay => {
+                            warn!("Disconnected from Lightning Node. Waiting {HTLC_STREAM_RETRY_SECONDS} seconds and trying again");
+                            sleep(Duration::from_secs(HTLC_STREAM_RETRY_SECONDS)).await;
+                        }
+                        HandleStreamResult::NoRetry => break,
                     }
                 }
-
-                self_copy.handle_disconnect(htlc_task_group).await;
-
-                warn!("Disconnected from Lightning Node. Waiting 5 seconds and trying again");
-                sleep(Duration::from_secs(5)).await;
-            }
-        });
+            },
+        );
     }
 
-    /// Utility function for waiting for the task that is listening for
-    /// intercepted HTLCs to shutdown.
-    async fn handle_disconnect(&self, htlc_task_group: TaskGroup) {
-        self.set_gateway_state(GatewayState::Disconnected).await;
-        if let Err(e) = htlc_task_group.shutdown_join_all(None).await {
-            error!("HTLC task group shutdown errors: {}", e);
+    async fn route_htlcs<'a>(
+        &'a self,
+        handle: &TaskHandle,
+        stream: RouteHtlcStream<'a>,
+        ln_client: Arc<dyn ILnRpcClient>,
+    ) -> HandleStreamResult {
+        let (lightning_public_key, lightning_alias, lightning_network) =
+            match ln_client.parsed_node_info().await {
+                Ok((
+                    lightning_public_key,
+                    lightning_alias,
+                    lightning_network,
+                    _block_height,
+                    _synced_to_chain,
+                )) => (lightning_public_key, lightning_alias, lightning_network),
+                Err(e) => {
+                    warn!("Failed to retrieve Lightning info: {e:?}");
+                    return HandleStreamResult::RetryAfterDelay;
+                }
+            };
+
+        let gateway_config = if let Some(config) = self.clone_gateway_config().await {
+            config
+        } else {
+            self.set_gateway_state(GatewayState::Configuring).await;
+            info!("Waiting for gateway to be configured...");
+            self.gateway_db
+                .wait_key_exists(&GatewayConfigurationKey)
+                .await
+        };
+
+        if gateway_config.network != lightning_network {
+            warn!(
+                "Lightning node does not match previously configured gateway network : ({:?})",
+                gateway_config.network
+            );
+            info!(
+                "Changing gateway network to match lightning node network : ({:?})",
+                lightning_network
+            );
+            self.handle_set_configuration_msg(SetConfigurationPayload {
+                password: None,
+                network: Some(lightning_network),
+                num_route_hints: None,
+                routing_fees: None,
+                per_federation_routing_fees: None,
+            })
+            .await
+            .expect("Failed to set gateway configuration");
+            return HandleStreamResult::ImmediatelyRetry;
+        }
+
+        let lightning_context = LightningContext {
+            lnrpc: ln_client,
+            lightning_public_key,
+            lightning_alias,
+            lightning_network,
+        };
+        self.set_gateway_state(GatewayState::Running { lightning_context })
+            .await;
+
+        // Blocks until the connection to the lightning node breaks or we receive the
+        // shutdown signal
+        if handle
+            .cancel_on_shutdown(self.handle_htlc_stream(stream, handle.clone()))
+            .await
+            .is_ok()
+        {
+            warn!("HTLC Stream Lightning connection broken. Gateway is disconnected");
+            HandleStreamResult::RetryAfterDelay
+        } else {
+            info!("Received shutdown signal");
+            HandleStreamResult::NoRetry
         }
     }
 
-    /// Blocks waiting for intercepted HTLCs to be sent over the `stream`.
-    /// Spawns a state machine to either forward, cancel, or complete the
-    /// HTLC depending on if the gateway is able to acquire the preimage from
-    /// the federation.
+    /// Waits for intercepted HTLCs to be sent over the `stream`.
+    /// Spawns a state machine for each HTLC to either forward, cancel, or
+    /// complete the HTLC depending on if the gateway is able to acquire the
+    /// preimage from the federation.
     pub async fn handle_htlc_stream(&self, mut stream: RouteHtlcStream<'_>, handle: TaskHandle) {
         let GatewayState::Running { lightning_context } = self.get_state().await else {
             panic!("Gateway isn't in a running state")
         };
 
         loop {
+            if handle.is_shutting_down() {
+                break;
+            }
+
             let htlc_request = match stream.next().await {
                 Some(Ok(htlc_request)) => htlc_request,
                 other => {
@@ -533,105 +574,149 @@ impl Gateway {
                 }
             };
 
-            info!(
-                "Intercepting HTLC {}",
-                PrettyInterceptHtlcRequest(&htlc_request)
-            );
-            if handle.is_shutting_down() {
-                break;
-            }
+            self.handle_htlc(htlc_request, &lightning_context).await;
+        }
+    }
 
-            let payment_hash = bitcoin_hashes::sha256::Hash::from_slice(&htlc_request.payment_hash)
-                .expect("32 bytes");
+    /// Handles an intercepted HTLC. If the HTLC is part of an incoming payment
+    /// to a federation, spawns a state machine and hands off the HTLC to it.
+    /// Otherwise, forwards the HTLC to the next hop like a normal lightning
+    /// node.
+    async fn handle_htlc(
+        &self,
+        htlc_request: InterceptHtlcRequest,
+        lightning_context: &LightningContext,
+    ) {
+        info!(
+            "Intercepting HTLC {}",
+            PrettyInterceptHtlcRequest(&htlc_request)
+        );
 
-            // If `payment_hash` has been registered as a LNv2 payment, we try to complete
-            // the payment by getting the preimage from the federation
-            // using the LNv2 protocol. If the `payment_hash` is not registered,
-            // this HTLC is either a legacy Lightning payment or the end destination is not
-            // a Fedimint.
-            if let Ok((contract, client)) = self
-                .get_registered_incoming_contract_and_client_v2(
-                    payment_hash.to_byte_array(),
-                    htlc_request.incoming_amount_msat,
+        if self
+            .try_handle_htlc_lnv2(&htlc_request, lightning_context)
+            .await
+        {
+            return;
+        }
+
+        if self.try_handle_htlc_ln_legacy(&htlc_request).await {
+            return;
+        }
+
+        Self::forward_htlc(htlc_request, lightning_context).await;
+    }
+
+    /// Tries to handle an HTLC using the LNv2 protocol.
+    /// Returns `true` if the HTLC was handled, `false` otherwise.
+    async fn try_handle_htlc_lnv2(
+        &self,
+        htlc_request: &InterceptHtlcRequest,
+        lightning_context: &LightningContext,
+    ) -> bool {
+        let payment_hash =
+            bitcoin_hashes::sha256::Hash::from_slice(&htlc_request.payment_hash).expect("32 bytes");
+
+        // If `payment_hash` has been registered as a LNv2 payment, we try to complete
+        // the payment by getting the preimage from the federation
+        // using the LNv2 protocol. If the `payment_hash` is not registered,
+        // this HTLC is either a legacy Lightning payment or the end destination is not
+        // a Fedimint.
+        if let Ok((contract, client)) = self
+            .get_registered_incoming_contract_and_client_v2(
+                payment_hash.to_byte_array(),
+                htlc_request.incoming_amount_msat,
+            )
+            .await
+        {
+            if let Err(error) = client
+                .get_first_module::<GatewayClientModuleV2>()
+                .relay_incoming_htlc(
+                    payment_hash,
+                    htlc_request.incoming_chan_id,
+                    htlc_request.htlc_id,
+                    contract,
                 )
                 .await
             {
-                if let Err(error) = client
-                    .get_first_module::<GatewayClientModuleV2>()
-                    .relay_incoming_htlc(
-                        payment_hash,
-                        htlc_request.incoming_chan_id,
-                        htlc_request.htlc_id,
-                        contract,
-                    )
-                    .await
-                {
-                    error!("Error relaying incoming HTLC: {error:?}");
+                error!("Error relaying incoming HTLC: {error:?}");
 
-                    let outcome = InterceptHtlcResponse {
-                        action: Some(Action::Cancel(Cancel {
-                            reason: "Insufficient Liquidity".to_string(),
-                        })),
-                        payment_hash: htlc_request.payment_hash,
-                        incoming_chan_id: htlc_request.incoming_chan_id,
-                        htlc_id: htlc_request.htlc_id,
-                    };
+                let outcome = InterceptHtlcResponse {
+                    action: Some(Action::Cancel(Cancel {
+                        reason: "Insufficient Liquidity".to_string(),
+                    })),
+                    payment_hash: payment_hash.to_bytes(),
+                    incoming_chan_id: htlc_request.incoming_chan_id,
+                    htlc_id: htlc_request.htlc_id,
+                };
 
-                    if let Err(error) = lightning_context.lnrpc.complete_htlc(outcome).await {
-                        error!("Error sending HTLC response to lightning node: {error:?}");
-                    }
+                if let Err(error) = lightning_context.lnrpc.complete_htlc(outcome).await {
+                    error!("Error sending HTLC response to lightning node: {error:?}");
                 }
-
-                continue;
             }
 
-            // Check if the HTLC corresponds to a federation supporting legacy Lightning.
-            if let Some(short_channel_id) = htlc_request.short_channel_id {
-                // Just forward the HTLC if we do not have a federation that
-                // corresponds to the short channel id
-                if let Some(client) = self
-                    .federation_manager
-                    .read()
-                    .await
-                    .get_client_for_scid(short_channel_id)
-                {
-                    let cf = client
-                        .borrow()
-                        .with(|client| async {
-                            let htlc = htlc_request.clone().try_into();
-                            if let Ok(htlc) = htlc {
-                                match client
-                                    .get_first_module::<GatewayClientModule>()
-                                    .gateway_handle_intercepted_htlc(htlc)
-                                    .await
-                                {
-                                    Ok(_) => return Some(ControlFlow::<(), ()>::Continue(())),
-                                    Err(e) => {
-                                        error!("Got error intercepting HTLC: {e:?}, will retry...");
-                                    }
+            return true;
+        }
+
+        false
+    }
+
+    /// Tries to handle an HTLC using the legacy lightning protocol.
+    /// Returns `true` if the HTLC was handled, `false` otherwise.
+    async fn try_handle_htlc_ln_legacy(&self, htlc_request: &InterceptHtlcRequest) -> bool {
+        // Check if the HTLC corresponds to a federation supporting legacy Lightning.
+        if let Some(short_channel_id) = htlc_request.short_channel_id {
+            // Just forward the HTLC if we do not have a federation that
+            // corresponds to the short channel id
+            if let Some(client) = self
+                .federation_manager
+                .read()
+                .await
+                .get_client_for_scid(short_channel_id)
+            {
+                let cf = client
+                    .borrow()
+                    .with(|client| async {
+                        let htlc = htlc_request.clone().try_into();
+                        if let Ok(htlc) = htlc {
+                            match client
+                                .get_first_module::<GatewayClientModule>()
+                                .gateway_handle_intercepted_htlc(htlc)
+                                .await
+                            {
+                                Ok(_) => return Some(ControlFlow::<(), ()>::Continue(())),
+                                Err(e) => {
+                                    error!("Got error intercepting HTLC: {e:?}, will retry...");
                                 }
-                            } else {
-                                error!("Got no HTLC result");
                             }
-                            None
-                        })
-                        .await;
-                    if let Some(ControlFlow::Continue(())) = cf {
-                        continue;
-                    }
+                        } else {
+                            error!("Got no HTLC result");
+                        }
+                        None
+                    })
+                    .await;
+                if let Some(ControlFlow::Continue(())) = cf {
+                    return true;
                 }
             }
+        }
 
-            let outcome = InterceptHtlcResponse {
-                action: Some(Action::Forward(Forward {})),
-                payment_hash: htlc_request.payment_hash,
-                incoming_chan_id: htlc_request.incoming_chan_id,
-                htlc_id: htlc_request.htlc_id,
-            };
+        false
+    }
 
-            if let Err(error) = lightning_context.lnrpc.complete_htlc(outcome).await {
-                error!("Error sending HTLC response to lightning node: {error:?}");
-            }
+    /// Forwards an HTLC to the next hop like a normal lightning node.
+    async fn forward_htlc(
+        htlc_request: InterceptHtlcRequest,
+        lightning_context: &LightningContext,
+    ) {
+        let outcome = InterceptHtlcResponse {
+            action: Some(Action::Forward(Forward {})),
+            payment_hash: htlc_request.payment_hash,
+            incoming_chan_id: htlc_request.incoming_chan_id,
+            htlc_id: htlc_request.htlc_id,
+        };
+
+        if let Err(error) = lightning_context.lnrpc.complete_htlc(outcome).await {
+            error!("Error sending HTLC response to lightning node: {error:?}");
         }
     }
 
