@@ -41,7 +41,7 @@ pub async fn run_api_announcement_sync(client_inner: Arc<Client>) {
     // Wait for the guardian keys to be available
     let guardian_pub_keys = client_inner.get_guardian_public_keys_blocking().await;
     loop {
-        let results = join_all(guardian_pub_keys.keys()
+        let results = join_all(client_inner.api.all_peers().iter()
             .map(|peer_id| async {
                 let announcements = client_inner
                     .api
