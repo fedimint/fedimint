@@ -341,6 +341,11 @@ enum AdminCmd {
         #[clap(long)]
         override_url: Option<SafeUrl>,
     },
+    /// Stop fedimintd after the specified session to do a coordinated upgrade
+    Shutdown {
+        /// Session index to stop after
+        session_idx: u64,
+    },
 }
 
 #[derive(Debug, Clone, Args)]
@@ -835,6 +840,15 @@ impl FedimintCli {
                 Ok(CliOutput::Raw(
                     serde_json::to_value(announcement).map_err_cli_msg("invalid response")?,
                 ))
+            }
+            Command::Admin(AdminCmd::Shutdown { session_idx }) => {
+                let client = self.client_open(&cli).await?;
+
+                cli.admin_client(&client.get_peer_urls().await, client.api_secret())?
+                    .shutdown(Some(session_idx), cli.auth()?)
+                    .await?;
+
+                Ok(CliOutput::Raw(json!(null)))
             }
             Command::Dev(DevCmd::Api {
                 method,
