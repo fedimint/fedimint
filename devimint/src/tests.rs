@@ -9,20 +9,18 @@ use anyhow::{anyhow, bail, Context, Result};
 use bitcoincore_rpc::bitcoin;
 use bitcoincore_rpc::bitcoin::Txid;
 use clap::Subcommand;
-use cln_rpc::primitives::{Amount as ClnRpcAmount, AmountOrAny};
 use fedimint_core::core::LEGACY_HARDCODED_INSTANCE_ID_WALLET;
 use fedimint_core::encoding::Decodable;
 use fedimint_core::envs::is_env_var_set;
 use fedimint_core::net::api_announcement::SignedApiAnnouncement;
 use fedimint_core::task::block_in_place;
-use fedimint_core::{Amount, BitcoinHash, PeerId};
+use fedimint_core::{Amount, PeerId};
 use fedimint_ln_client::cli::LnInvoiceResponse;
 use fedimint_logging::LOG_DEVIMINT;
 use hex::ToHex;
 use ln_gateway::rpc::GatewayInfo;
 use serde_json::json;
 use tokio::net::TcpStream;
-use tokio::time::timeout;
 use tokio::{fs, try_join};
 use tracing::{debug, info};
 
@@ -181,31 +179,10 @@ pub async fn latency_tests(
             info!("Testing latency of ln send");
             let mut ln_sends = Vec::with_capacity(iterations);
             for _ in 0..iterations {
-                let add_invoice = lnd
-                    .lightning_client_lock()
-                    .await?
-                    .add_invoice(tonic_lnd::lnrpc::Invoice {
-                        value_msat: 1_000_000,
-                        ..Default::default()
-                    })
-                    .await?
-                    .into_inner();
-
-                let invoice = add_invoice.payment_request;
-                let payment_hash = add_invoice.r_hash;
+                let (invoice, payment_hash) = lnd.invoice(1_000_000).await?;
                 let start_time = Instant::now();
                 ln_pay(&client, invoice, cln_gw_id.clone(), false).await?;
-                let invoice_status = lnd
-                    .lightning_client_lock()
-                    .await?
-                    .lookup_invoice(tonic_lnd::lnrpc::PaymentHash {
-                        r_hash: payment_hash,
-                        ..Default::default()
-                    })
-                    .await?
-                    .into_inner()
-                    .state();
-                anyhow::ensure!(invoice_status == tonic_lnd::lnrpc::invoice::InvoiceState::Settled);
+                lnd.wait_bolt11_invoice(payment_hash).await?;
                 ln_sends.push(start_time.elapsed());
             }
             let ln_sends_stats = stats_for(ln_sends);
@@ -222,17 +199,7 @@ pub async fn latency_tests(
             let mut ln_receives = Vec::with_capacity(iterations);
 
             // give lnd some funds
-            let add_invoice = lnd
-                .lightning_client_lock()
-                .await?
-                .add_invoice(tonic_lnd::lnrpc::Invoice {
-                    value_msat: 10_000_000,
-                    ..Default::default()
-                })
-                .await?
-                .into_inner();
-
-            let invoice = add_invoice.payment_request;
+            let (invoice, _) = lnd.invoice(10_000_000).await?;
             ln_pay(&client, invoice, cln_gw_id.clone(), false).await?;
 
             for _ in 0..iterations {
@@ -246,32 +213,7 @@ pub async fn latency_tests(
                 .invoice;
 
                 let start_time = Instant::now();
-                let payment = lnd
-                    .lightning_client_lock()
-                    .await?
-                    .send_payment_sync(tonic_lnd::lnrpc::SendRequest {
-                        payment_request: invoice,
-                        ..Default::default()
-                    })
-                    .await?
-                    .into_inner();
-                let payment_status = lnd
-                    .lightning_client_lock()
-                    .await?
-                    .list_payments(tonic_lnd::lnrpc::ListPaymentsRequest {
-                        include_incomplete: true,
-                        ..Default::default()
-                    })
-                    .await?
-                    .into_inner()
-                    .payments
-                    .into_iter()
-                    .find(|p| p.payment_hash == payment.payment_hash.encode_hex::<String>())
-                    .context("payment not in list")?
-                    .status();
-                anyhow::ensure!(
-                    payment_status == tonic_lnd::lnrpc::payment::PaymentStatus::Succeeded
-                );
+                lnd.pay_bolt11_invoice(invoice).await?;
                 ln_receives.push(start_time.elapsed());
             }
             let ln_receives_stats = stats_for(ln_receives);
@@ -687,79 +629,16 @@ pub async fn cli_tests(dev_fed: DevFed) -> Result<()> {
     // LND can pay CLN directly
     info!("Testing LND can pay CLN directly");
     let invoice = cln
-        .request(cln_rpc::model::requests::InvoiceRequest {
-            amount_msat: AmountOrAny::Amount(ClnRpcAmount::from_msat(1_200_000)),
-            description: "test".to_string(),
-            label: "test2".to_string(),
-            expiry: Some(60),
-            fallbacks: None,
-            preimage: None,
-            cltv: None,
-            deschashonly: None,
-            exposeprivatechannels: None,
-        })
-        .await?
-        .bolt11;
-    lnd.lightning_client_lock()
-        .await?
-        .send_payment_sync(tonic_lnd::lnrpc::SendRequest {
-            payment_request: invoice.clone(),
-            ..Default::default()
-        })
-        .await?
-        .into_inner();
-    let invoice_status = cln
-        .request(cln_rpc::model::requests::WaitanyinvoiceRequest {
-            lastpay_index: None,
-            timeout: None,
-        })
-        .await?
-        .status;
-    anyhow::ensure!(matches!(
-        invoice_status,
-        cln_rpc::model::responses::WaitanyinvoiceStatus::PAID
-    ));
+        .invoice(1_200_000, "test".to_string(), "test2".to_string())
+        .await?;
+    lnd.pay_bolt11_invoice(invoice).await?;
+    cln.wait_any_bolt11_invoice().await?;
 
     // CLN can pay LND directly
     info!("Testing CLN can pay LND directly");
-    let add_invoice = lnd
-        .lightning_client_lock()
-        .await?
-        .add_invoice(tonic_lnd::lnrpc::Invoice {
-            value_msat: 1_000_000,
-            ..Default::default()
-        })
-        .await?
-        .into_inner();
-    let invoice = add_invoice.payment_request;
-    let payment_hash = add_invoice.r_hash;
-    cln.request(cln_rpc::model::requests::PayRequest {
-        bolt11: invoice,
-        amount_msat: None,
-        label: None,
-        riskfactor: None,
-        maxfeepercent: None,
-        retry_for: None,
-        maxdelay: None,
-        exemptfee: None,
-        localinvreqid: None,
-        exclude: None,
-        maxfee: None,
-        description: None,
-        partial_msat: None,
-    })
-    .await?;
-    let invoice_status = lnd
-        .lightning_client_lock()
-        .await?
-        .lookup_invoice(tonic_lnd::lnrpc::PaymentHash {
-            r_hash: payment_hash,
-            ..Default::default()
-        })
-        .await?
-        .into_inner()
-        .state();
-    anyhow::ensure!(invoice_status == tonic_lnd::lnrpc::invoice::InvoiceState::Settled);
+    let (invoice, payment_hash) = lnd.invoice(1_000_000).await?;
+    cln.pay_bolt11_invoice(invoice).await?;
+    lnd.wait_bolt11_invoice(payment_hash).await?;
 
     // fedimintd introduced wpkh for single guardian federations in v0.3.0 (9e35bdb)
     // The code path is backwards-compatible, however this test will fail if we
@@ -897,30 +776,9 @@ pub async fn cli_tests(dev_fed: DevFed) -> Result<()> {
         .await?
         .as_u64()
         .unwrap();
-    let add_invoice = lnd
-        .lightning_client_lock()
-        .await?
-        .add_invoice(tonic_lnd::lnrpc::Invoice {
-            value_msat: 1_200_000,
-            ..Default::default()
-        })
-        .await?
-        .into_inner();
-    let invoice = add_invoice.payment_request;
-    let payment_hash = add_invoice.r_hash;
+    let (invoice, payment_hash) = lnd.invoice(1_200_000).await?;
     ln_pay(&client, invoice.clone(), cln_gw_id.clone(), false).await?;
-
-    let invoice_status = lnd
-        .lightning_client_lock()
-        .await?
-        .lookup_invoice(tonic_lnd::lnrpc::PaymentHash {
-            r_hash: payment_hash,
-            ..Default::default()
-        })
-        .await?
-        .into_inner()
-        .state();
-    anyhow::ensure!(invoice_status == tonic_lnd::lnrpc::invoice::InvoiceState::Settled);
+    lnd.wait_bolt11_invoice(payment_hash).await?;
 
     // Try to pay the same invoice with a different client
     let new_client = fed.new_joined_client("pay_invoice").await?;
@@ -959,30 +817,7 @@ pub async fn cli_tests(dev_fed: DevFed) -> Result<()> {
     )
     .await?;
     let invoice = ln_invoice_response.invoice;
-    let payment = lnd
-        .lightning_client_lock()
-        .await?
-        .send_payment_sync(tonic_lnd::lnrpc::SendRequest {
-            payment_request: invoice.clone(),
-            ..Default::default()
-        })
-        .await?
-        .into_inner();
-    let payment_status = lnd
-        .lightning_client_lock()
-        .await?
-        .list_payments(tonic_lnd::lnrpc::ListPaymentsRequest {
-            include_incomplete: true,
-            ..Default::default()
-        })
-        .await?
-        .into_inner()
-        .payments
-        .into_iter()
-        .find(|p| p.payment_hash == payment.payment_hash.encode_hex::<String>())
-        .context("payment not in list")?
-        .status();
-    anyhow::ensure!(payment_status == tonic_lnd::lnrpc::payment::PaymentStatus::Succeeded);
+    lnd.pay_bolt11_invoice(invoice).await?;
 
     // Receive the ecash notes
     info!("Testing receiving e-cash notes");
@@ -1021,19 +856,12 @@ pub async fn cli_tests(dev_fed: DevFed) -> Result<()> {
         .as_u64()
         .unwrap();
     let invoice = cln
-        .request(cln_rpc::model::requests::InvoiceRequest {
-            amount_msat: AmountOrAny::Amount(ClnRpcAmount::from_msat(2_000_000)),
-            description: "lnd-gw-to-cln".to_string(),
-            label: "test-client".to_string(),
-            expiry: Some(60),
-            fallbacks: None,
-            preimage: None,
-            cltv: None,
-            deschashonly: None,
-            exposeprivatechannels: None,
-        })
-        .await?
-        .bolt11;
+        .invoice(
+            2_000_000,
+            "lnd-gw-to-cln".to_string(),
+            "test-client".to_string(),
+        )
+        .await?;
     let gateway_cli_version = crate::util::GatewayCli::version_or_default().await;
     let gatewayd_version = crate::util::Gatewayd::version_or_default().await;
     if gateway_cli_version >= *VERSION_0_4_0_ALPHA && gatewayd_version >= *VERSION_0_4_0_ALPHA {
@@ -1047,17 +875,7 @@ pub async fn cli_tests(dev_fed: DevFed) -> Result<()> {
     ln_pay(&client, invoice.clone(), lnd_gw_id.clone(), false).await?;
     let fed_id = fed.calculate_federation_id();
 
-    let invoice_status = cln
-        .request(cln_rpc::model::requests::WaitanyinvoiceRequest {
-            lastpay_index: None,
-            timeout: None,
-        })
-        .await?
-        .status;
-    anyhow::ensure!(matches!(
-        invoice_status,
-        cln_rpc::model::responses::WaitanyinvoiceStatus::PAID
-    ));
+    cln.wait_any_bolt11_invoice().await?;
 
     // Assert balances changed by 2_000_000 msat (amount sent) + 0 msat (fee)
     let final_lnd_outgoing_client_balance = client.balance().await?;
@@ -1087,28 +905,7 @@ pub async fn cli_tests(dev_fed: DevFed) -> Result<()> {
     )
     .await?;
     let invoice = recv.invoice;
-    let invoice_status = cln
-        .request(cln_rpc::model::requests::PayRequest {
-            bolt11: invoice,
-            amount_msat: None,
-            label: None,
-            riskfactor: None,
-            maxfeepercent: None,
-            retry_for: None,
-            maxdelay: None,
-            exemptfee: None,
-            localinvreqid: None,
-            exclude: None,
-            maxfee: None,
-            description: None,
-            partial_msat: None,
-        })
-        .await?
-        .status;
-    anyhow::ensure!(matches!(
-        invoice_status,
-        cln_rpc::model::responses::PayStatus::COMPLETE
-    ));
+    cln.pay_bolt11_invoice(invoice).await?;
 
     // Receive the ecash notes
     info!("Testing receiving ecash notes");
@@ -1289,23 +1086,7 @@ pub async fn start_hold_invoice_payment(
     lnd: &Lnd,
 ) -> anyhow::Result<([u8; 32], cln_rpc::primitives::Sha256, String)> {
     client.use_gateway(gw_cln).await?;
-    let preimage = rand::random::<[u8; 32]>();
-    let hash = {
-        let mut engine = bitcoin::hashes::sha256::Hash::engine();
-        bitcoin::hashes::HashEngine::input(&mut engine, &preimage);
-        bitcoin::hashes::sha256::Hash::from_engine(engine)
-    };
-    let payment_request = lnd
-        .invoices_client_lock()
-        .await?
-        .add_hold_invoice(tonic_lnd::invoicesrpc::AddHoldInvoiceRequest {
-            value_msat: 1000,
-            hash: hash.to_byte_array().to_vec(),
-            ..Default::default()
-        })
-        .await?
-        .into_inner()
-        .payment_request;
+    let (preimage, payment_request, hash) = lnd.create_hold_invoice(1000).await?;
     let operation_id = ln_pay(client, payment_request, gw_cln_id, true).await?;
     Ok((preimage, hash, operation_id))
 }
@@ -1317,44 +1098,7 @@ pub async fn finish_hold_invoice_payment(
     hold_invoice_hash: cln_rpc::primitives::Sha256,
     hold_invoice_preimage: [u8; 32],
 ) -> anyhow::Result<()> {
-    let mut hold_invoice_subscription = lnd
-        .invoices_client_lock()
-        .await?
-        .subscribe_single_invoice(tonic_lnd::invoicesrpc::SubscribeSingleInvoiceRequest {
-            r_hash: hold_invoice_hash.to_byte_array().to_vec(),
-        })
-        .await?
-        .into_inner();
-    loop {
-        const WAIT_FOR_INVOICE_TIMEOUT: Duration = Duration::from_secs(60);
-        match timeout(
-            WAIT_FOR_INVOICE_TIMEOUT,
-            futures::StreamExt::next(&mut hold_invoice_subscription),
-        )
-        .await
-        {
-            Ok(Some(Ok(invoice))) => {
-                if invoice.state() == tonic_lnd::lnrpc::invoice::InvoiceState::Accepted {
-                    break;
-                }
-                debug!("hold invoice payment state: {:?}", invoice.state());
-            }
-            Ok(Some(Err(e))) => {
-                bail!("error in invoice subscription: {e:?}");
-            }
-            Ok(None) => {
-                bail!("invoice subscription ended before invoice was accepted");
-            }
-            Err(_) => {
-                bail!("timed out waiting for invoice to be accepted")
-            }
-        }
-    }
-    lnd.invoices_client_lock()
-        .await?
-        .settle_invoice(tonic_lnd::invoicesrpc::SettleInvoiceMsg {
-            preimage: hold_invoice_preimage.to_vec(),
-        })
+    lnd.settle_hold_invoice(hold_invoice_preimage, hold_invoice_hash)
         .await?;
     let received_preimage = cmd!(client, "await-ln-pay", hold_invoice_operation_id)
         .out_json()
@@ -1794,16 +1538,7 @@ pub async fn gw_reboot_test(dev_fed: DevFed, process_mgr: &ProcessManager) -> Re
     // funds being stuck
     info!("Making payment while gateway is down");
     let initial_client_balance = client.balance().await?;
-    let add_invoice = lnd
-        .lightning_client_lock()
-        .await?
-        .add_invoice(tonic_lnd::lnrpc::Invoice {
-            value_msat: 3000,
-            ..Default::default()
-        })
-        .await?
-        .into_inner();
-    let invoice = add_invoice.payment_request;
+    let (invoice, _) = lnd.invoice(3000).await?;
     ln_pay(&client, invoice, cln_gateway_id, false)
         .await
         .expect_err("Expected ln-pay to return error because the gateway is not online");
@@ -1894,56 +1629,11 @@ pub async fn do_try_create_and_pay_invoice(
     match gw.ln.as_ref() {
         Some(LightningNode::Cln(_cln)) => {
             // Pay the invoice using LND
-            let payment = new_lnd
-                .lightning_client_lock()
-                .await?
-                .send_payment_sync(tonic_lnd::lnrpc::SendRequest {
-                    payment_request: invoice.clone(),
-                    ..Default::default()
-                })
-                .await?
-                .into_inner();
-
-            let payment_status = new_lnd
-                .lightning_client_lock()
-                .await?
-                .list_payments(tonic_lnd::lnrpc::ListPaymentsRequest {
-                    include_incomplete: true,
-                    ..Default::default()
-                })
-                .await?
-                .into_inner()
-                .payments
-                .into_iter()
-                .find(|p| p.payment_hash == payment.payment_hash.encode_hex::<String>())
-                .context("payment not in list")?
-                .status();
-            anyhow::ensure!(payment_status == tonic_lnd::lnrpc::payment::PaymentStatus::Succeeded);
+            new_lnd.pay_bolt11_invoice(invoice).await?;
         }
         Some(LightningNode::Lnd(_lnd)) => {
             // Pay the invoice using CLN
-            let invoice_status = new_cln
-                .request(cln_rpc::model::requests::PayRequest {
-                    bolt11: invoice,
-                    amount_msat: None,
-                    label: None,
-                    riskfactor: None,
-                    maxfeepercent: None,
-                    retry_for: None,
-                    maxdelay: None,
-                    exemptfee: None,
-                    localinvreqid: None,
-                    exclude: None,
-                    maxfee: None,
-                    description: None,
-                    partial_msat: None,
-                })
-                .await?
-                .status;
-            anyhow::ensure!(matches!(
-                invoice_status,
-                cln_rpc::model::responses::PayStatus::COMPLETE
-            ));
+            new_cln.pay_bolt11_invoice(invoice).await?;
         }
         None => {
             panic!("Lightning node did not come back up correctly");

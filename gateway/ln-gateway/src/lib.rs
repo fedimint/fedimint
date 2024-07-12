@@ -403,6 +403,7 @@ impl Gateway {
         Gateway::new(
             Arc::new(GatewayLightningBuilder {
                 lightning_mode: opts.mode,
+                gateway_db: gateway_db.clone(),
             }),
             gateway_parameters,
             gateway_db,
