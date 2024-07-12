@@ -28,8 +28,8 @@ fedimint-client = { workspace = true }
 fedimint-core = { workspace = true }
 fedimint-ln-client = { workspace = true }
 fedimint-ln-server = { version = "=0.4.0-alpha", path = "../modules/fedimint-ln-server" }
-fedimint-lnv2-server = { version = "=0.4.0-alpha", path = "../modules/fedimint-lnv2-server" }
 fedimint-lnv2-client = { version = "=0.4.0-alpha", path = "../modules/fedimint-lnv2-client" }
+fedimint-lnv2-server = { version = "=0.4.0-alpha", path = "../modules/fedimint-lnv2-server" }
 fedimint-logging = { workspace = true }
 fedimint-meta-client = { version = "=0.4.0-alpha", path = "../modules/fedimint-meta-client" }
 fedimint-meta-server = { version = "=0.4.0-alpha", path = "../modules/fedimint-meta-server" }

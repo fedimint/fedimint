@@ -37,8 +37,8 @@ tokio = { version = "1", features = ["full", "tracing"] }
 tracing = { workspace = true }
 url = { version = "2.5.2", features = ["serde"] }
 
-[target.'cfg(not(target_family = "wasm"))'.dependencies]
-jsonrpsee-ws-client = { version = "0.24.0", default-features = false }
-
 [build-dependencies]
 fedimint-build = { version = "=0.4.0-alpha", path = "../fedimint-build" }
+
+[target.'cfg(not(target_family = "wasm"))'.dependencies]
+jsonrpsee-ws-client = { version = "0.24.0", default-features = false }

@@ -8,10 +8,6 @@ license = "MIT"
 readme = "../README.md"
 repository = "https://github.com/fedimint/fedimint"
 
-[lib]
-name = "fedimint_logging"
-path = "src/lib.rs"
-
 [features]
 telemetry = [
     "tracing-opentelemetry",
@@ -19,6 +15,10 @@ telemetry = [
     "console-subscriber",
     "opentelemetry",
 ]
+
+[lib]
+name = "fedimint_logging"
+path = "src/lib.rs"
 
 [dependencies]
 anyhow = { workspace = true }
