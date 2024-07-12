@@ -309,7 +309,7 @@ impl GatewayLndClient {
 
                 if contains_payment_hash
                     && invoice.r_preimage.is_empty()
-                    && invoice.state().clone() == InvoiceState::Open
+                    && invoice.state() == InvoiceState::Open
                 {
                     info!(
                         "Monitoring new LNv2 invoice with {}",
@@ -980,9 +980,10 @@ impl ILnRpcClient for GatewayLndClient {
             Some(Action::Settle(Settle { preimage })) => {
                 (ResolveHoldForwardAction::Settle, preimage)
             }
-            Some(Action::Cancel(Cancel { reason: _ })) => (ResolveHoldForwardAction::Fail, vec![]),
             Some(Action::Forward(Forward {})) => (ResolveHoldForwardAction::Resume, vec![]),
-            None => (ResolveHoldForwardAction::Fail, vec![]),
+            Some(Action::Cancel(Cancel { reason: _ })) | None => {
+                (ResolveHoldForwardAction::Fail, vec![])
+            }
         };
 
         // First check if this completion request corresponds to a HOLD LNv2 invoice
