@@ -1820,6 +1820,7 @@
 <a href="#1820" id="1820">1820</a>
 <a href="#1821" id="1821">1821</a>
 <a href="#1822" id="1822">1822</a>
+<a href="#1823" id="1823">1823</a>
 </pre></div><pre class="rust"><code><span class="attr">#![warn(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::cast_possible_wrap)]
@@ -2225,6 +2226,7 @@
         Gateway::new(
             Arc::new(GatewayLightningBuilder {
                 lightning_mode: opts.mode,
+                gateway_db: gateway_db.clone(),
             }),
             gateway_parameters,
             gateway_db,
