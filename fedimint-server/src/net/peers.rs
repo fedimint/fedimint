@@ -698,12 +698,11 @@ where
 mod tests {
     use std::collections::{BTreeMap, HashMap};
     use std::sync::Arc;
-    use std::time::Duration;
 
     use anyhow::{ensure, Context as _};
     use fedimint_api_client::api::PeerConnectionStatus;
     use fedimint_core::task::TaskGroup;
-    use fedimint_core::util::{backon, retry};
+    use fedimint_core::util::{backoff_util, retry};
     use fedimint_core::PeerId;
     use tokio::sync::RwLock;
 
@@ -723,10 +722,7 @@ mod tests {
             ) {
                 retry(
                     format!("wait for client {name}"),
-                    backon::FibonacciBuilder::default()
-                        .with_min_delay(Duration::from_millis(200))
-                        .with_max_delay(Duration::from_secs(5))
-                        .with_max_times(10),
+                    backoff_util::aggressive_backoff(),
                     || async {
                         let status = status_channels.read().await;
                         ensure!(status.len() == 2);

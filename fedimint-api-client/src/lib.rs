@@ -5,15 +5,13 @@
 #![allow(clippy::must_use_candidate)]
 #![allow(clippy::return_self_not_must_use)]
 
-use std::time::Duration;
-
 use anyhow::{bail, Context as _};
 use api::{DynGlobalApi, FederationApiExt as _, WsFederationApi};
 use fedimint_core::config::{ClientConfig, FederationId};
 use fedimint_core::endpoint_constants::CLIENT_CONFIG_ENDPOINT;
 use fedimint_core::invite_code::InviteCode;
 use fedimint_core::module::ApiRequestErased;
-use fedimint_core::util::backon;
+use fedimint_core::util::backoff_util;
 use fedimint_core::NumPeers;
 use query::FilterMap;
 use tracing::debug;
@@ -33,12 +31,7 @@ pub async fn download_from_invite_code(invite_code: &InviteCode) -> anyhow::Resu
 
     fedimint_core::util::retry(
         "Downloading client config",
-        // 0.2, 0.2, 0.4, 0.6, 1.0, 1.6, ...
-        // sum = 21.2
-        backon::FibonacciBuilder::default()
-            .with_min_delay(Duration::from_millis(200))
-            .with_max_delay(Duration::from_secs(5))
-            .with_max_times(10),
+        backoff_util::aggressive_backoff(),
         || try_download_client_config(&api, federation_id, api_secret.clone()),
     )
     .await

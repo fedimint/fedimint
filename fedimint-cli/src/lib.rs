@@ -45,7 +45,7 @@ use fedimint_core::core::{ModuleInstanceId, OperationId};
 use fedimint_core::db::{Database, DatabaseValue};
 use fedimint_core::invite_code::InviteCode;
 use fedimint_core::module::{ApiAuth, ApiRequestErased};
-use fedimint_core::util::{backon, handle_version_hash_command, retry, SafeUrl};
+use fedimint_core::util::{backoff_util, handle_version_hash_command, retry, SafeUrl};
 use fedimint_core::{fedimint_build_code_version_env, runtime, PeerId, TieredMulti};
 use fedimint_ln_client::LightningClientInit;
 use fedimint_logging::{TracingSetup, LOG_CLIENT};
@@ -897,9 +897,11 @@ impl FedimintCli {
             }
             Command::Dev(DevCmd::WaitBlockCount { count: target }) => retry(
                 "wait_block_count",
-                backon::ConstantBuilder::default()
-                    .with_delay(Duration::from_millis(100))
-                    .with_max_times(usize::MAX),
+                backoff_util::custom_backoff(
+                    Duration::from_millis(100),
+                    Duration::from_secs(5),
+                    None,
+                ),
                 || async {
                     let client = self.client_open(&cli).await?;
                     let wallet = client.get_first_module::<WalletClientModule>();
