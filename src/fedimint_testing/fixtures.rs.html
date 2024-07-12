@@ -254,8 +254,6 @@
 <a href="#254" id="254">254</a>
 <a href="#255" id="255">255</a>
 <a href="#256" id="256">256</a>
-<a href="#257" id="257">257</a>
-<a href="#258" id="258">258</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::net::SocketAddr;
 <span class="kw">use </span>std::path::PathBuf;
 <span class="kw">use </span>std::sync::Arc;
@@ -426,7 +424,7 @@
             Arc::new(FakeLightningBuilder);
 
         <span class="comment">// Module tests do not use the webserver, so any port is ok
-        </span><span class="kw">let </span>listen: SocketAddr = <span class="macro">format!</span>(<span class="string">"127.0.0.1:9000"</span>).parse().unwrap();
+        </span><span class="kw">let </span>listen: SocketAddr = <span class="string">"127.0.0.1:9000"</span>.parse().unwrap();
         <span class="kw">let </span>address: SafeUrl = <span class="macro">format!</span>(<span class="string">"http://{listen}"</span>).parse().unwrap();
 
         <span class="kw">let </span>ln_client: Arc&lt;<span class="kw">dyn </span>ILnRpcClient&gt; = lightning_builder.build().<span class="kw">await</span>.into();
@@ -441,7 +439,7 @@
             lightning_network,
         };
 
-        <span class="kw">let </span>gateway = Gateway::new_with_custom_registry(
+        Gateway::new_with_custom_registry(
             lightning_builder,
             client_builder,
             listen,
@@ -460,9 +458,7 @@
             </span>ln_gateway::GatewayState::Running { lightning_context },
         )
         .<span class="kw">await
-        </span>.expect(<span class="string">"Failed to create gateway"</span>);
-
-        gateway
+        </span>.expect(<span class="string">"Failed to create gateway"</span>)
     }
 
     <span class="doccomment">/// Get a server bitcoin RPC config

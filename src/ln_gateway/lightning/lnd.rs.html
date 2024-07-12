@@ -1361,6 +1361,7 @@
 <a href="#1361" id="1361">1361</a>
 <a href="#1362" id="1362">1362</a>
 <a href="#1363" id="1363">1363</a>
+<a href="#1364" id="1364">1364</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeSet;
 <span class="kw">use </span>std::fmt::{<span class="self">self</span>, Display};
 <span class="kw">use </span>std::str::FromStr;
@@ -1672,7 +1673,7 @@
 
                 <span class="kw">if </span>contains_payment_hash
                     &amp;&amp; invoice.r_preimage.is_empty()
-                    &amp;&amp; invoice.state().clone() == InvoiceState::Open
+                    &amp;&amp; invoice.state() == InvoiceState::Open
                 {
                     <span class="macro">info!</span>(
                         <span class="string">"Monitoring new LNv2 invoice with {}"</span>,
@@ -2343,9 +2344,10 @@
             <span class="prelude-val">Some</span>(Action::Settle(Settle { preimage })) =&gt; {
                 (ResolveHoldForwardAction::Settle, preimage)
             }
-            <span class="prelude-val">Some</span>(Action::Cancel(Cancel { reason: <span class="kw">_ </span>})) =&gt; (ResolveHoldForwardAction::Fail, <span class="macro">vec!</span>[]),
             <span class="prelude-val">Some</span>(Action::Forward(Forward {})) =&gt; (ResolveHoldForwardAction::Resume, <span class="macro">vec!</span>[]),
-            <span class="prelude-val">None </span>=&gt; (ResolveHoldForwardAction::Fail, <span class="macro">vec!</span>[]),
+            <span class="prelude-val">Some</span>(Action::Cancel(Cancel { reason: <span class="kw">_ </span>})) | <span class="prelude-val">None </span>=&gt; {
+                (ResolveHoldForwardAction::Fail, <span class="macro">vec!</span>[])
+            }
         };
 
         <span class="comment">// First check if this completion request corresponds to a HOLD LNv2 invoice
