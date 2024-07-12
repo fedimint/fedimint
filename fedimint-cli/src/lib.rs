@@ -716,14 +716,11 @@ impl FedimintCli {
     async fn handle_command(&mut self, cli: Opts) -> CliOutputResult {
         match cli.command.clone() {
             Command::InviteCode { peer } => {
-                let db = cli.load_rocks_db().await?;
-                let client_config = Client::get_config_from_db(&db)
-                    .await
-                    .ok_or_cli_msg("client config code not found")?;
-                let api_secret = Client::get_api_secret_from_db(&db).await;
+                let client = self.client_open(&cli).await?;
 
-                let invite_code = client_config
-                    .invite_code(&peer, &api_secret)
+                let invite_code = client
+                    .invite_code(peer)
+                    .await
                     .ok_or_cli_msg("peer not found")?;
 
                 Ok(CliOutput::InviteCode { invite_code })
