@@ -1,3 +1,4 @@
+use clap::{Parser, Subcommand};
 use devimint::devfed::DevJitFed;
 use devimint::federation::Client;
 use devimint::version_constants::VERSION_0_4_0_ALPHA;
@@ -10,8 +11,23 @@ use substring::Substring;
 use tokio::try_join;
 use tracing::info;
 
+#[derive(Parser)]
+struct TestOpts {
+    #[clap(subcommand)]
+    test: LnV2TestType,
+}
+
+#[derive(Debug, Clone, Subcommand)]
+enum LnV2TestType {
+    All,
+    SelfPayment,
+    GatewayRegistration,
+    LightningPayment,
+}
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
+    let opts = TestOpts::parse();
     devimint::run_devfed_test(|dev_fed, _process_mgr| async move {
         let fedimint_cli_version = util::FedimintCli::version_or_default().await;
         let fedimintd_version = util::FedimintdCmd::version_or_default().await;
@@ -32,15 +48,33 @@ async fn main() -> anyhow::Result<()> {
             return Ok(());
         }
 
+        let gw_lnd = dev_fed.gw_lnd_registered().await?;
+        let gw_cln = dev_fed.gw_cln_registered().await?;
+
+        let federation = dev_fed.fed().await?;
+        federation.pegin_gateway(1_000_000, gw_lnd).await?;
+        federation.pegin_gateway(1_000_000, gw_cln).await?;
+
         // TODO: test refund of payment between gateways - the refund works but it
         // causes the second payment between gateways which should be successful to
         // also be refunded but only in CI
 
-        test_self_payment_success(&dev_fed).await?;
-
-        test_gateway_registration(&dev_fed).await?;
-
-        test_lightning_payment(&dev_fed).await?;
+        match opts.test {
+            LnV2TestType::All => {
+                test_self_payment_success(&dev_fed).await?;
+                test_gateway_registration(&dev_fed).await?;
+                test_lightning_payment(&dev_fed).await?;
+            }
+            LnV2TestType::SelfPayment => {
+                test_self_payment_success(&dev_fed).await?;
+            }
+            LnV2TestType::GatewayRegistration => {
+                test_gateway_registration(&dev_fed).await?;
+            }
+            LnV2TestType::LightningPayment => {
+                test_lightning_payment(&dev_fed).await?;
+            }
+        }
 
         Ok(())
     })
@@ -58,10 +92,6 @@ async fn test_self_payment_success(dev_fed: &DevJitFed) -> anyhow::Result<()> {
 
     let gw_lnd = dev_fed.gw_lnd().await?;
     let gw_cln = dev_fed.gw_cln().await?;
-
-    federation.pegin_gateway(1_000_000, gw_lnd).await?;
-    federation.pegin_gateway(1_000_000, gw_cln).await?;
-
     for (gw_receive, gw_send) in [
         (gw_lnd.addr.clone(), gw_lnd.addr.clone()),
         (gw_lnd.addr.clone(), gw_cln.addr.clone()),
