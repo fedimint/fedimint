@@ -264,9 +264,6 @@
 <a href="#264" id="264">264</a>
 <a href="#265" id="265">265</a>
 <a href="#266" id="266">266</a>
-<a href="#267" id="267">267</a>
-<a href="#268" id="268">268</a>
-<a href="#269" id="269">269</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>devimint::devfed::DevJitFed;
 <span class="kw">use </span>devimint::federation::Client;
 <span class="kw">use </span>devimint::version_constants::VERSION_0_4_0_ALPHA;
@@ -301,7 +298,11 @@
             <span class="kw">return </span><span class="prelude-val">Ok</span>(());
         }
 
-        test_self_payment(<span class="kw-2">&amp;</span>dev_fed).<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="comment">// TODO: test refund of payment between gateways - the refund works but it
+        // causes the second payment between gateways which should be successful to
+        // also be refunded but only in CI
+
+        </span>test_self_payment_success(<span class="kw-2">&amp;</span>dev_fed).<span class="kw">await</span><span class="question-mark">?</span>;
 
         test_gateway_registration(<span class="kw-2">&amp;</span>dev_fed).<span class="kw">await</span><span class="question-mark">?</span>;
 
@@ -312,43 +313,36 @@
     .<span class="kw">await
 </span>}
 
-<span class="kw">async fn </span>test_self_payment(dev_fed: <span class="kw-2">&amp;</span>DevJitFed) -&gt; anyhow::Result&lt;()&gt; {
+<span class="kw">async fn </span>test_self_payment_success(dev_fed: <span class="kw-2">&amp;</span>DevJitFed) -&gt; anyhow::Result&lt;()&gt; {
     <span class="kw">let </span>federation = dev_fed.fed().<span class="kw">await</span><span class="question-mark">?</span>;
 
-    <span class="kw">let </span>client = federation.new_joined_client(<span class="string">"lnv2-module-client"</span>).<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="kw">let </span>client = federation
+        .new_joined_client(<span class="string">"lnv2-self-payment-success-client"</span>)
+        .<span class="kw">await</span><span class="question-mark">?</span>;
 
     federation.pegin_client(<span class="number">10_000</span>, <span class="kw-2">&amp;</span>client).<span class="kw">await</span><span class="question-mark">?</span>;
 
     <span class="kw">let </span>gw_lnd = dev_fed.gw_lnd().<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="kw">let </span>gw_cln = dev_fed.gw_cln().<span class="kw">await</span><span class="question-mark">?</span>;
 
-    <span class="comment">// TODO: test refund of payment between gateways - the refund works but it
-    // causes the second payment between gateways which should be successful to
-    // also be refunded but only in CI
-
-    </span><span class="kw">let </span>inv_lnd = fetch_invoice(<span class="kw-2">&amp;</span>client, <span class="kw-2">&amp;</span>gw_lnd.addr, <span class="number">1_000_000</span>).<span class="kw">await</span><span class="question-mark">?</span>.<span class="number">0</span>;
-
-    <span class="comment">// payment will be refunded due to insufficient liquidity
-
-    </span>test_send(<span class="kw-2">&amp;</span>client, <span class="kw-2">&amp;</span>gw_lnd.addr, <span class="kw-2">&amp;</span>inv_lnd, FinalSendState::Refunded).<span class="kw">await</span><span class="question-mark">?</span>;
-
-    <span class="comment">// only now pegin sufficient liquidity for the second payment attempts
-
-    </span>federation.pegin_gateway(<span class="number">1_000_000</span>, gw_lnd).<span class="kw">await</span><span class="question-mark">?</span>;
+    federation.pegin_gateway(<span class="number">1_000_000</span>, gw_lnd).<span class="kw">await</span><span class="question-mark">?</span>;
     federation.pegin_gateway(<span class="number">1_000_000</span>, gw_cln).<span class="kw">await</span><span class="question-mark">?</span>;
 
-    <span class="kw">let </span>(inv_lnd, receive_op_lnd) = fetch_invoice(<span class="kw-2">&amp;</span>client, <span class="kw-2">&amp;</span>gw_lnd.addr, <span class="number">1_000_000</span>).<span class="kw">await</span><span class="question-mark">?</span>;
-    <span class="kw">let </span>(inv_cln, receive_op_cln) = fetch_invoice(<span class="kw-2">&amp;</span>client, <span class="kw-2">&amp;</span>gw_cln.addr, <span class="number">1_000_000</span>).<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="kw">for </span>(gw_receive, gw_send) <span class="kw">in </span>[
+        (gw_lnd.addr.clone(), gw_lnd.addr.clone()),
+        (gw_lnd.addr.clone(), gw_cln.addr.clone()),
+        (gw_cln.addr.clone(), gw_lnd.addr.clone()),
+        (gw_cln.addr.clone(), gw_cln.addr.clone()),
+    ] {
+        <span class="kw">let </span>(invoice, receive_op) = fetch_invoice(<span class="kw-2">&amp;</span>client, <span class="kw-2">&amp;</span>gw_receive, <span class="number">1_000_000</span>).<span class="kw">await</span><span class="question-mark">?</span>;
 
-    <span class="comment">// payments will be successful since the gateways now have sufficient liquidity
+        test_send(<span class="kw-2">&amp;</span>client, <span class="kw-2">&amp;</span>gw_send, <span class="kw-2">&amp;</span>invoice, FinalSendState::Success).<span class="kw">await</span><span class="question-mark">?</span>;
 
-    </span>test_send(<span class="kw-2">&amp;</span>client, <span class="kw-2">&amp;</span>gw_lnd.addr, <span class="kw-2">&amp;</span>inv_lnd, FinalSendState::Success).<span class="kw">await</span><span class="question-mark">?</span>;
-    test_send(<span class="kw-2">&amp;</span>client, <span class="kw-2">&amp;</span>gw_lnd.addr, <span class="kw-2">&amp;</span>inv_cln, FinalSendState::Success).<span class="kw">await</span><span class="question-mark">?</span>;
-
-    await_receive_claimed(<span class="kw-2">&amp;</span>client, receive_op_lnd).<span class="kw">await</span><span class="question-mark">?</span>;
-    await_receive_claimed(<span class="kw-2">&amp;</span>client, receive_op_cln).<span class="kw">await</span><span class="question-mark">?</span>;
+        await_receive_claimed(<span class="kw-2">&amp;</span>client, receive_op).<span class="kw">await</span><span class="question-mark">?</span>;
+    }
 
     <span class="macro">info!</span>(<span class="string">"test_self_payment successful"</span>);
+
     <span class="prelude-val">Ok</span>(())
 }
 
