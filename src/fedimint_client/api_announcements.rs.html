@@ -161,7 +161,7 @@
     <span class="comment">// Wait for the guardian keys to be available
     </span><span class="kw">let </span>guardian_pub_keys = client_inner.get_guardian_public_keys_blocking().<span class="kw">await</span>;
     <span class="kw">loop </span>{
-        <span class="kw">let </span>results = join_all(guardian_pub_keys.keys()
+        <span class="kw">let </span>results = join_all(client_inner.api.all_peers().iter()
             .map(|peer_id| <span class="kw">async </span>{
                 <span class="kw">let </span>announcements = client_inner
                     .api

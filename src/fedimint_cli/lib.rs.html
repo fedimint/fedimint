@@ -1182,6 +1182,20 @@
 <a href="#1182" id="1182">1182</a>
 <a href="#1183" id="1183">1183</a>
 <a href="#1184" id="1184">1184</a>
+<a href="#1185" id="1185">1185</a>
+<a href="#1186" id="1186">1186</a>
+<a href="#1187" id="1187">1187</a>
+<a href="#1188" id="1188">1188</a>
+<a href="#1189" id="1189">1189</a>
+<a href="#1190" id="1190">1190</a>
+<a href="#1191" id="1191">1191</a>
+<a href="#1192" id="1192">1192</a>
+<a href="#1193" id="1193">1193</a>
+<a href="#1194" id="1194">1194</a>
+<a href="#1195" id="1195">1195</a>
+<a href="#1196" id="1196">1196</a>
+<a href="#1197" id="1197">1197</a>
+<a href="#1198" id="1198">1198</a>
 </pre></div><pre class="rust"><code><span class="attr">#![warn(clippy::pedantic)]
 #![allow(clippy::doc_markdown)]
 #![allow(clippy::missing_errors_doc)]
@@ -1524,6 +1538,11 @@
         /// isn't reachable anymore
         </span><span class="attr">#[clap(long)]
         </span>override_url: <span class="prelude-ty">Option</span>&lt;SafeUrl&gt;,
+    },
+    <span class="doccomment">/// Stop fedimintd after the specified session to do a coordinated upgrade
+    </span>Shutdown {
+        <span class="doccomment">/// Session index to stop after
+        </span>session_idx: u64,
     },
 }
 
@@ -2019,6 +2038,15 @@ Examples:
                 <span class="prelude-val">Ok</span>(CliOutput::Raw(
                     serde_json::to_value(announcement).map_err_cli_msg(<span class="string">"invalid response"</span>)<span class="question-mark">?</span>,
                 ))
+            }
+            Command::Admin(AdminCmd::Shutdown { session_idx }) =&gt; {
+                <span class="kw">let </span>client = <span class="self">self</span>.client_open(<span class="kw-2">&amp;</span>cli).<span class="kw">await</span><span class="question-mark">?</span>;
+
+                cli.admin_client(<span class="kw-2">&amp;</span>client.get_peer_urls().<span class="kw">await</span>, client.api_secret())<span class="question-mark">?
+                    </span>.shutdown(<span class="prelude-val">Some</span>(session_idx), cli.auth()<span class="question-mark">?</span>)
+                    .<span class="kw">await</span><span class="question-mark">?</span>;
+
+                <span class="prelude-val">Ok</span>(CliOutput::Raw(<span class="macro">json!</span>(null)))
             }
             Command::Dev(DevCmd::Api {
                 method,
