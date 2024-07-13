@@ -325,9 +325,14 @@ pub async fn handle_command(cmd: Cmd, common_args: CommonArgs) -> Result<()> {
         Cmd::Rpc(rpc_cmd) => rpc_command(rpc_cmd, common_args).await?,
         Cmd::RunUi => {
             let (process_mgr, task_group) = setup(common_args).await?;
+            let task_group_clone = task_group.clone();
             let main = async {
                 let result = run_ui(&process_mgr).await;
                 let daemons = write_ready_file(&process_mgr.globals, result).await?;
+
+                debug!(target: LOG_DEVIMINT, "Waiting for group task shutdown");
+                task_group_clone.make_handle().make_shutdown_rx().await;
+
                 Ok::<_, anyhow::Error>(daemons)
             };
             Box::pin(cleanup_on_exit(main, task_group)).await?;
