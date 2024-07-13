@@ -18,6 +18,7 @@ use config::LightningClientConfig;
 use fedimint_core::core::{Decoder, ModuleInstanceId, ModuleKind};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::{CommonModuleInit, ModuleCommon, ModuleConsensusVersion};
+use fedimint_core::util::SafeUrl;
 use fedimint_core::{extensible_associated_module_type, plugin_types_trait_impl_common};
 use secp256k1::schnorr::Signature;
 use serde::{Deserialize, Serialize};
@@ -156,3 +157,16 @@ plugin_types_trait_impl_common!(
     LightningInputError,
     LightningOutputError
 );
+
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
+pub enum GatewayEndpoint {
+    Url(SafeUrl),
+}
+
+impl GatewayEndpoint {
+    pub fn into_url(self) -> SafeUrl {
+        match self {
+            GatewayEndpoint::Url(url) => url,
+        }
+    }
+}
