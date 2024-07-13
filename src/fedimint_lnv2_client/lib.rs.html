@@ -951,6 +951,18 @@
 <a href="#951" id="951">951</a>
 <a href="#952" id="952">952</a>
 <a href="#953" id="953">953</a>
+<a href="#954" id="954">954</a>
+<a href="#955" id="955">955</a>
+<a href="#956" id="956">956</a>
+<a href="#957" id="957">957</a>
+<a href="#958" id="958">958</a>
+<a href="#959" id="959">959</a>
+<a href="#960" id="960">960</a>
+<a href="#961" id="961">961</a>
+<a href="#962" id="962">962</a>
+<a href="#963" id="963">963</a>
+<a href="#964" id="964">964</a>
+<a href="#965" id="965">965</a>
 </pre></div><pre class="rust"><code><span class="attr">#![warn(clippy::pedantic)]
 #![allow(clippy::missing_errors_doc)]
 #![allow(clippy::missing_panics_doc)]
@@ -994,7 +1006,7 @@
     LightningCommonInit, LightningModuleTypes, LightningOutput, LightningOutputV0,
 };
 <span class="kw">use </span>futures::StreamExt;
-<span class="kw">use </span>lightning_invoice::Bolt11Invoice;
+<span class="kw">use </span>lightning_invoice::{Bolt11Invoice, Currency};
 <span class="kw">use </span>secp256k1::schnorr::Signature;
 <span class="kw">use </span>secp256k1::{ecdh, KeyPair, PublicKey, Scalar, SecretKey};
 <span class="kw">use </span>serde::{Deserialize, Serialize};
@@ -1332,6 +1344,13 @@
 
         <span class="kw">if </span>invoice.is_expired() {
             <span class="kw">return </span><span class="prelude-val">Err</span>(SendPaymentError::InvoiceExpired);
+        }
+
+        <span class="kw">if </span><span class="self">self</span>.cfg.network != invoice.currency().into() {
+            <span class="kw">return </span><span class="prelude-val">Err</span>(SendPaymentError::WrongCurrency {
+                invoice_currency: invoice.currency(),
+                federation_currency: <span class="self">self</span>.cfg.network.into(),
+            });
         }
 
         <span class="kw">let </span>operation_id = <span class="self">self</span>.get_next_operation_id(<span class="kw-2">&amp;</span>invoice).<span class="kw">await</span><span class="question-mark">?</span>;
@@ -1839,6 +1858,11 @@
     </span>FederationError(String),
     <span class="attr">#[error(<span class="string">"We failed to finalize the funding transaction"</span>)]
     </span>FinalizationError(String),
+    <span class="attr">#[error(<span class="string">"The invoice was for the wrong currency. Invoice currency={invoice_currency} Federation Currency={federation_currency}"</span>)]
+    </span>WrongCurrency {
+        invoice_currency: Currency,
+        federation_currency: Currency,
+    },
 }
 
 <span class="attr">#[derive(Error, Debug, Clone, Eq, PartialEq)]
