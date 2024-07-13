@@ -742,6 +742,8 @@ pub trait IGlobalFederationApi: IRawFederationApi {
         api_url: SafeUrl,
         auth: ApiAuth,
     ) -> FederationResult<SignedApiAnnouncement>;
+
+    async fn shutdown(&self, session: Option<u64>, auth: ApiAuth) -> FederationResult<()>;
 }
 
 pub fn deserialize_outcome<R>(
