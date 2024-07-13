@@ -9,10 +9,9 @@ use fedimint_core::config::FederationId;
 use fedimint_core::core::OperationId;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::task::sleep;
-use fedimint_core::util::SafeUrl;
 use fedimint_core::{OutPoint, TransactionId};
 use fedimint_lnv2_common::contracts::OutgoingContract;
-use fedimint_lnv2_common::{LightningInput, LightningInputV0, OutgoingWitness};
+use fedimint_lnv2_common::{GatewayEndpoint, LightningInput, LightningInputV0, OutgoingWitness};
 use secp256k1::schnorr::Signature;
 use secp256k1::KeyPair;
 use tracing::error;
@@ -41,7 +40,7 @@ impl SendStateMachine {
 pub struct SendSMCommon {
     pub operation_id: OperationId,
     pub funding_txid: TransactionId,
-    pub gateway_api: SafeUrl,
+    pub gateway_api: GatewayEndpoint,
     pub contract: OutgoingContract,
     pub invoice: LightningInvoice,
     pub refund_keypair: KeyPair,
@@ -154,7 +153,7 @@ impl SendStateMachine {
     }
 
     async fn gateway_send_payment(
-        gateway_api: SafeUrl,
+        gateway_api: GatewayEndpoint,
         federation_id: FederationId,
         contract: OutgoingContract,
         invoice: LightningInvoice,

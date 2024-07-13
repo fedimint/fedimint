@@ -38,7 +38,7 @@ use fedimint_core::{apply, async_trait_maybe_send, Amount, OutPoint, PeerId, Tra
 use fedimint_lnv2_common::config::LightningClientConfig;
 use fedimint_lnv2_common::contracts::{IncomingContract, OutgoingContract};
 use fedimint_lnv2_common::{
-    LightningCommonInit, LightningModuleTypes, LightningOutput, LightningOutputV0,
+    GatewayEndpoint, LightningCommonInit, LightningModuleTypes, LightningOutput, LightningOutputV0,
 };
 use futures::StreamExt;
 use lightning_invoice::Bolt11Invoice;
@@ -62,7 +62,7 @@ pub enum LightningOperationMeta {
 pub struct SendOperationMeta {
     pub funding_txid: TransactionId,
     pub funding_change_outpoints: Vec<OutPoint>,
-    pub gateway_api: SafeUrl,
+    pub gateway_api: GatewayEndpoint,
     pub contract: OutgoingContract,
     pub invoice: Bolt11Invoice,
 }
@@ -371,6 +371,8 @@ impl LightningClientModule {
         expiration_delta_limit: u64,
         partial_amount: Option<Amount>,
     ) -> Result<OperationId, SendPaymentError> {
+        let gateway_api = GatewayEndpoint::Url(gateway_api);
+
         let amount = partial_amount.unwrap_or(Amount::from_msats(
             invoice
                 .amount_milli_satoshis()
@@ -644,6 +646,8 @@ impl LightningClientModule {
         description: Bolt11InvoiceDescription,
         payment_fee_limit: PaymentFee,
     ) -> Result<(IncomingContract, [u8; 32], Bolt11Invoice), FetchInvoiceError> {
+        let gateway_api = GatewayEndpoint::Url(gateway_api);
+
         let (ephemeral_tweak, ephemeral_pk) = generate_ephemeral_tweak(recipient_static_pk);
 
         let encryption_seed = ephemeral_tweak

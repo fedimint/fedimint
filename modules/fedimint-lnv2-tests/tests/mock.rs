@@ -7,7 +7,6 @@ use fedimint_core::config::FederationId;
 use fedimint_core::secp256k1::rand::rngs::OsRng;
 use fedimint_core::secp256k1::schnorr::Signature;
 use fedimint_core::secp256k1::KeyPair;
-use fedimint_core::util::SafeUrl;
 use fedimint_core::{apply, async_trait_maybe_send};
 use fedimint_ln_common::bitcoin;
 use fedimint_lnv2_client::api::GatewayConnection;
@@ -15,6 +14,7 @@ use fedimint_lnv2_client::{
     CreateBolt11InvoicePayload, GatewayError, LightningInvoice, PaymentFee, RoutingInfo,
 };
 use fedimint_lnv2_common::contracts::OutgoingContract;
+use fedimint_lnv2_common::GatewayEndpoint;
 use lightning_invoice::{
     Bolt11Invoice, Currency, InvoiceBuilder, PaymentSecret, DEFAULT_EXPIRY_TIME,
 };
@@ -80,7 +80,7 @@ impl Default for MockGatewayConnection {
 impl GatewayConnection for MockGatewayConnection {
     async fn fetch_routing_info(
         &self,
-        _gateway_api: SafeUrl,
+        _gateway_api: GatewayEndpoint,
         _federation_id: &FederationId,
     ) -> Result<Option<RoutingInfo>, GatewayError> {
         Ok(Some(RoutingInfo {
@@ -95,7 +95,7 @@ impl GatewayConnection for MockGatewayConnection {
 
     async fn fetch_invoice(
         &self,
-        _gateway_api: SafeUrl,
+        _gateway_api: GatewayEndpoint,
         payload: CreateBolt11InvoicePayload,
     ) -> Result<Result<Bolt11Invoice, String>, GatewayError> {
         Ok(Ok(InvoiceBuilder::new(Currency::Regtest)
@@ -112,7 +112,7 @@ impl GatewayConnection for MockGatewayConnection {
 
     async fn try_gateway_send_payment(
         &self,
-        _gateway_api: SafeUrl,
+        _gateway_api: GatewayEndpoint,
         _federation_id: FederationId,
         contract: OutgoingContract,
         invoice: LightningInvoice,
