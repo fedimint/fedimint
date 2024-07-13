@@ -13,7 +13,7 @@ path = "tests/tests.rs"
 
 [dependencies]
 anyhow = "1.0.86"
-async-trait = "0.1.80"
+async-trait = "0.1.81"
 clap = { workspace = true }
 fedimint-client = { workspace = true }
 fedimint-core = { workspace = true }

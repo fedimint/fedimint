@@ -14,7 +14,7 @@ path = "src/main.rs"
 anyhow = { version = "1.0.86", features = ["backtrace"] }
 axum = { version = "0.7.5", features = ["tracing"] }
 bitcoincore-rpc = { workspace = true }
-clap = { version = "4.5.8", features = ["derive", "env", "std", "help", "usage", "error-context", "suggestions"], default-features = false }
+clap = { version = "4.5.9", features = ["derive", "env", "std", "help", "usage", "error-context", "suggestions"], default-features = false }
 cln-rpc = { workspace = true }
 esplora-client = { workspace = true }
 fedimint-aead = { path = "../crypto/aead" }
