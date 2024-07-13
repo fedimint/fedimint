@@ -83,7 +83,7 @@ criterion = { version = "0.5.1" }
 threshold_crypto = { version = "0.2.1", package = "fedimint-threshold-crypto" }
 tonic_lnd = { version = "0.2.0", package = "fedimint-tonic-lnd", features = ["lightningrpc", "routerrpc"] }
 cln-rpc = "0.1.9"
-clap = { version = "4.5.8", features = ["derive", "std", "help", "usage", "error-context", "suggestions", "env"], default-features = false }
+clap = { version = "4.5.9", features = ["derive", "std", "help", "usage", "error-context", "suggestions", "env"], default-features = false }
 esplora-client = { version = "0.6.0", default-features = false, features = [
     "async",
     "async-https-rustls",
@@ -92,7 +92,7 @@ reqwest = { version = "0.11.27", features = [
     "json",
     "rustls-tls",
 ], default-features = false }
-serde = { version = "1.0.203", features = ["derive"] }
+serde = { version = "1.0.204", features = ["derive"] }
 serde-big-array = "0.5.1"
 serde_json = "1.0.120"
 serdect = "0.2.0"
@@ -116,11 +116,11 @@ futures-util = "0.3.30"
 lightning = "0.0.123"
 lightning-invoice = "0.31.0"
 once_cell = "1.19.0"
-thiserror = "1.0.61"
+thiserror = "1.0.62"
 tokio = { version = "1.38.0", features = ["sync", "io-util"] }
 url = "2.5.2"
 erased-serde = "0.4"
-async-trait = "0.1.80"
+async-trait = "0.1.81"
 bincode = "1.3.3"
 tokio-rustls = "0.24.1"
 hex = "0.4.3"

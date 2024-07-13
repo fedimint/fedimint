@@ -57,7 +57,7 @@ tracing = { workspace = true }
 tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
 serde_json = { workspace = true }
 url = { version = "2.5.2", features = ["serde"] }
-clap_complete = "4.5.7"
+clap_complete = "4.5.8"
 reqwest = { workspace = true }
 
 [build-dependencies]

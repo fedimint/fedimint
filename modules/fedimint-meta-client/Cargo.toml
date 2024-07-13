@@ -21,7 +21,7 @@ cli = ["dep:clap", "dep:serde_json"]
 
 [dependencies]
 anyhow = { workspace = true }
-async-trait = "0.1.80"
+async-trait = "0.1.81"
 clap = { workspace = true, optional = true }
 erased-serde = { workspace = true }
 fedimint-api-client = { workspace = true }

@@ -21,8 +21,8 @@ async-trait = { workspace = true }
 axum = "0.7.5"
 axum-macros = "0.4.1"
 bitcoin = { workspace = true }
-clap = { version = "4.5.8", features = ["derive", "std", "help", "usage", "error-context", "suggestions"], default-features = false }
-clap_complete = "4.5.7"
+clap = { version = "4.5.9", features = ["derive", "std", "help", "usage", "error-context", "suggestions"], default-features = false }
+clap_complete = "4.5.8"
 fedimint-core = { workspace = true }
 fedimint-logging = { workspace = true }
 ln-gateway = { version = "=0.4.0-alpha", package = "fedimint-ln-gateway", path = "../ln-gateway" }
