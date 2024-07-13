@@ -288,3 +288,27 @@ async fn receive_operation_expires() -> anyhow::Result<()> {
 
     Ok(())
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn rejects_wrong_network_invoice() -> anyhow::Result<()> {
+    let fixtures = fixtures();
+    let fed = fixtures.new_default_fed().await;
+    let gateway = gateway(&fixtures, &fed).await;
+    let gateway_api = gateway.versioned_api().clone();
+
+    let client = fed.new_client().await;
+
+    assert_eq!(
+        client
+            .get_first_module::<LightningClientModule>()
+            .send(gateway_api.clone(), mock::signet_bolt_11_invoice())
+            .await
+            .expect_err("send did not fail due to incorrect Currency"),
+        SendPaymentError::WrongCurrency {
+            invoice_currency: lightning_invoice::Currency::Signet,
+            federation_currency: lightning_invoice::Currency::Regtest
+        }
+    );
+
+    Ok(())
+}

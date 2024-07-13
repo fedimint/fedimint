@@ -41,7 +41,7 @@ use fedimint_lnv2_common::{
     LightningCommonInit, LightningModuleTypes, LightningOutput, LightningOutputV0,
 };
 use futures::StreamExt;
-use lightning_invoice::Bolt11Invoice;
+use lightning_invoice::{Bolt11Invoice, Currency};
 use secp256k1::schnorr::Signature;
 use secp256k1::{ecdh, KeyPair, PublicKey, Scalar, SecretKey};
 use serde::{Deserialize, Serialize};
@@ -379,6 +379,13 @@ impl LightningClientModule {
 
         if invoice.is_expired() {
             return Err(SendPaymentError::InvoiceExpired);
+        }
+
+        if self.cfg.network != invoice.currency().into() {
+            return Err(SendPaymentError::WrongCurrency {
+                invoice_currency: invoice.currency(),
+                federation_currency: self.cfg.network.into(),
+            });
         }
 
         let operation_id = self.get_next_operation_id(&invoice).await?;
@@ -886,6 +893,11 @@ pub enum SendPaymentError {
     FederationError(String),
     #[error("We failed to finalize the funding transaction")]
     FinalizationError(String),
+    #[error("The invoice was for the wrong currency. Invoice currency={invoice_currency} Federation Currency={federation_currency}")]
+    WrongCurrency {
+        invoice_currency: Currency,
+        federation_currency: Currency,
+    },
 }
 
 #[derive(Error, Debug, Clone, Eq, PartialEq)]

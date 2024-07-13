@@ -36,22 +36,22 @@ pub fn gateway_keypair() -> KeyPair {
 }
 
 pub fn payable_invoice() -> Bolt11Invoice {
-    bolt_11_invoice(PAYABLE_PAYMENT_SECRET)
+    bolt_11_invoice(PAYABLE_PAYMENT_SECRET, Currency::Regtest)
 }
 
 pub fn unpayable_invoice() -> Bolt11Invoice {
-    bolt_11_invoice(UNPAYABLE_PAYMENT_SECRET)
+    bolt_11_invoice(UNPAYABLE_PAYMENT_SECRET, Currency::Regtest)
 }
 
 pub fn crash_invoice() -> Bolt11Invoice {
-    bolt_11_invoice(GATEWAY_CRASH_PAYMENT_SECRET)
+    bolt_11_invoice(GATEWAY_CRASH_PAYMENT_SECRET, Currency::Regtest)
 }
 
-fn bolt_11_invoice(payment_secret: [u8; 32]) -> Bolt11Invoice {
+fn bolt_11_invoice(payment_secret: [u8; 32], currency: Currency) -> Bolt11Invoice {
     let sk = SecretKey::new(&mut OsRng);
     let payment_hash = sha256::Hash::hash(&MOCK_INVOICE_PREIMAGE);
 
-    InvoiceBuilder::new(Currency::Regtest)
+    InvoiceBuilder::new(currency)
         .description(String::new())
         .payment_hash(payment_hash)
         .current_timestamp()
@@ -61,6 +61,10 @@ fn bolt_11_invoice(payment_secret: [u8; 32]) -> Bolt11Invoice {
         .expiry_time(Duration::from_secs(DEFAULT_EXPIRY_TIME))
         .build_signed(|m| SECP256K1.sign_ecdsa_recoverable(m, &sk))
         .expect("Invoice creation failed")
+}
+
+pub fn signet_bolt_11_invoice() -> Bolt11Invoice {
+    bolt_11_invoice(PAYABLE_PAYMENT_SECRET, Currency::Signet)
 }
 
 #[derive(Debug)]
