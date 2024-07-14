@@ -10,7 +10,7 @@ use bitcoin::address::NetworkUnchecked;
 use bitcoin::Address;
 use clap::{CommandFactory, Parser, Subcommand};
 use fedimint_core::config::FederationId;
-use fedimint_core::util::{backon, retry, SafeUrl};
+use fedimint_core::util::{backoff_util, retry, SafeUrl};
 use fedimint_core::{fedimint_build_code_version_env, BitcoinAmountOrAll};
 use fedimint_logging::TracingSetup;
 use ln_gateway::rpc::rpc_client::GatewayRpcClient;
@@ -335,16 +335,17 @@ async fn main() -> anyhow::Result<()> {
                 max_retries,
                 retry_delay_seconds,
             } => {
+                let retry_duration = Duration::from_secs(
+                    retry_delay_seconds.unwrap_or(DEFAULT_WAIT_FOR_CHAIN_SYNC_RETRY_DELAY_SECONDS),
+                );
+
                 retry(
                     "Wait for chain sync",
-                    backon::ConstantBuilder::default()
-                        .with_delay(Duration::from_secs(
-                            retry_delay_seconds
-                                .unwrap_or(DEFAULT_WAIT_FOR_CHAIN_SYNC_RETRY_DELAY_SECONDS),
-                        ))
-                        .with_max_times(
-                            max_retries.unwrap_or(DEFAULT_WAIT_FOR_CHAIN_SYNC_RETRIES) as usize
-                        ),
+                    backoff_util::custom_backoff(
+                        retry_duration,
+                        retry_duration,
+                        Some(max_retries.unwrap_or(DEFAULT_WAIT_FOR_CHAIN_SYNC_RETRIES) as usize),
+                    ),
                     || async {
                         let info = client().get_info().await?;
                         if info.block_height.unwrap_or(0) >= block_height && info.synced_to_chain {

@@ -8,7 +8,7 @@ use async_stream::stream;
 use fedimint_core::db::{Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped};
 use fedimint_core::task::waiter::Waiter;
 use fedimint_core::task::{MaybeSend, MaybeSync};
-use fedimint_core::util::{backon, retry};
+use fedimint_core::util::{backoff_util, retry};
 use fedimint_core::{apply, async_trait_maybe_send};
 use serde::de::DeserializeOwned;
 use tokio::sync::Notify;
@@ -249,14 +249,8 @@ impl MetaSource for LegacyMetaSource {
             .map(|(key, value)| (MetaFieldKey(key.clone()), MetaFieldValue(value.clone())));
         let backoff = match fetch_kind {
             // need to be fast the first time.
-            FetchKind::Initial => backon::FibonacciBuilder::default()
-                .with_min_delay(Duration::from_millis(300))
-                .with_max_delay(Duration::from_secs(3))
-                .with_max_times(10),
-            FetchKind::Background => backon::FibonacciBuilder::default()
-                .with_min_delay(Duration::from_secs(10))
-                .with_max_delay(Duration::from_secs(10 * 60))
-                .with_max_times(usize::MAX),
+            FetchKind::Initial => backoff_util::aggressive_backoff(),
+            FetchKind::Background => backoff_util::background_backoff(),
         };
         let overrides = retry("fetch_meta_overrides", backoff, || {
             fetch_meta_overrides(&self.reqwest, client, "meta_override_url")

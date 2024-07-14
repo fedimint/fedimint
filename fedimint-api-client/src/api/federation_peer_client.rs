@@ -3,8 +3,7 @@ use std::time::{Duration, SystemTime};
 
 use fedimint_core::task::jit::JitTryAnyhow;
 use fedimint_core::time::now;
-use fedimint_core::util::backon::BackoffBuilder;
-use fedimint_core::util::{backon, SafeUrl};
+use fedimint_core::util::{backoff_util, SafeUrl};
 use fedimint_core::PeerId;
 use fedimint_logging::LOG_CLIENT_NET_API;
 use tokio::sync::{Mutex, RwLock};
@@ -132,7 +131,7 @@ struct FederationPeerClientConnectionState {
     /// Last time a connection attempt was made, or `None` if no attempt has
     /// been made yet.
     last_connection_attempt_or: Option<SystemTime>,
-    connection_backoff: backon::FibonacciBackoff,
+    connection_backoff: backoff_util::FibonacciBackoff,
 }
 
 impl FederationPeerClientConnectionState {
@@ -142,7 +141,11 @@ impl FederationPeerClientConnectionState {
     fn new() -> Self {
         Self {
             last_connection_attempt_or: None,
-            connection_backoff: Self::new_backoff(),
+            connection_backoff: backoff_util::custom_backoff(
+                Self::MIN_BACKOFF,
+                Self::MAX_BACKOFF,
+                None,
+            ),
         }
     }
 
@@ -162,22 +165,13 @@ impl FederationPeerClientConnectionState {
                 target: LOG_CLIENT_NET_API,
                 duration_ms=sleep_duration.as_millis(),
                 "Waiting before reconnecting");
+            fedimint_core::runtime::sleep(sleep_duration).await;
         }
-        fedimint_core::runtime::sleep(sleep_duration).await;
 
         self.last_connection_attempt_or = Some(now_ts);
     }
 
     fn reset(&mut self) {
         *self = Self::new();
-    }
-
-    fn new_backoff() -> backon::FibonacciBackoff {
-        backon::FibonacciBuilder::default()
-            .with_jitter()
-            .with_max_times(usize::MAX)
-            .with_min_delay(Self::MIN_BACKOFF)
-            .with_max_delay(Self::MAX_BACKOFF)
-            .build()
     }
 }

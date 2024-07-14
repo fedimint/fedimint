@@ -120,8 +120,7 @@ use fedimint_core::module::{
 use fedimint_core::net::api_announcement::SignedApiAnnouncement;
 use fedimint_core::task::{Elapsed, MaybeSend, MaybeSync, TaskGroup};
 use fedimint_core::transaction::Transaction;
-use fedimint_core::util::backon::FibonacciBuilder;
-use fedimint_core::util::{retry, BoxStream, NextOrPending, SafeUrl};
+use fedimint_core::util::{backoff_util, retry, BoxStream, NextOrPending, SafeUrl};
 use fedimint_core::{
     apply, async_trait_maybe_send, dyn_newtype_define, fedimint_build_code_version_env,
     maybe_add_send, maybe_add_send_sync, runtime, Amount, NumPeers, OutPoint, PeerId,
@@ -1887,10 +1886,7 @@ impl Client {
             let guardian_pub_keys = if let Some(guardian_pub_keys) = config.global.broadcast_public_keys {guardian_pub_keys}else{
                 let fetched_config = retry(
                     "Fetching guardian public keys",
-                    FibonacciBuilder::default()
-                        .with_min_delay(Duration::from_secs(1))
-                        .with_max_delay(Duration::from_secs(60))
-                        .with_max_times(usize::MAX),
+                    backoff_util::background_backoff(),
                     || async {
                         Ok(self.api.request_current_consensus::<ClientConfig>(
                             CLIENT_CONFIG_ENDPOINT.to_owned(),

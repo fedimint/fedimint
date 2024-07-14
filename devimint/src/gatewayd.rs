@@ -1,10 +1,9 @@
 use std::collections::HashMap;
 use std::ops::ControlFlow;
 use std::path::PathBuf;
-use std::time::Duration;
 
 use anyhow::{Context, Result};
-use fedimint_core::util::{backon, retry};
+use fedimint_core::util::{backoff_util, retry};
 use ln_gateway::lightning::ChannelInfo;
 use ln_gateway::rpc::V1_API_ENDPOINT;
 use tracing::info;
@@ -134,10 +133,7 @@ impl Gatewayd {
     pub async fn get_info(&self) -> Result<serde_json::Value> {
         retry(
             "Getting {} gateway info via gateway-cli info",
-            backon::FibonacciBuilder::default()
-                .with_min_delay(Duration::from_millis(200))
-                .with_max_delay(Duration::from_secs(5))
-                .with_max_times(10),
+            backoff_util::aggressive_backoff(),
             || async { cmd!(self, "info").out_json().await },
         )
         .await

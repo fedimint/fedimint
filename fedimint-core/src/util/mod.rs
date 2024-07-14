@@ -1,3 +1,4 @@
+pub mod backoff_util;
 /// Copied from `tokio_stream` 0.1.12 to use our optional Send bounds
 pub mod broadcaststream;
 pub mod update_merge;
@@ -13,7 +14,6 @@ use std::str::FromStr;
 use std::{fs, io};
 
 use anyhow::format_err;
-pub use backon;
 use fedimint_logging::LOG_CORE;
 use futures::StreamExt;
 use serde::Serialize;
@@ -372,14 +372,11 @@ pub fn handle_version_hash_command(version_hash: &str) {
 /// ```
 /// use std::time::Duration;
 ///
-/// use fedimint_core::util::{backon, retry};
+/// use fedimint_core::util::{backoff_util, retry};
 /// # tokio_test::block_on(async {
 /// retry(
 ///     "Gateway balance after swap".to_string(),
-///     backon::FibonacciBuilder::default()
-///         .with_min_delay(Duration::from_millis(200))
-///         .with_max_delay(Duration::from_secs(3))
-///         .with_max_times(10),
+///     backoff_util::background_backoff(),
 ///     || async {
 ///         // Fallible network calls …
 ///         Ok(())
@@ -397,14 +394,14 @@ pub fn handle_version_hash_command(version_hash: &str) {
 ///   error of the closure is returned
 pub async fn retry<F, Fut, T>(
     op_name: impl Into<String>,
-    strategy: impl backon::BackoffBuilder,
+    strategy: impl backoff_util::Backoff,
     op_fn: F,
 ) -> Result<T, anyhow::Error>
 where
     F: Fn() -> Fut,
     Fut: Future<Output = Result<T, anyhow::Error>>,
 {
-    let mut strategy = strategy.build();
+    let mut strategy = strategy;
     let op_name = op_name.into();
     let mut attempts: u64 = 0;
     loop {
@@ -513,24 +510,24 @@ mod tests {
             Err(Elapsed)
         ));
     }
+
     #[tokio::test]
     async fn retry_succeed_with_one_attempt() {
         let counter = AtomicU8::new(0);
         let closure = || async {
             counter.fetch_add(1, Ordering::SeqCst);
-            // always return a success
+            // Always return a success.
             Ok(42)
         };
 
         let _ = retry(
             "Run once",
-            backon::ConstantBuilder::default()
-                .with_delay(Duration::ZERO)
-                .with_max_times(3),
+            backoff_util::immediate_backoff(Some(2)),
             closure,
         )
         .await;
 
+        // Ensure the closure was only called once, and no backoff was applied.
         assert_eq!(counter.load(Ordering::SeqCst), 1);
     }
 
@@ -544,11 +541,8 @@ mod tests {
         };
 
         let _ = retry(
-            "Run 3 once",
-            backon::ConstantBuilder::default()
-                .with_delay(Duration::ZERO)
-                // retry two error
-                .with_max_times(2),
+            "Run 3 times",
+            backoff_util::immediate_backoff(Some(2)),
             closure,
         )
         .await;
