@@ -1148,81 +1148,16 @@ impl Gateway {
     /// re-register with the specified federation.
     pub async fn handle_set_configuration_msg(
         &self,
-        SetConfigurationPayload {
-            password,
-            network,
-            num_route_hints,
-            routing_fees,
-            per_federation_routing_fees,
-        }: SetConfigurationPayload,
+        payload: SetConfigurationPayload,
     ) -> Result<()> {
-        let gw_state = self.get_state().await;
-        let lightning_network = match gw_state {
-            GatewayState::Running { lightning_context } => {
-                if network.is_some() && network != Some(lightning_context.lightning_network) {
-                    return Err(GatewayError::GatewayConfigurationError(
-                        "Cannot change network while connected to a lightning node".to_string(),
-                    ));
-                }
-                lightning_context.lightning_network
-            }
-            // In the case the gateway is not yet running and not yet connected to a lightning node,
-            // we start off with a default network configuration. This default gets replaced later
-            // when the gateway connects to a lightning node, or when a user sets a different
-            // configuration
-            _ => DEFAULT_NETWORK,
-        };
-
         let mut dbtx = self.gateway_db.begin_transaction().await;
 
-        let prev_gateway_config = self.clone_gateway_config().await;
-        let new_gateway_config = if let Some(mut prev_config) = prev_gateway_config {
-            if let Some(password) = password.as_ref() {
-                let hashed_password = hash_password(password, prev_config.password_salt);
-                prev_config.hashed_password = hashed_password;
-            }
-
-            if let Some(network) = network {
-                if !self.federation_manager.read().await.is_empty() {
-                    return Err(GatewayError::GatewayConfigurationError(
-                        "Cannot change network while connected to a federation".to_string(),
-                    ));
-                }
-                prev_config.network = network;
-            }
-
-            if let Some(num_route_hints) = num_route_hints {
-                prev_config.num_route_hints = num_route_hints;
-            }
-
-            // Using this routing fee config as a default for all federation that has none
-            // routing fees specified.
-            if let Some(fees) = routing_fees {
-                let routing_fees = GatewayFee(fees.into()).0;
-                prev_config.routing_fees = routing_fees;
-            }
-
-            prev_config
-        } else {
-            let password = password.ok_or(GatewayError::GatewayConfigurationError(
-                "The password field is required when initially configuring the gateway".to_string(),
-            ))?;
-            let password_salt: [u8; 16] = rand::thread_rng().gen();
-            let hashed_password = hash_password(&password, password_salt);
-
-            GatewayConfiguration {
-                hashed_password,
-                network: lightning_network,
-                num_route_hints: DEFAULT_NUM_ROUTE_HINTS,
-                routing_fees: DEFAULT_FEES,
-                password_salt,
-            }
-        };
+        let new_gateway_config = self.create_new_gateway_config(&payload).await?;
         dbtx.insert_entry(&GatewayConfigurationKey, &new_gateway_config)
             .await;
 
         let mut register_federations: Vec<(FederationId, FederationConfig)> = Vec::new();
-        if let Some(per_federation_routing_fees) = per_federation_routing_fees {
+        if let Some(per_federation_routing_fees) = payload.per_federation_routing_fees {
             for (federation_id, routing_fees) in &per_federation_routing_fees {
                 let federation_key = FederationIdKey { id: *federation_id };
                 if let Some(mut federation_config) = dbtx.get_value(&federation_key).await {
@@ -1235,9 +1170,9 @@ impl Gateway {
             }
         }
 
-        // If 'num_route_hints' is provided, all federations must be re-registered.
+        // If `num_route_hints` is provided, all federations must be re-registered.
         // Otherwise, only those affected by the new fees need to be re-registered.
-        if num_route_hints.is_some() {
+        if payload.num_route_hints.is_some() {
             let all_federations_configs: Vec<_> = dbtx
                 .find_by_prefix(&FederationIdKeyPrefix)
                 .await
@@ -1253,12 +1188,87 @@ impl Gateway {
 
         dbtx.commit_tx().await;
 
-        let mut curr_gateway_config = self.gateway_config.write().await;
-        *curr_gateway_config = Some(new_gateway_config.clone());
+        *self.gateway_config.write().await = Some(new_gateway_config.clone());
 
         info!("Set GatewayConfiguration successfully.");
 
         Ok(())
+    }
+
+    async fn create_new_gateway_config(
+        &self,
+        SetConfigurationPayload {
+            password,
+            network,
+            num_route_hints,
+            routing_fees,
+            per_federation_routing_fees: _,
+        }: &SetConfigurationPayload,
+    ) -> Result<GatewayConfiguration> {
+        let lightning_network = match self.get_state().await {
+            GatewayState::Running { lightning_context } => {
+                if network.is_some() && network != &Some(lightning_context.lightning_network) {
+                    return Err(GatewayError::GatewayConfigurationError(
+                        "Cannot change network while connected to a lightning node".to_string(),
+                    ));
+                }
+                lightning_context.lightning_network
+            }
+            // In the case the gateway is not yet running and not yet connected to a lightning node,
+            // we start off with a default network configuration. This default gets replaced later
+            // when the gateway connects to a lightning node, or when a user sets a different
+            // configuration
+            _ => DEFAULT_NETWORK,
+        };
+
+        let prev_gateway_config = self.clone_gateway_config().await;
+        let new_gateway_config = if let Some(mut prev_config) = prev_gateway_config {
+            if let Some(password) = password.as_ref() {
+                let hashed_password = hash_password(password, prev_config.password_salt);
+                prev_config.hashed_password = hashed_password;
+            }
+
+            if let Some(network) = network {
+                if !self.federation_manager.read().await.is_empty() {
+                    return Err(GatewayError::GatewayConfigurationError(
+                        "Cannot change network while connected to a federation".to_string(),
+                    ));
+                }
+                prev_config.network = *network;
+            }
+
+            if let Some(num_route_hints) = num_route_hints {
+                prev_config.num_route_hints = *num_route_hints;
+            }
+
+            // Using this routing fee config as a default for all federation that has none
+            // routing fees specified.
+            if let Some(fees) = routing_fees {
+                let routing_fees = GatewayFee(fees.clone().into()).0;
+                prev_config.routing_fees = routing_fees;
+            }
+
+            prev_config
+        } else {
+            let password = password
+                .clone()
+                .ok_or(GatewayError::GatewayConfigurationError(
+                    "The password field is required when initially configuring the gateway"
+                        .to_string(),
+                ))?;
+            let password_salt: [u8; 16] = rand::thread_rng().gen();
+            let hashed_password = hash_password(&password, password_salt);
+
+            GatewayConfiguration {
+                hashed_password,
+                network: lightning_network,
+                num_route_hints: DEFAULT_NUM_ROUTE_HINTS,
+                routing_fees: DEFAULT_FEES,
+                password_salt,
+            }
+        };
+
+        Ok(new_gateway_config)
     }
 
     pub async fn handle_get_funding_address_msg(&self) -> Result<Address> {
