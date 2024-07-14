@@ -369,6 +369,7 @@
 <a href="#369" id="369">369</a>
 <a href="#370" id="370">370</a>
 <a href="#371" id="371">371</a>
+<a href="#372" id="372">372</a>
 </pre></div><pre class="rust"><code><span class="attr">#![warn(clippy::pedantic)]
 #![allow(clippy::doc_markdown)]
 #![allow(clippy::missing_panics_doc)]
@@ -381,7 +382,7 @@
 <span class="kw">use </span>bitcoin::Address;
 <span class="kw">use </span>clap::{CommandFactory, Parser, Subcommand};
 <span class="kw">use </span>fedimint_core::config::FederationId;
-<span class="kw">use </span>fedimint_core::util::{backon, retry, SafeUrl};
+<span class="kw">use </span>fedimint_core::util::{backoff_util, retry, SafeUrl};
 <span class="kw">use </span>fedimint_core::{fedimint_build_code_version_env, BitcoinAmountOrAll};
 <span class="kw">use </span>fedimint_logging::TracingSetup;
 <span class="kw">use </span>ln_gateway::rpc::rpc_client::GatewayRpcClient;
@@ -706,16 +707,17 @@
                 max_retries,
                 retry_delay_seconds,
             } =&gt; {
+                <span class="kw">let </span>retry_duration = Duration::from_secs(
+                    retry_delay_seconds.unwrap_or(DEFAULT_WAIT_FOR_CHAIN_SYNC_RETRY_DELAY_SECONDS),
+                );
+
                 retry(
                     <span class="string">"Wait for chain sync"</span>,
-                    backon::ConstantBuilder::default()
-                        .with_delay(Duration::from_secs(
-                            retry_delay_seconds
-                                .unwrap_or(DEFAULT_WAIT_FOR_CHAIN_SYNC_RETRY_DELAY_SECONDS),
-                        ))
-                        .with_max_times(
-                            max_retries.unwrap_or(DEFAULT_WAIT_FOR_CHAIN_SYNC_RETRIES) <span class="kw">as </span>usize
-                        ),
+                    backoff_util::custom_backoff(
+                        retry_duration,
+                        retry_duration,
+                        <span class="prelude-val">Some</span>(max_retries.unwrap_or(DEFAULT_WAIT_FOR_CHAIN_SYNC_RETRIES) <span class="kw">as </span>usize),
+                    ),
                     || <span class="kw">async </span>{
                         <span class="kw">let </span>info = client().get_info().<span class="kw">await</span><span class="question-mark">?</span>;
                         <span class="kw">if </span>info.block_height.unwrap_or(<span class="number">0</span>) &gt;= block_height &amp;&amp; info.synced_to_chain {

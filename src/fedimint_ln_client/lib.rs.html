@@ -2121,9 +2121,6 @@
 <a href="#2121" id="2121">2121</a>
 <a href="#2122" id="2122">2122</a>
 <a href="#2123" id="2123">2123</a>
-<a href="#2124" id="2124">2124</a>
-<a href="#2125" id="2125">2125</a>
-<a href="#2126" id="2126">2126</a>
 </pre></div><pre class="rust"><code><span class="attr">#![warn(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::cast_possible_wrap)]
@@ -2184,7 +2181,7 @@
 };
 <span class="kw">use </span>fedimint_core::task::{timeout, MaybeSend, MaybeSync};
 <span class="kw">use </span>fedimint_core::util::update_merge::UpdateMerge;
-<span class="kw">use </span>fedimint_core::util::{backon, retry, BoxStream};
+<span class="kw">use </span>fedimint_core::util::{backoff_util, retry, BoxStream};
 <span class="kw">use </span>fedimint_core::{
     apply, async_trait_maybe_send, push_db_pair_items, runtime, Amount, OutPoint, TransactionId,
 };
@@ -3124,10 +3121,7 @@
             <span class="comment">// should never fail with usize::MAX attempts.
             </span><span class="kw">let _ </span>= retry(
                 <span class="string">"update_gateway_cache"</span>,
-                backon::FibonacciBuilder::default()
-                    .with_min_delay(Duration::from_secs(<span class="number">1</span>))
-                    .with_max_delay(Duration::from_secs(<span class="number">10 </span>* <span class="number">60</span>))
-                    .with_max_times(usize::MAX),
+                backoff_util::background_backoff(),
                 || <span class="self">self</span>.update_gateway_cache(),
             )
             .<span class="kw">await</span>;

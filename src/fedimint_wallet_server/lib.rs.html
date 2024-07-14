@@ -1841,16 +1841,6 @@
 <a href="#1841" id="1841">1841</a>
 <a href="#1842" id="1842">1842</a>
 <a href="#1843" id="1843">1843</a>
-<a href="#1844" id="1844">1844</a>
-<a href="#1845" id="1845">1845</a>
-<a href="#1846" id="1846">1846</a>
-<a href="#1847" id="1847">1847</a>
-<a href="#1848" id="1848">1848</a>
-<a href="#1849" id="1849">1849</a>
-<a href="#1850" id="1850">1850</a>
-<a href="#1851" id="1851">1851</a>
-<a href="#1852" id="1852">1852</a>
-<a href="#1853" id="1853">1853</a>
 </pre></div><pre class="rust"><code><span class="attr">#![warn(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::cast_possible_wrap)]
@@ -1908,7 +1898,7 @@
 </span><span class="kw">use </span>fedimint_core::task::sleep;
 <span class="kw">use </span>fedimint_core::task::{TaskGroup, TaskHandle};
 <span class="kw">use </span>fedimint_core::time::now;
-<span class="kw">use </span>fedimint_core::util::{backon, retry};
+<span class="kw">use </span>fedimint_core::util::{backoff_util, retry};
 <span class="kw">use </span>fedimint_core::{
     apply, async_trait_maybe_send, push_db_key_items, push_db_pair_items, Feerate, NumPeersExt,
     OutPoint, PeerId, ServerModule,
@@ -2851,18 +2841,12 @@
 
             <span class="comment">// TODO: use batching for mainnet syncing
             </span><span class="macro">trace!</span>(block = height, <span class="string">"Fetching block hash"</span>);
-            <span class="kw">let </span>block_hash = retry(
-                <span class="string">"get_block_hash"</span>,
-                backon::FibonacciBuilder::default()
-                    .with_min_delay(Duration::from_secs(<span class="number">1</span>))
-                    .with_max_delay(Duration::from_secs(<span class="number">10 </span>* <span class="number">60</span>))
-                    .with_max_times(usize::MAX),
-                || {
+            <span class="kw">let </span>block_hash =
+                retry(<span class="string">"get_block_hash"</span>, backoff_util::background_backoff(), || {
                     <span class="self">self</span>.btc_rpc.get_block_hash(u64::from(height)) <span class="comment">// TODO: use u64 for height everywhere
-                </span>},
-            )
-            .<span class="kw">await
-            </span>.expect(<span class="string">"bitcoind rpc to get block hash"</span>);
+                </span>})
+                .<span class="kw">await
+                </span>.expect(<span class="string">"bitcoind rpc to get block hash"</span>);
 
             <span class="kw">let </span>pending_transactions = dbtx
                 .find_by_prefix(<span class="kw-2">&amp;</span>PendingTransactionPrefixKey)
@@ -2878,19 +2862,15 @@
                 <span class="string">"Recognizing change UTXOs"
             </span>);
             <span class="kw">for </span>(txid, tx) <span class="kw">in </span><span class="kw-2">&amp;</span>pending_transactions {
-                <span class="kw">let </span>is_tx_in_block = retry(
-                    <span class="string">"is_tx_in_block"</span>,
-                    backon::FibonacciBuilder::default()
-                        .with_min_delay(Duration::from_secs(<span class="number">1</span>))
-                        .with_max_delay(Duration::from_secs(<span class="number">10 </span>* <span class="number">60</span>))
-                        .with_max_times(usize::MAX),
-                    || {
+                <span class="kw">let </span>is_tx_in_block =
+                    retry(<span class="string">"is_tx_in_block"</span>, backoff_util::background_backoff(), || {
                         <span class="self">self</span>.btc_rpc
                             .is_tx_in_block(txid, <span class="kw-2">&amp;</span>block_hash, u64::from(height))
-                    },
-                )
-                .<span class="kw">await
-                </span>.unwrap_or_else(|<span class="kw">_</span>| <span class="macro">panic!</span>(<span class="string">"Failed checking if tx is in block height {height}"</span>));
+                    })
+                    .<span class="kw">await
+                    </span>.unwrap_or_else(|<span class="kw">_</span>| {
+                        <span class="macro">panic!</span>(<span class="string">"Failed checking if tx is in block height {height}"</span>)
+                    });
 
                 <span class="kw">if </span>is_tx_in_block {
                     <span class="macro">debug!</span>(<span class="question-mark">?</span>txid, <span class="question-mark">?</span>height, <span class="question-mark">?</span>block_hash, <span class="string">"Recognizing change UTXO"</span>);

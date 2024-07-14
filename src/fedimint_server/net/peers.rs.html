@@ -807,10 +807,6 @@
 <a href="#807" id="807">807</a>
 <a href="#808" id="808">808</a>
 <a href="#809" id="809">809</a>
-<a href="#810" id="810">810</a>
-<a href="#811" id="811">811</a>
-<a href="#812" id="812">812</a>
-<a href="#813" id="813">813</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! Implements a connection manager for communication with other federation
 //! members
 //!
@@ -1511,12 +1507,11 @@
 </span><span class="kw">mod </span>tests {
     <span class="kw">use </span>std::collections::{BTreeMap, HashMap};
     <span class="kw">use </span>std::sync::Arc;
-    <span class="kw">use </span>std::time::Duration;
 
     <span class="kw">use </span>anyhow::{ensure, Context <span class="kw">as _</span>};
     <span class="kw">use </span>fedimint_api_client::api::PeerConnectionStatus;
     <span class="kw">use </span>fedimint_core::task::TaskGroup;
-    <span class="kw">use </span>fedimint_core::util::{backon, retry};
+    <span class="kw">use </span>fedimint_core::util::{backoff_util, retry};
     <span class="kw">use </span>fedimint_core::PeerId;
     <span class="kw">use </span>tokio::sync::RwLock;
 
@@ -1536,10 +1531,7 @@
             ) {
                 retry(
                     <span class="macro">format!</span>(<span class="string">"wait for client {name}"</span>),
-                    backon::FibonacciBuilder::default()
-                        .with_min_delay(Duration::from_millis(<span class="number">200</span>))
-                        .with_max_delay(Duration::from_secs(<span class="number">5</span>))
-                        .with_max_times(<span class="number">10</span>),
+                    backoff_util::aggressive_backoff(),
                     || <span class="kw">async </span>{
                         <span class="kw">let </span>status = status_channels.read().<span class="kw">await</span>;
                         <span class="macro">ensure!</span>(status.len() == <span class="number">2</span>);

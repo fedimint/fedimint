@@ -1196,6 +1196,8 @@
 <a href="#1196" id="1196">1196</a>
 <a href="#1197" id="1197">1197</a>
 <a href="#1198" id="1198">1198</a>
+<a href="#1199" id="1199">1199</a>
+<a href="#1200" id="1200">1200</a>
 </pre></div><pre class="rust"><code><span class="attr">#![warn(clippy::pedantic)]
 #![allow(clippy::doc_markdown)]
 #![allow(clippy::missing_errors_doc)]
@@ -1243,7 +1245,7 @@
 <span class="kw">use </span>fedimint_core::db::{Database, DatabaseValue};
 <span class="kw">use </span>fedimint_core::invite_code::InviteCode;
 <span class="kw">use </span>fedimint_core::module::{ApiAuth, ApiRequestErased};
-<span class="kw">use </span>fedimint_core::util::{backon, handle_version_hash_command, retry, SafeUrl};
+<span class="kw">use </span>fedimint_core::util::{backoff_util, handle_version_hash_command, retry, SafeUrl};
 <span class="kw">use </span>fedimint_core::{fedimint_build_code_version_env, runtime, PeerId, TieredMulti};
 <span class="kw">use </span>fedimint_ln_client::LightningClientInit;
 <span class="kw">use </span>fedimint_logging::{TracingSetup, LOG_CLIENT};
@@ -2095,9 +2097,11 @@ Examples:
             }
             Command::Dev(DevCmd::WaitBlockCount { count: target }) =&gt; retry(
                 <span class="string">"wait_block_count"</span>,
-                backon::ConstantBuilder::default()
-                    .with_delay(Duration::from_millis(<span class="number">100</span>))
-                    .with_max_times(usize::MAX),
+                backoff_util::custom_backoff(
+                    Duration::from_millis(<span class="number">100</span>),
+                    Duration::from_secs(<span class="number">5</span>),
+                    <span class="prelude-val">None</span>,
+                ),
                 || <span class="kw">async </span>{
                     <span class="kw">let </span>client = <span class="self">self</span>.client_open(<span class="kw-2">&amp;</span>cli).<span class="kw">await</span><span class="question-mark">?</span>;
                     <span class="kw">let </span>wallet = client.get_first_module::&lt;WalletClientModule&gt;();

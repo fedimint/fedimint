@@ -333,12 +333,6 @@
 <a href="#333" id="333">333</a>
 <a href="#334" id="334">334</a>
 <a href="#335" id="335">335</a>
-<a href="#336" id="336">336</a>
-<a href="#337" id="337">337</a>
-<a href="#338" id="338">338</a>
-<a href="#339" id="339">339</a>
-<a href="#340" id="340">340</a>
-<a href="#341" id="341">341</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::pin::pin;
 <span class="kw">use </span>std::sync::Arc;
@@ -349,7 +343,7 @@
 <span class="kw">use </span>fedimint_core::db::{Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped};
 <span class="kw">use </span>fedimint_core::task::waiter::Waiter;
 <span class="kw">use </span>fedimint_core::task::{MaybeSend, MaybeSync};
-<span class="kw">use </span>fedimint_core::util::{backon, retry};
+<span class="kw">use </span>fedimint_core::util::{backoff_util, retry};
 <span class="kw">use </span>fedimint_core::{apply, async_trait_maybe_send};
 <span class="kw">use </span>serde::de::DeserializeOwned;
 <span class="kw">use </span>tokio::sync::Notify;
@@ -590,14 +584,8 @@
             .map(|(key, value)| (MetaFieldKey(key.clone()), MetaFieldValue(value.clone())));
         <span class="kw">let </span>backoff = <span class="kw">match </span>fetch_kind {
             <span class="comment">// need to be fast the first time.
-            </span>FetchKind::Initial =&gt; backon::FibonacciBuilder::default()
-                .with_min_delay(Duration::from_millis(<span class="number">300</span>))
-                .with_max_delay(Duration::from_secs(<span class="number">3</span>))
-                .with_max_times(<span class="number">10</span>),
-            FetchKind::Background =&gt; backon::FibonacciBuilder::default()
-                .with_min_delay(Duration::from_secs(<span class="number">10</span>))
-                .with_max_delay(Duration::from_secs(<span class="number">10 </span>* <span class="number">60</span>))
-                .with_max_times(usize::MAX),
+            </span>FetchKind::Initial =&gt; backoff_util::aggressive_backoff(),
+            FetchKind::Background =&gt; backoff_util::background_backoff(),
         };
         <span class="kw">let </span>overrides = retry(<span class="string">"fetch_meta_overrides"</span>, backoff, || {
             fetch_meta_overrides(<span class="kw-2">&amp;</span><span class="self">self</span>.reqwest, client, <span class="string">"meta_override_url"</span>)

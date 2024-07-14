@@ -550,13 +550,8 @@
 <a href="#550" id="550">550</a>
 <a href="#551" id="551">551</a>
 <a href="#552" id="552">552</a>
-<a href="#553" id="553">553</a>
-<a href="#554" id="554">554</a>
-<a href="#555" id="555">555</a>
-<a href="#556" id="556">556</a>
-<a href="#557" id="557">557</a>
-<a href="#558" id="558">558</a>
-</pre></div><pre class="rust"><code><span class="doccomment">/// Copied from `tokio_stream` 0.1.12 to use our optional Send bounds
+</pre></div><pre class="rust"><code><span class="kw">pub mod </span>backoff_util;
+<span class="doccomment">/// Copied from `tokio_stream` 0.1.12 to use our optional Send bounds
 </span><span class="kw">pub mod </span>broadcaststream;
 <span class="kw">pub mod </span>update_merge;
 
@@ -571,7 +566,6 @@
 <span class="kw">use </span>std::{fs, io};
 
 <span class="kw">use </span>anyhow::format_err;
-<span class="kw">pub use </span>backon;
 <span class="kw">use </span>fedimint_logging::LOG_CORE;
 <span class="kw">use </span>futures::StreamExt;
 <span class="kw">use </span>serde::Serialize;
@@ -930,14 +924,11 @@
 /// ```
 /// use std::time::Duration;
 ///
-/// use fedimint_core::util::{backon, retry};
+/// use fedimint_core::util::{backoff_util, retry};
 /// # tokio_test::block_on(async {
 /// retry(
 ///     "Gateway balance after swap".to_string(),
-///     backon::FibonacciBuilder::default()
-///         .with_min_delay(Duration::from_millis(200))
-///         .with_max_delay(Duration::from_secs(3))
-///         .with_max_times(10),
+///     backoff_util::background_backoff(),
 ///     || async {
 ///         // Fallible network calls …
 ///         Ok(())
@@ -955,14 +946,14 @@
 ///   error of the closure is returned
 </span><span class="kw">pub async fn </span>retry&lt;F, Fut, T&gt;(
     op_name: <span class="kw">impl </span>Into&lt;String&gt;,
-    strategy: <span class="kw">impl </span>backon::BackoffBuilder,
+    strategy: <span class="kw">impl </span>backoff_util::Backoff,
     op_fn: F,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;T, anyhow::Error&gt;
 <span class="kw">where
     </span>F: Fn() -&gt; Fut,
     Fut: Future&lt;Output = <span class="prelude-ty">Result</span>&lt;T, anyhow::Error&gt;&gt;,
 {
-    <span class="kw">let </span><span class="kw-2">mut </span>strategy = strategy.build();
+    <span class="kw">let </span><span class="kw-2">mut </span>strategy = strategy;
     <span class="kw">let </span>op_name = op_name.into();
     <span class="kw">let </span><span class="kw-2">mut </span>attempts: u64 = <span class="number">0</span>;
     <span class="kw">loop </span>{
@@ -1071,25 +1062,25 @@
             <span class="prelude-val">Err</span>(Elapsed)
         ));
     }
+
     <span class="attr">#[tokio::test]
     </span><span class="kw">async fn </span>retry_succeed_with_one_attempt() {
         <span class="kw">let </span>counter = AtomicU8::new(<span class="number">0</span>);
         <span class="kw">let </span>closure = || <span class="kw">async </span>{
             counter.fetch_add(<span class="number">1</span>, Ordering::SeqCst);
-            <span class="comment">// always return a success
+            <span class="comment">// Always return a success.
             </span><span class="prelude-val">Ok</span>(<span class="number">42</span>)
         };
 
         <span class="kw">let _ </span>= retry(
             <span class="string">"Run once"</span>,
-            backon::ConstantBuilder::default()
-                .with_delay(Duration::ZERO)
-                .with_max_times(<span class="number">3</span>),
+            backoff_util::immediate_backoff(<span class="prelude-val">Some</span>(<span class="number">2</span>)),
             closure,
         )
         .<span class="kw">await</span>;
 
-        <span class="macro">assert_eq!</span>(counter.load(Ordering::SeqCst), <span class="number">1</span>);
+        <span class="comment">// Ensure the closure was only called once, and no backoff was applied.
+        </span><span class="macro">assert_eq!</span>(counter.load(Ordering::SeqCst), <span class="number">1</span>);
     }
 
     <span class="attr">#[tokio::test]
@@ -1102,11 +1093,8 @@
         };
 
         <span class="kw">let _ </span>= retry(
-            <span class="string">"Run 3 once"</span>,
-            backon::ConstantBuilder::default()
-                .with_delay(Duration::ZERO)
-                <span class="comment">// retry two error
-                </span>.with_max_times(<span class="number">2</span>),
+            <span class="string">"Run 3 times"</span>,
+            backoff_util::immediate_backoff(<span class="prelude-val">Some</span>(<span class="number">2</span>)),
             closure,
         )
         .<span class="kw">await</span>;

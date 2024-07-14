@@ -2653,10 +2653,6 @@
 <a href="#2653" id="2653">2653</a>
 <a href="#2654" id="2654">2654</a>
 <a href="#2655" id="2655">2655</a>
-<a href="#2656" id="2656">2656</a>
-<a href="#2657" id="2657">2657</a>
-<a href="#2658" id="2658">2658</a>
-<a href="#2659" id="2659">2659</a>
 </pre></div><pre class="rust"><code><span class="attr">#![warn(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::default_trait_access)]
@@ -2779,8 +2775,7 @@
 <span class="kw">use </span>fedimint_core::net::api_announcement::SignedApiAnnouncement;
 <span class="kw">use </span>fedimint_core::task::{Elapsed, MaybeSend, MaybeSync, TaskGroup};
 <span class="kw">use </span>fedimint_core::transaction::Transaction;
-<span class="kw">use </span>fedimint_core::util::backon::FibonacciBuilder;
-<span class="kw">use </span>fedimint_core::util::{retry, BoxStream, NextOrPending, SafeUrl};
+<span class="kw">use </span>fedimint_core::util::{backoff_util, retry, BoxStream, NextOrPending, SafeUrl};
 <span class="kw">use </span>fedimint_core::{
     apply, async_trait_maybe_send, dyn_newtype_define, fedimint_build_code_version_env,
     maybe_add_send, maybe_add_send_sync, runtime, Amount, NumPeers, OutPoint, PeerId,
@@ -4546,10 +4541,7 @@
             <span class="kw">let </span>guardian_pub_keys = <span class="kw">if let </span><span class="prelude-val">Some</span>(guardian_pub_keys) = config.global.broadcast_public_keys {guardian_pub_keys}<span class="kw">else</span>{
                 <span class="kw">let </span>fetched_config = retry(
                     <span class="string">"Fetching guardian public keys"</span>,
-                    FibonacciBuilder::default()
-                        .with_min_delay(Duration::from_secs(<span class="number">1</span>))
-                        .with_max_delay(Duration::from_secs(<span class="number">60</span>))
-                        .with_max_times(usize::MAX),
+                    backoff_util::background_backoff(),
                     || <span class="kw">async </span>{
                         <span class="prelude-val">Ok</span>(<span class="self">self</span>.api.request_current_consensus::&lt;ClientConfig&gt;(
                             CLIENT_CONFIG_ENDPOINT.to_owned(),
