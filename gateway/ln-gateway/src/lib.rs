@@ -1323,41 +1323,42 @@ impl Gateway {
         gateway_config: &GatewayConfiguration,
         federations: &[(FederationId, FederationConfig)],
     ) -> Result<()> {
-        if let Ok(lightning_context) = self.get_lightning_context().await {
-            let route_hints = lightning_context
-                .lnrpc
-                .parsed_route_hints(gateway_config.num_route_hints)
-                .await;
-            if route_hints.is_empty() {
-                warn!("Gateway did not retrieve any route hints, may reduce receive success rate.");
-            }
+        let Ok(lightning_context) = self.get_lightning_context().await else {
+            return Ok(());
+        };
 
-            for (federation_id, federation_config) in federations {
-                if let Some(client) = self.federation_manager.read().await.client(federation_id) {
-                    if let Err(e) = async {
-                        client
-                            .value()
-                            .get_first_module::<GatewayClientModule>()
-                            .register_with_federation(
-                                route_hints.clone(),
-                                GW_ANNOUNCEMENT_TTL,
-                                federation_config.fees,
-                                lightning_context.clone(),
-                            )
-                            .await
-                    }
+        let route_hints = lightning_context
+            .lnrpc
+            .parsed_route_hints(gateway_config.num_route_hints)
+            .await;
+
+        if route_hints.is_empty() {
+            warn!("Gateway did not retrieve any route hints, may reduce receive success rate.");
+        }
+
+        for (federation_id, federation_config) in federations {
+            if let Some(client) = self.federation_manager.read().await.client(federation_id) {
+                client
+                    .value()
+                    .get_first_module::<GatewayClientModule>()
+                    .register_with_federation(
+                        route_hints.clone(),
+                        GW_ANNOUNCEMENT_TTL,
+                        federation_config.fees,
+                        lightning_context.clone(),
+                    )
                     .instrument(client.span())
                     .await
-                    {
-                        Err(GatewayError::FederationError(FederationError::general(
+                    .map_err(|e| {
+                        GatewayError::FederationError(FederationError::general(
                             REGISTER_GATEWAY_ENDPOINT,
                             serde_json::Value::Null,
                             anyhow::anyhow!("Error registering federation {federation_id}: {e:?}"),
-                        )))?;
-                    }
-                }
+                        ))
+                    })?;
             }
         }
+
         Ok(())
     }
 
