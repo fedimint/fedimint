@@ -48,8 +48,8 @@ use bitcoin_hashes::sha256;
 use clap::Parser;
 use client::GatewayClientBuilder;
 use db::{
-    DbKeyPrefix, FederationIdKey, GatewayConfiguration, GatewayConfigurationKey, GatewayPublicKey,
-    GATEWAYD_DATABASE_VERSION,
+    DbKeyPrefix, FederationIdKey, GatewayConfiguration, GatewayConfigurationKey,
+    GatewayDatabaseExt, GatewayPublicKey, GATEWAYD_DATABASE_VERSION,
 };
 use federation_manager::FederationManager;
 use fedimint_api_client::api::FederationError;
@@ -107,10 +107,7 @@ use thiserror::Error;
 use tokio::sync::{Mutex, RwLock};
 use tracing::{debug, error, info, info_span, warn, Instrument};
 
-use crate::db::{
-    get_gatewayd_database_migrations, FederationConfig, FederationIdKeyPrefix,
-    RegisteredIncomingContract, RegisteredIncomingContractKey,
-};
+use crate::db::{get_gatewayd_database_migrations, FederationConfig, FederationIdKeyPrefix};
 use crate::gateway_lnrpc::create_invoice_request::Description;
 use crate::gateway_lnrpc::intercept_htlc_response::Forward;
 use crate::gateway_lnrpc::CreateInvoiceRequest;
@@ -1090,8 +1087,9 @@ impl Gateway {
             .await,
         );
 
-        let dbtx = self.gateway_db.begin_transaction().await;
-        GatewayClientBuilder::save_config(gw_client_cfg, dbtx).await?;
+        self.gateway_db
+            .save_federation_config(gw_client_cfg)
+            .await?;
         debug!("Federation with ID: {federation_id} connected and assigned channel id: {mint_channel_id}");
 
         Ok(federation_info)
@@ -1415,12 +1413,11 @@ impl Gateway {
     /// database and reconstructs the clients necessary for interacting with
     /// connection federations.
     async fn load_clients(&self) {
-        let dbtx = self.gateway_db.begin_transaction_nc().await;
-        let configs = GatewayClientBuilder::load_configs(dbtx).await;
+        let configs = self.gateway_db.load_federation_configs().await;
 
         let _join_federation = self.client_joining_lock.lock().await;
 
-        for config in configs.clone() {
+        for (_, config) in configs.clone() {
             let federation_id = config.invite_code.federation_id();
             let scid = config.mint_channel_id;
 
@@ -1439,7 +1436,8 @@ impl Gateway {
             }
         }
 
-        if let Some(max_mint_channel_id) = configs.iter().map(|cfg| cfg.mint_channel_id).max() {
+        if let Some(max_mint_channel_id) = configs.iter().map(|(_, cfg)| cfg.mint_channel_id).max()
+        {
             self.federation_manager
                 .read()
                 .await
@@ -1461,8 +1459,7 @@ impl Gateway {
                 if let Some(gateway_config) = gateway_config {
                     let gateway_state = gateway.get_state().await;
                     if let GatewayState::Running { .. } = &gateway_state {
-                        let mut dbtx = gateway.gateway_db.begin_transaction_nc().await;
-                        let all_federations_configs: Vec<_> = dbtx.find_by_prefix(&FederationIdKeyPrefix).await.map(|(key, config)| (key.id, config)).collect().await;
+                        let all_federations_configs =  gateway.gateway_db.load_federation_configs().await;
                         let result = gateway.register_federations(&gateway_config, &all_federations_configs).await;
                         registration_result = Some(result);
                     } else {
@@ -1532,11 +1529,7 @@ impl Gateway {
     /// Iterates through all of the federations the gateway is registered with
     /// and requests to remove the registration record.
     pub async fn unannounce_from_all_federations(&self) {
-        let mut dbtx = self.gateway_db.begin_transaction_nc().await;
-        let gateway_keypair = dbtx
-            .get_value(&GatewayPublicKey)
-            .await
-            .expect("Gateway keypair does not exist");
+        let gateway_keypair = self.gateway_db.get_gateway_keypair().await;
 
         self.federation_manager
             .read()
@@ -1650,28 +1643,7 @@ impl Gateway {
             .await
             .map_err(|e| anyhow!(e))?;
 
-        let mut dbtx = self.gateway_db.begin_transaction().await;
-
-        if dbtx
-            .insert_entry(
-                &RegisteredIncomingContractKey(
-                    payload.contract.commitment.payment_hash.to_byte_array(),
-                ),
-                &RegisteredIncomingContract {
-                    federation_id: payload.federation_id,
-                    incoming_amount: payload.invoice_amount.msats,
-                    contract: payload.contract,
-                },
-            )
-            .await
-            .is_some()
-        {
-            bail!("Payment hash is already registered");
-        }
-
-        dbtx.commit_tx_result()
-            .await
-            .map_err(|_| anyhow!("Payment hash is already registered"))?;
+        self.gateway_db.save_lnv2_incoming_contract(payload).await?;
 
         Ok(invoice)
     }
@@ -1725,11 +1697,8 @@ impl Gateway {
     ) -> anyhow::Result<(IncomingContract, ClientHandleArc)> {
         let registered_incoming_contract = self
             .gateway_db
-            .begin_transaction_nc()
-            .await
-            .get_value(&RegisteredIncomingContractKey(payment_hash))
-            .await
-            .ok_or(anyhow!("No corresponding decryption contract available"))?;
+            .load_lnv2_incoming_contract(payment_hash)
+            .await?;
 
         if registered_incoming_contract.incoming_amount != amount_msats {
             bail!("The available decryption contract's amount is not equal the requested amount")

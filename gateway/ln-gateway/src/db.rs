@@ -1,17 +1,20 @@
 use std::collections::BTreeMap;
 
+use anyhow::{anyhow, bail};
 use bitcoin::Network;
-use bitcoin_hashes::sha256;
+use bitcoin_hashes::{sha256, Hash};
 use fedimint_core::config::FederationId;
 use fedimint_core::db::{
-    CoreMigrationFn, DatabaseTransaction, DatabaseVersion, IDatabaseTransactionOpsCoreTyped,
+    CoreMigrationFn, Database, DatabaseTransaction, DatabaseVersion,
+    IDatabaseTransactionOpsCoreTyped,
 };
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::invite_code::InviteCode;
 use fedimint_core::{impl_db_lookup, impl_db_record, secp256k1};
 use fedimint_ln_common::serde_routing_fees;
+use fedimint_lnv2_client::CreateBolt11InvoicePayload;
 use fedimint_lnv2_common::contracts::IncomingContract;
-use futures::FutureExt;
+use futures::{FutureExt, StreamExt};
 use lightning_invoice::RoutingFees;
 use rand::Rng;
 use serde::{Deserialize, Serialize};
@@ -20,6 +23,88 @@ use strum_macros::EnumIter;
 use crate::rpc::rpc_server::hash_password;
 
 pub const GATEWAYD_DATABASE_VERSION: DatabaseVersion = DatabaseVersion(1);
+
+pub trait GatewayDatabaseExt {
+    async fn save_federation_config(&self, config: FederationConfig) -> anyhow::Result<()>;
+    async fn load_federation_configs(&self) -> Vec<(FederationId, FederationConfig)>;
+    async fn get_gateway_keypair(&self) -> secp256k1::KeyPair;
+    async fn save_lnv2_incoming_contract(
+        &self,
+        payload: CreateBolt11InvoicePayload,
+    ) -> anyhow::Result<()>;
+    async fn load_lnv2_incoming_contract(
+        &self,
+        payment_hash: [u8; 32],
+    ) -> anyhow::Result<RegisteredIncomingContract>;
+}
+
+impl GatewayDatabaseExt for Database {
+    async fn save_federation_config(&self, config: FederationConfig) -> anyhow::Result<()> {
+        let id = config.invite_code.federation_id();
+        let mut dbtx = self.begin_transaction().await;
+        dbtx.insert_entry(&FederationIdKey { id }, &config).await;
+        dbtx.commit_tx_result().await
+    }
+
+    async fn load_federation_configs(&self) -> Vec<(FederationId, FederationConfig)> {
+        let mut dbtx = self.begin_transaction_nc().await;
+        dbtx.find_by_prefix(&FederationIdKeyPrefix)
+            .await
+            .collect::<BTreeMap<FederationIdKey, FederationConfig>>()
+            .await
+            .into_iter()
+            .map(|(key, config)| (key.id, config))
+            .collect::<Vec<_>>()
+    }
+
+    async fn get_gateway_keypair(&self) -> secp256k1::KeyPair {
+        let mut dbtx = self.begin_transaction_nc().await;
+        dbtx.get_value(&GatewayPublicKey)
+            .await
+            .expect("Gateway keypair does not exist")
+    }
+
+    async fn save_lnv2_incoming_contract(
+        &self,
+        payload: CreateBolt11InvoicePayload,
+    ) -> anyhow::Result<()> {
+        let mut dbtx = self.begin_transaction().await;
+
+        if dbtx
+            .insert_entry(
+                &RegisteredIncomingContractKey(
+                    payload.contract.commitment.payment_hash.to_byte_array(),
+                ),
+                &RegisteredIncomingContract {
+                    federation_id: payload.federation_id,
+                    incoming_amount: payload.invoice_amount.msats,
+                    contract: payload.contract,
+                },
+            )
+            .await
+            .is_some()
+        {
+            bail!("Payment hash is already registered");
+        }
+
+        dbtx.commit_tx_result()
+            .await
+            .map_err(|_| anyhow!("Payment hash is already registered"))?;
+
+        Ok(())
+    }
+
+    async fn load_lnv2_incoming_contract(
+        &self,
+        payment_hash: [u8; 32],
+    ) -> anyhow::Result<RegisteredIncomingContract> {
+        self.begin_transaction_nc()
+            .await
+            .get_value(&RegisteredIncomingContractKey(payment_hash))
+            .await
+            .ok_or(anyhow!("No corresponding decryption contract available"))
+    }
+}
 
 #[repr(u8)]
 #[derive(Clone, EnumIter, Debug)]
