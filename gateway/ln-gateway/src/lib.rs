@@ -1570,9 +1570,14 @@ impl Gateway {
     pub async fn routing_info_v2(&self, federation_id: &FederationId) -> Option<RoutingInfo> {
         Some(RoutingInfo {
             public_key: self.public_key_v2(federation_id).await?,
-            send_fee_default: PaymentFee::one_percent(),
-            send_fee_minimum: PaymentFee::half_of_one_percent(),
-            receive_fee: PaymentFee::half_of_one_percent(),
+            send_fee_default: PaymentFee::TEN_PROMILLE_PLUS_50_SATS,
+            // The base fee ensures that the gateway does not loose sats sending the payment due to
+            // fees paid on the transaction claiming the outgoing contract or subsequent
+            // transactions spending the newly issued ecash
+            send_fee_minimum: PaymentFee::FIVE_PROMILLE_PLUS_50_SATS,
+            // The base fee ensures that the gateway does not loose sats receiving the payment due
+            // to fees paid on the transaction funding the incoming contract
+            receive_fee: PaymentFee::FIVE_PROMILLE_PLUS_50_SATS,
             expiration_delta_default: 500,
             expiration_delta_minimum: EXPIRATION_DELTA_MINIMUM_V2,
         })
@@ -1624,13 +1629,13 @@ impl Gateway {
             bail!("The outgoing contract keyed to another gateway");
         }
 
-        if payload.contract.commitment.amount == Amount::ZERO {
-            bail!("Zero amount incoming contracts are not supported");
-        }
-
         let contract_amount = payment_info
             .receive_fee
             .subtract_fee(payload.invoice_amount.msats);
+
+        if contract_amount == Amount::ZERO {
+            bail!("Zero amount incoming contracts are not supported");
+        }
 
         if contract_amount != payload.contract.commitment.amount {
             bail!("The contract amount does not pay the correct amount of fees");
