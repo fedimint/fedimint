@@ -316,6 +316,11 @@ enum AdminCmd {
     GuardianConfigBackup,
 
     Dkg(DkgAdminArgs),
+    /// Stop fedimintd after the specified session to do a coordinated upgrade
+    Shutdown {
+        /// Session index to stop after
+        session_idx: u64,
+    },
 }
 
 #[derive(Debug, Clone, Args)]
@@ -754,6 +759,15 @@ impl FedimintCli {
             }
             Command::Admin(AdminCmd::Dkg(dkg_args)) => {
                 self.handle_admin_dkg_command(cli, dkg_args).await
+            }
+            Command::Admin(AdminCmd::Shutdown { session_idx }) => {
+                let client = self.client_open(&cli).await?;
+
+                cli.admin_client(client.get_config())?
+                    .shutdown(Some(session_idx), cli.auth()?)
+                    .await?;
+
+                Ok(CliOutput::Raw(json!(null)))
             }
             Command::Dev(DevCmd::Api {
                 method,
