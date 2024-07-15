@@ -916,7 +916,7 @@
                     .join(<span class="macro">format!</span>(<span class="string">"fedimintd-{peer}"</span>)),
                 FM_BIND_METRICS_API: <span class="macro">format!</span>(<span class="string">"127.0.0.1:{metrics_port}"</span>),
                 FM_FORCE_BITCOIN_RPC_URL: <span class="macro">format!</span>(
-                    <span class="string">"http://127.0.0.1:{}"</span>,
+                    <span class="string">"http://bitcoin:bitcoin@127.0.0.1:{}"</span>,
                     process_mgr.globals.FM_PORT_BTC_RPC
                 ),
                 FM_FORCE_BITCOIN_RPC_KIND: <span class="string">"bitcoind"</span>.into(),
