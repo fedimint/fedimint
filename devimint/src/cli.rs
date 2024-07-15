@@ -439,7 +439,7 @@ async fn run_ui(process_mgr: &ProcessManager) -> Result<(Vec<Fedimintd>, Externa
                     .join(format!("fedimintd-{peer}")),
                 FM_BIND_METRICS_API: format!("127.0.0.1:{metrics_port}"),
                 FM_FORCE_BITCOIN_RPC_URL: format!(
-                    "http://127.0.0.1:{}",
+                    "http://bitcoin:bitcoin@127.0.0.1:{}",
                     process_mgr.globals.FM_PORT_BTC_RPC
                 ),
                 FM_FORCE_BITCOIN_RPC_KIND: "bitcoind".into(),
