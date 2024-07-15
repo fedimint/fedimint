@@ -23,6 +23,7 @@ enum LnV2TestType {
     SelfPayment,
     GatewayRegistration,
     LightningPayment,
+    GatewayRefund,
 }
 
 #[tokio::main]
@@ -48,37 +49,79 @@ async fn main() -> anyhow::Result<()> {
             return Ok(());
         }
 
-        let gw_lnd = dev_fed.gw_lnd_registered().await?;
-        let gw_cln = dev_fed.gw_cln_registered().await?;
-
-        let federation = dev_fed.fed().await?;
-        federation.pegin_gateway(1_000_000, gw_lnd).await?;
-        federation.pegin_gateway(1_000_000, gw_cln).await?;
-
-        // TODO: test refund of payment between gateways - the refund works but it
-        // causes the second payment between gateways which should be successful to
-        // also be refunded but only in CI
-
         match opts.test {
             LnV2TestType::All => {
+                test_refund_payment(&dev_fed).await?; // pegs in the gateways during the test
                 test_self_payment_success(&dev_fed).await?;
                 test_gateway_registration(&dev_fed).await?;
                 test_lightning_payment(&dev_fed).await?;
             }
             LnV2TestType::SelfPayment => {
+                pegin_gateways(&dev_fed).await?;
                 test_self_payment_success(&dev_fed).await?;
             }
             LnV2TestType::GatewayRegistration => {
+                pegin_gateways(&dev_fed).await?;
                 test_gateway_registration(&dev_fed).await?;
             }
             LnV2TestType::LightningPayment => {
+                pegin_gateways(&dev_fed).await?;
                 test_lightning_payment(&dev_fed).await?;
+            }
+            LnV2TestType::GatewayRefund => {
+                test_refund_payment(&dev_fed).await?;
             }
         }
 
         Ok(())
     })
     .await
+}
+
+async fn pegin_gateways(dev_fed: &DevJitFed) -> anyhow::Result<()> {
+    let gw_lnd = dev_fed.gw_lnd_registered().await?;
+    let gw_cln = dev_fed.gw_cln_registered().await?;
+
+    let federation = dev_fed.fed().await?;
+    federation.pegin_gateway(1_000_000, gw_lnd).await?;
+    federation.pegin_gateway(1_000_000, gw_cln).await?;
+    Ok(())
+}
+
+async fn test_refund_payment(dev_fed: &DevJitFed) -> anyhow::Result<()> {
+    let federation = dev_fed.fed().await?;
+
+    let client = federation
+        .new_joined_client("lnv2-self-payment-refund-client")
+        .await?;
+
+    federation.pegin_client(10_000, &client).await?;
+
+    let gw_lnd = dev_fed.gw_lnd_registered().await?;
+    let gw_cln = dev_fed.gw_cln_registered().await?;
+
+    for (gw_receive, gw_send) in [
+        (gw_lnd.addr.clone(), gw_cln.addr.clone()),
+        (gw_cln.addr.clone(), gw_lnd.addr.clone()),
+    ] {
+        let (invoice, _) = fetch_invoice(&client, &gw_receive, 1_000_000).await?;
+        test_send(&client, &gw_send, &invoice, FinalSendState::Refunded).await?;
+    }
+
+    pegin_gateways(dev_fed).await?;
+
+    // Test that a payment can be made successfully after pegging in
+    for (gw_receive, gw_send) in [
+        (gw_lnd.addr.clone(), gw_cln.addr.clone()),
+        (gw_cln.addr.clone(), gw_lnd.addr.clone()),
+    ] {
+        let (invoice, receive_op) = fetch_invoice(&client, &gw_receive, 1_000_000).await?;
+        test_send(&client, &gw_send, &invoice, FinalSendState::Success).await?;
+        await_receive_claimed(&client, receive_op).await?;
+    }
+
+    info!("test_refund_payment successful");
+    Ok(())
 }
 
 async fn test_self_payment_success(dev_fed: &DevJitFed) -> anyhow::Result<()> {
@@ -92,6 +135,7 @@ async fn test_self_payment_success(dev_fed: &DevJitFed) -> anyhow::Result<()> {
 
     let gw_lnd = dev_fed.gw_lnd().await?;
     let gw_cln = dev_fed.gw_cln().await?;
+
     for (gw_receive, gw_send) in [
         (gw_lnd.addr.clone(), gw_lnd.addr.clone()),
         (gw_lnd.addr.clone(), gw_cln.addr.clone()),
