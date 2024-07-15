@@ -1236,7 +1236,6 @@
 <a href="#1236" id="1236">1236</a>
 <a href="#1237" id="1237">1237</a>
 <a href="#1238" id="1238">1238</a>
-<a href="#1239" id="1239">1239</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::array::TryFromSliceError;
 <span class="kw">use </span>std::collections::{BTreeMap, HashMap};
 <span class="kw">use </span>std::net::SocketAddr;
@@ -1982,9 +1981,8 @@
                     }
                 }
                 <span class="prelude-val">Some</span>(Action::Cancel(Cancel { reason: <span class="kw">_ </span>})) =&gt; {
-                    <span class="comment">// TODO: Translate the reason into a BOLT 4 failure message
-                    // See: https://github.com/lightning/bolts/blob/master/04-onion-routing.md#failure-messages
-                    </span>htlc_processing_failure()
+                    <span class="comment">// Simply forward the HTLC so that a "NoRoute" error response is returned.
+                    </span><span class="macro">serde_json::json!</span>({ <span class="string">"result"</span>: <span class="string">"continue" </span>})
                 }
                 <span class="prelude-val">Some</span>(Action::Forward(Forward {})) =&gt; {
                     <span class="macro">serde_json::json!</span>({ <span class="string">"result"</span>: <span class="string">"continue" </span>})
