@@ -27,7 +27,8 @@ use fedimint_core::endpoint_constants::{
     CLIENT_CONFIG_ENDPOINT, FEDERATION_ID_ENDPOINT, GUARDIAN_CONFIG_BACKUP_ENDPOINT,
     INVITE_CODE_ENDPOINT, MODULES_CONFIG_JSON_ENDPOINT, RECOVER_ENDPOINT,
     SERVER_CONFIG_CONSENSUS_HASH_ENDPOINT, SESSION_COUNT_ENDPOINT, SESSION_STATUS_ENDPOINT,
-    STATUS_ENDPOINT, SUBMIT_TRANSACTION_ENDPOINT, VERIFY_CONFIG_HASH_ENDPOINT, VERSION_ENDPOINT,
+    SHUTDOWN_ENDPOINT, STATUS_ENDPOINT, SUBMIT_TRANSACTION_ENDPOINT, VERIFY_CONFIG_HASH_ENDPOINT,
+    VERSION_ENDPOINT,
 };
 use fedimint_core::epoch::ConsensusItem;
 use fedimint_core::module::audit::{Audit, AuditSummary};
@@ -44,7 +45,7 @@ use fedimint_logging::LOG_NET_API;
 use futures::StreamExt;
 use jsonrpsee::RpcModule;
 use secp256k1_zkp::SECP256K1;
-use tokio::sync::RwLock;
+use tokio::sync::{watch, RwLock};
 use tracing::{debug, info};
 
 use super::peers::PeerStatusChannels;
@@ -91,6 +92,7 @@ pub struct ConsensusApi {
     pub client_cfg: ClientConfig,
     /// For sending API events to consensus such as transactions
     pub submission_sender: async_channel::Sender<ConsensusItem>,
+    pub shutdown_sender: watch::Sender<Option<u64>>,
     pub peer_status_channels: PeerStatusChannels,
     pub latest_contribution_by_peer: Arc<RwLock<LatestContributionByPeer>>,
     pub consensus_status_cache: ExpiringCache<ApiResult<FederationStatus>>,
@@ -258,6 +260,10 @@ impl ConsensusApi {
             peers_flagged,
             status_by_peer,
         })
+    }
+
+    fn shutdown(&self, index: Option<u64>) {
+        self.shutdown_sender.send_replace(index);
     }
 
     async fn get_federation_audit(&self) -> ApiResult<AuditSummary> {
@@ -545,6 +551,15 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConsensusApi>> {
             ApiVersion::new(0, 1),
             async |fedimint: &ConsensusApi, _context, index: u64| -> SerdeModuleEncoding<SessionStatus> {
                 Ok((&fedimint.session_status(index).await).into())
+            }
+        },
+        api_endpoint! {
+            SHUTDOWN_ENDPOINT,
+            ApiVersion::new(0, 3),
+            async |fedimint: &ConsensusApi, context, index: Option<u64>| -> () {
+                check_auth(context)?;
+                fedimint.shutdown(index);
+                Ok(())
             }
         },
         api_endpoint! {
