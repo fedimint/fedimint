@@ -165,6 +165,16 @@ impl Display for SafeUrl {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}://", self.0.scheme())?;
 
+        if !self.0.username().is_empty() {
+            write!(f, "REDACTEDUSER")?;
+
+            if self.0.password().is_some() {
+                write!(f, ":REDACTEDPASS")?;
+            }
+
+            write!(f, "@")?;
+        }
+
         if let Some(host) = self.0.host_str() {
             write!(f, "{host}")?;
         }
@@ -197,8 +207,6 @@ impl Debug for SafeUrl {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "SafeUrl(")?;
         Display::fmt(self, f)?;
-        write!(f, ", has_password={}", self.0.password().is_some())?;
-        write!(f, ", has_username={}", !self.0.username().is_empty())?;
         write!(f, ")")?;
         Ok(())
     }
@@ -453,27 +461,27 @@ mod tests {
             (
                 "http://1.2.3.4:80/foo",
                 "http://1.2.3.4/foo",
-                "SafeUrl(http://1.2.3.4/foo, has_password=false, has_username=false)",
+                "SafeUrl(http://1.2.3.4/foo)",
             ),
             (
                 "http://1.2.3.4:81/foo",
                 "http://1.2.3.4:81/foo",
-                "SafeUrl(http://1.2.3.4:81/foo, has_password=false, has_username=false)",
+                "SafeUrl(http://1.2.3.4:81/foo)",
             ),
             (
                 "fedimint://1.2.3.4:1000/foo",
                 "fedimint://1.2.3.4:1000/foo",
-                "SafeUrl(fedimint://1.2.3.4:1000/foo, has_password=false, has_username=false)",
+                "SafeUrl(fedimint://1.2.3.4:1000/foo)",
             ),
             (
                 "fedimint://foo:bar@domain.com:1000/foo",
-                "fedimint://domain.com:1000/foo",
-                "SafeUrl(fedimint://domain.com:1000/foo, has_password=true, has_username=true)",
+                "fedimint://REDACTEDUSER:REDACTEDPASS@domain.com:1000/foo",
+                "SafeUrl(fedimint://REDACTEDUSER:REDACTEDPASS@domain.com:1000/foo)",
             ),
             (
                 "fedimint://foo@1.2.3.4:1000/foo",
-                "fedimint://1.2.3.4:1000/foo",
-                "SafeUrl(fedimint://1.2.3.4:1000/foo, has_password=false, has_username=true)",
+                "fedimint://REDACTEDUSER@1.2.3.4:1000/foo",
+                "SafeUrl(fedimint://REDACTEDUSER@1.2.3.4:1000/foo)",
             ),
         ];
 
