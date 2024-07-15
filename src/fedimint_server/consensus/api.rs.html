@@ -1326,7 +1326,7 @@
         },
         <span class="macro">api_endpoint!</span> {
             SHUTDOWN_ENDPOINT,
-            ApiVersion::new(<span class="number">0</span>, <span class="number">0</span>),
+            ApiVersion::new(<span class="number">0</span>, <span class="number">3</span>),
             <span class="kw">async </span>|fedimint: <span class="kw-2">&amp;</span>ConsensusApi, context, index: <span class="prelude-ty">Option</span>&lt;u64&gt;| -&gt; () {
                 check_auth(context)<span class="question-mark">?</span>;
                 fedimint.shutdown(index);
