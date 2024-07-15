@@ -13,6 +13,7 @@ pub const SESSION_COUNT_ENDPOINT: &str = "session_count";
 pub const AWAIT_SESSION_OUTCOME_ENDPOINT: &str = "await_session_outcome";
 pub const AWAIT_SIGNED_SESSION_OUTCOME_ENDPOINT: &str = "await_signed_session_outcome";
 pub const SESSION_STATUS_ENDPOINT: &str = "session_status";
+pub const SHUTDOWN_ENDPOINT: &str = "shutdown";
 pub const CONFIG_GEN_PEERS_ENDPOINT: &str = "config_gen_peers";
 pub const CONSENSUS_CONFIG_GEN_PARAMS_ENDPOINT: &str = "consensus_config_gen_params";
 pub const DEFAULT_CONFIG_GEN_PARAMS_ENDPOINT: &str = "default_config_gen_params";
