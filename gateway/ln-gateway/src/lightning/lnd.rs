@@ -608,14 +608,7 @@ impl GatewayLndClient {
 
         let state = invoice.state();
         if state != InvoiceState::Open {
-            error!(
-                ?state,
-                "HOLD invoice state is not accepted {}",
-                PrettyPaymentHash(&payment_hash)
-            );
-            return Err(LightningRpcError::FailedToCompleteHtlc {
-                failure_reason: "HOLD invoice state is not accepted".to_string(),
-            });
+            warn!(?state, "Trying to cancel HOLD invoice with {} that is not OPEN, gateway likely encountered an issue", PrettyPaymentHash(&payment_hash));
         }
 
         client
