@@ -65,7 +65,7 @@ async fn can_pay_external_invoice_exactly_once() -> anyhow::Result<()> {
     // Print money for client
     let (op, outpoint) = client
         .get_first_module::<DummyClientModule>()
-        .print_money(sats(1000))
+        .print_money(sats(10_000))
         .await?;
 
     client.await_primary_module_output(op, outpoint).await?;
@@ -118,7 +118,7 @@ async fn refund_failed_payment() -> anyhow::Result<()> {
     // Print money for client
     let (op, outpoint) = client
         .get_first_module::<DummyClientModule>()
-        .print_money(sats(1000))
+        .print_money(sats(10_000))
         .await?;
 
     client.await_primary_module_output(op, outpoint).await?;
@@ -154,7 +154,7 @@ async fn unilateral_refund_of_outgoing_contracts() -> anyhow::Result<()> {
     // Print money for client
     let (op, outpoint) = client
         .get_first_module::<DummyClientModule>()
-        .print_money(sats(1000))
+        .print_money(sats(10_000))
         .await?;
 
     client.await_primary_module_output(op, outpoint).await?;
@@ -196,7 +196,7 @@ async fn claiming_outgoing_contract_triggers_success() -> anyhow::Result<()> {
     // Print money for client
     let (op, outpoint) = client
         .get_first_module::<DummyClientModule>()
-        .print_money(sats(1000))
+        .print_money(sats(10_000))
         .await?;
 
     client.await_primary_module_output(op, outpoint).await?;
@@ -272,7 +272,7 @@ async fn receive_operation_expires() -> anyhow::Result<()> {
             Amount::from_sats(1000),
             5, // receive operation expires in 5 seconds
             Bolt11InvoiceDescription::Direct(String::new()),
-            PaymentFee::one_percent(),
+            PaymentFee::TEN_PROMILLE_PLUS_50_SATS,
         )
         .await?
         .1;

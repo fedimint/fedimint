@@ -57,7 +57,7 @@ fn bolt_11_invoice(payment_secret: [u8; 32], currency: Currency) -> Bolt11Invoic
         .current_timestamp()
         .min_final_cltv_expiry_delta(0)
         .payment_secret(PaymentSecret(payment_secret))
-        .amount_milli_satoshis(100_000)
+        .amount_milli_satoshis(1_000_000)
         .expiry_time(Duration::from_secs(DEFAULT_EXPIRY_TIME))
         .build_signed(|m| SECP256K1.sign_ecdsa_recoverable(m, &sk))
         .expect("Invoice creation failed")
@@ -89,9 +89,9 @@ impl GatewayConnection for MockGatewayConnection {
     ) -> Result<Option<RoutingInfo>, GatewayError> {
         Ok(Some(RoutingInfo {
             public_key: self.keypair.public_key(),
-            send_fee_default: PaymentFee::one_percent(),
-            send_fee_minimum: PaymentFee::half_of_one_percent(),
-            receive_fee: PaymentFee::half_of_one_percent(),
+            send_fee_default: PaymentFee::TEN_PROMILLE_PLUS_50_SATS,
+            send_fee_minimum: PaymentFee::FIVE_PROMILLE_PLUS_50_SATS,
+            receive_fee: PaymentFee::FIVE_PROMILLE_PLUS_50_SATS,
             expiration_delta_default: 500,
             expiration_delta_minimum: 144,
         }))

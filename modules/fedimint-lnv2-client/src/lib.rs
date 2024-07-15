@@ -192,20 +192,18 @@ pub struct PaymentFee {
     pub parts_per_million: u64,
 }
 
-impl PaymentFee {
-    pub fn one_percent() -> Self {
-        PaymentFee {
-            base: Amount::ZERO,
-            parts_per_million: 10_000,
-        }
-    }
+const DUST_LIMIT: Amount = Amount::from_sats(50);
 
-    pub fn half_of_one_percent() -> Self {
-        PaymentFee {
-            base: Amount::ZERO,
-            parts_per_million: 5_000,
-        }
-    }
+impl PaymentFee {
+    pub const TEN_PROMILLE_PLUS_50_SATS: PaymentFee = PaymentFee {
+        base: DUST_LIMIT,
+        parts_per_million: 10_000,
+    };
+
+    pub const FIVE_PROMILLE_PLUS_50_SATS: PaymentFee = PaymentFee {
+        base: DUST_LIMIT,
+        parts_per_million: 5_000,
+    };
 
     pub fn add_fee(&self, msats: u64) -> Amount {
         Amount::from_msats(msats.saturating_add(self.fee(msats)))
@@ -354,7 +352,7 @@ impl LightningClientModule {
         self.send_internal(
             gateway_api,
             invoice,
-            PaymentFee::one_percent(),
+            PaymentFee::TEN_PROMILLE_PLUS_50_SATS,
             EXPIRATION_DELTA_LIMIT_DEFAULT,
             None,
         )
@@ -593,7 +591,7 @@ impl LightningClientModule {
             invoice_amount,
             INVOICE_EXPIRATION_SECONDS_DEFAULT,
             Bolt11InvoiceDescription::Direct(String::new()),
-            PaymentFee::one_percent(),
+            PaymentFee::TEN_PROMILLE_PLUS_50_SATS,
         )
         .await
     }
@@ -637,7 +635,7 @@ impl LightningClientModule {
             invoice_amount,
             INVOICE_EXPIRATION_SECONDS_DEFAULT,
             Bolt11InvoiceDescription::Direct(String::new()),
-            PaymentFee::one_percent(),
+            PaymentFee::TEN_PROMILLE_PLUS_50_SATS,
         )
         .await
     }
@@ -678,8 +676,10 @@ impl LightningClientModule {
 
         let contract_amount = payment_info.receive_fee.subtract_fee(invoice_amount.msats);
 
-        if contract_amount < Amount::from_sats(100) {
-            return Err(FetchInvoiceError::AmountIsUneconomical);
+        // The dust limit ensures that the incoming contract can be claimed without
+        // additional funds as the contracts amount is sufficient to cover the fees
+        if contract_amount < DUST_LIMIT {
+            return Err(FetchInvoiceError::DustAmount);
         }
 
         let expiration = duration_since_epoch()
@@ -909,8 +909,8 @@ pub enum FetchInvoiceError {
     UnknownFederation,
     #[error("The gateways fee of {0:?} exceeds the supplied limit")]
     PaymentFeeExceedsLimit(PaymentFee),
-    #[error("The total fees required to complete this payment exceed its value")]
-    AmountIsUneconomical,
+    #[error("The total fees required to complete this payment exceed its amount")]
+    DustAmount,
     #[error("The gateway considered our request for an invoice invalid: {0}")]
     CreateInvoiceError(String),
     #[error("The invoice's payment hash is incorrect")]
