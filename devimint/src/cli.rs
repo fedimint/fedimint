@@ -315,6 +315,9 @@ pub async fn handle_command(cmd: Cmd, common_args: CommonArgs) -> Result<()> {
                         task_group.shutdown();
                     }
 
+                    debug!(target: LOG_DEVIMINT, "Waiting for group task shutdown");
+                    task_group.make_handle().make_shutdown_rx().await;
+
                     Ok::<_, anyhow::Error>(daemons)
                 }
             };
