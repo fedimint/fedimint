@@ -743,9 +743,8 @@ impl GatewayLightning for ClnRpcService {
                     }
                 }
                 Some(Action::Cancel(Cancel { reason: _ })) => {
-                    // TODO: Translate the reason into a BOLT 4 failure message
-                    // See: https://github.com/lightning/bolts/blob/master/04-onion-routing.md#failure-messages
-                    htlc_processing_failure()
+                    // Simply forward the HTLC so that a "NoRoute" error response is returned.
+                    serde_json::json!({ "result": "continue" })
                 }
                 Some(Action::Forward(Forward {})) => {
                     serde_json::json!({ "result": "continue" })
