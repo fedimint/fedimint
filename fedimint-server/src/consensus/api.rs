@@ -625,7 +625,7 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConsensusApi>> {
         },
         api_endpoint! {
             SHUTDOWN_ENDPOINT,
-            ApiVersion::new(0, 0),
+            ApiVersion::new(0, 3),
             async |fedimint: &ConsensusApi, context, index: Option<u64>| -> () {
                 check_auth(context)?;
                 fedimint.shutdown(index);
