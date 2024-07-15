@@ -57,7 +57,7 @@ use crate::endpoint_constants::{
     GUARDIAN_CONFIG_BACKUP_ENDPOINT, RECOVER_ENDPOINT, RESTART_FEDERATION_SETUP_ENDPOINT,
     RUN_DKG_ENDPOINT, SESSION_COUNT_ENDPOINT, SESSION_STATUS_ENDPOINT,
     SET_CONFIG_GEN_CONNECTIONS_ENDPOINT, SET_CONFIG_GEN_PARAMS_ENDPOINT, SET_PASSWORD_ENDPOINT,
-    START_CONSENSUS_ENDPOINT, STATUS_ENDPOINT, SUBMIT_TRANSACTION_ENDPOINT,
+    SHUTDOWN_ENDPOINT, START_CONSENSUS_ENDPOINT, STATUS_ENDPOINT, SUBMIT_TRANSACTION_ENDPOINT,
     VERIFIED_CONFIGS_ENDPOINT, VERIFY_CONFIG_HASH_ENDPOINT, VERSION_ENDPOINT,
 };
 use crate::module::audit::AuditSummary;
@@ -659,6 +659,8 @@ pub trait IGlobalFederationApi: IRawFederationApi {
     async fn auth(&self, auth: ApiAuth) -> FederationResult<()>;
 
     async fn restart_federation_setup(&self, auth: ApiAuth) -> FederationResult<()>;
+
+    async fn shutdown(&self, session: Option<u64>, auth: ApiAuth) -> FederationResult<()>;
 }
 
 pub fn deserialize_outcome<R>(
@@ -1049,6 +1051,11 @@ where
             auth,
         )
         .await
+    }
+
+    async fn shutdown(&self, session: Option<u64>, auth: ApiAuth) -> FederationResult<()> {
+        self.request_admin(SHUTDOWN_ENDPOINT, ApiRequestErased::new(session), auth)
+            .await
     }
 }
 
