@@ -46,7 +46,7 @@ tracing-subscriber = { version = "0.3.18", features = [ "env-filter" ] }
 
 [target.'cfg(not(target_family = "wasm"))'.dependencies]
 fedimint-bitcoind = { version = "=0.4.0-alpha", path = "../../fedimint-bitcoind", default-features = false, features = ["esplora-client", "bitcoincore-rpc"] }
-tokio = { version = "1.38.0", features = ["full", "tracing"] }
+tokio = { version = "1.38.1", features = ["full", "tracing"] }
 
 [target.'cfg(target_family = "wasm")'.dependencies]
 fedimint-bitcoind = { version = "=0.4.0-alpha", path = "../../fedimint-bitcoind", default-features = false, features = ["esplora-client"] }
