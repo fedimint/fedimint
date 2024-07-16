@@ -87,10 +87,6 @@ pub enum ClientCmd {
         /// hasn't been redeemed by the recipient. Defaults to one week.
         #[clap(long, default_value_t = 60 * 60 * 24 * 7)]
         timeout: u64,
-        /// If the necessary information to join the federation the e-cash
-        /// belongs to should be included in the serialized notes
-        #[clap(long)]
-        include_invite: bool,
     },
     /// Verifies the signatures of e-cash notes, but *not* if they have been
     /// spent already
@@ -229,7 +225,6 @@ pub async fn handle_command(
             amount,
             allow_overpay,
             timeout,
-            include_invite,
         } => {
             warn!("The client will try to double-spend these notes after the duration specified by the --timeout option to recover any unclaimed e-cash.");
 
@@ -237,13 +232,7 @@ pub async fn handle_command(
             let timeout = Duration::from_secs(timeout);
             let (operation, notes) = if allow_overpay {
                 let (operation, notes) = mint_module
-                    .spend_notes_with_selector(
-                        &SelectNotesWithAtleastAmount,
-                        amount,
-                        timeout,
-                        include_invite,
-                        (),
-                    )
+                    .spend_notes_with_selector(&SelectNotesWithAtleastAmount, amount, timeout, ())
                     .await?;
 
                 let overspend_amount = notes.total_amount() - amount;
@@ -257,13 +246,7 @@ pub async fn handle_command(
                 (operation, notes)
             } else {
                 mint_module
-                    .spend_notes_with_selector(
-                        &SelectNotesWithExactAmount,
-                        amount,
-                        timeout,
-                        include_invite,
-                        (),
-                    )
+                    .spend_notes_with_selector(&SelectNotesWithExactAmount, amount, timeout, ())
                     .await?
             };
             info!("Spend e-cash operation: {}", operation.fmt_short());
