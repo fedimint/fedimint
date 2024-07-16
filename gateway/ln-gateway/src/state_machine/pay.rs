@@ -1,7 +1,7 @@
 use std::fmt::Display;
 use std::sync::Arc;
 
-use bitcoin_hashes::{sha256, Hash};
+use bitcoin_hashes::sha256;
 use fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
 use fedimint_client::transaction::{ClientInput, ClientOutput};
 use fedimint_client::{ClientHandleArc, DynGlobalClientContext};
@@ -25,7 +25,7 @@ use tracing::{debug, error, info, warn, Instrument};
 
 use super::{GatewayClientContext, GatewayClientStateMachines, GatewayExtReceiveStates};
 use crate::db::{FederationIdKey, PreimageAuthentication};
-use crate::gateway_lnrpc::{PayInvoiceRequest, PayInvoiceResponse};
+use crate::gateway_lnrpc::PayInvoiceResponse;
 use crate::lightning::LightningRpcError;
 use crate::state_machine::GatewayClientModule;
 use crate::{GatewayState, RoutingFees};
@@ -384,7 +384,6 @@ impl GatewayPayInvoice {
         common: GatewayPayCommon,
     ) -> GatewayPayStateMachine {
         debug!("Buying preimage over lightning for contract {contract:?}");
-        let payment_data = buy_preimage.payment_data.clone();
 
         let max_delay = buy_preimage.max_delay;
         let max_fee = buy_preimage.max_send_amount
@@ -404,12 +403,7 @@ impl GatewayPayInvoice {
             PaymentData::Invoice(invoice) => {
                 lightning_context
                     .lnrpc
-                    .pay(PayInvoiceRequest {
-                        invoice: invoice.to_string(),
-                        max_delay,
-                        max_fee_msat: max_fee.msats,
-                        payment_hash: payment_data.payment_hash().to_byte_array().to_vec(),
-                    })
+                    .pay(invoice, max_delay, max_fee)
                     .await
             }
             PaymentData::PrunedInvoice(invoice) => {

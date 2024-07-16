@@ -17,6 +17,7 @@ use fedimint_core::{secp256k1, Amount};
 use fedimint_ln_common::route_hints::RouteHint;
 use fedimint_ln_common::PrunedInvoice;
 use futures::stream::BoxStream;
+use lightning_invoice::Bolt11Invoice;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
@@ -28,7 +29,7 @@ use crate::envs::{
 use crate::gateway_lnrpc::{
     CloseChannelsWithPeerResponse, CreateInvoiceRequest, CreateInvoiceResponse, EmptyResponse,
     GetFundingAddressResponse, GetNodeInfoResponse, GetRouteHintsResponse, InterceptHtlcRequest,
-    InterceptHtlcResponse, PayInvoiceRequest, PayInvoiceResponse,
+    InterceptHtlcResponse, PayInvoiceResponse,
 };
 use crate::GatewayError;
 
@@ -88,8 +89,19 @@ pub trait ILnRpcClient: Debug + Send + Sync {
     /// Attempt to pay an invoice using the lightning node
     async fn pay(
         &self,
-        invoice: PayInvoiceRequest,
-    ) -> Result<PayInvoiceResponse, LightningRpcError>;
+        invoice: Bolt11Invoice,
+        max_delay: u64,
+        max_fee: Amount,
+    ) -> Result<PayInvoiceResponse, LightningRpcError> {
+        self.pay_private(
+            PrunedInvoice::try_from(invoice).map_err(|_| LightningRpcError::FailedPayment {
+                failure_reason: "Invoice has no amount".to_string(),
+            })?,
+            max_delay,
+            max_fee,
+        )
+        .await
+    }
 
     /// Attempt to pay an invoice using the lightning node using a
     /// [`PrunedInvoice`], increasing the user's privacy by not sending the
