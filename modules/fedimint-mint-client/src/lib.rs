@@ -320,10 +320,6 @@ impl FromStr for OOBNotes {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let s: String = s.chars().filter(|&c| !c.is_whitespace()).collect();
 
-        if let Ok(notes_v2) = OOBNotesV2::decode_base64(&s) {
-            return notes_v2.into_v1();
-        }
-
         let bytes = if let Ok(bytes) = BASE64_URL_SAFE.decode(&s) {
             bytes
         } else {
@@ -416,6 +412,29 @@ impl OOBNotesV2 {
 
         Ok(OOBNotes::new_with_invite(notes, &self.mint.into_v1()?))
     }
+
+    pub fn from_v1(notes_v1: &OOBNotes) -> anyhow::Result<OOBNotesV2> {
+        Ok(OOBNotesV2 {
+            mint: InviteCodeV2::from_v1(
+                &notes_v1
+                    .federation_invite()
+                    .context("Notes are missing an invite code")?
+                    .clone(),
+            ),
+            notes: notes_v1
+                .notes()
+                .clone()
+                .into_iter()
+                .map(|(amount, note)| OOBNoteV2 {
+                    amount,
+                    sig: note.signature,
+                    key: note.spend_key,
+                })
+                .collect(),
+            memo: String::new(),
+        })
+    }
+
     pub fn total_amount(&self) -> Amount {
         self.notes.iter().map(|note| note.amount).sum()
     }
@@ -428,6 +447,10 @@ impl OOBNotesV2 {
     }
 
     pub fn decode_base64(s: &str) -> anyhow::Result<Self> {
+        if let Ok(notes_v1) = OOBNotes::from_str(s) {
+            return OOBNotesV2::from_v1(&notes_v1);
+        }
+
         ensure!(s.starts_with("fedimintA"), "Invalid Prefix");
 
         let notes: Self = serde_json::from_slice(&base64_url::decode(&s[9..])?)?;
@@ -2458,12 +2481,15 @@ mod tests {
             })
             .take(NUMBER_OF_NOTES)
             .collect(),
-            memo: "Here are your sats!".to_string(),
+            memo: String::new(),
         };
 
-        OOBNotes::from_str(&notes.encode_base64()).expect("Failed to decode to legacy OOBNotes");
-
         let encoded = notes.encode_base64();
+        let decoded = OOBNotesV2::decode_base64(&encoded).unwrap();
+
+        assert_eq!(notes, decoded);
+
+        let encoded = notes.clone().into_v1().unwrap().to_string();
         let decoded = OOBNotesV2::decode_base64(&encoded).unwrap();
 
         assert_eq!(notes, decoded);
