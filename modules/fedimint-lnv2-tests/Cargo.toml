@@ -13,7 +13,7 @@ path = "tests/tests.rs"
 
 [dependencies]
 anyhow = "1.0.86"
-async-trait = "0.1.80"
+async-trait = "0.1.81"
 clap = { workspace = true }
 devimint = { workspace = true }
 fedimint-client = { workspace = true }
@@ -32,5 +32,5 @@ lightning-invoice = { workspace = true }
 semver = { workspace = true }
 serde_json = { workspace = true }
 substring = "1.4.5"
-tokio = { version = "1.38.0", features = ["sync"] }
+tokio = { version = "1.38.1", features = ["sync"] }
 tracing = { workspace = true }

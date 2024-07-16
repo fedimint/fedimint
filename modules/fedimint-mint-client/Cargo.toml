@@ -54,7 +54,7 @@ strum_macros = { workspace = true }
 tbs = { package = "fedimint-tbs", version = "=0.4.0-alpha", path = "../../crypto/tbs" }
 thiserror = { workspace = true }
 threshold_crypto = { workspace = true }
-tokio = { version = "1.38.0", features = ["sync"] }
+tokio = { version = "1.38.1", features = ["sync"] }
 tracing = { workspace = true }
 
 [dev-dependencies]

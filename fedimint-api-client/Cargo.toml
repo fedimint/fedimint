@@ -29,7 +29,7 @@ lru = "0.12.3"
 serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
-tokio = { version = "1.38.0", features = ["sync", "io-util"] }
+tokio = { version = "1.38.1", features = ["sync", "io-util"] }
 tracing = { workspace = true }
 
 [dev-dependencies]
