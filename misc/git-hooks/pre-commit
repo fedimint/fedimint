@@ -31,6 +31,18 @@ function check_nothing() {
 }
 export -f check_nothing
 
+function check_cargo_sort() {
+    set -euo pipefail
+
+    #!/usr/bin/env bash
+
+    set -eo pipefail
+
+    cargo sort -w -g --order package,features,bin,lib,test,bench,dependencies,dev-dependencies,build-dependencies --check >/dev/null
+
+}
+export -f check_cargo_sort
+
 function check_cargo_fmt() {
     set -euo pipefail
 
@@ -169,6 +181,7 @@ export -f check_typos
 parallel \
   --nonotice \
 ::: \
+    check_cargo_sort \
     check_cargo_fmt \
     check_cargo_lock \
     check_check_forbidden_dependencies \

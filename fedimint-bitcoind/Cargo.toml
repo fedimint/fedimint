@@ -11,7 +11,9 @@ repository = "https://github.com/fedimint/fedimint"
 [package.metadata.docs.rs]
 rustc-args = ["--cfg", "tokio_unstable"]
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[features]
+default = ["bitcoincore-rpc", "electrum-client", "esplora-client"]
+
 [lib]
 name = "fedimint_bitcoind"
 path = "src/lib.rs"
@@ -32,6 +34,3 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 tracing = { workspace = true }
 url = { workspace = true }
-
-[features]
-default = ["bitcoincore-rpc", "electrum-client", "esplora-client"]

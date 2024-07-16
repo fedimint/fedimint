@@ -62,8 +62,10 @@ members = [
 resolver = "2"
 
 [workspace.package]
-crane.name = "fedimint"
 version = "0.4.0-alpha"
+
+[workspace.package.crane]
+name = "fedimint"
 
 [workspace.metadata]
 name = "fedimint"
@@ -145,13 +147,6 @@ fedimint-wallet-common = { path = "./modules/fedimint-wallet-common" }
 debug = false
 opt-level = 3
 
-[profile.ci.build-override]
-debug = false
-opt-level = 1
-
-[profile.dev.package."*"] # external dependencies
-opt-level = 1
-
 # in dev mode optimize crates that are perf-critical (usually just crypto crates)
 [profile.dev.package]
 secp256k1 = { opt-level = 3 }
@@ -173,10 +168,17 @@ aleph-bft-crypto = { opt-level = 3 }
 aleph-bft-rmc = { opt-level = 3 }
 aleph-bft-types = { opt-level = 3 }
 
+[profile.dev.package."*"] # external dependencies
+opt-level = 1
+
 [profile.ci]
 inherits = "dev"
 debug = "line-tables-only"
 incremental = false
+
+[profile.ci.build-override]
+debug = false
+opt-level = 1
 
 [profile.release]
 debug = "line-tables-only"

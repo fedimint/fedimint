@@ -11,7 +11,6 @@ repository = "https://github.com/fedimint/fedimint"
 [package.metadata.docs.rs]
 rustc-args = ["--cfg", "tokio_unstable"]
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [lib]
 name = "fedimint_derive_secret"
 path = "src/lib.rs"

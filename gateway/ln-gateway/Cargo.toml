@@ -1,18 +1,12 @@
 [package]
 name = "fedimint-ln-gateway"
-version = {workspace = true}
+version = { workspace = true }
 authors = ["The Fedimint Developers"]
 edition = "2021"
 description = "fedimint-ln-gateway sends/receives Lightning Network payments on behalf of Fedimint clients"
 license = "MIT"
 readme = "../../README.md"
 repository = "https://github.com/fedimint/fedimint"
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
-[lib]
-name = "ln_gateway"
-path = "src/lib.rs"
 
 [[bin]]
 name = "gatewayd"
@@ -22,38 +16,41 @@ path = "src/bin/gatewayd.rs"
 name = "gateway-cln-extension"
 path = "src/bin/cln_extension.rs"
 
+[lib]
+name = "ln_gateway"
+path = "src/lib.rs"
+
 [[test]]
 name = "gatewayd-tests"
 path = "tests/tests.rs"
 
 [dependencies]
 anyhow = { workspace = true }
+aquamarine = "0.5.0"
 async-stream = "0.3.5"
 async-trait = { workspace = true }
 axum = "0.7.5"
 axum-macros = "0.4.1"
-aquamarine = "0.5.0"
 bitcoin = { workspace = true }
 bitcoin_hashes = { workspace = true }
 clap = { workspace = true }
 # cln-plugin made semver incompatible change
 cln-plugin = "=0.1.7"
 cln-rpc = { workspace = true }
+erased-serde = { workspace = true }
+fedimint-api-client = { workspace = true }
 fedimint-client = { workspace = true }
 fedimint-core = { workspace = true }
-fedimint-api-client = { workspace = true }
-fedimint-logging = { workspace = true }
-fedimint-rocksdb = { version = "=0.4.0-alpha", path = "../../fedimint-rocksdb" }
 fedimint-ln-client = { workspace = true }
 fedimint-ln-common = { version = "=0.4.0-alpha", path = "../../modules/fedimint-ln-common" }
-fedimint-mint-client = { version = "=0.4.0-alpha", path = "../../modules/fedimint-mint-client" }
-fedimint-wallet-client = { version = "=0.4.0-alpha", path = "../../modules/fedimint-wallet-client" }
 fedimint-lnv2-client = { path = "../../modules/fedimint-lnv2-client" }
 fedimint-lnv2-common = { path = "../../modules/fedimint-lnv2-common" }
-tpe = { package = "fedimint-tpe", version = "=0.4.0-alpha", path = "../../crypto/tpe" }
+fedimint-logging = { workspace = true }
+fedimint-mint-client = { version = "=0.4.0-alpha", path = "../../modules/fedimint-mint-client" }
+fedimint-rocksdb = { version = "=0.4.0-alpha", path = "../../fedimint-rocksdb" }
+fedimint-wallet-client = { version = "=0.4.0-alpha", path = "../../modules/fedimint-wallet-client" }
 futures = { workspace = true }
 hex = { workspace = true }
-erased-serde = { workspace = true }
 lightning-invoice = { workspace = true }
 prost = "0.12.6"
 rand = { workspace = true }
@@ -69,25 +66,26 @@ tokio-stream = "0.1.15"
 tonic = { version = "0.11.0", features = ["transport", "tls"] }
 tonic_lnd = { workspace = true }
 tower-http = { version = "0.5.2", features = ["cors", "auth"] }
-tracing = { version = "0.1.40", default-features = false, features= ["log", "attributes", "std"] }
+tpe = { package = "fedimint-tpe", version = "=0.4.0-alpha", path = "../../crypto/tpe" }
+tracing = { version = "0.1.40", default-features = false, features = ["log", "attributes", "std"] }
 url = { version = "2.5.2", features = ["serde"] }
 
 [dev-dependencies]
+assert_matches = { workspace = true }
 fedimint-dummy-client = { version = "=0.4.0-alpha", path = "../../modules/fedimint-dummy-client" }
-fedimint-dummy-server = { path = "../../modules/fedimint-dummy-server" }
 fedimint-dummy-common = { path = "../../modules/fedimint-dummy-common" }
-fedimint-unknown-server = { path = "../../modules/fedimint-unknown-server" }
-fedimint-unknown-common = { path = "../../modules/fedimint-unknown-common" }
+fedimint-dummy-server = { path = "../../modules/fedimint-dummy-server" }
 fedimint-ln-client = { workspace = true }
-fedimint-ln-server = { path = "../../modules/fedimint-ln-server" }
 fedimint-ln-common = { path = "../../modules/fedimint-ln-common" }
+fedimint-ln-server = { path = "../../modules/fedimint-ln-server" }
 fedimint-lnv2-server = { path = "../../modules/fedimint-lnv2-server" }
 fedimint-mint-client = { path = "../../modules/fedimint-mint-client" }
-fedimint-wallet-client = { path = "../../modules/fedimint-wallet-client" }
 fedimint-testing = { workspace = true }
+fedimint-unknown-common = { path = "../../modules/fedimint-unknown-common" }
+fedimint-unknown-server = { path = "../../modules/fedimint-unknown-server" }
+fedimint-wallet-client = { path = "../../modules/fedimint-wallet-client" }
 lightning = { workspace = true }
 threshold_crypto = { workspace = true }
-assert_matches = { workspace = true }
 
 [build-dependencies]
 fedimint-build = { version = "=0.4.0-alpha", path = "../../fedimint-build" }

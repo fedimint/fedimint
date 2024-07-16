@@ -44,11 +44,11 @@ tokio = { version = "1.38.0", features = [ "time", "macros", "rt" ] }
 tokio-stream = { version = "0.1.15", features = [ "time", "sync" ] }
 tracing = { workspace = true }
 
-[target.'cfg(target_family = "wasm")'.dependencies]
-ring = { version = "0.17.8", features = ["wasm32_unknown_unknown_js"] }
-
 [dev-dependencies]
 tracing-test = "0.2.5"
 
 [build-dependencies]
 fedimint-build = { version = "=0.4.0-alpha", path = "../fedimint-build" }
+
+[target.'cfg(target_family = "wasm")'.dependencies]
+ring = { version = "0.17.8", features = ["wasm32_unknown_unknown_js"] }

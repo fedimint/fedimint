@@ -7,7 +7,6 @@ description = "tbs is a helper cryptography library for threshold blind signatur
 license = "MIT"
 readme = "../../README.md"
 repository = "https://github.com/fedimint/fedimint"
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [features]
 default = []
@@ -16,6 +15,10 @@ unstable = []
 [lib]
 name = "tbs"
 path = "src/lib.rs"
+
+[[bench]]
+name = "tbs"
+harness = false
 
 [dependencies]
 bls12_381 = { workspace = true }
@@ -29,7 +32,3 @@ sha3 = "0.10.8"
 
 [dev-dependencies]
 criterion = { workspace = true }
-
-[[bench]]
-name = "tbs"
-harness = false

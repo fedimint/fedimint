@@ -8,51 +8,58 @@ license = "MIT"
 readme = "../README.md"
 repository = "https://github.com/fedimint/fedimint"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[package.metadata.cargo-udeps.ignore]
+development = ["tokio-test"]
 
 [lib]
 name = "fedimint_core"
 path = "src/lib.rs"
 
 [dependencies]
-async-recursion = "1.1.1"
 anyhow = { workspace = true }
+async-recursion = "1.1.1"
 async-trait = { workspace = true }
-futures = { workspace = true }
+backon = "=0.4.4" # don't upgrade unless really needed
 backtrace = "0.3.73"
-bincode = { workspace = true }
-bech32 = "0.11.0"
 base64-url = "3.0.0"
-bls12_381 = { workspace = true }
-serdect = { workspace = true }
-itertools = { workspace = true }
-jsonrpsee-core = { version = "0.24.0", features = ["client"] }
-serde = { workspace = true }
-serde_json = { workspace = true }
-strum = { workspace = true }
-strum_macros = { workspace = true }
-hex = { version = "0.4.3", features = ["serde"] }
-thiserror = { workspace = true }
-tracing = { workspace = true }
-threshold_crypto = { workspace = true }
-url = { version = "2.5.2", features = ["serde"] }
-bitcoin29 = { package = "bitcoin", version = "0.29.2", features = ["rand", "serde"] }
+bech32 = "0.11.0"
+bincode = { workspace = true }
 bitcoin = { workspace = true }
+bitcoin29 = { package = "bitcoin", version = "0.29.2", features = ["rand", "serde"] }
 bitcoin_hashes = { workspace = true }
+bitvec = "1.0.1"
+bls12_381 = { workspace = true }
 erased-serde = { workspace = true }
-lightning = { workspace = true }
-lightning-invoice = { workspace = true }
 fedimint-derive = { version = "=0.4.0-alpha", path = "../fedimint-derive" }
 fedimint-logging = { workspace = true }
-rand = { workspace = true }
-miniscript = { version = "10.0.0", features = ["compiler", "serde"] }
-secp256k1-zkp = { version = "0.9.2", features = ["serde", "global-context"] }
-secp256k1 = { version = "0.27.0", features = ["global-context", "rand-std"] }
-macro_rules_attribute = "0.2.0"
-bitvec = "1.0.1"
-parity-scale-codec = { version = "3.6.12", features = ["derive"] }
+futures = { workspace = true }
+hex = { version = "0.4.3", features = ["serde"] }
 imbl = "3.0.0"
-backon = "=0.4.4" # don't upgrade unless really needed
+itertools = { workspace = true }
+jsonrpsee-core = { version = "0.24.0", features = ["client"] }
+lightning = { workspace = true }
+lightning-invoice = { workspace = true }
+macro_rules_attribute = "0.2.0"
+miniscript = { version = "10.0.0", features = ["compiler", "serde"] }
+parity-scale-codec = { version = "3.6.12", features = ["derive"] }
+rand = { workspace = true }
+secp256k1 = { version = "0.27.0", features = ["global-context", "rand-std"] }
+secp256k1-zkp = { version = "0.9.2", features = ["serde", "global-context"] }
+serde = { workspace = true }
+serde_json = { workspace = true }
+serdect = { workspace = true }
+strum = { workspace = true }
+strum_macros = { workspace = true }
+thiserror = { workspace = true }
+threshold_crypto = { workspace = true }
+tracing = { workspace = true }
+url = { version = "2.5.2", features = ["serde"] }
+
+[dev-dependencies]
+once_cell = { workspace = true }
+test-log = { version = "0.2", features = ["trace"], default-features = false }
+tokio-test = "0.4.4"
+tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
 
 [target.'cfg(not(target_family = "wasm"))'.dependencies]
 tokio = { version = "1.38.0", features = ["full", "tracing"] }
@@ -70,12 +77,3 @@ getrandom = { version = "0.2.15", features = ["js"] }
 gloo-timers = { version = "0.3.0", features = ["futures"] }
 wasm-bindgen-futures = "0.4.42"
 js-sys = "0.3.69"
-
-[dev-dependencies]
-test-log = { version = "0.2", features = ["trace"], default-features = false }
-once_cell = { workspace = true }
-tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
-tokio-test = "0.4.4"
-
-[package.metadata.cargo-udeps.ignore]
-development = ["tokio-test"]

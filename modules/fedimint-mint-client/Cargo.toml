@@ -11,7 +11,10 @@ repository = "https://github.com/fedimint/fedimint"
 [package.metadata.docs.rs]
 rustc-args = ["--cfg", "tokio_unstable"]
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[package.metadata.cargo-udeps.ignore]
+# cargo udeps can't detect that one
+normal = ["aquamarine"]
+
 [lib]
 name = "fedimint_mint_client"
 path = "src/lib.rs"
@@ -20,36 +23,32 @@ path = "src/lib.rs"
 name = "notes"
 harness = false
 
-[package.metadata.cargo-udeps.ignore]
-# cargo udeps can't detect that one
-normal = ["aquamarine"]
-
 [dependencies]
 anyhow = { workspace = true }
+aquamarine = "0.5.0"
 async-stream = "0.3.5"
 async-trait = "0.1"
-aquamarine = "0.5.0"
 base64 = "0.22.1"
 base64-url = "3.0.0"
 bincode = { workspace = true }
-bls12_381 = { workspace = true }
 bitcoin_hashes = { workspace = true }
+bls12_381 = { workspace = true }
 clap = { workspace = true }
 erased-serde = { workspace = true }
+fedimint-api-client = { workspace = true }
+fedimint-client = { workspace = true }
+fedimint-core = { workspace = true }
+fedimint-derive-secret = { version = "=0.4.0-alpha", path = "../../crypto/derive-secret" }
+fedimint-logging = { workspace = true }
+fedimint-mint-common = { version = "=0.4.0-alpha", path = "../fedimint-mint-common" }
 futures = { workspace = true }
 hex = { workspace = true }
 itertools = { workspace = true }
-fedimint-core = { workspace = true }
-fedimint-api-client = { workspace = true }
-fedimint-client = { workspace = true }
-fedimint-derive-secret = { version = "=0.4.0-alpha", path = "../../crypto/derive-secret" }
-fedimint-mint-common = { version = "=0.4.0-alpha", path = "../fedimint-mint-common" }
-fedimint-logging = { workspace = true }
 secp256k1-zkp = "0.9.2"
 serde = { workspace = true }
-serdect = { workspace = true }
 serde-big-array = { workspace = true }
 serde_json = { workspace = true }
+serdect = { workspace = true }
 strum = { workspace = true }
 strum_macros = { workspace = true }
 tbs = { package = "fedimint-tbs", version = "=0.4.0-alpha", path = "../../crypto/tbs" }

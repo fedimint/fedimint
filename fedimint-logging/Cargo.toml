@@ -7,11 +7,6 @@ description = "contains some utilities for logging and tracing"
 license = "MIT"
 readme = "../README.md"
 repository = "https://github.com/fedimint/fedimint"
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
-[lib]
-name = "fedimint_logging"
-path = "src/lib.rs"
 
 [features]
 telemetry = [
@@ -20,6 +15,10 @@ telemetry = [
     "console-subscriber",
     "opentelemetry",
 ]
+
+[lib]
+name = "fedimint_logging"
+path = "src/lib.rs"
 
 [dependencies]
 anyhow = { workspace = true }

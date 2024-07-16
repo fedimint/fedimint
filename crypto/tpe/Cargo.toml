@@ -5,7 +5,6 @@ authors = ["The Fedimint Developers"]
 edition = "2021"
 description = "tpe is a helper cryptography library for threshold point encryption"
 license = "MIT"
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [features]
 default = []

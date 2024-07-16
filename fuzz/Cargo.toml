@@ -11,6 +11,15 @@ repository = "https://github.com/fedimint/fedimint"
 [package.metadata]
 cargo-fuzz = true
 
+[[bin]]
+name = "vec"
+path = "src/bin/vec.rs"
+
+# cargo-deny just needs at least one `bin` defined
+[lib]
+name = "fedimint_fuzz"
+path = "src/lib.rs"
+
 [dependencies]
 fedimint-core = { workspace = true }
 fedimint-ln-common = { workspace = true }
@@ -20,12 +29,3 @@ fedimint-mint-common = { workspace = true }
 fedimint-wallet-common = { workspace = true }
 # needs to be pinned to the same version `cargo-fuzz` binary uses
 honggfuzz = { version = "=0.5.55", default-features = false }
-
-# cargo-deny just needs at least one `bin` defined
-[lib]
-name = "fedimint_fuzz"
-path = "src/lib.rs"
-
-[[bin]]
-name = "vec"
-path = "src/bin/vec.rs"
