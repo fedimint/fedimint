@@ -8,7 +8,6 @@ use fedimint_core::core::OperationId;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::secp256k1::KeyPair;
 use fedimint_core::{Amount, OutPoint};
-use fedimint_ln_common::PrunedInvoice;
 use fedimint_lnv2_client::{LightningClientStateMachines, LightningInvoice};
 use fedimint_lnv2_common::contracts::OutgoingContract;
 use fedimint_lnv2_common::{LightningInput, LightningInputV0, OutgoingWitness};
@@ -127,9 +126,7 @@ impl SendStateMachine {
         invoice: LightningInvoice,
         contract: OutgoingContract,
     ) -> Result<[u8; 32], Cancelled> {
-        let (invoice, amount) = match invoice {
-            LightningInvoice::Bolt11(invoice, amount) => (invoice, amount),
-        };
+        let LightningInvoice::Bolt11(invoice) = invoice;
 
         // The following two checks may fail in edge cases since they have inherent
         // timing assumptions. Therefore, they may only be checked after we have created
@@ -157,7 +154,9 @@ impl SendStateMachine {
                 .gateway
                 .get_registered_incoming_contract_and_client_v2(
                     invoice.payment_hash().to_byte_array(),
-                    amount.msats,
+                    invoice
+                        .amount_milli_satoshis()
+                        .expect("The amount invoice has been checked previously"),
                 )
                 .await
                 .map_err(|e| Cancelled::RegistrationError(e.to_string()))?;
@@ -179,11 +178,7 @@ impl SendStateMachine {
 
         lightning_context
             .lnrpc
-            .pay_private(
-                PrunedInvoice::new(&invoice, amount),
-                max_delay,
-                contract.amount - min_contract_amount,
-            )
+            .pay(invoice, max_delay, contract.amount - min_contract_amount)
             .await
             .map(|response| {
                 response

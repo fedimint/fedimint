@@ -249,7 +249,12 @@ impl GatewayClientModuleV2 {
             .saturating_sub(EXPIRATION_DELTA_MINIMUM_V2);
 
         let (payment_hash, amount) = match &payload.invoice {
-            LightningInvoice::Bolt11(invoice, amount) => (invoice.payment_hash(), amount),
+            LightningInvoice::Bolt11(invoice) => (
+                invoice.payment_hash(),
+                invoice
+                    .amount_milli_satoshis()
+                    .ok_or(anyhow!("Invoice is missing amount"))?,
+            ),
         };
 
         ensure!(
@@ -263,7 +268,7 @@ impl GatewayClientModuleV2 {
             .await
             .ok_or(anyhow!("Routing Info not available"))?
             .send_fee_minimum
-            .add_fee(amount.msats);
+            .add_fee(amount);
 
         let send_sm = GatewayClientStateMachinesV2::Send(SendStateMachine {
             common: SendSMCommon {
