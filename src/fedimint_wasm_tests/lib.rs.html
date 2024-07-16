@@ -592,7 +592,7 @@
     ) -&gt; <span class="prelude-ty">Result</span>&lt;(), anyhow::Error&gt; {
         <span class="kw">let </span>mint = client.get_first_module::&lt;MintClientModule&gt;();
         <span class="kw">let </span>(<span class="kw">_</span>, notes) = mint
-            .spend_notes(Amount::from_sats(<span class="number">11</span>), Duration::from_secs(<span class="number">10000</span>), <span class="bool-val">false</span>, ())
+            .spend_notes(Amount::from_sats(<span class="number">11</span>), Duration::from_secs(<span class="number">10000</span>), ())
             .<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>operation_id = mint.reissue_external_notes(notes, ()).<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span><span class="kw-2">mut </span>updates = mint
@@ -621,7 +621,7 @@
         <span class="kw">let </span>mint = client.get_first_module::&lt;MintClientModule&gt;();
         <span class="lifetime">'retry</span>: <span class="kw">loop </span>{
             <span class="kw">let </span>(operation_id, notes) = mint
-                .spend_notes(amount, Duration::from_secs(<span class="number">10000</span>), <span class="bool-val">false</span>, ())
+                .spend_notes(amount, Duration::from_secs(<span class="number">10000</span>), ())
                 .<span class="kw">await</span><span class="question-mark">?</span>;
             <span class="kw">if </span>notes.total_amount() == amount {
                 <span class="kw">return </span><span class="prelude-val">Ok</span>(());

@@ -2529,15 +2529,6 @@
 <a href="#2529" id="2529">2529</a>
 <a href="#2530" id="2530">2530</a>
 <a href="#2531" id="2531">2531</a>
-<a href="#2532" id="2532">2532</a>
-<a href="#2533" id="2533">2533</a>
-<a href="#2534" id="2534">2534</a>
-<a href="#2535" id="2535">2535</a>
-<a href="#2536" id="2536">2536</a>
-<a href="#2537" id="2537">2537</a>
-<a href="#2538" id="2538">2538</a>
-<a href="#2539" id="2539">2539</a>
-<a href="#2540" id="2540">2540</a>
 </pre></div><pre class="rust"><code><span class="attr">#![warn(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::default_trait_access)]
@@ -3365,7 +3356,7 @@
                 }
                 <span class="string">"spend_notes" </span>=&gt; {
                     <span class="kw">let </span>req: SpendNotesRequest = serde_json::from_value(request)<span class="question-mark">?</span>;
-                    <span class="kw">let </span>result = <span class="self">self</span>.spend_notes(req.min_amount, req.try_cancel_after, req.include_invite, req.extra_meta).<span class="kw">await</span><span class="question-mark">?</span>;
+                    <span class="kw">let </span>result = <span class="self">self</span>.spend_notes(req.min_amount, req.try_cancel_after, req.extra_meta).<span class="kw">await</span><span class="question-mark">?</span>;
                     <span class="kw">yield </span>serde_json::to_value(result)<span class="question-mark">?</span>;
                 }
                 <span class="string">"validate_notes" </span>=&gt; {
@@ -3414,7 +3405,6 @@
 </span><span class="kw">struct </span>SpendNotesRequest {
     min_amount: Amount,
     try_cancel_after: Duration,
-    include_invite: bool,
     extra_meta: serde_json::Value,
 }
 
@@ -4058,14 +4048,12 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         min_amount: Amount,
         try_cancel_after: Duration,
-        include_invite: bool,
         extra_meta: M,
     ) -&gt; anyhow::Result&lt;(OperationId, OOBNotes)&gt; {
         <span class="self">self</span>.spend_notes_with_selector(
             <span class="kw-2">&amp;</span>SelectNotesWithAtleastAmount,
             min_amount,
             try_cancel_after,
-            include_invite,
             extra_meta,
         )
         .<span class="kw">await
@@ -4077,10 +4065,8 @@
         notes_selector: <span class="kw-2">&amp;</span><span class="kw">impl </span>NotesSelector,
         requested_amount: Amount,
         try_cancel_after: Duration,
-        include_invite: bool,
         extra_meta: M,
     ) -&gt; anyhow::Result&lt;(OperationId, OOBNotes)&gt; {
-        <span class="kw">let </span>federation_id_prefix = <span class="self">self</span>.federation_id.to_prefix();
         <span class="kw">let </span>extra_meta = serde_json::to_value(extra_meta)
             .expect(<span class="string">"MintClientModule::spend_notes extra_meta is serializable"</span>);
 
@@ -4098,14 +4084,10 @@
                             )
                             .<span class="kw">await</span><span class="question-mark">?</span>;
 
-                        <span class="kw">let </span>oob_notes = <span class="kw">if </span>include_invite {
-                            OOBNotes::new_with_invite(
-                                notes,
-                                <span class="kw-2">&amp;</span><span class="self">self</span>.client_ctx.get_invite_code().<span class="kw">await</span>,
-                            )
-                        } <span class="kw">else </span>{
-                            OOBNotes::new(federation_id_prefix, notes)
-                        };
+                        <span class="kw">let </span>oob_notes = OOBNotes::new_with_invite(
+                            notes,
+                            <span class="kw-2">&amp;</span><span class="self">self</span>.client_ctx.get_invite_code().<span class="kw">await</span>,
+                        );
 
                         dbtx.add_state_machines(<span class="self">self</span>.client_ctx.map_dyn(states).collect())
                             .<span class="kw">await</span><span class="question-mark">?</span>;
