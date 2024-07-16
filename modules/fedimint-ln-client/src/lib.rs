@@ -277,7 +277,7 @@ pub struct LightningClientInit {
 impl Default for LightningClientInit {
     fn default() -> Self {
         LightningClientInit {
-            gateway_conn: Arc::new(RealGatewayConnection),
+            gateway_conn: Arc::new(RealGatewayConnection::default()),
         }
     }
 }
@@ -2026,13 +2026,16 @@ pub trait GatewayConnection: std::fmt::Debug {
     ) -> Result<String, GatewayPayError>;
 }
 
-#[derive(Debug)]
-pub struct RealGatewayConnection;
+#[derive(Debug, Default)]
+pub struct RealGatewayConnection {
+    client: reqwest::Client,
+}
 
 #[apply(async_trait_maybe_send!)]
 impl GatewayConnection for RealGatewayConnection {
     async fn verify_gateway_availability(&self, gateway: &LightningGateway) -> anyhow::Result<()> {
-        let response = reqwest::Client::new()
+        let response = self
+            .client
             .get(
                 gateway
                     .api
@@ -2064,7 +2067,8 @@ impl GatewayConnection for RealGatewayConnection {
         gateway: LightningGateway,
         payload: PayInvoicePayload,
     ) -> Result<String, GatewayPayError> {
-        let response = reqwest::Client::new()
+        let response = self
+            .client
             .post(
                 gateway
                     .api
