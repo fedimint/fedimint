@@ -170,7 +170,7 @@ impl From<&GatewayClientContext> for LightningClientContext {
         LightningClientContext {
             ln_decoder: ctx.ln_decoder.clone(),
             redeem_key: ctx.redeem_key,
-            gateway_conn: Arc::new(RealGatewayConnection),
+            gateway_conn: Arc::new(RealGatewayConnection::default()),
         }
     }
 }
