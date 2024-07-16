@@ -38,6 +38,7 @@ impl RecoveryFromHistory for MintRecovery {
     type Init = MintClientInit;
 
     async fn new(
+        _init: &Self::Init,
         args: &ClientModuleRecoverArgs<Self::Init>,
         snapshot: Option<&EcashBackup>,
     ) -> anyhow::Result<(Self, u64)> {
@@ -75,10 +76,12 @@ impl RecoveryFromHistory for MintRecovery {
     }
 
     async fn load_dbtx(
+        _init: &Self::Init,
         dbtx: &mut DatabaseTransaction<'_>,
         args: &ClientModuleRecoverArgs<Self::Init>,
-    ) -> Option<(Self, RecoveryFromHistoryCommon)> {
-        dbtx.get_value(&RecoveryStateKey)
+    ) -> anyhow::Result<Option<(Self, RecoveryFromHistoryCommon)>> {
+        Ok(dbtx
+            .get_value(&RecoveryStateKey)
             .await
             .map(|(state, common)| {
                 (
@@ -88,7 +91,7 @@ impl RecoveryFromHistory for MintRecovery {
                     },
                     common,
                 )
-            })
+            }))
     }
 
     async fn store_dbtx(
@@ -117,6 +120,7 @@ impl RecoveryFromHistory for MintRecovery {
         _client_ctx: &ClientContext<MintClientModule>,
         _idx: usize,
         input: &MintInput,
+        _session_idx: u64,
     ) -> anyhow::Result<()> {
         self.state.handle_input(input);
         Ok(())
@@ -127,6 +131,7 @@ impl RecoveryFromHistory for MintRecovery {
         _client_ctx: &ClientContext<MintClientModule>,
         out_point: OutPoint,
         output: &MintOutput,
+        _session_idx: u64,
     ) -> anyhow::Result<()> {
         self.state.handle_output(out_point, output, &self.secret);
         Ok(())
