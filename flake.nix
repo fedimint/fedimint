@@ -113,6 +113,9 @@
               git.pre-commit.hooks = {
                 check_forbidden_dependencies = builtins.readFile ./nix/check-forbidden-deps.sh;
               };
+              git.pre-commit.hooks = {
+                cargo-sort = builtins.readFile ./nix/check-cargo-sort.sh;
+              };
             };
           };
 
