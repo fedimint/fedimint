@@ -123,7 +123,7 @@ impl GatewayConnection for MockGatewayConnection {
         _auth: Signature,
     ) -> anyhow::Result<Result<Result<[u8; 32], Signature>, String>> {
         match invoice {
-            LightningInvoice::Bolt11(invoice, _) => {
+            LightningInvoice::Bolt11(invoice) => {
                 if *invoice.payment_secret() == PaymentSecret(GATEWAY_CRASH_PAYMENT_SECRET) {
                     bail!("Failed to connect to gateway");
                 }

@@ -171,7 +171,7 @@ pub struct SendPaymentPayload {
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Decodable, Encodable)]
 pub enum LightningInvoice {
-    Bolt11(Bolt11Invoice, Amount),
+    Bolt11(Bolt11Invoice),
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Decodable, Encodable)]
@@ -356,7 +356,6 @@ impl LightningClientModule {
             invoice,
             PaymentFee::one_percent(),
             EXPIRATION_DELTA_LIMIT_DEFAULT,
-            None,
         )
         .await
     }
@@ -367,15 +366,12 @@ impl LightningClientModule {
         invoice: Bolt11Invoice,
         payment_fee_limit: PaymentFee,
         expiration_delta_limit: u64,
-        partial_amount: Option<Amount>,
     ) -> Result<OperationId, SendPaymentError> {
         let gateway_api = GatewayEndpoint::Url(gateway_api);
 
-        let amount = partial_amount.unwrap_or(Amount::from_msats(
-            invoice
-                .amount_milli_satoshis()
-                .ok_or(SendPaymentError::InvoiceMissingAmount)?,
-        ));
+        let amount = invoice
+            .amount_milli_satoshis()
+            .ok_or(SendPaymentError::InvoiceMissingAmount)?;
 
         if invoice.is_expired() {
             return Err(SendPaymentError::InvoiceExpired);
@@ -423,7 +419,7 @@ impl LightningClientModule {
 
         let contract = OutgoingContract {
             payment_hash: *invoice.payment_hash(),
-            amount: payment_info.send_fee_default.add_fee(amount.msats),
+            amount: payment_info.send_fee_default.add_fee(amount),
             expiration: consensus_block_count + payment_info.expiration_delta_default,
             claim_pk: payment_info.public_key,
             refund_pk: refund_keypair.public_key(),
@@ -444,7 +440,7 @@ impl LightningClientModule {
                         funding_txid,
                         gateway_api: gateway_api_clone.clone(),
                         contract: contract_clone.clone(),
-                        invoice: LightningInvoice::Bolt11(invoice_clone.clone(), amount),
+                        invoice: LightningInvoice::Bolt11(invoice_clone.clone()),
                         refund_keypair,
                     },
                     state: SendSMState::Funding,
