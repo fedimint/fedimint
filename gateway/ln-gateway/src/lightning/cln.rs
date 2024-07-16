@@ -18,7 +18,7 @@ use crate::gateway_lnrpc::{
     self, CloseChannelsWithPeerRequest, CloseChannelsWithPeerResponse, CreateInvoiceRequest,
     CreateInvoiceResponse, EmptyRequest, EmptyResponse, GetFundingAddressResponse,
     GetNodeInfoResponse, GetRouteHintsRequest, GetRouteHintsResponse, InterceptHtlcResponse,
-    OpenChannelRequest, PayInvoiceRequest, PayInvoiceResponse, PayPrunedInvoiceRequest,
+    OpenChannelRequest, PayInvoiceResponse, PayPrunedInvoiceRequest,
 };
 use crate::lightning::MAX_LIGHTNING_RETRIES;
 
@@ -91,22 +91,6 @@ impl ILnRpcClient for NetworkLnRpcClient {
                 failure_reason: status.message().to_string(),
             }
         })?;
-        Ok(res.into_inner())
-    }
-
-    async fn pay(
-        &self,
-        invoice: PayInvoiceRequest,
-    ) -> Result<PayInvoiceResponse, LightningRpcError> {
-        let req = Request::new(invoice);
-        let mut client = self.connect().await?;
-        let res =
-            client
-                .pay_invoice(req)
-                .await
-                .map_err(|status| LightningRpcError::FailedPayment {
-                    failure_reason: status.message().to_string(),
-                })?;
         Ok(res.into_inner())
     }
 

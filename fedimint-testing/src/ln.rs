@@ -13,13 +13,12 @@ use fedimint_core::{secp256k1, Amount};
 use fedimint_ln_common::PrunedInvoice;
 use fedimint_logging::LOG_TEST;
 use lightning_invoice::{
-    Bolt11Invoice, Currency, InvoiceBuilder, PaymentSecret, SignedRawBolt11Invoice,
-    DEFAULT_EXPIRY_TIME,
+    Bolt11Invoice, Currency, InvoiceBuilder, PaymentSecret, DEFAULT_EXPIRY_TIME,
 };
 use ln_gateway::gateway_lnrpc::{
     self, CloseChannelsWithPeerResponse, CreateInvoiceRequest, CreateInvoiceResponse,
     EmptyResponse, GetFundingAddressResponse, GetNodeInfoResponse, GetRouteHintsResponse,
-    InterceptHtlcResponse, PayInvoiceRequest, PayInvoiceResponse,
+    InterceptHtlcResponse, PayInvoiceResponse,
 };
 use ln_gateway::lightning::{
     ChannelInfo, HtlcResult, ILnRpcClient, LightningRpcError, RouteHtlcStream,
@@ -141,10 +140,10 @@ impl ILnRpcClient for FakeLightningTest {
 
     async fn pay(
         &self,
-        invoice: PayInvoiceRequest,
+        invoice: Bolt11Invoice,
+        _max_delay: u64,
+        _max_fee: Amount,
     ) -> Result<PayInvoiceResponse, LightningRpcError> {
-        let signed = invoice.invoice.parse::<SignedRawBolt11Invoice>().unwrap();
-        let invoice = Bolt11Invoice::from_signed(signed).unwrap();
         self.amount_sent
             .fetch_add(invoice.amount_milli_satoshis().unwrap(), Ordering::Relaxed);
 
