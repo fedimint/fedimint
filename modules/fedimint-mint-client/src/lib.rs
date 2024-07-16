@@ -874,8 +874,6 @@ struct SubscribeReissueExternalNotesRequest {
 struct SpendNotesRequest {
     min_amount: Amount,
     try_cancel_after: Duration,
-    #[allow(dead_code)]
-    include_invite: bool,
     extra_meta: serde_json::Value,
 }
 
