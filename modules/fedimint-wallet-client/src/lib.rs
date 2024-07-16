@@ -19,7 +19,7 @@ mod deposit;
 mod pegin_monitor;
 mod withdraw;
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 use std::future;
 use std::sync::Arc;
 use std::time::SystemTime;
@@ -36,7 +36,6 @@ use fedimint_client::derivable_secret::{ChildId, DerivableSecret};
 use fedimint_client::module::init::{
     ClientModuleInit, ClientModuleInitArgs, ClientModuleRecoverArgs,
 };
-use fedimint_client::module::recovery::RecoveryProgress;
 use fedimint_client::module::{ClientContext, ClientModule, IClientModule};
 use fedimint_client::oplog::UpdateStreamOrOutcome;
 use fedimint_client::sm::util::MapStateTransitions;
@@ -54,14 +53,15 @@ use fedimint_core::module::{
     ApiVersion, CommonModuleInit, ModuleCommon, ModuleInit, MultiApiVersion,
 };
 use fedimint_core::task::{MaybeSend, MaybeSync, TaskGroup};
+use fedimint_core::util::backoff_util;
 use fedimint_core::{
-    apply, async_trait_maybe_send, push_db_pair_items, Amount, OutPoint, TransactionId,
+    apply, async_trait_maybe_send, push_db_pair_items, runtime, Amount, OutPoint, TransactionId,
 };
 use fedimint_logging::LOG_CLIENT_MODULE_WALLET;
 use fedimint_wallet_common::config::{FeeConsensus, WalletClientConfig};
 use fedimint_wallet_common::tweakable::Tweakable;
 pub use fedimint_wallet_common::*;
-use futures::{Future, Stream, StreamExt};
+use futures::{Stream, StreamExt};
 use rand::{thread_rng, Rng};
 use secp256k1::{All, KeyPair, Secp256k1, SECP256K1};
 use serde::{Deserialize, Serialize};
@@ -70,6 +70,7 @@ use tokio::sync::watch;
 use tracing::{debug, instrument};
 
 use crate::api::WalletFederationApi;
+use crate::backup::WalletRecovery;
 use crate::client_db::{
     ClaimedPegInData, ClaimedPegInKey, ClaimedPegInPrefix, NextPegInTweakIndexKey,
     PegInTweakIndexData, PegInTweakIndexPrefix, RecoveryFinalizedKey,
@@ -172,7 +173,12 @@ impl ModuleInit for WalletClientInit {
                         "Claimed Peg-In"
                     );
                 }
-                DbKeyPrefix::RecoveryFinalized => {}
+                DbKeyPrefix::RecoveryFinalized => {
+                    if let Some(val) = dbtx.get_value(&RecoveryFinalizedKey).await {
+                        wallet_client_items.insert("RecoveryFinalized".to_string(), Box::new(val));
+                    }
+                }
+                DbKeyPrefix::RecoveryState => {}
             }
         }
 
@@ -235,99 +241,8 @@ impl ClientModuleInit for WalletClientInit {
         args: &ClientModuleRecoverArgs<Self>,
         snapshot: Option<&<Self::Module as ClientModule>::Backup>,
     ) -> anyhow::Result<()> {
-        let db = args.db().clone();
-        if db
-            .begin_transaction_nc()
+        args.recover_from_history::<WalletRecovery>(self, snapshot)
             .await
-            .get_value(&RecoveryFinalizedKey)
-            .await
-            .unwrap_or_default()
-        {
-            debug!(target: LOG_CLIENT_MODULE_WALLET, max_gap=RECOVER_MAX_GAP, "Recovery already complete before");
-            return Ok(());
-        }
-
-        #[allow(clippy::single_match_else)]
-        let previous_next_unused_idx = match snapshot {
-            Some(WalletModuleBackup::V0(backup)) => {
-                debug!(target: LOG_CLIENT_MODULE_WALLET, "Restoring starting from an existing backup");
-
-                backup.next_tweak_idx
-            }
-            _ => {
-                debug!(target: LOG_CLIENT_MODULE_WALLET, "Restoring without an existing backup");
-                TweakIdx(0)
-            }
-        };
-
-        let rpc_config = self
-            .0
-            .clone()
-            .unwrap_or(WalletClientModule::get_rpc_config(args.cfg()));
-
-        let btc_rpc = create_bitcoind(&rpc_config, TaskGroup::new().make_handle())?;
-        let btc_rpc = &btc_rpc;
-
-        let data = WalletClientModuleData {
-            cfg: args.cfg().clone(),
-            module_root_secret: args.module_root_secret().clone(),
-        };
-        let data = &data;
-
-        let RecoverScanOutcome { last_used_idx, new_start_idx, tweak_idxes_with_pegins} = recover_scan_idxes_for_activity(previous_next_unused_idx, move |cur_tweak_idx: TweakIdx| async move {
-            args.update_recovery_progress(RecoveryProgress {
-                complete: u32::try_from(cur_tweak_idx.0).unwrap_or(u32::MAX),
-                total: u32::try_from(cur_tweak_idx.0.saturating_add(RECOVER_MAX_GAP)).unwrap_or(u32::MAX),
-            });
-
-        let (script, address, _tweak_key, _operation_id) =
-            data.derive_peg_in_script(cur_tweak_idx);
-
-            btc_rpc.watch_script_history(&script).await?;
-            let history = btc_rpc.get_script_history(&script).await?;
-
-            debug!(target: LOG_CLIENT_MODULE_WALLET, %cur_tweak_idx, %address, history_len=history.len(), "Checked address");
-
-            Ok(history)
-        }).await?;
-
-        let now = fedimint_core::time::now();
-        let mut dbtx = db.begin_transaction().await;
-
-        let mut tweak_idx = TweakIdx(0);
-
-        while tweak_idx < new_start_idx {
-            let (_script, _address, _tweak_key, operation_id) =
-                data.derive_peg_in_script(tweak_idx);
-            dbtx.insert_new_entry(
-                &PegInTweakIndexKey(tweak_idx),
-                &PegInTweakIndexData {
-                    creation_time: now,
-                    next_check_time: if tweak_idxes_with_pegins.contains(&tweak_idx) {
-                        // The addresses that were already used before, or didn't seem to contain
-                        // anything don't need automatic peg-in attempt, and can be re-attempted
-                        // manually if needed.
-                        Some(now)
-                    } else {
-                        None
-                    },
-                    last_check_time: None,
-                    operation_id,
-                    claimed: vec![],
-                },
-            )
-            .await;
-            tweak_idx = tweak_idx.next();
-        }
-
-        dbtx.insert_new_entry(&NextPegInTweakIndexKey, &new_start_idx)
-            .await;
-        dbtx.insert_entry(&RecoveryFinalizedKey, &true).await;
-
-        dbtx.commit_tx().await;
-
-        debug!(target: LOG_CLIENT_MODULE_WALLET, %new_start_idx, ?last_used_idx, "Recovery complete");
-        Ok(())
     }
 }
 
@@ -838,6 +753,7 @@ impl WalletClientModule {
         let operation_id = self.get_pegin_tweak_idx(tweak_idx).await?.operation_id;
 
         let mut receiver = self.pegin_claimed_receiver.clone();
+        let mut backoff = backoff_util::aggressive_backoff();
 
         loop {
             let pegins = self
@@ -850,6 +766,7 @@ impl WalletClientModule {
             if pegins.len() < num_deposits {
                 debug!(target: LOG_CLIENT_MODULE_WALLET, has=pegins.len(), "Not enough deposits");
                 self.recheck_pegin_address(tweak_idx).await?;
+                runtime::sleep(backoff.next().unwrap_or_default()).await;
                 receiver.changed().await?;
                 continue;
             }
@@ -1086,75 +1003,15 @@ impl State for WalletClientStates {
     }
 }
 
-/// We will check this many addresses after last actually used
-/// one before we give up
-const RECOVER_MAX_GAP: u64 = 10;
-/// New client will start deriving new addresses from last used one
-/// plus that many idexes. This should be (much) less than
-/// `MAX_GAP`, but more than 0: We want to make sure we detect
-/// deposits that might have been made after multiple successive recoveries,
-/// but we want also to avoid accidental address re-use.
-const RECOVER_NUM_IDX_ADD_TO_LAST_USED: u64 = RECOVER_MAX_GAP / 4 + 1;
-
-#[derive(Clone, PartialEq, Eq, Debug)]
-struct RecoverScanOutcome {
-    last_used_idx: Option<TweakIdx>,
-    new_start_idx: TweakIdx,
-    tweak_idxes_with_pegins: BTreeSet<TweakIdx>,
-}
-
-/// A part of [`WalletClientInit::recover`] extracted out to be easy to test,
-/// as a side-effect free.
-async fn recover_scan_idxes_for_activity<F, FF, T>(
-    previous_next_unused_idx: TweakIdx,
-    check_addr_history: F,
-) -> anyhow::Result<RecoverScanOutcome>
-where
-    F: Fn(TweakIdx) -> FF,
-    FF: Future<Output = anyhow::Result<Vec<T>>>,
-{
-    let mut last_used_idx = if previous_next_unused_idx == TweakIdx::ZERO {
-        None
-    } else {
-        Some(
-            previous_next_unused_idx
-                .prev()
-                .expect("Check for not being zero"),
-        )
-    };
-    let mut cur_tweak_idx = previous_next_unused_idx;
-    let mut tweak_idxes_with_pegins = BTreeSet::new();
-
-    let new_start_idx = loop {
-        let gap_since_last_used = cur_tweak_idx - last_used_idx.unwrap_or_default();
-
-        if RECOVER_MAX_GAP <= gap_since_last_used {
-            break last_used_idx
-                .unwrap_or_default()
-                .advance(RECOVER_NUM_IDX_ADD_TO_LAST_USED);
-        }
-
-        let history = check_addr_history(cur_tweak_idx).await?;
-
-        if !history.is_empty() {
-            last_used_idx = Some(cur_tweak_idx);
-            tweak_idxes_with_pegins.insert(cur_tweak_idx);
-        }
-        cur_tweak_idx = cur_tweak_idx.next();
-    };
-
-    Ok(RecoverScanOutcome {
-        last_used_idx,
-        new_start_idx,
-        tweak_idxes_with_pegins,
-    })
-}
-
 #[cfg(all(test, not(target_family = "wasm")))]
 mod tests {
+    use std::collections::BTreeSet;
     use std::sync::atomic::{AtomicBool, Ordering};
 
     use super::*;
+    use crate::backup::{
+        recover_scan_idxes_for_activity, RecoverScanOutcome, RECOVER_NUM_IDX_ADD_TO_LAST_USED,
+    };
 
     #[allow(clippy::too_many_lines)] // shut-up clippy, it's a test
     #[tokio::test(flavor = "multi_thread")]

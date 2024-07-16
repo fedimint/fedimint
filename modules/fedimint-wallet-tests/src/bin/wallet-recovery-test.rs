@@ -1,6 +1,8 @@
+use anyhow::bail;
 use devimint::cmd;
 use devimint::util::{FedimintCli, FedimintdCmd};
 use devimint::version_constants::VERSION_0_3_0_ALPHA;
+use fedimint_core::util::{backoff_util, retry};
 use futures::try_join;
 use tracing::info;
 
@@ -18,6 +20,16 @@ async fn main() -> anyhow::Result<()> {
 
         let peg_in_amount_sats = 100_000;
 
+            // Start this client early, as we need to test waiting for session to close
+        let client_slow = fed
+            .new_joined_client("wallet-client-recovery-origin")
+            .await?;
+        info!("Join and claim");
+        fed.pegin_client(peg_in_amount_sats, &client_slow).await?;
+
+        let client_slow_pegin_session_count = client_slow.get_session_count().await?;
+
+        info!("### Test wallet restore without a backup");
         {
             let client = fed
                 .new_joined_client("wallet-client-recovery-origin")
@@ -41,6 +53,7 @@ async fn main() -> anyhow::Result<()> {
             assert_eq!(peg_in_amount_sats * 1000, restored.balance().await?);
         }
 
+        info!("### Test wallet restore with a backup");
         {
             let client = fed
                 .new_joined_client("wallet-client-recovery-origin")
@@ -68,6 +81,36 @@ async fn main() -> anyhow::Result<()> {
                 .await?;
 
             info!("Check if claimed");
+            assert_eq!(peg_in_amount_sats * 1000 * 2, restored.balance().await?);
+        }
+
+        info!("### Test wallet restore with a history and no backup");
+        {
+            let client = client_slow;
+
+            retry("wait for next session", backoff_util::aggressive_backoff(), || async {
+                if client_slow_pegin_session_count < client.get_session_count().await? {
+                    return Ok(());
+                }
+                bail!("Session didn't close")
+            })
+            .await
+            .expect("timeouted waiting for session to close");
+
+            let operation_id = fed
+                .pegin_client_no_wait(peg_in_amount_sats, &client)
+                .await?;
+
+            info!("Client slow: Restore without backup");
+            let restored = client
+                .new_restored("client-slow-restored-without-backup", fed.invite_code()?)
+                .await?;
+
+            cmd!(restored, "module", "wallet", "await-deposit", operation_id)
+                .run()
+                .await?;
+
+            info!("Client slow: Check if claimed");
             assert_eq!(peg_in_amount_sats * 1000 * 2, restored.balance().await?);
         }
 
