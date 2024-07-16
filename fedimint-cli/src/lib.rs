@@ -33,7 +33,7 @@ use fedimint_api_client::api::{
     DynGlobalApi, FederationApiExt, FederationError, IRawFederationApi, WsFederationApi,
 };
 use fedimint_bip39::Bip39RootSecretStrategy;
-use fedimint_client::meta::{FetchKind, MetaSource, MetaValues};
+use fedimint_client::meta::{FetchKind, MetaSource};
 use fedimint_client::module::init::{ClientModuleInit, ClientModuleInitRegistry};
 use fedimint_client::module::ClientModule as _;
 use fedimint_client::secret::{get_default_client_secret, RootSecretStrategy};
