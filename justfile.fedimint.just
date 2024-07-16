@@ -48,6 +48,7 @@ final-check: lint
 # run all/most checks a CI would run
 final-check-ci: lint
   just clippy
+  just cargo-sort-check
   cargo test --doc --workspace
   just check-wasm
   ./scripts/tests/test-ci-all.sh
@@ -235,7 +236,7 @@ release-bump-version VERSION="prerelease":
   cargo workspaces version --all --exact --no-git-commit --yes --force '*' --pre-id rc {{VERSION}}
 
 
-cargo_sort_defaults := "-w --order package,features,dependencies"
+cargo_sort_defaults := "-w -g --order package,features,bin,lib,test,bench,dependencies,dev-dependencies,build-dependencies"
 
 # Fix sort order in `Cargo.toml` files
 cargo-sort-fix *ARGS="":
