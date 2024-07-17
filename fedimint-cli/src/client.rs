@@ -185,6 +185,8 @@ pub enum ClientCmd {
     },
     /// Returns the client config
     Config,
+    /// Gets the current fedimint AlephBFT session count
+    SessionCount,
 }
 
 pub async fn handle_command(
@@ -592,6 +594,10 @@ pub async fn handle_command(
         ClientCmd::Config => {
             let config = client.get_config_json();
             Ok(serde_json::to_value(config).expect("Client config is serializable"))
+        }
+        ClientCmd::SessionCount => {
+            let count = client.api().session_count().await?;
+            Ok(json!({ "count": count }))
         }
     }
 }
