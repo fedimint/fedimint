@@ -1,8 +1,7 @@
 use fedimint_core::encoding::{Decodable, Encodable};
-use fedimint_core::util::SafeUrl;
 use fedimint_core::{impl_db_lookup, impl_db_record, OutPoint, PeerId};
 use fedimint_lnv2_common::contracts::{IncomingContract, OutgoingContract};
-use fedimint_lnv2_common::ContractId;
+use fedimint_lnv2_common::{ContractId, GatewayEndpoint};
 use serde::{Deserialize, Serialize};
 use strum_macros::EnumIter;
 
@@ -123,7 +122,7 @@ impl_db_record!(
 impl_db_lookup!(key = PreimageKey, query_prefix = PreimagePrefix);
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
-pub struct GatewayKey(pub SafeUrl);
+pub struct GatewayKey(pub GatewayEndpoint);
 
 #[derive(Debug, Encodable, Decodable)]
 pub struct GatewayPrefix;
