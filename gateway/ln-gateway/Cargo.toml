@@ -72,7 +72,7 @@ url = { version = "2.5.2", features = ["serde"] }
 
 [dev-dependencies]
 assert_matches = { workspace = true }
-fedimint-dummy-client = { version = "=0.4.0-alpha", path = "../../modules/fedimint-dummy-client" }
+fedimint-dummy-client = { path = "../../modules/fedimint-dummy-client" }
 fedimint-dummy-common = { path = "../../modules/fedimint-dummy-common" }
 fedimint-dummy-server = { path = "../../modules/fedimint-dummy-server" }
 fedimint-ln-client = { workspace = true }
