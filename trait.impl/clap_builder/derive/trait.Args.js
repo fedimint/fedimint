@@ -9,6 +9,5 @@
 "gateway_cli":[["impl Args for <a class=\"struct\" href=\"gateway_cli/struct.Cli.html\" title=\"struct gateway_cli::Cli\">Cli</a>"]],
 "gateway_cln_extension":[["impl Args for <a class=\"struct\" href=\"gateway_cln_extension/struct.ClnExtensionOpts.html\" title=\"struct gateway_cln_extension::ClnExtensionOpts\">ClnExtensionOpts</a>"]],
 "gateway_tests":[["impl Args for <a class=\"struct\" href=\"gateway_tests/struct.GatewayTestOpts.html\" title=\"struct gateway_tests::GatewayTestOpts\">GatewayTestOpts</a>"]],
-"ln_gateway":[["impl Args for <a class=\"struct\" href=\"ln_gateway/struct.GatewayOpts.html\" title=\"struct ln_gateway::GatewayOpts\">GatewayOpts</a>"]],
-"tests":[["impl Args for <a class=\"struct\" href=\"tests/struct.TestOpts.html\" title=\"struct tests::TestOpts\">TestOpts</a>"]]
+"ln_gateway":[["impl Args for <a class=\"struct\" href=\"ln_gateway/struct.GatewayOpts.html\" title=\"struct ln_gateway::GatewayOpts\">GatewayOpts</a>"]]
 };if (window.register_implementors) {window.register_implementors(implementors);} else {window.pending_implementors = implementors;}})()

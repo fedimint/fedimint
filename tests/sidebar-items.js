@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"enum":["LnV2TestType"],"fn":["await_receive_claimed","fetch_invoice","main","pegin_gateways","test_gateway_registration","test_lightning_payment","test_refund_payment","test_self_payment_success","test_send"],"struct":["TestOpts"]};
+window.SIDEBAR_ITEMS = {"enum":["TestOpts"],"fn":["await_receive_claimed","main","pegin_gateways","receive","test_gateway_registration","test_lightning_payments","test_self_payments_refund","test_self_payments_success","test_send"]};
