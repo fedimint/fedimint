@@ -292,7 +292,6 @@
 <a href="#292" id="292">292</a>
 <a href="#293" id="293">293</a>
 <a href="#294" id="294">294</a>
-<a href="#295" id="295">295</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
 
@@ -304,10 +303,9 @@
 <span class="kw">use </span>fedimint_core::core::OperationId;
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::task::sleep;
-<span class="kw">use </span>fedimint_core::util::SafeUrl;
 <span class="kw">use </span>fedimint_core::{OutPoint, TransactionId};
 <span class="kw">use </span>fedimint_lnv2_common::contracts::OutgoingContract;
-<span class="kw">use </span>fedimint_lnv2_common::{LightningInput, LightningInputV0, OutgoingWitness};
+<span class="kw">use </span>fedimint_lnv2_common::{GatewayEndpoint, LightningInput, LightningInputV0, OutgoingWitness};
 <span class="kw">use </span>secp256k1::schnorr::Signature;
 <span class="kw">use </span>secp256k1::KeyPair;
 <span class="kw">use </span>tracing::error;
@@ -336,7 +334,7 @@
 </span><span class="kw">pub struct </span>SendSMCommon {
     <span class="kw">pub </span>operation_id: OperationId,
     <span class="kw">pub </span>funding_txid: TransactionId,
-    <span class="kw">pub </span>gateway_api: SafeUrl,
+    <span class="kw">pub </span>gateway_api: GatewayEndpoint,
     <span class="kw">pub </span>contract: OutgoingContract,
     <span class="kw">pub </span>invoice: LightningInvoice,
     <span class="kw">pub </span>refund_keypair: KeyPair,
@@ -449,7 +447,7 @@
     }
 
     <span class="kw">async fn </span>gateway_send_payment(
-        gateway_api: SafeUrl,
+        gateway_api: GatewayEndpoint,
         federation_id: FederationId,
         contract: OutgoingContract,
         invoice: LightningInvoice,

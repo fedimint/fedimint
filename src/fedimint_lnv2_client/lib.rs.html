@@ -963,6 +963,10 @@
 <a href="#963" id="963">963</a>
 <a href="#964" id="964">964</a>
 <a href="#965" id="965">965</a>
+<a href="#966" id="966">966</a>
+<a href="#967" id="967">967</a>
+<a href="#968" id="968">968</a>
+<a href="#969" id="969">969</a>
 </pre></div><pre class="rust"><code><span class="attr">#![warn(clippy::pedantic)]
 #![allow(clippy::missing_errors_doc)]
 #![allow(clippy::missing_panics_doc)]
@@ -1003,7 +1007,7 @@
 <span class="kw">use </span>fedimint_lnv2_common::config::LightningClientConfig;
 <span class="kw">use </span>fedimint_lnv2_common::contracts::{IncomingContract, OutgoingContract};
 <span class="kw">use </span>fedimint_lnv2_common::{
-    LightningCommonInit, LightningModuleTypes, LightningOutput, LightningOutputV0,
+    GatewayEndpoint, LightningCommonInit, LightningModuleTypes, LightningOutput, LightningOutputV0,
 };
 <span class="kw">use </span>futures::StreamExt;
 <span class="kw">use </span>lightning_invoice::{Bolt11Invoice, Currency};
@@ -1027,7 +1031,7 @@
 </span><span class="kw">pub struct </span>SendOperationMeta {
     <span class="kw">pub </span>funding_txid: TransactionId,
     <span class="kw">pub </span>funding_change_outpoints: Vec&lt;OutPoint&gt;,
-    <span class="kw">pub </span>gateway_api: SafeUrl,
+    <span class="kw">pub </span>gateway_api: GatewayEndpoint,
     <span class="kw">pub </span>contract: OutgoingContract,
     <span class="kw">pub </span>invoice: Bolt11Invoice,
 }
@@ -1336,6 +1340,8 @@
         expiration_delta_limit: u64,
         partial_amount: <span class="prelude-ty">Option</span>&lt;Amount&gt;,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;OperationId, SendPaymentError&gt; {
+        <span class="kw">let </span>gateway_api = GatewayEndpoint::Url(gateway_api);
+
         <span class="kw">let </span>amount = partial_amount.unwrap_or(Amount::from_msats(
             invoice
                 .amount_milli_satoshis()
@@ -1616,6 +1622,8 @@
         description: Bolt11InvoiceDescription,
         payment_fee_limit: PaymentFee,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;(IncomingContract, [u8; <span class="number">32</span>], Bolt11Invoice), FetchInvoiceError&gt; {
+        <span class="kw">let </span>gateway_api = GatewayEndpoint::Url(gateway_api);
+
         <span class="kw">let </span>(ephemeral_tweak, ephemeral_pk) = generate_ephemeral_tweak(recipient_static_pk);
 
         <span class="kw">let </span>encryption_seed = ephemeral_tweak
