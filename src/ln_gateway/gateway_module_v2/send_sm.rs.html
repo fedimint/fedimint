@@ -219,11 +219,6 @@
 <a href="#219" id="219">219</a>
 <a href="#220" id="220">220</a>
 <a href="#221" id="221">221</a>
-<a href="#222" id="222">222</a>
-<a href="#223" id="223">223</a>
-<a href="#224" id="224">224</a>
-<a href="#225" id="225">225</a>
-<a href="#226" id="226">226</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::sync::Arc;
 
 <span class="kw">use </span>bitcoin_hashes::Hash;
@@ -234,7 +229,6 @@
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::secp256k1::KeyPair;
 <span class="kw">use </span>fedimint_core::{Amount, OutPoint};
-<span class="kw">use </span>fedimint_ln_common::PrunedInvoice;
 <span class="kw">use </span>fedimint_lnv2_client::{LightningClientStateMachines, LightningInvoice};
 <span class="kw">use </span>fedimint_lnv2_common::contracts::OutgoingContract;
 <span class="kw">use </span>fedimint_lnv2_common::{LightningInput, LightningInputV0, OutgoingWitness};
@@ -353,9 +347,7 @@
         invoice: LightningInvoice,
         contract: OutgoingContract,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;[u8; <span class="number">32</span>], Cancelled&gt; {
-        <span class="kw">let </span>(invoice, amount) = <span class="kw">match </span>invoice {
-            LightningInvoice::Bolt11(invoice, amount) =&gt; (invoice, amount),
-        };
+        <span class="kw">let </span>LightningInvoice::Bolt11(invoice) = invoice;
 
         <span class="comment">// The following two checks may fail in edge cases since they have inherent
         // timing assumptions. Therefore, they may only be checked after we have created
@@ -383,7 +375,9 @@
                 .gateway
                 .get_registered_incoming_contract_and_client_v2(
                     invoice.payment_hash().to_byte_array(),
-                    amount.msats,
+                    invoice
+                        .amount_milli_satoshis()
+                        .expect(<span class="string">"The amount invoice has been checked previously"</span>),
                 )
                 .<span class="kw">await
                 </span>.map_err(|e| Cancelled::RegistrationError(e.to_string()))<span class="question-mark">?</span>;
@@ -405,11 +399,7 @@
 
         lightning_context
             .lnrpc
-            .pay_private(
-                PrunedInvoice::new(<span class="kw-2">&amp;</span>invoice, amount),
-                max_delay,
-                contract.amount - min_contract_amount,
-            )
+            .pay(invoice, max_delay, contract.amount - min_contract_amount)
             .<span class="kw">await
             </span>.map(|response| {
                 response

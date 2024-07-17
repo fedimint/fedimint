@@ -1341,20 +1341,6 @@
 <a href="#1341" id="1341">1341</a>
 <a href="#1342" id="1342">1342</a>
 <a href="#1343" id="1343">1343</a>
-<a href="#1344" id="1344">1344</a>
-<a href="#1345" id="1345">1345</a>
-<a href="#1346" id="1346">1346</a>
-<a href="#1347" id="1347">1347</a>
-<a href="#1348" id="1348">1348</a>
-<a href="#1349" id="1349">1349</a>
-<a href="#1350" id="1350">1350</a>
-<a href="#1351" id="1351">1351</a>
-<a href="#1352" id="1352">1352</a>
-<a href="#1353" id="1353">1353</a>
-<a href="#1354" id="1354">1354</a>
-<a href="#1355" id="1355">1355</a>
-<a href="#1356" id="1356">1356</a>
-<a href="#1357" id="1357">1357</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeSet;
 <span class="kw">use </span>std::fmt::{<span class="self">self</span>, Display};
 <span class="kw">use </span>std::str::FromStr;
@@ -1403,7 +1389,7 @@
 <span class="kw">use </span><span class="kw">crate</span>::gateway_lnrpc::{
     CloseChannelsWithPeerResponse, CreateInvoiceRequest, CreateInvoiceResponse, EmptyResponse,
     GetFundingAddressResponse, GetNodeInfoResponse, GetRouteHintsResponse, InterceptHtlcRequest,
-    InterceptHtlcResponse, PayInvoiceRequest, PayInvoiceResponse,
+    InterceptHtlcResponse, PayInvoiceResponse,
 };
 <span class="kw">type </span>HtlcSubscriptionSender = mpsc::Sender&lt;<span class="prelude-ty">Result</span>&lt;InterceptHtlcRequest, Status&gt;&gt;;
 
@@ -2099,20 +2085,6 @@
         }
 
         <span class="prelude-val">Ok</span>(GetRouteHintsResponse { route_hints })
-    }
-
-    <span class="kw">async fn </span>pay(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        request: PayInvoiceRequest,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;PayInvoiceResponse, LightningRpcError&gt; {
-        <span class="macro">error!</span>(
-            <span class="string">"LND supports private payments, legacy `pay` should not be used. {}"</span>,
-            PrettyPaymentHash(<span class="kw-2">&amp;</span>request.payment_hash)
-        );
-        <span class="prelude-val">Err</span>(LightningRpcError::FailedPayment {
-            failure_reason: <span class="string">"LND supports private payments, legacy `pay` should not be used."
-                </span>.to_string(),
-        })
     }
 
     <span class="kw">async fn </span>pay_private(

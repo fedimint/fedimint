@@ -960,10 +960,6 @@
 <a href="#960" id="960">960</a>
 <a href="#961" id="961">961</a>
 <a href="#962" id="962">962</a>
-<a href="#963" id="963">963</a>
-<a href="#964" id="964">964</a>
-<a href="#965" id="965">965</a>
-<a href="#966" id="966">966</a>
 </pre></div><pre class="rust"><code><span class="attr">#![warn(clippy::pedantic)]
 #![allow(clippy::missing_errors_doc)]
 #![allow(clippy::missing_panics_doc)]
@@ -1137,7 +1133,7 @@
 
 <span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Decodable, Encodable)]
 </span><span class="kw">pub enum </span>LightningInvoice {
-    Bolt11(Bolt11Invoice, Amount),
+    Bolt11(Bolt11Invoice),
 }
 
 <span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Decodable, Encodable)]
@@ -1322,7 +1318,6 @@
             invoice,
             PaymentFee::one_percent(),
             EXPIRATION_DELTA_LIMIT_DEFAULT,
-            <span class="prelude-val">None</span>,
         )
         .<span class="kw">await
     </span>}
@@ -1333,15 +1328,12 @@
         invoice: Bolt11Invoice,
         payment_fee_limit: PaymentFee,
         expiration_delta_limit: u64,
-        partial_amount: <span class="prelude-ty">Option</span>&lt;Amount&gt;,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;OperationId, SendPaymentError&gt; {
         <span class="kw">let </span>gateway_api = GatewayEndpoint::Url(gateway_api);
 
-        <span class="kw">let </span>amount = partial_amount.unwrap_or(Amount::from_msats(
-            invoice
-                .amount_milli_satoshis()
-                .ok_or(SendPaymentError::InvoiceMissingAmount)<span class="question-mark">?</span>,
-        ));
+        <span class="kw">let </span>amount = invoice
+            .amount_milli_satoshis()
+            .ok_or(SendPaymentError::InvoiceMissingAmount)<span class="question-mark">?</span>;
 
         <span class="kw">if </span>invoice.is_expired() {
             <span class="kw">return </span><span class="prelude-val">Err</span>(SendPaymentError::InvoiceExpired);
@@ -1389,7 +1381,7 @@
 
         <span class="kw">let </span>contract = OutgoingContract {
             payment_hash: <span class="kw-2">*</span>invoice.payment_hash(),
-            amount: payment_info.send_fee_default.add_fee(amount.msats),
+            amount: payment_info.send_fee_default.add_fee(amount),
             expiration: consensus_block_count + payment_info.expiration_delta_default,
             claim_pk: payment_info.public_key,
             refund_pk: refund_keypair.public_key(),
@@ -1410,7 +1402,7 @@
                         funding_txid,
                         gateway_api: gateway_api_clone.clone(),
                         contract: contract_clone.clone(),
-                        invoice: LightningInvoice::Bolt11(invoice_clone.clone(), amount),
+                        invoice: LightningInvoice::Bolt11(invoice_clone.clone()),
                         refund_keypair,
                     },
                     state: SendSMState::Funding,

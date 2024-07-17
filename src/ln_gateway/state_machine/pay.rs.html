@@ -912,16 +912,10 @@
 <a href="#912" id="912">912</a>
 <a href="#913" id="913">913</a>
 <a href="#914" id="914">914</a>
-<a href="#915" id="915">915</a>
-<a href="#916" id="916">916</a>
-<a href="#917" id="917">917</a>
-<a href="#918" id="918">918</a>
-<a href="#919" id="919">919</a>
-<a href="#920" id="920">920</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::fmt::Display;
 <span class="kw">use </span>std::sync::Arc;
 
-<span class="kw">use </span>bitcoin_hashes::{sha256, Hash};
+<span class="kw">use </span>bitcoin_hashes::sha256;
 <span class="kw">use </span>fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
 <span class="kw">use </span>fedimint_client::transaction::{ClientInput, ClientOutput};
 <span class="kw">use </span>fedimint_client::{ClientHandleArc, DynGlobalClientContext};
@@ -945,7 +939,7 @@
 
 <span class="kw">use super</span>::{GatewayClientContext, GatewayClientStateMachines, GatewayExtReceiveStates};
 <span class="kw">use </span><span class="kw">crate</span>::db::{FederationIdKey, PreimageAuthentication};
-<span class="kw">use </span><span class="kw">crate</span>::gateway_lnrpc::{PayInvoiceRequest, PayInvoiceResponse};
+<span class="kw">use </span><span class="kw">crate</span>::gateway_lnrpc::PayInvoiceResponse;
 <span class="kw">use </span><span class="kw">crate</span>::lightning::LightningRpcError;
 <span class="kw">use </span><span class="kw">crate</span>::state_machine::GatewayClientModule;
 <span class="kw">use crate</span>::{GatewayState, RoutingFees};
@@ -1304,7 +1298,6 @@
         common: GatewayPayCommon,
     ) -&gt; GatewayPayStateMachine {
         <span class="macro">debug!</span>(<span class="string">"Buying preimage over lightning for contract {contract:?}"</span>);
-        <span class="kw">let </span>payment_data = buy_preimage.payment_data.clone();
 
         <span class="kw">let </span>max_delay = buy_preimage.max_delay;
         <span class="kw">let </span>max_fee = buy_preimage.max_send_amount
@@ -1324,12 +1317,7 @@
             PaymentData::Invoice(invoice) =&gt; {
                 lightning_context
                     .lnrpc
-                    .pay(PayInvoiceRequest {
-                        invoice: invoice.to_string(),
-                        max_delay,
-                        max_fee_msat: max_fee.msats,
-                        payment_hash: payment_data.payment_hash().to_byte_array().to_vec(),
-                    })
+                    .pay(invoice, max_delay, max_fee)
                     .<span class="kw">await
             </span>}
             PaymentData::PrunedInvoice(invoice) =&gt; {
