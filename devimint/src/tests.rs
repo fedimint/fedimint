@@ -365,13 +365,12 @@ async fn stress_test_fed(dev_fed: &DevFed, clients: Option<&UpgradeClients>) -> 
         latency_tests(dev_fed.clone(), LatencyTest::Restore, clients, 20).left_future()
     };
 
-    try_join!(
-        latency_tests(dev_fed.clone(), LatencyTest::Reissue, clients, 20),
-        latency_tests(dev_fed.clone(), LatencyTest::LnSend, clients, 20),
-        latency_tests(dev_fed.clone(), LatencyTest::LnReceive, clients, 20),
-        latency_tests(dev_fed.clone(), LatencyTest::FmPay, clients, 20),
-        restore_test,
-    )?;
+    latency_tests(dev_fed.clone(), LatencyTest::Reissue, clients, 20).await?;
+    latency_tests(dev_fed.clone(), LatencyTest::LnSend, clients, 20).await?;
+    latency_tests(dev_fed.clone(), LatencyTest::LnReceive, clients, 20).await?;
+    latency_tests(dev_fed.clone(), LatencyTest::FmPay, clients, 20).await?;
+    restore_test.await?;
+
     Ok(())
 }
 
