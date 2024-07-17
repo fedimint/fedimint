@@ -2416,7 +2416,6 @@
 <a href="#2416" id="2416">2416</a>
 <a href="#2417" id="2417">2417</a>
 <a href="#2418" id="2418">2418</a>
-<a href="#2419" id="2419">2419</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashSet};
 <span class="kw">use </span>std::io::Write;
 <span class="kw">use </span>std::ops::ControlFlow;
@@ -2784,13 +2783,12 @@
         latency_tests(dev_fed.clone(), LatencyTest::Restore, clients, <span class="number">20</span>).left_future()
     };
 
-    <span class="macro">try_join!</span>(
-        latency_tests(dev_fed.clone(), LatencyTest::Reissue, clients, <span class="number">20</span>),
-        latency_tests(dev_fed.clone(), LatencyTest::LnSend, clients, <span class="number">20</span>),
-        latency_tests(dev_fed.clone(), LatencyTest::LnReceive, clients, <span class="number">20</span>),
-        latency_tests(dev_fed.clone(), LatencyTest::FmPay, clients, <span class="number">20</span>),
-        restore_test,
-    )<span class="question-mark">?</span>;
+    latency_tests(dev_fed.clone(), LatencyTest::Reissue, clients, <span class="number">20</span>).<span class="kw">await</span><span class="question-mark">?</span>;
+    latency_tests(dev_fed.clone(), LatencyTest::LnSend, clients, <span class="number">20</span>).<span class="kw">await</span><span class="question-mark">?</span>;
+    latency_tests(dev_fed.clone(), LatencyTest::LnReceive, clients, <span class="number">20</span>).<span class="kw">await</span><span class="question-mark">?</span>;
+    latency_tests(dev_fed.clone(), LatencyTest::FmPay, clients, <span class="number">20</span>).<span class="kw">await</span><span class="question-mark">?</span>;
+    restore_test.<span class="kw">await</span><span class="question-mark">?</span>;
+
     <span class="prelude-val">Ok</span>(())
 }
 
