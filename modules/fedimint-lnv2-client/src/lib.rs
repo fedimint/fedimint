@@ -338,13 +338,11 @@ impl ClientModule for LightningClientModule {
 }
 
 fn generate_ephemeral_tweak(static_pk: PublicKey) -> ([u8; 32], PublicKey) {
-    let ephemeral_keypair = KeyPair::new(secp256k1::SECP256K1, &mut rand::thread_rng());
+    let keypair = KeyPair::new(secp256k1::SECP256K1, &mut rand::thread_rng());
 
-    let ephemeral_tweak = ecdh::shared_secret_point(&static_pk, &ephemeral_keypair.secret_key())
-        .consensus_hash::<sha256::Hash>()
-        .to_byte_array();
+    let tweak = ecdh::SharedSecret::new(&static_pk, &keypair.secret_key());
 
-    (ephemeral_tweak, ephemeral_keypair.public_key())
+    (tweak.secret_bytes(), keypair.public_key())
 }
 
 impl LightningClientModule {
@@ -775,12 +773,11 @@ impl LightningClientModule {
         &self,
         contract: &IncomingContract,
     ) -> Option<(KeyPair, AggregateDecryptionKey)> {
-        let ephemeral_tweak = ecdh::shared_secret_point(
+        let ephemeral_tweak = ecdh::SharedSecret::new(
             &contract.commitment.ephemeral_pk,
             &self.keypair.secret_key(),
         )
-        .consensus_hash::<sha256::Hash>()
-        .to_byte_array();
+        .secret_bytes();
 
         let encryption_seed = ephemeral_tweak
             .consensus_hash::<sha256::Hash>()
