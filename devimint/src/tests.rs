@@ -1497,18 +1497,20 @@ pub async fn lightning_gw_reconnect_test(
         .await?;
     client.use_gateway(&gw_cln).await?;
 
+    // Note: We aren't testing the LDK gateway here because there is no
+    // lightning node to disconnect/reconnect to/from since the node
+    // lives in the gateway process.
     info!("Pegging-in both gateways");
     try_join!(
         fed.pegin_gateway(99_999, &gw_cln),
         fed.pegin_gateway(99_999, &gw_lnd),
-        fed.pegin_gateway(99_999, &gw_ldk),
     )?;
 
     // Drop other references to CLN and LND so that the test can kill them
     drop(cln);
     drop(lnd);
 
-    let mut gateways = vec![gw_cln, gw_lnd, gw_ldk];
+    let mut gateways = vec![gw_cln, gw_lnd];
 
     tracing::info!("Stopping all lightning nodes");
     for gw in &mut gateways {
@@ -1591,6 +1593,10 @@ pub async fn gw_reboot_test(dev_fed: DevFed, process_mgr: &ProcessManager) -> Re
     let client = fed.new_joined_client("gw-reboot-test-client").await?;
     client.use_gateway(&gw_cln).await?;
     fed.pegin_client(10_000, &client).await?;
+
+    gw_cln.wait_for_chain_sync(&bitcoind).await?;
+    gw_lnd.wait_for_chain_sync(&bitcoind).await?;
+    gw_ldk.wait_for_chain_sync(&bitcoind).await?;
 
     // Query current gateway infos
     let (cln_value, lnd_value, ldk_value) =

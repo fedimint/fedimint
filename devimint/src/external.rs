@@ -25,7 +25,7 @@ use tonic_lnd::lnrpc::{ChanInfoRequest, GetInfoRequest, ListChannelsRequest};
 use tonic_lnd::Client as LndClient;
 use tracing::{debug, info, trace, warn};
 
-use crate::util::{poll, ClnLightningCli, ProcessHandle, ProcessManager};
+use crate::util::{poll, poll_with_timeout, ClnLightningCli, ProcessHandle, ProcessManager};
 use crate::vars::utf8;
 use crate::version_constants::VERSION_0_4_0_ALPHA;
 use crate::{cmd, poll_eq, Gatewayd};
@@ -890,26 +890,35 @@ pub async fn open_channel_between_gateways(
     )
     .await?;
 
+    // `open_channel` may not send out the channel funding transaction immediately
+    // so we need to wait for it to get to the mempool.
+    // TODO: LDK is the culprit here. Find a way to ensure that
+    // `GatewayLdkClient::open_channel` is fully done before it returns.
+    fedimint_core::runtime::sleep(Duration::from_secs(10)).await;
     bitcoind.mine_blocks(20).await?;
 
     let gw_a_node_pubkey = gw_a.lightning_pubkey().await?;
 
-    poll("Wait for channel update", || async {
-        let channels = gw_b
-            .list_active_channels()
-            .await
-            .context("list channels")
-            .map_err(ControlFlow::Break)?;
+    poll_with_timeout(
+        "Wait for channel update",
+        Duration::from_secs(120),
+        || async {
+            let channels = gw_b
+                .list_active_channels()
+                .await
+                .context("list channels")
+                .map_err(ControlFlow::Break)?;
 
-        if channels
-            .iter()
-            .any(|channel| channel.remote_pubkey == gw_a_node_pubkey)
-        {
-            return Ok(());
-        }
+            if channels
+                .iter()
+                .any(|channel| channel.remote_pubkey == gw_a_node_pubkey)
+            {
+                return Ok(());
+            }
 
-        Err(ControlFlow::Continue(anyhow!("channel not found")))
-    })
+            Err(ControlFlow::Continue(anyhow!("channel not found")))
+        },
+    )
     .await?;
 
     Ok(())

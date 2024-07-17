@@ -248,7 +248,8 @@ impl ILnRpcClient for GatewayLdkClient {
         })
     }
 
-    // TODO: Respect `max_delay` and `max_fee` parameters.
+    // TODO: Respect `max_delay` and `max_fee` parameters. This is
+    // security-critical!
     async fn pay(
         &self,
         invoice: Bolt11Invoice,

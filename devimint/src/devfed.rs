@@ -273,6 +273,7 @@ impl DevJitFed {
                 } else {
                     open_channel_between_gateways(&bitcoind, &gw_cln, &gw_lnd).await?;
                     open_channel_between_gateways(&bitcoind, &gw_ldk, &gw_lnd).await?;
+                    open_channel_between_gateways(&bitcoind, &gw_ldk, &gw_cln).await?;
                 }
 
                 Ok(Arc::new(()))
