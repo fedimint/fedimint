@@ -25,11 +25,15 @@ impl IntoDynInstance for WalletModuleBackup {
 impl ModuleBackup for WalletModuleBackup {}
 
 impl WalletModuleBackup {
-    pub fn new_v0(next_tweak_idx: TweakIdx) -> WalletModuleBackup {
-        WalletModuleBackup::V0(WalletModuleBackupV0 { next_tweak_idx })
+    pub fn new_v0(session_count: u64, next_tweak_idx: TweakIdx) -> WalletModuleBackup {
+        WalletModuleBackup::V0(WalletModuleBackupV0 {
+            session_count,
+            next_tweak_idx,
+        })
     }
 }
 #[derive(Clone, PartialEq, Eq, Debug, Encodable, Decodable)]
 pub struct WalletModuleBackupV0 {
+    pub session_count: u64,
     pub next_tweak_idx: TweakIdx,
 }

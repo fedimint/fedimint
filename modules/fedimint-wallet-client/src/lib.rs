@@ -477,7 +477,11 @@ impl ClientModule for WalletClientModule {
     }
 
     async fn backup(&self) -> anyhow::Result<backup::WalletModuleBackup> {
+        // fetch consensus height first
+        let session_count = self.client_ctx.global_api().session_count().await?;
+
         Ok(backup::WalletModuleBackup::new_v0(
+            session_count,
             self.db
                 .begin_transaction_nc()
                 .await
