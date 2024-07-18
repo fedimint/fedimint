@@ -29,7 +29,7 @@ erased-serde = { workspace = true }
 fedimint-api-client = { workspace = true }
 fedimint-client = { workspace = true }
 fedimint-core = { workspace = true }
-fedimint-lnv2-common = { path = "../fedimint-lnv2-common" }
+fedimint-lnv2-common = { path = "../fedimint-lnv2-common", version = "=0.4.0-alpha" }
 futures = "0.3.24"
 itertools = { workspace = true }
 lightning-invoice = { workspace = true }
