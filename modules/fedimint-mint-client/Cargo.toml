@@ -38,9 +38,9 @@ erased-serde = { workspace = true }
 fedimint-api-client = { workspace = true }
 fedimint-client = { workspace = true }
 fedimint-core = { workspace = true }
-fedimint-derive-secret = { version = "=0.4.0-alpha", path = "../../crypto/derive-secret" }
+fedimint-derive-secret = { version = "=0.5.0-alpha", path = "../../crypto/derive-secret" }
 fedimint-logging = { workspace = true }
-fedimint-mint-common = { version = "=0.4.0-alpha", path = "../fedimint-mint-common" }
+fedimint-mint-common = { version = "=0.5.0-alpha", path = "../fedimint-mint-common" }
 futures = { workspace = true }
 hex = { workspace = true }
 itertools = { workspace = true }
@@ -51,7 +51,7 @@ serde_json = { workspace = true }
 serdect = { workspace = true }
 strum = { workspace = true }
 strum_macros = { workspace = true }
-tbs = { package = "fedimint-tbs", version = "=0.4.0-alpha", path = "../../crypto/tbs" }
+tbs = { package = "fedimint-tbs", version = "=0.5.0-alpha", path = "../../crypto/tbs" }
 thiserror = { workspace = true }
 threshold_crypto = { workspace = true }
 tokio = { version = "1.38.1", features = ["sync"] }

@@ -30,7 +30,7 @@ bitcoin_hashes = { workspace = true }
 bitvec = "1.0.1"
 bls12_381 = { workspace = true }
 erased-serde = { workspace = true }
-fedimint-derive = { version = "=0.4.0-alpha", path = "../fedimint-derive" }
+fedimint-derive = { version = "=0.5.0-alpha", path = "../fedimint-derive" }
 fedimint-logging = { workspace = true }
 futures = { workspace = true }
 hex = { version = "0.4.3", features = ["serde"] }

@@ -15,14 +15,14 @@ anyhow = "1.0.86"
 async-trait = "0.1.81"
 bls12_381 = { workspace = true }
 erased-serde = { workspace = true }
-fedimint-bitcoind = { path = "../../fedimint-bitcoind", version = "=0.4.0-alpha" }
+fedimint-bitcoind = { path = "../../fedimint-bitcoind", version = "=0.5.0-alpha" }
 fedimint-core = { workspace = true }
-fedimint-lnv2-common = { path = "../fedimint-lnv2-common", version = "=0.4.0-alpha" }
-fedimint-server = { path = "../../fedimint-server", version = "=0.4.0-alpha" }
+fedimint-lnv2-common = { path = "../fedimint-lnv2-common", version = "=0.5.0-alpha" }
+fedimint-server = { path = "../../fedimint-server", version = "=0.5.0-alpha" }
 futures = "0.3.24"
 group = { workspace = true }
 rand = { workspace = true }
 serde = { workspace = true }
 strum = "0.26"
 strum_macros = "0.26"
-tpe = { package = "fedimint-tpe", version = "=0.4.0-alpha", path = "../../crypto/tpe" }
+tpe = { package = "fedimint-tpe", version = "=0.5.0-alpha", path = "../../crypto/tpe" }

@@ -27,11 +27,11 @@ bitcoin = { workspace = true }
 bitcoin_hashes = { workspace = true }
 bls12_381 = { workspace = true }
 bytes = "1.6.1"
-fedimint-aead = { version = "=0.4.0-alpha", path = "../crypto/aead" }
+fedimint-aead = { version = "=0.5.0-alpha", path = "../crypto/aead" }
 fedimint-api-client = { workspace = true }
 fedimint-core = { workspace = true }
 fedimint-logging = { workspace = true }
-fedimint-metrics = { version = "=0.4.0-alpha", path = "../fedimint-metrics" }
+fedimint-metrics = { version = "=0.5.0-alpha", path = "../fedimint-metrics" }
 futures = { workspace = true }
 hex = { workspace = true }
 hyper = "1"
@@ -50,7 +50,7 @@ strum = { workspace = true }
 strum_macros = { workspace = true }
 subtle = { workspace = true }
 tar = "0.4.41"
-tbs = { package = "fedimint-tbs", version = "=0.4.0-alpha", path = "../crypto/tbs" }
+tbs = { package = "fedimint-tbs", version = "=0.5.0-alpha", path = "../crypto/tbs" }
 thiserror = { workspace = true }
 threshold_crypto = { workspace = true }
 tokio = { version = "1.38.1", features = ["full", "tracing"] }
@@ -63,12 +63,12 @@ tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
 url = { version = "2.5.2", features = ["serde"] }
 
 [dev-dependencies]
-fedimint-dummy-common = { path = "../modules/fedimint-dummy-common", version = "=0.4.0-alpha" }
-fedimint-dummy-server = { path = "../modules/fedimint-dummy-server", version = "=0.4.0-alpha" }
-fedimint-portalloc = { path = "../utils/portalloc", version = "=0.4.0-alpha" }
+fedimint-dummy-common = { path = "../modules/fedimint-dummy-common", version = "=0.5.0-alpha" }
+fedimint-dummy-server = { path = "../modules/fedimint-dummy-server", version = "=0.5.0-alpha" }
+fedimint-portalloc = { path = "../utils/portalloc", version = "=0.5.0-alpha" }
 fedimint-testing = { workspace = true }
 tempfile = "3.10.1"
 test-log = { version = "0.2", features = ["trace"], default-features = false }
 
 [build-dependencies]
-fedimint-build = { version = "=0.4.0-alpha", path = "../fedimint-build" }
+fedimint-build = { version = "=0.5.0-alpha", path = "../fedimint-build" }
