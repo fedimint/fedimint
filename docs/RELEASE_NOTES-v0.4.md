@@ -18,6 +18,19 @@ of this document).
 **You must first upgrade your 0.3.x Federation to version v0.3.3 or higher for functionality
 required to coordinate shutdown to be available.**
 
+Before scheduling a shutdown, ensure you do not have automatic restart logic enabled. If
+you're using systemd to control `fedimintd`, you can disable automatic restart with:
+
+```
+sudo systemctl mask <service>
+```
+
+After switching to a new binary, you can re-enable using:
+
+```
+sudo systemctl unmask <service>
+```
+
 All guardians should be available to coordinate upgrading using an out-of-band communication
 channel, e.g. a group chat. Once all guardians are available, confirm the current session count.
 
