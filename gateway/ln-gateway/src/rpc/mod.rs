@@ -20,6 +20,8 @@ pub const V1_API_ENDPOINT: &str = "v1";
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ConnectFedPayload {
     pub invite_code: String,
+    #[serde(default)]
+    pub use_tor: Option<bool>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]

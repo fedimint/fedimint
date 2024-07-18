@@ -1,7 +1,10 @@
 use std::fmt;
 use std::str::FromStr;
 
-#[derive(Clone, Copy, Debug)]
+use fedimint_core::encoding::{Decodable, Encodable};
+use serde::{Deserialize, Serialize};
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Encodable, Decodable, Serialize, Deserialize)]
 pub enum Connector {
     Tcp,
     Tor,

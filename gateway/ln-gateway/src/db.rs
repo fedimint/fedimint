@@ -2,6 +2,7 @@ use std::collections::BTreeMap;
 
 use bitcoin::Network;
 use bitcoin_hashes::{sha256, Hash};
+use fedimint_api_client::api::net::Connector;
 use fedimint_core::config::FederationId;
 use fedimint_core::db::{
     CoreMigrationFn, DatabaseTransaction, DatabaseVersion, IDatabaseTransactionOpsCoreTyped,
@@ -259,6 +260,7 @@ pub struct FederationConfig {
     pub timelock_delta: u64,
     #[serde(with = "serde_routing_fees")]
     pub fees: RoutingFees,
+    pub connector: Connector,
 }
 
 impl_db_record!(
@@ -406,11 +408,13 @@ mod fedimint_migration_tests {
             federation_id,
             None,
         );
+        let connector = Connector::default();
         let federation_config = FederationConfig {
             invite_code,
             mint_channel_id: 2,
             timelock_delta: 10,
             fees: DEFAULT_FEES,
+            connector,
         };
 
         dbtx.insert_new_entry(&FederationIdKey { id: federation_id }, &federation_config)

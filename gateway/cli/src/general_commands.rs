@@ -81,6 +81,9 @@ pub enum GeneralCommands {
     ConnectFed {
         /// Invite code to connect to the federation
         invite_code: String,
+        /// Activate usage of Tor (or not) as the connector for the federation
+        /// client
+        use_tor: Option<bool>,
     },
     /// Leave a federation.
     LeaveFed {
@@ -202,9 +205,15 @@ impl GeneralCommands {
 
                 print_response(response);
             }
-            Self::ConnectFed { invite_code } => {
+            Self::ConnectFed {
+                invite_code,
+                use_tor,
+            } => {
                 let response = create_client()
-                    .connect_federation(ConnectFedPayload { invite_code })
+                    .connect_federation(ConnectFedPayload {
+                        invite_code,
+                        use_tor,
+                    })
                     .await?;
 
                 print_response(response);
