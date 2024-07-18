@@ -1017,6 +1017,7 @@ pub struct FederationStatus {
     /// This should always be 0 if everything is okay, so a monitoring tool
     /// should generate an alert if this is not the case.
     pub peers_flagged: u64,
+    pub scheduled_shutdown: Option<u64>,
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
