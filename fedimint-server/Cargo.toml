@@ -64,9 +64,9 @@ tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
 url = { version = "2.5.2", features = ["serde"] }
 
 [dev-dependencies]
-fedimint-dummy-common = { path = "../modules/fedimint-dummy-common" }
-fedimint-dummy-server = { path = "../modules/fedimint-dummy-server" }
-fedimint-portalloc = { path = "../utils/portalloc" }
+fedimint-dummy-common = { path = "../modules/fedimint-dummy-common", version = "=0.4.0-rc.1" }
+fedimint-dummy-server = { path = "../modules/fedimint-dummy-server", version = "=0.4.0-rc.1" }
+fedimint-portalloc = { path = "../utils/portalloc", version = "=0.4.0-rc.1" }
 fedimint-testing = { workspace = true }
 tempfile = "3.10.1"
 test-log = { version = "0.2", features = ["trace"], default-features = false }
