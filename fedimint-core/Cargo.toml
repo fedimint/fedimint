@@ -42,7 +42,7 @@ bitcoin_hashes = { workspace = true }
 erased-serde = { workspace = true }
 lightning = { workspace = true }
 lightning-invoice = { workspace = true }
-fedimint-derive = { version = "=0.4.0-rc.0", path = "../fedimint-derive" }
+fedimint-derive = { version = "=0.4.0-rc.1", path = "../fedimint-derive" }
 fedimint-logging = { workspace = true }
 rand = { workspace = true }
 miniscript = { version = "10.0.0", features = ["compiler", "serde"] }

@@ -22,7 +22,7 @@ erased-serde = { workspace = true }
 fedimint-api-client = { workspace = true }
 fedimint-client = { workspace = true }
 fedimint-core = { workspace = true }
-fedimint-dummy-common = { version = "=0.4.0-rc.0", path = "../fedimint-dummy-common" }
+fedimint-dummy-common = { version = "=0.4.0-rc.1", path = "../fedimint-dummy-common" }
 futures = { workspace = true }
 rand = { workspace = true }
 serde = { workspace = true }
