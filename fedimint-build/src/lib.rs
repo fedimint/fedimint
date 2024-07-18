@@ -132,7 +132,8 @@ pub fn set_code_version() {
     match set_code_version_inner() {
         Ok(()) => {}
         Err(e) => {
-            panic!("Failed to detect git hash version: {e}. Set {FORCE_GIT_HASH_ENV} to skip this check")
+            eprintln!("Failed to detect git hash version: {e}. Set {FORCE_GIT_HASH_ENV} to enforce the version and skip auto-detection.");
+            println!("cargo:rustc-env={FEDIMINT_BUILD_CODE_VERSION_ENV}=0000000000000000000000000000000000000000");
         }
     }
 }
