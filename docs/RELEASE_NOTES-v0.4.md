@@ -6,16 +6,20 @@ For all the non-critical release notes, see usual places (like github
 
 ### Lock-step upgrade requirement
 
-**Must be on version >= v0.3.3 to coordinate shutdown**
-
-Upgrading existing Federations that were created using previous (pre v0.4.x)
+Upgrading Federations that were created using previous (0.3.x)
 versions of `fedimintd` requires stopping all peers at the exact same session count
-(mint's internal consensus height), and switching to new v0.4.x release at the same time,
-before starting them again.
+(mint's internal consensus height), before simultaneously switching to new v0.4.x release
+binaries.
 
-All guardians should be available to coordinate upgrading using an out-of-band communicaitons
-channel, e.g. a group chat. Once all guardians are available, get the latest session count so
-a session in the future can be chosen to coordinate a shutdown.
+If you are setting up a new Federation using 0.4.x version, you don't need to do anything
+special, but you do need to acknowledge being aware of this requirement (see last section
+of this document).
+
+**You must first upgrade your 0.3.x Federation to version v0.3.3 or higher for functionality
+required to coordinate shutdown to be available.**
+
+All guardians should be available to coordinate upgrading using an out-of-band communication
+channel, e.g. a group chat. Once all guardians are available, confirm the current session count.
 
 Get the current session count using `fedimint-cli`:
 
@@ -39,9 +43,15 @@ accessible through the guardian UI. At the bottom of the page are actions in a d
 section. Click on "Schedule Shutdown" and fill in the form to schedule a shutdown after a
 future session count, referencing the current session count in the UI.
 
-Once all guardians have shutdown, every guardian needs to check in the logs that they
-shutdown at the expected session count. Once all guardians have verified, then you can proceed
-to upgrade to the latest version.
+After all peers have shutdown, verify that all peers shut-down at the expected session count,
+e.g. by reading fedimintd system logs and looking for last message of the form:
+
+```
+INFO consensus: Session 12345 completed
+```
+
+Only after all guardians have verified it, proceed to upgrade the binary to the new 0.4.x
+version. Be careful not to accidentally start `fedimintd` service with the old binary.
 
 ### Acknowledging
 
