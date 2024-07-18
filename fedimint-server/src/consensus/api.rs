@@ -78,6 +78,7 @@ pub struct ConsensusApi {
     pub force_api_secret: Option<String>,
     /// For sending API events to consensus such as transactions
     pub submission_sender: async_channel::Sender<ConsensusItem>,
+    pub shutdown_receiver: watch::Receiver<Option<u64>>,
     pub shutdown_sender: watch::Sender<Option<u64>>,
     pub connection_status_channels: Arc<RwLock<BTreeMap<PeerId, PeerConnectionStatus>>>,
     pub last_ci_by_peer: Arc<RwLock<BTreeMap<PeerId, u64>>>,
@@ -200,6 +201,7 @@ impl ConsensusApi {
         let peers_connection_status = self.connection_status_channels.read().await.clone();
         let last_ci_by_peer = self.last_ci_by_peer.read().await.clone();
         let session_count = self.session_count().await;
+        let scheduled_shutdown = self.shutdown_receiver.borrow().to_owned();
 
         let status_by_peer = peers_connection_status
             .into_iter()
@@ -238,6 +240,7 @@ impl ConsensusApi {
             peers_online,
             peers_offline,
             peers_flagged,
+            scheduled_shutdown,
         })
     }
 

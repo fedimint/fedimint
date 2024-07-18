@@ -109,6 +109,7 @@ pub async fn run(
         client_cfg: client_cfg.clone(),
         submission_sender: submission_sender.clone(),
         shutdown_sender,
+        shutdown_receiver: shutdown_receiver.clone(),
         supported_api_versions: ServerConfig::supported_api_versions_summary(
             &cfg.consensus.modules,
             &module_init_registry,
