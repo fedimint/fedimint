@@ -39,4 +39,7 @@ just release-bump-version patch
   - possible to add more versions as args
 - publish to crates (TODO: not sure of process yet)
   - `cargo workspaces publish --from-git`
+  - this may cause errors. not ideal, but hack workaround for now is to manually publish each package that had issues using:
+    - `cargo publish --no-verify -p <package>`
+    - `cargo publish --no-verify -p <package>`
   - elsirion and dpc are only two with permissions
