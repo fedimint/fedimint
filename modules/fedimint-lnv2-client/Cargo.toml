@@ -30,7 +30,7 @@ bitcoin = { workspace = true }
 clap = { workspace = true, optional = true }
 erased-serde = { workspace = true }
 futures = "0.3.24"
-lightning-invoice = { workspace = true }
+lightning-invoice = { workspace = true, features = [ "serde" ] }
 fedimint-client = { workspace = true }
 fedimint-core = { workspace = true }
 fedimint-api-client = { workspace = true }
