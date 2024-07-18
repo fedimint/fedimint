@@ -28,7 +28,7 @@ futures = { workspace = true }
 rand = { workspace = true }
 serde = { workspace = true }
 strum = { workspace = true }
-tbs = { package = "fedimint-tbs", version = "=0.4.0-rc.0", path = "../../crypto/tbs" }
+tbs = { package = "fedimint-tbs", version = "=0.4.0-rc.1", path = "../../crypto/tbs" }
 threshold_crypto = { workspace = true }
 tokio = { version = "1.38.0", features = ["sync"] }
 tracing = { workspace = true }

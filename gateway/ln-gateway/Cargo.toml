@@ -43,14 +43,14 @@ fedimint-client = { workspace = true }
 fedimint-core = { workspace = true }
 fedimint-api-client = { workspace = true }
 fedimint-logging = { workspace = true }
-fedimint-rocksdb = { version = "=0.4.0-rc.0", path = "../../fedimint-rocksdb" }
+fedimint-rocksdb = { version = "=0.4.0-rc.1", path = "../../fedimint-rocksdb" }
 fedimint-ln-client = { workspace = true }
-fedimint-ln-common = { version = "=0.4.0-rc.0", path = "../../modules/fedimint-ln-common" }
-fedimint-mint-client = { version = "=0.4.0-rc.0", path = "../../modules/fedimint-mint-client" }
-fedimint-wallet-client = { version = "=0.4.0-rc.0", path = "../../modules/fedimint-wallet-client" }
+fedimint-ln-common = { version = "=0.4.0-rc.1", path = "../../modules/fedimint-ln-common" }
+fedimint-mint-client = { version = "=0.4.0-rc.1", path = "../../modules/fedimint-mint-client" }
+fedimint-wallet-client = { version = "=0.4.0-rc.1", path = "../../modules/fedimint-wallet-client" }
 fedimint-lnv2-client = { path = "../../modules/fedimint-lnv2-client" }
 fedimint-lnv2-common = { path = "../../modules/fedimint-lnv2-common" }
-tpe = { package = "fedimint-tpe", version = "=0.4.0-rc.0", path = "../../crypto/tpe" }
+tpe = { package = "fedimint-tpe", version = "=0.4.0-rc.1", path = "../../crypto/tpe" }
 futures = { workspace = true }
 hex = { workspace = true }
 erased-serde = { workspace = true }
@@ -90,5 +90,5 @@ threshold_crypto = { workspace = true }
 assert_matches = { workspace = true }
 
 [build-dependencies]
-fedimint-build = { version = "=0.4.0-rc.0", path = "../../fedimint-build" }
+fedimint-build = { version = "=0.4.0-rc.1", path = "../../fedimint-build" }
 tonic-build = "0.11.0"
