@@ -252,6 +252,7 @@
 <a href="#252" id="252">252</a>
 <a href="#253" id="253">253</a>
 <a href="#254" id="254">254</a>
+<a href="#255" id="255">255</a>
 </pre></div><pre class="rust"><code><span class="attr">#![allow(clippy::let_unit_value)]
 
 </span><span class="kw">pub mod </span>aleph_bft;
@@ -363,6 +364,7 @@
         client_cfg: client_cfg.clone(),
         submission_sender: submission_sender.clone(),
         shutdown_sender,
+        shutdown_receiver: shutdown_receiver.clone(),
         supported_api_versions: ServerConfig::supported_api_versions_summary(
             <span class="kw-2">&amp;</span>cfg.consensus.modules,
             <span class="kw-2">&amp;</span>module_init_registry,

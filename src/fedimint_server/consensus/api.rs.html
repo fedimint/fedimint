@@ -699,6 +699,9 @@
 <a href="#699" id="699">699</a>
 <a href="#700" id="700">700</a>
 <a href="#701" id="701">701</a>
+<a href="#702" id="702">702</a>
+<a href="#703" id="703">703</a>
+<a href="#704" id="704">704</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! Implements the client API through which users interact with the federation
 </span><span class="kw">use </span>std::cmp::Ordering;
 <span class="kw">use </span>std::collections::{BTreeMap, HashMap};
@@ -779,6 +782,7 @@
     <span class="kw">pub </span>force_api_secret: <span class="prelude-ty">Option</span>&lt;String&gt;,
     <span class="doccomment">/// For sending API events to consensus such as transactions
     </span><span class="kw">pub </span>submission_sender: async_channel::Sender&lt;ConsensusItem&gt;,
+    <span class="kw">pub </span>shutdown_receiver: watch::Receiver&lt;<span class="prelude-ty">Option</span>&lt;u64&gt;&gt;,
     <span class="kw">pub </span>shutdown_sender: watch::Sender&lt;<span class="prelude-ty">Option</span>&lt;u64&gt;&gt;,
     <span class="kw">pub </span>connection_status_channels: Arc&lt;RwLock&lt;BTreeMap&lt;PeerId, PeerConnectionStatus&gt;&gt;&gt;,
     <span class="kw">pub </span>last_ci_by_peer: Arc&lt;RwLock&lt;BTreeMap&lt;PeerId, u64&gt;&gt;&gt;,
@@ -901,6 +905,7 @@
         <span class="kw">let </span>peers_connection_status = <span class="self">self</span>.connection_status_channels.read().<span class="kw">await</span>.clone();
         <span class="kw">let </span>last_ci_by_peer = <span class="self">self</span>.last_ci_by_peer.read().<span class="kw">await</span>.clone();
         <span class="kw">let </span>session_count = <span class="self">self</span>.session_count().<span class="kw">await</span>;
+        <span class="kw">let </span>scheduled_shutdown = <span class="self">self</span>.shutdown_receiver.borrow().to_owned();
 
         <span class="kw">let </span>status_by_peer = peers_connection_status
             .into_iter()
@@ -939,6 +944,7 @@
             peers_online,
             peers_offline,
             peers_flagged,
+            scheduled_shutdown,
         })
     }
 
