@@ -48,8 +48,8 @@ fedimint-ln-client = { workspace = true }
 fedimint-ln-common = { version = "=0.4.0-rc.1", path = "../../modules/fedimint-ln-common" }
 fedimint-mint-client = { version = "=0.4.0-rc.1", path = "../../modules/fedimint-mint-client" }
 fedimint-wallet-client = { version = "=0.4.0-rc.1", path = "../../modules/fedimint-wallet-client" }
-fedimint-lnv2-client = { path = "../../modules/fedimint-lnv2-client" }
-fedimint-lnv2-common = { path = "../../modules/fedimint-lnv2-common" }
+fedimint-lnv2-client = { path = "../../modules/fedimint-lnv2-client", version = "=0.4.0-rc.1" }
+fedimint-lnv2-common = { path = "../../modules/fedimint-lnv2-common", version = "=0.4.0-rc.1" }
 tpe = { package = "fedimint-tpe", version = "=0.4.0-rc.1", path = "../../crypto/tpe" }
 futures = { workspace = true }
 hex = { workspace = true }
@@ -73,17 +73,17 @@ tracing = { version = "0.1.40", default-features = false, features= ["log", "att
 url = { version = "2.5.2", features = ["serde"] }
 
 [dev-dependencies]
-fedimint-dummy-client = { path = "../../modules/fedimint-dummy-client" }
-fedimint-dummy-server = { path = "../../modules/fedimint-dummy-server" }
-fedimint-dummy-common = { path = "../../modules/fedimint-dummy-common" }
-fedimint-unknown-server = { path = "../../modules/fedimint-unknown-server" }
-fedimint-unknown-common = { path = "../../modules/fedimint-unknown-common" }
+fedimint-dummy-client = { path = "../../modules/fedimint-dummy-client", version = "=0.4.0-rc.1" }
+fedimint-dummy-server = { path = "../../modules/fedimint-dummy-server", version = "=0.4.0-rc.1" }
+fedimint-dummy-common = { path = "../../modules/fedimint-dummy-common", version = "=0.4.0-rc.1" }
+fedimint-unknown-server = { path = "../../modules/fedimint-unknown-server", version = "=0.4.0-rc.1" }
+fedimint-unknown-common = { path = "../../modules/fedimint-unknown-common", version = "=0.4.0-rc.1" }
 fedimint-ln-client = { workspace = true }
-fedimint-ln-server = { path = "../../modules/fedimint-ln-server" }
-fedimint-ln-common = { path = "../../modules/fedimint-ln-common" }
-fedimint-lnv2-server = { path = "../../modules/fedimint-lnv2-server" }
-fedimint-mint-client = { path = "../../modules/fedimint-mint-client" }
-fedimint-wallet-client = { path = "../../modules/fedimint-wallet-client" }
+fedimint-ln-server = { path = "../../modules/fedimint-ln-server", version = "=0.4.0-rc.1" }
+fedimint-ln-common = { path = "../../modules/fedimint-ln-common", version = "=0.4.0-rc.1" }
+fedimint-lnv2-server = { path = "../../modules/fedimint-lnv2-server", version = "=0.4.0-rc.1" }
+fedimint-mint-client = { path = "../../modules/fedimint-mint-client", version = "=0.4.0-rc.1" }
+fedimint-wallet-client = { path = "../../modules/fedimint-wallet-client", version = "=0.4.0-rc.1" }
 fedimint-testing = { workspace = true }
 lightning = { workspace = true }
 threshold_crypto = { workspace = true }
