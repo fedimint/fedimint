@@ -73,7 +73,7 @@ tracing = { version = "0.1.40", default-features = false, features= ["log", "att
 url = { version = "2.5.2", features = ["serde"] }
 
 [dev-dependencies]
-fedimint-dummy-client = { version = "=0.4.0-rc.0", path = "../../modules/fedimint-dummy-client" }
+fedimint-dummy-client = { path = "../../modules/fedimint-dummy-client" }
 fedimint-dummy-server = { path = "../../modules/fedimint-dummy-server" }
 fedimint-dummy-common = { path = "../../modules/fedimint-dummy-common" }
 fedimint-unknown-server = { path = "../../modules/fedimint-unknown-server" }
