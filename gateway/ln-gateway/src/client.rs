@@ -45,6 +45,7 @@ impl GatewayClientBuilder {
             invite_code,
             mint_channel_id,
             timelock_delta,
+            connector,
             ..
         } = config;
         let federation_id = invite_code.federation_id();
@@ -70,6 +71,7 @@ impl GatewayClientBuilder {
             .map_err(GatewayError::DatabaseError)?;
         client_builder.with_module_inits(registry);
         client_builder.with_primary_module(self.primary_module);
+        client_builder.with_connector(connector);
 
         let client_secret = if let Ok(secret) =
             Client::load_decodable_client_secret::<[u8; 64]>(client_builder.db_no_decoders()).await
@@ -91,11 +93,7 @@ impl GatewayClientBuilder {
                 .open(root_secret)
                 .await
         } else {
-            // FIXME: (@leonardo) How should we handle the `Connector` usage for ln-gateway
-            // ?
-            let client_config = fedimint_api_client::api::net::Connector::default()
-                .download_from_invite_code(&invite_code)
-                .await?;
+            let client_config = connector.download_from_invite_code(&invite_code).await?;
             client_builder
                 // TODO: make this configurable?
                 .join(root_secret, client_config.clone(), invite_code.api_secret())
