@@ -1261,6 +1261,10 @@
 <a href="#1261" id="1261">1261</a>
 <a href="#1262" id="1262">1262</a>
 <a href="#1263" id="1263">1263</a>
+<a href="#1264" id="1264">1264</a>
+<a href="#1265" id="1265">1265</a>
+<a href="#1266" id="1266">1266</a>
+<a href="#1267" id="1267">1267</a>
 </pre></div><pre class="rust"><code><span class="attr">#![warn(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::default_trait_access)]
@@ -1740,7 +1744,11 @@
     </span>}
 
     <span class="kw">async fn </span>backup(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; anyhow::Result&lt;backup::WalletModuleBackup&gt; {
+        <span class="comment">// fetch consensus height first
+        </span><span class="kw">let </span>session_count = <span class="self">self</span>.client_ctx.global_api().session_count().<span class="kw">await</span><span class="question-mark">?</span>;
+
         <span class="prelude-val">Ok</span>(backup::WalletModuleBackup::new_v0(
+            session_count,
             <span class="self">self</span>.db
                 .begin_transaction_nc()
                 .<span class="kw">await

@@ -33,6 +33,10 @@
 <a href="#33" id="33">33</a>
 <a href="#34" id="34">34</a>
 <a href="#35" id="35">35</a>
+<a href="#36" id="36">36</a>
+<a href="#37" id="37">37</a>
+<a href="#38" id="38">38</a>
+<a href="#39" id="39">39</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>fedimint_client::module::recovery::{DynModuleBackup, ModuleBackup};
 <span class="kw">use </span>fedimint_core::core::{IntoDynInstance, ModuleInstanceId};
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
@@ -60,12 +64,16 @@
 <span class="kw">impl </span>ModuleBackup <span class="kw">for </span>WalletModuleBackup {}
 
 <span class="kw">impl </span>WalletModuleBackup {
-    <span class="kw">pub fn </span>new_v0(next_tweak_idx: TweakIdx) -&gt; WalletModuleBackup {
-        WalletModuleBackup::V0(WalletModuleBackupV0 { next_tweak_idx })
+    <span class="kw">pub fn </span>new_v0(session_count: u64, next_tweak_idx: TweakIdx) -&gt; WalletModuleBackup {
+        WalletModuleBackup::V0(WalletModuleBackupV0 {
+            session_count,
+            next_tweak_idx,
+        })
     }
 }
 <span class="attr">#[derive(Clone, PartialEq, Eq, Debug, Encodable, Decodable)]
 </span><span class="kw">pub struct </span>WalletModuleBackupV0 {
+    <span class="kw">pub </span>session_count: u64,
     <span class="kw">pub </span>next_tweak_idx: TweakIdx,
 }
 </code></pre></div></section></main></body></html>
