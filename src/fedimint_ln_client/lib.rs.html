@@ -2121,6 +2121,10 @@
 <a href="#2121" id="2121">2121</a>
 <a href="#2122" id="2122">2122</a>
 <a href="#2123" id="2123">2123</a>
+<a href="#2124" id="2124">2124</a>
+<a href="#2125" id="2125">2125</a>
+<a href="#2126" id="2126">2126</a>
+<a href="#2127" id="2127">2127</a>
 </pre></div><pre class="rust"><code><span class="attr">#![warn(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::cast_possible_wrap)]
@@ -2400,7 +2404,7 @@
 <span class="kw">impl </span>Default <span class="kw">for </span>LightningClientInit {
     <span class="kw">fn </span>default() -&gt; <span class="self">Self </span>{
         LightningClientInit {
-            gateway_conn: Arc::new(RealGatewayConnection),
+            gateway_conn: Arc::new(RealGatewayConnection::default()),
         }
     }
 }
@@ -4149,13 +4153,16 @@
     ) -&gt; <span class="prelude-ty">Result</span>&lt;String, GatewayPayError&gt;;
 }
 
-<span class="attr">#[derive(Debug)]
-</span><span class="kw">pub struct </span>RealGatewayConnection;
+<span class="attr">#[derive(Debug, Default)]
+</span><span class="kw">pub struct </span>RealGatewayConnection {
+    client: reqwest::Client,
+}
 
 <span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
 </span><span class="kw">impl </span>GatewayConnection <span class="kw">for </span>RealGatewayConnection {
     <span class="kw">async fn </span>verify_gateway_availability(<span class="kw-2">&amp;</span><span class="self">self</span>, gateway: <span class="kw-2">&amp;</span>LightningGateway) -&gt; anyhow::Result&lt;()&gt; {
-        <span class="kw">let </span>response = reqwest::Client::new()
+        <span class="kw">let </span>response = <span class="self">self
+            </span>.client
             .get(
                 gateway
                     .api
@@ -4187,7 +4194,8 @@
         gateway: LightningGateway,
         payload: PayInvoicePayload,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;String, GatewayPayError&gt; {
-        <span class="kw">let </span>response = reqwest::Client::new()
+        <span class="kw">let </span>response = <span class="self">self
+            </span>.client
             .post(
                 gateway
                     .api
