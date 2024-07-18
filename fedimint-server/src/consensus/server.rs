@@ -196,6 +196,7 @@ impl ConsensusServer {
             latest_contribution_by_peer: Arc::clone(&latest_contribution_by_peer),
             peer_status_channels,
             consensus_status_cache: ExpiringCache::new(Duration::from_millis(500)),
+            shutdown_receiver: shutdown_receiver.clone(),
         };
 
         submit_module_consensus_items(
