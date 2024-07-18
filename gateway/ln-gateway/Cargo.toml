@@ -42,13 +42,13 @@ fedimint-api-client = { workspace = true }
 fedimint-client = { workspace = true }
 fedimint-core = { workspace = true }
 fedimint-ln-client = { workspace = true }
-fedimint-ln-common = { version = "=0.4.0-alpha", path = "../../modules/fedimint-ln-common" }
+fedimint-ln-common = { version = "=0.5.0-alpha", path = "../../modules/fedimint-ln-common" }
 fedimint-lnv2-client = { path = "../../modules/fedimint-lnv2-client" }
 fedimint-lnv2-common = { path = "../../modules/fedimint-lnv2-common" }
 fedimint-logging = { workspace = true }
-fedimint-mint-client = { version = "=0.4.0-alpha", path = "../../modules/fedimint-mint-client" }
-fedimint-rocksdb = { version = "=0.4.0-alpha", path = "../../fedimint-rocksdb" }
-fedimint-wallet-client = { version = "=0.4.0-alpha", path = "../../modules/fedimint-wallet-client" }
+fedimint-mint-client = { version = "=0.5.0-alpha", path = "../../modules/fedimint-mint-client" }
+fedimint-rocksdb = { version = "=0.5.0-alpha", path = "../../fedimint-rocksdb" }
+fedimint-wallet-client = { version = "=0.5.0-alpha", path = "../../modules/fedimint-wallet-client" }
 futures = { workspace = true }
 hex = { workspace = true }
 lightning-invoice = { workspace = true }
@@ -66,7 +66,7 @@ tokio-stream = "0.1.15"
 tonic = { version = "0.11.0", features = ["transport", "tls"] }
 tonic_lnd = { workspace = true }
 tower-http = { version = "0.5.2", features = ["cors", "auth"] }
-tpe = { package = "fedimint-tpe", version = "=0.4.0-alpha", path = "../../crypto/tpe" }
+tpe = { package = "fedimint-tpe", version = "=0.5.0-alpha", path = "../../crypto/tpe" }
 tracing = { version = "0.1.40", default-features = false, features = ["log", "attributes", "std"] }
 url = { version = "2.5.2", features = ["serde"] }
 
@@ -88,5 +88,5 @@ lightning = { workspace = true }
 threshold_crypto = { workspace = true }
 
 [build-dependencies]
-fedimint-build = { version = "=0.4.0-alpha", path = "../../fedimint-build" }
+fedimint-build = { version = "=0.5.0-alpha", path = "../../fedimint-build" }
 tonic-build = "0.11.0"
