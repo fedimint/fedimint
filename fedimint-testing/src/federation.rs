@@ -134,6 +134,7 @@ impl FederationTest {
     pub async fn connect_gateway(&self, gw: &Gateway) {
         gw.handle_connect_federation(ConnectFedPayload {
             invite_code: self.invite_code().to_string(),
+            use_tor: Some(false), // TODO: (@leonardo) Should we get it from self.configs too ?
         })
         .await
         .expect("Failed to connect federation");
