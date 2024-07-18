@@ -2,6 +2,7 @@ use std::collections::{BTreeMap, BTreeSet, HashSet};
 use std::convert::Infallible;
 use std::fmt::{Debug, Formatter};
 use std::io::{Error, Read, Write};
+use std::mem;
 use std::sync::Arc;
 use std::time::SystemTime;
 
@@ -58,16 +59,87 @@ pub struct Executor {
 
 struct ExecutorInner {
     db: Database,
-    context: Mutex<Option<ContextGen>>,
+    state: Mutex<ExecutorState>,
     module_contexts: BTreeMap<ModuleInstanceId, DynContext>,
     valid_module_ids: BTreeSet<ModuleInstanceId>,
     notifier: Notifier,
-    shutdown_executor: Mutex<Option<oneshot::Sender<()>>>,
     /// Any time executor should notice state machine update (e.g. because it
     /// was created), it's must be sent through this channel for it to notice.
     sm_update_tx: mpsc::UnboundedSender<DynState>,
-    sm_update_rx: Mutex<Option<mpsc::UnboundedReceiver<DynState>>>,
     client_task_group: TaskGroup,
+}
+
+enum ExecutorState {
+    Unstarted {
+        sm_update_rx: mpsc::UnboundedReceiver<DynState>,
+    },
+    Running {
+        context_gen: ContextGen,
+        shutdown_sender: oneshot::Sender<()>,
+    },
+    Stopped,
+}
+
+impl ExecutorState {
+    /// Starts the executor, returning a receiver that will be signalled when
+    /// the executor is stopped and a receiver for state machine updates.
+    /// Returns `None` if the executor has already been started and/or stopped.
+    fn start(
+        &mut self,
+        context: ContextGen,
+    ) -> Option<(oneshot::Receiver<()>, mpsc::UnboundedReceiver<DynState>)> {
+        let (shutdown_sender, shutdown_receiver) = tokio::sync::oneshot::channel::<()>();
+
+        let previous_state = mem::replace(
+            self,
+            ExecutorState::Running {
+                context_gen: context,
+                shutdown_sender,
+            },
+        );
+
+        if let ExecutorState::Unstarted { sm_update_rx } = previous_state {
+            Some((shutdown_receiver, sm_update_rx))
+        } else {
+            // Replace the previous state, undoing the `mem::replace` above.
+            *self = previous_state;
+
+            debug!("Executor already started, ignoring start request");
+            None
+        }
+    }
+
+    /// Stops the executor, returning `Some(())` if the executor was running and
+    /// `None` if it was in any other state.
+    fn stop(&mut self) -> Option<()> {
+        let previous_state = mem::replace(self, ExecutorState::Stopped);
+
+        if let ExecutorState::Running {
+            shutdown_sender, ..
+        } = previous_state
+        {
+            if shutdown_sender.send(()).is_err() {
+                warn!("Failed to send shutdown signal to executor, already dead?");
+            }
+            Some(())
+        } else {
+            // Replace the previous state, undoing the `mem::replace` above.
+            *self = previous_state;
+
+            debug!("Executor not running, ignoring stop request");
+            None
+        }
+    }
+
+    fn gen_context(&self, state: &DynState) -> Option<DynGlobalClientContext> {
+        let ExecutorState::Running { context_gen, .. } = self else {
+            return None;
+        };
+        Some(context_gen(
+            state.module_instance_id(),
+            state.operation_id(),
+        ))
+    }
 }
 
 /// Builder to which module clients can be attached and used to build an
@@ -156,13 +228,13 @@ impl Executor {
             if let Some(module_context) =
                 self.inner.module_contexts.get(&state.module_instance_id())
             {
-                let context = {
-                    let context_gen_guard = self.inner.context.lock().await;
-                    let context_gen = context_gen_guard
-                        .as_ref()
-                        .expect("should be initialized at this point");
-                    context_gen(state.module_instance_id(), state.operation_id())
-                };
+                let context = self
+                    .inner
+                    .state
+                    .lock()
+                    .await
+                    .gen_context(&state)
+                    .expect("executor should be running at this point");
 
                 if state.is_terminal(module_context, &context) {
                     return Err(AddStateMachinesError::Other(anyhow!(
@@ -270,38 +342,11 @@ impl Executor {
     /// ## Panics
     /// If called more than once.
     pub async fn start_executor(&self, context_gen: ContextGen) {
-        let replaced_old_context_gen = self
-            .inner
-            .context
-            .lock()
-            .await
-            .replace(context_gen.clone())
-            .is_some();
-        assert!(
-            !replaced_old_context_gen,
-            "start_executor was called previously"
-        );
-        let sm_update_rx = self
-            .inner
-            .sm_update_rx
-            .lock()
-            .await
-            .take()
-            .expect("start_executor was called previously: no sm_update_rx available");
-
-        let (shutdown_sender, shutdown_receiver) = tokio::sync::oneshot::channel::<()>();
-
-        let replaced_old_shutdown_sender = self
-            .inner
-            .shutdown_executor
-            .lock()
-            .await
-            .replace(shutdown_sender)
-            .is_some();
-        assert!(
-            !replaced_old_shutdown_sender,
-            "start_executor was called previously"
-        );
+        let Some((shutdown_receiver, sm_update_rx)) =
+            self.inner.state.lock().await.start(context_gen.clone())
+        else {
+            panic!("start_executor was called previously");
+        };
 
         let task_runner_inner = self.inner.clone();
         let _handle = self.inner.client_task_group.spawn("sm-executor", |task_handle| async move {
@@ -740,21 +785,12 @@ impl ExecutorInner {
 impl ExecutorInner {
     /// See [`Executor::stop_executor`].
     fn stop_executor(&self) -> Option<()> {
-        let Some(shutdown_sender) = self
-            .shutdown_executor
+        let mut state = self
+            .state
             .try_lock()
-            .expect("Only locked during startup, no collisions should be possible")
-            .take()
-        else {
-            debug!("Executor already stopped, ignoring stop request");
-            return None;
-        };
+            .expect("Only locked during startup, no collisions should be possible");
 
-        if shutdown_sender.send(()).is_err() {
-            warn!("Failed to send shutdown signal to executor, already dead?");
-        }
-
-        Some(())
+        state.stop()
     }
 }
 
@@ -803,13 +839,11 @@ impl ExecutorBuilder {
 
         let inner = Arc::new(ExecutorInner {
             db,
-            context: Mutex::new(None),
+            state: Mutex::new(ExecutorState::Unstarted { sm_update_rx }),
             module_contexts: self.module_contexts,
             valid_module_ids: self.valid_module_ids,
             notifier,
-            shutdown_executor: Default::default(),
             sm_update_tx,
-            sm_update_rx: Mutex::new(Some(sm_update_rx)),
             client_task_group,
         });
 
