@@ -1154,20 +1154,18 @@
     <span class="kw">pub </span>parts_per_million: u64,
 }
 
-<span class="kw">impl </span>PaymentFee {
-    <span class="kw">pub fn </span>one_percent() -&gt; <span class="self">Self </span>{
-        PaymentFee {
-            base: Amount::ZERO,
-            parts_per_million: <span class="number">10_000</span>,
-        }
-    }
+<span class="kw">const </span>DUST_LIMIT: Amount = Amount::from_sats(<span class="number">50</span>);
 
-    <span class="kw">pub fn </span>half_of_one_percent() -&gt; <span class="self">Self </span>{
-        PaymentFee {
-            base: Amount::ZERO,
-            parts_per_million: <span class="number">5_000</span>,
-        }
-    }
+<span class="kw">impl </span>PaymentFee {
+    <span class="kw">pub const </span>TEN_PROMILLE_PLUS_50_SATS: PaymentFee = PaymentFee {
+        base: DUST_LIMIT,
+        parts_per_million: <span class="number">10_000</span>,
+    };
+
+    <span class="kw">pub const </span>FIVE_PROMILLE_PLUS_50_SATS: PaymentFee = PaymentFee {
+        base: DUST_LIMIT,
+        parts_per_million: <span class="number">5_000</span>,
+    };
 
     <span class="kw">pub fn </span>add_fee(<span class="kw-2">&amp;</span><span class="self">self</span>, msats: u64) -&gt; Amount {
         Amount::from_msats(msats.saturating_add(<span class="self">self</span>.fee(msats)))
@@ -1316,7 +1314,7 @@
         <span class="self">self</span>.send_internal(
             gateway_api,
             invoice,
-            PaymentFee::one_percent(),
+            PaymentFee::TEN_PROMILLE_PLUS_50_SATS,
             EXPIRATION_DELTA_LIMIT_DEFAULT,
         )
         .<span class="kw">await
@@ -1551,7 +1549,7 @@
             invoice_amount,
             INVOICE_EXPIRATION_SECONDS_DEFAULT,
             Bolt11InvoiceDescription::Direct(String::new()),
-            PaymentFee::one_percent(),
+            PaymentFee::TEN_PROMILLE_PLUS_50_SATS,
         )
         .<span class="kw">await
     </span>}
@@ -1595,7 +1593,7 @@
             invoice_amount,
             INVOICE_EXPIRATION_SECONDS_DEFAULT,
             Bolt11InvoiceDescription::Direct(String::new()),
-            PaymentFee::one_percent(),
+            PaymentFee::TEN_PROMILLE_PLUS_50_SATS,
         )
         .<span class="kw">await
     </span>}
@@ -1636,8 +1634,10 @@
 
         <span class="kw">let </span>contract_amount = payment_info.receive_fee.subtract_fee(invoice_amount.msats);
 
-        <span class="kw">if </span>contract_amount &lt; Amount::from_sats(<span class="number">100</span>) {
-            <span class="kw">return </span><span class="prelude-val">Err</span>(FetchInvoiceError::AmountIsUneconomical);
+        <span class="comment">// The dust limit ensures that the incoming contract can be claimed without
+        // additional funds as the contracts amount is sufficient to cover the fees
+        </span><span class="kw">if </span>contract_amount &lt; DUST_LIMIT {
+            <span class="kw">return </span><span class="prelude-val">Err</span>(FetchInvoiceError::DustAmount);
         }
 
         <span class="kw">let </span>expiration = duration_since_epoch()
@@ -1867,8 +1867,8 @@
     </span>UnknownFederation,
     <span class="attr">#[error(<span class="string">"The gateways fee of {0:?} exceeds the supplied limit"</span>)]
     </span>PaymentFeeExceedsLimit(PaymentFee),
-    <span class="attr">#[error(<span class="string">"The total fees required to complete this payment exceed its value"</span>)]
-    </span>AmountIsUneconomical,
+    <span class="attr">#[error(<span class="string">"The total fees required to complete this payment exceed its amount"</span>)]
+    </span>DustAmount,
     <span class="attr">#[error(<span class="string">"The gateway considered our request for an invoice invalid: {0}"</span>)]
     </span>CreateInvoiceError(String),
     <span class="attr">#[error(<span class="string">"The invoice's payment hash is incorrect"</span>)]
