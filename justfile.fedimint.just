@@ -235,6 +235,8 @@ docs: build-docs
 release-bump-version VERSION="prerelease":
   cargo workspaces version --all --exact --no-git-commit --yes --force '*' --pre-id rc {{VERSION}}
 
+release-bump-version-custom VERSION:
+  cargo workspaces version --all --exact --no-git-commit --yes --force '*' custom {{VERSION}}
 
 cargo_sort_defaults := "-w -g --order package,features,bin,lib,test,bench,dependencies,dev-dependencies,build-dependencies"
 
