@@ -366,7 +366,7 @@ impl DecoderBuilder {
     }
 }
 
-/// Decoder for module associated types
+/// Consensus encoding decoder for module-specific types
 #[derive(Clone, Default)]
 pub struct Decoder {
     decode_fns: Arc<BTreeMap<TypeId, DecodeFn>>,
