@@ -11,7 +11,7 @@ use fedimint_core::invite_code::InviteCode;
 use fedimint_core::{impl_db_lookup, impl_db_record, secp256k1};
 use fedimint_ln_common::serde_routing_fees;
 use fedimint_lnv2_common::contracts::IncomingContract;
-use futures::FutureExt;
+use futures::{FutureExt, StreamExt};
 use lightning_invoice::RoutingFees;
 use rand::Rng;
 use serde::{Deserialize, Serialize};
@@ -20,6 +20,33 @@ use strum_macros::EnumIter;
 use crate::rpc::rpc_server::hash_password;
 
 pub const GATEWAYD_DATABASE_VERSION: DatabaseVersion = DatabaseVersion(1);
+
+pub trait GatewayDbtxNcExt {
+    async fn save_federation_config(&mut self, config: FederationConfig);
+    async fn load_federation_configs(&mut self) -> BTreeMap<FederationId, FederationConfig>;
+    async fn load_gateway_keypair(&mut self) -> secp256k1::KeyPair;
+}
+
+impl<Cap: Send> GatewayDbtxNcExt for DatabaseTransaction<'_, Cap> {
+    async fn save_federation_config(&mut self, config: FederationConfig) {
+        let id = config.invite_code.federation_id();
+        self.insert_entry(&FederationIdKey { id }, &config).await;
+    }
+
+    async fn load_federation_configs(&mut self) -> BTreeMap<FederationId, FederationConfig> {
+        self.find_by_prefix(&FederationIdKeyPrefix)
+            .await
+            .map(|(key, config)| (key.id, config))
+            .collect::<BTreeMap<FederationId, FederationConfig>>()
+            .await
+    }
+
+    async fn load_gateway_keypair(&mut self) -> secp256k1::KeyPair {
+        self.get_value(&GatewayPublicKey)
+            .await
+            .expect("Gateway keypair does not exist")
+    }
+}
 
 #[repr(u8)]
 #[derive(Clone, EnumIter, Debug)]
