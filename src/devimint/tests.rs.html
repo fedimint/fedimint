@@ -2416,6 +2416,68 @@
 <a href="#2416" id="2416">2416</a>
 <a href="#2417" id="2417">2417</a>
 <a href="#2418" id="2418">2418</a>
+<a href="#2419" id="2419">2419</a>
+<a href="#2420" id="2420">2420</a>
+<a href="#2421" id="2421">2421</a>
+<a href="#2422" id="2422">2422</a>
+<a href="#2423" id="2423">2423</a>
+<a href="#2424" id="2424">2424</a>
+<a href="#2425" id="2425">2425</a>
+<a href="#2426" id="2426">2426</a>
+<a href="#2427" id="2427">2427</a>
+<a href="#2428" id="2428">2428</a>
+<a href="#2429" id="2429">2429</a>
+<a href="#2430" id="2430">2430</a>
+<a href="#2431" id="2431">2431</a>
+<a href="#2432" id="2432">2432</a>
+<a href="#2433" id="2433">2433</a>
+<a href="#2434" id="2434">2434</a>
+<a href="#2435" id="2435">2435</a>
+<a href="#2436" id="2436">2436</a>
+<a href="#2437" id="2437">2437</a>
+<a href="#2438" id="2438">2438</a>
+<a href="#2439" id="2439">2439</a>
+<a href="#2440" id="2440">2440</a>
+<a href="#2441" id="2441">2441</a>
+<a href="#2442" id="2442">2442</a>
+<a href="#2443" id="2443">2443</a>
+<a href="#2444" id="2444">2444</a>
+<a href="#2445" id="2445">2445</a>
+<a href="#2446" id="2446">2446</a>
+<a href="#2447" id="2447">2447</a>
+<a href="#2448" id="2448">2448</a>
+<a href="#2449" id="2449">2449</a>
+<a href="#2450" id="2450">2450</a>
+<a href="#2451" id="2451">2451</a>
+<a href="#2452" id="2452">2452</a>
+<a href="#2453" id="2453">2453</a>
+<a href="#2454" id="2454">2454</a>
+<a href="#2455" id="2455">2455</a>
+<a href="#2456" id="2456">2456</a>
+<a href="#2457" id="2457">2457</a>
+<a href="#2458" id="2458">2458</a>
+<a href="#2459" id="2459">2459</a>
+<a href="#2460" id="2460">2460</a>
+<a href="#2461" id="2461">2461</a>
+<a href="#2462" id="2462">2462</a>
+<a href="#2463" id="2463">2463</a>
+<a href="#2464" id="2464">2464</a>
+<a href="#2465" id="2465">2465</a>
+<a href="#2466" id="2466">2466</a>
+<a href="#2467" id="2467">2467</a>
+<a href="#2468" id="2468">2468</a>
+<a href="#2469" id="2469">2469</a>
+<a href="#2470" id="2470">2470</a>
+<a href="#2471" id="2471">2471</a>
+<a href="#2472" id="2472">2472</a>
+<a href="#2473" id="2473">2473</a>
+<a href="#2474" id="2474">2474</a>
+<a href="#2475" id="2475">2475</a>
+<a href="#2476" id="2476">2476</a>
+<a href="#2477" id="2477">2477</a>
+<a href="#2478" id="2478">2478</a>
+<a href="#2479" id="2479">2479</a>
+<a href="#2480" id="2480">2480</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashSet};
 <span class="kw">use </span>std::io::Write;
 <span class="kw">use </span>std::ops::ControlFlow;
@@ -2523,6 +2585,7 @@
     r#type: LatencyTest,
     upgrade_clients: <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>UpgradeClients&gt;,
     iterations: usize,
+    assert_thresholds: bool,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
     log_binary_versions().<span class="kw">await</span><span class="question-mark">?</span>;
 
@@ -2586,12 +2649,15 @@
             }
             <span class="kw">let </span>reissue_stats = stats_for(reissues);
             <span class="macro">println!</span>(<span class="string">"### LATENCY REISSUE: {reissue_stats}"</span>);
-            <span class="macro">assert!</span>(reissue_stats.median &lt; Duration::from_secs(<span class="number">10</span>));
 
-            <span class="macro">assert!</span>(reissue_stats.p90 &lt; reissue_stats.median * p90_median_factor);
-            <span class="macro">assert!</span>(
-                reissue_stats.max.as_secs_f64() &lt; reissue_stats.p90.as_secs_f64() * max_p90_factor
-            );
+            <span class="kw">if </span>assert_thresholds {
+                <span class="macro">assert!</span>(reissue_stats.median &lt; Duration::from_secs(<span class="number">10</span>));
+                <span class="macro">assert!</span>(reissue_stats.p90 &lt; reissue_stats.median * p90_median_factor);
+                <span class="macro">assert!</span>(
+                    reissue_stats.max.as_secs_f64()
+                        &lt; reissue_stats.p90.as_secs_f64() * max_p90_factor
+                );
+            }
         }
         LatencyTest::LnSend =&gt; {
             <span class="macro">info!</span>(<span class="string">"Testing latency of ln send"</span>);
@@ -2605,12 +2671,15 @@
             }
             <span class="kw">let </span>ln_sends_stats = stats_for(ln_sends);
             <span class="macro">println!</span>(<span class="string">"### LATENCY LN SEND: {ln_sends_stats}"</span>);
-            <span class="macro">assert!</span>(ln_sends_stats.median &lt; Duration::from_secs(<span class="number">10</span>));
-            <span class="macro">assert!</span>(ln_sends_stats.p90 &lt; ln_sends_stats.median * p90_median_factor);
-            <span class="macro">assert!</span>(
-                ln_sends_stats.max.as_secs_f64()
-                    &lt; ln_sends_stats.p90.as_secs_f64() * max_p90_factor
-            );
+
+            <span class="kw">if </span>assert_thresholds {
+                <span class="macro">assert!</span>(ln_sends_stats.median &lt; Duration::from_secs(<span class="number">10</span>));
+                <span class="macro">assert!</span>(ln_sends_stats.p90 &lt; ln_sends_stats.median * p90_median_factor);
+                <span class="macro">assert!</span>(
+                    ln_sends_stats.max.as_secs_f64()
+                        &lt; ln_sends_stats.p90.as_secs_f64() * max_p90_factor
+                );
+            }
         }
         LatencyTest::LnReceive =&gt; {
             <span class="macro">info!</span>(<span class="string">"Testing latency of ln receive"</span>);
@@ -2636,12 +2705,15 @@
             }
             <span class="kw">let </span>ln_receives_stats = stats_for(ln_receives);
             <span class="macro">println!</span>(<span class="string">"### LATENCY LN RECV: {ln_receives_stats}"</span>);
-            <span class="macro">assert!</span>(ln_receives_stats.median &lt; Duration::from_secs(<span class="number">10</span>));
-            <span class="macro">assert!</span>(ln_receives_stats.p90 &lt; ln_receives_stats.median * p90_median_factor);
-            <span class="macro">assert!</span>(
-                ln_receives_stats.max.as_secs_f64()
-                    &lt; ln_receives_stats.p90.as_secs_f64() * max_p90_factor
-            );
+
+            <span class="kw">if </span>assert_thresholds {
+                <span class="macro">assert!</span>(ln_receives_stats.median &lt; Duration::from_secs(<span class="number">10</span>));
+                <span class="macro">assert!</span>(ln_receives_stats.p90 &lt; ln_receives_stats.median * p90_median_factor);
+                <span class="macro">assert!</span>(
+                    ln_receives_stats.max.as_secs_f64()
+                        &lt; ln_receives_stats.p90.as_secs_f64() * max_p90_factor
+                );
+            }
         }
         LatencyTest::FmPay =&gt; {
             <span class="macro">info!</span>(<span class="string">"Testing latency of internal payments within a federation"</span>);
@@ -2698,11 +2770,15 @@
             <span class="kw">let </span>fm_pay_stats = stats_for(fm_internal_pay);
 
             <span class="macro">println!</span>(<span class="string">"### LATENCY FM PAY: {fm_pay_stats}"</span>);
-            <span class="macro">assert!</span>(fm_pay_stats.median &lt; Duration::from_secs(<span class="number">15</span>));
-            <span class="macro">assert!</span>(fm_pay_stats.p90 &lt; fm_pay_stats.median * p90_median_factor);
-            <span class="macro">assert!</span>(
-                fm_pay_stats.max.as_secs_f64() &lt; fm_pay_stats.p90.as_secs_f64() * max_p90_factor
-            );
+
+            <span class="kw">if </span>assert_thresholds {
+                <span class="macro">assert!</span>(fm_pay_stats.median &lt; Duration::from_secs(<span class="number">15</span>));
+                <span class="macro">assert!</span>(fm_pay_stats.p90 &lt; fm_pay_stats.median * p90_median_factor);
+                <span class="macro">assert!</span>(
+                    fm_pay_stats.max.as_secs_f64()
+                        &lt; fm_pay_stats.p90.as_secs_f64() * max_p90_factor
+                );
+            }
         }
         LatencyTest::Restore =&gt; {
             <span class="macro">info!</span>(<span class="string">"Testing latency of restore"</span>);
@@ -2753,10 +2829,13 @@
             <span class="kw">let </span>restore_time = start_time.elapsed();
 
             <span class="macro">println!</span>(<span class="string">"### LATENCY RESTORE: {restore_time:?}"</span>);
-            <span class="kw">if </span><span class="kw">crate</span>::util::is_backwards_compatibility_test() {
-                <span class="macro">assert!</span>(restore_time &lt; Duration::from_secs(<span class="number">160</span>));
-            } <span class="kw">else </span>{
-                <span class="macro">assert!</span>(restore_time &lt; Duration::from_secs(<span class="number">15</span>));
+
+            <span class="kw">if </span>assert_thresholds {
+                <span class="kw">if </span><span class="kw">crate</span>::util::is_backwards_compatibility_test() {
+                    <span class="macro">assert!</span>(restore_time &lt; Duration::from_secs(<span class="number">160</span>));
+                } <span class="kw">else </span>{
+                    <span class="macro">assert!</span>(restore_time &lt; Duration::from_secs(<span class="number">15</span>));
+                }
             }
         }
     }
@@ -2775,18 +2854,63 @@
 <span class="kw">async fn </span>stress_test_fed(dev_fed: <span class="kw-2">&amp;</span>DevFed, clients: <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>UpgradeClients&gt;) -&gt; anyhow::Result&lt;()&gt; {
     <span class="kw">use </span>futures::FutureExt;
 
+    <span class="comment">// local environments can fail due to latency thresholds, however this shouldn't
+    // cause the upgrade test to fail
+    </span><span class="kw">let </span>assert_thresholds = <span class="bool-val">false</span>;
+
     <span class="comment">// skip restore test for client upgrades, since restoring a client doesn't
     // require a persistent data dir
     </span><span class="kw">let </span>restore_test = <span class="kw">if </span>clients.is_some() {
         futures::future::ok(()).right_future()
     } <span class="kw">else </span>{
-        latency_tests(dev_fed.clone(), LatencyTest::Restore, clients, <span class="number">20</span>).left_future()
+        latency_tests(
+            dev_fed.clone(),
+            LatencyTest::Restore,
+            clients,
+            <span class="number">20</span>,
+            assert_thresholds,
+        )
+        .left_future()
     };
 
-    latency_tests(dev_fed.clone(), LatencyTest::Reissue, clients, <span class="number">20</span>).<span class="kw">await</span><span class="question-mark">?</span>;
-    latency_tests(dev_fed.clone(), LatencyTest::LnSend, clients, <span class="number">20</span>).<span class="kw">await</span><span class="question-mark">?</span>;
-    latency_tests(dev_fed.clone(), LatencyTest::LnReceive, clients, <span class="number">20</span>).<span class="kw">await</span><span class="question-mark">?</span>;
-    latency_tests(dev_fed.clone(), LatencyTest::FmPay, clients, <span class="number">20</span>).<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="comment">// tests are run in sequence so parallelism is controlled using gnu `parallel`
+    // in `upgrade-test.sh`
+    </span>latency_tests(
+        dev_fed.clone(),
+        LatencyTest::Reissue,
+        clients,
+        <span class="number">20</span>,
+        assert_thresholds,
+    )
+    .<span class="kw">await</span><span class="question-mark">?</span>;
+
+    latency_tests(
+        dev_fed.clone(),
+        LatencyTest::LnSend,
+        clients,
+        <span class="number">20</span>,
+        assert_thresholds,
+    )
+    .<span class="kw">await</span><span class="question-mark">?</span>;
+
+    latency_tests(
+        dev_fed.clone(),
+        LatencyTest::LnReceive,
+        clients,
+        <span class="number">20</span>,
+        assert_thresholds,
+    )
+    .<span class="kw">await</span><span class="question-mark">?</span>;
+
+    latency_tests(
+        dev_fed.clone(),
+        LatencyTest::FmPay,
+        clients,
+        <span class="number">20</span>,
+        assert_thresholds,
+    )
+    .<span class="kw">await</span><span class="question-mark">?</span>;
+
     restore_test.<span class="kw">await</span><span class="question-mark">?</span>;
 
     <span class="prelude-val">Ok</span>(())
@@ -4785,7 +4909,7 @@
         TestCmd::LatencyTests { r#type, iterations } =&gt; {
             <span class="kw">let </span>(process_mgr, <span class="kw">_</span>) = setup(common_args).<span class="kw">await</span><span class="question-mark">?</span>;
             <span class="kw">let </span>dev_fed = dev_fed(<span class="kw-2">&amp;</span>process_mgr).<span class="kw">await</span><span class="question-mark">?</span>;
-            latency_tests(dev_fed, r#type, <span class="prelude-val">None</span>, iterations).<span class="kw">await</span><span class="question-mark">?</span>;
+            latency_tests(dev_fed, r#type, <span class="prelude-val">None</span>, iterations, <span class="bool-val">true</span>).<span class="kw">await</span><span class="question-mark">?</span>;
         }
         TestCmd::ReconnectTest =&gt; {
             <span class="kw">let </span>(process_mgr, <span class="kw">_</span>) = setup(common_args).<span class="kw">await</span><span class="question-mark">?</span>;
