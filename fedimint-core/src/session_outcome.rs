@@ -15,11 +15,16 @@ pub struct AcceptedItem {
     pub peer: PeerId,
 }
 
-/// All items ordered in a session that have been accepted by Fedimint Consensus
-/// are recorded in the corresponding block. A running Federation produces a
-/// [SessionOutcome] roughly every five minutes.  Therefore, just like in
-/// Bitcoin, a [SessionOutcome] might be empty if no items are ordered in that
-/// time or all ordered items are discarded by Fedimint Consensus.
+/// Items ordered in a single session that have been accepted by Fedimint
+/// consensus.
+///
+/// A running Federation produces a [`SessionOutcome`] every couple of minutes.
+/// Therefore, just like in Bitcoin, a [`SessionOutcome`] might be empty if no
+/// items are ordered in that time or all ordered items are discarded by
+/// Fedimint Consensus.
+///
+/// When session is closed it is signed over by the peers and produces a
+/// [`SignedSessionOutcome`].
 #[derive(Clone, Debug, PartialEq, Eq, Encodable, Decodable)]
 pub struct SessionOutcome {
     pub items: Vec<AcceptedItem>,
@@ -28,7 +33,7 @@ pub struct SessionOutcome {
 impl SessionOutcome {
     /// A blocks header consists of 40 bytes formed by its index in big endian
     /// bytes concatenated with the merkle root build from the consensus
-    /// hashes of its [AcceptedItem]s or 32 zero bytes if the block is
+    /// hashes of its [`AcceptedItem`]s or 32 zero bytes if the block is
     /// empty. The use of a merkle tree allows for efficient inclusion
     /// proofs of accepted consensus items for clients.
     pub fn header(&self, index: u64) -> [u8; 40] {
@@ -52,6 +57,8 @@ impl SessionOutcome {
 #[derive(Clone, Debug, Encodable, Decodable, Encode, Decode, PartialEq, Eq, Hash)]
 pub struct SchnorrSignature(pub [u8; 64]);
 
+/// A [`SessionOutcome`], signed by the Federation.
+///
 /// A signed block combines a block with the naive threshold secp schnorr
 /// signature for its header created by the federation. The signed blocks allow
 /// clients and recovering guardians to verify the federations consensus
