@@ -20,7 +20,7 @@ bitcoin = { workspace = true }
 bitcoin_hashes = { workspace = true }
 fedimint-client = { workspace = true }
 fedimint-core = { workspace = true }
-fedimint-ln-common ={ path = "../fedimint-ln-common" }
+fedimint-ln-common = { path = "../fedimint-ln-common", version = "=0.4.0-alpha" }
 # crypto deps
 group = { workspace = true }
 secp256k1 = { version = "0.27.0", default-features = false }
