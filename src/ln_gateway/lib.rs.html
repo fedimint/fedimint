@@ -1825,7 +1825,6 @@
 <a href="#1825" id="1825">1825</a>
 <a href="#1826" id="1826">1826</a>
 <a href="#1827" id="1827">1827</a>
-<a href="#1828" id="1828">1828</a>
 </pre></div><pre class="rust"><code><span class="attr">#![warn(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::cast_possible_wrap)]
@@ -1876,8 +1875,8 @@
 <span class="kw">use </span>clap::Parser;
 <span class="kw">use </span>client::GatewayClientBuilder;
 <span class="kw">use </span>db::{
-    DbKeyPrefix, FederationIdKey, GatewayConfiguration, GatewayConfigurationKey, GatewayPublicKey,
-    GATEWAYD_DATABASE_VERSION,
+    DbKeyPrefix, FederationIdKey, GatewayConfiguration, GatewayConfigurationKey, GatewayDbtxNcExt,
+    GatewayPublicKey, GATEWAYD_DATABASE_VERSION,
 };
 <span class="kw">use </span>federation_manager::FederationManager;
 <span class="kw">use </span>fedimint_api_client::api::FederationError;
@@ -2918,8 +2917,11 @@
             .<span class="kw">await</span>,
         );
 
-        <span class="kw">let </span>dbtx = <span class="self">self</span>.gateway_db.begin_transaction().<span class="kw">await</span>;
-        GatewayClientBuilder::save_config(gw_client_cfg, dbtx).<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.gateway_db.begin_transaction().<span class="kw">await</span>;
+        dbtx.save_federation_config(gw_client_cfg).<span class="kw">await</span>;
+        dbtx.commit_tx_result()
+            .<span class="kw">await
+            </span>.map_err(GatewayError::DatabaseError)<span class="question-mark">?</span>;
         <span class="macro">debug!</span>(<span class="string">"Federation with ID: {federation_id} connected and assigned channel id: {mint_channel_id}"</span>);
 
         <span class="prelude-val">Ok</span>(federation_info)
@@ -3068,12 +3070,8 @@
         <span class="comment">// If 'num_route_hints' is provided, all federations must be re-registered.
         // Otherwise, only those affected by the new fees need to be re-registered.
         </span><span class="kw">if </span>num_route_hints.is_some() {
-            <span class="kw">let </span>all_federations_configs: Vec&lt;<span class="kw">_</span>&gt; = dbtx
-                .find_by_prefix(<span class="kw-2">&amp;</span>FederationIdKeyPrefix)
-                .<span class="kw">await
-                </span>.map(|(key, config)| (key.id, config))
-                .collect()
-                .<span class="kw">await</span>;
+            <span class="kw">let </span>all_federations_configs: Vec&lt;<span class="kw">_</span>&gt; =
+                dbtx.load_federation_configs().<span class="kw">await</span>.into_iter().collect();
             <span class="self">self</span>.register_federations(<span class="kw-2">&amp;</span>new_gateway_config, <span class="kw-2">&amp;</span>all_federations_configs)
                 .<span class="kw">await</span><span class="question-mark">?</span>;
         } <span class="kw">else </span>{
@@ -3243,12 +3241,12 @@
     /// database and reconstructs the clients necessary for interacting with
     /// connection federations.
     </span><span class="kw">async fn </span>load_clients(<span class="kw-2">&amp;</span><span class="self">self</span>) {
-        <span class="kw">let </span>dbtx = <span class="self">self</span>.gateway_db.begin_transaction_nc().<span class="kw">await</span>;
-        <span class="kw">let </span>configs = GatewayClientBuilder::load_configs(dbtx).<span class="kw">await</span>;
+        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.gateway_db.begin_transaction_nc().<span class="kw">await</span>;
+        <span class="kw">let </span>configs = dbtx.load_federation_configs().<span class="kw">await</span>;
 
         <span class="kw">let </span>_join_federation = <span class="self">self</span>.client_joining_lock.lock().<span class="kw">await</span>;
 
-        <span class="kw">for </span>config <span class="kw">in </span>configs.clone() {
+        <span class="kw">for </span>(<span class="kw">_</span>, config) <span class="kw">in </span>configs.clone() {
             <span class="kw">let </span>federation_id = config.invite_code.federation_id();
             <span class="kw">let </span>scid = config.mint_channel_id;
 
@@ -3267,7 +3265,7 @@
             }
         }
 
-        <span class="kw">if let </span><span class="prelude-val">Some</span>(max_mint_channel_id) = configs.iter().map(|cfg| cfg.mint_channel_id).max() {
+        <span class="kw">if let </span><span class="prelude-val">Some</span>(max_mint_channel_id) = configs.values().map(|cfg| cfg.mint_channel_id).max() {
             <span class="self">self</span>.federation_manager
                 .read()
                 .<span class="kw">await
@@ -3290,7 +3288,7 @@
                     <span class="kw">let </span>gateway_state = gateway.get_state().<span class="kw">await</span>;
                     <span class="kw">if let </span>GatewayState::Running { .. } = <span class="kw-2">&amp;</span>gateway_state {
                         <span class="kw">let </span><span class="kw-2">mut </span>dbtx = gateway.gateway_db.begin_transaction_nc().<span class="kw">await</span>;
-                        <span class="kw">let </span>all_federations_configs: Vec&lt;<span class="kw">_</span>&gt; = dbtx.find_by_prefix(<span class="kw-2">&amp;</span>FederationIdKeyPrefix).<span class="kw">await</span>.map(|(key, config)| (key.id, config)).collect().<span class="kw">await</span>;
+                        <span class="kw">let </span>all_federations_configs: Vec&lt;<span class="kw">_</span>&gt; = dbtx.load_federation_configs().<span class="kw">await</span>.into_iter().collect();
                         <span class="kw">let </span>result = gateway.register_federations(<span class="kw-2">&amp;</span>gateway_config, <span class="kw-2">&amp;</span>all_federations_configs).<span class="kw">await</span>;
                         registration_result = <span class="prelude-val">Some</span>(result);
                     } <span class="kw">else </span>{

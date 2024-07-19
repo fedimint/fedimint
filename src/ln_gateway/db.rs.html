@@ -310,6 +310,33 @@
 <a href="#310" id="310">310</a>
 <a href="#311" id="311">311</a>
 <a href="#312" id="312">312</a>
+<a href="#313" id="313">313</a>
+<a href="#314" id="314">314</a>
+<a href="#315" id="315">315</a>
+<a href="#316" id="316">316</a>
+<a href="#317" id="317">317</a>
+<a href="#318" id="318">318</a>
+<a href="#319" id="319">319</a>
+<a href="#320" id="320">320</a>
+<a href="#321" id="321">321</a>
+<a href="#322" id="322">322</a>
+<a href="#323" id="323">323</a>
+<a href="#324" id="324">324</a>
+<a href="#325" id="325">325</a>
+<a href="#326" id="326">326</a>
+<a href="#327" id="327">327</a>
+<a href="#328" id="328">328</a>
+<a href="#329" id="329">329</a>
+<a href="#330" id="330">330</a>
+<a href="#331" id="331">331</a>
+<a href="#332" id="332">332</a>
+<a href="#333" id="333">333</a>
+<a href="#334" id="334">334</a>
+<a href="#335" id="335">335</a>
+<a href="#336" id="336">336</a>
+<a href="#337" id="337">337</a>
+<a href="#338" id="338">338</a>
+<a href="#339" id="339">339</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 
 <span class="kw">use </span>bitcoin::Network;
@@ -323,7 +350,7 @@
 <span class="kw">use </span>fedimint_core::{impl_db_lookup, impl_db_record, secp256k1};
 <span class="kw">use </span>fedimint_ln_common::serde_routing_fees;
 <span class="kw">use </span>fedimint_lnv2_common::contracts::IncomingContract;
-<span class="kw">use </span>futures::FutureExt;
+<span class="kw">use </span>futures::{FutureExt, StreamExt};
 <span class="kw">use </span>lightning_invoice::RoutingFees;
 <span class="kw">use </span>rand::Rng;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
@@ -332,6 +359,33 @@
 <span class="kw">use </span><span class="kw">crate</span>::rpc::rpc_server::hash_password;
 
 <span class="kw">pub const </span>GATEWAYD_DATABASE_VERSION: DatabaseVersion = DatabaseVersion(<span class="number">1</span>);
+
+<span class="kw">pub trait </span>GatewayDbtxNcExt {
+    <span class="kw">async fn </span>save_federation_config(<span class="kw-2">&amp;mut </span><span class="self">self</span>, config: FederationConfig);
+    <span class="kw">async fn </span>load_federation_configs(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; BTreeMap&lt;FederationId, FederationConfig&gt;;
+    <span class="kw">async fn </span>load_gateway_keypair(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; secp256k1::KeyPair;
+}
+
+<span class="kw">impl</span>&lt;Cap: Send&gt; GatewayDbtxNcExt <span class="kw">for </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>, Cap&gt; {
+    <span class="kw">async fn </span>save_federation_config(<span class="kw-2">&amp;mut </span><span class="self">self</span>, config: FederationConfig) {
+        <span class="kw">let </span>id = config.invite_code.federation_id();
+        <span class="self">self</span>.insert_entry(<span class="kw-2">&amp;</span>FederationIdKey { id }, <span class="kw-2">&amp;</span>config).<span class="kw">await</span>;
+    }
+
+    <span class="kw">async fn </span>load_federation_configs(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; BTreeMap&lt;FederationId, FederationConfig&gt; {
+        <span class="self">self</span>.find_by_prefix(<span class="kw-2">&amp;</span>FederationIdKeyPrefix)
+            .<span class="kw">await
+            </span>.map(|(key, config)| (key.id, config))
+            .collect::&lt;BTreeMap&lt;FederationId, FederationConfig&gt;&gt;()
+            .<span class="kw">await
+    </span>}
+
+    <span class="kw">async fn </span>load_gateway_keypair(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; secp256k1::KeyPair {
+        <span class="self">self</span>.get_value(<span class="kw-2">&amp;</span>GatewayPublicKey)
+            .<span class="kw">await
+            </span>.expect(<span class="string">"Gateway keypair does not exist"</span>)
+    }
+}
 
 <span class="attr">#[repr(u8)]
 #[derive(Clone, EnumIter, Debug)]
