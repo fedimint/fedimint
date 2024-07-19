@@ -8,7 +8,7 @@ use fedimint_core::config::{FederationId, JsonClientConfig};
 use fedimint_core::db::{DatabaseTransaction, IDatabaseTransactionOpsCoreTyped, NonCommittable};
 use fedimint_core::util::Spanned;
 
-use crate::db::{FederationIdKey, GatewayPublicKey};
+use crate::db::{FederationIdKey, GatewayDbtxNcExt};
 use crate::rpc::FederationInfo;
 use crate::state_machine::GatewayClientModule;
 use crate::{GatewayError, Result};
@@ -61,10 +61,7 @@ impl FederationManager {
     ) -> Result<FederationInfo> {
         let federation_info = self.federation_info(federation_id, dbtx).await?;
 
-        let gateway_keypair = dbtx
-            .get_value(&GatewayPublicKey)
-            .await
-            .expect("Gateway keypair does not exist");
+        let gateway_keypair = dbtx.load_gateway_keypair().await;
 
         self.unannounce_from_federation(federation_id, gateway_keypair)
             .await?;

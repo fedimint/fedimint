@@ -48,8 +48,8 @@ use bitcoin_hashes::sha256;
 use clap::Parser;
 use client::GatewayClientBuilder;
 use db::{
-    DbKeyPrefix, FederationIdKey, GatewayConfiguration, GatewayConfigurationKey, GatewayPublicKey,
-    GATEWAYD_DATABASE_VERSION,
+    DbKeyPrefix, FederationIdKey, GatewayConfiguration, GatewayConfigurationKey, GatewayDbtxNcExt,
+    GatewayPublicKey, GATEWAYD_DATABASE_VERSION,
 };
 use federation_manager::FederationManager;
 use fedimint_api_client::api::FederationError;
@@ -1090,8 +1090,11 @@ impl Gateway {
             .await,
         );
 
-        let dbtx = self.gateway_db.begin_transaction().await;
-        GatewayClientBuilder::save_config(gw_client_cfg, dbtx).await?;
+        let mut dbtx = self.gateway_db.begin_transaction().await;
+        dbtx.save_federation_config(gw_client_cfg).await;
+        dbtx.commit_tx_result()
+            .await
+            .map_err(GatewayError::DatabaseError)?;
         debug!("Federation with ID: {federation_id} connected and assigned channel id: {mint_channel_id}");
 
         Ok(federation_info)
@@ -1240,12 +1243,8 @@ impl Gateway {
         // If 'num_route_hints' is provided, all federations must be re-registered.
         // Otherwise, only those affected by the new fees need to be re-registered.
         if num_route_hints.is_some() {
-            let all_federations_configs: Vec<_> = dbtx
-                .find_by_prefix(&FederationIdKeyPrefix)
-                .await
-                .map(|(key, config)| (key.id, config))
-                .collect()
-                .await;
+            let all_federations_configs: Vec<_> =
+                dbtx.load_federation_configs().await.into_iter().collect();
             self.register_federations(&new_gateway_config, &all_federations_configs)
                 .await?;
         } else {
@@ -1415,12 +1414,12 @@ impl Gateway {
     /// database and reconstructs the clients necessary for interacting with
     /// connection federations.
     async fn load_clients(&self) {
-        let dbtx = self.gateway_db.begin_transaction_nc().await;
-        let configs = GatewayClientBuilder::load_configs(dbtx).await;
+        let mut dbtx = self.gateway_db.begin_transaction_nc().await;
+        let configs = dbtx.load_federation_configs().await;
 
         let _join_federation = self.client_joining_lock.lock().await;
 
-        for config in configs.clone() {
+        for (_, config) in configs.clone() {
             let federation_id = config.invite_code.federation_id();
             let scid = config.mint_channel_id;
 
@@ -1439,7 +1438,7 @@ impl Gateway {
             }
         }
 
-        if let Some(max_mint_channel_id) = configs.iter().map(|cfg| cfg.mint_channel_id).max() {
+        if let Some(max_mint_channel_id) = configs.values().map(|cfg| cfg.mint_channel_id).max() {
             self.federation_manager
                 .read()
                 .await
@@ -1462,7 +1461,7 @@ impl Gateway {
                     let gateway_state = gateway.get_state().await;
                     if let GatewayState::Running { .. } = &gateway_state {
                         let mut dbtx = gateway.gateway_db.begin_transaction_nc().await;
-                        let all_federations_configs: Vec<_> = dbtx.find_by_prefix(&FederationIdKeyPrefix).await.map(|(key, config)| (key.id, config)).collect().await;
+                        let all_federations_configs: Vec<_> = dbtx.load_federation_configs().await.into_iter().collect();
                         let result = gateway.register_federations(&gateway_config, &all_federations_configs).await;
                         registration_result = Some(result);
                     } else {

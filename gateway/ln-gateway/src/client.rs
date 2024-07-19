@@ -1,4 +1,3 @@
-use std::collections::BTreeMap;
 use std::fmt::Debug;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -7,15 +6,12 @@ use fedimint_client::module::init::ClientModuleInitRegistry;
 use fedimint_client::secret::{PlainRootSecretStrategy, RootSecretStrategy};
 use fedimint_client::Client;
 use fedimint_core::core::ModuleInstanceId;
-use fedimint_core::db::{
-    Committable, Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped,
-};
+use fedimint_core::db::Database;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
-use futures::StreamExt;
 use rand::thread_rng;
 use tracing::info;
 
-use crate::db::{FederationConfig, FederationIdKey, FederationIdKeyPrefix};
+use crate::db::FederationConfig;
 use crate::gateway_module_v2::GatewayClientInitV2;
 use crate::state_machine::GatewayClientInit;
 use crate::{Gateway, GatewayError, Result};
@@ -106,30 +102,5 @@ impl GatewayClientBuilder {
         }
         .map(Arc::new)
         .map_err(GatewayError::ClientStateMachineError)
-    }
-
-    // TODO(tvolk131): This code is purely database-related. Let's move it somewhere
-    // else.
-    pub async fn save_config(
-        config: FederationConfig,
-        mut dbtx: DatabaseTransaction<'_, Committable>,
-    ) -> Result<()> {
-        let id = config.invite_code.federation_id();
-        dbtx.insert_entry(&FederationIdKey { id }, &config).await;
-        dbtx.commit_tx_result()
-            .await
-            .map_err(GatewayError::DatabaseError)
-    }
-
-    // TODO(tvolk131): This code is purely database-related. Let's move it somewhere
-    // else.
-    pub async fn load_configs(mut dbtx: DatabaseTransaction<'_>) -> Vec<FederationConfig> {
-        dbtx.find_by_prefix(&FederationIdKeyPrefix)
-            .await
-            .collect::<BTreeMap<FederationIdKey, FederationConfig>>()
-            .await
-            .values()
-            .cloned()
-            .collect::<Vec<_>>()
     }
 }
