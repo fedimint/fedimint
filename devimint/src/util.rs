@@ -871,6 +871,35 @@ impl FedimintCli {
         Ok(serde_json::from_value(result)?)
     }
 
+    pub async fn shutdown(self, auth: &ApiAuth, our_id: u64, session_count: u64) -> Result<()> {
+        cmd!(
+            self,
+            "--password",
+            &auth.0,
+            "--our-id",
+            our_id,
+            "admin",
+            "shutdown",
+            session_count,
+        )
+        .run()
+        .await
+    }
+
+    pub async fn status(self, auth: &ApiAuth, our_id: u64) -> Result<()> {
+        cmd!(
+            self,
+            "--password",
+            &auth.0,
+            "--our-id",
+            our_id,
+            "admin",
+            "status",
+        )
+        .run()
+        .await
+    }
+
     pub async fn start_consensus(self, auth: &ApiAuth, endpoint: &str) -> Result<()> {
         cmd!(
             self,

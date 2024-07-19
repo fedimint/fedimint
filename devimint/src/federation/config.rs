@@ -18,12 +18,15 @@ use fedimint_wallet_server::WalletInit;
 use fedimintd::default_esplora_server;
 use fedimintd::envs::FM_DISABLE_META_MODULE_ENV;
 
+use crate::version_constants::VERSION_0_4_0_ALPHA;
+
 /// Duplicate default fedimint module setup
 pub fn attach_default_module_init_params(
     bitcoin_rpc: &BitcoinRpcConfig,
     module_init_params: &mut ServerModuleConfigGenParamsRegistry,
     network: Network,
     finality_delay: u32,
+    fedimintd_version: semver::Version,
 ) {
     module_init_params
         .attach_config_gen_params(
@@ -57,8 +60,10 @@ pub fn attach_default_module_init_params(
                     fee_consensus: Default::default(),
                 },
             },
-        )
-        .attach_config_gen_params(
+        );
+
+    if fedimintd_version >= *VERSION_0_4_0_ALPHA {
+        module_init_params.attach_config_gen_params(
             fedimint_lnv2_server::LightningInit::kind(),
             fedimint_lnv2_common::config::LightningGenParams {
                 local: fedimint_lnv2_common::config::LightningGenParamsLocal {
@@ -67,6 +72,7 @@ pub fn attach_default_module_init_params(
                 consensus: fedimint_lnv2_common::config::LightningGenParamsConsensus { network },
             },
         );
+    }
 
     if !is_env_var_set(FM_DISABLE_META_MODULE_ENV) {
         module_init_params.attach_config_gen_params(MetaInit::kind(), MetaGenParams::default());

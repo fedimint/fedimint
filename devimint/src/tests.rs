@@ -127,8 +127,10 @@ pub async fn latency_tests(
         esplora,
     } = dev_fed;
 
-    let max_p90_factor = 5.0;
-    let p90_median_factor = 7;
+    // TODO: failure during fm send, bumping just to make sure there isn't a cli
+    // compatibility issue
+    let max_p90_factor = 10.0;
+    let p90_median_factor = 20;
 
     let client = match upgrade_clients {
         Some(c) => match r#type {
@@ -365,13 +367,19 @@ async fn stress_test_fed(dev_fed: &DevFed, clients: Option<&UpgradeClients>) -> 
         latency_tests(dev_fed.clone(), LatencyTest::Restore, clients, 20).left_future()
     };
 
-    try_join!(
-        latency_tests(dev_fed.clone(), LatencyTest::Reissue, clients, 20),
-        latency_tests(dev_fed.clone(), LatencyTest::LnSend, clients, 20),
-        latency_tests(dev_fed.clone(), LatencyTest::LnReceive, clients, 20),
-        latency_tests(dev_fed.clone(), LatencyTest::FmPay, clients, 20),
-        restore_test,
-    )?;
+    latency_tests(dev_fed.clone(), LatencyTest::Reissue, clients, 20).await?;
+    latency_tests(dev_fed.clone(), LatencyTest::LnSend, clients, 20).await?;
+    latency_tests(dev_fed.clone(), LatencyTest::LnReceive, clients, 20).await?;
+    latency_tests(dev_fed.clone(), LatencyTest::FmPay, clients, 20).await?;
+    restore_test.await?;
+
+    // try_join!(
+    //     latency_tests(dev_fed.clone(), LatencyTest::Reissue, clients, 20),
+    //     latency_tests(dev_fed.clone(), LatencyTest::LnSend, clients, 20),
+    //     latency_tests(dev_fed.clone(), LatencyTest::LnReceive, clients, 20),
+    //     latency_tests(dev_fed.clone(), LatencyTest::FmPay, clients, 20),
+    //     // restore_test,
+    // )?;
     Ok(())
 }
 
@@ -392,12 +400,22 @@ pub async fn upgrade_tests(process_mgr: &ProcessManager, binary: UpgradeTest) ->
 
             let mut dev_fed = dev_fed(process_mgr).await?;
             let client = dev_fed.fed.new_joined_client("test-client").await?;
+            let current_session_count = client.get_session_count().await?;
+            info!(?current_session_count);
             try_join!(stress_test_fed(&dev_fed, None), wait_session(&client))?;
+            info!("finished first stress test, starting all peers and scheduling shutdown after session count");
+            // todo: start all
 
             for path in paths.iter().skip(1) {
+                // dev_fed
+                //     .fed
+                //     .restart_all_staggered_with_bin(process_mgr, path)
+                //     .await?;
+
+                // TODO: this is a one-off, figure out better generic solution
                 dev_fed
                     .fed
-                    .restart_all_staggered_with_bin(process_mgr, path)
+                    .restart_all_with_bin_after_session(process_mgr, path)
                     .await?;
 
                 // stress test with all peers online

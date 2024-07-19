@@ -41,7 +41,7 @@ use super::external::Bitcoind;
 use super::util::{cmd, parse_map, Command, ProcessHandle, ProcessManager};
 use super::vars::utf8;
 use crate::envs::{FM_CLIENT_DIR_ENV, FM_DATA_DIR_ENV};
-use crate::util::{poll, FedimintdCmd};
+use crate::util::{poll, poll_with_timeout, FedimintdCmd};
 use crate::version_constants::{VERSION_0_3_0, VERSION_0_3_0_ALPHA};
 use crate::{poll_eq, vars};
 
@@ -454,8 +454,29 @@ impl Federation {
     }
 
     pub async fn start_server(&mut self, process_mgr: &ProcessManager, peer: usize) -> Result<()> {
+        // TODO: if this works, worth creating a separate method that cleans up shutdown
+        // peers that we'd expect after a coordinate shutdown
         if self.members.contains_key(&peer) {
-            bail!("fedimintd-{peer} already running");
+            info!("members already contains key for peer {peer}");
+            info!("checking if peer is already running, if not starting new process and assigning to peer id");
+
+            // other approach
+            // logs show this shutdown, but the process handle is still some so need to do
+            // some type of healthcheck let member =
+            // self.members.get(&peer).expect(""); let process = member.process
+
+            if self
+                .members
+                .get(&peer)
+                .expect("do this better")
+                .process
+                .is_running()
+                .await
+            {
+                bail!("fedimintd-{peer} already running");
+            } else {
+                self.members.remove_entry(&peer);
+            }
         }
         self.members.insert(
             peer,
@@ -530,6 +551,141 @@ impl Federation {
         }
 
         std::env::set_var("FM_FEDIMINTD_BASE_EXECUTABLE", bin_path);
+
+        // staggered restart
+        for peer_id in 0..fed_size {
+            self.start_server(process_mgr, peer_id).await?;
+            if peer_id < fed_size - 1 {
+                fedimint_core::task::sleep_in_test(
+                    "waiting to restart remaining peers",
+                    Duration::from_secs(10),
+                )
+                .await;
+            }
+        }
+
+        self.await_all_peers().await?;
+
+        let fedimintd_version = crate::util::FedimintdCmd::version_or_default().await;
+        info!("upgraded fedimintd to version: {}", fedimintd_version);
+        Ok(())
+    }
+
+    // TODO: cleanup/unify with existing method
+    async fn wait_session_outcome(
+        &self,
+        client: &Client,
+        session_count: u64,
+    ) -> anyhow::Result<()> {
+        let start = Instant::now();
+        poll_with_timeout(
+            "Waiting for a new session",
+            Duration::from_secs(10 * 60),
+            || async {
+                info!("Awaiting session outcome {session_count}");
+                match cmd!(client, "dev", "api", "await_session_outcome", session_count)
+                    .run()
+                    .await
+                {
+                    Err(e) => Err(ControlFlow::Continue(e)),
+                    Ok(()) => Ok(()),
+                }
+            },
+        )
+        .await?;
+        let session_found_in = start.elapsed();
+        info!("session found in {session_found_in:?}");
+        Ok(())
+    }
+
+    pub async fn restart_all_with_bin_after_session(
+        &mut self,
+        process_mgr: &ProcessManager,
+        bin_path: &PathBuf,
+    ) -> Result<()> {
+        // removing here instead of in vars.rs since that breaks other tests
+        std::env::remove_var("FM_SKIP_REL_NOTES_ACK");
+        let fed_size = process_mgr.globals.FM_FED_SIZE;
+
+        // ensure all peers are online
+        self.start_all_servers(process_mgr).await?;
+
+        let client = self.client.get_try().await?;
+        let current_session = client.get_session_count().await?;
+        // this takes too long, only doing current session instead of adding 1
+        // necessary since we already call wait_session before calling this method, so
+        // it's now session 1 instead of session 0
+        let shutdown_after_session = current_session;
+
+        for peer_id in 0..self.num_members() {
+            let endpoint = &self
+                .vars
+                .get(&peer_id)
+                .expect("member exists and has vars")
+                .FM_API_URL;
+            // todo: how to do auth without hardcoding?
+            let auth = ApiAuth("pass".to_string());
+            crate::util::FedimintCli
+                .shutdown(&auth, peer_id.try_into()?, shutdown_after_session)
+                .await?;
+        }
+
+        // shouldn't need to do a staggered shutdown since we scheduled a shutdown
+        // staggered shutdown of peers
+        // while self.num_members() > 0 {
+        //     self.terminate_server(self.num_members() - 1).await?;
+        //     if self.num_members() > 0 {
+        //         fedimint_core::task::sleep_in_test(
+        //             "waiting to shutdown remaining peers",
+        //             Duration::from_secs(10),
+        //         )
+        //         .await;
+        //     }
+        // }
+
+        self.wait_session_outcome(client, shutdown_after_session)
+            .await?;
+
+        info!("done wating for shutdown session to complete");
+
+        info!("checking server status before waiting for shutdown to finish");
+        for peer_id in 0..self.num_members() {
+            let auth = ApiAuth("pass".to_string());
+            let status_res = crate::util::FedimintCli
+                .status(&auth, peer_id.try_into()?)
+                .await;
+            info!("peer_id: {:?}, status_res: {:?}", peer_id, status_res);
+        }
+
+        // not sure if we need this, but might as well sleep for > 60 seconds since it
+        // takes time for the shutdown to wrap up after scheduling
+        fedimint_core::task::sleep_in_test(
+            "waiting to start servers since shutdown takes time",
+            Duration::from_secs(100),
+        )
+        .await;
+
+        info!("checking server status after waiting for shutdown to finish");
+        for peer_id in 0..self.num_members() {
+            let auth = ApiAuth("pass".to_string());
+            let status_res = crate::util::FedimintCli
+                .status(&auth, peer_id.try_into()?)
+                .await;
+            info!("peer_id: {:?}, status_res: {:?}", peer_id, status_res);
+            match crate::util::FedimintCli
+                .status(&auth, peer_id.try_into()?)
+                .await
+            {
+                Ok(_) => bail!("coordinated shutdown failed to shutdown peer {peer_id}"),
+                // fedimintd shutdown, we need to cleanup the process handle
+                Err(_) => self.terminate_server(peer_id).await?,
+            }
+        }
+
+        // TODO: need to set ack env var, but still need to figure out how to verify
+        // servers shutdown before doing this
+        std::env::set_var("FM_FEDIMINTD_BASE_EXECUTABLE", bin_path);
+        std::env::set_var("FM_REL_NOTES_ACK", "0_4_xyz");
 
         // staggered restart
         for peer_id in 0..fed_size {
@@ -974,6 +1130,7 @@ pub async fn run_client_dkg(
     }
 
     for (peer_id, client) in &admin_clients {
+        // todo: decent reference for other admin auth command
         client.set_password(auth_for(peer_id)).await?;
     }
 
@@ -1106,11 +1263,13 @@ async fn set_config_gen_params(
     auth: ApiAuth,
     mut server_gen_params: ServerModuleConfigGenParamsRegistry,
 ) -> Result<()> {
+    let fedimintd_version = crate::util::FedimintdCmd::version_or_default().await;
     self::config::attach_default_module_init_params(
         &BitcoinRpcConfig::get_defaults_from_env_vars()?,
         &mut server_gen_params,
         Network::Regtest,
         10,
+        fedimintd_version,
     );
     // Since we are not actually calling `fedimintd` binary, parse and handle
     // `FM_EXTRA_META_DATA` like it would do.
@@ -1137,11 +1296,13 @@ async fn cli_set_config_gen_params(
     auth: &ApiAuth,
     mut server_gen_params: ServerModuleConfigGenParamsRegistry,
 ) -> Result<()> {
+    let fedimintd_version = crate::util::FedimintdCmd::version_or_default().await;
     self::config::attach_default_module_init_params(
         &BitcoinRpcConfig::get_defaults_from_env_vars()?,
         &mut server_gen_params,
         Network::Regtest,
         10,
+        fedimintd_version,
     );
     // Since we are not actually calling `fedimintd` binary, parse and handle
     // `FM_EXTRA_META_DATA` like it would do.

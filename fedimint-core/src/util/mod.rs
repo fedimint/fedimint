@@ -435,6 +435,19 @@ where
     }
 }
 
+pub fn write_log(message: &str) {
+    use std::fs::OpenOptions;
+
+    let path = format!("/home/nix/fedimint/debug.log");
+    let mut f = OpenOptions::new()
+        .append(true)
+        .create(true)
+        .open(path)
+        .unwrap();
+
+    f.write_all(format!("{message}\n").as_bytes()).unwrap();
+}
+
 #[cfg(test)]
 mod tests {
     use std::sync::atomic::{AtomicU8, Ordering};
