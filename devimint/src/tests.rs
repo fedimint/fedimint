@@ -105,6 +105,7 @@ pub async fn latency_tests(
     r#type: LatencyTest,
     upgrade_clients: Option<&UpgradeClients>,
     iterations: usize,
+    assert_thresholds: bool,
 ) -> Result<()> {
     log_binary_versions().await?;
 
@@ -168,12 +169,15 @@ pub async fn latency_tests(
             }
             let reissue_stats = stats_for(reissues);
             println!("### LATENCY REISSUE: {reissue_stats}");
-            assert!(reissue_stats.median < Duration::from_secs(10));
 
-            assert!(reissue_stats.p90 < reissue_stats.median * p90_median_factor);
-            assert!(
-                reissue_stats.max.as_secs_f64() < reissue_stats.p90.as_secs_f64() * max_p90_factor
-            );
+            if assert_thresholds {
+                assert!(reissue_stats.median < Duration::from_secs(10));
+                assert!(reissue_stats.p90 < reissue_stats.median * p90_median_factor);
+                assert!(
+                    reissue_stats.max.as_secs_f64()
+                        < reissue_stats.p90.as_secs_f64() * max_p90_factor
+                );
+            }
         }
         LatencyTest::LnSend => {
             info!("Testing latency of ln send");
@@ -187,12 +191,15 @@ pub async fn latency_tests(
             }
             let ln_sends_stats = stats_for(ln_sends);
             println!("### LATENCY LN SEND: {ln_sends_stats}");
-            assert!(ln_sends_stats.median < Duration::from_secs(10));
-            assert!(ln_sends_stats.p90 < ln_sends_stats.median * p90_median_factor);
-            assert!(
-                ln_sends_stats.max.as_secs_f64()
-                    < ln_sends_stats.p90.as_secs_f64() * max_p90_factor
-            );
+
+            if assert_thresholds {
+                assert!(ln_sends_stats.median < Duration::from_secs(10));
+                assert!(ln_sends_stats.p90 < ln_sends_stats.median * p90_median_factor);
+                assert!(
+                    ln_sends_stats.max.as_secs_f64()
+                        < ln_sends_stats.p90.as_secs_f64() * max_p90_factor
+                );
+            }
         }
         LatencyTest::LnReceive => {
             info!("Testing latency of ln receive");
@@ -218,12 +225,15 @@ pub async fn latency_tests(
             }
             let ln_receives_stats = stats_for(ln_receives);
             println!("### LATENCY LN RECV: {ln_receives_stats}");
-            assert!(ln_receives_stats.median < Duration::from_secs(10));
-            assert!(ln_receives_stats.p90 < ln_receives_stats.median * p90_median_factor);
-            assert!(
-                ln_receives_stats.max.as_secs_f64()
-                    < ln_receives_stats.p90.as_secs_f64() * max_p90_factor
-            );
+
+            if assert_thresholds {
+                assert!(ln_receives_stats.median < Duration::from_secs(10));
+                assert!(ln_receives_stats.p90 < ln_receives_stats.median * p90_median_factor);
+                assert!(
+                    ln_receives_stats.max.as_secs_f64()
+                        < ln_receives_stats.p90.as_secs_f64() * max_p90_factor
+                );
+            }
         }
         LatencyTest::FmPay => {
             info!("Testing latency of internal payments within a federation");
@@ -280,11 +290,15 @@ pub async fn latency_tests(
             let fm_pay_stats = stats_for(fm_internal_pay);
 
             println!("### LATENCY FM PAY: {fm_pay_stats}");
-            assert!(fm_pay_stats.median < Duration::from_secs(15));
-            assert!(fm_pay_stats.p90 < fm_pay_stats.median * p90_median_factor);
-            assert!(
-                fm_pay_stats.max.as_secs_f64() < fm_pay_stats.p90.as_secs_f64() * max_p90_factor
-            );
+
+            if assert_thresholds {
+                assert!(fm_pay_stats.median < Duration::from_secs(15));
+                assert!(fm_pay_stats.p90 < fm_pay_stats.median * p90_median_factor);
+                assert!(
+                    fm_pay_stats.max.as_secs_f64()
+                        < fm_pay_stats.p90.as_secs_f64() * max_p90_factor
+                );
+            }
         }
         LatencyTest::Restore => {
             info!("Testing latency of restore");
@@ -335,10 +349,13 @@ pub async fn latency_tests(
             let restore_time = start_time.elapsed();
 
             println!("### LATENCY RESTORE: {restore_time:?}");
-            if crate::util::is_backwards_compatibility_test() {
-                assert!(restore_time < Duration::from_secs(160));
-            } else {
-                assert!(restore_time < Duration::from_secs(15));
+
+            if assert_thresholds {
+                if crate::util::is_backwards_compatibility_test() {
+                    assert!(restore_time < Duration::from_secs(160));
+                } else {
+                    assert!(restore_time < Duration::from_secs(15));
+                }
             }
         }
     }
@@ -357,18 +374,63 @@ pub struct UpgradeClients {
 async fn stress_test_fed(dev_fed: &DevFed, clients: Option<&UpgradeClients>) -> anyhow::Result<()> {
     use futures::FutureExt;
 
+    // local environments can fail due to latency thresholds, however this shouldn't
+    // cause the upgrade test to fail
+    let assert_thresholds = false;
+
     // skip restore test for client upgrades, since restoring a client doesn't
     // require a persistent data dir
     let restore_test = if clients.is_some() {
         futures::future::ok(()).right_future()
     } else {
-        latency_tests(dev_fed.clone(), LatencyTest::Restore, clients, 20).left_future()
+        latency_tests(
+            dev_fed.clone(),
+            LatencyTest::Restore,
+            clients,
+            20,
+            assert_thresholds,
+        )
+        .left_future()
     };
 
-    latency_tests(dev_fed.clone(), LatencyTest::Reissue, clients, 20).await?;
-    latency_tests(dev_fed.clone(), LatencyTest::LnSend, clients, 20).await?;
-    latency_tests(dev_fed.clone(), LatencyTest::LnReceive, clients, 20).await?;
-    latency_tests(dev_fed.clone(), LatencyTest::FmPay, clients, 20).await?;
+    // tests are run in sequence so parallelism is controlled using gnu `parallel`
+    // in `upgrade-test.sh`
+    latency_tests(
+        dev_fed.clone(),
+        LatencyTest::Reissue,
+        clients,
+        20,
+        assert_thresholds,
+    )
+    .await?;
+
+    latency_tests(
+        dev_fed.clone(),
+        LatencyTest::LnSend,
+        clients,
+        20,
+        assert_thresholds,
+    )
+    .await?;
+
+    latency_tests(
+        dev_fed.clone(),
+        LatencyTest::LnReceive,
+        clients,
+        20,
+        assert_thresholds,
+    )
+    .await?;
+
+    latency_tests(
+        dev_fed.clone(),
+        LatencyTest::FmPay,
+        clients,
+        20,
+        assert_thresholds,
+    )
+    .await?;
+
     restore_test.await?;
 
     Ok(())
@@ -2367,7 +2429,7 @@ pub async fn handle_command(cmd: TestCmd, common_args: CommonArgs) -> Result<()>
         TestCmd::LatencyTests { r#type, iterations } => {
             let (process_mgr, _) = setup(common_args).await?;
             let dev_fed = dev_fed(&process_mgr).await?;
-            latency_tests(dev_fed, r#type, None, iterations).await?;
+            latency_tests(dev_fed, r#type, None, iterations, true).await?;
         }
         TestCmd::ReconnectTest => {
             let (process_mgr, _) = setup(common_args).await?;
