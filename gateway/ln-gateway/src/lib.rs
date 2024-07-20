@@ -777,7 +777,7 @@ impl Gateway {
         let GatewayState::Running { lightning_context } = self.get_state().await else {
             return Ok(GatewayInfo {
                 federations: vec![],
-                channels: None,
+                federation_fake_scids: None,
                 version_hash: fedimint_build_code_version_env!().to_string(),
                 lightning_pub_key: None,
                 lightning_alias: None,
@@ -820,7 +820,7 @@ impl Gateway {
 
         Ok(GatewayInfo {
             federations,
-            channels: Some(channels),
+            federation_fake_scids: Some(channels),
             version_hash: fedimint_build_code_version_env!().to_string(),
             lightning_pub_key: Some(lightning_context.lightning_public_key.to_string()),
             lightning_alias: Some(lightning_context.lightning_alias.clone()),
