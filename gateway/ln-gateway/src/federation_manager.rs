@@ -5,10 +5,10 @@ use std::sync::Arc;
 use bitcoin::secp256k1::KeyPair;
 use fedimint_client::ClientHandleArc;
 use fedimint_core::config::{FederationId, JsonClientConfig};
-use fedimint_core::db::{DatabaseTransaction, IDatabaseTransactionOpsCoreTyped, NonCommittable};
+use fedimint_core::db::{DatabaseTransaction, NonCommittable};
 use fedimint_core::util::Spanned;
 
-use crate::db::{FederationIdKey, GatewayDbtxNcExt};
+use crate::db::GatewayDbtxNcExt;
 use crate::rpc::FederationInfo;
 use crate::state_machine::GatewayClientModule;
 use crate::{GatewayError, Result};
@@ -61,7 +61,7 @@ impl FederationManager {
     ) -> Result<FederationInfo> {
         let federation_info = self.federation_info(federation_id, dbtx).await?;
 
-        let gateway_keypair = dbtx.load_gateway_keypair().await;
+        let gateway_keypair = dbtx.load_gateway_keypair_assert_exists().await;
 
         self.unannounce_from_federation(federation_id, gateway_keypair)
             .await?;
@@ -183,9 +183,8 @@ impl FederationManager {
                 let balance_msat = client.get_balance().await;
                 let config = client.config().await;
 
-                let federation_key = FederationIdKey { id: federation_id };
                 let routing_fees = dbtx
-                    .get_value(&federation_key)
+                    .load_federation_config(federation_id)
                     .await
                     .map(|config| config.fees.into());
 
@@ -211,9 +210,8 @@ impl FederationManager {
             let balance_msat = client.borrow().with(|client| client.get_balance()).await;
             let config = client.borrow().with(|client| client.config()).await;
 
-            let federation_key = FederationIdKey { id: *federation_id };
             let routing_fees = dbtx
-                .get_value(&federation_key)
+                .load_federation_config(*federation_id)
                 .await
                 .map(|config| config.fees.into());
 
