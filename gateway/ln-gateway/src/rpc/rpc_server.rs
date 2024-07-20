@@ -6,7 +6,6 @@ use axum::middleware::{self, Next};
 use axum::response::IntoResponse;
 use axum::routing::{get, post};
 use axum::{Extension, Json, Router};
-use axum_macros::debug_handler;
 use bitcoin_hashes::{sha256, Hash};
 use fedimint_core::config::FederationId;
 use fedimint_core::encoding::Encodable;
@@ -208,7 +207,6 @@ pub fn hash_password(plaintext_password: &str, salt: [u8; 16]) -> sha256::Hash {
 /// Display high-level information about the Gateway
 // FIXME: deprecated >= 0.3.0
 // This endpoint exists only to remain backwards-compatible with the original POST endpoint
-#[debug_handler]
 #[instrument(skip_all, err)]
 async fn handle_post_info(
     Extension(gateway): Extension<Arc<Gateway>>,
@@ -219,7 +217,6 @@ async fn handle_post_info(
 }
 
 /// Display high-level information about the Gateway
-#[debug_handler]
 #[instrument(skip_all, err)]
 async fn info(
     Extension(gateway): Extension<Arc<Gateway>>,
@@ -229,7 +226,6 @@ async fn info(
 }
 
 /// Display high-level information about the Gateway config
-#[debug_handler]
 #[instrument(skip_all, err, fields(?payload))]
 async fn configuration(
     Extension(gateway): Extension<Arc<Gateway>>,
@@ -242,7 +238,6 @@ async fn configuration(
 }
 
 /// Display gateway ecash note balance
-#[debug_handler]
 #[instrument(skip_all, err, fields(?payload))]
 async fn balance(
     Extension(gateway): Extension<Arc<Gateway>>,
@@ -253,7 +248,6 @@ async fn balance(
 }
 
 /// Generate deposit address
-#[debug_handler]
 #[instrument(skip_all, err, fields(?payload))]
 async fn address(
     Extension(gateway): Extension<Arc<Gateway>>,
@@ -264,7 +258,6 @@ async fn address(
 }
 
 /// Withdraw from a gateway federation.
-#[debug_handler]
 #[instrument(skip_all, err, fields(?payload))]
 async fn withdraw(
     Extension(gateway): Extension<Arc<Gateway>>,
