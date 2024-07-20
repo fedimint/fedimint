@@ -74,7 +74,10 @@ pub struct FederationInfo {
 pub struct GatewayInfo {
     pub version_hash: String,
     pub federations: Vec<FederationInfo>,
-    pub channels: Option<BTreeMap<u64, FederationId>>,
+    /// Mapping from short channel id to the federation id that it belongs to.
+    // TODO: Remove this alias once it no longer breaks backwards compatibility.
+    #[serde(alias = "channels")]
+    pub federation_fake_scids: Option<BTreeMap<u64, FederationId>>,
     pub lightning_pub_key: Option<String>,
     pub lightning_alias: Option<String>,
     #[serde(with = "serde_option_routing_fees")]
