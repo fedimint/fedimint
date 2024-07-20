@@ -120,7 +120,7 @@ futures-util = "0.3.30"
 lightning = "0.0.123"
 lightning-invoice = "0.31.0"
 once_cell = "1.19.0"
-thiserror = "1.0.62"
+thiserror = "1.0.63"
 tokio = { version = "1.38.1", features = ["sync", "io-util"] }
 url = "2.5.2"
 erased-serde = "0.4"
