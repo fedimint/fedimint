@@ -187,9 +187,7 @@ impl DatabaseDump {
     async fn serialize_gateway(&mut self) -> anyhow::Result<()> {
         let mut dbtx = self.read_only.begin_transaction_nc().await;
         let mut dbtx = dbtx.to_ref();
-        let gateway_serialized = Gateway::dump_database(&mut dbtx, self.prefixes.clone())
-            .await
-            .collect::<BTreeMap<String, _>>();
+        let gateway_serialized = Gateway::dump_database(&mut dbtx, self.prefixes.clone()).await;
         self.serialized
             .insert("gateway".to_string(), Box::new(gateway_serialized));
         Ok(())
