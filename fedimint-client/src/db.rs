@@ -432,7 +432,15 @@ pub async fn apply_migrations_core_client(
     target_version: DatabaseVersion,
     migrations: BTreeMap<DatabaseVersion, CoreMigrationFn>,
 ) -> Result<(), anyhow::Error> {
-    apply_migrations(db, kind, target_version, migrations, None).await
+    apply_migrations(
+        db,
+        kind,
+        target_version,
+        migrations,
+        None,
+        Some(DbKeyPrefix::UserData as u8),
+    )
+    .await
 }
 
 /// `apply_migrations_client` iterates from the on disk database version for the

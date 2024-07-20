@@ -324,6 +324,7 @@ where
         module.database_version(),
         module.get_database_migrations(),
         Some(TEST_MODULE_INSTANCE_ID),
+        None,
     )
     .await
     .context("Error applying migrations to temp database")?;
