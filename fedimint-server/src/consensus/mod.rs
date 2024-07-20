@@ -74,6 +74,7 @@ pub async fn run(
                     module_init.database_version(),
                     module_init.get_database_migrations(),
                     Some(*module_id),
+                    None,
                 )
                 .await?;
 
