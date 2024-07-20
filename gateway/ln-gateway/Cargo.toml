@@ -30,7 +30,6 @@ aquamarine = "0.5.0"
 async-stream = "0.3.5"
 async-trait = { workspace = true }
 axum = "0.7.5"
-axum-macros = "0.4.1"
 bitcoin = { workspace = true }
 bitcoin_hashes = { workspace = true }
 clap = { workspace = true }

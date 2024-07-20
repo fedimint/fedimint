@@ -1,4 +1,4 @@
-#![warn(clippy::pedantic)]
+#![deny(clippy::pedantic)]
 #![allow(clippy::default_trait_access)]
 #![allow(clippy::too_many_lines)]
 
