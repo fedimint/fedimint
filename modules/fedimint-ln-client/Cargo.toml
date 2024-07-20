@@ -39,7 +39,7 @@ fedimint-logging = { workspace = true }
 futures = { workspace = true }
 itertools = { workspace = true }
 lightning-invoice = { version = "0.31.0", features = [ "serde" ] }
-lnurl-rs = { version = "0.5.0", features = ["async"], default-features = false }
+lnurl-rs = { version = "0.6.0", features = ["async"], default-features = false }
 rand = { workspace = true }
 reqwest = { workspace = true }
 secp256k1 = { version = "0.27.0", default-features = false }

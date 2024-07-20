@@ -1229,9 +1229,9 @@ dependencies = [
 
 [[package]]
 name = "email_address"
-version = "0.2.4"
+version = "0.2.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e2153bd83ebc09db15bcbdc3e2194d901804952e3dc96967e1cd3b0c5c32d112"
+checksum = "c1019fa28f600f5b581b7a603d515c3f1635da041ca211b5055804788673abfe"
 dependencies = [
  "serde",
 ]
@@ -3770,14 +3770,14 @@ checksum = "01cda141df6706de531b6c46c3a33ecca755538219bd484262fa09410c13539c"
 
 [[package]]
 name = "lnurl-rs"
-version = "0.5.0"
+version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "043935963e3454227165b4daf62e8fdecd6273857e0e6fc00422aea4d9258673"
+checksum = "86f2347f6764fedbb74482d88f472dc3e2c7613304bfea31ce1b7ee8e1ebbf8c"
 dependencies = [
  "aes",
  "anyhow",
  "base64 0.22.1",
- "bech32 0.9.1",
+ "bech32 0.11.0",
  "bitcoin 0.30.2",
  "cbc",
  "email_address",
