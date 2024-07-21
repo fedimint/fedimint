@@ -55,21 +55,21 @@ const SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(10);
 
 #[derive(Parser)]
 #[command(version)]
-pub struct ServerOpts {
+struct ServerOpts {
     /// Path to folder containing federation config files
     #[arg(long = "data-dir", env = FM_DATA_DIR_ENV)]
-    pub data_dir: Option<PathBuf>,
+    data_dir: Option<PathBuf>,
     /// Password to encrypt sensitive config files
     // TODO: should probably never send password to the server directly, rather send the hash via
     // the API
     #[arg(long, env = FM_PASSWORD_ENV)]
-    pub password: Option<String>,
+    password: Option<String>,
     /// Enable tokio console logging
     #[arg(long, env = FM_TOKIO_CONSOLE_BIND_ENV)]
-    pub tokio_console_bind: Option<SocketAddr>,
+    tokio_console_bind: Option<SocketAddr>,
     /// Enable telemetry logging
     #[arg(long, default_value = "false")]
-    pub with_telemetry: bool,
+    with_telemetry: bool,
 
     /// Address we bind to for federation communication
     #[arg(long, env = FM_BIND_P2P_ENV, default_value = "127.0.0.1:8173")]
@@ -134,6 +134,13 @@ enum DevSubcommand {
     ListDbVersions,
 }
 
+/// Parse a key-value map from a string.
+///
+/// The string should be a comma-separated list of key-value pairs, where each
+/// pair is separated by an equals sign. For example, `key1=value1,key2=value2`.
+/// The keys and values are trimmed of whitespace, so
+/// `key1 = value1, key2 = value2` would be parsed the same as the previous
+/// example.
 fn parse_map(s: &str) -> anyhow::Result<BTreeMap<String, String>> {
     let mut map = BTreeMap::new();
 
@@ -143,19 +150,31 @@ fn parse_map(s: &str) -> anyhow::Result<BTreeMap<String, String>> {
 
     for pair in s.split(',') {
         let parts: Vec<&str> = pair.split('=').collect();
-        if parts.len() == 2 {
-            map.insert(parts[0].to_string(), parts[1].to_string());
-        } else {
-            return Err(format_err!("Invalid pair in map: {}", pair));
+
+        if parts.len() != 2 {
+            return Err(format_err!(
+                "Invalid key-value pair in map: '{}'. Expected format: 'key=value'.",
+                pair
+            ));
+        }
+
+        let key = parts[0].trim();
+        let value = parts[1].trim();
+
+        if let Some(previous_value) = map.insert(key.to_string(), value.to_string()) {
+            return Err(format_err!(
+                "Duplicate key in map: '{key}' (found values '{previous_value}' and '{value}')",
+            ));
         }
     }
+
     Ok(map)
 }
 
 /// `fedimintd` builder
 ///
 /// Fedimint supports third party modules. Right now (and for forseable feature)
-/// modules needs to be combined with rest of the code at the compilation time.
+/// modules needs to be combined with the rest of the code at compilation time.
 ///
 /// To make this easier, [`Fedimintd`] builder is exposed, allowing
 /// building `fedimintd` with custom set of modules.
@@ -192,18 +211,20 @@ pub struct Fedimintd {
 }
 
 impl Fedimintd {
-    /// Build a new `fedimintd`
+    /// Builds a new `fedimintd`
     ///
-    /// `code_version_hash` should be the git hash of the code, the
-    /// `fedimintd` binary is bing built from. This is used mostly for
-    /// information purposes (`fedimintd version-hash`). See
-    /// `fedimint-build` crate for easy way to obtain it.
+    /// # Arguments
     ///
-    /// `code_version_vendor_suffix` is an optional suffix that will be appended
-    /// to the internal fedimint release version, to distinguish binaries
-    /// built by different vendors, usually  with a different set of modules.
-    /// Currently DKG will enforce that the combined `code_version` is the same
-    /// between all peers.
+    /// * `code_version_hash` - The git hash of the code that the `fedimintd`
+    /// binary is being built from. This is used mostly for information
+    /// purposes (`fedimintd version-hash`). See `fedimint-build` crate for
+    /// easy way to obtain it.
+    ///
+    /// * `code_version_vendor_suffix` - An optional suffix that will be
+    /// appended to the internal fedimint release version, to distinguish
+    /// binaries built by different vendors, usually with a different set of
+    /// modules. Currently DKG will enforce that the combined `code_version`
+    /// is the same between all peers.
     pub fn new(
         code_version_hash: &str,
         code_version_vendor_suffix: Option<&str>,
@@ -486,7 +507,7 @@ fn check_release_notes_ack() -> anyhow::Result<()> {
     }
 
     eprintln!(
-        "This version of fedimintd has some criticallly important requirements you should be aware of."
+        "This version of fedimintd has some critically important requirements you should be aware of."
     );
     eprintln!("Not following them will likely result in a consensus failure or other problems.");
     eprintln!("To ensure you have read them, you must set specific environment variable to a specific value.");
