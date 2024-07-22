@@ -399,11 +399,10 @@ pub fn get_core_client_database_migrations() -> BTreeMap<DatabaseVersion, CoreMi
                 .collect::<Vec<_>>()
                 .await;
 
-            assert_eq!(config_v0.len(), 1);
-            let (id, config_v0) = config_v0
-                .into_iter()
-                .next()
-                .expect("We asserted that the database contains exactly one config");
+            assert!(config_v0.len() <= 1);
+            let Some((id, config_v0)) = config_v0.into_iter().next() else {
+                return Ok(());
+            };
 
             let global = GlobalClientConfig {
                 api_endpoints: config_v0.global.api_endpoints,
