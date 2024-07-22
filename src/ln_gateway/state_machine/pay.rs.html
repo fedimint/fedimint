@@ -910,8 +910,6 @@
 <a href="#910" id="910">910</a>
 <a href="#911" id="911">911</a>
 <a href="#912" id="912">912</a>
-<a href="#913" id="913">913</a>
-<a href="#914" id="914">914</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::fmt::Display;
 <span class="kw">use </span>std::sync::Arc;
 
@@ -921,7 +919,6 @@
 <span class="kw">use </span>fedimint_client::{ClientHandleArc, DynGlobalClientContext};
 <span class="kw">use </span>fedimint_core::config::FederationId;
 <span class="kw">use </span>fedimint_core::core::OperationId;
-<span class="kw">use </span>fedimint_core::db::IDatabaseTransactionOpsCoreTyped;
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::util::Spanned;
 <span class="kw">use </span>fedimint_core::{secp256k1, Amount, OutPoint, TransactionId};
@@ -938,7 +935,7 @@
 <span class="kw">use </span>tracing::{debug, error, info, warn, Instrument};
 
 <span class="kw">use super</span>::{GatewayClientContext, GatewayClientStateMachines, GatewayExtReceiveStates};
-<span class="kw">use </span><span class="kw">crate</span>::db::{FederationIdKey, PreimageAuthentication};
+<span class="kw">use </span><span class="kw">crate</span>::db::GatewayDbtxNcExt;
 <span class="kw">use </span><span class="kw">crate</span>::gateway_lnrpc::PayInvoiceResponse;
 <span class="kw">use </span><span class="kw">crate</span>::lightning::LightningRpcError;
 <span class="kw">use </span><span class="kw">crate</span>::state_machine::GatewayClientModule;
@@ -1069,6 +1066,8 @@
     </span>InvoiceAlreadyPaid,
     <span class="attr">#[error(<span class="string">"No federation configuration"</span>)]
     </span>InvalidFederationConfiguration,
+    <span class="attr">#[error(<span class="string">"Invalid invoice preimage"</span>)]
+    </span>InvalidInvoicePreimage,
 }
 
 <span class="attr">#[derive(
@@ -1254,7 +1253,7 @@
 
             <span class="kw">let </span><span class="kw-2">mut </span>gateway_dbtx = context.gateway.gateway_db.begin_transaction_nc().<span class="kw">await</span>;
             <span class="kw">let </span>config = gateway_dbtx
-                .get_value(<span class="kw-2">&amp;</span>FederationIdKey { id: federation_id })
+                .load_federation_config(federation_id)
                 .<span class="kw">await
                 </span>.ok_or(OutgoingPaymentError {
                     error_type: OutgoingPaymentErrorType::InvalidFederationConfiguration,
@@ -1445,13 +1444,10 @@
         contract: OutgoingContractAccount,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;(), OutgoingPaymentError&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>dbtx = context.gateway.gateway_db.begin_transaction().<span class="kw">await</span>;
-        <span class="kw">if let </span><span class="prelude-val">Some</span>(secret_hash) = dbtx
-            .get_value(<span class="kw-2">&amp;</span>PreimageAuthentication { payment_hash })
-            .<span class="kw">await
-        </span>{
+        <span class="kw">if let </span><span class="prelude-val">Some</span>(secret_hash) = dbtx.load_preimage_authentication(payment_hash).<span class="kw">await </span>{
             <span class="kw">if </span>secret_hash != preimage_auth {
                 <span class="kw">return </span><span class="prelude-val">Err</span>(OutgoingPaymentError {
-                    error_type: OutgoingPaymentErrorType::InvoiceAlreadyPaid,
+                    error_type: OutgoingPaymentErrorType::InvalidInvoicePreimage,
                     contract_id: contract.contract.contract_id(),
                     contract: <span class="prelude-val">Some</span>(contract),
                 });
@@ -1459,7 +1455,7 @@
         } <span class="kw">else </span>{
             <span class="comment">// Committing the `preimage_auth` to the database can fail if two users try to
             // pay the same invoice at the same time.
-            </span>dbtx.insert_new_entry(<span class="kw-2">&amp;</span>PreimageAuthentication { payment_hash }, <span class="kw-2">&amp;</span>preimage_auth)
+            </span>dbtx.save_new_preimage_authentication(payment_hash, preimage_auth)
                 .<span class="kw">await</span>;
             <span class="kw">return </span>dbtx
                 .commit_tx_result()

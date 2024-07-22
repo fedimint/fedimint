@@ -1762,69 +1762,6 @@
 <a href="#1762" id="1762">1762</a>
 <a href="#1763" id="1763">1763</a>
 <a href="#1764" id="1764">1764</a>
-<a href="#1765" id="1765">1765</a>
-<a href="#1766" id="1766">1766</a>
-<a href="#1767" id="1767">1767</a>
-<a href="#1768" id="1768">1768</a>
-<a href="#1769" id="1769">1769</a>
-<a href="#1770" id="1770">1770</a>
-<a href="#1771" id="1771">1771</a>
-<a href="#1772" id="1772">1772</a>
-<a href="#1773" id="1773">1773</a>
-<a href="#1774" id="1774">1774</a>
-<a href="#1775" id="1775">1775</a>
-<a href="#1776" id="1776">1776</a>
-<a href="#1777" id="1777">1777</a>
-<a href="#1778" id="1778">1778</a>
-<a href="#1779" id="1779">1779</a>
-<a href="#1780" id="1780">1780</a>
-<a href="#1781" id="1781">1781</a>
-<a href="#1782" id="1782">1782</a>
-<a href="#1783" id="1783">1783</a>
-<a href="#1784" id="1784">1784</a>
-<a href="#1785" id="1785">1785</a>
-<a href="#1786" id="1786">1786</a>
-<a href="#1787" id="1787">1787</a>
-<a href="#1788" id="1788">1788</a>
-<a href="#1789" id="1789">1789</a>
-<a href="#1790" id="1790">1790</a>
-<a href="#1791" id="1791">1791</a>
-<a href="#1792" id="1792">1792</a>
-<a href="#1793" id="1793">1793</a>
-<a href="#1794" id="1794">1794</a>
-<a href="#1795" id="1795">1795</a>
-<a href="#1796" id="1796">1796</a>
-<a href="#1797" id="1797">1797</a>
-<a href="#1798" id="1798">1798</a>
-<a href="#1799" id="1799">1799</a>
-<a href="#1800" id="1800">1800</a>
-<a href="#1801" id="1801">1801</a>
-<a href="#1802" id="1802">1802</a>
-<a href="#1803" id="1803">1803</a>
-<a href="#1804" id="1804">1804</a>
-<a href="#1805" id="1805">1805</a>
-<a href="#1806" id="1806">1806</a>
-<a href="#1807" id="1807">1807</a>
-<a href="#1808" id="1808">1808</a>
-<a href="#1809" id="1809">1809</a>
-<a href="#1810" id="1810">1810</a>
-<a href="#1811" id="1811">1811</a>
-<a href="#1812" id="1812">1812</a>
-<a href="#1813" id="1813">1813</a>
-<a href="#1814" id="1814">1814</a>
-<a href="#1815" id="1815">1815</a>
-<a href="#1816" id="1816">1816</a>
-<a href="#1817" id="1817">1817</a>
-<a href="#1818" id="1818">1818</a>
-<a href="#1819" id="1819">1819</a>
-<a href="#1820" id="1820">1820</a>
-<a href="#1821" id="1821">1821</a>
-<a href="#1822" id="1822">1822</a>
-<a href="#1823" id="1823">1823</a>
-<a href="#1824" id="1824">1824</a>
-<a href="#1825" id="1825">1825</a>
-<a href="#1826" id="1826">1826</a>
-<a href="#1827" id="1827">1827</a>
 </pre></div><pre class="rust"><code><span class="attr">#![warn(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::cast_possible_wrap)]
@@ -1867,6 +1804,7 @@
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
 
+<span class="kw">use </span>::lightning::ln::PaymentHash;
 <span class="kw">use </span>anyhow::{anyhow, bail};
 <span class="kw">use </span>axum::http::StatusCode;
 <span class="kw">use </span>axum::response::{IntoResponse, Response};
@@ -1875,8 +1813,7 @@
 <span class="kw">use </span>clap::Parser;
 <span class="kw">use </span>client::GatewayClientBuilder;
 <span class="kw">use </span>db::{
-    DbKeyPrefix, FederationIdKey, GatewayConfiguration, GatewayConfigurationKey, GatewayDbtxNcExt,
-    GatewayPublicKey, GATEWAYD_DATABASE_VERSION,
+    GatewayConfiguration, GatewayConfigurationKey, GatewayDbtxNcExt, GATEWAYD_DATABASE_VERSION,
 };
 <span class="kw">use </span>federation_manager::FederationManager;
 <span class="kw">use </span>fedimint_api_client::api::FederationError;
@@ -1887,21 +1824,17 @@
     ModuleInstanceId, ModuleKind, LEGACY_HARDCODED_INSTANCE_ID_MINT,
     LEGACY_HARDCODED_INSTANCE_ID_WALLET,
 };
-<span class="kw">use </span>fedimint_core::db::{
-    apply_migrations_server, Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped,
-};
+<span class="kw">use </span>fedimint_core::db::{apply_migrations_server, Database, DatabaseTransaction};
 <span class="kw">use </span>fedimint_core::endpoint_constants::REGISTER_GATEWAY_ENDPOINT;
 <span class="kw">use </span>fedimint_core::fmt_utils::OptStacktrace;
 <span class="kw">use </span>fedimint_core::invite_code::InviteCode;
 <span class="kw">use </span>fedimint_core::module::CommonModuleInit;
 <span class="kw">use </span>fedimint_core::secp256k1::schnorr::Signature;
-<span class="kw">use </span>fedimint_core::secp256k1::{KeyPair, PublicKey, Secp256k1};
+<span class="kw">use </span>fedimint_core::secp256k1::PublicKey;
 <span class="kw">use </span>fedimint_core::task::{sleep, TaskGroup, TaskHandle, TaskShutdownToken};
 <span class="kw">use </span>fedimint_core::time::duration_since_epoch;
 <span class="kw">use </span>fedimint_core::util::{SafeUrl, Spanned};
-<span class="kw">use </span>fedimint_core::{
-    fedimint_build_code_version_env, push_db_pair_items, Amount, BitcoinAmountOrAll, BitcoinHash,
-};
+<span class="kw">use </span>fedimint_core::{fedimint_build_code_version_env, Amount, BitcoinAmountOrAll, BitcoinHash};
 <span class="kw">use </span>fedimint_ln_client::pay::PayInvoicePayload;
 <span class="kw">use </span>fedimint_ln_common::config::{GatewayFee, LightningClientConfig};
 <span class="kw">use </span>fedimint_ln_common::contracts::Preimage;
@@ -1921,7 +1854,6 @@
 <span class="kw">use </span>hex::ToHex;
 <span class="kw">use </span>lightning::{ILnRpcClient, LightningBuilder, LightningMode, LightningRpcError};
 <span class="kw">use </span>lightning_invoice::{Bolt11Invoice, RoutingFees};
-<span class="kw">use </span>rand::rngs::OsRng;
 <span class="kw">use </span>rand::Rng;
 <span class="kw">use </span>rpc::{
     CloseChannelsWithPeerPayload, FederationInfo, GatewayFedConfig, GatewayInfo, LeaveFedPayload,
@@ -1929,15 +1861,11 @@
 };
 <span class="kw">use </span>state_machine::pay::OutgoingPaymentError;
 <span class="kw">use </span>state_machine::GatewayClientModule;
-<span class="kw">use </span>strum::IntoEnumIterator;
 <span class="kw">use </span>thiserror::Error;
 <span class="kw">use </span>tokio::sync::{Mutex, RwLock};
 <span class="kw">use </span>tracing::{debug, error, info, info_span, warn, Instrument};
 
-<span class="kw">use </span><span class="kw">crate</span>::db::{
-    get_gatewayd_database_migrations, FederationConfig, FederationIdKeyPrefix,
-    RegisteredIncomingContract, RegisteredIncomingContractKey,
-};
+<span class="kw">use </span><span class="kw">crate</span>::db::{get_gatewayd_database_migrations, FederationConfig};
 <span class="kw">use </span><span class="kw">crate</span>::gateway_lnrpc::create_invoice_request::Description;
 <span class="kw">use </span><span class="kw">crate</span>::gateway_lnrpc::intercept_htlc_response::Forward;
 <span class="kw">use </span><span class="kw">crate</span>::gateway_lnrpc::CreateInvoiceRequest;
@@ -2270,7 +2198,7 @@
             gateway_config: Arc::new(RwLock::new(gateway_config)),
             state: Arc::new(RwLock::new(gateway_state)),
             client_builder,
-            gateway_id: <span class="self">Self</span>::load_gateway_id(<span class="kw-2">&amp;</span>gateway_db).<span class="kw">await</span>,
+            gateway_id: <span class="self">Self</span>::load_or_create_gateway_id(<span class="kw-2">&amp;</span>gateway_db).<span class="kw">await</span>,
             gateway_db,
             client_joining_lock: Arc::new(Mutex::new(ClientsJoinLock)),
             versioned_api: gateway_parameters.versioned_api,
@@ -2279,18 +2207,11 @@
     }
 
     <span class="doccomment">/// Returns a `PublicKey` that uniquely identifies the Gateway.
-    </span><span class="kw">async fn </span>load_gateway_id(gateway_db: <span class="kw-2">&amp;</span>Database) -&gt; PublicKey {
+    </span><span class="kw">async fn </span>load_or_create_gateway_id(gateway_db: <span class="kw-2">&amp;</span>Database) -&gt; PublicKey {
         <span class="kw">let </span><span class="kw-2">mut </span>dbtx = gateway_db.begin_transaction().<span class="kw">await</span>;
-        <span class="kw">if let </span><span class="prelude-val">Some</span>(key_pair) = dbtx.get_value(<span class="kw-2">&amp;</span>GatewayPublicKey {}).<span class="kw">await </span>{
-            key_pair.public_key()
-        } <span class="kw">else </span>{
-            <span class="kw">let </span>context = Secp256k1::new();
-            <span class="kw">let </span>(secret, public) = context.generate_keypair(<span class="kw-2">&amp;mut </span>OsRng);
-            <span class="kw">let </span>key_pair = KeyPair::from_secret_key(<span class="kw-2">&amp;</span>context, <span class="kw-2">&amp;</span>secret);
-            dbtx.insert_new_entry(<span class="kw-2">&amp;</span>GatewayPublicKey, <span class="kw-2">&amp;</span>key_pair).<span class="kw">await</span>;
-            dbtx.commit_tx().<span class="kw">await</span>;
-            public
-        }
+        <span class="kw">let </span>keypair = dbtx.load_or_create_gateway_keypair().<span class="kw">await</span>;
+        dbtx.commit_tx().<span class="kw">await</span>;
+        keypair.public_key()
     }
 
     <span class="kw">pub fn </span>gateway_id(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; PublicKey {
@@ -2311,48 +2232,12 @@
 
     <span class="doccomment">/// Reads and serializes structures from the Gateway's database for the
     /// purpose for serializing to JSON for inspection.
-    </span><span class="kw">pub async fn </span>dump_database&lt;<span class="lifetime">'a</span>&gt;(
+    </span><span class="kw">pub async fn </span>dump_database(
         dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>&gt;,
         prefix_names: Vec&lt;String&gt;,
-    ) -&gt; Box&lt;<span class="kw">dyn </span>Iterator&lt;Item = (String, Box&lt;<span class="kw">dyn </span>erased_serde::Serialize + Send&gt;)&gt; + <span class="lifetime">'a</span>&gt; {
-        <span class="kw">let </span><span class="kw-2">mut </span>gateway_items: BTreeMap&lt;String, Box&lt;<span class="kw">dyn </span>erased_serde::Serialize + Send&gt;&gt; =
-            BTreeMap::new();
-        <span class="kw">let </span>filtered_prefixes = DbKeyPrefix::iter().filter(|f| {
-            prefix_names.is_empty() || prefix_names.contains(<span class="kw-2">&amp;</span>f.to_string().to_lowercase())
-        });
-
-        <span class="kw">for </span>table <span class="kw">in </span>filtered_prefixes {
-            <span class="kw">match </span>table {
-                DbKeyPrefix::FederationConfig =&gt; {
-                    <span class="macro">push_db_pair_items!</span>(
-                        dbtx,
-                        FederationIdKeyPrefix,
-                        FederationIdKey,
-                        FederationConfig,
-                        gateway_items,
-                        <span class="string">"Federation Config"
-                    </span>);
-                }
-                DbKeyPrefix::GatewayConfiguration =&gt; {
-                    <span class="kw">if let </span><span class="prelude-val">Some</span>(gateway_config) = dbtx.get_value(<span class="kw-2">&amp;</span>GatewayConfigurationKey).<span class="kw">await </span>{
-                        gateway_items.insert(
-                            <span class="string">"Gateway Configuration"</span>.to_string(),
-                            Box::new(gateway_config),
-                        );
-                    }
-                }
-                DbKeyPrefix::GatewayPublicKey =&gt; {
-                    <span class="kw">if let </span><span class="prelude-val">Some</span>(public_key) = dbtx.get_value(<span class="kw-2">&amp;</span>GatewayPublicKey).<span class="kw">await </span>{
-                        gateway_items
-                            .insert(<span class="string">"Gateway Public Key"</span>.to_string(), Box::new(public_key));
-                    }
-                }
-                <span class="kw">_ </span>=&gt; {}
-            }
-        }
-
-        Box::new(gateway_items.into_iter())
-    }
+    ) -&gt; BTreeMap&lt;String, Box&lt;<span class="kw">dyn </span>erased_serde::Serialize + Send&gt;&gt; {
+        dbtx.dump_database(prefix_names).<span class="kw">await
+    </span>}
 
     <span class="doccomment">/// Main entrypoint into the gateway that starts the client registration
     /// timer, loads the federation clients from the persisted config,
@@ -2918,7 +2803,7 @@
         );
 
         <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.gateway_db.begin_transaction().<span class="kw">await</span>;
-        dbtx.save_federation_config(gw_client_cfg).<span class="kw">await</span>;
+        dbtx.save_federation_config(<span class="kw-2">&amp;</span>gw_client_cfg).<span class="kw">await</span>;
         dbtx.commit_tx_result()
             .<span class="kw">await
             </span>.map_err(GatewayError::DatabaseError)<span class="question-mark">?</span>;
@@ -2945,10 +2830,7 @@
             </span>.leave_federation(payload.federation_id, <span class="kw-2">&amp;mut </span>dbtx.to_ref_nc())
             .<span class="kw">await</span><span class="question-mark">?</span>;
 
-        dbtx.remove_entry(<span class="kw-2">&amp;</span>FederationIdKey {
-            id: payload.federation_id,
-        })
-        .<span class="kw">await</span>;
+        dbtx.remove_federation_config(payload.federation_id).<span class="kw">await</span>;
         dbtx.commit_tx_result()
             .<span class="kw">await
             </span>.map_err(GatewayError::DatabaseError)<span class="question-mark">?</span>;
@@ -3050,16 +2932,16 @@
                 password_salt,
             }
         };
-        dbtx.insert_entry(<span class="kw-2">&amp;</span>GatewayConfigurationKey, <span class="kw-2">&amp;</span>new_gateway_config)
-            .<span class="kw">await</span>;
+        dbtx.set_gateway_config(<span class="kw-2">&amp;</span>new_gateway_config).<span class="kw">await</span>;
 
         <span class="kw">let </span><span class="kw-2">mut </span>register_federations: Vec&lt;(FederationId, FederationConfig)&gt; = Vec::new();
         <span class="kw">if let </span><span class="prelude-val">Some</span>(per_federation_routing_fees) = per_federation_routing_fees {
             <span class="kw">for </span>(federation_id, routing_fees) <span class="kw">in </span><span class="kw-2">&amp;</span>per_federation_routing_fees {
-                <span class="kw">let </span>federation_key = FederationIdKey { id: <span class="kw-2">*</span>federation_id };
-                <span class="kw">if let </span><span class="prelude-val">Some</span>(<span class="kw-2">mut </span>federation_config) = dbtx.get_value(<span class="kw-2">&amp;</span>federation_key).<span class="kw">await </span>{
+                <span class="kw">if let </span><span class="prelude-val">Some</span>(<span class="kw-2">mut </span>federation_config) =
+                    dbtx.load_federation_config(<span class="kw-2">*</span>federation_id).<span class="kw">await
+                </span>{
                     federation_config.fees = routing_fees.clone().into();
-                    dbtx.insert_entry(<span class="kw-2">&amp;</span>federation_key, <span class="kw-2">&amp;</span>federation_config).<span class="kw">await</span>;
+                    dbtx.save_federation_config(<span class="kw-2">&amp;</span>federation_config).<span class="kw">await</span>;
                     register_federations.push((<span class="kw-2">*</span>federation_id, federation_config));
                 } <span class="kw">else </span>{
                     <span class="macro">warn!</span>(<span class="string">"Given federation {federation_id} not found for updating routing fees"</span>);
@@ -3192,7 +3074,7 @@
         <span class="kw">let </span><span class="kw-2">mut </span>dbtx = gateway_db.begin_transaction_nc().<span class="kw">await</span>;
 
         <span class="comment">// Always use the gateway configuration from the database if it exists.
-        </span><span class="kw">if let </span><span class="prelude-val">Some</span>(gateway_config) = dbtx.get_value(<span class="kw-2">&amp;</span>GatewayConfigurationKey).<span class="kw">await </span>{
+        </span><span class="kw">if let </span><span class="prelude-val">Some</span>(gateway_config) = dbtx.load_gateway_config().<span class="kw">await </span>{
             <span class="kw">return </span><span class="prelude-val">Some</span>(gateway_config);
         }
 
@@ -3359,10 +3241,7 @@
     /// and requests to remove the registration record.
     </span><span class="kw">pub async fn </span>unannounce_from_all_federations(<span class="kw-2">&amp;</span><span class="self">self</span>) {
         <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.gateway_db.begin_transaction_nc().<span class="kw">await</span>;
-        <span class="kw">let </span>gateway_keypair = dbtx
-            .get_value(<span class="kw-2">&amp;</span>GatewayPublicKey)
-            .<span class="kw">await
-            </span>.expect(<span class="string">"Gateway keypair does not exist"</span>);
+        <span class="kw">let </span>gateway_keypair = dbtx.load_gateway_keypair_assert_exists().<span class="kw">await</span>;
 
         <span class="self">self</span>.federation_manager
             .read()
@@ -3484,15 +3363,10 @@
         <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.gateway_db.begin_transaction().<span class="kw">await</span>;
 
         <span class="kw">if </span>dbtx
-            .insert_entry(
-                <span class="kw-2">&amp;</span>RegisteredIncomingContractKey(
-                    payload.contract.commitment.payment_hash.to_byte_array(),
-                ),
-                <span class="kw-2">&amp;</span>RegisteredIncomingContract {
-                    federation_id: payload.federation_id,
-                    incoming_amount: payload.invoice_amount.msats,
-                    contract: payload.contract,
-                },
+            .save_registered_incoming_contract(
+                payload.federation_id,
+                payload.invoice_amount,
+                payload.contract,
             )
             .<span class="kw">await
             </span>.is_some()
@@ -3558,7 +3432,7 @@
             </span>.gateway_db
             .begin_transaction_nc()
             .<span class="kw">await
-            </span>.get_value(<span class="kw-2">&amp;</span>RegisteredIncomingContractKey(payment_hash))
+            </span>.load_registered_incoming_contract(PaymentHash(payment_hash))
             .<span class="kw">await
             </span>.ok_or(<span class="macro">anyhow!</span>(<span class="string">"No corresponding decryption contract available"</span>))<span class="question-mark">?</span>;
 

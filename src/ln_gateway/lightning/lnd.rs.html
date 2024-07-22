@@ -1341,6 +1341,7 @@
 <a href="#1341" id="1341">1341</a>
 <a href="#1342" id="1342">1342</a>
 <a href="#1343" id="1343">1343</a>
+<a href="#1344" id="1344">1344</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeSet;
 <span class="kw">use </span>std::fmt::{<span class="self">self</span>, Display};
 <span class="kw">use </span>std::str::FromStr;
@@ -1350,11 +1351,12 @@
 <span class="kw">use </span>anyhow::ensure;
 <span class="kw">use </span>async_trait::async_trait;
 <span class="kw">use </span>bitcoin_hashes::Hash;
-<span class="kw">use </span>fedimint_core::db::{Database, IDatabaseTransactionOpsCoreTyped};
+<span class="kw">use </span>fedimint_core::db::Database;
 <span class="kw">use </span>fedimint_core::task::{sleep, TaskGroup};
 <span class="kw">use </span>fedimint_core::{secp256k1, Amount};
 <span class="kw">use </span>fedimint_ln_common::PrunedInvoice;
 <span class="kw">use </span>hex::ToHex;
+<span class="kw">use </span>lightning::ln::PaymentHash;
 <span class="kw">use </span>secp256k1::PublicKey;
 <span class="kw">use </span>tokio::sync::{mpsc, RwLock};
 <span class="kw">use </span>tokio_stream::wrappers::ReceiverStream;
@@ -1382,7 +1384,7 @@
 <span class="kw">use </span>tracing::{debug, error, info, trace, warn};
 
 <span class="kw">use super</span>::{ChannelInfo, ILnRpcClient, LightningRpcError, RouteHtlcStream, MAX_LIGHTNING_RETRIES};
-<span class="kw">use </span><span class="kw">crate</span>::db::RegisteredIncomingContractKey;
+<span class="kw">use </span><span class="kw">crate</span>::db::GatewayDbtxNcExt;
 <span class="kw">use </span><span class="kw">crate</span>::gateway_lnrpc::create_invoice_request::Description;
 <span class="kw">use </span><span class="kw">crate</span>::gateway_lnrpc::get_route_hints_response::{RouteHint, RouteHintHop};
 <span class="kw">use </span><span class="kw">crate</span>::gateway_lnrpc::intercept_htlc_response::{Action, Cancel, Forward, Settle};
@@ -1632,7 +1634,7 @@
                     .gateway_db
                     .begin_transaction_nc()
                     .<span class="kw">await
-                    </span>.get_value(<span class="kw-2">&amp;</span>RegisteredIncomingContractKey(
+                    </span>.load_registered_incoming_contract(PaymentHash(
                         payment_hash
                             .clone()
                             .try_into()

@@ -274,8 +274,6 @@
 <a href="#274" id="274">274</a>
 <a href="#275" id="275">275</a>
 <a href="#276" id="276">276</a>
-<a href="#277" id="277">277</a>
-<a href="#278" id="278">278</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::sync::atomic::{AtomicU64, Ordering};
 <span class="kw">use </span>std::sync::Arc;
@@ -283,10 +281,10 @@
 <span class="kw">use </span>bitcoin::secp256k1::KeyPair;
 <span class="kw">use </span>fedimint_client::ClientHandleArc;
 <span class="kw">use </span>fedimint_core::config::{FederationId, JsonClientConfig};
-<span class="kw">use </span>fedimint_core::db::{DatabaseTransaction, IDatabaseTransactionOpsCoreTyped, NonCommittable};
+<span class="kw">use </span>fedimint_core::db::{DatabaseTransaction, NonCommittable};
 <span class="kw">use </span>fedimint_core::util::Spanned;
 
-<span class="kw">use </span><span class="kw">crate</span>::db::{FederationIdKey, GatewayDbtxNcExt};
+<span class="kw">use </span><span class="kw">crate</span>::db::GatewayDbtxNcExt;
 <span class="kw">use </span><span class="kw">crate</span>::rpc::FederationInfo;
 <span class="kw">use </span><span class="kw">crate</span>::state_machine::GatewayClientModule;
 <span class="kw">use crate</span>::{GatewayError, <span class="prelude-ty">Result</span>};
@@ -339,7 +337,7 @@
     ) -&gt; <span class="prelude-ty">Result</span>&lt;FederationInfo&gt; {
         <span class="kw">let </span>federation_info = <span class="self">self</span>.federation_info(federation_id, dbtx).<span class="kw">await</span><span class="question-mark">?</span>;
 
-        <span class="kw">let </span>gateway_keypair = dbtx.load_gateway_keypair().<span class="kw">await</span>;
+        <span class="kw">let </span>gateway_keypair = dbtx.load_gateway_keypair_assert_exists().<span class="kw">await</span>;
 
         <span class="self">self</span>.unannounce_from_federation(federation_id, gateway_keypair)
             .<span class="kw">await</span><span class="question-mark">?</span>;
@@ -461,9 +459,8 @@
                 <span class="kw">let </span>balance_msat = client.get_balance().<span class="kw">await</span>;
                 <span class="kw">let </span>config = client.config().<span class="kw">await</span>;
 
-                <span class="kw">let </span>federation_key = FederationIdKey { id: federation_id };
                 <span class="kw">let </span>routing_fees = dbtx
-                    .get_value(<span class="kw-2">&amp;</span>federation_key)
+                    .load_federation_config(federation_id)
                     .<span class="kw">await
                     </span>.map(|config| config.fees.into());
 
@@ -489,9 +486,8 @@
             <span class="kw">let </span>balance_msat = client.borrow().with(|client| client.get_balance()).<span class="kw">await</span>;
             <span class="kw">let </span>config = client.borrow().with(|client| client.config()).<span class="kw">await</span>;
 
-            <span class="kw">let </span>federation_key = FederationIdKey { id: <span class="kw-2">*</span>federation_id };
             <span class="kw">let </span>routing_fees = dbtx
-                .get_value(<span class="kw-2">&amp;</span>federation_key)
+                .load_federation_config(<span class="kw-2">*</span>federation_id)
                 .<span class="kw">await
                 </span>.map(|config| config.fees.into());
 
