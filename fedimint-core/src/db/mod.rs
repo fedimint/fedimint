@@ -1913,7 +1913,7 @@ pub async fn apply_migrations_server(
     target_db_version: DatabaseVersion,
     migrations: BTreeMap<DatabaseVersion, CoreMigrationFn>,
 ) -> Result<(), anyhow::Error> {
-    apply_migrations(db, kind, target_db_version, migrations, None).await
+    apply_migrations(db, kind, target_db_version, migrations, None, None).await
 }
 
 /// `apply_migrations` iterates from the on disk database version for the module
@@ -1930,11 +1930,26 @@ pub async fn apply_migrations(
     target_db_version: DatabaseVersion,
     migrations: BTreeMap<DatabaseVersion, CoreMigrationFn>,
     module_instance_id: Option<ModuleInstanceId>,
+    // When used in client side context, we can/should ignore keys that external app
+    // is allowed to use, and but since this function is shared, we make it optional argument
+    external_prefixes_above: Option<u8>,
 ) -> Result<(), anyhow::Error> {
     // Newly created databases will not have any data since they have just been
     // instantiated.
     let mut dbtx = db.begin_transaction_nc().await;
-    let is_new_db = dbtx.raw_find_by_prefix(&[]).await?.next().await.is_none();
+    let is_new_db = dbtx
+        .raw_find_by_prefix(&[])
+        .await?
+        .filter(|(key, _v)| {
+            std::future::ready(
+                external_prefixes_above.map_or(true, |external_prefixes_above| {
+                    !key.is_empty() && key[0] < external_prefixes_above
+                }),
+            )
+        })
+        .next()
+        .await
+        .is_none();
 
     // First write the database version to disk if it does not exist.
     create_database_version(
@@ -2796,6 +2811,7 @@ mod test_utils {
             "TestModule".to_string(),
             DatabaseVersion(1),
             migrations,
+            None,
             None,
         )
         .await
