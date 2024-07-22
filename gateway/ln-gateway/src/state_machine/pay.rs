@@ -7,7 +7,6 @@ use fedimint_client::transaction::{ClientInput, ClientOutput};
 use fedimint_client::{ClientHandleArc, DynGlobalClientContext};
 use fedimint_core::config::FederationId;
 use fedimint_core::core::OperationId;
-use fedimint_core::db::IDatabaseTransactionOpsCoreTyped;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::util::Spanned;
 use fedimint_core::{secp256k1, Amount, OutPoint, TransactionId};
@@ -24,7 +23,7 @@ use tokio_stream::StreamExt;
 use tracing::{debug, error, info, warn, Instrument};
 
 use super::{GatewayClientContext, GatewayClientStateMachines, GatewayExtReceiveStates};
-use crate::db::{FederationIdKey, PreimageAuthentication};
+use crate::db::GatewayDbtxNcExt;
 use crate::gateway_lnrpc::PayInvoiceResponse;
 use crate::lightning::LightningRpcError;
 use crate::state_machine::GatewayClientModule;
@@ -155,6 +154,8 @@ pub enum OutgoingPaymentErrorType {
     InvoiceAlreadyPaid,
     #[error("No federation configuration")]
     InvalidFederationConfiguration,
+    #[error("Invalid invoice preimage")]
+    InvalidInvoicePreimage,
 }
 
 #[derive(
@@ -340,7 +341,7 @@ impl GatewayPayInvoice {
 
             let mut gateway_dbtx = context.gateway.gateway_db.begin_transaction_nc().await;
             let config = gateway_dbtx
-                .get_value(&FederationIdKey { id: federation_id })
+                .load_federation_config(federation_id)
                 .await
                 .ok_or(OutgoingPaymentError {
                     error_type: OutgoingPaymentErrorType::InvalidFederationConfiguration,
@@ -531,13 +532,10 @@ impl GatewayPayInvoice {
         contract: OutgoingContractAccount,
     ) -> Result<(), OutgoingPaymentError> {
         let mut dbtx = context.gateway.gateway_db.begin_transaction().await;
-        if let Some(secret_hash) = dbtx
-            .get_value(&PreimageAuthentication { payment_hash })
-            .await
-        {
+        if let Some(secret_hash) = dbtx.load_preimage_authentication(payment_hash).await {
             if secret_hash != preimage_auth {
                 return Err(OutgoingPaymentError {
-                    error_type: OutgoingPaymentErrorType::InvoiceAlreadyPaid,
+                    error_type: OutgoingPaymentErrorType::InvalidInvoicePreimage,
                     contract_id: contract.contract.contract_id(),
                     contract: Some(contract),
                 });
@@ -545,7 +543,7 @@ impl GatewayPayInvoice {
         } else {
             // Committing the `preimage_auth` to the database can fail if two users try to
             // pay the same invoice at the same time.
-            dbtx.insert_new_entry(&PreimageAuthentication { payment_hash }, &preimage_auth)
+            dbtx.save_new_preimage_authentication(payment_hash, preimage_auth)
                 .await;
             return dbtx
                 .commit_tx_result()

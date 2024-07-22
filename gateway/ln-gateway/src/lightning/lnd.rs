@@ -7,11 +7,12 @@ use std::time::Duration;
 use anyhow::ensure;
 use async_trait::async_trait;
 use bitcoin_hashes::Hash;
-use fedimint_core::db::{Database, IDatabaseTransactionOpsCoreTyped};
+use fedimint_core::db::Database;
 use fedimint_core::task::{sleep, TaskGroup};
 use fedimint_core::{secp256k1, Amount};
 use fedimint_ln_common::PrunedInvoice;
 use hex::ToHex;
+use lightning::ln::PaymentHash;
 use secp256k1::PublicKey;
 use tokio::sync::{mpsc, RwLock};
 use tokio_stream::wrappers::ReceiverStream;
@@ -39,7 +40,7 @@ use tonic_lnd::{connect, Client as LndClient};
 use tracing::{debug, error, info, trace, warn};
 
 use super::{ChannelInfo, ILnRpcClient, LightningRpcError, RouteHtlcStream, MAX_LIGHTNING_RETRIES};
-use crate::db::RegisteredIncomingContractKey;
+use crate::db::GatewayDbtxNcExt;
 use crate::gateway_lnrpc::create_invoice_request::Description;
 use crate::gateway_lnrpc::get_route_hints_response::{RouteHint, RouteHintHop};
 use crate::gateway_lnrpc::intercept_htlc_response::{Action, Cancel, Forward, Settle};
@@ -289,7 +290,7 @@ impl GatewayLndClient {
                     .gateway_db
                     .begin_transaction_nc()
                     .await
-                    .get_value(&RegisteredIncomingContractKey(
+                    .load_registered_incoming_contract(PaymentHash(
                         payment_hash
                             .clone()
                             .try_into()
