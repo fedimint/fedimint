@@ -212,6 +212,8 @@ impl FederationTestBuilder {
 
         let task_group = TaskGroup::new();
         for (peer_id, config) in configs.clone() {
+            let p2p_bind_addr = params.get(&peer_id).expect("Must exist").local.p2p_bind;
+            let api_bind_addr = params.get(&peer_id).expect("Must exist").local.api_bind;
             if u16::from(peer_id) >= self.num_peers - self.num_offline {
                 continue;
             }
@@ -223,8 +225,10 @@ impl FederationTestBuilder {
             let subgroup = task_group.make_subgroup();
             let checkpoint_dir = tempfile::Builder::new().tempdir().unwrap().into_path();
 
-            task_group.spawn("fedimintd", |_| async move {
+            task_group.spawn("fedimintd", move |_| async move {
                 consensus::run(
+                    p2p_bind_addr,
+                    api_bind_addr,
                     config.clone(),
                     db.clone(),
                     module_init_registry,
