@@ -1238,9 +1238,9 @@ dependencies = [
 
 [[package]]
 name = "email_address"
-version = "0.2.4"
+version = "0.2.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e2153bd83ebc09db15bcbdc3e2194d901804952e3dc96967e1cd3b0c5c32d112"
+checksum = "c1019fa28f600f5b581b7a603d515c3f1635da041ca211b5055804788673abfe"
 dependencies = [
  "serde",
 ]
@@ -1471,7 +1471,7 @@ dependencies = [
  "itertools 0.12.1",
  "lightning-invoice",
  "rand",
- "reqwest 0.11.27",
+ "reqwest 0.12.5",
  "serde",
  "serde_json",
  "thiserror",
@@ -1500,7 +1500,7 @@ dependencies = [
  "futures",
  "itertools 0.12.1",
  "rand",
- "reqwest 0.12.2",
+ "reqwest 0.12.5",
  "ring",
  "secp256k1-zkp",
  "serde",
@@ -1768,7 +1768,7 @@ dependencies = [
  "fedimint-core",
  "fedimint-ln-gateway",
  "fedimint-logging",
- "reqwest 0.11.27",
+ "reqwest 0.12.5",
  "serde",
  "serde_json",
  "tokio",
@@ -1804,7 +1804,7 @@ dependencies = [
  "lightning-invoice",
  "lnurl-rs",
  "rand",
- "reqwest 0.11.27",
+ "reqwest 0.12.5",
  "secp256k1 0.27.0",
  "serde",
  "serde_json",
@@ -1881,7 +1881,7 @@ dependencies = [
  "lightning-invoice",
  "prost",
  "rand",
- "reqwest 0.11.27",
+ "reqwest 0.12.5",
  "secp256k1-zkp",
  "serde",
  "serde_json",
@@ -1972,7 +1972,7 @@ dependencies = [
  "itertools 0.12.1",
  "lightning-invoice",
  "rand",
- "reqwest 0.11.27",
+ "reqwest 0.12.5",
  "secp256k1 0.27.0",
  "serde",
  "serde_json",
@@ -3287,19 +3287,20 @@ dependencies = [
 
 [[package]]
 name = "hyper-rustls"
-version = "0.26.0"
+version = "0.27.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a0bea761b46ae2b24eb4aef630d8d1c398157b6fc29e6350ecf090a0b70c952c"
+checksum = "5ee4be2c948921a1a5320b629c4193916ed787a7f7f293fd3f7f5a6c9de74155"
 dependencies = [
  "futures-util",
  "http 1.1.0",
  "hyper 1.4.0",
  "hyper-util",
- "rustls 0.22.4",
+ "rustls 0.23.7",
  "rustls-pki-types",
  "tokio",
- "tokio-rustls 0.25.0",
+ "tokio-rustls 0.26.0",
  "tower-service",
+ "webpki-roots 0.26.3",
 ]
 
 [[package]]
@@ -3790,18 +3791,18 @@ checksum = "01cda141df6706de531b6c46c3a33ecca755538219bd484262fa09410c13539c"
 
 [[package]]
 name = "lnurl-rs"
-version = "0.4.1"
+version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "29742339d2d88bd3ea1f4305e11b22d3efada9f86010ccbd7b6646837cc57e85"
+checksum = "86f2347f6764fedbb74482d88f472dc3e2c7613304bfea31ce1b7ee8e1ebbf8c"
 dependencies = [
  "aes",
  "anyhow",
- "base64 0.13.1",
- "bech32 0.9.1",
+ "base64 0.22.1",
+ "bech32 0.11.0",
  "bitcoin 0.30.2",
  "cbc",
  "email_address",
- "reqwest 0.11.27",
+ "reqwest 0.12.5",
  "serde",
  "serde_json",
  "url",
@@ -4437,6 +4438,53 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "106dd99e98437432fed6519dedecfade6a06a73bb7b2a1e019fdd2bee5778d94"
 
 [[package]]
+name = "quinn"
+version = "0.11.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e4ceeeeabace7857413798eb1ffa1e9c905a9946a57d81fb69b4b71c4d8eb3ad"
+dependencies = [
+ "bytes",
+ "pin-project-lite",
+ "quinn-proto",
+ "quinn-udp",
+ "rustc-hash 1.1.0",
+ "rustls 0.23.7",
+ "thiserror",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
+name = "quinn-proto"
+version = "0.11.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ddf517c03a109db8100448a4be38d498df8a210a99fe0e1b9eaf39e78c640efe"
+dependencies = [
+ "bytes",
+ "rand",
+ "ring",
+ "rustc-hash 1.1.0",
+ "rustls 0.23.7",
+ "slab",
+ "thiserror",
+ "tinyvec",
+ "tracing",
+]
+
+[[package]]
+name = "quinn-udp"
+version = "0.5.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9096629c45860fc7fb143e125eb826b5e721e10be3263160c7d60ca832cf8c46"
+dependencies = [
+ "libc",
+ "once_cell",
+ "socket2",
+ "tracing",
+ "windows-sys 0.52.0",
+]
+
+[[package]]
 name = "quote"
 version = "1.0.36"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4626,16 +4674,16 @@ dependencies = [
  "wasm-bindgen-futures",
  "web-sys",
  "webpki-roots 0.25.4",
- "winreg",
+ "winreg 0.50.0",
 ]
 
 [[package]]
 name = "reqwest"
-version = "0.12.2"
+version = "0.12.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2d66674f2b6fb864665eea7a3c1ac4e3dfacd2fda83cf6f935a612e01b0e3338"
+checksum = "c7d6d2a27d57148378eb5e111173f4276ad26340ecc5c49a4a2152167a2d6a37"
 dependencies = [
- "base64 0.21.7",
+ "base64 0.22.1",
  "bytes",
  "futures-core",
  "futures-util",
@@ -4643,7 +4691,7 @@ dependencies = [
  "http-body 1.0.0",
  "http-body-util",
  "hyper 1.4.0",
- "hyper-rustls 0.26.0",
+ "hyper-rustls 0.27.2",
  "hyper-util",
  "ipnet",
  "js-sys",
@@ -4652,22 +4700,24 @@ dependencies = [
  "once_cell",
  "percent-encoding",
  "pin-project-lite",
- "rustls 0.22.4",
- "rustls-pemfile 1.0.4",
+ "quinn",
+ "rustls 0.23.7",
+ "rustls-pemfile 2.1.1",
  "rustls-pki-types",
  "serde",
  "serde_json",
  "serde_urlencoded",
- "sync_wrapper 0.1.2",
+ "sync_wrapper 1.0.1",
  "tokio",
- "tokio-rustls 0.25.0",
+ "tokio-rustls 0.26.0",
+ "tokio-socks",
  "tower-service",
  "url",
  "wasm-bindgen",
  "wasm-bindgen-futures",
  "web-sys",
  "webpki-roots 0.26.3",
- "winreg",
+ "winreg 0.52.0",
 ]
 
 [[package]]
@@ -6208,6 +6258,16 @@ name = "winreg"
 version = "0.50.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "524e57b2c537c0f9b1e69f1965311ec12182b4122e45035b1508cd24d2adadb1"
+dependencies = [
+ "cfg-if",
+ "windows-sys 0.48.0",
+]
+
+[[package]]
+name = "winreg"
+version = "0.52.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a277a57398d4bfa075df44f501a17cfdf8542d224f0d36095a2adc7aee4ef0a5"
 dependencies = [
  "cfg-if",
  "windows-sys 0.48.0",

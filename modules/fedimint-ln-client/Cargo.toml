@@ -36,7 +36,7 @@ erased-serde = { workspace = true }
 futures = { workspace = true }
 itertools = { workspace = true }
 lightning-invoice = { version = "0.31.0", features = [ "serde" ] }
-lnurl-rs = { version = "0.4.1", features = ["async"], default-features = false }
+lnurl-rs = { version = "0.6.0", features = ["async"], default-features = false }
 fedimint-client = { workspace = true }
 fedimint-core = { workspace = true }
 fedimint-api-client = { workspace = true }
