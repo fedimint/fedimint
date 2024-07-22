@@ -760,12 +760,14 @@ impl Lnd {
 
 // TODO(tvolk131): Remove this method and instead use
 // `open_channel_between_gateways()` below once 0.4.0 is released
-async fn open_channel(
+pub async fn open_channel(
     process_mgr: &ProcessManager,
     bitcoind: &Bitcoind,
     cln: &Lightningd,
     lnd: &Lnd,
 ) -> Result<()> {
+    debug!(target: LOG_DEVIMINT, "Opening channel between gateways (the old way)");
+
     debug!(target: LOG_DEVIMINT, "Await block ln nodes block processing");
     tokio::try_join!(cln.await_block_processing(), lnd.await_block_processing())?;
 
@@ -863,61 +865,48 @@ async fn open_channel(
     Ok(())
 }
 
-// TODO(tvolk131): Remove the `cln` and `lnd` arguments and instead use `gw_cln`
-// and `gw_lnd` once version 0.4.0 is released
 pub async fn open_channel_between_gateways(
-    process_mgr: &ProcessManager,
     bitcoind: &Bitcoind,
-    cln: &Lightningd,
-    gw_cln: &JitTryAnyhow<Arc<Gatewayd>>,
-    lnd: &Lnd,
-    gw_lnd: &JitTryAnyhow<Arc<Gatewayd>>,
+    gw_a: &JitTryAnyhow<Arc<Gatewayd>>,
+    gw_b: &JitTryAnyhow<Arc<Gatewayd>>,
 ) -> Result<()> {
-    let gateway_cli_version = crate::util::GatewayCli::version_or_default().await;
-    let gatewayd_version = crate::util::Gatewayd::version_or_default().await;
-    if gateway_cli_version < *VERSION_0_4_0_ALPHA || gatewayd_version < *VERSION_0_4_0_ALPHA {
-        debug!(target: LOG_DEVIMINT, "Opening channel between gateways (the old way)");
-        return open_channel(process_mgr, bitcoind, cln, lnd).await;
-    }
-    let gw_lnd = gw_lnd.get_try().await?.deref().clone();
-    let gw_cln = gw_cln.get_try().await?.deref().clone();
+    let gw_a = gw_a.get_try().await?.deref().clone();
+    let gw_b = gw_b.get_try().await?.deref().clone();
 
-    let cln_addr = gw_cln.get_funding_address().await?;
+    let funding_addr = gw_a.get_funding_address().await?;
 
-    bitcoind.send_to(cln_addr, 100_000_000).await?;
+    bitcoind.send_to(funding_addr, 100_000_000).await?;
     bitcoind.mine_blocks(10).await?;
 
     debug!(target: LOG_DEVIMINT, "Await block ln nodes block processing");
     tokio::try_join!(
-        gw_cln.wait_for_chain_sync(bitcoind),
-        gw_lnd.wait_for_chain_sync(bitcoind)
+        gw_a.wait_for_chain_sync(bitcoind),
+        gw_b.wait_for_chain_sync(bitcoind)
     )?;
 
-    let lnd_pubkey = gw_lnd.lightning_pubkey().await?;
-    let cln_pubkey = gw_cln.lightning_pubkey().await?;
-
     debug!(target: LOG_DEVIMINT, "Opening LN channel between the nodes...");
-    gw_cln
-        .open_channel(
-            lnd_pubkey.clone(),
-            gw_lnd.lightning_node_addr.clone(),
-            10_000_000,
-            Some(5_000_000),
-        )
-        .await?;
+    gw_a.open_channel(
+        gw_b.lightning_pubkey().await?,
+        gw_b.lightning_node_addr.clone(),
+        10_000_000,
+        Some(5_000_000),
+    )
+    .await?;
 
     bitcoind.mine_blocks(10).await?;
 
+    let gw_a_node_pubkey = gw_a.lightning_pubkey().await?;
+
     poll("Wait for channel update", || async {
-        let channels = gw_lnd
+        let channels = gw_b
             .list_active_channels()
             .await
-            .context("lnd list channels")
+            .context("list channels")
             .map_err(ControlFlow::Break)?;
 
         if channels
             .iter()
-            .any(|channel| channel.remote_pubkey == cln_pubkey)
+            .any(|channel| channel.remote_pubkey == gw_a_node_pubkey)
         {
             return Ok(());
         }
