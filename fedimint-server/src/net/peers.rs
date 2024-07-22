@@ -70,9 +70,6 @@ struct PeerConnection<T> {
 pub struct NetworkConfig {
     /// Our federation member's identity
     pub identity: PeerId,
-    /// Our listen address for incoming connections from other federation
-    /// members
-    pub bind_addr: SocketAddr,
     /// Map of all peers' connection information we want to be connected to
     pub peers: HashMap<PeerId, SafeUrl>,
 }
@@ -177,6 +174,7 @@ where
     /// `Connector`.
     #[instrument(skip_all)]
     pub(crate) async fn new(
+        p2p_bind_addr: SocketAddr,
         cfg: NetworkConfig,
         delay_calculator: DelayCalculator,
         connect: PeerConnector<T>,
@@ -212,8 +210,14 @@ where
                 .insert(*peer, PeerConnectionStatus::Disconnected);
         }
 
-        task_group.spawn("listen task", |handle| {
-            Self::run_listen_task(cfg, shared_connector, connection_senders, handle)
+        task_group.spawn("listen task", move |handle| {
+            Self::run_listen_task(
+                p2p_bind_addr,
+                cfg,
+                shared_connector,
+                connection_senders,
+                handle,
+            )
         });
 
         ReconnectPeerConnections {
@@ -223,15 +227,16 @@ where
     }
 
     async fn run_listen_task(
+        p2p_bind_addr: SocketAddr,
         cfg: NetworkConfig,
         connect: SharedAnyConnector<PeerMessage<T>>,
         mut connection_senders: HashMap<PeerId, Sender<AnyFramedTransport<PeerMessage<T>>>>,
         task_handle: TaskHandle,
     ) {
         let mut listener = connect
-            .listen(cfg.bind_addr)
+            .listen(p2p_bind_addr)
             .await
-            .with_context(|| anyhow::anyhow!("Failed to listen on {}", cfg.bind_addr))
+            .with_context(|| anyhow::anyhow!("Failed to listen on {}", p2p_bind_addr))
             .expect("Could not bind port");
 
         let mut shutdown_rx = task_handle.make_shutdown_rx();
@@ -758,7 +763,6 @@ mod tests {
             let build_peers = |bind: &'static str, id: u16, task_group: TaskGroup| async move {
                 let cfg = NetworkConfig {
                     identity: PeerId::from(id),
-                    bind_addr: bind.parse().unwrap(),
                     peers: peers_ref.clone(),
                 };
                 let connect = net_ref
@@ -766,6 +770,7 @@ mod tests {
                     .into_dyn();
                 let status_channels = Default::default();
                 let connection = ReconnectPeerConnections::<u64>::new(
+                    bind.parse().unwrap(),
                     cfg,
                     DelayCalculator::TEST_DEFAULT,
                     connect,
