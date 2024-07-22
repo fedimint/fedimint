@@ -755,7 +755,6 @@
 <a href="#755" id="755">755</a>
 <a href="#756" id="756">756</a>
 <a href="#757" id="757">757</a>
-<a href="#758" id="758">758</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::io::Cursor;
 <span class="kw">use </span>std::time::SystemTime;
@@ -1157,11 +1156,10 @@
                 </span>.collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;()
                 .<span class="kw">await</span>;
 
-            <span class="macro">assert_eq!</span>(config_v0.len(), <span class="number">1</span>);
-            <span class="kw">let </span>(id, config_v0) = config_v0
-                .into_iter()
-                .next()
-                .expect(<span class="string">"We asserted that the database contains exactly one config"</span>);
+            <span class="macro">assert!</span>(config_v0.len() &lt;= <span class="number">1</span>);
+            <span class="kw">let </span><span class="prelude-val">Some</span>((id, config_v0)) = config_v0.into_iter().next() <span class="kw">else </span>{
+                <span class="kw">return </span><span class="prelude-val">Ok</span>(());
+            };
 
             <span class="kw">let </span>global = GlobalClientConfig {
                 api_endpoints: config_v0.global.api_endpoints,
