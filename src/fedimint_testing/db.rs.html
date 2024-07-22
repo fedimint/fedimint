@@ -534,6 +534,7 @@
 <a href="#534" id="534">534</a>
 <a href="#535" id="535">535</a>
 <a href="#536" id="536">536</a>
+<a href="#537" id="537">537</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::io::ErrorKind;
 <span class="kw">use </span>std::path::{Path, PathBuf};
@@ -860,6 +861,7 @@
         module.database_version(),
         module.get_database_migrations(),
         <span class="prelude-val">Some</span>(TEST_MODULE_INSTANCE_ID),
+        <span class="prelude-val">None</span>,
     )
     .<span class="kw">await
     </span>.context(<span class="string">"Error applying migrations to temp database"</span>)<span class="question-mark">?</span>;

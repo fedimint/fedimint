@@ -253,6 +253,7 @@
 <a href="#253" id="253">253</a>
 <a href="#254" id="254">254</a>
 <a href="#255" id="255">255</a>
+<a href="#256" id="256">256</a>
 </pre></div><pre class="rust"><code><span class="attr">#![allow(clippy::let_unit_value)]
 
 </span><span class="kw">pub mod </span>aleph_bft;
@@ -329,6 +330,7 @@
                     module_init.database_version(),
                     module_init.get_database_migrations(),
                     <span class="prelude-val">Some</span>(<span class="kw-2">*</span>module_id),
+                    <span class="prelude-val">None</span>,
                 )
                 .<span class="kw">await</span><span class="question-mark">?</span>;
 
