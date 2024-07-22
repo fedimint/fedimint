@@ -133,12 +133,12 @@ pub fn check_auth(context: &mut ApiEndpointContext) -> ApiResult<GuardianAuthTok
 
 pub async fn spawn<T>(
     name: &'static str,
-    api_bind: &SocketAddr,
+    api_bind_addr: SocketAddr,
     module: RpcModule<RpcHandlerCtx<T>>,
     max_connections: u32,
     force_api_secrets: ApiSecrets,
 ) -> ServerHandle {
-    info!(target: LOG_NET_API, "Starting api on ws://{api_bind}");
+    info!(target: LOG_NET_API, "Starting api on ws://{api_bind_addr}");
 
     let builder =
         tower::ServiceBuilder::new().layer(HttpAuthLayer::new(force_api_secrets.get_all()));
@@ -148,9 +148,9 @@ pub async fn spawn<T>(
         .enable_ws_ping(PingConfig::new().ping_interval(Duration::from_secs(10)))
         .set_rpc_middleware(RpcServiceBuilder::new().layer(metrics::jsonrpsee::MetricsLayer))
         .set_http_middleware(builder)
-        .build(&api_bind.to_string())
+        .build(&api_bind_addr.to_string())
         .await
-        .context(format!("Bind address: {api_bind}"))
+        .context(format!("Bind address: {api_bind_addr}"))
         .context(format!("API name: {name}"))
         .expect("Could not build API server")
         .start(module)

@@ -7,6 +7,7 @@
 
 use std::collections::HashMap;
 use std::fmt::Debug;
+use std::net::SocketAddr;
 use std::time::Duration;
 
 use anyhow::Context;
@@ -147,6 +148,7 @@ where
     /// `Connector`.
     #[instrument(skip_all)]
     pub(crate) async fn new(
+        p2p_bind_addr: SocketAddr,
         cfg: NetworkConfig,
         delay_calculator: DelayCalculator,
         connect: PeerConnector<T>,
@@ -178,8 +180,14 @@ where
             status_query_senders.insert(*peer, status_query_sender);
             connections.insert(*peer, connection);
         }
-        task_group.spawn("listen task", |handle| {
-            Self::run_listen_task(cfg, shared_connector, connection_senders, handle)
+        task_group.spawn("listen task", move |handle| {
+            Self::run_listen_task(
+                p2p_bind_addr,
+                cfg,
+                shared_connector,
+                connection_senders,
+                handle,
+            )
         });
         (
             ReconnectPeerConnectionsReliable { connections },
@@ -188,15 +196,16 @@ where
     }
 
     async fn run_listen_task(
+        p2p_bind_addr: SocketAddr,
         cfg: NetworkConfig,
         connect: SharedAnyConnector<PeerMessage<T>>,
         mut connection_senders: HashMap<PeerId, Sender<AnyFramedTransport<PeerMessage<T>>>>,
         task_handle: TaskHandle,
     ) {
         let mut listener = connect
-            .listen(cfg.bind_addr)
+            .listen(p2p_bind_addr)
             .await
-            .with_context(|| anyhow::anyhow!("Failed to listen on {}", cfg.bind_addr))
+            .with_context(|| anyhow::anyhow!("Failed to listen on {}", p2p_bind_addr))
             .expect("Could not bind port");
 
         let mut shutdown_rx = task_handle.make_shutdown_rx();
@@ -768,13 +777,13 @@ mod tests {
             let build_peers = |bind: &'static str, id: u16, task_group: TaskGroup| async move {
                 let cfg = NetworkConfig {
                     identity: PeerId::from(id),
-                    bind_addr: bind.parse().unwrap(),
                     peers: peers_ref.clone(),
                 };
                 let connect = net_ref
                     .connector(cfg.identity, StreamReliability::MILDLY_UNRELIABLE)
                     .into_dyn();
                 ReconnectPeerConnectionsReliable::<u64>::new(
+                    bind.parse().unwrap(),
                     cfg,
                     DelayCalculator::TEST_DEFAULT,
                     connect,

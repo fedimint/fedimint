@@ -141,10 +141,6 @@ pub struct ServerConfigLocal {
     pub p2p_endpoints: BTreeMap<PeerId, PeerUrl>,
     /// Our peer id (generally should not change)
     pub identity: PeerId,
-    /// Our bind address for communicating with peers
-    pub fed_bind: SocketAddr,
-    /// Our bind address for our API endpoints
-    pub api_bind: SocketAddr,
     /// How many API connections we will accept
     pub max_connections: u32,
     /// Influences the atomic broadcast ordering latency, should be higher than
@@ -227,8 +223,6 @@ impl ServerConfig {
         let local = ServerConfigLocal {
             p2p_endpoints: params.p2p_urls(),
             identity,
-            fed_bind: params.local.p2p_bind,
-            api_bind: params.local.api_bind,
             max_connections: DEFAULT_MAX_CLIENT_CONNECTIONS,
             broadcast_round_delay_ms: if is_running_in_test_env() {
                 DEFAULT_TEST_BROADCAST_ROUND_DELAY_MS
@@ -433,6 +427,7 @@ impl ServerConfig {
 
     /// Runs the distributed key gen algorithm
     pub async fn distributed_gen(
+        p2p_bind_addr: SocketAddr,
         params: &ConfigGenParams,
         registry: ServerModuleInitRegistry,
         delay_calculator: DelayCalculator,
@@ -441,6 +436,7 @@ impl ServerConfig {
     ) -> DkgResult<Self> {
         let _timing /* logs on drop */ = timing::TimeReporter::new("distributed-gen").info();
         let server_conn = connect(
+            p2p_bind_addr,
             params.p2p_network(),
             params.tls_config(),
             delay_calculator,
@@ -586,7 +582,6 @@ impl ServerConfig {
     pub fn network_config(&self) -> NetworkConfig {
         NetworkConfig {
             identity: self.local.identity,
-            bind_addr: self.local.fed_bind,
             peers: self
                 .local
                 .p2p_endpoints
@@ -622,7 +617,6 @@ impl ConfigGenParams {
     pub fn p2p_network(&self) -> NetworkConfig {
         NetworkConfig {
             identity: self.local.our_id,
-            bind_addr: self.local.p2p_bind,
             peers: self
                 .p2p_urls()
                 .into_iter()
@@ -693,6 +687,7 @@ pub fn max_connections() -> u32 {
 }
 
 pub async fn connect<T>(
+    p2p_bind_addr: SocketAddr,
     network: NetworkConfig,
     certs: TlsConfig,
     delay_calculator: DelayCalculator,
@@ -702,9 +697,14 @@ where
     T: std::fmt::Debug + Clone + Serialize + DeserializeOwned + Unpin + Send + Sync + 'static,
 {
     let connector = TlsTcpConnector::new(certs, network.identity).into_dyn();
-    let (connections, _) =
-        ReconnectPeerConnectionsReliable::new(network, delay_calculator, connector, task_group)
-            .await;
+    let (connections, _) = ReconnectPeerConnectionsReliable::new(
+        p2p_bind_addr,
+        network,
+        delay_calculator,
+        connector,
+        task_group,
+    )
+    .await;
     connections.into_dyn()
 }
 

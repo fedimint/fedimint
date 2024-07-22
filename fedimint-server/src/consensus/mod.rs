@@ -9,6 +9,7 @@ pub mod transaction;
 
 use std::collections::BTreeMap;
 use std::env;
+use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
@@ -44,6 +45,8 @@ use crate::net::api::{ApiSecrets, RpcHandlerCtx};
 const TRANSACTION_BUFFER: usize = 1000;
 
 pub async fn run(
+    p2p_bind_addr: SocketAddr,
+    api_bind_addr: SocketAddr,
     cfg: ServerConfig,
     db: Database,
     module_init_registry: ServerModuleInitRegistry,
@@ -122,8 +125,13 @@ pub async fn run(
 
     info!(target: LOG_CONSENSUS, "Starting Consensus Api");
 
-    let api_handler =
-        start_consensus_api(&cfg.local, consensus_api, force_api_secrets.clone()).await;
+    let api_handler = start_consensus_api(
+        &cfg.local,
+        consensus_api,
+        force_api_secrets.clone(),
+        api_bind_addr,
+    )
+    .await;
 
     info!(target: LOG_CONSENSUS, "Starting Submission of Module CI proposals");
 
@@ -163,6 +171,7 @@ pub async fn run(
         task_group: task_group.clone(),
         data_dir,
         checkpoint_retention,
+        p2p_bind_addr,
     }
     .run()
     .await?;
@@ -180,6 +189,7 @@ async fn start_consensus_api(
     cfg: &ServerConfigLocal,
     api: ConsensusApi,
     force_api_secrets: ApiSecrets,
+    api_bind: SocketAddr,
 ) -> ServerHandle {
     let mut rpc_module = RpcHandlerCtx::new_module(api.clone());
 
@@ -191,7 +201,7 @@ async fn start_consensus_api(
 
     net::api::spawn(
         "consensus",
-        &cfg.api_bind,
+        api_bind,
         rpc_module,
         cfg.max_connections,
         force_api_secrets,
