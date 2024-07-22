@@ -19,7 +19,7 @@ clap = { workspace = true }
 devimint = { workspace = true }
 fedimint-core = { workspace = true }
 fedimint-testing = { workspace = true }
-ln-gateway = { version = "=0.4.0-rc.2", package = "fedimint-ln-gateway", path = "../ln-gateway" }
+ln-gateway = { version = "=0.4.0-rc.3", package = "fedimint-ln-gateway", path = "../ln-gateway" }
 semver = { workspace = true }
 serde_json = { workspace = true }
 tokio = { workspace = true }
