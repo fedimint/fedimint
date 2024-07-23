@@ -1084,17 +1084,6 @@
 <a href="#1084" id="1084">1084</a>
 <a href="#1085" id="1085">1085</a>
 <a href="#1086" id="1086">1086</a>
-<a href="#1087" id="1087">1087</a>
-<a href="#1088" id="1088">1088</a>
-<a href="#1089" id="1089">1089</a>
-<a href="#1090" id="1090">1090</a>
-<a href="#1091" id="1091">1091</a>
-<a href="#1092" id="1092">1092</a>
-<a href="#1093" id="1093">1093</a>
-<a href="#1094" id="1094">1094</a>
-<a href="#1095" id="1095">1095</a>
-<a href="#1096" id="1096">1096</a>
-<a href="#1097" id="1097">1097</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::ops::{ControlFlow, Deref <span class="kw">as _</span>};
 <span class="kw">use </span>std::path::Path;
 <span class="kw">use </span>std::str::FromStr;
@@ -1854,12 +1843,14 @@
 
 <span class="comment">// TODO(tvolk131): Remove this method and instead use
 // `open_channel_between_gateways()` below once 0.4.0 is released
-</span><span class="kw">async fn </span>open_channel(
+</span><span class="kw">pub async fn </span>open_channel(
     process_mgr: <span class="kw-2">&amp;</span>ProcessManager,
     bitcoind: <span class="kw-2">&amp;</span>Bitcoind,
     cln: <span class="kw-2">&amp;</span>Lightningd,
     lnd: <span class="kw-2">&amp;</span>Lnd,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+    <span class="macro">debug!</span>(target: LOG_DEVIMINT, <span class="string">"Opening channel between gateways (the old way)"</span>);
+
     <span class="macro">debug!</span>(target: LOG_DEVIMINT, <span class="string">"Await block ln nodes block processing"</span>);
     <span class="macro">tokio::try_join!</span>(cln.await_block_processing(), lnd.await_block_processing())<span class="question-mark">?</span>;
 
@@ -1957,61 +1948,48 @@
     <span class="prelude-val">Ok</span>(())
 }
 
-<span class="comment">// TODO(tvolk131): Remove the `cln` and `lnd` arguments and instead use `gw_cln`
-// and `gw_lnd` once version 0.4.0 is released
-</span><span class="kw">pub async fn </span>open_channel_between_gateways(
-    process_mgr: <span class="kw-2">&amp;</span>ProcessManager,
+<span class="kw">pub async fn </span>open_channel_between_gateways(
     bitcoind: <span class="kw-2">&amp;</span>Bitcoind,
-    cln: <span class="kw-2">&amp;</span>Lightningd,
-    gw_cln: <span class="kw-2">&amp;</span>JitTryAnyhow&lt;Arc&lt;Gatewayd&gt;&gt;,
-    lnd: <span class="kw-2">&amp;</span>Lnd,
-    gw_lnd: <span class="kw-2">&amp;</span>JitTryAnyhow&lt;Arc&lt;Gatewayd&gt;&gt;,
+    gw_a: <span class="kw-2">&amp;</span>JitTryAnyhow&lt;Arc&lt;Gatewayd&gt;&gt;,
+    gw_b: <span class="kw-2">&amp;</span>JitTryAnyhow&lt;Arc&lt;Gatewayd&gt;&gt;,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-    <span class="kw">let </span>gateway_cli_version = <span class="kw">crate</span>::util::GatewayCli::version_or_default().<span class="kw">await</span>;
-    <span class="kw">let </span>gatewayd_version = <span class="kw">crate</span>::util::Gatewayd::version_or_default().<span class="kw">await</span>;
-    <span class="kw">if </span>gateway_cli_version &lt; <span class="kw-2">*</span>VERSION_0_4_0_ALPHA || gatewayd_version &lt; <span class="kw-2">*</span>VERSION_0_4_0_ALPHA {
-        <span class="macro">debug!</span>(target: LOG_DEVIMINT, <span class="string">"Opening channel between gateways (the old way)"</span>);
-        <span class="kw">return </span>open_channel(process_mgr, bitcoind, cln, lnd).<span class="kw">await</span>;
-    }
-    <span class="kw">let </span>gw_lnd = gw_lnd.get_try().<span class="kw">await</span><span class="question-mark">?</span>.deref().clone();
-    <span class="kw">let </span>gw_cln = gw_cln.get_try().<span class="kw">await</span><span class="question-mark">?</span>.deref().clone();
+    <span class="kw">let </span>gw_a = gw_a.get_try().<span class="kw">await</span><span class="question-mark">?</span>.deref().clone();
+    <span class="kw">let </span>gw_b = gw_b.get_try().<span class="kw">await</span><span class="question-mark">?</span>.deref().clone();
 
-    <span class="kw">let </span>cln_addr = gw_cln.get_funding_address().<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="kw">let </span>funding_addr = gw_a.get_funding_address().<span class="kw">await</span><span class="question-mark">?</span>;
 
-    bitcoind.send_to(cln_addr, <span class="number">100_000_000</span>).<span class="kw">await</span><span class="question-mark">?</span>;
+    bitcoind.send_to(funding_addr, <span class="number">100_000_000</span>).<span class="kw">await</span><span class="question-mark">?</span>;
     bitcoind.mine_blocks(<span class="number">10</span>).<span class="kw">await</span><span class="question-mark">?</span>;
 
     <span class="macro">debug!</span>(target: LOG_DEVIMINT, <span class="string">"Await block ln nodes block processing"</span>);
     <span class="macro">tokio::try_join!</span>(
-        gw_cln.wait_for_chain_sync(bitcoind),
-        gw_lnd.wait_for_chain_sync(bitcoind)
+        gw_a.wait_for_chain_sync(bitcoind),
+        gw_b.wait_for_chain_sync(bitcoind)
     )<span class="question-mark">?</span>;
 
-    <span class="kw">let </span>lnd_pubkey = gw_lnd.lightning_pubkey().<span class="kw">await</span><span class="question-mark">?</span>;
-    <span class="kw">let </span>cln_pubkey = gw_cln.lightning_pubkey().<span class="kw">await</span><span class="question-mark">?</span>;
-
     <span class="macro">debug!</span>(target: LOG_DEVIMINT, <span class="string">"Opening LN channel between the nodes..."</span>);
-    gw_cln
-        .open_channel(
-            lnd_pubkey.clone(),
-            gw_lnd.lightning_node_addr.clone(),
-            <span class="number">10_000_000</span>,
-            <span class="prelude-val">Some</span>(<span class="number">5_000_000</span>),
-        )
-        .<span class="kw">await</span><span class="question-mark">?</span>;
+    gw_a.open_channel(
+        gw_b.lightning_pubkey().<span class="kw">await</span><span class="question-mark">?</span>,
+        gw_b.lightning_node_addr.clone(),
+        <span class="number">10_000_000</span>,
+        <span class="prelude-val">Some</span>(<span class="number">5_000_000</span>),
+    )
+    .<span class="kw">await</span><span class="question-mark">?</span>;
 
     bitcoind.mine_blocks(<span class="number">10</span>).<span class="kw">await</span><span class="question-mark">?</span>;
 
+    <span class="kw">let </span>gw_a_node_pubkey = gw_a.lightning_pubkey().<span class="kw">await</span><span class="question-mark">?</span>;
+
     poll(<span class="string">"Wait for channel update"</span>, || <span class="kw">async </span>{
-        <span class="kw">let </span>channels = gw_lnd
+        <span class="kw">let </span>channels = gw_b
             .list_active_channels()
             .<span class="kw">await
-            </span>.context(<span class="string">"lnd list channels"</span>)
+            </span>.context(<span class="string">"list channels"</span>)
             .map_err(ControlFlow::Break)<span class="question-mark">?</span>;
 
         <span class="kw">if </span>channels
             .iter()
-            .any(|channel| channel.remote_pubkey == cln_pubkey)
+            .any(|channel| channel.remote_pubkey == gw_a_node_pubkey)
         {
             <span class="kw">return </span><span class="prelude-val">Ok</span>(());
         }

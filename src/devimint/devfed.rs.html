@@ -376,6 +376,14 @@
 <a href="#376" id="376">376</a>
 <a href="#377" id="377">377</a>
 <a href="#378" id="378">378</a>
+<a href="#379" id="379">379</a>
+<a href="#380" id="380">380</a>
+<a href="#381" id="381">381</a>
+<a href="#382" id="382">382</a>
+<a href="#383" id="383">383</a>
+<a href="#384" id="384">384</a>
+<a href="#385" id="385">385</a>
+<a href="#386" id="386">386</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::ops::Deref <span class="kw">as _</span>;
 <span class="kw">use </span>std::sync::Arc;
 
@@ -387,10 +395,13 @@
 <span class="kw">use </span>tracing::debug;
 
 <span class="kw">use </span><span class="kw">crate</span>::envs::{FM_GWID_CLN_ENV, FM_GWID_LND_ENV};
-<span class="kw">use </span><span class="kw">crate</span>::external::{open_channel_between_gateways, Bitcoind, Electrs, Esplora, Lightningd, Lnd};
+<span class="kw">use </span><span class="kw">crate</span>::external::{
+    open_channel, open_channel_between_gateways, Bitcoind, Electrs, Esplora, Lightningd, Lnd,
+};
 <span class="kw">use </span><span class="kw">crate</span>::federation::{Client, Federation};
 <span class="kw">use </span><span class="kw">crate</span>::gatewayd::Gatewayd;
 <span class="kw">use </span><span class="kw">crate</span>::util::ProcessManager;
+<span class="kw">use </span><span class="kw">crate</span>::version_constants::VERSION_0_4_0_ALPHA;
 <span class="kw">use </span><span class="kw">crate</span>::LightningNode;
 
 <span class="kw">async fn </span>spawn_drop&lt;T&gt;(t: T)
@@ -593,21 +604,26 @@
             <span class="kw">let </span>gw_cln = gw_cln.clone();
             <span class="kw">let </span>bitcoind = bitcoind.clone();
             || <span class="kw">async move </span>{
-                <span class="kw">let </span>bitcoind = bitcoind.get_try().<span class="kw">await</span><span class="question-mark">?</span>.deref().clone();
-                <span class="kw">let </span>lnd = lnd.get_try().<span class="kw">await</span><span class="question-mark">?</span>.deref().clone();
-                <span class="kw">let </span>cln = cln.get_try().<span class="kw">await</span><span class="question-mark">?</span>.deref().clone();
                 <span class="comment">// Note: We open new channel even if starting from existing state
                 // as ports change on every start, and without this nodes will not find each
                 // other.
-                </span>open_channel_between_gateways(
-                    <span class="kw-2">&amp;</span>process_mgr,
-                    <span class="kw-2">&amp;</span>bitcoind,
-                    <span class="kw-2">&amp;</span>cln,
-                    <span class="kw-2">&amp;</span>gw_cln,
-                    <span class="kw-2">&amp;</span>lnd,
-                    <span class="kw-2">&amp;</span>gw_lnd,
-                )
-                .<span class="kw">await</span><span class="question-mark">?</span>;
+
+                </span><span class="kw">let </span>gateway_cli_version = <span class="kw">crate</span>::util::GatewayCli::version_or_default().<span class="kw">await</span>;
+                <span class="kw">let </span>gatewayd_version = <span class="kw">crate</span>::util::Gatewayd::version_or_default().<span class="kw">await</span>;
+
+                <span class="kw">let </span>bitcoind = bitcoind.get_try().<span class="kw">await</span><span class="question-mark">?</span>.deref().clone();
+
+                <span class="kw">if </span>gateway_cli_version &lt; <span class="kw-2">*</span>VERSION_0_4_0_ALPHA
+                    || gatewayd_version &lt; <span class="kw-2">*</span>VERSION_0_4_0_ALPHA
+                {
+                    <span class="kw">let </span>lnd = lnd.get_try().<span class="kw">await</span><span class="question-mark">?</span>.deref().clone();
+                    <span class="kw">let </span>cln = cln.get_try().<span class="kw">await</span><span class="question-mark">?</span>.deref().clone();
+
+                    open_channel(<span class="kw-2">&amp;</span>process_mgr, <span class="kw-2">&amp;</span>bitcoind, <span class="kw-2">&amp;</span>cln, <span class="kw-2">&amp;</span>lnd).<span class="kw">await</span><span class="question-mark">?</span>;
+                } <span class="kw">else </span>{
+                    open_channel_between_gateways(<span class="kw-2">&amp;</span>bitcoind, <span class="kw-2">&amp;</span>gw_cln, <span class="kw-2">&amp;</span>gw_lnd).<span class="kw">await</span><span class="question-mark">?</span>;
+                }
+
                 <span class="prelude-val">Ok</span>(Arc::new(()))
             }
         });
