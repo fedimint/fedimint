@@ -33,6 +33,7 @@ use common::{
     WalletOutput, WalletOutputOutcome, CONFIRMATION_TARGET, DEPRECATED_RBF_ERROR,
     FEERATE_MULTIPLIER,
 };
+use db::ConsensusVersionVoteKey;
 use fedimint_bitcoind::{create_bitcoind, DynBitcoindRpc};
 use fedimint_core::config::{
     ConfigGenModuleParams, DkgResult, ServerModuleConfig, ServerModuleConsensusConfig,
@@ -88,11 +89,11 @@ use tokio::sync::watch;
 use tracing::{debug, info, instrument, trace, warn};
 
 use crate::db::{
-    BlockCountVoteKey, BlockCountVotePrefix, BlockHashKey, BlockHashKeyPrefix, DbKeyPrefix,
-    FeeRateVoteKey, FeeRateVotePrefix, PegOutBitcoinTransaction, PegOutBitcoinTransactionPrefix,
-    PegOutNonceKey, PegOutTxSignatureCI, PegOutTxSignatureCIPrefix, PendingTransactionKey,
-    PendingTransactionPrefixKey, UTXOKey, UTXOPrefixKey, UnsignedTransactionKey,
-    UnsignedTransactionPrefixKey,
+    BlockCountVoteKey, BlockCountVotePrefix, BlockHashKey, BlockHashKeyPrefix,
+    ConsensusVersionVotePrefix, DbKeyPrefix, FeeRateVoteKey, FeeRateVotePrefix,
+    PegOutBitcoinTransaction, PegOutBitcoinTransactionPrefix, PegOutNonceKey, PegOutTxSignatureCI,
+    PegOutTxSignatureCIPrefix, PendingTransactionKey, PendingTransactionPrefixKey, UTXOKey,
+    UTXOPrefixKey, UnsignedTransactionKey, UnsignedTransactionPrefixKey,
 };
 use crate::metrics::WALLET_BLOCK_COUNT;
 
@@ -196,6 +197,7 @@ impl ModuleInit for WalletInit {
                         "Fee Rate Votes"
                     );
                 }
+                DbKeyPrefix::ConsensusVersionVote => {}
             }
         }
 
@@ -399,6 +401,10 @@ impl ServerModule for Wallet {
 
         items.push(WalletConsensusItem::Feerate(fee_rate_proposal));
 
+        items.push(WalletConsensusItem::ModuleConsensusVersion(
+            MODULE_CONSENSUS_VERSION,
+        ));
+
         items
     }
 
@@ -465,6 +471,25 @@ impl ServerModule for Wallet {
                 if Some(feerate) == dbtx.insert_entry(&FeeRateVoteKey(peer), &feerate).await {
                     bail!("Fee rate vote is redundant");
                 }
+            }
+            WalletConsensusItem::ModuleConsensusVersion(module_consensus_version) => {
+                let current_vote = dbtx
+                    .get_value(&ConsensusVersionVoteKey(peer))
+                    .await
+                    .unwrap_or(ModuleConsensusVersion::new(2, 0));
+
+                ensure!(
+                    module_consensus_version > current_vote,
+                    "Module consenus version vote is redundant"
+                );
+
+                dbtx.insert_entry(&ConsensusVersionVoteKey(peer), &module_consensus_version)
+                    .await;
+
+                assert!(
+                    self.consensus_module_consensus_version(dbtx).await <= MODULE_CONSENSUS_VERSION,
+                    "Wallet module does not support new consensus version, please upgrade the module"
+                );
             }
             WalletConsensusItem::PegOutSignature(peg_out_signature) => {
                 let txid = peg_out_signature.txid;
@@ -972,6 +997,32 @@ impl Wallet {
         rates[peer_count / 2]
     }
 
+    async fn consensus_module_consensus_version(
+        &self,
+        dbtx: &mut DatabaseTransaction<'_>,
+    ) -> ModuleConsensusVersion {
+        let num_peers = self.cfg.consensus.peer_peg_in_keys.to_num_peers();
+
+        let mut versions = dbtx
+            .find_by_prefix(&ConsensusVersionVotePrefix)
+            .await
+            .map(|entry| entry.1)
+            .collect::<Vec<ModuleConsensusVersion>>()
+            .await;
+
+        while versions.len() < num_peers.total() {
+            versions.push(ModuleConsensusVersion::new(2, 0));
+        }
+
+        assert_eq!(versions.len(), num_peers.total());
+
+        versions.sort_unstable();
+
+        assert!(versions.first() <= versions.last());
+
+        versions[num_peers.max_evil()]
+    }
+
     pub async fn consensus_nonce(&self, dbtx: &mut DatabaseTransaction<'_>) -> [u8; 33] {
         let nonce_idx = dbtx.get_value(&PegOutNonceKey).await.unwrap_or(0);
         dbtx.insert_entry(&PegOutNonceKey, &(nonce_idx + 1)).await;
@@ -998,12 +1049,11 @@ impl Wallet {
 
             // TODO: use batching for mainnet syncing
             trace!(block = height, "Fetching block hash");
-            let block_hash =
-                retry("get_block_hash", backoff_util::background_backoff(), || {
-                    self.btc_rpc.get_block_hash(u64::from(height)) // TODO: use u64 for height everywhere
-                })
-                .await
-                .expect("bitcoind rpc to get block hash");
+            let block_hash = retry("get_block_hash", backoff_util::background_backoff(), || {
+                self.btc_rpc.get_block_hash(u64::from(height)) // TODO: use u64 for height everywhere
+            })
+            .await
+            .expect("bitcoind rpc to get block hash");
 
             let pending_transactions = dbtx
                 .find_by_prefix(&PendingTransactionPrefixKey)

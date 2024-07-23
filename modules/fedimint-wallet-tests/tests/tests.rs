@@ -1002,6 +1002,7 @@ mod fedimint_migration_tests {
                             );
                             info!("Validated FeeRateVote");
                         }
+                        DbKeyPrefix::ConsensusVersionVote => {}
                     }
                 }
                 Ok(())
