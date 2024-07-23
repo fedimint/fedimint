@@ -424,7 +424,7 @@
 
         <span class="kw">let </span>urls = union
             .into_iter()
-            .map(|endpoint| endpoint.into_url())
+            .map(fedimint_lnv2_common::GatewayEndpoint::into_url)
             .collect();
 
         <span class="prelude-val">Ok</span>(urls)
@@ -442,7 +442,7 @@
 
         <span class="kw">let </span>urls = gateways
             .into_iter()
-            .map(|endpoint| endpoint.into_url())
+            .map(fedimint_lnv2_common::GatewayEndpoint::into_url)
             .collect();
 
         <span class="prelude-val">Ok</span>(urls)
