@@ -9,10 +9,13 @@ use tokio::join;
 use tracing::debug;
 
 use crate::envs::{FM_GWID_CLN_ENV, FM_GWID_LND_ENV};
-use crate::external::{open_channel_between_gateways, Bitcoind, Electrs, Esplora, Lightningd, Lnd};
+use crate::external::{
+    open_channel, open_channel_between_gateways, Bitcoind, Electrs, Esplora, Lightningd, Lnd,
+};
 use crate::federation::{Client, Federation};
 use crate::gatewayd::Gatewayd;
 use crate::util::ProcessManager;
+use crate::version_constants::VERSION_0_4_0_ALPHA;
 use crate::LightningNode;
 
 async fn spawn_drop<T>(t: T)
@@ -215,21 +218,26 @@ impl DevJitFed {
             let gw_cln = gw_cln.clone();
             let bitcoind = bitcoind.clone();
             || async move {
-                let bitcoind = bitcoind.get_try().await?.deref().clone();
-                let lnd = lnd.get_try().await?.deref().clone();
-                let cln = cln.get_try().await?.deref().clone();
                 // Note: We open new channel even if starting from existing state
                 // as ports change on every start, and without this nodes will not find each
                 // other.
-                open_channel_between_gateways(
-                    &process_mgr,
-                    &bitcoind,
-                    &cln,
-                    &gw_cln,
-                    &lnd,
-                    &gw_lnd,
-                )
-                .await?;
+
+                let gateway_cli_version = crate::util::GatewayCli::version_or_default().await;
+                let gatewayd_version = crate::util::Gatewayd::version_or_default().await;
+
+                let bitcoind = bitcoind.get_try().await?.deref().clone();
+
+                if gateway_cli_version < *VERSION_0_4_0_ALPHA
+                    || gatewayd_version < *VERSION_0_4_0_ALPHA
+                {
+                    let lnd = lnd.get_try().await?.deref().clone();
+                    let cln = cln.get_try().await?.deref().clone();
+
+                    open_channel(&process_mgr, &bitcoind, &cln, &lnd).await?;
+                } else {
+                    open_channel_between_gateways(&bitcoind, &gw_cln, &gw_lnd).await?;
+                }
+
                 Ok(Arc::new(()))
             }
         });
