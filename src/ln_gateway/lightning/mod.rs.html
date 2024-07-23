@@ -284,10 +284,43 @@
 <a href="#284" id="284">284</a>
 <a href="#285" id="285">285</a>
 <a href="#286" id="286">286</a>
+<a href="#287" id="287">287</a>
+<a href="#288" id="288">288</a>
+<a href="#289" id="289">289</a>
+<a href="#290" id="290">290</a>
+<a href="#291" id="291">291</a>
+<a href="#292" id="292">292</a>
+<a href="#293" id="293">293</a>
+<a href="#294" id="294">294</a>
+<a href="#295" id="295">295</a>
+<a href="#296" id="296">296</a>
+<a href="#297" id="297">297</a>
+<a href="#298" id="298">298</a>
+<a href="#299" id="299">299</a>
+<a href="#300" id="300">300</a>
+<a href="#301" id="301">301</a>
+<a href="#302" id="302">302</a>
+<a href="#303" id="303">303</a>
+<a href="#304" id="304">304</a>
+<a href="#305" id="305">305</a>
+<a href="#306" id="306">306</a>
+<a href="#307" id="307">307</a>
+<a href="#308" id="308">308</a>
+<a href="#309" id="309">309</a>
+<a href="#310" id="310">310</a>
+<a href="#311" id="311">311</a>
+<a href="#312" id="312">312</a>
+<a href="#313" id="313">313</a>
+<a href="#314" id="314">314</a>
+<a href="#315" id="315">315</a>
+<a href="#316" id="316">316</a>
+<a href="#317" id="317">317</a>
 </pre></div><pre class="rust"><code><span class="kw">pub mod </span>cln;
+<span class="kw">pub mod </span>ldk;
 <span class="kw">pub mod </span>lnd;
 
 <span class="kw">use </span>std::fmt::Debug;
+<span class="kw">use </span>std::path::PathBuf;
 <span class="kw">use </span>std::str::FromStr;
 <span class="kw">use </span>std::sync::Arc;
 
@@ -310,7 +343,8 @@
 <span class="kw">use </span><span class="self">self</span>::cln::NetworkLnRpcClient;
 <span class="kw">use </span><span class="self">self</span>::lnd::GatewayLndClient;
 <span class="kw">use </span><span class="kw">crate</span>::envs::{
-    FM_GATEWAY_LIGHTNING_ADDR_ENV, FM_LND_MACAROON_ENV, FM_LND_RPC_ADDR_ENV, FM_LND_TLS_CERT_ENV,
+    FM_GATEWAY_LIGHTNING_ADDR_ENV, FM_LDK_ESPLORA_SERVER_URL, FM_LDK_NETWORK, FM_LND_MACAROON_ENV,
+    FM_LND_RPC_ADDR_ENV, FM_LND_TLS_CERT_ENV, FM_PORT_LDK,
 };
 <span class="kw">use </span><span class="kw">crate</span>::gateway_lnrpc::{
     CloseChannelsWithPeerResponse, CreateInvoiceRequest, CreateInvoiceResponse, EmptyResponse,
@@ -536,6 +570,20 @@
         <span class="attr">#[arg(long = <span class="string">"cln-extension-addr"</span>, env = FM_GATEWAY_LIGHTNING_ADDR_ENV)]
         </span>cln_extension_addr: SafeUrl,
     },
+    <span class="attr">#[clap(name = <span class="string">"ldk"</span>)]
+    </span>Ldk {
+        <span class="doccomment">/// LDK esplora server URL
+        </span><span class="attr">#[arg(long = <span class="string">"ldk-esplora-server-url"</span>, env = FM_LDK_ESPLORA_SERVER_URL)]
+        </span>esplora_server_url: String,
+
+        <span class="doccomment">/// LDK network (defaults to regtest if not provided)
+        </span><span class="attr">#[arg(long = <span class="string">"ldk-network"</span>, env = FM_LDK_NETWORK, default_value = <span class="string">"regtest"</span>)]
+        </span>network: Network,
+
+        <span class="doccomment">/// LDK lightning server port
+        </span><span class="attr">#[arg(long = <span class="string">"ldk-lightning-port"</span>, env = FM_PORT_LDK)]
+        </span>lightning_port: u16,
+    },
 }
 
 <span class="attr">#[async_trait]
@@ -547,6 +595,7 @@
 </span><span class="kw">pub struct </span>GatewayLightningBuilder {
     <span class="kw">pub </span>lightning_mode: LightningMode,
     <span class="kw">pub </span>gateway_db: Database,
+    <span class="kw">pub </span>ldk_data_dir: PathBuf,
 }
 
 <span class="attr">#[async_trait]
@@ -567,6 +616,19 @@
                 <span class="prelude-val">None</span>,
                 <span class="self">self</span>.gateway_db.clone(),
             )),
+            LightningMode::Ldk {
+                esplora_server_url,
+                network,
+                lightning_port,
+            } =&gt; Box::new(
+                ldk::GatewayLdkClient::new(
+                    <span class="kw-2">&amp;</span><span class="self">self</span>.ldk_data_dir,
+                    <span class="kw-2">&amp;</span>esplora_server_url,
+                    network,
+                    lightning_port,
+                )
+                .unwrap(),
+            ),
         }
     }
 }

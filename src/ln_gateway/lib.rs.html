@@ -1762,6 +1762,11 @@
 <a href="#1762" id="1762">1762</a>
 <a href="#1763" id="1763">1763</a>
 <a href="#1764" id="1764">1764</a>
+<a href="#1765" id="1765">1765</a>
+<a href="#1766" id="1766">1766</a>
+<a href="#1767" id="1767">1767</a>
+<a href="#1768" id="1768">1768</a>
+<a href="#1769" id="1769">1769</a>
 </pre></div><pre class="rust"><code><span class="attr">#![warn(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::cast_possible_wrap)]
@@ -1906,6 +1911,10 @@
 <span class="doccomment">/// Name of the gateway's database that is used for metadata and configuration
 /// storage.
 </span><span class="kw">const </span>DB_FILE: <span class="kw-2">&amp;</span>str = <span class="string">"gatewayd.db"</span>;
+
+<span class="doccomment">/// Name of the folder that the gateway uses to store its node database when
+/// running in LDK mode.
+</span><span class="kw">const </span>LDK_NODE_DB_FOLDER: <span class="kw-2">&amp;</span>str = <span class="string">"ldk_node"</span>;
 
 <span class="doccomment">/// The non-lightning default module types that the Gateway supports.
 </span><span class="kw">const </span>DEFAULT_MODULE_KINDS: [(ModuleInstanceId, <span class="kw-2">&amp;</span>ModuleKind); <span class="number">2</span>] = [
@@ -2159,6 +2168,7 @@
             Arc::new(GatewayLightningBuilder {
                 lightning_mode: opts.mode,
                 gateway_db: gateway_db.clone(),
+                ldk_data_dir: opts.data_dir.join(LDK_NODE_DB_FOLDER),
             }),
             gateway_parameters,
             gateway_db,
