@@ -60,6 +60,7 @@ pub enum WalletConsensusItem {
                       * * verification logic */
     Feerate(Feerate),
     PegOutSignature(PegOutSignatureItem),
+    ModuleConsensusVersion(ModuleConsensusVersion),
     #[encodable_default]
     Default {
         variant: u64,
@@ -82,6 +83,13 @@ impl std::fmt::Display for WalletConsensusItem {
             }
             WalletConsensusItem::PegOutSignature(sig) => {
                 write!(f, "Wallet PegOut signature for Bitcoin TxId {}", sig.txid)
+            }
+            WalletConsensusItem::ModuleConsensusVersion(version) => {
+                write!(
+                    f,
+                    "Wallet Consensus Version {}.{}",
+                    version.major, version.minor
+                )
             }
             WalletConsensusItem::Default { variant, .. } => {
                 write!(f, "Unknown Wallet CI variant={variant}")

@@ -32,6 +32,7 @@ use common::{
     WalletModuleTypes, WalletOutput, WalletOutputOutcome, WalletSummary, CONFIRMATION_TARGET,
     DEPRECATED_RBF_ERROR, FEERATE_MULTIPLIER,
 };
+use db::ConsensusVersionVoteKey;
 use fedimint_bitcoind::{create_bitcoind, DynBitcoindRpc};
 use fedimint_core::config::{
     ConfigGenModuleParams, DkgResult, ServerModuleConfig, ServerModuleConsensusConfig,
@@ -90,11 +91,11 @@ use tracing::{debug, info, instrument, trace, warn};
 
 use crate::db::{
     migrate_to_v1, BlockCountVoteKey, BlockCountVotePrefix, BlockHashKey, BlockHashKeyPrefix,
-    ClaimedPegInOutpointKey, ClaimedPegInOutpointPrefixKey, DbKeyPrefix, FeeRateVoteKey,
-    FeeRateVotePrefix, PegOutBitcoinTransaction, PegOutBitcoinTransactionPrefix, PegOutNonceKey,
-    PegOutTxSignatureCI, PegOutTxSignatureCIPrefix, PendingTransactionKey,
-    PendingTransactionPrefixKey, UTXOKey, UTXOPrefixKey, UnsignedTransactionKey,
-    UnsignedTransactionPrefixKey,
+    ClaimedPegInOutpointKey, ClaimedPegInOutpointPrefixKey, ConsensusVersionVotePrefix,
+    DbKeyPrefix, FeeRateVoteKey, FeeRateVotePrefix, PegOutBitcoinTransaction,
+    PegOutBitcoinTransactionPrefix, PegOutNonceKey, PegOutTxSignatureCI, PegOutTxSignatureCIPrefix,
+    PendingTransactionKey, PendingTransactionPrefixKey, UTXOKey, UTXOPrefixKey,
+    UnsignedTransactionKey, UnsignedTransactionPrefixKey,
 };
 use crate::metrics::WALLET_BLOCK_COUNT;
 
@@ -205,6 +206,7 @@ impl ModuleInit for WalletInit {
                         "Claimed Peg-in Outpoint"
                     );
                 }
+                DbKeyPrefix::ConsensusVersionVote => {}
             }
         }
 
@@ -415,6 +417,10 @@ impl ServerModule for Wallet {
 
         items.push(WalletConsensusItem::Feerate(fee_rate_proposal));
 
+        items.push(WalletConsensusItem::ModuleConsensusVersion(
+            MODULE_CONSENSUS_VERSION,
+        ));
+
         items
     }
 
@@ -511,6 +517,25 @@ impl ServerModule for Wallet {
                     dbtx.remove_entry(&PegOutTxSignatureCI(txid)).await;
                     dbtx.remove_entry(&UnsignedTransactionKey(txid)).await;
                 }
+            }
+            WalletConsensusItem::ModuleConsensusVersion(module_consensus_version) => {
+                let current_vote = dbtx
+                    .get_value(&ConsensusVersionVoteKey(peer))
+                    .await
+                    .unwrap_or(ModuleConsensusVersion::new(2, 0));
+
+                ensure!(
+                    module_consensus_version > current_vote,
+                    "Module consenus version vote is redundant"
+                );
+
+                dbtx.insert_entry(&ConsensusVersionVoteKey(peer), &module_consensus_version)
+                    .await;
+
+                assert!(
+                    self.consensus_module_consensus_version(dbtx).await <= MODULE_CONSENSUS_VERSION,
+                    "Wallet module does not support new consensus version, please upgrade the module"
+                );
             }
             WalletConsensusItem::Default { variant, .. } => {
                 panic!("Received wallet consensus item with unknown variant {variant}");
@@ -1026,6 +1051,32 @@ impl Wallet {
         rates.sort_unstable();
 
         rates[peer_count / 2]
+    }
+
+    async fn consensus_module_consensus_version(
+        &self,
+        dbtx: &mut DatabaseTransaction<'_>,
+    ) -> ModuleConsensusVersion {
+        let num_peers = self.cfg.consensus.peer_peg_in_keys.to_num_peers();
+
+        let mut versions = dbtx
+            .find_by_prefix(&ConsensusVersionVotePrefix)
+            .await
+            .map(|entry| entry.1)
+            .collect::<Vec<ModuleConsensusVersion>>()
+            .await;
+
+        while versions.len() < num_peers.total() {
+            versions.push(ModuleConsensusVersion::new(2, 0));
+        }
+
+        assert_eq!(versions.len(), num_peers.total());
+
+        versions.sort_unstable();
+
+        assert!(versions.first() <= versions.last());
+
+        versions[num_peers.max_evil()]
     }
 
     pub async fn consensus_nonce(&self, dbtx: &mut DatabaseTransaction<'_>) -> [u8; 33] {
