@@ -922,6 +922,7 @@ pub async fn open_channel_between_gateways(
 pub enum LightningNode {
     Cln(Lightningd),
     Lnd(Lnd),
+    Ldk,
 }
 
 impl LightningNode {
@@ -929,6 +930,7 @@ impl LightningNode {
         match self {
             LightningNode::Cln(_) => LightningNodeType::Cln,
             LightningNode::Lnd(_) => LightningNodeType::Lnd,
+            LightningNode::Ldk => LightningNodeType::Ldk,
         }
     }
 }
