@@ -126,6 +126,7 @@ pub async fn latency_tests(
         gw_lnd,
         electrs,
         esplora,
+        ..
     } = dev_fed;
 
     let max_p90_factor = 5.0;
@@ -579,6 +580,7 @@ pub async fn cli_tests(dev_fed: DevFed) -> Result<()> {
         gw_lnd,
         electrs,
         esplora,
+        ..
     } = dev_fed;
 
     let fedimint_cli_version = crate::util::FedimintCli::version_or_default().await;
@@ -1487,6 +1489,7 @@ pub async fn lightning_gw_reconnect_test(
         gw_lnd,
         electrs,
         esplora,
+        ..
     } = dev_fed;
 
     let client = fed
@@ -1581,6 +1584,7 @@ pub async fn gw_reboot_test(dev_fed: DevFed, process_mgr: &ProcessManager) -> Re
         gw_lnd,
         electrs,
         esplora,
+        ..
     } = dev_fed;
 
     let client = fed.new_joined_client("gw-reboot-test-client").await?;
@@ -1696,6 +1700,9 @@ pub async fn do_try_create_and_pay_invoice(
             // Pay the invoice using CLN
             new_cln.pay_bolt11_invoice(invoice).await?;
         }
+        Some(LightningNode::Ldk) => {
+            unimplemented!("do_try_create_and_pay_invoice not implemented for LDK yet");
+        }
         None => {
             panic!("Lightning node did not come back up correctly");
         }
@@ -1803,6 +1810,7 @@ pub async fn reconnect_test(dev_fed: DevFed, process_mgr: &ProcessManager) -> Re
         gw_lnd,
         electrs,
         esplora,
+        ..
     } = dev_fed;
 
     bitcoind.mine_blocks(110).await?;
@@ -1866,6 +1874,7 @@ pub async fn recoverytool_test(dev_fed: DevFed) -> Result<()> {
         gw_lnd,
         electrs,
         esplora,
+        ..
     } = dev_fed;
 
     let data_dir = env::var(FM_DATA_DIR_ENV)?;
@@ -2065,6 +2074,7 @@ pub async fn guardian_backup_test(dev_fed: DevFed, process_mgr: &ProcessManager)
         gw_lnd,
         electrs,
         esplora,
+        ..
     } = dev_fed;
 
     const PEER_TO_TEST: usize = 0;
@@ -2212,6 +2222,7 @@ pub async fn cannot_replay_tx_test(dev_fed: DevFed) -> Result<()> {
         gw_lnd,
         electrs,
         esplora,
+        ..
     } = dev_fed;
 
     let client = fed.new_joined_client("cannot-replay-client").await?;
