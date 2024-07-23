@@ -47,7 +47,7 @@ var srcIndex = new Map(JSON.parse('[\
 ["fedimint_wallet_server",["",[],["db.rs","lib.rs","metrics.rs"]]],\
 ["fedimint_wasm_tests",["",[],["lib.rs"]]],\
 ["fedimintd",["",[["fedimintd",[],["metrics.rs"]]],["envs.rs","fedimintd.rs","lib.rs"]]],\
-["gateway_cli",["",[],["main.rs"]]],\
+["gateway_cli",["",[],["general_commands.rs","lightning_commands.rs","main.rs"]]],\
 ["gateway_cln_extension",["",[],["cln_extension.rs"]]],\
 ["gateway_tests",["",[],["main.rs"]]],\
 ["gatewayd",["",[],["gatewayd.rs"]]],\
