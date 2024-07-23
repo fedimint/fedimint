@@ -68,6 +68,13 @@
 <a href="#68" id="68">68</a>
 <a href="#69" id="69">69</a>
 <a href="#70" id="70">70</a>
+<a href="#71" id="71">71</a>
+<a href="#72" id="72">72</a>
+<a href="#73" id="73">73</a>
+<a href="#74" id="74">74</a>
+<a href="#75" id="75">75</a>
+<a href="#76" id="76">76</a>
+<a href="#77" id="77">77</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>bitcoin::hashes::{sha256, Hash};
 <span class="kw">use </span>parity_scale_codec::{Decode, Encode};
 
@@ -85,11 +92,16 @@
     <span class="kw">pub </span>peer: PeerId,
 }
 
-<span class="doccomment">/// All items ordered in a session that have been accepted by Fedimint Consensus
-/// are recorded in the corresponding block. A running Federation produces a
-/// [SessionOutcome] roughly every five minutes.  Therefore, just like in
-/// Bitcoin, a [SessionOutcome] might be empty if no items are ordered in that
-/// time or all ordered items are discarded by Fedimint Consensus.
+<span class="doccomment">/// Items ordered in a single session that have been accepted by Fedimint
+/// consensus.
+///
+/// A running Federation produces a [`SessionOutcome`] every couple of minutes.
+/// Therefore, just like in Bitcoin, a [`SessionOutcome`] might be empty if no
+/// items are ordered in that time or all ordered items are discarded by
+/// Fedimint Consensus.
+///
+/// When session is closed it is signed over by the peers and produces a
+/// [`SignedSessionOutcome`].
 </span><span class="attr">#[derive(Clone, Debug, PartialEq, Eq, Encodable, Decodable)]
 </span><span class="kw">pub struct </span>SessionOutcome {
     <span class="kw">pub </span>items: Vec&lt;AcceptedItem&gt;,
@@ -98,7 +110,7 @@
 <span class="kw">impl </span>SessionOutcome {
     <span class="doccomment">/// A blocks header consists of 40 bytes formed by its index in big endian
     /// bytes concatenated with the merkle root build from the consensus
-    /// hashes of its [AcceptedItem]s or 32 zero bytes if the block is
+    /// hashes of its [`AcceptedItem`]s or 32 zero bytes if the block is
     /// empty. The use of a merkle tree allows for efficient inclusion
     /// proofs of accepted consensus items for clients.
     </span><span class="kw">pub fn </span>header(<span class="kw-2">&amp;</span><span class="self">self</span>, index: u64) -&gt; [u8; <span class="number">40</span>] {
@@ -122,7 +134,9 @@
 <span class="attr">#[derive(Clone, Debug, Encodable, Decodable, Encode, Decode, PartialEq, Eq, Hash)]
 </span><span class="kw">pub struct </span>SchnorrSignature(<span class="kw">pub </span>[u8; <span class="number">64</span>]);
 
-<span class="doccomment">/// A signed block combines a block with the naive threshold secp schnorr
+<span class="doccomment">/// A [`SessionOutcome`], signed by the Federation.
+///
+/// A signed block combines a block with the naive threshold secp schnorr
 /// signature for its header created by the federation. The signed blocks allow
 /// clients and recovering guardians to verify the federations consensus
 /// history. After a signed block has been created it is stored in the database.
