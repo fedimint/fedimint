@@ -2499,7 +2499,7 @@
         <span class="kw">let </span>GatewayState::Running { lightning_context } = <span class="self">self</span>.get_state().<span class="kw">await else </span>{
             <span class="kw">return </span><span class="prelude-val">Ok</span>(GatewayInfo {
                 federations: <span class="macro">vec!</span>[],
-                channels: <span class="prelude-val">None</span>,
+                federation_fake_scids: <span class="prelude-val">None</span>,
                 version_hash: <span class="macro">fedimint_build_code_version_env!</span>().to_string(),
                 lightning_pub_key: <span class="prelude-val">None</span>,
                 lightning_alias: <span class="prelude-val">None</span>,
@@ -2542,7 +2542,7 @@
 
         <span class="prelude-val">Ok</span>(GatewayInfo {
             federations,
-            channels: <span class="prelude-val">Some</span>(channels),
+            federation_fake_scids: <span class="prelude-val">Some</span>(channels),
             version_hash: <span class="macro">fedimint_build_code_version_env!</span>().to_string(),
             lightning_pub_key: <span class="prelude-val">Some</span>(lightning_context.lightning_public_key.to_string()),
             lightning_alias: <span class="prelude-val">Some</span>(lightning_context.lightning_alias.clone()),
