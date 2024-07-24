@@ -94,8 +94,8 @@ use backup::ClientBackup;
 use db::{
     apply_migrations_client, apply_migrations_core_client, get_core_client_database_migrations,
     ApiSecretKey, CachedApiVersionSet, CachedApiVersionSetKey, ClientConfigKey, ClientInitStateKey,
-    ClientModuleRecovery, EncodedClientSecretKey, InitMode, PeerLastApiVersionsSummary,
-    PeerLastApiVersionsSummaryKey, CORE_CLIENT_DATABASE_VERSION,
+    ClientModuleRecovery, ClientPreRootSecretHashKey, EncodedClientSecretKey, InitMode,
+    PeerLastApiVersionsSummary, PeerLastApiVersionsSummaryKey, CORE_CLIENT_DATABASE_VERSION,
 };
 use fedimint_api_client::api::{
     ApiVersionSet, DynGlobalApi, DynModuleApi, FederationApiExt, IGlobalFederationApi,
@@ -2085,6 +2085,11 @@ impl ClientBuilder {
             let mut dbtx = self.db_no_decoders.begin_transaction().await;
             // Save config to DB
             dbtx.insert_new_entry(&ClientConfigKey, &config).await;
+            dbtx.insert_entry(
+                &ClientPreRootSecretHashKey,
+                &root_secret.derive_pre_root_secret_hash(),
+            )
+            .await;
 
             if let Some(api_secret) = api_secret.as_ref() {
                 dbtx.insert_new_entry(&ApiSecretKey, api_secret).await;
@@ -2249,6 +2254,26 @@ impl ClientBuilder {
         let Some(config) = Client::get_config_from_db(&self.db_no_decoders).await else {
             bail!("Client database not initialized")
         };
+
+        if let Some(secret_hash) = self
+            .db_no_decoders()
+            .begin_transaction_nc()
+            .await
+            .get_value(&ClientPreRootSecretHashKey)
+            .await
+        {
+            if root_secret.derive_pre_root_secret_hash() != secret_hash {
+                bail!("Secret hash does not match. Incorrect secret")
+            }
+
+            let mut dbtx = self.db_no_decoders.begin_transaction().await;
+            dbtx.insert_entry(
+                &ClientPreRootSecretHashKey,
+                &root_secret.derive_pre_root_secret_hash(),
+            )
+            .await;
+            dbtx.commit_tx().await;
+        }
 
         let api_secret = Client::get_api_secret_from_db(&self.db_no_decoders).await;
         let stopped = self.stopped;
