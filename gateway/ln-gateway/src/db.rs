@@ -24,10 +24,11 @@ use strum_macros::EnumIter;
 
 use crate::rpc::rpc_server::hash_password;
 
-pub const GATEWAYD_DATABASE_VERSION: DatabaseVersion = DatabaseVersion(1);
+pub const GATEWAYD_DATABASE_VERSION: DatabaseVersion = DatabaseVersion(2);
 
 pub trait GatewayDbtxNcExt {
     async fn save_federation_config(&mut self, config: &FederationConfig);
+    async fn load_federation_configs_v0(&mut self) -> BTreeMap<FederationId, FederationConfigV0>;
     async fn load_federation_configs(&mut self) -> BTreeMap<FederationId, FederationConfig>;
     async fn load_federation_config(
         &mut self,
@@ -92,10 +93,18 @@ impl<Cap: Send> GatewayDbtxNcExt for DatabaseTransaction<'_, Cap> {
         self.insert_entry(&FederationIdKey { id }, config).await;
     }
 
+    async fn load_federation_configs_v0(&mut self) -> BTreeMap<FederationId, FederationConfigV0> {
+        self.find_by_prefix(&FederationIdKeyPrefixV0)
+            .await
+            .map(|(key, config): (FederationIdKeyV0, FederationConfigV0)| (key.id, config))
+            .collect::<BTreeMap<FederationId, FederationConfigV0>>()
+            .await
+    }
+
     async fn load_federation_configs(&mut self) -> BTreeMap<FederationId, FederationConfig> {
         self.find_by_prefix(&FederationIdKeyPrefix)
             .await
-            .map(|(key, config)| (key.id, config))
+            .map(|(key, config): (FederationIdKey, FederationConfig)| (key.id, config))
             .collect::<BTreeMap<FederationId, FederationConfig>>()
             .await
     }
@@ -245,13 +254,30 @@ impl std::fmt::Display for DbKeyPrefix {
     }
 }
 
+#[derive(Debug, Encodable, Decodable)]
+struct FederationIdKeyPrefixV0;
+
+#[derive(Debug, Encodable, Decodable)]
+struct FederationIdKeyPrefix;
+
+#[derive(Debug, Clone, Encodable, Decodable, Eq, PartialEq, Hash, Ord, PartialOrd)]
+struct FederationIdKeyV0 {
+    id: FederationId,
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Encodable, Decodable, Serialize, Deserialize)]
+pub struct FederationConfigV0 {
+    pub invite_code: InviteCode,
+    pub mint_channel_id: u64,
+    pub timelock_delta: u64,
+    #[serde(with = "serde_routing_fees")]
+    pub fees: RoutingFees,
+}
+
 #[derive(Debug, Clone, Encodable, Decodable, Eq, PartialEq, Hash, Ord, PartialOrd)]
 struct FederationIdKey {
     id: FederationId,
 }
-
-#[derive(Debug, Encodable, Decodable)]
-struct FederationIdKeyPrefix;
 
 #[derive(Debug, Clone, Eq, PartialEq, Encodable, Decodable, Serialize, Deserialize)]
 pub struct FederationConfig {
@@ -264,11 +290,21 @@ pub struct FederationConfig {
 }
 
 impl_db_record!(
+    key = FederationIdKeyV0,
+    value = FederationConfigV0,
+    db_prefix = DbKeyPrefix::FederationConfig,
+);
+
+impl_db_record!(
     key = FederationIdKey,
     value = FederationConfig,
     db_prefix = DbKeyPrefix::FederationConfig,
 );
 
+impl_db_lookup!(
+    key = FederationIdKeyV0,
+    query_prefix = FederationIdKeyPrefixV0
+);
 impl_db_lookup!(key = FederationIdKey, query_prefix = FederationIdKeyPrefix);
 
 #[derive(Debug, Clone, Eq, PartialEq, Encodable, Decodable)]
@@ -340,6 +376,7 @@ impl_db_lookup!(
 pub fn get_gatewayd_database_migrations() -> BTreeMap<DatabaseVersion, CoreMigrationFn> {
     let mut migrations: BTreeMap<DatabaseVersion, CoreMigrationFn> = BTreeMap::new();
     migrations.insert(DatabaseVersion(0), |dbtx| migrate_to_v1(dbtx).boxed());
+    migrations.insert(DatabaseVersion(1), |dbtx| migrate_to_v2(dbtx).boxed());
     migrations
 }
 
@@ -359,6 +396,32 @@ async fn migrate_to_v1(dbtx: &mut DatabaseTransaction<'_>) -> Result<(), anyhow:
             .await;
     }
 
+    Ok(())
+}
+
+async fn migrate_to_v2(dbtx: &mut DatabaseTransaction<'_>) -> Result<(), anyhow::Error> {
+    // If there is no old federation configuration, there is nothing to do.
+    for (old_federation_id, old_federation_config) in dbtx.load_federation_configs_v0().await {
+        if let Some(old_federation_config) = dbtx
+            .remove_entry(&FederationIdKeyV0 {
+                id: old_federation_id,
+            })
+            .await
+        {
+            let new_federation_config = FederationConfig {
+                invite_code: old_federation_config.invite_code,
+                mint_channel_id: old_federation_config.mint_channel_id,
+                timelock_delta: old_federation_config.timelock_delta,
+                fees: old_federation_config.fees,
+                connector: Connector::default(),
+            };
+            let new_federation_key = FederationIdKey {
+                id: old_federation_id,
+            };
+            dbtx.insert_entry(&new_federation_key, &new_federation_config)
+                .await;
+        }
+    }
     Ok(())
 }
 
@@ -409,15 +472,14 @@ mod fedimint_migration_tests {
             None,
         );
         let connector = Connector::default();
-        let federation_config = FederationConfig {
+        let federation_config = FederationConfigV0 {
             invite_code,
             mint_channel_id: 2,
             timelock_delta: 10,
             fees: DEFAULT_FEES,
-            connector,
         };
 
-        dbtx.insert_new_entry(&FederationIdKey { id: federation_id }, &federation_config)
+        dbtx.insert_new_entry(&FederationIdKeyV0 { id: federation_id }, &federation_config)
             .await;
 
         let context = secp256k1::Secp256k1::new();
