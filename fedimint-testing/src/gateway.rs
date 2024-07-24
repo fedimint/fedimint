@@ -8,7 +8,7 @@ use crate::ln::FakeLightningTest;
 
 pub const DEFAULT_GATEWAY_PASSWORD: &str = "thereisnosecondbest";
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub enum LightningNodeType {
     Cln,
     Lnd,
