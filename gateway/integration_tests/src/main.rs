@@ -193,7 +193,7 @@ async fn config_test(gw_type: LightningNodeType) -> anyhow::Result<()> {
                 );
                 assert_eq!(
                     gateway_info
-                        .channels
+                        .federation_fake_scids
                         .unwrap()
                         .keys()
                         .copied()
