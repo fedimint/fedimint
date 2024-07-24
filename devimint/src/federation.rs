@@ -42,7 +42,7 @@ use super::util::{cmd, parse_map, Command, ProcessHandle, ProcessManager};
 use super::vars::utf8;
 use crate::envs::{FM_CLIENT_DIR_ENV, FM_DATA_DIR_ENV};
 use crate::util::{poll, poll_with_timeout, FedimintdCmd};
-use crate::version_constants::{VERSION_0_3_0, VERSION_0_3_0_ALPHA, VERSION_0_4_0_ALPHA};
+use crate::version_constants::{VERSION_0_3_0, VERSION_0_3_0_ALPHA, VERSION_0_5_0_ALPHA};
 use crate::{poll_eq, vars};
 
 #[derive(Clone)]
@@ -825,7 +825,7 @@ impl Federation {
             .map_err(ControlFlow::Break)?
             .len();
             let gatewayd_version = crate::util::Gatewayd::version_or_default().await;
-            let expected_gateways = if gatewayd_version >= *VERSION_0_4_0_ALPHA {
+            let expected_gateways = if gatewayd_version >= *VERSION_0_5_0_ALPHA {
                 3
             } else {
                 2

@@ -1,7 +1,7 @@
 use clap::Parser;
 use devimint::devfed::DevJitFed;
 use devimint::federation::Client;
-use devimint::version_constants::VERSION_0_4_0_ALPHA;
+use devimint::version_constants::VERSION_0_5_0_ALPHA;
 use devimint::{cmd, util};
 use fedimint_core::core::OperationId;
 use fedimint_core::util::SafeUrl;
@@ -29,17 +29,17 @@ async fn main() -> anyhow::Result<()> {
         let fedimintd_version = util::FedimintdCmd::version_or_default().await;
         let gatewayd_version = util::Gatewayd::version_or_default().await;
 
-        if fedimint_cli_version < *VERSION_0_4_0_ALPHA {
+        if fedimint_cli_version < *VERSION_0_5_0_ALPHA {
             info!(%fedimint_cli_version, "Version did not support lnv2 module, skipping");
             return Ok(());
         }
 
-        if fedimintd_version < *VERSION_0_4_0_ALPHA {
+        if fedimintd_version < *VERSION_0_5_0_ALPHA {
             info!(%fedimintd_version, "Version did not support lnv2 module, skipping");
             return Ok(());
         }
 
-        if gatewayd_version < *VERSION_0_4_0_ALPHA {
+        if gatewayd_version < *VERSION_0_5_0_ALPHA {
             info!(%gatewayd_version, "Version did not support lnv2 module, skipping");
             return Ok(());
         }
