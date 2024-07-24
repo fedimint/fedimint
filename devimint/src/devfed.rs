@@ -250,6 +250,7 @@ impl DevJitFed {
             let gw_lnd = gw_lnd.clone();
             let cln = cln.clone();
             let gw_cln = gw_cln.clone();
+            let gw_ldk = gw_ldk.clone();
             let bitcoind = bitcoind.clone();
             || async move {
                 // Note: We open new channel even if starting from existing state
@@ -269,7 +270,15 @@ impl DevJitFed {
 
                     open_channel(&process_mgr, &bitcoind, &cln, &lnd).await?;
                 } else {
-                    open_channel_between_gateways(&bitcoind, &gw_cln, &gw_lnd).await?;
+                    let gw_cln = gw_cln.get_try().await?.deref();
+                    let gw_lnd = gw_lnd.get_try().await?.deref();
+
+                    open_channel_between_gateways(&bitcoind, gw_cln, gw_lnd).await?;
+
+                    if let Some(gw_ldk) = gw_ldk.get_try().await?.deref() {
+                        open_channel_between_gateways(&bitcoind, gw_ldk, gw_cln).await?;
+                        open_channel_between_gateways(&bitcoind, gw_ldk, gw_lnd).await?;
+                    }
                 }
 
                 Ok(Arc::new(()))
