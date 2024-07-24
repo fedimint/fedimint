@@ -393,13 +393,6 @@
 <a href="#393" id="393">393</a>
 <a href="#394" id="394">394</a>
 <a href="#395" id="395">395</a>
-<a href="#396" id="396">396</a>
-<a href="#397" id="397">397</a>
-<a href="#398" id="398">398</a>
-<a href="#399" id="399">399</a>
-<a href="#400" id="400">400</a>
-<a href="#401" id="401">401</a>
-<a href="#402" id="402">402</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::sync::Arc;
 
 <span class="kw">use </span>axum::extract::Request;
@@ -408,7 +401,6 @@
 <span class="kw">use </span>axum::response::IntoResponse;
 <span class="kw">use </span>axum::routing::{get, post};
 <span class="kw">use </span>axum::{Extension, Json, Router};
-<span class="kw">use </span>axum_macros::debug_handler;
 <span class="kw">use </span>bitcoin_hashes::{sha256, Hash};
 <span class="kw">use </span>fedimint_core::config::FederationId;
 <span class="kw">use </span>fedimint_core::encoding::Encodable;
@@ -610,8 +602,7 @@
 <span class="doccomment">/// Display high-level information about the Gateway
 </span><span class="comment">// FIXME: deprecated &gt;= 0.3.0
 // This endpoint exists only to remain backwards-compatible with the original POST endpoint
-</span><span class="attr">#[debug_handler]
-#[instrument(skip_all, err)]
+</span><span class="attr">#[instrument(skip_all, err)]
 </span><span class="kw">async fn </span>handle_post_info(
     Extension(gateway): Extension&lt;Arc&lt;Gateway&gt;&gt;,
     Json(_payload): Json&lt;InfoPayload&gt;,
@@ -621,8 +612,7 @@
 }
 
 <span class="doccomment">/// Display high-level information about the Gateway
-</span><span class="attr">#[debug_handler]
-#[instrument(skip_all, err)]
+</span><span class="attr">#[instrument(skip_all, err)]
 </span><span class="kw">async fn </span>info(
     Extension(gateway): Extension&lt;Arc&lt;Gateway&gt;&gt;,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="kw">impl </span>IntoResponse, GatewayError&gt; {
@@ -631,8 +621,7 @@
 }
 
 <span class="doccomment">/// Display high-level information about the Gateway config
-</span><span class="attr">#[debug_handler]
-#[instrument(skip_all, err, fields(<span class="question-mark">?</span>payload))]
+</span><span class="attr">#[instrument(skip_all, err, fields(<span class="question-mark">?</span>payload))]
 </span><span class="kw">async fn </span>configuration(
     Extension(gateway): Extension&lt;Arc&lt;Gateway&gt;&gt;,
     Json(payload): Json&lt;ConfigPayload&gt;,
@@ -644,8 +633,7 @@
 }
 
 <span class="doccomment">/// Display gateway ecash note balance
-</span><span class="attr">#[debug_handler]
-#[instrument(skip_all, err, fields(<span class="question-mark">?</span>payload))]
+</span><span class="attr">#[instrument(skip_all, err, fields(<span class="question-mark">?</span>payload))]
 </span><span class="kw">async fn </span>balance(
     Extension(gateway): Extension&lt;Arc&lt;Gateway&gt;&gt;,
     Json(payload): Json&lt;BalancePayload&gt;,
@@ -655,8 +643,7 @@
 }
 
 <span class="doccomment">/// Generate deposit address
-</span><span class="attr">#[debug_handler]
-#[instrument(skip_all, err, fields(<span class="question-mark">?</span>payload))]
+</span><span class="attr">#[instrument(skip_all, err, fields(<span class="question-mark">?</span>payload))]
 </span><span class="kw">async fn </span>address(
     Extension(gateway): Extension&lt;Arc&lt;Gateway&gt;&gt;,
     Json(payload): Json&lt;DepositAddressPayload&gt;,
@@ -666,8 +653,7 @@
 }
 
 <span class="doccomment">/// Withdraw from a gateway federation.
-</span><span class="attr">#[debug_handler]
-#[instrument(skip_all, err, fields(<span class="question-mark">?</span>payload))]
+</span><span class="attr">#[instrument(skip_all, err, fields(<span class="question-mark">?</span>payload))]
 </span><span class="kw">async fn </span>withdraw(
     Extension(gateway): Extension&lt;Arc&lt;Gateway&gt;&gt;,
     Json(payload): Json&lt;WithdrawPayload&gt;,
