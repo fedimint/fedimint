@@ -66,7 +66,7 @@ Commands:
   help                       Print this message or the help of the given subcommand(s)
   lightning
     get-funding-address      Generate a new address belonging to the on-chain wallet of the gateway\'s underlying lightning node
-    open-channel             Open a lightning channel to another lighting node from the gateway\'s underlying lightning node
+    open-channel             Open a lightning channel to another lightning node from the gateway\'s underlying lightning node
     list-active-channels     List all channels on the underlying lightning node that can send or receive payments
     close-channels-with-peer Close all lightning channels with a given peer, claiming the funds to the lightning node\'s on-chain wallet
     wait-for-chain-sync      Wait for the gateway\'s underlying lightning node to sync to the blockchain at a given height
