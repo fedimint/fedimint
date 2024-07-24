@@ -2,7 +2,7 @@
 
 use clap::{Parser, Subcommand};
 use devimint::federation::Federation;
-use devimint::version_constants::VERSION_0_3_0;
+use devimint::version_constants::{VERSION_0_3_0, VERSION_0_4_0_ALPHA};
 use devimint::{cmd, util, Gatewayd};
 use fedimint_core::Amount;
 use fedimint_testing::gateway::LightningNodeType;
@@ -36,10 +36,19 @@ async fn main() -> anyhow::Result<()> {
 async fn config_test(gw_type: LightningNodeType) -> anyhow::Result<()> {
     Box::pin(devimint::run_devfed_test(
         |dev_fed, process_mgr| async move {
+            let gatewayd_version = util::Gatewayd::version_or_default().await;
+            if gatewayd_version < *VERSION_0_4_0_ALPHA && gw_type == LightningNodeType::Ldk {
+                return Ok(());
+            }
+
             let gw = match gw_type {
                 LightningNodeType::Lnd => dev_fed.gw_lnd_registered().await?,
                 LightningNodeType::Cln => dev_fed.gw_cln_registered().await?,
-                LightningNodeType::Ldk => dev_fed.gw_ldk_registered().await?,
+                LightningNodeType::Ldk => dev_fed
+                    .gw_ldk_registered()
+                    .await?
+                    .as_ref()
+                    .expect("LDK Gateway should be available"),
             };
 
             let fedimint_cli_version = crate::util::FedimintCli::version_or_default().await;
@@ -50,7 +59,6 @@ async fn config_test(gw_type: LightningNodeType) -> anyhow::Result<()> {
             }
 
             // Try to connect to already connected federation
-            let gatewayd_version = util::Gatewayd::version_or_default().await;
             if gatewayd_version >= *VERSION_0_3_0 {
                 let invite_code = dev_fed.fed().await?.invite_code()?;
                 let output = cmd!(gw, "connect-fed", invite_code.clone())

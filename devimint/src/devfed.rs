@@ -37,7 +37,7 @@ pub struct DevFed {
     pub fed: Federation,
     pub gw_cln: Gatewayd,
     pub gw_lnd: Gatewayd,
-    pub gw_ldk: Gatewayd,
+    pub gw_ldk: Option<Gatewayd>,
     pub electrs: Electrs,
     pub esplora: Esplora,
 }
@@ -85,7 +85,7 @@ pub struct DevJitFed {
     fed: JitArc<Federation>,
     gw_cln: JitArc<Gatewayd>,
     gw_lnd: JitArc<Gatewayd>,
-    gw_ldk: JitArc<Gatewayd>,
+    gw_ldk: JitArc<Option<Gatewayd>>,
     electrs: JitArc<Electrs>,
     esplora: JitArc<Esplora>,
     start_time: std::time::SystemTime,
@@ -218,10 +218,15 @@ impl DevJitFed {
             let esplora = esplora.clone();
             let process_mgr = process_mgr.to_owned();
             move || async move {
-                esplora.get_try().await?;
-                Ok(Arc::new(
-                    Gatewayd::new(&process_mgr, LightningNode::Ldk).await?,
-                ))
+                let gatewayd_version = crate::util::Gatewayd::version_or_default().await;
+                if gatewayd_version >= *VERSION_0_4_0_ALPHA {
+                    esplora.get_try().await?;
+                    Ok(Arc::new(Some(
+                        Gatewayd::new(&process_mgr, LightningNode::Ldk).await?,
+                    )))
+                } else {
+                    Ok(Arc::new(None))
+                }
             }
         });
         let gw_ldk_registered = JitTryAnyhow::new_try({
@@ -229,9 +234,11 @@ impl DevJitFed {
             let fed = fed.clone();
             move || async move {
                 let gw_ldk = gw_ldk.get_try().await?.deref();
-                let fed = fed.get_try().await?.deref();
-                if !skip_setup {
-                    gw_ldk.connect_fed(fed).await?;
+                if let Some(gw_ldk) = gw_ldk {
+                    let fed = fed.get_try().await?.deref();
+                    if !skip_setup {
+                        gw_ldk.connect_fed(fed).await?;
+                    }
                 }
                 Ok(Arc::new(()))
             }
@@ -325,10 +332,10 @@ impl DevJitFed {
         self.gw_lnd_registered.get_try().await?;
         Ok(self.gw_lnd.get_try().await?.deref())
     }
-    pub async fn gw_ldk(&self) -> anyhow::Result<&Gatewayd> {
+    pub async fn gw_ldk(&self) -> anyhow::Result<&Option<Gatewayd>> {
         Ok(self.gw_ldk.get_try().await?.deref())
     }
-    pub async fn gw_ldk_registered(&self) -> anyhow::Result<&Gatewayd> {
+    pub async fn gw_ldk_registered(&self) -> anyhow::Result<&Option<Gatewayd>> {
         self.gw_ldk_registered.get_try().await?;
         Ok(self.gw_ldk.get_try().await?.deref())
     }
@@ -360,7 +367,9 @@ impl DevJitFed {
 
         std::env::set_var(FM_GWID_CLN_ENV, self.gw_cln().await?.gateway_id().await?);
         std::env::set_var(FM_GWID_LND_ENV, self.gw_lnd().await?.gateway_id().await?);
-        std::env::set_var(FM_GWID_LDK_ENV, self.gw_ldk().await?.gateway_id().await?);
+        if let Some(gw_ldk) = self.gw_ldk().await? {
+            std::env::set_var(FM_GWID_LDK_ENV, gw_ldk.gateway_id().await?);
+        }
 
         let _ = self.internal_client_gw_registered().await?;
         let _ = self.channel_opened.get_try().await?;

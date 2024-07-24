@@ -296,16 +296,19 @@ pub async fn handle_command(cmd: Cmd, common_args: CommonArgs) -> Result<()> {
                                 dev_fed.bitcoind().await?.mine_blocks_no_wait(11).await
                             },
                             async {
-                                let pegin_addr = dev_fed
-                                    .gw_ldk_registered()
-                                    .await?
-                                    .get_pegin_addr(&dev_fed.fed().await?.calculate_federation_id())
-                                    .await?;
-                                dev_fed
-                                    .bitcoind()
-                                    .await?
-                                    .send_to(pegin_addr, gw_pegin_amount)
-                                    .await?;
+                                if let Some(gw_ldk) = dev_fed.gw_ldk_registered().await? {
+                                    let pegin_addr = gw_ldk
+                                        .get_pegin_addr(
+                                            &dev_fed.fed().await?.calculate_federation_id(),
+                                        )
+                                        .await?;
+                                    dev_fed
+                                        .bitcoind()
+                                        .await?
+                                        .send_to(pegin_addr, gw_pegin_amount)
+                                        .await?;
+                                }
+
                                 dev_fed.bitcoind().await?.mine_blocks_no_wait(11).await
                             },
                         )?;
