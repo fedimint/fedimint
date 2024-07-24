@@ -8,10 +8,11 @@ use crate::ln::FakeLightningTest;
 
 pub const DEFAULT_GATEWAY_PASSWORD: &str = "thereisnosecondbest";
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub enum LightningNodeType {
     Cln,
     Lnd,
+    Ldk,
 }
 
 impl Display for LightningNodeType {
@@ -19,6 +20,7 @@ impl Display for LightningNodeType {
         match self {
             LightningNodeType::Cln => write!(f, "cln"),
             LightningNodeType::Lnd => write!(f, "lnd"),
+            LightningNodeType::Ldk => write!(f, "ldk"),
         }
     }
 }
