@@ -227,6 +227,13 @@
 <a href="#227" id="227">227</a>
 <a href="#228" id="228">228</a>
 <a href="#229" id="229">229</a>
+<a href="#230" id="230">230</a>
+<a href="#231" id="231">231</a>
+<a href="#232" id="232">232</a>
+<a href="#233" id="233">233</a>
+<a href="#234" id="234">234</a>
+<a href="#235" id="235">235</a>
+<a href="#236" id="236">236</a>
 </pre></div><pre class="rust"><code><span class="attr">#![allow(non_snake_case)]
 
 </span><span class="kw">use </span>std::path::{Path, PathBuf};
@@ -362,6 +369,7 @@
         FM_PORT_BTC_ZMQ_PUB_RAW_TX: u16 = port_alloc(<span class="number">1</span>)<span class="question-mark">?</span>; env: <span class="string">"FM_PORT_BTC_ZMQ_PUB_RAW_TX"</span>;
         FM_PORT_CLN: u16 = port_alloc(<span class="number">1</span>)<span class="question-mark">?</span>; env: <span class="string">"FM_PORT_CLN"</span>;
         FM_PORT_LND_LISTEN: u16 = port_alloc(<span class="number">1</span>)<span class="question-mark">?</span>; env: <span class="string">"FM_PORT_LND_LISTEN"</span>;
+        FM_PORT_LDK: u16 = port_alloc(<span class="number">1</span>)<span class="question-mark">?</span>; env: <span class="string">"FM_PORT_LDK"</span>;
         FM_PORT_LND_RPC: u16 = port_alloc(<span class="number">1</span>)<span class="question-mark">?</span>; env: <span class="string">"FM_PORT_LND_RPC"</span>;
         FM_PORT_LND_REST: u16 = port_alloc(<span class="number">1</span>)<span class="question-mark">?</span>; env: <span class="string">"FM_PORT_LND_REST"</span>;
         FM_PORT_ELECTRS: u16 = port_alloc(<span class="number">1</span>)<span class="question-mark">?</span>; env: <span class="string">"FM_PORT_ELECTRS"</span>;
@@ -371,11 +379,15 @@
         </span>FM_PORT_FEDIMINTD_BASE: u16 = port_alloc((<span class="number">3 </span>* fed_size).try_into().unwrap())<span class="question-mark">?</span>; env: <span class="string">"FM_PORT_FEDIMINTD_BASE"</span>;
         FM_PORT_GW_CLN: u16 = port_alloc(<span class="number">1</span>)<span class="question-mark">?</span>; env: <span class="string">"FM_PORT_GW_CLN"</span>;
         FM_PORT_GW_LND: u16 = port_alloc(<span class="number">1</span>)<span class="question-mark">?</span>; env: <span class="string">"FM_PORT_GW_LND"</span>;
+        FM_PORT_GW_LDK: u16 = port_alloc(<span class="number">1</span>)<span class="question-mark">?</span>; env: <span class="string">"FM_PORT_GW_LDK"</span>;
         FM_PORT_CLN_EXTENSION: u16 = port_alloc(<span class="number">1</span>)<span class="question-mark">?</span>; env: <span class="string">"FM_PORT_CLN_EXTENSION"</span>;
         FM_PORT_FAUCET: u16 = <span class="number">15243u16</span>; env: <span class="string">"FM_PORT_FAUCET"</span>;
 
+        FM_LDK_ESPLORA_SERVER_URL: String = <span class="macro">format!</span>(<span class="string">"http://127.0.0.1:{FM_PORT_ESPLORA}"</span>); env: <span class="string">"FM_LDK_ESPLORA_SERVER_URL"</span>;
+
         FM_CLN_DIR: PathBuf = mkdir(FM_TEST_DIR.join(<span class="string">"cln"</span>)).<span class="kw">await</span><span class="question-mark">?</span>; env: <span class="string">"FM_CLN_DIR"</span>;
         FM_LND_DIR: PathBuf = mkdir(FM_TEST_DIR.join(<span class="string">"lnd"</span>)).<span class="kw">await</span><span class="question-mark">?</span>; env: <span class="string">"FM_LND_DIR"</span>;
+        FM_LDK_DIR: PathBuf = mkdir(FM_TEST_DIR.join(<span class="string">"ldk"</span>)).<span class="kw">await</span><span class="question-mark">?</span>; env: <span class="string">"FM_LDK_DIR"</span>;
         FM_BTC_DIR: PathBuf = mkdir(FM_TEST_DIR.join(<span class="string">"bitcoin"</span>)).<span class="kw">await</span><span class="question-mark">?</span>; env: <span class="string">"FM_BTC_DIR"</span>;
         FM_DATA_DIR: PathBuf = FM_TEST_DIR.clone(); env: <span class="string">"FM_DATA_DIR"</span>;
         FM_CLIENT_BASE_DIR: PathBuf = mkdir(FM_TEST_DIR.join(<span class="string">"clients"</span>)).<span class="kw">await</span><span class="question-mark">?</span>; env: <span class="string">"FM_CLIENT_BASE_DIR"</span>;
@@ -417,6 +429,8 @@
             gateway_cli = <span class="kw">crate</span>::util::get_gateway_cli_path().join(<span class="string">" "</span>),); env: <span class="string">"FM_GWCLI_CLN"</span>;
         FM_GWCLI_LND: String = <span class="macro">f!</span>(<span class="string">"{gateway_cli} --rpcpassword=theresnosecondbest -a http://127.0.0.1:{FM_PORT_GW_LND}/"</span>,
             gateway_cli = <span class="kw">crate</span>::util::get_gateway_cli_path().join(<span class="string">" "</span>),); env: <span class="string">"FM_GWCLI_LND"</span>;
+        FM_GWCLI_LDK: String = <span class="macro">f!</span>(<span class="string">"{gateway_cli} --rpcpassword=theresnosecondbest -a http://127.0.0.1:{FM_PORT_GW_LDK}/"</span>,
+            gateway_cli = <span class="kw">crate</span>::util::get_gateway_cli_path().join(<span class="string">" "</span>),); env: <span class="string">"FM_GWCLI_LDK"</span>;
         FM_DB_TOOL: String = <span class="macro">f!</span>(<span class="string">"{fedimint_dbtool}"</span>, fedimint_dbtool = <span class="kw">crate</span>::util::get_fedimint_dbtool_cli_path().join(<span class="string">" "</span>)); env: <span class="string">"FM_DB_TOOL"</span>;
 
         <span class="comment">// fedimint config variables

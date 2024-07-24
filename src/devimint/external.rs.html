@@ -1084,6 +1084,8 @@
 <a href="#1084" id="1084">1084</a>
 <a href="#1085" id="1085">1085</a>
 <a href="#1086" id="1086">1086</a>
+<a href="#1087" id="1087">1087</a>
+<a href="#1088" id="1088">1088</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::ops::{ControlFlow, Deref <span class="kw">as _</span>};
 <span class="kw">use </span>std::path::Path;
 <span class="kw">use </span>std::str::FromStr;
@@ -2005,6 +2007,7 @@
 </span><span class="kw">pub enum </span>LightningNode {
     Cln(Lightningd),
     Lnd(Lnd),
+    Ldk,
 }
 
 <span class="kw">impl </span>LightningNode {
@@ -2012,6 +2015,7 @@
         <span class="kw">match </span><span class="self">self </span>{
             LightningNode::Cln(<span class="kw">_</span>) =&gt; LightningNodeType::Cln,
             LightningNode::Lnd(<span class="kw">_</span>) =&gt; LightningNodeType::Lnd,
+            LightningNode::Ldk =&gt; LightningNodeType::Ldk,
         }
     }
 }

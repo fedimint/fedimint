@@ -1216,6 +1216,12 @@
 <a href="#1216" id="1216">1216</a>
 <a href="#1217" id="1217">1217</a>
 <a href="#1218" id="1218">1218</a>
+<a href="#1219" id="1219">1219</a>
+<a href="#1220" id="1220">1220</a>
+<a href="#1221" id="1221">1221</a>
+<a href="#1222" id="1222">1222</a>
+<a href="#1223" id="1223">1223</a>
+<a href="#1224" id="1224">1224</a>
 </pre></div><pre class="rust"><code><span class="kw">mod </span>config;
 
 <span class="kw">use </span>std::collections::{BTreeMap, HashMap, HashSet};
@@ -1260,7 +1266,7 @@
 <span class="kw">use </span><span class="kw">super</span>::vars::utf8;
 <span class="kw">use </span><span class="kw">crate</span>::envs::{FM_CLIENT_DIR_ENV, FM_DATA_DIR_ENV};
 <span class="kw">use </span><span class="kw">crate</span>::util::{poll, FedimintdCmd};
-<span class="kw">use </span><span class="kw">crate</span>::version_constants::{VERSION_0_3_0, VERSION_0_3_0_ALPHA};
+<span class="kw">use </span><span class="kw">crate</span>::version_constants::{VERSION_0_3_0, VERSION_0_3_0_ALPHA, VERSION_0_4_0_ALPHA};
 <span class="kw">use crate</span>::{poll_eq, vars};
 
 <span class="attr">#[derive(Clone)]
@@ -1908,7 +1914,13 @@
             .context(<span class="string">"invalid output"</span>)
             .map_err(ControlFlow::Break)<span class="question-mark">?
             </span>.len();
-            <span class="macro">poll_eq!</span>(num_gateways, <span class="number">2</span>)
+            <span class="kw">let </span>gatewayd_version = <span class="kw">crate</span>::util::Gatewayd::version_or_default().<span class="kw">await</span>;
+            <span class="kw">let </span>expected_gateways = <span class="kw">if </span>gatewayd_version &gt;= <span class="kw-2">*</span>VERSION_0_4_0_ALPHA {
+                <span class="number">3
+            </span>} <span class="kw">else </span>{
+                <span class="number">2
+            </span>};
+            <span class="macro">poll_eq!</span>(num_gateways, expected_gateways)
         })
         .<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="macro">debug!</span>(target: LOG_DEVIMINT,

@@ -384,6 +384,54 @@
 <a href="#384" id="384">384</a>
 <a href="#385" id="385">385</a>
 <a href="#386" id="386">386</a>
+<a href="#387" id="387">387</a>
+<a href="#388" id="388">388</a>
+<a href="#389" id="389">389</a>
+<a href="#390" id="390">390</a>
+<a href="#391" id="391">391</a>
+<a href="#392" id="392">392</a>
+<a href="#393" id="393">393</a>
+<a href="#394" id="394">394</a>
+<a href="#395" id="395">395</a>
+<a href="#396" id="396">396</a>
+<a href="#397" id="397">397</a>
+<a href="#398" id="398">398</a>
+<a href="#399" id="399">399</a>
+<a href="#400" id="400">400</a>
+<a href="#401" id="401">401</a>
+<a href="#402" id="402">402</a>
+<a href="#403" id="403">403</a>
+<a href="#404" id="404">404</a>
+<a href="#405" id="405">405</a>
+<a href="#406" id="406">406</a>
+<a href="#407" id="407">407</a>
+<a href="#408" id="408">408</a>
+<a href="#409" id="409">409</a>
+<a href="#410" id="410">410</a>
+<a href="#411" id="411">411</a>
+<a href="#412" id="412">412</a>
+<a href="#413" id="413">413</a>
+<a href="#414" id="414">414</a>
+<a href="#415" id="415">415</a>
+<a href="#416" id="416">416</a>
+<a href="#417" id="417">417</a>
+<a href="#418" id="418">418</a>
+<a href="#419" id="419">419</a>
+<a href="#420" id="420">420</a>
+<a href="#421" id="421">421</a>
+<a href="#422" id="422">422</a>
+<a href="#423" id="423">423</a>
+<a href="#424" id="424">424</a>
+<a href="#425" id="425">425</a>
+<a href="#426" id="426">426</a>
+<a href="#427" id="427">427</a>
+<a href="#428" id="428">428</a>
+<a href="#429" id="429">429</a>
+<a href="#430" id="430">430</a>
+<a href="#431" id="431">431</a>
+<a href="#432" id="432">432</a>
+<a href="#433" id="433">433</a>
+<a href="#434" id="434">434</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::ops::Deref <span class="kw">as _</span>;
 <span class="kw">use </span>std::sync::Arc;
 
@@ -394,7 +442,7 @@
 <span class="kw">use </span>tokio::join;
 <span class="kw">use </span>tracing::debug;
 
-<span class="kw">use </span><span class="kw">crate</span>::envs::{FM_GWID_CLN_ENV, FM_GWID_LND_ENV};
+<span class="kw">use </span><span class="kw">crate</span>::envs::{FM_GWID_CLN_ENV, FM_GWID_LDK_ENV, FM_GWID_LND_ENV};
 <span class="kw">use </span><span class="kw">crate</span>::external::{
     open_channel, open_channel_between_gateways, Bitcoind, Electrs, Esplora, Lightningd, Lnd,
 };
@@ -423,6 +471,7 @@
     <span class="kw">pub </span>fed: Federation,
     <span class="kw">pub </span>gw_cln: Gatewayd,
     <span class="kw">pub </span>gw_lnd: Gatewayd,
+    <span class="kw">pub </span>gw_ldk: <span class="prelude-ty">Option</span>&lt;Gatewayd&gt;,
     <span class="kw">pub </span>electrs: Electrs,
     <span class="kw">pub </span>esplora: Esplora,
 }
@@ -436,6 +485,7 @@
             fed,
             gw_cln,
             gw_lnd,
+            gw_ldk,
             electrs,
             esplora,
         } = <span class="self">self</span>;
@@ -443,6 +493,7 @@
         <span class="macro">join!</span>(
             spawn_drop(gw_cln),
             spawn_drop(gw_lnd),
+            spawn_drop(gw_ldk),
             spawn_drop(fed),
             spawn_drop(lnd),
             spawn_drop(cln),
@@ -468,11 +519,13 @@
     fed: JitArc&lt;Federation&gt;,
     gw_cln: JitArc&lt;Gatewayd&gt;,
     gw_lnd: JitArc&lt;Gatewayd&gt;,
+    gw_ldk: JitArc&lt;<span class="prelude-ty">Option</span>&lt;Gatewayd&gt;&gt;,
     electrs: JitArc&lt;Electrs&gt;,
     esplora: JitArc&lt;Esplora&gt;,
     start_time: std::time::SystemTime,
     gw_cln_registered: JitArc&lt;()&gt;,
     gw_lnd_registered: JitArc&lt;()&gt;,
+    gw_ldk_registered: JitArc&lt;()&gt;,
     fed_epoch_generated: JitArc&lt;()&gt;,
     channel_opened: JitArc&lt;()&gt;,
 }
@@ -595,6 +648,35 @@
                 <span class="prelude-val">Ok</span>(Arc::new(()))
             }
         });
+        <span class="kw">let </span>gw_ldk = JitTryAnyhow::new_try({
+            <span class="kw">let </span>esplora = esplora.clone();
+            <span class="kw">let </span>process_mgr = process_mgr.to_owned();
+            <span class="kw">move </span>|| <span class="kw">async move </span>{
+                <span class="kw">let </span>gatewayd_version = <span class="kw">crate</span>::util::Gatewayd::version_or_default().<span class="kw">await</span>;
+                <span class="kw">if </span>gatewayd_version &gt;= <span class="kw-2">*</span>VERSION_0_4_0_ALPHA {
+                    esplora.get_try().<span class="kw">await</span><span class="question-mark">?</span>;
+                    <span class="prelude-val">Ok</span>(Arc::new(<span class="prelude-val">Some</span>(
+                        Gatewayd::new(<span class="kw-2">&amp;</span>process_mgr, LightningNode::Ldk).<span class="kw">await</span><span class="question-mark">?</span>,
+                    )))
+                } <span class="kw">else </span>{
+                    <span class="prelude-val">Ok</span>(Arc::new(<span class="prelude-val">None</span>))
+                }
+            }
+        });
+        <span class="kw">let </span>gw_ldk_registered = JitTryAnyhow::new_try({
+            <span class="kw">let </span>gw_ldk = gw_ldk.clone();
+            <span class="kw">let </span>fed = fed.clone();
+            <span class="kw">move </span>|| <span class="kw">async move </span>{
+                <span class="kw">let </span>gw_ldk = gw_ldk.get_try().<span class="kw">await</span><span class="question-mark">?</span>.deref();
+                <span class="kw">if let </span><span class="prelude-val">Some</span>(gw_ldk) = gw_ldk {
+                    <span class="kw">let </span>fed = fed.get_try().<span class="kw">await</span><span class="question-mark">?</span>.deref();
+                    <span class="kw">if </span>!skip_setup {
+                        gw_ldk.connect_fed(fed).<span class="kw">await</span><span class="question-mark">?</span>;
+                    }
+                }
+                <span class="prelude-val">Ok</span>(Arc::new(()))
+            }
+        });
 
         <span class="kw">let </span>channel_opened = JitTryAnyhow::new_try({
             <span class="kw">let </span>process_mgr = process_mgr.to_owned();
@@ -646,11 +728,13 @@
             fed,
             gw_cln,
             gw_lnd,
+            gw_ldk,
             electrs,
             esplora,
             start_time,
             gw_cln_registered,
             gw_lnd_registered,
+            gw_ldk_registered,
             fed_epoch_generated,
             channel_opened,
         })
@@ -682,6 +766,13 @@
         <span class="self">self</span>.gw_lnd_registered.get_try().<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(<span class="self">self</span>.gw_lnd.get_try().<span class="kw">await</span><span class="question-mark">?</span>.deref())
     }
+    <span class="kw">pub async fn </span>gw_ldk(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; anyhow::Result&lt;<span class="kw-2">&amp;</span><span class="prelude-ty">Option</span>&lt;Gatewayd&gt;&gt; {
+        <span class="prelude-val">Ok</span>(<span class="self">self</span>.gw_ldk.get_try().<span class="kw">await</span><span class="question-mark">?</span>.deref())
+    }
+    <span class="kw">pub async fn </span>gw_ldk_registered(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; anyhow::Result&lt;<span class="kw-2">&amp;</span><span class="prelude-ty">Option</span>&lt;Gatewayd&gt;&gt; {
+        <span class="self">self</span>.gw_ldk_registered.get_try().<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="prelude-val">Ok</span>(<span class="self">self</span>.gw_ldk.get_try().<span class="kw">await</span><span class="question-mark">?</span>.deref())
+    }
     <span class="kw">pub async fn </span>fed(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; anyhow::Result&lt;<span class="kw-2">&amp;</span>Federation&gt; {
         <span class="prelude-val">Ok</span>(<span class="self">self</span>.fed.get_try().<span class="kw">await</span><span class="question-mark">?</span>.deref())
     }
@@ -710,11 +801,15 @@
 
         std::env::set_var(FM_GWID_CLN_ENV, <span class="self">self</span>.gw_cln().<span class="kw">await</span><span class="question-mark">?</span>.gateway_id().<span class="kw">await</span><span class="question-mark">?</span>);
         std::env::set_var(FM_GWID_LND_ENV, <span class="self">self</span>.gw_lnd().<span class="kw">await</span><span class="question-mark">?</span>.gateway_id().<span class="kw">await</span><span class="question-mark">?</span>);
+        <span class="kw">if let </span><span class="prelude-val">Some</span>(gw_ldk) = <span class="self">self</span>.gw_ldk().<span class="kw">await</span><span class="question-mark">? </span>{
+            std::env::set_var(FM_GWID_LDK_ENV, gw_ldk.gateway_id().<span class="kw">await</span><span class="question-mark">?</span>);
+        }
 
         <span class="kw">let _ </span>= <span class="self">self</span>.internal_client_gw_registered().<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let _ </span>= <span class="self">self</span>.channel_opened.get_try().<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let _ </span>= <span class="self">self</span>.gw_cln_registered().<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let _ </span>= <span class="self">self</span>.gw_lnd_registered().<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let _ </span>= <span class="self">self</span>.gw_ldk_registered().<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let _ </span>= <span class="self">self</span>.cln().<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let _ </span>= <span class="self">self</span>.lnd().<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let _ </span>= <span class="self">self</span>.electrs().<span class="kw">await</span><span class="question-mark">?</span>;
@@ -740,6 +835,7 @@
             fed: <span class="self">self</span>.fed().<span class="kw">await</span><span class="question-mark">?</span>.to_owned(),
             gw_cln: <span class="self">self</span>.gw_cln().<span class="kw">await</span><span class="question-mark">?</span>.to_owned(),
             gw_lnd: <span class="self">self</span>.gw_lnd().<span class="kw">await</span><span class="question-mark">?</span>.to_owned(),
+            gw_ldk: <span class="self">self</span>.gw_ldk().<span class="kw">await</span><span class="question-mark">?</span>.to_owned(),
             esplora: <span class="self">self</span>.esplora().<span class="kw">await</span><span class="question-mark">?</span>.to_owned(),
             electrs: <span class="self">self</span>.electrs().<span class="kw">await</span><span class="question-mark">?</span>.to_owned(),
         })

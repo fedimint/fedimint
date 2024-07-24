@@ -44,6 +44,8 @@
 <a href="#44" id="44">44</a>
 <a href="#45" id="45">45</a>
 <a href="#46" id="46">46</a>
+<a href="#47" id="47">47</a>
+<a href="#48" id="48">48</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::fmt::{Display, Formatter};
 <span class="kw">use </span>std::str::FromStr;
 
@@ -54,10 +56,11 @@
 
 <span class="kw">pub const </span>DEFAULT_GATEWAY_PASSWORD: <span class="kw-2">&amp;</span>str = <span class="string">"thereisnosecondbest"</span>;
 
-<span class="attr">#[derive(Debug, Clone)]
+<span class="attr">#[derive(Debug, Clone, Eq, PartialEq)]
 </span><span class="kw">pub enum </span>LightningNodeType {
     Cln,
     Lnd,
+    Ldk,
 }
 
 <span class="kw">impl </span>Display <span class="kw">for </span>LightningNodeType {
@@ -65,6 +68,7 @@
         <span class="kw">match </span><span class="self">self </span>{
             LightningNodeType::Cln =&gt; <span class="macro">write!</span>(f, <span class="string">"cln"</span>),
             LightningNodeType::Lnd =&gt; <span class="macro">write!</span>(f, <span class="string">"lnd"</span>),
+            LightningNodeType::Ldk =&gt; <span class="macro">write!</span>(f, <span class="string">"ldk"</span>),
         }
     }
 }

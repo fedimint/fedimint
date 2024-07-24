@@ -268,6 +268,13 @@
 <a href="#268" id="268">268</a>
 <a href="#269" id="269">269</a>
 <a href="#270" id="270">270</a>
+<a href="#271" id="271">271</a>
+<a href="#272" id="272">272</a>
+<a href="#273" id="273">273</a>
+<a href="#274" id="274">274</a>
+<a href="#275" id="275">275</a>
+<a href="#276" id="276">276</a>
+<a href="#277" id="277">277</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::HashMap;
 <span class="kw">use </span>std::ops::ControlFlow;
 <span class="kw">use </span>std::path::PathBuf;
@@ -301,12 +308,14 @@
         <span class="kw">let </span>port = <span class="kw">match </span>ln {
             LightningNode::Cln(<span class="kw">_</span>) =&gt; process_mgr.globals.FM_PORT_GW_CLN,
             LightningNode::Lnd(<span class="kw">_</span>) =&gt; process_mgr.globals.FM_PORT_GW_LND,
+            LightningNode::Ldk =&gt; process_mgr.globals.FM_PORT_GW_LDK,
         };
         <span class="kw">let </span>addr = <span class="macro">format!</span>(<span class="string">"http://127.0.0.1:{port}/{V1_API_ENDPOINT}"</span>);
 
         <span class="kw">let </span>lightning_node_port = <span class="kw">match </span>ln {
             LightningNode::Cln(<span class="kw">_</span>) =&gt; process_mgr.globals.FM_PORT_CLN,
             LightningNode::Lnd(<span class="kw">_</span>) =&gt; process_mgr.globals.FM_PORT_LND_LISTEN,
+            LightningNode::Ldk =&gt; process_mgr.globals.FM_PORT_LDK,
         };
         <span class="kw">let </span>lightning_node_addr = <span class="macro">format!</span>(<span class="string">"127.0.0.1:{lightning_node_port}"</span>);
 
@@ -351,6 +360,11 @@
         <span class="kw">match </span><span class="self">self</span>.ln.take() {
             <span class="prelude-val">Some</span>(LightningNode::Lnd(lnd)) =&gt; lnd.terminate().<span class="kw">await</span>,
             <span class="prelude-val">Some</span>(LightningNode::Cln(cln)) =&gt; cln.terminate().<span class="kw">await</span>,
+            <span class="prelude-val">Some</span>(LightningNode::Ldk) =&gt; {
+                <span class="comment">// This is not implemented because the LDK node lives in
+                // the gateway process and cannot be stopped independently.
+                </span><span class="macro">unimplemented!</span>(<span class="string">"LDK node termination not implemented"</span>)
+            }
             <span class="prelude-val">None </span>=&gt; <span class="prelude-val">Err</span>(<span class="macro">anyhow::anyhow!</span>(
                 <span class="string">"Cannot stop an already stopped Lightning Node"
             </span>)),

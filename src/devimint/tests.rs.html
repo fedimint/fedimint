@@ -2478,6 +2478,17 @@
 <a href="#2478" id="2478">2478</a>
 <a href="#2479" id="2479">2479</a>
 <a href="#2480" id="2480">2480</a>
+<a href="#2481" id="2481">2481</a>
+<a href="#2482" id="2482">2482</a>
+<a href="#2483" id="2483">2483</a>
+<a href="#2484" id="2484">2484</a>
+<a href="#2485" id="2485">2485</a>
+<a href="#2486" id="2486">2486</a>
+<a href="#2487" id="2487">2487</a>
+<a href="#2488" id="2488">2488</a>
+<a href="#2489" id="2489">2489</a>
+<a href="#2490" id="2490">2490</a>
+<a href="#2491" id="2491">2491</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashSet};
 <span class="kw">use </span>std::io::Write;
 <span class="kw">use </span>std::ops::ControlFlow;
@@ -2606,6 +2617,7 @@
         gw_lnd,
         electrs,
         esplora,
+        ..
     } = dev_fed;
 
     <span class="kw">let </span>max_p90_factor = <span class="number">5.0</span>;
@@ -3059,6 +3071,7 @@
         gw_lnd,
         electrs,
         esplora,
+        ..
     } = dev_fed;
 
     <span class="kw">let </span>fedimint_cli_version = <span class="kw">crate</span>::util::FedimintCli::version_or_default().<span class="kw">await</span>;
@@ -3967,6 +3980,7 @@
         gw_lnd,
         electrs,
         esplora,
+        ..
     } = dev_fed;
 
     <span class="kw">let </span>client = fed
@@ -4061,6 +4075,7 @@
         gw_lnd,
         electrs,
         esplora,
+        ..
     } = dev_fed;
 
     <span class="kw">let </span>client = fed.new_joined_client(<span class="string">"gw-reboot-test-client"</span>).<span class="kw">await</span><span class="question-mark">?</span>;
@@ -4176,6 +4191,9 @@
             <span class="comment">// Pay the invoice using CLN
             </span>new_cln.pay_bolt11_invoice(invoice).<span class="kw">await</span><span class="question-mark">?</span>;
         }
+        <span class="prelude-val">Some</span>(LightningNode::Ldk) =&gt; {
+            <span class="macro">unimplemented!</span>(<span class="string">"do_try_create_and_pay_invoice not implemented for LDK yet"</span>);
+        }
         <span class="prelude-val">None </span>=&gt; {
             <span class="macro">panic!</span>(<span class="string">"Lightning node did not come back up correctly"</span>);
         }
@@ -4283,6 +4301,7 @@
         gw_lnd,
         electrs,
         esplora,
+        ..
     } = dev_fed;
 
     bitcoind.mine_blocks(<span class="number">110</span>).<span class="kw">await</span><span class="question-mark">?</span>;
@@ -4346,6 +4365,7 @@
         gw_lnd,
         electrs,
         esplora,
+        ..
     } = dev_fed;
 
     <span class="kw">let </span>data_dir = env::var(FM_DATA_DIR_ENV)<span class="question-mark">?</span>;
@@ -4545,6 +4565,7 @@
         gw_lnd,
         electrs,
         esplora,
+        ..
     } = dev_fed;
 
     <span class="kw">const </span>PEER_TO_TEST: usize = <span class="number">0</span>;
@@ -4692,6 +4713,7 @@
         gw_lnd,
         electrs,
         esplora,
+        ..
     } = dev_fed;
 
     <span class="kw">let </span>client = fed.new_joined_client(<span class="string">"cannot-replay-client"</span>).<span class="kw">await</span><span class="question-mark">?</span>;
