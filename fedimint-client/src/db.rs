@@ -37,6 +37,7 @@ pub const CORE_CLIENT_DATABASE_VERSION: DatabaseVersion = DatabaseVersion(1);
 pub enum DbKeyPrefix {
     EncodedClientSecret = 0x28,
     ClientSecret = 0x29, // Unused
+    ClientPreRootSecretHash = 0x2a,
     OperationLog = 0x2c,
     ChronologicalOperationLog = 0x2d,
     CommonApiVersionCache = 0x2e,
@@ -104,6 +105,15 @@ impl_db_record!(
     key = OperationLogKey,
     value = OperationLogEntry,
     db_prefix = DbKeyPrefix::OperationLog
+);
+
+#[derive(Debug, Encodable, Decodable, Serialize)]
+pub struct ClientPreRootSecretHashKey;
+
+impl_db_record!(
+    key = ClientPreRootSecretHashKey,
+    value = [u8; 8],
+    db_prefix = DbKeyPrefix::ClientPreRootSecretHash
 );
 
 /// Key used to lookup operation log entries in chronological order
