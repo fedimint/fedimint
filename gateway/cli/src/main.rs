@@ -1,4 +1,4 @@
-#![warn(clippy::pedantic, clippy::nursery)]
+#![deny(clippy::pedantic, clippy::nursery)]
 
 mod general_commands;
 mod lightning_commands;

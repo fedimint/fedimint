@@ -1,4 +1,4 @@
-#![warn(clippy::pedantic)]
+#![deny(clippy::pedantic)]
 #![allow(clippy::default_trait_access)]
 
 //! BIP39 client secret support crate

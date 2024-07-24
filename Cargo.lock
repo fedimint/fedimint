@@ -408,18 +408,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "axum-macros"
-version = "0.4.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "00c055ee2d014ae5981ce1016374e8213682aa14d9bf40e48ab48b5f3ef20eaa"
-dependencies = [
- "heck 0.4.1",
- "proc-macro2",
- "quote",
- "syn 2.0.71",
-]
-
-[[package]]
 name = "backon"
 version = "0.4.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1838,7 +1826,6 @@ dependencies = [
  "anyhow",
  "async-trait",
  "axum 0.7.5",
- "axum-macros",
  "bitcoin 0.30.2",
  "clap",
  "clap_complete",
@@ -1923,7 +1910,6 @@ dependencies = [
  "async-stream",
  "async-trait",
  "axum 0.7.5",
- "axum-macros",
  "bitcoin 0.30.2",
  "bitcoin_hashes 0.12.0",
  "clap",

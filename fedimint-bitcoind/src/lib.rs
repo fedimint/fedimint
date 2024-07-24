@@ -1,4 +1,4 @@
-#![warn(clippy::pedantic)]
+#![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::cast_sign_loss)]
 #![allow(clippy::missing_errors_doc)]

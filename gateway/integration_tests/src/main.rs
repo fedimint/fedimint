@@ -1,4 +1,4 @@
-#![warn(clippy::pedantic)]
+#![deny(clippy::pedantic)]
 
 use clap::{Parser, Subcommand};
 use devimint::federation::Federation;

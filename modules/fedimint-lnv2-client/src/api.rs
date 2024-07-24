@@ -133,10 +133,7 @@ where
                 .count()
         });
 
-        let urls = union
-            .into_iter()
-            .map(fedimint_lnv2_common::GatewayEndpoint::into_url)
-            .collect();
+        let urls = union.into_iter().map(GatewayEndpoint::into_url).collect();
 
         Ok(urls)
     }
@@ -153,7 +150,7 @@ where
 
         let urls = gateways
             .into_iter()
-            .map(fedimint_lnv2_common::GatewayEndpoint::into_url)
+            .map(GatewayEndpoint::into_url)
             .collect();
 
         Ok(urls)
