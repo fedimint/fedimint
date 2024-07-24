@@ -15,7 +15,7 @@ use crate::external::{
 use crate::federation::{Client, Federation};
 use crate::gatewayd::Gatewayd;
 use crate::util::ProcessManager;
-use crate::version_constants::VERSION_0_4_0_ALPHA;
+use crate::version_constants::{VERSION_0_4_0_ALPHA, VERSION_0_5_0_ALPHA};
 use crate::LightningNode;
 
 async fn spawn_drop<T>(t: T)
@@ -219,7 +219,7 @@ impl DevJitFed {
             let process_mgr = process_mgr.to_owned();
             move || async move {
                 let gatewayd_version = crate::util::Gatewayd::version_or_default().await;
-                if gatewayd_version >= *VERSION_0_4_0_ALPHA {
+                if gatewayd_version >= *VERSION_0_5_0_ALPHA {
                     esplora.get_try().await?;
                     Ok(Arc::new(Some(
                         Gatewayd::new(&process_mgr, LightningNode::Ldk).await?,
