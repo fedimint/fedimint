@@ -170,8 +170,7 @@ impl ConsensusEngine {
 
         // Build P2P connections for the atomic broadcast
         let connections = ReconnectPeerConnections::new(
-            p2p_bind_addr,
-            self.cfg.network_config(),
+            self.cfg.network_config(p2p_bind_addr),
             DelayCalculator::PROD_DEFAULT,
             TlsTcpConnector::new(self.cfg.tls_config(), self.identity()).into_dyn(),
             &self.task_group,
