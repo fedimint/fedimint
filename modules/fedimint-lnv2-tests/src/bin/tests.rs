@@ -83,9 +83,15 @@ async fn pegin_gateways(dev_fed: &DevJitFed) -> anyhow::Result<()> {
 
     let gw_lnd = dev_fed.gw_lnd_registered().await?;
     let gw_cln = dev_fed.gw_cln_registered().await?;
+    let gw_ldk = dev_fed
+        .gw_ldk_registered()
+        .await?
+        .as_ref()
+        .expect("Gateways of version 0.5.0 or higher support LDK");
 
     federation.pegin_gateway(1_000_000, gw_lnd).await?;
     federation.pegin_gateway(1_000_000, gw_cln).await?;
+    federation.pegin_gateway(1_000_000, gw_ldk).await?;
 
     info!("Pegging-in gateways successful");
 
@@ -169,8 +175,13 @@ async fn test_self_payments_refund(dev_fed: &DevJitFed) -> anyhow::Result<()> {
 
     let gw_lnd = dev_fed.gw_lnd_registered().await?;
     let gw_cln = dev_fed.gw_cln_registered().await?;
+    let gw_ldk = dev_fed
+        .gw_ldk_registered()
+        .await?
+        .as_ref()
+        .expect("Gateways of version 0.5.0 or higher support LDK");
 
-    let gateways = [(gw_lnd, "LND"), (gw_cln, "CLN")];
+    let gateways = [(gw_lnd, "LND"), (gw_cln, "CLN"), (gw_ldk, "LDK")];
     let gateway_matrix = gateways.iter().cartesian_product(gateways);
 
     for ((gw_send, ln_send), (gw_receive, ln_receive)) in gateway_matrix {
@@ -199,8 +210,13 @@ async fn test_self_payments_success(dev_fed: &DevJitFed) -> anyhow::Result<()> {
 
     let gw_lnd = dev_fed.gw_lnd().await?;
     let gw_cln = dev_fed.gw_cln().await?;
+    let gw_ldk = dev_fed
+        .gw_ldk()
+        .await?
+        .as_ref()
+        .expect("Gateways of version 0.5.0 or higher support LDK");
 
-    let gateways = [(gw_lnd, "LND"), (gw_cln, "CLN")];
+    let gateways = [(gw_lnd, "LND"), (gw_cln, "CLN"), (gw_ldk, "LDK")];
     let gateway_matrix = gateways.iter().cartesian_product(gateways);
 
     for ((gw_send, ln_send), (gw_receive, ln_receive)) in gateway_matrix {
