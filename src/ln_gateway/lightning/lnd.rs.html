@@ -1342,6 +1342,14 @@
 <a href="#1342" id="1342">1342</a>
 <a href="#1343" id="1343">1343</a>
 <a href="#1344" id="1344">1344</a>
+<a href="#1345" id="1345">1345</a>
+<a href="#1346" id="1346">1346</a>
+<a href="#1347" id="1347">1347</a>
+<a href="#1348" id="1348">1348</a>
+<a href="#1349" id="1349">1349</a>
+<a href="#1350" id="1350">1350</a>
+<a href="#1351" id="1351">1351</a>
+<a href="#1352" id="1352">1352</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeSet;
 <span class="kw">use </span>std::fmt::{<span class="self">self</span>, Display};
 <span class="kw">use </span>std::str::FromStr;
@@ -2002,14 +2010,22 @@
                 .map_err(|e| LightningRpcError::FailedToGetNodeInfo {
                     failure_reason: <span class="macro">format!</span>(<span class="string">"Failed to parse public key {e:?}"</span>),
                 })<span class="question-mark">?</span>;
-        <span class="kw">let </span>network = info
+
+        <span class="kw">let </span>network = <span class="kw">match </span>info
             .chains
             .first()
             .ok_or_else(|| LightningRpcError::FailedToGetNodeInfo {
                 failure_reason: <span class="string">"Failed to parse node network"</span>.to_string(),
             })<span class="question-mark">?
-            </span>.clone()
-            .network;
+            </span>.network
+            .as_str()
+        {
+            <span class="comment">// LND uses "mainnet", but rust-bitcoin uses "bitcoin".
+            // TODO: create a fedimint `Network` type that understands "mainnet"
+            </span><span class="string">"mainnet" </span>=&gt; <span class="string">"bitcoin"</span>,
+            other =&gt; other,
+        }
+        .to_string();
 
         <span class="kw">return </span><span class="prelude-val">Ok</span>(GetNodeInfoResponse {
             pub_key: pub_key.serialize().to_vec(),

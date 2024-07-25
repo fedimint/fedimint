@@ -308,13 +308,6 @@
 <a href="#308" id="308">308</a>
 <a href="#309" id="309">309</a>
 <a href="#310" id="310">310</a>
-<a href="#311" id="311">311</a>
-<a href="#312" id="312">312</a>
-<a href="#313" id="313">313</a>
-<a href="#314" id="314">314</a>
-<a href="#315" id="315">315</a>
-<a href="#316" id="316">316</a>
-<a href="#317" id="317">317</a>
 </pre></div><pre class="rust"><code><span class="kw">pub mod </span>cln;
 <span class="kw">pub mod </span>ldk;
 <span class="kw">pub mod </span>lnd;
@@ -526,14 +519,7 @@
         } = <span class="self">self</span>.info().<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>node_pub_key = PublicKey::from_slice(<span class="kw-2">&amp;</span>pub_key)
             .map_err(|e| GatewayError::InvalidMetadata(<span class="macro">format!</span>(<span class="string">"Invalid node pubkey {e}"</span>)))<span class="question-mark">?</span>;
-        <span class="comment">// TODO: create a fedimint Network that understands "mainnet"
-        </span><span class="kw">let </span>network = <span class="kw">match </span>network.as_str() {
-            <span class="comment">// LND uses "mainnet", but rust-bitcoin uses "bitcoin".
-            // TODO(tvolk131): Push this detail down into the LND implementation of ILnRpcClient.
-            </span><span class="string">"mainnet" </span>=&gt; <span class="string">"bitcoin"</span>,
-            other =&gt; other,
-        };
-        <span class="kw">let </span>network = Network::from_str(network).map_err(|e| {
+        <span class="kw">let </span>network = Network::from_str(<span class="kw-2">&amp;</span>network).map_err(|e| {
             GatewayError::InvalidMetadata(<span class="macro">format!</span>(<span class="string">"Invalid network {network}: {e}"</span>))
         })<span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>((node_pub_key, alias, network, block_height, synced_to_chain))
