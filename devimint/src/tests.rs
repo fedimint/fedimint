@@ -26,8 +26,8 @@ use tracing::{debug, info};
 
 use crate::cli::{cleanup_on_exit, exec_user_command, setup, write_ready_file, CommonArgs};
 use crate::envs::{FM_DATA_DIR_ENV, FM_DEVIMINT_RUN_DEPRECATED_TESTS_ENV, FM_PASSWORD_ENV};
-use crate::federation::{self, Client, Federation};
-use crate::util::{poll, poll_with_timeout, LoadTestTool, ProcessManager};
+use crate::federation::{Client, Federation};
+use crate::util::{poll, LoadTestTool, ProcessManager};
 use crate::version_constants::{VERSION_0_3_0, VERSION_0_3_0_ALPHA, VERSION_0_4_0_ALPHA};
 use crate::{cmd, dev_fed, poll_eq, DevFed, Gatewayd, LightningNode, Lightningd, Lnd};
 
@@ -454,21 +454,18 @@ pub async fn upgrade_tests(process_mgr: &ProcessManager, binary: UpgradeTest) ->
 
             let mut dev_fed = dev_fed(process_mgr).await?;
             let client = dev_fed.fed.new_joined_client("test-client").await?;
-            try_join!(stress_test_fed(&dev_fed, None), wait_session(&client))?;
+            try_join!(stress_test_fed(&dev_fed, None), client.wait_session())?;
 
             for path in paths.iter().skip(1) {
-                dev_fed
-                    .fed
-                    .restart_all_staggered_with_bin(process_mgr, path)
-                    .await?;
+                dev_fed.fed.restart_all_with_bin(process_mgr, path).await?;
 
                 // stress test with all peers online
-                try_join!(stress_test_fed(&dev_fed, None), wait_session(&client))?;
+                try_join!(stress_test_fed(&dev_fed, None), client.wait_session())?;
 
                 // ensure a degraded federation with the last peer online works, since the last
                 // peer is the last to restart
                 dev_fed.fed.terminate_server(1).await?;
-                try_join!(stress_test_fed(&dev_fed, None), wait_session(&client))?;
+                try_join!(stress_test_fed(&dev_fed, None), client.wait_session())?;
 
                 let fedimintd_version = crate::util::FedimintdCmd::version_or_default().await;
                 info!(
@@ -513,7 +510,7 @@ pub async fn upgrade_tests(process_mgr: &ProcessManager, binary: UpgradeTest) ->
 
             try_join!(
                 stress_test_fed(&dev_fed, Some(&reusable_upgrade_clients)),
-                wait_session(&wait_session_client)
+                wait_session_client.wait_session()
             )?;
 
             for path in paths.iter().skip(1) {
@@ -522,7 +519,7 @@ pub async fn upgrade_tests(process_mgr: &ProcessManager, binary: UpgradeTest) ->
                 info!("upgraded fedimint-cli to version: {}", fedimint_cli_version);
                 try_join!(
                     stress_test_fed(&dev_fed, Some(&reusable_upgrade_clients)),
-                    wait_session(&wait_session_client)
+                    wait_session_client.wait_session()
                 )?;
                 info!(
                     "### fedimint-cli passed stress test for version {}",
@@ -546,14 +543,14 @@ pub async fn upgrade_tests(process_mgr: &ProcessManager, binary: UpgradeTest) ->
 
             let mut dev_fed = dev_fed(process_mgr).await?;
             let client = dev_fed.fed.new_joined_client("test-client").await?;
-            try_join!(stress_test_fed(&dev_fed, None), wait_session(&client))?;
+            try_join!(stress_test_fed(&dev_fed, None), client.wait_session())?;
 
             for path in paths.iter().skip(1) {
                 try_join!(
                     dev_fed.gw_cln.restart_with_bin(process_mgr, path),
                     dev_fed.gw_lnd.restart_with_bin(process_mgr, path),
                 )?;
-                try_join!(stress_test_fed(&dev_fed, None), wait_session(&client))?;
+                try_join!(stress_test_fed(&dev_fed, None), client.wait_session())?;
                 let gatewayd_version = crate::util::Gatewayd::version_or_default().await;
                 info!(
                     "### gatewayd passed stress test for version {}",
@@ -2015,7 +2012,7 @@ pub async fn recoverytool_test(dev_fed: DevFed) -> Result<()> {
     // session outcome in our DB. If there ever is another problem here: wait for
     // fedimintd-0 specifically to acknowledge the session switch. In practice this
     // should be sufficiently synchronous though.
-    wait_session_outcome(&client, last_tx_session).await?;
+    client.wait_session_outcome(last_tx_session).await?;
 
     // Funds from descriptors should match the fed's utxos
     assert_eq!(diff.to_sat(), total_fed_sats);
@@ -2364,38 +2361,6 @@ pub enum TestCmd {
         #[clap(subcommand)]
         binary: UpgradeTest,
     },
-}
-
-async fn wait_session(client: &federation::Client) -> anyhow::Result<()> {
-    info!("Waiting for a new session");
-    let session_count = client.get_session_count().await?;
-    wait_session_outcome(client, session_count).await?;
-    Ok(())
-}
-
-async fn wait_session_outcome(
-    client: &federation::Client,
-    session_count: u64,
-) -> anyhow::Result<()> {
-    let start = Instant::now();
-    poll_with_timeout(
-        "Waiting for a new session",
-        Duration::from_secs(180),
-        || async {
-            info!("Awaiting session outcome {session_count}");
-            match cmd!(client, "dev", "api", "await_session_outcome", session_count)
-                .run()
-                .await
-            {
-                Err(e) => Err(ControlFlow::Continue(e)),
-                Ok(()) => Ok(()),
-            }
-        },
-    )
-    .await?;
-    let session_found_in = start.elapsed();
-    info!("session found in {session_found_in:?}");
-    Ok(())
 }
 
 pub async fn handle_command(cmd: TestCmd, common_args: CommonArgs) -> Result<()> {

@@ -41,7 +41,7 @@ use super::external::Bitcoind;
 use super::util::{cmd, parse_map, Command, ProcessHandle, ProcessManager};
 use super::vars::utf8;
 use crate::envs::{FM_CLIENT_DIR_ENV, FM_DATA_DIR_ENV};
-use crate::util::{poll, FedimintdCmd};
+use crate::util::{poll, poll_with_timeout, FedimintdCmd};
 use crate::version_constants::{VERSION_0_3_0, VERSION_0_3_0_ALPHA, VERSION_0_4_0_ALPHA};
 use crate::{poll_eq, vars};
 
@@ -253,9 +253,44 @@ impl Client {
             .context("count field wasn't a number")
     }
 
-    /// Returns the current consensus session count
+    /// Returns once all active state machines complete
     pub async fn wait_complete(&self) -> Result<()> {
         cmd!(self, "dev", "wait-complete").run().await
+    }
+
+    /// Returns once the current session completes
+    pub async fn wait_session(&self) -> anyhow::Result<()> {
+        info!("Waiting for a new session");
+        let session_count = self.get_session_count().await?;
+        self.wait_session_outcome(session_count).await?;
+        Ok(())
+    }
+
+    /// Returns once the provided session count completes
+    pub async fn wait_session_outcome(&self, session_count: u64) -> anyhow::Result<()> {
+        let timeout = {
+            let current_session_count = self.get_session_count().await?;
+            let sessions_to_wait = session_count.saturating_sub(current_session_count) + 1;
+            let session_duration_seconds = 180;
+            Duration::from_secs(sessions_to_wait * session_duration_seconds)
+        };
+
+        let start = Instant::now();
+        poll_with_timeout("Waiting for a new session", timeout, || async {
+            info!("Awaiting session outcome {session_count}");
+            match cmd!(self, "dev", "api", "await_session_outcome", session_count)
+                .run()
+                .await
+            {
+                Err(e) => Err(ControlFlow::Continue(e)),
+                Ok(()) => Ok(()),
+            }
+        })
+        .await?;
+
+        let session_found_in = start.elapsed();
+        info!("session found in {session_found_in:?}");
+        Ok(())
     }
 }
 
@@ -548,6 +583,105 @@ impl Federation {
         let fedimintd_version = crate::util::FedimintdCmd::version_or_default().await;
         info!("upgraded fedimintd to version: {}", fedimintd_version);
         Ok(())
+    }
+
+    pub async fn restart_all_with_bin_after_session(
+        &mut self,
+        process_mgr: &ProcessManager,
+        bin_path: &PathBuf,
+    ) -> Result<()> {
+        // devimint defines `FM_SKIP_REL_NOTES_ACK` during setup, so we need to remove
+        // to verify the logic for `FM_REL_NOTES_ACK` works
+        std::env::remove_var("FM_SKIP_REL_NOTES_ACK");
+        let fed_size = process_mgr.globals.FM_FED_SIZE;
+
+        // ensure all peers are online, which must happen for a coordinated shutdown
+        self.start_all_servers(process_mgr).await?;
+
+        let client = self.client.get_try().await?;
+
+        // shutdown after the current session finishes
+        let shutdown_after_session = client.get_session_count().await?;
+
+        // schedule shutdown for all peers
+        for peer_id in 0..self.num_members() {
+            let auth = ApiAuth("pass".to_string());
+            crate::util::FedimintCli
+                .shutdown(&auth, peer_id.try_into()?, shutdown_after_session)
+                .await?;
+        }
+
+        client.wait_session_outcome(shutdown_after_session).await?;
+
+        poll_with_timeout(
+            "waiting for all peers to finish scheduled shutdown",
+            // fedimintd will wait 60s to shutdown, so we include a buffer
+            Duration::from_secs(70),
+            || async {
+                for peer_id in 0..self.num_members() {
+                    let auth = ApiAuth("pass".to_string());
+                    if crate::util::FedimintCli
+                        .status(&auth, peer_id.try_into().expect("conversion to u64 works"))
+                        .await
+                        .is_ok()
+                    {
+                        return Err(ControlFlow::Continue(anyhow!("peer is still running")));
+                    }
+                }
+                Ok(())
+            },
+        )
+        .await?;
+
+        // we need to cleanup all the processes for the shutdown peers
+        for peer_id in 0..self.num_members() {
+            self.terminate_server(peer_id).await?;
+        }
+
+        std::env::set_var("FM_FEDIMINTD_BASE_EXECUTABLE", bin_path);
+        std::env::set_var("FM_REL_NOTES_ACK", "0_4_xyz");
+
+        // staggered restart
+        for peer_id in 0..fed_size {
+            self.start_server(process_mgr, peer_id).await?;
+            if peer_id < fed_size - 1 {
+                fedimint_core::task::sleep_in_test(
+                    "waiting to restart remaining peers",
+                    Duration::from_secs(10),
+                )
+                .await;
+            }
+        }
+
+        self.await_all_peers().await?;
+
+        let fedimintd_version = crate::util::FedimintdCmd::version_or_default().await;
+        info!("upgraded fedimintd to version: {}", fedimintd_version);
+        Ok(())
+    }
+
+    pub async fn restart_all_with_bin(
+        &mut self,
+        process_mgr: &ProcessManager,
+        bin_path: &PathBuf,
+    ) -> Result<()> {
+        // get the version we're upgrading to, temporarily updating the fedimintd path
+        let current_fedimintd_path = std::env::var("FM_FEDIMINTD_BASE_EXECUTABLE")?;
+        std::env::set_var("FM_FEDIMINTD_BASE_EXECUTABLE", bin_path);
+        let new_fedimintd_version = crate::util::FedimintdCmd::version_or_default().await;
+        std::env::set_var("FM_FEDIMINTD_BASE_EXECUTABLE", current_fedimintd_path);
+
+        if Self::version_requires_coordinated_shutdown(new_fedimintd_version) {
+            self.restart_all_with_bin_after_session(process_mgr, bin_path)
+                .await
+        } else {
+            self.restart_all_staggered_with_bin(process_mgr, bin_path)
+                .await
+        }
+    }
+
+    fn version_requires_coordinated_shutdown(version: semver::Version) -> bool {
+        matches!((version.major, version.minor), (0, 4 | 5))
     }
 
     pub async fn degrade_federation(&mut self, process_mgr: &ProcessManager) -> Result<()> {
