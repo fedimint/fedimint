@@ -676,6 +676,23 @@
 <a href="#676" id="676">676</a>
 <a href="#677" id="677">677</a>
 <a href="#678" id="678">678</a>
+<a href="#679" id="679">679</a>
+<a href="#680" id="680">680</a>
+<a href="#681" id="681">681</a>
+<a href="#682" id="682">682</a>
+<a href="#683" id="683">683</a>
+<a href="#684" id="684">684</a>
+<a href="#685" id="685">685</a>
+<a href="#686" id="686">686</a>
+<a href="#687" id="687">687</a>
+<a href="#688" id="688">688</a>
+<a href="#689" id="689">689</a>
+<a href="#690" id="690">690</a>
+<a href="#691" id="691">691</a>
+<a href="#692" id="692">692</a>
+<a href="#693" id="693">693</a>
+<a href="#694" id="694">694</a>
+<a href="#695" id="695">695</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::ffi;
 <span class="kw">use </span>std::str::FromStr;
@@ -765,6 +782,10 @@
         /// hasn't been redeemed by the recipient. Defaults to one week.
         </span><span class="attr">#[clap(long, default_value_t = <span class="number">60 </span>* <span class="number">60 </span>* <span class="number">24 </span>* <span class="number">7</span>)]
         </span>timeout: u64,
+        <span class="doccomment">/// If the necessary information to join the federation the e-cash
+        /// belongs to should be included in the serialized notes
+        </span><span class="attr">#[clap(long)]
+        </span>include_invite: bool,
     },
     <span class="doccomment">/// Verifies the signatures of e-cash notes, but *not* if they have been
     /// spent already
@@ -905,6 +926,7 @@
             amount,
             allow_overpay,
             timeout,
+            include_invite,
         } =&gt; {
             <span class="macro">warn!</span>(<span class="string">"The client will try to double-spend these notes after the duration specified by the --timeout option to recover any unclaimed e-cash."</span>);
 
@@ -912,7 +934,13 @@
             <span class="kw">let </span>timeout = Duration::from_secs(timeout);
             <span class="kw">let </span>(operation, notes) = <span class="kw">if </span>allow_overpay {
                 <span class="kw">let </span>(operation, notes) = mint_module
-                    .spend_notes_with_selector(<span class="kw-2">&amp;</span>SelectNotesWithAtleastAmount, amount, timeout, ())
+                    .spend_notes_with_selector(
+                        <span class="kw-2">&amp;</span>SelectNotesWithAtleastAmount,
+                        amount,
+                        timeout,
+                        include_invite,
+                        (),
+                    )
                     .<span class="kw">await</span><span class="question-mark">?</span>;
 
                 <span class="kw">let </span>overspend_amount = notes.total_amount() - amount;
@@ -926,7 +954,13 @@
                 (operation, notes)
             } <span class="kw">else </span>{
                 mint_module
-                    .spend_notes_with_selector(<span class="kw-2">&amp;</span>SelectNotesWithExactAmount, amount, timeout, ())
+                    .spend_notes_with_selector(
+                        <span class="kw-2">&amp;</span>SelectNotesWithExactAmount,
+                        amount,
+                        timeout,
+                        include_invite,
+                        (),
+                    )
                     .<span class="kw">await</span><span class="question-mark">?
             </span>};
             <span class="macro">info!</span>(<span class="string">"Spend e-cash operation: {}"</span>, operation.fmt_short());
