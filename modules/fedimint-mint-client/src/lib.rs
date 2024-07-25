@@ -825,7 +825,7 @@ impl ClientModule for MintClientModule {
                 }
                 "spend_notes" => {
                     let req: SpendNotesRequest = serde_json::from_value(request)?;
-                    let result = self.spend_notes(req.min_amount, req.try_cancel_after, req.extra_meta).await?;
+                    let result = self.spend_notes(req.min_amount, req.try_cancel_after, req.include_invite, req.extra_meta).await?;
                     yield serde_json::to_value(result)?;
                 }
                 "validate_notes" => {
@@ -874,6 +874,7 @@ struct SubscribeReissueExternalNotesRequest {
 struct SpendNotesRequest {
     min_amount: Amount,
     try_cancel_after: Duration,
+    include_invite: bool,
     extra_meta: serde_json::Value,
 }
 
@@ -1517,12 +1518,14 @@ impl MintClientModule {
         &self,
         min_amount: Amount,
         try_cancel_after: Duration,
+        include_invite: bool,
         extra_meta: M,
     ) -> anyhow::Result<(OperationId, OOBNotes)> {
         self.spend_notes_with_selector(
             &SelectNotesWithAtleastAmount,
             min_amount,
             try_cancel_after,
+            include_invite,
             extra_meta,
         )
         .await
@@ -1534,8 +1537,10 @@ impl MintClientModule {
         notes_selector: &impl NotesSelector,
         requested_amount: Amount,
         try_cancel_after: Duration,
+        include_invite: bool,
         extra_meta: M,
     ) -> anyhow::Result<(OperationId, OOBNotes)> {
+        let federation_id_prefix = self.federation_id.to_prefix();
         let extra_meta = serde_json::to_value(extra_meta)
             .expect("MintClientModule::spend_notes extra_meta is serializable");
 
@@ -1553,10 +1558,14 @@ impl MintClientModule {
                             )
                             .await?;
 
-                        let oob_notes = OOBNotes::new_with_invite(
-                            notes,
-                            &self.client_ctx.get_invite_code().await,
-                        );
+                        let oob_notes = if include_invite {
+                            OOBNotes::new_with_invite(
+                                notes,
+                                &self.client_ctx.get_invite_code().await,
+                            )
+                        } else {
+                            OOBNotes::new(federation_id_prefix, notes)
+                        };
 
                         dbtx.add_state_machines(self.client_ctx.map_dyn(states).collect())
                             .await?;
