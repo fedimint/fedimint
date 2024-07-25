@@ -1101,6 +1101,35 @@
 <a href="#1101" id="1101">1101</a>
 <a href="#1102" id="1102">1102</a>
 <a href="#1103" id="1103">1103</a>
+<a href="#1104" id="1104">1104</a>
+<a href="#1105" id="1105">1105</a>
+<a href="#1106" id="1106">1106</a>
+<a href="#1107" id="1107">1107</a>
+<a href="#1108" id="1108">1108</a>
+<a href="#1109" id="1109">1109</a>
+<a href="#1110" id="1110">1110</a>
+<a href="#1111" id="1111">1111</a>
+<a href="#1112" id="1112">1112</a>
+<a href="#1113" id="1113">1113</a>
+<a href="#1114" id="1114">1114</a>
+<a href="#1115" id="1115">1115</a>
+<a href="#1116" id="1116">1116</a>
+<a href="#1117" id="1117">1117</a>
+<a href="#1118" id="1118">1118</a>
+<a href="#1119" id="1119">1119</a>
+<a href="#1120" id="1120">1120</a>
+<a href="#1121" id="1121">1121</a>
+<a href="#1122" id="1122">1122</a>
+<a href="#1123" id="1123">1123</a>
+<a href="#1124" id="1124">1124</a>
+<a href="#1125" id="1125">1125</a>
+<a href="#1126" id="1126">1126</a>
+<a href="#1127" id="1127">1127</a>
+<a href="#1128" id="1128">1128</a>
+<a href="#1129" id="1129">1129</a>
+<a href="#1130" id="1130">1130</a>
+<a href="#1131" id="1131">1131</a>
+<a href="#1132" id="1132">1132</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::ffi::OsStr;
 <span class="kw">use </span>std::future::Future;
@@ -1973,6 +2002,35 @@
         </span>.context(<span class="string">"non-json returned for get_verify_config_hash"</span>)<span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(serde_json::from_value(result)<span class="question-mark">?</span>)
     }
+
+    <span class="kw">pub async fn </span>shutdown(<span class="self">self</span>, auth: <span class="kw-2">&amp;</span>ApiAuth, our_id: u64, session_count: u64) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+        <span class="macro">cmd!</span>(
+            <span class="self">self</span>,
+            <span class="string">"--password"</span>,
+            <span class="kw-2">&amp;</span>auth.<span class="number">0</span>,
+            <span class="string">"--our-id"</span>,
+            our_id,
+            <span class="string">"admin"</span>,
+            <span class="string">"shutdown"</span>,
+            session_count,
+        )
+        .run()
+        .<span class="kw">await
+    </span>}
+
+    <span class="kw">pub async fn </span>status(<span class="self">self</span>, auth: <span class="kw-2">&amp;</span>ApiAuth, our_id: u64) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+        <span class="macro">cmd!</span>(
+            <span class="self">self</span>,
+            <span class="string">"--password"</span>,
+            <span class="kw-2">&amp;</span>auth.<span class="number">0</span>,
+            <span class="string">"--our-id"</span>,
+            our_id,
+            <span class="string">"admin"</span>,
+            <span class="string">"status"</span>,
+        )
+        .run()
+        .<span class="kw">await
+    </span>}
 
     <span class="kw">pub async fn </span>start_consensus(<span class="self">self</span>, auth: <span class="kw-2">&amp;</span>ApiAuth, endpoint: <span class="kw-2">&amp;</span>str) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
         <span class="macro">cmd!</span>(

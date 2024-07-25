@@ -2454,41 +2454,6 @@
 <a href="#2454" id="2454">2454</a>
 <a href="#2455" id="2455">2455</a>
 <a href="#2456" id="2456">2456</a>
-<a href="#2457" id="2457">2457</a>
-<a href="#2458" id="2458">2458</a>
-<a href="#2459" id="2459">2459</a>
-<a href="#2460" id="2460">2460</a>
-<a href="#2461" id="2461">2461</a>
-<a href="#2462" id="2462">2462</a>
-<a href="#2463" id="2463">2463</a>
-<a href="#2464" id="2464">2464</a>
-<a href="#2465" id="2465">2465</a>
-<a href="#2466" id="2466">2466</a>
-<a href="#2467" id="2467">2467</a>
-<a href="#2468" id="2468">2468</a>
-<a href="#2469" id="2469">2469</a>
-<a href="#2470" id="2470">2470</a>
-<a href="#2471" id="2471">2471</a>
-<a href="#2472" id="2472">2472</a>
-<a href="#2473" id="2473">2473</a>
-<a href="#2474" id="2474">2474</a>
-<a href="#2475" id="2475">2475</a>
-<a href="#2476" id="2476">2476</a>
-<a href="#2477" id="2477">2477</a>
-<a href="#2478" id="2478">2478</a>
-<a href="#2479" id="2479">2479</a>
-<a href="#2480" id="2480">2480</a>
-<a href="#2481" id="2481">2481</a>
-<a href="#2482" id="2482">2482</a>
-<a href="#2483" id="2483">2483</a>
-<a href="#2484" id="2484">2484</a>
-<a href="#2485" id="2485">2485</a>
-<a href="#2486" id="2486">2486</a>
-<a href="#2487" id="2487">2487</a>
-<a href="#2488" id="2488">2488</a>
-<a href="#2489" id="2489">2489</a>
-<a href="#2490" id="2490">2490</a>
-<a href="#2491" id="2491">2491</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashSet};
 <span class="kw">use </span>std::io::Write;
 <span class="kw">use </span>std::ops::ControlFlow;
@@ -2517,8 +2482,8 @@
 
 <span class="kw">use </span><span class="kw">crate</span>::cli::{cleanup_on_exit, exec_user_command, setup, write_ready_file, CommonArgs};
 <span class="kw">use </span><span class="kw">crate</span>::envs::{FM_DATA_DIR_ENV, FM_DEVIMINT_RUN_DEPRECATED_TESTS_ENV, FM_PASSWORD_ENV};
-<span class="kw">use </span><span class="kw">crate</span>::federation::{<span class="self">self</span>, Client, Federation};
-<span class="kw">use </span><span class="kw">crate</span>::util::{poll, poll_with_timeout, LoadTestTool, ProcessManager};
+<span class="kw">use </span><span class="kw">crate</span>::federation::{Client, Federation};
+<span class="kw">use </span><span class="kw">crate</span>::util::{poll, LoadTestTool, ProcessManager};
 <span class="kw">use </span><span class="kw">crate</span>::version_constants::{VERSION_0_3_0, VERSION_0_3_0_ALPHA, VERSION_0_4_0_ALPHA};
 <span class="kw">use crate</span>::{cmd, dev_fed, poll_eq, DevFed, Gatewayd, LightningNode, Lightningd, Lnd};
 
@@ -2945,21 +2910,18 @@
 
             <span class="kw">let </span><span class="kw-2">mut </span>dev_fed = dev_fed(process_mgr).<span class="kw">await</span><span class="question-mark">?</span>;
             <span class="kw">let </span>client = dev_fed.fed.new_joined_client(<span class="string">"test-client"</span>).<span class="kw">await</span><span class="question-mark">?</span>;
-            <span class="macro">try_join!</span>(stress_test_fed(<span class="kw-2">&amp;</span>dev_fed, <span class="prelude-val">None</span>), wait_session(<span class="kw-2">&amp;</span>client))<span class="question-mark">?</span>;
+            <span class="macro">try_join!</span>(stress_test_fed(<span class="kw-2">&amp;</span>dev_fed, <span class="prelude-val">None</span>), client.wait_session())<span class="question-mark">?</span>;
 
             <span class="kw">for </span>path <span class="kw">in </span>paths.iter().skip(<span class="number">1</span>) {
-                dev_fed
-                    .fed
-                    .restart_all_staggered_with_bin(process_mgr, path)
-                    .<span class="kw">await</span><span class="question-mark">?</span>;
+                dev_fed.fed.restart_all_with_bin(process_mgr, path).<span class="kw">await</span><span class="question-mark">?</span>;
 
                 <span class="comment">// stress test with all peers online
-                </span><span class="macro">try_join!</span>(stress_test_fed(<span class="kw-2">&amp;</span>dev_fed, <span class="prelude-val">None</span>), wait_session(<span class="kw-2">&amp;</span>client))<span class="question-mark">?</span>;
+                </span><span class="macro">try_join!</span>(stress_test_fed(<span class="kw-2">&amp;</span>dev_fed, <span class="prelude-val">None</span>), client.wait_session())<span class="question-mark">?</span>;
 
                 <span class="comment">// ensure a degraded federation with the last peer online works, since the last
                 // peer is the last to restart
                 </span>dev_fed.fed.terminate_server(<span class="number">1</span>).<span class="kw">await</span><span class="question-mark">?</span>;
-                <span class="macro">try_join!</span>(stress_test_fed(<span class="kw-2">&amp;</span>dev_fed, <span class="prelude-val">None</span>), wait_session(<span class="kw-2">&amp;</span>client))<span class="question-mark">?</span>;
+                <span class="macro">try_join!</span>(stress_test_fed(<span class="kw-2">&amp;</span>dev_fed, <span class="prelude-val">None</span>), client.wait_session())<span class="question-mark">?</span>;
 
                 <span class="kw">let </span>fedimintd_version = <span class="kw">crate</span>::util::FedimintdCmd::version_or_default().<span class="kw">await</span>;
                 <span class="macro">info!</span>(
@@ -3004,7 +2966,7 @@
 
             <span class="macro">try_join!</span>(
                 stress_test_fed(<span class="kw-2">&amp;</span>dev_fed, <span class="prelude-val">Some</span>(<span class="kw-2">&amp;</span>reusable_upgrade_clients)),
-                wait_session(<span class="kw-2">&amp;</span>wait_session_client)
+                wait_session_client.wait_session()
             )<span class="question-mark">?</span>;
 
             <span class="kw">for </span>path <span class="kw">in </span>paths.iter().skip(<span class="number">1</span>) {
@@ -3013,7 +2975,7 @@
                 <span class="macro">info!</span>(<span class="string">"upgraded fedimint-cli to version: {}"</span>, fedimint_cli_version);
                 <span class="macro">try_join!</span>(
                     stress_test_fed(<span class="kw-2">&amp;</span>dev_fed, <span class="prelude-val">Some</span>(<span class="kw-2">&amp;</span>reusable_upgrade_clients)),
-                    wait_session(<span class="kw-2">&amp;</span>wait_session_client)
+                    wait_session_client.wait_session()
                 )<span class="question-mark">?</span>;
                 <span class="macro">info!</span>(
                     <span class="string">"### fedimint-cli passed stress test for version {}"</span>,
@@ -3037,14 +2999,14 @@
 
             <span class="kw">let </span><span class="kw-2">mut </span>dev_fed = dev_fed(process_mgr).<span class="kw">await</span><span class="question-mark">?</span>;
             <span class="kw">let </span>client = dev_fed.fed.new_joined_client(<span class="string">"test-client"</span>).<span class="kw">await</span><span class="question-mark">?</span>;
-            <span class="macro">try_join!</span>(stress_test_fed(<span class="kw-2">&amp;</span>dev_fed, <span class="prelude-val">None</span>), wait_session(<span class="kw-2">&amp;</span>client))<span class="question-mark">?</span>;
+            <span class="macro">try_join!</span>(stress_test_fed(<span class="kw-2">&amp;</span>dev_fed, <span class="prelude-val">None</span>), client.wait_session())<span class="question-mark">?</span>;
 
             <span class="kw">for </span>path <span class="kw">in </span>paths.iter().skip(<span class="number">1</span>) {
                 <span class="macro">try_join!</span>(
                     dev_fed.gw_cln.restart_with_bin(process_mgr, path),
                     dev_fed.gw_lnd.restart_with_bin(process_mgr, path),
                 )<span class="question-mark">?</span>;
-                <span class="macro">try_join!</span>(stress_test_fed(<span class="kw-2">&amp;</span>dev_fed, <span class="prelude-val">None</span>), wait_session(<span class="kw-2">&amp;</span>client))<span class="question-mark">?</span>;
+                <span class="macro">try_join!</span>(stress_test_fed(<span class="kw-2">&amp;</span>dev_fed, <span class="prelude-val">None</span>), client.wait_session())<span class="question-mark">?</span>;
                 <span class="kw">let </span>gatewayd_version = <span class="kw">crate</span>::util::Gatewayd::version_or_default().<span class="kw">await</span>;
                 <span class="macro">info!</span>(
                     <span class="string">"### gatewayd passed stress test for version {}"</span>,
@@ -4506,7 +4468,7 @@
     // session outcome in our DB. If there ever is another problem here: wait for
     // fedimintd-0 specifically to acknowledge the session switch. In practice this
     // should be sufficiently synchronous though.
-    </span>wait_session_outcome(<span class="kw-2">&amp;</span>client, last_tx_session).<span class="kw">await</span><span class="question-mark">?</span>;
+    </span>client.wait_session_outcome(last_tx_session).<span class="kw">await</span><span class="question-mark">?</span>;
 
     <span class="comment">// Funds from descriptors should match the fed's utxos
     </span><span class="macro">assert_eq!</span>(diff.to_sat(), total_fed_sats);
@@ -4855,38 +4817,6 @@
         <span class="attr">#[clap(subcommand)]
         </span>binary: UpgradeTest,
     },
-}
-
-<span class="kw">async fn </span>wait_session(client: <span class="kw-2">&amp;</span>federation::Client) -&gt; anyhow::Result&lt;()&gt; {
-    <span class="macro">info!</span>(<span class="string">"Waiting for a new session"</span>);
-    <span class="kw">let </span>session_count = client.get_session_count().<span class="kw">await</span><span class="question-mark">?</span>;
-    wait_session_outcome(client, session_count).<span class="kw">await</span><span class="question-mark">?</span>;
-    <span class="prelude-val">Ok</span>(())
-}
-
-<span class="kw">async fn </span>wait_session_outcome(
-    client: <span class="kw-2">&amp;</span>federation::Client,
-    session_count: u64,
-) -&gt; anyhow::Result&lt;()&gt; {
-    <span class="kw">let </span>start = Instant::now();
-    poll_with_timeout(
-        <span class="string">"Waiting for a new session"</span>,
-        Duration::from_secs(<span class="number">180</span>),
-        || <span class="kw">async </span>{
-            <span class="macro">info!</span>(<span class="string">"Awaiting session outcome {session_count}"</span>);
-            <span class="kw">match </span><span class="macro">cmd!</span>(client, <span class="string">"dev"</span>, <span class="string">"api"</span>, <span class="string">"await_session_outcome"</span>, session_count)
-                .run()
-                .<span class="kw">await
-            </span>{
-                <span class="prelude-val">Err</span>(e) =&gt; <span class="prelude-val">Err</span>(ControlFlow::Continue(e)),
-                <span class="prelude-val">Ok</span>(()) =&gt; <span class="prelude-val">Ok</span>(()),
-            }
-        },
-    )
-    .<span class="kw">await</span><span class="question-mark">?</span>;
-    <span class="kw">let </span>session_found_in = start.elapsed();
-    <span class="macro">info!</span>(<span class="string">"session found in {session_found_in:?}"</span>);
-    <span class="prelude-val">Ok</span>(())
 }
 
 <span class="kw">pub async fn </span>handle_command(cmd: TestCmd, common_args: CommonArgs) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
