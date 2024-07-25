@@ -209,14 +209,7 @@ impl dyn ILnRpcClient {
         } = self.info().await?;
         let node_pub_key = PublicKey::from_slice(&pub_key)
             .map_err(|e| GatewayError::InvalidMetadata(format!("Invalid node pubkey {e}")))?;
-        // TODO: create a fedimint Network that understands "mainnet"
-        let network = match network.as_str() {
-            // LND uses "mainnet", but rust-bitcoin uses "bitcoin".
-            // TODO(tvolk131): Push this detail down into the LND implementation of ILnRpcClient.
-            "mainnet" => "bitcoin",
-            other => other,
-        };
-        let network = Network::from_str(network).map_err(|e| {
+        let network = Network::from_str(&network).map_err(|e| {
             GatewayError::InvalidMetadata(format!("Invalid network {network}: {e}"))
         })?;
         Ok((node_pub_key, alias, network, block_height, synced_to_chain))
