@@ -436,8 +436,7 @@ impl ServerConfig {
     ) -> DkgResult<Self> {
         let _timing /* logs on drop */ = timing::TimeReporter::new("distributed-gen").info();
         let server_conn = connect(
-            p2p_bind_addr,
-            params.p2p_network(),
+            params.p2p_network(p2p_bind_addr),
             params.tls_config(),
             delay_calculator,
             task_group,
@@ -579,7 +578,7 @@ pub enum KeyType {
 }
 
 impl ServerConfig {
-    pub fn network_config(&self) -> NetworkConfig {
+    pub fn network_config(&self, p2p_bind_addr: SocketAddr) -> NetworkConfig {
         NetworkConfig {
             identity: self.local.identity,
             peers: self
@@ -588,6 +587,7 @@ impl ServerConfig {
                 .iter()
                 .map(|(&id, endpoint)| (id, endpoint.url.clone()))
                 .collect(),
+            p2p_bind_addr,
         }
     }
 
@@ -614,9 +614,10 @@ impl ConfigGenParams {
         self.consensus.peers.keys().copied().collect()
     }
 
-    pub fn p2p_network(&self) -> NetworkConfig {
+    pub fn p2p_network(&self, p2p_bind_addr: SocketAddr) -> NetworkConfig {
         NetworkConfig {
             identity: self.local.our_id,
+            p2p_bind_addr,
             peers: self
                 .p2p_urls()
                 .into_iter()
@@ -687,7 +688,6 @@ pub fn max_connections() -> u32 {
 }
 
 pub async fn connect<T>(
-    p2p_bind_addr: SocketAddr,
     network: NetworkConfig,
     certs: TlsConfig,
     delay_calculator: DelayCalculator,
@@ -697,14 +697,9 @@ where
     T: std::fmt::Debug + Clone + Serialize + DeserializeOwned + Unpin + Send + Sync + 'static,
 {
     let connector = TlsTcpConnector::new(certs, network.identity).into_dyn();
-    let (connections, _) = ReconnectPeerConnectionsReliable::new(
-        p2p_bind_addr,
-        network,
-        delay_calculator,
-        connector,
-        task_group,
-    )
-    .await;
+    let (connections, _) =
+        ReconnectPeerConnectionsReliable::new(network, delay_calculator, connector, task_group)
+            .await;
     connections.into_dyn()
 }
 

@@ -44,6 +44,7 @@ use crate::net::api::{ApiSecrets, RpcHandlerCtx};
 /// How many txs can be stored in memory before blocking the API
 const TRANSACTION_BUFFER: usize = 1000;
 
+#[allow(clippy::too_many_arguments)]
 pub async fn run(
     p2p_bind_addr: SocketAddr,
     api_bind_addr: SocketAddr,
