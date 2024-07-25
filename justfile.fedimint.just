@@ -171,7 +171,7 @@ fuzz-target TARGET="" *ARGS="--exit_upon_crash":
   env -u RUSTC_WRAPPER CC=clang RUSTFLAGS="--cfg tokio_unstable" cargo hfuzz run {{TARGET}}
 
 # A quick round of fuzzing for every defined target
-fuzz-ci-quick *ARGS="--exit_upon_crash --run_time 30 -q -v":
+fuzz-ci-quick *ARGS="--exit_upon_crash --run_time 30 -q -v --threads 2":
   #!/usr/bin/env bash
   set -euo pipefail
 
