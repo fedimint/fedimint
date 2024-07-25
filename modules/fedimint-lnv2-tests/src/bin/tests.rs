@@ -6,6 +6,7 @@ use devimint::{cmd, util};
 use fedimint_core::core::OperationId;
 use fedimint_core::util::SafeUrl;
 use fedimint_lnv2_client::{FinalReceiveState, FinalSendState};
+use itertools::Itertools;
 use lightning_invoice::Bolt11Invoice;
 use substring::Substring;
 use tokio::try_join;
@@ -169,17 +170,15 @@ async fn test_self_payments_refund(dev_fed: &DevJitFed) -> anyhow::Result<()> {
     let gw_lnd = dev_fed.gw_lnd_registered().await?;
     let gw_cln = dev_fed.gw_cln_registered().await?;
 
-    for (gw_receive, gw_send) in [
-        (gw_lnd.addr.clone(), gw_lnd.addr.clone()),
-        (gw_lnd.addr.clone(), gw_cln.addr.clone()),
-        (gw_cln.addr.clone(), gw_lnd.addr.clone()),
-        (gw_cln.addr.clone(), gw_cln.addr.clone()),
-    ] {
-        info!("Testing self payment refund: {gw_send} -> {gw_receive}");
+    let gateways = [(gw_lnd, "LND"), (gw_cln, "CLN")];
+    let gateway_matrix = gateways.iter().cartesian_product(gateways);
 
-        let invoice = receive(&client, &gw_receive, 1_000_000).await?.0;
+    for ((gw_send, ln_send), (gw_receive, ln_receive)) in gateway_matrix {
+        info!("Testing self payment refund: {ln_send} -> {ln_receive}");
 
-        test_send(&client, &gw_send, &invoice, FinalSendState::Refunded).await?;
+        let invoice = receive(&client, &gw_receive.addr, 1_000_000).await?.0;
+
+        test_send(&client, &gw_send.addr, &invoice, FinalSendState::Refunded).await?;
     }
 
     info!("Testing self payments refund successful");
@@ -201,17 +200,15 @@ async fn test_self_payments_success(dev_fed: &DevJitFed) -> anyhow::Result<()> {
     let gw_lnd = dev_fed.gw_lnd().await?;
     let gw_cln = dev_fed.gw_cln().await?;
 
-    for (gw_receive, gw_send) in [
-        (gw_lnd.addr.clone(), gw_lnd.addr.clone()),
-        (gw_lnd.addr.clone(), gw_cln.addr.clone()),
-        (gw_cln.addr.clone(), gw_lnd.addr.clone()),
-        (gw_cln.addr.clone(), gw_cln.addr.clone()),
-    ] {
-        info!("Testing self payment success: {gw_send} -> {gw_receive}");
+    let gateways = [(gw_lnd, "LND"), (gw_cln, "CLN")];
+    let gateway_matrix = gateways.iter().cartesian_product(gateways);
 
-        let (invoice, receive_op) = receive(&client, &gw_receive, 1_000_000).await?;
+    for ((gw_send, ln_send), (gw_receive, ln_receive)) in gateway_matrix {
+        info!("Testing self payment success: {ln_send} -> {ln_receive}");
 
-        test_send(&client, &gw_send, &invoice, FinalSendState::Success).await?;
+        let (invoice, receive_op) = receive(&client, &gw_receive.addr, 1_000_000).await?;
+
+        test_send(&client, &gw_send.addr, &invoice, FinalSendState::Success).await?;
 
         await_receive_claimed(&client, receive_op).await?;
     }
