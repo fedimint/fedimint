@@ -59,7 +59,9 @@ async fn sends_ecash_out_of_band() -> anyhow::Result<()> {
     let client1_mint = client1.get_first_module::<MintClientModule>();
     let client2_mint = client2.get_first_module::<MintClientModule>();
     info!("### SPEND NOTES");
-    let (op, notes) = client1_mint.spend_notes(sats(750), TIMEOUT, ()).await?;
+    let (op, notes) = client1_mint
+        .spend_notes(sats(750), TIMEOUT, false, ())
+        .await?;
     let sub1 = &mut client1_mint.subscribe_spend_notes(op).await?.into_stream();
     assert_eq!(sub1.ok().await?, SpendOOBState::Created);
 
@@ -110,7 +112,7 @@ async fn sends_ecash_oob_highly_parallel() -> anyhow::Result<()> {
                 info!("Starting spend {num_spend}");
                 let client1_mint = task_client1.get_first_module::<MintClientModule>();
                 let (op, notes) = client1_mint
-                    .spend_notes(sats(30), ECASH_TIMEOUT, ())
+                    .spend_notes(sats(30), ECASH_TIMEOUT, false, ())
                     .await
                     .unwrap();
                 let sub1 = &mut client1_mint
@@ -234,7 +236,9 @@ async fn sends_ecash_out_of_band_cancel() -> anyhow::Result<()> {
 
     // Spend from client1 to client2
     let mint_module = client.get_first_module::<MintClientModule>();
-    let (op, _) = mint_module.spend_notes(sats(750), TIMEOUT, ()).await?;
+    let (op, _) = mint_module
+        .spend_notes(sats(750), TIMEOUT, false, ())
+        .await?;
     let sub1 = &mut mint_module.subscribe_spend_notes(op).await?.into_stream();
     assert_eq!(sub1.ok().await?, SpendOOBState::Created);
 
@@ -270,7 +274,7 @@ async fn error_zero_value_oob_spend() -> anyhow::Result<()> {
     // Spend from client1 to client2
     let err_msg = client1
         .get_first_module::<MintClientModule>()
-        .spend_notes(Amount::ZERO, TIMEOUT, ())
+        .spend_notes(Amount::ZERO, TIMEOUT, false, ())
         .await
         .expect_err("Zero-amount spends should be forbidden")
         .to_string();
