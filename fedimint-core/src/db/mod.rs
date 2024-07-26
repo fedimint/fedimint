@@ -1,5 +1,73 @@
 //! Core Fedimint database traits and types
 //!
+//! This module provides the core key-value database for Fedimint.
+//!
+//! # Usage
+//!
+//! To use the database, you typically follow these steps:
+//!
+//! 1. Create a `Database` instance
+//! 2. Begin a transaction
+//! 3. Perform operations within the transaction
+//! 4. Commit the transaction
+//!
+//! ## Example
+//!
+//! ```rust
+//! use fedimint_core::db::mem_impl::MemDatabase;
+//! use fedimint_core::db::{Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped};
+//! use fedimint_core::encoding::{Decodable, Encodable};
+//! use fedimint_core::impl_db_record;
+//! use fedimint_core::module::registry::ModuleDecoderRegistry;
+//!
+//! #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Encodable, Decodable)]
+//! pub struct TestKey(pub u64);
+//! #[derive(Debug, Encodable, Decodable, Eq, PartialEq, PartialOrd, Ord)]
+//! pub struct TestVal(pub u64);
+//!
+//! #[repr(u8)]
+//! #[derive(Clone)]
+//! pub enum TestDbKeyPrefix {
+//!     Test = 0x42,
+//! }
+//!
+//! impl_db_record!(
+//!     key = TestKey,
+//!     value = TestVal,
+//!     db_prefix = TestDbKeyPrefix::Test,
+//! );
+//!
+//! # async fn example() {
+//! // Create a new in-memory database
+//! let db = Database::new(MemDatabase::new(), ModuleDecoderRegistry::default());
+//!
+//! // Begin a transaction
+//! let mut tx = db.begin_transaction().await;
+//!
+//! // Perform operations
+//! tx.insert_entry(&TestKey(1), &TestVal(100)).await;
+//! let value = tx.get_value(&TestKey(1)).await;
+//!
+//! // Commit the transaction
+//! tx.commit_tx().await;
+//!
+//! // For operations that may need to be retried due to conflicts, use the
+//! // `autocommit` function:
+//!
+//! db.autocommit(
+//!     |dbtx, _| {
+//!         Box::pin(async move {
+//!             dbtx.insert_entry(&TestKey(1), &TestVal(100)).await;
+//!             anyhow::Ok(())
+//!         })
+//!     },
+//!     None,
+//! )
+//! .await
+//! .unwrap();
+//! # }
+//! ```
+//!
 //! # Isolation of database transactions
 //!
 //! Fedimint requires that the database implementation implement Snapshot
