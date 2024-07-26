@@ -63,7 +63,7 @@ resolver = "2"
 
 [workspace.package]
 crane.name = "fedimint"
-version = "0.4.0-rc.4"
+version = "0.4.0-rc.5"
 
 [workspace.metadata]
 name = "fedimint"
@@ -125,19 +125,19 @@ bincode = "1.3.3"
 tokio-rustls = "0.24.1"
 hex = "0.4.3"
 assert_matches = "1.5.0"
-devimint = { path = "./devimint", version = "=0.4.0-rc.4" }
-fedimint-client = { path = "./fedimint-client", version = "=0.4.0-rc.4" }
-fedimint-core = { path = "./fedimint-core", version = "=0.4.0-rc.4" }
-fedimint-ln-client = { path = "./modules/fedimint-ln-client", version = "=0.4.0-rc.4" }
-fedimint-api-client = { path = "./fedimint-api-client", version = "=0.4.0-rc.4" }
-fedimint-logging = { path = "./fedimint-logging", version = "=0.4.0-rc.4" }
-fedimint-empty-common = { path = "./modules/fedimint-empty-common", version = "=0.4.0-rc.4" }
-fedimint-testing = { path = "./fedimint-testing", version = "=0.4.0-rc.4" }
-fedimint-ln-common = { path = "./modules/fedimint-ln-common", version = "=0.4.0-rc.4" }
-fedimint-lnv2-common = { path = "./modules/fedimint-lnv2-common", version = "=0.4.0-rc.4" }
-fedimint-meta-common = { path = "./modules/fedimint-meta-common", version = "=0.4.0-rc.4" }
-fedimint-mint-common = { path = "./modules/fedimint-mint-common", version = "=0.4.0-rc.4" }
-fedimint-wallet-common = { path = "./modules/fedimint-wallet-common", version = "=0.4.0-rc.4" }
+devimint = { path = "./devimint", version = "=0.4.0-rc.5" }
+fedimint-client = { path = "./fedimint-client", version = "=0.4.0-rc.5" }
+fedimint-core = { path = "./fedimint-core", version = "=0.4.0-rc.5" }
+fedimint-ln-client = { path = "./modules/fedimint-ln-client", version = "=0.4.0-rc.5" }
+fedimint-api-client = { path = "./fedimint-api-client", version = "=0.4.0-rc.5" }
+fedimint-logging = { path = "./fedimint-logging", version = "=0.4.0-rc.5" }
+fedimint-empty-common = { path = "./modules/fedimint-empty-common", version = "=0.4.0-rc.5" }
+fedimint-testing = { path = "./fedimint-testing", version = "=0.4.0-rc.5" }
+fedimint-ln-common = { path = "./modules/fedimint-ln-common", version = "=0.4.0-rc.5" }
+fedimint-lnv2-common = { path = "./modules/fedimint-lnv2-common", version = "=0.4.0-rc.5" }
+fedimint-meta-common = { path = "./modules/fedimint-meta-common", version = "=0.4.0-rc.5" }
+fedimint-mint-common = { path = "./modules/fedimint-mint-common", version = "=0.4.0-rc.5" }
+fedimint-wallet-common = { path = "./modules/fedimint-wallet-common", version = "=0.4.0-rc.5" }
 
 # Workaround: https://github.com/rust-lang/cargo/issues/12457 which causes
 #             https://github.com/ipetkov/crane/issues/370
