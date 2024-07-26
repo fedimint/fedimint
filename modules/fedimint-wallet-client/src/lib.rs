@@ -44,7 +44,7 @@ use fedimint_client::sm::util::MapStateTransitions;
 use fedimint_client::sm::{Context, DynState, ModuleNotifier, State, StateTransition};
 use fedimint_client::transaction::{ClientOutput, TransactionBuilder};
 use fedimint_client::{sm_enum_variant_translation, DynGlobalClientContext};
-use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, OperationId};
+use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, ModuleKind, OperationId};
 use fedimint_core::db::{
     AutocommitError, Database, DatabaseTransaction, DatabaseVersion,
     IDatabaseTransactionOpsCoreTyped,
@@ -516,7 +516,9 @@ pub struct WalletClientContext {
     secp: Secp256k1<All>,
 }
 
-impl Context for WalletClientContext {}
+impl Context for WalletClientContext {
+    const KIND: Option<ModuleKind> = Some(KIND);
+}
 
 impl WalletClientModule {
     fn cfg(&self) -> &WalletClientConfig {

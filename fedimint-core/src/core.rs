@@ -452,6 +452,7 @@ impl Debug for Decoder {
 
 pub trait IClientConfig: Debug + Display + DynEncodable {
     fn as_any(&self) -> &(dyn Any + Send + Sync);
+    fn module_kind(&self) -> Option<ModuleKind>;
     fn clone(&self, instance_id: ModuleInstanceId) -> DynClientConfig;
     fn dyn_hash(&self) -> u64;
     fn erased_eq_no_instance_id(&self, other: &DynClientConfig) -> bool;
@@ -495,6 +496,7 @@ module_plugin_dyn_newtype_display_passthrough!(DynClientConfig);
 /// General purpose code should use [`DynInput`] instead
 pub trait IInput: Debug + Display + DynEncodable {
     fn as_any(&self) -> &(dyn Any + Send + Sync);
+    fn module_kind(&self) -> Option<ModuleKind>;
     fn clone(&self, instance_id: ModuleInstanceId) -> DynInput;
     fn dyn_hash(&self) -> u64;
     fn erased_eq_no_instance_id(&self, other: &DynInput) -> bool;
@@ -526,6 +528,7 @@ module_plugin_dyn_newtype_display_passthrough!(DynInput);
 /// General purpose code should use [`DynOutput`] instead
 pub trait IOutput: Debug + Display + DynEncodable {
     fn as_any(&self) -> &(dyn Any + Send + Sync);
+    fn module_kind(&self) -> Option<ModuleKind>;
     fn clone(&self, instance_id: ModuleInstanceId) -> DynOutput;
     fn dyn_hash(&self) -> u64;
     fn erased_eq_no_instance_id(&self, other: &DynOutput) -> bool;
@@ -556,6 +559,7 @@ pub enum FinalizationError {
 
 pub trait IOutputOutcome: Debug + Display + DynEncodable {
     fn as_any(&self) -> &(dyn Any + Send + Sync);
+    fn module_kind(&self) -> Option<ModuleKind>;
     fn clone(&self, module_instance_id: ModuleInstanceId) -> DynOutputOutcome;
     fn dyn_hash(&self) -> u64;
     fn erased_eq_no_instance_id(&self, other: &DynOutputOutcome) -> bool;
@@ -579,6 +583,7 @@ module_plugin_dyn_newtype_display_passthrough!(DynOutputOutcome);
 
 pub trait IModuleConsensusItem: Debug + Display + DynEncodable {
     fn as_any(&self) -> &(dyn Any + Send + Sync);
+    fn module_kind(&self) -> Option<ModuleKind>;
     fn clone(&self, module_instance_id: ModuleInstanceId) -> DynModuleConsensusItem;
     fn dyn_hash(&self) -> u64;
 
@@ -606,6 +611,7 @@ module_plugin_dyn_newtype_display_passthrough!(DynModuleConsensusItem);
 
 pub trait IOutputError: Debug + Display + DynEncodable {
     fn as_any(&self) -> &(dyn Any + Send + Sync);
+    fn module_kind(&self) -> Option<ModuleKind>;
     fn clone(&self, module_instance_id: ModuleInstanceId) -> DynOutputError;
     fn dyn_hash(&self) -> u64;
 
@@ -632,6 +638,7 @@ module_plugin_dyn_newtype_display_passthrough!(DynOutputError);
 
 pub trait IInputError: Debug + Display + DynEncodable {
     fn as_any(&self) -> &(dyn Any + Send + Sync);
+    fn module_kind(&self) -> Option<ModuleKind>;
     fn clone(&self, module_instance_id: ModuleInstanceId) -> DynInputError;
     fn dyn_hash(&self) -> u64;
 

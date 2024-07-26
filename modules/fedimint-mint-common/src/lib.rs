@@ -227,6 +227,7 @@ impl Nonce {
 }
 
 plugin_types_trait_impl_common!(
+    KIND,
     MintModuleTypes,
     MintClientConfig,
     MintInput,

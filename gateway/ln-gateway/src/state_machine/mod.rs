@@ -18,7 +18,7 @@ use fedimint_client::sm::util::MapStateTransitions;
 use fedimint_client::sm::{Context, DynState, ModuleNotifier, State};
 use fedimint_client::transaction::{ClientOutput, TransactionBuilder};
 use fedimint_client::{sm_enum_variant_translation, AddStateMachinesError, DynGlobalClientContext};
-use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, OperationId};
+use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, ModuleKind, OperationId};
 use fedimint_core::db::{AutocommitError, DatabaseTransaction, DatabaseVersion};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::{ApiVersion, ModuleInit, MultiApiVersion};
@@ -163,7 +163,9 @@ pub struct GatewayClientContext {
     gateway: Arc<Gateway>,
 }
 
-impl Context for GatewayClientContext {}
+impl Context for GatewayClientContext {
+    const KIND: Option<ModuleKind> = Some(fedimint_ln_common::KIND);
+}
 
 impl From<&GatewayClientContext> for LightningClientContext {
     fn from(ctx: &GatewayClientContext) -> Self {

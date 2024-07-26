@@ -11,7 +11,7 @@ pub mod states;
 use std::collections::BTreeMap;
 
 use api::MetaFederationApi;
-use common::{MetaConsensusValue, MetaKey, MetaValue};
+use common::{MetaConsensusValue, MetaKey, MetaValue, KIND};
 use db::DbKeyPrefix;
 use fedimint_api_client::api::DynModuleApi;
 use fedimint_client::db::ClientMigrationFn;
@@ -19,7 +19,7 @@ use fedimint_client::module::init::{ClientModuleInit, ClientModuleInitArgs};
 use fedimint_client::module::recovery::NoModuleBackup;
 use fedimint_client::module::{ClientModule, IClientModule};
 use fedimint_client::sm::Context;
-use fedimint_core::core::Decoder;
+use fedimint_core::core::{Decoder, ModuleKind};
 use fedimint_core::db::{DatabaseTransaction, DatabaseVersion};
 use fedimint_core::module::{ApiAuth, ApiVersion, ModuleCommon, ModuleInit, MultiApiVersion};
 use fedimint_core::{apply, async_trait_maybe_send, Amount, PeerId};
@@ -96,7 +96,9 @@ pub struct MetaClientContext {
 }
 
 // TODO: Boiler-plate
-impl Context for MetaClientContext {}
+impl Context for MetaClientContext {
+    const KIND: Option<ModuleKind> = Some(KIND);
+}
 
 #[apply(async_trait_maybe_send!)]
 impl ClientModule for MetaClientModule {

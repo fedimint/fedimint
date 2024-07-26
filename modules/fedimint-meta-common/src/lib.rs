@@ -209,6 +209,7 @@ pub struct MetaModuleTypes;
 
 // Wire together the types for this module
 plugin_types_trait_impl_common!(
+    KIND,
     MetaModuleTypes,
     MetaClientConfig,
     MetaInput,

@@ -16,7 +16,7 @@ use fedimint_client::sm::{Context, DynState, ModuleNotifier, State, StateTransit
 use fedimint_client::transaction::{ClientOutput, TransactionBuilder};
 use fedimint_client::{sm_enum_variant_translation, DynGlobalClientContext};
 use fedimint_core::config::FederationId;
-use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, OperationId};
+use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, ModuleKind, OperationId};
 use fedimint_core::db::{DatabaseTransaction, DatabaseVersion};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::{
@@ -112,7 +112,9 @@ pub struct GatewayClientContextV2 {
     pub gateway: Arc<Gateway>,
 }
 
-impl Context for GatewayClientContextV2 {}
+impl Context for GatewayClientContextV2 {
+    const KIND: Option<ModuleKind> = Some(fedimint_lnv2_common::KIND);
+}
 
 impl ClientModule for GatewayClientModuleV2 {
     type Init = GatewayClientInitV2;

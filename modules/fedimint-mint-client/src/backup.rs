@@ -1,8 +1,9 @@
 use fedimint_client::module::recovery::{DynModuleBackup, ModuleBackup};
 use fedimint_client::module::ClientDbTxContext;
-use fedimint_core::core::{IntoDynInstance, ModuleInstanceId};
+use fedimint_core::core::{IntoDynInstance, ModuleInstanceId, ModuleKind};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::{Amount, OutPoint, Tiered, TieredMulti};
+use fedimint_mint_common::KIND;
 use serde::{Deserialize, Serialize};
 
 use super::MintClientModule;
@@ -61,7 +62,9 @@ impl EcashBackupV0 {
     }
 }
 
-impl ModuleBackup for EcashBackup {}
+impl ModuleBackup for EcashBackup {
+    const KIND: Option<ModuleKind> = Some(KIND);
+}
 
 impl IntoDynInstance for EcashBackup {
     type DynType = DynModuleBackup;
