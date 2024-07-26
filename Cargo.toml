@@ -23,6 +23,7 @@ members = [
     "fedimint-rocksdb",
     "fedimint-server",
     "fedimint-testing",
+    "fedimint-testing-core",
     "fedimint-wasm-tests",
     "fedimintd",
     "fuzz",
@@ -137,6 +138,7 @@ fedimint-api-client = { path = "./fedimint-api-client", version = "=0.5.0-alpha"
 fedimint-logging = { path = "./fedimint-logging", version = "=0.5.0-alpha" }
 fedimint-empty-common = { path = "./modules/fedimint-empty-common", version = "=0.5.0-alpha" }
 fedimint-testing = { path = "./fedimint-testing", version = "=0.5.0-alpha" }
+fedimint-testing-core = { path = "./fedimint-testing-core", version = "=0.5.0-alpha" }
 fedimint-ln-common = { path = "./modules/fedimint-ln-common", version = "=0.5.0-alpha" }
 fedimint-lnv2-common = { path = "./modules/fedimint-lnv2-common", version = "=0.5.0-alpha" }
 fedimint-meta-common = { path = "./modules/fedimint-meta-common", version = "=0.5.0-alpha" }

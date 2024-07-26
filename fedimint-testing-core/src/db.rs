@@ -34,7 +34,7 @@ use crate::envs::FM_PREPARE_DB_MIGRATION_SNAPSHOTS_ENV;
 
 /// Get the project root (relative to closest Cargo.lock file)
 /// ```rust
-/// match fedimint_testing::db::get_project_root() {
+/// match fedimint_testing_core::db::get_project_root() {
 ///     Ok(p) => println!("Current project root is {:?}", p),
 ///     Err(e) => println!("Error obtaining project root {:?}", e),
 /// };
