@@ -351,14 +351,28 @@
 <a href="#351" id="351">351</a>
 <a href="#352" id="352">352</a>
 <a href="#353" id="353">353</a>
+<a href="#354" id="354">354</a>
+<a href="#355" id="355">355</a>
+<a href="#356" id="356">356</a>
+<a href="#357" id="357">357</a>
+<a href="#358" id="358">358</a>
+<a href="#359" id="359">359</a>
+<a href="#360" id="360">360</a>
+<a href="#361" id="361">361</a>
+<a href="#362" id="362">362</a>
+<a href="#363" id="363">363</a>
+<a href="#364" id="364">364</a>
+<a href="#365" id="365">365</a>
+<a href="#366" id="366">366</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>clap::Parser;
 <span class="kw">use </span>devimint::devfed::DevJitFed;
 <span class="kw">use </span>devimint::federation::Client;
-<span class="kw">use </span>devimint::version_constants::VERSION_0_4_0_ALPHA;
+<span class="kw">use </span>devimint::version_constants::VERSION_0_5_0_ALPHA;
 <span class="kw">use </span>devimint::{cmd, util};
 <span class="kw">use </span>fedimint_core::core::OperationId;
 <span class="kw">use </span>fedimint_core::util::SafeUrl;
 <span class="kw">use </span>fedimint_lnv2_client::{FinalReceiveState, FinalSendState};
+<span class="kw">use </span>itertools::Itertools;
 <span class="kw">use </span>lightning_invoice::Bolt11Invoice;
 <span class="kw">use </span>substring::Substring;
 <span class="kw">use </span>tokio::try_join;
@@ -382,17 +396,17 @@
         <span class="kw">let </span>fedimintd_version = util::FedimintdCmd::version_or_default().<span class="kw">await</span>;
         <span class="kw">let </span>gatewayd_version = util::Gatewayd::version_or_default().<span class="kw">await</span>;
 
-        <span class="kw">if </span>fedimint_cli_version &lt; <span class="kw-2">*</span>VERSION_0_4_0_ALPHA {
+        <span class="kw">if </span>fedimint_cli_version &lt; <span class="kw-2">*</span>VERSION_0_5_0_ALPHA {
             <span class="macro">info!</span>(%fedimint_cli_version, <span class="string">"Version did not support lnv2 module, skipping"</span>);
             <span class="kw">return </span><span class="prelude-val">Ok</span>(());
         }
 
-        <span class="kw">if </span>fedimintd_version &lt; <span class="kw-2">*</span>VERSION_0_4_0_ALPHA {
+        <span class="kw">if </span>fedimintd_version &lt; <span class="kw-2">*</span>VERSION_0_5_0_ALPHA {
             <span class="macro">info!</span>(%fedimintd_version, <span class="string">"Version did not support lnv2 module, skipping"</span>);
             <span class="kw">return </span><span class="prelude-val">Ok</span>(());
         }
 
-        <span class="kw">if </span>gatewayd_version &lt; <span class="kw-2">*</span>VERSION_0_4_0_ALPHA {
+        <span class="kw">if </span>gatewayd_version &lt; <span class="kw-2">*</span>VERSION_0_5_0_ALPHA {
             <span class="macro">info!</span>(%gatewayd_version, <span class="string">"Version did not support lnv2 module, skipping"</span>);
             <span class="kw">return </span><span class="prelude-val">Ok</span>(());
         }
@@ -435,9 +449,15 @@
 
     <span class="kw">let </span>gw_lnd = dev_fed.gw_lnd_registered().<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="kw">let </span>gw_cln = dev_fed.gw_cln_registered().<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="kw">let </span>gw_ldk = dev_fed
+        .gw_ldk_registered()
+        .<span class="kw">await</span><span class="question-mark">?
+        </span>.as_ref()
+        .expect(<span class="string">"Gateways of version 0.5.0 or higher support LDK"</span>);
 
     federation.pegin_gateway(<span class="number">1_000_000</span>, gw_lnd).<span class="kw">await</span><span class="question-mark">?</span>;
     federation.pegin_gateway(<span class="number">1_000_000</span>, gw_cln).<span class="kw">await</span><span class="question-mark">?</span>;
+    federation.pegin_gateway(<span class="number">1_000_000</span>, gw_ldk).<span class="kw">await</span><span class="question-mark">?</span>;
 
     <span class="macro">info!</span>(<span class="string">"Pegging-in gateways successful"</span>);
 
@@ -521,18 +541,21 @@
 
     <span class="kw">let </span>gw_lnd = dev_fed.gw_lnd_registered().<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="kw">let </span>gw_cln = dev_fed.gw_cln_registered().<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="kw">let </span>gw_ldk = dev_fed
+        .gw_ldk_registered()
+        .<span class="kw">await</span><span class="question-mark">?
+        </span>.as_ref()
+        .expect(<span class="string">"Gateways of version 0.5.0 or higher support LDK"</span>);
 
-    <span class="kw">for </span>(gw_receive, gw_send) <span class="kw">in </span>[
-        (gw_lnd.addr.clone(), gw_lnd.addr.clone()),
-        (gw_lnd.addr.clone(), gw_cln.addr.clone()),
-        (gw_cln.addr.clone(), gw_lnd.addr.clone()),
-        (gw_cln.addr.clone(), gw_cln.addr.clone()),
-    ] {
-        <span class="macro">info!</span>(<span class="string">"Testing self payment refund: {gw_send} -&gt; {gw_receive}"</span>);
+    <span class="kw">let </span>gateways = [(gw_lnd, <span class="string">"LND"</span>), (gw_cln, <span class="string">"CLN"</span>), (gw_ldk, <span class="string">"LDK"</span>)];
+    <span class="kw">let </span>gateway_matrix = gateways.iter().cartesian_product(gateways);
 
-        <span class="kw">let </span>invoice = receive(<span class="kw-2">&amp;</span>client, <span class="kw-2">&amp;</span>gw_receive, <span class="number">1_000_000</span>).<span class="kw">await</span><span class="question-mark">?</span>.<span class="number">0</span>;
+    <span class="kw">for </span>((gw_send, ln_send), (gw_receive, ln_receive)) <span class="kw">in </span>gateway_matrix {
+        <span class="macro">info!</span>(<span class="string">"Testing self payment refund: {ln_send} -&gt; {ln_receive}"</span>);
 
-        test_send(<span class="kw-2">&amp;</span>client, <span class="kw-2">&amp;</span>gw_send, <span class="kw-2">&amp;</span>invoice, FinalSendState::Refunded).<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>invoice = receive(<span class="kw-2">&amp;</span>client, <span class="kw-2">&amp;</span>gw_receive.addr, <span class="number">1_000_000</span>).<span class="kw">await</span><span class="question-mark">?</span>.<span class="number">0</span>;
+
+        test_send(<span class="kw-2">&amp;</span>client, <span class="kw-2">&amp;</span>gw_send.addr, <span class="kw-2">&amp;</span>invoice, FinalSendState::Refunded).<span class="kw">await</span><span class="question-mark">?</span>;
     }
 
     <span class="macro">info!</span>(<span class="string">"Testing self payments refund successful"</span>);
@@ -553,18 +576,21 @@
 
     <span class="kw">let </span>gw_lnd = dev_fed.gw_lnd().<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="kw">let </span>gw_cln = dev_fed.gw_cln().<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="kw">let </span>gw_ldk = dev_fed
+        .gw_ldk()
+        .<span class="kw">await</span><span class="question-mark">?
+        </span>.as_ref()
+        .expect(<span class="string">"Gateways of version 0.5.0 or higher support LDK"</span>);
 
-    <span class="kw">for </span>(gw_receive, gw_send) <span class="kw">in </span>[
-        (gw_lnd.addr.clone(), gw_lnd.addr.clone()),
-        (gw_lnd.addr.clone(), gw_cln.addr.clone()),
-        (gw_cln.addr.clone(), gw_lnd.addr.clone()),
-        (gw_cln.addr.clone(), gw_cln.addr.clone()),
-    ] {
-        <span class="macro">info!</span>(<span class="string">"Testing self payment success: {gw_send} -&gt; {gw_receive}"</span>);
+    <span class="kw">let </span>gateways = [(gw_lnd, <span class="string">"LND"</span>), (gw_cln, <span class="string">"CLN"</span>), (gw_ldk, <span class="string">"LDK"</span>)];
+    <span class="kw">let </span>gateway_matrix = gateways.iter().cartesian_product(gateways);
 
-        <span class="kw">let </span>(invoice, receive_op) = receive(<span class="kw-2">&amp;</span>client, <span class="kw-2">&amp;</span>gw_receive, <span class="number">1_000_000</span>).<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="kw">for </span>((gw_send, ln_send), (gw_receive, ln_receive)) <span class="kw">in </span>gateway_matrix {
+        <span class="macro">info!</span>(<span class="string">"Testing self payment success: {ln_send} -&gt; {ln_receive}"</span>);
 
-        test_send(<span class="kw-2">&amp;</span>client, <span class="kw-2">&amp;</span>gw_send, <span class="kw-2">&amp;</span>invoice, FinalSendState::Success).<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>(invoice, receive_op) = receive(<span class="kw-2">&amp;</span>client, <span class="kw-2">&amp;</span>gw_receive.addr, <span class="number">1_000_000</span>).<span class="kw">await</span><span class="question-mark">?</span>;
+
+        test_send(<span class="kw-2">&amp;</span>client, <span class="kw-2">&amp;</span>gw_send.addr, <span class="kw-2">&amp;</span>invoice, FinalSendState::Success).<span class="kw">await</span><span class="question-mark">?</span>;
 
         await_receive_claimed(<span class="kw-2">&amp;</span>client, receive_op).<span class="kw">await</span><span class="question-mark">?</span>;
     }

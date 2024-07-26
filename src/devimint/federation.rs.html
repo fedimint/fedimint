@@ -1400,7 +1400,7 @@
 <span class="kw">use </span><span class="kw">super</span>::vars::utf8;
 <span class="kw">use </span><span class="kw">crate</span>::envs::{FM_CLIENT_DIR_ENV, FM_DATA_DIR_ENV};
 <span class="kw">use </span><span class="kw">crate</span>::util::{poll, poll_with_timeout, FedimintdCmd};
-<span class="kw">use </span><span class="kw">crate</span>::version_constants::{VERSION_0_3_0, VERSION_0_3_0_ALPHA, VERSION_0_4_0_ALPHA};
+<span class="kw">use </span><span class="kw">crate</span>::version_constants::{VERSION_0_3_0, VERSION_0_3_0_ALPHA, VERSION_0_5_0_ALPHA};
 <span class="kw">use crate</span>::{poll_eq, vars};
 
 <span class="attr">#[derive(Clone)]
@@ -2183,7 +2183,7 @@
             .map_err(ControlFlow::Break)<span class="question-mark">?
             </span>.len();
             <span class="kw">let </span>gatewayd_version = <span class="kw">crate</span>::util::Gatewayd::version_or_default().<span class="kw">await</span>;
-            <span class="kw">let </span>expected_gateways = <span class="kw">if </span>gatewayd_version &gt;= <span class="kw-2">*</span>VERSION_0_4_0_ALPHA {
+            <span class="kw">let </span>expected_gateways = <span class="kw">if </span>gatewayd_version &gt;= <span class="kw-2">*</span>VERSION_0_5_0_ALPHA {
                 <span class="number">3
             </span>} <span class="kw">else </span>{
                 <span class="number">2

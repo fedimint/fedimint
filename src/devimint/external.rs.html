@@ -1086,7 +1086,17 @@
 <a href="#1086" id="1086">1086</a>
 <a href="#1087" id="1087">1087</a>
 <a href="#1088" id="1088">1088</a>
-</pre></div><pre class="rust"><code><span class="kw">use </span>std::ops::{ControlFlow, Deref <span class="kw">as _</span>};
+<a href="#1089" id="1089">1089</a>
+<a href="#1090" id="1090">1090</a>
+<a href="#1091" id="1091">1091</a>
+<a href="#1092" id="1092">1092</a>
+<a href="#1093" id="1093">1093</a>
+<a href="#1094" id="1094">1094</a>
+<a href="#1095" id="1095">1095</a>
+<a href="#1096" id="1096">1096</a>
+<a href="#1097" id="1097">1097</a>
+<a href="#1098" id="1098">1098</a>
+</pre></div><pre class="rust"><code><span class="kw">use </span>std::ops::ControlFlow;
 <span class="kw">use </span>std::path::Path;
 <span class="kw">use </span>std::str::FromStr;
 <span class="kw">use </span>std::sync::Arc;
@@ -1952,13 +1962,17 @@
 
 <span class="kw">pub async fn </span>open_channel_between_gateways(
     bitcoind: <span class="kw-2">&amp;</span>Bitcoind,
-    gw_a: <span class="kw-2">&amp;</span>JitTryAnyhow&lt;Arc&lt;Gatewayd&gt;&gt;,
-    gw_b: <span class="kw-2">&amp;</span>JitTryAnyhow&lt;Arc&lt;Gatewayd&gt;&gt;,
+    gw_a: <span class="kw-2">&amp;</span>Gatewayd,
+    gw_b: <span class="kw-2">&amp;</span>Gatewayd,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-    <span class="kw">let </span>gw_a = gw_a.get_try().<span class="kw">await</span><span class="question-mark">?</span>.deref().clone();
-    <span class="kw">let </span>gw_b = gw_b.get_try().<span class="kw">await</span><span class="question-mark">?</span>.deref().clone();
+    <span class="comment">// TODO: Find out why we need to wait for LDK here.
+    </span><span class="kw">let </span>funding_addr = <span class="kw">loop </span>{
+        <span class="kw">if let </span><span class="prelude-val">Ok</span>(address) = gw_a.get_funding_address().<span class="kw">await </span>{
+            <span class="kw">break </span>address;
+        }
 
-    <span class="kw">let </span>funding_addr = gw_a.get_funding_address().<span class="kw">await</span><span class="question-mark">?</span>;
+        fedimint_core::runtime::sleep(std::time::Duration::from_secs(<span class="number">1</span>)).<span class="kw">await</span>;
+    };
 
     bitcoind.send_to(funding_addr, <span class="number">100_000_000</span>).<span class="kw">await</span><span class="question-mark">?</span>;
     bitcoind.mine_blocks(<span class="number">10</span>).<span class="kw">await</span><span class="question-mark">?</span>;
@@ -1978,7 +1992,13 @@
     )
     .<span class="kw">await</span><span class="question-mark">?</span>;
 
-    bitcoind.mine_blocks(<span class="number">10</span>).<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="comment">// `open_channel` may not send out the channel funding transaction immediately
+    // so we need to wait for it to get to the mempool.
+    // TODO: LDK is the culprit here. Find a way to ensure that
+    // `GatewayLdkClient::open_channel` is fully done before it returns.
+    </span>fedimint_core::runtime::sleep(Duration::from_secs(<span class="number">10</span>)).<span class="kw">await</span>;
+
+    bitcoind.mine_blocks(<span class="number">20</span>).<span class="kw">await</span><span class="question-mark">?</span>;
 
     <span class="kw">let </span>gw_a_node_pubkey = gw_a.lightning_pubkey().<span class="kw">await</span><span class="question-mark">?</span>;
 
