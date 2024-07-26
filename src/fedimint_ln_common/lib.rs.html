@@ -742,6 +742,7 @@
 <a href="#742" id="742">742</a>
 <a href="#743" id="743">743</a>
 <a href="#744" id="744">744</a>
+<a href="#745" id="745">745</a>
 </pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::doc_markdown)]
 #![allow(clippy::missing_errors_doc)]
@@ -1158,6 +1159,7 @@
 <span class="kw">pub struct </span>LightningModuleTypes;
 
 <span class="macro">plugin_types_trait_impl_common!</span>(
+    KIND,
     LightningModuleTypes,
     LightningClientConfig,
     LightningInput,

@@ -185,6 +185,8 @@
 <a href="#185" id="185">185</a>
 <a href="#186" id="186">186</a>
 <a href="#187" id="187">187</a>
+<a href="#188" id="188">188</a>
+<a href="#189" id="189">189</a>
 </pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::missing_errors_doc)]
 #![allow(clippy::module_name_repetitions)]
@@ -198,7 +200,7 @@
 <span class="kw">use </span>std::collections::BTreeMap;
 
 <span class="kw">use </span>api::MetaFederationApi;
-<span class="kw">use </span>common::{MetaConsensusValue, MetaKey, MetaValue};
+<span class="kw">use </span>common::{MetaConsensusValue, MetaKey, MetaValue, KIND};
 <span class="kw">use </span>db::DbKeyPrefix;
 <span class="kw">use </span>fedimint_api_client::api::DynModuleApi;
 <span class="kw">use </span>fedimint_client::db::ClientMigrationFn;
@@ -206,7 +208,7 @@
 <span class="kw">use </span>fedimint_client::module::recovery::NoModuleBackup;
 <span class="kw">use </span>fedimint_client::module::{ClientModule, IClientModule};
 <span class="kw">use </span>fedimint_client::sm::Context;
-<span class="kw">use </span>fedimint_core::core::Decoder;
+<span class="kw">use </span>fedimint_core::core::{Decoder, ModuleKind};
 <span class="kw">use </span>fedimint_core::db::{DatabaseTransaction, DatabaseVersion};
 <span class="kw">use </span>fedimint_core::module::{ApiAuth, ApiVersion, ModuleCommon, ModuleInit, MultiApiVersion};
 <span class="kw">use </span>fedimint_core::{apply, async_trait_maybe_send, Amount, PeerId};
@@ -283,7 +285,9 @@
 }
 
 <span class="comment">// TODO: Boiler-plate
-</span><span class="kw">impl </span>Context <span class="kw">for </span>MetaClientContext {}
+</span><span class="kw">impl </span>Context <span class="kw">for </span>MetaClientContext {
+    <span class="kw">const </span>KIND: <span class="prelude-ty">Option</span>&lt;ModuleKind&gt; = <span class="prelude-val">Some</span>(KIND);
+}
 
 <span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
 </span><span class="kw">impl </span>ClientModule <span class="kw">for </span>MetaClientModule {

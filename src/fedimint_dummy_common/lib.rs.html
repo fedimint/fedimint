@@ -140,6 +140,7 @@
 <a href="#140" id="140">140</a>
 <a href="#141" id="141">141</a>
 <a href="#142" id="142">142</a>
+<a href="#143" id="143">143</a>
 </pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::missing_panics_doc)]
 #![allow(clippy::module_name_repetitions)]
@@ -207,6 +208,7 @@
 
 <span class="comment">// Wire together the types for this module
 </span><span class="macro">plugin_types_trait_impl_common!</span>(
+    KIND,
     DummyModuleTypes,
     DummyClientConfig,
     DummyInput,

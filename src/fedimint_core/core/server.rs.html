@@ -259,6 +259,13 @@
 <a href="#259" id="259">259</a>
 <a href="#260" id="260">260</a>
 <a href="#261" id="261">261</a>
+<a href="#262" id="262">262</a>
+<a href="#263" id="263">263</a>
+<a href="#264" id="264">264</a>
+<a href="#265" id="265">265</a>
+<a href="#266" id="266">266</a>
+<a href="#267" id="267">267</a>
+<a href="#268" id="268">268</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! Fedimint Core Server module interface
 //!
 //! Fedimint supports externally implemented modules.
@@ -271,6 +278,7 @@
 <span class="kw">use </span>fedimint_core::module::audit::Audit;
 <span class="kw">use </span>fedimint_core::{apply, async_trait_maybe_send, OutPoint, PeerId};
 
+<span class="kw">use </span><span class="kw">super</span>::ModuleKind;
 <span class="kw">use </span><span class="kw">crate</span>::core::{
     Any, Decoder, DynInput, DynInputError, DynModuleConsensusItem, DynOutput, DynOutputError,
     DynOutputOutcome,
@@ -292,6 +300,8 @@
 
     <span class="doccomment">/// Returns the decoder belonging to the server module
     </span><span class="kw">fn </span>decoder(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Decoder;
+
+    <span class="kw">fn </span>module_kind(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ModuleKind;
 
     <span class="doccomment">/// This module's contribution to the next consensus proposal
     </span><span class="kw">async fn </span>consensus_proposal(
@@ -384,6 +394,10 @@
     <span class="kw">fn </span>as_any(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span><span class="kw">dyn </span>Any {
         <span class="self">self
     </span>}
+
+    <span class="kw">fn </span>module_kind(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ModuleKind {
+        &lt;<span class="self">Self </span><span class="kw">as </span>ServerModule&gt;::module_kind()
+    }
 
     <span class="doccomment">/// This module's contribution to the next consensus proposal
     </span><span class="kw">async fn </span>consensus_proposal(

@@ -461,6 +461,8 @@
 <a href="#461" id="461">461</a>
 <a href="#462" id="462">462</a>
 <a href="#463" id="463">463</a>
+<a href="#464" id="464">464</a>
+<a href="#465" id="465">465</a>
 </pre></div><pre class="rust"><code><span class="kw">mod </span>complete_sm;
 <span class="kw">mod </span>receive_sm;
 <span class="kw">mod </span>send_sm;
@@ -479,7 +481,7 @@
 <span class="kw">use </span>fedimint_client::transaction::{ClientOutput, TransactionBuilder};
 <span class="kw">use </span>fedimint_client::{sm_enum_variant_translation, DynGlobalClientContext};
 <span class="kw">use </span>fedimint_core::config::FederationId;
-<span class="kw">use </span>fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, OperationId};
+<span class="kw">use </span>fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, ModuleKind, OperationId};
 <span class="kw">use </span>fedimint_core::db::{DatabaseTransaction, DatabaseVersion};
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::module::{
@@ -575,7 +577,9 @@
     <span class="kw">pub </span>gateway: Arc&lt;Gateway&gt;,
 }
 
-<span class="kw">impl </span>Context <span class="kw">for </span>GatewayClientContextV2 {}
+<span class="kw">impl </span>Context <span class="kw">for </span>GatewayClientContextV2 {
+    <span class="kw">const </span>KIND: <span class="prelude-ty">Option</span>&lt;ModuleKind&gt; = <span class="prelude-val">Some</span>(fedimint_lnv2_common::KIND);
+}
 
 <span class="kw">impl </span>ClientModule <span class="kw">for </span>GatewayClientModuleV2 {
     <span class="kw">type </span>Init = GatewayClientInitV2;

@@ -759,6 +759,49 @@
 <a href="#759" id="759">759</a>
 <a href="#760" id="760">760</a>
 <a href="#761" id="761">761</a>
+<a href="#762" id="762">762</a>
+<a href="#763" id="763">763</a>
+<a href="#764" id="764">764</a>
+<a href="#765" id="765">765</a>
+<a href="#766" id="766">766</a>
+<a href="#767" id="767">767</a>
+<a href="#768" id="768">768</a>
+<a href="#769" id="769">769</a>
+<a href="#770" id="770">770</a>
+<a href="#771" id="771">771</a>
+<a href="#772" id="772">772</a>
+<a href="#773" id="773">773</a>
+<a href="#774" id="774">774</a>
+<a href="#775" id="775">775</a>
+<a href="#776" id="776">776</a>
+<a href="#777" id="777">777</a>
+<a href="#778" id="778">778</a>
+<a href="#779" id="779">779</a>
+<a href="#780" id="780">780</a>
+<a href="#781" id="781">781</a>
+<a href="#782" id="782">782</a>
+<a href="#783" id="783">783</a>
+<a href="#784" id="784">784</a>
+<a href="#785" id="785">785</a>
+<a href="#786" id="786">786</a>
+<a href="#787" id="787">787</a>
+<a href="#788" id="788">788</a>
+<a href="#789" id="789">789</a>
+<a href="#790" id="790">790</a>
+<a href="#791" id="791">791</a>
+<a href="#792" id="792">792</a>
+<a href="#793" id="793">793</a>
+<a href="#794" id="794">794</a>
+<a href="#795" id="795">795</a>
+<a href="#796" id="796">796</a>
+<a href="#797" id="797">797</a>
+<a href="#798" id="798">798</a>
+<a href="#799" id="799">799</a>
+<a href="#800" id="800">800</a>
+<a href="#801" id="801">801</a>
+<a href="#802" id="802">802</a>
+<a href="#803" id="803">803</a>
+<a href="#804" id="804">804</a>
 </pre></div><pre class="rust"><code><span class="doccomment">/// Define "dyn newtype" (a newtype over `dyn Trait`)
 ///
 /// This is a simple pattern that make working with `dyn Trait`s
@@ -946,21 +989,31 @@
                 <span class="self">self</span>.module_instance_id
             }
 
-            <span class="kw">pub fn </span>from_typed&lt;I&gt;(module_instance_id: ::fedimint_core::core::ModuleInstanceId, typed: I) -&gt; <span class="self">Self
+            <span class="kw">pub fn </span>from_typed&lt;I&gt;(
+                module_instance_id: ::fedimint_core::core::ModuleInstanceId,
+                typed: I
+            ) -&gt; <span class="self">Self
             </span><span class="kw">where
                 </span>I: <span class="macro-nonterminal">$</span><span class="kw">trait </span>+ <span class="macro-nonterminal">$crate::task::MaybeSend </span>+ <span class="macro-nonterminal">$crate::task::MaybeSync </span>+ <span class="lifetime">'static </span>{
 
                 <span class="self">Self </span>{ inner: <span class="macro-nonterminal">$container::new</span>(typed), module_instance_id }
             }
 
-            <span class="kw">pub fn </span>from_parts(module_instance_id: <span class="macro-nonterminal">$crate::core::ModuleInstanceId</span>, dynbox: <span class="macro-nonterminal">$container</span>&lt;<span class="macro-nonterminal">$</span><span class="macro">crate::maybe_add_send_sync!</span>(<span class="kw">dyn </span><span class="macro-nonterminal">$</span><span class="kw">trait </span>+ <span class="lifetime">'static</span>)&gt;) -&gt; <span class="macro-nonterminal">Self </span>{
+            <span class="kw">pub fn </span>from_parts(
+                module_instance_id: <span class="macro-nonterminal">$crate::core::ModuleInstanceId</span>,
+                dynbox: <span class="macro-nonterminal">$container</span>&lt;<span class="macro-nonterminal">$</span><span class="macro">crate::maybe_add_send_sync!</span>(<span class="kw">dyn </span><span class="macro-nonterminal">$</span><span class="kw">trait </span>+ <span class="lifetime">'static</span>)&gt;
+            ) -&gt; <span class="macro-nonterminal">Self </span>{
                 <span class="self">Self </span>{ inner: dynbox, module_instance_id }
             }
         }
 
         <span class="kw">impl </span>std::fmt::Debug <span class="kw">for </span><span class="macro-nonterminal">$name </span>{
             <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>std::fmt::Formatter&lt;<span class="lifetime">'_</span>&gt;) -&gt; std::fmt::Result {
-                std::fmt::Debug::fmt(<span class="kw-2">&amp;</span><span class="self">self</span>.inner, f)
+                f.debug_struct(<span class="macro">stringify!</span>(<span class="macro-nonterminal">$name</span>))
+                    .field(<span class="string">"id"</span>, <span class="kw-2">&amp;</span><span class="self">self</span>.module_instance_id)
+                    .field(<span class="string">"kind"</span>, <span class="kw-2">&amp;</span><span class="self">self</span>.module_kind())
+                    .field(<span class="string">"inner"</span>, <span class="kw-2">&amp;</span><span class="self">self</span>.inner)
+                    .finish()
             }
         }
     };
@@ -1135,12 +1188,18 @@
         <span class="kw">pub trait </span><span class="macro-nonterminal">$static_trait</span>:
             std::fmt::Debug + std::fmt::Display + std::cmp::PartialEq + std::hash::Hash + DynEncodable + Decodable + Encodable + Clone + IntoDynInstance&lt;DynType = <span class="macro-nonterminal">$dyn_newtype</span>&gt; + Send + Sync + <span class="lifetime">'static
         </span>{
+            <span class="kw">const </span>KIND : ModuleKind;
+
             $(<span class="macro-nonterminal">$extra_methods</span>)*
         }
 
         <span class="kw">impl </span><span class="macro-nonterminal">$dyn_trait </span><span class="kw">for </span>::fedimint_core::core::DynUnknown {
             <span class="kw">fn </span>as_any(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>(<span class="kw">dyn </span>Any + Send + Sync) {
                 <span class="self">self
+            </span>}
+
+            <span class="kw">fn </span>module_kind(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;ModuleKind&gt; {
+                <span class="prelude-val">None
             </span>}
 
             <span class="kw">fn </span>clone(<span class="kw-2">&amp;</span><span class="self">self</span>, instance_id: ::fedimint_core::core::ModuleInstanceId) -&gt; <span class="macro-nonterminal">$dyn_newtype </span>{
@@ -1164,6 +1223,10 @@
             <span class="kw">fn </span>as_any(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>(<span class="kw">dyn </span>Any + Send + Sync) {
                 <span class="self">self
             </span>}
+
+            <span class="kw">fn </span>module_kind(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;ModuleKind&gt; {
+                <span class="prelude-val">Some</span>(&lt;<span class="self">Self </span><span class="kw">as </span><span class="macro-nonterminal">$static_trait</span>&gt;::KIND)
+            }
 
             <span class="kw">fn </span>clone(<span class="kw-2">&amp;</span><span class="self">self</span>, instance_id: ::fedimint_core::core::ModuleInstanceId) -&gt; <span class="macro-nonterminal">$dyn_newtype </span>{
                 <span class="macro-nonterminal">$dyn_newtype::from_typed</span>(instance_id, &lt;<span class="self">Self </span><span class="kw">as </span>Clone&gt;::clone(<span class="self">self</span>))
@@ -1202,12 +1265,17 @@
         <span class="kw">pub trait </span><span class="macro-nonterminal">$static_trait</span>:
             std::fmt::Debug + std::fmt::Display + std::cmp::PartialEq + std::hash::Hash + DynEncodable + Decodable + Encodable + Clone + IntoDynInstance&lt;DynType = <span class="macro-nonterminal">$dyn_newtype</span>&gt; + Send + Sync + serde::Serialize + serde::de::DeserializeOwned + <span class="lifetime">'static
         </span>{
+            <span class="kw">const </span>KIND : ::fedimint_core::core::ModuleKind;
             $(<span class="macro-nonterminal">$extra_methods</span>)*
         }
 
         <span class="kw">impl </span><span class="macro-nonterminal">$dyn_trait </span><span class="kw">for </span>::fedimint_core::core::DynUnknown {
             <span class="kw">fn </span>as_any(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>(<span class="kw">dyn </span>Any + Send + Sync) {
                 <span class="self">self
+            </span>}
+
+            <span class="kw">fn </span>module_kind(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;::fedimint_core::core::ModuleKind&gt; {
+                <span class="prelude-val">None
             </span>}
 
             <span class="kw">fn </span>clone(<span class="kw-2">&amp;</span><span class="self">self</span>, instance_id: ::fedimint_core::core::ModuleInstanceId) -&gt; <span class="macro-nonterminal">$dyn_newtype </span>{
@@ -1231,6 +1299,10 @@
             <span class="kw">fn </span>as_any(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>(<span class="kw">dyn </span>Any + Send + Sync) {
                 <span class="self">self
             </span>}
+
+            <span class="kw">fn </span>module_kind(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;::fedimint_core::core::ModuleKind&gt; {
+                <span class="prelude-val">Some</span>(&lt;T <span class="kw">as </span><span class="macro-nonterminal">$static_trait</span>&gt;::KIND)
+            }
 
             <span class="kw">fn </span>clone(<span class="kw-2">&amp;</span><span class="self">self</span>, instance_id: ::fedimint_core::core::ModuleInstanceId) -&gt; <span class="macro-nonterminal">$dyn_newtype </span>{
                 <span class="macro-nonterminal">$dyn_newtype::from_typed</span>(instance_id, &lt;<span class="self">Self </span><span class="kw">as </span>Clone&gt;::clone(<span class="self">self</span>))
@@ -1318,7 +1390,7 @@
 /// `FederationServer` module.
 </span><span class="attr">#[macro_export]
 </span><span class="macro">macro_rules!</span> plugin_types_trait_impl_common {
-    (<span class="macro-nonterminal">$types</span>:ty, <span class="macro-nonterminal">$client_config</span>:ty, <span class="macro-nonterminal">$input</span>:ty, <span class="macro-nonterminal">$output</span>:ty, <span class="macro-nonterminal">$outcome</span>:ty, <span class="macro-nonterminal">$ci</span>:ty, <span class="macro-nonterminal">$input_error</span>:ty, <span class="macro-nonterminal">$output_error</span>:ty) =&gt; {
+    (<span class="macro-nonterminal">$kind</span>:expr, <span class="macro-nonterminal">$types</span>:ty, <span class="macro-nonterminal">$client_config</span>:ty, <span class="macro-nonterminal">$input</span>:ty, <span class="macro-nonterminal">$output</span>:ty, <span class="macro-nonterminal">$outcome</span>:ty, <span class="macro-nonterminal">$ci</span>:ty, <span class="macro-nonterminal">$input_error</span>:ty, <span class="macro-nonterminal">$output_error</span>:ty) =&gt; {
         <span class="kw">impl </span>fedimint_core::module::ModuleCommon <span class="kw">for </span><span class="macro-nonterminal">$types </span>{
             <span class="kw">type </span>ClientConfig = <span class="macro-nonterminal">$client_config</span>;
             <span class="kw">type </span>Input = <span class="macro-nonterminal">$input</span>;
@@ -1329,7 +1401,9 @@
             <span class="kw">type </span>OutputError = <span class="macro-nonterminal">$output_error</span>;
         }
 
-        <span class="kw">impl </span>fedimint_core::core::ClientConfig <span class="kw">for </span><span class="macro-nonterminal">$client_config </span>{}
+        <span class="kw">impl </span>fedimint_core::core::ClientConfig <span class="kw">for </span><span class="macro-nonterminal">$client_config </span>{
+            <span class="kw">const </span>KIND: ModuleKind = <span class="macro-nonterminal">$kind</span>;
+        }
 
         <span class="kw">impl </span>fedimint_core::core::IntoDynInstance <span class="kw">for </span><span class="macro-nonterminal">$client_config </span>{
             <span class="kw">type </span>DynType = fedimint_core::core::DynClientConfig;
@@ -1339,7 +1413,9 @@
             }
         }
 
-        <span class="kw">impl </span>fedimint_core::core::Input <span class="kw">for </span><span class="macro-nonterminal">$input </span>{}
+        <span class="kw">impl </span>fedimint_core::core::Input <span class="kw">for </span><span class="macro-nonterminal">$input </span>{
+            <span class="kw">const </span>KIND: ModuleKind = <span class="macro-nonterminal">$kind</span>;
+        }
 
         <span class="kw">impl </span>fedimint_core::core::IntoDynInstance <span class="kw">for </span><span class="macro-nonterminal">$input </span>{
             <span class="kw">type </span>DynType = fedimint_core::core::DynInput;
@@ -1349,7 +1425,9 @@
             }
         }
 
-        <span class="kw">impl </span>fedimint_core::core::Output <span class="kw">for </span><span class="macro-nonterminal">$output </span>{}
+        <span class="kw">impl </span>fedimint_core::core::Output <span class="kw">for </span><span class="macro-nonterminal">$output </span>{
+            <span class="kw">const </span>KIND: ModuleKind = <span class="macro-nonterminal">$kind</span>;
+        }
 
         <span class="kw">impl </span>fedimint_core::core::IntoDynInstance <span class="kw">for </span><span class="macro-nonterminal">$output </span>{
             <span class="kw">type </span>DynType = fedimint_core::core::DynOutput;
@@ -1359,7 +1437,9 @@
             }
         }
 
-        <span class="kw">impl </span>fedimint_core::core::OutputOutcome <span class="kw">for </span><span class="macro-nonterminal">$outcome </span>{}
+        <span class="kw">impl </span>fedimint_core::core::OutputOutcome <span class="kw">for </span><span class="macro-nonterminal">$outcome </span>{
+            <span class="kw">const </span>KIND: ModuleKind = <span class="macro-nonterminal">$kind</span>;
+        }
 
         <span class="kw">impl </span>fedimint_core::core::IntoDynInstance <span class="kw">for </span><span class="macro-nonterminal">$outcome </span>{
             <span class="kw">type </span>DynType = fedimint_core::core::DynOutputOutcome;
@@ -1369,7 +1449,9 @@
             }
         }
 
-        <span class="kw">impl </span>fedimint_core::core::ModuleConsensusItem <span class="kw">for </span><span class="macro-nonterminal">$ci </span>{}
+        <span class="kw">impl </span>fedimint_core::core::ModuleConsensusItem <span class="kw">for </span><span class="macro-nonterminal">$ci </span>{
+            <span class="kw">const </span>KIND: ModuleKind = <span class="macro-nonterminal">$kind</span>;
+        }
 
         <span class="kw">impl </span>fedimint_core::core::IntoDynInstance <span class="kw">for </span><span class="macro-nonterminal">$ci </span>{
             <span class="kw">type </span>DynType = fedimint_core::core::DynModuleConsensusItem;
@@ -1379,7 +1461,9 @@
             }
         }
 
-        <span class="kw">impl </span>fedimint_core::core::InputError <span class="kw">for </span><span class="macro-nonterminal">$input_error </span>{}
+        <span class="kw">impl </span>fedimint_core::core::InputError <span class="kw">for </span><span class="macro-nonterminal">$input_error </span>{
+            <span class="kw">const </span>KIND: ModuleKind = <span class="macro-nonterminal">$kind</span>;
+        }
 
         <span class="kw">impl </span>fedimint_core::core::IntoDynInstance <span class="kw">for </span><span class="macro-nonterminal">$input_error </span>{
             <span class="kw">type </span>DynType = fedimint_core::core::DynInputError;
@@ -1389,7 +1473,9 @@
             }
         }
 
-        <span class="kw">impl </span>fedimint_core::core::OutputError <span class="kw">for </span><span class="macro-nonterminal">$output_error </span>{}
+        <span class="kw">impl </span>fedimint_core::core::OutputError <span class="kw">for </span><span class="macro-nonterminal">$output_error </span>{
+            <span class="kw">const </span>KIND: ModuleKind = <span class="macro-nonterminal">$kind</span>;
+        }
 
         <span class="kw">impl </span>fedimint_core::core::IntoDynInstance <span class="kw">for </span><span class="macro-nonterminal">$output_error </span>{
             <span class="kw">type </span>DynType = fedimint_core::core::DynOutputError;

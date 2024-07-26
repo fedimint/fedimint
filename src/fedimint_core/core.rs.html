@@ -655,6 +655,13 @@
 <a href="#655" id="655">655</a>
 <a href="#656" id="656">656</a>
 <a href="#657" id="657">657</a>
+<a href="#658" id="658">658</a>
+<a href="#659" id="659">659</a>
+<a href="#660" id="660">660</a>
+<a href="#661" id="661">661</a>
+<a href="#662" id="662">662</a>
+<a href="#663" id="663">663</a>
+<a href="#664" id="664">664</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! Fedimint Core API (common) module interface
 //!
 //! Fedimint supports externally implemented modules.
@@ -1109,6 +1116,7 @@
 
 <span class="kw">pub trait </span>IClientConfig: Debug + Display + DynEncodable {
     <span class="kw">fn </span>as_any(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>(<span class="kw">dyn </span>Any + Send + Sync);
+    <span class="kw">fn </span>module_kind(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;ModuleKind&gt;;
     <span class="kw">fn </span>clone(<span class="kw-2">&amp;</span><span class="self">self</span>, instance_id: ModuleInstanceId) -&gt; DynClientConfig;
     <span class="kw">fn </span>dyn_hash(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; u64;
     <span class="kw">fn </span>erased_eq_no_instance_id(<span class="kw-2">&amp;</span><span class="self">self</span>, other: <span class="kw-2">&amp;</span>DynClientConfig) -&gt; bool;
@@ -1152,6 +1160,7 @@
 /// General purpose code should use [`DynInput`] instead
 </span><span class="kw">pub trait </span>IInput: Debug + Display + DynEncodable {
     <span class="kw">fn </span>as_any(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>(<span class="kw">dyn </span>Any + Send + Sync);
+    <span class="kw">fn </span>module_kind(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;ModuleKind&gt;;
     <span class="kw">fn </span>clone(<span class="kw-2">&amp;</span><span class="self">self</span>, instance_id: ModuleInstanceId) -&gt; DynInput;
     <span class="kw">fn </span>dyn_hash(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; u64;
     <span class="kw">fn </span>erased_eq_no_instance_id(<span class="kw-2">&amp;</span><span class="self">self</span>, other: <span class="kw-2">&amp;</span>DynInput) -&gt; bool;
@@ -1183,6 +1192,7 @@
 /// General purpose code should use [`DynOutput`] instead
 </span><span class="kw">pub trait </span>IOutput: Debug + Display + DynEncodable {
     <span class="kw">fn </span>as_any(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>(<span class="kw">dyn </span>Any + Send + Sync);
+    <span class="kw">fn </span>module_kind(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;ModuleKind&gt;;
     <span class="kw">fn </span>clone(<span class="kw-2">&amp;</span><span class="self">self</span>, instance_id: ModuleInstanceId) -&gt; DynOutput;
     <span class="kw">fn </span>dyn_hash(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; u64;
     <span class="kw">fn </span>erased_eq_no_instance_id(<span class="kw-2">&amp;</span><span class="self">self</span>, other: <span class="kw-2">&amp;</span>DynOutput) -&gt; bool;
@@ -1213,6 +1223,7 @@
 
 <span class="kw">pub trait </span>IOutputOutcome: Debug + Display + DynEncodable {
     <span class="kw">fn </span>as_any(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>(<span class="kw">dyn </span>Any + Send + Sync);
+    <span class="kw">fn </span>module_kind(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;ModuleKind&gt;;
     <span class="kw">fn </span>clone(<span class="kw-2">&amp;</span><span class="self">self</span>, module_instance_id: ModuleInstanceId) -&gt; DynOutputOutcome;
     <span class="kw">fn </span>dyn_hash(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; u64;
     <span class="kw">fn </span>erased_eq_no_instance_id(<span class="kw-2">&amp;</span><span class="self">self</span>, other: <span class="kw-2">&amp;</span>DynOutputOutcome) -&gt; bool;
@@ -1236,6 +1247,7 @@
 
 <span class="kw">pub trait </span>IModuleConsensusItem: Debug + Display + DynEncodable {
     <span class="kw">fn </span>as_any(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>(<span class="kw">dyn </span>Any + Send + Sync);
+    <span class="kw">fn </span>module_kind(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;ModuleKind&gt;;
     <span class="kw">fn </span>clone(<span class="kw-2">&amp;</span><span class="self">self</span>, module_instance_id: ModuleInstanceId) -&gt; DynModuleConsensusItem;
     <span class="kw">fn </span>dyn_hash(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; u64;
 
@@ -1263,6 +1275,7 @@
 
 <span class="kw">pub trait </span>IOutputError: Debug + Display + DynEncodable {
     <span class="kw">fn </span>as_any(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>(<span class="kw">dyn </span>Any + Send + Sync);
+    <span class="kw">fn </span>module_kind(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;ModuleKind&gt;;
     <span class="kw">fn </span>clone(<span class="kw-2">&amp;</span><span class="self">self</span>, module_instance_id: ModuleInstanceId) -&gt; DynOutputError;
     <span class="kw">fn </span>dyn_hash(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; u64;
 
@@ -1289,6 +1302,7 @@
 
 <span class="kw">pub trait </span>IInputError: Debug + Display + DynEncodable {
     <span class="kw">fn </span>as_any(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>(<span class="kw">dyn </span>Any + Send + Sync);
+    <span class="kw">fn </span>module_kind(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;ModuleKind&gt;;
     <span class="kw">fn </span>clone(<span class="kw-2">&amp;</span><span class="self">self</span>, module_instance_id: ModuleInstanceId) -&gt; DynInputError;
     <span class="kw">fn </span>dyn_hash(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; u64;
 

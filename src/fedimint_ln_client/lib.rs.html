@@ -2125,6 +2125,8 @@
 <a href="#2125" id="2125">2125</a>
 <a href="#2126" id="2126">2126</a>
 <a href="#2127" id="2127">2127</a>
+<a href="#2128" id="2128">2128</a>
+<a href="#2129" id="2129">2129</a>
 </pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::cast_possible_wrap)]
@@ -2177,7 +2179,7 @@
 <span class="kw">use </span>fedimint_client::transaction::{ClientInput, ClientOutput, TransactionBuilder};
 <span class="kw">use </span>fedimint_client::{sm_enum_variant_translation, DynGlobalClientContext};
 <span class="kw">use </span>fedimint_core::config::FederationId;
-<span class="kw">use </span>fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, OperationId};
+<span class="kw">use </span>fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, ModuleKind, OperationId};
 <span class="kw">use </span>fedimint_core::db::{DatabaseTransaction, DatabaseVersion, IDatabaseTransactionOpsCoreTyped};
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::module::{
@@ -2201,7 +2203,7 @@
 <span class="kw">use </span>fedimint_ln_common::{
     ContractOutput, LightningCommonInit, LightningGateway, LightningGatewayAnnouncement,
     LightningGatewayRegistration, LightningInput, LightningModuleTypes, LightningOutput,
-    LightningOutputV0,
+    LightningOutputV0, KIND,
 };
 <span class="kw">use </span>fedimint_logging::LOG_CLIENT_MODULE_LN;
 <span class="kw">use </span>futures::{Future, StreamExt};
@@ -4137,7 +4139,9 @@
     <span class="kw">pub </span>gateway_conn: Arc&lt;<span class="kw">dyn </span>GatewayConnection + Send + Sync&gt;,
 }
 
-<span class="kw">impl </span>fedimint_client::sm::Context <span class="kw">for </span>LightningClientContext {}
+<span class="kw">impl </span>fedimint_client::sm::Context <span class="kw">for </span>LightningClientContext {
+    <span class="kw">const </span>KIND: <span class="prelude-ty">Option</span>&lt;ModuleKind&gt; = <span class="prelude-val">Some</span>(KIND);
+}
 
 <span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
 </span><span class="kw">pub trait </span>GatewayConnection: std::fmt::Debug {

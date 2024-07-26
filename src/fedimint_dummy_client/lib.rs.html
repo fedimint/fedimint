@@ -391,6 +391,8 @@
 <a href="#391" id="391">391</a>
 <a href="#392" id="392">392</a>
 <a href="#393" id="393">393</a>
+<a href="#394" id="394">394</a>
+<a href="#395" id="395">395</a>
 </pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::missing_errors_doc)]
 #![allow(clippy::missing_panics_doc)]
@@ -411,7 +413,7 @@
 <span class="kw">use </span>fedimint_client::module::{ClientContext, ClientModule, IClientModule};
 <span class="kw">use </span>fedimint_client::sm::{Context, ModuleNotifier};
 <span class="kw">use </span>fedimint_client::transaction::{ClientInput, ClientOutput, TransactionBuilder};
-<span class="kw">use </span>fedimint_core::core::{Decoder, OperationId};
+<span class="kw">use </span>fedimint_core::core::{Decoder, ModuleKind, OperationId};
 <span class="kw">use </span>fedimint_core::db::{
     Database, DatabaseTransaction, DatabaseVersion, IDatabaseTransactionOpsCoreTyped,
 };
@@ -451,7 +453,9 @@
 }
 
 <span class="comment">// TODO: Boiler-plate
-</span><span class="kw">impl </span>Context <span class="kw">for </span>DummyClientContext {}
+</span><span class="kw">impl </span>Context <span class="kw">for </span>DummyClientContext {
+    <span class="kw">const </span>KIND: <span class="prelude-ty">Option</span>&lt;ModuleKind&gt; = <span class="prelude-val">None</span>;
+}
 
 <span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
 </span><span class="kw">impl </span>ClientModule <span class="kw">for </span>DummyClientModule {

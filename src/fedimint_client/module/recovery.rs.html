@@ -150,10 +150,22 @@
 <a href="#150" id="150">150</a>
 <a href="#151" id="151">151</a>
 <a href="#152" id="152">152</a>
+<a href="#153" id="153">153</a>
+<a href="#154" id="154">154</a>
+<a href="#155" id="155">155</a>
+<a href="#156" id="156">156</a>
+<a href="#157" id="157">157</a>
+<a href="#158" id="158">158</a>
+<a href="#159" id="159">159</a>
+<a href="#160" id="160">160</a>
+<a href="#161" id="161">161</a>
+<a href="#162" id="162">162</a>
+<a href="#163" id="163">163</a>
+<a href="#164" id="164">164</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::any::Any;
 <span class="kw">use </span>std::fmt::{<span class="self">self</span>, Debug};
 
-<span class="kw">use </span>fedimint_core::core::{IntoDynInstance, ModuleInstanceId};
+<span class="kw">use </span>fedimint_core::core::{IntoDynInstance, ModuleInstanceId, ModuleKind};
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, DynEncodable, Encodable};
 <span class="kw">use </span>fedimint_core::task::{MaybeSend, MaybeSync};
 <span class="kw">use </span>fedimint_core::{
@@ -164,6 +176,7 @@
 
 <span class="kw">pub trait </span>IModuleBackup: Debug + DynEncodable {
     <span class="kw">fn </span>as_any(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>(<span class="macro">maybe_add_send_sync!</span>(<span class="kw">dyn </span>Any));
+    <span class="kw">fn </span>module_kind(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;ModuleKind&gt;;
     <span class="kw">fn </span>clone(<span class="kw-2">&amp;</span><span class="self">self</span>, instance_id: ModuleInstanceId) -&gt; DynModuleBackup;
     <span class="kw">fn </span>erased_eq_no_instance_id(<span class="kw-2">&amp;</span><span class="self">self</span>, other: <span class="kw-2">&amp;</span>DynModuleBackup) -&gt; bool;
 }
@@ -179,11 +192,16 @@
     + MaybeSync
     + <span class="lifetime">'static
 </span>{
+    <span class="kw">const </span>KIND: <span class="prelude-ty">Option</span>&lt;ModuleKind&gt;;
 }
 
 <span class="kw">impl </span>IModuleBackup <span class="kw">for </span>::fedimint_core::core::DynUnknown {
     <span class="kw">fn </span>as_any(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>(<span class="macro">maybe_add_send_sync!</span>(<span class="kw">dyn </span>Any)) {
         <span class="self">self
+    </span>}
+
+    <span class="kw">fn </span>module_kind(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;ModuleKind&gt; {
+        <span class="prelude-val">None
     </span>}
 
     <span class="kw">fn </span>clone(<span class="kw-2">&amp;</span><span class="self">self</span>, instance_id: ::fedimint_core::core::ModuleInstanceId) -&gt; DynModuleBackup {
@@ -207,6 +225,10 @@
     <span class="kw">fn </span>as_any(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>(<span class="macro">maybe_add_send_sync!</span>(<span class="kw">dyn </span>Any)) {
         <span class="self">self
     </span>}
+
+    <span class="kw">fn </span>module_kind(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;ModuleKind&gt; {
+        T::KIND
+    }
 
     <span class="kw">fn </span>clone(<span class="kw-2">&amp;</span><span class="self">self</span>, instance_id: ::fedimint_core::core::ModuleInstanceId) -&gt; DynModuleBackup {
         DynModuleBackup::from_typed(instance_id, &lt;<span class="self">Self </span><span class="kw">as </span>Clone&gt;::clone(<span class="self">self</span>))
@@ -245,7 +267,9 @@
     },
 }
 
-<span class="kw">impl </span>ModuleBackup <span class="kw">for </span>NoModuleBackup {}
+<span class="kw">impl </span>ModuleBackup <span class="kw">for </span>NoModuleBackup {
+    <span class="kw">const </span>KIND: <span class="prelude-ty">Option</span>&lt;ModuleKind&gt; = <span class="prelude-val">None</span>;
+}
 
 <span class="kw">impl </span>IntoDynInstance <span class="kw">for </span>NoModuleBackup {
     <span class="kw">type </span>DynType = DynModuleBackup;

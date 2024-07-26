@@ -122,6 +122,8 @@
 <a href="#122" id="122">122</a>
 <a href="#123" id="123">123</a>
 <a href="#124" id="124">124</a>
+<a href="#125" id="125">125</a>
+<a href="#126" id="126">126</a>
 </pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::module_name_repetitions)]
 
@@ -133,7 +135,7 @@
 <span class="kw">use </span>fedimint_client::module::recovery::NoModuleBackup;
 <span class="kw">use </span>fedimint_client::module::{ClientContext, ClientModule, IClientModule};
 <span class="kw">use </span>fedimint_client::sm::Context;
-<span class="kw">use </span>fedimint_core::core::Decoder;
+<span class="kw">use </span>fedimint_core::core::{Decoder, ModuleKind};
 <span class="kw">use </span>fedimint_core::db::{Database, DatabaseTransaction, DatabaseVersion};
 <span class="kw">use </span>fedimint_core::module::{ApiVersion, ModuleCommon, ModuleInit, MultiApiVersion};
 <span class="kw">use </span>fedimint_core::{apply, async_trait_maybe_send, Amount};
@@ -164,7 +166,9 @@
 }
 
 <span class="comment">// TODO: Boiler-plate
-</span><span class="kw">impl </span>Context <span class="kw">for </span>EmptyClientContext {}
+</span><span class="kw">impl </span>Context <span class="kw">for </span>EmptyClientContext {
+    <span class="kw">const </span>KIND: <span class="prelude-ty">Option</span>&lt;ModuleKind&gt; = <span class="prelude-val">None</span>;
+}
 
 <span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
 </span><span class="kw">impl </span>ClientModule <span class="kw">for </span>EmptyClientModule {
