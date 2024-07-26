@@ -1,5 +1,6 @@
 use std::collections::BTreeMap;
 use std::fs;
+use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
@@ -74,6 +75,7 @@ pub struct ConsensusEngine {
     pub task_group: TaskGroup,
     pub data_dir: PathBuf,
     pub checkpoint_retention: u64,
+    pub p2p_bind_addr: SocketAddr,
 }
 
 impl ConsensusEngine {
@@ -91,7 +93,8 @@ impl ConsensusEngine {
             self.run_single_guardian(self.task_group.make_handle())
                 .await
         } else {
-            self.run_consensus(self.task_group.make_handle()).await
+            self.run_consensus(self.p2p_bind_addr, self.task_group.make_handle())
+                .await
         }
     }
 
@@ -155,7 +158,11 @@ impl ConsensusEngine {
         Ok(())
     }
 
-    pub async fn run_consensus(&self, task_handle: TaskHandle) -> anyhow::Result<()> {
+    pub async fn run_consensus(
+        &self,
+        p2p_bind_addr: SocketAddr,
+        task_handle: TaskHandle,
+    ) -> anyhow::Result<()> {
         // We need four peers to run the atomic broadcast
         assert!(self.num_peers().total() >= 4);
 
@@ -163,7 +170,7 @@ impl ConsensusEngine {
 
         // Build P2P connections for the atomic broadcast
         let connections = ReconnectPeerConnections::new(
-            self.cfg.network_config(),
+            self.cfg.network_config(p2p_bind_addr),
             DelayCalculator::PROD_DEFAULT,
             TlsTcpConnector::new(self.cfg.tls_config(), self.identity()).into_dyn(),
             &self.task_group,

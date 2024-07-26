@@ -66,7 +66,7 @@ pub async fn run(
         None => {
             run_config_gen(
                 data_dir.clone(),
-                settings,
+                settings.clone(),
                 db.clone(),
                 code_version_str,
                 task_group.make_subgroup(),
@@ -90,6 +90,8 @@ pub async fn run(
     start_api_announcement_service(&db, &task_group, &cfg, force_api_secrets.get_active()).await;
 
     consensus::run(
+        settings.p2p_bind,
+        settings.api_bind,
         cfg,
         db,
         module_init_registry.clone(),
@@ -130,6 +132,7 @@ pub async fn run_config_gen(
     let (cfg_sender, mut cfg_receiver) = tokio::sync::mpsc::channel(1);
 
     let config_gen = ConfigGenApi::new(
+        settings.p2p_bind,
         settings.clone(),
         db.clone(),
         cfg_sender,
@@ -144,7 +147,7 @@ pub async fn run_config_gen(
 
     let api_handler = net::api::spawn(
         "config-gen",
-        &settings.api_bind,
+        settings.api_bind,
         rpc_module,
         10,
         force_api_secrets.clone(),

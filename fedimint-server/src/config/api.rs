@@ -55,10 +55,13 @@ pub struct ConfigGenApi {
     code_version_str: String,
     /// Api secret to use
     api_secret: Option<String>,
+
+    p2p_bind_addr: SocketAddr,
 }
 
 impl ConfigGenApi {
     pub fn new(
+        p2p_bind_addr: SocketAddr,
         settings: ConfigGenSettings,
         db: Database,
         config_generated_tx: Sender<ServerConfig>,
@@ -73,6 +76,7 @@ impl ConfigGenApi {
             task_group: task_group.clone(),
             code_version_str,
             api_secret,
+            p2p_bind_addr,
         };
         info!(target: fedimint_logging::LOG_NET_PEER_DKG, "Created new config gen Api");
         config_gen_api
@@ -245,7 +249,8 @@ impl ConfigGenApi {
 
         let self_clone = self.clone();
         let sub_group = self.task_group.make_subgroup();
-        sub_group.spawn("run dkg", |_handle| async move {
+        let p2p_bind_addr = self.p2p_bind_addr;
+        sub_group.spawn("run dkg", move |_handle| async move {
             // Followers wait for leader to signal readiness for DKG
             if let Some(client) = leader {
                 loop {
@@ -274,6 +279,7 @@ impl ConfigGenApi {
             // Run DKG
             let task_group: TaskGroup = self_clone.task_group.make_subgroup();
             let config = ServerConfig::distributed_gen(
+                p2p_bind_addr,
                 &params,
                 registry,
                 DelayCalculator::PROD_DEFAULT,
