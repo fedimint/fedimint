@@ -33,7 +33,7 @@ use tracing::{debug, info, instrument, warn, Level};
 
 use crate::config::ServerConfig;
 use crate::consensus::aleph_bft::backup::{BackupReader, BackupWriter};
-use crate::consensus::aleph_bft::data_provider::{DataProvider, UnitData};
+use crate::consensus::aleph_bft::data_provider::{get_citem_bytes_chsum, DataProvider, UnitData};
 use crate::consensus::aleph_bft::finalization_handler::{FinalizationHandler, OrderedUnit};
 use crate::consensus::aleph_bft::keychain::Keychain;
 use crate::consensus::aleph_bft::network::Network;
@@ -342,7 +342,7 @@ impl ConsensusEngine {
         session_index: u64,
         ordered_unit_receiver: Receiver<OrderedUnit>,
         signature_sender: watch::Sender<Option<SchnorrSignature>>,
-        timestamp_receiver: Receiver<(Instant, usize)>,
+        timestamp_receiver: Receiver<(Instant, u64)>,
     ) -> anyhow::Result<SignedSessionOutcome> {
         let mut item_index = 0;
 
@@ -362,8 +362,8 @@ impl ConsensusEngine {
                         if ordered_unit.creator == self.identity() {
                             loop {
                                  match timestamp_receiver.try_recv() {
-                                    Ok((timestamp, bytes_len)) => {
-                                        if bytes.len() == bytes_len {
+                                    Ok((timestamp, chsum)) => {
+                                        if get_citem_bytes_chsum(&bytes) == chsum {
                                             CONSENSUS_ORDERING_LATENCY_SECONDS.observe(timestamp.elapsed().as_secs_f64());
                                             break;
                                         }
