@@ -1,11 +1,12 @@
 use clap::Parser;
 use devimint::devfed::DevJitFed;
 use devimint::federation::Client;
-use devimint::version_constants::VERSION_0_4_0_ALPHA;
+use devimint::version_constants::VERSION_0_5_0_ALPHA;
 use devimint::{cmd, util};
 use fedimint_core::core::OperationId;
 use fedimint_core::util::SafeUrl;
 use fedimint_lnv2_client::{FinalReceiveState, FinalSendState};
+use itertools::Itertools;
 use lightning_invoice::Bolt11Invoice;
 use substring::Substring;
 use tokio::try_join;
@@ -29,17 +30,17 @@ async fn main() -> anyhow::Result<()> {
         let fedimintd_version = util::FedimintdCmd::version_or_default().await;
         let gatewayd_version = util::Gatewayd::version_or_default().await;
 
-        if fedimint_cli_version < *VERSION_0_4_0_ALPHA {
+        if fedimint_cli_version < *VERSION_0_5_0_ALPHA {
             info!(%fedimint_cli_version, "Version did not support lnv2 module, skipping");
             return Ok(());
         }
 
-        if fedimintd_version < *VERSION_0_4_0_ALPHA {
+        if fedimintd_version < *VERSION_0_5_0_ALPHA {
             info!(%fedimintd_version, "Version did not support lnv2 module, skipping");
             return Ok(());
         }
 
-        if gatewayd_version < *VERSION_0_4_0_ALPHA {
+        if gatewayd_version < *VERSION_0_5_0_ALPHA {
             info!(%gatewayd_version, "Version did not support lnv2 module, skipping");
             return Ok(());
         }
@@ -82,9 +83,15 @@ async fn pegin_gateways(dev_fed: &DevJitFed) -> anyhow::Result<()> {
 
     let gw_lnd = dev_fed.gw_lnd_registered().await?;
     let gw_cln = dev_fed.gw_cln_registered().await?;
+    let gw_ldk = dev_fed
+        .gw_ldk_registered()
+        .await?
+        .as_ref()
+        .expect("Gateways of version 0.5.0 or higher support LDK");
 
     federation.pegin_gateway(1_000_000, gw_lnd).await?;
     federation.pegin_gateway(1_000_000, gw_cln).await?;
+    federation.pegin_gateway(1_000_000, gw_ldk).await?;
 
     info!("Pegging-in gateways successful");
 
@@ -168,18 +175,21 @@ async fn test_self_payments_refund(dev_fed: &DevJitFed) -> anyhow::Result<()> {
 
     let gw_lnd = dev_fed.gw_lnd_registered().await?;
     let gw_cln = dev_fed.gw_cln_registered().await?;
+    let gw_ldk = dev_fed
+        .gw_ldk_registered()
+        .await?
+        .as_ref()
+        .expect("Gateways of version 0.5.0 or higher support LDK");
 
-    for (gw_receive, gw_send) in [
-        (gw_lnd.addr.clone(), gw_lnd.addr.clone()),
-        (gw_lnd.addr.clone(), gw_cln.addr.clone()),
-        (gw_cln.addr.clone(), gw_lnd.addr.clone()),
-        (gw_cln.addr.clone(), gw_cln.addr.clone()),
-    ] {
-        info!("Testing self payment refund: {gw_send} -> {gw_receive}");
+    let gateways = [(gw_lnd, "LND"), (gw_cln, "CLN"), (gw_ldk, "LDK")];
+    let gateway_matrix = gateways.iter().cartesian_product(gateways);
 
-        let invoice = receive(&client, &gw_receive, 1_000_000).await?.0;
+    for ((gw_send, ln_send), (gw_receive, ln_receive)) in gateway_matrix {
+        info!("Testing self payment refund: {ln_send} -> {ln_receive}");
 
-        test_send(&client, &gw_send, &invoice, FinalSendState::Refunded).await?;
+        let invoice = receive(&client, &gw_receive.addr, 1_000_000).await?.0;
+
+        test_send(&client, &gw_send.addr, &invoice, FinalSendState::Refunded).await?;
     }
 
     info!("Testing self payments refund successful");
@@ -200,18 +210,21 @@ async fn test_self_payments_success(dev_fed: &DevJitFed) -> anyhow::Result<()> {
 
     let gw_lnd = dev_fed.gw_lnd().await?;
     let gw_cln = dev_fed.gw_cln().await?;
+    let gw_ldk = dev_fed
+        .gw_ldk()
+        .await?
+        .as_ref()
+        .expect("Gateways of version 0.5.0 or higher support LDK");
 
-    for (gw_receive, gw_send) in [
-        (gw_lnd.addr.clone(), gw_lnd.addr.clone()),
-        (gw_lnd.addr.clone(), gw_cln.addr.clone()),
-        (gw_cln.addr.clone(), gw_lnd.addr.clone()),
-        (gw_cln.addr.clone(), gw_cln.addr.clone()),
-    ] {
-        info!("Testing self payment success: {gw_send} -> {gw_receive}");
+    let gateways = [(gw_lnd, "LND"), (gw_cln, "CLN"), (gw_ldk, "LDK")];
+    let gateway_matrix = gateways.iter().cartesian_product(gateways);
 
-        let (invoice, receive_op) = receive(&client, &gw_receive, 1_000_000).await?;
+    for ((gw_send, ln_send), (gw_receive, ln_receive)) in gateway_matrix {
+        info!("Testing self payment success: {ln_send} -> {ln_receive}");
 
-        test_send(&client, &gw_send, &invoice, FinalSendState::Success).await?;
+        let (invoice, receive_op) = receive(&client, &gw_receive.addr, 1_000_000).await?;
+
+        test_send(&client, &gw_send.addr, &invoice, FinalSendState::Success).await?;
 
         await_receive_claimed(&client, receive_op).await?;
     }

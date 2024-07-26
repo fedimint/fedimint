@@ -2,7 +2,7 @@
 
 use clap::{Parser, Subcommand};
 use devimint::federation::Federation;
-use devimint::version_constants::{VERSION_0_3_0, VERSION_0_4_0_ALPHA};
+use devimint::version_constants::{VERSION_0_3_0, VERSION_0_5_0_ALPHA};
 use devimint::{cmd, util, Gatewayd};
 use fedimint_core::Amount;
 use fedimint_testing::gateway::LightningNodeType;
@@ -37,7 +37,7 @@ async fn config_test(gw_type: LightningNodeType) -> anyhow::Result<()> {
     Box::pin(devimint::run_devfed_test(
         |dev_fed, process_mgr| async move {
             let gatewayd_version = util::Gatewayd::version_or_default().await;
-            if gatewayd_version < *VERSION_0_4_0_ALPHA && gw_type == LightningNodeType::Ldk {
+            if gatewayd_version < *VERSION_0_5_0_ALPHA && gw_type == LightningNodeType::Ldk {
                 return Ok(());
             }
 

@@ -28,6 +28,7 @@ fedimint-lnv2-client = { path = "../fedimint-lnv2-client" }
 fedimint-lnv2-common = { path = "../fedimint-lnv2-common" }
 fedimint-lnv2-server = { path = "../fedimint-lnv2-server" }
 fedimint-testing = { workspace = true }
+itertools = "0.13.0"
 lightning-invoice = { workspace = true }
 semver = { workspace = true }
 serde_json = { workspace = true }

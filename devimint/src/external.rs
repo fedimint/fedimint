@@ -1,4 +1,4 @@
-use std::ops::{ControlFlow, Deref as _};
+use std::ops::ControlFlow;
 use std::path::Path;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -864,13 +864,17 @@ pub async fn open_channel(
 
 pub async fn open_channel_between_gateways(
     bitcoind: &Bitcoind,
-    gw_a: &JitTryAnyhow<Arc<Gatewayd>>,
-    gw_b: &JitTryAnyhow<Arc<Gatewayd>>,
+    gw_a: &Gatewayd,
+    gw_b: &Gatewayd,
 ) -> Result<()> {
-    let gw_a = gw_a.get_try().await?.deref().clone();
-    let gw_b = gw_b.get_try().await?.deref().clone();
+    // TODO: Find out why we need to wait for LDK here.
+    let funding_addr = loop {
+        if let Ok(address) = gw_a.get_funding_address().await {
+            break address;
+        }
 
-    let funding_addr = gw_a.get_funding_address().await?;
+        fedimint_core::runtime::sleep(std::time::Duration::from_secs(1)).await;
+    };
 
     bitcoind.send_to(funding_addr, 100_000_000).await?;
     bitcoind.mine_blocks(10).await?;
@@ -890,7 +894,13 @@ pub async fn open_channel_between_gateways(
     )
     .await?;
 
-    bitcoind.mine_blocks(10).await?;
+    // `open_channel` may not send out the channel funding transaction immediately
+    // so we need to wait for it to get to the mempool.
+    // TODO: LDK is the culprit here. Find a way to ensure that
+    // `GatewayLdkClient::open_channel` is fully done before it returns.
+    fedimint_core::runtime::sleep(Duration::from_secs(10)).await;
+
+    bitcoind.mine_blocks(20).await?;
 
     let gw_a_node_pubkey = gw_a.lightning_pubkey().await?;
 
