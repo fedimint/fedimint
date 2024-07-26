@@ -622,7 +622,7 @@ impl Lightning {
     }
 
     async fn consensus_block_count(&self, dbtx: &mut DatabaseTransaction<'_>) -> u64 {
-        let peer_count = self.cfg.consensus.tpe_pks.len();
+        let num_peers = self.cfg.consensus.tpe_pks.to_num_peers();
 
         let mut counts = dbtx
             .find_by_prefix(&BlockCountVotePrefix)
@@ -631,19 +631,25 @@ impl Lightning {
             .collect::<Vec<u64>>()
             .await;
 
-        assert!(counts.len() <= peer_count);
-
-        while counts.len() < peer_count {
+        while counts.len() < num_peers.total() {
             counts.push(0);
         }
 
+        assert_eq!(counts.len(), num_peers.total());
+
         counts.sort_unstable();
 
-        counts[peer_count / 2]
+        assert!(counts.first() <= counts.last());
+
+        // The block count we select guarantees that any threshold of correct peers can
+        // increase the consensus block count and any consensus block count has been
+        // confirmed by a threshold of peers.
+
+        counts[num_peers.max_evil()]
     }
 
     async fn consensus_unix_time(&self, dbtx: &mut DatabaseTransaction<'_>) -> u64 {
-        let peer_count = self.cfg.consensus.tpe_pks.len();
+        let num_peers = self.cfg.consensus.tpe_pks.to_num_peers();
 
         let mut times = dbtx
             .find_by_prefix(&UnixTimeVotePrefix)
@@ -652,15 +658,21 @@ impl Lightning {
             .collect::<Vec<u64>>()
             .await;
 
-        assert!(times.len() <= peer_count);
-
-        while times.len() < peer_count {
+        while times.len() < num_peers.total() {
             times.push(0);
         }
 
+        assert_eq!(times.len(), num_peers.total());
+
         times.sort_unstable();
 
-        times[peer_count / 2]
+        assert!(times.first() <= times.last());
+
+        // The unix time we select guarantees that any threshold of correct peers can
+        // advance the consensus unix time and any consensus unix time has been
+        // confirmed by a threshold of peers.
+
+        times[num_peers.max_evil()]
     }
 
     async fn await_incoming_contract(
