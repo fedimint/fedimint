@@ -90,6 +90,7 @@ pub fn encrypt_preimage(
     }
 }
 
+/// The function asserts that the ciphertext is valid.
 pub fn verify_agg_decryption_key(
     agg_pk: &AggregatePublicKey,
     agg_dk: &AggregateDecryptionKey,
@@ -98,6 +99,16 @@ pub fn verify_agg_decryption_key(
 ) -> bool {
     let message = hash_to_message(&ct.encrypted_preimage, &ct.pk.0, commitment);
 
+    assert_eq!(
+        pairing(&G1Affine::generator(), &ct.signature.0),
+        pairing(&ct.pk.0, &message)
+    );
+
+    // Since the ciphertext is valid its signature is the ecdh point of the message
+    // and the ephemeral public key. Hence, the following equation holds if and only
+    // if the aggregate decryption key is the ecdh point of the ephemeral public key
+    // and the aggregate public key.
+
     pairing(&agg_dk.0, &message) == pairing(&agg_pk.0, &ct.signature.0)
 }
 
@@ -105,6 +116,7 @@ pub fn create_decryption_key_share(sks: &SecretKeyShare, ct: &CipherText) -> Dec
     DecryptionKeyShare(ct.pk.0.mul(sks.0).to_affine())
 }
 
+/// The function asserts that the ciphertext is valid.
 pub fn verify_decryption_key_share(
     pks: &PublicKeyShare,
     dks: &DecryptionKeyShare,
@@ -112,6 +124,16 @@ pub fn verify_decryption_key_share(
     commitment: &sha256::Hash,
 ) -> bool {
     let message = hash_to_message(&ct.encrypted_preimage, &ct.pk.0, commitment);
+
+    assert_eq!(
+        pairing(&G1Affine::generator(), &ct.signature.0),
+        pairing(&ct.pk.0, &message)
+    );
+
+    // Since the ciphertext is valid its signature is the ecdh point of the message
+    // and the ephemeral public key. Hence, the following equation holds if and only
+    // if the decryption key share is the ecdh point of the ephemeral public key and
+    // the public key share.
 
     pairing(&dks.0, &message) == pairing(&pks.0, &ct.signature.0)
 }
