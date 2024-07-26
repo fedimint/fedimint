@@ -6,7 +6,7 @@ use std::io::{Error, Read, Write};
 use std::pin::Pin;
 use std::sync::Arc;
 
-use fedimint_core::core::{IntoDynInstance, ModuleInstanceId, OperationId};
+use fedimint_core::core::{IntoDynInstance, ModuleInstanceId, ModuleKind, OperationId};
 use fedimint_core::encoding::{Decodable, DecodeError, DynEncodable, Encodable};
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::task::{MaybeSend, MaybeSync};
@@ -74,6 +74,7 @@ pub trait IState: Debug + DynEncodable + MaybeSend + MaybeSync {
 /// General purpose code should use [`DynContext`] instead
 pub trait IContext: Debug {
     fn as_any(&self) -> &(maybe_add_send_sync!(dyn Any));
+    fn module_kind(&self) -> Option<ModuleKind>;
 }
 
 module_plugin_dyn_newtype_define! {
@@ -84,9 +85,9 @@ module_plugin_dyn_newtype_define! {
 
 /// Additional data made available to state machines of a module (e.g. API
 /// clients)
-pub trait Context: std::fmt::Debug + MaybeSend + MaybeSync + 'static {}
-
-impl Context for () {}
+pub trait Context: std::fmt::Debug + MaybeSend + MaybeSync + 'static {
+    const KIND: Option<ModuleKind>;
+}
 
 /// Type-erased version of [`Context`]
 impl<T> IContext for T
@@ -95,6 +96,10 @@ where
 {
     fn as_any(&self) -> &(maybe_add_send_sync!(dyn Any)) {
         self
+    }
+
+    fn module_kind(&self) -> Option<ModuleKind> {
+        T::KIND
     }
 }
 

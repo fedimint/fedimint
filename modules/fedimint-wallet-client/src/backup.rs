@@ -1,6 +1,7 @@
 use fedimint_client::module::recovery::{DynModuleBackup, ModuleBackup};
-use fedimint_core::core::{IntoDynInstance, ModuleInstanceId};
+use fedimint_core::core::{IntoDynInstance, ModuleInstanceId, ModuleKind};
 use fedimint_core::encoding::{Decodable, Encodable};
+use fedimint_wallet_common::KIND;
 
 use crate::client_db::TweakIdx;
 
@@ -22,7 +23,9 @@ impl IntoDynInstance for WalletModuleBackup {
     }
 }
 
-impl ModuleBackup for WalletModuleBackup {}
+impl ModuleBackup for WalletModuleBackup {
+    const KIND: Option<ModuleKind> = Some(KIND);
+}
 
 impl WalletModuleBackup {
     pub fn new_v0(session_count: u64, next_tweak_idx: TweakIdx) -> WalletModuleBackup {

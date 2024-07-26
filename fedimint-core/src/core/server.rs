@@ -10,6 +10,7 @@ use std::sync::Arc;
 use fedimint_core::module::audit::Audit;
 use fedimint_core::{apply, async_trait_maybe_send, OutPoint, PeerId};
 
+use super::ModuleKind;
 use crate::core::{
     Any, Decoder, DynInput, DynInputError, DynModuleConsensusItem, DynOutput, DynOutputError,
     DynOutputOutcome,
@@ -31,6 +32,8 @@ pub trait IServerModule: Debug {
 
     /// Returns the decoder belonging to the server module
     fn decoder(&self) -> Decoder;
+
+    fn module_kind(&self) -> ModuleKind;
 
     /// This module's contribution to the next consensus proposal
     async fn consensus_proposal(
@@ -122,6 +125,10 @@ where
 
     fn as_any(&self) -> &dyn Any {
         self
+    }
+
+    fn module_kind(&self) -> ModuleKind {
+        <Self as ServerModule>::module_kind()
     }
 
     /// This module's contribution to the next consensus proposal

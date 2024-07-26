@@ -26,7 +26,7 @@ use fedimint_client::sm::{Context, DynState, ModuleNotifier, State, StateTransit
 use fedimint_client::transaction::{ClientOutput, TransactionBuilder};
 use fedimint_client::{sm_enum_variant_translation, DynGlobalClientContext};
 use fedimint_core::config::FederationId;
-use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, OperationId};
+use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, ModuleKind, OperationId};
 use fedimint_core::db::{DatabaseTransaction, DatabaseVersion};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::{
@@ -39,6 +39,7 @@ use fedimint_lnv2_common::config::LightningClientConfig;
 use fedimint_lnv2_common::contracts::{IncomingContract, OutgoingContract};
 use fedimint_lnv2_common::{
     GatewayEndpoint, LightningCommonInit, LightningModuleTypes, LightningOutput, LightningOutputV0,
+    KIND,
 };
 use futures::StreamExt;
 use lightning_invoice::{Bolt11Invoice, Currency};
@@ -282,7 +283,9 @@ pub struct LightningClientContext {
     pub gateway_conn: Arc<dyn GatewayConnection + Send + Sync>,
 }
 
-impl Context for LightningClientContext {}
+impl Context for LightningClientContext {
+    const KIND: Option<ModuleKind> = Some(KIND);
+}
 
 /// Client side lightning module
 ///

@@ -47,7 +47,7 @@ use fedimint_client::sm::{Context, DynState, ModuleNotifier, State, StateTransit
 use fedimint_client::transaction::{ClientInput, ClientOutput, TransactionBuilder};
 use fedimint_client::{sm_enum_variant_translation, DynGlobalClientContext};
 use fedimint_core::config::{FederationId, FederationIdPrefix};
-use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, OperationId};
+use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, ModuleKind, OperationId};
 use fedimint_core::db::{
     AutocommitError, Database, DatabaseTransaction, DatabaseVersion,
     IDatabaseTransactionOpsCoreTyped,
@@ -653,7 +653,9 @@ impl MintClientContext {
     }
 }
 
-impl Context for MintClientContext {}
+impl Context for MintClientContext {
+    const KIND: Option<ModuleKind> = Some(KIND);
+}
 
 #[apply(async_trait_maybe_send!)]
 impl ClientModule for MintClientModule {

@@ -50,7 +50,7 @@ use fedimint_client::sm::{DynState, ModuleNotifier, State, StateTransition};
 use fedimint_client::transaction::{ClientInput, ClientOutput, TransactionBuilder};
 use fedimint_client::{sm_enum_variant_translation, DynGlobalClientContext};
 use fedimint_core::config::FederationId;
-use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, OperationId};
+use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, ModuleKind, OperationId};
 use fedimint_core::db::{DatabaseTransaction, DatabaseVersion, IDatabaseTransactionOpsCoreTyped};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::{
@@ -74,7 +74,7 @@ use fedimint_ln_common::contracts::{
 use fedimint_ln_common::{
     ContractOutput, LightningCommonInit, LightningGateway, LightningGatewayAnnouncement,
     LightningGatewayRegistration, LightningInput, LightningModuleTypes, LightningOutput,
-    LightningOutputV0,
+    LightningOutputV0, KIND,
 };
 use fedimint_logging::LOG_CLIENT_MODULE_LN;
 use futures::{Future, StreamExt};
@@ -2010,7 +2010,9 @@ pub struct LightningClientContext {
     pub gateway_conn: Arc<dyn GatewayConnection + Send + Sync>,
 }
 
-impl fedimint_client::sm::Context for LightningClientContext {}
+impl fedimint_client::sm::Context for LightningClientContext {
+    const KIND: Option<ModuleKind> = Some(KIND);
+}
 
 #[apply(async_trait_maybe_send!)]
 pub trait GatewayConnection: std::fmt::Debug {

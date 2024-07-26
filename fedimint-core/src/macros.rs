@@ -185,21 +185,31 @@ macro_rules! _dyn_newtype_define_with_instance_id_inner {
                 self.module_instance_id
             }
 
-            pub fn from_typed<I>(module_instance_id: ::fedimint_core::core::ModuleInstanceId, typed: I) -> Self
+            pub fn from_typed<I>(
+                module_instance_id: ::fedimint_core::core::ModuleInstanceId,
+                typed: I
+            ) -> Self
             where
                 I: $trait + $crate::task::MaybeSend + $crate::task::MaybeSync + 'static {
 
                 Self { inner: $container::new(typed), module_instance_id }
             }
 
-            pub fn from_parts(module_instance_id: $crate::core::ModuleInstanceId, dynbox: $container<$crate::maybe_add_send_sync!(dyn $trait + 'static)>) -> Self {
+            pub fn from_parts(
+                module_instance_id: $crate::core::ModuleInstanceId,
+                dynbox: $container<$crate::maybe_add_send_sync!(dyn $trait + 'static)>
+            ) -> Self {
                 Self { inner: dynbox, module_instance_id }
             }
         }
 
         impl std::fmt::Debug for $name {
             fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                std::fmt::Debug::fmt(&self.inner, f)
+                f.debug_struct(stringify!($name))
+                    .field("id", &self.module_instance_id)
+                    .field("kind", &self.module_kind())
+                    .field("inner", &self.inner)
+                    .finish()
             }
         }
     };
@@ -374,12 +384,18 @@ macro_rules! module_plugin_static_trait_define{
         pub trait $static_trait:
             std::fmt::Debug + std::fmt::Display + std::cmp::PartialEq + std::hash::Hash + DynEncodable + Decodable + Encodable + Clone + IntoDynInstance<DynType = $dyn_newtype> + Send + Sync + 'static
         {
+            const KIND : ModuleKind;
+
             $($extra_methods)*
         }
 
         impl $dyn_trait for ::fedimint_core::core::DynUnknown {
             fn as_any(&self) -> &(dyn Any + Send + Sync) {
                 self
+            }
+
+            fn module_kind(&self) -> Option<ModuleKind> {
+                None
             }
 
             fn clone(&self, instance_id: ::fedimint_core::core::ModuleInstanceId) -> $dyn_newtype {
@@ -402,6 +418,10 @@ macro_rules! module_plugin_static_trait_define{
         {
             fn as_any(&self) -> &(dyn Any + Send + Sync) {
                 self
+            }
+
+            fn module_kind(&self) -> Option<ModuleKind> {
+                Some(<Self as $static_trait>::KIND)
             }
 
             fn clone(&self, instance_id: ::fedimint_core::core::ModuleInstanceId) -> $dyn_newtype {
@@ -441,12 +461,17 @@ macro_rules! module_plugin_static_trait_define_config{
         pub trait $static_trait:
             std::fmt::Debug + std::fmt::Display + std::cmp::PartialEq + std::hash::Hash + DynEncodable + Decodable + Encodable + Clone + IntoDynInstance<DynType = $dyn_newtype> + Send + Sync + serde::Serialize + serde::de::DeserializeOwned + 'static
         {
+            const KIND : ::fedimint_core::core::ModuleKind;
             $($extra_methods)*
         }
 
         impl $dyn_trait for ::fedimint_core::core::DynUnknown {
             fn as_any(&self) -> &(dyn Any + Send + Sync) {
                 self
+            }
+
+            fn module_kind(&self) -> Option<::fedimint_core::core::ModuleKind> {
+                None
             }
 
             fn clone(&self, instance_id: ::fedimint_core::core::ModuleInstanceId) -> $dyn_newtype {
@@ -469,6 +494,10 @@ macro_rules! module_plugin_static_trait_define_config{
         {
             fn as_any(&self) -> &(dyn Any + Send + Sync) {
                 self
+            }
+
+            fn module_kind(&self) -> Option<::fedimint_core::core::ModuleKind> {
+                Some(<T as $static_trait>::KIND)
             }
 
             fn clone(&self, instance_id: ::fedimint_core::core::ModuleInstanceId) -> $dyn_newtype {
@@ -557,7 +586,7 @@ macro_rules! plugin_types_trait_impl_config {
 /// `FederationServer` module.
 #[macro_export]
 macro_rules! plugin_types_trait_impl_common {
-    ($types:ty, $client_config:ty, $input:ty, $output:ty, $outcome:ty, $ci:ty, $input_error:ty, $output_error:ty) => {
+    ($kind:expr, $types:ty, $client_config:ty, $input:ty, $output:ty, $outcome:ty, $ci:ty, $input_error:ty, $output_error:ty) => {
         impl fedimint_core::module::ModuleCommon for $types {
             type ClientConfig = $client_config;
             type Input = $input;
@@ -568,7 +597,9 @@ macro_rules! plugin_types_trait_impl_common {
             type OutputError = $output_error;
         }
 
-        impl fedimint_core::core::ClientConfig for $client_config {}
+        impl fedimint_core::core::ClientConfig for $client_config {
+            const KIND: ModuleKind = $kind;
+        }
 
         impl fedimint_core::core::IntoDynInstance for $client_config {
             type DynType = fedimint_core::core::DynClientConfig;
@@ -578,7 +609,9 @@ macro_rules! plugin_types_trait_impl_common {
             }
         }
 
-        impl fedimint_core::core::Input for $input {}
+        impl fedimint_core::core::Input for $input {
+            const KIND: ModuleKind = $kind;
+        }
 
         impl fedimint_core::core::IntoDynInstance for $input {
             type DynType = fedimint_core::core::DynInput;
@@ -588,7 +621,9 @@ macro_rules! plugin_types_trait_impl_common {
             }
         }
 
-        impl fedimint_core::core::Output for $output {}
+        impl fedimint_core::core::Output for $output {
+            const KIND: ModuleKind = $kind;
+        }
 
         impl fedimint_core::core::IntoDynInstance for $output {
             type DynType = fedimint_core::core::DynOutput;
@@ -598,7 +633,9 @@ macro_rules! plugin_types_trait_impl_common {
             }
         }
 
-        impl fedimint_core::core::OutputOutcome for $outcome {}
+        impl fedimint_core::core::OutputOutcome for $outcome {
+            const KIND: ModuleKind = $kind;
+        }
 
         impl fedimint_core::core::IntoDynInstance for $outcome {
             type DynType = fedimint_core::core::DynOutputOutcome;
@@ -608,7 +645,9 @@ macro_rules! plugin_types_trait_impl_common {
             }
         }
 
-        impl fedimint_core::core::ModuleConsensusItem for $ci {}
+        impl fedimint_core::core::ModuleConsensusItem for $ci {
+            const KIND: ModuleKind = $kind;
+        }
 
         impl fedimint_core::core::IntoDynInstance for $ci {
             type DynType = fedimint_core::core::DynModuleConsensusItem;
@@ -618,7 +657,9 @@ macro_rules! plugin_types_trait_impl_common {
             }
         }
 
-        impl fedimint_core::core::InputError for $input_error {}
+        impl fedimint_core::core::InputError for $input_error {
+            const KIND: ModuleKind = $kind;
+        }
 
         impl fedimint_core::core::IntoDynInstance for $input_error {
             type DynType = fedimint_core::core::DynInputError;
@@ -628,7 +669,9 @@ macro_rules! plugin_types_trait_impl_common {
             }
         }
 
-        impl fedimint_core::core::OutputError for $output_error {}
+        impl fedimint_core::core::OutputError for $output_error {
+            const KIND: ModuleKind = $kind;
+        }
 
         impl fedimint_core::core::IntoDynInstance for $output_error {
             type DynType = fedimint_core::core::DynOutputError;
