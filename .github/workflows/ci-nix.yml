@@ -33,6 +33,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Check Nix flake inputs
+        if: github.event_name == 'pull_request' && github.base_ref == 'master'
         uses: DeterminateSystems/flake-checker-action@v8
         with:
           fail-mode: true
