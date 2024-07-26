@@ -42,32 +42,6 @@ pub struct CipherText {
     pub signature: EphemeralSignature,
 }
 
-pub fn verify_ciphertext(ct: &CipherText, commitment: &sha256::Hash) -> bool {
-    let message = hash_to_message(&ct.encrypted_preimage, &ct.pk.0, commitment);
-
-    pairing(&G1Affine::generator(), &ct.signature.0) == pairing(&ct.pk.0, &message)
-}
-
-pub fn decrypt_preimage(ct: &CipherText, agg_dk: &AggregateDecryptionKey) -> [u8; 32] {
-    xor_with_hash(ct.encrypted_preimage, agg_dk)
-}
-
-pub fn derive_agg_decryption_key(
-    agg_pk: &AggregatePublicKey,
-    encryption_seed: &[u8; 32],
-) -> AggregateDecryptionKey {
-    AggregateDecryptionKey(
-        agg_pk
-            .0
-            .mul(derive_ephemeral_sk(encryption_seed))
-            .to_affine(),
-    )
-}
-
-fn derive_ephemeral_sk(encryption_seed: &[u8; 32]) -> Scalar {
-    Scalar::random(&mut ChaChaRng::from_seed(*encryption_seed))
-}
-
 pub fn encrypt_preimage(
     agg_pk: &AggregatePublicKey,
     encryption_seed: &[u8; 32],
@@ -88,6 +62,71 @@ pub fn encrypt_preimage(
         pk: EphemeralPublicKey(ephemeral_pk),
         signature: EphemeralSignature(ephemeral_signature),
     }
+}
+
+pub fn derive_agg_decryption_key(
+    agg_pk: &AggregatePublicKey,
+    encryption_seed: &[u8; 32],
+) -> AggregateDecryptionKey {
+    AggregateDecryptionKey(
+        agg_pk
+            .0
+            .mul(derive_ephemeral_sk(encryption_seed))
+            .to_affine(),
+    )
+}
+
+fn derive_ephemeral_sk(encryption_seed: &[u8; 32]) -> Scalar {
+    Scalar::random(&mut ChaChaRng::from_seed(*encryption_seed))
+}
+
+fn xor_with_hash(mut bytes: [u8; 32], agg_dk: &AggregateDecryptionKey) -> [u8; 32] {
+    let hash = sha256::Hash::hash(&agg_dk.0.to_compressed());
+
+    for i in 0..32 {
+        bytes[i] ^= hash[i];
+    }
+
+    bytes
+}
+
+fn hash_to_message(
+    encrypted_point: &[u8; 32],
+    ephemeral_pk: &G1Affine,
+    commitment: &sha256::Hash,
+) -> G2Affine {
+    let mut engine = sha256::HashEngine::default();
+
+    engine
+        .write_all("FEDIMINT_TPE_BLS12_381_MESSAGE".as_bytes())
+        .expect("Writing to a hash engine cannot fail");
+
+    engine
+        .write_all(encrypted_point)
+        .expect("Writing to a hash engine cannot fail");
+
+    engine
+        .write_all(&ephemeral_pk.to_compressed())
+        .expect("Writing to a hash engine cannot fail");
+
+    engine
+        .write_all(commitment.as_byte_array())
+        .expect("Writing to a hash engine cannot fail");
+
+    let seed = sha256::Hash::from_engine(engine).to_byte_array();
+
+    G2Projective::random(&mut ChaChaRng::from_seed(seed)).to_affine()
+}
+
+/// Verifying a ciphertext guarantees that it has not been malleated.
+pub fn verify_ciphertext(ct: &CipherText, commitment: &sha256::Hash) -> bool {
+    let message = hash_to_message(&ct.encrypted_preimage, &ct.pk.0, commitment);
+
+    pairing(&G1Affine::generator(), &ct.signature.0) == pairing(&ct.pk.0, &message)
+}
+
+pub fn decrypt_preimage(ct: &CipherText, agg_dk: &AggregateDecryptionKey) -> [u8; 32] {
+    xor_with_hash(ct.encrypted_preimage, agg_dk)
 }
 
 /// The function asserts that the ciphertext is valid.
@@ -136,44 +175,6 @@ pub fn verify_decryption_key_share(
     // the public key share.
 
     pairing(&dks.0, &message) == pairing(&pks.0, &ct.signature.0)
-}
-
-fn xor_with_hash(mut bytes: [u8; 32], agg_dk: &AggregateDecryptionKey) -> [u8; 32] {
-    let hash = agg_dk.consensus_hash::<sha256::Hash>();
-
-    for i in 0..32 {
-        bytes[i] ^= hash[i];
-    }
-
-    bytes
-}
-
-fn hash_to_message(
-    encrypted_point: &[u8; 32],
-    ephemeral_pk: &G1Affine,
-    commitment: &sha256::Hash,
-) -> G2Affine {
-    let mut engine = sha256::HashEngine::default();
-
-    engine
-        .write_all("FEDIMINT_TPE_BLS12_381_MESSAGE".as_bytes())
-        .expect("Writing to a hash engine cannot fail");
-
-    engine
-        .write_all(encrypted_point)
-        .expect("Writing to a hash engine cannot fail");
-
-    engine
-        .write_all(&ephemeral_pk.to_compressed())
-        .expect("Writing to a hash engine cannot fail");
-
-    engine
-        .write_all(commitment.as_byte_array())
-        .expect("Writing to a hash engine cannot fail");
-
-    let seed = sha256::Hash::from_engine(engine).to_byte_array();
-
-    G2Projective::random(&mut ChaChaRng::from_seed(seed)).to_affine()
 }
 
 pub fn aggregate_decryption_shares(
@@ -233,7 +234,7 @@ mod tests {
 
     use crate::{
         aggregate_decryption_shares, create_decryption_key_share, decrypt_preimage,
-        derive_agg_decryption_key, encrypt_preimage, verify_agg_decryption_key,
+        derive_agg_decryption_key, encrypt_preimage, verify_agg_decryption_key, verify_ciphertext,
         verify_decryption_key_share, AggregatePublicKey, DecryptionKeyShare, PublicKeyShare,
         SecretKeyShare,
     };
@@ -275,6 +276,8 @@ mod tests {
         let preimage = [42_u8; 32];
         let commitment = sha256::Hash::hash(&[0_u8; 32]);
         let ciphertext = encrypt_preimage(&agg_pk, &encryption_seed, &preimage, &commitment);
+
+        assert!(verify_ciphertext(&ciphertext, &commitment));
 
         let shares: Vec<DecryptionKeyShare> = sks
             .iter()
