@@ -1289,7 +1289,9 @@ mod tests {
         }
     }
 
-    impl Context for MockContext {}
+    impl Context for MockContext {
+        const KIND: Option<ModuleKind> = None;
+    }
 
     async fn get_executor() -> (Executor, Sender<u64>, Database) {
         let (broadcast, _) = tokio::sync::broadcast::channel(10);

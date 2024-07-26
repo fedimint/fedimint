@@ -1,7 +1,7 @@
 use std::any::Any;
 use std::fmt::{self, Debug};
 
-use fedimint_core::core::{IntoDynInstance, ModuleInstanceId};
+use fedimint_core::core::{IntoDynInstance, ModuleInstanceId, ModuleKind};
 use fedimint_core::encoding::{Decodable, DynEncodable, Encodable};
 use fedimint_core::task::{MaybeSend, MaybeSync};
 use fedimint_core::{
@@ -12,6 +12,7 @@ use fedimint_core::{
 
 pub trait IModuleBackup: Debug + DynEncodable {
     fn as_any(&self) -> &(maybe_add_send_sync!(dyn Any));
+    fn module_kind(&self) -> Option<ModuleKind>;
     fn clone(&self, instance_id: ModuleInstanceId) -> DynModuleBackup;
     fn erased_eq_no_instance_id(&self, other: &DynModuleBackup) -> bool;
 }
@@ -27,11 +28,16 @@ pub trait ModuleBackup:
     + MaybeSync
     + 'static
 {
+    const KIND: Option<ModuleKind>;
 }
 
 impl IModuleBackup for ::fedimint_core::core::DynUnknown {
     fn as_any(&self) -> &(maybe_add_send_sync!(dyn Any)) {
         self
+    }
+
+    fn module_kind(&self) -> Option<ModuleKind> {
+        None
     }
 
     fn clone(&self, instance_id: ::fedimint_core::core::ModuleInstanceId) -> DynModuleBackup {
@@ -54,6 +60,10 @@ where
 {
     fn as_any(&self) -> &(maybe_add_send_sync!(dyn Any)) {
         self
+    }
+
+    fn module_kind(&self) -> Option<ModuleKind> {
+        T::KIND
     }
 
     fn clone(&self, instance_id: ::fedimint_core::core::ModuleInstanceId) -> DynModuleBackup {
@@ -93,7 +103,9 @@ pub enum NoModuleBackup {
     },
 }
 
-impl ModuleBackup for NoModuleBackup {}
+impl ModuleBackup for NoModuleBackup {
+    const KIND: Option<ModuleKind> = None;
+}
 
 impl IntoDynInstance for NoModuleBackup {
     type DynType = DynModuleBackup;

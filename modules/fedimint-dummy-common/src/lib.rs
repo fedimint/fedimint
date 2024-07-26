@@ -65,6 +65,7 @@ pub struct DummyModuleTypes;
 
 // Wire together the types for this module
 plugin_types_trait_impl_common!(
+    KIND,
     DummyModuleTypes,
     DummyClientConfig,
     DummyInput,

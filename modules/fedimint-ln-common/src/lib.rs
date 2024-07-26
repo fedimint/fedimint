@@ -414,6 +414,7 @@ impl CommonModuleInit for LightningCommonInit {
 pub struct LightningModuleTypes;
 
 plugin_types_trait_impl_common!(
+    KIND,
     LightningModuleTypes,
     LightningClientConfig,
     LightningInput,

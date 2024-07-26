@@ -9,7 +9,7 @@ use fedimint_client::module::init::{ClientModuleInit, ClientModuleInitArgs};
 use fedimint_client::module::recovery::NoModuleBackup;
 use fedimint_client::module::{ClientContext, ClientModule, IClientModule};
 use fedimint_client::sm::Context;
-use fedimint_core::core::Decoder;
+use fedimint_core::core::{Decoder, ModuleKind};
 use fedimint_core::db::{Database, DatabaseTransaction, DatabaseVersion};
 use fedimint_core::module::{ApiVersion, ModuleCommon, ModuleInit, MultiApiVersion};
 use fedimint_core::{apply, async_trait_maybe_send, Amount};
@@ -40,7 +40,9 @@ pub struct EmptyClientContext {
 }
 
 // TODO: Boiler-plate
-impl Context for EmptyClientContext {}
+impl Context for EmptyClientContext {
+    const KIND: Option<ModuleKind> = None;
+}
 
 #[apply(async_trait_maybe_send!)]
 impl ClientModule for EmptyClientModule {

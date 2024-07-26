@@ -281,6 +281,7 @@ impl PartialEq for PegOutSignatureItem {
 impl Eq for PegOutSignatureItem {}
 
 plugin_types_trait_impl_common!(
+    KIND,
     WalletModuleTypes,
     WalletClientConfig,
     WalletInput,

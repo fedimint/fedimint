@@ -2,7 +2,7 @@
 
 use std::time::Duration;
 
-use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, OperationId};
+use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, ModuleKind, OperationId};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::runtime::sleep;
 use fedimint_core::transaction::{Transaction, TransactionSubmissionOutcome};
@@ -24,7 +24,9 @@ const RETRY_INTERVAL: Duration = Duration::from_secs(5);
 #[derive(Debug, Clone)]
 pub struct TxSubmissionContext;
 
-impl Context for TxSubmissionContext {}
+impl Context for TxSubmissionContext {
+    const KIND: Option<ModuleKind> = None;
+}
 
 impl IntoDynInstance for TxSubmissionContext {
     type DynType = DynContext;

@@ -18,7 +18,7 @@ use fedimint_client::module::recovery::NoModuleBackup;
 use fedimint_client::module::{ClientContext, ClientModule, IClientModule};
 use fedimint_client::sm::{Context, ModuleNotifier};
 use fedimint_client::transaction::{ClientInput, ClientOutput, TransactionBuilder};
-use fedimint_core::core::{Decoder, OperationId};
+use fedimint_core::core::{Decoder, ModuleKind, OperationId};
 use fedimint_core::db::{
     Database, DatabaseTransaction, DatabaseVersion, IDatabaseTransactionOpsCoreTyped,
 };
@@ -58,7 +58,9 @@ pub struct DummyClientContext {
 }
 
 // TODO: Boiler-plate
-impl Context for DummyClientContext {}
+impl Context for DummyClientContext {
+    const KIND: Option<ModuleKind> = None;
+}
 
 #[apply(async_trait_maybe_send!)]
 impl ClientModule for DummyClientModule {

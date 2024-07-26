@@ -57,6 +57,7 @@ pub struct EmptyModuleTypes;
 
 // Wire together the types for this module
 plugin_types_trait_impl_common!(
+    KIND,
     EmptyModuleTypes,
     EmptyClientConfig,
     EmptyInput,
