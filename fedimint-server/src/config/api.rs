@@ -869,7 +869,7 @@ mod tests {
     use fedimint_dummy_server::DummyInit;
     use fedimint_logging::TracingSetup;
     use fedimint_portalloc::port_alloc;
-    use fedimint_testing::fixtures::test_dir;
+    use fedimint_testing_core::test_dir;
     use futures::future::join_all;
     use itertools::Itertools;
     use tracing::info;

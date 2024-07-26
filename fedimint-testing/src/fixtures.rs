@@ -1,8 +1,7 @@
+use std::env;
 use std::net::SocketAddr;
-use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
-use std::{env, fs};
 
 use fedimint_bitcoind::{create_bitcoind, DynBitcoindRpc};
 use fedimint_client::module::init::{
@@ -19,18 +18,16 @@ use fedimint_core::module::{DynServerModuleInit, IServerModuleInit};
 use fedimint_core::task::{MaybeSend, MaybeSync, TaskGroup};
 use fedimint_core::util::SafeUrl;
 use fedimint_logging::TracingSetup;
+use fedimint_testing_core::test_dir;
 use lightning_invoice::RoutingFees;
 use ln_gateway::client::GatewayClientBuilder;
 use ln_gateway::lightning::{ILnRpcClient, LightningBuilder};
 use ln_gateway::{Gateway, LightningContext};
-use tempfile::TempDir;
 
 use crate::btc::mock::FakeBitcoinFactory;
 use crate::btc::real::RealBitcoinTest;
 use crate::btc::BitcoinTest;
-use crate::envs::{
-    FM_PORT_ESPLORA_ENV, FM_TEST_BITCOIND_RPC_ENV, FM_TEST_DIR_ENV, FM_TEST_USE_REAL_DAEMONS_ENV,
-};
+use crate::envs::{FM_PORT_ESPLORA_ENV, FM_TEST_BITCOIND_RPC_ENV, FM_TEST_USE_REAL_DAEMONS_ENV};
 use crate::federation::{FederationTest, FederationTestBuilder};
 use crate::gateway::{FakeLightningBuilder, DEFAULT_GATEWAY_PASSWORD};
 
@@ -236,21 +233,4 @@ impl Fixtures {
     pub fn dyn_bitcoin_rpc(&self) -> DynBitcoindRpc {
         self.dyn_bitcoin_rpc.clone()
     }
-}
-
-/// If `FM_TEST_DIR` is set, use it as a base, otherwise use a tempdir
-///
-/// Callers must hold onto the tempdir until it is no longer needed
-pub fn test_dir(pathname: &str) -> (PathBuf, Option<TempDir>) {
-    let (parent, maybe_tmp_dir_guard) = if let Ok(directory) = env::var(FM_TEST_DIR_ENV) {
-        (directory, None)
-    } else {
-        let random = format!("test-{}", rand::random::<u64>());
-        let guard = tempfile::Builder::new().prefix(&random).tempdir().unwrap();
-        let directory = guard.path().to_str().unwrap().to_owned();
-        (directory, Some(guard))
-    };
-    let fullpath = PathBuf::from(parent).join(pathname);
-    fs::create_dir_all(fullpath.clone()).expect("Can make dirs");
-    (fullpath, maybe_tmp_dir_guard)
 }
