@@ -71,4 +71,4 @@ tempfile = "3.10.1"
 test-log = { version = "0.2", features = ["trace"], default-features = false }
 
 [build-dependencies]
-fedimint-build = { version = "=0.5.0-alpha", path = "../fedimint-build" }
+fedimint-build = { workspace = true }

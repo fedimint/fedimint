@@ -23,7 +23,7 @@ bitcoin = { workspace = true }
 fedimint-client = { version = "=0.5.0-alpha", path = "../fedimint-client" }
 fedimint-core = { workspace = true }
 fedimint-logging = { workspace = true }
-fedimint-rocksdb = { version = "=0.5.0-alpha", path = "../fedimint-rocksdb" }
+fedimint-rocksdb = { workspace = true }
 futures = { workspace = true }
 lightning-invoice = { workspace = true }
 rand = { workspace = true }

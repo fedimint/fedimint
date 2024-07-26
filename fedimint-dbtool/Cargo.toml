@@ -35,7 +35,7 @@ fedimint-meta-client = { version = "=0.5.0-alpha", path = "../modules/fedimint-m
 fedimint-meta-server = { version = "=0.5.0-alpha", path = "../modules/fedimint-meta-server" }
 fedimint-mint-client = { version = "=0.5.0-alpha", path = "../modules/fedimint-mint-client" }
 fedimint-mint-server = { version = "=0.5.0-alpha", path = "../modules/fedimint-mint-server" }
-fedimint-rocksdb = { version = "=0.5.0-alpha", path = "../fedimint-rocksdb" }
+fedimint-rocksdb = { workspace = true }
 fedimint-server = { version = "=0.5.0-alpha", path = "../fedimint-server" }
 fedimint-wallet-client = { version = "=0.5.0-alpha", path = "../modules/fedimint-wallet-client" }
 fedimint-wallet-server = { version = "=0.5.0-alpha", path = "../modules/fedimint-wallet-server" }
@@ -50,4 +50,4 @@ tokio = "1.38.1"
 tracing = { workspace = true }
 
 [build-dependencies]
-fedimint-build = { version = "=0.5.0-alpha", path = "../fedimint-build" }
+fedimint-build = { workspace = true }

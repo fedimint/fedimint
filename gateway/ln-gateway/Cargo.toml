@@ -47,7 +47,7 @@ fedimint-lnv2-client = { path = "../../modules/fedimint-lnv2-client" }
 fedimint-lnv2-common = { path = "../../modules/fedimint-lnv2-common" }
 fedimint-logging = { workspace = true }
 fedimint-mint-client = { version = "=0.5.0-alpha", path = "../../modules/fedimint-mint-client" }
-fedimint-rocksdb = { version = "=0.5.0-alpha", path = "../../fedimint-rocksdb" }
+fedimint-rocksdb = { workspace = true }
 fedimint-wallet-client = { version = "=0.5.0-alpha", path = "../../modules/fedimint-wallet-client" }
 futures = { workspace = true }
 hex = { workspace = true }
@@ -89,5 +89,5 @@ fedimint-wallet-client = { path = "../../modules/fedimint-wallet-client" }
 threshold_crypto = { workspace = true }
 
 [build-dependencies]
-fedimint-build = { version = "=0.5.0-alpha", path = "../../fedimint-build" }
+fedimint-build = { workspace = true }
 tonic-build = "0.12.1"
