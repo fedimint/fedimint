@@ -172,6 +172,9 @@
 <a href="#172" id="172">172</a>
 <a href="#173" id="173">173</a>
 <a href="#174" id="174">174</a>
+<a href="#175" id="175">175</a>
+<a href="#176" id="176">176</a>
+<a href="#177" id="177">177</a>
 </pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::cast_possible_wrap)]
@@ -240,7 +243,7 @@
         <span class="prelude-val">None </span>=&gt; {
             run_config_gen(
                 data_dir.clone(),
-                settings,
+                settings.clone(),
                 db.clone(),
                 code_version_str,
                 task_group.make_subgroup(),
@@ -264,6 +267,8 @@
     start_api_announcement_service(<span class="kw-2">&amp;</span>db, <span class="kw-2">&amp;</span>task_group, <span class="kw-2">&amp;</span>cfg, force_api_secrets.get_active()).<span class="kw">await</span>;
 
     consensus::run(
+        settings.p2p_bind,
+        settings.api_bind,
         cfg,
         db,
         module_init_registry.clone(),
@@ -304,6 +309,7 @@
     <span class="kw">let </span>(cfg_sender, <span class="kw-2">mut </span>cfg_receiver) = tokio::sync::mpsc::channel(<span class="number">1</span>);
 
     <span class="kw">let </span>config_gen = ConfigGenApi::new(
+        settings.p2p_bind,
         settings.clone(),
         db.clone(),
         cfg_sender,
@@ -318,7 +324,7 @@
 
     <span class="kw">let </span>api_handler = net::api::spawn(
         <span class="string">"config-gen"</span>,
-        <span class="kw-2">&amp;</span>settings.api_bind,
+        settings.api_bind,
         rpc_module,
         <span class="number">10</span>,
         force_api_secrets.clone(),

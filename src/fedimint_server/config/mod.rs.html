@@ -792,11 +792,6 @@
 <a href="#792" id="792">792</a>
 <a href="#793" id="793">793</a>
 <a href="#794" id="794">794</a>
-<a href="#795" id="795">795</a>
-<a href="#796" id="796">796</a>
-<a href="#797" id="797">797</a>
-<a href="#798" id="798">798</a>
-<a href="#799" id="799">799</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap};
 <span class="kw">use </span>std::env;
 <span class="kw">use </span>std::net::SocketAddr;
@@ -940,10 +935,6 @@
     </span><span class="kw">pub </span>p2p_endpoints: BTreeMap&lt;PeerId, PeerUrl&gt;,
     <span class="doccomment">/// Our peer id (generally should not change)
     </span><span class="kw">pub </span>identity: PeerId,
-    <span class="doccomment">/// Our bind address for communicating with peers
-    </span><span class="kw">pub </span>fed_bind: SocketAddr,
-    <span class="doccomment">/// Our bind address for our API endpoints
-    </span><span class="kw">pub </span>api_bind: SocketAddr,
     <span class="doccomment">/// How many API connections we will accept
     </span><span class="kw">pub </span>max_connections: u32,
     <span class="doccomment">/// Influences the atomic broadcast ordering latency, should be higher than
@@ -1026,8 +1017,6 @@
         <span class="kw">let </span>local = ServerConfigLocal {
             p2p_endpoints: params.p2p_urls(),
             identity,
-            fed_bind: params.local.p2p_bind,
-            api_bind: params.local.api_bind,
             max_connections: DEFAULT_MAX_CLIENT_CONNECTIONS,
             broadcast_round_delay_ms: <span class="kw">if </span>is_running_in_test_env() {
                 DEFAULT_TEST_BROADCAST_ROUND_DELAY_MS
@@ -1232,6 +1221,7 @@
 
     <span class="doccomment">/// Runs the distributed key gen algorithm
     </span><span class="kw">pub async fn </span>distributed_gen(
+        p2p_bind_addr: SocketAddr,
         params: <span class="kw-2">&amp;</span>ConfigGenParams,
         registry: ServerModuleInitRegistry,
         delay_calculator: DelayCalculator,
@@ -1240,7 +1230,7 @@
     ) -&gt; DkgResult&lt;<span class="self">Self</span>&gt; {
         <span class="kw">let </span>_timing <span class="comment">/* logs on drop */ </span>= timing::TimeReporter::new(<span class="string">"distributed-gen"</span>).info();
         <span class="kw">let </span>server_conn = connect(
-            params.p2p_network(),
+            params.p2p_network(p2p_bind_addr),
             params.tls_config(),
             delay_calculator,
             task_group,
@@ -1382,16 +1372,16 @@
 }
 
 <span class="kw">impl </span>ServerConfig {
-    <span class="kw">pub fn </span>network_config(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; NetworkConfig {
+    <span class="kw">pub fn </span>network_config(<span class="kw-2">&amp;</span><span class="self">self</span>, p2p_bind_addr: SocketAddr) -&gt; NetworkConfig {
         NetworkConfig {
             identity: <span class="self">self</span>.local.identity,
-            bind_addr: <span class="self">self</span>.local.fed_bind,
             peers: <span class="self">self
                 </span>.local
                 .p2p_endpoints
                 .iter()
                 .map(|(<span class="kw-2">&amp;</span>id, endpoint)| (id, endpoint.url.clone()))
                 .collect(),
+            p2p_bind_addr,
         }
     }
 
@@ -1418,10 +1408,10 @@
         <span class="self">self</span>.consensus.peers.keys().copied().collect()
     }
 
-    <span class="kw">pub fn </span>p2p_network(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; NetworkConfig {
+    <span class="kw">pub fn </span>p2p_network(<span class="kw-2">&amp;</span><span class="self">self</span>, p2p_bind_addr: SocketAddr) -&gt; NetworkConfig {
         NetworkConfig {
             identity: <span class="self">self</span>.local.our_id,
-            bind_addr: <span class="self">self</span>.local.p2p_bind,
+            p2p_bind_addr,
             peers: <span class="self">self
                 </span>.p2p_urls()
                 .into_iter()

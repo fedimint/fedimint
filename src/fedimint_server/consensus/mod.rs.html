@@ -254,6 +254,17 @@
 <a href="#254" id="254">254</a>
 <a href="#255" id="255">255</a>
 <a href="#256" id="256">256</a>
+<a href="#257" id="257">257</a>
+<a href="#258" id="258">258</a>
+<a href="#259" id="259">259</a>
+<a href="#260" id="260">260</a>
+<a href="#261" id="261">261</a>
+<a href="#262" id="262">262</a>
+<a href="#263" id="263">263</a>
+<a href="#264" id="264">264</a>
+<a href="#265" id="265">265</a>
+<a href="#266" id="266">266</a>
+<a href="#267" id="267">267</a>
 </pre></div><pre class="rust"><code><span class="attr">#![allow(clippy::let_unit_value)]
 
 </span><span class="kw">pub mod </span>aleph_bft;
@@ -265,6 +276,7 @@
 
 <span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::env;
+<span class="kw">use </span>std::net::SocketAddr;
 <span class="kw">use </span>std::path::PathBuf;
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
@@ -299,7 +311,10 @@
 <span class="doccomment">/// How many txs can be stored in memory before blocking the API
 </span><span class="kw">const </span>TRANSACTION_BUFFER: usize = <span class="number">1000</span>;
 
-<span class="kw">pub async fn </span>run(
+<span class="attr">#[allow(clippy::too_many_arguments)]
+</span><span class="kw">pub async fn </span>run(
+    p2p_bind_addr: SocketAddr,
+    api_bind_addr: SocketAddr,
     cfg: ServerConfig,
     db: Database,
     module_init_registry: ServerModuleInitRegistry,
@@ -378,8 +393,13 @@
 
     <span class="macro">info!</span>(target: LOG_CONSENSUS, <span class="string">"Starting Consensus Api"</span>);
 
-    <span class="kw">let </span>api_handler =
-        start_consensus_api(<span class="kw-2">&amp;</span>cfg.local, consensus_api, force_api_secrets.clone()).<span class="kw">await</span>;
+    <span class="kw">let </span>api_handler = start_consensus_api(
+        <span class="kw-2">&amp;</span>cfg.local,
+        consensus_api,
+        force_api_secrets.clone(),
+        api_bind_addr,
+    )
+    .<span class="kw">await</span>;
 
     <span class="macro">info!</span>(target: LOG_CONSENSUS, <span class="string">"Starting Submission of Module CI proposals"</span>);
 
@@ -419,6 +439,7 @@
         task_group: task_group.clone(),
         data_dir,
         checkpoint_retention,
+        p2p_bind_addr,
     }
     .run()
     .<span class="kw">await</span><span class="question-mark">?</span>;
@@ -436,6 +457,7 @@
     cfg: <span class="kw-2">&amp;</span>ServerConfigLocal,
     api: ConsensusApi,
     force_api_secrets: ApiSecrets,
+    api_bind: SocketAddr,
 ) -&gt; ServerHandle {
     <span class="kw">let </span><span class="kw-2">mut </span>rpc_module = RpcHandlerCtx::new_module(api.clone());
 
@@ -447,7 +469,7 @@
 
     net::api::spawn(
         <span class="string">"consensus"</span>,
-        <span class="kw-2">&amp;</span>cfg.api_bind,
+        api_bind,
         rpc_module,
         cfg.max_connections,
         force_api_secrets,

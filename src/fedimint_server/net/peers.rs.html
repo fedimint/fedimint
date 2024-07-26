@@ -875,13 +875,13 @@
 }
 
 <span class="doccomment">/// Specifies the network configuration for federation-internal communication
-</span><span class="attr">#[derive(Debug, Clone, Serialize, Deserialize)]
+</span><span class="attr">#[derive(Debug, Clone)]
 </span><span class="kw">pub struct </span>NetworkConfig {
     <span class="doccomment">/// Our federation member's identity
     </span><span class="kw">pub </span>identity: PeerId,
     <span class="doccomment">/// Our listen address for incoming connections from other federation
     /// members
-    </span><span class="kw">pub </span>bind_addr: SocketAddr,
+    </span><span class="kw">pub </span>p2p_bind_addr: SocketAddr,
     <span class="doccomment">/// Map of all peers' connection information we want to be connected to
     </span><span class="kw">pub </span>peers: HashMap&lt;PeerId, SafeUrl&gt;,
 }
@@ -1021,7 +1021,7 @@
                 </span>.insert(<span class="kw-2">*</span>peer, PeerConnectionStatus::Disconnected);
         }
 
-        task_group.spawn(<span class="string">"listen task"</span>, |handle| {
+        task_group.spawn(<span class="string">"listen task"</span>, <span class="kw">move </span>|handle| {
             <span class="self">Self</span>::run_listen_task(cfg, shared_connector, connection_senders, handle)
         });
 
@@ -1038,9 +1038,9 @@
         task_handle: TaskHandle,
     ) {
         <span class="kw">let </span><span class="kw-2">mut </span>listener = connect
-            .listen(cfg.bind_addr)
+            .listen(cfg.p2p_bind_addr)
             .<span class="kw">await
-            </span>.with_context(|| <span class="macro">anyhow::anyhow!</span>(<span class="string">"Failed to listen on {}"</span>, cfg.bind_addr))
+            </span>.with_context(|| <span class="macro">anyhow::anyhow!</span>(<span class="string">"Failed to listen on {}"</span>, cfg.p2p_bind_addr))
             .expect(<span class="string">"Could not bind port"</span>);
 
         <span class="kw">let </span><span class="kw-2">mut </span>shutdown_rx = task_handle.make_shutdown_rx();
@@ -1563,7 +1563,7 @@
             <span class="kw">let </span>build_peers = |bind: <span class="kw-2">&amp;</span><span class="lifetime">'static </span>str, id: u16, task_group: TaskGroup| <span class="kw">async move </span>{
                 <span class="kw">let </span>cfg = NetworkConfig {
                     identity: PeerId::from(id),
-                    bind_addr: bind.parse().unwrap(),
+                    p2p_bind_addr: bind.parse().unwrap(),
                     peers: peers_ref.clone(),
                 };
                 <span class="kw">let </span>connect = net_ref

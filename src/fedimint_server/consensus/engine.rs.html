@@ -797,8 +797,16 @@
 <a href="#797" id="797">797</a>
 <a href="#798" id="798">798</a>
 <a href="#799" id="799">799</a>
+<a href="#800" id="800">800</a>
+<a href="#801" id="801">801</a>
+<a href="#802" id="802">802</a>
+<a href="#803" id="803">803</a>
+<a href="#804" id="804">804</a>
+<a href="#805" id="805">805</a>
+<a href="#806" id="806">806</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::fs;
+<span class="kw">use </span>std::net::SocketAddr;
 <span class="kw">use </span>std::path::{Path, PathBuf};
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
@@ -873,6 +881,7 @@
     <span class="kw">pub </span>task_group: TaskGroup,
     <span class="kw">pub </span>data_dir: PathBuf,
     <span class="kw">pub </span>checkpoint_retention: u64,
+    <span class="kw">pub </span>p2p_bind_addr: SocketAddr,
 }
 
 <span class="kw">impl </span>ConsensusEngine {
@@ -890,7 +899,8 @@
             <span class="self">self</span>.run_single_guardian(<span class="self">self</span>.task_group.make_handle())
                 .<span class="kw">await
         </span>} <span class="kw">else </span>{
-            <span class="self">self</span>.run_consensus(<span class="self">self</span>.task_group.make_handle()).<span class="kw">await
+            <span class="self">self</span>.run_consensus(<span class="self">self</span>.p2p_bind_addr, <span class="self">self</span>.task_group.make_handle())
+                .<span class="kw">await
         </span>}
     }
 
@@ -954,7 +964,11 @@
         <span class="prelude-val">Ok</span>(())
     }
 
-    <span class="kw">pub async fn </span>run_consensus(<span class="kw-2">&amp;</span><span class="self">self</span>, task_handle: TaskHandle) -&gt; anyhow::Result&lt;()&gt; {
+    <span class="kw">pub async fn </span>run_consensus(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        p2p_bind_addr: SocketAddr,
+        task_handle: TaskHandle,
+    ) -&gt; anyhow::Result&lt;()&gt; {
         <span class="comment">// We need four peers to run the atomic broadcast
         </span><span class="macro">assert!</span>(<span class="self">self</span>.num_peers().total() &gt;= <span class="number">4</span>);
 
@@ -962,7 +976,7 @@
 
         <span class="comment">// Build P2P connections for the atomic broadcast
         </span><span class="kw">let </span>connections = ReconnectPeerConnections::new(
-            <span class="self">self</span>.cfg.network_config(),
+            <span class="self">self</span>.cfg.network_config(p2p_bind_addr),
             DelayCalculator::PROD_DEFAULT,
             TlsTcpConnector::new(<span class="self">self</span>.cfg.tls_config(), <span class="self">self</span>.identity()).into_dyn(),
             <span class="kw-2">&amp;</span><span class="self">self</span>.task_group,
