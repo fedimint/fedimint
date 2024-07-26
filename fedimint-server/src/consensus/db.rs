@@ -118,7 +118,7 @@ mod fedimint_migration_tests {
     use fedimint_dummy_common::{DummyCommonInit, DummyInput, DummyOutput};
     use fedimint_dummy_server::Dummy;
     use fedimint_logging::{TracingSetup, LOG_DB};
-    use fedimint_testing::db::{
+    use fedimint_testing_core::db::{
         snapshot_db_migrations_with_decoders, validate_migrations_global, BYTE_32,
         TEST_MODULE_INSTANCE_ID,
     };

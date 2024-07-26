@@ -1,9 +1,9 @@
 [package]
-name = "fedimint-testing"
+name = "fedimint-testing-core"
 version = { workspace = true }
 authors = ["The Fedimint Developers"]
 edition = "2021"
-description = "fedimint-testing provides a library of shared objects and utilities for testing fedimint components"
+description = "fedimint-testing provides a basic utils for testing fedimint components"
 license = "MIT"
 readme = "../README.md"
 repository = "https://github.com/fedimint/fedimint"
@@ -12,7 +12,7 @@ repository = "https://github.com/fedimint/fedimint"
 rustc-args = ["--cfg", "tokio_unstable"]
 
 [lib]
-name = "fedimint_testing"
+name = "fedimint_testing_core"
 path = "src/lib.rs"
 
 [dependencies]
@@ -20,22 +20,12 @@ anyhow = { workspace = true }
 async-stream = "0.3.5"
 async-trait = { workspace = true }
 bitcoin = { workspace = true }
-bitcoincore-rpc = "0.17.0"
-clap = { version = "4.5.9", features = ["derive", "std", "help", "usage", "error-context", "suggestions"], default-features = false }
-fedimint-api-client = { workspace = true }
-fedimint-bitcoind = { version = "=0.5.0-alpha", path = "../fedimint-bitcoind" }
 fedimint-client = { version = "=0.5.0-alpha", path = "../fedimint-client" }
 fedimint-core = { workspace = true }
-fedimint-ln-common = { version = "=0.5.0-alpha", path = "../modules/fedimint-ln-common" }
 fedimint-logging = { workspace = true }
-fedimint-portalloc = { version = "=0.5.0-alpha", path = "../utils/portalloc" }
 fedimint-rocksdb = { version = "=0.5.0-alpha", path = "../fedimint-rocksdb" }
-fedimint-server = { version = "=0.5.0-alpha", path = "../fedimint-server" }
-fedimint-testing-core = { version = "=0.5.0-alpha", path = "../fedimint-testing-core" }
-fs-lock = "0.1.3"
 futures = { workspace = true }
 lightning-invoice = { workspace = true }
-ln-gateway = { version = "=0.5.0-alpha", package = "fedimint-ln-gateway", path = "../gateway/ln-gateway" }
 rand = { workspace = true }
 secp256k1-zkp = { version = "0.9.2", features = ["global-context", "bitcoin_hashes"] }
 serde = { workspace = true }
@@ -43,6 +33,5 @@ tempfile = "3.10.1"
 tokio = { version = "1.38.1", features = ["full", "tracing"] }
 tokio-rustls = { workspace = true }
 tokio-stream = "0.1.15"
-tonic_lnd = { workspace = true }
 tracing = { workspace = true }
 url = { workspace = true }
