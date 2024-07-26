@@ -39,7 +39,8 @@ var srcIndex = new Map(JSON.parse('[\
 ["fedimint_recoverytool",["",[],["envs.rs","main.rs"]]],\
 ["fedimint_rocksdb",["",[],["envs.rs","lib.rs"]]],\
 ["fedimint_server",["",[["config",[],["api.rs","distributedgen.rs","io.rs","mod.rs"]],["consensus",[["aleph_bft",[],["backup.rs","data_provider.rs","finalization_handler.rs","keychain.rs","mod.rs","network.rs","spawner.rs"]]],["api.rs","db.rs","debug.rs","engine.rs","mod.rs","transaction.rs"]],["metrics",[],["jsonrpsee.rs"]],["net",[["api",[],["announcement.rs","http_auth.rs","mod.rs"]]],["connect.rs","framed.rs","mod.rs","peers.rs","peers_reliable.rs","queue.rs"]]],["envs.rs","lib.rs","metrics.rs","multiplexed.rs"]]],\
-["fedimint_testing",["",[["btc",[],["mock.rs","mod.rs","real.rs"]]],["db.rs","envs.rs","federation.rs","fixtures.rs","gateway.rs","lib.rs","ln.rs"]]],\
+["fedimint_testing",["",[["btc",[],["mock.rs","mod.rs","real.rs"]]],["federation.rs","fixtures.rs","gateway.rs","lib.rs","ln.rs"]]],\
+["fedimint_testing_core",["",[],["db.rs","envs.rs","lib.rs"]]],\
 ["fedimint_unknown_common",["",[],["config.rs","lib.rs"]]],\
 ["fedimint_unknown_server",["",[],["db.rs","lib.rs"]]],\
 ["fedimint_wallet_client",["",[],["api.rs","backup.rs","cli.rs","client_db.rs","deposit.rs","lib.rs","pegin_monitor.rs","withdraw.rs"]]],\

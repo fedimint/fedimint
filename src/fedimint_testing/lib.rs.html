@@ -15,7 +15,6 @@
 <a href="#15" id="15">15</a>
 <a href="#16" id="16">16</a>
 <a href="#17" id="17">17</a>
-<a href="#18" id="18">18</a>
 </pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::default_trait_access)]
@@ -27,11 +26,10 @@
 #![allow(clippy::return_self_not_must_use)]
 
 </span><span class="kw">pub mod </span>btc;
-<span class="kw">pub mod </span>db;
-<span class="kw">pub mod </span>envs;
 <span class="kw">pub mod </span>federation;
 <span class="kw">pub mod </span>fixtures;
 <span class="kw">pub mod </span>gateway;
 <span class="kw">pub mod </span>ln;
+<span class="kw">pub use </span>fedimint_testing_core::{db, envs};
 <span class="kw">pub use </span>ln_gateway::Gateway;
 </code></pre></div></section></main></body></html>
