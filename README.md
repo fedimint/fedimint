@@ -19,6 +19,9 @@
   <a href="https://docs.fedimint.org">
     <img src="https://img.shields.io/static/v1?label=Docs&message=master&color=007ec6&logo=GitBook&logoColor=ffffff" alt="docs built from master">
   </a>
+  <a href="https://app.radicle.xyz/nodes/radicle.fedimint.org/rad:z2eeB9LF8fDNJQaEcvAWxQmU7h2PG">
+    <img src="https://img.shields.io/badge/Radicle-explore-blue" alt="View on Radicle">
+  </a>
   <img alt="Lines of code" src="https://tokei.rs/b1/github/fedimint/fedimint">
 </p>
 
