@@ -45,7 +45,7 @@ fedimint-logging = { version = "=0.5.0-alpha", path = "../fedimint-logging" }
 fedimint-meta-server = { version = "=0.5.0-alpha", path = "../modules/fedimint-meta-server" }
 fedimint-metrics = { version = "=0.5.0-alpha", path = "../fedimint-metrics" }
 fedimint-mint-server = { version = "=0.5.0-alpha", path = "../modules/fedimint-mint-server" }
-fedimint-rocksdb = { version = "=0.5.0-alpha", path = "../fedimint-rocksdb" }
+fedimint-rocksdb = { workspace = true }
 fedimint-server = { version = "=0.5.0-alpha", path = "../fedimint-server" }
 fedimint-unknown-common = { version = "=0.5.0-alpha", path = "../modules/fedimint-unknown-common" }
 fedimint-unknown-server = { version = "=0.5.0-alpha", path = "../modules/fedimint-unknown-server" }
@@ -74,4 +74,4 @@ tracing = { workspace = true }
 url = { version = "2.5.2", features = ["serde"] }
 
 [build-dependencies]
-fedimint-build = { version = "=0.5.0-alpha", path = "../fedimint-build" }
+fedimint-build = { workspace = true }
