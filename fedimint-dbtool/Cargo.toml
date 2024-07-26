@@ -28,13 +28,13 @@ fedimint-client = { workspace = true }
 fedimint-core = { workspace = true }
 fedimint-ln-client = { workspace = true }
 fedimint-ln-server = { version = "=0.5.0-alpha", path = "../modules/fedimint-ln-server" }
-fedimint-lnv2-client = { version = "=0.5.0-alpha", path = "../modules/fedimint-lnv2-client" }
-fedimint-lnv2-server = { version = "=0.5.0-alpha", path = "../modules/fedimint-lnv2-server" }
+fedimint-lnv2-client = { workspace = true }
+fedimint-lnv2-server = { workspace = true }
 fedimint-logging = { workspace = true }
-fedimint-meta-client = { version = "=0.5.0-alpha", path = "../modules/fedimint-meta-client" }
-fedimint-meta-server = { version = "=0.5.0-alpha", path = "../modules/fedimint-meta-server" }
-fedimint-mint-client = { version = "=0.5.0-alpha", path = "../modules/fedimint-mint-client" }
-fedimint-mint-server = { version = "=0.5.0-alpha", path = "../modules/fedimint-mint-server" }
+fedimint-meta-client = { workspace = true }
+fedimint-meta-server = { workspace = true }
+fedimint-mint-client = { workspace = true }
+fedimint-mint-server = { workspace = true }
 fedimint-rocksdb = { workspace = true }
 fedimint-server = { version = "=0.5.0-alpha", path = "../fedimint-server" }
 fedimint-wallet-client = { version = "=0.5.0-alpha", path = "../modules/fedimint-wallet-client" }
