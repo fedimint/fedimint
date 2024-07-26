@@ -151,24 +151,32 @@ opt-level = 3
 
 # in dev mode optimize crates that are perf-critical (usually just crypto crates)
 [profile.dev.package]
-secp256k1 = { opt-level = 3 }
-secp256k1-zkp = { opt-level = 3 }
-secp256k1-sys = { opt-level = 3 }
-secp256k1-zkp-sys = { opt-level = 3 }
-bitcoin_hashes = { opt-level = 3 }
-ff = { opt-level = 3 }
-group = { opt-level = 3 }
-pairing = { opt-level = 3 }
-rand_core = { opt-level = 3 }
-byteorder = { opt-level = 3 }
-zeroize = { opt-level = 3 }
-bls12_381 = { opt-level = 3 }
-subtle = { opt-level = 3 }
-ring = { opt-level = 3 }
-fedimint-threshold-crypto = { opt-level = 3 }
+ahash = { opt-level = 3 }
 aleph-bft-crypto = { opt-level = 3 }
 aleph-bft-rmc = { opt-level = 3 }
 aleph-bft-types = { opt-level = 3 }
+bitcoin_hashes = { opt-level = 3 }
+bls12_381 = { opt-level = 3 }
+byteorder = { opt-level = 3 }
+fedimint-threshold-crypto = { opt-level = 3 }
+ff = { opt-level = 3 }
+group = { opt-level = 3 }
+hashbrown = { opt-level = 3 }
+libc = { opt-level = 3 }
+memchr = { opt-level = 3 }
+pairing = { opt-level = 3 }
+ppv-lite86 = { opt-level = 3 }
+parity-scale-codec = { opt-level = 3 }
+rand_chacha = { opt-level = 3 }
+rand_core = { opt-level = 3 }
+rand = { opt-level = 3 }
+ring = { opt-level = 3 }
+secp256k1 = { opt-level = 3 }
+secp256k1-sys = { opt-level = 3 }
+secp256k1-zkp = { opt-level = 3 }
+secp256k1-zkp-sys = { opt-level = 3 }
+subtle = { opt-level = 3 }
+zeroize = { opt-level = 3 }
 
 [profile.dev.package."*"] # external dependencies
 opt-level = 1
