@@ -23,12 +23,12 @@ fedimint-client  = { path = "../fedimint-client" }
 fedimint-core = { workspace = true }
 fedimint-ln-client = { workspace = true, features = [ "cli" ] }
 fedimint-ln-server = { path = "../modules/fedimint-ln-server" }
-fedimint-lnv2-client = { path = "../modules/fedimint-lnv2-client", features = [ "cli" ] }
-fedimint-lnv2-common = { path = "../modules/fedimint-lnv2-common" }
-fedimint-lnv2-server = { path = "../modules/fedimint-lnv2-server" }
+fedimint-lnv2-client = { workspace = true, features = [ "cli" ] }
+fedimint-lnv2-common = { workspace = true }
+fedimint-lnv2-server = { workspace = true }
 fedimint-logging = { workspace = true }
-fedimint-meta-server = { path = "../modules/fedimint-meta-server" }
-fedimint-mint-server = { path = "../modules/fedimint-mint-server" }
+fedimint-meta-server = { workspace = true }
+fedimint-mint-server = { workspace = true }
 fedimint-portalloc = { path = "../utils/portalloc" }
 fedimint-server = { path = "../fedimint-server" }
 fedimint-testing = { workspace = true }

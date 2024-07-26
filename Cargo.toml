@@ -142,9 +142,16 @@ fedimint-empty-common = { path = "./modules/fedimint-empty-common", version = "=
 fedimint-testing = { path = "./fedimint-testing", version = "=0.5.0-alpha" }
 fedimint-testing-core = { path = "./fedimint-testing-core", version = "=0.5.0-alpha" }
 fedimint-ln-common = { path = "./modules/fedimint-ln-common", version = "=0.5.0-alpha" }
+fedimint-lnv2-client = { path = "./modules/fedimint-lnv2-client", version = "=0.5.0-alpha" }
 fedimint-lnv2-common = { path = "./modules/fedimint-lnv2-common", version = "=0.5.0-alpha" }
+fedimint-lnv2-server = { path = "./modules/fedimint-lnv2-server", version = "=0.5.0-alpha" }
+fedimint-meta-client = { path = "./modules/fedimint-meta-client", version = "=0.5.0-alpha" }
 fedimint-meta-common = { path = "./modules/fedimint-meta-common", version = "=0.5.0-alpha" }
+fedimint-meta-server = { path = "./modules/fedimint-meta-server", version = "=0.5.0-alpha" }
+fedimint-mint-client = { path = "./modules/fedimint-mint-client", version = "=0.5.0-alpha" }
 fedimint-mint-common = { path = "./modules/fedimint-mint-common", version = "=0.5.0-alpha" }
+fedimint-mint-server = { path = "./modules/fedimint-mint-server", version = "=0.5.0-alpha" }
+fedimint-portalloc = { path = "utils/portalloc", version = "=0.5.0-alpha" }
 fedimint-rocksdb = { path = "./fedimint-rocksdb", version = "=0.5.0-alpha" }
 fedimint-wallet-common = { path = "./modules/fedimint-wallet-common", version = "=0.5.0-alpha" }
 
