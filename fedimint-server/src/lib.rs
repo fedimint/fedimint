@@ -20,13 +20,14 @@ use std::path::{Path, PathBuf};
 
 use config::io::{read_server_config, PLAINTEXT_PASSWORD};
 use config::ServerConfig;
+use consensus::db::ConsensusVersionKey;
 use fedimint_aead::random_salt;
 use fedimint_core::config::ServerModuleInitRegistry;
-use fedimint_core::db::Database;
+use fedimint_core::db::{Database, IDatabaseTransactionOpsCoreTyped};
 use fedimint_core::epoch::ConsensusItem;
 use fedimint_core::task::TaskGroup;
 use fedimint_core::util::write_new;
-use fedimint_logging::LOG_CONSENSUS;
+use fedimint_logging::{LOG_CONSENSUS, LOG_SERVER};
 use net::api::ApiSecrets;
 use tracing::info;
 
@@ -162,6 +163,8 @@ pub async fn run_config_gen(
 
     api_handler.stopped().await;
 
+    write_consensus_versions_to_db(&db, &cfg).await?;
+
     // TODO: Make writing password optional
     write_new(data_dir.join(PLAINTEXT_PASSWORD), &cfg.private.api_auth.0)?;
     write_new(data_dir.join(SALT_FILE), random_salt())?;
@@ -174,4 +177,25 @@ pub async fn run_config_gen(
     )?;
 
     Ok(cfg)
+}
+
+async fn write_consensus_versions_to_db(db: &Database, cfg: &ServerConfig) -> anyhow::Result<()> {
+    let mut dbtx = db.begin_transaction().await;
+
+    info!(target: LOG_SERVER, version = %cfg.consensus.version, "Writing core consensus version");
+    dbtx.insert_new_entry(&ConsensusVersionKey(None), &cfg.consensus.version.into())
+        .await;
+
+    for (module_id, module_cfg) in &cfg.consensus.modules {
+        info!(target: LOG_SERVER, %module_id, version = %module_cfg.version, "Writing module consensus version");
+        dbtx.insert_new_entry(
+            &ConsensusVersionKey(Some(*module_id)),
+            &module_cfg.version.into(),
+        )
+        .await;
+    }
+
+    dbtx.commit_tx().await;
+
+    Ok(())
 }

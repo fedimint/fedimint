@@ -2,6 +2,8 @@ use std::fmt;
 
 use bitcoin_hashes::{sha256, Hash as _};
 use fedimint_core::encoding::Encodable as _;
+use fedimint_core::epoch::ConsensusVersionVote;
+use fedimint_core::module::{CoreConsensusVersion, ModuleConsensusVersion};
 use fedimint_core::session_outcome::AcceptedItem;
 
 use crate::ConsensusItem;
@@ -36,6 +38,21 @@ impl<'ci> fmt::Debug for DebugConsensusItem<'ci> {
                     f.write_fmt(format_args!("\n    Output: {output}")).unwrap();
                 }
             }
+            ConsensusItem::ConsensusVersionVote(vote) => match vote {
+                ConsensusVersionVote::Core(CoreConsensusVersion { major, minor }) => {
+                    f.write_fmt(format_args!(
+                        "Core Consensus Version vote: version={major}.{minor}",
+                    ))?;
+                }
+                ConsensusVersionVote::Module {
+                    id,
+                    version: ModuleConsensusVersion { major, minor },
+                } => {
+                    f.write_fmt(format_args!(
+                        "Module Consensus Version vote: module_id={id}, version={major}.{minor}",
+                    ))?;
+                }
+            },
             ConsensusItem::Default { variant, .. } => {
                 f.write_fmt(format_args!("Unknown CI variant: {variant}"))?;
             }
@@ -89,6 +106,19 @@ impl<'a> fmt::Display for DebugConsensusItemCompact<'a> {
                     module_citem.module_instance_id()
                 ))?;
             }
+            ConsensusItem::ConsensusVersionVote(vote) => match vote {
+                ConsensusVersionVote::Core(CoreConsensusVersion { major, minor }) => {
+                    f.write_fmt(format_args!("core cvv; version={major}.{minor}",))?;
+                }
+                ConsensusVersionVote::Module {
+                    id,
+                    version: ModuleConsensusVersion { major, minor },
+                } => {
+                    f.write_fmt(format_args!(
+                        "module cvv; module_id={id}; version={major}.{minor}",
+                    ))?;
+                }
+            },
             ConsensusItem::Default { variant, .. } => {
                 f.write_fmt(format_args!("unknown variant={variant}"))?;
             }

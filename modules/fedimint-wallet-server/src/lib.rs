@@ -46,9 +46,8 @@ use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::envs::{is_rbf_withdrawal_enabled, is_running_in_test_env};
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::{
-    api_endpoint, ApiEndpoint, ApiVersion, CoreConsensusVersion, InputMeta, ModuleConsensusVersion,
-    ModuleInit, PeerHandle, ServerModuleInit, ServerModuleInitArgs, SupportedModuleApiVersions,
-    TransactionItemAmount, CORE_CONSENSUS_VERSION,
+    api_endpoint, ApiEndpoint, ApiVersion, InputMeta, ModuleConsensusVersion, ModuleInit,
+    MultiApiVersion, PeerHandle, ServerModuleInit, ServerModuleInitArgs, TransactionItemAmount,
 };
 use fedimint_core::server::DynServerModule;
 #[cfg(not(target_family = "wasm"))]
@@ -207,19 +206,16 @@ impl ModuleInit for WalletInit {
 impl ServerModuleInit for WalletInit {
     type Params = WalletGenParams;
 
-    fn versions(&self, _core: CoreConsensusVersion) -> &[ModuleConsensusVersion] {
+    fn supported_consensus_versions(&self) -> &[ModuleConsensusVersion] {
         &[MODULE_CONSENSUS_VERSION]
     }
 
-    fn supported_api_versions(&self) -> SupportedModuleApiVersions {
-        SupportedModuleApiVersions::from_raw(
-            (CORE_CONSENSUS_VERSION.major, CORE_CONSENSUS_VERSION.minor),
-            (
-                MODULE_CONSENSUS_VERSION.major,
-                MODULE_CONSENSUS_VERSION.minor,
-            ),
-            &[(0, 0)],
-        )
+    fn supported_api_versions(&self, major_module_consensus_version: u32) -> MultiApiVersion {
+        if major_module_consensus_version == MODULE_CONSENSUS_VERSION.major {
+            MultiApiVersion::from_raw([(0, 0)])
+        } else {
+            MultiApiVersion::from_raw([])
+        }
     }
 
     async fn init(&self, args: &ServerModuleInitArgs<Self>) -> anyhow::Result<DynServerModule> {
