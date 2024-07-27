@@ -1,1 +1,2 @@
 *.lock merge=ours
+*.rs	diff=rust
