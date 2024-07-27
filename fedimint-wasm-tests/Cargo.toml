@@ -22,7 +22,7 @@ fedimint-mint-client = { path = "../modules/fedimint-mint-client" }
 fedimint-mint-common = { path = "../modules/fedimint-mint-common" }
 fedimint-wallet-client = { path = "../modules/fedimint-wallet-client" }
 futures = { workspace = true }
-gloo-net = "0.5.0"
+gloo-net = "0.6.0"
 js-sys = "0.3.69"
 rand = { workspace = true }
 ring = { version = "0.17.8", features = ["wasm32_unknown_unknown_js"] }
