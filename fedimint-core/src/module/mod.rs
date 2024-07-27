@@ -503,7 +503,9 @@ where
 pub trait IServerModuleInit: IDynCommonModuleInit {
     fn as_common(&self) -> &(dyn IDynCommonModuleInit + Send + Sync + 'static);
 
-    fn supported_api_versions(&self) -> SupportedModuleApiVersions;
+    fn supported_consensus_versions(&self) -> &[ModuleConsensusVersion];
+
+    fn supported_api_versions(&self, major_module_consensus_versions: u32) -> MultiApiVersion;
 
     /// Initialize the [`DynServerModule`] instance from its config
     async fn init(
@@ -644,9 +646,9 @@ pub trait ServerModuleInit: ModuleInit + Sized {
     /// instantiate the desired one. This method should expose all the
     /// available versions, purely for information, setup UI and sanity
     /// checking purposes.
-    fn versions(&self, core: CoreConsensusVersion) -> &[ModuleConsensusVersion];
+    fn supported_consensus_versions(&self) -> &[ModuleConsensusVersion];
 
-    fn supported_api_versions(&self) -> SupportedModuleApiVersions;
+    fn supported_api_versions(&self, major_module_consensus_version: u32) -> MultiApiVersion;
 
     fn kind() -> ModuleKind {
         <Self as ModuleInit>::Common::KIND
@@ -696,8 +698,23 @@ where
         self
     }
 
-    fn supported_api_versions(&self) -> SupportedModuleApiVersions {
-        <Self as ServerModuleInit>::supported_api_versions(self)
+    fn supported_consensus_versions(&self) -> &[ModuleConsensusVersion] {
+        let versions = <Self as ServerModuleInit>::supported_consensus_versions(self);
+
+        for (i1, v1) in versions.iter().enumerate() {
+            for v2 in &versions[i1 + 1..] {
+                debug_assert_ne!(
+                    v1.major, v2.major,
+                    "Module can't return multiple consensus with the same major versions"
+                );
+            }
+        }
+
+        versions
+    }
+
+    fn supported_api_versions(&self, major_module_consensus_version: u32) -> MultiApiVersion {
+        <Self as ServerModuleInit>::supported_api_versions(self, major_module_consensus_version)
     }
 
     async fn init(

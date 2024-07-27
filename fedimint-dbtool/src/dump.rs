@@ -287,6 +287,26 @@ impl DatabaseDump {
                         "Aleph Units"
                     );
                 }
+                ConsensusRange::DbKeyPrefix::ConsensusVersionVote => {
+                    push_db_pair_items_no_serde!(
+                        dbtx,
+                        ConsensusRange::ConsensusVersionVotePrefixAll,
+                        ConsensusRange::ConsensusVersionVoteKey,
+                        Vec<u8>,
+                        consensus,
+                        "Consensus Version Vote"
+                    );
+                }
+                ConsensusRange::DbKeyPrefix::ConsensusVersion => {
+                    push_db_pair_items_no_serde!(
+                        dbtx,
+                        ConsensusRange::ConsensusVersionPrefixAll,
+                        ConsensusRange::ConsensusVersionKey,
+                        Vec<u8>,
+                        consensus,
+                        "Consensus Version"
+                    );
+                }
                 // Module is a global prefix for all module data
                 ConsensusRange::DbKeyPrefix::Module => {}
                 ConsensusRange::DbKeyPrefix::ApiAnnouncements => {
