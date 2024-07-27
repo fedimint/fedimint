@@ -86,7 +86,7 @@ criterion = { version = "0.5.1" }
 threshold_crypto = { version = "0.2.1", package = "fedimint-threshold-crypto" }
 tonic_lnd = { version = "0.2.0", package = "fedimint-tonic-lnd", features = ["lightningrpc", "routerrpc"] }
 cln-rpc = "0.1.9"
-clap = { version = "4.5.9", features = ["derive", "std", "help", "usage", "error-context", "suggestions", "env"], default-features = false }
+clap = { version = "4.5.11", features = ["derive", "std", "help", "usage", "error-context", "suggestions", "env"], default-features = false }
 electrum-client = { version = "0.18.0", features = [ "use-rustls" ] }
 esplora-client = { version = "0.6.0", default-features = false, features = [
     "async",
