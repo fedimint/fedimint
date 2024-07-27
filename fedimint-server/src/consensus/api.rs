@@ -55,7 +55,7 @@ use futures::StreamExt;
 use tokio::sync::{watch, RwLock};
 use tracing::{debug, info};
 
-use super::db::ConsensusVersionKey;
+use super::db::DatabaseTransactionExt;
 use crate::config::io::{
     CONSENSUS_CONFIG, ENCRYPTED_EXT, JSON_EXT, LOCAL_CONFIG, PRIVATE_CONFIG, SALT_FILE,
 };
@@ -93,18 +93,14 @@ pub struct ConsensusApi {
 impl ConsensusApi {
     pub async fn api_versions_summary(&self) -> SupportedApiVersionsSummary {
         let mut dbtx = self.db.begin_transaction_nc().await;
-        let core_consensus_version = dbtx
-            .get_value(&ConsensusVersionKey(None))
-            .await
-            .expect("Must have a consensus version set");
+        let core_consensus_version = dbtx.get_consensus_version(None, &self.cfg.consensus).await;
         let mut module_consensus_versions = BTreeMap::new();
 
         for (module_id, _, _) in self.modules.iter_modules() {
             module_consensus_versions.insert(
                 module_id,
-                dbtx.get_value(&ConsensusVersionKey(Some(module_id)))
+                dbtx.get_consensus_version(Some(module_id), &self.cfg.consensus)
                     .await
-                    .expect("Must have a consensus version set")
                     .into(),
             );
         }

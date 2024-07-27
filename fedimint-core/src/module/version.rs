@@ -86,9 +86,53 @@ impl CoreConsensusVersion {
     }
 }
 
+impl From<ConsensusVersion> for CoreConsensusVersion {
+    fn from(ConsensusVersion { major, minor }: ConsensusVersion) -> Self {
+        Self { major, minor }
+    }
+}
+
 /// Globally declared core consensus version
 pub const CORE_CONSENSUS_VERSION: CoreConsensusVersion = CoreConsensusVersion::new(2, 0);
 
+/// General "consensus version" use [`CoreConsensusVersion`] or
+/// [`ModuleConsensusVersion`] instead when possible.
+#[derive(
+    Debug,
+    Copy,
+    Clone,
+    PartialEq,
+    Eq,
+    Serialize,
+    Deserialize,
+    Encodable,
+    Decodable,
+    Hash,
+    PartialOrd,
+    Ord,
+)]
+pub struct ConsensusVersion {
+    pub major: u32,
+    pub minor: u32,
+}
+
+impl From<ModuleConsensusVersion> for ConsensusVersion {
+    fn from(ModuleConsensusVersion { major, minor }: ModuleConsensusVersion) -> Self {
+        Self { major, minor }
+    }
+}
+
+impl From<CoreConsensusVersion> for ConsensusVersion {
+    fn from(CoreConsensusVersion { major, minor }: CoreConsensusVersion) -> Self {
+        Self { major, minor }
+    }
+}
+
+impl fmt::Display for ConsensusVersion {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_fmt(format_args!("{}.{}", self.major, self.minor))
+    }
+}
 /// Consensus version of a specific module instance
 ///
 /// Any breaking change to the module's consensus rules require incrementing the
@@ -130,6 +174,13 @@ impl fmt::Display for ModuleConsensusVersion {
         f.write_fmt(format_args!("{}.{}", self.major, self.minor))
     }
 }
+
+impl From<ConsensusVersion> for ModuleConsensusVersion {
+    fn from(ConsensusVersion { major, minor }: ConsensusVersion) -> Self {
+        Self { major, minor }
+    }
+}
+
 /// Api version supported by a core server or a client/server module at a given
 /// [`ModuleConsensusVersion`].
 ///

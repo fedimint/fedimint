@@ -1,15 +1,22 @@
 use std::collections::BTreeMap;
-use std::fmt::{self, Debug};
+use std::fmt::Debug;
 
 use fedimint_core::core::ModuleInstanceId;
-use fedimint_core::db::{CoreMigrationFn, DatabaseVersion, MODULE_GLOBAL_PREFIX};
+use fedimint_core::db::{
+    CoreMigrationFn, DatabaseTransaction, DatabaseVersion, IDatabaseTransactionOpsCoreTyped,
+    MODULE_GLOBAL_PREFIX,
+};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::epoch::ConsensusVersionVote;
-use fedimint_core::module::{CoreConsensusVersion, ModuleConsensusVersion};
+use fedimint_core::module::ConsensusVersion;
 use fedimint_core::session_outcome::{AcceptedItem, SignedSessionOutcome};
-use fedimint_core::{impl_db_lookup, impl_db_record, PeerId, TransactionId};
+use fedimint_core::{impl_db_lookup, impl_db_record, NumPeers, NumPeersExt, PeerId, TransactionId};
+use futures::stream;
 use serde::Serialize;
 use strum_macros::EnumIter;
+use tokio_stream::StreamExt as _;
+
+use crate::config::ServerConfigConsensus;
 
 pub const GLOBAL_DATABASE_VERSION: DatabaseVersion = DatabaseVersion(0);
 
@@ -23,7 +30,6 @@ pub enum DbKeyPrefix {
     // TODO: do we want to split the server DB into consensus/non-consensus?
     ApiAnnouncements = 0x06,
     ConsensusVersionVote = 0x07,
-    ConsensusVersion = 0x08,
     Module = MODULE_GLOBAL_PREFIX,
 }
 
@@ -108,44 +114,30 @@ pub struct ConsensusVersionVoteKey {
 impl From<(ConsensusVersionVote, PeerId)> for ConsensusVersionVoteKey {
     fn from((vote, peer_id): (ConsensusVersionVote, PeerId)) -> Self {
         Self {
-            module_id: match vote {
-                ConsensusVersionVote::Core(_) => None,
-                ConsensusVersionVote::Module { id, version: _ } => Some(id),
-            },
+            module_id: vote.module_id,
             peer_id,
         }
     }
 }
 
-#[derive(Copy, Clone, Debug, Encodable, Decodable, PartialEq, Eq)]
+#[derive(Copy, Clone, Debug, Encodable, Decodable, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ConsensusVersionVoteValue {
-    pub major: u32,
-    pub minor: u32,
+    pub desired: ConsensusVersion,
+    pub accelerated: ConsensusVersion,
 }
 
 impl From<ConsensusVersionVote> for ConsensusVersionVoteValue {
-    fn from(vote: ConsensusVersionVote) -> Self {
-        match vote {
-            ConsensusVersionVote::Core(CoreConsensusVersion { major, minor }) => {
-                Self { major, minor }
-            }
-            ConsensusVersionVote::Module {
-                id: _,
-                version: ModuleConsensusVersion { major, minor },
-            } => Self { major, minor },
+    fn from(
+        ConsensusVersionVote {
+            module_id: _,
+            desired,
+            accelerated,
+        }: ConsensusVersionVote,
+    ) -> Self {
+        Self {
+            desired,
+            accelerated,
         }
-    }
-}
-
-impl From<ModuleConsensusVersion> for ConsensusVersionVoteValue {
-    fn from(ModuleConsensusVersion { major, minor }: ModuleConsensusVersion) -> Self {
-        Self { major, minor }
-    }
-}
-
-impl From<CoreConsensusVersion> for ConsensusVersionVoteValue {
-    fn from(CoreConsensusVersion { major, minor }: CoreConsensusVersion) -> Self {
-        Self { major, minor }
     }
 }
 
@@ -153,9 +145,7 @@ impl From<CoreConsensusVersion> for ConsensusVersionVoteValue {
 pub struct ConsensusVersionVotePrefixAll;
 
 #[derive(Clone, Debug, Encodable, Decodable)]
-pub struct ConsensusVersionVotePrefixByModuleId {
-    pub module_id: Option<ModuleInstanceId>,
-}
+pub struct ConsensusVersionVotePrefixByModuleId(Option<ModuleInstanceId>);
 
 impl_db_record!(
     key = ConsensusVersionVoteKey,
@@ -173,59 +163,87 @@ impl_db_lookup!(
     query_prefix = ConsensusVersionVotePrefixByModuleId
 );
 
-#[derive(Copy, Clone, Debug, Encodable, Decodable, PartialEq, Eq, PartialOrd, Ord)]
-pub struct ConsensusVersionKey(pub Option<ModuleInstanceId>);
-
-#[derive(Copy, Clone, Debug, Encodable, Decodable, PartialEq, Eq, PartialOrd, Ord)]
-pub struct ConsensusVersionValue {
-    pub major: u32,
-    pub minor: u32,
+pub(crate) trait DatabaseTransactionExt {
+    async fn get_consensus_version_opt(
+        &mut self,
+        module_id: Option<ModuleInstanceId>,
+        num_peers: NumPeers,
+    ) -> Option<ConsensusVersion>;
+    async fn get_consensus_version(
+        &mut self,
+        module_id: Option<ModuleInstanceId>,
+        cfg: &ServerConfigConsensus,
+    ) -> ConsensusVersion;
 }
 
-impl fmt::Display for ConsensusVersionValue {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_fmt(format_args!("{}.{}", self.major, self.minor))
+impl<Cap: Send> DatabaseTransactionExt for DatabaseTransaction<'_, Cap> {
+    async fn get_consensus_version(
+        &mut self,
+        module_id: Option<ModuleInstanceId>,
+        cfg: &ServerConfigConsensus,
+    ) -> ConsensusVersion {
+        self.get_consensus_version_opt(module_id, cfg.api_endpoints.to_num_peers())
+            .await
+            .unwrap_or_else(|| {
+                if let Some(module_id) = module_id {
+                    cfg.modules
+                        .get(&module_id)
+                        .expect("Must have a matching module")
+                        .version
+                        .into()
+                } else {
+                    cfg.version.into()
+                }
+            })
+    }
+    async fn get_consensus_version_opt(
+        &mut self,
+        module_id: Option<ModuleInstanceId>,
+        num_peers: NumPeers,
+    ) -> Option<ConsensusVersion> {
+        let mut votes: Vec<_> = self
+            .find_by_prefix(&ConsensusVersionVotePrefixByModuleId(module_id))
+            .await
+            .map(|(_k, v)| Some(v))
+            .chain(stream::repeat(None))
+            .take(num_peers.total())
+            .collect::<Vec<_>>()
+            .await;
+
+        get_consensus_from_votes(&mut votes, num_peers)
     }
 }
 
-impl From<CoreConsensusVersion> for ConsensusVersionValue {
-    fn from(CoreConsensusVersion { major, minor }: CoreConsensusVersion) -> Self {
-        Self { major, minor }
+fn get_consensus_from_votes(
+    votes: &mut [Option<ConsensusVersionVoteValue>],
+    num_peers: NumPeers,
+) -> Option<ConsensusVersion> {
+    assert_eq!(votes.len(), num_peers.total());
+
+    votes.sort();
+
+    // The desire version is one that threashold amount of peers are ready for.
+    let Some(threshold_desired_version) = votes[num_peers.max_evil()].map(|vote| vote.desired)
+    else {
+        return None;
+    };
+
+    // If all peers are ready for the desired version, we accept it
+    if votes[0].map(|v| v.desired) == Some(threshold_desired_version) {
+        return Some(threshold_desired_version);
     }
-}
 
-impl From<ModuleConsensusVersion> for ConsensusVersionValue {
-    fn from(ModuleConsensusVersion { major, minor }: ModuleConsensusVersion) -> Self {
-        Self { major, minor }
+    // If any peer voted to accelerate switching, we accept it
+    if votes
+        .iter()
+        .any(|v| v.is_some_and(|v| threshold_desired_version <= v.accelerated))
+    {
+        return Some(threshold_desired_version);
     }
+
+    // Otherwise, we proceed with the lowest vote
+    votes[0].map(|v| v.desired)
 }
-
-impl From<ConsensusVersionValue> for CoreConsensusVersion {
-    fn from(ConsensusVersionValue { major, minor }: ConsensusVersionValue) -> Self {
-        Self { major, minor }
-    }
-}
-
-impl From<ConsensusVersionValue> for ModuleConsensusVersion {
-    fn from(ConsensusVersionValue { major, minor }: ConsensusVersionValue) -> Self {
-        Self { major, minor }
-    }
-}
-
-#[derive(Clone, Debug, Encodable, Decodable)]
-pub struct ConsensusVersionPrefixAll;
-
-impl_db_record!(
-    key = ConsensusVersionKey,
-    value = ConsensusVersionValue,
-    db_prefix = DbKeyPrefix::ConsensusVersion,
-    notify_on_modify = false,
-);
-
-impl_db_lookup!(
-    key = ConsensusVersionKey,
-    query_prefix = ConsensusVersionPrefixAll
-);
 
 #[cfg(test)]
 mod fedimint_migration_tests {
@@ -444,9 +462,7 @@ mod fedimint_migration_tests {
                             assert_eq!(announcements.len(), 1);
                         }
                         // Module prefix is reserved for modules, no migration testing is needed
-                        DbKeyPrefix::Module
-                        | DbKeyPrefix::ConsensusVersionVote
-                        | DbKeyPrefix::ConsensusVersion => {}
+                        DbKeyPrefix::Module | DbKeyPrefix::ConsensusVersionVote => {}
                     }
                 }
                 Ok(())

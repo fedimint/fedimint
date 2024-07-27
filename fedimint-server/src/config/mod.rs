@@ -96,7 +96,7 @@ pub struct ServerConfigPrivate {
 pub struct ServerConfigConsensus {
     /// The version of the binary code running
     pub code_version: String,
-    /// Agreed on core consensus version
+    /// Agreed on (during DKG) initial core consensus version
     pub version: CoreConsensusVersion,
     /// Public keys for the atomic broadcast to authenticate messages
     pub broadcast_public_keys: BTreeMap<PeerId, PublicKey>,
