@@ -26,7 +26,7 @@ base64 = "0.22.1"
 bip39 = { version = "2.0.0", features = ["rand"] }
 bitcoin = { workspace = true }
 clap = { workspace = true }
-clap_complete = "4.5.8"
+clap_complete = "4.5.11"
 fedimint-aead = { version = "=0.5.0-alpha", path = "../crypto/aead" }
 fedimint-api-client = { workspace = true }
 fedimint-bip39 = { version = "=0.5.0-alpha", path = "../fedimint-bip39" }
