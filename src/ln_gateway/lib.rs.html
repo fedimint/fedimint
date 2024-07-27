@@ -1690,83 +1690,6 @@
 <a href="#1690" id="1690">1690</a>
 <a href="#1691" id="1691">1691</a>
 <a href="#1692" id="1692">1692</a>
-<a href="#1693" id="1693">1693</a>
-<a href="#1694" id="1694">1694</a>
-<a href="#1695" id="1695">1695</a>
-<a href="#1696" id="1696">1696</a>
-<a href="#1697" id="1697">1697</a>
-<a href="#1698" id="1698">1698</a>
-<a href="#1699" id="1699">1699</a>
-<a href="#1700" id="1700">1700</a>
-<a href="#1701" id="1701">1701</a>
-<a href="#1702" id="1702">1702</a>
-<a href="#1703" id="1703">1703</a>
-<a href="#1704" id="1704">1704</a>
-<a href="#1705" id="1705">1705</a>
-<a href="#1706" id="1706">1706</a>
-<a href="#1707" id="1707">1707</a>
-<a href="#1708" id="1708">1708</a>
-<a href="#1709" id="1709">1709</a>
-<a href="#1710" id="1710">1710</a>
-<a href="#1711" id="1711">1711</a>
-<a href="#1712" id="1712">1712</a>
-<a href="#1713" id="1713">1713</a>
-<a href="#1714" id="1714">1714</a>
-<a href="#1715" id="1715">1715</a>
-<a href="#1716" id="1716">1716</a>
-<a href="#1717" id="1717">1717</a>
-<a href="#1718" id="1718">1718</a>
-<a href="#1719" id="1719">1719</a>
-<a href="#1720" id="1720">1720</a>
-<a href="#1721" id="1721">1721</a>
-<a href="#1722" id="1722">1722</a>
-<a href="#1723" id="1723">1723</a>
-<a href="#1724" id="1724">1724</a>
-<a href="#1725" id="1725">1725</a>
-<a href="#1726" id="1726">1726</a>
-<a href="#1727" id="1727">1727</a>
-<a href="#1728" id="1728">1728</a>
-<a href="#1729" id="1729">1729</a>
-<a href="#1730" id="1730">1730</a>
-<a href="#1731" id="1731">1731</a>
-<a href="#1732" id="1732">1732</a>
-<a href="#1733" id="1733">1733</a>
-<a href="#1734" id="1734">1734</a>
-<a href="#1735" id="1735">1735</a>
-<a href="#1736" id="1736">1736</a>
-<a href="#1737" id="1737">1737</a>
-<a href="#1738" id="1738">1738</a>
-<a href="#1739" id="1739">1739</a>
-<a href="#1740" id="1740">1740</a>
-<a href="#1741" id="1741">1741</a>
-<a href="#1742" id="1742">1742</a>
-<a href="#1743" id="1743">1743</a>
-<a href="#1744" id="1744">1744</a>
-<a href="#1745" id="1745">1745</a>
-<a href="#1746" id="1746">1746</a>
-<a href="#1747" id="1747">1747</a>
-<a href="#1748" id="1748">1748</a>
-<a href="#1749" id="1749">1749</a>
-<a href="#1750" id="1750">1750</a>
-<a href="#1751" id="1751">1751</a>
-<a href="#1752" id="1752">1752</a>
-<a href="#1753" id="1753">1753</a>
-<a href="#1754" id="1754">1754</a>
-<a href="#1755" id="1755">1755</a>
-<a href="#1756" id="1756">1756</a>
-<a href="#1757" id="1757">1757</a>
-<a href="#1758" id="1758">1758</a>
-<a href="#1759" id="1759">1759</a>
-<a href="#1760" id="1760">1760</a>
-<a href="#1761" id="1761">1761</a>
-<a href="#1762" id="1762">1762</a>
-<a href="#1763" id="1763">1763</a>
-<a href="#1764" id="1764">1764</a>
-<a href="#1765" id="1765">1765</a>
-<a href="#1766" id="1766">1766</a>
-<a href="#1767" id="1767">1767</a>
-<a href="#1768" id="1768">1768</a>
-<a href="#1769" id="1769">1769</a>
 </pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::cast_possible_wrap)]
@@ -1785,6 +1708,7 @@
 #![allow(clippy::wildcard_imports)]
 
 </span><span class="kw">pub mod </span>client;
+<span class="kw">mod </span>config;
 <span class="kw">mod </span>db;
 <span class="kw">pub mod </span>envs;
 <span class="kw">mod </span>federation_manager;
@@ -1804,7 +1728,6 @@
 <span class="kw">use </span>std::fmt::Display;
 <span class="kw">use </span>std::net::SocketAddr;
 <span class="kw">use </span>std::ops::ControlFlow;
-<span class="kw">use </span>std::path::PathBuf;
 <span class="kw">use </span>std::str::FromStr;
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
@@ -1817,6 +1740,8 @@
 <span class="kw">use </span>bitcoin_hashes::sha256;
 <span class="kw">use </span>clap::Parser;
 <span class="kw">use </span>client::GatewayClientBuilder;
+<span class="kw">use </span>config::GatewayOpts;
+<span class="kw">pub use </span>config::GatewayParameters;
 <span class="kw">use </span>db::{
     GatewayConfiguration, GatewayConfigurationKey, GatewayDbtxNcExt, GATEWAYD_DATABASE_VERSION,
 };
@@ -1857,7 +1782,7 @@
 <span class="kw">use </span>gateway_lnrpc::intercept_htlc_response::{Action, Cancel};
 <span class="kw">use </span>gateway_lnrpc::{CloseChannelsWithPeerResponse, InterceptHtlcResponse};
 <span class="kw">use </span>hex::ToHex;
-<span class="kw">use </span>lightning::{ILnRpcClient, LightningBuilder, LightningMode, LightningRpcError};
+<span class="kw">use </span>lightning::{ILnRpcClient, LightningBuilder, LightningRpcError};
 <span class="kw">use </span>lightning_invoice::{Bolt11Invoice, RoutingFees};
 <span class="kw">use </span>rand::Rng;
 <span class="kw">use </span>rpc::{
@@ -1921,85 +1846,6 @@
     (LEGACY_HARDCODED_INSTANCE_ID_MINT, <span class="kw-2">&amp;</span>MintCommonInit::KIND),
     (LEGACY_HARDCODED_INSTANCE_ID_WALLET, <span class="kw-2">&amp;</span>WalletCommonInit::KIND),
 ];
-
-<span class="doccomment">/// Command line parameters for starting the gateway. `mode`, `data_dir`,
-/// `listen`, and `api_addr` are all required.
-</span><span class="attr">#[derive(Parser)]
-#[command(version)]
-</span><span class="kw">struct </span>GatewayOpts {
-    <span class="attr">#[clap(subcommand)]
-    </span>mode: LightningMode,
-
-    <span class="doccomment">/// Path to folder containing gateway config and data files
-    </span><span class="attr">#[arg(long = <span class="string">"data-dir"</span>, env = envs::FM_GATEWAY_DATA_DIR_ENV)]
-    </span>data_dir: PathBuf,
-
-    <span class="doccomment">/// Gateway webserver listen address
-    </span><span class="attr">#[arg(long = <span class="string">"listen"</span>, env = envs::FM_GATEWAY_LISTEN_ADDR_ENV)]
-    </span>listen: SocketAddr,
-
-    <span class="doccomment">/// Public URL from which the webserver API is reachable
-    </span><span class="attr">#[arg(long = <span class="string">"api-addr"</span>, env = envs::FM_GATEWAY_API_ADDR_ENV)]
-    </span>api_addr: SafeUrl,
-
-    <span class="doccomment">/// Gateway webserver authentication password
-    </span><span class="attr">#[arg(long = <span class="string">"password"</span>, env = envs::FM_GATEWAY_PASSWORD_ENV)]
-    </span>password: <span class="prelude-ty">Option</span>&lt;String&gt;,
-
-    <span class="doccomment">/// Bitcoin network this gateway will be running on
-    </span><span class="attr">#[arg(long = <span class="string">"network"</span>, env = envs::FM_GATEWAY_NETWORK_ENV)]
-    </span>network: <span class="prelude-ty">Option</span>&lt;Network&gt;,
-
-    <span class="doccomment">/// Configured gateway routing fees
-    /// Format: &lt;base_msat&gt;,&lt;proportional_millionths&gt;
-    </span><span class="attr">#[arg(long = <span class="string">"fees"</span>, env = envs::FM_GATEWAY_FEES_ENV)]
-    </span>fees: <span class="prelude-ty">Option</span>&lt;GatewayFee&gt;,
-
-    <span class="doccomment">/// Number of route hints to return in invoices
-    </span><span class="attr">#[arg(
-        long = <span class="string">"num-route-hints"</span>,
-        env = envs::FM_NUMBER_OF_ROUTE_HINTS_ENV,
-        default_value_t = DEFAULT_NUM_ROUTE_HINTS
-    )]
-    </span>num_route_hints: u32,
-}
-
-<span class="kw">impl </span>GatewayOpts {
-    <span class="doccomment">/// Converts the command line parameters into a helper struct the Gateway
-    /// uses to store runtime parameters.
-    </span><span class="kw">fn </span>to_gateway_parameters(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; anyhow::Result&lt;GatewayParameters&gt; {
-        <span class="kw">let </span>versioned_api = <span class="self">self</span>.api_addr.join(V1_API_ENDPOINT).map_err(|e| {
-            <span class="macro">anyhow::anyhow!</span>(
-                <span class="string">"Failed to version gateway API address: {api_addr:?}, error: {e:?}"</span>,
-                api_addr = <span class="self">self</span>.api_addr,
-            )
-        })<span class="question-mark">?</span>;
-        <span class="prelude-val">Ok</span>(GatewayParameters {
-            listen: <span class="self">self</span>.listen,
-            versioned_api,
-            password: <span class="self">self</span>.password.clone(),
-            network: <span class="self">self</span>.network,
-            num_route_hints: <span class="self">self</span>.num_route_hints,
-            fees: <span class="self">self</span>.fees.clone(),
-        })
-    }
-}
-
-<span class="doccomment">/// `GatewayParameters` is a helper struct that can be derived from
-/// `GatewayOpts` that holds the CLI or environment variables that are specified
-/// by the user.
-///
-/// If `GatewayConfiguration is set in the database, that takes precedence and
-/// the optional parameters will have no affect.
-</span><span class="attr">#[derive(Clone, Debug)]
-</span><span class="kw">pub struct </span>GatewayParameters {
-    listen: SocketAddr,
-    versioned_api: SafeUrl,
-    password: <span class="prelude-ty">Option</span>&lt;String&gt;,
-    network: <span class="prelude-ty">Option</span>&lt;Network&gt;,
-    num_route_hints: u32,
-    fees: <span class="prelude-ty">Option</span>&lt;GatewayFee&gt;,
-}
 
 <span class="attr">#[cfg_attr(doc, aquamarine::aquamarine)]
 </span><span class="doccomment">/// ```mermaid
