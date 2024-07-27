@@ -29,7 +29,7 @@ fedimint-core = { workspace = true }
 fedimint-ln-common = { version = "=0.5.0-alpha", path = "../modules/fedimint-ln-common" }
 fedimint-logging = { workspace = true }
 fedimint-portalloc = { version = "=0.5.0-alpha", path = "../utils/portalloc" }
-fedimint-rocksdb = { version = "=0.5.0-alpha", path = "../fedimint-rocksdb" }
+fedimint-rocksdb = { workspace = true }
 fedimint-server = { version = "=0.5.0-alpha", path = "../fedimint-server" }
 fedimint-testing-core = { version = "=0.5.0-alpha", path = "../fedimint-testing-core" }
 fs-lock = "0.1.3"

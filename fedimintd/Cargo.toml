@@ -39,13 +39,13 @@ fedimint-bitcoind = { version = "=0.5.0-alpha", path = "../fedimint-bitcoind" }
 fedimint-core = { workspace = true }
 fedimint-ln-common = { version = "=0.5.0-alpha", path = "../modules/fedimint-ln-common" }
 fedimint-ln-server = { version = "=0.5.0-alpha", path = "../modules/fedimint-ln-server" }
-fedimint-lnv2-common = { version = "=0.5.0-alpha", path = "../modules/fedimint-lnv2-common" }
-fedimint-lnv2-server = { version = "=0.5.0-alpha", path = "../modules/fedimint-lnv2-server" }
+fedimint-lnv2-common = { workspace = true }
+fedimint-lnv2-server = { workspace = true }
 fedimint-logging = { version = "=0.5.0-alpha", path = "../fedimint-logging" }
-fedimint-meta-server = { version = "=0.5.0-alpha", path = "../modules/fedimint-meta-server" }
+fedimint-meta-server = { workspace = true }
 fedimint-metrics = { version = "=0.5.0-alpha", path = "../fedimint-metrics" }
-fedimint-mint-server = { version = "=0.5.0-alpha", path = "../modules/fedimint-mint-server" }
-fedimint-rocksdb = { version = "=0.5.0-alpha", path = "../fedimint-rocksdb" }
+fedimint-mint-server = { workspace = true }
+fedimint-rocksdb = { workspace = true }
 fedimint-server = { version = "=0.5.0-alpha", path = "../fedimint-server" }
 fedimint-unknown-common = { version = "=0.5.0-alpha", path = "../modules/fedimint-unknown-common" }
 fedimint-unknown-server = { version = "=0.5.0-alpha", path = "../modules/fedimint-unknown-server" }
@@ -74,4 +74,4 @@ tracing = { workspace = true }
 url = { version = "2.5.2", features = ["serde"] }
 
 [build-dependencies]
-fedimint-build = { version = "=0.5.0-alpha", path = "../fedimint-build" }
+fedimint-build = { workspace = true }

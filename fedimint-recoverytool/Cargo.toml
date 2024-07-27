@@ -22,7 +22,7 @@ clap = { version = "4.5.9", features = [ "derive", "env" ] }
 fedimint-aead = { version = "=0.5.0-alpha", path = "../crypto/aead" }
 fedimint-core = { workspace = true }
 fedimint-logging = { workspace = true }
-fedimint-rocksdb = { version = "=0.5.0-alpha", path = "../fedimint-rocksdb" }
+fedimint-rocksdb = { workspace = true }
 fedimint-server = { version = "=0.5.0-alpha", path = "../fedimint-server" }
 fedimint-wallet-server = { version = "=0.5.0-alpha", path = "../modules/fedimint-wallet-server" }
 futures = { workspace = true }
@@ -39,4 +39,4 @@ tracing-subscriber = "0.3.18"
 rand = { workspace = true }
 
 [build-dependencies]
-fedimint-build = { version = "=0.5.0-alpha", path = "../fedimint-build" }
+fedimint-build = { workspace = true }

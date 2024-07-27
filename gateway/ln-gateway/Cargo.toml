@@ -43,11 +43,11 @@ fedimint-client = { workspace = true }
 fedimint-core = { workspace = true }
 fedimint-ln-client = { workspace = true }
 fedimint-ln-common = { version = "=0.5.0-alpha", path = "../../modules/fedimint-ln-common" }
-fedimint-lnv2-client = { path = "../../modules/fedimint-lnv2-client" }
-fedimint-lnv2-common = { path = "../../modules/fedimint-lnv2-common" }
+fedimint-lnv2-client = { workspace = true }
+fedimint-lnv2-common = { workspace = true }
 fedimint-logging = { workspace = true }
-fedimint-mint-client = { version = "=0.5.0-alpha", path = "../../modules/fedimint-mint-client" }
-fedimint-rocksdb = { version = "=0.5.0-alpha", path = "../../fedimint-rocksdb" }
+fedimint-mint-client = { workspace = true }
+fedimint-rocksdb = { workspace = true }
 fedimint-wallet-client = { version = "=0.5.0-alpha", path = "../../modules/fedimint-wallet-client" }
 futures = { workspace = true }
 hex = { workspace = true }
@@ -80,8 +80,8 @@ fedimint-dummy-server = { path = "../../modules/fedimint-dummy-server" }
 fedimint-ln-client = { workspace = true }
 fedimint-ln-common = { path = "../../modules/fedimint-ln-common" }
 fedimint-ln-server = { path = "../../modules/fedimint-ln-server" }
-fedimint-lnv2-server = { path = "../../modules/fedimint-lnv2-server" }
-fedimint-mint-client = { path = "../../modules/fedimint-mint-client" }
+fedimint-lnv2-server = { workspace = true }
+fedimint-mint-client = { workspace = true }
 fedimint-testing = { workspace = true }
 fedimint-unknown-common = { path = "../../modules/fedimint-unknown-common" }
 fedimint-unknown-server = { path = "../../modules/fedimint-unknown-server" }
@@ -89,5 +89,5 @@ fedimint-wallet-client = { path = "../../modules/fedimint-wallet-client" }
 threshold_crypto = { workspace = true }
 
 [build-dependencies]
-fedimint-build = { version = "=0.5.0-alpha", path = "../../fedimint-build" }
+fedimint-build = { workspace = true }
 tonic-build = "0.12.1"
