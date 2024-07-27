@@ -8,11 +8,11 @@ use fedimint_client::module::init::ClientModuleInitRegistry;
 use fedimint_core::config::{ClientConfig, CommonModuleInitRegistry, ServerModuleInitRegistry};
 use fedimint_core::core::ModuleKind;
 use fedimint_core::db::{
-    Database, DatabaseVersionKey, IDatabaseTransactionOpsCore, IDatabaseTransactionOpsCoreTyped,
+    Database, DatabaseTransaction, DatabaseVersionKey, IDatabaseTransactionOpsCore,
+    IDatabaseTransactionOpsCoreTyped,
 };
 use fedimint_core::encoding::Encodable;
-use fedimint_core::module::registry::ModuleDecoderRegistry;
-use fedimint_core::push_db_pair_items_no_serde;
+use fedimint_core::module::registry::{ModuleDecoderRegistry, ModuleRegistry};
 use fedimint_rocksdb::RocksDbReadOnly;
 use fedimint_server::config::io::read_server_config;
 use fedimint_server::config::ServerConfig;
@@ -21,6 +21,23 @@ use fedimint_server::net::api::announcement::ApiAnnouncementPrefix;
 use futures::StreamExt;
 use ln_gateway::Gateway;
 use strum::IntoEnumIterator;
+
+macro_rules! push_db_pair_items_no_serde {
+    ($dbtx:ident, $prefix_type:expr, $key_type:ty, $value_type:ty, $map:ident, $key_literal:literal) => {
+        let db_items = IDatabaseTransactionOpsCoreTyped::find_by_prefix($dbtx, &$prefix_type)
+            .await
+            .map(|(key, val)| {
+                (
+                    Encodable::consensus_encode_to_hex(&key),
+                    SerdeWrapper::from_encodable(&val),
+                )
+            })
+            .collect::<BTreeMap<_, _>>()
+            .await;
+
+        $map.insert($key_literal.to_string(), Box::new(db_items));
+    };
+}
 
 #[derive(Debug, serde::Serialize)]
 struct SerdeWrapper(#[serde(with = "hex::serde")] Vec<u8>);
@@ -38,10 +55,10 @@ impl SerdeWrapper {
 /// Also includes metadata on which sections of the database to read.
 pub struct DatabaseDump {
     serialized: BTreeMap<String, Box<dyn Serialize>>,
-    read_only: Database,
+    read_only_db: Database,
     modules: Vec<String>,
     prefixes: Vec<String>,
-    cfg: Option<ServerConfig>,
+    server_cfg: Option<ServerConfig>,
     module_inits: ServerModuleInitRegistry,
     client_cfg: Option<ClientConfig>,
     client_module_inits: ClientModuleInitRegistry,
@@ -57,12 +74,11 @@ impl DatabaseDump {
         modules: Vec<String>,
         prefixes: Vec<String>,
     ) -> anyhow::Result<DatabaseDump> {
-        let read_only = match RocksDbReadOnly::open_read_only(data_dir.clone()) {
-            Ok(db) => Database::new(db, Default::default()),
-            Err(_) => {
-                panic!("Error reading RocksDB database. Quitting...");
-            }
+        let Ok(read_only_rocks_db) = RocksDbReadOnly::open_read_only(data_dir.clone()) else {
+            panic!("Error reading RocksDB database. Quitting...");
         };
+
+        let read_only_db = Database::new(read_only_rocks_db, ModuleRegistry::default());
 
         let (server_cfg, client_cfg, decoders) = if let Ok(cfg) =
             read_server_config(&password, &cfg_dir).context("Failed to read server config")
@@ -77,17 +93,11 @@ impl DatabaseDump {
         } else {
             // Check if this database is a client database by reading the `ClientConfig`
             // from the database.
-            let db = match RocksDbReadOnly::open_read_only(data_dir) {
-                Ok(db) => Database::new(db, Default::default()),
-                Err(_) => {
-                    panic!("Error reading RocksDB database. Quitting...");
-                }
-            };
 
-            let mut dbtx = db.begin_transaction_nc().await;
-            let client_cfg = dbtx.get_value(&ClientConfigKey).await;
+            let mut dbtx = read_only_db.begin_transaction_nc().await;
+            let client_cfg_or = dbtx.get_value(&ClientConfigKey).await;
 
-            if let Some(client_cfg) = client_cfg {
+            if let Some(client_cfg) = client_cfg_or {
                 // Successfully read the client config, that means this database is a client db
                 let kinds = client_cfg.modules.iter().map(|(k, v)| (*k, &v.kind));
                 let decoders = client_module_inits
@@ -102,10 +112,10 @@ impl DatabaseDump {
 
         Ok(DatabaseDump {
             serialized: BTreeMap::new(),
-            read_only: read_only.with_decoders(decoders),
+            read_only_db: read_only_db.with_decoders(decoders),
             modules,
             prefixes,
-            cfg: server_cfg,
+            server_cfg,
             module_inits,
             client_module_inits,
             client_cfg,
@@ -114,7 +124,7 @@ impl DatabaseDump {
 }
 
 impl DatabaseDump {
-    /// Prints the contents of the BTreeMap to a pretty JSON string
+    /// Prints the contents of the `BTreeMap` to a pretty JSON string
     fn print_database(&self) {
         let json = serde_json::to_string_pretty(&self.serialized).unwrap();
         println!("{json}");
@@ -129,7 +139,7 @@ impl DatabaseDump {
         if !self.modules.is_empty() && !self.modules.contains(&kind.to_string()) {
             return Ok(());
         }
-        let mut dbtx = self.read_only.begin_transaction_nc().await;
+        let mut dbtx = self.read_only_db.begin_transaction_nc().await;
         let db_version = dbtx.get_value(&DatabaseVersionKey(*module_id)).await;
         let mut isolated_dbtx = dbtx.to_ref_with_prefix_module_id(*module_id);
 
@@ -185,8 +195,7 @@ impl DatabaseDump {
     }
 
     async fn serialize_gateway(&mut self) -> anyhow::Result<()> {
-        let mut dbtx = self.read_only.begin_transaction_nc().await;
-        let mut dbtx = dbtx.to_ref();
+        let mut dbtx = self.read_only_db.begin_transaction_nc().await;
         let gateway_serialized = Gateway::dump_database(&mut dbtx, self.prefixes.clone()).await;
         self.serialized
             .insert("gateway".to_string(), Box::new(gateway_serialized));
@@ -196,8 +205,7 @@ impl DatabaseDump {
     /// Iterates through all the specified ranges in the database and retrieves
     /// the data for each range. Prints serialized contents at the end.
     pub async fn dump_database(&mut self) -> anyhow::Result<()> {
-        let cfg = self.cfg.clone();
-        if let Some(cfg) = cfg {
+        if let Some(cfg) = self.server_cfg.clone() {
             if self.modules.is_empty() || self.modules.contains(&"consensus".to_string()) {
                 self.retrieve_consensus_data().await;
             }
@@ -237,72 +245,78 @@ impl DatabaseDump {
     /// Iterates through each of the prefixes within the consensus range and
     /// retrieves the corresponding data.
     async fn retrieve_consensus_data(&mut self) {
-        let mut consensus: BTreeMap<String, Box<dyn Serialize>> = BTreeMap::new();
-        let mut dbtx = self.read_only.begin_transaction_nc().await;
-        let dbtx = &mut dbtx;
-        let prefix_names = &self.prefixes;
-
-        let filtered_prefixes = ConsensusRange::DbKeyPrefix::iter().filter(|f| {
-            prefix_names.is_empty() || prefix_names.contains(&f.to_string().to_lowercase())
+        let filtered_prefixes = ConsensusRange::DbKeyPrefix::iter().filter(|prefix| {
+            self.prefixes.is_empty() || self.prefixes.contains(&prefix.to_string().to_lowercase())
         });
+        let mut dbtx = self.read_only_db.begin_transaction_nc().await;
+        let mut consensus: BTreeMap<String, Box<dyn Serialize>> = BTreeMap::new();
+
         for table in filtered_prefixes {
-            match table {
-                ConsensusRange::DbKeyPrefix::AcceptedItem => {
-                    push_db_pair_items_no_serde!(
-                        dbtx,
-                        ConsensusRange::AcceptedItemPrefix,
-                        ConsensusRange::AcceptedItemKey,
-                        fedimint_server::consensus::AcceptedItem,
-                        consensus,
-                        "Accepted Items"
-                    );
-                }
-                ConsensusRange::DbKeyPrefix::AcceptedTransaction => {
-                    push_db_pair_items_no_serde!(
-                        dbtx,
-                        ConsensusRange::AcceptedTransactionKeyPrefix,
-                        ConsensusRange::AcceptedTransactionKey,
-                        fedimint_server::consensus::AcceptedTransaction,
-                        consensus,
-                        "Accepted Transactions"
-                    );
-                }
-                ConsensusRange::DbKeyPrefix::SignedSessionOutcome => {
-                    push_db_pair_items_no_serde!(
-                        dbtx,
-                        ConsensusRange::SignedSessionOutcomePrefix,
-                        ConsensusRange::SignedBlockKey,
-                        fedimint_server::consensus::SignedBlock,
-                        consensus,
-                        "Signed Blocks"
-                    );
-                }
-                ConsensusRange::DbKeyPrefix::AlephUnits => {
-                    push_db_pair_items_no_serde!(
-                        dbtx,
-                        ConsensusRange::AlephUnitsPrefix,
-                        ConsensusRange::AlephUnitsKey,
-                        Vec<u8>,
-                        consensus,
-                        "Aleph Units"
-                    );
-                }
-                // Module is a global prefix for all module data
-                ConsensusRange::DbKeyPrefix::Module => {}
-                ConsensusRange::DbKeyPrefix::ApiAnnouncements => {
-                    push_db_pair_items_no_serde!(
-                        dbtx,
-                        ApiAnnouncementPrefix,
-                        ApiAnnouncementKey,
-                        fedimint_core::net::api_announcement::SignedApiAnnouncement,
-                        consensus,
-                        "API Announcements"
-                    );
-                }
-            }
+            Self::write_serialized_consensus_range(table, &mut dbtx, &mut consensus).await;
         }
 
         self.serialized
             .insert("Consensus".to_string(), Box::new(consensus));
+    }
+
+    async fn write_serialized_consensus_range(
+        table: ConsensusRange::DbKeyPrefix,
+        dbtx: &mut DatabaseTransaction<'_>,
+        consensus: &mut BTreeMap<String, Box<dyn Serialize>>,
+    ) {
+        match table {
+            ConsensusRange::DbKeyPrefix::AcceptedItem => {
+                push_db_pair_items_no_serde!(
+                    dbtx,
+                    ConsensusRange::AcceptedItemPrefix,
+                    ConsensusRange::AcceptedItemKey,
+                    fedimint_server::consensus::AcceptedItem,
+                    consensus,
+                    "Accepted Items"
+                );
+            }
+            ConsensusRange::DbKeyPrefix::AcceptedTransaction => {
+                push_db_pair_items_no_serde!(
+                    dbtx,
+                    ConsensusRange::AcceptedTransactionKeyPrefix,
+                    ConsensusRange::AcceptedTransactionKey,
+                    fedimint_server::consensus::AcceptedTransaction,
+                    consensus,
+                    "Accepted Transactions"
+                );
+            }
+            ConsensusRange::DbKeyPrefix::SignedSessionOutcome => {
+                push_db_pair_items_no_serde!(
+                    dbtx,
+                    ConsensusRange::SignedSessionOutcomePrefix,
+                    ConsensusRange::SignedBlockKey,
+                    fedimint_server::consensus::SignedBlock,
+                    consensus,
+                    "Signed Blocks"
+                );
+            }
+            ConsensusRange::DbKeyPrefix::AlephUnits => {
+                push_db_pair_items_no_serde!(
+                    dbtx,
+                    ConsensusRange::AlephUnitsPrefix,
+                    ConsensusRange::AlephUnitsKey,
+                    Vec<u8>,
+                    consensus,
+                    "Aleph Units"
+                );
+            }
+            // Module is a global prefix for all module data
+            ConsensusRange::DbKeyPrefix::Module => {}
+            ConsensusRange::DbKeyPrefix::ApiAnnouncements => {
+                push_db_pair_items_no_serde!(
+                    dbtx,
+                    ApiAnnouncementPrefix,
+                    ApiAnnouncementKey,
+                    fedimint_core::net::api_announcement::SignedApiAnnouncement,
+                    consensus,
+                    "API Announcements"
+                );
+            }
+        }
     }
 }
