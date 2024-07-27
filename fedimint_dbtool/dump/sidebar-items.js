@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"struct":["DatabaseDump","SerdeWrapper"]};
+window.SIDEBAR_ITEMS = {"macro":["push_db_pair_items_no_serde"],"struct":["DatabaseDump","SerdeWrapper"]};

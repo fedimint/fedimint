@@ -306,6 +306,20 @@
 <a href="#306" id="306">306</a>
 <a href="#307" id="307">307</a>
 <a href="#308" id="308">308</a>
+<a href="#309" id="309">309</a>
+<a href="#310" id="310">310</a>
+<a href="#311" id="311">311</a>
+<a href="#312" id="312">312</a>
+<a href="#313" id="313">313</a>
+<a href="#314" id="314">314</a>
+<a href="#315" id="315">315</a>
+<a href="#316" id="316">316</a>
+<a href="#317" id="317">317</a>
+<a href="#318" id="318">318</a>
+<a href="#319" id="319">319</a>
+<a href="#320" id="320">320</a>
+<a href="#321" id="321">321</a>
+<a href="#322" id="322">322</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::path::PathBuf;
 
@@ -316,11 +330,11 @@
 <span class="kw">use </span>fedimint_core::config::{ClientConfig, CommonModuleInitRegistry, ServerModuleInitRegistry};
 <span class="kw">use </span>fedimint_core::core::ModuleKind;
 <span class="kw">use </span>fedimint_core::db::{
-    Database, DatabaseVersionKey, IDatabaseTransactionOpsCore, IDatabaseTransactionOpsCoreTyped,
+    Database, DatabaseTransaction, DatabaseVersionKey, IDatabaseTransactionOpsCore,
+    IDatabaseTransactionOpsCoreTyped,
 };
 <span class="kw">use </span>fedimint_core::encoding::Encodable;
-<span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
-<span class="kw">use </span>fedimint_core::push_db_pair_items_no_serde;
+<span class="kw">use </span>fedimint_core::module::registry::{ModuleDecoderRegistry, ModuleRegistry};
 <span class="kw">use </span>fedimint_rocksdb::RocksDbReadOnly;
 <span class="kw">use </span>fedimint_server::config::io::read_server_config;
 <span class="kw">use </span>fedimint_server::config::ServerConfig;
@@ -329,6 +343,23 @@
 <span class="kw">use </span>futures::StreamExt;
 <span class="kw">use </span>ln_gateway::Gateway;
 <span class="kw">use </span>strum::IntoEnumIterator;
+
+<span class="macro">macro_rules!</span> push_db_pair_items_no_serde {
+    (<span class="macro-nonterminal">$dbtx</span>:ident, <span class="macro-nonterminal">$prefix_type</span>:expr, <span class="macro-nonterminal">$key_type</span>:ty, <span class="macro-nonterminal">$value_type</span>:ty, <span class="macro-nonterminal">$map</span>:ident, <span class="macro-nonterminal">$key_literal</span>:literal) =&gt; {
+        <span class="kw">let </span>db_items = IDatabaseTransactionOpsCoreTyped::find_by_prefix(<span class="macro-nonterminal">$dbtx</span>, <span class="kw-2">&amp;</span><span class="macro-nonterminal">$prefix_type</span>)
+            .<span class="kw">await
+            </span>.map(|(key, val)| {
+                (
+                    Encodable::consensus_encode_to_hex(<span class="kw-2">&amp;</span>key),
+                    SerdeWrapper::from_encodable(<span class="kw-2">&amp;</span>val),
+                )
+            })
+            .collect::&lt;BTreeMap&lt;<span class="kw">_</span>, <span class="kw">_</span>&gt;&gt;()
+            .<span class="kw">await</span>;
+
+        <span class="macro-nonterminal">$map</span>.insert(<span class="macro-nonterminal">$key_literal</span>.to_string(), Box::new(db_items));
+    };
+}
 
 <span class="attr">#[derive(Debug, serde::Serialize)]
 </span><span class="kw">struct </span>SerdeWrapper(<span class="attr">#[serde(with = <span class="string">"hex::serde"</span>)] </span>Vec&lt;u8&gt;);
@@ -346,10 +377,10 @@
 /// Also includes metadata on which sections of the database to read.
 </span><span class="kw">pub struct </span>DatabaseDump {
     serialized: BTreeMap&lt;String, Box&lt;<span class="kw">dyn </span>Serialize&gt;&gt;,
-    read_only: Database,
+    read_only_db: Database,
     modules: Vec&lt;String&gt;,
     prefixes: Vec&lt;String&gt;,
-    cfg: <span class="prelude-ty">Option</span>&lt;ServerConfig&gt;,
+    server_cfg: <span class="prelude-ty">Option</span>&lt;ServerConfig&gt;,
     module_inits: ServerModuleInitRegistry,
     client_cfg: <span class="prelude-ty">Option</span>&lt;ClientConfig&gt;,
     client_module_inits: ClientModuleInitRegistry,
@@ -365,12 +396,11 @@
         modules: Vec&lt;String&gt;,
         prefixes: Vec&lt;String&gt;,
     ) -&gt; anyhow::Result&lt;DatabaseDump&gt; {
-        <span class="kw">let </span>read_only = <span class="kw">match </span>RocksDbReadOnly::open_read_only(data_dir.clone()) {
-            <span class="prelude-val">Ok</span>(db) =&gt; Database::new(db, Default::default()),
-            <span class="prelude-val">Err</span>(<span class="kw">_</span>) =&gt; {
-                <span class="macro">panic!</span>(<span class="string">"Error reading RocksDB database. Quitting..."</span>);
-            }
+        <span class="kw">let </span><span class="prelude-val">Ok</span>(read_only_rocks_db) = RocksDbReadOnly::open_read_only(data_dir.clone()) <span class="kw">else </span>{
+            <span class="macro">panic!</span>(<span class="string">"Error reading RocksDB database. Quitting..."</span>);
         };
+
+        <span class="kw">let </span>read_only_db = Database::new(read_only_rocks_db, ModuleRegistry::default());
 
         <span class="kw">let </span>(server_cfg, client_cfg, decoders) = <span class="kw">if let </span><span class="prelude-val">Ok</span>(cfg) =
             read_server_config(<span class="kw-2">&amp;</span>password, <span class="kw-2">&amp;</span>cfg_dir).context(<span class="string">"Failed to read server config"</span>)
@@ -385,17 +415,11 @@
         } <span class="kw">else </span>{
             <span class="comment">// Check if this database is a client database by reading the `ClientConfig`
             // from the database.
-            </span><span class="kw">let </span>db = <span class="kw">match </span>RocksDbReadOnly::open_read_only(data_dir) {
-                <span class="prelude-val">Ok</span>(db) =&gt; Database::new(db, Default::default()),
-                <span class="prelude-val">Err</span>(<span class="kw">_</span>) =&gt; {
-                    <span class="macro">panic!</span>(<span class="string">"Error reading RocksDB database. Quitting..."</span>);
-                }
-            };
 
-            <span class="kw">let </span><span class="kw-2">mut </span>dbtx = db.begin_transaction_nc().<span class="kw">await</span>;
-            <span class="kw">let </span>client_cfg = dbtx.get_value(<span class="kw-2">&amp;</span>ClientConfigKey).<span class="kw">await</span>;
+            </span><span class="kw">let </span><span class="kw-2">mut </span>dbtx = read_only_db.begin_transaction_nc().<span class="kw">await</span>;
+            <span class="kw">let </span>client_cfg_or = dbtx.get_value(<span class="kw-2">&amp;</span>ClientConfigKey).<span class="kw">await</span>;
 
-            <span class="kw">if let </span><span class="prelude-val">Some</span>(client_cfg) = client_cfg {
+            <span class="kw">if let </span><span class="prelude-val">Some</span>(client_cfg) = client_cfg_or {
                 <span class="comment">// Successfully read the client config, that means this database is a client db
                 </span><span class="kw">let </span>kinds = client_cfg.modules.iter().map(|(k, v)| (<span class="kw-2">*</span>k, <span class="kw-2">&amp;</span>v.kind));
                 <span class="kw">let </span>decoders = client_module_inits
@@ -410,10 +434,10 @@
 
         <span class="prelude-val">Ok</span>(DatabaseDump {
             serialized: BTreeMap::new(),
-            read_only: read_only.with_decoders(decoders),
+            read_only_db: read_only_db.with_decoders(decoders),
             modules,
             prefixes,
-            cfg: server_cfg,
+            server_cfg,
             module_inits,
             client_module_inits,
             client_cfg,
@@ -422,7 +446,7 @@
 }
 
 <span class="kw">impl </span>DatabaseDump {
-    <span class="doccomment">/// Prints the contents of the BTreeMap to a pretty JSON string
+    <span class="doccomment">/// Prints the contents of the `BTreeMap` to a pretty JSON string
     </span><span class="kw">fn </span>print_database(<span class="kw-2">&amp;</span><span class="self">self</span>) {
         <span class="kw">let </span>json = serde_json::to_string_pretty(<span class="kw-2">&amp;</span><span class="self">self</span>.serialized).unwrap();
         <span class="macro">println!</span>(<span class="string">"{json}"</span>);
@@ -437,7 +461,7 @@
         <span class="kw">if </span>!<span class="self">self</span>.modules.is_empty() &amp;&amp; !<span class="self">self</span>.modules.contains(<span class="kw-2">&amp;</span>kind.to_string()) {
             <span class="kw">return </span><span class="prelude-val">Ok</span>(());
         }
-        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.read_only.begin_transaction_nc().<span class="kw">await</span>;
+        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.read_only_db.begin_transaction_nc().<span class="kw">await</span>;
         <span class="kw">let </span>db_version = dbtx.get_value(<span class="kw-2">&amp;</span>DatabaseVersionKey(<span class="kw-2">*</span>module_id)).<span class="kw">await</span>;
         <span class="kw">let </span><span class="kw-2">mut </span>isolated_dbtx = dbtx.to_ref_with_prefix_module_id(<span class="kw-2">*</span>module_id);
 
@@ -493,8 +517,7 @@
     }
 
     <span class="kw">async fn </span>serialize_gateway(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; anyhow::Result&lt;()&gt; {
-        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.read_only.begin_transaction_nc().<span class="kw">await</span>;
-        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = dbtx.to_ref();
+        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.read_only_db.begin_transaction_nc().<span class="kw">await</span>;
         <span class="kw">let </span>gateway_serialized = Gateway::dump_database(<span class="kw-2">&amp;mut </span>dbtx, <span class="self">self</span>.prefixes.clone()).<span class="kw">await</span>;
         <span class="self">self</span>.serialized
             .insert(<span class="string">"gateway"</span>.to_string(), Box::new(gateway_serialized));
@@ -504,8 +527,7 @@
     <span class="doccomment">/// Iterates through all the specified ranges in the database and retrieves
     /// the data for each range. Prints serialized contents at the end.
     </span><span class="kw">pub async fn </span>dump_database(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; anyhow::Result&lt;()&gt; {
-        <span class="kw">let </span>cfg = <span class="self">self</span>.cfg.clone();
-        <span class="kw">if let </span><span class="prelude-val">Some</span>(cfg) = cfg {
+        <span class="kw">if let </span><span class="prelude-val">Some</span>(cfg) = <span class="self">self</span>.server_cfg.clone() {
             <span class="kw">if </span><span class="self">self</span>.modules.is_empty() || <span class="self">self</span>.modules.contains(<span class="kw-2">&amp;</span><span class="string">"consensus"</span>.to_string()) {
                 <span class="self">self</span>.retrieve_consensus_data().<span class="kw">await</span>;
             }
@@ -545,73 +567,79 @@
     <span class="doccomment">/// Iterates through each of the prefixes within the consensus range and
     /// retrieves the corresponding data.
     </span><span class="kw">async fn </span>retrieve_consensus_data(<span class="kw-2">&amp;mut </span><span class="self">self</span>) {
-        <span class="kw">let </span><span class="kw-2">mut </span>consensus: BTreeMap&lt;String, Box&lt;<span class="kw">dyn </span>Serialize&gt;&gt; = BTreeMap::new();
-        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.read_only.begin_transaction_nc().<span class="kw">await</span>;
-        <span class="kw">let </span>dbtx = <span class="kw-2">&amp;mut </span>dbtx;
-        <span class="kw">let </span>prefix_names = <span class="kw-2">&amp;</span><span class="self">self</span>.prefixes;
-
-        <span class="kw">let </span>filtered_prefixes = ConsensusRange::DbKeyPrefix::iter().filter(|f| {
-            prefix_names.is_empty() || prefix_names.contains(<span class="kw-2">&amp;</span>f.to_string().to_lowercase())
+        <span class="kw">let </span>filtered_prefixes = ConsensusRange::DbKeyPrefix::iter().filter(|prefix| {
+            <span class="self">self</span>.prefixes.is_empty() || <span class="self">self</span>.prefixes.contains(<span class="kw-2">&amp;</span>prefix.to_string().to_lowercase())
         });
+        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.read_only_db.begin_transaction_nc().<span class="kw">await</span>;
+        <span class="kw">let </span><span class="kw-2">mut </span>consensus: BTreeMap&lt;String, Box&lt;<span class="kw">dyn </span>Serialize&gt;&gt; = BTreeMap::new();
+
         <span class="kw">for </span>table <span class="kw">in </span>filtered_prefixes {
-            <span class="kw">match </span>table {
-                ConsensusRange::DbKeyPrefix::AcceptedItem =&gt; {
-                    <span class="macro">push_db_pair_items_no_serde!</span>(
-                        dbtx,
-                        ConsensusRange::AcceptedItemPrefix,
-                        ConsensusRange::AcceptedItemKey,
-                        fedimint_server::consensus::AcceptedItem,
-                        consensus,
-                        <span class="string">"Accepted Items"
-                    </span>);
-                }
-                ConsensusRange::DbKeyPrefix::AcceptedTransaction =&gt; {
-                    <span class="macro">push_db_pair_items_no_serde!</span>(
-                        dbtx,
-                        ConsensusRange::AcceptedTransactionKeyPrefix,
-                        ConsensusRange::AcceptedTransactionKey,
-                        fedimint_server::consensus::AcceptedTransaction,
-                        consensus,
-                        <span class="string">"Accepted Transactions"
-                    </span>);
-                }
-                ConsensusRange::DbKeyPrefix::SignedSessionOutcome =&gt; {
-                    <span class="macro">push_db_pair_items_no_serde!</span>(
-                        dbtx,
-                        ConsensusRange::SignedSessionOutcomePrefix,
-                        ConsensusRange::SignedBlockKey,
-                        fedimint_server::consensus::SignedBlock,
-                        consensus,
-                        <span class="string">"Signed Blocks"
-                    </span>);
-                }
-                ConsensusRange::DbKeyPrefix::AlephUnits =&gt; {
-                    <span class="macro">push_db_pair_items_no_serde!</span>(
-                        dbtx,
-                        ConsensusRange::AlephUnitsPrefix,
-                        ConsensusRange::AlephUnitsKey,
-                        Vec&lt;u8&gt;,
-                        consensus,
-                        <span class="string">"Aleph Units"
-                    </span>);
-                }
-                <span class="comment">// Module is a global prefix for all module data
-                </span>ConsensusRange::DbKeyPrefix::Module =&gt; {}
-                ConsensusRange::DbKeyPrefix::ApiAnnouncements =&gt; {
-                    <span class="macro">push_db_pair_items_no_serde!</span>(
-                        dbtx,
-                        ApiAnnouncementPrefix,
-                        ApiAnnouncementKey,
-                        fedimint_core::net::api_announcement::SignedApiAnnouncement,
-                        consensus,
-                        <span class="string">"API Announcements"
-                    </span>);
-                }
-            }
+            <span class="self">Self</span>::write_serialized_consensus_range(table, <span class="kw-2">&amp;mut </span>dbtx, <span class="kw-2">&amp;mut </span>consensus).<span class="kw">await</span>;
         }
 
         <span class="self">self</span>.serialized
             .insert(<span class="string">"Consensus"</span>.to_string(), Box::new(consensus));
+    }
+
+    <span class="kw">async fn </span>write_serialized_consensus_range(
+        table: ConsensusRange::DbKeyPrefix,
+        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>&gt;,
+        consensus: <span class="kw-2">&amp;mut </span>BTreeMap&lt;String, Box&lt;<span class="kw">dyn </span>Serialize&gt;&gt;,
+    ) {
+        <span class="kw">match </span>table {
+            ConsensusRange::DbKeyPrefix::AcceptedItem =&gt; {
+                <span class="macro">push_db_pair_items_no_serde!</span>(
+                    dbtx,
+                    ConsensusRange::AcceptedItemPrefix,
+                    ConsensusRange::AcceptedItemKey,
+                    fedimint_server::consensus::AcceptedItem,
+                    consensus,
+                    <span class="string">"Accepted Items"
+                </span>);
+            }
+            ConsensusRange::DbKeyPrefix::AcceptedTransaction =&gt; {
+                <span class="macro">push_db_pair_items_no_serde!</span>(
+                    dbtx,
+                    ConsensusRange::AcceptedTransactionKeyPrefix,
+                    ConsensusRange::AcceptedTransactionKey,
+                    fedimint_server::consensus::AcceptedTransaction,
+                    consensus,
+                    <span class="string">"Accepted Transactions"
+                </span>);
+            }
+            ConsensusRange::DbKeyPrefix::SignedSessionOutcome =&gt; {
+                <span class="macro">push_db_pair_items_no_serde!</span>(
+                    dbtx,
+                    ConsensusRange::SignedSessionOutcomePrefix,
+                    ConsensusRange::SignedBlockKey,
+                    fedimint_server::consensus::SignedBlock,
+                    consensus,
+                    <span class="string">"Signed Blocks"
+                </span>);
+            }
+            ConsensusRange::DbKeyPrefix::AlephUnits =&gt; {
+                <span class="macro">push_db_pair_items_no_serde!</span>(
+                    dbtx,
+                    ConsensusRange::AlephUnitsPrefix,
+                    ConsensusRange::AlephUnitsKey,
+                    Vec&lt;u8&gt;,
+                    consensus,
+                    <span class="string">"Aleph Units"
+                </span>);
+            }
+            <span class="comment">// Module is a global prefix for all module data
+            </span>ConsensusRange::DbKeyPrefix::Module =&gt; {}
+            ConsensusRange::DbKeyPrefix::ApiAnnouncements =&gt; {
+                <span class="macro">push_db_pair_items_no_serde!</span>(
+                    dbtx,
+                    ApiAnnouncementPrefix,
+                    ApiAnnouncementKey,
+                    fedimint_core::net::api_announcement::SignedApiAnnouncement,
+                    consensus,
+                    <span class="string">"API Announcements"
+                </span>);
+            }
+        }
     }
 }
 </code></pre></div></section></main></body></html>

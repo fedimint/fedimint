@@ -250,13 +250,7 @@
 <a href="#250" id="250">250</a>
 <a href="#251" id="251">251</a>
 <a href="#252" id="252">252</a>
-<a href="#253" id="253">253</a>
-<a href="#254" id="254">254</a>
-<a href="#255" id="255">255</a>
 </pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
-#![allow(clippy::default_trait_access)]
-#![allow(clippy::doc_markdown)]
-#![allow(clippy::match_wild_err_arm)]
 #![allow(clippy::missing_errors_doc)]
 #![allow(clippy::missing_panics_doc)]
 #![allow(clippy::module_name_repetitions)]
@@ -295,7 +289,7 @@
 #[command(version)]
 </span><span class="kw">struct </span>Options {
     <span class="attr">#[clap(long, env = FM_DBTOOL_DATABASE_ENV)]
-    </span>database: String,
+    </span>database_dir: String,
 
     <span class="attr">#[clap(long, hide = <span class="bool-val">true</span>)]
     </span><span class="doccomment">/// Run dbtool like it doesn't know about any module kind. This is a
@@ -415,7 +409,7 @@
         <span class="kw">let </span>options = <span class="kw-2">&amp;</span><span class="self">self</span>.cli_args;
         <span class="kw">match </span><span class="kw-2">&amp;</span>options.command {
             DbCommand::List { prefix } =&gt; {
-                <span class="kw">let </span>rocksdb = fedimint_rocksdb::RocksDb::open(<span class="kw-2">&amp;</span>options.database)
+                <span class="kw">let </span>rocksdb = fedimint_rocksdb::RocksDb::open(<span class="kw-2">&amp;</span>options.database_dir)
                     .unwrap()
                     .into_database();
                 <span class="kw">let </span><span class="kw-2">mut </span>dbtx = rocksdb.begin_transaction().<span class="kw">await</span>;
@@ -430,7 +424,7 @@
                 dbtx.commit_tx().<span class="kw">await</span>;
             }
             DbCommand::Write { key, value } =&gt; {
-                <span class="kw">let </span>rocksdb = fedimint_rocksdb::RocksDb::open(<span class="kw-2">&amp;</span>options.database)
+                <span class="kw">let </span>rocksdb = fedimint_rocksdb::RocksDb::open(<span class="kw-2">&amp;</span>options.database_dir)
                     .unwrap()
                     .into_database();
                 <span class="kw">let </span><span class="kw-2">mut </span>dbtx = rocksdb.begin_transaction().<span class="kw">await</span>;
@@ -440,7 +434,7 @@
                 dbtx.commit_tx().<span class="kw">await</span>;
             }
             DbCommand::Delete { key } =&gt; {
-                <span class="kw">let </span>rocksdb = fedimint_rocksdb::RocksDb::open(<span class="kw-2">&amp;</span>options.database)
+                <span class="kw">let </span>rocksdb = fedimint_rocksdb::RocksDb::open(<span class="kw-2">&amp;</span>options.database_dir)
                     .unwrap()
                     .into_database();
                 <span class="kw">let </span><span class="kw-2">mut </span>dbtx = rocksdb.begin_transaction().<span class="kw">await</span>;
@@ -485,7 +479,7 @@
 
                 <span class="kw">let </span><span class="kw-2">mut </span>dbdump = DatabaseDump::new(
                     cfg_dir.clone(),
-                    options.database.clone(),
+                    options.database_dir.clone(),
                     password.to_string(),
                     module_inits,
                     client_module_inits,
@@ -496,7 +490,7 @@
                 dbdump.dump_database().<span class="kw">await</span><span class="question-mark">?</span>;
             }
             DbCommand::DeletePrefix { prefix } =&gt; {
-                <span class="kw">let </span>rocksdb = fedimint_rocksdb::RocksDb::open(<span class="kw-2">&amp;</span>options.database)
+                <span class="kw">let </span>rocksdb = fedimint_rocksdb::RocksDb::open(<span class="kw-2">&amp;</span>options.database_dir)
                     .unwrap()
                     .into_database();
                 <span class="kw">let </span><span class="kw-2">mut </span>dbtx = rocksdb.begin_transaction().<span class="kw">await</span>;
