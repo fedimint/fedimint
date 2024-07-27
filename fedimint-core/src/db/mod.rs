@@ -1934,25 +1934,6 @@ macro_rules! push_db_pair_items {
 }
 
 #[macro_export]
-macro_rules! push_db_pair_items_no_serde {
-    ($dbtx:ident, $prefix_type:expr, $key_type:ty, $value_type:ty, $map:ident, $key_literal:literal) => {
-        let db_items =
-            $crate::db::IDatabaseTransactionOpsCoreTyped::find_by_prefix($dbtx, &$prefix_type)
-                .await
-                .map(|(key, val)| {
-                    (
-                        $crate::encoding::Encodable::consensus_encode_to_hex(&key),
-                        SerdeWrapper::from_encodable(&val),
-                    )
-                })
-                .collect::<BTreeMap<_, _>>()
-                .await;
-
-        $map.insert($key_literal.to_string(), Box::new(db_items));
-    };
-}
-
-#[macro_export]
 macro_rules! push_db_key_items {
     ($dbtx:ident, $prefix_type:expr, $key_type:ty, $map:ident, $key_literal:literal) => {
         let db_items =

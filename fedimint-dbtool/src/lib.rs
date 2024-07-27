@@ -1,7 +1,4 @@
 #![deny(clippy::pedantic)]
-#![allow(clippy::default_trait_access)]
-#![allow(clippy::doc_markdown)]
-#![allow(clippy::match_wild_err_arm)]
 #![allow(clippy::missing_errors_doc)]
 #![allow(clippy::missing_panics_doc)]
 #![allow(clippy::module_name_repetitions)]
@@ -40,7 +37,7 @@ mod dump;
 #[command(version)]
 struct Options {
     #[clap(long, env = FM_DBTOOL_DATABASE_ENV)]
-    database: String,
+    database_dir: String,
 
     #[clap(long, hide = true)]
     /// Run dbtool like it doesn't know about any module kind. This is a
@@ -160,7 +157,7 @@ impl FedimintDBTool {
         let options = &self.cli_args;
         match &options.command {
             DbCommand::List { prefix } => {
-                let rocksdb = fedimint_rocksdb::RocksDb::open(&options.database)
+                let rocksdb = fedimint_rocksdb::RocksDb::open(&options.database_dir)
                     .unwrap()
                     .into_database();
                 let mut dbtx = rocksdb.begin_transaction().await;
@@ -175,7 +172,7 @@ impl FedimintDBTool {
                 dbtx.commit_tx().await;
             }
             DbCommand::Write { key, value } => {
-                let rocksdb = fedimint_rocksdb::RocksDb::open(&options.database)
+                let rocksdb = fedimint_rocksdb::RocksDb::open(&options.database_dir)
                     .unwrap()
                     .into_database();
                 let mut dbtx = rocksdb.begin_transaction().await;
@@ -185,7 +182,7 @@ impl FedimintDBTool {
                 dbtx.commit_tx().await;
             }
             DbCommand::Delete { key } => {
-                let rocksdb = fedimint_rocksdb::RocksDb::open(&options.database)
+                let rocksdb = fedimint_rocksdb::RocksDb::open(&options.database_dir)
                     .unwrap()
                     .into_database();
                 let mut dbtx = rocksdb.begin_transaction().await;
@@ -230,7 +227,7 @@ impl FedimintDBTool {
 
                 let mut dbdump = DatabaseDump::new(
                     cfg_dir.clone(),
-                    options.database.clone(),
+                    options.database_dir.clone(),
                     password.to_string(),
                     module_inits,
                     client_module_inits,
@@ -241,7 +238,7 @@ impl FedimintDBTool {
                 dbdump.dump_database().await?;
             }
             DbCommand::DeletePrefix { prefix } => {
-                let rocksdb = fedimint_rocksdb::RocksDb::open(&options.database)
+                let rocksdb = fedimint_rocksdb::RocksDb::open(&options.database_dir)
                     .unwrap()
                     .into_database();
                 let mut dbtx = rocksdb.begin_transaction().await;
