@@ -1373,10 +1373,45 @@
 <a href="#1373" id="1373">1373</a>
 <a href="#1374" id="1374">1374</a>
 <a href="#1375" id="1375">1375</a>
+<a href="#1376" id="1376">1376</a>
+<a href="#1377" id="1377">1377</a>
+<a href="#1378" id="1378">1378</a>
+<a href="#1379" id="1379">1379</a>
+<a href="#1380" id="1380">1380</a>
+<a href="#1381" id="1381">1381</a>
+<a href="#1382" id="1382">1382</a>
+<a href="#1383" id="1383">1383</a>
+<a href="#1384" id="1384">1384</a>
+<a href="#1385" id="1385">1385</a>
+<a href="#1386" id="1386">1386</a>
+<a href="#1387" id="1387">1387</a>
+<a href="#1388" id="1388">1388</a>
+<a href="#1389" id="1389">1389</a>
+<a href="#1390" id="1390">1390</a>
+<a href="#1391" id="1391">1391</a>
+<a href="#1392" id="1392">1392</a>
+<a href="#1393" id="1393">1393</a>
+<a href="#1394" id="1394">1394</a>
+<a href="#1395" id="1395">1395</a>
+<a href="#1396" id="1396">1396</a>
+<a href="#1397" id="1397">1397</a>
+<a href="#1398" id="1398">1398</a>
+<a href="#1399" id="1399">1399</a>
+<a href="#1400" id="1400">1400</a>
+<a href="#1401" id="1401">1401</a>
+<a href="#1402" id="1402">1402</a>
+<a href="#1403" id="1403">1403</a>
+<a href="#1404" id="1404">1404</a>
+<a href="#1405" id="1405">1405</a>
+<a href="#1406" id="1406">1406</a>
+<a href="#1407" id="1407">1407</a>
+<a href="#1408" id="1408">1408</a>
+<a href="#1409" id="1409">1409</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashSet};
 <span class="kw">use </span>std::convert::Infallible;
 <span class="kw">use </span>std::fmt::{Debug, Formatter};
 <span class="kw">use </span>std::io::{Error, Read, Write};
+<span class="kw">use </span>std::mem;
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::SystemTime;
 
@@ -1433,16 +1468,87 @@
 
 <span class="kw">struct </span>ExecutorInner {
     db: Database,
-    context: Mutex&lt;<span class="prelude-ty">Option</span>&lt;ContextGen&gt;&gt;,
+    state: Mutex&lt;ExecutorState&gt;,
     module_contexts: BTreeMap&lt;ModuleInstanceId, DynContext&gt;,
     valid_module_ids: BTreeSet&lt;ModuleInstanceId&gt;,
     notifier: Notifier,
-    shutdown_executor: Mutex&lt;<span class="prelude-ty">Option</span>&lt;oneshot::Sender&lt;()&gt;&gt;&gt;,
     <span class="doccomment">/// Any time executor should notice state machine update (e.g. because it
     /// was created), it's must be sent through this channel for it to notice.
     </span>sm_update_tx: mpsc::UnboundedSender&lt;DynState&gt;,
-    sm_update_rx: Mutex&lt;<span class="prelude-ty">Option</span>&lt;mpsc::UnboundedReceiver&lt;DynState&gt;&gt;&gt;,
     client_task_group: TaskGroup,
+}
+
+<span class="kw">enum </span>ExecutorState {
+    Unstarted {
+        sm_update_rx: mpsc::UnboundedReceiver&lt;DynState&gt;,
+    },
+    Running {
+        context_gen: ContextGen,
+        shutdown_sender: oneshot::Sender&lt;()&gt;,
+    },
+    Stopped,
+}
+
+<span class="kw">impl </span>ExecutorState {
+    <span class="doccomment">/// Starts the executor, returning a receiver that will be signalled when
+    /// the executor is stopped and a receiver for state machine updates.
+    /// Returns `None` if the executor has already been started and/or stopped.
+    </span><span class="kw">fn </span>start(
+        <span class="kw-2">&amp;mut </span><span class="self">self</span>,
+        context: ContextGen,
+    ) -&gt; <span class="prelude-ty">Option</span>&lt;(oneshot::Receiver&lt;()&gt;, mpsc::UnboundedReceiver&lt;DynState&gt;)&gt; {
+        <span class="kw">let </span>(shutdown_sender, shutdown_receiver) = tokio::sync::oneshot::channel::&lt;()&gt;();
+
+        <span class="kw">let </span>previous_state = mem::replace(
+            <span class="self">self</span>,
+            ExecutorState::Running {
+                context_gen: context,
+                shutdown_sender,
+            },
+        );
+
+        <span class="kw">if let </span>ExecutorState::Unstarted { sm_update_rx } = previous_state {
+            <span class="prelude-val">Some</span>((shutdown_receiver, sm_update_rx))
+        } <span class="kw">else </span>{
+            <span class="comment">// Replace the previous state, undoing the `mem::replace` above.
+            </span><span class="kw-2">*</span><span class="self">self </span>= previous_state;
+
+            <span class="macro">debug!</span>(<span class="string">"Executor already started, ignoring start request"</span>);
+            <span class="prelude-val">None
+        </span>}
+    }
+
+    <span class="doccomment">/// Stops the executor, returning `Some(())` if the executor was running and
+    /// `None` if it was in any other state.
+    </span><span class="kw">fn </span>stop(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;()&gt; {
+        <span class="kw">let </span>previous_state = mem::replace(<span class="self">self</span>, ExecutorState::Stopped);
+
+        <span class="kw">if let </span>ExecutorState::Running {
+            shutdown_sender, ..
+        } = previous_state
+        {
+            <span class="kw">if </span>shutdown_sender.send(()).is_err() {
+                <span class="macro">warn!</span>(<span class="string">"Failed to send shutdown signal to executor, already dead?"</span>);
+            }
+            <span class="prelude-val">Some</span>(())
+        } <span class="kw">else </span>{
+            <span class="comment">// Replace the previous state, undoing the `mem::replace` above.
+            </span><span class="kw-2">*</span><span class="self">self </span>= previous_state;
+
+            <span class="macro">debug!</span>(<span class="string">"Executor not running, ignoring stop request"</span>);
+            <span class="prelude-val">None
+        </span>}
+    }
+
+    <span class="kw">fn </span>gen_context(<span class="kw-2">&amp;</span><span class="self">self</span>, state: <span class="kw-2">&amp;</span>DynState) -&gt; <span class="prelude-ty">Option</span>&lt;DynGlobalClientContext&gt; {
+        <span class="kw">let </span>ExecutorState::Running { context_gen, .. } = <span class="self">self </span><span class="kw">else </span>{
+            <span class="kw">return </span><span class="prelude-val">None</span>;
+        };
+        <span class="prelude-val">Some</span>(context_gen(
+            state.module_instance_id(),
+            state.operation_id(),
+        ))
+    }
 }
 
 <span class="doccomment">/// Builder to which module clients can be attached and used to build an
@@ -1531,13 +1637,13 @@
             </span><span class="kw">if let </span><span class="prelude-val">Some</span>(module_context) =
                 <span class="self">self</span>.inner.module_contexts.get(<span class="kw-2">&amp;</span>state.module_instance_id())
             {
-                <span class="kw">let </span>context = {
-                    <span class="kw">let </span>context_gen_guard = <span class="self">self</span>.inner.context.lock().<span class="kw">await</span>;
-                    <span class="kw">let </span>context_gen = context_gen_guard
-                        .as_ref()
-                        .expect(<span class="string">"should be initialized at this point"</span>);
-                    context_gen(state.module_instance_id(), state.operation_id())
-                };
+                <span class="kw">let </span>context = <span class="self">self
+                    </span>.inner
+                    .state
+                    .lock()
+                    .<span class="kw">await
+                    </span>.gen_context(<span class="kw-2">&amp;</span>state)
+                    .expect(<span class="string">"executor should be running at this point"</span>);
 
                 <span class="kw">if </span>state.is_terminal(module_context, <span class="kw-2">&amp;</span>context) {
                     <span class="kw">return </span><span class="prelude-val">Err</span>(AddStateMachinesError::Other(<span class="macro">anyhow!</span>(
@@ -1645,38 +1751,11 @@
     /// ## Panics
     /// If called more than once.
     </span><span class="kw">pub async fn </span>start_executor(<span class="kw-2">&amp;</span><span class="self">self</span>, context_gen: ContextGen) {
-        <span class="kw">let </span>replaced_old_context_gen = <span class="self">self
-            </span>.inner
-            .context
-            .lock()
-            .<span class="kw">await
-            </span>.replace(context_gen.clone())
-            .is_some();
-        <span class="macro">assert!</span>(
-            !replaced_old_context_gen,
-            <span class="string">"start_executor was called previously"
-        </span>);
-        <span class="kw">let </span>sm_update_rx = <span class="self">self
-            </span>.inner
-            .sm_update_rx
-            .lock()
-            .<span class="kw">await
-            </span>.take()
-            .expect(<span class="string">"start_executor was called previously: no sm_update_rx available"</span>);
-
-        <span class="kw">let </span>(shutdown_sender, shutdown_receiver) = tokio::sync::oneshot::channel::&lt;()&gt;();
-
-        <span class="kw">let </span>replaced_old_shutdown_sender = <span class="self">self
-            </span>.inner
-            .shutdown_executor
-            .lock()
-            .<span class="kw">await
-            </span>.replace(shutdown_sender)
-            .is_some();
-        <span class="macro">assert!</span>(
-            !replaced_old_shutdown_sender,
-            <span class="string">"start_executor was called previously"
-        </span>);
+        <span class="kw">let </span><span class="prelude-val">Some</span>((shutdown_receiver, sm_update_rx)) =
+            <span class="self">self</span>.inner.state.lock().<span class="kw">await</span>.start(context_gen.clone())
+        <span class="kw">else </span>{
+            <span class="macro">panic!</span>(<span class="string">"start_executor was called previously"</span>);
+        };
 
         <span class="kw">let </span>task_runner_inner = <span class="self">self</span>.inner.clone();
         <span class="kw">let </span>_handle = <span class="self">self</span>.inner.client_task_group.spawn(<span class="string">"sm-executor"</span>, |task_handle| <span class="kw">async move </span>{
@@ -2115,21 +2194,12 @@
 <span class="kw">impl </span>ExecutorInner {
     <span class="doccomment">/// See [`Executor::stop_executor`].
     </span><span class="kw">fn </span>stop_executor(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;()&gt; {
-        <span class="kw">let </span><span class="prelude-val">Some</span>(shutdown_sender) = <span class="self">self
-            </span>.shutdown_executor
+        <span class="kw">let </span><span class="kw-2">mut </span>state = <span class="self">self
+            </span>.state
             .try_lock()
-            .expect(<span class="string">"Only locked during startup, no collisions should be possible"</span>)
-            .take()
-        <span class="kw">else </span>{
-            <span class="macro">debug!</span>(<span class="string">"Executor already stopped, ignoring stop request"</span>);
-            <span class="kw">return </span><span class="prelude-val">None</span>;
-        };
+            .expect(<span class="string">"Only locked during startup, no collisions should be possible"</span>);
 
-        <span class="kw">if </span>shutdown_sender.send(()).is_err() {
-            <span class="macro">warn!</span>(<span class="string">"Failed to send shutdown signal to executor, already dead?"</span>);
-        }
-
-        <span class="prelude-val">Some</span>(())
+        state.stop()
     }
 }
 
@@ -2178,13 +2248,11 @@
 
         <span class="kw">let </span>inner = Arc::new(ExecutorInner {
             db,
-            context: Mutex::new(<span class="prelude-val">None</span>),
+            state: Mutex::new(ExecutorState::Unstarted { sm_update_rx }),
             module_contexts: <span class="self">self</span>.module_contexts,
             valid_module_ids: <span class="self">self</span>.valid_module_ids,
             notifier,
-            shutdown_executor: Default::default(),
             sm_update_tx,
-            sm_update_rx: Mutex::new(<span class="prelude-val">Some</span>(sm_update_rx)),
             client_task_group,
         });
 
