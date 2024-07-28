@@ -274,50 +274,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "96d30a06541fbafbc7f82ed10c06164cfbd2c401138f6addd8404629c4b16711"
 
 [[package]]
-name = "arti-client"
-version = "0.20.0"
-source = "git+https://github.com/oleonardolima/arti?branch=feat/downgrade-rusqlite#e616c8d91e18d232007020c48183e2f9255e96f1"
-dependencies = [
- "async-trait",
- "cfg-if",
- "derive-deftly",
- "derive_builder_fork_arti",
- "derive_more",
- "educe",
- "fs-mistrust",
- "futures",
- "hostname-validator",
- "humantime",
- "humantime-serde",
- "libc",
- "postage",
- "rand",
- "safelog",
- "serde",
- "thiserror",
- "tor-async-utils",
- "tor-basic-utils",
- "tor-chanmgr",
- "tor-circmgr",
- "tor-config",
- "tor-dirmgr",
- "tor-error",
- "tor-guardmgr",
- "tor-hsclient",
- "tor-hscrypto",
- "tor-keymgr",
- "tor-linkspec",
- "tor-llcrypto",
- "tor-netdir",
- "tor-netdoc",
- "tor-persist",
- "tor-proto",
- "tor-rtcompat",
- "tracing",
- "void",
-]
-
-[[package]]
 name = "ascii"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -913,9 +869,9 @@ checksum = "c3ac9f8b63eca6fd385229b3675f6cc0dc5c8a5c8a54a59d4f52ffd670d87b0c"
 
 [[package]]
 name = "bytemuck"
-version = "1.16.0"
+version = "1.16.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "78834c15cb5d5efe3452d58b1e8ba890dd62d21907f867f383358198e56ebca5"
+checksum = "b236fc92302c97ed75b38da1f4917b5cdda4984745740f153a5d3059e48d725e"
 
 [[package]]
 name = "byteorder"
@@ -943,7 +899,8 @@ dependencies = [
 [[package]]
 name = "caret"
 version = "0.4.6"
-source = "git+https://github.com/oleonardolima/arti?branch=feat/downgrade-rusqlite#e616c8d91e18d232007020c48183e2f9255e96f1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4ac3ae35de516b8ee4bfb6affc72bd6c121d2967206f307c026890f99c7875a0"
 
 [[package]]
 name = "cast"
@@ -1549,9 +1506,9 @@ dependencies = [
 
 [[package]]
 name = "derive-deftly"
-version = "0.14.2"
+version = "0.13.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "72f9bc3564f74be6c35d49a7efee54380d7946ccc631323067f33fabb9246027"
+checksum = "063829d0f555b9fc22c8ddd206f1602372c4186e7b51046c43716f295182561d"
 dependencies = [
  "derive-deftly-macros",
  "heck 0.5.0",
@@ -1559,9 +1516,9 @@ dependencies = [
 
 [[package]]
 name = "derive-deftly-macros"
-version = "0.14.2"
+version = "0.13.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e1b84d32b18d9a256d81e4fec2e4cfd0ab6dde5e5ff49be1713ae0adbd0060c2"
+checksum = "68a27f0a2651f507903d67f8fb0688291e3e69f70381cdb5ee9729366f795f80"
 dependencies = [
  "heck 0.5.0",
  "indexmap 2.2.5",
@@ -1987,12 +1944,12 @@ name = "fedimint-api-client"
 version = "0.5.0-alpha"
 dependencies = [
  "anyhow",
- "arti-client",
  "async-lock",
  "async-trait",
  "base64 0.22.1",
  "bitcoin 0.30.2",
  "curve25519-dalek",
+ "fedimint-arti-client",
  "fedimint-core",
  "fedimint-logging",
  "futures",
@@ -2016,6 +1973,50 @@ dependencies = [
  "tracing-subscriber",
  "wasm-bindgen-futures",
  "webpki-roots 0.26.3",
+]
+
+[[package]]
+name = "fedimint-arti-client"
+version = "0.20.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1f624d537652186fabb4c90cd3f90bafb0127b318937098b2a3707a8d18dceda"
+dependencies = [
+ "async-trait",
+ "cfg-if",
+ "derive-deftly",
+ "derive_builder_fork_arti",
+ "derive_more",
+ "educe",
+ "fedimint-tor-dirmgr",
+ "fs-mistrust",
+ "futures",
+ "hostname-validator",
+ "humantime",
+ "humantime-serde",
+ "libc",
+ "postage",
+ "safelog",
+ "serde",
+ "thiserror",
+ "tor-async-utils",
+ "tor-basic-utils",
+ "tor-chanmgr",
+ "tor-circmgr",
+ "tor-config",
+ "tor-error",
+ "tor-guardmgr",
+ "tor-hsclient",
+ "tor-hscrypto",
+ "tor-keymgr",
+ "tor-linkspec",
+ "tor-llcrypto",
+ "tor-netdir",
+ "tor-netdoc",
+ "tor-persist",
+ "tor-proto",
+ "tor-rtcompat",
+ "tracing",
+ "void",
 ]
 
 [[package]]
@@ -3143,6 +3144,57 @@ dependencies = [
 ]
 
 [[package]]
+name = "fedimint-tor-dirmgr"
+version = "0.20.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c6a81954545f13dc907a25e18bf1b654e6e6b90248465969430525c8ecbe5dfc"
+dependencies = [
+ "async-trait",
+ "base64ct",
+ "derive_builder_fork_arti",
+ "derive_more",
+ "digest",
+ "educe",
+ "event-listener",
+ "fs-mistrust",
+ "fslock",
+ "futures",
+ "hex",
+ "humantime",
+ "humantime-serde",
+ "itertools 0.13.0",
+ "memmap2 0.9.4",
+ "once_cell",
+ "paste",
+ "postage",
+ "rand",
+ "rusqlite",
+ "safelog",
+ "scopeguard",
+ "serde",
+ "signature",
+ "strum 0.26.3",
+ "thiserror",
+ "time",
+ "tor-async-utils",
+ "tor-basic-utils",
+ "tor-checkable",
+ "tor-circmgr",
+ "tor-config",
+ "tor-consdiff",
+ "tor-dirclient",
+ "tor-error",
+ "tor-guardmgr",
+ "tor-llcrypto",
+ "tor-netdir",
+ "tor-netdoc",
+ "tor-persist",
+ "tor-proto",
+ "tor-rtcompat",
+ "tracing",
+]
+
+[[package]]
 name = "fedimint-tpe"
 version = "0.5.0-alpha"
 dependencies = [
@@ -3444,7 +3496,8 @@ dependencies = [
 [[package]]
 name = "fs-mistrust"
 version = "0.7.11"
-source = "git+https://github.com/oleonardolima/arti?branch=feat/downgrade-rusqlite#e616c8d91e18d232007020c48183e2f9255e96f1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "daa843fc37db9fe16a248421fa36454f903dbc2ff722cc613a7e12932ee572c7"
 dependencies = [
  "derive_builder_fork_arti",
  "dirs",
@@ -6026,7 +6079,8 @@ dependencies = [
 [[package]]
 name = "retry-error"
 version = "0.5.3"
-source = "git+https://github.com/oleonardolima/arti?branch=feat/downgrade-rusqlite#e616c8d91e18d232007020c48183e2f9255e96f1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b960f1dc847b9e4383ca73b4e8002f725b2f562addb9ade88a6ba109b305e96d"
 
 [[package]]
 name = "rfc6979"
@@ -6248,7 +6302,8 @@ checksum = "e86697c916019a8588c99b5fac3cead74ec0b4b819707a682fd4d23fa0ce1ba1"
 [[package]]
 name = "safelog"
 version = "0.3.7"
-source = "git+https://github.com/oleonardolima/arti?branch=feat/downgrade-rusqlite#e616c8d91e18d232007020c48183e2f9255e96f1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4a1e9cd092ef5e122f1a34f3fe15de8e9685f8f610e31c4c0643976aa5e31737"
 dependencies = [
  "derive_more",
  "educe",
@@ -6461,9 +6516,9 @@ dependencies = [
 
 [[package]]
 name = "serde_spanned"
-version = "0.6.6"
+version = "0.6.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "79e674e01f999af37c49f70a6ede167a8a60b2503e56c5599532a65baa5969a0"
+checksum = "eb5b1b31579f3811bf615c144393417496f152e12ac8b7663bf664f4a815306d"
 dependencies = [
  "serde",
 ]
@@ -6482,9 +6537,9 @@ dependencies = [
 
 [[package]]
 name = "serde_with"
-version = "3.8.1"
+version = "3.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0ad483d2ab0149d5a5ebcd9972a3852711e0153d863bf5a5d0391d28883c4a20"
+checksum = "69cecfa94848272156ea67b2b1a53f20fc7bc638c4a46d2f8abde08f05f4b857"
 dependencies = [
  "base64 0.22.1",
  "chrono",
@@ -6500,9 +6555,9 @@ dependencies = [
 
 [[package]]
 name = "serde_with_macros"
-version = "3.8.1"
+version = "3.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "65569b702f41443e8bc8bbb1c5779bd0450bbe723b56198980e80ec45780bce2"
+checksum = "a8fee4991ef4f274617a51ad4af30519438dacb2f56ac773b08a1922ff743350"
 dependencies = [
  "darling 0.20.8",
  "proc-macro2",
@@ -7209,7 +7264,7 @@ dependencies = [
  "serde",
  "serde_spanned",
  "toml_datetime",
- "winnow 0.6.13",
+ "winnow 0.6.16",
 ]
 
 [[package]]
@@ -7303,7 +7358,8 @@ dependencies = [
 [[package]]
 name = "tor-async-utils"
 version = "0.20.0"
-source = "git+https://github.com/oleonardolima/arti?branch=feat/downgrade-rusqlite#e616c8d91e18d232007020c48183e2f9255e96f1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "10e0b21e5da44d48fb79f9ccc468fdb4e260514c3054fda2a9ebcc3572a3b2a9"
 dependencies = [
  "futures",
  "pin-project",
@@ -7314,7 +7370,8 @@ dependencies = [
 [[package]]
 name = "tor-basic-utils"
 version = "0.20.0"
-source = "git+https://github.com/oleonardolima/arti?branch=feat/downgrade-rusqlite#e616c8d91e18d232007020c48183e2f9255e96f1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4c877853697cd45b6ba114e11a835df92db1aafb0af0d2771dabbe7d4107321b"
 dependencies = [
  "hex",
  "libc",
@@ -7328,7 +7385,8 @@ dependencies = [
 [[package]]
 name = "tor-bytes"
 version = "0.20.0"
-source = "git+https://github.com/oleonardolima/arti?branch=feat/downgrade-rusqlite#e616c8d91e18d232007020c48183e2f9255e96f1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ef1b8ab9a722deaf9d6db2ec00adc05465b5e9654504426c4a46d58ef49e4692"
 dependencies = [
  "bytes",
  "digest",
@@ -7343,7 +7401,8 @@ dependencies = [
 [[package]]
 name = "tor-cell"
 version = "0.20.0"
-source = "git+https://github.com/oleonardolima/arti?branch=feat/downgrade-rusqlite#e616c8d91e18d232007020c48183e2f9255e96f1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1a278cc2fb3cbf9fc4137d492e0900f14e615f9181b8c5c7d5d1f1822725c65b"
 dependencies = [
  "bitflags 2.4.2",
  "bytes",
@@ -7367,7 +7426,8 @@ dependencies = [
 [[package]]
 name = "tor-cert"
 version = "0.20.0"
-source = "git+https://github.com/oleonardolima/arti?branch=feat/downgrade-rusqlite#e616c8d91e18d232007020c48183e2f9255e96f1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d788592147d24f6269cea9bf43c18393905a8778540f4ab77065306e8158d105"
 dependencies = [
  "caret",
  "derive_more",
@@ -7381,7 +7441,8 @@ dependencies = [
 [[package]]
 name = "tor-chanmgr"
 version = "0.20.0"
-source = "git+https://github.com/oleonardolima/arti?branch=feat/downgrade-rusqlite#e616c8d91e18d232007020c48183e2f9255e96f1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "48f70c19181bb19d58eb8e135146d617c6b7497c69e08a23c0967f42040926b4"
 dependencies = [
  "async-trait",
  "derive_builder_fork_arti",
@@ -7412,7 +7473,8 @@ dependencies = [
 [[package]]
 name = "tor-checkable"
 version = "0.20.0"
-source = "git+https://github.com/oleonardolima/arti?branch=feat/downgrade-rusqlite#e616c8d91e18d232007020c48183e2f9255e96f1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e598cac17d259d75093ebac644610d4f91259f056f26408146921808391fd4ba"
 dependencies = [
  "humantime",
  "signature",
@@ -7423,7 +7485,8 @@ dependencies = [
 [[package]]
 name = "tor-circmgr"
 version = "0.20.0"
-source = "git+https://github.com/oleonardolima/arti?branch=feat/downgrade-rusqlite#e616c8d91e18d232007020c48183e2f9255e96f1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0fe10d9577e2bf3042b2985e46b9144a9a4cdafecb6292948bca627781025e4b"
 dependencies = [
  "amplify",
  "async-trait",
@@ -7467,7 +7530,8 @@ dependencies = [
 [[package]]
 name = "tor-config"
 version = "0.20.0"
-source = "git+https://github.com/oleonardolima/arti?branch=feat/downgrade-rusqlite#e616c8d91e18d232007020c48183e2f9255e96f1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9cbae8248eca02109bfd2d8b106d5f44d3898a1c79592cfb526e1d4a4bd11378"
 dependencies = [
  "derive-deftly",
  "derive_builder_fork_arti",
@@ -7496,7 +7560,8 @@ dependencies = [
 [[package]]
 name = "tor-consdiff"
 version = "0.20.0"
-source = "git+https://github.com/oleonardolima/arti?branch=feat/downgrade-rusqlite#e616c8d91e18d232007020c48183e2f9255e96f1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "997edd03dc12f1865b2e651b9f5c90f586c73b908cb470acb670261608432e27"
 dependencies = [
  "digest",
  "hex",
@@ -7507,7 +7572,8 @@ dependencies = [
 [[package]]
 name = "tor-dirclient"
 version = "0.20.0"
-source = "git+https://github.com/oleonardolima/arti?branch=feat/downgrade-rusqlite#e616c8d91e18d232007020c48183e2f9255e96f1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4ad3fc105b351b327a7f21348fa6ebf8b89c8e2106be77c94eb8d69f01dbfaa7"
 dependencies = [
  "async-compression",
  "base64ct",
@@ -7532,59 +7598,10 @@ dependencies = [
 ]
 
 [[package]]
-name = "tor-dirmgr"
-version = "0.20.0"
-source = "git+https://github.com/oleonardolima/arti?branch=feat/downgrade-rusqlite#e616c8d91e18d232007020c48183e2f9255e96f1"
-dependencies = [
- "async-trait",
- "base64ct",
- "derive_builder_fork_arti",
- "derive_more",
- "digest",
- "educe",
- "event-listener",
- "fs-mistrust",
- "fslock",
- "futures",
- "hex",
- "humantime",
- "humantime-serde",
- "itertools 0.13.0",
- "memmap2 0.9.4",
- "once_cell",
- "paste",
- "postage",
- "rand",
- "rusqlite",
- "safelog",
- "scopeguard",
- "serde",
- "signature",
- "strum 0.26.3",
- "thiserror",
- "time",
- "tor-async-utils",
- "tor-basic-utils",
- "tor-checkable",
- "tor-circmgr",
- "tor-config",
- "tor-consdiff",
- "tor-dirclient",
- "tor-error",
- "tor-guardmgr",
- "tor-llcrypto",
- "tor-netdir",
- "tor-netdoc",
- "tor-persist",
- "tor-proto",
- "tor-rtcompat",
- "tracing",
-]
-
-[[package]]
 name = "tor-error"
 version = "0.20.0"
-source = "git+https://github.com/oleonardolima/arti?branch=feat/downgrade-rusqlite#e616c8d91e18d232007020c48183e2f9255e96f1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cab4f75d5d8e00890261b9ff22e7c40354fdf88b375d83a6974d8128207f4db3"
 dependencies = [
  "backtrace",
  "derive_more",
@@ -7601,7 +7618,8 @@ dependencies = [
 [[package]]
 name = "tor-guardmgr"
 version = "0.20.0"
-source = "git+https://github.com/oleonardolima/arti?branch=feat/downgrade-rusqlite#e616c8d91e18d232007020c48183e2f9255e96f1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "58efe45c0ccdbcfbab5912faa7c0ab550bdcc8a25553d68c31bebff28a9bb912"
 dependencies = [
  "amplify",
  "base64ct",
@@ -7641,7 +7659,8 @@ dependencies = [
 [[package]]
 name = "tor-hsclient"
 version = "0.20.0"
-source = "git+https://github.com/oleonardolima/arti?branch=feat/downgrade-rusqlite#e616c8d91e18d232007020c48183e2f9255e96f1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "40668cea7d86ebcff26a07ed728f6006f9a89f320e32b659990d12602ae9c980"
 dependencies = [
  "async-trait",
  "derive-deftly",
@@ -7681,7 +7700,8 @@ dependencies = [
 [[package]]
 name = "tor-hscrypto"
 version = "0.20.0"
-source = "git+https://github.com/oleonardolima/arti?branch=feat/downgrade-rusqlite#e616c8d91e18d232007020c48183e2f9255e96f1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6045a6105e8159e86a73d9e925c67d7ef85dec1cbf160230c02fd94430ea7192"
 dependencies = [
  "data-encoding",
  "derive_more",
@@ -7703,7 +7723,8 @@ dependencies = [
 [[package]]
 name = "tor-keymgr"
 version = "0.20.0"
-source = "git+https://github.com/oleonardolima/arti?branch=feat/downgrade-rusqlite#e616c8d91e18d232007020c48183e2f9255e96f1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ce378b229df3d957f811c8c330edf4c1cf3da55d3a4b009c61ad95f0be70ed01"
 dependencies = [
  "amplify",
  "arrayvec",
@@ -7734,7 +7755,8 @@ dependencies = [
 [[package]]
 name = "tor-linkspec"
 version = "0.20.0"
-source = "git+https://github.com/oleonardolima/arti?branch=feat/downgrade-rusqlite#e616c8d91e18d232007020c48183e2f9255e96f1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d20859d824c68462077a7ad79394348a31d541e170e98caed6c69d4282081347"
 dependencies = [
  "base64ct",
  "by_address",
@@ -7759,7 +7781,8 @@ dependencies = [
 [[package]]
 name = "tor-llcrypto"
 version = "0.20.0"
-source = "git+https://github.com/oleonardolima/arti?branch=feat/downgrade-rusqlite#e616c8d91e18d232007020c48183e2f9255e96f1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fb5df07e4a32aab17c8813aa43719a07fae6167212e4506b48f79a035bd2f4e9"
 dependencies = [
  "aes",
  "base64ct",
@@ -7789,7 +7812,8 @@ dependencies = [
 [[package]]
 name = "tor-log-ratelim"
 version = "0.20.0"
-source = "git+https://github.com/oleonardolima/arti?branch=feat/downgrade-rusqlite#e616c8d91e18d232007020c48183e2f9255e96f1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "dc9d75654f5baa76555fd2577b92c9baf828fb3b724cf41c9741693b00ae597e"
 dependencies = [
  "futures",
  "humantime",
@@ -7804,7 +7828,8 @@ dependencies = [
 [[package]]
 name = "tor-netdir"
 version = "0.20.0"
-source = "git+https://github.com/oleonardolima/arti?branch=feat/downgrade-rusqlite#e616c8d91e18d232007020c48183e2f9255e96f1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "37b39f8f3dcad5504634b66a4ae209a2d0dd9936752f6e5a3722c8ff6831ab5e"
 dependencies = [
  "bitflags 2.4.2",
  "derive_more",
@@ -7835,7 +7860,8 @@ dependencies = [
 [[package]]
 name = "tor-netdoc"
 version = "0.20.0"
-source = "git+https://github.com/oleonardolima/arti?branch=feat/downgrade-rusqlite#e616c8d91e18d232007020c48183e2f9255e96f1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d742d50881e12014880daf2b6c82deb74a00bda97582ab0a2a8ad55ae2ffa5cb"
 dependencies = [
  "amplify",
  "base64ct",
@@ -7877,31 +7903,30 @@ dependencies = [
 [[package]]
 name = "tor-persist"
 version = "0.20.0"
-source = "git+https://github.com/oleonardolima/arti?branch=feat/downgrade-rusqlite#e616c8d91e18d232007020c48183e2f9255e96f1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4c114ebe5597c0e6c5e692130f9343a46673e821f3318b69791a84076628c4e2"
 dependencies = [
  "derive-deftly",
  "derive_more",
  "filetime",
  "fs-mistrust",
  "fslock",
- "futures",
  "itertools 0.13.0",
  "paste",
  "sanitize-filename",
  "serde",
  "serde_json",
  "thiserror",
- "tor-async-utils",
  "tor-basic-utils",
  "tor-error",
  "tracing",
- "void",
 ]
 
 [[package]]
 name = "tor-proto"
 version = "0.20.0"
-source = "git+https://github.com/oleonardolima/arti?branch=feat/downgrade-rusqlite#e616c8d91e18d232007020c48183e2f9255e96f1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a0fa03f66ac9bd02c1893ba054733e18e556c8b78b3c20f72d3eb3534d5a98ee"
 dependencies = [
  "asynchronous-codec",
  "bitvec",
@@ -7948,7 +7973,8 @@ dependencies = [
 [[package]]
 name = "tor-protover"
 version = "0.20.0"
-source = "git+https://github.com/oleonardolima/arti?branch=feat/downgrade-rusqlite#e616c8d91e18d232007020c48183e2f9255e96f1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1e600bd6da80c68389337bd1e407617e510534087571790b79289de6aed4ee52"
 dependencies = [
  "caret",
  "thiserror",
@@ -7957,7 +7983,8 @@ dependencies = [
 [[package]]
 name = "tor-relay-selection"
 version = "0.20.0"
-source = "git+https://github.com/oleonardolima/arti?branch=feat/downgrade-rusqlite#e616c8d91e18d232007020c48183e2f9255e96f1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e3ffcf6469084ac835e5cbc416a3536f5305b8072d9ae56d16d02839f31a2478"
 dependencies = [
  "rand",
  "serde",
@@ -7970,7 +7997,8 @@ dependencies = [
 [[package]]
 name = "tor-rtcompat"
 version = "0.20.0"
-source = "git+https://github.com/oleonardolima/arti?branch=feat/downgrade-rusqlite#e616c8d91e18d232007020c48183e2f9255e96f1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fae92628eb8967bbd33754b24b95d43161d4c0ef7bf9eaaab111f5efd53afb40"
 dependencies = [
  "async-trait",
  "async_executors",
@@ -7993,7 +8021,8 @@ dependencies = [
 [[package]]
 name = "tor-rtmock"
 version = "0.20.0"
-source = "git+https://github.com/oleonardolima/arti?branch=feat/downgrade-rusqlite#e616c8d91e18d232007020c48183e2f9255e96f1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "054701378b4f5e7c29cc819ca3034e8e1a69418d485d10b4ac790a8936974c95"
 dependencies = [
  "amplify",
  "async-trait",
@@ -8020,7 +8049,8 @@ dependencies = [
 [[package]]
 name = "tor-socksproto"
 version = "0.20.0"
-source = "git+https://github.com/oleonardolima/arti?branch=feat/downgrade-rusqlite#e616c8d91e18d232007020c48183e2f9255e96f1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "649e5f4b48f966adaa4934ab73086c94aa26356a01b2b51748db006d09484197"
 dependencies = [
  "caret",
  "subtle",
@@ -8032,7 +8062,8 @@ dependencies = [
 [[package]]
 name = "tor-units"
 version = "0.20.0"
-source = "git+https://github.com/oleonardolima/arti?branch=feat/downgrade-rusqlite#e616c8d91e18d232007020c48183e2f9255e96f1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "dae1da9b62c697ba9924f26051ed346ae3b8b57eab7b4d367cb2f5462e05902a"
 dependencies = [
  "derive_more",
  "thiserror",
@@ -8717,9 +8748,9 @@ dependencies = [
 
 [[package]]
 name = "winnow"
-version = "0.6.13"
+version = "0.6.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "59b5e5f6c299a3c7890b876a2a587f3115162487e704907d9b6cd29473052ba1"
+checksum = "b480ae9340fc261e6be3e95a1ba86d54ae3f9171132a73ce8d4bbaf68339507c"
 dependencies = [
  "memchr",
 ]
