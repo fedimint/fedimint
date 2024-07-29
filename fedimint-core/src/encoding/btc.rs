@@ -108,9 +108,9 @@ impl crate::encoding::Decodable for bitcoin::Txid {
     }
 }
 
-impl<K> Encodable for miniscript::Descriptor<K>
+impl<K> Encodable for Descriptor<K>
 where
-    K: miniscript::MiniscriptKey,
+    K: MiniscriptKey,
 {
     fn consensus_encode<W: Write>(&self, writer: &mut W) -> Result<usize, Error> {
         let descriptor_str = self.to_string();
@@ -118,7 +118,7 @@ where
     }
 }
 
-impl<K> Decodable for miniscript::Descriptor<K>
+impl<K> Decodable for Descriptor<K>
 where
     Self: FromStr,
     <Self as FromStr>::Err: ToString + std::error::Error + Send + Sync + 'static,
@@ -129,7 +129,7 @@ where
         modules: &ModuleDecoderRegistry,
     ) -> Result<Self, DecodeError> {
         let descriptor_str = String::consensus_decode_from_finite_reader(d, modules)?;
-        Descriptor::<K>::from_str(&descriptor_str).map_err(DecodeError::from_err)
+        Self::from_str(&descriptor_str).map_err(DecodeError::from_err)
     }
 }
 
@@ -166,7 +166,7 @@ impl Decodable for bitcoin::Network {
         modules: &ModuleDecoderRegistry,
     ) -> Result<Self, DecodeError> {
         let magic = bitcoin::network::Magic::consensus_decode(d, modules)?;
-        bitcoin::Network::from_magic(magic).ok_or_else(|| {
+        Self::from_magic(magic).ok_or_else(|| {
             DecodeError::new_custom(format_err!("Unknown network magic: {:x}", magic))
         })
     }
@@ -183,9 +183,7 @@ impl Decodable for bitcoin::Amount {
         d: &mut D,
         modules: &ModuleDecoderRegistry,
     ) -> Result<Self, DecodeError> {
-        Ok(bitcoin::Amount::from_sat(u64::consensus_decode(
-            d, modules,
-        )?))
+        Ok(Self::from_sat(u64::consensus_decode(d, modules)?))
     }
 }
 
@@ -233,9 +231,9 @@ impl Decodable for bitcoin::hashes::sha256::Hash {
         d: &mut D,
         modules: &ModuleDecoderRegistry,
     ) -> Result<Self, DecodeError> {
-        Ok(bitcoin::hashes::sha256::Hash::from_byte_array(
-            Decodable::consensus_decode(d, modules)?,
-        ))
+        Ok(Self::from_byte_array(Decodable::consensus_decode(
+            d, modules,
+        )?))
     }
 }
 

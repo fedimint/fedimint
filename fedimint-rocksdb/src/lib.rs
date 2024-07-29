@@ -1,5 +1,4 @@
 #![deny(clippy::pedantic)]
-#![allow(clippy::default_trait_access)]
 #![allow(clippy::missing_errors_doc)]
 #![allow(clippy::must_use_candidate)]
 
@@ -416,7 +415,7 @@ impl<'a> IRawDatabaseTransaction for RocksDbReadOnlyTransaction<'a> {
 mod fedimint_rocksdb_tests {
     use fedimint_core::db::{Database, IDatabaseTransactionOpsCoreTyped};
     use fedimint_core::encoding::{Decodable, Encodable};
-    use fedimint_core::module::registry::ModuleDecoderRegistry;
+    use fedimint_core::module::registry::{ModuleDecoderRegistry, ModuleRegistry};
     use fedimint_core::{impl_db_lookup, impl_db_record};
     use futures::StreamExt;
 
@@ -660,7 +659,7 @@ mod fedimint_rocksdb_tests {
         }
         // Test readonly implementation
         let db_readonly = RocksDbReadOnly::open_read_only(path).unwrap();
-        let db_readonly = Database::new(db_readonly, Default::default());
+        let db_readonly = Database::new(db_readonly, ModuleRegistry::default());
         let mut dbtx = db_readonly.begin_transaction_nc().await;
         let query = dbtx
             .find_by_prefix_sorted_descending(&DbPrefixTestPrefix)

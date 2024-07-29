@@ -31,7 +31,7 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use crate::core::ModuleInstanceId;
-use crate::module::registry::ModuleDecoderRegistry;
+use crate::module::registry::{ModuleDecoderRegistry, ModuleRegistry};
 use crate::util::SafeUrl;
 
 /// Object-safe trait for things that can encode themselves
@@ -220,7 +220,7 @@ impl Decodable for SafeUrl {
         modules: &ModuleDecoderRegistry,
     ) -> Result<Self, DecodeError> {
         String::consensus_decode_from_finite_reader(d, modules)?
-            .parse::<SafeUrl>()
+            .parse::<Self>()
             .map_err(DecodeError::from_err)
     }
 }
@@ -236,7 +236,7 @@ impl DecodeError {
 
 impl From<anyhow::Error> for DecodeError {
     fn from(e: anyhow::Error) -> Self {
-        DecodeError(e)
+        Self(e)
     }
 }
 
@@ -255,7 +255,7 @@ impl Decodable for BigSize {
         r: &mut R,
         _modules: &ModuleDecoderRegistry,
     ) -> Result<Self, DecodeError> {
-        BigSize::read(r)
+        Self::read(r)
             .map_err(|e| DecodeError::new_custom(anyhow::anyhow!("BigSize decoding error: {e:?}")))
     }
 }
@@ -390,7 +390,7 @@ pub fn consensus_decode_bytes<D: std::io::Read>(r: &mut D) -> Result<Vec<u8>, De
 pub fn consensus_decode_bytes_from_finite_reader<D: std::io::Read>(
     r: &mut D,
 ) -> Result<Vec<u8>, DecodeError> {
-    let len = u64::consensus_decode_from_finite_reader(r, &Default::default())?;
+    let len = u64::consensus_decode_from_finite_reader(r, &ModuleRegistry::default())?;
 
     let len: usize =
         usize::try_from(len).map_err(|_| DecodeError::from_str("size exceeds memory"))?;
@@ -463,7 +463,7 @@ where
         if TypeId::of::<T>() == TypeId::of::<u8>() {
             // unsafe: we've just checked that T is `u8` so the transmute here is a no-op
             return Ok(unsafe {
-                mem::transmute::<Vec<u8>, Vec<T>>(consensus_decode_bytes_from_finite_reader(d)?)
+                mem::transmute::<Vec<u8>, Self>(consensus_decode_bytes_from_finite_reader(d)?)
             });
         }
         let len = u64::consensus_decode_from_finite_reader(d, modules)?;
@@ -478,9 +478,9 @@ where
 
         // Up to a cap, use the (potentially specialized for better perf in stdlib)
         // `from_iter`.
-        let mut v: Vec<_> = (0..cap_len)
+        let mut v: Self = (0..cap_len)
             .map(|_| T::consensus_decode_from_finite_reader(d, modules))
-            .collect::<Result<Vec<_>, DecodeError>>()?;
+            .collect::<Result<Self, DecodeError>>()?;
 
         // Add any excess manually avoiding any surprises.
         while (v.len() as u64) < len {
@@ -513,8 +513,8 @@ fn vec_decode_sanity() {
     ];
 
     // On malicious large len, return an error instead of panicking.
-    assert!(Vec::<u8>::consensus_decode(&mut buf.as_slice(), &Default::default()).is_err());
-    assert!(Vec::<u16>::consensus_decode(&mut buf.as_slice(), &Default::default()).is_err());
+    assert!(Vec::<u8>::consensus_decode(&mut buf.as_slice(), &ModuleRegistry::default()).is_err());
+    assert!(Vec::<u16>::consensus_decode(&mut buf.as_slice(), &ModuleRegistry::default()).is_err());
 }
 
 impl<T> Decodable for VecDeque<T>
@@ -525,9 +525,9 @@ where
         d: &mut D,
         modules: &ModuleDecoderRegistry,
     ) -> Result<Self, DecodeError> {
-        Ok(VecDeque::from(
-            Vec::<T>::consensus_decode_from_finite_reader(d, modules)?,
-        ))
+        Ok(Self::from(Vec::<T>::consensus_decode_from_finite_reader(
+            d, modules,
+        )?))
     }
 }
 
@@ -538,8 +538,12 @@ fn vec_deque_decode_sanity() {
     ];
 
     // On malicious large len, return an error instead of panicking.
-    assert!(VecDeque::<u8>::consensus_decode(&mut buf.as_slice(), &Default::default()).is_err());
-    assert!(VecDeque::<u16>::consensus_decode(&mut buf.as_slice(), &Default::default()).is_err());
+    assert!(
+        VecDeque::<u8>::consensus_decode(&mut buf.as_slice(), &ModuleRegistry::default()).is_err()
+    );
+    assert!(
+        VecDeque::<u16>::consensus_decode(&mut buf.as_slice(), &ModuleRegistry::default()).is_err()
+    );
 }
 
 impl<T, const SIZE: usize> Encodable for [T; SIZE]
@@ -690,7 +694,7 @@ where
         d: &mut D,
         modules: &ModuleDecoderRegistry,
     ) -> Result<Self, DecodeError> {
-        Ok(Box::new(T::consensus_decode_from_finite_reader(
+        Ok(Self::new(T::consensus_decode_from_finite_reader(
             d, modules,
         )?))
     }
@@ -731,7 +735,7 @@ impl Decodable for String {
         d: &mut D,
         modules: &ModuleDecoderRegistry,
     ) -> Result<Self, DecodeError> {
-        String::from_utf8(Decodable::consensus_decode_from_finite_reader(d, modules)?)
+        Self::from_utf8(Decodable::consensus_decode_from_finite_reader(d, modules)?)
             .map_err(DecodeError::from_err)
     }
 }
@@ -770,7 +774,7 @@ impl Decodable for Duration {
     ) -> Result<Self, DecodeError> {
         let secs = Decodable::consensus_decode(d, modules)?;
         let nsecs = Decodable::consensus_decode(d, modules)?;
-        Ok(Duration::new(secs, nsecs))
+        Ok(Self::new(secs, nsecs))
     }
 }
 
@@ -796,7 +800,7 @@ impl Decodable for lightning_invoice::RoutingFees {
     ) -> Result<Self, DecodeError> {
         let base_msat = Decodable::consensus_decode(d, modules)?;
         let proportional_millionths = Decodable::consensus_decode(d, modules)?;
-        Ok(lightning_invoice::RoutingFees {
+        Ok(Self {
             base_msat,
             proportional_millionths,
         })
@@ -809,7 +813,7 @@ impl Decodable for lightning_invoice::Bolt11Invoice {
         modules: &ModuleDecoderRegistry,
     ) -> Result<Self, DecodeError> {
         String::consensus_decode(d, modules)?
-            .parse::<lightning_invoice::Bolt11Invoice>()
+            .parse::<Self>()
             .map_err(DecodeError::from_err)
     }
 }
@@ -853,11 +857,11 @@ impl DecodeError {
 
         impl std::error::Error for StrError {}
 
-        DecodeError(anyhow::Error::from(StrError(s)))
+        Self(anyhow::Error::from(StrError(s)))
     }
 
     pub fn from_err<E: std::error::Error + Send + Sync + 'static>(e: E) -> Self {
-        DecodeError(anyhow::Error::from(e))
+        Self(anyhow::Error::from(e))
     }
 }
 
@@ -892,7 +896,7 @@ where
         d: &mut D,
         modules: &ModuleDecoderRegistry,
     ) -> Result<Self, DecodeError> {
-        let mut res = BTreeMap::new();
+        let mut res = Self::new();
         let len = u64::consensus_decode_from_finite_reader(d, modules)?;
         for _ in 0..len {
             let k = K::consensus_decode_from_finite_reader(d, modules)?;
@@ -933,7 +937,7 @@ where
         d: &mut D,
         modules: &ModuleDecoderRegistry,
     ) -> Result<Self, DecodeError> {
-        let mut res = BTreeSet::new();
+        let mut res = Self::new();
         let len = u64::consensus_decode_from_finite_reader(d, modules)?;
         for _ in 0..len {
             let k = K::consensus_decode_from_finite_reader(d, modules)?;
@@ -1038,28 +1042,28 @@ where
     /// Get the decoded `T` or `None` if not decoded yet
     pub fn decoded(self) -> Option<T> {
         match self {
-            DynRawFallback::Raw { .. } => None,
-            DynRawFallback::Decoded(v) => Some(v),
+            Self::Raw { .. } => None,
+            Self::Decoded(v) => Some(v),
         }
     }
 
     /// Convert into the decoded `T` and panic if not decoded yet
     pub fn expect_decoded(self) -> T {
         match self {
-            DynRawFallback::Raw { .. } => {
+            Self::Raw { .. } => {
                 panic!("Expected decoded value. Possibly `redecode_raw` call is missing.")
             }
-            DynRawFallback::Decoded(v) => v,
+            Self::Decoded(v) => v,
         }
     }
 
     /// Get the decoded `T` and panic if not decoded yet
     pub fn expect_decoded_ref(&self) -> &T {
         match self {
-            DynRawFallback::Raw { .. } => {
+            Self::Raw { .. } => {
                 panic!("Expected decoded value. Possibly `redecode_raw` call is missing.")
             }
-            DynRawFallback::Decoded(v) => v,
+            Self::Decoded(v) => v,
         }
     }
 
@@ -1072,22 +1076,22 @@ where
         decoders: &ModuleDecoderRegistry,
     ) -> Result<Self, crate::encoding::DecodeError> {
         Ok(match self {
-            DynRawFallback::Raw {
+            Self::Raw {
                 module_instance_id,
                 raw,
             } => match decoders.get(module_instance_id) {
-                Some(decoder) => DynRawFallback::Decoded(decoder.decode_complete(
+                Some(decoder) => Self::Decoded(decoder.decode_complete(
                     &mut &raw[..],
                     raw.len() as u64,
                     module_instance_id,
                     decoders,
                 )?),
-                None => DynRawFallback::Raw {
+                None => Self::Raw {
                     module_instance_id,
                     raw,
                 },
             },
-            DynRawFallback::Decoded(v) => DynRawFallback::Decoded(v),
+            Self::Decoded(v) => Self::Decoded(v),
         })
     }
 }
@@ -1113,7 +1117,7 @@ where
         Ok(match decoders.get(module_instance_id) {
             Some(decoder) => {
                 let total_len_u64 = u64::consensus_decode_from_finite_reader(reader, decoders)?;
-                DynRawFallback::Decoded(decoder.decode_complete(
+                Self::Decoded(decoder.decode_complete(
                     reader,
                     total_len_u64,
                     module_instance_id,
@@ -1137,7 +1141,7 @@ where
 {
     fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<usize, std::io::Error> {
         match self {
-            DynRawFallback::Raw {
+            Self::Raw {
                 module_instance_id,
                 raw,
             } => {
@@ -1145,7 +1149,7 @@ where
                 written += raw.consensus_encode(writer)?;
                 Ok(written)
             }
-            DynRawFallback::Decoded(v) => v.consensus_encode(writer),
+            Self::Decoded(v) => v.consensus_encode(writer),
         }
     }
 }
@@ -1235,7 +1239,7 @@ mod tests {
             .unwrap();
 
         let mut cursor = Cursor::new(&unknown_variant_encoding);
-        let decode_res = NoDefaultEnum::consensus_decode(&mut cursor, &Default::default());
+        let decode_res = NoDefaultEnum::consensus_decode(&mut cursor, &ModuleRegistry::default());
 
         match decode_res {
             Ok(_) => panic!("Should return error"),
@@ -1252,7 +1256,7 @@ mod tests {
             .unwrap();
 
         let mut cursor = Cursor::new(&unknown_variant_encoding);
-        let decode_res = DefaultEnum::consensus_decode(&mut cursor, &Default::default());
+        let decode_res = DefaultEnum::consensus_decode(&mut cursor, &ModuleRegistry::default());
 
         assert_eq!(
             decode_res.unwrap(),
@@ -1399,8 +1403,8 @@ mod tests {
 
         for (old, new) in test_vector {
             let old_bytes = old.consensus_encode_to_vec();
-            let decoded_new =
-                New::consensus_decode_vec(old_bytes, &Default::default()).expect("Decoding failed");
+            let decoded_new = New::consensus_decode_vec(old_bytes, &ModuleRegistry::default())
+                .expect("Decoding failed");
             assert_eq!(decoded_new, new);
         }
     }

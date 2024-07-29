@@ -760,7 +760,7 @@ mod tests {
                 let connect = net_ref
                     .connector(cfg.identity, StreamReliability::MILDLY_UNRELIABLE)
                     .into_dyn();
-                let status_channels = Default::default();
+                let status_channels = Arc::new(RwLock::new(BTreeMap::new()));
                 let connection = ReconnectPeerConnections::<u64>::new(
                     cfg,
                     DelayCalculator::TEST_DEFAULT,

@@ -1,6 +1,4 @@
 #![deny(clippy::pedantic)]
-#![allow(clippy::default_trait_access)]
-#![allow(clippy::too_many_lines)]
 
 pub mod envs;
 
@@ -17,7 +15,7 @@ use clap::{ArgGroup, Parser, Subcommand};
 use fedimint_core::core::LEGACY_HARDCODED_INSTANCE_ID_WALLET;
 use fedimint_core::db::{Database, IDatabaseTransactionOpsCoreTyped};
 use fedimint_core::epoch::ConsensusItem;
-use fedimint_core::module::registry::ModuleDecoderRegistry;
+use fedimint_core::module::registry::{ModuleDecoderRegistry, ModuleRegistry};
 use fedimint_core::module::CommonModuleInit;
 use fedimint_core::session_outcome::SignedSessionOutcome;
 use fedimint_core::transaction::Transaction;
@@ -157,7 +155,7 @@ async fn main() -> anyhow::Result<()> {
                 .expect("Could not encode to stdout");
         }
         TweakSource::Utxos { legacy, db } => {
-            let db = get_db(opts.readonly, &db, Default::default());
+            let db = get_db(opts.readonly, &db, ModuleRegistry::default());
 
             let db = if legacy {
                 db

@@ -172,9 +172,7 @@ where
 
 impl<T> BincodeCodec<T> {
     fn new() -> BincodeCodec<T> {
-        BincodeCodec {
-            _pd: Default::default(),
-        }
+        BincodeCodec { _pd: PhantomData }
     }
 }
 

@@ -88,7 +88,7 @@ impl IntoDynInstance for LightningReceiveStateMachine {
     }
 }
 
-/// Old version of LightningReceiveSubmittedOffer, used for migrations
+/// Old version of `LightningReceiveSubmittedOffer`, used for migrations
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
 pub struct LightningReceiveSubmittedOfferV0 {
     pub offer_txid: TransactionId,

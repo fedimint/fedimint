@@ -1,8 +1,5 @@
 #![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
-#![allow(clippy::default_trait_access)]
-#![allow(clippy::doc_markdown)]
-#![allow(clippy::match_same_arms)]
 #![allow(clippy::missing_errors_doc)]
 #![allow(clippy::missing_panics_doc)]
 #![allow(clippy::module_name_repetitions)]
@@ -54,7 +51,7 @@ use fedimint_core::db::{
 };
 use fedimint_core::encoding::{Decodable, DecodeError, Encodable};
 use fedimint_core::invite_code::{InviteCode, InviteCodeV2};
-use fedimint_core::module::registry::ModuleDecoderRegistry;
+use fedimint_core::module::registry::{ModuleDecoderRegistry, ModuleRegistry};
 use fedimint_core::module::{
     ApiVersion, CommonModuleInit, ModuleCommon, ModuleInit, MultiApiVersion,
 };
@@ -600,7 +597,7 @@ impl ClientModuleInit for MintClientInit {
 /// operations. It interacts with the mint server to issue, reissue, and
 /// validate e-cash notes.
 ///
-/// # DerivableSecret
+/// # Derivable Secret
 ///
 /// The `DerivableSecret` is a cryptographic secret that can be used to derive
 /// other secrets. In the context of the `MintClientModule`, it is used to
@@ -778,14 +775,14 @@ impl ClientModule for MintClientModule {
                         MintClientStateMachines::Output(MintOutputStateMachine {
                             state: MintOutputStates::Succeeded(_),
                             ..
-                        }) => Some(()),
-                        MintClientStateMachines::Input(MintInputStateMachine {
+                        })
+                        | MintClientStateMachines::Input(MintInputStateMachine {
                             state: MintInputStates::Created(_),
                             ..
-                        }) => Some(()),
+                        })
                         // We only trigger on created since refunds are already covered under the
                         // output state
-                        MintClientStateMachines::OOB(MintOOBStateMachine {
+                        | MintClientStateMachines::OOB(MintOOBStateMachine {
                             state: MintOOBStates::Created(_),
                             ..
                         }) => Some(()),
@@ -2084,7 +2081,7 @@ impl SpendableNoteUndecoded {
         Ok(SpendableNote {
             signature: Decodable::consensus_decode_from_finite_reader(
                 &mut self.signature.as_slice(),
-                &Default::default(),
+                &ModuleRegistry::default(),
             )?,
             spend_key: self.spend_key,
         })
@@ -2211,6 +2208,7 @@ mod tests {
     use fedimint_core::config::FederationId;
     use fedimint_core::encoding::Decodable;
     use fedimint_core::invite_code::{InviteCode, InviteCodeV2};
+    use fedimint_core::module::registry::ModuleRegistry;
     use fedimint_core::secp256k1::rand::rngs::OsRng;
     use fedimint_core::secp256k1::SecretKey;
     use fedimint_core::util::SafeUrl;
@@ -2264,7 +2262,7 @@ mod tests {
     async fn select_notes_avg_test() {
         let max_amount = Amount::from_sats(1_000_000);
         let tiers = Tiered::gen_denominations(2, max_amount);
-        let tiered = represent_amount::<()>(max_amount, &Default::default(), &tiers, 3);
+        let tiered = represent_amount::<()>(max_amount, &TieredCounts::default(), &tiers, 3);
 
         let mut total_notes = 0;
         for multiplier in 1..100 {
@@ -2364,7 +2362,8 @@ mod tests {
 
     #[test]
     fn decoding_empty_oob_notes_fails() {
-        let empty_oob_notes = OOBNotes::new(FederationId::dummy().to_prefix(), Default::default());
+        let empty_oob_notes =
+            OOBNotes::new(FederationId::dummy().to_prefix(), TieredMulti::default());
         let oob_notes_string = empty_oob_notes.to_string();
 
         let res = oob_notes_string.parse::<OOBNotes>();
@@ -2395,7 +2394,7 @@ mod tests {
 
         let notes = vec![(
             Amount::from_sats(1),
-            SpendableNote::consensus_decode_hex("a5dd3ebacad1bc48bd8718eed5a8da1d68f91323bef2848ac4fa2e6f8eed710f3178fd4aef047cc234e6b1127086f33cc408b39818781d9521475360de6b205f3328e490a6d99d5e2553a4553207c8bd", &Default::default()).unwrap(),
+            SpendableNote::consensus_decode_hex("a5dd3ebacad1bc48bd8718eed5a8da1d68f91323bef2848ac4fa2e6f8eed710f3178fd4aef047cc234e6b1127086f33cc408b39818781d9521475360de6b205f3328e490a6d99d5e2553a4553207c8bd", &ModuleRegistry::default()).unwrap(),
         )]
         .into_iter()
         .collect::<TieredMulti<_>>();
@@ -2486,8 +2485,8 @@ mod tests {
         #[allow(clippy::single_element_loop)]
         for note_hex in ["a5dd3ebacad1bc48bd8718eed5a8da1d68f91323bef2848ac4fa2e6f8eed710f3178fd4aef047cc234e6b1127086f33cc408b39818781d9521475360de6b205f3328e490a6d99d5e2553a4553207c8bd"] {
 
-            let note = SpendableNote::consensus_decode_hex(note_hex, &Default::default()).unwrap();
-            let note_undecoded= SpendableNoteUndecoded::consensus_decode_hex(note_hex, &Default::default()).unwrap().decode().unwrap();
+            let note = SpendableNote::consensus_decode_hex(note_hex, &ModuleRegistry::default()).unwrap();
+            let note_undecoded= SpendableNoteUndecoded::consensus_decode_hex(note_hex, &ModuleRegistry::default()).unwrap().decode().unwrap();
             assert_eq!(
                 note,
                 note_undecoded,

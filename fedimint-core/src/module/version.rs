@@ -197,7 +197,7 @@ pub struct MultiApiVersion(Vec<ApiVersion>);
 
 impl MultiApiVersion {
     pub fn new() -> Self {
-        Default::default()
+        Self::default()
     }
 
     /// Verify the invariant: sorted by unique major numbers

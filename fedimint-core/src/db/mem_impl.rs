@@ -69,14 +69,13 @@ impl<'a> fmt::Debug for MemTransaction<'a> {
 pub struct DummyError;
 
 impl MemDatabase {
-    pub fn new() -> MemDatabase {
-        Default::default()
+    pub fn new() -> Self {
+        Self::default()
     }
 
     pub async fn dump_db(&self) {
-        let data = self.data.read().await;
-        let data_iter = data.iter();
-        for (key, value) in data_iter {
+        #[allow(clippy::significant_drop_in_scrutinee)]
+        for (key, value) in self.data.read().await.iter() {
             println!(
                 "{}: {}",
                 key.encode_hex::<String>(),
@@ -204,6 +203,7 @@ impl<'a> IDatabaseTransactionOps for MemTransaction<'a> {
 
 #[apply(async_trait_maybe_send!)]
 impl<'a> IRawDatabaseTransaction for MemTransaction<'a> {
+    #[allow(clippy::significant_drop_tightening)]
     async fn commit_tx(self) -> Result<()> {
         let mut data = self.db.data.write().await;
         let mut data_copy = data.clone();

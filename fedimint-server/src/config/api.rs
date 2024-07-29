@@ -561,7 +561,7 @@ impl ConfigGenState {
             settings,
             auth: None,
             local: None,
-            peers: Default::default(),
+            peers: BTreeMap::new(),
             requested_params: None,
             status: ServerStatus::AwaitingPassword,
             config: None,
@@ -681,12 +681,12 @@ impl ConfigGenState {
     }
 
     fn reset(&mut self) {
-        self.config = None;
-        self.peers = Default::default();
         self.auth = None;
+        self.local = None;
+        self.peers = BTreeMap::new();
         self.requested_params = None;
         self.status = ServerStatus::AwaitingPassword;
-        self.local = None;
+        self.config = None;
 
         info!(
             target: fedimint_logging::LOG_NET_PEER_DKG,
@@ -908,7 +908,7 @@ mod tests {
             modules.attach_config_gen_params_by_id(0, DummyInit::kind(), DummyGenParams::default());
 
             let default_params = ConfigGenParamsRequest {
-                meta: Default::default(),
+                meta: BTreeMap::new(),
                 modules,
             };
             let settings = ConfigGenSettings {

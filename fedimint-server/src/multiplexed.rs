@@ -14,7 +14,7 @@ use tokio::sync::mpsc::{channel, Receiver, Sender};
 use tokio::sync::oneshot;
 use tracing::{debug, warn};
 
-/// TODO: Use proper ModuleId after modularization is complete
+/// TODO: Use proper `ModuleId` after modularization is complete
 pub type ModuleId = String;
 pub type ModuleIdRef<'a> = &'a str;
 
@@ -43,9 +43,9 @@ struct ModuleMultiplexerOutOfOrder<MuxKey, Msg> {
 impl<MuxKey, Msg> Default for ModuleMultiplexerOutOfOrder<MuxKey, Msg> {
     fn default() -> Self {
         Self {
-            msgs: Default::default(),
-            callbacks: Default::default(),
-            peer_counts: Default::default(),
+            msgs: HashMap::new(),
+            callbacks: HashMap::new(),
+            peer_counts: HashMap::new(),
         }
     }
 }
@@ -83,7 +83,7 @@ where
             "peer connection multiplexer",
             Self::run(
                 connections,
-                Default::default(),
+                ModuleMultiplexerOutOfOrder::default(),
                 send_requests_rx,
                 receive_callbacks_rx,
                 peer_bans_rx,

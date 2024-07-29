@@ -1,7 +1,9 @@
+use std::collections::BTreeMap;
 use std::io::Cursor;
 
 use anyhow::Result;
 use fedimint_core::encoding::{Decodable, Encodable};
+use fedimint_core::module::registry::ModuleRegistry;
 use fedimint_derive_secret::DerivableSecret;
 
 use crate::backup::{ClientBackup, Metadata};
@@ -28,14 +30,14 @@ fn sanity_ecash_backup_decode_encode() -> Result<()> {
     let orig = ClientBackup {
         session_count: 0,
         metadata: Metadata::from_raw(vec![1, 2, 3]),
-        modules: Default::default(),
+        modules: BTreeMap::new(),
     };
 
     let encoded = orig.consensus_encode_to_vec();
     assert_eq!(encoded.len(), ClientBackup::PADDING_ALIGNMENT);
     assert_eq!(
         orig,
-        ClientBackup::consensus_decode(&mut Cursor::new(encoded), &Default::default())?
+        ClientBackup::consensus_decode(&mut Cursor::new(encoded), &ModuleRegistry::default())?
     );
 
     Ok(())
@@ -44,7 +46,7 @@ fn sanity_ecash_backup_decode_encode() -> Result<()> {
 #[test]
 fn sanity_ecash_backup_encrypt_decrypt() -> Result<()> {
     let orig = ClientBackup {
-        modules: Default::default(),
+        modules: BTreeMap::new(),
         session_count: 1,
         metadata: Metadata::from_raw(vec![1, 2, 3]),
     };
@@ -54,7 +56,7 @@ fn sanity_ecash_backup_encrypt_decrypt() -> Result<()> {
 
     let encrypted = orig.encrypt_to(&key)?;
 
-    let decrypted = encrypted.decrypt_with(&key, &Default::default())?;
+    let decrypted = encrypted.decrypt_with(&key, &ModuleRegistry::default())?;
 
     assert_eq!(orig, decrypted);
 

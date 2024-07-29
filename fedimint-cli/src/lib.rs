@@ -308,7 +308,7 @@ enum Command {
         peer: PeerId,
     },
 
-    /// Join a federation using it's InviteCode
+    /// Join a federation using its InviteCode
     JoinFederation {
         invite_code: String,
     },
@@ -500,7 +500,7 @@ Examples:
         #[arg(long = "out-file")]
         out_file: PathBuf,
         /// Encryption salt file, otherwise defaults to the salt file from the
-        /// in_file directory
+        /// `in_file` directory
         #[arg(long = "salt-file")]
         salt_file: Option<PathBuf>,
         /// The password that encrypts the configs
@@ -516,7 +516,7 @@ Examples:
         #[arg(long = "out-file")]
         out_file: PathBuf,
         /// Encryption salt file, otherwise defaults to the salt file from the
-        /// out_file directory
+        /// `out_file` directory
         #[arg(long = "salt-file")]
         salt_file: Option<PathBuf>,
         /// The password that encrypts the configs

@@ -1,6 +1,5 @@
 #![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_wrap)]
-#![allow(clippy::default_trait_access)]
 #![allow(clippy::missing_errors_doc)]
 #![allow(clippy::missing_panics_doc)]
 #![allow(clippy::must_use_candidate)]

@@ -200,7 +200,7 @@ pub struct Command {
 }
 
 impl Command {
-    pub fn arg<T: ToString>(mut self, arg: T) -> Self {
+    pub fn arg<T: ToString>(mut self, arg: &T) -> Self {
         let string = arg.to_string();
         self.cmd.arg(string.clone());
         self.args_debug.push(string);
@@ -209,7 +209,7 @@ impl Command {
 
     pub fn args<T: ToString>(mut self, args: impl IntoIterator<Item = T>) -> Self {
         for arg in args {
-            self = self.arg(arg);
+            self = self.arg(&arg);
         }
         self
     }
@@ -396,7 +396,7 @@ macro_rules! cmd {
             #[allow(unused)]
             use $crate::util::ToCmdExt;
             $this.cmd()
-                $(.arg($arg))*
+                $(.arg(&$arg))*
                 .kill_on_drop(true)
                 .env("RUST_BACKTRACE", "1")
         }

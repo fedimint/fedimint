@@ -1,5 +1,4 @@
 #![deny(clippy::pedantic)]
-#![allow(clippy::missing_panics_doc)]
 
 //! Fedimint build scripts
 //!

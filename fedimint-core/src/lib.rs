@@ -4,7 +4,6 @@
 #![allow(clippy::cast_precision_loss)]
 #![allow(clippy::cast_sign_loss)]
 #![allow(clippy::cognitive_complexity)]
-#![allow(clippy::default_trait_access)]
 #![allow(clippy::doc_markdown)]
 #![allow(clippy::future_not_send)]
 #![allow(clippy::missing_const_for_fn)]
@@ -14,11 +13,9 @@
 #![allow(clippy::must_use_candidate)]
 #![allow(clippy::redundant_pub_crate)]
 #![allow(clippy::return_self_not_must_use)]
-#![allow(clippy::significant_drop_tightening)]
 #![allow(clippy::similar_names)]
 #![allow(clippy::transmute_ptr_to_ptr)]
 #![allow(clippy::unsafe_derive_deserialize)]
-#![allow(clippy::use_self)]
 
 //! Fedimint Core library
 //!
@@ -72,7 +69,7 @@ mod amount;
 pub mod backup;
 /// Gradual bitcoin dependency migration helpers
 pub mod bitcoin_migration;
-/// Legacy serde encoding for bls12_381
+/// Legacy serde encoding for `bls12_381`
 pub mod bls12_381_serde;
 /// Federation configuration
 pub mod config;
@@ -140,10 +137,10 @@ impl FromStr for BitcoinAmountOrAll {
 
     fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
         if s == "all" {
-            Ok(BitcoinAmountOrAll::All)
+            Ok(Self::All)
         } else {
             let amount = Amount::from_str(s)?;
-            Ok(BitcoinAmountOrAll::Amount(amount.try_into()?))
+            Ok(Self::Amount(amount.try_into()?))
         }
     }
 }
@@ -194,7 +191,7 @@ impl Decodable for TransactionId {
     ) -> Result<Self, DecodeError> {
         let mut bytes = [0u8; 32];
         d.read_exact(&mut bytes).map_err(DecodeError::from_err)?;
-        Ok(TransactionId::from_byte_array(bytes))
+        Ok(Self::from_byte_array(bytes))
     }
 }
 

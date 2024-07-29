@@ -21,7 +21,7 @@ pub struct TieredMulti<T>(BTreeMap<Amount, Vec<T>>);
 impl<T> TieredMulti<T> {
     /// Returns a new `TieredMulti` with the given `BTreeMap` map
     pub fn new(map: BTreeMap<Amount, Vec<T>>) -> Self {
-        TieredMulti(map.into_iter().filter(|(_, v)| !v.is_empty()).collect())
+        Self(map.into_iter().filter(|(_, v)| !v.is_empty()).collect())
     }
 
     /// Returns the total value of all notes in msat as `Amount`
@@ -150,7 +150,7 @@ impl<T> TieredMulti<T> {
 
 impl<C> FromIterator<(Amount, C)> for TieredMulti<C> {
     fn from_iter<T: IntoIterator<Item = (Amount, C)>>(iter: T) -> Self {
-        let mut res = TieredMulti::default();
+        let mut res = Self::default();
         res.extend(iter);
         res.assert_invariants();
         res
@@ -175,7 +175,7 @@ where
 
 impl<C> Default for TieredMulti<C> {
     fn default() -> Self {
-        TieredMulti(BTreeMap::default())
+        Self(BTreeMap::default())
     }
 }
 
@@ -204,7 +204,7 @@ where
         d: &mut D,
         modules: &ModuleDecoderRegistry,
     ) -> Result<Self, DecodeError> {
-        Ok(TieredMulti(BTreeMap::consensus_decode_from_finite_reader(
+        Ok(Self(BTreeMap::consensus_decode_from_finite_reader(
             d, modules,
         )?))
     }
@@ -219,15 +219,15 @@ where
 }
 
 impl<'a, I, C> TieredMultiZip<'a, I, C> {
-    /// Creates a new MultiZip Iterator from `Notes` iterators. These have to be
-    /// checked for structural equality! There also has to be at least one
-    /// iterator in the `iter` vector.
+    /// Creates a new `TieredMultiZip` Iterator from `Notes` iterators. These
+    /// have to be checked for structural equality! There also has to be at
+    /// least one iterator in the `iter` vector.
     pub fn new(iters: Vec<I>) -> Self {
         assert!(!iters.is_empty());
 
         TieredMultiZip {
             iters,
-            _pd: Default::default(),
+            _pd: PhantomData,
         }
     }
 }
@@ -325,7 +325,7 @@ impl TieredCounts {
 
 impl FromIterator<(Amount, usize)> for TieredCounts {
     fn from_iter<I: IntoIterator<Item = (Amount, usize)>>(iter: I) -> Self {
-        TieredCounts(iter.into_iter().filter(|(_, count)| *count != 0).collect())
+        Self(iter.into_iter().filter(|(_, count)| *count != 0).collect())
     }
 }
 

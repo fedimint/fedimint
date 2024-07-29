@@ -21,6 +21,7 @@ use fedimint_core::module::registry::ModuleDecoderRegistry;
 use rand::RngCore;
 use serde::{Deserialize, Deserializer, Serialize};
 
+use crate::module::registry::ModuleRegistry;
 use crate::{
     erased_eq_no_instance_id, module_plugin_dyn_newtype_clone_passthrough,
     module_plugin_dyn_newtype_define, module_plugin_dyn_newtype_display_passthrough,
@@ -70,7 +71,7 @@ impl OperationId {
         Self(bytes)
     }
 
-    pub fn from_encodable<E: Encodable>(encodable: &E) -> OperationId {
+    pub fn from_encodable<E: Encodable>(encodable: &E) -> Self {
         Self(encodable.consensus_hash::<sha256::Hash>().to_byte_array())
     }
 
@@ -108,7 +109,7 @@ impl FromStr for OperationId {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let bytes: [u8; 32] = hex::FromHex::from_hex(s)?;
-        Ok(OperationId(bytes))
+        Ok(Self(bytes))
     }
 }
 
@@ -129,12 +130,12 @@ impl<'de> Deserialize<'de> for OperationId {
     {
         if deserializer.is_human_readable() {
             let s = String::deserialize(deserializer)?;
-            let operation_id = OperationId::from_str(&s)
+            let operation_id = Self::from_str(&s)
                 .map_err(|e| serde::de::Error::custom(format!("invalid operation id: {e}")))?;
             Ok(operation_id)
         } else {
             let bytes: [u8; 32] = <[u8; 32]>::deserialize(deserializer)?;
-            Ok(OperationId(bytes))
+            Ok(Self(bytes))
         }
     }
 }
@@ -196,7 +197,7 @@ impl fmt::Display for ModuleKind {
 
 impl From<&'static str> for ModuleKind {
     fn from(val: &'static str) -> Self {
-        ModuleKind::from_static_str(val)
+        Self::from_static_str(val)
     }
 }
 
@@ -343,7 +344,7 @@ impl DecoderBuilder {
                 let decoders = if is_transparent_decoder {
                     Cow::Borrowed(decoders)
                 } else {
-                    Cow::Owned(Default::default())
+                    Cow::Owned(ModuleRegistry::default())
                 };
                 let typed_val = Type::consensus_decode(&mut reader, &decoders).map_err(|err| {
                     let err: anyhow::Error = err.into();

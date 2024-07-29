@@ -15,6 +15,7 @@
 use serde::Deserialize;
 
 use super::{Decodable, Encodable};
+use crate::module::registry::ModuleRegistry;
 
 pub fn serialize<T, S>(t: &T, ser: S) -> Result<S::Ok, S::Error>
 where
@@ -28,7 +29,7 @@ pub fn deserialize<'de, T: Decodable, D>(de: D) -> Result<T, D::Error>
 where
     D: serde::de::Deserializer<'de>,
 {
-    Decodable::consensus_decode_hex(&String::deserialize(de)?, &Default::default())
+    Decodable::consensus_decode_hex(&String::deserialize(de)?, &ModuleRegistry::default())
         .map_err(|e| serde::de::Error::custom(format!("decodable deserialization failed: {e:?}")))
 }
 

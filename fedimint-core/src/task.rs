@@ -62,7 +62,7 @@ impl TaskGroup {
     /// The code create a subgroup is responsible for calling
     /// [`Self::join_all`]. If it won't, the parent subgroup **will not**
     /// detect any panics in the tasks spawned by the subgroup.
-    pub fn make_subgroup(&self) -> TaskGroup {
+    pub fn make_subgroup(&self) -> Self {
         let new_tg = Self::new();
         self.inner.add_subgroup(new_tg.clone());
         new_tg
@@ -176,7 +176,7 @@ impl TaskGroup {
         guard.completed = true;
     }
 
-    /// Spawn a task that will get cancelled automatically on TaskGroup
+    /// Spawn a task that will get cancelled automatically on `TaskGroup`
     /// shutdown.
     pub fn spawn_cancellable<R>(
         &self,

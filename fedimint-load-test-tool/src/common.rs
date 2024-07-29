@@ -13,6 +13,7 @@ use fedimint_client::{Client, ClientHandleArc};
 use fedimint_core::core::{IntoDynInstance, OperationId};
 use fedimint_core::db::Database;
 use fedimint_core::invite_code::InviteCode;
+use fedimint_core::module::registry::ModuleRegistry;
 use fedimint_core::module::CommonModuleInit;
 use fedimint_core::{Amount, OutPoint, TieredCounts};
 use fedimint_ln_client::{
@@ -137,7 +138,7 @@ pub async fn build_client(
     let db = if let Some(rocksdb) = rocksdb {
         Database::new(
             fedimint_rocksdb::RocksDb::open(rocksdb)?,
-            Default::default(),
+            ModuleRegistry::default(),
         )
     } else {
         fedimint_core::db::mem_impl::MemDatabase::new().into()

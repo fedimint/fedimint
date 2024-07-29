@@ -41,11 +41,7 @@ impl Decodable for threshold_crypto::PublicKeySet {
                 }
             })
             .collect::<Result<Vec<_>, _>>()
-            .map(|coefficients| {
-                threshold_crypto::PublicKeySet::from(threshold_crypto::poly::Commitment::from(
-                    coefficients,
-                ))
-            })
+            .map(|coefficients| Self::from(threshold_crypto::poly::Commitment::from(coefficients)))
     }
 }
 
@@ -61,7 +57,7 @@ impl Decodable for threshold_crypto::PublicKey {
         modules: &ModuleDecoderRegistry,
     ) -> Result<Self, DecodeError> {
         let bytes: [u8; 48] = Decodable::consensus_decode(r, modules)?;
-        threshold_crypto::PublicKey::from_bytes(bytes).map_err(DecodeError::from_err)
+        Self::from_bytes(bytes).map_err(DecodeError::from_err)
     }
 }
 
@@ -77,7 +73,7 @@ impl Decodable for threshold_crypto::Ciphertext {
         modules: &ModuleDecoderRegistry,
     ) -> Result<Self, DecodeError> {
         let ciphertext_bytes = Vec::<u8>::consensus_decode(reader, modules)?;
-        threshold_crypto::Ciphertext::from_bytes(&ciphertext_bytes).ok_or_else(|| {
+        Self::from_bytes(&ciphertext_bytes).ok_or_else(|| {
             DecodeError::from_str("Error decoding threshold_crypto::Ciphertext from bytes")
         })
     }
@@ -95,7 +91,7 @@ impl Decodable for threshold_crypto::DecryptionShare {
         modules: &ModuleDecoderRegistry,
     ) -> Result<Self, DecodeError> {
         let decryption_share_bytes = <[u8; 48]>::consensus_decode(reader, modules)?;
-        threshold_crypto::DecryptionShare::from_bytes(&decryption_share_bytes).ok_or_else(|| {
+        Self::from_bytes(&decryption_share_bytes).ok_or_else(|| {
             DecodeError::from_str("Error decoding threshold_crypto::DecryptionShare from bytes")
         })
     }

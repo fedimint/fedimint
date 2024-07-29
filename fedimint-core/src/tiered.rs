@@ -21,7 +21,7 @@ pub struct Tiered<T>(BTreeMap<Amount, T>);
 
 impl<T> Default for Tiered<T> {
     fn default() -> Self {
-        Self(Default::default())
+        Self(BTreeMap::default())
     }
 }
 
@@ -85,7 +85,7 @@ impl<T> Tiered<T> {
 
 impl Tiered<()> {
     /// Generates denominations of a given base up to and including `max`
-    pub fn gen_denominations(denomination_base: u16, max: Amount) -> Tiered<()> {
+    pub fn gen_denominations(denomination_base: u16, max: Amount) -> Self {
         let mut amounts = vec![];
 
         let mut denomination = Amount::from_msats(1);
@@ -100,7 +100,7 @@ impl Tiered<()> {
 
 impl<T> FromIterator<(Amount, T)> for Tiered<T> {
     fn from_iter<I: IntoIterator<Item = (Amount, T)>>(iter: I) -> Self {
-        Tiered(iter.into_iter().collect())
+        Self(iter.into_iter().collect())
     }
 }
 
@@ -121,7 +121,7 @@ where
         d: &mut D,
         modules: &ModuleDecoderRegistry,
     ) -> Result<Self, DecodeError> {
-        Ok(Tiered(BTreeMap::consensus_decode(d, modules)?))
+        Ok(Self(BTreeMap::consensus_decode(d, modules)?))
     }
 }
 
