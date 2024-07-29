@@ -804,12 +804,41 @@
 <a href="#804" id="804">804</a>
 <a href="#805" id="805">805</a>
 <a href="#806" id="806">806</a>
+<a href="#807" id="807">807</a>
+<a href="#808" id="808">808</a>
+<a href="#809" id="809">809</a>
+<a href="#810" id="810">810</a>
+<a href="#811" id="811">811</a>
+<a href="#812" id="812">812</a>
+<a href="#813" id="813">813</a>
+<a href="#814" id="814">814</a>
+<a href="#815" id="815">815</a>
+<a href="#816" id="816">816</a>
+<a href="#817" id="817">817</a>
+<a href="#818" id="818">818</a>
+<a href="#819" id="819">819</a>
+<a href="#820" id="820">820</a>
+<a href="#821" id="821">821</a>
+<a href="#822" id="822">822</a>
+<a href="#823" id="823">823</a>
+<a href="#824" id="824">824</a>
+<a href="#825" id="825">825</a>
+<a href="#826" id="826">826</a>
+<a href="#827" id="827">827</a>
+<a href="#828" id="828">828</a>
+<a href="#829" id="829">829</a>
+<a href="#830" id="830">830</a>
+<a href="#831" id="831">831</a>
+<a href="#832" id="832">832</a>
+<a href="#833" id="833">833</a>
+<a href="#834" id="834">834</a>
+<a href="#835" id="835">835</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::fs;
 <span class="kw">use </span>std::net::SocketAddr;
 <span class="kw">use </span>std::path::{Path, PathBuf};
 <span class="kw">use </span>std::sync::Arc;
-<span class="kw">use </span>std::time::Duration;
+<span class="kw">use </span>std::time::{Duration, Instant};
 
 <span class="kw">use </span>aleph_bft::Keychain <span class="kw">as </span>KeychainTrait;
 <span class="kw">use </span>anyhow::{anyhow, bail};
@@ -839,7 +868,7 @@
 
 <span class="kw">use </span><span class="kw">crate</span>::config::ServerConfig;
 <span class="kw">use </span><span class="kw">crate</span>::consensus::aleph_bft::backup::{BackupReader, BackupWriter};
-<span class="kw">use </span><span class="kw">crate</span>::consensus::aleph_bft::data_provider::{DataProvider, UnitData};
+<span class="kw">use </span><span class="kw">crate</span>::consensus::aleph_bft::data_provider::{get_citem_bytes_chsum, DataProvider, UnitData};
 <span class="kw">use </span><span class="kw">crate</span>::consensus::aleph_bft::finalization_handler::{FinalizationHandler, OrderedUnit};
 <span class="kw">use </span><span class="kw">crate</span>::consensus::aleph_bft::keychain::Keychain;
 <span class="kw">use </span><span class="kw">crate</span>::consensus::aleph_bft::network::Network;
@@ -854,7 +883,7 @@
 <span class="kw">use </span><span class="kw">crate</span>::fedimint_core::encoding::Encodable;
 <span class="kw">use </span><span class="kw">crate</span>::metrics::{
     CONSENSUS_ITEMS_PROCESSED_TOTAL, CONSENSUS_ITEM_PROCESSING_DURATION_SECONDS,
-    CONSENSUS_ITEM_PROCESSING_MODULE_AUDIT_DURATION_SECONDS,
+    CONSENSUS_ITEM_PROCESSING_MODULE_AUDIT_DURATION_SECONDS, CONSENSUS_ORDERING_LATENCY_SECONDS,
     CONSENSUS_PEER_CONTRIBUTION_SESSION_IDX, CONSENSUS_SESSION_COUNT,
 };
 <span class="kw">use </span><span class="kw">crate</span>::net::connect::{Connector, TlsTcpConnector};
@@ -1094,6 +1123,7 @@
         // ordered in a single aleph session is bounded as described above
         </span><span class="kw">let </span>(unit_data_sender, unit_data_receiver) = async_channel::unbounded();
         <span class="kw">let </span>(signature_sender, signature_receiver) = watch::channel(<span class="prelude-val">None</span>);
+        <span class="kw">let </span>(timestamp_sender, timestamp_receiver) = async_channel::unbounded();
         <span class="kw">let </span>(terminator_sender, terminator_receiver) = futures::channel::oneshot::channel();
 
         <span class="kw">let </span>aleph_handle = spawn(
@@ -1101,7 +1131,11 @@
             aleph_bft::run_session(
                 config,
                 aleph_bft::LocalIO::new(
-                    DataProvider::new(<span class="self">self</span>.submission_receiver.clone(), signature_receiver),
+                    DataProvider::new(
+                        <span class="self">self</span>.submission_receiver.clone(),
+                        signature_receiver,
+                        timestamp_sender,
+                    ),
                     FinalizationHandler::new(unit_data_sender),
                     BackupWriter::new(<span class="self">self</span>.db.clone()),
                     BackupReader::new(<span class="self">self</span>.db.clone()),
@@ -1114,7 +1148,12 @@
         );
 
         <span class="kw">let </span>signed_session_outcome = <span class="self">self
-            </span>.complete_signed_session_outcome(session_index, unit_data_receiver, signature_sender)
+            </span>.complete_signed_session_outcome(
+                session_index,
+                unit_data_receiver,
+                signature_sender,
+                timestamp_receiver,
+            )
             .<span class="kw">await</span><span class="question-mark">?</span>;
 
         <span class="comment">// We can terminate the session instead of waiting for other peers to complete
@@ -1138,6 +1177,7 @@
         session_index: u64,
         ordered_unit_receiver: Receiver&lt;OrderedUnit&gt;,
         signature_sender: watch::Sender&lt;<span class="prelude-ty">Option</span>&lt;SchnorrSignature&gt;&gt;,
+        timestamp_receiver: Receiver&lt;(Instant, u64)&gt;,
     ) -&gt; anyhow::Result&lt;SignedSessionOutcome&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>item_index = <span class="number">0</span>;
 
@@ -1154,6 +1194,24 @@
                     }
 
                     <span class="kw">if let </span><span class="prelude-val">Some</span>(UnitData::Batch(bytes)) = ordered_unit.data {
+                        <span class="kw">if </span>ordered_unit.creator == <span class="self">self</span>.identity() {
+                            <span class="kw">loop </span>{
+                                 <span class="kw">match </span>timestamp_receiver.try_recv() {
+                                    <span class="prelude-val">Ok</span>((timestamp, chsum)) =&gt; {
+                                        <span class="kw">if </span>get_citem_bytes_chsum(<span class="kw-2">&amp;</span>bytes) == chsum {
+                                            CONSENSUS_ORDERING_LATENCY_SECONDS.observe(timestamp.elapsed().as_secs_f64());
+                                            <span class="kw">break</span>;
+                                        }
+                                        <span class="macro">warn!</span>(target: LOG_CONSENSUS, <span class="string">"Not reporting ordering latency on possibly out of sync item"</span>);
+                                    }
+                                    <span class="prelude-val">Err</span>(e) =&gt; {
+                                        <span class="macro">warn!</span>(target: LOG_CONSENSUS, <span class="string">"Missing submission timestamp: {e}"</span>);
+                                        <span class="kw">break</span>;
+                                    }
+                                }
+                            }
+                        }
+
                         <span class="kw">if let </span><span class="prelude-val">Ok</span>(items) = Vec::&lt;ConsensusItem&gt;::consensus_decode(<span class="kw-2">&amp;mut </span>bytes.as_slice(), <span class="kw-2">&amp;</span><span class="self">self</span>.decoders()){
                             <span class="kw">for </span>item <span class="kw">in </span>items {
                                 <span class="kw">if </span><span class="self">self</span>.process_consensus_item(

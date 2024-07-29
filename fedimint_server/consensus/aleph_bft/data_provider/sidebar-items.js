@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"enum":["UnitData"],"struct":["DataProvider"]};
+window.SIDEBAR_ITEMS = {"enum":["UnitData"],"fn":["get_citem_bytes_chsum"],"struct":["DataProvider"]};

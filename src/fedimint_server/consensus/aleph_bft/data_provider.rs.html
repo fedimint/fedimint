@@ -103,8 +103,30 @@
 <a href="#103" id="103">103</a>
 <a href="#104" id="104">104</a>
 <a href="#105" id="105">105</a>
+<a href="#106" id="106">106</a>
+<a href="#107" id="107">107</a>
+<a href="#108" id="108">108</a>
+<a href="#109" id="109">109</a>
+<a href="#110" id="110">110</a>
+<a href="#111" id="111">111</a>
+<a href="#112" id="112">112</a>
+<a href="#113" id="113">113</a>
+<a href="#114" id="114">114</a>
+<a href="#115" id="115">115</a>
+<a href="#116" id="116">116</a>
+<a href="#117" id="117">117</a>
+<a href="#118" id="118">118</a>
+<a href="#119" id="119">119</a>
+<a href="#120" id="120">120</a>
+<a href="#121" id="121">121</a>
+<a href="#122" id="122">122</a>
+<a href="#123" id="123">123</a>
+<a href="#124" id="124">124</a>
+<a href="#125" id="125">125</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeSet;
+<span class="kw">use </span>std::time::Instant;
 
+<span class="kw">use </span>bitcoin_hashes::Hash;
 <span class="kw">use </span>fedimint_core::config::ALEPH_BFT_UNIT_BYTE_LIMIT;
 <span class="kw">use </span>fedimint_core::encoding::Encodable;
 <span class="kw">use </span>fedimint_core::epoch::ConsensusItem;
@@ -138,18 +160,25 @@
     signature_receiver: watch::Receiver&lt;<span class="prelude-ty">Option</span>&lt;SchnorrSignature&gt;&gt;,
     submitted_transactions: BTreeSet&lt;TransactionId&gt;,
     leftover_item: <span class="prelude-ty">Option</span>&lt;ConsensusItem&gt;,
+    <span class="comment">// Since it's possible that `fedimintd` after restart will receive citems it
+    // sent before restart, we use cheap citem's chsum, as a simple method
+    // to self-synchronize. See &lt;https://github.com/fedimint/fedimint/pull/5432#issuecomment-2176860609&gt;
+    // for discussion about it.
+    </span>timestamp_sender: async_channel::Sender&lt;(Instant, u64)&gt;,
 }
 
 <span class="kw">impl </span>DataProvider {
     <span class="kw">pub fn </span>new(
         mempool_item_receiver: async_channel::Receiver&lt;ConsensusItem&gt;,
         signature_receiver: watch::Receiver&lt;<span class="prelude-ty">Option</span>&lt;SchnorrSignature&gt;&gt;,
+        timestamp_sender: async_channel::Sender&lt;(Instant, u64)&gt;,
     ) -&gt; <span class="self">Self </span>{
         <span class="self">Self </span>{
             mempool_item_receiver,
             signature_receiver,
             submitted_transactions: BTreeSet::new(),
             leftover_item: <span class="prelude-val">None</span>,
+            timestamp_sender,
         }
     }
 }
@@ -205,7 +234,18 @@
 
         <span class="macro">assert!</span>(bytes.len() &lt;= ALEPH_BFT_UNIT_BYTE_LIMIT);
 
+        <span class="self">self</span>.timestamp_sender
+            .send((Instant::now(), get_citem_bytes_chsum(<span class="kw-2">&amp;</span>bytes)))
+            .<span class="kw">await
+            </span>.ok();
+
         <span class="prelude-val">Some</span>(UnitData::Batch(bytes))
     }
+}
+
+<span class="doccomment">/// Calculate a cheap chesum of an encoded citem
+</span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>get_citem_bytes_chsum(bytes: <span class="kw-2">&amp;</span>[u8]) -&gt; u64 {
+    <span class="kw">let </span>chsum = bitcoin_hashes::sha256::Hash::hash(bytes);
+    u64::from_le_bytes(chsum[..<span class="number">8</span>].try_into().expect(<span class="string">"Can't fail"</span>))
 }
 </code></pre></div></section></main></body></html>
