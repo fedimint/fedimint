@@ -178,7 +178,7 @@ where
             status_query_senders.insert(*peer, status_query_sender);
             connections.insert(*peer, connection);
         }
-        task_group.spawn("listen task", |handle| {
+        task_group.spawn("listen task", move |handle| {
             Self::run_listen_task(cfg, shared_connector, connection_senders, handle)
         });
         (
@@ -194,9 +194,9 @@ where
         task_handle: TaskHandle,
     ) {
         let mut listener = connect
-            .listen(cfg.bind_addr)
+            .listen(cfg.p2p_bind_addr)
             .await
-            .with_context(|| anyhow::anyhow!("Failed to listen on {}", cfg.bind_addr))
+            .with_context(|| anyhow::anyhow!("Failed to listen on {}", cfg.p2p_bind_addr))
             .expect("Could not bind port");
 
         let mut shutdown_rx = task_handle.make_shutdown_rx();
@@ -768,7 +768,7 @@ mod tests {
             let build_peers = |bind: &'static str, id: u16, task_group: TaskGroup| async move {
                 let cfg = NetworkConfig {
                     identity: PeerId::from(id),
-                    bind_addr: bind.parse().unwrap(),
+                    p2p_bind_addr: bind.parse().unwrap(),
                     peers: peers_ref.clone(),
                 };
                 let connect = net_ref

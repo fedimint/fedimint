@@ -141,10 +141,6 @@ pub struct ServerConfigLocal {
     pub p2p_endpoints: BTreeMap<PeerId, PeerUrl>,
     /// Our peer id (generally should not change)
     pub identity: PeerId,
-    /// Our bind address for communicating with peers
-    pub fed_bind: SocketAddr,
-    /// Our bind address for our API endpoints
-    pub api_bind: SocketAddr,
     /// How many API connections we will accept
     pub max_connections: u32,
     /// Influences the atomic broadcast ordering latency, should be higher than
@@ -227,8 +223,6 @@ impl ServerConfig {
         let local = ServerConfigLocal {
             p2p_endpoints: params.p2p_urls(),
             identity,
-            fed_bind: params.local.p2p_bind,
-            api_bind: params.local.api_bind,
             max_connections: DEFAULT_MAX_CLIENT_CONNECTIONS,
             broadcast_round_delay_ms: if is_running_in_test_env() {
                 DEFAULT_TEST_BROADCAST_ROUND_DELAY_MS
@@ -433,6 +427,7 @@ impl ServerConfig {
 
     /// Runs the distributed key gen algorithm
     pub async fn distributed_gen(
+        p2p_bind_addr: SocketAddr,
         params: &ConfigGenParams,
         registry: ServerModuleInitRegistry,
         delay_calculator: DelayCalculator,
@@ -441,7 +436,7 @@ impl ServerConfig {
     ) -> DkgResult<Self> {
         let _timing /* logs on drop */ = timing::TimeReporter::new("distributed-gen").info();
         let server_conn = connect(
-            params.p2p_network(),
+            params.p2p_network(p2p_bind_addr),
             params.tls_config(),
             delay_calculator,
             task_group,
@@ -583,16 +578,16 @@ pub enum KeyType {
 }
 
 impl ServerConfig {
-    pub fn network_config(&self) -> NetworkConfig {
+    pub fn network_config(&self, p2p_bind_addr: SocketAddr) -> NetworkConfig {
         NetworkConfig {
             identity: self.local.identity,
-            bind_addr: self.local.fed_bind,
             peers: self
                 .local
                 .p2p_endpoints
                 .iter()
                 .map(|(&id, endpoint)| (id, endpoint.url.clone()))
                 .collect(),
+            p2p_bind_addr,
         }
     }
 
@@ -619,10 +614,10 @@ impl ConfigGenParams {
         self.consensus.peers.keys().copied().collect()
     }
 
-    pub fn p2p_network(&self) -> NetworkConfig {
+    pub fn p2p_network(&self, p2p_bind_addr: SocketAddr) -> NetworkConfig {
         NetworkConfig {
             identity: self.local.our_id,
-            bind_addr: self.local.p2p_bind,
+            p2p_bind_addr,
             peers: self
                 .p2p_urls()
                 .into_iter()
