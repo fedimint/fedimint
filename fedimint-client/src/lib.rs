@@ -88,14 +88,14 @@ use std::pin::Pin;
 use std::sync::{Arc, Weak};
 use std::time::Duration;
 
-use anyhow::{anyhow, bail, Context};
+use anyhow::{anyhow, bail, ensure, Context};
 use async_stream::stream;
 use backup::ClientBackup;
 use db::{
     apply_migrations_client, apply_migrations_core_client, get_core_client_database_migrations,
     ApiSecretKey, CachedApiVersionSet, CachedApiVersionSetKey, ClientConfigKey, ClientInitStateKey,
-    ClientModuleRecovery, EncodedClientSecretKey, InitMode, PeerLastApiVersionsSummary,
-    PeerLastApiVersionsSummaryKey, CORE_CLIENT_DATABASE_VERSION,
+    ClientModuleRecovery, ClientPreRootSecretHashKey, EncodedClientSecretKey, InitMode,
+    PeerLastApiVersionsSummary, PeerLastApiVersionsSummaryKey, CORE_CLIENT_DATABASE_VERSION,
 };
 use fedimint_api_client::api::{
     ApiVersionSet, DynGlobalApi, DynModuleApi, FederationApiExt, IGlobalFederationApi,
@@ -2069,7 +2069,7 @@ impl ClientBuilder {
 
     async fn init(
         self,
-        root_secret: DerivableSecret,
+        pre_root_secret: DerivableSecret,
         config: ClientConfig,
         api_secret: Option<String>,
         init_mode: InitMode,
@@ -2085,6 +2085,11 @@ impl ClientBuilder {
             let mut dbtx = self.db_no_decoders.begin_transaction().await;
             // Save config to DB
             dbtx.insert_new_entry(&ClientConfigKey, &config).await;
+            dbtx.insert_entry(
+                &ClientPreRootSecretHashKey,
+                &pre_root_secret.derive_pre_root_secret_hash(),
+            )
+            .await;
 
             if let Some(api_secret) = api_secret.as_ref() {
                 dbtx.insert_new_entry(&ApiSecretKey, api_secret).await;
@@ -2104,7 +2109,8 @@ impl ClientBuilder {
         }
 
         let stopped = self.stopped;
-        self.build(root_secret, config, api_secret, stopped).await
+        self.build(pre_root_secret, config, api_secret, stopped)
+            .await
     }
 
     /// Join a new Federation
@@ -2182,11 +2188,11 @@ impl ClientBuilder {
     /// ```
     pub async fn join(
         self,
-        root_secret: DerivableSecret,
+        pre_root_secret: DerivableSecret,
         config: ClientConfig,
         api_secret: Option<String>,
     ) -> anyhow::Result<ClientHandle> {
-        self.init(root_secret, config, api_secret, InitMode::Fresh)
+        self.init(pre_root_secret, config, api_secret, InitMode::Fresh)
             .await
     }
 
@@ -2245,15 +2251,40 @@ impl ClientBuilder {
         Ok(client)
     }
 
-    pub async fn open(self, root_secret: DerivableSecret) -> anyhow::Result<ClientHandle> {
+    pub async fn open(self, pre_root_secret: DerivableSecret) -> anyhow::Result<ClientHandle> {
         let Some(config) = Client::get_config_from_db(&self.db_no_decoders).await else {
             bail!("Client database not initialized")
         };
 
+        if let Some(secret_hash) = self
+            .db_no_decoders()
+            .begin_transaction_nc()
+            .await
+            .get_value(&ClientPreRootSecretHashKey)
+            .await
+        {
+            ensure!(
+                pre_root_secret.derive_pre_root_secret_hash() == secret_hash,
+                "Secret hash does not match. Incorrect secret"
+            );
+        } else {
+            debug!(target: LOG_CLIENT, "Backfilling secret hash");
+            // Note: no need for dbtx autocommit, we are the only writer ATM
+            let mut dbtx = self.db_no_decoders.begin_transaction().await;
+            dbtx.insert_entry(
+                &ClientPreRootSecretHashKey,
+                &pre_root_secret.derive_pre_root_secret_hash(),
+            )
+            .await;
+            dbtx.commit_tx().await;
+        }
+
         let api_secret = Client::get_api_secret_from_db(&self.db_no_decoders).await;
         let stopped = self.stopped;
 
-        let client = self.build_stopped(root_secret, &config, api_secret).await?;
+        let client = self
+            .build_stopped(pre_root_secret, &config, api_secret)
+            .await?;
         if !stopped {
             client.as_inner().start_executor().await;
         }
@@ -2263,12 +2294,14 @@ impl ClientBuilder {
     /// Build a [`Client`] and start the executor
     async fn build(
         self,
-        root_secret: DerivableSecret,
+        pre_root_secret: DerivableSecret,
         config: ClientConfig,
         api_secret: Option<String>,
         stopped: bool,
     ) -> anyhow::Result<ClientHandle> {
-        let client = self.build_stopped(root_secret, &config, api_secret).await?;
+        let client = self
+            .build_stopped(pre_root_secret, &config, api_secret)
+            .await?;
         if !stopped {
             client.as_inner().start_executor().await;
         }
