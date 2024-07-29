@@ -1,5 +1,7 @@
 use std::collections::BTreeSet;
+use std::time::Instant;
 
+use bitcoin_hashes::Hash;
 use fedimint_core::config::ALEPH_BFT_UNIT_BYTE_LIMIT;
 use fedimint_core::encoding::Encodable;
 use fedimint_core::epoch::ConsensusItem;
@@ -33,18 +35,25 @@ pub struct DataProvider {
     signature_receiver: watch::Receiver<Option<SchnorrSignature>>,
     submitted_transactions: BTreeSet<TransactionId>,
     leftover_item: Option<ConsensusItem>,
+    // Since it's possible that `fedimintd` after restart will receive citems it
+    // sent before restart, we use cheap citem's chsum, as a simple method
+    // to self-synchronize. See <https://github.com/fedimint/fedimint/pull/5432#issuecomment-2176860609>
+    // for discussion about it.
+    timestamp_sender: async_channel::Sender<(Instant, u64)>,
 }
 
 impl DataProvider {
     pub fn new(
         mempool_item_receiver: async_channel::Receiver<ConsensusItem>,
         signature_receiver: watch::Receiver<Option<SchnorrSignature>>,
+        timestamp_sender: async_channel::Sender<(Instant, u64)>,
     ) -> Self {
         Self {
             mempool_item_receiver,
             signature_receiver,
             submitted_transactions: BTreeSet::new(),
             leftover_item: None,
+            timestamp_sender,
         }
     }
 }
@@ -100,6 +109,17 @@ impl aleph_bft::DataProvider<UnitData> for DataProvider {
 
         assert!(bytes.len() <= ALEPH_BFT_UNIT_BYTE_LIMIT);
 
+        self.timestamp_sender
+            .send((Instant::now(), get_citem_bytes_chsum(&bytes)))
+            .await
+            .ok();
+
         Some(UnitData::Batch(bytes))
     }
+}
+
+/// Calculate a cheap chesum of an encoded citem
+pub(crate) fn get_citem_bytes_chsum(bytes: &[u8]) -> u64 {
+    let chsum = bitcoin_hashes::sha256::Hash::hash(bytes);
+    u64::from_le_bytes(chsum[..8].try_into().expect("Can't fail"))
 }

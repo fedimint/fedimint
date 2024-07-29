@@ -3,7 +3,7 @@ use std::fs;
 use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use aleph_bft::Keychain as KeychainTrait;
 use anyhow::{anyhow, bail};
@@ -33,7 +33,7 @@ use tracing::{debug, info, instrument, warn, Level};
 
 use crate::config::ServerConfig;
 use crate::consensus::aleph_bft::backup::{BackupReader, BackupWriter};
-use crate::consensus::aleph_bft::data_provider::{DataProvider, UnitData};
+use crate::consensus::aleph_bft::data_provider::{get_citem_bytes_chsum, DataProvider, UnitData};
 use crate::consensus::aleph_bft::finalization_handler::{FinalizationHandler, OrderedUnit};
 use crate::consensus::aleph_bft::keychain::Keychain;
 use crate::consensus::aleph_bft::network::Network;
@@ -48,7 +48,7 @@ use crate::consensus::transaction::process_transaction_with_dbtx;
 use crate::fedimint_core::encoding::Encodable;
 use crate::metrics::{
     CONSENSUS_ITEMS_PROCESSED_TOTAL, CONSENSUS_ITEM_PROCESSING_DURATION_SECONDS,
-    CONSENSUS_ITEM_PROCESSING_MODULE_AUDIT_DURATION_SECONDS,
+    CONSENSUS_ITEM_PROCESSING_MODULE_AUDIT_DURATION_SECONDS, CONSENSUS_ORDERING_LATENCY_SECONDS,
     CONSENSUS_PEER_CONTRIBUTION_SESSION_IDX, CONSENSUS_SESSION_COUNT,
 };
 use crate::net::connect::{Connector, TlsTcpConnector};
@@ -288,6 +288,7 @@ impl ConsensusEngine {
         // ordered in a single aleph session is bounded as described above
         let (unit_data_sender, unit_data_receiver) = async_channel::unbounded();
         let (signature_sender, signature_receiver) = watch::channel(None);
+        let (timestamp_sender, timestamp_receiver) = async_channel::unbounded();
         let (terminator_sender, terminator_receiver) = futures::channel::oneshot::channel();
 
         let aleph_handle = spawn(
@@ -295,7 +296,11 @@ impl ConsensusEngine {
             aleph_bft::run_session(
                 config,
                 aleph_bft::LocalIO::new(
-                    DataProvider::new(self.submission_receiver.clone(), signature_receiver),
+                    DataProvider::new(
+                        self.submission_receiver.clone(),
+                        signature_receiver,
+                        timestamp_sender,
+                    ),
                     FinalizationHandler::new(unit_data_sender),
                     BackupWriter::new(self.db.clone()),
                     BackupReader::new(self.db.clone()),
@@ -308,7 +313,12 @@ impl ConsensusEngine {
         );
 
         let signed_session_outcome = self
-            .complete_signed_session_outcome(session_index, unit_data_receiver, signature_sender)
+            .complete_signed_session_outcome(
+                session_index,
+                unit_data_receiver,
+                signature_sender,
+                timestamp_receiver,
+            )
             .await?;
 
         // We can terminate the session instead of waiting for other peers to complete
@@ -332,6 +342,7 @@ impl ConsensusEngine {
         session_index: u64,
         ordered_unit_receiver: Receiver<OrderedUnit>,
         signature_sender: watch::Sender<Option<SchnorrSignature>>,
+        timestamp_receiver: Receiver<(Instant, u64)>,
     ) -> anyhow::Result<SignedSessionOutcome> {
         let mut item_index = 0;
 
@@ -348,6 +359,24 @@ impl ConsensusEngine {
                     }
 
                     if let Some(UnitData::Batch(bytes)) = ordered_unit.data {
+                        if ordered_unit.creator == self.identity() {
+                            loop {
+                                 match timestamp_receiver.try_recv() {
+                                    Ok((timestamp, chsum)) => {
+                                        if get_citem_bytes_chsum(&bytes) == chsum {
+                                            CONSENSUS_ORDERING_LATENCY_SECONDS.observe(timestamp.elapsed().as_secs_f64());
+                                            break;
+                                        }
+                                        warn!(target: LOG_CONSENSUS, "Not reporting ordering latency on possibly out of sync item");
+                                    }
+                                    Err(e) => {
+                                        warn!(target: LOG_CONSENSUS, "Missing submission timestamp: {e}");
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+
                         if let Ok(items) = Vec::<ConsensusItem>::consensus_decode(&mut bytes.as_slice(), &self.decoders()){
                             for item in items {
                                 if self.process_consensus_item(
