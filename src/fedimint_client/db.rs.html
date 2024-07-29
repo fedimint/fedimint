@@ -755,6 +755,16 @@
 <a href="#755" id="755">755</a>
 <a href="#756" id="756">756</a>
 <a href="#757" id="757">757</a>
+<a href="#758" id="758">758</a>
+<a href="#759" id="759">759</a>
+<a href="#760" id="760">760</a>
+<a href="#761" id="761">761</a>
+<a href="#762" id="762">762</a>
+<a href="#763" id="763">763</a>
+<a href="#764" id="764">764</a>
+<a href="#765" id="765">765</a>
+<a href="#766" id="766">766</a>
+<a href="#767" id="767">767</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::io::Cursor;
 <span class="kw">use </span>std::time::SystemTime;
@@ -794,7 +804,8 @@
 </span><span class="kw">pub enum </span>DbKeyPrefix {
     EncodedClientSecret = <span class="number">0x28</span>,
     ClientSecret = <span class="number">0x29</span>, <span class="comment">// Unused
-    </span>OperationLog = <span class="number">0x2c</span>,
+    </span>ClientPreRootSecretHash = <span class="number">0x2a</span>,
+    OperationLog = <span class="number">0x2c</span>,
     ChronologicalOperationLog = <span class="number">0x2d</span>,
     CommonApiVersionCache = <span class="number">0x2e</span>,
     ClientConfig = <span class="number">0x2f</span>,
@@ -861,6 +872,15 @@
     key = OperationLogKey,
     value = OperationLogEntry,
     db_prefix = DbKeyPrefix::OperationLog
+);
+
+<span class="attr">#[derive(Debug, Encodable, Decodable, Serialize)]
+</span><span class="kw">pub struct </span>ClientPreRootSecretHashKey;
+
+<span class="macro">impl_db_record!</span>(
+    key = ClientPreRootSecretHashKey,
+    value = [u8; <span class="number">8</span>],
+    db_prefix = DbKeyPrefix::ClientPreRootSecretHash
 );
 
 <span class="doccomment">/// Key used to lookup operation log entries in chronological order

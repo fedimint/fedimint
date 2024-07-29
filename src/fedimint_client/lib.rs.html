@@ -2653,6 +2653,39 @@
 <a href="#2653" id="2653">2653</a>
 <a href="#2654" id="2654">2654</a>
 <a href="#2655" id="2655">2655</a>
+<a href="#2656" id="2656">2656</a>
+<a href="#2657" id="2657">2657</a>
+<a href="#2658" id="2658">2658</a>
+<a href="#2659" id="2659">2659</a>
+<a href="#2660" id="2660">2660</a>
+<a href="#2661" id="2661">2661</a>
+<a href="#2662" id="2662">2662</a>
+<a href="#2663" id="2663">2663</a>
+<a href="#2664" id="2664">2664</a>
+<a href="#2665" id="2665">2665</a>
+<a href="#2666" id="2666">2666</a>
+<a href="#2667" id="2667">2667</a>
+<a href="#2668" id="2668">2668</a>
+<a href="#2669" id="2669">2669</a>
+<a href="#2670" id="2670">2670</a>
+<a href="#2671" id="2671">2671</a>
+<a href="#2672" id="2672">2672</a>
+<a href="#2673" id="2673">2673</a>
+<a href="#2674" id="2674">2674</a>
+<a href="#2675" id="2675">2675</a>
+<a href="#2676" id="2676">2676</a>
+<a href="#2677" id="2677">2677</a>
+<a href="#2678" id="2678">2678</a>
+<a href="#2679" id="2679">2679</a>
+<a href="#2680" id="2680">2680</a>
+<a href="#2681" id="2681">2681</a>
+<a href="#2682" id="2682">2682</a>
+<a href="#2683" id="2683">2683</a>
+<a href="#2684" id="2684">2684</a>
+<a href="#2685" id="2685">2685</a>
+<a href="#2686" id="2686">2686</a>
+<a href="#2687" id="2687">2687</a>
+<a href="#2688" id="2688">2688</a>
 </pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::default_trait_access)]
@@ -2743,14 +2776,14 @@
 <span class="kw">use </span>std::sync::{Arc, Weak};
 <span class="kw">use </span>std::time::Duration;
 
-<span class="kw">use </span>anyhow::{anyhow, bail, Context};
+<span class="kw">use </span>anyhow::{anyhow, bail, ensure, Context};
 <span class="kw">use </span>async_stream::stream;
 <span class="kw">use </span>backup::ClientBackup;
 <span class="kw">use </span>db::{
     apply_migrations_client, apply_migrations_core_client, get_core_client_database_migrations,
     ApiSecretKey, CachedApiVersionSet, CachedApiVersionSetKey, ClientConfigKey, ClientInitStateKey,
-    ClientModuleRecovery, EncodedClientSecretKey, InitMode, PeerLastApiVersionsSummary,
-    PeerLastApiVersionsSummaryKey, CORE_CLIENT_DATABASE_VERSION,
+    ClientModuleRecovery, ClientPreRootSecretHashKey, EncodedClientSecretKey, InitMode,
+    PeerLastApiVersionsSummary, PeerLastApiVersionsSummaryKey, CORE_CLIENT_DATABASE_VERSION,
 };
 <span class="kw">use </span>fedimint_api_client::api::{
     ApiVersionSet, DynGlobalApi, DynModuleApi, FederationApiExt, IGlobalFederationApi,
@@ -4724,7 +4757,7 @@
 
     <span class="kw">async fn </span>init(
         <span class="self">self</span>,
-        root_secret: DerivableSecret,
+        pre_root_secret: DerivableSecret,
         config: ClientConfig,
         api_secret: <span class="prelude-ty">Option</span>&lt;String&gt;,
         init_mode: InitMode,
@@ -4740,6 +4773,11 @@
             <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.db_no_decoders.begin_transaction().<span class="kw">await</span>;
             <span class="comment">// Save config to DB
             </span>dbtx.insert_new_entry(<span class="kw-2">&amp;</span>ClientConfigKey, <span class="kw-2">&amp;</span>config).<span class="kw">await</span>;
+            dbtx.insert_entry(
+                <span class="kw-2">&amp;</span>ClientPreRootSecretHashKey,
+                <span class="kw-2">&amp;</span>pre_root_secret.derive_pre_root_secret_hash(),
+            )
+            .<span class="kw">await</span>;
 
             <span class="kw">if let </span><span class="prelude-val">Some</span>(api_secret) = api_secret.as_ref() {
                 dbtx.insert_new_entry(<span class="kw-2">&amp;</span>ApiSecretKey, api_secret).<span class="kw">await</span>;
@@ -4759,7 +4797,8 @@
         }
 
         <span class="kw">let </span>stopped = <span class="self">self</span>.stopped;
-        <span class="self">self</span>.build(root_secret, config, api_secret, stopped).<span class="kw">await
+        <span class="self">self</span>.build(pre_root_secret, config, api_secret, stopped)
+            .<span class="kw">await
     </span>}
 
     <span class="doccomment">/// Join a new Federation
@@ -4837,11 +4876,11 @@
     /// ```
     </span><span class="kw">pub async fn </span>join(
         <span class="self">self</span>,
-        root_secret: DerivableSecret,
+        pre_root_secret: DerivableSecret,
         config: ClientConfig,
         api_secret: <span class="prelude-ty">Option</span>&lt;String&gt;,
     ) -&gt; anyhow::Result&lt;ClientHandle&gt; {
-        <span class="self">self</span>.init(root_secret, config, api_secret, InitMode::Fresh)
+        <span class="self">self</span>.init(pre_root_secret, config, api_secret, InitMode::Fresh)
             .<span class="kw">await
     </span>}
 
@@ -4900,15 +4939,40 @@
         <span class="prelude-val">Ok</span>(client)
     }
 
-    <span class="kw">pub async fn </span>open(<span class="self">self</span>, root_secret: DerivableSecret) -&gt; anyhow::Result&lt;ClientHandle&gt; {
+    <span class="kw">pub async fn </span>open(<span class="self">self</span>, pre_root_secret: DerivableSecret) -&gt; anyhow::Result&lt;ClientHandle&gt; {
         <span class="kw">let </span><span class="prelude-val">Some</span>(config) = Client::get_config_from_db(<span class="kw-2">&amp;</span><span class="self">self</span>.db_no_decoders).<span class="kw">await else </span>{
             <span class="macro">bail!</span>(<span class="string">"Client database not initialized"</span>)
         };
 
+        <span class="kw">if let </span><span class="prelude-val">Some</span>(secret_hash) = <span class="self">self
+            </span>.db_no_decoders()
+            .begin_transaction_nc()
+            .<span class="kw">await
+            </span>.get_value(<span class="kw-2">&amp;</span>ClientPreRootSecretHashKey)
+            .<span class="kw">await
+        </span>{
+            <span class="macro">ensure!</span>(
+                pre_root_secret.derive_pre_root_secret_hash() == secret_hash,
+                <span class="string">"Secret hash does not match. Incorrect secret"
+            </span>);
+        } <span class="kw">else </span>{
+            <span class="macro">debug!</span>(target: LOG_CLIENT, <span class="string">"Backfilling secret hash"</span>);
+            <span class="comment">// Note: no need for dbtx autocommit, we are the only writer ATM
+            </span><span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.db_no_decoders.begin_transaction().<span class="kw">await</span>;
+            dbtx.insert_entry(
+                <span class="kw-2">&amp;</span>ClientPreRootSecretHashKey,
+                <span class="kw-2">&amp;</span>pre_root_secret.derive_pre_root_secret_hash(),
+            )
+            .<span class="kw">await</span>;
+            dbtx.commit_tx().<span class="kw">await</span>;
+        }
+
         <span class="kw">let </span>api_secret = Client::get_api_secret_from_db(<span class="kw-2">&amp;</span><span class="self">self</span>.db_no_decoders).<span class="kw">await</span>;
         <span class="kw">let </span>stopped = <span class="self">self</span>.stopped;
 
-        <span class="kw">let </span>client = <span class="self">self</span>.build_stopped(root_secret, <span class="kw-2">&amp;</span>config, api_secret).<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>client = <span class="self">self
+            </span>.build_stopped(pre_root_secret, <span class="kw-2">&amp;</span>config, api_secret)
+            .<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">if </span>!stopped {
             client.as_inner().start_executor().<span class="kw">await</span>;
         }
@@ -4918,12 +4982,14 @@
     <span class="doccomment">/// Build a [`Client`] and start the executor
     </span><span class="kw">async fn </span>build(
         <span class="self">self</span>,
-        root_secret: DerivableSecret,
+        pre_root_secret: DerivableSecret,
         config: ClientConfig,
         api_secret: <span class="prelude-ty">Option</span>&lt;String&gt;,
         stopped: bool,
     ) -&gt; anyhow::Result&lt;ClientHandle&gt; {
-        <span class="kw">let </span>client = <span class="self">self</span>.build_stopped(root_secret, <span class="kw-2">&amp;</span>config, api_secret).<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>client = <span class="self">self
+            </span>.build_stopped(pre_root_secret, <span class="kw-2">&amp;</span>config, api_secret)
+            .<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">if </span>!stopped {
             client.as_inner().start_executor().<span class="kw">await</span>;
         }
