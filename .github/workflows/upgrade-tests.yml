@@ -55,7 +55,7 @@ jobs:
             nix shell github:rustshop/fs-dir-cache -c \
             scripts/ci/run-in-fs-dir-cache.sh upgrade-tests \
             env -u RUSTC_WRAPPER \
-            runLowPrio ./scripts/tests/upgrade-test.sh v0.2.1 v0.3.3 v0.4.0-rc.5
+            runLowPrio ./scripts/tests/upgrade-test.sh v0.2.1 v0.3.3 v0.4.0-rc.6
 
   notifications:
     if: always() && github.repository == 'fedimint/fedimint'
