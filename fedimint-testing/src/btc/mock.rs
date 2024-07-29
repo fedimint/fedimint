@@ -93,10 +93,10 @@ impl FakeBitcoinTest {
         let inner = FakeBitcoinTestInner {
             blocks: vec![genesis_block(Network::Regtest)],
             pending: vec![],
-            addresses: Default::default(),
-            proofs: Default::default(),
-            scripts: Default::default(),
-            txid_to_block_height: Default::default(),
+            addresses: BTreeMap::new(),
+            proofs: BTreeMap::new(),
+            scripts: BTreeMap::new(),
+            txid_to_block_height: BTreeMap::new(),
         };
         FakeBitcoinTest {
             inner: std::sync::RwLock::new(inner).into(),

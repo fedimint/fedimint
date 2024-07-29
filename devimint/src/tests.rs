@@ -12,6 +12,7 @@ use clap::Subcommand;
 use fedimint_core::core::LEGACY_HARDCODED_INSTANCE_ID_WALLET;
 use fedimint_core::encoding::Decodable;
 use fedimint_core::envs::is_env_var_set;
+use fedimint_core::module::registry::ModuleRegistry;
 use fedimint_core::net::api_announcement::SignedApiAnnouncement;
 use fedimint_core::task::block_in_place;
 use fedimint_core::{Amount, PeerId};
@@ -1048,7 +1049,8 @@ pub async fn cli_tests(dev_fed: DevFed) -> Result<()> {
     .await
     .expect("cannot fail, gets stuck");
 
-    let tx = bitcoin::Transaction::consensus_decode_hex(&tx_hex, &Default::default()).unwrap();
+    let tx =
+        bitcoin::Transaction::consensus_decode_hex(&tx_hex, &ModuleRegistry::default()).unwrap();
     assert!(tx
         .output
         .iter()
@@ -1918,7 +1920,7 @@ pub async fn recoverytool_test(dev_fed: DevFed) -> Result<()> {
         .await
         .expect("withdrawal tx failed to reach mempool");
 
-        let tx = bitcoin::Transaction::consensus_decode_hex(&tx_hex, &Default::default())?;
+        let tx = bitcoin::Transaction::consensus_decode_hex(&tx_hex, &ModuleRegistry::default())?;
         assert_eq!(tx.input.len(), 1);
         assert_eq!(tx.output.len(), 2);
 
@@ -2050,6 +2052,8 @@ pub async fn recoverytool_test(dev_fed: DevFed) -> Result<()> {
 }
 
 pub async fn guardian_backup_test(dev_fed: DevFed, process_mgr: &ProcessManager) -> Result<()> {
+    const PEER_TO_TEST: u16 = 0;
+
     log_binary_versions().await?;
 
     let fedimint_cli_version = crate::util::FedimintCli::version_or_default().await;
@@ -2073,8 +2077,6 @@ pub async fn guardian_backup_test(dev_fed: DevFed, process_mgr: &ProcessManager)
         esplora,
         ..
     } = dev_fed;
-
-    const PEER_TO_TEST: usize = 0;
 
     fed.await_all_peers()
         .await
@@ -2112,12 +2114,12 @@ pub async fn guardian_backup_test(dev_fed: DevFed, process_mgr: &ProcessManager)
 
     let data_dir = fed
         .vars
-        .get(&PEER_TO_TEST)
+        .get(&PEER_TO_TEST.into())
         .expect("peer not found")
         .FM_DATA_DIR
         .clone();
 
-    fed.terminate_server(PEER_TO_TEST)
+    fed.terminate_server(PEER_TO_TEST.into())
         .await
         .expect("could not terminate fedimintd");
 
@@ -2155,7 +2157,7 @@ pub async fn guardian_backup_test(dev_fed: DevFed, process_mgr: &ProcessManager)
         "tar failed"
     );
 
-    fed.start_server(process_mgr, PEER_TO_TEST)
+    fed.start_server(process_mgr, PEER_TO_TEST.into())
         .await
         .expect("could not restart fedimintd");
 
@@ -2163,7 +2165,7 @@ pub async fn guardian_backup_test(dev_fed: DevFed, process_mgr: &ProcessManager)
         let block_counts = all_peer_block_count(&client, fed.member_ids())
             .await
             .map_err(ControlFlow::Continue)?;
-        let block_count = block_counts[&PeerId::from(PEER_TO_TEST as u16)];
+        let block_count = block_counts[&PeerId::from(PEER_TO_TEST)];
 
         info!("Caught up to block {block_count} of at least {old_block_count} (counts={block_counts:?})");
 

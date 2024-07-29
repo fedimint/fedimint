@@ -33,9 +33,9 @@ where
     State: Default,
 {
     fn default() -> Self {
-        ModuleRegistry {
+        Self {
             inner: BTreeMap::new(),
-            state: Default::default(),
+            state: State::default(),
         }
     }
 }

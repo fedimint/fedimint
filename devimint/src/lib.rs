@@ -3,7 +3,6 @@
 #![allow(clippy::cast_possible_wrap)]
 #![allow(clippy::cast_precision_loss)]
 #![allow(clippy::cast_sign_loss)]
-#![allow(clippy::default_trait_access)]
 #![allow(clippy::doc_markdown)]
 #![allow(clippy::explicit_deref_methods)]
 #![allow(clippy::implicit_hasher)]
@@ -13,7 +12,6 @@
 #![allow(clippy::missing_panics_doc)]
 #![allow(clippy::module_name_repetitions)]
 #![allow(clippy::must_use_candidate)]
-#![allow(clippy::needless_pass_by_value)]
 #![allow(clippy::return_self_not_must_use)]
 #![allow(clippy::too_many_lines)]
 

@@ -27,7 +27,7 @@ impl MessageId {
 impl<M> Default for MessageQueue<M> {
     fn default() -> Self {
         MessageQueue {
-            queue: Default::default(),
+            queue: VecDeque::default(),
             next_id: MessageId(1),
         }
     }

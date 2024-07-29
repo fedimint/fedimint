@@ -14,6 +14,7 @@ use fedimint_core::core::{ModuleInstanceId, ModuleKind};
 use fedimint_core::db::mem_impl::MemDatabase;
 use fedimint_core::db::Database;
 use fedimint_core::envs::BitcoinRpcConfig;
+use fedimint_core::module::registry::ModuleRegistry;
 use fedimint_core::module::{DynServerModuleInit, IServerModuleInit};
 use fedimint_core::task::{MaybeSend, MaybeSync, TaskGroup};
 use fedimint_core::util::SafeUrl;
@@ -78,7 +79,7 @@ impl Fixtures {
         Self {
             clients: vec![],
             servers: vec![],
-            params: Default::default(),
+            params: ModuleRegistry::default(),
             bitcoin_rpc: config,
             bitcoin,
             dyn_bitcoin_rpc,

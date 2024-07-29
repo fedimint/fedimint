@@ -671,7 +671,7 @@ impl Federation {
         let new_fedimintd_version = crate::util::FedimintdCmd::version_or_default().await;
         std::env::set_var("FM_FEDIMINTD_BASE_EXECUTABLE", current_fedimintd_path);
 
-        if Self::version_requires_coordinated_shutdown(new_fedimintd_version) {
+        if Self::version_requires_coordinated_shutdown(&new_fedimintd_version) {
             self.restart_all_with_bin_after_session(process_mgr, bin_path)
                 .await
         } else {
@@ -680,7 +680,7 @@ impl Federation {
         }
     }
 
-    fn version_requires_coordinated_shutdown(version: semver::Version) -> bool {
+    fn version_requires_coordinated_shutdown(version: &semver::Version) -> bool {
         matches!((version.major, version.minor), (0, 4 | 5))
     }
 
@@ -1254,7 +1254,7 @@ async fn set_config_gen_params(
         &mut server_gen_params,
         Network::Regtest,
         10,
-        fedimintd_version,
+        &fedimintd_version,
     );
     // Since we are not actually calling `fedimintd` binary, parse and handle
     // `FM_EXTRA_META_DATA` like it would do.
@@ -1289,7 +1289,7 @@ async fn cli_set_config_gen_params(
         &mut server_gen_params,
         Network::Regtest,
         10,
-        fedimintd_version,
+        &fedimintd_version,
     );
     // Since we are not actually calling `fedimintd` binary, parse and handle
     // `FM_EXTRA_META_DATA` like it would do.

@@ -694,7 +694,7 @@ where
         task_handle: &TaskHandle,
     ) {
         let common = CommonPeerConnectionState {
-            resend_queue: Default::default(),
+            resend_queue: MessageQueue::default(),
             incoming,
             outgoing,
             our_id,

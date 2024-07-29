@@ -64,7 +64,7 @@ impl Notifications {
         self.buckets[slot_index_for_key(key)].notify_waiters();
     }
 
-    /// Notifies the waiters about the notifications recorded in NotifyQueue.
+    /// Notifies the waiters about the notifications recorded in `NotifyQueue`.
     pub fn submit_queue(&self, queue: &NotifyQueue) {
         for bucket in queue.buckets.iter_ones() {
             self.buckets[bucket].notify_waiters();

@@ -84,21 +84,23 @@ impl MintClientModule {
 
         let notes = Self::get_all_spendable_notes(&mut dbtx_ctx.module_dbtx()).await;
 
-        let pending_notes: Vec<(OutPoint, Amount, NoteIssuanceRequest)> = self.client_ctx.get_own_active_states().await.into_iter()
-            .filter_map(|(state, _active_state)| {
-
-                match state {
-                    MintClientStateMachines::Output(MintOutputStateMachine { common, state }) => {
-                        match state {
-                            crate::output::MintOutputStates::Created(state) => Some((common.out_point, state.amount, state.issuance_request)),
-                            crate::output::MintOutputStates::Succeeded(_) => None /* we back these via get_all_spendable_notes */,
-                            _ => None,
-                        }
-                    }
-                    _ => None,
-                }
+        let pending_notes: Vec<(OutPoint, Amount, NoteIssuanceRequest)> = self
+            .client_ctx
+            .get_own_active_states()
+            .await
+            .into_iter()
+            .filter_map(|(state, _active_state)| match state {
+                MintClientStateMachines::Output(MintOutputStateMachine {
+                    common,
+                    state: crate::output::MintOutputStates::Created(created_state),
+                }) => Some((
+                    common.out_point,
+                    created_state.amount,
+                    created_state.issuance_request,
+                )),
+                _ => None,
             })
-            .collect::<Vec<_>>() ;
+            .collect::<Vec<_>>();
 
         let mut idxes = vec![];
         for &amount in self.cfg.tbs_pks.tiers() {

@@ -60,11 +60,11 @@ impl_db_lookup!(
     query_prefix = ContractUpdateKeyPrefix
 );
 
-/// We keep a separate mapping of incoming and outgoing ContractIds to Amounts,
-/// which allows us to quickly audit the total liabilities in the Lightning
-/// module.
+/// We keep a separate mapping of incoming and outgoing `ContractId`s to
+/// `Amount`s, which allows us to quickly audit the total liabilities in the
+/// Lightning module.
 ///
-/// This differs from MintAuditItemKeys, since it doesn't include an aggregate
+/// This differs from `MintAuditItemKey`s, since it doesn't include an aggregate
 /// *Total key. The motivation for not including the aggregate key is how the
 /// Amount associated to the contract mutates in the LN module. When a contract
 /// reaches a terminal state, the associated amount updates to 0. The additional

@@ -99,7 +99,7 @@ impl AuditSummary {
             .iter()
             .map(|(id, _)| create_empty_module_placeholder(*id))
             .collect::<Vec<_>>();
-        AuditSummary {
+        Self {
             net_assets: calculate_net_assets(audit.items.iter()),
             module_summaries: generate_module_summaries(
                 audit.items.iter().chain(&empty_module_placeholders),

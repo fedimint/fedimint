@@ -45,25 +45,25 @@ impl Amount {
     pub const ZERO: Self = Self { msats: 0 };
 
     /// Create an amount from a number of millisatoshis.
-    pub const fn from_msats(msats: u64) -> Amount {
-        Amount { msats }
+    pub const fn from_msats(msats: u64) -> Self {
+        Self { msats }
     }
 
     /// Create an amount from a number of satoshis.
-    pub const fn from_sats(sats: u64) -> Amount {
-        Amount::from_msats(sats * 1000)
+    pub const fn from_sats(sats: u64) -> Self {
+        Self::from_msats(sats * 1000)
     }
 
     /// Create an amount from a number of whole bitcoins.
-    pub const fn from_bitcoins(bitcoins: u64) -> Amount {
-        Amount::from_sats(bitcoins * SATS_PER_BITCOIN)
+    pub const fn from_bitcoins(bitcoins: u64) -> Self {
+        Self::from_sats(bitcoins * SATS_PER_BITCOIN)
     }
 
     /// Parse a decimal string as a value in the given denomination.
     ///
     /// Note: This only parses the value string.  If you want to parse a value
-    /// with denomination, use [FromStr].
-    pub fn from_str_in(s: &str, denom: Denomination) -> Result<Amount, ParseAmountError> {
+    /// with denomination, use [`FromStr`].
+    pub fn from_str_in(s: &str, denom: Denomination) -> Result<Self, ParseAmountError> {
         if denom == Denomination::MilliSatoshi {
             return Ok(Self::from_msats(s.parse()?));
         }
@@ -71,14 +71,14 @@ impl Amount {
         Ok(Self::from(btc_amt))
     }
 
-    pub fn saturating_sub(self, other: Amount) -> Self {
-        Amount {
+    pub fn saturating_sub(self, other: Self) -> Self {
+        Self {
             msats: self.msats.saturating_sub(other.msats),
         }
     }
 
     pub fn mul_u64(self, other: u64) -> Self {
-        Amount {
+        Self {
             msats: self.msats * other,
         }
     }
@@ -105,7 +105,7 @@ impl Amount {
         self.msats as f64 / 1000.0
     }
 
-    pub fn checked_sub(self, other: Amount) -> Option<Self> {
+    pub fn checked_sub(self, other: Self) -> Option<Self> {
         Some(Self {
             msats: self.msats.checked_sub(other.msats)?,
         })
@@ -119,10 +119,10 @@ impl std::fmt::Display for Amount {
 }
 
 impl std::ops::Rem for Amount {
-    type Output = Amount;
+    type Output = Self;
 
     fn rem(self, rhs: Self) -> Self::Output {
-        Amount {
+        Self {
             msats: self.msats % rhs.msats,
         }
     }
@@ -149,10 +149,10 @@ impl std::ops::SubAssign for Amount {
 }
 
 impl std::ops::Mul<u64> for Amount {
-    type Output = Amount;
+    type Output = Self;
 
     fn mul(self, rhs: u64) -> Self::Output {
-        Amount {
+        Self {
             msats: self.msats * rhs,
         }
     }
@@ -169,10 +169,10 @@ impl std::ops::Mul<Amount> for u64 {
 }
 
 impl std::ops::Add for Amount {
-    type Output = Amount;
+    type Output = Self;
 
     fn add(self, rhs: Self) -> Self::Output {
-        Amount {
+        Self {
             msats: self.msats + rhs.msats,
         }
     }
@@ -185,18 +185,18 @@ impl std::ops::AddAssign for Amount {
 }
 
 impl std::iter::Sum for Amount {
-    fn sum<I: Iterator<Item = Amount>>(iter: I) -> Self {
-        Amount {
+    fn sum<I: Iterator<Item = Self>>(iter: I) -> Self {
+        Self {
             msats: iter.map(|amt| amt.msats).sum::<u64>(),
         }
     }
 }
 
 impl std::ops::Sub for Amount {
-    type Output = Amount;
+    type Output = Self;
 
     fn sub(self, rhs: Self) -> Self::Output {
-        Amount {
+        Self {
             msats: self.msats - rhs.msats,
         }
     }
@@ -208,10 +208,10 @@ impl FromStr for Amount {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         if let Some(i) = s.find(char::is_alphabetic) {
             let (amt, denom) = s.split_at(i);
-            Amount::from_str_in(amt.trim(), denom.trim().parse()?)
+            Self::from_str_in(amt.trim(), denom.trim().parse()?)
         } else {
             // default to millisatoshi
-            Amount::from_str_in(s.trim(), bitcoin::Denomination::MilliSatoshi)
+            Self::from_str_in(s.trim(), bitcoin::Denomination::MilliSatoshi)
         }
     }
 }
@@ -219,7 +219,7 @@ impl FromStr for Amount {
 impl From<bitcoin::Amount> for Amount {
     fn from(amt: bitcoin::Amount) -> Self {
         assert!(amt.to_sat() <= 2_100_000_000_000_000);
-        Amount {
+        Self {
             msats: amt.to_sat() * 1000,
         }
     }
@@ -229,7 +229,7 @@ impl TryFrom<Amount> for bitcoin::Amount {
     type Error = anyhow::Error;
 
     fn try_from(value: Amount) -> anyhow::Result<Self> {
-        value.try_into_sats().map(bitcoin::Amount::from_sat)
+        value.try_into_sats().map(Self::from_sat)
     }
 }
 

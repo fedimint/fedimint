@@ -4,6 +4,7 @@ use std::io::{Read, Write};
 use fedimint_core::config::FederationId;
 use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::encoding::{Decodable, DecodeError, Encodable};
+use fedimint_core::module::registry::ModuleRegistry;
 use fedimint_derive_secret::{ChildId, DerivableSecret};
 use rand::{CryptoRng, Rng, RngCore};
 
@@ -79,7 +80,7 @@ impl RootSecretStrategy for PlainRootSecretStrategy {
     }
 
     fn consensus_decode(reader: &mut impl Read) -> Result<Self::Encoding, DecodeError> {
-        Self::Encoding::consensus_decode(reader, &Default::default())
+        Self::Encoding::consensus_decode(reader, &ModuleRegistry::default())
     }
 
     fn random<R>(rng: &mut R) -> Self::Encoding

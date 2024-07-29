@@ -1,7 +1,6 @@
 #![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::cast_precision_loss)]
-#![allow(clippy::default_trait_access)]
 #![allow(clippy::missing_errors_doc)]
 #![allow(clippy::too_many_lines)]
 

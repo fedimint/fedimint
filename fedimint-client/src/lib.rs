@@ -1,6 +1,5 @@
 #![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
-#![allow(clippy::default_trait_access)]
 #![allow(clippy::doc_markdown)]
 #![allow(clippy::explicit_deref_methods)]
 #![allow(clippy::missing_errors_doc)]
@@ -112,7 +111,7 @@ use fedimint_core::db::{
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::endpoint_constants::{CLIENT_CONFIG_ENDPOINT, VERSION_ENDPOINT};
 use fedimint_core::invite_code::InviteCode;
-use fedimint_core::module::registry::ModuleDecoderRegistry;
+use fedimint_core::module::registry::{ModuleDecoderRegistry, ModuleRegistry};
 use fedimint_core::module::{
     ApiAuth, ApiRequestErased, ApiVersion, MultiApiVersion, SupportedApiVersionsSummary,
     SupportedCoreApiVersions, SupportedModuleApiVersions,
@@ -855,7 +854,7 @@ impl Client {
 
         Ok(match client_secret {
             Some(client_secret) => Some(
-                T::consensus_decode(&mut client_secret.as_slice(), &Default::default())
+                T::consensus_decode(&mut client_secret.as_slice(), &ModuleRegistry::default())
                     .map_err(|e| anyhow!("Decoding failed: {e}"))?,
             ),
             None => None,
@@ -1970,8 +1969,8 @@ impl ClientBuilder {
     fn new(db: Database) -> Self {
         let meta_service = MetaService::new(LegacyMetaSource::default());
         ClientBuilder {
-            module_inits: Default::default(),
-            primary_module_instance: Default::default(),
+            module_inits: ModuleInitRegistry::new(),
+            primary_module_instance: None,
             admin_creds: None,
             db_no_decoders: db,
             stopped: false,
@@ -1984,7 +1983,7 @@ impl ClientBuilder {
             module_inits: client.module_inits.clone(),
             primary_module_instance: Some(client.primary_module_instance),
             admin_creds: None,
-            db_no_decoders: client.db.with_decoders(Default::default()),
+            db_no_decoders: client.db.with_decoders(ModuleRegistry::default()),
             stopped: false,
             // non unique
             meta_service: client.meta_service.clone(),
@@ -2329,7 +2328,7 @@ impl ClientBuilder {
         .unwrap_or(ApiVersionSet {
             core: ApiVersion::new(0, 0),
             // This will cause all modules to skip initialization
-            modules: Default::default(),
+            modules: BTreeMap::new(),
         });
 
         debug!(?common_api_versions, "Completed api version negotiation");
@@ -2337,11 +2336,11 @@ impl ClientBuilder {
         let mut module_recoveries: BTreeMap<
             ModuleInstanceId,
             Pin<Box<maybe_add_send!(dyn Future<Output = anyhow::Result<()>>)>>,
-        > = Default::default();
+        > = BTreeMap::new();
         let mut module_recovery_progress_receivers: BTreeMap<
             ModuleInstanceId,
             watch::Receiver<RecoveryProgress>,
-        > = Default::default();
+        > = BTreeMap::new();
 
         let final_client = FinalClient::default();
 
@@ -2605,9 +2604,9 @@ impl ClientBuilder {
         config.clone().redecode_raw(decoders)
     }
 
-    /// Re-derive client's root_secret using the federation ID. This eliminates
-    /// the possibility of having the same client root_secret across
-    /// multiple federations.
+    /// Re-derive client's `root_secret` using the federation ID. This
+    /// eliminates the possibility of having the same client `root_secret`
+    /// across multiple federations.
     fn federation_root_secret(
         root_secret: &DerivableSecret,
         config: &ClientConfig,
@@ -2625,7 +2624,7 @@ pub async fn get_decoded_client_secret<T: Decodable>(db: &Database) -> anyhow::R
 
     match client_secret {
         Some(client_secret) => {
-            T::consensus_decode(&mut client_secret.as_slice(), &Default::default())
+            T::consensus_decode(&mut client_secret.as_slice(), &ModuleRegistry::default())
                 .map_err(|e| anyhow!("Decoding failed: {e}"))
         }
         None => bail!("Encoded client secret not present in DB"),

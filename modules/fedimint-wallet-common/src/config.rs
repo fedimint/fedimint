@@ -40,7 +40,7 @@ impl WalletGenParams {
                     ))
                     .expect("Failed to parse default esplora server"),
                 },
-                fee_consensus: Default::default(),
+                fee_consensus: FeeConsensus::default(),
             },
         }
     }
@@ -205,7 +205,7 @@ impl WalletClientConfig {
             peg_in_descriptor,
             network,
             finality_delay,
-            fee_consensus: Default::default(),
+            fee_consensus: FeeConsensus::default(),
             default_bitcoin_rpc,
         }
     }

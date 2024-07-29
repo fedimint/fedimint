@@ -1,7 +1,5 @@
 use std::io::{Error, Read, Write};
 
-use secp256k1_zkp::ecdsa::Signature;
-
 use crate::encoding::{Decodable, DecodeError, Encodable};
 use crate::module::registry::ModuleDecoderRegistry;
 
@@ -18,7 +16,7 @@ impl Decodable for secp256k1_zkp::ecdsa::Signature {
         d: &mut D,
         modules: &ModuleDecoderRegistry,
     ) -> Result<Self, DecodeError> {
-        Signature::from_compact(&<[u8; 64]>::consensus_decode(d, modules)?)
+        Self::from_compact(&<[u8; 64]>::consensus_decode(d, modules)?)
             .map_err(DecodeError::from_err)
     }
 }
@@ -34,8 +32,7 @@ impl Decodable for secp256k1_zkp::PublicKey {
         d: &mut D,
         modules: &ModuleDecoderRegistry,
     ) -> Result<Self, DecodeError> {
-        secp256k1_zkp::PublicKey::from_slice(&<[u8; 33]>::consensus_decode(d, modules)?)
-            .map_err(DecodeError::from_err)
+        Self::from_slice(&<[u8; 33]>::consensus_decode(d, modules)?).map_err(DecodeError::from_err)
     }
 }
 
@@ -50,8 +47,7 @@ impl Decodable for secp256k1_zkp::SecretKey {
         d: &mut D,
         modules: &ModuleDecoderRegistry,
     ) -> Result<Self, DecodeError> {
-        secp256k1_zkp::SecretKey::from_slice(&<[u8; 32]>::consensus_decode(d, modules)?)
-            .map_err(DecodeError::from_err)
+        Self::from_slice(&<[u8; 32]>::consensus_decode(d, modules)?).map_err(DecodeError::from_err)
     }
 }
 
@@ -74,7 +70,7 @@ impl Decodable for secp256k1_zkp::schnorr::Signature {
     ) -> Result<Self, DecodeError> {
         let bytes =
             <[u8; secp256k1_zkp::constants::SCHNORR_SIGNATURE_SIZE]>::consensus_decode(d, modules)?;
-        secp256k1_zkp::schnorr::Signature::from_slice(&bytes).map_err(DecodeError::from_err)
+        Self::from_slice(&bytes).map_err(DecodeError::from_err)
     }
 }
 
