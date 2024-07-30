@@ -11,7 +11,7 @@ use std::collections::BTreeMap;
 use std::env;
 use std::fmt::Debug;
 use std::future::Future;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, LazyLock, Mutex};
 use std::time::Duration;
 
 use anyhow::Context;
@@ -27,7 +27,6 @@ use fedimint_core::txoproof::TxOutProof;
 use fedimint_core::util::SafeUrl;
 use fedimint_core::{apply, async_trait_maybe_send, dyn_newtype_define, Feerate};
 use fedimint_logging::{LOG_BLOCKCHAIN, LOG_CORE};
-use once_cell::sync::Lazy;
 use tracing::{debug, info};
 
 #[cfg(feature = "bitcoincore-rpc")]
@@ -48,8 +47,8 @@ const SIGNET_GENESIS_BLOCK_HASH: &str =
     "00000008819873e925422c1ff0f99f7cc9bbb232af63a077a480a3633bee1ef6";
 
 /// Global factories for creating bitcoin RPCs
-static BITCOIN_RPC_REGISTRY: Lazy<Mutex<BTreeMap<String, DynBitcoindRpcFactory>>> =
-    Lazy::new(|| {
+static BITCOIN_RPC_REGISTRY: LazyLock<Mutex<BTreeMap<String, DynBitcoindRpcFactory>>> =
+    LazyLock::new(|| {
         Mutex::new(BTreeMap::from([
             #[cfg(feature = "esplora-client")]
             ("esplora".to_string(), esplora::EsploraFactory.into()),

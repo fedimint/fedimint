@@ -1,3 +1,5 @@
+use std::sync::LazyLock;
+
 use fedimint_metrics::prometheus::{
     register_histogram_vec_with_registry, register_int_gauge_with_registry, IntGauge,
 };
@@ -5,9 +7,8 @@ use fedimint_metrics::{
     histogram_opts, opts, register_histogram_with_registry, Histogram, HistogramVec,
     AMOUNTS_BUCKETS_SATS, REGISTRY,
 };
-use once_cell::sync::Lazy;
 
-pub(crate) static WALLET_INOUT_SATS: Lazy<HistogramVec> = Lazy::new(|| {
+pub(crate) static WALLET_INOUT_SATS: LazyLock<HistogramVec> = LazyLock::new(|| {
     register_histogram_vec_with_registry!(
         histogram_opts!(
             "wallet_inout_sats",
@@ -19,7 +20,7 @@ pub(crate) static WALLET_INOUT_SATS: Lazy<HistogramVec> = Lazy::new(|| {
     )
     .unwrap()
 });
-pub(crate) static WALLET_INOUT_FEES_SATS: Lazy<HistogramVec> = Lazy::new(|| {
+pub(crate) static WALLET_INOUT_FEES_SATS: LazyLock<HistogramVec> = LazyLock::new(|| {
     register_histogram_vec_with_registry!(
         histogram_opts!(
             "wallet_inout_fees_sats",
@@ -31,7 +32,7 @@ pub(crate) static WALLET_INOUT_FEES_SATS: Lazy<HistogramVec> = Lazy::new(|| {
     )
     .unwrap()
 });
-pub(crate) static WALLET_PEGIN_SATS: Lazy<Histogram> = Lazy::new(|| {
+pub(crate) static WALLET_PEGIN_SATS: LazyLock<Histogram> = LazyLock::new(|| {
     register_histogram_with_registry!(
         histogram_opts!(
             "wallet_pegin_sats",
@@ -42,7 +43,7 @@ pub(crate) static WALLET_PEGIN_SATS: Lazy<Histogram> = Lazy::new(|| {
     )
     .unwrap()
 });
-pub(crate) static WALLET_PEGIN_FEES_SATS: Lazy<Histogram> = Lazy::new(|| {
+pub(crate) static WALLET_PEGIN_FEES_SATS: LazyLock<Histogram> = LazyLock::new(|| {
     register_histogram_with_registry!(
         histogram_opts!(
             "wallet_pegin_fees_sats",
@@ -53,7 +54,7 @@ pub(crate) static WALLET_PEGIN_FEES_SATS: Lazy<Histogram> = Lazy::new(|| {
     )
     .unwrap()
 });
-pub(crate) static WALLET_PEGOUT_SATS: Lazy<Histogram> = Lazy::new(|| {
+pub(crate) static WALLET_PEGOUT_SATS: LazyLock<Histogram> = LazyLock::new(|| {
     register_histogram_with_registry!(
         histogram_opts!(
             "wallet_pegout_sats",
@@ -64,7 +65,7 @@ pub(crate) static WALLET_PEGOUT_SATS: Lazy<Histogram> = Lazy::new(|| {
     )
     .unwrap()
 });
-pub(crate) static WALLET_PEGOUT_FEES_SATS: Lazy<Histogram> = Lazy::new(|| {
+pub(crate) static WALLET_PEGOUT_FEES_SATS: LazyLock<Histogram> = LazyLock::new(|| {
     register_histogram_with_registry!(
         histogram_opts!(
             "wallet_pegout_fees_sats",
@@ -75,7 +76,7 @@ pub(crate) static WALLET_PEGOUT_FEES_SATS: Lazy<Histogram> = Lazy::new(|| {
     )
     .unwrap()
 });
-pub(crate) static WALLET_BLOCK_COUNT: Lazy<IntGauge> = Lazy::new(|| {
+pub(crate) static WALLET_BLOCK_COUNT: LazyLock<IntGauge> = LazyLock::new(|| {
     register_int_gauge_with_registry!(
         opts!(
             "wallet_block_count",
