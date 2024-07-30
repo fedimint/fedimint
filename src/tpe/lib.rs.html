@@ -274,7 +274,45 @@
 <a href="#274" id="274">274</a>
 <a href="#275" id="275">275</a>
 <a href="#276" id="276">276</a>
+<a href="#277" id="277">277</a>
+<a href="#278" id="278">278</a>
+<a href="#279" id="279">279</a>
+<a href="#280" id="280">280</a>
+<a href="#281" id="281">281</a>
+<a href="#282" id="282">282</a>
+<a href="#283" id="283">283</a>
+<a href="#284" id="284">284</a>
+<a href="#285" id="285">285</a>
+<a href="#286" id="286">286</a>
+<a href="#287" id="287">287</a>
+<a href="#288" id="288">288</a>
+<a href="#289" id="289">289</a>
+<a href="#290" id="290">290</a>
+<a href="#291" id="291">291</a>
+<a href="#292" id="292">292</a>
+<a href="#293" id="293">293</a>
+<a href="#294" id="294">294</a>
+<a href="#295" id="295">295</a>
+<a href="#296" id="296">296</a>
+<a href="#297" id="297">297</a>
+<a href="#298" id="298">298</a>
+<a href="#299" id="299">299</a>
+<a href="#300" id="300">300</a>
+<a href="#301" id="301">301</a>
+<a href="#302" id="302">302</a>
+<a href="#303" id="303">303</a>
+<a href="#304" id="304">304</a>
+<a href="#305" id="305">305</a>
+<a href="#306" id="306">306</a>
+<a href="#307" id="307">307</a>
+<a href="#308" id="308">308</a>
+<a href="#309" id="309">309</a>
+<a href="#310" id="310">310</a>
+<a href="#311" id="311">311</a>
+<a href="#312" id="312">312</a>
+<a href="#313" id="313">313</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
+<span class="kw">use </span>std::io::Write;
 <span class="kw">use </span>std::ops::Mul;
 
 <span class="kw">use </span>bitcoin_hashes::{sha256, Hash};
@@ -317,32 +355,6 @@
     <span class="kw">pub </span>signature: EphemeralSignature,
 }
 
-<span class="kw">pub fn </span>verify_ciphertext(ct: <span class="kw-2">&amp;</span>CipherText, commitment: <span class="kw-2">&amp;</span>sha256::Hash) -&gt; bool {
-    <span class="kw">let </span>message = hash_to_message(<span class="kw-2">&amp;</span>ct.encrypted_preimage, <span class="kw-2">&amp;</span>ct.pk.<span class="number">0</span>, commitment);
-
-    pairing(<span class="kw-2">&amp;</span>G1Affine::generator(), <span class="kw-2">&amp;</span>ct.signature.<span class="number">0</span>) == pairing(<span class="kw-2">&amp;</span>ct.pk.<span class="number">0</span>, <span class="kw-2">&amp;</span>message)
-}
-
-<span class="kw">pub fn </span>decrypt_preimage(ct: <span class="kw-2">&amp;</span>CipherText, agg_dk: <span class="kw-2">&amp;</span>AggregateDecryptionKey) -&gt; [u8; <span class="number">32</span>] {
-    xor_with_hash(ct.encrypted_preimage, agg_dk)
-}
-
-<span class="kw">pub fn </span>derive_agg_decryption_key(
-    agg_pk: <span class="kw-2">&amp;</span>AggregatePublicKey,
-    encryption_seed: <span class="kw-2">&amp;</span>[u8; <span class="number">32</span>],
-) -&gt; AggregateDecryptionKey {
-    AggregateDecryptionKey(
-        agg_pk
-            .<span class="number">0
-            </span>.mul(derive_ephemeral_sk(encryption_seed))
-            .to_affine(),
-    )
-}
-
-<span class="kw">fn </span>derive_ephemeral_sk(encryption_seed: <span class="kw-2">&amp;</span>[u8; <span class="number">32</span>]) -&gt; Scalar {
-    Scalar::random(<span class="kw-2">&amp;mut </span>ChaChaRng::from_seed(<span class="kw-2">*</span>encryption_seed))
-}
-
 <span class="kw">pub fn </span>encrypt_preimage(
     agg_pk: <span class="kw-2">&amp;</span>AggregatePublicKey,
     encryption_seed: <span class="kw-2">&amp;</span>[u8; <span class="number">32</span>],
@@ -365,34 +377,24 @@
     }
 }
 
-<span class="kw">pub fn </span>verify_agg_decryption_key(
+<span class="kw">pub fn </span>derive_agg_decryption_key(
     agg_pk: <span class="kw-2">&amp;</span>AggregatePublicKey,
-    agg_dk: <span class="kw-2">&amp;</span>AggregateDecryptionKey,
-    ct: <span class="kw-2">&amp;</span>CipherText,
-    commitment: <span class="kw-2">&amp;</span>sha256::Hash,
-) -&gt; bool {
-    <span class="kw">let </span>message = hash_to_message(<span class="kw-2">&amp;</span>ct.encrypted_preimage, <span class="kw-2">&amp;</span>ct.pk.<span class="number">0</span>, commitment);
-
-    pairing(<span class="kw-2">&amp;</span>agg_dk.<span class="number">0</span>, <span class="kw-2">&amp;</span>message) == pairing(<span class="kw-2">&amp;</span>agg_pk.<span class="number">0</span>, <span class="kw-2">&amp;</span>ct.signature.<span class="number">0</span>)
+    encryption_seed: <span class="kw-2">&amp;</span>[u8; <span class="number">32</span>],
+) -&gt; AggregateDecryptionKey {
+    AggregateDecryptionKey(
+        agg_pk
+            .<span class="number">0
+            </span>.mul(derive_ephemeral_sk(encryption_seed))
+            .to_affine(),
+    )
 }
 
-<span class="kw">pub fn </span>create_decryption_key_share(sks: <span class="kw-2">&amp;</span>SecretKeyShare, ct: <span class="kw-2">&amp;</span>CipherText) -&gt; DecryptionKeyShare {
-    DecryptionKeyShare(ct.pk.<span class="number">0</span>.mul(sks.<span class="number">0</span>).to_affine())
-}
-
-<span class="kw">pub fn </span>verify_decryption_key_share(
-    pks: <span class="kw-2">&amp;</span>PublicKeyShare,
-    dks: <span class="kw-2">&amp;</span>DecryptionKeyShare,
-    ct: <span class="kw-2">&amp;</span>CipherText,
-    commitment: <span class="kw-2">&amp;</span>sha256::Hash,
-) -&gt; bool {
-    <span class="kw">let </span>message = hash_to_message(<span class="kw-2">&amp;</span>ct.encrypted_preimage, <span class="kw-2">&amp;</span>ct.pk.<span class="number">0</span>, commitment);
-
-    pairing(<span class="kw-2">&amp;</span>dks.<span class="number">0</span>, <span class="kw-2">&amp;</span>message) == pairing(<span class="kw-2">&amp;</span>pks.<span class="number">0</span>, <span class="kw-2">&amp;</span>ct.signature.<span class="number">0</span>)
+<span class="kw">fn </span>derive_ephemeral_sk(encryption_seed: <span class="kw-2">&amp;</span>[u8; <span class="number">32</span>]) -&gt; Scalar {
+    Scalar::random(<span class="kw-2">&amp;mut </span>ChaChaRng::from_seed(<span class="kw-2">*</span>encryption_seed))
 }
 
 <span class="kw">fn </span>xor_with_hash(<span class="kw-2">mut </span>bytes: [u8; <span class="number">32</span>], agg_dk: <span class="kw-2">&amp;</span>AggregateDecryptionKey) -&gt; [u8; <span class="number">32</span>] {
-    <span class="kw">let </span>hash = agg_dk.consensus_hash::&lt;sha256::Hash&gt;();
+    <span class="kw">let </span>hash = sha256::Hash::hash(<span class="kw-2">&amp;</span>agg_dk.<span class="number">0</span>.to_compressed());
 
     <span class="kw">for </span>i <span class="kw">in </span><span class="number">0</span>..<span class="number">32 </span>{
         bytes[i] ^= hash[i];
@@ -406,16 +408,86 @@
     ephemeral_pk: <span class="kw-2">&amp;</span>G1Affine,
     commitment: <span class="kw-2">&amp;</span>sha256::Hash,
 ) -&gt; G2Affine {
-    <span class="kw">let </span>message = (
-        <span class="string">"FEDIMINT_TPE_BLS12_381_MESSAGE"</span>,
-        <span class="kw-2">*</span>encrypted_point,
-        <span class="kw-2">*</span>ephemeral_pk,
-        <span class="kw-2">*</span>commitment,
-    );
+    <span class="kw">let </span><span class="kw-2">mut </span>engine = sha256::HashEngine::default();
 
-    <span class="kw">let </span>seed = message.consensus_hash::&lt;sha256::Hash&gt;().to_byte_array();
+    engine
+        .write_all(<span class="string">"FEDIMINT_TPE_BLS12_381_MESSAGE"</span>.as_bytes())
+        .expect(<span class="string">"Writing to a hash engine cannot fail"</span>);
+
+    engine
+        .write_all(encrypted_point)
+        .expect(<span class="string">"Writing to a hash engine cannot fail"</span>);
+
+    engine
+        .write_all(<span class="kw-2">&amp;</span>ephemeral_pk.to_compressed())
+        .expect(<span class="string">"Writing to a hash engine cannot fail"</span>);
+
+    engine
+        .write_all(commitment.as_byte_array())
+        .expect(<span class="string">"Writing to a hash engine cannot fail"</span>);
+
+    <span class="kw">let </span>seed = sha256::Hash::from_engine(engine).to_byte_array();
 
     G2Projective::random(<span class="kw-2">&amp;mut </span>ChaChaRng::from_seed(seed)).to_affine()
+}
+
+<span class="doccomment">/// Verifying a ciphertext guarantees that it has not been malleated.
+</span><span class="kw">pub fn </span>verify_ciphertext(ct: <span class="kw-2">&amp;</span>CipherText, commitment: <span class="kw-2">&amp;</span>sha256::Hash) -&gt; bool {
+    <span class="kw">let </span>message = hash_to_message(<span class="kw-2">&amp;</span>ct.encrypted_preimage, <span class="kw-2">&amp;</span>ct.pk.<span class="number">0</span>, commitment);
+
+    pairing(<span class="kw-2">&amp;</span>G1Affine::generator(), <span class="kw-2">&amp;</span>ct.signature.<span class="number">0</span>) == pairing(<span class="kw-2">&amp;</span>ct.pk.<span class="number">0</span>, <span class="kw-2">&amp;</span>message)
+}
+
+<span class="kw">pub fn </span>decrypt_preimage(ct: <span class="kw-2">&amp;</span>CipherText, agg_dk: <span class="kw-2">&amp;</span>AggregateDecryptionKey) -&gt; [u8; <span class="number">32</span>] {
+    xor_with_hash(ct.encrypted_preimage, agg_dk)
+}
+
+<span class="doccomment">/// The function asserts that the ciphertext is valid.
+</span><span class="kw">pub fn </span>verify_agg_decryption_key(
+    agg_pk: <span class="kw-2">&amp;</span>AggregatePublicKey,
+    agg_dk: <span class="kw-2">&amp;</span>AggregateDecryptionKey,
+    ct: <span class="kw-2">&amp;</span>CipherText,
+    commitment: <span class="kw-2">&amp;</span>sha256::Hash,
+) -&gt; bool {
+    <span class="kw">let </span>message = hash_to_message(<span class="kw-2">&amp;</span>ct.encrypted_preimage, <span class="kw-2">&amp;</span>ct.pk.<span class="number">0</span>, commitment);
+
+    <span class="macro">assert_eq!</span>(
+        pairing(<span class="kw-2">&amp;</span>G1Affine::generator(), <span class="kw-2">&amp;</span>ct.signature.<span class="number">0</span>),
+        pairing(<span class="kw-2">&amp;</span>ct.pk.<span class="number">0</span>, <span class="kw-2">&amp;</span>message)
+    );
+
+    <span class="comment">// Since the ciphertext is valid its signature is the ecdh point of the message
+    // and the ephemeral public key. Hence, the following equation holds if and only
+    // if the aggregate decryption key is the ecdh point of the ephemeral public key
+    // and the aggregate public key.
+
+    </span>pairing(<span class="kw-2">&amp;</span>agg_dk.<span class="number">0</span>, <span class="kw-2">&amp;</span>message) == pairing(<span class="kw-2">&amp;</span>agg_pk.<span class="number">0</span>, <span class="kw-2">&amp;</span>ct.signature.<span class="number">0</span>)
+}
+
+<span class="kw">pub fn </span>create_decryption_key_share(sks: <span class="kw-2">&amp;</span>SecretKeyShare, ct: <span class="kw-2">&amp;</span>CipherText) -&gt; DecryptionKeyShare {
+    DecryptionKeyShare(ct.pk.<span class="number">0</span>.mul(sks.<span class="number">0</span>).to_affine())
+}
+
+<span class="doccomment">/// The function asserts that the ciphertext is valid.
+</span><span class="kw">pub fn </span>verify_decryption_key_share(
+    pks: <span class="kw-2">&amp;</span>PublicKeyShare,
+    dks: <span class="kw-2">&amp;</span>DecryptionKeyShare,
+    ct: <span class="kw-2">&amp;</span>CipherText,
+    commitment: <span class="kw-2">&amp;</span>sha256::Hash,
+) -&gt; bool {
+    <span class="kw">let </span>message = hash_to_message(<span class="kw-2">&amp;</span>ct.encrypted_preimage, <span class="kw-2">&amp;</span>ct.pk.<span class="number">0</span>, commitment);
+
+    <span class="macro">assert_eq!</span>(
+        pairing(<span class="kw-2">&amp;</span>G1Affine::generator(), <span class="kw-2">&amp;</span>ct.signature.<span class="number">0</span>),
+        pairing(<span class="kw-2">&amp;</span>ct.pk.<span class="number">0</span>, <span class="kw-2">&amp;</span>message)
+    );
+
+    <span class="comment">// Since the ciphertext is valid its signature is the ecdh point of the message
+    // and the ephemeral public key. Hence, the following equation holds if and only
+    // if the decryption key share is the ecdh point of the ephemeral public key and
+    // the public key share.
+
+    </span>pairing(<span class="kw-2">&amp;</span>dks.<span class="number">0</span>, <span class="kw-2">&amp;</span>message) == pairing(<span class="kw-2">&amp;</span>pks.<span class="number">0</span>, <span class="kw-2">&amp;</span>ct.signature.<span class="number">0</span>)
 }
 
 <span class="kw">pub fn </span>aggregate_decryption_shares(
@@ -475,7 +547,7 @@
 
     <span class="kw">use crate</span>::{
         aggregate_decryption_shares, create_decryption_key_share, decrypt_preimage,
-        derive_agg_decryption_key, encrypt_preimage, verify_agg_decryption_key,
+        derive_agg_decryption_key, encrypt_preimage, verify_agg_decryption_key, verify_ciphertext,
         verify_decryption_key_share, AggregatePublicKey, DecryptionKeyShare, PublicKeyShare,
         SecretKeyShare,
     };
@@ -517,6 +589,8 @@
         <span class="kw">let </span>preimage = [<span class="number">42_u8</span>; <span class="number">32</span>];
         <span class="kw">let </span>commitment = sha256::Hash::hash(<span class="kw-2">&amp;</span>[<span class="number">0_u8</span>; <span class="number">32</span>]);
         <span class="kw">let </span>ciphertext = encrypt_preimage(<span class="kw-2">&amp;</span>agg_pk, <span class="kw-2">&amp;</span>encryption_seed, <span class="kw-2">&amp;</span>preimage, <span class="kw-2">&amp;</span>commitment);
+
+        <span class="macro">assert!</span>(verify_ciphertext(<span class="kw-2">&amp;</span>ciphertext, <span class="kw-2">&amp;</span>commitment));
 
         <span class="kw">let </span>shares: Vec&lt;DecryptionKeyShare&gt; = sks
             .iter()
