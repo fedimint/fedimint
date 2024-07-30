@@ -210,6 +210,10 @@ fuzz-target-debug TARGET="" CRASH="" *ARGS="--exit_upon_crash":
 build-docs:
   ./scripts/dev/build-docs.sh
 
+# Build `cargo doc`-generated documentation just like on https://docs.fedimint.org
+build-docs-nix: build-docs
+  nix build -L .#nightly.ci.workspaceDocExport
+
 # Open `cargo doc`-generated documentation
 docs: build-docs
   #!/usr/bin/env bash
