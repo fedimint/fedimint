@@ -196,12 +196,20 @@ pub struct PaymentFee {
 const DUST_LIMIT: Amount = Amount::from_sats(50);
 
 impl PaymentFee {
-    pub const TEN_PROMILLE_PLUS_50_SATS: PaymentFee = PaymentFee {
+    pub const SEND_FEE_MINIMUM: PaymentFee = PaymentFee {
         base: DUST_LIMIT,
-        parts_per_million: 10_000,
+        parts_per_million: 5_000,
     };
 
-    pub const FIVE_PROMILLE_PLUS_50_SATS: PaymentFee = PaymentFee {
+    // The difference between the SEND_FEE_LIMIT_DEFAULT and the SEND_FEE_MINIMUM
+    // leaves the gateway with a limit of one percent + 50 sats for lightning
+    // routing fees which is the LDK default
+    pub const SEND_FEE_LIMIT_DEFAULT: PaymentFee = PaymentFee {
+        base: Amount::from_sats(100),
+        parts_per_million: 15_000,
+    };
+
+    pub const RECEIVE_FEE_LIMIT_DEFAULT: PaymentFee = PaymentFee {
         base: DUST_LIMIT,
         parts_per_million: 5_000,
     };
@@ -355,7 +363,7 @@ impl LightningClientModule {
         self.send_internal(
             gateway_api,
             invoice,
-            PaymentFee::TEN_PROMILLE_PLUS_50_SATS,
+            PaymentFee::SEND_FEE_LIMIT_DEFAULT,
             EXPIRATION_DELTA_LIMIT_DEFAULT,
         )
         .await
@@ -590,7 +598,7 @@ impl LightningClientModule {
             invoice_amount,
             INVOICE_EXPIRATION_SECONDS_DEFAULT,
             Bolt11InvoiceDescription::Direct(String::new()),
-            PaymentFee::TEN_PROMILLE_PLUS_50_SATS,
+            PaymentFee::RECEIVE_FEE_LIMIT_DEFAULT,
         )
         .await
     }
@@ -634,7 +642,7 @@ impl LightningClientModule {
             invoice_amount,
             INVOICE_EXPIRATION_SECONDS_DEFAULT,
             Bolt11InvoiceDescription::Direct(String::new()),
-            PaymentFee::TEN_PROMILLE_PLUS_50_SATS,
+            PaymentFee::RECEIVE_FEE_LIMIT_DEFAULT,
         )
         .await
     }
