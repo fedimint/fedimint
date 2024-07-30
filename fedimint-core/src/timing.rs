@@ -14,7 +14,7 @@ struct TimeReporterInner {
 }
 
 impl TimeReporterInner {
-    fn report(&mut self) {
+    fn report(&self) {
         let duration = crate::time::now()
             .duration_since(self.start)
             .map_err(|error| {
@@ -137,7 +137,7 @@ impl TimeReporter {
 
 impl Drop for TimeReporter {
     fn drop(&mut self) {
-        if let Some(mut inner) = self.inner.take() {
+        if let Some(inner) = self.inner.take() {
             inner.report();
         }
     }

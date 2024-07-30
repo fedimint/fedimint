@@ -217,15 +217,15 @@ impl Fedimintd {
     /// # Arguments
     ///
     /// * `code_version_hash` - The git hash of the code that the `fedimintd`
-    /// binary is being built from. This is used mostly for information
-    /// purposes (`fedimintd version-hash`). See `fedimint-build` crate for
-    /// easy way to obtain it.
+    ///   binary is being built from. This is used mostly for information
+    ///   purposes (`fedimintd version-hash`). See `fedimint-build` crate for
+    ///   easy way to obtain it.
     ///
     /// * `code_version_vendor_suffix` - An optional suffix that will be
-    /// appended to the internal fedimint release version, to distinguish
-    /// binaries built by different vendors, usually with a different set of
-    /// modules. Currently DKG will enforce that the combined `code_version`
-    /// is the same between all peers.
+    ///   appended to the internal fedimint release version, to distinguish
+    ///   binaries built by different vendors, usually with a different set of
+    ///   modules. Currently DKG will enforce that the combined `code_version`
+    ///   is the same between all peers.
     pub fn new(
         code_version_hash: &str,
         code_version_vendor_suffix: Option<&str>,

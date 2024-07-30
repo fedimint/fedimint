@@ -223,7 +223,7 @@ where
     ) -> FederationResult<SerdeModuleEncoding<TransactionSubmissionOutcome>> {
         self.request_current_consensus(
             SUBMIT_TRANSACTION_ENDPOINT.to_owned(),
-            ApiRequestErased::new(&SerdeTransaction::from(&tx)),
+            ApiRequestErased::new(SerdeTransaction::from(&tx)),
         )
         .await
     }

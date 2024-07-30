@@ -35,7 +35,6 @@
 //! * [`fedimint_core::task`] for task spawning and control
 //! * [`fedimint_core::time`] for time-related operations
 
-#![allow(where_clauses_object_safety)] // https://github.com/dtolnay/async-trait/issues/228
 extern crate self as fedimint_core;
 
 use std::fmt::Debug;

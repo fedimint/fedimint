@@ -139,8 +139,8 @@ async fn authenticate(
 /// - Always Authenticated: these routes always require a Bearer token. Used by
 ///   gateway administrators.
 /// - Authenticated after config: these routes are unauthenticated before
-///   configuring the gateway to allow the user
-/// to set a password. After setting the password, they become authenticated.
+///   configuring the gateway to allow the user to set a password. After setting
+///   the password, they become authenticated.
 /// - Un-authenticated: anyone can request these routes. Used by fedimint
 ///   clients.
 fn v1_routes(gateway: Arc<Gateway>) -> Router {
