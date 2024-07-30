@@ -1,10 +1,11 @@
+use std::sync::LazyLock;
+
 use fedimint_metrics::prometheus::{
     register_histogram_vec_with_registry, register_histogram_with_registry,
 };
 use fedimint_metrics::{histogram_opts, Histogram, HistogramVec, AMOUNTS_BUCKETS_SATS, REGISTRY};
-use once_cell::sync::Lazy;
 
-pub(crate) static MINT_INOUT_SATS: Lazy<HistogramVec> = Lazy::new(|| {
+pub(crate) static MINT_INOUT_SATS: LazyLock<HistogramVec> = LazyLock::new(|| {
     register_histogram_vec_with_registry!(
         histogram_opts!(
             "mint_inout_sats",
@@ -16,7 +17,7 @@ pub(crate) static MINT_INOUT_SATS: Lazy<HistogramVec> = Lazy::new(|| {
     )
     .unwrap()
 });
-pub(crate) static MINT_INOUT_FEES_SATS: Lazy<HistogramVec> = Lazy::new(|| {
+pub(crate) static MINT_INOUT_FEES_SATS: LazyLock<HistogramVec> = LazyLock::new(|| {
     register_histogram_vec_with_registry!(
         histogram_opts!(
             "mint_inout_fees_sats",
@@ -28,7 +29,7 @@ pub(crate) static MINT_INOUT_FEES_SATS: Lazy<HistogramVec> = Lazy::new(|| {
     )
     .unwrap()
 });
-pub(crate) static MINT_REDEEMED_ECASH_SATS: Lazy<Histogram> = Lazy::new(|| {
+pub(crate) static MINT_REDEEMED_ECASH_SATS: LazyLock<Histogram> = LazyLock::new(|| {
     register_histogram_with_registry!(
         histogram_opts!(
             "mint_redeemed_ecash_sats",
@@ -39,7 +40,7 @@ pub(crate) static MINT_REDEEMED_ECASH_SATS: Lazy<Histogram> = Lazy::new(|| {
     )
     .unwrap()
 });
-pub(crate) static MINT_REDEEMED_ECASH_FEES_SATS: Lazy<Histogram> = Lazy::new(|| {
+pub(crate) static MINT_REDEEMED_ECASH_FEES_SATS: LazyLock<Histogram> = LazyLock::new(|| {
     register_histogram_with_registry!(
             histogram_opts!(
                 "mint_redeemed_ecash_fees_sats",
@@ -50,7 +51,7 @@ pub(crate) static MINT_REDEEMED_ECASH_FEES_SATS: Lazy<Histogram> = Lazy::new(|| 
         )
         .unwrap()
 });
-pub(crate) static MINT_ISSUED_ECASH_SATS: Lazy<Histogram> = Lazy::new(|| {
+pub(crate) static MINT_ISSUED_ECASH_SATS: LazyLock<Histogram> = LazyLock::new(|| {
     register_histogram_with_registry!(
         histogram_opts!(
             "mint_issued_ecash_sats",
@@ -61,7 +62,7 @@ pub(crate) static MINT_ISSUED_ECASH_SATS: Lazy<Histogram> = Lazy::new(|| {
     )
     .unwrap()
 });
-pub(crate) static MINT_ISSUED_ECASH_FEES_SATS: Lazy<Histogram> = Lazy::new(|| {
+pub(crate) static MINT_ISSUED_ECASH_FEES_SATS: LazyLock<Histogram> = LazyLock::new(|| {
     register_histogram_with_registry!(
         histogram_opts!(
             "mint_issued_ecash_fees_sats",

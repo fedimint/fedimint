@@ -28,7 +28,10 @@ anyhow = { workspace = true }
 async-trait = { workspace = true }
 
 # setup dependencies
-axum = { version = "0.7.5", default-features = false, features = ["form", "tokio"] }
+axum = { version = "0.7.5", default-features = false, features = [
+    "form",
+    "tokio",
+] }
 bincode = { workspace = true }
 bitcoin = { workspace = true }
 bytes = "1.6.1"
@@ -56,7 +59,6 @@ http-body = "1.0"
 hyper = { version = "1.4", features = ["full"] }
 itertools = { workspace = true }
 jsonrpsee = { version = "0.24.0", features = ["server"] }
-once_cell = { workspace = true }
 rand = { workspace = true }
 rcgen = "0.13.1"
 ring = "0.17.8"

@@ -37,7 +37,6 @@ hex = { workspace = true }
 hyper = "1"
 itertools = { workspace = true }
 jsonrpsee = { version = "0.24.0", features = ["server"] }
-once_cell = { workspace = true }
 parity-scale-codec = "3.6.12"
 pin-project = "1.1.5"
 rand = { workspace = true }

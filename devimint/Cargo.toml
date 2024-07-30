@@ -13,17 +13,25 @@ path = "src/main.rs"
 anyhow = { version = "1.0.86", features = ["backtrace"] }
 axum = { version = "0.7.5", features = ["tracing"] }
 bitcoincore-rpc = { workspace = true }
-clap = { version = "4.5.11", features = ["derive", "env", "std", "help", "usage", "error-context", "suggestions"], default-features = false }
+clap = { version = "4.5.11", features = [
+    "derive",
+    "env",
+    "std",
+    "help",
+    "usage",
+    "error-context",
+    "suggestions",
+], default-features = false }
 cln-rpc = { workspace = true }
 esplora-client = { workspace = true }
 fedimint-aead = { path = "../crypto/aead" }
 fedimint-api-client = { workspace = true }
 fedimint-bitcoind = { path = "../fedimint-bitcoind" }
-fedimint-client  = { path = "../fedimint-client" }
+fedimint-client = { path = "../fedimint-client" }
 fedimint-core = { workspace = true }
-fedimint-ln-client = { workspace = true, features = [ "cli" ] }
+fedimint-ln-client = { workspace = true, features = ["cli"] }
 fedimint-ln-server = { path = "../modules/fedimint-ln-server" }
-fedimint-lnv2-client = { workspace = true, features = [ "cli" ] }
+fedimint-lnv2-client = { workspace = true, features = ["cli"] }
 fedimint-lnv2-common = { workspace = true }
 fedimint-lnv2-server = { workspace = true }
 fedimint-logging = { workspace = true }
@@ -33,7 +41,9 @@ fedimint-portalloc = { path = "../utils/portalloc" }
 fedimint-server = { path = "../fedimint-server" }
 fedimint-testing = { workspace = true }
 fedimint-unknown-server = { path = "../modules/fedimint-unknown-server" }
-fedimint-wallet-client = { path = "../modules/fedimint-wallet-client", features = [ "cli" ] }
+fedimint-wallet-client = { path = "../modules/fedimint-wallet-client", features = [
+    "cli",
+] }
 fedimint-wallet-server = { path = "../modules/fedimint-wallet-server" }
 fedimintd = { path = "../fedimintd" }
 fs-lock = "0.1.3"
@@ -41,7 +51,6 @@ futures = { workspace = true }
 hex = { workspace = true }
 ln-gateway = { package = "fedimint-ln-gateway", path = "../gateway/ln-gateway" }
 nix = { version = "0.29.0", features = ["signal"] }
-once_cell = { workspace = true }
 rand = { workspace = true }
 semver = { workspace = true }
 serde = { workspace = true }

@@ -33,14 +33,19 @@ tokio = { version = "1.38.1", features = ["sync", "io-util"] }
 tracing = { workspace = true }
 
 [dev-dependencies]
-once_cell = { workspace = true }
 tokio-test = "0.4.4"
 tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
 
 [target.'cfg(not(target_family = "wasm"))'.dependencies]
-jsonrpsee-ws-client = { version = "0.24.0", features = ["tls"], default-features = false }
+jsonrpsee-ws-client = { version = "0.24.0", features = [
+    "tls",
+], default-features = false }
 tokio = { version = "1.38.0", features = ["full", "tracing"] }
-tokio-rustls = { version = "0.26.0", default-features = false, features = ["logging", "tls12", "ring"] }
+tokio-rustls = { version = "0.26.0", default-features = false, features = [
+    "logging",
+    "tls12",
+    "ring",
+] }
 webpki-roots = { version = "0.26.3" }
 rustls-pki-types = { version = "1.7.0" }
 
