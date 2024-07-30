@@ -27,7 +27,7 @@ use anyhow::{format_err, Context};
 use bip39::Mnemonic;
 use clap::{Args, CommandFactory, Parser, Subcommand};
 use db_locked::LockedBuilder;
-use envs::FM_API_SECRET_ENV;
+use envs::{FM_API_SECRET_ENV, SALT_FILE};
 use fedimint_aead::{encrypted_read, encrypted_write, get_encryption_key};
 use fedimint_api_client::api::{
     DynGlobalApi, FederationApiExt, FederationError, IRawFederationApi, WsFederationApi,
@@ -51,7 +51,6 @@ use fedimint_ln_client::LightningClientInit;
 use fedimint_logging::{TracingSetup, LOG_CLIENT};
 use fedimint_meta_client::MetaClientInit;
 use fedimint_mint_client::{MintClientInit, MintClientModule, OOBNotes, SpendableNote};
-use fedimint_server::config::io::SALT_FILE;
 use fedimint_wallet_client::api::WalletFederationApi;
 use fedimint_wallet_client::{WalletClientInit, WalletClientModule};
 use futures::future::pending;
