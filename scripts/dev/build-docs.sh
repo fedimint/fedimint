@@ -34,7 +34,7 @@ if [ -e "${index_html}" ]; then
         close(insert_path);
       }
       {
-        sub(/<section id="main-content"/, content "&"); # Replace MARKER with insert.txt content + MARKER
+        sub(/<section id="main-content"[^>]*>/, "&" content); # Replace MARKER with insert.txt content + MARKER
         print;
       }' "$index_html" > "$index_html.tmp" && mv "$index_html.tmp" "$index_html"
   fi
