@@ -272,7 +272,7 @@ async fn receive_operation_expires() -> anyhow::Result<()> {
             Amount::from_sats(1000),
             5, // receive operation expires in 5 seconds
             Bolt11InvoiceDescription::Direct(String::new()),
-            PaymentFee::TEN_PROMILLE_PLUS_50_SATS,
+            PaymentFee::RECEIVE_FEE_LIMIT_DEFAULT,
         )
         .await?
         .1;

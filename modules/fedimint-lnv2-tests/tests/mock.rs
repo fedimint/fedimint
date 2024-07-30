@@ -89,9 +89,9 @@ impl GatewayConnection for MockGatewayConnection {
     ) -> Result<Option<RoutingInfo>, GatewayError> {
         Ok(Some(RoutingInfo {
             public_key: self.keypair.public_key(),
-            send_fee_default: PaymentFee::TEN_PROMILLE_PLUS_50_SATS,
-            send_fee_minimum: PaymentFee::FIVE_PROMILLE_PLUS_50_SATS,
-            receive_fee: PaymentFee::FIVE_PROMILLE_PLUS_50_SATS,
+            send_fee_default: PaymentFee::SEND_FEE_LIMIT_DEFAULT,
+            send_fee_minimum: PaymentFee::SEND_FEE_MINIMUM,
+            receive_fee: PaymentFee::RECEIVE_FEE_LIMIT_DEFAULT,
             expiration_delta_default: 500,
             expiration_delta_minimum: 144,
         }))
