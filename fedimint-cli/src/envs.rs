@@ -10,3 +10,6 @@ pub const FM_PASSWORD_ENV: &str = "FM_PASSWORD";
 
 // Api authentication secret
 pub const FM_API_SECRET_ENV: &str = "FM_API_SECRET";
+
+/// Salt backup for combining with the private key
+pub const SALT_FILE: &str = "private.salt";
