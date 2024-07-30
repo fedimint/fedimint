@@ -47,12 +47,12 @@ impl IncomingContractOffer {
 /// outcomes:
 ///
 ///   1. The decryption results in a valid preimage which is given to the
-/// lightning gateway. The      user can in return claim the funds from the
-/// contract. For this they need to be able to sign      with the private key
-/// corresponding to the public key which they used as preimage.
+///      lightning gateway. The user can in return claim the funds from the
+///      contract. For this they need to be able to sign with the private key
+///      corresponding to the public key which they used as preimage.
 ///   2. The decryption results in an invalid preimage, the gateway can claim
-/// back the money. For      this to work securely they have to specify a public
-/// key when creating the actual contract.
+///      back the money. For this to work securely they have to specify a public
+///      key when creating the actual contract.
 // TODO: don't duplicate offer, include id instead and fetch offer on mint side
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
 pub struct IncomingContract {
