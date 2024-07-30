@@ -3127,14 +3127,14 @@
     </span><span class="kw">pub async fn </span>routing_info_v2(<span class="kw-2">&amp;</span><span class="self">self</span>, federation_id: <span class="kw-2">&amp;</span>FederationId) -&gt; <span class="prelude-ty">Option</span>&lt;RoutingInfo&gt; {
         <span class="prelude-val">Some</span>(RoutingInfo {
             public_key: <span class="self">self</span>.public_key_v2(federation_id).<span class="kw">await</span><span class="question-mark">?</span>,
-            send_fee_default: PaymentFee::TEN_PROMILLE_PLUS_50_SATS,
+            send_fee_default: PaymentFee::SEND_FEE_LIMIT_DEFAULT,
             <span class="comment">// The base fee ensures that the gateway does not loose sats sending the payment due to
             // fees paid on the transaction claiming the outgoing contract or subsequent
             // transactions spending the newly issued ecash
-            </span>send_fee_minimum: PaymentFee::FIVE_PROMILLE_PLUS_50_SATS,
+            </span>send_fee_minimum: PaymentFee::SEND_FEE_MINIMUM,
             <span class="comment">// The base fee ensures that the gateway does not loose sats receiving the payment due
             // to fees paid on the transaction funding the incoming contract
-            </span>receive_fee: PaymentFee::FIVE_PROMILLE_PLUS_50_SATS,
+            </span>receive_fee: PaymentFee::RECEIVE_FEE_LIMIT_DEFAULT,
             expiration_delta_default: <span class="number">500</span>,
             expiration_delta_minimum: EXPIRATION_DELTA_MINIMUM_V2,
         })
