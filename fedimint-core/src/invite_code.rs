@@ -11,7 +11,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::config::FederationId;
 use crate::encoding::{Decodable, DecodeError, Encodable};
-use crate::module::registry::ModuleDecoderRegistry;
+use crate::module::registry::{ModuleDecoderRegistry, ModuleRegistry};
 use crate::util::SafeUrl;
 use crate::{NumPeersExt, PeerId};
 
@@ -51,7 +51,7 @@ impl Decodable for InviteCode {
             ));
         }
 
-        Ok(InviteCode(inner))
+        Ok(Self(inner))
     }
 }
 
@@ -62,7 +62,7 @@ impl InviteCode {
         federation_id: FederationId,
         api_secret: Option<String>,
     ) -> Self {
-        let mut s = InviteCode(vec![
+        let mut s = Self(vec![
             InviteCodePart::Api { url, peer },
             InviteCodePart::FederationId(federation_id),
         ]);
@@ -95,7 +95,7 @@ impl InviteCode {
             code_vec.push(InviteCodePart::ApiSecret(api_secret));
         }
 
-        InviteCode(code_vec)
+        Self(code_vec)
     }
 
     /// Constructs an [`InviteCode`] which contains as many guardian URLs as
@@ -115,7 +115,7 @@ impl InviteCode {
             .collect();
         code_vec.push(InviteCodePart::FederationId(federation_id));
 
-        InviteCode(code_vec)
+        Self(code_vec)
     }
 
     /// Returns the API URL of one of the guardians.
@@ -222,7 +222,7 @@ impl FromStr for InviteCode {
 
         ensure!(hrp == BECH32_HRP, "Invalid HRP in bech32 encoding");
 
-        let invite = InviteCode::consensus_decode(&mut Cursor::new(data), &Default::default())?;
+        let invite = Self::consensus_decode(&mut Cursor::new(data), &ModuleRegistry::default())?;
 
         Ok(invite)
     }

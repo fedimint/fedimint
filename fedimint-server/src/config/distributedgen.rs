@@ -70,10 +70,10 @@ impl<G: DkgGroup> Dkg<G> {
             threshold,
             f1_poly,
             f2_poly,
-            hashed_commits: Default::default(),
-            commitments: Default::default(),
-            sk_shares: Default::default(),
-            pk_shares: Default::default(),
+            hashed_commits: BTreeMap::new(),
+            commitments: BTreeMap::new(),
+            sk_shares: BTreeMap::new(),
+            pk_shares: BTreeMap::new(),
         };
 
         // broadcast our commitment to the polynomials
@@ -238,7 +238,7 @@ impl<G: DkgGroup> Dkg<G> {
     }
 }
 
-/// PeerIds are offset by 1, since evaluating a poly at 0 reveals the secret
+/// `PeerId`s are offset by 1, since evaluating a poly at 0 reveals the secret
 pub fn scalar(peer: &PeerId) -> Scalar {
     Scalar::from(peer.to_usize() as u64 + 1)
 }

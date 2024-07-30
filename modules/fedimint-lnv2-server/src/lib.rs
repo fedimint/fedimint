@@ -1,6 +1,5 @@
 #![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_wrap)]
-#![allow(clippy::default_trait_access)]
 #![allow(clippy::module_name_repetitions)]
 
 mod db;
@@ -249,7 +248,7 @@ impl ServerModuleInit for LightningInit {
                         (*peer, PublicKeyShare(pk))
                     })
                     .collect(),
-                fee_consensus: Default::default(),
+                fee_consensus: FeeConsensus::default(),
                 network: params.consensus.network,
             },
             private: LightningConfigPrivate {

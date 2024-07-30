@@ -472,7 +472,7 @@ pub struct ModuleInitRegistry<M>(BTreeMap<ModuleKind, M>);
 
 impl<M> Default for ModuleInitRegistry<M> {
     fn default() -> Self {
-        Self(Default::default())
+        Self(BTreeMap::new())
     }
 }
 
@@ -550,7 +550,7 @@ impl<'de> Deserialize<'de> for ServerModuleConfigGenParamsRegistry {
         for (id, (kind, module)) in json {
             params.insert(id, (kind, module));
         }
-        Ok(ModuleRegistry::from(params))
+        Ok(Self::from(params))
     }
 }
 
@@ -583,7 +583,7 @@ where
 
 impl<M> ModuleInitRegistry<M> {
     pub fn new() -> Self {
-        Default::default()
+        Self::default()
     }
 
     pub fn attach<T>(&mut self, gen: T)
@@ -805,8 +805,10 @@ impl ServerModuleConfig {
     pub fn to_typed<T: TypedServerModuleConfig>(&self) -> anyhow::Result<T> {
         let local = serde_json::from_value(self.local.value().clone())?;
         let private = serde_json::from_value(self.private.value().clone())?;
-        let consensus =
-            <T::Consensus>::consensus_decode(&mut &self.consensus.config[..], &Default::default())?;
+        let consensus = <T::Consensus>::consensus_decode(
+            &mut &self.consensus.config[..],
+            &ModuleRegistry::default(),
+        )?;
 
         Ok(TypedServerModuleConfig::from_parts(
             local, private, consensus,
@@ -825,7 +827,7 @@ pub trait TypedServerModuleConsensusConfig:
     fn from_erased(erased: &ServerModuleConsensusConfig) -> anyhow::Result<Self> {
         Ok(Self::consensus_decode(
             &mut &erased.config[..],
-            &Default::default(),
+            &ModuleRegistry::default(),
         )?)
     }
 }
@@ -1004,7 +1006,7 @@ impl SGroup for G2Projective {
     }
 
     fn deserialize2<'d, D: Deserializer<'d>>(d: D) -> Result<Self, D::Error> {
-        bls12_381_serde::g2::deserialize(d).map(G2Projective::from)
+        bls12_381_serde::g2::deserialize(d).map(Self::from)
     }
 }
 
@@ -1014,7 +1016,7 @@ impl SGroup for G1Projective {
     }
 
     fn deserialize2<'d, D: Deserializer<'d>>(d: D) -> Result<Self, D::Error> {
-        bls12_381_serde::g1::deserialize(d).map(G1Projective::from)
+        bls12_381_serde::g1::deserialize(d).map(Self::from)
     }
 }
 
@@ -1065,6 +1067,8 @@ pub mod serde_binary_human_readable {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::BTreeMap;
+
     use fedimint_core::config::{ClientConfig, GlobalClientConfig};
 
     use crate::module::CoreConsensusVersion;
@@ -1073,8 +1077,8 @@ mod tests {
     fn test_dcode_meta() {
         let config = ClientConfig {
             global: GlobalClientConfig {
-                api_endpoints: Default::default(),
-                broadcast_public_keys: Default::default(),
+                api_endpoints: BTreeMap::new(),
+                broadcast_public_keys: None,
                 consensus_version: CoreConsensusVersion { major: 0, minor: 0 },
                 meta: vec![
                     ("foo".to_string(), "bar".to_string()),
@@ -1084,7 +1088,7 @@ mod tests {
                 .into_iter()
                 .collect(),
             },
-            modules: Default::default(),
+            modules: BTreeMap::new(),
         };
 
         assert_eq!(

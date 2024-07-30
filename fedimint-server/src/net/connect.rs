@@ -499,7 +499,7 @@ pub mod mock {
         #[allow(clippy::new_without_default)]
         pub fn new() -> MockNetwork {
             MockNetwork {
-                clients: Arc::new(Default::default()),
+                clients: Arc::new(Mutex::new(HashMap::new())),
             }
         }
 

@@ -1,7 +1,5 @@
 #![deny(clippy::pedantic)]
-#![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::cast_possible_wrap)]
-#![allow(clippy::default_trait_access)]
 #![allow(clippy::module_name_repetitions)]
 #![allow(clippy::must_use_candidate)]
 #![allow(clippy::similar_names)]
@@ -673,9 +671,12 @@ impl Mint {
 #[cfg(test)]
 mod test {
     use assert_matches::assert_matches;
-    use fedimint_core::config::{ClientModuleConfig, ConfigGenModuleParams, ServerModuleConfig};
+    use fedimint_core::config::{
+        ClientModuleConfig, ConfigGenModuleParams, EmptyGenParams, ServerModuleConfig,
+    };
     use fedimint_core::db::mem_impl::MemDatabase;
     use fedimint_core::db::Database;
+    use fedimint_core::module::registry::ModuleRegistry;
     use fedimint_core::module::{ModuleConsensusVersion, ServerModuleInit};
     use fedimint_core::{secp256k1, Amount, PeerId, ServerModule};
     use fedimint_mint_common::config::FeeConsensus;
@@ -688,14 +689,14 @@ mod test {
         MintInit,
     };
 
-    const MINTS: usize = 5;
+    const MINTS: u16 = 5;
 
     fn build_configs() -> (Vec<ServerModuleConfig>, ClientModuleConfig) {
-        let peers = (0..MINTS as u16).map(PeerId::from).collect::<Vec<_>>();
+        let peers = (0..MINTS).map(PeerId::from).collect::<Vec<_>>();
         let mint_cfg = MintInit.trusted_dealer_gen(
             &peers,
             &ConfigGenModuleParams::from_typed(MintGenParams {
-                local: Default::default(),
+                local: EmptyGenParams::default(),
                 consensus: MintGenParamsConsensus::new(2, FeeConsensus::default()),
             })
             .unwrap(),
@@ -784,7 +785,7 @@ mod test {
         let (_, note) = issue_note(&mint_server_cfg, highest_denomination);
 
         // Normal spend works
-        let db = Database::new(MemDatabase::new(), Default::default());
+        let db = Database::new(MemDatabase::new(), ModuleRegistry::default());
         let input = MintInput::new_v0(highest_denomination, note);
 
         // Double spend in same session is detected

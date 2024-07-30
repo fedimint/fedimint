@@ -82,7 +82,7 @@ where
 pub struct SafeUrl(Url);
 
 impl SafeUrl {
-    pub fn parse(url_str: &str) -> Result<SafeUrl, ParseError> {
+    pub fn parse(url_str: &str) -> Result<Self, ParseError> {
         let s = Url::parse(url_str).map(SafeUrl)?;
 
         if s.port_or_known_default().is_none() {
@@ -131,7 +131,7 @@ impl SafeUrl {
     }
 
     /// `self` but with port explicitly set, if known from url
-    pub fn with_port_or_known_default(&self) -> SafeUrl {
+    pub fn with_port_or_known_default(&self) -> Self {
         if self.port().is_none() {
             if let Some(default) = self.port_or_known_default() {
                 let mut url = self.clone();
@@ -156,7 +156,7 @@ impl SafeUrl {
     pub fn password(&self) -> Option<&str> {
         self.0.password()
     }
-    pub fn join(&self, input: &str) -> Result<SafeUrl, ParseError> {
+    pub fn join(&self, input: &str) -> Result<Self, ParseError> {
         self.0.join(input).map(SafeUrl)
     }
 }
@@ -194,7 +194,7 @@ impl<'de> serde::de::Deserialize<'de> for SafeUrl {
     where
         D: serde::Deserializer<'de>,
     {
-        let s = SafeUrl(Url::deserialize(deserializer)?);
+        let s = Self(Url::deserialize(deserializer)?);
 
         if s.port_or_known_default().is_none() {
             return Err(serde::de::Error::custom("Invalid port"));
@@ -218,7 +218,7 @@ impl Debug for SafeUrl {
 impl TryFrom<Url> for SafeUrl {
     type Error = anyhow::Error;
     fn try_from(u: Url) -> anyhow::Result<Self> {
-        let s = SafeUrl(u);
+        let s = Self(u);
 
         if s.port_or_known_default().is_none() {
             anyhow::bail!("Invalid port");
@@ -232,8 +232,8 @@ impl FromStr for SafeUrl {
     type Err = ParseError;
 
     #[inline]
-    fn from_str(input: &str) -> Result<SafeUrl, ParseError> {
-        SafeUrl::parse(input)
+    fn from_str(input: &str) -> Result<Self, ParseError> {
+        Self::parse(input)
     }
 }
 

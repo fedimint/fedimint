@@ -59,7 +59,7 @@ impl Notifier {
             broadcast: self.broadcast.clone(),
             module_instance,
             db: self.db.clone(),
-            _pd: Default::default(),
+            _pd: PhantomData,
         }
     }
 

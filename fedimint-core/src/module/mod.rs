@@ -24,6 +24,7 @@ use std::sync::Arc;
 use fedimint_logging::LOG_NET_API;
 use futures::Future;
 use jsonrpsee_core::JsonValue;
+use registry::ModuleRegistry;
 use serde::{Deserialize, Serialize};
 use tracing::Instrument;
 
@@ -71,7 +72,7 @@ pub struct TransactionItemAmount {
 }
 
 impl TransactionItemAmount {
-    pub const ZERO: TransactionItemAmount = TransactionItemAmount {
+    pub const ZERO: Self = Self {
         amount: Amount::ZERO,
         fee: Amount::ZERO,
     };
@@ -98,7 +99,7 @@ impl Default for ApiRequestErased {
 }
 
 impl ApiRequestErased {
-    pub fn new<T: Serialize>(params: T) -> ApiRequestErased {
+    pub fn new<T: Serialize>(params: T) -> Self {
         Self {
             auth: None,
             params: serde_json::to_value(params)
@@ -239,7 +240,7 @@ impl<'a> ApiEndpointContext<'a> {
         async move { db.wait_key_check(&key, |v| v.filter(matcher)).await.0 }
     }
 
-    /// Attempts to commit the dbtx or returns an ApiError
+    /// Attempts to commit the dbtx or returns an `ApiError`
     pub async fn commit_tx_result(self, path: &'static str) -> Result<(), ApiError> {
         self.dbtx.commit_tx_result().await.map_err(|err| {
             tracing::warn!(
@@ -558,7 +559,7 @@ impl DynCommonModuleInit {
     pub fn from_inner(
         inner: Arc<maybe_add_send_sync!(dyn IDynCommonModuleInit + 'static)>,
     ) -> Self {
-        DynCommonModuleInit { inner }
+        Self { inner }
     }
 }
 
@@ -716,7 +717,7 @@ where
                 db,
                 task_group: task_group.clone(),
                 our_peer_id,
-                _marker: Default::default(),
+                _marker: PhantomData,
             },
         )
         .await
@@ -958,7 +959,12 @@ impl<T: Encodable + Decodable + 'static> SerdeModuleEncoding<T> {
 
         // No recursive module decoding is supported since we give an empty decoder
         // registry to the decode function
-        decoder.decode_complete(&mut reader, total_len, module_instance, &Default::default())
+        decoder.decode_complete(
+            &mut reader,
+            total_len,
+            module_instance,
+            &ModuleRegistry::default(),
+        )
     }
 }
 

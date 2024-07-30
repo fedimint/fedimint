@@ -1,5 +1,4 @@
 #![deny(clippy::pedantic)]
-#![allow(clippy::default_trait_access)]
 
 //! BIP39 client secret support crate
 
@@ -8,6 +7,7 @@ use std::io::{Read, Write};
 use fedimint_client::derivable_secret::DerivableSecret;
 use fedimint_client::secret::RootSecretStrategy;
 use fedimint_core::encoding::{Decodable, DecodeError, Encodable};
+use fedimint_core::module::registry::ModuleRegistry;
 use rand::{CryptoRng, RngCore};
 
 /// BIP39 root secret encoding strategy allowing retrieval of the seed phrase.
@@ -37,7 +37,7 @@ impl<const WORD_COUNT: usize> RootSecretStrategy for Bip39RootSecretStrategy<WOR
     fn consensus_decode(
         reader: &mut impl Read,
     ) -> Result<Self::Encoding, fedimint_core::encoding::DecodeError> {
-        let bytes = Vec::<u8>::consensus_decode(reader, &Default::default())?;
+        let bytes = Vec::<u8>::consensus_decode(reader, &ModuleRegistry::default())?;
         bip39::Mnemonic::from_entropy(&bytes).map_err(DecodeError::from_err)
     }
 

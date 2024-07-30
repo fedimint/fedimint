@@ -1,6 +1,5 @@
 #![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
-#![allow(clippy::default_trait_access)]
 #![allow(clippy::missing_errors_doc)]
 #![allow(clippy::missing_panics_doc)]
 #![allow(clippy::module_name_repetitions)]
@@ -447,7 +446,7 @@ impl ClientModule for WalletClientModule {
             rpc: self.rpc.clone(),
             wallet_descriptor: self.cfg().peg_in_descriptor.clone(),
             wallet_decoder: self.decoder(),
-            secp: Default::default(),
+            secp: Secp256k1::default(),
         }
     }
 

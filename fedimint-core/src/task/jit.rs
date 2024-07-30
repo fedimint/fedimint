@@ -43,8 +43,8 @@ where
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            OneTimeError::Original(o) => o.fmt(f),
-            OneTimeError::Copy(c) => c.fmt(f),
+            Self::Original(o) => o.fmt(f),
+            Self::Copy(c) => c.fmt(f),
         }
     }
 }

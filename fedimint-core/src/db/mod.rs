@@ -136,7 +136,7 @@ pub mod notifications;
 pub use test_utils::*;
 
 use self::notifications::{Notifications, NotifyQueue};
-use crate::module::registry::ModuleDecoderRegistry;
+use crate::module::registry::{ModuleDecoderRegistry, ModuleRegistry};
 
 pub const MODULE_GLOBAL_PREFIX: u8 = 0xff;
 
@@ -263,7 +263,7 @@ pub trait IRawDatabaseExt: IRawDatabase + Sized {
     ///
     /// When type inference is not an issue, [`Into::into`] can be used instead.
     fn into_database(self) -> Database {
-        Database::new(self, Default::default())
+        Database::new(self, ModuleRegistry::default())
     }
 }
 
@@ -274,7 +274,7 @@ where
     T: IRawDatabase,
 {
     fn from(raw: T) -> Self {
-        Database::new(raw, Default::default())
+        Self::new(raw, ModuleRegistry::default())
     }
 }
 
@@ -1207,8 +1207,8 @@ impl<Tx> BaseDatabaseTransaction<Tx>
 where
     Tx: IRawDatabaseTransaction,
 {
-    fn new(dbtx: Tx, notifications: Arc<Notifications>) -> BaseDatabaseTransaction<Tx> {
-        BaseDatabaseTransaction {
+    fn new(dbtx: Tx, notifications: Arc<Notifications>) -> Self {
+        Self {
             raw: Some(dbtx),
             notifications,
             notify_queue: Some(NotifyQueue::new()),
@@ -1609,11 +1609,8 @@ impl<'tx, Cap> DatabaseTransaction<'tx, Cap> {
 }
 
 impl<'tx> DatabaseTransaction<'tx, Committable> {
-    pub fn new(
-        dbtx: Box<dyn IDatabaseTransaction + 'tx>,
-        decoders: ModuleDecoderRegistry,
-    ) -> DatabaseTransaction<'tx, Committable> {
-        DatabaseTransaction {
+    pub fn new(dbtx: Box<dyn IDatabaseTransaction + 'tx>, decoders: ModuleDecoderRegistry) -> Self {
+        Self {
             tx: dbtx,
             decoders,
             commit_tracker: MaybeRef::Owned(CommitTracker {
@@ -1901,16 +1898,16 @@ pub enum DecodingError {
 }
 
 impl DecodingError {
-    pub fn other<E: Error + Send + Sync + 'static>(error: E) -> DecodingError {
-        DecodingError::Other(anyhow::Error::from(error))
+    pub fn other<E: Error + Send + Sync + 'static>(error: E) -> Self {
+        Self::Other(anyhow::Error::from(error))
     }
 
-    pub fn wrong_prefix(expected: u8, found: u8) -> DecodingError {
-        DecodingError::WrongPrefix { expected, found }
+    pub fn wrong_prefix(expected: u8, found: u8) -> Self {
+        Self::WrongPrefix { expected, found }
     }
 
-    pub fn wrong_length(expected: usize, found: usize) -> DecodingError {
-        DecodingError::WrongLength { expected, found }
+    pub fn wrong_length(expected: usize, found: usize) -> Self {
+        Self::WrongLength { expected, found }
     }
 }
 

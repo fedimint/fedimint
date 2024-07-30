@@ -1,9 +1,5 @@
 #![deny(clippy::pedantic)]
-#![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::cast_possible_wrap)]
-#![allow(clippy::default_trait_access)]
-#![allow(clippy::doc_markdown)]
-#![allow(clippy::manual_let_else)]
 #![allow(clippy::module_name_repetitions)]
 #![allow(clippy::must_use_candidate)]
 #![allow(clippy::too_many_lines)]
@@ -279,7 +275,7 @@ impl ServerModuleInit for LightningInit {
             },
             consensus: LightningConfigConsensus {
                 threshold_pub_keys: keys.public_key_set,
-                fee_consensus: Default::default(),
+                fee_consensus: FeeConsensus::default(),
                 network: params.consensus.network,
             },
             private: LightningConfigPrivate {
@@ -488,12 +484,12 @@ impl ServerModule for Lightning {
                     .await
                     .expect("outcome was created on funding");
 
-                let incoming_contract_outcome_preimage = match &mut outcome {
-                    LightningOutputOutcomeV0::Contract {
-                        outcome: ContractOutcome::Incoming(decryption_outcome),
-                        ..
-                    } => decryption_outcome,
-                    _ => panic!("We are expecting an incoming contract"),
+                let LightningOutputOutcomeV0::Contract {
+                    outcome: ContractOutcome::Incoming(incoming_contract_outcome_preimage),
+                    ..
+                } = &mut outcome
+                else {
+                    panic!("We are expecting an incoming contract")
                 };
                 *incoming_contract_outcome_preimage = decrypted_preimage.clone();
                 dbtx.insert_entry(&ContractUpdateKey(out_point), &outcome)
@@ -1250,6 +1246,7 @@ mod tests {
     use fedimint_core::db::{Database, IDatabaseTransactionOpsCoreTyped};
     use fedimint_core::encoding::Encodable;
     use fedimint_core::envs::BitcoinRpcConfig;
+    use fedimint_core::module::registry::ModuleRegistry;
     use fedimint_core::module::{InputMeta, ServerModuleInit, TransactionItemAmount};
     use fedimint_core::task::TaskGroup;
     use fedimint_core::{Amount, OutPoint, PeerId, ServerModule, TransactionId};
@@ -1272,10 +1269,10 @@ mod tests {
     use crate::db::{ContractKey, LightningAuditItemKey};
     use crate::{Lightning, LightningInit};
 
-    const MINTS: usize = 4;
+    const MINTS: u16 = 4;
 
     fn build_configs() -> (Vec<LightningConfig>, LightningClientConfig) {
-        let peers = (0..MINTS as u16).map(PeerId::from).collect::<Vec<_>>();
+        let peers = (0..MINTS).map(PeerId::from).collect::<Vec<_>>();
         let server_cfg = ServerModuleInit::trusted_dealer_gen(
             &LightningInit,
             &peers,
@@ -1337,7 +1334,7 @@ mod tests {
             out_idx: 0,
         };
 
-        let db = Database::new(MemDatabase::new(), Default::default());
+        let db = Database::new(MemDatabase::new(), ModuleRegistry::default());
         let mut dbtx = db.begin_transaction_nc().await;
 
         server
@@ -1377,7 +1374,7 @@ mod tests {
     #[test_log::test(tokio::test)]
     async fn process_input_for_valid_incoming_contracts() {
         let (server_cfg, client_cfg) = build_configs();
-        let db = Database::new(MemDatabase::new(), Default::default());
+        let db = Database::new(MemDatabase::new(), ModuleRegistry::default());
         let mut dbtx = db.begin_transaction_nc().await;
         let mut module_dbtx = dbtx.to_ref_with_prefix_module_id(42);
         let tg = TaskGroup::new();
@@ -1438,7 +1435,7 @@ mod tests {
     #[test_log::test(tokio::test)]
     async fn process_input_for_valid_outgoing_contracts() {
         let (server_cfg, _) = build_configs();
-        let db = Database::new(MemDatabase::new(), Default::default());
+        let db = Database::new(MemDatabase::new(), ModuleRegistry::default());
         let mut dbtx = db.begin_transaction_nc().await;
         let mut module_dbtx = dbtx.to_ref_with_prefix_module_id(42);
         let tg = TaskGroup::new();

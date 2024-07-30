@@ -8,7 +8,7 @@ pub struct UpdateMerge {
 
 impl Default for UpdateMerge {
     fn default() -> Self {
-        UpdateMerge {
+        Self {
             last_failed: Mutex::new(false),
         }
     }

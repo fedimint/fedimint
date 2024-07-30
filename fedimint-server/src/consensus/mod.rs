@@ -1,5 +1,3 @@
-#![allow(clippy::let_unit_value)]
-
 pub mod aleph_bft;
 pub mod api;
 pub mod db;
@@ -29,7 +27,7 @@ use fedimint_core::task::TaskGroup;
 use fedimint_core::NumPeers;
 use fedimint_logging::{LOG_CONSENSUS, LOG_CORE};
 use jsonrpsee::server::ServerHandle;
-use tokio::sync::watch;
+use tokio::sync::{watch, RwLock};
 use tracing::info;
 use tracing::log::warn;
 
@@ -104,8 +102,8 @@ pub async fn run(
 
     let (submission_sender, submission_receiver) = async_channel::bounded(TRANSACTION_BUFFER);
     let (shutdown_sender, shutdown_receiver) = watch::channel(None);
-    let connection_status_channels = Default::default();
-    let last_ci_by_peer = Default::default();
+    let connection_status_channels = Arc::new(RwLock::new(BTreeMap::new()));
+    let last_ci_by_peer = Arc::new(RwLock::new(BTreeMap::new()));
 
     let consensus_api = ConsensusApi {
         cfg: cfg.clone(),
@@ -119,8 +117,8 @@ pub async fn run(
             &cfg.consensus.modules,
             &module_init_registry,
         ),
-        last_ci_by_peer: Arc::clone(&last_ci_by_peer),
-        connection_status_channels: Arc::clone(&connection_status_channels),
+        last_ci_by_peer: last_ci_by_peer.clone(),
+        connection_status_channels: connection_status_channels.clone(),
         force_api_secret: force_api_secrets.get_active(),
     };
 

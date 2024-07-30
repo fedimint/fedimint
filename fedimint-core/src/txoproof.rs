@@ -52,7 +52,7 @@ impl Decodable for TxOutProof {
             .map_err(|_| DecodeError::from_str("Invalid partial merkle tree"))?;
 
         if block_header.merkle_root == root {
-            Ok(TxOutProof {
+            Ok(Self {
                 block_header,
                 merkle_proof,
             })
@@ -101,13 +101,13 @@ impl<'de> Deserialize<'de> for TxOutProof {
             let hex_str: Cow<str> = Deserialize::deserialize(deserializer)?;
             let bytes = Vec::from_hex(hex_str.as_ref()).map_err(D::Error::custom)?;
             Ok(
-                TxOutProof::consensus_decode(&mut Cursor::new(bytes), &empty_module_registry)
+                Self::consensus_decode(&mut Cursor::new(bytes), &empty_module_registry)
                     .map_err(D::Error::custom)?,
             )
         } else {
             let bytes: &[u8] = Deserialize::deserialize(deserializer)?;
             Ok(
-                TxOutProof::consensus_decode(&mut Cursor::new(bytes), &empty_module_registry)
+                Self::consensus_decode(&mut Cursor::new(bytes), &empty_module_registry)
                     .map_err(D::Error::custom)?,
             )
         }
@@ -124,7 +124,7 @@ impl Hash for TxOutProof {
 }
 
 impl PartialEq for TxOutProof {
-    fn eq(&self, other: &TxOutProof) -> bool {
+    fn eq(&self, other: &Self) -> bool {
         self.block_header == other.block_header && self.merkle_proof == other.merkle_proof
     }
 }

@@ -54,7 +54,7 @@ impl From<u16> for PeerId {
 }
 
 impl From<PeerId> for u16 {
-    fn from(peer: PeerId) -> u16 {
+    fn from(peer: PeerId) -> Self {
         peer.0
     }
 }
@@ -64,10 +64,6 @@ impl From<PeerId> for u16 {
 pub struct NumPeers(usize);
 
 impl NumPeers {
-    pub fn as_usize(self) -> usize {
-        self.0
-    }
-
     /// Returns an iterator over all peer IDs in the federation.
     pub fn peer_ids(self) -> impl Iterator<Item = PeerId> {
         (0u16..(self.0 as u16)).map(PeerId)
