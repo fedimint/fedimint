@@ -548,7 +548,7 @@
     /// The code create a subgroup is responsible for calling
     /// [`Self::join_all`]. If it won't, the parent subgroup **will not**
     /// detect any panics in the tasks spawned by the subgroup.
-    </span><span class="kw">pub fn </span>make_subgroup(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; TaskGroup {
+    </span><span class="kw">pub fn </span>make_subgroup(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="self">Self </span>{
         <span class="kw">let </span>new_tg = <span class="self">Self</span>::new();
         <span class="self">self</span>.inner.add_subgroup(new_tg.clone());
         new_tg
@@ -662,7 +662,7 @@
         guard.completed = <span class="bool-val">true</span>;
     }
 
-    <span class="doccomment">/// Spawn a task that will get cancelled automatically on TaskGroup
+    <span class="doccomment">/// Spawn a task that will get cancelled automatically on `TaskGroup`
     /// shutdown.
     </span><span class="kw">pub fn </span>spawn_cancellable&lt;R&gt;(
         <span class="kw-2">&amp;</span><span class="self">self</span>,

@@ -291,7 +291,7 @@
             broadcast: <span class="self">self</span>.broadcast.clone(),
             module_instance,
             db: <span class="self">self</span>.db.clone(),
-            _pd: Default::default(),
+            _pd: PhantomData,
         }
     }
 

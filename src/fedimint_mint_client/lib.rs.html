@@ -2539,12 +2539,8 @@
 <a href="#2539" id="2539">2539</a>
 <a href="#2540" id="2540">2540</a>
 <a href="#2541" id="2541">2541</a>
-<a href="#2542" id="2542">2542</a>
 </pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
-#![allow(clippy::default_trait_access)]
-#![allow(clippy::doc_markdown)]
-#![allow(clippy::match_same_arms)]
 #![allow(clippy::missing_errors_doc)]
 #![allow(clippy::missing_panics_doc)]
 #![allow(clippy::module_name_repetitions)]
@@ -2596,7 +2592,7 @@
 };
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, DecodeError, Encodable};
 <span class="kw">use </span>fedimint_core::invite_code::{InviteCode, InviteCodeV2};
-<span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
+<span class="kw">use </span>fedimint_core::module::registry::{ModuleDecoderRegistry, ModuleRegistry};
 <span class="kw">use </span>fedimint_core::module::{
     ApiVersion, CommonModuleInit, ModuleCommon, ModuleInit, MultiApiVersion,
 };
@@ -3142,7 +3138,7 @@
 /// operations. It interacts with the mint server to issue, reissue, and
 /// validate e-cash notes.
 ///
-/// # DerivableSecret
+/// # Derivable Secret
 ///
 /// The `DerivableSecret` is a cryptographic secret that can be used to derive
 /// other secrets. In the context of the `MintClientModule`, it is used to
@@ -3320,14 +3316,14 @@
                         MintClientStateMachines::Output(MintOutputStateMachine {
                             state: MintOutputStates::Succeeded(<span class="kw">_</span>),
                             ..
-                        }) =&gt; <span class="prelude-val">Some</span>(()),
-                        MintClientStateMachines::Input(MintInputStateMachine {
+                        })
+                        | MintClientStateMachines::Input(MintInputStateMachine {
                             state: MintInputStates::Created(<span class="kw">_</span>),
                             ..
-                        }) =&gt; <span class="prelude-val">Some</span>(()),
+                        })
                         <span class="comment">// We only trigger on created since refunds are already covered under the
                         // output state
-                        </span>MintClientStateMachines::OOB(MintOOBStateMachine {
+                        </span>| MintClientStateMachines::OOB(MintOOBStateMachine {
                             state: MintOOBStates::Created(<span class="kw">_</span>),
                             ..
                         }) =&gt; <span class="prelude-val">Some</span>(()),
@@ -4626,7 +4622,7 @@
         <span class="prelude-val">Ok</span>(SpendableNote {
             signature: Decodable::consensus_decode_from_finite_reader(
                 <span class="kw-2">&amp;mut </span><span class="self">self</span>.signature.as_slice(),
-                <span class="kw-2">&amp;</span>Default::default(),
+                <span class="kw-2">&amp;</span>ModuleRegistry::default(),
             )<span class="question-mark">?</span>,
             spend_key: <span class="self">self</span>.spend_key,
         })
@@ -4753,6 +4749,7 @@
     <span class="kw">use </span>fedimint_core::config::FederationId;
     <span class="kw">use </span>fedimint_core::encoding::Decodable;
     <span class="kw">use </span>fedimint_core::invite_code::{InviteCode, InviteCodeV2};
+    <span class="kw">use </span>fedimint_core::module::registry::ModuleRegistry;
     <span class="kw">use </span>fedimint_core::secp256k1::rand::rngs::OsRng;
     <span class="kw">use </span>fedimint_core::secp256k1::SecretKey;
     <span class="kw">use </span>fedimint_core::util::SafeUrl;
@@ -4806,7 +4803,7 @@
     </span><span class="kw">async fn </span>select_notes_avg_test() {
         <span class="kw">let </span>max_amount = Amount::from_sats(<span class="number">1_000_000</span>);
         <span class="kw">let </span>tiers = Tiered::gen_denominations(<span class="number">2</span>, max_amount);
-        <span class="kw">let </span>tiered = represent_amount::&lt;()&gt;(max_amount, <span class="kw-2">&amp;</span>Default::default(), <span class="kw-2">&amp;</span>tiers, <span class="number">3</span>);
+        <span class="kw">let </span>tiered = represent_amount::&lt;()&gt;(max_amount, <span class="kw-2">&amp;</span>TieredCounts::default(), <span class="kw-2">&amp;</span>tiers, <span class="number">3</span>);
 
         <span class="kw">let </span><span class="kw-2">mut </span>total_notes = <span class="number">0</span>;
         <span class="kw">for </span>multiplier <span class="kw">in </span><span class="number">1</span>..<span class="number">100 </span>{
@@ -4906,7 +4903,8 @@
 
     <span class="attr">#[test]
     </span><span class="kw">fn </span>decoding_empty_oob_notes_fails() {
-        <span class="kw">let </span>empty_oob_notes = OOBNotes::new(FederationId::dummy().to_prefix(), Default::default());
+        <span class="kw">let </span>empty_oob_notes =
+            OOBNotes::new(FederationId::dummy().to_prefix(), TieredMulti::default());
         <span class="kw">let </span>oob_notes_string = empty_oob_notes.to_string();
 
         <span class="kw">let </span>res = oob_notes_string.parse::&lt;OOBNotes&gt;();
@@ -4937,7 +4935,7 @@
 
         <span class="kw">let </span>notes = <span class="macro">vec!</span>[(
             Amount::from_sats(<span class="number">1</span>),
-            SpendableNote::consensus_decode_hex(<span class="string">"a5dd3ebacad1bc48bd8718eed5a8da1d68f91323bef2848ac4fa2e6f8eed710f3178fd4aef047cc234e6b1127086f33cc408b39818781d9521475360de6b205f3328e490a6d99d5e2553a4553207c8bd"</span>, <span class="kw-2">&amp;</span>Default::default()).unwrap(),
+            SpendableNote::consensus_decode_hex(<span class="string">"a5dd3ebacad1bc48bd8718eed5a8da1d68f91323bef2848ac4fa2e6f8eed710f3178fd4aef047cc234e6b1127086f33cc408b39818781d9521475360de6b205f3328e490a6d99d5e2553a4553207c8bd"</span>, <span class="kw-2">&amp;</span>ModuleRegistry::default()).unwrap(),
         )]
         .into_iter()
         .collect::&lt;TieredMulti&lt;<span class="kw">_</span>&gt;&gt;();
@@ -5028,8 +5026,8 @@
         </span><span class="attr">#[allow(clippy::single_element_loop)]
         </span><span class="kw">for </span>note_hex <span class="kw">in </span>[<span class="string">"a5dd3ebacad1bc48bd8718eed5a8da1d68f91323bef2848ac4fa2e6f8eed710f3178fd4aef047cc234e6b1127086f33cc408b39818781d9521475360de6b205f3328e490a6d99d5e2553a4553207c8bd"</span>] {
 
-            <span class="kw">let </span>note = SpendableNote::consensus_decode_hex(note_hex, <span class="kw-2">&amp;</span>Default::default()).unwrap();
-            <span class="kw">let </span>note_undecoded= SpendableNoteUndecoded::consensus_decode_hex(note_hex, <span class="kw-2">&amp;</span>Default::default()).unwrap().decode().unwrap();
+            <span class="kw">let </span>note = SpendableNote::consensus_decode_hex(note_hex, <span class="kw-2">&amp;</span>ModuleRegistry::default()).unwrap();
+            <span class="kw">let </span>note_undecoded= SpendableNoteUndecoded::consensus_decode_hex(note_hex, <span class="kw-2">&amp;</span>ModuleRegistry::default()).unwrap().decode().unwrap();
             <span class="macro">assert_eq!</span>(
                 note,
                 note_undecoded,

@@ -1000,6 +1000,12 @@
 <a href="#1000" id="1000">1000</a>
 <a href="#1001" id="1001">1001</a>
 <a href="#1002" id="1002">1002</a>
+<a href="#1003" id="1003">1003</a>
+<a href="#1004" id="1004">1004</a>
+<a href="#1005" id="1005">1005</a>
+<a href="#1006" id="1006">1006</a>
+<a href="#1007" id="1007">1007</a>
+<a href="#1008" id="1008">1008</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! Fedimint supports modules to allow extending it's functionality.
 //! Some of the standard functionality is implemented in form of modules as
 //! well.
@@ -1026,6 +1032,7 @@
 <span class="kw">use </span>fedimint_logging::LOG_NET_API;
 <span class="kw">use </span>futures::Future;
 <span class="kw">use </span>jsonrpsee_core::JsonValue;
+<span class="kw">use </span>registry::ModuleRegistry;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>tracing::Instrument;
 
@@ -1073,7 +1080,7 @@
 }
 
 <span class="kw">impl </span>TransactionItemAmount {
-    <span class="kw">pub const </span>ZERO: TransactionItemAmount = TransactionItemAmount {
+    <span class="kw">pub const </span>ZERO: <span class="self">Self </span>= <span class="self">Self </span>{
         amount: Amount::ZERO,
         fee: Amount::ZERO,
     };
@@ -1100,7 +1107,7 @@
 }
 
 <span class="kw">impl </span>ApiRequestErased {
-    <span class="kw">pub fn </span>new&lt;T: Serialize&gt;(params: T) -&gt; ApiRequestErased {
+    <span class="kw">pub fn </span>new&lt;T: Serialize&gt;(params: T) -&gt; <span class="self">Self </span>{
         <span class="self">Self </span>{
             auth: <span class="prelude-val">None</span>,
             params: serde_json::to_value(params)
@@ -1241,7 +1248,7 @@
         <span class="kw">async move </span>{ db.wait_key_check(<span class="kw-2">&amp;</span>key, |v| v.filter(matcher)).<span class="kw">await</span>.<span class="number">0 </span>}
     }
 
-    <span class="doccomment">/// Attempts to commit the dbtx or returns an ApiError
+    <span class="doccomment">/// Attempts to commit the dbtx or returns an `ApiError`
     </span><span class="kw">pub async fn </span>commit_tx_result(<span class="self">self</span>, path: <span class="kw-2">&amp;</span><span class="lifetime">'static </span>str) -&gt; <span class="prelude-ty">Result</span>&lt;(), ApiError&gt; {
         <span class="self">self</span>.dbtx.commit_tx_result().<span class="kw">await</span>.map_err(|err| {
             <span class="macro">tracing::warn!</span>(
@@ -1560,7 +1567,7 @@
     <span class="kw">pub fn </span>from_inner(
         inner: Arc&lt;<span class="macro">maybe_add_send_sync!</span>(<span class="kw">dyn </span>IDynCommonModuleInit + <span class="lifetime">'static</span>)&gt;,
     ) -&gt; <span class="self">Self </span>{
-        DynCommonModuleInit { inner }
+        <span class="self">Self </span>{ inner }
     }
 }
 
@@ -1718,7 +1725,7 @@
                 db,
                 task_group: task_group.clone(),
                 our_peer_id,
-                _marker: Default::default(),
+                _marker: PhantomData,
             },
         )
         .<span class="kw">await
@@ -1960,7 +1967,12 @@
 
         <span class="comment">// No recursive module decoding is supported since we give an empty decoder
         // registry to the decode function
-        </span>decoder.decode_complete(<span class="kw-2">&amp;mut </span>reader, total_len, module_instance, <span class="kw-2">&amp;</span>Default::default())
+        </span>decoder.decode_complete(
+            <span class="kw-2">&amp;mut </span>reader,
+            total_len,
+            module_instance,
+            <span class="kw-2">&amp;</span>ModuleRegistry::default(),
+        )
     }
 }
 

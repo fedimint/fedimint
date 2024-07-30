@@ -1530,7 +1530,7 @@
         task_handle: <span class="kw-2">&amp;</span>TaskHandle,
     ) {
         <span class="kw">let </span>common = CommonPeerConnectionState {
-            resend_queue: Default::default(),
+            resend_queue: MessageQueue::default(),
             incoming,
             outgoing,
             our_id,

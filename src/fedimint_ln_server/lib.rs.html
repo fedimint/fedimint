@@ -1485,15 +1485,8 @@
 <a href="#1485" id="1485">1485</a>
 <a href="#1486" id="1486">1486</a>
 <a href="#1487" id="1487">1487</a>
-<a href="#1488" id="1488">1488</a>
-<a href="#1489" id="1489">1489</a>
-<a href="#1490" id="1490">1490</a>
 </pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
-#![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::cast_possible_wrap)]
-#![allow(clippy::default_trait_access)]
-#![allow(clippy::doc_markdown)]
-#![allow(clippy::manual_let_else)]
 #![allow(clippy::module_name_repetitions)]
 #![allow(clippy::must_use_candidate)]
 #![allow(clippy::too_many_lines)]
@@ -1769,7 +1762,7 @@
             },
             consensus: LightningConfigConsensus {
                 threshold_pub_keys: keys.public_key_set,
-                fee_consensus: Default::default(),
+                fee_consensus: FeeConsensus::default(),
                 network: params.consensus.network,
             },
             private: LightningConfigPrivate {
@@ -1978,12 +1971,12 @@
                     .<span class="kw">await
                     </span>.expect(<span class="string">"outcome was created on funding"</span>);
 
-                <span class="kw">let </span>incoming_contract_outcome_preimage = <span class="kw">match </span><span class="kw-2">&amp;mut </span>outcome {
-                    LightningOutputOutcomeV0::Contract {
-                        outcome: ContractOutcome::Incoming(decryption_outcome),
-                        ..
-                    } =&gt; decryption_outcome,
-                    <span class="kw">_ </span>=&gt; <span class="macro">panic!</span>(<span class="string">"We are expecting an incoming contract"</span>),
+                <span class="kw">let </span>LightningOutputOutcomeV0::Contract {
+                    outcome: ContractOutcome::Incoming(incoming_contract_outcome_preimage),
+                    ..
+                } = <span class="kw-2">&amp;mut </span>outcome
+                <span class="kw">else </span>{
+                    <span class="macro">panic!</span>(<span class="string">"We are expecting an incoming contract"</span>)
                 };
                 <span class="kw-2">*</span>incoming_contract_outcome_preimage = decrypted_preimage.clone();
                 dbtx.insert_entry(<span class="kw-2">&amp;</span>ContractUpdateKey(out_point), <span class="kw-2">&amp;</span>outcome)
@@ -2740,6 +2733,7 @@
     <span class="kw">use </span>fedimint_core::db::{Database, IDatabaseTransactionOpsCoreTyped};
     <span class="kw">use </span>fedimint_core::encoding::Encodable;
     <span class="kw">use </span>fedimint_core::envs::BitcoinRpcConfig;
+    <span class="kw">use </span>fedimint_core::module::registry::ModuleRegistry;
     <span class="kw">use </span>fedimint_core::module::{InputMeta, ServerModuleInit, TransactionItemAmount};
     <span class="kw">use </span>fedimint_core::task::TaskGroup;
     <span class="kw">use </span>fedimint_core::{Amount, OutPoint, PeerId, ServerModule, TransactionId};
@@ -2762,10 +2756,10 @@
     <span class="kw">use </span><span class="kw">crate</span>::db::{ContractKey, LightningAuditItemKey};
     <span class="kw">use crate</span>::{Lightning, LightningInit};
 
-    <span class="kw">const </span>MINTS: usize = <span class="number">4</span>;
+    <span class="kw">const </span>MINTS: u16 = <span class="number">4</span>;
 
     <span class="kw">fn </span>build_configs() -&gt; (Vec&lt;LightningConfig&gt;, LightningClientConfig) {
-        <span class="kw">let </span>peers = (<span class="number">0</span>..MINTS <span class="kw">as </span>u16).map(PeerId::from).collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
+        <span class="kw">let </span>peers = (<span class="number">0</span>..MINTS).map(PeerId::from).collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
         <span class="kw">let </span>server_cfg = ServerModuleInit::trusted_dealer_gen(
             <span class="kw-2">&amp;</span>LightningInit,
             <span class="kw-2">&amp;</span>peers,
@@ -2827,7 +2821,7 @@
             out_idx: <span class="number">0</span>,
         };
 
-        <span class="kw">let </span>db = Database::new(MemDatabase::new(), Default::default());
+        <span class="kw">let </span>db = Database::new(MemDatabase::new(), ModuleRegistry::default());
         <span class="kw">let </span><span class="kw-2">mut </span>dbtx = db.begin_transaction_nc().<span class="kw">await</span>;
 
         server
@@ -2867,7 +2861,7 @@
     <span class="attr">#[test_log::test(tokio::test)]
     </span><span class="kw">async fn </span>process_input_for_valid_incoming_contracts() {
         <span class="kw">let </span>(server_cfg, client_cfg) = build_configs();
-        <span class="kw">let </span>db = Database::new(MemDatabase::new(), Default::default());
+        <span class="kw">let </span>db = Database::new(MemDatabase::new(), ModuleRegistry::default());
         <span class="kw">let </span><span class="kw-2">mut </span>dbtx = db.begin_transaction_nc().<span class="kw">await</span>;
         <span class="kw">let </span><span class="kw-2">mut </span>module_dbtx = dbtx.to_ref_with_prefix_module_id(<span class="number">42</span>);
         <span class="kw">let </span>tg = TaskGroup::new();
@@ -2928,7 +2922,7 @@
     <span class="attr">#[test_log::test(tokio::test)]
     </span><span class="kw">async fn </span>process_input_for_valid_outgoing_contracts() {
         <span class="kw">let </span>(server_cfg, <span class="kw">_</span>) = build_configs();
-        <span class="kw">let </span>db = Database::new(MemDatabase::new(), Default::default());
+        <span class="kw">let </span>db = Database::new(MemDatabase::new(), ModuleRegistry::default());
         <span class="kw">let </span><span class="kw-2">mut </span>dbtx = db.begin_transaction_nc().<span class="kw">await</span>;
         <span class="kw">let </span><span class="kw-2">mut </span>module_dbtx = dbtx.to_ref_with_prefix_module_id(<span class="number">42</span>);
         <span class="kw">let </span>tg = TaskGroup::new();

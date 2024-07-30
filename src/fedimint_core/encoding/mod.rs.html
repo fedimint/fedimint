@@ -1512,6 +1512,10 @@
 <a href="#1512" id="1512">1512</a>
 <a href="#1513" id="1513">1513</a>
 <a href="#1514" id="1514">1514</a>
+<a href="#1515" id="1515">1515</a>
+<a href="#1516" id="1516">1516</a>
+<a href="#1517" id="1517">1517</a>
+<a href="#1518" id="1518">1518</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! This module defines a binary encoding interface which is more suitable for
 //! consensus critical encoding than e.g. `bincode`. Over time all structs that
 //! need to be encoded to binary will be migrated to this interface.
@@ -1545,7 +1549,7 @@
 <span class="kw">use </span>thiserror::Error;
 
 <span class="kw">use </span><span class="kw">crate</span>::core::ModuleInstanceId;
-<span class="kw">use </span><span class="kw">crate</span>::module::registry::ModuleDecoderRegistry;
+<span class="kw">use </span><span class="kw">crate</span>::module::registry::{ModuleDecoderRegistry, ModuleRegistry};
 <span class="kw">use </span><span class="kw">crate</span>::util::SafeUrl;
 
 <span class="doccomment">/// Object-safe trait for things that can encode themselves
@@ -1734,7 +1738,7 @@
         modules: <span class="kw-2">&amp;</span>ModuleDecoderRegistry,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
         String::consensus_decode_from_finite_reader(d, modules)<span class="question-mark">?
-            </span>.parse::&lt;SafeUrl&gt;()
+            </span>.parse::&lt;<span class="self">Self</span>&gt;()
             .map_err(DecodeError::from_err)
     }
 }
@@ -1750,7 +1754,7 @@
 
 <span class="kw">impl </span>From&lt;anyhow::Error&gt; <span class="kw">for </span>DecodeError {
     <span class="kw">fn </span>from(e: anyhow::Error) -&gt; <span class="self">Self </span>{
-        DecodeError(e)
+        <span class="self">Self</span>(e)
     }
 }
 
@@ -1769,7 +1773,7 @@
         r: <span class="kw-2">&amp;mut </span>R,
         _modules: <span class="kw-2">&amp;</span>ModuleDecoderRegistry,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
-        BigSize::read(r)
+        <span class="self">Self</span>::read(r)
             .map_err(|e| DecodeError::new_custom(<span class="macro">anyhow::anyhow!</span>(<span class="string">"BigSize decoding error: {e:?}"</span>)))
     }
 }
@@ -1904,7 +1908,7 @@
 </span><span class="kw">pub fn </span>consensus_decode_bytes_from_finite_reader&lt;D: std::io::Read&gt;(
     r: <span class="kw-2">&amp;mut </span>D,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;Vec&lt;u8&gt;, DecodeError&gt; {
-    <span class="kw">let </span>len = u64::consensus_decode_from_finite_reader(r, <span class="kw-2">&amp;</span>Default::default())<span class="question-mark">?</span>;
+    <span class="kw">let </span>len = u64::consensus_decode_from_finite_reader(r, <span class="kw-2">&amp;</span>ModuleRegistry::default())<span class="question-mark">?</span>;
 
     <span class="kw">let </span>len: usize =
         usize::try_from(len).map_err(|<span class="kw">_</span>| DecodeError::from_str(<span class="string">"size exceeds memory"</span>))<span class="question-mark">?</span>;
@@ -1977,7 +1981,7 @@
         <span class="kw">if </span>TypeId::of::&lt;T&gt;() == TypeId::of::&lt;u8&gt;() {
             <span class="comment">// unsafe: we've just checked that T is `u8` so the transmute here is a no-op
             </span><span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="kw">unsafe </span>{
-                mem::transmute::&lt;Vec&lt;u8&gt;, Vec&lt;T&gt;&gt;(consensus_decode_bytes_from_finite_reader(d)<span class="question-mark">?</span>)
+                mem::transmute::&lt;Vec&lt;u8&gt;, <span class="self">Self</span>&gt;(consensus_decode_bytes_from_finite_reader(d)<span class="question-mark">?</span>)
             });
         }
         <span class="kw">let </span>len = u64::consensus_decode_from_finite_reader(d, modules)<span class="question-mark">?</span>;
@@ -1992,9 +1996,9 @@
 
         <span class="comment">// Up to a cap, use the (potentially specialized for better perf in stdlib)
         // `from_iter`.
-        </span><span class="kw">let </span><span class="kw-2">mut </span>v: Vec&lt;<span class="kw">_</span>&gt; = (<span class="number">0</span>..cap_len)
+        </span><span class="kw">let </span><span class="kw-2">mut </span>v: <span class="self">Self </span>= (<span class="number">0</span>..cap_len)
             .map(|<span class="kw">_</span>| T::consensus_decode_from_finite_reader(d, modules))
-            .collect::&lt;<span class="prelude-ty">Result</span>&lt;Vec&lt;<span class="kw">_</span>&gt;, DecodeError&gt;&gt;()<span class="question-mark">?</span>;
+            .collect::&lt;<span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt;&gt;()<span class="question-mark">?</span>;
 
         <span class="comment">// Add any excess manually avoiding any surprises.
         </span><span class="kw">while </span>(v.len() <span class="kw">as </span>u64) &lt; len {
@@ -2027,8 +2031,8 @@
     ];
 
     <span class="comment">// On malicious large len, return an error instead of panicking.
-    </span><span class="macro">assert!</span>(Vec::&lt;u8&gt;::consensus_decode(<span class="kw-2">&amp;mut </span>buf.as_slice(), <span class="kw-2">&amp;</span>Default::default()).is_err());
-    <span class="macro">assert!</span>(Vec::&lt;u16&gt;::consensus_decode(<span class="kw-2">&amp;mut </span>buf.as_slice(), <span class="kw-2">&amp;</span>Default::default()).is_err());
+    </span><span class="macro">assert!</span>(Vec::&lt;u8&gt;::consensus_decode(<span class="kw-2">&amp;mut </span>buf.as_slice(), <span class="kw-2">&amp;</span>ModuleRegistry::default()).is_err());
+    <span class="macro">assert!</span>(Vec::&lt;u16&gt;::consensus_decode(<span class="kw-2">&amp;mut </span>buf.as_slice(), <span class="kw-2">&amp;</span>ModuleRegistry::default()).is_err());
 }
 
 <span class="kw">impl</span>&lt;T&gt; Decodable <span class="kw">for </span>VecDeque&lt;T&gt;
@@ -2039,9 +2043,9 @@
         d: <span class="kw-2">&amp;mut </span>D,
         modules: <span class="kw-2">&amp;</span>ModuleDecoderRegistry,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
-        <span class="prelude-val">Ok</span>(VecDeque::from(
-            Vec::&lt;T&gt;::consensus_decode_from_finite_reader(d, modules)<span class="question-mark">?</span>,
-        ))
+        <span class="prelude-val">Ok</span>(<span class="self">Self</span>::from(Vec::&lt;T&gt;::consensus_decode_from_finite_reader(
+            d, modules,
+        )<span class="question-mark">?</span>))
     }
 }
 
@@ -2052,8 +2056,12 @@
     ];
 
     <span class="comment">// On malicious large len, return an error instead of panicking.
-    </span><span class="macro">assert!</span>(VecDeque::&lt;u8&gt;::consensus_decode(<span class="kw-2">&amp;mut </span>buf.as_slice(), <span class="kw-2">&amp;</span>Default::default()).is_err());
-    <span class="macro">assert!</span>(VecDeque::&lt;u16&gt;::consensus_decode(<span class="kw-2">&amp;mut </span>buf.as_slice(), <span class="kw-2">&amp;</span>Default::default()).is_err());
+    </span><span class="macro">assert!</span>(
+        VecDeque::&lt;u8&gt;::consensus_decode(<span class="kw-2">&amp;mut </span>buf.as_slice(), <span class="kw-2">&amp;</span>ModuleRegistry::default()).is_err()
+    );
+    <span class="macro">assert!</span>(
+        VecDeque::&lt;u16&gt;::consensus_decode(<span class="kw-2">&amp;mut </span>buf.as_slice(), <span class="kw-2">&amp;</span>ModuleRegistry::default()).is_err()
+    );
 }
 
 <span class="kw">impl</span>&lt;T, <span class="kw">const </span>SIZE: usize&gt; Encodable <span class="kw">for </span>[T; SIZE]
@@ -2204,7 +2212,7 @@
         d: <span class="kw-2">&amp;mut </span>D,
         modules: <span class="kw-2">&amp;</span>ModuleDecoderRegistry,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
-        <span class="prelude-val">Ok</span>(Box::new(T::consensus_decode_from_finite_reader(
+        <span class="prelude-val">Ok</span>(<span class="self">Self</span>::new(T::consensus_decode_from_finite_reader(
             d, modules,
         )<span class="question-mark">?</span>))
     }
@@ -2245,7 +2253,7 @@
         d: <span class="kw-2">&amp;mut </span>D,
         modules: <span class="kw-2">&amp;</span>ModuleDecoderRegistry,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
-        String::from_utf8(Decodable::consensus_decode_from_finite_reader(d, modules)<span class="question-mark">?</span>)
+        <span class="self">Self</span>::from_utf8(Decodable::consensus_decode_from_finite_reader(d, modules)<span class="question-mark">?</span>)
             .map_err(DecodeError::from_err)
     }
 }
@@ -2284,7 +2292,7 @@
     ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
         <span class="kw">let </span>secs = Decodable::consensus_decode(d, modules)<span class="question-mark">?</span>;
         <span class="kw">let </span>nsecs = Decodable::consensus_decode(d, modules)<span class="question-mark">?</span>;
-        <span class="prelude-val">Ok</span>(Duration::new(secs, nsecs))
+        <span class="prelude-val">Ok</span>(<span class="self">Self</span>::new(secs, nsecs))
     }
 }
 
@@ -2310,7 +2318,7 @@
     ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
         <span class="kw">let </span>base_msat = Decodable::consensus_decode(d, modules)<span class="question-mark">?</span>;
         <span class="kw">let </span>proportional_millionths = Decodable::consensus_decode(d, modules)<span class="question-mark">?</span>;
-        <span class="prelude-val">Ok</span>(lightning_invoice::RoutingFees {
+        <span class="prelude-val">Ok</span>(<span class="self">Self </span>{
             base_msat,
             proportional_millionths,
         })
@@ -2323,7 +2331,7 @@
         modules: <span class="kw-2">&amp;</span>ModuleDecoderRegistry,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
         String::consensus_decode(d, modules)<span class="question-mark">?
-            </span>.parse::&lt;lightning_invoice::Bolt11Invoice&gt;()
+            </span>.parse::&lt;<span class="self">Self</span>&gt;()
             .map_err(DecodeError::from_err)
     }
 }
@@ -2367,11 +2375,11 @@
 
         <span class="kw">impl </span>std::error::Error <span class="kw">for </span>StrError {}
 
-        DecodeError(anyhow::Error::from(StrError(s)))
+        <span class="self">Self</span>(anyhow::Error::from(StrError(s)))
     }
 
     <span class="kw">pub fn </span>from_err&lt;E: std::error::Error + Send + Sync + <span class="lifetime">'static</span>&gt;(e: E) -&gt; <span class="self">Self </span>{
-        DecodeError(anyhow::Error::from(e))
+        <span class="self">Self</span>(anyhow::Error::from(e))
     }
 }
 
@@ -2406,7 +2414,7 @@
         d: <span class="kw-2">&amp;mut </span>D,
         modules: <span class="kw-2">&amp;</span>ModuleDecoderRegistry,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
-        <span class="kw">let </span><span class="kw-2">mut </span>res = BTreeMap::new();
+        <span class="kw">let </span><span class="kw-2">mut </span>res = <span class="self">Self</span>::new();
         <span class="kw">let </span>len = u64::consensus_decode_from_finite_reader(d, modules)<span class="question-mark">?</span>;
         <span class="kw">for _ in </span><span class="number">0</span>..len {
             <span class="kw">let </span>k = K::consensus_decode_from_finite_reader(d, modules)<span class="question-mark">?</span>;
@@ -2447,7 +2455,7 @@
         d: <span class="kw-2">&amp;mut </span>D,
         modules: <span class="kw-2">&amp;</span>ModuleDecoderRegistry,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
-        <span class="kw">let </span><span class="kw-2">mut </span>res = BTreeSet::new();
+        <span class="kw">let </span><span class="kw-2">mut </span>res = <span class="self">Self</span>::new();
         <span class="kw">let </span>len = u64::consensus_decode_from_finite_reader(d, modules)<span class="question-mark">?</span>;
         <span class="kw">for _ in </span><span class="number">0</span>..len {
             <span class="kw">let </span>k = K::consensus_decode_from_finite_reader(d, modules)<span class="question-mark">?</span>;
@@ -2552,28 +2560,28 @@
     <span class="doccomment">/// Get the decoded `T` or `None` if not decoded yet
     </span><span class="kw">pub fn </span>decoded(<span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;T&gt; {
         <span class="kw">match </span><span class="self">self </span>{
-            DynRawFallback::Raw { .. } =&gt; <span class="prelude-val">None</span>,
-            DynRawFallback::Decoded(v) =&gt; <span class="prelude-val">Some</span>(v),
+            <span class="self">Self</span>::Raw { .. } =&gt; <span class="prelude-val">None</span>,
+            <span class="self">Self</span>::Decoded(v) =&gt; <span class="prelude-val">Some</span>(v),
         }
     }
 
     <span class="doccomment">/// Convert into the decoded `T` and panic if not decoded yet
     </span><span class="kw">pub fn </span>expect_decoded(<span class="self">self</span>) -&gt; T {
         <span class="kw">match </span><span class="self">self </span>{
-            DynRawFallback::Raw { .. } =&gt; {
+            <span class="self">Self</span>::Raw { .. } =&gt; {
                 <span class="macro">panic!</span>(<span class="string">"Expected decoded value. Possibly `redecode_raw` call is missing."</span>)
             }
-            DynRawFallback::Decoded(v) =&gt; v,
+            <span class="self">Self</span>::Decoded(v) =&gt; v,
         }
     }
 
     <span class="doccomment">/// Get the decoded `T` and panic if not decoded yet
     </span><span class="kw">pub fn </span>expect_decoded_ref(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>T {
         <span class="kw">match </span><span class="self">self </span>{
-            DynRawFallback::Raw { .. } =&gt; {
+            <span class="self">Self</span>::Raw { .. } =&gt; {
                 <span class="macro">panic!</span>(<span class="string">"Expected decoded value. Possibly `redecode_raw` call is missing."</span>)
             }
-            DynRawFallback::Decoded(v) =&gt; v,
+            <span class="self">Self</span>::Decoded(v) =&gt; v,
         }
     }
 
@@ -2586,22 +2594,22 @@
         decoders: <span class="kw-2">&amp;</span>ModuleDecoderRegistry,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, <span class="kw">crate</span>::encoding::DecodeError&gt; {
         <span class="prelude-val">Ok</span>(<span class="kw">match </span><span class="self">self </span>{
-            DynRawFallback::Raw {
+            <span class="self">Self</span>::Raw {
                 module_instance_id,
                 raw,
             } =&gt; <span class="kw">match </span>decoders.get(module_instance_id) {
-                <span class="prelude-val">Some</span>(decoder) =&gt; DynRawFallback::Decoded(decoder.decode_complete(
+                <span class="prelude-val">Some</span>(decoder) =&gt; <span class="self">Self</span>::Decoded(decoder.decode_complete(
                     <span class="kw-2">&amp;mut &amp;</span>raw[..],
                     raw.len() <span class="kw">as </span>u64,
                     module_instance_id,
                     decoders,
                 )<span class="question-mark">?</span>),
-                <span class="prelude-val">None </span>=&gt; DynRawFallback::Raw {
+                <span class="prelude-val">None </span>=&gt; <span class="self">Self</span>::Raw {
                     module_instance_id,
                     raw,
                 },
             },
-            DynRawFallback::Decoded(v) =&gt; DynRawFallback::Decoded(v),
+            <span class="self">Self</span>::Decoded(v) =&gt; <span class="self">Self</span>::Decoded(v),
         })
     }
 }
@@ -2627,7 +2635,7 @@
         <span class="prelude-val">Ok</span>(<span class="kw">match </span>decoders.get(module_instance_id) {
             <span class="prelude-val">Some</span>(decoder) =&gt; {
                 <span class="kw">let </span>total_len_u64 = u64::consensus_decode_from_finite_reader(reader, decoders)<span class="question-mark">?</span>;
-                DynRawFallback::Decoded(decoder.decode_complete(
+                <span class="self">Self</span>::Decoded(decoder.decode_complete(
                     reader,
                     total_len_u64,
                     module_instance_id,
@@ -2651,7 +2659,7 @@
 {
     <span class="kw">fn </span>consensus_encode&lt;W: std::io::Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: <span class="kw-2">&amp;mut </span>W) -&gt; <span class="prelude-ty">Result</span>&lt;usize, std::io::Error&gt; {
         <span class="kw">match </span><span class="self">self </span>{
-            DynRawFallback::Raw {
+            <span class="self">Self</span>::Raw {
                 module_instance_id,
                 raw,
             } =&gt; {
@@ -2659,7 +2667,7 @@
                 written += raw.consensus_encode(writer)<span class="question-mark">?</span>;
                 <span class="prelude-val">Ok</span>(written)
             }
-            DynRawFallback::Decoded(v) =&gt; v.consensus_encode(writer),
+            <span class="self">Self</span>::Decoded(v) =&gt; v.consensus_encode(writer),
         }
     }
 }
@@ -2749,7 +2757,7 @@
             .unwrap();
 
         <span class="kw">let </span><span class="kw-2">mut </span>cursor = Cursor::new(<span class="kw-2">&amp;</span>unknown_variant_encoding);
-        <span class="kw">let </span>decode_res = NoDefaultEnum::consensus_decode(<span class="kw-2">&amp;mut </span>cursor, <span class="kw-2">&amp;</span>Default::default());
+        <span class="kw">let </span>decode_res = NoDefaultEnum::consensus_decode(<span class="kw-2">&amp;mut </span>cursor, <span class="kw-2">&amp;</span>ModuleRegistry::default());
 
         <span class="kw">match </span>decode_res {
             <span class="prelude-val">Ok</span>(<span class="kw">_</span>) =&gt; <span class="macro">panic!</span>(<span class="string">"Should return error"</span>),
@@ -2766,7 +2774,7 @@
             .unwrap();
 
         <span class="kw">let </span><span class="kw-2">mut </span>cursor = Cursor::new(<span class="kw-2">&amp;</span>unknown_variant_encoding);
-        <span class="kw">let </span>decode_res = DefaultEnum::consensus_decode(<span class="kw-2">&amp;mut </span>cursor, <span class="kw-2">&amp;</span>Default::default());
+        <span class="kw">let </span>decode_res = DefaultEnum::consensus_decode(<span class="kw-2">&amp;mut </span>cursor, <span class="kw-2">&amp;</span>ModuleRegistry::default());
 
         <span class="macro">assert_eq!</span>(
             decode_res.unwrap(),
@@ -2913,8 +2921,8 @@
 
         <span class="kw">for </span>(old, new) <span class="kw">in </span>test_vector {
             <span class="kw">let </span>old_bytes = old.consensus_encode_to_vec();
-            <span class="kw">let </span>decoded_new =
-                New::consensus_decode_vec(old_bytes, <span class="kw-2">&amp;</span>Default::default()).expect(<span class="string">"Decoding failed"</span>);
+            <span class="kw">let </span>decoded_new = New::consensus_decode_vec(old_bytes, <span class="kw-2">&amp;</span>ModuleRegistry::default())
+                .expect(<span class="string">"Decoding failed"</span>);
             <span class="macro">assert_eq!</span>(decoded_new, new);
         }
     }

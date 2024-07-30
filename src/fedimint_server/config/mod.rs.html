@@ -1012,7 +1012,7 @@
             api_auth: params.local.api_auth.clone(),
             tls_key: params.local.our_private_key.clone(),
             broadcast_secret_key,
-            modules: Default::default(),
+            modules: BTreeMap::new(),
         };
         <span class="kw">let </span>local = ServerConfigLocal {
             p2p_endpoints: params.p2p_urls(),
@@ -1023,7 +1023,7 @@
             } <span class="kw">else </span>{
                 DEFAULT_BROADCAST_ROUND_DELAY_MS
             },
-            modules: Default::default(),
+            modules: BTreeMap::new(),
         };
         <span class="kw">let </span>consensus = ServerConfigConsensus {
             code_version: code_version_str,
@@ -1036,7 +1036,7 @@
             },
             api_endpoints: params.api_urls(),
             tls_certs: params.tls_certs(),
-            modules: Default::default(),
+            modules: BTreeMap::new(),
             meta: params.consensus.meta,
         };
         <span class="kw">let </span><span class="kw-2">mut </span>cfg = <span class="self">Self </span>{
@@ -1279,7 +1279,7 @@
         dkg.add(KeyType::Epoch, peers.to_num_peers().threshold());
 
         <span class="kw">let </span><span class="kw-2">mut </span>registered_modules = registry.kinds();
-        <span class="kw">let </span><span class="kw-2">mut </span>module_cfgs: BTreeMap&lt;ModuleInstanceId, ServerModuleConfig&gt; = Default::default();
+        <span class="kw">let </span><span class="kw-2">mut </span>module_cfgs: BTreeMap&lt;ModuleInstanceId, ServerModuleConfig&gt; = BTreeMap::new();
         <span class="kw">let </span>modules = params.consensus.modules.iter_modules();
         <span class="kw">let </span>modules_runner = modules.map(|(module_instance_id, kind, module_params)| {
             <span class="kw">let </span>dkg = PeerHandle::new(<span class="kw-2">&amp;</span>connections, module_instance_id, <span class="kw-2">*</span>our_id, peers.clone());

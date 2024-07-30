@@ -76,6 +76,7 @@
 <a href="#76" id="76">76</a>
 <a href="#77" id="77">77</a>
 <a href="#78" id="78">78</a>
+<a href="#79" id="79">79</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! Serde implementations using hex-encoded encodables
 //!
 //! Oftentimes it's convenient to de/serialize consensus encodable data
@@ -93,6 +94,7 @@
 </span><span class="kw">use </span>serde::Deserialize;
 
 <span class="kw">use super</span>::{Decodable, Encodable};
+<span class="kw">use </span><span class="kw">crate</span>::module::registry::ModuleRegistry;
 
 <span class="kw">pub fn </span>serialize&lt;T, S&gt;(t: <span class="kw-2">&amp;</span>T, ser: S) -&gt; <span class="prelude-ty">Result</span>&lt;S::Ok, S::Error&gt;
 <span class="kw">where
@@ -106,7 +108,7 @@
 <span class="kw">where
     </span>D: serde::de::Deserializer&lt;<span class="lifetime">'de</span>&gt;,
 {
-    Decodable::consensus_decode_hex(<span class="kw-2">&amp;</span>String::deserialize(de)<span class="question-mark">?</span>, <span class="kw-2">&amp;</span>Default::default())
+    Decodable::consensus_decode_hex(<span class="kw-2">&amp;</span>String::deserialize(de)<span class="question-mark">?</span>, <span class="kw-2">&amp;</span>ModuleRegistry::default())
         .map_err(|e| serde::de::Error::custom(<span class="macro">format!</span>(<span class="string">"decodable deserialization failed: {e:?}"</span>)))
 }
 

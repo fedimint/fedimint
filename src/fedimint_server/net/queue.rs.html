@@ -130,7 +130,7 @@
 <span class="kw">impl</span>&lt;M&gt; Default <span class="kw">for </span>MessageQueue&lt;M&gt; {
     <span class="kw">fn </span>default() -&gt; <span class="self">Self </span>{
         MessageQueue {
-            queue: Default::default(),
+            queue: VecDeque::default(),
             next_id: MessageId(<span class="number">1</span>),
         }
     }

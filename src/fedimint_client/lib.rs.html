@@ -2685,10 +2685,8 @@
 <a href="#2685" id="2685">2685</a>
 <a href="#2686" id="2686">2686</a>
 <a href="#2687" id="2687">2687</a>
-<a href="#2688" id="2688">2688</a>
 </pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
-#![allow(clippy::default_trait_access)]
 #![allow(clippy::doc_markdown)]
 #![allow(clippy::explicit_deref_methods)]
 #![allow(clippy::missing_errors_doc)]
@@ -2800,7 +2798,7 @@
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::endpoint_constants::{CLIENT_CONFIG_ENDPOINT, VERSION_ENDPOINT};
 <span class="kw">use </span>fedimint_core::invite_code::InviteCode;
-<span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
+<span class="kw">use </span>fedimint_core::module::registry::{ModuleDecoderRegistry, ModuleRegistry};
 <span class="kw">use </span>fedimint_core::module::{
     ApiAuth, ApiRequestErased, ApiVersion, MultiApiVersion, SupportedApiVersionsSummary,
     SupportedCoreApiVersions, SupportedModuleApiVersions,
@@ -3543,7 +3541,7 @@
 
         <span class="prelude-val">Ok</span>(<span class="kw">match </span>client_secret {
             <span class="prelude-val">Some</span>(client_secret) =&gt; <span class="prelude-val">Some</span>(
-                T::consensus_decode(<span class="kw-2">&amp;mut </span>client_secret.as_slice(), <span class="kw-2">&amp;</span>Default::default())
+                T::consensus_decode(<span class="kw-2">&amp;mut </span>client_secret.as_slice(), <span class="kw-2">&amp;</span>ModuleRegistry::default())
                     .map_err(|e| <span class="macro">anyhow!</span>(<span class="string">"Decoding failed: {e}"</span>))<span class="question-mark">?</span>,
             ),
             <span class="prelude-val">None </span>=&gt; <span class="prelude-val">None</span>,
@@ -4658,8 +4656,8 @@
     <span class="kw">fn </span>new(db: Database) -&gt; <span class="self">Self </span>{
         <span class="kw">let </span>meta_service = MetaService::new(LegacyMetaSource::default());
         ClientBuilder {
-            module_inits: Default::default(),
-            primary_module_instance: Default::default(),
+            module_inits: ModuleInitRegistry::new(),
+            primary_module_instance: <span class="prelude-val">None</span>,
             admin_creds: <span class="prelude-val">None</span>,
             db_no_decoders: db,
             stopped: <span class="bool-val">false</span>,
@@ -4672,7 +4670,7 @@
             module_inits: client.module_inits.clone(),
             primary_module_instance: <span class="prelude-val">Some</span>(client.primary_module_instance),
             admin_creds: <span class="prelude-val">None</span>,
-            db_no_decoders: client.db.with_decoders(Default::default()),
+            db_no_decoders: client.db.with_decoders(ModuleRegistry::default()),
             stopped: <span class="bool-val">false</span>,
             <span class="comment">// non unique
             </span>meta_service: client.meta_service.clone(),
@@ -5050,7 +5048,7 @@
         .unwrap_or(ApiVersionSet {
             core: ApiVersion::new(<span class="number">0</span>, <span class="number">0</span>),
             <span class="comment">// This will cause all modules to skip initialization
-            </span>modules: Default::default(),
+            </span>modules: BTreeMap::new(),
         });
 
         <span class="macro">debug!</span>(<span class="question-mark">?</span>common_api_versions, <span class="string">"Completed api version negotiation"</span>);
@@ -5058,11 +5056,11 @@
         <span class="kw">let </span><span class="kw-2">mut </span>module_recoveries: BTreeMap&lt;
             ModuleInstanceId,
             Pin&lt;Box&lt;<span class="macro">maybe_add_send!</span>(<span class="kw">dyn </span>Future&lt;Output = anyhow::Result&lt;()&gt;&gt;)&gt;&gt;,
-        &gt; = Default::default();
+        &gt; = BTreeMap::new();
         <span class="kw">let </span><span class="kw-2">mut </span>module_recovery_progress_receivers: BTreeMap&lt;
             ModuleInstanceId,
             watch::Receiver&lt;RecoveryProgress&gt;,
-        &gt; = Default::default();
+        &gt; = BTreeMap::new();
 
         <span class="kw">let </span>final_client = FinalClient::default();
 
@@ -5326,9 +5324,9 @@
         config.clone().redecode_raw(decoders)
     }
 
-    <span class="doccomment">/// Re-derive client's root_secret using the federation ID. This eliminates
-    /// the possibility of having the same client root_secret across
-    /// multiple federations.
+    <span class="doccomment">/// Re-derive client's `root_secret` using the federation ID. This
+    /// eliminates the possibility of having the same client `root_secret`
+    /// across multiple federations.
     </span><span class="kw">fn </span>federation_root_secret(
         root_secret: <span class="kw-2">&amp;</span>DerivableSecret,
         config: <span class="kw-2">&amp;</span>ClientConfig,
@@ -5346,7 +5344,7 @@
 
     <span class="kw">match </span>client_secret {
         <span class="prelude-val">Some</span>(client_secret) =&gt; {
-            T::consensus_decode(<span class="kw-2">&amp;mut </span>client_secret.as_slice(), <span class="kw-2">&amp;</span>Default::default())
+            T::consensus_decode(<span class="kw-2">&amp;mut </span>client_secret.as_slice(), <span class="kw-2">&amp;</span>ModuleRegistry::default())
                 .map_err(|e| <span class="macro">anyhow!</span>(<span class="string">"Decoding failed: {e}"</span>))
         }
         <span class="prelude-val">None </span>=&gt; <span class="macro">bail!</span>(<span class="string">"Encoded client secret not present in DB"</span>),

@@ -50,7 +50,6 @@
 <a href="#50" id="50">50</a>
 <a href="#51" id="51">51</a>
 </pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
-#![allow(clippy::default_trait_access)]
 
 </span><span class="doccomment">//! BIP39 client secret support crate
 
@@ -59,6 +58,7 @@
 <span class="kw">use </span>fedimint_client::derivable_secret::DerivableSecret;
 <span class="kw">use </span>fedimint_client::secret::RootSecretStrategy;
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, DecodeError, Encodable};
+<span class="kw">use </span>fedimint_core::module::registry::ModuleRegistry;
 <span class="kw">use </span>rand::{CryptoRng, RngCore};
 
 <span class="doccomment">/// BIP39 root secret encoding strategy allowing retrieval of the seed phrase.
@@ -88,7 +88,7 @@
     <span class="kw">fn </span>consensus_decode(
         reader: <span class="kw-2">&amp;mut </span><span class="kw">impl </span>Read,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>::Encoding, fedimint_core::encoding::DecodeError&gt; {
-        <span class="kw">let </span>bytes = Vec::&lt;u8&gt;::consensus_decode(reader, <span class="kw-2">&amp;</span>Default::default())<span class="question-mark">?</span>;
+        <span class="kw">let </span>bytes = Vec::&lt;u8&gt;::consensus_decode(reader, <span class="kw-2">&amp;</span>ModuleRegistry::default())<span class="question-mark">?</span>;
         bip39::Mnemonic::from_entropy(<span class="kw-2">&amp;</span>bytes).map_err(DecodeError::from_err)
     }
 

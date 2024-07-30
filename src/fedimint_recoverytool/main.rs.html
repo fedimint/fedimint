@@ -480,11 +480,7 @@
 <a href="#480" id="480">480</a>
 <a href="#481" id="481">481</a>
 <a href="#482" id="482">482</a>
-<a href="#483" id="483">483</a>
-<a href="#484" id="484">484</a>
 </pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
-#![allow(clippy::default_trait_access)]
-#![allow(clippy::too_many_lines)]
 
 </span><span class="kw">pub mod </span>envs;
 
@@ -501,7 +497,7 @@
 <span class="kw">use </span>fedimint_core::core::LEGACY_HARDCODED_INSTANCE_ID_WALLET;
 <span class="kw">use </span>fedimint_core::db::{Database, IDatabaseTransactionOpsCoreTyped};
 <span class="kw">use </span>fedimint_core::epoch::ConsensusItem;
-<span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
+<span class="kw">use </span>fedimint_core::module::registry::{ModuleDecoderRegistry, ModuleRegistry};
 <span class="kw">use </span>fedimint_core::module::CommonModuleInit;
 <span class="kw">use </span>fedimint_core::session_outcome::SignedSessionOutcome;
 <span class="kw">use </span>fedimint_core::transaction::Transaction;
@@ -641,7 +637,7 @@
                 .expect(<span class="string">"Could not encode to stdout"</span>);
         }
         TweakSource::Utxos { legacy, db } =&gt; {
-            <span class="kw">let </span>db = get_db(opts.readonly, <span class="kw-2">&amp;</span>db, Default::default());
+            <span class="kw">let </span>db = get_db(opts.readonly, <span class="kw-2">&amp;</span>db, ModuleRegistry::default());
 
             <span class="kw">let </span>db = <span class="kw">if </span>legacy {
                 db

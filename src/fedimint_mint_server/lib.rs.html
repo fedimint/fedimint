@@ -799,10 +799,9 @@
 <a href="#799" id="799">799</a>
 <a href="#800" id="800">800</a>
 <a href="#801" id="801">801</a>
+<a href="#802" id="802">802</a>
 </pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
-#![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::cast_possible_wrap)]
-#![allow(clippy::default_trait_access)]
 #![allow(clippy::module_name_repetitions)]
 #![allow(clippy::must_use_candidate)]
 #![allow(clippy::similar_names)]
@@ -1474,9 +1473,12 @@
 <span class="attr">#[cfg(test)]
 </span><span class="kw">mod </span>test {
     <span class="kw">use </span>assert_matches::assert_matches;
-    <span class="kw">use </span>fedimint_core::config::{ClientModuleConfig, ConfigGenModuleParams, ServerModuleConfig};
+    <span class="kw">use </span>fedimint_core::config::{
+        ClientModuleConfig, ConfigGenModuleParams, EmptyGenParams, ServerModuleConfig,
+    };
     <span class="kw">use </span>fedimint_core::db::mem_impl::MemDatabase;
     <span class="kw">use </span>fedimint_core::db::Database;
+    <span class="kw">use </span>fedimint_core::module::registry::ModuleRegistry;
     <span class="kw">use </span>fedimint_core::module::{ModuleConsensusVersion, ServerModuleInit};
     <span class="kw">use </span>fedimint_core::{secp256k1, Amount, PeerId, ServerModule};
     <span class="kw">use </span>fedimint_mint_common::config::FeeConsensus;
@@ -1489,14 +1491,14 @@
         MintInit,
     };
 
-    <span class="kw">const </span>MINTS: usize = <span class="number">5</span>;
+    <span class="kw">const </span>MINTS: u16 = <span class="number">5</span>;
 
     <span class="kw">fn </span>build_configs() -&gt; (Vec&lt;ServerModuleConfig&gt;, ClientModuleConfig) {
-        <span class="kw">let </span>peers = (<span class="number">0</span>..MINTS <span class="kw">as </span>u16).map(PeerId::from).collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
+        <span class="kw">let </span>peers = (<span class="number">0</span>..MINTS).map(PeerId::from).collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
         <span class="kw">let </span>mint_cfg = MintInit.trusted_dealer_gen(
             <span class="kw-2">&amp;</span>peers,
             <span class="kw-2">&amp;</span>ConfigGenModuleParams::from_typed(MintGenParams {
-                local: Default::default(),
+                local: EmptyGenParams::default(),
                 consensus: MintGenParamsConsensus::new(<span class="number">2</span>, FeeConsensus::default()),
             })
             .unwrap(),
@@ -1585,7 +1587,7 @@
         <span class="kw">let </span>(<span class="kw">_</span>, note) = issue_note(<span class="kw-2">&amp;</span>mint_server_cfg, highest_denomination);
 
         <span class="comment">// Normal spend works
-        </span><span class="kw">let </span>db = Database::new(MemDatabase::new(), Default::default());
+        </span><span class="kw">let </span>db = Database::new(MemDatabase::new(), ModuleRegistry::default());
         <span class="kw">let </span>input = MintInput::new_v0(highest_denomination, note);
 
         <span class="comment">// Double spend in same session is detected

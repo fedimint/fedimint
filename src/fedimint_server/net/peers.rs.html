@@ -1569,7 +1569,7 @@
                 <span class="kw">let </span>connect = net_ref
                     .connector(cfg.identity, StreamReliability::MILDLY_UNRELIABLE)
                     .into_dyn();
-                <span class="kw">let </span>status_channels = Default::default();
+                <span class="kw">let </span>status_channels = Arc::new(RwLock::new(BTreeMap::new()));
                 <span class="kw">let </span>connection = ReconnectPeerConnections::&lt;u64&gt;::new(
                     cfg,
                     DelayCalculator::TEST_DEFAULT,

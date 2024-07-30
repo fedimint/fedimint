@@ -372,7 +372,7 @@
             .iter()
             .map(|(id, <span class="kw">_</span>)| create_empty_module_placeholder(<span class="kw-2">*</span>id))
             .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
-        AuditSummary {
+        <span class="self">Self </span>{
             net_assets: calculate_net_assets(audit.items.iter()),
             module_summaries: generate_module_summaries(
                 audit.items.iter().chain(<span class="kw-2">&amp;</span>empty_module_placeholders),

@@ -287,8 +287,6 @@
 <a href="#287" id="287">287</a>
 <a href="#288" id="288">288</a>
 <a href="#289" id="289">289</a>
-<a href="#290" id="290">290</a>
-<a href="#291" id="291">291</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::io::{Error, Write};
 <span class="kw">use </span>std::str::FromStr;
 
@@ -399,9 +397,9 @@
     }
 }
 
-<span class="kw">impl</span>&lt;K&gt; Encodable <span class="kw">for </span>miniscript::Descriptor&lt;K&gt;
+<span class="kw">impl</span>&lt;K&gt; Encodable <span class="kw">for </span>Descriptor&lt;K&gt;
 <span class="kw">where
-    </span>K: miniscript::MiniscriptKey,
+    </span>K: MiniscriptKey,
 {
     <span class="kw">fn </span>consensus_encode&lt;W: Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: <span class="kw-2">&amp;mut </span>W) -&gt; <span class="prelude-ty">Result</span>&lt;usize, Error&gt; {
         <span class="kw">let </span>descriptor_str = <span class="self">self</span>.to_string();
@@ -409,7 +407,7 @@
     }
 }
 
-<span class="kw">impl</span>&lt;K&gt; Decodable <span class="kw">for </span>miniscript::Descriptor&lt;K&gt;
+<span class="kw">impl</span>&lt;K&gt; Decodable <span class="kw">for </span>Descriptor&lt;K&gt;
 <span class="kw">where
     </span><span class="self">Self</span>: FromStr,
     &lt;<span class="self">Self </span><span class="kw">as </span>FromStr&gt;::Err: ToString + std::error::Error + Send + Sync + <span class="lifetime">'static</span>,
@@ -420,7 +418,7 @@
         modules: <span class="kw-2">&amp;</span>ModuleDecoderRegistry,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
         <span class="kw">let </span>descriptor_str = String::consensus_decode_from_finite_reader(d, modules)<span class="question-mark">?</span>;
-        Descriptor::&lt;K&gt;::from_str(<span class="kw-2">&amp;</span>descriptor_str).map_err(DecodeError::from_err)
+        <span class="self">Self</span>::from_str(<span class="kw-2">&amp;</span>descriptor_str).map_err(DecodeError::from_err)
     }
 }
 
@@ -457,7 +455,7 @@
         modules: <span class="kw-2">&amp;</span>ModuleDecoderRegistry,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
         <span class="kw">let </span>magic = bitcoin::network::Magic::consensus_decode(d, modules)<span class="question-mark">?</span>;
-        bitcoin::Network::from_magic(magic).ok_or_else(|| {
+        <span class="self">Self</span>::from_magic(magic).ok_or_else(|| {
             DecodeError::new_custom(<span class="macro">format_err!</span>(<span class="string">"Unknown network magic: {:x}"</span>, magic))
         })
     }
@@ -474,9 +472,7 @@
         d: <span class="kw-2">&amp;mut </span>D,
         modules: <span class="kw-2">&amp;</span>ModuleDecoderRegistry,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
-        <span class="prelude-val">Ok</span>(bitcoin::Amount::from_sat(u64::consensus_decode(
-            d, modules,
-        )<span class="question-mark">?</span>))
+        <span class="prelude-val">Ok</span>(<span class="self">Self</span>::from_sat(u64::consensus_decode(d, modules)<span class="question-mark">?</span>))
     }
 }
 
@@ -524,9 +520,9 @@
         d: <span class="kw-2">&amp;mut </span>D,
         modules: <span class="kw-2">&amp;</span>ModuleDecoderRegistry,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
-        <span class="prelude-val">Ok</span>(bitcoin::hashes::sha256::Hash::from_byte_array(
-            Decodable::consensus_decode(d, modules)<span class="question-mark">?</span>,
-        ))
+        <span class="prelude-val">Ok</span>(<span class="self">Self</span>::from_byte_array(Decodable::consensus_decode(
+            d, modules,
+        )<span class="question-mark">?</span>))
     }
 }
 

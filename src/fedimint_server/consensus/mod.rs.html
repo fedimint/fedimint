@@ -263,11 +263,7 @@
 <a href="#263" id="263">263</a>
 <a href="#264" id="264">264</a>
 <a href="#265" id="265">265</a>
-<a href="#266" id="266">266</a>
-<a href="#267" id="267">267</a>
-</pre></div><pre class="rust"><code><span class="attr">#![allow(clippy::let_unit_value)]
-
-</span><span class="kw">pub mod </span>aleph_bft;
+</pre></div><pre class="rust"><code><span class="kw">pub mod </span>aleph_bft;
 <span class="kw">pub mod </span>api;
 <span class="kw">pub mod </span>db;
 <span class="kw">pub mod </span>debug;
@@ -296,7 +292,7 @@
 <span class="kw">use </span>fedimint_core::NumPeers;
 <span class="kw">use </span>fedimint_logging::{LOG_CONSENSUS, LOG_CORE};
 <span class="kw">use </span>jsonrpsee::server::ServerHandle;
-<span class="kw">use </span>tokio::sync::watch;
+<span class="kw">use </span>tokio::sync::{watch, RwLock};
 <span class="kw">use </span>tracing::info;
 <span class="kw">use </span>tracing::log::warn;
 
@@ -371,8 +367,8 @@
 
     <span class="kw">let </span>(submission_sender, submission_receiver) = async_channel::bounded(TRANSACTION_BUFFER);
     <span class="kw">let </span>(shutdown_sender, shutdown_receiver) = watch::channel(<span class="prelude-val">None</span>);
-    <span class="kw">let </span>connection_status_channels = Default::default();
-    <span class="kw">let </span>last_ci_by_peer = Default::default();
+    <span class="kw">let </span>connection_status_channels = Arc::new(RwLock::new(BTreeMap::new()));
+    <span class="kw">let </span>last_ci_by_peer = Arc::new(RwLock::new(BTreeMap::new()));
 
     <span class="kw">let </span>consensus_api = ConsensusApi {
         cfg: cfg.clone(),
@@ -386,8 +382,8 @@
             <span class="kw-2">&amp;</span>cfg.consensus.modules,
             <span class="kw-2">&amp;</span>module_init_registry,
         ),
-        last_ci_by_peer: Arc::clone(<span class="kw-2">&amp;</span>last_ci_by_peer),
-        connection_status_channels: Arc::clone(<span class="kw-2">&amp;</span>connection_status_channels),
+        last_ci_by_peer: last_ci_by_peer.clone(),
+        connection_status_channels: connection_status_channels.clone(),
         force_api_secret: force_api_secrets.get_active(),
     };
 

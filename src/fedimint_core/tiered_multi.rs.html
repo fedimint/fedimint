@@ -381,7 +381,7 @@
 <span class="kw">impl</span>&lt;T&gt; TieredMulti&lt;T&gt; {
     <span class="doccomment">/// Returns a new `TieredMulti` with the given `BTreeMap` map
     </span><span class="kw">pub fn </span>new(map: BTreeMap&lt;Amount, Vec&lt;T&gt;&gt;) -&gt; <span class="self">Self </span>{
-        TieredMulti(map.into_iter().filter(|(<span class="kw">_</span>, v)| !v.is_empty()).collect())
+        <span class="self">Self</span>(map.into_iter().filter(|(<span class="kw">_</span>, v)| !v.is_empty()).collect())
     }
 
     <span class="doccomment">/// Returns the total value of all notes in msat as `Amount`
@@ -510,7 +510,7 @@
 
 <span class="kw">impl</span>&lt;C&gt; FromIterator&lt;(Amount, C)&gt; <span class="kw">for </span>TieredMulti&lt;C&gt; {
     <span class="kw">fn </span>from_iter&lt;T: IntoIterator&lt;Item = (Amount, C)&gt;&gt;(iter: T) -&gt; <span class="self">Self </span>{
-        <span class="kw">let </span><span class="kw-2">mut </span>res = TieredMulti::default();
+        <span class="kw">let </span><span class="kw-2">mut </span>res = <span class="self">Self</span>::default();
         res.extend(iter);
         res.assert_invariants();
         res
@@ -535,7 +535,7 @@
 
 <span class="kw">impl</span>&lt;C&gt; Default <span class="kw">for </span>TieredMulti&lt;C&gt; {
     <span class="kw">fn </span>default() -&gt; <span class="self">Self </span>{
-        TieredMulti(BTreeMap::default())
+        <span class="self">Self</span>(BTreeMap::default())
     }
 }
 
@@ -564,7 +564,7 @@
         d: <span class="kw-2">&amp;mut </span>D,
         modules: <span class="kw-2">&amp;</span>ModuleDecoderRegistry,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
-        <span class="prelude-val">Ok</span>(TieredMulti(BTreeMap::consensus_decode_from_finite_reader(
+        <span class="prelude-val">Ok</span>(<span class="self">Self</span>(BTreeMap::consensus_decode_from_finite_reader(
             d, modules,
         )<span class="question-mark">?</span>))
     }
@@ -579,15 +579,15 @@
 }
 
 <span class="kw">impl</span>&lt;<span class="lifetime">'a</span>, I, C&gt; TieredMultiZip&lt;<span class="lifetime">'a</span>, I, C&gt; {
-    <span class="doccomment">/// Creates a new MultiZip Iterator from `Notes` iterators. These have to be
-    /// checked for structural equality! There also has to be at least one
-    /// iterator in the `iter` vector.
+    <span class="doccomment">/// Creates a new `TieredMultiZip` Iterator from `Notes` iterators. These
+    /// have to be checked for structural equality! There also has to be at
+    /// least one iterator in the `iter` vector.
     </span><span class="kw">pub fn </span>new(iters: Vec&lt;I&gt;) -&gt; <span class="self">Self </span>{
         <span class="macro">assert!</span>(!iters.is_empty());
 
         TieredMultiZip {
             iters,
-            _pd: Default::default(),
+            _pd: PhantomData,
         }
     }
 }
@@ -685,7 +685,7 @@
 
 <span class="kw">impl </span>FromIterator&lt;(Amount, usize)&gt; <span class="kw">for </span>TieredCounts {
     <span class="kw">fn </span>from_iter&lt;I: IntoIterator&lt;Item = (Amount, usize)&gt;&gt;(iter: I) -&gt; <span class="self">Self </span>{
-        TieredCounts(iter.into_iter().filter(|(<span class="kw">_</span>, count)| <span class="kw-2">*</span>count != <span class="number">0</span>).collect())
+        <span class="self">Self</span>(iter.into_iter().filter(|(<span class="kw">_</span>, count)| <span class="kw-2">*</span>count != <span class="number">0</span>).collect())
     }
 }
 

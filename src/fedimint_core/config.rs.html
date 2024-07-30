@@ -1114,6 +1114,10 @@
 <a href="#1114" id="1114">1114</a>
 <a href="#1115" id="1115">1115</a>
 <a href="#1116" id="1116">1116</a>
+<a href="#1117" id="1117">1117</a>
+<a href="#1118" id="1118">1118</a>
+<a href="#1119" id="1119">1119</a>
+<a href="#1120" id="1120">1120</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet};
 <span class="kw">use </span>std::fmt::{Debug, Display};
 <span class="kw">use </span>std::hash::Hash;
@@ -1588,7 +1592,7 @@
 
 <span class="kw">impl</span>&lt;M&gt; Default <span class="kw">for </span>ModuleInitRegistry&lt;M&gt; {
     <span class="kw">fn </span>default() -&gt; <span class="self">Self </span>{
-        <span class="self">Self</span>(Default::default())
+        <span class="self">Self</span>(BTreeMap::new())
     }
 }
 
@@ -1666,7 +1670,7 @@
         <span class="kw">for </span>(id, (kind, module)) <span class="kw">in </span>json {
             params.insert(id, (kind, module));
         }
-        <span class="prelude-val">Ok</span>(ModuleRegistry::from(params))
+        <span class="prelude-val">Ok</span>(<span class="self">Self</span>::from(params))
     }
 }
 
@@ -1699,7 +1703,7 @@
 
 <span class="kw">impl</span>&lt;M&gt; ModuleInitRegistry&lt;M&gt; {
     <span class="kw">pub fn </span>new() -&gt; <span class="self">Self </span>{
-        Default::default()
+        <span class="self">Self</span>::default()
     }
 
     <span class="kw">pub fn </span>attach&lt;T&gt;(<span class="kw-2">&amp;mut </span><span class="self">self</span>, gen: T)
@@ -1921,8 +1925,10 @@
     <span class="kw">pub fn </span>to_typed&lt;T: TypedServerModuleConfig&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; anyhow::Result&lt;T&gt; {
         <span class="kw">let </span>local = serde_json::from_value(<span class="self">self</span>.local.value().clone())<span class="question-mark">?</span>;
         <span class="kw">let </span>private = serde_json::from_value(<span class="self">self</span>.private.value().clone())<span class="question-mark">?</span>;
-        <span class="kw">let </span>consensus =
-            &lt;T::Consensus&gt;::consensus_decode(<span class="kw-2">&amp;mut &amp;</span><span class="self">self</span>.consensus.config[..], <span class="kw-2">&amp;</span>Default::default())<span class="question-mark">?</span>;
+        <span class="kw">let </span>consensus = &lt;T::Consensus&gt;::consensus_decode(
+            <span class="kw-2">&amp;mut &amp;</span><span class="self">self</span>.consensus.config[..],
+            <span class="kw-2">&amp;</span>ModuleRegistry::default(),
+        )<span class="question-mark">?</span>;
 
         <span class="prelude-val">Ok</span>(TypedServerModuleConfig::from_parts(
             local, private, consensus,
@@ -1941,7 +1947,7 @@
     <span class="kw">fn </span>from_erased(erased: <span class="kw-2">&amp;</span>ServerModuleConsensusConfig) -&gt; anyhow::Result&lt;<span class="self">Self</span>&gt; {
         <span class="prelude-val">Ok</span>(<span class="self">Self</span>::consensus_decode(
             <span class="kw-2">&amp;mut &amp;</span>erased.config[..],
-            <span class="kw-2">&amp;</span>Default::default(),
+            <span class="kw-2">&amp;</span>ModuleRegistry::default(),
         )<span class="question-mark">?</span>)
     }
 }
@@ -2120,7 +2126,7 @@
     }
 
     <span class="kw">fn </span>deserialize2&lt;<span class="lifetime">'d</span>, D: Deserializer&lt;<span class="lifetime">'d</span>&gt;&gt;(d: D) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, D::Error&gt; {
-        bls12_381_serde::g2::deserialize(d).map(G2Projective::from)
+        bls12_381_serde::g2::deserialize(d).map(<span class="self">Self</span>::from)
     }
 }
 
@@ -2130,7 +2136,7 @@
     }
 
     <span class="kw">fn </span>deserialize2&lt;<span class="lifetime">'d</span>, D: Deserializer&lt;<span class="lifetime">'d</span>&gt;&gt;(d: D) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, D::Error&gt; {
-        bls12_381_serde::g1::deserialize(d).map(G1Projective::from)
+        bls12_381_serde::g1::deserialize(d).map(<span class="self">Self</span>::from)
     }
 }
 
@@ -2181,6 +2187,8 @@
 
 <span class="attr">#[cfg(test)]
 </span><span class="kw">mod </span>tests {
+    <span class="kw">use </span>std::collections::BTreeMap;
+
     <span class="kw">use </span>fedimint_core::config::{ClientConfig, GlobalClientConfig};
 
     <span class="kw">use </span><span class="kw">crate</span>::module::CoreConsensusVersion;
@@ -2189,8 +2197,8 @@
     </span><span class="kw">fn </span>test_dcode_meta() {
         <span class="kw">let </span>config = ClientConfig {
             global: GlobalClientConfig {
-                api_endpoints: Default::default(),
-                broadcast_public_keys: Default::default(),
+                api_endpoints: BTreeMap::new(),
+                broadcast_public_keys: <span class="prelude-val">None</span>,
                 consensus_version: CoreConsensusVersion { major: <span class="number">0</span>, minor: <span class="number">0 </span>},
                 meta: <span class="macro">vec!</span>[
                     (<span class="string">"foo"</span>.to_string(), <span class="string">"bar"</span>.to_string()),
@@ -2200,7 +2208,7 @@
                 .into_iter()
                 .collect(),
             },
-            modules: Default::default(),
+            modules: BTreeMap::new(),
         };
 
         <span class="macro">assert_eq!</span>(

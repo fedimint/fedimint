@@ -234,6 +234,7 @@
 <a href="#234" id="234">234</a>
 <a href="#235" id="235">235</a>
 <a href="#236" id="236">236</a>
+<a href="#237" id="237">237</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::env;
 <span class="kw">use </span>std::net::SocketAddr;
 <span class="kw">use </span>std::sync::Arc;
@@ -250,6 +251,7 @@
 <span class="kw">use </span>fedimint_core::db::mem_impl::MemDatabase;
 <span class="kw">use </span>fedimint_core::db::Database;
 <span class="kw">use </span>fedimint_core::envs::BitcoinRpcConfig;
+<span class="kw">use </span>fedimint_core::module::registry::ModuleRegistry;
 <span class="kw">use </span>fedimint_core::module::{DynServerModuleInit, IServerModuleInit};
 <span class="kw">use </span>fedimint_core::task::{MaybeSend, MaybeSync, TaskGroup};
 <span class="kw">use </span>fedimint_core::util::SafeUrl;
@@ -314,7 +316,7 @@
         <span class="self">Self </span>{
             clients: <span class="macro">vec!</span>[],
             servers: <span class="macro">vec!</span>[],
-            params: Default::default(),
+            params: ModuleRegistry::default(),
             bitcoin_rpc: config,
             bitcoin,
             dyn_bitcoin_rpc,

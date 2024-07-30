@@ -1521,7 +1521,7 @@
         <span class="attr">#[allow(clippy::new_without_default)]
         </span><span class="kw">pub fn </span>new() -&gt; MockNetwork {
             MockNetwork {
-                clients: Arc::new(Default::default()),
+                clients: Arc::new(Mutex::new(HashMap::new())),
             }
         }
 

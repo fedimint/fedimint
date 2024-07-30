@@ -340,25 +340,25 @@
     <span class="kw">pub const </span>ZERO: <span class="self">Self </span>= <span class="self">Self </span>{ msats: <span class="number">0 </span>};
 
     <span class="doccomment">/// Create an amount from a number of millisatoshis.
-    </span><span class="kw">pub const fn </span>from_msats(msats: u64) -&gt; Amount {
-        Amount { msats }
+    </span><span class="kw">pub const fn </span>from_msats(msats: u64) -&gt; <span class="self">Self </span>{
+        <span class="self">Self </span>{ msats }
     }
 
     <span class="doccomment">/// Create an amount from a number of satoshis.
-    </span><span class="kw">pub const fn </span>from_sats(sats: u64) -&gt; Amount {
-        Amount::from_msats(sats * <span class="number">1000</span>)
+    </span><span class="kw">pub const fn </span>from_sats(sats: u64) -&gt; <span class="self">Self </span>{
+        <span class="self">Self</span>::from_msats(sats * <span class="number">1000</span>)
     }
 
     <span class="doccomment">/// Create an amount from a number of whole bitcoins.
-    </span><span class="kw">pub const fn </span>from_bitcoins(bitcoins: u64) -&gt; Amount {
-        Amount::from_sats(bitcoins * SATS_PER_BITCOIN)
+    </span><span class="kw">pub const fn </span>from_bitcoins(bitcoins: u64) -&gt; <span class="self">Self </span>{
+        <span class="self">Self</span>::from_sats(bitcoins * SATS_PER_BITCOIN)
     }
 
     <span class="doccomment">/// Parse a decimal string as a value in the given denomination.
     ///
     /// Note: This only parses the value string.  If you want to parse a value
-    /// with denomination, use [FromStr].
-    </span><span class="kw">pub fn </span>from_str_in(s: <span class="kw-2">&amp;</span>str, denom: Denomination) -&gt; <span class="prelude-ty">Result</span>&lt;Amount, ParseAmountError&gt; {
+    /// with denomination, use [`FromStr`].
+    </span><span class="kw">pub fn </span>from_str_in(s: <span class="kw-2">&amp;</span>str, denom: Denomination) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, ParseAmountError&gt; {
         <span class="kw">if </span>denom == Denomination::MilliSatoshi {
             <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="self">Self</span>::from_msats(s.parse()<span class="question-mark">?</span>));
         }
@@ -366,14 +366,14 @@
         <span class="prelude-val">Ok</span>(<span class="self">Self</span>::from(btc_amt))
     }
 
-    <span class="kw">pub fn </span>saturating_sub(<span class="self">self</span>, other: Amount) -&gt; <span class="self">Self </span>{
-        Amount {
+    <span class="kw">pub fn </span>saturating_sub(<span class="self">self</span>, other: <span class="self">Self</span>) -&gt; <span class="self">Self </span>{
+        <span class="self">Self </span>{
             msats: <span class="self">self</span>.msats.saturating_sub(other.msats),
         }
     }
 
     <span class="kw">pub fn </span>mul_u64(<span class="self">self</span>, other: u64) -&gt; <span class="self">Self </span>{
-        Amount {
+        <span class="self">Self </span>{
             msats: <span class="self">self</span>.msats * other,
         }
     }
@@ -400,7 +400,7 @@
         <span class="self">self</span>.msats <span class="kw">as </span>f64 / <span class="number">1000.0
     </span>}
 
-    <span class="kw">pub fn </span>checked_sub(<span class="self">self</span>, other: Amount) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="self">Self</span>&gt; {
+    <span class="kw">pub fn </span>checked_sub(<span class="self">self</span>, other: <span class="self">Self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="self">Self</span>&gt; {
         <span class="prelude-val">Some</span>(<span class="self">Self </span>{
             msats: <span class="self">self</span>.msats.checked_sub(other.msats)<span class="question-mark">?</span>,
         })
@@ -414,10 +414,10 @@
 }
 
 <span class="kw">impl </span>std::ops::Rem <span class="kw">for </span>Amount {
-    <span class="kw">type </span>Output = Amount;
+    <span class="kw">type </span>Output = <span class="self">Self</span>;
 
     <span class="kw">fn </span>rem(<span class="self">self</span>, rhs: <span class="self">Self</span>) -&gt; <span class="self">Self</span>::Output {
-        Amount {
+        <span class="self">Self </span>{
             msats: <span class="self">self</span>.msats % rhs.msats,
         }
     }
@@ -444,10 +444,10 @@
 }
 
 <span class="kw">impl </span>std::ops::Mul&lt;u64&gt; <span class="kw">for </span>Amount {
-    <span class="kw">type </span>Output = Amount;
+    <span class="kw">type </span>Output = <span class="self">Self</span>;
 
     <span class="kw">fn </span>mul(<span class="self">self</span>, rhs: u64) -&gt; <span class="self">Self</span>::Output {
-        Amount {
+        <span class="self">Self </span>{
             msats: <span class="self">self</span>.msats * rhs,
         }
     }
@@ -464,10 +464,10 @@
 }
 
 <span class="kw">impl </span>std::ops::Add <span class="kw">for </span>Amount {
-    <span class="kw">type </span>Output = Amount;
+    <span class="kw">type </span>Output = <span class="self">Self</span>;
 
     <span class="kw">fn </span>add(<span class="self">self</span>, rhs: <span class="self">Self</span>) -&gt; <span class="self">Self</span>::Output {
-        Amount {
+        <span class="self">Self </span>{
             msats: <span class="self">self</span>.msats + rhs.msats,
         }
     }
@@ -480,18 +480,18 @@
 }
 
 <span class="kw">impl </span>std::iter::Sum <span class="kw">for </span>Amount {
-    <span class="kw">fn </span>sum&lt;I: Iterator&lt;Item = Amount&gt;&gt;(iter: I) -&gt; <span class="self">Self </span>{
-        Amount {
+    <span class="kw">fn </span>sum&lt;I: Iterator&lt;Item = <span class="self">Self</span>&gt;&gt;(iter: I) -&gt; <span class="self">Self </span>{
+        <span class="self">Self </span>{
             msats: iter.map(|amt| amt.msats).sum::&lt;u64&gt;(),
         }
     }
 }
 
 <span class="kw">impl </span>std::ops::Sub <span class="kw">for </span>Amount {
-    <span class="kw">type </span>Output = Amount;
+    <span class="kw">type </span>Output = <span class="self">Self</span>;
 
     <span class="kw">fn </span>sub(<span class="self">self</span>, rhs: <span class="self">Self</span>) -&gt; <span class="self">Self</span>::Output {
-        Amount {
+        <span class="self">Self </span>{
             msats: <span class="self">self</span>.msats - rhs.msats,
         }
     }
@@ -503,10 +503,10 @@
     <span class="kw">fn </span>from_str(s: <span class="kw-2">&amp;</span>str) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, <span class="self">Self</span>::Err&gt; {
         <span class="kw">if let </span><span class="prelude-val">Some</span>(i) = s.find(char::is_alphabetic) {
             <span class="kw">let </span>(amt, denom) = s.split_at(i);
-            Amount::from_str_in(amt.trim(), denom.trim().parse()<span class="question-mark">?</span>)
+            <span class="self">Self</span>::from_str_in(amt.trim(), denom.trim().parse()<span class="question-mark">?</span>)
         } <span class="kw">else </span>{
             <span class="comment">// default to millisatoshi
-            </span>Amount::from_str_in(s.trim(), bitcoin::Denomination::MilliSatoshi)
+            </span><span class="self">Self</span>::from_str_in(s.trim(), bitcoin::Denomination::MilliSatoshi)
         }
     }
 }
@@ -514,7 +514,7 @@
 <span class="kw">impl </span>From&lt;bitcoin::Amount&gt; <span class="kw">for </span>Amount {
     <span class="kw">fn </span>from(amt: bitcoin::Amount) -&gt; <span class="self">Self </span>{
         <span class="macro">assert!</span>(amt.to_sat() &lt;= <span class="number">2_100_000_000_000_000</span>);
-        Amount {
+        <span class="self">Self </span>{
             msats: amt.to_sat() * <span class="number">1000</span>,
         }
     }
@@ -524,7 +524,7 @@
     <span class="kw">type </span>Error = anyhow::Error;
 
     <span class="kw">fn </span>try_from(value: Amount) -&gt; anyhow::Result&lt;<span class="self">Self</span>&gt; {
-        value.try_into_sats().map(bitcoin::Amount::from_sat)
+        value.try_into_sats().map(<span class="self">Self</span>::from_sat)
     }
 }
 

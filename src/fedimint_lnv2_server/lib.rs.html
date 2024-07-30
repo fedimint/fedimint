@@ -774,10 +774,8 @@
 <a href="#774" id="774">774</a>
 <a href="#775" id="775">775</a>
 <a href="#776" id="776">776</a>
-<a href="#777" id="777">777</a>
 </pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_wrap)]
-#![allow(clippy::default_trait_access)]
 #![allow(clippy::module_name_repetitions)]
 
 </span><span class="kw">mod </span>db;
@@ -1026,7 +1024,7 @@
                         (<span class="kw-2">*</span>peer, PublicKeyShare(pk))
                     })
                     .collect(),
-                fee_consensus: Default::default(),
+                fee_consensus: FeeConsensus::default(),
                 network: params.consensus.network,
             },
             private: LightningConfigPrivate {

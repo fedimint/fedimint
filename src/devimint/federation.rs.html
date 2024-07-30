@@ -2029,7 +2029,7 @@
         <span class="kw">let </span>new_fedimintd_version = <span class="kw">crate</span>::util::FedimintdCmd::version_or_default().<span class="kw">await</span>;
         std::env::set_var(<span class="string">"FM_FEDIMINTD_BASE_EXECUTABLE"</span>, current_fedimintd_path);
 
-        <span class="kw">if </span><span class="self">Self</span>::version_requires_coordinated_shutdown(new_fedimintd_version) {
+        <span class="kw">if </span><span class="self">Self</span>::version_requires_coordinated_shutdown(<span class="kw-2">&amp;</span>new_fedimintd_version) {
             <span class="self">self</span>.restart_all_with_bin_after_session(process_mgr, bin_path)
                 .<span class="kw">await
         </span>} <span class="kw">else </span>{
@@ -2038,7 +2038,7 @@
         </span>}
     }
 
-    <span class="kw">fn </span>version_requires_coordinated_shutdown(version: semver::Version) -&gt; bool {
+    <span class="kw">fn </span>version_requires_coordinated_shutdown(version: <span class="kw-2">&amp;</span>semver::Version) -&gt; bool {
         <span class="macro">matches!</span>((version.major, version.minor), (<span class="number">0</span>, <span class="number">4 </span>| <span class="number">5</span>))
     }
 
@@ -2612,7 +2612,7 @@
         <span class="kw-2">&amp;mut </span>server_gen_params,
         Network::Regtest,
         <span class="number">10</span>,
-        fedimintd_version,
+        <span class="kw-2">&amp;</span>fedimintd_version,
     );
     <span class="comment">// Since we are not actually calling `fedimintd` binary, parse and handle
     // `FM_EXTRA_META_DATA` like it would do.
@@ -2647,7 +2647,7 @@
         <span class="kw-2">&amp;mut </span>server_gen_params,
         Network::Regtest,
         <span class="number">10</span>,
-        fedimintd_version,
+        <span class="kw-2">&amp;</span>fedimintd_version,
     );
     <span class="comment">// Since we are not actually calling `fedimintd` binary, parse and handle
     // `FM_EXTRA_META_DATA` like it would do.

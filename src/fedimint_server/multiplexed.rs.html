@@ -286,7 +286,7 @@
 <span class="kw">use </span>tokio::sync::oneshot;
 <span class="kw">use </span>tracing::{debug, warn};
 
-<span class="doccomment">/// TODO: Use proper ModuleId after modularization is complete
+<span class="doccomment">/// TODO: Use proper `ModuleId` after modularization is complete
 </span><span class="kw">pub type </span>ModuleId = String;
 <span class="kw">pub type </span>ModuleIdRef&lt;<span class="lifetime">'a</span>&gt; = <span class="kw-2">&amp;</span><span class="lifetime">'a </span>str;
 
@@ -315,9 +315,9 @@
 <span class="kw">impl</span>&lt;MuxKey, Msg&gt; Default <span class="kw">for </span>ModuleMultiplexerOutOfOrder&lt;MuxKey, Msg&gt; {
     <span class="kw">fn </span>default() -&gt; <span class="self">Self </span>{
         <span class="self">Self </span>{
-            msgs: Default::default(),
-            callbacks: Default::default(),
-            peer_counts: Default::default(),
+            msgs: HashMap::new(),
+            callbacks: HashMap::new(),
+            peer_counts: HashMap::new(),
         }
     }
 }
@@ -355,7 +355,7 @@
             <span class="string">"peer connection multiplexer"</span>,
             <span class="self">Self</span>::run(
                 connections,
-                Default::default(),
+                ModuleMultiplexerOutOfOrder::default(),
                 send_requests_rx,
                 receive_callbacks_rx,
                 peer_bans_rx,

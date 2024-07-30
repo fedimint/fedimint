@@ -358,7 +358,7 @@
 
 <span class="kw">use </span><span class="kw">crate</span>::config::FederationId;
 <span class="kw">use </span><span class="kw">crate</span>::encoding::{Decodable, DecodeError, Encodable};
-<span class="kw">use </span><span class="kw">crate</span>::module::registry::ModuleDecoderRegistry;
+<span class="kw">use </span><span class="kw">crate</span>::module::registry::{ModuleDecoderRegistry, ModuleRegistry};
 <span class="kw">use </span><span class="kw">crate</span>::util::SafeUrl;
 <span class="kw">use crate</span>::{NumPeersExt, PeerId};
 
@@ -398,7 +398,7 @@
             ));
         }
 
-        <span class="prelude-val">Ok</span>(InviteCode(inner))
+        <span class="prelude-val">Ok</span>(<span class="self">Self</span>(inner))
     }
 }
 
@@ -409,7 +409,7 @@
         federation_id: FederationId,
         api_secret: <span class="prelude-ty">Option</span>&lt;String&gt;,
     ) -&gt; <span class="self">Self </span>{
-        <span class="kw">let </span><span class="kw-2">mut </span>s = InviteCode(<span class="macro">vec!</span>[
+        <span class="kw">let </span><span class="kw-2">mut </span>s = <span class="self">Self</span>(<span class="macro">vec!</span>[
             InviteCodePart::Api { url, peer },
             InviteCodePart::FederationId(federation_id),
         ]);
@@ -442,7 +442,7 @@
             code_vec.push(InviteCodePart::ApiSecret(api_secret));
         }
 
-        InviteCode(code_vec)
+        <span class="self">Self</span>(code_vec)
     }
 
     <span class="doccomment">/// Constructs an [`InviteCode`] which contains as many guardian URLs as
@@ -462,7 +462,7 @@
             .collect();
         code_vec.push(InviteCodePart::FederationId(federation_id));
 
-        InviteCode(code_vec)
+        <span class="self">Self</span>(code_vec)
     }
 
     <span class="doccomment">/// Returns the API URL of one of the guardians.
@@ -569,7 +569,7 @@
 
         <span class="macro">ensure!</span>(hrp == BECH32_HRP, <span class="string">"Invalid HRP in bech32 encoding"</span>);
 
-        <span class="kw">let </span>invite = InviteCode::consensus_decode(<span class="kw-2">&amp;mut </span>Cursor::new(data), <span class="kw-2">&amp;</span>Default::default())<span class="question-mark">?</span>;
+        <span class="kw">let </span>invite = <span class="self">Self</span>::consensus_decode(<span class="kw-2">&amp;mut </span>Cursor::new(data), <span class="kw-2">&amp;</span>ModuleRegistry::default())<span class="question-mark">?</span>;
 
         <span class="prelude-val">Ok</span>(invite)
     }

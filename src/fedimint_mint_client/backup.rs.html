@@ -121,6 +121,8 @@
 <a href="#121" id="121">121</a>
 <a href="#122" id="122">122</a>
 <a href="#123" id="123">123</a>
+<a href="#124" id="124">124</a>
+<a href="#125" id="125">125</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>fedimint_client::module::recovery::{DynModuleBackup, ModuleBackup};
 <span class="kw">use </span>fedimint_client::module::ClientDbTxContext;
 <span class="kw">use </span>fedimint_core::core::{IntoDynInstance, ModuleInstanceId, ModuleKind};
@@ -207,21 +209,23 @@
 
         <span class="kw">let </span>notes = <span class="self">Self</span>::get_all_spendable_notes(<span class="kw-2">&amp;mut </span>dbtx_ctx.module_dbtx()).<span class="kw">await</span>;
 
-        <span class="kw">let </span>pending_notes: Vec&lt;(OutPoint, Amount, NoteIssuanceRequest)&gt; = <span class="self">self</span>.client_ctx.get_own_active_states().<span class="kw">await</span>.into_iter()
-            .filter_map(|(state, _active_state)| {
-
-                <span class="kw">match </span>state {
-                    MintClientStateMachines::Output(MintOutputStateMachine { common, state }) =&gt; {
-                        <span class="kw">match </span>state {
-                            <span class="kw">crate</span>::output::MintOutputStates::Created(state) =&gt; <span class="prelude-val">Some</span>((common.out_point, state.amount, state.issuance_request)),
-                            <span class="kw">crate</span>::output::MintOutputStates::Succeeded(<span class="kw">_</span>) =&gt; <span class="prelude-val">None </span><span class="comment">/* we back these via get_all_spendable_notes */</span>,
-                            <span class="kw">_ </span>=&gt; <span class="prelude-val">None</span>,
-                        }
-                    }
-                    <span class="kw">_ </span>=&gt; <span class="prelude-val">None</span>,
-                }
+        <span class="kw">let </span>pending_notes: Vec&lt;(OutPoint, Amount, NoteIssuanceRequest)&gt; = <span class="self">self
+            </span>.client_ctx
+            .get_own_active_states()
+            .<span class="kw">await
+            </span>.into_iter()
+            .filter_map(|(state, _active_state)| <span class="kw">match </span>state {
+                MintClientStateMachines::Output(MintOutputStateMachine {
+                    common,
+                    state: <span class="kw">crate</span>::output::MintOutputStates::Created(created_state),
+                }) =&gt; <span class="prelude-val">Some</span>((
+                    common.out_point,
+                    created_state.amount,
+                    created_state.issuance_request,
+                )),
+                <span class="kw">_ </span>=&gt; <span class="prelude-val">None</span>,
             })
-            .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;() ;
+            .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
 
         <span class="kw">let </span><span class="kw-2">mut </span>idxes = <span class="macro">vec!</span>[];
         <span class="kw">for </span><span class="kw-2">&amp;</span>amount <span class="kw">in </span><span class="self">self</span>.cfg.tbs_pks.tiers() {

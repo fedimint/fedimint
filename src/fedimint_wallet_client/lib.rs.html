@@ -1266,10 +1266,8 @@
 <a href="#1266" id="1266">1266</a>
 <a href="#1267" id="1267">1267</a>
 <a href="#1268" id="1268">1268</a>
-<a href="#1269" id="1269">1269</a>
 </pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
-#![allow(clippy::default_trait_access)]
 #![allow(clippy::missing_errors_doc)]
 #![allow(clippy::missing_panics_doc)]
 #![allow(clippy::module_name_repetitions)]
@@ -1716,7 +1714,7 @@
             rpc: <span class="self">self</span>.rpc.clone(),
             wallet_descriptor: <span class="self">self</span>.cfg().peg_in_descriptor.clone(),
             wallet_decoder: <span class="self">self</span>.decoder(),
-            secp: Default::default(),
+            secp: Secp256k1::default(),
         }
     }
 

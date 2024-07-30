@@ -264,7 +264,7 @@
                     ))
                     .expect(<span class="string">"Failed to parse default esplora server"</span>),
                 },
-                fee_consensus: Default::default(),
+                fee_consensus: FeeConsensus::default(),
             },
         }
     }
@@ -429,7 +429,7 @@
             peg_in_descriptor,
             network,
             finality_delay,
-            fee_consensus: Default::default(),
+            fee_consensus: FeeConsensus::default(),
             default_bitcoin_rpc,
         }
     }

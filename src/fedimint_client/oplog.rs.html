@@ -491,6 +491,7 @@
 <a href="#491" id="491">491</a>
 <a href="#492" id="492">492</a>
 <a href="#493" id="493">493</a>
+<a href="#494" id="494">494</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::fmt::Debug;
 <span class="kw">use </span>std::future;
 <span class="kw">use </span>std::io::{Read, Write};
@@ -837,6 +838,7 @@
     <span class="kw">use </span>fedimint_core::core::OperationId;
     <span class="kw">use </span>fedimint_core::db::mem_impl::MemDatabase;
     <span class="kw">use </span>fedimint_core::db::{Database, IRawDatabaseExt};
+    <span class="kw">use </span>fedimint_core::module::registry::ModuleRegistry;
     <span class="kw">use </span>futures::stream::StreamExt;
     <span class="kw">use </span>serde::{Deserialize, Serialize};
 
@@ -881,7 +883,7 @@
     </span><span class="kw">async fn </span>test_operation_log_update() {
         <span class="kw">let </span>op_id = OperationId([<span class="number">0x32</span>; <span class="number">32</span>]);
 
-        <span class="kw">let </span>db = Database::new(MemDatabase::new(), Default::default());
+        <span class="kw">let </span>db = Database::new(MemDatabase::new(), ModuleRegistry::default());
         <span class="kw">let </span>op_log = OperationLog::new(db.clone());
 
         <span class="kw">let </span><span class="kw-2">mut </span>dbtx = db.begin_transaction().<span class="kw">await</span>;
@@ -955,7 +957,7 @@
             }
         }
 
-        <span class="kw">let </span>db = Database::new(MemDatabase::new(), Default::default());
+        <span class="kw">let </span>db = Database::new(MemDatabase::new(), ModuleRegistry::default());
         <span class="kw">let </span>op_log = OperationLog::new(db.clone());
 
         <span class="kw">for </span>operation_idx <span class="kw">in </span><span class="number">0u8</span>..<span class="number">98 </span>{

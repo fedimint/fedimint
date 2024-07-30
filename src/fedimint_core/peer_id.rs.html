@@ -148,10 +148,6 @@
 <a href="#148" id="148">148</a>
 <a href="#149" id="149">149</a>
 <a href="#150" id="150">150</a>
-<a href="#151" id="151">151</a>
-<a href="#152" id="152">152</a>
-<a href="#153" id="153">153</a>
-<a href="#154" id="154">154</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet};
 <span class="kw">use </span>std::fmt::Debug;
 <span class="kw">use </span>std::str::FromStr;
@@ -208,7 +204,7 @@
 }
 
 <span class="kw">impl </span>From&lt;PeerId&gt; <span class="kw">for </span>u16 {
-    <span class="kw">fn </span>from(peer: PeerId) -&gt; u16 {
+    <span class="kw">fn </span>from(peer: PeerId) -&gt; <span class="self">Self </span>{
         peer.<span class="number">0
     </span>}
 }
@@ -218,10 +214,6 @@
 </span><span class="kw">pub struct </span>NumPeers(usize);
 
 <span class="kw">impl </span>NumPeers {
-    <span class="kw">pub fn </span>as_usize(<span class="self">self</span>) -&gt; usize {
-        <span class="self">self</span>.<span class="number">0
-    </span>}
-
     <span class="doccomment">/// Returns an iterator over all peer IDs in the federation.
     </span><span class="kw">pub fn </span>peer_ids(<span class="self">self</span>) -&gt; <span class="kw">impl </span>Iterator&lt;Item = PeerId&gt; {
         (<span class="number">0u16</span>..(<span class="self">self</span>.<span class="number">0 </span><span class="kw">as </span>u16)).map(PeerId)

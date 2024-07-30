@@ -2454,6 +2454,8 @@
 <a href="#2454" id="2454">2454</a>
 <a href="#2455" id="2455">2455</a>
 <a href="#2456" id="2456">2456</a>
+<a href="#2457" id="2457">2457</a>
+<a href="#2458" id="2458">2458</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashSet};
 <span class="kw">use </span>std::io::Write;
 <span class="kw">use </span>std::ops::ControlFlow;
@@ -2468,6 +2470,7 @@
 <span class="kw">use </span>fedimint_core::core::LEGACY_HARDCODED_INSTANCE_ID_WALLET;
 <span class="kw">use </span>fedimint_core::encoding::Decodable;
 <span class="kw">use </span>fedimint_core::envs::is_env_var_set;
+<span class="kw">use </span>fedimint_core::module::registry::ModuleRegistry;
 <span class="kw">use </span>fedimint_core::net::api_announcement::SignedApiAnnouncement;
 <span class="kw">use </span>fedimint_core::task::block_in_place;
 <span class="kw">use </span>fedimint_core::{Amount, PeerId};
@@ -3504,7 +3507,8 @@
     .<span class="kw">await
     </span>.expect(<span class="string">"cannot fail, gets stuck"</span>);
 
-    <span class="kw">let </span>tx = bitcoin::Transaction::consensus_decode_hex(<span class="kw-2">&amp;</span>tx_hex, <span class="kw-2">&amp;</span>Default::default()).unwrap();
+    <span class="kw">let </span>tx =
+        bitcoin::Transaction::consensus_decode_hex(<span class="kw-2">&amp;</span>tx_hex, <span class="kw-2">&amp;</span>ModuleRegistry::default()).unwrap();
     <span class="macro">assert!</span>(tx
         .output
         .iter()
@@ -4374,7 +4378,7 @@
         .<span class="kw">await
         </span>.expect(<span class="string">"withdrawal tx failed to reach mempool"</span>);
 
-        <span class="kw">let </span>tx = bitcoin::Transaction::consensus_decode_hex(<span class="kw-2">&amp;</span>tx_hex, <span class="kw-2">&amp;</span>Default::default())<span class="question-mark">?</span>;
+        <span class="kw">let </span>tx = bitcoin::Transaction::consensus_decode_hex(<span class="kw-2">&amp;</span>tx_hex, <span class="kw-2">&amp;</span>ModuleRegistry::default())<span class="question-mark">?</span>;
         <span class="macro">assert_eq!</span>(tx.input.len(), <span class="number">1</span>);
         <span class="macro">assert_eq!</span>(tx.output.len(), <span class="number">2</span>);
 
@@ -4506,6 +4510,8 @@
 }
 
 <span class="kw">pub async fn </span>guardian_backup_test(dev_fed: DevFed, process_mgr: <span class="kw-2">&amp;</span>ProcessManager) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+    <span class="kw">const </span>PEER_TO_TEST: u16 = <span class="number">0</span>;
+
     log_binary_versions().<span class="kw">await</span><span class="question-mark">?</span>;
 
     <span class="kw">let </span>fedimint_cli_version = <span class="kw">crate</span>::util::FedimintCli::version_or_default().<span class="kw">await</span>;
@@ -4529,8 +4535,6 @@
         esplora,
         ..
     } = dev_fed;
-
-    <span class="kw">const </span>PEER_TO_TEST: usize = <span class="number">0</span>;
 
     fed.await_all_peers()
         .<span class="kw">await
@@ -4568,12 +4572,12 @@
 
     <span class="kw">let </span>data_dir = fed
         .vars
-        .get(<span class="kw-2">&amp;</span>PEER_TO_TEST)
+        .get(<span class="kw-2">&amp;</span>PEER_TO_TEST.into())
         .expect(<span class="string">"peer not found"</span>)
         .FM_DATA_DIR
         .clone();
 
-    fed.terminate_server(PEER_TO_TEST)
+    fed.terminate_server(PEER_TO_TEST.into())
         .<span class="kw">await
         </span>.expect(<span class="string">"could not terminate fedimintd"</span>);
 
@@ -4611,7 +4615,7 @@
         <span class="string">"tar failed"
     </span>);
 
-    fed.start_server(process_mgr, PEER_TO_TEST)
+    fed.start_server(process_mgr, PEER_TO_TEST.into())
         .<span class="kw">await
         </span>.expect(<span class="string">"could not restart fedimintd"</span>);
 
@@ -4619,7 +4623,7 @@
         <span class="kw">let </span>block_counts = all_peer_block_count(<span class="kw-2">&amp;</span>client, fed.member_ids())
             .<span class="kw">await
             </span>.map_err(ControlFlow::Continue)<span class="question-mark">?</span>;
-        <span class="kw">let </span>block_count = block_counts[<span class="kw-2">&amp;</span>PeerId::from(PEER_TO_TEST <span class="kw">as </span>u16)];
+        <span class="kw">let </span>block_count = block_counts[<span class="kw-2">&amp;</span>PeerId::from(PEER_TO_TEST)];
 
         <span class="macro">info!</span>(<span class="string">"Caught up to block {block_count} of at least {old_block_count} (counts={block_counts:?})"</span>);
 

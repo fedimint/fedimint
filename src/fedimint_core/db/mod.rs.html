@@ -3187,9 +3187,6 @@
 <a href="#3187" id="3187">3187</a>
 <a href="#3188" id="3188">3188</a>
 <a href="#3189" id="3189">3189</a>
-<a href="#3190" id="3190">3190</a>
-<a href="#3191" id="3191">3191</a>
-<a href="#3192" id="3192">3192</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! Core Fedimint database traits and types
 //!
 //! This module provides the core key-value database for Fedimint.
@@ -3328,7 +3325,7 @@
 <span class="kw">pub use </span>test_utils::<span class="kw-2">*</span>;
 
 <span class="kw">use </span><span class="self">self</span>::notifications::{Notifications, NotifyQueue};
-<span class="kw">use </span><span class="kw">crate</span>::module::registry::ModuleDecoderRegistry;
+<span class="kw">use </span><span class="kw">crate</span>::module::registry::{ModuleDecoderRegistry, ModuleRegistry};
 
 <span class="kw">pub const </span>MODULE_GLOBAL_PREFIX: u8 = <span class="number">0xff</span>;
 
@@ -3455,7 +3452,7 @@
     ///
     /// When type inference is not an issue, [`Into::into`] can be used instead.
     </span><span class="kw">fn </span>into_database(<span class="self">self</span>) -&gt; Database {
-        Database::new(<span class="self">self</span>, Default::default())
+        Database::new(<span class="self">self</span>, ModuleRegistry::default())
     }
 }
 
@@ -3466,7 +3463,7 @@
     </span>T: IRawDatabase,
 {
     <span class="kw">fn </span>from(raw: T) -&gt; <span class="self">Self </span>{
-        Database::new(raw, Default::default())
+        <span class="self">Self</span>::new(raw, ModuleRegistry::default())
     }
 }
 
@@ -4399,8 +4396,8 @@
 <span class="kw">where
     </span>Tx: IRawDatabaseTransaction,
 {
-    <span class="kw">fn </span>new(dbtx: Tx, notifications: Arc&lt;Notifications&gt;) -&gt; BaseDatabaseTransaction&lt;Tx&gt; {
-        BaseDatabaseTransaction {
+    <span class="kw">fn </span>new(dbtx: Tx, notifications: Arc&lt;Notifications&gt;) -&gt; <span class="self">Self </span>{
+        <span class="self">Self </span>{
             raw: <span class="prelude-val">Some</span>(dbtx),
             notifications,
             notify_queue: <span class="prelude-val">Some</span>(NotifyQueue::new()),
@@ -4801,11 +4798,8 @@
 }
 
 <span class="kw">impl</span>&lt;<span class="lifetime">'tx</span>&gt; DatabaseTransaction&lt;<span class="lifetime">'tx</span>, Committable&gt; {
-    <span class="kw">pub fn </span>new(
-        dbtx: Box&lt;<span class="kw">dyn </span>IDatabaseTransaction + <span class="lifetime">'tx</span>&gt;,
-        decoders: ModuleDecoderRegistry,
-    ) -&gt; DatabaseTransaction&lt;<span class="lifetime">'tx</span>, Committable&gt; {
-        DatabaseTransaction {
+    <span class="kw">pub fn </span>new(dbtx: Box&lt;<span class="kw">dyn </span>IDatabaseTransaction + <span class="lifetime">'tx</span>&gt;, decoders: ModuleDecoderRegistry) -&gt; <span class="self">Self </span>{
+        <span class="self">Self </span>{
             tx: dbtx,
             decoders,
             commit_tracker: MaybeRef::Owned(CommitTracker {
@@ -5093,16 +5087,16 @@
 }
 
 <span class="kw">impl </span>DecodingError {
-    <span class="kw">pub fn </span>other&lt;E: Error + Send + Sync + <span class="lifetime">'static</span>&gt;(error: E) -&gt; DecodingError {
-        DecodingError::Other(anyhow::Error::from(error))
+    <span class="kw">pub fn </span>other&lt;E: Error + Send + Sync + <span class="lifetime">'static</span>&gt;(error: E) -&gt; <span class="self">Self </span>{
+        <span class="self">Self</span>::Other(anyhow::Error::from(error))
     }
 
-    <span class="kw">pub fn </span>wrong_prefix(expected: u8, found: u8) -&gt; DecodingError {
-        DecodingError::WrongPrefix { expected, found }
+    <span class="kw">pub fn </span>wrong_prefix(expected: u8, found: u8) -&gt; <span class="self">Self </span>{
+        <span class="self">Self</span>::WrongPrefix { expected, found }
     }
 
-    <span class="kw">pub fn </span>wrong_length(expected: usize, found: usize) -&gt; DecodingError {
-        DecodingError::WrongLength { expected, found }
+    <span class="kw">pub fn </span>wrong_length(expected: usize, found: usize) -&gt; <span class="self">Self </span>{
+        <span class="self">Self</span>::WrongLength { expected, found }
     }
 }
 

@@ -126,13 +126,7 @@
 <a href="#126" id="126">126</a>
 <a href="#127" id="127">127</a>
 <a href="#128" id="128">128</a>
-<a href="#129" id="129">129</a>
-<a href="#130" id="130">130</a>
-<a href="#131" id="131">131</a>
-<a href="#132" id="132">132</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::io::{Error, Read, Write};
-
-<span class="kw">use </span>secp256k1_zkp::ecdsa::Signature;
 
 <span class="kw">use </span><span class="kw">crate</span>::encoding::{Decodable, DecodeError, Encodable};
 <span class="kw">use </span><span class="kw">crate</span>::module::registry::ModuleDecoderRegistry;
@@ -150,7 +144,7 @@
         d: <span class="kw-2">&amp;mut </span>D,
         modules: <span class="kw-2">&amp;</span>ModuleDecoderRegistry,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
-        Signature::from_compact(<span class="kw-2">&amp;</span>&lt;[u8; <span class="number">64</span>]&gt;::consensus_decode(d, modules)<span class="question-mark">?</span>)
+        <span class="self">Self</span>::from_compact(<span class="kw-2">&amp;</span>&lt;[u8; <span class="number">64</span>]&gt;::consensus_decode(d, modules)<span class="question-mark">?</span>)
             .map_err(DecodeError::from_err)
     }
 }
@@ -166,8 +160,7 @@
         d: <span class="kw-2">&amp;mut </span>D,
         modules: <span class="kw-2">&amp;</span>ModuleDecoderRegistry,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
-        secp256k1_zkp::PublicKey::from_slice(<span class="kw-2">&amp;</span>&lt;[u8; <span class="number">33</span>]&gt;::consensus_decode(d, modules)<span class="question-mark">?</span>)
-            .map_err(DecodeError::from_err)
+        <span class="self">Self</span>::from_slice(<span class="kw-2">&amp;</span>&lt;[u8; <span class="number">33</span>]&gt;::consensus_decode(d, modules)<span class="question-mark">?</span>).map_err(DecodeError::from_err)
     }
 }
 
@@ -182,8 +175,7 @@
         d: <span class="kw-2">&amp;mut </span>D,
         modules: <span class="kw-2">&amp;</span>ModuleDecoderRegistry,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
-        secp256k1_zkp::SecretKey::from_slice(<span class="kw-2">&amp;</span>&lt;[u8; <span class="number">32</span>]&gt;::consensus_decode(d, modules)<span class="question-mark">?</span>)
-            .map_err(DecodeError::from_err)
+        <span class="self">Self</span>::from_slice(<span class="kw-2">&amp;</span>&lt;[u8; <span class="number">32</span>]&gt;::consensus_decode(d, modules)<span class="question-mark">?</span>).map_err(DecodeError::from_err)
     }
 }
 
@@ -206,7 +198,7 @@
     ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
         <span class="kw">let </span>bytes =
             &lt;[u8; secp256k1_zkp::constants::SCHNORR_SIGNATURE_SIZE]&gt;::consensus_decode(d, modules)<span class="question-mark">?</span>;
-        secp256k1_zkp::schnorr::Signature::from_slice(<span class="kw-2">&amp;</span>bytes).map_err(DecodeError::from_err)
+        <span class="self">Self</span>::from_slice(<span class="kw-2">&amp;</span>bytes).map_err(DecodeError::from_err)
     }
 }
 

@@ -115,10 +115,6 @@
 <a href="#115" id="115">115</a>
 <a href="#116" id="116">116</a>
 <a href="#117" id="117">117</a>
-<a href="#118" id="118">118</a>
-<a href="#119" id="119">119</a>
-<a href="#120" id="120">120</a>
-<a href="#121" id="121">121</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::io::{Error, Read, Write};
 
 <span class="kw">use </span>threshold_crypto::group::Curve;
@@ -162,11 +158,7 @@
                 }
             })
             .collect::&lt;<span class="prelude-ty">Result</span>&lt;Vec&lt;<span class="kw">_</span>&gt;, <span class="kw">_</span>&gt;&gt;()
-            .map(|coefficients| {
-                threshold_crypto::PublicKeySet::from(threshold_crypto::poly::Commitment::from(
-                    coefficients,
-                ))
-            })
+            .map(|coefficients| <span class="self">Self</span>::from(threshold_crypto::poly::Commitment::from(coefficients)))
     }
 }
 
@@ -182,7 +174,7 @@
         modules: <span class="kw-2">&amp;</span>ModuleDecoderRegistry,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
         <span class="kw">let </span>bytes: [u8; <span class="number">48</span>] = Decodable::consensus_decode(r, modules)<span class="question-mark">?</span>;
-        threshold_crypto::PublicKey::from_bytes(bytes).map_err(DecodeError::from_err)
+        <span class="self">Self</span>::from_bytes(bytes).map_err(DecodeError::from_err)
     }
 }
 
@@ -198,7 +190,7 @@
         modules: <span class="kw-2">&amp;</span>ModuleDecoderRegistry,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
         <span class="kw">let </span>ciphertext_bytes = Vec::&lt;u8&gt;::consensus_decode(reader, modules)<span class="question-mark">?</span>;
-        threshold_crypto::Ciphertext::from_bytes(<span class="kw-2">&amp;</span>ciphertext_bytes).ok_or_else(|| {
+        <span class="self">Self</span>::from_bytes(<span class="kw-2">&amp;</span>ciphertext_bytes).ok_or_else(|| {
             DecodeError::from_str(<span class="string">"Error decoding threshold_crypto::Ciphertext from bytes"</span>)
         })
     }
@@ -216,7 +208,7 @@
         modules: <span class="kw-2">&amp;</span>ModuleDecoderRegistry,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
         <span class="kw">let </span>decryption_share_bytes = &lt;[u8; <span class="number">48</span>]&gt;::consensus_decode(reader, modules)<span class="question-mark">?</span>;
-        threshold_crypto::DecryptionShare::from_bytes(<span class="kw-2">&amp;</span>decryption_share_bytes).ok_or_else(|| {
+        <span class="self">Self</span>::from_bytes(<span class="kw-2">&amp;</span>decryption_share_bytes).ok_or_else(|| {
             DecodeError::from_str(<span class="string">"Error decoding threshold_crypto::DecryptionShare from bytes"</span>)
         })
     }

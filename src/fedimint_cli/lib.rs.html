@@ -1508,7 +1508,7 @@
         peer: PeerId,
     },
 
-    <span class="doccomment">/// Join a federation using it's InviteCode
+    <span class="doccomment">/// Join a federation using its InviteCode
     </span>JoinFederation {
         invite_code: String,
     },
@@ -1700,7 +1700,7 @@ Examples:
         </span><span class="attr">#[arg(long = <span class="string">"out-file"</span>)]
         </span>out_file: PathBuf,
         <span class="doccomment">/// Encryption salt file, otherwise defaults to the salt file from the
-        /// in_file directory
+        /// `in_file` directory
         </span><span class="attr">#[arg(long = <span class="string">"salt-file"</span>)]
         </span>salt_file: <span class="prelude-ty">Option</span>&lt;PathBuf&gt;,
         <span class="doccomment">/// The password that encrypts the configs
@@ -1716,7 +1716,7 @@ Examples:
         </span><span class="attr">#[arg(long = <span class="string">"out-file"</span>)]
         </span>out_file: PathBuf,
         <span class="doccomment">/// Encryption salt file, otherwise defaults to the salt file from the
-        /// out_file directory
+        /// `out_file` directory
         </span><span class="attr">#[arg(long = <span class="string">"salt-file"</span>)]
         </span>salt_file: <span class="prelude-ty">Option</span>&lt;PathBuf&gt;,
         <span class="doccomment">/// The password that encrypts the configs

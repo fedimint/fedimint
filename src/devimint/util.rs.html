@@ -1332,7 +1332,7 @@
 }
 
 <span class="kw">impl </span>Command {
-    <span class="kw">pub fn </span>arg&lt;T: ToString&gt;(<span class="kw-2">mut </span><span class="self">self</span>, arg: T) -&gt; <span class="self">Self </span>{
+    <span class="kw">pub fn </span>arg&lt;T: ToString&gt;(<span class="kw-2">mut </span><span class="self">self</span>, arg: <span class="kw-2">&amp;</span>T) -&gt; <span class="self">Self </span>{
         <span class="kw">let </span>string = arg.to_string();
         <span class="self">self</span>.cmd.arg(string.clone());
         <span class="self">self</span>.args_debug.push(string);
@@ -1341,7 +1341,7 @@
 
     <span class="kw">pub fn </span>args&lt;T: ToString&gt;(<span class="kw-2">mut </span><span class="self">self</span>, args: <span class="kw">impl </span>IntoIterator&lt;Item = T&gt;) -&gt; <span class="self">Self </span>{
         <span class="kw">for </span>arg <span class="kw">in </span>args {
-            <span class="self">self </span>= <span class="self">self</span>.arg(arg);
+            <span class="self">self </span>= <span class="self">self</span>.arg(<span class="kw-2">&amp;</span>arg);
         }
         <span class="self">self
     </span>}
@@ -1528,7 +1528,7 @@
             <span class="attr">#[allow(unused)]
             </span><span class="kw">use </span><span class="macro-nonterminal">$crate::util::ToCmdExt</span>;
             <span class="macro-nonterminal">$this</span>.cmd()
-                $(.arg(<span class="macro-nonterminal">$arg</span>))*
+                $(.arg(<span class="kw-2">&amp;</span><span class="macro-nonterminal">$arg</span>))*
                 .kill_on_drop(<span class="bool-val">true</span>)
                 .env(<span class="string">"RUST_BACKTRACE"</span>, <span class="string">"1"</span>)
         }

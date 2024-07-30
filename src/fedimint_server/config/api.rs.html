@@ -1864,7 +1864,7 @@
             settings,
             auth: <span class="prelude-val">None</span>,
             local: <span class="prelude-val">None</span>,
-            peers: Default::default(),
+            peers: BTreeMap::new(),
             requested_params: <span class="prelude-val">None</span>,
             status: ServerStatus::AwaitingPassword,
             config: <span class="prelude-val">None</span>,
@@ -1984,12 +1984,12 @@
     }
 
     <span class="kw">fn </span>reset(<span class="kw-2">&amp;mut </span><span class="self">self</span>) {
-        <span class="self">self</span>.config = <span class="prelude-val">None</span>;
-        <span class="self">self</span>.peers = Default::default();
         <span class="self">self</span>.auth = <span class="prelude-val">None</span>;
+        <span class="self">self</span>.local = <span class="prelude-val">None</span>;
+        <span class="self">self</span>.peers = BTreeMap::new();
         <span class="self">self</span>.requested_params = <span class="prelude-val">None</span>;
         <span class="self">self</span>.status = ServerStatus::AwaitingPassword;
-        <span class="self">self</span>.local = <span class="prelude-val">None</span>;
+        <span class="self">self</span>.config = <span class="prelude-val">None</span>;
 
         <span class="macro">info!</span>(
             target: fedimint_logging::LOG_NET_PEER_DKG,
@@ -2211,7 +2211,7 @@
             modules.attach_config_gen_params_by_id(<span class="number">0</span>, DummyInit::kind(), DummyGenParams::default());
 
             <span class="kw">let </span>default_params = ConfigGenParamsRequest {
-                meta: Default::default(),
+                meta: BTreeMap::new(),
                 modules,
             };
             <span class="kw">let </span>settings = ConfigGenSettings {

@@ -642,7 +642,7 @@
 </span><span class="kw">pub struct </span>SafeUrl(Url);
 
 <span class="kw">impl </span>SafeUrl {
-    <span class="kw">pub fn </span>parse(url_str: <span class="kw-2">&amp;</span>str) -&gt; <span class="prelude-ty">Result</span>&lt;SafeUrl, ParseError&gt; {
+    <span class="kw">pub fn </span>parse(url_str: <span class="kw-2">&amp;</span>str) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, ParseError&gt; {
         <span class="kw">let </span>s = Url::parse(url_str).map(SafeUrl)<span class="question-mark">?</span>;
 
         <span class="kw">if </span>s.port_or_known_default().is_none() {
@@ -691,7 +691,7 @@
     }
 
     <span class="doccomment">/// `self` but with port explicitly set, if known from url
-    </span><span class="kw">pub fn </span>with_port_or_known_default(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; SafeUrl {
+    </span><span class="kw">pub fn </span>with_port_or_known_default(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="self">Self </span>{
         <span class="kw">if </span><span class="self">self</span>.port().is_none() {
             <span class="kw">if let </span><span class="prelude-val">Some</span>(default) = <span class="self">self</span>.port_or_known_default() {
                 <span class="kw">let </span><span class="kw-2">mut </span>url = <span class="self">self</span>.clone();
@@ -716,7 +716,7 @@
     <span class="kw">pub fn </span>password(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>str&gt; {
         <span class="self">self</span>.<span class="number">0</span>.password()
     }
-    <span class="kw">pub fn </span>join(<span class="kw-2">&amp;</span><span class="self">self</span>, input: <span class="kw-2">&amp;</span>str) -&gt; <span class="prelude-ty">Result</span>&lt;SafeUrl, ParseError&gt; {
+    <span class="kw">pub fn </span>join(<span class="kw-2">&amp;</span><span class="self">self</span>, input: <span class="kw-2">&amp;</span>str) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, ParseError&gt; {
         <span class="self">self</span>.<span class="number">0</span>.join(input).map(SafeUrl)
     }
 }
@@ -754,7 +754,7 @@
     <span class="kw">where
         </span>D: serde::Deserializer&lt;<span class="lifetime">'de</span>&gt;,
     {
-        <span class="kw">let </span>s = SafeUrl(Url::deserialize(deserializer)<span class="question-mark">?</span>);
+        <span class="kw">let </span>s = <span class="self">Self</span>(Url::deserialize(deserializer)<span class="question-mark">?</span>);
 
         <span class="kw">if </span>s.port_or_known_default().is_none() {
             <span class="kw">return </span><span class="prelude-val">Err</span>(serde::de::Error::custom(<span class="string">"Invalid port"</span>));
@@ -778,7 +778,7 @@
 </span><span class="kw">impl </span>TryFrom&lt;Url&gt; <span class="kw">for </span>SafeUrl {
     <span class="kw">type </span>Error = anyhow::Error;
     <span class="kw">fn </span>try_from(u: Url) -&gt; anyhow::Result&lt;<span class="self">Self</span>&gt; {
-        <span class="kw">let </span>s = SafeUrl(u);
+        <span class="kw">let </span>s = <span class="self">Self</span>(u);
 
         <span class="kw">if </span>s.port_or_known_default().is_none() {
             <span class="macro">anyhow::bail!</span>(<span class="string">"Invalid port"</span>);
@@ -792,8 +792,8 @@
     <span class="kw">type </span><span class="prelude-val">Err </span>= ParseError;
 
     <span class="attr">#[inline]
-    </span><span class="kw">fn </span>from_str(input: <span class="kw-2">&amp;</span>str) -&gt; <span class="prelude-ty">Result</span>&lt;SafeUrl, ParseError&gt; {
-        SafeUrl::parse(input)
+    </span><span class="kw">fn </span>from_str(input: <span class="kw-2">&amp;</span>str) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, ParseError&gt; {
+        <span class="self">Self</span>::parse(input)
     }
 }
 

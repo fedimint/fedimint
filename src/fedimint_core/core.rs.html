@@ -662,6 +662,7 @@
 <a href="#662" id="662">662</a>
 <a href="#663" id="663">663</a>
 <a href="#664" id="664">664</a>
+<a href="#665" id="665">665</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! Fedimint Core API (common) module interface
 //!
 //! Fedimint supports externally implemented modules.
@@ -685,6 +686,7 @@
 <span class="kw">use </span>rand::RngCore;
 <span class="kw">use </span>serde::{Deserialize, Deserializer, Serialize};
 
+<span class="kw">use </span><span class="kw">crate</span>::module::registry::ModuleRegistry;
 <span class="kw">use crate</span>::{
     erased_eq_no_instance_id, module_plugin_dyn_newtype_clone_passthrough,
     module_plugin_dyn_newtype_define, module_plugin_dyn_newtype_display_passthrough,
@@ -734,7 +736,7 @@
         <span class="self">Self</span>(bytes)
     }
 
-    <span class="kw">pub fn </span>from_encodable&lt;E: Encodable&gt;(encodable: <span class="kw-2">&amp;</span>E) -&gt; OperationId {
+    <span class="kw">pub fn </span>from_encodable&lt;E: Encodable&gt;(encodable: <span class="kw-2">&amp;</span>E) -&gt; <span class="self">Self </span>{
         <span class="self">Self</span>(encodable.consensus_hash::&lt;sha256::Hash&gt;().to_byte_array())
     }
 
@@ -772,7 +774,7 @@
 
     <span class="kw">fn </span>from_str(s: <span class="kw-2">&amp;</span>str) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, <span class="self">Self</span>::Err&gt; {
         <span class="kw">let </span>bytes: [u8; <span class="number">32</span>] = hex::FromHex::from_hex(s)<span class="question-mark">?</span>;
-        <span class="prelude-val">Ok</span>(OperationId(bytes))
+        <span class="prelude-val">Ok</span>(<span class="self">Self</span>(bytes))
     }
 }
 
@@ -793,12 +795,12 @@
     {
         <span class="kw">if </span>deserializer.is_human_readable() {
             <span class="kw">let </span>s = String::deserialize(deserializer)<span class="question-mark">?</span>;
-            <span class="kw">let </span>operation_id = OperationId::from_str(<span class="kw-2">&amp;</span>s)
+            <span class="kw">let </span>operation_id = <span class="self">Self</span>::from_str(<span class="kw-2">&amp;</span>s)
                 .map_err(|e| serde::de::Error::custom(<span class="macro">format!</span>(<span class="string">"invalid operation id: {e}"</span>)))<span class="question-mark">?</span>;
             <span class="prelude-val">Ok</span>(operation_id)
         } <span class="kw">else </span>{
             <span class="kw">let </span>bytes: [u8; <span class="number">32</span>] = &lt;[u8; <span class="number">32</span>]&gt;::deserialize(deserializer)<span class="question-mark">?</span>;
-            <span class="prelude-val">Ok</span>(OperationId(bytes))
+            <span class="prelude-val">Ok</span>(<span class="self">Self</span>(bytes))
         }
     }
 }
@@ -860,7 +862,7 @@
 
 <span class="kw">impl </span>From&lt;<span class="kw-2">&amp;</span><span class="lifetime">'static </span>str&gt; <span class="kw">for </span>ModuleKind {
     <span class="kw">fn </span>from(val: <span class="kw-2">&amp;</span><span class="lifetime">'static </span>str) -&gt; <span class="self">Self </span>{
-        ModuleKind::from_static_str(val)
+        <span class="self">Self</span>::from_static_str(val)
     }
 }
 
@@ -1007,7 +1009,7 @@
                 </span><span class="kw">let </span>decoders = <span class="kw">if </span>is_transparent_decoder {
                     Cow::Borrowed(decoders)
                 } <span class="kw">else </span>{
-                    Cow::Owned(Default::default())
+                    Cow::Owned(ModuleRegistry::default())
                 };
                 <span class="kw">let </span>typed_val = Type::consensus_decode(<span class="kw-2">&amp;mut </span>reader, <span class="kw-2">&amp;</span>decoders).map_err(|err| {
                     <span class="kw">let </span>err: anyhow::Error = err.into();

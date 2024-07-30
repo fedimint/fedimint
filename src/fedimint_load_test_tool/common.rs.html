@@ -392,6 +392,7 @@
 <a href="#392" id="392">392</a>
 <a href="#393" id="393">393</a>
 <a href="#394" id="394">394</a>
+<a href="#395" id="395">395</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::path::PathBuf;
 <span class="kw">use </span>std::str::FromStr;
 <span class="kw">use </span>std::sync::Arc;
@@ -407,6 +408,7 @@
 <span class="kw">use </span>fedimint_core::core::{IntoDynInstance, OperationId};
 <span class="kw">use </span>fedimint_core::db::Database;
 <span class="kw">use </span>fedimint_core::invite_code::InviteCode;
+<span class="kw">use </span>fedimint_core::module::registry::ModuleRegistry;
 <span class="kw">use </span>fedimint_core::module::CommonModuleInit;
 <span class="kw">use </span>fedimint_core::{Amount, OutPoint, TieredCounts};
 <span class="kw">use </span>fedimint_ln_client::{
@@ -531,7 +533,7 @@
     <span class="kw">let </span>db = <span class="kw">if let </span><span class="prelude-val">Some</span>(rocksdb) = rocksdb {
         Database::new(
             fedimint_rocksdb::RocksDb::open(rocksdb)<span class="question-mark">?</span>,
-            Default::default(),
+            ModuleRegistry::default(),
         )
     } <span class="kw">else </span>{
         fedimint_core::db::mem_impl::MemDatabase::new().into()

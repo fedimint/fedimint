@@ -310,8 +310,6 @@
 <a href="#310" id="310">310</a>
 <a href="#311" id="311">311</a>
 <a href="#312" id="312">312</a>
-<a href="#313" id="313">313</a>
-<a href="#314" id="314">314</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! Adapter that implements a message based protocol on top of a stream based
 //! one
 </span><span class="kw">use </span>std::fmt::Debug;
@@ -486,9 +484,7 @@
 
 <span class="kw">impl</span>&lt;T&gt; BincodeCodec&lt;T&gt; {
     <span class="kw">fn </span>new() -&gt; BincodeCodec&lt;T&gt; {
-        BincodeCodec {
-            _pd: Default::default(),
-        }
+        BincodeCodec { _pd: PhantomData }
     }
 }
 
