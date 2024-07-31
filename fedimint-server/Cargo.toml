@@ -35,6 +35,7 @@ fedimint-metrics = { version = "=0.5.0-alpha", path = "../fedimint-metrics" }
 futures = { workspace = true }
 hex = { workspace = true }
 hyper = "1"
+iroh-net = "0.21.0"
 itertools = { workspace = true }
 jsonrpsee = { version = "0.24.0", features = ["server"] }
 once_cell = { workspace = true }
