@@ -196,6 +196,7 @@ impl ClientModuleInit for MetaClientInit {
 
 /// Meta source fetching meta values from the meta module if available or the
 /// legacy meta source otherwise.
+#[derive(Clone, Debug, Default)]
 pub struct MetaModuleOrLegacyMetaSource {
     legacy: LegacyMetaSource,
 }

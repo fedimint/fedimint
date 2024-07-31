@@ -11,6 +11,7 @@ use fedimint_core::task::{MaybeSend, MaybeSync};
 use fedimint_core::util::{backoff_util, retry};
 use fedimint_core::{apply, async_trait_maybe_send};
 use serde::de::DeserializeOwned;
+use serde::{Deserialize, Serialize};
 use tokio::sync::Notify;
 use tokio_stream::{Stream, StreamExt as _};
 use tracing::{debug, instrument, warn};
@@ -41,7 +42,7 @@ pub enum FetchKind {
     Background,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct MetaValues {
     pub values: BTreeMap<MetaFieldKey, MetaFieldValue>,
     pub revision: u64,
