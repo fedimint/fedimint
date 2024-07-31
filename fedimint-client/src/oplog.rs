@@ -167,13 +167,13 @@ impl OperationLog {
 ///      determine the structure of the meta data.
 ///   3. To find out the current state of the operation there is a two-step
 ///      process:
-///     * First, the [`OperationLogEntry::outcome`] function returns the outcome
-///       if the operation finished **and** the update subscription stream has
-///       been processed till its end at least once.
-///     * If that isn't the case, the [`OperationLogEntry::outcome`] method will
-///       return `None` and the appropriate update subscription function has to
-///       be called. See the respective client extension trait for these
-///       functions.
+///      * First, the [`OperationLogEntry::outcome`] function returns the
+///        outcome if the operation finished **and** the update subscription
+///        stream has been processed till its end at least once.
+///      * If that isn't the case, the [`OperationLogEntry::outcome`] method
+///        will return `None` and the appropriate update subscription function
+///        has to be called. See the respective client extension trait for these
+///        functions.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct OperationLogEntry {
     operation_module_kind: String,
