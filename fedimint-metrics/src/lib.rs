@@ -2,12 +2,12 @@
 #![allow(clippy::missing_errors_doc)]
 
 use std::net::SocketAddr;
+use std::sync::LazyLock;
 
 use axum::http::StatusCode;
 use axum::routing::get;
 use axum::Router;
 use fedimint_core::task::{TaskGroup, TaskShutdownToken};
-pub use once_cell::sync::Lazy;
 use prometheus::Registry;
 pub use prometheus::{
     self, histogram_opts, opts, register_histogram_with_registry,
@@ -17,10 +17,10 @@ pub use prometheus::{
 use tokio::net::TcpListener;
 use tracing::error;
 
-pub static REGISTRY: Lazy<Registry> =
-    Lazy::new(|| Registry::new_custom(Some("fm".into()), None).unwrap());
+pub static REGISTRY: LazyLock<Registry> =
+    LazyLock::new(|| Registry::new_custom(Some("fm".into()), None).unwrap());
 
-pub static AMOUNTS_BUCKETS_SATS: Lazy<Vec<f64>> = Lazy::new(|| {
+pub static AMOUNTS_BUCKETS_SATS: LazyLock<Vec<f64>> = LazyLock::new(|| {
     vec![
         0.0,
         0.1,
