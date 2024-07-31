@@ -73,11 +73,6 @@ where
         &self.module_api_version
     }
 
-    // TODO: deprecate, use `module_api_version` instead
-    pub fn api_version(&self) -> &ApiVersion {
-        &self.module_api_version
-    }
-
     pub fn module_root_secret(&self) -> &DerivableSecret {
         &self.module_root_secret
     }
@@ -115,8 +110,6 @@ where
     }
 }
 
-// TODO: remove
-#[allow(dead_code)]
 pub struct ClientModuleRecoverArgs<C>
 where
     C: ClientModuleInit,
@@ -161,11 +154,6 @@ where
     }
 
     pub fn module_api_version(&self) -> &ApiVersion {
-        &self.module_api_version
-    }
-
-    // TODO: deprecate, use module_api_version instead
-    pub fn api_version(&self) -> &ApiVersion {
         &self.module_api_version
     }
 
