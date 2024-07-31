@@ -196,7 +196,13 @@
 <a href="#196" id="196">196</a>
 <a href="#197" id="197">197</a>
 <a href="#198" id="198">198</a>
+<a href="#199" id="199">199</a>
+<a href="#200" id="200">200</a>
+<a href="#201" id="201">201</a>
+<a href="#202" id="202">202</a>
 </pre></div><pre class="rust"><code><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">mod </span>jsonrpsee;
+
+<span class="kw">use </span>std::sync::LazyLock;
 
 <span class="kw">use </span>fedimint_core::backup::ClientBackupKeyPrefix;
 <span class="kw">use </span>fedimint_core::db::{Database, IDatabaseTransactionOpsCoreTyped};
@@ -209,14 +215,13 @@
     Histogram, REGISTRY,
 };
 <span class="kw">use </span>futures::StreamExt <span class="kw">as _</span>;
-<span class="kw">use </span>once_cell::sync::Lazy;
 
-<span class="kw">pub static </span>TX_ELEMS_BUCKETS: Lazy&lt;Vec&lt;f64&gt;&gt; = Lazy::new(|| {
+<span class="kw">pub static </span>TX_ELEMS_BUCKETS: LazyLock&lt;Vec&lt;f64&gt;&gt; = LazyLock::new(|| {
     <span class="macro">vec!</span>[
         <span class="number">1.0</span>, <span class="number">2.0</span>, <span class="number">5.0</span>, <span class="number">10.0</span>, <span class="number">20.0</span>, <span class="number">50.0</span>, <span class="number">100.0</span>, <span class="number">200.0</span>, <span class="number">500.0</span>, <span class="number">1000.0</span>, <span class="number">2000.0</span>, <span class="number">5000.0</span>,
     ]
 });
-<span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">static </span>CONSENSUS_TX_PROCESSED_INPUTS: Lazy&lt;Histogram&gt; = Lazy::new(|| {
+<span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">static </span>CONSENSUS_TX_PROCESSED_INPUTS: LazyLock&lt;Histogram&gt; = LazyLock::new(|| {
     <span class="macro">register_histogram_with_registry!</span>(
         <span class="macro">histogram_opts!</span>(
             <span class="string">"consensus_tx_processed_inputs"</span>,
@@ -227,7 +232,7 @@
     )
     .unwrap()
 });
-<span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">static </span>CONSENSUS_TX_PROCESSED_OUTPUTS: Lazy&lt;Histogram&gt; = Lazy::new(|| {
+<span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">static </span>CONSENSUS_TX_PROCESSED_OUTPUTS: LazyLock&lt;Histogram&gt; = LazyLock::new(|| {
     <span class="macro">register_histogram_with_registry!</span>(
         <span class="macro">histogram_opts!</span>(
             <span class="string">"consensus_tx_processed_outputs"</span>,
@@ -238,7 +243,7 @@
     )
     .unwrap()
 });
-<span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">static </span>CONSENSUS_ITEMS_PROCESSED_TOTAL: Lazy&lt;IntCounterVec&gt; = Lazy::new(|| {
+<span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">static </span>CONSENSUS_ITEMS_PROCESSED_TOTAL: LazyLock&lt;IntCounterVec&gt; = LazyLock::new(|| {
     <span class="macro">register_int_counter_vec_with_registry!</span>(
         <span class="macro">opts!</span>(
             <span class="string">"consensus_items_processed_total"</span>,
@@ -249,8 +254,8 @@
     )
     .unwrap()
 });
-<span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">static </span>CONSENSUS_ITEM_PROCESSING_DURATION_SECONDS: Lazy&lt;HistogramVec&gt; =
-    Lazy::new(|| {
+<span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">static </span>CONSENSUS_ITEM_PROCESSING_DURATION_SECONDS: LazyLock&lt;HistogramVec&gt; =
+    LazyLock::new(|| {
         <span class="macro">register_histogram_vec_with_registry!</span>(
             <span class="macro">histogram_opts!</span>(
                 <span class="string">"consensus_item_processing_duration_seconds"</span>,
@@ -261,8 +266,8 @@
         )
         .unwrap()
     });
-<span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">static </span>CONSENSUS_ITEM_PROCESSING_MODULE_AUDIT_DURATION_SECONDS: Lazy&lt;HistogramVec&gt; =
-    Lazy::new(|| {
+<span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">static </span>CONSENSUS_ITEM_PROCESSING_MODULE_AUDIT_DURATION_SECONDS: LazyLock&lt;HistogramVec&gt; =
+    LazyLock::new(|| {
         <span class="macro">register_histogram_vec_with_registry!</span>(
             <span class="macro">histogram_opts!</span>(
                 <span class="string">"consensus_item_processing_module_audit_duration_seconds"</span>,
@@ -274,7 +279,7 @@
         .unwrap()
     });
 
-<span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">static </span>CONSENSUS_ORDERING_LATENCY_SECONDS: Lazy&lt;Histogram&gt; = Lazy::new(|| {
+<span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">static </span>CONSENSUS_ORDERING_LATENCY_SECONDS: LazyLock&lt;Histogram&gt; = LazyLock::new(|| {
     <span class="macro">register_histogram_with_registry!</span>(
         <span class="macro">histogram_opts!</span>(
             <span class="string">"consensus_ordering_latency_seconds"</span>,
@@ -285,29 +290,31 @@
     .unwrap()
 });
 
-<span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">static </span>JSONRPC_API_REQUEST_DURATION_SECONDS: Lazy&lt;HistogramVec&gt; = Lazy::new(|| {
-    <span class="macro">register_histogram_vec_with_registry!</span>(
-        <span class="macro">histogram_opts!</span>(
-            <span class="string">"jsonrpc_api_request_duration_seconds"</span>,
-            <span class="string">"Duration of processing an rpc request"</span>,
-        ),
-        <span class="kw-2">&amp;</span>[<span class="string">"method"</span>],
-        REGISTRY
-    )
-    .unwrap()
-});
-<span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">static </span>JSONRPC_API_REQUEST_RESPONSE_CODE: Lazy&lt;IntCounterVec&gt; = Lazy::new(|| {
-    <span class="macro">register_int_counter_vec_with_registry!</span>(
-        <span class="macro">opts!</span>(
-            <span class="string">"jsonrpc_api_request_response_code_total"</span>,
-            <span class="string">"Count of response counts and types"</span>,
-        ),
-        <span class="kw-2">&amp;</span>[<span class="string">"method"</span>, <span class="string">"code"</span>, <span class="string">"type"</span>],
-        REGISTRY
-    )
-    .unwrap()
-});
-<span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">static </span>CONSENSUS_SESSION_COUNT: Lazy&lt;IntGauge&gt; = Lazy::new(|| {
+<span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">static </span>JSONRPC_API_REQUEST_DURATION_SECONDS: LazyLock&lt;HistogramVec&gt; =
+    LazyLock::new(|| {
+        <span class="macro">register_histogram_vec_with_registry!</span>(
+            <span class="macro">histogram_opts!</span>(
+                <span class="string">"jsonrpc_api_request_duration_seconds"</span>,
+                <span class="string">"Duration of processing an rpc request"</span>,
+            ),
+            <span class="kw-2">&amp;</span>[<span class="string">"method"</span>],
+            REGISTRY
+        )
+        .unwrap()
+    });
+<span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">static </span>JSONRPC_API_REQUEST_RESPONSE_CODE: LazyLock&lt;IntCounterVec&gt; =
+    LazyLock::new(|| {
+        <span class="macro">register_int_counter_vec_with_registry!</span>(
+            <span class="macro">opts!</span>(
+                <span class="string">"jsonrpc_api_request_response_code_total"</span>,
+                <span class="string">"Count of response counts and types"</span>,
+            ),
+            <span class="kw-2">&amp;</span>[<span class="string">"method"</span>, <span class="string">"code"</span>, <span class="string">"type"</span>],
+            REGISTRY
+        )
+        .unwrap()
+    });
+<span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">static </span>CONSENSUS_SESSION_COUNT: LazyLock&lt;IntGauge&gt; = LazyLock::new(|| {
     <span class="macro">register_int_gauge_with_registry!</span>(
         <span class="macro">opts!</span>(
             <span class="string">"consensus_session_count"</span>,
@@ -317,18 +324,19 @@
     )
     .unwrap()
 });
-<span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">static </span>CONSENSUS_PEER_CONTRIBUTION_SESSION_IDX: Lazy&lt;IntGaugeVec&gt; = Lazy::new(|| {
-    <span class="macro">register_int_gauge_vec_with_registry!</span>(
-        <span class="macro">opts!</span>(
-            <span class="string">"consensus_peer_contribution_session_idx"</span>,
-            <span class="string">"Latest contribution session idx by peer_id"</span>,
-        ),
-        <span class="kw-2">&amp;</span>[<span class="string">"self_id"</span>, <span class="string">"peer_id"</span>],
-        REGISTRY
-    )
-    .unwrap()
-});
-<span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">static </span>BACKUP_WRITE_SIZE_BYTES: Lazy&lt;Histogram&gt; = Lazy::new(|| {
+<span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">static </span>CONSENSUS_PEER_CONTRIBUTION_SESSION_IDX: LazyLock&lt;IntGaugeVec&gt; =
+    LazyLock::new(|| {
+        <span class="macro">register_int_gauge_vec_with_registry!</span>(
+            <span class="macro">opts!</span>(
+                <span class="string">"consensus_peer_contribution_session_idx"</span>,
+                <span class="string">"Latest contribution session idx by peer_id"</span>,
+            ),
+            <span class="kw-2">&amp;</span>[<span class="string">"self_id"</span>, <span class="string">"peer_id"</span>],
+            REGISTRY
+        )
+        .unwrap()
+    });
+<span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">static </span>BACKUP_WRITE_SIZE_BYTES: LazyLock&lt;Histogram&gt; = LazyLock::new(|| {
     <span class="macro">register_histogram_with_registry!</span>(
         <span class="macro">histogram_opts!</span>(
             <span class="string">"backup_write_size_bytes"</span>,
@@ -339,14 +347,14 @@
     )
     .unwrap()
 });
-<span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">static </span>STORED_BACKUPS_COUNT: Lazy&lt;IntGauge&gt; = Lazy::new(|| {
+<span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">static </span>STORED_BACKUPS_COUNT: LazyLock&lt;IntGauge&gt; = LazyLock::new(|| {
     <span class="macro">register_int_gauge_with_registry!</span>(
         <span class="macro">opts!</span>(<span class="string">"stored_backups_count"</span>, <span class="string">"Total amount of backups stored"</span>,),
         REGISTRY
     )
     .unwrap()
 });
-<span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">static </span>PEER_CONNECT_COUNT: Lazy&lt;IntCounterVec&gt; = Lazy::new(|| {
+<span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">static </span>PEER_CONNECT_COUNT: LazyLock&lt;IntCounterVec&gt; = LazyLock::new(|| {
     <span class="macro">register_int_counter_vec_with_registry!</span>(
         <span class="macro">opts!</span>(<span class="string">"peer_connect_total"</span>, <span class="string">"Number of times peer (re/)connected"</span>,),
         <span class="kw-2">&amp;</span>[<span class="string">"self_id"</span>, <span class="string">"peer_id"</span>, <span class="string">"direction"</span>],
@@ -354,7 +362,7 @@
     )
     .unwrap()
 });
-<span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">static </span>PEER_DISCONNECT_COUNT: Lazy&lt;IntCounterVec&gt; = Lazy::new(|| {
+<span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">static </span>PEER_DISCONNECT_COUNT: LazyLock&lt;IntCounterVec&gt; = LazyLock::new(|| {
     <span class="macro">register_int_counter_vec_with_registry!</span>(
         <span class="macro">opts!</span>(
             <span class="string">"peer_disconnect_total"</span>,
@@ -365,7 +373,7 @@
     )
     .unwrap()
 });
-<span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">static </span>PEER_MESSAGES_COUNT: Lazy&lt;IntCounterVec&gt; = Lazy::new(|| {
+<span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">static </span>PEER_MESSAGES_COUNT: LazyLock&lt;IntCounterVec&gt; = LazyLock::new(|| {
     <span class="macro">register_int_counter_vec_with_registry!</span>(
         <span class="macro">opts!</span>(<span class="string">"peer_messages_total"</span>, <span class="string">"Messages with the peer"</span>,),
         <span class="kw-2">&amp;</span>[<span class="string">"self_id"</span>, <span class="string">"peer_id"</span>, <span class="string">"direction"</span>],
@@ -373,7 +381,7 @@
     )
     .unwrap()
 });
-<span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">static </span>PEER_BANS_COUNT: Lazy&lt;IntCounterVec&gt; = Lazy::new(|| {
+<span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">static </span>PEER_BANS_COUNT: LazyLock&lt;IntCounterVec&gt; = LazyLock::new(|| {
     <span class="macro">register_int_counter_vec_with_registry!</span>(
         <span class="macro">opts!</span>(<span class="string">"peer_bans_total"</span>, <span class="string">"Peer bans"</span>,),
         <span class="kw-2">&amp;</span>[<span class="string">"self_id"</span>, <span class="string">"peer_id"</span>],

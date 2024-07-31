@@ -288,7 +288,6 @@
 <a href="#288" id="288">288</a>
 <a href="#289" id="289">289</a>
 <a href="#290" id="290">290</a>
-<a href="#291" id="291">291</a>
 </pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::cast_sign_loss)]
@@ -302,7 +301,7 @@
 <span class="kw">use </span>std::env;
 <span class="kw">use </span>std::fmt::Debug;
 <span class="kw">use </span>std::future::Future;
-<span class="kw">use </span>std::sync::{Arc, Mutex};
+<span class="kw">use </span>std::sync::{Arc, LazyLock, Mutex};
 <span class="kw">use </span>std::time::Duration;
 
 <span class="kw">use </span>anyhow::Context;
@@ -318,7 +317,6 @@
 <span class="kw">use </span>fedimint_core::util::SafeUrl;
 <span class="kw">use </span>fedimint_core::{apply, async_trait_maybe_send, dyn_newtype_define, Feerate};
 <span class="kw">use </span>fedimint_logging::{LOG_BLOCKCHAIN, LOG_CORE};
-<span class="kw">use </span>once_cell::sync::Lazy;
 <span class="kw">use </span>tracing::{debug, info};
 
 <span class="attr">#[cfg(feature = <span class="string">"bitcoincore-rpc"</span>)]
@@ -339,8 +337,8 @@
     <span class="string">"00000008819873e925422c1ff0f99f7cc9bbb232af63a077a480a3633bee1ef6"</span>;
 
 <span class="doccomment">/// Global factories for creating bitcoin RPCs
-</span><span class="kw">static </span>BITCOIN_RPC_REGISTRY: Lazy&lt;Mutex&lt;BTreeMap&lt;String, DynBitcoindRpcFactory&gt;&gt;&gt; =
-    Lazy::new(|| {
+</span><span class="kw">static </span>BITCOIN_RPC_REGISTRY: LazyLock&lt;Mutex&lt;BTreeMap&lt;String, DynBitcoindRpcFactory&gt;&gt;&gt; =
+    LazyLock::new(|| {
         Mutex::new(BTreeMap::from([
             <span class="attr">#[cfg(feature = <span class="string">"esplora-client"</span>)]
             </span>(<span class="string">"esplora"</span>.to_string(), esplora::EsploraFactory.into()),

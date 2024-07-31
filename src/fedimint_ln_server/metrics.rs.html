@@ -35,22 +35,24 @@
 <a href="#35" id="35">35</a>
 <a href="#36" id="36">36</a>
 <a href="#37" id="37">37</a>
-</pre></div><pre class="rust"><code><span class="kw">use </span>fedimint_metrics::prometheus::{
+<a href="#38" id="38">38</a>
+</pre></div><pre class="rust"><code><span class="kw">use </span>std::sync::LazyLock;
+
+<span class="kw">use </span>fedimint_metrics::prometheus::{
     register_histogram_vec_with_registry, register_int_counter_with_registry,
 };
 <span class="kw">use </span>fedimint_metrics::{
     histogram_opts, opts, HistogramVec, IntCounter, AMOUNTS_BUCKETS_SATS, REGISTRY,
 };
-<span class="kw">use </span>once_cell::sync::Lazy;
 
-<span class="kw">pub static </span>LN_INCOMING_OFFER: Lazy&lt;IntCounter&gt; = Lazy::new(|| {
+<span class="kw">pub static </span>LN_INCOMING_OFFER: LazyLock&lt;IntCounter&gt; = LazyLock::new(|| {
     <span class="macro">register_int_counter_with_registry!</span>(
         <span class="macro">opts!</span>(<span class="string">"ln_incoming_offer_total"</span>, <span class="string">"Incoming payment offer"</span>),
         REGISTRY
     )
     .unwrap()
 });
-<span class="kw">pub static </span>LN_CANCEL_OUTGOING_CONTRACTS: Lazy&lt;IntCounter&gt; = Lazy::new(|| {
+<span class="kw">pub static </span>LN_CANCEL_OUTGOING_CONTRACTS: LazyLock&lt;IntCounter&gt; = LazyLock::new(|| {
     <span class="macro">register_int_counter_with_registry!</span>(
         <span class="macro">opts!</span>(
             <span class="string">"ln_canceled_outgoing_contract_total"</span>,
@@ -60,7 +62,7 @@
     )
     .unwrap()
 });
-<span class="kw">pub static </span>LN_FUNDED_CONTRACT_SATS: Lazy&lt;HistogramVec&gt; = Lazy::new(|| {
+<span class="kw">pub static </span>LN_FUNDED_CONTRACT_SATS: LazyLock&lt;HistogramVec&gt; = LazyLock::new(|| {
     <span class="macro">register_histogram_vec_with_registry!</span>(
         <span class="macro">histogram_opts!</span>(
             <span class="string">"ln_funded_contract_sats"</span>,

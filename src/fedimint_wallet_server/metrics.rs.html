@@ -85,16 +85,18 @@
 <a href="#85" id="85">85</a>
 <a href="#86" id="86">86</a>
 <a href="#87" id="87">87</a>
-</pre></div><pre class="rust"><code><span class="kw">use </span>fedimint_metrics::prometheus::{
+<a href="#88" id="88">88</a>
+</pre></div><pre class="rust"><code><span class="kw">use </span>std::sync::LazyLock;
+
+<span class="kw">use </span>fedimint_metrics::prometheus::{
     register_histogram_vec_with_registry, register_int_gauge_with_registry, IntGauge,
 };
 <span class="kw">use </span>fedimint_metrics::{
     histogram_opts, opts, register_histogram_with_registry, Histogram, HistogramVec,
     AMOUNTS_BUCKETS_SATS, REGISTRY,
 };
-<span class="kw">use </span>once_cell::sync::Lazy;
 
-<span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">static </span>WALLET_INOUT_SATS: Lazy&lt;HistogramVec&gt; = Lazy::new(|| {
+<span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">static </span>WALLET_INOUT_SATS: LazyLock&lt;HistogramVec&gt; = LazyLock::new(|| {
     <span class="macro">register_histogram_vec_with_registry!</span>(
         <span class="macro">histogram_opts!</span>(
             <span class="string">"wallet_inout_sats"</span>,
@@ -106,7 +108,7 @@
     )
     .unwrap()
 });
-<span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">static </span>WALLET_INOUT_FEES_SATS: Lazy&lt;HistogramVec&gt; = Lazy::new(|| {
+<span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">static </span>WALLET_INOUT_FEES_SATS: LazyLock&lt;HistogramVec&gt; = LazyLock::new(|| {
     <span class="macro">register_histogram_vec_with_registry!</span>(
         <span class="macro">histogram_opts!</span>(
             <span class="string">"wallet_inout_fees_sats"</span>,
@@ -118,7 +120,7 @@
     )
     .unwrap()
 });
-<span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">static </span>WALLET_PEGIN_SATS: Lazy&lt;Histogram&gt; = Lazy::new(|| {
+<span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">static </span>WALLET_PEGIN_SATS: LazyLock&lt;Histogram&gt; = LazyLock::new(|| {
     <span class="macro">register_histogram_with_registry!</span>(
         <span class="macro">histogram_opts!</span>(
             <span class="string">"wallet_pegin_sats"</span>,
@@ -129,7 +131,7 @@
     )
     .unwrap()
 });
-<span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">static </span>WALLET_PEGIN_FEES_SATS: Lazy&lt;Histogram&gt; = Lazy::new(|| {
+<span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">static </span>WALLET_PEGIN_FEES_SATS: LazyLock&lt;Histogram&gt; = LazyLock::new(|| {
     <span class="macro">register_histogram_with_registry!</span>(
         <span class="macro">histogram_opts!</span>(
             <span class="string">"wallet_pegin_fees_sats"</span>,
@@ -140,7 +142,7 @@
     )
     .unwrap()
 });
-<span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">static </span>WALLET_PEGOUT_SATS: Lazy&lt;Histogram&gt; = Lazy::new(|| {
+<span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">static </span>WALLET_PEGOUT_SATS: LazyLock&lt;Histogram&gt; = LazyLock::new(|| {
     <span class="macro">register_histogram_with_registry!</span>(
         <span class="macro">histogram_opts!</span>(
             <span class="string">"wallet_pegout_sats"</span>,
@@ -151,7 +153,7 @@
     )
     .unwrap()
 });
-<span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">static </span>WALLET_PEGOUT_FEES_SATS: Lazy&lt;Histogram&gt; = Lazy::new(|| {
+<span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">static </span>WALLET_PEGOUT_FEES_SATS: LazyLock&lt;Histogram&gt; = LazyLock::new(|| {
     <span class="macro">register_histogram_with_registry!</span>(
         <span class="macro">histogram_opts!</span>(
             <span class="string">"wallet_pegout_fees_sats"</span>,
@@ -162,7 +164,7 @@
     )
     .unwrap()
 });
-<span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">static </span>WALLET_BLOCK_COUNT: Lazy&lt;IntGauge&gt; = Lazy::new(|| {
+<span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">static </span>WALLET_BLOCK_COUNT: LazyLock&lt;IntGauge&gt; = LazyLock::new(|| {
     <span class="macro">register_int_gauge_with_registry!</span>(
         <span class="macro">opts!</span>(
             <span class="string">"wallet_block_count"</span>,

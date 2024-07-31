@@ -72,13 +72,15 @@
 <a href="#72" id="72">72</a>
 <a href="#73" id="73">73</a>
 <a href="#74" id="74">74</a>
-</pre></div><pre class="rust"><code><span class="kw">use </span>fedimint_metrics::prometheus::{
+<a href="#75" id="75">75</a>
+</pre></div><pre class="rust"><code><span class="kw">use </span>std::sync::LazyLock;
+
+<span class="kw">use </span>fedimint_metrics::prometheus::{
     register_histogram_vec_with_registry, register_histogram_with_registry,
 };
 <span class="kw">use </span>fedimint_metrics::{histogram_opts, Histogram, HistogramVec, AMOUNTS_BUCKETS_SATS, REGISTRY};
-<span class="kw">use </span>once_cell::sync::Lazy;
 
-<span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">static </span>MINT_INOUT_SATS: Lazy&lt;HistogramVec&gt; = Lazy::new(|| {
+<span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">static </span>MINT_INOUT_SATS: LazyLock&lt;HistogramVec&gt; = LazyLock::new(|| {
     <span class="macro">register_histogram_vec_with_registry!</span>(
         <span class="macro">histogram_opts!</span>(
             <span class="string">"mint_inout_sats"</span>,
@@ -90,7 +92,7 @@
     )
     .unwrap()
 });
-<span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">static </span>MINT_INOUT_FEES_SATS: Lazy&lt;HistogramVec&gt; = Lazy::new(|| {
+<span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">static </span>MINT_INOUT_FEES_SATS: LazyLock&lt;HistogramVec&gt; = LazyLock::new(|| {
     <span class="macro">register_histogram_vec_with_registry!</span>(
         <span class="macro">histogram_opts!</span>(
             <span class="string">"mint_inout_fees_sats"</span>,
@@ -102,7 +104,7 @@
     )
     .unwrap()
 });
-<span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">static </span>MINT_REDEEMED_ECASH_SATS: Lazy&lt;Histogram&gt; = Lazy::new(|| {
+<span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">static </span>MINT_REDEEMED_ECASH_SATS: LazyLock&lt;Histogram&gt; = LazyLock::new(|| {
     <span class="macro">register_histogram_with_registry!</span>(
         <span class="macro">histogram_opts!</span>(
             <span class="string">"mint_redeemed_ecash_sats"</span>,
@@ -113,7 +115,7 @@
     )
     .unwrap()
 });
-<span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">static </span>MINT_REDEEMED_ECASH_FEES_SATS: Lazy&lt;Histogram&gt; = Lazy::new(|| {
+<span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">static </span>MINT_REDEEMED_ECASH_FEES_SATS: LazyLock&lt;Histogram&gt; = LazyLock::new(|| {
     <span class="macro">register_histogram_with_registry!</span>(
             <span class="macro">histogram_opts!</span>(
                 <span class="string">"mint_redeemed_ecash_fees_sats"</span>,
@@ -124,7 +126,7 @@
         )
         .unwrap()
 });
-<span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">static </span>MINT_ISSUED_ECASH_SATS: Lazy&lt;Histogram&gt; = Lazy::new(|| {
+<span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">static </span>MINT_ISSUED_ECASH_SATS: LazyLock&lt;Histogram&gt; = LazyLock::new(|| {
     <span class="macro">register_histogram_with_registry!</span>(
         <span class="macro">histogram_opts!</span>(
             <span class="string">"mint_issued_ecash_sats"</span>,
@@ -135,7 +137,7 @@
     )
     .unwrap()
 });
-<span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">static </span>MINT_ISSUED_ECASH_FEES_SATS: Lazy&lt;Histogram&gt; = Lazy::new(|| {
+<span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">static </span>MINT_ISSUED_ECASH_FEES_SATS: LazyLock&lt;Histogram&gt; = LazyLock::new(|| {
     <span class="macro">register_histogram_with_registry!</span>(
         <span class="macro">histogram_opts!</span>(
             <span class="string">"mint_issued_ecash_fees_sats"</span>,

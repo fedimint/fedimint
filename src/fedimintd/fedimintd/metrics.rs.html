@@ -17,15 +17,17 @@
 <a href="#17" id="17">17</a>
 <a href="#18" id="18">18</a>
 <a href="#19" id="19">19</a>
-</pre></div><pre class="rust"><code><span class="kw">use </span>fedimint_metrics::prometheus::{register_int_gauge_vec_with_registry, IntGaugeVec};
+<a href="#20" id="20">20</a>
+</pre></div><pre class="rust"><code><span class="kw">use </span>std::sync::LazyLock;
+
+<span class="kw">use </span>fedimint_metrics::prometheus::{register_int_gauge_vec_with_registry, IntGaugeVec};
 <span class="kw">use </span>fedimint_metrics::{opts, REGISTRY};
-<span class="kw">use </span>once_cell::sync::Lazy;
 
 <span class="comment">// Note: we can't really use a counter for monitoring restarts of the
 // application because such timer would always equal 1, and Prometheus would
 // never actually add it up. But what we can do is to use a gauge with a
 // timestamp, and then detect every time it changes.
-</span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">static </span>APP_START_TS: Lazy&lt;IntGaugeVec&gt; = Lazy::new(|| {
+</span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">static </span>APP_START_TS: LazyLock&lt;IntGaugeVec&gt; = LazyLock::new(|| {
     <span class="macro">register_int_gauge_vec_with_registry!</span>(
         <span class="macro">opts!</span>(
             <span class="string">"app_start_ts"</span>,
