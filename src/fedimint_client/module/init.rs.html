@@ -427,18 +427,6 @@
 <a href="#427" id="427">427</a>
 <a href="#428" id="428">428</a>
 <a href="#429" id="429">429</a>
-<a href="#430" id="430">430</a>
-<a href="#431" id="431">431</a>
-<a href="#432" id="432">432</a>
-<a href="#433" id="433">433</a>
-<a href="#434" id="434">434</a>
-<a href="#435" id="435">435</a>
-<a href="#436" id="436">436</a>
-<a href="#437" id="437">437</a>
-<a href="#438" id="438">438</a>
-<a href="#439" id="439">439</a>
-<a href="#440" id="440">440</a>
-<a href="#441" id="441">441</a>
 </pre></div><pre class="rust"><code><span class="kw">pub mod </span>recovery;
 
 <span class="kw">use </span>std::collections::BTreeMap;
@@ -514,11 +502,6 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>.module_api_version
     }
 
-    <span class="comment">// TODO: deprecate, use `module_api_version` instead
-    </span><span class="kw">pub fn </span>api_version(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>ApiVersion {
-        <span class="kw-2">&amp;</span><span class="self">self</span>.module_api_version
-    }
-
     <span class="kw">pub fn </span>module_root_secret(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>DerivableSecret {
         <span class="kw-2">&amp;</span><span class="self">self</span>.module_root_secret
     }
@@ -556,9 +539,7 @@
     }
 }
 
-<span class="comment">// TODO: remove
-</span><span class="attr">#[allow(dead_code)]
-</span><span class="kw">pub struct </span>ClientModuleRecoverArgs&lt;C&gt;
+<span class="kw">pub struct </span>ClientModuleRecoverArgs&lt;C&gt;
 <span class="kw">where
     </span>C: ClientModuleInit,
 {
@@ -602,11 +583,6 @@
     }
 
     <span class="kw">pub fn </span>module_api_version(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>ApiVersion {
-        <span class="kw-2">&amp;</span><span class="self">self</span>.module_api_version
-    }
-
-    <span class="comment">// TODO: deprecate, use module_api_version instead
-    </span><span class="kw">pub fn </span>api_version(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>ApiVersion {
         <span class="kw-2">&amp;</span><span class="self">self</span>.module_api_version
     }
 
