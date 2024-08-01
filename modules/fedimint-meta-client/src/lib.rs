@@ -9,24 +9,30 @@ pub mod db;
 pub mod states;
 
 use std::collections::BTreeMap;
+use std::time::Duration;
 
 use api::MetaFederationApi;
 use common::{MetaConsensusValue, MetaKey, MetaValue, KIND};
 use db::DbKeyPrefix;
 use fedimint_api_client::api::DynModuleApi;
 use fedimint_client::db::ClientMigrationFn;
+use fedimint_client::meta::{FetchKind, LegacyMetaSource, MetaSource, MetaValues};
 use fedimint_client::module::init::{ClientModuleInit, ClientModuleInitArgs};
 use fedimint_client::module::recovery::NoModuleBackup;
 use fedimint_client::module::{ClientModule, IClientModule};
 use fedimint_client::sm::Context;
+use fedimint_client::Client;
 use fedimint_core::core::{Decoder, ModuleKind};
 use fedimint_core::db::{DatabaseTransaction, DatabaseVersion};
 use fedimint_core::module::{ApiAuth, ApiVersion, ModuleCommon, ModuleInit, MultiApiVersion};
+use fedimint_core::util::backoff_util::FibonacciBackoff;
+use fedimint_core::util::{backoff_util, retry};
 use fedimint_core::{apply, async_trait_maybe_send, Amount, PeerId};
 pub use fedimint_meta_common as common;
-use fedimint_meta_common::{MetaCommonInit, MetaModuleTypes};
+use fedimint_meta_common::{MetaCommonInit, MetaModuleTypes, DEFAULT_META_KEY};
 use states::MetaStateMachine;
 use strum::IntoEnumIterator;
+use tracing::{debug, warn};
 
 #[derive(Debug)]
 pub struct MetaClientModule {
@@ -185,5 +191,78 @@ impl ClientModuleInit for MetaClientInit {
 
     fn get_database_migrations(&self) -> BTreeMap<DatabaseVersion, ClientMigrationFn> {
         BTreeMap::new()
+    }
+}
+
+/// Meta source fetching meta values from the meta module if available or the
+/// legacy meta source otherwise.
+#[derive(Clone, Debug, Default)]
+pub struct MetaModuleOrLegacyMetaSource {
+    legacy: LegacyMetaSource,
+}
+
+#[apply(async_trait_maybe_send!)]
+impl MetaSource for MetaModuleOrLegacyMetaSource {
+    async fn wait_for_update(&self) {
+        fedimint_core::runtime::sleep(Duration::from_secs(10 * 60)).await;
+    }
+
+    async fn fetch(
+        &self,
+        client: &fedimint_client::Client,
+        fetch_kind: fedimint_client::meta::FetchKind,
+        last_revision: Option<u64>,
+    ) -> anyhow::Result<fedimint_client::meta::MetaValues> {
+        let backoff = match fetch_kind {
+            // need to be fast the first time.
+            FetchKind::Initial => backoff_util::aggressive_backoff(),
+            FetchKind::Background => backoff_util::background_backoff(),
+        };
+
+        let maybe_meta_module_meta = get_meta_module_value(client, backoff)
+            .await
+            .map(|meta| {
+                Result::<_, anyhow::Error>::Ok(MetaValues {
+                    values: serde_json::from_slice(meta.value.as_slice())?,
+                    revision: meta.revision,
+                })
+            })
+            .transpose()?;
+
+        // If we couldn't fetch valid meta values from the meta module for any reason,
+        // fall back to the legacy meta source
+        if let Some(maybe_meta_module_meta) = maybe_meta_module_meta {
+            Ok(maybe_meta_module_meta)
+        } else {
+            self.legacy.fetch(client, fetch_kind, last_revision).await
+        }
+    }
+}
+
+async fn get_meta_module_value(
+    client: &Client,
+    backoff: FibonacciBackoff,
+) -> Option<MetaConsensusValue> {
+    if client.get_first_instance(&KIND).is_some() {
+        let meta_client = client.get_first_module::<MetaClientModule>();
+
+        let overrides_res = retry("fetch_meta_values", backoff, || {
+            meta_client.get_consensus_value(DEFAULT_META_KEY)
+        })
+        .await;
+
+        match overrides_res {
+            Ok(Some(consensus)) => Some(consensus),
+            Ok(None) => {
+                debug!("Meta module returned no consensus value");
+                None
+            }
+            Err(e) => {
+                warn!("Failed to fetch meta module consensus value: {}", e);
+                None
+            }
+        }
+    } else {
+        None
     }
 }

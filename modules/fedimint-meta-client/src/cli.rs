@@ -3,7 +3,7 @@ use std::{ffi, iter};
 
 use anyhow::Context as _;
 use clap::Parser;
-use fedimint_meta_common::{MetaConsensusValue, MetaKey, MetaValue};
+use fedimint_meta_common::{MetaConsensusValue, MetaKey, MetaValue, DEFAULT_META_KEY};
 use serde::Serialize;
 use serde_json::json;
 
@@ -14,26 +14,26 @@ use crate::api::MetaFederationApi;
 enum Opts {
     /// Get current consensus value
     Get {
-        #[arg(long, default_value = "0")]
+        #[arg(long, default_value_t = DEFAULT_META_KEY)]
         key: MetaKey,
         #[arg(long)]
         hex: bool,
     },
     /// Get current consensus value revision
     GetRev {
-        #[arg(long, default_value = "0")]
+        #[arg(long, default_value_t = DEFAULT_META_KEY)]
         key: MetaKey,
     },
     /// Get value change submissions
     GetSubmissions {
-        #[arg(long, default_value = "0")]
+        #[arg(long, default_value_t = DEFAULT_META_KEY)]
         key: MetaKey,
         #[arg(long)]
         hex: bool,
     },
     /// Submit value change proposal
     Submit {
-        #[arg(long, default_value = "0")]
+        #[arg(long, default_value_t = DEFAULT_META_KEY)]
         key: MetaKey,
         value: String,
         #[arg(long)]
