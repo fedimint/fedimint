@@ -915,11 +915,17 @@ impl GatewayLightning for ClnRpcService {
     ) -> Result<tonic::Response<EmptyResponse>, Status> {
         let request_inner = request.into_inner();
 
+        let public_key = cln_rpc::primitives::PublicKey::from_slice(&request_inner.pubkey)
+            .map_err(|e| {
+                error!("cln fundchannel pubkey parse error {:?}", e);
+                tonic::Status::invalid_argument(e.to_string())
+            })?;
+
         self.rpc_client()
             .await
             .map_err(|e| Status::internal(e.to_string()))?
             .call(cln_rpc::Request::Connect(model::requests::ConnectRequest {
-                id: format!("{}@{}", request_inner.pubkey, request_inner.host),
+                id: format!("{}@{}", public_key, request_inner.host),
                 host: None,
                 port: None,
             }))
@@ -934,12 +940,7 @@ impl GatewayLightning for ClnRpcService {
             .map_err(|e| Status::internal(e.to_string()))?
             .call(cln_rpc::Request::FundChannel(
                 model::requests::FundchannelRequest {
-                    id: cln_rpc::primitives::PublicKey::from_str(&request_inner.pubkey).map_err(
-                        |e| {
-                            error!("cln fundchannel pubkey parse error {:?}", e);
-                            tonic::Status::invalid_argument(e.to_string())
-                        },
-                    )?,
+                    id: public_key,
                     amount: cln_rpc::primitives::AmountOrAll::Amount(
                         cln_rpc::primitives::Amount::from_sat(request_inner.channel_size_sats),
                     ),
@@ -1054,7 +1055,7 @@ impl GatewayLightning for ClnRpcService {
                             model::responses::ListpeerchannelsChannelsState::CHANNELD_NORMAL
                         ) {
                             Some(ChannelInfo {
-                                remote_pubkey: format!("{}", channel.peer_id),
+                                remote_pubkey: channel.peer_id.serialize().to_vec(),
                                 channel_size_sats: channel
                                     .total_msat
                                     .map(|value| value.msat() / 1000)
