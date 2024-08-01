@@ -1236,6 +1236,7 @@
 <a href="#1236" id="1236">1236</a>
 <a href="#1237" id="1237">1237</a>
 <a href="#1238" id="1238">1238</a>
+<a href="#1239" id="1239">1239</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::array::TryFromSliceError;
 <span class="kw">use </span>std::collections::{BTreeMap, HashMap};
 <span class="kw">use </span>std::net::SocketAddr;
@@ -2153,11 +2154,17 @@
     ) -&gt; <span class="prelude-ty">Result</span>&lt;tonic::Response&lt;EmptyResponse&gt;, Status&gt; {
         <span class="kw">let </span>request_inner = request.into_inner();
 
+        <span class="kw">let </span>public_key = cln_rpc::primitives::PublicKey::from_slice(<span class="kw-2">&amp;</span>request_inner.pubkey)
+            .map_err(|e| {
+                <span class="macro">error!</span>(<span class="string">"cln fundchannel pubkey parse error {:?}"</span>, e);
+                tonic::Status::invalid_argument(e.to_string())
+            })<span class="question-mark">?</span>;
+
         <span class="self">self</span>.rpc_client()
             .<span class="kw">await
             </span>.map_err(|e| Status::internal(e.to_string()))<span class="question-mark">?
             </span>.call(cln_rpc::Request::Connect(model::requests::ConnectRequest {
-                id: <span class="macro">format!</span>(<span class="string">"{}@{}"</span>, request_inner.pubkey, request_inner.host),
+                id: <span class="macro">format!</span>(<span class="string">"{}@{}"</span>, public_key, request_inner.host),
                 host: <span class="prelude-val">None</span>,
                 port: <span class="prelude-val">None</span>,
             }))
@@ -2172,12 +2179,7 @@
             </span>.map_err(|e| Status::internal(e.to_string()))<span class="question-mark">?
             </span>.call(cln_rpc::Request::FundChannel(
                 model::requests::FundchannelRequest {
-                    id: cln_rpc::primitives::PublicKey::from_str(<span class="kw-2">&amp;</span>request_inner.pubkey).map_err(
-                        |e| {
-                            <span class="macro">error!</span>(<span class="string">"cln fundchannel pubkey parse error {:?}"</span>, e);
-                            tonic::Status::invalid_argument(e.to_string())
-                        },
-                    )<span class="question-mark">?</span>,
+                    id: public_key,
                     amount: cln_rpc::primitives::AmountOrAll::Amount(
                         cln_rpc::primitives::Amount::from_sat(request_inner.channel_size_sats),
                     ),
@@ -2292,7 +2294,7 @@
                             model::responses::ListpeerchannelsChannelsState::CHANNELD_NORMAL
                         ) {
                             <span class="prelude-val">Some</span>(ChannelInfo {
-                                remote_pubkey: <span class="macro">format!</span>(<span class="string">"{}"</span>, channel.peer_id),
+                                remote_pubkey: channel.peer_id.serialize().to_vec(),
                                 channel_size_sats: channel
                                     .total_msat
                                     .map(|value| value.msat() / <span class="number">1000</span>)

@@ -241,6 +241,7 @@
 <a href="#241" id="241">241</a>
 <a href="#242" id="242">242</a>
 <a href="#243" id="243">243</a>
+<a href="#244" id="244">244</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::fmt::Debug;
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
@@ -434,7 +435,7 @@
 
         <span class="kw">let </span>res = client
             .open_channel(OpenChannelRequest {
-                pubkey: pubkey.to_string(),
+                pubkey: pubkey.serialize().to_vec(),
                 host,
                 channel_size_sats,
                 push_amount_sats,
@@ -475,7 +476,8 @@
             .channels
             .into_iter()
             .map(|channel| ChannelInfo {
-                remote_pubkey: channel.remote_pubkey,
+                remote_pubkey: secp256k1::PublicKey::from_slice(<span class="kw-2">&amp;</span>channel.remote_pubkey)
+                    .expect(<span class="string">"Lightning node returned invalid remote channel pubkey"</span>),
                 channel_size_sats: channel.channel_size_sats,
                 outbound_liquidity_sats: channel.outbound_liquidity_sats,
                 inbound_liquidity_sats: channel.inbound_liquidity_sats,

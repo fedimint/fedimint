@@ -528,7 +528,7 @@
 
 <span class="attr">#[derive(Serialize, Deserialize, Debug)]
 </span><span class="kw">pub struct </span>ChannelInfo {
-    <span class="kw">pub </span>remote_pubkey: String,
+    <span class="kw">pub </span>remote_pubkey: secp256k1::PublicKey,
     <span class="kw">pub </span>channel_size_sats: u64,
     <span class="kw">pub </span>outbound_liquidity_sats: u64,
     <span class="kw">pub </span>inbound_liquidity_sats: u64,

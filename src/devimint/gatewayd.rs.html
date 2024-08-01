@@ -275,11 +275,15 @@
 <a href="#275" id="275">275</a>
 <a href="#276" id="276">276</a>
 <a href="#277" id="277">277</a>
+<a href="#278" id="278">278</a>
+<a href="#279" id="279">279</a>
+<a href="#280" id="280">280</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::HashMap;
 <span class="kw">use </span>std::ops::ControlFlow;
 <span class="kw">use </span>std::path::PathBuf;
 
 <span class="kw">use </span>anyhow::{Context, <span class="prelude-ty">Result</span>};
+<span class="kw">use </span>fedimint_core::secp256k1::PublicKey;
 <span class="kw">use </span>fedimint_core::util::{backoff_util, retry};
 <span class="kw">use </span>ln_gateway::lightning::ChannelInfo;
 <span class="kw">use </span>ln_gateway::rpc::V1_API_ENDPOINT;
@@ -433,13 +437,13 @@
         <span class="prelude-val">Ok</span>(gateway_id)
     }
 
-    <span class="kw">pub async fn </span>lightning_pubkey(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;String&gt; {
+    <span class="kw">pub async fn </span>lightning_pubkey(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;PublicKey&gt; {
         <span class="kw">let </span>info = <span class="self">self</span>.get_info().<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>gateway_id = info[<span class="string">"lightning_pub_key"</span>]
             .as_str()
             .context(<span class="string">"lightning_pub_key must be a string"</span>)<span class="question-mark">?
             </span>.to_owned();
-        <span class="prelude-val">Ok</span>(gateway_id)
+        <span class="prelude-val">Ok</span>(gateway_id.parse()<span class="question-mark">?</span>)
     }
 
     <span class="kw">pub async fn </span>connect_fed(<span class="kw-2">&amp;</span><span class="self">self</span>, fed: <span class="kw-2">&amp;</span>Federation) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
@@ -473,7 +477,7 @@
 
     <span class="kw">pub async fn </span>open_channel(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        pubkey: String,
+        pubkey: PublicKey,
         host: String,
         channel_size_sats: u64,
         push_amount_sats: <span class="prelude-ty">Option</span>&lt;u64&gt;,
@@ -522,7 +526,9 @@
                     .as_u64()
                     .context(<span class="string">"short_channel_id must be a u64"</span>)<span class="question-mark">?</span>;
                 <span class="prelude-val">Ok</span>(ChannelInfo {
-                    remote_pubkey,
+                    remote_pubkey: remote_pubkey
+                        .parse()
+                        .expect(<span class="string">"Lightning node returned invalid remote channel pubkey"</span>),
                     channel_size_sats,
                     outbound_liquidity_sats,
                     inbound_liquidity_sats,
