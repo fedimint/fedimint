@@ -333,6 +333,7 @@
 <a href="#333" id="333">333</a>
 <a href="#334" id="334">334</a>
 <a href="#335" id="335">335</a>
+<a href="#336" id="336">336</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::pin::pin;
 <span class="kw">use </span>std::sync::Arc;
@@ -346,6 +347,7 @@
 <span class="kw">use </span>fedimint_core::util::{backoff_util, retry};
 <span class="kw">use </span>fedimint_core::{apply, async_trait_maybe_send};
 <span class="kw">use </span>serde::de::DeserializeOwned;
+<span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>tokio::sync::Notify;
 <span class="kw">use </span>tokio_stream::{Stream, StreamExt <span class="kw">as _</span>};
 <span class="kw">use </span>tracing::{debug, instrument, warn};
@@ -376,10 +378,10 @@
     </span>Background,
 }
 
-<span class="attr">#[derive(Debug, Clone)]
+<span class="attr">#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 </span><span class="kw">pub struct </span>MetaValues {
-    values: BTreeMap&lt;MetaFieldKey, MetaFieldValue&gt;,
-    revision: u64,
+    <span class="kw">pub </span>values: BTreeMap&lt;MetaFieldKey, MetaFieldValue&gt;,
+    <span class="kw">pub </span>revision: u64,
 }
 
 <span class="attr">#[derive(Debug, Clone, Copy)]

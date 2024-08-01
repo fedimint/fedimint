@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"mod":["api","cli","db","states"],"struct":["MetaClientContext","MetaClientInit","MetaClientModule"]};
+window.SIDEBAR_ITEMS = {"fn":["get_meta_module_value"],"mod":["api","cli","db","states"],"struct":["MetaClientContext","MetaClientInit","MetaClientModule","MetaModuleOrLegacyMetaSource"]};

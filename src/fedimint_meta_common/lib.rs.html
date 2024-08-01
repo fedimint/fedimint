@@ -262,6 +262,10 @@
 <a href="#262" id="262">262</a>
 <a href="#263" id="263">263</a>
 <a href="#264" id="264">264</a>
+<a href="#265" id="265">265</a>
+<a href="#266" id="266">266</a>
+<a href="#267" id="267">267</a>
+<a href="#268" id="268">268</a>
 </pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::missing_errors_doc)]
 #![allow(clippy::module_name_repetitions)]
@@ -292,6 +296,10 @@
 <span class="doccomment">/// Modules are non-compatible with older versions
 </span><span class="kw">pub const </span>MODULE_CONSENSUS_VERSION: ModuleConsensusVersion = ModuleConsensusVersion::new(<span class="number">0</span>, <span class="number">0</span>);
 
+<span class="doccomment">/// The meta module was built with flexibility and upgradability in mind. We
+/// currently only intend to use one key, which is defined here.
+</span><span class="kw">pub const </span>DEFAULT_META_KEY: MetaKey = MetaKey(<span class="number">0</span>);
+
 <span class="doccomment">/// A key identifying a value in the meta module consensus
 ///
 /// Intentionally small (`u8`) to avoid problems with malicious peers
@@ -312,7 +320,7 @@
     Serialize,
     Deserialize,
 )]
-</span><span class="kw">pub struct </span>MetaKey(u8);
+</span><span class="kw">pub struct </span>MetaKey(<span class="kw">pub </span>u8);
 
 <span class="kw">impl </span>fmt::Display <span class="kw">for </span>MetaKey {
     <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>fmt::Formatter&lt;<span class="lifetime">'_</span>&gt;) -&gt; fmt::Result {

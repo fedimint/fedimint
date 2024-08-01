@@ -120,7 +120,7 @@
 
 <span class="kw">use </span>anyhow::Context <span class="kw">as _</span>;
 <span class="kw">use </span>clap::Parser;
-<span class="kw">use </span>fedimint_meta_common::{MetaConsensusValue, MetaKey, MetaValue};
+<span class="kw">use </span>fedimint_meta_common::{MetaConsensusValue, MetaKey, MetaValue, DEFAULT_META_KEY};
 <span class="kw">use </span>serde::Serialize;
 <span class="kw">use </span>serde_json::json;
 
@@ -131,26 +131,26 @@
 </span><span class="kw">enum </span>Opts {
     <span class="doccomment">/// Get current consensus value
     </span>Get {
-        <span class="attr">#[arg(long, default_value = <span class="string">"0"</span>)]
+        <span class="attr">#[arg(long, default_value_t = DEFAULT_META_KEY)]
         </span>key: MetaKey,
         <span class="attr">#[arg(long)]
         </span>hex: bool,
     },
     <span class="doccomment">/// Get current consensus value revision
     </span>GetRev {
-        <span class="attr">#[arg(long, default_value = <span class="string">"0"</span>)]
+        <span class="attr">#[arg(long, default_value_t = DEFAULT_META_KEY)]
         </span>key: MetaKey,
     },
     <span class="doccomment">/// Get value change submissions
     </span>GetSubmissions {
-        <span class="attr">#[arg(long, default_value = <span class="string">"0"</span>)]
+        <span class="attr">#[arg(long, default_value_t = DEFAULT_META_KEY)]
         </span>key: MetaKey,
         <span class="attr">#[arg(long)]
         </span>hex: bool,
     },
     <span class="doccomment">/// Submit value change proposal
     </span>Submit {
-        <span class="attr">#[arg(long, default_value = <span class="string">"0"</span>)]
+        <span class="attr">#[arg(long, default_value_t = DEFAULT_META_KEY)]
         </span>key: MetaKey,
         value: String,
         <span class="attr">#[arg(long)]

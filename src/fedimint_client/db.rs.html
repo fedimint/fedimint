@@ -765,6 +765,8 @@
 <a href="#765" id="765">765</a>
 <a href="#766" id="766">766</a>
 <a href="#767" id="767">767</a>
+<a href="#768" id="768">768</a>
+<a href="#769" id="769">769</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::io::Cursor;
 <span class="kw">use </span>std::time::SystemTime;
@@ -784,7 +786,7 @@
 <span class="kw">use </span>fedimint_core::{impl_db_lookup, impl_db_record, PeerId};
 <span class="kw">use </span>fedimint_logging::LOG_CLIENT_DB;
 <span class="kw">use </span>futures::StreamExt;
-<span class="kw">use </span>serde::Serialize;
+<span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>strum_macros::EnumIter;
 <span class="kw">use </span>tracing::{debug, info, trace, warn};
 
@@ -1123,13 +1125,15 @@
     db_prefix = DbKeyPrefix::ClientLastBackup
 );
 
-<span class="attr">#[derive(Encodable, Decodable, Debug, PartialEq, Eq, PartialOrd, Ord, Clone)]
+<span class="attr">#[derive(
+    Encodable, Decodable, Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Serialize, Deserialize,
+)]
 </span><span class="kw">pub struct </span>MetaFieldKey(<span class="kw">pub </span>String);
 
 <span class="attr">#[derive(Encodable, Decodable, Debug, PartialEq, Eq, PartialOrd, Ord, Clone)]
 </span><span class="kw">pub struct </span>MetaFieldPrefix;
 
-<span class="attr">#[derive(Encodable, Decodable, Debug, Clone)]
+<span class="attr">#[derive(Encodable, Decodable, Debug, Clone, Serialize, Deserialize)]
 </span><span class="kw">pub struct </span>MetaFieldValue(<span class="kw">pub </span>String);
 
 <span class="attr">#[derive(Encodable, Decodable, Debug)]
