@@ -35,9 +35,7 @@ impl GatewayClientBuilder {
             primary_module,
         }
     }
-}
 
-impl GatewayClientBuilder {
     pub async fn build(
         &self,
         config: FederationConfig,
