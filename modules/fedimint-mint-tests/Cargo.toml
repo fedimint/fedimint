@@ -30,7 +30,7 @@ serde = { workspace = true }
 strum = { workspace = true }
 tbs = { package = "fedimint-tbs", version = "=0.5.0-alpha", path = "../../crypto/tbs" }
 threshold_crypto = { workspace = true }
-tokio = { version = "1.38.1", features = ["sync"] }
+tokio = { version = "1.39.2", features = ["sync"] }
 tracing = { workspace = true }
 
 [dev-dependencies]

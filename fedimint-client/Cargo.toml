@@ -40,7 +40,7 @@ serde_json = { workspace = true }
 strum = { workspace = true }
 strum_macros = { workspace = true }
 thiserror = { workspace = true }
-tokio = { version = "1.38.1", features = [ "time", "macros", "rt" ] }
+tokio = { version = "1.39.2", features = [ "time", "macros", "rt" ] }
 tokio-stream = { version = "0.1.15", features = [ "time", "sync" ] }
 tracing = { workspace = true }
 

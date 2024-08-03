@@ -48,5 +48,5 @@ serde_json = { workspace = true }
 strum = { workspace = true }
 strum_macros = { workspace = true }
 thiserror = { workspace = true }
-tokio = { version = "1.38.1", features = ["macros"] }
+tokio = { version = "1.39.2", features = ["macros"] }
 tracing = { workspace = true }
