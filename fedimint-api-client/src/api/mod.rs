@@ -963,23 +963,29 @@ where
 {
     #[instrument(level = "trace", fields(peer = %self.peer_id, %method), skip_all)]
     pub async fn request(&self, method: &str, params: &[Value]) -> JsonRpcResult<Value> {
+        // Strategies using timeouts often depend on failing requests returning quickly,
+        // so every request gets only one reconnection attempt.
+        const RETRIES: usize = 1;
+
         for attempts in 0.. {
-            debug_assert!(attempts <= 1);
+            // The `match` statement below should always return if `RETRIES <= attempts`, so
+            // if we're looping again and `attempts` is greater than `RETRIES`, we have a
+            // bug.
+            debug_assert!(attempts <= RETRIES);
+
             let rclient = self.client.read().await;
             match rclient.client.get_try().await {
                 Ok(client) if client.is_connected() => {
                     return client.request::<_, _>(method, params).await;
                 }
                 Err(e) => {
-                    // Strategies using timeouts often depend on failing requests returning quickly,
-                    // so every request gets only one reconnection attempt.
-                    if 0 < attempts {
+                    if RETRIES <= attempts {
                         return Err(JsonRpcClientError::Transport(e.into()));
                     }
                     debug!(target: LOG_CLIENT_NET_API, err=%e, "Triggering reconnection after connection error");
                 }
                 Ok(_client) => {
-                    if 0 < attempts {
+                    if RETRIES <= attempts {
                         return Err(JsonRpcClientError::Transport(
                             anyhow::format_err!("Disconnected").into(),
                         ));
@@ -988,6 +994,7 @@ where
                 }
             };
 
+            // Drop read lock so we can take the write lock, which is needed to reconnect.
             drop(rclient);
             let mut wclient = self.client.write().await;
             match wclient.client.get_try().await {
