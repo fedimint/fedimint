@@ -13,7 +13,7 @@ path = "src/main.rs"
 anyhow = { version = "1.0.86", features = ["backtrace"] }
 axum = { version = "0.7.5", features = ["tracing"] }
 bitcoincore-rpc = { workspace = true }
-clap = { version = "4.5.11", features = [
+clap = { version = "4.5.13", features = [
     "derive",
     "env",
     "std",
