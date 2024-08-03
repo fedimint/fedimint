@@ -33,5 +33,5 @@ lightning-invoice = { workspace = true }
 semver = { workspace = true }
 serde_json = { workspace = true }
 substring = "1.4.5"
-tokio = { version = "1.38.1", features = ["sync"] }
+tokio = { version = "1.39.2", features = ["sync"] }
 tracing = { workspace = true }

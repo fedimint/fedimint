@@ -63,7 +63,7 @@ serde_json = { workspace = true }
 strum = { workspace = true }
 strum_macros = { workspace = true }
 thiserror = { workspace = true }
-tokio = { version = "1.38", features = ["full"] }
+tokio = { version = "1.39", features = ["full"] }
 tokio-stream = "0.1.15"
 tonic = { version = "0.12.1", features = ["transport", "tls"] }
 tonic_lnd = { workspace = true }

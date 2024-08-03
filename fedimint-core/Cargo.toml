@@ -64,13 +64,13 @@ tokio-test = "0.4.4"
 tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
 
 [target.'cfg(not(target_family = "wasm"))'.dependencies]
-tokio = { version = "1.38.1", features = ["full", "tracing"] }
+tokio = { version = "1.39.2", features = ["full", "tracing"] }
 tokio-rustls = { workspace = true }
 
 [target.'cfg(target_family = "wasm")'.dependencies]
 jsonrpsee-wasm-client = "0.24.0"
 async-lock = "3.4"
-tokio = "1.38.0"
+tokio = "1.39.2"
 futures-util = { workspace = true }
 # getrandom is transitive dependency of rand
 # on wasm, we need to enable the js backend
