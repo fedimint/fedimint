@@ -39,7 +39,7 @@ futures = { workspace = true }
 hex = { version = "0.4.3", features = ["serde"] }
 imbl = "3.0.0"
 itertools = { workspace = true }
-jsonrpsee-core = { version = "0.24.0", features = ["client"] }
+jsonrpsee-core = { version = "0.24.2", features = ["client"] }
 lightning = { workspace = true }
 lightning-invoice = { workspace = true }
 macro_rules_attribute = "0.2.0"
@@ -68,7 +68,7 @@ tokio = { version = "1.39.2", features = ["full", "tracing"] }
 tokio-rustls = { workspace = true }
 
 [target.'cfg(target_family = "wasm")'.dependencies]
-jsonrpsee-wasm-client = "0.24.0"
+jsonrpsee-wasm-client = "0.24.2"
 async-lock = "3.4"
 tokio = "1.39.2"
 futures-util = { workspace = true }
