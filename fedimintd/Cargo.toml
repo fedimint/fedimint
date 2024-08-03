@@ -58,7 +58,7 @@ http = "1.1"
 http-body = "1.0"
 hyper = { version = "1.4", features = ["full"] }
 itertools = { workspace = true }
-jsonrpsee = { version = "0.24.0", features = ["server"] }
+jsonrpsee = { version = "0.24.2", features = ["server"] }
 rand = { workspace = true }
 rcgen = "0.13.1"
 ring = "0.17.8"
