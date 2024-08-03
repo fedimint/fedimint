@@ -29,7 +29,7 @@ lru = "0.12.3"
 serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
-tokio = { version = "1.38.1", features = ["sync", "io-util"] }
+tokio = { version = "1.39.2", features = ["sync", "io-util"] }
 tracing = { workspace = true }
 
 [dev-dependencies]
@@ -40,7 +40,7 @@ tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
 jsonrpsee-ws-client = { version = "0.24.0", features = [
     "tls",
 ], default-features = false }
-tokio = { version = "1.38.0", features = ["full", "tracing"] }
+tokio = { version = "1.39.2", features = ["full", "tracing"] }
 tokio-rustls = { version = "0.26.0", default-features = false, features = [
     "logging",
     "tls12",
