@@ -15,7 +15,7 @@ name = "fedimint_lnv2_common"
 path = "src/lib.rs"
 
 [dependencies]
-anyhow = "1.0.86"
+anyhow = { workspace = true }
 bitcoin = { workspace = true }
 bitcoin_hashes = { workspace = true }
 fedimint-client = { workspace = true }

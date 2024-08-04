@@ -11,8 +11,8 @@ name = "fedimint_lnv2_server"
 path = "src/lib.rs"
 
 [dependencies]
-anyhow = "1.0.86"
-async-trait = "0.1.81"
+anyhow = { workspace = true }
+async-trait = { workspace = true }
 bls12_381 = { workspace = true }
 erased-serde = { workspace = true }
 fedimint-bitcoind = { path = "../../fedimint-bitcoind", version = "=0.5.0-alpha" }

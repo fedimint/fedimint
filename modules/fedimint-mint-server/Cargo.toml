@@ -38,4 +38,4 @@ tracing = { workspace = true }
 [dev-dependencies]
 assert_matches = { workspace = true }
 test-log = { version = "0.2", features = ["trace"], default-features = false }
-tokio = { version = "1.39.2", features = ["full"] }
+tokio = { workspace = true }

@@ -30,7 +30,6 @@ fedimint-wallet-common = { path = "../fedimint-wallet-common" }
 fedimint-wallet-server = { path = "../fedimint-wallet-server" }
 futures = { workspace = true }
 rand = { workspace = true }
-secp256k1 = { version = "0.27.0", features = [ "serde" ] }
 strum = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }

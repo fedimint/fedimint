@@ -68,7 +68,7 @@ sha3 = "0.10.8"
 tbs = { package = "fedimint-tbs", version = "=0.5.0-alpha", path = "../crypto/tbs" }
 thiserror = { workspace = true }
 threshold_crypto = { workspace = true }
-tokio = { version = "1.39.2", features = ["full", "tracing"] }
+tokio = { workspace = true }
 tokio-rustls = { workspace = true }
 tokio-util = { version = "0.7.11", features = ["codec"] }
 tower = { version = "0.4", features = ["util"] }

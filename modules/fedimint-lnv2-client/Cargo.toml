@@ -19,10 +19,10 @@ name = "fedimint_lnv2_client"
 path = "src/lib.rs"
 
 [dependencies]
-anyhow = "1.0.86"
-aquamarine = "0.5.0"
-async-stream = "0.3.5"
-async-trait = "0.1.81"
+anyhow = { workspace = true }
+aquamarine = { workspace = true }
+async-stream = { workspace = true }
+async-trait = { workspace = true }
 bitcoin = { workspace = true }
 clap = { workspace = true, optional = true }
 erased-serde = { workspace = true }

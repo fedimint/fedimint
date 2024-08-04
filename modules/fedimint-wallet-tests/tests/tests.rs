@@ -2,7 +2,7 @@ use std::time::Duration;
 
 use anyhow::{bail, Context};
 use assert_matches::assert_matches;
-use bitcoin::secp256k1::rand::rngs::OsRng;
+use bitcoin::secp256k1;
 use fedimint_client::secret::{PlainRootSecretStrategy, RootSecretStrategy};
 use fedimint_client::ClientHandleArc;
 use fedimint_core::bitcoin_migration::checked_address_to_unchecked_address;
@@ -25,6 +25,7 @@ use fedimint_wallet_common::txoproof::PegInProof;
 use fedimint_wallet_common::{PegOutFees, Rbf};
 use fedimint_wallet_server::WalletInit;
 use futures::stream::StreamExt;
+use secp256k1::rand::rngs::OsRng;
 use tracing::info;
 
 fn fixtures() -> Fixtures {
@@ -497,7 +498,7 @@ async fn peg_ins_that_are_unconfirmed_are_rejected() -> anyhow::Result<()> {
     let module_instance_id = 1;
     let root_secret =
         PlainRootSecretStrategy::to_root_secret(&PlainRootSecretStrategy::random(&mut OsRng));
-    let secp = bitcoin::secp256k1::Secp256k1::new();
+    let secp = secp256k1::Secp256k1::new();
     let tweak_key = root_secret.to_secp_key(&secp);
     let pk = tweak_key.public_key();
     let wallet_config: WalletConfig = wallet_server_cfg[0].to_typed()?;
@@ -660,7 +661,8 @@ mod fedimint_migration_tests {
     use bitcoin::hashes::Hash;
     use bitcoin::psbt::{Input, PartiallySignedTransaction};
     use bitcoin::{
-        Amount, BlockHash, ScriptBuf, Sequence, Transaction, TxIn, TxOut, Txid, WPubkeyHash,
+        secp256k1, Amount, BlockHash, ScriptBuf, Sequence, Transaction, TxIn, TxOut, Txid,
+        WPubkeyHash,
     };
     use fedimint_client::module::init::DynClientModuleInit;
     use fedimint_core::db::{
