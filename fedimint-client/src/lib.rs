@@ -90,6 +90,7 @@ use std::time::Duration;
 use anyhow::{anyhow, bail, ensure, Context};
 use async_stream::{stream, try_stream};
 use backup::ClientBackup;
+use bitcoin::secp256k1;
 use db::{
     apply_migrations_client, apply_migrations_core_client, get_core_client_database_migrations,
     ApiSecretKey, CachedApiVersionSet, CachedApiVersionSetKey, ClientConfigKey, ClientInitStateKey,
@@ -134,7 +135,7 @@ use meta::{LegacyMetaSource, MetaService};
 use module::recovery::RecoveryProgress;
 use module::{DynClientModule, FinalClient};
 use rand::thread_rng;
-use secp256k1_zkp::{PublicKey, Secp256k1};
+use secp256k1::{PublicKey, Secp256k1};
 use secret::{DeriveableSecretClientExt, PlainRootSecretStrategy, RootSecretStrategy as _};
 use serde::Deserialize;
 use thiserror::Error;
@@ -774,7 +775,7 @@ pub struct Client {
     api: DynGlobalApi,
     root_secret: DerivableSecret,
     operation_log: OperationLog,
-    secp_ctx: Secp256k1<secp256k1_zkp::All>,
+    secp_ctx: Secp256k1<secp256k1::All>,
     meta_service: Arc<MetaService>,
 
     task_group: TaskGroup,
@@ -1887,7 +1888,7 @@ impl Client {
     /// once this function is guaranteed to return immediately.
     pub async fn get_guardian_public_keys_blocking(
         &self,
-    ) -> BTreeMap<PeerId, secp256k1_zkp::PublicKey> {
+    ) -> BTreeMap<PeerId, secp256k1::PublicKey> {
         self.db.autocommit(|dbtx, _| Box::pin(async move {
             let config = self.config().await;
 
