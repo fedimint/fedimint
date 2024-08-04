@@ -457,6 +457,8 @@ impl ExecutorInner {
             /// One of trigger futures of a state machine finished and
             /// returned transition function to run
             Triggered(TransitionForActiveState),
+            /// The state machine did not need to run, so it was canceled
+            Invalid { state: DynState },
             /// Transition function and all the accounting around it are done
             Completed {
                 state: DynState,
@@ -478,6 +480,12 @@ impl ExecutorInner {
         // in case.
         let mut currently_running_sms = HashSet::<DynState>::new();
         // All things happening in parallel go into here
+        // NOTE: `FuturesUnordered` is a footgun: when it's not being polled
+        // (e.g. we picked an event and are awaiting on something to process it),
+        // nothing inside `futures` will be making progress, which in extreme cases
+        // could lead to hangs. For this reason we try really hard in the code here,
+        // to pick an event from `futures` and spawn a new task, avoiding any `await`,
+        // just so we can get back to `futures.next()` ASAP.
         let mut futures: FuturesUnordered<BoxFuture<'_, ExecutorLoopEvent>> =
             FuturesUnordered::new();
 
@@ -504,29 +512,31 @@ impl ExecutorInner {
                         warn!(target: LOG_CLIENT_REACTOR, operation_id = %state.operation_id().fmt_short(), "Received a state machine that is already running. Ignoring");
                         continue;
                     }
-                    let Some(meta) = self.get_active_state(&state).await else {
-                        warn!(target: LOG_CLIENT_REACTOR, operation_id = %state.operation_id().fmt_short(), "Couldn't look up received state machine. Ignoring.");
-                        continue;
-                    };
-
-                    let transitions = self
-                        .get_transition_for(&state, meta, &global_context_gen)
-                        .await;
-                    if transitions.is_empty() {
-                        warn!(target: LOG_CLIENT_REACTOR, operation_id = %state.operation_id().fmt_short(), "Received an active state that doesn't produce any transitions. Ignoring.");
-                        continue;
-                    }
-
-                    let transitions_num = transitions.len();
                     currently_running_sms.insert(state.clone());
-                    futures.push(Box::pin(async {
+                    let futures_len = futures.len();
+                    let global_context_gen = &global_context_gen;
+                    trace!(target: LOG_CLIENT_REACTOR, state = ?state, "Started new active state machine, details.");
+                    futures.push(Box::pin(async move {
+                        let Some(meta) = self.get_active_state(&state).await else {
+                            warn!(target: LOG_CLIENT_REACTOR, operation_id = %state.operation_id().fmt_short(), "Couldn't look up received state machine. Ignoring.");
+                            return ExecutorLoopEvent::Invalid { state: state.clone() };
+                        };
+
+                        let transitions = self
+                            .get_transition_for(&state, meta, global_context_gen)
+                            .await;
+                        if transitions.is_empty() {
+                            warn!(target: LOG_CLIENT_REACTOR, operation_id = %state.operation_id().fmt_short(), "Received an active state that doesn't produce any transitions. Ignoring.");
+                            return ExecutorLoopEvent::Invalid { state: state.clone() };
+                        }
+                        let transitions_num = transitions.len();
+
+                        debug!(target: LOG_CLIENT_REACTOR, operation_id = %state.operation_id().fmt_short(), total = futures_len + 1, transitions_num, "New active state machine.");
+
                         let (first_completed_result, _index, _unused_transitions) =
                             select_all(transitions).await;
                         ExecutorLoopEvent::Triggered(first_completed_result)
                     }));
-
-                    debug!(target: LOG_CLIENT_REACTOR, operation_id = %state.operation_id().fmt_short(), total = futures.len(), transitions_num, "New active state machine.");
-                    trace!(target: LOG_CLIENT_REACTOR, state = ?state, "Started new active state machine, details.");
                 }
                 ExecutorLoopEvent::Triggered(TransitionForActiveState {
                     outcome,
@@ -656,6 +666,18 @@ impl ExecutorInner {
                         )
                     });
                 }
+                ExecutorLoopEvent::Invalid { state } => {
+                    trace!(
+                        target: LOG_CLIENT_REACTOR,
+                        operation_id = %state.operation_id().fmt_short(), total = futures.len(),
+                        "State invalid"
+                    );
+                    assert!(
+                        currently_running_sms.remove(&state),
+                        "State must have been recorded"
+                    );
+                }
+
                 ExecutorLoopEvent::Completed { state, outcome } => {
                     assert!(
                         currently_running_sms.remove(&state),
