@@ -134,6 +134,7 @@ where
     module_api: DynModuleApi,
     context: ClientContext<<C as ClientModuleInit>::Module>,
     progress_tx: tokio::sync::watch::Sender<RecoveryProgress>,
+    task_group: TaskGroup,
 }
 
 impl<C> ClientModuleRecoverArgs<C>
@@ -154,6 +155,10 @@ where
 
     pub fn db(&self) -> &Database {
         &self.db
+    }
+
+    pub fn task_group(&self) -> &TaskGroup {
+        &self.task_group
     }
 
     pub fn core_api_version(&self) -> &ApiVersion {
@@ -278,6 +283,7 @@ pub trait IClientModuleInit: IDynCommonModuleInit + Debug + MaybeSend + MaybeSyn
         admin_auth: Option<ApiAuth>,
         snapshot: Option<&DynModuleBackup>,
         progress_tx: watch::Sender<RecoveryProgress>,
+        task_group: TaskGroup,
     ) -> anyhow::Result<()>;
 
     #[allow(clippy::too_many_arguments)]
@@ -339,6 +345,7 @@ where
         admin_auth: Option<ApiAuth>,
         snapshot: Option<&DynModuleBackup>,
         progress_tx: watch::Sender<RecoveryProgress>,
+        task_group: TaskGroup,
     ) -> anyhow::Result<()> {
         let typed_cfg: &<<T as fedimint_core::module::ModuleInit>::Common as CommonModuleInit>::ClientConfig = cfg.cast()?;
         let snapshot: Option<&<<Self as ClientModuleInit>::Module as ClientModule>::Backup> =
@@ -369,6 +376,7 @@ where
                         _marker: marker::PhantomData,
                     },
                     progress_tx,
+                    task_group,
                 },
                 snapshot,
             )
