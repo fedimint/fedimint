@@ -8,7 +8,7 @@ use fedimint_core::epoch::ConsensusItem;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::module::{ApiVersion, ModuleCommon};
 use fedimint_core::session_outcome::{AcceptedItem, SessionStatus};
-use fedimint_core::task::{MaybeSend, MaybeSync};
+use fedimint_core::task::{MaybeSend, MaybeSync, ShuttingDownError, TaskGroup};
 use fedimint_core::transaction::Transaction;
 use fedimint_core::{apply, async_trait_maybe_send, OutPoint};
 use fedimint_logging::LOG_CLIENT_RECOVERY;
@@ -236,7 +236,9 @@ where
             core_api_version: ApiVersion,
             decoders: ModuleDecoderRegistry,
             epoch_range: ops::Range<u64>,
-        ) -> impl futures::Stream<Item = (u64, Vec<AcceptedItem>)> + 'a {
+            task_group: TaskGroup,
+        ) -> impl futures::Stream<Item = Result<(u64, Vec<AcceptedItem>), ShuttingDownError>> + 'a
+        {
             // How many request for blocks to run in parallel (streaming).
             const PARALLISM_LEVEL: usize = 64;
             const VERSION_THAT_INTRODUCED_GET_SESSION_STATUS: ApiVersion =
@@ -246,45 +248,53 @@ where
                 .map(move |session_idx| {
                     let api = api.clone();
                     let decoders = decoders.clone();
+                    let task_group = task_group.clone();
+
                     Box::pin(async move {
-                        info!(session_idx, "Fetching epoch");
+                        // NOTE: Each block is fetched in a spawned task. This avoids a footgun
+                        // of stuff in streams not making any progress when the stream itself
+                        // is not being polled, and possibly can increase the fetching performance.
+                        task_group.spawn_cancellable("recovery fetch block", async move {
 
-                        let mut retry_sleep = Duration::from_millis(10);
-                        let block = loop {
-                            trace!(target: LOG_CLIENT_RECOVERY, session_idx, "Awaiting signed block");
+                            info!(session_idx, "Fetching epoch");
 
-                            let items_res = if core_api_version < VERSION_THAT_INTRODUCED_GET_SESSION_STATUS {
-                                api.await_block(session_idx, &decoders).await.map(|s| s.items)
-                            } else {
-                                api.get_session_status(session_idx, &decoders).await.map(|s| match s {
-                                    SessionStatus::Initial => panic!("Federation missing session that existed when we started recovery"),
-                                    SessionStatus::Pending(items) => items,
-                                    SessionStatus::Complete(s) => s.items,
-                                })
+                            let mut retry_sleep = Duration::from_millis(10);
+                            let block = loop {
+                                trace!(target: LOG_CLIENT_RECOVERY, session_idx, "Awaiting signed block");
+
+                                let items_res = if core_api_version < VERSION_THAT_INTRODUCED_GET_SESSION_STATUS {
+                                    api.await_block(session_idx, &decoders).await.map(|s| s.items)
+                                } else {
+                                    api.get_session_status(session_idx, &decoders).await.map(|s| match s {
+                                        SessionStatus::Initial => panic!("Federation missing session that existed when we started recovery"),
+                                        SessionStatus::Pending(items) => items,
+                                        SessionStatus::Complete(s) => s.items,
+                                    })
+                                };
+
+                                match items_res {
+                                    Ok(block) => {
+                                        debug!(target: LOG_CLIENT_RECOVERY, session_idx, "Got signed session");
+                                        break block
+                                    },
+                                    Err(e) => {
+                                        const MAX_SLEEP: Duration = Duration::from_secs(120);
+
+                                        warn!(target: LOG_CLIENT_RECOVERY, e = %e, session_idx, "Error trying to fetch signed block");
+                                        // We don't want PARALLISM_LEVEL tasks hammering Federation
+                                        // with requests, so max sleep is significant
+                                        if retry_sleep <= MAX_SLEEP {
+                                            retry_sleep = retry_sleep
+                                                + thread_rng().gen_range(Duration::ZERO..=retry_sleep);
+                                        }
+                                        fedimint_core::runtime::sleep(cmp::min(retry_sleep, MAX_SLEEP))
+                                            .await;
+                                    }
+                                }
                             };
 
-                            match items_res {
-                                Ok(block) => {
-                                    debug!(target: LOG_CLIENT_RECOVERY, session_idx, "Got signed session");
-                                    break block
-                                },
-                                Err(e) => {
-                                    const MAX_SLEEP: Duration = Duration::from_secs(120);
-
-                                    warn!(target: LOG_CLIENT_RECOVERY, e = %e, session_idx, "Error trying to fetch signed block");
-                                    // We don't want PARALLISM_LEVEL tasks hammering Federation
-                                    // with requests, so max sleep is significant
-                                    if retry_sleep <= MAX_SLEEP {
-                                        retry_sleep = retry_sleep
-                                            + thread_rng().gen_range(Duration::ZERO..=retry_sleep);
-                                    }
-                                    fedimint_core::runtime::sleep(cmp::min(retry_sleep, MAX_SLEEP))
-                                        .await;
-                                }
-                            }
-                        };
-
-                        (session_idx, block)
+                            (session_idx, block)
+                        }).await.expect("Can't fail")
                     })
                 })
                 .buffered(PARALLISM_LEVEL)
@@ -296,7 +306,8 @@ where
             client_ctx: &ClientContext<<Init as ClientModuleInit>::Module>,
             common_state: &mut RecoveryFromHistoryCommon,
             state: &mut Recovery,
-            block_stream: &mut (impl Stream<Item = (u64, Vec<AcceptedItem>)> + Unpin),
+            block_stream: &mut (impl Stream<Item = Result<(u64, Vec<AcceptedItem>), ShuttingDownError>>
+                      + Unpin),
         ) -> anyhow::Result<()>
         where
             Init: ClientModuleInit,
@@ -325,9 +336,11 @@ where
             );
 
             for _ in block_range {
-                let Some((session_idx, accepted_items)) = block_stream.next().await else {
+                let Some(res) = block_stream.next().await else {
                     break;
                 };
+
+                let (session_idx, accepted_items) = res?;
 
                 assert_eq!(common_state.next_session, session_idx);
                 state
@@ -398,6 +411,7 @@ where
             *self.core_api_version(),
             client_ctx.decoders(),
             block_stream_session_range,
+            self.task_group().clone(),
         );
         let client_ctx = self.context();
 
