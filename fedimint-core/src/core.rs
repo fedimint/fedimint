@@ -134,13 +134,9 @@ pub trait IntoDynInstance {
     fn into_dyn(self, instance_id: ModuleInstanceId) -> Self::DynType;
 }
 
-enum Never {}
-
 /// Type that can be used as type-system placeholder for [`IntoDynInstance`]
 pub struct IntoDynNever<T> {
     _phantom: marker::PhantomData<T>,
-    // you can't make that
-    _never: Never,
 }
 
 impl<T> cmp::PartialEq for IntoDynNever<T> {
