@@ -8,10 +8,8 @@ use core::fmt;
 use std::any::Any;
 use std::borrow::Cow;
 use std::fmt::{Debug, Display, Formatter};
-use std::{cmp, marker};
 
-use fedimint_core::encoding::{Decodable, DecodeError, DynEncodable, Encodable};
-use fedimint_core::module::registry::ModuleDecoderRegistry;
+use fedimint_core::encoding::{Decodable, DynEncodable, Encodable};
 use serde::{Deserialize, Serialize};
 
 use crate::{
@@ -129,57 +127,6 @@ pub trait IntoDynInstance {
 
     /// Convert `self` into its type-erased equivalent
     fn into_dyn(self, instance_id: ModuleInstanceId) -> Self::DynType;
-}
-
-/// Type that can be used as type-system placeholder for [`IntoDynInstance`]
-pub struct IntoDynNever<T> {
-    _phantom: marker::PhantomData<T>,
-}
-
-impl<T> cmp::PartialEq for IntoDynNever<T> {
-    fn eq(&self, _: &Self) -> bool {
-        unreachable!()
-    }
-}
-
-impl<T> cmp::Eq for IntoDynNever<T> {}
-
-impl<T> fmt::Debug for IntoDynNever<T> {
-    fn fmt(&self, _: &mut Formatter<'_>) -> fmt::Result {
-        unreachable!()
-    }
-}
-
-impl<T> Clone for IntoDynNever<T> {
-    fn clone(&self) -> Self {
-        unreachable!()
-    }
-}
-
-impl<T> Encodable for IntoDynNever<T> {
-    fn consensus_encode<W: std::io::Write>(&self, _: &mut W) -> Result<usize, std::io::Error> {
-        unreachable!()
-    }
-}
-
-impl<T> Decodable for IntoDynNever<T> {
-    fn consensus_decode<R: std::io::Read>(
-        _: &mut R,
-        _: &ModuleDecoderRegistry,
-    ) -> Result<Self, DecodeError> {
-        unreachable!()
-    }
-}
-
-impl<T> IntoDynInstance for IntoDynNever<T>
-where
-    T: 'static,
-{
-    type DynType = T;
-
-    fn into_dyn(self, _instance_id: ModuleInstanceId) -> Self::DynType {
-        unreachable!()
-    }
 }
 
 pub trait IClientConfig: Debug + Display + DynEncodable {
