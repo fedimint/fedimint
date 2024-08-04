@@ -17,7 +17,7 @@ path = "src/lib.rs"
 
 [dependencies]
 anyhow = { workspace = true }
-async-trait = "0.1.81"
+async-trait = { workspace = true }
 erased-serde = { workspace = true }
 fedimint-core = { workspace = true }
 fedimint-logging = { workspace = true }
