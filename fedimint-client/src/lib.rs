@@ -1414,6 +1414,8 @@ impl Client {
             )
         }
 
+        // NOTE: `FuturesUnordered` is a footgun, but since we only poll it for result
+        // and make a single async db write operation, it should be OK.
         let mut requests = FuturesUnordered::new();
 
         for peer_id in num_peers.peer_ids() {
