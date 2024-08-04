@@ -21,6 +21,7 @@ use tracing::{error, info};
 
 use super::{ChannelInfo, ILnRpcClient, LightningRpcError, RouteHtlcStream};
 use crate::gateway_lnrpc::create_invoice_request::Description;
+use crate::gateway_lnrpc::get_route_hints_response::{RouteHint, RouteHintHop};
 use crate::gateway_lnrpc::intercept_htlc_response::{Action, Settle};
 use crate::gateway_lnrpc::{
     CloseChannelsWithPeerResponse, CreateInvoiceRequest, CreateInvoiceResponse, EmptyResponse,
@@ -239,13 +240,59 @@ impl ILnRpcClient for GatewayLdkClient {
 
     async fn routehints(
         &self,
-        _num_route_hints: usize,
+        num_route_hints: usize,
     ) -> Result<GetRouteHintsResponse, LightningRpcError> {
-        // TODO: Return real route hints. Not strictly necessary but would be nice to
-        // have.
-        Ok(GetRouteHintsResponse {
-            route_hints: vec![],
-        })
+        let mut channels = self.node.list_channels();
+
+        // Take the channels with the largest incoming capacity
+        channels.sort_by(|a, b| b.inbound_capacity_msat.cmp(&a.inbound_capacity_msat));
+
+        let mut route_hints: Vec<RouteHint> = vec![];
+        for chan in &channels {
+            if route_hints.len() >= num_route_hints {
+                break;
+            }
+
+            let short_channel_id = match chan.funding_txo {
+                Some(funding_outpoint) => match self.outpoint_to_scid(funding_outpoint).await {
+                    Ok(scid) => scid,
+                    Err(e) => {
+                        error!(?e, "Failed to convert outpoint to short channel ID");
+                        continue;
+                    }
+                },
+                None => continue,
+            };
+            let Some(base_msat) = chan.counterparty_forwarding_info_fee_base_msat else {
+                continue;
+            };
+            let Some(proportional_millionths) =
+                chan.counterparty_forwarding_info_fee_proportional_millionths
+            else {
+                continue;
+            };
+            let cltv_expiry_delta = match chan.cltv_expiry_delta {
+                Some(cltv_expiry_delta) => cltv_expiry_delta.into(),
+                None => continue,
+            };
+            let htlc_minimum_msat = Some(chan.inbound_htlc_minimum_msat);
+            let htlc_maximum_msat = chan.inbound_htlc_maximum_msat;
+
+            let route_hint_hop = RouteHintHop {
+                src_node_id: chan.counterparty_node_id.serialize().to_vec(),
+                short_channel_id,
+                base_msat,
+                proportional_millionths,
+                cltv_expiry_delta,
+                htlc_minimum_msat,
+                htlc_maximum_msat,
+            };
+            route_hints.push(RouteHint {
+                hops: vec![route_hint_hop],
+            });
+        }
+
+        Ok(GetRouteHintsResponse { route_hints })
     }
 
     // TODO: Respect `max_delay` and `max_fee` parameters.
@@ -474,7 +521,7 @@ impl ILnRpcClient for GatewayLdkClient {
             .node
             .list_channels()
             .iter()
-            .filter(|channel| channel.is_channel_ready)
+            .filter(|channel| channel.is_usable)
         {
             channels.push(ChannelInfo {
                 remote_pubkey: channel_details.counterparty_node_id.to_string(),
