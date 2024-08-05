@@ -35,6 +35,8 @@ runLowPrio cargo nextest run --no-run ${CARGO_PROFILE:+--cargo-profile ${CARGO_P
 # If you really need to break this rule, ping dpc
 export FM_CARGO_DENY_COMPILATION=1
 
+export FM_FED_SIZE=5
+
 function rust_unit_tests() {
   # unit tests don't use binaries from old versions, so there's no need to run for backwards-compatibility tests
   if [ -z "${FM_BACKWARDS_COMPATIBILITY_TEST:-}" ]; then
