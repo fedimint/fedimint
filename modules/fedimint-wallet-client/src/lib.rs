@@ -526,13 +526,7 @@ impl WalletClientModule {
 
     fn get_rpc_config(cfg: &WalletClientConfig) -> BitcoinRpcConfig {
         if let Ok(rpc_config) = BitcoinRpcConfig::get_defaults_from_env_vars() {
-            // TODO: Wallet client cannot support bitcoind RPC until the bitcoin dep is
-            // updated to 0.30
-            if rpc_config.kind == "bitcoind" {
-                cfg.default_bitcoin_rpc.clone()
-            } else {
-                rpc_config
-            }
+            rpc_config
         } else {
             cfg.default_bitcoin_rpc.clone()
         }
