@@ -193,7 +193,7 @@ pub trait GatewayConnection: std::fmt::Debug {
         &self,
         gateway_api: GatewayEndpoint,
         payload: CreateBolt11InvoicePayload,
-    ) -> Result<Result<Bolt11Invoice, String>, GatewayError>;
+    ) -> Result<Bolt11Invoice, GatewayError>;
 
     async fn try_gateway_send_payment(
         &self,
@@ -202,7 +202,7 @@ pub trait GatewayConnection: std::fmt::Debug {
         contract: OutgoingContract,
         invoice: LightningInvoice,
         auth: Signature,
-    ) -> anyhow::Result<Result<Result<[u8; 32], Signature>, String>>;
+    ) -> Result<Result<[u8; 32], Signature>, GatewayError>;
 }
 
 #[derive(Debug)]
@@ -227,16 +227,17 @@ impl GatewayConnection for RealGatewayConnection {
             .send()
             .await
             .map_err(|e| GatewayError::Unreachable(e.to_string()))?
-            .json::<Option<RoutingInfo>>()
+            .json::<Result<Option<RoutingInfo>, String>>()
             .await
-            .map_err(|e| GatewayError::InvalidJsonResponse(e.to_string()))
+            .map_err(|e| GatewayError::InvalidJsonResponse(e.to_string()))?
+            .map_err(|e| GatewayError::Request(e.to_string()))
     }
 
     async fn fetch_invoice(
         &self,
         gateway_api: GatewayEndpoint,
         payload: CreateBolt11InvoicePayload,
-    ) -> Result<Result<Bolt11Invoice, String>, GatewayError> {
+    ) -> Result<Bolt11Invoice, GatewayError> {
         reqwest::Client::new()
             .post(
                 gateway_api
@@ -251,7 +252,8 @@ impl GatewayConnection for RealGatewayConnection {
             .map_err(|e| GatewayError::Unreachable(e.to_string()))?
             .json::<Result<Bolt11Invoice, String>>()
             .await
-            .map_err(|e| GatewayError::InvalidJsonResponse(e.to_string()))
+            .map_err(|e| GatewayError::InvalidJsonResponse(e.to_string()))?
+            .map_err(|e| GatewayError::Request(e.to_string()))
     }
 
     async fn try_gateway_send_payment(
@@ -261,8 +263,8 @@ impl GatewayConnection for RealGatewayConnection {
         contract: OutgoingContract,
         invoice: LightningInvoice,
         auth: Signature,
-    ) -> anyhow::Result<Result<Result<[u8; 32], Signature>, String>> {
-        let result = reqwest::Client::new()
+    ) -> Result<Result<[u8; 32], Signature>, GatewayError> {
+        reqwest::Client::new()
             .post(
                 gateway_api
                     .into_url()
@@ -277,10 +279,11 @@ impl GatewayConnection for RealGatewayConnection {
                 auth,
             })
             .send()
-            .await?
+            .await
+            .map_err(|e| GatewayError::Unreachable(e.to_string()))?
             .json::<Result<Result<[u8; 32], Signature>, String>>()
-            .await?;
-
-        Ok(result)
+            .await
+            .map_err(|e| GatewayError::InvalidJsonResponse(e.to_string()))?
+            .map_err(|e| GatewayError::Request(e.to_string()))
     }
 }

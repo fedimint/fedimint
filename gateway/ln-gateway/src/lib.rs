@@ -1434,20 +1434,29 @@ impl Gateway {
 
     /// Returns payment information that LNv2 clients can use to instruct this
     /// Gateway to pay an invoice or receive a payment.
-    pub async fn routing_info_v2(&self, federation_id: &FederationId) -> Option<RoutingInfo> {
-        Some(RoutingInfo {
-            public_key: self.public_key_v2(federation_id).await?,
-            send_fee_default: PaymentFee::SEND_FEE_LIMIT_DEFAULT,
-            // The base fee ensures that the gateway does not loose sats sending the payment due to
-            // fees paid on the transaction claiming the outgoing contract or subsequent
-            // transactions spending the newly issued ecash
-            send_fee_minimum: PaymentFee::SEND_FEE_MINIMUM,
-            // The base fee ensures that the gateway does not loose sats receiving the payment due
-            // to fees paid on the transaction funding the incoming contract
-            receive_fee: PaymentFee::RECEIVE_FEE_LIMIT_DEFAULT,
-            expiration_delta_default: 500,
-            expiration_delta_minimum: EXPIRATION_DELTA_MINIMUM_V2,
-        })
+    pub async fn routing_info_v2(
+        &self,
+        federation_id: &FederationId,
+    ) -> anyhow::Result<Option<RoutingInfo>> {
+        let context = self.get_lightning_context().await?;
+
+        Ok(self
+            .public_key_v2(federation_id)
+            .await
+            .map(|public_key| RoutingInfo {
+                lightning_public_key: context.lightning_public_key,
+                public_key,
+                send_fee_default: PaymentFee::SEND_FEE_LIMIT_DEFAULT,
+                // The base fee ensures that the gateway does not loose sats sending the payment due
+                // to fees paid on the transaction claiming the outgoing contract or
+                // subsequent transactions spending the newly issued ecash
+                send_fee_minimum: PaymentFee::SEND_FEE_MINIMUM,
+                // The base fee ensures that the gateway does not loose sats receiving the payment
+                // due to fees paid on the transaction funding the incoming contract
+                receive_fee: PaymentFee::RECEIVE_FEE_LIMIT_DEFAULT,
+                expiration_delta_default: 500,
+                expiration_delta_minimum: EXPIRATION_DELTA_MINIMUM_V2,
+            }))
     }
 
     pub async fn select_client_v2(
@@ -1489,8 +1498,8 @@ impl Gateway {
 
         let payment_info = self
             .routing_info_v2(&payload.federation_id)
-            .await
-            .ok_or(anyhow!("Payment Info not available"))?;
+            .await?
+            .ok_or(anyhow!("Unknown federation"))?;
 
         if payload.contract.commitment.refund_pk != payment_info.public_key {
             bail!("The outgoing contract keyed to another gateway");
