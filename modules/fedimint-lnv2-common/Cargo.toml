@@ -21,11 +21,11 @@ bitcoin = { workspace = true }
 bitcoin_hashes = { workspace = true }
 fedimint-client = { workspace = true }
 fedimint-core = { workspace = true }
-fedimint-ln-common = { path = "../fedimint-ln-common", version = "=0.4.0-rc.6" }
+fedimint-ln-common = { path = "../fedimint-ln-common", version = "=0.4.0" }
 # crypto deps
 group = { workspace = true }
 secp256k1 = { version = "0.27.0", default-features = false }
 serde = { workspace = true }
 serde_json = "1.0.120"
 thiserror = "1.0.61"
-tpe = { package = "fedimint-tpe", version = "=0.4.0-rc.6", path = "../../crypto/tpe" }
+tpe = { package = "fedimint-tpe", version = "=0.4.0", path = "../../crypto/tpe" }
