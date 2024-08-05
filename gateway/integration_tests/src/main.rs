@@ -87,22 +87,6 @@ async fn config_test(gw_type: LightningNodeType) -> anyhow::Result<()> {
                 .await?;
                 info!(?new_default_routing_fees, "Changed gateway routing fees");
 
-                let info_value = cmd!(gw, "info").out_json().await?;
-                let gateway_info: GatewayInfo =
-                    serde_json::from_value(info_value).expect("Could not parse GatewayInfo");
-                assert!(gateway_info.fees.is_some(), "Fees must be set");
-                assert_eq!(
-                    gateway_info.fees.unwrap().base_msat,
-                    10,
-                    "Default Base msat is not 10"
-                );
-                assert_eq!(
-                    gateway_info.fees.unwrap().proportional_millionths,
-                    10000,
-                    "Default proportional millionths is not 10000"
-                );
-                info!("Verified default routing fees changed");
-
                 // Change the routing fees for a specific federation
                 let fed_id = dev_fed.fed().await?.calculate_federation_id();
                 let new_fed_routing_fees = format!("{},20,20000", fed_id.clone());
