@@ -774,6 +774,9 @@
 <a href="#774" id="774">774</a>
 <a href="#775" id="775">775</a>
 <a href="#776" id="776">776</a>
+<a href="#777" id="777">777</a>
+<a href="#778" id="778">778</a>
+<a href="#779" id="779">779</a>
 </pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_wrap)]
 #![allow(clippy::module_name_repetitions)]
@@ -783,7 +786,7 @@
 <span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::time::Duration;
 
-<span class="kw">use </span>anyhow::ensure;
+<span class="kw">use </span>anyhow::{anyhow, ensure};
 <span class="kw">use </span>bls12_381::{G1Projective, Scalar};
 <span class="kw">use </span>fedimint_bitcoind::{create_bitcoind, DynBitcoindRpc};
 <span class="kw">use </span>fedimint_core::config::{
@@ -1140,6 +1143,9 @@
 
                 <span class="prelude-val">Ok</span>(())
             }
+            LightningConsensusItem::Default { variant, .. } =&gt; <span class="prelude-val">Err</span>(<span class="macro">anyhow!</span>(
+                <span class="string">"Received lnv2 consensus item with unknown variant {variant}"
+            </span>)),
         }
     }
 

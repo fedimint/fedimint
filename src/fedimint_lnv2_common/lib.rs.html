@@ -171,6 +171,11 @@
 <a href="#171" id="171">171</a>
 <a href="#172" id="172">172</a>
 <a href="#173" id="173">173</a>
+<a href="#174" id="174">174</a>
+<a href="#175" id="175">175</a>
+<a href="#176" id="176">176</a>
+<a href="#177" id="177">177</a>
+<a href="#178" id="178">178</a>
 </pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::module_name_repetitions)]
 #![allow(clippy::must_use_candidate)]
@@ -296,6 +301,11 @@
 </span><span class="kw">pub enum </span>LightningConsensusItem {
     BlockCountVote(u64),
     UnixTimeVote(u64),
+    <span class="attr">#[encodable_default]
+    </span>Default {
+        variant: u64,
+        bytes: Vec&lt;u8&gt;,
+    },
 }
 
 <span class="kw">impl </span>std::fmt::Display <span class="kw">for </span>LightningConsensusItem {
