@@ -145,15 +145,10 @@ function use_client_binaries_for_version() {
   version=$1
   if [[ "$version" == "current" ]]; then
     unset FM_FEDIMINT_CLI_BASE_EXECUTABLE
-    unset FM_GATEWAY_CLI_BASE_EXECUTABLE
   else
     var_name=$(nix_binary_version_var_name fedimint-cli "$version")
     FM_FEDIMINT_CLI_BASE_EXECUTABLE="${!var_name}"
     export FM_FEDIMINT_CLI_BASE_EXECUTABLE
-
-    var_name=$(nix_binary_version_var_name gateway-cli "$version")
-    FM_GATEWAY_CLI_BASE_EXECUTABLE="${!var_name}"
-    export FM_GATEWAY_CLI_BASE_EXECUTABLE
   fi
 }
 export -f use_client_binaries_for_version
@@ -162,10 +157,15 @@ function use_gateway_binaries_for_version() {
   version=$1
   if [[ "$version" == "current" ]]; then
     unset FM_GATEWAYD_BASE_EXECUTABLE
+    unset FM_GATEWAY_CLI_BASE_EXECUTABLE
   else
     var_name=$(nix_binary_version_var_name gatewayd "$version")
     FM_GATEWAYD_BASE_EXECUTABLE="${!var_name}"
     export FM_GATEWAYD_BASE_EXECUTABLE
+
+    var_name=$(nix_binary_version_var_name gateway-cli "$version")
+    FM_GATEWAY_CLI_BASE_EXECUTABLE="${!var_name}"
+    export FM_GATEWAY_CLI_BASE_EXECUTABLE
   fi
 }
 export -f use_gateway_binaries_for_version
