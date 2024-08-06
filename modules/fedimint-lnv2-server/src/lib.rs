@@ -7,7 +7,7 @@ mod db;
 use std::collections::BTreeMap;
 use std::time::Duration;
 
-use anyhow::ensure;
+use anyhow::{anyhow, ensure};
 use bls12_381::{G1Projective, Scalar};
 use fedimint_bitcoind::{create_bitcoind, DynBitcoindRpc};
 use fedimint_core::config::{
@@ -364,6 +364,9 @@ impl ServerModule for Lightning {
 
                 Ok(())
             }
+            LightningConsensusItem::Default { variant, .. } => Err(anyhow!(
+                "Received lnv2 consensus item with unknown variant {variant}"
+            )),
         }
     }
 

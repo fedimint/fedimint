@@ -123,6 +123,11 @@ pub enum LightningOutputError {
 pub enum LightningConsensusItem {
     BlockCountVote(u64),
     UnixTimeVote(u64),
+    #[encodable_default]
+    Default {
+        variant: u64,
+        bytes: Vec<u8>,
+    },
 }
 
 impl std::fmt::Display for LightningConsensusItem {
