@@ -98,7 +98,7 @@ use rpc::{
 use state_machine::pay::OutgoingPaymentError;
 use state_machine::GatewayClientModule;
 use thiserror::Error;
-use tokio::sync::{Mutex, RwLock};
+use tokio::sync::RwLock;
 use tracing::{debug, error, info, info_span, warn, Instrument};
 
 use crate::db::{get_gatewayd_database_migrations, FederationConfig};
@@ -195,9 +195,6 @@ pub struct LightningContext {
     pub lightning_network: Network,
 }
 
-// A marker struct, to distinguish lock over `Gateway::clients`.
-struct ClientsJoinLock;
-
 #[derive(Clone)]
 pub struct Gateway {
     /// The gateway's federation manager.
@@ -219,11 +216,6 @@ pub struct Gateway {
 
     /// Database for Gateway metadata.
     gateway_db: Database,
-
-    /// Joining or leaving Federation is protected by this lock to prevent
-    /// trying to use same database at the same time from multiple threads.
-    /// Could be more granular (per id), but shouldn't matter in practice.
-    client_joining_lock: Arc<tokio::sync::Mutex<ClientsJoinLock>>,
 
     /// A public key representing the identity of the gateway. Private key is
     /// not used.
@@ -362,7 +354,6 @@ impl Gateway {
             client_builder,
             gateway_id: Self::load_or_create_gateway_id(&gateway_db).await,
             gateway_db,
-            client_joining_lock: Arc::new(Mutex::new(ClientsJoinLock)),
             versioned_api: gateway_parameters.versioned_api,
             listen: gateway_parameters.listen,
         })
@@ -407,7 +398,7 @@ impl Gateway {
     /// service requests.
     pub async fn run(self, tg: &TaskGroup) -> anyhow::Result<TaskShutdownToken> {
         self.register_clients_timer(tg);
-        Box::pin(self.load_clients()).await;
+        self.load_clients().await;
         self.start_gateway(tg);
         // start webserver last to avoid handling requests before fully initialized
         run_webserver(Arc::new(self), tg).await?;
@@ -896,15 +887,10 @@ impl Gateway {
         })?;
         let federation_id = invite_code.federation_id();
 
-        let _join_federation = self.client_joining_lock.lock().await;
+        let mut federation_manager = self.federation_manager.write().await;
 
         // Check if this federation has already been registered
-        if self
-            .federation_manager
-            .read()
-            .await
-            .has_federation(federation_id)
-        {
+        if federation_manager.has_federation(federation_id) {
             return Err(GatewayError::FederationAlreadyConnected);
         }
 
@@ -917,7 +903,7 @@ impl Gateway {
 
         // The gateway deterministically assigns a channel id (u64) to each federation
         // connected.
-        let mint_channel_id = self.federation_manager.read().await.pop_next_scid()?;
+        let mint_channel_id = federation_manager.pop_next_scid()?;
 
         let gw_client_cfg = FederationConfig {
             invite_code,
@@ -955,7 +941,7 @@ impl Gateway {
             .await?;
 
         // no need to enter span earlier, because connect-fed has a span
-        self.federation_manager.write().await.add_client(
+        federation_manager.add_client(
             mint_channel_id,
             Spanned::new(
                 info_span!("client", federation_id=%federation_id.clone()),
@@ -982,13 +968,12 @@ impl Gateway {
         &self,
         payload: LeaveFedPayload,
     ) -> Result<FederationInfo> {
-        let _client_joining_lock = self.client_joining_lock.lock().await;
+        // Lock the federation manager before starting the db transaction to reduce the
+        // chance of db write conflicts.
+        let mut federation_manager = self.federation_manager.write().await;
         let mut dbtx = self.gateway_db.begin_transaction().await;
 
-        let federation_info = self
-            .federation_manager
-            .write()
-            .await
+        let federation_info = federation_manager
             .leave_federation(payload.federation_id, &mut dbtx.to_ref_nc())
             .await?;
 
@@ -1285,35 +1270,29 @@ impl Gateway {
     /// database and reconstructs the clients necessary for interacting with
     /// connection federations.
     async fn load_clients(&self) {
-        let mut dbtx = self.gateway_db.begin_transaction_nc().await;
-        let configs = dbtx.load_federation_configs().await;
+        let mut federation_manager = self.federation_manager.write().await;
 
-        let _join_federation = self.client_joining_lock.lock().await;
+        let configs = {
+            let mut dbtx = self.gateway_db.begin_transaction_nc().await;
+            dbtx.load_federation_configs().await
+        };
 
-        for (_, config) in configs.clone() {
-            let federation_id = config.invite_code.federation_id();
+        if let Some(max_mint_channel_id) = configs.values().map(|cfg| cfg.mint_channel_id).max() {
+            federation_manager.set_next_scid(max_mint_channel_id + 1);
+        }
+
+        for (federation_id, config) in configs {
             let scid = config.mint_channel_id;
-
             if let Ok(client) = Box::pin(Spanned::try_new(
                 info_span!("client", federation_id  = %federation_id.clone()),
                 self.client_builder.build(config, Arc::new(self.clone())),
             ))
             .await
             {
-                self.federation_manager
-                    .write()
-                    .await
-                    .add_client(scid, client);
+                federation_manager.add_client(scid, client);
             } else {
                 warn!("Failed to load client for federation: {federation_id}");
             }
-        }
-
-        if let Some(max_mint_channel_id) = configs.values().map(|cfg| cfg.mint_channel_id).max() {
-            self.federation_manager
-                .read()
-                .await
-                .set_next_scid(max_mint_channel_id + 1);
         }
     }
 
