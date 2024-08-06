@@ -1,11 +1,9 @@
 #![deny(clippy::pedantic)]
 
-pub mod envs;
+mod envs;
+mod key;
 
-use std::cmp::Ordering;
 use std::collections::BTreeSet;
-use std::fmt::{Display, Formatter};
-use std::hash::Hasher;
 use std::path::{Path, PathBuf};
 
 use anyhow::anyhow;
@@ -35,12 +33,13 @@ use fedimint_wallet_server::db::{UTXOKey, UTXOPrefixKey};
 use fedimint_wallet_server::{nonce_from_idx, Wallet};
 use futures::stream::StreamExt;
 use hex::FromHex;
-use miniscript::{Descriptor, MiniscriptKey, ToPublicKey, TranslatePk, Translator};
+use miniscript::{Descriptor, MiniscriptKey, TranslatePk, Translator};
 use secp256k1::SecretKey;
 use serde::Serialize;
 use tracing::info;
 
 use crate::envs::FM_PASSWORD_ENV;
+use crate::key::Key;
 
 /// Tool to recover the on-chain wallet of a Fedimint federation
 #[derive(Debug, Parser)]
@@ -146,18 +145,37 @@ async fn main() -> anyhow::Result<()> {
         panic!("Either config or descriptor need to be provided by clap");
     };
 
-    match opts.strategy {
+    process_and_print_tweak_source(
+        &opts.strategy,
+        opts.readonly,
+        &base_descriptor,
+        &base_key,
+        network,
+    )
+    .await;
+
+    Ok(())
+}
+
+async fn process_and_print_tweak_source(
+    tweak_source: &TweakSource,
+    readonly: bool,
+    base_descriptor: &Descriptor<CompressedPublicKey>,
+    base_key: &SecretKey,
+    network: Network,
+) {
+    match tweak_source {
         TweakSource::Direct { tweak } => {
-            let descriptor = tweak_descriptor(&base_descriptor, &base_key, &tweak, network);
+            let descriptor = tweak_descriptor(base_descriptor, base_key, tweak, network);
             let wallets = vec![ImportableWalletMin { descriptor }];
 
             serde_json::to_writer(std::io::stdout().lock(), &wallets)
                 .expect("Could not encode to stdout");
         }
         TweakSource::Utxos { legacy, db } => {
-            let db = get_db(opts.readonly, &db, ModuleRegistry::default());
+            let db = get_db(readonly, db, ModuleRegistry::default());
 
-            let db = if legacy {
+            let db = if *legacy {
                 db
             } else {
                 db.with_prefix_module_id(LEGACY_HARDCODED_INSTANCE_ID_WALLET)
@@ -169,7 +187,7 @@ async fn main() -> anyhow::Result<()> {
                 .find_by_prefix(&UTXOPrefixKey)
                 .await
                 .map(|(UTXOKey(outpoint), SpendableUTXO { tweak, amount })| {
-                    let descriptor = tweak_descriptor(&base_descriptor, &base_key, &tweak, network);
+                    let descriptor = tweak_descriptor(base_descriptor, base_key, &tweak, network);
 
                     ImportableWallet {
                         outpoint,
@@ -192,7 +210,7 @@ async fn main() -> anyhow::Result<()> {
             )])
             .with_fallback();
 
-            let db = get_db(opts.readonly, &db, decoders);
+            let db = get_db(readonly, db, decoders);
             let mut dbtx = db.begin_transaction_nc().await;
 
             let mut change_tweak_idx: u64 = 0;
@@ -234,7 +252,7 @@ async fn main() -> anyhow::Result<()> {
 
             let wallets = tweaks
                 .map(|tweak| {
-                    let descriptor = tweak_descriptor(&base_descriptor, &base_key, &tweak, network);
+                    let descriptor = tweak_descriptor(base_descriptor, base_key, &tweak, network);
                     ImportableWalletMin { descriptor }
                 })
                 .collect::<Vec<_>>()
@@ -244,8 +262,6 @@ async fn main() -> anyhow::Result<()> {
                 .expect("Could not encode to stdout");
         }
     }
-
-    Ok(())
 }
 
 fn input_tweaks_and_peg_out_count(
@@ -318,106 +334,6 @@ struct ImportableWallet {
 #[derive(Debug, Serialize)]
 struct ImportableWalletMin {
     descriptor: Descriptor<Key>,
-}
-
-/// `MiniscriptKey` that is either a WIF-encoded private key or a compressed,
-/// hex-encoded public key
-#[derive(Debug, Clone, Copy, Eq)]
-enum Key {
-    Public(CompressedPublicKey),
-    Private(bitcoin::key::PrivateKey),
-}
-
-impl PartialOrd for Key {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(
-            self.to_compressed_public_key()
-                .cmp(&other.to_compressed_public_key()),
-        )
-    }
-}
-
-impl Ord for Key {
-    fn cmp(&self, other: &Self) -> Ordering {
-        self.to_compressed_public_key()
-            .cmp(&other.to_compressed_public_key())
-    }
-}
-
-impl PartialEq for Key {
-    fn eq(&self, other: &Self) -> bool {
-        self.to_compressed_public_key()
-            .eq(&other.to_compressed_public_key())
-    }
-}
-
-impl std::hash::Hash for Key {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        self.to_compressed_public_key().hash(state);
-    }
-}
-
-impl Key {
-    fn to_compressed_public_key(self) -> CompressedPublicKey {
-        match self {
-            Key::Public(pk) => pk,
-            Key::Private(sk) => {
-                CompressedPublicKey::new(secp256k1::PublicKey::from_secret_key_global(&sk.inner))
-            }
-        }
-    }
-}
-
-impl Display for Key {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Key::Public(pk) => Display::fmt(pk, f),
-            Key::Private(sk) => Display::fmt(sk, f),
-        }
-    }
-}
-
-impl MiniscriptKey for Key {
-    fn is_uncompressed(&self) -> bool {
-        false
-    }
-
-    fn num_der_paths(&self) -> usize {
-        0
-    }
-
-    type Sha256 = bitcoin::hashes::sha256::Hash;
-    type Hash256 = miniscript::hash256::Hash;
-    type Ripemd160 = bitcoin::hashes::ripemd160::Hash;
-    type Hash160 = bitcoin::hashes::hash160::Hash;
-}
-
-impl ToPublicKey for Key {
-    fn to_public_key(&self) -> miniscript::bitcoin::PublicKey {
-        self.to_compressed_public_key().to_public_key()
-    }
-
-    fn to_sha256(
-        hash: &<Self as MiniscriptKey>::Sha256,
-    ) -> miniscript::bitcoin::hashes::sha256::Hash {
-        *hash
-    }
-
-    fn to_hash256(hash: &<Self as MiniscriptKey>::Hash256) -> miniscript::hash256::Hash {
-        *hash
-    }
-
-    fn to_ripemd160(
-        hash: &<Self as MiniscriptKey>::Ripemd160,
-    ) -> miniscript::bitcoin::hashes::ripemd160::Hash {
-        *hash
-    }
-
-    fn to_hash160(
-        hash: &<Self as MiniscriptKey>::Hash160,
-    ) -> miniscript::bitcoin::hashes::hash160::Hash {
-        *hash
-    }
 }
 
 /// Miniscript [`Translator`] that replaces a public key with a private key we
