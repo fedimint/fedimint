@@ -36,8 +36,8 @@ services:
       - "0.0.0.0:8173:8173"
     environment:
       - FM_BITCOIN_RPC_KIND=bitcoind
-      - FM_BITCOIN_RPC_URL=http://bitcoin:bitcoin@bitcoind:38332
-      - FM_BITCOIN_NETWORK=signet
+      - FM_BITCOIN_RPC_URL=http://bitcoin:bitcoin@bitcoind:8332
+      - FM_BITCOIN_NETWORK=bitcoin
       - FM_BIND_P2P=0.0.0.0:8173
       - FM_P2P_URL=fedimint://fedimint.my-super-host.com:8173
       - FM_BIND_API=0.0.0.0:80
@@ -55,7 +55,7 @@ services:
 
   ### START_GUARDIAN_UI ###
   guardian-ui:
-    image: fedimintui/guardian-ui:0.3.0
+    image: fedimintui/guardian-ui:0.4.0
     environment:
       - PORT=80
       - REACT_APP_FM_CONFIG_API=wss://fedimintd.fedimint.my-super-host.com
@@ -73,10 +73,8 @@ services:
 
   ### START_BITCOIND ###
   bitcoind:
-    image: fedimint/mutinynet-bitcoind:master
-    command: --rpcuser=bitcoin --rpcpassword=bitcoin -zmqpubrawblock=tcp://[::]:48332 -zmqpubrawtx=tcp://[::]:48333
-    ports:
-      - 0.0.0.0:38333:38333
+    image: btcpayserver/bitcoin:26.0
+    command: --rpcuser=bitcoin --rpcpassword=bitcoin
     volumes:
       - "bitcoin_datadir:/root/.bitcoin"
     restart: always

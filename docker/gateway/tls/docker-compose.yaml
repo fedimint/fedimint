@@ -27,6 +27,7 @@ services:
       - "/var/run/docker.sock:/var/run/docker.sock:ro"
   ### END_TRAEFIK ###
 
+  ### START_LND ###
   ### START_LND_GATEWAYD ###
   gatewayd:
     image: fedimint/gatewayd:v0.4.0
@@ -47,7 +48,7 @@ services:
       # LND TLS cert file path
       - FM_LND_TLS_CERT=/lnd_data/tls.cert
       # LND macaroon file path
-      - FM_LND_MACAROON=/lnd_data/data/chain/bitcoin/signet/admin.macaroon
+      - FM_LND_MACAROON=/lnd_data/data/chain/bitcoin/mainnet/admin.macaroon
       - FM_REL_NOTES_ACK=0_4_xyz
     volumes:
       - gateway_datadir:/gateway_data
@@ -63,6 +64,36 @@ services:
       - "traefik.http.routers.gatewayd.entrypoints=websecure"
       - "traefik.http.routers.gatewayd.tls.certresolver=myresolver"
   ### END_LND_GATEWAYD ###
+
+  ### START_LND_NODE ###
+  lnd:
+    image: lightninglabs/lnd:v0.18.0-beta
+    entrypoint: bash
+    command:
+      - -c
+      - lnd --bitcoin.active --bitcoin.signet --bitcoin.dnsseed=0 --bitcoin.node=bitcoind --protocol.wumbo-channels --bitcoind.rpchost=bitcoind --bitcoind.rpcuser=bitcoin --bitcoind.rpcpass=bitcoin --bitcoind.zmqpubrawblock=tcp://bitcoind:48332 --bitcoind.zmqpubrawtx=tcp://bitcoind:48333 --listen=0.0.0.0:9735 --rpclisten=0.0.0.0:10009 --restlisten=0.0.0.0:8080 --tlsextradomain=lnd --noseedbackup
+    ports:
+      - "10009:10009"
+      - "0.0.0.0:9735:9735"
+    volumes:
+      - lnd_datadir:/root/.lnd
+    depends_on:
+      - bitcoind
+    restart: always
+  ### END_LND_NODE ###
+
+  ### START_BITCOIND ###
+  bitcoind:
+    image: btcpayserver/bitcoin:26.0
+    command: --rpcuser=bitcoin --rpcpassword=bitcoin -zmqpubrawblock=tcp://[::]:48332 -zmqpubrawtx=tcp://[::]:48333
+    ports:
+      - 0.0.0.0:38333:38333
+    volumes:
+      - "bitcoin_datadir:/root/.bitcoin"
+    restart: always
+    platform: linux/amd64
+  ### END_BITCOIND ###
+  ### END_LND ###
 
   ### START_LDK_GATEWAYD ###
   gatewayd:
@@ -117,83 +148,10 @@ services:
       - "traefik.http.routers.gateway-ui.tls.certresolver=myresolver"
   ### END_GATEWAY_UI ###
 
-  ### START_LND ###
-  lnd:
-    image: lightninglabs/lnd:v0.18.0-beta
-    entrypoint: bash
-    command:
-      - -c
-      - lnd --bitcoin.active --bitcoin.signet --bitcoin.dnsseed=0 --bitcoin.node=bitcoind --protocol.wumbo-channels --bitcoind.rpchost=bitcoind --bitcoind.rpcuser=bitcoin --bitcoind.rpcpass=bitcoin --bitcoind.zmqpubrawblock=tcp://bitcoind:48332 --bitcoind.zmqpubrawtx=tcp://bitcoind:48333 --listen=0.0.0.0:9735 --rpclisten=0.0.0.0:10009 --restlisten=0.0.0.0:8080 --tlsextradomain=lnd --noseedbackup
-    ports:
-      - "10009:10009"
-      - "0.0.0.0:9735:9735"
-    volumes:
-      - lnd_datadir:/root/.lnd
-    depends_on:
-      - bitcoind
-    restart: always
-  ### END_LND ###
-
-  ### START_THUNDERHUB ###
-  thunderhub_config_writer:
-    image: alpine:latest
-    command:
-      - sh
-      - -c
-      - |
-        cat <<EOF > /thconfig/accounts.yaml
-        masterPassword: "thereisnosecondbest"
-        accounts:
-          - name: "main lnd"
-            serverUrl: "lnd:10009"
-            lndDir: "/root/.lnd"
-            network: signet
-        EOF
-        tail -f /dev/null
-    volumes:
-      - thunderhub_datadir:/thconfig
-    depends_on:
-      - lnd
-    restart: always
-
-  thunderhub:
-    image: fedimintui/fedimint-thunderhub:0.2.1
-    environment:
-      - ACCOUNT_CONFIG_PATH=/thconfig/accounts.yaml
-      - HOST=0.0.0.0
-      - PORT=80
-      - REACT_APP_FM_GATEWAY_API=https://gatewayd.fedimint.my-super-host.com
-      - FM_GATEWAY_PASSWORD=thereisnosecondbest
-    volumes:
-      - lnd_datadir:/root/.lnd
-      - thunderhub_datadir:/thconfig
-    depends_on:
-      - thunderhub_config_writer
-    restart: always
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.services.thunderhub.loadbalancer.server.port=80"
-      - "traefik.http.routers.thunderhub.rule=Host(`thunderhub.fedimint.my-super-host.com`)"
-      - "traefik.http.routers.thunderhub.entrypoints=websecure"
-      - "traefik.http.routers.thunderhub.tls.certresolver=myresolver"
-  ### END_THUNDERHUB ###
-
-  ### START_BITCOIND ###
-  bitcoind:
-    image: btcpayserver/bitcoin:26.0
-    command: --rpcuser=bitcoin --rpcpassword=bitcoin -zmqpubrawblock=tcp://[::]:48332 -zmqpubrawtx=tcp://[::]:48333
-    ports:
-      - 0.0.0.0:38333:38333
-    volumes:
-      - "bitcoin_datadir:/root/.bitcoin"
-    restart: always
-    platform: linux/amd64
-  ### END_BITCOIND ###
-    
-
 volumes:
   letsencrypt_data:
+  gateway_datadir:
+  ### START_LND_DATA ###
   lnd_datadir:
   bitcoin_datadir:
-  gateway_datadir:
-  thunderhub_datadir:
+  ### END_LND_DATA ###
