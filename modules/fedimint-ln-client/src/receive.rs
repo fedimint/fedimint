@@ -291,7 +291,10 @@ impl LightningReceiveConfirmedInvoice {
             state_machines: Arc::new(|_, _| vec![]),
         };
 
-        global_context.claim_input(dbtx, client_input).await
+        global_context
+            .claim_input(dbtx, client_input)
+            .await
+            .expect("Cannot claim input, additional funding needed")
     }
 }
 

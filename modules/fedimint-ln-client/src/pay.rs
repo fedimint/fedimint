@@ -553,7 +553,10 @@ async fn try_refund_outgoing_contract(
         state_machines: Arc::new(|_, _| vec![]),
     };
 
-    let (txid, out_points) = global_context.claim_input(dbtx, refund_client_input).await;
+    let (txid, out_points) = global_context
+        .claim_input(dbtx, refund_client_input)
+        .await
+        .expect("Cannot claim input, additional funding needed");
 
     LightningPayStateMachine {
         common: old_state.common,

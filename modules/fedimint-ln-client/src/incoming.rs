@@ -333,7 +333,11 @@ impl DecryptingPreimageState {
             keys: vec![context.redeem_key],
         };
 
-        let out_points = global_context.claim_input(dbtx, client_input).await.1;
+        let out_points = global_context
+            .claim_input(dbtx, client_input)
+            .await
+            .expect("Cannot claim input, additional funding needed")
+            .1;
         debug!("Refunded incoming contract {contract:?} with {out_points:?}");
 
         IncomingStateMachine {

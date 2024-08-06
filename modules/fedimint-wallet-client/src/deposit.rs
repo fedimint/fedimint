@@ -284,7 +284,10 @@ pub(crate) async fn transition_btc_tx_confirmed(
         state_machines: Arc::new(|_, _| vec![]),
     };
 
-    let (fm_txid, change) = global_context.claim_input(dbtx, client_input).await;
+    let (fm_txid, change) = global_context
+        .claim_input(dbtx, client_input)
+        .await
+        .expect("Cannot claim input, additional funding needed");
 
     DepositStateMachine {
         operation_id: old_state.operation_id,
