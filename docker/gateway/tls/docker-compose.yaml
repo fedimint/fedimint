@@ -27,7 +27,7 @@ services:
       - "/var/run/docker.sock:/var/run/docker.sock:ro"
   ### END_TRAEFIK ###
 
-  ### START_GATEWAYD ###
+  ### START_LND_GATEWAYD ###
   gatewayd:
     image: fedimint/gatewayd:v0.4.0
     command: gatewayd lnd
@@ -62,7 +62,42 @@ services:
       - "traefik.http.routers.gatewayd.rule=Host(`gatewayd.fedimint.my-super-host.com`)"
       - "traefik.http.routers.gatewayd.entrypoints=websecure"
       - "traefik.http.routers.gatewayd.tls.certresolver=myresolver"
-  ### END_GATEWAYD ###
+  ### END_LND_GATEWAYD ###
+
+  ### START_LDK_GATEWAYD ###
+  gatewayd:
+    image: fedimint/gatewayd:v0.4.0
+    command: gatewayd ldk
+    environment:
+      # Path to folder containing gateway config and data files
+      - FM_GATEWAY_DATA_DIR=/gateway_data
+      # Gateway webserver listen address
+      - FM_GATEWAY_LISTEN_ADDR=0.0.0.0:80
+      # Public URL from which the webserver API is reachable
+      - FM_GATEWAY_API_ADDR=https://gatewayd.fedimint.my-super-host.com
+      # Gateway webserver authentication password
+      - FM_GATEWAY_PASSWORD=thereisnosecondbest
+      # Configured gateway routing fees Format: <base_msat>,<proportional_millionths>
+      - FM_GATEWAY_FEES=0,10000
+      # LDK requires esplora
+      - FM_LDK_ESPLORA_SERVER_URL=https://blockstream.info/api
+      # LDK network
+      - FM_LDK_NETWORK=bitcoin
+      # LDK port
+      - FM_PORT_LDK=9735
+      # Release notes ack for 0.4 upgrade
+      - FM_REL_NOTES_ACK=0_4_xyz
+    volumes:
+      - gateway_datadir:/gateway_data
+    restart: always
+    platform: linux/amd64
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.services.gatewayd.loadbalancer.server.port=80"
+      - "traefik.http.routers.gatewayd.rule=Host(`gatewayd.fedimint.my-super-host.com`)"
+      - "traefik.http.routers.gatewayd.entrypoints=websecure"
+      - "traefik.http.routers.gatewayd.tls.certresolver=myresolver"
+  ### END_LDK_GATEWAYD ###
 
   ### START_GATEWAY_UI ###
   gateway-ui:
