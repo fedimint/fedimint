@@ -365,6 +365,19 @@ if [[ $SETUP_TLS == false ]]; then
   rename_localhost ./docker-compose.yaml "$external_ip"
 fi
 
+if [ "$USE_LDK" = true ]; then
+  # Remove the LND and Bitcoin sections from the docker-compose file
+  sed -i '/### START_LND ###/,/### END_LND ###/d' ./docker-compose.yaml
+  sed -i '/### START_LND_DATA ###/,/### END_LND_DATA ###/d' ./docker-compose.yaml
+  # Remove the volume binding for lnd_datadir:/root/.lnd
+  sed -i '/- lnd_datadir:\/root\/\.lnd/d' ./docker-compose.yaml
+  # Remove the 'depends_on: - lnd' lines
+  sed -i '/depends_on:/,+1d' ./docker-compose.yaml
+else
+  # Remove the LDK section from the docker-compose file
+  sed -i '/### START_LDK ###/,/### END_LDK ###/d' ./docker-compose.yaml
+fi
+
 if [ "$IS_GATEWAY" = true ]; then
   # ask the user for the gateway password
   DEFAULT_GATEWAY_PASSWORD=thereisnosecondbest
@@ -373,75 +386,67 @@ if [ "$IS_GATEWAY" = true ]; then
     gateway_password=$DEFAULT_GATEWAY_PASSWORD
   fi
   sed -i "s/$DEFAULT_GATEWAY_PASSWORD/$gateway_password/g" ./docker-compose.yaml
+elif [ "$START_NEW_LND_NODE" = false ]; then
+  # Remove the LND and Bitcoin sections from the docker-compose file
+  sed -i '/### START_LND ###/,/### END_LND ###/d' ./docker-compose.yaml
+  sed -i '/### START_BITCOIND ###/,/### END_BITCOIND ###/d' ./docker-compose.yaml
+  # Remove the volume binding for lnd_datadir:/root/.lnd
+  sed -i '/- lnd_datadir:\/root\/\.lnd/d' ./docker-compose.yaml
+  # Remove the 'depends_on: - lnd' lines
+  sed -i '/depends_on:/,+1d' ./docker-compose.yaml
+  # Remove empty volume declarations for lnd_datadir and bitcoin_datadir
+  sed -i '/lnd_datadir:/d' ./docker-compose.yaml
+  sed -i '/bitcoin_datadir:/d' ./docker-compose.yaml
 
-  if [ $USE_LDK = true ]; then
-    # Remove the LND and Bitcoin sections from the docker-compose file
-    sed -i '/### START_LND ###/,/### END_LND ###/d' ./docker-compose.yaml
-    sed -i '/### START_LND_DATA ###/,/### END_LND_DATA ###/d' ./docker-compose.yaml
-    # Remove the volume binding for lnd_datadir:/root/.lnd
-    sed -i '/- lnd_datadir:\/root\/\.lnd/d' ./docker-compose.yaml
-    # Remove the 'depends_on: - lnd' lines
-    sed -i '/depends_on:/,+1d' ./docker-compose.yaml
-  elif [ "$START_NEW_LND_NODE" = false ]; then
-    # Remove the LND and Bitcoin sections from the docker-compose file
-    sed -i '/### START_LND ###/,/### END_LND ###/d' ./docker-compose.yaml
-    sed -i '/### START_BITCOIND ###/,/### END_BITCOIND ###/d' ./docker-compose.yaml
-    # Remove the volume binding for lnd_datadir:/root/.lnd
-    sed -i '/- lnd_datadir:\/root\/\.lnd/d' ./docker-compose.yaml
-    # Remove the 'depends_on: - lnd' lines
-    sed -i '/depends_on:/,+1d' ./docker-compose.yaml
-    # Remove empty volume declarations for lnd_datadir and bitcoin_datadir
-    sed -i '/lnd_datadir:/d' ./docker-compose.yaml
-    sed -i '/bitcoin_datadir:/d' ./docker-compose.yaml
-
-    # ask the user for their LND rpc
-    DEFAULT_LND_RPC=lnd_gprc_url
-    echo
-    read -p "Enter the RPC for your LND node (ex. https://mynode.m.voltageapp.io:10009): " -a lnd_rpc </dev/tty
-    if [[ -z ${lnd_rpc[*]} ]]; then
-      echo 'Error: You must set an LND rpc if you configure the gateway with an existing LND node' >&2
-      exit 1
-    fi
-    sed -i "s|$DEFAULT_LND_RPC|$lnd_rpc|g" ./docker-compose.yaml
-
-    # confirm that the user put their LND files in the proper place
-    echo
-    echo
-    echo "The gateway needs two files in order to connect to your LND node."
-    echo "Please transfer these files to '~/.lnd':"
-    echo "  - admin.macaroon"
-    echo "  - tls.cert"
-    echo
-
-    # create ~/.lnd directory if it doesn't exist
-    if [ ! -d "$HOME/.lnd" ]; then
-      mkdir -p "$HOME/.lnd"
-      echo "Directory has been created at: $HOME/.lnd"
-    fi
-
-    echo
-    echo "You can transfer these files in with SCP:"
-    echo "  scp admin.macaroon $REMOTE_USER@$EXTERNAL_IP:/home/$REMOTE_USER/.lnd/"
-    echo "  scp tls.cert $REMOTE_USER@$EXTERNAL_IP:/home/$REMOTE_USER/.lnd/"
-    echo
-    read -p "Press enter after you have transferred the files " -r -n 1 </dev/tty
-    echo
-
-    while true; do
-      echo "Checking files..."
-
-      # check if the two files are present in the .lnd directory
-      if [ -f "$HOME/.lnd/admin.macaroon" ] && [ -f "$HOME/.lnd/tls.cert" ]; then
-        echo "All files look good..."
-        break
-      else
-        echo "Some files do not look correct. Make sure you put them both in your .lnd directory."
-        read -p "Press enter after you have transferred the files " -r -n 1 </dev/tty
-        continue
-      fi
-    done
+  # ask the user for their LND rpc
+  DEFAULT_LND_RPC=lnd_gprc_url
+  echo
+  read -p "Enter the RPC for your LND node (ex. https://mynode.m.voltageapp.io:10009): " -a lnd_rpc </dev/tty
+  if [[ -z ${lnd_rpc[*]} ]]; then
+    echo 'Error: You must set an LND rpc if you configure the gateway with an existing LND node' >&2
+    exit 1
   fi
-else # Is Guardian
+  sed -i "s|$DEFAULT_LND_RPC|$lnd_rpc|g" ./docker-compose.yaml
+
+  # confirm that the user put their LND files in the proper place
+  echo
+  echo
+  echo "The gateway needs two files in order to connect to your LND node."
+  echo "Please transfer these files to '~/.lnd':"
+  echo "  - admin.macaroon"
+  echo "  - tls.cert"
+  echo
+
+  # create ~/.lnd directory if it doesn't exist
+  if [ ! -d "$HOME/.lnd" ]; then
+    mkdir -p "$HOME/.lnd"
+    echo "Directory has been created at: $HOME/.lnd"
+  fi
+
+  echo
+  echo "You can transfer these files in with SCP:"
+  echo "  scp admin.macaroon $REMOTE_USER@$EXTERNAL_IP:/home/$REMOTE_USER/.lnd/"
+  echo "  scp tls.cert $REMOTE_USER@$EXTERNAL_IP:/home/$REMOTE_USER/.lnd/"
+  echo
+  read -p "Press enter after you have transferred the files " -r -n 1 </dev/tty
+  echo
+
+  while true; do
+    echo "Checking files..."
+
+    # check if the two files are present in the .lnd directory
+    if [ -f "$HOME/.lnd/admin.macaroon" ] && [ -f "$HOME/.lnd/tls.cert" ]; then
+      echo "All files look good..."
+      break
+    else
+      echo "Some files do not look correct. Make sure you put them both in your .lnd directory."
+      read -p "Press enter after you have transferred the files " -r -n 1 </dev/tty
+      continue
+    fi
+  done
+fi
+
+if [ "$IS_GATEWAY" = false ]; then # Is Guardian
   if [ "$USE_ESPLORA" = true ]; then
     case $NETWORK_TYPE in
     mainnet)
