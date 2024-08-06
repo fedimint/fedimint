@@ -1667,27 +1667,6 @@
 <a href="#1667" id="1667">1667</a>
 <a href="#1668" id="1668">1668</a>
 <a href="#1669" id="1669">1669</a>
-<a href="#1670" id="1670">1670</a>
-<a href="#1671" id="1671">1671</a>
-<a href="#1672" id="1672">1672</a>
-<a href="#1673" id="1673">1673</a>
-<a href="#1674" id="1674">1674</a>
-<a href="#1675" id="1675">1675</a>
-<a href="#1676" id="1676">1676</a>
-<a href="#1677" id="1677">1677</a>
-<a href="#1678" id="1678">1678</a>
-<a href="#1679" id="1679">1679</a>
-<a href="#1680" id="1680">1680</a>
-<a href="#1681" id="1681">1681</a>
-<a href="#1682" id="1682">1682</a>
-<a href="#1683" id="1683">1683</a>
-<a href="#1684" id="1684">1684</a>
-<a href="#1685" id="1685">1685</a>
-<a href="#1686" id="1686">1686</a>
-<a href="#1687" id="1687">1687</a>
-<a href="#1688" id="1688">1688</a>
-<a href="#1689" id="1689">1689</a>
-<a href="#1690" id="1690">1690</a>
 </pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::cast_possible_wrap)]
@@ -1788,7 +1767,7 @@
 <span class="kw">use </span>state_machine::pay::OutgoingPaymentError;
 <span class="kw">use </span>state_machine::GatewayClientModule;
 <span class="kw">use </span>thiserror::Error;
-<span class="kw">use </span>tokio::sync::{Mutex, RwLock};
+<span class="kw">use </span>tokio::sync::RwLock;
 <span class="kw">use </span>tracing::{debug, error, info, info_span, warn, Instrument};
 
 <span class="kw">use </span><span class="kw">crate</span>::db::{get_gatewayd_database_migrations, FederationConfig};
@@ -1885,9 +1864,6 @@
     <span class="kw">pub </span>lightning_network: Network,
 }
 
-<span class="comment">// A marker struct, to distinguish lock over `Gateway::clients`.
-</span><span class="kw">struct </span>ClientsJoinLock;
-
 <span class="attr">#[derive(Clone)]
 </span><span class="kw">pub struct </span>Gateway {
     <span class="doccomment">/// The gateway's federation manager.
@@ -1909,11 +1885,6 @@
 
     <span class="doccomment">/// Database for Gateway metadata.
     </span>gateway_db: Database,
-
-    <span class="doccomment">/// Joining or leaving Federation is protected by this lock to prevent
-    /// trying to use same database at the same time from multiple threads.
-    /// Could be more granular (per id), but shouldn't matter in practice.
-    </span>client_joining_lock: Arc&lt;tokio::sync::Mutex&lt;ClientsJoinLock&gt;&gt;,
 
     <span class="doccomment">/// A public key representing the identity of the gateway. Private key is
     /// not used.
@@ -2052,7 +2023,6 @@
             client_builder,
             gateway_id: <span class="self">Self</span>::load_or_create_gateway_id(<span class="kw-2">&amp;</span>gateway_db).<span class="kw">await</span>,
             gateway_db,
-            client_joining_lock: Arc::new(Mutex::new(ClientsJoinLock)),
             versioned_api: gateway_parameters.versioned_api,
             listen: gateway_parameters.listen,
         })
@@ -2097,7 +2067,7 @@
     /// service requests.
     </span><span class="kw">pub async fn </span>run(<span class="self">self</span>, tg: <span class="kw-2">&amp;</span>TaskGroup) -&gt; anyhow::Result&lt;TaskShutdownToken&gt; {
         <span class="self">self</span>.register_clients_timer(tg);
-        Box::pin(<span class="self">self</span>.load_clients()).<span class="kw">await</span>;
+        <span class="self">self</span>.load_clients().<span class="kw">await</span>;
         <span class="self">self</span>.start_gateway(tg);
         <span class="comment">// start webserver last to avoid handling requests before fully initialized
         </span>run_webserver(Arc::new(<span class="self">self</span>), tg).<span class="kw">await</span><span class="question-mark">?</span>;
@@ -2586,15 +2556,10 @@
         })<span class="question-mark">?</span>;
         <span class="kw">let </span>federation_id = invite_code.federation_id();
 
-        <span class="kw">let </span>_join_federation = <span class="self">self</span>.client_joining_lock.lock().<span class="kw">await</span>;
+        <span class="kw">let </span><span class="kw-2">mut </span>federation_manager = <span class="self">self</span>.federation_manager.write().<span class="kw">await</span>;
 
         <span class="comment">// Check if this federation has already been registered
-        </span><span class="kw">if </span><span class="self">self
-            </span>.federation_manager
-            .read()
-            .<span class="kw">await
-            </span>.has_federation(federation_id)
-        {
+        </span><span class="kw">if </span>federation_manager.has_federation(federation_id) {
             <span class="kw">return </span><span class="prelude-val">Err</span>(GatewayError::FederationAlreadyConnected);
         }
 
@@ -2607,7 +2572,7 @@
 
         <span class="comment">// The gateway deterministically assigns a channel id (u64) to each federation
         // connected.
-        </span><span class="kw">let </span>mint_channel_id = <span class="self">self</span>.federation_manager.read().<span class="kw">await</span>.pop_next_scid()<span class="question-mark">?</span>;
+        </span><span class="kw">let </span>mint_channel_id = federation_manager.pop_next_scid()<span class="question-mark">?</span>;
 
         <span class="kw">let </span>gw_client_cfg = FederationConfig {
             invite_code,
@@ -2645,7 +2610,7 @@
             .<span class="kw">await</span><span class="question-mark">?</span>;
 
         <span class="comment">// no need to enter span earlier, because connect-fed has a span
-        </span><span class="self">self</span>.federation_manager.write().<span class="kw">await</span>.add_client(
+        </span>federation_manager.add_client(
             mint_channel_id,
             Spanned::new(
                 <span class="macro">info_span!</span>(<span class="string">"client"</span>, federation_id=%federation_id.clone()),
@@ -2672,14 +2637,13 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         payload: LeaveFedPayload,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;FederationInfo&gt; {
-        <span class="kw">let </span>_client_joining_lock = <span class="self">self</span>.client_joining_lock.lock().<span class="kw">await</span>;
+        <span class="comment">// Lock the federation manager before starting the db transaction to reduce the
+        // chance of db write conflicts.
+        </span><span class="kw">let </span><span class="kw-2">mut </span>federation_manager = <span class="self">self</span>.federation_manager.write().<span class="kw">await</span>;
         <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.gateway_db.begin_transaction().<span class="kw">await</span>;
 
-        <span class="kw">let </span>federation_info = <span class="self">self
-            </span>.federation_manager
-            .write()
-            .<span class="kw">await
-            </span>.leave_federation(payload.federation_id, <span class="kw-2">&amp;mut </span>dbtx.to_ref_nc())
+        <span class="kw">let </span>federation_info = federation_manager
+            .leave_federation(payload.federation_id, <span class="kw-2">&amp;mut </span>dbtx.to_ref_nc())
             .<span class="kw">await</span><span class="question-mark">?</span>;
 
         dbtx.remove_federation_config(payload.federation_id).<span class="kw">await</span>;
@@ -2975,35 +2939,29 @@
     /// database and reconstructs the clients necessary for interacting with
     /// connection federations.
     </span><span class="kw">async fn </span>load_clients(<span class="kw-2">&amp;</span><span class="self">self</span>) {
-        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.gateway_db.begin_transaction_nc().<span class="kw">await</span>;
-        <span class="kw">let </span>configs = dbtx.load_federation_configs().<span class="kw">await</span>;
+        <span class="kw">let </span><span class="kw-2">mut </span>federation_manager = <span class="self">self</span>.federation_manager.write().<span class="kw">await</span>;
 
-        <span class="kw">let </span>_join_federation = <span class="self">self</span>.client_joining_lock.lock().<span class="kw">await</span>;
+        <span class="kw">let </span>configs = {
+            <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.gateway_db.begin_transaction_nc().<span class="kw">await</span>;
+            dbtx.load_federation_configs().<span class="kw">await
+        </span>};
 
-        <span class="kw">for </span>(<span class="kw">_</span>, config) <span class="kw">in </span>configs.clone() {
-            <span class="kw">let </span>federation_id = config.invite_code.federation_id();
+        <span class="kw">if let </span><span class="prelude-val">Some</span>(max_mint_channel_id) = configs.values().map(|cfg| cfg.mint_channel_id).max() {
+            federation_manager.set_next_scid(max_mint_channel_id + <span class="number">1</span>);
+        }
+
+        <span class="kw">for </span>(federation_id, config) <span class="kw">in </span>configs {
             <span class="kw">let </span>scid = config.mint_channel_id;
-
             <span class="kw">if let </span><span class="prelude-val">Ok</span>(client) = Box::pin(Spanned::try_new(
                 <span class="macro">info_span!</span>(<span class="string">"client"</span>, federation_id  = %federation_id.clone()),
                 <span class="self">self</span>.client_builder.build(config, Arc::new(<span class="self">self</span>.clone())),
             ))
             .<span class="kw">await
             </span>{
-                <span class="self">self</span>.federation_manager
-                    .write()
-                    .<span class="kw">await
-                    </span>.add_client(scid, client);
+                federation_manager.add_client(scid, client);
             } <span class="kw">else </span>{
                 <span class="macro">warn!</span>(<span class="string">"Failed to load client for federation: {federation_id}"</span>);
             }
-        }
-
-        <span class="kw">if let </span><span class="prelude-val">Some</span>(max_mint_channel_id) = configs.values().map(|cfg| cfg.mint_channel_id).max() {
-            <span class="self">self</span>.federation_manager
-                .read()
-                .<span class="kw">await
-                </span>.set_next_scid(max_mint_channel_id + <span class="number">1</span>);
         }
     }
 
