@@ -428,7 +428,10 @@ async fn claim_peg_in(
             state_machines: Arc::new(|_, _| vec![]),
         };
 
-        dbtx_context.claim_input(client_input, operation_id).await
+        dbtx_context
+            .claim_input(client_input, operation_id)
+            .await
+            .expect("Cannot claim input, additional funding needed")
     }
 
     let tx_out_proof = &tx_out_proof;

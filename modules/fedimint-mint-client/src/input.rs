@@ -149,7 +149,10 @@ impl MintInputStateCreated {
             state_machines: Arc::new(|_, _| vec![]),
         };
 
-        let (refund_txid, _) = global_context.claim_input(dbtx, refund_input).await;
+        let (refund_txid, _) = global_context
+            .claim_input(dbtx, refund_input)
+            .await
+            .expect("Cannot claim input, additional funding needed");
 
         MintInputStateMachine {
             common: old_state.common,

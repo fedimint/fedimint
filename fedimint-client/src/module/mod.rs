@@ -172,7 +172,7 @@ where
         &mut self,
         input: ClientInput<I, S>,
         operation_id: OperationId,
-    ) -> (TransactionId, Vec<OutPoint>)
+    ) -> anyhow::Result<(TransactionId, Vec<OutPoint>)>
     where
         I: IInput + MaybeSend + MaybeSync + 'static,
         S: sm::IState + MaybeSend + MaybeSync + 'static,
@@ -193,7 +193,7 @@ where
         &mut self,
         input: InstancelessDynClientInput,
         operation_id: OperationId,
-    ) -> (TransactionId, Vec<OutPoint>) {
+    ) -> anyhow::Result<(TransactionId, Vec<OutPoint>)> {
         let instance_input = ClientInput {
             input: DynInput::from_parts(self.client.module_instance_id, input.input),
             keys: input.keys,
@@ -213,7 +213,6 @@ where
                 TransactionBuilder::new().with_input(instance_input),
             )
             .await
-            .expect("Can only fail if additional funding is needed")
     }
 
     pub async fn add_state_machines_dbtx(
