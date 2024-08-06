@@ -105,7 +105,7 @@ while true; do
     break
     ;;
   gateway)
-    SERVICES="gatewayd gateway-ui thunderhub"
+    SERVICES="gatewayd gateway-ui lnd bitcoind"
     IS_GATEWAY=true
     break
     ;;
@@ -135,6 +135,8 @@ while true; do
     fi
     ;;
   mutinynet)
+    SETUP_TLS=false
+    TLS_DIR="no-tls"
     break
     ;;
   *)
@@ -144,31 +146,6 @@ while true; do
 done
 
 echo "Setting up for $NETWORK_TYPE. Proceeding with installation."
-
-if [[ -z $SETUP_TLS ]] || [[ -z $TLS_DIR ]]; then
-  echo
-  echo "Do you want to setup TLS certificates with Let's Encrypt? [yes/no]"
-  while true; do
-    read -p "Type 'yes' to setup TLS certificates or 'no' to skip: " SETUP_TLS </dev/tty
-    case $SETUP_TLS in
-    yes)
-      SETUP_TLS=true
-      TLS_DIR="tls"
-      break
-      ;;
-    no)
-      SETUP_TLS=false
-      TLS_DIR="no-tls"
-      break
-      ;;
-    *)
-      echo "Invalid option. Please type 'yes' or 'no'."
-      ;;
-    esac
-  done
-else
-  echo "Running mainnet, you must setup with TLS."
-fi
 
 DOCKER_COMPOSE_FILE="https://raw.githubusercontent.com/Kodylow/fedimint/kl/docker-deploy/docker/${INSTALL_TYPE}/${TLS_DIR}/docker-compose.yaml"
 
@@ -198,48 +175,35 @@ if [ "$IS_GATEWAY" = false ]; then
   done
 else # Is Gateway
   echo "The Lightning Gateway requires a Lightning node to connect to."
-  echo "This installer is only compatible with LND, for Core Lightning you'll need to run the gateway plugin."
+  echo "This installer can start a standalone gateway with LDK, start a new LND node, or use an existing LND node."
   echo "Do you want to configure this Lightning Gateway to:"
-  echo "1. Start and use a new LND Lightning node"
-  echo "2. Point at an existing LND Lightning node"
+  echo "1. Use LDK (standalone gateway)"
+  echo "2. Start a new LND Lightning node"
+  echo "2. Use an existing LND Lightning node"
   while true; do
-    read -r -n 1 -p "Your choice (1/2): " choice </dev/tty
+    read -r -n 1 -p "Your choice (1/2/3): " choice </dev/tty
     echo
     case $choice in
     1)
-      START_NEW_LND_NODE=true
+      USE_LDK=true
+      START_NEW_LND_NODE=false
+      SERVICES="gatewayd gateway-ui"
       break
       ;;
     2)
+      USE_LDK=false
+      START_NEW_LND_NODE=true
+      SERVICES="gatewayd gateway-ui lnd bitcoind"
+      break
+      ;;
+    3)
+      USE_LDK=false
       START_NEW_LND_NODE=false
-      break
-      ;;
-    *)
-      echo "Invalid option. Please choose 1 or 2."
-      ;;
-    esac
-  done
-
-  # Ask if they want to run fedimint's thunderhub fork
-  echo "Do you want to run thunderhub for the lightning gateway?"
-  echo "This is a fork of thunderhub that is compatible with the Fedimint lightning gateway."
-  echo "It lets you manage your lightning node and multiple fedimints' ecash from a single interface."
-  echo
-  while true; do
-    read -p "Do you want to run thunderhub alongside the gateway? [yes/no]: " choice </dev/tty
-    case $choice in
-    yes)
-      USE_THUNDERHUB=true
-      SERVICES="gatewayd lightningd thunderhub"
-      break
-      ;;
-    no)
-      USE_THUNDERHUB=false
       SERVICES="gatewayd gateway-ui"
       break
       ;;
     *)
-      echo "Invalid option. Please choose yes or no."
+      echo "Invalid option. Please choose 1, 2 or 3."
       ;;
     esac
   done
@@ -404,13 +368,21 @@ fi
 if [ "$IS_GATEWAY" = true ]; then
   # ask the user for the gateway password
   DEFAULT_GATEWAY_PASSWORD=thereisnosecondbest
-  read -p "Set the password for the gateway [$DEFAULT_GATEWAY_PASSWORD]: " -a gateway_password </dev/tty
+  read -p "Set a password for your gateway (must be a strong password): " -a gateway_password </dev/tty
   if [[ -z ${gateway_password[*]} ]]; then
     gateway_password=$DEFAULT_GATEWAY_PASSWORD
   fi
   sed -i "s/$DEFAULT_GATEWAY_PASSWORD/$gateway_password/g" ./docker-compose.yaml
 
-  if [ "$START_NEW_LND_NODE" = false ]; then
+  if [ $USE_LDK = true ]; then
+    # Remove the LND and Bitcoin sections from the docker-compose file
+    sed -i '/### START_LND ###/,/### END_LND ###/d' ./docker-compose.yaml
+    sed -i '/### START_LND_DATA ###/,/### END_LND_DATA ###/d' ./docker-compose.yaml
+    # Remove the volume binding for lnd_datadir:/root/.lnd
+    sed -i '/- lnd_datadir:\/root\/\.lnd/d' ./docker-compose.yaml
+    # Remove the 'depends_on: - lnd' lines
+    sed -i '/depends_on:/,+1d' ./docker-compose.yaml
+  elif [ "$START_NEW_LND_NODE" = false ]; then
     # Remove the LND and Bitcoin sections from the docker-compose file
     sed -i '/### START_LND ###/,/### END_LND ###/d' ./docker-compose.yaml
     sed -i '/### START_BITCOIND ###/,/### END_BITCOIND ###/d' ./docker-compose.yaml
@@ -468,13 +440,6 @@ if [ "$IS_GATEWAY" = true ]; then
         continue
       fi
     done
-  fi
-  if [ "$USE_THUNDERHUB" = false ]; then
-    # Remove thunderhub from the docker-compose file
-    sed -i '/### START_THUNDERHUB ###/,/### END_THUNDERHUB ###/d' ./docker-compose.yaml
-
-    # Remove thunderhub data directory 'thunderhub_datadir:' from the docker-compose file
-    sed -i '/thunderhub_datadir:/d' ./docker-compose.yaml
   fi
 else # Is Guardian
   if [ "$USE_ESPLORA" = true ]; then
