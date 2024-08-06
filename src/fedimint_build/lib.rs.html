@@ -131,11 +131,6 @@
 <a href="#131" id="131">131</a>
 <a href="#132" id="132">132</a>
 <a href="#133" id="133">133</a>
-<a href="#134" id="134">134</a>
-<a href="#135" id="135">135</a>
-<a href="#136" id="136">136</a>
-<a href="#137" id="137">137</a>
-<a href="#138" id="138">138</a>
 </pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 
 </span><span class="doccomment">//! Fedimint build scripts
@@ -255,23 +250,18 @@
         ));
     }
 
-    <span class="prelude-val">Ok</span>(<span class="kw">match </span>String::from_utf8(output.stdout) {
-        <span class="prelude-val">Ok</span>(o) =&gt; o.trim().to_string(),
-        <span class="prelude-val">Err</span>(e) =&gt; {
-            <span class="kw">return </span><span class="prelude-val">Err</span>(<span class="macro">format!</span>(<span class="string">"Invalid UTF-8 sequence detected: {e}"</span>));
-        }
-    })
+    <span class="kw">match </span>String::from_utf8(output.stdout) {
+        <span class="prelude-val">Ok</span>(o) =&gt; <span class="prelude-val">Ok</span>(o.trim().to_string()),
+        <span class="prelude-val">Err</span>(e) =&gt; <span class="prelude-val">Err</span>(<span class="macro">format!</span>(<span class="string">"Invalid UTF-8 sequence detected: {e}"</span>)),
+    }
 }
 
 <span class="doccomment">/// Run from a `build.rs` script to detect code version. See [`crate`] for
 /// description.
 </span><span class="kw">pub fn </span>set_code_version() {
-    <span class="kw">match </span>set_code_version_inner() {
-        <span class="prelude-val">Ok</span>(()) =&gt; {}
-        <span class="prelude-val">Err</span>(e) =&gt; {
-            <span class="macro">eprintln!</span>(<span class="string">"Failed to detect git hash version: {e}. Set {FORCE_GIT_HASH_ENV} to enforce the version and skip auto-detection."</span>);
-            <span class="macro">println!</span>(<span class="string">"cargo:rustc-env={FEDIMINT_BUILD_CODE_VERSION_ENV}=0000000000000000000000000000000000000000"</span>);
-        }
+    <span class="kw">if let </span><span class="prelude-val">Err</span>(e) = set_code_version_inner() {
+        <span class="macro">eprintln!</span>(<span class="string">"Failed to detect git hash version: {e}. Set {FORCE_GIT_HASH_ENV} to enforce the version and skip auto-detection."</span>);
+        <span class="macro">println!</span>(<span class="string">"cargo:rustc-env={FEDIMINT_BUILD_CODE_VERSION_ENV}=0000000000000000000000000000000000000000"</span>);
     }
 }
 </code></pre></div></section></main></body></html>
