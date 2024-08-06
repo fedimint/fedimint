@@ -4,7 +4,7 @@ version: "3"
 services:
   ### START_GATEWAYD ###
   gatewayd:
-    image: fedimint/gatewayd:v0.3.0
+    image: fedimint/gatewayd:v0.4.0
     command: gatewayd lnd
     environment:
       # Path to folder containing gateway config and data files
@@ -37,7 +37,7 @@ services:
 
   ### START_GATEWAY_UI ###
   gateway-ui:
-    image: fedimintui/gateway-ui:0.3.0
+    image: fedimintui/gateway-ui:0.4.0
     # image: gateway-ui
     ports:
       - "0.0.0.0:3001:3001"
@@ -69,7 +69,7 @@ services:
 
   ### START_BITCOIND ###
   bitcoind:
-    image: fedimint/mutinynet-bitcoind:master
+    image: btcpayserver/bitcoin:26.0
     command: --rpcuser=bitcoin --rpcpassword=bitcoin -zmqpubrawblock=tcp://[::]:48332 -zmqpubrawtx=tcp://[::]:48333
     ports:
       - 0.0.0.0:38333:38333

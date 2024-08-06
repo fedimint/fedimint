@@ -4,8 +4,6 @@
 # - guardian-ui.fedimint.my-super-host.com
 # - gatewayd.fedimint.my-super-host.com
 # - gateway-ui.fedimint.my-super-host.com
-# - rtl.fedimint.my-super-host.com
-# - xmpp.fedimint.my-super-host.com
 
 version: "3.3"
 
@@ -31,7 +29,7 @@ services:
 
   ### START_GATEWAYD ###
   gatewayd:
-    image: fedimint/gatewayd:v0.3.0
+    image: fedimint/gatewayd:v0.4.0
     command: gatewayd lnd
     environment:
       # Path to folder containing gateway config and data files
@@ -50,6 +48,7 @@ services:
       - FM_LND_TLS_CERT=/lnd_data/tls.cert
       # LND macaroon file path
       - FM_LND_MACAROON=/lnd_data/data/chain/bitcoin/signet/admin.macaroon
+      - FM_REL_NOTES_ACK=0_4_xyz
     volumes:
       - gateway_datadir:/gateway_data
       - lnd_datadir:/lnd_data
@@ -67,7 +66,7 @@ services:
 
   ### START_GATEWAY_UI ###
   gateway-ui:
-    image: fedimintui/gateway-ui:0.3.0
+    image: fedimintui/gateway-ui:0.4.0
     environment:
       - PORT=80
       - REACT_APP_FM_GATEWAY_API=https://gatewayd.fedimint.my-super-host.com
@@ -85,7 +84,7 @@ services:
 
   ### START_LND ###
   lnd:
-    image: lightninglabs/lnd:v0.17.3-beta
+    image: lightninglabs/lnd:v0.18.0-beta
     entrypoint: bash
     command:
       - -c
@@ -146,7 +145,7 @@ services:
 
   ### START_BITCOIND ###
   bitcoind:
-    image: fedimint/mutinynet-bitcoind:master
+    image: btcpayserver/bitcoin:26.0
     command: --rpcuser=bitcoin --rpcpassword=bitcoin -zmqpubrawblock=tcp://[::]:48332 -zmqpubrawtx=tcp://[::]:48333
     ports:
       - 0.0.0.0:38333:38333

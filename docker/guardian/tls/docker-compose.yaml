@@ -4,7 +4,6 @@
 # - fedimint.my-super-host.com
 # - fedimintd.fedimint.my-super-host.com
 # - guardian-ui.fedimint.my-super-host.com
-# - xmpp.fedimint.my-super-host.com
 
 version: "3.3"
 
@@ -30,7 +29,7 @@ services:
   
   ### START_FEDIMINTD ###
   fedimintd:
-    image: fedimint/fedimintd:v0.3.0
+    image: fedimint/fedimintd:v0.4.0
     volumes:
       - fedimintd_data:/data
     ports:
@@ -43,6 +42,7 @@ services:
       - FM_P2P_URL=fedimint://fedimint.my-super-host.com:8173
       - FM_BIND_API=0.0.0.0:80
       - FM_API_URL=wss://fedimintd.fedimint.my-super-host.com
+      - FM_REL_NOTES_ACK=0_4_xyz
     restart: always
     platform: linux/amd64
     labels:
