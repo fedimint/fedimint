@@ -1,6 +1,7 @@
 use clap::Parser;
 use devimint::devfed::DevJitFed;
-use devimint::federation::Client;
+use devimint::federation::{Client, Federation};
+use devimint::util::ProcessManager;
 use devimint::version_constants::VERSION_0_5_0_ALPHA;
 use devimint::{cmd, util};
 use fedimint_core::core::OperationId;
@@ -19,13 +20,13 @@ enum TestOpts {
     SelfPaymentsRefund,
     SelfPaymentsSuccess,
     LightningPayment,
+    InterFederation,
 }
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let opts = TestOpts::parse();
-
-    devimint::run_devfed_test(|dev_fed, _process_mgr| async move {
+    devimint::run_devfed_test(|dev_fed, process_mgr| async move {
         let fedimint_cli_version = util::FedimintCli::version_or_default().await;
         let fedimintd_version = util::FedimintdCmd::version_or_default().await;
         let gatewayd_version = util::Gatewayd::version_or_default().await;
@@ -54,6 +55,7 @@ async fn main() -> anyhow::Result<()> {
 
                 test_self_payments_success(&dev_fed).await?;
                 test_lightning_payments(&dev_fed).await?;
+                test_inter_federation_payments(&dev_fed, &process_mgr).await?;
             }
             TestOpts::GatewayRegistration => {
                 test_gateway_registration(&dev_fed).await?;
@@ -68,6 +70,10 @@ async fn main() -> anyhow::Result<()> {
             TestOpts::LightningPayment => {
                 pegin_gateways(&dev_fed).await?;
                 test_lightning_payments(&dev_fed).await?;
+            }
+            TestOpts::InterFederation => {
+                pegin_gateways(&dev_fed).await?;
+                test_inter_federation_payments(&dev_fed, &process_mgr).await?;
             }
         }
 
@@ -298,6 +304,71 @@ async fn test_lightning_payments(dev_fed: &DevJitFed) -> anyhow::Result<()> {
 
     info!("Testing lightning payments successful");
 
+    Ok(())
+}
+
+async fn test_inter_federation_payments(
+    dev_fed: &DevJitFed,
+    process_mgr: &ProcessManager,
+) -> anyhow::Result<()> {
+    info!("Testing inter federation...");
+    let send_federation = dev_fed.fed().await?;
+    let send_client = send_federation
+        .new_joined_client("lnv2-send-client")
+        .await?;
+
+    send_federation.pegin_client(100_000, &send_client).await?;
+
+    let gw_lnd = dev_fed.gw_lnd_registered().await?;
+    let gw_cln = dev_fed.gw_cln_registered().await?;
+    let gw_ldk = dev_fed
+        .gw_ldk_registered()
+        .await?
+        .as_ref()
+        .expect("LDK Gateway should be available");
+
+    // Spawn new federation
+    info!("Spawning receive federation...");
+    let bitcoind = dev_fed.bitcoind().await?;
+    let receive_federation = Federation::new(
+        process_mgr,
+        bitcoind.clone(),
+        4,
+        false,
+        "inter-federation-test".to_string(),
+    )
+    .await?;
+    gw_cln.connect_fed(&receive_federation).await?;
+    gw_lnd.connect_fed(&receive_federation).await?;
+    gw_ldk.connect_fed(&receive_federation).await?;
+
+    // pegin gateways for new federation
+    receive_federation.pegin_gateway(1_000_000, gw_cln).await?;
+    receive_federation.pegin_gateway(1_000_000, gw_lnd).await?;
+    receive_federation.pegin_gateway(1_000_000, gw_ldk).await?;
+
+    let receive_client = receive_federation
+        .new_joined_client("lnv2-receive-client")
+        .await?;
+
+    let gateways = [(gw_lnd, "LND"), (gw_cln, "CLN"), (gw_ldk, "LDK")];
+    let gateway_matrix = gateways.iter().cartesian_product(gateways);
+    for ((gw_send, ln_send), (gw_receive, ln_receive)) in gateway_matrix {
+        info!("Testing inter federation payment from {ln_send} -> {ln_receive}");
+
+        // Send from Fed1 -> Fed2 using different gateways
+        let (invoice, receive_op) = receive(&receive_client, &gw_receive.addr, 5_000_000).await?;
+        test_send(
+            &send_client,
+            &gw_send.addr,
+            &invoice,
+            FinalSendState::Success,
+        )
+        .await?;
+        await_receive_claimed(&receive_client, receive_op).await?;
+    }
+
+    info!("Testing inter federation payments successful");
     Ok(())
 }
 
