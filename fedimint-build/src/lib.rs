@@ -117,22 +117,17 @@ fn call_cmd(cmd: &str, args: &[&str]) -> Result<String, String> {
         ));
     }
 
-    Ok(match String::from_utf8(output.stdout) {
-        Ok(o) => o.trim().to_string(),
-        Err(e) => {
-            return Err(format!("Invalid UTF-8 sequence detected: {e}"));
-        }
-    })
+    match String::from_utf8(output.stdout) {
+        Ok(o) => Ok(o.trim().to_string()),
+        Err(e) => Err(format!("Invalid UTF-8 sequence detected: {e}")),
+    }
 }
 
 /// Run from a `build.rs` script to detect code version. See [`crate`] for
 /// description.
 pub fn set_code_version() {
-    match set_code_version_inner() {
-        Ok(()) => {}
-        Err(e) => {
-            eprintln!("Failed to detect git hash version: {e}. Set {FORCE_GIT_HASH_ENV} to enforce the version and skip auto-detection.");
-            println!("cargo:rustc-env={FEDIMINT_BUILD_CODE_VERSION_ENV}=0000000000000000000000000000000000000000");
-        }
+    if let Err(e) = set_code_version_inner() {
+        eprintln!("Failed to detect git hash version: {e}. Set {FORCE_GIT_HASH_ENV} to enforce the version and skip auto-detection.");
+        println!("cargo:rustc-env={FEDIMINT_BUILD_CODE_VERSION_ENV}=0000000000000000000000000000000000000000");
     }
 }
