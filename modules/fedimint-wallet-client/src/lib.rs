@@ -1214,19 +1214,23 @@ mod tests {
             let last_checked = AtomicBool::new(false);
             let last_checked = &last_checked;
             assert_eq!(
-                recover_scan_idxes_for_activity(TweakIdx(0), |cur_idx| async move {
-                    Ok(match cur_idx {
-                        TweakIdx(9) => {
-                            last_checked.store(true, Ordering::SeqCst);
-                            vec![]
-                        }
-                        TweakIdx(10) => panic!("Shouldn't happen"),
-                        TweakIdx(11) => {
-                            vec![0usize] /* just for type inference */
-                        }
-                        _ => vec![],
-                    })
-                })
+                recover_scan_idxes_for_activity(
+                    TweakIdx(0),
+                    &BTreeSet::new(),
+                    |cur_idx| async move {
+                        Ok(match cur_idx {
+                            TweakIdx(9) => {
+                                last_checked.store(true, Ordering::SeqCst);
+                                vec![]
+                            }
+                            TweakIdx(10) => panic!("Shouldn't happen"),
+                            TweakIdx(11) => {
+                                vec![0usize] /* just for type inference */
+                            }
+                            _ => vec![],
+                        })
+                    }
+                )
                 .await
                 .unwrap(),
                 RecoverScanOutcome {
@@ -1242,17 +1246,55 @@ mod tests {
             let last_checked = AtomicBool::new(false);
             let last_checked = &last_checked;
             assert_eq!(
-                recover_scan_idxes_for_activity(TweakIdx(10), |cur_idx| async move {
-                    Ok(match cur_idx {
-                        TweakIdx(10) => vec![()],
-                        TweakIdx(19) => {
-                            last_checked.store(true, Ordering::SeqCst);
-                            vec![]
-                        }
-                        TweakIdx(20) => panic!("Shouldn't happen"),
-                        _ => vec![],
-                    })
-                })
+                recover_scan_idxes_for_activity(
+                    TweakIdx(0),
+                    &BTreeSet::from([TweakIdx(1), TweakIdx(2)]),
+                    |cur_idx| async move {
+                        Ok(match cur_idx {
+                            TweakIdx(1) => panic!("Shouldn't happen: already used (1)"),
+                            TweakIdx(2) => panic!("Shouldn't happen: already used (2)"),
+                            TweakIdx(11) => {
+                                last_checked.store(true, Ordering::SeqCst);
+                                vec![]
+                            }
+                            TweakIdx(12) => panic!("Shouldn't happen"),
+                            TweakIdx(13) => {
+                                vec![0usize] /* just for type inference */
+                            }
+                            _ => vec![],
+                        })
+                    }
+                )
+                .await
+                .unwrap(),
+                RecoverScanOutcome {
+                    last_used_idx: Some(TweakIdx(2)),
+                    new_start_idx: TweakIdx(2 + RECOVER_NUM_IDX_ADD_TO_LAST_USED),
+                    tweak_idxes_with_pegins: BTreeSet::from([])
+                }
+            );
+            assert!(last_checked.load(Ordering::SeqCst));
+        }
+
+        {
+            let last_checked = AtomicBool::new(false);
+            let last_checked = &last_checked;
+            assert_eq!(
+                recover_scan_idxes_for_activity(
+                    TweakIdx(10),
+                    &BTreeSet::new(),
+                    |cur_idx| async move {
+                        Ok(match cur_idx {
+                            TweakIdx(10) => vec![()],
+                            TweakIdx(19) => {
+                                last_checked.store(true, Ordering::SeqCst);
+                                vec![]
+                            }
+                            TweakIdx(20) => panic!("Shouldn't happen"),
+                            _ => vec![],
+                        })
+                    }
+                )
                 .await
                 .unwrap(),
                 RecoverScanOutcome {
@@ -1265,7 +1307,7 @@ mod tests {
         }
 
         assert_eq!(
-            recover_scan_idxes_for_activity(TweakIdx(0), |cur_idx| async move {
+            recover_scan_idxes_for_activity(TweakIdx(0), &BTreeSet::new(), |cur_idx| async move {
                 Ok(match cur_idx {
                     TweakIdx(6 | 15) => vec![()],
                     _ => vec![],
@@ -1280,7 +1322,7 @@ mod tests {
             }
         );
         assert_eq!(
-            recover_scan_idxes_for_activity(TweakIdx(10), |cur_idx| async move {
+            recover_scan_idxes_for_activity(TweakIdx(10), &BTreeSet::new(), |cur_idx| async move {
                 Ok(match cur_idx {
                     TweakIdx(8) => {
                         vec![()] /* for type inference only */
@@ -1300,7 +1342,7 @@ mod tests {
             }
         );
         assert_eq!(
-            recover_scan_idxes_for_activity(TweakIdx(10), |cur_idx| async move {
+            recover_scan_idxes_for_activity(TweakIdx(10), &BTreeSet::new(), |cur_idx| async move {
                 Ok(match cur_idx {
                     TweakIdx(9) => panic!("Shouldn't happen"),
                     TweakIdx(15) => vec![()],

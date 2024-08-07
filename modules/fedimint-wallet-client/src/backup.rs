@@ -261,9 +261,14 @@ impl RecoveryFromHistory for WalletRecovery {
         // mutex
         let tracker = &Arc::new(Mutex::new(self.state.tracker.clone()));
 
-        debug!(target: LOG_CLIENT_MODULE_WALLET, next_unused_tweak_idx = ?self.state.tracker.next_unused_tweak_idx(), "Scanning blockchain for used peg-in addresses");
+        debug!(target: LOG_CLIENT_MODULE_WALLET,
+            next_unused_tweak_idx = ?self.state.next_unused_idx_from_backup,
+            "Scanning blockchain for used peg-in addresses");
         let RecoverScanOutcome { last_used_idx: _, new_start_idx, tweak_idxes_with_pegins}
-            = recover_scan_idxes_for_activity(self.state.tracker.next_unused_tweak_idx(), |cur_tweak_idx: TweakIdx|
+            = recover_scan_idxes_for_activity(
+                self.state.next_unused_idx_from_backup,
+                self.state.tracker.used_tweak_idxes(),
+                |cur_tweak_idx: TweakIdx|
                 async move {
 
                     let (script, address, _tweak_key, _operation_id) =
@@ -377,6 +382,7 @@ pub(crate) struct RecoverScanOutcome {
 /// test, as a side-effect free.
 pub(crate) async fn recover_scan_idxes_for_activity<F, FF, T>(
     previous_next_unused_idx: TweakIdx,
+    used_tweak_idxes: &BTreeSet<TweakIdx>,
     check_addr_history: F,
 ) -> anyhow::Result<RecoverScanOutcome>
 where
@@ -404,11 +410,18 @@ where
                 .advance(RECOVER_NUM_IDX_ADD_TO_LAST_USED);
         }
 
-        let history = check_addr_history(cur_tweak_idx).await?;
-
-        if !history.is_empty() {
+        if used_tweak_idxes.contains(&cur_tweak_idx) {
+            debug!(target: LOG_CLIENT_MODULE_WALLET,
+                tweak_idx=%cur_tweak_idx,
+                "Skipping checking history of an address, as it was previously used");
             last_used_idx = Some(cur_tweak_idx);
-            tweak_idxes_with_pegins.insert(cur_tweak_idx);
+        } else {
+            let history = check_addr_history(cur_tweak_idx).await?;
+
+            if !history.is_empty() {
+                last_used_idx = Some(cur_tweak_idx);
+                tweak_idxes_with_pegins.insert(cur_tweak_idx);
+            }
         }
         cur_tweak_idx = cur_tweak_idx.next();
     };
