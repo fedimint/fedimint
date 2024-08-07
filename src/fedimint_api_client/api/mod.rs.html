@@ -1162,6 +1162,9 @@
 <a href="#1162" id="1162">1162</a>
 <a href="#1163" id="1163">1163</a>
 <a href="#1164" id="1164">1164</a>
+<a href="#1165" id="1165">1165</a>
+<a href="#1166" id="1166">1166</a>
+<a href="#1167" id="1167">1167</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap};
 <span class="kw">use </span>std::fmt::{<span class="self">self</span>, Debug, Display};
 <span class="kw">use </span>std::pin::Pin;
@@ -1520,7 +1523,10 @@
         method: String,
         params: ApiRequestErased,
     ) -&gt; FederationResult&lt;FedRet&gt; {
-        <span class="attr">#[cfg(not(target_family = <span class="string">"wasm"</span>))]
+        <span class="comment">// NOTE: `FuturesUnorderded` is a footgun, but all we do here is polling
+        // completed results from it and we don't do any `await`s when
+        // processing them, it should be totally OK.
+        </span><span class="attr">#[cfg(not(target_family = <span class="string">"wasm"</span>))]
         </span><span class="kw">let </span><span class="kw-2">mut </span>futures = FuturesUnordered::&lt;Pin&lt;Box&lt;<span class="kw">dyn </span>Future&lt;Output = <span class="kw">_</span>&gt; + Send&gt;&gt;&gt;::new();
         <span class="attr">#[cfg(target_family = <span class="string">"wasm"</span>)]
         </span><span class="kw">let </span><span class="kw-2">mut </span>futures = FuturesUnordered::&lt;Pin&lt;Box&lt;<span class="kw">dyn </span>Future&lt;Output = <span class="kw">_</span>&gt;&gt;&gt;&gt;::new();

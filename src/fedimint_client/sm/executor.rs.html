@@ -1407,6 +1407,28 @@
 <a href="#1407" id="1407">1407</a>
 <a href="#1408" id="1408">1408</a>
 <a href="#1409" id="1409">1409</a>
+<a href="#1410" id="1410">1410</a>
+<a href="#1411" id="1411">1411</a>
+<a href="#1412" id="1412">1412</a>
+<a href="#1413" id="1413">1413</a>
+<a href="#1414" id="1414">1414</a>
+<a href="#1415" id="1415">1415</a>
+<a href="#1416" id="1416">1416</a>
+<a href="#1417" id="1417">1417</a>
+<a href="#1418" id="1418">1418</a>
+<a href="#1419" id="1419">1419</a>
+<a href="#1420" id="1420">1420</a>
+<a href="#1421" id="1421">1421</a>
+<a href="#1422" id="1422">1422</a>
+<a href="#1423" id="1423">1423</a>
+<a href="#1424" id="1424">1424</a>
+<a href="#1425" id="1425">1425</a>
+<a href="#1426" id="1426">1426</a>
+<a href="#1427" id="1427">1427</a>
+<a href="#1428" id="1428">1428</a>
+<a href="#1429" id="1429">1429</a>
+<a href="#1430" id="1430">1430</a>
+<a href="#1431" id="1431">1431</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashSet};
 <span class="kw">use </span>std::convert::Infallible;
 <span class="kw">use </span>std::fmt::{Debug, Formatter};
@@ -1911,6 +1933,8 @@
             <span class="doccomment">/// One of trigger futures of a state machine finished and
             /// returned transition function to run
             </span>Triggered(TransitionForActiveState),
+            <span class="doccomment">/// The state machine did not need to run, so it was canceled
+            </span>Invalid { state: DynState },
             <span class="doccomment">/// Transition function and all the accounting around it are done
             </span>Completed {
                 state: DynState,
@@ -1932,6 +1956,12 @@
         // in case.
         </span><span class="kw">let </span><span class="kw-2">mut </span>currently_running_sms = HashSet::&lt;DynState&gt;::new();
         <span class="comment">// All things happening in parallel go into here
+        // NOTE: `FuturesUnordered` is a footgun: when it's not being polled
+        // (e.g. we picked an event and are awaiting on something to process it),
+        // nothing inside `futures` will be making progress, which in extreme cases
+        // could lead to hangs. For this reason we try really hard in the code here,
+        // to pick an event from `futures` and spawn a new task, avoiding any `await`,
+        // just so we can get back to `futures.next()` ASAP.
         </span><span class="kw">let </span><span class="kw-2">mut </span>futures: FuturesUnordered&lt;BoxFuture&lt;<span class="lifetime">'_</span>, ExecutorLoopEvent&gt;&gt; =
             FuturesUnordered::new();
 
@@ -1958,29 +1988,31 @@
                         <span class="macro">warn!</span>(target: LOG_CLIENT_REACTOR, operation_id = %state.operation_id().fmt_short(), <span class="string">"Received a state machine that is already running. Ignoring"</span>);
                         <span class="kw">continue</span>;
                     }
-                    <span class="kw">let </span><span class="prelude-val">Some</span>(meta) = <span class="self">self</span>.get_active_state(<span class="kw-2">&amp;</span>state).<span class="kw">await else </span>{
-                        <span class="macro">warn!</span>(target: LOG_CLIENT_REACTOR, operation_id = %state.operation_id().fmt_short(), <span class="string">"Couldn't look up received state machine. Ignoring."</span>);
-                        <span class="kw">continue</span>;
-                    };
-
-                    <span class="kw">let </span>transitions = <span class="self">self
-                        </span>.get_transition_for(<span class="kw-2">&amp;</span>state, meta, <span class="kw-2">&amp;</span>global_context_gen)
-                        .<span class="kw">await</span>;
-                    <span class="kw">if </span>transitions.is_empty() {
-                        <span class="macro">warn!</span>(target: LOG_CLIENT_REACTOR, operation_id = %state.operation_id().fmt_short(), <span class="string">"Received an active state that doesn't produce any transitions. Ignoring."</span>);
-                        <span class="kw">continue</span>;
-                    }
-
-                    <span class="kw">let </span>transitions_num = transitions.len();
                     currently_running_sms.insert(state.clone());
-                    futures.push(Box::pin(<span class="kw">async </span>{
+                    <span class="kw">let </span>futures_len = futures.len();
+                    <span class="kw">let </span>global_context_gen = <span class="kw-2">&amp;</span>global_context_gen;
+                    <span class="macro">trace!</span>(target: LOG_CLIENT_REACTOR, state = <span class="question-mark">?</span>state, <span class="string">"Started new active state machine, details."</span>);
+                    futures.push(Box::pin(<span class="kw">async move </span>{
+                        <span class="kw">let </span><span class="prelude-val">Some</span>(meta) = <span class="self">self</span>.get_active_state(<span class="kw-2">&amp;</span>state).<span class="kw">await else </span>{
+                            <span class="macro">warn!</span>(target: LOG_CLIENT_REACTOR, operation_id = %state.operation_id().fmt_short(), <span class="string">"Couldn't look up received state machine. Ignoring."</span>);
+                            <span class="kw">return </span>ExecutorLoopEvent::Invalid { state: state.clone() };
+                        };
+
+                        <span class="kw">let </span>transitions = <span class="self">self
+                            </span>.get_transition_for(<span class="kw-2">&amp;</span>state, meta, global_context_gen)
+                            .<span class="kw">await</span>;
+                        <span class="kw">if </span>transitions.is_empty() {
+                            <span class="macro">warn!</span>(target: LOG_CLIENT_REACTOR, operation_id = %state.operation_id().fmt_short(), <span class="string">"Received an active state that doesn't produce any transitions. Ignoring."</span>);
+                            <span class="kw">return </span>ExecutorLoopEvent::Invalid { state: state.clone() };
+                        }
+                        <span class="kw">let </span>transitions_num = transitions.len();
+
+                        <span class="macro">debug!</span>(target: LOG_CLIENT_REACTOR, operation_id = %state.operation_id().fmt_short(), total = futures_len + <span class="number">1</span>, transitions_num, <span class="string">"New active state machine."</span>);
+
                         <span class="kw">let </span>(first_completed_result, _index, _unused_transitions) =
                             select_all(transitions).<span class="kw">await</span>;
                         ExecutorLoopEvent::Triggered(first_completed_result)
                     }));
-
-                    <span class="macro">debug!</span>(target: LOG_CLIENT_REACTOR, operation_id = %state.operation_id().fmt_short(), total = futures.len(), transitions_num, <span class="string">"New active state machine."</span>);
-                    <span class="macro">trace!</span>(target: LOG_CLIENT_REACTOR, state = <span class="question-mark">?</span>state, <span class="string">"Started new active state machine, details."</span>);
                 }
                 ExecutorLoopEvent::Triggered(TransitionForActiveState {
                     outcome,
@@ -2110,6 +2142,18 @@
                         )
                     });
                 }
+                ExecutorLoopEvent::Invalid { state } =&gt; {
+                    <span class="macro">trace!</span>(
+                        target: LOG_CLIENT_REACTOR,
+                        operation_id = %state.operation_id().fmt_short(), total = futures.len(),
+                        <span class="string">"State invalid"
+                    </span>);
+                    <span class="macro">assert!</span>(
+                        currently_running_sms.remove(<span class="kw-2">&amp;</span>state),
+                        <span class="string">"State must have been recorded"
+                    </span>);
+                }
+
                 ExecutorLoopEvent::Completed { state, outcome } =&gt; {
                     <span class="macro">assert!</span>(
                         currently_running_sms.remove(<span class="kw-2">&amp;</span>state),

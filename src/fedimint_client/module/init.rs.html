@@ -427,6 +427,14 @@
 <a href="#427" id="427">427</a>
 <a href="#428" id="428">428</a>
 <a href="#429" id="429">429</a>
+<a href="#430" id="430">430</a>
+<a href="#431" id="431">431</a>
+<a href="#432" id="432">432</a>
+<a href="#433" id="433">433</a>
+<a href="#434" id="434">434</a>
+<a href="#435" id="435">435</a>
+<a href="#436" id="436">436</a>
+<a href="#437" id="437">437</a>
 </pre></div><pre class="rust"><code><span class="kw">pub mod </span>recovery;
 
 <span class="kw">use </span>std::collections::BTreeMap;
@@ -556,6 +564,7 @@
     module_api: DynModuleApi,
     context: ClientContext&lt;&lt;C <span class="kw">as </span>ClientModuleInit&gt;::Module&gt;,
     progress_tx: tokio::sync::watch::Sender&lt;RecoveryProgress&gt;,
+    task_group: TaskGroup,
 }
 
 <span class="kw">impl</span>&lt;C&gt; ClientModuleRecoverArgs&lt;C&gt;
@@ -576,6 +585,10 @@
 
     <span class="kw">pub fn </span>db(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>Database {
         <span class="kw-2">&amp;</span><span class="self">self</span>.db
+    }
+
+    <span class="kw">pub fn </span>task_group(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>TaskGroup {
+        <span class="kw-2">&amp;</span><span class="self">self</span>.task_group
     }
 
     <span class="kw">pub fn </span>core_api_version(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>ApiVersion {
@@ -695,6 +708,7 @@
         admin_auth: <span class="prelude-ty">Option</span>&lt;ApiAuth&gt;,
         snapshot: <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>DynModuleBackup&gt;,
         progress_tx: watch::Sender&lt;RecoveryProgress&gt;,
+        task_group: TaskGroup,
     ) -&gt; anyhow::Result&lt;()&gt;;
 
     <span class="attr">#[allow(clippy::too_many_arguments)]
@@ -756,6 +770,7 @@
         admin_auth: <span class="prelude-ty">Option</span>&lt;ApiAuth&gt;,
         snapshot: <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>DynModuleBackup&gt;,
         progress_tx: watch::Sender&lt;RecoveryProgress&gt;,
+        task_group: TaskGroup,
     ) -&gt; anyhow::Result&lt;()&gt; {
         <span class="kw">let </span>typed_cfg: <span class="kw-2">&amp;</span>&lt;&lt;T <span class="kw">as </span>fedimint_core::module::ModuleInit&gt;::Common <span class="kw">as </span>CommonModuleInit&gt;::ClientConfig = cfg.cast()<span class="question-mark">?</span>;
         <span class="kw">let </span>snapshot: <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>&lt;&lt;<span class="self">Self </span><span class="kw">as </span>ClientModuleInit&gt;::Module <span class="kw">as </span>ClientModule&gt;::Backup&gt; =
@@ -786,6 +801,7 @@
                         _marker: marker::PhantomData,
                     },
                     progress_tx,
+                    task_group,
                 },
                 snapshot,
             )

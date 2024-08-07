@@ -2685,6 +2685,10 @@
 <a href="#2685" id="2685">2685</a>
 <a href="#2686" id="2686">2686</a>
 <a href="#2687" id="2687">2687</a>
+<a href="#2688" id="2688">2688</a>
+<a href="#2689" id="2689">2689</a>
+<a href="#2690" id="2690">2690</a>
+<a href="#2691" id="2691">2691</a>
 </pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::doc_markdown)]
@@ -4101,7 +4105,9 @@
             )
         }
 
-        <span class="kw">let </span><span class="kw-2">mut </span>requests = FuturesUnordered::new();
+        <span class="comment">// NOTE: `FuturesUnordered` is a footgun, but since we only poll it for result
+        // and make a single async db write operation, it should be OK.
+        </span><span class="kw">let </span><span class="kw-2">mut </span>requests = FuturesUnordered::new();
 
         <span class="kw">for </span>peer_id <span class="kw">in </span>num_peers.peer_ids() {
             requests.push(make_request(Duration::ZERO, peer_id, <span class="kw-2">&amp;</span>api));
@@ -5095,6 +5101,7 @@
                         <span class="kw">let </span>admin_auth = <span class="self">self</span>.admin_creds.as_ref().map(|creds| creds.auth.clone());
                         <span class="kw">let </span>final_client = final_client.clone();
                         <span class="kw">let </span>(progress_tx, progress_rx) = tokio::sync::watch::channel(progress);
+                        <span class="kw">let </span>task_group = task_group.clone();
                         <span class="kw">let </span>module_init = module_init.clone();
                         (
                             Box::pin(<span class="kw">async move </span>{
@@ -5114,6 +5121,7 @@
                                         admin_auth,
                                         snapshot.as_ref().and_then(|s| s.modules.get(<span class="kw-2">&amp;</span>module_instance_id)),
                                         progress_tx,
+                                        task_group,
                                     )
                                     .<span class="kw">await
                                     </span>.map_err(|err| {
