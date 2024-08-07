@@ -192,5 +192,9 @@ async fn try_cancel_oob_spend(
         }),
     };
 
-    global_context.claim_input(dbtx, input).await.0
+    global_context
+        .claim_input(dbtx, input)
+        .await
+        .expect("Cannot claim input, additional funding needed")
+        .0
 }

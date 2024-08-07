@@ -243,7 +243,11 @@ impl ReceiveStateMachine {
             state_machines: Arc::new(|_, _| vec![]),
         };
 
-        let outpoints = global_context.claim_input(dbtx, client_input).await.1;
+        let outpoints = global_context
+            .claim_input(dbtx, client_input)
+            .await
+            .expect("Cannot claim input, additional funding needed")
+            .1;
 
         old_state.update(ReceiveSMState::Refunding(outpoints))
     }

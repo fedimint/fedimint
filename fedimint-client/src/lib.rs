@@ -231,7 +231,7 @@ pub trait IGlobalClientContext: Debug + MaybeSend + MaybeSync + 'static {
         &self,
         dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
         input: InstancelessDynClientInput,
-    ) -> (TransactionId, Vec<OutPoint>);
+    ) -> anyhow::Result<(TransactionId, Vec<OutPoint>)>;
 
     /// This function is mostly meant for internal use, you are probably looking
     /// for [`DynGlobalClientContext::fund_output`].
@@ -275,7 +275,7 @@ impl IGlobalClientContext for () {
         &self,
         _dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
         _input: InstancelessDynClientInput,
-    ) -> (TransactionId, Vec<OutPoint>) {
+    ) -> anyhow::Result<(TransactionId, Vec<OutPoint>)> {
         unimplemented!("fake implementation, only for tests");
     }
 
@@ -340,7 +340,7 @@ impl DynGlobalClientContext {
         &self,
         dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
         input: ClientInput<I, S>,
-    ) -> (TransactionId, Vec<OutPoint>)
+    ) -> anyhow::Result<(TransactionId, Vec<OutPoint>)>
     where
         I: IInput + MaybeSend + MaybeSync + 'static,
         S: IState + MaybeSend + MaybeSync + 'static,
@@ -466,7 +466,7 @@ impl IGlobalClientContext for ModuleGlobalClientContext {
         &self,
         dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
         input: InstancelessDynClientInput,
-    ) -> (TransactionId, Vec<OutPoint>) {
+    ) -> anyhow::Result<(TransactionId, Vec<OutPoint>)> {
         let instance_input = ClientInput {
             input: DynInput::from_parts(self.module_instance_id, input.input),
             keys: input.keys,
@@ -481,7 +481,6 @@ impl IGlobalClientContext for ModuleGlobalClientContext {
                 TransactionBuilder::new().with_input(instance_input),
             )
             .await
-            .expect("Can only fail if additional funding is needed")
     }
 
     async fn fund_output_dyn(
