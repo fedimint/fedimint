@@ -20,14 +20,13 @@ services:
       # note: for production environments it's recommended to use a https reverse proxy,
       # so it will be prefixed by wss:// instead of ws://
       - FM_API_URL=ws://127.0.0.1:8174
-      - FM_REL_NOTES_ACK=0_4_xyz
     restart: always
     platform: linux/amd64
   ### END_FEDIMINTD ###
 
   ### START_GUARDIAN_UI ###
   guardian-ui:
-    image: fedimintui/guardian-ui:0.4.0
+    image: fedimintui/guardian-ui:0.3.0
     ports:
       - "0.0.0.0:3000:3000"
     environment:
@@ -41,7 +40,7 @@ services:
 
   ### START_BITCOIND ###
   bitcoind:
-    image: btcpayserver/bitcoin:26.0
+    image: fedimint/mutinynet-bitcoind:master
     command: --rpcuser=bitcoin --rpcpassword=bitcoin -zmqpubrawblock=tcp://[::]:48332 -zmqpubrawtx=tcp://[::]:48333
     ports:
       - 0.0.0.0:38333:38333
@@ -50,6 +49,7 @@ services:
     restart: always
     platform: linux/amd64
   ### END_BITCOIND ###
+
 
 volumes:
   fedimintd_data:
