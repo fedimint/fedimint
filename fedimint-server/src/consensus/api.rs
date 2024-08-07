@@ -33,7 +33,7 @@ use fedimint_core::epoch::ConsensusItem;
 use fedimint_core::module::audit::{Audit, AuditSummary};
 use fedimint_core::module::registry::ServerModuleRegistry;
 use fedimint_core::module::{
-    api_endpoint, ApiEndpoint, ApiEndpointContext, ApiError, ApiRequestErased, ApiVersion,
+    api_endpoint, ApiAuth, ApiEndpoint, ApiEndpointContext, ApiError, ApiRequestErased, ApiVersion,
     SerdeModuleEncoding, SupportedApiVersionsSummary,
 };
 use fedimint_core::net::api_announcement::{
@@ -471,6 +471,7 @@ impl HasApiContext<ConsensusApi> for ConsensusApi {
         &self,
         request: &ApiRequestErased,
         id: Option<ModuleInstanceId>,
+        http_api_auth: Option<ApiAuth>,
     ) -> (&ConsensusApi, ApiEndpointContext<'_>) {
         let mut db = self.db.clone();
         let mut dbtx = self.db.begin_transaction().await;
@@ -478,12 +479,13 @@ impl HasApiContext<ConsensusApi> for ConsensusApi {
             db = self.db.with_prefix_module_id(id);
             dbtx = dbtx.with_prefix_module_id(id);
         }
+
         (
             self,
             ApiEndpointContext::new(
                 db,
                 dbtx,
-                request.auth == Some(self.cfg.private.api_auth.clone()),
+                request.auth.clone().or(http_api_auth) == Some(self.cfg.private.api_auth.clone()),
                 request.auth.clone(),
             ),
         )
@@ -496,8 +498,9 @@ impl HasApiContext<DynServerModule> for ConsensusApi {
         &self,
         request: &ApiRequestErased,
         id: Option<ModuleInstanceId>,
+        http_api_auth: Option<ApiAuth>,
     ) -> (&DynServerModule, ApiEndpointContext<'_>) {
-        let (_, context): (&ConsensusApi, _) = self.context(request, id).await;
+        let (_, context): (&ConsensusApi, _) = self.context(request, id, http_api_auth).await;
         (
             self.modules.get_expect(id.expect("required module id")),
             context,

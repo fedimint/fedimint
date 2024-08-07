@@ -527,7 +527,7 @@ pub struct ConfigGenState {
     /// Our config gen settings configured locally
     settings: ConfigGenSettings,
     /// Our auth string
-    auth: Option<ApiAuth>,
+    auth: Arc<Mutex<Option<ApiAuth>>>,
     /// Our local connection
     local: Option<ConfigGenLocalConnection>,
     /// Connection info received from other guardians, unique by api_url
@@ -556,10 +556,10 @@ struct ConfigGenLocalConnection {
 }
 
 impl ConfigGenState {
-    fn new(settings: ConfigGenSettings) -> Self {
+    fn new(settings: ConfigGenSettings, auth: Arc<Mutex<Option<ApiAuth>>>) -> Self {
         Self {
             settings,
-            auth: None,
+            auth,
             local: None,
             peers: BTreeMap::new(),
             requested_params: None,
@@ -701,6 +701,7 @@ impl HasApiContext<ConfigGenApi> for ConfigGenApi {
         &self,
         request: &ApiRequestErased,
         id: Option<ModuleInstanceId>,
+        http_auth_status: Option<ApiAuth>,
     ) -> (&ConfigGenApi, ApiEndpointContext<'_>) {
         let mut db = self.db.clone();
         let mut dbtx = self.db.begin_transaction().await;
@@ -710,7 +711,7 @@ impl HasApiContext<ConfigGenApi> for ConfigGenApi {
         }
         let state = self.state.lock().await;
         let auth = request.auth.as_ref();
-        let has_auth = match state.auth.clone() {
+        let has_guardian_auth = match state.auth.clone().or(http_auth_status) {
             // The first client to connect gets the set the password
             None => true,
             Some(configured_auth) => Some(&configured_auth) == auth,
@@ -718,7 +719,7 @@ impl HasApiContext<ConfigGenApi> for ConfigGenApi {
 
         (
             self,
-            ApiEndpointContext::new(db, dbtx, has_auth, request.auth.clone()),
+            ApiEndpointContext::new(db, dbtx, has_guardian_auth, request.auth.clone()),
         )
     }
 }

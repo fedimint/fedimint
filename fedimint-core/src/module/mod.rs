@@ -79,6 +79,7 @@ impl TransactionItemAmount {
 }
 
 /// All requests from client to server contain these fields
+// TODO: The goal would be to get rid of this wrapping of jsonrpc body
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ApiRequest<T> {
     /// Hashed user password if the API requires authentication
@@ -170,7 +171,7 @@ impl ApiError {
 pub struct ApiEndpointContext<'dbtx> {
     db: Database,
     dbtx: DatabaseTransaction<'dbtx, Committable>,
-    has_auth: bool,
+    has_guardian_auth: bool,
     request_auth: Option<ApiAuth>,
 }
 
@@ -179,13 +180,13 @@ impl<'a> ApiEndpointContext<'a> {
     pub fn new(
         db: Database,
         dbtx: DatabaseTransaction<'a, Committable>,
-        has_auth: bool,
+        has_guardian_auth: bool,
         request_auth: Option<ApiAuth>,
     ) -> Self {
         Self {
             db,
             dbtx,
-            has_auth,
+            has_guardian_auth,
             request_auth,
         }
     }
@@ -208,8 +209,8 @@ impl<'a> ApiEndpointContext<'a> {
 
     /// Whether the request was authenticated as the guardian who controls this
     /// fedimint server
-    pub fn has_auth(&self) -> bool {
-        self.has_auth
+    pub fn has_guardian_auth(&self) -> bool {
+        self.has_guardian_auth
     }
 
     pub fn db(&self) -> Database {

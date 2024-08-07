@@ -12,7 +12,7 @@ use anyhow::{bail, Context};
 use async_trait::async_trait;
 use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::encoding::{Decodable, Encodable};
-use fedimint_core::module::{ApiEndpoint, ApiEndpointContext, ApiError, ApiRequestErased};
+use fedimint_core::module::{ApiAuth, ApiEndpoint, ApiEndpointContext, ApiError, ApiRequestErased};
 use fedimint_logging::LOG_NET_API;
 use futures::FutureExt;
 use jsonrpsee::server::{PingConfig, RpcServiceBuilder, ServerBuilder, ServerHandle};
@@ -110,6 +110,7 @@ pub trait HasApiContext<State> {
         &self,
         request: &ApiRequestErased,
         id: Option<ModuleInstanceId>,
+        http_api_auth: Option<ApiAuth>,
     ) -> (&State, ApiEndpointContext<'_>);
 }
 
@@ -124,7 +125,7 @@ pub struct GuardianAuthToken {
 pub type ApiResult<T> = Result<T, ApiError>;
 
 pub fn check_auth(context: &mut ApiEndpointContext) -> ApiResult<GuardianAuthToken> {
-    if context.has_auth() {
+    if context.has_guardian_auth() {
         Ok(GuardianAuthToken { _marker: () })
     } else {
         Err(ApiError::unauthorized())
@@ -183,9 +184,13 @@ pub fn attach_endpoints<State, T>(
         let handler: &'static _ = Box::leak(endpoint.handler);
 
         rpc_module
-            .register_async_method(path, move |params, rpc_state, _extensions| async move {
+            .register_async_method(path, move |params, rpc_state, extensions| async move {
                 let params = params.one::<serde_json::Value>()?;
                 let rpc_context = &rpc_state.rpc_context;
+
+                let http_api_auth = extensions
+                    .get::<Option<ApiAuth>>()
+                    .expect("AuthStatus always set by the HttpAuthService");
 
                 // Using AssertUnwindSafe here is far from ideal. In theory this means we could
                 // end up with an inconsistent state in theory. In practice most API functions
@@ -194,7 +199,9 @@ pub fn attach_endpoints<State, T>(
                 AssertUnwindSafe(tokio::time::timeout(API_ENDPOINT_TIMEOUT, async {
                     let request = serde_json::from_value(params)
                         .map_err(|e| ApiError::bad_request(e.to_string()))?;
-                    let (state, context) = rpc_context.context(&request, module_instance_id).await;
+                    let (state, context) = rpc_context
+                        .context(&request, module_instance_id, http_api_auth.clone())
+                        .await;
 
                     (handler)(state, context, request).await
                 }))
