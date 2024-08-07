@@ -514,7 +514,8 @@ jobs:
               cachix push fedimint -c 8 -j 8 $(nix-store --query --references $(readlink -f result)) $(readlink -f result)
               cachix pin fedimint "fedimint-release-$bin:$BUILD_ID" $(readlink -f result)
             fi
-            nix bundle --bundler .# .#$bin -o "bins/$bin-$BUILD_ID" && sha256sum "bins/$bin-$BUILD_ID"
+            # Note: keep in sync with sign.sh
+            nix bundle --bundler .# ".#$bin" -o "bins/$bin-$BUILD_ID" && sha256sum "bins/$bin-$BUILD_ID"
           done
 
       - name: Check version ${{ matrix.build.bins }}

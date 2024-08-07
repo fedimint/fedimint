@@ -24,7 +24,10 @@ fi
 
 # TODO: add gateway-cln-extension once available as an output
 for bin in fedimintd fedimint-cli fedimint-dbtool gateway-cli gatewayd ; do
-  repo="git+file:${REPO_ROOT}?ref=refs/tags/${tag}"
+  # We need to use rev= , see https://github.com/NixOS/nix/issues/11266
+  # NOTE: '^{commit}' is not a mistake, but git rev-parse syntaxh
+  rev="$(git rev-parse "${tag}^{commit}")"
+  repo="git+file:${REPO_ROOT}?rev=${rev}"
   out="$repo#${bin}"
   nix build "$out"
   mkdir -p "${release_dir}/nixos"
@@ -32,10 +35,7 @@ for bin in fedimintd fedimint-cli fedimint-dbtool gateway-cli gatewayd ; do
 
   # skip bundles on Darwin (not supported)
   if [[ "$system" != *"-darwin" ]]; then
-    # TODO: re-export pinned bundlers from our own flake, so they are pinned at the release time
-    # and use the bundler exported in the release: '--bundler git+file:?ref/targs/'
-    # TODO: switch back to upstream after https://github.com/matthewbauer/nix-bundle/pull/103 is available
-    nix bundle --bundler "github:dpc/bundlers?branch=24-02-21-tar-deterministic&rev=e8aafe89a11ae0a5f3ce97d1d7d0fcfb354c79eb" "$out" -o result
+    nix bundle --bundler "$repo" "$out" -o result
     cp -f -L result "${release_dir}/$bin"
   fi
 done
