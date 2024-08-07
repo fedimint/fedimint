@@ -35,6 +35,8 @@ for bin in fedimintd fedimint-cli fedimint-dbtool gateway-cli gatewayd ; do
     # TODO: re-export pinned bundlers from our own flake, so they are pinned at the release time
     # and use the bundler exported in the release: '--bundler git+file:?ref/targs/'
     # TODO: switch back to upstream after https://github.com/matthewbauer/nix-bundle/pull/103 is available
+    # The invocation here, needs to be the same as in ci-nix.yml, and notably
+    # '.#<out>' and 'git+file://...' give different results
     nix bundle --bundler "github:dpc/bundlers?branch=24-02-21-tar-deterministic&rev=e8aafe89a11ae0a5f3ce97d1d7d0fcfb354c79eb" "$out" -o result
     cp -f -L result "${release_dir}/$bin"
   fi
