@@ -2688,7 +2688,6 @@
 <a href="#2688" id="2688">2688</a>
 <a href="#2689" id="2689">2689</a>
 <a href="#2690" id="2690">2690</a>
-<a href="#2691" id="2691">2691</a>
 </pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::doc_markdown)]
@@ -2922,7 +2921,7 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         dbtx: <span class="kw-2">&amp;mut </span>ClientSMDatabaseTransaction&lt;<span class="lifetime">'_</span>, <span class="lifetime">'_</span>&gt;,
         input: InstancelessDynClientInput,
-    ) -&gt; (TransactionId, Vec&lt;OutPoint&gt;);
+    ) -&gt; anyhow::Result&lt;(TransactionId, Vec&lt;OutPoint&gt;)&gt;;
 
     <span class="doccomment">/// This function is mostly meant for internal use, you are probably looking
     /// for [`DynGlobalClientContext::fund_output`].
@@ -2966,7 +2965,7 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         _dbtx: <span class="kw-2">&amp;mut </span>ClientSMDatabaseTransaction&lt;<span class="lifetime">'_</span>, <span class="lifetime">'_</span>&gt;,
         _input: InstancelessDynClientInput,
-    ) -&gt; (TransactionId, Vec&lt;OutPoint&gt;) {
+    ) -&gt; anyhow::Result&lt;(TransactionId, Vec&lt;OutPoint&gt;)&gt; {
         <span class="macro">unimplemented!</span>(<span class="string">"fake implementation, only for tests"</span>);
     }
 
@@ -3031,7 +3030,7 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         dbtx: <span class="kw-2">&amp;mut </span>ClientSMDatabaseTransaction&lt;<span class="lifetime">'_</span>, <span class="lifetime">'_</span>&gt;,
         input: ClientInput&lt;I, S&gt;,
-    ) -&gt; (TransactionId, Vec&lt;OutPoint&gt;)
+    ) -&gt; anyhow::Result&lt;(TransactionId, Vec&lt;OutPoint&gt;)&gt;
     <span class="kw">where
         </span>I: IInput + MaybeSend + MaybeSync + <span class="lifetime">'static</span>,
         S: IState + MaybeSend + MaybeSync + <span class="lifetime">'static</span>,
@@ -3157,7 +3156,7 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         dbtx: <span class="kw-2">&amp;mut </span>ClientSMDatabaseTransaction&lt;<span class="lifetime">'_</span>, <span class="lifetime">'_</span>&gt;,
         input: InstancelessDynClientInput,
-    ) -&gt; (TransactionId, Vec&lt;OutPoint&gt;) {
+    ) -&gt; anyhow::Result&lt;(TransactionId, Vec&lt;OutPoint&gt;)&gt; {
         <span class="kw">let </span>instance_input = ClientInput {
             input: DynInput::from_parts(<span class="self">self</span>.module_instance_id, input.input),
             keys: input.keys,
@@ -3172,8 +3171,7 @@
                 TransactionBuilder::new().with_input(instance_input),
             )
             .<span class="kw">await
-            </span>.expect(<span class="string">"Can only fail if additional funding is needed"</span>)
-    }
+    </span>}
 
     <span class="kw">async fn </span>fund_output_dyn(
         <span class="kw-2">&amp;</span><span class="self">self</span>,

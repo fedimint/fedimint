@@ -229,6 +229,9 @@
 <a href="#229" id="229">229</a>
 <a href="#230" id="230">230</a>
 <a href="#231" id="231">231</a>
+<a href="#232" id="232">232</a>
+<a href="#233" id="233">233</a>
+<a href="#234" id="234">234</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::sync::Arc;
 
 <span class="kw">use </span>fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
@@ -380,7 +383,10 @@
             </span>state_machines: Arc::new(|<span class="kw">_</span>, <span class="kw">_</span>| <span class="macro">vec!</span>[]),
         };
 
-        <span class="kw">let </span>(refund_txid, <span class="kw">_</span>) = global_context.claim_input(dbtx, refund_input).<span class="kw">await</span>;
+        <span class="kw">let </span>(refund_txid, <span class="kw">_</span>) = global_context
+            .claim_input(dbtx, refund_input)
+            .<span class="kw">await
+            </span>.expect(<span class="string">"Cannot claim input, additional funding needed"</span>);
 
         MintInputStateMachine {
             common: old_state.common,

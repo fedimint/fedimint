@@ -910,6 +910,10 @@
 <a href="#910" id="910">910</a>
 <a href="#911" id="911">911</a>
 <a href="#912" id="912">912</a>
+<a href="#913" id="913">913</a>
+<a href="#914" id="914">914</a>
+<a href="#915" id="915">915</a>
+<a href="#916" id="916">916</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::fmt::Display;
 <span class="kw">use </span>std::sync::Arc;
 
@@ -1606,7 +1610,11 @@
             keys: <span class="macro">vec!</span>[context.redeem_key],
         };
 
-        <span class="kw">let </span>out_points = global_context.claim_input(dbtx, client_input).<span class="kw">await</span>.<span class="number">1</span>;
+        <span class="kw">let </span>out_points = global_context
+            .claim_input(dbtx, client_input)
+            .<span class="kw">await
+            </span>.expect(<span class="string">"Cannot claim input, additional funding needed"</span>)
+            .<span class="number">1</span>;
         <span class="macro">debug!</span>(<span class="string">"Claimed outgoing contract {contract:?} with out points {out_points:?}"</span>);
         GatewayPayStateMachine {
             common,
