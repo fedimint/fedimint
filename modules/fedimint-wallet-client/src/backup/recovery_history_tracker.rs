@@ -1,4 +1,4 @@
-use std::collections::{BTreeMap, VecDeque};
+use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_logging::LOG_CLIENT_MODULE_WALLET;
@@ -22,9 +22,18 @@ use crate::WalletClientModuleData;
 /// are actually linked with each other.
 #[derive(Clone, Debug, Encodable, Decodable)]
 pub struct ConsensusPegInTweakIdxesUsedTracker {
+    /// Any time we detect one of the scripts in `pending_pubkey_scripts` was
+    /// used we insert the `tweak_idx`, so we can skip asking network about
+    /// them (which would be bad for privacy)
+    used_tweak_idxes: BTreeSet<TweakIdx>,
+    /// All the pubkey scripts we are looking for in the federation history, to
+    /// detect previous successful peg-ins.
     pending_pubkey_scripts: BTreeMap<bitcoin::ScriptBuf, TweakIdx>,
+    /// Next tweak idx to add to `pending_pubkey_scripts`
     next_pending_tweak_idx: TweakIdx,
-    next_unused_tweak_idx: TweakIdx,
+
+    /// Collection of recent scripts from federation history that do not belong
+    /// to us
     decoys: VecDeque<bitcoin::ScriptBuf>,
     // To avoid updating `decoys` for the whole recovery, which might be a lot of extra updates
     // most of which will be thrown away, ignore script pubkeys from before this `session_idx`
@@ -32,39 +41,26 @@ pub struct ConsensusPegInTweakIdxesUsedTracker {
 }
 
 impl ConsensusPegInTweakIdxesUsedTracker {
-    pub(crate) fn next_unused_tweak_idx(&self) -> TweakIdx {
-        self.next_unused_tweak_idx
-    }
-
     pub(crate) fn new(
         previous_next_unused_idx: TweakIdx,
         start_session_idx: u64,
         current_session_count: u64,
-
         data: &WalletClientModuleData,
     ) -> Self {
         debug_assert!(start_session_idx <= current_session_count);
 
         let mut s = Self {
-            pending_pubkey_scripts: BTreeMap::new(),
             next_pending_tweak_idx: previous_next_unused_idx,
+            pending_pubkey_scripts: BTreeMap::new(),
             decoys: VecDeque::new(),
             decoy_session_threshold: current_session_count
                 .saturating_sub((current_session_count.saturating_sub(current_session_count)) / 20),
-            next_unused_tweak_idx: previous_next_unused_idx,
+            used_tweak_idxes: BTreeSet::new(),
         };
 
         s.init(data);
 
         s
-    }
-    fn generate_next_pending_tweak_idx(&mut self, data: &WalletClientModuleData) {
-        let (script, _address, _tweak_key, _operation_id) =
-            data.derive_peg_in_script(self.next_pending_tweak_idx);
-
-        self.pending_pubkey_scripts
-            .insert(script, self.next_pending_tweak_idx);
-        self.next_pending_tweak_idx = self.next_pending_tweak_idx.next();
     }
 
     fn init(&mut self, data: &WalletClientModuleData) {
@@ -74,21 +70,27 @@ impl ConsensusPegInTweakIdxesUsedTracker {
         debug_assert_eq!(self.pending_pubkey_scripts.len(), RECOVER_MAX_GAP as usize);
     }
 
-    fn remove_and_replenish_by_tweakidx(
+    pub fn used_tweak_idxes(&self) -> &BTreeSet<TweakIdx> {
+        &self.used_tweak_idxes
+    }
+
+    fn generate_next_pending_tweak_idx(&mut self, data: &WalletClientModuleData) {
+        let (script, _address, _tweak_key, _operation_id) =
+            data.derive_peg_in_script(self.next_pending_tweak_idx);
+
+        self.pending_pubkey_scripts
+            .insert(script, self.next_pending_tweak_idx);
+        self.next_pending_tweak_idx = self.next_pending_tweak_idx.next();
+    }
+
+    fn refill_pending_pool_up_to_tweak_idx(
         &mut self,
         data: &WalletClientModuleData,
         tweak_idx: TweakIdx,
     ) {
-        if let Some(script) = self
-            .pending_pubkey_scripts
-            .iter()
-            .find(|(_k, v)| *v == &tweak_idx)
-            .map(|(k, _v)| k.clone())
-        {
-            self.pending_pubkey_scripts.remove(&script);
+        while self.next_pending_tweak_idx < tweak_idx {
             self.generate_next_pending_tweak_idx(data);
         }
-        debug_assert_eq!(self.pending_pubkey_scripts.len(), RECOVER_MAX_GAP as usize);
     }
 
     pub(crate) fn handle_script(
@@ -97,17 +99,12 @@ impl ConsensusPegInTweakIdxesUsedTracker {
         script: &bitcoin::ScriptBuf,
         session_idx: u64,
     ) {
-        if let Some(tweak_idx) = self.pending_pubkey_scripts.remove(script) {
+        if let Some(tweak_idx) = self.pending_pubkey_scripts.get(script).copied() {
             debug!(target: LOG_CLIENT_MODULE_WALLET, %session_idx, ?tweak_idx, "Found previously used tweak_idx in federation history");
-            self.generate_next_pending_tweak_idx(data);
 
-            let mut to_remove = self.next_unused_tweak_idx;
-            while to_remove <= tweak_idx {
-                self.remove_and_replenish_by_tweakidx(data, tweak_idx);
-                to_remove = to_remove.next();
-            }
+            self.used_tweak_idxes.insert(tweak_idx);
 
-            self.next_unused_tweak_idx = tweak_idx.next();
+            self.refill_pending_pool_up_to_tweak_idx(data, tweak_idx.advance(RECOVER_MAX_GAP));
         } else if self.decoy_session_threshold < session_idx {
             self.push_decoy(script);
         }
