@@ -356,6 +356,9 @@ pub trait FederationApiExt: IRawFederationApi {
         method: String,
         params: ApiRequestErased,
     ) -> FederationResult<FedRet> {
+        // NOTE: `FuturesUnorderded` is a footgun, but all we do here is polling
+        // completed results from it and we don't do any `await`s when
+        // processing them, it should be totally OK.
         #[cfg(not(target_family = "wasm"))]
         let mut futures = FuturesUnordered::<Pin<Box<dyn Future<Output = _> + Send>>>::new();
         #[cfg(target_family = "wasm")]

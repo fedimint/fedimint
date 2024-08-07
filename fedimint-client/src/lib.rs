@@ -1414,6 +1414,8 @@ impl Client {
             )
         }
 
+        // NOTE: `FuturesUnordered` is a footgun, but since we only poll it for result
+        // and make a single async db write operation, it should be OK.
         let mut requests = FuturesUnordered::new();
 
         for peer_id in num_peers.peer_ids() {
@@ -2408,6 +2410,7 @@ impl ClientBuilder {
                         let admin_auth = self.admin_creds.as_ref().map(|creds| creds.auth.clone());
                         let final_client = final_client.clone();
                         let (progress_tx, progress_rx) = tokio::sync::watch::channel(progress);
+                        let task_group = task_group.clone();
                         let module_init = module_init.clone();
                         (
                             Box::pin(async move {
@@ -2427,6 +2430,7 @@ impl ClientBuilder {
                                         admin_auth,
                                         snapshot.as_ref().and_then(|s| s.modules.get(&module_instance_id)),
                                         progress_tx,
+                                        task_group,
                                     )
                                     .await
                                     .map_err(|err| {
