@@ -870,25 +870,25 @@ pub async fn open_channel_between_gateways(
     gw_a: &Gatewayd,
     gw_b: &Gatewayd,
 ) -> Result<()> {
-    // TODO: Find out why we need to wait for LDK here.
-    let funding_addr = loop {
-        if let Ok(address) = gw_a.get_funding_address().await {
-            break address;
-        }
-
-        fedimint_core::runtime::sleep(std::time::Duration::from_secs(1)).await;
-    };
-
-    bitcoind.send_to(funding_addr, 100_000_000).await?;
-    bitcoind.mine_blocks(10).await?;
-
-    debug!(target: LOG_DEVIMINT, "Await block ln nodes block processing");
+    debug!(target: LOG_DEVIMINT, "Syncing gateway lightning nodes to chain tip...");
     tokio::try_join!(
         gw_a.wait_for_chain_sync(bitcoind),
         gw_b.wait_for_chain_sync(bitcoind)
     )?;
 
-    debug!(target: LOG_DEVIMINT, "Opening LN channel between the nodes...");
+    debug!(target: LOG_DEVIMINT, "Performing peg-in...");
+    let funding_addr = gw_a.get_funding_address().await?;
+    bitcoind.send_to(funding_addr, 100_000_000).await?;
+
+    bitcoind.mine_blocks(10).await?;
+
+    debug!(target: LOG_DEVIMINT, "Syncing gateway lightning nodes to chain tip...");
+    tokio::try_join!(
+        gw_a.wait_for_chain_sync(bitcoind),
+        gw_b.wait_for_chain_sync(bitcoind)
+    )?;
+
+    debug!(target: LOG_DEVIMINT, "Opening lightning channel between gateway lightning nodes...");
     gw_a.open_channel(
         gw_b.lightning_pubkey().await?,
         gw_b.lightning_node_addr.clone(),
@@ -901,9 +901,9 @@ pub async fn open_channel_between_gateways(
     // so we need to wait for it to get to the mempool.
     // TODO: LDK is the culprit here. Find a way to ensure that
     // `GatewayLdkClient::open_channel` is fully done before it returns.
-    fedimint_core::runtime::sleep(Duration::from_secs(10)).await;
+    fedimint_core::runtime::sleep(Duration::from_secs(5)).await;
 
-    bitcoind.mine_blocks(20).await?;
+    bitcoind.mine_blocks(10).await?;
 
     let gw_a_node_pubkey = gw_a.lightning_pubkey().await?;
 
