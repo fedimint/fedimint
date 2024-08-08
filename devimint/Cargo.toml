@@ -41,6 +41,7 @@ fedimintd = { path = "../fedimintd" }
 fs-lock = "0.1.4"
 futures = { workspace = true }
 hex = { workspace = true }
+itertools = { workspace = true }
 ln-gateway = { package = "fedimint-ln-gateway", path = "../gateway/ln-gateway" }
 nix = { version = "0.29.0", features = ["signal"] }
 rand = { workspace = true }
