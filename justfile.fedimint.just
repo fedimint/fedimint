@@ -236,11 +236,10 @@ docs: build-docs
     $open_cmd "$fallback_index_path" || true
   fi
 
-release-bump-version VERSION="prerelease":
-  cargo workspaces version --all --exact --no-git-commit --yes --force '*' --pre-id rc {{VERSION}}
-
-release-bump-version-custom VERSION:
-  cargo workspaces version --all --exact --no-git-commit --yes --force '*' custom {{VERSION}}
+# Bump all versions
+# ex: `just bump-version 0.5.0-alpha 0.5.0-rc.0`
+bump-version FROM_VERSION TO_VERSION:
+  find . -name 'Cargo.toml' -exec sed -i 's/{{FROM_VERSION}}/{{TO_VERSION}}/g' {} +
 
 cargo_sort_defaults := "-w -g --order package,features,bin,lib,test,bench,dependencies,dev-dependencies,build-dependencies"
 
