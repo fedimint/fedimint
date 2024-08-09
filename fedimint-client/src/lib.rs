@@ -88,7 +88,7 @@ use std::sync::{Arc, Weak};
 use std::time::Duration;
 
 use anyhow::{anyhow, bail, ensure, Context};
-use async_stream::stream;
+use async_stream::{stream, try_stream};
 use backup::ClientBackup;
 use db::{
     apply_migrations_client, apply_migrations_core_client, get_core_client_database_migrations,
@@ -136,6 +136,7 @@ use module::{DynClientModule, FinalClient};
 use rand::thread_rng;
 use secp256k1_zkp::{PublicKey, Secp256k1};
 use secret::{DeriveableSecretClientExt, PlainRootSecretStrategy, RootSecretStrategy as _};
+use serde::Deserialize;
 use thiserror::Error;
 #[cfg(not(target_family = "wasm"))]
 use tokio::runtime::{Handle as RuntimeHandle, RuntimeFlavor};
@@ -1919,6 +1920,70 @@ impl Client {
             Result::<_, ()>::Ok(guardian_pub_keys)
         }), None).await.expect("Will retry forever")
     }
+
+    pub fn handle_global_rpc(
+        &self,
+        method: String,
+        params: serde_json::Value,
+    ) -> BoxStream<'_, anyhow::Result<serde_json::Value>> {
+        Box::pin(try_stream! {
+            match method.as_str() {
+                "get_balance" => {
+                    let balance = self.get_balance().await;
+                    yield serde_json::to_value(balance)?;
+                }
+                "subscribe_balance_changes" => {
+                    let mut stream = self.subscribe_balance_changes().await;
+                    while let Some(balance) = stream.next().await {
+                        yield serde_json::to_value(balance)?;
+                    }
+                }
+                "get_config" => {
+                    let config = self.config().await;
+                    yield serde_json::to_value(config)?;
+                }
+                "get_federation_id" => {
+                    let federation_id = self.federation_id();
+                    yield serde_json::to_value(federation_id)?;
+                }
+                "get_invite_code" => {
+                    let req: GetInviteCodeRequest = serde_json::from_value(params)?;
+                    let invite_code = self.invite_code(req.peer).await;
+                    yield serde_json::to_value(invite_code)?;
+                }
+                "list_operations" => {
+                    // TODO: support pagination
+                    let operations = self.operation_log().list_operations(usize::MAX, None).await;
+                    yield serde_json::to_value(operations)?;
+                }
+                "has_pending_recoveries" => {
+                    let has_pending = self.has_pending_recoveries();
+                    yield serde_json::to_value(has_pending)?;
+                }
+                "wait_for_all_recoveries" => {
+                    self.wait_for_all_recoveries().await?;
+                    yield serde_json::Value::Null;
+                }
+                "subscribe_to_recovery_progress" => {
+                    let mut stream = self.subscribe_to_recovery_progress();
+                    while let Some((module_id, progress)) = stream.next().await {
+                        yield serde_json::json!({
+                            "module_id": module_id,
+                            "progress": progress
+                        });
+                    }
+                }
+                _ => {
+                    Err(anyhow::format_err!("Unknown method: {}", method))?;
+                    unreachable!()
+                },
+            }
+        })
+    }
+}
+#[derive(Deserialize)]
+struct GetInviteCodeRequest {
+    peer: PeerId,
 }
 
 /// See [`Client::transaction_updates`]
