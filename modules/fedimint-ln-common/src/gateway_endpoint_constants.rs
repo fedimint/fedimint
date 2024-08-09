@@ -19,4 +19,5 @@ pub const PAY_INVOICE_ENDPOINT: &str = "/pay_invoice";
 pub const RESTORE_ENDPOINT: &str = "/restore";
 pub const SEND_PAYMENT_V2_ENDPOINT: &str = "/send_payment";
 pub const SET_CONFIGURATION_ENDPOINT: &str = "/set_configuration";
+pub const SPEND_ECASH_ENDPOINT: &str = "/spend_ecash";
 pub const WITHDRAW_ENDPOINT: &str = "/withdraw";
