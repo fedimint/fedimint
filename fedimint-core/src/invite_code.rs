@@ -328,6 +328,14 @@ impl InviteCodeV2 {
         Ok(InviteCode::from_map(&self.peers, self.id, self.api_secret))
     }
 
+    pub fn from_v1(invite_v1: &InviteCode) -> InviteCodeV2 {
+        InviteCodeV2 {
+            id: invite_v1.federation_id(),
+            peers: invite_v1.peers(),
+            api_secret: invite_v1.api_secret(),
+        }
+    }
+
     pub fn encode_base64(&self) -> String {
         let json = &serde_json::to_string(self).expect("Encoding to JSON cannot fail");
         let base_64 = base64_url::encode(json);
