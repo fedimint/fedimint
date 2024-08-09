@@ -6,8 +6,8 @@ use fedimint_ln_common::gateway_endpoint_constants::{
     BACKUP_ENDPOINT, BALANCE_ENDPOINT, CLOSE_CHANNELS_WITH_PEER_ENDPOINT, CONFIGURATION_ENDPOINT,
     CONNECT_FED_ENDPOINT, GATEWAY_INFO_ENDPOINT, GATEWAY_INFO_POST_ENDPOINT,
     GET_FUNDING_ADDRESS_ENDPOINT, LEAVE_FED_ENDPOINT, LIST_ACTIVE_CHANNELS_ENDPOINT,
-    OPEN_CHANNEL_ENDPOINT, RESTORE_ENDPOINT, SET_CONFIGURATION_ENDPOINT, SPEND_ECASH_ENDPOINT,
-    WITHDRAW_ENDPOINT,
+    OPEN_CHANNEL_ENDPOINT, RECEIVE_ECASH_ENDPOINT, RESTORE_ENDPOINT, SET_CONFIGURATION_ENDPOINT,
+    SPEND_ECASH_ENDPOINT, WITHDRAW_ENDPOINT,
 };
 use reqwest::{Method, StatusCode};
 use serde::de::DeserializeOwned;
@@ -17,8 +17,8 @@ use thiserror::Error;
 use super::{
     BackupPayload, BalancePayload, CloseChannelsWithPeerPayload, ConfigPayload, ConnectFedPayload,
     DepositAddressPayload, FederationInfo, GatewayFedConfig, GatewayInfo, GetFundingAddressPayload,
-    LeaveFedPayload, OpenChannelPayload, RestorePayload, SetConfigurationPayload,
-    SpendEcashPayload, SpendEcashResponse, WithdrawPayload,
+    LeaveFedPayload, OpenChannelPayload, ReceiveEcashPayload, ReceiveEcashResponse, RestorePayload,
+    SetConfigurationPayload, SpendEcashPayload, SpendEcashResponse, WithdrawPayload,
 };
 use crate::lightning::ChannelInfo;
 use crate::CloseChannelsWithPeerResponse;
@@ -189,6 +189,17 @@ impl GatewayRpcClient {
         let url = self
             .base_url
             .join(SPEND_ECASH_ENDPOINT)
+            .expect("invalid base url");
+        self.call_post(url, payload).await
+    }
+
+    pub async fn receive_ecash(
+        &self,
+        payload: ReceiveEcashPayload,
+    ) -> GatewayRpcResult<ReceiveEcashResponse> {
+        let url = self
+            .base_url
+            .join(RECEIVE_ECASH_ENDPOINT)
             .expect("invalid base url");
         self.call_post(url, payload).await
     }

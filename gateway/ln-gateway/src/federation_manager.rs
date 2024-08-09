@@ -156,10 +156,10 @@ impl FederationManager {
 
     pub fn get_client_for_federation_id_prefix(
         &self,
-        federation_id_prefix: &FederationIdPrefix,
+        federation_id_prefix: FederationIdPrefix,
     ) -> Option<Spanned<ClientHandleArc>> {
         self.clients.iter().find_map(|(fid, client)| {
-            if &fid.to_prefix() == federation_id_prefix {
+            if fid.to_prefix() == federation_id_prefix {
                 Some(client.clone())
             } else {
                 None

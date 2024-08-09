@@ -1847,6 +1847,7 @@ dependencies = [
  "fedimint-core",
  "fedimint-ln-gateway",
  "fedimint-logging",
+ "fedimint-mint-client",
  "reqwest 0.12.5",
  "serde",
  "serde_json",
