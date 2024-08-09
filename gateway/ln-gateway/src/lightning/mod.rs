@@ -225,7 +225,7 @@ pub struct ChannelInfo {
     pub short_channel_id: u64,
 }
 
-#[derive(Debug, Clone, Subcommand, Serialize, Deserialize)]
+#[derive(Debug, Clone, Subcommand, Serialize, Deserialize, Eq, PartialEq)]
 pub enum LightningMode {
     #[clap(name = "lnd")]
     Lnd {
@@ -265,6 +265,9 @@ pub enum LightningMode {
 #[async_trait]
 pub trait LightningBuilder {
     async fn build(&self) -> Box<dyn ILnRpcClient>;
+    fn lightning_mode(&self) -> Option<LightningMode> {
+        None
+    }
 }
 
 #[derive(Clone)]
@@ -306,5 +309,9 @@ impl LightningBuilder for GatewayLightningBuilder {
                 .unwrap(),
             ),
         }
+    }
+
+    fn lightning_mode(&self) -> Option<LightningMode> {
+        Some(self.lightning_mode.clone())
     }
 }
