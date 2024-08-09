@@ -16,7 +16,7 @@ name = "fedimint_meta_client"
 path = "src/lib.rs"
 
 [features]
-default =[]
+default = []
 cli = ["dep:clap", "dep:serde_json"]
 
 [dependencies]
@@ -28,8 +28,10 @@ fedimint-api-client = { workspace = true }
 fedimint-client = { workspace = true }
 fedimint-core = { workspace = true }
 fedimint-meta-common = { version = "=0.4.1-rc.0", path = "../fedimint-meta-common" }
+futures = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true, optional = true }
 strum = { workspace = true }
 strum_macros = { workspace = true }
 thiserror = { workspace = true }
+tracing = { workspace = true }

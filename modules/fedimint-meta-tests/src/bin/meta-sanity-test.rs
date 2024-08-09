@@ -96,6 +96,10 @@ async fn main() -> anyhow::Result<()> {
             .await
         }
 
+        async fn get_meta_fields(client: &Client) -> anyhow::Result<serde_json::Value> {
+            cmd!(client, "dev", "meta-fields",).out_json().await
+        }
+
         // check starting conditions
         assert_eq!(get_consensus(&client).await?, serde_json::Value::Null);
         assert_eq!(
@@ -178,6 +182,17 @@ async fn main() -> anyhow::Result<()> {
             json! { {} },
         )
         .await?;
+
+        let meta_fields = get_meta_fields(&client).await?;
+        assert_eq!(
+            meta_fields,
+            json! {
+                {
+                    "revision": 0,
+                    "values": submission_value,
+                }
+            }
+        );
 
         Ok(())
     })
