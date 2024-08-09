@@ -10,7 +10,7 @@ version: "3.3"
 services:
   ### START_TRAEFIK ###
   traefik:
-    image: "traefik:v2.10"
+    image: "traefik:v3.1.2"
     container_name: "traefik"
     command:
       #- "--log.level=DEBUG"

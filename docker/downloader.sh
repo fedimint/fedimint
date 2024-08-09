@@ -68,6 +68,7 @@ elif ! [ -x "$(command -v docker-compose)" ]; then
   fi
 
   # Install Docker and Docker Compose using Docker's convenience script
+  echo "Installing Docker and Docker Compose..."
   curl -fsSL https://get.docker.com -o get-docker.sh
   sh get-docker.sh
 
@@ -236,7 +237,7 @@ download() {
 replace_host() {
   local external_host=$1
   local path=$2
-  if [[ "$(uname)" == "Darwin" ]]; then # macOS uses BSD sed
+  if [[ "$(uname)" == "Darwin" ]]; then
     sed -i '' "s/fedimint.my-super-host.com/$external_host/g" "$path"
   else
     sed -i "s/fedimint.my-super-host.com/$external_host/g" "$path"
