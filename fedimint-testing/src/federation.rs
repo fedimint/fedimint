@@ -2,6 +2,7 @@ use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
 use std::time::Duration;
 
+use fedimint_api_client::api::net::Connector;
 use fedimint_api_client::api::{DynGlobalApi, FederationApiExt};
 use fedimint_client::module::init::ClientModuleInitRegistry;
 use fedimint_client::secret::{PlainRootSecretStrategy, RootSecretStrategy};
@@ -133,6 +134,7 @@ impl FederationTest {
     pub async fn connect_gateway(&self, gw: &Gateway) {
         gw.handle_connect_federation(ConnectFedPayload {
             invite_code: self.invite_code().to_string(),
+            use_tor: Some(false), // TODO: (@leonardo) Should we get it from self.configs too ?
         })
         .await
         .expect("Failed to connect federation");
@@ -246,10 +248,13 @@ impl FederationTestBuilder {
                 continue;
             }
 
+            // FIXME: (@leonardo) Currently there is no support for Tor while testing,
+            // defaulting to Tcp variant.
             let api = DynGlobalApi::new_admin(
                 peer_id,
                 config.consensus.api_endpoints[&peer_id].url.clone(),
                 &None,
+                &Connector::default(),
             );
 
             while let Err(e) = api

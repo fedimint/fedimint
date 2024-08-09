@@ -52,6 +52,7 @@ use db::{
     GatewayConfiguration, GatewayConfigurationKey, GatewayDbtxNcExt, GATEWAYD_DATABASE_VERSION,
 };
 use federation_manager::FederationManager;
+use fedimint_api_client::api::net::Connector;
 use fedimint_api_client::api::FederationError;
 use fedimint_client::module::init::ClientModuleInitRegistry;
 use fedimint_client::ClientHandleArc;
@@ -885,6 +886,19 @@ impl Gateway {
         let invite_code = InviteCode::from_str(&payload.invite_code).map_err(|e| {
             GatewayError::InvalidMetadata(format!("Invalid federation member string {e:?}"))
         })?;
+
+        // TODO: (@leonardo) Should we use default, or respond with an error ?
+        let connector = match &payload.use_tor {
+            Some(use_tor) => match use_tor {
+                true => Connector::tor(),
+                false => Connector::default(),
+            },
+            None => {
+                info!("Missing `use_tor` payload field, defaulting to `Connector::Tcp` variant!");
+                Connector::default()
+            }
+        };
+
         let federation_id = invite_code.federation_id();
 
         let mut federation_manager = self.federation_manager.write().await;
@@ -910,6 +924,7 @@ impl Gateway {
             mint_channel_id,
             timelock_delta: 10,
             fees: gateway_config.routing_fees,
+            connector,
         };
 
         let client = self

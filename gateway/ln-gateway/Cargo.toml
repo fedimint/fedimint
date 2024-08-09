@@ -89,5 +89,5 @@ fedimint-wallet-client = { path = "../../modules/fedimint-wallet-client" }
 threshold_crypto = { workspace = true }
 
 [build-dependencies]
-fedimint-build = { workspace = true }
+fedimint-build = { version = "=0.5.0-alpha", path = "../../fedimint-build" }
 tonic-build = "0.12.1"
