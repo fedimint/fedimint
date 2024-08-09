@@ -1220,6 +1220,7 @@ dependencies = [
  "fs-lock",
  "futures",
  "hex",
+ "itertools 0.13.0",
  "nix",
  "rand",
  "semver",
