@@ -186,3 +186,14 @@ pub struct SpendEcashResponse {
     pub operation_id: OperationId,
     pub notes: OOBNotes,
 }
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct ReceiveEcashPayload {
+    pub notes: OOBNotes,
+    pub wait: bool,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct ReceiveEcashResponse {
+    pub amount: Amount,
+}

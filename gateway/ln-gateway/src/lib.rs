@@ -96,8 +96,8 @@ use lightning_invoice::{Bolt11Invoice, RoutingFees};
 use rand::Rng;
 use rpc::{
     CloseChannelsWithPeerPayload, FederationInfo, GatewayFedConfig, GatewayInfo, LeaveFedPayload,
-    OpenChannelPayload, SetConfigurationPayload, SpendEcashPayload, SpendEcashResponse,
-    V1_API_ENDPOINT,
+    OpenChannelPayload, ReceiveEcashPayload, ReceiveEcashResponse, SetConfigurationPayload,
+    SpendEcashPayload, SpendEcashResponse, V1_API_ENDPOINT,
 };
 use state_machine::pay::OutgoingPaymentError;
 use state_machine::GatewayClientModule;
@@ -1635,6 +1635,37 @@ impl Gateway {
             operation_id,
             notes,
         })
+    }
+
+    pub async fn receive_ecash(
+        &self,
+        payload: ReceiveEcashPayload,
+    ) -> anyhow::Result<ReceiveEcashResponse> {
+        let amount = payload.notes.total_amount();
+        let client = self
+            .federation_manager
+            .read()
+            .await
+            .get_client_for_federation_id_prefix(&payload.notes.federation_id_prefix())
+            .ok_or(anyhow!("Client not found"))?;
+        let mint = client.get_first_module::<MintClientModule>();
+
+        let operation_id = mint.reissue_external_notes(payload.notes, ()).await?;
+        if payload.wait {
+            let mut updates = mint
+                .subscribe_reissue_external_notes(operation_id)
+                .await
+                .unwrap()
+                .into_stream();
+
+            while let Some(update) = updates.next().await {
+                if let fedimint_mint_client::ReissueExternalNotesState::Failed(e) = update {
+                    bail!("Reissue failed: {e}");
+                }
+            }
+        }
+
+        Ok(ReceiveEcashResponse { amount })
     }
 }
 
