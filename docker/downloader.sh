@@ -80,7 +80,8 @@ fi
 COMMANDS="awk curl sed tr wc jq"
 for command in $COMMANDS; do
   if ! [ -x "$(command -v $command)" ]; then
-    echo "Error: $command is not installed. Please try to install it" >&2
+    echo "This script requires the following commands to be installed: $COMMANDS"
+    echo "Error: $command is not installed. Please install it before running this script." >&2
     exit 1
   fi
 done
@@ -235,7 +236,11 @@ download() {
 replace_host() {
   local external_host=$1
   local path=$2
-  sed -i "s/fedimint.my-super-host.com/$external_host/g" $path
+  if [[ "$(uname)" == "Darwin" ]]; then # macOS uses BSD sed
+    sed -i '' "s/fedimint.my-super-host.com/$external_host/g" "$path"
+  else
+    sed -i "s/fedimint.my-super-host.com/$external_host/g" "$path"
+  fi
 }
 
 count_dots() {
@@ -350,6 +355,7 @@ fi
 rename_localhost() {
   local path=$1
   local ip=$2
+  echo "Replacing localhost with $ip in $path"
   if [[ "$(uname)" == "Darwin" ]]; then # macOS uses BSD sed
     sed -i '' "s/fedimint.my-super-host.com/$ip/g" "$path"
   else
