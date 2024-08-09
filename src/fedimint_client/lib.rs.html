@@ -2753,6 +2753,13 @@
 <a href="#2753" id="2753">2753</a>
 <a href="#2754" id="2754">2754</a>
 <a href="#2755" id="2755">2755</a>
+<a href="#2756" id="2756">2756</a>
+<a href="#2757" id="2757">2757</a>
+<a href="#2758" id="2758">2758</a>
+<a href="#2759" id="2759">2759</a>
+<a href="#2760" id="2760">2760</a>
+<a href="#2761" id="2761">2761</a>
+<a href="#2762" id="2762">2762</a>
 </pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::doc_markdown)]
@@ -3485,6 +3492,13 @@
     </span><span class="kw">pub </span>api: DynModuleApi,
 
     module: <span class="kw-2">&amp;</span><span class="lifetime">'m </span>M,
+}
+
+<span class="kw">impl</span>&lt;<span class="lifetime">'m</span>, M: ClientModule&gt; ClientModuleInstance&lt;<span class="lifetime">'m</span>, M&gt; {
+    <span class="doccomment">/// Get a reference to the module
+    </span><span class="kw">pub fn </span>inner(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span><span class="lifetime">'m </span>M {
+        <span class="self">self</span>.module
+    }
 }
 
 <span class="kw">impl</span>&lt;<span class="lifetime">'m</span>, M&gt; ops::Deref <span class="kw">for </span>ClientModuleInstance&lt;<span class="lifetime">'m</span>, M&gt;
