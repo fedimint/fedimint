@@ -2688,6 +2688,71 @@
 <a href="#2688" id="2688">2688</a>
 <a href="#2689" id="2689">2689</a>
 <a href="#2690" id="2690">2690</a>
+<a href="#2691" id="2691">2691</a>
+<a href="#2692" id="2692">2692</a>
+<a href="#2693" id="2693">2693</a>
+<a href="#2694" id="2694">2694</a>
+<a href="#2695" id="2695">2695</a>
+<a href="#2696" id="2696">2696</a>
+<a href="#2697" id="2697">2697</a>
+<a href="#2698" id="2698">2698</a>
+<a href="#2699" id="2699">2699</a>
+<a href="#2700" id="2700">2700</a>
+<a href="#2701" id="2701">2701</a>
+<a href="#2702" id="2702">2702</a>
+<a href="#2703" id="2703">2703</a>
+<a href="#2704" id="2704">2704</a>
+<a href="#2705" id="2705">2705</a>
+<a href="#2706" id="2706">2706</a>
+<a href="#2707" id="2707">2707</a>
+<a href="#2708" id="2708">2708</a>
+<a href="#2709" id="2709">2709</a>
+<a href="#2710" id="2710">2710</a>
+<a href="#2711" id="2711">2711</a>
+<a href="#2712" id="2712">2712</a>
+<a href="#2713" id="2713">2713</a>
+<a href="#2714" id="2714">2714</a>
+<a href="#2715" id="2715">2715</a>
+<a href="#2716" id="2716">2716</a>
+<a href="#2717" id="2717">2717</a>
+<a href="#2718" id="2718">2718</a>
+<a href="#2719" id="2719">2719</a>
+<a href="#2720" id="2720">2720</a>
+<a href="#2721" id="2721">2721</a>
+<a href="#2722" id="2722">2722</a>
+<a href="#2723" id="2723">2723</a>
+<a href="#2724" id="2724">2724</a>
+<a href="#2725" id="2725">2725</a>
+<a href="#2726" id="2726">2726</a>
+<a href="#2727" id="2727">2727</a>
+<a href="#2728" id="2728">2728</a>
+<a href="#2729" id="2729">2729</a>
+<a href="#2730" id="2730">2730</a>
+<a href="#2731" id="2731">2731</a>
+<a href="#2732" id="2732">2732</a>
+<a href="#2733" id="2733">2733</a>
+<a href="#2734" id="2734">2734</a>
+<a href="#2735" id="2735">2735</a>
+<a href="#2736" id="2736">2736</a>
+<a href="#2737" id="2737">2737</a>
+<a href="#2738" id="2738">2738</a>
+<a href="#2739" id="2739">2739</a>
+<a href="#2740" id="2740">2740</a>
+<a href="#2741" id="2741">2741</a>
+<a href="#2742" id="2742">2742</a>
+<a href="#2743" id="2743">2743</a>
+<a href="#2744" id="2744">2744</a>
+<a href="#2745" id="2745">2745</a>
+<a href="#2746" id="2746">2746</a>
+<a href="#2747" id="2747">2747</a>
+<a href="#2748" id="2748">2748</a>
+<a href="#2749" id="2749">2749</a>
+<a href="#2750" id="2750">2750</a>
+<a href="#2751" id="2751">2751</a>
+<a href="#2752" id="2752">2752</a>
+<a href="#2753" id="2753">2753</a>
+<a href="#2754" id="2754">2754</a>
+<a href="#2755" id="2755">2755</a>
 </pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::doc_markdown)]
@@ -2778,7 +2843,7 @@
 <span class="kw">use </span>std::time::Duration;
 
 <span class="kw">use </span>anyhow::{anyhow, bail, ensure, Context};
-<span class="kw">use </span>async_stream::stream;
+<span class="kw">use </span>async_stream::{stream, try_stream};
 <span class="kw">use </span>backup::ClientBackup;
 <span class="kw">use </span>db::{
     apply_migrations_client, apply_migrations_core_client, get_core_client_database_migrations,
@@ -2826,6 +2891,7 @@
 <span class="kw">use </span>rand::thread_rng;
 <span class="kw">use </span>secp256k1_zkp::{PublicKey, Secp256k1};
 <span class="kw">use </span>secret::{DeriveableSecretClientExt, PlainRootSecretStrategy, RootSecretStrategy <span class="kw">as _</span>};
+<span class="kw">use </span>serde::Deserialize;
 <span class="kw">use </span>thiserror::Error;
 <span class="attr">#[cfg(not(target_family = <span class="string">"wasm"</span>))]
 </span><span class="kw">use </span>tokio::runtime::{Handle <span class="kw">as </span>RuntimeHandle, RuntimeFlavor};
@@ -4609,6 +4675,70 @@
             <span class="prelude-ty">Result</span>::&lt;<span class="kw">_</span>, ()&gt;::Ok(guardian_pub_keys)
         }), <span class="prelude-val">None</span>).<span class="kw">await</span>.expect(<span class="string">"Will retry forever"</span>)
     }
+
+    <span class="kw">pub fn </span>handle_global_rpc(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        method: String,
+        params: serde_json::Value,
+    ) -&gt; BoxStream&lt;<span class="lifetime">'_</span>, anyhow::Result&lt;serde_json::Value&gt;&gt; {
+        Box::pin(<span class="macro">try_stream!</span> {
+            <span class="kw">match </span>method.as_str() {
+                <span class="string">"get_balance" </span>=&gt; {
+                    <span class="kw">let </span>balance = <span class="self">self</span>.get_balance().<span class="kw">await</span>;
+                    <span class="kw">yield </span>serde_json::to_value(balance)<span class="question-mark">?</span>;
+                }
+                <span class="string">"subscribe_balance_changes" </span>=&gt; {
+                    <span class="kw">let </span><span class="kw-2">mut </span>stream = <span class="self">self</span>.subscribe_balance_changes().<span class="kw">await</span>;
+                    <span class="kw">while let </span><span class="prelude-val">Some</span>(balance) = stream.next().<span class="kw">await </span>{
+                        <span class="kw">yield </span>serde_json::to_value(balance)<span class="question-mark">?</span>;
+                    }
+                }
+                <span class="string">"get_config" </span>=&gt; {
+                    <span class="kw">let </span>config = <span class="self">self</span>.config().<span class="kw">await</span>;
+                    <span class="kw">yield </span>serde_json::to_value(config)<span class="question-mark">?</span>;
+                }
+                <span class="string">"get_federation_id" </span>=&gt; {
+                    <span class="kw">let </span>federation_id = <span class="self">self</span>.federation_id();
+                    <span class="kw">yield </span>serde_json::to_value(federation_id)<span class="question-mark">?</span>;
+                }
+                <span class="string">"get_invite_code" </span>=&gt; {
+                    <span class="kw">let </span>req: GetInviteCodeRequest = serde_json::from_value(params)<span class="question-mark">?</span>;
+                    <span class="kw">let </span>invite_code = <span class="self">self</span>.invite_code(req.peer).<span class="kw">await</span>;
+                    <span class="kw">yield </span>serde_json::to_value(invite_code)<span class="question-mark">?</span>;
+                }
+                <span class="string">"list_operations" </span>=&gt; {
+                    <span class="comment">// TODO: support pagination
+                    </span><span class="kw">let </span>operations = <span class="self">self</span>.operation_log().list_operations(usize::MAX, <span class="prelude-val">None</span>).<span class="kw">await</span>;
+                    <span class="kw">yield </span>serde_json::to_value(operations)<span class="question-mark">?</span>;
+                }
+                <span class="string">"has_pending_recoveries" </span>=&gt; {
+                    <span class="kw">let </span>has_pending = <span class="self">self</span>.has_pending_recoveries();
+                    <span class="kw">yield </span>serde_json::to_value(has_pending)<span class="question-mark">?</span>;
+                }
+                <span class="string">"wait_for_all_recoveries" </span>=&gt; {
+                    <span class="self">self</span>.wait_for_all_recoveries().<span class="kw">await</span><span class="question-mark">?</span>;
+                    <span class="kw">yield </span>serde_json::Value::Null;
+                }
+                <span class="string">"subscribe_to_recovery_progress" </span>=&gt; {
+                    <span class="kw">let </span><span class="kw-2">mut </span>stream = <span class="self">self</span>.subscribe_to_recovery_progress();
+                    <span class="kw">while let </span><span class="prelude-val">Some</span>((module_id, progress)) = stream.next().<span class="kw">await </span>{
+                        <span class="kw">yield </span><span class="macro">serde_json::json!</span>({
+                            <span class="string">"module_id"</span>: module_id,
+                            <span class="string">"progress"</span>: progress
+                        });
+                    }
+                }
+                <span class="kw">_ </span>=&gt; {
+                    <span class="prelude-val">Err</span>(<span class="macro">anyhow::format_err!</span>(<span class="string">"Unknown method: {}"</span>, method))<span class="question-mark">?</span>;
+                    <span class="macro">unreachable!</span>()
+                },
+            }
+        })
+    }
+}
+<span class="attr">#[derive(Deserialize)]
+</span><span class="kw">struct </span>GetInviteCodeRequest {
+    peer: PeerId,
 }
 
 <span class="doccomment">/// See [`Client::transaction_updates`]
