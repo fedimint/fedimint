@@ -1564,7 +1564,6 @@ dependencies = [
  "rand",
  "reqwest 0.12.5",
  "ring",
- "secp256k1-zkp",
  "serde",
  "serde_json",
  "strum",
@@ -2700,7 +2699,6 @@ dependencies = [
  "fedimint-wallet-server",
  "futures",
  "rand",
- "secp256k1 0.27.0",
  "strum",
  "tokio",
  "tracing",
@@ -4139,9 +4137,9 @@ checksum = "68354c5c6bd36d73ff3feceb05efa59b6acb7626617f4962be322a825e61f79a"
 
 [[package]]
 name = "miniscript"
-version = "10.0.0"
+version = "10.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1eb102b66b2127a872dbcc73095b7b47aeb9d92f7b03c2b2298253ffc82c7594"
+checksum = "d371924f9eb7aa860ab395baaaa0bcdfa81a32f330b538c4e2c04617b2722fe3"
 dependencies = [
  "bitcoin 0.30.2",
  "bitcoin-private",
