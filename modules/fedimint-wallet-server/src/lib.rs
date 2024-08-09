@@ -56,8 +56,8 @@ use fedimint_core::task::{TaskGroup, TaskHandle};
 use fedimint_core::time::now;
 use fedimint_core::util::{backoff_util, retry};
 use fedimint_core::{
-    apply, async_trait_maybe_send, push_db_key_items, push_db_pair_items, Feerate, NumPeersExt,
-    OutPoint, PeerId, ServerModule,
+    apply, async_trait_maybe_send, push_db_key_items, push_db_pair_items, Amount, Feerate,
+    NumPeersExt, OutPoint, PeerId, ServerModule,
 };
 use fedimint_logging::LOG_MODULE_WALLET;
 use fedimint_server::config::distributedgen::PeerHandleOps;
@@ -88,10 +88,10 @@ use tracing::{debug, info, instrument, trace, warn};
 
 use crate::db::{
     BlockCountVoteKey, BlockCountVotePrefix, BlockHashKey, BlockHashKeyPrefix, DbKeyPrefix,
-    FeeRateVoteKey, FeeRateVotePrefix, PegOutBitcoinTransaction, PegOutBitcoinTransactionPrefix,
-    PegOutNonceKey, PegOutTxSignatureCI, PegOutTxSignatureCIPrefix, PendingTransactionKey,
-    PendingTransactionPrefixKey, UTXOKey, UTXOPrefixKey, UnsignedTransactionKey,
-    UnsignedTransactionPrefixKey,
+    FeeRateVoteKey, FeeRateVotePrefix, PegInMinimumVoteKey, PegInMinimumVotePrefix,
+    PegOutBitcoinTransaction, PegOutBitcoinTransactionPrefix, PegOutNonceKey, PegOutTxSignatureCI,
+    PegOutTxSignatureCIPrefix, PendingTransactionKey, PendingTransactionPrefixKey, UTXOKey,
+    UTXOPrefixKey, UnsignedTransactionKey, UnsignedTransactionPrefixKey,
 };
 use crate::metrics::WALLET_BLOCK_COUNT;
 
@@ -173,7 +173,6 @@ impl ModuleInit for WalletInit {
                         "UTXOs"
                     );
                 }
-
                 DbKeyPrefix::BlockCountVote => {
                     push_db_pair_items!(
                         dbtx,
@@ -184,7 +183,6 @@ impl ModuleInit for WalletInit {
                         "Block Count Votes"
                     );
                 }
-
                 DbKeyPrefix::FeeRateVote => {
                     push_db_pair_items!(
                         dbtx,
@@ -194,6 +192,9 @@ impl ModuleInit for WalletInit {
                         wallet,
                         "Fee Rate Votes"
                     );
+                }
+                DbKeyPrefix::PegInMinimumVote => {
+                    todo!()
                 }
             }
         }
@@ -398,6 +399,10 @@ impl ServerModule for Wallet {
 
         items.push(WalletConsensusItem::Feerate(fee_rate_proposal));
 
+        items.push(WalletConsensusItem::PegInMinimum(
+            bitcoin::Amount::from_sat(10_000),
+        ));
+
         items
     }
 
@@ -495,6 +500,11 @@ impl ServerModule for Wallet {
                     dbtx.remove_entry(&UnsignedTransactionKey(txid)).await;
                 }
             }
+            WalletConsensusItem::PegInMinimum(amount) => {
+                if Some(amount) == dbtx.insert_entry(&PegInMinimumVoteKey(peer), &amount).await {
+                    bail!("Pegin Minimum vote is redundant");
+                }
+            }
             WalletConsensusItem::Default { variant, .. } => {
                 bail!("Received wallet consensus item with unknown variant {variant}");
             }
@@ -509,6 +519,12 @@ impl ServerModule for Wallet {
         input: &'b WalletInput,
     ) -> Result<InputMeta, WalletInputError> {
         let input = input.ensure_v0_ref()?;
+
+        let amount = bitcoin::Amount::from_sat(input.tx_output().value);
+
+        if amount < self.consensus_peg_in_minimum(dbtx).await {
+            return Err(WalletInputError::PegInUnderMinimum);
+        }
 
         if !self.block_is_known(dbtx, input.proof_block()).await {
             return Err(WalletInputError::UnknownPegInProofBlock(
@@ -525,7 +541,7 @@ impl ServerModule for Wallet {
                 &UTXOKey(input.outpoint()),
                 &SpendableUTXO {
                     tweak: input.tweak_contract_key().serialize(),
-                    amount: bitcoin::Amount::from_sat(input.tx_output().value),
+                    amount,
                 },
             )
             .await
@@ -533,9 +549,12 @@ impl ServerModule for Wallet {
         {
             return Err(WalletInputError::PegInAlreadyClaimed);
         }
-        let amount = fedimint_core::Amount::from_sats(input.tx_output().value);
+
+        let amount = Amount::from_sats(amount.to_sat());
         let fee = self.cfg.consensus.fee_consensus.peg_in_abs;
+
         calculate_pegin_metrics(dbtx, amount, fee);
+
         Ok(InputMeta {
             amount: TransactionItemAmount { amount, fee },
             pub_key: *input.tweak_contract_key(),
@@ -694,20 +713,20 @@ impl ServerModule for Wallet {
                 PEG_OUT_FEES_ENDPOINT,
                 ApiVersion::new(0, 0),
                 async |module: &Wallet, context, params: (Address<NetworkUnchecked>, u64)| -> Option<PegOutFees> {
-                    let (address, sats) = params;
-                    let feerate = module.consensus_fee_rate(&mut context.dbtx().into_nc()).await;
-
                     // Since we are only calculating the tx size we can use an arbitrary dummy nonce.
                     let dummy_tweak = [0; 33];
 
+                    let mut dbtx = context.dbtx().into_nc();
+
                     let tx = module.offline_wallet().create_tx(
-                        bitcoin::Amount::from_sat(sats),
-                        address.assume_checked().script_pubkey(),
+                        bitcoin::Amount::from_sat(params.1),
+                        params.0.assume_checked().script_pubkey(),
                         vec![],
-                        module.available_utxos(&mut context.dbtx().into_nc()).await,
-                        feerate,
+                        module.available_utxos(&mut dbtx).await,
+                        module.consensus_fee_rate(&mut dbtx).await,
                         &dummy_tweak,
-                        None
+                        None,
+                        module.consensus_peg_in_minimum(&mut dbtx).await
                     );
 
                     match tx {
@@ -971,6 +990,36 @@ impl Wallet {
         rates[peer_count / 2]
     }
 
+    pub async fn consensus_peg_in_minimum(
+        &self,
+        dbtx: &mut DatabaseTransaction<'_>,
+    ) -> bitcoin::Amount {
+        let num_peers = self.cfg.consensus.peer_peg_in_keys.to_num_peers();
+
+        let mut minima = dbtx
+            .find_by_prefix(&PegInMinimumVotePrefix)
+            .await
+            .map(|(.., minimum)| minimum)
+            .collect::<Vec<bitcoin::Amount>>()
+            .await;
+
+        while minima.len() < num_peers.total() {
+            minima.push(bitcoin::Amount::from_sat(0));
+        }
+
+        assert_eq!(minima.len(), num_peers.total());
+
+        minima.sort_unstable();
+
+        assert!(minima.first() <= minima.last());
+
+        // The pegin minimum we select guarantees that any threshold of correct peers
+        // can decrease the consensus pegin minimum and any consensus pegin
+        // minimum has been confirmed by a threshold of peers.
+
+        minima[num_peers.threshold() - 1]
+    }
+
     pub async fn consensus_nonce(&self, dbtx: &mut DatabaseTransaction<'_>) -> [u8; 33] {
         let nonce_idx = dbtx.get_value(&PegOutNonceKey).await.unwrap_or(0);
         dbtx.insert_entry(&PegOutNonceKey, &(nonce_idx + 1)).await;
@@ -1138,6 +1187,7 @@ impl Wallet {
                 peg_out.fees.fee_rate,
                 change_tweak,
                 None,
+                self.consensus_peg_in_minimum(dbtx).await,
             ),
             WalletOutputV0::Rbf(rbf) => {
                 let tx = dbtx
@@ -1153,6 +1203,7 @@ impl Wallet {
                     tx.fees.fee_rate,
                     change_tweak,
                     Some(rbf.clone()),
+                    self.consensus_peg_in_minimum(dbtx).await,
                 )
             }
         }
@@ -1390,6 +1441,7 @@ impl<'a> StatelessWallet<'a> {
         mut fee_rate: Feerate,
         change_tweak: &[u8; 33],
         rbf: Option<Rbf>,
+        utxo_minimum: bitcoin::Amount,
     ) -> Result<UnsignedTransaction, WalletOutputError> {
         // Add the rbf fees to the existing tx fees
         if let Some(rbf) = &rbf {
@@ -1443,6 +1495,21 @@ impl<'a> StatelessWallet<'a> {
                     selected_utxos.push((utxo_key, utxo));
                 }
                 _ => return Err(WalletOutputError::NotEnoughSpendableUTXO), // Not enough UTXOs
+            }
+        }
+
+        // ensure that the created change output is economically viable
+        if total_selected_value - fees - peg_out_amount != bitcoin::Amount::from_sat(0) {
+            while total_selected_value - fees - peg_out_amount < utxo_minimum {
+                match included_utxos.pop() {
+                    Some((utxo_key, utxo)) => {
+                        total_selected_value += utxo.amount;
+                        total_weight += max_input_weight;
+                        fees = fee_rate.calculate_fee(total_weight);
+                        selected_utxos.push((utxo_key, utxo));
+                    }
+                    _ => break,
+                }
             }
         }
 
@@ -1778,6 +1845,7 @@ mod tests {
             fee,
             &[0; 33],
             None,
+            Amount::ZERO,
         );
         assert_eq!(tx, Err(WalletOutputError::NotEnoughSpendableUTXO));
 
@@ -1791,6 +1859,7 @@ mod tests {
                 fee,
                 &[0; 33],
                 None,
+                Amount::ZERO,
             )
             .expect("is ok");
 

@@ -680,10 +680,11 @@ mod fedimint_migration_tests {
     };
     use fedimint_wallet_server::db::{
         BlockCountVoteKey, BlockCountVotePrefix, BlockHashKey, BlockHashKeyPrefix, DbKeyPrefix,
-        FeeRateVoteKey, FeeRateVotePrefix, PegOutBitcoinTransaction,
-        PegOutBitcoinTransactionPrefix, PegOutNonceKey, PegOutTxSignatureCI,
-        PegOutTxSignatureCIPrefix, PendingTransactionKey, PendingTransactionPrefixKey, UTXOKey,
-        UTXOPrefixKey, UnsignedTransactionKey, UnsignedTransactionPrefixKey,
+        FeeRateVoteKey, FeeRateVotePrefix, PegInMinimumVoteKey, PegInMinimumVotePrefix,
+        PegOutBitcoinTransaction, PegOutBitcoinTransactionPrefix, PegOutNonceKey,
+        PegOutTxSignatureCI, PegOutTxSignatureCIPrefix, PendingTransactionKey,
+        PendingTransactionPrefixKey, UTXOKey, UTXOPrefixKey, UnsignedTransactionKey,
+        UnsignedTransactionPrefixKey,
     };
     use fedimint_wallet_server::{PendingTransaction, UnsignedTransaction};
     use futures::StreamExt;
@@ -729,6 +730,12 @@ mod fedimint_migration_tests {
         dbtx.insert_new_entry(
             &FeeRateVoteKey(PeerId::from(0)),
             &Feerate { sats_per_kvb: 10 },
+        )
+        .await;
+
+        dbtx.insert_new_entry(
+            &PegInMinimumVoteKey(PeerId::from(0)),
+            &bitcoin::Amount::from_sat(1_000_000),
         )
         .await;
 
@@ -1001,6 +1008,19 @@ mod fedimint_migration_tests {
                                 "validate_migrations was not able to read any fee rate votes"
                             );
                             info!("Validated FeeRateVote");
+                        }
+                        DbKeyPrefix::PegInMinimumVote => {
+                            let minima = dbtx
+                                .find_by_prefix(&PegInMinimumVotePrefix)
+                                .await
+                                .collect::<Vec<_>>()
+                                .await;
+                            let num_minima = minima.len();
+                            ensure!(
+                                num_minima > 0,
+                                "validate_migrations was not able to read any pegin minimum votes"
+                            );
+                            info!("Validated PegInMinimumVote");
                         }
                     }
                 }
