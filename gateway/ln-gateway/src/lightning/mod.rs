@@ -31,8 +31,8 @@ use crate::envs::{
 };
 use crate::gateway_lnrpc::{
     CloseChannelsWithPeerResponse, CreateInvoiceRequest, CreateInvoiceResponse, EmptyResponse,
-    GetFundingAddressResponse, GetNodeInfoResponse, GetRouteHintsResponse, InterceptHtlcRequest,
-    InterceptHtlcResponse, PayInvoiceResponse,
+    GetBalancesResponse, GetFundingAddressResponse, GetNodeInfoResponse, GetRouteHintsResponse,
+    InterceptHtlcRequest, InterceptHtlcResponse, PayInvoiceResponse,
 };
 use crate::GatewayError;
 
@@ -69,6 +69,8 @@ pub enum LightningRpcError {
     FailedToConnectToPeer { failure_reason: String },
     #[error("Failed to list active channels: {failure_reason}")]
     FailedToListActiveChannels { failure_reason: String },
+    #[error("Failed to get balances: {failure_reason}")]
+    FailedToGetBalances { failure_reason: String },
     #[error("Failed to wait for chain sync: {failure_reason}")]
     FailedToWaitForChainSync { failure_reason: String },
     #[error("Failed to subscribe to invoice updates: {failure_reason}")]
@@ -177,6 +179,8 @@ pub trait ILnRpcClient: Debug + Send + Sync {
     ) -> Result<CloseChannelsWithPeerResponse, LightningRpcError>;
 
     async fn list_active_channels(&self) -> Result<Vec<ChannelInfo>, LightningRpcError>;
+
+    async fn get_balances(&self) -> Result<GetBalancesResponse, LightningRpcError>;
 }
 
 impl dyn ILnRpcClient {

@@ -58,6 +58,8 @@ pub enum GeneralCommands {
         #[clap(long)]
         federation_id: FederationId,
     },
+    /// Get the total on-chain, lightning, and eCash balances of the gateway.
+    GetBalances,
     /// Generate a new peg-in address to a federation that the gateway can claim
     /// e-cash for later.
     Address {
@@ -172,6 +174,10 @@ impl GeneralCommands {
                     .get_balance(BalancePayload { federation_id })
                     .await?;
 
+                print_response(response);
+            }
+            Self::GetBalances => {
+                let response = create_client().get_balances().await?;
                 print_response(response);
             }
             Self::Address { federation_id } => {

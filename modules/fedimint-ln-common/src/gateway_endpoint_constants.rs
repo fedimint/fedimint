@@ -7,6 +7,7 @@ pub const CONFIGURATION_ENDPOINT: &str = "/config";
 pub const CONNECT_FED_ENDPOINT: &str = "/connect-fed"; // uses `-` for backwards compatibility
 pub const CREATE_BOLT11_INVOICE_V2_ENDPOINT: &str = "/create_bolt11_invoice";
 pub const GATEWAY_INFO_ENDPOINT: &str = "/info";
+pub const GET_BALANCES_ENDPOINT: &str = "/balances";
 pub const GET_GATEWAY_ID_ENDPOINT: &str = "/id";
 pub const GATEWAY_INFO_POST_ENDPOINT: &str = "/info";
 pub const GET_FUNDING_ADDRESS_ENDPOINT: &str = "/get_funding_address";

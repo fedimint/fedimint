@@ -4,7 +4,7 @@ use fedimint_core::util::SafeUrl;
 use fedimint_core::{Amount, TransactionId};
 use fedimint_ln_common::gateway_endpoint_constants::{
     BACKUP_ENDPOINT, BALANCE_ENDPOINT, CLOSE_CHANNELS_WITH_PEER_ENDPOINT, CONFIGURATION_ENDPOINT,
-    CONNECT_FED_ENDPOINT, GATEWAY_INFO_ENDPOINT, GATEWAY_INFO_POST_ENDPOINT,
+    CONNECT_FED_ENDPOINT, GATEWAY_INFO_ENDPOINT, GATEWAY_INFO_POST_ENDPOINT, GET_BALANCES_ENDPOINT,
     GET_FUNDING_ADDRESS_ENDPOINT, LEAVE_FED_ENDPOINT, LIST_ACTIVE_CHANNELS_ENDPOINT,
     OPEN_CHANNEL_ENDPOINT, RECEIVE_ECASH_ENDPOINT, RESTORE_ENDPOINT, SET_CONFIGURATION_ENDPOINT,
     SPEND_ECASH_ENDPOINT, WITHDRAW_ENDPOINT,
@@ -21,7 +21,7 @@ use super::{
     SetConfigurationPayload, SpendEcashPayload, SpendEcashResponse, WithdrawPayload,
 };
 use crate::lightning::ChannelInfo;
-use crate::CloseChannelsWithPeerResponse;
+use crate::{CloseChannelsWithPeerResponse, GatewayBalances};
 
 pub struct GatewayRpcClient {
     /// Base URL to gateway web server
@@ -202,6 +202,14 @@ impl GatewayRpcClient {
             .join(RECEIVE_ECASH_ENDPOINT)
             .expect("invalid base url");
         self.call_post(url, payload).await
+    }
+
+    pub async fn get_balances(&self) -> GatewayRpcResult<GatewayBalances> {
+        let url = self
+            .base_url
+            .join(GET_BALANCES_ENDPOINT)
+            .expect("invalid base url");
+        self.call_get(url).await
     }
 
     async fn call<P: Serialize, T: DeserializeOwned>(
