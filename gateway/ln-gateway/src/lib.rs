@@ -1646,9 +1646,9 @@ impl Gateway {
             .federation_manager
             .read()
             .await
-            .get_client_for_federation_id_prefix(&payload.notes.federation_id_prefix())
+            .get_client_for_federation_id_prefix(payload.notes.federation_id_prefix())
             .ok_or(anyhow!("Client not found"))?;
-        let mint = client.get_first_module::<MintClientModule>();
+        let mint = client.value().get_first_module::<MintClientModule>();
 
         let operation_id = mint.reissue_external_notes(payload.notes, ()).await?;
         if payload.wait {
