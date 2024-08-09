@@ -1,0 +1,157 @@
+# Best used if called by 'downloader.sh' script and selecting gateway
+# fedimint.my-super-host.com should be replaced by a domain controlled by you and all DNS below should redirect to the IP of your server.
+# Domains:
+# - guardian-ui.fedimint.my-super-host.com
+# - gatewayd.fedimint.my-super-host.com
+# - gateway-ui.fedimint.my-super-host.com
+
+version: "3.3"
+
+services:
+  ### START_TRAEFIK ###
+  traefik:
+    image: "traefik:v3.1.2"
+    container_name: "traefik"
+    command:
+      #- "--log.level=DEBUG"
+      - "--api.insecure=true"
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--entrypoints.websecure.address=:443"
+      - "--certificatesresolvers.myresolver.acme.tlschallenge=true"
+      - "--certificatesresolvers.myresolver.acme.storage=/letsencrypt/acme.json"
+    ports:
+      - "443:443"
+    volumes:
+      - "letsencrypt_data:/letsencrypt"
+      - "/var/run/docker.sock:/var/run/docker.sock:ro"
+  ### END_TRAEFIK ###
+
+  ### START_LND ###
+  ### START_LND_GATEWAYD ###
+  gatewayd:
+    image: fedimint/gatewayd:v0.4.0
+    command: gatewayd lnd
+    environment:
+      # Path to folder containing gateway config and data files
+      - FM_GATEWAY_DATA_DIR=/gateway_data
+      # Gateway webserver listen address
+      - FM_GATEWAY_LISTEN_ADDR=0.0.0.0:80
+      # Public URL from which the webserver API is reachable
+      - FM_GATEWAY_API_ADDR=https://gatewayd.fedimint.my-super-host.com
+      # Gateway webserver authentication password
+      - FM_GATEWAY_PASSWORD=thereisnosecondbest
+      # Configured gateway routing fees Format: <base_msat>,<proportional_millionths>
+      - FM_GATEWAY_FEES=0,10000
+      # LND RPC address
+      - FM_LND_RPC_ADDR=https://lnd:10009
+      # LND TLS cert file path
+      - FM_LND_TLS_CERT=/lnd_data/tls.cert
+      # LND macaroon file path
+      - FM_LND_MACAROON=/lnd_data/data/chain/bitcoin/mainnet/admin.macaroon
+      - FM_REL_NOTES_ACK=0_4_xyz
+    volumes:
+      - gateway_datadir:/gateway_data
+      - lnd_datadir:/lnd_data
+    depends_on:
+      - lnd
+    restart: always
+    platform: linux/amd64
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.services.gatewayd.loadbalancer.server.port=80"
+      - "traefik.http.routers.gatewayd.rule=Host(`gatewayd.fedimint.my-super-host.com`)"
+      - "traefik.http.routers.gatewayd.entrypoints=websecure"
+      - "traefik.http.routers.gatewayd.tls.certresolver=myresolver"
+  ### END_LND_GATEWAYD ###
+
+  ### START_LND_NODE ###
+  lnd:
+    image: lightninglabs/lnd:v0.18.0-beta
+    entrypoint: bash
+    command:
+      - -c
+      - lnd --bitcoin.active --bitcoin.signet --bitcoin.dnsseed=0 --bitcoin.node=bitcoind --protocol.wumbo-channels --bitcoind.rpchost=bitcoind --bitcoind.rpcuser=bitcoin --bitcoind.rpcpass=bitcoin --bitcoind.zmqpubrawblock=tcp://bitcoind:48332 --bitcoind.zmqpubrawtx=tcp://bitcoind:48333 --listen=0.0.0.0:9735 --rpclisten=0.0.0.0:10009 --restlisten=0.0.0.0:8080 --tlsextradomain=lnd --noseedbackup
+    ports:
+      - "10009:10009"
+      - "0.0.0.0:9735:9735"
+    volumes:
+      - lnd_datadir:/root/.lnd
+    depends_on:
+      - bitcoind
+    restart: always
+  ### END_LND_NODE ###
+
+  ### START_BITCOIND ###
+  bitcoind:
+    image: btcpayserver/bitcoin:26.0
+    command: --rpcuser=bitcoin --rpcpassword=bitcoin -zmqpubrawblock=tcp://[::]:48332 -zmqpubrawtx=tcp://[::]:48333
+    ports:
+      - 0.0.0.0:38333:38333
+    volumes:
+      - "bitcoin_datadir:/root/.bitcoin"
+    restart: always
+    platform: linux/amd64
+  ### END_BITCOIND ###
+  ### END_LND ###
+
+  ### START_LDK_GATEWAYD ###
+  gatewayd:
+    image: fedimint/gatewayd:v0.4.0
+    command: gatewayd ldk
+    environment:
+      # Path to folder containing gateway config and data files
+      - FM_GATEWAY_DATA_DIR=/gateway_data
+      # Gateway webserver listen address
+      - FM_GATEWAY_LISTEN_ADDR=0.0.0.0:80
+      # Public URL from which the webserver API is reachable
+      - FM_GATEWAY_API_ADDR=https://gatewayd.fedimint.my-super-host.com
+      # Gateway webserver authentication password
+      - FM_GATEWAY_PASSWORD=thereisnosecondbest
+      # Configured gateway routing fees Format: <base_msat>,<proportional_millionths>
+      - FM_GATEWAY_FEES=0,10000
+      # LDK requires esplora
+      - FM_LDK_ESPLORA_SERVER_URL=https://blockstream.info/api
+      # LDK network
+      - FM_LDK_NETWORK=bitcoin
+      # LDK port
+      - FM_PORT_LDK=9735
+      # Release notes ack for 0.4 upgrade
+      - FM_REL_NOTES_ACK=0_4_xyz
+    volumes:
+      - gateway_datadir:/gateway_data
+    restart: always
+    platform: linux/amd64
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.services.gatewayd.loadbalancer.server.port=80"
+      - "traefik.http.routers.gatewayd.rule=Host(`gatewayd.fedimint.my-super-host.com`)"
+      - "traefik.http.routers.gatewayd.entrypoints=websecure"
+      - "traefik.http.routers.gatewayd.tls.certresolver=myresolver"
+  ### END_LDK_GATEWAYD ###
+
+  ### START_GATEWAY_UI ###
+  gateway-ui:
+    image: fedimintui/gateway-ui:0.4.0
+    environment:
+      - PORT=80
+      - REACT_APP_FM_GATEWAY_API=https://gatewayd.fedimint.my-super-host.com
+    depends_on:
+      - gatewayd
+    restart: always
+    platform: linux/amd64
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.services.gateway-ui.loadbalancer.server.port=80"
+      - "traefik.http.routers.gateway-ui.rule=Host(`gateway-ui.fedimint.my-super-host.com`)"
+      - "traefik.http.routers.gateway-ui.entrypoints=websecure"
+      - "traefik.http.routers.gateway-ui.tls.certresolver=myresolver"
+  ### END_GATEWAY_UI ###
+
+volumes:
+  letsencrypt_data:
+  gateway_datadir:
+  ### START_LND_DATA ###
+  lnd_datadir:
+  bitcoin_datadir:
+  ### END_LND_DATA ###
