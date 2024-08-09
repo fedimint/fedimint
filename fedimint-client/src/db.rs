@@ -17,7 +17,7 @@ use fedimint_core::util::BoxFuture;
 use fedimint_core::{impl_db_lookup, impl_db_record, PeerId};
 use fedimint_logging::LOG_CLIENT_DB;
 use futures::StreamExt;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use strum_macros::EnumIter;
 use tracing::{debug, info, trace, warn};
 
@@ -346,13 +346,17 @@ impl_db_record!(
     db_prefix = DbKeyPrefix::ClientLastBackup
 );
 
-#[derive(Encodable, Decodable, Debug, PartialEq, Eq, PartialOrd, Ord, Clone)]
+#[derive(
+    Encodable, Decodable, Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Serialize, Deserialize,
+)]
 pub struct MetaFieldKey(pub String);
 
-#[derive(Encodable, Decodable, Debug, PartialEq, Eq, PartialOrd, Ord, Clone)]
+#[derive(
+    Encodable, Decodable, Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Serialize, Deserialize,
+)]
 pub struct MetaFieldPrefix;
 
-#[derive(Encodable, Decodable, Debug, Clone)]
+#[derive(Encodable, Decodable, Debug, Clone, Serialize, Deserialize)]
 pub struct MetaFieldValue(pub String);
 
 #[derive(Encodable, Decodable, Debug)]

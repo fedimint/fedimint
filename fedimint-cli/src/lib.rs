@@ -33,6 +33,7 @@ use fedimint_api_client::api::{
     DynGlobalApi, FederationApiExt, FederationError, IRawFederationApi, WsFederationApi,
 };
 use fedimint_bip39::Bip39RootSecretStrategy;
+use fedimint_client::meta::{FetchKind, MetaSource, MetaValues};
 use fedimint_client::module::init::{ClientModuleInit, ClientModuleInitRegistry};
 use fedimint_client::module::ClientModule as _;
 use fedimint_client::secret::{get_default_client_secret, RootSecretStrategy};
@@ -49,7 +50,7 @@ use fedimint_core::util::{backon, handle_version_hash_command, retry, SafeUrl};
 use fedimint_core::{fedimint_build_code_version_env, runtime, PeerId, TieredMulti};
 use fedimint_ln_client::LightningClientInit;
 use fedimint_logging::{TracingSetup, LOG_CLIENT};
-use fedimint_meta_client::MetaClientInit;
+use fedimint_meta_client::{MetaClientInit, MetaModuleOrLegacyMetaSource};
 use fedimint_mint_client::{MintClientInit, MintClientModule, OOBNotes, SpendableNote};
 use fedimint_server::config::io::SALT_FILE;
 use fedimint_wallet_client::api::WalletFederationApi;
@@ -529,6 +530,10 @@ Examples:
     ListOperationStates {
         operation_id: OperationId,
     },
+    /// Returns the federation's meta fields. If they are set correctly via the
+    /// meta module these are returned, otherwise the legacy mechanism
+    /// (config+override file) is used.
+    MetaFields,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -1066,6 +1071,19 @@ impl FedimintCli {
                 Ok(CliOutput::Raw(json!({
                     "states": all_states
                 })))
+            }
+            Command::Dev(DevCmd::MetaFields) => {
+                let client = self.client_open(&cli).await?;
+                let source = MetaModuleOrLegacyMetaSource::default();
+
+                let meta_fields = source
+                    .fetch(&client, FetchKind::Initial, None)
+                    .await
+                    .map_err_cli()?;
+
+                Ok(CliOutput::Raw(
+                    serde_json::to_value(meta_fields).expect("Can be encoded"),
+                ))
             }
             Command::Completion { shell } => {
                 clap_complete::generate(
