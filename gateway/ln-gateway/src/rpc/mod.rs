@@ -7,9 +7,11 @@ use std::str::FromStr;
 use bitcoin::address::NetworkUnchecked;
 use bitcoin::{Address, Network};
 use fedimint_core::config::{ClientConfig, FederationId, JsonClientConfig};
+use fedimint_core::core::OperationId;
 use fedimint_core::{secp256k1, Amount, BitcoinAmountOrAll};
 use fedimint_ln_common::config::parse_routing_fees;
 use fedimint_ln_common::{route_hints, serde_option_routing_fees};
+use fedimint_mint_client::OOBNotes;
 use lightning_invoice::RoutingFees;
 use serde::{Deserialize, Serialize};
 
@@ -160,4 +162,27 @@ pub struct OpenChannelPayload {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct CloseChannelsWithPeerPayload {
     pub pubkey: secp256k1::PublicKey,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct SpendEcashPayload {
+    /// Federation id of the e-cash to spend
+    pub federation_id: FederationId,
+    /// The amount of e-cash to spend
+    pub amount: Amount,
+    /// If the exact amount cannot be represented, return e-cash of a higher
+    /// value instead of failing
+    pub allow_overpay: bool,
+    /// After how many seconds we will try to reclaim the e-cash if it
+    /// hasn't been redeemed by the recipient. Defaults to one week.
+    pub timeout: u64,
+    /// If the necessary information to join the federation the e-cash
+    /// belongs to should be included in the serialized notes
+    pub include_invite: bool,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct SpendEcashResponse {
+    pub operation_id: OperationId,
+    pub notes: OOBNotes,
 }

@@ -80,7 +80,10 @@ use fedimint_lnv2_client::{
     SendPaymentPayload,
 };
 use fedimint_lnv2_common::contracts::IncomingContract;
-use fedimint_mint_client::{MintClientInit, MintCommonInit};
+use fedimint_mint_client::{
+    MintClientInit, MintClientModule, MintCommonInit, SelectNotesWithAtleastAmount,
+    SelectNotesWithExactAmount,
+};
 use fedimint_wallet_client::{
     WalletClientInit, WalletClientModule, WalletCommonInit, WithdrawState,
 };
@@ -93,7 +96,8 @@ use lightning_invoice::{Bolt11Invoice, RoutingFees};
 use rand::Rng;
 use rpc::{
     CloseChannelsWithPeerPayload, FederationInfo, GatewayFedConfig, GatewayInfo, LeaveFedPayload,
-    OpenChannelPayload, SetConfigurationPayload, V1_API_ENDPOINT,
+    OpenChannelPayload, SetConfigurationPayload, SpendEcashPayload, SpendEcashResponse,
+    V1_API_ENDPOINT,
 };
 use state_machine::pay::OutgoingPaymentError;
 use state_machine::GatewayClientModule;
@@ -1586,6 +1590,51 @@ impl Gateway {
             .await?;
 
         Ok((registered_incoming_contract.contract, client))
+    }
+
+    pub async fn spend_ecash(
+        &self,
+        payload: SpendEcashPayload,
+    ) -> anyhow::Result<SpendEcashResponse> {
+        let client = self.select_client_v2(payload.federation_id).await?;
+        let mint_module = client.get_first_module::<MintClientModule>();
+        let timeout = Duration::from_secs(payload.timeout);
+        let (operation_id, notes) = if payload.allow_overpay {
+            let (operation_id, notes) = mint_module
+                .spend_notes_with_selector(
+                    &SelectNotesWithAtleastAmount,
+                    payload.amount,
+                    timeout,
+                    payload.include_invite,
+                    (),
+                )
+                .await?;
+
+            let overspend_amount = notes.total_amount() - payload.amount;
+            if overspend_amount != Amount::ZERO {
+                warn!(
+                    "Selected notes {} worth more than requested",
+                    overspend_amount
+                );
+            }
+
+            (operation_id, notes)
+        } else {
+            mint_module
+                .spend_notes_with_selector(
+                    &SelectNotesWithExactAmount,
+                    payload.amount,
+                    timeout,
+                    payload.include_invite,
+                    (),
+                )
+                .await?
+        };
+
+        Ok(SpendEcashResponse {
+            operation_id,
+            notes,
+        })
     }
 }
 

@@ -115,6 +115,15 @@ pub enum GeneralCommands {
         #[clap(long)]
         per_federation_routing_fees: Option<Vec<PerFederationRoutingFees>>,
     },
+    /// Spend e-cash
+    SpendEcash {
+        #[clap(long)]
+        amount: BitcoinAmountOrAll,
+        #[clap(long)]
+        timeout: u64,
+        #[clap(long)]
+        include_invite: bool,
+    },
 }
 
 impl GeneralCommands {
@@ -214,6 +223,19 @@ impl GeneralCommands {
                         routing_fees,
                         network,
                         per_federation_routing_fees,
+                    })
+                    .await?;
+            }
+            Self::SpendEcash {
+                amount,
+                timeout,
+                include_invite,
+            } => {
+                let response = create_client()
+                    .spend_ecash(SpendEcashPayload {
+                        amount,
+                        timeout,
+                        include_invite,
                     })
                     .await?;
             }

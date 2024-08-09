@@ -17,7 +17,7 @@ use fedimint_ln_common::gateway_endpoint_constants::{
     GATEWAY_INFO_ENDPOINT, GATEWAY_INFO_POST_ENDPOINT, GET_FUNDING_ADDRESS_ENDPOINT,
     GET_GATEWAY_ID_ENDPOINT, LEAVE_FED_ENDPOINT, LIST_ACTIVE_CHANNELS_ENDPOINT,
     OPEN_CHANNEL_ENDPOINT, PAY_INVOICE_ENDPOINT, RESTORE_ENDPOINT, ROUTING_INFO_V2_ENDPOINT,
-    SEND_PAYMENT_V2_ENDPOINT, SET_CONFIGURATION_ENDPOINT, WITHDRAW_ENDPOINT,
+    SEND_PAYMENT_V2_ENDPOINT, SET_CONFIGURATION_ENDPOINT, SPEND_ECASH_ENDPOINT, WITHDRAW_ENDPOINT,
 };
 use fedimint_lnv2_client::{CreateBolt11InvoicePayload, SendPaymentPayload};
 use hex::ToHex;
@@ -29,7 +29,8 @@ use tracing::{error, info, instrument};
 use super::{
     BackupPayload, BalancePayload, CloseChannelsWithPeerPayload, ConnectFedPayload,
     DepositAddressPayload, GetFundingAddressPayload, InfoPayload, LeaveFedPayload,
-    OpenChannelPayload, RestorePayload, SetConfigurationPayload, WithdrawPayload, V1_API_ENDPOINT,
+    OpenChannelPayload, RestorePayload, SetConfigurationPayload, SpendEcashPayload,
+    WithdrawPayload, V1_API_ENDPOINT,
 };
 use crate::rpc::ConfigPayload;
 use crate::{Gateway, GatewayError};
@@ -154,7 +155,8 @@ fn v1_routes(gateway: Arc<Gateway>) -> Router {
         .route(
             CREATE_BOLT11_INVOICE_V2_ENDPOINT,
             post(create_bolt11_invoice_v2),
-        );
+        )
+        .route(SPEND_ECASH_ENDPOINT, post(spend_ecash));
 
     // Authenticated, public routes used for gateway administration
     let always_authenticated_routes = Router::new()
@@ -390,6 +392,16 @@ async fn create_bolt11_invoice_v2(
 ) -> Json<Value> {
     Json(json!(gateway
         .create_bolt11_invoice_v2(payload)
+        .await
+        .map_err(|e| e.to_string())))
+}
+
+async fn spend_ecash(
+    Extension(gateway): Extension<Arc<Gateway>>,
+    Json(payload): Json<SpendEcashPayload>,
+) -> Json<Value> {
+    Json(json!(gateway
+        .spend_ecash(payload)
         .await
         .map_err(|e| e.to_string())))
 }
