@@ -14,6 +14,7 @@ pub const LEAVE_FED_ENDPOINT: &str = "/leave-fed"; // uses `-` for backwards com
 pub const LIST_ACTIVE_CHANNELS_ENDPOINT: &str = "/list_active_channels";
 pub const OPEN_CHANNEL_ENDPOINT: &str = "/open_channel";
 pub const CLOSE_CHANNELS_WITH_PEER_ENDPOINT: &str = "/close_channels_with_peer";
+pub const RECEIVE_ECASH_ENDPOINT: &str = "/receive_ecash";
 pub const ROUTING_INFO_V2_ENDPOINT: &str = "/routing_info";
 pub const PAY_INVOICE_ENDPOINT: &str = "/pay_invoice";
 pub const RESTORE_ENDPOINT: &str = "/restore";

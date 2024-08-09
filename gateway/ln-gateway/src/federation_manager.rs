@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use bitcoin::secp256k1::KeyPair;
 use fedimint_client::ClientHandleArc;
-use fedimint_core::config::{FederationId, JsonClientConfig};
+use fedimint_core::config::{FederationId, FederationIdPrefix, JsonClientConfig};
 use fedimint_core::db::{DatabaseTransaction, NonCommittable};
 use fedimint_core::util::Spanned;
 
@@ -148,6 +148,19 @@ impl FederationManager {
         self.scid_to_federation.iter().find_map(|(scid, fid)| {
             if *fid == federation_id {
                 Some(*scid)
+            } else {
+                None
+            }
+        })
+    }
+
+    pub fn get_client_for_federation_id_prefix(
+        &self,
+        federation_id_prefix: &FederationIdPrefix,
+    ) -> Option<Spanned<ClientHandleArc>> {
+        self.clients.iter().find_map(|(fid, client)| {
+            if &fid.to_prefix() == federation_id_prefix {
+                Some(client.clone())
             } else {
                 None
             }
