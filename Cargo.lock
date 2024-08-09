@@ -1577,6 +1577,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "fedimint-client-wasm"
+version = "0.5.0-alpha"
+dependencies = [
+ "anyhow",
+ "async-stream",
+ "fedimint-api-client",
+ "fedimint-client",
+ "fedimint-core",
+ "fedimint-ln-client",
+ "fedimint-mint-client",
+ "futures",
+ "js-sys",
+ "serde_json",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+]
+
+[[package]]
 name = "fedimint-core"
 version = "0.5.0-alpha"
 dependencies = [
