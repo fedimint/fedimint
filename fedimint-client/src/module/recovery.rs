@@ -9,6 +9,7 @@ use fedimint_core::{
     module_plugin_dyn_newtype_define, module_plugin_dyn_newtype_encode_decode,
     module_plugin_dyn_newtype_eq_passthrough,
 };
+use serde::{Deserialize, Serialize};
 
 pub trait IModuleBackup: Debug + DynEncodable {
     fn as_any(&self) -> &(maybe_add_send_sync!(dyn Any));
@@ -119,7 +120,7 @@ impl IntoDynInstance for NoModuleBackup {
 ///
 /// This includes "magic" value: if `total` is `0` the progress is "not started
 /// yet"/"empty"/"none"
-#[derive(Debug, Copy, Clone, Encodable, Decodable)]
+#[derive(Debug, Copy, Clone, Encodable, Decodable, Serialize, Deserialize)]
 pub struct RecoveryProgress {
     pub complete: u32,
     pub total: u32,
