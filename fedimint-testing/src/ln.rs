@@ -17,8 +17,8 @@ use lightning_invoice::{
 };
 use ln_gateway::gateway_lnrpc::{
     self, CloseChannelsWithPeerResponse, CreateInvoiceRequest, CreateInvoiceResponse,
-    EmptyResponse, GetFundingAddressResponse, GetNodeInfoResponse, GetRouteHintsResponse,
-    InterceptHtlcResponse, PayInvoiceResponse,
+    EmptyResponse, GetBalancesResponse, GetFundingAddressResponse, GetNodeInfoResponse,
+    GetRouteHintsResponse, InterceptHtlcResponse, PayInvoiceResponse,
 };
 use ln_gateway::lightning::{
     ChannelInfo, HtlcResult, ILnRpcClient, LightningRpcError, RouteHtlcStream,
@@ -257,5 +257,9 @@ impl ILnRpcClient for FakeLightningTest {
 
     async fn list_active_channels(&self) -> Result<Vec<ChannelInfo>, LightningRpcError> {
         unimplemented!("FakeLightningTest does not support listing active channels")
+    }
+
+    async fn get_balances(&self) -> Result<GetBalancesResponse, LightningRpcError> {
+        unimplemented!("FakeLightningTest does not support getting balances")
     }
 }

@@ -30,10 +30,10 @@ use ln_gateway::gateway_lnrpc::intercept_htlc_response::{Action, Cancel, Forward
 use ln_gateway::gateway_lnrpc::list_active_channels_response::ChannelInfo;
 use ln_gateway::gateway_lnrpc::{
     CloseChannelsWithPeerRequest, CloseChannelsWithPeerResponse, CreateInvoiceRequest,
-    CreateInvoiceResponse, EmptyRequest, EmptyResponse, GetFundingAddressResponse,
-    GetNodeInfoResponse, GetRouteHintsRequest, GetRouteHintsResponse, InterceptHtlcRequest,
-    InterceptHtlcResponse, ListActiveChannelsResponse, OpenChannelRequest, PayInvoiceRequest,
-    PayInvoiceResponse, PayPrunedInvoiceRequest, PrunedInvoice,
+    CreateInvoiceResponse, EmptyRequest, EmptyResponse, GetBalancesResponse,
+    GetFundingAddressResponse, GetNodeInfoResponse, GetRouteHintsRequest, GetRouteHintsResponse,
+    InterceptHtlcRequest, InterceptHtlcResponse, ListActiveChannelsResponse, OpenChannelRequest,
+    PayInvoiceRequest, PayInvoiceResponse, PayPrunedInvoiceRequest, PrunedInvoice,
 };
 use rand::rngs::OsRng;
 use rand::Rng;
@@ -1088,6 +1088,44 @@ impl GatewayLightning for ClnRpcService {
 
         Ok(tonic::Response::new(ListActiveChannelsResponse {
             channels,
+        }))
+    }
+
+    async fn get_balances(
+        &self,
+        _request: tonic::Request<EmptyRequest>,
+    ) -> Result<tonic::Response<GetBalancesResponse>, Status> {
+        let (channels, outputs) = self
+            .rpc_client()
+            .await
+            .map_err(|e| Status::internal(e.to_string()))?
+            .call(cln_rpc::Request::ListFunds(
+                model::requests::ListfundsRequest { spent: None },
+            ))
+            .await
+            .map(|response| match response {
+                cln_rpc::Response::ListFunds(model::responses::ListfundsResponse {
+                    channels,
+                    outputs,
+                }) => Ok((channels, outputs)),
+                _ => Err(ClnExtensionError::RpcWrongResponse),
+            })
+            .map_err(|e| {
+                error!("cln listchannels rpc returned error {:?}", e);
+                tonic::Status::internal(e.to_string())
+            })?
+            .map_err(|e| tonic::Status::internal(e.to_string()))?;
+
+        let lightning_balance_msats = channels
+            .into_iter()
+            .fold(0, |acc, channel| acc + channel.our_amount_msat.msat());
+        let onchain_balance_sats = outputs
+            .into_iter()
+            .fold(0, |acc, output| acc + output.amount_msat.msat() / 1000);
+
+        Ok(tonic::Response::new(GetBalancesResponse {
+            onchain_balance_sats,
+            lightning_balance_msats,
         }))
     }
 }

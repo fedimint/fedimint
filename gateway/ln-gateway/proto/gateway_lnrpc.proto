@@ -47,6 +47,8 @@ service GatewayLightning {
 
   /* List all channels that are active and able to send and receive funds. */
   rpc ListActiveChannels(EmptyRequest) returns (ListActiveChannelsResponse) {}
+
+  rpc GetBalances(EmptyRequest) returns (GetBalancesResponse) {}
 }
 
 message EmptyRequest {}
@@ -311,4 +313,12 @@ message ListActiveChannelsResponse {
 
   // All channels on the node that are currently able to send and receive payments.
   repeated ChannelInfo channels = 1;
+}
+
+message GetBalancesResponse {
+    // The total balance of the node's on-chain wallet, in sats.
+    uint64 onchain_balance_sats = 1;
+
+    // The total balance of the node's lightning wallet, in millisats.
+    uint64 lightning_balance_msats = 2;
 }

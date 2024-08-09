@@ -24,8 +24,8 @@ use crate::gateway_lnrpc::create_invoice_request::Description;
 use crate::gateway_lnrpc::intercept_htlc_response::{Action, Settle};
 use crate::gateway_lnrpc::{
     CloseChannelsWithPeerResponse, CreateInvoiceRequest, CreateInvoiceResponse, EmptyResponse,
-    GetFundingAddressResponse, GetNodeInfoResponse, GetRouteHintsResponse, InterceptHtlcRequest,
-    InterceptHtlcResponse, PayInvoiceResponse,
+    GetBalancesResponse, GetFundingAddressResponse, GetNodeInfoResponse, GetRouteHintsResponse,
+    InterceptHtlcRequest, InterceptHtlcResponse, PayInvoiceResponse,
 };
 
 pub struct GatewayLdkClient {
@@ -489,5 +489,13 @@ impl ILnRpcClient for GatewayLdkClient {
         }
 
         Ok(channels)
+    }
+
+    async fn get_balances(&self) -> Result<GetBalancesResponse, LightningRpcError> {
+        let balances = self.node.list_balances();
+        Ok(GetBalancesResponse {
+            onchain_balance_sats: balances.total_onchain_balance_sats,
+            lightning_balance_msats: balances.total_lightning_balance_sats * 1000,
+        })
     }
 }
