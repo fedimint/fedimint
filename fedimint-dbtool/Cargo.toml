@@ -24,25 +24,25 @@ anyhow = { workspace = true }
 bytes = "1.6.0"
 clap = { version = "4.5.8", features = ["derive", "env"] }
 erased-serde = { workspace = true }
-fedimint-aead = { version = "=0.4.1-rc.0", path = "../crypto/aead" }
+fedimint-aead = { version = "=0.4.1", path = "../crypto/aead" }
 fedimint-client = { workspace = true }
 fedimint-core = { workspace = true }
 fedimint-ln-client = { workspace = true }
-fedimint-ln-server = { version = "=0.4.1-rc.0", path = "../modules/fedimint-ln-server" }
-fedimint-lnv2-server = { version = "=0.4.1-rc.0", path = "../modules/fedimint-lnv2-server" }
-fedimint-lnv2-client = { version = "=0.4.1-rc.0", path = "../modules/fedimint-lnv2-client" }
+fedimint-ln-server = { version = "=0.4.1", path = "../modules/fedimint-ln-server" }
+fedimint-lnv2-server = { version = "=0.4.1", path = "../modules/fedimint-lnv2-server" }
+fedimint-lnv2-client = { version = "=0.4.1", path = "../modules/fedimint-lnv2-client" }
 fedimint-logging = { workspace = true }
-fedimint-meta-client = { version = "=0.4.1-rc.0", path = "../modules/fedimint-meta-client" }
-fedimint-meta-server = { version = "=0.4.1-rc.0", path = "../modules/fedimint-meta-server" }
-fedimint-mint-client = { version = "=0.4.1-rc.0", path = "../modules/fedimint-mint-client" }
-fedimint-mint-server = { version = "=0.4.1-rc.0", path = "../modules/fedimint-mint-server" }
-fedimint-rocksdb = { version = "=0.4.1-rc.0", path = "../fedimint-rocksdb" }
-fedimint-server = { version = "=0.4.1-rc.0", path = "../fedimint-server" }
-fedimint-wallet-client = { version = "=0.4.1-rc.0", path = "../modules/fedimint-wallet-client" }
-fedimint-wallet-server = { version = "=0.4.1-rc.0", path = "../modules/fedimint-wallet-server" }
+fedimint-meta-client = { version = "=0.4.1", path = "../modules/fedimint-meta-client" }
+fedimint-meta-server = { version = "=0.4.1", path = "../modules/fedimint-meta-server" }
+fedimint-mint-client = { version = "=0.4.1", path = "../modules/fedimint-mint-client" }
+fedimint-mint-server = { version = "=0.4.1", path = "../modules/fedimint-mint-server" }
+fedimint-rocksdb = { version = "=0.4.1", path = "../fedimint-rocksdb" }
+fedimint-server = { version = "=0.4.1", path = "../fedimint-server" }
+fedimint-wallet-client = { version = "=0.4.1", path = "../modules/fedimint-wallet-client" }
+fedimint-wallet-server = { version = "=0.4.1", path = "../modules/fedimint-wallet-server" }
 futures = { workspace = true }
 hex = { version = "0.4.3", features = ["serde"] }
-ln-gateway = { package = "fedimint-ln-gateway", version = "=0.4.1-rc.0", path = "../gateway/ln-gateway" }
+ln-gateway = { package = "fedimint-ln-gateway", version = "=0.4.1", path = "../gateway/ln-gateway" }
 serde = { workspace = true }
 serde_json = { workspace = true }
 strum = { workspace = true }
@@ -51,4 +51,4 @@ tokio = "1.38.0"
 tracing = { workspace = true }
 
 [build-dependencies]
-fedimint-build = { version = "=0.4.1-rc.0", path = "../fedimint-build" }
+fedimint-build = { version = "=0.4.1", path = "../fedimint-build" }
