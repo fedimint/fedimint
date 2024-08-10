@@ -13,7 +13,7 @@ path = "src/main.rs"
 anyhow = { version = "1.0.86", features = ["backtrace"] }
 axum = { version = "0.7.5", features = ["tracing"] }
 bitcoincore-rpc = { workspace = true }
-clap = { version = "4.5.13", features = [
+clap = { version = "4.5.15", features = [
     "derive",
     "env",
     "std",
@@ -46,7 +46,7 @@ fedimint-wallet-client = { path = "../modules/fedimint-wallet-client", features 
 ] }
 fedimint-wallet-server = { path = "../modules/fedimint-wallet-server" }
 fedimintd = { path = "../fedimintd" }
-fs-lock = "0.1.3"
+fs-lock = "0.1.4"
 futures = { workspace = true }
 hex = { workspace = true }
 ln-gateway = { package = "fedimint-ln-gateway", path = "../gateway/ln-gateway" }
