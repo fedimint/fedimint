@@ -1631,6 +1631,9 @@ impl Gateway {
                 .await?
         };
 
+        info!("Spend ecash operation id: {:?}", operation_id);
+        info!("Spend ecash notes: {:?}", notes);
+
         Ok(SpendEcashResponse {
             operation_id,
             notes,

@@ -172,13 +172,20 @@ pub struct SpendEcashPayload {
     pub amount: Amount,
     /// If the exact amount cannot be represented, return e-cash of a higher
     /// value instead of failing
+    #[serde(default)]
     pub allow_overpay: bool,
     /// After how many seconds we will try to reclaim the e-cash if it
     /// hasn't been redeemed by the recipient. Defaults to one week.
+    #[serde(default = "default_timeout")]
     pub timeout: u64,
     /// If the necessary information to join the federation the e-cash
     /// belongs to should be included in the serialized notes
+    #[serde(default)]
     pub include_invite: bool,
+}
+
+fn default_timeout() -> u64 {
+    604800
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -190,6 +197,7 @@ pub struct SpendEcashResponse {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ReceiveEcashPayload {
     pub notes: OOBNotes,
+    #[serde(default)]
     pub wait: bool,
 }
 
