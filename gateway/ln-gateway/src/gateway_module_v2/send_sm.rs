@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use bitcoin_hashes::Hash;
 use fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
-use fedimint_client::transaction::ClientInput;
+use fedimint_client::transaction::{ChangeStrategy, ClientInput};
 use fedimint_client::DynGlobalClientContext;
 use fedimint_core::core::OperationId;
 use fedimint_core::encoding::{Decodable, Encodable};
@@ -209,7 +209,7 @@ impl SendStateMachine {
                 };
 
                 let outpoints = global_context
-                    .claim_input(dbtx, client_input)
+                    .claim_input(dbtx, client_input, ChangeStrategy::default())
                     .await
                     .expect("Cannot claim input, additional funding needed")
                     .1;

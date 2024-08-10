@@ -7,7 +7,7 @@ use anyhow::{anyhow, bail};
 use fedimint_api_client::api::{deserialize_outcome, FederationApiExt, SerdeOutputOutcome};
 use fedimint_api_client::query::FilterMapThreshold;
 use fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
-use fedimint_client::transaction::ClientInput;
+use fedimint_client::transaction::{ChangeStrategy, ClientInput};
 use fedimint_client::DynGlobalClientContext;
 use fedimint_core::core::{Decoder, OperationId};
 use fedimint_core::encoding::{Decodable, Encodable};
@@ -246,7 +246,7 @@ impl ReceiveStateMachine {
         };
 
         let outpoints = global_context
-            .claim_input(dbtx, client_input)
+            .claim_input(dbtx, client_input, ChangeStrategy::default())
             .await
             .expect("Cannot claim input, additional funding needed")
             .1;

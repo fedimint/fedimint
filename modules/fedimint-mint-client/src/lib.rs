@@ -41,7 +41,7 @@ use fedimint_client::module::{ClientContext, ClientModule, IClientModule};
 use fedimint_client::oplog::{OperationLogEntry, UpdateStreamOrOutcome};
 use fedimint_client::sm::util::MapStateTransitions;
 use fedimint_client::sm::{Context, DynState, ModuleNotifier, State, StateTransition};
-use fedimint_client::transaction::{ClientInput, ClientOutput, TransactionBuilder};
+use fedimint_client::transaction::{ChangeStrategy, ClientInput, ClientOutput, TransactionBuilder};
 use fedimint_client::{sm_enum_variant_translation, DynGlobalClientContext};
 use fedimint_core::config::{FederationId, FederationIdPrefix};
 use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, ModuleKind, OperationId};
@@ -724,6 +724,7 @@ impl ClientModule for MintClientModule {
         operation_id: OperationId,
         mut input_amount: Amount,
         mut output_amount: Amount,
+        change_strategy: ChangeStrategy,
     ) -> anyhow::Result<(
         Vec<ClientInput<MintInput, MintClientStateMachines>>,
         Vec<ClientOutput<MintOutput, MintClientStateMachines>>,
@@ -755,7 +756,13 @@ impl ClientModule for MintClientModule {
             .mul_u64(additional_inputs.len() as u64);
 
         let outputs = self
-            .create_exact_output(dbtx, operation_id, 2, input_amount - output_amount)
+            .create_exact_output(
+                dbtx,
+                operation_id,
+                2,
+                input_amount - output_amount,
+                change_strategy,
+            )
             .await;
 
         Ok(([consolidation_inputs, additional_inputs].concat(), outputs))
@@ -992,17 +999,21 @@ impl MintClientModule {
         operation_id: OperationId,
         notes_per_denomination: u16,
         exact_amount: Amount,
+        change_strategy: ChangeStrategy,
     ) -> Vec<ClientOutput<MintOutput, MintClientStateMachines>> {
         if exact_amount == Amount::ZERO {
             return Vec::new();
         }
 
-        let denominations = represent_amount(
-            exact_amount,
-            &self.get_notes_tier_counts(dbtx).await,
-            &self.cfg.tbs_pks,
-            notes_per_denomination,
-        );
+        let denominations = match change_strategy {
+            ChangeStrategy::Minimize => represent_amount_minimally(exact_amount, &self.cfg.tbs_pks),
+            ChangeStrategy::OptimizeWallet => represent_amount(
+                exact_amount,
+                &self.get_notes_tier_counts(dbtx).await,
+                &self.cfg.tbs_pks,
+                notes_per_denomination,
+            ),
+        };
 
         let mut outputs = Vec::new();
 
@@ -2197,6 +2208,25 @@ pub fn represent_amount<K>(
     denominations
 }
 
+fn represent_amount_minimally<K>(amount: Amount, tiers: &Tiered<K>) -> TieredCounts {
+    let mut remaining_amount = amount;
+    let mut denominations = TieredCounts::default();
+
+    for tier in tiers.tiers().rev() {
+        let res = remaining_amount / *tier;
+        remaining_amount %= *tier;
+        denominations.inc(*tier, res as usize);
+    }
+
+    let represented: u64 = denominations
+        .iter()
+        .map(|(k, v)| k.msats * (v as u64))
+        .sum();
+    assert_eq!(represented, amount.msats);
+
+    denominations
+}
+
 #[cfg(test)]
 mod tests {
     use std::collections::BTreeMap;
@@ -2220,8 +2250,9 @@ mod tests {
     use tbs::Signature;
 
     use crate::{
-        represent_amount, select_notes_from_stream, MintOperationMetaVariant, OOBNoteV2, OOBNotes,
-        OOBNotesPart, OOBNotesV2, SpendableNote, SpendableNoteUndecoded,
+        represent_amount, represent_amount_minimally, select_notes_from_stream,
+        MintOperationMetaVariant, OOBNoteV2, OOBNotes, OOBNotesPart, OOBNotesV2, SpendableNote,
+        SpendableNoteUndecoded,
     };
 
     #[test]
@@ -2536,6 +2567,29 @@ mod tests {
                     "out_point_indices": [dummy_outpoint.out_idx],
                 }
             })
+        );
+    }
+
+    #[test]
+    fn test_minimal_representation() {
+        let tiers = Tiered::gen_denominations(2, Amount::from_sats(100));
+
+        assert_eq!(
+            represent_amount_minimally(Amount::from_msats(5), &tiers),
+            TieredCounts::from_iter(vec![(Amount::from_msats(1), 1), (Amount::from_msats(4), 1)])
+        );
+        assert_eq!(
+            represent_amount_minimally(Amount::from_msats(32), &tiers),
+            TieredCounts::from_iter(vec![(Amount::from_msats(32), 1)])
+        );
+        assert_eq!(
+            represent_amount_minimally(Amount::from_msats(15), &tiers),
+            TieredCounts::from_iter(vec![
+                (Amount::from_msats(1), 1),
+                (Amount::from_msats(2), 1),
+                (Amount::from_msats(4), 1),
+                (Amount::from_msats(8), 1)
+            ])
         );
     }
 }

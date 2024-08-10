@@ -3,7 +3,7 @@ use std::sync::Arc;
 
 use bitcoin_hashes::sha256;
 use fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
-use fedimint_client::transaction::{ClientInput, ClientOutput};
+use fedimint_client::transaction::{ChangeStrategy, ClientInput, ClientOutput};
 use fedimint_client::{ClientHandleArc, DynGlobalClientContext};
 use fedimint_core::config::FederationId;
 use fedimint_core::core::OperationId;
@@ -695,7 +695,7 @@ impl GatewayPayClaimOutgoingContract {
         };
 
         let out_points = global_context
-            .claim_input(dbtx, client_input)
+            .claim_input(dbtx, client_input, ChangeStrategy::default())
             .await
             .expect("Cannot claim input, additional funding needed")
             .1;

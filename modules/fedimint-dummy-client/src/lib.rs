@@ -17,7 +17,7 @@ use fedimint_client::module::init::{ClientModuleInit, ClientModuleInitArgs};
 use fedimint_client::module::recovery::NoModuleBackup;
 use fedimint_client::module::{ClientContext, ClientModule, IClientModule};
 use fedimint_client::sm::{Context, ModuleNotifier};
-use fedimint_client::transaction::{ClientInput, ClientOutput, TransactionBuilder};
+use fedimint_client::transaction::{ChangeStrategy, ClientInput, ClientOutput, TransactionBuilder};
 use fedimint_core::core::{Decoder, ModuleKind, OperationId};
 use fedimint_core::db::{
     Database, DatabaseTransaction, DatabaseVersion, IDatabaseTransactionOpsCoreTyped,
@@ -94,6 +94,7 @@ impl ClientModule for DummyClientModule {
         operation_id: OperationId,
         input_amount: Amount,
         output_amount: Amount,
+        _change_strategy: ChangeStrategy,
     ) -> anyhow::Result<(
         Vec<ClientInput<DummyInput, DummyStateMachine>>,
         Vec<ClientOutput<DummyOutput, DummyStateMachine>>,

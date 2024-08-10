@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
-use fedimint_client::transaction::ClientInput;
+use fedimint_client::transaction::{ChangeStrategy, ClientInput};
 use fedimint_client::DynGlobalClientContext;
 use fedimint_core::core::OperationId;
 use fedimint_core::encoding::{Decodable, Encodable};
@@ -150,7 +150,7 @@ impl MintInputStateCreated {
         };
 
         let (refund_txid, _) = global_context
-            .claim_input(dbtx, refund_input)
+            .claim_input(dbtx, refund_input, ChangeStrategy::Minimize)
             .await
             .expect("Cannot claim input, additional funding needed");
 

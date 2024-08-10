@@ -8,7 +8,7 @@ use bitcoin::secp256k1;
 use devimint::cmd;
 use devimint::util::{ClnLightningCli, FedimintCli, LnCli};
 use fedimint_client::secret::{PlainRootSecretStrategy, RootSecretStrategy};
-use fedimint_client::transaction::TransactionBuilder;
+use fedimint_client::transaction::{ChangeStrategy, TransactionBuilder};
 use fedimint_client::{Client, ClientHandleArc};
 use fedimint_core::core::{IntoDynInstance, OperationId};
 use fedimint_core::db::Database;
@@ -360,6 +360,7 @@ pub async fn remint_denomination(
                 operation_id,
                 1,
                 denomination,
+                ChangeStrategy::default(),
             )
             .await
             .into_iter()

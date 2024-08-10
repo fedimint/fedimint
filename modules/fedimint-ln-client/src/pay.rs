@@ -3,7 +3,7 @@ use std::time::{Duration, SystemTime};
 
 use bitcoin::hashes::sha256;
 use fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
-use fedimint_client::transaction::ClientInput;
+use fedimint_client::transaction::{ChangeStrategy, ClientInput};
 use fedimint_client::DynGlobalClientContext;
 use fedimint_core::config::FederationId;
 use fedimint_core::core::{Decoder, OperationId};
@@ -554,7 +554,7 @@ async fn try_refund_outgoing_contract(
     };
 
     let (txid, out_points) = global_context
-        .claim_input(dbtx, refund_client_input)
+        .claim_input(dbtx, refund_client_input, ChangeStrategy::default())
         .await
         .expect("Cannot claim input, additional funding needed");
 

@@ -2,7 +2,7 @@ use std::sync::Arc;
 use std::time::SystemTime;
 
 use fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
-use fedimint_client::transaction::ClientInput;
+use fedimint_client::transaction::{ChangeStrategy, ClientInput};
 use fedimint_client::DynGlobalClientContext;
 use fedimint_core::core::OperationId;
 use fedimint_core::encoding::{Decodable, Encodable};
@@ -193,7 +193,7 @@ async fn try_cancel_oob_spend(
     };
 
     global_context
-        .claim_input(dbtx, input)
+        .claim_input(dbtx, input, ChangeStrategy::Minimize)
         .await
         .expect("Cannot claim input, additional funding needed")
         .0
