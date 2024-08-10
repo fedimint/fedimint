@@ -29,7 +29,7 @@ lightning-invoice = { workspace = true }
 rand = { workspace = true }
 secp256k1-zkp = { version = "0.9.2", features = ["global-context", "bitcoin_hashes"] }
 serde = { workspace = true }
-tempfile = "3.10.1"
+tempfile = "3.12.0"
 tokio = { version = "1.39.2", features = ["full", "tracing"] }
 tokio-rustls = { workspace = true }
 tokio-stream = "0.1.15"
