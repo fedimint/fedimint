@@ -184,8 +184,9 @@ pub struct SpendEcashPayload {
     pub include_invite: bool,
 }
 
+/// Default timeout for e-cash redemption of one week in seconds
 fn default_timeout() -> u64 {
-    604800
+    604_800
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
