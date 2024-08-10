@@ -13,7 +13,6 @@ use reqwest::{Method, StatusCode};
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use thiserror::Error;
-use tracing::info;
 
 use super::{
     BackupPayload, BalancePayload, CloseChannelsWithPeerPayload, ConfigPayload, ConnectFedPayload,
@@ -191,9 +190,7 @@ impl GatewayRpcClient {
             .base_url
             .join(SPEND_ECASH_ENDPOINT)
             .expect("invalid base url");
-        let result = self.call_post(url, payload).await;
-        info!("Spend ecash result: {:?}", result);
-        result
+        self.call_post(url, payload).await
     }
 
     pub async fn receive_ecash(
@@ -213,7 +210,7 @@ impl GatewayRpcClient {
         url: SafeUrl,
         payload: Option<P>,
     ) -> Result<T, GatewayRpcError> {
-        let mut builder = self.client.request(method, url.to_unsafe());
+        let mut builder = self.client.request(method, url.clone().to_unsafe());
         if let Some(password) = self.password.clone() {
             builder = builder.bearer_auth(password);
         }
@@ -222,7 +219,9 @@ impl GatewayRpcClient {
                 .json(&payload)
                 .header(reqwest::header::CONTENT_TYPE, "application/json");
         }
+
         let response = builder.send().await?;
+
         match response.status() {
             StatusCode::OK => Ok(response.json().await?),
             status => Err(GatewayRpcError::BadStatus(status)),
