@@ -263,8 +263,6 @@ impl GeneralCommands {
                     .receive_ecash(ReceiveEcashPayload { notes, wait })
                     .await?;
 
-                info!("Response: {:?}", response);
-
                 print_response(response);
             }
         }
