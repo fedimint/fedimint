@@ -1667,6 +1667,89 @@
 <a href="#1667" id="1667">1667</a>
 <a href="#1668" id="1668">1668</a>
 <a href="#1669" id="1669">1669</a>
+<a href="#1670" id="1670">1670</a>
+<a href="#1671" id="1671">1671</a>
+<a href="#1672" id="1672">1672</a>
+<a href="#1673" id="1673">1673</a>
+<a href="#1674" id="1674">1674</a>
+<a href="#1675" id="1675">1675</a>
+<a href="#1676" id="1676">1676</a>
+<a href="#1677" id="1677">1677</a>
+<a href="#1678" id="1678">1678</a>
+<a href="#1679" id="1679">1679</a>
+<a href="#1680" id="1680">1680</a>
+<a href="#1681" id="1681">1681</a>
+<a href="#1682" id="1682">1682</a>
+<a href="#1683" id="1683">1683</a>
+<a href="#1684" id="1684">1684</a>
+<a href="#1685" id="1685">1685</a>
+<a href="#1686" id="1686">1686</a>
+<a href="#1687" id="1687">1687</a>
+<a href="#1688" id="1688">1688</a>
+<a href="#1689" id="1689">1689</a>
+<a href="#1690" id="1690">1690</a>
+<a href="#1691" id="1691">1691</a>
+<a href="#1692" id="1692">1692</a>
+<a href="#1693" id="1693">1693</a>
+<a href="#1694" id="1694">1694</a>
+<a href="#1695" id="1695">1695</a>
+<a href="#1696" id="1696">1696</a>
+<a href="#1697" id="1697">1697</a>
+<a href="#1698" id="1698">1698</a>
+<a href="#1699" id="1699">1699</a>
+<a href="#1700" id="1700">1700</a>
+<a href="#1701" id="1701">1701</a>
+<a href="#1702" id="1702">1702</a>
+<a href="#1703" id="1703">1703</a>
+<a href="#1704" id="1704">1704</a>
+<a href="#1705" id="1705">1705</a>
+<a href="#1706" id="1706">1706</a>
+<a href="#1707" id="1707">1707</a>
+<a href="#1708" id="1708">1708</a>
+<a href="#1709" id="1709">1709</a>
+<a href="#1710" id="1710">1710</a>
+<a href="#1711" id="1711">1711</a>
+<a href="#1712" id="1712">1712</a>
+<a href="#1713" id="1713">1713</a>
+<a href="#1714" id="1714">1714</a>
+<a href="#1715" id="1715">1715</a>
+<a href="#1716" id="1716">1716</a>
+<a href="#1717" id="1717">1717</a>
+<a href="#1718" id="1718">1718</a>
+<a href="#1719" id="1719">1719</a>
+<a href="#1720" id="1720">1720</a>
+<a href="#1721" id="1721">1721</a>
+<a href="#1722" id="1722">1722</a>
+<a href="#1723" id="1723">1723</a>
+<a href="#1724" id="1724">1724</a>
+<a href="#1725" id="1725">1725</a>
+<a href="#1726" id="1726">1726</a>
+<a href="#1727" id="1727">1727</a>
+<a href="#1728" id="1728">1728</a>
+<a href="#1729" id="1729">1729</a>
+<a href="#1730" id="1730">1730</a>
+<a href="#1731" id="1731">1731</a>
+<a href="#1732" id="1732">1732</a>
+<a href="#1733" id="1733">1733</a>
+<a href="#1734" id="1734">1734</a>
+<a href="#1735" id="1735">1735</a>
+<a href="#1736" id="1736">1736</a>
+<a href="#1737" id="1737">1737</a>
+<a href="#1738" id="1738">1738</a>
+<a href="#1739" id="1739">1739</a>
+<a href="#1740" id="1740">1740</a>
+<a href="#1741" id="1741">1741</a>
+<a href="#1742" id="1742">1742</a>
+<a href="#1743" id="1743">1743</a>
+<a href="#1744" id="1744">1744</a>
+<a href="#1745" id="1745">1745</a>
+<a href="#1746" id="1746">1746</a>
+<a href="#1747" id="1747">1747</a>
+<a href="#1748" id="1748">1748</a>
+<a href="#1749" id="1749">1749</a>
+<a href="#1750" id="1750">1750</a>
+<a href="#1751" id="1751">1751</a>
+<a href="#1752" id="1752">1752</a>
 </pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::cast_possible_wrap)]
@@ -1749,7 +1832,10 @@
     SendPaymentPayload,
 };
 <span class="kw">use </span>fedimint_lnv2_common::contracts::IncomingContract;
-<span class="kw">use </span>fedimint_mint_client::{MintClientInit, MintCommonInit};
+<span class="kw">use </span>fedimint_mint_client::{
+    MintClientInit, MintClientModule, MintCommonInit, SelectNotesWithAtleastAmount,
+    SelectNotesWithExactAmount,
+};
 <span class="kw">use </span>fedimint_wallet_client::{
     WalletClientInit, WalletClientModule, WalletCommonInit, WithdrawState,
 };
@@ -1762,7 +1848,8 @@
 <span class="kw">use </span>rand::Rng;
 <span class="kw">use </span>rpc::{
     CloseChannelsWithPeerPayload, FederationInfo, GatewayFedConfig, GatewayInfo, LeaveFedPayload,
-    OpenChannelPayload, SetConfigurationPayload, V1_API_ENDPOINT,
+    OpenChannelPayload, ReceiveEcashPayload, ReceiveEcashResponse, SetConfigurationPayload,
+    SpendEcashPayload, SpendEcashResponse, V1_API_ENDPOINT,
 };
 <span class="kw">use </span>state_machine::pay::OutgoingPaymentError;
 <span class="kw">use </span>state_machine::GatewayClientModule;
@@ -3255,6 +3342,85 @@
             .<span class="kw">await</span><span class="question-mark">?</span>;
 
         <span class="prelude-val">Ok</span>((registered_incoming_contract.contract, client))
+    }
+
+    <span class="kw">pub async fn </span>spend_ecash(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        payload: SpendEcashPayload,
+    ) -&gt; anyhow::Result&lt;SpendEcashResponse&gt; {
+        <span class="kw">let </span>client = <span class="self">self</span>.select_client_v2(payload.federation_id).<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>mint_module = client.get_first_module::&lt;MintClientModule&gt;();
+        <span class="kw">let </span>timeout = Duration::from_secs(payload.timeout);
+        <span class="kw">let </span>(operation_id, notes) = <span class="kw">if </span>payload.allow_overpay {
+            <span class="kw">let </span>(operation_id, notes) = mint_module
+                .spend_notes_with_selector(
+                    <span class="kw-2">&amp;</span>SelectNotesWithAtleastAmount,
+                    payload.amount,
+                    timeout,
+                    payload.include_invite,
+                    (),
+                )
+                .<span class="kw">await</span><span class="question-mark">?</span>;
+
+            <span class="kw">let </span>overspend_amount = notes.total_amount() - payload.amount;
+            <span class="kw">if </span>overspend_amount != Amount::ZERO {
+                <span class="macro">warn!</span>(
+                    <span class="string">"Selected notes {} worth more than requested"</span>,
+                    overspend_amount
+                );
+            }
+
+            (operation_id, notes)
+        } <span class="kw">else </span>{
+            mint_module
+                .spend_notes_with_selector(
+                    <span class="kw-2">&amp;</span>SelectNotesWithExactAmount,
+                    payload.amount,
+                    timeout,
+                    payload.include_invite,
+                    (),
+                )
+                .<span class="kw">await</span><span class="question-mark">?
+        </span>};
+
+        <span class="macro">info!</span>(<span class="string">"Spend ecash operation id: {:?}"</span>, operation_id);
+        <span class="macro">info!</span>(<span class="string">"Spend ecash notes: {:?}"</span>, notes);
+
+        <span class="prelude-val">Ok</span>(SpendEcashResponse {
+            operation_id,
+            notes,
+        })
+    }
+
+    <span class="kw">pub async fn </span>receive_ecash(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        payload: ReceiveEcashPayload,
+    ) -&gt; anyhow::Result&lt;ReceiveEcashResponse&gt; {
+        <span class="kw">let </span>amount = payload.notes.total_amount();
+        <span class="kw">let </span>client = <span class="self">self
+            </span>.federation_manager
+            .read()
+            .<span class="kw">await
+            </span>.get_client_for_federation_id_prefix(payload.notes.federation_id_prefix())
+            .ok_or(<span class="macro">anyhow!</span>(<span class="string">"Client not found"</span>))<span class="question-mark">?</span>;
+        <span class="kw">let </span>mint = client.value().get_first_module::&lt;MintClientModule&gt;();
+
+        <span class="kw">let </span>operation_id = mint.reissue_external_notes(payload.notes, ()).<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">if </span>payload.wait {
+            <span class="kw">let </span><span class="kw-2">mut </span>updates = mint
+                .subscribe_reissue_external_notes(operation_id)
+                .<span class="kw">await
+                </span>.unwrap()
+                .into_stream();
+
+            <span class="kw">while let </span><span class="prelude-val">Some</span>(update) = updates.next().<span class="kw">await </span>{
+                <span class="kw">if let </span>fedimint_mint_client::ReissueExternalNotesState::Failed(e) = update {
+                    <span class="macro">bail!</span>(<span class="string">"Reissue failed: {e}"</span>);
+                }
+            }
+        }
+
+        <span class="prelude-val">Ok</span>(ReceiveEcashResponse { amount })
     }
 }
 

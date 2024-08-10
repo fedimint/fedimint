@@ -274,13 +274,26 @@
 <a href="#274" id="274">274</a>
 <a href="#275" id="275">275</a>
 <a href="#276" id="276">276</a>
+<a href="#277" id="277">277</a>
+<a href="#278" id="278">278</a>
+<a href="#279" id="279">279</a>
+<a href="#280" id="280">280</a>
+<a href="#281" id="281">281</a>
+<a href="#282" id="282">282</a>
+<a href="#283" id="283">283</a>
+<a href="#284" id="284">284</a>
+<a href="#285" id="285">285</a>
+<a href="#286" id="286">286</a>
+<a href="#287" id="287">287</a>
+<a href="#288" id="288">288</a>
+<a href="#289" id="289">289</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::sync::atomic::{AtomicU64, Ordering};
 <span class="kw">use </span>std::sync::Arc;
 
 <span class="kw">use </span>bitcoin::secp256k1::KeyPair;
 <span class="kw">use </span>fedimint_client::ClientHandleArc;
-<span class="kw">use </span>fedimint_core::config::{FederationId, JsonClientConfig};
+<span class="kw">use </span>fedimint_core::config::{FederationId, FederationIdPrefix, JsonClientConfig};
 <span class="kw">use </span>fedimint_core::db::{DatabaseTransaction, NonCommittable};
 <span class="kw">use </span>fedimint_core::util::Spanned;
 
@@ -424,6 +437,19 @@
         <span class="self">self</span>.scid_to_federation.iter().find_map(|(scid, fid)| {
             <span class="kw">if </span><span class="kw-2">*</span>fid == federation_id {
                 <span class="prelude-val">Some</span>(<span class="kw-2">*</span>scid)
+            } <span class="kw">else </span>{
+                <span class="prelude-val">None
+            </span>}
+        })
+    }
+
+    <span class="kw">pub fn </span>get_client_for_federation_id_prefix(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        federation_id_prefix: FederationIdPrefix,
+    ) -&gt; <span class="prelude-ty">Option</span>&lt;Spanned&lt;ClientHandleArc&gt;&gt; {
+        <span class="self">self</span>.clients.iter().find_map(|(fid, client)| {
+            <span class="kw">if </span>fid.to_prefix() == federation_id_prefix {
+                <span class="prelude-val">Some</span>(client.clone())
             } <span class="kw">else </span>{
                 <span class="prelude-val">None
             </span>}

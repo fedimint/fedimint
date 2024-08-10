@@ -393,6 +393,24 @@
 <a href="#393" id="393">393</a>
 <a href="#394" id="394">394</a>
 <a href="#395" id="395">395</a>
+<a href="#396" id="396">396</a>
+<a href="#397" id="397">397</a>
+<a href="#398" id="398">398</a>
+<a href="#399" id="399">399</a>
+<a href="#400" id="400">400</a>
+<a href="#401" id="401">401</a>
+<a href="#402" id="402">402</a>
+<a href="#403" id="403">403</a>
+<a href="#404" id="404">404</a>
+<a href="#405" id="405">405</a>
+<a href="#406" id="406">406</a>
+<a href="#407" id="407">407</a>
+<a href="#408" id="408">408</a>
+<a href="#409" id="409">409</a>
+<a href="#410" id="410">410</a>
+<a href="#411" id="411">411</a>
+<a href="#412" id="412">412</a>
+<a href="#413" id="413">413</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::sync::Arc;
 
 <span class="kw">use </span>axum::extract::Request;
@@ -411,8 +429,9 @@
     CONFIGURATION_ENDPOINT, CONNECT_FED_ENDPOINT, CREATE_BOLT11_INVOICE_V2_ENDPOINT,
     GATEWAY_INFO_ENDPOINT, GATEWAY_INFO_POST_ENDPOINT, GET_FUNDING_ADDRESS_ENDPOINT,
     GET_GATEWAY_ID_ENDPOINT, LEAVE_FED_ENDPOINT, LIST_ACTIVE_CHANNELS_ENDPOINT,
-    OPEN_CHANNEL_ENDPOINT, PAY_INVOICE_ENDPOINT, RESTORE_ENDPOINT, ROUTING_INFO_V2_ENDPOINT,
-    SEND_PAYMENT_V2_ENDPOINT, SET_CONFIGURATION_ENDPOINT, WITHDRAW_ENDPOINT,
+    OPEN_CHANNEL_ENDPOINT, PAY_INVOICE_ENDPOINT, RECEIVE_ECASH_ENDPOINT, RESTORE_ENDPOINT,
+    ROUTING_INFO_V2_ENDPOINT, SEND_PAYMENT_V2_ENDPOINT, SET_CONFIGURATION_ENDPOINT,
+    SPEND_ECASH_ENDPOINT, WITHDRAW_ENDPOINT,
 };
 <span class="kw">use </span>fedimint_lnv2_client::{CreateBolt11InvoicePayload, SendPaymentPayload};
 <span class="kw">use </span>hex::ToHex;
@@ -424,7 +443,8 @@
 <span class="kw">use super</span>::{
     BackupPayload, BalancePayload, CloseChannelsWithPeerPayload, ConnectFedPayload,
     DepositAddressPayload, GetFundingAddressPayload, InfoPayload, LeaveFedPayload,
-    OpenChannelPayload, RestorePayload, SetConfigurationPayload, WithdrawPayload, V1_API_ENDPOINT,
+    OpenChannelPayload, ReceiveEcashPayload, RestorePayload, SetConfigurationPayload,
+    SpendEcashPayload, WithdrawPayload, V1_API_ENDPOINT,
 };
 <span class="kw">use </span><span class="kw">crate</span>::rpc::ConfigPayload;
 <span class="kw">use crate</span>::{Gateway, GatewayError};
@@ -549,7 +569,9 @@
         .route(
             CREATE_BOLT11_INVOICE_V2_ENDPOINT,
             post(create_bolt11_invoice_v2),
-        );
+        )
+        .route(SPEND_ECASH_ENDPOINT, post(spend_ecash))
+        .route(RECEIVE_ECASH_ENDPOINT, post(receive_ecash));
 
     <span class="comment">// Authenticated, public routes used for gateway administration
     </span><span class="kw">let </span>always_authenticated_routes = Router::new()
@@ -787,5 +809,19 @@
         .create_bolt11_invoice_v2(payload)
         .<span class="kw">await
         </span>.map_err(|e| e.to_string())))
+}
+
+<span class="kw">async fn </span>spend_ecash(
+    Extension(gateway): Extension&lt;Arc&lt;Gateway&gt;&gt;,
+    Json(payload): Json&lt;SpendEcashPayload&gt;,
+) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="kw">impl </span>IntoResponse, GatewayError&gt; {
+    <span class="prelude-val">Ok</span>(Json(<span class="macro">json!</span>(gateway.spend_ecash(payload).<span class="kw">await</span><span class="question-mark">?</span>)))
+}
+
+<span class="kw">async fn </span>receive_ecash(
+    Extension(gateway): Extension&lt;Arc&lt;Gateway&gt;&gt;,
+    Json(payload): Json&lt;ReceiveEcashPayload&gt;,
+) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="kw">impl </span>IntoResponse, GatewayError&gt; {
+    <span class="prelude-val">Ok</span>(Json(<span class="macro">json!</span>(gateway.receive_ecash(payload).<span class="kw">await</span><span class="question-mark">?</span>)))
 }
 </code></pre></div></section></main></body></html>
