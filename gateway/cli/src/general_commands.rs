@@ -11,6 +11,7 @@ use ln_gateway::rpc::{
     FederationRoutingFees, LeaveFedPayload, ReceiveEcashPayload, RestorePayload,
     SetConfigurationPayload, SpendEcashPayload, WithdrawPayload,
 };
+use tracing::info;
 
 use crate::print_response;
 
@@ -120,11 +121,10 @@ pub enum GeneralCommands {
     SpendEcash {
         #[clap(long)]
         federation_id: FederationId,
-        #[clap(long)]
         amount: Amount,
         #[clap(long)]
         allow_overpay: bool,
-        #[clap(long)]
+        #[clap(long, default_value_t = 60 * 60 * 24 * 7)]
         timeout: u64,
         #[clap(long)]
         include_invite: bool,
@@ -133,7 +133,7 @@ pub enum GeneralCommands {
     ReceiveEcash {
         #[clap(long)]
         notes: OOBNotes,
-        #[clap(long)]
+        #[arg(long = "no-wait", action = clap::ArgAction::SetFalse)]
         wait: bool,
     },
 }
@@ -262,6 +262,8 @@ impl GeneralCommands {
                 let response = create_client()
                     .receive_ecash(ReceiveEcashPayload { notes, wait })
                     .await?;
+
+                info!("Response: {:?}", response);
 
                 print_response(response);
             }
