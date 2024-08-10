@@ -401,19 +401,13 @@ async fn create_bolt11_invoice_v2(
 async fn spend_ecash(
     Extension(gateway): Extension<Arc<Gateway>>,
     Json(payload): Json<SpendEcashPayload>,
-) -> Json<Value> {
-    Json(json!(gateway
-        .spend_ecash(payload)
-        .await
-        .map_err(|e| e.to_string())))
+) -> Result<impl IntoResponse, GatewayError> {
+    Ok(Json(json!(gateway.spend_ecash(payload).await?)))
 }
 
 async fn receive_ecash(
     Extension(gateway): Extension<Arc<Gateway>>,
     Json(payload): Json<ReceiveEcashPayload>,
-) -> Json<Value> {
-    Json(json!(gateway
-        .receive_ecash(payload)
-        .await
-        .map_err(|e| e.to_string())))
+) -> Result<impl IntoResponse, GatewayError> {
+    Ok(Json(json!(gateway.receive_ecash(payload).await?)))
 }

@@ -223,7 +223,7 @@ impl GatewayRpcClient {
         let response = builder.send().await?;
 
         match response.status() {
-            StatusCode::OK => Ok(response.json().await?),
+            StatusCode::OK => Ok(response.json::<T>().await?),
             status => Err(GatewayRpcError::BadStatus(status)),
         }
     }
