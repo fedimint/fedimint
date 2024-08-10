@@ -3,13 +3,15 @@ use bitcoin::address::NetworkUnchecked;
 use bitcoin::Address;
 use clap::Subcommand;
 use fedimint_core::config::FederationId;
-use fedimint_core::{fedimint_build_code_version_env, BitcoinAmountOrAll};
+use fedimint_core::{fedimint_build_code_version_env, Amount, BitcoinAmountOrAll};
+use fedimint_mint_client::OOBNotes;
 use ln_gateway::rpc::rpc_client::GatewayRpcClient;
 use ln_gateway::rpc::{
     BackupPayload, BalancePayload, ConfigPayload, ConnectFedPayload, DepositAddressPayload,
-    FederationRoutingFees, LeaveFedPayload, RestorePayload, SetConfigurationPayload,
-    WithdrawPayload,
+    FederationRoutingFees, LeaveFedPayload, ReceiveEcashPayload, RestorePayload,
+    SetConfigurationPayload, SpendEcashPayload, WithdrawPayload,
 };
+use tracing::info;
 
 use crate::print_response;
 
@@ -115,9 +117,29 @@ pub enum GeneralCommands {
         #[clap(long)]
         per_federation_routing_fees: Option<Vec<PerFederationRoutingFees>>,
     },
+    /// Spend e-cash
+    SpendEcash {
+        #[clap(long)]
+        federation_id: FederationId,
+        amount: Amount,
+        #[clap(long)]
+        allow_overpay: bool,
+        #[clap(long, default_value_t = 60 * 60 * 24 * 7)]
+        timeout: u64,
+        #[clap(long)]
+        include_invite: bool,
+    },
+    /// Receive e-cash
+    ReceiveEcash {
+        #[clap(long)]
+        notes: OOBNotes,
+        #[arg(long = "no-wait", action = clap::ArgAction::SetFalse)]
+        wait: bool,
+    },
 }
 
 impl GeneralCommands {
+    #[allow(clippy::too_many_lines)]
     pub async fn handle(
         self,
         create_client: impl Fn() -> GatewayRpcClient + Send + Sync,
@@ -216,6 +238,32 @@ impl GeneralCommands {
                         per_federation_routing_fees,
                     })
                     .await?;
+            }
+            Self::SpendEcash {
+                federation_id,
+                amount,
+                allow_overpay,
+                timeout,
+                include_invite,
+            } => {
+                let response = create_client()
+                    .spend_ecash(SpendEcashPayload {
+                        federation_id,
+                        amount,
+                        allow_overpay,
+                        timeout,
+                        include_invite,
+                    })
+                    .await?;
+
+                print_response(response);
+            }
+            Self::ReceiveEcash { notes, wait } => {
+                let response = create_client()
+                    .receive_ecash(ReceiveEcashPayload { notes, wait })
+                    .await?;
+
+                print_response(response);
             }
         }
 

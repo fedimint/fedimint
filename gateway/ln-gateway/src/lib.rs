@@ -80,7 +80,10 @@ use fedimint_lnv2_client::{
     SendPaymentPayload,
 };
 use fedimint_lnv2_common::contracts::IncomingContract;
-use fedimint_mint_client::{MintClientInit, MintCommonInit};
+use fedimint_mint_client::{
+    MintClientInit, MintClientModule, MintCommonInit, SelectNotesWithAtleastAmount,
+    SelectNotesWithExactAmount,
+};
 use fedimint_wallet_client::{
     WalletClientInit, WalletClientModule, WalletCommonInit, WithdrawState,
 };
@@ -93,7 +96,8 @@ use lightning_invoice::{Bolt11Invoice, RoutingFees};
 use rand::Rng;
 use rpc::{
     CloseChannelsWithPeerPayload, FederationInfo, GatewayFedConfig, GatewayInfo, LeaveFedPayload,
-    OpenChannelPayload, SetConfigurationPayload, V1_API_ENDPOINT,
+    OpenChannelPayload, ReceiveEcashPayload, ReceiveEcashResponse, SetConfigurationPayload,
+    SpendEcashPayload, SpendEcashResponse, V1_API_ENDPOINT,
 };
 use state_machine::pay::OutgoingPaymentError;
 use state_machine::GatewayClientModule;
@@ -1586,6 +1590,85 @@ impl Gateway {
             .await?;
 
         Ok((registered_incoming_contract.contract, client))
+    }
+
+    pub async fn spend_ecash(
+        &self,
+        payload: SpendEcashPayload,
+    ) -> anyhow::Result<SpendEcashResponse> {
+        let client = self.select_client_v2(payload.federation_id).await?;
+        let mint_module = client.get_first_module::<MintClientModule>();
+        let timeout = Duration::from_secs(payload.timeout);
+        let (operation_id, notes) = if payload.allow_overpay {
+            let (operation_id, notes) = mint_module
+                .spend_notes_with_selector(
+                    &SelectNotesWithAtleastAmount,
+                    payload.amount,
+                    timeout,
+                    payload.include_invite,
+                    (),
+                )
+                .await?;
+
+            let overspend_amount = notes.total_amount() - payload.amount;
+            if overspend_amount != Amount::ZERO {
+                warn!(
+                    "Selected notes {} worth more than requested",
+                    overspend_amount
+                );
+            }
+
+            (operation_id, notes)
+        } else {
+            mint_module
+                .spend_notes_with_selector(
+                    &SelectNotesWithExactAmount,
+                    payload.amount,
+                    timeout,
+                    payload.include_invite,
+                    (),
+                )
+                .await?
+        };
+
+        info!("Spend ecash operation id: {:?}", operation_id);
+        info!("Spend ecash notes: {:?}", notes);
+
+        Ok(SpendEcashResponse {
+            operation_id,
+            notes,
+        })
+    }
+
+    pub async fn receive_ecash(
+        &self,
+        payload: ReceiveEcashPayload,
+    ) -> anyhow::Result<ReceiveEcashResponse> {
+        let amount = payload.notes.total_amount();
+        let client = self
+            .federation_manager
+            .read()
+            .await
+            .get_client_for_federation_id_prefix(payload.notes.federation_id_prefix())
+            .ok_or(anyhow!("Client not found"))?;
+        let mint = client.value().get_first_module::<MintClientModule>();
+
+        let operation_id = mint.reissue_external_notes(payload.notes, ()).await?;
+        if payload.wait {
+            let mut updates = mint
+                .subscribe_reissue_external_notes(operation_id)
+                .await
+                .unwrap()
+                .into_stream();
+
+            while let Some(update) = updates.next().await {
+                if let fedimint_mint_client::ReissueExternalNotesState::Failed(e) = update {
+                    bail!("Reissue failed: {e}");
+                }
+            }
+        }
+
+        Ok(ReceiveEcashResponse { amount })
     }
 }
 
