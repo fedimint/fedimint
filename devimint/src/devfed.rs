@@ -5,6 +5,7 @@ use anyhow::Result;
 use fedimint_core::runtime;
 use fedimint_core::task::jit::{JitTry, JitTryAnyhow};
 use fedimint_logging::LOG_DEVIMINT;
+use futures::try_join;
 use tokio::join;
 use tracing::debug;
 
@@ -270,15 +271,30 @@ impl DevJitFed {
 
                     open_channel(&process_mgr, &bitcoind, &cln, &lnd).await?;
                 } else {
-                    let gw_cln = gw_cln.get_try().await?.deref();
-                    let gw_lnd = gw_lnd.get_try().await?.deref();
+                    try_join!(
+                        async {
+                            let gw_cln = gw_cln.get_try().await?.deref();
+                            let gw_lnd = gw_lnd.get_try().await?.deref();
 
-                    open_channel_between_gateways(&bitcoind, gw_cln, gw_lnd).await?;
+                            open_channel_between_gateways(&bitcoind, gw_cln, gw_lnd).await
+                        },
+                        async {
+                            let gw_cln = gw_cln.get_try().await?.deref();
+                            if let Some(gw_ldk) = gw_ldk.get_try().await?.deref() {
+                                open_channel_between_gateways(&bitcoind, gw_ldk, gw_cln).await?;
+                            }
 
-                    if let Some(gw_ldk) = gw_ldk.get_try().await?.deref() {
-                        open_channel_between_gateways(&bitcoind, gw_ldk, gw_cln).await?;
-                        open_channel_between_gateways(&bitcoind, gw_ldk, gw_lnd).await?;
-                    }
+                            Ok(())
+                        },
+                        async {
+                            let gw_lnd = gw_lnd.get_try().await?.deref();
+                            if let Some(gw_ldk) = gw_ldk.get_try().await?.deref() {
+                                open_channel_between_gateways(&bitcoind, gw_ldk, gw_lnd).await?;
+                            }
+
+                            Ok(())
+                        }
+                    )?;
                 }
 
                 Ok(Arc::new(()))
