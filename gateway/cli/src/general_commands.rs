@@ -11,7 +11,6 @@ use ln_gateway::rpc::{
     FederationRoutingFees, LeaveFedPayload, ReceiveEcashPayload, RestorePayload,
     SetConfigurationPayload, SpendEcashPayload, WithdrawPayload,
 };
-use tracing::info;
 
 use crate::print_response;
 
