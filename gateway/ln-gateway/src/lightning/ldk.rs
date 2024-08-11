@@ -363,33 +363,44 @@ impl ILnRpcClient for GatewayLdkClient {
         &self,
         create_invoice_request: CreateInvoiceRequest,
     ) -> Result<CreateInvoiceResponse, LightningRpcError> {
-        let payment_hash = PaymentHash(create_invoice_request.payment_hash.try_into().map_err(
-            |_| LightningRpcError::FailedToGetInvoice {
-                failure_reason: "Failed to convert Vec<u8> to [u8; 32] (this probably means that LDK received an invalid payment hash)".to_string(),
-            },
-        )?);
-
-        let invoice = self
-            .node
-            .bolt11_payment()
-            .receive_for_hash(
-                create_invoice_request.amount_msat,
-                // Currently `ldk-node` only supports direct descriptions.
-                // See https://github.com/lightningdevkit/ldk-node/issues/325.
-                // TODO: Once the above issue is resolved, we should support
-                // description hashes as well.
-                if let Some(Description::Direct(description)) = &create_invoice_request.description
-                {
-                    description
-                } else {
-                    ""
+        let payment_hash_or = if create_invoice_request.payment_hash.is_empty() {
+            None
+        } else {
+            Some(PaymentHash(create_invoice_request.payment_hash.try_into().map_err(
+                |_| LightningRpcError::FailedToGetInvoice {
+                    failure_reason: "Failed to convert Vec<u8> to [u8; 32] (this probably means that LDK received an invalid payment hash)".to_string(),
                 },
+            )?))
+        };
+
+        // Currently `ldk-node` only supports direct descriptions.
+        // See https://github.com/lightningdevkit/ldk-node/issues/325.
+        // TODO: Once the above issue is resolved, we should support
+        // description hashes as well.
+        let Some(Description::Direct(description_str)) = &create_invoice_request.description else {
+            return Err(LightningRpcError::FailedToGetInvoice {
+                failure_reason:
+                    "Only direct descriptions are supported for LDK gateways at this time"
+                        .to_string(),
+            });
+        };
+
+        let invoice = match payment_hash_or {
+            Some(payment_hash) => self.node.bolt11_payment().receive_for_hash(
+                create_invoice_request.amount_msat,
+                description_str,
                 create_invoice_request.expiry_secs,
                 payment_hash,
-            )
-            .map_err(|e| LightningRpcError::FailedToGetInvoice {
-                failure_reason: e.to_string(),
-            })?;
+            ),
+            None => self.node.bolt11_payment().receive(
+                create_invoice_request.amount_msat,
+                description_str,
+                create_invoice_request.expiry_secs,
+            ),
+        }
+        .map_err(|e| LightningRpcError::FailedToGetInvoice {
+            failure_reason: e.to_string(),
+        })?;
 
         Ok(CreateInvoiceResponse {
             invoice: invoice.to_string(),

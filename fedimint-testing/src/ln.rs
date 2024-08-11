@@ -214,20 +214,39 @@ impl ILnRpcClient for FakeLightningTest {
     ) -> Result<CreateInvoiceResponse, LightningRpcError> {
         let ctx = bitcoin::secp256k1::Secp256k1::new();
 
-        let payment_hash = sha256::Hash::from_slice(&create_invoice_request.payment_hash)
-            .expect("Failed to lookup FederationId");
-        let invoice = InvoiceBuilder::new(Currency::Regtest)
-            .description(String::new())
-            .payment_hash(payment_hash)
-            .current_timestamp()
-            .min_final_cltv_expiry_delta(0)
-            .payment_secret(PaymentSecret([0; 32]))
-            .amount_milli_satoshis(create_invoice_request.amount_msat)
-            .expiry_time(Duration::from_secs(u64::from(
-                create_invoice_request.expiry_secs,
-            )))
-            .build_signed(|m| ctx.sign_ecdsa_recoverable(m, &self.gateway_node_sec_key))
-            .unwrap();
+        let payment_hash_or = if create_invoice_request.payment_hash.is_empty() {
+            None
+        } else {
+            Some(
+                sha256::Hash::from_slice(&create_invoice_request.payment_hash).map_err(|e| {
+                    LightningRpcError::FailedToGetInvoice {
+                        failure_reason: format!(
+                            "CreateInvoiceRequest.payment_hash is invalid: {e}"
+                        ),
+                    }
+                })?,
+            )
+        };
+
+        let invoice = match payment_hash_or {
+            Some(payment_hash) => InvoiceBuilder::new(Currency::Regtest)
+                .description(String::new())
+                .payment_hash(payment_hash)
+                .current_timestamp()
+                .min_final_cltv_expiry_delta(0)
+                .payment_secret(PaymentSecret([0; 32]))
+                .amount_milli_satoshis(create_invoice_request.amount_msat)
+                .expiry_time(Duration::from_secs(u64::from(
+                    create_invoice_request.expiry_secs,
+                )))
+                .build_signed(|m| ctx.sign_ecdsa_recoverable(m, &self.gateway_node_sec_key))
+                .unwrap(),
+            None => {
+                unimplemented!(
+                    "FakeLightningTest does not support creating invoices without a payment hash"
+                )
+            }
+        };
 
         Ok(CreateInvoiceResponse {
             invoice: invoice.to_string(),
