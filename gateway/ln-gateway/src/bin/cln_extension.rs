@@ -800,58 +800,49 @@ impl GatewayLightning for ClnRpcService {
         let payment_hash = sha256::Hash::from_slice(&payment_hash)
             .map_err(|e| tonic::Status::internal(e.to_string()))?;
 
-        let duration_since_epoch = fedimint_core::time::duration_since_epoch();
         let description = description.ok_or(tonic::Status::internal(
             "Description or description hash was not provided".to_string(),
         ))?;
+
         let info = self
             .info()
             .await
             .map_err(|e| Status::internal(e.to_string()))?;
+
         let network = bitcoin::Network::from_str(info.2.as_str())
             .map_err(|e| Status::internal(e.to_string()))?;
-        let currency = Currency::from(network);
 
-        let invoice = match description {
-            Description::Direct(description) => InvoiceBuilder::new(currency)
-                .amount_milli_satoshis(amount_msat)
-                .invoice_description(lightning_invoice::Bolt11InvoiceDescription::Direct(
+        let invoice_builder = InvoiceBuilder::new(Currency::from(network))
+            .amount_milli_satoshis(amount_msat)
+            .payment_hash(payment_hash)
+            .payment_secret(PaymentSecret(OsRng.gen()))
+            .duration_since_epoch(fedimint_core::time::duration_since_epoch())
+            .min_final_cltv_expiry_delta(18)
+            .expiry_time(Duration::from_secs(expiry_secs.into()));
+
+        let invoice_builder = match description {
+            Description::Direct(description) => invoice_builder.invoice_description(
+                lightning_invoice::Bolt11InvoiceDescription::Direct(
                     &lightning_invoice::Description::new(description)
                         .expect("Description is valid"),
-                ))
-                .payment_hash(payment_hash)
-                .payment_secret(PaymentSecret(OsRng.gen()))
-                .duration_since_epoch(duration_since_epoch)
-                .min_final_cltv_expiry_delta(18)
-                .expiry_time(Duration::from_secs(expiry_secs.into()))
-                // Temporarily sign with an ephemeral private key, we will request CLN to sign this
-                // invoice next.
-                .build_signed(|m| {
-                    self.secp
-                        .sign_ecdsa_recoverable(m, &SecretKey::new(&mut OsRng))
-                })
-                .map_err(|e| Status::internal(e.to_string()))?,
-            Description::Hash(hash) => InvoiceBuilder::new(currency)
-                .amount_milli_satoshis(amount_msat)
-                .invoice_description(lightning_invoice::Bolt11InvoiceDescription::Hash(
-                    &lightning_invoice::Sha256(
-                        bitcoin_hashes::sha256::Hash::from_slice(&hash)
-                            .expect("Couldnt create hash from description hash"),
-                    ),
-                ))
-                .payment_hash(payment_hash)
-                .payment_secret(PaymentSecret(OsRng.gen()))
-                .duration_since_epoch(duration_since_epoch)
-                .min_final_cltv_expiry_delta(18)
-                .expiry_time(Duration::from_secs(expiry_secs.into()))
-                // Temporarily sign with an ephemeral private key, we will request CLN to sign this
-                // invoice next.
-                .build_signed(|m| {
-                    self.secp
-                        .sign_ecdsa_recoverable(m, &SecretKey::new(&mut OsRng))
-                })
-                .map_err(|e| Status::internal(e.to_string()))?,
+                ),
+            ),
+            Description::Hash(hash) => invoice_builder.invoice_description(
+                lightning_invoice::Bolt11InvoiceDescription::Hash(&lightning_invoice::Sha256(
+                    bitcoin_hashes::sha256::Hash::from_slice(&hash)
+                        .expect("Couldnt create hash from description hash"),
+                )),
+            ),
         };
+
+        let invoice = invoice_builder
+            // Temporarily sign with an ephemeral private key, we will request CLN to sign this
+            // invoice next.
+            .build_signed(|m| {
+                self.secp
+                    .sign_ecdsa_recoverable(m, &SecretKey::new(&mut OsRng))
+            })
+            .map_err(|e| Status::internal(e.to_string()))?;
 
         let invstring = invoice.to_string();
 
