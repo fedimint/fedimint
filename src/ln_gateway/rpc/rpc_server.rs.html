@@ -411,6 +411,15 @@
 <a href="#411" id="411">411</a>
 <a href="#412" id="412">412</a>
 <a href="#413" id="413">413</a>
+<a href="#414" id="414">414</a>
+<a href="#415" id="415">415</a>
+<a href="#416" id="416">416</a>
+<a href="#417" id="417">417</a>
+<a href="#418" id="418">418</a>
+<a href="#419" id="419">419</a>
+<a href="#420" id="420">420</a>
+<a href="#421" id="421">421</a>
+<a href="#422" id="422">422</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::sync::Arc;
 
 <span class="kw">use </span>axum::extract::Request;
@@ -427,11 +436,11 @@
 <span class="kw">use </span>fedimint_ln_common::gateway_endpoint_constants::{
     ADDRESS_ENDPOINT, BACKUP_ENDPOINT, BALANCE_ENDPOINT, CLOSE_CHANNELS_WITH_PEER_ENDPOINT,
     CONFIGURATION_ENDPOINT, CONNECT_FED_ENDPOINT, CREATE_BOLT11_INVOICE_V2_ENDPOINT,
-    GATEWAY_INFO_ENDPOINT, GATEWAY_INFO_POST_ENDPOINT, GET_FUNDING_ADDRESS_ENDPOINT,
-    GET_GATEWAY_ID_ENDPOINT, LEAVE_FED_ENDPOINT, LIST_ACTIVE_CHANNELS_ENDPOINT,
-    OPEN_CHANNEL_ENDPOINT, PAY_INVOICE_ENDPOINT, RECEIVE_ECASH_ENDPOINT, RESTORE_ENDPOINT,
-    ROUTING_INFO_V2_ENDPOINT, SEND_PAYMENT_V2_ENDPOINT, SET_CONFIGURATION_ENDPOINT,
-    SPEND_ECASH_ENDPOINT, WITHDRAW_ENDPOINT,
+    GATEWAY_INFO_ENDPOINT, GATEWAY_INFO_POST_ENDPOINT, GET_BALANCES_ENDPOINT,
+    GET_FUNDING_ADDRESS_ENDPOINT, GET_GATEWAY_ID_ENDPOINT, LEAVE_FED_ENDPOINT,
+    LIST_ACTIVE_CHANNELS_ENDPOINT, OPEN_CHANNEL_ENDPOINT, PAY_INVOICE_ENDPOINT,
+    RECEIVE_ECASH_ENDPOINT, RESTORE_ENDPOINT, ROUTING_INFO_V2_ENDPOINT, SEND_PAYMENT_V2_ENDPOINT,
+    SET_CONFIGURATION_ENDPOINT, SPEND_ECASH_ENDPOINT, WITHDRAW_ENDPOINT,
 };
 <span class="kw">use </span>fedimint_lnv2_client::{CreateBolt11InvoicePayload, SendPaymentPayload};
 <span class="kw">use </span>hex::ToHex;
@@ -589,6 +598,7 @@
             post(close_channels_with_peer),
         )
         .route(LIST_ACTIVE_CHANNELS_ENDPOINT, get(list_active_channels))
+        .route(GET_BALANCES_ENDPOINT, get(get_balances))
         .layer(middleware::from_fn(auth_middleware));
 
     <span class="comment">// Routes that are un-authenticated before gateway configuration, then become
@@ -775,6 +785,14 @@
 ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="kw">impl </span>IntoResponse, GatewayError&gt; {
     <span class="kw">let </span>channels = gateway.handle_list_active_channels_msg().<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="prelude-val">Ok</span>(Json(<span class="macro">json!</span>(channels)))
+}
+
+<span class="attr">#[instrument(skip_all, err)]
+</span><span class="kw">async fn </span>get_balances(
+    Extension(gateway): Extension&lt;Arc&lt;Gateway&gt;&gt;,
+) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="kw">impl </span>IntoResponse, GatewayError&gt; {
+    <span class="kw">let </span>balances = gateway.handle_get_balances_msg().<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="prelude-val">Ok</span>(Json(<span class="macro">json!</span>(balances)))
 }
 
 <span class="attr">#[instrument(skip_all, err)]

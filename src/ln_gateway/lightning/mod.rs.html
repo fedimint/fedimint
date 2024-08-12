@@ -308,6 +308,10 @@
 <a href="#308" id="308">308</a>
 <a href="#309" id="309">309</a>
 <a href="#310" id="310">310</a>
+<a href="#311" id="311">311</a>
+<a href="#312" id="312">312</a>
+<a href="#313" id="313">313</a>
+<a href="#314" id="314">314</a>
 </pre></div><pre class="rust"><code><span class="kw">pub mod </span>cln;
 <span class="kw">pub mod </span>ldk;
 <span class="kw">pub mod </span>lnd;
@@ -341,8 +345,8 @@
 };
 <span class="kw">use </span><span class="kw">crate</span>::gateway_lnrpc::{
     CloseChannelsWithPeerResponse, CreateInvoiceRequest, CreateInvoiceResponse, EmptyResponse,
-    GetFundingAddressResponse, GetNodeInfoResponse, GetRouteHintsResponse, InterceptHtlcRequest,
-    InterceptHtlcResponse, PayInvoiceResponse,
+    GetBalancesResponse, GetFundingAddressResponse, GetNodeInfoResponse, GetRouteHintsResponse,
+    InterceptHtlcRequest, InterceptHtlcResponse, PayInvoiceResponse,
 };
 <span class="kw">use </span><span class="kw">crate</span>::GatewayError;
 
@@ -379,6 +383,8 @@
     </span>FailedToConnectToPeer { failure_reason: String },
     <span class="attr">#[error(<span class="string">"Failed to list active channels: {failure_reason}"</span>)]
     </span>FailedToListActiveChannels { failure_reason: String },
+    <span class="attr">#[error(<span class="string">"Failed to get balances: {failure_reason}"</span>)]
+    </span>FailedToGetBalances { failure_reason: String },
     <span class="attr">#[error(<span class="string">"Failed to wait for chain sync: {failure_reason}"</span>)]
     </span>FailedToWaitForChainSync { failure_reason: String },
     <span class="attr">#[error(<span class="string">"Failed to subscribe to invoice updates: {failure_reason}"</span>)]
@@ -487,6 +493,8 @@
     ) -&gt; <span class="prelude-ty">Result</span>&lt;CloseChannelsWithPeerResponse, LightningRpcError&gt;;
 
     <span class="kw">async fn </span>list_active_channels(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;Vec&lt;ChannelInfo&gt;, LightningRpcError&gt;;
+
+    <span class="kw">async fn </span>get_balances(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;GetBalancesResponse, LightningRpcError&gt;;
 }
 
 <span class="kw">impl dyn </span>ILnRpcClient {

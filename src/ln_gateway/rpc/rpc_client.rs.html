@@ -250,13 +250,21 @@
 <a href="#250" id="250">250</a>
 <a href="#251" id="251">251</a>
 <a href="#252" id="252">252</a>
+<a href="#253" id="253">253</a>
+<a href="#254" id="254">254</a>
+<a href="#255" id="255">255</a>
+<a href="#256" id="256">256</a>
+<a href="#257" id="257">257</a>
+<a href="#258" id="258">258</a>
+<a href="#259" id="259">259</a>
+<a href="#260" id="260">260</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>bitcoin::address::NetworkUnchecked;
 <span class="kw">use </span>bitcoin::Address;
 <span class="kw">use </span>fedimint_core::util::SafeUrl;
 <span class="kw">use </span>fedimint_core::{Amount, TransactionId};
 <span class="kw">use </span>fedimint_ln_common::gateway_endpoint_constants::{
     BACKUP_ENDPOINT, BALANCE_ENDPOINT, CLOSE_CHANNELS_WITH_PEER_ENDPOINT, CONFIGURATION_ENDPOINT,
-    CONNECT_FED_ENDPOINT, GATEWAY_INFO_ENDPOINT, GATEWAY_INFO_POST_ENDPOINT,
+    CONNECT_FED_ENDPOINT, GATEWAY_INFO_ENDPOINT, GATEWAY_INFO_POST_ENDPOINT, GET_BALANCES_ENDPOINT,
     GET_FUNDING_ADDRESS_ENDPOINT, LEAVE_FED_ENDPOINT, LIST_ACTIVE_CHANNELS_ENDPOINT,
     OPEN_CHANNEL_ENDPOINT, RECEIVE_ECASH_ENDPOINT, RESTORE_ENDPOINT, SET_CONFIGURATION_ENDPOINT,
     SPEND_ECASH_ENDPOINT, WITHDRAW_ENDPOINT,
@@ -273,7 +281,7 @@
     SetConfigurationPayload, SpendEcashPayload, SpendEcashResponse, WithdrawPayload,
 };
 <span class="kw">use </span><span class="kw">crate</span>::lightning::ChannelInfo;
-<span class="kw">use </span><span class="kw">crate</span>::CloseChannelsWithPeerResponse;
+<span class="kw">use crate</span>::{CloseChannelsWithPeerResponse, GatewayBalances};
 
 <span class="kw">pub struct </span>GatewayRpcClient {
     <span class="doccomment">/// Base URL to gateway web server
@@ -454,6 +462,14 @@
             .join(RECEIVE_ECASH_ENDPOINT)
             .expect(<span class="string">"invalid base url"</span>);
         <span class="self">self</span>.call_post(url, payload).<span class="kw">await
+    </span>}
+
+    <span class="kw">pub async fn </span>get_balances(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; GatewayRpcResult&lt;GatewayBalances&gt; {
+        <span class="kw">let </span>url = <span class="self">self
+            </span>.base_url
+            .join(GET_BALANCES_ENDPOINT)
+            .expect(<span class="string">"invalid base url"</span>);
+        <span class="self">self</span>.call_get(url).<span class="kw">await
     </span>}
 
     <span class="kw">async fn </span>call&lt;P: Serialize, T: DeserializeOwned&gt;(

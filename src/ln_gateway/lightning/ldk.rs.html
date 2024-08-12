@@ -491,6 +491,14 @@
 <a href="#491" id="491">491</a>
 <a href="#492" id="492">492</a>
 <a href="#493" id="493">493</a>
+<a href="#494" id="494">494</a>
+<a href="#495" id="495">495</a>
+<a href="#496" id="496">496</a>
+<a href="#497" id="497">497</a>
+<a href="#498" id="498">498</a>
+<a href="#499" id="499">499</a>
+<a href="#500" id="500">500</a>
+<a href="#501" id="501">501</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::path::Path;
 <span class="kw">use </span>std::str::FromStr;
 <span class="kw">use </span>std::sync::Arc;
@@ -517,8 +525,8 @@
 <span class="kw">use </span><span class="kw">crate</span>::gateway_lnrpc::intercept_htlc_response::{Action, Settle};
 <span class="kw">use </span><span class="kw">crate</span>::gateway_lnrpc::{
     CloseChannelsWithPeerResponse, CreateInvoiceRequest, CreateInvoiceResponse, EmptyResponse,
-    GetFundingAddressResponse, GetNodeInfoResponse, GetRouteHintsResponse, InterceptHtlcRequest,
-    InterceptHtlcResponse, PayInvoiceResponse,
+    GetBalancesResponse, GetFundingAddressResponse, GetNodeInfoResponse, GetRouteHintsResponse,
+    InterceptHtlcRequest, InterceptHtlcResponse, PayInvoiceResponse,
 };
 
 <span class="kw">pub struct </span>GatewayLdkClient {
@@ -982,6 +990,14 @@
         }
 
         <span class="prelude-val">Ok</span>(channels)
+    }
+
+    <span class="kw">async fn </span>get_balances(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;GetBalancesResponse, LightningRpcError&gt; {
+        <span class="kw">let </span>balances = <span class="self">self</span>.node.list_balances();
+        <span class="prelude-val">Ok</span>(GetBalancesResponse {
+            onchain_balance_sats: balances.total_onchain_balance_sats,
+            lightning_balance_msats: balances.total_lightning_balance_sats * <span class="number">1000</span>,
+        })
     }
 }
 </code></pre></div></section></main></body></html>
