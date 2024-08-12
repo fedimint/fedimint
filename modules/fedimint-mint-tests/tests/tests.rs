@@ -20,20 +20,14 @@ use futures::StreamExt;
 use serde::{Deserialize, Serialize};
 use tracing::{debug, info};
 
-const EXPECTED_MAXIMUM_FEE: Amount = Amount::from_sats(50);
+const EXPECTED_MAXIMUM_FEE: Amount = Amount::from_sats(5);
 
 fn fixtures() -> Fixtures {
     let fixtures = Fixtures::new_primary(
         MintClientInit,
         MintInit,
         MintGenParams {
-            consensus: MintGenParamsConsensus::new(
-                2,
-                FeeConsensus {
-                    note_issuance_abs: Amount::ZERO,
-                    note_spend_abs: Amount::from_sats(1),
-                },
-            ),
+            consensus: MintGenParamsConsensus::new(2, FeeConsensus::default()),
             local: EmptyGenParams {},
         },
     );

@@ -128,7 +128,7 @@ impl Default for FeeConsensus {
     fn default() -> Self {
         Self {
             note_issuance_abs: fedimint_core::Amount::ZERO,
-            note_spend_abs: fedimint_core::Amount::ZERO,
+            note_spend_abs: fedimint_core::Amount::from_msats(100),
         }
     }
 }
