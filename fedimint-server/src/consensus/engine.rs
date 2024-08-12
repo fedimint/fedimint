@@ -743,9 +743,14 @@ impl ConsensusEngine {
                     .map(DynOutput::module_instance_id)
                     .collect::<Vec<_>>();
 
-                process_transaction_with_dbtx(self.modules.clone(), dbtx, &transaction)
-                    .await
-                    .map_err(|error| anyhow!(error.to_string()))?;
+                process_transaction_with_dbtx(
+                    self.modules.clone(),
+                    dbtx,
+                    &transaction,
+                    &self.cfg.consensus.transaction_fee,
+                )
+                .await
+                .map_err(|error| anyhow!(error.to_string()))?;
 
                 debug!(target: LOG_CONSENSUS, %txid,  "Transaction accepted");
                 dbtx.insert_entry(&AcceptedTransactionKey(txid), &modules_ids)

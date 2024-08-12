@@ -15,7 +15,7 @@ use fedimint_core::encoding::{DynRawFallback, Encodable};
 use fedimint_core::module::registry::ModuleRegistry;
 use fedimint_core::task::Cancelled;
 use fedimint_core::util::SafeUrl;
-use fedimint_core::{BitcoinHash, ModuleDecoderRegistry};
+use fedimint_core::{Amount, BitcoinHash, ModuleDecoderRegistry};
 use fedimint_logging::LOG_CORE;
 use hex::FromHex;
 use secp256k1::PublicKey;
@@ -122,6 +122,17 @@ pub struct ClientConfigV0 {
     pub modules: BTreeMap<ModuleInstanceId, ClientModuleConfig>,
 }
 
+/// Total client config v0 (<0.5.0). Does not contain broadcast public keys.
+///
+/// This includes global settings and client-side module configs.
+#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize, Encodable, Decodable)]
+pub struct ClientConfigV1 {
+    #[serde(flatten)]
+    pub global: GlobalClientConfigV1,
+    #[serde(deserialize_with = "de_int_key")]
+    pub modules: BTreeMap<ModuleInstanceId, ClientModuleConfig>,
+}
+
 /// Total client config
 ///
 /// This includes global settings and client-side module configs.
@@ -197,7 +208,7 @@ pub struct GlobalClientConfigV0 {
 
 /// Federation-wide client config
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize, Encodable, Decodable)]
-pub struct GlobalClientConfig {
+pub struct GlobalClientConfigV1 {
     /// API endpoints for each federation member
     #[serde(deserialize_with = "de_int_key")]
     pub api_endpoints: BTreeMap<PeerId, PeerUrl>,
@@ -210,6 +221,38 @@ pub struct GlobalClientConfig {
     // TODO: make it a String -> serde_json::Value map?
     /// Additional config the federation wants to transmit to the clients
     pub meta: BTreeMap<String, String>,
+}
+
+/// Federation-wide client config
+#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize, Encodable, Decodable)]
+pub struct GlobalClientConfig {
+    /// API endpoints for each federation member
+    #[serde(deserialize_with = "de_int_key")]
+    pub api_endpoints: BTreeMap<PeerId, PeerUrl>,
+    /// Signing session keys for each federation member
+    /// Optional for 0.3.x backwards compatibility
+    #[serde(default, deserialize_with = "optional_de_int_key")]
+    pub broadcast_public_keys: Option<BTreeMap<PeerId, PublicKey>>,
+    #[serde(default = "default_transaction_fee")]
+    pub transaction_fee: TransactionFee,
+    /// Core consensus version
+    pub consensus_version: CoreConsensusVersion,
+    // TODO: make it a String -> serde_json::Value map?
+    /// Additional config the federation wants to transmit to the clients
+    pub meta: BTreeMap<String, String>,
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize, Encodable, Decodable)]
+pub struct TransactionFee {
+    pub base: Amount,
+    pub parts_per_million: u64,
+}
+
+fn default_transaction_fee() -> TransactionFee {
+    TransactionFee {
+        base: Amount::ZERO,
+        parts_per_million: 0,
+    }
 }
 
 impl GlobalClientConfig {
@@ -1075,9 +1118,9 @@ pub mod serde_binary_human_readable {
 mod tests {
     use std::collections::BTreeMap;
 
-    use fedimint_core::config::{ClientConfig, GlobalClientConfig};
-
-    use crate::module::CoreConsensusVersion;
+    use fedimint_core::config::{ClientConfig, GlobalClientConfig, TransactionFee};
+    use fedimint_core::module::CoreConsensusVersion;
+    use fedimint_core::Amount;
 
     #[test]
     fn test_dcode_meta() {
@@ -1086,6 +1129,10 @@ mod tests {
                 api_endpoints: BTreeMap::new(),
                 broadcast_public_keys: None,
                 consensus_version: CoreConsensusVersion { major: 0, minor: 0 },
+                transaction_fee: TransactionFee {
+                    base: Amount::ZERO,
+                    parts_per_million: 0,
+                },
                 meta: vec![
                     ("foo".to_string(), "bar".to_string()),
                     ("baz".to_string(), "\"bam\"".to_string()),
