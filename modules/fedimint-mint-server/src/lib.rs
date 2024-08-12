@@ -370,11 +370,7 @@ impl ServerModule for Mint {
         bail!("Mint does not process consensus items");
     }
 
-    async fn process_input<'a, 'b, 'c>(
-        &'a self,
-        dbtx: &mut DatabaseTransaction<'c>,
-        input: &'b MintInput,
-    ) -> Result<InputMeta, MintInputError> {
+    fn verify_input(&self, input: &MintInput) -> Result<(), MintInputError> {
         let input = input.ensure_v0_ref()?;
 
         let amount_key = self
@@ -386,7 +382,18 @@ impl ServerModule for Mint {
             return Err(MintInputError::InvalidSignature);
         }
 
+        Ok(())
+    }
+
+    async fn process_input<'a, 'b, 'c>(
+        &'a self,
+        dbtx: &mut DatabaseTransaction<'c>,
+        input: &'b MintInput,
+    ) -> Result<InputMeta, MintInputError> {
+        let input = input.ensure_v0_ref()?;
+
         debug!(target: LOG_MODULE_MINT, nonce=%(input.note.nonce), "Marking note as spent");
+
         if dbtx
             .insert_entry(&NonceKey(input.note.nonce), &())
             .await
@@ -400,9 +407,12 @@ impl ServerModule for Mint {
             &input.amount,
         )
         .await;
+
         let amount = input.amount;
         let fee = self.cfg.consensus.fee_consensus.note_spend_abs;
+
         calculate_mint_redeemed_ecash_metrics(dbtx, amount, fee);
+
         Ok(InputMeta {
             amount: TransactionItemAmount { amount, fee },
             pub_key: *input.note.spend_key(),

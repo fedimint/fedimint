@@ -1,19 +1,26 @@
 use std::io::Cursor;
+use std::sync::Arc;
 use std::time::Duration;
 
+use bls12_381::G1Affine;
 use fedimint_client::backup::{ClientBackup, Metadata};
+use fedimint_client::transaction::{ClientInput, TransactionBuilder};
 use fedimint_core::config::EmptyGenParams;
+use fedimint_core::core::OperationId;
+use fedimint_core::secp256k1::KeyPair;
 use fedimint_core::task::sleep_in_test;
 use fedimint_core::util::NextOrPending;
-use fedimint_core::{sats, Amount};
+use fedimint_core::{sats, secp256k1, Amount};
 use fedimint_dummy_client::{DummyClientInit, DummyClientModule};
 use fedimint_dummy_common::config::DummyGenParams;
 use fedimint_dummy_server::DummyInit;
 use fedimint_logging::LOG_TEST;
 use fedimint_mint_client::{
-    MintClientInit, MintClientModule, OOBNotes, ReissueExternalNotesState, SpendOOBState,
+    MintClientInit, MintClientModule, MintClientStateMachines, Note, OOBNotes,
+    ReissueExternalNotesState, SpendOOBState,
 };
 use fedimint_mint_common::config::{FeeConsensus, MintGenParams, MintGenParamsConsensus};
+use fedimint_mint_common::{MintInput, MintInputV0, Nonce};
 use fedimint_mint_server::MintInit;
 use fedimint_testing::fixtures::{Fixtures, TIMEOUT};
 use futures::StreamExt;
@@ -44,6 +51,55 @@ fn fixtures() -> Fixtures {
 #[derive(Serialize, Deserialize)]
 struct BackupTestMetadata {
     custom_key: String,
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn transaction_with_invalid_signature_is_rejected() -> anyhow::Result<()> {
+    let fixtures = fixtures();
+    let fed = fixtures.new_default_fed().await;
+    let client = fed.new_client().await;
+
+    let keypair = KeyPair::new(secp256k1::SECP256K1, &mut rand::thread_rng());
+
+    let client_input = ClientInput::<MintInput, MintClientStateMachines> {
+        input: MintInput::V0(MintInputV0 {
+            amount: Amount::from_msats(1024),
+            note: Note {
+                nonce: Nonce(keypair.public_key()),
+                signature: tbs::Signature(G1Affine::generator()),
+            },
+        }),
+        amount: Amount::from_msats(1024),
+        keys: vec![keypair],
+        state_machines: Arc::new(|_, _| vec![]),
+    };
+
+    let operation_id = OperationId::new_random();
+
+    let txid = client
+        .finalize_and_submit_transaction(
+            operation_id,
+            "Claiming Invalid Ecash Note",
+            |_, _| (),
+            TransactionBuilder::new().with_input(
+                client
+                    .get_first_module::<MintClientModule>()
+                    .client_ctx
+                    .make_client_input(client_input),
+            ),
+        )
+        .await
+        .expect("Failed to finalize transaction")
+        .0;
+
+    assert!(client
+        .transaction_updates(operation_id)
+        .await
+        .await_tx_accepted(txid)
+        .await
+        .is_err());
+
+    Ok(())
 }
 
 #[tokio::test(flavor = "multi_thread")]
