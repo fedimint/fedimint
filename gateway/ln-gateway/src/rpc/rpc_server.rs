@@ -21,7 +21,8 @@ use fedimint_ln_common::gateway_endpoint_constants::{
 };
 use fedimint_lnv2_client::{CreateBolt11InvoicePayload, SendPaymentPayload};
 use fedimint_lnv2_common::endpoint_constants::{
-    CREATE_BOLT11_INVOICE_ENDPOINT, ROUTING_INFO_ENDPOINT, SEND_PAYMENT_ENDPOINT,
+    CREATE_BOLT11_INVOICE_ENDPOINT, CREATE_BOLT11_INVOICE_FOR_SELF_ENDPOINT, ROUTING_INFO_ENDPOINT,
+    SEND_PAYMENT_ENDPOINT,
 };
 use hex::ToHex;
 use serde_json::{json, Value};
@@ -31,9 +32,9 @@ use tracing::{error, info, instrument};
 
 use super::{
     BackupPayload, BalancePayload, CloseChannelsWithPeerPayload, ConnectFedPayload,
-    DepositAddressPayload, GetFundingAddressPayload, InfoPayload, LeaveFedPayload,
-    OpenChannelPayload, ReceiveEcashPayload, RestorePayload, SetConfigurationPayload,
-    SpendEcashPayload, WithdrawPayload, V1_API_ENDPOINT,
+    CreateInvoiceForSelfPayload, DepositAddressPayload, GetFundingAddressPayload, InfoPayload,
+    LeaveFedPayload, OpenChannelPayload, ReceiveEcashPayload, RestorePayload,
+    SetConfigurationPayload, SpendEcashPayload, WithdrawPayload, V1_API_ENDPOINT,
 };
 use crate::rpc::ConfigPayload;
 use crate::{Gateway, GatewayError};
@@ -150,6 +151,10 @@ async fn authenticate(
 fn v1_routes(gateway: Arc<Gateway>) -> Router {
     // Public routes on gateway webserver
     let public_routes = Router::new()
+        .route(
+            CREATE_BOLT11_INVOICE_FOR_SELF_ENDPOINT,
+            post(create_invoice_for_self),
+        )
         .route(PAY_INVOICE_ENDPOINT, post(pay_invoice))
         .route(GET_GATEWAY_ID_ENDPOINT, get(get_gateway_id))
         // These routes are for next generation lightning
@@ -272,6 +277,15 @@ async fn withdraw(
 ) -> Result<impl IntoResponse, GatewayError> {
     let txid = gateway.handle_withdraw_msg(payload).await?;
     Ok(Json(json!(txid)))
+}
+
+#[instrument(skip_all, err, fields(?payload))]
+async fn create_invoice_for_self(
+    Extension(gateway): Extension<Arc<Gateway>>,
+    Json(payload): Json<CreateInvoiceForSelfPayload>,
+) -> Result<impl IntoResponse, GatewayError> {
+    let invoice = gateway.handle_create_invoice_for_self_msg(payload).await?;
+    Ok(Json(json!(invoice)))
 }
 
 #[instrument(skip_all, err, fields(?payload))]

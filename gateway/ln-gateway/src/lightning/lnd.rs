@@ -1027,12 +1027,9 @@ impl ILnRpcClient for GatewayLndClient {
         create_invoice_request: CreateInvoiceRequest,
     ) -> Result<CreateInvoiceResponse, LightningRpcError> {
         let mut client = self.connect().await?;
-        let description =
-            create_invoice_request
-                .description
-                .ok_or(LightningRpcError::FailedToGetInvoice {
-                    failure_reason: "Description or description hash was not provided".to_string(),
-                })?;
+        let description = create_invoice_request
+            .description
+            .unwrap_or(Description::Direct(String::new()));
 
         if create_invoice_request.payment_hash.is_empty() {
             let invoice = match description {

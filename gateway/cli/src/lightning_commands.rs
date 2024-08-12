@@ -15,6 +15,17 @@ const DEFAULT_WAIT_FOR_CHAIN_SYNC_RETRY_DELAY_SECONDS: u64 = 2;
 /// in a test environment.
 #[derive(Subcommand)]
 pub enum LightningCommands {
+    /// Create an invoice to receive lightning funds to the gateway.
+    CreateInvoice {
+        #[clap(long)]
+        amount_msats: u64,
+
+        #[clap(long, default_value_t = 300)]
+        expiry_secs: u32,
+
+        #[clap(long)]
+        description: Option<String>,
+    },
     /// Get a Bitcoin address to fund the gateway.
     GetFundingAddress,
     /// Open a channel with another lightning node.
@@ -65,6 +76,20 @@ impl LightningCommands {
         create_client: impl Fn() -> GatewayRpcClient + Send + Sync,
     ) -> anyhow::Result<()> {
         match self {
+            Self::CreateInvoice {
+                amount_msats,
+                expiry_secs,
+                description,
+            } => {
+                let response = create_client()
+                    .create_invoice_for_self(ln_gateway::rpc::CreateInvoiceForSelfPayload {
+                        amount_msats,
+                        expiry_secs,
+                        description,
+                    })
+                    .await?;
+                println!("{response}");
+            }
             Self::GetFundingAddress => {
                 let response = create_client()
                     .get_funding_address(GetFundingAddressPayload {})

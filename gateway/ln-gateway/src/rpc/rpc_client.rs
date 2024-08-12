@@ -10,6 +10,8 @@ use fedimint_ln_common::gateway_endpoint_constants::{
     RECEIVE_ECASH_ENDPOINT, RESTORE_ENDPOINT, SET_CONFIGURATION_ENDPOINT, SPEND_ECASH_ENDPOINT,
     WITHDRAW_ENDPOINT,
 };
+use fedimint_lnv2_common::endpoint_constants::CREATE_BOLT11_INVOICE_FOR_SELF_ENDPOINT;
+use lightning_invoice::Bolt11Invoice;
 use reqwest::{Method, StatusCode};
 use serde::de::DeserializeOwned;
 use serde::Serialize;
@@ -17,9 +19,10 @@ use thiserror::Error;
 
 use super::{
     BackupPayload, BalancePayload, CloseChannelsWithPeerPayload, ConfigPayload, ConnectFedPayload,
-    DepositAddressPayload, FederationInfo, GatewayFedConfig, GatewayInfo, GetFundingAddressPayload,
-    LeaveFedPayload, OpenChannelPayload, ReceiveEcashPayload, ReceiveEcashResponse, RestorePayload,
-    SetConfigurationPayload, SpendEcashPayload, SpendEcashResponse, WithdrawPayload,
+    CreateInvoiceForSelfPayload, DepositAddressPayload, FederationInfo, GatewayFedConfig,
+    GatewayInfo, GetFundingAddressPayload, LeaveFedPayload, OpenChannelPayload,
+    ReceiveEcashPayload, ReceiveEcashResponse, RestorePayload, SetConfigurationPayload,
+    SpendEcashPayload, SpendEcashResponse, WithdrawPayload,
 };
 use crate::lightning::ChannelInfo;
 use crate::{CloseChannelsWithPeerResponse, GatewayBalances};
@@ -144,6 +147,17 @@ impl GatewayRpcClient {
         let url = self
             .base_url
             .join(SET_CONFIGURATION_ENDPOINT)
+            .expect("invalid base url");
+        self.call_post(url, payload).await
+    }
+
+    pub async fn create_invoice_for_self(
+        &self,
+        payload: CreateInvoiceForSelfPayload,
+    ) -> GatewayRpcResult<Bolt11Invoice> {
+        let url = self
+            .base_url
+            .join(CREATE_BOLT11_INVOICE_FOR_SELF_ENDPOINT)
             .expect("invalid base url");
         self.call_post(url, payload).await
     }
