@@ -1228,15 +1228,6 @@
 <a href="#1228" id="1228">1228</a>
 <a href="#1229" id="1229">1229</a>
 <a href="#1230" id="1230">1230</a>
-<a href="#1231" id="1231">1231</a>
-<a href="#1232" id="1232">1232</a>
-<a href="#1233" id="1233">1233</a>
-<a href="#1234" id="1234">1234</a>
-<a href="#1235" id="1235">1235</a>
-<a href="#1236" id="1236">1236</a>
-<a href="#1237" id="1237">1237</a>
-<a href="#1238" id="1238">1238</a>
-<a href="#1239" id="1239">1239</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::array::TryFromSliceError;
 <span class="kw">use </span>std::collections::{BTreeMap, HashMap};
 <span class="kw">use </span>std::net::SocketAddr;
@@ -2039,58 +2030,49 @@
         <span class="kw">let </span>payment_hash = sha256::Hash::from_slice(<span class="kw-2">&amp;</span>payment_hash)
             .map_err(|e| tonic::Status::internal(e.to_string()))<span class="question-mark">?</span>;
 
-        <span class="kw">let </span>duration_since_epoch = fedimint_core::time::duration_since_epoch();
         <span class="kw">let </span>description = description.ok_or(tonic::Status::internal(
             <span class="string">"Description or description hash was not provided"</span>.to_string(),
         ))<span class="question-mark">?</span>;
+
         <span class="kw">let </span>info = <span class="self">self
             </span>.info()
             .<span class="kw">await
             </span>.map_err(|e| Status::internal(e.to_string()))<span class="question-mark">?</span>;
+
         <span class="kw">let </span>network = bitcoin::Network::from_str(info.<span class="number">2</span>.as_str())
             .map_err(|e| Status::internal(e.to_string()))<span class="question-mark">?</span>;
-        <span class="kw">let </span>currency = Currency::from(network);
 
-        <span class="kw">let </span>invoice = <span class="kw">match </span>description {
-            Description::Direct(description) =&gt; InvoiceBuilder::new(currency)
-                .amount_milli_satoshis(amount_msat)
-                .invoice_description(lightning_invoice::Bolt11InvoiceDescription::Direct(
+        <span class="kw">let </span>invoice_builder = InvoiceBuilder::new(Currency::from(network))
+            .amount_milli_satoshis(amount_msat)
+            .payment_hash(payment_hash)
+            .payment_secret(PaymentSecret(OsRng.gen()))
+            .duration_since_epoch(fedimint_core::time::duration_since_epoch())
+            .min_final_cltv_expiry_delta(<span class="number">18</span>)
+            .expiry_time(Duration::from_secs(expiry_secs.into()));
+
+        <span class="kw">let </span>invoice_builder = <span class="kw">match </span>description {
+            Description::Direct(description) =&gt; invoice_builder.invoice_description(
+                lightning_invoice::Bolt11InvoiceDescription::Direct(
                     <span class="kw-2">&amp;</span>lightning_invoice::Description::new(description)
                         .expect(<span class="string">"Description is valid"</span>),
-                ))
-                .payment_hash(payment_hash)
-                .payment_secret(PaymentSecret(OsRng.gen()))
-                .duration_since_epoch(duration_since_epoch)
-                .min_final_cltv_expiry_delta(<span class="number">18</span>)
-                .expiry_time(Duration::from_secs(expiry_secs.into()))
-                <span class="comment">// Temporarily sign with an ephemeral private key, we will request CLN to sign this
-                // invoice next.
-                </span>.build_signed(|m| {
-                    <span class="self">self</span>.secp
-                        .sign_ecdsa_recoverable(m, <span class="kw-2">&amp;</span>SecretKey::new(<span class="kw-2">&amp;mut </span>OsRng))
-                })
-                .map_err(|e| Status::internal(e.to_string()))<span class="question-mark">?</span>,
-            Description::Hash(hash) =&gt; InvoiceBuilder::new(currency)
-                .amount_milli_satoshis(amount_msat)
-                .invoice_description(lightning_invoice::Bolt11InvoiceDescription::Hash(
-                    <span class="kw-2">&amp;</span>lightning_invoice::Sha256(
-                        bitcoin_hashes::sha256::Hash::from_slice(<span class="kw-2">&amp;</span>hash)
-                            .expect(<span class="string">"Couldnt create hash from description hash"</span>),
-                    ),
-                ))
-                .payment_hash(payment_hash)
-                .payment_secret(PaymentSecret(OsRng.gen()))
-                .duration_since_epoch(duration_since_epoch)
-                .min_final_cltv_expiry_delta(<span class="number">18</span>)
-                .expiry_time(Duration::from_secs(expiry_secs.into()))
-                <span class="comment">// Temporarily sign with an ephemeral private key, we will request CLN to sign this
-                // invoice next.
-                </span>.build_signed(|m| {
-                    <span class="self">self</span>.secp
-                        .sign_ecdsa_recoverable(m, <span class="kw-2">&amp;</span>SecretKey::new(<span class="kw-2">&amp;mut </span>OsRng))
-                })
-                .map_err(|e| Status::internal(e.to_string()))<span class="question-mark">?</span>,
+                ),
+            ),
+            Description::Hash(hash) =&gt; invoice_builder.invoice_description(
+                lightning_invoice::Bolt11InvoiceDescription::Hash(<span class="kw-2">&amp;</span>lightning_invoice::Sha256(
+                    bitcoin_hashes::sha256::Hash::from_slice(<span class="kw-2">&amp;</span>hash)
+                        .expect(<span class="string">"Couldnt create hash from description hash"</span>),
+                )),
+            ),
         };
+
+        <span class="kw">let </span>invoice = invoice_builder
+            <span class="comment">// Temporarily sign with an ephemeral private key, we will request CLN to sign this
+            // invoice next.
+            </span>.build_signed(|m| {
+                <span class="self">self</span>.secp
+                    .sign_ecdsa_recoverable(m, <span class="kw-2">&amp;</span>SecretKey::new(<span class="kw-2">&amp;mut </span>OsRng))
+            })
+            .map_err(|e| Status::internal(e.to_string()))<span class="question-mark">?</span>;
 
         <span class="kw">let </span>invstring = invoice.to_string();
 
