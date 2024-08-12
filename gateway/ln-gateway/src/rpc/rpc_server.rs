@@ -14,11 +14,11 @@ use fedimint_ln_client::pay::PayInvoicePayload;
 use fedimint_ln_common::gateway_endpoint_constants::{
     ADDRESS_ENDPOINT, BACKUP_ENDPOINT, BALANCE_ENDPOINT, CLOSE_CHANNELS_WITH_PEER_ENDPOINT,
     CONFIGURATION_ENDPOINT, CONNECT_FED_ENDPOINT, CREATE_BOLT11_INVOICE_V2_ENDPOINT,
-    GATEWAY_INFO_ENDPOINT, GATEWAY_INFO_POST_ENDPOINT, GET_FUNDING_ADDRESS_ENDPOINT,
-    GET_GATEWAY_ID_ENDPOINT, LEAVE_FED_ENDPOINT, LIST_ACTIVE_CHANNELS_ENDPOINT,
-    OPEN_CHANNEL_ENDPOINT, PAY_INVOICE_ENDPOINT, RECEIVE_ECASH_ENDPOINT, RESTORE_ENDPOINT,
-    ROUTING_INFO_V2_ENDPOINT, SEND_PAYMENT_V2_ENDPOINT, SET_CONFIGURATION_ENDPOINT,
-    SPEND_ECASH_ENDPOINT, WITHDRAW_ENDPOINT,
+    GATEWAY_INFO_ENDPOINT, GATEWAY_INFO_POST_ENDPOINT, GET_BALANCES_ENDPOINT,
+    GET_FUNDING_ADDRESS_ENDPOINT, GET_GATEWAY_ID_ENDPOINT, LEAVE_FED_ENDPOINT,
+    LIST_ACTIVE_CHANNELS_ENDPOINT, OPEN_CHANNEL_ENDPOINT, PAY_INVOICE_ENDPOINT,
+    RECEIVE_ECASH_ENDPOINT, RESTORE_ENDPOINT, ROUTING_INFO_V2_ENDPOINT, SEND_PAYMENT_V2_ENDPOINT,
+    SET_CONFIGURATION_ENDPOINT, SPEND_ECASH_ENDPOINT, WITHDRAW_ENDPOINT,
 };
 use fedimint_lnv2_client::{CreateBolt11InvoicePayload, SendPaymentPayload};
 use hex::ToHex;
@@ -176,6 +176,7 @@ fn v1_routes(gateway: Arc<Gateway>) -> Router {
             post(close_channels_with_peer),
         )
         .route(LIST_ACTIVE_CHANNELS_ENDPOINT, get(list_active_channels))
+        .route(GET_BALANCES_ENDPOINT, get(get_balances))
         .layer(middleware::from_fn(auth_middleware));
 
     // Routes that are un-authenticated before gateway configuration, then become
@@ -362,6 +363,14 @@ async fn list_active_channels(
 ) -> Result<impl IntoResponse, GatewayError> {
     let channels = gateway.handle_list_active_channels_msg().await?;
     Ok(Json(json!(channels)))
+}
+
+#[instrument(skip_all, err)]
+async fn get_balances(
+    Extension(gateway): Extension<Arc<Gateway>>,
+) -> Result<impl IntoResponse, GatewayError> {
+    let balances = gateway.handle_get_balances_msg().await?;
+    Ok(Json(json!(balances)))
 }
 
 #[instrument(skip_all, err)]

@@ -26,9 +26,9 @@ use tonic_lnd::lnrpc::failure::FailureCode;
 use tonic_lnd::lnrpc::invoice::InvoiceState;
 use tonic_lnd::lnrpc::payment::PaymentStatus;
 use tonic_lnd::lnrpc::{
-    ChanInfoRequest, ChannelPoint, CloseChannelRequest, ConnectPeerRequest, GetInfoRequest,
-    InvoiceSubscription, LightningAddress, ListChannelsRequest, ListInvoiceRequest,
-    OpenChannelRequest,
+    ChanInfoRequest, ChannelBalanceRequest, ChannelPoint, CloseChannelRequest, ConnectPeerRequest,
+    GetInfoRequest, InvoiceSubscription, LightningAddress, ListChannelsRequest, ListInvoiceRequest,
+    OpenChannelRequest, WalletBalanceRequest,
 };
 use tonic_lnd::routerrpc::{
     CircuitKey, ForwardHtlcInterceptResponse, ResolveHoldForwardAction, SendPaymentRequest,
@@ -46,8 +46,8 @@ use crate::gateway_lnrpc::get_route_hints_response::{RouteHint, RouteHintHop};
 use crate::gateway_lnrpc::intercept_htlc_response::{Action, Cancel, Forward, Settle};
 use crate::gateway_lnrpc::{
     CloseChannelsWithPeerResponse, CreateInvoiceRequest, CreateInvoiceResponse, EmptyResponse,
-    GetFundingAddressResponse, GetNodeInfoResponse, GetRouteHintsResponse, InterceptHtlcRequest,
-    InterceptHtlcResponse, PayInvoiceResponse,
+    GetBalancesResponse, GetFundingAddressResponse, GetNodeInfoResponse, GetRouteHintsResponse,
+    InterceptHtlcRequest, InterceptHtlcResponse, PayInvoiceResponse,
 };
 type HtlcSubscriptionSender = mpsc::Sender<Result<InterceptHtlcRequest, Status>>;
 
@@ -1257,6 +1257,36 @@ impl ILnRpcClient for GatewayLndClient {
                 failure_reason: format!("Failed to list active channels {e:?}"),
             }),
         }
+    }
+
+    async fn get_balances(&self) -> Result<GetBalancesResponse, LightningRpcError> {
+        let mut client = self.connect().await?;
+
+        let wallet_balance_response = client
+            .lightning()
+            .wallet_balance(WalletBalanceRequest {})
+            .await
+            .map_err(|e| LightningRpcError::FailedToGetBalances {
+                failure_reason: format!("Failed to get on-chain balance {e:?}"),
+            })?
+            .into_inner();
+
+        let channel_balance_response = client
+            .lightning()
+            .channel_balance(ChannelBalanceRequest {})
+            .await
+            .map_err(|e| LightningRpcError::FailedToGetBalances {
+                failure_reason: format!("Failed to get lightning balance {e:?}"),
+            })?
+            .into_inner();
+
+        Ok(GetBalancesResponse {
+            onchain_balance_sats: wallet_balance_response.total_balance as u64,
+            lightning_balance_msats: channel_balance_response
+                .local_balance
+                .unwrap_or_default()
+                .msat,
+        })
     }
 }
 

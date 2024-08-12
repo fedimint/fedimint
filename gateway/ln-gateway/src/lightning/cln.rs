@@ -16,9 +16,9 @@ use super::{ChannelInfo, ILnRpcClient, LightningRpcError, RouteHtlcStream};
 use crate::gateway_lnrpc::gateway_lightning_client::GatewayLightningClient;
 use crate::gateway_lnrpc::{
     self, CloseChannelsWithPeerRequest, CloseChannelsWithPeerResponse, CreateInvoiceRequest,
-    CreateInvoiceResponse, EmptyRequest, EmptyResponse, GetFundingAddressResponse,
-    GetNodeInfoResponse, GetRouteHintsRequest, GetRouteHintsResponse, InterceptHtlcResponse,
-    OpenChannelRequest, PayInvoiceResponse, PayPrunedInvoiceRequest,
+    CreateInvoiceResponse, EmptyRequest, EmptyResponse, GetBalancesResponse,
+    GetFundingAddressResponse, GetNodeInfoResponse, GetRouteHintsRequest, GetRouteHintsResponse,
+    InterceptHtlcResponse, OpenChannelRequest, PayInvoiceResponse, PayPrunedInvoiceRequest,
 };
 use crate::lightning::MAX_LIGHTNING_RETRIES;
 
@@ -240,5 +240,17 @@ impl ILnRpcClient for NetworkLnRpcClient {
                 short_channel_id: channel.short_channel_id,
             })
             .collect())
+    }
+
+    async fn get_balances(&self) -> Result<GetBalancesResponse, LightningRpcError> {
+        let mut client = self.connect().await?;
+
+        Ok(client
+            .get_balances(EmptyRequest {})
+            .await
+            .map_err(|status| LightningRpcError::FailedToGetBalances {
+                failure_reason: status.message().to_string(),
+            })?
+            .into_inner())
     }
 }
