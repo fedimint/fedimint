@@ -41,6 +41,7 @@ parity-scale-codec = "3.6.12"
 pin-project = "1.1.5"
 rand = { workspace = true }
 rand_chacha = { workspace = true }
+rayon = "1.10.0"
 rcgen = "=0.13.1"
 serde = { workspace = true }
 serde_json = { workspace = true }

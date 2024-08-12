@@ -3,6 +3,7 @@ use fedimint_core::module::registry::ServerModuleRegistry;
 use fedimint_core::module::TransactionItemAmount;
 use fedimint_core::transaction::{Transaction, TransactionError};
 use fedimint_core::{Amount, OutPoint};
+use rayon::iter::{IntoParallelIterator, ParallelIterator};
 
 use crate::metrics::{CONSENSUS_TX_PROCESSED_INPUTS, CONSENSUS_TX_PROCESSED_OUTPUTS};
 
@@ -18,6 +19,21 @@ pub async fn process_transaction_with_dbtx(
         CONSENSUS_TX_PROCESSED_INPUTS.observe(in_count as f64);
         CONSENSUS_TX_PROCESSED_OUTPUTS.observe(out_count as f64);
     });
+
+    // We can not return the error here as errors are not returned in a specified
+    // order and the client still expects consensus on the error. Since the
+    // error is not extensible at the moment we need to incorrectly return the
+    // InvalidWitnessLength variant.
+    transaction
+        .inputs
+        .clone()
+        .into_par_iter()
+        .try_for_each(|input| {
+            modules
+                .get_expect(input.module_instance_id())
+                .verify_input(&input, input.module_instance_id())
+        })
+        .map_err(|_| TransactionError::InvalidWitnessLength)?;
 
     let mut funding_verifier = FundingVerifier::default();
     let mut public_keys = Vec::new();

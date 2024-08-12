@@ -851,6 +851,16 @@ pub trait ServerModule: Debug + Sized {
         peer_id: PeerId,
     ) -> anyhow::Result<()>;
 
+    // Use this function to parallelise stateless cryptographic verification of
+    // inputs across a transaction. All inputs of a transaction are verified
+    // before any input is processed.
+    fn verify_input(
+        &self,
+        _input: &<Self::Common as ModuleCommon>::Input,
+    ) -> Result<(), <Self::Common as ModuleCommon>::InputError> {
+        Ok(())
+    }
+
     /// Try to spend a transaction input. On success all necessary updates will
     /// be part of the database transaction. On failure (e.g. double spend)
     /// the database transaction is rolled back and the operation will take

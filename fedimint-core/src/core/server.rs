@@ -52,6 +52,15 @@ pub trait IServerModule: Debug {
         peer_id: PeerId,
     ) -> anyhow::Result<()>;
 
+    // Use this function to parallelise stateless cryptographic verification of
+    // inputs across a transaction. All inputs of a transaction are verified
+    // before any input is processed.
+    fn verify_input(
+        &self,
+        input: &DynInput,
+        module_instance_id: ModuleInstanceId,
+    ) -> Result<(), DynInputError>;
+
     /// Try to spend a transaction input. On success all necessary updates will
     /// be part of the database transaction. On failure (e.g. double spend)
     /// the database transaction is rolled back and the operation will take
@@ -164,6 +173,24 @@ where
             peer_id
         )
         .await
+    }
+
+    // Use this function to parallelise stateless cryptographic verification of
+    // inputs across a transaction. All inputs of a transaction are verified
+    // before any input is processed.
+    fn verify_input(
+        &self,
+        input: &DynInput,
+        module_instance_id: ModuleInstanceId,
+    ) -> Result<(), DynInputError> {
+        <Self as ServerModule>::verify_input(
+            self,
+            input
+                .as_any()
+                .downcast_ref::<<<Self as ServerModule>::Common as ModuleCommon>::Input>()
+                .expect("incorrect input type passed to module plugin"),
+        )
+        .map_err(|v| DynInputError::from_typed(module_instance_id, v))
     }
 
     /// Try to spend a transaction input. On success all necessary updates will
