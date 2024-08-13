@@ -25,7 +25,7 @@ use fedimint_core::module::{
 use fedimint_core::server::DynServerModule;
 use fedimint_core::{
     apply, async_trait_maybe_send, push_db_key_items, push_db_pair_items, Amount, NumPeersExt,
-    OutPoint, PeerId, ServerModule, Tiered, TieredMultiZip,
+    OutPoint, PeerId, ServerModule, Tiered, TieredMulti,
 };
 use fedimint_logging::LOG_MODULE_MINT;
 pub use fedimint_mint_common as common;
@@ -291,20 +291,21 @@ impl ServerModuleInit for MintInit {
         // TODO: the aggregate pks should become part of the MintConfigConsensus as they
         // can be obtained by evaluating the polynomial returned by the DKG at
         // zero
-        let pub_keys = TieredMultiZip::new(
-            config.peer_tbs_pks.values().map(Tiered::iter).collect(),
-        )
-        .map(|(amt, keys)| {
-            let keys = (1_u64..)
-                .zip(keys.into_iter().copied())
-                .take(config.peer_tbs_pks.to_num_peers().threshold())
+        let tbs_pks =
+            TieredMulti::new_aggregate_from_tiered_iter(config.peer_tbs_pks.values().cloned())
+                .into_iter()
+                .map(|(amt, keys)| {
+                    let keys = (1_u64..)
+                        .zip(keys)
+                        .take(config.peer_tbs_pks.to_num_peers().threshold())
+                        .collect();
+
+                    (amt, aggregate_public_key_shares(&keys))
+                })
                 .collect();
 
-            (amt, aggregate_public_key_shares(&keys))
-        });
-
         Ok(MintClientConfig {
-            tbs_pks: pub_keys.collect(),
+            tbs_pks,
             fee_consensus: config.fee_consensus.clone(),
             peer_tbs_pks: config.peer_tbs_pks.clone(),
             max_notes_per_denomination: config.max_notes_per_denomination,
@@ -649,16 +650,13 @@ impl Mint {
         // TODO: the aggregate pks should become part of the MintConfigConsensus as they
         // can be obtained by evaluating the polynomial returned by the DKG at
         // zero
-        let aggregate_pub_keys = TieredMultiZip::new(
-            cfg.consensus
-                .peer_tbs_pks
-                .values()
-                .map(Tiered::iter)
-                .collect(),
+        let aggregate_pub_keys = TieredMulti::new_aggregate_from_tiered_iter(
+            cfg.consensus.peer_tbs_pks.values().cloned(),
         )
+        .into_iter()
         .map(|(amt, keys)| {
             let keys = (1_u64..)
-                .zip(keys.into_iter().copied())
+                .zip(keys)
                 .take(cfg.consensus.peer_tbs_pks.to_num_peers().threshold())
                 .collect();
 
