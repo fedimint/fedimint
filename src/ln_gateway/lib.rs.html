@@ -1787,11 +1787,6 @@
 <a href="#1787" id="1787">1787</a>
 <a href="#1788" id="1788">1788</a>
 <a href="#1789" id="1789">1789</a>
-<a href="#1790" id="1790">1790</a>
-<a href="#1791" id="1791">1791</a>
-<a href="#1792" id="1792">1792</a>
-<a href="#1793" id="1793">1793</a>
-<a href="#1794" id="1794">1794</a>
 </pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::cast_possible_wrap)]
@@ -2444,13 +2439,13 @@
                 version_hash: <span class="macro">fedimint_build_code_version_env!</span>().to_string(),
                 lightning_pub_key: <span class="prelude-val">None</span>,
                 lightning_alias: <span class="prelude-val">None</span>,
-                fees: <span class="prelude-val">None</span>,
-                route_hints: <span class="macro">vec!</span>[],
                 gateway_id: <span class="self">self</span>.gateway_id,
                 gateway_state: <span class="self">self</span>.state.read().<span class="kw">await</span>.to_string(),
                 network: <span class="prelude-val">None</span>,
                 block_height: <span class="prelude-val">None</span>,
                 synced_to_chain: <span class="bool-val">false</span>,
+                api: <span class="self">self</span>.versioned_api.clone(),
+                lightning_mode: <span class="prelude-val">None</span>,
             });
         };
 
@@ -2475,10 +2470,6 @@
             (federations, federation_manager.clone_scid_map())
         };
 
-        <span class="kw">let </span>route_hints = lightning_context
-            .lnrpc
-            .parsed_route_hints(gateway_config.num_route_hints)
-            .<span class="kw">await</span>;
         <span class="kw">let </span>node_info = lightning_context.lnrpc.parsed_node_info().<span class="kw">await</span><span class="question-mark">?</span>;
 
         <span class="prelude-val">Ok</span>(GatewayInfo {
@@ -2487,13 +2478,13 @@
             version_hash: <span class="macro">fedimint_build_code_version_env!</span>().to_string(),
             lightning_pub_key: <span class="prelude-val">Some</span>(lightning_context.lightning_public_key.to_string()),
             lightning_alias: <span class="prelude-val">Some</span>(lightning_context.lightning_alias.clone()),
-            fees: <span class="prelude-val">Some</span>(gateway_config.routing_fees),
-            route_hints,
             gateway_id: <span class="self">self</span>.gateway_id,
             gateway_state: <span class="self">self</span>.state.read().<span class="kw">await</span>.to_string(),
             network: <span class="prelude-val">Some</span>(gateway_config.network),
             block_height: <span class="prelude-val">Some</span>(node_info.<span class="number">3</span>),
             synced_to_chain: node_info.<span class="number">4</span>,
+            api: <span class="self">self</span>.versioned_api.clone(),
+            lightning_mode: <span class="self">self</span>.lightning_builder.lightning_mode(),
         })
     }
 
@@ -2720,12 +2711,11 @@
         </span><span class="kw">let </span>federation_info = FederationInfo {
             federation_id,
             balance_msat: client.get_balance().<span class="kw">await</span>,
-            config: client.config().<span class="kw">await</span>,
             channel_id: <span class="prelude-val">Some</span>(mint_channel_id),
             routing_fees: <span class="prelude-val">Some</span>(gateway_config.routing_fees.into()),
         };
 
-        <span class="self">Self</span>::check_federation_network(<span class="kw-2">&amp;</span>federation_info, gateway_config.network)<span class="question-mark">?</span>;
+        <span class="self">Self</span>::check_federation_network(<span class="kw-2">&amp;</span>client, gateway_config.network).<span class="kw">await</span><span class="question-mark">?</span>;
 
         client
             .get_first_module::&lt;GatewayClientModule&gt;()
@@ -3168,24 +3158,24 @@
 
     <span class="doccomment">/// Verifies that the supplied `network` matches the Bitcoin network in the
     /// connected client's configuration.
-    </span><span class="kw">fn </span>check_federation_network(info: <span class="kw-2">&amp;</span>FederationInfo, network: Network) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-        <span class="kw">let </span>cfg = info
-            .config
+    </span><span class="kw">async fn </span>check_federation_network(client: <span class="kw-2">&amp;</span>ClientHandleArc, network: Network) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+        <span class="kw">let </span>federation_id = client.federation_id();
+        <span class="kw">let </span>config = client.config().<span class="kw">await</span>;
+        <span class="kw">let </span>cfg = config
             .modules
             .values()
             .find(|m| LightningCommonInit::KIND == m.kind)
             .ok_or_else(|| {
                 GatewayError::InvalidMetadata(<span class="macro">format!</span>(
-                    <span class="string">"Federation {} does not have a lightning module"</span>,
-                    info.federation_id
+                    <span class="string">"Federation {federation_id} does not have a lightning module"</span>,
                 ))
             })<span class="question-mark">?</span>;
         <span class="kw">let </span>ln_cfg: <span class="kw-2">&amp;</span>LightningClientConfig = cfg.cast()<span class="question-mark">?</span>;
 
         <span class="kw">if </span>ln_cfg.network != network {
             <span class="macro">error!</span>(
-                <span class="string">"Federation {} runs on {} but this gateway supports {}"</span>,
-                info.federation_id, ln_cfg.network, network,
+                <span class="string">"Federation {federation_id} runs on {} but this gateway supports {network}"</span>,
+                ln_cfg.network,
             );
             <span class="kw">return </span><span class="prelude-val">Err</span>(GatewayError::UnsupportedNetwork(ln_cfg.network));
         }

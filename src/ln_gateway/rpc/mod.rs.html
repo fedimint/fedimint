@@ -214,14 +214,16 @@
 
 <span class="kw">use </span>bitcoin::address::NetworkUnchecked;
 <span class="kw">use </span>bitcoin::{Address, Network};
-<span class="kw">use </span>fedimint_core::config::{ClientConfig, FederationId, JsonClientConfig};
+<span class="kw">use </span>fedimint_core::config::{FederationId, JsonClientConfig};
 <span class="kw">use </span>fedimint_core::core::OperationId;
 <span class="kw">use </span>fedimint_core::{secp256k1, Amount, BitcoinAmountOrAll};
 <span class="kw">use </span>fedimint_ln_common::config::parse_routing_fees;
-<span class="kw">use </span>fedimint_ln_common::{route_hints, serde_option_routing_fees};
 <span class="kw">use </span>fedimint_mint_client::OOBNotes;
 <span class="kw">use </span>lightning_invoice::RoutingFees;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
+
+<span class="kw">use </span><span class="kw">crate</span>::lightning::LightningMode;
+<span class="kw">use </span><span class="kw">crate</span>::SafeUrl;
 
 <span class="kw">pub const </span>V1_API_ENDPOINT: <span class="kw-2">&amp;</span>str = <span class="string">"v1"</span>;
 
@@ -275,8 +277,7 @@
 </span><span class="kw">pub struct </span>FederationInfo {
     <span class="kw">pub </span>federation_id: FederationId,
     <span class="kw">pub </span>balance_msat: Amount, <span class="comment">// TODO: Rename to `balance`, since `Amount` is already in msat.
-    </span><span class="kw">pub </span>config: ClientConfig,
-    <span class="kw">pub </span>channel_id: <span class="prelude-ty">Option</span>&lt;u64&gt;,
+    </span><span class="kw">pub </span>channel_id: <span class="prelude-ty">Option</span>&lt;u64&gt;,
     <span class="kw">pub </span>routing_fees: <span class="prelude-ty">Option</span>&lt;FederationRoutingFees&gt;,
 }
 
@@ -290,9 +291,6 @@
     </span><span class="kw">pub </span>federation_fake_scids: <span class="prelude-ty">Option</span>&lt;BTreeMap&lt;u64, FederationId&gt;&gt;,
     <span class="kw">pub </span>lightning_pub_key: <span class="prelude-ty">Option</span>&lt;String&gt;,
     <span class="kw">pub </span>lightning_alias: <span class="prelude-ty">Option</span>&lt;String&gt;,
-    <span class="attr">#[serde(with = <span class="string">"serde_option_routing_fees"</span>)]
-    </span><span class="kw">pub </span>fees: <span class="prelude-ty">Option</span>&lt;RoutingFees&gt;,
-    <span class="kw">pub </span>route_hints: Vec&lt;route_hints::RouteHint&gt;,
     <span class="kw">pub </span>gateway_id: secp256k1::PublicKey,
     <span class="kw">pub </span>gateway_state: String,
     <span class="kw">pub </span>network: <span class="prelude-ty">Option</span>&lt;Network&gt;,
@@ -304,6 +302,8 @@
     // should be able to remove it once 0.4.0 is released.
     </span><span class="attr">#[serde(default)]
     </span><span class="kw">pub </span>synced_to_chain: bool,
+    <span class="kw">pub </span>api: SafeUrl,
+    <span class="kw">pub </span>lightning_mode: <span class="prelude-ty">Option</span>&lt;LightningMode&gt;,
 }
 
 <span class="attr">#[derive(Debug, Serialize, Deserialize, PartialEq)]

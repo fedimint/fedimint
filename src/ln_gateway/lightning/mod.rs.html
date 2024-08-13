@@ -312,6 +312,13 @@
 <a href="#312" id="312">312</a>
 <a href="#313" id="313">313</a>
 <a href="#314" id="314">314</a>
+<a href="#315" id="315">315</a>
+<a href="#316" id="316">316</a>
+<a href="#317" id="317">317</a>
+<a href="#318" id="318">318</a>
+<a href="#319" id="319">319</a>
+<a href="#320" id="320">320</a>
+<a href="#321" id="321">321</a>
 </pre></div><pre class="rust"><code><span class="kw">pub mod </span>cln;
 <span class="kw">pub mod </span>ldk;
 <span class="kw">pub mod </span>lnd;
@@ -543,7 +550,7 @@
     <span class="kw">pub </span>short_channel_id: u64,
 }
 
-<span class="attr">#[derive(Debug, Clone, Subcommand, Serialize, Deserialize)]
+<span class="attr">#[derive(Debug, Clone, Subcommand, Serialize, Deserialize, Eq, PartialEq)]
 </span><span class="kw">pub enum </span>LightningMode {
     <span class="attr">#[clap(name = <span class="string">"lnd"</span>)]
     </span>Lnd {
@@ -583,6 +590,9 @@
 <span class="attr">#[async_trait]
 </span><span class="kw">pub trait </span>LightningBuilder {
     <span class="kw">async fn </span>build(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Box&lt;<span class="kw">dyn </span>ILnRpcClient&gt;;
+    <span class="kw">fn </span>lightning_mode(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;LightningMode&gt; {
+        <span class="prelude-val">None
+    </span>}
 }
 
 <span class="attr">#[derive(Clone)]
@@ -624,6 +634,10 @@
                 .unwrap(),
             ),
         }
+    }
+
+    <span class="kw">fn </span>lightning_mode(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;LightningMode&gt; {
+        <span class="prelude-val">Some</span>(<span class="self">self</span>.lightning_mode.clone())
     }
 }
 </code></pre></div></section></main></body></html>
