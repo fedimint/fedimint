@@ -34,16 +34,6 @@ mod r#impl {
         tokio::spawn(future.instrument(span))
     }
 
-    pub(crate) fn spawn_local<F>(name: &str, future: F) -> JoinHandle<()>
-    where
-        F: Future<Output = ()> + 'static,
-    {
-        let span =
-            tracing::debug_span!(target: LOG_RUNTIME, parent: None, "spawn_local", task = name);
-        // nosemgrep: ban-tokio-spawn
-        tokio::task::spawn_local(future.instrument(span))
-    }
-
     // note: this call does not exist on wasm and you need to handle it
     // conditionally at the call site of packages that compile on wasm
     pub fn block_in_place<F, R>(f: F) -> R
