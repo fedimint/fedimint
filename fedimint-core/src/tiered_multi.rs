@@ -2,6 +2,7 @@ use std::collections::btree_map::Entry;
 use std::collections::BTreeMap;
 
 use fedimint_core::encoding::{Decodable, DecodeError, Encodable};
+use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 
 use crate::module::registry::ModuleDecoderRegistry;
@@ -20,6 +21,33 @@ impl<T> TieredMulti<T> {
     /// Returns a new `TieredMulti` with the given `BTreeMap` map
     pub fn new(map: BTreeMap<Amount, Vec<T>>) -> Self {
         Self(map.into_iter().filter(|(_, v)| !v.is_empty()).collect())
+    }
+
+    /// Returns a new `TieredMulti` from a collection of `Tiered` structs.
+    /// The `Tiered` structs are expected to be structurally equal, otherwise
+    /// this function will panic.
+    pub fn new_aggregate_from_tiered_iter(tiered_iter: impl Iterator<Item = Tiered<T>>) -> Self {
+        let mut tiered_multi = Self::default();
+
+        for tiered in tiered_iter {
+            for (amt, val) in tiered {
+                tiered_multi.push(amt, val);
+            }
+        }
+
+        // TODO: This only asserts that the output is structurally sound, not the input.
+        // For example, an input with tier `Amount`s of [[1, 2], [4, 8]] would currently
+        // be accepted even though it is not structurally sound.
+        assert!(
+            tiered_multi
+                .summary()
+                .iter()
+                .map(|(_tier, count)| count)
+                .all_equal(),
+            "The supplied Tiered structs were not structurally equal"
+        );
+
+        tiered_multi
     }
 
     /// Returns the total value of all notes in msat as `Amount`
@@ -154,55 +182,6 @@ where
         Ok(Self(Tiered::consensus_decode_from_finite_reader(
             d, modules,
         )?))
-    }
-}
-
-pub struct TieredMultiZip<I> {
-    iters: Vec<I>,
-}
-
-impl<I> TieredMultiZip<I> {
-    /// Creates a new `TieredMultiZip` Iterator from `Notes` iterators. These
-    /// have to be checked for structural equality! There also has to be at
-    /// least one iterator in the `iter` vector.
-    pub fn new(iters: Vec<I>) -> Self {
-        assert!(!iters.is_empty());
-
-        Self { iters }
-    }
-}
-
-impl<I, C> Iterator for TieredMultiZip<I>
-where
-    I: Iterator<Item = (Amount, C)>,
-{
-    type Item = (Amount, Vec<C>);
-
-    fn next(&mut self) -> Option<Self::Item> {
-        let mut notes = Vec::with_capacity(self.iters.len());
-        let mut amount = None;
-        for iter in &mut self.iters {
-            match iter.next() {
-                Some((amt, note)) => {
-                    if let Some(amount) = amount {
-                        // This may fail if notes weren't tested for structural equality
-                        assert_eq!(amount, amt);
-                    } else {
-                        amount = Some(amt);
-                    }
-                    notes.push(note);
-                }
-                None => return None,
-            }
-        }
-
-        // This should always hold as long as this impl is correct
-        assert_eq!(notes.len(), self.iters.len());
-
-        Some((
-            amount.expect("The multi zip must contain at least one iterator"),
-            notes,
-        ))
     }
 }
 
