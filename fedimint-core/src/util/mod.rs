@@ -164,9 +164,7 @@ impl SafeUrl {
     // once https://gitlab.torproject.org/tpo/core/arti/-/merge_requests/2214 lands.
     #[allow(clippy::case_sensitive_file_extension_comparisons)]
     pub fn is_onion_address(&self) -> bool {
-        let host = self
-            .host_str()
-            .expect("It should've asserted for `host` on construction");
+        let host = self.host_str().unwrap_or_default();
 
         host.ends_with(".onion")
     }
