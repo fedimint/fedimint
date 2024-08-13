@@ -18,7 +18,9 @@ use fedimint_core::task::sleep;
 use fedimint_core::{NumPeersExt, OutPoint, PeerId, TransactionId};
 use fedimint_lnv2_client::LightningClientStateMachines;
 use fedimint_lnv2_common::contracts::IncomingContract;
-use fedimint_lnv2_common::{LightningInput, LightningInputV0, LightningOutputOutcome};
+use fedimint_lnv2_common::{
+    LightningInput, LightningInputV0, LightningOutputOutcome, LightningOutputOutcomeV0,
+};
 use tpe::{aggregate_decryption_shares, AggregatePublicKey, DecryptionKeyShare, PublicKeyShare};
 use tracing::{error, trace};
 
@@ -157,18 +159,18 @@ impl ReceiveStateMachine {
         let verify_decryption_share = move |peer, outcome: SerdeOutputOutcome| {
             let outcome = deserialize_outcome::<LightningOutputOutcome>(&outcome, &module_decoder)?;
 
-            match outcome {
-                LightningOutputOutcome::Incoming(share) => {
+            match outcome.ensure_v0_ref()? {
+                LightningOutputOutcomeV0::Incoming(share) => {
                     if !decryption_contract.verify_decryption_share(
                         tpe_pks.get(&peer).ok_or(anyhow!("Unknown peer pk"))?,
-                        &share,
+                        share,
                     ) {
                         bail!("Invalid decryption share");
                     }
 
-                    Ok(share)
+                    Ok(*share)
                 }
-                LightningOutputOutcome::Outgoing => {
+                LightningOutputOutcomeV0::Outgoing => {
                     bail!("Unexpected outcome variant");
                 }
             }

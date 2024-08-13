@@ -77,6 +77,12 @@ impl std::fmt::Display for LightningOutputV0 {
     }
 }
 
+extensible_associated_module_type!(
+    LightningOutputOutcome,
+    LightningOutputOutcomeV0,
+    UnknownLightningOutputOutcomeVariantError
+);
+
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
 pub enum LightningOutputOutcomeV0 {
     Outgoing,
@@ -85,7 +91,7 @@ pub enum LightningOutputOutcomeV0 {
 
 impl std::fmt::Display for LightningOutputOutcomeV0 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "LightningOutputOutcome")
+        write!(f, "LightningOutputOutcomeV0")
     }
 }
 
@@ -158,7 +164,7 @@ plugin_types_trait_impl_common!(
     LightningClientConfig,
     LightningInput,
     LightningOutput,
-    LightningOutputOutcomeV0,
+    LightningOutputOutcome,
     LightningConsensusItem,
     LightningInputError,
     LightningOutputError

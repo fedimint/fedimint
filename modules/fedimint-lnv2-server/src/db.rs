@@ -1,11 +1,9 @@
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::{impl_db_lookup, impl_db_record, OutPoint, PeerId};
 use fedimint_lnv2_common::contracts::{IncomingContract, OutgoingContract};
-use fedimint_lnv2_common::{ContractId, GatewayEndpoint};
+use fedimint_lnv2_common::{ContractId, GatewayEndpoint, LightningOutputOutcome};
 use serde::{Deserialize, Serialize};
 use strum_macros::EnumIter;
-
-use crate::LightningOutputOutcome;
 
 #[repr(u8)]
 #[derive(Clone, EnumIter, Debug)]
