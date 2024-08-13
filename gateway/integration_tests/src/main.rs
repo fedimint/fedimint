@@ -6,7 +6,7 @@ use devimint::version_constants::{VERSION_0_3_0, VERSION_0_5_0_ALPHA};
 use devimint::{cmd, util, Gatewayd};
 use fedimint_core::Amount;
 use fedimint_testing::gateway::LightningNodeType;
-use ln_gateway::rpc::{FederationInfo, GatewayInfo};
+use ln_gateway::rpc::{FederationInfo, GatewayFedConfig, GatewayInfo};
 use tracing::info;
 
 #[derive(Parser)]
@@ -87,22 +87,6 @@ async fn config_test(gw_type: LightningNodeType) -> anyhow::Result<()> {
                 .await?;
                 info!(?new_default_routing_fees, "Changed gateway routing fees");
 
-                let info_value = cmd!(gw, "info").out_json().await?;
-                let gateway_info: GatewayInfo =
-                    serde_json::from_value(info_value).expect("Could not parse GatewayInfo");
-                assert!(gateway_info.fees.is_some(), "Fees must be set");
-                assert_eq!(
-                    gateway_info.fees.unwrap().base_msat,
-                    10,
-                    "Default Base msat is not 10"
-                );
-                assert_eq!(
-                    gateway_info.fees.unwrap().proportional_millionths,
-                    10000,
-                    "Default proportional millionths is not 10000"
-                );
-                info!("Verified default routing fees changed");
-
                 // Change the routing fees for a specific federation
                 let fed_id = dev_fed.fed().await?.calculate_federation_id();
                 let new_fed_routing_fees = format!("{},20,20000", fed_id.clone());
@@ -153,6 +137,12 @@ async fn config_test(gw_type: LightningNodeType) -> anyhow::Result<()> {
                     .await
                     .expect_err("Cannot change the network while connected to a federation");
                 info!("Verified password change and network cannot be changed.");
+
+                // Get the federation's config and verify it parses correctly
+                let config_val = cmd!(gw, "config", "--federation-id", fed_id)
+                    .out_json()
+                    .await?;
+                serde_json::from_value::<GatewayFedConfig>(config_val)?;
 
                 // Spawn new federation
                 let bitcoind = dev_fed.bitcoind().await?;

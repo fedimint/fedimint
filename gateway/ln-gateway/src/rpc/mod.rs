@@ -6,14 +6,16 @@ use std::str::FromStr;
 
 use bitcoin::address::NetworkUnchecked;
 use bitcoin::{Address, Network};
-use fedimint_core::config::{ClientConfig, FederationId, JsonClientConfig};
+use fedimint_core::config::{FederationId, JsonClientConfig};
 use fedimint_core::core::OperationId;
 use fedimint_core::{secp256k1, Amount, BitcoinAmountOrAll};
 use fedimint_ln_common::config::parse_routing_fees;
-use fedimint_ln_common::{route_hints, serde_option_routing_fees};
 use fedimint_mint_client::OOBNotes;
 use lightning_invoice::RoutingFees;
 use serde::{Deserialize, Serialize};
+
+use crate::lightning::LightningMode;
+use crate::SafeUrl;
 
 pub const V1_API_ENDPOINT: &str = "v1";
 
@@ -67,7 +69,6 @@ pub struct WithdrawPayload {
 pub struct FederationInfo {
     pub federation_id: FederationId,
     pub balance_msat: Amount, // TODO: Rename to `balance`, since `Amount` is already in msat.
-    pub config: ClientConfig,
     pub channel_id: Option<u64>,
     pub routing_fees: Option<FederationRoutingFees>,
 }
@@ -82,9 +83,6 @@ pub struct GatewayInfo {
     pub federation_fake_scids: Option<BTreeMap<u64, FederationId>>,
     pub lightning_pub_key: Option<String>,
     pub lightning_alias: Option<String>,
-    #[serde(with = "serde_option_routing_fees")]
-    pub fees: Option<RoutingFees>,
-    pub route_hints: Vec<route_hints::RouteHint>,
     pub gateway_id: secp256k1::PublicKey,
     pub gateway_state: String,
     pub network: Option<Network>,
@@ -96,6 +94,8 @@ pub struct GatewayInfo {
     // should be able to remove it once 0.4.0 is released.
     #[serde(default)]
     pub synced_to_chain: bool,
+    pub api: SafeUrl,
+    pub lightning_mode: Option<LightningMode>,
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq)]

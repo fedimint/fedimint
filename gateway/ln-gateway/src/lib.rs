@@ -650,13 +650,13 @@ impl Gateway {
                 version_hash: fedimint_build_code_version_env!().to_string(),
                 lightning_pub_key: None,
                 lightning_alias: None,
-                fees: None,
-                route_hints: vec![],
                 gateway_id: self.gateway_id,
                 gateway_state: self.state.read().await.to_string(),
                 network: None,
                 block_height: None,
                 synced_to_chain: false,
+                api: self.versioned_api.clone(),
+                lightning_mode: None,
             });
         };
 
@@ -681,10 +681,6 @@ impl Gateway {
             (federations, federation_manager.clone_scid_map())
         };
 
-        let route_hints = lightning_context
-            .lnrpc
-            .parsed_route_hints(gateway_config.num_route_hints)
-            .await;
         let node_info = lightning_context.lnrpc.parsed_node_info().await?;
 
         Ok(GatewayInfo {
@@ -693,13 +689,13 @@ impl Gateway {
             version_hash: fedimint_build_code_version_env!().to_string(),
             lightning_pub_key: Some(lightning_context.lightning_public_key.to_string()),
             lightning_alias: Some(lightning_context.lightning_alias.clone()),
-            fees: Some(gateway_config.routing_fees),
-            route_hints,
             gateway_id: self.gateway_id,
             gateway_state: self.state.read().await.to_string(),
             network: Some(gateway_config.network),
             block_height: Some(node_info.3),
             synced_to_chain: node_info.4,
+            api: self.versioned_api.clone(),
+            lightning_mode: self.lightning_builder.lightning_mode(),
         })
     }
 
@@ -926,12 +922,11 @@ impl Gateway {
         let federation_info = FederationInfo {
             federation_id,
             balance_msat: client.get_balance().await,
-            config: client.config().await,
             channel_id: Some(mint_channel_id),
             routing_fees: Some(gateway_config.routing_fees.into()),
         };
 
-        Self::check_federation_network(&federation_info, gateway_config.network)?;
+        Self::check_federation_network(&client, gateway_config.network).await?;
 
         client
             .get_first_module::<GatewayClientModule>()
@@ -1374,24 +1369,24 @@ impl Gateway {
 
     /// Verifies that the supplied `network` matches the Bitcoin network in the
     /// connected client's configuration.
-    fn check_federation_network(info: &FederationInfo, network: Network) -> Result<()> {
-        let cfg = info
-            .config
+    async fn check_federation_network(client: &ClientHandleArc, network: Network) -> Result<()> {
+        let federation_id = client.federation_id();
+        let config = client.config().await;
+        let cfg = config
             .modules
             .values()
             .find(|m| LightningCommonInit::KIND == m.kind)
             .ok_or_else(|| {
                 GatewayError::InvalidMetadata(format!(
-                    "Federation {} does not have a lightning module",
-                    info.federation_id
+                    "Federation {federation_id} does not have a lightning module",
                 ))
             })?;
         let ln_cfg: &LightningClientConfig = cfg.cast()?;
 
         if ln_cfg.network != network {
             error!(
-                "Federation {} runs on {} but this gateway supports {}",
-                info.federation_id, ln_cfg.network, network,
+                "Federation {federation_id} runs on {} but this gateway supports {network}",
+                ln_cfg.network,
             );
             return Err(GatewayError::UnsupportedNetwork(ln_cfg.network));
         }
