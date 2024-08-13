@@ -183,7 +183,7 @@ fn v1_routes(gateway: Arc<Gateway>) -> Router {
     // authenticated after a password has been set.
     let authenticated_after_config_routes = Router::new()
         .route(SET_CONFIGURATION_ENDPOINT, post(set_configuration))
-        .route(CONFIGURATION_ENDPOINT, get(configuration))
+        .route(CONFIGURATION_ENDPOINT, post(configuration))
         // FIXME: deprecated >= 0.3.0
         .route(GATEWAY_INFO_POST_ENDPOINT, post(handle_post_info))
         .route(GATEWAY_INFO_ENDPOINT, get(info))

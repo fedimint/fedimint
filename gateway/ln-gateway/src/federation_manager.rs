@@ -194,7 +194,6 @@ impl FederationManager {
             .borrow()
             .with(|client| async move {
                 let balance_msat = client.get_balance().await;
-                let config = client.config().await;
 
                 let routing_fees = dbtx
                     .load_federation_config(federation_id)
@@ -204,7 +203,6 @@ impl FederationManager {
                 Ok(FederationInfo {
                     federation_id,
                     balance_msat,
-                    config,
                     channel_id,
                     routing_fees,
                 })
@@ -221,7 +219,6 @@ impl FederationManager {
             let channel_id = self.get_scid_for_federation(*federation_id);
 
             let balance_msat = client.borrow().with(|client| client.get_balance()).await;
-            let config = client.borrow().with(|client| client.config()).await;
 
             let routing_fees = dbtx
                 .load_federation_config(*federation_id)
@@ -231,7 +228,6 @@ impl FederationManager {
             federation_infos.push(FederationInfo {
                 federation_id: *federation_id,
                 balance_msat,
-                config,
                 channel_id,
                 routing_fees,
             });
