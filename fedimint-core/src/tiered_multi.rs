@@ -112,15 +112,11 @@ impl<C> IntoIterator for TieredMulti<C>
 where
     C: 'static + Send,
 {
-    type Item = (Amount, C);
-    type IntoIter = Box<dyn Iterator<Item = (Amount, C)> + Send>;
+    type Item = (Amount, Vec<C>);
+    type IntoIter = std::collections::btree_map::IntoIter<Amount, Vec<C>>;
 
     fn into_iter(self) -> Self::IntoIter {
-        Box::new(
-            self.0
-                .into_iter()
-                .flat_map(|(amt, notes)| notes.into_iter().map(move |c| (amt, c))),
-        )
+        self.0.into_iter()
     }
 }
 

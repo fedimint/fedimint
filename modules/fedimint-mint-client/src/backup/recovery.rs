@@ -153,7 +153,7 @@ impl RecoveryFromHistory for MintRecovery {
             len = finalized.spendable_notes.count_items(),
             "Restoring spendable notes"
         );
-        for (amount, note) in finalized.spendable_notes {
+        for (amount, note) in finalized.spendable_notes.into_iter_items() {
             let key = NoteKey {
                 amount,
                 nonce: note.nonce(),
