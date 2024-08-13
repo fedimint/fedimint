@@ -43,8 +43,8 @@ use fedimint_lnv2_common::endpoint_constants::{
 use fedimint_lnv2_common::{
     ContractId, GatewayEndpoint, LightningCommonInit, LightningConsensusItem, LightningInput,
     LightningInputError, LightningInputV0, LightningModuleTypes, LightningOutput,
-    LightningOutputError, LightningOutputOutcomeV0, LightningOutputV0, OutgoingWitness,
-    MODULE_CONSENSUS_VERSION,
+    LightningOutputError, LightningOutputOutcome, LightningOutputOutcomeV0, LightningOutputV0,
+    OutgoingWitness, MODULE_CONSENSUS_VERSION,
 };
 use fedimint_server::config::distributedgen::{evaluate_polynomial_g1, PeerHandleOps};
 use fedimint_server::net::api::check_auth;
@@ -128,7 +128,7 @@ impl ModuleInit for LightningInit {
                         dbtx,
                         LightningOutputOutcomePrefix,
                         LightningOutputOutcomeKey,
-                        LightningOutputOutcomeV0,
+                        LightningOutputOutcome,
                         lightning,
                         "Lightning Output Outcomes"
                     );
@@ -491,7 +491,10 @@ impl ServerModule for Lightning {
         };
 
         if dbtx
-            .insert_entry(&OutputOutcomeKey(out_point), &outcome)
+            .insert_entry(
+                &OutputOutcomeKey(out_point),
+                &LightningOutputOutcome::V0(outcome),
+            )
             .await
             .is_some()
         {
@@ -511,7 +514,7 @@ impl ServerModule for Lightning {
         &self,
         dbtx: &mut DatabaseTransaction<'_>,
         out_point: OutPoint,
-    ) -> Option<LightningOutputOutcomeV0> {
+    ) -> Option<LightningOutputOutcome> {
         dbtx.get_value(&OutputOutcomeKey(out_point)).await
     }
 
