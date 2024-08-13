@@ -1164,7 +1164,7 @@ impl MintClientModule {
     ) -> anyhow::Result<Vec<ClientInput<MintInput, MintClientStateMachines>>> {
         let mut inputs = Vec::new();
 
-        for (amount, spendable_note) in notes {
+        for (amount, spendable_note) in notes.into_iter_items() {
             let key = self
                 .cfg
                 .tbs_pks
@@ -1229,7 +1229,7 @@ impl MintClientModule {
 
         let mut state_machines = Vec::new();
 
-        for (amount, spendable_note) in selected_notes.clone() {
+        for (amount, spendable_note) in selected_notes.clone().into_iter_items() {
             state_machines.push(MintClientStateMachines::OOB(MintOOBStateMachine {
                 operation_id,
                 state: MintOOBStates::Created(MintOOBStatesCreated {
@@ -1285,7 +1285,7 @@ impl MintClientModule {
         notes_selector
             .select_notes(note_stream, requested_amount, fee_per_note_input)
             .await?
-            .into_iter()
+            .into_iter_items()
             .map(|(amt, snote)| Ok((amt, snote.decode()?)))
             .collect::<anyhow::Result<TieredMulti<_>>>()
     }

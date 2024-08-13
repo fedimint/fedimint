@@ -114,7 +114,7 @@ impl MintClientModule {
 
         Ok(EcashBackup::new_v0(
             notes
-                .into_iter()
+                .into_iter_items()
                 .map(|(amt, spendable_note)| Ok((amt, spendable_note.decode()?)))
                 .collect::<anyhow::Result<TieredMulti<_>>>()?,
             pending_notes,
