@@ -2760,6 +2760,7 @@
 <a href="#2760" id="2760">2760</a>
 <a href="#2761" id="2761">2761</a>
 <a href="#2762" id="2762">2762</a>
+<a href="#2763" id="2763">2763</a>
 </pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::doc_markdown)]
@@ -2852,6 +2853,7 @@
 <span class="kw">use </span>anyhow::{anyhow, bail, ensure, Context};
 <span class="kw">use </span>async_stream::{stream, try_stream};
 <span class="kw">use </span>backup::ClientBackup;
+<span class="kw">use </span>bitcoin::secp256k1;
 <span class="kw">use </span>db::{
     apply_migrations_client, apply_migrations_core_client, get_core_client_database_migrations,
     ApiSecretKey, CachedApiVersionSet, CachedApiVersionSetKey, ClientConfigKey, ClientInitStateKey,
@@ -2896,7 +2898,7 @@
 <span class="kw">use </span>module::recovery::RecoveryProgress;
 <span class="kw">use </span>module::{DynClientModule, FinalClient};
 <span class="kw">use </span>rand::thread_rng;
-<span class="kw">use </span>secp256k1_zkp::{PublicKey, Secp256k1};
+<span class="kw">use </span>secp256k1::{PublicKey, Secp256k1};
 <span class="kw">use </span>secret::{DeriveableSecretClientExt, PlainRootSecretStrategy, RootSecretStrategy <span class="kw">as _</span>};
 <span class="kw">use </span>serde::Deserialize;
 <span class="kw">use </span>thiserror::Error;
@@ -3536,7 +3538,7 @@
     api: DynGlobalApi,
     root_secret: DerivableSecret,
     operation_log: OperationLog,
-    secp_ctx: Secp256k1&lt;secp256k1_zkp::All&gt;,
+    secp_ctx: Secp256k1&lt;secp256k1::All&gt;,
     meta_service: Arc&lt;MetaService&gt;,
 
     task_group: TaskGroup,
@@ -4649,7 +4651,7 @@
     /// once this function is guaranteed to return immediately.
     </span><span class="kw">pub async fn </span>get_guardian_public_keys_blocking(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-    ) -&gt; BTreeMap&lt;PeerId, secp256k1_zkp::PublicKey&gt; {
+    ) -&gt; BTreeMap&lt;PeerId, secp256k1::PublicKey&gt; {
         <span class="self">self</span>.db.autocommit(|dbtx, <span class="kw">_</span>| Box::pin(<span class="kw">async move </span>{
             <span class="kw">let </span>config = <span class="self">self</span>.config().<span class="kw">await</span>;
 

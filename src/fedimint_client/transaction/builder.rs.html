@@ -159,15 +159,17 @@
 <a href="#159" id="159">159</a>
 <a href="#160" id="160">160</a>
 <a href="#161" id="161">161</a>
+<a href="#162" id="162">162</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::sync::Arc;
 
 <span class="kw">use </span>bitcoin::key::KeyPair;
+<span class="kw">use </span>bitcoin::secp256k1;
 <span class="kw">use </span>fedimint_core::core::{DynInput, DynOutput, IntoDynInstance, ModuleInstanceId};
 <span class="kw">use </span>fedimint_core::transaction::{Transaction, TransactionSignature};
 <span class="kw">use </span>fedimint_core::Amount;
 <span class="kw">use </span>itertools::multiunzip;
 <span class="kw">use </span>rand::{CryptoRng, Rng, RngCore};
-<span class="kw">use </span>secp256k1_zkp::Secp256k1;
+<span class="kw">use </span>secp256k1::Secp256k1;
 
 <span class="kw">use </span><span class="kw">crate</span>::module::StateGenerator;
 <span class="kw">use </span><span class="kw">crate</span>::sm::DynState;
@@ -263,7 +265,7 @@
         <span class="kw-2">mut </span>rng: R,
     ) -&gt; (Transaction, Vec&lt;DynState&gt;)
     <span class="kw">where
-        </span>C: secp256k1_zkp::Signing + secp256k1_zkp::Verification,
+        </span>C: secp256k1::Signing + secp256k1::Verification,
     {
         <span class="kw">let </span>(inputs, input_keys, input_states): (Vec&lt;<span class="kw">_</span>&gt;, Vec&lt;<span class="kw">_</span>&gt;, Vec&lt;<span class="kw">_</span>&gt;) = multiunzip(
             <span class="self">self</span>.inputs
@@ -279,7 +281,7 @@
         <span class="kw">let </span>nonce: [u8; <span class="number">8</span>] = rng.gen();
 
         <span class="kw">let </span>txid = Transaction::tx_hash_from_parts(<span class="kw-2">&amp;</span>inputs, <span class="kw-2">&amp;</span>outputs, nonce);
-        <span class="kw">let </span>msg = secp256k1_zkp::Message::from_slice(<span class="kw-2">&amp;</span>txid[..]).expect(<span class="string">"txid has right length"</span>);
+        <span class="kw">let </span>msg = secp256k1::Message::from_slice(<span class="kw-2">&amp;</span>txid[..]).expect(<span class="string">"txid has right length"</span>);
 
         <span class="kw">let </span>signatures = input_keys
             .into_iter()

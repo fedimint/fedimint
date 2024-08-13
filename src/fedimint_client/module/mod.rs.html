@@ -971,6 +971,7 @@
 <span class="kw">use </span>std::{ffi, marker, ops};
 
 <span class="kw">use </span>anyhow::{anyhow, bail};
+<span class="kw">use </span>bitcoin::secp256k1::PublicKey;
 <span class="kw">use </span>fedimint_api_client::api::DynGlobalApi;
 <span class="kw">use </span>fedimint_core::config::ClientConfig;
 <span class="kw">use </span>fedimint_core::core::{
@@ -987,7 +988,6 @@
     apply, async_trait_maybe_send, dyn_newtype_define, maybe_add_send_sync, Amount, OutPoint,
     TransactionId,
 };
-<span class="kw">use </span>secp256k1_zkp::PublicKey;
 
 <span class="kw">use </span><span class="self">self</span>::init::ClientModuleInit;
 <span class="kw">use </span><span class="kw">crate</span>::module::recovery::{DynModuleBackup, ModuleBackup};
