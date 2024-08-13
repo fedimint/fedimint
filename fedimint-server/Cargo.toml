@@ -52,13 +52,13 @@ tar = "0.4.41"
 tbs = { package = "fedimint-tbs", version = "=0.5.0-alpha", path = "../crypto/tbs" }
 thiserror = { workspace = true }
 threshold_crypto = { workspace = true }
-tokio = { version = "1.39.2", features = ["full", "tracing"] }
+tokio = { workspace = true }
 tokio-rustls = { workspace = true }
-tokio-stream = "0.1.15"
+tokio-stream = { workspace = true }
 tokio-util = { version = "0.7.11", features = ["codec"] }
 tower = { version = "0.4.13", default-features = false }
 tracing = { workspace = true }
-tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
+tracing-subscriber = { workspace = true }
 url = { version = "2.5.2", features = ["serde"] }
 
 [dev-dependencies]

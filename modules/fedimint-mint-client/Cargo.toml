@@ -25,10 +25,10 @@ harness = false
 
 [dependencies]
 anyhow = { workspace = true }
-aquamarine = "0.5.0"
-async-stream = "0.3.5"
-async-trait = "0.1"
-base64 = "0.22.1"
+aquamarine = { workspace = true }
+async-stream = { workspace = true }
+async-trait = { workspace = true }
+base64 = { workspace = true }
 base64-url = "3.0.0"
 bincode = { workspace = true }
 bitcoin_hashes = { workspace = true }
@@ -54,7 +54,7 @@ strum_macros = { workspace = true }
 tbs = { package = "fedimint-tbs", version = "=0.5.0-alpha", path = "../../crypto/tbs" }
 thiserror = { workspace = true }
 threshold_crypto = { workspace = true }
-tokio = { version = "1.39.2", features = ["sync"] }
+tokio = { workspace = true }
 tracing = { workspace = true }
 
 [dev-dependencies]
