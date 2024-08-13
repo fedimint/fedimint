@@ -716,42 +716,43 @@ impl ClientModule for MintClientModule {
         &self,
         dbtx: &mut DatabaseTransaction<'_>,
         operation_id: OperationId,
-        input: Amount,
-        output: Amount,
+        mut input_amount: Amount,
+        mut output_amount: Amount,
     ) -> anyhow::Result<(
         Vec<ClientInput<MintInput, MintClientStateMachines>>,
         Vec<ClientOutput<MintOutput, MintClientStateMachines>>,
     )> {
-        let (mut consolidated_inputs, consolidated_amount) =
-            self.consolidate_notes(dbtx, operation_id).await?;
+        let consolidation_inputs = self.consolidate_notes(dbtx, operation_id).await?;
 
-        let mut inputs = self
-            .create_sufficient_input(
-                dbtx,
-                operation_id,
-                output
-                    .saturating_sub(input)
-                    .saturating_sub(consolidated_amount),
-            )
-            .await?;
+        input_amount += consolidation_inputs.iter().map(|input| input.amount).sum();
 
-        inputs.append(&mut consolidated_inputs);
-
-        let selected_input_amount = inputs.iter().map(|input| input.amount).sum();
-
-        let selected_input_fee = self
+        output_amount += self
             .cfg
             .fee_consensus
             .note_spend_abs
-            .mul_u64(inputs.len() as u64);
+            .mul_u64(consolidation_inputs.len() as u64);
 
-        let missing_output = (input + selected_input_amount) - (output + selected_input_fee);
+        let additional_inputs = self
+            .create_sufficient_input(
+                dbtx,
+                operation_id,
+                output_amount.saturating_sub(input_amount),
+            )
+            .await?;
+
+        input_amount += additional_inputs.iter().map(|input| input.amount).sum();
+
+        output_amount += self
+            .cfg
+            .fee_consensus
+            .note_spend_abs
+            .mul_u64(additional_inputs.len() as u64);
 
         let outputs = self
-            .create_exact_output(dbtx, operation_id, 2, missing_output)
+            .create_exact_output(dbtx, operation_id, 2, input_amount - output_amount)
             .await;
 
-        Ok((inputs, outputs))
+        Ok(([consolidation_inputs, additional_inputs].concat(), outputs))
     }
 
     async fn await_primary_module_output(
@@ -1094,7 +1095,7 @@ impl MintClientModule {
         &self,
         dbtx: &mut DatabaseTransaction<'_>,
         operation_id: OperationId,
-    ) -> anyhow::Result<(Vec<ClientInput<MintInput, MintClientStateMachines>>, Amount)> {
+    ) -> anyhow::Result<Vec<ClientInput<MintInput, MintClientStateMachines>>> {
         /// At how many notes of the same denomination should we try to
         /// consolidate
         const MAX_NOTES_PER_TIER_TRIGGER: usize = 8;
@@ -1116,7 +1117,7 @@ impl MintClientModule {
             .any(|(_, count)| MAX_NOTES_PER_TIER_TRIGGER < count);
 
         if !should_consolidate {
-            return Ok((vec![], Amount::ZERO));
+            return Ok(vec![]);
         }
 
         let mut max_count = MAX_NOTES_TO_CONSOLIDATE_IN_TX;
@@ -1144,22 +1145,15 @@ impl MintClientModule {
             debug!(target: LOG_CLIENT_MODULE_MINT, note_num=selected_notes.count_items(), denominations_msats=?selected_notes.iter_items().map(|(amount, _)| amount.msats).collect::<Vec<_>>(), "Will consolidate excessive notes");
         }
 
-        let mut sum = Amount::ZERO;
         let mut selected_notes_decoded = vec![];
         for (amount, note) in selected_notes.iter_items() {
             let spendable_note_decoded = note.decode()?;
             debug!(target: LOG_CLIENT_MODULE_MINT, %amount, %note, "Consolidating note");
             Self::delete_spendable_note(dbtx, amount, &spendable_note_decoded).await;
             selected_notes_decoded.push((amount, spendable_note_decoded));
-            sum += amount;
         }
-        Ok((
-            self.create_input_from_notes(
-                operation_id,
-                selected_notes_decoded.into_iter().collect(),
-            )?,
-            sum,
-        ))
+
+        self.create_input_from_notes(operation_id, selected_notes_decoded.into_iter().collect())
     }
 
     /// Create a mint input from external, potentially untrusted notes
