@@ -48,7 +48,11 @@ impl<T> Tiered<T> {
         self.0.keys()
     }
 
-    pub fn iter(&self) -> impl Iterator<Item = (Amount, &T)> {
+    pub fn values(&self) -> impl DoubleEndedIterator<Item = &T> {
+        self.0.values()
+    }
+
+    pub fn iter(&self) -> impl DoubleEndedIterator<Item = (Amount, &T)> {
         self.0.iter().map(|(amt, key)| (*amt, key))
     }
 
@@ -101,6 +105,15 @@ impl Tiered<()> {
 impl<T> FromIterator<(Amount, T)> for Tiered<T> {
     fn from_iter<I: IntoIterator<Item = (Amount, T)>>(iter: I) -> Self {
         Self(iter.into_iter().collect())
+    }
+}
+
+impl<T> IntoIterator for Tiered<T> {
+    type Item = (Amount, T);
+    type IntoIter = std::collections::btree_map::IntoIter<Amount, T>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.into_iter()
     }
 }
 

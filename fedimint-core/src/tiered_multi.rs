@@ -16,7 +16,7 @@ use crate::{Amount, Tiered};
 /// both the maximum note amount and maximum note count per transaction this
 /// shouldn't be a problem in practice though.
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize)]
-pub struct TieredMulti<T>(BTreeMap<Amount, Vec<T>>);
+pub struct TieredMulti<T>(Tiered<Vec<T>>);
 
 impl<T> TieredMulti<T> {
     /// Returns a new `TieredMulti` with the given `BTreeMap` map
@@ -41,19 +41,19 @@ impl<T> TieredMulti<T> {
 
     /// Returns the number of tiers
     pub fn count_tiers(&self) -> usize {
-        self.0.len()
+        self.0.count_tiers()
     }
 
     /// Returns an iterator over the keys
-    pub fn iter_tiers(&self) -> impl Iterator<Item = &Amount> {
-        self.0.keys()
+    pub fn tiers(&self) -> impl Iterator<Item = &Amount> {
+        self.0.tiers()
     }
 
     /// Returns the summary of number of items in each tier
     pub fn summary(&self) -> TieredCounts {
         TieredCounts(
             self.iter()
-                .map(|(amount, values)| (*amount, values.len()))
+                .map(|(amount, values)| (amount, values.len()))
                 .collect(),
         )
     }
@@ -66,7 +66,7 @@ impl<T> TieredMulti<T> {
 
     /// Verifies whether the structure of `self` and `other` is identical
     pub fn structural_eq<O>(&self, other: &TieredMulti<O>) -> bool {
-        let tier_eq = self.0.keys().eq(other.0.keys());
+        let tier_eq = self.0.tiers().eq(other.0.tiers());
         let per_tier_eq = self
             .0
             .values()
@@ -76,7 +76,7 @@ impl<T> TieredMulti<T> {
     }
 
     /// Returns an borrowing iterator
-    pub fn iter(&self) -> impl Iterator<Item = (&Amount, &Vec<T>)> {
+    pub fn iter(&self) -> impl Iterator<Item = (Amount, &Vec<T>)> {
         self.0.iter()
     }
 
@@ -90,7 +90,7 @@ impl<T> TieredMulti<T> {
         // order of the elements stays consistent.
         self.0
             .iter()
-            .flat_map(|(amt, notes)| notes.iter().map(|c| (*amt, c)))
+            .flat_map(|(amt, notes)| notes.iter().map(move |c| (amt, c)))
     }
 
     /// Returns an consuming iterator over every `(Amount, T)`
@@ -112,7 +112,7 @@ impl<T> TieredMulti<T> {
         self.0
             .iter()
             .filter_map(|(amt, notes)| {
-                if amt == except {
+                if amt == *except {
                     None
                 } else {
                     Some(notes.len())
@@ -126,7 +126,7 @@ impl<T> TieredMulti<T> {
     /// parameter `Tiered`
     pub fn all_tiers_exist_in<K>(&self, keys: &Tiered<K>) -> Result<(), InvalidAmountTierError> {
         self.0
-            .keys()
+            .tiers()
             .find(|&amt| keys.get(*amt).is_none())
             .map_or(Ok(()), |amt| Err(InvalidAmountTierError(*amt)))
     }
@@ -134,7 +134,7 @@ impl<T> TieredMulti<T> {
     /// Returns an `Option` with a reference to the vector of the given `Amount`
     pub fn get(&self, amt: Amount) -> Option<&Vec<T>> {
         self.assert_invariants();
-        self.0.get(&amt)
+        self.0.get(amt)
     }
 
     pub fn push(&mut self, amt: Amount, val: T) {
@@ -175,7 +175,7 @@ where
 
 impl<C> Default for TieredMulti<C> {
     fn default() -> Self {
-        Self(BTreeMap::default())
+        Self(Tiered::default())
     }
 }
 
@@ -204,7 +204,7 @@ where
         d: &mut D,
         modules: &ModuleDecoderRegistry,
     ) -> Result<Self, DecodeError> {
-        Ok(Self(BTreeMap::consensus_decode_from_finite_reader(
+        Ok(Self(Tiered::consensus_decode_from_finite_reader(
             d, modules,
         )?))
     }
