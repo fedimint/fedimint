@@ -78,12 +78,12 @@ impl std::fmt::Display for LightningOutputV0 {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
-pub enum LightningOutputOutcome {
+pub enum LightningOutputOutcomeV0 {
     Outgoing,
     Incoming(DecryptionKeyShare),
 }
 
-impl std::fmt::Display for LightningOutputOutcome {
+impl std::fmt::Display for LightningOutputOutcomeV0 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "LightningOutputOutcome")
     }
@@ -158,7 +158,7 @@ plugin_types_trait_impl_common!(
     LightningClientConfig,
     LightningInput,
     LightningOutput,
-    LightningOutputOutcome,
+    LightningOutputOutcomeV0,
     LightningConsensusItem,
     LightningInputError,
     LightningOutputError

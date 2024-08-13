@@ -43,7 +43,7 @@ use fedimint_lnv2_common::endpoint_constants::{
 use fedimint_lnv2_common::{
     ContractId, GatewayEndpoint, LightningCommonInit, LightningConsensusItem, LightningInput,
     LightningInputError, LightningInputV0, LightningModuleTypes, LightningOutput,
-    LightningOutputError, LightningOutputOutcome, LightningOutputV0, OutgoingWitness,
+    LightningOutputError, LightningOutputOutcomeV0, LightningOutputV0, OutgoingWitness,
     MODULE_CONSENSUS_VERSION,
 };
 use fedimint_server::config::distributedgen::{evaluate_polynomial_g1, PeerHandleOps};
@@ -128,7 +128,7 @@ impl ModuleInit for LightningInit {
                         dbtx,
                         LightningOutputOutcomePrefix,
                         LightningOutputOutcomeKey,
-                        LightningOutputOutcome,
+                        LightningOutputOutcomeV0,
                         lightning,
                         "Lightning Output Outcomes"
                     );
@@ -465,7 +465,7 @@ impl ServerModule for Lightning {
                     return Err(LightningOutputError::ContractAlreadyExists);
                 }
 
-                LightningOutputOutcome::Outgoing
+                LightningOutputOutcomeV0::Outgoing
             }
             LightningOutputV0::Incoming(contract) => {
                 if !contract.verify() {
@@ -486,7 +486,7 @@ impl ServerModule for Lightning {
 
                 let dk_share = contract.create_decryption_key_share(&self.cfg.private.sk);
 
-                LightningOutputOutcome::Incoming(dk_share)
+                LightningOutputOutcomeV0::Incoming(dk_share)
             }
         };
 
@@ -511,7 +511,7 @@ impl ServerModule for Lightning {
         &self,
         dbtx: &mut DatabaseTransaction<'_>,
         out_point: OutPoint,
-    ) -> Option<LightningOutputOutcome> {
+    ) -> Option<LightningOutputOutcomeV0> {
         dbtx.get_value(&OutputOutcomeKey(out_point)).await
     }
 
