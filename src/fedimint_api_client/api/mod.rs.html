@@ -1163,19 +1163,20 @@
 <a href="#1163" id="1163">1163</a>
 <a href="#1164" id="1164">1164</a>
 <a href="#1165" id="1165">1165</a>
-<a href="#1166" id="1166">1166</a>
-<a href="#1167" id="1167">1167</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap};
-<span class="kw">use </span>std::fmt::{<span class="self">self</span>, Debug, Display};
+<span class="kw">use </span>std::fmt::Debug;
 <span class="kw">use </span>std::pin::Pin;
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
 <span class="kw">use </span>std::{cmp, result};
 
 <span class="kw">use </span>anyhow::anyhow;
+<span class="attr">#[cfg(not(target_family = <span class="string">"wasm"</span>))]
+</span><span class="kw">use </span>arti_client::{TorAddr, TorClient, TorClientConfig};
 <span class="kw">use </span>base64::Engine <span class="kw">as _</span>;
 <span class="kw">use </span>bitcoin::hashes::sha256;
 <span class="kw">use </span>bitcoin::secp256k1;
+<span class="kw">pub use </span>error::{FederationError, OutputOutcomeError, PeerError};
 <span class="kw">use </span>fedimint_core::admin_client::{
     ConfigGenConnectionsRequest, ConfigGenParamsRequest, ConfigGenParamsResponse, PeerServerParams,
     ServerStatus,
@@ -1185,11 +1186,12 @@
 <span class="kw">use </span>fedimint_core::core::{Decoder, DynOutputOutcome, ModuleInstanceId, OutputOutcome};
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::endpoint_constants::AWAIT_OUTPUT_OUTCOME_ENDPOINT;
-<span class="kw">use </span>fedimint_core::fmt_utils::{AbbreviateDebug, AbbreviateJson};
+<span class="kw">use </span>fedimint_core::fmt_utils::AbbreviateDebug;
 <span class="kw">use </span>fedimint_core::invite_code::InviteCode;
 <span class="kw">use </span>fedimint_core::module::audit::AuditSummary;
 <span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
 <span class="kw">use </span>fedimint_core::module::{ApiAuth, ApiRequestErased, ApiVersion, SerdeModuleEncoding};
+<span class="kw">use </span>fedimint_core::net::api_announcement::SignedApiAnnouncement;
 <span class="kw">use </span>fedimint_core::session_outcome::{SessionOutcome, SessionStatus};
 <span class="kw">use </span>fedimint_core::task::{MaybeSend, MaybeSync};
 <span class="kw">use </span>fedimint_core::transaction::{Transaction, TransactionSubmissionOutcome};
@@ -1210,204 +1212,39 @@
 </span><span class="kw">use </span>jsonrpsee_ws_client::{CustomCertStore, HeaderMap, HeaderValue};
 <span class="attr">#[cfg(not(target_family = <span class="string">"wasm"</span>))]
 </span><span class="kw">use </span>jsonrpsee_ws_client::{WsClient, WsClientBuilder};
+<span class="kw">use </span>net::Connector;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>serde_json::Value;
-<span class="kw">use </span>thiserror::Error;
 <span class="attr">#[cfg(not(target_family = <span class="string">"wasm"</span>))]
-</span><span class="kw">use </span>tokio_rustls::rustls::RootCertStore;
-<span class="kw">use </span>tracing::{debug, error, instrument, trace, warn};
+</span><span class="kw">use </span>tokio_rustls::rustls::{ClientConfig <span class="kw">as </span>TlsClientConfig, RootCertStore};
+<span class="attr">#[cfg(not(target_family = <span class="string">"wasm"</span>))]
+</span><span class="kw">use </span>tokio_rustls::TlsConnector;
+<span class="kw">use </span>tracing::{debug, instrument, trace};
 
 <span class="kw">use </span><span class="kw">crate</span>::query::{QueryStep, QueryStrategy, ThresholdConsensus};
 
-<span class="kw">mod </span>federation_peer_client;
-<span class="kw">mod </span>global_federation_api_with_cache;
+<span class="kw">mod </span>error;
+<span class="kw">mod </span>global_api;
+<span class="kw">pub mod </span>net;
+<span class="kw">mod </span>peer;
 
-<span class="kw">use </span>federation_peer_client::FederationPeer;
-<span class="kw">use </span>fedimint_core::net::api_announcement::SignedApiAnnouncement;
-<span class="kw">use </span>global_federation_api_with_cache::GlobalFederationApiWithCache;
+<span class="kw">use </span>global_api::GlobalFederationApiWithCache;
+<span class="kw">use </span>peer::FederationPeer;
 
 <span class="kw">pub type </span>PeerResult&lt;T&gt; = <span class="prelude-ty">Result</span>&lt;T, PeerError&gt;;
 <span class="kw">pub type </span>JsonRpcResult&lt;T&gt; = <span class="prelude-ty">Result</span>&lt;T, JsonRpcClientError&gt;;
 <span class="kw">pub type </span>FederationResult&lt;T&gt; = <span class="prelude-ty">Result</span>&lt;T, FederationError&gt;;
 <span class="kw">pub type </span>SerdeOutputOutcome = SerdeModuleEncoding&lt;DynOutputOutcome&gt;;
 
-<span class="doccomment">/// An API request error when calling a single federation peer
-</span><span class="attr">#[derive(Debug, Error)]
-</span><span class="kw">pub enum </span>PeerError {
-    <span class="attr">#[error(<span class="string">"Response deserialization error: {0}"</span>)]
-    </span>ResponseDeserialization(anyhow::Error),
-    <span class="attr">#[error(<span class="string">"Invalid peer id: {peer_id}"</span>)]
-    </span>InvalidPeerId { peer_id: PeerId },
-    <span class="attr">#[error(<span class="string">"Rpc error: {0}"</span>)]
-    </span>Rpc(<span class="attr">#[from] </span>JsonRpcClientError),
-    <span class="attr">#[error(<span class="string">"Invalid response: {0}"</span>)]
-    </span>InvalidResponse(String),
-}
+<span class="kw">pub type </span>OutputOutcomeResult&lt;O&gt; = result::Result&lt;O, OutputOutcomeError&gt;;
 
-<span class="kw">impl </span>PeerError {
-    <span class="doccomment">/// Report errors that are worth reporting
-    ///
-    /// The goal here is to avoid spamming logs with errors that happen commonly
-    /// for all sorts of expected reasons, while printing ones that suggest
-    /// there's a problem.
-    </span><span class="kw">pub fn </span>report_if_important(<span class="kw-2">&amp;</span><span class="self">self</span>, peer_id: PeerId) {
-        <span class="kw">let </span>important = <span class="kw">match </span><span class="self">self </span>{
-            PeerError::ResponseDeserialization(<span class="kw">_</span>)
-            | PeerError::InvalidPeerId { .. }
-            | PeerError::InvalidResponse(<span class="kw">_</span>) =&gt; <span class="bool-val">true</span>,
-            PeerError::Rpc(rpc_e) =&gt; <span class="kw">match </span>rpc_e {
-                <span class="comment">// TODO: Does this cover all retryable cases?
-                </span>JsonRpcClientError::Transport(<span class="kw">_</span>) | JsonRpcClientError::RequestTimeout =&gt; <span class="bool-val">false</span>,
-                JsonRpcClientError::RestartNeeded(<span class="kw">_</span>)
-                | JsonRpcClientError::Call(<span class="kw">_</span>)
-                | JsonRpcClientError::ParseError(<span class="kw">_</span>)
-                | JsonRpcClientError::InvalidSubscriptionId
-                | JsonRpcClientError::InvalidRequestId(<span class="kw">_</span>)
-                | JsonRpcClientError::Custom(<span class="kw">_</span>)
-                | JsonRpcClientError::HttpNotImplemented
-                | JsonRpcClientError::EmptyBatchRequest(<span class="kw">_</span>)
-                | JsonRpcClientError::RegisterMethod(<span class="kw">_</span>) =&gt; <span class="bool-val">true</span>,
-            },
-        };
-
-        <span class="macro">trace!</span>(target: LOG_CLIENT_NET_API, error = %<span class="self">self</span>, <span class="string">"PeerError"</span>);
-
-        <span class="kw">if </span>important {
-            <span class="macro">warn!</span>(target: LOG_CLIENT_NET_API, error = %<span class="self">self</span>, %peer_id, <span class="string">"Unusual PeerError"</span>);
-        }
-    }
-}
-
-<span class="doccomment">/// An API request error when calling an entire federation
+<span class="doccomment">/// Set of api versions for each component (core + modules)
 ///
-/// Generally all Federation errors are retriable.
-</span><span class="attr">#[derive(Debug, Error)]
-</span><span class="kw">pub struct </span>FederationError {
-    method: String,
-    params: serde_json::Value,
-    general: <span class="prelude-ty">Option</span>&lt;anyhow::Error&gt;,
-    peers: BTreeMap&lt;PeerId, PeerError&gt;,
-}
-
-<span class="kw">impl </span>Display <span class="kw">for </span>FederationError {
-    <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>fmt::Formatter&lt;<span class="lifetime">'_</span>&gt;) -&gt; fmt::Result {
-        f.write_str(<span class="string">"Federation rpc error {"</span>)<span class="question-mark">?</span>;
-        <span class="kw">if let </span><span class="prelude-val">Some</span>(general) = <span class="self">self</span>.general.as_ref() {
-            f.write_fmt(<span class="macro">format_args!</span>(<span class="string">"method =&gt; {}), "</span>, <span class="self">self</span>.method))<span class="question-mark">?</span>;
-            f.write_fmt(<span class="macro">format_args!</span>(
-                <span class="string">"params =&gt; {:?}), "</span>,
-                AbbreviateJson(<span class="kw-2">&amp;</span><span class="self">self</span>.params)
-            ))<span class="question-mark">?</span>;
-            f.write_fmt(<span class="macro">format_args!</span>(<span class="string">"general =&gt; {general})"</span>))<span class="question-mark">?</span>;
-            <span class="kw">if </span>!<span class="self">self</span>.peers.is_empty() {
-                f.write_str(<span class="string">", "</span>)<span class="question-mark">?</span>;
-            }
-        }
-        <span class="kw">for </span>(i, (peer, e)) <span class="kw">in </span><span class="self">self</span>.peers.iter().enumerate() {
-            f.write_fmt(<span class="macro">format_args!</span>(<span class="string">"{peer} =&gt; {e})"</span>))<span class="question-mark">?</span>;
-            <span class="kw">if </span>i == <span class="self">self</span>.peers.len() - <span class="number">1 </span>{
-                f.write_str(<span class="string">", "</span>)<span class="question-mark">?</span>;
-            }
-        }
-        f.write_str(<span class="string">"}"</span>)<span class="question-mark">?</span>;
-        <span class="prelude-val">Ok</span>(())
-    }
-}
-
-<span class="kw">impl </span>FederationError {
-    <span class="kw">pub fn </span>general(
-        method: <span class="kw">impl </span>Into&lt;String&gt;,
-        params: <span class="kw">impl </span>Serialize,
-        e: <span class="kw">impl </span>Into&lt;anyhow::Error&gt;,
-    ) -&gt; FederationError {
-        FederationError {
-            method: method.into(),
-            params: serde_json::to_value(params).unwrap_or_default(),
-            general: <span class="prelude-val">Some</span>(e.into()),
-            peers: BTreeMap::default(),
-        }
-    }
-
-    <span class="kw">pub fn </span>new_one_peer(
-        peer_id: PeerId,
-        method: <span class="kw">impl </span>Into&lt;String&gt;,
-        params: <span class="kw">impl </span>Serialize,
-        error: PeerError,
-    ) -&gt; <span class="self">Self </span>{
-        <span class="self">Self </span>{
-            method: method.into(),
-            params: serde_json::to_value(params).expect(<span class="string">"Serialization of valid params won't fail"</span>),
-            general: <span class="prelude-val">None</span>,
-            peers: [(peer_id, error)].into_iter().collect(),
-        }
-    }
-
-    <span class="doccomment">/// Report any errors
-    </span><span class="kw">pub fn </span>report_if_important(<span class="kw-2">&amp;</span><span class="self">self</span>) {
-        <span class="kw">if let </span><span class="prelude-val">Some</span>(error) = <span class="self">self</span>.general.as_ref() {
-            <span class="macro">warn!</span>(target: LOG_CLIENT_NET_API, %error, <span class="string">"General FederationError"</span>);
-        }
-        <span class="kw">for </span>(peer_id, e) <span class="kw">in </span><span class="kw-2">&amp;</span><span class="self">self</span>.peers {
-            e.report_if_important(<span class="kw-2">*</span>peer_id);
-        }
-    }
-
-    <span class="doccomment">/// Get the general error if any.
-    </span><span class="kw">pub fn </span>get_general_error(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>anyhow::Error&gt; {
-        <span class="self">self</span>.general.as_ref()
-    }
-
-    <span class="doccomment">/// Get errors from different peers.
-    </span><span class="kw">pub fn </span>get_peer_errors(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw">impl </span>Iterator&lt;Item = (PeerId, <span class="kw-2">&amp;</span>PeerError)&gt; {
-        <span class="self">self</span>.peers.iter().map(|(peer, error)| (<span class="kw-2">*</span>peer, error))
-    }
-}
-
-<span class="kw">type </span>OutputOutcomeResult&lt;O&gt; = result::Result&lt;O, OutputOutcomeError&gt;;
-
-<span class="attr">#[derive(Debug, Error)]
-</span><span class="kw">pub enum </span>OutputOutcomeError {
-    <span class="attr">#[error(<span class="string">"Response deserialization error: {0}"</span>)]
-    </span>ResponseDeserialization(anyhow::Error),
-    <span class="attr">#[error(<span class="string">"Federation error: {0}"</span>)]
-    </span>Federation(<span class="attr">#[from] </span>FederationError),
-    <span class="attr">#[error(<span class="string">"Core error: {0}"</span>)]
-    </span>Core(<span class="attr">#[from] </span>anyhow::Error),
-    <span class="attr">#[error(<span class="string">"Transaction rejected: {0}"</span>)]
-    </span>Rejected(String),
-    <span class="attr">#[error(<span class="string">"Invalid output index {out_idx}, larger than {outputs_num} in the transaction"</span>)]
-    </span>InvalidVout { out_idx: u64, outputs_num: usize },
-    <span class="attr">#[error(<span class="string">"Timeout reached after waiting {}s"</span>, .<span class="number">0</span>.as_secs())]
-    </span>Timeout(Duration),
-}
-
-<span class="kw">impl </span>OutputOutcomeError {
-    <span class="kw">pub fn </span>report_if_important(<span class="kw-2">&amp;</span><span class="self">self</span>) {
-        <span class="kw">let </span>important = <span class="kw">match </span><span class="self">self </span>{
-            OutputOutcomeError::Federation(e) =&gt; {
-                e.report_if_important();
-                <span class="kw">return</span>;
-            }
-            OutputOutcomeError::Core(<span class="kw">_</span>)
-            | OutputOutcomeError::InvalidVout { .. }
-            | OutputOutcomeError::ResponseDeserialization(<span class="kw">_</span>) =&gt; <span class="bool-val">true</span>,
-            OutputOutcomeError::Rejected(<span class="kw">_</span>) | OutputOutcomeError::Timeout(<span class="kw">_</span>) =&gt; <span class="bool-val">false</span>,
-        };
-
-        <span class="macro">trace!</span>(target: LOG_CLIENT_NET_API, error = %<span class="self">self</span>, <span class="string">"OutputOutcomeError"</span>);
-
-        <span class="kw">if </span>important {
-            <span class="macro">warn!</span>(target: LOG_CLIENT_NET_API, error = %<span class="self">self</span>, <span class="string">"Uncommon OutputOutcomeError"</span>);
-        }
-    }
-
-    <span class="doccomment">/// Was the transaction rejected (which is final)
-    </span><span class="kw">pub fn </span>is_rejected(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
-        <span class="macro">matches!</span>(
-            <span class="self">self</span>,
-            OutputOutcomeError::Rejected(<span class="kw">_</span>) | OutputOutcomeError::InvalidVout { .. }
-        )
-    }
+/// E.g. result of federated common api versions discovery.
+</span><span class="attr">#[derive(Debug, Clone, Serialize, Deserialize, Encodable, Decodable)]
+</span><span class="kw">pub struct </span>ApiVersionSet {
+    <span class="kw">pub </span>core: ApiVersion,
+    <span class="kw">pub </span>modules: BTreeMap&lt;ModuleInstanceId, ApiVersion&gt;,
 }
 
 <span class="doccomment">/// An API (module or global) that can query a federation
@@ -1437,15 +1274,6 @@
         method: <span class="kw-2">&amp;</span>str,
         params: <span class="kw-2">&amp;</span>[Value],
     ) -&gt; result::Result&lt;Value, JsonRpcClientError&gt;;
-}
-
-<span class="doccomment">/// Set of api versions for each component (core + modules)
-///
-/// E.g. result of federated common api versions discovery.
-</span><span class="attr">#[derive(Debug, Clone, Serialize, Deserialize, Encodable, Decodable)]
-</span><span class="kw">pub struct </span>ApiVersionSet {
-    <span class="kw">pub </span>core: ApiVersion,
-    <span class="kw">pub </span>modules: BTreeMap&lt;ModuleInstanceId, ApiVersion&gt;,
 }
 
 <span class="doccomment">/// An extension trait allowing to making federation-wide API call on top
@@ -1512,7 +1340,7 @@
             .and_then(|v| {
                 serde_json::from_value(v).map_err(|e| PeerError::ResponseDeserialization(e.into()))
             })
-            .map_err(|e| FederationError::new_one_peer(peer_id, method, params, e))<span class="question-mark">?</span>)
+            .map_err(|e| error::FederationError::new_one_peer(peer_id, method, params, e))<span class="question-mark">?</span>)
     }
 
     <span class="doccomment">/// Make an aggregate request to federation, using `strategy` to logically
@@ -1706,37 +1534,57 @@
 }
 
 <span class="kw">impl </span>DynGlobalApi {
-    <span class="kw">pub fn </span>new_admin(peer: PeerId, url: SafeUrl, api_secret: <span class="kw-2">&amp;</span><span class="prelude-ty">Option</span>&lt;String&gt;) -&gt; DynGlobalApi {
+    <span class="kw">pub fn </span>new_admin(
+        peer: PeerId,
+        url: SafeUrl,
+        api_secret: <span class="kw-2">&amp;</span><span class="prelude-ty">Option</span>&lt;String&gt;,
+        connector: <span class="kw-2">&amp;</span>Connector,
+    ) -&gt; DynGlobalApi {
         GlobalFederationApiWithCache::new(
-            WsFederationApi::new(<span class="macro">vec!</span>[(peer, url)], api_secret).with_self_peer_id(peer),
+            WsFederationApi::new(connector, <span class="macro">vec!</span>[(peer, url)], api_secret).with_self_peer_id(peer),
         )
         .into()
     }
 
-    <span class="kw">pub fn </span>from_pre_peer_id_admin_endpoint(url: SafeUrl, api_secret: <span class="kw-2">&amp;</span><span class="prelude-ty">Option</span>&lt;String&gt;) -&gt; <span class="self">Self </span>{
+    <span class="comment">// FIXME: (@leonardo) Should we have the option to do DKG and config related
+    // actions through Tor ? Should we add the `Connector` choice to
+    // ConfigParams then ?
+    </span><span class="kw">pub fn </span>from_pre_peer_id_admin_endpoint(url: SafeUrl, api_secret: <span class="kw-2">&amp;</span><span class="prelude-ty">Option</span>&lt;String&gt;) -&gt; <span class="self">Self </span>{
         <span class="comment">// PeerIds are used only for informational purposes, but just in case, make a
         // big number so it stands out
         </span><span class="kw">let </span>peer_id = PeerId::from(<span class="number">1024</span>);
         GlobalFederationApiWithCache::new(
-            WsFederationApi::new(<span class="macro">vec!</span>[(peer_id, url)], api_secret).with_self_peer_id(peer_id),
+            WsFederationApi::new(<span class="kw-2">&amp;</span>Connector::default(), <span class="macro">vec!</span>[(peer_id, url)], api_secret)
+                .with_self_peer_id(peer_id),
         )
         .into()
     }
 
-    <span class="kw">pub fn </span>from_single_endpoint(peer: PeerId, url: SafeUrl, api_secret: <span class="kw-2">&amp;</span><span class="prelude-ty">Option</span>&lt;String&gt;) -&gt; <span class="self">Self </span>{
-        GlobalFederationApiWithCache::new(WsFederationApi::new(<span class="macro">vec!</span>[(peer, url)], api_secret))
-            .into()
+    <span class="kw">pub fn </span>from_single_endpoint(
+        peer: PeerId,
+        url: SafeUrl,
+        api_secret: <span class="kw-2">&amp;</span><span class="prelude-ty">Option</span>&lt;String&gt;,
+        connector: <span class="kw-2">&amp;</span>Connector,
+    ) -&gt; <span class="self">Self </span>{
+        GlobalFederationApiWithCache::new(WsFederationApi::new(
+            connector,
+            <span class="macro">vec!</span>[(peer, url)],
+            api_secret,
+        ))
+        .into()
     }
 
     <span class="kw">pub fn </span>from_endpoints(
         peers: <span class="kw">impl </span>IntoIterator&lt;Item = (PeerId, SafeUrl)&gt;,
         api_secret: <span class="kw-2">&amp;</span><span class="prelude-ty">Option</span>&lt;String&gt;,
+        connector: <span class="kw-2">&amp;</span>Connector,
     ) -&gt; <span class="self">Self </span>{
-        GlobalFederationApiWithCache::new(WsFederationApi::new(peers, api_secret)).into()
+        GlobalFederationApiWithCache::new(WsFederationApi::new(connector, peers, api_secret)).into()
     }
 
-    <span class="kw">pub fn </span>from_invite_code(invite_code: <span class="kw-2">&amp;</span>InviteCode) -&gt; <span class="self">Self </span>{
+    <span class="kw">pub fn </span>from_invite_code(connector: <span class="kw-2">&amp;</span>Connector, invite_code: <span class="kw-2">&amp;</span>InviteCode) -&gt; <span class="self">Self </span>{
         GlobalFederationApiWithCache::new(WsFederationApi::new(
+            connector,
             invite_code.peers().into_iter().collect_vec(),
             <span class="kw-2">&amp;</span>invite_code.api_secret(),
         ))
@@ -1950,7 +1798,7 @@
 
 <span class="kw">impl</span>&lt;C: JsonRpcClient + Debug + <span class="lifetime">'static</span>&gt; IModuleFederationApi <span class="kw">for </span>WsFederationApi&lt;C&gt; {}
 
-<span class="doccomment">/// Implementation of API calls over websockets
+<span class="doccomment">/// Implementation of API calls over WebSockets
 ///
 /// Can function as either the global or module API
 </span><span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
@@ -1999,6 +1847,13 @@
         url: <span class="kw-2">&amp;</span>SafeUrl,
         api_secret: <span class="prelude-ty">Option</span>&lt;String&gt;,
     ) -&gt; result::Result&lt;<span class="self">Self</span>, JsonRpcClientError&gt;;
+
+    <span class="attr">#[cfg(not(target_family = <span class="string">"wasm"</span>))]
+    </span><span class="kw">async fn </span>connect_with_tor(
+        url: <span class="kw-2">&amp;</span>SafeUrl,
+        api_secret: <span class="prelude-ty">Option</span>&lt;String&gt;,
+    ) -&gt; result::Result&lt;<span class="self">Self</span>, JsonRpcClientError&gt;;
+
     <span class="kw">fn </span>is_connected(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool;
 }
 
@@ -2060,6 +1915,133 @@
         client.build(url.as_str()).<span class="kw">await
     </span>}
 
+    <span class="attr">#[cfg(not(target_family = <span class="string">"wasm"</span>))]
+    </span><span class="kw">async fn </span>connect_with_tor(
+        url: <span class="kw-2">&amp;</span>SafeUrl,
+        api_secret: <span class="prelude-ty">Option</span>&lt;String&gt;,
+    ) -&gt; result::Result&lt;<span class="self">Self</span>, JsonRpcClientError&gt; {
+        <span class="kw">let </span>tor_config = TorClientConfig::default();
+        <span class="kw">let </span>tor_client = TorClient::create_bootstrapped(tor_config)
+            .<span class="kw">await
+            </span>.map_err(|e| JsonRpcClientError::Transport(e.into()))<span class="question-mark">?
+            </span>.isolated_client();
+
+        <span class="macro">debug!</span>(<span class="string">"Successfully created and bootstrapped the `TorClient`, for given `TorConfig`."</span>);
+
+        <span class="comment">// TODO: (@leonardo) should we implement our `IntoTorAddr` for `SafeUrl`
+        // instead?
+        </span><span class="kw">let </span>addr = (
+            url.host_str()
+                .expect(<span class="string">"It should've asserted for `host` on construction"</span>),
+            url.port_or_known_default()
+                .expect(<span class="string">"It should've asserted for `port`, or used a default one, on construction"</span>),
+        );
+        <span class="kw">let </span>tor_addr = TorAddr::from(addr).map_err(|e| JsonRpcClientError::Transport(e.into()))<span class="question-mark">?</span>;
+        <span class="kw">let </span>tor_addr_clone = tor_addr.clone();
+
+        <span class="macro">debug!</span>(
+            <span class="question-mark">?</span>tor_addr,
+            <span class="question-mark">?</span>addr,
+            <span class="string">"Successfully created `TorAddr` for given address (i.e. host and port)"
+        </span>);
+
+        <span class="comment">// TODO: It can be updated to use `is_onion_address()` implementation,
+        // once https://gitlab.torproject.org/tpo/core/arti/-/merge_requests/2214 lands.
+        </span><span class="kw">let </span>anonymized_stream = <span class="kw">if </span>url.is_onion_address() {
+            <span class="kw">let </span><span class="kw-2">mut </span>stream_prefs = arti_client::StreamPrefs::default();
+            stream_prefs.connect_to_onion_services(arti_client::config::BoolOrAuto::Explicit(<span class="bool-val">true</span>));
+
+            <span class="kw">let </span>anonymized_stream = tor_client
+                .connect_with_prefs(tor_addr, <span class="kw-2">&amp;</span>stream_prefs)
+                .<span class="kw">await
+                </span>.map_err(|e| JsonRpcClientError::Transport(e.into()))<span class="question-mark">?</span>;
+
+            <span class="macro">debug!</span>(
+                <span class="question-mark">?</span>tor_addr_clone,
+                <span class="string">"Successfully connected to onion address `TorAddr`, and established an anonymized `DataStream`"
+            </span>);
+            anonymized_stream
+        } <span class="kw">else </span>{
+            <span class="kw">let </span>anonymized_stream = tor_client
+                .connect(tor_addr)
+                .<span class="kw">await
+                </span>.map_err(|e| JsonRpcClientError::Transport(e.into()))<span class="question-mark">?</span>;
+
+            <span class="macro">debug!</span>(<span class="question-mark">?</span>tor_addr_clone, <span class="string">"Successfully connected to `Hostname`or `Ip` `TorAddr`, and established an anonymized `DataStream`"</span>);
+            anonymized_stream
+        };
+
+        <span class="kw">let </span>is_tls = <span class="kw">match </span>url.scheme() {
+            <span class="string">"wss" </span>=&gt; <span class="bool-val">true</span>,
+            <span class="string">"ws" </span>=&gt; <span class="bool-val">false</span>,
+            unexpected_scheme =&gt; {
+                <span class="kw">let </span>error =
+                    <span class="macro">format!</span>(<span class="string">"`{unexpected_scheme}` not supported, it's expected `ws` or `wss`!"</span>);
+                <span class="kw">return </span><span class="prelude-val">Err</span>(JsonRpcClientError::Transport(<span class="macro">anyhow!</span>(error).into()));
+            }
+        };
+
+        <span class="kw">let </span>tls_connector = <span class="kw">if </span>is_tls {
+            <span class="kw">let </span>webpki_roots = webpki_roots::TLS_SERVER_ROOTS.iter().cloned();
+            <span class="kw">let </span><span class="kw-2">mut </span>root_certs = RootCertStore::empty();
+            root_certs.extend(webpki_roots);
+
+            <span class="kw">let </span>tls_config = TlsClientConfig::builder()
+                .with_root_certificates(root_certs)
+                .with_no_client_auth();
+            <span class="kw">let </span>tls_connector = TlsConnector::from(Arc::new(tls_config));
+            <span class="prelude-val">Some</span>(tls_connector)
+        } <span class="kw">else </span>{
+            <span class="prelude-val">None
+        </span>};
+
+        <span class="kw">let </span><span class="kw-2">mut </span>ws_client_builder =
+            WsClientBuilder::default().max_concurrent_requests(u16::MAX <span class="kw">as </span>usize);
+
+        <span class="kw">if let </span><span class="prelude-val">Some</span>(api_secret) = api_secret {
+            <span class="comment">// on native platforms, jsonrpsee-client ignores `user:pass@...` in the Url,
+            // but we can set up the headers manually
+            </span><span class="kw">let </span><span class="kw-2">mut </span>headers = HeaderMap::new();
+
+            <span class="kw">let </span>auth =
+                base64::engine::general_purpose::STANDARD.encode(<span class="macro">format!</span>(<span class="string">"fedimint:{api_secret}"</span>));
+
+            headers.insert(
+                <span class="string">"Authorization"</span>,
+                HeaderValue::from_str(<span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">"Basic {auth}"</span>)).expect(<span class="string">"Can't fail"</span>),
+            );
+
+            ws_client_builder = ws_client_builder.set_headers(headers);
+        }
+
+        <span class="kw">match </span>tls_connector {
+            <span class="prelude-val">None </span>=&gt; {
+                <span class="kw">return </span>ws_client_builder
+                    .build_with_stream(url.as_str(), anonymized_stream)
+                    .<span class="kw">await</span>;
+            }
+            <span class="prelude-val">Some</span>(tls_connector) =&gt; {
+                <span class="kw">let </span>host = url.host_str().map(ToOwned::to_owned).ok_or_else(|| {
+                    JsonRpcClientError::Transport(<span class="macro">anyhow!</span>(<span class="string">"Invalid host!"</span>).into())
+                })<span class="question-mark">?</span>;
+
+                <span class="comment">// FIXME: (@leonardo) Is this leaking any data ? Should investigate it further
+                // if it's really needed.
+                </span><span class="kw">let </span>server_name = rustls_pki_types::ServerName::try_from(host)
+                    .map_err(|e| JsonRpcClientError::Transport(e.into()))<span class="question-mark">?</span>;
+
+                <span class="kw">let </span>anonymized_tls_stream = tls_connector
+                    .connect(server_name, anonymized_stream)
+                    .<span class="kw">await
+                    </span>.map_err(|e| JsonRpcClientError::Transport(e.into()))<span class="question-mark">?</span>;
+
+                <span class="kw">return </span>ws_client_builder
+                    .build_with_stream(url.as_str(), anonymized_tls_stream)
+                    .<span class="kw">await</span>;
+            }
+        }
+    }
+
     <span class="kw">fn </span>is_connected(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
         <span class="self">self</span>.is_connected()
     }
@@ -2068,10 +2050,11 @@
 <span class="kw">impl </span>WsFederationApi&lt;WsClient&gt; {
     <span class="doccomment">/// Creates a new API client
     </span><span class="kw">pub fn </span>new(
+        connector: <span class="kw-2">&amp;</span>Connector,
         peers: <span class="kw">impl </span>IntoIterator&lt;Item = (PeerId, SafeUrl)&gt;,
         api_secret: <span class="kw-2">&amp;</span><span class="prelude-ty">Option</span>&lt;String&gt;,
     ) -&gt; <span class="self">Self </span>{
-        <span class="self">Self</span>::new_with_client(peers, <span class="prelude-val">None</span>, api_secret)
+        <span class="self">Self</span>::new_with_client(connector, peers, <span class="prelude-val">None</span>, api_secret)
     }
 
     <span class="kw">pub fn </span>with_self_peer_id(<span class="self">self</span>, self_peer_id: PeerId) -&gt; <span class="self">Self </span>{
@@ -2086,12 +2069,14 @@
 <span class="kw">where
     </span>C: JsonRpcClient + <span class="lifetime">'static</span>,
 {
-    <span class="kw">pub fn </span>peers(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Vec&lt;PeerId&gt; {
+    <span class="doccomment">/// Returns the [`PeerId`]'s for the current [`WsFederationApi`]
+    </span><span class="kw">pub fn </span>peers(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Vec&lt;PeerId&gt; {
         <span class="self">self</span>.peers.iter().map(|peer| peer.peer_id).collect()
     }
 
-    <span class="doccomment">/// Creates a new API client
+    <span class="doccomment">/// Creates a new [`WsFederationApi`] client, for given [`Connector`].
     </span><span class="kw">pub fn </span>new_with_client(
+        connector: <span class="kw-2">&amp;</span>Connector,
         peers: <span class="kw">impl </span>IntoIterator&lt;Item = (PeerId, SafeUrl)&gt;,
         self_peer_id: <span class="prelude-ty">Option</span>&lt;PeerId&gt;,
         api_secret: <span class="kw-2">&amp;</span><span class="prelude-ty">Option</span>&lt;String&gt;,
@@ -2106,7 +2091,7 @@
                 <span class="macro">assert!</span>(url.host().is_some(), <span class="string">"API client requires a target host"</span>);
 
                 (
-                    FederationPeer::new(url, peer_id, api_secret.clone()),
+                    FederationPeer::new(<span class="kw-2">*</span>connector, url, peer_id, api_secret.clone()),
                     peer_id,
                 )
             })
@@ -2173,7 +2158,12 @@
                     </span><span class="macro">trace!</span>(target: LOG_CLIENT_NET_API, <span class="string">"Some other request reconnected client, retrying"</span>);
                 }
                 <span class="kw">_ </span>=&gt; {
-                    wclient.reconnect(<span class="self">self</span>.peer_id, <span class="self">self</span>.url.clone(), <span class="self">self</span>.api_secret.clone());
+                    wclient.reconnect(
+                        <span class="self">self</span>.connector,
+                        <span class="self">self</span>.peer_id,
+                        <span class="self">self</span>.url.clone(),
+                        <span class="self">self</span>.api_secret.clone(),
+                    );
                 }
             }
         }
@@ -2230,6 +2220,7 @@
 
 <span class="attr">#[cfg(test)]
 </span><span class="kw">mod </span>tests {
+    <span class="kw">use </span>std::fmt;
     <span class="kw">use </span>std::str::FromStr <span class="kw">as _</span>;
 
     <span class="kw">use </span>fedimint_core::config::FederationId;
@@ -2244,6 +2235,7 @@
     <span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
     </span><span class="kw">trait </span>SimpleClient: Sized {
         <span class="kw">async fn </span>connect() -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>&gt;;
+        <span class="kw">async fn </span>connect_with_tor() -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>&gt;;
         <span class="kw">fn </span>is_connected(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
             <span class="bool-val">true
         </span>}
@@ -2255,12 +2247,16 @@
 
     <span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
     </span><span class="kw">impl</span>&lt;C: SimpleClient + MaybeSend + MaybeSync&gt; JsonRpcClient <span class="kw">for </span>Client&lt;C&gt; {
-        <span class="kw">fn </span>is_connected(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
-            <span class="self">self</span>.<span class="number">0</span>.is_connected()
-        }
-
         <span class="kw">async fn </span>connect(_url: <span class="kw-2">&amp;</span>SafeUrl, _api_secret: <span class="prelude-ty">Option</span>&lt;String&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>&gt; {
             <span class="prelude-val">Ok</span>(<span class="self">Self</span>(C::connect().<span class="kw">await</span><span class="question-mark">?</span>))
+        }
+
+        <span class="kw">async fn </span>connect_with_tor(_url: <span class="kw-2">&amp;</span>SafeUrl, _api_secret: <span class="prelude-ty">Option</span>&lt;String&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>&gt; {
+            <span class="prelude-val">Ok</span>(<span class="self">Self</span>(C::connect_with_tor().<span class="kw">await</span><span class="question-mark">?</span>))
+        }
+
+        <span class="kw">fn </span>is_connected(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
+            <span class="self">self</span>.<span class="number">0</span>.is_connected()
         }
     }
 

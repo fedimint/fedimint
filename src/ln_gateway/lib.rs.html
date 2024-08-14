@@ -1787,6 +1787,21 @@
 <a href="#1787" id="1787">1787</a>
 <a href="#1788" id="1788">1788</a>
 <a href="#1789" id="1789">1789</a>
+<a href="#1790" id="1790">1790</a>
+<a href="#1791" id="1791">1791</a>
+<a href="#1792" id="1792">1792</a>
+<a href="#1793" id="1793">1793</a>
+<a href="#1794" id="1794">1794</a>
+<a href="#1795" id="1795">1795</a>
+<a href="#1796" id="1796">1796</a>
+<a href="#1797" id="1797">1797</a>
+<a href="#1798" id="1798">1798</a>
+<a href="#1799" id="1799">1799</a>
+<a href="#1800" id="1800">1800</a>
+<a href="#1801" id="1801">1801</a>
+<a href="#1802" id="1802">1802</a>
+<a href="#1803" id="1803">1803</a>
+<a href="#1804" id="1804">1804</a>
 </pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::cast_possible_wrap)]
@@ -1841,6 +1856,7 @@
     GatewayConfiguration, GatewayConfigurationKey, GatewayDbtxNcExt, GATEWAYD_DATABASE_VERSION,
 };
 <span class="kw">use </span>federation_manager::FederationManager;
+<span class="kw">use </span>fedimint_api_client::api::net::Connector;
 <span class="kw">use </span>fedimint_api_client::api::FederationError;
 <span class="kw">use </span>fedimint_client::module::init::ClientModuleInitRegistry;
 <span class="kw">use </span>fedimint_client::ClientHandleArc;
@@ -2674,6 +2690,19 @@
         <span class="kw">let </span>invite_code = InviteCode::from_str(<span class="kw-2">&amp;</span>payload.invite_code).map_err(|e| {
             GatewayError::InvalidMetadata(<span class="macro">format!</span>(<span class="string">"Invalid federation member string {e:?}"</span>))
         })<span class="question-mark">?</span>;
+
+        <span class="comment">// TODO: (@leonardo) Should we use default, or respond with an error ?
+        </span><span class="kw">let </span>connector = <span class="kw">match </span><span class="kw-2">&amp;</span>payload.use_tor {
+            <span class="prelude-val">Some</span>(use_tor) =&gt; <span class="kw">match </span>use_tor {
+                <span class="bool-val">true </span>=&gt; Connector::tor(),
+                <span class="bool-val">false </span>=&gt; Connector::default(),
+            },
+            <span class="prelude-val">None </span>=&gt; {
+                <span class="macro">info!</span>(<span class="string">"Missing `use_tor` payload field, defaulting to `Connector::Tcp` variant!"</span>);
+                Connector::default()
+            }
+        };
+
         <span class="kw">let </span>federation_id = invite_code.federation_id();
 
         <span class="kw">let </span><span class="kw-2">mut </span>federation_manager = <span class="self">self</span>.federation_manager.write().<span class="kw">await</span>;
@@ -2699,6 +2728,7 @@
             mint_channel_id,
             timelock_delta: <span class="number">10</span>,
             fees: gateway_config.routing_fees,
+            connector,
         };
 
         <span class="kw">let </span>client = <span class="self">self

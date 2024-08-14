@@ -132,6 +132,8 @@
 <a href="#132" id="132">132</a>
 <a href="#133" id="133">133</a>
 <a href="#134" id="134">134</a>
+<a href="#135" id="135">135</a>
+<a href="#136" id="136">136</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::pin::pin;
 <span class="kw">use </span>std::str::FromStr;
 <span class="kw">use </span>std::sync::Arc;
@@ -193,7 +195,9 @@
         <span class="comment">// FIXME: add wallet module
         </span>builder.with_primary_module(<span class="number">1</span>);
         <span class="kw">let </span>invite_code = InviteCode::from_str(<span class="kw-2">&amp;</span>invite_code)<span class="question-mark">?</span>;
-        <span class="kw">let </span>config = fedimint_api_client::download_from_invite_code(<span class="kw-2">&amp;</span>invite_code).<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>config = fedimint_api_client::api::net::Connector::default()
+            .download_from_invite_code(<span class="kw-2">&amp;</span>invite_code)
+            .<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>client = Arc::new(builder.join(root_secret, config, <span class="prelude-val">None</span>).<span class="kw">await</span><span class="question-mark">?</span>);
         <span class="prelude-val">Ok</span>(<span class="self">Self </span>{ client })
     }

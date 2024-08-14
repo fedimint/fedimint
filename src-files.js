@@ -3,7 +3,7 @@ var srcIndex = new Map(JSON.parse('[\
 ["devimint",["",[["federation",[],["config.rs"]]],["cli.rs","devfed.rs","envs.rs","external.rs","federation.rs","gatewayd.rs","lib.rs","tests.rs","util.rs","vars.rs","version_constants.rs"]]],\
 ["faucet",["",[],["faucet.rs"]]],\
 ["fedimint_aead",["",[],["envs.rs","lib.rs"]]],\
-["fedimint_api_client",["",[["api",[],["federation_peer_client.rs","global_federation_api_with_cache.rs","mod.rs"]]],["lib.rs","query.rs"]]],\
+["fedimint_api_client",["",[["api",[],["error.rs","global_api.rs","mod.rs","net.rs","peer.rs"]]],["lib.rs","query.rs"]]],\
 ["fedimint_bip39",["",[],["lib.rs"]]],\
 ["fedimint_bitcoind",["",[],["bitcoincore.rs","electrum.rs","esplora.rs","lib.rs"]]],\
 ["fedimint_build",["",[],["envs.rs","lib.rs"]]],\

@@ -393,6 +393,8 @@
 <a href="#393" id="393">393</a>
 <a href="#394" id="394">394</a>
 <a href="#395" id="395">395</a>
+<a href="#396" id="396">396</a>
+<a href="#397" id="397">397</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::path::PathBuf;
 <span class="kw">use </span>std::str::FromStr;
 <span class="kw">use </span>std::sync::Arc;
@@ -550,7 +552,9 @@
     <span class="kw">let </span>client = <span class="kw">if </span>Client::is_initialized(client_builder.db_no_decoders()).<span class="kw">await </span>{
         client_builder.open(root_secret).<span class="kw">await
     </span>} <span class="kw">else if let </span><span class="prelude-val">Some</span>(invite_code) = <span class="kw-2">&amp;</span>invite_code {
-        <span class="kw">let </span>client_config = fedimint_api_client::download_from_invite_code(invite_code).<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>client_config = fedimint_api_client::api::net::Connector::default()
+            .download_from_invite_code(invite_code)
+            .<span class="kw">await</span><span class="question-mark">?</span>;
         client_builder
             .join(root_secret, client_config.clone(), invite_code.api_secret())
             .<span class="kw">await

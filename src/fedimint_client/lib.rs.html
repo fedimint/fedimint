@@ -2761,6 +2761,24 @@
 <a href="#2761" id="2761">2761</a>
 <a href="#2762" id="2762">2762</a>
 <a href="#2763" id="2763">2763</a>
+<a href="#2764" id="2764">2764</a>
+<a href="#2765" id="2765">2765</a>
+<a href="#2766" id="2766">2766</a>
+<a href="#2767" id="2767">2767</a>
+<a href="#2768" id="2768">2768</a>
+<a href="#2769" id="2769">2769</a>
+<a href="#2770" id="2770">2770</a>
+<a href="#2771" id="2771">2771</a>
+<a href="#2772" id="2772">2772</a>
+<a href="#2773" id="2773">2773</a>
+<a href="#2774" id="2774">2774</a>
+<a href="#2775" id="2775">2775</a>
+<a href="#2776" id="2776">2776</a>
+<a href="#2777" id="2777">2777</a>
+<a href="#2778" id="2778">2778</a>
+<a href="#2779" id="2779">2779</a>
+<a href="#2780" id="2780">2780</a>
+<a href="#2781" id="2781">2781</a>
 </pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::doc_markdown)]
@@ -2860,6 +2878,7 @@
     ClientModuleRecovery, ClientPreRootSecretHashKey, EncodedClientSecretKey, InitMode,
     PeerLastApiVersionsSummary, PeerLastApiVersionsSummaryKey, CORE_CLIENT_DATABASE_VERSION,
 };
+<span class="kw">use </span>fedimint_api_client::api::net::Connector;
 <span class="kw">use </span>fedimint_api_client::api::{
     ApiVersionSet, DynGlobalApi, DynModuleApi, FederationApiExt, IGlobalFederationApi,
 };
@@ -3540,6 +3559,7 @@
     operation_log: OperationLog,
     secp_ctx: Secp256k1&lt;secp256k1::All&gt;,
     meta_service: Arc&lt;MetaService&gt;,
+    connector: Connector,
 
     task_group: TaskGroup,
 
@@ -4799,6 +4819,7 @@
     admin_creds: <span class="prelude-ty">Option</span>&lt;AdminCreds&gt;,
     db_no_decoders: Database,
     meta_service: Arc&lt;MetaService&gt;,
+    connector: Connector,
     stopped: bool,
 }
 
@@ -4808,6 +4829,7 @@
         ClientBuilder {
             module_inits: ModuleInitRegistry::new(),
             primary_module_instance: <span class="prelude-val">None</span>,
+            connector: Connector::default(),
             admin_creds: <span class="prelude-val">None</span>,
             db_no_decoders: db,
             stopped: <span class="bool-val">false</span>,
@@ -4824,6 +4846,7 @@
             stopped: <span class="bool-val">false</span>,
             <span class="comment">// non unique
             </span>meta_service: client.meta_service.clone(),
+            connector: client.connector,
         }
     }
 
@@ -4901,6 +4924,14 @@
 
     <span class="kw">pub fn </span>set_admin_creds(<span class="kw-2">&amp;mut </span><span class="self">self</span>, creds: AdminCreds) {
         <span class="self">self</span>.admin_creds = <span class="prelude-val">Some</span>(creds);
+    }
+
+    <span class="kw">pub fn </span>with_connector(<span class="kw-2">&amp;mut </span><span class="self">self</span>, connector: Connector) {
+        <span class="self">self</span>.connector = connector;
+    }
+
+    <span class="kw">pub fn </span>with_tor_connector(<span class="kw-2">&amp;mut </span><span class="self">self</span>) {
+        <span class="self">self</span>.with_connector(Connector::tor());
     }
 
     <span class="kw">async fn </span>init(
@@ -4986,7 +5017,7 @@
     /// // Get invite code from user
     /// let invite_code = InviteCode::from_str("fed11qgqpw9thwvaz7te3xgmjuvpwxqhrzw3jxumrvvf0qqqjpetvlg8glnpvzcufhffgzhv8m75f7y34ryk7suamh8x7zetly8h0v9v0rm")
     ///     .expect("Invalid invite code");
-    /// let config = fedimint_api_client::download_from_invite_code(&amp;invite_code).await
+    /// let config = fedimint_api_client::api::net::Connector::default().download_from_invite_code(&amp;invite_code).await
     ///     .expect("Error downloading config");
     ///
     /// // Tell the user the federation name, bitcoin network
@@ -5039,6 +5070,7 @@
         config: <span class="kw-2">&amp;</span>ClientConfig,
         api_secret: <span class="prelude-ty">Option</span>&lt;String&gt;,
     ) -&gt; anyhow::Result&lt;<span class="prelude-ty">Option</span>&lt;ClientBackup&gt;&gt; {
+        <span class="kw">let </span>connector = <span class="self">self</span>.connector;
         <span class="kw">let </span>api = DynGlobalApi::from_endpoints(
             <span class="comment">// TODO: change join logic to use FederationId v2
             </span>config
@@ -5047,6 +5079,7 @@
                 .iter()
                 .map(|(peer_id, peer_url)| (<span class="kw-2">*</span>peer_id, peer_url.url.clone())),
             <span class="kw-2">&amp;</span>api_secret,
+            <span class="kw-2">&amp;</span>connector,
         );
         Client::download_backup_from_federation_static(
             <span class="kw-2">&amp;</span>api,
@@ -5157,6 +5190,7 @@
         <span class="kw">let </span>config = <span class="self">Self</span>::config_decoded(config, <span class="kw-2">&amp;</span>decoders)<span class="question-mark">?</span>;
         <span class="kw">let </span>fed_id = config.calculate_federation_id();
         <span class="kw">let </span>db = <span class="self">self</span>.db_no_decoders.with_decoders(decoders.clone());
+        <span class="kw">let </span>connector = <span class="self">self</span>.connector;
         <span class="kw">let </span>peer_urls = get_api_urls(<span class="kw-2">&amp;</span>db, <span class="kw-2">&amp;</span>config).<span class="kw">await</span>;
         <span class="kw">let </span>api = <span class="kw">if let </span><span class="prelude-val">Some</span>(admin_creds) = <span class="self">self</span>.admin_creds.as_ref() {
             DynGlobalApi::new_admin(
@@ -5166,9 +5200,10 @@
                     .find_map(|(peer, api_url)| (admin_creds.peer_id == peer).then_some(api_url))
                     .context(<span class="string">"Admin creds should match a peer"</span>)<span class="question-mark">?</span>,
                 <span class="kw-2">&amp;</span>api_secret,
+                <span class="kw-2">&amp;</span>connector,
             )
         } <span class="kw">else </span>{
-            DynGlobalApi::from_endpoints(peer_urls, <span class="kw-2">&amp;</span>api_secret)
+            DynGlobalApi::from_endpoints(peer_urls, <span class="kw-2">&amp;</span>api_secret, <span class="kw-2">&amp;</span>connector)
         };
         <span class="kw">let </span>task_group = TaskGroup::new();
 
@@ -5402,6 +5437,7 @@
             operation_log: OperationLog::new(db),
             client_recovery_progress_receiver,
             meta_service: <span class="self">self</span>.meta_service,
+            connector,
         });
         client_inner
             .task_group

@@ -334,6 +334,8 @@
 <a href="#334" id="334">334</a>
 <a href="#335" id="335">335</a>
 <a href="#336" id="336">336</a>
+<a href="#337" id="337">337</a>
+<a href="#338" id="338">338</a>
 </pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 
 </span><span class="kw">use </span>std::sync::Arc;
@@ -373,7 +375,9 @@
 }
 
 <span class="kw">async fn </span>client(invite_code: <span class="kw-2">&amp;</span>InviteCode) -&gt; <span class="prelude-ty">Result</span>&lt;fedimint_client::ClientHandleArc&gt; {
-    <span class="kw">let </span>client_config = fedimint_api_client::download_from_invite_code(invite_code).<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="kw">let </span>client_config = fedimint_api_client::api::net::Connector::default()
+        .download_from_invite_code(invite_code)
+        .<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="kw">let </span><span class="kw-2">mut </span>builder = make_client_builder().<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="kw">let </span>client_secret = load_or_generate_mnemonic(builder.db_no_decoders()).<span class="kw">await</span><span class="question-mark">?</span>;
     builder.stopped();

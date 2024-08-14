@@ -263,6 +263,14 @@
 <a href="#263" id="263">263</a>
 <a href="#264" id="264">264</a>
 <a href="#265" id="265">265</a>
+<a href="#266" id="266">266</a>
+<a href="#267" id="267">267</a>
+<a href="#268" id="268">268</a>
+<a href="#269" id="269">269</a>
+<a href="#270" id="270">270</a>
+<a href="#271" id="271">271</a>
+<a href="#272" id="272">272</a>
+<a href="#273" id="273">273</a>
 </pre></div><pre class="rust"><code><span class="kw">pub mod </span>aleph_bft;
 <span class="kw">pub mod </span>api;
 <span class="kw">pub mod </span>db;
@@ -280,6 +288,7 @@
 <span class="kw">use </span>anyhow::bail;
 <span class="kw">use </span>async_channel::Sender;
 <span class="kw">use </span>db::{get_global_database_migrations, GLOBAL_DATABASE_VERSION};
+<span class="kw">use </span>fedimint_api_client::api::net::Connector;
 <span class="kw">use </span>fedimint_api_client::api::DynGlobalApi;
 <span class="kw">use </span>fedimint_core::config::ServerModuleInitRegistry;
 <span class="kw">use </span>fedimint_core::core::{ModuleInstanceId, ModuleKind};
@@ -419,9 +428,16 @@
     <span class="macro">info!</span>(target: LOG_CONSENSUS, <span class="string">"Starting Consensus Engine"</span>);
 
     <span class="kw">let </span>api_urls = get_api_urls(<span class="kw-2">&amp;</span>db, <span class="kw-2">&amp;</span>cfg.consensus).<span class="kw">await</span>;
-    ConsensusEngine {
+
+    <span class="comment">// FIXME: (@leonardo) How should this be handled ?
+    // Using the `Connector::default()` for now!
+    </span>ConsensusEngine {
         db,
-        federation_api: DynGlobalApi::from_endpoints(api_urls, <span class="kw-2">&amp;</span>force_api_secrets.get_active()),
+        federation_api: DynGlobalApi::from_endpoints(
+            api_urls,
+            <span class="kw-2">&amp;</span>force_api_secrets.get_active(),
+            <span class="kw-2">&amp;</span>Connector::default(),
+        ),
         self_id_str: cfg.local.identity.to_string(),
         peer_id_str: (<span class="number">0</span>..cfg.consensus.api_endpoints.len())
             .map(|x| x.to_string())

@@ -340,10 +340,16 @@
 <a href="#340" id="340">340</a>
 <a href="#341" id="341">341</a>
 <a href="#342" id="342">342</a>
+<a href="#343" id="343">343</a>
+<a href="#344" id="344">344</a>
+<a href="#345" id="345">345</a>
+<a href="#346" id="346">346</a>
+<a href="#347" id="347">347</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap};
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
 
+<span class="kw">use </span>fedimint_api_client::api::net::Connector;
 <span class="kw">use </span>fedimint_api_client::api::{DynGlobalApi, FederationApiExt};
 <span class="kw">use </span>fedimint_client::module::init::ClientModuleInitRegistry;
 <span class="kw">use </span>fedimint_client::secret::{PlainRootSecretStrategy, RootSecretStrategy};
@@ -475,7 +481,8 @@
     </span><span class="kw">pub async fn </span>connect_gateway(<span class="kw-2">&amp;</span><span class="self">self</span>, gw: <span class="kw-2">&amp;</span>Gateway) {
         gw.handle_connect_federation(ConnectFedPayload {
             invite_code: <span class="self">self</span>.invite_code().to_string(),
-        })
+            use_tor: <span class="prelude-val">Some</span>(<span class="bool-val">false</span>), <span class="comment">// TODO: (@leonardo) Should we get it from self.configs too ?
+        </span>})
         .<span class="kw">await
         </span>.expect(<span class="string">"Failed to connect federation"</span>);
     }
@@ -588,10 +595,13 @@
                 <span class="kw">continue</span>;
             }
 
-            <span class="kw">let </span>api = DynGlobalApi::new_admin(
+            <span class="comment">// FIXME: (@leonardo) Currently there is no support for Tor while testing,
+            // defaulting to Tcp variant.
+            </span><span class="kw">let </span>api = DynGlobalApi::new_admin(
                 peer_id,
                 config.consensus.api_endpoints[<span class="kw-2">&amp;</span>peer_id].url.clone(),
                 <span class="kw-2">&amp;</span><span class="prelude-val">None</span>,
+                <span class="kw-2">&amp;</span>Connector::default(),
             );
 
             <span class="kw">while let </span><span class="prelude-val">Err</span>(e) = api

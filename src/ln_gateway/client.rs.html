@@ -102,6 +102,7 @@
 <a href="#102" id="102">102</a>
 <a href="#103" id="103">103</a>
 <a href="#104" id="104">104</a>
+<a href="#105" id="105">105</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::fmt::Debug;
 <span class="kw">use </span>std::path::PathBuf;
 <span class="kw">use </span>std::sync::Arc;
@@ -149,6 +150,7 @@
             invite_code,
             mint_channel_id,
             timelock_delta,
+            connector,
             ..
         } = config;
         <span class="kw">let </span>federation_id = invite_code.federation_id();
@@ -174,6 +176,7 @@
             </span>.map_err(GatewayError::DatabaseError)<span class="question-mark">?</span>;
         client_builder.with_module_inits(registry);
         client_builder.with_primary_module(<span class="self">self</span>.primary_module);
+        client_builder.with_connector(connector);
 
         <span class="kw">let </span>client_secret = <span class="kw">if let </span><span class="prelude-val">Ok</span>(secret) =
             Client::load_decodable_client_secret::&lt;[u8; <span class="number">64</span>]&gt;(client_builder.db_no_decoders()).<span class="kw">await
@@ -195,8 +198,7 @@
                 </span>.open(root_secret)
                 .<span class="kw">await
         </span>} <span class="kw">else </span>{
-            <span class="kw">let </span>client_config =
-                fedimint_api_client::download_from_invite_code(<span class="kw-2">&amp;</span>invite_code).<span class="kw">await</span><span class="question-mark">?</span>;
+            <span class="kw">let </span>client_config = connector.download_from_invite_code(<span class="kw-2">&amp;</span>invite_code).<span class="kw">await</span><span class="question-mark">?</span>;
             client_builder
                 <span class="comment">// TODO: make this configurable?
                 </span>.join(root_secret, client_config.clone(), invite_code.api_secret())

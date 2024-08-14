@@ -1215,6 +1215,34 @@
 <a href="#1215" id="1215">1215</a>
 <a href="#1216" id="1216">1216</a>
 <a href="#1217" id="1217">1217</a>
+<a href="#1218" id="1218">1218</a>
+<a href="#1219" id="1219">1219</a>
+<a href="#1220" id="1220">1220</a>
+<a href="#1221" id="1221">1221</a>
+<a href="#1222" id="1222">1222</a>
+<a href="#1223" id="1223">1223</a>
+<a href="#1224" id="1224">1224</a>
+<a href="#1225" id="1225">1225</a>
+<a href="#1226" id="1226">1226</a>
+<a href="#1227" id="1227">1227</a>
+<a href="#1228" id="1228">1228</a>
+<a href="#1229" id="1229">1229</a>
+<a href="#1230" id="1230">1230</a>
+<a href="#1231" id="1231">1231</a>
+<a href="#1232" id="1232">1232</a>
+<a href="#1233" id="1233">1233</a>
+<a href="#1234" id="1234">1234</a>
+<a href="#1235" id="1235">1235</a>
+<a href="#1236" id="1236">1236</a>
+<a href="#1237" id="1237">1237</a>
+<a href="#1238" id="1238">1238</a>
+<a href="#1239" id="1239">1239</a>
+<a href="#1240" id="1240">1240</a>
+<a href="#1241" id="1241">1241</a>
+<a href="#1242" id="1242">1242</a>
+<a href="#1243" id="1243">1243</a>
+<a href="#1244" id="1244">1244</a>
+<a href="#1245" id="1245">1245</a>
 </pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::doc_markdown)]
 #![allow(clippy::missing_errors_doc)]
@@ -1244,8 +1272,9 @@
 <span class="kw">use </span>bip39::Mnemonic;
 <span class="kw">use </span>clap::{Args, CommandFactory, Parser, Subcommand};
 <span class="kw">use </span>db_locked::LockedBuilder;
-<span class="kw">use </span>envs::{FM_API_SECRET_ENV, SALT_FILE};
+<span class="kw">use </span>envs::{FM_API_SECRET_ENV, FM_USE_TOR_ENV, SALT_FILE};
 <span class="kw">use </span>fedimint_aead::{encrypted_read, encrypted_write, get_encryption_key};
+<span class="kw">use </span>fedimint_api_client::api::net::Connector;
 <span class="kw">use </span>fedimint_api_client::api::{
     DynGlobalApi, FederationApiExt, FederationError, IRawFederationApi, WsFederationApi,
 };
@@ -1427,6 +1456,10 @@
     </span><span class="attr">#[arg(long, env = FM_PASSWORD_ENV)]
     </span>password: <span class="prelude-ty">Option</span>&lt;String&gt;,
 
+    <span class="doccomment">/// Activate usage of Tor as the Connector when building the Client
+    </span><span class="attr">#[arg(long, env = FM_USE_TOR_ENV)]
+    </span>use_tor: bool,
+
     <span class="doccomment">/// Activate more verbose logging, for full control use the RUST_LOG env
     /// variable
     </span><span class="attr">#[arg(short = <span class="string">'v'</span>, long)]
@@ -1458,6 +1491,8 @@
         api_secret: <span class="kw-2">&amp;</span><span class="prelude-ty">Option</span>&lt;String&gt;,
     ) -&gt; CliResult&lt;DynGlobalApi&gt; {
         <span class="kw">let </span>our_id = <span class="self">self</span>.our_id.ok_or_cli_msg(<span class="string">"Admin client needs our-id set"</span>)<span class="question-mark">?</span>;
+        <span class="kw">let </span>connector = <span class="self">self</span>.connector();
+
         <span class="prelude-val">Ok</span>(DynGlobalApi::new_admin(
             our_id,
             peer_urls
@@ -1466,6 +1501,7 @@
                 .context(<span class="string">"Our peer URL not found in config"</span>)
                 .map_err_cli()<span class="question-mark">?</span>,
             api_secret,
+            <span class="kw-2">&amp;</span>connector,
         ))
     }
 
@@ -1488,6 +1524,14 @@
                     .map_err_cli_msg(<span class="string">"could not open database"</span>)<span class="question-mark">?</span>,
             )
             .into())
+    }
+
+    <span class="kw">fn </span>connector(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Connector {
+        <span class="kw">if </span><span class="self">self</span>.use_tor {
+            Connector::tor()
+        } <span class="kw">else </span>{
+            Connector::default()
+        }
     }
 }
 
@@ -1827,6 +1871,10 @@ Examples:
         client_builder.with_module_inits(<span class="self">self</span>.module_inits.clone());
         client_builder.with_primary_module(<span class="number">1</span>);
 
+        <span class="kw">if </span>cli.use_tor {
+            client_builder.with_tor_connector();
+        }
+
         <span class="prelude-val">Ok</span>(client_builder)
     }
 
@@ -1835,7 +1883,9 @@ Examples:
         cli: <span class="kw-2">&amp;</span>Opts,
         invite_code: InviteCode,
     ) -&gt; CliResult&lt;ClientHandleArc&gt; {
-        <span class="kw">let </span>client_config = fedimint_api_client::download_from_invite_code(<span class="kw-2">&amp;</span>invite_code)
+        <span class="kw">let </span>client_config = cli
+            .connector()
+            .download_from_invite_code(<span class="kw-2">&amp;</span>invite_code)
             .<span class="kw">await
             </span>.map_err_cli()<span class="question-mark">?</span>;
 
@@ -1896,7 +1946,9 @@ Examples:
     ) -&gt; CliResult&lt;ClientHandleArc&gt; {
         <span class="kw">let </span>builder = <span class="self">self</span>.make_client_builder(cli).<span class="kw">await</span><span class="question-mark">?</span>;
 
-        <span class="kw">let </span>client_config = fedimint_api_client::download_from_invite_code(<span class="kw-2">&amp;</span>invite_code)
+        <span class="kw">let </span>client_config = cli
+            .connector()
+            .download_from_invite_code(<span class="kw-2">&amp;</span>invite_code)
             .<span class="kw">await
             </span>.map_err_cli()<span class="question-mark">?</span>;
 
@@ -2094,8 +2146,12 @@ Examples:
                 }
                 <span class="kw">let </span>client = <span class="self">self</span>.client_open(<span class="kw-2">&amp;</span>cli).<span class="kw">await</span><span class="question-mark">?</span>;
 
-                <span class="kw">let </span>ws_api: Arc&lt;<span class="kw">_</span>&gt; =
-                    WsFederationApi::new(client.get_peer_urls().<span class="kw">await</span>, client.api_secret()).into();
+                <span class="kw">let </span>ws_api: Arc&lt;<span class="kw">_</span>&gt; = WsFederationApi::new(
+                    <span class="kw-2">&amp;</span>cli.connector(),
+                    client.get_peer_urls().<span class="kw">await</span>,
+                    client.api_secret(),
+                )
+                .into();
                 <span class="kw">let </span>response: Value = <span class="kw">match </span>peer_id {
                     <span class="prelude-val">Some</span>(peer_id) =&gt; ws_api
                         .request_raw(peer_id.into(), <span class="kw-2">&amp;</span>method, <span class="kw-2">&amp;</span>[params.to_json()])

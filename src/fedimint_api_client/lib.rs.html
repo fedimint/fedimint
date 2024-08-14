@@ -80,6 +80,14 @@
 <a href="#80" id="80">80</a>
 <a href="#81" id="81">81</a>
 <a href="#82" id="82">82</a>
+<a href="#83" id="83">83</a>
+<a href="#84" id="84">84</a>
+<a href="#85" id="85">85</a>
+<a href="#86" id="86">86</a>
+<a href="#87" id="87">87</a>
+<a href="#88" id="88">88</a>
+<a href="#89" id="89">89</a>
+<a href="#90" id="90">90</a>
 </pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::missing_errors_doc)]
 #![allow(clippy::missing_panics_doc)]
@@ -88,6 +96,7 @@
 #![allow(clippy::return_self_not_must_use)]
 
 </span><span class="kw">use </span>anyhow::{bail, Context <span class="kw">as _</span>};
+<span class="kw">use </span>api::net::Connector;
 <span class="kw">use </span>api::{DynGlobalApi, FederationApiExt <span class="kw">as _</span>, WsFederationApi};
 <span class="kw">use </span>fedimint_core::config::{ClientConfig, FederationId};
 <span class="kw">use </span>fedimint_core::endpoint_constants::CLIENT_CONFIG_ENDPOINT;
@@ -102,64 +111,71 @@
 <span class="doccomment">/// Client query system
 </span><span class="kw">pub mod </span>query;
 
-<span class="doccomment">/// Tries to download the client config from the federation,
-/// attempts to retry teb times before giving up.
-</span><span class="kw">pub async fn </span>download_from_invite_code(invite_code: <span class="kw-2">&amp;</span>InviteCode) -&gt; anyhow::Result&lt;ClientConfig&gt; {
-    <span class="macro">debug!</span>(<span class="string">"Downloading client config from {:?}"</span>, invite_code);
+<span class="kw">impl </span>Connector {
+    <span class="doccomment">/// Tries to download the [`ClientConfig`] from the federation with an
+    /// specified [`Connector`] variant, attempts to retry ten times before
+    /// giving up.
+    </span><span class="kw">pub async fn </span>download_from_invite_code(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        invite_code: <span class="kw-2">&amp;</span>InviteCode,
+    ) -&gt; anyhow::Result&lt;ClientConfig&gt; {
+        <span class="macro">debug!</span>(<span class="string">"Downloading client config from {:?}"</span>, invite_code);
 
-    <span class="kw">let </span>federation_id = invite_code.federation_id();
-    <span class="kw">let </span>api = DynGlobalApi::from_invite_code(invite_code);
-    <span class="kw">let </span>api_secret = invite_code.api_secret();
+        <span class="kw">let </span>federation_id = invite_code.federation_id();
+        <span class="kw">let </span>api = DynGlobalApi::from_invite_code(<span class="self">self</span>, invite_code);
+        <span class="kw">let </span>api_secret = invite_code.api_secret();
 
-    fedimint_core::util::retry(
-        <span class="string">"Downloading client config"</span>,
-        backoff_util::aggressive_backoff(),
-        || try_download_client_config(<span class="kw-2">&amp;</span>api, federation_id, api_secret.clone()),
-    )
-    .<span class="kw">await
-    </span>.context(<span class="string">"Failed to download client config"</span>)
-}
-
-<span class="doccomment">/// Tries to download the client config only once.
-</span><span class="kw">pub async fn </span>try_download_client_config(
-    api: <span class="kw-2">&amp;</span>DynGlobalApi,
-    federation_id: FederationId,
-    api_secret: <span class="prelude-ty">Option</span>&lt;String&gt;,
-) -&gt; anyhow::Result&lt;ClientConfig&gt; {
-    <span class="comment">// TODO: use new download approach based on guardian PKs
-    </span><span class="kw">let </span>query_strategy = FilterMap::new(
-        <span class="kw">move </span>|cfg: ClientConfig| {
-            <span class="kw">if </span>federation_id != cfg.global.calculate_federation_id() {
-                <span class="macro">bail!</span>(<span class="string">"FederationId in invite code does not match client config"</span>)
-            }
-
-            <span class="prelude-val">Ok</span>(cfg.global.api_endpoints)
-        },
-        NumPeers::from(<span class="number">1</span>),
-    );
-
-    <span class="kw">let </span>api_endpoints = api
-        .request_with_strategy(
-            query_strategy,
-            CLIENT_CONFIG_ENDPOINT.to_owned(),
-            ApiRequestErased::default(),
+        fedimint_core::util::retry(
+            <span class="string">"Downloading client config"</span>,
+            backoff_util::aggressive_backoff(),
+            || <span class="self">self</span>.try_download_client_config(<span class="kw-2">&amp;</span>api, federation_id, api_secret.clone()),
         )
-        .<span class="kw">await</span><span class="question-mark">?</span>;
-
-    <span class="comment">// now we can build an api for all guardians and download the client config
-    </span><span class="kw">let </span>api_endpoints = api_endpoints.into_iter().map(|(peer, url)| (peer, url.url));
-
-    <span class="kw">let </span>client_config = WsFederationApi::new(api_endpoints, <span class="kw-2">&amp;</span>api_secret)
-        .request_current_consensus::&lt;ClientConfig&gt;(
-            CLIENT_CONFIG_ENDPOINT.to_owned(),
-            ApiRequestErased::default(),
-        )
-        .<span class="kw">await</span><span class="question-mark">?</span>;
-
-    <span class="kw">if </span>client_config.calculate_federation_id() != federation_id {
-        <span class="macro">bail!</span>(<span class="string">"Obtained client config has different federation id"</span>);
+        .<span class="kw">await
+        </span>.context(<span class="string">"Failed to download client config"</span>)
     }
 
-    <span class="prelude-val">Ok</span>(client_config)
+    <span class="doccomment">/// Tries to download the [`ClientConfig`] only once.
+    </span><span class="kw">pub async fn </span>try_download_client_config(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        api: <span class="kw-2">&amp;</span>DynGlobalApi,
+        federation_id: FederationId,
+        api_secret: <span class="prelude-ty">Option</span>&lt;String&gt;,
+    ) -&gt; anyhow::Result&lt;ClientConfig&gt; {
+        <span class="comment">// TODO: use new download approach based on guardian PKs
+        </span><span class="kw">let </span>query_strategy = FilterMap::new(
+            <span class="kw">move </span>|cfg: ClientConfig| {
+                <span class="kw">if </span>federation_id != cfg.global.calculate_federation_id() {
+                    <span class="macro">bail!</span>(<span class="string">"FederationId in invite code does not match client config"</span>)
+                }
+
+                <span class="prelude-val">Ok</span>(cfg.global.api_endpoints)
+            },
+            NumPeers::from(<span class="number">1</span>),
+        );
+
+        <span class="kw">let </span>api_endpoints = api
+            .request_with_strategy(
+                query_strategy,
+                CLIENT_CONFIG_ENDPOINT.to_owned(),
+                ApiRequestErased::default(),
+            )
+            .<span class="kw">await</span><span class="question-mark">?</span>;
+
+        <span class="comment">// now we can build an api for all guardians and download the client config
+        </span><span class="kw">let </span>api_endpoints = api_endpoints.into_iter().map(|(peer, url)| (peer, url.url));
+
+        <span class="kw">let </span>client_config = WsFederationApi::new(<span class="self">self</span>, api_endpoints, <span class="kw-2">&amp;</span>api_secret)
+            .request_current_consensus::&lt;ClientConfig&gt;(
+                CLIENT_CONFIG_ENDPOINT.to_owned(),
+                ApiRequestErased::default(),
+            )
+            .<span class="kw">await</span><span class="question-mark">?</span>;
+
+        <span class="kw">if </span>client_config.calculate_federation_id() != federation_id {
+            <span class="macro">bail!</span>(<span class="string">"Obtained client config has different federation id"</span>);
+        }
+
+        <span class="prelude-val">Ok</span>(client_config)
+    }
 }
 </code></pre></div></section></main></body></html>

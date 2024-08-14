@@ -792,6 +792,8 @@
 <a href="#792" id="792">792</a>
 <a href="#793" id="793">793</a>
 <a href="#794" id="794">794</a>
+<a href="#795" id="795">795</a>
+<a href="#796" id="796">796</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap};
 <span class="kw">use </span>std::env;
 <span class="kw">use </span>std::net::SocketAddr;
@@ -929,7 +931,9 @@
     </span><span class="kw">pub </span>meta: BTreeMap&lt;String, String&gt;,
 }
 
-<span class="attr">#[derive(Debug, Clone, Serialize, Deserialize)]
+<span class="comment">// FIXME: (@leonardo) Should this have another field for the expected transport
+// ? (e.g. clearnet/tor/...)
+</span><span class="attr">#[derive(Debug, Clone, Serialize, Deserialize)]
 </span><span class="kw">pub struct </span>ServerConfigLocal {
     <span class="doccomment">/// Network addresses and names for all p2p connections
     </span><span class="kw">pub </span>p2p_endpoints: BTreeMap&lt;PeerId, PeerUrl&gt;,

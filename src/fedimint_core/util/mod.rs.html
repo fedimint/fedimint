@@ -558,6 +558,15 @@
 <a href="#558" id="558">558</a>
 <a href="#559" id="559">559</a>
 <a href="#560" id="560">560</a>
+<a href="#561" id="561">561</a>
+<a href="#562" id="562">562</a>
+<a href="#563" id="563">563</a>
+<a href="#564" id="564">564</a>
+<a href="#565" id="565">565</a>
+<a href="#566" id="566">566</a>
+<a href="#567" id="567">567</a>
+<a href="#568" id="568">568</a>
+<a href="#569" id="569">569</a>
 </pre></div><pre class="rust"><code><span class="kw">pub mod </span>backoff_util;
 <span class="doccomment">/// Copied from `tokio_stream` 0.1.12 to use our optional Send bounds
 </span><span class="kw">pub mod </span>broadcaststream;
@@ -718,6 +727,15 @@
     }
     <span class="kw">pub fn </span>join(<span class="kw-2">&amp;</span><span class="self">self</span>, input: <span class="kw-2">&amp;</span>str) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, ParseError&gt; {
         <span class="self">self</span>.<span class="number">0</span>.join(input).map(SafeUrl)
+    }
+
+    <span class="comment">// It can be removed to use `is_onion_address()` implementation,
+    // once https://gitlab.torproject.org/tpo/core/arti/-/merge_requests/2214 lands.
+    </span><span class="attr">#[allow(clippy::case_sensitive_file_extension_comparisons)]
+    </span><span class="kw">pub fn </span>is_onion_address(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
+        <span class="kw">let </span>host = <span class="self">self</span>.host_str().unwrap_or_default();
+
+        host.ends_with(<span class="string">".onion"</span>)
     }
 }
 

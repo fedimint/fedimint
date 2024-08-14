@@ -128,10 +128,16 @@
 <a href="#128" id="128">128</a>
 <a href="#129" id="129">129</a>
 <a href="#130" id="130">130</a>
+<a href="#131" id="131">131</a>
+<a href="#132" id="132">132</a>
+<a href="#133" id="133">133</a>
+<a href="#134" id="134">134</a>
+<a href="#135" id="135">135</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::time::Duration;
 
 <span class="kw">use </span>bitcoin::secp256k1;
+<span class="kw">use </span>fedimint_api_client::api::net::Connector;
 <span class="kw">use </span>fedimint_api_client::api::DynGlobalApi;
 <span class="kw">use </span>fedimint_core::db::{Database, IDatabaseTransactionOpsCoreTyped};
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
@@ -177,8 +183,12 @@
     insert_signed_api_announcement_if_not_present(db, cfg).<span class="kw">await</span>;
 
     <span class="kw">let </span>db = db.clone();
-    <span class="kw">let </span>api_client =
-        DynGlobalApi::from_endpoints(get_api_urls(<span class="kw-2">&amp;</span>db, <span class="kw-2">&amp;</span>cfg.consensus).<span class="kw">await</span>, <span class="kw-2">&amp;</span>api_secret);
+    <span class="comment">// FIXME: (@leonardo) how should we handle the connector here ?
+    </span><span class="kw">let </span>api_client = DynGlobalApi::from_endpoints(
+        get_api_urls(<span class="kw-2">&amp;</span>db, <span class="kw-2">&amp;</span>cfg.consensus).<span class="kw">await</span>,
+        <span class="kw-2">&amp;</span>api_secret,
+        <span class="kw-2">&amp;</span>Connector::default(),
+    );
     <span class="kw">let </span>our_peer_id = cfg.local.identity;
     tg.spawn_cancellable(<span class="string">"submit-api-url-announcement"</span>, <span class="kw">async move </span>{
         <span class="comment">// Give other servers some time to start up in case they were just restarted
