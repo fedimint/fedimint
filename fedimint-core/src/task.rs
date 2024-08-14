@@ -68,10 +68,13 @@ impl TaskGroup {
         new_tg
     }
 
+    /// Tell all tasks in the group to shut down. This only initiates the
+    /// shutdown process, it does not wait for the tasks to shut down.
     pub fn shutdown(&self) {
         self.inner.shutdown();
     }
 
+    /// Tell all tasks in the group to shut down and wait for them to finish.
     pub async fn shutdown_join_all(
         self,
         join_timeout: impl Into<Option<Duration>>,
@@ -80,11 +83,14 @@ impl TaskGroup {
         self.join_all(join_timeout.into()).await
     }
 
+    /// Add a task to the group that waits for CTRL+C or SIGTERM, then
+    /// tells the rest of the task group to shut down.
     #[cfg(not(target_family = "wasm"))]
     pub fn install_kill_handler(&self) {
-        use tokio::signal;
-
+        /// Wait for CTRL+C or SIGTERM.
         async fn wait_for_shutdown_signal() {
+            use tokio::signal;
+
             let ctrl_c = async {
                 signal::ctrl_c()
                     .await
@@ -107,6 +113,7 @@ impl TaskGroup {
                 () = terminate => {},
             }
         }
+
         runtime::spawn("kill handlers", {
             let task_group = self.clone();
             async move {
@@ -154,28 +161,6 @@ impl TaskGroup {
         rx
     }
 
-    pub fn spawn_local<Fut>(
-        &self,
-        name: impl Into<String>,
-        f: impl FnOnce(TaskHandle) -> Fut + 'static,
-    ) where
-        Fut: Future<Output = ()> + 'static,
-    {
-        let name = name.into();
-        let mut guard = TaskPanicGuard {
-            name: name.clone(),
-            inner: self.inner.clone(),
-            completed: false,
-        };
-        let handle = self.make_handle();
-
-        let handle = runtime::spawn_local(name.as_str(), async {
-            f(handle).await;
-        });
-        self.inner.add_join_handle(name, handle);
-        guard.completed = true;
-    }
-
     /// Spawn a task that will get cancelled automatically on `TaskGroup`
     /// shutdown.
     pub fn spawn_cancellable<R>(
@@ -217,17 +202,11 @@ impl TaskGroup {
     }
 }
 
-pub struct TaskPanicGuard {
+struct TaskPanicGuard {
     name: String,
     inner: Arc<TaskGroupInner>,
     /// Did the future completed successfully (no panic)
     completed: bool,
-}
-
-impl TaskPanicGuard {
-    pub fn is_shutting_down(&self) -> bool {
-        self.inner.is_shutting_down()
-    }
 }
 
 impl Drop for TaskPanicGuard {

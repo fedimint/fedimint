@@ -787,8 +787,7 @@ mod tests {
             wait_for_connection("c", &peer_status_client_c).await;
         }
 
-        task_group.shutdown();
-        task_group.join_all(None).await.unwrap();
+        task_group.shutdown_join_all(None).await.unwrap();
     }
 
     #[test]
