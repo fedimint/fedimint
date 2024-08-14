@@ -806,7 +806,6 @@
 <a href="#806" id="806">806</a>
 <a href="#807" id="807">807</a>
 <a href="#808" id="808">808</a>
-<a href="#809" id="809">809</a>
 </pre></div><pre class="rust"><code><span class="doccomment">//! Implements a connection manager for communication with other federation
 //! members
 //!
@@ -1596,8 +1595,7 @@
             wait_for_connection(<span class="string">"c"</span>, <span class="kw-2">&amp;</span>peer_status_client_c).<span class="kw">await</span>;
         }
 
-        task_group.shutdown();
-        task_group.join_all(<span class="prelude-val">None</span>).<span class="kw">await</span>.unwrap();
+        task_group.shutdown_join_all(<span class="prelude-val">None</span>).<span class="kw">await</span>.unwrap();
     }
 
     <span class="attr">#[test]

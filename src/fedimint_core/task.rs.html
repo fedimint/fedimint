@@ -463,27 +463,6 @@
 <a href="#463" id="463">463</a>
 <a href="#464" id="464">464</a>
 <a href="#465" id="465">465</a>
-<a href="#466" id="466">466</a>
-<a href="#467" id="467">467</a>
-<a href="#468" id="468">468</a>
-<a href="#469" id="469">469</a>
-<a href="#470" id="470">470</a>
-<a href="#471" id="471">471</a>
-<a href="#472" id="472">472</a>
-<a href="#473" id="473">473</a>
-<a href="#474" id="474">474</a>
-<a href="#475" id="475">475</a>
-<a href="#476" id="476">476</a>
-<a href="#477" id="477">477</a>
-<a href="#478" id="478">478</a>
-<a href="#479" id="479">479</a>
-<a href="#480" id="480">480</a>
-<a href="#481" id="481">481</a>
-<a href="#482" id="482">482</a>
-<a href="#483" id="483">483</a>
-<a href="#484" id="484">484</a>
-<a href="#485" id="485">485</a>
-<a href="#486" id="486">486</a>
 </pre></div><pre class="rust"><code><span class="attr">#![cfg_attr(target_family = <span class="string">"wasm"</span>, allow(dead_code))]
 
 </span><span class="kw">mod </span>inner;
@@ -554,11 +533,14 @@
         new_tg
     }
 
-    <span class="kw">pub fn </span>shutdown(<span class="kw-2">&amp;</span><span class="self">self</span>) {
+    <span class="doccomment">/// Tell all tasks in the group to shut down. This only initiates the
+    /// shutdown process, it does not wait for the tasks to shut down.
+    </span><span class="kw">pub fn </span>shutdown(<span class="kw-2">&amp;</span><span class="self">self</span>) {
         <span class="self">self</span>.inner.shutdown();
     }
 
-    <span class="kw">pub async fn </span>shutdown_join_all(
+    <span class="doccomment">/// Tell all tasks in the group to shut down and wait for them to finish.
+    </span><span class="kw">pub async fn </span>shutdown_join_all(
         <span class="self">self</span>,
         join_timeout: <span class="kw">impl </span>Into&lt;<span class="prelude-ty">Option</span>&lt;Duration&gt;&gt;,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;(), anyhow::Error&gt; {
@@ -566,11 +548,14 @@
         <span class="self">self</span>.join_all(join_timeout.into()).<span class="kw">await
     </span>}
 
-    <span class="attr">#[cfg(not(target_family = <span class="string">"wasm"</span>))]
+    <span class="doccomment">/// Add a task to the group that waits for CTRL+C or SIGTERM, then
+    /// tells the rest of the task group to shut down.
+    </span><span class="attr">#[cfg(not(target_family = <span class="string">"wasm"</span>))]
     </span><span class="kw">pub fn </span>install_kill_handler(<span class="kw-2">&amp;</span><span class="self">self</span>) {
-        <span class="kw">use </span>tokio::signal;
+        <span class="doccomment">/// Wait for CTRL+C or SIGTERM.
+        </span><span class="kw">async fn </span>wait_for_shutdown_signal() {
+            <span class="kw">use </span>tokio::signal;
 
-        <span class="kw">async fn </span>wait_for_shutdown_signal() {
             <span class="kw">let </span>ctrl_c = <span class="kw">async </span>{
                 signal::ctrl_c()
                     .<span class="kw">await
@@ -593,6 +578,7 @@
                 () = terminate =&gt; {},
             }
         }
+
         runtime::spawn(<span class="string">"kill handlers"</span>, {
             <span class="kw">let </span>task_group = <span class="self">self</span>.clone();
             <span class="kw">async move </span>{
@@ -640,28 +626,6 @@
         rx
     }
 
-    <span class="kw">pub fn </span>spawn_local&lt;Fut&gt;(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        name: <span class="kw">impl </span>Into&lt;String&gt;,
-        f: <span class="kw">impl </span>FnOnce(TaskHandle) -&gt; Fut + <span class="lifetime">'static</span>,
-    ) <span class="kw">where
-        </span>Fut: Future&lt;Output = ()&gt; + <span class="lifetime">'static</span>,
-    {
-        <span class="kw">let </span>name = name.into();
-        <span class="kw">let </span><span class="kw-2">mut </span>guard = TaskPanicGuard {
-            name: name.clone(),
-            inner: <span class="self">self</span>.inner.clone(),
-            completed: <span class="bool-val">false</span>,
-        };
-        <span class="kw">let </span>handle = <span class="self">self</span>.make_handle();
-
-        <span class="kw">let </span>handle = runtime::spawn_local(name.as_str(), <span class="kw">async </span>{
-            f(handle).<span class="kw">await</span>;
-        });
-        <span class="self">self</span>.inner.add_join_handle(name, handle);
-        guard.completed = <span class="bool-val">true</span>;
-    }
-
     <span class="doccomment">/// Spawn a task that will get cancelled automatically on `TaskGroup`
     /// shutdown.
     </span><span class="kw">pub fn </span>spawn_cancellable&lt;R&gt;(
@@ -703,17 +667,11 @@
     }
 }
 
-<span class="kw">pub struct </span>TaskPanicGuard {
+<span class="kw">struct </span>TaskPanicGuard {
     name: String,
     inner: Arc&lt;TaskGroupInner&gt;,
     <span class="doccomment">/// Did the future completed successfully (no panic)
     </span>completed: bool,
-}
-
-<span class="kw">impl </span>TaskPanicGuard {
-    <span class="kw">pub fn </span>is_shutting_down(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
-        <span class="self">self</span>.inner.is_shutting_down()
-    }
 }
 
 <span class="kw">impl </span>Drop <span class="kw">for </span>TaskPanicGuard {
