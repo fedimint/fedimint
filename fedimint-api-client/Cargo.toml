@@ -48,6 +48,11 @@ tokio-rustls = { version = "0.26.0", default-features = false, features = [
 ] }
 webpki-roots = { version = "0.26.3" }
 rustls-pki-types = { version = "1.8.0" }
+arti-client = { version = "0.20.0", features = ["tokio", "rustls", "onion-service-client"], default-features = false, package = "fedimint-arti-client" }
+strum = { version = "0.26.3" }
+# We need to pin this arti's `curve25519-dalek` dependency, due to `https://rustsec.org/advisories/RUSTSEC-2024-0344` vulnerability
+# It's been updated by https://gitlab.torproject.org/tpo/core/arti/-/merge_requests/2211, should be removed in next release.
+curve25519-dalek = { version = ">=4.1.3" }
 
 [target.'cfg(target_family = "wasm")'.dependencies]
 jsonrpsee-wasm-client = "0.24.2"

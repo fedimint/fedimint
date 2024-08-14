@@ -2,6 +2,7 @@ use std::collections::BTreeMap;
 use std::time::Duration;
 
 use bitcoin::secp256k1;
+use fedimint_api_client::api::net::Connector;
 use fedimint_api_client::api::DynGlobalApi;
 use fedimint_core::db::{Database, IDatabaseTransactionOpsCoreTyped};
 use fedimint_core::encoding::{Decodable, Encodable};
@@ -47,8 +48,12 @@ pub async fn start_api_announcement_service(
     insert_signed_api_announcement_if_not_present(db, cfg).await;
 
     let db = db.clone();
-    let api_client =
-        DynGlobalApi::from_endpoints(get_api_urls(&db, &cfg.consensus).await, &api_secret);
+    // FIXME: (@leonardo) how should we handle the connector here ?
+    let api_client = DynGlobalApi::from_endpoints(
+        get_api_urls(&db, &cfg.consensus).await,
+        &api_secret,
+        &Connector::default(),
+    );
     let our_peer_id = cfg.local.identity;
     tg.spawn_cancellable("submit-api-url-announcement", async move {
         // Give other servers some time to start up in case they were just restarted
