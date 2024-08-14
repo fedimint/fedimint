@@ -3004,6 +3004,7 @@ dependencies = [
  "pin-project",
  "rand",
  "rand_chacha",
+ "rayon",
  "rcgen",
  "serde",
  "serde_json",

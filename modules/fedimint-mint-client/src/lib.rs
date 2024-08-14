@@ -625,7 +625,7 @@ pub struct MintClientModule {
     secret: DerivableSecret,
     secp: Secp256k1<All>,
     notifier: ModuleNotifier<MintClientStateMachines>,
-    client_ctx: ClientContext<Self>,
+    pub client_ctx: ClientContext<Self>,
 }
 
 // TODO: wrap in Arc
