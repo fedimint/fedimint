@@ -60,7 +60,7 @@ pub async fn run_webserver(gateway: Arc<Gateway>, task_group: &TaskGroup) -> any
         }
     });
 
-    info!("Successfully started webserver");
+    info!("Successfully started webserver on {}", gateway.listen);
     Ok(())
 }
 
