@@ -7,10 +7,12 @@ use serde::{Deserialize, Serialize};
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Encodable, Decodable, Serialize, Deserialize)]
 pub enum Connector {
     Tcp,
+    #[cfg(feature = "tor")]
     Tor,
 }
 
 impl Connector {
+    #[cfg(feature = "tor")]
     pub fn tor() -> Connector {
         Connector::Tor
     }
@@ -34,6 +36,7 @@ impl FromStr for Connector {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s.to_lowercase().as_str() {
             "tcp" => Ok(Connector::Tcp),
+            #[cfg(feature = "tor")]
             "tor" => Ok(Connector::Tor),
             _ => Err("invalid connector!"),
         }

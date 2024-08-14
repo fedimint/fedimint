@@ -23,6 +23,7 @@ pub const V1_API_ENDPOINT: &str = "v1";
 pub struct ConnectFedPayload {
     pub invite_code: String,
     #[serde(default)]
+    #[cfg(feature = "tor")]
     pub use_tor: Option<bool>,
 }
 

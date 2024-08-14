@@ -11,6 +11,9 @@ repository = "https://github.com/fedimint/fedimint"
 [package.metadata.docs.rs]
 rustc-args = ["--cfg", "tokio_unstable"]
 
+[features]
+tor = ["fedimint-client/tor", "fedimint-api-client/tor"]
+
 [[bin]]
 name = "fedimint-cli"
 path = "src/main.rs"

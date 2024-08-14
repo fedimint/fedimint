@@ -10,6 +10,9 @@ repository = "https://github.com/fedimint/fedimint"
 [package.metadata.docs.rs]
 rustc-args = ["--cfg", "tokio_unstable"]
 
+[features]
+tor = ["ln-gateway/tor"]
+
 [[bin]]
 name = "gateway-cli"
 path = "src/main.rs"

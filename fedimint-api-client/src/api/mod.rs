@@ -6,7 +6,7 @@ use std::time::Duration;
 use std::{cmp, result};
 
 use anyhow::anyhow;
-#[cfg(not(target_family = "wasm"))]
+#[cfg(all(feature = "tor", not(target_family = "wasm")))]
 use arti_client::{TorAddr, TorClient, TorClientConfig};
 use base64::Engine as _;
 use bitcoin::hashes::sha256;
@@ -51,9 +51,9 @@ use net::Connector;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 #[cfg(not(target_family = "wasm"))]
-use tokio_rustls::rustls::{ClientConfig as TlsClientConfig, RootCertStore};
-#[cfg(not(target_family = "wasm"))]
-use tokio_rustls::TlsConnector;
+use tokio_rustls::rustls::RootCertStore;
+#[cfg(all(feature = "tor", not(target_family = "wasm")))]
+use tokio_rustls::{rustls::ClientConfig as TlsClientConfig, TlsConnector};
 use tracing::{debug, instrument, trace};
 
 use crate::query::{QueryStep, QueryStrategy, ThresholdConsensus};
@@ -683,7 +683,7 @@ pub trait JsonRpcClient: ClientT + Sized + MaybeSend + MaybeSync {
         api_secret: Option<String>,
     ) -> result::Result<Self, JsonRpcClientError>;
 
-    #[cfg(not(target_family = "wasm"))]
+    #[cfg(all(feature = "tor", not(target_family = "wasm")))]
     async fn connect_with_tor(
         url: &SafeUrl,
         api_secret: Option<String>,
@@ -750,7 +750,7 @@ impl JsonRpcClient for WsClient {
         client.build(url.as_str()).await
     }
 
-    #[cfg(not(target_family = "wasm"))]
+    #[cfg(all(feature = "tor", not(target_family = "wasm")))]
     async fn connect_with_tor(
         url: &SafeUrl,
         api_secret: Option<String>,
@@ -1070,10 +1070,14 @@ mod tests {
     #[apply(async_trait_maybe_send!)]
     trait SimpleClient: Sized {
         async fn connect() -> Result<Self>;
+
+        #[cfg(all(feature = "tor", not(target_family = "wasm")))]
         async fn connect_with_tor() -> Result<Self>;
+
         fn is_connected(&self) -> bool {
             true
         }
+
         // reply with json
         async fn request(&self, method: &str) -> Result<String>;
     }
@@ -1086,6 +1090,7 @@ mod tests {
             Ok(Self(C::connect().await?))
         }
 
+        #[cfg(all(feature = "tor", not(target_family = "wasm")))]
         async fn connect_with_tor(_url: &SafeUrl, _api_secret: Option<String>) -> Result<Self> {
             Ok(Self(C::connect_with_tor().await?))
         }

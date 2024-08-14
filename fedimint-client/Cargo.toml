@@ -15,6 +15,9 @@ normal = ["aquamarine"]
 [package.metadata.docs.rs]
 rustc-args = ["--cfg", "tokio_unstable"]
 
+[features]
+tor = ["fedimint-api-client/tor"]
+
 [lib]
 name = "fedimint_client"
 path = "src/lib.rs"

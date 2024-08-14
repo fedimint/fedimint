@@ -95,9 +95,9 @@ where
 
             let res = match connector {
                 Connector::Tcp => C::connect(&url, api_secret).await,
-                #[cfg(not(target_family = "wasm"))]
+                #[cfg(all(feature = "tor", not(target_family = "wasm")))]
                 Connector::Tor => C::connect_with_tor(&url, api_secret).await,
-                #[cfg(target_family = "wasm")]
+                #[cfg(all(feature = "tor", target_family = "wasm"))]
                 Connector::Tor => unimplemented!(),
             };
 
