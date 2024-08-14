@@ -9,7 +9,13 @@ if [ "$#" -eq 0 ]; then
   exit 1
 fi
 
-versions=("$@")
+# allows versions to be passed in as either a single string or multiple params
+# e.g. `"v0.3.0 v0.4.0"` is the same as `v0.3.0 v0.4.0`
+if [ "$#" -eq 1 ]; then
+  IFS=' ' read -r -a versions <<< "$1"
+else
+  versions=("$@")
+fi
 
 source scripts/_common.sh
 build_workspace

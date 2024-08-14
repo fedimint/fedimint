@@ -13,6 +13,12 @@ on:
 
   # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch:
+    inputs:
+      versions:
+        description: 'Versions to test (if empty, uses same as daily run)'
+        required: false
+        default: ''
+        
 
 # A workflow run is made up of one or more jobs that can run sequentially or in parallel
 jobs:
@@ -40,6 +46,11 @@ jobs:
 
       - name: Upgrade tests
         run: |
+          # read versions from manually triggered workflows
+          # default needed for cron or manual workflow without params
+          VERSIONS="${{ github.event.inputs.versions }}"
+          VERSIONS=${VERSIONS:="v0.3.3 v0.4.0 current"}
+
           # the default tmp dir is too long (/home/ubuntu/actions-runner/_work/_temp/)
           # we need to use `nix develop -c` to be able to use `nix build` inside of backwards-compatibility-test
           # Disable `sccache`, it seems incompatible with self-hosted runner sandbox for some reason, and
@@ -51,7 +62,7 @@ jobs:
             nix shell github:rustshop/fs-dir-cache -c \
             scripts/ci/run-in-fs-dir-cache.sh upgrade-tests \
             env -u RUSTC_WRAPPER \
-            runLowPrio ./scripts/tests/upgrade-test.sh v0.3.3 v0.4.0 current
+            runLowPrio ./scripts/tests/upgrade-test.sh "$VERSIONS"
 
   notifications:
     if: always() && github.repository == 'fedimint/fedimint'
