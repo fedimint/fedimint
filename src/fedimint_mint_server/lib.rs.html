@@ -800,6 +800,16 @@
 <a href="#800" id="800">800</a>
 <a href="#801" id="801">801</a>
 <a href="#802" id="802">802</a>
+<a href="#803" id="803">803</a>
+<a href="#804" id="804">804</a>
+<a href="#805" id="805">805</a>
+<a href="#806" id="806">806</a>
+<a href="#807" id="807">807</a>
+<a href="#808" id="808">808</a>
+<a href="#809" id="809">809</a>
+<a href="#810" id="810">810</a>
+<a href="#811" id="811">811</a>
+<a href="#812" id="812">812</a>
 </pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_wrap)]
 #![allow(clippy::module_name_repetitions)]
@@ -1172,11 +1182,7 @@
         <span class="macro">bail!</span>(<span class="string">"Mint does not process consensus items"</span>);
     }
 
-    <span class="kw">async fn </span>process_input&lt;<span class="lifetime">'a</span>, <span class="lifetime">'b</span>, <span class="lifetime">'c</span>&gt;(
-        <span class="kw-2">&amp;</span><span class="lifetime">'a </span><span class="self">self</span>,
-        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'c</span>&gt;,
-        input: <span class="kw-2">&amp;</span><span class="lifetime">'b </span>MintInput,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;InputMeta, MintInputError&gt; {
+    <span class="kw">fn </span>verify_input(<span class="kw-2">&amp;</span><span class="self">self</span>, input: <span class="kw-2">&amp;</span>MintInput) -&gt; <span class="prelude-ty">Result</span>&lt;(), MintInputError&gt; {
         <span class="kw">let </span>input = input.ensure_v0_ref()<span class="question-mark">?</span>;
 
         <span class="kw">let </span>amount_key = <span class="self">self
@@ -1188,7 +1194,18 @@
             <span class="kw">return </span><span class="prelude-val">Err</span>(MintInputError::InvalidSignature);
         }
 
+        <span class="prelude-val">Ok</span>(())
+    }
+
+    <span class="kw">async fn </span>process_input&lt;<span class="lifetime">'a</span>, <span class="lifetime">'b</span>, <span class="lifetime">'c</span>&gt;(
+        <span class="kw-2">&amp;</span><span class="lifetime">'a </span><span class="self">self</span>,
+        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'c</span>&gt;,
+        input: <span class="kw-2">&amp;</span><span class="lifetime">'b </span>MintInput,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;InputMeta, MintInputError&gt; {
+        <span class="kw">let </span>input = input.ensure_v0_ref()<span class="question-mark">?</span>;
+
         <span class="macro">debug!</span>(target: LOG_MODULE_MINT, nonce=%(input.note.nonce), <span class="string">"Marking note as spent"</span>);
+
         <span class="kw">if </span>dbtx
             .insert_entry(<span class="kw-2">&amp;</span>NonceKey(input.note.nonce), <span class="kw-2">&amp;</span>())
             .<span class="kw">await
@@ -1202,9 +1219,12 @@
             <span class="kw-2">&amp;</span>input.amount,
         )
         .<span class="kw">await</span>;
+
         <span class="kw">let </span>amount = input.amount;
         <span class="kw">let </span>fee = <span class="self">self</span>.cfg.consensus.fee_consensus.note_spend_abs;
+
         calculate_mint_redeemed_ecash_metrics(dbtx, amount, fee);
+
         <span class="prelude-val">Ok</span>(InputMeta {
             amount: TransactionItemAmount { amount, fee },
             pub_key: <span class="kw-2">*</span>input.note.spend_key(),

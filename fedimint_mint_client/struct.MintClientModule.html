@@ -4,7 +4,7 @@
     pub(crate) secret: <a class="struct" href="../fedimint_derive_secret/struct.DerivableSecret.html" title="struct fedimint_derive_secret::DerivableSecret">DerivableSecret</a>,
     pub(crate) secp: Secp256k1&lt;All&gt;,
     pub(crate) notifier: <a class="struct" href="../fedimint_client/sm/notifier/struct.ModuleNotifier.html" title="struct fedimint_client::sm::notifier::ModuleNotifier">ModuleNotifier</a>&lt;<a class="enum" href="enum.MintClientStateMachines.html" title="enum fedimint_mint_client::MintClientStateMachines">MintClientStateMachines</a>&gt;,
-    pub(crate) client_ctx: <a class="struct" href="../fedimint_client/module/struct.ClientContext.html" title="struct fedimint_client::module::ClientContext">ClientContext</a>&lt;Self&gt;,
+    pub client_ctx: <a class="struct" href="../fedimint_client/module/struct.ClientContext.html" title="struct fedimint_client::module::ClientContext">ClientContext</a>&lt;Self&gt;,
 }</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>The <code>MintClientModule</code> is responsible for handling e-cash minting
 operations. It interacts with the mint server to issue, reissue, and
 validate e-cash notes.</p>
