@@ -4,8 +4,9 @@ use std::fmt::Debug;
 use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::db::{CoreMigrationFn, DatabaseVersion, MODULE_GLOBAL_PREFIX};
 use fedimint_core::encoding::{Decodable, Encodable};
+use fedimint_core::module::{CoreConsensusVersion, ModuleConsensusVersion};
 use fedimint_core::session_outcome::{AcceptedItem, SignedSessionOutcome};
-use fedimint_core::{impl_db_lookup, impl_db_record, TransactionId};
+use fedimint_core::{impl_db_lookup, impl_db_record, PeerId, TransactionId};
 use serde::Serialize;
 use strum_macros::EnumIter;
 
@@ -20,6 +21,8 @@ pub enum DbKeyPrefix {
     AlephUnits = 0x05,
     // TODO: do we want to split the server DB into consensus/non-consensus?
     ApiAnnouncements = 0x06,
+    CoreConsensusVersionVote = 0x07,
+    ModuleConsensusVersionVote = 0x08,
     Module = MODULE_GLOBAL_PREFIX,
 }
 
@@ -91,6 +94,48 @@ impl_db_record!(
 );
 impl_db_lookup!(key = AlephUnitsKey, query_prefix = AlephUnitsPrefix);
 
+#[derive(Clone, Debug, Encodable, Decodable, Serialize)]
+pub struct CoreConsensusVersionVoteKey(pub PeerId);
+
+#[derive(Clone, Debug, Encodable, Decodable)]
+pub struct CoreConsensusVersionVotePrefix;
+
+impl_db_record!(
+    key = CoreConsensusVersionVoteKey,
+    value = CoreConsensusVersion,
+    db_prefix = DbKeyPrefix::CoreConsensusVersionVote
+);
+
+impl_db_lookup!(
+    key = CoreConsensusVersionVoteKey,
+    query_prefix = CoreConsensusVersionVotePrefix
+);
+
+#[derive(Clone, Debug, Encodable, Decodable, Serialize)]
+pub struct ModuleConsensusVersionVoteKey(pub ModuleInstanceId, pub PeerId);
+
+#[derive(Clone, Debug, Encodable, Decodable)]
+pub struct ModuleConsensusVersionVotePrefix;
+
+#[derive(Clone, Debug, Encodable, Decodable)]
+pub struct ModuleConsensusVersionVoteModuleIdPrefix(pub ModuleInstanceId);
+
+impl_db_record!(
+    key = ModuleConsensusVersionVoteKey,
+    value = ModuleConsensusVersion,
+    db_prefix = DbKeyPrefix::ModuleConsensusVersionVote
+);
+
+impl_db_lookup!(
+    key = ModuleConsensusVersionVoteKey,
+    query_prefix = ModuleConsensusVersionVotePrefix
+);
+
+impl_db_lookup!(
+    key = ModuleConsensusVersionVoteKey,
+    query_prefix = ModuleConsensusVersionVoteModuleIdPrefix
+);
+
 pub fn get_global_database_migrations() -> BTreeMap<DatabaseVersion, CoreMigrationFn> {
     BTreeMap::new()
 }
@@ -134,6 +179,7 @@ mod fedimint_migration_tests {
         AcceptedTransactionKey, AcceptedTransactionKeyPrefix, AlephUnitsKey, AlephUnitsPrefix,
         DbKeyPrefix, SignedSessionOutcomeKey, SignedSessionOutcomePrefix, GLOBAL_DATABASE_VERSION,
     };
+    use crate::consensus::db::{CoreConsensusVersionVotePrefix, ModuleConsensusVersionVotePrefix};
     use crate::net::api::announcement::{ApiAnnouncementKey, ApiAnnouncementPrefix};
 
     /// Create a database with version 0 data. The database produced is not
@@ -302,8 +348,6 @@ mod fedimint_migration_tests {
                             );
                             info!(target: LOG_DB, "Validated AlephUnits");
                         }
-                        // Module prefix is reserved for modules, no migration testing is needed
-                        DbKeyPrefix::Module => {}
                         DbKeyPrefix::ApiAnnouncements => {
                             let announcements = dbtx
                                 .find_by_prefix(&ApiAnnouncementPrefix)
@@ -313,6 +357,34 @@ mod fedimint_migration_tests {
 
                             assert_eq!(announcements.len(), 1);
                         }
+                        DbKeyPrefix::CoreConsensusVersionVote => {
+                            let version_votes = dbtx
+                                .find_by_prefix(&CoreConsensusVersionVotePrefix)
+                                .await
+                                .collect::<Vec<_>>()
+                                .await;
+                            let num_version_votes = version_votes.len();
+                            ensure!(
+                                num_version_votes > 0,
+                                "validate_migrations was not able to read any Version Votes"
+                            );
+                            info!(target: LOG_DB, "Validated VersionVotes");
+                        }
+                        DbKeyPrefix::ModuleConsensusVersionVote => {
+                            let version_votes = dbtx
+                                .find_by_prefix(&ModuleConsensusVersionVotePrefix)
+                                .await
+                                .collect::<Vec<_>>()
+                                .await;
+                            let num_version_votes = version_votes.len();
+                            ensure!(
+                                num_version_votes > 0,
+                                "validate_migrations was not able to read any Version Votes"
+                            );
+                            info!(target: LOG_DB, "Validated VersionVotes");
+                        }
+                        // Module prefix is reserved for modules, no migration testing is needed
+                        DbKeyPrefix::Module => {}
                     }
                 }
                 Ok(())

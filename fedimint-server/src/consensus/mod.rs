@@ -20,8 +20,9 @@ use fedimint_core::config::ServerModuleInitRegistry;
 use fedimint_core::core::{ModuleInstanceId, ModuleKind};
 use fedimint_core::db::{apply_migrations, apply_migrations_server, Database};
 use fedimint_core::envs::is_running_in_test_env;
-use fedimint_core::epoch::ConsensusItem;
+use fedimint_core::epoch::{ConsensusItem, ConsensusVersionVote};
 use fedimint_core::module::registry::ModuleRegistry;
+use fedimint_core::module::CoreConsensusVersion;
 use fedimint_core::server::DynServerModule;
 use fedimint_core::task::TaskGroup;
 use fedimint_core::NumPeers;
@@ -38,6 +39,8 @@ use crate::envs::{FM_DB_CHECKPOINT_RETENTION_DEFAULT, FM_DB_CHECKPOINT_RETENTION
 use crate::net;
 use crate::net::api::announcement::get_api_urls;
 use crate::net::api::{ApiSecrets, RpcHandlerCtx};
+
+const CORE_CONSENSUS_VERSION: CoreConsensusVersion = CoreConsensusVersion::new(0, 0);
 
 /// How many txs can be stored in memory before blocking the API
 const TRANSACTION_BUFFER: usize = 1000;
@@ -132,6 +135,10 @@ pub async fn run(
     )
     .await;
 
+    info!(target: LOG_CONSENSUS, "Starting Submission of Core Consensus Version Vote CI proposals");
+
+    submit_core_consensus_version_vote(task_group, submission_sender.clone());
+
     info!(target: LOG_CONSENSUS, "Starting Submission of Module CI proposals");
 
     for (module_id, kind, module) in module_registry.iter_modules() {
@@ -208,6 +215,33 @@ async fn start_consensus_api(
     .await
 }
 
+fn submit_core_consensus_version_vote(
+    task_group: &TaskGroup,
+    submission_sender: Sender<ConsensusItem>,
+) {
+    let mut interval = tokio::time::interval(if is_running_in_test_env() {
+        Duration::from_millis(100)
+    } else {
+        Duration::from_secs(1)
+    });
+
+    task_group.spawn(
+        "submit_core_consensus_version_vote",
+        move |task_handle| async move {
+            while !task_handle.is_shutting_down() {
+                submission_sender
+                    .send(ConsensusItem::ConsensusVersionVote(
+                        ConsensusVersionVote::Core(CORE_CONSENSUS_VERSION),
+                    ))
+                    .await
+                    .ok();
+
+                interval.tick().await;
+            }
+        },
+    );
+}
+
 const CONSENSUS_PROPOSAL_TIMEOUT: Duration = Duration::from_secs(30);
 
 fn submit_module_ci_proposals(
@@ -257,6 +291,14 @@ fn submit_module_ci_proposals(
                         );
                     }
                 }
+
+                submission_sender.send(ConsensusItem::ConsensusVersionVote(
+                    ConsensusVersionVote::Module(
+                    module_id,
+                    module.consensus_version())
+                ))
+                .await
+                .ok();
 
                 interval.tick().await;
             }

@@ -818,6 +818,10 @@ pub trait ServerModule: Debug + Sized {
         Self::Common::decoder_builder().build()
     }
 
+    fn consensus_version(&self) -> ModuleConsensusVersion {
+        ModuleConsensusVersion::new(2, 0)
+    }
+
     /// This module's contribution to the next consensus proposal. This method
     /// is only guaranteed to be called once every few seconds. Consensus items
     /// are not meant to be latency critical; do not create them as

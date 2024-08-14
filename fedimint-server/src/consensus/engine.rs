@@ -6,19 +6,21 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use aleph_bft::Keychain as KeychainTrait;
-use anyhow::{anyhow, bail};
+use anyhow::{anyhow, bail, ensure};
 use async_channel::Receiver;
 use fedimint_api_client::api::{DynGlobalApi, FederationApiExt, PeerConnectionStatus};
 use fedimint_api_client::query::FilterMap;
-use fedimint_core::core::{DynOutput, MODULE_INSTANCE_ID_GLOBAL};
+use fedimint_core::core::{DynOutput, ModuleInstanceId, MODULE_INSTANCE_ID_GLOBAL};
 use fedimint_core::db::{Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped};
 use fedimint_core::encoding::Decodable;
 use fedimint_core::endpoint_constants::AWAIT_SIGNED_SESSION_OUTCOME_ENDPOINT;
-use fedimint_core::epoch::ConsensusItem;
+use fedimint_core::epoch::{ConsensusItem, ConsensusVersionVote};
 use fedimint_core::fmt_utils::OptStacktrace;
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::registry::{ModuleDecoderRegistry, ServerModuleRegistry};
-use fedimint_core::module::{ApiRequestErased, SerdeModuleEncoding};
+use fedimint_core::module::{
+    ApiRequestErased, CoreConsensusVersion, ModuleConsensusVersion, SerdeModuleEncoding,
+};
 use fedimint_core::runtime::spawn;
 use fedimint_core::session_outcome::{
     AcceptedItem, SchnorrSignature, SessionOutcome, SignedSessionOutcome,
@@ -41,10 +43,12 @@ use crate::consensus::aleph_bft::spawner::Spawner;
 use crate::consensus::aleph_bft::{to_node_index, Message};
 use crate::consensus::db::{
     AcceptedItemKey, AcceptedItemPrefix, AcceptedTransactionKey, AlephUnitsPrefix,
-    SignedSessionOutcomeKey, SignedSessionOutcomePrefix,
+    CoreConsensusVersionVoteKey, CoreConsensusVersionVotePrefix, ModuleConsensusVersionVoteKey,
+    ModuleConsensusVersionVoteModuleIdPrefix, SignedSessionOutcomeKey, SignedSessionOutcomePrefix,
 };
 use crate::consensus::debug::{DebugConsensusItem, DebugConsensusItemCompact};
 use crate::consensus::transaction::process_transaction_with_dbtx;
+use crate::consensus::CORE_CONSENSUS_VERSION;
 use crate::fedimint_core::encoding::Encodable;
 use crate::metrics::{
     CONSENSUS_ITEMS_PROCESSED_TOTAL, CONSENSUS_ITEM_PROCESSING_DURATION_SECONDS,
@@ -753,6 +757,63 @@ impl ConsensusEngine {
 
                 Ok(())
             }
+            ConsensusItem::ConsensusVersionVote(vote) => match vote {
+                ConsensusVersionVote::Core(vote) => {
+                    let current_vote = dbtx
+                        .get_value(&CoreConsensusVersionVoteKey(peer_id))
+                        .await
+                        .unwrap_or(CoreConsensusVersion::new(0, 0));
+
+                    ensure!(
+                        vote > current_vote,
+                        "Core consenus version vote is redundant"
+                    );
+
+                    dbtx.insert_entry(&CoreConsensusVersionVoteKey(peer_id), &vote)
+                        .await;
+
+                    assert!(
+                        self.consensus_core_consensus_version(dbtx).await <= CORE_CONSENSUS_VERSION,
+                        "Core consensus does not support new consensus version"
+                    );
+
+                    Ok(())
+                }
+                ConsensusVersionVote::Module(module_instance_id, vote) => {
+                    ensure!(
+                        self.modules.get(module_instance_id).is_some(),
+                        "Module instance id for consensus version vote is unknown"
+                    );
+
+                    let current_vote = dbtx
+                        .get_value(&ModuleConsensusVersionVoteKey(module_instance_id, peer_id))
+                        .await
+                        .unwrap_or(ModuleConsensusVersion::new(0, 0));
+
+                    ensure!(
+                        vote > current_vote,
+                        "Module consenus version vote is redundant"
+                    );
+
+                    dbtx.insert_entry(
+                        &ModuleConsensusVersionVoteKey(module_instance_id, peer_id),
+                        &vote,
+                    )
+                    .await;
+
+                    assert!(
+                        self.consensus_module_consensus_version(dbtx, module_instance_id)
+                            .await
+                            <= self
+                                .modules
+                                .get_expect(module_instance_id)
+                                .consensus_version(),
+                        "Module {module_instance_id} does not support new consensus version"
+                    );
+
+                    Ok(())
+                }
+            },
             ConsensusItem::Default { variant, .. } => {
                 warn!(
                     target: LOG_CONSENSUS,
@@ -761,6 +822,61 @@ impl ConsensusEngine {
                 bail!("Unexpected consensus item type: {variant}")
             }
         }
+    }
+
+    async fn consensus_core_consensus_version(
+        &self,
+        dbtx: &mut DatabaseTransaction<'_>,
+    ) -> CoreConsensusVersion {
+        let num_peers = self.cfg.consensus.broadcast_public_keys.to_num_peers();
+
+        let mut versions = dbtx
+            .find_by_prefix(&CoreConsensusVersionVotePrefix)
+            .await
+            .map(|entry| entry.1)
+            .collect::<Vec<CoreConsensusVersion>>()
+            .await;
+
+        while versions.len() < num_peers.total() {
+            versions.push(CoreConsensusVersion::new(0, 0));
+        }
+
+        assert_eq!(versions.len(), num_peers.total());
+
+        versions.sort_unstable();
+
+        assert!(versions.first() <= versions.last());
+
+        versions[num_peers.max_evil()]
+    }
+
+    async fn consensus_module_consensus_version(
+        &self,
+        dbtx: &mut DatabaseTransaction<'_>,
+        module_instance_id: ModuleInstanceId,
+    ) -> ModuleConsensusVersion {
+        let num_peers = self.cfg.consensus.broadcast_public_keys.to_num_peers();
+
+        let mut versions = dbtx
+            .find_by_prefix(&ModuleConsensusVersionVoteModuleIdPrefix(
+                module_instance_id,
+            ))
+            .await
+            .map(|entry| entry.1)
+            .collect::<Vec<ModuleConsensusVersion>>()
+            .await;
+
+        while versions.len() < num_peers.total() {
+            versions.push(ModuleConsensusVersion::new(0, 0));
+        }
+
+        assert_eq!(versions.len(), num_peers.total());
+
+        versions.sort_unstable();
+
+        assert!(versions.first() <= versions.last());
+
+        versions[num_peers.max_evil()]
     }
 
     async fn request_signed_session_outcome(

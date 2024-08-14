@@ -8,6 +8,7 @@ use std::fmt::Debug;
 use std::sync::Arc;
 
 use fedimint_core::module::audit::Audit;
+use fedimint_core::module::ModuleConsensusVersion;
 use fedimint_core::{apply, async_trait_maybe_send, OutPoint, PeerId};
 
 use super::ModuleKind;
@@ -34,6 +35,8 @@ pub trait IServerModule: Debug {
     fn decoder(&self) -> Decoder;
 
     fn module_kind(&self) -> ModuleKind;
+
+    fn consensus_version(&self) -> ModuleConsensusVersion;
 
     /// This module's contribution to the next consensus proposal
     async fn consensus_proposal(
@@ -129,6 +132,10 @@ where
 
     fn module_kind(&self) -> ModuleKind {
         <Self as ServerModule>::module_kind()
+    }
+
+    fn consensus_version(&self) -> ModuleConsensusVersion {
+        <Self as ServerModule>::consensus_version(self)
     }
 
     /// This module's contribution to the next consensus proposal
