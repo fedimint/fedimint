@@ -19,7 +19,7 @@ use tokio_stream::wrappers::ReceiverStream;
 use tonic::Status;
 use tracing::{error, info};
 
-use super::{ChannelInfo, ILnRpcClient, LightningRpcError, RouteHtlcStream};
+use super::{ChannelInfo, ILnRpcClient, LdkLspConfig, LightningRpcError, RouteHtlcStream};
 use crate::gateway_lnrpc::create_invoice_request::Description;
 use crate::gateway_lnrpc::intercept_htlc_response::{Action, Settle};
 use crate::gateway_lnrpc::{
@@ -64,6 +64,7 @@ impl GatewayLdkClient {
         esplora_server_url: &str,
         network: Network,
         lightning_port: u16,
+        lsp_config_or: Option<LdkLspConfig>,
     ) -> anyhow::Result<Self> {
         let mut node_builder = ldk_node::Builder::from_config(ldk_node::Config {
             network,
@@ -82,6 +83,14 @@ impl GatewayLdkClient {
             return Err(anyhow::anyhow!("Invalid data dir path"));
         };
         node_builder.set_storage_dir_path(data_dir_str.to_string());
+
+        if let Some(lsp_config) = lsp_config_or {
+            node_builder.set_liquidity_source_lsps2(
+                lsp_config.node_address,
+                lsp_config.node_id,
+                lsp_config.token_or,
+            );
+        }
 
         let node = Arc::new(node_builder.build()?);
         node.start().map_err(|e| {

@@ -19,6 +19,7 @@ use fedimint_core::{secp256k1, Amount};
 use fedimint_ln_common::route_hints::RouteHint;
 use fedimint_ln_common::PrunedInvoice;
 use futures::stream::BoxStream;
+use lightning::ln::msgs::SocketAddress;
 use lightning_invoice::Bolt11Invoice;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -26,8 +27,9 @@ use thiserror::Error;
 use self::cln::NetworkLnRpcClient;
 use self::lnd::GatewayLndClient;
 use crate::envs::{
-    FM_GATEWAY_LIGHTNING_ADDR_ENV, FM_LDK_ESPLORA_SERVER_URL, FM_LDK_NETWORK, FM_LND_MACAROON_ENV,
-    FM_LND_RPC_ADDR_ENV, FM_LND_TLS_CERT_ENV, FM_PORT_LDK,
+    FM_GATEWAY_LIGHTNING_ADDR_ENV, FM_LDK_ESPLORA_SERVER_URL, FM_LDK_LSP_NODE_ADDRESS,
+    FM_LDK_LSP_NODE_ID, FM_LDK_LSP_TOKEN, FM_LDK_NETWORK, FM_LND_MACAROON_ENV, FM_LND_RPC_ADDR_ENV,
+    FM_LND_TLS_CERT_ENV, FM_PORT_LDK,
 };
 use crate::gateway_lnrpc::{
     CloseChannelsWithPeerResponse, CreateInvoiceRequest, CreateInvoiceResponse, EmptyResponse,
@@ -263,6 +265,18 @@ pub enum LightningMode {
         /// LDK lightning server port
         #[arg(long = "ldk-lightning-port", env = FM_PORT_LDK)]
         lightning_port: u16,
+
+        /// Lightning address of trusted LSP node
+        #[arg(long = "ldk-lsp-node-address", env = FM_LDK_LSP_NODE_ADDRESS)]
+        lsp_node_address: Option<String>,
+
+        /// Lightning node ID of trusted LSP node
+        #[arg(long = "ldk-lsp-node-id", env = FM_LDK_LSP_NODE_ID)]
+        lsp_node_id: Option<bitcoin::secp256k1::PublicKey>,
+
+        /// Lightning node LSP token
+        #[arg(long = "ldk-lsp-token", env = FM_LDK_LSP_TOKEN)]
+        lsp_node_token: Option<String>,
     },
 }
 
@@ -279,6 +293,12 @@ pub struct GatewayLightningBuilder {
     pub lightning_mode: LightningMode,
     pub gateway_db: Database,
     pub ldk_data_dir: PathBuf,
+}
+
+pub struct LdkLspConfig {
+    pub node_address: SocketAddress,
+    pub node_id: bitcoin::secp256k1::PublicKey,
+    pub token_or: Option<String>,
 }
 
 #[async_trait]
@@ -303,15 +323,47 @@ impl LightningBuilder for GatewayLightningBuilder {
                 esplora_server_url,
                 network,
                 lightning_port,
-            } => Box::new(
-                ldk::GatewayLdkClient::new(
-                    &self.ldk_data_dir,
-                    &esplora_server_url,
-                    network,
-                    lightning_port,
+                lsp_node_address,
+                lsp_node_id,
+                lsp_node_token,
+            } => {
+                assert!(
+                    (lsp_node_address.is_some() == lsp_node_id.is_some()),
+                    "Both or neither of LSP node address and node ID must be provided"
+                );
+
+                let lsp_config_or =
+                    if let (Some(node_address), Some(node_id)) = (lsp_node_address, lsp_node_id) {
+                        let node_address = match SocketAddress::from_str(&node_address) {
+                            Ok(addr) => addr,
+                            Err(e) => {
+                                panic!("Invalid LSP node address: {e}");
+                            }
+                        };
+                        Some(LdkLspConfig {
+                            node_address,
+                            node_id,
+                            token_or: lsp_node_token,
+                        })
+                    } else {
+                        assert!(
+                            lsp_node_token.is_none(),
+                            "LSP token provided without LSP node address and node ID"
+                        );
+                        None
+                    };
+
+                Box::new(
+                    ldk::GatewayLdkClient::new(
+                        &self.ldk_data_dir,
+                        &esplora_server_url,
+                        network,
+                        lightning_port,
+                        lsp_config_or,
+                    )
+                    .unwrap(),
                 )
-                .unwrap(),
-            ),
+            }
         }
     }
 

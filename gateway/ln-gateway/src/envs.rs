@@ -42,3 +42,12 @@ pub const FM_LDK_NETWORK: &str = "FM_LDK_NETWORK";
 
 // Env variable to TODO
 pub const FM_PORT_LDK: &str = "FM_PORT_LDK";
+
+// Env variable to TODO
+pub const FM_LDK_LSP_NODE_ADDRESS: &str = "FM_LDK_LSP_NODE_ADDRESS";
+
+// Env variable to TODO
+pub const FM_LDK_LSP_NODE_ID: &str = "FM_LDK_LSP_NODE_ID";
+
+// Env variable to TODO
+pub const FM_LDK_LSP_TOKEN: &str = "FM_LDK_LSP_TOKEN";
