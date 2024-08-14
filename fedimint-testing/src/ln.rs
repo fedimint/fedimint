@@ -235,7 +235,10 @@ impl ILnRpcClient for FakeLightningTest {
     }
 
     async fn get_funding_address(&self) -> Result<GetFundingAddressResponse, LightningRpcError> {
-        unimplemented!("FakeLightningTest does not support getting a funding address")
+        Err(LightningRpcError::FailedToGetFundingAddress {
+            failure_reason: "FakeLightningTest does not support getting a funding address"
+                .to_string(),
+        })
     }
 
     async fn open_channel(
@@ -245,21 +248,31 @@ impl ILnRpcClient for FakeLightningTest {
         _channel_size_sats: u64,
         _push_amount_sats: u64,
     ) -> Result<EmptyResponse, LightningRpcError> {
-        unimplemented!("FakeLightningTest does not support opening channels")
+        Err(LightningRpcError::FailedToOpenChannel {
+            failure_reason: "FakeLightningTest does not support opening channels".to_string(),
+        })
     }
 
     async fn close_channels_with_peer(
         &self,
         _pubkey: bitcoin::secp256k1::PublicKey,
     ) -> Result<CloseChannelsWithPeerResponse, LightningRpcError> {
-        unimplemented!("FakeLightningTest does not support closing channels by peer")
+        Err(LightningRpcError::FailedToCloseChannelsWithPeer {
+            failure_reason: "FakeLightningTest does not support closing channels by peer"
+                .to_string(),
+        })
     }
 
     async fn list_active_channels(&self) -> Result<Vec<ChannelInfo>, LightningRpcError> {
-        unimplemented!("FakeLightningTest does not support listing active channels")
+        Err(LightningRpcError::FailedToListActiveChannels {
+            failure_reason: "FakeLightningTest does not support listing active channels"
+                .to_string(),
+        })
     }
 
     async fn get_balances(&self) -> Result<GetBalancesResponse, LightningRpcError> {
-        unimplemented!("FakeLightningTest does not support getting balances")
+        Err(LightningRpcError::FailedToGetBalances {
+            failure_reason: "FakeLightningTest does not support getting balances".to_string(),
+        })
     }
 }
