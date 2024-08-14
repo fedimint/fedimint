@@ -45,7 +45,7 @@ use fedimint_unknown_server::UnknownInit;
 use futures::Future;
 use lightning_invoice::{Bolt11Invoice, Bolt11InvoiceDescription, Description};
 use ln_gateway::gateway_module_v2::{FinalReceiveState, GatewayClientModuleV2};
-use ln_gateway::rpc::{BalancePayload, FederationRoutingFees, SetConfigurationPayload};
+use ln_gateway::rpc::{FederationRoutingFees, SetConfigurationPayload};
 use ln_gateway::state_machine::pay::{
     OutgoingContractError, OutgoingPaymentError, OutgoingPaymentErrorType,
 };
@@ -907,13 +907,21 @@ fn routing_fees_in_msats(routing_fees: &FederationRoutingFees, amount: &Amount) 
 /// Retrieves the balance of each federation the gateway is connected to.
 async fn get_balances(gw: &Gateway, ids: impl IntoIterator<Item = &FederationId>) -> Vec<u64> {
     let mut balances = vec![];
+    let all_balances = gw
+        .handle_get_balances_msg()
+        .await
+        .expect("Could not get balances");
     for id in ids.into_iter() {
-        let balance_payload = BalancePayload { federation_id: *id };
-        let balance = gw
-            .handle_balance_msg(balance_payload)
-            .await
-            .expect("Could not get balance");
-        balances.push(balance.msats);
+        balances.push(
+            all_balances
+                .ecash_balances
+                .iter()
+                .find(|balance| &balance.federation_id == id)
+                .unwrap()
+                .ecash_balance_msats
+                .msats,
+        );
+        // balances.balances.push(balance.msats);
     }
 
     balances

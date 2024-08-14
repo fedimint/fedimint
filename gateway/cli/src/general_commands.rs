@@ -7,9 +7,9 @@ use fedimint_core::{fedimint_build_code_version_env, Amount, BitcoinAmountOrAll}
 use fedimint_mint_client::OOBNotes;
 use ln_gateway::rpc::rpc_client::GatewayRpcClient;
 use ln_gateway::rpc::{
-    BackupPayload, BalancePayload, ConfigPayload, ConnectFedPayload, DepositAddressPayload,
-    FederationRoutingFees, LeaveFedPayload, ReceiveEcashPayload, SetConfigurationPayload,
-    SpendEcashPayload, WithdrawPayload,
+    BackupPayload, ConfigPayload, ConnectFedPayload, DepositAddressPayload, FederationRoutingFees,
+    LeaveFedPayload, ReceiveEcashPayload, SetConfigurationPayload, SpendEcashPayload,
+    WithdrawPayload,
 };
 
 use crate::print_response;
@@ -53,12 +53,8 @@ pub enum GeneralCommands {
         #[clap(long)]
         federation_id: Option<FederationId>,
     },
-    /// Check gateway's e-cash balance on the specified federation.
-    Balance {
-        #[clap(long)]
-        federation_id: FederationId,
-    },
-    /// Get the total on-chain, lightning, and eCash balances of the gateway.
+    /// Get the total on-chain, lightning, and per-federation e-cash balances of
+    /// the gateway.
     GetBalances,
     /// Generate a new peg-in address to a federation that the gateway can claim
     /// e-cash for later.
@@ -171,13 +167,6 @@ impl GeneralCommands {
             Self::Config { federation_id } => {
                 let response = create_client()
                     .get_config(ConfigPayload { federation_id })
-                    .await?;
-
-                print_response(response);
-            }
-            Self::Balance { federation_id } => {
-                let response = create_client()
-                    .get_balance(BalancePayload { federation_id })
                     .await?;
 
                 print_response(response);

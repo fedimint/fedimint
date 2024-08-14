@@ -2,6 +2,7 @@ use std::collections::{BTreeMap, HashSet};
 use std::io::Write;
 use std::ops::ControlFlow;
 use std::path::{Path, PathBuf};
+use std::str::FromStr;
 use std::time::{Duration, Instant};
 use std::{env, ffi};
 
@@ -9,6 +10,7 @@ use anyhow::{anyhow, bail, Context, Result};
 use bitcoincore_rpc::bitcoin;
 use bitcoincore_rpc::bitcoin::Txid;
 use clap::Subcommand;
+use fedimint_core::config::FederationId;
 use fedimint_core::core::LEGACY_HARDCODED_INSTANCE_ID_WALLET;
 use fedimint_core::encoding::Decodable;
 use fedimint_core::envs::is_env_var_set;
@@ -19,7 +21,7 @@ use fedimint_core::{Amount, PeerId};
 use fedimint_ln_client::cli::LnInvoiceResponse;
 use fedimint_logging::LOG_DEVIMINT;
 use hex::ToHex;
-use ln_gateway::rpc::GatewayInfo;
+use ln_gateway::rpc::{GatewayBalances, GatewayInfo};
 use serde_json::json;
 use tokio::net::TcpStream;
 use tokio::{fs, try_join};
@@ -697,7 +699,7 @@ pub async fn cli_tests(dev_fed: DevFed) -> Result<()> {
 
     fed.pegin_gateway(10_000_000, &gw_cln).await?;
 
-    let fed_id = fed.calculate_federation_id();
+    let fed_id = FederationId::from_str(&fed.calculate_federation_id())?;
     let invite = fed.invite_code()?;
 
     let fedimint_cli_version = crate::util::FedimintCli::version_or_default().await;
@@ -887,11 +889,8 @@ pub async fn cli_tests(dev_fed: DevFed) -> Result<()> {
     client.use_gateway(&gw_cln).await?;
 
     let initial_client_balance = client.balance().await?;
-    let initial_cln_gateway_balance = cmd!(gw_cln, "balance", "--federation-id={fed_id}")
-        .out_json()
-        .await?
-        .as_u64()
-        .unwrap();
+    let initial_cln_gateway_balance =
+        get_gateway_ecash_balance_for_federation(&gw_cln, &fed_id).await?;
     let (invoice, payment_hash) = lnd.invoice(1_200_000).await?;
     ln_pay(&client, invoice.clone(), cln_gw_id.clone(), false).await?;
     lnd.wait_bolt11_invoice(payment_hash).await?;
@@ -907,15 +906,12 @@ pub async fn cli_tests(dev_fed: DevFed) -> Result<()> {
 
     // Assert balances changed by 1_200_000 msat (amount sent) + 0 msat (fee)
     let final_cln_outgoing_client_balance = client.balance().await?;
-    let final_cln_outgoing_gateway_balance = cmd!(gw_cln, "balance", "--federation-id={fed_id}")
-        .out_json()
-        .await?
-        .as_u64()
-        .unwrap();
+    let final_cln_outgoing_gateway_balance =
+        get_gateway_ecash_balance_for_federation(&gw_cln, &fed_id).await?;
 
-    let expected_diff = 1_200_000;
+    let expected_diff = Amount::from_msats(1_200_000);
     anyhow::ensure!(
-        initial_client_balance - final_cln_outgoing_client_balance == expected_diff,
+        initial_client_balance - final_cln_outgoing_client_balance == expected_diff.msats,
         "Client balance changed by {} on CLN outgoing payment, expected {expected_diff}",
         (initial_client_balance - final_cln_outgoing_client_balance)
     );
@@ -944,18 +940,16 @@ pub async fn cli_tests(dev_fed: DevFed) -> Result<()> {
 
     // Assert balances changed by 1100000 msat
     let final_cln_incoming_client_balance = client.balance().await?;
-    let final_cln_incoming_gateway_balance = cmd!(gw_cln, "balance", "--federation-id={fed_id}")
-        .out_json()
-        .await?
-        .as_u64()
-        .unwrap();
+    let final_cln_incoming_gateway_balance =
+        get_gateway_ecash_balance_for_federation(&gw_cln, &fed_id).await?;
     anyhow::ensure!(
         final_cln_incoming_client_balance - final_cln_outgoing_client_balance == 1_100_000,
         "Client balance changed by {} on CLN incoming payment, expected 1100000",
         (final_cln_incoming_client_balance - final_cln_outgoing_client_balance)
     );
     anyhow::ensure!(
-        final_cln_outgoing_gateway_balance - final_cln_incoming_gateway_balance == 1_100_000,
+        final_cln_outgoing_gateway_balance - final_cln_incoming_gateway_balance
+            == Amount::from_msats(1_100_000),
         "CLN Gateway balance changed by {} on CLN incoming payment, expected 1100000",
         (final_cln_outgoing_gateway_balance - final_cln_incoming_gateway_balance)
     );
@@ -966,11 +960,8 @@ pub async fn cli_tests(dev_fed: DevFed) -> Result<()> {
 
     // OUTGOING: fedimint-cli pays CLN via LND gateaway
     info!("Testing outgoing payment from client to CLN via LND gateway");
-    let initial_lnd_gateway_balance = cmd!(gw_lnd, "balance", "--federation-id={fed_id}")
-        .out_json()
-        .await?
-        .as_u64()
-        .unwrap();
+    let initial_lnd_gateway_balance =
+        get_gateway_ecash_balance_for_federation(&gw_lnd, &fed_id).await?;
     let invoice = cln
         .invoice(
             2_000_000,
@@ -989,24 +980,22 @@ pub async fn cli_tests(dev_fed: DevFed) -> Result<()> {
         try_join!(cln.await_block_processing(), lnd.await_block_processing())?;
     }
     ln_pay(&client, invoice.clone(), lnd_gw_id.clone(), false).await?;
-    let fed_id = fed.calculate_federation_id();
+    let fed_id = FederationId::from_str(&fed.calculate_federation_id())?;
 
     cln.wait_any_bolt11_invoice().await?;
 
     // Assert balances changed by 2_000_000 msat (amount sent) + 0 msat (fee)
     let final_lnd_outgoing_client_balance = client.balance().await?;
-    let final_lnd_outgoing_gateway_balance = cmd!(gw_lnd, "balance", "--federation-id={fed_id}")
-        .out_json()
-        .await?
-        .as_u64()
-        .unwrap();
+    let final_lnd_outgoing_gateway_balance =
+        get_gateway_ecash_balance_for_federation(&gw_lnd, &fed_id).await?;
     anyhow::ensure!(
         final_cln_incoming_client_balance - final_lnd_outgoing_client_balance == 2_000_000,
         "Client balance changed by {} on LND outgoing payment, expected 2_000_000",
         (final_cln_incoming_client_balance - final_lnd_outgoing_client_balance)
     );
     anyhow::ensure!(
-        final_lnd_outgoing_gateway_balance - initial_lnd_gateway_balance == 2_000_000,
+        final_lnd_outgoing_gateway_balance - initial_lnd_gateway_balance
+            == Amount::from_msats(2_000_000),
         "LND Gateway balance changed by {} on LND outgoing payment, expected 2_000_000",
         (final_lnd_outgoing_gateway_balance - initial_lnd_gateway_balance)
     );
@@ -1032,18 +1021,16 @@ pub async fn cli_tests(dev_fed: DevFed) -> Result<()> {
 
     // Assert balances changed by 1_300_000 msat
     let final_lnd_incoming_client_balance = client.balance().await?;
-    let final_lnd_incoming_gateway_balance = cmd!(gw_lnd, "balance", "--federation-id={fed_id}")
-        .out_json()
-        .await?
-        .as_u64()
-        .unwrap();
+    let final_lnd_incoming_gateway_balance =
+        get_gateway_ecash_balance_for_federation(&gw_lnd, &fed_id).await?;
     anyhow::ensure!(
         final_lnd_incoming_client_balance - final_lnd_outgoing_client_balance == 1_300_000,
         "Client balance changed by {} on LND incoming payment, expected 1_300_000",
         (final_lnd_incoming_client_balance - final_lnd_outgoing_client_balance)
     );
     anyhow::ensure!(
-        final_lnd_outgoing_gateway_balance - final_lnd_incoming_gateway_balance == 1_300_000,
+        final_lnd_outgoing_gateway_balance - final_lnd_incoming_gateway_balance
+            == Amount::from_msats(1_300_000),
         "LND Gateway balance changed by {} on LND incoming payment, expected 1_300_000",
         (final_lnd_outgoing_gateway_balance - final_lnd_incoming_gateway_balance)
     );
@@ -1213,6 +1200,22 @@ pub async fn cli_tests(dev_fed: DevFed) -> Result<()> {
     }
 
     Ok(())
+}
+
+async fn get_gateway_ecash_balance_for_federation(
+    gateway: &Gatewayd,
+    federation_id: &FederationId,
+) -> Result<Amount> {
+    let balances: GatewayBalances =
+        serde_json::from_value(cmd!(gateway, "get-balances").out_json().await?)?;
+    match balances
+        .ecash_balances
+        .iter()
+        .find(|balance| &balance.federation_id == federation_id)
+    {
+        Some(balance) => Ok(balance.ecash_balance_msats),
+        None => Err(anyhow!("Federation not found in gateway balances")),
+    }
 }
 
 pub async fn start_hold_invoice_payment(

@@ -14,9 +14,11 @@ just mprocs
 
 > [!NOTE]
 > In a memory-constrained environments you might want to [set the `CARGO_BUILD_JOBS` environment variable](https://doc.rust-lang.org/cargo/reference/config.html#buildjobs) to a lower number (defaults to number of logical CPU cores):
+>
 > ```shell
 > CARGO_BUILD_JOBS=2 just mprocs
 > ```
+>
 > As a rule of thumb expect each parallel job to require 2-2.5GB of memory. Running the build less parallel will lead to longer build times but can prevent the process from being [killed by the OOM killer](https://www.kernel.org/doc/gorman/html/understand/understand016.html), leading to hard to debug errors.
 
 This uses a tool called [mprocs](https://github.com/pvolok/mprocs) to spawn working local federation, displays logs for all daemons involved, as well as a shell with some convenient aliases and environment variables already setup so you can start tinkering. Click the tabs on the left nav to inspect the different processes. You can see available keyboard commands on the bottom -- for example, when you select text you'll see a `c` command that can be used to copy the text. To quit, type `ctrl-a` then `q` then `y`. If you're a tmux user, you can also use `just tmuxinator` to setup a tmux session with a running federation. But this is a little less user-friendly.
@@ -92,13 +94,20 @@ $ fedimint-cli reissue BgAAAAAAAAAgAAAAAAAAAAEAAAAAAAAAwdt...
 
 ### Using the Gateway
 
-The [lightning gateway](../gateway/ln-gateway) connects the federation to the lightning network. It contains a federation client that holds ecash notes just like `fedimint-cli`. The mprocs setup scripts also give it some ecash. To check its balance, we use the [`gateway-cli`](../gateway/cli) utility. In the mprocs environment there are 2 lightning gateways -- one for Core Lightning and one for LND -- so we add `gateway-cln` and `gateway-lnd` shell aliases which will run `gateway-cli` pointed at that gateway. To get the balance with the Core Lightinng gateway, run `gateway-cln info`, copy the federation id and then:
+The [lightning gateway](../gateway/ln-gateway) connects the federation to the lightning network. It contains a federation client that holds e-cash notes just like `fedimint-cli`. The mprocs setup scripts also give it some e-cash. To check its balance, we use the [`gateway-cli`](../gateway/cli) utility. In the mprocs environment there are 2 lightning gateways -- one for Core Lightning and one for LND -- so we add `gateway-cln` and `gateway-lnd` shell aliases which will run `gateway-cli` pointed at that gateway. To get the balance with the Core Lightinng gateway, run `gateway-cln info`, copy the federation id and then:
 
 ```shell
-$ gateway-cln balance --federation-id <FEDERATION-ID>
+$ gateway-cln balances
 
 {
-  30000000
+  "onchain_balance_sats": 89999846,
+  "lightning_balance_msats": 10000000000,
+  "ecash_balances": [
+    {
+      "federation_id": "922e768d81a1437439e8640c570edbec84ac0acca35fed2010b80fca38d642b8",
+      "ecash_balance_msats": 999000000
+    }
+  ]
 }
 ```
 
@@ -136,6 +145,7 @@ $ lncli lookupinvoice 1072fe19b3a53b3d778f6d5b0b...
 ```
 
 To receive a lightning payment inside use `fedimint-cli` to create an invoice:
+
 ```shell
 $ fedimint-cli ln-invoice --amount 1000
 
