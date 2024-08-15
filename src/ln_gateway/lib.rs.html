@@ -1901,6 +1901,8 @@
 <a href="#1901" id="1901">1901</a>
 <a href="#1902" id="1902">1902</a>
 <a href="#1903" id="1903">1903</a>
+<a href="#1904" id="1904">1904</a>
+<a href="#1905" id="1905">1905</a>
 </pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::cast_possible_wrap)]
@@ -2151,6 +2153,8 @@
             .field(<span class="string">"client_builder"</span>, <span class="kw-2">&amp;</span><span class="self">self</span>.client_builder)
             .field(<span class="string">"gateway_db"</span>, <span class="kw-2">&amp;</span><span class="self">self</span>.gateway_db)
             .field(<span class="string">"gateway_id"</span>, <span class="kw-2">&amp;</span><span class="self">self</span>.gateway_id)
+            .field(<span class="string">"versioned_api"</span>, <span class="kw-2">&amp;</span><span class="self">self</span>.versioned_api)
+            .field(<span class="string">"listen"</span>, <span class="kw-2">&amp;</span><span class="self">self</span>.listen)
             .finish_non_exhaustive()
     }
 }
