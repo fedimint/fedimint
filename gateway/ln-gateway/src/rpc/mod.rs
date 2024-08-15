@@ -11,7 +11,7 @@ use fedimint_core::core::OperationId;
 use fedimint_core::{secp256k1, Amount, BitcoinAmountOrAll};
 use fedimint_ln_common::config::parse_routing_fees;
 use fedimint_mint_client::OOBNotes;
-use lightning_invoice::RoutingFees;
+use lightning_invoice::{Bolt11Invoice, RoutingFees};
 use serde::{Deserialize, Serialize};
 
 use crate::lightning::LightningMode;
@@ -156,6 +156,13 @@ pub struct CreateInvoiceForSelfPayload {
     pub amount_msats: u64,
     pub expiry_secs: u32,
     pub description: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct PayInvoicePayload {
+    pub invoice: Bolt11Invoice,
+    pub max_delay: u64,
+    pub max_fee: Amount,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]

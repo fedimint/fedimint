@@ -6,6 +6,7 @@ pub const CREATE_BOLT11_INVOICE_ENDPOINT: &str = "/create_bolt11_invoice";
 pub const CREATE_BOLT11_INVOICE_FOR_SELF_ENDPOINT: &str = "/create_bolt11_invoice_for_self";
 pub const GATEWAYS_ENDPOINT: &str = "gateways";
 pub const OUTGOING_CONTRACT_EXPIRATION_ENDPOINT: &str = "outgoing_contract_expiration";
+pub const PAY_INVOICE_SELF_ENDPOINT: &str = "/pay_invoice_self";
 pub const REMOVE_GATEWAY_ENDPOINT: &str = "remove_gateway";
 pub const ROUTING_INFO_ENDPOINT: &str = "/routing_info";
 pub const SEND_PAYMENT_ENDPOINT: &str = "/send_payment";

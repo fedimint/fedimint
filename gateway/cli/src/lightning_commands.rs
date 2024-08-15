@@ -2,6 +2,8 @@ use std::time::Duration;
 
 use clap::Subcommand;
 use fedimint_core::util::{backoff_util, retry};
+use fedimint_core::Amount;
+use lightning_invoice::Bolt11Invoice;
 use ln_gateway::rpc::rpc_client::GatewayRpcClient;
 use ln_gateway::rpc::{
     CloseChannelsWithPeerPayload, GetLnOnchainAddressPayload, OpenChannelPayload,
@@ -27,6 +29,16 @@ pub enum LightningCommands {
 
         #[clap(long)]
         description: Option<String>,
+    },
+    /// Pay a lightning invoice as the gateway (i.e. no e-cash exchange).
+    PayInvoice {
+        invoice: Bolt11Invoice,
+
+        #[clap(long, default_value_t = 144)]
+        max_delay: u64,
+
+        #[clap(long)]
+        max_fee_msats: Amount,
     },
     /// Get a Bitcoin address from the gateway's lightning node's onchain
     /// wallet.
@@ -89,6 +101,20 @@ impl LightningCommands {
                         amount_msats,
                         expiry_secs,
                         description,
+                    })
+                    .await?;
+                println!("{response}");
+            }
+            Self::PayInvoice {
+                invoice,
+                max_delay,
+                max_fee_msats,
+            } => {
+                let response = create_client()
+                    .pay_invoice(ln_gateway::rpc::PayInvoicePayload {
+                        invoice,
+                        max_delay,
+                        max_fee: max_fee_msats,
                     })
                     .await?;
                 println!("{response}");
