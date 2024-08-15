@@ -263,6 +263,19 @@
 <a href="#263" id="263">263</a>
 <a href="#264" id="264">264</a>
 <a href="#265" id="265">265</a>
+<a href="#266" id="266">266</a>
+<a href="#267" id="267">267</a>
+<a href="#268" id="268">268</a>
+<a href="#269" id="269">269</a>
+<a href="#270" id="270">270</a>
+<a href="#271" id="271">271</a>
+<a href="#272" id="272">272</a>
+<a href="#273" id="273">273</a>
+<a href="#274" id="274">274</a>
+<a href="#275" id="275">275</a>
+<a href="#276" id="276">276</a>
+<a href="#277" id="277">277</a>
+<a href="#278" id="278">278</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::sync::atomic::{AtomicU64, Ordering};
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
@@ -500,7 +513,10 @@
     }
 
     <span class="kw">async fn </span>get_funding_address(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;GetFundingAddressResponse, LightningRpcError&gt; {
-        <span class="macro">unimplemented!</span>(<span class="string">"FakeLightningTest does not support getting a funding address"</span>)
+        <span class="prelude-val">Err</span>(LightningRpcError::FailedToGetFundingAddress {
+            failure_reason: <span class="string">"FakeLightningTest does not support getting a funding address"
+                </span>.to_string(),
+        })
     }
 
     <span class="kw">async fn </span>open_channel(
@@ -510,22 +526,32 @@
         _channel_size_sats: u64,
         _push_amount_sats: u64,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;EmptyResponse, LightningRpcError&gt; {
-        <span class="macro">unimplemented!</span>(<span class="string">"FakeLightningTest does not support opening channels"</span>)
+        <span class="prelude-val">Err</span>(LightningRpcError::FailedToOpenChannel {
+            failure_reason: <span class="string">"FakeLightningTest does not support opening channels"</span>.to_string(),
+        })
     }
 
     <span class="kw">async fn </span>close_channels_with_peer(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         _pubkey: bitcoin::secp256k1::PublicKey,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;CloseChannelsWithPeerResponse, LightningRpcError&gt; {
-        <span class="macro">unimplemented!</span>(<span class="string">"FakeLightningTest does not support closing channels by peer"</span>)
+        <span class="prelude-val">Err</span>(LightningRpcError::FailedToCloseChannelsWithPeer {
+            failure_reason: <span class="string">"FakeLightningTest does not support closing channels by peer"
+                </span>.to_string(),
+        })
     }
 
     <span class="kw">async fn </span>list_active_channels(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;Vec&lt;ChannelInfo&gt;, LightningRpcError&gt; {
-        <span class="macro">unimplemented!</span>(<span class="string">"FakeLightningTest does not support listing active channels"</span>)
+        <span class="prelude-val">Err</span>(LightningRpcError::FailedToListActiveChannels {
+            failure_reason: <span class="string">"FakeLightningTest does not support listing active channels"
+                </span>.to_string(),
+        })
     }
 
     <span class="kw">async fn </span>get_balances(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;GetBalancesResponse, LightningRpcError&gt; {
-        <span class="macro">unimplemented!</span>(<span class="string">"FakeLightningTest does not support getting balances"</span>)
+        <span class="prelude-val">Err</span>(LightningRpcError::FailedToGetBalances {
+            failure_reason: <span class="string">"FakeLightningTest does not support getting balances"</span>.to_string(),
+        })
     }
 }
 </code></pre></div></section></main></body></html>
