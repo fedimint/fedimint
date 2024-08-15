@@ -401,7 +401,7 @@ async fn migrate_to_v1(dbtx: &mut DatabaseTransaction<'_>) -> Result<(), anyhow:
 
 async fn migrate_to_v2(dbtx: &mut DatabaseTransaction<'_>) -> Result<(), anyhow::Error> {
     // If there is no old federation configuration, there is nothing to do.
-    for (old_federation_id, old_federation_config) in dbtx.load_federation_configs_v0().await {
+    for (old_federation_id, _old_federation_config) in dbtx.load_federation_configs_v0().await {
         if let Some(old_federation_config) = dbtx
             .remove_entry(&FederationIdKeyV0 {
                 id: old_federation_id,
