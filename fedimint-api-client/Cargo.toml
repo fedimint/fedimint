@@ -12,6 +12,7 @@ repository = "https://github.com/fedimint/fedimint"
 development = ["tokio-test"]
 
 [features]
+default = ["tor"]
 tor = ["dep:strum", "dep:curve25519-dalek", "arti-client/tokio", "arti-client/rustls", "arti-client/onion-service-client"]
 
 [lib]

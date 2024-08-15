@@ -9,6 +9,7 @@ readme = "../../README.md"
 repository = "https://github.com/fedimint/fedimint"
 
 [features]
+default = ["tor"]
 tor = ["fedimint-client/tor", "fedimint-api-client/tor"]
 
 [[bin]]

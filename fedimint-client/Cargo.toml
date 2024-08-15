@@ -16,6 +16,7 @@ normal = ["aquamarine"]
 rustc-args = ["--cfg", "tokio_unstable"]
 
 [features]
+default = ["tor"]
 tor = ["fedimint-api-client/tor"]
 
 [lib]

@@ -12,6 +12,7 @@ repository = "https://github.com/fedimint/fedimint"
 rustc-args = ["--cfg", "tokio_unstable"]
 
 [features]
+default = ["tor"]
 tor = ["ln-gateway/tor"]
 
 [lib]
