@@ -12,7 +12,7 @@ repository = "https://github.com/fedimint/fedimint"
 development = ["tokio-test"]
 
 [features]
-tor = ["arti-client", "strum", "curve25519-dalek"]
+tor = ["dep:strum", "dep:curve25519-dalek", "arti-client/tokio", "arti-client/rustls", "arti-client/onion-service-client"]
 
 [lib]
 name = "fedimint_api_client"
@@ -51,7 +51,7 @@ tokio-rustls = { version = "0.26.0", default-features = false, features = [
 ] }
 webpki-roots = { version = "0.26.3" }
 rustls-pki-types = { version = "1.8.0" }
-arti-client = { version = "0.20.0", features = ["tokio", "rustls", "onion-service-client"], default-features = false, package = "fedimint-arti-client", optional = true }
+arti-client = { version = "0.20.0", default-features = false, package = "fedimint-arti-client", optional = true }
 strum = { version = "0.26.3", optional = true }
 # We need to pin this arti's `curve25519-dalek` dependency, due to `https://rustsec.org/advisories/RUSTSEC-2024-0344` vulnerability
 # It's been updated by https://gitlab.torproject.org/tpo/core/arti/-/merge_requests/2211, should be removed in next release.

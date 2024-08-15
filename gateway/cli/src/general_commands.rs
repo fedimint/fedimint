@@ -81,9 +81,9 @@ pub enum GeneralCommands {
     ConnectFed {
         /// Invite code to connect to the federation
         invite_code: String,
-        #[cfg(feature = "tor")]
         /// Activate usage of Tor (or not) as the connector for the federation
         /// client
+        #[cfg(feature = "tor")]
         use_tor: Option<bool>,
     },
     /// Leave a federation.

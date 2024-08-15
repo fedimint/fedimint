@@ -34,7 +34,7 @@ clap_complete = "4.5.14"
 fedimint-core = { workspace = true }
 fedimint-logging = { workspace = true }
 fedimint-mint-client = { workspace = true }
-ln-gateway = { version = "=0.5.0-alpha", package = "fedimint-ln-gateway", path = "../ln-gateway" }
+ln-gateway = { version = "=0.5.0-alpha", default-features = false, package = "fedimint-ln-gateway", path = "../ln-gateway" }
 reqwest = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
