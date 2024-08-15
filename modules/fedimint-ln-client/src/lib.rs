@@ -62,6 +62,9 @@ use fedimint_ln_common::contracts::{
     Contract, ContractId, DecryptedPreimage, EncryptedPreimage, IdentifiableContract, Preimage,
     PreimageKey,
 };
+use fedimint_ln_common::gateway_endpoint_constants::{
+    GET_GATEWAY_ID_ENDPOINT, PAY_INVOICE_ENDPOINT,
+};
 use fedimint_ln_common::{
     ContractOutput, LightningCommonInit, LightningGateway, LightningGatewayAnnouncement,
     LightningGatewayRegistration, LightningInput, LightningModuleTypes, LightningOutput,
@@ -2032,7 +2035,7 @@ impl GatewayConnection for RealGatewayConnection {
             .get(
                 gateway
                     .api
-                    .join("id")
+                    .join(GET_GATEWAY_ID_ENDPOINT)
                     .expect("id contains no invalid characters for a URL")
                     .as_str(),
             )
@@ -2065,7 +2068,7 @@ impl GatewayConnection for RealGatewayConnection {
             .post(
                 gateway
                     .api
-                    .join("pay_invoice")
+                    .join(PAY_INVOICE_ENDPOINT)
                     .expect("'pay_invoice' contains no invalid characters for a URL")
                     .as_str(),
             )
