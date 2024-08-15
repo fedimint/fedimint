@@ -13,14 +13,16 @@ use fedimint_core::task::TaskGroup;
 use fedimint_ln_client::pay::PayInvoicePayload;
 use fedimint_ln_common::gateway_endpoint_constants::{
     ADDRESS_ENDPOINT, BACKUP_ENDPOINT, BALANCE_ENDPOINT, CLOSE_CHANNELS_WITH_PEER_ENDPOINT,
-    CONFIGURATION_ENDPOINT, CONNECT_FED_ENDPOINT, CREATE_BOLT11_INVOICE_V2_ENDPOINT,
-    GATEWAY_INFO_ENDPOINT, GATEWAY_INFO_POST_ENDPOINT, GET_BALANCES_ENDPOINT,
-    GET_FUNDING_ADDRESS_ENDPOINT, GET_GATEWAY_ID_ENDPOINT, LEAVE_FED_ENDPOINT,
-    LIST_ACTIVE_CHANNELS_ENDPOINT, OPEN_CHANNEL_ENDPOINT, PAY_INVOICE_ENDPOINT,
-    RECEIVE_ECASH_ENDPOINT, RESTORE_ENDPOINT, ROUTING_INFO_V2_ENDPOINT, SEND_PAYMENT_V2_ENDPOINT,
+    CONFIGURATION_ENDPOINT, CONNECT_FED_ENDPOINT, GATEWAY_INFO_ENDPOINT,
+    GATEWAY_INFO_POST_ENDPOINT, GET_BALANCES_ENDPOINT, GET_FUNDING_ADDRESS_ENDPOINT,
+    GET_GATEWAY_ID_ENDPOINT, LEAVE_FED_ENDPOINT, LIST_ACTIVE_CHANNELS_ENDPOINT,
+    OPEN_CHANNEL_ENDPOINT, PAY_INVOICE_ENDPOINT, RECEIVE_ECASH_ENDPOINT, RESTORE_ENDPOINT,
     SET_CONFIGURATION_ENDPOINT, SPEND_ECASH_ENDPOINT, WITHDRAW_ENDPOINT,
 };
 use fedimint_lnv2_client::{CreateBolt11InvoicePayload, SendPaymentPayload};
+use fedimint_lnv2_common::endpoint_constants::{
+    CREATE_BOLT11_INVOICE_ENDPOINT, ROUTING_INFO_ENDPOINT, SEND_PAYMENT_ENDPOINT,
+};
 use hex::ToHex;
 use serde_json::{json, Value};
 use tokio::net::TcpListener;
@@ -151,10 +153,10 @@ fn v1_routes(gateway: Arc<Gateway>) -> Router {
         .route(PAY_INVOICE_ENDPOINT, post(pay_invoice))
         .route(GET_GATEWAY_ID_ENDPOINT, get(get_gateway_id))
         // These routes are for next generation lightning
-        .route(ROUTING_INFO_V2_ENDPOINT, post(routing_info_v2))
-        .route(SEND_PAYMENT_V2_ENDPOINT, post(pay_bolt11_invoice_v2))
+        .route(ROUTING_INFO_ENDPOINT, post(routing_info_v2))
+        .route(SEND_PAYMENT_ENDPOINT, post(pay_bolt11_invoice_v2))
         .route(
-            CREATE_BOLT11_INVOICE_V2_ENDPOINT,
+            CREATE_BOLT11_INVOICE_ENDPOINT,
             post(create_bolt11_invoice_v2),
         )
         .route(SPEND_ECASH_ENDPOINT, post(spend_ecash))

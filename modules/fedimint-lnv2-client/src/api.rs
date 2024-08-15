@@ -13,8 +13,9 @@ use fedimint_core::{apply, async_trait_maybe_send, NumPeersExt, PeerId};
 use fedimint_lnv2_common::contracts::OutgoingContract;
 use fedimint_lnv2_common::endpoint_constants::{
     ADD_GATEWAY_ENDPOINT, AWAIT_INCOMING_CONTRACT_ENDPOINT, AWAIT_PREIMAGE_ENDPOINT,
-    CONSENSUS_BLOCK_COUNT_ENDPOINT, GATEWAYS_ENDPOINT, OUTGOING_CONTRACT_EXPIRATION_ENDPOINT,
-    REMOVE_GATEWAY_ENDPOINT,
+    CONSENSUS_BLOCK_COUNT_ENDPOINT, CREATE_BOLT11_INVOICE_ENDPOINT, GATEWAYS_ENDPOINT,
+    OUTGOING_CONTRACT_EXPIRATION_ENDPOINT, REMOVE_GATEWAY_ENDPOINT, ROUTING_INFO_ENDPOINT,
+    SEND_PAYMENT_ENDPOINT,
 };
 use fedimint_lnv2_common::{ContractId, GatewayEndpoint};
 use itertools::Itertools;
@@ -222,7 +223,7 @@ impl GatewayConnection for RealGatewayConnection {
             .post(
                 gateway_api
                     .into_url()
-                    .join("routing_info")
+                    .join(ROUTING_INFO_ENDPOINT)
                     .expect("'routing_info' contains no invalid characters for a URL")
                     .as_str(),
             )
@@ -244,7 +245,7 @@ impl GatewayConnection for RealGatewayConnection {
             .post(
                 gateway_api
                     .into_url()
-                    .join("create_bolt11_invoice")
+                    .join(CREATE_BOLT11_INVOICE_ENDPOINT)
                     .expect("'create_bolt11_invoice' contains no invalid characters for a URL")
                     .as_str(),
             )
@@ -269,7 +270,7 @@ impl GatewayConnection for RealGatewayConnection {
             .post(
                 gateway_api
                     .into_url()
-                    .join("send_payment")
+                    .join(SEND_PAYMENT_ENDPOINT)
                     .expect("'send_payment' contains no invalid characters for a URL")
                     .as_str(),
             )
