@@ -132,16 +132,12 @@
 <a href="#132" id="132">132</a>
 <a href="#133" id="133">133</a>
 <a href="#134" id="134">134</a>
-<a href="#135" id="135">135</a>
-<a href="#136" id="136">136</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::{impl_db_lookup, impl_db_record, OutPoint, PeerId};
 <span class="kw">use </span>fedimint_lnv2_common::contracts::{IncomingContract, OutgoingContract};
-<span class="kw">use </span>fedimint_lnv2_common::{ContractId, GatewayEndpoint};
+<span class="kw">use </span>fedimint_lnv2_common::{ContractId, GatewayEndpoint, LightningOutputOutcome};
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>strum_macros::EnumIter;
-
-<span class="kw">use </span><span class="kw">crate</span>::LightningOutputOutcome;
 
 <span class="attr">#[repr(u8)]
 #[derive(Clone, EnumIter, Debug)]

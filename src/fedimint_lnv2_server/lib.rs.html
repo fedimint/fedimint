@@ -777,6 +777,9 @@
 <a href="#777" id="777">777</a>
 <a href="#778" id="778">778</a>
 <a href="#779" id="779">779</a>
+<a href="#780" id="780">780</a>
+<a href="#781" id="781">781</a>
+<a href="#782" id="782">782</a>
 </pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_wrap)]
 #![allow(clippy::module_name_repetitions)]
@@ -822,8 +825,8 @@
 <span class="kw">use </span>fedimint_lnv2_common::{
     ContractId, GatewayEndpoint, LightningCommonInit, LightningConsensusItem, LightningInput,
     LightningInputError, LightningInputV0, LightningModuleTypes, LightningOutput,
-    LightningOutputError, LightningOutputOutcome, LightningOutputV0, OutgoingWitness,
-    MODULE_CONSENSUS_VERSION,
+    LightningOutputError, LightningOutputOutcome, LightningOutputOutcomeV0, LightningOutputV0,
+    OutgoingWitness, MODULE_CONSENSUS_VERSION,
 };
 <span class="kw">use </span>fedimint_server::config::distributedgen::{evaluate_polynomial_g1, PeerHandleOps};
 <span class="kw">use </span>fedimint_server::net::api::check_auth;
@@ -1244,7 +1247,7 @@
                     <span class="kw">return </span><span class="prelude-val">Err</span>(LightningOutputError::ContractAlreadyExists);
                 }
 
-                LightningOutputOutcome::Outgoing
+                LightningOutputOutcomeV0::Outgoing
             }
             LightningOutputV0::Incoming(contract) =&gt; {
                 <span class="kw">if </span>!contract.verify() {
@@ -1265,12 +1268,15 @@
 
                 <span class="kw">let </span>dk_share = contract.create_decryption_key_share(<span class="kw-2">&amp;</span><span class="self">self</span>.cfg.private.sk);
 
-                LightningOutputOutcome::Incoming(dk_share)
+                LightningOutputOutcomeV0::Incoming(dk_share)
             }
         };
 
         <span class="kw">if </span>dbtx
-            .insert_entry(<span class="kw-2">&amp;</span>OutputOutcomeKey(out_point), <span class="kw-2">&amp;</span>outcome)
+            .insert_entry(
+                <span class="kw-2">&amp;</span>OutputOutcomeKey(out_point),
+                <span class="kw-2">&amp;</span>LightningOutputOutcome::V0(outcome),
+            )
             .<span class="kw">await
             </span>.is_some()
         {

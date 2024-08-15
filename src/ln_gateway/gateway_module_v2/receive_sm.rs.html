@@ -252,6 +252,8 @@
 <a href="#252" id="252">252</a>
 <a href="#253" id="253">253</a>
 <a href="#254" id="254">254</a>
+<a href="#255" id="255">255</a>
+<a href="#256" id="256">256</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::future::pending;
 <span class="kw">use </span>std::sync::Arc;
@@ -272,7 +274,9 @@
 <span class="kw">use </span>fedimint_core::{NumPeersExt, OutPoint, PeerId, TransactionId};
 <span class="kw">use </span>fedimint_lnv2_client::LightningClientStateMachines;
 <span class="kw">use </span>fedimint_lnv2_common::contracts::IncomingContract;
-<span class="kw">use </span>fedimint_lnv2_common::{LightningInput, LightningInputV0, LightningOutputOutcome};
+<span class="kw">use </span>fedimint_lnv2_common::{
+    LightningInput, LightningInputV0, LightningOutputOutcome, LightningOutputOutcomeV0,
+};
 <span class="kw">use </span>tpe::{aggregate_decryption_shares, AggregatePublicKey, DecryptionKeyShare, PublicKeyShare};
 <span class="kw">use </span>tracing::{error, trace};
 
@@ -411,18 +415,18 @@
         <span class="kw">let </span>verify_decryption_share = <span class="kw">move </span>|peer, outcome: SerdeOutputOutcome| {
             <span class="kw">let </span>outcome = deserialize_outcome::&lt;LightningOutputOutcome&gt;(<span class="kw-2">&amp;</span>outcome, <span class="kw-2">&amp;</span>module_decoder)<span class="question-mark">?</span>;
 
-            <span class="kw">match </span>outcome {
-                LightningOutputOutcome::Incoming(share) =&gt; {
+            <span class="kw">match </span>outcome.ensure_v0_ref()<span class="question-mark">? </span>{
+                LightningOutputOutcomeV0::Incoming(share) =&gt; {
                     <span class="kw">if </span>!decryption_contract.verify_decryption_share(
                         tpe_pks.get(<span class="kw-2">&amp;</span>peer).ok_or(<span class="macro">anyhow!</span>(<span class="string">"Unknown peer pk"</span>))<span class="question-mark">?</span>,
-                        <span class="kw-2">&amp;</span>share,
+                        share,
                     ) {
                         <span class="macro">bail!</span>(<span class="string">"Invalid decryption share"</span>);
                     }
 
-                    <span class="prelude-val">Ok</span>(share)
+                    <span class="prelude-val">Ok</span>(<span class="kw-2">*</span>share)
                 }
-                LightningOutputOutcome::Outgoing =&gt; {
+                LightningOutputOutcomeV0::Outgoing =&gt; {
                     <span class="macro">bail!</span>(<span class="string">"Unexpected outcome variant"</span>);
                 }
             }

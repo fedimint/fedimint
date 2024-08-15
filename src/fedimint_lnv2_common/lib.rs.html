@@ -176,6 +176,12 @@
 <a href="#176" id="176">176</a>
 <a href="#177" id="177">177</a>
 <a href="#178" id="178">178</a>
+<a href="#179" id="179">179</a>
+<a href="#180" id="180">180</a>
+<a href="#181" id="181">181</a>
+<a href="#182" id="182">182</a>
+<a href="#183" id="183">183</a>
+<a href="#184" id="184">184</a>
 </pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::module_name_repetitions)]
 #![allow(clippy::must_use_candidate)]
@@ -255,15 +261,21 @@
     }
 }
 
+<span class="macro">extensible_associated_module_type!</span>(
+    LightningOutputOutcome,
+    LightningOutputOutcomeV0,
+    UnknownLightningOutputOutcomeVariantError
+);
+
 <span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
-</span><span class="kw">pub enum </span>LightningOutputOutcome {
+</span><span class="kw">pub enum </span>LightningOutputOutcomeV0 {
     Outgoing,
     Incoming(DecryptionKeyShare),
 }
 
-<span class="kw">impl </span>std::fmt::Display <span class="kw">for </span>LightningOutputOutcome {
+<span class="kw">impl </span>std::fmt::Display <span class="kw">for </span>LightningOutputOutcomeV0 {
     <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>std::fmt::Formatter&lt;<span class="lifetime">'_</span>&gt;) -&gt; std::fmt::Result {
-        <span class="macro">write!</span>(f, <span class="string">"LightningOutputOutcome"</span>)
+        <span class="macro">write!</span>(f, <span class="string">"LightningOutputOutcomeV0"</span>)
     }
 }
 
