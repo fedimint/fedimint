@@ -43,8 +43,8 @@ use fedimint_lnv2_common::endpoint_constants::{
 use fedimint_lnv2_common::{
     ContractId, GatewayEndpoint, LightningCommonInit, LightningConsensusItem, LightningInput,
     LightningInputError, LightningInputV0, LightningModuleTypes, LightningOutput,
-    LightningOutputError, LightningOutputOutcome, LightningOutputV0, OutgoingWitness,
-    MODULE_CONSENSUS_VERSION,
+    LightningOutputError, LightningOutputOutcome, LightningOutputOutcomeV0, LightningOutputV0,
+    OutgoingWitness, MODULE_CONSENSUS_VERSION,
 };
 use fedimint_server::config::distributedgen::{evaluate_polynomial_g1, PeerHandleOps};
 use fedimint_server::net::api::check_auth;
@@ -465,7 +465,7 @@ impl ServerModule for Lightning {
                     return Err(LightningOutputError::ContractAlreadyExists);
                 }
 
-                LightningOutputOutcome::Outgoing
+                LightningOutputOutcomeV0::Outgoing
             }
             LightningOutputV0::Incoming(contract) => {
                 if !contract.verify() {
@@ -486,12 +486,15 @@ impl ServerModule for Lightning {
 
                 let dk_share = contract.create_decryption_key_share(&self.cfg.private.sk);
 
-                LightningOutputOutcome::Incoming(dk_share)
+                LightningOutputOutcomeV0::Incoming(dk_share)
             }
         };
 
         if dbtx
-            .insert_entry(&OutputOutcomeKey(out_point), &outcome)
+            .insert_entry(
+                &OutputOutcomeKey(out_point),
+                &LightningOutputOutcome::V0(outcome),
+            )
             .await
             .is_some()
         {
