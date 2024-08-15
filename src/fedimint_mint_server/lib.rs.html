@@ -808,8 +808,6 @@
 <a href="#808" id="808">808</a>
 <a href="#809" id="809">809</a>
 <a href="#810" id="810">810</a>
-<a href="#811" id="811">811</a>
-<a href="#812" id="812">812</a>
 </pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_wrap)]
 #![allow(clippy::module_name_repetitions)]
@@ -837,7 +835,7 @@
 <span class="kw">use </span>fedimint_core::server::DynServerModule;
 <span class="kw">use </span>fedimint_core::{
     apply, async_trait_maybe_send, push_db_key_items, push_db_pair_items, Amount, NumPeersExt,
-    OutPoint, PeerId, ServerModule, Tiered, TieredMultiZip,
+    OutPoint, PeerId, ServerModule, Tiered, TieredMulti,
 };
 <span class="kw">use </span>fedimint_logging::LOG_MODULE_MINT;
 <span class="kw">pub use </span>fedimint_mint_common <span class="kw">as </span>common;
@@ -1103,20 +1101,21 @@
         <span class="comment">// TODO: the aggregate pks should become part of the MintConfigConsensus as they
         // can be obtained by evaluating the polynomial returned by the DKG at
         // zero
-        </span><span class="kw">let </span>pub_keys = TieredMultiZip::new(
-            config.peer_tbs_pks.values().map(Tiered::iter).collect(),
-        )
-        .map(|(amt, keys)| {
-            <span class="kw">let </span>keys = (<span class="number">1_u64</span>..)
-                .zip(keys.into_iter().copied())
-                .take(config.peer_tbs_pks.to_num_peers().threshold())
+        </span><span class="kw">let </span>tbs_pks =
+            TieredMulti::new_aggregate_from_tiered_iter(config.peer_tbs_pks.values().cloned())
+                .into_iter()
+                .map(|(amt, keys)| {
+                    <span class="kw">let </span>keys = (<span class="number">1_u64</span>..)
+                        .zip(keys)
+                        .take(config.peer_tbs_pks.to_num_peers().threshold())
+                        .collect();
+
+                    (amt, aggregate_public_key_shares(<span class="kw-2">&amp;</span>keys))
+                })
                 .collect();
 
-            (amt, aggregate_public_key_shares(<span class="kw-2">&amp;</span>keys))
-        });
-
         <span class="prelude-val">Ok</span>(MintClientConfig {
-            tbs_pks: pub_keys.collect(),
+            tbs_pks,
             fee_consensus: config.fee_consensus.clone(),
             peer_tbs_pks: config.peer_tbs_pks.clone(),
             max_notes_per_denomination: config.max_notes_per_denomination,
@@ -1461,16 +1460,13 @@
         <span class="comment">// TODO: the aggregate pks should become part of the MintConfigConsensus as they
         // can be obtained by evaluating the polynomial returned by the DKG at
         // zero
-        </span><span class="kw">let </span>aggregate_pub_keys = TieredMultiZip::new(
-            cfg.consensus
-                .peer_tbs_pks
-                .values()
-                .map(Tiered::iter)
-                .collect(),
+        </span><span class="kw">let </span>aggregate_pub_keys = TieredMulti::new_aggregate_from_tiered_iter(
+            cfg.consensus.peer_tbs_pks.values().cloned(),
         )
+        .into_iter()
         .map(|(amt, keys)| {
             <span class="kw">let </span>keys = (<span class="number">1_u64</span>..)
-                .zip(keys.into_iter().copied())
+                .zip(keys)
                 .take(cfg.consensus.peer_tbs_pks.to_num_peers().threshold())
                 .collect();
 

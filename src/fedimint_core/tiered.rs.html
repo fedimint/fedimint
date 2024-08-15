@@ -149,6 +149,19 @@
 <a href="#149" id="149">149</a>
 <a href="#150" id="150">150</a>
 <a href="#151" id="151">151</a>
+<a href="#152" id="152">152</a>
+<a href="#153" id="153">153</a>
+<a href="#154" id="154">154</a>
+<a href="#155" id="155">155</a>
+<a href="#156" id="156">156</a>
+<a href="#157" id="157">157</a>
+<a href="#158" id="158">158</a>
+<a href="#159" id="159">159</a>
+<a href="#160" id="160">160</a>
+<a href="#161" id="161">161</a>
+<a href="#162" id="162">162</a>
+<a href="#163" id="163">163</a>
+<a href="#164" id="164">164</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 
 <span class="kw">use </span>fedimint_core::Amount;
@@ -199,7 +212,11 @@
         <span class="self">self</span>.<span class="number">0</span>.keys()
     }
 
-    <span class="kw">pub fn </span>iter(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw">impl </span>Iterator&lt;Item = (Amount, <span class="kw-2">&amp;</span>T)&gt; {
+    <span class="kw">pub fn </span>values(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw">impl </span>DoubleEndedIterator&lt;Item = <span class="kw-2">&amp;</span>T&gt; {
+        <span class="self">self</span>.<span class="number">0</span>.values()
+    }
+
+    <span class="kw">pub fn </span>iter(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw">impl </span>DoubleEndedIterator&lt;Item = (Amount, <span class="kw-2">&amp;</span>T)&gt; {
         <span class="self">self</span>.<span class="number">0</span>.iter().map(|(amt, key)| (<span class="kw-2">*</span>amt, key))
     }
 
@@ -252,6 +269,15 @@
 <span class="kw">impl</span>&lt;T&gt; FromIterator&lt;(Amount, T)&gt; <span class="kw">for </span>Tiered&lt;T&gt; {
     <span class="kw">fn </span>from_iter&lt;I: IntoIterator&lt;Item = (Amount, T)&gt;&gt;(iter: I) -&gt; <span class="self">Self </span>{
         <span class="self">Self</span>(iter.into_iter().collect())
+    }
+}
+
+<span class="kw">impl</span>&lt;T&gt; IntoIterator <span class="kw">for </span>Tiered&lt;T&gt; {
+    <span class="kw">type </span>Item = (Amount, T);
+    <span class="kw">type </span>IntoIter = std::collections::btree_map::IntoIter&lt;Amount, T&gt;;
+
+    <span class="kw">fn </span>into_iter(<span class="self">self</span>) -&gt; <span class="self">Self</span>::IntoIter {
+        <span class="self">self</span>.<span class="number">0</span>.into_iter()
     }
 }
 

@@ -642,7 +642,7 @@
             len = finalized.spendable_notes.count_items(),
             <span class="string">"Restoring spendable notes"
         </span>);
-        <span class="kw">for </span>(amount, note) <span class="kw">in </span>finalized.spendable_notes {
+        <span class="kw">for </span>(amount, note) <span class="kw">in </span>finalized.spendable_notes.into_iter_items() {
             <span class="kw">let </span>key = NoteKey {
                 amount,
                 nonce: note.nonce(),

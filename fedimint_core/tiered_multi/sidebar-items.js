@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"struct":["TieredCounts","TieredMulti","TieredMultiZip"]};
+window.SIDEBAR_ITEMS = {"struct":["TieredCounts","TieredMulti"]};

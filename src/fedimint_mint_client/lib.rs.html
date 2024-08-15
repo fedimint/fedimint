@@ -3699,7 +3699,7 @@
     ) -&gt; anyhow::Result&lt;Vec&lt;ClientInput&lt;MintInput, MintClientStateMachines&gt;&gt;&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>inputs = Vec::new();
 
-        <span class="kw">for </span>(amount, spendable_note) <span class="kw">in </span>notes {
+        <span class="kw">for </span>(amount, spendable_note) <span class="kw">in </span>notes.into_iter_items() {
             <span class="kw">let </span>key = <span class="self">self
                 </span>.cfg
                 .tbs_pks
@@ -3764,7 +3764,7 @@
 
         <span class="kw">let </span><span class="kw-2">mut </span>state_machines = Vec::new();
 
-        <span class="kw">for </span>(amount, spendable_note) <span class="kw">in </span>selected_notes.clone() {
+        <span class="kw">for </span>(amount, spendable_note) <span class="kw">in </span>selected_notes.clone().into_iter_items() {
             state_machines.push(MintClientStateMachines::OOB(MintOOBStateMachine {
                 operation_id,
                 state: MintOOBStates::Created(MintOOBStatesCreated {
@@ -3820,7 +3820,7 @@
         notes_selector
             .select_notes(note_stream, requested_amount, fee_per_note_input)
             .<span class="kw">await</span><span class="question-mark">?
-            </span>.into_iter()
+            </span>.into_iter_items()
             .map(|(amt, snote)| <span class="prelude-val">Ok</span>((amt, snote.decode()<span class="question-mark">?</span>)))
             .collect::&lt;anyhow::Result&lt;TieredMulti&lt;<span class="kw">_</span>&gt;&gt;&gt;()
     }

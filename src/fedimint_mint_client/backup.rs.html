@@ -239,7 +239,7 @@
 
         <span class="prelude-val">Ok</span>(EcashBackup::new_v0(
             notes
-                .into_iter()
+                .into_iter_items()
                 .map(|(amt, spendable_note)| <span class="prelude-val">Ok</span>((amt, spendable_note.decode()<span class="question-mark">?</span>)))
                 .collect::&lt;anyhow::Result&lt;TieredMulti&lt;<span class="kw">_</span>&gt;&gt;&gt;()<span class="question-mark">?</span>,
             pending_notes,

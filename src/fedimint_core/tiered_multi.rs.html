@@ -277,96 +277,14 @@
 <a href="#277" id="277">277</a>
 <a href="#278" id="278">278</a>
 <a href="#279" id="279">279</a>
-<a href="#280" id="280">280</a>
-<a href="#281" id="281">281</a>
-<a href="#282" id="282">282</a>
-<a href="#283" id="283">283</a>
-<a href="#284" id="284">284</a>
-<a href="#285" id="285">285</a>
-<a href="#286" id="286">286</a>
-<a href="#287" id="287">287</a>
-<a href="#288" id="288">288</a>
-<a href="#289" id="289">289</a>
-<a href="#290" id="290">290</a>
-<a href="#291" id="291">291</a>
-<a href="#292" id="292">292</a>
-<a href="#293" id="293">293</a>
-<a href="#294" id="294">294</a>
-<a href="#295" id="295">295</a>
-<a href="#296" id="296">296</a>
-<a href="#297" id="297">297</a>
-<a href="#298" id="298">298</a>
-<a href="#299" id="299">299</a>
-<a href="#300" id="300">300</a>
-<a href="#301" id="301">301</a>
-<a href="#302" id="302">302</a>
-<a href="#303" id="303">303</a>
-<a href="#304" id="304">304</a>
-<a href="#305" id="305">305</a>
-<a href="#306" id="306">306</a>
-<a href="#307" id="307">307</a>
-<a href="#308" id="308">308</a>
-<a href="#309" id="309">309</a>
-<a href="#310" id="310">310</a>
-<a href="#311" id="311">311</a>
-<a href="#312" id="312">312</a>
-<a href="#313" id="313">313</a>
-<a href="#314" id="314">314</a>
-<a href="#315" id="315">315</a>
-<a href="#316" id="316">316</a>
-<a href="#317" id="317">317</a>
-<a href="#318" id="318">318</a>
-<a href="#319" id="319">319</a>
-<a href="#320" id="320">320</a>
-<a href="#321" id="321">321</a>
-<a href="#322" id="322">322</a>
-<a href="#323" id="323">323</a>
-<a href="#324" id="324">324</a>
-<a href="#325" id="325">325</a>
-<a href="#326" id="326">326</a>
-<a href="#327" id="327">327</a>
-<a href="#328" id="328">328</a>
-<a href="#329" id="329">329</a>
-<a href="#330" id="330">330</a>
-<a href="#331" id="331">331</a>
-<a href="#332" id="332">332</a>
-<a href="#333" id="333">333</a>
-<a href="#334" id="334">334</a>
-<a href="#335" id="335">335</a>
-<a href="#336" id="336">336</a>
-<a href="#337" id="337">337</a>
-<a href="#338" id="338">338</a>
-<a href="#339" id="339">339</a>
-<a href="#340" id="340">340</a>
-<a href="#341" id="341">341</a>
-<a href="#342" id="342">342</a>
-<a href="#343" id="343">343</a>
-<a href="#344" id="344">344</a>
-<a href="#345" id="345">345</a>
-<a href="#346" id="346">346</a>
-<a href="#347" id="347">347</a>
-<a href="#348" id="348">348</a>
-<a href="#349" id="349">349</a>
-<a href="#350" id="350">350</a>
-<a href="#351" id="351">351</a>
-<a href="#352" id="352">352</a>
-<a href="#353" id="353">353</a>
-<a href="#354" id="354">354</a>
-<a href="#355" id="355">355</a>
-<a href="#356" id="356">356</a>
-<a href="#357" id="357">357</a>
-<a href="#358" id="358">358</a>
-<a href="#359" id="359">359</a>
-<a href="#360" id="360">360</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::btree_map::Entry;
 <span class="kw">use </span>std::collections::BTreeMap;
-<span class="kw">use </span>std::marker::PhantomData;
 
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, DecodeError, Encodable};
+<span class="kw">use </span>itertools::Itertools;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 
 <span class="kw">use </span><span class="kw">crate</span>::module::registry::ModuleDecoderRegistry;
-<span class="kw">use </span><span class="kw">crate</span>::tiered::InvalidAmountTierError;
 <span class="kw">use crate</span>::{Amount, Tiered};
 
 <span class="doccomment">/// Represents notes of different denominations.
@@ -376,12 +294,39 @@
 /// both the maximum note amount and maximum note count per transaction this
 /// shouldn't be a problem in practice though.
 </span><span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize)]
-</span><span class="kw">pub struct </span>TieredMulti&lt;T&gt;(BTreeMap&lt;Amount, Vec&lt;T&gt;&gt;);
+</span><span class="kw">pub struct </span>TieredMulti&lt;T&gt;(Tiered&lt;Vec&lt;T&gt;&gt;);
 
 <span class="kw">impl</span>&lt;T&gt; TieredMulti&lt;T&gt; {
     <span class="doccomment">/// Returns a new `TieredMulti` with the given `BTreeMap` map
     </span><span class="kw">pub fn </span>new(map: BTreeMap&lt;Amount, Vec&lt;T&gt;&gt;) -&gt; <span class="self">Self </span>{
         <span class="self">Self</span>(map.into_iter().filter(|(<span class="kw">_</span>, v)| !v.is_empty()).collect())
+    }
+
+    <span class="doccomment">/// Returns a new `TieredMulti` from a collection of `Tiered` structs.
+    /// The `Tiered` structs are expected to be structurally equal, otherwise
+    /// this function will panic.
+    </span><span class="kw">pub fn </span>new_aggregate_from_tiered_iter(tiered_iter: <span class="kw">impl </span>Iterator&lt;Item = Tiered&lt;T&gt;&gt;) -&gt; <span class="self">Self </span>{
+        <span class="kw">let </span><span class="kw-2">mut </span>tiered_multi = <span class="self">Self</span>::default();
+
+        <span class="kw">for </span>tiered <span class="kw">in </span>tiered_iter {
+            <span class="kw">for </span>(amt, val) <span class="kw">in </span>tiered {
+                tiered_multi.push(amt, val);
+            }
+        }
+
+        <span class="comment">// TODO: This only asserts that the output is structurally sound, not the input.
+        // For example, an input with tier `Amount`s of [[1, 2], [4, 8]] would currently
+        // be accepted even though it is not structurally sound.
+        </span><span class="macro">assert!</span>(
+            tiered_multi
+                .summary()
+                .iter()
+                .map(|(_tier, count)| count)
+                .all_equal(),
+            <span class="string">"The supplied Tiered structs were not structurally equal"
+        </span>);
+
+        tiered_multi
     }
 
     <span class="doccomment">/// Returns the total value of all notes in msat as `Amount`
@@ -401,19 +346,14 @@
 
     <span class="doccomment">/// Returns the number of tiers
     </span><span class="kw">pub fn </span>count_tiers(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; usize {
-        <span class="self">self</span>.<span class="number">0</span>.len()
-    }
-
-    <span class="doccomment">/// Returns an iterator over the keys
-    </span><span class="kw">pub fn </span>iter_tiers(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw">impl </span>Iterator&lt;Item = <span class="kw-2">&amp;</span>Amount&gt; {
-        <span class="self">self</span>.<span class="number">0</span>.keys()
+        <span class="self">self</span>.<span class="number">0</span>.count_tiers()
     }
 
     <span class="doccomment">/// Returns the summary of number of items in each tier
     </span><span class="kw">pub fn </span>summary(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; TieredCounts {
         TieredCounts(
             <span class="self">self</span>.iter()
-                .map(|(amount, values)| (<span class="kw-2">*</span>amount, values.len()))
+                .map(|(amount, values)| (amount, values.len()))
                 .collect(),
         )
     }
@@ -424,19 +364,8 @@
         <span class="self">self</span>.count_items() == <span class="number">0
     </span>}
 
-    <span class="doccomment">/// Verifies whether the structure of `self` and `other` is identical
-    </span><span class="kw">pub fn </span>structural_eq&lt;O&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, other: <span class="kw-2">&amp;</span>TieredMulti&lt;O&gt;) -&gt; bool {
-        <span class="kw">let </span>tier_eq = <span class="self">self</span>.<span class="number">0</span>.keys().eq(other.<span class="number">0</span>.keys());
-        <span class="kw">let </span>per_tier_eq = <span class="self">self
-            </span>.<span class="number">0
-            </span>.values()
-            .zip(other.<span class="number">0</span>.values())
-            .all(|(c1, c2)| c1.len() == c2.len());
-        tier_eq &amp;&amp; per_tier_eq
-    }
-
     <span class="doccomment">/// Returns an borrowing iterator
-    </span><span class="kw">pub fn </span>iter(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw">impl </span>Iterator&lt;Item = (<span class="kw-2">&amp;</span>Amount, <span class="kw-2">&amp;</span>Vec&lt;T&gt;)&gt; {
+    </span><span class="kw">pub fn </span>iter(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw">impl </span>Iterator&lt;Item = (Amount, <span class="kw-2">&amp;</span>Vec&lt;T&gt;)&gt; {
         <span class="self">self</span>.<span class="number">0</span>.iter()
     }
 
@@ -450,7 +379,7 @@
         // order of the elements stays consistent.
         </span><span class="self">self</span>.<span class="number">0
             </span>.iter()
-            .flat_map(|(amt, notes)| notes.iter().map(|c| (<span class="kw-2">*</span>amt, c)))
+            .flat_map(|(amt, notes)| notes.iter().map(<span class="kw">move </span>|c| (amt, c)))
     }
 
     <span class="doccomment">/// Returns an consuming iterator over every `(Amount, T)`
@@ -464,37 +393,6 @@
         </span><span class="self">self</span>.<span class="number">0
             </span>.into_iter()
             .flat_map(|(amt, notes)| notes.into_iter().map(<span class="kw">move </span>|c| (amt, c)))
-    }
-
-    <span class="doccomment">/// Returns the length of the longest vector of all tiers, ignoring the
-    /// `except` tier
-    </span><span class="kw">pub fn </span>longest_tier_except(<span class="kw-2">&amp;</span><span class="self">self</span>, except: <span class="kw-2">&amp;</span>Amount) -&gt; usize {
-        <span class="self">self</span>.<span class="number">0
-            </span>.iter()
-            .filter_map(|(amt, notes)| {
-                <span class="kw">if </span>amt == except {
-                    <span class="prelude-val">None
-                </span>} <span class="kw">else </span>{
-                    <span class="prelude-val">Some</span>(notes.len())
-                }
-            })
-            .max()
-            .unwrap_or_default()
-    }
-
-    <span class="doccomment">/// Verifies that all keys in `self` are present in the keys of the given
-    /// parameter `Tiered`
-    </span><span class="kw">pub fn </span>all_tiers_exist_in&lt;K&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, keys: <span class="kw-2">&amp;</span>Tiered&lt;K&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;(), InvalidAmountTierError&gt; {
-        <span class="self">self</span>.<span class="number">0
-            </span>.keys()
-            .find(|<span class="kw-2">&amp;</span>amt| keys.get(<span class="kw-2">*</span>amt).is_none())
-            .map_or(<span class="prelude-val">Ok</span>(()), |amt| <span class="prelude-val">Err</span>(InvalidAmountTierError(<span class="kw-2">*</span>amt)))
-    }
-
-    <span class="doccomment">/// Returns an `Option` with a reference to the vector of the given `Amount`
-    </span><span class="kw">pub fn </span>get(<span class="kw-2">&amp;</span><span class="self">self</span>, amt: Amount) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>Vec&lt;T&gt;&gt; {
-        <span class="self">self</span>.assert_invariants();
-        <span class="self">self</span>.<span class="number">0</span>.get(<span class="kw-2">&amp;</span>amt)
     }
 
     <span class="kw">pub fn </span>push(<span class="kw-2">&amp;mut </span><span class="self">self</span>, amt: Amount, val: T) {
@@ -521,21 +419,17 @@
 <span class="kw">where
     </span>C: <span class="lifetime">'static </span>+ Send,
 {
-    <span class="kw">type </span>Item = (Amount, C);
-    <span class="kw">type </span>IntoIter = Box&lt;<span class="kw">dyn </span>Iterator&lt;Item = (Amount, C)&gt; + Send&gt;;
+    <span class="kw">type </span>Item = (Amount, Vec&lt;C&gt;);
+    <span class="kw">type </span>IntoIter = std::collections::btree_map::IntoIter&lt;Amount, Vec&lt;C&gt;&gt;;
 
     <span class="kw">fn </span>into_iter(<span class="self">self</span>) -&gt; <span class="self">Self</span>::IntoIter {
-        Box::new(
-            <span class="self">self</span>.<span class="number">0
-                </span>.into_iter()
-                .flat_map(|(amt, notes)| notes.into_iter().map(<span class="kw">move </span>|c| (amt, c))),
-        )
+        <span class="self">self</span>.<span class="number">0</span>.into_iter()
     }
 }
 
 <span class="kw">impl</span>&lt;C&gt; Default <span class="kw">for </span>TieredMulti&lt;C&gt; {
     <span class="kw">fn </span>default() -&gt; <span class="self">Self </span>{
-        <span class="self">Self</span>(BTreeMap::default())
+        <span class="self">Self</span>(Tiered::default())
     }
 }
 
@@ -564,65 +458,9 @@
         d: <span class="kw-2">&amp;mut </span>D,
         modules: <span class="kw-2">&amp;</span>ModuleDecoderRegistry,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
-        <span class="prelude-val">Ok</span>(<span class="self">Self</span>(BTreeMap::consensus_decode_from_finite_reader(
+        <span class="prelude-val">Ok</span>(<span class="self">Self</span>(Tiered::consensus_decode_from_finite_reader(
             d, modules,
         )<span class="question-mark">?</span>))
-    }
-}
-
-<span class="kw">pub struct </span>TieredMultiZip&lt;<span class="lifetime">'a</span>, I, T&gt;
-<span class="kw">where
-    </span>I: <span class="lifetime">'a</span>,
-{
-    iters: Vec&lt;I&gt;,
-    _pd: PhantomData&lt;<span class="kw-2">&amp;</span><span class="lifetime">'a </span>T&gt;,
-}
-
-<span class="kw">impl</span>&lt;<span class="lifetime">'a</span>, I, C&gt; TieredMultiZip&lt;<span class="lifetime">'a</span>, I, C&gt; {
-    <span class="doccomment">/// Creates a new `TieredMultiZip` Iterator from `Notes` iterators. These
-    /// have to be checked for structural equality! There also has to be at
-    /// least one iterator in the `iter` vector.
-    </span><span class="kw">pub fn </span>new(iters: Vec&lt;I&gt;) -&gt; <span class="self">Self </span>{
-        <span class="macro">assert!</span>(!iters.is_empty());
-
-        TieredMultiZip {
-            iters,
-            _pd: PhantomData,
-        }
-    }
-}
-
-<span class="kw">impl</span>&lt;<span class="lifetime">'a</span>, I, C&gt; Iterator <span class="kw">for </span>TieredMultiZip&lt;<span class="lifetime">'a</span>, I, C&gt;
-<span class="kw">where
-    </span>I: Iterator&lt;Item = (Amount, C)&gt;,
-{
-    <span class="kw">type </span>Item = (Amount, Vec&lt;C&gt;);
-
-    <span class="kw">fn </span>next(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="self">Self</span>::Item&gt; {
-        <span class="kw">let </span><span class="kw-2">mut </span>notes = Vec::with_capacity(<span class="self">self</span>.iters.len());
-        <span class="kw">let </span><span class="kw-2">mut </span>amount = <span class="prelude-val">None</span>;
-        <span class="kw">for </span>iter <span class="kw">in </span><span class="kw-2">&amp;mut </span><span class="self">self</span>.iters {
-            <span class="kw">match </span>iter.next() {
-                <span class="prelude-val">Some</span>((amt, note)) =&gt; {
-                    <span class="kw">if let </span><span class="prelude-val">Some</span>(amount) = amount {
-                        <span class="comment">// This may fail if notes weren't tested for structural equality
-                        </span><span class="macro">assert_eq!</span>(amount, amt);
-                    } <span class="kw">else </span>{
-                        amount = <span class="prelude-val">Some</span>(amt);
-                    }
-                    notes.push(note);
-                }
-                <span class="prelude-val">None </span>=&gt; <span class="kw">return </span><span class="prelude-val">None</span>,
-            }
-        }
-
-        <span class="comment">// This should always hold as long as this impl is correct
-        </span><span class="macro">assert_eq!</span>(notes.len(), <span class="self">self</span>.iters.len());
-
-        <span class="prelude-val">Some</span>((
-            amount.expect(<span class="string">"The multi zip must contain at least one iterator"</span>),
-            notes,
-        ))
     }
 }
 
