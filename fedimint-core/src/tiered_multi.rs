@@ -1,12 +1,11 @@
 use std::collections::btree_map::Entry;
 use std::collections::BTreeMap;
-use std::marker::PhantomData;
 
 use fedimint_core::encoding::{Decodable, DecodeError, Encodable};
+use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 
 use crate::module::registry::ModuleDecoderRegistry;
-use crate::tiered::InvalidAmountTierError;
 use crate::{Amount, Tiered};
 
 /// Represents notes of different denominations.
@@ -16,12 +15,39 @@ use crate::{Amount, Tiered};
 /// both the maximum note amount and maximum note count per transaction this
 /// shouldn't be a problem in practice though.
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize)]
-pub struct TieredMulti<T>(BTreeMap<Amount, Vec<T>>);
+pub struct TieredMulti<T>(Tiered<Vec<T>>);
 
 impl<T> TieredMulti<T> {
     /// Returns a new `TieredMulti` with the given `BTreeMap` map
     pub fn new(map: BTreeMap<Amount, Vec<T>>) -> Self {
         Self(map.into_iter().filter(|(_, v)| !v.is_empty()).collect())
+    }
+
+    /// Returns a new `TieredMulti` from a collection of `Tiered` structs.
+    /// The `Tiered` structs are expected to be structurally equal, otherwise
+    /// this function will panic.
+    pub fn new_aggregate_from_tiered_iter(tiered_iter: impl Iterator<Item = Tiered<T>>) -> Self {
+        let mut tiered_multi = Self::default();
+
+        for tiered in tiered_iter {
+            for (amt, val) in tiered {
+                tiered_multi.push(amt, val);
+            }
+        }
+
+        // TODO: This only asserts that the output is structurally sound, not the input.
+        // For example, an input with tier `Amount`s of [[1, 2], [4, 8]] would currently
+        // be accepted even though it is not structurally sound.
+        assert!(
+            tiered_multi
+                .summary()
+                .iter()
+                .map(|(_tier, count)| count)
+                .all_equal(),
+            "The supplied Tiered structs were not structurally equal"
+        );
+
+        tiered_multi
     }
 
     /// Returns the total value of all notes in msat as `Amount`
@@ -41,19 +67,14 @@ impl<T> TieredMulti<T> {
 
     /// Returns the number of tiers
     pub fn count_tiers(&self) -> usize {
-        self.0.len()
-    }
-
-    /// Returns an iterator over the keys
-    pub fn iter_tiers(&self) -> impl Iterator<Item = &Amount> {
-        self.0.keys()
+        self.0.count_tiers()
     }
 
     /// Returns the summary of number of items in each tier
     pub fn summary(&self) -> TieredCounts {
         TieredCounts(
             self.iter()
-                .map(|(amount, values)| (*amount, values.len()))
+                .map(|(amount, values)| (amount, values.len()))
                 .collect(),
         )
     }
@@ -64,19 +85,8 @@ impl<T> TieredMulti<T> {
         self.count_items() == 0
     }
 
-    /// Verifies whether the structure of `self` and `other` is identical
-    pub fn structural_eq<O>(&self, other: &TieredMulti<O>) -> bool {
-        let tier_eq = self.0.keys().eq(other.0.keys());
-        let per_tier_eq = self
-            .0
-            .values()
-            .zip(other.0.values())
-            .all(|(c1, c2)| c1.len() == c2.len());
-        tier_eq && per_tier_eq
-    }
-
     /// Returns an borrowing iterator
-    pub fn iter(&self) -> impl Iterator<Item = (&Amount, &Vec<T>)> {
+    pub fn iter(&self) -> impl Iterator<Item = (Amount, &Vec<T>)> {
         self.0.iter()
     }
 
@@ -90,7 +100,7 @@ impl<T> TieredMulti<T> {
         // order of the elements stays consistent.
         self.0
             .iter()
-            .flat_map(|(amt, notes)| notes.iter().map(|c| (*amt, c)))
+            .flat_map(|(amt, notes)| notes.iter().map(move |c| (amt, c)))
     }
 
     /// Returns an consuming iterator over every `(Amount, T)`
@@ -104,37 +114,6 @@ impl<T> TieredMulti<T> {
         self.0
             .into_iter()
             .flat_map(|(amt, notes)| notes.into_iter().map(move |c| (amt, c)))
-    }
-
-    /// Returns the length of the longest vector of all tiers, ignoring the
-    /// `except` tier
-    pub fn longest_tier_except(&self, except: &Amount) -> usize {
-        self.0
-            .iter()
-            .filter_map(|(amt, notes)| {
-                if amt == except {
-                    None
-                } else {
-                    Some(notes.len())
-                }
-            })
-            .max()
-            .unwrap_or_default()
-    }
-
-    /// Verifies that all keys in `self` are present in the keys of the given
-    /// parameter `Tiered`
-    pub fn all_tiers_exist_in<K>(&self, keys: &Tiered<K>) -> Result<(), InvalidAmountTierError> {
-        self.0
-            .keys()
-            .find(|&amt| keys.get(*amt).is_none())
-            .map_or(Ok(()), |amt| Err(InvalidAmountTierError(*amt)))
-    }
-
-    /// Returns an `Option` with a reference to the vector of the given `Amount`
-    pub fn get(&self, amt: Amount) -> Option<&Vec<T>> {
-        self.assert_invariants();
-        self.0.get(&amt)
     }
 
     pub fn push(&mut self, amt: Amount, val: T) {
@@ -161,21 +140,17 @@ impl<C> IntoIterator for TieredMulti<C>
 where
     C: 'static + Send,
 {
-    type Item = (Amount, C);
-    type IntoIter = Box<dyn Iterator<Item = (Amount, C)> + Send>;
+    type Item = (Amount, Vec<C>);
+    type IntoIter = std::collections::btree_map::IntoIter<Amount, Vec<C>>;
 
     fn into_iter(self) -> Self::IntoIter {
-        Box::new(
-            self.0
-                .into_iter()
-                .flat_map(|(amt, notes)| notes.into_iter().map(move |c| (amt, c))),
-        )
+        self.0.into_iter()
     }
 }
 
 impl<C> Default for TieredMulti<C> {
     fn default() -> Self {
-        Self(BTreeMap::default())
+        Self(Tiered::default())
     }
 }
 
@@ -204,65 +179,9 @@ where
         d: &mut D,
         modules: &ModuleDecoderRegistry,
     ) -> Result<Self, DecodeError> {
-        Ok(Self(BTreeMap::consensus_decode_from_finite_reader(
+        Ok(Self(Tiered::consensus_decode_from_finite_reader(
             d, modules,
         )?))
-    }
-}
-
-pub struct TieredMultiZip<'a, I, T>
-where
-    I: 'a,
-{
-    iters: Vec<I>,
-    _pd: PhantomData<&'a T>,
-}
-
-impl<'a, I, C> TieredMultiZip<'a, I, C> {
-    /// Creates a new `TieredMultiZip` Iterator from `Notes` iterators. These
-    /// have to be checked for structural equality! There also has to be at
-    /// least one iterator in the `iter` vector.
-    pub fn new(iters: Vec<I>) -> Self {
-        assert!(!iters.is_empty());
-
-        TieredMultiZip {
-            iters,
-            _pd: PhantomData,
-        }
-    }
-}
-
-impl<'a, I, C> Iterator for TieredMultiZip<'a, I, C>
-where
-    I: Iterator<Item = (Amount, C)>,
-{
-    type Item = (Amount, Vec<C>);
-
-    fn next(&mut self) -> Option<Self::Item> {
-        let mut notes = Vec::with_capacity(self.iters.len());
-        let mut amount = None;
-        for iter in &mut self.iters {
-            match iter.next() {
-                Some((amt, note)) => {
-                    if let Some(amount) = amount {
-                        // This may fail if notes weren't tested for structural equality
-                        assert_eq!(amount, amt);
-                    } else {
-                        amount = Some(amt);
-                    }
-                    notes.push(note);
-                }
-                None => return None,
-            }
-        }
-
-        // This should always hold as long as this impl is correct
-        assert_eq!(notes.len(), self.iters.len());
-
-        Some((
-            amount.expect("The multi zip must contain at least one iterator"),
-            notes,
-        ))
     }
 }
 

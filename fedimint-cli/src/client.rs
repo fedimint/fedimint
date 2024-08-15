@@ -294,9 +294,7 @@ pub async fn handle_command(
                         .map(|note| {
                             OOBNotes::new(
                                 federation,
-                                TieredMulti::new(
-                                    vec![(*amount, vec![*note])].into_iter().collect(),
-                                ),
+                                TieredMulti::new(vec![(amount, vec![*note])].into_iter().collect()),
                             )
                         })
                         .collect::<Vec<_>>();
