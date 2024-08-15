@@ -248,6 +248,8 @@ impl std::fmt::Debug for Gateway {
             .field("client_builder", &self.client_builder)
             .field("gateway_db", &self.gateway_db)
             .field("gateway_id", &self.gateway_id)
+            .field("versioned_api", &self.versioned_api)
+            .field("listen", &self.listen)
             .finish_non_exhaustive()
     }
 }
