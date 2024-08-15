@@ -2118,6 +2118,9 @@
 <a href="#2118" id="2118">2118</a>
 <a href="#2119" id="2119">2119</a>
 <a href="#2120" id="2120">2120</a>
+<a href="#2121" id="2121">2121</a>
+<a href="#2122" id="2122">2122</a>
+<a href="#2123" id="2123">2123</a>
 </pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::missing_errors_doc)]
@@ -2181,6 +2184,9 @@
 <span class="kw">use </span>fedimint_ln_common::contracts::{
     Contract, ContractId, DecryptedPreimage, EncryptedPreimage, IdentifiableContract, Preimage,
     PreimageKey,
+};
+<span class="kw">use </span>fedimint_ln_common::gateway_endpoint_constants::{
+    GET_GATEWAY_ID_ENDPOINT, PAY_INVOICE_ENDPOINT,
 };
 <span class="kw">use </span>fedimint_ln_common::{
     ContractOutput, LightningCommonInit, LightningGateway, LightningGatewayAnnouncement,
@@ -4152,7 +4158,7 @@
             .get(
                 gateway
                     .api
-                    .join(<span class="string">"id"</span>)
+                    .join(GET_GATEWAY_ID_ENDPOINT)
                     .expect(<span class="string">"id contains no invalid characters for a URL"</span>)
                     .as_str(),
             )
@@ -4185,7 +4191,7 @@
             .post(
                 gateway
                     .api
-                    .join(<span class="string">"pay_invoice"</span>)
+                    .join(PAY_INVOICE_ENDPOINT)
                     .expect(<span class="string">"'pay_invoice' contains no invalid characters for a URL"</span>)
                     .as_str(),
             )

@@ -20,9 +20,6 @@
 <a href="#20" id="20">20</a>
 <a href="#21" id="21">21</a>
 <a href="#22" id="22">22</a>
-<a href="#23" id="23">23</a>
-<a href="#24" id="24">24</a>
-<a href="#25" id="25">25</a>
 </pre></div><pre class="rust"><code><span class="doccomment">/// Use `_` for word separator
 
 </span><span class="kw">pub const </span>ADDRESS_ENDPOINT: <span class="kw-2">&amp;</span>str = <span class="string">"/address"</span>;
@@ -30,8 +27,7 @@
 <span class="kw">pub const </span>BALANCE_ENDPOINT: <span class="kw-2">&amp;</span>str = <span class="string">"/balance"</span>;
 <span class="kw">pub const </span>CONFIGURATION_ENDPOINT: <span class="kw-2">&amp;</span>str = <span class="string">"/config"</span>;
 <span class="kw">pub const </span>CONNECT_FED_ENDPOINT: <span class="kw-2">&amp;</span>str = <span class="string">"/connect-fed"</span>; <span class="comment">// uses `-` for backwards compatibility
-</span><span class="kw">pub const </span>CREATE_BOLT11_INVOICE_V2_ENDPOINT: <span class="kw-2">&amp;</span>str = <span class="string">"/create_bolt11_invoice"</span>;
-<span class="kw">pub const </span>GATEWAY_INFO_ENDPOINT: <span class="kw-2">&amp;</span>str = <span class="string">"/info"</span>;
+</span><span class="kw">pub const </span>GATEWAY_INFO_ENDPOINT: <span class="kw-2">&amp;</span>str = <span class="string">"/info"</span>;
 <span class="kw">pub const </span>GET_BALANCES_ENDPOINT: <span class="kw-2">&amp;</span>str = <span class="string">"/balances"</span>;
 <span class="kw">pub const </span>GET_GATEWAY_ID_ENDPOINT: <span class="kw-2">&amp;</span>str = <span class="string">"/id"</span>;
 <span class="kw">pub const </span>GATEWAY_INFO_POST_ENDPOINT: <span class="kw-2">&amp;</span>str = <span class="string">"/info"</span>;
@@ -41,10 +37,8 @@
 <span class="kw">pub const </span>OPEN_CHANNEL_ENDPOINT: <span class="kw-2">&amp;</span>str = <span class="string">"/open_channel"</span>;
 <span class="kw">pub const </span>CLOSE_CHANNELS_WITH_PEER_ENDPOINT: <span class="kw-2">&amp;</span>str = <span class="string">"/close_channels_with_peer"</span>;
 <span class="kw">pub const </span>RECEIVE_ECASH_ENDPOINT: <span class="kw-2">&amp;</span>str = <span class="string">"/receive_ecash"</span>;
-<span class="kw">pub const </span>ROUTING_INFO_V2_ENDPOINT: <span class="kw-2">&amp;</span>str = <span class="string">"/routing_info"</span>;
 <span class="kw">pub const </span>PAY_INVOICE_ENDPOINT: <span class="kw-2">&amp;</span>str = <span class="string">"/pay_invoice"</span>;
 <span class="kw">pub const </span>RESTORE_ENDPOINT: <span class="kw-2">&amp;</span>str = <span class="string">"/restore"</span>;
-<span class="kw">pub const </span>SEND_PAYMENT_V2_ENDPOINT: <span class="kw-2">&amp;</span>str = <span class="string">"/send_payment"</span>;
 <span class="kw">pub const </span>SET_CONFIGURATION_ENDPOINT: <span class="kw-2">&amp;</span>str = <span class="string">"/set_configuration"</span>;
 <span class="kw">pub const </span>SPEND_ECASH_ENDPOINT: <span class="kw-2">&amp;</span>str = <span class="string">"/spend_ecash"</span>;
 <span class="kw">pub const </span>WITHDRAW_ENDPOINT: <span class="kw-2">&amp;</span>str = <span class="string">"/withdraw"</span>;

@@ -258,16 +258,21 @@
 <a href="#258" id="258">258</a>
 <a href="#259" id="259">259</a>
 <a href="#260" id="260">260</a>
+<a href="#261" id="261">261</a>
+<a href="#262" id="262">262</a>
+<a href="#263" id="263">263</a>
+<a href="#264" id="264">264</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>bitcoin::address::NetworkUnchecked;
 <span class="kw">use </span>bitcoin::Address;
 <span class="kw">use </span>fedimint_core::util::SafeUrl;
 <span class="kw">use </span>fedimint_core::{Amount, TransactionId};
 <span class="kw">use </span>fedimint_ln_common::gateway_endpoint_constants::{
-    BACKUP_ENDPOINT, BALANCE_ENDPOINT, CLOSE_CHANNELS_WITH_PEER_ENDPOINT, CONFIGURATION_ENDPOINT,
-    CONNECT_FED_ENDPOINT, GATEWAY_INFO_ENDPOINT, GATEWAY_INFO_POST_ENDPOINT, GET_BALANCES_ENDPOINT,
-    GET_FUNDING_ADDRESS_ENDPOINT, LEAVE_FED_ENDPOINT, LIST_ACTIVE_CHANNELS_ENDPOINT,
-    OPEN_CHANNEL_ENDPOINT, RECEIVE_ECASH_ENDPOINT, RESTORE_ENDPOINT, SET_CONFIGURATION_ENDPOINT,
-    SPEND_ECASH_ENDPOINT, WITHDRAW_ENDPOINT,
+    ADDRESS_ENDPOINT, BACKUP_ENDPOINT, BALANCE_ENDPOINT, CLOSE_CHANNELS_WITH_PEER_ENDPOINT,
+    CONFIGURATION_ENDPOINT, CONNECT_FED_ENDPOINT, GATEWAY_INFO_ENDPOINT,
+    GATEWAY_INFO_POST_ENDPOINT, GET_BALANCES_ENDPOINT, GET_FUNDING_ADDRESS_ENDPOINT,
+    LEAVE_FED_ENDPOINT, LIST_ACTIVE_CHANNELS_ENDPOINT, OPEN_CHANNEL_ENDPOINT,
+    RECEIVE_ECASH_ENDPOINT, RESTORE_ENDPOINT, SET_CONFIGURATION_ENDPOINT, SPEND_ECASH_ENDPOINT,
+    WITHDRAW_ENDPOINT,
 };
 <span class="kw">use </span>reqwest::{Method, StatusCode};
 <span class="kw">use </span>serde::de::DeserializeOwned;
@@ -343,7 +348,10 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         payload: DepositAddressPayload,
     ) -&gt; GatewayRpcResult&lt;Address&lt;NetworkUnchecked&gt;&gt; {
-        <span class="kw">let </span>url = <span class="self">self</span>.base_url.join(<span class="string">"/address"</span>).expect(<span class="string">"invalid base url"</span>);
+        <span class="kw">let </span>url = <span class="self">self
+            </span>.base_url
+            .join(ADDRESS_ENDPOINT)
+            .expect(<span class="string">"invalid base url"</span>);
         <span class="self">self</span>.call_post(url, payload).<span class="kw">await
     </span>}
 

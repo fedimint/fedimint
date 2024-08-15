@@ -287,6 +287,7 @@
 <a href="#287" id="287">287</a>
 <a href="#288" id="288">288</a>
 <a href="#289" id="289">289</a>
+<a href="#290" id="290">290</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::time::Duration;
 
@@ -302,8 +303,9 @@
 <span class="kw">use </span>fedimint_lnv2_common::contracts::OutgoingContract;
 <span class="kw">use </span>fedimint_lnv2_common::endpoint_constants::{
     ADD_GATEWAY_ENDPOINT, AWAIT_INCOMING_CONTRACT_ENDPOINT, AWAIT_PREIMAGE_ENDPOINT,
-    CONSENSUS_BLOCK_COUNT_ENDPOINT, GATEWAYS_ENDPOINT, OUTGOING_CONTRACT_EXPIRATION_ENDPOINT,
-    REMOVE_GATEWAY_ENDPOINT,
+    CONSENSUS_BLOCK_COUNT_ENDPOINT, CREATE_BOLT11_INVOICE_ENDPOINT, GATEWAYS_ENDPOINT,
+    OUTGOING_CONTRACT_EXPIRATION_ENDPOINT, REMOVE_GATEWAY_ENDPOINT, ROUTING_INFO_ENDPOINT,
+    SEND_PAYMENT_ENDPOINT,
 };
 <span class="kw">use </span>fedimint_lnv2_common::{ContractId, GatewayEndpoint};
 <span class="kw">use </span>itertools::Itertools;
@@ -511,7 +513,7 @@
             .post(
                 gateway_api
                     .into_url()
-                    .join(<span class="string">"routing_info"</span>)
+                    .join(ROUTING_INFO_ENDPOINT)
                     .expect(<span class="string">"'routing_info' contains no invalid characters for a URL"</span>)
                     .as_str(),
             )
@@ -533,7 +535,7 @@
             .post(
                 gateway_api
                     .into_url()
-                    .join(<span class="string">"create_bolt11_invoice"</span>)
+                    .join(CREATE_BOLT11_INVOICE_ENDPOINT)
                     .expect(<span class="string">"'create_bolt11_invoice' contains no invalid characters for a URL"</span>)
                     .as_str(),
             )
@@ -558,7 +560,7 @@
             .post(
                 gateway_api
                     .into_url()
-                    .join(<span class="string">"send_payment"</span>)
+                    .join(SEND_PAYMENT_ENDPOINT)
                     .expect(<span class="string">"'send_payment' contains no invalid characters for a URL"</span>)
                     .as_str(),
             )
