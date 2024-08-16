@@ -70,6 +70,7 @@ impl LightningCommands {
                     .get_funding_address(GetFundingAddressPayload {})
                     .await?
                     .require_network();
+
                 println!("{response}");
             }
             Self::OpenChannel {
