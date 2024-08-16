@@ -112,11 +112,11 @@
     <span class="kw">let </span>(process_mgr, task_group) = cli::setup(args).<span class="kw">await</span><span class="question-mark">?</span>;
     log_binary_versions().<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="kw">let </span>dev_fed = devfed::DevJitFed::new(<span class="kw-2">&amp;</span>process_mgr, <span class="bool-val">false</span>)<span class="question-mark">?</span>;
-    <span class="kw">let </span>res = cleanup_on_exit(f(dev_fed.clone(), process_mgr.clone()), task_group).<span class="kw">await</span>;
     <span class="comment">// workaround https://github.com/tokio-rs/tokio/issues/6463
     // by waiting on all jits to complete, we make it less likely
     // that something is not finished yet and will block in `on_block`
     </span><span class="kw">let _ </span>= dev_fed.finalize(<span class="kw-2">&amp;</span>process_mgr).<span class="kw">await</span>;
+    <span class="kw">let </span>res = cleanup_on_exit(f(dev_fed.clone(), process_mgr.clone()), task_group).<span class="kw">await</span>;
     dev_fed.fast_terminate().<span class="kw">await</span>;
     res<span class="question-mark">?</span>;
 

@@ -1096,6 +1096,32 @@
 <a href="#1096" id="1096">1096</a>
 <a href="#1097" id="1097">1097</a>
 <a href="#1098" id="1098">1098</a>
+<a href="#1099" id="1099">1099</a>
+<a href="#1100" id="1100">1100</a>
+<a href="#1101" id="1101">1101</a>
+<a href="#1102" id="1102">1102</a>
+<a href="#1103" id="1103">1103</a>
+<a href="#1104" id="1104">1104</a>
+<a href="#1105" id="1105">1105</a>
+<a href="#1106" id="1106">1106</a>
+<a href="#1107" id="1107">1107</a>
+<a href="#1108" id="1108">1108</a>
+<a href="#1109" id="1109">1109</a>
+<a href="#1110" id="1110">1110</a>
+<a href="#1111" id="1111">1111</a>
+<a href="#1112" id="1112">1112</a>
+<a href="#1113" id="1113">1113</a>
+<a href="#1114" id="1114">1114</a>
+<a href="#1115" id="1115">1115</a>
+<a href="#1116" id="1116">1116</a>
+<a href="#1117" id="1117">1117</a>
+<a href="#1118" id="1118">1118</a>
+<a href="#1119" id="1119">1119</a>
+<a href="#1120" id="1120">1120</a>
+<a href="#1121" id="1121">1121</a>
+<a href="#1122" id="1122">1122</a>
+<a href="#1123" id="1123">1123</a>
+<a href="#1124" id="1124">1124</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::ops::ControlFlow;
 <span class="kw">use </span>std::path::Path;
 <span class="kw">use </span>std::str::FromStr;
@@ -1116,6 +1142,7 @@
 <span class="kw">use </span>fedimint_logging::LOG_DEVIMINT;
 <span class="kw">use </span>fedimint_testing::gateway::LightningNodeType;
 <span class="kw">use </span>hex::ToHex;
+<span class="kw">use </span>itertools::Itertools;
 <span class="kw">use </span>tokio::fs;
 <span class="kw">use </span>tokio::sync::{MappedMutexGuard, Mutex, MutexGuard};
 <span class="kw">use </span>tokio::time::Instant;
@@ -1960,50 +1987,77 @@
     <span class="prelude-val">Ok</span>(())
 }
 
-<span class="kw">pub async fn </span>open_channel_between_gateways(
+<span class="attr">#[allow(clippy::similar_names)]
+</span><span class="kw">pub async fn </span>open_channels_between_gateways(
     bitcoind: <span class="kw-2">&amp;</span>Bitcoind,
-    gw_a: <span class="kw-2">&amp;</span>Gatewayd,
-    gw_b: <span class="kw-2">&amp;</span>Gatewayd,
+    gateways: <span class="kw-2">&amp;</span>[(<span class="kw-2">&amp;</span>Gatewayd, <span class="kw-2">&amp;</span>str)],
 ) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-    <span class="comment">// TODO: Find out why we need to wait for LDK here.
-    </span><span class="kw">let </span>funding_addr = <span class="kw">loop </span>{
-        <span class="kw">if let </span><span class="prelude-val">Ok</span>(address) = gw_a.get_funding_address().<span class="kw">await </span>{
-            <span class="kw">break </span>address;
-        }
-
-        fedimint_core::runtime::sleep(std::time::Duration::from_secs(<span class="number">1</span>)).<span class="kw">await</span>;
-    };
-
-    bitcoind.send_to(funding_addr, <span class="number">100_000_000</span>).<span class="kw">await</span><span class="question-mark">?</span>;
-    bitcoind.mine_blocks(<span class="number">10</span>).<span class="kw">await</span><span class="question-mark">?</span>;
-
-    <span class="macro">debug!</span>(target: LOG_DEVIMINT, <span class="string">"Await block ln nodes block processing"</span>);
-    <span class="macro">tokio::try_join!</span>(
-        gw_a.wait_for_chain_sync(bitcoind),
-        gw_b.wait_for_chain_sync(bitcoind)
-    )<span class="question-mark">?</span>;
-
-    <span class="macro">debug!</span>(target: LOG_DEVIMINT, <span class="string">"Opening LN channel between the nodes..."</span>);
-    gw_a.open_channel(
-        gw_b.lightning_pubkey().<span class="kw">await</span><span class="question-mark">?</span>,
-        gw_b.lightning_node_addr.clone(),
-        <span class="number">10_000_000</span>,
-        <span class="prelude-val">Some</span>(<span class="number">5_000_000</span>),
+    <span class="macro">debug!</span>(target: LOG_DEVIMINT, <span class="string">"Syncing gateway lightning nodes to chain tip..."</span>);
+    futures::future::try_join_all(
+        gateways
+            .iter()
+            .map(|(gw, _gw_name)| gw.wait_for_chain_sync(bitcoind)),
     )
     .<span class="kw">await</span><span class="question-mark">?</span>;
+
+    <span class="macro">debug!</span>(target: LOG_DEVIMINT, <span class="string">"Performing peg-in on all gateway lightning nodes..."</span>);
+    <span class="kw">for </span>(gw, _gw_name) <span class="kw">in </span>gateways {
+        <span class="kw">let </span>funding_addr = gw.get_funding_address().<span class="kw">await</span><span class="question-mark">?</span>;
+        bitcoind.send_to(funding_addr, <span class="number">100_000_000</span>).<span class="kw">await</span><span class="question-mark">?</span>;
+    }
+
+    bitcoind.mine_blocks(<span class="number">10</span>).<span class="kw">await</span><span class="question-mark">?</span>;
+
+    <span class="macro">debug!</span>(target: LOG_DEVIMINT, <span class="string">"Syncing gateway lightning nodes to chain tip..."</span>);
+    futures::future::try_join_all(
+        gateways
+            .iter()
+            .map(|(gw, _gw_name)| gw.wait_for_chain_sync(bitcoind)),
+    )
+    .<span class="kw">await</span><span class="question-mark">?</span>;
+
+    <span class="comment">// All unique pairs of gateways.
+    // For a list of gateways [A, B, C], this will produce [(A, B), (B, C), (C, A)].
+    </span><span class="attr">#[allow(clippy::type_complexity)]
+    </span><span class="kw">let </span>gateway_pairs: Vec&lt;(<span class="kw-2">&amp;</span>(<span class="kw-2">&amp;</span>Gatewayd, <span class="kw-2">&amp;</span>str), <span class="kw-2">&amp;</span>(<span class="kw-2">&amp;</span>Gatewayd, <span class="kw-2">&amp;</span>str))&gt; =
+        gateways.iter().circular_tuple_windows::&lt;(<span class="kw">_</span>, <span class="kw">_</span>)&gt;().collect();
+
+    <span class="kw">for </span>((gw_a, gw_a_name), (gw_b, gw_b_name)) <span class="kw">in </span><span class="kw-2">&amp;</span>gateway_pairs {
+        <span class="macro">debug!</span>(target: LOG_DEVIMINT, <span class="string">"Opening channel between {gw_a_name} and {gw_b_name} gateway lightning nodes..."</span>);
+        gw_a.open_channel(
+            gw_b.lightning_pubkey().<span class="kw">await</span><span class="question-mark">?</span>,
+            gw_b.lightning_node_addr.clone(),
+            <span class="number">10_000_000</span>,
+            <span class="prelude-val">Some</span>(<span class="number">5_000_000</span>),
+        )
+        .<span class="kw">await</span><span class="question-mark">?</span>;
+    }
 
     <span class="comment">// `open_channel` may not send out the channel funding transaction immediately
     // so we need to wait for it to get to the mempool.
     // TODO: LDK is the culprit here. Find a way to ensure that
     // `GatewayLdkClient::open_channel` is fully done before it returns.
-    </span>fedimint_core::runtime::sleep(Duration::from_secs(<span class="number">10</span>)).<span class="kw">await</span>;
+    </span>fedimint_core::runtime::sleep(Duration::from_secs(<span class="number">5</span>)).<span class="kw">await</span>;
 
-    bitcoind.mine_blocks(<span class="number">20</span>).<span class="kw">await</span><span class="question-mark">?</span>;
+    bitcoind.mine_blocks(<span class="number">10</span>).<span class="kw">await</span><span class="question-mark">?</span>;
 
-    <span class="kw">let </span>gw_a_node_pubkey = gw_a.lightning_pubkey().<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="kw">for </span>((gw_a, _gw_a_name), (gw_b, _gw_b_name)) <span class="kw">in </span><span class="kw-2">&amp;</span>gateway_pairs {
+        <span class="kw">let </span>gw_a_node_pubkey = gw_a.lightning_pubkey().<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>gw_b_node_pubkey = gw_b.lightning_pubkey().<span class="kw">await</span><span class="question-mark">?</span>;
 
+        wait_for_ready_channel_on_gateway_with_counterparty(gw_b, gw_a_node_pubkey).<span class="kw">await</span><span class="question-mark">?</span>;
+        wait_for_ready_channel_on_gateway_with_counterparty(gw_a, gw_b_node_pubkey).<span class="kw">await</span><span class="question-mark">?</span>;
+    }
+
+    <span class="prelude-val">Ok</span>(())
+}
+
+<span class="kw">async fn </span>wait_for_ready_channel_on_gateway_with_counterparty(
+    gw: <span class="kw-2">&amp;</span>Gatewayd,
+    counterparty_lightning_node_pubkey: bitcoin::secp256k1::PublicKey,
+) -&gt; anyhow::Result&lt;()&gt; {
     poll(<span class="string">"Wait for channel update"</span>, || <span class="kw">async </span>{
-        <span class="kw">let </span>channels = gw_b
+        <span class="kw">let </span>channels = gw
             .list_active_channels()
             .<span class="kw">await
             </span>.context(<span class="string">"list channels"</span>)
@@ -2011,17 +2065,15 @@
 
         <span class="kw">if </span>channels
             .iter()
-            .any(|channel| channel.remote_pubkey == gw_a_node_pubkey)
+            .any(|channel| channel.remote_pubkey == counterparty_lightning_node_pubkey)
         {
             <span class="kw">return </span><span class="prelude-val">Ok</span>(());
         }
 
         <span class="prelude-val">Err</span>(ControlFlow::Continue(<span class="macro">anyhow!</span>(<span class="string">"channel not found"</span>)))
     })
-    .<span class="kw">await</span><span class="question-mark">?</span>;
-
-    <span class="prelude-val">Ok</span>(())
-}
+    .<span class="kw">await
+</span>}
 
 <span class="attr">#[derive(Clone)]
 </span><span class="kw">pub enum </span>LightningNode {

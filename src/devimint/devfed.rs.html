@@ -441,6 +441,8 @@
 <a href="#441" id="441">441</a>
 <a href="#442" id="442">442</a>
 <a href="#443" id="443">443</a>
+<a href="#444" id="444">444</a>
+<a href="#445" id="445">445</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::ops::Deref <span class="kw">as _</span>;
 <span class="kw">use </span>std::sync::Arc;
 
@@ -453,7 +455,7 @@
 
 <span class="kw">use </span><span class="kw">crate</span>::envs::{FM_GWID_CLN_ENV, FM_GWID_LDK_ENV, FM_GWID_LND_ENV};
 <span class="kw">use </span><span class="kw">crate</span>::external::{
-    open_channel, open_channel_between_gateways, Bitcoind, Electrs, Esplora, Lightningd, Lnd,
+    open_channel, open_channels_between_gateways, Bitcoind, Electrs, Esplora, Lightningd, Lnd,
 };
 <span class="kw">use </span><span class="kw">crate</span>::federation::{Client, Federation};
 <span class="kw">use </span><span class="kw">crate</span>::gatewayd::Gatewayd;
@@ -716,12 +718,14 @@
                     <span class="kw">let </span>gw_cln = gw_cln.get_try().<span class="kw">await</span><span class="question-mark">?</span>.deref();
                     <span class="kw">let </span>gw_lnd = gw_lnd.get_try().<span class="kw">await</span><span class="question-mark">?</span>.deref();
 
-                    open_channel_between_gateways(<span class="kw-2">&amp;</span>bitcoind, gw_cln, gw_lnd).<span class="kw">await</span><span class="question-mark">?</span>;
+                    <span class="kw">let </span>gateways: <span class="kw-2">&amp;</span>[(<span class="kw-2">&amp;</span>Gatewayd, <span class="kw-2">&amp;</span>str)] =
+                        <span class="kw">if let </span><span class="prelude-val">Some</span>(gw_ldk) = gw_ldk.get_try().<span class="kw">await</span><span class="question-mark">?</span>.deref() {
+                            <span class="kw-2">&amp;</span>[(gw_cln, <span class="string">"CLN"</span>), (gw_lnd, <span class="string">"LND"</span>), (gw_ldk, <span class="string">"LDK"</span>)]
+                        } <span class="kw">else </span>{
+                            <span class="kw-2">&amp;</span>[(gw_cln, <span class="string">"CLN"</span>), (gw_lnd, <span class="string">"LND"</span>)]
+                        };
 
-                    <span class="kw">if let </span><span class="prelude-val">Some</span>(gw_ldk) = gw_ldk.get_try().<span class="kw">await</span><span class="question-mark">?</span>.deref() {
-                        open_channel_between_gateways(<span class="kw-2">&amp;</span>bitcoind, gw_ldk, gw_cln).<span class="kw">await</span><span class="question-mark">?</span>;
-                        open_channel_between_gateways(<span class="kw-2">&amp;</span>bitcoind, gw_ldk, gw_lnd).<span class="kw">await</span><span class="question-mark">?</span>;
-                    }
+                    open_channels_between_gateways(<span class="kw-2">&amp;</span>bitcoind, gateways).<span class="kw">await</span><span class="question-mark">?</span>;
                 }
 
                 <span class="prelude-val">Ok</span>(Arc::new(()))
