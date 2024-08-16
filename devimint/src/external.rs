@@ -18,6 +18,7 @@ use fedimint_core::BitcoinHash;
 use fedimint_logging::LOG_DEVIMINT;
 use fedimint_testing::gateway::LightningNodeType;
 use hex::ToHex;
+use itertools::Itertools;
 use tokio::fs;
 use tokio::sync::{MappedMutexGuard, Mutex, MutexGuard};
 use tokio::time::Instant;
@@ -862,50 +863,77 @@ pub async fn open_channel(
     Ok(())
 }
 
-pub async fn open_channel_between_gateways(
+#[allow(clippy::similar_names)]
+pub async fn open_channels_between_gateways(
     bitcoind: &Bitcoind,
-    gw_a: &Gatewayd,
-    gw_b: &Gatewayd,
+    gateways: &[(&Gatewayd, &str)],
 ) -> Result<()> {
-    // TODO: Find out why we need to wait for LDK here.
-    let funding_addr = loop {
-        if let Ok(address) = gw_a.get_funding_address().await {
-            break address;
-        }
-
-        fedimint_core::runtime::sleep(std::time::Duration::from_secs(1)).await;
-    };
-
-    bitcoind.send_to(funding_addr, 100_000_000).await?;
-    bitcoind.mine_blocks(10).await?;
-
-    debug!(target: LOG_DEVIMINT, "Await block ln nodes block processing");
-    tokio::try_join!(
-        gw_a.wait_for_chain_sync(bitcoind),
-        gw_b.wait_for_chain_sync(bitcoind)
-    )?;
-
-    debug!(target: LOG_DEVIMINT, "Opening LN channel between the nodes...");
-    gw_a.open_channel(
-        gw_b.lightning_pubkey().await?,
-        gw_b.lightning_node_addr.clone(),
-        10_000_000,
-        Some(5_000_000),
+    debug!(target: LOG_DEVIMINT, "Syncing gateway lightning nodes to chain tip...");
+    futures::future::try_join_all(
+        gateways
+            .iter()
+            .map(|(gw, _gw_name)| gw.wait_for_chain_sync(bitcoind)),
     )
     .await?;
+
+    debug!(target: LOG_DEVIMINT, "Performing peg-in on all gateway lightning nodes...");
+    for (gw, _gw_name) in gateways {
+        let funding_addr = gw.get_funding_address().await?;
+        bitcoind.send_to(funding_addr, 100_000_000).await?;
+    }
+
+    bitcoind.mine_blocks(10).await?;
+
+    debug!(target: LOG_DEVIMINT, "Syncing gateway lightning nodes to chain tip...");
+    futures::future::try_join_all(
+        gateways
+            .iter()
+            .map(|(gw, _gw_name)| gw.wait_for_chain_sync(bitcoind)),
+    )
+    .await?;
+
+    // All unique pairs of gateways.
+    // For a list of gateways [A, B, C], this will produce [(A, B), (B, C), (C, A)].
+    #[allow(clippy::type_complexity)]
+    let gateway_pairs: Vec<(&(&Gatewayd, &str), &(&Gatewayd, &str))> =
+        gateways.iter().circular_tuple_windows::<(_, _)>().collect();
+
+    for ((gw_a, gw_a_name), (gw_b, gw_b_name)) in &gateway_pairs {
+        debug!(target: LOG_DEVIMINT, "Opening channel between {gw_a_name} and {gw_b_name} gateway lightning nodes...");
+        gw_a.open_channel(
+            gw_b.lightning_pubkey().await?,
+            gw_b.lightning_node_addr.clone(),
+            10_000_000,
+            Some(5_000_000),
+        )
+        .await?;
+    }
 
     // `open_channel` may not send out the channel funding transaction immediately
     // so we need to wait for it to get to the mempool.
     // TODO: LDK is the culprit here. Find a way to ensure that
     // `GatewayLdkClient::open_channel` is fully done before it returns.
-    fedimint_core::runtime::sleep(Duration::from_secs(10)).await;
+    fedimint_core::runtime::sleep(Duration::from_secs(5)).await;
 
-    bitcoind.mine_blocks(20).await?;
+    bitcoind.mine_blocks(10).await?;
 
-    let gw_a_node_pubkey = gw_a.lightning_pubkey().await?;
+    for ((gw_a, _gw_a_name), (gw_b, _gw_b_name)) in &gateway_pairs {
+        let gw_a_node_pubkey = gw_a.lightning_pubkey().await?;
+        let gw_b_node_pubkey = gw_b.lightning_pubkey().await?;
 
+        wait_for_ready_channel_on_gateway_with_counterparty(gw_b, gw_a_node_pubkey).await?;
+        wait_for_ready_channel_on_gateway_with_counterparty(gw_a, gw_b_node_pubkey).await?;
+    }
+
+    Ok(())
+}
+
+async fn wait_for_ready_channel_on_gateway_with_counterparty(
+    gw: &Gatewayd,
+    counterparty_lightning_node_pubkey: bitcoin::secp256k1::PublicKey,
+) -> anyhow::Result<()> {
     poll("Wait for channel update", || async {
-        let channels = gw_b
+        let channels = gw
             .list_active_channels()
             .await
             .context("list channels")
@@ -913,16 +941,14 @@ pub async fn open_channel_between_gateways(
 
         if channels
             .iter()
-            .any(|channel| channel.remote_pubkey == gw_a_node_pubkey)
+            .any(|channel| channel.remote_pubkey == counterparty_lightning_node_pubkey)
         {
             return Ok(());
         }
 
         Err(ControlFlow::Continue(anyhow!("channel not found")))
     })
-    .await?;
-
-    Ok(())
+    .await
 }
 
 #[derive(Clone)]

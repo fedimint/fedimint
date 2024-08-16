@@ -10,7 +10,7 @@ use tracing::debug;
 
 use crate::envs::{FM_GWID_CLN_ENV, FM_GWID_LDK_ENV, FM_GWID_LND_ENV};
 use crate::external::{
-    open_channel, open_channel_between_gateways, Bitcoind, Electrs, Esplora, Lightningd, Lnd,
+    open_channel, open_channels_between_gateways, Bitcoind, Electrs, Esplora, Lightningd, Lnd,
 };
 use crate::federation::{Client, Federation};
 use crate::gatewayd::Gatewayd;
@@ -273,12 +273,14 @@ impl DevJitFed {
                     let gw_cln = gw_cln.get_try().await?.deref();
                     let gw_lnd = gw_lnd.get_try().await?.deref();
 
-                    open_channel_between_gateways(&bitcoind, gw_cln, gw_lnd).await?;
+                    let gateways: &[(&Gatewayd, &str)] =
+                        if let Some(gw_ldk) = gw_ldk.get_try().await?.deref() {
+                            &[(gw_cln, "CLN"), (gw_lnd, "LND"), (gw_ldk, "LDK")]
+                        } else {
+                            &[(gw_cln, "CLN"), (gw_lnd, "LND")]
+                        };
 
-                    if let Some(gw_ldk) = gw_ldk.get_try().await?.deref() {
-                        open_channel_between_gateways(&bitcoind, gw_ldk, gw_cln).await?;
-                        open_channel_between_gateways(&bitcoind, gw_ldk, gw_lnd).await?;
-                    }
+                    open_channels_between_gateways(&bitcoind, gateways).await?;
                 }
 
                 Ok(Arc::new(()))
