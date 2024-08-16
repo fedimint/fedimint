@@ -23,7 +23,7 @@ bitcoin = { workspace = true }
 bitcoincore-rpc = { version = "0.17.0", optional = true }
 electrum-client = { version = "0.18.0", optional = true }
 esplora-client = { workspace = true, optional = true }
-fedimint-core  = { version = "=0.4.1-rc.0", path = "../fedimint-core" }
+fedimint-core  = { version = "=0.4.2-rc.0", path = "../fedimint-core" }
 fedimint-logging = { workspace = true }
 hex = "0.4.3"
 once_cell = { workspace = true }
