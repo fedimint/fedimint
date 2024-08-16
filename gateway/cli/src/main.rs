@@ -55,6 +55,88 @@ async fn main() -> anyhow::Result<()> {
                 &mut std::io::stdout(),
             );
         }
+        Commands::SetConfiguration {
+            password,
+            num_route_hints,
+            routing_fees,
+            network,
+            per_federation_routing_fees,
+        } => {
+            let per_federation_routing_fees = per_federation_routing_fees
+                .map(|input| input.into_iter().map(Into::into).collect());
+            client()
+                .set_configuration(SetConfigurationPayload {
+                    password,
+                    num_route_hints,
+                    routing_fees,
+                    network,
+                    per_federation_routing_fees,
+                })
+                .await?;
+        }
+
+        Commands::Lightning(lightning_command) => match lightning_command {
+            LightningCommands::GetFundingAddress => {
+                let response = client()
+                    .get_funding_address(GetFundingAddressPayload {})
+                    .await?
+                    .require_network();
+                println!("{response}");
+            }
+            LightningCommands::OpenChannel {
+                pubkey,
+                host,
+                channel_size_sats,
+                push_amount_sats,
+            } => {
+                client()
+                    .open_channel(OpenChannelPayload {
+                        pubkey,
+                        host,
+                        channel_size_sats,
+                        push_amount_sats: push_amount_sats.unwrap_or(0),
+                    })
+                    .await?;
+            }
+            LightningCommands::CloseChannelsWithPeer { pubkey } => {
+                let response = client()
+                    .close_channels_with_peer(CloseChannelsWithPeerPayload { pubkey })
+                    .await?;
+                print_response(response);
+            }
+            LightningCommands::ListActiveChannels => {
+                let response = client().list_active_channels().await?;
+                print_response(response);
+            }
+            LightningCommands::WaitForChainSync {
+                block_height,
+                max_retries,
+                retry_delay_seconds,
+            } => {
+                let retry_duration = Duration::from_secs(
+                    retry_delay_seconds.unwrap_or(DEFAULT_WAIT_FOR_CHAIN_SYNC_RETRY_DELAY_SECONDS),
+                );
+
+                retry(
+                    "Wait for chain sync",
+                    backoff_util::custom_backoff(
+                        retry_duration,
+                        retry_duration,
+                        Some(max_retries.unwrap_or(DEFAULT_WAIT_FOR_CHAIN_SYNC_RETRIES) as usize),
+                    ),
+                    || async {
+                        let info = client().get_info().await?;
+                        if info.block_height.unwrap_or(0) >= block_height && info.synced_to_chain {
+                            Ok(())
+                        } else {
+                            Err(anyhow::anyhow!("Not synced yet"))
+                        }
+                    },
+                )
+                .await
+                .map_err(|_| anyhow::anyhow!("Timed out waiting for chain sync"))?;
+            }
+        },
     }
 
     Ok(())
