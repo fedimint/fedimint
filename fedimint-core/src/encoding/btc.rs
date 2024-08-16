@@ -200,7 +200,7 @@ impl Encodable for bitcoin::Address {
 
 impl Encodable for bitcoin::Address<NetworkUnchecked> {
     fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<usize, Error> {
-        self.clone().assume_checked().consensus_encode(writer)
+        self.clone().require_network().consensus_encode(writer)
     }
 }
 

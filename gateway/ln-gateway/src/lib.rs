@@ -941,7 +941,7 @@ impl Gateway {
                 WithdrawState::Succeeded(txid) => {
                     info!(
                         "Sent {amount} funds to address {}",
-                        address.assume_checked()
+                        address.require_network()
                     );
                     return Ok(txid);
                 }

@@ -580,7 +580,7 @@ impl WalletClientModule {
         check_address(&address, self.cfg().network)?;
 
         self.module_api
-            .fetch_peg_out_fees(&address.assume_checked(), amount)
+            .fetch_peg_out_fees(&address.require_network(), amount)
             .await?
             .context("Federation didn't return peg-out fees")
     }

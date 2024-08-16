@@ -302,7 +302,7 @@ async fn main() -> anyhow::Result<()> {
                 let response = client()
                     .get_funding_address(GetFundingAddressPayload {})
                     .await?
-                    .assume_checked();
+                    .require_network();
                 println!("{response}");
             }
             LightningCommands::OpenChannel {

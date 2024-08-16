@@ -53,7 +53,7 @@ async fn assert_withdrawal(
     let parsed_address = Address::from_str(&deposit_address)?;
     let tx = Transaction::consensus_decode_hex(&tx_hex, &Default::default()).unwrap();
     assert!(tx.output.iter().any(|o| o.script_pubkey
-        == parsed_address.clone().assume_checked().script_pubkey()
+        == parsed_address.clone().require_network().script_pubkey()
         && o.value == withdrawal_amount_sats));
 
     // Verify the receive client gets the deposit

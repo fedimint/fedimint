@@ -138,7 +138,7 @@ impl BitcoinTest for RealBitcoinTestNoLock {
         self.client
             .get_new_address(None, None)
             .expect(Self::ERROR)
-            .assume_checked()
+            .require_network()
     }
 
     async fn get_mempool_tx_fee(&self, txid: &Txid) -> Amount {
