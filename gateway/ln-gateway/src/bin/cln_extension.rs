@@ -66,7 +66,7 @@ struct ClnExtensionOpts {
 async fn main() -> Result<(), anyhow::Error> {
     handle_version_hash_command(fedimint_build_code_version_env!());
 
-    let extension_opts = ClnExtensionOpts::parse();
+    let extension_opts = ClnExtensionOpts::try_parse().ok();
 
     let (service, listen, plugin) = ClnRpcService::new(extension_opts)
         .await
@@ -131,7 +131,7 @@ struct ClnRpcService {
 
 impl ClnRpcService {
     async fn new(
-        extension_opts: ClnExtensionOpts,
+        extension_opts: Option<ClnExtensionOpts>,
     ) -> Result<(Self, SocketAddr, Plugin<Arc<ClnHtlcInterceptor>>), ClnExtensionError> {
         let interceptor = Arc::new(ClnHtlcInterceptor::new());
 
@@ -171,7 +171,19 @@ impl ClnRpcService {
             let socket = PathBuf::from(config.lightning_dir).join(config.rpc_file);
 
             // Parse configurations or read from
-            let fm_gateway_listen = extension_opts.fm_gateway_listen;
+            let fm_gateway_listen = match extension_opts {
+                Some(opts) => opts.fm_gateway_listen,
+                None => {
+                    let listen_val = plugin.option("fm-gateway-listen")
+                        .expect("Gateway CLN extension is missing a listen address configuration.
+                        You can set it via FM_CLN_EXTENSION_LISTEN_ADDRESS env variable, or by adding
+                        a --fm-gateway-listen config option to the CLN plugin.");
+                    let listen = listen_val.as_str()
+                        .expect("fm-gateway-listen isn't a string");
+
+                    SocketAddr::from_str(listen).expect("invalid fm-gateway-listen address")
+                }
+            };
 
             Ok((
                 Self {
