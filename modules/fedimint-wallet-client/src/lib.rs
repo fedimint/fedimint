@@ -28,7 +28,7 @@ use anyhow::{anyhow, bail, ensure, Context as AnyhowContext};
 use async_stream::stream;
 use backup::WalletModuleBackup;
 use bitcoin::address::NetworkUnchecked;
-use bitcoin::{Address, Network, ScriptBuf};
+use bitcoin::{Address, Network, Network, ScriptBuf};
 use client_db::{DbKeyPrefix, PegInTweakIndexKey, TweakIdx};
 use fedimint_api_client::api::DynModuleApi;
 use fedimint_bitcoind::{create_bitcoind, DynBitcoindRpc};
@@ -585,7 +585,7 @@ impl WalletClientModule {
         check_address(&address, self.cfg().network)?;
 
         self.module_api
-            .fetch_peg_out_fees(&address.assume_checked(), amount)
+            .fetch_peg_out_fees(&address.require_network(Network::Bitcoin).unwrap(), amount)
             .await?
             .context("Federation didn't return peg-out fees")
     }

@@ -4,7 +4,7 @@ use std::time::Duration;
 
 use anyhow::Context;
 use async_trait::async_trait;
-use bitcoin::{Address, Transaction, Txid};
+use bitcoin::{Address, Network, Transaction, Txid};
 use bitcoincore_rpc::{Client, RpcApi};
 use fedimint_bitcoind::DynBitcoindRpc;
 use fedimint_core::encoding::Decodable;
@@ -138,7 +138,8 @@ impl BitcoinTest for RealBitcoinTestNoLock {
         self.client
             .get_new_address(None, None)
             .expect(Self::ERROR)
-            .assume_checked()
+            .require_network(Network::Bitcoin)
+            .unwrap()
     }
 
     async fn get_mempool_tx_fee(&self, txid: &Txid) -> Amount {

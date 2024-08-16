@@ -1,5 +1,6 @@
 use std::time::Duration;
 
+use bitcoin::Network;
 use clap::Subcommand;
 use fedimint_core::util::{backoff_util, retry};
 use ln_gateway::rpc::rpc_client::GatewayRpcClient;
@@ -69,7 +70,8 @@ impl LightningCommands {
                 let response = create_client()
                     .get_funding_address(GetFundingAddressPayload {})
                     .await?
-                    .assume_checked();
+                    .require_network(Network::Bitcoin)
+                    .unwrap();
                 println!("{response}");
             }
             Self::OpenChannel {

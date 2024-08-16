@@ -2,7 +2,7 @@ use std::time::Duration;
 
 use anyhow::{bail, Context};
 use assert_matches::assert_matches;
-use bitcoin::secp256k1;
+use bitcoin::{secp256k1, Network};
 use fedimint_client::secret::{PlainRootSecretStrategy, RootSecretStrategy};
 use fedimint_client::ClientHandleArc;
 use fedimint_core::bitcoin_migration::checked_address_to_unchecked_address;
@@ -193,7 +193,7 @@ async fn on_chain_peg_in_and_peg_out_happy_case() -> anyhow::Result<()> {
     assert_eq!(tx_fee, expected_tx_fee);
 
     let received = bitcoin
-        .mine_block_and_get_received(&address.clone().assume_checked())
+        .mine_block_and_get_received(&address.clone().require_network(Network::Bitcoin).unwrap())
         .await;
     assert_eq!(received, peg_out.into());
     Ok(())
@@ -384,7 +384,9 @@ async fn rbf_withdrawals_are_rejected() -> anyhow::Result<()> {
 
     assert_eq!(
         bitcoin
-            .mine_block_and_get_received(&address.clone().assume_checked())
+            .mine_block_and_get_received(
+                &address.clone().require_network(Network::Bitcoin).unwrap()
+            )
             .await,
         sats(PEG_OUT_AMOUNT_SATS)
     );

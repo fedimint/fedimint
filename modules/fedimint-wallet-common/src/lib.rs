@@ -244,7 +244,11 @@ impl std::fmt::Display for WalletOutputV0 {
                     f,
                     "Wallet PegOut {} to {}",
                     pegout.amount,
-                    pegout.recipient.clone().assume_checked()
+                    pegout
+                        .recipient
+                        .clone()
+                        .require_network(Network::Bitcoin)
+                        .unwrap()
                 )
             }
             WalletOutputV0::Rbf(rbf) => write!(f, "Wallet RBF {:?} to {}", rbf.fees, rbf.txid),

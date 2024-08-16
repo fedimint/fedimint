@@ -41,7 +41,7 @@ use ::lightning::ln::PaymentHash;
 use anyhow::{anyhow, bail};
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
-use bitcoin::{Address, Network, Txid};
+use bitcoin::{Address, Network, Network, Txid};
 use bitcoin_hashes::sha256;
 use clap::Parser;
 use client::GatewayClientBuilder;
@@ -904,7 +904,7 @@ impl Gateway {
                 WithdrawState::Succeeded(txid) => {
                     info!(
                         "Sent {amount} funds to address {}",
-                        address.assume_checked()
+                        address.require_network(Network::Bitcoin).unwrap()
                     );
                     return Ok(txid);
                 }
@@ -1233,7 +1233,7 @@ impl Gateway {
         let context = self.get_lightning_context().await?;
         let response = context.lnrpc.get_funding_address().await?;
         Address::from_str(&response.address)
-            .map(Address::assume_checked)
+            .map(Address::require_network(Network::Bitcoin).unwrap())
             .map_err(|e| GatewayError::LightningResponseParseError(e.into()))
     }
 

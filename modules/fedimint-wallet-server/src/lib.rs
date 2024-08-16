@@ -702,7 +702,7 @@ impl ServerModule for Wallet {
 
                     let tx = module.offline_wallet().create_tx(
                         bitcoin::Amount::from_sat(sats),
-                        address.assume_checked().script_pubkey(),
+                        address.require_network(Network::Bitcoin).unwrap().script_pubkey(),
                         vec![],
                         module.available_utxos(&mut context.dbtx().into_nc()).await,
                         feerate,
@@ -1132,7 +1132,12 @@ impl Wallet {
         match output {
             WalletOutputV0::PegOut(peg_out) => self.offline_wallet().create_tx(
                 peg_out.amount,
-                peg_out.recipient.clone().assume_checked().script_pubkey(),
+                peg_out
+                    .recipient
+                    .clone()
+                    .require_network(Network::Bitcoin)
+                    .unwrap()
+                    .script_pubkey(),
                 vec![],
                 self.available_utxos(dbtx).await,
                 peg_out.fees.fee_rate,
@@ -1772,7 +1777,11 @@ mod tests {
         // spendable sats = 3000 - 219 - 330 = 2451
         let tx = wallet.create_tx(
             Amount::from_sat(2452),
-            recipient.clone().assume_checked().script_pubkey(),
+            recipient
+                .clone()
+                .require_network(Network::Bitcoin)
+                .unwrap()
+                .script_pubkey(),
             vec![],
             vec![(UTXOKey(OutPoint::null()), spendable.clone())],
             fee,
@@ -1785,7 +1794,11 @@ mod tests {
         let mut tx = wallet
             .create_tx(
                 Amount::from_sat(1000),
-                recipient.clone().assume_checked().script_pubkey(),
+                recipient
+                    .clone()
+                    .require_network(Network::Bitcoin)
+                    .unwrap()
+                    .script_pubkey(),
                 vec![],
                 vec![(UTXOKey(OutPoint::null()), spendable)],
                 fee,

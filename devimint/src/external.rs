@@ -5,6 +5,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::{anyhow, bail, Context, Result};
+use bitcoin::Network;
 use bitcoincore_rpc::bitcoin::{Address, BlockHash};
 use bitcoincore_rpc::bitcoincore_rpc_json::{GetBalancesResult, GetBlockchainInfoResult};
 use bitcoincore_rpc::{bitcoin, RpcApi};
@@ -130,7 +131,9 @@ impl Bitcoind {
         if !skip_setup {
             // mine blocks
             let blocks = 101;
-            let address = block_in_place(|| client.get_new_address(None, None))?.assume_checked();
+            let address = block_in_place(|| client.get_new_address(None, None))?
+                .require_network(Network::Bitcoin)
+                .unwrap();
             debug!(target: LOG_DEVIMINT, blocks_num=blocks, %address, "Mining blocks to address");
             block_in_place(|| {
                 client
@@ -222,7 +225,12 @@ impl Bitcoind {
         let tx = self
             .wallet_client()
             .await?
-            .send_to_address(&bitcoin::Address::from_str(&addr)?.assume_checked(), amount)
+            .send_to_address(
+                &bitcoin::Address::from_str(&addr)?
+                    .require_network(Network::Bitcoin)
+                    .unwrap(),
+                amount,
+            )
             .await?;
         Ok(tx)
     }
@@ -240,7 +248,9 @@ impl Bitcoind {
 
     pub async fn get_new_address(&self) -> Result<Address> {
         let client = &self.wallet_client().await?;
-        let addr = block_in_place(|| client.client.get_new_address(None, None))?.assume_checked();
+        let addr = block_in_place(|| client.client.get_new_address(None, None))?
+            .require_network(Network::Bitcoin)
+            .unwrap();
         Ok(addr)
     }
 
