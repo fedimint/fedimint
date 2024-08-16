@@ -32,12 +32,13 @@ use crate::envs::{
     FM_ELECTRS_BASE_EXECUTABLE_ENV, FM_ESPLORA_BASE_EXECUTABLE_ENV, FM_FAUCET_BASE_EXECUTABLE_ENV,
     FM_FEDIMINTD_BASE_EXECUTABLE_ENV, FM_FEDIMINT_CLI_BASE_EXECUTABLE_ENV,
     FM_FEDIMINT_DBTOOL_BASE_EXECUTABLE_ENV, FM_GATEWAYD_BASE_EXECUTABLE_ENV,
-    FM_GATEWAY_CLI_BASE_EXECUTABLE_ENV, FM_GWCLI_CLN_ENV, FM_GWCLI_LND_ENV,
-    FM_LIGHTNINGD_BASE_EXECUTABLE_ENV, FM_LIGHTNING_CLI_BASE_EXECUTABLE_ENV, FM_LIGHTNING_CLI_ENV,
-    FM_LNCLI_BASE_EXECUTABLE_ENV, FM_LNCLI_ENV, FM_LND_BASE_EXECUTABLE_ENV,
-    FM_LOAD_TEST_TOOL_BASE_EXECUTABLE_ENV, FM_LOGS_DIR_ENV, FM_MINT_CLIENT_ENV,
-    FM_RECOVERYTOOL_BASE_EXECUTABLE_ENV,
+    FM_GATEWAY_CLI_BASE_EXECUTABLE_ENV, FM_GATEWAY_CLN_EXTENSION_BASE_EXECUTABLE_ENV,
+    FM_GWCLI_CLN_ENV, FM_GWCLI_LND_ENV, FM_LIGHTNINGD_BASE_EXECUTABLE_ENV,
+    FM_LIGHTNING_CLI_BASE_EXECUTABLE_ENV, FM_LIGHTNING_CLI_ENV, FM_LNCLI_BASE_EXECUTABLE_ENV,
+    FM_LNCLI_ENV, FM_LND_BASE_EXECUTABLE_ENV, FM_LOAD_TEST_TOOL_BASE_EXECUTABLE_ENV,
+    FM_LOGS_DIR_ENV, FM_MINT_CLIENT_ENV, FM_RECOVERYTOOL_BASE_EXECUTABLE_ENV,
 };
+use crate::version_constants::VERSION_0_5_0_ALPHA;
 
 // If a binary doesn't provide a clap version, default to the first stable
 // release (v0.2.1)
@@ -569,6 +570,15 @@ pub fn get_gateway_cli_path() -> Vec<String> {
     )
 }
 
+const GATEWAY_CLN_EXTENSION_FALLBACK: &str = "gateway-cln-extension";
+
+pub fn get_gateway_cln_extension_path(default_path: &str) -> Vec<String> {
+    get_command_str_for_alias(
+        &[FM_GATEWAY_CLN_EXTENSION_BASE_EXECUTABLE_ENV],
+        &[default_path],
+    )
+}
+
 const LOAD_TEST_TOOL_FALLBACK: &str = "fedimint-load-test-tool";
 
 const LIGHTNING_CLI_FALLBACK: &str = "lightning-cli";
@@ -943,6 +953,57 @@ impl GatewayCli {
         match cmd!(GatewayCli, "--version").out_string().await {
             Ok(version) => parse_clap_version(&version),
             Err(_) => DEFAULT_VERSION,
+        }
+    }
+}
+
+pub struct GatewayClnExtension {
+    default_path: String,
+}
+
+impl GatewayClnExtension {
+    pub async fn default_path() -> String {
+        cmd!("which", GATEWAY_CLN_EXTENSION_FALLBACK)
+            .out_string()
+            .await
+            .expect("Failed to get gateway-cln-extension path")
+    }
+
+    async fn new() -> GatewayClnExtension {
+        let default_path = GatewayClnExtension::default_path().await;
+        GatewayClnExtension { default_path }
+    }
+
+    pub fn cmd(self) -> Command {
+        to_command(get_command_str_for_alias(
+            &[],
+            &get_gateway_cln_extension_path(self.default_path.as_str())
+                .iter()
+                .map(String::as_str)
+                .collect::<Vec<_>>(),
+        ))
+    }
+
+    /// Returns the gateway-cln-extension version from clap or default min
+    /// version
+    pub async fn version_or_default() -> Version {
+        // gateway-cln-extension did not handle --version correctly until v0.5.0
+        // Without --version, we don't have a convenient way for determining the
+        // version. To handle this, we only check the version for the extension
+        // if gatewayd is > v0.5.0 since they should be on the same version.
+        let gatewayd_version = crate::util::Gatewayd::version_or_default().await;
+        if gatewayd_version < *VERSION_0_5_0_ALPHA {
+            return Version::new(0, 4, 0);
+        }
+
+        match cmd!(GatewayClnExtension::new().await, "--version")
+            .out_string()
+            .await
+        {
+            Ok(version) => parse_clap_version(&version),
+            // Default version for gateway-cln-extension is v0.4.0 because --version did not parse
+            // correctly until v0.5.0
+            Err(_) => Version::new(0, 4, 0),
         }
     }
 }

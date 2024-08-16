@@ -26,23 +26,29 @@ export FM_BACKWARDS_COMPATIBILITY_TEST=1
 fedimintd_paths=()
 fedimint_cli_paths=()
 gatewayd_paths=()
+gateway_cli_paths=()
+gateway_cln_extension_paths=()
 for version in "${versions[@]}"; do
   if [ "$version" == "current" ]; then
     # Add current binaries from PATH
     fedimintd_paths+=("fedimintd")
     fedimint_cli_paths+=("fedimint-cli")
     gatewayd_paths+=("gatewayd")
+    gateway_cli_paths+=("gateway-cli")
+    gateway_cln_extension_paths+=("gateway-cln-extension")
   else
     fedimintd_paths+=("$(nix_build_binary_for_version 'fedimintd' "$version")")
     fedimint_cli_paths+=("$(nix_build_binary_for_version 'fedimint-cli' "$version")")
     gatewayd_paths+=("$(nix_build_binary_for_version 'gatewayd' "$version")")
+    gateway_cli_paths+=("$(nix_build_binary_for_version 'gateway-cli' "$version")")
+    gateway_cln_extension_paths+=("$(nix_build_binary_for_version 'gateway-cln-extension' "$version")")
   fi
 done
 
 upgrade_tests=(
   "devimint upgrade-tests fedimintd --paths $(printf "%s " "${fedimintd_paths[@]}")"
   "devimint upgrade-tests fedimint-cli --paths $(printf "%s " "${fedimint_cli_paths[@]}")"
-  "devimint upgrade-tests gatewayd --paths $(printf "%s " "${gatewayd_paths[@]}")"
+  "devimint upgrade-tests gatewayd --gatewayd-paths $(printf "%s " "${gatewayd_paths[@]}") --gateway-cli-paths $(printf "%s " "${gateway_cli_paths[@]}") --gateway-cln-extension-paths $(printf "%s " "${gateway_cln_extension_paths[@]}")"
 )
 
 parsed_test_commands=$(printf "%s\n" "${upgrade_tests[@]}")

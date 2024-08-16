@@ -100,10 +100,17 @@ impl Gatewayd {
     pub async fn restart_with_bin(
         &mut self,
         process_mgr: &ProcessManager,
-        bin_path: &PathBuf,
+        gatewayd_path: &PathBuf,
+        gateway_cli_path: &PathBuf,
+        gateway_cln_extension_path: &PathBuf,
     ) -> Result<()> {
         self.process.terminate().await?;
-        std::env::set_var("FM_GATEWAYD_BASE_EXECUTABLE", bin_path);
+        std::env::set_var("FM_GATEWAYD_BASE_EXECUTABLE", gatewayd_path);
+        std::env::set_var("FM_GATEWAY_CLI_BASE_EXECUTABLE", gateway_cli_path);
+        std::env::set_var(
+            "FM_GATEWAY_CLN_EXTENSION_BASE_EXECUTABLE",
+            gateway_cln_extension_path,
+        );
         let ln = self
             .ln
             .as_ref()
@@ -112,7 +119,15 @@ impl Gatewayd {
         let new_gw = Self::new(process_mgr, ln).await?;
         self.process = new_gw.process;
         let gatewayd_version = crate::util::Gatewayd::version_or_default().await;
-        info!("upgraded gatewayd to version: {}", gatewayd_version);
+        let gateway_cli_version = crate::util::GatewayCli::version_or_default().await;
+        let gateway_cln_extension_version =
+            crate::util::GatewayClnExtension::version_or_default().await;
+        info!(
+            ?gatewayd_version,
+            ?gateway_cli_version,
+            ?gateway_cln_extension_version,
+            "upgraded gatewayd, gateway-cli, and gateway-cln-extension"
+        );
         Ok(())
     }
 
@@ -159,11 +174,11 @@ impl Gatewayd {
 
     pub async fn lightning_pubkey(&self) -> Result<PublicKey> {
         let info = self.get_info().await?;
-        let gateway_id = info["lightning_pub_key"]
+        let lightning_pub_key = info["lightning_pub_key"]
             .as_str()
             .context("lightning_pub_key must be a string")?
             .to_owned();
-        Ok(gateway_id.parse()?)
+        Ok(lightning_pub_key.parse()?)
     }
 
     pub async fn connect_fed(&self, fed: &Federation) -> Result<()> {
@@ -197,11 +212,11 @@ impl Gatewayd {
 
     pub async fn open_channel(
         &self,
-        pubkey: PublicKey,
-        host: String,
+        gw: &Gatewayd,
         channel_size_sats: u64,
         push_amount_sats: Option<u64>,
     ) -> Result<()> {
+        let pubkey = gw.lightning_pubkey().await?;
         cmd!(
             self,
             "lightning",
@@ -209,7 +224,7 @@ impl Gatewayd {
             "--pubkey",
             pubkey,
             "--host",
-            host,
+            gw.lightning_node_addr,
             "--channel-size-sats",
             channel_size_sats,
             "--push-amount-sats",
