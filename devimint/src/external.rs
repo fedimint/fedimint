@@ -18,7 +18,6 @@ use fedimint_core::BitcoinHash;
 use fedimint_logging::LOG_DEVIMINT;
 use fedimint_testing::gateway::LightningNodeType;
 use hex::ToHex;
-use itertools::Itertools;
 use tokio::fs;
 use tokio::sync::{MappedMutexGuard, Mutex, MutexGuard};
 use tokio::time::Instant;
@@ -882,7 +881,7 @@ pub async fn open_channels_between_gateways(
     )
     .await?;
 
-    debug!(target: LOG_DEVIMINT, "Performing peg-in on all gateway lightning nodes...");
+    debug!(target: LOG_DEVIMINT, "Funding all gateway lightning nodes...");
     for (gw, _gw_name) in gateways {
         let funding_addr = gw.get_funding_address().await?;
         bitcoind.send_to(funding_addr, 100_000_000).await?;
@@ -900,9 +899,12 @@ pub async fn open_channels_between_gateways(
 
     // All unique pairs of gateways.
     // For a list of gateways [A, B, C], this will produce [(A, B), (B, C), (C, A)].
-    #[allow(clippy::type_complexity)]
-    let gateway_pairs: Vec<(&(&Gatewayd, &str), &(&Gatewayd, &str))> =
-        gateways.iter().circular_tuple_windows::<(_, _)>().collect();
+    // Order needs to be enforced so that each Lightning node opens 1 channel.
+    let mut gateway_pairs = Vec::new();
+    for i in 0..gateways.len() {
+        let next = (i + 1) % gateways.len();
+        gateway_pairs.push((gateways[i], gateways[next]));
+    }
 
     for ((gw_a, gw_a_name), (gw_b, gw_b_name)) in &gateway_pairs {
         debug!(target: LOG_DEVIMINT, "Opening channel between {gw_a_name} and {gw_b_name} gateway lightning nodes...");
