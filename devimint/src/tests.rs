@@ -529,35 +529,79 @@ pub async fn upgrade_tests(process_mgr: &ProcessManager, binary: UpgradeTest) ->
             }
             info!("## fedimint-cli upgraded all binaries successfully");
         }
-        UpgradeTest::Gatewayd { paths } => {
-            if let Some(oldest_gatewayd) = paths.first() {
+        UpgradeTest::Gatewayd {
+            gatewayd_paths,
+            gateway_cli_paths,
+            gateway_cln_extension_paths,
+        } => {
+            if let Some(oldest_gatewayd) = gatewayd_paths.first() {
                 std::env::set_var("FM_GATEWAYD_BASE_EXECUTABLE", oldest_gatewayd);
             } else {
-                bail!("Must provide at least 1 binary path");
+                bail!("Must provide at least 1 gatewayd path");
+            }
+
+            if let Some(oldest_gateway_cli) = gateway_cli_paths.first() {
+                std::env::set_var("FM_GATEWAY_CLI_BASE_EXECUTABLE", oldest_gateway_cli);
+            } else {
+                bail!("Must provide at least 1 gateway-cli path");
+            }
+
+            if let Some(oldest_gateway_cln_extension) = gateway_cln_extension_paths.first() {
+                std::env::set_var(
+                    "FM_GATEWAY_CLN_EXTENSION_BASE_EXECUTABLE",
+                    oldest_gateway_cln_extension,
+                );
+            } else {
+                bail!("Must provide at least 1 gateway-cln-extension path");
             }
 
             let gatewayd_version = crate::util::Gatewayd::version_or_default().await;
+            let gateway_cli_version = crate::util::GatewayCli::version_or_default().await;
+            let gateway_cln_extension_version =
+                crate::util::GatewayClnExtension::version_or_default().await;
             info!(
-                "running first stress test for gatewayd version: {}",
-                gatewayd_version
+                ?gatewayd_version,
+                ?gateway_cli_version,
+                ?gateway_cln_extension_version,
+                "running first stress test for gateway",
             );
 
             let mut dev_fed = dev_fed(process_mgr).await?;
             let client = dev_fed.fed.new_joined_client("test-client").await?;
             try_join!(stress_test_fed(&dev_fed, None), client.wait_session())?;
 
-            for path in paths.iter().skip(1) {
+            for i in 1..gatewayd_paths.len() {
+                let new_gatewayd_path = gatewayd_paths.get(i).expect("Not enough gatewayd paths");
+                let new_gateway_cli_path = gateway_cli_paths
+                    .get(i)
+                    .expect("Not enough gateway-cli paths");
+                let new_gateway_extension_path = gateway_cln_extension_paths
+                    .get(i)
+                    .expect("Not enough gateway-cln-extension paths");
                 try_join!(
-                    dev_fed.gw_cln.restart_with_bin(process_mgr, path),
-                    dev_fed.gw_lnd.restart_with_bin(process_mgr, path),
+                    dev_fed.gw_cln.restart_with_bin(
+                        process_mgr,
+                        new_gatewayd_path,
+                        new_gateway_cli_path,
+                        new_gateway_extension_path
+                    ),
+                    dev_fed.gw_lnd.restart_with_bin(
+                        process_mgr,
+                        new_gatewayd_path,
+                        new_gateway_cli_path,
+                        new_gateway_extension_path
+                    ),
                 )?;
                 try_join!(stress_test_fed(&dev_fed, None), client.wait_session())?;
                 let gatewayd_version = crate::util::Gatewayd::version_or_default().await;
                 info!(
-                    "### gatewayd passed stress test for version {}",
-                    gatewayd_version
+                    ?gatewayd_version,
+                    ?gateway_cli_version,
+                    ?gateway_cln_extension_version,
+                    "### gateway passed stress test for version",
                 );
             }
+
             info!("## gatewayd upgraded all binaries successfully");
         }
     }
@@ -2318,7 +2362,11 @@ pub enum UpgradeTest {
     },
     Gatewayd {
         #[arg(long, trailing_var_arg = true, num_args=1..)]
-        paths: Vec<PathBuf>,
+        gatewayd_paths: Vec<PathBuf>,
+        #[arg(long, trailing_var_arg = true, num_args=1..)]
+        gateway_cli_paths: Vec<PathBuf>,
+        #[arg(long, trailing_var_arg = true, num_args=1..)]
+        gateway_cln_extension_paths: Vec<PathBuf>,
     },
 }
 

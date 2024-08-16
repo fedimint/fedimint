@@ -26,7 +26,7 @@ use tonic_lnd::lnrpc::{ChanInfoRequest, GetInfoRequest, ListChannelsRequest};
 use tonic_lnd::Client as LndClient;
 use tracing::{debug, info, trace, warn};
 
-use crate::util::{poll, ClnLightningCli, ProcessHandle, ProcessManager};
+use crate::util::{poll, ClnLightningCli, GatewayClnExtension, ProcessHandle, ProcessManager};
 use crate::vars::utf8;
 use crate::version_constants::VERSION_0_4_0_ALPHA;
 use crate::{cmd, poll_eq, Gatewayd};
@@ -293,14 +293,18 @@ impl Bitcoind {
     }
 }
 
-const GATEWAY_CLN_EXTENSION: &str = "gateway-cln-extension";
-
 pub struct LightningdProcessHandle(ProcessHandle);
 
 impl LightningdProcessHandle {
     async fn terminate(&self) -> Result<()> {
         if self.0.is_running().await {
-            let mut stop_plugins = cmd!(ClnLightningCli, "plugin", "stop", GATEWAY_CLN_EXTENSION);
+            let extension_paths = crate::util::get_gateway_cln_extension_path(
+                GatewayClnExtension::default_path().await.as_str(),
+            );
+            let extension_path = extension_paths
+                .first()
+                .expect("gateway-cln-extension must have a path");
+            let mut stop_plugins = cmd!(ClnLightningCli, "plugin", "stop", extension_path);
             if let Err(e) = stop_plugins.out_string().await {
                 warn!(
                     target: LOG_DEVIMINT,
@@ -363,10 +367,12 @@ impl Lightningd {
     }
 
     pub async fn start(process_mgr: &ProcessManager, cln_dir: &Path) -> Result<ProcessHandle> {
-        let extension_path = cmd!("which", GATEWAY_CLN_EXTENSION)
-            .out_string()
-            .await
-            .context("gateway-cln-extension not on path")?;
+        let extension_paths = crate::util::get_gateway_cln_extension_path(
+            GatewayClnExtension::default_path().await.as_str(),
+        );
+        let extension_path = extension_paths
+            .first()
+            .expect("gateway-cln-extension must have a path");
         let btc_dir = utf8(&process_mgr.globals.FM_BTC_DIR);
         let cmd = cmd!(
             crate::util::Lightningd,
@@ -900,13 +906,7 @@ pub async fn open_channels_between_gateways(
 
     for ((gw_a, gw_a_name), (gw_b, gw_b_name)) in &gateway_pairs {
         debug!(target: LOG_DEVIMINT, "Opening channel between {gw_a_name} and {gw_b_name} gateway lightning nodes...");
-        gw_a.open_channel(
-            gw_b.lightning_pubkey().await?,
-            gw_b.lightning_node_addr.clone(),
-            10_000_000,
-            Some(5_000_000),
-        )
-        .await?;
+        gw_a.open_channel(gw_b, 10_000_000, Some(5_000_000)).await?;
     }
 
     // `open_channel` may not send out the channel funding transaction immediately
