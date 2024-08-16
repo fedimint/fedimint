@@ -1211,7 +1211,7 @@ impl Gateway {
         let context = self.get_lightning_context().await?;
         let response = context.lnrpc.get_funding_address().await?;
         Address::from_str(&response.address)
-            .map(Address::assume_checked)
+            .map(Address::require_network())
             .map_err(|e| GatewayError::LightningResponseParseError(e.into()))
     }
 
