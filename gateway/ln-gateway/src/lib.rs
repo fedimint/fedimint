@@ -41,7 +41,7 @@ use ::lightning::ln::PaymentHash;
 use anyhow::{anyhow, bail};
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
-use bitcoin::{Address, Network, Network, Txid};
+use bitcoin::{Address, Network, Txid};
 use bitcoin_hashes::sha256;
 use clap::Parser;
 use client::GatewayClientBuilder;
@@ -1232,8 +1232,14 @@ impl Gateway {
     pub async fn handle_get_funding_address_msg(&self) -> Result<Address> {
         let context = self.get_lightning_context().await?;
         let response = context.lnrpc.get_funding_address().await?;
-        Address::from_str(&response.address)
-            .map(Address::require_network(Network::Bitcoin).unwrap())
+
+        // Parse the address string
+        let address = Address::from_str(&response.address)
+            .map_err(|e| GatewayError::LightningResponseParseError(e.into()))?;
+
+        // Ensure the address is for the Bitcoin network
+        address
+            .require_network(Network::Bitcoin)
             .map_err(|e| GatewayError::LightningResponseParseError(e.into()))
     }
 

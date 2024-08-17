@@ -28,7 +28,7 @@ use anyhow::{anyhow, bail, ensure, Context as AnyhowContext};
 use async_stream::stream;
 use backup::WalletModuleBackup;
 use bitcoin::address::NetworkUnchecked;
-use bitcoin::{Address, Network, Network, ScriptBuf};
+use bitcoin::{Address, Network, ScriptBuf};
 use client_db::{DbKeyPrefix, PegInTweakIndexKey, TweakIdx};
 use fedimint_api_client::api::DynModuleApi;
 use fedimint_bitcoind::{create_bitcoind, DynBitcoindRpc};
