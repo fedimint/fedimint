@@ -83,6 +83,7 @@ pub enum GeneralCommands {
         invite_code: String,
         /// Activate usage of Tor (or not) as the connector for the federation
         /// client
+        #[cfg(feature = "tor")]
         use_tor: Option<bool>,
     },
     /// Leave a federation.
@@ -207,11 +208,13 @@ impl GeneralCommands {
             }
             Self::ConnectFed {
                 invite_code,
+                #[cfg(feature = "tor")]
                 use_tor,
             } => {
                 let response = create_client()
                     .connect_federation(ConnectFedPayload {
                         invite_code,
+                        #[cfg(feature = "tor")]
                         use_tor,
                     })
                     .await?;

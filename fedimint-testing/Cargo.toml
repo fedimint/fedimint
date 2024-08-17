@@ -11,6 +11,10 @@ repository = "https://github.com/fedimint/fedimint"
 [package.metadata.docs.rs]
 rustc-args = ["--cfg", "tokio_unstable"]
 
+[features]
+default = ["tor"]
+tor = ["ln-gateway/tor"]
+
 [lib]
 name = "fedimint_testing"
 path = "src/lib.rs"
@@ -35,7 +39,7 @@ fedimint-testing-core = { version = "=0.5.0-alpha", path = "../fedimint-testing-
 fs-lock = "0.1.4"
 futures = { workspace = true }
 lightning-invoice = { workspace = true }
-ln-gateway = { version = "=0.5.0-alpha", package = "fedimint-ln-gateway", path = "../gateway/ln-gateway" }
+ln-gateway = { version = "=0.5.0-alpha", default-features = false, package = "fedimint-ln-gateway", path = "../gateway/ln-gateway" }
 rand = { workspace = true }
 secp256k1-zkp = { version = "0.9.2", features = ["global-context", "bitcoin_hashes"] }
 serde = { workspace = true }

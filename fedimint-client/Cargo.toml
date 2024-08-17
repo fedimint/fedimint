@@ -15,6 +15,10 @@ normal = ["aquamarine"]
 [package.metadata.docs.rs]
 rustc-args = ["--cfg", "tokio_unstable"]
 
+[features]
+default = ["tor"]
+tor = ["fedimint-api-client/tor"]
+
 [lib]
 name = "fedimint_client"
 path = "src/lib.rs"
@@ -26,7 +30,7 @@ async-stream = { workspace = true }
 async-trait = { workspace = true }
 bitcoin = { workspace = true }
 fedimint-aead = { version = "=0.5.0-alpha", path = "../crypto/aead" }
-fedimint-api-client  = { workspace = true }
+fedimint-api-client  = { workspace = true, default-features = false }
 fedimint-core = { workspace = true }
 fedimint-derive-secret = { version = "=0.5.0-alpha", path = "../crypto/derive-secret" }
 fedimint-logging = { workspace = true }

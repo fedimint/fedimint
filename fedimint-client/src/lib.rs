@@ -2149,6 +2149,7 @@ impl ClientBuilder {
         self.connector = connector;
     }
 
+    #[cfg(feature = "tor")]
     pub fn with_tor_connector(&mut self) {
         self.with_connector(Connector::tor());
     }

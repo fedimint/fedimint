@@ -8,6 +8,10 @@ license = "MIT"
 readme = "../../README.md"
 repository = "https://github.com/fedimint/fedimint"
 
+[features]
+default = ["tor"]
+tor = ["fedimint-client/tor", "fedimint-api-client/tor"]
+
 [[bin]]
 name = "gatewayd"
 path = "src/bin/gatewayd.rs"
@@ -38,8 +42,8 @@ cln-plugin = "=0.1.7"
 cln-rpc = { workspace = true }
 erased-serde = { workspace = true }
 esplora-client = { version = "0.6.0", default-features = false, features = ["async", "async-https-rustls"] }
-fedimint-api-client = { workspace = true }
-fedimint-client = { workspace = true }
+fedimint-api-client = { workspace = true, default-features = false }
+fedimint-client = { workspace = true, default-features = false }
 fedimint-core = { workspace = true }
 fedimint-ln-client = { workspace = true }
 fedimint-ln-common = { workspace = true }

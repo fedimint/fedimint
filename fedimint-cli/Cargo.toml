@@ -11,6 +11,10 @@ repository = "https://github.com/fedimint/fedimint"
 [package.metadata.docs.rs]
 rustc-args = ["--cfg", "tokio_unstable"]
 
+[features]
+default = ["tor"]
+tor = ["fedimint-client/tor", "fedimint-api-client/tor"]
+
 [[bin]]
 name = "fedimint-cli"
 path = "src/main.rs"
@@ -28,9 +32,9 @@ bitcoin = { workspace = true }
 clap = { workspace = true }
 clap_complete = "4.5.14"
 fedimint-aead = { version = "=0.5.0-alpha", path = "../crypto/aead" }
-fedimint-api-client = { workspace = true }
+fedimint-api-client = { workspace = true, default-features = false }
 fedimint-bip39 = { version = "=0.5.0-alpha", path = "../fedimint-bip39" }
-fedimint-client = { workspace = true }
+fedimint-client = { workspace = true, default-features = false }
 fedimint-core = { workspace = true }
 fedimint-ln-client = { workspace = true, features = ["cli"] }
 fedimint-ln-common = { version = "=0.5.0-alpha", path = "../modules/fedimint-ln-common" }

@@ -984,7 +984,7 @@ impl Gateway {
             GatewayError::InvalidMetadata(format!("Invalid federation member string {e:?}"))
         })?;
 
-        // TODO: (@leonardo) Should we use default, or respond with an error ?
+        #[cfg(feature = "tor")]
         let connector = match &payload.use_tor {
             Some(use_tor) => match use_tor {
                 true => Connector::tor(),
@@ -995,6 +995,9 @@ impl Gateway {
                 Connector::default()
             }
         };
+
+        #[cfg(not(feature = "tor"))]
+        let connector = Connector::default();
 
         let federation_id = invite_code.federation_id();
 

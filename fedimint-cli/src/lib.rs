@@ -27,7 +27,9 @@ use anyhow::{format_err, Context};
 use bip39::Mnemonic;
 use clap::{Args, CommandFactory, Parser, Subcommand};
 use db_locked::LockedBuilder;
-use envs::{FM_API_SECRET_ENV, FM_USE_TOR_ENV, SALT_FILE};
+#[cfg(feature = "tor")]
+use envs::FM_USE_TOR_ENV;
+use envs::{FM_API_SECRET_ENV, SALT_FILE};
 use fedimint_aead::{encrypted_read, encrypted_write, get_encryption_key};
 use fedimint_api_client::api::net::Connector;
 use fedimint_api_client::api::{
@@ -211,6 +213,7 @@ struct Opts {
     #[arg(long, env = FM_PASSWORD_ENV)]
     password: Option<String>,
 
+    #[cfg(feature = "tor")]
     /// Activate usage of Tor as the Connector when building the Client
     #[arg(long, env = FM_USE_TOR_ENV)]
     use_tor: bool,
@@ -281,12 +284,16 @@ impl Opts {
             .into())
     }
 
+    #[allow(clippy::unused_self)]
     fn connector(&self) -> Connector {
+        #[cfg(feature = "tor")]
         if self.use_tor {
             Connector::tor()
         } else {
             Connector::default()
         }
+        #[cfg(not(feature = "tor"))]
+        Connector::default()
     }
 }
 
@@ -626,6 +633,7 @@ impl FedimintCli {
         client_builder.with_module_inits(self.module_inits.clone());
         client_builder.with_primary_module(1);
 
+        #[cfg(feature = "tor")]
         if cli.use_tor {
             client_builder.with_tor_connector();
         }
