@@ -1903,6 +1903,9 @@
 <a href="#1903" id="1903">1903</a>
 <a href="#1904" id="1904">1904</a>
 <a href="#1905" id="1905">1905</a>
+<a href="#1906" id="1906">1906</a>
+<a href="#1907" id="1907">1907</a>
+<a href="#1908" id="1908">1908</a>
 </pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::cast_possible_wrap)]
@@ -2889,7 +2892,7 @@
             GatewayError::InvalidMetadata(<span class="macro">format!</span>(<span class="string">"Invalid federation member string {e:?}"</span>))
         })<span class="question-mark">?</span>;
 
-        <span class="comment">// TODO: (@leonardo) Should we use default, or respond with an error ?
+        <span class="attr">#[cfg(feature = <span class="string">"tor"</span>)]
         </span><span class="kw">let </span>connector = <span class="kw">match </span><span class="kw-2">&amp;</span>payload.use_tor {
             <span class="prelude-val">Some</span>(use_tor) =&gt; <span class="kw">match </span>use_tor {
                 <span class="bool-val">true </span>=&gt; Connector::tor(),
@@ -2900,6 +2903,9 @@
                 Connector::default()
             }
         };
+
+        <span class="attr">#[cfg(not(feature = <span class="string">"tor"</span>))]
+        </span><span class="kw">let </span>connector = Connector::default();
 
         <span class="kw">let </span>federation_id = invite_code.federation_id();
 

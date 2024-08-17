@@ -2779,6 +2779,7 @@
 <a href="#2779" id="2779">2779</a>
 <a href="#2780" id="2780">2780</a>
 <a href="#2781" id="2781">2781</a>
+<a href="#2782" id="2782">2782</a>
 </pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::doc_markdown)]
@@ -4930,7 +4931,8 @@
         <span class="self">self</span>.connector = connector;
     }
 
-    <span class="kw">pub fn </span>with_tor_connector(<span class="kw-2">&amp;mut </span><span class="self">self</span>) {
+    <span class="attr">#[cfg(feature = <span class="string">"tor"</span>)]
+    </span><span class="kw">pub fn </span>with_tor_connector(<span class="kw-2">&amp;mut </span><span class="self">self</span>) {
         <span class="self">self</span>.with_connector(Connector::tor());
     }
 

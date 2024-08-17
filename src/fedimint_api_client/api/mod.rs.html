@@ -1163,6 +1163,11 @@
 <a href="#1163" id="1163">1163</a>
 <a href="#1164" id="1164">1164</a>
 <a href="#1165" id="1165">1165</a>
+<a href="#1166" id="1166">1166</a>
+<a href="#1167" id="1167">1167</a>
+<a href="#1168" id="1168">1168</a>
+<a href="#1169" id="1169">1169</a>
+<a href="#1170" id="1170">1170</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap};
 <span class="kw">use </span>std::fmt::Debug;
 <span class="kw">use </span>std::pin::Pin;
@@ -1171,7 +1176,7 @@
 <span class="kw">use </span>std::{cmp, result};
 
 <span class="kw">use </span>anyhow::anyhow;
-<span class="attr">#[cfg(not(target_family = <span class="string">"wasm"</span>))]
+<span class="attr">#[cfg(all(feature = <span class="string">"tor"</span>, not(target_family = <span class="string">"wasm"</span>)))]
 </span><span class="kw">use </span>arti_client::{TorAddr, TorClient, TorClientConfig};
 <span class="kw">use </span>base64::Engine <span class="kw">as _</span>;
 <span class="kw">use </span>bitcoin::hashes::sha256;
@@ -1216,9 +1221,9 @@
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>serde_json::Value;
 <span class="attr">#[cfg(not(target_family = <span class="string">"wasm"</span>))]
-</span><span class="kw">use </span>tokio_rustls::rustls::{ClientConfig <span class="kw">as </span>TlsClientConfig, RootCertStore};
-<span class="attr">#[cfg(not(target_family = <span class="string">"wasm"</span>))]
-</span><span class="kw">use </span>tokio_rustls::TlsConnector;
+</span><span class="kw">use </span>tokio_rustls::rustls::RootCertStore;
+<span class="attr">#[cfg(all(feature = <span class="string">"tor"</span>, not(target_family = <span class="string">"wasm"</span>)))]
+</span><span class="kw">use </span>tokio_rustls::{rustls::ClientConfig <span class="kw">as </span>TlsClientConfig, TlsConnector};
 <span class="kw">use </span>tracing::{debug, instrument, trace};
 
 <span class="kw">use </span><span class="kw">crate</span>::query::{QueryStep, QueryStrategy, ThresholdConsensus};
@@ -1848,7 +1853,7 @@
         api_secret: <span class="prelude-ty">Option</span>&lt;String&gt;,
     ) -&gt; result::Result&lt;<span class="self">Self</span>, JsonRpcClientError&gt;;
 
-    <span class="attr">#[cfg(not(target_family = <span class="string">"wasm"</span>))]
+    <span class="attr">#[cfg(all(feature = <span class="string">"tor"</span>, not(target_family = <span class="string">"wasm"</span>)))]
     </span><span class="kw">async fn </span>connect_with_tor(
         url: <span class="kw-2">&amp;</span>SafeUrl,
         api_secret: <span class="prelude-ty">Option</span>&lt;String&gt;,
@@ -1915,7 +1920,7 @@
         client.build(url.as_str()).<span class="kw">await
     </span>}
 
-    <span class="attr">#[cfg(not(target_family = <span class="string">"wasm"</span>))]
+    <span class="attr">#[cfg(all(feature = <span class="string">"tor"</span>, not(target_family = <span class="string">"wasm"</span>)))]
     </span><span class="kw">async fn </span>connect_with_tor(
         url: <span class="kw-2">&amp;</span>SafeUrl,
         api_secret: <span class="prelude-ty">Option</span>&lt;String&gt;,
@@ -2235,10 +2240,14 @@
     <span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
     </span><span class="kw">trait </span>SimpleClient: Sized {
         <span class="kw">async fn </span>connect() -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>&gt;;
-        <span class="kw">async fn </span>connect_with_tor() -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>&gt;;
+
+        <span class="attr">#[cfg(all(feature = <span class="string">"tor"</span>, not(target_family = <span class="string">"wasm"</span>)))]
+        </span><span class="kw">async fn </span>connect_with_tor() -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>&gt;;
+
         <span class="kw">fn </span>is_connected(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
             <span class="bool-val">true
         </span>}
+
         <span class="comment">// reply with json
         </span><span class="kw">async fn </span>request(<span class="kw-2">&amp;</span><span class="self">self</span>, method: <span class="kw-2">&amp;</span>str) -&gt; <span class="prelude-ty">Result</span>&lt;String&gt;;
     }
@@ -2251,7 +2260,8 @@
             <span class="prelude-val">Ok</span>(<span class="self">Self</span>(C::connect().<span class="kw">await</span><span class="question-mark">?</span>))
         }
 
-        <span class="kw">async fn </span>connect_with_tor(_url: <span class="kw-2">&amp;</span>SafeUrl, _api_secret: <span class="prelude-ty">Option</span>&lt;String&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>&gt; {
+        <span class="attr">#[cfg(all(feature = <span class="string">"tor"</span>, not(target_family = <span class="string">"wasm"</span>)))]
+        </span><span class="kw">async fn </span>connect_with_tor(_url: <span class="kw-2">&amp;</span>SafeUrl, _api_secret: <span class="prelude-ty">Option</span>&lt;String&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>&gt; {
             <span class="prelude-val">Ok</span>(<span class="self">Self</span>(C::connect_with_tor().<span class="kw">await</span><span class="question-mark">?</span>))
         }
 

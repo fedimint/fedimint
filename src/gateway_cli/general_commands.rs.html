@@ -284,6 +284,9 @@
 <a href="#284" id="284">284</a>
 <a href="#285" id="285">285</a>
 <a href="#286" id="286">286</a>
+<a href="#287" id="287">287</a>
+<a href="#288" id="288">288</a>
+<a href="#289" id="289">289</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>anyhow::bail;
 <span class="kw">use </span>bitcoin::address::NetworkUnchecked;
 <span class="kw">use </span>bitcoin::Address;
@@ -369,6 +372,7 @@
         </span>invite_code: String,
         <span class="doccomment">/// Activate usage of Tor (or not) as the connector for the federation
         /// client
+        </span><span class="attr">#[cfg(feature = <span class="string">"tor"</span>)]
         </span>use_tor: <span class="prelude-ty">Option</span>&lt;bool&gt;,
     },
     <span class="doccomment">/// Leave a federation.
@@ -493,12 +497,14 @@
             }
             <span class="self">Self</span>::ConnectFed {
                 invite_code,
-                use_tor,
+                <span class="attr">#[cfg(feature = <span class="string">"tor"</span>)]
+                </span>use_tor,
             } =&gt; {
                 <span class="kw">let </span>response = create_client()
                     .connect_federation(ConnectFedPayload {
                         invite_code,
-                        use_tor,
+                        <span class="attr">#[cfg(feature = <span class="string">"tor"</span>)]
+                        </span>use_tor,
                     })
                     .<span class="kw">await</span><span class="question-mark">?</span>;
 

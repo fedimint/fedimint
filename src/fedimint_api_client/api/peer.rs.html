@@ -311,9 +311,9 @@
 
             <span class="kw">let </span>res = <span class="kw">match </span>connector {
                 Connector::Tcp =&gt; C::connect(<span class="kw-2">&amp;</span>url, api_secret).<span class="kw">await</span>,
-                <span class="attr">#[cfg(not(target_family = <span class="string">"wasm"</span>))]
+                <span class="attr">#[cfg(all(feature = <span class="string">"tor"</span>, not(target_family = <span class="string">"wasm"</span>)))]
                 </span>Connector::Tor =&gt; C::connect_with_tor(<span class="kw-2">&amp;</span>url, api_secret).<span class="kw">await</span>,
-                <span class="attr">#[cfg(target_family = <span class="string">"wasm"</span>)]
+                <span class="attr">#[cfg(all(feature = <span class="string">"tor"</span>, target_family = <span class="string">"wasm"</span>))]
                 </span>Connector::Tor =&gt; <span class="macro">unimplemented!</span>(),
             };
 
