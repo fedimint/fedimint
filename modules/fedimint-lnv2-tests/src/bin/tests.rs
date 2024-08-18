@@ -124,7 +124,8 @@ async fn test_gateway_registration(dev_fed: &DevJitFed) -> anyhow::Result<()> {
             "pass",
             "module",
             "lnv2",
-            "add-gateway",
+            "gateway",
+            "add",
             gateway.clone().to_string(),
         )
         .out_json()
@@ -133,7 +134,7 @@ async fn test_gateway_registration(dev_fed: &DevJitFed) -> anyhow::Result<()> {
     );
 
     assert_eq!(
-        cmd!(client, "module", "lnv2", "gateways", "0")
+        cmd!(client, "module", "lnv2", "gateway", "list", "0")
             .out_json()
             .await?,
         serde_json::to_value(vec![gateway.clone()]).expect("JSON serialization failed")
@@ -148,7 +149,8 @@ async fn test_gateway_registration(dev_fed: &DevJitFed) -> anyhow::Result<()> {
             "pass",
             "module",
             "lnv2",
-            "remove-gateway",
+            "gateway",
+            "remove",
             gateway.to_string(),
         )
         .out_json()
@@ -157,7 +159,7 @@ async fn test_gateway_registration(dev_fed: &DevJitFed) -> anyhow::Result<()> {
     );
 
     assert_eq!(
-        cmd!(client, "module", "lnv2", "gateways", "0",)
+        cmd!(client, "module", "lnv2", "gateway", "list", "0",)
             .out_json()
             .await?,
         serde_json::to_value(Vec::<SafeUrl>::new()).expect("JSON serialization failed")
