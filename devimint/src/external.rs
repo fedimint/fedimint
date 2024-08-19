@@ -297,13 +297,7 @@ pub struct LightningdProcessHandle(ProcessHandle);
 impl LightningdProcessHandle {
     async fn terminate(&self) -> Result<()> {
         if self.0.is_running().await {
-            let extension_paths = crate::util::get_gateway_cln_extension_path(
-                GatewayClnExtension::default_path().await.as_str(),
-            );
-            let extension_path = extension_paths
-                .first()
-                .expect("gateway-cln-extension must have a path");
-            let mut stop_plugins = cmd!(ClnLightningCli, "plugin", "stop", extension_path);
+            let mut stop_plugins = cmd!(ClnLightningCli, "plugin", "stop", "gateway-cln-extension");
             if let Err(e) = stop_plugins.out_string().await {
                 warn!(
                     target: LOG_DEVIMINT,
@@ -366,12 +360,9 @@ impl Lightningd {
     }
 
     pub async fn start(process_mgr: &ProcessManager, cln_dir: &Path) -> Result<ProcessHandle> {
-        let extension_paths = crate::util::get_gateway_cln_extension_path(
+        let extension_path = crate::util::get_gateway_cln_extension_path(
             GatewayClnExtension::default_path().await.as_str(),
         );
-        let extension_path = extension_paths
-            .first()
-            .expect("gateway-cln-extension must have a path");
         let btc_dir = utf8(&process_mgr.globals.FM_BTC_DIR);
         let cmd = cmd!(
             crate::util::Lightningd,
@@ -904,11 +895,17 @@ pub async fn open_channels_between_gateways(
     for i in 0..gateways.len() {
         let next = (i + 1) % gateways.len();
         gateway_pairs.push((gateways[i], gateways[next]));
+        // Exit early if there is only one pair of gateways
+        if gateways.len() == 2 {
+            break;
+        }
     }
 
     for ((gw_a, gw_a_name), (gw_b, gw_b_name)) in &gateway_pairs {
-        debug!(target: LOG_DEVIMINT, "Opening channel between {gw_a_name} and {gw_b_name} gateway lightning nodes...");
-        gw_a.open_channel(gw_b, 10_000_000, Some(5_000_000)).await?;
+        let push_amount = 5_000_000;
+        info!(target: LOG_DEVIMINT, "Opening channel between {gw_a_name} and {gw_b_name} gateway lightning nodes with {push_amount} on each side...");
+        gw_a.open_channel(gw_b, 10_000_000, Some(push_amount))
+            .await?;
     }
 
     // `open_channel` may not send out the channel funding transaction immediately

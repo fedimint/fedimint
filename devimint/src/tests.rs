@@ -571,6 +571,10 @@ pub async fn upgrade_tests(process_mgr: &ProcessManager, binary: UpgradeTest) ->
             try_join!(stress_test_fed(&dev_fed, None), client.wait_session())?;
 
             for i in 1..gatewayd_paths.len() {
+                info!(
+                    "running stress test with gatewayd path {:?}",
+                    gatewayd_paths.get(i)
+                );
                 let new_gatewayd_path = gatewayd_paths.get(i).expect("Not enough gatewayd paths");
                 let new_gateway_cli_path = gateway_cli_paths
                     .get(i)
@@ -583,17 +587,22 @@ pub async fn upgrade_tests(process_mgr: &ProcessManager, binary: UpgradeTest) ->
                         process_mgr,
                         new_gatewayd_path,
                         new_gateway_cli_path,
-                        new_gateway_extension_path
+                        new_gateway_extension_path,
+                        dev_fed.bitcoind.clone(),
                     ),
                     dev_fed.gw_lnd.restart_with_bin(
                         process_mgr,
                         new_gatewayd_path,
                         new_gateway_cli_path,
-                        new_gateway_extension_path
+                        new_gateway_extension_path,
+                        dev_fed.bitcoind.clone(),
                     ),
                 )?;
                 try_join!(stress_test_fed(&dev_fed, None), client.wait_session())?;
                 let gatewayd_version = crate::util::Gatewayd::version_or_default().await;
+                let gateway_cli_version = crate::util::GatewayCli::version_or_default().await;
+                let gateway_cln_extension_version =
+                    crate::util::GatewayClnExtension::version_or_default().await;
                 info!(
                     ?gatewayd_version,
                     ?gateway_cli_version,

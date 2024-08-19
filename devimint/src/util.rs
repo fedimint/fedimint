@@ -572,11 +572,20 @@ pub fn get_gateway_cli_path() -> Vec<String> {
 
 const GATEWAY_CLN_EXTENSION_FALLBACK: &str = "gateway-cln-extension";
 
-pub fn get_gateway_cln_extension_path(default_path: &str) -> Vec<String> {
-    get_command_str_for_alias(
+pub fn get_gateway_cln_extension_path(default_path: &str) -> String {
+    let paths = get_command_str_for_alias(
         &[FM_GATEWAY_CLN_EXTENSION_BASE_EXECUTABLE_ENV],
         &[default_path],
-    )
+    );
+    let path = paths
+        .first()
+        .expect("Gateway CLN extension should only have one alias")
+        .clone();
+    if path == GATEWAY_CLN_EXTENSION_FALLBACK {
+        return default_path.to_string();
+    }
+
+    path
 }
 
 const LOAD_TEST_TOOL_FALLBACK: &str = "fedimint-load-test-tool";
@@ -977,10 +986,7 @@ impl GatewayClnExtension {
     pub fn cmd(self) -> Command {
         to_command(get_command_str_for_alias(
             &[],
-            &get_gateway_cln_extension_path(self.default_path.as_str())
-                .iter()
-                .map(String::as_str)
-                .collect::<Vec<_>>(),
+            &[get_gateway_cln_extension_path(self.default_path.as_str()).as_str()],
         ))
     }
 

@@ -5,16 +5,17 @@ use std::path::PathBuf;
 use anyhow::{Context, Result};
 use fedimint_core::secp256k1::PublicKey;
 use fedimint_core::util::{backoff_util, retry};
+use fedimint_testing::gateway::LightningNodeType;
 use ln_gateway::lightning::ChannelInfo;
 use ln_gateway::rpc::V1_API_ENDPOINT;
 use tracing::info;
 
-use crate::cmd;
 use crate::envs::{FM_GATEWAY_API_ADDR_ENV, FM_GATEWAY_DATA_DIR_ENV, FM_GATEWAY_LISTEN_ADDR_ENV};
 use crate::external::{Bitcoind, LightningNode};
 use crate::federation::Federation;
 use crate::util::{poll, Command, ProcessHandle, ProcessManager};
 use crate::vars::utf8;
+use crate::{cmd, Lightningd};
 
 #[derive(Clone)]
 pub struct Gatewayd {
@@ -103,7 +104,20 @@ impl Gatewayd {
         gatewayd_path: &PathBuf,
         gateway_cli_path: &PathBuf,
         gateway_cln_extension_path: &PathBuf,
+        bitcoind: Bitcoind,
     ) -> Result<()> {
+        let ln = self
+            .ln
+            .as_ref()
+            .expect("Lightning Node should exist")
+            .clone();
+        let ln_type = ln.name();
+
+        // We need to restart the CLN extension so that it has the same version as
+        // gatewayd
+        if ln_type == LightningNodeType::Cln {
+            self.stop_lightning_node().await?;
+        }
         self.process.terminate().await?;
         std::env::set_var("FM_GATEWAYD_BASE_EXECUTABLE", gatewayd_path);
         std::env::set_var("FM_GATEWAY_CLI_BASE_EXECUTABLE", gateway_cli_path);
@@ -111,13 +125,17 @@ impl Gatewayd {
             "FM_GATEWAY_CLN_EXTENSION_BASE_EXECUTABLE",
             gateway_cln_extension_path,
         );
-        let ln = self
-            .ln
-            .as_ref()
-            .expect("gateway already had an associated ln node")
-            .clone();
-        let new_gw = Self::new(process_mgr, ln).await?;
+
+        let new_ln = match ln_type {
+            LightningNodeType::Cln => {
+                let new_cln = Lightningd::new(process_mgr, bitcoind).await?;
+                LightningNode::Cln(new_cln)
+            }
+            _ => ln,
+        };
+        let new_gw = Self::new(process_mgr, new_ln.clone()).await?;
         self.process = new_gw.process;
+        self.set_lightning_node(new_ln);
         let gatewayd_version = crate::util::Gatewayd::version_or_default().await;
         let gateway_cli_version = crate::util::GatewayCli::version_or_default().await;
         let gateway_cln_extension_version =
