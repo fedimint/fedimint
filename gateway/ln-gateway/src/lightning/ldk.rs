@@ -224,14 +224,7 @@ impl ILnRpcClient for GatewayLdkClient {
             pub_key: self.node.node_id().serialize().to_vec(),
             // TODO: This is a placeholder. We need to get the actual alias from the LDK node.
             alias: format!("LDK Fedimint Gateway Node {}", self.node.node_id()),
-            network: match self.node.config().network {
-                Network::Bitcoin => "main",
-                Network::Testnet => "test",
-                Network::Signet => "signet",
-                Network::Regtest => "regtest",
-                _ => panic!("Unsupported network"),
-            }
-            .to_string(),
+            network: self.node.config().network.to_string(),
             block_height,
             synced_to_chain,
         })
