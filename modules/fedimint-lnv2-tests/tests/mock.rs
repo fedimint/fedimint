@@ -6,6 +6,7 @@ use fedimint_core::config::FederationId;
 use fedimint_core::secp256k1::rand::rngs::OsRng;
 use fedimint_core::secp256k1::schnorr::Signature;
 use fedimint_core::secp256k1::KeyPair;
+use fedimint_core::util::SafeUrl;
 use fedimint_core::{apply, async_trait_maybe_send};
 use fedimint_ln_common::bitcoin;
 use fedimint_lnv2_client::api::GatewayConnection;
@@ -27,6 +28,10 @@ const UNPAYABLE_PAYMENT_SECRET: [u8; 32] = [212; 32];
 const GATEWAY_CRASH_PAYMENT_SECRET: [u8; 32] = [213; 32];
 
 pub const MOCK_INVOICE_PREIMAGE: [u8; 32] = [1; 32];
+
+pub fn gateway_api() -> SafeUrl {
+    SafeUrl::parse("https://gateway.xyz").expect("Valid Url")
+}
 
 pub fn gateway_keypair() -> KeyPair {
     SecretKey::from_slice(&GATEWAY_SECRET)

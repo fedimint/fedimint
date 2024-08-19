@@ -17,9 +17,7 @@ use fedimint_lnv2_client::{
 use fedimint_lnv2_common::config::LightningGenParams;
 use fedimint_lnv2_common::{LightningInput, LightningInputV0, OutgoingWitness};
 use fedimint_lnv2_server::LightningInit;
-use fedimint_testing::federation::FederationTest;
 use fedimint_testing::fixtures::Fixtures;
-use fedimint_testing::Gateway;
 
 use crate::mock::{MockGatewayConnection, MOCK_INVOICE_PREIMAGE};
 
@@ -28,38 +26,19 @@ fn fixtures() -> Fixtures {
 
     let bitcoin_server = fixtures.bitcoin_server();
 
-    let fixtures = fixtures.with_module(
+    fixtures.with_module(
         LightningClientInit {
             gateway_conn: Arc::new(MockGatewayConnection::default()),
         },
         LightningInit,
         LightningGenParams::regtest(bitcoin_server.clone()),
-    );
-
-    // TODO: We still have to attach the legacy lightning module such that the
-    // gateway can connect to a federation. Remove this once connection to a
-    // federation does not require lightning legacy anymore.
-    fixtures.with_module(
-        fedimint_ln_client::LightningClientInit::default(),
-        fedimint_ln_server::LightningInit,
-        fedimint_ln_common::config::LightningGenParams::regtest(bitcoin_server),
     )
-}
-
-/// Setup a gateway connected to the fed and client
-async fn gateway(fixtures: &Fixtures, fed: &FederationTest) -> Gateway {
-    let gateway = fixtures.new_gateway().await;
-    fed.connect_gateway(&gateway).await;
-    gateway
 }
 
 #[tokio::test(flavor = "multi_thread")]
 async fn can_pay_external_invoice_exactly_once() -> anyhow::Result<()> {
     let fixtures = fixtures();
     let fed = fixtures.new_default_fed().await;
-    let gateway = gateway(&fixtures, &fed).await;
-    let gateway_api = gateway.versioned_api().clone();
-
     let client = fed.new_client().await;
 
     // Print money for client
@@ -70,6 +49,7 @@ async fn can_pay_external_invoice_exactly_once() -> anyhow::Result<()> {
 
     client.await_primary_module_output(op, outpoint).await?;
 
+    let gateway_api = mock::gateway_api();
     let invoice = mock::payable_invoice();
 
     let operation_id = client
@@ -110,9 +90,6 @@ async fn can_pay_external_invoice_exactly_once() -> anyhow::Result<()> {
 async fn refund_failed_payment() -> anyhow::Result<()> {
     let fixtures = fixtures();
     let fed = fixtures.new_default_fed().await;
-    let gateway = gateway(&fixtures, &fed).await;
-    let gateway_api = gateway.versioned_api().clone();
-
     let client = fed.new_client().await;
 
     // Print money for client
@@ -125,7 +102,7 @@ async fn refund_failed_payment() -> anyhow::Result<()> {
 
     let op = client
         .get_first_module::<LightningClientModule>()
-        .send(gateway_api, mock::unpayable_invoice())
+        .send(mock::gateway_api(), mock::unpayable_invoice())
         .await?;
 
     let mut sub = client
@@ -146,9 +123,6 @@ async fn refund_failed_payment() -> anyhow::Result<()> {
 async fn unilateral_refund_of_outgoing_contracts() -> anyhow::Result<()> {
     let fixtures = fixtures();
     let fed = fixtures.new_default_fed().await;
-    let gateway = gateway(&fixtures, &fed).await;
-    let gateway_api = gateway.versioned_api().clone();
-
     let client = fed.new_client().await;
 
     // Print money for client
@@ -161,7 +135,7 @@ async fn unilateral_refund_of_outgoing_contracts() -> anyhow::Result<()> {
 
     let op = client
         .get_first_module::<LightningClientModule>()
-        .send(gateway_api, mock::crash_invoice())
+        .send(mock::gateway_api(), mock::crash_invoice())
         .await?;
 
     let mut sub = client
@@ -188,9 +162,6 @@ async fn unilateral_refund_of_outgoing_contracts() -> anyhow::Result<()> {
 async fn claiming_outgoing_contract_triggers_success() -> anyhow::Result<()> {
     let fixtures = fixtures();
     let fed = fixtures.new_default_fed().await;
-    let gateway = gateway(&fixtures, &fed).await;
-    let gateway_api = gateway.versioned_api().clone();
-
     let client = fed.new_client().await;
 
     // Print money for client
@@ -203,7 +174,7 @@ async fn claiming_outgoing_contract_triggers_success() -> anyhow::Result<()> {
 
     let op = client
         .get_first_module::<LightningClientModule>()
-        .send(gateway_api, mock::crash_invoice())
+        .send(mock::gateway_api(), mock::crash_invoice())
         .await?;
 
     let mut sub = client
@@ -260,15 +231,12 @@ async fn claiming_outgoing_contract_triggers_success() -> anyhow::Result<()> {
 async fn receive_operation_expires() -> anyhow::Result<()> {
     let fixtures = fixtures();
     let fed = fixtures.new_default_fed().await;
-    let gateway = gateway(&fixtures, &fed).await;
-    let gateway_api = gateway.versioned_api().clone();
-
     let client = fed.new_client().await;
 
     let op = client
         .get_first_module::<LightningClientModule>()
         .receive_internal(
-            gateway_api,
+            mock::gateway_api(),
             Amount::from_sats(1000),
             5, // receive operation expires in 5 seconds
             Bolt11InvoiceDescription::Direct(String::new()),
@@ -293,15 +261,12 @@ async fn receive_operation_expires() -> anyhow::Result<()> {
 async fn rejects_wrong_network_invoice() -> anyhow::Result<()> {
     let fixtures = fixtures();
     let fed = fixtures.new_default_fed().await;
-    let gateway = gateway(&fixtures, &fed).await;
-    let gateway_api = gateway.versioned_api().clone();
-
     let client = fed.new_client().await;
 
     assert_eq!(
         client
             .get_first_module::<LightningClientModule>()
-            .send(gateway_api.clone(), mock::signet_bolt_11_invoice())
+            .send(mock::gateway_api(), mock::signet_bolt_11_invoice())
             .await
             .expect_err("send did not fail due to incorrect Currency"),
         SendPaymentError::WrongCurrency {
