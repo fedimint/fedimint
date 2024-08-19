@@ -18,7 +18,7 @@ path = "src/main.rs"
 [dependencies]
 anyhow = { workspace = true }
 bitcoin = { workspace = true }
-clap = { version = "4.5.15", features = [ "derive", "env" ] }
+clap = { version = "4.5.16", features = [ "derive", "env" ] }
 fedimint-aead = { version = "=0.5.0-alpha", path = "../crypto/aead" }
 fedimint-core = { workspace = true }
 fedimint-logging = { workspace = true }

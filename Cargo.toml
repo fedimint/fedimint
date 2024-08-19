@@ -94,7 +94,7 @@ tonic_lnd = { version = "0.2.0", package = "fedimint-tonic-lnd", features = [
     "routerrpc",
 ] }
 cln-rpc = "0.1.9"
-clap = { version = "4.5.15", features = [
+clap = { version = "4.5.16", features = [
     "derive",
     "env",
     "error-context",
@@ -108,15 +108,15 @@ esplora-client = { version = "0.6.0", default-features = false, features = [
     "async",
     "async-https-rustls",
 ] }
-reqwest = { version = "0.12.5", features = [
+reqwest = { version = "0.12.6", features = [
     "json",
     "rustls-tls",
     "charset",
     "http2",
 ], default-features = false }
-serde = { version = "1.0.205", features = ["derive"] }
+serde = { version = "1.0.208", features = ["derive"] }
 serde-big-array = "0.5.1"
-serde_json = "1.0.122"
+serde_json = "1.0.125"
 serdect = "0.2.0"
 bls12_381 = "0.8.0"
 group = "0.13.0"
@@ -139,7 +139,7 @@ futures-util = "0.3.30"
 lightning = "0.0.123"
 lightning-invoice = "0.31.0"
 thiserror = "1.0.63"
-tokio = "1.39.2"
+tokio = "1.39.3"
 tracing-subscriber = "0.3.18"
 url = "2.5.2"
 erased-serde = "0.4"
