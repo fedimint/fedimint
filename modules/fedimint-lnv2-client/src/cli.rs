@@ -1,6 +1,6 @@
 use std::{ffi, iter};
 
-use clap::Parser;
+use clap::{Parser, Subcommand};
 use fedimint_core::core::OperationId;
 use fedimint_core::util::SafeUrl;
 use fedimint_core::{Amount, PeerId};
@@ -24,12 +24,19 @@ enum Opts {
     Receive { gateway: SafeUrl, amount: Amount },
     /// Await the final state of the receive operation
     AwaitReceive { operation_id: OperationId },
-    /// Fetch vetted gateways
-    Gateways { peer: Option<PeerId> },
+    /// Gateway subcommands
+    #[command(subcommand)]
+    Gateway(GatewayOpts),
+}
+
+#[derive(Clone, Subcommand, Serialize)]
+enum GatewayOpts {
+    /// List vetted gateways
+    List { peer: Option<PeerId> },
     /// Add a vetted gateway
-    AddGateway { gateway: SafeUrl },
+    Add { gateway: SafeUrl },
     /// Remove a vetted gateway
-    RemoveGateway { gateway: SafeUrl },
+    Remove { gateway: SafeUrl },
 }
 
 pub(crate) async fn handle_cli_command(
@@ -43,26 +50,28 @@ pub(crate) async fn handle_cli_command(
         Opts::AwaitSend { operation_id } => json(lightning.await_send(operation_id).await?),
         Opts::Receive { gateway, amount } => json(lightning.receive(gateway, amount).await?),
         Opts::AwaitReceive { operation_id } => json(lightning.await_receive(operation_id).await?),
-        Opts::Gateways { peer } => match peer {
-            Some(peer) => json(lightning.module_api.fetch_gateways_from_peer(peer).await?),
-            None => json(lightning.module_api.fetch_gateways().await?),
+        Opts::Gateway(gateway_opts) => match gateway_opts {
+            GatewayOpts::List { peer } => match peer {
+                Some(peer) => json(lightning.module_api.fetch_gateways_from_peer(peer).await?),
+                None => json(lightning.module_api.fetch_gateways().await?),
+            },
+            GatewayOpts::Add { gateway } => {
+                let auth = lightning
+                    .admin_auth
+                    .clone()
+                    .ok_or(anyhow::anyhow!("Admin auth not set"))?;
+
+                json(lightning.module_api.add_gateway(auth, gateway).await?)
+            }
+            GatewayOpts::Remove { gateway } => {
+                let auth = lightning
+                    .admin_auth
+                    .clone()
+                    .ok_or(anyhow::anyhow!("Admin auth not set"))?;
+
+                json(lightning.module_api.remove_gateway(auth, gateway).await?)
+            }
         },
-        Opts::AddGateway { gateway } => {
-            let auth = lightning
-                .admin_auth
-                .clone()
-                .ok_or(anyhow::anyhow!("Admin auth not set"))?;
-
-            json(lightning.module_api.add_gateway(auth, gateway).await?)
-        }
-        Opts::RemoveGateway { gateway } => {
-            let auth = lightning
-                .admin_auth
-                .clone()
-                .ok_or(anyhow::anyhow!("Admin auth not set"))?;
-
-            json(lightning.module_api.remove_gateway(auth, gateway).await?)
-        }
     };
 
     Ok(value)
