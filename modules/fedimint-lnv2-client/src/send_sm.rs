@@ -172,32 +172,20 @@ impl SendStateMachine {
                 )
                 .await
             {
-                Ok(gateway_response) => match gateway_response {
-                    Ok(gateway_response) => {
-                        if contract.verify_gateway_response(&gateway_response) {
-                            return gateway_response;
-                        }
+                Ok(send_result) => {
+                    if contract.verify_gateway_response(&send_result) {
+                        return send_result;
+                    }
 
-                        error!(
-                            ?gateway_response,
-                            ?contract,
-                            ?invoice,
-                            ?federation_id,
-                            ?gateway_api,
-                            "Invalid gateway response"
-                        );
-                    }
-                    Err(error) => {
-                        error!(
-                            ?error,
-                            ?contract,
-                            ?invoice,
-                            ?federation_id,
-                            ?gateway_api,
-                            "Gateway returned error"
-                        );
-                    }
-                },
+                    error!(
+                        ?send_result,
+                        ?contract,
+                        ?invoice,
+                        ?federation_id,
+                        ?gateway_api,
+                        "Invalid gateway response"
+                    );
+                }
                 Err(error) => {
                     error!(
                         ?error,
@@ -205,7 +193,7 @@ impl SendStateMachine {
                         ?invoice,
                         ?federation_id,
                         ?gateway_api,
-                        "Error while trying to reach gateway"
+                        "Error while trying to send payment via gateway"
                     );
                 }
             }

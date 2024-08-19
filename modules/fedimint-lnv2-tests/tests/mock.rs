@@ -1,6 +1,5 @@
 use std::time::Duration;
 
-use anyhow::bail;
 use bitcoin::hashes::{sha256, Hash};
 use bitcoin::secp256k1::{SecretKey, SECP256K1};
 use fedimint_core::config::FederationId;
@@ -88,6 +87,7 @@ impl GatewayConnection for MockGatewayConnection {
         _federation_id: &FederationId,
     ) -> Result<Option<RoutingInfo>, GatewayError> {
         Ok(Some(RoutingInfo {
+            lightning_public_key: self.keypair.public_key(),
             public_key: self.keypair.public_key(),
             send_fee_default: PaymentFee::SEND_FEE_LIMIT_DEFAULT,
             send_fee_minimum: PaymentFee::SEND_FEE_MINIMUM,
@@ -101,8 +101,8 @@ impl GatewayConnection for MockGatewayConnection {
         &self,
         _gateway_api: GatewayEndpoint,
         payload: CreateBolt11InvoicePayload,
-    ) -> Result<Result<Bolt11Invoice, String>, GatewayError> {
-        Ok(Ok(InvoiceBuilder::new(Currency::Regtest)
+    ) -> Result<Bolt11Invoice, GatewayError> {
+        Ok(InvoiceBuilder::new(Currency::Regtest)
             .description(String::new())
             .payment_hash(payload.contract.commitment.payment_hash)
             .current_timestamp()
@@ -111,7 +111,7 @@ impl GatewayConnection for MockGatewayConnection {
             .amount_milli_satoshis(payload.invoice_amount.msats)
             .expiry_time(Duration::from_secs(payload.expiry_time as u64))
             .build_signed(|m| SECP256K1.sign_ecdsa_recoverable(m, &self.keypair.secret_key()))
-            .unwrap()))
+            .unwrap())
     }
 
     async fn try_gateway_send_payment(
@@ -121,20 +121,18 @@ impl GatewayConnection for MockGatewayConnection {
         contract: OutgoingContract,
         invoice: LightningInvoice,
         _auth: Signature,
-    ) -> anyhow::Result<Result<Result<[u8; 32], Signature>, String>> {
+    ) -> Result<Result<[u8; 32], Signature>, GatewayError> {
         match invoice {
             LightningInvoice::Bolt11(invoice) => {
                 if *invoice.payment_secret() == PaymentSecret(GATEWAY_CRASH_PAYMENT_SECRET) {
-                    bail!("Failed to connect to gateway");
+                    return Err(GatewayError::Unreachable(String::new()));
                 }
 
                 if *invoice.payment_secret() == PaymentSecret(UNPAYABLE_PAYMENT_SECRET) {
-                    return Ok(Ok(Err(self
-                        .keypair
-                        .sign_schnorr(contract.forfeit_message()))));
+                    return Ok(Err(self.keypair.sign_schnorr(contract.forfeit_message())));
                 }
 
-                Ok(Ok(Ok(MOCK_INVOICE_PREIMAGE)))
+                Ok(Ok(MOCK_INVOICE_PREIMAGE))
             }
         }
     }

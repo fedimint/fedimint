@@ -267,7 +267,7 @@ impl GatewayClientModuleV2 {
         let min_contract_amount = self
             .gateway
             .routing_info_v2(&payload.federation_id)
-            .await
+            .await?
             .ok_or(anyhow!("Routing Info not available"))?
             .send_fee_minimum
             .add_fee(amount);

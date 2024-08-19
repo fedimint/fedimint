@@ -73,9 +73,12 @@ pub struct ReceiveOperationMeta {
     pub contract: IncomingContract,
 }
 
-/// Number of blocks until outgoing lightning contracts time out and user
+/// Number of blocks until outgoing lightning contracts times out and user
 /// client can refund it unilaterally
 pub const EXPIRATION_DELTA_LIMIT_DEFAULT: u64 = 500;
+
+/// A two hour buffer in case either the client or gateway go offline
+pub const CONTRACT_CONFIRMATION_BUFFER: u64 = 12;
 
 /// Default expiration time for lightning invoices
 pub const INVOICE_EXPIRATION_SECONDS_DEFAULT: u32 = 24 * 60 * 60;
@@ -177,12 +180,23 @@ pub enum LightningInvoice {
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Decodable, Encodable)]
 pub struct RoutingInfo {
+    pub lightning_public_key: PublicKey,
     pub public_key: PublicKey,
     pub send_fee_minimum: PaymentFee,
     pub send_fee_default: PaymentFee,
     pub receive_fee: PaymentFee,
     pub expiration_delta_default: u64,
     pub expiration_delta_minimum: u64,
+}
+
+impl RoutingInfo {
+    pub fn send_parameters(&self, invoice: &Bolt11Invoice) -> (PaymentFee, u64) {
+        if invoice.recover_payee_pub_key() == self.lightning_public_key {
+            (self.send_fee_minimum.clone(), self.expiration_delta_minimum)
+        } else {
+            (self.send_fee_default.clone(), self.expiration_delta_default)
+        }
+    }
 }
 
 #[derive(
@@ -401,22 +415,22 @@ impl LightningClientModule {
             .expect("32 bytes, within curve order")
             .keypair(secp256k1::SECP256K1);
 
-        let payment_info = self
+        let routing_info = self
             .gateway_conn
             .fetch_routing_info(gateway_api.clone(), &self.federation_id)
             .await
             .map_err(SendPaymentError::GatewayError)?
             .ok_or(SendPaymentError::UnknownFederation)?;
 
-        if !payment_info.send_fee_default.le(&payment_fee_limit) {
-            return Err(SendPaymentError::PaymentFeeExceedsLimit(
-                payment_info.send_fee_default,
-            ));
+        let (send_fee, expiration_delta) = routing_info.send_parameters(&invoice);
+
+        if !send_fee.le(&payment_fee_limit) {
+            return Err(SendPaymentError::PaymentFeeExceedsLimit(send_fee));
         }
 
-        if expiration_delta_limit < payment_info.expiration_delta_default {
+        if expiration_delta_limit < expiration_delta {
             return Err(SendPaymentError::ExpirationDeltaExceedsLimit(
-                payment_info.expiration_delta_default,
+                expiration_delta,
             ));
         }
 
@@ -428,9 +442,9 @@ impl LightningClientModule {
 
         let contract = OutgoingContract {
             payment_hash: *invoice.payment_hash(),
-            amount: payment_info.send_fee_default.add_fee(amount),
-            expiration: consensus_block_count + payment_info.expiration_delta_default,
-            claim_pk: payment_info.public_key,
+            amount: send_fee.add_fee(amount),
+            expiration: consensus_block_count + expiration_delta + CONTRACT_CONFIRMATION_BUFFER,
+            claim_pk: routing_info.public_key,
             refund_pk: refund_keypair.public_key(),
             ephemeral_pk,
         };
@@ -723,8 +737,7 @@ impl LightningClientModule {
             .gateway_conn
             .fetch_invoice(gateway_api, payload)
             .await
-            .map_err(FetchInvoiceError::GatewayError)?
-            .map_err(FetchInvoiceError::CreateInvoiceError)?;
+            .map_err(FetchInvoiceError::GatewayError)?;
 
         if invoice.payment_hash() != &contract.commitment.payment_hash {
             return Err(FetchInvoiceError::InvalidInvoicePaymentHash);
@@ -877,6 +890,8 @@ pub enum GatewayError {
     Unreachable(String),
     #[error("The gateway returned an invalid response: {0}")]
     InvalidJsonResponse(String),
+    #[error("The gateway returned an error for this request: {0}")]
+    Request(String),
 }
 
 #[derive(Error, Debug, Clone, Eq, PartialEq)]
@@ -918,8 +933,6 @@ pub enum FetchInvoiceError {
     PaymentFeeExceedsLimit(PaymentFee),
     #[error("The total fees required to complete this payment exceed its amount")]
     DustAmount,
-    #[error("The gateway considered our request for an invoice invalid: {0}")]
-    CreateInvoiceError(String),
     #[error("The invoice's payment hash is incorrect")]
     InvalidInvoicePaymentHash,
     #[error("The invoice's amount is incorrect")]
