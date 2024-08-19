@@ -971,6 +971,19 @@
 <a href="#971" id="971">971</a>
 <a href="#972" id="972">972</a>
 <a href="#973" id="973">973</a>
+<a href="#974" id="974">974</a>
+<a href="#975" id="975">975</a>
+<a href="#976" id="976">976</a>
+<a href="#977" id="977">977</a>
+<a href="#978" id="978">978</a>
+<a href="#979" id="979">979</a>
+<a href="#980" id="980">980</a>
+<a href="#981" id="981">981</a>
+<a href="#982" id="982">982</a>
+<a href="#983" id="983">983</a>
+<a href="#984" id="984">984</a>
+<a href="#985" id="985">985</a>
+<a href="#986" id="986">986</a>
 </pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::missing_errors_doc)]
 #![allow(clippy::missing_panics_doc)]
@@ -1046,9 +1059,12 @@
     <span class="kw">pub </span>contract: IncomingContract,
 }
 
-<span class="doccomment">/// Number of blocks until outgoing lightning contracts time out and user
+<span class="doccomment">/// Number of blocks until outgoing lightning contracts times out and user
 /// client can refund it unilaterally
 </span><span class="kw">pub const </span>EXPIRATION_DELTA_LIMIT_DEFAULT: u64 = <span class="number">500</span>;
+
+<span class="doccomment">/// A two hour buffer in case either the client or gateway go offline
+</span><span class="kw">pub const </span>CONTRACT_CONFIRMATION_BUFFER: u64 = <span class="number">12</span>;
 
 <span class="doccomment">/// Default expiration time for lightning invoices
 </span><span class="kw">pub const </span>INVOICE_EXPIRATION_SECONDS_DEFAULT: u32 = <span class="number">24 </span>* <span class="number">60 </span>* <span class="number">60</span>;
@@ -1150,12 +1166,23 @@
 
 <span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Decodable, Encodable)]
 </span><span class="kw">pub struct </span>RoutingInfo {
+    <span class="kw">pub </span>lightning_public_key: PublicKey,
     <span class="kw">pub </span>public_key: PublicKey,
     <span class="kw">pub </span>send_fee_minimum: PaymentFee,
     <span class="kw">pub </span>send_fee_default: PaymentFee,
     <span class="kw">pub </span>receive_fee: PaymentFee,
     <span class="kw">pub </span>expiration_delta_default: u64,
     <span class="kw">pub </span>expiration_delta_minimum: u64,
+}
+
+<span class="kw">impl </span>RoutingInfo {
+    <span class="kw">pub fn </span>send_parameters(<span class="kw-2">&amp;</span><span class="self">self</span>, invoice: <span class="kw-2">&amp;</span>Bolt11Invoice) -&gt; (PaymentFee, u64) {
+        <span class="kw">if </span>invoice.recover_payee_pub_key() == <span class="self">self</span>.lightning_public_key {
+            (<span class="self">self</span>.send_fee_minimum.clone(), <span class="self">self</span>.expiration_delta_minimum)
+        } <span class="kw">else </span>{
+            (<span class="self">self</span>.send_fee_default.clone(), <span class="self">self</span>.expiration_delta_default)
+        }
+    }
 }
 
 <span class="attr">#[derive(
@@ -1374,22 +1401,22 @@
             .expect(<span class="string">"32 bytes, within curve order"</span>)
             .keypair(secp256k1::SECP256K1);
 
-        <span class="kw">let </span>payment_info = <span class="self">self
+        <span class="kw">let </span>routing_info = <span class="self">self
             </span>.gateway_conn
             .fetch_routing_info(gateway_api.clone(), <span class="kw-2">&amp;</span><span class="self">self</span>.federation_id)
             .<span class="kw">await
             </span>.map_err(SendPaymentError::GatewayError)<span class="question-mark">?
             </span>.ok_or(SendPaymentError::UnknownFederation)<span class="question-mark">?</span>;
 
-        <span class="kw">if </span>!payment_info.send_fee_default.le(<span class="kw-2">&amp;</span>payment_fee_limit) {
-            <span class="kw">return </span><span class="prelude-val">Err</span>(SendPaymentError::PaymentFeeExceedsLimit(
-                payment_info.send_fee_default,
-            ));
+        <span class="kw">let </span>(send_fee, expiration_delta) = routing_info.send_parameters(<span class="kw-2">&amp;</span>invoice);
+
+        <span class="kw">if </span>!send_fee.le(<span class="kw-2">&amp;</span>payment_fee_limit) {
+            <span class="kw">return </span><span class="prelude-val">Err</span>(SendPaymentError::PaymentFeeExceedsLimit(send_fee));
         }
 
-        <span class="kw">if </span>expiration_delta_limit &lt; payment_info.expiration_delta_default {
+        <span class="kw">if </span>expiration_delta_limit &lt; expiration_delta {
             <span class="kw">return </span><span class="prelude-val">Err</span>(SendPaymentError::ExpirationDeltaExceedsLimit(
-                payment_info.expiration_delta_default,
+                expiration_delta,
             ));
         }
 
@@ -1401,9 +1428,9 @@
 
         <span class="kw">let </span>contract = OutgoingContract {
             payment_hash: <span class="kw-2">*</span>invoice.payment_hash(),
-            amount: payment_info.send_fee_default.add_fee(amount),
-            expiration: consensus_block_count + payment_info.expiration_delta_default,
-            claim_pk: payment_info.public_key,
+            amount: send_fee.add_fee(amount),
+            expiration: consensus_block_count + expiration_delta + CONTRACT_CONFIRMATION_BUFFER,
+            claim_pk: routing_info.public_key,
             refund_pk: refund_keypair.public_key(),
             ephemeral_pk,
         };
@@ -1696,8 +1723,7 @@
             </span>.gateway_conn
             .fetch_invoice(gateway_api, payload)
             .<span class="kw">await
-            </span>.map_err(FetchInvoiceError::GatewayError)<span class="question-mark">?
-            </span>.map_err(FetchInvoiceError::CreateInvoiceError)<span class="question-mark">?</span>;
+            </span>.map_err(FetchInvoiceError::GatewayError)<span class="question-mark">?</span>;
 
         <span class="kw">if </span>invoice.payment_hash() != <span class="kw-2">&amp;</span>contract.commitment.payment_hash {
             <span class="kw">return </span><span class="prelude-val">Err</span>(FetchInvoiceError::InvalidInvoicePaymentHash);
@@ -1850,6 +1876,8 @@
     </span>Unreachable(String),
     <span class="attr">#[error(<span class="string">"The gateway returned an invalid response: {0}"</span>)]
     </span>InvalidJsonResponse(String),
+    <span class="attr">#[error(<span class="string">"The gateway returned an error for this request: {0}"</span>)]
+    </span>Request(String),
 }
 
 <span class="attr">#[derive(Error, Debug, Clone, Eq, PartialEq)]
@@ -1891,8 +1919,6 @@
     </span>PaymentFeeExceedsLimit(PaymentFee),
     <span class="attr">#[error(<span class="string">"The total fees required to complete this payment exceed its amount"</span>)]
     </span>DustAmount,
-    <span class="attr">#[error(<span class="string">"The gateway considered our request for an invoice invalid: {0}"</span>)]
-    </span>CreateInvoiceError(String),
     <span class="attr">#[error(<span class="string">"The invoice's payment hash is incorrect"</span>)]
     </span>InvalidInvoicePaymentHash,
     <span class="attr">#[error(<span class="string">"The invoice's amount is incorrect"</span>)]

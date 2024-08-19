@@ -732,7 +732,7 @@
         <span class="kw">let </span>min_contract_amount = <span class="self">self
             </span>.gateway
             .routing_info_v2(<span class="kw-2">&amp;</span>payload.federation_id)
-            .<span class="kw">await
+            .<span class="kw">await</span><span class="question-mark">?
             </span>.ok_or(<span class="macro">anyhow!</span>(<span class="string">"Routing Info not available"</span>))<span class="question-mark">?
             </span>.send_fee_minimum
             .add_fee(amount);

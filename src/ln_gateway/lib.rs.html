@@ -1906,6 +1906,15 @@
 <a href="#1906" id="1906">1906</a>
 <a href="#1907" id="1907">1907</a>
 <a href="#1908" id="1908">1908</a>
+<a href="#1909" id="1909">1909</a>
+<a href="#1910" id="1910">1910</a>
+<a href="#1911" id="1911">1911</a>
+<a href="#1912" id="1912">1912</a>
+<a href="#1913" id="1913">1913</a>
+<a href="#1914" id="1914">1914</a>
+<a href="#1915" id="1915">1915</a>
+<a href="#1916" id="1916">1916</a>
+<a href="#1917" id="1917">1917</a>
 </pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::cast_possible_wrap)]
@@ -3477,20 +3486,29 @@
 
     <span class="doccomment">/// Returns payment information that LNv2 clients can use to instruct this
     /// Gateway to pay an invoice or receive a payment.
-    </span><span class="kw">pub async fn </span>routing_info_v2(<span class="kw-2">&amp;</span><span class="self">self</span>, federation_id: <span class="kw-2">&amp;</span>FederationId) -&gt; <span class="prelude-ty">Option</span>&lt;RoutingInfo&gt; {
-        <span class="prelude-val">Some</span>(RoutingInfo {
-            public_key: <span class="self">self</span>.public_key_v2(federation_id).<span class="kw">await</span><span class="question-mark">?</span>,
-            send_fee_default: PaymentFee::SEND_FEE_LIMIT_DEFAULT,
-            <span class="comment">// The base fee ensures that the gateway does not loose sats sending the payment due to
-            // fees paid on the transaction claiming the outgoing contract or subsequent
-            // transactions spending the newly issued ecash
-            </span>send_fee_minimum: PaymentFee::SEND_FEE_MINIMUM,
-            <span class="comment">// The base fee ensures that the gateway does not loose sats receiving the payment due
-            // to fees paid on the transaction funding the incoming contract
-            </span>receive_fee: PaymentFee::RECEIVE_FEE_LIMIT_DEFAULT,
-            expiration_delta_default: <span class="number">500</span>,
-            expiration_delta_minimum: EXPIRATION_DELTA_MINIMUM_V2,
-        })
+    </span><span class="kw">pub async fn </span>routing_info_v2(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        federation_id: <span class="kw-2">&amp;</span>FederationId,
+    ) -&gt; anyhow::Result&lt;<span class="prelude-ty">Option</span>&lt;RoutingInfo&gt;&gt; {
+        <span class="kw">let </span>context = <span class="self">self</span>.get_lightning_context().<span class="kw">await</span><span class="question-mark">?</span>;
+
+        <span class="prelude-val">Ok</span>(<span class="self">self
+            </span>.public_key_v2(federation_id)
+            .<span class="kw">await
+            </span>.map(|public_key| RoutingInfo {
+                lightning_public_key: context.lightning_public_key,
+                public_key,
+                send_fee_default: PaymentFee::SEND_FEE_LIMIT_DEFAULT,
+                <span class="comment">// The base fee ensures that the gateway does not loose sats sending the payment due
+                // to fees paid on the transaction claiming the outgoing contract or
+                // subsequent transactions spending the newly issued ecash
+                </span>send_fee_minimum: PaymentFee::SEND_FEE_MINIMUM,
+                <span class="comment">// The base fee ensures that the gateway does not loose sats receiving the payment
+                // due to fees paid on the transaction funding the incoming contract
+                </span>receive_fee: PaymentFee::RECEIVE_FEE_LIMIT_DEFAULT,
+                expiration_delta_default: <span class="number">500</span>,
+                expiration_delta_minimum: EXPIRATION_DELTA_MINIMUM_V2,
+            }))
     }
 
     <span class="kw">pub async fn </span>select_client_v2(
@@ -3532,8 +3550,8 @@
 
         <span class="kw">let </span>payment_info = <span class="self">self
             </span>.routing_info_v2(<span class="kw-2">&amp;</span>payload.federation_id)
-            .<span class="kw">await
-            </span>.ok_or(<span class="macro">anyhow!</span>(<span class="string">"Payment Info not available"</span>))<span class="question-mark">?</span>;
+            .<span class="kw">await</span><span class="question-mark">?
+            </span>.ok_or(<span class="macro">anyhow!</span>(<span class="string">"Unknown federation"</span>))<span class="question-mark">?</span>;
 
         <span class="kw">if </span>payload.contract.commitment.refund_pk != payment_info.public_key {
             <span class="macro">bail!</span>(<span class="string">"The outgoing contract keyed to another gateway"</span>);

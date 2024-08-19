@@ -288,6 +288,9 @@
 <a href="#288" id="288">288</a>
 <a href="#289" id="289">289</a>
 <a href="#290" id="290">290</a>
+<a href="#291" id="291">291</a>
+<a href="#292" id="292">292</a>
+<a href="#293" id="293">293</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::time::Duration;
 
@@ -487,7 +490,7 @@
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         gateway_api: GatewayEndpoint,
         payload: CreateBolt11InvoicePayload,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Result</span>&lt;Bolt11Invoice, String&gt;, GatewayError&gt;;
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;Bolt11Invoice, GatewayError&gt;;
 
     <span class="kw">async fn </span>try_gateway_send_payment(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
@@ -496,7 +499,7 @@
         contract: OutgoingContract,
         invoice: LightningInvoice,
         auth: Signature,
-    ) -&gt; anyhow::Result&lt;<span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Result</span>&lt;[u8; <span class="number">32</span>], Signature&gt;, String&gt;&gt;;
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Result</span>&lt;[u8; <span class="number">32</span>], Signature&gt;, GatewayError&gt;;
 }
 
 <span class="attr">#[derive(Debug)]
@@ -521,16 +524,17 @@
             .send()
             .<span class="kw">await
             </span>.map_err(|e| GatewayError::Unreachable(e.to_string()))<span class="question-mark">?
-            </span>.json::&lt;<span class="prelude-ty">Option</span>&lt;RoutingInfo&gt;&gt;()
+            </span>.json::&lt;<span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;RoutingInfo&gt;, String&gt;&gt;()
             .<span class="kw">await
-            </span>.map_err(|e| GatewayError::InvalidJsonResponse(e.to_string()))
+            </span>.map_err(|e| GatewayError::InvalidJsonResponse(e.to_string()))<span class="question-mark">?
+            </span>.map_err(|e| GatewayError::Request(e.to_string()))
     }
 
     <span class="kw">async fn </span>fetch_invoice(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         gateway_api: GatewayEndpoint,
         payload: CreateBolt11InvoicePayload,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Result</span>&lt;Bolt11Invoice, String&gt;, GatewayError&gt; {
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;Bolt11Invoice, GatewayError&gt; {
         reqwest::Client::new()
             .post(
                 gateway_api
@@ -545,7 +549,8 @@
             </span>.map_err(|e| GatewayError::Unreachable(e.to_string()))<span class="question-mark">?
             </span>.json::&lt;<span class="prelude-ty">Result</span>&lt;Bolt11Invoice, String&gt;&gt;()
             .<span class="kw">await
-            </span>.map_err(|e| GatewayError::InvalidJsonResponse(e.to_string()))
+            </span>.map_err(|e| GatewayError::InvalidJsonResponse(e.to_string()))<span class="question-mark">?
+            </span>.map_err(|e| GatewayError::Request(e.to_string()))
     }
 
     <span class="kw">async fn </span>try_gateway_send_payment(
@@ -555,8 +560,8 @@
         contract: OutgoingContract,
         invoice: LightningInvoice,
         auth: Signature,
-    ) -&gt; anyhow::Result&lt;<span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Result</span>&lt;[u8; <span class="number">32</span>], Signature&gt;, String&gt;&gt; {
-        <span class="kw">let </span>result = reqwest::Client::new()
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Result</span>&lt;[u8; <span class="number">32</span>], Signature&gt;, GatewayError&gt; {
+        reqwest::Client::new()
             .post(
                 gateway_api
                     .into_url()
@@ -571,11 +576,12 @@
                 auth,
             })
             .send()
-            .<span class="kw">await</span><span class="question-mark">?
+            .<span class="kw">await
+            </span>.map_err(|e| GatewayError::Unreachable(e.to_string()))<span class="question-mark">?
             </span>.json::&lt;<span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Result</span>&lt;[u8; <span class="number">32</span>], Signature&gt;, String&gt;&gt;()
-            .<span class="kw">await</span><span class="question-mark">?</span>;
-
-        <span class="prelude-val">Ok</span>(result)
+            .<span class="kw">await
+            </span>.map_err(|e| GatewayError::InvalidJsonResponse(e.to_string()))<span class="question-mark">?
+            </span>.map_err(|e| GatewayError::Request(e.to_string()))
     }
 }
 </code></pre></div></section></main></body></html>
