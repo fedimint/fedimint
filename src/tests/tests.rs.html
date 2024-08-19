@@ -435,6 +435,8 @@
 <a href="#435" id="435">435</a>
 <a href="#436" id="436">436</a>
 <a href="#437" id="437">437</a>
+<a href="#438" id="438">438</a>
+<a href="#439" id="439">439</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>clap::Parser;
 <span class="kw">use </span>devimint::devfed::DevJitFed;
 <span class="kw">use </span>devimint::federation::{Client, Federation};
@@ -561,7 +563,8 @@
             <span class="string">"pass"</span>,
             <span class="string">"module"</span>,
             <span class="string">"lnv2"</span>,
-            <span class="string">"add-gateway"</span>,
+            <span class="string">"gateway"</span>,
+            <span class="string">"add"</span>,
             gateway.clone().to_string(),
         )
         .out_json()
@@ -570,7 +573,7 @@
     );
 
     <span class="macro">assert_eq!</span>(
-        <span class="macro">cmd!</span>(client, <span class="string">"module"</span>, <span class="string">"lnv2"</span>, <span class="string">"gateways"</span>, <span class="string">"0"</span>)
+        <span class="macro">cmd!</span>(client, <span class="string">"module"</span>, <span class="string">"lnv2"</span>, <span class="string">"gateway"</span>, <span class="string">"list"</span>, <span class="string">"0"</span>)
             .out_json()
             .<span class="kw">await</span><span class="question-mark">?</span>,
         serde_json::to_value(<span class="macro">vec!</span>[gateway.clone()]).expect(<span class="string">"JSON serialization failed"</span>)
@@ -585,7 +588,8 @@
             <span class="string">"pass"</span>,
             <span class="string">"module"</span>,
             <span class="string">"lnv2"</span>,
-            <span class="string">"remove-gateway"</span>,
+            <span class="string">"gateway"</span>,
+            <span class="string">"remove"</span>,
             gateway.to_string(),
         )
         .out_json()
@@ -594,7 +598,7 @@
     );
 
     <span class="macro">assert_eq!</span>(
-        <span class="macro">cmd!</span>(client, <span class="string">"module"</span>, <span class="string">"lnv2"</span>, <span class="string">"gateways"</span>, <span class="string">"0"</span>,)
+        <span class="macro">cmd!</span>(client, <span class="string">"module"</span>, <span class="string">"lnv2"</span>, <span class="string">"gateway"</span>, <span class="string">"list"</span>, <span class="string">"0"</span>,)
             .out_json()
             .<span class="kw">await</span><span class="question-mark">?</span>,
         serde_json::to_value(Vec::&lt;SafeUrl&gt;::new()).expect(<span class="string">"JSON serialization failed"</span>)

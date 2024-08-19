@@ -71,9 +71,18 @@
 <a href="#71" id="71">71</a>
 <a href="#72" id="72">72</a>
 <a href="#73" id="73">73</a>
+<a href="#74" id="74">74</a>
+<a href="#75" id="75">75</a>
+<a href="#76" id="76">76</a>
+<a href="#77" id="77">77</a>
+<a href="#78" id="78">78</a>
+<a href="#79" id="79">79</a>
+<a href="#80" id="80">80</a>
+<a href="#81" id="81">81</a>
+<a href="#82" id="82">82</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::{ffi, iter};
 
-<span class="kw">use </span>clap::Parser;
+<span class="kw">use </span>clap::{Parser, Subcommand};
 <span class="kw">use </span>fedimint_core::core::OperationId;
 <span class="kw">use </span>fedimint_core::util::SafeUrl;
 <span class="kw">use </span>fedimint_core::{Amount, PeerId};
@@ -97,12 +106,19 @@
     </span>Receive { gateway: SafeUrl, amount: Amount },
     <span class="doccomment">/// Await the final state of the receive operation
     </span>AwaitReceive { operation_id: OperationId },
-    <span class="doccomment">/// Fetch vetted gateways
-    </span>Gateways { peer: <span class="prelude-ty">Option</span>&lt;PeerId&gt; },
+    <span class="doccomment">/// Gateway subcommands
+    </span><span class="attr">#[command(subcommand)]
+    </span>Gateway(GatewayOpts),
+}
+
+<span class="attr">#[derive(Clone, Subcommand, Serialize)]
+</span><span class="kw">enum </span>GatewayOpts {
+    <span class="doccomment">/// List vetted gateways
+    </span>List { peer: <span class="prelude-ty">Option</span>&lt;PeerId&gt; },
     <span class="doccomment">/// Add a vetted gateway
-    </span>AddGateway { gateway: SafeUrl },
+    </span>Add { gateway: SafeUrl },
     <span class="doccomment">/// Remove a vetted gateway
-    </span>RemoveGateway { gateway: SafeUrl },
+    </span>Remove { gateway: SafeUrl },
 }
 
 <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">async fn </span>handle_cli_command(
@@ -116,26 +132,28 @@
         Opts::AwaitSend { operation_id } =&gt; json(lightning.await_send(operation_id).<span class="kw">await</span><span class="question-mark">?</span>),
         Opts::Receive { gateway, amount } =&gt; json(lightning.receive(gateway, amount).<span class="kw">await</span><span class="question-mark">?</span>),
         Opts::AwaitReceive { operation_id } =&gt; json(lightning.await_receive(operation_id).<span class="kw">await</span><span class="question-mark">?</span>),
-        Opts::Gateways { peer } =&gt; <span class="kw">match </span>peer {
-            <span class="prelude-val">Some</span>(peer) =&gt; json(lightning.module_api.fetch_gateways_from_peer(peer).<span class="kw">await</span><span class="question-mark">?</span>),
-            <span class="prelude-val">None </span>=&gt; json(lightning.module_api.fetch_gateways().<span class="kw">await</span><span class="question-mark">?</span>),
+        Opts::Gateway(gateway_opts) =&gt; <span class="kw">match </span>gateway_opts {
+            GatewayOpts::List { peer } =&gt; <span class="kw">match </span>peer {
+                <span class="prelude-val">Some</span>(peer) =&gt; json(lightning.module_api.fetch_gateways_from_peer(peer).<span class="kw">await</span><span class="question-mark">?</span>),
+                <span class="prelude-val">None </span>=&gt; json(lightning.module_api.fetch_gateways().<span class="kw">await</span><span class="question-mark">?</span>),
+            },
+            GatewayOpts::Add { gateway } =&gt; {
+                <span class="kw">let </span>auth = lightning
+                    .admin_auth
+                    .clone()
+                    .ok_or(<span class="macro">anyhow::anyhow!</span>(<span class="string">"Admin auth not set"</span>))<span class="question-mark">?</span>;
+
+                json(lightning.module_api.add_gateway(auth, gateway).<span class="kw">await</span><span class="question-mark">?</span>)
+            }
+            GatewayOpts::Remove { gateway } =&gt; {
+                <span class="kw">let </span>auth = lightning
+                    .admin_auth
+                    .clone()
+                    .ok_or(<span class="macro">anyhow::anyhow!</span>(<span class="string">"Admin auth not set"</span>))<span class="question-mark">?</span>;
+
+                json(lightning.module_api.remove_gateway(auth, gateway).<span class="kw">await</span><span class="question-mark">?</span>)
+            }
         },
-        Opts::AddGateway { gateway } =&gt; {
-            <span class="kw">let </span>auth = lightning
-                .admin_auth
-                .clone()
-                .ok_or(<span class="macro">anyhow::anyhow!</span>(<span class="string">"Admin auth not set"</span>))<span class="question-mark">?</span>;
-
-            json(lightning.module_api.add_gateway(auth, gateway).<span class="kw">await</span><span class="question-mark">?</span>)
-        }
-        Opts::RemoveGateway { gateway } =&gt; {
-            <span class="kw">let </span>auth = lightning
-                .admin_auth
-                .clone()
-                .ok_or(<span class="macro">anyhow::anyhow!</span>(<span class="string">"Admin auth not set"</span>))<span class="question-mark">?</span>;
-
-            json(lightning.module_api.remove_gateway(auth, gateway).<span class="kw">await</span><span class="question-mark">?</span>)
-        }
     };
 
     <span class="prelude-val">Ok</span>(value)
