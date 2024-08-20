@@ -59,14 +59,15 @@ const FAILURE_ALONG_ROUTE: i32 = 204;
 struct ClnExtensionOpts {
     /// Gateway CLN extension service listen address
     #[arg(long = "fm-gateway-listen", env = FM_CLN_EXTENSION_LISTEN_ADDRESS_ENV)]
-    fm_gateway_listen: SocketAddr,
+    fm_gateway_listen: Option<SocketAddr>,
 }
 
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {
     handle_version_hash_command(fedimint_build_code_version_env!());
 
-    let (service, listen, plugin) = ClnRpcService::new()
+    let extension_opts = ClnExtensionOpts::parse();
+    let (service, listen, plugin) = ClnRpcService::new(extension_opts)
         .await
         .expect("Failed to create cln rpc service");
 
@@ -128,8 +129,9 @@ struct ClnRpcService {
 }
 
 impl ClnRpcService {
-    async fn new() -> Result<(Self, SocketAddr, Plugin<Arc<ClnHtlcInterceptor>>), ClnExtensionError>
-    {
+    async fn new(
+        extension_opts: ClnExtensionOpts,
+    ) -> Result<(Self, SocketAddr, Plugin<Arc<ClnHtlcInterceptor>>), ClnExtensionError> {
         let interceptor = Arc::new(ClnHtlcInterceptor::new());
 
         if let Some(plugin) = Builder::new(stdin(), stdout())
@@ -168,10 +170,9 @@ impl ClnRpcService {
             let socket = PathBuf::from(config.lightning_dir).join(config.rpc_file);
 
             // Parse configurations or read from
-            let fm_gateway_listen: SocketAddr = match ClnExtensionOpts::try_parse() {
-                Ok(opts) => opts.fm_gateway_listen,
-                Err(_) => {
-
+            let fm_gateway_listen = match extension_opts.fm_gateway_listen {
+                Some(addr) => addr,
+                None => {
                     let listen_val = plugin.option("fm-gateway-listen")
                         .expect("Gateway CLN extension is missing a listen address configuration.
                         You can set it via FM_CLN_EXTENSION_LISTEN_ADDRESS env variable, or by adding

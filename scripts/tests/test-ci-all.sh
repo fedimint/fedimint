@@ -246,7 +246,7 @@ if [[ "$num_versions" == "0" ]]; then
   mapfile -t version_matrix < <(generate_current_only_matrix "${versions[@]}")
 else
   # precompile binaries
-  binaries=( "fedimintd" "fedimint-cli" "gateway-cli" "gatewayd" )
+  binaries=( "fedimintd" "fedimint-cli" "gateway-cli" "gatewayd" "gateway-cln-extension" )
   for version in "${versions[@]}" ; do
     if [ "$version" == "current" ] ; then
       continue

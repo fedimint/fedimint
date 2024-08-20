@@ -18,7 +18,6 @@ use fedimint_core::BitcoinHash;
 use fedimint_logging::LOG_DEVIMINT;
 use fedimint_testing::gateway::LightningNodeType;
 use hex::ToHex;
-use itertools::Itertools;
 use tokio::fs;
 use tokio::sync::{MappedMutexGuard, Mutex, MutexGuard};
 use tokio::time::Instant;
@@ -26,7 +25,7 @@ use tonic_lnd::lnrpc::{ChanInfoRequest, GetInfoRequest, ListChannelsRequest};
 use tonic_lnd::Client as LndClient;
 use tracing::{debug, info, trace, warn};
 
-use crate::util::{poll, ClnLightningCli, ProcessHandle, ProcessManager};
+use crate::util::{poll, ClnLightningCli, GatewayClnExtension, ProcessHandle, ProcessManager};
 use crate::vars::utf8;
 use crate::version_constants::VERSION_0_4_0_ALPHA;
 use crate::{cmd, poll_eq, Gatewayd};
@@ -293,14 +292,12 @@ impl Bitcoind {
     }
 }
 
-const GATEWAY_CLN_EXTENSION: &str = "gateway-cln-extension";
-
 pub struct LightningdProcessHandle(ProcessHandle);
 
 impl LightningdProcessHandle {
     async fn terminate(&self) -> Result<()> {
         if self.0.is_running().await {
-            let mut stop_plugins = cmd!(ClnLightningCli, "plugin", "stop", GATEWAY_CLN_EXTENSION);
+            let mut stop_plugins = cmd!(ClnLightningCli, "plugin", "stop", "gateway-cln-extension");
             if let Err(e) = stop_plugins.out_string().await {
                 warn!(
                     target: LOG_DEVIMINT,
@@ -363,10 +360,9 @@ impl Lightningd {
     }
 
     pub async fn start(process_mgr: &ProcessManager, cln_dir: &Path) -> Result<ProcessHandle> {
-        let extension_path = cmd!("which", GATEWAY_CLN_EXTENSION)
-            .out_string()
-            .await
-            .context("gateway-cln-extension not on path")?;
+        let extension_path = crate::util::get_gateway_cln_extension_path(
+            GatewayClnExtension::default_path().await.as_str(),
+        );
         let btc_dir = utf8(&process_mgr.globals.FM_BTC_DIR);
         let cmd = cmd!(
             crate::util::Lightningd,
@@ -876,7 +872,7 @@ pub async fn open_channels_between_gateways(
     )
     .await?;
 
-    debug!(target: LOG_DEVIMINT, "Performing peg-in on all gateway lightning nodes...");
+    debug!(target: LOG_DEVIMINT, "Funding all gateway lightning nodes...");
     for (gw, _gw_name) in gateways {
         let funding_addr = gw.get_funding_address().await?;
         bitcoind.send_to(funding_addr, 100_000_000).await?;
@@ -894,19 +890,22 @@ pub async fn open_channels_between_gateways(
 
     // All unique pairs of gateways.
     // For a list of gateways [A, B, C], this will produce [(A, B), (B, C), (C, A)].
-    #[allow(clippy::type_complexity)]
-    let gateway_pairs: Vec<(&(&Gatewayd, &str), &(&Gatewayd, &str))> =
-        gateways.iter().circular_tuple_windows::<(_, _)>().collect();
+    // Order needs to be enforced so that each Lightning node opens 1 channel.
+    let mut gateway_pairs = Vec::new();
+    for i in 0..gateways.len() {
+        let next = (i + 1) % gateways.len();
+        gateway_pairs.push((gateways[i], gateways[next]));
+        // Exit early if there is only one pair of gateways
+        if gateways.len() == 2 {
+            break;
+        }
+    }
 
     for ((gw_a, gw_a_name), (gw_b, gw_b_name)) in &gateway_pairs {
-        debug!(target: LOG_DEVIMINT, "Opening channel between {gw_a_name} and {gw_b_name} gateway lightning nodes...");
-        gw_a.open_channel(
-            gw_b.lightning_pubkey().await?,
-            gw_b.lightning_node_addr.clone(),
-            10_000_000,
-            Some(5_000_000),
-        )
-        .await?;
+        let push_amount = 5_000_000;
+        info!(target: LOG_DEVIMINT, "Opening channel between {gw_a_name} and {gw_b_name} gateway lightning nodes with {push_amount} on each side...");
+        gw_a.open_channel(gw_b, 10_000_000, Some(push_amount))
+            .await?;
     }
 
     // `open_channel` may not send out the channel funding transaction immediately
