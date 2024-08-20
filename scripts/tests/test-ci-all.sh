@@ -59,11 +59,6 @@ function lightning_reconnect_test() {
 }
 export -f lightning_reconnect_test
 
-function gateway_mnemonic_upgrade_test() {
-  fm-run-test "${FUNCNAME[0]}" ./scripts/tests/gatewayd-mnemonic-upgrade.sh
-}
-export -f gateway_mnemonic_upgrade_test
-
 function gateway_reboot_test() {
   fm-run-test "${FUNCNAME[0]}" ./scripts/tests/gateway-reboot-test.sh
 }
@@ -298,7 +293,6 @@ tests_to_run_in_parallel+=(
   "latency_test_restore"
   "reconnect_test"
   "lightning_reconnect_test"
-  "gateway_mnemonic_upgrade_test"
   "gateway_reboot_test"
   "gateway_config_test_cln"
   "gateway_config_test_lnd"

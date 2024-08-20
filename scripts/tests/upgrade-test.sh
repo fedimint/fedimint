@@ -18,7 +18,7 @@ else
   versions=("$@")
 fi
 
-default_test_kinds=("fedimintd" "fedimint-cli" "gateway")
+default_test_kinds=("fedimintd" "fedimint-cli" "gateway" "mnemonic")
 
 # runs a subset of tests if the user provides `TEST_KINDS`
 # ex: TEST_KINDS=fedimint-cli,gateway
@@ -98,6 +98,19 @@ if contains "gateway" "${test_kinds[@]}"; then
 
   upgrade_tests+=(
     "devimint upgrade-tests gatewayd --gatewayd-paths $(printf "%s " "${gatewayd_paths[@]}") --gateway-cli-paths $(printf "%s " "${gateway_cli_paths[@]}") --gateway-cln-extension-paths $(printf "%s " "${gateway_cln_extension_paths[@]}")"
+  )
+fi
+
+if contains "mnemonic" "${test_kinds[@]}"; then
+  old_gatewayd=$(nix_build_binary_for_version 'gatewayd' "v0.4.0")
+  new_gatewayd="gatewayd"
+  old_gateway_cli=$(nix_build_binary_for_version 'gateway-cli' "v0.4.0")
+  new_gateway_cli="gateway-cli"
+  old_gateway_cln_ext=$(nix_build_binary_for_version 'gateway-cln-extension' "v0.4.0")
+  new_gateway_cln_ext="gateway-cln-extension"
+
+  upgrade_tests+=(
+    "gateway-tests gatewayd-mnemonic --old-gatewayd-path $old_gatewayd --new-gatewayd-path $new_gatewayd --gw-type lnd --old-gateway-cli-path $old_gateway_cli --new-gateway-cli-path $new_gateway_cli --old-gateway-cln-extension-path $old_gateway_cln_ext --new-gateway-cln-extension-path $new_gateway_cln_ext"
   )
 fi
 
