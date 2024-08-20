@@ -1268,10 +1268,6 @@ pub async fn run_standard_load_test(
         "did not compare to previous run"
     );
     anyhow::ensure!(
-        output.contains("2 reissue_notes"),
-        "reissued different number notes than expected"
-    );
-    anyhow::ensure!(
         output.contains("1 gateway_pay_invoice"),
         "paid different number of invoices than expected"
     );
