@@ -31,7 +31,7 @@ pub async fn process_transaction_with_dbtx(
         .try_for_each(|input| {
             modules
                 .get_expect(input.module_instance_id())
-                .verify_input(&input, input.module_instance_id())
+                .verify_input(&input)
         })
         .map_err(|_| TransactionError::InvalidWitnessLength)?;
 
@@ -44,7 +44,6 @@ pub async fn process_transaction_with_dbtx(
             .process_input(
                 &mut dbtx.to_ref_with_prefix_module_id(input.module_instance_id()),
                 input,
-                input.module_instance_id(),
             )
             .await
             .map_err(TransactionError::Input)?;
@@ -64,7 +63,6 @@ pub async fn process_transaction_with_dbtx(
                 &mut dbtx.to_ref_with_prefix_module_id(output.module_instance_id()),
                 output,
                 OutPoint { txid, out_idx },
-                output.module_instance_id(),
             )
             .await
             .map_err(TransactionError::Output)?;

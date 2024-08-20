@@ -55,11 +55,7 @@ pub trait IServerModule: Debug {
     // Use this function to parallelise stateless cryptographic verification of
     // inputs across a transaction. All inputs of a transaction are verified
     // before any input is processed.
-    fn verify_input(
-        &self,
-        input: &DynInput,
-        module_instance_id: ModuleInstanceId,
-    ) -> Result<(), DynInputError>;
+    fn verify_input(&self, input: &DynInput) -> Result<(), DynInputError>;
 
     /// Try to spend a transaction input. On success all necessary updates will
     /// be part of the database transaction. On failure (e.g. double spend)
@@ -69,7 +65,6 @@ pub trait IServerModule: Debug {
         &'a self,
         dbtx: &mut DatabaseTransaction<'c>,
         input: &'b DynInput,
-        module_instance_id: ModuleInstanceId,
     ) -> Result<InputMeta, DynInputError>;
 
     /// Try to create an output (e.g. issue notes, peg-out BTC, …). On success
@@ -85,7 +80,6 @@ pub trait IServerModule: Debug {
         dbtx: &mut DatabaseTransaction<'a>,
         output: &DynOutput,
         out_point: OutPoint,
-        module_instance_id: ModuleInstanceId,
     ) -> Result<TransactionItemAmount, DynOutputError>;
 
     /// Retrieve the current status of the output. Depending on the module this
@@ -178,11 +172,7 @@ where
     // Use this function to parallelise stateless cryptographic verification of
     // inputs across a transaction. All inputs of a transaction are verified
     // before any input is processed.
-    fn verify_input(
-        &self,
-        input: &DynInput,
-        module_instance_id: ModuleInstanceId,
-    ) -> Result<(), DynInputError> {
+    fn verify_input(&self, input: &DynInput) -> Result<(), DynInputError> {
         <Self as ServerModule>::verify_input(
             self,
             input
@@ -190,7 +180,7 @@ where
                 .downcast_ref::<<<Self as ServerModule>::Common as ModuleCommon>::Input>()
                 .expect("incorrect input type passed to module plugin"),
         )
-        .map_err(|v| DynInputError::from_typed(module_instance_id, v))
+        .map_err(|v| DynInputError::from_typed(input.module_instance_id(), v))
     }
 
     /// Try to spend a transaction input. On success all necessary updates will
@@ -201,7 +191,6 @@ where
         &'a self,
         dbtx: &mut DatabaseTransaction<'c>,
         input: &'b DynInput,
-        module_instance_id: ModuleInstanceId,
     ) -> Result<InputMeta, DynInputError> {
         <Self as ServerModule>::process_input(
             self,
@@ -213,7 +202,7 @@ where
         )
         .await
         .map(Into::into)
-        .map_err(|v| DynInputError::from_typed(module_instance_id, v))
+        .map_err(|v| DynInputError::from_typed(input.module_instance_id(), v))
     }
 
     /// Try to create an output (e.g. issue notes, peg-out BTC, …). On success
@@ -229,7 +218,6 @@ where
         dbtx: &mut DatabaseTransaction<'a>,
         output: &DynOutput,
         out_point: OutPoint,
-        module_instance_id: ModuleInstanceId,
     ) -> Result<TransactionItemAmount, DynOutputError> {
         <Self as ServerModule>::process_output(
             self,
@@ -241,7 +229,7 @@ where
             out_point,
         )
         .await
-        .map_err(|v| DynOutputError::from_typed(module_instance_id, v))
+        .map_err(|v| DynOutputError::from_typed(output.module_instance_id(), v))
     }
 
     /// Retrieve the current status of the output. Depending on the module this
