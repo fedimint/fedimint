@@ -184,13 +184,15 @@ impl FederationManager {
         federation_id: FederationId,
         dbtx: &mut DatabaseTransaction<'_, NonCommittable>,
     ) -> Result<FederationInfo> {
-        let channel_id = self.get_scid_for_federation(federation_id);
+        let Some(channel_id) = self.get_scid_for_federation(federation_id) else {
+            return Err(GatewayError::InvalidMetadata(format!(
+                "No federation with id {federation_id}"
+            )));
+        };
 
         self.clients
             .get(&federation_id)
-            .ok_or(GatewayError::InvalidMetadata(format!(
-                "No federation with id {federation_id}"
-            )))?
+            .expect("`FederationManager.scid_to_federation` is out of sync with `FederationManager.clients`! This is a bug.")
             .borrow()
             .with(|client| async move {
                 let balance_msat = client.get_balance().await;
@@ -216,7 +218,7 @@ impl FederationManager {
     ) -> Vec<FederationInfo> {
         let mut federation_infos = Vec::new();
         for (federation_id, client) in &self.clients {
-            let channel_id = self.get_scid_for_federation(*federation_id);
+            let channel_id = self.get_scid_for_federation(*federation_id).expect("`FederationManager.scid_to_federation` is out of sync with `FederationManager.clients`! This is a bug.");
 
             let balance_msat = client.borrow().with(|client| client.get_balance()).await;
 

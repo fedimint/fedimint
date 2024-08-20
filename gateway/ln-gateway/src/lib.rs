@@ -1037,7 +1037,7 @@ impl Gateway {
         let federation_info = FederationInfo {
             federation_id,
             balance_msat: client.get_balance().await,
-            channel_id: Some(mint_channel_id),
+            channel_id: mint_channel_id,
             routing_fees: Some(gateway_config.routing_fees.into()),
         };
 
