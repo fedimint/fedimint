@@ -1,9 +1,16 @@
 #![deny(clippy::pedantic)]
 
+use std::env;
+use std::fs::remove_dir_all;
+use std::path::PathBuf;
+use std::str::FromStr;
+
 use clap::{Parser, Subcommand};
+use devimint::envs::FM_DATA_DIR_ENV;
 use devimint::federation::Federation;
 use devimint::version_constants::{VERSION_0_3_0, VERSION_0_5_0_ALPHA};
 use devimint::{cmd, util, Gatewayd};
+use fedimint_core::config::FederationId;
 use fedimint_core::Amount;
 use fedimint_testing::gateway::LightningNodeType;
 use ln_gateway::rpc::{FederationInfo, GatewayFedConfig, GatewayInfo};
@@ -13,22 +20,184 @@ use tracing::info;
 struct GatewayTestOpts {
     #[clap(subcommand)]
     test: GatewayTest,
-
-    #[arg(long = "gw-type")]
-    gateway_type: LightningNodeType,
 }
 
 #[derive(Debug, Clone, Subcommand)]
 enum GatewayTest {
-    ConfigTest,
+    ConfigTest {
+        #[arg(long = "gw-type")]
+        gateway_type: LightningNodeType,
+    },
+    GatewaydMnemonic {
+        #[arg(long)]
+        old_gatewayd_path: PathBuf,
+        #[arg(long)]
+        new_gatewayd_path: PathBuf,
+        #[arg(long = "gw-type")]
+        gateway_type: LightningNodeType,
+        #[arg(long)]
+        old_gateway_cli_path: PathBuf,
+        #[arg(long)]
+        new_gateway_cli_path: PathBuf,
+        #[arg(long)]
+        old_gateway_cln_extension_path: PathBuf,
+        #[arg(long)]
+        new_gateway_cln_extension_path: PathBuf,
+    },
 }
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let opts = GatewayTestOpts::parse();
     match opts.test {
-        GatewayTest::ConfigTest => Box::pin(config_test(opts.gateway_type)).await,
+        GatewayTest::ConfigTest { gateway_type } => Box::pin(config_test(gateway_type)).await,
+        GatewayTest::GatewaydMnemonic {
+            old_gatewayd_path,
+            new_gatewayd_path,
+            gateway_type,
+            old_gateway_cli_path,
+            new_gateway_cli_path,
+            old_gateway_cln_extension_path,
+            new_gateway_cln_extension_path,
+        } => {
+            mnemonic_upgrade_test(
+                old_gatewayd_path,
+                new_gatewayd_path,
+                gateway_type,
+                old_gateway_cli_path,
+                new_gateway_cli_path,
+                old_gateway_cln_extension_path,
+                new_gateway_cln_extension_path,
+            )
+            .await
+        }
     }
+}
+
+async fn mnemonic_upgrade_test(
+    old_gatewayd_path: PathBuf,
+    new_gatewayd_path: PathBuf,
+    gw_type: LightningNodeType,
+    old_gateway_cli_path: PathBuf,
+    new_gateway_cli_path: PathBuf,
+    old_gateway_cln_extension_path: PathBuf,
+    new_gateway_cln_extension_path: PathBuf,
+) -> anyhow::Result<()> {
+    std::env::set_var("FM_GATEWAYD_BASE_EXECUTABLE", old_gatewayd_path);
+    std::env::set_var("FM_GATEWAY_CLI_BASE_EXECUTABLE", old_gateway_cli_path);
+    std::env::set_var(
+        "FM_GATEWAY_CLN_EXTENSION_BASE_EXECUTABLE",
+        old_gateway_cln_extension_path,
+    );
+
+    devimint::run_devfed_test(|dev_fed, process_mgr| async move {
+        let gatewayd_version = util::Gatewayd::version_or_default().await;
+        let gateway_cli_version = util::GatewayCli::version_or_default().await;
+        info!(
+            ?gatewayd_version,
+            ?gateway_cli_version,
+            "Running gatewayd mnemonic test"
+        );
+
+        let mut gw_lnd = dev_fed.gw_lnd_registered().await?.to_owned();
+        let fed = dev_fed.fed().await?;
+        let federation_id = FederationId::from_str(fed.calculate_federation_id().as_str())?;
+        let bitcoind = dev_fed.bitcoind().await?;
+
+        gw_lnd
+            .restart_with_bin(
+                &process_mgr,
+                &new_gatewayd_path,
+                &new_gateway_cli_path,
+                &new_gateway_cln_extension_path,
+                bitcoind.clone(),
+            )
+            .await?;
+
+        // Gateway mnemonic is only support in >= v0.5.0
+        let new_gatewayd_version = util::Gatewayd::version_or_default().await;
+        if new_gatewayd_version < *VERSION_0_5_0_ALPHA {
+            info!("Gateway mnemonic test is not supported below v0.5.0");
+            return Ok(());
+        }
+
+        // Verify that we have a legacy federation
+        let mnemonic_response = gw_lnd.get_mnemonic().await?;
+        assert!(mnemonic_response
+            .legacy_federations
+            .contains(&federation_id));
+
+        info!("Verified a legacy federation exists");
+
+        // Leave federation
+        gw_lnd.leave_federation(federation_id).await?;
+
+        // Rejoin federation
+        gw_lnd.connect_fed(fed).await?;
+
+        // Verify that the legacy federation is recognized
+        let mnemonic_response = gw_lnd.get_mnemonic().await?;
+        assert!(mnemonic_response
+            .legacy_federations
+            .contains(&federation_id));
+        assert_eq!(mnemonic_response.legacy_federations.len(), 1);
+
+        info!("Verified leaving and re-joining preservers legacy federation");
+
+        // Leave federation and delete database to force migration to mnemonic
+        gw_lnd.leave_federation(federation_id).await?;
+
+        let data_dir: PathBuf = env::var(FM_DATA_DIR_ENV)
+            .expect("Data dir is not set")
+            .parse()
+            .expect("Could not parse data dir");
+        let gw_fed_db = data_dir
+            .join(gw_type.to_string())
+            .join(format!("{federation_id}.db"));
+        remove_dir_all(gw_fed_db)?;
+
+        gw_lnd.connect_fed(fed).await?;
+
+        // Verify that the re-connected federation is not a legacy federation
+        let mnemonic_response = gw_lnd.get_mnemonic().await?;
+        assert!(!mnemonic_response
+            .legacy_federations
+            .contains(&federation_id));
+        assert_eq!(mnemonic_response.legacy_federations.len(), 0);
+
+        info!("Verified deleting database will migrate the federation to use mnemonic");
+
+        // Restart CLN gateway but with a given mnemonic
+        let mnemonic =
+            "cereal fortune course waste wagon jaguar shoulder client modify view panic describe";
+        std::env::set_var("FM_GATEWAY_MNEMONIC", mnemonic);
+        let mut gw_cln = dev_fed.gw_cln_registered().await?.to_owned();
+        gw_cln
+            .restart_with_bin(
+                &process_mgr,
+                &new_gatewayd_path,
+                &new_gateway_cli_path,
+                &new_gateway_cln_extension_path,
+                bitcoind.clone(),
+            )
+            .await?;
+        let mnemonic_response = gw_cln.get_mnemonic().await?;
+        assert!(mnemonic_response
+            .legacy_federations
+            .contains(&federation_id));
+        assert_eq!(
+            mnemonic_response.mnemonic,
+            mnemonic
+                .split_whitespace()
+                .map(std::string::ToString::to_string)
+                .collect::<Vec<String>>()
+        );
+
+        info!("Successfully completed mnemonic upgrade test");
+
+        Ok(())
+    })
+    .await
 }
 
 /// Test that sets and verifies configurations within the gateway

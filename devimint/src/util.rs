@@ -949,7 +949,7 @@ pub struct GatewayCli;
 impl GatewayCli {
     pub fn cmd(self) -> Command {
         to_command(get_command_str_for_alias(
-            &[],
+            &[FM_GATEWAY_CLI_BASE_EXECUTABLE_ENV],
             &get_gateway_cli_path()
                 .iter()
                 .map(String::as_str)

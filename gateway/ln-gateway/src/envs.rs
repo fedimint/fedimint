@@ -42,3 +42,5 @@ pub const FM_LDK_NETWORK: &str = "FM_LDK_NETWORK";
 
 // Env variable to TODO
 pub const FM_PORT_LDK: &str = "FM_PORT_LDK";
+
+pub const FM_GATEWAY_MNEMONIC_ENV: &str = "FM_GATEWAY_MNEMONIC";

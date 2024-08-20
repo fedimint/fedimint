@@ -236,3 +236,9 @@ pub struct FederationBalanceInfo {
     pub federation_id: FederationId,
     pub ecash_balance_msats: Amount,
 }
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct MnemonicResponse {
+    pub mnemonic: Vec<String>,
+    pub legacy_federations: Vec<FederationId>,
+}

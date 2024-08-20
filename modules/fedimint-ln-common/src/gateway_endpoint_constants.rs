@@ -6,6 +6,7 @@ pub const BALANCE_ENDPOINT: &str = "/balance";
 pub const CONFIGURATION_ENDPOINT: &str = "/config";
 pub const CONNECT_FED_ENDPOINT: &str = "/connect_fed";
 pub const GATEWAY_INFO_ENDPOINT: &str = "/info";
+pub const GATEWAY_MNEMONIC_ENDPOINT: &str = "/mnemonic";
 pub const GET_BALANCES_ENDPOINT: &str = "/balances";
 pub const GET_GATEWAY_ID_ENDPOINT: &str = "/id";
 pub const GATEWAY_INFO_POST_ENDPOINT: &str = "/info";

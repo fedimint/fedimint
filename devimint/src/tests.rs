@@ -610,7 +610,6 @@ pub async fn upgrade_tests(process_mgr: &ProcessManager, binary: UpgradeTest) ->
                     "### gateway passed stress test for version",
                 );
             }
-
             info!("## gatewayd upgraded all binaries successfully");
         }
     }

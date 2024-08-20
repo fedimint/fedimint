@@ -3,11 +3,12 @@ use std::ops::ControlFlow;
 use std::path::PathBuf;
 
 use anyhow::{Context, Result};
+use fedimint_core::config::FederationId;
 use fedimint_core::secp256k1::PublicKey;
 use fedimint_core::util::{backoff_util, retry};
 use fedimint_testing::gateway::LightningNodeType;
 use ln_gateway::lightning::ChannelInfo;
-use ln_gateway::rpc::V1_API_ENDPOINT;
+use ln_gateway::rpc::{MnemonicResponse, V1_API_ENDPOINT};
 use tracing::info;
 
 use crate::envs::{FM_GATEWAY_API_ADDR_ENV, FM_GATEWAY_DATA_DIR_ENV, FM_GATEWAY_LISTEN_ADDR_ENV};
@@ -174,7 +175,7 @@ impl Gatewayd {
 
     pub async fn get_info(&self) -> Result<serde_json::Value> {
         retry(
-            "Getting {} gateway info via gateway-cli info",
+            "Getting gateway info via gateway-cli info",
             backoff_util::aggressive_backoff(),
             || async { cmd!(self, "info").out_json().await },
         )
@@ -235,6 +236,25 @@ impl Gatewayd {
         };
 
         Ok(address)
+    }
+
+    pub async fn get_mnemonic(&self) -> Result<MnemonicResponse> {
+        let value = retry(
+            "Getting gateway mnemonic",
+            backoff_util::aggressive_backoff(),
+            || async { cmd!(self, "seed").out_json().await },
+        )
+        .await
+        .context("Getting gateway mnemonic")?;
+
+        Ok(serde_json::from_value(value)?)
+    }
+
+    pub async fn leave_federation(&self, federation_id: FederationId) -> Result<()> {
+        cmd!(self, "leave-fed", "--federation-id", federation_id)
+            .run()
+            .await?;
+        Ok(())
     }
 
     pub async fn open_channel(

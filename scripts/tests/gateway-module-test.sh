@@ -9,11 +9,11 @@ add_target_dir_to_path
 
 # Check if both arguments are provided
 if [ $# -ne 2 ]; then
-    echo "Usage: $0 <test> <lnd|cln>"
+    echo "Usage: $0 <test> <lnd|cln|ldk>"
     exit 1
 fi
 
 test=$1
 gw_type=$2
 
-gateway-tests --gw-type $gw_type $test
+gateway-tests $test --gw-type $gw_type
