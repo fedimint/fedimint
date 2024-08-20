@@ -18,6 +18,7 @@ use fedimint_core::BitcoinHash;
 use fedimint_logging::LOG_DEVIMINT;
 use fedimint_testing::gateway::LightningNodeType;
 use hex::ToHex;
+use itertools::Itertools;
 use tokio::fs;
 use tokio::sync::{MappedMutexGuard, Mutex, MutexGuard};
 use tokio::time::Instant;
@@ -890,16 +891,14 @@ pub async fn open_channels_between_gateways(
 
     // All unique pairs of gateways.
     // For a list of gateways [A, B, C], this will produce [(A, B), (B, C), (C, A)].
-    // Order needs to be enforced so that each Lightning node opens 1 channel.
-    let mut gateway_pairs = Vec::new();
-    for i in 0..gateways.len() {
-        let next = (i + 1) % gateways.len();
-        gateway_pairs.push((gateways[i], gateways[next]));
-        // Exit early if there is only one pair of gateways
-        if gateways.len() == 2 {
-            break;
-        }
-    }
+    // Since the first gateway within each pair initiates the channel open,
+    // order within each pair needs to be enforced so that each Lightning node opens
+    // 1 channel.
+    let gateway_pairs: Vec<(&(&Gatewayd, &str), &(&Gatewayd, &str))> = if gateways.len() == 2 {
+        gateways.iter().tuple_windows::<(_, _)>().collect()
+    } else {
+        gateways.iter().circular_tuple_windows::<(_, _)>().collect()
+    };
 
     for ((gw_a, gw_a_name), (gw_b, gw_b_name)) in &gateway_pairs {
         let push_amount = 5_000_000;
