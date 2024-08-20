@@ -765,19 +765,18 @@ impl Gateway {
             .await
             .expect("Gateway configuration should be set");
 
-        // Minimize the time we hold a lock on the federation manager.
-        // TODO(tvolk131): See if we can make this block into a method on
-        // `FederationManager`.
-        let (federations, channels) = {
-            let federation_manager = self.federation_manager.read().await;
+        let dbtx = self.gateway_db.begin_transaction_nc().await;
+        let federations = self
+            .federation_manager
+            .read()
+            .await
+            .federation_info_all_federations(dbtx)
+            .await;
 
-            let dbtx = self.gateway_db.begin_transaction_nc().await;
-            let federations = federation_manager
-                .federation_info_all_federations(dbtx)
-                .await;
-
-            (federations, federation_manager.clone_scid_map())
-        };
+        let channels: BTreeMap<u64, FederationId> = federations
+            .iter()
+            .map(|federation_info| (federation_info.channel_id, federation_info.federation_id))
+            .collect();
 
         let node_info = lightning_context.lnrpc.parsed_node_info().await?;
 
