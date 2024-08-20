@@ -1130,6 +1130,73 @@
 <a href="#1130" id="1130">1130</a>
 <a href="#1131" id="1131">1131</a>
 <a href="#1132" id="1132">1132</a>
+<a href="#1133" id="1133">1133</a>
+<a href="#1134" id="1134">1134</a>
+<a href="#1135" id="1135">1135</a>
+<a href="#1136" id="1136">1136</a>
+<a href="#1137" id="1137">1137</a>
+<a href="#1138" id="1138">1138</a>
+<a href="#1139" id="1139">1139</a>
+<a href="#1140" id="1140">1140</a>
+<a href="#1141" id="1141">1141</a>
+<a href="#1142" id="1142">1142</a>
+<a href="#1143" id="1143">1143</a>
+<a href="#1144" id="1144">1144</a>
+<a href="#1145" id="1145">1145</a>
+<a href="#1146" id="1146">1146</a>
+<a href="#1147" id="1147">1147</a>
+<a href="#1148" id="1148">1148</a>
+<a href="#1149" id="1149">1149</a>
+<a href="#1150" id="1150">1150</a>
+<a href="#1151" id="1151">1151</a>
+<a href="#1152" id="1152">1152</a>
+<a href="#1153" id="1153">1153</a>
+<a href="#1154" id="1154">1154</a>
+<a href="#1155" id="1155">1155</a>
+<a href="#1156" id="1156">1156</a>
+<a href="#1157" id="1157">1157</a>
+<a href="#1158" id="1158">1158</a>
+<a href="#1159" id="1159">1159</a>
+<a href="#1160" id="1160">1160</a>
+<a href="#1161" id="1161">1161</a>
+<a href="#1162" id="1162">1162</a>
+<a href="#1163" id="1163">1163</a>
+<a href="#1164" id="1164">1164</a>
+<a href="#1165" id="1165">1165</a>
+<a href="#1166" id="1166">1166</a>
+<a href="#1167" id="1167">1167</a>
+<a href="#1168" id="1168">1168</a>
+<a href="#1169" id="1169">1169</a>
+<a href="#1170" id="1170">1170</a>
+<a href="#1171" id="1171">1171</a>
+<a href="#1172" id="1172">1172</a>
+<a href="#1173" id="1173">1173</a>
+<a href="#1174" id="1174">1174</a>
+<a href="#1175" id="1175">1175</a>
+<a href="#1176" id="1176">1176</a>
+<a href="#1177" id="1177">1177</a>
+<a href="#1178" id="1178">1178</a>
+<a href="#1179" id="1179">1179</a>
+<a href="#1180" id="1180">1180</a>
+<a href="#1181" id="1181">1181</a>
+<a href="#1182" id="1182">1182</a>
+<a href="#1183" id="1183">1183</a>
+<a href="#1184" id="1184">1184</a>
+<a href="#1185" id="1185">1185</a>
+<a href="#1186" id="1186">1186</a>
+<a href="#1187" id="1187">1187</a>
+<a href="#1188" id="1188">1188</a>
+<a href="#1189" id="1189">1189</a>
+<a href="#1190" id="1190">1190</a>
+<a href="#1191" id="1191">1191</a>
+<a href="#1192" id="1192">1192</a>
+<a href="#1193" id="1193">1193</a>
+<a href="#1194" id="1194">1194</a>
+<a href="#1195" id="1195">1195</a>
+<a href="#1196" id="1196">1196</a>
+<a href="#1197" id="1197">1197</a>
+<a href="#1198" id="1198">1198</a>
+<a href="#1199" id="1199">1199</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::ffi::OsStr;
 <span class="kw">use </span>std::future::Future;
@@ -1164,12 +1231,13 @@
     FM_ELECTRS_BASE_EXECUTABLE_ENV, FM_ESPLORA_BASE_EXECUTABLE_ENV, FM_FAUCET_BASE_EXECUTABLE_ENV,
     FM_FEDIMINTD_BASE_EXECUTABLE_ENV, FM_FEDIMINT_CLI_BASE_EXECUTABLE_ENV,
     FM_FEDIMINT_DBTOOL_BASE_EXECUTABLE_ENV, FM_GATEWAYD_BASE_EXECUTABLE_ENV,
-    FM_GATEWAY_CLI_BASE_EXECUTABLE_ENV, FM_GWCLI_CLN_ENV, FM_GWCLI_LND_ENV,
-    FM_LIGHTNINGD_BASE_EXECUTABLE_ENV, FM_LIGHTNING_CLI_BASE_EXECUTABLE_ENV, FM_LIGHTNING_CLI_ENV,
-    FM_LNCLI_BASE_EXECUTABLE_ENV, FM_LNCLI_ENV, FM_LND_BASE_EXECUTABLE_ENV,
-    FM_LOAD_TEST_TOOL_BASE_EXECUTABLE_ENV, FM_LOGS_DIR_ENV, FM_MINT_CLIENT_ENV,
-    FM_RECOVERYTOOL_BASE_EXECUTABLE_ENV,
+    FM_GATEWAY_CLI_BASE_EXECUTABLE_ENV, FM_GATEWAY_CLN_EXTENSION_BASE_EXECUTABLE_ENV,
+    FM_GWCLI_CLN_ENV, FM_GWCLI_LND_ENV, FM_LIGHTNINGD_BASE_EXECUTABLE_ENV,
+    FM_LIGHTNING_CLI_BASE_EXECUTABLE_ENV, FM_LIGHTNING_CLI_ENV, FM_LNCLI_BASE_EXECUTABLE_ENV,
+    FM_LNCLI_ENV, FM_LND_BASE_EXECUTABLE_ENV, FM_LOAD_TEST_TOOL_BASE_EXECUTABLE_ENV,
+    FM_LOGS_DIR_ENV, FM_MINT_CLIENT_ENV, FM_RECOVERYTOOL_BASE_EXECUTABLE_ENV,
 };
+<span class="kw">use </span><span class="kw">crate</span>::version_constants::VERSION_0_5_0_ALPHA;
 
 <span class="comment">// If a binary doesn't provide a clap version, default to the first stable
 // release (v0.2.1)
@@ -1701,6 +1769,24 @@
     )
 }
 
+<span class="kw">const </span>GATEWAY_CLN_EXTENSION_FALLBACK: <span class="kw-2">&amp;</span>str = <span class="string">"gateway-cln-extension"</span>;
+
+<span class="kw">pub fn </span>get_gateway_cln_extension_path(default_path: <span class="kw-2">&amp;</span>str) -&gt; String {
+    <span class="kw">let </span>paths = get_command_str_for_alias(
+        <span class="kw-2">&amp;</span>[FM_GATEWAY_CLN_EXTENSION_BASE_EXECUTABLE_ENV],
+        <span class="kw-2">&amp;</span>[default_path],
+    );
+    <span class="kw">let </span>path = paths
+        .first()
+        .expect(<span class="string">"Gateway CLN extension should only have one alias"</span>)
+        .clone();
+    <span class="kw">if </span>path == GATEWAY_CLN_EXTENSION_FALLBACK {
+        <span class="kw">return </span>default_path.to_string();
+    }
+
+    path
+}
+
 <span class="kw">const </span>LOAD_TEST_TOOL_FALLBACK: <span class="kw-2">&amp;</span>str = <span class="string">"fedimint-load-test-tool"</span>;
 
 <span class="kw">const </span>LIGHTNING_CLI_FALLBACK: <span class="kw-2">&amp;</span>str = <span class="string">"lightning-cli"</span>;
@@ -2075,6 +2161,54 @@
         <span class="kw">match </span><span class="macro">cmd!</span>(GatewayCli, <span class="string">"--version"</span>).out_string().<span class="kw">await </span>{
             <span class="prelude-val">Ok</span>(version) =&gt; parse_clap_version(<span class="kw-2">&amp;</span>version),
             <span class="prelude-val">Err</span>(<span class="kw">_</span>) =&gt; DEFAULT_VERSION,
+        }
+    }
+}
+
+<span class="kw">pub struct </span>GatewayClnExtension {
+    default_path: String,
+}
+
+<span class="kw">impl </span>GatewayClnExtension {
+    <span class="kw">pub async fn </span>default_path() -&gt; String {
+        <span class="macro">cmd!</span>(<span class="string">"which"</span>, GATEWAY_CLN_EXTENSION_FALLBACK)
+            .out_string()
+            .<span class="kw">await
+            </span>.expect(<span class="string">"Failed to get gateway-cln-extension path"</span>)
+    }
+
+    <span class="kw">async fn </span>new() -&gt; GatewayClnExtension {
+        <span class="kw">let </span>default_path = GatewayClnExtension::default_path().<span class="kw">await</span>;
+        GatewayClnExtension { default_path }
+    }
+
+    <span class="kw">pub fn </span>cmd(<span class="self">self</span>) -&gt; Command {
+        to_command(get_command_str_for_alias(
+            <span class="kw-2">&amp;</span>[],
+            <span class="kw-2">&amp;</span>[get_gateway_cln_extension_path(<span class="self">self</span>.default_path.as_str()).as_str()],
+        ))
+    }
+
+    <span class="doccomment">/// Returns the gateway-cln-extension version from clap or default min
+    /// version
+    </span><span class="kw">pub async fn </span>version_or_default() -&gt; Version {
+        <span class="comment">// gateway-cln-extension did not handle --version correctly until v0.5.0
+        // Without --version, we don't have a convenient way for determining the
+        // version. To handle this, we only check the version for the extension
+        // if gatewayd is &gt; v0.5.0 since they should be on the same version.
+        </span><span class="kw">let </span>gatewayd_version = <span class="kw">crate</span>::util::Gatewayd::version_or_default().<span class="kw">await</span>;
+        <span class="kw">if </span>gatewayd_version &lt; <span class="kw-2">*</span>VERSION_0_5_0_ALPHA {
+            <span class="kw">return </span>Version::new(<span class="number">0</span>, <span class="number">4</span>, <span class="number">0</span>);
+        }
+
+        <span class="kw">match </span><span class="macro">cmd!</span>(GatewayClnExtension::new().<span class="kw">await</span>, <span class="string">"--version"</span>)
+            .out_string()
+            .<span class="kw">await
+        </span>{
+            <span class="prelude-val">Ok</span>(version) =&gt; parse_clap_version(<span class="kw-2">&amp;</span>version),
+            <span class="comment">// Default version for gateway-cln-extension is v0.4.0 because --version did not parse
+            // correctly until v0.5.0
+            </span><span class="prelude-val">Err</span>(<span class="kw">_</span>) =&gt; Version::new(<span class="number">0</span>, <span class="number">4</span>, <span class="number">0</span>),
         }
     }
 }

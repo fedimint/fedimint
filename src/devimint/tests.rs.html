@@ -2456,6 +2456,63 @@
 <a href="#2456" id="2456">2456</a>
 <a href="#2457" id="2457">2457</a>
 <a href="#2458" id="2458">2458</a>
+<a href="#2459" id="2459">2459</a>
+<a href="#2460" id="2460">2460</a>
+<a href="#2461" id="2461">2461</a>
+<a href="#2462" id="2462">2462</a>
+<a href="#2463" id="2463">2463</a>
+<a href="#2464" id="2464">2464</a>
+<a href="#2465" id="2465">2465</a>
+<a href="#2466" id="2466">2466</a>
+<a href="#2467" id="2467">2467</a>
+<a href="#2468" id="2468">2468</a>
+<a href="#2469" id="2469">2469</a>
+<a href="#2470" id="2470">2470</a>
+<a href="#2471" id="2471">2471</a>
+<a href="#2472" id="2472">2472</a>
+<a href="#2473" id="2473">2473</a>
+<a href="#2474" id="2474">2474</a>
+<a href="#2475" id="2475">2475</a>
+<a href="#2476" id="2476">2476</a>
+<a href="#2477" id="2477">2477</a>
+<a href="#2478" id="2478">2478</a>
+<a href="#2479" id="2479">2479</a>
+<a href="#2480" id="2480">2480</a>
+<a href="#2481" id="2481">2481</a>
+<a href="#2482" id="2482">2482</a>
+<a href="#2483" id="2483">2483</a>
+<a href="#2484" id="2484">2484</a>
+<a href="#2485" id="2485">2485</a>
+<a href="#2486" id="2486">2486</a>
+<a href="#2487" id="2487">2487</a>
+<a href="#2488" id="2488">2488</a>
+<a href="#2489" id="2489">2489</a>
+<a href="#2490" id="2490">2490</a>
+<a href="#2491" id="2491">2491</a>
+<a href="#2492" id="2492">2492</a>
+<a href="#2493" id="2493">2493</a>
+<a href="#2494" id="2494">2494</a>
+<a href="#2495" id="2495">2495</a>
+<a href="#2496" id="2496">2496</a>
+<a href="#2497" id="2497">2497</a>
+<a href="#2498" id="2498">2498</a>
+<a href="#2499" id="2499">2499</a>
+<a href="#2500" id="2500">2500</a>
+<a href="#2501" id="2501">2501</a>
+<a href="#2502" id="2502">2502</a>
+<a href="#2503" id="2503">2503</a>
+<a href="#2504" id="2504">2504</a>
+<a href="#2505" id="2505">2505</a>
+<a href="#2506" id="2506">2506</a>
+<a href="#2507" id="2507">2507</a>
+<a href="#2508" id="2508">2508</a>
+<a href="#2509" id="2509">2509</a>
+<a href="#2510" id="2510">2510</a>
+<a href="#2511" id="2511">2511</a>
+<a href="#2512" id="2512">2512</a>
+<a href="#2513" id="2513">2513</a>
+<a href="#2514" id="2514">2514</a>
+<a href="#2515" id="2515">2515</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashSet};
 <span class="kw">use </span>std::io::Write;
 <span class="kw">use </span>std::ops::ControlFlow;
@@ -2987,35 +3044,88 @@
             }
             <span class="macro">info!</span>(<span class="string">"## fedimint-cli upgraded all binaries successfully"</span>);
         }
-        UpgradeTest::Gatewayd { paths } =&gt; {
-            <span class="kw">if let </span><span class="prelude-val">Some</span>(oldest_gatewayd) = paths.first() {
+        UpgradeTest::Gatewayd {
+            gatewayd_paths,
+            gateway_cli_paths,
+            gateway_cln_extension_paths,
+        } =&gt; {
+            <span class="kw">if let </span><span class="prelude-val">Some</span>(oldest_gatewayd) = gatewayd_paths.first() {
                 std::env::set_var(<span class="string">"FM_GATEWAYD_BASE_EXECUTABLE"</span>, oldest_gatewayd);
             } <span class="kw">else </span>{
-                <span class="macro">bail!</span>(<span class="string">"Must provide at least 1 binary path"</span>);
+                <span class="macro">bail!</span>(<span class="string">"Must provide at least 1 gatewayd path"</span>);
+            }
+
+            <span class="kw">if let </span><span class="prelude-val">Some</span>(oldest_gateway_cli) = gateway_cli_paths.first() {
+                std::env::set_var(<span class="string">"FM_GATEWAY_CLI_BASE_EXECUTABLE"</span>, oldest_gateway_cli);
+            } <span class="kw">else </span>{
+                <span class="macro">bail!</span>(<span class="string">"Must provide at least 1 gateway-cli path"</span>);
+            }
+
+            <span class="kw">if let </span><span class="prelude-val">Some</span>(oldest_gateway_cln_extension) = gateway_cln_extension_paths.first() {
+                std::env::set_var(
+                    <span class="string">"FM_GATEWAY_CLN_EXTENSION_BASE_EXECUTABLE"</span>,
+                    oldest_gateway_cln_extension,
+                );
+            } <span class="kw">else </span>{
+                <span class="macro">bail!</span>(<span class="string">"Must provide at least 1 gateway-cln-extension path"</span>);
             }
 
             <span class="kw">let </span>gatewayd_version = <span class="kw">crate</span>::util::Gatewayd::version_or_default().<span class="kw">await</span>;
+            <span class="kw">let </span>gateway_cli_version = <span class="kw">crate</span>::util::GatewayCli::version_or_default().<span class="kw">await</span>;
+            <span class="kw">let </span>gateway_cln_extension_version =
+                <span class="kw">crate</span>::util::GatewayClnExtension::version_or_default().<span class="kw">await</span>;
             <span class="macro">info!</span>(
-                <span class="string">"running first stress test for gatewayd version: {}"</span>,
-                gatewayd_version
+                <span class="question-mark">?</span>gatewayd_version,
+                <span class="question-mark">?</span>gateway_cli_version,
+                <span class="question-mark">?</span>gateway_cln_extension_version,
+                <span class="string">"running first stress test for gateway"</span>,
             );
 
             <span class="kw">let </span><span class="kw-2">mut </span>dev_fed = dev_fed(process_mgr).<span class="kw">await</span><span class="question-mark">?</span>;
             <span class="kw">let </span>client = dev_fed.fed.new_joined_client(<span class="string">"test-client"</span>).<span class="kw">await</span><span class="question-mark">?</span>;
             <span class="macro">try_join!</span>(stress_test_fed(<span class="kw-2">&amp;</span>dev_fed, <span class="prelude-val">None</span>), client.wait_session())<span class="question-mark">?</span>;
 
-            <span class="kw">for </span>path <span class="kw">in </span>paths.iter().skip(<span class="number">1</span>) {
+            <span class="kw">for </span>i <span class="kw">in </span><span class="number">1</span>..gatewayd_paths.len() {
+                <span class="macro">info!</span>(
+                    <span class="string">"running stress test with gatewayd path {:?}"</span>,
+                    gatewayd_paths.get(i)
+                );
+                <span class="kw">let </span>new_gatewayd_path = gatewayd_paths.get(i).expect(<span class="string">"Not enough gatewayd paths"</span>);
+                <span class="kw">let </span>new_gateway_cli_path = gateway_cli_paths
+                    .get(i)
+                    .expect(<span class="string">"Not enough gateway-cli paths"</span>);
+                <span class="kw">let </span>new_gateway_extension_path = gateway_cln_extension_paths
+                    .get(i)
+                    .expect(<span class="string">"Not enough gateway-cln-extension paths"</span>);
                 <span class="macro">try_join!</span>(
-                    dev_fed.gw_cln.restart_with_bin(process_mgr, path),
-                    dev_fed.gw_lnd.restart_with_bin(process_mgr, path),
+                    dev_fed.gw_cln.restart_with_bin(
+                        process_mgr,
+                        new_gatewayd_path,
+                        new_gateway_cli_path,
+                        new_gateway_extension_path,
+                        dev_fed.bitcoind.clone(),
+                    ),
+                    dev_fed.gw_lnd.restart_with_bin(
+                        process_mgr,
+                        new_gatewayd_path,
+                        new_gateway_cli_path,
+                        new_gateway_extension_path,
+                        dev_fed.bitcoind.clone(),
+                    ),
                 )<span class="question-mark">?</span>;
                 <span class="macro">try_join!</span>(stress_test_fed(<span class="kw-2">&amp;</span>dev_fed, <span class="prelude-val">None</span>), client.wait_session())<span class="question-mark">?</span>;
                 <span class="kw">let </span>gatewayd_version = <span class="kw">crate</span>::util::Gatewayd::version_or_default().<span class="kw">await</span>;
+                <span class="kw">let </span>gateway_cli_version = <span class="kw">crate</span>::util::GatewayCli::version_or_default().<span class="kw">await</span>;
+                <span class="kw">let </span>gateway_cln_extension_version =
+                    <span class="kw">crate</span>::util::GatewayClnExtension::version_or_default().<span class="kw">await</span>;
                 <span class="macro">info!</span>(
-                    <span class="string">"### gatewayd passed stress test for version {}"</span>,
-                    gatewayd_version
+                    <span class="question-mark">?</span>gatewayd_version,
+                    <span class="question-mark">?</span>gateway_cli_version,
+                    <span class="question-mark">?</span>gateway_cln_extension_version,
+                    <span class="string">"### gateway passed stress test for version"</span>,
                 );
             }
+
             <span class="macro">info!</span>(<span class="string">"## gatewayd upgraded all binaries successfully"</span>);
         }
     }
@@ -4776,7 +4886,11 @@
     },
     Gatewayd {
         <span class="attr">#[arg(long, trailing_var_arg = <span class="bool-val">true</span>, num_args=<span class="number">1</span>..)]
-        </span>paths: Vec&lt;PathBuf&gt;,
+        </span>gatewayd_paths: Vec&lt;PathBuf&gt;,
+        <span class="attr">#[arg(long, trailing_var_arg = <span class="bool-val">true</span>, num_args=<span class="number">1</span>..)]
+        </span>gateway_cli_paths: Vec&lt;PathBuf&gt;,
+        <span class="attr">#[arg(long, trailing_var_arg = <span class="bool-val">true</span>, num_args=<span class="number">1</span>..)]
+        </span>gateway_cln_extension_paths: Vec&lt;PathBuf&gt;,
     },
 }
 

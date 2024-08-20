@@ -278,6 +278,39 @@
 <a href="#278" id="278">278</a>
 <a href="#279" id="279">279</a>
 <a href="#280" id="280">280</a>
+<a href="#281" id="281">281</a>
+<a href="#282" id="282">282</a>
+<a href="#283" id="283">283</a>
+<a href="#284" id="284">284</a>
+<a href="#285" id="285">285</a>
+<a href="#286" id="286">286</a>
+<a href="#287" id="287">287</a>
+<a href="#288" id="288">288</a>
+<a href="#289" id="289">289</a>
+<a href="#290" id="290">290</a>
+<a href="#291" id="291">291</a>
+<a href="#292" id="292">292</a>
+<a href="#293" id="293">293</a>
+<a href="#294" id="294">294</a>
+<a href="#295" id="295">295</a>
+<a href="#296" id="296">296</a>
+<a href="#297" id="297">297</a>
+<a href="#298" id="298">298</a>
+<a href="#299" id="299">299</a>
+<a href="#300" id="300">300</a>
+<a href="#301" id="301">301</a>
+<a href="#302" id="302">302</a>
+<a href="#303" id="303">303</a>
+<a href="#304" id="304">304</a>
+<a href="#305" id="305">305</a>
+<a href="#306" id="306">306</a>
+<a href="#307" id="307">307</a>
+<a href="#308" id="308">308</a>
+<a href="#309" id="309">309</a>
+<a href="#310" id="310">310</a>
+<a href="#311" id="311">311</a>
+<a href="#312" id="312">312</a>
+<a href="#313" id="313">313</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::HashMap;
 <span class="kw">use </span>std::ops::ControlFlow;
 <span class="kw">use </span>std::path::PathBuf;
@@ -285,16 +318,17 @@
 <span class="kw">use </span>anyhow::{Context, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>fedimint_core::secp256k1::PublicKey;
 <span class="kw">use </span>fedimint_core::util::{backoff_util, retry};
+<span class="kw">use </span>fedimint_testing::gateway::LightningNodeType;
 <span class="kw">use </span>ln_gateway::lightning::ChannelInfo;
 <span class="kw">use </span>ln_gateway::rpc::V1_API_ENDPOINT;
 <span class="kw">use </span>tracing::info;
 
-<span class="kw">use </span><span class="kw">crate</span>::cmd;
 <span class="kw">use </span><span class="kw">crate</span>::envs::{FM_GATEWAY_API_ADDR_ENV, FM_GATEWAY_DATA_DIR_ENV, FM_GATEWAY_LISTEN_ADDR_ENV};
 <span class="kw">use </span><span class="kw">crate</span>::external::{Bitcoind, LightningNode};
 <span class="kw">use </span><span class="kw">crate</span>::federation::Federation;
 <span class="kw">use </span><span class="kw">crate</span>::util::{poll, Command, ProcessHandle, ProcessManager};
 <span class="kw">use </span><span class="kw">crate</span>::vars::utf8;
+<span class="kw">use crate</span>::{cmd, Lightningd};
 
 <span class="attr">#[derive(Clone)]
 </span><span class="kw">pub struct </span>Gatewayd {
@@ -380,19 +414,51 @@
     </span><span class="kw">pub async fn </span>restart_with_bin(
         <span class="kw-2">&amp;mut </span><span class="self">self</span>,
         process_mgr: <span class="kw-2">&amp;</span>ProcessManager,
-        bin_path: <span class="kw-2">&amp;</span>PathBuf,
+        gatewayd_path: <span class="kw-2">&amp;</span>PathBuf,
+        gateway_cli_path: <span class="kw-2">&amp;</span>PathBuf,
+        gateway_cln_extension_path: <span class="kw-2">&amp;</span>PathBuf,
+        bitcoind: Bitcoind,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-        <span class="self">self</span>.process.terminate().<span class="kw">await</span><span class="question-mark">?</span>;
-        std::env::set_var(<span class="string">"FM_GATEWAYD_BASE_EXECUTABLE"</span>, bin_path);
         <span class="kw">let </span>ln = <span class="self">self
             </span>.ln
             .as_ref()
-            .expect(<span class="string">"gateway already had an associated ln node"</span>)
+            .expect(<span class="string">"Lightning Node should exist"</span>)
             .clone();
-        <span class="kw">let </span>new_gw = <span class="self">Self</span>::new(process_mgr, ln).<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>ln_type = ln.name();
+
+        <span class="comment">// We need to restart the CLN extension so that it has the same version as
+        // gatewayd
+        </span><span class="kw">if </span>ln_type == LightningNodeType::Cln {
+            <span class="self">self</span>.stop_lightning_node().<span class="kw">await</span><span class="question-mark">?</span>;
+        }
+        <span class="self">self</span>.process.terminate().<span class="kw">await</span><span class="question-mark">?</span>;
+        std::env::set_var(<span class="string">"FM_GATEWAYD_BASE_EXECUTABLE"</span>, gatewayd_path);
+        std::env::set_var(<span class="string">"FM_GATEWAY_CLI_BASE_EXECUTABLE"</span>, gateway_cli_path);
+        std::env::set_var(
+            <span class="string">"FM_GATEWAY_CLN_EXTENSION_BASE_EXECUTABLE"</span>,
+            gateway_cln_extension_path,
+        );
+
+        <span class="kw">let </span>new_ln = <span class="kw">match </span>ln_type {
+            LightningNodeType::Cln =&gt; {
+                <span class="kw">let </span>new_cln = Lightningd::new(process_mgr, bitcoind).<span class="kw">await</span><span class="question-mark">?</span>;
+                LightningNode::Cln(new_cln)
+            }
+            <span class="kw">_ </span>=&gt; ln,
+        };
+        <span class="kw">let </span>new_gw = <span class="self">Self</span>::new(process_mgr, new_ln.clone()).<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="self">self</span>.process = new_gw.process;
+        <span class="self">self</span>.set_lightning_node(new_ln);
         <span class="kw">let </span>gatewayd_version = <span class="kw">crate</span>::util::Gatewayd::version_or_default().<span class="kw">await</span>;
-        <span class="macro">info!</span>(<span class="string">"upgraded gatewayd to version: {}"</span>, gatewayd_version);
+        <span class="kw">let </span>gateway_cli_version = <span class="kw">crate</span>::util::GatewayCli::version_or_default().<span class="kw">await</span>;
+        <span class="kw">let </span>gateway_cln_extension_version =
+            <span class="kw">crate</span>::util::GatewayClnExtension::version_or_default().<span class="kw">await</span>;
+        <span class="macro">info!</span>(
+            <span class="question-mark">?</span>gatewayd_version,
+            <span class="question-mark">?</span>gateway_cli_version,
+            <span class="question-mark">?</span>gateway_cln_extension_version,
+            <span class="string">"upgraded gatewayd, gateway-cli, and gateway-cln-extension"
+        </span>);
         <span class="prelude-val">Ok</span>(())
     }
 
@@ -439,11 +505,11 @@
 
     <span class="kw">pub async fn </span>lightning_pubkey(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;PublicKey&gt; {
         <span class="kw">let </span>info = <span class="self">self</span>.get_info().<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">let </span>gateway_id = info[<span class="string">"lightning_pub_key"</span>]
+        <span class="kw">let </span>lightning_pub_key = info[<span class="string">"lightning_pub_key"</span>]
             .as_str()
             .context(<span class="string">"lightning_pub_key must be a string"</span>)<span class="question-mark">?
             </span>.to_owned();
-        <span class="prelude-val">Ok</span>(gateway_id.parse()<span class="question-mark">?</span>)
+        <span class="prelude-val">Ok</span>(lightning_pub_key.parse()<span class="question-mark">?</span>)
     }
 
     <span class="kw">pub async fn </span>connect_fed(<span class="kw-2">&amp;</span><span class="self">self</span>, fed: <span class="kw-2">&amp;</span>Federation) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
@@ -477,11 +543,11 @@
 
     <span class="kw">pub async fn </span>open_channel(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        pubkey: PublicKey,
-        host: String,
+        gw: <span class="kw-2">&amp;</span>Gatewayd,
         channel_size_sats: u64,
         push_amount_sats: <span class="prelude-ty">Option</span>&lt;u64&gt;,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+        <span class="kw">let </span>pubkey = gw.lightning_pubkey().<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="macro">cmd!</span>(
             <span class="self">self</span>,
             <span class="string">"lightning"</span>,
@@ -489,7 +555,7 @@
             <span class="string">"--pubkey"</span>,
             pubkey,
             <span class="string">"--host"</span>,
-            host,
+            gw.lightning_node_addr,
             <span class="string">"--channel-size-sats"</span>,
             channel_size_sats,
             <span class="string">"--push-amount-sats"</span>,
