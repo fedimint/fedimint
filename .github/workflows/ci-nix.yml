@@ -543,6 +543,7 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/')
         with:
           files: "bins/**"
+          prerelease: ${{ contains(github.ref, 'rc') }}
 
       - name: Build DEB package
         run: |
@@ -573,6 +574,7 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/')
         with:
           files: "debs/**.deb"
+          prerelease: ${{ contains(github.ref, 'rc') }}
 
       - name: Upload RPM packages
         uses: actions/upload-artifact@v4
@@ -585,6 +587,7 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/')
         with:
           files: "rpms/**.rpm"
+          prerelease: ${{ contains(github.ref, 'rc') }}
 
   status:
     name: Status
