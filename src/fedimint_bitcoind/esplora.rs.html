@@ -159,13 +159,13 @@
 <a href="#159" id="159">159</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::HashMap;
 
-<span class="kw">use </span>anyhow::format_err;
+<span class="kw">use </span>anyhow::{bail, format_err};
 <span class="kw">use </span>bitcoin::{BlockHash, Network, ScriptBuf, Transaction, Txid};
 <span class="kw">use </span>fedimint_core::task::TaskHandle;
 <span class="kw">use </span>fedimint_core::txoproof::TxOutProof;
 <span class="kw">use </span>fedimint_core::util::SafeUrl;
 <span class="kw">use </span>fedimint_core::{apply, async_trait_maybe_send, Feerate};
-<span class="kw">use </span>tracing::{info, warn};
+<span class="kw">use </span>tracing::info;
 
 <span class="kw">use crate</span>::{DynBitcoindRpc, IBitcoindRpc, IBitcoindRpcFactory, RetryClient};
 
@@ -206,9 +206,9 @@
             <span class="kw">crate</span>::MAINNET_GENESIS_BLOCK_HASH =&gt; Network::Bitcoin,
             <span class="kw">crate</span>::TESTNET_GENESIS_BLOCK_HASH =&gt; Network::Testnet,
             <span class="kw">crate</span>::SIGNET_GENESIS_BLOCK_HASH =&gt; Network::Signet,
+            <span class="kw">crate</span>::REGTEST_GENESIS_BLOCK_HASH =&gt; Network::Regtest,
             hash =&gt; {
-                <span class="macro">warn!</span>(<span class="string">"Unknown genesis hash {hash} - assuming regtest"</span>);
-                Network::Regtest
+                <span class="macro">bail!</span>(<span class="string">"Unknown genesis hash {hash}"</span>);
             }
         };
 

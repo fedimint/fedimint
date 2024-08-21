@@ -219,7 +219,7 @@
 <a href="#219" id="219">219</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::fmt;
 
-<span class="kw">use </span>anyhow::anyhow <span class="kw">as </span>format_err;
+<span class="kw">use </span>anyhow::{anyhow <span class="kw">as </span>format_err, bail};
 <span class="kw">use </span>bitcoin::{BlockHash, Network, ScriptBuf, Transaction, Txid};
 <span class="kw">use </span>electrum_client::ElectrumApi;
 <span class="kw">use </span>electrum_client::Error::Protocol;
@@ -230,7 +230,7 @@
 <span class="kw">use </span>fedimint_core::{apply, async_trait_maybe_send, Feerate};
 <span class="kw">use </span>hex::ToHex;
 <span class="kw">use </span>serde_json::{Map, Value};
-<span class="kw">use </span>tracing::{info, warn};
+<span class="kw">use </span>tracing::info;
 
 <span class="kw">use crate</span>::{DynBitcoindRpc, IBitcoindRpc, IBitcoindRpcFactory, RetryClient};
 
@@ -269,9 +269,9 @@
             <span class="kw">crate</span>::MAINNET_GENESIS_BLOCK_HASH =&gt; Network::Bitcoin,
             <span class="kw">crate</span>::TESTNET_GENESIS_BLOCK_HASH =&gt; Network::Testnet,
             <span class="kw">crate</span>::SIGNET_GENESIS_BLOCK_HASH =&gt; Network::Signet,
+            <span class="kw">crate</span>::REGTEST_GENESIS_BLOCK_HASH =&gt; Network::Regtest,
             hash =&gt; {
-                <span class="macro">warn!</span>(<span class="string">"Unknown genesis hash {hash} - assuming regtest"</span>);
-                Network::Regtest
+                <span class="macro">bail!</span>(<span class="string">"Unknown genesis hash {hash}"</span>);
             }
         })
     }

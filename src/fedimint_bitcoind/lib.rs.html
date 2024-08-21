@@ -288,6 +288,10 @@
 <a href="#288" id="288">288</a>
 <a href="#289" id="289">289</a>
 <a href="#290" id="290">290</a>
+<a href="#291" id="291">291</a>
+<a href="#292" id="292">292</a>
+<a href="#293" id="293">293</a>
+<a href="#294" id="294">294</a>
 </pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::cast_sign_loss)]
@@ -335,6 +339,10 @@
 <span class="comment">// &lt;https://mempool.space/signet/api/block-height/0&gt;
 </span><span class="kw">const </span>SIGNET_GENESIS_BLOCK_HASH: <span class="kw-2">&amp;</span>str =
     <span class="string">"00000008819873e925422c1ff0f99f7cc9bbb232af63a077a480a3633bee1ef6"</span>;
+<span class="comment">// See &lt;https://bitcoin.stackexchange.com/questions/122778/is-the-regtest-genesis-hash-always-the-same-or-not&gt;
+// &lt;https://github.com/bitcoin/bitcoin/blob/d82283950f5ff3b2116e705f931c6e89e5fdd0be/src/kernel/chainparams.cpp#L478&gt;
+</span><span class="kw">const </span>REGTEST_GENESIS_BLOCK_HASH: <span class="kw-2">&amp;</span>str =
+    <span class="string">"0x0f9188f13cb7b2c71f2a335e3a4fc328bf5beb436012afca590b1a11466e2206"</span>;
 
 <span class="doccomment">/// Global factories for creating bitcoin RPCs
 </span><span class="kw">static </span>BITCOIN_RPC_REGISTRY: LazyLock&lt;Mutex&lt;BTreeMap&lt;String, DynBitcoindRpcFactory&gt;&gt;&gt; =
