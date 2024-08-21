@@ -28,7 +28,10 @@ use ln_gateway::{Gateway, LightningContext};
 use crate::btc::mock::FakeBitcoinFactory;
 use crate::btc::real::RealBitcoinTest;
 use crate::btc::BitcoinTest;
-use crate::envs::{FM_PORT_ESPLORA_ENV, FM_TEST_BITCOIND_RPC_ENV, FM_TEST_USE_REAL_DAEMONS_ENV};
+use crate::envs::{
+    FM_PORT_ESPLORA_ENV, FM_TEST_BACKEND_BITCOIN_RPC_KIND_ENV, FM_TEST_BACKEND_BITCOIN_RPC_URL_ENV,
+    FM_TEST_BITCOIND_RPC_ENV, FM_TEST_USE_REAL_DAEMONS_ENV,
+};
 use crate::federation::{FederationTest, FederationTestBuilder};
 use crate::gateway::{FakeLightningBuilder, DEFAULT_GATEWAY_PASSWORD};
 
@@ -61,13 +64,27 @@ impl Fixtures {
             Arc<dyn BitcoinTest>,
             BitcoinRpcConfig,
         ) = if real_testing {
-            let rpc_config = BitcoinRpcConfig::get_defaults_from_env_vars().unwrap();
+            // `backend-test.sh` overrides which Bitcoin RPC to use for electrs and esplora
+            // backend tests
+            let override_bitcoin_rpc_kind = env::var(FM_TEST_BACKEND_BITCOIN_RPC_KIND_ENV);
+            let override_bitcoin_rpc_url = env::var(FM_TEST_BACKEND_BITCOIN_RPC_URL_ENV);
+
+            let rpc_config = match (override_bitcoin_rpc_kind, override_bitcoin_rpc_url) {
+                (Ok(kind), Ok(url)) => BitcoinRpcConfig {
+                    kind: kind.parse().expect("must provide valid kind"),
+                    url: url.parse().expect("must provide valid url"),
+                },
+                _ => BitcoinRpcConfig::get_defaults_from_env_vars()
+                    .expect("must provide valid default env vars"),
+            };
+
             let dyn_bitcoin_rpc = create_bitcoind(&rpc_config, task_group.make_handle()).unwrap();
             let bitcoincore_url = env::var(FM_TEST_BITCOIND_RPC_ENV)
                 .expect("Must have bitcoind RPC defined for real tests")
                 .parse()
                 .expect("Invalid bitcoind RPC URL");
             let bitcoin = RealBitcoinTest::new(&bitcoincore_url, dyn_bitcoin_rpc.clone());
+
             (dyn_bitcoin_rpc, Arc::new(bitcoin), rpc_config)
         } else {
             let FakeBitcoinFactory { bitcoin, config } = FakeBitcoinFactory::register_new();
