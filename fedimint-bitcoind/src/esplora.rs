@@ -1,12 +1,12 @@
 use std::collections::HashMap;
 
-use anyhow::format_err;
+use anyhow::{bail, format_err};
 use bitcoin::{BlockHash, Network, ScriptBuf, Transaction, Txid};
 use fedimint_core::task::TaskHandle;
 use fedimint_core::txoproof::TxOutProof;
 use fedimint_core::util::SafeUrl;
 use fedimint_core::{apply, async_trait_maybe_send, Feerate};
-use tracing::{info, warn};
+use tracing::info;
 
 use crate::{DynBitcoindRpc, IBitcoindRpc, IBitcoindRpcFactory, RetryClient};
 
@@ -47,9 +47,9 @@ impl IBitcoindRpc for EsploraClient {
             crate::MAINNET_GENESIS_BLOCK_HASH => Network::Bitcoin,
             crate::TESTNET_GENESIS_BLOCK_HASH => Network::Testnet,
             crate::SIGNET_GENESIS_BLOCK_HASH => Network::Signet,
+            crate::REGTEST_GENESIS_BLOCK_HASH => Network::Regtest,
             hash => {
-                warn!("Unknown genesis hash {hash} - assuming regtest");
-                Network::Regtest
+                bail!("Unknown genesis hash {hash}");
             }
         };
 

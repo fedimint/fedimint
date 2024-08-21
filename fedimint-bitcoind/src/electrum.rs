@@ -1,6 +1,6 @@
 use std::fmt;
 
-use anyhow::anyhow as format_err;
+use anyhow::{anyhow as format_err, bail};
 use bitcoin::{BlockHash, Network, ScriptBuf, Transaction, Txid};
 use electrum_client::ElectrumApi;
 use electrum_client::Error::Protocol;
@@ -11,7 +11,7 @@ use fedimint_core::util::SafeUrl;
 use fedimint_core::{apply, async_trait_maybe_send, Feerate};
 use hex::ToHex;
 use serde_json::{Map, Value};
-use tracing::{info, warn};
+use tracing::info;
 
 use crate::{DynBitcoindRpc, IBitcoindRpc, IBitcoindRpcFactory, RetryClient};
 
@@ -50,9 +50,9 @@ impl IBitcoindRpc for ElectrumClient {
             crate::MAINNET_GENESIS_BLOCK_HASH => Network::Bitcoin,
             crate::TESTNET_GENESIS_BLOCK_HASH => Network::Testnet,
             crate::SIGNET_GENESIS_BLOCK_HASH => Network::Signet,
+            crate::REGTEST_GENESIS_BLOCK_HASH => Network::Regtest,
             hash => {
-                warn!("Unknown genesis hash {hash} - assuming regtest");
-                Network::Regtest
+                bail!("Unknown genesis hash {hash}");
             }
         })
     }
