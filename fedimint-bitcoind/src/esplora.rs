@@ -41,8 +41,13 @@ impl EsploraClient {
 #[apply(async_trait_maybe_send!)]
 impl IBitcoindRpc for EsploraClient {
     async fn get_network(&self) -> anyhow::Result<Network> {
+        info!("inside get_network for esplora");
         let genesis_height: u32 = 0;
         let genesis_hash = self.0.get_block_hash(genesis_height).await?;
+        println!("genesis_hash: {genesis_hash:?}");
+        let encoded_as_hex = genesis_hash.encode_hex::<String>();
+        let encoded_as_hex = encoded_as_hex.as_str();
+        println!("encoded_as_hex: {encoded_as_hex:?}");
 
         let network = match genesis_hash.encode_hex::<String>().as_str() {
             crate::MAINNET_GENESIS_BLOCK_HASH => Network::Bitcoin,

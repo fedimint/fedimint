@@ -24,6 +24,7 @@ use lightning_invoice::RoutingFees;
 use ln_gateway::client::GatewayClientBuilder;
 use ln_gateway::lightning::{ILnRpcClient, LightningBuilder};
 use ln_gateway::{Gateway, LightningContext};
+use tracing::info;
 
 use crate::btc::mock::FakeBitcoinFactory;
 use crate::btc::real::RealBitcoinTest;
@@ -61,7 +62,10 @@ impl Fixtures {
             Arc<dyn BitcoinTest>,
             BitcoinRpcConfig,
         ) = if real_testing {
+            info!("inside Fixtures::new_primary");
             let rpc_config = BitcoinRpcConfig::get_defaults_from_env_vars().unwrap();
+            let kind = &rpc_config.kind;
+            info!(?kind);
             let dyn_bitcoin_rpc = create_bitcoind(&rpc_config, task_group.make_handle()).unwrap();
             let bitcoincore_url = env::var(FM_TEST_BITCOIND_RPC_ENV)
                 .expect("Must have bitcoind RPC defined for real tests")

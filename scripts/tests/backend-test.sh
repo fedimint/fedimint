@@ -95,14 +95,13 @@ function run_tests() {
   fi
 
   # Switch to esplora and run wallet tests
-  export FM_BITCOIN_RPC_KIND="esplora"
-  export FM_BITCOIN_RPC_URL="http://127.0.0.1:$FM_PORT_ESPLORA"
+  export FM_FORCE_BITCOIND_RPC_KIND="esplora"
+  export FM_FORCE_BITCOIND_RPC_URL="http://127.0.0.1:$FM_PORT_ESPLORA"
 
   if [ -z "${FM_TEST_ONLY:-}" ] || [ "${FM_TEST_ONLY:-}" = "esplora" ]; then
     >&2 echo "### Testing against esplora"
-    cargo nextest run --locked --workspace --all-targets \
+    cargo nextest run --no-capture --locked --workspace --all-targets \
       ${CARGO_PROFILE:+--cargo-profile ${CARGO_PROFILE}} ${CARGO_PROFILE:+--profile ${CARGO_PROFILE}} \
-      ${TEST_ARGS_THREADED} \
       -E 'package(fedimint-wallet-tests)'
     >&2 echo "### Testing against esplora - complete"
   fi

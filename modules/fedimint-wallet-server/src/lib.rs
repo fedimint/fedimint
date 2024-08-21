@@ -795,6 +795,7 @@ impl Wallet {
 
         let bitcoind_rpc = bitcoind;
 
+        info!("inside new_with_bitcoind");
         let bitcoind_net = bitcoind_rpc
             .get_network()
             .await
