@@ -394,14 +394,27 @@ impl ClientModule for WalletClientModule {
         // fetch consensus height first
         let session_count = self.client_ctx.global_api().session_count().await?;
 
-        Ok(backup::WalletModuleBackup::new_v0(
+        let mut dbtx = self.db.begin_transaction_nc().await;
+        let next_pegin_tweak_idx = dbtx
+            .get_value(&NextPegInTweakIndexKey)
+            .await
+            .unwrap_or_default();
+        let claimed = dbtx
+            .find_by_prefix(&PegInTweakIndexPrefix)
+            .await
+            .filter_map(|(k, v)| async move {
+                if v.claimed.is_empty() {
+                    None
+                } else {
+                    Some(k.0)
+                }
+            })
+            .collect()
+            .await;
+        Ok(backup::WalletModuleBackup::new_v1(
             session_count,
-            self.db
-                .begin_transaction_nc()
-                .await
-                .get_value(&NextPegInTweakIndexKey)
-                .await
-                .unwrap_or_default(),
+            next_pegin_tweak_idx,
+            claimed,
         ))
     }
 
