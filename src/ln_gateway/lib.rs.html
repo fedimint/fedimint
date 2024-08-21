@@ -1915,6 +1915,30 @@
 <a href="#1915" id="1915">1915</a>
 <a href="#1916" id="1916">1916</a>
 <a href="#1917" id="1917">1917</a>
+<a href="#1918" id="1918">1918</a>
+<a href="#1919" id="1919">1919</a>
+<a href="#1920" id="1920">1920</a>
+<a href="#1921" id="1921">1921</a>
+<a href="#1922" id="1922">1922</a>
+<a href="#1923" id="1923">1923</a>
+<a href="#1924" id="1924">1924</a>
+<a href="#1925" id="1925">1925</a>
+<a href="#1926" id="1926">1926</a>
+<a href="#1927" id="1927">1927</a>
+<a href="#1928" id="1928">1928</a>
+<a href="#1929" id="1929">1929</a>
+<a href="#1930" id="1930">1930</a>
+<a href="#1931" id="1931">1931</a>
+<a href="#1932" id="1932">1932</a>
+<a href="#1933" id="1933">1933</a>
+<a href="#1934" id="1934">1934</a>
+<a href="#1935" id="1935">1935</a>
+<a href="#1936" id="1936">1936</a>
+<a href="#1937" id="1937">1937</a>
+<a href="#1938" id="1938">1938</a>
+<a href="#1939" id="1939">1939</a>
+<a href="#1940" id="1940">1940</a>
+<a href="#1941" id="1941">1941</a>
 </pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::cast_possible_wrap)]
@@ -2012,9 +2036,9 @@
 <span class="kw">use </span>lightning_invoice::{Bolt11Invoice, RoutingFees};
 <span class="kw">use </span>rand::Rng;
 <span class="kw">use </span>rpc::{
-    CloseChannelsWithPeerPayload, FederationInfo, GatewayFedConfig, GatewayInfo, LeaveFedPayload,
-    OpenChannelPayload, ReceiveEcashPayload, ReceiveEcashResponse, SetConfigurationPayload,
-    SpendEcashPayload, SpendEcashResponse, V1_API_ENDPOINT,
+    CloseChannelsWithPeerPayload, CreateInvoiceForSelfPayload, FederationInfo, GatewayFedConfig,
+    GatewayInfo, LeaveFedPayload, OpenChannelPayload, ReceiveEcashPayload, ReceiveEcashResponse,
+    SetConfigurationPayload, SpendEcashPayload, SpendEcashResponse, V1_API_ENDPOINT,
 };
 <span class="kw">use </span>state_machine::pay::OutgoingPaymentError;
 <span class="kw">use </span>state_machine::GatewayClientModule;
@@ -2835,6 +2859,30 @@
         <span class="prelude-val">Err</span>(GatewayError::UnexpectedState(
             <span class="string">"Ran out of state updates while withdrawing"</span>.to_string(),
         ))
+    }
+
+    <span class="kw">async fn </span>handle_create_invoice_for_self_msg(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        payload: CreateInvoiceForSelfPayload,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;Bolt11Invoice&gt; {
+        <span class="kw">let </span>GatewayState::Running { lightning_context } = <span class="self">self</span>.get_state().<span class="kw">await else </span>{
+            <span class="kw">return </span><span class="prelude-val">Err</span>(GatewayError::Disconnected);
+        };
+
+        Bolt11Invoice::from_str(
+            <span class="kw-2">&amp;</span>lightning_context
+                .lnrpc
+                .create_invoice(CreateInvoiceRequest {
+                    payment_hash: Vec::new(), <span class="comment">/* Empty payment hash indicates an invoice payable
+                                               * directly to the gateway. */
+                    </span>amount_msat: payload.amount_msats,
+                    expiry_secs: payload.expiry_secs,
+                    description: payload.description.map(Description::Direct),
+                })
+                .<span class="kw">await</span><span class="question-mark">?
+                </span>.invoice,
+        )
+        .map_err(|e| GatewayError::UnexpectedState(e.to_string()))
     }
 
     <span class="doccomment">/// Requests the gateway to pay an outgoing LN invoice on behalf of a

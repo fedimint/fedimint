@@ -262,6 +262,20 @@
 <a href="#262" id="262">262</a>
 <a href="#263" id="263">263</a>
 <a href="#264" id="264">264</a>
+<a href="#265" id="265">265</a>
+<a href="#266" id="266">266</a>
+<a href="#267" id="267">267</a>
+<a href="#268" id="268">268</a>
+<a href="#269" id="269">269</a>
+<a href="#270" id="270">270</a>
+<a href="#271" id="271">271</a>
+<a href="#272" id="272">272</a>
+<a href="#273" id="273">273</a>
+<a href="#274" id="274">274</a>
+<a href="#275" id="275">275</a>
+<a href="#276" id="276">276</a>
+<a href="#277" id="277">277</a>
+<a href="#278" id="278">278</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>bitcoin::address::NetworkUnchecked;
 <span class="kw">use </span>bitcoin::Address;
 <span class="kw">use </span>fedimint_core::util::SafeUrl;
@@ -274,6 +288,8 @@
     RECEIVE_ECASH_ENDPOINT, RESTORE_ENDPOINT, SET_CONFIGURATION_ENDPOINT, SPEND_ECASH_ENDPOINT,
     WITHDRAW_ENDPOINT,
 };
+<span class="kw">use </span>fedimint_lnv2_common::endpoint_constants::CREATE_BOLT11_INVOICE_FOR_SELF_ENDPOINT;
+<span class="kw">use </span>lightning_invoice::Bolt11Invoice;
 <span class="kw">use </span>reqwest::{Method, StatusCode};
 <span class="kw">use </span>serde::de::DeserializeOwned;
 <span class="kw">use </span>serde::Serialize;
@@ -281,9 +297,10 @@
 
 <span class="kw">use super</span>::{
     BackupPayload, BalancePayload, CloseChannelsWithPeerPayload, ConfigPayload, ConnectFedPayload,
-    DepositAddressPayload, FederationInfo, GatewayFedConfig, GatewayInfo, GetFundingAddressPayload,
-    LeaveFedPayload, OpenChannelPayload, ReceiveEcashPayload, ReceiveEcashResponse, RestorePayload,
-    SetConfigurationPayload, SpendEcashPayload, SpendEcashResponse, WithdrawPayload,
+    CreateInvoiceForSelfPayload, DepositAddressPayload, FederationInfo, GatewayFedConfig,
+    GatewayInfo, GetFundingAddressPayload, LeaveFedPayload, OpenChannelPayload,
+    ReceiveEcashPayload, ReceiveEcashResponse, RestorePayload, SetConfigurationPayload,
+    SpendEcashPayload, SpendEcashResponse, WithdrawPayload,
 };
 <span class="kw">use </span><span class="kw">crate</span>::lightning::ChannelInfo;
 <span class="kw">use crate</span>::{CloseChannelsWithPeerResponse, GatewayBalances};
@@ -408,6 +425,17 @@
         <span class="kw">let </span>url = <span class="self">self
             </span>.base_url
             .join(SET_CONFIGURATION_ENDPOINT)
+            .expect(<span class="string">"invalid base url"</span>);
+        <span class="self">self</span>.call_post(url, payload).<span class="kw">await
+    </span>}
+
+    <span class="kw">pub async fn </span>create_invoice_for_self(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        payload: CreateInvoiceForSelfPayload,
+    ) -&gt; GatewayRpcResult&lt;Bolt11Invoice&gt; {
+        <span class="kw">let </span>url = <span class="self">self
+            </span>.base_url
+            .join(CREATE_BOLT11_INVOICE_FOR_SELF_ENDPOINT)
             .expect(<span class="string">"invalid base url"</span>);
         <span class="self">self</span>.call_post(url, payload).<span class="kw">await
     </span>}

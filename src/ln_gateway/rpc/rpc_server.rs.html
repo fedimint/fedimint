@@ -425,6 +425,20 @@
 <a href="#425" id="425">425</a>
 <a href="#426" id="426">426</a>
 <a href="#427" id="427">427</a>
+<a href="#428" id="428">428</a>
+<a href="#429" id="429">429</a>
+<a href="#430" id="430">430</a>
+<a href="#431" id="431">431</a>
+<a href="#432" id="432">432</a>
+<a href="#433" id="433">433</a>
+<a href="#434" id="434">434</a>
+<a href="#435" id="435">435</a>
+<a href="#436" id="436">436</a>
+<a href="#437" id="437">437</a>
+<a href="#438" id="438">438</a>
+<a href="#439" id="439">439</a>
+<a href="#440" id="440">440</a>
+<a href="#441" id="441">441</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::sync::Arc;
 
 <span class="kw">use </span>axum::extract::Request;
@@ -448,7 +462,8 @@
 };
 <span class="kw">use </span>fedimint_lnv2_client::{CreateBolt11InvoicePayload, SendPaymentPayload};
 <span class="kw">use </span>fedimint_lnv2_common::endpoint_constants::{
-    CREATE_BOLT11_INVOICE_ENDPOINT, ROUTING_INFO_ENDPOINT, SEND_PAYMENT_ENDPOINT,
+    CREATE_BOLT11_INVOICE_ENDPOINT, CREATE_BOLT11_INVOICE_FOR_SELF_ENDPOINT, ROUTING_INFO_ENDPOINT,
+    SEND_PAYMENT_ENDPOINT,
 };
 <span class="kw">use </span>hex::ToHex;
 <span class="kw">use </span>serde_json::{json, Value};
@@ -458,9 +473,9 @@
 
 <span class="kw">use super</span>::{
     BackupPayload, BalancePayload, CloseChannelsWithPeerPayload, ConnectFedPayload,
-    DepositAddressPayload, GetFundingAddressPayload, InfoPayload, LeaveFedPayload,
-    OpenChannelPayload, ReceiveEcashPayload, RestorePayload, SetConfigurationPayload,
-    SpendEcashPayload, WithdrawPayload, V1_API_ENDPOINT,
+    CreateInvoiceForSelfPayload, DepositAddressPayload, GetFundingAddressPayload, InfoPayload,
+    LeaveFedPayload, OpenChannelPayload, ReceiveEcashPayload, RestorePayload,
+    SetConfigurationPayload, SpendEcashPayload, WithdrawPayload, V1_API_ENDPOINT,
 };
 <span class="kw">use </span><span class="kw">crate</span>::rpc::ConfigPayload;
 <span class="kw">use crate</span>::{Gateway, GatewayError};
@@ -577,6 +592,10 @@
 </span><span class="kw">fn </span>v1_routes(gateway: Arc&lt;Gateway&gt;) -&gt; Router {
     <span class="comment">// Public routes on gateway webserver
     </span><span class="kw">let </span>public_routes = Router::new()
+        .route(
+            CREATE_BOLT11_INVOICE_FOR_SELF_ENDPOINT,
+            post(create_invoice_for_self),
+        )
         .route(PAY_INVOICE_ENDPOINT, post(pay_invoice))
         .route(GET_GATEWAY_ID_ENDPOINT, get(get_gateway_id))
         <span class="comment">// These routes are for next generation lightning
@@ -699,6 +718,15 @@
 ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="kw">impl </span>IntoResponse, GatewayError&gt; {
     <span class="kw">let </span>txid = gateway.handle_withdraw_msg(payload).<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="prelude-val">Ok</span>(Json(<span class="macro">json!</span>(txid)))
+}
+
+<span class="attr">#[instrument(skip_all, err, fields(<span class="question-mark">?</span>payload))]
+</span><span class="kw">async fn </span>create_invoice_for_self(
+    Extension(gateway): Extension&lt;Arc&lt;Gateway&gt;&gt;,
+    Json(payload): Json&lt;CreateInvoiceForSelfPayload&gt;,
+) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="kw">impl </span>IntoResponse, GatewayError&gt; {
+    <span class="kw">let </span>invoice = gateway.handle_create_invoice_for_self_msg(payload).<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="prelude-val">Ok</span>(Json(<span class="macro">json!</span>(invoice)))
 }
 
 <span class="attr">#[instrument(skip_all, err, fields(<span class="question-mark">?</span>payload))]

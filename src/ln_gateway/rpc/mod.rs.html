@@ -209,6 +209,13 @@
 <a href="#209" id="209">209</a>
 <a href="#210" id="210">210</a>
 <a href="#211" id="211">211</a>
+<a href="#212" id="212">212</a>
+<a href="#213" id="213">213</a>
+<a href="#214" id="214">214</a>
+<a href="#215" id="215">215</a>
+<a href="#216" id="216">216</a>
+<a href="#217" id="217">217</a>
+<a href="#218" id="218">218</a>
 </pre></div><pre class="rust"><code><span class="kw">pub mod </span>rpc_client;
 <span class="kw">pub mod </span>rpc_server;
 
@@ -360,6 +367,13 @@
     <span class="kw">pub </span>routing_fees: <span class="prelude-ty">Option</span>&lt;FederationRoutingFees&gt;,
     <span class="kw">pub </span>network: <span class="prelude-ty">Option</span>&lt;Network&gt;,
     <span class="kw">pub </span>per_federation_routing_fees: <span class="prelude-ty">Option</span>&lt;Vec&lt;(FederationId, FederationRoutingFees)&gt;&gt;,
+}
+
+<span class="attr">#[derive(Debug, Serialize, Deserialize, Clone)]
+</span><span class="kw">pub struct </span>CreateInvoiceForSelfPayload {
+    <span class="kw">pub </span>amount_msats: u64,
+    <span class="kw">pub </span>expiry_secs: u32,
+    <span class="kw">pub </span>description: <span class="prelude-ty">Option</span>&lt;String&gt;,
 }
 
 <span class="attr">#[derive(Debug, Serialize, Deserialize, Clone)]

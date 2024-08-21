@@ -1380,6 +1380,35 @@
 <a href="#1380" id="1380">1380</a>
 <a href="#1381" id="1381">1381</a>
 <a href="#1382" id="1382">1382</a>
+<a href="#1383" id="1383">1383</a>
+<a href="#1384" id="1384">1384</a>
+<a href="#1385" id="1385">1385</a>
+<a href="#1386" id="1386">1386</a>
+<a href="#1387" id="1387">1387</a>
+<a href="#1388" id="1388">1388</a>
+<a href="#1389" id="1389">1389</a>
+<a href="#1390" id="1390">1390</a>
+<a href="#1391" id="1391">1391</a>
+<a href="#1392" id="1392">1392</a>
+<a href="#1393" id="1393">1393</a>
+<a href="#1394" id="1394">1394</a>
+<a href="#1395" id="1395">1395</a>
+<a href="#1396" id="1396">1396</a>
+<a href="#1397" id="1397">1397</a>
+<a href="#1398" id="1398">1398</a>
+<a href="#1399" id="1399">1399</a>
+<a href="#1400" id="1400">1400</a>
+<a href="#1401" id="1401">1401</a>
+<a href="#1402" id="1402">1402</a>
+<a href="#1403" id="1403">1403</a>
+<a href="#1404" id="1404">1404</a>
+<a href="#1405" id="1405">1405</a>
+<a href="#1406" id="1406">1406</a>
+<a href="#1407" id="1407">1407</a>
+<a href="#1408" id="1408">1408</a>
+<a href="#1409" id="1409">1409</a>
+<a href="#1410" id="1410">1410</a>
+<a href="#1411" id="1411">1411</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeSet;
 <span class="kw">use </span>std::fmt::{<span class="self">self</span>, Display};
 <span class="kw">use </span>std::str::FromStr;
@@ -1409,8 +1438,8 @@
 <span class="kw">use </span>tonic_lnd::lnrpc::payment::PaymentStatus;
 <span class="kw">use </span>tonic_lnd::lnrpc::{
     ChanInfoRequest, ChannelBalanceRequest, ChannelPoint, CloseChannelRequest, ConnectPeerRequest,
-    GetInfoRequest, InvoiceSubscription, LightningAddress, ListChannelsRequest, ListInvoiceRequest,
-    OpenChannelRequest, WalletBalanceRequest,
+    GetInfoRequest, Invoice, InvoiceSubscription, LightningAddress, ListChannelsRequest,
+    ListInvoiceRequest, OpenChannelRequest, WalletBalanceRequest,
 };
 <span class="kw">use </span>tonic_lnd::routerrpc::{
     CircuitKey, ForwardHtlcInterceptResponse, ResolveHoldForwardAction, SendPaymentRequest,
@@ -2409,45 +2438,74 @@
         create_invoice_request: CreateInvoiceRequest,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;CreateInvoiceResponse, LightningRpcError&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>client = <span class="self">self</span>.connect().<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">let </span>description =
-            create_invoice_request
-                .description
-                .ok_or(LightningRpcError::FailedToGetInvoice {
-                    failure_reason: <span class="string">"Description or description hash was not provided"</span>.to_string(),
+        <span class="kw">let </span>description = create_invoice_request
+            .description
+            .unwrap_or(Description::Direct(String::new()));
+
+        <span class="kw">if </span>create_invoice_request.payment_hash.is_empty() {
+            <span class="kw">let </span>invoice = <span class="kw">match </span>description {
+                Description::Direct(description) =&gt; Invoice {
+                    memo: description,
+                    value_msat: create_invoice_request.amount_msat <span class="kw">as </span>i64,
+                    expiry: i64::from(create_invoice_request.expiry_secs),
+                    ..Default::default()
+                },
+                Description::Hash(desc_hash) =&gt; Invoice {
+                    description_hash: desc_hash,
+                    value_msat: create_invoice_request.amount_msat <span class="kw">as </span>i64,
+                    expiry: i64::from(create_invoice_request.expiry_secs),
+                    ..Default::default()
+                },
+            };
+
+            <span class="self">self</span>.payment_hashes
+                .write()
+                .<span class="kw">await
+                </span>.insert(create_invoice_request.payment_hash);
+
+            <span class="kw">let </span>add_invoice_response =
+                client.lightning().add_invoice(invoice).<span class="kw">await</span>.map_err(|e| {
+                    LightningRpcError::FailedToGetInvoice {
+                        failure_reason: e.to_string(),
+                    }
                 })<span class="question-mark">?</span>;
 
-        <span class="kw">let </span>hold_invoice_request = <span class="kw">match </span>description {
-            Description::Direct(description) =&gt; AddHoldInvoiceRequest {
-                memo: description,
-                hash: create_invoice_request.payment_hash.clone(),
-                value_msat: create_invoice_request.amount_msat <span class="kw">as </span>i64,
-                expiry: i64::from(create_invoice_request.expiry_secs),
-                ..Default::default()
-            },
-            Description::Hash(desc_hash) =&gt; AddHoldInvoiceRequest {
-                description_hash: desc_hash,
-                hash: create_invoice_request.payment_hash.clone(),
-                value_msat: create_invoice_request.amount_msat <span class="kw">as </span>i64,
-                expiry: i64::from(create_invoice_request.expiry_secs),
-                ..Default::default()
-            },
-        };
+            <span class="kw">let </span>invoice = add_invoice_response.into_inner().payment_request;
+            <span class="prelude-val">Ok</span>(CreateInvoiceResponse { invoice })
+        } <span class="kw">else </span>{
+            <span class="kw">let </span>hold_invoice_request = <span class="kw">match </span>description {
+                Description::Direct(description) =&gt; AddHoldInvoiceRequest {
+                    memo: description,
+                    hash: create_invoice_request.payment_hash.clone(),
+                    value_msat: create_invoice_request.amount_msat <span class="kw">as </span>i64,
+                    expiry: i64::from(create_invoice_request.expiry_secs),
+                    ..Default::default()
+                },
+                Description::Hash(desc_hash) =&gt; AddHoldInvoiceRequest {
+                    description_hash: desc_hash,
+                    hash: create_invoice_request.payment_hash.clone(),
+                    value_msat: create_invoice_request.amount_msat <span class="kw">as </span>i64,
+                    expiry: i64::from(create_invoice_request.expiry_secs),
+                    ..Default::default()
+                },
+            };
 
-        <span class="self">self</span>.payment_hashes
-            .write()
-            .<span class="kw">await
-            </span>.insert(create_invoice_request.payment_hash);
+            <span class="self">self</span>.payment_hashes
+                .write()
+                .<span class="kw">await
+                </span>.insert(create_invoice_request.payment_hash);
 
-        <span class="kw">let </span>hold_invoice_response = client
-            .invoices()
-            .add_hold_invoice(hold_invoice_request)
-            .<span class="kw">await
-            </span>.map_err(|e| LightningRpcError::FailedToGetInvoice {
-                failure_reason: e.to_string(),
-            })<span class="question-mark">?</span>;
+            <span class="kw">let </span>hold_invoice_response = client
+                .invoices()
+                .add_hold_invoice(hold_invoice_request)
+                .<span class="kw">await
+                </span>.map_err(|e| LightningRpcError::FailedToGetInvoice {
+                    failure_reason: e.to_string(),
+                })<span class="question-mark">?</span>;
 
-        <span class="kw">let </span>invoice = hold_invoice_response.into_inner().payment_request;
-        <span class="prelude-val">Ok</span>(CreateInvoiceResponse { invoice })
+            <span class="kw">let </span>invoice = hold_invoice_response.into_inner().payment_request;
+            <span class="prelude-val">Ok</span>(CreateInvoiceResponse { invoice })
+        }
     }
 
     <span class="kw">async fn </span>get_funding_address(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;GetFundingAddressResponse, LightningRpcError&gt; {

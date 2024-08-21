@@ -130,6 +130,31 @@
 <a href="#130" id="130">130</a>
 <a href="#131" id="131">131</a>
 <a href="#132" id="132">132</a>
+<a href="#133" id="133">133</a>
+<a href="#134" id="134">134</a>
+<a href="#135" id="135">135</a>
+<a href="#136" id="136">136</a>
+<a href="#137" id="137">137</a>
+<a href="#138" id="138">138</a>
+<a href="#139" id="139">139</a>
+<a href="#140" id="140">140</a>
+<a href="#141" id="141">141</a>
+<a href="#142" id="142">142</a>
+<a href="#143" id="143">143</a>
+<a href="#144" id="144">144</a>
+<a href="#145" id="145">145</a>
+<a href="#146" id="146">146</a>
+<a href="#147" id="147">147</a>
+<a href="#148" id="148">148</a>
+<a href="#149" id="149">149</a>
+<a href="#150" id="150">150</a>
+<a href="#151" id="151">151</a>
+<a href="#152" id="152">152</a>
+<a href="#153" id="153">153</a>
+<a href="#154" id="154">154</a>
+<a href="#155" id="155">155</a>
+<a href="#156" id="156">156</a>
+<a href="#157" id="157">157</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::time::Duration;
 
 <span class="kw">use </span>clap::Subcommand;
@@ -147,6 +172,17 @@
 /// in a test environment.
 </span><span class="attr">#[derive(Subcommand)]
 </span><span class="kw">pub enum </span>LightningCommands {
+    <span class="doccomment">/// Create an invoice to receive lightning funds to the gateway.
+    </span>CreateInvoice {
+        <span class="attr">#[clap(long)]
+        </span>amount_msats: u64,
+
+        <span class="attr">#[clap(long, default_value_t = <span class="number">300</span>)]
+        </span>expiry_secs: u32,
+
+        <span class="attr">#[clap(long)]
+        </span>description: <span class="prelude-ty">Option</span>&lt;String&gt;,
+    },
     <span class="doccomment">/// Get a Bitcoin address to fund the gateway.
     </span>GetFundingAddress,
     <span class="doccomment">/// Open a channel with another lightning node.
@@ -197,6 +233,20 @@
         create_client: <span class="kw">impl </span>Fn() -&gt; GatewayRpcClient + Send + Sync,
     ) -&gt; anyhow::Result&lt;()&gt; {
         <span class="kw">match </span><span class="self">self </span>{
+            <span class="self">Self</span>::CreateInvoice {
+                amount_msats,
+                expiry_secs,
+                description,
+            } =&gt; {
+                <span class="kw">let </span>response = create_client()
+                    .create_invoice_for_self(ln_gateway::rpc::CreateInvoiceForSelfPayload {
+                        amount_msats,
+                        expiry_secs,
+                        description,
+                    })
+                    .<span class="kw">await</span><span class="question-mark">?</span>;
+                <span class="macro">println!</span>(<span class="string">"{response}"</span>);
+            }
             <span class="self">Self</span>::GetFundingAddress =&gt; {
                 <span class="kw">let </span>response = create_client()
                     .get_funding_address(GetFundingAddressPayload {})
