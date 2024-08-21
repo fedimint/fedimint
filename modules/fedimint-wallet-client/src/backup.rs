@@ -28,6 +28,7 @@ use crate::{WalletClientInit, WalletClientModule, WalletClientModuleData};
 #[derive(Clone, PartialEq, Eq, Debug, Encodable, Decodable)]
 pub enum WalletModuleBackup {
     V0(WalletModuleBackupV0),
+    V1(WalletModuleBackupV1),
     #[encodable_default]
     Default {
         variant: u64,
@@ -46,17 +47,30 @@ impl IntoDynInstance for WalletModuleBackup {
 impl ModuleBackup for WalletModuleBackup {}
 
 impl WalletModuleBackup {
-    pub fn new_v0(session_count: u64, next_tweak_idx: TweakIdx) -> WalletModuleBackup {
-        WalletModuleBackup::V0(WalletModuleBackupV0 {
+    pub fn new_v1(
+        session_count: u64,
+        next_tweak_idx: TweakIdx,
+        already_claimed_tweak_idxes: BTreeSet<TweakIdx>,
+    ) -> WalletModuleBackup {
+        WalletModuleBackup::V1(WalletModuleBackupV1 {
             session_count,
             next_tweak_idx,
+            already_claimed_tweak_idxes,
         })
     }
 }
+
 #[derive(Clone, PartialEq, Eq, Debug, Encodable, Decodable)]
 pub struct WalletModuleBackupV0 {
     pub session_count: u64,
     pub next_tweak_idx: TweakIdx,
+}
+
+#[derive(Clone, PartialEq, Eq, Debug, Encodable, Decodable)]
+pub struct WalletModuleBackupV1 {
+    pub session_count: u64,
+    pub next_tweak_idx: TweakIdx,
+    pub already_claimed_tweak_idxes: BTreeSet<TweakIdx>,
 }
 
 #[derive(Debug, Clone, Decodable, Encodable)]
@@ -69,8 +83,21 @@ pub struct WalletRecoveryStateV0 {
 }
 
 #[derive(Debug, Clone, Decodable, Encodable)]
+pub struct WalletRecoveryStateV1 {
+    snapshot: Option<WalletModuleBackup>,
+    next_unused_idx_from_backup: TweakIdx,
+    // If `Some` - backup contained information about which tweak idxes were already claimed (the
+    // set can still be empty). If `None` - backup version did not contain that information.
+    already_claimed_tweak_idxes_from_backup: Option<BTreeSet<TweakIdx>>,
+    new_start_idx: Option<TweakIdx>,
+    tweak_idxes_with_pegins: Option<BTreeSet<TweakIdx>>,
+    tracker: ConsensusPegInTweakIdxesUsedTracker,
+}
+
+#[derive(Debug, Clone, Decodable, Encodable)]
 pub enum WalletRecoveryState {
     V0(WalletRecoveryStateV0),
+    V1(WalletRecoveryStateV1),
     #[encodable_default]
     Default {
         variant: u64,
@@ -91,7 +118,7 @@ pub enum WalletRecoveryState {
 /// new point a client will use for new peg-ins.
 #[derive(Clone, Debug)]
 pub struct WalletRecovery {
-    state: WalletRecoveryStateV0,
+    state: WalletRecoveryStateV1,
     data: WalletClientModuleData,
     btc_rpc: DynBitcoindRpc,
 }
@@ -119,18 +146,32 @@ impl RecoveryFromHistory for WalletRecovery {
         };
 
         #[allow(clippy::single_match_else)]
-        let (next_unused_idx_from_backup, start_session_idx) = match snapshot.as_ref() {
+        let (
+            next_unused_idx_from_backup,
+            start_session_idx,
+            already_claimed_tweak_idxes_from_backup,
+        ) = match snapshot.as_ref() {
             Some(WalletModuleBackup::V0(backup)) => {
-                debug!(target: LOG_CLIENT_MODULE_WALLET, ?backup, "Restoring starting from an existing backup");
+                debug!(target: LOG_CLIENT_MODULE_WALLET, ?backup, "Restoring starting from an existing backup (v0)");
 
                 (
                     backup.next_tweak_idx,
                     backup.session_count.saturating_sub(1),
+                    None,
+                )
+            }
+            Some(WalletModuleBackup::V1(backup)) => {
+                debug!(target: LOG_CLIENT_MODULE_WALLET, ?backup, "Restoring starting from an existing backup (v1)");
+
+                (
+                    backup.next_tweak_idx,
+                    backup.session_count.saturating_sub(1),
+                    Some(backup.already_claimed_tweak_idxes.clone()),
                 )
             }
             _ => {
                 debug!(target: LOG_CLIENT_MODULE_WALLET, "Restoring without an existing backup");
-                (TweakIdx(0), 0)
+                (TweakIdx(0), 0, None)
             }
         };
 
@@ -147,11 +188,12 @@ impl RecoveryFromHistory for WalletRecovery {
 
         Ok((
             WalletRecovery {
-                state: WalletRecoveryStateV0 {
+                state: WalletRecoveryStateV1 {
                     snapshot: snapshot.cloned(),
                     new_start_idx: None,
                     tweak_idxes_with_pegins: None,
                     next_unused_idx_from_backup,
+                    already_claimed_tweak_idxes_from_backup,
                     tracker: ConsensusPegInTweakIdxesUsedTracker::new(
                         next_unused_idx_from_backup,
                         start_session_idx,
@@ -186,7 +228,7 @@ impl RecoveryFromHistory for WalletRecovery {
         Ok(dbtx.get_value(&RecoveryStateKey)
             .await
             .and_then(|(state, common)| {
-                if let WalletRecoveryState::V0(state) = state {
+                if let WalletRecoveryState::V1(state) = state {
                     Some((state, common))
                 } else {
                     warn!(target: LOG_CLIENT_RECOVERY, "Found unknown version recovery state. Ignoring");
@@ -213,7 +255,7 @@ impl RecoveryFromHistory for WalletRecovery {
         trace!(target: LOG_CLIENT_MODULE_WALLET, "Storing recovery state");
         dbtx.insert_entry(
             &RecoveryStateKey,
-            &(WalletRecoveryState::V0(self.state.clone()), common.clone()),
+            &(WalletRecoveryState::V1(self.state.clone()), common.clone()),
         )
         .await;
     }
@@ -266,8 +308,18 @@ impl RecoveryFromHistory for WalletRecovery {
             "Scanning blockchain for used peg-in addresses");
         let RecoverScanOutcome { last_used_idx: _, new_start_idx, tweak_idxes_with_pegins}
             = recover_scan_idxes_for_activity(
-                self.state.next_unused_idx_from_backup,
-                self.state.tracker.used_tweak_idxes(),
+                if self.state.already_claimed_tweak_idxes_from_backup.is_some() {
+                    // If the backup contains list of already claimed tweak_idexes, we can just scan
+                    // the blockchain addresses starting from tweakidx `0`, without loosing too much privacy,
+                    // as we will skip all the idxes that had peg-ins already
+                    TweakIdx(0)
+                } else {
+                    // If backup didn't have it, we just start from the last derived address from backup (or 0 otherwise).
+                    self.state.next_unused_idx_from_backup
+                },
+                &self.state.tracker.used_tweak_idxes()
+                    .union(&self.state.already_claimed_tweak_idxes_from_backup.clone().unwrap_or_default())
+                    .copied().collect(),
                 |cur_tweak_idx: TweakIdx|
                 async move {
 
