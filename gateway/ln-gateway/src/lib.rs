@@ -95,9 +95,9 @@ use lightning::{ILnRpcClient, LightningBuilder, LightningRpcError};
 use lightning_invoice::{Bolt11Invoice, RoutingFees};
 use rand::Rng;
 use rpc::{
-    CloseChannelsWithPeerPayload, FederationInfo, GatewayFedConfig, GatewayInfo, LeaveFedPayload,
-    OpenChannelPayload, ReceiveEcashPayload, ReceiveEcashResponse, SetConfigurationPayload,
-    SpendEcashPayload, SpendEcashResponse, V1_API_ENDPOINT,
+    CloseChannelsWithPeerPayload, CreateInvoiceForSelfPayload, FederationInfo, GatewayFedConfig,
+    GatewayInfo, LeaveFedPayload, OpenChannelPayload, ReceiveEcashPayload, ReceiveEcashResponse,
+    SetConfigurationPayload, SpendEcashPayload, SpendEcashResponse, V1_API_ENDPOINT,
 };
 use state_machine::pay::OutgoingPaymentError;
 use state_machine::GatewayClientModule;
@@ -918,6 +918,30 @@ impl Gateway {
         Err(GatewayError::UnexpectedState(
             "Ran out of state updates while withdrawing".to_string(),
         ))
+    }
+
+    async fn handle_create_invoice_for_self_msg(
+        &self,
+        payload: CreateInvoiceForSelfPayload,
+    ) -> Result<Bolt11Invoice> {
+        let GatewayState::Running { lightning_context } = self.get_state().await else {
+            return Err(GatewayError::Disconnected);
+        };
+
+        Bolt11Invoice::from_str(
+            &lightning_context
+                .lnrpc
+                .create_invoice(CreateInvoiceRequest {
+                    payment_hash: Vec::new(), /* Empty payment hash indicates an invoice payable
+                                               * directly to the gateway. */
+                    amount_msat: payload.amount_msats,
+                    expiry_secs: payload.expiry_secs,
+                    description: payload.description.map(Description::Direct),
+                })
+                .await?
+                .invoice,
+        )
+        .map_err(|e| GatewayError::UnexpectedState(e.to_string()))
     }
 
     /// Requests the gateway to pay an outgoing LN invoice on behalf of a

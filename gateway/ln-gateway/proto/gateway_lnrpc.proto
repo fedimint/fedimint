@@ -243,6 +243,17 @@ message GetRouteHintsResponse {
 
 message CreateInvoiceRequest {
   // The payment hash of the invoice being created.
+  //
+  // If this field is present, a hold invoice will be returned.
+  // This means the lightning node will not know the preimage,
+  // and upon payment receival, the preimage will need to be
+  // fetched out-of-band. For a gateway, this means purchasing
+  // it from a federation.
+  //
+  // If this field is not present, the lightning node will
+  // generate its own preimage and payment hash and return a
+  // regular invoice which can be used to send funds to the
+  // gateway.
   bytes payment_hash = 1;
 
   // The amount in millisatoshis of the invoice.

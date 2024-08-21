@@ -152,6 +152,13 @@ pub struct SetConfigurationPayload {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct CreateInvoiceForSelfPayload {
+    pub amount_msats: u64,
+    pub expiry_secs: u32,
+    pub description: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct GetFundingAddressPayload;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
