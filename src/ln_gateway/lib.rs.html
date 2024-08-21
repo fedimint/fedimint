@@ -1938,7 +1938,6 @@
 <a href="#1938" id="1938">1938</a>
 <a href="#1939" id="1939">1939</a>
 <a href="#1940" id="1940">1940</a>
-<a href="#1941" id="1941">1941</a>
 </pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::cast_possible_wrap)]
@@ -2706,19 +2705,18 @@
             .<span class="kw">await
             </span>.expect(<span class="string">"Gateway configuration should be set"</span>);
 
-        <span class="comment">// Minimize the time we hold a lock on the federation manager.
-        // TODO(tvolk131): See if we can make this block into a method on
-        // `FederationManager`.
-        </span><span class="kw">let </span>(federations, channels) = {
-            <span class="kw">let </span>federation_manager = <span class="self">self</span>.federation_manager.read().<span class="kw">await</span>;
+        <span class="kw">let </span>dbtx = <span class="self">self</span>.gateway_db.begin_transaction_nc().<span class="kw">await</span>;
+        <span class="kw">let </span>federations = <span class="self">self
+            </span>.federation_manager
+            .read()
+            .<span class="kw">await
+            </span>.federation_info_all_federations(dbtx)
+            .<span class="kw">await</span>;
 
-            <span class="kw">let </span>dbtx = <span class="self">self</span>.gateway_db.begin_transaction_nc().<span class="kw">await</span>;
-            <span class="kw">let </span>federations = federation_manager
-                .federation_info_all_federations(dbtx)
-                .<span class="kw">await</span>;
-
-            (federations, federation_manager.clone_scid_map())
-        };
+        <span class="kw">let </span>channels: BTreeMap&lt;u64, FederationId&gt; = federations
+            .iter()
+            .map(|federation_info| (federation_info.channel_id, federation_info.federation_id))
+            .collect();
 
         <span class="kw">let </span>node_info = lightning_context.lnrpc.parsed_node_info().<span class="kw">await</span><span class="question-mark">?</span>;
 
@@ -3002,7 +3000,7 @@
         </span><span class="kw">let </span>federation_info = FederationInfo {
             federation_id,
             balance_msat: client.get_balance().<span class="kw">await</span>,
-            channel_id: <span class="prelude-val">Some</span>(mint_channel_id),
+            channel_id: mint_channel_id,
             routing_fees: <span class="prelude-val">Some</span>(gateway_config.routing_fees.into()),
         };
 

@@ -496,7 +496,7 @@
     <span class="kw">let </span>fed_info: FederationInfo =
         serde_json::from_value(leave_fed).expect(<span class="string">"Could not parse FederationInfo"</span>);
     <span class="macro">assert_eq!</span>(fed_info.federation_id.to_string(), fed_id);
-    <span class="macro">assert_eq!</span>(fed_info.channel_id, <span class="prelude-val">Some</span>(expected_scid));
+    <span class="macro">assert_eq!</span>(fed_info.channel_id, expected_scid);
     <span class="macro">info!</span>(<span class="string">"Verified gateway left federation {fed_id}"</span>);
     <span class="prelude-val">Ok</span>(fed_info)
 }
