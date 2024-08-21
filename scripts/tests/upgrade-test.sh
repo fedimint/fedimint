@@ -17,6 +17,8 @@ else
   versions=("$@")
 fi
 
+echo "## Running upgrade tests for versions: ${versions[*]}"
+
 source scripts/_common.sh
 build_workspace
 add_target_dir_to_path
