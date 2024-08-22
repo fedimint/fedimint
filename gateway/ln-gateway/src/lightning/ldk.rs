@@ -24,7 +24,7 @@ use crate::gateway_lnrpc::create_invoice_request::Description;
 use crate::gateway_lnrpc::intercept_htlc_response::{Action, Settle};
 use crate::gateway_lnrpc::{
     CloseChannelsWithPeerResponse, CreateInvoiceRequest, CreateInvoiceResponse, EmptyResponse,
-    GetBalancesResponse, GetFundingAddressResponse, GetNodeInfoResponse, GetRouteHintsResponse,
+    GetBalancesResponse, GetLnOnchainAddressResponse, GetNodeInfoResponse, GetRouteHintsResponse,
     InterceptHtlcRequest, InterceptHtlcResponse, PayInvoiceResponse,
 };
 
@@ -400,14 +400,16 @@ impl ILnRpcClient for GatewayLdkClient {
         })
     }
 
-    async fn get_funding_address(&self) -> Result<GetFundingAddressResponse, LightningRpcError> {
+    async fn get_ln_onchain_address(
+        &self,
+    ) -> Result<GetLnOnchainAddressResponse, LightningRpcError> {
         self.node
             .onchain_payment()
             .new_address()
-            .map(|address| GetFundingAddressResponse {
+            .map(|address| GetLnOnchainAddressResponse {
                 address: address.to_string(),
             })
-            .map_err(|e| LightningRpcError::FailedToGetFundingAddress {
+            .map_err(|e| LightningRpcError::FailedToGetLnOnchainAddress {
                 failure_reason: e.to_string(),
             })
     }

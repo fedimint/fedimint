@@ -90,7 +90,6 @@ use fedimint_wallet_client::{
 use futures::stream::StreamExt;
 use gateway_lnrpc::intercept_htlc_response::{Action, Cancel};
 use gateway_lnrpc::{CloseChannelsWithPeerResponse, InterceptHtlcRequest, InterceptHtlcResponse};
-use hex::ToHex;
 use lightning::{ILnRpcClient, LightningBuilder, LightningRpcError};
 use lightning_invoice::{Bolt11Invoice, RoutingFees};
 use rand::Rng;
@@ -110,13 +109,14 @@ use crate::gateway_lnrpc::create_invoice_request::Description;
 use crate::gateway_lnrpc::intercept_htlc_response::Forward;
 use crate::gateway_lnrpc::CreateInvoiceRequest;
 use crate::gateway_module_v2::GatewayClientModuleV2;
-use crate::lightning::{GatewayLightningBuilder, RouteHtlcStream};
+use crate::lightning::{GatewayLightningBuilder, LightningContext, RouteHtlcStream};
 use crate::rpc::rpc_server::{hash_password, run_webserver};
 use crate::rpc::{
-    BackupPayload, BalancePayload, ConnectFedPayload, DepositAddressPayload, RestorePayload,
-    WithdrawPayload,
+    BackupPayload, BalancePayload, ConnectFedPayload, DepositAddressPayload, FederationBalanceInfo,
+    GatewayBalances, RestorePayload, WithdrawPayload,
 };
 use crate::state_machine::GatewayExtPayStates;
+use crate::types::PrettyInterceptHtlcRequest;
 
 /// How long a gateway announcement stays valid
 const GW_ANNOUNCEMENT_TTL: Duration = Duration::from_secs(600);
@@ -188,15 +188,6 @@ impl Display for GatewayState {
             GatewayState::Disconnected => write!(f, "Disconnected"),
         }
     }
-}
-
-/// Represents an active connection to the lightning node.
-#[derive(Clone, Debug)]
-pub struct LightningContext {
-    pub lnrpc: Arc<dyn ILnRpcClient>,
-    pub lightning_public_key: PublicKey,
-    pub lightning_alias: String,
-    pub lightning_network: Network,
 }
 
 /// The action to take after handling a payment stream.
@@ -919,6 +910,8 @@ impl Gateway {
         ))
     }
 
+    /// Creates an invoice that is directly payable to the gateway's lightning
+    /// node.
     async fn handle_create_invoice_for_self_msg(
         &self,
         payload: CreateInvoiceForSelfPayload,
@@ -1255,9 +1248,10 @@ impl Gateway {
         Ok(())
     }
 
-    pub async fn handle_get_funding_address_msg(&self) -> Result<Address> {
+    /// Generates an onchain address to fund the gateway's lightning node.
+    pub async fn handle_get_ln_onchain_address_msg(&self) -> Result<Address> {
         let context = self.get_lightning_context().await?;
-        let response = context.lnrpc.get_funding_address().await?;
+        let response = context.lnrpc.get_ln_onchain_address().await?;
         Address::from_str(&response.address)
             .map(Address::assume_checked)
             .map_err(|e| GatewayError::LightningResponseParseError(e.into()))
@@ -1301,6 +1295,8 @@ impl Gateway {
         Ok(channels)
     }
 
+    /// Returns the ecash, lightning, and onchain balances for the gateway and
+    /// the gateway's lightning node.
     pub async fn handle_get_balances_msg(&self) -> Result<GatewayBalances> {
         let dbtx = self.gateway_db.begin_transaction_nc().await;
         let federation_infos = self
@@ -1328,6 +1324,87 @@ impl Gateway {
             lightning_balance_msats: lightning_node_balances.lightning_balance_msats,
             ecash_balances,
         })
+    }
+
+    // Handles a request the spend the gateway's ecash for a given federation.
+    pub async fn handle_spend_ecash_msg(
+        &self,
+        payload: SpendEcashPayload,
+    ) -> anyhow::Result<SpendEcashResponse> {
+        let client = self.select_client_v2(payload.federation_id).await?;
+        let mint_module = client.get_first_module::<MintClientModule>();
+        let timeout = Duration::from_secs(payload.timeout);
+        let (operation_id, notes) = if payload.allow_overpay {
+            let (operation_id, notes) = mint_module
+                .spend_notes_with_selector(
+                    &SelectNotesWithAtleastAmount,
+                    payload.amount,
+                    timeout,
+                    payload.include_invite,
+                    (),
+                )
+                .await?;
+
+            let overspend_amount = notes.total_amount() - payload.amount;
+            if overspend_amount != Amount::ZERO {
+                warn!(
+                    "Selected notes {} worth more than requested",
+                    overspend_amount
+                );
+            }
+
+            (operation_id, notes)
+        } else {
+            mint_module
+                .spend_notes_with_selector(
+                    &SelectNotesWithExactAmount,
+                    payload.amount,
+                    timeout,
+                    payload.include_invite,
+                    (),
+                )
+                .await?
+        };
+
+        info!("Spend ecash operation id: {:?}", operation_id);
+        info!("Spend ecash notes: {:?}", notes);
+
+        Ok(SpendEcashResponse {
+            operation_id,
+            notes,
+        })
+    }
+
+    /// Handles a request to receive ecash into the gateway.
+    pub async fn handle_receive_ecash_msg(
+        &self,
+        payload: ReceiveEcashPayload,
+    ) -> anyhow::Result<ReceiveEcashResponse> {
+        let amount = payload.notes.total_amount();
+        let client = self
+            .federation_manager
+            .read()
+            .await
+            .get_client_for_federation_id_prefix(payload.notes.federation_id_prefix())
+            .ok_or(anyhow!("Client not found"))?;
+        let mint = client.value().get_first_module::<MintClientModule>();
+
+        let operation_id = mint.reissue_external_notes(payload.notes, ()).await?;
+        if payload.wait {
+            let mut updates = mint
+                .subscribe_reissue_external_notes(operation_id)
+                .await
+                .unwrap()
+                .into_stream();
+
+            while let Some(update) = updates.next().await {
+                if let fedimint_mint_client::ReissueExternalNotesState::Failed(e) = update {
+                    bail!("Reissue failed: {e}");
+                }
+            }
+        }
+
+        Ok(ReceiveEcashResponse { amount })
     }
 
     /// Registers the gateway with each specified federation.
@@ -1558,19 +1635,6 @@ impl Gateway {
     }
 }
 
-#[derive(serde::Serialize, serde::Deserialize)]
-pub struct GatewayBalances {
-    pub onchain_balance_sats: u64,
-    pub lightning_balance_msats: u64,
-    pub ecash_balances: Vec<FederationBalanceInfo>,
-}
-
-#[derive(serde::Serialize, serde::Deserialize)]
-pub struct FederationBalanceInfo {
-    pub federation_id: FederationId,
-    pub ecash_balance_msats: Amount,
-}
-
 // LNv2 Gateway implementation
 impl Gateway {
     /// Retrieves the `PublicKey` of the Gateway module for a given federation
@@ -1775,85 +1839,6 @@ impl Gateway {
 
         Ok((registered_incoming_contract.contract, client))
     }
-
-    pub async fn spend_ecash(
-        &self,
-        payload: SpendEcashPayload,
-    ) -> anyhow::Result<SpendEcashResponse> {
-        let client = self.select_client_v2(payload.federation_id).await?;
-        let mint_module = client.get_first_module::<MintClientModule>();
-        let timeout = Duration::from_secs(payload.timeout);
-        let (operation_id, notes) = if payload.allow_overpay {
-            let (operation_id, notes) = mint_module
-                .spend_notes_with_selector(
-                    &SelectNotesWithAtleastAmount,
-                    payload.amount,
-                    timeout,
-                    payload.include_invite,
-                    (),
-                )
-                .await?;
-
-            let overspend_amount = notes.total_amount() - payload.amount;
-            if overspend_amount != Amount::ZERO {
-                warn!(
-                    "Selected notes {} worth more than requested",
-                    overspend_amount
-                );
-            }
-
-            (operation_id, notes)
-        } else {
-            mint_module
-                .spend_notes_with_selector(
-                    &SelectNotesWithExactAmount,
-                    payload.amount,
-                    timeout,
-                    payload.include_invite,
-                    (),
-                )
-                .await?
-        };
-
-        info!("Spend ecash operation id: {:?}", operation_id);
-        info!("Spend ecash notes: {:?}", notes);
-
-        Ok(SpendEcashResponse {
-            operation_id,
-            notes,
-        })
-    }
-
-    pub async fn receive_ecash(
-        &self,
-        payload: ReceiveEcashPayload,
-    ) -> anyhow::Result<ReceiveEcashResponse> {
-        let amount = payload.notes.total_amount();
-        let client = self
-            .federation_manager
-            .read()
-            .await
-            .get_client_for_federation_id_prefix(payload.notes.federation_id_prefix())
-            .ok_or(anyhow!("Client not found"))?;
-        let mint = client.value().get_first_module::<MintClientModule>();
-
-        let operation_id = mint.reissue_external_notes(payload.notes, ()).await?;
-        if payload.wait {
-            let mut updates = mint
-                .subscribe_reissue_external_notes(operation_id)
-                .await
-                .unwrap()
-                .into_stream();
-
-            while let Some(update) = updates.next().await {
-                if let fedimint_mint_client::ReissueExternalNotesState::Failed(e) = update {
-                    bail!("Reissue failed: {e}");
-                }
-            }
-        }
-
-        Ok(ReceiveEcashResponse { amount })
-    }
 }
 
 /// Errors that can occur while processing incoming HTLC's, making outgoing
@@ -1916,25 +1901,5 @@ impl IntoResponse for GatewayError {
         let mut err = Cow::<'static, str>::Owned(error_message).into_response();
         *err.status_mut() = status_code;
         err
-    }
-}
-
-/// Utility struct for formatting an intercepted HTLC. Useful for debugging.
-struct PrettyInterceptHtlcRequest<'a>(&'a crate::gateway_lnrpc::InterceptHtlcRequest);
-
-impl Display for PrettyInterceptHtlcRequest<'_> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let PrettyInterceptHtlcRequest(htlc_request) = self;
-        write!(
-            f,
-            "InterceptHtlcRequest {{ payment_hash: {}, incoming_amount_msat: {:?}, outgoing_amount_msat: {:?}, incoming_expiry: {:?}, short_channel_id: {:?}, incoming_chan_id: {:?}, htlc_id: {:?} }}",
-            htlc_request.payment_hash.encode_hex::<String>(),
-            htlc_request.incoming_amount_msat,
-            htlc_request.outgoing_amount_msat,
-            htlc_request.incoming_expiry,
-            htlc_request.short_channel_id,
-            htlc_request.incoming_chan_id,
-            htlc_request.htlc_id,
-        )
     }
 }

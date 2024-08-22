@@ -17,7 +17,7 @@ use lightning_invoice::{
 };
 use ln_gateway::gateway_lnrpc::{
     self, CloseChannelsWithPeerResponse, CreateInvoiceRequest, CreateInvoiceResponse,
-    EmptyResponse, GetBalancesResponse, GetFundingAddressResponse, GetNodeInfoResponse,
+    EmptyResponse, GetBalancesResponse, GetLnOnchainAddressResponse, GetNodeInfoResponse,
     GetRouteHintsResponse, InterceptHtlcResponse, PayInvoiceResponse,
 };
 use ln_gateway::lightning::{
@@ -253,8 +253,10 @@ impl ILnRpcClient for FakeLightningTest {
         })
     }
 
-    async fn get_funding_address(&self) -> Result<GetFundingAddressResponse, LightningRpcError> {
-        Err(LightningRpcError::FailedToGetFundingAddress {
+    async fn get_ln_onchain_address(
+        &self,
+    ) -> Result<GetLnOnchainAddressResponse, LightningRpcError> {
+        Err(LightningRpcError::FailedToGetLnOnchainAddress {
             failure_reason: "FakeLightningTest does not support getting a funding address"
                 .to_string(),
         })

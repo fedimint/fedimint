@@ -14,8 +14,8 @@ use fedimint_ln_client::pay::PayInvoicePayload;
 use fedimint_ln_common::gateway_endpoint_constants::{
     ADDRESS_ENDPOINT, BACKUP_ENDPOINT, BALANCE_ENDPOINT, CLOSE_CHANNELS_WITH_PEER_ENDPOINT,
     CONFIGURATION_ENDPOINT, CONNECT_FED_ENDPOINT, GATEWAY_INFO_ENDPOINT,
-    GATEWAY_INFO_POST_ENDPOINT, GET_BALANCES_ENDPOINT, GET_FUNDING_ADDRESS_ENDPOINT,
-    GET_GATEWAY_ID_ENDPOINT, LEAVE_FED_ENDPOINT, LIST_ACTIVE_CHANNELS_ENDPOINT,
+    GATEWAY_INFO_POST_ENDPOINT, GET_BALANCES_ENDPOINT, GET_GATEWAY_ID_ENDPOINT,
+    GET_LN_ONCHAIN_ADDRESS_ENDPOINT, LEAVE_FED_ENDPOINT, LIST_ACTIVE_CHANNELS_ENDPOINT,
     OPEN_CHANNEL_ENDPOINT, PAY_INVOICE_ENDPOINT, RECEIVE_ECASH_ENDPOINT, RESTORE_ENDPOINT,
     SET_CONFIGURATION_ENDPOINT, SPEND_ECASH_ENDPOINT, WITHDRAW_ENDPOINT,
 };
@@ -32,7 +32,7 @@ use tracing::{error, info, instrument};
 
 use super::{
     BackupPayload, BalancePayload, CloseChannelsWithPeerPayload, ConnectFedPayload,
-    CreateInvoiceForSelfPayload, DepositAddressPayload, GetFundingAddressPayload, InfoPayload,
+    CreateInvoiceForSelfPayload, DepositAddressPayload, GetLnOnchainAddressPayload, InfoPayload,
     LeaveFedPayload, OpenChannelPayload, ReceiveEcashPayload, RestorePayload,
     SetConfigurationPayload, SpendEcashPayload, WithdrawPayload, V1_API_ENDPOINT,
 };
@@ -175,7 +175,10 @@ fn v1_routes(gateway: Arc<Gateway>) -> Router {
         .route(LEAVE_FED_ENDPOINT, post(leave_fed))
         .route(BACKUP_ENDPOINT, post(backup))
         .route(RESTORE_ENDPOINT, post(restore))
-        .route(GET_FUNDING_ADDRESS_ENDPOINT, post(get_funding_address))
+        .route(
+            GET_LN_ONCHAIN_ADDRESS_ENDPOINT,
+            post(get_ln_onchain_address),
+        )
         .route(OPEN_CHANNEL_ENDPOINT, post(open_channel))
         .route(
             CLOSE_CHANNELS_WITH_PEER_ENDPOINT,
@@ -347,11 +350,11 @@ async fn set_configuration(
 }
 
 #[instrument(skip_all, err)]
-async fn get_funding_address(
+async fn get_ln_onchain_address(
     Extension(gateway): Extension<Arc<Gateway>>,
-    Json(_payload): Json<GetFundingAddressPayload>,
+    Json(_payload): Json<GetLnOnchainAddressPayload>,
 ) -> Result<impl IntoResponse, GatewayError> {
-    let address = gateway.handle_get_funding_address_msg().await?;
+    let address = gateway.handle_get_ln_onchain_address_msg().await?;
     Ok(Json(json!(address.to_string())))
 }
 
@@ -430,12 +433,14 @@ async fn spend_ecash(
     Extension(gateway): Extension<Arc<Gateway>>,
     Json(payload): Json<SpendEcashPayload>,
 ) -> Result<impl IntoResponse, GatewayError> {
-    Ok(Json(json!(gateway.spend_ecash(payload).await?)))
+    Ok(Json(json!(gateway.handle_spend_ecash_msg(payload).await?)))
 }
 
 async fn receive_ecash(
     Extension(gateway): Extension<Arc<Gateway>>,
     Json(payload): Json<ReceiveEcashPayload>,
 ) -> Result<impl IntoResponse, GatewayError> {
-    Ok(Json(json!(gateway.receive_ecash(payload).await?)))
+    Ok(Json(json!(
+        gateway.handle_receive_ecash_msg(payload).await?
+    )))
 }

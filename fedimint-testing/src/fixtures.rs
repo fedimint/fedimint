@@ -22,8 +22,8 @@ use fedimint_logging::TracingSetup;
 use fedimint_testing_core::test_dir;
 use lightning_invoice::RoutingFees;
 use ln_gateway::client::GatewayClientBuilder;
-use ln_gateway::lightning::{ILnRpcClient, LightningBuilder};
-use ln_gateway::{Gateway, LightningContext};
+use ln_gateway::lightning::{ILnRpcClient, LightningBuilder, LightningContext};
+use ln_gateway::Gateway;
 
 use crate::btc::mock::FakeBitcoinFactory;
 use crate::btc::real::RealBitcoinTest;

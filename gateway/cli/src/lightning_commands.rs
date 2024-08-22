@@ -3,7 +3,9 @@ use std::time::Duration;
 use clap::Subcommand;
 use fedimint_core::util::{backoff_util, retry};
 use ln_gateway::rpc::rpc_client::GatewayRpcClient;
-use ln_gateway::rpc::{CloseChannelsWithPeerPayload, GetFundingAddressPayload, OpenChannelPayload};
+use ln_gateway::rpc::{
+    CloseChannelsWithPeerPayload, GetLnOnchainAddressPayload, OpenChannelPayload,
+};
 
 use crate::print_response;
 
@@ -26,8 +28,9 @@ pub enum LightningCommands {
         #[clap(long)]
         description: Option<String>,
     },
-    /// Get a Bitcoin address to fund the gateway.
-    GetFundingAddress,
+    /// Get a Bitcoin address from the gateway's lightning node's onchain
+    /// wallet.
+    GetLnOnchainAddress,
     /// Open a channel with another lightning node.
     OpenChannel {
         /// The public key of the node to open a channel with
@@ -90,9 +93,9 @@ impl LightningCommands {
                     .await?;
                 println!("{response}");
             }
-            Self::GetFundingAddress => {
+            Self::GetLnOnchainAddress => {
                 let response = create_client()
-                    .get_funding_address(GetFundingAddressPayload {})
+                    .get_ln_onchain_address(GetLnOnchainAddressPayload {})
                     .await?
                     .assume_checked();
                 println!("{response}");

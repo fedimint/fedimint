@@ -1,7 +1,12 @@
 //! Map `gateway_lnrpc` protobuf types to rust types
 
+use std::fmt::Display;
+
 use anyhow::anyhow;
 use fedimint_core::secp256k1::PublicKey;
+use hex::ToHex;
+
+use crate::gateway_lnrpc::InterceptHtlcRequest;
 
 impl TryFrom<crate::gateway_lnrpc::get_route_hints_response::RouteHintHop>
     for fedimint_ln_common::route_hints::RouteHintHop
@@ -48,5 +53,25 @@ impl TryFrom<crate::gateway_lnrpc::GetRouteHintsResponse>
         }
 
         Ok(route_hints)
+    }
+}
+
+/// Utility struct for formatting an intercepted HTLC. Useful for debugging.
+pub struct PrettyInterceptHtlcRequest<'a>(pub &'a InterceptHtlcRequest);
+
+impl Display for PrettyInterceptHtlcRequest<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let PrettyInterceptHtlcRequest(htlc_request) = self;
+        write!(
+            f,
+            "InterceptHtlcRequest {{ payment_hash: {}, incoming_amount_msat: {:?}, outgoing_amount_msat: {:?}, incoming_expiry: {:?}, short_channel_id: {:?}, incoming_chan_id: {:?}, htlc_id: {:?} }}",
+            htlc_request.payment_hash.encode_hex::<String>(),
+            htlc_request.incoming_amount_msat,
+            htlc_request.outgoing_amount_msat,
+            htlc_request.incoming_expiry,
+            htlc_request.short_channel_id,
+            htlc_request.incoming_chan_id,
+            htlc_request.htlc_id,
+        )
     }
 }
