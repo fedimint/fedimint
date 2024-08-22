@@ -317,7 +317,7 @@ impl RecoveryFromHistory for WalletRecovery {
                     TweakIdx(0)
                 } else {
                     // If backup didn't have it, we just start from the last derived address from backup (or 0 otherwise).
-                    self.state.next_unused_idx_from_backup
+                    self.state.next_unused_idx_from_backup.prev().unwrap_or_default()
                 },
                 &self.state.tracker.used_tweak_idxes()
                     .union(&self.state.already_claimed_tweak_idxes_from_backup.clone().unwrap_or_default())
@@ -435,7 +435,7 @@ pub(crate) struct RecoverScanOutcome {
 /// A part of `WalletClientInit::recover` extracted out to be easy to
 /// test, as a side-effect free.
 pub(crate) async fn recover_scan_idxes_for_activity<F, FF, T>(
-    previous_next_unused_idx: TweakIdx,
+    scan_from_idx: TweakIdx,
     used_tweak_idxes: &BTreeSet<TweakIdx>,
     check_addr_history: F,
 ) -> anyhow::Result<RecoverScanOutcome>
@@ -443,9 +443,6 @@ where
     F: Fn(TweakIdx) -> FF,
     FF: Future<Output = anyhow::Result<Vec<T>>>,
 {
-    // TODO: change fn arg to scan_from_idx instead of previous_next_unused_idx
-    let scan_from_idx = previous_next_unused_idx.prev().unwrap_or_default();
-
     let tweak_indexes_to_scan = (scan_from_idx.0..).map(TweakIdx).filter(|tweak_idx| {
         let already_used = used_tweak_idxes.contains(tweak_idx);
 

@@ -1100,7 +1100,7 @@ mod tests {
             let last_checked = &last_checked;
             assert_eq!(
                 recover_scan_idxes_for_activity(
-                    TweakIdx(10),
+                    TweakIdx(9),
                     &BTreeSet::new(),
                     |cur_idx| async move {
                         Ok(match cur_idx {
@@ -1141,7 +1141,7 @@ mod tests {
             }
         );
         assert_eq!(
-            recover_scan_idxes_for_activity(TweakIdx(10), &BTreeSet::new(), |cur_idx| async move {
+            recover_scan_idxes_for_activity(TweakIdx(9), &BTreeSet::new(), |cur_idx| async move {
                 Ok(match cur_idx {
                     TweakIdx(8) => {
                         vec![()] /* for type inference only */
@@ -1161,7 +1161,7 @@ mod tests {
             }
         );
         assert_eq!(
-            recover_scan_idxes_for_activity(TweakIdx(10), &BTreeSet::new(), |cur_idx| async move {
+            recover_scan_idxes_for_activity(TweakIdx(9), &BTreeSet::new(), |cur_idx| async move {
                 Ok(match cur_idx {
                     TweakIdx(9) => panic!("Shouldn't happen"),
                     TweakIdx(15) => vec![()],
