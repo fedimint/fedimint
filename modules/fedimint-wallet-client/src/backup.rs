@@ -443,35 +443,42 @@ where
     F: Fn(TweakIdx) -> FF,
     FF: Future<Output = anyhow::Result<Vec<T>>>,
 {
-    let mut last_used_idx = previous_next_unused_idx.prev();
+    // TODO: change fn arg to scan_from_idx instead of previous_next_unused_idx
+    let scan_from_idx = previous_next_unused_idx.prev().unwrap_or_default();
 
-    let mut cur_tweak_idx = previous_next_unused_idx;
+    let tweak_indexes_to_scan = (scan_from_idx.0..).map(TweakIdx).filter(|tweak_idx| {
+        let already_used = used_tweak_idxes.contains(tweak_idx);
+
+        if already_used {
+            debug!(target: LOG_CLIENT_MODULE_WALLET,
+                %tweak_idx,
+                "Skipping checking history of an address, as it was previously used"
+            );
+        }
+
+        !already_used
+    });
+
+    // Last tweak index which had on-chain activity, used to implement a gap limit,
+    // i.e. scanning a certain number of addresses past the last one that had
+    // activity.
+    let mut last_used_idx = None;
     let mut tweak_idxes_with_pegins = BTreeSet::new();
 
-    let new_start_idx = loop {
-        let gap_since_last_used = cur_tweak_idx - last_used_idx.unwrap_or_default();
-
-        if RECOVER_MAX_GAP <= gap_since_last_used {
-            break last_used_idx
-                .unwrap_or_default()
-                .advance(RECOVER_NUM_IDX_ADD_TO_LAST_USED);
+    for cur_tweak_idx in tweak_indexes_to_scan {
+        if RECOVER_MAX_GAP <= cur_tweak_idx - last_used_idx.unwrap_or_default() {
+            break;
         }
 
-        if used_tweak_idxes.contains(&cur_tweak_idx) {
-            debug!(target: LOG_CLIENT_MODULE_WALLET,
-                tweak_idx=%cur_tweak_idx,
-                "Skipping checking history of an address, as it was previously used");
+        if !check_addr_history(cur_tweak_idx).await?.is_empty() {
+            tweak_idxes_with_pegins.insert(cur_tweak_idx);
             last_used_idx = Some(cur_tweak_idx);
-        } else {
-            let history = check_addr_history(cur_tweak_idx).await?;
-
-            if !history.is_empty() {
-                last_used_idx = Some(cur_tweak_idx);
-                tweak_idxes_with_pegins.insert(cur_tweak_idx);
-            }
         }
-        cur_tweak_idx = cur_tweak_idx.next();
-    };
+    }
+
+    let new_start_idx = last_used_idx
+        .unwrap_or_default()
+        .advance(RECOVER_NUM_IDX_ADD_TO_LAST_USED);
 
     Ok(RecoverScanOutcome {
         last_used_idx,
