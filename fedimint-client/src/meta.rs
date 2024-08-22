@@ -227,6 +227,7 @@ impl<S: MetaSource + ?Sized> MetaService<S> {
 #[non_exhaustive]
 pub struct LegacyMetaSource {
     reqwest: reqwest::Client,
+    extra_override_keys: Vec<String>,
 }
 
 #[apply(async_trait_maybe_send!)]
