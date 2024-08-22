@@ -370,6 +370,12 @@ impl FromStr for FederationIdPrefix {
     }
 }
 
+impl FederationIdPrefix {
+    pub fn as_bytes(&self) -> Vec<u8> {
+        self.0.to_vec()
+    }
+}
+
 /// Display as a hex encoding
 impl FederationId {
     /// Random dummy id for testing

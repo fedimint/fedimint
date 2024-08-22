@@ -74,6 +74,9 @@ async fn main() -> anyhow::Result<()> {
     }
 }
 
+/// TODO(v0.5.0): We do not need to run the `gatewayd-mnemonic` test from v0.4.0
+/// -> v0.5.0 over and over again. Once we have verified this test passes for
+/// v0.5.0, it can safely be removed.
 async fn mnemonic_upgrade_test(
     old_gatewayd_path: PathBuf,
     new_gatewayd_path: PathBuf,

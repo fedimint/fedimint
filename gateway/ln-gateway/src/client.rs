@@ -108,11 +108,9 @@ impl GatewayClientBuilder {
             let root_secret = self.client_plainrootsecret(&db).await?;
             (db, root_secret)
         } else {
-            // Use the mint channel id as the prefix for the database because it is a short,
-            // unique identifier
             let db = gateway
                 .gateway_db
-                .with_prefix(config.mint_channel_id.to_le_bytes().to_vec());
+                .with_prefix(federation_id.to_prefix().as_bytes());
             let root_secret = Bip39RootSecretStrategy::<12>::to_root_secret(mnemonic);
             (db, root_secret)
         };
