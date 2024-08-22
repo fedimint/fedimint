@@ -69,6 +69,10 @@ impl TweakIdx {
     pub fn advance(self, i: u64) -> Self {
         Self(self.0 + i)
     }
+
+    pub fn saturating_sub(&self, rhs: TweakIdx) -> u64 {
+        self.0.saturating_sub(rhs.0)
+    }
 }
 
 impl ops::Sub for TweakIdx {

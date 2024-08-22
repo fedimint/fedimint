@@ -1349,7 +1349,7 @@ mod tests {
             .await
             .unwrap(),
             RecoverScanOutcome {
-                last_used_idx: Some(TweakIdx(9)),
+                last_used_idx: None,
                 new_start_idx: TweakIdx(9 + RECOVER_NUM_IDX_ADD_TO_LAST_USED),
                 tweak_idxes_with_pegins: BTreeSet::from([])
             }

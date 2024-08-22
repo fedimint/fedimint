@@ -433,7 +433,7 @@ pub(crate) struct RecoverScanOutcome {
 /// A part of `WalletClientInit::recover` extracted out to be easy to
 /// test, as a side-effect free.
 pub(crate) async fn recover_scan_idxes_for_activity<F, FF, T>(
-    previous_next_unused_idx: TweakIdx,
+    scan_from_idx: TweakIdx,
     used_tweak_idxes: &BTreeSet<TweakIdx>,
     check_addr_history: F,
 ) -> anyhow::Result<RecoverScanOutcome>
@@ -441,9 +441,6 @@ where
     F: Fn(TweakIdx) -> FF,
     FF: Future<Output = anyhow::Result<Vec<T>>>,
 {
-    // TODO: change fn arg to scan_from_idx instead of previous_next_unused_idx
-    let scan_from_idx = previous_next_unused_idx.prev().unwrap_or_default();
-
     let tweak_indexes_to_scan = (scan_from_idx.0..).map(TweakIdx).filter(|tweak_idx| {
         let already_used = used_tweak_idxes.contains(tweak_idx);
 
@@ -460,11 +457,16 @@ where
     // Last tweak index which had on-chain activity, used to implement a gap limit,
     // i.e. scanning a certain number of addresses past the last one that had
     // activity.
-    let mut last_used_idx = None;
+    let mut last_used_idx = used_tweak_idxes.last().copied();
+    // When we didn't find any used idx yet, assume that last one before
+    // `scan_from_idx` was used.
+    let fallback_last_used_idx = scan_from_idx.prev().unwrap_or_default();
     let mut tweak_idxes_with_pegins = BTreeSet::new();
 
     for cur_tweak_idx in tweak_indexes_to_scan {
-        if RECOVER_MAX_GAP <= cur_tweak_idx - last_used_idx.unwrap_or_default() {
+        if RECOVER_MAX_GAP
+            <= cur_tweak_idx.saturating_sub(last_used_idx.unwrap_or(fallback_last_used_idx))
+        {
             break;
         }
 
@@ -475,7 +477,7 @@ where
     }
 
     let new_start_idx = last_used_idx
-        .unwrap_or_default()
+        .unwrap_or(fallback_last_used_idx)
         .advance(RECOVER_NUM_IDX_ADD_TO_LAST_USED);
 
     Ok(RecoverScanOutcome {
