@@ -3,10 +3,11 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use async_trait::async_trait;
+use bitcoin::Address;
 use fedimint_core::encoding::Encodable;
 use fedimint_core::task::{sleep, TaskGroup};
 use fedimint_core::util::SafeUrl;
-use fedimint_core::{secp256k1, Amount};
+use fedimint_core::{secp256k1, Amount, BitcoinAmountOrAll};
 use fedimint_ln_common::PrunedInvoice;
 use tonic::transport::{Channel, Endpoint};
 use tonic::Request;
@@ -19,7 +20,7 @@ use crate::gateway_lnrpc::{
     CreateInvoiceResponse, EmptyRequest, EmptyResponse, GetBalancesResponse,
     GetLnOnchainAddressResponse, GetNodeInfoResponse, GetRouteHintsRequest, GetRouteHintsResponse,
     InterceptHtlcResponse, OpenChannelRequest, OpenChannelResponse, PayInvoiceResponse,
-    PayPrunedInvoiceRequest,
+    PayPrunedInvoiceRequest, WithdrawOnchainRequest, WithdrawOnchainResponse,
 };
 use crate::lightning::MAX_LIGHTNING_RETRIES;
 
@@ -178,6 +179,30 @@ impl ILnRpcClient for NetworkLnRpcClient {
             .get_ln_onchain_address(EmptyRequest {})
             .await
             .map_err(|status| LightningRpcError::FailedToGetLnOnchainAddress {
+                failure_reason: status.message().to_string(),
+            })?;
+        Ok(res.into_inner())
+    }
+
+    async fn withdraw_onchain(
+        &self,
+        address: Address,
+        amount: BitcoinAmountOrAll,
+        fee_rate_sats_per_vbyte: u64,
+    ) -> Result<WithdrawOnchainResponse, LightningRpcError> {
+        let mut client = self.connect().await?;
+        let res = client
+            .withdraw_onchain(WithdrawOnchainRequest {
+                address: address.to_string(),
+                amount_sats: match amount {
+                    // This leaves the field empty, which is interpreted as "all funds".
+                    BitcoinAmountOrAll::All => None,
+                    BitcoinAmountOrAll::Amount(amount) => Some(amount.to_sat()),
+                },
+                fee_rate_sats_per_vbyte,
+            })
+            .await
+            .map_err(|status| LightningRpcError::FailedToWithdrawOnchain {
                 failure_reason: status.message().to_string(),
             })?;
         Ok(res.into_inner())

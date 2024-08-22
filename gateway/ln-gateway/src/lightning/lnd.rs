@@ -6,10 +6,11 @@ use std::time::Duration;
 
 use anyhow::ensure;
 use async_trait::async_trait;
+use bitcoin::Address;
 use bitcoin_hashes::{sha256, Hash};
 use fedimint_core::db::Database;
 use fedimint_core::task::{sleep, TaskGroup};
-use fedimint_core::{secp256k1, Amount};
+use fedimint_core::{secp256k1, Amount, BitcoinAmountOrAll};
 use fedimint_ln_common::PrunedInvoice;
 use fedimint_lnv2_common::contracts::PaymentImage;
 use hex::ToHex;
@@ -29,7 +30,7 @@ use tonic_lnd::lnrpc::payment::PaymentStatus;
 use tonic_lnd::lnrpc::{
     ChanInfoRequest, ChannelBalanceRequest, ChannelPoint, CloseChannelRequest, ConnectPeerRequest,
     GetInfoRequest, Invoice, InvoiceSubscription, LightningAddress, ListChannelsRequest,
-    ListInvoiceRequest, OpenChannelRequest, WalletBalanceRequest,
+    ListInvoiceRequest, OpenChannelRequest, SendCoinsRequest, WalletBalanceRequest,
 };
 use tonic_lnd::routerrpc::{
     CircuitKey, ForwardHtlcInterceptResponse, ResolveHoldForwardAction, SendPaymentRequest,
@@ -49,6 +50,7 @@ use crate::gateway_lnrpc::{
     CloseChannelsWithPeerResponse, CreateInvoiceRequest, CreateInvoiceResponse, EmptyResponse,
     GetBalancesResponse, GetLnOnchainAddressResponse, GetNodeInfoResponse, GetRouteHintsResponse,
     InterceptHtlcRequest, InterceptHtlcResponse, OpenChannelResponse, PayInvoiceResponse,
+    WithdrawOnchainResponse,
 };
 
 type HtlcSubscriptionSender = mpsc::Sender<Result<InterceptHtlcRequest, Status>>;
@@ -1120,6 +1122,48 @@ impl ILnRpcClient for GatewayLndClient {
             }),
             Err(e) => Err(LightningRpcError::FailedToGetLnOnchainAddress {
                 failure_reason: format!("Failed to get funding address {e:?}"),
+            }),
+        }
+    }
+
+    async fn withdraw_onchain(
+        &self,
+        address: Address,
+        amount: BitcoinAmountOrAll,
+        fee_rate_sats_per_vbyte: u64,
+    ) -> Result<WithdrawOnchainResponse, LightningRpcError> {
+        #[allow(deprecated)]
+        let request = match amount {
+            BitcoinAmountOrAll::All => SendCoinsRequest {
+                addr: address.to_string(),
+                amount: 0,
+                target_conf: 0,
+                sat_per_vbyte: fee_rate_sats_per_vbyte,
+                sat_per_byte: 0,
+                send_all: true,
+                label: String::new(),
+                min_confs: 0,
+                spend_unconfirmed: true,
+            },
+            BitcoinAmountOrAll::Amount(amount) => SendCoinsRequest {
+                addr: address.to_string(),
+                amount: amount.to_sat() as i64,
+                target_conf: 0,
+                sat_per_vbyte: fee_rate_sats_per_vbyte,
+                sat_per_byte: 0,
+                send_all: false,
+                label: String::new(),
+                min_confs: 0,
+                spend_unconfirmed: true,
+            },
+        };
+
+        match self.connect().await?.lightning().send_coins(request).await {
+            Ok(res) => Ok(WithdrawOnchainResponse {
+                txid: res.into_inner().txid,
+            }),
+            Err(e) => Err(LightningRpcError::FailedToWithdrawOnchain {
+                failure_reason: format!("Failed to withdraw funds on-chain {e:?}"),
             }),
         }
     }

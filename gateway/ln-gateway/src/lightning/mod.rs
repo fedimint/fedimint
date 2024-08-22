@@ -9,14 +9,14 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use bip39::Mnemonic;
-use bitcoin::Network;
+use bitcoin::{Address, Network};
 use clap::Subcommand;
 use fedimint_core::db::Database;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::secp256k1::PublicKey;
 use fedimint_core::task::TaskGroup;
 use fedimint_core::util::SafeUrl;
-use fedimint_core::{secp256k1, Amount};
+use fedimint_core::{secp256k1, Amount, BitcoinAmountOrAll};
 use fedimint_ln_common::route_hints::RouteHint;
 use fedimint_ln_common::PrunedInvoice;
 use futures::stream::BoxStream;
@@ -34,6 +34,7 @@ use crate::gateway_lnrpc::{
     CloseChannelsWithPeerResponse, CreateInvoiceRequest, CreateInvoiceResponse, EmptyResponse,
     GetBalancesResponse, GetLnOnchainAddressResponse, GetNodeInfoResponse, GetRouteHintsResponse,
     InterceptHtlcRequest, InterceptHtlcResponse, OpenChannelResponse, PayInvoiceResponse,
+    WithdrawOnchainResponse,
 };
 
 pub const MAX_LIGHTNING_RETRIES: u32 = 10;
@@ -65,6 +66,8 @@ pub enum LightningRpcError {
     FailedToGetInvoice { failure_reason: String },
     #[error("Failed to get funding address: {failure_reason}")]
     FailedToGetLnOnchainAddress { failure_reason: String },
+    #[error("Failed to withdraw funds on-chain: {failure_reason}")]
+    FailedToWithdrawOnchain { failure_reason: String },
     #[error("Failed to connect to peer: {failure_reason}")]
     FailedToConnectToPeer { failure_reason: String },
     #[error("Failed to list active channels: {failure_reason}")]
@@ -173,6 +176,13 @@ pub trait ILnRpcClient: Debug + Send + Sync {
     async fn get_ln_onchain_address(
         &self,
     ) -> Result<GetLnOnchainAddressResponse, LightningRpcError>;
+
+    async fn withdraw_onchain(
+        &self,
+        address: Address,
+        amount: BitcoinAmountOrAll,
+        fee_rate_sats_per_vbyte: u64,
+    ) -> Result<WithdrawOnchainResponse, LightningRpcError>;
 
     /// Open a channel with a peer lightning node from the gateway's lightning
     /// node.

@@ -10,3 +10,4 @@ pub const PAY_INVOICE_SELF_ENDPOINT: &str = "/pay_invoice_self";
 pub const REMOVE_GATEWAY_ENDPOINT: &str = "remove_gateway";
 pub const ROUTING_INFO_ENDPOINT: &str = "/routing_info";
 pub const SEND_PAYMENT_ENDPOINT: &str = "/send_payment";
+pub const WITHDRAW_ONCHAIN_ENDPOINT: &str = "/withdraw_onchain";

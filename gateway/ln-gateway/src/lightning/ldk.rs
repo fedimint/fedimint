@@ -5,10 +5,10 @@ use std::time::Duration;
 
 use async_trait::async_trait;
 use bip39::Mnemonic;
-use bitcoin::{secp256k1, Network, OutPoint};
+use bitcoin::{secp256k1, Address, Network, OutPoint};
 use fedimint_core::runtime::spawn;
 use fedimint_core::task::TaskGroup;
-use fedimint_core::Amount;
+use fedimint_core::{Amount, BitcoinAmountOrAll};
 use ldk_node::lightning::ln::msgs::SocketAddress;
 use ldk_node::lightning::ln::PaymentHash;
 use ldk_node::lightning_invoice::Bolt11Invoice;
@@ -27,6 +27,7 @@ use crate::gateway_lnrpc::{
     CloseChannelsWithPeerResponse, CreateInvoiceRequest, CreateInvoiceResponse, EmptyResponse,
     GetBalancesResponse, GetLnOnchainAddressResponse, GetNodeInfoResponse, GetRouteHintsResponse,
     InterceptHtlcRequest, InterceptHtlcResponse, OpenChannelResponse, PayInvoiceResponse,
+    WithdrawOnchainResponse,
 };
 
 pub struct GatewayLdkClient {
@@ -413,6 +414,32 @@ impl ILnRpcClient for GatewayLdkClient {
             .map_err(|e| LightningRpcError::FailedToGetLnOnchainAddress {
                 failure_reason: e.to_string(),
             })
+    }
+
+    async fn withdraw_onchain(
+        &self,
+        address: Address,
+        amount: BitcoinAmountOrAll,
+        // TODO: Respect this fee rate once `ldk-node` supports setting a custom fee rate.
+        // This work is planned to be in `ldk-node` v0.4 and is tracked here:
+        // https://github.com/lightningdevkit/ldk-node/issues/176
+        _fee_rate_sats_per_vbyte: u64,
+    ) -> Result<WithdrawOnchainResponse, LightningRpcError> {
+        let onchain = self.node.onchain_payment();
+
+        let txid = match amount {
+            BitcoinAmountOrAll::All => onchain.send_all_to_address(&address),
+            BitcoinAmountOrAll::Amount(amount_sats) => {
+                onchain.send_to_address(&address, amount_sats.to_sat())
+            }
+        }
+        .map_err(|e| LightningRpcError::FailedToWithdrawOnchain {
+            failure_reason: e.to_string(),
+        })?;
+
+        Ok(WithdrawOnchainResponse {
+            txid: txid.to_string(),
+        })
     }
 
     async fn open_channel(

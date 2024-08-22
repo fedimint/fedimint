@@ -7,9 +7,10 @@ use async_trait::async_trait;
 use bitcoin::hashes::{sha256, Hash};
 use bitcoin::key::KeyPair;
 use bitcoin::secp256k1::{PublicKey, SecretKey};
+use bitcoin::Address;
 use fedimint_core::task::TaskGroup;
 use fedimint_core::util::BoxStream;
-use fedimint_core::{secp256k1, Amount};
+use fedimint_core::{secp256k1, Amount, BitcoinAmountOrAll};
 use fedimint_ln_common::PrunedInvoice;
 use fedimint_logging::LOG_TEST;
 use lightning_invoice::{
@@ -19,6 +20,7 @@ use ln_gateway::gateway_lnrpc::{
     self, CloseChannelsWithPeerResponse, CreateInvoiceRequest, CreateInvoiceResponse,
     EmptyResponse, GetBalancesResponse, GetLnOnchainAddressResponse, GetNodeInfoResponse,
     GetRouteHintsResponse, InterceptHtlcResponse, OpenChannelResponse, PayInvoiceResponse,
+    WithdrawOnchainResponse,
 };
 use ln_gateway::lightning::{
     ChannelInfo, HtlcResult, ILnRpcClient, LightningRpcError, RouteHtlcStream,
@@ -261,6 +263,18 @@ impl ILnRpcClient for FakeLightningTest {
     ) -> Result<GetLnOnchainAddressResponse, LightningRpcError> {
         Err(LightningRpcError::FailedToGetLnOnchainAddress {
             failure_reason: "FakeLightningTest does not support getting a funding address"
+                .to_string(),
+        })
+    }
+
+    async fn withdraw_onchain(
+        &self,
+        _address: Address,
+        _amount: BitcoinAmountOrAll,
+        _fee_rate_sats_per_vbyte: u64,
+    ) -> Result<WithdrawOnchainResponse, LightningRpcError> {
+        Err(LightningRpcError::FailedToWithdrawOnchain {
+            failure_reason: "FakeLightningTest does not support withdrawing funds on-chain"
                 .to_string(),
         })
     }
