@@ -443,15 +443,8 @@ where
     F: Fn(TweakIdx) -> FF,
     FF: Future<Output = anyhow::Result<Vec<T>>>,
 {
-    let mut last_used_idx = if previous_next_unused_idx == TweakIdx::ZERO {
-        None
-    } else {
-        Some(
-            previous_next_unused_idx
-                .prev()
-                .expect("Check for not being zero"),
-        )
-    };
+    let mut last_used_idx = previous_next_unused_idx.prev();
+
     let mut cur_tweak_idx = previous_next_unused_idx;
     let mut tweak_idxes_with_pegins = BTreeSet::new();
 
