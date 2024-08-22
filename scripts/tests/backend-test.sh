@@ -82,8 +82,8 @@ function run_tests() {
   fi
 
   # Switch to electrum and run wallet tests
-  export FM_BITCOIN_RPC_KIND="electrum"
-  export FM_BITCOIN_RPC_URL="tcp://127.0.0.1:$FM_PORT_ELECTRS"
+  export FM_TEST_BACKEND_BITCOIN_RPC_KIND="electrum"
+  export FM_TEST_BACKEND_BITCOIN_RPC_URL="tcp://127.0.0.1:$FM_PORT_ELECTRS"
 
   if [ -z "${FM_TEST_ONLY:-}" ] || [ "${FM_TEST_ONLY:-}" = "electrs" ]; then
     >&2 echo "### Testing against electrs"
@@ -95,14 +95,14 @@ function run_tests() {
   fi
 
   # Switch to esplora and run wallet tests
-  export FM_BITCOIN_RPC_KIND="esplora"
-  export FM_BITCOIN_RPC_URL="http://127.0.0.1:$FM_PORT_ESPLORA"
+  export FM_TEST_BACKEND_BITCOIN_RPC_KIND="esplora"
+  export FM_TEST_BACKEND_BITCOIN_RPC_URL="http://127.0.0.1:$FM_PORT_ESPLORA"
 
   if [ -z "${FM_TEST_ONLY:-}" ] || [ "${FM_TEST_ONLY:-}" = "esplora" ]; then
     >&2 echo "### Testing against esplora"
     cargo nextest run --locked --workspace --all-targets \
       ${CARGO_PROFILE:+--cargo-profile ${CARGO_PROFILE}} ${CARGO_PROFILE:+--profile ${CARGO_PROFILE}} \
-      ${TEST_ARGS_THREADED} \
+      ${TEST_ARGS_SERIALIZED} \
       -E 'package(fedimint-wallet-tests)'
     >&2 echo "### Testing against esplora - complete"
   fi
