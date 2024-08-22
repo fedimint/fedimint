@@ -30,6 +30,16 @@
 <a href="#30" id="30">30</a>
 <a href="#31" id="31">31</a>
 <a href="#32" id="32">32</a>
+<a href="#33" id="33">33</a>
+<a href="#34" id="34">34</a>
+<a href="#35" id="35">35</a>
+<a href="#36" id="36">36</a>
+<a href="#37" id="37">37</a>
+<a href="#38" id="38">38</a>
+<a href="#39" id="39">39</a>
+<a href="#40" id="40">40</a>
+<a href="#41" id="41">41</a>
+<a href="#42" id="42">42</a>
 </pre></div><pre class="rust"><code><span class="comment">// Env variable to TODO
 </span><span class="kw">pub const </span>FM_PREPARE_DB_MIGRATION_SNAPSHOTS_ENV: <span class="kw-2">&amp;</span>str = <span class="string">"FM_PREPARE_DB_MIGRATION_SNAPSHOTS"</span>;
 
@@ -62,4 +72,14 @@
 
 <span class="comment">// Env variable to TODO
 </span><span class="kw">pub const </span>FM_TEST_BITCOIND_RPC_ENV: <span class="kw-2">&amp;</span>str = <span class="string">"FM_TEST_BITCOIND_RPC"</span>;
+
+<span class="comment">// Overrides the wallet server's Bitcoin RPC kind used in testing fixtures.
+// This is necessary instead of `FM_FORCE_BITCOIN_RPC_KIND_ENV` since that
+// overrides both the wallet client and server's Bitcoin RPC.
+</span><span class="kw">pub const </span>FM_TEST_BACKEND_BITCOIN_RPC_KIND_ENV: <span class="kw-2">&amp;</span>str = <span class="string">"FM_TEST_BACKEND_BITCOIN_RPC_KIND"</span>;
+
+<span class="comment">// Overrides the wallet server's Bitcoin RPC URL used in testing fixtures.
+// This is necessary instead of `FM_FORCE_BITCOIN_RPC_URL_ENV` since that
+// overrides both the wallet client and server's Bitcoin RPC.
+</span><span class="kw">pub const </span>FM_TEST_BACKEND_BITCOIN_RPC_URL_ENV: <span class="kw-2">&amp;</span>str = <span class="string">"FM_TEST_BACKEND_BITCOIN_RPC_URL"</span>;
 </code></pre></div></section></main></body></html>
