@@ -164,7 +164,6 @@ fn v1_routes(gateway: Arc<Gateway>) -> Router {
             CREATE_BOLT11_INVOICE_ENDPOINT,
             post(create_bolt11_invoice_v2),
         )
-        .route(SPEND_ECASH_ENDPOINT, post(spend_ecash))
         .route(RECEIVE_ECASH_ENDPOINT, post(receive_ecash));
 
     // Authenticated, public routes used for gateway administration
@@ -184,6 +183,7 @@ fn v1_routes(gateway: Arc<Gateway>) -> Router {
         )
         .route(LIST_ACTIVE_CHANNELS_ENDPOINT, get(list_active_channels))
         .route(GET_BALANCES_ENDPOINT, get(get_balances))
+        .route(SPEND_ECASH_ENDPOINT, post(spend_ecash))
         .layer(middleware::from_fn(auth_middleware));
 
     // Routes that are un-authenticated before gateway configuration, then become
