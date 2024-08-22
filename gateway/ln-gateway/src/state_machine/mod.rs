@@ -53,10 +53,11 @@ use self::pay::{
     OutgoingPaymentError,
 };
 use crate::gateway_lnrpc::InterceptHtlcRequest;
+use crate::lightning::LightningContext;
 use crate::state_machine::complete::{
     GatewayCompleteCommon, GatewayCompleteStates, WaitForPreimageState,
 };
-use crate::{Gateway, LightningContext};
+use crate::Gateway;
 
 /// The high-level state of a reissue operation started with
 /// [`GatewayClientModule::gateway_pay_bolt11_invoice`].

@@ -17,7 +17,7 @@ use crate::gateway_lnrpc::gateway_lightning_client::GatewayLightningClient;
 use crate::gateway_lnrpc::{
     self, CloseChannelsWithPeerRequest, CloseChannelsWithPeerResponse, CreateInvoiceRequest,
     CreateInvoiceResponse, EmptyRequest, EmptyResponse, GetBalancesResponse,
-    GetFundingAddressResponse, GetNodeInfoResponse, GetRouteHintsRequest, GetRouteHintsResponse,
+    GetLnOnchainAddressResponse, GetNodeInfoResponse, GetRouteHintsRequest, GetRouteHintsResponse,
     InterceptHtlcResponse, OpenChannelRequest, PayInvoiceResponse, PayPrunedInvoiceRequest,
 };
 use crate::lightning::MAX_LIGHTNING_RETRIES;
@@ -169,12 +169,14 @@ impl ILnRpcClient for NetworkLnRpcClient {
         Ok(res.into_inner())
     }
 
-    async fn get_funding_address(&self) -> Result<GetFundingAddressResponse, LightningRpcError> {
+    async fn get_ln_onchain_address(
+        &self,
+    ) -> Result<GetLnOnchainAddressResponse, LightningRpcError> {
         let mut client = self.connect().await?;
         let res = client
-            .get_funding_address(EmptyRequest {})
+            .get_ln_onchain_address(EmptyRequest {})
             .await
-            .map_err(|status| LightningRpcError::FailedToGetFundingAddress {
+            .map_err(|status| LightningRpcError::FailedToGetLnOnchainAddress {
                 failure_reason: status.message().to_string(),
             })?;
         Ok(res.into_inner())

@@ -875,7 +875,7 @@ pub async fn open_channels_between_gateways(
 
     debug!(target: LOG_DEVIMINT, "Funding all gateway lightning nodes...");
     for (gw, _gw_name) in gateways {
-        let funding_addr = gw.get_funding_address().await?;
+        let funding_addr = gw.get_ln_onchain_address().await?;
         bitcoind.send_to(funding_addr, 100_000_000).await?;
     }
 

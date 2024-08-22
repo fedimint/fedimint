@@ -159,7 +159,7 @@ pub struct CreateInvoiceForSelfPayload {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct GetFundingAddressPayload;
+pub struct GetLnOnchainAddressPayload;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct OpenChannelPayload {
@@ -215,4 +215,17 @@ pub struct ReceiveEcashPayload {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ReceiveEcashResponse {
     pub amount: Amount,
+}
+
+#[derive(serde::Serialize, serde::Deserialize)]
+pub struct GatewayBalances {
+    pub onchain_balance_sats: u64,
+    pub lightning_balance_msats: u64,
+    pub ecash_balances: Vec<FederationBalanceInfo>,
+}
+
+#[derive(serde::Serialize, serde::Deserialize)]
+pub struct FederationBalanceInfo {
+    pub federation_id: FederationId,
+    pub ecash_balance_msats: Amount,
 }

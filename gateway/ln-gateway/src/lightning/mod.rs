@@ -31,7 +31,7 @@ use crate::envs::{
 };
 use crate::gateway_lnrpc::{
     CloseChannelsWithPeerResponse, CreateInvoiceRequest, CreateInvoiceResponse, EmptyResponse,
-    GetBalancesResponse, GetFundingAddressResponse, GetNodeInfoResponse, GetRouteHintsResponse,
+    GetBalancesResponse, GetLnOnchainAddressResponse, GetNodeInfoResponse, GetRouteHintsResponse,
     InterceptHtlcRequest, InterceptHtlcResponse, PayInvoiceResponse,
 };
 use crate::GatewayError;
@@ -64,7 +64,7 @@ pub enum LightningRpcError {
     #[error("Failed to get Invoice: {failure_reason}")]
     FailedToGetInvoice { failure_reason: String },
     #[error("Failed to get funding address: {failure_reason}")]
-    FailedToGetFundingAddress { failure_reason: String },
+    FailedToGetLnOnchainAddress { failure_reason: String },
     #[error("Failed to connect to peer: {failure_reason}")]
     FailedToConnectToPeer { failure_reason: String },
     #[error("Failed to list active channels: {failure_reason}")]
@@ -75,6 +75,15 @@ pub enum LightningRpcError {
     FailedToWaitForChainSync { failure_reason: String },
     #[error("Failed to subscribe to invoice updates: {failure_reason}")]
     FailedToSubscribeToInvoiceUpdates { failure_reason: String },
+}
+
+/// Represents an active connection to the lightning node.
+#[derive(Clone, Debug)]
+pub struct LightningContext {
+    pub lnrpc: Arc<dyn ILnRpcClient>,
+    pub lightning_public_key: PublicKey,
+    pub lightning_alias: String,
+    pub lightning_network: Network,
 }
 
 /// A trait that the gateway uses to interact with a lightning node. This allows
@@ -159,7 +168,9 @@ pub trait ILnRpcClient: Debug + Send + Sync {
 
     /// Get a funding address belonging to the gateway's lightning node
     /// wallet.
-    async fn get_funding_address(&self) -> Result<GetFundingAddressResponse, LightningRpcError>;
+    async fn get_ln_onchain_address(
+        &self,
+    ) -> Result<GetLnOnchainAddressResponse, LightningRpcError>;
 
     /// Open a channel with a peer lightning node from the gateway's lightning
     /// node.

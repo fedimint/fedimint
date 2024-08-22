@@ -46,7 +46,7 @@ use crate::gateway_lnrpc::get_route_hints_response::{RouteHint, RouteHintHop};
 use crate::gateway_lnrpc::intercept_htlc_response::{Action, Cancel, Forward, Settle};
 use crate::gateway_lnrpc::{
     CloseChannelsWithPeerResponse, CreateInvoiceRequest, CreateInvoiceResponse, EmptyResponse,
-    GetBalancesResponse, GetFundingAddressResponse, GetNodeInfoResponse, GetRouteHintsResponse,
+    GetBalancesResponse, GetLnOnchainAddressResponse, GetNodeInfoResponse, GetRouteHintsResponse,
     InterceptHtlcRequest, InterceptHtlcResponse, PayInvoiceResponse,
 };
 type HtlcSubscriptionSender = mpsc::Sender<Result<InterceptHtlcRequest, Status>>;
@@ -1097,7 +1097,9 @@ impl ILnRpcClient for GatewayLndClient {
         }
     }
 
-    async fn get_funding_address(&self) -> Result<GetFundingAddressResponse, LightningRpcError> {
+    async fn get_ln_onchain_address(
+        &self,
+    ) -> Result<GetLnOnchainAddressResponse, LightningRpcError> {
         let mut client = self.connect().await?;
 
         match client
@@ -1109,10 +1111,10 @@ impl ILnRpcClient for GatewayLndClient {
             })
             .await
         {
-            Ok(response) => Ok(GetFundingAddressResponse {
+            Ok(response) => Ok(GetLnOnchainAddressResponse {
                 address: response.into_inner().addr,
             }),
-            Err(e) => Err(LightningRpcError::FailedToGetFundingAddress {
+            Err(e) => Err(LightningRpcError::FailedToGetLnOnchainAddress {
                 failure_reason: format!("Failed to get funding address {e:?}"),
             }),
         }

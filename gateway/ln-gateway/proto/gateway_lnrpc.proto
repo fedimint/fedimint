@@ -37,7 +37,7 @@ service GatewayLightning {
   rpc CreateInvoice(CreateInvoiceRequest) returns (CreateInvoiceResponse) {}
 
   /* Get a Bitcoin address that belongs to the underlying lightning node's wallet. */
-  rpc GetFundingAddress(EmptyRequest) returns (GetFundingAddressResponse) {}
+  rpc GetLnOnchainAddress(EmptyRequest) returns (GetLnOnchainAddressResponse) {}
 
   /* Open a channel on the underlying lightning node. */
   rpc OpenChannel(OpenChannelRequest) returns (EmptyResponse) {}
@@ -274,7 +274,7 @@ message CreateInvoiceResponse {
   string invoice = 1;
 }
 
-message GetFundingAddressResponse {
+message GetLnOnchainAddressResponse {
   // An address belonging to the lightning node's on-chain wallet.
   string address = 1;
 }

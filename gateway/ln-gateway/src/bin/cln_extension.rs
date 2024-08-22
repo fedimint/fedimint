@@ -31,7 +31,7 @@ use ln_gateway::gateway_lnrpc::list_active_channels_response::ChannelInfo;
 use ln_gateway::gateway_lnrpc::{
     CloseChannelsWithPeerRequest, CloseChannelsWithPeerResponse, CreateInvoiceRequest,
     CreateInvoiceResponse, EmptyRequest, EmptyResponse, GetBalancesResponse,
-    GetFundingAddressResponse, GetNodeInfoResponse, GetRouteHintsRequest, GetRouteHintsResponse,
+    GetLnOnchainAddressResponse, GetNodeInfoResponse, GetRouteHintsRequest, GetRouteHintsResponse,
     InterceptHtlcRequest, InterceptHtlcResponse, ListActiveChannelsResponse, OpenChannelRequest,
     PayInvoiceRequest, PayInvoiceResponse, PayPrunedInvoiceRequest, PrunedInvoice,
 };
@@ -927,10 +927,10 @@ impl GatewayLightning for ClnRpcService {
         Ok(tonic::Response::new(response))
     }
 
-    async fn get_funding_address(
+    async fn get_ln_onchain_address(
         &self,
         _request: tonic::Request<EmptyRequest>,
-    ) -> Result<tonic::Response<GetFundingAddressResponse>, Status> {
+    ) -> Result<tonic::Response<GetLnOnchainAddressResponse>, Status> {
         let address_or = self
             .rpc_client()
             .await
@@ -952,7 +952,9 @@ impl GatewayLightning for ClnRpcService {
             .map_err(|e| tonic::Status::internal(e.to_string()))?;
 
         match address_or {
-            Some(address) => Ok(tonic::Response::new(GetFundingAddressResponse { address })),
+            Some(address) => Ok(tonic::Response::new(GetLnOnchainAddressResponse {
+                address,
+            })),
             None => Err(Status::internal("cln newaddr rpc returned no address")),
         }
     }

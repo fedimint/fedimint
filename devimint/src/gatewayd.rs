@@ -221,8 +221,8 @@ impl Gatewayd {
             .to_owned())
     }
 
-    pub async fn get_funding_address(&self) -> Result<String> {
-        let address = cmd!(self, "lightning", "get-funding-address")
+    pub async fn get_ln_onchain_address(&self) -> Result<String> {
+        let address = cmd!(self, "lightning", "get-ln-onchain-address")
             .out_string()
             .await?;
         Ok(address)
