@@ -1903,41 +1903,6 @@
 <a href="#1903" id="1903">1903</a>
 <a href="#1904" id="1904">1904</a>
 <a href="#1905" id="1905">1905</a>
-<a href="#1906" id="1906">1906</a>
-<a href="#1907" id="1907">1907</a>
-<a href="#1908" id="1908">1908</a>
-<a href="#1909" id="1909">1909</a>
-<a href="#1910" id="1910">1910</a>
-<a href="#1911" id="1911">1911</a>
-<a href="#1912" id="1912">1912</a>
-<a href="#1913" id="1913">1913</a>
-<a href="#1914" id="1914">1914</a>
-<a href="#1915" id="1915">1915</a>
-<a href="#1916" id="1916">1916</a>
-<a href="#1917" id="1917">1917</a>
-<a href="#1918" id="1918">1918</a>
-<a href="#1919" id="1919">1919</a>
-<a href="#1920" id="1920">1920</a>
-<a href="#1921" id="1921">1921</a>
-<a href="#1922" id="1922">1922</a>
-<a href="#1923" id="1923">1923</a>
-<a href="#1924" id="1924">1924</a>
-<a href="#1925" id="1925">1925</a>
-<a href="#1926" id="1926">1926</a>
-<a href="#1927" id="1927">1927</a>
-<a href="#1928" id="1928">1928</a>
-<a href="#1929" id="1929">1929</a>
-<a href="#1930" id="1930">1930</a>
-<a href="#1931" id="1931">1931</a>
-<a href="#1932" id="1932">1932</a>
-<a href="#1933" id="1933">1933</a>
-<a href="#1934" id="1934">1934</a>
-<a href="#1935" id="1935">1935</a>
-<a href="#1936" id="1936">1936</a>
-<a href="#1937" id="1937">1937</a>
-<a href="#1938" id="1938">1938</a>
-<a href="#1939" id="1939">1939</a>
-<a href="#1940" id="1940">1940</a>
 </pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::cast_possible_wrap)]
@@ -2030,7 +1995,6 @@
 <span class="kw">use </span>futures::stream::StreamExt;
 <span class="kw">use </span>gateway_lnrpc::intercept_htlc_response::{Action, Cancel};
 <span class="kw">use </span>gateway_lnrpc::{CloseChannelsWithPeerResponse, InterceptHtlcRequest, InterceptHtlcResponse};
-<span class="kw">use </span>hex::ToHex;
 <span class="kw">use </span>lightning::{ILnRpcClient, LightningBuilder, LightningRpcError};
 <span class="kw">use </span>lightning_invoice::{Bolt11Invoice, RoutingFees};
 <span class="kw">use </span>rand::Rng;
@@ -2050,13 +2014,14 @@
 <span class="kw">use </span><span class="kw">crate</span>::gateway_lnrpc::intercept_htlc_response::Forward;
 <span class="kw">use </span><span class="kw">crate</span>::gateway_lnrpc::CreateInvoiceRequest;
 <span class="kw">use </span><span class="kw">crate</span>::gateway_module_v2::GatewayClientModuleV2;
-<span class="kw">use </span><span class="kw">crate</span>::lightning::{GatewayLightningBuilder, RouteHtlcStream};
+<span class="kw">use </span><span class="kw">crate</span>::lightning::{GatewayLightningBuilder, LightningContext, RouteHtlcStream};
 <span class="kw">use </span><span class="kw">crate</span>::rpc::rpc_server::{hash_password, run_webserver};
 <span class="kw">use </span><span class="kw">crate</span>::rpc::{
-    BackupPayload, BalancePayload, ConnectFedPayload, DepositAddressPayload, RestorePayload,
-    WithdrawPayload,
+    BackupPayload, BalancePayload, ConnectFedPayload, DepositAddressPayload, FederationBalanceInfo,
+    GatewayBalances, RestorePayload, WithdrawPayload,
 };
 <span class="kw">use </span><span class="kw">crate</span>::state_machine::GatewayExtPayStates;
+<span class="kw">use </span><span class="kw">crate</span>::types::PrettyInterceptHtlcRequest;
 
 <span class="doccomment">/// How long a gateway announcement stays valid
 </span><span class="kw">const </span>GW_ANNOUNCEMENT_TTL: Duration = Duration::from_secs(<span class="number">600</span>);
@@ -2128,15 +2093,6 @@
             GatewayState::Disconnected =&gt; <span class="macro">write!</span>(f, <span class="string">"Disconnected"</span>),
         }
     }
-}
-
-<span class="doccomment">/// Represents an active connection to the lightning node.
-</span><span class="attr">#[derive(Clone, Debug)]
-</span><span class="kw">pub struct </span>LightningContext {
-    <span class="kw">pub </span>lnrpc: Arc&lt;<span class="kw">dyn </span>ILnRpcClient&gt;,
-    <span class="kw">pub </span>lightning_public_key: PublicKey,
-    <span class="kw">pub </span>lightning_alias: String,
-    <span class="kw">pub </span>lightning_network: Network,
 }
 
 <span class="doccomment">/// The action to take after handling a payment stream.
@@ -2859,7 +2815,9 @@
         ))
     }
 
-    <span class="kw">async fn </span>handle_create_invoice_for_self_msg(
+    <span class="doccomment">/// Creates an invoice that is directly payable to the gateway's lightning
+    /// node.
+    </span><span class="kw">async fn </span>handle_create_invoice_for_self_msg(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         payload: CreateInvoiceForSelfPayload,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;Bolt11Invoice&gt; {
@@ -3195,9 +3153,10 @@
         <span class="prelude-val">Ok</span>(())
     }
 
-    <span class="kw">pub async fn </span>handle_get_funding_address_msg(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;Address&gt; {
+    <span class="doccomment">/// Generates an onchain address to fund the gateway's lightning node.
+    </span><span class="kw">pub async fn </span>handle_get_ln_onchain_address_msg(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;Address&gt; {
         <span class="kw">let </span>context = <span class="self">self</span>.get_lightning_context().<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">let </span>response = context.lnrpc.get_funding_address().<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>response = context.lnrpc.get_ln_onchain_address().<span class="kw">await</span><span class="question-mark">?</span>;
         Address::from_str(<span class="kw-2">&amp;</span>response.address)
             .map(Address::assume_checked)
             .map_err(|e| GatewayError::LightningResponseParseError(e.into()))
@@ -3241,7 +3200,9 @@
         <span class="prelude-val">Ok</span>(channels)
     }
 
-    <span class="kw">pub async fn </span>handle_get_balances_msg(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;GatewayBalances&gt; {
+    <span class="doccomment">/// Returns the ecash, lightning, and onchain balances for the gateway and
+    /// the gateway's lightning node.
+    </span><span class="kw">pub async fn </span>handle_get_balances_msg(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;GatewayBalances&gt; {
         <span class="kw">let </span>dbtx = <span class="self">self</span>.gateway_db.begin_transaction_nc().<span class="kw">await</span>;
         <span class="kw">let </span>federation_infos = <span class="self">self
             </span>.federation_manager
@@ -3268,6 +3229,87 @@
             lightning_balance_msats: lightning_node_balances.lightning_balance_msats,
             ecash_balances,
         })
+    }
+
+    <span class="comment">// Handles a request the spend the gateway's ecash for a given federation.
+    </span><span class="kw">pub async fn </span>handle_spend_ecash_msg(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        payload: SpendEcashPayload,
+    ) -&gt; anyhow::Result&lt;SpendEcashResponse&gt; {
+        <span class="kw">let </span>client = <span class="self">self</span>.select_client_v2(payload.federation_id).<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>mint_module = client.get_first_module::&lt;MintClientModule&gt;();
+        <span class="kw">let </span>timeout = Duration::from_secs(payload.timeout);
+        <span class="kw">let </span>(operation_id, notes) = <span class="kw">if </span>payload.allow_overpay {
+            <span class="kw">let </span>(operation_id, notes) = mint_module
+                .spend_notes_with_selector(
+                    <span class="kw-2">&amp;</span>SelectNotesWithAtleastAmount,
+                    payload.amount,
+                    timeout,
+                    payload.include_invite,
+                    (),
+                )
+                .<span class="kw">await</span><span class="question-mark">?</span>;
+
+            <span class="kw">let </span>overspend_amount = notes.total_amount() - payload.amount;
+            <span class="kw">if </span>overspend_amount != Amount::ZERO {
+                <span class="macro">warn!</span>(
+                    <span class="string">"Selected notes {} worth more than requested"</span>,
+                    overspend_amount
+                );
+            }
+
+            (operation_id, notes)
+        } <span class="kw">else </span>{
+            mint_module
+                .spend_notes_with_selector(
+                    <span class="kw-2">&amp;</span>SelectNotesWithExactAmount,
+                    payload.amount,
+                    timeout,
+                    payload.include_invite,
+                    (),
+                )
+                .<span class="kw">await</span><span class="question-mark">?
+        </span>};
+
+        <span class="macro">info!</span>(<span class="string">"Spend ecash operation id: {:?}"</span>, operation_id);
+        <span class="macro">info!</span>(<span class="string">"Spend ecash notes: {:?}"</span>, notes);
+
+        <span class="prelude-val">Ok</span>(SpendEcashResponse {
+            operation_id,
+            notes,
+        })
+    }
+
+    <span class="doccomment">/// Handles a request to receive ecash into the gateway.
+    </span><span class="kw">pub async fn </span>handle_receive_ecash_msg(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        payload: ReceiveEcashPayload,
+    ) -&gt; anyhow::Result&lt;ReceiveEcashResponse&gt; {
+        <span class="kw">let </span>amount = payload.notes.total_amount();
+        <span class="kw">let </span>client = <span class="self">self
+            </span>.federation_manager
+            .read()
+            .<span class="kw">await
+            </span>.get_client_for_federation_id_prefix(payload.notes.federation_id_prefix())
+            .ok_or(<span class="macro">anyhow!</span>(<span class="string">"Client not found"</span>))<span class="question-mark">?</span>;
+        <span class="kw">let </span>mint = client.value().get_first_module::&lt;MintClientModule&gt;();
+
+        <span class="kw">let </span>operation_id = mint.reissue_external_notes(payload.notes, ()).<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">if </span>payload.wait {
+            <span class="kw">let </span><span class="kw-2">mut </span>updates = mint
+                .subscribe_reissue_external_notes(operation_id)
+                .<span class="kw">await
+                </span>.unwrap()
+                .into_stream();
+
+            <span class="kw">while let </span><span class="prelude-val">Some</span>(update) = updates.next().<span class="kw">await </span>{
+                <span class="kw">if let </span>fedimint_mint_client::ReissueExternalNotesState::Failed(e) = update {
+                    <span class="macro">bail!</span>(<span class="string">"Reissue failed: {e}"</span>);
+                }
+            }
+        }
+
+        <span class="prelude-val">Ok</span>(ReceiveEcashResponse { amount })
     }
 
     <span class="doccomment">/// Registers the gateway with each specified federation.
@@ -3498,19 +3540,6 @@
     }
 }
 
-<span class="attr">#[derive(serde::Serialize, serde::Deserialize)]
-</span><span class="kw">pub struct </span>GatewayBalances {
-    <span class="kw">pub </span>onchain_balance_sats: u64,
-    <span class="kw">pub </span>lightning_balance_msats: u64,
-    <span class="kw">pub </span>ecash_balances: Vec&lt;FederationBalanceInfo&gt;,
-}
-
-<span class="attr">#[derive(serde::Serialize, serde::Deserialize)]
-</span><span class="kw">pub struct </span>FederationBalanceInfo {
-    <span class="kw">pub </span>federation_id: FederationId,
-    <span class="kw">pub </span>ecash_balance_msats: Amount,
-}
-
 <span class="comment">// LNv2 Gateway implementation
 </span><span class="kw">impl </span>Gateway {
     <span class="doccomment">/// Retrieves the `PublicKey` of the Gateway module for a given federation
@@ -3715,85 +3744,6 @@
 
         <span class="prelude-val">Ok</span>((registered_incoming_contract.contract, client))
     }
-
-    <span class="kw">pub async fn </span>spend_ecash(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        payload: SpendEcashPayload,
-    ) -&gt; anyhow::Result&lt;SpendEcashResponse&gt; {
-        <span class="kw">let </span>client = <span class="self">self</span>.select_client_v2(payload.federation_id).<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">let </span>mint_module = client.get_first_module::&lt;MintClientModule&gt;();
-        <span class="kw">let </span>timeout = Duration::from_secs(payload.timeout);
-        <span class="kw">let </span>(operation_id, notes) = <span class="kw">if </span>payload.allow_overpay {
-            <span class="kw">let </span>(operation_id, notes) = mint_module
-                .spend_notes_with_selector(
-                    <span class="kw-2">&amp;</span>SelectNotesWithAtleastAmount,
-                    payload.amount,
-                    timeout,
-                    payload.include_invite,
-                    (),
-                )
-                .<span class="kw">await</span><span class="question-mark">?</span>;
-
-            <span class="kw">let </span>overspend_amount = notes.total_amount() - payload.amount;
-            <span class="kw">if </span>overspend_amount != Amount::ZERO {
-                <span class="macro">warn!</span>(
-                    <span class="string">"Selected notes {} worth more than requested"</span>,
-                    overspend_amount
-                );
-            }
-
-            (operation_id, notes)
-        } <span class="kw">else </span>{
-            mint_module
-                .spend_notes_with_selector(
-                    <span class="kw-2">&amp;</span>SelectNotesWithExactAmount,
-                    payload.amount,
-                    timeout,
-                    payload.include_invite,
-                    (),
-                )
-                .<span class="kw">await</span><span class="question-mark">?
-        </span>};
-
-        <span class="macro">info!</span>(<span class="string">"Spend ecash operation id: {:?}"</span>, operation_id);
-        <span class="macro">info!</span>(<span class="string">"Spend ecash notes: {:?}"</span>, notes);
-
-        <span class="prelude-val">Ok</span>(SpendEcashResponse {
-            operation_id,
-            notes,
-        })
-    }
-
-    <span class="kw">pub async fn </span>receive_ecash(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        payload: ReceiveEcashPayload,
-    ) -&gt; anyhow::Result&lt;ReceiveEcashResponse&gt; {
-        <span class="kw">let </span>amount = payload.notes.total_amount();
-        <span class="kw">let </span>client = <span class="self">self
-            </span>.federation_manager
-            .read()
-            .<span class="kw">await
-            </span>.get_client_for_federation_id_prefix(payload.notes.federation_id_prefix())
-            .ok_or(<span class="macro">anyhow!</span>(<span class="string">"Client not found"</span>))<span class="question-mark">?</span>;
-        <span class="kw">let </span>mint = client.value().get_first_module::&lt;MintClientModule&gt;();
-
-        <span class="kw">let </span>operation_id = mint.reissue_external_notes(payload.notes, ()).<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">if </span>payload.wait {
-            <span class="kw">let </span><span class="kw-2">mut </span>updates = mint
-                .subscribe_reissue_external_notes(operation_id)
-                .<span class="kw">await
-                </span>.unwrap()
-                .into_stream();
-
-            <span class="kw">while let </span><span class="prelude-val">Some</span>(update) = updates.next().<span class="kw">await </span>{
-                <span class="kw">if let </span>fedimint_mint_client::ReissueExternalNotesState::Failed(e) = update {
-                    <span class="macro">bail!</span>(<span class="string">"Reissue failed: {e}"</span>);
-                }
-            }
-        }
-
-        <span class="prelude-val">Ok</span>(ReceiveEcashResponse { amount })
-    }
 }
 
 <span class="doccomment">/// Errors that can occur while processing incoming HTLC's, making outgoing
@@ -3856,26 +3806,6 @@
         <span class="kw">let </span><span class="kw-2">mut </span>err = Cow::&lt;<span class="lifetime">'static</span>, str&gt;::Owned(error_message).into_response();
         <span class="kw-2">*</span>err.status_mut() = status_code;
         err
-    }
-}
-
-<span class="doccomment">/// Utility struct for formatting an intercepted HTLC. Useful for debugging.
-</span><span class="kw">struct </span>PrettyInterceptHtlcRequest&lt;<span class="lifetime">'a</span>&gt;(<span class="kw-2">&amp;</span><span class="lifetime">'a </span><span class="kw">crate</span>::gateway_lnrpc::InterceptHtlcRequest);
-
-<span class="kw">impl </span>Display <span class="kw">for </span>PrettyInterceptHtlcRequest&lt;<span class="lifetime">'_</span>&gt; {
-    <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>std::fmt::Formatter&lt;<span class="lifetime">'_</span>&gt;) -&gt; std::fmt::Result {
-        <span class="kw">let </span>PrettyInterceptHtlcRequest(htlc_request) = <span class="self">self</span>;
-        <span class="macro">write!</span>(
-            f,
-            <span class="string">"InterceptHtlcRequest {{ payment_hash: {}, incoming_amount_msat: {:?}, outgoing_amount_msat: {:?}, incoming_expiry: {:?}, short_channel_id: {:?}, incoming_chan_id: {:?}, htlc_id: {:?} }}"</span>,
-            htlc_request.payment_hash.encode_hex::&lt;String&gt;(),
-            htlc_request.incoming_amount_msat,
-            htlc_request.outgoing_amount_msat,
-            htlc_request.incoming_expiry,
-            htlc_request.short_channel_id,
-            htlc_request.incoming_chan_id,
-            htlc_request.htlc_id,
-        )
     }
 }
 </code></pre></div></section></main></body></html>

@@ -1323,6 +1323,8 @@
 <a href="#1323" id="1323">1323</a>
 <a href="#1324" id="1324">1324</a>
 <a href="#1325" id="1325">1325</a>
+<a href="#1326" id="1326">1326</a>
+<a href="#1327" id="1327">1327</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::array::TryFromSliceError;
 <span class="kw">use </span>std::collections::{BTreeMap, HashMap};
 <span class="kw">use </span>std::net::SocketAddr;
@@ -1356,7 +1358,7 @@
 <span class="kw">use </span>ln_gateway::gateway_lnrpc::{
     CloseChannelsWithPeerRequest, CloseChannelsWithPeerResponse, CreateInvoiceRequest,
     CreateInvoiceResponse, EmptyRequest, EmptyResponse, GetBalancesResponse,
-    GetFundingAddressResponse, GetNodeInfoResponse, GetRouteHintsRequest, GetRouteHintsResponse,
+    GetLnOnchainAddressResponse, GetNodeInfoResponse, GetRouteHintsRequest, GetRouteHintsResponse,
     InterceptHtlcRequest, InterceptHtlcResponse, ListActiveChannelsResponse, OpenChannelRequest,
     PayInvoiceRequest, PayInvoiceResponse, PayPrunedInvoiceRequest, PrunedInvoice,
 };
@@ -2252,10 +2254,10 @@
         <span class="prelude-val">Ok</span>(tonic::Response::new(response))
     }
 
-    <span class="kw">async fn </span>get_funding_address(
+    <span class="kw">async fn </span>get_ln_onchain_address(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         _request: tonic::Request&lt;EmptyRequest&gt;,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;tonic::Response&lt;GetFundingAddressResponse&gt;, Status&gt; {
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;tonic::Response&lt;GetLnOnchainAddressResponse&gt;, Status&gt; {
         <span class="kw">let </span>address_or = <span class="self">self
             </span>.rpc_client()
             .<span class="kw">await
@@ -2277,7 +2279,9 @@
             </span>.map_err(|e| tonic::Status::internal(e.to_string()))<span class="question-mark">?</span>;
 
         <span class="kw">match </span>address_or {
-            <span class="prelude-val">Some</span>(address) =&gt; <span class="prelude-val">Ok</span>(tonic::Response::new(GetFundingAddressResponse { address })),
+            <span class="prelude-val">Some</span>(address) =&gt; <span class="prelude-val">Ok</span>(tonic::Response::new(GetLnOnchainAddressResponse {
+                address,
+            })),
             <span class="prelude-val">None </span>=&gt; <span class="prelude-val">Err</span>(Status::internal(<span class="string">"cln newaddr rpc returned no address"</span>)),
         }
     }

@@ -155,12 +155,17 @@
 <a href="#155" id="155">155</a>
 <a href="#156" id="156">156</a>
 <a href="#157" id="157">157</a>
+<a href="#158" id="158">158</a>
+<a href="#159" id="159">159</a>
+<a href="#160" id="160">160</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::time::Duration;
 
 <span class="kw">use </span>clap::Subcommand;
 <span class="kw">use </span>fedimint_core::util::{backoff_util, retry};
 <span class="kw">use </span>ln_gateway::rpc::rpc_client::GatewayRpcClient;
-<span class="kw">use </span>ln_gateway::rpc::{CloseChannelsWithPeerPayload, GetFundingAddressPayload, OpenChannelPayload};
+<span class="kw">use </span>ln_gateway::rpc::{
+    CloseChannelsWithPeerPayload, GetLnOnchainAddressPayload, OpenChannelPayload,
+};
 
 <span class="kw">use </span><span class="kw">crate</span>::print_response;
 
@@ -183,8 +188,9 @@
         <span class="attr">#[clap(long)]
         </span>description: <span class="prelude-ty">Option</span>&lt;String&gt;,
     },
-    <span class="doccomment">/// Get a Bitcoin address to fund the gateway.
-    </span>GetFundingAddress,
+    <span class="doccomment">/// Get a Bitcoin address from the gateway's lightning node's onchain
+    /// wallet.
+    </span>GetLnOnchainAddress,
     <span class="doccomment">/// Open a channel with another lightning node.
     </span>OpenChannel {
         <span class="doccomment">/// The public key of the node to open a channel with
@@ -247,9 +253,9 @@
                     .<span class="kw">await</span><span class="question-mark">?</span>;
                 <span class="macro">println!</span>(<span class="string">"{response}"</span>);
             }
-            <span class="self">Self</span>::GetFundingAddress =&gt; {
+            <span class="self">Self</span>::GetLnOnchainAddress =&gt; {
                 <span class="kw">let </span>response = create_client()
-                    .get_funding_address(GetFundingAddressPayload {})
+                    .get_ln_onchain_address(GetLnOnchainAddressPayload {})
                     .<span class="kw">await</span><span class="question-mark">?
                     </span>.assume_checked();
                 <span class="macro">println!</span>(<span class="string">"{response}"</span>);

@@ -254,6 +254,8 @@
 <a href="#254" id="254">254</a>
 <a href="#255" id="255">255</a>
 <a href="#256" id="256">256</a>
+<a href="#257" id="257">257</a>
+<a href="#258" id="258">258</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::fmt::Debug;
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
@@ -273,7 +275,7 @@
 <span class="kw">use </span><span class="kw">crate</span>::gateway_lnrpc::{
     <span class="self">self</span>, CloseChannelsWithPeerRequest, CloseChannelsWithPeerResponse, CreateInvoiceRequest,
     CreateInvoiceResponse, EmptyRequest, EmptyResponse, GetBalancesResponse,
-    GetFundingAddressResponse, GetNodeInfoResponse, GetRouteHintsRequest, GetRouteHintsResponse,
+    GetLnOnchainAddressResponse, GetNodeInfoResponse, GetRouteHintsRequest, GetRouteHintsResponse,
     InterceptHtlcResponse, OpenChannelRequest, PayInvoiceResponse, PayPrunedInvoiceRequest,
 };
 <span class="kw">use </span><span class="kw">crate</span>::lightning::MAX_LIGHTNING_RETRIES;
@@ -425,12 +427,14 @@
         <span class="prelude-val">Ok</span>(res.into_inner())
     }
 
-    <span class="kw">async fn </span>get_funding_address(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;GetFundingAddressResponse, LightningRpcError&gt; {
+    <span class="kw">async fn </span>get_ln_onchain_address(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;GetLnOnchainAddressResponse, LightningRpcError&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>client = <span class="self">self</span>.connect().<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>res = client
-            .get_funding_address(EmptyRequest {})
+            .get_ln_onchain_address(EmptyRequest {})
             .<span class="kw">await
-            </span>.map_err(|status| LightningRpcError::FailedToGetFundingAddress {
+            </span>.map_err(|status| LightningRpcError::FailedToGetLnOnchainAddress {
                 failure_reason: status.message().to_string(),
             })<span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(res.into_inner())

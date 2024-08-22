@@ -1997,7 +1997,7 @@
 
     <span class="macro">debug!</span>(target: LOG_DEVIMINT, <span class="string">"Funding all gateway lightning nodes..."</span>);
     <span class="kw">for </span>(gw, _gw_name) <span class="kw">in </span>gateways {
-        <span class="kw">let </span>funding_addr = gw.get_funding_address().<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>funding_addr = gw.get_ln_onchain_address().<span class="kw">await</span><span class="question-mark">?</span>;
         bitcoind.send_to(funding_addr, <span class="number">100_000_000</span>).<span class="kw">await</span><span class="question-mark">?</span>;
     }
 

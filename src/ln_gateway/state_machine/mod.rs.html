@@ -763,6 +763,7 @@
 <a href="#763" id="763">763</a>
 <a href="#764" id="764">764</a>
 <a href="#765" id="765">765</a>
+<a href="#766" id="766">766</a>
 </pre></div><pre class="rust"><code><span class="kw">mod </span>complete;
 <span class="kw">pub mod </span>pay;
 
@@ -818,10 +819,11 @@
     OutgoingPaymentError,
 };
 <span class="kw">use </span><span class="kw">crate</span>::gateway_lnrpc::InterceptHtlcRequest;
+<span class="kw">use </span><span class="kw">crate</span>::lightning::LightningContext;
 <span class="kw">use </span><span class="kw">crate</span>::state_machine::complete::{
     GatewayCompleteCommon, GatewayCompleteStates, WaitForPreimageState,
 };
-<span class="kw">use crate</span>::{Gateway, LightningContext};
+<span class="kw">use </span><span class="kw">crate</span>::Gateway;
 
 <span class="doccomment">/// The high-level state of a reissue operation started with
 /// [`GatewayClientModule::gateway_pay_bolt11_invoice`].

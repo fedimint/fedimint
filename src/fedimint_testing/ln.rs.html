@@ -295,6 +295,8 @@
 <a href="#295" id="295">295</a>
 <a href="#296" id="296">296</a>
 <a href="#297" id="297">297</a>
+<a href="#298" id="298">298</a>
+<a href="#299" id="299">299</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::sync::atomic::{AtomicU64, Ordering};
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
@@ -314,7 +316,7 @@
 };
 <span class="kw">use </span>ln_gateway::gateway_lnrpc::{
     <span class="self">self</span>, CloseChannelsWithPeerResponse, CreateInvoiceRequest, CreateInvoiceResponse,
-    EmptyResponse, GetBalancesResponse, GetFundingAddressResponse, GetNodeInfoResponse,
+    EmptyResponse, GetBalancesResponse, GetLnOnchainAddressResponse, GetNodeInfoResponse,
     GetRouteHintsResponse, InterceptHtlcResponse, PayInvoiceResponse,
 };
 <span class="kw">use </span>ln_gateway::lightning::{
@@ -550,8 +552,10 @@
         })
     }
 
-    <span class="kw">async fn </span>get_funding_address(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;GetFundingAddressResponse, LightningRpcError&gt; {
-        <span class="prelude-val">Err</span>(LightningRpcError::FailedToGetFundingAddress {
+    <span class="kw">async fn </span>get_ln_onchain_address(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;GetLnOnchainAddressResponse, LightningRpcError&gt; {
+        <span class="prelude-val">Err</span>(LightningRpcError::FailedToGetLnOnchainAddress {
             failure_reason: <span class="string">"FakeLightningTest does not support getting a funding address"
                 </span>.to_string(),
         })

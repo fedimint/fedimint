@@ -1874,7 +1874,7 @@
 <span class="attr">#[derive(serde::Serialize, serde::Deserialize)]
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
-</span><span class="kw">pub struct </span>GetFundingAddressResponse {
+</span><span class="kw">pub struct </span>GetLnOnchainAddressResponse {
     <span class="doccomment">/// An address belonging to the lightning node's on-chain wallet.
     </span><span class="attr">#[prost(string, tag = <span class="string">"1"</span>)]
     </span><span class="kw">pub </span>address: ::prost::alloc::string::String,
@@ -2238,11 +2238,11 @@
             <span class="self">self</span>.inner.unary(req, path, codec).<span class="kw">await
         </span>}
         <span class="doccomment">/// Get a Bitcoin address that belongs to the underlying lightning node's wallet.
-        </span><span class="kw">pub async fn </span>get_funding_address(
+        </span><span class="kw">pub async fn </span>get_ln_onchain_address(
             <span class="kw-2">&amp;mut </span><span class="self">self</span>,
             request: <span class="kw">impl </span>tonic::IntoRequest&lt;<span class="kw">super</span>::EmptyRequest&gt;,
         ) -&gt; std::result::Result&lt;
-            tonic::Response&lt;<span class="kw">super</span>::GetFundingAddressResponse&gt;,
+            tonic::Response&lt;<span class="kw">super</span>::GetLnOnchainAddressResponse&gt;,
             tonic::Status,
         &gt; {
             <span class="self">self</span>.inner
@@ -2256,14 +2256,14 @@
                 })<span class="question-mark">?</span>;
             <span class="kw">let </span>codec = tonic::codec::ProstCodec::default();
             <span class="kw">let </span>path = http::uri::PathAndQuery::from_static(
-                <span class="string">"/gateway_lnrpc.GatewayLightning/GetFundingAddress"</span>,
+                <span class="string">"/gateway_lnrpc.GatewayLightning/GetLnOnchainAddress"</span>,
             );
             <span class="kw">let </span><span class="kw-2">mut </span>req = request.into_request();
             req.extensions_mut()
                 .insert(
                     GrpcMethod::new(
                         <span class="string">"gateway_lnrpc.GatewayLightning"</span>,
-                        <span class="string">"GetFundingAddress"</span>,
+                        <span class="string">"GetLnOnchainAddress"</span>,
                     ),
                 );
             <span class="self">self</span>.inner.unary(req, path, codec).<span class="kw">await
@@ -2453,11 +2453,11 @@
             tonic::Status,
         &gt;;
         <span class="doccomment">/// Get a Bitcoin address that belongs to the underlying lightning node's wallet.
-        </span><span class="kw">async fn </span>get_funding_address(
+        </span><span class="kw">async fn </span>get_ln_onchain_address(
             <span class="kw-2">&amp;</span><span class="self">self</span>,
             request: tonic::Request&lt;<span class="kw">super</span>::EmptyRequest&gt;,
         ) -&gt; std::result::Result&lt;
-            tonic::Response&lt;<span class="kw">super</span>::GetFundingAddressResponse&gt;,
+            tonic::Response&lt;<span class="kw">super</span>::GetLnOnchainAddressResponse&gt;,
             tonic::Status,
         &gt;;
         <span class="doccomment">/// Open a channel on the underlying lightning node.
@@ -2889,14 +2889,14 @@
                     };
                     Box::pin(fut)
                 }
-                <span class="string">"/gateway_lnrpc.GatewayLightning/GetFundingAddress" </span>=&gt; {
+                <span class="string">"/gateway_lnrpc.GatewayLightning/GetLnOnchainAddress" </span>=&gt; {
                     <span class="attr">#[allow(non_camel_case_types)]
-                    </span><span class="kw">struct </span>GetFundingAddressSvc&lt;T: GatewayLightning&gt;(<span class="kw">pub </span>Arc&lt;T&gt;);
+                    </span><span class="kw">struct </span>GetLnOnchainAddressSvc&lt;T: GatewayLightning&gt;(<span class="kw">pub </span>Arc&lt;T&gt;);
                     <span class="kw">impl</span>&lt;
                         T: GatewayLightning,
                     &gt; tonic::server::UnaryService&lt;<span class="kw">super</span>::EmptyRequest&gt;
-                    <span class="kw">for </span>GetFundingAddressSvc&lt;T&gt; {
-                        <span class="kw">type </span>Response = <span class="kw">super</span>::GetFundingAddressResponse;
+                    <span class="kw">for </span>GetLnOnchainAddressSvc&lt;T&gt; {
+                        <span class="kw">type </span>Response = <span class="kw">super</span>::GetLnOnchainAddressResponse;
                         <span class="kw">type </span>Future = BoxFuture&lt;
                             tonic::Response&lt;<span class="self">Self</span>::Response&gt;,
                             tonic::Status,
@@ -2907,7 +2907,7 @@
                         ) -&gt; <span class="self">Self</span>::Future {
                             <span class="kw">let </span>inner = Arc::clone(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="number">0</span>);
                             <span class="kw">let </span>fut = <span class="kw">async move </span>{
-                                &lt;T <span class="kw">as </span>GatewayLightning&gt;::get_funding_address(
+                                &lt;T <span class="kw">as </span>GatewayLightning&gt;::get_ln_onchain_address(
                                         <span class="kw-2">&amp;</span>inner,
                                         request,
                                     )
@@ -2922,7 +2922,7 @@
                     <span class="kw">let </span>max_encoding_message_size = <span class="self">self</span>.max_encoding_message_size;
                     <span class="kw">let </span>inner = <span class="self">self</span>.inner.clone();
                     <span class="kw">let </span>fut = <span class="kw">async move </span>{
-                        <span class="kw">let </span>method = GetFundingAddressSvc(inner);
+                        <span class="kw">let </span>method = GetLnOnchainAddressSvc(inner);
                         <span class="kw">let </span>codec = tonic::codec::ProstCodec::default();
                         <span class="kw">let </span><span class="kw-2">mut </span>grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(

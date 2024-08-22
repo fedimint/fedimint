@@ -1409,6 +1409,8 @@
 <a href="#1409" id="1409">1409</a>
 <a href="#1410" id="1410">1410</a>
 <a href="#1411" id="1411">1411</a>
+<a href="#1412" id="1412">1412</a>
+<a href="#1413" id="1413">1413</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeSet;
 <span class="kw">use </span>std::fmt::{<span class="self">self</span>, Display};
 <span class="kw">use </span>std::str::FromStr;
@@ -1457,7 +1459,7 @@
 <span class="kw">use </span><span class="kw">crate</span>::gateway_lnrpc::intercept_htlc_response::{Action, Cancel, Forward, Settle};
 <span class="kw">use </span><span class="kw">crate</span>::gateway_lnrpc::{
     CloseChannelsWithPeerResponse, CreateInvoiceRequest, CreateInvoiceResponse, EmptyResponse,
-    GetBalancesResponse, GetFundingAddressResponse, GetNodeInfoResponse, GetRouteHintsResponse,
+    GetBalancesResponse, GetLnOnchainAddressResponse, GetNodeInfoResponse, GetRouteHintsResponse,
     InterceptHtlcRequest, InterceptHtlcResponse, PayInvoiceResponse,
 };
 <span class="kw">type </span>HtlcSubscriptionSender = mpsc::Sender&lt;<span class="prelude-ty">Result</span>&lt;InterceptHtlcRequest, Status&gt;&gt;;
@@ -2508,7 +2510,9 @@
         }
     }
 
-    <span class="kw">async fn </span>get_funding_address(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;GetFundingAddressResponse, LightningRpcError&gt; {
+    <span class="kw">async fn </span>get_ln_onchain_address(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;GetLnOnchainAddressResponse, LightningRpcError&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>client = <span class="self">self</span>.connect().<span class="kw">await</span><span class="question-mark">?</span>;
 
         <span class="kw">match </span>client
@@ -2520,10 +2524,10 @@
             })
             .<span class="kw">await
         </span>{
-            <span class="prelude-val">Ok</span>(response) =&gt; <span class="prelude-val">Ok</span>(GetFundingAddressResponse {
+            <span class="prelude-val">Ok</span>(response) =&gt; <span class="prelude-val">Ok</span>(GetLnOnchainAddressResponse {
                 address: response.into_inner().addr,
             }),
-            <span class="prelude-val">Err</span>(e) =&gt; <span class="prelude-val">Err</span>(LightningRpcError::FailedToGetFundingAddress {
+            <span class="prelude-val">Err</span>(e) =&gt; <span class="prelude-val">Err</span>(LightningRpcError::FailedToGetLnOnchainAddress {
                 failure_reason: <span class="macro">format!</span>(<span class="string">"Failed to get funding address {e:?}"</span>),
             }),
         }
