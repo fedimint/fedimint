@@ -38,7 +38,6 @@ use fedimint_api_client::api::{
 use fedimint_bip39::Bip39RootSecretStrategy;
 use fedimint_client::meta::{FetchKind, MetaSource};
 use fedimint_client::module::init::{ClientModuleInit, ClientModuleInitRegistry};
-use fedimint_client::module::ClientModule as _;
 use fedimint_client::secret::{get_default_client_secret, RootSecretStrategy};
 use fedimint_client::{AdminCreds, Client, ClientBuilder, ClientHandleArc};
 use fedimint_core::admin_client::{ConfigGenConnectionsRequest, ConfigGenParamsRequest};
@@ -54,7 +53,7 @@ use fedimint_core::{fedimint_build_code_version_env, runtime, PeerId, TieredMult
 use fedimint_ln_client::LightningClientInit;
 use fedimint_logging::{TracingSetup, LOG_CLIENT};
 use fedimint_meta_client::{MetaClientInit, MetaModuleOrLegacyMetaSource};
-use fedimint_mint_client::{MintClientInit, MintClientModule, OOBNotes, SpendableNote};
+use fedimint_mint_client::{MintClientInit, OOBNotes, SpendableNote};
 use fedimint_wallet_client::api::WalletFederationApi;
 use fedimint_wallet_client::{WalletClientInit, WalletClientModule};
 use futures::future::pending;
@@ -794,10 +793,7 @@ impl FedimintCli {
                 // TODO: until we implement recovery for other modules we can't really wait
                 // for more than this one
                 debug!("Waiting for mint module recovery to finish");
-                client
-                    .wait_for_module_kind_recovery(MintClientModule::kind())
-                    .await
-                    .map_err_cli()?;
+                client.wait_for_all_recoveries().await.map_err_cli()?;
 
                 debug!("Recovery complete");
 

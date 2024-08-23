@@ -47,8 +47,9 @@ pub trait RecoveryFromHistory: std::fmt::Debug + MaybeSend + MaybeSync + Clone {
     /// [`ClientModuleInit`] of this recovery logic.
     type Init: ClientModuleInit;
 
-    /// New empty state to start recovery from
+    /// New empty state to start recovery from, and session number to start from
     async fn new(
+        init: &Self::Init,
         args: &ClientModuleRecoverArgs<Self::Init>,
         snapshot: Option<&<<Self::Init as ClientModuleInit>::Module as ClientModule>::Backup>,
     ) -> anyhow::Result<(Self, u64)>;
@@ -59,9 +60,10 @@ pub trait RecoveryFromHistory: std::fmt::Debug + MaybeSend + MaybeSync + Clone {
     /// Storing and restoring progress is used to save progress and
     /// continue recovery if it was previously terminated before completion.
     async fn load_dbtx(
+        init: &Self::Init,
         dbtx: &mut DatabaseTransaction<'_>,
         args: &ClientModuleRecoverArgs<Self::Init>,
-    ) -> Option<(Self, RecoveryFromHistoryCommon)>;
+    ) -> anyhow::Result<Option<(Self, RecoveryFromHistoryCommon)>>;
 
     /// Store the current recovery state in the database
     ///
@@ -99,12 +101,13 @@ pub trait RecoveryFromHistory: std::fmt::Debug + MaybeSend + MaybeSync + Clone {
     async fn handle_session(
         &mut self,
         client_ctx: &ClientContext<<Self::Init as ClientModuleInit>::Module>,
-        _session_idx: u64,
+        session_idx: u64,
         session_items: &Vec<AcceptedItem>,
     ) -> anyhow::Result<()> {
         for accepted_item in session_items {
             if let ConsensusItem::Transaction(ref transaction) = accepted_item.item {
-                self.handle_transaction(client_ctx, transaction).await?;
+                self.handle_transaction(client_ctx, transaction, session_idx)
+                    .await?;
             }
         }
         Ok(())
@@ -124,6 +127,7 @@ pub trait RecoveryFromHistory: std::fmt::Debug + MaybeSend + MaybeSync + Clone {
         &mut self,
         client_ctx: &ClientContext<<Self::Init as ClientModuleInit>::Module>,
         transaction: &Transaction,
+        session_idx: u64,
     ) -> anyhow::Result<()> {
         trace!(
             target: LOG_CLIENT_RECOVERY,
@@ -143,7 +147,8 @@ pub trait RecoveryFromHistory: std::fmt::Debug + MaybeSend + MaybeSync + Clone {
             );
 
             if let Some(own_input) = client_ctx.input_from_dyn(input) {
-                self.handle_input(client_ctx, idx, own_input).await?;
+                self.handle_input(client_ctx, idx, own_input, session_idx)
+                    .await?;
             }
         }
 
@@ -162,7 +167,7 @@ pub trait RecoveryFromHistory: std::fmt::Debug + MaybeSend + MaybeSync + Clone {
                     out_idx: out_idx as u64,
                 };
 
-                self.handle_output(client_ctx, out_point, own_output)
+                self.handle_output(client_ctx, out_point, own_output, session_idx)
                     .await?;
             }
         }
@@ -178,6 +183,7 @@ pub trait RecoveryFromHistory: std::fmt::Debug + MaybeSend + MaybeSync + Clone {
         _client_ctx: &ClientContext<<Self::Init as ClientModuleInit>::Module>,
         _idx: usize,
         _input: &<<<Self::Init as ClientModuleInit>::Module as ClientModule>::Common as ModuleCommon>::Input,
+        _session_idx: u64,
     ) -> anyhow::Result<()> {
         Ok(())
     }
@@ -190,7 +196,14 @@ pub trait RecoveryFromHistory: std::fmt::Debug + MaybeSend + MaybeSync + Clone {
         _client_ctx: &ClientContext<<Self::Init as ClientModuleInit>::Module>,
         _out_point: OutPoint,
         _output: &<<<Self::Init as ClientModuleInit>::Module as ClientModule>::Common as ModuleCommon>::Output,
+        _session_idx: u64,
     ) -> anyhow::Result<()> {
+        Ok(())
+    }
+
+    /// Called before `finalize_dbtx`, to allow final state changes outside
+    /// of retriable database transaction.
+    async fn pre_finalize(&mut self) -> anyhow::Result<()> {
         Ok(())
     }
 
@@ -222,6 +235,7 @@ where
     /// parts of recovery logic.
     pub async fn recover_from_history<Recovery>(
         &self,
+        init: &Init,
         snapshot: Option<&<<Init as ClientModuleInit>::Module as ClientModule>::Backup>,
     ) -> anyhow::Result<()>
     where
@@ -389,10 +403,10 @@ where
         let (mut state, mut common_state) =
             // TODO: if load fails (e.g. module didn't migrate an existing recovery state and failed to decode it),
             // we could just ... start from scratch? at least being able to force this behavior might be useful
-            if let Some((state, common_state)) = Recovery::load_dbtx(&mut db.begin_transaction_nc().await, self).await {
+            if let Some((state, common_state)) = Recovery::load_dbtx(init, &mut db.begin_transaction_nc().await, self).await? {
                 (state, common_state)
             } else {
-                let (state, start_session) = Recovery::new(self, snapshot).await?;
+                let (state, start_session) = Recovery::new(init, self, snapshot).await?;
 
                 debug!(target: LOG_CLIENT_RECOVERY, start_session, "Recovery start session");
                 (state,
@@ -437,6 +451,12 @@ where
                     .unwrap_or(u32::MAX),
             });
         }
+
+        state.pre_finalize().await?;
+
+        let mut dbtx = db.begin_transaction().await;
+        state.store_dbtx(&mut dbtx.to_ref_nc(), &common_state).await;
+        dbtx.commit_tx().await;
 
         debug!(
             target: LOG_CLIENT_RECOVERY,
