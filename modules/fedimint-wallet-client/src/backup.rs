@@ -12,6 +12,7 @@ use fedimint_core::core::{IntoDynInstance, ModuleInstanceId, ModuleKind};
 use fedimint_core::db::{DatabaseTransaction, IDatabaseTransactionOpsCoreTyped as _};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::task::TaskGroup;
+use fedimint_core::util::{backoff_util, retry};
 use fedimint_core::{apply, async_trait_maybe_send};
 use fedimint_logging::{LOG_CLIENT_MODULE_WALLET, LOG_CLIENT_RECOVERY};
 use fedimint_wallet_common::{WalletInput, WalletInputV0, KIND};
@@ -472,7 +473,14 @@ where
             break;
         }
 
-        if !check_addr_history(cur_tweak_idx).await?.is_empty() {
+        let history = retry(
+            "Check address history",
+            backoff_util::background_backoff(),
+            || async { check_addr_history(cur_tweak_idx).await },
+        )
+        .await?;
+
+        if !history.is_empty() {
             tweak_idxes_with_pegins.insert(cur_tweak_idx);
             last_used_idx = Some(cur_tweak_idx);
         }
