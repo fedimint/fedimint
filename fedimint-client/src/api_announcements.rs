@@ -43,11 +43,12 @@ pub async fn run_api_announcement_sync(client_inner: Arc<Client>) {
     loop {
         let results = join_all(client_inner.api.all_peers().iter()
             .map(|peer_id| async {
+                let peer_id = *peer_id;
                 let announcements = client_inner
                     .api
-                    .api_announcements(*peer_id)
+                    .api_announcements(peer_id)
                     .await
-                    .context("Fetching API announcements from peer {peer_id} failed")?;
+                    .with_context(move || format!("Fetching API announcements from peer {peer_id} failed"))?;
 
                 // If any of the announcements is invalid something is fishy with that
                 // guardian and we ignore all its responses
