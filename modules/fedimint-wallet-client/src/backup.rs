@@ -418,7 +418,13 @@ impl RecoveryFromHistory for WalletRecovery {
 
 /// We will check this many addresses after last actually used
 /// one before we give up
-pub(crate) const RECOVER_MAX_GAP: u64 = 10;
+pub(crate) const ONCHAIN_RECOVER_MAX_GAP: u64 = 10;
+
+/// When scanning the history of the Federation, there's no need to be
+/// so cautious about the privacy (as it's perfectly private), so might
+/// as well increase the gap limit.
+pub(crate) const FEDERATION_RECOVER_MAX_GAP: u64 = 50;
+
 /// New client will start deriving new addresses from last used one
 /// plus that many indexes. This should be less than
 /// `MAX_GAP`, but more than 0: We want to make sure we detect
@@ -467,7 +473,7 @@ where
     let mut tweak_idxes_with_pegins = BTreeSet::new();
 
     for cur_tweak_idx in tweak_indexes_to_scan {
-        if RECOVER_MAX_GAP
+        if ONCHAIN_RECOVER_MAX_GAP
             <= cur_tweak_idx.saturating_sub(last_used_idx.unwrap_or(fallback_last_used_idx))
         {
             break;
