@@ -466,6 +466,26 @@
 <a href="#466" id="466">466</a>
 <a href="#467" id="467">467</a>
 <a href="#468" id="468">468</a>
+<a href="#469" id="469">469</a>
+<a href="#470" id="470">470</a>
+<a href="#471" id="471">471</a>
+<a href="#472" id="472">472</a>
+<a href="#473" id="473">473</a>
+<a href="#474" id="474">474</a>
+<a href="#475" id="475">475</a>
+<a href="#476" id="476">476</a>
+<a href="#477" id="477">477</a>
+<a href="#478" id="478">478</a>
+<a href="#479" id="479">479</a>
+<a href="#480" id="480">480</a>
+<a href="#481" id="481">481</a>
+<a href="#482" id="482">482</a>
+<a href="#483" id="483">483</a>
+<a href="#484" id="484">484</a>
+<a href="#485" id="485">485</a>
+<a href="#486" id="486">486</a>
+<a href="#487" id="487">487</a>
+<a href="#488" id="488">488</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::time::Duration;
 <span class="kw">use </span>std::{cmp, ops};
 
@@ -515,8 +535,9 @@
     <span class="doccomment">/// [`ClientModuleInit`] of this recovery logic.
     </span><span class="kw">type </span>Init: ClientModuleInit;
 
-    <span class="doccomment">/// New empty state to start recovery from
+    <span class="doccomment">/// New empty state to start recovery from, and session number to start from
     </span><span class="kw">async fn </span>new(
+        init: <span class="kw-2">&amp;</span><span class="self">Self</span>::Init,
         args: <span class="kw-2">&amp;</span>ClientModuleRecoverArgs&lt;<span class="self">Self</span>::Init&gt;,
         snapshot: <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>&lt;&lt;<span class="self">Self</span>::Init <span class="kw">as </span>ClientModuleInit&gt;::Module <span class="kw">as </span>ClientModule&gt;::Backup&gt;,
     ) -&gt; anyhow::Result&lt;(<span class="self">Self</span>, u64)&gt;;
@@ -527,9 +548,10 @@
     /// Storing and restoring progress is used to save progress and
     /// continue recovery if it was previously terminated before completion.
     </span><span class="kw">async fn </span>load_dbtx(
+        init: <span class="kw-2">&amp;</span><span class="self">Self</span>::Init,
         dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>&gt;,
         args: <span class="kw-2">&amp;</span>ClientModuleRecoverArgs&lt;<span class="self">Self</span>::Init&gt;,
-    ) -&gt; <span class="prelude-ty">Option</span>&lt;(<span class="self">Self</span>, RecoveryFromHistoryCommon)&gt;;
+    ) -&gt; anyhow::Result&lt;<span class="prelude-ty">Option</span>&lt;(<span class="self">Self</span>, RecoveryFromHistoryCommon)&gt;&gt;;
 
     <span class="doccomment">/// Store the current recovery state in the database
     ///
@@ -567,12 +589,13 @@
     </span><span class="kw">async fn </span>handle_session(
         <span class="kw-2">&amp;mut </span><span class="self">self</span>,
         client_ctx: <span class="kw-2">&amp;</span>ClientContext&lt;&lt;<span class="self">Self</span>::Init <span class="kw">as </span>ClientModuleInit&gt;::Module&gt;,
-        _session_idx: u64,
+        session_idx: u64,
         session_items: <span class="kw-2">&amp;</span>Vec&lt;AcceptedItem&gt;,
     ) -&gt; anyhow::Result&lt;()&gt; {
         <span class="kw">for </span>accepted_item <span class="kw">in </span>session_items {
             <span class="kw">if let </span>ConsensusItem::Transaction(<span class="kw-2">ref </span>transaction) = accepted_item.item {
-                <span class="self">self</span>.handle_transaction(client_ctx, transaction).<span class="kw">await</span><span class="question-mark">?</span>;
+                <span class="self">self</span>.handle_transaction(client_ctx, transaction, session_idx)
+                    .<span class="kw">await</span><span class="question-mark">?</span>;
             }
         }
         <span class="prelude-val">Ok</span>(())
@@ -592,6 +615,7 @@
         <span class="kw-2">&amp;mut </span><span class="self">self</span>,
         client_ctx: <span class="kw-2">&amp;</span>ClientContext&lt;&lt;<span class="self">Self</span>::Init <span class="kw">as </span>ClientModuleInit&gt;::Module&gt;,
         transaction: <span class="kw-2">&amp;</span>Transaction,
+        session_idx: u64,
     ) -&gt; anyhow::Result&lt;()&gt; {
         <span class="macro">trace!</span>(
             target: LOG_CLIENT_RECOVERY,
@@ -611,7 +635,8 @@
             </span>);
 
             <span class="kw">if let </span><span class="prelude-val">Some</span>(own_input) = client_ctx.input_from_dyn(input) {
-                <span class="self">self</span>.handle_input(client_ctx, idx, own_input).<span class="kw">await</span><span class="question-mark">?</span>;
+                <span class="self">self</span>.handle_input(client_ctx, idx, own_input, session_idx)
+                    .<span class="kw">await</span><span class="question-mark">?</span>;
             }
         }
 
@@ -630,7 +655,7 @@
                     out_idx: out_idx <span class="kw">as </span>u64,
                 };
 
-                <span class="self">self</span>.handle_output(client_ctx, out_point, own_output)
+                <span class="self">self</span>.handle_output(client_ctx, out_point, own_output, session_idx)
                     .<span class="kw">await</span><span class="question-mark">?</span>;
             }
         }
@@ -646,6 +671,7 @@
         _client_ctx: <span class="kw-2">&amp;</span>ClientContext&lt;&lt;<span class="self">Self</span>::Init <span class="kw">as </span>ClientModuleInit&gt;::Module&gt;,
         _idx: usize,
         _input: <span class="kw-2">&amp;</span>&lt;&lt;&lt;<span class="self">Self</span>::Init <span class="kw">as </span>ClientModuleInit&gt;::Module <span class="kw">as </span>ClientModule&gt;::Common <span class="kw">as </span>ModuleCommon&gt;::Input,
+        _session_idx: u64,
     ) -&gt; anyhow::Result&lt;()&gt; {
         <span class="prelude-val">Ok</span>(())
     }
@@ -658,7 +684,14 @@
         _client_ctx: <span class="kw-2">&amp;</span>ClientContext&lt;&lt;<span class="self">Self</span>::Init <span class="kw">as </span>ClientModuleInit&gt;::Module&gt;,
         _out_point: OutPoint,
         _output: <span class="kw-2">&amp;</span>&lt;&lt;&lt;<span class="self">Self</span>::Init <span class="kw">as </span>ClientModuleInit&gt;::Module <span class="kw">as </span>ClientModule&gt;::Common <span class="kw">as </span>ModuleCommon&gt;::Output,
+        _session_idx: u64,
     ) -&gt; anyhow::Result&lt;()&gt; {
+        <span class="prelude-val">Ok</span>(())
+    }
+
+    <span class="doccomment">/// Called before `finalize_dbtx`, to allow final state changes outside
+    /// of retriable database transaction.
+    </span><span class="kw">async fn </span>pre_finalize(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; anyhow::Result&lt;()&gt; {
         <span class="prelude-val">Ok</span>(())
     }
 
@@ -690,6 +723,7 @@
     /// parts of recovery logic.
     </span><span class="kw">pub async fn </span>recover_from_history&lt;Recovery&gt;(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
+        init: <span class="kw-2">&amp;</span>Init,
         snapshot: <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>&lt;&lt;Init <span class="kw">as </span>ClientModuleInit&gt;::Module <span class="kw">as </span>ClientModule&gt;::Backup&gt;,
     ) -&gt; anyhow::Result&lt;()&gt;
     <span class="kw">where
@@ -857,10 +891,10 @@
         <span class="kw">let </span>(<span class="kw-2">mut </span>state, <span class="kw-2">mut </span>common_state) =
             <span class="comment">// TODO: if load fails (e.g. module didn't migrate an existing recovery state and failed to decode it),
             // we could just ... start from scratch? at least being able to force this behavior might be useful
-            </span><span class="kw">if let </span><span class="prelude-val">Some</span>((state, common_state)) = Recovery::load_dbtx(<span class="kw-2">&amp;mut </span>db.begin_transaction_nc().<span class="kw">await</span>, <span class="self">self</span>).<span class="kw">await </span>{
+            </span><span class="kw">if let </span><span class="prelude-val">Some</span>((state, common_state)) = Recovery::load_dbtx(init, <span class="kw-2">&amp;mut </span>db.begin_transaction_nc().<span class="kw">await</span>, <span class="self">self</span>).<span class="kw">await</span><span class="question-mark">? </span>{
                 (state, common_state)
             } <span class="kw">else </span>{
-                <span class="kw">let </span>(state, start_session) = Recovery::new(<span class="self">self</span>, snapshot).<span class="kw">await</span><span class="question-mark">?</span>;
+                <span class="kw">let </span>(state, start_session) = Recovery::new(init, <span class="self">self</span>, snapshot).<span class="kw">await</span><span class="question-mark">?</span>;
 
                 <span class="macro">debug!</span>(target: LOG_CLIENT_RECOVERY, start_session, <span class="string">"Recovery start session"</span>);
                 (state,
@@ -905,6 +939,12 @@
                     .unwrap_or(u32::MAX),
             });
         }
+
+        state.pre_finalize().<span class="kw">await</span><span class="question-mark">?</span>;
+
+        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = db.begin_transaction().<span class="kw">await</span>;
+        state.store_dbtx(<span class="kw-2">&amp;mut </span>dbtx.to_ref_nc(), <span class="kw-2">&amp;</span>common_state).<span class="kw">await</span>;
+        dbtx.commit_tx().<span class="kw">await</span>;
 
         <span class="macro">debug!</span>(
             target: LOG_CLIENT_RECOVERY,

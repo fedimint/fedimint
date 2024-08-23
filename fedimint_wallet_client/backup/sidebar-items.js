@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"enum":["WalletModuleBackup"],"struct":["WalletModuleBackupV0"]};
+window.SIDEBAR_ITEMS = {"constant":["RECOVER_MAX_GAP","RECOVER_NUM_IDX_ADD_TO_LAST_USED"],"enum":["WalletModuleBackup","WalletRecoveryState"],"fn":["recover_scan_idxes_for_activity"],"mod":["recovery_history_tracker"],"struct":["RecoverScanOutcome","WalletModuleBackupV0","WalletModuleBackupV1","WalletRecovery","WalletRecoveryStateV0","WalletRecoveryStateV1"]};

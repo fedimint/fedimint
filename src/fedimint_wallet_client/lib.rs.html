@@ -1178,94 +1178,6 @@
 <a href="#1178" id="1178">1178</a>
 <a href="#1179" id="1179">1179</a>
 <a href="#1180" id="1180">1180</a>
-<a href="#1181" id="1181">1181</a>
-<a href="#1182" id="1182">1182</a>
-<a href="#1183" id="1183">1183</a>
-<a href="#1184" id="1184">1184</a>
-<a href="#1185" id="1185">1185</a>
-<a href="#1186" id="1186">1186</a>
-<a href="#1187" id="1187">1187</a>
-<a href="#1188" id="1188">1188</a>
-<a href="#1189" id="1189">1189</a>
-<a href="#1190" id="1190">1190</a>
-<a href="#1191" id="1191">1191</a>
-<a href="#1192" id="1192">1192</a>
-<a href="#1193" id="1193">1193</a>
-<a href="#1194" id="1194">1194</a>
-<a href="#1195" id="1195">1195</a>
-<a href="#1196" id="1196">1196</a>
-<a href="#1197" id="1197">1197</a>
-<a href="#1198" id="1198">1198</a>
-<a href="#1199" id="1199">1199</a>
-<a href="#1200" id="1200">1200</a>
-<a href="#1201" id="1201">1201</a>
-<a href="#1202" id="1202">1202</a>
-<a href="#1203" id="1203">1203</a>
-<a href="#1204" id="1204">1204</a>
-<a href="#1205" id="1205">1205</a>
-<a href="#1206" id="1206">1206</a>
-<a href="#1207" id="1207">1207</a>
-<a href="#1208" id="1208">1208</a>
-<a href="#1209" id="1209">1209</a>
-<a href="#1210" id="1210">1210</a>
-<a href="#1211" id="1211">1211</a>
-<a href="#1212" id="1212">1212</a>
-<a href="#1213" id="1213">1213</a>
-<a href="#1214" id="1214">1214</a>
-<a href="#1215" id="1215">1215</a>
-<a href="#1216" id="1216">1216</a>
-<a href="#1217" id="1217">1217</a>
-<a href="#1218" id="1218">1218</a>
-<a href="#1219" id="1219">1219</a>
-<a href="#1220" id="1220">1220</a>
-<a href="#1221" id="1221">1221</a>
-<a href="#1222" id="1222">1222</a>
-<a href="#1223" id="1223">1223</a>
-<a href="#1224" id="1224">1224</a>
-<a href="#1225" id="1225">1225</a>
-<a href="#1226" id="1226">1226</a>
-<a href="#1227" id="1227">1227</a>
-<a href="#1228" id="1228">1228</a>
-<a href="#1229" id="1229">1229</a>
-<a href="#1230" id="1230">1230</a>
-<a href="#1231" id="1231">1231</a>
-<a href="#1232" id="1232">1232</a>
-<a href="#1233" id="1233">1233</a>
-<a href="#1234" id="1234">1234</a>
-<a href="#1235" id="1235">1235</a>
-<a href="#1236" id="1236">1236</a>
-<a href="#1237" id="1237">1237</a>
-<a href="#1238" id="1238">1238</a>
-<a href="#1239" id="1239">1239</a>
-<a href="#1240" id="1240">1240</a>
-<a href="#1241" id="1241">1241</a>
-<a href="#1242" id="1242">1242</a>
-<a href="#1243" id="1243">1243</a>
-<a href="#1244" id="1244">1244</a>
-<a href="#1245" id="1245">1245</a>
-<a href="#1246" id="1246">1246</a>
-<a href="#1247" id="1247">1247</a>
-<a href="#1248" id="1248">1248</a>
-<a href="#1249" id="1249">1249</a>
-<a href="#1250" id="1250">1250</a>
-<a href="#1251" id="1251">1251</a>
-<a href="#1252" id="1252">1252</a>
-<a href="#1253" id="1253">1253</a>
-<a href="#1254" id="1254">1254</a>
-<a href="#1255" id="1255">1255</a>
-<a href="#1256" id="1256">1256</a>
-<a href="#1257" id="1257">1257</a>
-<a href="#1258" id="1258">1258</a>
-<a href="#1259" id="1259">1259</a>
-<a href="#1260" id="1260">1260</a>
-<a href="#1261" id="1261">1261</a>
-<a href="#1262" id="1262">1262</a>
-<a href="#1263" id="1263">1263</a>
-<a href="#1264" id="1264">1264</a>
-<a href="#1265" id="1265">1265</a>
-<a href="#1266" id="1266">1266</a>
-<a href="#1267" id="1267">1267</a>
-<a href="#1268" id="1268">1268</a>
 </pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::missing_errors_doc)]
@@ -1287,7 +1199,7 @@
 </span><span class="kw">mod </span>pegin_monitor;
 <span class="kw">mod </span>withdraw;
 
-<span class="kw">use </span>std::collections::{BTreeMap, BTreeSet};
+<span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::future;
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::SystemTime;
@@ -1304,7 +1216,6 @@
 <span class="kw">use </span>fedimint_client::module::init::{
     ClientModuleInit, ClientModuleInitArgs, ClientModuleRecoverArgs,
 };
-<span class="kw">use </span>fedimint_client::module::recovery::RecoveryProgress;
 <span class="kw">use </span>fedimint_client::module::{ClientContext, ClientModule, IClientModule};
 <span class="kw">use </span>fedimint_client::oplog::UpdateStreamOrOutcome;
 <span class="kw">use </span>fedimint_client::sm::util::MapStateTransitions;
@@ -1322,14 +1233,15 @@
     ApiVersion, CommonModuleInit, ModuleCommon, ModuleInit, MultiApiVersion,
 };
 <span class="kw">use </span>fedimint_core::task::{MaybeSend, MaybeSync, TaskGroup};
+<span class="kw">use </span>fedimint_core::util::backoff_util;
 <span class="kw">use </span>fedimint_core::{
-    apply, async_trait_maybe_send, push_db_pair_items, Amount, OutPoint, TransactionId,
+    apply, async_trait_maybe_send, push_db_pair_items, runtime, Amount, OutPoint, TransactionId,
 };
 <span class="kw">use </span>fedimint_logging::LOG_CLIENT_MODULE_WALLET;
 <span class="kw">use </span>fedimint_wallet_common::config::{FeeConsensus, WalletClientConfig};
 <span class="kw">use </span>fedimint_wallet_common::tweakable::Tweakable;
 <span class="kw">pub use </span>fedimint_wallet_common::<span class="kw-2">*</span>;
-<span class="kw">use </span>futures::{Future, Stream, StreamExt};
+<span class="kw">use </span>futures::{Stream, StreamExt};
 <span class="kw">use </span>rand::{thread_rng, Rng};
 <span class="kw">use </span>secp256k1::{All, KeyPair, Secp256k1, SECP256K1};
 <span class="kw">use </span>serde::{Deserialize, Serialize};
@@ -1338,6 +1250,7 @@
 <span class="kw">use </span>tracing::{debug, instrument};
 
 <span class="kw">use </span><span class="kw">crate</span>::api::WalletFederationApi;
+<span class="kw">use </span><span class="kw">crate</span>::backup::WalletRecovery;
 <span class="kw">use </span><span class="kw">crate</span>::client_db::{
     ClaimedPegInData, ClaimedPegInKey, ClaimedPegInPrefix, NextPegInTweakIndexKey,
     PegInTweakIndexData, PegInTweakIndexPrefix, RecoveryFinalizedKey,
@@ -1440,7 +1353,12 @@
                         <span class="string">"Claimed Peg-In"
                     </span>);
                 }
-                DbKeyPrefix::RecoveryFinalized =&gt; {}
+                DbKeyPrefix::RecoveryFinalized =&gt; {
+                    <span class="kw">if let </span><span class="prelude-val">Some</span>(val) = dbtx.get_value(<span class="kw-2">&amp;</span>RecoveryFinalizedKey).<span class="kw">await </span>{
+                        wallet_client_items.insert(<span class="string">"RecoveryFinalized"</span>.to_string(), Box::new(val));
+                    }
+                }
+                DbKeyPrefix::RecoveryState =&gt; {}
             }
         }
 
@@ -1503,100 +1421,9 @@
         args: <span class="kw-2">&amp;</span>ClientModuleRecoverArgs&lt;<span class="self">Self</span>&gt;,
         snapshot: <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>&lt;<span class="self">Self</span>::Module <span class="kw">as </span>ClientModule&gt;::Backup&gt;,
     ) -&gt; anyhow::Result&lt;()&gt; {
-        <span class="kw">let </span>db = args.db().clone();
-        <span class="kw">if </span>db
-            .begin_transaction_nc()
+        args.recover_from_history::&lt;WalletRecovery&gt;(<span class="self">self</span>, snapshot)
             .<span class="kw">await
-            </span>.get_value(<span class="kw-2">&amp;</span>RecoveryFinalizedKey)
-            .<span class="kw">await
-            </span>.unwrap_or_default()
-        {
-            <span class="macro">debug!</span>(target: LOG_CLIENT_MODULE_WALLET, max_gap=RECOVER_MAX_GAP, <span class="string">"Recovery already complete before"</span>);
-            <span class="kw">return </span><span class="prelude-val">Ok</span>(());
-        }
-
-        <span class="attr">#[allow(clippy::single_match_else)]
-        </span><span class="kw">let </span>previous_next_unused_idx = <span class="kw">match </span>snapshot {
-            <span class="prelude-val">Some</span>(WalletModuleBackup::V0(backup)) =&gt; {
-                <span class="macro">debug!</span>(target: LOG_CLIENT_MODULE_WALLET, <span class="string">"Restoring starting from an existing backup"</span>);
-
-                backup.next_tweak_idx
-            }
-            <span class="kw">_ </span>=&gt; {
-                <span class="macro">debug!</span>(target: LOG_CLIENT_MODULE_WALLET, <span class="string">"Restoring without an existing backup"</span>);
-                TweakIdx(<span class="number">0</span>)
-            }
-        };
-
-        <span class="kw">let </span>rpc_config = <span class="self">self
-            </span>.<span class="number">0
-            </span>.clone()
-            .unwrap_or(WalletClientModule::get_rpc_config(args.cfg()));
-
-        <span class="kw">let </span>btc_rpc = create_bitcoind(<span class="kw-2">&amp;</span>rpc_config, TaskGroup::new().make_handle())<span class="question-mark">?</span>;
-        <span class="kw">let </span>btc_rpc = <span class="kw-2">&amp;</span>btc_rpc;
-
-        <span class="kw">let </span>data = WalletClientModuleData {
-            cfg: args.cfg().clone(),
-            module_root_secret: args.module_root_secret().clone(),
-        };
-        <span class="kw">let </span>data = <span class="kw-2">&amp;</span>data;
-
-        <span class="kw">let </span>RecoverScanOutcome { last_used_idx, new_start_idx, tweak_idxes_with_pegins} = recover_scan_idxes_for_activity(previous_next_unused_idx, <span class="kw">move </span>|cur_tweak_idx: TweakIdx| <span class="kw">async move </span>{
-            args.update_recovery_progress(RecoveryProgress {
-                complete: u32::try_from(cur_tweak_idx.<span class="number">0</span>).unwrap_or(u32::MAX),
-                total: u32::try_from(cur_tweak_idx.<span class="number">0</span>.saturating_add(RECOVER_MAX_GAP)).unwrap_or(u32::MAX),
-            });
-
-        <span class="kw">let </span>(script, address, _tweak_key, _operation_id) =
-            data.derive_peg_in_script(cur_tweak_idx);
-
-            btc_rpc.watch_script_history(<span class="kw-2">&amp;</span>script).<span class="kw">await</span><span class="question-mark">?</span>;
-            <span class="kw">let </span>history = btc_rpc.get_script_history(<span class="kw-2">&amp;</span>script).<span class="kw">await</span><span class="question-mark">?</span>;
-
-            <span class="macro">debug!</span>(target: LOG_CLIENT_MODULE_WALLET, %cur_tweak_idx, %address, history_len=history.len(), <span class="string">"Checked address"</span>);
-
-            <span class="prelude-val">Ok</span>(history)
-        }).<span class="kw">await</span><span class="question-mark">?</span>;
-
-        <span class="kw">let </span>now = fedimint_core::time::now();
-        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = db.begin_transaction().<span class="kw">await</span>;
-
-        <span class="kw">let </span><span class="kw-2">mut </span>tweak_idx = TweakIdx(<span class="number">0</span>);
-
-        <span class="kw">while </span>tweak_idx &lt; new_start_idx {
-            <span class="kw">let </span>(_script, _address, _tweak_key, operation_id) =
-                data.derive_peg_in_script(tweak_idx);
-            dbtx.insert_new_entry(
-                <span class="kw-2">&amp;</span>PegInTweakIndexKey(tweak_idx),
-                <span class="kw-2">&amp;</span>PegInTweakIndexData {
-                    creation_time: now,
-                    next_check_time: <span class="kw">if </span>tweak_idxes_with_pegins.contains(<span class="kw-2">&amp;</span>tweak_idx) {
-                        <span class="comment">// The addresses that were already used before, or didn't seem to contain
-                        // anything don't need automatic peg-in attempt, and can be re-attempted
-                        // manually if needed.
-                        </span><span class="prelude-val">Some</span>(now)
-                    } <span class="kw">else </span>{
-                        <span class="prelude-val">None
-                    </span>},
-                    last_check_time: <span class="prelude-val">None</span>,
-                    operation_id,
-                    claimed: <span class="macro">vec!</span>[],
-                },
-            )
-            .<span class="kw">await</span>;
-            tweak_idx = tweak_idx.next();
-        }
-
-        dbtx.insert_new_entry(<span class="kw-2">&amp;</span>NextPegInTweakIndexKey, <span class="kw-2">&amp;</span>new_start_idx)
-            .<span class="kw">await</span>;
-        dbtx.insert_entry(<span class="kw-2">&amp;</span>RecoveryFinalizedKey, <span class="kw-2">&amp;</span><span class="bool-val">true</span>).<span class="kw">await</span>;
-
-        dbtx.commit_tx().<span class="kw">await</span>;
-
-        <span class="macro">debug!</span>(target: LOG_CLIENT_MODULE_WALLET, %new_start_idx, <span class="question-mark">?</span>last_used_idx, <span class="string">"Recovery complete"</span>);
-        <span class="prelude-val">Ok</span>(())
-    }
+    </span>}
 }
 
 <span class="attr">#[derive(Debug, Clone, Serialize, Deserialize)]
@@ -1747,14 +1574,27 @@
         <span class="comment">// fetch consensus height first
         </span><span class="kw">let </span>session_count = <span class="self">self</span>.client_ctx.global_api().session_count().<span class="kw">await</span><span class="question-mark">?</span>;
 
-        <span class="prelude-val">Ok</span>(backup::WalletModuleBackup::new_v0(
+        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.db.begin_transaction_nc().<span class="kw">await</span>;
+        <span class="kw">let </span>next_pegin_tweak_idx = dbtx
+            .get_value(<span class="kw-2">&amp;</span>NextPegInTweakIndexKey)
+            .<span class="kw">await
+            </span>.unwrap_or_default();
+        <span class="kw">let </span>claimed = dbtx
+            .find_by_prefix(<span class="kw-2">&amp;</span>PegInTweakIndexPrefix)
+            .<span class="kw">await
+            </span>.filter_map(|(k, v)| <span class="kw">async move </span>{
+                <span class="kw">if </span>v.claimed.is_empty() {
+                    <span class="prelude-val">None
+                </span>} <span class="kw">else </span>{
+                    <span class="prelude-val">Some</span>(k.<span class="number">0</span>)
+                }
+            })
+            .collect()
+            .<span class="kw">await</span>;
+        <span class="prelude-val">Ok</span>(backup::WalletModuleBackup::new_v1(
             session_count,
-            <span class="self">self</span>.db
-                .begin_transaction_nc()
-                .<span class="kw">await
-                </span>.get_value(<span class="kw-2">&amp;</span>NextPegInTweakIndexKey)
-                .<span class="kw">await
-                </span>.unwrap_or_default(),
+            next_pegin_tweak_idx,
+            claimed,
         ))
     }
 
@@ -2106,6 +1946,7 @@
         <span class="kw">let </span>operation_id = <span class="self">self</span>.get_pegin_tweak_idx(tweak_idx).<span class="kw">await</span><span class="question-mark">?</span>.operation_id;
 
         <span class="kw">let </span><span class="kw-2">mut </span>receiver = <span class="self">self</span>.pegin_claimed_receiver.clone();
+        <span class="kw">let </span><span class="kw-2">mut </span>backoff = backoff_util::aggressive_backoff();
 
         <span class="kw">loop </span>{
             <span class="kw">let </span>pegins = <span class="self">self
@@ -2118,6 +1959,7 @@
             <span class="kw">if </span>pegins.len() &lt; num_deposits {
                 <span class="macro">debug!</span>(target: LOG_CLIENT_MODULE_WALLET, has=pegins.len(), <span class="string">"Not enough deposits"</span>);
                 <span class="self">self</span>.recheck_pegin_address(tweak_idx).<span class="kw">await</span><span class="question-mark">?</span>;
+                runtime::sleep(backoff.next().unwrap_or_default()).<span class="kw">await</span>;
                 receiver.changed().<span class="kw">await</span><span class="question-mark">?</span>;
                 <span class="kw">continue</span>;
             }
@@ -2354,75 +2196,15 @@
     }
 }
 
-<span class="doccomment">/// We will check this many addresses after last actually used
-/// one before we give up
-</span><span class="kw">const </span>RECOVER_MAX_GAP: u64 = <span class="number">10</span>;
-<span class="doccomment">/// New client will start deriving new addresses from last used one
-/// plus that many idexes. This should be (much) less than
-/// `MAX_GAP`, but more than 0: We want to make sure we detect
-/// deposits that might have been made after multiple successive recoveries,
-/// but we want also to avoid accidental address re-use.
-</span><span class="kw">const </span>RECOVER_NUM_IDX_ADD_TO_LAST_USED: u64 = RECOVER_MAX_GAP / <span class="number">4 </span>+ <span class="number">1</span>;
-
-<span class="attr">#[derive(Clone, PartialEq, Eq, Debug)]
-</span><span class="kw">struct </span>RecoverScanOutcome {
-    last_used_idx: <span class="prelude-ty">Option</span>&lt;TweakIdx&gt;,
-    new_start_idx: TweakIdx,
-    tweak_idxes_with_pegins: BTreeSet&lt;TweakIdx&gt;,
-}
-
-<span class="doccomment">/// A part of [`WalletClientInit::recover`] extracted out to be easy to test,
-/// as a side-effect free.
-</span><span class="kw">async fn </span>recover_scan_idxes_for_activity&lt;F, FF, T&gt;(
-    previous_next_unused_idx: TweakIdx,
-    check_addr_history: F,
-) -&gt; anyhow::Result&lt;RecoverScanOutcome&gt;
-<span class="kw">where
-    </span>F: Fn(TweakIdx) -&gt; FF,
-    FF: Future&lt;Output = anyhow::Result&lt;Vec&lt;T&gt;&gt;&gt;,
-{
-    <span class="kw">let </span><span class="kw-2">mut </span>last_used_idx = <span class="kw">if </span>previous_next_unused_idx == TweakIdx::ZERO {
-        <span class="prelude-val">None
-    </span>} <span class="kw">else </span>{
-        <span class="prelude-val">Some</span>(
-            previous_next_unused_idx
-                .prev()
-                .expect(<span class="string">"Check for not being zero"</span>),
-        )
-    };
-    <span class="kw">let </span><span class="kw-2">mut </span>cur_tweak_idx = previous_next_unused_idx;
-    <span class="kw">let </span><span class="kw-2">mut </span>tweak_idxes_with_pegins = BTreeSet::new();
-
-    <span class="kw">let </span>new_start_idx = <span class="kw">loop </span>{
-        <span class="kw">let </span>gap_since_last_used = cur_tweak_idx - last_used_idx.unwrap_or_default();
-
-        <span class="kw">if </span>RECOVER_MAX_GAP &lt;= gap_since_last_used {
-            <span class="kw">break </span>last_used_idx
-                .unwrap_or_default()
-                .advance(RECOVER_NUM_IDX_ADD_TO_LAST_USED);
-        }
-
-        <span class="kw">let </span>history = check_addr_history(cur_tweak_idx).<span class="kw">await</span><span class="question-mark">?</span>;
-
-        <span class="kw">if </span>!history.is_empty() {
-            last_used_idx = <span class="prelude-val">Some</span>(cur_tweak_idx);
-            tweak_idxes_with_pegins.insert(cur_tweak_idx);
-        }
-        cur_tweak_idx = cur_tweak_idx.next();
-    };
-
-    <span class="prelude-val">Ok</span>(RecoverScanOutcome {
-        last_used_idx,
-        new_start_idx,
-        tweak_idxes_with_pegins,
-    })
-}
-
 <span class="attr">#[cfg(all(test, not(target_family = <span class="string">"wasm"</span>)))]
 </span><span class="kw">mod </span>tests {
+    <span class="kw">use </span>std::collections::BTreeSet;
     <span class="kw">use </span>std::sync::atomic::{AtomicBool, Ordering};
 
     <span class="kw">use super</span>::<span class="kw-2">*</span>;
+    <span class="kw">use </span><span class="kw">crate</span>::backup::{
+        recover_scan_idxes_for_activity, RecoverScanOutcome, RECOVER_NUM_IDX_ADD_TO_LAST_USED,
+    };
 
     <span class="attr">#[allow(clippy::too_many_lines)] </span><span class="comment">// shut-up clippy, it's a test
     </span><span class="attr">#[tokio::test(flavor = <span class="string">"multi_thread"</span>)]
@@ -2431,19 +2213,23 @@
             <span class="kw">let </span>last_checked = AtomicBool::new(<span class="bool-val">false</span>);
             <span class="kw">let </span>last_checked = <span class="kw-2">&amp;</span>last_checked;
             <span class="macro">assert_eq!</span>(
-                recover_scan_idxes_for_activity(TweakIdx(<span class="number">0</span>), |cur_idx| <span class="kw">async move </span>{
-                    <span class="prelude-val">Ok</span>(<span class="kw">match </span>cur_idx {
-                        TweakIdx(<span class="number">9</span>) =&gt; {
-                            last_checked.store(<span class="bool-val">true</span>, Ordering::SeqCst);
-                            <span class="macro">vec!</span>[]
-                        }
-                        TweakIdx(<span class="number">10</span>) =&gt; <span class="macro">panic!</span>(<span class="string">"Shouldn't happen"</span>),
-                        TweakIdx(<span class="number">11</span>) =&gt; {
-                            <span class="macro">vec!</span>[<span class="number">0usize</span>] <span class="comment">/* just for type inference */
-                        </span>}
-                        <span class="kw">_ </span>=&gt; <span class="macro">vec!</span>[],
-                    })
-                })
+                recover_scan_idxes_for_activity(
+                    TweakIdx(<span class="number">0</span>),
+                    <span class="kw-2">&amp;</span>BTreeSet::new(),
+                    |cur_idx| <span class="kw">async move </span>{
+                        <span class="prelude-val">Ok</span>(<span class="kw">match </span>cur_idx {
+                            TweakIdx(<span class="number">9</span>) =&gt; {
+                                last_checked.store(<span class="bool-val">true</span>, Ordering::SeqCst);
+                                <span class="macro">vec!</span>[]
+                            }
+                            TweakIdx(<span class="number">10</span>) =&gt; <span class="macro">panic!</span>(<span class="string">"Shouldn't happen"</span>),
+                            TweakIdx(<span class="number">11</span>) =&gt; {
+                                <span class="macro">vec!</span>[<span class="number">0usize</span>] <span class="comment">/* just for type inference */
+                            </span>}
+                            <span class="kw">_ </span>=&gt; <span class="macro">vec!</span>[],
+                        })
+                    }
+                )
                 .<span class="kw">await
                 </span>.unwrap(),
                 RecoverScanOutcome {
@@ -2459,17 +2245,55 @@
             <span class="kw">let </span>last_checked = AtomicBool::new(<span class="bool-val">false</span>);
             <span class="kw">let </span>last_checked = <span class="kw-2">&amp;</span>last_checked;
             <span class="macro">assert_eq!</span>(
-                recover_scan_idxes_for_activity(TweakIdx(<span class="number">10</span>), |cur_idx| <span class="kw">async move </span>{
-                    <span class="prelude-val">Ok</span>(<span class="kw">match </span>cur_idx {
-                        TweakIdx(<span class="number">10</span>) =&gt; <span class="macro">vec!</span>[()],
-                        TweakIdx(<span class="number">19</span>) =&gt; {
-                            last_checked.store(<span class="bool-val">true</span>, Ordering::SeqCst);
-                            <span class="macro">vec!</span>[]
-                        }
-                        TweakIdx(<span class="number">20</span>) =&gt; <span class="macro">panic!</span>(<span class="string">"Shouldn't happen"</span>),
-                        <span class="kw">_ </span>=&gt; <span class="macro">vec!</span>[],
-                    })
-                })
+                recover_scan_idxes_for_activity(
+                    TweakIdx(<span class="number">0</span>),
+                    <span class="kw-2">&amp;</span>BTreeSet::from([TweakIdx(<span class="number">1</span>), TweakIdx(<span class="number">2</span>)]),
+                    |cur_idx| <span class="kw">async move </span>{
+                        <span class="prelude-val">Ok</span>(<span class="kw">match </span>cur_idx {
+                            TweakIdx(<span class="number">1</span>) =&gt; <span class="macro">panic!</span>(<span class="string">"Shouldn't happen: already used (1)"</span>),
+                            TweakIdx(<span class="number">2</span>) =&gt; <span class="macro">panic!</span>(<span class="string">"Shouldn't happen: already used (2)"</span>),
+                            TweakIdx(<span class="number">11</span>) =&gt; {
+                                last_checked.store(<span class="bool-val">true</span>, Ordering::SeqCst);
+                                <span class="macro">vec!</span>[]
+                            }
+                            TweakIdx(<span class="number">12</span>) =&gt; <span class="macro">panic!</span>(<span class="string">"Shouldn't happen"</span>),
+                            TweakIdx(<span class="number">13</span>) =&gt; {
+                                <span class="macro">vec!</span>[<span class="number">0usize</span>] <span class="comment">/* just for type inference */
+                            </span>}
+                            <span class="kw">_ </span>=&gt; <span class="macro">vec!</span>[],
+                        })
+                    }
+                )
+                .<span class="kw">await
+                </span>.unwrap(),
+                RecoverScanOutcome {
+                    last_used_idx: <span class="prelude-val">Some</span>(TweakIdx(<span class="number">2</span>)),
+                    new_start_idx: TweakIdx(<span class="number">2 </span>+ RECOVER_NUM_IDX_ADD_TO_LAST_USED),
+                    tweak_idxes_with_pegins: BTreeSet::from([])
+                }
+            );
+            <span class="macro">assert!</span>(last_checked.load(Ordering::SeqCst));
+        }
+
+        {
+            <span class="kw">let </span>last_checked = AtomicBool::new(<span class="bool-val">false</span>);
+            <span class="kw">let </span>last_checked = <span class="kw-2">&amp;</span>last_checked;
+            <span class="macro">assert_eq!</span>(
+                recover_scan_idxes_for_activity(
+                    TweakIdx(<span class="number">10</span>),
+                    <span class="kw-2">&amp;</span>BTreeSet::new(),
+                    |cur_idx| <span class="kw">async move </span>{
+                        <span class="prelude-val">Ok</span>(<span class="kw">match </span>cur_idx {
+                            TweakIdx(<span class="number">10</span>) =&gt; <span class="macro">vec!</span>[()],
+                            TweakIdx(<span class="number">19</span>) =&gt; {
+                                last_checked.store(<span class="bool-val">true</span>, Ordering::SeqCst);
+                                <span class="macro">vec!</span>[]
+                            }
+                            TweakIdx(<span class="number">20</span>) =&gt; <span class="macro">panic!</span>(<span class="string">"Shouldn't happen"</span>),
+                            <span class="kw">_ </span>=&gt; <span class="macro">vec!</span>[],
+                        })
+                    }
+                )
                 .<span class="kw">await
                 </span>.unwrap(),
                 RecoverScanOutcome {
@@ -2482,7 +2306,7 @@
         }
 
         <span class="macro">assert_eq!</span>(
-            recover_scan_idxes_for_activity(TweakIdx(<span class="number">0</span>), |cur_idx| <span class="kw">async move </span>{
+            recover_scan_idxes_for_activity(TweakIdx(<span class="number">0</span>), <span class="kw-2">&amp;</span>BTreeSet::new(), |cur_idx| <span class="kw">async move </span>{
                 <span class="prelude-val">Ok</span>(<span class="kw">match </span>cur_idx {
                     TweakIdx(<span class="number">6 </span>| <span class="number">15</span>) =&gt; <span class="macro">vec!</span>[()],
                     <span class="kw">_ </span>=&gt; <span class="macro">vec!</span>[],
@@ -2497,7 +2321,7 @@
             }
         );
         <span class="macro">assert_eq!</span>(
-            recover_scan_idxes_for_activity(TweakIdx(<span class="number">10</span>), |cur_idx| <span class="kw">async move </span>{
+            recover_scan_idxes_for_activity(TweakIdx(<span class="number">10</span>), <span class="kw-2">&amp;</span>BTreeSet::new(), |cur_idx| <span class="kw">async move </span>{
                 <span class="prelude-val">Ok</span>(<span class="kw">match </span>cur_idx {
                     TweakIdx(<span class="number">8</span>) =&gt; {
                         <span class="macro">vec!</span>[()] <span class="comment">/* for type inference only */
@@ -2511,13 +2335,13 @@
             .<span class="kw">await
             </span>.unwrap(),
             RecoverScanOutcome {
-                last_used_idx: <span class="prelude-val">Some</span>(TweakIdx(<span class="number">9</span>)),
+                last_used_idx: <span class="prelude-val">None</span>,
                 new_start_idx: TweakIdx(<span class="number">9 </span>+ RECOVER_NUM_IDX_ADD_TO_LAST_USED),
                 tweak_idxes_with_pegins: BTreeSet::from([])
             }
         );
         <span class="macro">assert_eq!</span>(
-            recover_scan_idxes_for_activity(TweakIdx(<span class="number">10</span>), |cur_idx| <span class="kw">async move </span>{
+            recover_scan_idxes_for_activity(TweakIdx(<span class="number">10</span>), <span class="kw-2">&amp;</span>BTreeSet::new(), |cur_idx| <span class="kw">async move </span>{
                 <span class="prelude-val">Ok</span>(<span class="kw">match </span>cur_idx {
                     TweakIdx(<span class="number">9</span>) =&gt; <span class="macro">panic!</span>(<span class="string">"Shouldn't happen"</span>),
                     TweakIdx(<span class="number">15</span>) =&gt; <span class="macro">vec!</span>[()],

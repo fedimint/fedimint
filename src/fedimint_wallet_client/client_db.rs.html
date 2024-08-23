@@ -135,15 +135,38 @@
 <a href="#135" id="135">135</a>
 <a href="#136" id="136">136</a>
 <a href="#137" id="137">137</a>
+<a href="#138" id="138">138</a>
+<a href="#139" id="139">139</a>
+<a href="#140" id="140">140</a>
+<a href="#141" id="141">141</a>
+<a href="#142" id="142">142</a>
+<a href="#143" id="143">143</a>
+<a href="#144" id="144">144</a>
+<a href="#145" id="145">145</a>
+<a href="#146" id="146">146</a>
+<a href="#147" id="147">147</a>
+<a href="#148" id="148">148</a>
+<a href="#149" id="149">149</a>
+<a href="#150" id="150">150</a>
+<a href="#151" id="151">151</a>
+<a href="#152" id="152">152</a>
+<a href="#153" id="153">153</a>
+<a href="#154" id="154">154</a>
+<a href="#155" id="155">155</a>
+<a href="#156" id="156">156</a>
+<a href="#157" id="157">157</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>core::fmt;
 <span class="kw">use </span>std::ops;
 <span class="kw">use </span>std::time::SystemTime;
 
+<span class="kw">use </span>fedimint_client::module::init::recovery::RecoveryFromHistoryCommon;
 <span class="kw">use </span>fedimint_core::core::OperationId;
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::{impl_db_lookup, impl_db_record, TransactionId};
 <span class="kw">use </span>serde::Serialize;
 <span class="kw">use </span>strum_macros::EnumIter;
+
+<span class="kw">use </span><span class="kw">crate</span>::backup::WalletRecoveryState;
 
 <span class="attr">#[derive(Clone, EnumIter, Debug)]
 </span><span class="kw">pub enum </span>DbKeyPrefix {
@@ -151,6 +174,7 @@
     PegInTweakIndex = <span class="number">0x2d</span>,
     ClaimedPegIn = <span class="number">0x2e</span>,
     RecoveryFinalized = <span class="number">0x2f</span>,
+    RecoveryState = <span class="number">0x30</span>,
 }
 
 <span class="kw">impl </span>std::fmt::Display <span class="kw">for </span>DbKeyPrefix {
@@ -190,6 +214,10 @@
     <span class="attr">#[must_use]
     </span><span class="kw">pub fn </span>advance(<span class="self">self</span>, i: u64) -&gt; <span class="self">Self </span>{
         <span class="self">Self</span>(<span class="self">self</span>.<span class="number">0 </span>+ i)
+    }
+
+    <span class="kw">pub fn </span>saturating_sub(<span class="kw-2">&amp;</span><span class="self">self</span>, rhs: TweakIdx) -&gt; u64 {
+        <span class="self">self</span>.<span class="number">0</span>.saturating_sub(rhs.<span class="number">0</span>)
     }
 }
 
@@ -271,5 +299,17 @@
     key = RecoveryFinalizedKey,
     value = bool,
     db_prefix = DbKeyPrefix::RecoveryFinalized,
+);
+
+<span class="attr">#[derive(Debug, Clone, Encodable, Decodable, Serialize)]
+</span><span class="kw">pub struct </span>RecoveryStateKey;
+
+<span class="attr">#[derive(Debug, Clone, Encodable, Decodable)]
+</span><span class="kw">pub struct </span>RestoreStateKeyPrefix;
+
+<span class="macro">impl_db_record!</span>(
+    key = RecoveryStateKey,
+    value = (WalletRecoveryState, RecoveryFromHistoryCommon),
+    db_prefix = DbKeyPrefix::RecoveryState,
 );
 </code></pre></div></section></main></body></html>

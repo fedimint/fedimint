@@ -118,6 +118,7 @@
 <a href="#118" id="118">118</a>
 <a href="#119" id="119">119</a>
 <a href="#120" id="120">120</a>
+<a href="#121" id="121">121</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
@@ -163,11 +164,12 @@
     <span class="kw">loop </span>{
         <span class="kw">let </span>results = join_all(client_inner.api.all_peers().iter()
             .map(|peer_id| <span class="kw">async </span>{
+                <span class="kw">let </span>peer_id = <span class="kw-2">*</span>peer_id;
                 <span class="kw">let </span>announcements = client_inner
                     .api
-                    .api_announcements(<span class="kw-2">*</span>peer_id)
+                    .api_announcements(peer_id)
                     .<span class="kw">await
-                    </span>.context(<span class="string">"Fetching API announcements from peer {peer_id} failed"</span>)<span class="question-mark">?</span>;
+                    </span>.with_context(<span class="kw">move </span>|| <span class="macro">format!</span>(<span class="string">"Fetching API announcements from peer {peer_id} failed"</span>))<span class="question-mark">?</span>;
 
                 <span class="comment">// If any of the announcements is invalid something is fishy with that
                 // guardian and we ignore all its responses

@@ -75,9 +75,54 @@
 <a href="#75" id="75">75</a>
 <a href="#76" id="76">76</a>
 <a href="#77" id="77">77</a>
-</pre></div><pre class="rust"><code><span class="kw">use </span>devimint::cmd;
+<a href="#78" id="78">78</a>
+<a href="#79" id="79">79</a>
+<a href="#80" id="80">80</a>
+<a href="#81" id="81">81</a>
+<a href="#82" id="82">82</a>
+<a href="#83" id="83">83</a>
+<a href="#84" id="84">84</a>
+<a href="#85" id="85">85</a>
+<a href="#86" id="86">86</a>
+<a href="#87" id="87">87</a>
+<a href="#88" id="88">88</a>
+<a href="#89" id="89">89</a>
+<a href="#90" id="90">90</a>
+<a href="#91" id="91">91</a>
+<a href="#92" id="92">92</a>
+<a href="#93" id="93">93</a>
+<a href="#94" id="94">94</a>
+<a href="#95" id="95">95</a>
+<a href="#96" id="96">96</a>
+<a href="#97" id="97">97</a>
+<a href="#98" id="98">98</a>
+<a href="#99" id="99">99</a>
+<a href="#100" id="100">100</a>
+<a href="#101" id="101">101</a>
+<a href="#102" id="102">102</a>
+<a href="#103" id="103">103</a>
+<a href="#104" id="104">104</a>
+<a href="#105" id="105">105</a>
+<a href="#106" id="106">106</a>
+<a href="#107" id="107">107</a>
+<a href="#108" id="108">108</a>
+<a href="#109" id="109">109</a>
+<a href="#110" id="110">110</a>
+<a href="#111" id="111">111</a>
+<a href="#112" id="112">112</a>
+<a href="#113" id="113">113</a>
+<a href="#114" id="114">114</a>
+<a href="#115" id="115">115</a>
+<a href="#116" id="116">116</a>
+<a href="#117" id="117">117</a>
+<a href="#118" id="118">118</a>
+<a href="#119" id="119">119</a>
+<a href="#120" id="120">120</a>
+</pre></div><pre class="rust"><code><span class="kw">use </span>anyhow::bail;
+<span class="kw">use </span>devimint::cmd;
 <span class="kw">use </span>devimint::util::{FedimintCli, FedimintdCmd};
 <span class="kw">use </span>devimint::version_constants::VERSION_0_3_0_ALPHA;
+<span class="kw">use </span>fedimint_core::util::{backoff_util, retry};
 <span class="kw">use </span>futures::try_join;
 <span class="kw">use </span>tracing::info;
 
@@ -95,6 +140,16 @@
 
         <span class="kw">let </span>peg_in_amount_sats = <span class="number">100_000</span>;
 
+            <span class="comment">// Start this client early, as we need to test waiting for session to close
+        </span><span class="kw">let </span>client_slow = fed
+            .new_joined_client(<span class="string">"wallet-client-recovery-origin"</span>)
+            .<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="macro">info!</span>(<span class="string">"Join and claim"</span>);
+        fed.pegin_client(peg_in_amount_sats, <span class="kw-2">&amp;</span>client_slow).<span class="kw">await</span><span class="question-mark">?</span>;
+
+        <span class="kw">let </span>client_slow_pegin_session_count = client_slow.get_session_count().<span class="kw">await</span><span class="question-mark">?</span>;
+
+        <span class="macro">info!</span>(<span class="string">"### Test wallet restore without a backup"</span>);
         {
             <span class="kw">let </span>client = fed
                 .new_joined_client(<span class="string">"wallet-client-recovery-origin"</span>)
@@ -118,6 +173,7 @@
             <span class="macro">assert_eq!</span>(peg_in_amount_sats * <span class="number">1000</span>, restored.balance().<span class="kw">await</span><span class="question-mark">?</span>);
         }
 
+        <span class="macro">info!</span>(<span class="string">"### Test wallet restore with a backup"</span>);
         {
             <span class="kw">let </span>client = fed
                 .new_joined_client(<span class="string">"wallet-client-recovery-origin"</span>)
@@ -145,6 +201,36 @@
                 .<span class="kw">await</span><span class="question-mark">?</span>;
 
             <span class="macro">info!</span>(<span class="string">"Check if claimed"</span>);
+            <span class="macro">assert_eq!</span>(peg_in_amount_sats * <span class="number">1000 </span>* <span class="number">2</span>, restored.balance().<span class="kw">await</span><span class="question-mark">?</span>);
+        }
+
+        <span class="macro">info!</span>(<span class="string">"### Test wallet restore with a history and no backup"</span>);
+        {
+            <span class="kw">let </span>client = client_slow;
+
+            retry(<span class="string">"wait for next session"</span>, backoff_util::aggressive_backoff(), || <span class="kw">async </span>{
+                <span class="kw">if </span>client_slow_pegin_session_count &lt; client.get_session_count().<span class="kw">await</span><span class="question-mark">? </span>{
+                    <span class="kw">return </span><span class="prelude-val">Ok</span>(());
+                }
+                <span class="macro">bail!</span>(<span class="string">"Session didn't close"</span>)
+            })
+            .<span class="kw">await
+            </span>.expect(<span class="string">"timeouted waiting for session to close"</span>);
+
+            <span class="kw">let </span>operation_id = fed
+                .pegin_client_no_wait(peg_in_amount_sats, <span class="kw-2">&amp;</span>client)
+                .<span class="kw">await</span><span class="question-mark">?</span>;
+
+            <span class="macro">info!</span>(<span class="string">"Client slow: Restore without backup"</span>);
+            <span class="kw">let </span>restored = client
+                .new_restored(<span class="string">"client-slow-restored-without-backup"</span>, fed.invite_code()<span class="question-mark">?</span>)
+                .<span class="kw">await</span><span class="question-mark">?</span>;
+
+            <span class="macro">cmd!</span>(restored, <span class="string">"module"</span>, <span class="string">"wallet"</span>, <span class="string">"await-deposit"</span>, operation_id)
+                .run()
+                .<span class="kw">await</span><span class="question-mark">?</span>;
+
+            <span class="macro">info!</span>(<span class="string">"Client slow: Check if claimed"</span>);
             <span class="macro">assert_eq!</span>(peg_in_amount_sats * <span class="number">1000 </span>* <span class="number">2</span>, restored.balance().<span class="kw">await</span><span class="question-mark">?</span>);
         }
 

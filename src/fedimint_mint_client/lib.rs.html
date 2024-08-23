@@ -2533,6 +2533,12 @@
 <a href="#2533" id="2533">2533</a>
 <a href="#2534" id="2534">2534</a>
 <a href="#2535" id="2535">2535</a>
+<a href="#2536" id="2536">2536</a>
+<a href="#2537" id="2537">2537</a>
+<a href="#2538" id="2538">2538</a>
+<a href="#2539" id="2539">2539</a>
+<a href="#2540" id="2540">2540</a>
+<a href="#2541" id="2541">2541</a>
 </pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::missing_errors_doc)]
@@ -2568,7 +2574,7 @@
 <span class="kw">use </span>backup::recovery::MintRecovery;
 <span class="kw">use </span>base64::Engine <span class="kw">as _</span>;
 <span class="kw">use </span>bitcoin_hashes::{sha256, sha256t, Hash, HashEngine <span class="kw">as </span>BitcoinHashEngine};
-<span class="kw">use </span>client_db::{DbKeyPrefix, NoteKeyPrefix};
+<span class="kw">use </span>client_db::{DbKeyPrefix, NoteKeyPrefix, RecoveryFinalizedKey};
 <span class="kw">use </span>fedimint_client::module::init::{
     ClientModuleInit, ClientModuleInitArgs, ClientModuleRecoverArgs,
 };
@@ -3091,7 +3097,12 @@
                         <span class="string">"CancelledOOBSpendKey"
                     </span>);
                 }
-                DbKeyPrefix::RecoveryState | DbKeyPrefix::RecoveryFinalized =&gt; {}
+                DbKeyPrefix::RecoveryFinalized =&gt; {
+                    <span class="kw">if let </span><span class="prelude-val">Some</span>(val) = dbtx.get_value(<span class="kw-2">&amp;</span>RecoveryFinalizedKey).<span class="kw">await </span>{
+                        mint_client_items.insert(<span class="string">"RecoveryFinalized"</span>.to_string(), Box::new(val));
+                    }
+                }
+                DbKeyPrefix::RecoveryState =&gt; {}
             }
         }
 
@@ -3124,7 +3135,8 @@
         args: <span class="kw-2">&amp;</span>ClientModuleRecoverArgs&lt;<span class="self">Self</span>&gt;,
         snapshot: <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>&lt;<span class="self">Self</span>::Module <span class="kw">as </span>ClientModule&gt;::Backup&gt;,
     ) -&gt; anyhow::Result&lt;()&gt; {
-        args.recover_from_history::&lt;MintRecovery&gt;(snapshot).<span class="kw">await
+        args.recover_from_history::&lt;MintRecovery&gt;(<span class="self">self</span>, snapshot)
+            .<span class="kw">await
     </span>}
 }
 
