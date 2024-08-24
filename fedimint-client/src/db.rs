@@ -1,5 +1,5 @@
 use std::collections::BTreeMap;
-use std::io::Cursor;
+use std::io::{Cursor, Error, Write};
 use std::time::SystemTime;
 
 use fedimint_api_client::api::ApiVersionSet;
@@ -10,7 +10,7 @@ use fedimint_core::db::{
     DatabaseValue, DatabaseVersion, DatabaseVersionKey, IDatabaseTransactionOpsCore,
     IDatabaseTransactionOpsCoreTyped, MODULE_GLOBAL_PREFIX,
 };
-use fedimint_core::encoding::{Decodable, Encodable};
+use fedimint_core::encoding::{Decodable, DecodeError, Encodable};
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::module::SupportedApiVersionsSummary;
 use fedimint_core::util::BoxFuture;
@@ -51,6 +51,7 @@ pub enum DbKeyPrefix {
     ApiSecret = 0x36,
     PeerLastApiVersionsSummaryCache = 0x37,
     ApiUrlAnnouncement = 0x38,
+    ExtraConfig = 0x39,
 
     /// Arbitrary data of the applications integrating Fedimint client and
     /// wanting to store some Federation-specific data in Fedimint client
@@ -389,6 +390,52 @@ impl_db_record!(
 );
 
 impl_db_lookup!(key = MetaFieldKey, query_prefix = MetaFieldPrefix);
+
+/// Database key for config values that aren't part of the client config, but
+/// synced from the federation after the fact. See the [`crate::extra_config`]
+/// module for more information.
+#[derive(Debug, Clone, Encodable, Decodable, Eq, PartialEq, PartialOrd, Ord, Hash)]
+pub struct ExtraConfigKey {
+    pub module_instance_id: Option<ModuleInstanceId>,
+    pub tracked_value: String,
+}
+
+/// Database value for config values that aren't part of the client config, but
+/// synced from the federation after the fact. See the [`crate::extra_config`]
+/// module for more information.
+#[derive(Debug, Clone)]
+pub struct ExtraConfigValue {
+    pub last_update: SystemTime,
+    pub value: serde_json::Value,
+}
+
+impl_db_record!(
+    key = ExtraConfigKey,
+    value = ExtraConfigValue,
+    db_prefix = DbKeyPrefix::ExtraConfig,
+);
+
+impl Encodable for ExtraConfigValue {
+    fn consensus_encode<W: Write>(&self, writer: &mut W) -> Result<usize, Error> {
+        let mut size_written = 0;
+        let json_bytes = serde_json::to_vec(&self.value).expect("JSON can always be serialized");
+        size_written += json_bytes.consensus_encode(writer)?;
+        size_written += self.last_update.consensus_encode(writer)?;
+        Ok(size_written)
+    }
+}
+
+impl Decodable for ExtraConfigValue {
+    fn consensus_decode<R: std::io::Read>(
+        r: &mut R,
+        modules: &ModuleDecoderRegistry,
+    ) -> Result<Self, DecodeError> {
+        let value = serde_json::from_slice(&Vec::<u8>::consensus_decode(r, modules)?)
+            .map_err(|e| DecodeError::new_custom(e.into()))?;
+        let last_update = SystemTime::consensus_decode(r, modules)?;
+        Ok(ExtraConfigValue { last_update, value })
+    }
+}
 
 /// `ClientMigrationFn` is a function that modules can implement to "migrate"
 /// the database to the next database version.

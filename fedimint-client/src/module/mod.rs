@@ -25,6 +25,7 @@ use fedimint_core::{
 };
 
 use self::init::ClientModuleInit;
+use crate::extra_config::{ModuleExtraConfigService, TrackedExtraConfig};
 use crate::module::recovery::{DynModuleBackup, ModuleBackup};
 use crate::sm::{self, ActiveStateMeta, Context, DynContext, DynState, State};
 use crate::transaction::{ClientInput, ClientOutput, TransactionBuilder};
@@ -550,6 +551,18 @@ where
 
         Ok(())
     }
+
+    /// Get the [`ModuleExtraConfigService`] that allows the module access to
+    /// config values synced in the background by the global
+    /// [`ExtraConfigService`](crate::extra_config::ExtraConfigService). Values
+    /// read from it have to be registered by the module by returning them from
+    /// the [`ClientModule::tracked_extra_config`] method.
+    pub fn extra_cfg_service(&self) -> ModuleExtraConfigService {
+        self.client
+            .get()
+            .extra_config_service
+            .module_service(self.module_instance_id)
+    }
 }
 
 /// Fedimint module client
@@ -764,6 +777,12 @@ pub trait ClientModule: Debug + MaybeSend + MaybeSync + 'static {
     async fn leave(&self, _dbtx: &mut DatabaseTransaction<'_>) -> anyhow::Result<()> {
         bail!("Unable to determine if safe to leave the federation: Not implemented")
     }
+
+    /// Returns the extra config values that should be tracked by the config
+    /// sync service. See [`crate::extra_config`].
+    fn tracked_extra_config(&self) -> Vec<TrackedExtraConfig> {
+        vec![]
+    }
 }
 
 /// Type-erased version of [`ClientModule`]
@@ -819,6 +838,8 @@ pub trait IClientModule: Debug {
     ) -> Amount;
 
     async fn subscribe_balance_changes(&self) -> BoxStream<'static, ()>;
+
+    fn tracked_extra_config(&self) -> Vec<TrackedExtraConfig>;
 }
 
 #[apply(async_trait_maybe_send!)]
@@ -947,6 +968,10 @@ where
 
     async fn subscribe_balance_changes(&self) -> BoxStream<'static, ()> {
         <T as ClientModule>::subscribe_balance_changes(self).await
+    }
+
+    fn tracked_extra_config(&self) -> Vec<TrackedExtraConfig> {
+        <T as ClientModule>::tracked_extra_config(self)
     }
 }
 

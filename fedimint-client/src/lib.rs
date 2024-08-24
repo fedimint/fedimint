@@ -150,6 +150,7 @@ use crate::api_announcements::{get_api_urls, run_api_announcement_sync, ApiAnnou
 use crate::api_version_discovery::discover_common_api_versions_set;
 use crate::backup::Metadata;
 use crate::db::{ClientMetadataKey, ClientModuleRecoveryState, InitState, OperationLogKey};
+use crate::extra_config::{ExtraConfigService, TrackedExtraConfig};
 use crate::module::init::{
     ClientModuleInit, ClientModuleInitRegistry, DynClientModuleInit, IClientModuleInit,
 };
@@ -186,6 +187,7 @@ pub mod transaction;
 mod api_version_discovery;
 
 pub mod api_announcements;
+pub mod extra_config;
 /// Management of meta fields
 pub mod meta;
 
@@ -778,6 +780,7 @@ pub struct Client {
     operation_log: OperationLog,
     secp_ctx: Secp256k1<secp256k1::All>,
     meta_service: Arc<MetaService>,
+    extra_config_service: ExtraConfigService,
     connector: Connector,
 
     task_group: TaskGroup,
@@ -2639,6 +2642,18 @@ impl ClientBuilder {
         let (client_recovery_progress_sender, client_recovery_progress_receiver) =
             watch::channel(recovery_receiver_init_val);
 
+        let extra_config_service = {
+            let mut builder = ExtraConfigService::builder();
+            builder.with_db(db.clone());
+            builder.with_api(api.clone());
+            builder.with_tracked_core_config(core_extra_config());
+            for (module_instance_id, _kind, module) in modules.iter_modules() {
+                builder
+                    .with_tracked_module_config(module_instance_id, module.tracked_extra_config());
+            }
+            builder.start(&task_group)
+        };
+
         let client_inner = Arc::new(Client {
             config: RwLock::new(config.clone()),
             api_secret,
@@ -2657,6 +2672,7 @@ impl ClientBuilder {
             operation_log: OperationLog::new(db),
             client_recovery_progress_receiver,
             meta_service: self.meta_service,
+            extra_config_service,
             connector,
         });
         client_inner
@@ -2779,4 +2795,8 @@ pub fn client_decoders<'a>(
         );
     }
     ModuleDecoderRegistry::from(modules)
+}
+
+fn core_extra_config() -> Vec<TrackedExtraConfig> {
+    vec![]
 }

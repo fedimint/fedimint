@@ -4,6 +4,7 @@ use std::hash::Hash;
 use std::ops::Mul;
 use std::path::Path;
 use std::str::FromStr;
+use std::time::Duration;
 
 use anyhow::{bail, format_err, Context};
 use bitcoin29::hashes::hex::format_hex;
@@ -1035,6 +1036,19 @@ pub const META_OVERRIDE_URL_KEY: &str = "meta_override_url";
 pub fn load_from_file<T: DeserializeOwned>(path: &Path) -> Result<T, anyhow::Error> {
     let file = std::fs::File::open(path)?;
     Ok(serde_json::from_reader(file)?)
+}
+
+/// Some config values that the client and its modules use are dynamic in
+/// nature. This trait is implemented for structs representing such config
+/// values that can be fetched from the federation regularly to keep them up to
+/// date.
+pub trait ExtraConfig: DeserializeOwned {
+    /// Server method that returns the latest value
+    const FETCH_METHOD: &'static str;
+    /// The interval at which the value is being fetched. This is only a rough
+    /// guideline, fetching may be more or less frequent depending on network
+    /// conditions and restarts of the update service.
+    const UPDATE_INTERVAL: Duration;
 }
 
 pub mod serde_binary_human_readable {
