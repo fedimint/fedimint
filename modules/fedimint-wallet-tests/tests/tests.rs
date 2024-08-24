@@ -9,6 +9,7 @@ use fedimint_core::bitcoin_migration::checked_address_to_unchecked_address;
 use fedimint_core::db::mem_impl::MemDatabase;
 use fedimint_core::db::{DatabaseTransaction, IRawDatabaseExt};
 use fedimint_core::envs::BitcoinRpcConfig;
+use fedimint_core::module::serde_json;
 use fedimint_core::task::sleep_in_test;
 use fedimint_core::util::{BoxStream, NextOrPending};
 use fedimint_core::{sats, Amount, Feerate, PeerId, ServerModule};
@@ -51,7 +52,9 @@ async fn initial_peg_in<'a>(
     assert_eq!(balance_sub.ok().await?, sats(0));
 
     let wallet_module = &client.get_first_module::<WalletClientModule>();
-    let (op, address, _) = wallet_module.allocate_deposit_address_expert_only().await?;
+    let (op, address, _) = wallet_module
+        .allocate_deposit_address_expert_only(())
+        .await?;
     info!(?address, "Peg-in address generated");
     let (_proof, tx) = bitcoin
         .send_and_mine_block(
@@ -154,6 +157,24 @@ async fn on_chain_peg_in_and_peg_out_happy_case() -> anyhow::Result<()> {
 
     let mut balance_sub = initial_peg_in(&client, bitcoin.as_ref(), finality_delay).await?;
 
+    let operations = client.operation_log().list_operations(10, None).await;
+    assert_eq!(operations.len(), 1, "Expecting only the peg-in operation");
+    assert_eq!(
+        operations[0].1.operation_module_kind(),
+        "wallet",
+        "Peg-in operation should ke of kind wallet"
+    );
+    assert!(
+        operations[0]
+            .1
+            .meta::<serde_json::Value>()
+            .get("variant")
+            .and_then(|v| v.get("deposit"))
+            .and_then(|d| d.get("address"))
+            .is_some(),
+        "Peg-in operation meta data should contain address"
+    );
+
     info!("Peg-in finished for test on_chain_peg_in_and_peg_out_happy_case");
     // Peg-out test, requires block to recognize change UTXOs
     let address = checked_address_to_unchecked_address(&bitcoin.get_new_address().await);
@@ -216,7 +237,9 @@ async fn on_chain_peg_in_detects_multiple() -> anyhow::Result<()> {
     info!(?starting_balance, "Starting balance");
 
     let wallet_module = &client.get_first_module::<WalletClientModule>();
-    let (op, address, tweak_idx) = wallet_module.allocate_deposit_address_expert_only().await?;
+    let (op, address, tweak_idx) = wallet_module
+        .allocate_deposit_address_expert_only(())
+        .await?;
 
     // First peg-in
     {

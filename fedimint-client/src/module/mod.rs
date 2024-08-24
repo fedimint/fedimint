@@ -521,6 +521,53 @@ where
         let db = self.client.get().db().clone();
         let mut dbtx = db.begin_transaction().await;
 
+        self.manual_operation_start_inner(
+            &mut dbtx.to_ref_nc(),
+            operation_id,
+            op_type,
+            operation_meta,
+            sms,
+        )
+        .await?;
+
+        dbtx.commit_tx_result().await.map_err(|_| {
+            anyhow!(
+                "Operation with id {} already exists",
+                operation_id.fmt_short()
+            )
+        })?;
+
+        Ok(())
+    }
+
+    pub async fn manual_operation_start_dbtx<C: ClientModule>(
+        &self,
+        dbtx: &mut ClientDbTxContext<'_, '_, C>,
+        operation_id: OperationId,
+        op_type: &str,
+        operation_meta: impl serde::Serialize + Debug,
+        sms: Vec<DynState>,
+    ) -> anyhow::Result<()> {
+        self.manual_operation_start_inner(
+            &mut dbtx.dbtx.to_ref_nc(),
+            operation_id,
+            op_type,
+            operation_meta,
+            sms,
+        )
+        .await
+    }
+
+    /// See [`Self::manual_operation_start`], just inside a database
+    /// transaction.
+    async fn manual_operation_start_inner(
+        &self,
+        dbtx: &mut DatabaseTransaction<'_>,
+        operation_id: OperationId,
+        op_type: &str,
+        operation_meta: impl serde::Serialize + Debug,
+        sms: Vec<DynState>,
+    ) -> anyhow::Result<()> {
         if Client::operation_exists_dbtx(&mut dbtx.to_ref_nc(), operation_id).await {
             bail!(
                 "Operation with id {} already exists",
@@ -540,13 +587,6 @@ where
             .add_state_machines_dbtx(&mut dbtx.to_ref_nc(), sms)
             .await
             .expect("State machine is valid");
-
-        dbtx.commit_tx_result().await.map_err(|_| {
-            anyhow!(
-                "Operation with id {} already exists",
-                operation_id.fmt_short()
-            )
-        })?;
 
         Ok(())
     }

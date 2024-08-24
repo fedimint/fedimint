@@ -257,7 +257,10 @@ pub struct WalletOperationMeta {
 pub enum WalletOperationMetaVariant {
     Deposit {
         address: bitcoin::Address<NetworkUnchecked>,
-        expires_at: SystemTime,
+        #[serde(default)]
+        tweak_idx: Option<TweakIdx>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        expires_at: Option<SystemTime>,
     },
     Withdraw {
         address: bitcoin::Address<NetworkUnchecked>,
@@ -589,17 +592,40 @@ impl WalletClientModule {
     ///
     /// Everyday users should rely on Lightning to move funds into the
     /// federation.
-    pub async fn allocate_deposit_address_expert_only(
+    pub async fn allocate_deposit_address_expert_only<M>(
         &self,
-    ) -> anyhow::Result<(OperationId, Address, TweakIdx)> {
+        extra_meta: M,
+    ) -> anyhow::Result<(OperationId, Address, TweakIdx)>
+    where
+        M: Serialize + MaybeSend + MaybeSync,
+    {
+        let extra_meta_value =
+            serde_json::to_value(extra_meta).expect("Failed to serialize extra meta");
         let (operation_id, address, tweak_idx) = self
             .client_ctx
             .module_autocommit(
-                |dbtx, _| {
-                    Box::pin(async {
+                move |dbtx, _| {
+                    let extra_meta_value_inner = extra_meta_value.clone();
+                    Box::pin(async move {
                         let (operation_id, address, tweak_idx) = self
                             .allocate_deposit_address_inner( &mut dbtx.module_dbtx())
                             .await;
+
+                        self.client_ctx.manual_operation_start_dbtx(
+                            dbtx,
+                            operation_id,
+                            WalletCommonInit::KIND.as_str(),
+                            WalletOperationMeta {
+                                variant: WalletOperationMetaVariant::Deposit {
+                                    // TODO(bitcoin 0.32): use as_unchecked
+                                    address: address.to_string().parse().expect("can be parsed"),
+                                    tweak_idx: Some(tweak_idx),
+                                    expires_at: None,
+                                },
+                                extra_meta: extra_meta_value_inner,
+                            },
+                            vec![]
+                        ).await?;
 
                         debug!(target: LOG_CLIENT_MODULE_WALLET, %tweak_idx, %address, "Derived a new deposit address");
 

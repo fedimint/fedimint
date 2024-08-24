@@ -6,7 +6,7 @@ use fedimint_client::module::init::recovery::RecoveryFromHistoryCommon;
 use fedimint_core::core::OperationId;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::{impl_db_lookup, impl_db_record, TransactionId};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use strum_macros::EnumIter;
 
 use crate::backup::WalletRecoveryState;
@@ -31,7 +31,18 @@ impl std::fmt::Display for DbKeyPrefix {
 /// Under the hood it's similar to `ChildId`, but in a wallet module
 /// it's used often enough to deserve own newtype.
 #[derive(
-    Copy, Clone, Debug, Encodable, Decodable, Serialize, Default, PartialEq, Eq, PartialOrd, Ord,
+    Copy,
+    Clone,
+    Debug,
+    Encodable,
+    Decodable,
+    Serialize,
+    Deserialize,
+    Default,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
 )]
 pub struct TweakIdx(pub u64);
 

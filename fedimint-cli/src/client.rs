@@ -466,7 +466,7 @@ pub async fn handle_command(
         ClientCmd::DepositAddress => {
             let (operation_id, address, tweak_idx) = client
                 .get_first_module::<WalletClientModule>()
-                .allocate_deposit_address_expert_only()
+                .allocate_deposit_address_expert_only(())
                 .await?;
             Ok(serde_json::json! {
                 {
