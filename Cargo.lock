@@ -1035,9 +1035,9 @@ dependencies = [
 
 [[package]]
 name = "clap_complete"
-version = "4.5.19"
+version = "4.5.23"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7eddf1c00919f37952199f7dbc834789cd33356ed10278ee40c8572b8fb88cf2"
+checksum = "531d7959c5bbb6e266cecdd0f20213639c3a5c3e4d615f97db87661745f781ff"
 dependencies = [
  "clap",
 ]
@@ -2090,7 +2090,7 @@ dependencies = [
  "itertools 0.13.0",
  "lightning-invoice",
  "rand",
- "reqwest 0.12.6",
+ "reqwest 0.12.7",
  "serde",
  "serde_json",
  "thiserror",
@@ -2119,7 +2119,7 @@ dependencies = [
  "futures",
  "itertools 0.13.0",
  "rand",
- "reqwest 0.12.6",
+ "reqwest 0.12.7",
  "ring 0.17.8",
  "serde",
  "serde_json",
@@ -2403,7 +2403,7 @@ dependencies = [
  "fedimint-ln-gateway",
  "fedimint-logging",
  "fedimint-mint-client",
- "reqwest 0.12.6",
+ "reqwest 0.12.7",
  "serde",
  "serde_json",
  "tokio",
@@ -2439,7 +2439,7 @@ dependencies = [
  "lightning-invoice",
  "lnurl-rs",
  "rand",
- "reqwest 0.12.6",
+ "reqwest 0.12.7",
  "secp256k1 0.27.0",
  "serde",
  "serde_json",
@@ -2517,7 +2517,7 @@ dependencies = [
  "lightning-invoice",
  "prost 0.13.1",
  "rand",
- "reqwest 0.12.6",
+ "reqwest 0.12.7",
  "secp256k1-zkp",
  "serde",
  "serde_json",
@@ -2607,7 +2607,7 @@ dependencies = [
  "itertools 0.13.0",
  "lightning-invoice",
  "rand",
- "reqwest 0.12.6",
+ "reqwest 0.12.7",
  "secp256k1 0.27.0",
  "serde",
  "serde_json",
@@ -4784,7 +4784,7 @@ dependencies = [
  "bitcoin 0.30.2",
  "cbc",
  "email_address",
- "reqwest 0.12.6",
+ "reqwest 0.12.7",
  "serde",
  "serde_json",
  "url",
@@ -5842,9 +5842,9 @@ dependencies = [
 
 [[package]]
 name = "quote"
-version = "1.0.36"
+version = "1.0.37"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0fa76aaf39101c457836aec0ce2316dbdc3ab723cdda1c6bd4e6ad4208acaca7"
+checksum = "b5b9d34b8991d19d98081b46eacdd8eb58c6f2b201139f7c5f643cc155a633af"
 dependencies = [
  "proc-macro2",
 ]
@@ -6035,9 +6035,9 @@ dependencies = [
 
 [[package]]
 name = "reqwest"
-version = "0.12.6"
+version = "0.12.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b6f6ddd79dc661ade721873783d159ec87d91d556ce92933e342bae8b87c48c0"
+checksum = "f8f4955649ef5c38cc7f9e8aa41761d48fb9677197daea9984dc54f56aad5e63"
 dependencies = [
  "base64 0.22.1",
  "bytes",
@@ -6448,9 +6448,9 @@ checksum = "f638d531eccd6e23b980caf34876660d38e265409d8e99b397ab71eb3612fad0"
 
 [[package]]
 name = "serde"
-version = "1.0.208"
+version = "1.0.209"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cff085d2cb684faa248efb494c39b68e522822ac0de72ccf08109abde717cfb2"
+checksum = "99fce0ffe7310761ca6bf9faf5115afbc19688edd00171d81b1bb1b116c63e09"
 dependencies = [
  "serde_derive",
 ]
@@ -6476,9 +6476,9 @@ dependencies = [
 
 [[package]]
 name = "serde_derive"
-version = "1.0.208"
+version = "1.0.209"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "24008e81ff7613ed8e5ba0cfaf24e2c2f1e5b8a0495711e44fcd4882fca62bcf"
+checksum = "a5831b979fd7b5439637af1752d535ff49f4860c0f341d1baeb6faf0f4242170"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -6496,9 +6496,9 @@ dependencies = [
 
 [[package]]
 name = "serde_json"
-version = "1.0.125"
+version = "1.0.127"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "83c8e735a073ccf5be70aa8066aa984eaf2fa000db6c8d0100ae605b366d31ed"
+checksum = "8043c06d9f82bd7271361ed64f415fe5e12a77fdb52e573e7f06a516dea329ad"
 dependencies = [
  "itoa",
  "memchr",

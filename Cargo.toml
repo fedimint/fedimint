@@ -108,15 +108,15 @@ esplora-client = { version = "0.6.0", default-features = false, features = [
     "async",
     "async-https-rustls",
 ] }
-reqwest = { version = "0.12.6", features = [
+reqwest = { version = "0.12.7", features = [
     "json",
     "rustls-tls",
     "charset",
     "http2",
 ], default-features = false }
-serde = { version = "1.0.208", features = ["derive"] }
+serde = { version = "1.0.209", features = ["derive"] }
 serde-big-array = "0.5.1"
-serde_json = "1.0.125"
+serde_json = "1.0.127"
 serdect = "0.2.0"
 bls12_381 = "0.8.0"
 group = "0.13.0"
