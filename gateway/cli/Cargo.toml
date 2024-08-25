@@ -31,7 +31,7 @@ clap = { version = "4.5.16", features = [
   "error-context",
   "suggestions",
 ], default-features = false }
-clap_complete = "4.5.19"
+clap_complete = "4.5.23"
 fedimint-core = { workspace = true }
 fedimint-logging = { workspace = true }
 fedimint-mint-client = { workspace = true }
