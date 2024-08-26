@@ -7,6 +7,8 @@ use std::time::Duration;
 
 use anyhow::ensure;
 use async_stream::stream;
+use bitcoin::key::Secp256k1;
+use bitcoin::secp256k1::All;
 use bitcoin_hashes::{sha256, Hash};
 use fedimint_api_client::api::DynModuleApi;
 use fedimint_client::derivable_secret::ChildId;
@@ -43,7 +45,6 @@ use fedimint_ln_common::{
 use futures::StreamExt;
 use lightning_invoice::RoutingFees;
 use secp256k1::KeyPair;
-use secp256k1_zkp::{All, Secp256k1};
 use serde::{Deserialize, Serialize};
 use tracing::{debug, info, warn};
 
