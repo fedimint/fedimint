@@ -887,7 +887,7 @@ impl Gateway {
             .await?
             .value()
             .get_first_module::<WalletClientModule>()
-            .allocate_deposit_address_expert_only()
+            .allocate_deposit_address_expert_only(())
             .await?;
         Ok(address)
     }
