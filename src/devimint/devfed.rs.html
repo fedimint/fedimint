@@ -436,13 +436,6 @@
 <a href="#436" id="436">436</a>
 <a href="#437" id="437">437</a>
 <a href="#438" id="438">438</a>
-<a href="#439" id="439">439</a>
-<a href="#440" id="440">440</a>
-<a href="#441" id="441">441</a>
-<a href="#442" id="442">442</a>
-<a href="#443" id="443">443</a>
-<a href="#444" id="444">444</a>
-<a href="#445" id="445">445</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::ops::Deref <span class="kw">as _</span>;
 <span class="kw">use </span>std::sync::Arc;
 
@@ -453,7 +446,6 @@
 <span class="kw">use </span>tokio::join;
 <span class="kw">use </span>tracing::debug;
 
-<span class="kw">use </span><span class="kw">crate</span>::envs::{FM_GWID_CLN_ENV, FM_GWID_LDK_ENV, FM_GWID_LND_ENV};
 <span class="kw">use </span><span class="kw">crate</span>::external::{
     open_channel, open_channels_between_gateways, Bitcoind, Electrs, Esplora, Lightningd, Lnd,
 };
@@ -820,12 +812,6 @@
             fed_size &gt; <span class="number">3 </span>* offline_nodes,
             <span class="string">"too many offline nodes ({offline_nodes}) to reach consensus"
         </span>);
-
-        std::env::set_var(FM_GWID_CLN_ENV, <span class="self">self</span>.gw_cln().<span class="kw">await</span><span class="question-mark">?</span>.gateway_id().<span class="kw">await</span><span class="question-mark">?</span>);
-        std::env::set_var(FM_GWID_LND_ENV, <span class="self">self</span>.gw_lnd().<span class="kw">await</span><span class="question-mark">?</span>.gateway_id().<span class="kw">await</span><span class="question-mark">?</span>);
-        <span class="kw">if let </span><span class="prelude-val">Some</span>(gw_ldk) = <span class="self">self</span>.gw_ldk().<span class="kw">await</span><span class="question-mark">? </span>{
-            std::env::set_var(FM_GWID_LDK_ENV, gw_ldk.gateway_id().<span class="kw">await</span><span class="question-mark">?</span>);
-        }
 
         <span class="kw">let _ </span>= <span class="self">self</span>.internal_client_gw_registered().<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let _ </span>= <span class="self">self</span>.channel_opened.get_try().<span class="kw">await</span><span class="question-mark">?</span>;
