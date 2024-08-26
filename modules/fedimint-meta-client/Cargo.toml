@@ -13,7 +13,7 @@ rustc-args = ["--cfg", "tokio_unstable"]
 
 [features]
 default =[]
-cli = ["dep:clap", "dep:serde_json"]
+cli = ["dep:clap"]
 
 [lib]
 name = "fedimint_meta_client"
@@ -30,7 +30,7 @@ fedimint-core = { workspace = true }
 fedimint-meta-common = { version = "=0.5.0-alpha", path = "../fedimint-meta-common" }
 futures = { workspace = true }
 serde = { workspace = true }
-serde_json = { workspace = true, optional = true }
+serde_json = { workspace = true }
 strum = { workspace = true }
 strum_macros = { workspace = true }
 thiserror = { workspace = true }
