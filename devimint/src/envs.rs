@@ -37,17 +37,6 @@ pub const FM_DATA_DIR_ENV: &str = "FM_DATA_DIR";
 // and db
 pub const FM_CLIENT_DIR_ENV: &str = "FM_CLIENT_DIR";
 
-// devfed.rs
-
-// Env variable to define the gateway_id of the CLN client
-pub const FM_GWID_CLN_ENV: &str = "FM_GWID_CLN";
-
-// Env variable to define the gateway_id of the LND client
-pub const FM_GWID_LND_ENV: &str = "FM_GWID_LND";
-
-// Env variable to define the gateway_id of the LDK client
-pub const FM_GWID_LDK_ENV: &str = "FM_GWID_LDK";
-
 // cli.rs
 
 // Env variable to set the testing directory of the client
