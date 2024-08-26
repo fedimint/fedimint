@@ -764,6 +764,7 @@
 <a href="#764" id="764">764</a>
 <a href="#765" id="765">765</a>
 <a href="#766" id="766">766</a>
+<a href="#767" id="767">767</a>
 </pre></div><pre class="rust"><code><span class="kw">mod </span>complete;
 <span class="kw">pub mod </span>pay;
 
@@ -773,6 +774,8 @@
 
 <span class="kw">use </span>anyhow::ensure;
 <span class="kw">use </span>async_stream::stream;
+<span class="kw">use </span>bitcoin::key::Secp256k1;
+<span class="kw">use </span>bitcoin::secp256k1::All;
 <span class="kw">use </span>bitcoin_hashes::{sha256, Hash};
 <span class="kw">use </span>fedimint_api_client::api::DynModuleApi;
 <span class="kw">use </span>fedimint_client::derivable_secret::ChildId;
@@ -809,7 +812,6 @@
 <span class="kw">use </span>futures::StreamExt;
 <span class="kw">use </span>lightning_invoice::RoutingFees;
 <span class="kw">use </span>secp256k1::KeyPair;
-<span class="kw">use </span>secp256k1_zkp::{All, Secp256k1};
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>tracing::{debug, info, warn};
 
