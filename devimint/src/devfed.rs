@@ -8,7 +8,6 @@ use fedimint_logging::LOG_DEVIMINT;
 use tokio::join;
 use tracing::debug;
 
-use crate::envs::{FM_GWID_CLN_ENV, FM_GWID_LDK_ENV, FM_GWID_LND_ENV};
 use crate::external::{
     open_channel, open_channels_between_gateways, Bitcoind, Electrs, Esplora, Lightningd, Lnd,
 };
@@ -375,12 +374,6 @@ impl DevJitFed {
             fed_size > 3 * offline_nodes,
             "too many offline nodes ({offline_nodes}) to reach consensus"
         );
-
-        std::env::set_var(FM_GWID_CLN_ENV, self.gw_cln().await?.gateway_id().await?);
-        std::env::set_var(FM_GWID_LND_ENV, self.gw_lnd().await?.gateway_id().await?);
-        if let Some(gw_ldk) = self.gw_ldk().await? {
-            std::env::set_var(FM_GWID_LDK_ENV, gw_ldk.gateway_id().await?);
-        }
 
         let _ = self.internal_client_gw_registered().await?;
         let _ = self.channel_opened.get_try().await?;
