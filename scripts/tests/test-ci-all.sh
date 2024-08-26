@@ -282,7 +282,9 @@ tests_to_run_in_parallel+=(
   "bckn_bitcoind_lnv2"
   "bckn_gw_client"
   "bckn_gw_not_client"
-  "bckn_electrs"
+  # TODO: https://github.com/fedimint/fedimint/issues/5917
+  # disabling while we investigate 60s timeouts causing CI flakiness
+  # "bckn_electrs"
   "bckn_esplora"
   "latency_test_reissue"
   "latency_test_ln_send"
