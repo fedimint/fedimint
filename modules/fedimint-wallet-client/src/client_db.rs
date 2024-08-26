@@ -132,6 +132,7 @@ impl_db_record!(
     key = ClaimedPegInKey,
     value = ClaimedPegInData,
     db_prefix = DbKeyPrefix::ClaimedPegIn,
+    notify_on_modify = true,
 );
 impl_db_lookup!(key = ClaimedPegInKey, query_prefix = ClaimedPegInPrefix);
 
