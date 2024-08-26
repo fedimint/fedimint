@@ -53,7 +53,8 @@ use fedimint_core::module::{
     ApiVersion, CommonModuleInit, ModuleCommon, ModuleInit, MultiApiVersion,
 };
 use fedimint_core::task::{MaybeSend, MaybeSync, TaskGroup};
-use fedimint_core::util::backoff_util;
+use fedimint_core::util::backoff_util::background_backoff;
+use fedimint_core::util::{backoff_util, retry};
 use fedimint_core::{
     apply, async_trait_maybe_send, push_db_pair_items, runtime, Amount, OutPoint, TransactionId,
 };
@@ -90,11 +91,27 @@ pub struct BitcoinTransactionData {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq)]
-pub enum DepositState {
+pub enum DepositStateV1 {
     WaitingForTransaction,
     WaitingForConfirmation(BitcoinTransactionData),
     Confirmed(BitcoinTransactionData),
     Claimed(BitcoinTransactionData),
+    Failed(String),
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq)]
+pub enum DepositStateV2 {
+    WaitingForTransaction,
+    WaitingForConfirmation {
+        #[serde(with = "bitcoin::amount::serde::as_sat")]
+        btc_deposited: bitcoin::Amount,
+        btc_out_point: bitcoin::OutPoint,
+    },
+    Claimed {
+        #[serde(with = "bitcoin::amount::serde::as_sat")]
+        btc_deposited: bitcoin::Amount,
+        btc_out_point: bitcoin::OutPoint,
+    },
     Failed(String),
 }
 
@@ -257,6 +274,10 @@ pub struct WalletOperationMeta {
 pub enum WalletOperationMetaVariant {
     Deposit {
         address: bitcoin::Address<NetworkUnchecked>,
+        /// Added in 0.4.2, can be `None` for old deposits or `Some` for ones
+        /// using the pegin monitor. The value is the child index of the key
+        /// used to generate the address, so we can re-generate the secret key
+        /// from our root secret.
         #[serde(default)]
         tweak_idx: Option<TweakIdx>,
         #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -654,6 +675,114 @@ impl WalletClientModule {
             })?;
 
         Ok((operation_id, address, tweak_idx))
+    }
+
+    /// Returns a stream of updates about an ongoing deposit operation created
+    /// with [`WalletClientModule::allocate_deposit_address_expert_only`].
+    /// Returns an error for old deposit operations created prior to the 0.4
+    /// release and not driven to completion yet. This should be rare enough
+    /// that an indeterminate state is ok here.
+    pub async fn subscribe_deposit(
+        &self,
+        operation_id: OperationId,
+    ) -> anyhow::Result<UpdateStreamOrOutcome<DepositStateV2>> {
+        let operation = self
+            .client_ctx
+            .get_operation(operation_id)
+            .await
+            .with_context(|| anyhow!("Operation not found: {}", operation_id.fmt_short()))?;
+
+        if operation.operation_module_kind() != WalletCommonInit::KIND.as_str() {
+            bail!("Operation is not a wallet operation");
+        }
+
+        let operation_meta = operation.meta::<WalletOperationMeta>();
+
+        let WalletOperationMetaVariant::Deposit {
+            address, tweak_idx, ..
+        } = operation_meta.variant
+        else {
+            bail!("Operation is not a deposit operation");
+        };
+
+        // The old deposit operations don't have tweak_idx set
+        let Some(tweak_idx) = tweak_idx else {
+            // In case we are dealing with an old deposit that still uses state machines we
+            // don't have the logic here anymore to subscribe to updates. We can still read
+            // the final state though if it reached any.
+            let outcome_v1 = operation
+                .outcome::<DepositStateV1>()
+                .context("Old pending deposit, can't subscribe to updates")?;
+
+            let outcome_v2 = match outcome_v1 {
+                DepositStateV1::Claimed(tx_info) => DepositStateV2::Claimed {
+                    btc_deposited: bitcoin::Amount::from_sat(
+                        tx_info.btc_transaction.output[tx_info.out_idx as usize].value,
+                    ),
+                    btc_out_point: bitcoin::OutPoint {
+                        txid: tx_info.btc_transaction.txid(),
+                        vout: tx_info.out_idx,
+                    },
+                },
+                DepositStateV1::Failed(error) => DepositStateV2::Failed(error),
+                _ => bail!("Non-final outcome in operation log"),
+            };
+
+            return Ok(UpdateStreamOrOutcome::Outcome(outcome_v2));
+        };
+
+        Ok(operation.outcome_or_updates(&self.client_ctx.global_db(), operation_id, || {
+            let stream_rpc = self.rpc.clone();
+            let stream_cient_ctx = self.client_ctx.clone();
+            let stream_script_pub_key = address.assume_checked().script_pubkey();
+
+            stream! {
+                yield DepositStateV2::WaitingForTransaction;
+
+                retry(
+                    "subscribe script history",
+                    background_backoff(),
+                    || stream_rpc.watch_script_history(&stream_script_pub_key)
+                ).await.expect("Will never give up");
+                let (btc_out_point, btc_deposited) = retry(
+                    "fetch history",
+                    background_backoff(),
+                    || async {
+                        let history = stream_rpc.get_script_history(&stream_script_pub_key).await?;
+                        history.first().and_then(|tx| {
+                            let (out_idx, amount) = tx.output
+                                .iter()
+                                .enumerate()
+                                .find_map(|(idx, output)| (output.script_pubkey == stream_script_pub_key).then_some((idx, output.value)))?;
+                            let txid = tx.txid();
+
+                            Some((
+                                bitcoin::OutPoint {
+                                    txid,
+                                    vout: out_idx as u32,
+                                },
+                                bitcoin::Amount::from_sat(amount)
+                            ))
+                        }).context("No deposit transaction found")
+                    }
+                ).await.expect("Will never give up");
+
+                yield DepositStateV2::WaitingForConfirmation {
+                    btc_deposited,
+                    btc_out_point
+                };
+
+                stream_cient_ctx.module_db().wait_key_exists(&ClaimedPegInKey {
+                    peg_in_index: tweak_idx,
+                    btc_out_point,
+                }).await;
+
+                yield DepositStateV2::Claimed {
+                    btc_deposited,
+                    btc_out_point,
+                };
+            }
+        }))
     }
 
     pub async fn find_tweak_idx_by_operation_id(
