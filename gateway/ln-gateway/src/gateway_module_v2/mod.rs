@@ -86,7 +86,7 @@ impl ClientModuleInit for GatewayClientInitV2 {
             keypair: args
                 .module_root_secret()
                 .clone()
-                .to_secp_key(secp256k1_zkp::SECP256K1),
+                .to_secp_key(secp256k1::SECP256K1),
             gateway: self.gateway.clone(),
         })
     }
