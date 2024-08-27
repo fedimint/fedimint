@@ -16,7 +16,7 @@ normal = ["aquamarine"]
 rustc-args = ["--cfg", "tokio_unstable"]
 
 [features]
-default =[]
+default = []
 cli = ["dep:clap"]
 
 [lib]
@@ -34,15 +34,15 @@ erased-serde = { workspace = true }
 fedimint-api-client = { workspace = true }
 fedimint-client = { workspace = true }
 fedimint-core = { workspace = true }
-fedimint-ln-common = { version = "=0.5.0-alpha", path = "../fedimint-ln-common" }
+fedimint-ln-common = { workspace = true }
 fedimint-logging = { workspace = true }
 futures = { workspace = true }
 itertools = { workspace = true }
-lightning-invoice = { version = "0.31.0", features = [ "serde" ] }
+lightning-invoice = { workspace = true, features = ["serde"] }
 lnurl-rs = { version = "0.6.0", features = ["async"], default-features = false }
 rand = { workspace = true }
 reqwest = { workspace = true }
-secp256k1 = { version = "0.27.0", default-features = false }
+secp256k1 = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 strum = { workspace = true }

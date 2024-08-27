@@ -20,14 +20,14 @@ path = "src/lib.rs"
 
 [dependencies]
 anyhow = { workspace = true }
-bytes = "1.7.1"
+bytes = { workspace = true }
 clap = { version = "4.5.16", features = ["derive", "env"] }
 erased-serde = { workspace = true }
-fedimint-aead = { version = "=0.5.0-alpha", path = "../crypto/aead" }
+fedimint-aead = { workspace = true }
 fedimint-client = { workspace = true }
 fedimint-core = { workspace = true }
 fedimint-ln-client = { workspace = true }
-fedimint-ln-server = { version = "=0.5.0-alpha", path = "../modules/fedimint-ln-server" }
+fedimint-ln-server = { workspace = true }
 fedimint-lnv2-client = { workspace = true }
 fedimint-lnv2-server = { workspace = true }
 fedimint-logging = { workspace = true }
@@ -36,12 +36,12 @@ fedimint-meta-server = { workspace = true }
 fedimint-mint-client = { workspace = true }
 fedimint-mint-server = { workspace = true }
 fedimint-rocksdb = { workspace = true }
-fedimint-server = { version = "=0.5.0-alpha", path = "../fedimint-server" }
-fedimint-wallet-client = { version = "=0.5.0-alpha", path = "../modules/fedimint-wallet-client" }
-fedimint-wallet-server = { version = "=0.5.0-alpha", path = "../modules/fedimint-wallet-server" }
+fedimint-server = { workspace = true }
+fedimint-wallet-client = { workspace = true }
+fedimint-wallet-server = { workspace = true }
 futures = { workspace = true }
-hex = { version = "0.4.3", features = ["serde"] }
-ln-gateway = { package = "fedimint-ln-gateway", version = "=0.5.0-alpha", path = "../gateway/ln-gateway" }
+hex = { workspace = true, features = ["serde"] }
+ln-gateway = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 strum = { workspace = true }

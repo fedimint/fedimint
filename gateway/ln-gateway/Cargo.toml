@@ -33,7 +33,7 @@ anyhow = { workspace = true }
 aquamarine = { workspace = true }
 async-stream = { workspace = true }
 async-trait = { workspace = true }
-axum = "0.7.5"
+axum = { workspace = true }
 bitcoin = { workspace = true }
 bitcoin_hashes = { workspace = true }
 clap = { workspace = true }
@@ -41,7 +41,7 @@ clap = { workspace = true }
 cln-plugin = "=0.1.7"
 cln-rpc = { workspace = true }
 erased-serde = { workspace = true }
-esplora-client = { version = "0.6.0", default-features = false, features = ["async", "async-https-rustls"] }
+esplora-client = { workspace = true }
 fedimint-api-client = { workspace = true, default-features = false }
 fedimint-client = { workspace = true, default-features = false }
 fedimint-core = { workspace = true }
@@ -52,7 +52,7 @@ fedimint-lnv2-common = { workspace = true }
 fedimint-logging = { workspace = true }
 fedimint-mint-client = { workspace = true }
 fedimint-rocksdb = { workspace = true }
-fedimint-wallet-client = { version = "=0.5.0-alpha", path = "../../modules/fedimint-wallet-client" }
+fedimint-wallet-client = { workspace = true }
 futures = { workspace = true }
 hex = { workspace = true }
 ldk-node = "0.3.0"
@@ -71,24 +71,28 @@ tokio-stream = { workspace = true }
 tonic = { version = "0.12.1", features = ["transport", "tls"] }
 tonic_lnd = { workspace = true }
 tower-http = { version = "0.5.2", features = ["cors", "auth"] }
-tpe = { package = "fedimint-tpe", version = "=0.5.0-alpha", path = "../../crypto/tpe" }
-tracing = { version = "0.1.40", default-features = false, features = ["log", "attributes", "std"] }
-url = { version = "2.5.2", features = ["serde"] }
+tpe = { workspace = true }
+tracing = { workspace = true, default-features = false, features = [
+    "log",
+    "attributes",
+    "std",
+] }
+url = { workspace = true, features = ["serde"] }
 
 [dev-dependencies]
 assert_matches = { workspace = true }
-fedimint-dummy-client = { path = "../../modules/fedimint-dummy-client" }
-fedimint-dummy-common = { path = "../../modules/fedimint-dummy-common" }
-fedimint-dummy-server = { path = "../../modules/fedimint-dummy-server" }
+fedimint-dummy-client = { workspace = true }
+fedimint-dummy-common = { workspace = true }
+fedimint-dummy-server = { workspace = true }
 fedimint-ln-client = { workspace = true }
-fedimint-ln-common = { path = "../../modules/fedimint-ln-common" }
-fedimint-ln-server = { path = "../../modules/fedimint-ln-server" }
+fedimint-ln-common = { workspace = true }
+fedimint-ln-server = { workspace = true }
 fedimint-lnv2-server = { workspace = true }
 fedimint-mint-client = { workspace = true }
 fedimint-testing = { workspace = true }
-fedimint-unknown-common = { path = "../../modules/fedimint-unknown-common" }
-fedimint-unknown-server = { path = "../../modules/fedimint-unknown-server" }
-fedimint-wallet-client = { path = "../../modules/fedimint-wallet-client" }
+fedimint-unknown-common = { workspace = true }
+fedimint-unknown-server = { workspace = true }
+fedimint-wallet-client = { workspace = true }
 threshold_crypto = { workspace = true }
 
 [build-dependencies]

@@ -29,15 +29,14 @@ erased-serde = { workspace = true }
 fedimint-api-client = { workspace = true }
 fedimint-client = { workspace = true }
 fedimint-core = { workspace = true }
-fedimint-lnv2-common = { path = "../fedimint-lnv2-common", version = "=0.5.0-alpha" }
-futures = "0.3.24"
+fedimint-lnv2-common = { workspace = true }
+futures = { workspace = true }
 itertools = { workspace = true }
 lightning-invoice = { workspace = true }
 rand = { workspace = true }
 reqwest = { workspace = true }
-secp256k1 = { version = "0.27.0", default-features = false }
 serde = { workspace = true }
 serde_json = { workspace = true, optional = true }
-thiserror = "1.0.63"
-tpe = { package = "fedimint-tpe", version = "=0.5.0-alpha", path = "../../crypto/tpe" }
+thiserror = { workspace = true }
+tpe = { workspace = true }
 tracing = { workspace = true }

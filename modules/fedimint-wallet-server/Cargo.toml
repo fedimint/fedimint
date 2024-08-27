@@ -20,17 +20,17 @@ anyhow = { workspace = true }
 async-trait = { workspace = true }
 bitcoin = { workspace = true }
 erased-serde = { workspace = true }
-fedimint-bitcoind = { version = "=0.5.0-alpha", path = "../../fedimint-bitcoind" }
+fedimint-bitcoind = { workspace = true }
 fedimint-core = { workspace = true }
 fedimint-logging = { workspace = true }
-fedimint-metrics = { version = "=0.5.0-alpha", path = "../../fedimint-metrics" }
-fedimint-server = { version = "=0.5.0-alpha", path = "../../fedimint-server" }
-fedimint-wallet-common = { version = "=0.5.0-alpha", path = "../fedimint-wallet-common" }
+fedimint-metrics = { workspace = true }
+fedimint-server = { workspace = true }
+fedimint-wallet-common = { workspace = true }
 futures = { workspace = true }
 hex = { workspace = true }
 miniscript = { workspace = true }
 rand = { workspace = true }
-secp256k1 = { version = "0.27.0", features = ["serde"] }
+secp256k1 = { workspace = true }
 serde = { workspace = true }
 strum = { workspace = true }
 strum_macros = { workspace = true }

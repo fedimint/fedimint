@@ -20,14 +20,14 @@ anyhow = { workspace = true }
 async-trait = { workspace = true }
 bitcoin_hashes = { workspace = true }
 erased-serde = { workspace = true }
-fedimint-bitcoind = { version = "=0.5.0-alpha", path = "../../fedimint-bitcoind" }
+fedimint-bitcoind = { workspace = true }
 fedimint-core = { workspace = true }
-fedimint-ln-common = { version = "=0.5.0-alpha", path = "../fedimint-ln-common" }
-fedimint-metrics = { version = "=0.5.0-alpha", path = "../../fedimint-metrics" }
-fedimint-server = { version = "=0.5.0-alpha", path = "../../fedimint-server" }
+fedimint-ln-common = { workspace = true }
+fedimint-metrics = { workspace = true }
+fedimint-server = { workspace = true }
 futures = { workspace = true }
 rand = { workspace = true }
-secp256k1 = { version = "0.27.0", default-features = false }
+secp256k1 = { workspace = true }
 serde = { workspace = true }
 strum = { workspace = true }
 strum_macros = { workspace = true }
@@ -37,4 +37,4 @@ tracing = { workspace = true }
 
 [dev-dependencies]
 assert_matches = { workspace = true }
-test-log = { version = "0.2", features = [ "trace" ], default-features = false }
+test-log = { workspace = true }

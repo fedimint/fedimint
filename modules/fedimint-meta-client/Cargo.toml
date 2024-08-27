@@ -12,7 +12,7 @@ repository = "https://github.com/fedimint/fedimint"
 rustc-args = ["--cfg", "tokio_unstable"]
 
 [features]
-default =[]
+default = []
 cli = ["dep:clap"]
 
 [lib]
@@ -27,7 +27,7 @@ erased-serde = { workspace = true }
 fedimint-api-client = { workspace = true }
 fedimint-client = { workspace = true }
 fedimint-core = { workspace = true }
-fedimint-meta-common = { version = "=0.5.0-alpha", path = "../fedimint-meta-common" }
+fedimint-meta-common = { workspace = true }
 futures = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

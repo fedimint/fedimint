@@ -19,21 +19,21 @@ devimint = { workspace = true }
 fedimint-client = { workspace = true }
 fedimint-core = { workspace = true }
 fedimint-logging = { workspace = true }
-fedimint-mint-client = { path = "../fedimint-mint-client" }
-fedimint-mint-common = { path = "../fedimint-mint-common" }
-fedimint-mint-server = { path = "../fedimint-mint-server" }
+fedimint-mint-client = { workspace = true }
+fedimint-mint-common = { workspace = true }
+fedimint-mint-server = { workspace = true }
 fedimint-testing = { workspace = true }
 ff = "0.13.0"
 futures = { workspace = true }
 rand = { workspace = true }
 serde = { workspace = true }
 strum = { workspace = true }
-tbs = { package = "fedimint-tbs", version = "=0.5.0-alpha", path = "../../crypto/tbs" }
+tbs = { workspace = true }
 threshold_crypto = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }
 
 [dev-dependencies]
-fedimint-dummy-client = { path = "../fedimint-dummy-client" }
-fedimint-dummy-common = { path = "../fedimint-dummy-common" }
-fedimint-dummy-server = { path = "../fedimint-dummy-server" }
+fedimint-dummy-client = { workspace = true }
+fedimint-dummy-common = { workspace = true }
+fedimint-dummy-server = { workspace = true }

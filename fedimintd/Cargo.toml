@@ -28,44 +28,44 @@ anyhow = { workspace = true }
 async-trait = { workspace = true }
 
 # setup dependencies
-axum = { version = "0.7.5", default-features = false, features = [
+axum = { workspace = true, default-features = false, features = [
     "form",
     "tokio",
 ] }
 bincode = { workspace = true }
 bitcoin = { workspace = true }
-bytes = "1.7.1"
+bytes = { workspace = true }
 clap = { workspace = true }
 console-subscriber = "0.4.0"
-fedimint-aead = { version = "=0.5.0-alpha", path = "../crypto/aead" }
-fedimint-bitcoind = { version = "=0.5.0-alpha", path = "../fedimint-bitcoind" }
+fedimint-aead = { workspace = true }
+fedimint-bitcoind = { workspace = true }
 fedimint-core = { workspace = true }
-fedimint-ln-common = { version = "=0.5.0-alpha", path = "../modules/fedimint-ln-common" }
-fedimint-ln-server = { version = "=0.5.0-alpha", path = "../modules/fedimint-ln-server" }
+fedimint-ln-common = { workspace = true }
+fedimint-ln-server = { workspace = true }
 fedimint-lnv2-common = { workspace = true }
 fedimint-lnv2-server = { workspace = true }
-fedimint-logging = { version = "=0.5.0-alpha", path = "../fedimint-logging" }
+fedimint-logging = { workspace = true }
 fedimint-meta-server = { workspace = true }
-fedimint-metrics = { version = "=0.5.0-alpha", path = "../fedimint-metrics" }
+fedimint-metrics = { workspace = true }
 fedimint-mint-server = { workspace = true }
 fedimint-rocksdb = { workspace = true }
-fedimint-server = { version = "=0.5.0-alpha", path = "../fedimint-server" }
-fedimint-unknown-common = { version = "=0.5.0-alpha", path = "../modules/fedimint-unknown-common" }
-fedimint-unknown-server = { version = "=0.5.0-alpha", path = "../modules/fedimint-unknown-server" }
-fedimint-wallet-server = { version = "=0.5.0-alpha", path = "../modules/fedimint-wallet-server" }
+fedimint-server = { workspace = true }
+fedimint-unknown-common = { workspace = true }
+fedimint-unknown-server = { workspace = true }
+fedimint-wallet-server = { workspace = true }
 futures = { workspace = true }
 http = "1.1"
 http-body = "1.0"
-hyper = { version = "1.4", features = ["full"] }
+hyper = { workspace = true, features = ["full"] }
 itertools = { workspace = true }
 jsonrpsee = { version = "0.24.3", features = ["server"] }
 rand = { workspace = true }
 rcgen = "0.13.1"
-ring = "0.17.8"
+ring = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
-sha3 = "0.10.8"
-tbs = { package = "fedimint-tbs", version = "=0.5.0-alpha", path = "../crypto/tbs" }
+sha3 = { workspace = true }
+tbs = { workspace = true }
 thiserror = { workspace = true }
 threshold_crypto = { workspace = true }
 tokio = { workspace = true }
@@ -73,7 +73,7 @@ tokio-rustls = { workspace = true }
 tokio-util = { version = "0.7.11", features = ["codec"] }
 tower = { version = "0.4", features = ["util"] }
 tracing = { workspace = true }
-url = { version = "2.5.2", features = ["serde"] }
+url = { workspace = true, features = ["serde"] }
 
 [build-dependencies]
 fedimint-build = { workspace = true }

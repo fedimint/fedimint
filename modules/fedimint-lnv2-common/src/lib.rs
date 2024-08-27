@@ -13,6 +13,7 @@ pub mod config;
 pub mod contracts;
 pub mod endpoint_constants;
 
+use bitcoin::secp256k1::schnorr::Signature;
 use bitcoin_hashes::sha256;
 use config::LightningClientConfig;
 use fedimint_core::core::{Decoder, ModuleInstanceId, ModuleKind};
@@ -20,7 +21,6 @@ use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::{CommonModuleInit, ModuleCommon, ModuleConsensusVersion};
 use fedimint_core::util::SafeUrl;
 use fedimint_core::{extensible_associated_module_type, plugin_types_trait_impl_common};
-use secp256k1::schnorr::Signature;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tpe::{AggregateDecryptionKey, DecryptionKeyShare};

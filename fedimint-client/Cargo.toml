@@ -29,10 +29,10 @@ aquamarine = { workspace = true }
 async-stream = { workspace = true }
 async-trait = { workspace = true }
 bitcoin = { workspace = true }
-fedimint-aead = { version = "=0.5.0-alpha", path = "../crypto/aead" }
-fedimint-api-client  = { workspace = true, default-features = false }
+fedimint-aead = { workspace = true }
+fedimint-api-client = { workspace = true, default-features = false }
 fedimint-core = { workspace = true }
-fedimint-derive-secret = { version = "=0.5.0-alpha", path = "../crypto/derive-secret" }
+fedimint-derive-secret = { workspace = true }
 fedimint-logging = { workspace = true }
 futures = { workspace = true }
 itertools = { workspace = true }
@@ -43,8 +43,8 @@ serde_json = { workspace = true }
 strum = { workspace = true }
 strum_macros = { workspace = true }
 thiserror = { workspace = true }
-tokio = { workspace = true, features = [ "time", "macros", "rt" ] }
-tokio-stream = { workspace = true, features = [ "sync" ] }
+tokio = { workspace = true, features = ["time", "macros", "rt"] }
+tokio-stream = { workspace = true, features = ["sync"] }
 tracing = { workspace = true }
 
 [dev-dependencies]
@@ -54,4 +54,4 @@ tracing-test = "0.2.5"
 fedimint-build = { workspace = true }
 
 [target.'cfg(target_family = "wasm")'.dependencies]
-ring = { version = "0.17.8", features = ["wasm32_unknown_unknown_js"] }
+ring = { workspace = true, features = ["wasm32_unknown_unknown_js"] }

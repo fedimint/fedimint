@@ -10,39 +10,37 @@ name = "devimint"
 path = "src/main.rs"
 
 [dependencies]
-anyhow = { version = "1.0.86", features = ["backtrace"] }
-axum = { version = "0.7.5", features = ["tracing"] }
+anyhow = { workspace = true, features = ["backtrace"] }
+axum = { workspace = true, features = ["tracing"] }
 bitcoincore-rpc = { workspace = true }
 clap = { workspace = true }
 cln-rpc = { workspace = true }
 esplora-client = { workspace = true }
-fedimint-aead = { path = "../crypto/aead" }
+fedimint-aead = { workspace = true }
 fedimint-api-client = { workspace = true }
-fedimint-bitcoind = { path = "../fedimint-bitcoind" }
+fedimint-bitcoind = { workspace = true }
 fedimint-client = { workspace = true }
 fedimint-core = { workspace = true }
 fedimint-ln-client = { workspace = true, features = ["cli"] }
-fedimint-ln-server = { path = "../modules/fedimint-ln-server" }
+fedimint-ln-server = { workspace = true }
 fedimint-lnv2-client = { workspace = true, features = ["cli"] }
 fedimint-lnv2-common = { workspace = true }
 fedimint-lnv2-server = { workspace = true }
 fedimint-logging = { workspace = true }
 fedimint-meta-server = { workspace = true }
 fedimint-mint-server = { workspace = true }
-fedimint-portalloc = { path = "../utils/portalloc" }
-fedimint-server = { path = "../fedimint-server" }
+fedimint-portalloc = { workspace = true }
+fedimint-server = { workspace = true }
 fedimint-testing = { workspace = true }
-fedimint-unknown-server = { path = "../modules/fedimint-unknown-server" }
-fedimint-wallet-client = { path = "../modules/fedimint-wallet-client", features = [
-    "cli",
-] }
-fedimint-wallet-server = { path = "../modules/fedimint-wallet-server" }
-fedimintd = { path = "../fedimintd" }
-fs-lock = "0.1.4"
+fedimint-unknown-server = { workspace = true }
+fedimint-wallet-client = { workspace = true, features = ["cli"] }
+fedimint-wallet-server = { workspace = true }
+fedimintd = { workspace = true }
+fs-lock = { workspace = true }
 futures = { workspace = true }
 hex = { workspace = true }
 itertools = { workspace = true }
-ln-gateway = { package = "fedimint-ln-gateway", path = "../gateway/ln-gateway" }
+ln-gateway = { workspace = true }
 nix = { version = "0.29.0", features = ["signal"] }
 rand = { workspace = true }
 semver = { workspace = true }

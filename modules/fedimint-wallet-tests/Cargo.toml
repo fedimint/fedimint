@@ -20,14 +20,14 @@ anyhow = { workspace = true }
 bitcoin = { workspace = true }
 bitcoincore-rpc = { workspace = true }
 devimint = { workspace = true }
-fedimint-bitcoind = { path = "../../fedimint-bitcoind" }
+fedimint-bitcoind = { workspace = true }
 fedimint-client = { workspace = true }
 fedimint-core = { workspace = true }
 fedimint-logging = { workspace = true }
 fedimint-testing = { workspace = true }
-fedimint-wallet-client = { path = "../fedimint-wallet-client" }
-fedimint-wallet-common = { path = "../fedimint-wallet-common" }
-fedimint-wallet-server = { path = "../fedimint-wallet-server" }
+fedimint-wallet-client = { workspace = true }
+fedimint-wallet-common = { workspace = true }
+fedimint-wallet-server = { workspace = true }
 futures = { workspace = true }
 rand = { workspace = true }
 strum = { workspace = true }
@@ -36,6 +36,6 @@ tracing = { workspace = true }
 
 [dev-dependencies]
 assert_matches = { workspace = true }
-fedimint-dummy-client = { path = "../fedimint-dummy-client" }
-fedimint-dummy-common = { path = "../fedimint-dummy-common" }
-fedimint-dummy-server = { path = "../fedimint-dummy-server" }
+fedimint-dummy-client = { workspace = true }
+fedimint-dummy-common = { workspace = true }
+fedimint-dummy-server = { workspace = true }

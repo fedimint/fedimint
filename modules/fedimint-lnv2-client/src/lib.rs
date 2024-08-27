@@ -16,6 +16,7 @@ use std::sync::Arc;
 use api::{GatewayConnection, RealGatewayConnection};
 use async_stream::stream;
 use bitcoin::hashes::{sha256, Hash};
+use bitcoin::secp256k1;
 use fedimint_api_client::api::DynModuleApi;
 use fedimint_client::module::init::{ClientModuleInit, ClientModuleInitArgs};
 use fedimint_client::module::recovery::NoModuleBackup;

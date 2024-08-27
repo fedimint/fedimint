@@ -21,7 +21,7 @@ async-recursion = "1.1.1"
 async-trait = { workspace = true }
 backon = "=0.4.4" # don't upgrade unless really needed
 backtrace = "0.3.73"
-base64-url = "3.0.0"
+base64-url = { workspace = true }
 bech32 = "0.11.0"
 bincode = { workspace = true }
 bitcoin = { workspace = true }
@@ -33,10 +33,10 @@ bitcoin_hashes = { workspace = true }
 bitvec = "1.0.1"
 bls12_381 = { workspace = true }
 erased-serde = { workspace = true }
-fedimint-derive = { version = "=0.5.0-alpha", path = "../fedimint-derive" }
+fedimint-derive = { workspace = true }
 fedimint-logging = { workspace = true }
 futures = { workspace = true }
-hex = { version = "0.4.3", features = ["serde"] }
+hex = { workspace = true, features = ["serde"] }
 imbl = "3.0.0"
 itertools = { workspace = true }
 jsonrpsee-core = { version = "0.24.3", features = ["client"] }
@@ -46,7 +46,7 @@ macro_rules_attribute = "0.2.0"
 miniscript = { workspace = true, features = ["serde"] }
 parity-scale-codec = { version = "3.6.12", features = ["derive"] }
 rand = { workspace = true }
-secp256k1 = { version = "0.27.0", features = ["global-context", "rand-std"] }
+secp256k1 = { workspace = true, features = ["global-context", "rand-std"] }
 secp256k1-zkp = { version = "0.9.2", features = ["serde", "global-context"] }
 serde = { workspace = true }
 serde_json = { workspace = true }
@@ -56,10 +56,10 @@ strum_macros = { workspace = true }
 thiserror = { workspace = true }
 threshold_crypto = { workspace = true }
 tracing = { workspace = true }
-url = { version = "2.5.2", features = ["serde"] }
+url = { workspace = true, features = ["serde"] }
 
 [dev-dependencies]
-test-log = { version = "0.2", features = ["trace"], default-features = false }
+test-log = { workspace = true }
 tokio-test = "0.4.4"
 tracing-subscriber = { workspace = true }
 
