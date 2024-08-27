@@ -180,13 +180,31 @@ pub enum LightningInvoice {
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Decodable, Encodable)]
 pub struct RoutingInfo {
+    /// The public key of the gateways lightning node. Since this key signs the
+    /// gateways invoices the senders client uses it to differentiate between a
+    /// direct swap between fedimints and a lightning swap.
     pub lightning_public_key: PublicKey,
-    pub public_key: PublicKey,
+    /// The public key of the gateways client module. This key is used to claim
+    /// or cancel outgoing contracts and refund incoming contracts.
+    pub module_public_key: PublicKey,
+    /// This is the fee the gateway charges for an outgoing payment. The senders
+    /// client will use this fee in case of a direct swap.
     pub send_fee_minimum: PaymentFee,
+    /// This is the default total fee the gateway recommends for an outgoing
+    /// payment in case of a lightning swap. It accounts for the additional fee
+    /// required to successfully route this payment over lightning.
     pub send_fee_default: PaymentFee,
+    /// This is the fee the gateway charges for an incoming payment.
     pub receive_fee: PaymentFee,
-    pub expiration_delta_default: u64,
+    /// This is the minimum expiration delta in block the gateway requires for
+    /// an outgoing payment. The senders client will use this expiration delta
+    /// in case of a direct swap.
     pub expiration_delta_minimum: u64,
+    /// This is the default total expiration the gateway recommends for an
+    /// outgoing payment in case of a lightning swap. It accounts for the
+    /// additional expiration delta required to successfully route this payment
+    /// over lightning.
+    pub expiration_delta_default: u64,
 }
 
 impl RoutingInfo {
@@ -444,7 +462,7 @@ impl LightningClientModule {
             payment_hash: *invoice.payment_hash(),
             amount: send_fee.add_fee(amount),
             expiration: consensus_block_count + expiration_delta + CONTRACT_CONFIRMATION_BUFFER,
-            claim_pk: routing_info.public_key,
+            claim_pk: routing_info.module_public_key,
             refund_pk: refund_keypair.public_key(),
             ephemeral_pk,
         };
@@ -721,7 +739,7 @@ impl LightningClientModule {
             contract_amount,
             expiration,
             claim_pk,
-            payment_info.public_key,
+            payment_info.module_public_key,
             ephemeral_pk,
         );
 
