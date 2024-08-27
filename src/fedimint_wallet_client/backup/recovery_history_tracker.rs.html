@@ -123,13 +123,19 @@
 <a href="#123" id="123">123</a>
 <a href="#124" id="124">124</a>
 <a href="#125" id="125">125</a>
+<a href="#126" id="126">126</a>
+<a href="#127" id="127">127</a>
+<a href="#128" id="128">128</a>
+<a href="#129" id="129">129</a>
+<a href="#130" id="130">130</a>
+<a href="#131" id="131">131</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, VecDeque};
 
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_logging::LOG_CLIENT_MODULE_WALLET;
 <span class="kw">use </span>tracing::debug;
 
-<span class="kw">use </span><span class="kw">super</span>::RECOVER_MAX_GAP;
+<span class="kw">use </span><span class="kw">crate</span>::backup::FEDERATION_RECOVER_MAX_GAP;
 <span class="kw">use </span><span class="kw">crate</span>::client_db::TweakIdx;
 <span class="kw">use </span><span class="kw">crate</span>::WalletClientModuleData;
 
@@ -189,10 +195,13 @@
     }
 
     <span class="kw">fn </span>init(<span class="kw-2">&amp;mut </span><span class="self">self</span>, data: <span class="kw-2">&amp;</span>WalletClientModuleData) {
-        <span class="kw">for _ in </span><span class="number">0</span>..RECOVER_MAX_GAP {
+        <span class="kw">for _ in </span><span class="number">0</span>..<span class="kw">super</span>::ONCHAIN_RECOVER_MAX_GAP {
             <span class="self">self</span>.generate_next_pending_tweak_idx(data);
         }
-        <span class="macro">debug_assert_eq!</span>(<span class="self">self</span>.pending_pubkey_scripts.len(), RECOVER_MAX_GAP <span class="kw">as </span>usize);
+        <span class="macro">debug_assert_eq!</span>(
+            <span class="self">self</span>.pending_pubkey_scripts.len(),
+            <span class="kw">super</span>::ONCHAIN_RECOVER_MAX_GAP <span class="kw">as </span>usize
+        );
     }
 
     <span class="kw">pub fn </span>used_tweak_idxes(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>BTreeSet&lt;TweakIdx&gt; {
@@ -229,7 +238,10 @@
 
             <span class="self">self</span>.used_tweak_idxes.insert(tweak_idx);
 
-            <span class="self">self</span>.refill_pending_pool_up_to_tweak_idx(data, tweak_idx.advance(RECOVER_MAX_GAP));
+            <span class="self">self</span>.refill_pending_pool_up_to_tweak_idx(
+                data,
+                tweak_idx.advance(FEDERATION_RECOVER_MAX_GAP),
+            );
         } <span class="kw">else if </span><span class="self">self</span>.decoy_session_threshold &lt; session_idx {
             <span class="self">self</span>.push_decoy(script);
         }
