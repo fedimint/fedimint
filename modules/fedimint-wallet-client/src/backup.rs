@@ -12,6 +12,7 @@ use fedimint_core::core::{IntoDynInstance, ModuleInstanceId, ModuleKind};
 use fedimint_core::db::{DatabaseTransaction, IDatabaseTransactionOpsCoreTyped as _};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::task::TaskGroup;
+use fedimint_core::util::{backoff_util, retry};
 use fedimint_core::{apply, async_trait_maybe_send};
 use fedimint_logging::{LOG_CLIENT_MODULE_WALLET, LOG_CLIENT_RECOVERY};
 use fedimint_wallet_common::{WalletInput, WalletInputV0, KIND};
@@ -417,7 +418,13 @@ impl RecoveryFromHistory for WalletRecovery {
 
 /// We will check this many addresses after last actually used
 /// one before we give up
-pub(crate) const RECOVER_MAX_GAP: u64 = 10;
+pub(crate) const ONCHAIN_RECOVER_MAX_GAP: u64 = 10;
+
+/// When scanning the history of the Federation, there's no need to be
+/// so cautious about the privacy (as it's perfectly private), so might
+/// as well increase the gap limit.
+pub(crate) const FEDERATION_RECOVER_MAX_GAP: u64 = 50;
+
 /// New client will start deriving new addresses from last used one
 /// plus that many indexes. This should be less than
 /// `MAX_GAP`, but more than 0: We want to make sure we detect
@@ -466,13 +473,20 @@ where
     let mut tweak_idxes_with_pegins = BTreeSet::new();
 
     for cur_tweak_idx in tweak_indexes_to_scan {
-        if RECOVER_MAX_GAP
+        if ONCHAIN_RECOVER_MAX_GAP
             <= cur_tweak_idx.saturating_sub(last_used_idx.unwrap_or(fallback_last_used_idx))
         {
             break;
         }
 
-        if !check_addr_history(cur_tweak_idx).await?.is_empty() {
+        let history = retry(
+            "Check address history",
+            backoff_util::background_backoff(),
+            || async { check_addr_history(cur_tweak_idx).await },
+        )
+        .await?;
+
+        if !history.is_empty() {
             tweak_idxes_with_pegins.insert(cur_tweak_idx);
             last_used_idx = Some(cur_tweak_idx);
         }

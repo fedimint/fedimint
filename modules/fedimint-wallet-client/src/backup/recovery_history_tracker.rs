@@ -4,7 +4,7 @@ use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_logging::LOG_CLIENT_MODULE_WALLET;
 use tracing::debug;
 
-use super::RECOVER_MAX_GAP;
+use crate::backup::FEDERATION_RECOVER_MAX_GAP;
 use crate::client_db::TweakIdx;
 use crate::WalletClientModuleData;
 
@@ -64,10 +64,13 @@ impl ConsensusPegInTweakIdxesUsedTracker {
     }
 
     fn init(&mut self, data: &WalletClientModuleData) {
-        for _ in 0..RECOVER_MAX_GAP {
+        for _ in 0..super::ONCHAIN_RECOVER_MAX_GAP {
             self.generate_next_pending_tweak_idx(data);
         }
-        debug_assert_eq!(self.pending_pubkey_scripts.len(), RECOVER_MAX_GAP as usize);
+        debug_assert_eq!(
+            self.pending_pubkey_scripts.len(),
+            super::ONCHAIN_RECOVER_MAX_GAP as usize
+        );
     }
 
     pub fn used_tweak_idxes(&self) -> &BTreeSet<TweakIdx> {
@@ -104,7 +107,10 @@ impl ConsensusPegInTweakIdxesUsedTracker {
 
             self.used_tweak_idxes.insert(tweak_idx);
 
-            self.refill_pending_pool_up_to_tweak_idx(data, tweak_idx.advance(RECOVER_MAX_GAP));
+            self.refill_pending_pool_up_to_tweak_idx(
+                data,
+                tweak_idx.advance(FEDERATION_RECOVER_MAX_GAP),
+            );
         } else if self.decoy_session_threshold < session_idx {
             self.push_decoy(script);
         }
