@@ -444,6 +444,15 @@
 <a href="#444" id="444">444</a>
 <a href="#445" id="445">445</a>
 <a href="#446" id="446">446</a>
+<a href="#447" id="447">447</a>
+<a href="#448" id="448">448</a>
+<a href="#449" id="449">449</a>
+<a href="#450" id="450">450</a>
+<a href="#451" id="451">451</a>
+<a href="#452" id="452">452</a>
+<a href="#453" id="453">453</a>
+<a href="#454" id="454">454</a>
+<a href="#455" id="455">455</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::sync::Arc;
 
 <span class="kw">use </span>axum::extract::Request;
@@ -456,7 +465,6 @@
 <span class="kw">use </span>fedimint_core::config::FederationId;
 <span class="kw">use </span>fedimint_core::encoding::Encodable;
 <span class="kw">use </span>fedimint_core::task::TaskGroup;
-<span class="kw">use </span>fedimint_ln_client::pay::PayInvoicePayload;
 <span class="kw">use </span>fedimint_ln_common::gateway_endpoint_constants::{
     ADDRESS_ENDPOINT, BACKUP_ENDPOINT, BALANCE_ENDPOINT, CLOSE_CHANNELS_WITH_PEER_ENDPOINT,
     CONFIGURATION_ENDPOINT, CONNECT_FED_ENDPOINT, GATEWAY_INFO_ENDPOINT,
@@ -467,8 +475,8 @@
 };
 <span class="kw">use </span>fedimint_lnv2_client::{CreateBolt11InvoicePayload, SendPaymentPayload};
 <span class="kw">use </span>fedimint_lnv2_common::endpoint_constants::{
-    CREATE_BOLT11_INVOICE_ENDPOINT, CREATE_BOLT11_INVOICE_FOR_SELF_ENDPOINT, ROUTING_INFO_ENDPOINT,
-    SEND_PAYMENT_ENDPOINT,
+    CREATE_BOLT11_INVOICE_ENDPOINT, CREATE_BOLT11_INVOICE_FOR_SELF_ENDPOINT,
+    PAY_INVOICE_SELF_ENDPOINT, ROUTING_INFO_ENDPOINT, SEND_PAYMENT_ENDPOINT,
 };
 <span class="kw">use </span>hex::ToHex;
 <span class="kw">use </span>serde_json::{json, Value};
@@ -479,7 +487,7 @@
 <span class="kw">use super</span>::{
     BackupPayload, BalancePayload, CloseChannelsWithPeerPayload, ConnectFedPayload,
     CreateInvoiceForSelfPayload, DepositAddressPayload, GetLnOnchainAddressPayload, InfoPayload,
-    LeaveFedPayload, OpenChannelPayload, ReceiveEcashPayload, RestorePayload,
+    LeaveFedPayload, OpenChannelPayload, PayInvoicePayload, ReceiveEcashPayload, RestorePayload,
     SetConfigurationPayload, SpendEcashPayload, WithdrawPayload, V1_API_ENDPOINT,
 };
 <span class="kw">use </span><span class="kw">crate</span>::rpc::ConfigPayload;
@@ -621,6 +629,7 @@
         .route(LEAVE_FED_ENDPOINT, post(leave_fed))
         .route(BACKUP_ENDPOINT, post(backup))
         .route(RESTORE_ENDPOINT, post(restore))
+        .route(PAY_INVOICE_SELF_ENDPOINT, post(pay_invoice_self))
         .route(
             GET_LN_ONCHAIN_ADDRESS_ENDPOINT,
             post(get_ln_onchain_address),
@@ -738,9 +747,18 @@
 }
 
 <span class="attr">#[instrument(skip_all, err, fields(<span class="question-mark">?</span>payload))]
-</span><span class="kw">async fn </span>pay_invoice(
+</span><span class="kw">async fn </span>pay_invoice_self(
     Extension(gateway): Extension&lt;Arc&lt;Gateway&gt;&gt;,
     Json(payload): Json&lt;PayInvoicePayload&gt;,
+) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="kw">impl </span>IntoResponse, GatewayError&gt; {
+    <span class="kw">let </span>preimage = gateway.handle_pay_invoice_self_msg(payload).<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="prelude-val">Ok</span>(Json(<span class="macro">json!</span>(preimage.<span class="number">0</span>.encode_hex::&lt;String&gt;())))
+}
+
+<span class="attr">#[instrument(skip_all, err, fields(<span class="question-mark">?</span>payload))]
+</span><span class="kw">async fn </span>pay_invoice(
+    Extension(gateway): Extension&lt;Arc&lt;Gateway&gt;&gt;,
+    Json(payload): Json&lt;fedimint_ln_client::pay::PayInvoicePayload&gt;,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="kw">impl </span>IntoResponse, GatewayError&gt; {
     <span class="kw">let </span>preimage = gateway.handle_pay_invoice_msg(payload).<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="prelude-val">Ok</span>(Json(<span class="macro">json!</span>(preimage.<span class="number">0</span>.encode_hex::&lt;String&gt;())))

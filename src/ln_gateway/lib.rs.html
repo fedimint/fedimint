@@ -1903,6 +1903,25 @@
 <a href="#1903" id="1903">1903</a>
 <a href="#1904" id="1904">1904</a>
 <a href="#1905" id="1905">1905</a>
+<a href="#1906" id="1906">1906</a>
+<a href="#1907" id="1907">1907</a>
+<a href="#1908" id="1908">1908</a>
+<a href="#1909" id="1909">1909</a>
+<a href="#1910" id="1910">1910</a>
+<a href="#1911" id="1911">1911</a>
+<a href="#1912" id="1912">1912</a>
+<a href="#1913" id="1913">1913</a>
+<a href="#1914" id="1914">1914</a>
+<a href="#1915" id="1915">1915</a>
+<a href="#1916" id="1916">1916</a>
+<a href="#1917" id="1917">1917</a>
+<a href="#1918" id="1918">1918</a>
+<a href="#1919" id="1919">1919</a>
+<a href="#1920" id="1920">1920</a>
+<a href="#1921" id="1921">1921</a>
+<a href="#1922" id="1922">1922</a>
+<a href="#1923" id="1923">1923</a>
+<a href="#1924" id="1924">1924</a>
 </pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::cast_possible_wrap)]
@@ -1976,7 +1995,6 @@
 <span class="kw">use </span>fedimint_core::time::duration_since_epoch;
 <span class="kw">use </span>fedimint_core::util::{SafeUrl, Spanned};
 <span class="kw">use </span>fedimint_core::{fedimint_build_code_version_env, Amount, BitcoinAmountOrAll, BitcoinHash};
-<span class="kw">use </span>fedimint_ln_client::pay::PayInvoicePayload;
 <span class="kw">use </span>fedimint_ln_common::config::{GatewayFee, LightningClientConfig};
 <span class="kw">use </span>fedimint_ln_common::contracts::Preimage;
 <span class="kw">use </span>fedimint_ln_common::LightningCommonInit;
@@ -2000,11 +2018,12 @@
 <span class="kw">use </span>rand::Rng;
 <span class="kw">use </span>rpc::{
     CloseChannelsWithPeerPayload, CreateInvoiceForSelfPayload, FederationInfo, GatewayFedConfig,
-    GatewayInfo, LeaveFedPayload, OpenChannelPayload, ReceiveEcashPayload, ReceiveEcashResponse,
-    SetConfigurationPayload, SpendEcashPayload, SpendEcashResponse, V1_API_ENDPOINT,
+    GatewayInfo, LeaveFedPayload, OpenChannelPayload, PayInvoicePayload, ReceiveEcashPayload,
+    ReceiveEcashResponse, SetConfigurationPayload, SpendEcashPayload, SpendEcashResponse,
+    V1_API_ENDPOINT,
 };
 <span class="kw">use </span>state_machine::pay::OutgoingPaymentError;
-<span class="kw">use </span>state_machine::GatewayClientModule;
+<span class="kw">use </span>state_machine::{GatewayClientModule, GatewayExtPayStates};
 <span class="kw">use </span>thiserror::Error;
 <span class="kw">use </span>tokio::sync::RwLock;
 <span class="kw">use </span>tracing::{debug, error, info, info_span, warn, Instrument};
@@ -2020,7 +2039,6 @@
     BackupPayload, BalancePayload, ConnectFedPayload, DepositAddressPayload, FederationBalanceInfo,
     GatewayBalances, RestorePayload, WithdrawPayload,
 };
-<span class="kw">use </span><span class="kw">crate</span>::state_machine::GatewayExtPayStates;
 <span class="kw">use </span><span class="kw">crate</span>::types::PrettyInterceptHtlcRequest;
 
 <span class="doccomment">/// How long a gateway announcement stays valid
@@ -2841,9 +2859,29 @@
         .map_err(|e| GatewayError::UnexpectedState(e.to_string()))
     }
 
+    <span class="doccomment">/// Requests the gateway to pay an outgoing LN invoice using its own funds.
+    /// Returns the payment hash's preimage on success.
+    </span><span class="kw">async fn </span>handle_pay_invoice_self_msg(<span class="kw-2">&amp;</span><span class="self">self</span>, payload: PayInvoicePayload) -&gt; <span class="prelude-ty">Result</span>&lt;Preimage&gt; {
+        <span class="kw">if let </span>GatewayState::Running { lightning_context } = <span class="self">self</span>.get_state().<span class="kw">await </span>{
+            <span class="kw">let </span>res = lightning_context
+                .lnrpc
+                .pay(payload.invoice, payload.max_delay, payload.max_fee)
+                .<span class="kw">await</span><span class="question-mark">?</span>;
+            <span class="prelude-val">Ok</span>(Preimage(
+                res.preimage.try_into().expect(<span class="string">"preimage is 32 bytes"</span>),
+            ))
+        } <span class="kw">else </span>{
+            <span class="macro">warn!</span>(<span class="string">"Gateway is not connected to lightning node, cannot pay invoice"</span>);
+            <span class="prelude-val">Err</span>(GatewayError::Disconnected)
+        }
+    }
+
     <span class="doccomment">/// Requests the gateway to pay an outgoing LN invoice on behalf of a
     /// Fedimint client. Returns the payment hash's preimage on success.
-    </span><span class="kw">async fn </span>handle_pay_invoice_msg(<span class="kw-2">&amp;</span><span class="self">self</span>, payload: PayInvoicePayload) -&gt; <span class="prelude-ty">Result</span>&lt;Preimage&gt; {
+    </span><span class="kw">async fn </span>handle_pay_invoice_msg(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        payload: fedimint_ln_client::pay::PayInvoicePayload,
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;Preimage&gt; {
         <span class="kw">if let </span>GatewayState::Running { .. } = <span class="self">self</span>.get_state().<span class="kw">await </span>{
             <span class="macro">debug!</span>(<span class="string">"Handling pay invoice message: {payload:?}"</span>);
             <span class="kw">let </span>client = <span class="self">self</span>.select_client(payload.federation_id).<span class="kw">await</span><span class="question-mark">?</span>;
