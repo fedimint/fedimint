@@ -193,6 +193,10 @@ async fn on_chain_peg_in_and_peg_out_happy_case() -> anyhow::Result<()> {
     ));
     assert!(matches!(
         deposit_updates.next().await.unwrap(),
+        DepositStateV2::Confirmed { .. }
+    ));
+    assert!(matches!(
+        deposit_updates.next().await.unwrap(),
         DepositStateV2::Claimed { .. }
     ));
     assert_eq!(deposit_updates.next().await, None);
