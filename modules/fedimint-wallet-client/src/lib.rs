@@ -878,15 +878,16 @@ impl WalletClientModule {
                         .await;
 
                     yield DepositStateV2::Confirmed {
-                    btc_deposited,
-                    btc_out_point
-                };
-
-                match stream_cient_ctx.await_primary_module_outputs(operation_id, claim_data.change).await {
-                    Ok(_) =>yield DepositStateV2::Claimed {
                         btc_deposited,
-                        btc_out_point},
-                    Err(e) => yield DepositStateV2::Failed(e.to_string())
+                        btc_out_point
+                    };
+
+                    match stream_cient_ctx.await_primary_module_outputs(operation_id, claim_data.change).await {
+                        Ok(_) => yield DepositStateV2::Claimed {
+                            btc_deposited,
+                            btc_out_point
+                        },
+                        Err(e) => yield DepositStateV2::Failed(e.to_string())
                     }
                 }
             }),
