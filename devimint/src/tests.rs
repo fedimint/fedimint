@@ -1413,7 +1413,7 @@ pub async fn cli_tests_backup_and_restore(
 
     let pre_balance = pre_notes["total_amount_msat"].as_u64().unwrap();
 
-    debug!(%pre_notes, pre_balance, "State before backup");
+    debug!(target: LOG_DEVIMINT, %pre_notes, pre_balance, "State before backup");
 
     // we need to have some funds
     // TODO: right now we rely on previous tests to leave some balance
@@ -1444,7 +1444,7 @@ pub async fn cli_tests_backup_and_restore(
             let _ = cmd!(client, "dev", "wait-complete").out_json().await?;
             let post_notes = cmd!(client, "info").out_json().await?;
             let post_balance = post_notes["total_amount_msat"].as_u64().unwrap();
-            debug!(%post_notes, post_balance, "State after backup");
+            debug!(target: LOG_DEVIMINT, %post_notes, post_balance, "State after backup");
 
             post_balance
         } else {
@@ -1466,7 +1466,7 @@ pub async fn cli_tests_backup_and_restore(
                 .as_u64()
                 .unwrap();
             let post_notes = cmd!(client, "info").out_json().await?;
-            debug!(%post_notes, post_balance, "State after backup");
+            debug!(target: LOG_DEVIMINT, %post_notes, post_balance, "State after backup");
 
             post_balance
         };
@@ -1522,7 +1522,7 @@ pub async fn cli_tests_backup_and_restore(
                 let _ = cmd!(client, "dev", "wait-complete").out_json().await?;
                 let post_notes = cmd!(client, "info").out_json().await?;
                 let post_balance = post_notes["total_amount_msat"].as_u64().unwrap();
-                debug!(%post_notes, post_balance, "State after (subsequent) backup");
+                debug!(target: LOG_DEVIMINT, %post_notes, post_balance, "State after (subsequent) backup");
 
                 assert_eq!(pre_balance + EXTRA_PEGIN_SATS * 1000, post_balance);
             }
@@ -1539,7 +1539,7 @@ pub async fn cli_tests_backup_and_restore(
             let _ = cmd!(client, "restore", &secret,).out_json().await?;
             let post_notes = cmd!(client, "info").out_json().await?;
             let post_balance = post_notes["total_amount_msat"].as_u64().unwrap();
-            debug!(%post_notes, post_balance, "State after backup");
+            debug!(target: LOG_DEVIMINT, %post_notes, post_balance, "State after backup");
 
             assert_eq!(pre_balance, post_balance);
         }
