@@ -23,14 +23,7 @@ anyhow = { workspace = true }
 async-trait = { workspace = true }
 axum = { workspace = true }
 bitcoin = { workspace = true }
-clap = { version = "4.5.16", features = [
-    "derive",
-    "std",
-    "help",
-    "usage",
-    "error-context",
-    "suggestions",
-], default-features = false }
+clap = { workspace = true }
 clap_complete = "4.5.23"
 fedimint-core = { workspace = true }
 fedimint-logging = { workspace = true }

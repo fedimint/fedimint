@@ -25,14 +25,7 @@ async-stream = { workspace = true }
 async-trait = { workspace = true }
 bitcoin = { workspace = true }
 bitcoincore-rpc = { workspace = true }
-clap = { version = "4.5.16", features = [
-    "derive",
-    "std",
-    "help",
-    "usage",
-    "error-context",
-    "suggestions",
-], default-features = false }
+clap = { workspace = true }
 fedimint-api-client = { workspace = true }
 fedimint-bitcoind = { workspace = true }
 fedimint-client = { workspace = true }
