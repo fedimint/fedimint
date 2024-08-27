@@ -71,7 +71,6 @@ use fedimint_core::task::{sleep, TaskGroup, TaskHandle, TaskShutdownToken};
 use fedimint_core::time::duration_since_epoch;
 use fedimint_core::util::{SafeUrl, Spanned};
 use fedimint_core::{fedimint_build_code_version_env, Amount, BitcoinAmountOrAll, BitcoinHash};
-use fedimint_ln_client::pay::PayInvoicePayload;
 use fedimint_ln_common::config::{GatewayFee, LightningClientConfig};
 use fedimint_ln_common::contracts::Preimage;
 use fedimint_ln_common::LightningCommonInit;
@@ -95,11 +94,12 @@ use lightning_invoice::{Bolt11Invoice, RoutingFees};
 use rand::Rng;
 use rpc::{
     CloseChannelsWithPeerPayload, CreateInvoiceForSelfPayload, FederationInfo, GatewayFedConfig,
-    GatewayInfo, LeaveFedPayload, OpenChannelPayload, ReceiveEcashPayload, ReceiveEcashResponse,
-    SetConfigurationPayload, SpendEcashPayload, SpendEcashResponse, V1_API_ENDPOINT,
+    GatewayInfo, LeaveFedPayload, OpenChannelPayload, PayInvoicePayload, ReceiveEcashPayload,
+    ReceiveEcashResponse, SetConfigurationPayload, SpendEcashPayload, SpendEcashResponse,
+    V1_API_ENDPOINT,
 };
 use state_machine::pay::OutgoingPaymentError;
-use state_machine::GatewayClientModule;
+use state_machine::{GatewayClientModule, GatewayExtPayStates};
 use thiserror::Error;
 use tokio::sync::RwLock;
 use tracing::{debug, error, info, info_span, warn, Instrument};
@@ -115,7 +115,6 @@ use crate::rpc::{
     BackupPayload, BalancePayload, ConnectFedPayload, DepositAddressPayload, FederationBalanceInfo,
     GatewayBalances, RestorePayload, WithdrawPayload,
 };
-use crate::state_machine::GatewayExtPayStates;
 use crate::types::PrettyInterceptHtlcRequest;
 
 /// How long a gateway announcement stays valid
@@ -936,9 +935,29 @@ impl Gateway {
         .map_err(|e| GatewayError::UnexpectedState(e.to_string()))
     }
 
+    /// Requests the gateway to pay an outgoing LN invoice using its own funds.
+    /// Returns the payment hash's preimage on success.
+    async fn handle_pay_invoice_self_msg(&self, payload: PayInvoicePayload) -> Result<Preimage> {
+        if let GatewayState::Running { lightning_context } = self.get_state().await {
+            let res = lightning_context
+                .lnrpc
+                .pay(payload.invoice, payload.max_delay, payload.max_fee)
+                .await?;
+            Ok(Preimage(
+                res.preimage.try_into().expect("preimage is 32 bytes"),
+            ))
+        } else {
+            warn!("Gateway is not connected to lightning node, cannot pay invoice");
+            Err(GatewayError::Disconnected)
+        }
+    }
+
     /// Requests the gateway to pay an outgoing LN invoice on behalf of a
     /// Fedimint client. Returns the payment hash's preimage on success.
-    async fn handle_pay_invoice_msg(&self, payload: PayInvoicePayload) -> Result<Preimage> {
+    async fn handle_pay_invoice_msg(
+        &self,
+        payload: fedimint_ln_client::pay::PayInvoicePayload,
+    ) -> Result<Preimage> {
         if let GatewayState::Running { .. } = self.get_state().await {
             debug!("Handling pay invoice message: {payload:?}");
             let client = self.select_client(payload.federation_id).await?;

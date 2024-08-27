@@ -10,7 +10,6 @@ use bitcoin_hashes::{sha256, Hash};
 use fedimint_core::config::FederationId;
 use fedimint_core::encoding::Encodable;
 use fedimint_core::task::TaskGroup;
-use fedimint_ln_client::pay::PayInvoicePayload;
 use fedimint_ln_common::gateway_endpoint_constants::{
     ADDRESS_ENDPOINT, BACKUP_ENDPOINT, BALANCE_ENDPOINT, CLOSE_CHANNELS_WITH_PEER_ENDPOINT,
     CONFIGURATION_ENDPOINT, CONNECT_FED_ENDPOINT, GATEWAY_INFO_ENDPOINT,
@@ -21,8 +20,8 @@ use fedimint_ln_common::gateway_endpoint_constants::{
 };
 use fedimint_lnv2_client::{CreateBolt11InvoicePayload, SendPaymentPayload};
 use fedimint_lnv2_common::endpoint_constants::{
-    CREATE_BOLT11_INVOICE_ENDPOINT, CREATE_BOLT11_INVOICE_FOR_SELF_ENDPOINT, ROUTING_INFO_ENDPOINT,
-    SEND_PAYMENT_ENDPOINT,
+    CREATE_BOLT11_INVOICE_ENDPOINT, CREATE_BOLT11_INVOICE_FOR_SELF_ENDPOINT,
+    PAY_INVOICE_SELF_ENDPOINT, ROUTING_INFO_ENDPOINT, SEND_PAYMENT_ENDPOINT,
 };
 use hex::ToHex;
 use serde_json::{json, Value};
@@ -33,7 +32,7 @@ use tracing::{error, info, instrument};
 use super::{
     BackupPayload, BalancePayload, CloseChannelsWithPeerPayload, ConnectFedPayload,
     CreateInvoiceForSelfPayload, DepositAddressPayload, GetLnOnchainAddressPayload, InfoPayload,
-    LeaveFedPayload, OpenChannelPayload, ReceiveEcashPayload, RestorePayload,
+    LeaveFedPayload, OpenChannelPayload, PayInvoicePayload, ReceiveEcashPayload, RestorePayload,
     SetConfigurationPayload, SpendEcashPayload, WithdrawPayload, V1_API_ENDPOINT,
 };
 use crate::rpc::ConfigPayload;
@@ -175,6 +174,7 @@ fn v1_routes(gateway: Arc<Gateway>) -> Router {
         .route(LEAVE_FED_ENDPOINT, post(leave_fed))
         .route(BACKUP_ENDPOINT, post(backup))
         .route(RESTORE_ENDPOINT, post(restore))
+        .route(PAY_INVOICE_SELF_ENDPOINT, post(pay_invoice_self))
         .route(
             GET_LN_ONCHAIN_ADDRESS_ENDPOINT,
             post(get_ln_onchain_address),
@@ -292,9 +292,18 @@ async fn create_invoice_for_self(
 }
 
 #[instrument(skip_all, err, fields(?payload))]
-async fn pay_invoice(
+async fn pay_invoice_self(
     Extension(gateway): Extension<Arc<Gateway>>,
     Json(payload): Json<PayInvoicePayload>,
+) -> Result<impl IntoResponse, GatewayError> {
+    let preimage = gateway.handle_pay_invoice_self_msg(payload).await?;
+    Ok(Json(json!(preimage.0.encode_hex::<String>())))
+}
+
+#[instrument(skip_all, err, fields(?payload))]
+async fn pay_invoice(
+    Extension(gateway): Extension<Arc<Gateway>>,
+    Json(payload): Json<fedimint_ln_client::pay::PayInvoicePayload>,
 ) -> Result<impl IntoResponse, GatewayError> {
     let preimage = gateway.handle_pay_invoice_msg(payload).await?;
     Ok(Json(json!(preimage.0.encode_hex::<String>())))
