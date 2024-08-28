@@ -93,7 +93,7 @@ impl GatewayConnection for MockGatewayConnection {
     ) -> Result<Option<RoutingInfo>, GatewayError> {
         Ok(Some(RoutingInfo {
             lightning_public_key: self.keypair.public_key(),
-            public_key: self.keypair.public_key(),
+            module_public_key: self.keypair.public_key(),
             send_fee_default: PaymentFee::SEND_FEE_LIMIT_DEFAULT,
             send_fee_minimum: PaymentFee::SEND_FEE_MINIMUM,
             receive_fee: PaymentFee::RECEIVE_FEE_LIMIT_DEFAULT,

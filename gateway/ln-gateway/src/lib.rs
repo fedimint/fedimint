@@ -75,7 +75,7 @@ use fedimint_ln_common::contracts::Preimage;
 use fedimint_ln_common::LightningCommonInit;
 use fedimint_lnv2_client::{
     Bolt11InvoiceDescription, CreateBolt11InvoicePayload, PaymentFee, RoutingInfo,
-    SendPaymentPayload,
+    SendPaymentPayload, EXPIRATION_DELTA_LIMIT_DEFAULT,
 };
 use fedimint_lnv2_common::contracts::{IncomingContract, PaymentImage};
 use fedimint_mint_client::{
@@ -1683,9 +1683,9 @@ impl Gateway {
         Ok(self
             .public_key_v2(federation_id)
             .await
-            .map(|public_key| RoutingInfo {
+            .map(|module_public_key| RoutingInfo {
                 lightning_public_key: context.lightning_public_key,
-                public_key,
+                module_public_key,
                 send_fee_default: PaymentFee::SEND_FEE_LIMIT_DEFAULT,
                 // The base fee ensures that the gateway does not loose sats sending the payment due
                 // to fees paid on the transaction claiming the outgoing contract or
@@ -1694,7 +1694,7 @@ impl Gateway {
                 // The base fee ensures that the gateway does not loose sats receiving the payment
                 // due to fees paid on the transaction funding the incoming contract
                 receive_fee: PaymentFee::RECEIVE_FEE_LIMIT_DEFAULT,
-                expiration_delta_default: 500,
+                expiration_delta_default: EXPIRATION_DELTA_LIMIT_DEFAULT,
                 expiration_delta_minimum: EXPIRATION_DELTA_MINIMUM_V2,
             }))
     }
@@ -1741,7 +1741,7 @@ impl Gateway {
             .await?
             .ok_or(anyhow!("Unknown federation"))?;
 
-        if payload.contract.commitment.refund_pk != payment_info.public_key {
+        if payload.contract.commitment.refund_pk != payment_info.module_public_key {
             bail!("The outgoing contract keyed to another gateway");
         }
 
