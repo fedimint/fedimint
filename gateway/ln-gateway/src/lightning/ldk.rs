@@ -13,6 +13,7 @@ use ldk_node::lightning::ln::msgs::SocketAddress;
 use ldk_node::lightning::ln::PaymentHash;
 use ldk_node::lightning_invoice::Bolt11Invoice;
 use ldk_node::payment::{PaymentKind, PaymentStatus};
+use ldk_node::{Builder, Config, Event, Node};
 use lightning::ln::PaymentPreimage;
 use lightning::util::scid_utils::scid_from_parts;
 use tokio::sync::mpsc::Sender;
@@ -31,7 +32,7 @@ use crate::gateway_lnrpc::{
 
 pub struct GatewayLdkClient {
     /// The underlying lightning node.
-    node: Arc<ldk_node::Node>,
+    node: Arc<Node>,
 
     /// The client for querying data about the blockchain.
     esplora_client: esplora_client::AsyncClient,
@@ -67,7 +68,7 @@ impl GatewayLdkClient {
         lightning_port: u16,
         mnemonic: Mnemonic,
     ) -> anyhow::Result<Self> {
-        let mut node_builder = ldk_node::Builder::from_config(ldk_node::Config {
+        let mut node_builder = Builder::from_config(Config {
             network,
             listening_addresses: Some(vec![SocketAddress::TcpIpV4 {
                 addr: [0, 0, 0, 0],
@@ -110,10 +111,10 @@ impl GatewayLdkClient {
     }
 
     async fn handle_next_event(
-        node: &ldk_node::Node,
+        node: &Node,
         htlc_stream_sender: &Sender<Result<InterceptHtlcRequest, Status>>,
     ) {
-        if let ldk_node::Event::PaymentClaimable {
+        if let Event::PaymentClaimable {
             payment_id: _,
             payment_hash,
             claimable_amount_msat,
