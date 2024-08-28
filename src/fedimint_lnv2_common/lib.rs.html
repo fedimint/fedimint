@@ -197,6 +197,7 @@
 <span class="kw">pub mod </span>contracts;
 <span class="kw">pub mod </span>endpoint_constants;
 
+<span class="kw">use </span>bitcoin::secp256k1::schnorr::Signature;
 <span class="kw">use </span>bitcoin_hashes::sha256;
 <span class="kw">use </span>config::LightningClientConfig;
 <span class="kw">use </span>fedimint_core::core::{Decoder, ModuleInstanceId, ModuleKind};
@@ -204,7 +205,6 @@
 <span class="kw">use </span>fedimint_core::module::{CommonModuleInit, ModuleCommon, ModuleConsensusVersion};
 <span class="kw">use </span>fedimint_core::util::SafeUrl;
 <span class="kw">use </span>fedimint_core::{extensible_associated_module_type, plugin_types_trait_impl_common};
-<span class="kw">use </span>secp256k1::schnorr::Signature;
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>thiserror::Error;
 <span class="kw">use </span>tpe::{AggregateDecryptionKey, DecryptionKeyShare};
