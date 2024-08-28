@@ -470,6 +470,7 @@
 <a href="#470" id="470">470</a>
 <a href="#471" id="471">471</a>
 <a href="#472" id="472">472</a>
+<a href="#473" id="473">473</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet};
 <span class="kw">use </span>std::fmt::Debug;
 <span class="kw">use </span>std::num::NonZeroUsize;
@@ -508,6 +509,7 @@
 <span class="kw">use </span>fedimint_core::transaction::{SerdeTransaction, Transaction, TransactionSubmissionOutcome};
 <span class="kw">use </span>fedimint_core::util::SafeUrl;
 <span class="kw">use </span>fedimint_core::{apply, async_trait_maybe_send, NumPeersExt, PeerId, TransactionId};
+<span class="kw">use </span>fedimint_logging::{LOG_CLIENT, LOG_CLIENT_NET_API};
 <span class="kw">use </span>futures::future::join_all;
 <span class="kw">use </span>jsonrpsee_core::client::Error <span class="kw">as </span>JsonRpcClientError;
 <span class="kw">use </span>serde_json::Value;
@@ -552,10 +554,10 @@
         <span class="self">Self </span>{
             inner,
             await_session_lru: Arc::new(tokio::sync::Mutex::new(lru::LruCache::new(
-                NonZeroUsize::new(<span class="number">32</span>).expect(<span class="string">"is non-zero"</span>),
+                NonZeroUsize::new(<span class="number">512</span>).expect(<span class="string">"is non-zero"</span>),
             ))),
             get_session_status_lru: Arc::new(tokio::sync::Mutex::new(lru::LruCache::new(
-                NonZeroUsize::new(<span class="number">32</span>).expect(<span class="string">"is non-zero"</span>),
+                NonZeroUsize::new(<span class="number">512</span>).expect(<span class="string">"is non-zero"</span>),
             ))),
         }
     }
@@ -570,7 +572,7 @@
         block_index: u64,
         decoders: <span class="kw-2">&amp;</span>ModuleDecoderRegistry,
     ) -&gt; anyhow::Result&lt;SessionOutcome&gt; {
-        <span class="macro">debug!</span>(block_index, <span class="string">"Awaiting block's outcome from Federation"</span>);
+        <span class="macro">debug!</span>(target: LOG_CLIENT_NET_API, block_index, <span class="string">"Awaiting block's outcome from Federation"</span>);
         <span class="self">self</span>.request_current_consensus::&lt;SerdeModuleEncoding&lt;SessionOutcome&gt;&gt;(
             AWAIT_SESSION_OUTCOME_ENDPOINT.to_string(),
             ApiRequestErased::new(block_index),
@@ -585,7 +587,7 @@
         block_index: u64,
         decoders: <span class="kw-2">&amp;</span>ModuleDecoderRegistry,
     ) -&gt; anyhow::Result&lt;SessionStatus&gt; {
-        <span class="macro">debug!</span>(block_index, <span class="string">"Fetching block's outcome from Federation"</span>);
+        <span class="macro">debug!</span>(target: LOG_CLIENT_NET_API, block_index, <span class="string">"Fetching block's outcome from Federation"</span>);
         <span class="self">self</span>.request_current_consensus::&lt;SerdeModuleEncoding&lt;SessionStatus&gt;&gt;(
             SESSION_STATUS_ENDPOINT.to_string(),
             ApiRequestErased::new(block_index),
