@@ -1009,7 +1009,6 @@
 <a href="#1009" id="1009">1009</a>
 <a href="#1010" id="1010">1010</a>
 <a href="#1011" id="1011">1011</a>
-<a href="#1012" id="1012">1012</a>
 </pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::missing_errors_doc)]
 #![allow(clippy::missing_panics_doc)]
@@ -1454,7 +1453,7 @@
 
         <span class="kw">let </span>routing_info = <span class="self">self
             </span>.gateway_conn
-            .fetch_routing_info(gateway_api.clone(), <span class="kw-2">&amp;</span><span class="self">self</span>.federation_id)
+            .routing_info(gateway_api.clone(), <span class="kw-2">&amp;</span><span class="self">self</span>.federation_id)
             .<span class="kw">await
             </span>.map_err(SendPaymentError::GatewayError)<span class="question-mark">?
             </span>.ok_or(SendPaymentError::UnknownFederation)<span class="question-mark">?</span>;
@@ -1721,7 +1720,7 @@
 
         <span class="kw">let </span>payment_info = <span class="self">self
             </span>.gateway_conn
-            .fetch_routing_info(gateway_api.clone(), <span class="kw-2">&amp;</span><span class="self">self</span>.federation_id)
+            .routing_info(gateway_api.clone(), <span class="kw-2">&amp;</span><span class="self">self</span>.federation_id)
             .<span class="kw">await
             </span>.map_err(FetchInvoiceError::GatewayError)<span class="question-mark">?
             </span>.ok_or(FetchInvoiceError::UnknownFederation)<span class="question-mark">?</span>;
@@ -1763,17 +1762,16 @@
             ephemeral_pk,
         );
 
-        <span class="kw">let </span>payload = CreateBolt11InvoicePayload {
-            federation_id: <span class="self">self</span>.federation_id,
-            contract: contract.clone(),
-            invoice_amount,
-            description,
-            expiry_time,
-        };
-
         <span class="kw">let </span>invoice = <span class="self">self
             </span>.gateway_conn
-            .fetch_invoice(gateway_api, payload)
+            .bolt11_invoice(
+                gateway_api,
+                <span class="self">self</span>.federation_id,
+                contract.clone(),
+                invoice_amount,
+                description,
+                expiry_time,
+            )
             .<span class="kw">await
             </span>.map_err(FetchInvoiceError::GatewayError)<span class="question-mark">?</span>;
 

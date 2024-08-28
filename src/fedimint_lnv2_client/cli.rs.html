@@ -134,8 +134,8 @@
         Opts::AwaitReceive { operation_id } =&gt; json(lightning.await_receive(operation_id).<span class="kw">await</span><span class="question-mark">?</span>),
         Opts::Gateway(gateway_opts) =&gt; <span class="kw">match </span>gateway_opts {
             GatewayOpts::List { peer } =&gt; <span class="kw">match </span>peer {
-                <span class="prelude-val">Some</span>(peer) =&gt; json(lightning.module_api.fetch_gateways_from_peer(peer).<span class="kw">await</span><span class="question-mark">?</span>),
-                <span class="prelude-val">None </span>=&gt; json(lightning.module_api.fetch_gateways().<span class="kw">await</span><span class="question-mark">?</span>),
+                <span class="prelude-val">Some</span>(peer) =&gt; json(lightning.module_api.gateways_from_peer(peer).<span class="kw">await</span><span class="question-mark">?</span>),
+                <span class="prelude-val">None </span>=&gt; json(lightning.module_api.gateways().<span class="kw">await</span><span class="question-mark">?</span>),
             },
             GatewayOpts::Add { gateway } =&gt; {
                 <span class="kw">let </span>auth = lightning
