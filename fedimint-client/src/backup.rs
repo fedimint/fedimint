@@ -2,7 +2,7 @@ use std::cmp::Reverse;
 use std::collections::{BTreeMap, BTreeSet};
 use std::io::{Cursor, Error, Read, Write};
 
-use anyhow::{bail, Context, Result};
+use anyhow::{bail, ensure, Context, Result};
 use fedimint_api_client::api::DynGlobalApi;
 use fedimint_core::core::backup::{
     BackupRequest, SignedBackupRequest, BACKUP_REQUEST_MAX_PAYLOAD_SIZE_BYTES,
@@ -279,6 +279,11 @@ impl Client {
 
     /// Prepare an encrypted backup and send it to federation for storing
     pub async fn backup_to_federation(&self, metadata: Metadata) -> Result<()> {
+        ensure!(
+            !self.has_pending_recoveries(),
+            "Cannot backup while there are pending recoveries"
+        );
+
         let last_backup = self.load_previous_backup().await;
         let new_backup = self.create_backup(metadata).await?;
 
