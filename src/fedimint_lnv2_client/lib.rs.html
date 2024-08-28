@@ -992,6 +992,24 @@
 <a href="#992" id="992">992</a>
 <a href="#993" id="993">993</a>
 <a href="#994" id="994">994</a>
+<a href="#995" id="995">995</a>
+<a href="#996" id="996">996</a>
+<a href="#997" id="997">997</a>
+<a href="#998" id="998">998</a>
+<a href="#999" id="999">999</a>
+<a href="#1000" id="1000">1000</a>
+<a href="#1001" id="1001">1001</a>
+<a href="#1002" id="1002">1002</a>
+<a href="#1003" id="1003">1003</a>
+<a href="#1004" id="1004">1004</a>
+<a href="#1005" id="1005">1005</a>
+<a href="#1006" id="1006">1006</a>
+<a href="#1007" id="1007">1007</a>
+<a href="#1008" id="1008">1008</a>
+<a href="#1009" id="1009">1009</a>
+<a href="#1010" id="1010">1010</a>
+<a href="#1011" id="1011">1011</a>
+<a href="#1012" id="1012">1012</a>
 </pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::missing_errors_doc)]
 #![allow(clippy::missing_panics_doc)]
@@ -1175,13 +1193,31 @@
 
 <span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Decodable, Encodable)]
 </span><span class="kw">pub struct </span>RoutingInfo {
-    <span class="kw">pub </span>lightning_public_key: PublicKey,
-    <span class="kw">pub </span>public_key: PublicKey,
-    <span class="kw">pub </span>send_fee_minimum: PaymentFee,
-    <span class="kw">pub </span>send_fee_default: PaymentFee,
-    <span class="kw">pub </span>receive_fee: PaymentFee,
-    <span class="kw">pub </span>expiration_delta_default: u64,
-    <span class="kw">pub </span>expiration_delta_minimum: u64,
+    <span class="doccomment">/// The public key of the gateways lightning node. Since this key signs the
+    /// gateways invoices the senders client uses it to differentiate between a
+    /// direct swap between fedimints and a lightning swap.
+    </span><span class="kw">pub </span>lightning_public_key: PublicKey,
+    <span class="doccomment">/// The public key of the gateways client module. This key is used to claim
+    /// or cancel outgoing contracts and refund incoming contracts.
+    </span><span class="kw">pub </span>module_public_key: PublicKey,
+    <span class="doccomment">/// This is the fee the gateway charges for an outgoing payment. The senders
+    /// client will use this fee in case of a direct swap.
+    </span><span class="kw">pub </span>send_fee_minimum: PaymentFee,
+    <span class="doccomment">/// This is the default total fee the gateway recommends for an outgoing
+    /// payment in case of a lightning swap. It accounts for the additional fee
+    /// required to successfully route this payment over lightning.
+    </span><span class="kw">pub </span>send_fee_default: PaymentFee,
+    <span class="doccomment">/// This is the fee the gateway charges for an incoming payment.
+    </span><span class="kw">pub </span>receive_fee: PaymentFee,
+    <span class="doccomment">/// This is the minimum expiration delta in block the gateway requires for
+    /// an outgoing payment. The senders client will use this expiration delta
+    /// in case of a direct swap.
+    </span><span class="kw">pub </span>expiration_delta_minimum: u64,
+    <span class="doccomment">/// This is the default total expiration the gateway recommends for an
+    /// outgoing payment in case of a lightning swap. It accounts for the
+    /// additional expiration delta required to successfully route this payment
+    /// over lightning.
+    </span><span class="kw">pub </span>expiration_delta_default: u64,
 }
 
 <span class="kw">impl </span>RoutingInfo {
@@ -1445,7 +1481,7 @@
             payment_image: PaymentImage::Hash(<span class="kw-2">*</span>invoice.payment_hash()),
             amount: send_fee.add_fee(amount),
             expiration: consensus_block_count + expiration_delta + CONTRACT_CONFIRMATION_BUFFER,
-            claim_pk: routing_info.public_key,
+            claim_pk: routing_info.module_public_key,
             refund_pk: refund_keypair.public_key(),
             ephemeral_pk,
         };
@@ -1723,7 +1759,7 @@
             contract_amount,
             expiration,
             claim_pk,
-            payment_info.public_key,
+            payment_info.module_public_key,
             ephemeral_pk,
         );
 

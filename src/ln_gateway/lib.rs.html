@@ -2003,7 +2003,7 @@
 <span class="kw">use </span>fedimint_ln_common::LightningCommonInit;
 <span class="kw">use </span>fedimint_lnv2_client::{
     Bolt11InvoiceDescription, CreateBolt11InvoicePayload, PaymentFee, RoutingInfo,
-    SendPaymentPayload,
+    SendPaymentPayload, EXPIRATION_DELTA_LIMIT_DEFAULT,
 };
 <span class="kw">use </span>fedimint_lnv2_common::contracts::{IncomingContract, PaymentImage};
 <span class="kw">use </span>fedimint_mint_client::{
@@ -3611,9 +3611,9 @@
         <span class="prelude-val">Ok</span>(<span class="self">self
             </span>.public_key_v2(federation_id)
             .<span class="kw">await
-            </span>.map(|public_key| RoutingInfo {
+            </span>.map(|module_public_key| RoutingInfo {
                 lightning_public_key: context.lightning_public_key,
-                public_key,
+                module_public_key,
                 send_fee_default: PaymentFee::SEND_FEE_LIMIT_DEFAULT,
                 <span class="comment">// The base fee ensures that the gateway does not loose sats sending the payment due
                 // to fees paid on the transaction claiming the outgoing contract or
@@ -3622,7 +3622,7 @@
                 <span class="comment">// The base fee ensures that the gateway does not loose sats receiving the payment
                 // due to fees paid on the transaction funding the incoming contract
                 </span>receive_fee: PaymentFee::RECEIVE_FEE_LIMIT_DEFAULT,
-                expiration_delta_default: <span class="number">500</span>,
+                expiration_delta_default: EXPIRATION_DELTA_LIMIT_DEFAULT,
                 expiration_delta_minimum: EXPIRATION_DELTA_MINIMUM_V2,
             }))
     }
@@ -3669,7 +3669,7 @@
             .<span class="kw">await</span><span class="question-mark">?
             </span>.ok_or(<span class="macro">anyhow!</span>(<span class="string">"Unknown federation"</span>))<span class="question-mark">?</span>;
 
-        <span class="kw">if </span>payload.contract.commitment.refund_pk != payment_info.public_key {
+        <span class="kw">if </span>payload.contract.commitment.refund_pk != payment_info.module_public_key {
             <span class="macro">bail!</span>(<span class="string">"The outgoing contract keyed to another gateway"</span>);
         }
 
