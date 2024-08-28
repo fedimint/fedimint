@@ -12,6 +12,7 @@ use fedimint_client::transaction::{ClientInput, ClientOutput, TransactionBuilder
 use fedimint_client::ClientHandleArc;
 use fedimint_core::config::FederationId;
 use fedimint_core::core::{IntoDynInstance, OperationId};
+use fedimint_core::encoding::Encodable;
 use fedimint_core::secp256k1::{KeyPair, PublicKey};
 use fedimint_core::task::sleep_in_test;
 use fedimint_core::util::NextOrPending;
@@ -32,7 +33,7 @@ use fedimint_ln_common::contracts::outgoing::OutgoingContractAccount;
 use fedimint_ln_common::contracts::{EncryptedPreimage, FundedContract, Preimage, PreimageKey};
 use fedimint_ln_common::{LightningGateway, LightningInput, LightningOutput, PrunedInvoice};
 use fedimint_ln_server::LightningInit;
-use fedimint_lnv2_common::contracts::IncomingContract;
+use fedimint_lnv2_common::contracts::{IncomingContract, PaymentImage};
 use fedimint_logging::LOG_TEST;
 use fedimint_testing::btc::BitcoinTest;
 use fedimint_testing::db::BYTE_33;
@@ -957,6 +958,7 @@ async fn lnv2_incoming_contract_with_invalid_preimage_is_refunded() -> anyhow::R
         tpe::AggregatePublicKey(G1Affine::generator()),
         [42; 32],
         [0; 32],
+        PaymentImage::Hash([0_u8; 32].consensus_hash()),
         Amount::from_sats(1000),
         u64::MAX,
         KeyPair::new(secp256k1::SECP256K1, &mut rand::thread_rng()).public_key(),
@@ -1000,6 +1002,7 @@ async fn lnv2_expired_incoming_contract_is_rejected() -> anyhow::Result<()> {
             .tpe_agg_pk,
         [42; 32],
         [0; 32],
+        PaymentImage::Hash([0_u8; 32].consensus_hash()),
         Amount::from_sats(1000),
         0, // this incoming contract expired on the 1st of January 1970
         KeyPair::new(secp256k1::SECP256K1, &mut rand::thread_rng()).public_key(),
@@ -1043,6 +1046,7 @@ async fn lnv2_malleated_incoming_contract_is_rejected() -> anyhow::Result<()> {
             .tpe_agg_pk,
         [42; 32],
         [0; 32],
+        PaymentImage::Hash([0_u8; 32].consensus_hash()),
         Amount::from_sats(1000),
         u64::MAX,
         KeyPair::new(secp256k1::SECP256K1, &mut rand::thread_rng()).public_key(),

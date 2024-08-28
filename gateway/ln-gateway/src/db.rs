@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 
 use bitcoin::Network;
-use bitcoin_hashes::{sha256, Hash};
+use bitcoin_hashes::sha256;
 use fedimint_api_client::api::net::Connector;
 use fedimint_core::config::FederationId;
 use fedimint_core::db::{
@@ -11,9 +11,8 @@ use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::invite_code::InviteCode;
 use fedimint_core::{impl_db_lookup, impl_db_record, push_db_pair_items, secp256k1, Amount};
 use fedimint_ln_common::serde_routing_fees;
-use fedimint_lnv2_common::contracts::IncomingContract;
+use fedimint_lnv2_common::contracts::{IncomingContract, PaymentImage};
 use futures::{FutureExt, StreamExt};
-use lightning::ln::PaymentHash;
 use lightning_invoice::RoutingFees;
 use rand::rngs::OsRng;
 use rand::Rng;
@@ -76,7 +75,7 @@ pub trait GatewayDbtxNcExt {
 
     async fn load_registered_incoming_contract(
         &mut self,
-        payment_hash: PaymentHash,
+        payment_image: PaymentImage,
     ) -> Option<RegisteredIncomingContract>;
 
     /// Reads and serializes structures from the gateway's database for the
@@ -176,7 +175,7 @@ impl<Cap: Send> GatewayDbtxNcExt for DatabaseTransaction<'_, Cap> {
         contract: IncomingContract,
     ) -> Option<RegisteredIncomingContract> {
         self.insert_entry(
-            &RegisteredIncomingContractKey(contract.commitment.payment_hash.to_byte_array()),
+            &RegisteredIncomingContractKey(contract.commitment.payment_image.clone()),
             &RegisteredIncomingContract {
                 federation_id,
                 incoming_amount: incoming_amount.msats,
@@ -188,9 +187,9 @@ impl<Cap: Send> GatewayDbtxNcExt for DatabaseTransaction<'_, Cap> {
 
     async fn load_registered_incoming_contract(
         &mut self,
-        payment_hash: PaymentHash,
+        payment_image: PaymentImage,
     ) -> Option<RegisteredIncomingContract> {
-        self.get_value(&RegisteredIncomingContractKey(payment_hash.0))
+        self.get_value(&RegisteredIncomingContractKey(payment_image))
             .await
     }
 
@@ -426,7 +425,7 @@ async fn migrate_to_v2(dbtx: &mut DatabaseTransaction<'_>) -> Result<(), anyhow:
 }
 
 #[derive(Debug, Encodable, Decodable)]
-struct RegisteredIncomingContractKey([u8; 32]);
+struct RegisteredIncomingContractKey(pub PaymentImage);
 
 #[derive(Debug, Encodable, Decodable)]
 pub struct RegisteredIncomingContract {

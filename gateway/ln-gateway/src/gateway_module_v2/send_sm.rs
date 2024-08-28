@@ -1,6 +1,5 @@
 use std::sync::Arc;
 
-use bitcoin_hashes::Hash;
 use fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
 use fedimint_client::transaction::ClientInput;
 use fedimint_client::DynGlobalClientContext;
@@ -9,7 +8,7 @@ use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::secp256k1::KeyPair;
 use fedimint_core::{Amount, OutPoint};
 use fedimint_lnv2_client::{LightningClientStateMachines, LightningInvoice};
-use fedimint_lnv2_common::contracts::OutgoingContract;
+use fedimint_lnv2_common::contracts::{OutgoingContract, PaymentImage};
 use fedimint_lnv2_common::{LightningInput, LightningInputV0, OutgoingWitness};
 use serde::{Deserialize, Serialize};
 
@@ -153,7 +152,7 @@ impl SendStateMachine {
             let (contract, client) = context
                 .gateway
                 .get_registered_incoming_contract_and_client_v2(
-                    invoice.payment_hash().to_byte_array(),
+                    PaymentImage::Hash(*invoice.payment_hash()),
                     invoice
                         .amount_milli_satoshis()
                         .expect("The amount invoice has been checked previously"),
