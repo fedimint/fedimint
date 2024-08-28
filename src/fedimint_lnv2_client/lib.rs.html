@@ -985,6 +985,12 @@
 <a href="#985" id="985">985</a>
 <a href="#986" id="986">986</a>
 <a href="#987" id="987">987</a>
+<a href="#988" id="988">988</a>
+<a href="#989" id="989">989</a>
+<a href="#990" id="990">990</a>
+<a href="#991" id="991">991</a>
+<a href="#992" id="992">992</a>
+<a href="#993" id="993">993</a>
 </pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::missing_errors_doc)]
 #![allow(clippy::missing_panics_doc)]
@@ -1026,8 +1032,8 @@
 <span class="kw">use </span>fedimint_lnv2_common::config::LightningClientConfig;
 <span class="kw">use </span>fedimint_lnv2_common::contracts::{IncomingContract, OutgoingContract};
 <span class="kw">use </span>fedimint_lnv2_common::{
-    GatewayEndpoint, LightningCommonInit, LightningModuleTypes, LightningOutput, LightningOutputV0,
-    KIND,
+    GatewayEndpoint, LightningCommonInit, LightningInputV0, LightningModuleTypes, LightningOutput,
+    LightningOutputV0, KIND,
 };
 <span class="kw">use </span>futures::StreamExt;
 <span class="kw">use </span>lightning_invoice::{Bolt11Invoice, Currency};
@@ -1331,12 +1337,18 @@
         }
     }
 
-    <span class="kw">fn </span>input_fee(<span class="kw-2">&amp;</span><span class="self">self</span>, _input: <span class="kw-2">&amp;</span>&lt;<span class="self">Self</span>::Common <span class="kw">as </span>ModuleCommon&gt;::Input) -&gt; <span class="prelude-ty">Option</span>&lt;Amount&gt; {
-        <span class="prelude-val">Some</span>(<span class="self">self</span>.cfg.fee_consensus.input)
+    <span class="kw">fn </span>input_fee(<span class="kw-2">&amp;</span><span class="self">self</span>, input: <span class="kw-2">&amp;</span>&lt;<span class="self">Self</span>::Common <span class="kw">as </span>ModuleCommon&gt;::Input) -&gt; <span class="prelude-ty">Option</span>&lt;Amount&gt; {
+        <span class="prelude-val">Some</span>(<span class="kw">match </span>input.maybe_v0_ref()<span class="question-mark">? </span>{
+            LightningInputV0::Outgoing(..) =&gt; <span class="self">self</span>.cfg.fees.spend_outgoing_contract,
+            LightningInputV0::Incoming(..) =&gt; <span class="self">self</span>.cfg.fees.spend_incoming_contract,
+        })
     }
 
-    <span class="kw">fn </span>output_fee(<span class="kw-2">&amp;</span><span class="self">self</span>, _output: <span class="kw-2">&amp;</span>&lt;<span class="self">Self</span>::Common <span class="kw">as </span>ModuleCommon&gt;::Output) -&gt; <span class="prelude-ty">Option</span>&lt;Amount&gt; {
-        <span class="prelude-val">Some</span>(<span class="self">self</span>.cfg.fee_consensus.output)
+    <span class="kw">fn </span>output_fee(<span class="kw-2">&amp;</span><span class="self">self</span>, output: <span class="kw-2">&amp;</span>&lt;<span class="self">Self</span>::Common <span class="kw">as </span>ModuleCommon&gt;::Output) -&gt; <span class="prelude-ty">Option</span>&lt;Amount&gt; {
+        <span class="prelude-val">Some</span>(<span class="kw">match </span>output.maybe_v0_ref()<span class="question-mark">? </span>{
+            LightningOutputV0::Outgoing(..) =&gt; <span class="self">self</span>.cfg.fees.create_outgoing_contract,
+            LightningOutputV0::Incoming(..) =&gt; <span class="self">self</span>.cfg.fees.create_incoming_contract,
+        })
     }
 
     <span class="attr">#[cfg(feature = <span class="string">"cli"</span>)]

@@ -463,6 +463,12 @@
 <a href="#463" id="463">463</a>
 <a href="#464" id="464">464</a>
 <a href="#465" id="465">465</a>
+<a href="#466" id="466">466</a>
+<a href="#467" id="467">467</a>
+<a href="#468" id="468">468</a>
+<a href="#469" id="469">469</a>
+<a href="#470" id="470">470</a>
+<a href="#471" id="471">471</a>
 </pre></div><pre class="rust"><code><span class="kw">mod </span>complete_sm;
 <span class="kw">mod </span>receive_sm;
 <span class="kw">mod </span>send_sm;
@@ -493,7 +499,7 @@
 <span class="kw">use </span>fedimint_lnv2_common::config::LightningClientConfig;
 <span class="kw">use </span>fedimint_lnv2_common::contracts::IncomingContract;
 <span class="kw">use </span>fedimint_lnv2_common::{
-    LightningCommonInit, LightningModuleTypes, LightningOutput, LightningOutputV0,
+    LightningCommonInit, LightningInputV0, LightningModuleTypes, LightningOutput, LightningOutputV0,
 };
 <span class="kw">use </span>futures::StreamExt;
 <span class="kw">use </span>receive_sm::{ReceiveSMState, ReceiveStateMachine};
@@ -598,12 +604,18 @@
         }
     }
 
-    <span class="kw">fn </span>input_fee(<span class="kw-2">&amp;</span><span class="self">self</span>, _input: <span class="kw-2">&amp;</span>&lt;<span class="self">Self</span>::Common <span class="kw">as </span>ModuleCommon&gt;::Input) -&gt; <span class="prelude-ty">Option</span>&lt;Amount&gt; {
-        <span class="prelude-val">Some</span>(<span class="self">self</span>.cfg.fee_consensus.input)
+    <span class="kw">fn </span>input_fee(<span class="kw-2">&amp;</span><span class="self">self</span>, input: <span class="kw-2">&amp;</span>&lt;<span class="self">Self</span>::Common <span class="kw">as </span>ModuleCommon&gt;::Input) -&gt; <span class="prelude-ty">Option</span>&lt;Amount&gt; {
+        <span class="prelude-val">Some</span>(<span class="kw">match </span>input.maybe_v0_ref()<span class="question-mark">? </span>{
+            LightningInputV0::Outgoing(..) =&gt; <span class="self">self</span>.cfg.fees.spend_outgoing_contract,
+            LightningInputV0::Incoming(..) =&gt; <span class="self">self</span>.cfg.fees.spend_incoming_contract,
+        })
     }
 
-    <span class="kw">fn </span>output_fee(<span class="kw-2">&amp;</span><span class="self">self</span>, _output: <span class="kw-2">&amp;</span>&lt;<span class="self">Self</span>::Common <span class="kw">as </span>ModuleCommon&gt;::Output) -&gt; <span class="prelude-ty">Option</span>&lt;Amount&gt; {
-        <span class="prelude-val">Some</span>(<span class="self">self</span>.cfg.fee_consensus.output)
+    <span class="kw">fn </span>output_fee(<span class="kw-2">&amp;</span><span class="self">self</span>, output: <span class="kw-2">&amp;</span>&lt;<span class="self">Self</span>::Common <span class="kw">as </span>ModuleCommon&gt;::Output) -&gt; <span class="prelude-ty">Option</span>&lt;Amount&gt; {
+        <span class="prelude-val">Some</span>(<span class="kw">match </span>output.maybe_v0_ref()<span class="question-mark">? </span>{
+            LightningOutputV0::Outgoing(..) =&gt; <span class="self">self</span>.cfg.fees.create_outgoing_contract,
+            LightningOutputV0::Incoming(..) =&gt; <span class="self">self</span>.cfg.fees.create_incoming_contract,
+        })
     }
 }
 
