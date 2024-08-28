@@ -52,8 +52,8 @@ pub(crate) async fn handle_cli_command(
         Opts::AwaitReceive { operation_id } => json(lightning.await_receive(operation_id).await?),
         Opts::Gateway(gateway_opts) => match gateway_opts {
             GatewayOpts::List { peer } => match peer {
-                Some(peer) => json(lightning.module_api.fetch_gateways_from_peer(peer).await?),
-                None => json(lightning.module_api.fetch_gateways().await?),
+                Some(peer) => json(lightning.module_api.gateways_from_peer(peer).await?),
+                None => json(lightning.module_api.gateways().await?),
             },
             GatewayOpts::Add { gateway } => {
                 let auth = lightning

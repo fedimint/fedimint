@@ -10,8 +10,8 @@ use fedimint_core::config::FederationId;
 use fedimint_core::module::{ApiAuth, ApiRequestErased};
 use fedimint_core::task::{sleep, MaybeSend, MaybeSync};
 use fedimint_core::util::SafeUrl;
-use fedimint_core::{apply, async_trait_maybe_send, NumPeersExt, PeerId};
-use fedimint_lnv2_common::contracts::OutgoingContract;
+use fedimint_core::{apply, async_trait_maybe_send, Amount, NumPeersExt, PeerId};
+use fedimint_lnv2_common::contracts::{IncomingContract, OutgoingContract};
 use fedimint_lnv2_common::endpoint_constants::{
     ADD_GATEWAY_ENDPOINT, AWAIT_INCOMING_CONTRACT_ENDPOINT, AWAIT_PREIMAGE_ENDPOINT,
     CONSENSUS_BLOCK_COUNT_ENDPOINT, CREATE_BOLT11_INVOICE_ENDPOINT, GATEWAYS_ENDPOINT,
@@ -24,7 +24,8 @@ use lightning_invoice::Bolt11Invoice;
 use secp256k1::schnorr::Signature;
 
 use crate::{
-    CreateBolt11InvoicePayload, GatewayError, LightningInvoice, RoutingInfo, SendPaymentPayload,
+    Bolt11InvoiceDescription, CreateBolt11InvoicePayload, GatewayError, LightningInvoice,
+    RoutingInfo, SendPaymentPayload,
 };
 
 const RETRY_DELAY: Duration = Duration::from_secs(1);
@@ -42,9 +43,9 @@ pub trait LnFederationApi {
         contract_id: &ContractId,
     ) -> FederationResult<Option<u64>>;
 
-    async fn fetch_gateways(&self) -> FederationResult<Vec<SafeUrl>>;
+    async fn gateways(&self) -> FederationResult<Vec<SafeUrl>>;
 
-    async fn fetch_gateways_from_peer(&self, peer: PeerId) -> PeerResult<Vec<SafeUrl>>;
+    async fn gateways_from_peer(&self, peer: PeerId) -> PeerResult<Vec<SafeUrl>>;
 
     async fn add_gateway(&self, auth: ApiAuth, gateway: SafeUrl) -> FederationResult<bool>;
 
@@ -109,7 +110,7 @@ where
         .await
     }
 
-    async fn fetch_gateways(&self) -> FederationResult<Vec<SafeUrl>> {
+    async fn gateways(&self) -> FederationResult<Vec<SafeUrl>> {
         let gateways: BTreeMap<PeerId, Vec<GatewayEndpoint>> = self
             .request_with_strategy(
                 FilterMapThreshold::new(
@@ -143,7 +144,7 @@ where
         Ok(urls)
     }
 
-    async fn fetch_gateways_from_peer(&self, peer: PeerId) -> PeerResult<Vec<SafeUrl>> {
+    async fn gateways_from_peer(&self, peer: PeerId) -> PeerResult<Vec<SafeUrl>> {
         let gateways = self
             .request_single_peer_typed::<Vec<GatewayEndpoint>>(
                 None,
@@ -188,19 +189,23 @@ where
 
 #[apply(async_trait_maybe_send!)]
 pub trait GatewayConnection: std::fmt::Debug {
-    async fn fetch_routing_info(
+    async fn routing_info(
         &self,
         gateway_api: GatewayEndpoint,
         federation_id: &FederationId,
     ) -> Result<Option<RoutingInfo>, GatewayError>;
 
-    async fn fetch_invoice(
+    async fn bolt11_invoice(
         &self,
         gateway_api: GatewayEndpoint,
-        payload: CreateBolt11InvoicePayload,
+        federation_id: FederationId,
+        contract: IncomingContract,
+        invoice_amount: Amount,
+        description: Bolt11InvoiceDescription,
+        expiry_time: u32,
     ) -> Result<Bolt11Invoice, GatewayError>;
 
-    async fn try_gateway_send_payment(
+    async fn send_payment(
         &self,
         gateway_api: GatewayEndpoint,
         federation_id: FederationId,
@@ -215,7 +220,7 @@ pub struct RealGatewayConnection;
 
 #[apply(async_trait_maybe_send!)]
 impl GatewayConnection for RealGatewayConnection {
-    async fn fetch_routing_info(
+    async fn routing_info(
         &self,
         gateway_api: GatewayEndpoint,
         federation_id: &FederationId,
@@ -238,10 +243,14 @@ impl GatewayConnection for RealGatewayConnection {
             .map_err(|e| GatewayError::Request(e.to_string()))
     }
 
-    async fn fetch_invoice(
+    async fn bolt11_invoice(
         &self,
         gateway_api: GatewayEndpoint,
-        payload: CreateBolt11InvoicePayload,
+        federation_id: FederationId,
+        contract: IncomingContract,
+        invoice_amount: Amount,
+        description: Bolt11InvoiceDescription,
+        expiry_time: u32,
     ) -> Result<Bolt11Invoice, GatewayError> {
         reqwest::Client::new()
             .post(
@@ -251,7 +260,13 @@ impl GatewayConnection for RealGatewayConnection {
                     .expect("'create_bolt11_invoice' contains no invalid characters for a URL")
                     .as_str(),
             )
-            .json(&payload)
+            .json(&CreateBolt11InvoicePayload {
+                federation_id,
+                contract,
+                invoice_amount,
+                description,
+                expiry_time,
+            })
             .send()
             .await
             .map_err(|e| GatewayError::Unreachable(e.to_string()))?
@@ -261,7 +276,7 @@ impl GatewayConnection for RealGatewayConnection {
             .map_err(|e| GatewayError::Request(e.to_string()))
     }
 
-    async fn try_gateway_send_payment(
+    async fn send_payment(
         &self,
         gateway_api: GatewayEndpoint,
         federation_id: FederationId,
