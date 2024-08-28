@@ -7,16 +7,17 @@ use axum::response::IntoResponse;
 use axum::routing::{get, post};
 use axum::{Extension, Json, Router};
 use bitcoin_hashes::{sha256, Hash};
+use fedimint_client::secret;
 use fedimint_core::config::FederationId;
 use fedimint_core::encoding::Encodable;
 use fedimint_core::task::TaskGroup;
 use fedimint_ln_common::gateway_endpoint_constants::{
-    ADDRESS_ENDPOINT, BACKUP_ENDPOINT, BALANCE_ENDPOINT, CLOSE_CHANNELS_WITH_PEER_ENDPOINT,
-    CONFIGURATION_ENDPOINT, CONNECT_FED_ENDPOINT, GATEWAY_INFO_ENDPOINT,
-    GATEWAY_INFO_POST_ENDPOINT, GET_BALANCES_ENDPOINT, GET_GATEWAY_ID_ENDPOINT,
-    GET_LN_ONCHAIN_ADDRESS_ENDPOINT, LEAVE_FED_ENDPOINT, LIST_ACTIVE_CHANNELS_ENDPOINT,
-    MNEMONIC_ENDPOINT, OPEN_CHANNEL_ENDPOINT, PAY_INVOICE_ENDPOINT, RECEIVE_ECASH_ENDPOINT,
-    SET_CONFIGURATION_ENDPOINT, SPEND_ECASH_ENDPOINT, STOP_ENDPOINT, SYNC_TO_CHAIN_ENDPOINT,
+    ADDRESS_ENDPOINT, AUTH_CHALLENGE_ENDPOINT, AUTH_SESSION_ENDPOINT, BACKUP_ENDPOINT,
+    BALANCE_ENDPOINT, CLOSE_CHANNELS_WITH_PEER_ENDPOINT, CONFIGURATION_ENDPOINT,
+    CONNECT_FED_ENDPOINT, GATEWAY_INFO_ENDPOINT, GATEWAY_INFO_POST_ENDPOINT, GET_BALANCES_ENDPOINT,
+    GET_FUNDING_ADDRESS_ENDPOINT, GET_GATEWAY_ID_ENDPOINT, LEAVE_FED_ENDPOINT,
+    LIST_ACTIVE_CHANNELS_ENDPOINT, OPEN_CHANNEL_ENDPOINT, PAY_INVOICE_ENDPOINT,
+    RECEIVE_ECASH_ENDPOINT, RESTORE_ENDPOINT, SET_CONFIGURATION_ENDPOINT, SPEND_ECASH_ENDPOINT,
     WITHDRAW_ENDPOINT,
 };
 use fedimint_lnv2_client::{CreateBolt11InvoicePayload, SendPaymentPayload};
@@ -25,7 +26,9 @@ use fedimint_lnv2_common::endpoint_constants::{
     PAY_INVOICE_SELF_ENDPOINT, ROUTING_INFO_ENDPOINT, SEND_PAYMENT_ENDPOINT,
 };
 use hex::ToHex;
-use serde_json::json;
+use jsonwebtoken::{decode, DecodingKey, Validation};
+use secp256k1_zkp::SECP256K1;
+use serde_json::{json, Value};
 use tokio::net::TcpListener;
 use tower_http::cors::CorsLayer;
 use tracing::{error, info, instrument};
@@ -37,6 +40,7 @@ use super::{
     SetConfigurationPayload, SpendEcashPayload, SyncToChainPayload, WithdrawPayload,
     V1_API_ENDPOINT,
 };
+use crate::auth_manager::{AuthChallengeResponse, Session};
 use crate::rpc::ConfigPayload;
 use crate::{Gateway, GatewayError};
 
@@ -141,6 +145,42 @@ async fn authenticate(
     Err(StatusCode::UNAUTHORIZED)
 }
 
+async fn auth_jwt_middleware(
+    Extension(gateway): Extension<Arc<Gateway>>,
+    request: Request,
+    next: Next,
+) -> Result<impl IntoResponse, StatusCode> {
+    // If the gateway's config has not been set, allow the request to continue, so
+    // that the gateway can be configured
+    let gateway_config = gateway.clone_gateway_config().await;
+    if gateway_config.is_none() {
+        return Ok(next.run(request).await);
+    }
+
+    //TODO where the secret should be placed
+    authenticate_jwt("secret".to_string(), request, next).await
+}
+
+async fn authenticate_jwt(
+    secret: String,
+    request: Request,
+    next: Next,
+) -> Result<axum::response::Response, StatusCode> {
+    let token = extract_bearer_token(&request)?;
+    match decode::<Session>(
+        &token,
+        &DecodingKey::from_secret(secret.as_ref()),
+        &Validation::default(),
+    ) {
+        Ok(token_data) =>
+        //TODO how to check that the decoded token is valid
+        {
+            Ok(next.run(request).await)
+        }
+        Err(_) => Err(StatusCode::UNAUTHORIZED),
+    }
+}
+
 /// Gateway Webserver Routes. The gateway supports three types of routes
 /// - Always Authenticated: these routes always require a Bearer token. Used by
 ///   gateway administrators.
@@ -203,13 +243,40 @@ fn v1_routes(gateway: Arc<Gateway>, task_group: TaskGroup) -> Router {
         .route(GATEWAY_INFO_ENDPOINT, get(info))
         .layer(middleware::from_fn(auth_after_config_middleware));
 
+    let generate_jwt_auth_routes = Router::new()
+        .route(AUTH_CHALLENGE_ENDPOINT, post(auth_challenge))
+        .route(AUTH_SESSION_ENDPOINT, post(auth_session));
+
     Router::new()
         .merge(public_routes)
         .merge(always_authenticated_routes)
         .merge(authenticated_after_config_routes)
+        .merge(generate_jwt_auth_routes)
         .layer(Extension(gateway))
         .layer(Extension(task_group))
         .layer(CorsLayer::permissive())
+}
+
+/// Auth Challenge Endpoint
+async fn auth_challenge(
+    Extension(gateway): Extension<Arc<Gateway>>,
+) -> Result<impl IntoResponse, GatewayError> {
+    let mut auth_manager = gateway.auth_manager.lock().await;
+    let challenge = auth_manager.create_challenge();
+    Ok(Json(json!(challenge)))
+}
+
+/// Auth Session Endpoint
+async fn auth_session(
+    Extension(gateway): Extension<Arc<Gateway>>,
+    Json(payload): Json<AuthChallengeResponse>,
+) -> Result<impl IntoResponse, GatewayError> {
+    let mut auth_manager = gateway.auth_manager.lock().await;
+    let session = auth_manager
+        .verify_challenge_response(SECP256K1, &payload)
+        .map_err(|_| GatewayError::Unauthorized)?;
+    let token = session.encode_jwt()?;
+    Ok(Json(json!(token)))
 }
 
 /// Creates a password hash by appending a 4 byte salt to the plaintext

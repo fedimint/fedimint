@@ -2481,6 +2481,7 @@ dependencies = [
  "fedimint-wallet-client",
  "futures",
  "hex",
+ "jsonwebtoken",
  "ldk-node",
  "lightning",
  "lightning-invoice",
@@ -4450,6 +4451,19 @@ dependencies = [
  "jsonrpsee-core",
  "jsonrpsee-types",
  "url",
+]
+
+[[package]]
+name = "jsonwebtoken"
+version = "9.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b9ae10193d25051e74945f1ea2d0b42e03cc3b890f7e4cc5faa44997d808193f"
+dependencies = [
+ "base64 0.21.7",
+ "js-sys",
+ "ring 0.17.8",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]

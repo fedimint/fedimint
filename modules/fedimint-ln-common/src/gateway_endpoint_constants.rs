@@ -1,6 +1,10 @@
 /// Use `_` for word separator
 
 pub const ADDRESS_ENDPOINT: &str = "/address";
+pub const AUTH_CHALLENGE_ENDPOINT: &str = "/auth/challenge";
+// TODO: reserved for 2FA
+pub const AUTH_LOGIN_ENDPOINT: &str = "/auth/login";
+pub const AUTH_SESSION_ENDPOINT: &str = "/auth/session";
 pub const BACKUP_ENDPOINT: &str = "/backup";
 pub const BALANCE_ENDPOINT: &str = "/balance";
 pub const CONFIGURATION_ENDPOINT: &str = "/config";
