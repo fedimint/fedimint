@@ -31,8 +31,8 @@ use fedimint_core::{
     apply, async_trait_maybe_send, push_db_pair_items, NumPeersExt, OutPoint, PeerId, ServerModule,
 };
 use fedimint_lnv2_common::config::{
-    FeeConsensus, LightningClientConfig, LightningConfig, LightningConfigConsensus,
-    LightningConfigLocal, LightningConfigPrivate, LightningGenParams,
+    LightningClientConfig, LightningConfig, LightningConfigConsensus, LightningConfigLocal,
+    LightningConfigPrivate, LightningFees, LightningGenParams,
 };
 use fedimint_lnv2_common::contracts::{IncomingContract, OutgoingContract};
 use fedimint_lnv2_common::endpoint_constants::{
@@ -206,7 +206,7 @@ impl ServerModuleInit for LightningInit {
                         consensus: LightningConfigConsensus {
                             tpe_agg_pk,
                             tpe_pks: tpe_pks.clone(),
-                            fee_consensus: FeeConsensus::default(),
+                            fees: LightningFees::default(),
                             network: params.consensus.network,
                         },
                         private: LightningConfigPrivate {
@@ -248,7 +248,7 @@ impl ServerModuleInit for LightningInit {
                         (*peer, PublicKeyShare(pk))
                     })
                     .collect(),
-                fee_consensus: FeeConsensus::default(),
+                fees: LightningFees::default(),
                 network: params.consensus.network,
             },
             private: LightningConfigPrivate {
@@ -275,7 +275,7 @@ impl ServerModuleInit for LightningInit {
         Ok(LightningClientConfig {
             tpe_agg_pk: config.tpe_agg_pk,
             tpe_pks: config.tpe_pks,
-            fee_consensus: config.fee_consensus,
+            fees: config.fees,
             network: config.network,
         })
     }
@@ -377,7 +377,7 @@ impl ServerModule for Lightning {
     ) -> Result<InputMeta, LightningInputError> {
         let input = input.ensure_v0_ref()?;
 
-        let (pub_key, amount) = match &input {
+        match &input {
             LightningInputV0::Outgoing(contract_id, outgoing_witness) => {
                 let contract = dbtx
                     .remove_entry(&OutgoingContractKey(*contract_id))
@@ -415,7 +415,13 @@ impl ServerModule for Lightning {
                     }
                 };
 
-                (pub_key, contract.amount)
+                Ok(InputMeta {
+                    amount: TransactionItemAmount {
+                        amount: contract.amount,
+                        fee: self.cfg.consensus.fees.spend_outgoing_contract,
+                    },
+                    pub_key,
+                })
             }
             LightningInputV0::Incoming(contract_id, agg_decryption_key) => {
                 let contract = dbtx
@@ -434,17 +440,15 @@ impl ServerModule for Lightning {
                     None => contract.commitment.refund_pk,
                 };
 
-                (pub_key, contract.commitment.amount)
+                Ok(InputMeta {
+                    amount: TransactionItemAmount {
+                        amount: contract.commitment.amount,
+                        fee: self.cfg.consensus.fees.spend_incoming_contract,
+                    },
+                    pub_key,
+                })
             }
-        };
-
-        Ok(InputMeta {
-            amount: TransactionItemAmount {
-                amount,
-                fee: self.cfg.consensus.fee_consensus.input,
-            },
-            pub_key,
-        })
+        }
     }
 
     async fn process_output<'a, 'b>(
@@ -501,12 +505,15 @@ impl ServerModule for Lightning {
             panic!("Output Outcome for {out_point:?} already exists");
         }
 
-        Ok(TransactionItemAmount {
-            amount: match output {
-                LightningOutputV0::Outgoing(contract) => contract.amount,
-                LightningOutputV0::Incoming(contract) => contract.commitment.amount,
+        Ok(match output {
+            LightningOutputV0::Outgoing(contract) => TransactionItemAmount {
+                amount: contract.amount,
+                fee: self.cfg.consensus.fees.create_outgoing_contract,
             },
-            fee: self.cfg.consensus.fee_consensus.output,
+            LightningOutputV0::Incoming(contract) => TransactionItemAmount {
+                amount: contract.commitment.amount,
+                fee: self.cfg.consensus.fees.create_incoming_contract,
+            },
         })
     }
 
