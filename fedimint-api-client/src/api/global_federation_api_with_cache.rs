@@ -36,6 +36,7 @@ use fedimint_core::task::{MaybeSend, MaybeSync};
 use fedimint_core::transaction::{SerdeTransaction, Transaction, TransactionSubmissionOutcome};
 use fedimint_core::util::SafeUrl;
 use fedimint_core::{apply, async_trait_maybe_send, NumPeersExt, PeerId, TransactionId};
+use fedimint_logging::{LOG_CLIENT, LOG_CLIENT_NET_API};
 use futures::future::join_all;
 use jsonrpsee_core::client::Error as JsonRpcClientError;
 use serde_json::Value;
@@ -80,10 +81,10 @@ impl<T> GlobalFederationApiWithCache<T> {
         Self {
             inner,
             await_session_lru: Arc::new(tokio::sync::Mutex::new(lru::LruCache::new(
-                NonZeroUsize::new(32).expect("is non-zero"),
+                NonZeroUsize::new(512).expect("is non-zero"),
             ))),
             get_session_status_lru: Arc::new(tokio::sync::Mutex::new(lru::LruCache::new(
-                NonZeroUsize::new(32).expect("is non-zero"),
+                NonZeroUsize::new(512).expect("is non-zero"),
             ))),
         }
     }
@@ -98,7 +99,7 @@ where
         block_index: u64,
         decoders: &ModuleDecoderRegistry,
     ) -> anyhow::Result<SessionOutcome> {
-        debug!(block_index, "Awaiting block's outcome from Federation");
+        debug!(target: LOG_CLIENT_NET_API, block_index, "Awaiting block's outcome from Federation");
         self.request_current_consensus::<SerdeModuleEncoding<SessionOutcome>>(
             AWAIT_SESSION_OUTCOME_ENDPOINT.to_string(),
             ApiRequestErased::new(block_index),
@@ -113,7 +114,7 @@ where
         block_index: u64,
         decoders: &ModuleDecoderRegistry,
     ) -> anyhow::Result<SessionStatus> {
-        debug!(block_index, "Fetching block's outcome from Federation");
+        debug!(target: LOG_CLIENT_NET_API, block_index, "Fetching block's outcome from Federation");
         self.request_current_consensus::<SerdeModuleEncoding<SessionStatus>>(
             SESSION_STATUS_ENDPOINT.to_string(),
             ApiRequestErased::new(block_index),
