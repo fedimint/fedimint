@@ -276,7 +276,7 @@ pub struct MintRecoveryState {
     /// backup value). TODO: One could imagine a case where the note was
     /// issued but not get any partial sigs yet. Very unlikely in real life
     /// scenario, but worth considering.
-    last_mined_nonce_idx: Tiered<NoteIndex>,
+    last_used_nonce_idx: Tiered<NoteIndex>,
     /// Threshold
     threshold: u64,
     /// Public key shares for each peer
@@ -327,7 +327,11 @@ impl MintRecoveryState {
                 .collect(),
             pending_nonces: BTreeMap::default(),
             next_pending_note_idx: backup.next_note_idx.clone(),
-            last_mined_nonce_idx: backup.next_note_idx,
+            last_used_nonce_idx: backup
+                .next_note_idx
+                .into_iter()
+                .filter_map(|(a, idx)| idx.prev().map(|idx| (a, idx)))
+                .collect(),
             threshold: pub_key_shares.to_num_peers().threshold() as u64,
             gap_limit,
             tbs_pks,
@@ -459,18 +463,21 @@ impl MintRecoveryState {
         note_idx: NoteIndex,
         secret: &DerivableSecret,
     ) {
-        *self.last_mined_nonce_idx.entry(amount).or_default() = max(
-            self.last_mined_nonce_idx
-                .get(amount)
-                .copied()
-                .unwrap_or_default(),
-            note_idx,
+        self.last_used_nonce_idx.insert(
+            amount,
+            max(
+                self.last_used_nonce_idx
+                    .get(amount)
+                    .copied()
+                    .unwrap_or_default(),
+                note_idx,
+            ),
         );
 
         while self.next_pending_note_idx.get_mut_or_default(amount).0
             < self.gap_limit
                 + self
-                    .last_mined_nonce_idx
+                    .last_used_nonce_idx
                     .get(amount)
                     .expect("must be there already")
                     .0
@@ -485,7 +492,7 @@ impl MintRecoveryState {
             unconfirmed_notes: self.pending_outputs.into_values().collect(),
             // next note idx is the last one detected as used + 1
             next_note_idx: self
-                .last_mined_nonce_idx
+                .last_used_nonce_idx
                 .iter()
                 .map(|(amount, value)| (amount, value.next()))
                 .collect(),

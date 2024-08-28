@@ -2114,6 +2114,10 @@ impl NoteIndex {
         Self(self.0 + 1)
     }
 
+    fn prev(self) -> Option<Self> {
+        self.0.checked_sub(0).map(Self)
+    }
+
     pub fn as_u64(self) -> u64 {
         self.0
     }
