@@ -492,6 +492,13 @@
 <a href="#492" id="492">492</a>
 <a href="#493" id="493">493</a>
 <a href="#494" id="494">494</a>
+<a href="#495" id="495">495</a>
+<a href="#496" id="496">496</a>
+<a href="#497" id="497">497</a>
+<a href="#498" id="498">498</a>
+<a href="#499" id="499">499</a>
+<a href="#500" id="500">500</a>
+<a href="#501" id="501">501</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::cmp::max;
 <span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::fmt;
@@ -770,7 +777,7 @@
     /// backup value). TODO: One could imagine a case where the note was
     /// issued but not get any partial sigs yet. Very unlikely in real life
     /// scenario, but worth considering.
-    </span>last_mined_nonce_idx: Tiered&lt;NoteIndex&gt;,
+    </span>last_used_nonce_idx: Tiered&lt;NoteIndex&gt;,
     <span class="doccomment">/// Threshold
     </span>threshold: u64,
     <span class="doccomment">/// Public key shares for each peer
@@ -821,7 +828,11 @@
                 .collect(),
             pending_nonces: BTreeMap::default(),
             next_pending_note_idx: backup.next_note_idx.clone(),
-            last_mined_nonce_idx: backup.next_note_idx,
+            last_used_nonce_idx: backup
+                .next_note_idx
+                .into_iter()
+                .filter_map(|(a, idx)| idx.prev().map(|idx| (a, idx)))
+                .collect(),
             threshold: pub_key_shares.to_num_peers().threshold() <span class="kw">as </span>u64,
             gap_limit,
             tbs_pks,
@@ -953,18 +964,21 @@
         note_idx: NoteIndex,
         secret: <span class="kw-2">&amp;</span>DerivableSecret,
     ) {
-        <span class="kw-2">*</span><span class="self">self</span>.last_mined_nonce_idx.entry(amount).or_default() = max(
-            <span class="self">self</span>.last_mined_nonce_idx
-                .get(amount)
-                .copied()
-                .unwrap_or_default(),
-            note_idx,
+        <span class="self">self</span>.last_used_nonce_idx.insert(
+            amount,
+            max(
+                <span class="self">self</span>.last_used_nonce_idx
+                    .get(amount)
+                    .copied()
+                    .unwrap_or_default(),
+                note_idx,
+            ),
         );
 
         <span class="kw">while </span><span class="self">self</span>.next_pending_note_idx.get_mut_or_default(amount).<span class="number">0
             </span>&lt; <span class="self">self</span>.gap_limit
                 + <span class="self">self
-                    </span>.last_mined_nonce_idx
+                    </span>.last_used_nonce_idx
                     .get(amount)
                     .expect(<span class="string">"must be there already"</span>)
                     .<span class="number">0
@@ -979,7 +993,7 @@
             unconfirmed_notes: <span class="self">self</span>.pending_outputs.into_values().collect(),
             <span class="comment">// next note idx is the last one detected as used + 1
             </span>next_note_idx: <span class="self">self
-                </span>.last_mined_nonce_idx
+                </span>.last_used_nonce_idx
                 .iter()
                 .map(|(amount, value)| (amount, value.next()))
                 .collect(),
