@@ -287,3 +287,18 @@ function generate_partial_matrix() {
 function generate_current_only_matrix() {
   generate_matrix are_all_versions_current "$@"
 }
+
+# Returns true if the search string is contained in the array
+function contains() {
+  local search_str="$1"
+  shift
+  local array=("$@")
+
+  for item in "${array[@]}"; do
+    if [[ "$item" == "$search_str" ]]; then
+      return 0
+    fi
+  done
+  return 1
+}
+
