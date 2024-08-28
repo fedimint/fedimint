@@ -107,6 +107,11 @@ pub enum DepositStateV2 {
         btc_deposited: bitcoin::Amount,
         btc_out_point: bitcoin::OutPoint,
     },
+    Confirmed {
+        #[serde(with = "bitcoin::amount::serde::as_sat")]
+        btc_deposited: bitcoin::Amount,
+        btc_out_point: bitcoin::OutPoint,
+    },
     Claimed {
         #[serde(with = "bitcoin::amount::serde::as_sat")]
         btc_deposited: bitcoin::Amount,
@@ -772,15 +777,23 @@ impl WalletClientModule {
                     btc_out_point
                 };
 
-                stream_cient_ctx.module_db().wait_key_exists(&ClaimedPegInKey {
+                let claim_data = stream_cient_ctx.module_db().wait_key_exists(&ClaimedPegInKey {
                     peg_in_index: tweak_idx,
                     btc_out_point,
                 }).await;
 
-                yield DepositStateV2::Claimed {
+                yield DepositStateV2::Confirmed {
                     btc_deposited,
-                    btc_out_point,
+                    btc_out_point
                 };
+
+                match stream_cient_ctx.await_primary_module_outputs(operation_id, claim_data.change).await {
+                    Ok(_) => yield DepositStateV2::Claimed {
+                        btc_deposited,
+                        btc_out_point
+                    },
+                    Err(e) => yield DepositStateV2::Failed(e.to_string())
+                }
             }
         }))
     }
