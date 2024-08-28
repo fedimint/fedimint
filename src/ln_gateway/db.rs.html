@@ -570,11 +570,10 @@
 <a href="#570" id="570">570</a>
 <a href="#571" id="571">571</a>
 <a href="#572" id="572">572</a>
-<a href="#573" id="573">573</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 
 <span class="kw">use </span>bitcoin::Network;
-<span class="kw">use </span>bitcoin_hashes::{sha256, Hash};
+<span class="kw">use </span>bitcoin_hashes::sha256;
 <span class="kw">use </span>fedimint_api_client::api::net::Connector;
 <span class="kw">use </span>fedimint_core::config::FederationId;
 <span class="kw">use </span>fedimint_core::db::{
@@ -584,9 +583,8 @@
 <span class="kw">use </span>fedimint_core::invite_code::InviteCode;
 <span class="kw">use </span>fedimint_core::{impl_db_lookup, impl_db_record, push_db_pair_items, secp256k1, Amount};
 <span class="kw">use </span>fedimint_ln_common::serde_routing_fees;
-<span class="kw">use </span>fedimint_lnv2_common::contracts::IncomingContract;
+<span class="kw">use </span>fedimint_lnv2_common::contracts::{IncomingContract, PaymentImage};
 <span class="kw">use </span>futures::{FutureExt, StreamExt};
-<span class="kw">use </span>lightning::ln::PaymentHash;
 <span class="kw">use </span>lightning_invoice::RoutingFees;
 <span class="kw">use </span>rand::rngs::OsRng;
 <span class="kw">use </span>rand::Rng;
@@ -649,7 +647,7 @@
 
     <span class="kw">async fn </span>load_registered_incoming_contract(
         <span class="kw-2">&amp;mut </span><span class="self">self</span>,
-        payment_hash: PaymentHash,
+        payment_image: PaymentImage,
     ) -&gt; <span class="prelude-ty">Option</span>&lt;RegisteredIncomingContract&gt;;
 
     <span class="doccomment">/// Reads and serializes structures from the gateway's database for the
@@ -749,7 +747,7 @@
         contract: IncomingContract,
     ) -&gt; <span class="prelude-ty">Option</span>&lt;RegisteredIncomingContract&gt; {
         <span class="self">self</span>.insert_entry(
-            <span class="kw-2">&amp;</span>RegisteredIncomingContractKey(contract.commitment.payment_hash.to_byte_array()),
+            <span class="kw-2">&amp;</span>RegisteredIncomingContractKey(contract.commitment.payment_image.clone()),
             <span class="kw-2">&amp;</span>RegisteredIncomingContract {
                 federation_id,
                 incoming_amount: incoming_amount.msats,
@@ -761,9 +759,9 @@
 
     <span class="kw">async fn </span>load_registered_incoming_contract(
         <span class="kw-2">&amp;mut </span><span class="self">self</span>,
-        payment_hash: PaymentHash,
+        payment_image: PaymentImage,
     ) -&gt; <span class="prelude-ty">Option</span>&lt;RegisteredIncomingContract&gt; {
-        <span class="self">self</span>.get_value(<span class="kw-2">&amp;</span>RegisteredIncomingContractKey(payment_hash.<span class="number">0</span>))
+        <span class="self">self</span>.get_value(<span class="kw-2">&amp;</span>RegisteredIncomingContractKey(payment_image))
             .<span class="kw">await
     </span>}
 
@@ -999,7 +997,7 @@
 }
 
 <span class="attr">#[derive(Debug, Encodable, Decodable)]
-</span><span class="kw">struct </span>RegisteredIncomingContractKey([u8; <span class="number">32</span>]);
+</span><span class="kw">struct </span>RegisteredIncomingContractKey(<span class="kw">pub </span>PaymentImage);
 
 <span class="attr">#[derive(Debug, Encodable, Decodable)]
 </span><span class="kw">pub struct </span>RegisteredIncomingContract {

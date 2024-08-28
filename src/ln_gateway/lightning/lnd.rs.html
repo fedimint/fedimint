@@ -1411,6 +1411,9 @@
 <a href="#1411" id="1411">1411</a>
 <a href="#1412" id="1412">1412</a>
 <a href="#1413" id="1413">1413</a>
+<a href="#1414" id="1414">1414</a>
+<a href="#1415" id="1415">1415</a>
+<a href="#1416" id="1416">1416</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeSet;
 <span class="kw">use </span>std::fmt::{<span class="self">self</span>, Display};
 <span class="kw">use </span>std::str::FromStr;
@@ -1419,13 +1422,13 @@
 
 <span class="kw">use </span>anyhow::ensure;
 <span class="kw">use </span>async_trait::async_trait;
-<span class="kw">use </span>bitcoin_hashes::Hash;
+<span class="kw">use </span>bitcoin_hashes::{sha256, Hash};
 <span class="kw">use </span>fedimint_core::db::Database;
 <span class="kw">use </span>fedimint_core::task::{sleep, TaskGroup};
 <span class="kw">use </span>fedimint_core::{secp256k1, Amount};
 <span class="kw">use </span>fedimint_ln_common::PrunedInvoice;
+<span class="kw">use </span>fedimint_lnv2_common::contracts::PaymentImage;
 <span class="kw">use </span>hex::ToHex;
-<span class="kw">use </span>lightning::ln::PaymentHash;
 <span class="kw">use </span>secp256k1::PublicKey;
 <span class="kw">use </span>tokio::sync::{mpsc, RwLock};
 <span class="kw">use </span>tokio_stream::wrappers::ReceiverStream;
@@ -1462,6 +1465,7 @@
     GetBalancesResponse, GetLnOnchainAddressResponse, GetNodeInfoResponse, GetRouteHintsResponse,
     InterceptHtlcRequest, InterceptHtlcResponse, PayInvoiceResponse,
 };
+
 <span class="kw">type </span>HtlcSubscriptionSender = mpsc::Sender&lt;<span class="prelude-ty">Result</span>&lt;InterceptHtlcRequest, Status&gt;&gt;;
 
 <span class="kw">const </span>LND_PAYMENT_TIMEOUT_SECONDS: i32 = <span class="number">180</span>;
@@ -1703,11 +1707,13 @@
                     .gateway_db
                     .begin_transaction_nc()
                     .<span class="kw">await
-                    </span>.load_registered_incoming_contract(PaymentHash(
-                        payment_hash
-                            .clone()
-                            .try_into()
-                            .expect(<span class="string">"Malformatted payment hash"</span>),
+                    </span>.load_registered_incoming_contract(PaymentImage::Hash(
+                        sha256::Hash::from_byte_array(
+                            payment_hash
+                                .clone()
+                                .try_into()
+                                .expect(<span class="string">"Malformatted payment hash"</span>),
+                        ),
                     ))
                     .<span class="kw">await
                     </span>.is_some();

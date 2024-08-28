@@ -1922,6 +1922,10 @@
 <a href="#1922" id="1922">1922</a>
 <a href="#1923" id="1923">1923</a>
 <a href="#1924" id="1924">1924</a>
+<a href="#1925" id="1925">1925</a>
+<a href="#1926" id="1926">1926</a>
+<a href="#1927" id="1927">1927</a>
+<a href="#1928" id="1928">1928</a>
 </pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::cast_possible_wrap)]
@@ -1961,12 +1965,11 @@
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
 
-<span class="kw">use </span>::lightning::ln::PaymentHash;
 <span class="kw">use </span>anyhow::{anyhow, bail};
 <span class="kw">use </span>axum::http::StatusCode;
 <span class="kw">use </span>axum::response::{IntoResponse, Response};
 <span class="kw">use </span>bitcoin::{Address, Network, Txid};
-<span class="kw">use </span>bitcoin_hashes::sha256;
+<span class="kw">use </span>bitcoin_hashes::{sha256, Hash};
 <span class="kw">use </span>clap::Parser;
 <span class="kw">use </span>client::GatewayClientBuilder;
 <span class="kw">use </span>config::GatewayOpts;
@@ -1994,7 +1997,7 @@
 <span class="kw">use </span>fedimint_core::task::{sleep, TaskGroup, TaskHandle, TaskShutdownToken};
 <span class="kw">use </span>fedimint_core::time::duration_since_epoch;
 <span class="kw">use </span>fedimint_core::util::{SafeUrl, Spanned};
-<span class="kw">use </span>fedimint_core::{fedimint_build_code_version_env, Amount, BitcoinAmountOrAll, BitcoinHash};
+<span class="kw">use </span>fedimint_core::{fedimint_build_code_version_env, Amount, BitcoinAmountOrAll};
 <span class="kw">use </span>fedimint_ln_common::config::{GatewayFee, LightningClientConfig};
 <span class="kw">use </span>fedimint_ln_common::contracts::Preimage;
 <span class="kw">use </span>fedimint_ln_common::LightningCommonInit;
@@ -2002,7 +2005,7 @@
     Bolt11InvoiceDescription, CreateBolt11InvoicePayload, PaymentFee, RoutingInfo,
     SendPaymentPayload,
 };
-<span class="kw">use </span>fedimint_lnv2_common::contracts::IncomingContract;
+<span class="kw">use </span>fedimint_lnv2_common::contracts::{IncomingContract, PaymentImage};
 <span class="kw">use </span>fedimint_mint_client::{
     MintClientInit, MintClientModule, MintCommonInit, SelectNotesWithAtleastAmount,
     SelectNotesWithExactAmount,
@@ -2544,7 +2547,7 @@
         // a Fedimint.
         </span><span class="kw">let </span><span class="prelude-val">Ok</span>((contract, client)) = <span class="self">self
             </span>.get_registered_incoming_contract_and_client_v2(
-                payment_hash.to_byte_array(),
+                PaymentImage::Hash(payment_hash),
                 htlc_request.incoming_amount_msat,
             )
             .<span class="kw">await
@@ -3686,9 +3689,14 @@
             <span class="macro">bail!</span>(<span class="string">"The contract has already expired"</span>);
         }
 
+        <span class="kw">let </span>payment_hash = <span class="kw">match </span>payload.contract.commitment.payment_image {
+            PaymentImage::Hash(payment_hash) =&gt; payment_hash,
+            PaymentImage::Point(..) =&gt; <span class="macro">bail!</span>(<span class="string">"PaymentImage is not a payment hash"</span>),
+        };
+
         <span class="kw">let </span>invoice = <span class="self">self
             </span>.create_invoice_via_lnrpc_v2(
-                payload.contract.commitment.payment_hash,
+                payment_hash,
                 payload.invoice_amount,
                 payload.description.clone(),
                 payload.expiry_time,
@@ -3735,7 +3743,7 @@
         <span class="kw">let </span>response = <span class="kw">match </span>description {
             Bolt11InvoiceDescription::Direct(description) =&gt; lnrpc
                 .create_invoice(CreateInvoiceRequest {
-                    payment_hash: payment_hash.to_byte_array().to_vec(),
+                    payment_hash: payment_hash.as_byte_array().to_vec(),
                     amount_msat: amount.msats,
                     expiry_secs: expiry_time,
                     description: <span class="prelude-val">Some</span>(Description::Direct(description)),
@@ -3744,7 +3752,7 @@
                 </span>.map_err(|e| e.to_string())<span class="question-mark">?</span>,
             Bolt11InvoiceDescription::Hash(hash) =&gt; lnrpc
                 .create_invoice(CreateInvoiceRequest {
-                    payment_hash: payment_hash.to_byte_array().to_vec(),
+                    payment_hash: payment_hash.as_byte_array().to_vec(),
                     amount_msat: amount.msats,
                     expiry_secs: expiry_time,
                     description: <span class="prelude-val">Some</span>(Description::Hash(hash.to_byte_array().to_vec())),
@@ -3761,14 +3769,14 @@
     /// by the payload's `federation_id`.
     </span><span class="kw">pub async fn </span>get_registered_incoming_contract_and_client_v2(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        payment_hash: [u8; <span class="number">32</span>],
+        payment_image: PaymentImage,
         amount_msats: u64,
     ) -&gt; anyhow::Result&lt;(IncomingContract, ClientHandleArc)&gt; {
         <span class="kw">let </span>registered_incoming_contract = <span class="self">self
             </span>.gateway_db
             .begin_transaction_nc()
             .<span class="kw">await
-            </span>.load_registered_incoming_contract(PaymentHash(payment_hash))
+            </span>.load_registered_incoming_contract(payment_image)
             .<span class="kw">await
             </span>.ok_or(<span class="macro">anyhow!</span>(<span class="string">"No corresponding decryption contract available"</span>))<span class="question-mark">?</span>;
 

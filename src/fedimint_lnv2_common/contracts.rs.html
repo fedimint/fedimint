@@ -169,12 +169,46 @@
 <a href="#169" id="169">169</a>
 <a href="#170" id="170">170</a>
 <a href="#171" id="171">171</a>
+<a href="#172" id="172">172</a>
+<a href="#173" id="173">173</a>
+<a href="#174" id="174">174</a>
+<a href="#175" id="175">175</a>
+<a href="#176" id="176">176</a>
+<a href="#177" id="177">177</a>
+<a href="#178" id="178">178</a>
+<a href="#179" id="179">179</a>
+<a href="#180" id="180">180</a>
+<a href="#181" id="181">181</a>
+<a href="#182" id="182">182</a>
+<a href="#183" id="183">183</a>
+<a href="#184" id="184">184</a>
+<a href="#185" id="185">185</a>
+<a href="#186" id="186">186</a>
+<a href="#187" id="187">187</a>
+<a href="#188" id="188">188</a>
+<a href="#189" id="189">189</a>
+<a href="#190" id="190">190</a>
+<a href="#191" id="191">191</a>
+<a href="#192" id="192">192</a>
+<a href="#193" id="193">193</a>
+<a href="#194" id="194">194</a>
+<a href="#195" id="195">195</a>
+<a href="#196" id="196">196</a>
+<a href="#197" id="197">197</a>
+<a href="#198" id="198">198</a>
+<a href="#199" id="199">199</a>
+<a href="#200" id="200">200</a>
+<a href="#201" id="201">201</a>
+<a href="#202" id="202">202</a>
+<a href="#203" id="203">203</a>
+<a href="#204" id="204">204</a>
+<a href="#205" id="205">205</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>bitcoin::secp256k1;
 <span class="kw">use </span>bitcoin_hashes::sha256;
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::Amount;
 <span class="kw">use </span>secp256k1::schnorr::Signature;
-<span class="kw">use </span>secp256k1::{Message, PublicKey};
+<span class="kw">use </span>secp256k1::{Message, PublicKey, SecretKey};
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>tpe::{
     create_decryption_key_share, decrypt_preimage, encrypt_preimage, verify_agg_decryption_key,
@@ -185,13 +219,9 @@
 <span class="kw">use </span><span class="kw">crate</span>::ContractId;
 
 <span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
-</span><span class="kw">pub struct </span>Commitment {
-    <span class="kw">pub </span>payment_hash: sha256::Hash,
-    <span class="kw">pub </span>amount: Amount,
-    <span class="kw">pub </span>expiration: u64,
-    <span class="kw">pub </span>claim_pk: PublicKey,
-    <span class="kw">pub </span>refund_pk: PublicKey,
-    <span class="kw">pub </span>ephemeral_pk: PublicKey,
+</span><span class="kw">pub enum </span>PaymentImage {
+    Hash(sha256::Hash),
+    Point(PublicKey),
 }
 
 <span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
@@ -200,12 +230,23 @@
     <span class="kw">pub </span>ciphertext: CipherText,
 }
 
+<span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
+</span><span class="kw">pub struct </span>Commitment {
+    <span class="kw">pub </span>payment_image: PaymentImage,
+    <span class="kw">pub </span>amount: Amount,
+    <span class="kw">pub </span>expiration: u64,
+    <span class="kw">pub </span>claim_pk: PublicKey,
+    <span class="kw">pub </span>refund_pk: PublicKey,
+    <span class="kw">pub </span>ephemeral_pk: PublicKey,
+}
+
 <span class="kw">impl </span>IncomingContract {
     <span class="attr">#[allow(clippy::too_many_arguments)]
     </span><span class="kw">pub fn </span>new(
         agg_pk: AggregatePublicKey,
         encryption_seed: [u8; <span class="number">32</span>],
         preimage: [u8; <span class="number">32</span>],
+        payment_image: PaymentImage,
         amount: Amount,
         expiration: u64,
         claim_pk: PublicKey,
@@ -213,7 +254,7 @@
         ephemeral_pk: PublicKey,
     ) -&gt; <span class="self">Self </span>{
         <span class="kw">let </span>commitment = Commitment {
-            payment_hash: preimage.consensus_hash(),
+            payment_image,
             amount,
             expiration,
             claim_pk,
@@ -269,7 +310,7 @@
     }
 
     <span class="kw">pub fn </span>verify_preimage(<span class="kw-2">&amp;</span><span class="self">self</span>, preimage: <span class="kw-2">&amp;</span>[u8; <span class="number">32</span>]) -&gt; bool {
-        preimage.consensus_hash::&lt;sha256::Hash&gt;() == <span class="self">self</span>.commitment.payment_hash
+        verify_preimage(<span class="kw-2">&amp;</span><span class="self">self</span>.commitment.payment_image, preimage)
     }
 
     <span class="kw">pub fn </span>decrypt_preimage(
@@ -292,7 +333,7 @@
 
 <span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
 </span><span class="kw">pub struct </span>OutgoingContract {
-    <span class="kw">pub </span>payment_hash: sha256::Hash,
+    <span class="kw">pub </span>payment_image: PaymentImage,
     <span class="kw">pub </span>amount: Amount,
     <span class="kw">pub </span>expiration: u64,
     <span class="kw">pub </span>claim_pk: PublicKey,
@@ -310,7 +351,7 @@
     }
 
     <span class="kw">pub fn </span>verify_preimage(<span class="kw-2">&amp;</span><span class="self">self</span>, preimage: <span class="kw-2">&amp;</span>[u8; <span class="number">32</span>]) -&gt; bool {
-        preimage.consensus_hash::&lt;sha256::Hash&gt;() == <span class="self">self</span>.payment_hash
+        verify_preimage(<span class="kw-2">&amp;</span><span class="self">self</span>.payment_image, preimage)
     }
 
     <span class="kw">pub fn </span>verify_forfeit_signature(<span class="kw-2">&amp;</span><span class="self">self</span>, signature: <span class="kw-2">&amp;</span>Signature) -&gt; bool {
@@ -339,5 +380,32 @@
             )
             .is_ok()
     }
+}
+
+<span class="kw">fn </span>verify_preimage(payment_image: <span class="kw-2">&amp;</span>PaymentImage, preimage: <span class="kw-2">&amp;</span>[u8; <span class="number">32</span>]) -&gt; bool {
+    <span class="kw">match </span>payment_image {
+        PaymentImage::Hash(hash) =&gt; preimage.consensus_hash::&lt;sha256::Hash&gt;() == <span class="kw-2">*</span>hash,
+        PaymentImage::Point(pk) =&gt; <span class="kw">match </span>SecretKey::from_slice(preimage) {
+            <span class="prelude-val">Ok</span>(sk) =&gt; sk.public_key(secp256k1::SECP256K1) == <span class="kw-2">*</span>pk,
+            <span class="prelude-val">Err</span>(..) =&gt; <span class="bool-val">false</span>,
+        },
+    }
+}
+
+<span class="attr">#[test]
+</span><span class="kw">fn </span>test_verify_preimage() {
+    <span class="kw">use </span>bitcoin_hashes::Hash;
+
+    <span class="macro">assert!</span>(verify_preimage(
+        <span class="kw-2">&amp;</span>PaymentImage::Hash(bitcoin_hashes::sha256::Hash::hash(<span class="kw-2">&amp;</span>[<span class="number">42</span>; <span class="number">32</span>])),
+        <span class="kw-2">&amp;</span>[<span class="number">42</span>; <span class="number">32</span>]
+    ));
+
+    <span class="kw">let </span>(secret_key, public_key) = secp256k1::generate_keypair(<span class="kw-2">&amp;mut </span>secp256k1::rand::thread_rng());
+
+    <span class="macro">assert!</span>(verify_preimage(
+        <span class="kw-2">&amp;</span>PaymentImage::Point(public_key),
+        <span class="kw-2">&amp;</span>secret_key.secret_bytes()
+    ));
 }
 </code></pre></div></section></main></body></html>

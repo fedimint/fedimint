@@ -497,7 +497,7 @@
 <span class="kw">use </span>fedimint_lnv2_client::api::LnFederationApi;
 <span class="kw">use </span>fedimint_lnv2_client::{LightningInvoice, SendPaymentPayload};
 <span class="kw">use </span>fedimint_lnv2_common::config::LightningClientConfig;
-<span class="kw">use </span>fedimint_lnv2_common::contracts::IncomingContract;
+<span class="kw">use </span>fedimint_lnv2_common::contracts::{IncomingContract, PaymentImage};
 <span class="kw">use </span>fedimint_lnv2_common::{
     LightningCommonInit, LightningInputV0, LightningModuleTypes, LightningOutput, LightningOutputV0,
 };
@@ -737,7 +737,7 @@
         };
 
         <span class="macro">ensure!</span>(
-            payment_hash == <span class="kw-2">&amp;</span>payload.contract.payment_hash,
+            PaymentImage::Hash(<span class="kw-2">*</span>payment_hash) == payload.contract.payment_image,
             <span class="string">"The invoices payment hash does not match the contracts payment hash"
         </span>);
 

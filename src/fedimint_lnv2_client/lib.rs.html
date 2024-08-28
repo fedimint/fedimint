@@ -991,6 +991,7 @@
 <a href="#991" id="991">991</a>
 <a href="#992" id="992">992</a>
 <a href="#993" id="993">993</a>
+<a href="#994" id="994">994</a>
 </pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::missing_errors_doc)]
 #![allow(clippy::missing_panics_doc)]
@@ -1030,7 +1031,7 @@
 <span class="kw">use </span>fedimint_core::util::SafeUrl;
 <span class="kw">use </span>fedimint_core::{apply, async_trait_maybe_send, Amount, OutPoint, PeerId, TransactionId};
 <span class="kw">use </span>fedimint_lnv2_common::config::LightningClientConfig;
-<span class="kw">use </span>fedimint_lnv2_common::contracts::{IncomingContract, OutgoingContract};
+<span class="kw">use </span>fedimint_lnv2_common::contracts::{IncomingContract, OutgoingContract, PaymentImage};
 <span class="kw">use </span>fedimint_lnv2_common::{
     GatewayEndpoint, LightningCommonInit, LightningInputV0, LightningModuleTypes, LightningOutput,
     LightningOutputV0, KIND,
@@ -1441,7 +1442,7 @@
             </span>.map_err(|e| SendPaymentError::FederationError(e.to_string()))<span class="question-mark">?</span>;
 
         <span class="kw">let </span>contract = OutgoingContract {
-            payment_hash: <span class="kw-2">*</span>invoice.payment_hash(),
+            payment_image: PaymentImage::Hash(<span class="kw-2">*</span>invoice.payment_hash()),
             amount: send_fee.add_fee(amount),
             expiration: consensus_block_count + expiration_delta + CONTRACT_CONFIRMATION_BUFFER,
             claim_pk: routing_info.public_key,
@@ -1718,6 +1719,7 @@
             <span class="self">self</span>.cfg.tpe_agg_pk,
             encryption_seed,
             preimage,
+            PaymentImage::Hash(preimage.consensus_hash()),
             contract_amount,
             expiration,
             claim_pk,
@@ -1739,7 +1741,7 @@
             .<span class="kw">await
             </span>.map_err(FetchInvoiceError::GatewayError)<span class="question-mark">?</span>;
 
-        <span class="kw">if </span>invoice.payment_hash() != <span class="kw-2">&amp;</span>contract.commitment.payment_hash {
+        <span class="kw">if </span>invoice.payment_hash() != <span class="kw-2">&amp;</span>preimage.consensus_hash() {
             <span class="kw">return </span><span class="prelude-val">Err</span>(FetchInvoiceError::InvalidInvoicePaymentHash);
         }
 
