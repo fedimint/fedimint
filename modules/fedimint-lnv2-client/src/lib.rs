@@ -39,8 +39,8 @@ use fedimint_core::{apply, async_trait_maybe_send, Amount, OutPoint, PeerId, Tra
 use fedimint_lnv2_common::config::LightningClientConfig;
 use fedimint_lnv2_common::contracts::{IncomingContract, OutgoingContract};
 use fedimint_lnv2_common::{
-    GatewayEndpoint, LightningCommonInit, LightningModuleTypes, LightningOutput, LightningOutputV0,
-    KIND,
+    GatewayEndpoint, LightningCommonInit, LightningInputV0, LightningModuleTypes, LightningOutput,
+    LightningOutputV0, KIND,
 };
 use futures::StreamExt;
 use lightning_invoice::{Bolt11Invoice, Currency};
@@ -344,12 +344,18 @@ impl ClientModule for LightningClientModule {
         }
     }
 
-    fn input_fee(&self, _input: &<Self::Common as ModuleCommon>::Input) -> Option<Amount> {
-        Some(self.cfg.fee_consensus.input)
+    fn input_fee(&self, input: &<Self::Common as ModuleCommon>::Input) -> Option<Amount> {
+        Some(match input.maybe_v0_ref()? {
+            LightningInputV0::Outgoing(..) => self.cfg.fees.spend_outgoing_contract,
+            LightningInputV0::Incoming(..) => self.cfg.fees.spend_incoming_contract,
+        })
     }
 
-    fn output_fee(&self, _output: &<Self::Common as ModuleCommon>::Output) -> Option<Amount> {
-        Some(self.cfg.fee_consensus.output)
+    fn output_fee(&self, output: &<Self::Common as ModuleCommon>::Output) -> Option<Amount> {
+        Some(match output.maybe_v0_ref()? {
+            LightningOutputV0::Outgoing(..) => self.cfg.fees.create_outgoing_contract,
+            LightningOutputV0::Incoming(..) => self.cfg.fees.create_incoming_contract,
+        })
     }
 
     #[cfg(feature = "cli")]
