@@ -34,12 +34,12 @@ lightning-invoice = { workspace = true, features = [ "serde" ] }
 fedimint-client = { workspace = true }
 fedimint-core = { workspace = true }
 fedimint-api-client = { workspace = true }
-fedimint-lnv2-common = { path = "../fedimint-lnv2-common", version = "=0.4.2-rc.2" }
+fedimint-lnv2-common = { path = "../fedimint-lnv2-common", version = "=0.4.2-rc.3" }
 secp256k1 = { version = "0.27.0", default-features = false }
 serde = { workspace = true }
 serde_json = { workspace = true, optional = true }
 thiserror = "1.0.61"
 tracing = "0.1.37"
 rand = { workspace = true }
-tpe = { package = "fedimint-tpe", version = "=0.4.2-rc.2", path = "../../crypto/tpe" }
+tpe = { package = "fedimint-tpe", version = "=0.4.2-rc.3", path = "../../crypto/tpe" }
 reqwest = { workspace = true }
