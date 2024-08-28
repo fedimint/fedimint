@@ -17,18 +17,18 @@ assert_matches = { workspace = true }
 bitcoin_hashes = { workspace = true }
 fedimint-client = { workspace = true }
 fedimint-core = { workspace = true }
-fedimint-dummy-client = { path = "../fedimint-dummy-client" }
-fedimint-dummy-common = { path = "../fedimint-dummy-common" }
-fedimint-dummy-server = { path = "../fedimint-dummy-server" }
+fedimint-dummy-client = { workspace = true }
+fedimint-dummy-common = { workspace = true }
+fedimint-dummy-server = { workspace = true }
 fedimint-ln-client = { workspace = true }
-fedimint-ln-common = { path = "../fedimint-ln-common" }
-fedimint-ln-server = { path = "../fedimint-ln-server" }
+fedimint-ln-common = { workspace = true }
+fedimint-ln-server = { workspace = true }
 fedimint-logging = { workspace = true }
 fedimint-testing = { workspace = true }
 futures = { workspace = true }
 lightning-invoice = { workspace = true }
 rand = { workspace = true }
-secp256k1 = { version = "0.27.0", default-features = false }
+secp256k1 = { workspace = true }
 serde_json = { workspace = true }
 strum = { workspace = true }
 threshold_crypto = { workspace = true }

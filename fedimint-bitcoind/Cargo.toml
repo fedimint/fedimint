@@ -25,7 +25,7 @@ bitcoin = { workspace = true }
 bitcoincore-rpc = { workspace = true, optional = true }
 electrum-client = { workspace = true, optional = true }
 esplora-client = { workspace = true, optional = true }
-fedimint-core = { version = "=0.5.0-alpha", path = "../fedimint-core" }
+fedimint-core = { workspace = true }
 fedimint-logging = { workspace = true }
 hex = { workspace = true }
 rand = { workspace = true }

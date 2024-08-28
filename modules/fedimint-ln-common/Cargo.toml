@@ -25,9 +25,11 @@ bitcoin = { workspace = true }
 bitcoin_hashes = { workspace = true }
 fedimint-client = { workspace = true }
 fedimint-core = { workspace = true }
-lightning = { version = "0.0.123", default-features = false, features = ["no-std"] }
+lightning = { workspace = true, default-features = false, features = [
+    "no-std",
+] }
 lightning-invoice = { workspace = true }
-secp256k1 = { version = "0.27.0", default-features = false }
+secp256k1 = { workspace = true }
 serde = { workspace = true }
 serde-big-array = { workspace = true }
 serde_json = { workspace = true }

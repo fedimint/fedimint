@@ -18,17 +18,17 @@ clap = { workspace = true }
 devimint = { workspace = true }
 fedimint-client = { workspace = true }
 fedimint-core = { workspace = true }
-fedimint-dummy-client = { path = "../fedimint-dummy-client" }
-fedimint-dummy-common = { path = "../fedimint-dummy-common" }
-fedimint-dummy-server = { path = "../fedimint-dummy-server" }
+fedimint-dummy-client = { workspace = true }
+fedimint-dummy-common = { workspace = true }
+fedimint-dummy-server = { workspace = true }
 fedimint-ln-client = { workspace = true }
-fedimint-ln-common = { path = "../fedimint-ln-common" }
-fedimint-ln-server = { path = "../fedimint-ln-server" }
-fedimint-lnv2-client = { path = "../fedimint-lnv2-client" }
-fedimint-lnv2-common = { path = "../fedimint-lnv2-common" }
-fedimint-lnv2-server = { path = "../fedimint-lnv2-server" }
+fedimint-ln-common = { workspace = true }
+fedimint-ln-server = { workspace = true }
+fedimint-lnv2-client = { workspace = true }
+fedimint-lnv2-common = { workspace = true }
+fedimint-lnv2-server = { workspace = true }
 fedimint-testing = { workspace = true }
-itertools = "0.13.0"
+itertools = { workspace = true }
 lightning-invoice = { workspace = true }
 semver = { workspace = true }
 serde_json = { workspace = true }

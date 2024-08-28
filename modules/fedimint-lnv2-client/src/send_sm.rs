@@ -2,6 +2,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use bitcoin::hashes::sha256;
+use bitcoin::secp256k1;
 use fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
 use fedimint_client::transaction::ClientInput;
 use fedimint_client::DynGlobalClientContext;

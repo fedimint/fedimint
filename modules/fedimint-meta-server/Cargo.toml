@@ -21,7 +21,7 @@ async-trait = { workspace = true }
 erased-serde = { workspace = true }
 fedimint-core = { workspace = true }
 fedimint-logging = { workspace = true }
-fedimint-meta-common = { version = "=0.5.0-alpha", path = "../fedimint-meta-common" }
+fedimint-meta-common = { workspace = true }
 futures = { workspace = true }
 rand = { workspace = true }
 serde = { workspace = true }

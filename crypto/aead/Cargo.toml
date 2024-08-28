@@ -20,4 +20,4 @@ anyhow = { workspace = true }
 argon2 = { version = "0.5.3", features = ["password-hash", "alloc"] }
 hex = { workspace = true }
 rand = { workspace = true }
-ring = "0.17.8"
+ring = { workspace = true }
