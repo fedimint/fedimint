@@ -26,6 +26,7 @@ use fedimint_wallet_common::txoproof::PegInProof;
 use fedimint_wallet_common::{PegOutFees, Rbf};
 use fedimint_wallet_server::WalletInit;
 use futures::stream::StreamExt;
+use tokio::select;
 use tracing::info;
 
 fn fixtures() -> Fixtures {
@@ -155,13 +156,21 @@ async fn on_chain_peg_in_and_peg_out_happy_case() -> anyhow::Result<()> {
     bitcoin.mine_blocks(finality_delay).await;
     await_consensus_to_catch_up(&client, 1).await?;
 
-    let mut balance_sub = initial_peg_in(&client, bitcoin.as_ref(), finality_delay).await?;
+    assert_eq!(client.get_balance().await, sats(0));
+    let (op, address, _) = wallet_module
+        .allocate_deposit_address_expert_only(())
+        .await?;
 
     // Test operation is created
     let operations = client.operation_log().list_operations(10, None).await;
     assert_eq!(operations.len(), 1, "Expecting only the peg-in operation");
+
     let deposit_operation_id = operations[0].0.operation_id;
     let deposit_operation = &operations[0].1;
+    assert_eq!(
+        deposit_operation_id, op,
+        "Operation ID should match the one returned by allocate_deposit_address"
+    );
 
     assert_eq!(
         deposit_operation.operation_module_kind(),
@@ -187,14 +196,57 @@ async fn on_chain_peg_in_and_peg_out_happy_case() -> anyhow::Result<()> {
         deposit_updates.next().await.unwrap(),
         DepositStateV2::WaitingForTransaction
     );
+
+    info!(?address, "Peg-in address generated");
+    let (_proof, tx) = bitcoin
+        .send_and_mine_block(
+            &address,
+            bsats(PEG_IN_AMOUNT_SATS)
+                + bsats(wallet_module.get_fee_consensus().peg_in_abs.msats / 1000),
+        )
+        .await;
+
+    info!("Waiting for confirmation");
     assert!(matches!(
         deposit_updates.next().await.unwrap(),
-        DepositStateV2::WaitingForConfirmation { .. }
+        DepositStateV2::WaitingForConfirmation { btc_out_point, .. } if btc_out_point.txid == tx.txid()
     ));
+
+    bitcoin.mine_blocks(finality_delay).await;
+
+    // Afaik technically not necessary, but useful to speed up test (should probably
+    // just poll more often in tests?)
+    let await_update_while_rechecking = async {
+        loop {
+            select! {
+                update = deposit_updates.next() => {
+                    break update;
+                },
+                _ = sleep_in_test("Waiting for address recheck", Duration::from_secs(1)) => {
+                    wallet_module.recheck_pegin_address_by_op_id(op).await
+                        .expect("Operation exists");
+                }
+            }
+        }
+    };
+
+    info!("Waiting for claim tx");
+    assert!(matches!(
+        await_update_while_rechecking.await.unwrap(),
+        DepositStateV2::Confirmed { btc_out_point, .. } if btc_out_point.txid == tx.txid()
+    ));
+
+    info!("Waiting for e-cash");
     assert!(matches!(
         deposit_updates.next().await.unwrap(),
-        DepositStateV2::Claimed { .. }
+        DepositStateV2::Claimed { btc_out_point, .. } if btc_out_point.txid == tx.txid()
     ));
+
+    info!("Checking balance after deposit");
+    let mut balance_sub = client.subscribe_balance_changes().await;
+    assert_eq!(client.get_balance().await, sats(PEG_IN_AMOUNT_SATS));
+    assert_eq!(balance_sub.ok().await?, sats(PEG_IN_AMOUNT_SATS));
+
     assert_eq!(deposit_updates.next().await, None);
 
     info!("Peg-in finished for test on_chain_peg_in_and_peg_out_happy_case");
