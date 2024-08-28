@@ -442,7 +442,7 @@ impl LightningClientModule {
 
         let routing_info = self
             .gateway_conn
-            .fetch_routing_info(gateway_api.clone(), &self.federation_id)
+            .routing_info(gateway_api.clone(), &self.federation_id)
             .await
             .map_err(SendPaymentError::GatewayError)?
             .ok_or(SendPaymentError::UnknownFederation)?;
@@ -709,7 +709,7 @@ impl LightningClientModule {
 
         let payment_info = self
             .gateway_conn
-            .fetch_routing_info(gateway_api.clone(), &self.federation_id)
+            .routing_info(gateway_api.clone(), &self.federation_id)
             .await
             .map_err(FetchInvoiceError::GatewayError)?
             .ok_or(FetchInvoiceError::UnknownFederation)?;
@@ -751,17 +751,16 @@ impl LightningClientModule {
             ephemeral_pk,
         );
 
-        let payload = CreateBolt11InvoicePayload {
-            federation_id: self.federation_id,
-            contract: contract.clone(),
-            invoice_amount,
-            description,
-            expiry_time,
-        };
-
         let invoice = self
             .gateway_conn
-            .fetch_invoice(gateway_api, payload)
+            .bolt11_invoice(
+                gateway_api,
+                self.federation_id,
+                contract.clone(),
+                invoice_amount,
+                description,
+                expiry_time,
+            )
             .await
             .map_err(FetchInvoiceError::GatewayError)?;
 

@@ -164,7 +164,7 @@ impl SendStateMachine {
         loop {
             match context
                 .gateway_conn
-                .try_gateway_send_payment(
+                .send_payment(
                     gateway_api.clone(),
                     federation_id,
                     contract.clone(),
