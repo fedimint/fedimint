@@ -24,7 +24,7 @@ use fedimint_lnv2_common::endpoint_constants::{
     PAY_INVOICE_SELF_ENDPOINT, ROUTING_INFO_ENDPOINT, SEND_PAYMENT_ENDPOINT,
 };
 use hex::ToHex;
-use serde_json::{json, Value};
+use serde_json::json;
 use tokio::net::TcpListener;
 use tower_http::cors::CorsLayer;
 use tracing::{error, info, instrument};
@@ -409,36 +409,34 @@ async fn get_gateway_id(
     Ok(Json(json!(gateway.gateway_id)))
 }
 
+#[instrument(skip_all, err)]
 async fn routing_info_v2(
     Extension(gateway): Extension<Arc<Gateway>>,
     Json(federation_id): Json<FederationId>,
-) -> Json<Value> {
-    Json(json!(gateway
-        .routing_info_v2(&federation_id)
-        .await
-        .map_err(|e| e.to_string())))
+) -> Result<impl IntoResponse, GatewayError> {
+    let routing_info = gateway.routing_info_v2(&federation_id).await?;
+    Ok(Json(json!(routing_info)))
 }
 
+#[instrument(skip_all, err)]
 async fn pay_bolt11_invoice_v2(
     Extension(gateway): Extension<Arc<Gateway>>,
     Json(payload): Json<SendPaymentPayload>,
-) -> Json<Value> {
-    Json(json!(gateway
-        .send_payment_v2(payload)
-        .await
-        .map_err(|e| e.to_string())))
+) -> Result<impl IntoResponse, GatewayError> {
+    let payment_result = gateway.send_payment_v2(payload).await?;
+    Ok(Json(json!(payment_result)))
 }
 
+#[instrument(skip_all, err)]
 async fn create_bolt11_invoice_v2(
     Extension(gateway): Extension<Arc<Gateway>>,
     Json(payload): Json<CreateBolt11InvoicePayload>,
-) -> Json<Value> {
-    Json(json!(gateway
-        .create_bolt11_invoice_v2(payload)
-        .await
-        .map_err(|e| e.to_string())))
+) -> Result<impl IntoResponse, GatewayError> {
+    let invoice = gateway.create_bolt11_invoice_v2(payload).await?;
+    Ok(Json(json!(invoice)))
 }
 
+#[instrument(skip_all, err)]
 async fn spend_ecash(
     Extension(gateway): Extension<Arc<Gateway>>,
     Json(payload): Json<SpendEcashPayload>,
@@ -446,6 +444,7 @@ async fn spend_ecash(
     Ok(Json(json!(gateway.handle_spend_ecash_msg(payload).await?)))
 }
 
+#[instrument(skip_all, err)]
 async fn receive_ecash(
     Extension(gateway): Extension<Arc<Gateway>>,
     Json(payload): Json<ReceiveEcashPayload>,

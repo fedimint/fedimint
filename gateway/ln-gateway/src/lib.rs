@@ -37,7 +37,7 @@ use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
 
-use anyhow::{anyhow, bail};
+use anyhow::anyhow;
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use bip39::Mnemonic;
@@ -621,15 +621,12 @@ impl Gateway {
         // using the LNv2 protocol. If the `payment_hash` is not registered,
         // this HTLC is either a legacy Lightning payment or the end destination is not
         // a Fedimint.
-        let Ok((contract, client)) = self
+        let (contract, client) = self
             .get_registered_incoming_contract_and_client_v2(
                 PaymentImage::Hash(payment_hash),
                 htlc_request.incoming_amount_msat,
             )
-            .await
-        else {
-            return Err(GatewayError::PaymentNotRegisteredWithLNv2Error);
-        };
+            .await?;
 
         if let Err(error) = client
             .get_first_module::<GatewayClientModuleV2>()
@@ -1379,8 +1376,11 @@ impl Gateway {
     pub async fn handle_spend_ecash_msg(
         &self,
         payload: SpendEcashPayload,
-    ) -> anyhow::Result<SpendEcashResponse> {
-        let client = self.select_client_v2(payload.federation_id).await?;
+    ) -> Result<SpendEcashResponse> {
+        let client = self
+            .select_client(payload.federation_id)
+            .await?
+            .into_value();
         let mint_module = client.get_first_module::<MintClientModule>()?;
         let timeout = Duration::from_secs(payload.timeout);
         let (operation_id, notes) = if payload.allow_overpay {
@@ -1428,7 +1428,7 @@ impl Gateway {
     pub async fn handle_receive_ecash_msg(
         &self,
         payload: ReceiveEcashPayload,
-    ) -> anyhow::Result<ReceiveEcashResponse> {
+    ) -> Result<ReceiveEcashResponse> {
         let amount = payload.notes.total_amount();
         let client = self
             .federation_manager
@@ -1448,7 +1448,7 @@ impl Gateway {
 
             while let Some(update) = updates.next().await {
                 if let fedimint_mint_client::ReissueExternalNotesState::Failed(e) = update {
-                    bail!("Reissue failed: {e}");
+                    return Err(GatewayError::UnexpectedState(e));
                 }
             }
         }
@@ -1695,12 +1695,12 @@ impl Gateway {
     /// Checks the Gateway's current state and returns the proper
     /// `LightningContext` if it is available. Sometimes the lightning node
     /// will not be connected and this will return an error.
-    pub async fn get_lightning_context(
-        &self,
-    ) -> std::result::Result<LightningContext, LightningRpcError> {
+    pub async fn get_lightning_context(&self) -> Result<LightningContext> {
         match self.get_state().await {
             GatewayState::Running { lightning_context } => Ok(lightning_context),
-            _ => Err(LightningRpcError::FailedToConnect),
+            _ => Err(GatewayError::LightningRpcError(
+                LightningRpcError::FailedToConnect,
+            )),
         }
     }
 
@@ -1743,7 +1743,7 @@ impl Gateway {
     pub async fn routing_info_v2(
         &self,
         federation_id: &FederationId,
-    ) -> anyhow::Result<Option<RoutingInfo>> {
+    ) -> Result<Option<RoutingInfo>> {
         let context = self.get_lightning_context().await?;
 
         Ok(self
@@ -1765,30 +1765,20 @@ impl Gateway {
             }))
     }
 
-    pub async fn select_client_v2(
-        &self,
-        federation_id: FederationId,
-    ) -> anyhow::Result<ClientHandleArc> {
-        self.federation_manager
-            .read()
-            .await
-            .client(&federation_id)
-            .map(|entry| entry.value().clone())
-            .ok_or(anyhow!("Federation client not available"))
-    }
-
     /// Instructs this gateway to pay a Lightning network invoice via the LNv2
     /// protocol.
     async fn send_payment_v2(
         &self,
         payload: SendPaymentPayload,
-    ) -> anyhow::Result<std::result::Result<[u8; 32], Signature>> {
-        self.select_client_v2(payload.federation_id)
+    ) -> Result<std::result::Result<[u8; 32], Signature>> {
+        self.select_client(payload.federation_id)
             .await?
+            .value()
             .get_first_module::<GatewayClientModuleV2>()
             .expect("Must have client module")
             .send_payment(payload)
             .await
+            .map_err(GatewayError::LNv2OutgoingError)
     }
 
     /// For the LNv2 protocol, this will create an invoice by fetching it from
@@ -1798,9 +1788,11 @@ impl Gateway {
     async fn create_bolt11_invoice_v2(
         &self,
         payload: CreateBolt11InvoicePayload,
-    ) -> anyhow::Result<Bolt11Invoice> {
+    ) -> Result<Bolt11Invoice> {
         if !payload.contract.verify() {
-            bail!("The contract is invalid")
+            return Err(GatewayError::IncomingContractError(
+                "The contract is invalid".to_string(),
+            ));
         }
 
         let payment_info = self
@@ -1809,7 +1801,9 @@ impl Gateway {
             .ok_or(anyhow!("Unknown federation"))?;
 
         if payload.contract.commitment.refund_pk != payment_info.module_public_key {
-            bail!("The outgoing contract keyed to another gateway");
+            return Err(GatewayError::IncomingContractError(
+                "The incoming contract is keyed to another gateway".to_string(),
+            ));
         }
 
         let contract_amount = payment_info
@@ -1817,20 +1811,30 @@ impl Gateway {
             .subtract_fee(payload.invoice_amount.msats);
 
         if contract_amount == Amount::ZERO {
-            bail!("Zero amount incoming contracts are not supported");
+            return Err(GatewayError::IncomingContractError(
+                "Zero amount incoming contracts are not supported".to_string(),
+            ));
         }
 
         if contract_amount != payload.contract.commitment.amount {
-            bail!("The contract amount does not pay the correct amount of fees");
+            return Err(GatewayError::IncomingContractError(
+                "The contract amount does not pay the correct amount of fees".to_string(),
+            ));
         }
 
         if payload.contract.commitment.expiration <= duration_since_epoch().as_secs() {
-            bail!("The contract has already expired");
+            return Err(GatewayError::IncomingContractError(
+                "The contract has already expired".to_string(),
+            ));
         }
 
         let payment_hash = match payload.contract.commitment.payment_image {
             PaymentImage::Hash(payment_hash) => payment_hash,
-            PaymentImage::Point(..) => bail!("PaymentImage is not a payment hash"),
+            PaymentImage::Point(..) => {
+                return Err(GatewayError::IncomingContractError(
+                    "PaymentImage is not a payment hash".to_string(),
+                ))
+            }
         };
 
         let invoice = self
@@ -1854,7 +1858,9 @@ impl Gateway {
             .await
             .is_some()
         {
-            bail!("Payment hash is already registered");
+            return Err(GatewayError::IncomingContractError(
+                "Payment hash is already registered".to_string(),
+            ));
         }
 
         dbtx.commit_tx_result()
@@ -1872,35 +1878,37 @@ impl Gateway {
         amount: Amount,
         description: Bolt11InvoiceDescription,
         expiry_time: u32,
-    ) -> std::result::Result<Bolt11Invoice, String> {
-        let lnrpc = self
-            .get_lightning_context()
-            .await
-            .map_err(|e| e.to_string())?
-            .lnrpc;
+    ) -> Result<Bolt11Invoice> {
+        let lnrpc = self.get_lightning_context().await?.lnrpc;
 
         let response = match description {
-            Bolt11InvoiceDescription::Direct(description) => lnrpc
-                .create_invoice(CreateInvoiceRequest {
-                    payment_hash: payment_hash.as_byte_array().to_vec(),
-                    amount_msat: amount.msats,
-                    expiry_secs: expiry_time,
-                    description: Some(Description::Direct(description)),
-                })
-                .await
-                .map_err(|e| e.to_string())?,
-            Bolt11InvoiceDescription::Hash(hash) => lnrpc
-                .create_invoice(CreateInvoiceRequest {
-                    payment_hash: payment_hash.as_byte_array().to_vec(),
-                    amount_msat: amount.msats,
-                    expiry_secs: expiry_time,
-                    description: Some(Description::Hash(hash.to_byte_array().to_vec())),
-                })
-                .await
-                .map_err(|e| e.to_string())?,
+            Bolt11InvoiceDescription::Direct(description) => {
+                lnrpc
+                    .create_invoice(CreateInvoiceRequest {
+                        payment_hash: payment_hash.to_byte_array().to_vec(),
+                        amount_msat: amount.msats,
+                        expiry_secs: expiry_time,
+                        description: Some(Description::Direct(description)),
+                    })
+                    .await?
+            }
+            Bolt11InvoiceDescription::Hash(hash) => {
+                lnrpc
+                    .create_invoice(CreateInvoiceRequest {
+                        payment_hash: payment_hash.to_byte_array().to_vec(),
+                        amount_msat: amount.msats,
+                        expiry_secs: expiry_time,
+                        description: Some(Description::Hash(hash.to_byte_array().to_vec())),
+                    })
+                    .await?
+            }
         };
 
-        Bolt11Invoice::from_str(&response.invoice).map_err(|e| e.to_string())
+        Bolt11Invoice::from_str(&response.invoice).map_err(|e| {
+            GatewayError::LightningRpcError(LightningRpcError::FailedToGetInvoice {
+                failure_reason: e.to_string(),
+            })
+        })
     }
 
     /// Retrieves the persisted `CreateInvoicePayload` from the database
@@ -1910,7 +1918,7 @@ impl Gateway {
         &self,
         payment_image: PaymentImage,
         amount_msats: u64,
-    ) -> anyhow::Result<(IncomingContract, ClientHandleArc)> {
+    ) -> Result<(IncomingContract, ClientHandleArc)> {
         let registered_incoming_contract = self
             .gateway_db
             .begin_transaction_nc()
@@ -1920,12 +1928,16 @@ impl Gateway {
             .ok_or(anyhow!("No corresponding decryption contract available"))?;
 
         if registered_incoming_contract.incoming_amount != amount_msats {
-            bail!("The available decryption contract's amount is not equal the requested amount")
+            return Err(GatewayError::IncomingContractError(
+                "The available decryption contract's amount is not equal to the requested amount"
+                    .to_string(),
+            ));
         }
 
         let client = self
-            .select_client_v2(registered_incoming_contract.federation_id)
-            .await?;
+            .select_client(registered_incoming_contract.federation_id)
+            .await?
+            .into_value();
 
         Ok((registered_incoming_contract.contract, client))
     }
@@ -1964,10 +1976,12 @@ pub enum GatewayError {
     LightningResponseParseError(anyhow::Error),
     #[error("An incoming payment was unable to be handled by the LNv1 module")]
     IncomingLNv1PaymentError(anyhow::Error),
-    #[error("Incoming payment is not registered as an LNv2 payment")]
-    PaymentNotRegisteredWithLNv2Error,
     #[error("Failed to create client: {}", .0)]
     ClientCreationError(String),
+    #[error("Incoming contract error: {}", OptStacktrace(.0))]
+    IncomingContractError(String),
+    #[error("Error while sending LNv2 payment: {}", OptStacktrace(.0))]
+    LNv2OutgoingError(anyhow::Error),
 }
 
 impl IntoResponse for GatewayError {

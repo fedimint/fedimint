@@ -237,9 +237,8 @@ impl GatewayConnection for RealGatewayConnection {
             .send()
             .await
             .map_err(|e| GatewayError::Unreachable(e.to_string()))?
-            .json::<Result<Option<RoutingInfo>, String>>()
+            .json::<Option<RoutingInfo>>()
             .await
-            .map_err(|e| GatewayError::InvalidJsonResponse(e.to_string()))?
             .map_err(|e| GatewayError::Request(e.to_string()))
     }
 
@@ -270,9 +269,8 @@ impl GatewayConnection for RealGatewayConnection {
             .send()
             .await
             .map_err(|e| GatewayError::Unreachable(e.to_string()))?
-            .json::<Result<Bolt11Invoice, String>>()
+            .json::<Bolt11Invoice>()
             .await
-            .map_err(|e| GatewayError::InvalidJsonResponse(e.to_string()))?
             .map_err(|e| GatewayError::Request(e.to_string()))
     }
 
@@ -301,9 +299,8 @@ impl GatewayConnection for RealGatewayConnection {
             .send()
             .await
             .map_err(|e| GatewayError::Unreachable(e.to_string()))?
-            .json::<Result<Result<[u8; 32], Signature>, String>>()
+            .json::<Result<[u8; 32], Signature>>()
             .await
-            .map_err(|e| GatewayError::InvalidJsonResponse(e.to_string()))?
             .map_err(|e| GatewayError::Request(e.to_string()))
     }
 }
