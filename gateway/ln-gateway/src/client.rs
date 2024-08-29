@@ -13,8 +13,6 @@ use fedimint_core::config::FederationId;
 use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::db::Database;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
-use rand::thread_rng;
-use tracing::info;
 
 use crate::db::FederationConfig;
 use crate::gateway_module_v2::GatewayClientInitV2;
@@ -42,18 +40,7 @@ impl GatewayClientBuilder {
     }
 
     async fn client_plainrootsecret(&self, db: &Database) -> Result<DerivableSecret> {
-        let client_secret =
-            if let Ok(secret) = Client::load_decodable_client_secret::<[u8; 64]>(db).await {
-                secret
-            } else {
-                info!("Generating secret and writing to client storage");
-                let secret = PlainRootSecretStrategy::random(&mut thread_rng());
-                Client::store_encodable_client_secret(db, secret)
-                    .await
-                    .map_err(GatewayError::ClientStateMachineError)?;
-                secret
-            };
-
+        let client_secret = Client::load_decodable_client_secret::<[u8; 64]>(db).await?;
         Ok(PlainRootSecretStrategy::to_root_secret(&client_secret))
     }
 
@@ -110,7 +97,7 @@ impl GatewayClientBuilder {
         } else {
             let db = gateway
                 .gateway_db
-                .with_prefix(federation_id.to_prefix().as_bytes());
+                .with_prefix(federation_id.to_prefix().to_bytes());
             let root_secret = Bip39RootSecretStrategy::<12>::to_root_secret(mnemonic);
             (db, root_secret)
         };
@@ -133,14 +120,12 @@ impl GatewayClientBuilder {
     }
 
     pub fn legacy_federations(&self, all_federations: BTreeSet<FederationId>) -> Vec<FederationId> {
-        let mut legacy_federations = Vec::new();
-        for federation_id in all_federations {
-            let db_path = self.work_dir.join(format!("{federation_id}.db"));
-            if db_path.exists() {
-                legacy_federations.push(federation_id);
-            }
-        }
-
-        legacy_federations
+        all_federations
+            .into_iter()
+            .filter(|federation_id| {
+                let db_path = self.work_dir.join(format!("{federation_id}.db"));
+                db_path.exists()
+            })
+            .collect::<Vec<FederationId>>()
     }
 }

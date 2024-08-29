@@ -441,7 +441,7 @@ where
                     warn!(
                         target: LOG_CORE,
                         ?error,
-                        ?attempts,
+                        %attempts,
                         "{} failed",
                         op_name,
                     );

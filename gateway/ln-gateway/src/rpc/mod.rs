@@ -240,5 +240,9 @@ pub struct FederationBalanceInfo {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct MnemonicResponse {
     pub mnemonic: Vec<String>,
+
+    // Legacy federations are federations that the gateway joined prior to v0.5.0
+    // and do not derive their secrets from the gateway's mnemonic. They also use
+    // a separate database from the gateway's db.
     pub legacy_federations: Vec<FederationId>,
 }
