@@ -15,6 +15,7 @@ use crate::external::{Bitcoind, LightningNode};
 use crate::federation::Federation;
 use crate::util::{poll, Command, ProcessHandle, ProcessManager};
 use crate::vars::utf8;
+use crate::version_constants::VERSION_0_5_0_ALPHA;
 use crate::{cmd, Lightningd};
 
 #[derive(Clone)]
@@ -222,9 +223,17 @@ impl Gatewayd {
     }
 
     pub async fn get_ln_onchain_address(&self) -> Result<String> {
-        let address = cmd!(self, "lightning", "get-ln-onchain-address")
-            .out_string()
-            .await?;
+        let gateway_cli_version = crate::util::GatewayCli::version_or_default().await;
+        let address = if gateway_cli_version < *VERSION_0_5_0_ALPHA {
+            cmd!(self, "lightning", "get-funding-address")
+                .out_string()
+                .await?
+        } else {
+            cmd!(self, "lightning", "get-ln-onchain-address")
+                .out_string()
+                .await?
+        };
+
         Ok(address)
     }
 
