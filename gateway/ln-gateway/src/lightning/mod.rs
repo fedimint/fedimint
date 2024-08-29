@@ -72,10 +72,10 @@ pub enum LightningRpcError {
     FailedToListActiveChannels { failure_reason: String },
     #[error("Failed to get balances: {failure_reason}")]
     FailedToGetBalances { failure_reason: String },
-    #[error("Failed to wait for chain sync: {failure_reason}")]
-    FailedToWaitForChainSync { failure_reason: String },
     #[error("Failed to subscribe to invoice updates: {failure_reason}")]
     FailedToSubscribeToInvoiceUpdates { failure_reason: String },
+    #[error("Failed to sync to chain: {failure_reason}")]
+    FailedToSyncToChain { failure_reason: String },
 }
 
 /// Represents an active connection to the lightning node.
@@ -193,6 +193,8 @@ pub trait ILnRpcClient: Debug + Send + Sync {
     async fn list_active_channels(&self) -> Result<Vec<ChannelInfo>, LightningRpcError>;
 
     async fn get_balances(&self) -> Result<GetBalancesResponse, LightningRpcError>;
+
+    async fn sync_to_chain(&self, block_height: u32) -> Result<EmptyResponse, LightningRpcError>;
 }
 
 impl dyn ILnRpcClient {

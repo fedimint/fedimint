@@ -73,6 +73,8 @@ impl GatewayLdkClient {
                 addr: [0, 0, 0, 0],
                 port: lightning_port,
             }]),
+            // TODO: Remove these and rely on the default values.
+            // See here for details: https://github.com/lightningdevkit/ldk-node/issues/339#issuecomment-2344230472
             onchain_wallet_sync_interval_secs: 10,
             wallet_sync_interval_secs: 10,
             ..Default::default()
@@ -528,5 +530,23 @@ impl ILnRpcClient for GatewayLdkClient {
             onchain_balance_sats: balances.total_onchain_balance_sats,
             lightning_balance_msats: balances.total_lightning_balance_sats * 1000,
         })
+    }
+
+    async fn sync_to_chain(&self, block_height: u32) -> Result<EmptyResponse, LightningRpcError> {
+        loop {
+            self.node
+                .sync_wallets()
+                .map_err(|e| LightningRpcError::FailedToSyncToChain {
+                    failure_reason: e.to_string(),
+                })?;
+
+            if self.node.status().current_best_block.height < block_height {
+                fedimint_core::runtime::sleep(Duration::from_millis(100)).await;
+            } else {
+                break;
+            }
+        }
+
+        Ok(EmptyResponse {})
     }
 }

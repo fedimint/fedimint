@@ -7,6 +7,7 @@ use lightning_invoice::Bolt11Invoice;
 use ln_gateway::rpc::rpc_client::GatewayRpcClient;
 use ln_gateway::rpc::{
     CloseChannelsWithPeerPayload, GetLnOnchainAddressPayload, OpenChannelPayload,
+    SyncToChainPayload,
 };
 
 use crate::print_response;
@@ -157,6 +158,10 @@ impl LightningCommands {
                 max_retries,
                 retry_delay_seconds,
             } => {
+                create_client()
+                    .sync_to_chain(SyncToChainPayload { block_height })
+                    .await?;
+
                 let retry_duration = Duration::from_secs(
                     retry_delay_seconds.unwrap_or(DEFAULT_WAIT_FOR_CHAIN_SYNC_RETRY_DELAY_SECONDS),
                 );
