@@ -27,7 +27,7 @@ erased-serde = { workspace = true }
 fedimint-api-client = { workspace = true }
 fedimint-client = { workspace = true }
 fedimint-core = { workspace = true }
-fedimint-meta-common = { version = "=0.4.2-rc.3", path = "../fedimint-meta-common" }
+fedimint-meta-common = { version = "=0.4.2-rc.4", path = "../fedimint-meta-common" }
 futures = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
