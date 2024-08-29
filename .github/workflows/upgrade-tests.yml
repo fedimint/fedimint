@@ -11,6 +11,10 @@ on:
     # run daily during low usage hours
     - cron:  '30 4 * * *'
 
+  # adding just for kicking off ci, not to be merged
+  pull_request:
+    branches: [ "main", "master", "devel", "releases/v*" ]
+
   # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch:
     inputs:
@@ -53,7 +57,7 @@ jobs:
           # read versions from manually triggered workflows
           # default needed for cron or manual workflow without params
           VERSIONS="${{ github.event.inputs.versions }}"
-          VERSIONS=${VERSIONS:="v0.3.3 v0.4.0 current"}
+          VERSIONS=${VERSIONS:="v0.3.3 v0.4.2-rc.3"}
 
           # if empty, defaults to all test kinds within script
           TEST_KINDS="${{ github.event.inputs.test_kinds }}"
