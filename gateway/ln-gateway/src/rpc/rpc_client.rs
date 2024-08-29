@@ -8,7 +8,7 @@ use fedimint_ln_common::gateway_endpoint_constants::{
     GATEWAY_INFO_POST_ENDPOINT, GET_BALANCES_ENDPOINT, GET_LN_ONCHAIN_ADDRESS_ENDPOINT,
     LEAVE_FED_ENDPOINT, LIST_ACTIVE_CHANNELS_ENDPOINT, MNEMONIC_ENDPOINT, OPEN_CHANNEL_ENDPOINT,
     RECEIVE_ECASH_ENDPOINT, SET_CONFIGURATION_ENDPOINT, SPEND_ECASH_ENDPOINT, STOP_ENDPOINT,
-    WITHDRAW_ENDPOINT,
+    SYNC_TO_CHAIN_ENDPOINT, WITHDRAW_ENDPOINT,
 };
 use fedimint_lnv2_common::endpoint_constants::{
     CREATE_BOLT11_INVOICE_FOR_SELF_ENDPOINT, PAY_INVOICE_SELF_ENDPOINT,
@@ -24,7 +24,8 @@ use super::{
     CreateInvoiceForSelfPayload, DepositAddressPayload, FederationInfo, GatewayBalances,
     GatewayFedConfig, GatewayInfo, GetLnOnchainAddressPayload, LeaveFedPayload, MnemonicResponse,
     OpenChannelPayload, PayInvoicePayload, ReceiveEcashPayload, ReceiveEcashResponse,
-    SetConfigurationPayload, SpendEcashPayload, SpendEcashResponse, WithdrawPayload,
+    SetConfigurationPayload, SpendEcashPayload, SpendEcashResponse, SyncToChainPayload,
+    WithdrawPayload,
 };
 use crate::lightning::ChannelInfo;
 use crate::CloseChannelsWithPeerResponse;
@@ -230,6 +231,14 @@ impl GatewayRpcClient {
             .join(GET_BALANCES_ENDPOINT)
             .expect("invalid base url");
         self.call_get(url).await
+    }
+
+    pub async fn sync_to_chain(&self, payload: SyncToChainPayload) -> GatewayRpcResult<()> {
+        let url = self
+            .base_url
+            .join(SYNC_TO_CHAIN_ENDPOINT)
+            .expect("invalid base url");
+        self.call_post(url, payload).await
     }
 
     pub async fn get_mnemonic(&self) -> GatewayRpcResult<MnemonicResponse> {

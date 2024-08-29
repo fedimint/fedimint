@@ -946,6 +946,14 @@ pub async fn open_channels_between_gateways(
 
     bitcoind.mine_blocks(10).await?;
 
+    debug!(target: LOG_DEVIMINT, "Syncing gateway lightning nodes to chain tip...");
+    futures::future::try_join_all(
+        gateways
+            .iter()
+            .map(|(gw, _gw_name)| gw.wait_for_chain_sync(bitcoind)),
+    )
+    .await?;
+
     for ((gw_a, _gw_a_name), (gw_b, _gw_b_name)) in &gateway_pairs {
         let gw_a_node_pubkey = gw_a.lightning_pubkey().await?;
         let gw_b_node_pubkey = gw_b.lightning_pubkey().await?;

@@ -16,7 +16,8 @@ use fedimint_ln_common::gateway_endpoint_constants::{
     GATEWAY_INFO_POST_ENDPOINT, GET_BALANCES_ENDPOINT, GET_GATEWAY_ID_ENDPOINT,
     GET_LN_ONCHAIN_ADDRESS_ENDPOINT, LEAVE_FED_ENDPOINT, LIST_ACTIVE_CHANNELS_ENDPOINT,
     MNEMONIC_ENDPOINT, OPEN_CHANNEL_ENDPOINT, PAY_INVOICE_ENDPOINT, RECEIVE_ECASH_ENDPOINT,
-    SET_CONFIGURATION_ENDPOINT, SPEND_ECASH_ENDPOINT, STOP_ENDPOINT, WITHDRAW_ENDPOINT,
+    SET_CONFIGURATION_ENDPOINT, SPEND_ECASH_ENDPOINT, STOP_ENDPOINT, SYNC_TO_CHAIN_ENDPOINT,
+    WITHDRAW_ENDPOINT,
 };
 use fedimint_lnv2_client::{CreateBolt11InvoicePayload, SendPaymentPayload};
 use fedimint_lnv2_common::endpoint_constants::{
@@ -33,7 +34,8 @@ use super::{
     BackupPayload, BalancePayload, CloseChannelsWithPeerPayload, ConnectFedPayload,
     CreateInvoiceForSelfPayload, DepositAddressPayload, GetLnOnchainAddressPayload, InfoPayload,
     LeaveFedPayload, OpenChannelPayload, PayInvoicePayload, ReceiveEcashPayload,
-    SetConfigurationPayload, SpendEcashPayload, WithdrawPayload, V1_API_ENDPOINT,
+    SetConfigurationPayload, SpendEcashPayload, SyncToChainPayload, WithdrawPayload,
+    V1_API_ENDPOINT,
 };
 use crate::rpc::ConfigPayload;
 use crate::{Gateway, GatewayError};
@@ -163,7 +165,8 @@ fn v1_routes(gateway: Arc<Gateway>, task_group: TaskGroup) -> Router {
             CREATE_BOLT11_INVOICE_ENDPOINT,
             post(create_bolt11_invoice_v2),
         )
-        .route(RECEIVE_ECASH_ENDPOINT, post(receive_ecash));
+        .route(RECEIVE_ECASH_ENDPOINT, post(receive_ecash))
+        .route(SYNC_TO_CHAIN_ENDPOINT, post(sync_to_chain));
 
     // Authenticated, public routes used for gateway administration
     let always_authenticated_routes = Router::new()
@@ -391,6 +394,15 @@ async fn get_balances(
 ) -> Result<impl IntoResponse, GatewayError> {
     let balances = gateway.handle_get_balances_msg().await?;
     Ok(Json(json!(balances)))
+}
+
+#[instrument(skip_all, err)]
+async fn sync_to_chain(
+    Extension(gateway): Extension<Arc<Gateway>>,
+    Json(payload): Json<SyncToChainPayload>,
+) -> Result<impl IntoResponse, GatewayError> {
+    gateway.handle_sync_to_chain_msg(payload).await?;
+    Ok(Json(json!(())))
 }
 
 #[instrument(skip_all, err)]

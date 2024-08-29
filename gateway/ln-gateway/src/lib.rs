@@ -98,7 +98,7 @@ use rpc::{
     CloseChannelsWithPeerPayload, CreateInvoiceForSelfPayload, FederationInfo, GatewayFedConfig,
     GatewayInfo, LeaveFedPayload, MnemonicResponse, OpenChannelPayload, PayInvoicePayload,
     ReceiveEcashPayload, ReceiveEcashResponse, SetConfigurationPayload, SpendEcashPayload,
-    SpendEcashResponse, V1_API_ENDPOINT,
+    SpendEcashResponse, SyncToChainPayload, V1_API_ENDPOINT,
 };
 use state_machine::pay::OutgoingPaymentError;
 use state_machine::{GatewayClientModule, GatewayExtPayStates};
@@ -1396,6 +1396,16 @@ impl Gateway {
             lightning_balance_msats: lightning_node_balances.lightning_balance_msats,
             ecash_balances,
         })
+    }
+
+    pub async fn handle_sync_to_chain_msg(&self, payload: SyncToChainPayload) -> Result<()> {
+        self.get_lightning_context()
+            .await?
+            .lnrpc
+            .sync_to_chain(payload.block_height)
+            .await?;
+
+        Ok(())
     }
 
     // Handles a request the spend the gateway's ecash for a given federation.
