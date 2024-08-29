@@ -57,7 +57,7 @@ jobs:
           # read versions from manually triggered workflows
           # default needed for cron or manual workflow without params
           VERSIONS="${{ github.event.inputs.versions }}"
-          VERSIONS=${VERSIONS:="v0.3.3 v0.4.2-rc.3"}
+          VERSIONS=${VERSIONS:="v0.4.0 v0.4.2-rc.3"}
 
           # if empty, defaults to all test kinds within script
           TEST_KINDS="${{ github.event.inputs.test_kinds }}"
