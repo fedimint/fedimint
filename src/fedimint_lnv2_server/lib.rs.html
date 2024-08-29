@@ -780,13 +780,6 @@
 <a href="#780" id="780">780</a>
 <a href="#781" id="781">781</a>
 <a href="#782" id="782">782</a>
-<a href="#783" id="783">783</a>
-<a href="#784" id="784">784</a>
-<a href="#785" id="785">785</a>
-<a href="#786" id="786">786</a>
-<a href="#787" id="787">787</a>
-<a href="#788" id="788">788</a>
-<a href="#789" id="789">789</a>
 </pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_wrap)]
 #![allow(clippy::module_name_repetitions)]
@@ -820,8 +813,8 @@
     apply, async_trait_maybe_send, push_db_pair_items, NumPeersExt, OutPoint, PeerId, ServerModule,
 };
 <span class="kw">use </span>fedimint_lnv2_common::config::{
-    LightningClientConfig, LightningConfig, LightningConfigConsensus, LightningConfigLocal,
-    LightningConfigPrivate, LightningFees, LightningGenParams,
+    FeeConsensus, LightningClientConfig, LightningConfig, LightningConfigConsensus,
+    LightningConfigLocal, LightningConfigPrivate, LightningGenParams,
 };
 <span class="kw">use </span>fedimint_lnv2_common::contracts::{IncomingContract, OutgoingContract};
 <span class="kw">use </span>fedimint_lnv2_common::endpoint_constants::{
@@ -995,7 +988,7 @@
                         consensus: LightningConfigConsensus {
                             tpe_agg_pk,
                             tpe_pks: tpe_pks.clone(),
-                            fees: LightningFees::default(),
+                            fee_consensus: FeeConsensus::default(),
                             network: params.consensus.network,
                         },
                         private: LightningConfigPrivate {
@@ -1037,7 +1030,7 @@
                         (<span class="kw-2">*</span>peer, PublicKeyShare(pk))
                     })
                     .collect(),
-                fees: LightningFees::default(),
+                fee_consensus: FeeConsensus::default(),
                 network: params.consensus.network,
             },
             private: LightningConfigPrivate {
@@ -1064,7 +1057,7 @@
         <span class="prelude-val">Ok</span>(LightningClientConfig {
             tpe_agg_pk: config.tpe_agg_pk,
             tpe_pks: config.tpe_pks,
-            fees: config.fees,
+            fee_consensus: config.fee_consensus,
             network: config.network,
         })
     }
@@ -1166,7 +1159,7 @@
     ) -&gt; <span class="prelude-ty">Result</span>&lt;InputMeta, LightningInputError&gt; {
         <span class="kw">let </span>input = input.ensure_v0_ref()<span class="question-mark">?</span>;
 
-        <span class="kw">match </span><span class="kw-2">&amp;</span>input {
+        <span class="kw">let </span>(pub_key, amount) = <span class="kw">match </span><span class="kw-2">&amp;</span>input {
             LightningInputV0::Outgoing(contract_id, outgoing_witness) =&gt; {
                 <span class="kw">let </span>contract = dbtx
                     .remove_entry(<span class="kw-2">&amp;</span>OutgoingContractKey(<span class="kw-2">*</span>contract_id))
@@ -1204,13 +1197,7 @@
                     }
                 };
 
-                <span class="prelude-val">Ok</span>(InputMeta {
-                    amount: TransactionItemAmount {
-                        amount: contract.amount,
-                        fee: <span class="self">self</span>.cfg.consensus.fees.spend_outgoing_contract,
-                    },
-                    pub_key,
-                })
+                (pub_key, contract.amount)
             }
             LightningInputV0::Incoming(contract_id, agg_decryption_key) =&gt; {
                 <span class="kw">let </span>contract = dbtx
@@ -1229,15 +1216,17 @@
                     <span class="prelude-val">None </span>=&gt; contract.commitment.refund_pk,
                 };
 
-                <span class="prelude-val">Ok</span>(InputMeta {
-                    amount: TransactionItemAmount {
-                        amount: contract.commitment.amount,
-                        fee: <span class="self">self</span>.cfg.consensus.fees.spend_incoming_contract,
-                    },
-                    pub_key,
-                })
+                (pub_key, contract.commitment.amount)
             }
-        }
+        };
+
+        <span class="prelude-val">Ok</span>(InputMeta {
+            amount: TransactionItemAmount {
+                amount,
+                fee: <span class="self">self</span>.cfg.consensus.fee_consensus.input,
+            },
+            pub_key,
+        })
     }
 
     <span class="kw">async fn </span>process_output&lt;<span class="lifetime">'a</span>, <span class="lifetime">'b</span>&gt;(
@@ -1294,15 +1283,12 @@
             <span class="macro">panic!</span>(<span class="string">"Output Outcome for {out_point:?} already exists"</span>);
         }
 
-        <span class="prelude-val">Ok</span>(<span class="kw">match </span>output {
-            LightningOutputV0::Outgoing(contract) =&gt; TransactionItemAmount {
-                amount: contract.amount,
-                fee: <span class="self">self</span>.cfg.consensus.fees.create_outgoing_contract,
+        <span class="prelude-val">Ok</span>(TransactionItemAmount {
+            amount: <span class="kw">match </span>output {
+                LightningOutputV0::Outgoing(contract) =&gt; contract.amount,
+                LightningOutputV0::Incoming(contract) =&gt; contract.commitment.amount,
             },
-            LightningOutputV0::Incoming(contract) =&gt; TransactionItemAmount {
-                amount: contract.commitment.amount,
-                fee: <span class="self">self</span>.cfg.consensus.fees.create_incoming_contract,
-            },
+            fee: <span class="self">self</span>.cfg.consensus.fee_consensus.output,
         })
     }
 

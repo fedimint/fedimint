@@ -156,7 +156,6 @@
 <a href="#156" id="156">156</a>
 <a href="#157" id="157">157</a>
 <a href="#158" id="158">158</a>
-<a href="#159" id="159">159</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 
 <span class="kw">pub use </span>bitcoin::Network;
@@ -213,7 +212,7 @@
 </span><span class="kw">pub struct </span>LightningConfigConsensus {
     <span class="kw">pub </span>tpe_agg_pk: AggregatePublicKey,
     <span class="kw">pub </span>tpe_pks: BTreeMap&lt;PeerId, PublicKeyShare&gt;,
-    <span class="kw">pub </span>fees: LightningFees,
+    <span class="kw">pub </span>fee_consensus: FeeConsensus,
     <span class="kw">pub </span>network: Network,
 }
 
@@ -226,7 +225,7 @@
 </span><span class="kw">pub struct </span>LightningClientConfig {
     <span class="kw">pub </span>tpe_agg_pk: AggregatePublicKey,
     <span class="kw">pub </span>tpe_pks: BTreeMap&lt;PeerId, PublicKeyShare&gt;,
-    <span class="kw">pub </span>fees: LightningFees,
+    <span class="kw">pub </span>fee_consensus: FeeConsensus,
     <span class="kw">pub </span>network: Network,
 }
 
@@ -254,20 +253,16 @@
 );
 
 <span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable, Decodable)]
-</span><span class="kw">pub struct </span>LightningFees {
-    <span class="kw">pub </span>spend_outgoing_contract: Amount,
-    <span class="kw">pub </span>spend_incoming_contract: Amount,
-    <span class="kw">pub </span>create_outgoing_contract: Amount,
-    <span class="kw">pub </span>create_incoming_contract: Amount,
+</span><span class="kw">pub struct </span>FeeConsensus {
+    <span class="kw">pub </span>input: Amount,
+    <span class="kw">pub </span>output: Amount,
 }
 
-<span class="kw">impl </span>Default <span class="kw">for </span>LightningFees {
+<span class="kw">impl </span>Default <span class="kw">for </span>FeeConsensus {
     <span class="kw">fn </span>default() -&gt; <span class="self">Self </span>{
         <span class="self">Self </span>{
-            spend_outgoing_contract: Amount::from_sats(<span class="number">1</span>),
-            spend_incoming_contract: Amount::from_sats(<span class="number">1</span>),
-            create_outgoing_contract: Amount::from_sats(<span class="number">1</span>),
-            create_incoming_contract: Amount::from_sats(<span class="number">1</span>),
+            input: Amount::from_sats(<span class="number">1</span>),
+            output: Amount::from_sats(<span class="number">1</span>),
         }
     }
 }
@@ -294,7 +289,10 @@
                 )
             })
             .collect(),
-        fees: LightningFees::default(),
+        fee_consensus: FeeConsensus {
+            input: config.fee_consensus.contract_input,
+            output: config.fee_consensus.contract_output,
+        },
         network: config.network,
     }
 }

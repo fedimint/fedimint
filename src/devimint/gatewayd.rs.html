@@ -311,6 +311,15 @@
 <a href="#311" id="311">311</a>
 <a href="#312" id="312">312</a>
 <a href="#313" id="313">313</a>
+<a href="#314" id="314">314</a>
+<a href="#315" id="315">315</a>
+<a href="#316" id="316">316</a>
+<a href="#317" id="317">317</a>
+<a href="#318" id="318">318</a>
+<a href="#319" id="319">319</a>
+<a href="#320" id="320">320</a>
+<a href="#321" id="321">321</a>
+<a href="#322" id="322">322</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::HashMap;
 <span class="kw">use </span>std::ops::ControlFlow;
 <span class="kw">use </span>std::path::PathBuf;
@@ -328,6 +337,7 @@
 <span class="kw">use </span><span class="kw">crate</span>::federation::Federation;
 <span class="kw">use </span><span class="kw">crate</span>::util::{poll, Command, ProcessHandle, ProcessManager};
 <span class="kw">use </span><span class="kw">crate</span>::vars::utf8;
+<span class="kw">use </span><span class="kw">crate</span>::version_constants::VERSION_0_5_0_ALPHA;
 <span class="kw">use crate</span>::{cmd, Lightningd};
 
 <span class="attr">#[derive(Clone)]
@@ -535,9 +545,17 @@
     }
 
     <span class="kw">pub async fn </span>get_ln_onchain_address(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;String&gt; {
-        <span class="kw">let </span>address = <span class="macro">cmd!</span>(<span class="self">self</span>, <span class="string">"lightning"</span>, <span class="string">"get-ln-onchain-address"</span>)
-            .out_string()
-            .<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>gateway_cli_version = <span class="kw">crate</span>::util::GatewayCli::version_or_default().<span class="kw">await</span>;
+        <span class="kw">let </span>address = <span class="kw">if </span>gateway_cli_version &lt; <span class="kw-2">*</span>VERSION_0_5_0_ALPHA {
+            <span class="macro">cmd!</span>(<span class="self">self</span>, <span class="string">"lightning"</span>, <span class="string">"get-funding-address"</span>)
+                .out_string()
+                .<span class="kw">await</span><span class="question-mark">?
+        </span>} <span class="kw">else </span>{
+            <span class="macro">cmd!</span>(<span class="self">self</span>, <span class="string">"lightning"</span>, <span class="string">"get-ln-onchain-address"</span>)
+                .out_string()
+                .<span class="kw">await</span><span class="question-mark">?
+        </span>};
+
         <span class="prelude-val">Ok</span>(address)
     }
 
