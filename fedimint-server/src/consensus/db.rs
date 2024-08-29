@@ -243,6 +243,152 @@ fn get_consensus_from_votes(
     votes[0].map(|v| v.desired)
 }
 
+#[test]
+fn get_consensus_from_votes_sanity() {
+    for (raw_votes, res) in [
+        ([Some((0, 0, false))].as_slice(), Some((0, 0))),
+        (&[Some((1, 2, false)), None, None, None], None),
+        (
+            &[Some((1, 2, false)), Some((1, 2, false)), None, None],
+            None,
+        ),
+        (
+            &[
+                Some((1, 2, false)),
+                Some((1, 2, false)),
+                Some((1, 2, false)),
+                None,
+            ],
+            None,
+        ),
+        (
+            &[
+                Some((1, 2, false)),
+                Some((1, 2, false)),
+                Some((1, 2, false)),
+                Some((1, 2, false)),
+            ],
+            Some((1, 2)),
+        ),
+        (
+            &[
+                Some((1, 2, false)),
+                Some((1, 2, false)),
+                Some((1, 2, true)),
+                None,
+            ],
+            Some((1, 2)),
+        ),
+        (
+            &[
+                Some((1, 3, false)),
+                Some((1, 3, false)),
+                Some((1, 2, false)),
+                Some((1, 3, false)),
+            ],
+            Some((1, 2)),
+        ),
+        (
+            &[
+                Some((1, 1, false)),
+                Some((1, 2, false)),
+                Some((1, 3, false)),
+                Some((1, 4, false)),
+            ],
+            Some((1, 1)),
+        ),
+        (
+            &[
+                Some((1, 3, false)),
+                Some((1, 2, false)),
+                Some((1, 2, true)),
+                Some((1, 3, false)),
+            ],
+            Some((1, 2)),
+        ),
+        (
+            &[
+                Some((1, 3, false)),
+                Some((1, 2, false)),
+                Some((1, 2, false)),
+                Some((1, 3, true)),
+            ],
+            Some((1, 2)),
+        ),
+        (
+            &[
+                Some((1, 3, false)),
+                Some((1, 3, false)),
+                Some((1, 2, true)),
+                Some((1, 3, false)),
+            ],
+            Some((1, 3)),
+        ),
+        (
+            &[
+                Some((1, 3, true)),
+                Some((1, 3, false)),
+                Some((1, 2, false)),
+                Some((1, 3, false)),
+            ],
+            Some((1, 3)),
+        ),
+        (
+            &[
+                Some((1, 1, false)),
+                Some((1, 2, false)),
+                Some((1, 3, false)),
+                Some((1, 4, false)),
+                Some((1, 5, false)),
+                Some((1, 6, false)),
+                Some((1, 7, false)),
+            ],
+            Some((1, 1)),
+        ),
+        (
+            &[
+                Some((1, 1, false)),
+                Some((1, 2, false)),
+                Some((1, 3, false)),
+                Some((1, 4, false)),
+                Some((1, 5, false)),
+                Some((1, 6, true)),
+                Some((1, 7, false)),
+            ],
+            Some((1, 3)),
+        ),
+        (
+            &[
+                None,
+                None,
+                Some((1, 3, false)),
+                Some((1, 4, false)),
+                Some((1, 5, false)),
+                Some((1, 6, true)),
+                Some((1, 7, false)),
+            ],
+            Some((1, 3)),
+        ),
+    ] {
+        use fedimint_core::NumPeersExt;
+        let num_peers = raw_votes.to_num_peers();
+        let mut votes: Vec<_> = raw_votes
+            .iter()
+            .map(|raw| {
+                raw.map(|(major, minor, accelerate)| ConsensusVersionVoteValue {
+                    desired: ConsensusVersion { major, minor },
+                    accelerate,
+                })
+            })
+            .collect();
+        assert_eq!(
+            get_consensus_from_votes(&mut votes, num_peers),
+            res.map(|(major, minor)| ConsensusVersion { major, minor }),
+            "For votes {raw_votes:?}"
+        );
+    }
+}
+
 #[cfg(test)]
 mod fedimint_migration_tests {
     use std::collections::BTreeMap;
