@@ -54,7 +54,7 @@ pub struct LightningConfigLocal {
 pub struct LightningConfigConsensus {
     pub tpe_agg_pk: AggregatePublicKey,
     pub tpe_pks: BTreeMap<PeerId, PublicKeyShare>,
-    pub fees: LightningFees,
+    pub fee_consensus: FeeConsensus,
     pub network: Network,
 }
 
@@ -67,7 +67,7 @@ pub struct LightningConfigPrivate {
 pub struct LightningClientConfig {
     pub tpe_agg_pk: AggregatePublicKey,
     pub tpe_pks: BTreeMap<PeerId, PublicKeyShare>,
-    pub fees: LightningFees,
+    pub fee_consensus: FeeConsensus,
     pub network: Network,
 }
 
@@ -95,20 +95,16 @@ plugin_types_trait_impl_config!(
 );
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable, Decodable)]
-pub struct LightningFees {
-    pub spend_outgoing_contract: Amount,
-    pub spend_incoming_contract: Amount,
-    pub create_outgoing_contract: Amount,
-    pub create_incoming_contract: Amount,
+pub struct FeeConsensus {
+    pub input: Amount,
+    pub output: Amount,
 }
 
-impl Default for LightningFees {
+impl Default for FeeConsensus {
     fn default() -> Self {
         Self {
-            spend_outgoing_contract: Amount::from_sats(1),
-            spend_incoming_contract: Amount::from_sats(1),
-            create_outgoing_contract: Amount::from_sats(1),
-            create_incoming_contract: Amount::from_sats(1),
+            input: Amount::from_sats(1),
+            output: Amount::from_sats(1),
         }
     }
 }
@@ -135,7 +131,10 @@ fn migrate_config_consensus(
                 )
             })
             .collect(),
-        fees: LightningFees::default(),
+        fee_consensus: FeeConsensus {
+            input: config.fee_consensus.contract_input,
+            output: config.fee_consensus.contract_output,
+        },
         network: config.network,
     }
 }
