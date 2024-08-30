@@ -2149,7 +2149,7 @@ impl Gateway {
                 "No corresponding decryption contract available".to_string(),
             )))?;
 
-        if registered_incoming_contract.incoming_amount != amount_msats {
+        if registered_incoming_contract.incoming_amount_msats != amount_msats {
             return Err(PublicGatewayError::LNv2(LNv2Error::IncomingPayment(
                 "The available decryption contract's amount is not equal to the requested amount"
                     .to_string(),
