@@ -67,7 +67,7 @@ pub struct WithdrawPayload {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct FederationInfo {
     pub federation_id: FederationId,
-    pub balance_msat: Amount, // TODO: Rename to `balance`, since `Amount` is already in msat.
+    pub balance_msat: Amount,
     pub federation_index: u64,
     pub routing_fees: Option<FederationRoutingFees>,
 }
