@@ -4,7 +4,7 @@ use std::fmt::Debug;
 use fedimint_core::util::SafeUrl;
 use serde::{Deserialize, Serialize};
 #[cfg(not(target_family = "wasm"))]
-use tokio_rustls::rustls::Certificate as RustlsCertificate;
+use tokio_rustls::rustls::pki_types::CertificateDer as RustlsCertificate;
 
 use crate::config::ServerModuleConfigGenParamsRegistry;
 use crate::PeerId;
@@ -35,7 +35,7 @@ pub enum ServerStatus {
 
 #[cfg(target_family = "wasm")]
 #[derive(Debug, Clone, Eq, Hash, Ord, PartialEq, PartialOrd)]
-struct RustlsCertificate(pub Vec<u8>);
+struct RustlsCertificate<'a>(pub Vec<u8>);
 
 /// Sent by admin user to the API
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -52,7 +52,7 @@ pub struct ConfigGenConnectionsRequest {
 pub struct PeerServerParams {
     /// TLS cert is necessary for P2P auth during DKG and  consensus
     #[serde(with = "serde_tls_cert")]
-    pub cert: RustlsCertificate,
+    pub cert: RustlsCertificate<'static>,
     /// P2P is the network for running DKG and consensus
     pub p2p_url: SafeUrl,
     /// API for secure websocket requests
@@ -96,7 +96,7 @@ pub struct ConfigGenParamsRequest {
 mod serde_tls_cert {
     use std::borrow::Cow;
 
-    use hex::{FromHex, ToHex};
+    use hex::FromHex;
     use serde::de::Error;
     use serde::{Deserialize, Deserializer, Serializer};
 
@@ -106,17 +106,16 @@ mod serde_tls_cert {
     where
         S: Serializer,
     {
-        let hex_str = certs.0.encode_hex::<String>();
+        let hex_str = hex::encode(certs.as_ref());
         serializer.serialize_str(&hex_str)
     }
 
-    pub fn deserialize<'de, D>(deserializer: D) -> Result<RustlsCertificate, D::Error>
+    pub fn deserialize<'de, D>(deserializer: D) -> Result<RustlsCertificate<'static>, D::Error>
     where
         D: Deserializer<'de>,
     {
         let value: Cow<str> = Deserialize::deserialize(deserializer)?;
-        Ok(RustlsCertificate(
-            Vec::from_hex(value.as_ref()).map_err(D::Error::custom)?,
-        ))
+        let bytes = Vec::from_hex(value.as_ref()).map_err(D::Error::custom)?;
+        Ok(RustlsCertificate::from(bytes).into_owned())
     }
 }

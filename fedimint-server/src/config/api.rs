@@ -1,3 +1,4 @@
+use std::clone::Clone;
 use std::collections::BTreeMap;
 use std::net::SocketAddr;
 use std::sync::Arc;
@@ -41,7 +42,7 @@ use tokio::time::Instant;
 use tokio_rustls::rustls;
 use tracing::{error, info};
 
-use crate::config::{gen_cert_and_key, ConfigGenParams, ServerConfig};
+use crate::config::{gen_cert_and_key, CloneablePrivateKey, ConfigGenParams, ServerConfig};
 use crate::envs::FM_PEER_ID_SORT_BY_URL_ENV;
 use crate::net::api::{check_auth, ApiResult, HasApiContext};
 use crate::net::peers::DelayCalculator;
@@ -580,7 +581,7 @@ pub struct ConfigGenParamsLocal {
     /// Our peer id
     pub our_id: PeerId,
     /// Our TLS private key
-    pub our_private_key: rustls::PrivateKey,
+    pub our_private_key: CloneablePrivateKey,
     /// Secret API auth string
     pub api_auth: ApiAuth,
     /// Bind address for P2P communication
@@ -636,9 +637,9 @@ pub struct ConfigGenState {
 #[derive(Debug, Clone)]
 struct ConfigGenLocalConnection {
     /// Our TLS private key
-    tls_private: rustls::PrivateKey,
+    tls_private: CloneablePrivateKey,
     /// Our TLS public cert
-    tls_cert: rustls::Certificate,
+    tls_cert: rustls::pki_types::CertificateDer<'static>,
     /// Our guardian name
     our_name: String,
     /// URL of "leader" guardian to send our connection info to
@@ -663,7 +664,7 @@ impl ConfigGenState {
         let (tls_cert, tls_private) = gen_cert_and_key(&request.our_name)
             .map_err(|_| ApiError::server_error("Unable to generate TLS keys".to_string()))?;
         self.local = Some(ConfigGenLocalConnection {
-            tls_private,
+            tls_private: CloneablePrivateKey(tls_private),
             tls_cert,
             our_name: request.our_name,
             leader_api_url: request.leader_api_url,

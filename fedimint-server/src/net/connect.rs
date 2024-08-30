@@ -14,7 +14,7 @@ use fedimint_core::PeerId;
 use futures::Stream;
 use tokio::io::{ReadHalf, WriteHalf};
 use tokio::net::{TcpListener, TcpStream};
-use tokio_rustls::rustls::server::AllowAnyAuthenticatedClient;
+use tokio_rustls::rustls::server::WebPkiClientVerifier;
 use tokio_rustls::rustls::RootCertStore;
 use tokio_rustls::{rustls, TlsAcceptor, TlsConnector, TlsStream};
 
@@ -58,8 +58,8 @@ pub trait Connector<M> {
 /// TCP connector with encryption and authentication
 #[derive(Debug)]
 pub struct TlsTcpConnector {
-    our_certificate: rustls::Certificate,
-    our_private_key: rustls::PrivateKey,
+    our_certificate: rustls::pki_types::CertificateDer<'static>,
+    our_private_key: rustls::pki_types::PrivateKeyDer<'static>,
     peer_certs: Arc<PeerCertStore>,
     /// Copy of the certs from `peer_certs`, but in a format that `tokio_rustls`
     /// understands
@@ -69,28 +69,29 @@ pub struct TlsTcpConnector {
 
 #[derive(Debug, Clone)]
 pub struct TlsConfig {
-    pub our_private_key: rustls::PrivateKey,
-    pub peer_certs: BTreeMap<PeerId, rustls::Certificate>,
+    pub our_private_key: Arc<rustls::pki_types::PrivateKeyDer<'static>>,
+    pub peer_certs: BTreeMap<PeerId, rustls::pki_types::CertificateDer<'static>>,
     pub peer_names: BTreeMap<PeerId, String>,
 }
 
 #[derive(Debug, Clone)]
 pub struct PeerCertStore {
-    peer_certificates: Vec<(PeerId, rustls::Certificate)>,
+    peer_certificates: Vec<(PeerId, rustls::pki_types::CertificateDer<'static>)>,
 }
 
 impl TlsTcpConnector {
     pub fn new(cfg: TlsConfig, our_id: PeerId) -> TlsTcpConnector {
         let mut cert_store = RootCertStore::empty();
         for cert in cfg.peer_certs.values() {
+            let cert_der = rustls::pki_types::CertificateDer::from(cert.as_ref().to_vec());
             cert_store
-                .add(cert)
+                .add(cert_der)
                 .expect("Could not add peer certificate");
         }
 
         TlsTcpConnector {
             our_certificate: cfg.peer_certs.get(&our_id).expect("exists").clone(),
-            our_private_key: cfg.our_private_key,
+            our_private_key: cfg.our_private_key.clone_key(),
             peer_certs: Arc::new(PeerCertStore::new(cfg.peer_certs)),
             cert_store,
             peer_names: cfg.peer_names,
@@ -99,13 +100,18 @@ impl TlsTcpConnector {
 }
 
 impl PeerCertStore {
-    fn new(certs: impl IntoIterator<Item = (PeerId, rustls::Certificate)>) -> PeerCertStore {
+    fn new(
+        certs: impl IntoIterator<Item = (PeerId, rustls::pki_types::CertificateDer<'static>)>,
+    ) -> PeerCertStore {
         PeerCertStore {
             peer_certificates: certs.into_iter().collect(),
         }
     }
 
-    fn get_peer_by_cert(&self, cert: &rustls::Certificate) -> Option<PeerId> {
+    fn get_peer_by_cert(
+        &self,
+        cert: &rustls::pki_types::CertificateDer<'static>,
+    ) -> Option<PeerId> {
         self.peer_certificates
             .iter()
             .find_map(|(peer, peer_cert)| if peer_cert == cert { Some(*peer) } else { None })
@@ -113,7 +119,7 @@ impl PeerCertStore {
 
     fn authenticate_peer(
         &self,
-        received: Option<&[rustls::Certificate]>,
+        received: Option<&[rustls::pki_types::CertificateDer<'static>]>,
     ) -> Result<PeerId, anyhow::Error> {
         let cert_chain =
             received.ok_or_else(|| anyhow::anyhow!("Peer did not authenticate itself"))?;
@@ -161,16 +167,15 @@ where
 {
     async fn connect_framed(&self, destination: SafeUrl, peer: PeerId) -> ConnectResult<M> {
         let cfg = rustls::ClientConfig::builder()
-            .with_safe_defaults()
             .with_root_certificates(self.cert_store.clone())
             .with_client_auth_cert(
                 vec![self.our_certificate.clone()],
-                self.our_private_key.clone(),
+                self.our_private_key.clone_key(),
             )
             .expect("Failed to create TLS config");
 
         let fake_domain =
-            rustls::ServerName::try_from(dns_sanitize(&self.peer_names[&peer]).as_str())
+            rustls::pki_types::ServerName::try_from(dns_sanitize(&self.peer_names[&peer]))
                 .expect("Always a valid DNS name");
 
         let connector = TlsConnector::from(Arc::new(cfg));
@@ -200,15 +205,14 @@ where
     }
 
     async fn listen(&self, bind_addr: SocketAddr) -> Result<ConnectionListener<M>, anyhow::Error> {
-        let verifier = AllowAnyAuthenticatedClient::new(self.cert_store.clone());
+        let verifier = WebPkiClientVerifier::builder(Arc::from(self.cert_store.clone())).build()?;
+
         let config = rustls::ServerConfig::builder()
-            .with_safe_defaults()
-            .with_client_cert_verifier(Arc::from(verifier))
+            .with_client_cert_verifier(verifier)
             .with_single_cert(
                 vec![self.our_certificate.clone()],
-                self.our_private_key.clone(),
-            )
-            .unwrap();
+                self.our_private_key.clone_key(),
+            )?;
         let listener = TcpListener::bind(bind_addr).await?;
         let peer_certs = self.peer_certs.clone();
 
@@ -854,7 +858,7 @@ mod tests {
         peer_keys
             .iter()
             .map(|(_cert, key)| TlsConfig {
-                our_private_key: key.clone(),
+                our_private_key: std::sync::Arc::new((*key).clone_key()),
                 peer_certs: peer_keys
                     .iter()
                     .enumerate()

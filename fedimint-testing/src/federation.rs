@@ -292,7 +292,13 @@ pub fn local_config_gen_params(
     server_config_gen: &ServerModuleConfigGenParamsRegistry,
 ) -> anyhow::Result<HashMap<PeerId, ConfigGenParams>> {
     // Generate TLS cert and private key
-    let tls_keys: HashMap<PeerId, (rustls::Certificate, rustls::PrivateKey)> = peers
+    let tls_keys: HashMap<
+        PeerId,
+        (
+            rustls::pki_types::CertificateDer,
+            rustls::pki_types::PrivateKeyDer,
+        ),
+    > = peers
         .iter()
         .map(|peer| {
             (
@@ -330,7 +336,9 @@ pub fn local_config_gen_params(
             let params = ConfigGenParams {
                 local: ConfigGenParamsLocal {
                     our_id: *peer,
-                    our_private_key: tls_keys[peer].1.clone(),
+                    our_private_key: fedimint_server::config::CloneablePrivateKey(
+                        tls_keys[peer].1.clone_key(),
+                    ),
                     api_auth: ApiAuth("pass".to_string()),
                     p2p_bind: p2p_bind.parse().expect("Valid address"),
                     api_bind: api_bind.parse().expect("Valid address"),

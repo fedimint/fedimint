@@ -153,7 +153,7 @@ exceptions = [
     ], name = "unicode-ident" },
     { allow = [
         "OpenSSL",
-    ], name = "ring" },
+    ], name = [ "ring", "aws-lc-sys" ] },
 ]
 
 # Some crates don't have (easily) machine readable licensing information,

@@ -23,4 +23,4 @@ fedimint-wallet-client = { workspace = true }
 futures = { workspace = true }
 gloo-net = "0.6.0"
 rand = { workspace = true }
-wasm-bindgen-test = "0.3.42"
+wasm-bindgen-test = { workspace = true }
