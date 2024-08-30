@@ -624,7 +624,9 @@ async fn get_lightning_gateway(
     gateway_id: Option<String>,
 ) -> Option<LightningGateway> {
     let gateway_id = parse_gateway_id(gateway_id.or(None)?.as_str()).expect("Invalid gateway id");
-    let ln_module = client.get_first_module::<LightningClientModule>();
+    let ln_module = client
+        .get_first_module::<LightningClientModule>()
+        .expect("Must have ln client module");
     ln_module.select_gateway(&gateway_id).await
 }
 
@@ -944,7 +946,7 @@ async fn do_self_payment(
     let (operation_id, invoice) =
         client_create_invoice(client, invoice_amount, event_sender, None).await?;
     let pay_invoice_time = fedimint_core::time::now();
-    let lightning_module = client.get_first_module::<LightningClientModule>();
+    let lightning_module = client.get_first_module::<LightningClientModule>()?;
     //let gateway = lightning_module.select_active_gateway_opt().await;
     lightning_module
         .pay_bolt11_invoice(None, invoice, ())
@@ -972,7 +974,7 @@ async fn do_partner_ping_pong(
     let (operation_id, invoice) =
         client_create_invoice(partner, invoice_amount, event_sender, None).await?;
     let pay_invoice_time = fedimint_core::time::now();
-    let lightning_module = client.get_first_module::<LightningClientModule>();
+    let lightning_module = client.get_first_module::<LightningClientModule>()?;
     // TODO: Select random gateway?
     //let gateway = lightning_module.select_active_gateway_opt().await;
     lightning_module
@@ -991,7 +993,7 @@ async fn do_partner_ping_pong(
     let (operation_id, invoice) =
         client_create_invoice(client, invoice_amount, event_sender, None).await?;
     let pay_invoice_time = fedimint_core::time::now();
-    let partner_lightning_module = partner.get_first_module::<LightningClientModule>();
+    let partner_lightning_module = partner.get_first_module::<LightningClientModule>()?;
     //let gateway = partner_lightning_module.select_active_gateway_opt().await;
     // TODO: Select random gateway?
     partner_lightning_module
@@ -1023,7 +1025,7 @@ async fn wait_invoice_payment(
         name: format!("gateway_{gateway_name}_payment_received_started"),
         duration: elapsed,
     })?;
-    let lightning_module = client.get_first_module::<LightningClientModule>();
+    let lightning_module = client.get_first_module::<LightningClientModule>()?;
     let mut updates = lightning_module
         .subscribe_ln_receive(operation_id)
         .await?
@@ -1066,7 +1068,7 @@ async fn client_create_invoice(
     ln_gateway: Option<LightningGateway>,
 ) -> anyhow::Result<(fedimint_core::core::OperationId, Bolt11Invoice)> {
     let create_invoice_time = fedimint_core::time::now();
-    let lightning_module = client.get_first_module::<LightningClientModule>();
+    let lightning_module = client.get_first_module::<LightningClientModule>()?;
     let desc = Description::new("test".to_string())?;
     let (operation_id, invoice, _) = lightning_module
         .create_bolt11_invoice(

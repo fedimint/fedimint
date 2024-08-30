@@ -109,7 +109,7 @@ impl WasmClient {
                 "ln" => {
                     let ln = self
                         .client
-                        .get_first_module::<LightningClientModule>()
+                        .get_first_module::<LightningClientModule>()?
                         .inner();
                     let mut stream = ln.handle_rpc(method.to_owned(), payload).await;
                     while let Some(item) = stream.next().await {
@@ -119,7 +119,7 @@ impl WasmClient {
                 "mint" => {
                     let mint = self
                         .client
-                        .get_first_module::<fedimint_mint_client::MintClientModule>()
+                        .get_first_module::<fedimint_mint_client::MintClientModule>()?
                         .inner();
                     let mut stream = mint.handle_rpc(method.to_owned(), payload).await;
                     while let Some(item) = stream.next().await {

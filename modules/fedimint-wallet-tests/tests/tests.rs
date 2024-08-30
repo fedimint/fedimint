@@ -52,7 +52,7 @@ async fn initial_peg_in<'a>(
     let mut balance_sub = client.subscribe_balance_changes().await;
     assert_eq!(balance_sub.ok().await?, sats(0));
 
-    let wallet_module = &client.get_first_module::<WalletClientModule>();
+    let wallet_module = &client.get_first_module::<WalletClientModule>()?;
     let (op, address, _) = wallet_module
         .allocate_deposit_address_expert_only(())
         .await?;
@@ -84,7 +84,7 @@ async fn await_consensus_to_catch_up(
     client: &ClientHandleArc,
     block_count: u64,
 ) -> anyhow::Result<u64> {
-    let wallet = client.get_first_module::<WalletClientModule>();
+    let wallet = client.get_first_module::<WalletClientModule>()?;
     loop {
         let current_consensus = client
             .api()
@@ -148,7 +148,7 @@ async fn on_chain_peg_in_and_peg_out_happy_case() -> anyhow::Result<()> {
     let fixtures = fixtures();
     let fed = fixtures.new_default_fed().await;
     let client = fed.new_client().await;
-    let wallet_module = client.get_first_module::<WalletClientModule>();
+    let wallet_module = client.get_first_module::<WalletClientModule>()?;
     let bitcoin = fixtures.bitcoin();
     let bitcoin = bitcoin.lock_exclusive().await;
     info!("Starting test on_chain_peg_in_and_peg_out_happy_case");
@@ -310,7 +310,7 @@ async fn on_chain_peg_in_detects_multiple() -> anyhow::Result<()> {
     let starting_balance = client.get_balance().await;
     info!(?starting_balance, "Starting balance");
 
-    let wallet_module = &client.get_first_module::<WalletClientModule>();
+    let wallet_module = &client.get_first_module::<WalletClientModule>()?;
     let (op, address, tweak_idx) = wallet_module
         .allocate_deposit_address_expert_only(())
         .await?;
@@ -395,7 +395,7 @@ async fn peg_out_fail_refund() -> anyhow::Result<()> {
         total_weight: 0,
     };
 
-    let wallet_module = client.get_first_module::<WalletClientModule>();
+    let wallet_module = client.get_first_module::<WalletClientModule>()?;
     let op = wallet_module
         .withdraw(address.clone(), peg_out, fees, ())
         .await?;
@@ -435,7 +435,7 @@ async fn rbf_withdrawals_are_rejected() -> anyhow::Result<()> {
     info!("Peg-in finished for test rbf_withdrawals_are_rejected");
     let address = checked_address_to_unchecked_address(&bitcoin.get_new_address().await);
     let peg_out = bsats(PEG_OUT_AMOUNT_SATS);
-    let wallet_module = client.get_first_module::<WalletClientModule>();
+    let wallet_module = client.get_first_module::<WalletClientModule>()?;
     let fees = wallet_module
         .get_withdraw_fees(address.clone(), peg_out)
         .await?;
@@ -465,7 +465,7 @@ async fn rbf_withdrawals_are_rejected() -> anyhow::Result<()> {
         txid,
     };
 
-    let wallet_module = client.get_first_module::<WalletClientModule>();
+    let wallet_module = client.get_first_module::<WalletClientModule>()?;
     #[allow(deprecated)]
     let rbf_op = wallet_module.rbf_withdraw(rbf.clone(), ()).await?;
     let rbf_sub = wallet_module.subscribe_withdraw_updates(rbf_op).await?;
@@ -516,7 +516,7 @@ async fn peg_outs_must_wait_for_available_utxos() -> anyhow::Result<()> {
     info!("Peg-in finished for test peg_outs_must_wait_for_available_utxos");
     let address = checked_address_to_unchecked_address(&bitcoin.get_new_address().await);
     let peg_out1 = PEG_OUT_AMOUNT_SATS;
-    let wallet_module = client.get_first_module::<WalletClientModule>();
+    let wallet_module = client.get_first_module::<WalletClientModule>()?;
     let fees1 = wallet_module
         .get_withdraw_fees(address.clone(), bsats(peg_out1))
         .await?;

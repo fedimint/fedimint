@@ -83,7 +83,7 @@ async fn transaction_with_invalid_signature_is_rejected() -> anyhow::Result<()> 
             |_, _| (),
             TransactionBuilder::new().with_input(
                 client
-                    .get_first_module::<MintClientModule>()
+                    .get_first_module::<MintClientModule>()?
                     .client_ctx
                     .make_client_input(client_input),
             ),
@@ -107,13 +107,13 @@ async fn sends_ecash_out_of_band() -> anyhow::Result<()> {
     // Print notes for client1
     let fed = fixtures().new_default_fed().await;
     let (client1, client2) = fed.two_clients().await;
-    let client1_dummy_module = client1.get_first_module::<DummyClientModule>();
+    let client1_dummy_module = client1.get_first_module::<DummyClientModule>()?;
     let (op, outpoint) = client1_dummy_module.print_money(sats(1000)).await?;
     client1.await_primary_module_output(op, outpoint).await?;
 
     // Spend from client1 to client2
-    let client1_mint = client1.get_first_module::<MintClientModule>();
-    let client2_mint = client2.get_first_module::<MintClientModule>();
+    let client1_mint = client1.get_first_module::<MintClientModule>()?;
+    let client2_mint = client2.get_first_module::<MintClientModule>()?;
     info!("### SPEND NOTES");
     let (op, notes) = client1_mint
         .spend_notes(sats(750), TIMEOUT, false, ())
@@ -147,7 +147,7 @@ async fn sends_ecash_oob_highly_parallel() -> anyhow::Result<()> {
     let fed = fixtures().new_default_fed().await;
     let client1 = fed.new_client_rocksdb().await;
     let client2 = fed.new_client_rocksdb().await;
-    let client1_dummy_module = client1.get_first_module::<DummyClientModule>();
+    let client1_dummy_module = client1.get_first_module::<DummyClientModule>()?;
     let (op, outpoint) = client1_dummy_module.print_money(sats(1000)).await?;
     client1.await_primary_module_output(op, outpoint).await?;
 
@@ -166,7 +166,7 @@ async fn sends_ecash_oob_highly_parallel() -> anyhow::Result<()> {
             &format!("spend_ecash_{num_spend}"),
             async move {
                 info!("Starting spend {num_spend}");
-                let client1_mint = task_client1.get_first_module::<MintClientModule>();
+                let client1_mint = task_client1.get_first_module::<MintClientModule>().unwrap();
                 let (op, notes) = client1_mint
                     .spend_notes(sats(30), ECASH_TIMEOUT, false, ())
                     .await
@@ -201,7 +201,7 @@ async fn sends_ecash_oob_highly_parallel() -> anyhow::Result<()> {
             &format!("reissue_ecash_{num_reissue}"),
             async move {
                 info!("Starting reissue {num_reissue}");
-                let client2_mint = task_client2.get_first_module::<MintClientModule>();
+                let client2_mint = task_client2.get_first_module::<MintClientModule>().unwrap();
                 let op = client2_mint
                     .reissue_external_notes(notes, ())
                     .await
@@ -235,7 +235,7 @@ async fn backup_encode_decode_roundtrip() -> anyhow::Result<()> {
     // Print notes for client
     let fed = fixtures().new_default_fed().await;
     let client = fed.new_client().await;
-    let client_dummy_module = client.get_first_module::<DummyClientModule>();
+    let client_dummy_module = client.get_first_module::<DummyClientModule>()?;
     let (op, outpoint) = client_dummy_module.print_money(sats(1000)).await?;
     client.await_primary_module_output(op, outpoint).await?;
 
@@ -263,7 +263,7 @@ async fn ecash_backup_can_recover_metadata() -> anyhow::Result<()> {
     // Print notes for client
     let fed = fixtures().new_default_fed().await;
     let client = fed.new_client().await;
-    let client_dummy_module = client.get_first_module::<DummyClientModule>();
+    let client_dummy_module = client.get_first_module::<DummyClientModule>()?;
     let (op, outpoint) = client_dummy_module.print_money(sats(1000)).await?;
     client.await_primary_module_output(op, outpoint).await?;
 
@@ -286,12 +286,12 @@ async fn sends_ecash_out_of_band_cancel() -> anyhow::Result<()> {
     // Print notes for client1
     let fed = fixtures().new_default_fed().await;
     let client = fed.new_client().await;
-    let dummy_module = client.get_first_module::<DummyClientModule>();
+    let dummy_module = client.get_first_module::<DummyClientModule>()?;
     let (op, outpoint) = dummy_module.print_money(sats(1000)).await?;
     client.await_primary_module_output(op, outpoint).await?;
 
     // Spend from client1 to client2
-    let mint_module = client.get_first_module::<MintClientModule>();
+    let mint_module = client.get_first_module::<MintClientModule>()?;
     let (op, _) = mint_module
         .spend_notes(sats(750), TIMEOUT, false, ())
         .await?;
@@ -323,13 +323,13 @@ async fn error_zero_value_oob_spend() -> anyhow::Result<()> {
     // Print notes for client1
     let fed = fixtures().new_default_fed().await;
     let (client1, _client2) = fed.two_clients().await;
-    let client1_dummy_module = client1.get_first_module::<DummyClientModule>();
+    let client1_dummy_module = client1.get_first_module::<DummyClientModule>()?;
     let (op, outpoint) = client1_dummy_module.print_money(sats(1000)).await?;
     client1.await_primary_module_output(op, outpoint).await?;
 
     // Spend from client1 to client2
     let err_msg = client1
-        .get_first_module::<MintClientModule>()
+        .get_first_module::<MintClientModule>()?
         .spend_notes(Amount::ZERO, TIMEOUT, false, ())
         .await
         .expect_err("Zero-amount spends should be forbidden")
@@ -344,13 +344,13 @@ async fn error_zero_value_oob_receive() -> anyhow::Result<()> {
     // Print notes for client1
     let fed = fixtures().new_default_fed().await;
     let (client1, _client2) = fed.two_clients().await;
-    let client1_dummy_module = client1.get_first_module::<DummyClientModule>();
+    let client1_dummy_module = client1.get_first_module::<DummyClientModule>()?;
     let (op, outpoint) = client1_dummy_module.print_money(sats(1000)).await?;
     client1.await_primary_module_output(op, outpoint).await?;
 
     // Spend from client1 to client2
     let err_msg = client1
-        .get_first_module::<MintClientModule>()
+        .get_first_module::<MintClientModule>()?
         .reissue_external_notes(
             OOBNotes::new(client1.federation_id().to_prefix(), Default::default()),
             (),

@@ -154,7 +154,7 @@ async fn gateway_pay_valid_invoice(
     gateway_client: &ClientHandleArc,
     gateway_id: &PublicKey,
 ) -> anyhow::Result<()> {
-    let user_lightning_module = &user_client.get_first_module::<LightningClientModule>();
+    let user_lightning_module = &user_client.get_first_module::<LightningClientModule>()?;
     let gateway = user_lightning_module.select_gateway(gateway_id).await;
 
     // User client pays test invoice
@@ -181,18 +181,18 @@ async fn gateway_pay_valid_invoice(
             };
 
             let gw_pay_op = gateway_client
-                .get_first_module::<GatewayClientModule>()
+                .get_first_module::<GatewayClientModule>()?
                 .gateway_pay_bolt11_invoice(payload)
                 .await?;
             let mut gw_pay_sub = gateway_client
-                .get_first_module::<GatewayClientModule>()
+                .get_first_module::<GatewayClientModule>()?
                 .gateway_subscribe_ln_pay(gw_pay_op)
                 .await?
                 .into_stream();
             assert_eq!(gw_pay_sub.ok().await?, GatewayExtPayStates::Created);
             assert_matches!(gw_pay_sub.ok().await?, GatewayExtPayStates::Preimage { .. });
 
-            let dummy_module = gateway_client.get_first_module::<DummyClientModule>();
+            let dummy_module = gateway_client.get_first_module::<DummyClientModule>()?;
             if let GatewayExtPayStates::Success { out_points, .. } = gw_pay_sub.ok().await? {
                 for outpoint in out_points {
                     dummy_module.receive_money(outpoint).await?;
@@ -212,7 +212,7 @@ async fn test_gateway_client_pay_valid_invoice() -> anyhow::Result<()> {
         |gateway, other_lightning_client, fed, user_client, _| async move {
             let gateway_client = gateway.select_client(fed.id()).await?.into_value();
             // Print money for user_client
-            let dummy_module = user_client.get_first_module::<DummyClientModule>();
+            let dummy_module = user_client.get_first_module::<DummyClientModule>()?;
             let (_, outpoint) = dummy_module.print_money(sats(1000)).await?;
             dummy_module.receive_money(outpoint).await?;
             assert_eq!(user_client.get_balance().await, sats(1000));
@@ -242,7 +242,7 @@ async fn test_gateway_enforces_fees() -> anyhow::Result<()> {
     single_federation_test(
         |gateway, other_lightning_client, fed, user_client, _| async move {
             // Print money for user_client
-            let dummy_module = user_client.get_first_module::<DummyClientModule>();
+            let dummy_module = user_client.get_first_module::<DummyClientModule>()?;
             let (_, outpoint) = dummy_module.print_money(sats(1000)).await?;
             dummy_module.receive_money(outpoint).await?;
             assert_eq!(user_client.get_balance().await, sats(1000));
@@ -263,7 +263,7 @@ async fn test_gateway_enforces_fees() -> anyhow::Result<()> {
 
             info!("### Changed gateway routing fees");
 
-            let user_lightning_module = user_client.get_first_module::<LightningClientModule>();
+            let user_lightning_module = user_client.get_first_module::<LightningClientModule>()?;
             let gateway_id = gateway.gateway_id();
             let ln_gateway = user_lightning_module.select_gateway(&gateway_id).await;
             let gateway_client = gateway.select_client(fed.id()).await?.into_value();
@@ -301,11 +301,11 @@ async fn test_gateway_enforces_fees() -> anyhow::Result<()> {
                     };
 
                     let gw_pay_op = gateway_client
-                        .get_first_module::<GatewayClientModule>()
+                        .get_first_module::<GatewayClientModule>()?
                         .gateway_pay_bolt11_invoice(payload)
                         .await?;
                     let mut gw_pay_sub = gateway_client
-                        .get_first_module::<GatewayClientModule>()
+                        .get_first_module::<GatewayClientModule>()?
                         .gateway_subscribe_ln_pay(gw_pay_op)
                         .await?
                         .into_stream();
@@ -338,9 +338,9 @@ async fn test_gateway_cannot_claim_invalid_preimage() -> anyhow::Result<()> {
     single_federation_test(
         |gateway, other_lightning_client, fed, user_client, _| async move {
             let gateway_id = gateway.gateway_id();
-            let gateway_client = gateway.select_client(fed.id()).await?.into_value();
+            let gateway_client = gateway.select_client(fed.id()).await.unwrap().into_value();
             // Print money for user_client
-            let dummy_module = user_client.get_first_module::<DummyClientModule>();
+            let dummy_module = user_client.get_first_module::<DummyClientModule>().unwrap();
             let (_, outpoint) = dummy_module.print_money(sats(1000)).await?;
             dummy_module.receive_money(outpoint).await?;
             assert_eq!(user_client.get_balance().await, sats(1000));
@@ -352,14 +352,16 @@ async fn test_gateway_cannot_claim_invalid_preimage() -> anyhow::Result<()> {
                 contract_id,
                 fee: _,
             } = user_pay_invoice(
-                &user_client.get_first_module(),
+                &user_client
+                    .get_first_module::<LightningClientModule>()
+                    .unwrap(),
                 invoice.clone(),
                 &gateway_id,
             )
             .await?;
 
             // Try to directly claim the outgoing contract with an invalid preimage
-            let gateway_module = gateway_client.get_first_module::<GatewayClientModule>();
+            let gateway_module = gateway_client.get_first_module::<GatewayClientModule>()?;
 
             let account = gateway_module.api.wait_contract(contract_id).await?;
             let outgoing_contract = match account.contract {
@@ -400,7 +402,7 @@ async fn test_gateway_cannot_claim_invalid_preimage() -> anyhow::Result<()> {
                 .await
                 .is_err());
             assert_eq!(gateway_client.get_balance().await, sats(0));
-            Ok(())
+            Ok::<_, anyhow::Error>(())
         },
     )
     .await
@@ -413,8 +415,8 @@ async fn test_gateway_client_pay_unpayable_invoice() -> anyhow::Result<()> {
             let gateway_id = gateway.gateway_id();
             let gateway_client = gateway.select_client(fed.id()).await?.into_value();
             // Print money for user client
-            let dummy_module = user_client.get_first_module::<DummyClientModule>();
-            let lightning_module = user_client.get_first_module::<LightningClientModule>();
+            let dummy_module = user_client.get_first_module::<DummyClientModule>()?;
+            let lightning_module = user_client.get_first_module::<LightningClientModule>()?;
             let (_, outpoint) = dummy_module.print_money(sats(1000)).await?;
             dummy_module.receive_money(outpoint).await?;
             assert_eq!(user_client.get_balance().await, sats(1000));
@@ -448,11 +450,11 @@ async fn test_gateway_client_pay_unpayable_invoice() -> anyhow::Result<()> {
                     };
 
                     let gw_pay_op = gateway_client
-                        .get_first_module::<GatewayClientModule>()
+                        .get_first_module::<GatewayClientModule>()?
                         .gateway_pay_bolt11_invoice(payload)
                         .await?;
                     let mut gw_pay_sub = gateway_client
-                        .get_first_module::<GatewayClientModule>()
+                        .get_first_module::<GatewayClientModule>()?
                         .gateway_subscribe_ln_pay(gw_pay_op)
                         .await?
                         .into_stream();
@@ -475,14 +477,14 @@ async fn test_gateway_client_intercept_valid_htlc() -> anyhow::Result<()> {
         let gateway_client = gateway.select_client(fed.id()).await?.into_value();
         // Print money for gateway client
         let initial_gateway_balance = sats(1000);
-        let dummy_module = gateway_client.get_first_module::<DummyClientModule>();
+        let dummy_module = gateway_client.get_first_module::<DummyClientModule>()?;
         let (_, outpoint) = dummy_module.print_money(initial_gateway_balance).await?;
         dummy_module.receive_money(outpoint).await?;
         assert_eq!(gateway_client.get_balance().await, sats(1000));
 
         // User client creates invoice in federation
         let invoice_amount = sats(100);
-        let ln_module = user_client.get_first_module::<LightningClientModule>();
+        let ln_module = user_client.get_first_module::<LightningClientModule>()?;
         let ln_gateway = ln_module.select_gateway(&gateway_id).await;
         let desc = Description::new("description".to_string())?;
         let (_invoice_op, invoice, _) = ln_module
@@ -506,11 +508,11 @@ async fn test_gateway_client_intercept_valid_htlc() -> anyhow::Result<()> {
             htlc_id: 1,
         };
         let intercept_op = gateway_client
-            .get_first_module::<GatewayClientModule>()
+            .get_first_module::<GatewayClientModule>()?
             .gateway_handle_intercepted_htlc(htlc)
             .await?;
         let mut intercept_sub = gateway_client
-            .get_first_module::<GatewayClientModule>()
+            .get_first_module::<GatewayClientModule>()?
             .gateway_subscribe_ln_receive(intercept_op)
             .await?
             .into_stream();
@@ -535,7 +537,7 @@ async fn test_gateway_client_intercept_offer_does_not_exist() -> anyhow::Result<
         let gateway_client = gateway.select_client(fed.id()).await?.into_value();
         // Print money for gateway client
         let initial_gateway_balance = sats(1000);
-        let dummy_module = gateway_client.get_first_module::<DummyClientModule>();
+        let dummy_module = gateway_client.get_first_module::<DummyClientModule>()?;
         let (_, outpoint) = dummy_module.print_money(initial_gateway_balance).await?;
         dummy_module.receive_money(outpoint).await?;
         assert_eq!(gateway_client.get_balance().await, sats(1000));
@@ -552,7 +554,7 @@ async fn test_gateway_client_intercept_offer_does_not_exist() -> anyhow::Result<
         };
 
         match gateway_client
-            .get_first_module::<GatewayClientModule>()
+            .get_first_module::<GatewayClientModule>()?
             .gateway_handle_intercepted_htlc(htlc)
             .await
         {
@@ -573,7 +575,7 @@ async fn test_gateway_client_intercept_htlc_no_funds() -> anyhow::Result<()> {
         let gateway_id = gateway.gateway_id();
         let gateway_client = gateway.select_client(fed.id()).await?.into_value();
         // User client creates invoice in federation
-        let ln_module = user_client.get_first_module::<LightningClientModule>();
+        let ln_module = user_client.get_first_module::<LightningClientModule>()?;
         let ln_gateway = ln_module.select_gateway(&gateway_id).await;
         let desc = Description::new("description".to_string())?;
         let (_invoice_op, invoice, _) = ln_module
@@ -599,7 +601,7 @@ async fn test_gateway_client_intercept_htlc_no_funds() -> anyhow::Result<()> {
 
         // Attempt to route an HTLC while the gateway has no funds
         match gateway_client
-            .get_first_module::<GatewayClientModule>()
+            .get_first_module::<GatewayClientModule>()?
             .gateway_handle_intercepted_htlc(htlc)
             .await
         {
@@ -619,7 +621,7 @@ async fn test_gateway_client_intercept_htlc_invalid_offer() -> anyhow::Result<()
             let gateway_client = gateway.select_client(fed.id()).await?.into_value();
             // Print money for gateway client
             let initial_gateway_balance = sats(1000);
-            let gateway_dummy_module = gateway_client.get_first_module::<DummyClientModule>();
+            let gateway_dummy_module = gateway_client.get_first_module::<DummyClientModule>()?;
             let (_, outpoint) = gateway_dummy_module
                 .print_money(initial_gateway_balance)
                 .await?;
@@ -631,7 +633,7 @@ async fn test_gateway_client_intercept_htlc_invalid_offer() -> anyhow::Result<()
 
             // Create offer with a preimage that doesn't correspond to the payment hash of
             // the invoice
-            let user_lightning_module = user_client.get_first_module::<LightningClientModule>();
+            let user_lightning_module = user_client.get_first_module::<LightningClientModule>()?;
 
             let amount = sats(100);
             let preimage = BYTE_33;
@@ -694,11 +696,11 @@ async fn test_gateway_client_intercept_htlc_invalid_offer() -> anyhow::Result<()
             };
 
             let intercept_op = gateway_client
-                .get_first_module::<GatewayClientModule>()
+                .get_first_module::<GatewayClientModule>()?
                 .gateway_handle_intercepted_htlc(htlc)
                 .await?;
             let mut intercept_sub = gateway_client
-                .get_first_module::<GatewayClientModule>()
+                .get_first_module::<GatewayClientModule>()?
                 .gateway_subscribe_ln_receive(intercept_op)
                 .await?
                 .into_stream();
@@ -742,13 +744,13 @@ async fn test_gateway_cannot_pay_expired_invoice() -> anyhow::Result<()> {
             sleep_in_test("waiting for invoice to expire", Duration::from_secs(2)).await;
 
             // Print money for user_client
-            let dummy_module = user_client.get_first_module::<DummyClientModule>();
+            let dummy_module = user_client.get_first_module::<DummyClientModule>()?;
             let (_, outpoint) = dummy_module.print_money(sats(2000)).await?;
             dummy_module.receive_money(outpoint).await?;
             assert_eq!(user_client.get_balance().await, sats(2000));
 
             // User client pays test invoice
-            let lightning_module = user_client.get_first_module::<LightningClientModule>();
+            let lightning_module = user_client.get_first_module::<LightningClientModule>()?;
             let gateway_module = lightning_module.select_gateway(&gateway_id).await;
             let OutgoingLightningPayment {
                 payment_type,
@@ -773,11 +775,11 @@ async fn test_gateway_cannot_pay_expired_invoice() -> anyhow::Result<()> {
                     };
 
                     let gw_pay_op = gateway_client
-                        .get_first_module::<GatewayClientModule>()
+                        .get_first_module::<GatewayClientModule>()?
                         .gateway_pay_bolt11_invoice(payload)
                         .await?;
                     let mut gw_pay_sub = gateway_client
-                        .get_first_module::<GatewayClientModule>()
+                        .get_first_module::<GatewayClientModule>()?
                         .gateway_subscribe_ln_pay(gw_pay_op)
                         .await?
                         .into_stream();
@@ -832,14 +834,14 @@ async fn test_gateway_executes_swaps_between_connected_federations() -> anyhow::
         assert_eq!(pre_balances[1], 10_000);
 
         let deposit_amt = msats(5_000);
-        let client1_dummy_module = client1.get_first_module::<DummyClientModule>();
+        let client1_dummy_module = client1.get_first_module::<DummyClientModule>()?;
         let (_, outpoint) = client1_dummy_module.print_money(deposit_amt).await?;
         client1_dummy_module.receive_money(outpoint).await?;
         assert_eq!(client1.get_balance().await, deposit_amt);
 
         // User creates invoice in federation 2
         let invoice_amt = msats(2_500);
-        let ln_module = client2.get_first_module::<LightningClientModule>();
+        let ln_module = client2.get_first_module::<LightningClientModule>()?;
         let ln_gateway = ln_module.select_gateway(&gateway_id).await;
         let desc = Description::new("description".to_string())?;
         let (receive_op, invoice, _) = ln_module
@@ -926,6 +928,7 @@ async fn send_msats_to_gateway(gateway: &Gateway, federation_id: FederationId, m
 
     let (op, outpoints) = client
         .get_first_module::<DummyClientModule>()
+        .unwrap()
         .print_money(Amount::from_msats(msats))
         .await
         .expect("Could not print primary module liquidity");
@@ -963,7 +966,7 @@ async fn lnv2_incoming_contract_with_invalid_preimage_is_refunded() -> anyhow::R
         u64::MAX,
         KeyPair::new(secp256k1::SECP256K1, &mut rand::thread_rng()).public_key(),
         client
-            .get_first_module::<GatewayClientModuleV2>()
+            .get_first_module::<GatewayClientModuleV2>()?
             .keypair
             .public_key(),
         KeyPair::new(secp256k1::SECP256K1, &mut rand::thread_rng()).public_key(),
@@ -973,7 +976,7 @@ async fn lnv2_incoming_contract_with_invalid_preimage_is_refunded() -> anyhow::R
 
     assert_eq!(
         client
-            .get_first_module::<GatewayClientModuleV2>()
+            .get_first_module::<GatewayClientModuleV2>()?
             .relay_direct_swap(contract)
             .await?,
         FinalReceiveState::Refunded
@@ -997,7 +1000,7 @@ async fn lnv2_expired_incoming_contract_is_rejected() -> anyhow::Result<()> {
 
     let contract = IncomingContract::new(
         client
-            .get_first_module::<GatewayClientModuleV2>()
+            .get_first_module::<GatewayClientModuleV2>()?
             .cfg
             .tpe_agg_pk,
         [42; 32],
@@ -1007,7 +1010,7 @@ async fn lnv2_expired_incoming_contract_is_rejected() -> anyhow::Result<()> {
         0, // this incoming contract expired on the 1st of January 1970
         KeyPair::new(secp256k1::SECP256K1, &mut rand::thread_rng()).public_key(),
         client
-            .get_first_module::<GatewayClientModuleV2>()
+            .get_first_module::<GatewayClientModuleV2>()?
             .keypair
             .public_key(),
         KeyPair::new(secp256k1::SECP256K1, &mut rand::thread_rng()).public_key(),
@@ -1017,7 +1020,7 @@ async fn lnv2_expired_incoming_contract_is_rejected() -> anyhow::Result<()> {
 
     assert_eq!(
         client
-            .get_first_module::<GatewayClientModuleV2>()
+            .get_first_module::<GatewayClientModuleV2>()?
             .relay_direct_swap(contract)
             .await?,
         FinalReceiveState::Rejected
@@ -1041,7 +1044,7 @@ async fn lnv2_malleated_incoming_contract_is_rejected() -> anyhow::Result<()> {
 
     let mut contract = IncomingContract::new(
         client
-            .get_first_module::<GatewayClientModuleV2>()
+            .get_first_module::<GatewayClientModuleV2>()?
             .cfg
             .tpe_agg_pk,
         [42; 32],
@@ -1051,7 +1054,7 @@ async fn lnv2_malleated_incoming_contract_is_rejected() -> anyhow::Result<()> {
         u64::MAX,
         KeyPair::new(secp256k1::SECP256K1, &mut rand::thread_rng()).public_key(),
         client
-            .get_first_module::<GatewayClientModuleV2>()
+            .get_first_module::<GatewayClientModuleV2>()?
             .keypair
             .public_key(),
         KeyPair::new(secp256k1::SECP256K1, &mut rand::thread_rng()).public_key(),
@@ -1061,7 +1064,7 @@ async fn lnv2_malleated_incoming_contract_is_rejected() -> anyhow::Result<()> {
 
     assert_eq!(
         client
-            .get_first_module::<GatewayClientModuleV2>()
+            .get_first_module::<GatewayClientModuleV2>()?
             .relay_direct_swap(contract.clone())
             .await?,
         FinalReceiveState::Success([0; 32])
@@ -1073,7 +1076,7 @@ async fn lnv2_malleated_incoming_contract_is_rejected() -> anyhow::Result<()> {
 
     assert_eq!(
         client
-            .get_first_module::<GatewayClientModuleV2>()
+            .get_first_module::<GatewayClientModuleV2>()?
             .relay_direct_swap(contract)
             .await?,
         FinalReceiveState::Rejected

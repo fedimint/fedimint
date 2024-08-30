@@ -2736,6 +2736,7 @@ dependencies = [
  "fedimint-api-client",
  "fedimint-client",
  "fedimint-core",
+ "fedimint-logging",
  "fedimint-meta-common",
  "futures",
  "serde",

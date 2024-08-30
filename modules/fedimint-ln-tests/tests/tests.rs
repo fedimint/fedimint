@@ -47,7 +47,7 @@ async fn pay_invoice(
     invoice: Bolt11Invoice,
     gateway_id: Option<secp256k1::PublicKey>,
 ) -> anyhow::Result<OutgoingLightningPayment> {
-    let ln_module = client.get_first_module::<LightningClientModule>();
+    let ln_module = client.get_first_module::<LightningClientModule>()?;
     let gateway = if let Some(gateway_id) = gateway_id {
         ln_module.select_gateway(&gateway_id).await
     } else {
@@ -61,7 +61,7 @@ async fn test_can_attach_extra_meta_to_receive_operation() -> anyhow::Result<()>
     let fixtures = fixtures();
     let fed = fixtures.new_default_fed().await;
     let (client1, client2) = fed.two_clients().await;
-    let client2_dummy_module = client2.get_first_module::<DummyClientModule>();
+    let client2_dummy_module = client2.get_first_module::<DummyClientModule>()?;
 
     // Print money for client2
     let (op, outpoint) = client2_dummy_module.print_money(sats(1000)).await?;
@@ -70,7 +70,7 @@ async fn test_can_attach_extra_meta_to_receive_operation() -> anyhow::Result<()>
     let extra_meta = "internal payment with no gateway registered".to_string();
     let desc = Description::new("with-markers".to_string())?;
     let (op, invoice, _) = client1
-        .get_first_module::<LightningClientModule>()
+        .get_first_module::<LightningClientModule>()?
         .create_bolt11_invoice(
             sats(250),
             Bolt11InvoiceDescription::Direct(&desc),
@@ -80,7 +80,7 @@ async fn test_can_attach_extra_meta_to_receive_operation() -> anyhow::Result<()>
         )
         .await?;
     let mut sub1 = client1
-        .get_first_module::<LightningClientModule>()
+        .get_first_module::<LightningClientModule>()?
         .subscribe_ln_receive(op)
         .await?
         .into_stream();
@@ -96,7 +96,7 @@ async fn test_can_attach_extra_meta_to_receive_operation() -> anyhow::Result<()>
     match payment_type {
         PayType::Internal(op_id) => {
             let mut sub2 = client2
-                .get_first_module::<LightningClientModule>()
+                .get_first_module::<LightningClientModule>()?
                 .subscribe_internal_pay(op_id)
                 .await?
                 .into_stream();
@@ -123,7 +123,7 @@ async fn cannot_pay_same_internal_invoice_twice() -> anyhow::Result<()> {
     let fixtures = fixtures();
     let fed = fixtures.new_default_fed().await;
     let (client1, client2) = fed.two_clients().await;
-    let client2_dummy_module = client2.get_first_module::<DummyClientModule>();
+    let client2_dummy_module = client2.get_first_module::<DummyClientModule>()?;
 
     // Print money for client2
     let (op, outpoint) = client2_dummy_module.print_money(sats(1000)).await?;
@@ -132,7 +132,7 @@ async fn cannot_pay_same_internal_invoice_twice() -> anyhow::Result<()> {
     // TEST internal payment when there are no gateways registered
     let desc = Description::new("with-markers".to_string())?;
     let (op, invoice, _) = client1
-        .get_first_module::<LightningClientModule>()
+        .get_first_module::<LightningClientModule>()?
         .create_bolt11_invoice(
             sats(250),
             Bolt11InvoiceDescription::Direct(&desc),
@@ -142,7 +142,7 @@ async fn cannot_pay_same_internal_invoice_twice() -> anyhow::Result<()> {
         )
         .await?;
     let mut sub1 = client1
-        .get_first_module::<LightningClientModule>()
+        .get_first_module::<LightningClientModule>()?
         .subscribe_ln_receive(op)
         .await?
         .into_stream();
@@ -157,7 +157,7 @@ async fn cannot_pay_same_internal_invoice_twice() -> anyhow::Result<()> {
     match payment_type {
         PayType::Internal(op_id) => {
             let mut sub2 = client2
-                .get_first_module::<LightningClientModule>()
+                .get_first_module::<LightningClientModule>()?
                 .subscribe_internal_pay(op_id)
                 .await?
                 .into_stream();
@@ -181,7 +181,7 @@ async fn cannot_pay_same_internal_invoice_twice() -> anyhow::Result<()> {
     match payment_type {
         PayType::Internal(op_id) => {
             let mut sub2 = client2
-                .get_first_module::<LightningClientModule>()
+                .get_first_module::<LightningClientModule>()?
                 .subscribe_internal_pay(op_id)
                 .await?
                 .into_stream();
@@ -203,7 +203,7 @@ async fn cannot_pay_same_external_invoice_twice() -> anyhow::Result<()> {
     let fed = fixtures.new_default_fed().await;
     let gw = gateway(&fixtures, &fed).await;
     let client = fed.new_client().await;
-    let dummy_module = client.get_first_module::<DummyClientModule>();
+    let dummy_module = client.get_first_module::<DummyClientModule>()?;
 
     // Print money for client
     let (op, outpoint) = dummy_module.print_money(sats(1000)).await?;
@@ -221,7 +221,7 @@ async fn cannot_pay_same_external_invoice_twice() -> anyhow::Result<()> {
     match payment_type {
         PayType::Lightning(operation_id) => {
             let mut sub = client
-                .get_first_module::<LightningClientModule>()
+                .get_first_module::<LightningClientModule>()?
                 .subscribe_ln_pay(operation_id)
                 .await?
                 .into_stream();
@@ -245,7 +245,7 @@ async fn cannot_pay_same_external_invoice_twice() -> anyhow::Result<()> {
     match payment_type {
         PayType::Lightning(operation_id) => {
             let mut sub = client
-                .get_first_module::<LightningClientModule>()
+                .get_first_module::<LightningClientModule>()?
                 .subscribe_ln_pay(operation_id)
                 .await?
                 .into_stream();
@@ -270,7 +270,7 @@ async fn makes_internal_payments_within_federation() -> anyhow::Result<()> {
     let fixtures = fixtures();
     let fed = fixtures.new_default_fed().await;
     let (client1, client2) = fed.two_clients().await;
-    let client2_dummy_module = client2.get_first_module::<DummyClientModule>();
+    let client2_dummy_module = client2.get_first_module::<DummyClientModule>()?;
 
     // Print money for client2
     let (op, outpoint) = client2_dummy_module.print_money(sats(1000)).await?;
@@ -279,7 +279,7 @@ async fn makes_internal_payments_within_federation() -> anyhow::Result<()> {
     // TEST internal payment when there are no gateways registered
     let desc = Description::new("with-markers".to_string())?;
     let (op, invoice, _) = client1
-        .get_first_module::<LightningClientModule>()
+        .get_first_module::<LightningClientModule>()?
         .create_bolt11_invoice(
             sats(250),
             Bolt11InvoiceDescription::Direct(&desc),
@@ -289,7 +289,7 @@ async fn makes_internal_payments_within_federation() -> anyhow::Result<()> {
         )
         .await?;
     let mut sub1 = client1
-        .get_first_module::<LightningClientModule>()
+        .get_first_module::<LightningClientModule>()?
         .subscribe_ln_receive(op)
         .await?
         .into_stream();
@@ -304,7 +304,7 @@ async fn makes_internal_payments_within_federation() -> anyhow::Result<()> {
     match payment_type {
         PayType::Internal(op_id) => {
             let mut sub2 = client2
-                .get_first_module::<LightningClientModule>()
+                .get_first_module::<LightningClientModule>()?
                 .subscribe_internal_pay(op_id)
                 .await?
                 .into_stream();
@@ -320,7 +320,7 @@ async fn makes_internal_payments_within_federation() -> anyhow::Result<()> {
     // TEST internal payment when there is a registered gateway
     let gw = gateway(&fixtures, &fed).await;
 
-    let ln_module = client1.get_first_module::<LightningClientModule>();
+    let ln_module = client1.get_first_module::<LightningClientModule>()?;
     let ln_gateway = ln_module.select_gateway(&gw.gateway_id()).await;
     let desc = Description::new("with-gateway-hint".to_string())?;
     let (op, invoice, _) = ln_module
@@ -333,7 +333,7 @@ async fn makes_internal_payments_within_federation() -> anyhow::Result<()> {
         )
         .await?;
     let mut sub1 = client1
-        .get_first_module::<LightningClientModule>()
+        .get_first_module::<LightningClientModule>()?
         .subscribe_ln_receive(op)
         .await?
         .into_stream();
@@ -348,7 +348,7 @@ async fn makes_internal_payments_within_federation() -> anyhow::Result<()> {
     match payment_type {
         PayType::Internal(op_id) => {
             let mut sub2 = client2
-                .get_first_module::<LightningClientModule>()
+                .get_first_module::<LightningClientModule>()?
                 .subscribe_internal_pay(op_id)
                 .await?
                 .into_stream();
@@ -369,7 +369,7 @@ async fn can_receive_for_other_user() -> anyhow::Result<()> {
     let fixtures = fixtures();
     let fed = fixtures.new_default_fed().await;
     let (client1, client2) = fed.two_clients().await;
-    let client2_dummy_module = client2.get_first_module::<DummyClientModule>();
+    let client2_dummy_module = client2.get_first_module::<DummyClientModule>()?;
 
     // generate a new keypair
     let keypair = KeyPair::new_global(&mut OsRng);
@@ -381,7 +381,7 @@ async fn can_receive_for_other_user() -> anyhow::Result<()> {
     // TEST internal payment when there are no gateways registered
     let desc = Description::new("with-markers".to_string())?;
     let (op, invoice, _) = client1
-        .get_first_module::<LightningClientModule>()
+        .get_first_module::<LightningClientModule>()?
         .create_bolt11_invoice_for_user(
             sats(250),
             Bolt11InvoiceDescription::Direct(&desc),
@@ -392,7 +392,7 @@ async fn can_receive_for_other_user() -> anyhow::Result<()> {
         )
         .await?;
     let mut sub1 = client1
-        .get_first_module::<LightningClientModule>()
+        .get_first_module::<LightningClientModule>()?
         .subscribe_ln_receive(op)
         .await?
         .into_stream();
@@ -407,7 +407,7 @@ async fn can_receive_for_other_user() -> anyhow::Result<()> {
     match payment_type {
         PayType::Internal(op_id) => {
             let mut sub2 = client2
-                .get_first_module::<LightningClientModule>()
+                .get_first_module::<LightningClientModule>()?
                 .subscribe_internal_pay(op_id)
                 .await?
                 .into_stream();
@@ -421,7 +421,7 @@ async fn can_receive_for_other_user() -> anyhow::Result<()> {
 
     // Create a new client and try to receive the locked payment
     let new_client = fed.new_client().await;
-    let new_ln_module = new_client.get_first_module::<LightningClientModule>();
+    let new_ln_module = new_client.get_first_module::<LightningClientModule>()?;
     let operation_id = new_ln_module.scan_receive_for_user(keypair, ()).await?;
     let mut sub3 = new_ln_module
         .subscribe_ln_claim(operation_id)
@@ -437,7 +437,7 @@ async fn can_receive_for_other_user() -> anyhow::Result<()> {
     // generate a new keypair
     let keypair = KeyPair::new_global(&mut OsRng);
 
-    let ln_module = client1.get_first_module::<LightningClientModule>();
+    let ln_module = client1.get_first_module::<LightningClientModule>()?;
     let ln_gateway = ln_module.select_gateway(&gw.gateway_id()).await;
     let desc = Description::new("with-gateway-hint".to_string())?;
     let (op, invoice, _) = ln_module
@@ -451,7 +451,7 @@ async fn can_receive_for_other_user() -> anyhow::Result<()> {
         )
         .await?;
     let mut sub1 = client1
-        .get_first_module::<LightningClientModule>()
+        .get_first_module::<LightningClientModule>()?
         .subscribe_ln_receive(op)
         .await?
         .into_stream();
@@ -466,7 +466,7 @@ async fn can_receive_for_other_user() -> anyhow::Result<()> {
     match payment_type {
         PayType::Internal(op_id) => {
             let mut sub2 = client2
-                .get_first_module::<LightningClientModule>()
+                .get_first_module::<LightningClientModule>()?
                 .subscribe_internal_pay(op_id)
                 .await?
                 .into_stream();
@@ -480,7 +480,7 @@ async fn can_receive_for_other_user() -> anyhow::Result<()> {
 
     // Create a new client and try to receive the locked payment
     let new_client = fed.new_client().await;
-    let new_ln_module = new_client.get_first_module::<LightningClientModule>();
+    let new_ln_module = new_client.get_first_module::<LightningClientModule>()?;
     let operation_id = new_ln_module.scan_receive_for_user(keypair, ()).await?;
     let mut sub3 = new_ln_module
         .subscribe_ln_claim(operation_id)
@@ -499,7 +499,7 @@ async fn can_receive_for_other_user_tweaked() -> anyhow::Result<()> {
     let fed = fixtures.new_default_fed().await;
     let gw = gateway(&fixtures, &fed).await;
     let (client1, client2) = fed.two_clients().await;
-    let client2_dummy_module = client2.get_first_module::<DummyClientModule>();
+    let client2_dummy_module = client2.get_first_module::<DummyClientModule>()?;
 
     // Print money for client2
     let (op, outpoint) = client2_dummy_module.print_money(sats(1000)).await?;
@@ -508,7 +508,7 @@ async fn can_receive_for_other_user_tweaked() -> anyhow::Result<()> {
     // generate a new keypair
     let keypair = KeyPair::new_global(&mut OsRng);
 
-    let ln_module = client1.get_first_module::<LightningClientModule>();
+    let ln_module = client1.get_first_module::<LightningClientModule>()?;
     let ln_gateway = ln_module.select_gateway(&gw.gateway_id()).await;
     let desc = Description::new("with-gateway-hint-tweaked".to_string())?;
     let (op, invoice, _) = ln_module
@@ -523,7 +523,7 @@ async fn can_receive_for_other_user_tweaked() -> anyhow::Result<()> {
         )
         .await?;
     let mut sub1 = client1
-        .get_first_module::<LightningClientModule>()
+        .get_first_module::<LightningClientModule>()?
         .subscribe_ln_receive(op)
         .await?
         .into_stream();
@@ -538,7 +538,7 @@ async fn can_receive_for_other_user_tweaked() -> anyhow::Result<()> {
     match payment_type {
         PayType::Internal(op_id) => {
             let mut sub2 = client2
-                .get_first_module::<LightningClientModule>()
+                .get_first_module::<LightningClientModule>()?
                 .subscribe_internal_pay(op_id)
                 .await?
                 .into_stream();
@@ -552,7 +552,7 @@ async fn can_receive_for_other_user_tweaked() -> anyhow::Result<()> {
 
     // Create a new client and try to receive the locked payment
     let new_client = fed.new_client().await;
-    let new_ln_module = new_client.get_first_module::<LightningClientModule>();
+    let new_ln_module = new_client.get_first_module::<LightningClientModule>()?;
     let claims = new_ln_module
         .scan_receive_for_user_tweaked(keypair, vec![1], ())
         .await;

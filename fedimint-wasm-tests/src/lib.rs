@@ -128,7 +128,7 @@ mod tests {
     async fn get_gateway(
         client: &fedimint_client::ClientHandleArc,
     ) -> anyhow::Result<LightningGateway> {
-        let lightning_module = client.get_first_module::<LightningClientModule>();
+        let lightning_module = client.get_first_module::<LightningClientModule>()?;
         let gws = lightning_module.list_gateways().await;
         let gw_api = faucet::gateway_api().await?;
         let lnd_gw = gws
@@ -157,7 +157,7 @@ mod tests {
         amount: Amount,
         gateway: LightningGateway,
     ) -> Result<()> {
-        let lightning_module = client.get_first_module::<LightningClientModule>();
+        let lightning_module = client.get_first_module::<LightningClientModule>()?;
         let desc = Description::new("test".to_string())?;
         let (opid, invoice, _) = lightning_module
             .create_bolt11_invoice(
@@ -202,7 +202,7 @@ mod tests {
         client: fedimint_client::ClientHandleArc,
         ln_gateway: LightningGateway,
     ) -> Result<(), anyhow::Error> {
-        let lightning_module = client.get_first_module::<LightningClientModule>();
+        let lightning_module = client.get_first_module::<LightningClientModule>()?;
         let bolt11 = faucet::generate_invoice(11).await?;
         let OutgoingLightningPayment {
             payment_type,
@@ -214,7 +214,7 @@ mod tests {
         let PayType::Lightning(operation_id) = payment_type else {
             unreachable!("paying invoice over lightning");
         };
-        let lightning_module = client.get_first_module::<LightningClientModule>();
+        let lightning_module = client.get_first_module::<LightningClientModule>()?;
         let mut updates = lightning_module
             .subscribe_ln_pay(operation_id)
             .await?
@@ -256,7 +256,7 @@ mod tests {
     async fn send_and_recv_ecash_once(
         client: fedimint_client::ClientHandleArc,
     ) -> Result<(), anyhow::Error> {
-        let mint = client.get_first_module::<MintClientModule>();
+        let mint = client.get_first_module::<MintClientModule>()?;
         let (_, notes) = mint
             .spend_notes(Amount::from_sats(11), Duration::from_secs(10000), false, ())
             .await?;
@@ -284,7 +284,7 @@ mod tests {
         client: fedimint_client::ClientHandleArc,
         amount: Amount,
     ) -> Result<(), anyhow::Error> {
-        let mint = client.get_first_module::<MintClientModule>();
+        let mint = client.get_first_module::<MintClientModule>()?;
         'retry: loop {
             let (operation_id, notes) = mint
                 .spend_notes(amount, Duration::from_secs(10000), false, ())

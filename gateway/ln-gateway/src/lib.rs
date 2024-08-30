@@ -629,6 +629,7 @@ impl Gateway {
 
         if let Err(error) = client
             .get_first_module::<GatewayClientModuleV2>()
+            .expect("Must have client module")
             .relay_incoming_htlc(
                 payment_hash,
                 htlc_request.incoming_chan_id,
@@ -686,6 +687,7 @@ impl Gateway {
                 if let Ok(htlc) = htlc {
                     match client
                         .get_first_module::<GatewayClientModule>()
+                        .expect("Must have client module")
                         .gateway_handle_intercepted_htlc(htlc)
                         .await
                     {
@@ -839,6 +841,7 @@ impl Gateway {
             .await?
             .value()
             .get_first_module::<WalletClientModule>()
+            .expect("Must have client module")
             .allocate_deposit_address_expert_only(())
             .await?;
         Ok(address)
@@ -853,7 +856,7 @@ impl Gateway {
             federation_id,
         } = payload;
         let client = self.select_client(federation_id).await?;
-        let wallet_module = client.value().get_first_module::<WalletClientModule>();
+        let wallet_module = client.value().get_first_module::<WalletClientModule>()?;
 
         // TODO: Fees should probably be passed in as a parameter
         let (amount, fees) = match amount {
@@ -961,7 +964,7 @@ impl Gateway {
             debug!("Handling pay invoice message: {payload:?}");
             let client = self.select_client(payload.federation_id).await?;
             let contract_id = payload.contract_id;
-            let gateway_module = &client.value().get_first_module::<GatewayClientModule>();
+            let gateway_module = &client.value().get_first_module::<GatewayClientModule>()?;
             let operation_id = gateway_module.gateway_pay_bolt11_invoice(payload).await?;
             let mut updates = gateway_module
                 .gateway_subscribe_ln_pay(operation_id)
@@ -1078,7 +1081,7 @@ impl Gateway {
         Self::check_federation_network(&client, gateway_config.network).await?;
 
         client
-            .get_first_module::<GatewayClientModule>()
+            .get_first_module::<GatewayClientModule>()?
             .register_with_federation(
                 // Route hints will be updated in the background
                 Vec::new(),
@@ -1350,7 +1353,7 @@ impl Gateway {
         payload: SpendEcashPayload,
     ) -> anyhow::Result<SpendEcashResponse> {
         let client = self.select_client_v2(payload.federation_id).await?;
-        let mint_module = client.get_first_module::<MintClientModule>();
+        let mint_module = client.get_first_module::<MintClientModule>()?;
         let timeout = Duration::from_secs(payload.timeout);
         let (operation_id, notes) = if payload.allow_overpay {
             let (operation_id, notes) = mint_module
@@ -1405,7 +1408,7 @@ impl Gateway {
             .await
             .get_client_for_federation_id_prefix(payload.notes.federation_id_prefix())
             .ok_or(anyhow!("Client not found"))?;
-        let mint = client.value().get_first_module::<MintClientModule>();
+        let mint = client.value().get_first_module::<MintClientModule>()?;
 
         let operation_id = mint.reissue_external_notes(payload.notes, ()).await?;
         if payload.wait {
@@ -1445,7 +1448,7 @@ impl Gateway {
                     if let Err(e) = async {
                         client
                             .value()
-                            .get_first_module::<GatewayClientModule>()
+                            .get_first_module::<GatewayClientModule>()?
                             .register_with_federation(
                                 route_hints.clone(),
                                 GW_ANNOUNCEMENT_TTL,
@@ -1667,6 +1670,7 @@ impl Gateway {
                 client
                     .value()
                     .get_first_module::<GatewayClientModuleV2>()
+                    .expect("Must have client module")
                     .keypair
                     .public_key()
             })
@@ -1720,6 +1724,7 @@ impl Gateway {
         self.select_client_v2(payload.federation_id)
             .await?
             .get_first_module::<GatewayClientModuleV2>()
+            .expect("Must have client module")
             .send_payment(payload)
             .await
     }
