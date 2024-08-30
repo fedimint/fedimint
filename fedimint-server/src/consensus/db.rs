@@ -1,6 +1,7 @@
 use std::collections::BTreeMap;
 use std::fmt::Debug;
 
+use async_trait::async_trait;
 use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::db::{
     CoreMigrationFn, DatabaseTransaction, DatabaseVersion, IDatabaseTransactionOpsCoreTyped,
@@ -8,7 +9,7 @@ use fedimint_core::db::{
 };
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::epoch::ConsensusVersionVote;
-use fedimint_core::module::ConsensusVersion;
+use fedimint_core::module::{ConsensusVersion, CoreConsensusVersion, ModuleConsensusVersion};
 use fedimint_core::session_outcome::{AcceptedItem, SignedSessionOutcome};
 use fedimint_core::{impl_db_lookup, impl_db_record, NumPeers, NumPeersExt, PeerId, TransactionId};
 use futures::stream;
@@ -163,7 +164,8 @@ impl_db_lookup!(
     query_prefix = ConsensusVersionVotePrefixByModuleId
 );
 
-pub(crate) trait DatabaseTransactionExt {
+#[async_trait]
+pub trait DatabaseTransactionExt {
     async fn get_consensus_version_opt(
         &mut self,
         module_id: Option<ModuleInstanceId>,
@@ -174,9 +176,40 @@ pub(crate) trait DatabaseTransactionExt {
         module_id: Option<ModuleInstanceId>,
         cfg: &ServerConfigConsensus,
     ) -> ConsensusVersion;
+
+    async fn get_all_consensus_versions(
+        &mut self,
+        cfg: &ServerConfigConsensus,
+    ) -> (
+        CoreConsensusVersion,
+        BTreeMap<ModuleInstanceId, ModuleConsensusVersion>,
+    );
 }
 
+#[async_trait]
 impl<Cap: Send> DatabaseTransactionExt for DatabaseTransaction<'_, Cap> {
+    async fn get_all_consensus_versions(
+        &mut self,
+        cfg: &ServerConfigConsensus,
+    ) -> (
+        CoreConsensusVersion,
+        BTreeMap<ModuleInstanceId, ModuleConsensusVersion>,
+    ) {
+        let core_consensus_version = self.get_consensus_version(None, cfg).await;
+        let mut module_consensus_versions = BTreeMap::new();
+
+        for module_id in cfg.modules.keys().copied() {
+            module_consensus_versions.insert(
+                module_id,
+                self.get_consensus_version(Some(module_id), cfg)
+                    .await
+                    .into(),
+            );
+        }
+
+        (core_consensus_version.into(), module_consensus_versions)
+    }
+
     async fn get_consensus_version(
         &mut self,
         module_id: Option<ModuleInstanceId>,

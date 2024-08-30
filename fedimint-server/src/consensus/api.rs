@@ -93,21 +93,14 @@ pub struct ConsensusApi {
 impl ConsensusApi {
     /// Calculate the [`VERSION_ENDPOINT`] response
     pub async fn api_versions_summary(&self) -> SupportedApiVersionsSummary {
-        let mut dbtx = self.db.begin_transaction_nc().await;
-        let core_consensus_version = dbtx.get_consensus_version(None, &self.cfg.consensus).await;
-        let mut module_consensus_versions = BTreeMap::new();
-
-        for (module_id, _, _) in self.modules.iter_modules() {
-            module_consensus_versions.insert(
-                module_id,
-                dbtx.get_consensus_version(Some(module_id), &self.cfg.consensus)
-                    .await
-                    .into(),
-            );
-        }
-        drop(dbtx);
+        let (core_consensus_version, module_consensus_versions) = self
+            .db
+            .begin_transaction_nc()
+            .await
+            .get_all_consensus_versions(&self.cfg.consensus)
+            .await;
         Self::supported_api_versions_summary(
-            core_consensus_version.into(),
+            core_consensus_version,
             &module_consensus_versions,
             &self.cfg.consensus.modules,
             &self.module_inits,
@@ -116,7 +109,7 @@ impl ConsensusApi {
 
     /// Calculate the supported api version summary for the purpose of
     /// [`VERSION_ENDPOINT`]
-    fn supported_api_versions_summary(
+    pub fn supported_api_versions_summary(
         core_consensus: CoreConsensusVersion,
         module_consensus: &BTreeMap<ModuleInstanceId, ModuleConsensusVersion>,
         modules: &BTreeMap<ModuleInstanceId, ServerModuleConsensusConfig>,
