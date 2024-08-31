@@ -87,7 +87,7 @@ use std::pin::Pin;
 use std::sync::{Arc, Weak};
 use std::time::Duration;
 
-use anyhow::{anyhow, bail, ensure, Context};
+use anyhow::{anyhow, bail, ensure, format_err, Context};
 use async_stream::{stream, try_stream};
 use backup::ClientBackup;
 use bitcoin::secp256k1;
@@ -620,7 +620,7 @@ impl ClientHandle {
             let client = self
                 .inner
                 .as_ref()
-                .ok_or_else(|| anyhow::format_err!("Already stopped"))?;
+                .ok_or_else(|| format_err!("Already stopped"))?;
             let builder = ClientBuilder::from_existing(client);
             let config = client.config().await;
             let api_secret = client.api_secret.clone();
@@ -1257,23 +1257,23 @@ impl Client {
     }
 
     /// Returns a reference to a typed module client instance by kind
-    pub fn get_first_module<M: ClientModule>(&self) -> ClientModuleInstance<M> {
+    pub fn get_first_module<M: ClientModule>(&self) -> anyhow::Result<ClientModuleInstance<M>> {
         let module_kind = M::kind();
         let id = self
             .get_first_instance(&module_kind)
-            .unwrap_or_else(|| panic!("No modules found of kind {module_kind}"));
+            .ok_or_else(|| format_err!("No modules found of kind {module_kind}"))?;
         let module: &M = self
             .try_get_module(id)
-            .unwrap_or_else(|| panic!("Unknown module instance {id}"))
+            .ok_or_else(|| format_err!("Unknown module instance {id}"))?
             .as_any()
             .downcast_ref::<M>()
-            .unwrap_or_else(|| panic!("Module is not of type {}", std::any::type_name::<M>()));
-        ClientModuleInstance {
+            .ok_or_else(|| format_err!("Module is not of type {}", std::any::type_name::<M>()))?;
+        Ok(ClientModuleInstance {
             id,
             db: self.db().with_prefix_module_id(id),
             api: self.api().with_module(id),
             module,
-        }
+        })
     }
 
     pub fn get_module_client_dyn(

@@ -940,7 +940,7 @@ impl FedimintCli {
                 ),
                 || async {
                     let client = self.client_open(&cli).await?;
-                    let wallet = client.get_first_module::<WalletClientModule>();
+                    let wallet = client.get_first_module::<WalletClientModule>()?;
                     let count = client
                         .api()
                         .with_module(wallet.id)

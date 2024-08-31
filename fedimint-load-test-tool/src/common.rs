@@ -67,7 +67,7 @@ pub async fn reissue_notes(
     event_sender: &mpsc::UnboundedSender<MetricEvent>,
 ) -> anyhow::Result<()> {
     let m = fedimint_core::time::now();
-    let mint = &client.get_first_module::<MintClientModule>();
+    let mint = &client.get_first_module::<MintClientModule>()?;
     let operation_id = mint.reissue_external_notes(oob_notes, ()).await?;
     let mut updates = mint
         .subscribe_reissue_external_notes(operation_id)
@@ -89,7 +89,7 @@ pub async fn do_spend_notes(
     mint: &ClientHandleArc,
     amount: Amount,
 ) -> anyhow::Result<(OperationId, OOBNotes)> {
-    let mint = &mint.get_first_module::<MintClientModule>();
+    let mint = &mint.get_first_module::<MintClientModule>()?;
     let (operation_id, oob_notes) = mint
         .spend_notes(amount, Duration::from_secs(600), false, ())
         .await?;
@@ -114,7 +114,7 @@ pub async fn await_spend_notes_finish(
     operation_id: OperationId,
 ) -> anyhow::Result<()> {
     let mut updates = client
-        .get_first_module::<MintClientModule>()
+        .get_first_module::<MintClientModule>()?
         .subscribe_spend_notes(operation_id)
         .await?
         .into_stream();
@@ -223,7 +223,7 @@ pub async fn gateway_pay_invoice(
     ln_gateway: Option<LightningGateway>,
 ) -> anyhow::Result<()> {
     let m = fedimint_core::time::now();
-    let lightning_module = &client.get_first_module::<LightningClientModule>();
+    let lightning_module = &client.get_first_module::<LightningClientModule>()?;
     let OutgoingLightningPayment {
         payment_type,
         contract_id: _,
@@ -330,7 +330,7 @@ pub fn parse_gateway_id(s: &str) -> Result<secp256k1::PublicKey, secp256k1::Erro
 }
 
 pub async fn get_note_summary(client: &ClientHandleArc) -> anyhow::Result<TieredCounts> {
-    let mint_client = client.get_first_module::<MintClientModule>();
+    let mint_client = client.get_first_module::<MintClientModule>()?;
     let summary = mint_client
         .get_notes_tier_counts(
             &mut client
@@ -348,7 +348,7 @@ pub async fn remint_denomination(
     denomination: Amount,
     quantity: u16,
 ) -> anyhow::Result<()> {
-    let mint_client = client.get_first_module::<MintClientModule>();
+    let mint_client = client.get_first_module::<MintClientModule>()?;
     let mut dbtx = client.db().begin_transaction().await;
     let mut module_transaction = dbtx.to_ref_with_prefix_module_id(mint_client.id);
     let mut tx = TransactionBuilder::new();

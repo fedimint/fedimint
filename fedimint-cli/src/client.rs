@@ -206,7 +206,7 @@ pub async fn handle_command(
         ClientCmd::Reissue { oob_notes, wait } => {
             let amount = oob_notes.total_amount();
 
-            let mint = client.get_first_module::<MintClientModule>();
+            let mint = client.get_first_module::<MintClientModule>()?;
 
             let operation_id = mint.reissue_external_notes(oob_notes, ()).await?;
             if wait {
@@ -235,7 +235,7 @@ pub async fn handle_command(
         } => {
             warn!("The client will try to double-spend these notes after the duration specified by the --timeout option to recover any unclaimed e-cash.");
 
-            let mint_module = client.get_first_module::<MintClientModule>();
+            let mint_module = client.get_first_module::<MintClientModule>()?;
             let timeout = Duration::from_secs(timeout);
             let (operation, notes) = if allow_overpay {
                 let (operation, notes) = mint_module
@@ -276,7 +276,7 @@ pub async fn handle_command(
         }
         ClientCmd::Validate { oob_notes } => {
             let amount = client
-                .get_first_module::<MintClientModule>()
+                .get_first_module::<MintClientModule>()?
                 .validate_notes(&oob_notes)?;
 
             Ok(json!({
@@ -338,12 +338,12 @@ pub async fn handle_command(
             force_internal,
         } => {
             warn!("Command deprecated. Use `fedimint-cli module ln invoice` instead.");
-            let lightning_module = client.get_first_module::<LightningClientModule>();
+            let lightning_module = client.get_first_module::<LightningClientModule>()?;
             let ln_gateway = lightning_module
                 .get_gateway(gateway_id, force_internal)
                 .await?;
 
-            let lightning_module = client.get_first_module::<LightningClientModule>();
+            let lightning_module = client.get_first_module::<LightningClientModule>()?;
             let desc = Description::new(description)?;
             let (operation_id, invoice, _) = lightning_module
                 .create_bolt11_invoice(
@@ -361,7 +361,7 @@ pub async fn handle_command(
             .unwrap())
         }
         ClientCmd::AwaitInvoice { operation_id } => {
-            let lightning_module = &client.get_first_module::<LightningClientModule>();
+            let lightning_module = &client.get_first_module::<LightningClientModule>()?;
             let mut updates = lightning_module
                 .subscribe_ln_receive(operation_id)
                 .await?
@@ -396,12 +396,12 @@ pub async fn handle_command(
             let bolt11 =
                 fedimint_ln_client::get_invoice(&payment_info, amount, lnurl_comment).await?;
             info!("Paying invoice: {bolt11}");
-            let lightning_module = client.get_first_module::<LightningClientModule>();
+            let lightning_module = client.get_first_module::<LightningClientModule>()?;
             let ln_gateway = lightning_module
                 .get_gateway(gateway_id, force_internal)
                 .await?;
 
-            let lightning_module = client.get_first_module::<LightningClientModule>();
+            let lightning_module = client.get_first_module::<LightningClientModule>()?;
             let OutgoingLightningPayment {
                 payment_type,
                 contract_id,
@@ -416,7 +416,7 @@ pub async fn handle_command(
             );
             if finish_in_background {
                 client
-                    .get_first_module::<LightningClientModule>()
+                    .get_first_module::<LightningClientModule>()?
                     .wait_for_ln_payment(payment_type, contract_id, true)
                     .await?;
                 info!("Payment will finish in background, use await-ln-pay to get the result");
@@ -430,14 +430,14 @@ pub async fn handle_command(
                 })
             } else {
                 Ok(client
-                    .get_first_module::<LightningClientModule>()
+                    .get_first_module::<LightningClientModule>()?
                     .wait_for_ln_payment(payment_type, contract_id, false)
                     .await?
                     .context("expected a response")?)
             }
         }
         ClientCmd::AwaitLnPay { operation_id } => {
-            let lightning_module = client.get_first_module::<LightningClientModule>();
+            let lightning_module = client.get_first_module::<LightningClientModule>()?;
             let ln_pay_details = lightning_module
                 .get_ln_pay_details_for(operation_id)
                 .await?;
@@ -452,7 +452,7 @@ pub async fn handle_command(
                 .context("expected a response")?)
         }
         ClientCmd::ListGateways { no_update } => {
-            let lightning_module = client.get_first_module::<LightningClientModule>();
+            let lightning_module = client.get_first_module::<LightningClientModule>()?;
             if !no_update {
                 lightning_module.update_gateway_cache().await?;
             }
@@ -465,7 +465,7 @@ pub async fn handle_command(
         }
         ClientCmd::DepositAddress => {
             let (operation_id, address, tweak_idx) = client
-                .get_first_module::<WalletClientModule>()
+                .get_first_module::<WalletClientModule>()?
                 .allocate_deposit_address_expert_only(())
                 .await?;
             Ok(serde_json::json! {
@@ -478,7 +478,7 @@ pub async fn handle_command(
         }
         ClientCmd::AwaitDeposit { operation_id } => {
             client
-                .get_first_module::<WalletClientModule>()
+                .get_first_module::<WalletClientModule>()?
                 .await_num_deposit_by_operation_id(operation_id, 1)
                 .await?;
 
@@ -539,7 +539,7 @@ pub async fn handle_command(
             }))
         }
         ClientCmd::Withdraw { amount, address } => {
-            let wallet_module = client.get_first_module::<WalletClientModule>();
+            let wallet_module = client.get_first_module::<WalletClientModule>()?;
             let (amount, fees) = match amount {
                 // If the amount is "all", then we need to subtract the fees from
                 // the amount we are withdrawing
@@ -642,8 +642,8 @@ pub async fn handle_command(
 }
 
 async fn get_note_summary(client: &ClientHandleArc) -> anyhow::Result<serde_json::Value> {
-    let mint_client = client.get_first_module::<MintClientModule>();
-    let wallet_client = client.get_first_module::<WalletClientModule>();
+    let mint_client = client.get_first_module::<MintClientModule>()?;
+    let wallet_client = client.get_first_module::<WalletClientModule>()?;
     let summary = mint_client
         .get_notes_tier_counts(
             &mut client

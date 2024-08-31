@@ -24,8 +24,8 @@ async fn can_print_and_send_money() -> anyhow::Result<()> {
     let fed = fixtures().new_default_fed().await;
     let (client1, client2) = fed.two_clients().await;
 
-    let client1_dummy_module = client1.get_first_module::<DummyClientModule>();
-    let client2_dummy_module = client2.get_first_module::<DummyClientModule>();
+    let client1_dummy_module = client1.get_first_module::<DummyClientModule>()?;
+    let client2_dummy_module = client2.get_first_module::<DummyClientModule>()?;
     let (_, outpoint) = client1_dummy_module.print_money(sats(1000)).await?;
     client1_dummy_module.receive_money(outpoint).await?;
     assert_eq!(client1.get_balance().await, sats(1000));
@@ -83,7 +83,7 @@ async fn federation_should_abort_if_balance_sheet_is_negative() -> anyhow::Resul
         prev_panic_hook(info);
     }));
 
-    let dummy = client.get_first_module::<DummyClientModule>();
+    let dummy = client.get_first_module::<DummyClientModule>()?;
     let op_id = OperationId(rand::random());
     let account_kp = broken_fed_key_pair();
     let input = ClientInput {
@@ -117,7 +117,7 @@ async fn unbalanced_transactions_get_rejected() -> anyhow::Result<()> {
     let fed = fixtures().new_default_fed().await;
     let client = fed.new_client().await;
 
-    let dummy_module = client.get_first_module::<DummyClientModule>();
+    let dummy_module = client.get_first_module::<DummyClientModule>()?;
     let output = ClientOutput {
         output: DummyOutput {
             amount: sats(1000),

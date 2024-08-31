@@ -36,7 +36,7 @@ use fedimint_core::task::{MaybeSend, MaybeSync};
 use fedimint_core::transaction::{SerdeTransaction, Transaction, TransactionSubmissionOutcome};
 use fedimint_core::util::SafeUrl;
 use fedimint_core::{apply, async_trait_maybe_send, NumPeersExt, PeerId, TransactionId};
-use fedimint_logging::{LOG_CLIENT, LOG_CLIENT_NET_API};
+use fedimint_logging::LOG_CLIENT_NET_API;
 use futures::future::join_all;
 use jsonrpsee_core::client::Error as JsonRpcClientError;
 use serde_json::Value;

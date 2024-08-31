@@ -28,6 +28,7 @@ use fedimint_core::module::{ApiAuth, ApiVersion, ModuleCommon, ModuleInit, Multi
 use fedimint_core::util::backoff_util::FibonacciBackoff;
 use fedimint_core::util::{backoff_util, retry};
 use fedimint_core::{apply, async_trait_maybe_send, Amount, PeerId};
+use fedimint_logging::LOG_CLIENT_MODULE_META;
 pub use fedimint_meta_common as common;
 use fedimint_meta_common::{MetaCommonInit, MetaModuleTypes, DEFAULT_META_KEY};
 use states::MetaStateMachine;
@@ -244,7 +245,10 @@ async fn get_meta_module_value(
     backoff: FibonacciBackoff,
 ) -> Option<MetaConsensusValue> {
     if client.get_first_instance(&KIND).is_some() {
-        let meta_client = client.get_first_module::<MetaClientModule>();
+        let Ok(meta_client) = client.get_first_module::<MetaClientModule>() else {
+            warn!(target: LOG_CLIENT_MODULE_META, "Meta module instance not found");
+            return None;
+        };
 
         let overrides_res = retry("fetch_meta_values", backoff, || {
             meta_client.get_consensus_value(DEFAULT_META_KEY)

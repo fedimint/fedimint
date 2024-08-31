@@ -465,6 +465,7 @@ impl GatewayPayInvoice {
         match payment_data.try_into() {
             Ok(swap_params) => match client
                 .get_first_module::<GatewayClientModule>()
+                .expect("Must have client module")
                 .gateway_handle_direct_swap(swap_params)
                 .await
             {
@@ -761,6 +762,7 @@ impl GatewayPayWaitForSwapPreimage {
             let mut stream = client
                 .value()
                 .get_first_module::<GatewayClientModule>()
+                .expect("Must have client module")
                 .gateway_subscribe_ln_receive(operation_id)
                 .await
                 .map_err(|e| {

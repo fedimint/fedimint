@@ -162,6 +162,7 @@ impl SendStateMachine {
 
             return match client
                 .get_first_module::<GatewayClientModuleV2>()
+                .expect("Must have client module")
                 .relay_direct_swap(contract)
                 .await
             {

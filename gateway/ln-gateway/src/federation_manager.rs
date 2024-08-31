@@ -107,7 +107,7 @@ impl FederationManager {
 
         client
             .value()
-            .get_first_module::<GatewayClientModule>()
+            .get_first_module::<GatewayClientModule>()?
             .remove_from_federation(gateway_keypair)
             .await;
 
@@ -124,6 +124,7 @@ impl FederationManager {
                 client
                     .value()
                     .get_first_module::<GatewayClientModule>()
+                    .expect("Must have client module")
                     .remove_from_federation(gateway_keypair)
                     .await;
             })
