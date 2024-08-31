@@ -1362,6 +1362,8 @@
 <a href="#1362" id="1362">1362</a>
 <a href="#1363" id="1363">1363</a>
 <a href="#1364" id="1364">1364</a>
+<a href="#1365" id="1365">1365</a>
+<a href="#1366" id="1366">1366</a>
 </pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::cast_precision_loss)]
@@ -1988,7 +1990,9 @@
     gateway_id: <span class="prelude-ty">Option</span>&lt;String&gt;,
 ) -&gt; <span class="prelude-ty">Option</span>&lt;LightningGateway&gt; {
     <span class="kw">let </span>gateway_id = parse_gateway_id(gateway_id.or(<span class="prelude-val">None</span>)<span class="question-mark">?</span>.as_str()).expect(<span class="string">"Invalid gateway id"</span>);
-    <span class="kw">let </span>ln_module = client.get_first_module::&lt;LightningClientModule&gt;();
+    <span class="kw">let </span>ln_module = client
+        .get_first_module::&lt;LightningClientModule&gt;()
+        .expect(<span class="string">"Must have ln client module"</span>);
     ln_module.select_gateway(<span class="kw-2">&amp;</span>gateway_id).<span class="kw">await
 </span>}
 
@@ -2308,7 +2312,7 @@
     <span class="kw">let </span>(operation_id, invoice) =
         client_create_invoice(client, invoice_amount, event_sender, <span class="prelude-val">None</span>).<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="kw">let </span>pay_invoice_time = fedimint_core::time::now();
-    <span class="kw">let </span>lightning_module = client.get_first_module::&lt;LightningClientModule&gt;();
+    <span class="kw">let </span>lightning_module = client.get_first_module::&lt;LightningClientModule&gt;()<span class="question-mark">?</span>;
     <span class="comment">//let gateway = lightning_module.select_active_gateway_opt().await;
     </span>lightning_module
         .pay_bolt11_invoice(<span class="prelude-val">None</span>, invoice, ())
@@ -2336,7 +2340,7 @@
     </span><span class="kw">let </span>(operation_id, invoice) =
         client_create_invoice(partner, invoice_amount, event_sender, <span class="prelude-val">None</span>).<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="kw">let </span>pay_invoice_time = fedimint_core::time::now();
-    <span class="kw">let </span>lightning_module = client.get_first_module::&lt;LightningClientModule&gt;();
+    <span class="kw">let </span>lightning_module = client.get_first_module::&lt;LightningClientModule&gt;()<span class="question-mark">?</span>;
     <span class="comment">// TODO: Select random gateway?
     //let gateway = lightning_module.select_active_gateway_opt().await;
     </span>lightning_module
@@ -2355,7 +2359,7 @@
     </span><span class="kw">let </span>(operation_id, invoice) =
         client_create_invoice(client, invoice_amount, event_sender, <span class="prelude-val">None</span>).<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="kw">let </span>pay_invoice_time = fedimint_core::time::now();
-    <span class="kw">let </span>partner_lightning_module = partner.get_first_module::&lt;LightningClientModule&gt;();
+    <span class="kw">let </span>partner_lightning_module = partner.get_first_module::&lt;LightningClientModule&gt;()<span class="question-mark">?</span>;
     <span class="comment">//let gateway = partner_lightning_module.select_active_gateway_opt().await;
     // TODO: Select random gateway?
     </span>partner_lightning_module
@@ -2387,7 +2391,7 @@
         name: <span class="macro">format!</span>(<span class="string">"gateway_{gateway_name}_payment_received_started"</span>),
         duration: elapsed,
     })<span class="question-mark">?</span>;
-    <span class="kw">let </span>lightning_module = client.get_first_module::&lt;LightningClientModule&gt;();
+    <span class="kw">let </span>lightning_module = client.get_first_module::&lt;LightningClientModule&gt;()<span class="question-mark">?</span>;
     <span class="kw">let </span><span class="kw-2">mut </span>updates = lightning_module
         .subscribe_ln_receive(operation_id)
         .<span class="kw">await</span><span class="question-mark">?
@@ -2430,7 +2434,7 @@
     ln_gateway: <span class="prelude-ty">Option</span>&lt;LightningGateway&gt;,
 ) -&gt; anyhow::Result&lt;(fedimint_core::core::OperationId, Bolt11Invoice)&gt; {
     <span class="kw">let </span>create_invoice_time = fedimint_core::time::now();
-    <span class="kw">let </span>lightning_module = client.get_first_module::&lt;LightningClientModule&gt;();
+    <span class="kw">let </span>lightning_module = client.get_first_module::&lt;LightningClientModule&gt;()<span class="question-mark">?</span>;
     <span class="kw">let </span>desc = Description::new(<span class="string">"test"</span>.to_string())<span class="question-mark">?</span>;
     <span class="kw">let </span>(operation_id, invoice, <span class="kw">_</span>) = lightning_module
         .create_bolt11_invoice(

@@ -899,7 +899,7 @@
         ClientCmd::Reissue { oob_notes, wait } =&gt; {
             <span class="kw">let </span>amount = oob_notes.total_amount();
 
-            <span class="kw">let </span>mint = client.get_first_module::&lt;MintClientModule&gt;();
+            <span class="kw">let </span>mint = client.get_first_module::&lt;MintClientModule&gt;()<span class="question-mark">?</span>;
 
             <span class="kw">let </span>operation_id = mint.reissue_external_notes(oob_notes, ()).<span class="kw">await</span><span class="question-mark">?</span>;
             <span class="kw">if </span>wait {
@@ -928,7 +928,7 @@
         } =&gt; {
             <span class="macro">warn!</span>(<span class="string">"The client will try to double-spend these notes after the duration specified by the --timeout option to recover any unclaimed e-cash."</span>);
 
-            <span class="kw">let </span>mint_module = client.get_first_module::&lt;MintClientModule&gt;();
+            <span class="kw">let </span>mint_module = client.get_first_module::&lt;MintClientModule&gt;()<span class="question-mark">?</span>;
             <span class="kw">let </span>timeout = Duration::from_secs(timeout);
             <span class="kw">let </span>(operation, notes) = <span class="kw">if </span>allow_overpay {
                 <span class="kw">let </span>(operation, notes) = mint_module
@@ -969,8 +969,8 @@
         }
         ClientCmd::Validate { oob_notes } =&gt; {
             <span class="kw">let </span>amount = client
-                .get_first_module::&lt;MintClientModule&gt;()
-                .validate_notes(<span class="kw-2">&amp;</span>oob_notes)<span class="question-mark">?</span>;
+                .get_first_module::&lt;MintClientModule&gt;()<span class="question-mark">?
+                </span>.validate_notes(<span class="kw-2">&amp;</span>oob_notes)<span class="question-mark">?</span>;
 
             <span class="prelude-val">Ok</span>(<span class="macro">json!</span>({
                 <span class="string">"amount_msat"</span>: amount,
@@ -1031,12 +1031,12 @@
             force_internal,
         } =&gt; {
             <span class="macro">warn!</span>(<span class="string">"Command deprecated. Use `fedimint-cli module ln invoice` instead."</span>);
-            <span class="kw">let </span>lightning_module = client.get_first_module::&lt;LightningClientModule&gt;();
+            <span class="kw">let </span>lightning_module = client.get_first_module::&lt;LightningClientModule&gt;()<span class="question-mark">?</span>;
             <span class="kw">let </span>ln_gateway = lightning_module
                 .get_gateway(gateway_id, force_internal)
                 .<span class="kw">await</span><span class="question-mark">?</span>;
 
-            <span class="kw">let </span>lightning_module = client.get_first_module::&lt;LightningClientModule&gt;();
+            <span class="kw">let </span>lightning_module = client.get_first_module::&lt;LightningClientModule&gt;()<span class="question-mark">?</span>;
             <span class="kw">let </span>desc = Description::new(description)<span class="question-mark">?</span>;
             <span class="kw">let </span>(operation_id, invoice, <span class="kw">_</span>) = lightning_module
                 .create_bolt11_invoice(
@@ -1054,7 +1054,7 @@
             .unwrap())
         }
         ClientCmd::AwaitInvoice { operation_id } =&gt; {
-            <span class="kw">let </span>lightning_module = <span class="kw-2">&amp;</span>client.get_first_module::&lt;LightningClientModule&gt;();
+            <span class="kw">let </span>lightning_module = <span class="kw-2">&amp;</span>client.get_first_module::&lt;LightningClientModule&gt;()<span class="question-mark">?</span>;
             <span class="kw">let </span><span class="kw-2">mut </span>updates = lightning_module
                 .subscribe_ln_receive(operation_id)
                 .<span class="kw">await</span><span class="question-mark">?
@@ -1089,12 +1089,12 @@
             <span class="kw">let </span>bolt11 =
                 fedimint_ln_client::get_invoice(<span class="kw-2">&amp;</span>payment_info, amount, lnurl_comment).<span class="kw">await</span><span class="question-mark">?</span>;
             <span class="macro">info!</span>(<span class="string">"Paying invoice: {bolt11}"</span>);
-            <span class="kw">let </span>lightning_module = client.get_first_module::&lt;LightningClientModule&gt;();
+            <span class="kw">let </span>lightning_module = client.get_first_module::&lt;LightningClientModule&gt;()<span class="question-mark">?</span>;
             <span class="kw">let </span>ln_gateway = lightning_module
                 .get_gateway(gateway_id, force_internal)
                 .<span class="kw">await</span><span class="question-mark">?</span>;
 
-            <span class="kw">let </span>lightning_module = client.get_first_module::&lt;LightningClientModule&gt;();
+            <span class="kw">let </span>lightning_module = client.get_first_module::&lt;LightningClientModule&gt;()<span class="question-mark">?</span>;
             <span class="kw">let </span>OutgoingLightningPayment {
                 payment_type,
                 contract_id,
@@ -1109,8 +1109,8 @@
             );
             <span class="kw">if </span>finish_in_background {
                 client
-                    .get_first_module::&lt;LightningClientModule&gt;()
-                    .wait_for_ln_payment(payment_type, contract_id, <span class="bool-val">true</span>)
+                    .get_first_module::&lt;LightningClientModule&gt;()<span class="question-mark">?
+                    </span>.wait_for_ln_payment(payment_type, contract_id, <span class="bool-val">true</span>)
                     .<span class="kw">await</span><span class="question-mark">?</span>;
                 <span class="macro">info!</span>(<span class="string">"Payment will finish in background, use await-ln-pay to get the result"</span>);
                 <span class="prelude-val">Ok</span>(<span class="macro">serde_json::json!</span> {
@@ -1123,14 +1123,14 @@
                 })
             } <span class="kw">else </span>{
                 <span class="prelude-val">Ok</span>(client
-                    .get_first_module::&lt;LightningClientModule&gt;()
-                    .wait_for_ln_payment(payment_type, contract_id, <span class="bool-val">false</span>)
+                    .get_first_module::&lt;LightningClientModule&gt;()<span class="question-mark">?
+                    </span>.wait_for_ln_payment(payment_type, contract_id, <span class="bool-val">false</span>)
                     .<span class="kw">await</span><span class="question-mark">?
                     </span>.context(<span class="string">"expected a response"</span>)<span class="question-mark">?</span>)
             }
         }
         ClientCmd::AwaitLnPay { operation_id } =&gt; {
-            <span class="kw">let </span>lightning_module = client.get_first_module::&lt;LightningClientModule&gt;();
+            <span class="kw">let </span>lightning_module = client.get_first_module::&lt;LightningClientModule&gt;()<span class="question-mark">?</span>;
             <span class="kw">let </span>ln_pay_details = lightning_module
                 .get_ln_pay_details_for(operation_id)
                 .<span class="kw">await</span><span class="question-mark">?</span>;
@@ -1145,7 +1145,7 @@
                 </span>.context(<span class="string">"expected a response"</span>)<span class="question-mark">?</span>)
         }
         ClientCmd::ListGateways { no_update } =&gt; {
-            <span class="kw">let </span>lightning_module = client.get_first_module::&lt;LightningClientModule&gt;();
+            <span class="kw">let </span>lightning_module = client.get_first_module::&lt;LightningClientModule&gt;()<span class="question-mark">?</span>;
             <span class="kw">if </span>!no_update {
                 lightning_module.update_gateway_cache().<span class="kw">await</span><span class="question-mark">?</span>;
             }
@@ -1158,8 +1158,8 @@
         }
         ClientCmd::DepositAddress =&gt; {
             <span class="kw">let </span>(operation_id, address, tweak_idx) = client
-                .get_first_module::&lt;WalletClientModule&gt;()
-                .allocate_deposit_address_expert_only(())
+                .get_first_module::&lt;WalletClientModule&gt;()<span class="question-mark">?
+                </span>.allocate_deposit_address_expert_only(())
                 .<span class="kw">await</span><span class="question-mark">?</span>;
             <span class="prelude-val">Ok</span>(<span class="macro">serde_json::json!</span> {
                 {
@@ -1171,8 +1171,8 @@
         }
         ClientCmd::AwaitDeposit { operation_id } =&gt; {
             client
-                .get_first_module::&lt;WalletClientModule&gt;()
-                .await_num_deposit_by_operation_id(operation_id, <span class="number">1</span>)
+                .get_first_module::&lt;WalletClientModule&gt;()<span class="question-mark">?
+                </span>.await_num_deposit_by_operation_id(operation_id, <span class="number">1</span>)
                 .<span class="kw">await</span><span class="question-mark">?</span>;
 
             <span class="prelude-val">Ok</span>(serde_json::to_value(()).unwrap())
@@ -1232,7 +1232,7 @@
             }))
         }
         ClientCmd::Withdraw { amount, address } =&gt; {
-            <span class="kw">let </span>wallet_module = client.get_first_module::&lt;WalletClientModule&gt;();
+            <span class="kw">let </span>wallet_module = client.get_first_module::&lt;WalletClientModule&gt;()<span class="question-mark">?</span>;
             <span class="kw">let </span>(amount, fees) = <span class="kw">match </span>amount {
                 <span class="comment">// If the amount is "all", then we need to subtract the fees from
                 // the amount we are withdrawing
@@ -1335,8 +1335,8 @@
 }
 
 <span class="kw">async fn </span>get_note_summary(client: <span class="kw-2">&amp;</span>ClientHandleArc) -&gt; anyhow::Result&lt;serde_json::Value&gt; {
-    <span class="kw">let </span>mint_client = client.get_first_module::&lt;MintClientModule&gt;();
-    <span class="kw">let </span>wallet_client = client.get_first_module::&lt;WalletClientModule&gt;();
+    <span class="kw">let </span>mint_client = client.get_first_module::&lt;MintClientModule&gt;()<span class="question-mark">?</span>;
+    <span class="kw">let </span>wallet_client = client.get_first_module::&lt;WalletClientModule&gt;()<span class="question-mark">?</span>;
     <span class="kw">let </span>summary = mint_client
         .get_notes_tier_counts(
             <span class="kw-2">&amp;mut </span>client

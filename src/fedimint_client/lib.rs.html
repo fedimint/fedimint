@@ -2869,7 +2869,7 @@
 <span class="kw">use </span>std::sync::{Arc, Weak};
 <span class="kw">use </span>std::time::Duration;
 
-<span class="kw">use </span>anyhow::{anyhow, bail, ensure, Context};
+<span class="kw">use </span>anyhow::{anyhow, bail, ensure, format_err, Context};
 <span class="kw">use </span>async_stream::{stream, try_stream};
 <span class="kw">use </span>backup::ClientBackup;
 <span class="kw">use </span>bitcoin::secp256k1;
@@ -3402,7 +3402,7 @@
             <span class="kw">let </span>client = <span class="self">self
                 </span>.inner
                 .as_ref()
-                .ok_or_else(|| <span class="macro">anyhow::format_err!</span>(<span class="string">"Already stopped"</span>))<span class="question-mark">?</span>;
+                .ok_or_else(|| <span class="macro">format_err!</span>(<span class="string">"Already stopped"</span>))<span class="question-mark">?</span>;
             <span class="kw">let </span>builder = ClientBuilder::from_existing(client);
             <span class="kw">let </span>config = client.config().<span class="kw">await</span>;
             <span class="kw">let </span>api_secret = client.api_secret.clone();
@@ -4039,23 +4039,23 @@
     </span>}
 
     <span class="doccomment">/// Returns a reference to a typed module client instance by kind
-    </span><span class="kw">pub fn </span>get_first_module&lt;M: ClientModule&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; ClientModuleInstance&lt;M&gt; {
+    </span><span class="kw">pub fn </span>get_first_module&lt;M: ClientModule&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; anyhow::Result&lt;ClientModuleInstance&lt;M&gt;&gt; {
         <span class="kw">let </span>module_kind = M::kind();
         <span class="kw">let </span>id = <span class="self">self
             </span>.get_first_instance(<span class="kw-2">&amp;</span>module_kind)
-            .unwrap_or_else(|| <span class="macro">panic!</span>(<span class="string">"No modules found of kind {module_kind}"</span>));
+            .ok_or_else(|| <span class="macro">format_err!</span>(<span class="string">"No modules found of kind {module_kind}"</span>))<span class="question-mark">?</span>;
         <span class="kw">let </span>module: <span class="kw-2">&amp;</span>M = <span class="self">self
             </span>.try_get_module(id)
-            .unwrap_or_else(|| <span class="macro">panic!</span>(<span class="string">"Unknown module instance {id}"</span>))
-            .as_any()
+            .ok_or_else(|| <span class="macro">format_err!</span>(<span class="string">"Unknown module instance {id}"</span>))<span class="question-mark">?
+            </span>.as_any()
             .downcast_ref::&lt;M&gt;()
-            .unwrap_or_else(|| <span class="macro">panic!</span>(<span class="string">"Module is not of type {}"</span>, std::any::type_name::&lt;M&gt;()));
-        ClientModuleInstance {
+            .ok_or_else(|| <span class="macro">format_err!</span>(<span class="string">"Module is not of type {}"</span>, std::any::type_name::&lt;M&gt;()))<span class="question-mark">?</span>;
+        <span class="prelude-val">Ok</span>(ClientModuleInstance {
             id,
             db: <span class="self">self</span>.db().with_prefix_module_id(id),
             api: <span class="self">self</span>.api().with_module(id),
             module,
-        }
+        })
     }
 
     <span class="kw">pub fn </span>get_module_client_dyn(

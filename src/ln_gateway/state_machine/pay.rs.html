@@ -914,6 +914,8 @@
 <a href="#914" id="914">914</a>
 <a href="#915" id="915">915</a>
 <a href="#916" id="916">916</a>
+<a href="#917" id="917">917</a>
+<a href="#918" id="918">918</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::fmt::Display;
 <span class="kw">use </span>std::sync::Arc;
 
@@ -1381,6 +1383,7 @@
         <span class="kw">match </span>payment_data.try_into() {
             <span class="prelude-val">Ok</span>(swap_params) =&gt; <span class="kw">match </span>client
                 .get_first_module::&lt;GatewayClientModule&gt;()
+                .expect(<span class="string">"Must have client module"</span>)
                 .gateway_handle_direct_swap(swap_params)
                 .<span class="kw">await
             </span>{
@@ -1677,6 +1680,7 @@
             <span class="kw">let </span><span class="kw-2">mut </span>stream = client
                 .value()
                 .get_first_module::&lt;GatewayClientModule&gt;()
+                .expect(<span class="string">"Must have client module"</span>)
                 .gateway_subscribe_ln_receive(operation_id)
                 .<span class="kw">await
                 </span>.map_err(|e| {

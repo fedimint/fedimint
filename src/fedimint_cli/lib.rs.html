@@ -2189,7 +2189,7 @@ Examples:
                 ),
                 || <span class="kw">async </span>{
                     <span class="kw">let </span>client = <span class="self">self</span>.client_open(<span class="kw-2">&amp;</span>cli).<span class="kw">await</span><span class="question-mark">?</span>;
-                    <span class="kw">let </span>wallet = client.get_first_module::&lt;WalletClientModule&gt;();
+                    <span class="kw">let </span>wallet = client.get_first_module::&lt;WalletClientModule&gt;()<span class="question-mark">?</span>;
                     <span class="kw">let </span>count = client
                         .api()
                         .with_module(wallet.id)

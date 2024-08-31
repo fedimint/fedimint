@@ -1926,6 +1926,11 @@
 <a href="#1926" id="1926">1926</a>
 <a href="#1927" id="1927">1927</a>
 <a href="#1928" id="1928">1928</a>
+<a href="#1929" id="1929">1929</a>
+<a href="#1930" id="1930">1930</a>
+<a href="#1931" id="1931">1931</a>
+<a href="#1932" id="1932">1932</a>
+<a href="#1933" id="1933">1933</a>
 </pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::cast_possible_wrap)]
@@ -2557,6 +2562,7 @@
 
         <span class="kw">if let </span><span class="prelude-val">Err</span>(error) = client
             .get_first_module::&lt;GatewayClientModuleV2&gt;()
+            .expect(<span class="string">"Must have client module"</span>)
             .relay_incoming_htlc(
                 payment_hash,
                 htlc_request.incoming_chan_id,
@@ -2614,6 +2620,7 @@
                 <span class="kw">if let </span><span class="prelude-val">Ok</span>(htlc) = htlc {
                     <span class="kw">match </span>client
                         .get_first_module::&lt;GatewayClientModule&gt;()
+                        .expect(<span class="string">"Must have client module"</span>)
                         .gateway_handle_intercepted_htlc(htlc)
                         .<span class="kw">await
                     </span>{
@@ -2767,6 +2774,7 @@
             .<span class="kw">await</span><span class="question-mark">?
             </span>.value()
             .get_first_module::&lt;WalletClientModule&gt;()
+            .expect(<span class="string">"Must have client module"</span>)
             .allocate_deposit_address_expert_only(())
             .<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(address)
@@ -2781,7 +2789,7 @@
             federation_id,
         } = payload;
         <span class="kw">let </span>client = <span class="self">self</span>.select_client(federation_id).<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">let </span>wallet_module = client.value().get_first_module::&lt;WalletClientModule&gt;();
+        <span class="kw">let </span>wallet_module = client.value().get_first_module::&lt;WalletClientModule&gt;()<span class="question-mark">?</span>;
 
         <span class="comment">// TODO: Fees should probably be passed in as a parameter
         </span><span class="kw">let </span>(amount, fees) = <span class="kw">match </span>amount {
@@ -2889,7 +2897,7 @@
             <span class="macro">debug!</span>(<span class="string">"Handling pay invoice message: {payload:?}"</span>);
             <span class="kw">let </span>client = <span class="self">self</span>.select_client(payload.federation_id).<span class="kw">await</span><span class="question-mark">?</span>;
             <span class="kw">let </span>contract_id = payload.contract_id;
-            <span class="kw">let </span>gateway_module = <span class="kw-2">&amp;</span>client.value().get_first_module::&lt;GatewayClientModule&gt;();
+            <span class="kw">let </span>gateway_module = <span class="kw-2">&amp;</span>client.value().get_first_module::&lt;GatewayClientModule&gt;()<span class="question-mark">?</span>;
             <span class="kw">let </span>operation_id = gateway_module.gateway_pay_bolt11_invoice(payload).<span class="kw">await</span><span class="question-mark">?</span>;
             <span class="kw">let </span><span class="kw-2">mut </span>updates = gateway_module
                 .gateway_subscribe_ln_pay(operation_id)
@@ -3006,8 +3014,8 @@
         <span class="self">Self</span>::check_federation_network(<span class="kw-2">&amp;</span>client, gateway_config.network).<span class="kw">await</span><span class="question-mark">?</span>;
 
         client
-            .get_first_module::&lt;GatewayClientModule&gt;()
-            .register_with_federation(
+            .get_first_module::&lt;GatewayClientModule&gt;()<span class="question-mark">?
+            </span>.register_with_federation(
                 <span class="comment">// Route hints will be updated in the background
                 </span>Vec::new(),
                 GW_ANNOUNCEMENT_TTL,
@@ -3278,7 +3286,7 @@
         payload: SpendEcashPayload,
     ) -&gt; anyhow::Result&lt;SpendEcashResponse&gt; {
         <span class="kw">let </span>client = <span class="self">self</span>.select_client_v2(payload.federation_id).<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">let </span>mint_module = client.get_first_module::&lt;MintClientModule&gt;();
+        <span class="kw">let </span>mint_module = client.get_first_module::&lt;MintClientModule&gt;()<span class="question-mark">?</span>;
         <span class="kw">let </span>timeout = Duration::from_secs(payload.timeout);
         <span class="kw">let </span>(operation_id, notes) = <span class="kw">if </span>payload.allow_overpay {
             <span class="kw">let </span>(operation_id, notes) = mint_module
@@ -3333,7 +3341,7 @@
             .<span class="kw">await
             </span>.get_client_for_federation_id_prefix(payload.notes.federation_id_prefix())
             .ok_or(<span class="macro">anyhow!</span>(<span class="string">"Client not found"</span>))<span class="question-mark">?</span>;
-        <span class="kw">let </span>mint = client.value().get_first_module::&lt;MintClientModule&gt;();
+        <span class="kw">let </span>mint = client.value().get_first_module::&lt;MintClientModule&gt;()<span class="question-mark">?</span>;
 
         <span class="kw">let </span>operation_id = mint.reissue_external_notes(payload.notes, ()).<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">if </span>payload.wait {
@@ -3373,8 +3381,8 @@
                     <span class="kw">if let </span><span class="prelude-val">Err</span>(e) = <span class="kw">async </span>{
                         client
                             .value()
-                            .get_first_module::&lt;GatewayClientModule&gt;()
-                            .register_with_federation(
+                            .get_first_module::&lt;GatewayClientModule&gt;()<span class="question-mark">?
+                            </span>.register_with_federation(
                                 route_hints.clone(),
                                 GW_ANNOUNCEMENT_TTL,
                                 federation_config.fees,
@@ -3595,6 +3603,7 @@
                 client
                     .value()
                     .get_first_module::&lt;GatewayClientModuleV2&gt;()
+                    .expect(<span class="string">"Must have client module"</span>)
                     .keypair
                     .public_key()
             })
@@ -3648,6 +3657,7 @@
         <span class="self">self</span>.select_client_v2(payload.federation_id)
             .<span class="kw">await</span><span class="question-mark">?
             </span>.get_first_module::&lt;GatewayClientModuleV2&gt;()
+            .expect(<span class="string">"Must have client module"</span>)
             .send_payment(payload)
             .<span class="kw">await
     </span>}

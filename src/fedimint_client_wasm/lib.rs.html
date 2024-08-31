@@ -245,8 +245,8 @@
                 <span class="string">"ln" </span>=&gt; {
                     <span class="kw">let </span>ln = <span class="self">self
                         </span>.client
-                        .get_first_module::&lt;LightningClientModule&gt;()
-                        .inner();
+                        .get_first_module::&lt;LightningClientModule&gt;()<span class="question-mark">?
+                        </span>.inner();
                     <span class="kw">let </span><span class="kw-2">mut </span>stream = ln.handle_rpc(method.to_owned(), payload).<span class="kw">await</span>;
                     <span class="kw">while let </span><span class="prelude-val">Some</span>(item) = stream.next().<span class="kw">await </span>{
                         <span class="kw">yield </span>item<span class="question-mark">?</span>;
@@ -255,8 +255,8 @@
                 <span class="string">"mint" </span>=&gt; {
                     <span class="kw">let </span>mint = <span class="self">self
                         </span>.client
-                        .get_first_module::&lt;fedimint_mint_client::MintClientModule&gt;()
-                        .inner();
+                        .get_first_module::&lt;fedimint_mint_client::MintClientModule&gt;()<span class="question-mark">?
+                        </span>.inner();
                     <span class="kw">let </span><span class="kw-2">mut </span>stream = mint.handle_rpc(method.to_owned(), payload).<span class="kw">await</span>;
                     <span class="kw">while let </span><span class="prelude-val">Some</span>(item) = stream.next().<span class="kw">await </span>{
                         <span class="kw">yield </span>item<span class="question-mark">?</span>;

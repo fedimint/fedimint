@@ -266,6 +266,10 @@
 <a href="#266" id="266">266</a>
 <a href="#267" id="267">267</a>
 <a href="#268" id="268">268</a>
+<a href="#269" id="269">269</a>
+<a href="#270" id="270">270</a>
+<a href="#271" id="271">271</a>
+<a href="#272" id="272">272</a>
 </pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::missing_errors_doc)]
 #![allow(clippy::module_name_repetitions)]
@@ -296,6 +300,7 @@
 <span class="kw">use </span>fedimint_core::util::backoff_util::FibonacciBackoff;
 <span class="kw">use </span>fedimint_core::util::{backoff_util, retry};
 <span class="kw">use </span>fedimint_core::{apply, async_trait_maybe_send, Amount, PeerId};
+<span class="kw">use </span>fedimint_logging::LOG_CLIENT_MODULE_META;
 <span class="kw">pub use </span>fedimint_meta_common <span class="kw">as </span>common;
 <span class="kw">use </span>fedimint_meta_common::{MetaCommonInit, MetaModuleTypes, DEFAULT_META_KEY};
 <span class="kw">use </span>states::MetaStateMachine;
@@ -512,7 +517,10 @@
     backoff: FibonacciBackoff,
 ) -&gt; <span class="prelude-ty">Option</span>&lt;MetaConsensusValue&gt; {
     <span class="kw">if </span>client.get_first_instance(<span class="kw-2">&amp;</span>KIND).is_some() {
-        <span class="kw">let </span>meta_client = client.get_first_module::&lt;MetaClientModule&gt;();
+        <span class="kw">let </span><span class="prelude-val">Ok</span>(meta_client) = client.get_first_module::&lt;MetaClientModule&gt;() <span class="kw">else </span>{
+            <span class="macro">warn!</span>(target: LOG_CLIENT_MODULE_META, <span class="string">"Meta module instance not found"</span>);
+            <span class="kw">return </span><span class="prelude-val">None</span>;
+        };
 
         <span class="kw">let </span>overrides_res = retry(<span class="string">"fetch_meta_values"</span>, backoff, || {
             meta_client.get_consensus_value(DEFAULT_META_KEY)

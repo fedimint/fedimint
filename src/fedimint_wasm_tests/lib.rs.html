@@ -466,7 +466,7 @@
     <span class="kw">async fn </span>get_gateway(
         client: <span class="kw-2">&amp;</span>fedimint_client::ClientHandleArc,
     ) -&gt; anyhow::Result&lt;LightningGateway&gt; {
-        <span class="kw">let </span>lightning_module = client.get_first_module::&lt;LightningClientModule&gt;();
+        <span class="kw">let </span>lightning_module = client.get_first_module::&lt;LightningClientModule&gt;()<span class="question-mark">?</span>;
         <span class="kw">let </span>gws = lightning_module.list_gateways().<span class="kw">await</span>;
         <span class="kw">let </span>gw_api = faucet::gateway_api().<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>lnd_gw = gws
@@ -495,7 +495,7 @@
         amount: Amount,
         gateway: LightningGateway,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-        <span class="kw">let </span>lightning_module = client.get_first_module::&lt;LightningClientModule&gt;();
+        <span class="kw">let </span>lightning_module = client.get_first_module::&lt;LightningClientModule&gt;()<span class="question-mark">?</span>;
         <span class="kw">let </span>desc = Description::new(<span class="string">"test"</span>.to_string())<span class="question-mark">?</span>;
         <span class="kw">let </span>(opid, invoice, <span class="kw">_</span>) = lightning_module
             .create_bolt11_invoice(
@@ -540,7 +540,7 @@
         client: fedimint_client::ClientHandleArc,
         ln_gateway: LightningGateway,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;(), anyhow::Error&gt; {
-        <span class="kw">let </span>lightning_module = client.get_first_module::&lt;LightningClientModule&gt;();
+        <span class="kw">let </span>lightning_module = client.get_first_module::&lt;LightningClientModule&gt;()<span class="question-mark">?</span>;
         <span class="kw">let </span>bolt11 = faucet::generate_invoice(<span class="number">11</span>).<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>OutgoingLightningPayment {
             payment_type,
@@ -552,7 +552,7 @@
         <span class="kw">let </span>PayType::Lightning(operation_id) = payment_type <span class="kw">else </span>{
             <span class="macro">unreachable!</span>(<span class="string">"paying invoice over lightning"</span>);
         };
-        <span class="kw">let </span>lightning_module = client.get_first_module::&lt;LightningClientModule&gt;();
+        <span class="kw">let </span>lightning_module = client.get_first_module::&lt;LightningClientModule&gt;()<span class="question-mark">?</span>;
         <span class="kw">let </span><span class="kw-2">mut </span>updates = lightning_module
             .subscribe_ln_pay(operation_id)
             .<span class="kw">await</span><span class="question-mark">?
@@ -594,7 +594,7 @@
     <span class="kw">async fn </span>send_and_recv_ecash_once(
         client: fedimint_client::ClientHandleArc,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;(), anyhow::Error&gt; {
-        <span class="kw">let </span>mint = client.get_first_module::&lt;MintClientModule&gt;();
+        <span class="kw">let </span>mint = client.get_first_module::&lt;MintClientModule&gt;()<span class="question-mark">?</span>;
         <span class="kw">let </span>(<span class="kw">_</span>, notes) = mint
             .spend_notes(Amount::from_sats(<span class="number">11</span>), Duration::from_secs(<span class="number">10000</span>), <span class="bool-val">false</span>, ())
             .<span class="kw">await</span><span class="question-mark">?</span>;
@@ -622,7 +622,7 @@
         client: fedimint_client::ClientHandleArc,
         amount: Amount,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;(), anyhow::Error&gt; {
-        <span class="kw">let </span>mint = client.get_first_module::&lt;MintClientModule&gt;();
+        <span class="kw">let </span>mint = client.get_first_module::&lt;MintClientModule&gt;()<span class="question-mark">?</span>;
         <span class="lifetime">'retry</span>: <span class="kw">loop </span>{
             <span class="kw">let </span>(operation_id, notes) = mint
                 .spend_notes(amount, Duration::from_secs(<span class="number">10000</span>), <span class="bool-val">false</span>, ())

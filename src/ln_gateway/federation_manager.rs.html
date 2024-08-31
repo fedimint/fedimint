@@ -281,6 +281,7 @@
 <a href="#281" id="281">281</a>
 <a href="#282" id="282">282</a>
 <a href="#283" id="283">283</a>
+<a href="#284" id="284">284</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::sync::atomic::{AtomicU64, Ordering};
 <span class="kw">use </span>std::sync::Arc;
@@ -390,8 +391,8 @@
 
         client
             .value()
-            .get_first_module::&lt;GatewayClientModule&gt;()
-            .remove_from_federation(gateway_keypair)
+            .get_first_module::&lt;GatewayClientModule&gt;()<span class="question-mark">?
+            </span>.remove_from_federation(gateway_keypair)
             .<span class="kw">await</span>;
 
         <span class="prelude-val">Ok</span>(())
@@ -407,6 +408,7 @@
                 client
                     .value()
                     .get_first_module::&lt;GatewayClientModule&gt;()
+                    .expect(<span class="string">"Must have client module"</span>)
                     .remove_from_federation(gateway_keypair)
                     .<span class="kw">await</span>;
             })
