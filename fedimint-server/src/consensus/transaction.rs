@@ -11,6 +11,7 @@ pub async fn process_transaction_with_dbtx(
     modules: ServerModuleRegistry,
     dbtx: &mut DatabaseTransaction<'_>,
     transaction: &Transaction,
+    transaction_fee: Amount,
 ) -> Result<(), TransactionError> {
     let in_count = transaction.inputs.len();
     let out_count = transaction.outputs.len();
@@ -70,7 +71,7 @@ pub async fn process_transaction_with_dbtx(
         funding_verifier.add_output(amount);
     }
 
-    funding_verifier.verify_funding()?;
+    funding_verifier.verify_funding(transaction_fee)?;
 
     Ok(())
 }
@@ -92,14 +93,14 @@ impl FundingVerifier {
         self.fee_amount += output_amount.fee;
     }
 
-    pub fn verify_funding(self) -> Result<(), TransactionError> {
-        if self.input_amount == (self.output_amount + self.fee_amount) {
+    pub fn verify_funding(self, transaction_fee: Amount) -> Result<(), TransactionError> {
+        if self.input_amount == (self.output_amount + self.fee_amount + transaction_fee) {
             Ok(())
         } else {
             Err(TransactionError::UnbalancedTransaction {
                 inputs: self.input_amount,
                 outputs: self.output_amount,
-                fee: self.fee_amount,
+                fee: self.fee_amount + transaction_fee,
             })
         }
     }

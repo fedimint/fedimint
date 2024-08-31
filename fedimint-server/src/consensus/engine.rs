@@ -25,7 +25,8 @@ use fedimint_core::session_outcome::{
 };
 use fedimint_core::task::{sleep, TaskGroup, TaskHandle};
 use fedimint_core::timing::TimeReporter;
-use fedimint_core::{timing, NumPeers, NumPeersExt, PeerId};
+use fedimint_core::transaction::DEFAULT_TRANSACTION_FEE;
+use fedimint_core::{timing, Amount, NumPeers, NumPeersExt, PeerId};
 use futures::StreamExt;
 use rand::Rng;
 use tokio::sync::{watch, RwLock};
@@ -743,9 +744,14 @@ impl ConsensusEngine {
                     .map(DynOutput::module_instance_id)
                     .collect::<Vec<_>>();
 
-                process_transaction_with_dbtx(self.modules.clone(), dbtx, &transaction)
-                    .await
-                    .map_err(|error| anyhow!(error.to_string()))?;
+                process_transaction_with_dbtx(
+                    self.modules.clone(),
+                    dbtx,
+                    &transaction,
+                    self.get_transaction_fee().await,
+                )
+                .await
+                .map_err(|error| anyhow!(error.to_string()))?;
 
                 debug!(target: LOG_CONSENSUS, %txid,  "Transaction accepted");
                 dbtx.insert_entry(&AcceptedTransactionKey(txid), &modules_ids)
@@ -823,6 +829,15 @@ impl ConsensusEngine {
     /// **does not** include the currently running session.
     async fn get_finished_session_count(&self) -> u64 {
         get_finished_session_count_static(&mut self.db.begin_transaction_nc().await).await
+    }
+
+    /// Returns the current consensus on the per-transaction fee.
+    ///
+    /// This function is `async` on purpose, it is expected to do DB reads in
+    /// the future once the transaction fee can be set dynamically.
+    #[allow(clippy::unused_async)]
+    async fn get_transaction_fee(&self) -> Amount {
+        DEFAULT_TRANSACTION_FEE
     }
 }
 

@@ -102,7 +102,8 @@ use fedimint_api_client::api::{
     ApiVersionSet, DynGlobalApi, DynModuleApi, FederationApiExt, IGlobalFederationApi,
 };
 use fedimint_core::config::{
-    ClientConfig, FederationId, GlobalClientConfig, JsonClientConfig, ModuleInitRegistry,
+    ClientConfig, ExtraConfig, FederationId, GlobalClientConfig, JsonClientConfig,
+    ModuleInitRegistry,
 };
 use fedimint_core::core::{
     DynInput, DynOutput, IInput, IOutput, ModuleInstanceId, ModuleKind, OperationId,
@@ -120,7 +121,7 @@ use fedimint_core::module::{
 };
 use fedimint_core::net::api_announcement::SignedApiAnnouncement;
 use fedimint_core::task::{Elapsed, MaybeSend, MaybeSync, TaskGroup};
-use fedimint_core::transaction::Transaction;
+use fedimint_core::transaction::{Transaction, TransactionFee};
 use fedimint_core::util::{backoff_util, retry, BoxStream, NextOrPending, SafeUrl};
 use fedimint_core::{
     apply, async_trait_maybe_send, dyn_newtype_define, fedimint_build_code_version_env,
@@ -150,7 +151,7 @@ use crate::api_announcements::{get_api_urls, run_api_announcement_sync, ApiAnnou
 use crate::api_version_discovery::discover_common_api_versions_set;
 use crate::backup::Metadata;
 use crate::db::{ClientMetadataKey, ClientModuleRecoveryState, InitState, OperationLogKey};
-use crate::extra_config::{ExtraConfigService, TrackedExtraConfig};
+use crate::extra_config::{ExtraConfigService, ExtraConfigTacking, TrackedExtraConfig};
 use crate::module::init::{
     ClientModuleInit, ClientModuleInitRegistry, DynClientModuleInit, IClientModuleInit,
 };
@@ -1040,6 +1041,11 @@ impl Client {
     ) -> anyhow::Result<(Transaction, Vec<DynState>, Range<u64>)> {
         let (input_amount, output_amount) = self.transaction_builder_balance(&partial_transaction);
 
+        let transaction_fee = self
+            .extra_config_service
+            .get_config_value::<TransactionFee>(dbtx)
+            .await
+            .map_or(Amount::ZERO, |tx_fee| tx_fee.fee_per_transaction);
         let (added_inputs, change_outputs) = self
             .primary_module()
             .create_final_inputs_and_outputs(
@@ -1047,7 +1053,7 @@ impl Client {
                 dbtx,
                 operation_id,
                 input_amount,
-                output_amount,
+                output_amount + transaction_fee,
             )
             .await?;
 
@@ -1064,7 +1070,11 @@ impl Client {
 
         let (input_amount, output_amount) = self.transaction_builder_balance(&partial_transaction);
 
-        assert_eq!(input_amount, output_amount, "Transaction is not balanced");
+        assert_eq!(
+            input_amount,
+            output_amount + transaction_fee,
+            "Transaction is not balanced"
+        );
 
         let (tx, states) = partial_transaction.build(&self.secp_ctx, thread_rng());
 
@@ -1993,6 +2003,12 @@ impl Client {
             }
         })
     }
+
+    pub async fn get_extra_config<T: ExtraConfig>(&self) -> Option<T> {
+        self.extra_config_service
+            .get_config_value(&mut self.db.begin_transaction_nc().await)
+            .await
+    }
 }
 #[derive(Deserialize)]
 struct GetInviteCodeRequest {
@@ -2798,5 +2814,5 @@ pub fn client_decoders<'a>(
 }
 
 fn core_extra_config() -> Vec<TrackedExtraConfig> {
-    vec![]
+    vec![TransactionFee::tracking_info()]
 }

@@ -34,3 +34,4 @@ pub const RESTART_FEDERATION_SETUP_ENDPOINT: &str = "restart_federation_setup";
 pub const API_ANNOUNCEMENTS_ENDPOINT: &str = "api_announcements";
 pub const SUBMIT_API_ANNOUNCEMENT_ENDPOINT: &str = "submit_api_announcement";
 pub const SIGN_API_ANNOUNCEMENT_ENDPOINT: &str = "sign_api_announcement";
+pub const TRANSACTION_FEE_ENDPOINT: &str = "transaction_fee";

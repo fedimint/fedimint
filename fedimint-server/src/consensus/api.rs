@@ -27,7 +27,7 @@ use fedimint_core::endpoint_constants::{
     INVITE_CODE_ENDPOINT, RECOVER_ENDPOINT, SERVER_CONFIG_CONSENSUS_HASH_ENDPOINT,
     SESSION_COUNT_ENDPOINT, SESSION_STATUS_ENDPOINT, SHUTDOWN_ENDPOINT,
     SIGN_API_ANNOUNCEMENT_ENDPOINT, STATUS_ENDPOINT, SUBMIT_API_ANNOUNCEMENT_ENDPOINT,
-    SUBMIT_TRANSACTION_ENDPOINT, VERSION_ENDPOINT,
+    SUBMIT_TRANSACTION_ENDPOINT, TRANSACTION_FEE_ENDPOINT, VERSION_ENDPOINT,
 };
 use fedimint_core::epoch::ConsensusItem;
 use fedimint_core::module::audit::{Audit, AuditSummary};
@@ -43,10 +43,11 @@ use fedimint_core::secp256k1::{PublicKey, SECP256K1};
 use fedimint_core::server::DynServerModule;
 use fedimint_core::session_outcome::{SessionOutcome, SessionStatus, SignedSessionOutcome};
 use fedimint_core::transaction::{
-    SerdeTransaction, Transaction, TransactionError, TransactionSubmissionOutcome,
+    SerdeTransaction, Transaction, TransactionError, TransactionFee, TransactionSubmissionOutcome,
+    DEFAULT_TRANSACTION_FEE,
 };
 use fedimint_core::util::SafeUrl;
-use fedimint_core::{secp256k1, OutPoint, PeerId, TransactionId};
+use fedimint_core::{secp256k1, Amount, OutPoint, PeerId, TransactionId};
 use fedimint_logging::LOG_NET_API;
 use futures::StreamExt;
 use tokio::sync::{watch, RwLock};
@@ -121,7 +122,13 @@ impl ConsensusApi {
         // We ignore any writes, as we only verify if the transaction is valid here
         dbtx.ignore_uncommitted();
 
-        process_transaction_with_dbtx(self.modules.clone(), &mut dbtx, &transaction).await?;
+        process_transaction_with_dbtx(
+            self.modules.clone(),
+            &mut dbtx,
+            &transaction,
+            self.get_transaction_fee().await,
+        )
+        .await?;
 
         self.submission_sender
             .send(ConsensusItem::Transaction(transaction))
@@ -463,6 +470,13 @@ impl ConsensusApi {
             .await
             .expect("Will not terminate on error")
     }
+
+    /// Returns the fee per transaction. The function is `async` on purpose so
+    /// it can fetch the value from the database once it is dynamic.
+    #[allow(clippy::unused_async)]
+    async fn get_transaction_fee(&self) -> Amount {
+        DEFAULT_TRANSACTION_FEE
+    }
 }
 
 #[async_trait]
@@ -698,6 +712,15 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConsensusApi>> {
             async |fedimint: &ConsensusApi, context, new_url: SafeUrl| -> SignedApiAnnouncement {
                 check_auth(context)?;
                 Ok(fedimint.sign_api_announcement(new_url).await)
+            }
+        },
+        api_endpoint! {
+            TRANSACTION_FEE_ENDPOINT,
+            ApiVersion::new(0, 3),
+            async |fedimint: &ConsensusApi, _context, _v: ()| -> TransactionFee {
+                Ok(TransactionFee {
+                    fee_per_transaction: fedimint.get_transaction_fee().await
+                })
             }
         },
     ]

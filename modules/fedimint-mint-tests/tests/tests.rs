@@ -2,6 +2,7 @@ use std::io::Cursor;
 use std::sync::Arc;
 use std::time::Duration;
 
+use anyhow::ensure;
 use bls12_381::G1Affine;
 use fedimint_client::backup::{ClientBackup, Metadata};
 use fedimint_client::transaction::{ClientInput, TransactionBuilder};
@@ -9,7 +10,9 @@ use fedimint_core::config::EmptyGenParams;
 use fedimint_core::core::OperationId;
 use fedimint_core::secp256k1::KeyPair;
 use fedimint_core::task::sleep_in_test;
-use fedimint_core::util::NextOrPending;
+use fedimint_core::transaction::TransactionFee;
+use fedimint_core::util::backoff_util::aggressive_backoff;
+use fedimint_core::util::{retry, NextOrPending};
 use fedimint_core::{sats, secp256k1, Amount};
 use fedimint_dummy_client::{DummyClientInit, DummyClientModule};
 use fedimint_dummy_common::config::DummyGenParams;
@@ -725,4 +728,24 @@ mod fedimint_migration_tests {
         )
         .await
     }
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn global_transaction_fee_fetching() -> anyhow::Result<()> {
+    let fed = fixtures().new_default_fed().await;
+    let client = fed.new_client().await;
+
+    retry(
+        "fetching global transaction fee",
+        aggressive_backoff(),
+        || async {
+            let fee = client.get_extra_config::<TransactionFee>().await;
+            ensure!(fee.is_some(), "Expected fee to be Some, got None",);
+            Ok(())
+        },
+    )
+    .await
+    .expect("Did not fetch global transaction fee in time");
+
+    Ok(())
 }

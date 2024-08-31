@@ -1,13 +1,19 @@
+use std::time::Duration;
+
 use bitcoin::hashes::Hash as BitcoinHash;
 use fedimint_core::core::{DynInput, DynOutput};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::SerdeModuleEncoding;
 use fedimint_core::{Amount, TransactionId};
 use secp256k1_zkp::schnorr;
+use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use crate::config::ALEPH_BFT_UNIT_BYTE_LIMIT;
+use crate::config::{ExtraConfig, ALEPH_BFT_UNIT_BYTE_LIMIT};
 use crate::core::{DynInputError, DynOutputError};
+use crate::endpoint_constants::TRANSACTION_FEE_ENDPOINT;
+
+pub const DEFAULT_TRANSACTION_FEE: Amount = Amount::ZERO;
 
 /// An atomic value transfer operation within the Fedimint system and consensus
 ///
@@ -121,6 +127,16 @@ pub enum TransactionSignature {
         variant: u64,
         bytes: Vec<u8>,
     },
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Encodable, Decodable, Serialize, Deserialize)]
+pub struct TransactionFee {
+    pub fee_per_transaction: Amount,
+}
+
+impl ExtraConfig for TransactionFee {
+    const FETCH_METHOD: &'static str = TRANSACTION_FEE_ENDPOINT;
+    const UPDATE_INTERVAL: Duration = Duration::from_secs(60 * 60 * 24);
 }
 
 #[derive(Debug, Error, Encodable, Decodable, Clone, Eq, PartialEq)]
