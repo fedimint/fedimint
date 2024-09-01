@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"struct":["GatewayLightningServer"],"trait":["GatewayLightning"]};
+window.SIDEBAR_ITEMS = {"constant":["SERVICE_NAME"],"struct":["GatewayLightningServer"],"trait":["GatewayLightning"]};
