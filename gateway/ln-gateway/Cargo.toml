@@ -58,7 +58,7 @@ hex = { workspace = true }
 ldk-node = "0.3.0"
 lightning = { workspace = true }
 lightning-invoice = { workspace = true }
-prost = "0.13.1"
+prost = "0.13.2"
 rand = { workspace = true }
 reqwest = { workspace = true }
 serde = { workspace = true }
@@ -68,7 +68,7 @@ strum_macros = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true }
 tokio-stream = { workspace = true }
-tonic = { version = "0.12.1", features = ["transport", "tls"] }
+tonic = { version = "0.12.2", features = ["transport", "tls"] }
 tonic_lnd = { workspace = true }
 tower-http = { version = "0.5.2", features = ["cors", "auth"] }
 tpe = { workspace = true }
@@ -97,4 +97,4 @@ threshold_crypto = { workspace = true }
 
 [build-dependencies]
 fedimint-build = { workspace = true }
-tonic-build = "0.12.1"
+tonic-build = "0.12.2"

@@ -24,7 +24,7 @@ async-trait = { workspace = true }
 axum = { workspace = true }
 bitcoin = { workspace = true }
 clap = { workspace = true }
-clap_complete = "4.5.23"
+clap_complete = "4.5.24"
 fedimint-core = { workspace = true }
 fedimint-logging = { workspace = true }
 fedimint-mint-client = { workspace = true }
