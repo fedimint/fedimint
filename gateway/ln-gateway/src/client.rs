@@ -5,13 +5,14 @@ use std::sync::Arc;
 
 use bip39::Mnemonic;
 use fedimint_bip39::Bip39RootSecretStrategy;
-use fedimint_client::derivable_secret::DerivableSecret;
+use fedimint_client::db::ClientConfigKey;
+use fedimint_client::derivable_secret::{ChildId, DerivableSecret};
 use fedimint_client::module::init::ClientModuleInitRegistry;
 use fedimint_client::secret::{PlainRootSecretStrategy, RootSecretStrategy};
 use fedimint_client::{Client, ClientBuilder};
 use fedimint_core::config::FederationId;
 use fedimint_core::core::ModuleInstanceId;
-use fedimint_core::db::Database;
+use fedimint_core::db::{Database, IDatabaseTransactionOpsCoreTyped};
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 
 use crate::db::FederationConfig;
@@ -97,10 +98,12 @@ impl GatewayClientBuilder {
         } else {
             let db = gateway
                 .gateway_db
-                .with_prefix(federation_id.to_prefix().to_bytes());
-            let root_secret = Bip39RootSecretStrategy::<12>::to_root_secret(mnemonic);
-            (db, root_secret)
+                .with_prefix(config.mint_channel_id.to_le_bytes().to_vec());
+            let secret = Self::derive_federation_secret(mnemonic, &federation_id);
+            (db, secret)
         };
+
+        Self::verify_client_config(&db, federation_id).await?;
 
         let client_builder = self.create_client_builder(db, &config, gateway).await?;
 
@@ -119,6 +122,35 @@ impl GatewayClientBuilder {
         .map_err(GatewayError::ClientStateMachineError)
     }
 
+    /// Verifies that the saved `ClientConfig` contains the expected
+    /// federation's config.
+    async fn verify_client_config(db: &Database, federation_id: FederationId) -> Result<()> {
+        let mut dbtx = db.begin_transaction_nc().await;
+        if let Some(config) = dbtx.get_value(&ClientConfigKey).await {
+            if config.calculate_federation_id() != federation_id {
+                return Err(GatewayError::ClientCreationError(
+                    "Federation Id did not match saved federation ID".to_string(),
+                ));
+            }
+        }
+        Ok(())
+    }
+
+    /// Derives a per-federation secret according to Fedimint's multi-federation
+    /// secret derivation policy.
+    fn derive_federation_secret(
+        mnemonic: &Mnemonic,
+        federation_id: &FederationId,
+    ) -> DerivableSecret {
+        let global_root_secret = Bip39RootSecretStrategy::<12>::to_root_secret(mnemonic);
+        let multi_federation_root_secret = global_root_secret.child_key(ChildId(0));
+        let federation_root_secret = multi_federation_root_secret.federation_key(federation_id);
+        let federation_wallet_root_secret = federation_root_secret.child_key(ChildId(0));
+        federation_wallet_root_secret.child_key(ChildId(0))
+    }
+
+    /// Returns a vector of "legacy" federations which did not derive their
+    /// client secret's from the gateway's mnemonic.
     pub fn legacy_federations(&self, all_federations: BTreeSet<FederationId>) -> Vec<FederationId> {
         all_federations
             .into_iter()

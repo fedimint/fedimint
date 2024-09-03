@@ -18,6 +18,9 @@ else
   versions=("$@")
 fi
 
+# TODO(v0.5.0): We do not need to run the `gatewayd-mnemonic` test from v0.4.0
+# -> v0.5.0 over and over again. Once we have verified this test passes for
+# v0.5.0, it can safely be removed.
 default_test_kinds=("fedimintd" "fedimint-cli" "gateway" "mnemonic")
 
 # runs a subset of tests if the user provides `TEST_KINDS`
