@@ -22,6 +22,7 @@ use tonic_lnd::invoicesrpc::{
     AddHoldInvoiceRequest, CancelInvoiceMsg, LookupInvoiceMsg, SettleInvoiceMsg,
     SubscribeSingleInvoiceRequest,
 };
+use tonic_lnd::lnrpc::channel_point::FundingTxid;
 use tonic_lnd::lnrpc::failure::FailureCode;
 use tonic_lnd::lnrpc::invoice::InvoiceState;
 use tonic_lnd::lnrpc::payment::PaymentStatus;
@@ -47,7 +48,7 @@ use crate::gateway_lnrpc::intercept_htlc_response::{Action, Cancel, Forward, Set
 use crate::gateway_lnrpc::{
     CloseChannelsWithPeerResponse, CreateInvoiceRequest, CreateInvoiceResponse, EmptyResponse,
     GetBalancesResponse, GetLnOnchainAddressResponse, GetNodeInfoResponse, GetRouteHintsResponse,
-    InterceptHtlcRequest, InterceptHtlcResponse, PayInvoiceResponse,
+    InterceptHtlcRequest, InterceptHtlcResponse, OpenChannelResponse, PayInvoiceResponse,
 };
 
 type HtlcSubscriptionSender = mpsc::Sender<Result<InterceptHtlcRequest, Status>>;
@@ -1129,7 +1130,7 @@ impl ILnRpcClient for GatewayLndClient {
         host: String,
         channel_size_sats: u64,
         push_amount_sats: u64,
-    ) -> Result<EmptyResponse, LightningRpcError> {
+    ) -> Result<OpenChannelResponse, LightningRpcError> {
         let mut client = self.connect().await?;
 
         // Connect to the peer first
@@ -1151,7 +1152,7 @@ impl ILnRpcClient for GatewayLndClient {
         // Open the channel
         match client
             .lightning()
-            .open_channel(OpenChannelRequest {
+            .open_channel_sync(OpenChannelRequest {
                 node_pubkey: pubkey.serialize().to_vec(),
                 local_funding_amount: channel_size_sats.try_into().expect("u64 -> i64"),
                 push_sat: push_amount_sats.try_into().expect("u64 -> i64"),
@@ -1159,7 +1160,18 @@ impl ILnRpcClient for GatewayLndClient {
             })
             .await
         {
-            Ok(_) => Ok(EmptyResponse {}),
+            Ok(res) => Ok(OpenChannelResponse {
+                funding_txid: match res.into_inner().funding_txid {
+                    Some(txid) => match txid {
+                        FundingTxid::FundingTxidBytes(mut bytes) => {
+                            bytes.reverse();
+                            hex::encode(bytes)
+                        }
+                        FundingTxid::FundingTxidStr(str) => str,
+                    },
+                    None => String::new(),
+                },
+            }),
             Err(e) => Err(LightningRpcError::FailedToOpenChannel {
                 failure_reason: format!("Failed to open channel {e:?}"),
             }),

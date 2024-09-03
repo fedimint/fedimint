@@ -1,5 +1,5 @@
 use bitcoin::address::NetworkUnchecked;
-use bitcoin::Address;
+use bitcoin::{Address, Txid};
 use fedimint_core::util::SafeUrl;
 use fedimint_core::{Amount, TransactionId};
 use fedimint_ln_common::gateway_endpoint_constants::{
@@ -175,7 +175,7 @@ impl GatewayRpcClient {
         self.call_post(url, payload).await
     }
 
-    pub async fn open_channel(&self, payload: OpenChannelPayload) -> GatewayRpcResult<()> {
+    pub async fn open_channel(&self, payload: OpenChannelPayload) -> GatewayRpcResult<Txid> {
         let url = self
             .base_url
             .join(OPEN_CHANNEL_ENDPOINT)

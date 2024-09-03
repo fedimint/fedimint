@@ -1335,13 +1335,17 @@ impl Gateway {
             channel_size_sats,
             push_amount_sats,
         }: OpenChannelPayload,
-    ) -> Result<()> {
+    ) -> Result<Txid> {
         let context = self.get_lightning_context().await?;
-        context
+        let res = context
             .lnrpc
             .open_channel(pubkey, host, channel_size_sats, push_amount_sats)
             .await?;
-        Ok(())
+        Txid::from_str(&res.funding_txid).map_err(|e| {
+            GatewayError::InvalidMetadata(format!(
+                "Received invalid channel funding txid string: {e}"
+            ))
+        })
     }
 
     /// Instructs the Gateway's Lightning node to close all channels with a peer
