@@ -567,6 +567,35 @@
 <a href="#567" id="567">567</a>
 <a href="#568" id="568">568</a>
 <a href="#569" id="569">569</a>
+<a href="#570" id="570">570</a>
+<a href="#571" id="571">571</a>
+<a href="#572" id="572">572</a>
+<a href="#573" id="573">573</a>
+<a href="#574" id="574">574</a>
+<a href="#575" id="575">575</a>
+<a href="#576" id="576">576</a>
+<a href="#577" id="577">577</a>
+<a href="#578" id="578">578</a>
+<a href="#579" id="579">579</a>
+<a href="#580" id="580">580</a>
+<a href="#581" id="581">581</a>
+<a href="#582" id="582">582</a>
+<a href="#583" id="583">583</a>
+<a href="#584" id="584">584</a>
+<a href="#585" id="585">585</a>
+<a href="#586" id="586">586</a>
+<a href="#587" id="587">587</a>
+<a href="#588" id="588">588</a>
+<a href="#589" id="589">589</a>
+<a href="#590" id="590">590</a>
+<a href="#591" id="591">591</a>
+<a href="#592" id="592">592</a>
+<a href="#593" id="593">593</a>
+<a href="#594" id="594">594</a>
+<a href="#595" id="595">595</a>
+<a href="#596" id="596">596</a>
+<a href="#597" id="597">597</a>
+<a href="#598" id="598">598</a>
 </pre></div><pre class="rust"><code><span class="kw">pub mod </span>backoff_util;
 <span class="doccomment">/// Copied from `tokio_stream` 0.1.12 to use our optional Send bounds
 </span><span class="kw">pub mod </span>broadcaststream;
@@ -586,6 +615,7 @@
 <span class="kw">use </span>fedimint_logging::LOG_CORE;
 <span class="kw">use </span>futures::StreamExt;
 <span class="kw">use </span>serde::Serialize;
+<span class="kw">use </span>thiserror::Error;
 <span class="kw">use </span>tokio::io::AsyncWriteExt;
 <span class="kw">use </span>tracing::{debug, warn, Instrument, Span};
 <span class="kw">use </span>url::{Host, ParseError, Url};
@@ -650,6 +680,12 @@
 </span><span class="comment">// nosemgrep: ban-raw-url
 </span><span class="kw">pub struct </span>SafeUrl(Url);
 
+<span class="attr">#[derive(Debug, Error)]
+</span><span class="kw">pub enum </span>SafeUrlError {
+    <span class="attr">#[error(<span class="string">"Failed to remove auth from URL"</span>)]
+    </span>WithoutAuthError,
+}
+
 <span class="kw">impl </span>SafeUrl {
     <span class="kw">pub fn </span>parse(url_str: <span class="kw-2">&amp;</span>str) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, ParseError&gt; {
         <span class="kw">let </span>s = Url::parse(url_str).map(SafeUrl)<span class="question-mark">?</span>;
@@ -674,6 +710,14 @@
     <span class="attr">#[allow(clippy::result_unit_err)] </span><span class="comment">// just copying `url`'s API here
     </span><span class="kw">pub fn </span>set_password(<span class="kw-2">&amp;mut </span><span class="self">self</span>, password: <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>str&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;(), ()&gt; {
         <span class="self">self</span>.<span class="number">0</span>.set_password(password)
+    }
+
+    <span class="kw">pub fn </span>without_auth(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, SafeUrlError&gt; {
+        <span class="kw">let </span><span class="kw-2">mut </span>url = <span class="self">self</span>.clone();
+        url.set_username(<span class="string">""</span>)
+            .and_then(|()| url.set_password(<span class="prelude-val">None</span>))
+            .map_err(|()| SafeUrlError::WithoutAuthError)<span class="question-mark">?</span>;
+        <span class="prelude-val">Ok</span>(url)
     }
 
     <span class="kw">pub fn </span>host(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;Host&lt;<span class="kw-2">&amp;</span>str&gt;&gt; {
@@ -1040,30 +1084,37 @@
                 <span class="string">"http://1.2.3.4:80/foo"</span>,
                 <span class="string">"http://1.2.3.4/foo"</span>,
                 <span class="string">"SafeUrl(http://1.2.3.4/foo)"</span>,
+                <span class="string">"http://1.2.3.4/foo"</span>,
             ),
             (
                 <span class="string">"http://1.2.3.4:81/foo"</span>,
                 <span class="string">"http://1.2.3.4:81/foo"</span>,
                 <span class="string">"SafeUrl(http://1.2.3.4:81/foo)"</span>,
+                <span class="string">"http://1.2.3.4:81/foo"</span>,
             ),
             (
                 <span class="string">"fedimint://1.2.3.4:1000/foo"</span>,
                 <span class="string">"fedimint://1.2.3.4:1000/foo"</span>,
                 <span class="string">"SafeUrl(fedimint://1.2.3.4:1000/foo)"</span>,
+                <span class="string">"fedimint://1.2.3.4:1000/foo"</span>,
             ),
             (
                 <span class="string">"fedimint://foo:bar@domain.com:1000/foo"</span>,
                 <span class="string">"fedimint://REDACTEDUSER:REDACTEDPASS@domain.com:1000/foo"</span>,
                 <span class="string">"SafeUrl(fedimint://REDACTEDUSER:REDACTEDPASS@domain.com:1000/foo)"</span>,
+                <span class="string">"fedimint://domain.com:1000/foo"</span>,
             ),
             (
                 <span class="string">"fedimint://foo@1.2.3.4:1000/foo"</span>,
                 <span class="string">"fedimint://REDACTEDUSER@1.2.3.4:1000/foo"</span>,
                 <span class="string">"SafeUrl(fedimint://REDACTEDUSER@1.2.3.4:1000/foo)"</span>,
+                <span class="string">"fedimint://1.2.3.4:1000/foo"</span>,
             ),
         ];
 
-        <span class="kw">for </span>(url_str, safe_display_expected, safe_debug_expected) <span class="kw">in </span>test_cases {
+        <span class="kw">for </span>(url_str, safe_display_expected, safe_debug_expected, without_auth_expected) <span class="kw">in
+            </span>test_cases
+        {
             <span class="kw">let </span>safe_url = SafeUrl::parse(url_str).unwrap();
 
             <span class="kw">let </span>safe_display = <span class="macro">format!</span>(<span class="string">"{safe_url}"</span>);
@@ -1076,6 +1127,13 @@
             <span class="macro">assert_eq!</span>(
                 safe_debug, safe_debug_expected,
                 <span class="string">"Debug implementation out of spec"
+            </span>);
+
+            <span class="kw">let </span>without_auth = safe_url.without_auth().unwrap();
+            <span class="macro">assert_eq!</span>(
+                without_auth.as_str(),
+                without_auth_expected,
+                <span class="string">"Without auth implementation out of spec"
             </span>);
         }
 

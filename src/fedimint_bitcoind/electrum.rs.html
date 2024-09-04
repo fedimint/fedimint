@@ -217,12 +217,30 @@
 <a href="#217" id="217">217</a>
 <a href="#218" id="218">218</a>
 <a href="#219" id="219">219</a>
+<a href="#220" id="220">220</a>
+<a href="#221" id="221">221</a>
+<a href="#222" id="222">222</a>
+<a href="#223" id="223">223</a>
+<a href="#224" id="224">224</a>
+<a href="#225" id="225">225</a>
+<a href="#226" id="226">226</a>
+<a href="#227" id="227">227</a>
+<a href="#228" id="228">228</a>
+<a href="#229" id="229">229</a>
+<a href="#230" id="230">230</a>
+<a href="#231" id="231">231</a>
+<a href="#232" id="232">232</a>
+<a href="#233" id="233">233</a>
+<a href="#234" id="234">234</a>
+<a href="#235" id="235">235</a>
+<a href="#236" id="236">236</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::fmt;
 
 <span class="kw">use </span>anyhow::{anyhow <span class="kw">as </span>format_err, bail};
 <span class="kw">use </span>bitcoin::{BlockHash, Network, ScriptBuf, Transaction, Txid};
 <span class="kw">use </span>electrum_client::ElectrumApi;
 <span class="kw">use </span>electrum_client::Error::Protocol;
+<span class="kw">use </span>fedimint_core::envs::BitcoinRpcConfig;
 <span class="kw">use </span>fedimint_core::runtime::block_in_place;
 <span class="kw">use </span>fedimint_core::task::TaskHandle;
 <span class="kw">use </span>fedimint_core::txoproof::TxOutProof;
@@ -247,11 +265,17 @@
     }
 }
 
-<span class="kw">pub struct </span>ElectrumClient(electrum_client::Client);
+<span class="kw">pub struct </span>ElectrumClient {
+    client: electrum_client::Client,
+    url: SafeUrl,
+}
 
 <span class="kw">impl </span>ElectrumClient {
     <span class="kw">fn </span>new(url: <span class="kw-2">&amp;</span>SafeUrl) -&gt; anyhow::Result&lt;<span class="self">Self</span>&gt; {
-        <span class="prelude-val">Ok</span>(<span class="self">Self</span>(electrum_client::Client::new(url.as_str())<span class="question-mark">?</span>))
+        <span class="prelude-val">Ok</span>(<span class="self">Self </span>{
+            client: electrum_client::Client::new(url.as_str())<span class="question-mark">?</span>,
+            url: url.clone(),
+        })
     }
 }
 
@@ -264,7 +288,7 @@
 <span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
 </span><span class="kw">impl </span>IBitcoindRpc <span class="kw">for </span>ElectrumClient {
     <span class="kw">async fn </span>get_network(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; anyhow::Result&lt;Network&gt; {
-        <span class="kw">let </span>resp = block_in_place(|| <span class="self">self</span>.<span class="number">0</span>.server_features())<span class="question-mark">?</span>;
+        <span class="kw">let </span>resp = block_in_place(|| <span class="self">self</span>.client.server_features())<span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(<span class="kw">match </span>resp.genesis_hash.encode_hex::&lt;String&gt;().as_str() {
             <span class="kw">crate</span>::MAINNET_GENESIS_BLOCK_HASH =&gt; Network::Bitcoin,
             <span class="kw">crate</span>::TESTNET_GENESIS_BLOCK_HASH =&gt; Network::Testnet,
@@ -277,12 +301,12 @@
     }
 
     <span class="kw">async fn </span>get_block_count(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; anyhow::Result&lt;u64&gt; {
-        <span class="prelude-val">Ok</span>(block_in_place(|| <span class="self">self</span>.<span class="number">0</span>.block_headers_subscribe_raw())<span class="question-mark">?</span>.height <span class="kw">as </span>u64 + <span class="number">1</span>)
+        <span class="prelude-val">Ok</span>(block_in_place(|| <span class="self">self</span>.client.block_headers_subscribe_raw())<span class="question-mark">?</span>.height <span class="kw">as </span>u64 + <span class="number">1</span>)
     }
 
     <span class="kw">async fn </span>get_block_hash(<span class="kw-2">&amp;</span><span class="self">self</span>, height: u64) -&gt; anyhow::Result&lt;BlockHash&gt; {
         <span class="kw">let </span>height = usize::try_from(height)<span class="question-mark">?</span>;
-        <span class="kw">let </span>result = block_in_place(|| <span class="self">self</span>.<span class="number">0</span>.block_headers(height, <span class="number">1</span>))<span class="question-mark">?</span>;
+        <span class="kw">let </span>result = block_in_place(|| <span class="self">self</span>.client.block_headers(height, <span class="number">1</span>))<span class="question-mark">?</span>;
         <span class="prelude-val">Ok</span>(result
             .headers
             .first()
@@ -291,8 +315,8 @@
     }
 
     <span class="kw">async fn </span>get_fee_rate(<span class="kw-2">&amp;</span><span class="self">self</span>, confirmation_target: u16) -&gt; anyhow::Result&lt;<span class="prelude-ty">Option</span>&lt;Feerate&gt;&gt; {
-        <span class="kw">let </span>estimate = block_in_place(|| <span class="self">self</span>.<span class="number">0</span>.estimate_fee(confirmation_target <span class="kw">as </span>usize))<span class="question-mark">?</span>;
-        <span class="kw">let </span>min_fee = block_in_place(|| <span class="self">self</span>.<span class="number">0</span>.relay_fee())<span class="question-mark">?</span>;
+        <span class="kw">let </span>estimate = block_in_place(|| <span class="self">self</span>.client.estimate_fee(confirmation_target <span class="kw">as </span>usize))<span class="question-mark">?</span>;
+        <span class="kw">let </span>min_fee = block_in_place(|| <span class="self">self</span>.client.relay_fee())<span class="question-mark">?</span>;
 
         <span class="comment">// convert fee rate estimate or min fee to sats
         </span><span class="kw">let </span>sats_per_kvb = estimate.max(min_fee) * <span class="number">100_000_000f64</span>;
@@ -305,7 +329,7 @@
         <span class="kw">let </span><span class="kw-2">mut </span>bytes = <span class="macro">vec!</span>[];
         bitcoin::consensus::Encodable::consensus_encode(<span class="kw-2">&amp;</span>transaction, <span class="kw-2">&amp;mut </span>bytes)
             .expect(<span class="string">"can't fail"</span>);
-        <span class="kw">match </span>block_in_place(|| <span class="self">self</span>.<span class="number">0</span>.transaction_broadcast_raw(<span class="kw-2">&amp;</span>bytes)) {
+        <span class="kw">match </span>block_in_place(|| <span class="self">self</span>.client.transaction_broadcast_raw(<span class="kw-2">&amp;</span>bytes)) {
             <span class="prelude-val">Err</span>(Protocol(Value::Object(e))) <span class="kw">if </span>is_already_submitted_error(<span class="kw-2">&amp;</span>e) =&gt; (),
             <span class="prelude-val">Err</span>(e) =&gt; <span class="macro">info!</span>(<span class="question-mark">?</span>e, <span class="string">"Error broadcasting transaction"</span>),
             <span class="prelude-val">Ok</span>(<span class="kw">_</span>) =&gt; (),
@@ -313,7 +337,7 @@
     }
 
     <span class="kw">async fn </span>get_tx_block_height(<span class="kw-2">&amp;</span><span class="self">self</span>, txid: <span class="kw-2">&amp;</span>Txid) -&gt; anyhow::Result&lt;<span class="prelude-ty">Option</span>&lt;u64&gt;&gt; {
-        <span class="kw">let </span>tx = block_in_place(|| <span class="self">self</span>.<span class="number">0</span>.transaction_get(txid))
+        <span class="kw">let </span>tx = block_in_place(|| <span class="self">self</span>.client.transaction_get(txid))
             .map_err(|error| <span class="macro">info!</span>(<span class="question-mark">?</span>error, <span class="string">"Unable to get raw transaction"</span>));
         <span class="kw">match </span>tx.ok() {
             <span class="prelude-val">None </span>=&gt; <span class="prelude-val">Ok</span>(<span class="prelude-val">None</span>),
@@ -322,7 +346,8 @@
                     .output
                     .first()
                     .ok_or(<span class="macro">format_err!</span>(<span class="string">"Transaction must contain at least one output"</span>))<span class="question-mark">?</span>;
-                <span class="kw">let </span>history = block_in_place(|| <span class="self">self</span>.<span class="number">0</span>.script_get_history(<span class="kw-2">&amp;</span>output.script_pubkey))<span class="question-mark">?</span>;
+                <span class="kw">let </span>history =
+                    block_in_place(|| <span class="self">self</span>.client.script_get_history(<span class="kw-2">&amp;</span>output.script_pubkey))<span class="question-mark">?</span>;
                 <span class="prelude-val">Ok</span>(history.first().map(|history| history.height <span class="kw">as </span>u64))
             }
         }
@@ -334,7 +359,7 @@
         block_hash: <span class="kw-2">&amp;</span>BlockHash,
         block_height: u64,
     ) -&gt; anyhow::Result&lt;bool&gt; {
-        <span class="kw">let </span>tx = block_in_place(|| <span class="self">self</span>.<span class="number">0</span>.transaction_get(txid))
+        <span class="kw">let </span>tx = block_in_place(|| <span class="self">self</span>.client.transaction_get(txid))
             .map_err(|error| <span class="macro">info!</span>(<span class="question-mark">?</span>error, <span class="string">"Unable to get raw transaction"</span>));
 
         <span class="kw">match </span>tx.ok() {
@@ -346,7 +371,7 @@
                     </span>.last()
                     .ok_or(<span class="macro">format_err!</span>(<span class="string">"Transaction must contain at least one output"</span>))<span class="question-mark">?</span>;
 
-                <span class="kw">match </span>block_in_place(|| <span class="self">self</span>.<span class="number">0</span>.script_get_history(<span class="kw-2">&amp;</span>output.script_pubkey))<span class="question-mark">?
+                <span class="kw">match </span>block_in_place(|| <span class="self">self</span>.client.script_get_history(<span class="kw-2">&amp;</span>output.script_pubkey))<span class="question-mark">?
                     </span>.iter()
                     .find(|tx| tx.tx_hash == <span class="kw-2">*</span>txid &amp;&amp; tx.height <span class="kw">as </span>u64 == block_height)
                 {
@@ -375,9 +400,11 @@
         script: <span class="kw-2">&amp;</span>ScriptBuf,
     ) -&gt; anyhow::Result&lt;Vec&lt;bitcoin::Transaction&gt;&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>results = <span class="macro">vec!</span>[];
-        <span class="kw">let </span>transactions = block_in_place(|| <span class="self">self</span>.<span class="number">0</span>.script_get_history(script))<span class="question-mark">?</span>;
+        <span class="kw">let </span>transactions = block_in_place(|| <span class="self">self</span>.client.script_get_history(script))<span class="question-mark">?</span>;
         <span class="kw">for </span>history <span class="kw">in </span>transactions {
-            results.push(block_in_place(|| <span class="self">self</span>.<span class="number">0</span>.transaction_get(<span class="kw-2">&amp;</span>history.tx_hash))<span class="question-mark">?</span>);
+            results.push(block_in_place(|| {
+                <span class="self">self</span>.client.transaction_get(<span class="kw-2">&amp;</span>history.tx_hash)
+            })<span class="question-mark">?</span>);
         }
         <span class="prelude-val">Ok</span>(results)
     }
@@ -386,6 +413,13 @@
         <span class="comment">// FIXME: Not sure how to implement for electrum yet, but the client cannot use
         // electrum regardless right now
         </span><span class="macro">unimplemented!</span>()
+    }
+
+    <span class="kw">fn </span>get_bitcoin_rpc_config(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; BitcoinRpcConfig {
+        BitcoinRpcConfig {
+            kind: <span class="string">"electrum"</span>.to_string(),
+            url: <span class="self">self</span>.url.clone(),
+        }
     }
 }
 

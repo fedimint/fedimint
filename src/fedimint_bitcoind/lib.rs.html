@@ -292,6 +292,13 @@
 <a href="#292" id="292">292</a>
 <a href="#293" id="293">293</a>
 <a href="#294" id="294">294</a>
+<a href="#295" id="295">295</a>
+<a href="#296" id="296">296</a>
+<a href="#297" id="297">297</a>
+<a href="#298" id="298">298</a>
+<a href="#299" id="299">299</a>
+<a href="#300" id="300">300</a>
+<a href="#301" id="301">301</a>
 </pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::cast_sign_loss)]
@@ -473,6 +480,9 @@
 
     <span class="doccomment">/// Returns a proof that a tx is included in the bitcoin blockchain
     </span><span class="kw">async fn </span>get_txout_proof(<span class="kw-2">&amp;</span><span class="self">self</span>, txid: Txid) -&gt; <span class="prelude-ty">Result</span>&lt;TxOutProof&gt;;
+
+    <span class="doccomment">/// Returns the Bitcoin RPC config
+    </span><span class="kw">fn </span>get_bitcoin_rpc_config(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; BitcoinRpcConfig;
 }
 
 <span class="macro">dyn_newtype_define!</span> {
@@ -585,5 +595,9 @@
         <span class="self">self</span>.retry_call(|| <span class="kw">async </span>{ <span class="self">self</span>.inner.get_txout_proof(txid).<span class="kw">await </span>})
             .<span class="kw">await
     </span>}
+
+    <span class="kw">fn </span>get_bitcoin_rpc_config(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; BitcoinRpcConfig {
+        <span class="self">self</span>.inner.get_bitcoin_rpc_config()
+    }
 }
 </code></pre></div></section></main></body></html>

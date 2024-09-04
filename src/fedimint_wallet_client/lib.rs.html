@@ -1346,6 +1346,8 @@
 <a href="#1346" id="1346">1346</a>
 <a href="#1347" id="1347">1347</a>
 <a href="#1348" id="1348">1348</a>
+<a href="#1349" id="1349">1349</a>
+<a href="#1350" id="1350">1350</a>
 </pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::missing_errors_doc)]
@@ -1398,7 +1400,7 @@
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::envs::BitcoinRpcConfig;
 <span class="kw">use </span>fedimint_core::module::{
-    ApiVersion, CommonModuleInit, ModuleCommon, ModuleInit, MultiApiVersion,
+    ApiAuth, ApiVersion, CommonModuleInit, ModuleCommon, ModuleInit, MultiApiVersion,
 };
 <span class="kw">use </span>fedimint_core::task::{MaybeSend, MaybeSync, TaskGroup};
 <span class="kw">use </span>fedimint_core::util::backoff_util::background_backoff;
@@ -1596,6 +1598,7 @@
             pegin_claimed_receiver,
             pegin_claimed_sender,
             task_group: args.task_group().clone(),
+            admin_auth: args.admin_auth().cloned(),
         })
     }
 
@@ -1723,6 +1726,7 @@
     </span>pegin_claimed_sender: watch::Sender&lt;()&gt;,
     pegin_claimed_receiver: watch::Receiver&lt;()&gt;,
     task_group: TaskGroup,
+    admin_auth: <span class="prelude-ty">Option</span>&lt;ApiAuth&gt;,
 }
 
 <span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]

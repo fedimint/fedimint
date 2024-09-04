@@ -394,6 +394,13 @@
 <a href="#394" id="394">394</a>
 <a href="#395" id="395">395</a>
 <a href="#396" id="396">396</a>
+<a href="#397" id="397">397</a>
+<a href="#398" id="398">398</a>
+<a href="#399" id="399">399</a>
+<a href="#400" id="400">400</a>
+<a href="#401" id="401">401</a>
+<a href="#402" id="402">402</a>
+<a href="#403" id="403">403</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::iter::repeat;
 <span class="kw">use </span>std::sync::Arc;
@@ -780,6 +787,13 @@
         <span class="kw">let </span>inner = <span class="self">self</span>.inner.read().unwrap();
         <span class="kw">let </span>proof = inner.proofs.get(<span class="kw-2">&amp;</span>txid);
         <span class="prelude-val">Ok</span>(proof.ok_or(<span class="macro">format_err!</span>(<span class="string">"No proof stored"</span>))<span class="question-mark">?</span>.clone())
+    }
+
+    <span class="kw">fn </span>get_bitcoin_rpc_config(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; BitcoinRpcConfig {
+        BitcoinRpcConfig {
+            kind: <span class="string">"mock_kind"</span>.to_string(),
+            url: <span class="string">"http://mock"</span>.parse().unwrap(),
+        }
     }
 }
 
