@@ -317,6 +317,16 @@ impl DatabaseDump {
                     "API Announcements"
                 );
             }
+            ConsensusRange::DbKeyPrefix::ConsensusVersionVote => {
+                push_db_pair_items_no_serde!(
+                    dbtx,
+                    ConsensusRange::ConsensusVersionVotePrefixAll,
+                    ConsensusRange::ConsensusVersionVoteKey,
+                    Vec<u8>,
+                    consensus,
+                    "Consensus Version Vote"
+                );
+            }
         }
     }
 }

@@ -5,12 +5,14 @@ use fedimint_core::transaction::{Transaction, TransactionError};
 use fedimint_core::{Amount, OutPoint};
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 
+use super::engine::ConsensusVersionCache;
 use crate::metrics::{CONSENSUS_TX_PROCESSED_INPUTS, CONSENSUS_TX_PROCESSED_OUTPUTS};
 
-pub async fn process_transaction_with_dbtx(
+pub(crate) async fn process_transaction_with_dbtx(
     modules: ServerModuleRegistry,
     dbtx: &mut DatabaseTransaction<'_>,
     transaction: &Transaction,
+    consensus_version_cache: &ConsensusVersionCache,
 ) -> Result<(), TransactionError> {
     let in_count = transaction.inputs.len();
     let out_count = transaction.outputs.len();
@@ -29,9 +31,10 @@ pub async fn process_transaction_with_dbtx(
         .clone()
         .into_par_iter()
         .try_for_each(|input| {
-            modules
-                .get_expect(input.module_instance_id())
-                .verify_input(&input)
+            modules.get_expect(input.module_instance_id()).verify_input(
+                &input,
+                consensus_version_cache.get_module_expect(input.module_instance_id()),
+            )
         })
         .map_err(|_| TransactionError::InvalidWitnessLength)?;
 
@@ -44,6 +47,7 @@ pub async fn process_transaction_with_dbtx(
             .process_input(
                 &mut dbtx.to_ref_with_prefix_module_id(input.module_instance_id()),
                 input,
+                consensus_version_cache.get_module_expect(input.module_instance_id()),
             )
             .await
             .map_err(TransactionError::Input)?;
@@ -63,6 +67,7 @@ pub async fn process_transaction_with_dbtx(
                 &mut dbtx.to_ref_with_prefix_module_id(output.module_instance_id()),
                 output,
                 OutPoint { txid, out_idx },
+                consensus_version_cache.get_module_expect(output.module_instance_id()),
             )
             .await
             .map_err(TransactionError::Output)?;

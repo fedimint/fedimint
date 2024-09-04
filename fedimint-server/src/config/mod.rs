@@ -14,8 +14,8 @@ use fedimint_core::core::{ModuleInstanceId, ModuleKind, MODULE_INSTANCE_ID_GLOBA
 use fedimint_core::envs::is_running_in_test_env;
 use fedimint_core::invite_code::InviteCode;
 use fedimint_core::module::{
-    ApiAuth, ApiVersion, CoreConsensusVersion, DynServerModuleInit, MultiApiVersion, PeerHandle,
-    SupportedApiVersionsSummary, SupportedCoreApiVersions, CORE_CONSENSUS_VERSION,
+    ApiAuth, CoreConsensusVersion, DynServerModuleInit, MultiApiVersion, PeerHandle,
+    CORE_CONSENSUS_VERSION,
 };
 use fedimint_core::net::peers::{IMuxPeerConnections, IPeerConnections, PeerConnections};
 use fedimint_core::task::{timeout, Cancelled, Elapsed, TaskGroup};
@@ -77,27 +77,6 @@ impl ServerConfig {
     ) -> impl Iterator<Item = (ModuleInstanceId, &ModuleKind)> + '_ {
         self.consensus.iter_module_instances()
     }
-
-    pub(crate) fn supported_api_versions_summary(
-        modules: &BTreeMap<ModuleInstanceId, ServerModuleConsensusConfig>,
-        module_inits: &ServerModuleInitRegistry,
-    ) -> SupportedApiVersionsSummary {
-        SupportedApiVersionsSummary {
-            core: Self::supported_api_versions(),
-            modules: modules
-                .iter()
-                .map(|(&id, config)| {
-                    (
-                        id,
-                        module_inits
-                            .get(&config.kind)
-                            .expect("missing module kind gen")
-                            .supported_api_versions(),
-                    )
-                })
-                .collect(),
-        }
-    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -117,7 +96,7 @@ pub struct ServerConfigPrivate {
 pub struct ServerConfigConsensus {
     /// The version of the binary code running
     pub code_version: String,
-    /// Agreed on core consensus version
+    /// Agreed on (during DKG) initial core consensus version
     pub version: CoreConsensusVersion,
     /// Public keys for the atomic broadcast to authenticate messages
     pub broadcast_public_keys: BTreeMap<PeerId, PublicKey>,
@@ -199,11 +178,11 @@ impl ServerConfigConsensus {
 
 impl ServerConfig {
     /// Api versions supported by this server
-    pub fn supported_api_versions() -> SupportedCoreApiVersions {
-        SupportedCoreApiVersions {
-            core_consensus: CORE_CONSENSUS_VERSION,
-            api: MultiApiVersion::try_from_iter([ApiVersion { major: 0, minor: 3 }])
-                .expect("not version conflicts"),
+    pub fn supported_api_versions(core_major_consensus_version: u32) -> MultiApiVersion {
+        if core_major_consensus_version == CORE_CONSENSUS_VERSION.major {
+            MultiApiVersion::from_raw([(0, 2)])
+        } else {
+            MultiApiVersion::from_raw([])
         }
     }
     /// Creates a new config from the results of a trusted or distributed key

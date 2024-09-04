@@ -125,7 +125,7 @@ impl<T> NumPeersExt for BTreeMap<PeerId, T> {
     }
 }
 
-impl NumPeersExt for &[PeerId] {
+impl<T> NumPeersExt for &[T] {
     fn to_num_peers(&self) -> NumPeers {
         NumPeers(self.len())
     }

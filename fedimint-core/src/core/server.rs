@@ -19,8 +19,8 @@ use crate::db::DatabaseTransaction;
 use crate::dyn_newtype_define;
 use crate::module::registry::ModuleInstanceId;
 use crate::module::{
-    ApiEndpoint, ApiEndpointContext, ApiRequestErased, InputMeta, ModuleCommon, ServerModule,
-    TransactionItemAmount,
+    ApiEndpoint, ApiEndpointContext, ApiRequestErased, InputMeta, ModuleCommon,
+    ModuleConsensusVersion, ServerModule, TransactionItemAmount,
 };
 
 /// Backend side module interface
@@ -50,12 +50,17 @@ pub trait IServerModule: Debug {
         dbtx: &mut DatabaseTransaction<'a>,
         consensus_item: &'b DynModuleConsensusItem,
         peer_id: PeerId,
+        consensus_version: ModuleConsensusVersion,
     ) -> anyhow::Result<()>;
 
     // Use this function to parallelise stateless cryptographic verification of
     // inputs across a transaction. All inputs of a transaction are verified
     // before any input is processed.
-    fn verify_input(&self, input: &DynInput) -> Result<(), DynInputError>;
+    fn verify_input(
+        &self,
+        input: &DynInput,
+        consensus_version: ModuleConsensusVersion,
+    ) -> Result<(), DynInputError>;
 
     /// Try to spend a transaction input. On success all necessary updates will
     /// be part of the database transaction. On failure (e.g. double spend)
@@ -65,6 +70,7 @@ pub trait IServerModule: Debug {
         &'a self,
         dbtx: &mut DatabaseTransaction<'c>,
         input: &'b DynInput,
+        consensus_version: ModuleConsensusVersion,
     ) -> Result<InputMeta, DynInputError>;
 
     /// Try to create an output (e.g. issue notes, peg-out BTC, …). On success
@@ -80,6 +86,7 @@ pub trait IServerModule: Debug {
         dbtx: &mut DatabaseTransaction<'a>,
         output: &DynOutput,
         out_point: OutPoint,
+        consensus_version: ModuleConsensusVersion,
     ) -> Result<TransactionItemAmount, DynOutputError>;
 
     /// Retrieve the current status of the output. Depending on the module this
@@ -155,6 +162,7 @@ where
         dbtx: &mut DatabaseTransaction<'a>,
         consensus_item: &'b DynModuleConsensusItem,
         peer_id: PeerId,
+        _consensus_version: ModuleConsensusVersion,
     ) -> anyhow::Result<()> {
         <Self as ServerModule>::process_consensus_item(
             self,
@@ -172,7 +180,11 @@ where
     // Use this function to parallelise stateless cryptographic verification of
     // inputs across a transaction. All inputs of a transaction are verified
     // before any input is processed.
-    fn verify_input(&self, input: &DynInput) -> Result<(), DynInputError> {
+    fn verify_input(
+        &self,
+        input: &DynInput,
+        _consensus_version: ModuleConsensusVersion,
+    ) -> Result<(), DynInputError> {
         <Self as ServerModule>::verify_input(
             self,
             input
@@ -191,6 +203,8 @@ where
         &'a self,
         dbtx: &mut DatabaseTransaction<'c>,
         input: &'b DynInput,
+
+        _consensus_version: ModuleConsensusVersion,
     ) -> Result<InputMeta, DynInputError> {
         <Self as ServerModule>::process_input(
             self,
@@ -218,6 +232,7 @@ where
         dbtx: &mut DatabaseTransaction<'a>,
         output: &DynOutput,
         out_point: OutPoint,
+        _consensus_version: ModuleConsensusVersion,
     ) -> Result<TransactionItemAmount, DynOutputError> {
         <Self as ServerModule>::process_output(
             self,

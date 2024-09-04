@@ -51,6 +51,30 @@ pub mod config;
 /// Implementation of multiplexed peer connections
 pub mod multiplexed;
 
+pub async fn load_cfg(
+    data_dir: &Path,
+    force_api_secrets: &ApiSecrets,
+    settings: &ConfigGenSettings,
+    db: &Database,
+    code_version_str: String,
+    task_group: &TaskGroup,
+) -> anyhow::Result<ServerConfig> {
+    Ok(match get_config(data_dir)? {
+        Some(cfg) => cfg,
+        None => {
+            run_config_gen(
+                data_dir.to_owned(),
+                settings.clone(),
+                db.clone(),
+                code_version_str,
+                task_group.make_subgroup(),
+                force_api_secrets.clone(),
+            )
+            .await?
+        }
+    })
+}
+
 pub async fn run(
     data_dir: PathBuf,
     force_api_secrets: ApiSecrets,
@@ -60,20 +84,15 @@ pub async fn run(
     module_init_registry: &ServerModuleInitRegistry,
     task_group: TaskGroup,
 ) -> anyhow::Result<()> {
-    let cfg = match get_config(&data_dir)? {
-        Some(cfg) => cfg,
-        None => {
-            run_config_gen(
-                data_dir.clone(),
-                settings.clone(),
-                db.clone(),
-                code_version_str,
-                task_group.make_subgroup(),
-                force_api_secrets.clone(),
-            )
-            .await?
-        }
-    };
+    let cfg = load_cfg(
+        &data_dir,
+        &force_api_secrets,
+        &settings,
+        &db,
+        code_version_str,
+        &task_group,
+    )
+    .await?;
 
     let decoders = module_init_registry.decoders_strict(
         cfg.consensus

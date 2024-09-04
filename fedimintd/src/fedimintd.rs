@@ -17,7 +17,7 @@ use fedimint_core::envs::{
     is_env_var_set, BitcoinRpcConfig, FM_ENABLE_MODULE_LNV2_ENV, FM_USE_UNKNOWN_MODULE_ENV,
 };
 use fedimint_core::module::registry::ModuleRegistry;
-use fedimint_core::module::{ServerApiVersionsSummary, ServerDbVersionsSummary, ServerModuleInit};
+use fedimint_core::module::{ServerDbVersionsSummary, ServerModuleInit};
 use fedimint_core::task::TaskGroup;
 use fedimint_core::timing;
 use fedimint_core::util::{handle_version_hash_command, write_overwrite, SafeUrl};
@@ -31,7 +31,9 @@ use fedimint_mint_server::common::config::{MintGenParams, MintGenParamsConsensus
 use fedimint_mint_server::MintInit;
 use fedimint_server::config::api::ConfigGenSettings;
 use fedimint_server::config::io::{DB_FILE, PLAINTEXT_PASSWORD};
-use fedimint_server::config::ServerConfig;
+use fedimint_server::consensus::api::ConsensusApi;
+use fedimint_server::consensus::db::DatabaseTransactionExt as _;
+use fedimint_server::load_cfg;
 use fedimint_server::net::api::ApiSecrets;
 use fedimint_unknown_common::config::UnknownGenParams;
 use fedimint_unknown_server::UnknownInit;
@@ -381,26 +383,6 @@ impl Fedimintd {
 
     /// Block thread and run a Fedimintd server
     pub async fn run(self) -> ! {
-        // handle optional subcommand
-        if let Some(subcommand) = &self.opts.subcommand {
-            match subcommand {
-                ServerSubcommand::Dev(DevSubcommand::ListApiVersions) => {
-                    let api_versions = self.get_server_api_versions();
-                    let api_versions = serde_json::to_string_pretty(&api_versions)
-                        .expect("API versions struct is serializable");
-                    println!("{api_versions}");
-                    std::process::exit(0);
-                }
-                ServerSubcommand::Dev(DevSubcommand::ListDbVersions) => {
-                    let db_versions = self.get_server_db_versions();
-                    let db_versions = serde_json::to_string_pretty(&db_versions)
-                        .expect("API versions struct is serializable");
-                    println!("{db_versions}");
-                    std::process::exit(0);
-                }
-            }
-        }
-
         let root_task_group = TaskGroup::new();
         root_task_group.install_kill_handler();
 
@@ -448,43 +430,16 @@ impl Fedimintd {
         // Should we ever shut down without an error code?
         std::process::exit(-1);
     }
+}
 
-    fn get_server_api_versions(&self) -> ServerApiVersionsSummary {
-        ServerApiVersionsSummary {
-            core: ServerConfig::supported_api_versions().api,
-            modules: self
-                .server_gens
-                .kinds()
-                .into_iter()
-                .map(|module_kind| {
-                    self.server_gens
-                        .get(&module_kind)
-                        .expect("module is present")
-                })
-                .map(|module_init| {
-                    (
-                        module_init.module_kind(),
-                        module_init.supported_api_versions().api,
-                    )
-                })
-                .collect(),
-        }
-    }
-
-    fn get_server_db_versions(&self) -> ServerDbVersionsSummary {
-        ServerDbVersionsSummary {
-            modules: self
-                .server_gens
-                .kinds()
-                .into_iter()
-                .map(|module_kind| {
-                    self.server_gens
-                        .get(&module_kind)
-                        .expect("module is present")
-                })
-                .map(|module_init| (module_init.module_kind(), module_init.database_version()))
-                .collect(),
-        }
+fn get_server_db_versions(module_inits: &ServerModuleInitRegistry) -> ServerDbVersionsSummary {
+    ServerDbVersionsSummary {
+        modules: module_inits
+            .kinds()
+            .into_iter()
+            .map(|module_kind| module_inits.get(&module_kind).expect("module is present"))
+            .map(|module_init| (module_init.module_kind(), module_init.database_version()))
+            .collect(),
     }
 }
 
@@ -562,6 +517,46 @@ async fn run(
         fedimint_rocksdb::RocksDb::open(data_dir.join(DB_FILE))?,
         ModuleRegistry::default(),
     );
+
+    if let Some(subcommand) = &opts.subcommand {
+        match subcommand {
+            ServerSubcommand::Dev(DevSubcommand::ListApiVersions) => {
+                let cfg = load_cfg(
+                    &data_dir,
+                    &opts.force_api_secrets,
+                    &settings,
+                    &db,
+                    code_version_str,
+                    task_group,
+                )
+                .await?;
+                let (core_consensus_version, module_consensus_versions) = db
+                    .begin_transaction_nc()
+                    .await
+                    .get_all_consensus_versions(&cfg.consensus)
+                    .await;
+
+                let api_versions = ConsensusApi::supported_api_versions_summary(
+                    core_consensus_version,
+                    &module_consensus_versions,
+                    &cfg.consensus.modules,
+                    &module_inits,
+                );
+
+                let api_versions = serde_json::to_string_pretty(&api_versions)
+                    .expect("API versions struct is serializable");
+                println!("{api_versions}");
+                std::process::exit(0);
+            }
+            ServerSubcommand::Dev(DevSubcommand::ListDbVersions) => {
+                let db_versions = get_server_db_versions(&module_inits);
+                let db_versions = serde_json::to_string_pretty(&db_versions)
+                    .expect("API versions struct is serializable");
+                println!("{db_versions}");
+                std::process::exit(0);
+            }
+        }
+    }
 
     fedimint_server::run(
         data_dir,

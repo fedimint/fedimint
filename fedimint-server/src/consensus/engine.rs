@@ -10,15 +10,19 @@ use anyhow::{anyhow, bail};
 use async_channel::Receiver;
 use fedimint_api_client::api::{DynGlobalApi, FederationApiExt, PeerConnectionStatus};
 use fedimint_api_client::query::FilterMap;
-use fedimint_core::core::{DynOutput, MODULE_INSTANCE_ID_GLOBAL};
+use fedimint_core::config::ServerModuleInitRegistry;
+use fedimint_core::core::{DynOutput, ModuleInstanceId, MODULE_INSTANCE_ID_GLOBAL};
 use fedimint_core::db::{Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped};
 use fedimint_core::encoding::Decodable;
 use fedimint_core::endpoint_constants::AWAIT_SIGNED_SESSION_OUTCOME_ENDPOINT;
-use fedimint_core::epoch::ConsensusItem;
+use fedimint_core::epoch::{ConsensusItem, ConsensusVersionVote};
 use fedimint_core::fmt_utils::OptStacktrace;
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::registry::{ModuleDecoderRegistry, ServerModuleRegistry};
-use fedimint_core::module::{ApiRequestErased, SerdeModuleEncoding};
+use fedimint_core::module::{
+    ApiRequestErased, ConsensusVersion, CoreConsensusVersion, ModuleConsensusVersion,
+    SerdeModuleEncoding, CORE_CONSENSUS_VERSION,
+};
 use fedimint_core::runtime::spawn;
 use fedimint_core::session_outcome::{
     AcceptedItem, SchnorrSignature, SessionOutcome, SignedSessionOutcome,
@@ -31,6 +35,7 @@ use rand::Rng;
 use tokio::sync::{watch, RwLock};
 use tracing::{debug, info, instrument, warn, Level};
 
+use super::db::DatabaseTransactionExt;
 use crate::config::ServerConfig;
 use crate::consensus::aleph_bft::backup::{BackupReader, BackupWriter};
 use crate::consensus::aleph_bft::data_provider::{get_citem_bytes_chsum, DataProvider, UnitData};
@@ -41,7 +46,8 @@ use crate::consensus::aleph_bft::spawner::Spawner;
 use crate::consensus::aleph_bft::{to_node_index, Message};
 use crate::consensus::db::{
     AcceptedItemKey, AcceptedItemPrefix, AcceptedTransactionKey, AlephUnitsPrefix,
-    SignedSessionOutcomeKey, SignedSessionOutcomePrefix,
+    ConsensusVersionVoteKey, ConsensusVersionVoteValue, SignedSessionOutcomeKey,
+    SignedSessionOutcomePrefix,
 };
 use crate::consensus::debug::{DebugConsensusItem, DebugConsensusItemCompact};
 use crate::consensus::transaction::process_transaction_with_dbtx;
@@ -61,6 +67,7 @@ const DB_CHECKPOINTS_DIR: &str = "db_checkpoints";
 /// Runs the main server consensus loop
 pub struct ConsensusEngine {
     pub modules: ServerModuleRegistry,
+    pub module_inits: ServerModuleInitRegistry,
     pub db: Database,
     pub federation_api: DynGlobalApi,
     pub cfg: ServerConfig,
@@ -103,6 +110,8 @@ impl ConsensusEngine {
 
         self.initialize_checkpoint_directory(self.get_finished_session_count().await)?;
 
+        let mut consensus_version_cache = ConsensusVersionCache::new_invalidated();
+
         while !task_handle.is_shutting_down() {
             let session_index = self.get_finished_session_count().await;
 
@@ -114,7 +123,13 @@ impl ConsensusEngine {
 
             while let Ok(item) = self.submission_receiver.recv().await {
                 if self
-                    .process_consensus_item(session_index, item_index, item, self.identity())
+                    .process_consensus_item(
+                        session_index,
+                        item_index,
+                        item,
+                        self.identity(),
+                        &mut consensus_version_cache,
+                    )
                     .await
                     .is_ok()
                 {
@@ -346,6 +361,8 @@ impl ConsensusEngine {
     ) -> anyhow::Result<SignedSessionOutcome> {
         let mut item_index = 0;
 
+        let mut consensus_version_cache = ConsensusVersionCache::new_invalidated();
+
         // We build a session outcome out of the ordered batches until either we have
         // processed broadcast_rounds_per_session rounds or a threshold signed
         // session outcome is obtained from our peers
@@ -383,7 +400,8 @@ impl ConsensusEngine {
                                     session_index,
                                     item_index,
                                     item.clone(),
-                                    ordered_unit.creator
+                                    ordered_unit.creator,
+                                    &mut consensus_version_cache,
                                 ).await
                                 .is_ok() {
                                     item_index += 1;
@@ -411,7 +429,8 @@ impl ConsensusEngine {
                             session_index,
                             item_index,
                             accepted_item.item.clone(),
-                            accepted_item.peer
+                            accepted_item.peer,
+                            &mut consensus_version_cache,
                         ).await.is_err(){
                             panic!("Consensus Failure: rejected item accepted by federation consensus");
                         }
@@ -613,13 +632,49 @@ impl ConsensusEngine {
         Ok(())
     }
 
-    #[instrument(target = "fm::consensus", skip(self, item), level = "info")]
+    async fn process_consensus_version_vote(
+        &self,
+        dbtx: &mut DatabaseTransaction<'_>,
+        peer_id: PeerId,
+        vote: ConsensusVersionVote,
+    ) -> Result<(), anyhow::Error> {
+        let key = ConsensusVersionVoteKey::from((vote, peer_id));
+        let val = ConsensusVersionVoteValue::from(vote);
+
+        if let Some(module_id) = key.module_id {
+            if !self.cfg.consensus.modules.contains_key(&module_id) {
+                warn!(target: LOG_CONSENSUS, %peer_id, module_id, ?key, ?val, "Peer submitted invalid consensus version vote: invalid module id");
+                bail!("Invalid vote: invalid module id");
+            }
+        }
+        if let Some(prev_val) = dbtx.get_value(&key).await {
+            if prev_val == val {
+                warn!(target: LOG_CONSENSUS, %peer_id, ?key, ?val, ?prev_val, "Peer submitted duplicate consensus version vote");
+                bail!("Redundant vote");
+            }
+
+            if prev_val.desired < val.desired {
+                warn!(target: LOG_CONSENSUS, %peer_id, ?key, ?val, ?prev_val, "Peer submitted consensus version vote with desired version lower than before");
+                bail!("Invalid vote: no backsies");
+            }
+        }
+        dbtx.insert_entry(&key, &val).await;
+
+        Ok(())
+    }
+
+    #[instrument(
+        target = "fm::consensus",
+        skip(self, item, consensus_version_cache),
+        level = "info"
+    )]
     pub async fn process_consensus_item(
         &self,
         session_index: u64,
         item_index: u64,
         item: ConsensusItem,
         peer: PeerId,
+        consensus_version_cache: &mut ConsensusVersionCache,
     ) -> anyhow::Result<()> {
         let peer_id_str = &self.peer_id_str[peer.to_usize()];
         let _timing /* logs on drop */ = timing::TimeReporter::new("process_consensus_item").level(Level::TRACE);
@@ -639,8 +694,13 @@ impl ConsensusEngine {
             .set(session_index as i64);
 
         let mut dbtx = self.db.begin_transaction().await;
-
         dbtx.ignore_uncommitted();
+
+        if consensus_version_cache.is_invalidated() {
+            *consensus_version_cache = self
+                .load_consensus_version_cache(&mut dbtx.to_ref_nc())
+                .await;
+        }
 
         // When we recover from a mid-session crash aleph bft will replay the units that
         // were already processed before the crash. We therefore skip all consensus
@@ -656,8 +716,13 @@ impl ConsensusEngine {
             bail!("Item was discarded previously");
         }
 
-        self.process_consensus_item_with_db_transaction(&mut dbtx.to_ref_nc(), item.clone(), peer)
-            .await?;
+        self.process_consensus_item_with_db_transaction(
+            &mut dbtx.to_ref_nc(),
+            item.clone(),
+            peer,
+            consensus_version_cache,
+        )
+        .await?;
 
         // After this point we have to commit the database transaction since the
         // item has been fully processed without errors
@@ -710,6 +775,7 @@ impl ConsensusEngine {
         dbtx: &mut DatabaseTransaction<'_>,
         consensus_item: ConsensusItem,
         peer_id: PeerId,
+        consensus_version_cache: &mut ConsensusVersionCache,
     ) -> anyhow::Result<()> {
         // We rely on decoding rejecting any unknown module instance ids to avoid
         // peer-triggered panic here
@@ -723,7 +789,12 @@ impl ConsensusEngine {
 
                 self.modules
                     .get_expect(instance_id)
-                    .process_consensus_item(module_dbtx, &module_item, peer_id)
+                    .process_consensus_item(
+                        module_dbtx,
+                        &module_item,
+                        peer_id,
+                        consensus_version_cache.get_module_expect(instance_id),
+                    )
                     .await
             }
             ConsensusItem::Transaction(transaction) => {
@@ -743,15 +814,25 @@ impl ConsensusEngine {
                     .map(DynOutput::module_instance_id)
                     .collect::<Vec<_>>();
 
-                process_transaction_with_dbtx(self.modules.clone(), dbtx, &transaction)
-                    .await
-                    .map_err(|error| anyhow!(error.to_string()))?;
+                process_transaction_with_dbtx(
+                    self.modules.clone(),
+                    dbtx,
+                    &transaction,
+                    consensus_version_cache,
+                )
+                .await
+                .map_err(|error| anyhow!(error.to_string()))?;
 
                 debug!(target: LOG_CONSENSUS, %txid,  "Transaction accepted");
                 dbtx.insert_entry(&AcceptedTransactionKey(txid), &modules_ids)
                     .await;
 
                 Ok(())
+            }
+            ConsensusItem::ConsensusVersionVote(vote) => {
+                consensus_version_cache.invalidate();
+                self.process_consensus_version_vote(dbtx, peer_id, vote)
+                    .await
             }
             ConsensusItem::Default { variant, .. } => {
                 warn!(
@@ -824,6 +905,196 @@ impl ConsensusEngine {
     async fn get_finished_session_count(&self) -> u64 {
         get_finished_session_count_static(&mut self.db.begin_transaction_nc().await).await
     }
+
+    /// Load all the current consensus versions from the database and validate
+    /// against what core and modules actually support.
+    ///
+    /// Panics if the code can't support current consensus versions
+    async fn load_consensus_version_cache(
+        &self,
+        dbtx: &mut DatabaseTransaction<'_>,
+    ) -> ConsensusVersionCache {
+        Self::load_consensus_version_cache_static(
+            dbtx,
+            &self.modules,
+            &self.module_inits,
+            &self.cfg,
+        )
+        .await
+    }
+
+    pub(crate) async fn load_consensus_version_cache_static(
+        dbtx: &mut DatabaseTransaction<'_>,
+        modules: &ServerModuleRegistry,
+        module_inits: &ServerModuleInitRegistry,
+        cfg: &ServerConfig,
+    ) -> ConsensusVersionCache {
+        let mut versions: BTreeMap<_, _> = BTreeMap::new();
+
+        for module_id in cfg
+            .consensus
+            .iter_module_instances()
+            .map(|(module_id, _kind)| Some(module_id))
+            .chain([None])
+        {
+            versions.insert(
+                module_id,
+                dbtx.get_consensus_version(module_id, &cfg.consensus).await,
+            );
+        }
+
+        // core
+        {
+            let Some(current_version) = versions.get(&None) else {
+                panic!("Missing core consensus version");
+            };
+            let supported_version = CORE_CONSENSUS_VERSION;
+
+            if supported_version.major != current_version.major
+                || supported_version.minor < current_version.minor
+            {
+                panic!("Current consensus version {current_version} not matching supported version {supported_version}");
+            }
+        }
+
+        // modules
+        for (module_id, kind, _) in modules.iter_modules() {
+            let Some(current_version) = versions.get(&Some(module_id)) else {
+                panic!("Missing module consensus version");
+            };
+            let supported_version = module_inits
+                .get(kind)
+                .expect("Must have module init for module")
+                .supported_consensus_versions()
+                .iter()
+                .find(|supported_version| supported_version.major == current_version.major)
+                .expect(
+                    "Major version from {current_version} for module {module_id} is not supported",
+                );
+
+            assert_eq!(current_version.major, supported_version.major);
+
+            assert!(current_version.minor <= supported_version.minor,
+                    "Consensus version {current_version} is higher then supported version {supported_version} for module {module_id}");
+        }
+        ConsensusVersionCache::new(versions)
+    }
+
+    pub(crate) async fn get_existing_version_votes_or_cfg_defaults(
+        &self,
+        dbtx: &mut DatabaseTransaction<'_>,
+    ) -> BTreeMap<Option<u16>, ConsensusVersion> {
+        let peer_id = self.cfg.local.identity;
+
+        // votes or defaults from config
+        let mut our_existing_votes: BTreeMap<_, _> = BTreeMap::new();
+
+        // core
+        our_existing_votes.insert(
+            None,
+            if let Some(value) = dbtx
+                .get_value(&ConsensusVersionVoteKey {
+                    module_id: None,
+                    peer_id,
+                })
+                .await
+            {
+                value.desired
+            } else {
+                self.cfg.consensus.version.into()
+            },
+        );
+
+        // modules
+        for (module_id_raw, _) in self.cfg.iter_module_instances() {
+            let module_id = Some(module_id_raw);
+            our_existing_votes.insert(
+                module_id,
+                if let Some(value) = dbtx
+                    .get_value(&ConsensusVersionVoteKey { module_id, peer_id })
+                    .await
+                {
+                    value.desired
+                } else {
+                    self.cfg
+                        .consensus
+                        .modules
+                        .get(&module_id_raw)
+                        .expect("Must have an entry for module")
+                        .version
+                        .into()
+                },
+            );
+        }
+
+        our_existing_votes
+    }
+
+    pub(crate) async fn submit_desired_consensus_version(
+        &self,
+        dbtx: &mut DatabaseTransaction<'_>,
+        submission_sender: &async_channel::Sender<ConsensusItem>,
+    ) {
+        let our_existing_votes = self.get_existing_version_votes_or_cfg_defaults(dbtx).await;
+
+        {
+            let current_version = *our_existing_votes
+                .get(&None)
+                .expect("Missing core consensus version");
+
+            let supported_version: ConsensusVersion = CORE_CONSENSUS_VERSION.into();
+
+            assert_eq!(
+                current_version.major, supported_version.major,
+                "Changing major core consensus version is currently not supported"
+            );
+
+            assert!(current_version <= supported_version, "This version of software does not support core consensus version we already committed to");
+
+            if current_version != supported_version {
+                info!(target: LOG_CONSENSUS,  %supported_version, "Submitting core consensus version vote");
+                let _ = submission_sender
+                    .send(ConsensusItem::ConsensusVersionVote(ConsensusVersionVote {
+                        module_id: None,
+                        desired: supported_version,
+                        accelerate: false,
+                    }))
+                    .await;
+            }
+        }
+        for (module_id, kind, _) in self.modules.iter_modules() {
+            let current_version = *our_existing_votes
+                .get(&Some(module_id))
+                .expect("Missing module consensus version");
+
+            let supported_version: ConsensusVersion = (*self
+                .module_inits
+                .get(kind)
+                .expect("Must have module init for module")
+                .supported_consensus_versions()
+                .iter()
+                .find(|supported_version| supported_version.major == current_version.major)
+                .unwrap_or_else(|| {
+                    panic!(
+                        "Major version from {current_version} for module {module_id} {kind} is not supported",
+                    )
+                }))
+            .into();
+
+            assert!(current_version <= supported_version, "This version of software does not support module consensus version we already committed to");
+
+            if current_version != supported_version {
+                info!(target: LOG_CONSENSUS, module_id, %supported_version, "Submitting module consensus version vote");
+                let _ = submission_sender
+                    .send(ConsensusItem::ConsensusVersionVote(ConsensusVersionVote {
+                        module_id: Some(module_id),
+                        desired: supported_version,
+                        accelerate: false,
+                    }))
+                    .await;
+            }
+        }
+    }
 }
 
 pub async fn get_finished_session_count_static(dbtx: &mut DatabaseTransaction<'_>) -> u64 {
@@ -832,4 +1103,62 @@ pub async fn get_finished_session_count_static(dbtx: &mut DatabaseTransaction<'_
         .next()
         .await
         .map_or(0, |entry| (entry.0 .0) + 1)
+}
+
+/// In memory copy of all the current consensus versions that are maintained in
+/// the DB.
+///
+/// To avoid reading from the database all the time, invalidation is supported.
+/// Any time consensus item that could have changed it is processed, the whole
+/// thing will get invalidated and reloaded at the beginning for processing new
+/// consensus item.
+///
+/// Create by using [`ConsensusEngine::load_consensus_version_cache`]
+#[derive(Debug)]
+pub(crate) struct ConsensusVersionCache {
+    // Currently nothing is using it, but in the future we can pass these
+    // to modules.
+    #[allow(unused)]
+    versions: BTreeMap<Option<ModuleInstanceId>, ConsensusVersion>,
+    invalidated: bool,
+}
+
+impl ConsensusVersionCache {
+    fn new(versions: BTreeMap<Option<ModuleInstanceId>, ConsensusVersion>) -> Self {
+        Self {
+            invalidated: false,
+            versions,
+        }
+    }
+    pub fn invalidate(&mut self) {
+        self.invalidated = true;
+    }
+
+    pub fn is_invalidated(&self) -> bool {
+        self.invalidated
+    }
+
+    pub fn new_invalidated() -> ConsensusVersionCache {
+        Self {
+            invalidated: true,
+            versions: BTreeMap::new(),
+        }
+    }
+
+    pub fn get_module_expect(&self, instance_id: u16) -> ModuleConsensusVersion {
+        self.versions
+            .get(&Some(instance_id))
+            .copied()
+            .map(Into::into)
+            .expect("Must not be called for unverified module ids")
+    }
+
+    #[allow(unused)] // Will use in the future for core consensus changes
+    pub fn get_core(&self) -> CoreConsensusVersion {
+        self.versions
+            .get(&None)
+            .copied()
+            .map(Into::into)
+            .expect("Must always have core consensus version")
+    }
 }

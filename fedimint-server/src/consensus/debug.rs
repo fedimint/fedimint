@@ -2,6 +2,7 @@ use std::fmt;
 
 use bitcoin_hashes::{sha256, Hash as _};
 use fedimint_core::encoding::Encodable as _;
+use fedimint_core::epoch::ConsensusVersionVote;
 use fedimint_core::session_outcome::AcceptedItem;
 
 use crate::ConsensusItem;
@@ -35,6 +36,15 @@ impl<'ci> fmt::Debug for DebugConsensusItem<'ci> {
                 for output in &tx.outputs {
                     f.write_fmt(format_args!("\n    Output: {output}")).unwrap();
                 }
+            }
+            ConsensusItem::ConsensusVersionVote(ConsensusVersionVote {
+                module_id,
+                desired,
+                accelerate,
+            }) => {
+                f.write_fmt(format_args!(
+                    "Consensus Version vote: module_id={module_id:?}, desired={desired} accelerate={accelerate}",
+                ))?;
             }
             ConsensusItem::Default { variant, .. } => {
                 f.write_fmt(format_args!("Unknown CI variant: {variant}"))?;
@@ -87,6 +97,15 @@ impl<'a> fmt::Display for DebugConsensusItemCompact<'a> {
                 f.write_fmt(format_args!(
                     "citem={}; ",
                     module_citem.module_instance_id()
+                ))?;
+            }
+            ConsensusItem::ConsensusVersionVote(ConsensusVersionVote {
+                module_id,
+                desired,
+                accelerate,
+            }) => {
+                f.write_fmt(format_args!(
+                    "cvv; module_id={module_id:?}, desired={desired}, accelerate={accelerate}",
                 ))?;
             }
             ConsensusItem::Default { variant, .. } => {
