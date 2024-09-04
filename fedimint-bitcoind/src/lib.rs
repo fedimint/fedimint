@@ -179,6 +179,9 @@ pub trait IBitcoindRpc: Debug {
 
     /// Returns a proof that a tx is included in the bitcoin blockchain
     async fn get_txout_proof(&self, txid: Txid) -> Result<TxOutProof>;
+
+    /// Returns the Bitcoin RPC config
+    fn get_bitcoin_rpc_config(&self) -> BitcoinRpcConfig;
 }
 
 dyn_newtype_define! {
@@ -290,5 +293,9 @@ where
     async fn get_txout_proof(&self, txid: Txid) -> Result<TxOutProof> {
         self.retry_call(|| async { self.inner.get_txout_proof(txid).await })
             .await
+    }
+
+    fn get_bitcoin_rpc_config(&self) -> BitcoinRpcConfig {
+        self.inner.get_bitcoin_rpc_config()
     }
 }
