@@ -1223,7 +1223,7 @@
         <span class="prelude-val">Ok</span>(InputMeta {
             amount: TransactionItemAmount {
                 amount,
-                fee: <span class="self">self</span>.cfg.consensus.fee_consensus.input,
+                fee: <span class="self">self</span>.cfg.consensus.fee_consensus.spend_contract,
             },
             pub_key,
         })
@@ -1288,7 +1288,7 @@
                 LightningOutputV0::Outgoing(contract) =&gt; contract.amount,
                 LightningOutputV0::Incoming(contract) =&gt; contract.commitment.amount,
             },
-            fee: <span class="self">self</span>.cfg.consensus.fee_consensus.output,
+            fee: <span class="self">self</span>.cfg.consensus.fee_consensus.create_contract,
         })
     }
 
