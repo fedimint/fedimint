@@ -441,7 +441,7 @@ impl ServerModule for Lightning {
         Ok(InputMeta {
             amount: TransactionItemAmount {
                 amount,
-                fee: self.cfg.consensus.fee_consensus.input,
+                fee: self.cfg.consensus.fee_consensus.spend_contract,
             },
             pub_key,
         })
@@ -506,7 +506,7 @@ impl ServerModule for Lightning {
                 LightningOutputV0::Outgoing(contract) => contract.amount,
                 LightningOutputV0::Incoming(contract) => contract.commitment.amount,
             },
-            fee: self.cfg.consensus.fee_consensus.output,
+            fee: self.cfg.consensus.fee_consensus.create_contract,
         })
     }
 

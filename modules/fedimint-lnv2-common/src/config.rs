@@ -96,15 +96,15 @@ plugin_types_trait_impl_config!(
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable, Decodable)]
 pub struct FeeConsensus {
-    pub input: Amount,
-    pub output: Amount,
+    pub spend_contract: Amount,
+    pub create_contract: Amount,
 }
 
 impl Default for FeeConsensus {
     fn default() -> Self {
         Self {
-            input: Amount::from_sats(1),
-            output: Amount::from_sats(1),
+            spend_contract: Amount::from_sats(1),
+            create_contract: Amount::from_sats(1),
         }
     }
 }
@@ -131,10 +131,7 @@ fn migrate_config_consensus(
                 )
             })
             .collect(),
-        fee_consensus: FeeConsensus {
-            input: config.fee_consensus.contract_input,
-            output: config.fee_consensus.contract_output,
-        },
+        fee_consensus: FeeConsensus::default(),
         network: config.network,
     }
 }
