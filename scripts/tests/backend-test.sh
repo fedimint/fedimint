@@ -41,6 +41,7 @@ function run_tests() {
       cargo nextest run --locked --workspace --all-targets \
         ${CARGO_PROFILE:+--cargo-profile ${CARGO_PROFILE}} ${CARGO_PROFILE:+--profile ${CARGO_PROFILE}} \
         ${TEST_ARGS_THREADED} \
+        --features bitcoind \
         -E 'package(fedimint-wallet-tests)'
     fi
     if [ -z "${FM_BITCOIND_TEST_ONLY:-}" ] || [ "${FM_BITCOIND_TEST_ONLY:-}" = "ln" ]; then
@@ -90,6 +91,7 @@ function run_tests() {
     cargo nextest run --locked --workspace --all-targets \
       ${CARGO_PROFILE:+--cargo-profile ${CARGO_PROFILE}} ${CARGO_PROFILE:+--profile ${CARGO_PROFILE}} \
       ${TEST_ARGS_SERIALIZED} \
+      --features electrum \
       -E 'package(fedimint-wallet-tests)'
     >&2 echo "### Testing against electrs - complete"
   fi
@@ -103,6 +105,7 @@ function run_tests() {
     cargo nextest run --locked --workspace --all-targets \
       ${CARGO_PROFILE:+--cargo-profile ${CARGO_PROFILE}} ${CARGO_PROFILE:+--profile ${CARGO_PROFILE}} \
       ${TEST_ARGS_SERIALIZED} \
+      --features esplora \
       -E 'package(fedimint-wallet-tests)'
     >&2 echo "### Testing against esplora - complete"
   fi

@@ -7,6 +7,11 @@ description = "fedimint-wallet-tests contains integration tests for the lightnin
 license = "MIT"
 publish = false
 
+[features]
+bitcoind = []
+electrum = []
+esplora = []
+
 [[bin]]
 name = "circular-deposit-test"
 path = "src/bin/circular-deposit-test.rs"

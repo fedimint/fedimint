@@ -1151,3 +1151,32 @@ mod fedimint_migration_tests {
         .await
     }
 }
+
+// Verify the correct Bitcoin RPC is used
+
+#[cfg(feature = "bitcoind")]
+#[test]
+fn verify_bitcoind_backend() {
+    let fixtures = fixtures();
+    let dyn_bitcoin_rpc = fixtures.dyn_bitcoin_rpc();
+    let bitcoin_rpc_kind = dyn_bitcoin_rpc.get_bitcoin_rpc_config().kind;
+    assert_eq!(bitcoin_rpc_kind, "bitcoind")
+}
+
+#[cfg(feature = "esplora")]
+#[test]
+fn verify_esplora_backend() {
+    let fixtures = fixtures();
+    let dyn_bitcoin_rpc = fixtures.dyn_bitcoin_rpc();
+    let bitcoin_rpc_kind = dyn_bitcoin_rpc.get_bitcoin_rpc_config().kind;
+    assert_eq!(bitcoin_rpc_kind, "esplora")
+}
+
+#[cfg(feature = "electrum")]
+#[test]
+fn verify_electrum_backend() {
+    let fixtures = fixtures();
+    let dyn_bitcoin_rpc = fixtures.dyn_bitcoin_rpc();
+    let bitcoin_rpc_kind = dyn_bitcoin_rpc.get_bitcoin_rpc_config().kind;
+    assert_eq!(bitcoin_rpc_kind, "electrum")
+}
