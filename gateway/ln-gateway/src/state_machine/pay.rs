@@ -393,11 +393,12 @@ impl GatewayPayInvoice {
                 .amount()
                 .expect("We already checked that an amount was supplied");
 
-        let lightning_context = match context.gateway.get_lightning_context().await {
-            Ok(lightning_context) => lightning_context,
-            Err(error) => {
-                return Self::gateway_pay_cancel_contract(error, contract, common);
-            }
+        let Ok(lightning_context) = context.gateway.get_lightning_context().await else {
+            return Self::gateway_pay_cancel_contract(
+                LightningRpcError::FailedToConnect,
+                contract,
+                common,
+            );
         };
 
         let payment_result = match buy_preimage.payment_data {
