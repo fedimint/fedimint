@@ -287,6 +287,11 @@
 <a href="#287" id="287">287</a>
 <a href="#288" id="288">288</a>
 <a href="#289" id="289">289</a>
+<a href="#290" id="290">290</a>
+<a href="#291" id="291">291</a>
+<a href="#292" id="292">292</a>
+<a href="#293" id="293">293</a>
+<a href="#294" id="294">294</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>anyhow::bail;
 <span class="kw">use </span>bitcoin::address::NetworkUnchecked;
 <span class="kw">use </span>bitcoin::Address;
@@ -390,6 +395,8 @@
         <span class="attr">#[clap(long)]
         </span>federation_id: FederationId,
     },
+    <span class="doccomment">/// Prints the seed phrase for the gateway
+    </span>Seed,
     <span class="doccomment">/// Set or update the gateway configuration.
     </span>SetConfiguration {
         <span class="attr">#[clap(long)]
@@ -568,7 +575,10 @@
                 <span class="kw">let </span>response = create_client()
                     .receive_ecash(ReceiveEcashPayload { notes, wait })
                     .<span class="kw">await</span><span class="question-mark">?</span>;
-
+                print_response(response);
+            }
+            <span class="self">Self</span>::Seed =&gt; {
+                <span class="kw">let </span>response = create_client().get_mnemonic().<span class="kw">await</span><span class="question-mark">?</span>;
                 print_response(response);
             }
         }

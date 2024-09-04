@@ -2148,7 +2148,7 @@
 <span class="kw">impl </span>GatewayCli {
     <span class="kw">pub fn </span>cmd(<span class="self">self</span>) -&gt; Command {
         to_command(get_command_str_for_alias(
-            <span class="kw-2">&amp;</span>[],
+            <span class="kw-2">&amp;</span>[FM_GATEWAY_CLI_BASE_EXECUTABLE_ENV],
             <span class="kw-2">&amp;</span>get_gateway_cli_path()
                 .iter()
                 .map(String::as_str)
