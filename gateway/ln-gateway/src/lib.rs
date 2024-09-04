@@ -29,7 +29,7 @@ pub mod gateway_lnrpc {
 }
 
 use std::borrow::Cow;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::env;
 use std::fmt::Display;
 use std::net::SocketAddr;
@@ -40,6 +40,7 @@ use std::time::Duration;
 use anyhow::{anyhow, bail};
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
+use bip39::Mnemonic;
 use bitcoin::{Address, Network, Txid};
 use bitcoin_hashes::{sha256, Hash};
 use clap::Parser;
@@ -52,8 +53,10 @@ use db::{
 use federation_manager::FederationManager;
 use fedimint_api_client::api::net::Connector;
 use fedimint_api_client::api::FederationError;
+use fedimint_bip39::Bip39RootSecretStrategy;
 use fedimint_client::module::init::ClientModuleInitRegistry;
-use fedimint_client::ClientHandleArc;
+use fedimint_client::secret::RootSecretStrategy;
+use fedimint_client::{Client, ClientHandleArc};
 use fedimint_core::config::FederationId;
 use fedimint_core::core::{
     ModuleInstanceId, ModuleKind, LEGACY_HARDCODED_INSTANCE_ID_MINT,
@@ -90,12 +93,12 @@ use gateway_lnrpc::intercept_htlc_response::{Action, Cancel};
 use gateway_lnrpc::{CloseChannelsWithPeerResponse, InterceptHtlcRequest, InterceptHtlcResponse};
 use lightning::{ILnRpcClient, LightningBuilder, LightningRpcError};
 use lightning_invoice::{Bolt11Invoice, RoutingFees};
-use rand::Rng;
+use rand::{thread_rng, Rng};
 use rpc::{
     CloseChannelsWithPeerPayload, CreateInvoiceForSelfPayload, FederationInfo, GatewayFedConfig,
-    GatewayInfo, LeaveFedPayload, OpenChannelPayload, PayInvoicePayload, ReceiveEcashPayload,
-    ReceiveEcashResponse, SetConfigurationPayload, SpendEcashPayload, SpendEcashResponse,
-    V1_API_ENDPOINT,
+    GatewayInfo, LeaveFedPayload, MnemonicResponse, OpenChannelPayload, PayInvoicePayload,
+    ReceiveEcashPayload, ReceiveEcashResponse, SetConfigurationPayload, SpendEcashPayload,
+    SpendEcashResponse, V1_API_ENDPOINT,
 };
 use state_machine::pay::OutgoingPaymentError;
 use state_machine::{GatewayClientModule, GatewayExtPayStates};
@@ -104,6 +107,7 @@ use tokio::sync::RwLock;
 use tracing::{debug, error, info, info_span, warn, Instrument};
 
 use crate::db::{get_gatewayd_database_migrations, FederationConfig};
+use crate::envs::FM_GATEWAY_MNEMONIC_ENV;
 use crate::gateway_lnrpc::create_invoice_request::Description;
 use crate::gateway_lnrpc::intercept_htlc_response::Forward;
 use crate::gateway_lnrpc::CreateInvoiceRequest;
@@ -400,7 +404,7 @@ impl Gateway {
     /// service requests.
     pub async fn run(self, tg: &TaskGroup) -> anyhow::Result<TaskShutdownToken> {
         self.register_clients_timer(tg);
-        self.load_clients().await;
+        self.load_clients().await?;
         self.start_gateway(tg);
         // start webserver last to avoid handling requests before fully initialized
         run_webserver(Arc::new(self), tg).await?;
@@ -1064,9 +1068,10 @@ impl Gateway {
             connector,
         };
 
+        let mnemonic = self.load_or_generate_mnemonic().await?;
         let client = self
             .client_builder
-            .build(gw_client_cfg.clone(), Arc::new(self.clone()))
+            .build(gw_client_cfg.clone(), Arc::new(self.clone()), &mnemonic)
             .await?;
 
         // Instead of using `FederationManager::federation_info`, we manually create
@@ -1151,6 +1156,29 @@ impl Gateway {
         RestorePayload { federation_id: _ }: RestorePayload,
     ) -> Result<()> {
         unimplemented!("Restore is not currently supported");
+    }
+
+    pub async fn handle_mnemonic_msg(&self) -> Result<MnemonicResponse> {
+        let mnemonic = self.load_or_generate_mnemonic().await?;
+        let words = mnemonic
+            .word_iter()
+            .map(std::string::ToString::to_string)
+            .collect::<Vec<_>>();
+        let all_federations = self
+            .federation_manager
+            .read()
+            .await
+            .get_all_federation_configs()
+            .await
+            .keys()
+            .copied()
+            .collect::<BTreeSet<_>>();
+        let legacy_federations = self.client_builder.legacy_federations(all_federations);
+        let mnemonic_response = MnemonicResponse {
+            mnemonic: words,
+            legacy_federations,
+        };
+        Ok(mnemonic_response)
     }
 
     /// Handle a request to change a connected federation's configuration or
@@ -1530,10 +1558,39 @@ impl Gateway {
             )))
     }
 
+    async fn load_or_generate_mnemonic(&self) -> Result<Mnemonic> {
+        Ok(
+            if let Ok(entropy) =
+                Client::load_decodable_client_secret::<Vec<u8>>(&self.gateway_db).await
+            {
+                Mnemonic::from_entropy(&entropy)
+                    .map_err(|e| GatewayError::ClientCreationError(e.to_string()))?
+            } else {
+                let mnemonic = if let Ok(words) = std::env::var(FM_GATEWAY_MNEMONIC_ENV) {
+                    info!("Using provided mnemonic from environment variable");
+                    Mnemonic::parse_in_normalized(bip39::Language::English, words.as_str())
+                        .map_err(|e| {
+                            GatewayError::InvalidMetadata(format!(
+                                "Seed phrase provided in environment variable was invalid: {e:?}"
+                            ))
+                        })?
+                } else {
+                    info!("Generating mnemonic and writing entropy to client storage");
+                    Bip39RootSecretStrategy::<12>::random(&mut thread_rng())
+                };
+
+                Client::store_encodable_client_secret(&self.gateway_db, mnemonic.to_entropy())
+                    .await
+                    .map_err(|e| GatewayError::ClientCreationError(e.to_string()))?;
+                mnemonic
+            },
+        )
+    }
+
     /// Reads the connected federation client configs from the Gateway's
     /// database and reconstructs the clients necessary for interacting with
     /// connection federations.
-    async fn load_clients(&self) {
+    async fn load_clients(&self) -> Result<()> {
         let mut federation_manager = self.federation_manager.write().await;
 
         let configs = {
@@ -1545,11 +1602,14 @@ impl Gateway {
             federation_manager.set_next_scid(max_mint_channel_id + 1);
         }
 
+        let mnemonic = self.load_or_generate_mnemonic().await?;
+
         for (federation_id, config) in configs {
             let scid = config.mint_channel_id;
             if let Ok(client) = Box::pin(Spanned::try_new(
                 info_span!("client", federation_id  = %federation_id.clone()),
-                self.client_builder.build(config, Arc::new(self.clone())),
+                self.client_builder
+                    .build(config, Arc::new(self.clone()), &mnemonic),
             ))
             .await
             {
@@ -1558,6 +1618,8 @@ impl Gateway {
                 warn!("Failed to load client for federation: {federation_id}");
             }
         }
+
+        Ok(())
     }
 
     /// Legacy mechanism for registering the Gateway with connected federations.
@@ -1904,6 +1966,8 @@ pub enum GatewayError {
     IncomingLNv1PaymentError(anyhow::Error),
     #[error("Incoming payment is not registered as an LNv2 payment")]
     PaymentNotRegisteredWithLNv2Error,
+    #[error("Failed to create client: {}", .0)]
+    ClientCreationError(String),
 }
 
 impl IntoResponse for GatewayError {

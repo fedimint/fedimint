@@ -15,8 +15,8 @@ use fedimint_ln_common::gateway_endpoint_constants::{
     CONFIGURATION_ENDPOINT, CONNECT_FED_ENDPOINT, GATEWAY_INFO_ENDPOINT,
     GATEWAY_INFO_POST_ENDPOINT, GET_BALANCES_ENDPOINT, GET_GATEWAY_ID_ENDPOINT,
     GET_LN_ONCHAIN_ADDRESS_ENDPOINT, LEAVE_FED_ENDPOINT, LIST_ACTIVE_CHANNELS_ENDPOINT,
-    OPEN_CHANNEL_ENDPOINT, PAY_INVOICE_ENDPOINT, RECEIVE_ECASH_ENDPOINT, RESTORE_ENDPOINT,
-    SET_CONFIGURATION_ENDPOINT, SPEND_ECASH_ENDPOINT, WITHDRAW_ENDPOINT,
+    MNEMONIC_ENDPOINT, OPEN_CHANNEL_ENDPOINT, PAY_INVOICE_ENDPOINT, RECEIVE_ECASH_ENDPOINT,
+    RESTORE_ENDPOINT, SET_CONFIGURATION_ENDPOINT, SPEND_ECASH_ENDPOINT, WITHDRAW_ENDPOINT,
 };
 use fedimint_lnv2_client::{CreateBolt11InvoicePayload, SendPaymentPayload};
 use fedimint_lnv2_common::endpoint_constants::{
@@ -187,6 +187,7 @@ fn v1_routes(gateway: Arc<Gateway>) -> Router {
         .route(LIST_ACTIVE_CHANNELS_ENDPOINT, get(list_active_channels))
         .route(GET_BALANCES_ENDPOINT, get(get_balances))
         .route(SPEND_ECASH_ENDPOINT, post(spend_ecash))
+        .route(MNEMONIC_ENDPOINT, get(mnemonic))
         .layer(middleware::from_fn(auth_middleware));
 
     // Routes that are un-authenticated before gateway configuration, then become
@@ -452,4 +453,12 @@ async fn receive_ecash(
     Ok(Json(json!(
         gateway.handle_receive_ecash_msg(payload).await?
     )))
+}
+
+#[instrument(skip_all, err)]
+async fn mnemonic(
+    Extension(gateway): Extension<Arc<Gateway>>,
+) -> Result<impl IntoResponse, GatewayError> {
+    let words = gateway.handle_mnemonic_msg().await?;
+    Ok(Json(json!(words)))
 }

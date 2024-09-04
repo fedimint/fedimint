@@ -1,15 +1,19 @@
+use std::collections::BTreeSet;
 use std::fmt::Debug;
 use std::path::PathBuf;
 use std::sync::Arc;
 
+use bip39::Mnemonic;
+use fedimint_bip39::Bip39RootSecretStrategy;
+use fedimint_client::db::ClientConfigKey;
+use fedimint_client::derivable_secret::{ChildId, DerivableSecret};
 use fedimint_client::module::init::ClientModuleInitRegistry;
 use fedimint_client::secret::{PlainRootSecretStrategy, RootSecretStrategy};
-use fedimint_client::Client;
+use fedimint_client::{Client, ClientBuilder};
+use fedimint_core::config::FederationId;
 use fedimint_core::core::ModuleInstanceId;
-use fedimint_core::db::Database;
+use fedimint_core::db::{Database, IDatabaseTransactionOpsCoreTyped};
 use fedimint_core::module::registry::ModuleDecoderRegistry;
-use rand::thread_rng;
-use tracing::info;
 
 use crate::db::FederationConfig;
 use crate::gateway_module_v2::GatewayClientInitV2;
@@ -36,19 +40,23 @@ impl GatewayClientBuilder {
         }
     }
 
-    pub async fn build(
+    async fn client_plainrootsecret(&self, db: &Database) -> Result<DerivableSecret> {
+        let client_secret = Client::load_decodable_client_secret::<[u8; 64]>(db).await?;
+        Ok(PlainRootSecretStrategy::to_root_secret(&client_secret))
+    }
+
+    async fn create_client_builder(
         &self,
-        config: FederationConfig,
+        db: Database,
+        federation_config: &FederationConfig,
         gateway: Arc<Gateway>,
-    ) -> Result<fedimint_client::ClientHandleArc> {
+    ) -> Result<ClientBuilder> {
         let FederationConfig {
-            invite_code,
             mint_channel_id,
             timelock_delta,
             connector,
             ..
-        } = config;
-        let federation_id = invite_code.federation_id();
+        } = federation_config.to_owned();
 
         let mut registry = self.registry.clone();
 
@@ -57,14 +65,9 @@ impl GatewayClientBuilder {
             mint_channel_id,
             gateway: gateway.clone(),
         });
-        registry.attach(GatewayClientInitV2 { gateway });
-
-        let db_path = self.work_dir.join(format!("{federation_id}.db"));
-
-        let rocksdb = fedimint_rocksdb::RocksDb::open(db_path.clone()).map_err(|e| {
-            GatewayError::DatabaseError(anyhow::anyhow!("Error opening rocksdb: {e:?}"))
-        })?;
-        let db = Database::new(rocksdb, ModuleDecoderRegistry::default());
+        registry.attach(GatewayClientInitV2 {
+            gateway: gateway.clone(),
+        });
 
         let mut client_builder = Client::builder(db)
             .await
@@ -72,34 +75,89 @@ impl GatewayClientBuilder {
         client_builder.with_module_inits(registry);
         client_builder.with_primary_module(self.primary_module);
         client_builder.with_connector(connector);
+        Ok(client_builder)
+    }
 
-        let client_secret = if let Ok(secret) =
-            Client::load_decodable_client_secret::<[u8; 64]>(client_builder.db_no_decoders()).await
-        {
-            secret
+    pub async fn build(
+        &self,
+        config: FederationConfig,
+        gateway: Arc<Gateway>,
+        mnemonic: &Mnemonic,
+    ) -> Result<fedimint_client::ClientHandleArc> {
+        let invite_code = config.invite_code.clone();
+        let federation_id = invite_code.federation_id();
+        let db_path = self.work_dir.join(format!("{federation_id}.db"));
+
+        let (db, root_secret) = if db_path.exists() {
+            let rocksdb = fedimint_rocksdb::RocksDb::open(db_path.clone()).map_err(|e| {
+                GatewayError::DatabaseError(anyhow::anyhow!("Error opening rocksdb: {e:?}"))
+            })?;
+            let db = Database::new(rocksdb, ModuleDecoderRegistry::default());
+            let root_secret = self.client_plainrootsecret(&db).await?;
+            (db, root_secret)
         } else {
-            info!("Generating secret and writing to client storage");
-            let secret = PlainRootSecretStrategy::random(&mut thread_rng());
-            Client::store_encodable_client_secret(client_builder.db_no_decoders(), secret)
-                .await
-                .map_err(GatewayError::ClientStateMachineError)?;
-            secret
+            let db = gateway
+                .gateway_db
+                .with_prefix(config.mint_channel_id.to_le_bytes().to_vec());
+            let secret = Self::derive_federation_secret(mnemonic, &federation_id);
+            (db, secret)
         };
 
-        let root_secret = PlainRootSecretStrategy::to_root_secret(&client_secret);
+        Self::verify_client_config(&db, federation_id).await?;
+
+        let client_builder = self.create_client_builder(db, &config, gateway).await?;
+
         if Client::is_initialized(client_builder.db_no_decoders()).await {
-            client_builder
-                // TODO: make this configurable?
-                .open(root_secret)
-                .await
+            client_builder.open(root_secret).await
         } else {
-            let client_config = connector.download_from_invite_code(&invite_code).await?;
+            let client_config = config
+                .connector
+                .download_from_invite_code(&invite_code)
+                .await?;
             client_builder
-                // TODO: make this configurable?
                 .join(root_secret, client_config.clone(), invite_code.api_secret())
                 .await
         }
         .map(Arc::new)
         .map_err(GatewayError::ClientStateMachineError)
+    }
+
+    /// Verifies that the saved `ClientConfig` contains the expected
+    /// federation's config.
+    async fn verify_client_config(db: &Database, federation_id: FederationId) -> Result<()> {
+        let mut dbtx = db.begin_transaction_nc().await;
+        if let Some(config) = dbtx.get_value(&ClientConfigKey).await {
+            if config.calculate_federation_id() != federation_id {
+                return Err(GatewayError::ClientCreationError(
+                    "Federation Id did not match saved federation ID".to_string(),
+                ));
+            }
+        }
+        Ok(())
+    }
+
+    /// Derives a per-federation secret according to Fedimint's multi-federation
+    /// secret derivation policy.
+    fn derive_federation_secret(
+        mnemonic: &Mnemonic,
+        federation_id: &FederationId,
+    ) -> DerivableSecret {
+        let global_root_secret = Bip39RootSecretStrategy::<12>::to_root_secret(mnemonic);
+        let multi_federation_root_secret = global_root_secret.child_key(ChildId(0));
+        let federation_root_secret = multi_federation_root_secret.federation_key(federation_id);
+        let federation_wallet_root_secret = federation_root_secret.child_key(ChildId(0));
+        federation_wallet_root_secret.child_key(ChildId(0))
+    }
+
+    /// Returns a vector of "legacy" federations which did not derive their
+    /// client secret's from the gateway's mnemonic.
+    pub fn legacy_federations(&self, all_federations: BTreeSet<FederationId>) -> Vec<FederationId> {
+        all_federations
+            .into_iter()
+            .filter(|federation_id| {
+                let db_path = self.work_dir.join(format!("{federation_id}.db"));
+                db_path.exists()
+            })
+            .collect::<Vec<FederationId>>()
     }
 }

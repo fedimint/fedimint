@@ -12,6 +12,7 @@ pub const GATEWAY_INFO_POST_ENDPOINT: &str = "/info";
 pub const GET_LN_ONCHAIN_ADDRESS_ENDPOINT: &str = "/get_ln_onchain_address";
 pub const LEAVE_FED_ENDPOINT: &str = "/leave_fed";
 pub const LIST_ACTIVE_CHANNELS_ENDPOINT: &str = "/list_active_channels";
+pub const MNEMONIC_ENDPOINT: &str = "/mnemonic";
 pub const OPEN_CHANNEL_ENDPOINT: &str = "/open_channel";
 pub const CLOSE_CHANNELS_WITH_PEER_ENDPOINT: &str = "/close_channels_with_peer";
 pub const RECEIVE_ECASH_ENDPOINT: &str = "/receive_ecash";

@@ -101,6 +101,8 @@ pub enum GeneralCommands {
         #[clap(long)]
         federation_id: FederationId,
     },
+    /// Prints the seed phrase for the gateway
+    Seed,
     /// Set or update the gateway configuration.
     SetConfiguration {
         #[clap(long)]
@@ -279,7 +281,10 @@ impl GeneralCommands {
                 let response = create_client()
                     .receive_ecash(ReceiveEcashPayload { notes, wait })
                     .await?;
-
+                print_response(response);
+            }
+            Self::Seed => {
+                let response = create_client().get_mnemonic().await?;
                 print_response(response);
             }
         }

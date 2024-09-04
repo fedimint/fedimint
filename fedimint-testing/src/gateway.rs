@@ -32,6 +32,7 @@ impl FromStr for LightningNodeType {
         match s.to_lowercase().as_str() {
             "cln" => Ok(LightningNodeType::Cln),
             "lnd" => Ok(LightningNodeType::Lnd),
+            "ldk" => Ok(LightningNodeType::Ldk),
             _ => Err(format!("Invalid value for LightningNodeType: {s}")),
         }
     }

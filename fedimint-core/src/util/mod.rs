@@ -440,7 +440,7 @@ where
                 } else {
                     warn!(
                         target: LOG_CORE,
-                        %error,
+                        ?error,
                         %attempts,
                         "{} failed",
                         op_name,
