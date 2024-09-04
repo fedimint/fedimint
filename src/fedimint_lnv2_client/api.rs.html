@@ -304,9 +304,6 @@
 <a href="#304" id="304">304</a>
 <a href="#305" id="305">305</a>
 <a href="#306" id="306">306</a>
-<a href="#307" id="307">307</a>
-<a href="#308" id="308">308</a>
-<a href="#309" id="309">309</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::time::Duration;
 
@@ -546,9 +543,8 @@
             .send()
             .<span class="kw">await
             </span>.map_err(|e| GatewayError::Unreachable(e.to_string()))<span class="question-mark">?
-            </span>.json::&lt;<span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;RoutingInfo&gt;, String&gt;&gt;()
+            </span>.json::&lt;<span class="prelude-ty">Option</span>&lt;RoutingInfo&gt;&gt;()
             .<span class="kw">await
-            </span>.map_err(|e| GatewayError::InvalidJsonResponse(e.to_string()))<span class="question-mark">?
             </span>.map_err(|e| GatewayError::Request(e.to_string()))
     }
 
@@ -579,9 +575,8 @@
             .send()
             .<span class="kw">await
             </span>.map_err(|e| GatewayError::Unreachable(e.to_string()))<span class="question-mark">?
-            </span>.json::&lt;<span class="prelude-ty">Result</span>&lt;Bolt11Invoice, String&gt;&gt;()
+            </span>.json::&lt;Bolt11Invoice&gt;()
             .<span class="kw">await
-            </span>.map_err(|e| GatewayError::InvalidJsonResponse(e.to_string()))<span class="question-mark">?
             </span>.map_err(|e| GatewayError::Request(e.to_string()))
     }
 
@@ -610,9 +605,8 @@
             .send()
             .<span class="kw">await
             </span>.map_err(|e| GatewayError::Unreachable(e.to_string()))<span class="question-mark">?
-            </span>.json::&lt;<span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Result</span>&lt;[u8; <span class="number">32</span>], Signature&gt;, String&gt;&gt;()
+            </span>.json::&lt;<span class="prelude-ty">Result</span>&lt;[u8; <span class="number">32</span>], Signature&gt;&gt;()
             .<span class="kw">await
-            </span>.map_err(|e| GatewayError::InvalidJsonResponse(e.to_string()))<span class="question-mark">?
             </span>.map_err(|e| GatewayError::Request(e.to_string()))
     }
 }
