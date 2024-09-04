@@ -900,18 +900,49 @@ pub async fn open_channels_between_gateways(
         gateways.iter().circular_tuple_windows::<(_, _)>().collect()
     };
 
-    for ((gw_a, gw_a_name), (gw_b, gw_b_name)) in &gateway_pairs {
-        let push_amount = 5_000_000;
-        info!(target: LOG_DEVIMINT, "Opening channel between {gw_a_name} and {gw_b_name} gateway lightning nodes with {push_amount} on each side...");
-        gw_a.open_channel(gw_b, 10_000_000, Some(push_amount))
-            .await?;
+    let open_channel_tasks = gateway_pairs.iter()
+        .map(|((gw_a, gw_a_name), (gw_b, gw_b_name))| {
+            let gw_a = (*gw_a).clone();
+            let gw_b = (*gw_b).clone();
+
+            let push_amount = 5_000_000;
+            info!(target: LOG_DEVIMINT, "Opening channel between {gw_a_name} and {gw_b_name} gateway lightning nodes with {push_amount} on each side...");
+            tokio::task::spawn(async move {
+                gw_a.open_channel(&gw_b, 10_000_000, Some(push_amount)).await
+            })
+        })
+        .collect::<Vec<_>>();
+    let open_channel_task_results: Vec<Result<Result<_, _>, _>> =
+        futures::future::join_all(open_channel_tasks).await;
+
+    let mut channel_funding_txids = Vec::new();
+    for open_channel_task_result in open_channel_task_results {
+        match open_channel_task_result {
+            Ok(Ok(txid)) => {
+                channel_funding_txids.push(txid);
+            }
+            Ok(Err(e)) => {
+                return Err(anyhow::anyhow!(e));
+            }
+            Err(e) => {
+                return Err(anyhow::anyhow!(e));
+            }
+        }
     }
 
-    // `open_channel` may not send out the channel funding transaction immediately
-    // so we need to wait for it to get to the mempool.
-    // TODO: LDK is the culprit here. Find a way to ensure that
-    // `GatewayLdkClient::open_channel` is fully done before it returns.
-    fedimint_core::runtime::sleep(Duration::from_secs(5)).await;
+    // Wait for all channel funding transaction to be known by bitcoind.
+    for txid in &channel_funding_txids {
+        loop {
+            // Bitcoind's getrawtransaction RPC call will return an error if the transaction
+            // is not known.
+            if bitcoind.get_raw_transaction(txid).is_ok() {
+                break;
+            }
+
+            // Wait for a bit, then restart the check.
+            fedimint_core::runtime::sleep(Duration::from_millis(100)).await;
+        }
+    }
 
     bitcoind.mine_blocks(10).await?;
 

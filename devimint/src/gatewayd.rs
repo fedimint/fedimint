@@ -1,8 +1,10 @@
 use std::collections::HashMap;
 use std::ops::ControlFlow;
 use std::path::PathBuf;
+use std::str::FromStr;
 
 use anyhow::{Context, Result};
+use esplora_client::Txid;
 use fedimint_core::config::FederationId;
 use fedimint_core::secp256k1::PublicKey;
 use fedimint_core::util::{backoff_util, retry};
@@ -291,24 +293,25 @@ impl Gatewayd {
         gw: &Gatewayd,
         channel_size_sats: u64,
         push_amount_sats: Option<u64>,
-    ) -> Result<()> {
+    ) -> Result<Txid> {
         let pubkey = gw.lightning_pubkey().await?;
-        cmd!(
-            self,
-            "lightning",
-            "open-channel",
-            "--pubkey",
-            pubkey,
-            "--host",
-            gw.lightning_node_addr,
-            "--channel-size-sats",
-            channel_size_sats,
-            "--push-amount-sats",
-            push_amount_sats.unwrap_or(0)
-        )
-        .run()
-        .await?;
-        Ok(())
+        Ok(Txid::from_str(
+            &cmd!(
+                self,
+                "lightning",
+                "open-channel",
+                "--pubkey",
+                pubkey,
+                "--host",
+                gw.lightning_node_addr,
+                "--channel-size-sats",
+                channel_size_sats,
+                "--push-amount-sats",
+                push_amount_sats.unwrap_or(0)
+            )
+            .out_string()
+            .await?,
+        )?)
     }
 
     pub async fn list_active_channels(&self) -> Result<Vec<ChannelInfo>> {
