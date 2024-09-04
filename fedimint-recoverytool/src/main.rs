@@ -240,7 +240,7 @@ async fn process_and_print_tweak_source(
                         let (mut peg_in_tweaks, peg_out_count) =
                             input_tweaks_and_peg_out_count(transaction_cis.into_iter());
 
-                        for _ in 0..=peg_out_count {
+                        for _ in 0..peg_out_count {
                             info!("Found change output, adding tweak {change_tweak_idx} to list");
                             peg_in_tweaks.insert(nonce_from_idx(change_tweak_idx));
                             change_tweak_idx += 1;
