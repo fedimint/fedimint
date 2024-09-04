@@ -1919,7 +1919,7 @@ impl Gateway {
             .await
             .ok_or(anyhow!("No corresponding decryption contract available"))?;
 
-        if registered_incoming_contract.incoming_amount != amount_msats {
+        if registered_incoming_contract.incoming_amount_msats != amount_msats {
             bail!("The available decryption contract's amount is not equal the requested amount")
         }
 
