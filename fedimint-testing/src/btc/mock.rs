@@ -385,6 +385,13 @@ impl IBitcoindRpc for FakeBitcoinTest {
         let proof = inner.proofs.get(&txid);
         Ok(proof.ok_or(format_err!("No proof stored"))?.clone())
     }
+
+    fn get_bitcoin_rpc_config(&self) -> BitcoinRpcConfig {
+        BitcoinRpcConfig {
+            kind: "mock_kind".to_string(),
+            url: "http://mock".parse().unwrap(),
+        }
+    }
 }
 
 fn output_sum(tx: &Transaction) -> u64 {

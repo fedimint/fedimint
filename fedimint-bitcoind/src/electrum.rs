@@ -4,6 +4,7 @@ use anyhow::{anyhow as format_err, bail};
 use bitcoin::{BlockHash, Network, ScriptBuf, Transaction, Txid};
 use electrum_client::ElectrumApi;
 use electrum_client::Error::Protocol;
+use fedimint_core::envs::BitcoinRpcConfig;
 use fedimint_core::runtime::block_in_place;
 use fedimint_core::task::TaskHandle;
 use fedimint_core::txoproof::TxOutProof;
@@ -28,11 +29,17 @@ impl IBitcoindRpcFactory for ElectrumFactory {
     }
 }
 
-pub struct ElectrumClient(electrum_client::Client);
+pub struct ElectrumClient {
+    client: electrum_client::Client,
+    url: SafeUrl,
+}
 
 impl ElectrumClient {
     fn new(url: &SafeUrl) -> anyhow::Result<Self> {
-        Ok(Self(electrum_client::Client::new(url.as_str())?))
+        Ok(Self {
+            client: electrum_client::Client::new(url.as_str())?,
+            url: url.clone(),
+        })
     }
 }
 
@@ -45,7 +52,7 @@ impl fmt::Debug for ElectrumClient {
 #[apply(async_trait_maybe_send!)]
 impl IBitcoindRpc for ElectrumClient {
     async fn get_network(&self) -> anyhow::Result<Network> {
-        let resp = block_in_place(|| self.0.server_features())?;
+        let resp = block_in_place(|| self.client.server_features())?;
         Ok(match resp.genesis_hash.encode_hex::<String>().as_str() {
             crate::MAINNET_GENESIS_BLOCK_HASH => Network::Bitcoin,
             crate::TESTNET_GENESIS_BLOCK_HASH => Network::Testnet,
@@ -58,12 +65,12 @@ impl IBitcoindRpc for ElectrumClient {
     }
 
     async fn get_block_count(&self) -> anyhow::Result<u64> {
-        Ok(block_in_place(|| self.0.block_headers_subscribe_raw())?.height as u64 + 1)
+        Ok(block_in_place(|| self.client.block_headers_subscribe_raw())?.height as u64 + 1)
     }
 
     async fn get_block_hash(&self, height: u64) -> anyhow::Result<BlockHash> {
         let height = usize::try_from(height)?;
-        let result = block_in_place(|| self.0.block_headers(height, 1))?;
+        let result = block_in_place(|| self.client.block_headers(height, 1))?;
         Ok(result
             .headers
             .first()
@@ -72,8 +79,8 @@ impl IBitcoindRpc for ElectrumClient {
     }
 
     async fn get_fee_rate(&self, confirmation_target: u16) -> anyhow::Result<Option<Feerate>> {
-        let estimate = block_in_place(|| self.0.estimate_fee(confirmation_target as usize))?;
-        let min_fee = block_in_place(|| self.0.relay_fee())?;
+        let estimate = block_in_place(|| self.client.estimate_fee(confirmation_target as usize))?;
+        let min_fee = block_in_place(|| self.client.relay_fee())?;
 
         // convert fee rate estimate or min fee to sats
         let sats_per_kvb = estimate.max(min_fee) * 100_000_000f64;
@@ -86,7 +93,7 @@ impl IBitcoindRpc for ElectrumClient {
         let mut bytes = vec![];
         bitcoin::consensus::Encodable::consensus_encode(&transaction, &mut bytes)
             .expect("can't fail");
-        match block_in_place(|| self.0.transaction_broadcast_raw(&bytes)) {
+        match block_in_place(|| self.client.transaction_broadcast_raw(&bytes)) {
             Err(Protocol(Value::Object(e))) if is_already_submitted_error(&e) => (),
             Err(e) => info!(?e, "Error broadcasting transaction"),
             Ok(_) => (),
@@ -94,7 +101,7 @@ impl IBitcoindRpc for ElectrumClient {
     }
 
     async fn get_tx_block_height(&self, txid: &Txid) -> anyhow::Result<Option<u64>> {
-        let tx = block_in_place(|| self.0.transaction_get(txid))
+        let tx = block_in_place(|| self.client.transaction_get(txid))
             .map_err(|error| info!(?error, "Unable to get raw transaction"));
         match tx.ok() {
             None => Ok(None),
@@ -103,7 +110,8 @@ impl IBitcoindRpc for ElectrumClient {
                     .output
                     .first()
                     .ok_or(format_err!("Transaction must contain at least one output"))?;
-                let history = block_in_place(|| self.0.script_get_history(&output.script_pubkey))?;
+                let history =
+                    block_in_place(|| self.client.script_get_history(&output.script_pubkey))?;
                 Ok(history.first().map(|history| history.height as u64))
             }
         }
@@ -115,7 +123,7 @@ impl IBitcoindRpc for ElectrumClient {
         block_hash: &BlockHash,
         block_height: u64,
     ) -> anyhow::Result<bool> {
-        let tx = block_in_place(|| self.0.transaction_get(txid))
+        let tx = block_in_place(|| self.client.transaction_get(txid))
             .map_err(|error| info!(?error, "Unable to get raw transaction"));
 
         match tx.ok() {
@@ -127,7 +135,7 @@ impl IBitcoindRpc for ElectrumClient {
                     .last()
                     .ok_or(format_err!("Transaction must contain at least one output"))?;
 
-                match block_in_place(|| self.0.script_get_history(&output.script_pubkey))?
+                match block_in_place(|| self.client.script_get_history(&output.script_pubkey))?
                     .iter()
                     .find(|tx| tx.tx_hash == *txid && tx.height as u64 == block_height)
                 {
@@ -156,9 +164,11 @@ impl IBitcoindRpc for ElectrumClient {
         script: &ScriptBuf,
     ) -> anyhow::Result<Vec<bitcoin::Transaction>> {
         let mut results = vec![];
-        let transactions = block_in_place(|| self.0.script_get_history(script))?;
+        let transactions = block_in_place(|| self.client.script_get_history(script))?;
         for history in transactions {
-            results.push(block_in_place(|| self.0.transaction_get(&history.tx_hash))?);
+            results.push(block_in_place(|| {
+                self.client.transaction_get(&history.tx_hash)
+            })?);
         }
         Ok(results)
     }
@@ -167,6 +177,13 @@ impl IBitcoindRpc for ElectrumClient {
         // FIXME: Not sure how to implement for electrum yet, but the client cannot use
         // electrum regardless right now
         unimplemented!()
+    }
+
+    fn get_bitcoin_rpc_config(&self) -> BitcoinRpcConfig {
+        BitcoinRpcConfig {
+            kind: "electrum".to_string(),
+            url: self.url.clone(),
+        }
     }
 }
 

@@ -50,7 +50,7 @@ use fedimint_core::db::{
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::envs::BitcoinRpcConfig;
 use fedimint_core::module::{
-    ApiVersion, CommonModuleInit, ModuleCommon, ModuleInit, MultiApiVersion,
+    ApiAuth, ApiVersion, CommonModuleInit, ModuleCommon, ModuleInit, MultiApiVersion,
 };
 use fedimint_core::task::{MaybeSend, MaybeSync, TaskGroup};
 use fedimint_core::util::backoff_util::background_backoff;
@@ -248,6 +248,7 @@ impl ClientModuleInit for WalletClientInit {
             pegin_claimed_receiver,
             pegin_claimed_sender,
             task_group: args.task_group().clone(),
+            admin_auth: args.admin_auth().cloned(),
         })
     }
 
@@ -375,6 +376,7 @@ pub struct WalletClientModule {
     pegin_claimed_sender: watch::Sender<()>,
     pegin_claimed_receiver: watch::Receiver<()>,
     task_group: TaskGroup,
+    admin_auth: Option<ApiAuth>,
 }
 
 #[apply(async_trait_maybe_send!)]

@@ -2,6 +2,7 @@ use std::collections::HashMap;
 
 use anyhow::{bail, format_err};
 use bitcoin::{BlockHash, Network, ScriptBuf, Transaction, Txid};
+use fedimint_core::envs::BitcoinRpcConfig;
 use fedimint_core::task::TaskHandle;
 use fedimint_core::txoproof::TxOutProof;
 use fedimint_core::util::SafeUrl;
@@ -24,7 +25,10 @@ impl IBitcoindRpcFactory for EsploraFactory {
 }
 
 #[derive(Debug)]
-pub struct EsploraClient(esplora_client::AsyncClient);
+pub struct EsploraClient {
+    client: esplora_client::AsyncClient,
+    url: SafeUrl,
+}
 
 impl EsploraClient {
     fn new(url: &SafeUrl) -> anyhow::Result<Self> {
@@ -33,7 +37,10 @@ impl EsploraClient {
 
         let builder = esplora_client::Builder::new(without_trailing);
         let client = builder.build_async()?;
-        Ok(Self(client))
+        Ok(Self {
+            client,
+            url: url.clone(),
+        })
     }
 }
 
@@ -41,7 +48,7 @@ impl EsploraClient {
 impl IBitcoindRpc for EsploraClient {
     async fn get_network(&self) -> anyhow::Result<Network> {
         let genesis_height: u32 = 0;
-        let genesis_hash = self.0.get_block_hash(genesis_height).await?;
+        let genesis_hash = self.client.get_block_hash(genesis_height).await?;
 
         let network = match genesis_hash.to_string().as_str() {
             crate::MAINNET_GENESIS_BLOCK_HASH => Network::Bitcoin,
@@ -57,18 +64,18 @@ impl IBitcoindRpc for EsploraClient {
     }
 
     async fn get_block_count(&self) -> anyhow::Result<u64> {
-        match self.0.get_height().await {
+        match self.client.get_height().await {
             Ok(height) => Ok(u64::from(height) + 1),
             Err(e) => Err(e.into()),
         }
     }
 
     async fn get_block_hash(&self, height: u64) -> anyhow::Result<BlockHash> {
-        Ok(self.0.get_block_hash(u32::try_from(height)?).await?)
+        Ok(self.client.get_block_hash(u32::try_from(height)?).await?)
     }
 
     async fn get_fee_rate(&self, confirmation_target: u16) -> anyhow::Result<Option<Feerate>> {
-        let fee_estimates: HashMap<String, f64> = self.0.get_fee_estimates().await?;
+        let fee_estimates: HashMap<String, f64> = self.client.get_fee_estimates().await?;
 
         let fee_rate_vb =
             esplora_client::convert_fee_rate(confirmation_target.into(), fee_estimates)?;
@@ -81,7 +88,7 @@ impl IBitcoindRpc for EsploraClient {
     }
 
     async fn submit_transaction(&self, transaction: Transaction) {
-        let _ = self.0.broadcast(&transaction).await.map_err(|error| {
+        let _ = self.client.broadcast(&transaction).await.map_err(|error| {
             // `esplora-client` v0.6.0 only surfaces HTTP error codes, which prevents us
             // from detecting errors for transactions already submitted.
             // TODO: Suppress `esplora-client` already submitted errors when client is
@@ -93,7 +100,7 @@ impl IBitcoindRpc for EsploraClient {
 
     async fn get_tx_block_height(&self, txid: &Txid) -> anyhow::Result<Option<u64>> {
         Ok(self
-            .0
+            .client
             .get_tx_status(txid)
             .await?
             .block_height
@@ -106,7 +113,7 @@ impl IBitcoindRpc for EsploraClient {
         block_hash: &BlockHash,
         block_height: u64,
     ) -> anyhow::Result<bool> {
-        let tx_status = self.0.get_tx_status(txid).await?;
+        let tx_status = self.client.get_tx_status(txid).await?;
 
         let is_in_block_height = tx_status
             .block_height
@@ -135,7 +142,7 @@ impl IBitcoindRpc for EsploraClient {
         script: &ScriptBuf,
     ) -> anyhow::Result<Vec<bitcoin::Transaction>> {
         let transactions = self
-            .0
+            .client
             .scripthash_txs(script, None)
             .await?
             .into_iter()
@@ -144,9 +151,10 @@ impl IBitcoindRpc for EsploraClient {
 
         Ok(transactions)
     }
+
     async fn get_txout_proof(&self, txid: Txid) -> anyhow::Result<TxOutProof> {
         let proof = self
-            .0
+            .client
             .get_merkle_block(&txid)
             .await?
             .ok_or(format_err!("No merkle proof found"))?;
@@ -155,5 +163,12 @@ impl IBitcoindRpc for EsploraClient {
             block_header: proof.header,
             merkle_proof: proof.txn,
         })
+    }
+
+    fn get_bitcoin_rpc_config(&self) -> BitcoinRpcConfig {
+        BitcoinRpcConfig {
+            kind: "esplora".to_string(),
+            url: self.url.clone(),
+        }
     }
 }

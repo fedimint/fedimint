@@ -42,12 +42,12 @@ use fedimint_core::db::{
     Database, DatabaseTransaction, DatabaseVersion, IDatabaseTransactionOpsCoreTyped,
 };
 use fedimint_core::encoding::{Decodable, Encodable};
-use fedimint_core::envs::{is_rbf_withdrawal_enabled, is_running_in_test_env};
+use fedimint_core::envs::{is_rbf_withdrawal_enabled, is_running_in_test_env, BitcoinRpcConfig};
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::{
-    api_endpoint, ApiEndpoint, ApiVersion, CoreConsensusVersion, InputMeta, ModuleConsensusVersion,
-    ModuleInit, PeerHandle, ServerModuleInit, ServerModuleInitArgs, SupportedModuleApiVersions,
-    TransactionItemAmount, CORE_CONSENSUS_VERSION,
+    api_endpoint, ApiEndpoint, ApiError, ApiVersion, CoreConsensusVersion, InputMeta,
+    ModuleConsensusVersion, ModuleInit, PeerHandle, ServerModuleInit, ServerModuleInitArgs,
+    SupportedModuleApiVersions, TransactionItemAmount, CORE_CONSENSUS_VERSION,
 };
 use fedimint_core::server::DynServerModule;
 #[cfg(not(target_family = "wasm"))]
@@ -61,10 +61,12 @@ use fedimint_core::{
 };
 use fedimint_logging::LOG_MODULE_WALLET;
 use fedimint_server::config::distributedgen::PeerHandleOps;
+use fedimint_server::net::api::check_auth;
 pub use fedimint_wallet_common as common;
 use fedimint_wallet_common::config::{WalletClientConfig, WalletConfig, WalletGenParams};
 use fedimint_wallet_common::endpoint_constants::{
-    BLOCK_COUNT_ENDPOINT, BLOCK_COUNT_LOCAL_ENDPOINT, PEG_OUT_FEES_ENDPOINT,
+    BITCOIN_KIND_ENDPOINT, BITCOIN_RPC_CONFIG_ENDPOINT, BLOCK_COUNT_ENDPOINT,
+    BLOCK_COUNT_LOCAL_ENDPOINT, PEG_OUT_FEES_ENDPOINT,
 };
 use fedimint_wallet_common::keys::CompressedPublicKey;
 use fedimint_wallet_common::tweakable::Tweakable;
@@ -718,6 +720,31 @@ impl ServerModule for Wallet {
                         }
                         Ok(tx) => Ok(Some(tx.fees))
                     }
+                }
+            },
+            api_endpoint! {
+                BITCOIN_KIND_ENDPOINT,
+                ApiVersion::new(0, 1),
+                async |module: &Wallet, _context, _params: ()| -> String {
+                    Ok(module.btc_rpc.get_bitcoin_rpc_config().kind)
+                }
+            },
+            api_endpoint! {
+                BITCOIN_RPC_CONFIG_ENDPOINT,
+                ApiVersion::new(0, 1),
+                async |module: &Wallet, context, _params: ()| -> BitcoinRpcConfig {
+                    check_auth(context)?;
+                    let config = module.btc_rpc.get_bitcoin_rpc_config();
+
+                    // we need to remove auth, otherwise we'll send over the wire
+                    let without_auth = config.url.clone().without_auth().map_err(|_| {
+                        ApiError::server_error("Unable to remove auth from bitcoin config URL".to_string())
+                    })?;
+
+                    Ok(BitcoinRpcConfig {
+                        url: without_auth,
+                        ..config
+                    })
                 }
             },
         ]

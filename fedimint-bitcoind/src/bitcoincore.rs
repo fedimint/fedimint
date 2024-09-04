@@ -7,7 +7,7 @@ use bitcoin::{BlockHash, Network, ScriptBuf, Transaction, Txid};
 use bitcoincore_rpc::bitcoincore_rpc_json::EstimateMode;
 use bitcoincore_rpc::{Auth, RpcApi};
 use fedimint_core::encoding::Decodable;
-use fedimint_core::envs::FM_BITCOIND_COOKIE_FILE_ENV;
+use fedimint_core::envs::{BitcoinRpcConfig, FM_BITCOIND_COOKIE_FILE_ENV};
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::runtime::block_in_place;
 use fedimint_core::task::TaskHandle;
@@ -33,19 +33,26 @@ impl IBitcoindRpcFactory for BitcoindFactory {
 }
 
 #[derive(Debug)]
-struct BitcoinClient(::bitcoincore_rpc::Client);
+struct BitcoinClient {
+    client: ::bitcoincore_rpc::Client,
+    url: SafeUrl,
+}
 
 impl BitcoinClient {
     fn new(url: &SafeUrl) -> anyhow::Result<Self> {
+        let safe_url = url.clone();
         let (url, auth) = from_url_to_url_auth(url)?;
-        Ok(Self(::bitcoincore_rpc::Client::new(&url, auth)?))
+        Ok(Self {
+            client: ::bitcoincore_rpc::Client::new(&url, auth)?,
+            url: safe_url,
+        })
     }
 }
 
 #[apply(async_trait_maybe_send!)]
 impl IBitcoindRpc for BitcoinClient {
     async fn get_network(&self) -> anyhow::Result<Network> {
-        let network = block_in_place(|| self.0.get_blockchain_info())?;
+        let network = block_in_place(|| self.client.get_blockchain_info())?;
         Ok(match network.chain.as_str() {
             "main" => Network::Bitcoin,
             "test" => Network::Testnet,
@@ -57,18 +64,18 @@ impl IBitcoindRpc for BitcoinClient {
 
     async fn get_block_count(&self) -> anyhow::Result<u64> {
         // The RPC function is confusingly named and actually returns the block height
-        block_in_place(|| self.0.get_block_count())
+        block_in_place(|| self.client.get_block_count())
             .map(|height| height + 1)
             .map_err(anyhow::Error::from)
     }
 
     async fn get_block_hash(&self, height: u64) -> anyhow::Result<BlockHash> {
-        block_in_place(|| self.0.get_block_hash(height)).map_err(anyhow::Error::from)
+        block_in_place(|| self.client.get_block_hash(height)).map_err(anyhow::Error::from)
     }
 
     async fn get_fee_rate(&self, confirmation_target: u16) -> anyhow::Result<Option<Feerate>> {
         let fee = block_in_place(|| {
-            self.0
+            self.client
                 .estimate_smart_fee(confirmation_target, Some(EstimateMode::Conservative))
         });
         Ok(fee?.fee_rate.map(|per_kb| Feerate {
@@ -79,7 +86,7 @@ impl IBitcoindRpc for BitcoinClient {
     async fn submit_transaction(&self, transaction: Transaction) {
         use bitcoincore_rpc::jsonrpc::Error::Rpc;
         use bitcoincore_rpc::Error::JsonRpc;
-        match block_in_place(|| self.0.send_raw_transaction(&transaction)) {
+        match block_in_place(|| self.client.send_raw_transaction(&transaction)) {
             // Bitcoin core's RPC will return error code -27 if a transaction is already in a block.
             // This is considered a success case, so we don't surface the error log.
             //
@@ -91,11 +98,11 @@ impl IBitcoindRpc for BitcoinClient {
     }
 
     async fn get_tx_block_height(&self, txid: &Txid) -> anyhow::Result<Option<u64>> {
-        let info = block_in_place(|| self.0.get_raw_transaction_info(txid, None))
+        let info = block_in_place(|| self.client.get_raw_transaction_info(txid, None))
             .map_err(|error| info!(?error, "Unable to get raw transaction"));
         let height = match info.ok().and_then(|info| info.blockhash) {
             None => None,
-            Some(hash) => Some(block_in_place(|| self.0.get_block_header_info(&hash))?.height),
+            Some(hash) => Some(block_in_place(|| self.client.get_block_header_info(&hash))?.height),
         };
         Ok(height.map(|h| h as u64))
     }
@@ -106,7 +113,7 @@ impl IBitcoindRpc for BitcoinClient {
         block_hash: &BlockHash,
         block_height: u64,
     ) -> anyhow::Result<bool> {
-        let block_info = block_in_place(|| self.0.get_block_info(block_hash))?;
+        let block_info = block_in_place(|| self.client.get_block_info(block_hash))?;
         anyhow::ensure!(
             block_info.height as u64 == block_height,
             "Block height for block hash does not match expected height"
@@ -119,7 +126,7 @@ impl IBitcoindRpc for BitcoinClient {
         // start watching for this script in our wallet to avoid the need to rescan the
         // blockchain, labeling it so we can reference it later
         block_in_place(|| {
-            self.0
+            self.client
                 .import_address_script(script, Some(&script.to_string()), Some(false), None)
         })?;
 
@@ -129,11 +136,11 @@ impl IBitcoindRpc for BitcoinClient {
     async fn get_script_history(&self, script: &ScriptBuf) -> anyhow::Result<Vec<Transaction>> {
         let mut results = vec![];
         let list = block_in_place(|| {
-            self.0
+            self.client
                 .list_transactions(Some(&script.to_string()), None, None, Some(true))
         })?;
         for tx in list {
-            let raw_tx = block_in_place(|| self.0.get_raw_transaction(&tx.info.txid, None))?;
+            let raw_tx = block_in_place(|| self.client.get_raw_transaction(&tx.info.txid, None))?;
             results.push(raw_tx);
         }
         Ok(results)
@@ -141,10 +148,19 @@ impl IBitcoindRpc for BitcoinClient {
 
     async fn get_txout_proof(&self, txid: Txid) -> anyhow::Result<TxOutProof> {
         TxOutProof::consensus_decode(
-            &mut Cursor::new(block_in_place(|| self.0.get_tx_out_proof(&[txid], None))?),
+            &mut Cursor::new(block_in_place(|| {
+                self.client.get_tx_out_proof(&[txid], None)
+            })?),
             &ModuleDecoderRegistry::default(),
         )
         .map_err(|error| format_err!("Could not decode tx: {}", error))
+    }
+
+    fn get_bitcoin_rpc_config(&self) -> BitcoinRpcConfig {
+        BitcoinRpcConfig {
+            kind: "bitcoind".to_string(),
+            url: self.url.clone(),
+        }
     }
 }
 
