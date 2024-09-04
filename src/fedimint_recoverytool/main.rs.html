@@ -638,7 +638,7 @@
                         </span><span class="kw">let </span>(<span class="kw-2">mut </span>peg_in_tweaks, peg_out_count) =
                             input_tweaks_and_peg_out_count(transaction_cis.into_iter());
 
-                        <span class="kw">for _ in </span><span class="number">0</span>..=peg_out_count {
+                        <span class="kw">for _ in </span><span class="number">0</span>..peg_out_count {
                             <span class="macro">info!</span>(<span class="string">"Found change output, adding tweak {change_tweak_idx} to list"</span>);
                             peg_in_tweaks.insert(nonce_from_idx(change_tweak_idx));
                             change_tweak_idx += <span class="number">1</span>;
