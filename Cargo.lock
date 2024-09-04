@@ -2138,16 +2138,20 @@ version = "0.5.0-alpha"
 dependencies = [
  "anyhow",
  "async-stream",
+ "async-trait",
  "fedimint-api-client",
  "fedimint-client",
  "fedimint-core",
  "fedimint-ln-client",
  "fedimint-mint-client",
  "futures",
+ "imbl 2.0.3",
  "js-sys",
+ "rexie",
  "serde_json",
  "wasm-bindgen",
  "wasm-bindgen-futures",
+ "wasm-bindgen-test",
 ]
 
 [[package]]
@@ -2177,7 +2181,7 @@ dependencies = [
  "getrandom",
  "gloo-timers 0.3.0",
  "hex",
- "imbl",
+ "imbl 3.0.0",
  "itertools 0.13.0",
  "js-sys",
  "jsonrpsee-core",
@@ -4211,6 +4215,19 @@ dependencies = [
 
 [[package]]
 name = "imbl"
+version = "2.0.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "978d142c8028edf52095703af2fad11d6f611af1246685725d6b850634647085"
+dependencies = [
+ "bitmaps",
+ "imbl-sized-chunks",
+ "rand_core",
+ "rand_xoshiro",
+ "version_check",
+]
+
+[[package]]
+name = "imbl"
 version = "3.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bc3be8d8cd36f33a46b1849f31f837c44d9fa87223baee3b4bd96b8f11df81eb"
@@ -4609,7 +4626,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0c2a198fb6b0eada2a8df47933734e6d35d350665a33a3593d7164fa52c75c19"
 dependencies = [
  "cfg-if",
- "windows-targets 0.48.5",
+ "windows-targets 0.52.6",
 ]
 
 [[package]]
@@ -6082,6 +6099,21 @@ name = "retry-error"
 version = "0.5.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b960f1dc847b9e4383ca73b4e8002f725b2f562addb9ade88a6ba109b305e96d"
+
+[[package]]
+name = "rexie"
+version = "0.4.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fef172ff9cdf146cdc934e28cdeb137517bf954fb75e6ee8987dd44b58f351b1"
+dependencies = [
+ "console_error_panic_hook",
+ "js-sys",
+ "num-traits",
+ "thiserror",
+ "tokio",
+ "wasm-bindgen",
+ "web-sys",
+]
 
 [[package]]
 name = "rfc6979"
