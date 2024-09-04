@@ -30,7 +30,6 @@ async-stream = { workspace = true }
 async-trait = { workspace = true }
 base64 = { workspace = true }
 base64-url = { workspace = true }
-bincode = { workspace = true }
 bitcoin_hashes = { workspace = true }
 bls12_381 = { workspace = true }
 clap = { workspace = true }

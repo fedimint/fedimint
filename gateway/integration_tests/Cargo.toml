@@ -20,7 +20,6 @@ devimint = { workspace = true }
 fedimint-core = { workspace = true }
 fedimint-testing = { workspace = true }
 ln-gateway = { workspace = true }
-semver = { workspace = true }
 serde_json = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }

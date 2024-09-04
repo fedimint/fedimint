@@ -19,7 +19,6 @@ path = "src/main.rs"
 anyhow = { workspace = true }
 bitcoin = { workspace = true }
 clap = { workspace = true }
-fedimint-aead = { workspace = true }
 fedimint-core = { workspace = true }
 fedimint-logging = { workspace = true }
 fedimint-rocksdb = { workspace = true }
@@ -33,7 +32,6 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }
 tracing = { workspace = true }
-tracing-subscriber = { workspace = true }
 
 [dev-dependencies]
 rand = { workspace = true }

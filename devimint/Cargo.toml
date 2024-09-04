@@ -16,14 +16,12 @@ bitcoincore-rpc = { workspace = true }
 clap = { workspace = true }
 cln-rpc = { workspace = true }
 esplora-client = { workspace = true }
-fedimint-aead = { workspace = true }
 fedimint-api-client = { workspace = true }
 fedimint-bitcoind = { workspace = true }
 fedimint-client = { workspace = true }
 fedimint-core = { workspace = true }
 fedimint-ln-client = { workspace = true, features = ["cli"] }
 fedimint-ln-server = { workspace = true }
-fedimint-lnv2-client = { workspace = true, features = ["cli"] }
 fedimint-lnv2-common = { workspace = true }
 fedimint-lnv2-server = { workspace = true }
 fedimint-logging = { workspace = true }
@@ -50,8 +48,6 @@ tokio = { workspace = true, features = ["full", "tracing"] }
 tonic_lnd = { workspace = true }
 tower-http = { version = "0.5.2", features = ["cors", "auth"] }
 tracing = { workspace = true }
-tracing-subscriber = { workspace = true }
-url = { workspace = true }
 
 [build-dependencies]
 fedimint-build = { workspace = true }

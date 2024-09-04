@@ -82,16 +82,11 @@ assert_matches = { workspace = true }
 fedimint-dummy-client = { workspace = true }
 fedimint-dummy-common = { workspace = true }
 fedimint-dummy-server = { workspace = true }
-fedimint-ln-client = { workspace = true }
-fedimint-ln-common = { workspace = true }
 fedimint-ln-server = { workspace = true }
 fedimint-lnv2-server = { workspace = true }
-fedimint-mint-client = { workspace = true }
 fedimint-testing = { workspace = true }
 fedimint-unknown-common = { workspace = true }
 fedimint-unknown-server = { workspace = true }
-fedimint-wallet-client = { workspace = true }
-threshold_crypto = { workspace = true }
 
 [build-dependencies]
 fedimint-build = { workspace = true }

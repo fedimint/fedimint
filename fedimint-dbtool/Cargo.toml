@@ -23,7 +23,6 @@ anyhow = { workspace = true }
 bytes = { workspace = true }
 clap = { workspace = true }
 erased-serde = { workspace = true }
-fedimint-aead = { workspace = true }
 fedimint-client = { workspace = true }
 fedimint-core = { workspace = true }
 fedimint-ln-client = { workspace = true }
@@ -45,7 +44,6 @@ ln-gateway = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 strum = { workspace = true }
-strum_macros = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }
 

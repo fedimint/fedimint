@@ -52,6 +52,3 @@ tracing-test = "0.2.5"
 
 [build-dependencies]
 fedimint-build = { workspace = true }
-
-[target.'cfg(target_family = "wasm")'.dependencies]
-ring = { workspace = true, features = ["wasm32_unknown_unknown_js"] }

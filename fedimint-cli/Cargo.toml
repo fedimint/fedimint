@@ -26,7 +26,6 @@ path = "src/lib.rs"
 [dependencies]
 anyhow = { workspace = true }
 async-trait = { workspace = true }
-base64 = { workspace = true }
 bip39 = { version = "2.0.0", features = ["rand"] }
 bitcoin = { workspace = true }
 clap = { workspace = true }
@@ -37,13 +36,10 @@ fedimint-bip39 = { workspace = true }
 fedimint-client = { path = "../fedimint-client", version = "=0.5.0-alpha", default-features = false }
 fedimint-core = { workspace = true }
 fedimint-ln-client = { workspace = true, features = ["cli"] }
-fedimint-ln-common = { workspace = true }
 fedimint-lnv2-client = { workspace = true, features = ["cli"] }
 fedimint-logging = { workspace = true }
 fedimint-meta-client = { workspace = true, features = ["cli"] }
-fedimint-meta-common = { workspace = true }
 fedimint-mint-client = { workspace = true }
-fedimint-mint-common = { workspace = true }
 fedimint-rocksdb = { workspace = true }
 fedimint-wallet-client = { workspace = true, features = ["cli"] }
 fs-lock = { workspace = true }
@@ -52,15 +48,12 @@ hex = { workspace = true }
 itertools = { workspace = true }
 lightning-invoice = { workspace = true }
 rand = { workspace = true }
-reqwest = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
 time = { version = "0.3.36", features = ["formatting"] }
 tokio = { workspace = true, features = ["full", "tracing"] }
 tracing = { workspace = true }
-tracing-subscriber = { workspace = true }
-url = { workspace = true, features = ["serde"] }
 
 [build-dependencies]
 fedimint-build = { workspace = true }
