@@ -134,11 +134,11 @@ impl ClientModule for GatewayClientModuleV2 {
     }
 
     fn input_fee(&self, _input: &<Self::Common as ModuleCommon>::Input) -> Option<Amount> {
-        Some(self.cfg.fee_consensus.input)
+        Some(self.cfg.fee_consensus.spend_contract)
     }
 
     fn output_fee(&self, _output: &<Self::Common as ModuleCommon>::Output) -> Option<Amount> {
-        Some(self.cfg.fee_consensus.output)
+        Some(self.cfg.fee_consensus.create_contract)
     }
 }
 
