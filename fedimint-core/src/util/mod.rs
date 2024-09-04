@@ -17,6 +17,7 @@ use anyhow::format_err;
 use fedimint_logging::LOG_CORE;
 use futures::StreamExt;
 use serde::Serialize;
+use thiserror::Error;
 use tokio::io::AsyncWriteExt;
 use tracing::{debug, warn, Instrument, Span};
 use url::{Host, ParseError, Url};
@@ -81,6 +82,12 @@ where
 // nosemgrep: ban-raw-url
 pub struct SafeUrl(Url);
 
+#[derive(Debug, Error)]
+pub enum SafeUrlError {
+    #[error("Failed to remove auth from URL")]
+    WithoutAuthError,
+}
+
 impl SafeUrl {
     pub fn parse(url_str: &str) -> Result<Self, ParseError> {
         let s = Url::parse(url_str).map(SafeUrl)?;
@@ -105,6 +112,14 @@ impl SafeUrl {
     #[allow(clippy::result_unit_err)] // just copying `url`'s API here
     pub fn set_password(&mut self, password: Option<&str>) -> Result<(), ()> {
         self.0.set_password(password)
+    }
+
+    pub fn without_auth(&self) -> Result<Self, SafeUrlError> {
+        let mut url = self.clone();
+        url.set_username("")
+            .and_then(|()| url.set_password(None))
+            .map_err(|()| SafeUrlError::WithoutAuthError)?;
+        Ok(url)
     }
 
     pub fn host(&self) -> Option<Host<&str>> {
@@ -471,30 +486,37 @@ mod tests {
                 "http://1.2.3.4:80/foo",
                 "http://1.2.3.4/foo",
                 "SafeUrl(http://1.2.3.4/foo)",
+                "http://1.2.3.4/foo",
             ),
             (
                 "http://1.2.3.4:81/foo",
                 "http://1.2.3.4:81/foo",
                 "SafeUrl(http://1.2.3.4:81/foo)",
+                "http://1.2.3.4:81/foo",
             ),
             (
                 "fedimint://1.2.3.4:1000/foo",
                 "fedimint://1.2.3.4:1000/foo",
                 "SafeUrl(fedimint://1.2.3.4:1000/foo)",
+                "fedimint://1.2.3.4:1000/foo",
             ),
             (
                 "fedimint://foo:bar@domain.com:1000/foo",
                 "fedimint://REDACTEDUSER:REDACTEDPASS@domain.com:1000/foo",
                 "SafeUrl(fedimint://REDACTEDUSER:REDACTEDPASS@domain.com:1000/foo)",
+                "fedimint://domain.com:1000/foo",
             ),
             (
                 "fedimint://foo@1.2.3.4:1000/foo",
                 "fedimint://REDACTEDUSER@1.2.3.4:1000/foo",
                 "SafeUrl(fedimint://REDACTEDUSER@1.2.3.4:1000/foo)",
+                "fedimint://1.2.3.4:1000/foo",
             ),
         ];
 
-        for (url_str, safe_display_expected, safe_debug_expected) in test_cases {
+        for (url_str, safe_display_expected, safe_debug_expected, without_auth_expected) in
+            test_cases
+        {
             let safe_url = SafeUrl::parse(url_str).unwrap();
 
             let safe_display = format!("{safe_url}");
@@ -507,6 +529,13 @@ mod tests {
             assert_eq!(
                 safe_debug, safe_debug_expected,
                 "Debug implementation out of spec"
+            );
+
+            let without_auth = safe_url.without_auth().unwrap();
+            assert_eq!(
+                without_auth.as_str(),
+                without_auth_expected,
+                "Without auth implementation out of spec"
             );
         }
 
