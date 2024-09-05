@@ -45,10 +45,7 @@ tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 
 [target.'cfg(not(target_family = "wasm"))'.dependencies]
-fedimint-bitcoind = { workspace = true, default-features = false, features = [
-    "esplora-client",
-    "bitcoincore-rpc",
-] }
+fedimint-bitcoind = { workspace = true }
 tokio = { workspace = true }
 
 [target.'cfg(target_family = "wasm")'.dependencies]
