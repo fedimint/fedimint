@@ -610,6 +610,9 @@ rec {
           pkgs.coreutils
           pkgs.sqlite
           pkgs.fakeNss
+          pkgs.busybox
+          pkgs.curl
+          pkgs.rsync
         ];
         config = {
           Cmd = [ ]; # entrypoint will handle empty vs non-empty cmd
@@ -632,7 +635,7 @@ rec {
 
       fedimint-cli = pkgs.dockerTools.buildLayeredImage {
         name = "fedimint-cli";
-        contents = [ fedimint-pkgs pkgs.bash pkgs.coreutils pkgs.sqlite pkgs.fakeNss ];
+        contents = [ fedimint-pkgs pkgs.bash pkgs.coreutils pkgs.sqlite pkgs.fakeNss pkgs.busybox pkgs.curl pkgs.rsync ];
         config = {
           Cmd = [
             "${fedimint-pkgs}/bin/fedimint-cli"
@@ -642,7 +645,7 @@ rec {
 
       gatewayd = pkgs.dockerTools.buildLayeredImage {
         name = "gatewayd";
-        contents = [ gateway-pkgs pkgs.bash pkgs.coreutils pkgs.sqlite pkgs.fakeNss ];
+        contents = [ gateway-pkgs pkgs.bash pkgs.coreutils pkgs.sqlite pkgs.fakeNss pkgs.busybox pkgs.curl pkgs.rsync ];
         config = {
           Cmd = [
             "${gateway-pkgs}/bin/gatewayd"
@@ -652,7 +655,7 @@ rec {
 
       gateway-cli = pkgs.dockerTools.buildLayeredImage {
         name = "gateway-cli";
-        contents = [ gateway-pkgs pkgs.bash pkgs.coreutils pkgs.sqlite pkgs.fakeNss ];
+        contents = [ gateway-pkgs pkgs.bash pkgs.coreutils pkgs.sqlite pkgs.fakeNss pkgs.busybox pkgs.curl pkgs.rsync ];
         config = {
           Cmd = [
             "${gateway-pkgs}/bin/gateway-cli"
@@ -672,6 +675,9 @@ rec {
               pkgs.bash
               pkgs.coreutils
               pkgs.sqlite
+              pkgs.busybox
+              pkgs.curl
+              pkgs.rsync
             ];
             config = {
               Cmd = [
