@@ -1,3 +1,0 @@
-(function() {var implementors = {
-"fedimint_client_wasm":[["impl <a class=\"trait\" href=\"https://docs.rs/wasm-bindgen/0.2/wasm_bindgen/convert/traits/trait.LongRefFromWasmAbi.html\" title=\"trait wasm_bindgen::convert::traits::LongRefFromWasmAbi\">LongRefFromWasmAbi</a> for <a class=\"struct\" href=\"fedimint_client_wasm/struct.WasmClient.html\" title=\"struct fedimint_client_wasm::WasmClient\">WasmClient</a>"]]
-};if (window.register_implementors) {window.register_implementors(implementors);} else {window.pending_implementors = implementors;}})()

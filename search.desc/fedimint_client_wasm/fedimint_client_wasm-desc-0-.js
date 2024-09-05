@@ -1,1 +1,1 @@
-searchState.loadedDescShard("fedimint_client_wasm", 0, "Returns the argument unchanged.\nCalls <code>U::from(self)</code>.\nOpen a fedimint client by join a federation.\nOpen fedimint client with already joined federation.\nCall a fedimint client rpc the responses are returned …")
+searchState.loadedDescShard("fedimint_client_wasm", 0, "")

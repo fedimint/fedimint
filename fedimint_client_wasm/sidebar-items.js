@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"struct":["WasmClient"]};
+window.SIDEBAR_ITEMS = {};
