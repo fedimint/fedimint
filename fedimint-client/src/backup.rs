@@ -18,6 +18,7 @@ use serde::{Deserialize, Serialize};
 use tracing::{debug, info, warn};
 
 use super::Client;
+use crate::db::event_log::{Event, EventKind};
 use crate::db::LastBackupKey;
 use crate::get_decoded_client_secret;
 use crate::module::recovery::DynModuleBackup;
@@ -242,6 +243,15 @@ impl EncryptedClientBackup {
     }
 }
 
+#[derive(Serialize, Deserialize)]
+pub struct EventBackupDone;
+
+impl Event for EventBackupDone {
+    const MODULE: Option<fedimint_core::core::ModuleKind> = None;
+
+    const KIND: EventKind = EventKind::from_static("backup-done");
+}
+
 impl Client {
     /// Create a backup, include provided `metadata`
     pub async fn create_backup(&self, metadata: Metadata) -> anyhow::Result<ClientBackup> {
@@ -296,6 +306,8 @@ impl Client {
         self.store_last_backup(&new_backup).await;
 
         self.upload_backup(&encrypted).await?;
+
+        self.log_event(None, EventBackupDone).await;
 
         Ok(())
     }

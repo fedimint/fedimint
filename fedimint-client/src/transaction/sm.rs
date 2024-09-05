@@ -11,7 +11,7 @@ use fedimint_logging::LOG_CLIENT_NET_API;
 use tracing::warn;
 
 use crate::sm::{Context, DynContext, OperationState, State, StateTransition};
-use crate::{DynGlobalClientContext, DynState};
+use crate::{DynGlobalClientContext, DynState, TxAcceptedEvent, TxRejectedEvent};
 
 // TODO: how to prevent collisions? Generally reserve some range for custom IDs?
 /// Reserved module instance id used for client-internal state machines
@@ -79,13 +79,39 @@ impl State for TxSubmissionStates {
                 vec![
                     StateTransition::new(
                         Self::trigger_created_rejected(transaction.clone(), global_context.clone()),
-                        move |_, error, _| {
-                            Box::pin(async move { TxSubmissionStates::Rejected(txid, error) })
+                        {
+                            let global_context = global_context.clone();
+                            move |sm_dbtx, error, _| {
+                                let global_context = global_context.clone();
+                                Box::pin(async move {
+                                    global_context
+                                        .log_event(
+                                            sm_dbtx,
+                                            TxRejectedEvent {
+                                                txid,
+                                                error: error.clone(),
+                                            },
+                                        )
+                                        .await;
+                                    TxSubmissionStates::Rejected(txid, error)
+                                })
+                            }
                         },
                     ),
                     StateTransition::new(
                         Self::trigger_created_accepted(txid, global_context.clone()),
-                        move |_, (), _| Box::pin(async move { TxSubmissionStates::Accepted(txid) }),
+                        {
+                            let global_context = global_context.clone();
+                            move |sm_dbtx, (), _| {
+                                let global_context = global_context.clone();
+                                Box::pin(async move {
+                                    global_context
+                                        .log_event(sm_dbtx, TxAcceptedEvent { txid })
+                                        .await;
+                                    TxSubmissionStates::Accepted(txid)
+                                })
+                            }
+                        },
                     ),
                 ]
             }

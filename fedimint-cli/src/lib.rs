@@ -36,6 +36,7 @@ use fedimint_api_client::api::{
     DynGlobalApi, FederationApiExt, FederationError, IRawFederationApi, WsFederationApi,
 };
 use fedimint_bip39::Bip39RootSecretStrategy;
+use fedimint_client::db::event_log::EventLogId;
 use fedimint_client::meta::{FetchKind, LegacyMetaSource, MetaSource};
 use fedimint_client::module::init::{ClientModuleInit, ClientModuleInitRegistry};
 use fedimint_client::secret::{get_default_client_secret, RootSecretStrategy};
@@ -568,6 +569,13 @@ Examples:
     PeerVersion {
         #[clap(long)]
         peer_id: u16,
+    },
+    /// Dump Client Event Log
+    ShowEventLog {
+        #[arg(long)]
+        pos: Option<EventLogId>,
+        #[arg(long, default_value = "10")]
+        limit: u64,
     },
 }
 
@@ -1156,6 +1164,31 @@ impl FedimintCli {
                     .map_err_cli()?;
 
                 Ok(CliOutput::Raw(json!({ "version": version })))
+            }
+            Command::Dev(DevCmd::ShowEventLog { pos, limit }) => {
+                let client = self.client_open(&cli).await?;
+
+                let events: Vec<_> = client
+                    .get_event_log(pos, limit)
+                    .await
+                    .into_iter()
+                    .map(|v| {
+                        let module_id = v.2.as_ref().map(|m| m.1);
+                        let module_kind = v.2.map(|m| m.0);
+                        serde_json::json!({
+                            "id": v.0,
+                            "kind": v.1,
+                            "module_kind": module_kind,
+                            "module_id": module_id,
+                            "ts": v.3,
+                            "payload": v.4
+                        })
+                    })
+                    .collect();
+
+                Ok(CliOutput::Raw(
+                    serde_json::to_value(events).expect("Can be encoded"),
+                ))
             }
             Command::Completion { shell } => {
                 clap_complete::generate(

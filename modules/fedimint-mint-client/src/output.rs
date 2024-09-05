@@ -5,6 +5,7 @@ use std::time::Duration;
 use anyhow::{anyhow, bail};
 use fedimint_api_client::api::{deserialize_outcome, FederationApiExt, SerdeOutputOutcome};
 use fedimint_api_client::query::FilterMapThreshold;
+use fedimint_client::module::ClientContext;
 use fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
 use fedimint_client::DynGlobalClientContext;
 use fedimint_core::core::{Decoder, OperationId};
@@ -27,7 +28,8 @@ use tbs::{
 use tracing::{debug, error};
 
 use crate::client_db::NoteKey;
-use crate::{MintClientContext, SpendableNote};
+use crate::event::NoteCreated;
+use crate::{MintClientContext, MintClientModule, SpendableNote};
 
 const RETRY_DELAY: Duration = Duration::from_secs(1);
 
@@ -121,6 +123,7 @@ impl MintOutputStatesCreated {
         common: MintOutputCommon,
     ) -> Vec<StateTransition<MintOutputStateMachine>> {
         let tbs_pks = context.tbs_pks.clone();
+        let client_ctx = context.client_ctx.clone();
 
         vec![
             // Check if transaction was rejected
@@ -140,6 +143,7 @@ impl MintOutputStatesCreated {
                 ),
                 move |dbtx, blinded_signature_shares, old_state| {
                     Box::pin(Self::transition_outcome_ready(
+                        client_ctx.clone(),
                         dbtx,
                         blinded_signature_shares,
                         old_state,
@@ -208,6 +212,7 @@ impl MintOutputStatesCreated {
     }
 
     async fn transition_outcome_ready(
+        client_ctx: ClientContext<MintClientModule>,
         dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
         blinded_signature_shares: BTreeMap<PeerId, BlindedSignatureShare>,
         old_state: MintOutputStateMachine,
@@ -250,6 +255,15 @@ impl MintOutputStatesCreated {
         assert!(spendable_note.note().verify(*amount_key));
 
         debug!(target: LOG_CLIENT_MODULE_MINT, amount = %created.amount, note=%spendable_note, "Adding new note from transaction output");
+
+        client_ctx
+            .log_event(
+                &mut dbtx.module_tx(),
+                NoteCreated {
+                    nonce: spendable_note.nonce(),
+                },
+            )
+            .await;
         if let Some(note) = dbtx
             .module_tx()
             .insert_entry(

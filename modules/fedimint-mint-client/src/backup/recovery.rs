@@ -22,6 +22,7 @@ use tracing::{debug, info, trace, warn};
 use super::EcashBackup;
 use crate::backup::EcashBackupV0;
 use crate::client_db::{NextECashNoteIndexKey, NoteKey, RecoveryFinalizedKey, RecoveryStateKey};
+use crate::event::NoteCreated;
 use crate::output::{
     MintOutputCommon, MintOutputStateMachine, MintOutputStatesCreated, NoteIssuanceRequest,
 };
@@ -164,6 +165,14 @@ impl RecoveryFromHistory for MintRecovery {
                 nonce: note.nonce(),
             };
             debug!(target: LOG_CLIENT_MODULE_MINT, %amount, %note, "Restoring note");
+            self.client_ctx
+                .log_event(
+                    dbtx,
+                    NoteCreated {
+                        nonce: note.nonce(),
+                    },
+                )
+                .await;
             dbtx.insert_new_entry(&key, &note.to_undecoded()).await;
         }
 
