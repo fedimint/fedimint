@@ -19,6 +19,8 @@ mod oob;
 /// State machines for mint outputs
 pub mod output;
 
+pub mod event;
+
 use std::cmp::{min, Ordering};
 use std::collections::BTreeMap;
 use std::fmt;
@@ -34,6 +36,7 @@ use backup::recovery::MintRecovery;
 use base64::Engine as _;
 use bitcoin_hashes::{sha256, sha256t, Hash, HashEngine as BitcoinHashEngine};
 use client_db::{migrate_to_v1, DbKeyPrefix, NoteKeyPrefix, RecoveryFinalizedKey};
+use event::NoteSpent;
 use fedimint_client::db::ClientMigrationFn;
 use fedimint_client::module::init::{
     ClientModuleInit, ClientModuleInitArgs, ClientModuleRecoverArgs,
@@ -644,6 +647,7 @@ pub struct MintClientModule {
 // TODO: wrap in Arc
 #[derive(Debug, Clone)]
 pub struct MintClientContext {
+    pub client_ctx: ClientContext<MintClientModule>,
     pub mint_decoder: Decoder,
     pub tbs_pks: Tiered<AggregatePublicKey>,
     pub peer_tbs_pks: BTreeMap<PeerId, Tiered<tbs::PublicKeyShare>>,
@@ -677,6 +681,7 @@ impl ClientModule for MintClientModule {
 
     fn context(&self) -> Self::ModuleStateMachineContext {
         MintClientContext {
+            client_ctx: self.client_ctx.clone(),
             mint_decoder: self.decoder(),
             tbs_pks: self.cfg.tbs_pks.clone(),
             peer_tbs_pks: self.cfg.peer_tbs_pks.clone(),
@@ -945,7 +950,7 @@ impl MintClientModule {
 
         for (amount, note) in selected_notes.iter_items() {
             debug!(target: LOG_CLIENT_MODULE_MINT, %amount, %note, "Spending note as sufficient input to fund a tx");
-            MintClientModule::delete_spendable_note(dbtx, amount, note).await;
+            MintClientModule::delete_spendable_note(&self.client_ctx, dbtx, amount, note).await;
         }
 
         let inputs = self.create_input_from_notes(operation_id, selected_notes)?;
@@ -1167,7 +1172,8 @@ impl MintClientModule {
         for (amount, note) in selected_notes.iter_items() {
             let spendable_note_decoded = note.decode()?;
             debug!(target: LOG_CLIENT_MODULE_MINT, %amount, %note, "Consolidating note");
-            Self::delete_spendable_note(dbtx, amount, &spendable_note_decoded).await;
+            Self::delete_spendable_note(&self.client_ctx, dbtx, amount, &spendable_note_decoded)
+                .await;
             selected_notes_decoded.push((amount, spendable_note_decoded));
         }
 
@@ -1242,7 +1248,7 @@ impl MintClientModule {
 
         for (amount, note) in selected_notes.iter_items() {
             debug!(target: LOG_CLIENT_MODULE_MINT, %amount, %note, "Spending note as oob");
-            MintClientModule::delete_spendable_note(dbtx, amount, note).await;
+            MintClientModule::delete_spendable_note(&self.client_ctx, dbtx, amount, note).await;
         }
 
         let mut state_machines = Vec::new();
@@ -1736,10 +1742,19 @@ impl MintClientModule {
     }
 
     async fn delete_spendable_note(
+        client_ctx: &ClientContext<MintClientModule>,
         dbtx: &mut DatabaseTransaction<'_>,
         amount: Amount,
         note: &SpendableNote,
     ) {
+        client_ctx
+            .log_event(
+                dbtx,
+                NoteSpent {
+                    nonce: note.nonce(),
+                },
+            )
+            .await;
         dbtx.remove_entry(&NoteKey {
             amount,
             nonce: note.nonce(),
@@ -2051,7 +2066,7 @@ impl fmt::Display for SpendableNote {
 }
 
 impl SpendableNote {
-    fn nonce(&self) -> Nonce {
+    pub fn nonce(&self) -> Nonce {
         Nonce(self.spend_key.public_key())
     }
 
@@ -2061,6 +2076,7 @@ impl SpendableNote {
             signature: self.signature,
         }
     }
+
     pub fn to_undecoded(&self) -> SpendableNoteUndecoded {
         SpendableNoteUndecoded {
             signature: self
