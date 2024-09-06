@@ -2350,7 +2350,7 @@
             .first()
             .and_then(|rh| rh.<span class="number">0</span>.last())
             .map(|hop| (hop.src_node_id, hop.short_channel_id))
-            == <span class="prelude-val">Some</span>((gateway.node_pub_key, gateway.mint_channel_id))
+            == <span class="prelude-val">Some</span>((gateway.node_pub_key, gateway.federation_index))
     })
 }
 
@@ -3613,7 +3613,7 @@
         <span class="kw">let </span>(src_node_id, short_channel_id, route_hints) = <span class="kw">if let </span><span class="prelude-val">Some</span>(current_gateway) = gateway {
             (
                 current_gateway.node_pub_key,
-                current_gateway.mint_channel_id,
+                current_gateway.federation_index,
                 current_gateway.route_hints,
             )
         } <span class="kw">else </span>{

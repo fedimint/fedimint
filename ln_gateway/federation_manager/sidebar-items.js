@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"constant":["INITIAL_SCID"],"struct":["FederationManager"]};
+window.SIDEBAR_ITEMS = {"constant":["INITIAL_INDEX"],"struct":["FederationManager"]};

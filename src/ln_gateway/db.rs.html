@@ -570,6 +570,9 @@
 <a href="#570" id="570">570</a>
 <a href="#571" id="571">571</a>
 <a href="#572" id="572">572</a>
+<a href="#573" id="573">573</a>
+<a href="#574" id="574">574</a>
+<a href="#575" id="575">575</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 
 <span class="kw">use </span>bitcoin::Network;
@@ -839,7 +842,7 @@
 <span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Encodable, Decodable, Serialize, Deserialize)]
 </span><span class="kw">pub struct </span>FederationConfigV0 {
     <span class="kw">pub </span>invite_code: InviteCode,
-    <span class="kw">pub </span>mint_channel_id: u64,
+    <span class="kw">pub </span>federation_index: u64,
     <span class="kw">pub </span>timelock_delta: u64,
     <span class="attr">#[serde(with = <span class="string">"serde_routing_fees"</span>)]
     </span><span class="kw">pub </span>fees: RoutingFees,
@@ -853,7 +856,10 @@
 <span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Encodable, Decodable, Serialize, Deserialize)]
 </span><span class="kw">pub struct </span>FederationConfig {
     <span class="kw">pub </span>invite_code: InviteCode,
-    <span class="kw">pub </span>mint_channel_id: u64,
+    <span class="comment">// Unique integer identifier per-federation that is assigned when the gateways joins a
+    // federation.
+    </span><span class="attr">#[serde(alias = <span class="string">"mint_channel_id"</span>)]
+    </span><span class="kw">pub </span>federation_index: u64,
     <span class="kw">pub </span>timelock_delta: u64,
     <span class="attr">#[serde(with = <span class="string">"serde_routing_fees"</span>)]
     </span><span class="kw">pub </span>fees: RoutingFees,
@@ -981,7 +987,7 @@
         </span>{
             <span class="kw">let </span>new_federation_config = FederationConfig {
                 invite_code: old_federation_config.invite_code,
-                mint_channel_id: old_federation_config.mint_channel_id,
+                federation_index: old_federation_config.federation_index,
                 timelock_delta: old_federation_config.timelock_delta,
                 fees: old_federation_config.fees,
                 connector: Connector::default(),
@@ -1044,7 +1050,7 @@
         );
         <span class="kw">let </span>federation_config = FederationConfigV0 {
             invite_code,
-            mint_channel_id: <span class="number">2</span>,
+            federation_index: <span class="number">2</span>,
             timelock_delta: <span class="number">10</span>,
             fees: DEFAULT_FEES,
         };

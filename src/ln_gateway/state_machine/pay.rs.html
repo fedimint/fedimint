@@ -1553,7 +1553,7 @@
                         .federation_manager
                         .read()
                         .<span class="kw">await
-                        </span>.get_client_for_scid(hop.short_channel_id)
+                        </span>.get_client_for_index(hop.short_channel_id)
                 }
                 <span class="kw">_ </span>=&gt; <span class="prelude-val">None</span>,
             },

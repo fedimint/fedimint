@@ -879,7 +879,7 @@
 <span class="attr">#[derive(Debug, Clone)]
 </span><span class="kw">pub struct </span>GatewayClientInit {
     <span class="kw">pub </span>timelock_delta: u64,
-    <span class="kw">pub </span>mint_channel_id: u64,
+    <span class="kw">pub </span>federation_index: u64,
     <span class="kw">pub </span>gateway: Arc&lt;Gateway&gt;,
 }
 
@@ -915,7 +915,7 @@
                 .to_secp_key(<span class="kw-2">&amp;</span>Secp256k1::new()),
             module_api: args.module_api().clone(),
             timelock_delta: <span class="self">self</span>.timelock_delta,
-            mint_channel_id: <span class="self">self</span>.mint_channel_id,
+            federation_index: <span class="self">self</span>.federation_index,
             client_ctx: args.context(),
             gateway: <span class="self">self</span>.gateway.clone(),
         })
@@ -956,7 +956,7 @@
     <span class="kw">pub </span>notifier: ModuleNotifier&lt;GatewayClientStateMachines&gt;,
     <span class="kw">pub </span>redeem_key: KeyPair,
     timelock_delta: u64,
-    mint_channel_id: u64,
+    federation_index: u64,
     module_api: DynModuleApi,
     client_ctx: ClientContext&lt;<span class="self">Self</span>&gt;,
     gateway: Arc&lt;Gateway&gt;,
@@ -1010,7 +1010,7 @@
     ) -&gt; LightningGatewayAnnouncement {
         LightningGatewayAnnouncement {
             info: LightningGateway {
-                mint_channel_id: <span class="self">self</span>.mint_channel_id,
+                federation_index: <span class="self">self</span>.federation_index,
                 gateway_redeem_key: <span class="self">self</span>.redeem_key.public_key(),
                 node_pub_key: lightning_context.lightning_public_key,
                 lightning_alias: lightning_context.lightning_alias,

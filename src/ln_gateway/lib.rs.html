@@ -2009,6 +2009,11 @@
 <a href="#2009" id="2009">2009</a>
 <a href="#2010" id="2010">2010</a>
 <a href="#2011" id="2011">2011</a>
+<a href="#2012" id="2012">2012</a>
+<a href="#2013" id="2013">2013</a>
+<a href="#2014" id="2014">2014</a>
+<a href="#2015" id="2015">2015</a>
+<a href="#2016" id="2016">2016</a>
 </pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::cast_possible_wrap)]
@@ -2673,9 +2678,9 @@
     /// Returns `Ok` if the HTLC was handled, `Err` otherwise.
     </span><span class="kw">async fn </span>try_handle_htlc_ln_legacy(<span class="kw-2">&amp;</span><span class="self">self</span>, htlc_request: <span class="kw-2">&amp;</span>InterceptHtlcRequest) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
         <span class="comment">// Check if the HTLC corresponds to a federation supporting legacy Lightning.
-        </span><span class="kw">let </span><span class="prelude-val">Some</span>(short_channel_id) = htlc_request.short_channel_id <span class="kw">else </span>{
+        </span><span class="kw">let </span><span class="prelude-val">Some</span>(federation_index) = htlc_request.short_channel_id <span class="kw">else </span>{
             <span class="kw">return </span><span class="prelude-val">Err</span>(GatewayError::IncomingLNv1PaymentError(<span class="macro">anyhow::anyhow!</span>(
-                <span class="string">"Incoming payment has no last hop scid"
+                <span class="string">"Incoming payment has no last hop short channel id"
             </span>)));
         };
 
@@ -2685,10 +2690,10 @@
             </span>.federation_manager
             .read()
             .<span class="kw">await
-            </span>.get_client_for_scid(short_channel_id)
+            </span>.get_client_for_index(federation_index)
         <span class="kw">else </span>{
             <span class="kw">return </span><span class="prelude-val">Err</span>(GatewayError::IncomingLNv1PaymentError(<span class="macro">anyhow::anyhow!</span>(
-                <span class="string">"Incoming payment has a last hop scid that does not map to a known federation"
+                <span class="string">"Incoming payment has a last hop short channel id that does not map to a known federation"
             </span>)));
         };
 
@@ -2778,7 +2783,12 @@
 
         <span class="kw">let </span>channels: BTreeMap&lt;u64, FederationId&gt; = federations
             .iter()
-            .map(|federation_info| (federation_info.channel_id, federation_info.federation_id))
+            .map(|federation_info| {
+                (
+                    federation_info.federation_index,
+                    federation_info.federation_id,
+                )
+            })
             .collect();
 
         <span class="kw">let </span>node_info = lightning_context.lnrpc.parsed_node_info().<span class="kw">await</span><span class="question-mark">?</span>;
@@ -3064,13 +3074,13 @@
             .<span class="kw">await
             </span>.expect(<span class="string">"Gateway configuration should be set"</span>);
 
-        <span class="comment">// The gateway deterministically assigns a channel id (u64) to each federation
-        // connected.
-        </span><span class="kw">let </span>mint_channel_id = federation_manager.pop_next_scid()<span class="question-mark">?</span>;
+        <span class="comment">// The gateway deterministically assigns a unique identifier (u64) to each
+        // federation connected.
+        </span><span class="kw">let </span>federation_index = federation_manager.pop_next_index()<span class="question-mark">?</span>;
 
         <span class="kw">let </span>gw_client_cfg = FederationConfig {
             invite_code,
-            mint_channel_id,
+            federation_index,
             timelock_delta: <span class="number">10</span>,
             fees: gateway_config.routing_fees,
             connector,
@@ -3087,7 +3097,7 @@
         </span><span class="kw">let </span>federation_info = FederationInfo {
             federation_id,
             balance_msat: client.get_balance().<span class="kw">await</span>,
-            channel_id: mint_channel_id,
+            federation_index,
             routing_fees: <span class="prelude-val">Some</span>(gateway_config.routing_fees.into()),
         };
 
@@ -3106,7 +3116,7 @@
 
         <span class="comment">// no need to enter span earlier, because connect-fed has a span
         </span>federation_manager.add_client(
-            mint_channel_id,
+            federation_index,
             Spanned::new(
                 <span class="macro">info_span!</span>(<span class="string">"client"</span>, federation_id=%federation_id.clone()),
                 <span class="kw">async </span>{ client },
@@ -3119,7 +3129,7 @@
         dbtx.commit_tx_result()
             .<span class="kw">await
             </span>.map_err(GatewayError::DatabaseError)<span class="question-mark">?</span>;
-        <span class="macro">debug!</span>(<span class="string">"Federation with ID: {federation_id} connected and assigned channel id: {mint_channel_id}"</span>);
+        <span class="macro">debug!</span>(<span class="string">"Federation with ID: {federation_id} connected and assigned federation index: {federation_index}"</span>);
 
         <span class="prelude-val">Ok</span>(federation_info)
     }
@@ -3609,14 +3619,14 @@
             dbtx.load_federation_configs().<span class="kw">await
         </span>};
 
-        <span class="kw">if let </span><span class="prelude-val">Some</span>(max_mint_channel_id) = configs.values().map(|cfg| cfg.mint_channel_id).max() {
-            federation_manager.set_next_scid(max_mint_channel_id + <span class="number">1</span>);
+        <span class="kw">if let </span><span class="prelude-val">Some</span>(max_federation_index) = configs.values().map(|cfg| cfg.federation_index).max() {
+            federation_manager.set_next_index(max_federation_index + <span class="number">1</span>);
         }
 
         <span class="kw">let </span>mnemonic = <span class="self">self</span>.load_or_generate_mnemonic().<span class="kw">await</span><span class="question-mark">?</span>;
 
         <span class="kw">for </span>(federation_id, config) <span class="kw">in </span>configs {
-            <span class="kw">let </span>scid = config.mint_channel_id;
+            <span class="kw">let </span>federation_index = config.federation_index;
             <span class="kw">if let </span><span class="prelude-val">Ok</span>(client) = Box::pin(Spanned::try_new(
                 <span class="macro">info_span!</span>(<span class="string">"client"</span>, federation_id  = %federation_id.clone()),
                 <span class="self">self</span>.client_builder
@@ -3624,7 +3634,7 @@
             ))
             .<span class="kw">await
             </span>{
-                federation_manager.add_client(scid, client);
+                federation_manager.add_client(federation_index, client);
             } <span class="kw">else </span>{
                 <span class="macro">warn!</span>(<span class="string">"Failed to load client for federation: {federation_id}"</span>);
             }

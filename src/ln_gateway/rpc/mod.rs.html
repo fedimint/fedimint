@@ -320,7 +320,7 @@
 </span><span class="kw">pub struct </span>FederationInfo {
     <span class="kw">pub </span>federation_id: FederationId,
     <span class="kw">pub </span>balance_msat: Amount, <span class="comment">// TODO: Rename to `balance`, since `Amount` is already in msat.
-    </span><span class="kw">pub </span>channel_id: u64,
+    </span><span class="kw">pub </span>federation_index: u64,
     <span class="kw">pub </span>routing_fees: <span class="prelude-ty">Option</span>&lt;FederationRoutingFees&gt;,
 }
 

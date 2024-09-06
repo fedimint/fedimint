@@ -743,6 +743,7 @@
 <a href="#743" id="743">743</a>
 <a href="#744" id="744">744</a>
 <a href="#745" id="745">745</a>
+<a href="#746" id="746">746</a>
 </pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::doc_markdown)]
 #![allow(clippy::missing_errors_doc)]
@@ -1092,11 +1093,12 @@
 <span class="doccomment">/// Information a gateway registers with a federation
 </span><span class="attr">#[derive(Debug, Clone, Serialize, Deserialize, Encodable, Decodable, PartialEq, Eq, Hash)]
 </span><span class="kw">pub struct </span>LightningGateway {
-    <span class="doccomment">/// Channel identifier assigned to the mint by the gateway.
+    <span class="doccomment">/// Unique per-federation identifier assigned by the gateway.
     /// All clients in this federation should use this value as
     /// `short_channel_id` when creating invoices to be settled by this
     /// gateway.
-    </span><span class="kw">pub </span>mint_channel_id: u64,
+    </span><span class="attr">#[serde(rename = <span class="string">"mint_channel_id"</span>)]
+    </span><span class="kw">pub </span>federation_index: u64,
     <span class="doccomment">/// Key used to pay the gateway
     </span><span class="kw">pub </span>gateway_redeem_key: secp256k1::PublicKey,
     <span class="kw">pub </span>node_pub_key: secp256k1::PublicKey,

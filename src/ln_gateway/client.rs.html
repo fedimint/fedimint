@@ -215,7 +215,7 @@
         gateway: Arc&lt;Gateway&gt;,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;ClientBuilder&gt; {
         <span class="kw">let </span>FederationConfig {
-            mint_channel_id,
+            federation_index,
             timelock_delta,
             connector,
             ..
@@ -225,7 +225,7 @@
 
         registry.attach(GatewayClientInit {
             timelock_delta,
-            mint_channel_id,
+            federation_index,
             gateway: gateway.clone(),
         });
         registry.attach(GatewayClientInitV2 {
@@ -261,7 +261,7 @@
         } <span class="kw">else </span>{
             <span class="kw">let </span>db = gateway
                 .gateway_db
-                .with_prefix(config.mint_channel_id.to_le_bytes().to_vec());
+                .with_prefix(config.federation_index.to_le_bytes().to_vec());
             <span class="kw">let </span>secret = <span class="self">Self</span>::derive_federation_secret(mnemonic, <span class="kw-2">&amp;</span>federation_id);
             (db, secret)
         };

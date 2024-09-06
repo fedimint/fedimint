@@ -282,6 +282,7 @@
 <a href="#282" id="282">282</a>
 <a href="#283" id="283">283</a>
 <a href="#284" id="284">284</a>
+<a href="#285" id="285">285</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::sync::atomic::{AtomicU64, Ordering};
 <span class="kw">use </span>std::sync::Arc;
@@ -297,10 +298,10 @@
 <span class="kw">use </span><span class="kw">crate</span>::state_machine::GatewayClientModule;
 <span class="kw">use crate</span>::{GatewayError, <span class="prelude-ty">Result</span>};
 
-<span class="doccomment">/// The first SCID that the gateway will assign to a federation.
-/// Note: This starts at 1 because an SCID of 0 is considered invalid by LND's
-/// HTLC interceptor.
-</span><span class="kw">const </span>INITIAL_SCID: u64 = <span class="number">1</span>;
+<span class="doccomment">/// The first index that the gateway will assign to a federation.
+/// Note: This starts at 1 because LNv1 uses the `federation_index` as an SCID.
+/// An SCID of 0 is considered invalid by LND's HTLC interceptor.
+</span><span class="kw">const </span>INITIAL_INDEX: u64 = <span class="number">1</span>;
 
 <span class="comment">// TODO: Add support for client lookup by payment hash (for LNv2).
 </span><span class="attr">#[derive(Debug)]
@@ -309,22 +310,23 @@
     /// client while handling incoming HTLCs.
     </span>clients: BTreeMap&lt;FederationId, Spanned&lt;fedimint_client::ClientHandleArc&gt;&gt;,
 
-    <span class="doccomment">/// Map of short channel ids to `FederationId`. Use for efficient retrieval
+    <span class="doccomment">/// Map of federation indices to `FederationId`. Use for efficient retrieval
     /// of the client while handling incoming HTLCs.
-    </span>scid_to_federation: BTreeMap&lt;u64, FederationId&gt;,
+    /// Can be removed after LNv1 removal.
+    </span>index_to_federation: BTreeMap&lt;u64, FederationId&gt;,
 
-    <span class="doccomment">/// Tracker for short channel ID assignments. When connecting a new
+    <span class="doccomment">/// Tracker for federation index assignments. When connecting a new
     /// federation, this value is incremented and assigned to the federation
-    /// as the `mint_channel_id`
-    </span>next_scid: AtomicU64,
+    /// as the `federation_index`
+    </span>next_index: AtomicU64,
 }
 
 <span class="kw">impl </span>FederationManager {
     <span class="kw">pub fn </span>new() -&gt; <span class="self">Self </span>{
         <span class="self">Self </span>{
             clients: BTreeMap::new(),
-            scid_to_federation: BTreeMap::new(),
-            next_scid: AtomicU64::new(INITIAL_SCID),
+            index_to_federation: BTreeMap::new(),
+            next_index: AtomicU64::new(INITIAL_INDEX),
         }
     }
 
@@ -332,10 +334,10 @@
         <span class="self">self</span>.clients.is_empty()
     }
 
-    <span class="kw">pub fn </span>add_client(<span class="kw-2">&amp;mut </span><span class="self">self</span>, scid: u64, client: Spanned&lt;fedimint_client::ClientHandleArc&gt;) {
+    <span class="kw">pub fn </span>add_client(<span class="kw-2">&amp;mut </span><span class="self">self</span>, index: u64, client: Spanned&lt;fedimint_client::ClientHandleArc&gt;) {
         <span class="kw">let </span>federation_id = client.borrow().with_sync(|c| c.federation_id());
         <span class="self">self</span>.clients.insert(federation_id, client);
-        <span class="self">self</span>.scid_to_federation.insert(scid, federation_id);
+        <span class="self">self</span>.index_to_federation.insert(index, federation_id);
     }
 
     <span class="kw">pub async fn </span>leave_federation(
@@ -364,7 +366,7 @@
             </span>)))<span class="question-mark">?
             </span>.into_value();
 
-        <span class="self">self</span>.scid_to_federation
+        <span class="self">self</span>.index_to_federation
             .retain(|<span class="kw">_</span>, fid| <span class="kw-2">*</span>fid != federation_id);
 
         <span class="kw">if let </span><span class="prelude-val">Some</span>(client) = Arc::into_inner(client) {
@@ -417,22 +419,22 @@
         futures::future::join_all(removal_futures).<span class="kw">await</span>;
     }
 
-    <span class="kw">pub fn </span>get_client_for_scid(<span class="kw-2">&amp;</span><span class="self">self</span>, short_channel_id: u64) -&gt; <span class="prelude-ty">Option</span>&lt;Spanned&lt;ClientHandleArc&gt;&gt; {
-        <span class="kw">let </span>federation_id = <span class="self">self</span>.scid_to_federation.get(<span class="kw-2">&amp;</span>short_channel_id)<span class="question-mark">?</span>;
+    <span class="kw">pub fn </span>get_client_for_index(<span class="kw-2">&amp;</span><span class="self">self</span>, short_channel_id: u64) -&gt; <span class="prelude-ty">Option</span>&lt;Spanned&lt;ClientHandleArc&gt;&gt; {
+        <span class="kw">let </span>federation_id = <span class="self">self</span>.index_to_federation.get(<span class="kw-2">&amp;</span>short_channel_id)<span class="question-mark">?</span>;
         <span class="comment">// TODO(tvolk131): Cloning the client here could cause issues with client
         // shutdown (see `remove_client` above). Perhaps this function should take a
         // lambda and pass it into `client.with_sync`.
         </span><span class="kw">if let </span><span class="prelude-val">Some</span>(client) = <span class="self">self</span>.clients.get(federation_id).cloned() {
             <span class="prelude-val">Some</span>(client)
         } <span class="kw">else </span>{
-            <span class="macro">panic!</span>(<span class="string">"`FederationManager.scid_to_federation` is out of sync with `FederationManager.clients`! This is a bug."</span>);
+            <span class="macro">panic!</span>(<span class="string">"`FederationManager.index_to_federation` is out of sync with `FederationManager.clients`! This is a bug."</span>);
         }
     }
 
-    <span class="kw">fn </span>get_scid_for_federation(<span class="kw-2">&amp;</span><span class="self">self</span>, federation_id: FederationId) -&gt; <span class="prelude-ty">Option</span>&lt;u64&gt; {
-        <span class="self">self</span>.scid_to_federation.iter().find_map(|(scid, fid)| {
+    <span class="kw">fn </span>get_index_for_federation(<span class="kw-2">&amp;</span><span class="self">self</span>, federation_id: FederationId) -&gt; <span class="prelude-ty">Option</span>&lt;u64&gt; {
+        <span class="self">self</span>.index_to_federation.iter().find_map(|(index, fid)| {
             <span class="kw">if </span><span class="kw-2">*</span>fid == federation_id {
-                <span class="prelude-val">Some</span>(<span class="kw-2">*</span>scid)
+                <span class="prelude-val">Some</span>(<span class="kw-2">*</span>index)
             } <span class="kw">else </span>{
                 <span class="prelude-val">None
             </span>}
@@ -465,7 +467,7 @@
         federation_id: FederationId,
         dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>, NonCommittable&gt;,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;FederationInfo&gt; {
-        <span class="kw">let </span><span class="prelude-val">Some</span>(channel_id) = <span class="self">self</span>.get_scid_for_federation(federation_id) <span class="kw">else </span>{
+        <span class="kw">let </span><span class="prelude-val">Some</span>(federation_index) = <span class="self">self</span>.get_index_for_federation(federation_id) <span class="kw">else </span>{
             <span class="kw">return </span><span class="prelude-val">Err</span>(GatewayError::InvalidMetadata(<span class="macro">format!</span>(
                 <span class="string">"No federation with id {federation_id}"
             </span>)));
@@ -473,7 +475,7 @@
 
         <span class="self">self</span>.clients
             .get(<span class="kw-2">&amp;</span>federation_id)
-            .expect(<span class="string">"`FederationManager.scid_to_federation` is out of sync with `FederationManager.clients`! This is a bug."</span>)
+            .expect(<span class="string">"`FederationManager.index_to_federation` is out of sync with `FederationManager.clients`! This is a bug."</span>)
             .borrow()
             .with(|client| <span class="kw">async move </span>{
                 <span class="kw">let </span>balance_msat = client.get_balance().<span class="kw">await</span>;
@@ -486,7 +488,7 @@
                 <span class="prelude-val">Ok</span>(FederationInfo {
                     federation_id,
                     balance_msat,
-                    channel_id,
+                    federation_index,
                     routing_fees,
                 })
             })
@@ -499,7 +501,7 @@
     ) -&gt; Vec&lt;FederationInfo&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>federation_infos = Vec::new();
         <span class="kw">for </span>(federation_id, client) <span class="kw">in </span><span class="kw-2">&amp;</span><span class="self">self</span>.clients {
-            <span class="kw">let </span>channel_id = <span class="self">self</span>.get_scid_for_federation(<span class="kw-2">*</span>federation_id).expect(<span class="string">"`FederationManager.scid_to_federation` is out of sync with `FederationManager.clients`! This is a bug."</span>);
+            <span class="kw">let </span>federation_index = <span class="self">self</span>.get_index_for_federation(<span class="kw-2">*</span>federation_id).expect(<span class="string">"`FederationManager.index_to_federation` is out of sync with `FederationManager.clients`! This is a bug."</span>);
 
             <span class="kw">let </span>balance_msat = client.borrow().with(|client| client.get_balance()).<span class="kw">await</span>;
 
@@ -511,7 +513,7 @@
             federation_infos.push(FederationInfo {
                 federation_id: <span class="kw-2">*</span>federation_id,
                 balance_msat,
-                channel_id,
+                federation_index,
                 routing_fees,
             });
         }
@@ -549,21 +551,21 @@
     }
 
     <span class="comment">// TODO(tvolk131): Set this value in the constructor.
-    </span><span class="kw">pub fn </span>set_next_scid(<span class="kw-2">&amp;</span><span class="self">self</span>, next_scid: u64) {
-        <span class="self">self</span>.next_scid.store(next_scid, Ordering::SeqCst);
+    </span><span class="kw">pub fn </span>set_next_index(<span class="kw-2">&amp;</span><span class="self">self</span>, next_index: u64) {
+        <span class="self">self</span>.next_index.store(next_index, Ordering::SeqCst);
     }
 
-    <span class="kw">pub fn </span>pop_next_scid(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;u64&gt; {
-        <span class="kw">let </span>next_scid = <span class="self">self</span>.next_scid.fetch_add(<span class="number">1</span>, Ordering::Relaxed);
+    <span class="kw">pub fn </span>pop_next_index(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;u64&gt; {
+        <span class="kw">let </span>next_index = <span class="self">self</span>.next_index.fetch_add(<span class="number">1</span>, Ordering::Relaxed);
 
         <span class="comment">// Check for overflow.
-        </span><span class="kw">if </span>next_scid == INITIAL_SCID.wrapping_sub(<span class="number">1</span>) {
+        </span><span class="kw">if </span>next_index == INITIAL_INDEX.wrapping_sub(<span class="number">1</span>) {
             <span class="kw">return </span><span class="prelude-val">Err</span>(GatewayError::GatewayConfigurationError(
-                <span class="string">"Short channel ID overflow"</span>.to_string(),
+                <span class="string">"Federation Index overflow"</span>.to_string(),
             ));
         }
 
-        <span class="prelude-val">Ok</span>(next_scid)
+        <span class="prelude-val">Ok</span>(next_index)
     }
 }
 </code></pre></div></section></main></body></html>
