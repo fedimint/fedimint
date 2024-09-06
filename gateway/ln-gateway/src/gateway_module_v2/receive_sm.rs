@@ -1,3 +1,4 @@
+use core::fmt;
 use std::collections::BTreeMap;
 use std::future::pending;
 use std::sync::Arc;
@@ -43,6 +44,16 @@ impl ReceiveStateMachine {
     }
 }
 
+impl fmt::Display for ReceiveStateMachine {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "Receive State Machine Operation ID: {:?} State: {}",
+            self.common.operation_id, self.state
+        )
+    }
+}
+
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
 pub struct ReceiveSMCommon {
     pub operation_id: OperationId,
@@ -58,6 +69,18 @@ pub enum ReceiveSMState {
     Success([u8; 32]),
     Failure,
     Refunding(Vec<OutPoint>),
+}
+
+impl fmt::Display for ReceiveSMState {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ReceiveSMState::Funding => write!(f, "Funding"),
+            ReceiveSMState::Rejected(_) => write!(f, "Rejected"),
+            ReceiveSMState::Success(_) => write!(f, "Success"),
+            ReceiveSMState::Failure => write!(f, "Failure"),
+            ReceiveSMState::Refunding(_) => write!(f, "Refunding"),
+        }
+    }
 }
 
 #[cfg_attr(doc, aquamarine::aquamarine)]

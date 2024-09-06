@@ -8,7 +8,7 @@ use fedimint_ln_common::gateway_endpoint_constants::{
     GATEWAY_INFO_POST_ENDPOINT, GET_BALANCES_ENDPOINT, GET_LN_ONCHAIN_ADDRESS_ENDPOINT,
     LEAVE_FED_ENDPOINT, LIST_ACTIVE_CHANNELS_ENDPOINT, MNEMONIC_ENDPOINT, OPEN_CHANNEL_ENDPOINT,
     RECEIVE_ECASH_ENDPOINT, RESTORE_ENDPOINT, SET_CONFIGURATION_ENDPOINT, SPEND_ECASH_ENDPOINT,
-    WITHDRAW_ENDPOINT,
+    STOP_ENDPOINT, WITHDRAW_ENDPOINT,
 };
 use fedimint_lnv2_common::endpoint_constants::{
     CREATE_BOLT11_INVOICE_FOR_SELF_ENDPOINT, PAY_INVOICE_SELF_ENDPOINT,
@@ -246,6 +246,11 @@ impl GatewayRpcClient {
             .base_url
             .join(MNEMONIC_ENDPOINT)
             .expect("invalid base url");
+        self.call_get(url).await
+    }
+
+    pub async fn stop(&self) -> GatewayRpcResult<()> {
+        let url = self.base_url.join(STOP_ENDPOINT).expect("invalid base url");
         self.call_get(url).await
     }
 

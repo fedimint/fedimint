@@ -1,3 +1,4 @@
+use std::fmt;
 use std::time::Duration;
 
 use bitcoin_hashes::Hash;
@@ -41,6 +42,16 @@ impl CompleteStateMachine {
     }
 }
 
+impl fmt::Display for CompleteStateMachine {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "Complete State Machine Operation ID: {:?} State: {}",
+            self.common.operation_id, self.state
+        )
+    }
+}
+
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
 pub struct CompleteSMCommon {
     pub operation_id: OperationId,
@@ -54,6 +65,16 @@ pub enum CompleteSMState {
     Pending,
     Completing(FinalReceiveState),
     Completed,
+}
+
+impl fmt::Display for CompleteSMState {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            CompleteSMState::Pending => write!(f, "Pending"),
+            CompleteSMState::Completing(_) => write!(f, "Completing"),
+            CompleteSMState::Completed => write!(f, "Completed"),
+        }
+    }
 }
 
 impl State for CompleteStateMachine {
