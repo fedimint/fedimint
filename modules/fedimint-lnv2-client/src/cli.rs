@@ -15,13 +15,18 @@ use crate::LightningClientModule;
 enum Opts {
     /// Pay an invoice
     Send {
-        gateway: SafeUrl,
         invoice: Bolt11Invoice,
+        #[arg(long)]
+        gateway: Option<SafeUrl>,
     },
     /// Await the final state of the send operation
     AwaitSend { operation_id: OperationId },
     /// Request an invoice
-    Receive { gateway: SafeUrl, amount: Amount },
+    Receive {
+        amount: Amount,
+        #[arg(long)]
+        gateway: Option<SafeUrl>,
+    },
     /// Await the final state of the receive operation
     AwaitReceive { operation_id: OperationId },
     /// Gateway subcommands
@@ -32,7 +37,10 @@ enum Opts {
 #[derive(Clone, Subcommand, Serialize)]
 enum GatewayOpts {
     /// List vetted gateways
-    List { peer: Option<PeerId> },
+    List {
+        #[arg(long)]
+        peer: Option<PeerId>,
+    },
     /// Add a vetted gateway
     Add { gateway: SafeUrl },
     /// Remove a vetted gateway
@@ -46,9 +54,9 @@ pub(crate) async fn handle_cli_command(
     let opts = Opts::parse_from(iter::once(&ffi::OsString::from("lnv2")).chain(args.iter()));
 
     let value = match opts {
-        Opts::Send { gateway, invoice } => json(lightning.send(gateway, invoice).await?),
+        Opts::Send { gateway, invoice } => json(lightning.send(invoice, gateway).await?),
         Opts::AwaitSend { operation_id } => json(lightning.await_send(operation_id).await?),
-        Opts::Receive { gateway, amount } => json(lightning.receive(gateway, amount).await?),
+        Opts::Receive { gateway, amount } => json(lightning.receive(amount, gateway).await?),
         Opts::AwaitReceive { operation_id } => json(lightning.await_receive(operation_id).await?),
         Opts::Gateway(gateway_opts) => match gateway_opts {
             GatewayOpts::List { peer } => match peer {

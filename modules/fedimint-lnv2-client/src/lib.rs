@@ -388,14 +388,36 @@ fn generate_ephemeral_tweak(static_pk: PublicKey) -> ([u8; 32], PublicKey) {
 }
 
 impl LightningClientModule {
+    async fn select_gateway(&self) -> Option<(SafeUrl, RoutingInfo)> {
+        for gateway in self.module_api.gateways().await.ok()? {
+            if let Ok(Some(routing_info)) = self.routing_info(&gateway).await {
+                return Some((gateway, routing_info));
+            }
+        }
+
+        None
+    }
+
+    async fn routing_info(
+        &self,
+        gateway_api: &SafeUrl,
+    ) -> Result<Option<RoutingInfo>, GatewayError> {
+        self.gateway_conn
+            .routing_info(
+                GatewayEndpoint::Url(gateway_api.clone()),
+                &self.federation_id,
+            )
+            .await
+    }
+
     pub async fn send(
         &self,
-        gateway_api: SafeUrl,
         invoice: Bolt11Invoice,
+        gateway_api: Option<SafeUrl>,
     ) -> Result<OperationId, SendPaymentError> {
         self.send_internal(
-            gateway_api,
             invoice,
+            gateway_api,
             PaymentFee::SEND_FEE_LIMIT_DEFAULT,
             EXPIRATION_DELTA_LIMIT_DEFAULT,
         )
@@ -404,13 +426,11 @@ impl LightningClientModule {
 
     pub async fn send_internal(
         &self,
-        gateway_api: SafeUrl,
         invoice: Bolt11Invoice,
+        gateway_api: Option<SafeUrl>,
         payment_fee_limit: PaymentFee,
         expiration_delta_limit: u64,
     ) -> Result<OperationId, SendPaymentError> {
-        let gateway_api = GatewayEndpoint::Url(gateway_api);
-
         let amount = invoice
             .amount_milli_satoshis()
             .ok_or(SendPaymentError::InvoiceMissingAmount)?;
@@ -434,12 +454,19 @@ impl LightningClientModule {
             .expect("32 bytes, within curve order")
             .keypair(secp256k1::SECP256K1);
 
-        let routing_info = self
-            .gateway_conn
-            .routing_info(gateway_api.clone(), &self.federation_id)
-            .await
-            .map_err(SendPaymentError::GatewayError)?
-            .ok_or(SendPaymentError::UnknownFederation)?;
+        let (gateway_api, routing_info) = match gateway_api {
+            Some(gateway_api) => (
+                gateway_api.clone(),
+                self.routing_info(&gateway_api)
+                    .await
+                    .map_err(SendPaymentError::GatewayError)?
+                    .ok_or(SendPaymentError::UnknownFederation)?,
+            ),
+            None => self
+                .select_gateway()
+                .await
+                .ok_or(SendPaymentError::FailedToSelectGateway)?,
+        };
 
         let (send_fee, expiration_delta) = routing_info.send_parameters(&invoice);
 
@@ -480,7 +507,7 @@ impl LightningClientModule {
                     common: SendSMCommon {
                         operation_id,
                         funding_txid,
-                        gateway_api: gateway_api_clone.clone(),
+                        gateway_api: GatewayEndpoint::Url(gateway_api_clone.clone()),
                         contract: contract_clone.clone(),
                         invoice: LightningInvoice::Bolt11(invoice_clone.clone()),
                         refund_keypair,
@@ -501,7 +528,7 @@ impl LightningClientModule {
                     LightningOperationMeta::Send(SendOperationMeta {
                         funding_txid,
                         funding_change_outpoints,
-                        gateway_api: gateway_api.clone(),
+                        gateway_api: GatewayEndpoint::Url(gateway_api.clone()),
                         contract: contract.clone(),
                         invoice: invoice.clone(),
                     })
@@ -625,10 +652,14 @@ impl LightningClientModule {
         Ok(state)
     }
 
-    pub async fn receive(&self, gateway_api: SafeUrl, invoice_amount: Amount) -> ReceiveResult {
+    pub async fn receive(
+        &self,
+        invoice_amount: Amount,
+        gateway_api: Option<SafeUrl>,
+    ) -> ReceiveResult {
         self.receive_internal(
-            gateway_api,
             invoice_amount,
+            gateway_api,
             INVOICE_EXPIRATION_SECONDS_DEFAULT,
             Bolt11InvoiceDescription::Direct(String::new()),
             PaymentFee::RECEIVE_FEE_LIMIT_DEFAULT,
@@ -638,8 +669,8 @@ impl LightningClientModule {
 
     pub async fn receive_internal(
         &self,
-        gateway_api: SafeUrl,
         invoice_amount: Amount,
+        gateway_api: Option<SafeUrl>,
         expiry_time: u32,
         description: Bolt11InvoiceDescription,
         payment_fee_limit: PaymentFee,
@@ -647,8 +678,8 @@ impl LightningClientModule {
         let (contract, .., invoice) = self
             .create_contract_and_fetch_invoice_internal(
                 self.keypair.public_key(),
-                gateway_api,
                 invoice_amount,
+                gateway_api,
                 expiry_time,
                 description,
                 payment_fee_limit,
@@ -666,13 +697,13 @@ impl LightningClientModule {
     pub async fn create_contract_and_fetch_invoice(
         &self,
         recipient_static_pk: PublicKey,
-        gateway_api: SafeUrl,
         invoice_amount: Amount,
+        gateway_api: Option<SafeUrl>,
     ) -> Result<(IncomingContract, [u8; 32], Bolt11Invoice), FetchInvoiceError> {
         self.create_contract_and_fetch_invoice_internal(
             recipient_static_pk,
-            gateway_api,
             invoice_amount,
+            gateway_api,
             INVOICE_EXPIRATION_SECONDS_DEFAULT,
             Bolt11InvoiceDescription::Direct(String::new()),
             PaymentFee::RECEIVE_FEE_LIMIT_DEFAULT,
@@ -683,14 +714,12 @@ impl LightningClientModule {
     pub async fn create_contract_and_fetch_invoice_internal(
         &self,
         recipient_static_pk: PublicKey,
-        gateway_api: SafeUrl,
         invoice_amount: Amount,
+        gateway_api: Option<SafeUrl>,
         expiry_time: u32,
         description: Bolt11InvoiceDescription,
         payment_fee_limit: PaymentFee,
     ) -> Result<(IncomingContract, [u8; 32], Bolt11Invoice), FetchInvoiceError> {
-        let gateway_api = GatewayEndpoint::Url(gateway_api);
-
         let (ephemeral_tweak, ephemeral_pk) = generate_ephemeral_tweak(recipient_static_pk);
 
         let encryption_seed = ephemeral_tweak
@@ -701,20 +730,27 @@ impl LightningClientModule {
             .consensus_hash::<sha256::Hash>()
             .to_byte_array();
 
-        let payment_info = self
-            .gateway_conn
-            .routing_info(gateway_api.clone(), &self.federation_id)
-            .await
-            .map_err(FetchInvoiceError::GatewayError)?
-            .ok_or(FetchInvoiceError::UnknownFederation)?;
+        let (gateway_api, routing_info) = match gateway_api {
+            Some(gateway_api) => (
+                gateway_api.clone(),
+                self.routing_info(&gateway_api)
+                    .await
+                    .map_err(FetchInvoiceError::GatewayError)?
+                    .ok_or(FetchInvoiceError::UnknownFederation)?,
+            ),
+            None => self
+                .select_gateway()
+                .await
+                .ok_or(FetchInvoiceError::FailedToSelectGateway)?,
+        };
 
-        if !payment_info.receive_fee.le(&payment_fee_limit) {
+        if !routing_info.receive_fee.le(&payment_fee_limit) {
             return Err(FetchInvoiceError::PaymentFeeExceedsLimit(
-                payment_info.receive_fee,
+                routing_info.receive_fee,
             ));
         }
 
-        let contract_amount = payment_info.receive_fee.subtract_fee(invoice_amount.msats);
+        let contract_amount = routing_info.receive_fee.subtract_fee(invoice_amount.msats);
 
         // The dust limit ensures that the incoming contract can be claimed without
         // additional funds as the contracts amount is sufficient to cover the fees
@@ -741,14 +777,14 @@ impl LightningClientModule {
             contract_amount,
             expiration,
             claim_pk,
-            payment_info.module_public_key,
+            routing_info.module_public_key,
             ephemeral_pk,
         );
 
         let invoice = self
             .gateway_conn
             .bolt11_invoice(
-                gateway_api,
+                GatewayEndpoint::Url(gateway_api),
                 self.federation_id,
                 contract.clone(),
                 invoice_amount,
@@ -923,6 +959,8 @@ pub enum SendPaymentError {
     PendingPreviousPayment(OperationId),
     #[error("A previous payment for the same invoice was successful: {}", .0.fmt_full())]
     SuccessfulPreviousPayment(OperationId),
+    #[error("Failed to select gateway")]
+    FailedToSelectGateway,
     #[error("Gateway error: {0}")]
     GatewayError(GatewayError),
     #[error("The gateway does not support our federation")]
@@ -944,6 +982,8 @@ pub enum SendPaymentError {
 
 #[derive(Error, Debug, Clone, Eq, PartialEq)]
 pub enum FetchInvoiceError {
+    #[error("Failed to select gateway")]
+    FailedToSelectGateway,
     #[error("Gateway error: {0}")]
     GatewayError(GatewayError),
     #[error("The gateway does not support our federation")]

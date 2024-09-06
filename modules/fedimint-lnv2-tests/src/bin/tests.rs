@@ -115,7 +115,7 @@ async fn test_gateway_registration(dev_fed: &DevJitFed) -> anyhow::Result<()> {
         .new_joined_client("lnv2-gateway-registration-client")
         .await?;
 
-    let gateway = SafeUrl::parse("https://gateway.xyz").expect("Valid Url");
+    let gateway_api = SafeUrl::parse("https://gateway.xyz").expect("Valid Url");
 
     assert_eq!(
         cmd!(
@@ -128,7 +128,7 @@ async fn test_gateway_registration(dev_fed: &DevJitFed) -> anyhow::Result<()> {
             "lnv2",
             "gateway",
             "add",
-            gateway.clone().to_string(),
+            gateway_api.clone().to_string()
         )
         .out_json()
         .await?,
@@ -136,10 +136,10 @@ async fn test_gateway_registration(dev_fed: &DevJitFed) -> anyhow::Result<()> {
     );
 
     assert_eq!(
-        cmd!(client, "module", "lnv2", "gateway", "list", "0")
+        cmd!(client, "module", "lnv2", "gateway", "list", "--peer", "0")
             .out_json()
             .await?,
-        serde_json::to_value(vec![gateway.clone()]).expect("JSON serialization failed")
+        serde_json::to_value(vec![gateway_api.clone()]).expect("JSON serialization failed")
     );
 
     assert_eq!(
@@ -153,7 +153,7 @@ async fn test_gateway_registration(dev_fed: &DevJitFed) -> anyhow::Result<()> {
             "lnv2",
             "gateway",
             "remove",
-            gateway.to_string(),
+            gateway_api.to_string()
         )
         .out_json()
         .await?,
@@ -161,7 +161,7 @@ async fn test_gateway_registration(dev_fed: &DevJitFed) -> anyhow::Result<()> {
     );
 
     assert_eq!(
-        cmd!(client, "module", "lnv2", "gateway", "list", "0",)
+        cmd!(client, "module", "lnv2", "gateway", "list", "--peer", "0")
             .out_json()
             .await?,
         serde_json::to_value(Vec::<SafeUrl>::new()).expect("JSON serialization failed")
@@ -373,24 +373,33 @@ async fn test_inter_federation_payments(
     }
 
     info!("Testing inter federation payments successful");
+
     Ok(())
 }
 
 async fn receive(
     client: &Client,
-    gw_address: &str,
+    gateway_api: &str,
     amount: u64,
 ) -> anyhow::Result<(Bolt11Invoice, OperationId)> {
     Ok(serde_json::from_value::<(Bolt11Invoice, OperationId)>(
-        cmd!(client, "module", "lnv2", "receive", gw_address, amount,)
-            .out_json()
-            .await?,
+        cmd!(
+            client,
+            "module",
+            "lnv2",
+            "receive",
+            amount,
+            "--gateway",
+            gateway_api
+        )
+        .out_json()
+        .await?,
     )?)
 }
 
 async fn test_send(
     client: &Client,
-    gw_address: &String,
+    gateway_api: &String,
     invoice: &Bolt11Invoice,
     final_state: FinalSendState,
 ) -> anyhow::Result<()> {
@@ -400,8 +409,9 @@ async fn test_send(
             "module",
             "lnv2",
             "send",
-            gw_address,
-            invoice.to_string()
+            invoice.to_string(),
+            "--gateway",
+            gateway_api
         )
         .out_json()
         .await?,

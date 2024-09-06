@@ -54,13 +54,13 @@ async fn can_pay_external_invoice_exactly_once() -> anyhow::Result<()> {
 
     let operation_id = client
         .get_first_module::<LightningClientModule>()?
-        .send(gateway_api.clone(), invoice.clone())
+        .send(invoice.clone(), Some(gateway_api.clone()))
         .await?;
 
     assert_eq!(
         client
             .get_first_module::<LightningClientModule>()?
-            .send(gateway_api.clone(), invoice.clone())
+            .send(invoice.clone(), Some(gateway_api.clone()))
             .await,
         Err(SendPaymentError::PendingPreviousPayment(operation_id)),
     );
@@ -78,7 +78,7 @@ async fn can_pay_external_invoice_exactly_once() -> anyhow::Result<()> {
     assert_eq!(
         client
             .get_first_module::<LightningClientModule>()?
-            .send(gateway_api, invoice)
+            .send(invoice, Some(gateway_api))
             .await,
         Err(SendPaymentError::SuccessfulPreviousPayment(operation_id)),
     );
@@ -102,7 +102,7 @@ async fn refund_failed_payment() -> anyhow::Result<()> {
 
     let op = client
         .get_first_module::<LightningClientModule>()?
-        .send(mock::gateway_api(), mock::unpayable_invoice())
+        .send(mock::unpayable_invoice(), Some(mock::gateway_api()))
         .await?;
 
     let mut sub = client
@@ -135,7 +135,7 @@ async fn unilateral_refund_of_outgoing_contracts() -> anyhow::Result<()> {
 
     let op = client
         .get_first_module::<LightningClientModule>()?
-        .send(mock::gateway_api(), mock::crash_invoice())
+        .send(mock::crash_invoice(), Some(mock::gateway_api()))
         .await?;
 
     let mut sub = client
@@ -174,7 +174,7 @@ async fn claiming_outgoing_contract_triggers_success() -> anyhow::Result<()> {
 
     let op = client
         .get_first_module::<LightningClientModule>()?
-        .send(mock::gateway_api(), mock::crash_invoice())
+        .send(mock::crash_invoice(), Some(mock::gateway_api()))
         .await?;
 
     let mut sub = client
@@ -236,8 +236,8 @@ async fn receive_operation_expires() -> anyhow::Result<()> {
     let op = client
         .get_first_module::<LightningClientModule>()?
         .receive_internal(
-            mock::gateway_api(),
             Amount::from_sats(1000),
+            Some(mock::gateway_api()),
             5, // receive operation expires in 5 seconds
             Bolt11InvoiceDescription::Direct(String::new()),
             PaymentFee::RECEIVE_FEE_LIMIT_DEFAULT,
@@ -266,7 +266,7 @@ async fn rejects_wrong_network_invoice() -> anyhow::Result<()> {
     assert_eq!(
         client
             .get_first_module::<LightningClientModule>()?
-            .send(mock::gateway_api(), mock::signet_bolt_11_invoice())
+            .send(mock::signet_bolt_11_invoice(), Some(mock::gateway_api()))
             .await
             .expect_err("send did not fail due to incorrect Currency"),
         SendPaymentError::WrongCurrency {
