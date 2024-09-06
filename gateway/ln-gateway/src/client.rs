@@ -52,7 +52,7 @@ impl GatewayClientBuilder {
         gateway: Arc<Gateway>,
     ) -> Result<ClientBuilder> {
         let FederationConfig {
-            mint_channel_id,
+            federation_index,
             timelock_delta,
             connector,
             ..
@@ -62,7 +62,7 @@ impl GatewayClientBuilder {
 
         registry.attach(GatewayClientInit {
             timelock_delta,
-            mint_channel_id,
+            federation_index,
             gateway: gateway.clone(),
         });
         registry.attach(GatewayClientInitV2 {
@@ -98,7 +98,7 @@ impl GatewayClientBuilder {
         } else {
             let db = gateway
                 .gateway_db
-                .with_prefix(config.mint_channel_id.to_le_bytes().to_vec());
+                .with_prefix(config.federation_index.to_le_bytes().to_vec());
             let secret = Self::derive_federation_secret(mnemonic, &federation_id);
             (db, secret)
         };

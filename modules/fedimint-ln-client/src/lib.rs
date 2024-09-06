@@ -227,7 +227,7 @@ fn invoice_routes_back_to_federation(
             .first()
             .and_then(|rh| rh.0.last())
             .map(|hop| (hop.src_node_id, hop.short_channel_id))
-            == Some((gateway.node_pub_key, gateway.mint_channel_id))
+            == Some((gateway.node_pub_key, gateway.federation_index))
     })
 }
 
@@ -1490,7 +1490,7 @@ impl LightningClientModule {
         let (src_node_id, short_channel_id, route_hints) = if let Some(current_gateway) = gateway {
             (
                 current_gateway.node_pub_key,
-                current_gateway.mint_channel_id,
+                current_gateway.federation_index,
                 current_gateway.route_hints,
             )
         } else {

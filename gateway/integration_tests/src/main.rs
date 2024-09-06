@@ -417,7 +417,7 @@ async fn leave_federation(
     let fed_info: FederationInfo =
         serde_json::from_value(leave_fed).expect("Could not parse FederationInfo");
     assert_eq!(fed_info.federation_id.to_string(), fed_id);
-    assert_eq!(fed_info.channel_id, expected_scid);
+    assert_eq!(fed_info.federation_index, expected_scid);
     info!("Verified gateway left federation {fed_id}");
     Ok(fed_info)
 }

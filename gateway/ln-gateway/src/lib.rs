@@ -665,9 +665,9 @@ impl Gateway {
     /// Returns `Ok` if the HTLC was handled, `Err` otherwise.
     async fn try_handle_htlc_ln_legacy(&self, htlc_request: &InterceptHtlcRequest) -> Result<()> {
         // Check if the HTLC corresponds to a federation supporting legacy Lightning.
-        let Some(short_channel_id) = htlc_request.short_channel_id else {
+        let Some(federation_index) = htlc_request.short_channel_id else {
             return Err(GatewayError::IncomingLNv1PaymentError(anyhow::anyhow!(
-                "Incoming payment has no last hop scid"
+                "Incoming payment has no last hop short channel id"
             )));
         };
 
@@ -677,10 +677,10 @@ impl Gateway {
             .federation_manager
             .read()
             .await
-            .get_client_for_scid(short_channel_id)
+            .get_client_for_index(federation_index)
         else {
             return Err(GatewayError::IncomingLNv1PaymentError(anyhow::anyhow!(
-                "Incoming payment has a last hop scid that does not map to a known federation"
+                "Incoming payment has a last hop short channel id that does not map to a known federation"
             )));
         };
 
@@ -770,7 +770,12 @@ impl Gateway {
 
         let channels: BTreeMap<u64, FederationId> = federations
             .iter()
-            .map(|federation_info| (federation_info.channel_id, federation_info.federation_id))
+            .map(|federation_info| {
+                (
+                    federation_info.federation_index,
+                    federation_info.federation_id,
+                )
+            })
             .collect();
 
         let node_info = lightning_context.lnrpc.parsed_node_info().await?;
@@ -1056,13 +1061,13 @@ impl Gateway {
             .await
             .expect("Gateway configuration should be set");
 
-        // The gateway deterministically assigns a channel id (u64) to each federation
-        // connected.
-        let mint_channel_id = federation_manager.pop_next_scid()?;
+        // The gateway deterministically assigns a unique identifier (u64) to each
+        // federation connected.
+        let federation_index = federation_manager.pop_next_index()?;
 
         let gw_client_cfg = FederationConfig {
             invite_code,
-            mint_channel_id,
+            federation_index,
             timelock_delta: 10,
             fees: gateway_config.routing_fees,
             connector,
@@ -1079,7 +1084,7 @@ impl Gateway {
         let federation_info = FederationInfo {
             federation_id,
             balance_msat: client.get_balance().await,
-            channel_id: mint_channel_id,
+            federation_index,
             routing_fees: Some(gateway_config.routing_fees.into()),
         };
 
@@ -1098,7 +1103,7 @@ impl Gateway {
 
         // no need to enter span earlier, because connect-fed has a span
         federation_manager.add_client(
-            mint_channel_id,
+            federation_index,
             Spanned::new(
                 info_span!("client", federation_id=%federation_id.clone()),
                 async { client },
@@ -1111,7 +1116,7 @@ impl Gateway {
         dbtx.commit_tx_result()
             .await
             .map_err(GatewayError::DatabaseError)?;
-        debug!("Federation with ID: {federation_id} connected and assigned channel id: {mint_channel_id}");
+        debug!("Federation with ID: {federation_id} connected and assigned federation index: {federation_index}");
 
         Ok(federation_info)
     }
@@ -1598,14 +1603,14 @@ impl Gateway {
             dbtx.load_federation_configs().await
         };
 
-        if let Some(max_mint_channel_id) = configs.values().map(|cfg| cfg.mint_channel_id).max() {
-            federation_manager.set_next_scid(max_mint_channel_id + 1);
+        if let Some(max_federation_index) = configs.values().map(|cfg| cfg.federation_index).max() {
+            federation_manager.set_next_index(max_federation_index + 1);
         }
 
         let mnemonic = self.load_or_generate_mnemonic().await?;
 
         for (federation_id, config) in configs {
-            let scid = config.mint_channel_id;
+            let federation_index = config.federation_index;
             if let Ok(client) = Box::pin(Spanned::try_new(
                 info_span!("client", federation_id  = %federation_id.clone()),
                 self.client_builder
@@ -1613,7 +1618,7 @@ impl Gateway {
             ))
             .await
             {
-                federation_manager.add_client(scid, client);
+                federation_manager.add_client(federation_index, client);
             } else {
                 warn!("Failed to load client for federation: {federation_id}");
             }
