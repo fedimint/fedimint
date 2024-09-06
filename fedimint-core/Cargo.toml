@@ -61,14 +61,12 @@ url = { workspace = true, features = ["serde"] }
 [dev-dependencies]
 test-log = { workspace = true }
 tokio-test = "0.4.4"
-tracing-subscriber = { workspace = true }
 
 [target.'cfg(not(target_family = "wasm"))'.dependencies]
 tokio = { workspace = true, features = ["full", "tracing"] }
 tokio-rustls = { workspace = true }
 
 [target.'cfg(target_family = "wasm")'.dependencies]
-jsonrpsee-wasm-client = "0.24.3"
 async-lock = "3.4"
 tokio = { workspace = true, features = ["io-util"] }
 futures-util = { workspace = true }

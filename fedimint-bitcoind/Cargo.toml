@@ -28,8 +28,5 @@ esplora-client = { workspace = true, optional = true }
 fedimint-core = { workspace = true }
 fedimint-logging = { workspace = true }
 hex = { workspace = true }
-rand = { workspace = true }
-serde = { workspace = true }
 serde_json = { workspace = true }
 tracing = { workspace = true }
-url = { workspace = true }

@@ -25,7 +25,6 @@ anyhow = { workspace = true }
 bitcoin = { workspace = true }
 bitcoincore-rpc = { workspace = true }
 devimint = { workspace = true }
-fedimint-bitcoind = { workspace = true }
 fedimint-client = { workspace = true }
 fedimint-core = { workspace = true }
 fedimint-logging = { workspace = true }

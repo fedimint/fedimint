@@ -21,16 +21,13 @@ fedimint-core = { workspace = true }
 fedimint-dummy-client = { workspace = true }
 fedimint-dummy-common = { workspace = true }
 fedimint-dummy-server = { workspace = true }
-fedimint-ln-client = { workspace = true }
 fedimint-ln-common = { workspace = true }
-fedimint-ln-server = { workspace = true }
 fedimint-lnv2-client = { workspace = true }
 fedimint-lnv2-common = { workspace = true }
 fedimint-lnv2-server = { workspace = true }
 fedimint-testing = { workspace = true }
 itertools = { workspace = true }
 lightning-invoice = { workspace = true }
-semver = { workspace = true }
 serde_json = { workspace = true }
 substring = "1.4.5"
 tokio = { workspace = true }

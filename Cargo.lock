@@ -1575,7 +1575,6 @@ dependencies = [
  "clap",
  "cln-rpc",
  "esplora-client",
- "fedimint-aead",
  "fedimint-api-client",
  "fedimint-bitcoind",
  "fedimint-build",
@@ -1584,7 +1583,6 @@ dependencies = [
  "fedimint-ln-client",
  "fedimint-ln-gateway",
  "fedimint-ln-server",
- "fedimint-lnv2-client",
  "fedimint-lnv2-common",
  "fedimint-lnv2-server",
  "fedimint-logging",
@@ -1610,8 +1608,6 @@ dependencies = [
  "tokio",
  "tower-http",
  "tracing",
- "tracing-subscriber",
- "url",
 ]
 
 [[package]]
@@ -1934,7 +1930,6 @@ name = "fedimint-api-client"
 version = "0.5.0-alpha"
 dependencies = [
  "anyhow",
- "async-lock",
  "async-trait",
  "base64 0.22.1",
  "bitcoin 0.30.2",
@@ -1943,10 +1938,7 @@ dependencies = [
  "fedimint-core",
  "fedimint-logging",
  "futures",
- "getrandom",
- "gloo-timers 0.3.0",
  "itertools 0.13.0",
- "js-sys",
  "jsonrpsee-core",
  "jsonrpsee-wasm-client",
  "jsonrpsee-ws-client",
@@ -1958,10 +1950,7 @@ dependencies = [
  "thiserror",
  "tokio",
  "tokio-rustls 0.26.0",
- "tokio-test",
  "tracing",
- "tracing-subscriber",
- "wasm-bindgen-futures",
  "webpki-roots 0.26.5",
 ]
 
@@ -2032,11 +2021,8 @@ dependencies = [
  "fedimint-core",
  "fedimint-logging",
  "hex",
- "rand",
- "serde",
  "serde_json",
  "tracing",
- "url",
 ]
 
 [[package]]
@@ -2052,7 +2038,6 @@ version = "0.5.0-alpha"
 dependencies = [
  "anyhow",
  "async-trait",
- "base64 0.22.1",
  "bip39",
  "bitcoin 0.30.2",
  "clap",
@@ -2064,13 +2049,10 @@ dependencies = [
  "fedimint-client",
  "fedimint-core",
  "fedimint-ln-client",
- "fedimint-ln-common",
  "fedimint-lnv2-client",
  "fedimint-logging",
  "fedimint-meta-client",
- "fedimint-meta-common",
  "fedimint-mint-client",
- "fedimint-mint-common",
  "fedimint-rocksdb",
  "fedimint-wallet-client",
  "fs-lock",
@@ -2079,15 +2061,12 @@ dependencies = [
  "itertools 0.13.0",
  "lightning-invoice",
  "rand",
- "reqwest 0.12.7",
  "serde",
  "serde_json",
  "thiserror",
  "time",
  "tokio",
  "tracing",
- "tracing-subscriber",
- "url",
 ]
 
 [[package]]
@@ -2109,7 +2088,6 @@ dependencies = [
  "itertools 0.13.0",
  "rand",
  "reqwest 0.12.7",
- "ring 0.17.8",
  "serde",
  "serde_json",
  "strum 0.26.3",
@@ -2174,7 +2152,6 @@ dependencies = [
  "itertools 0.13.0",
  "js-sys",
  "jsonrpsee-core",
- "jsonrpsee-wasm-client",
  "lightning",
  "lightning-invoice",
  "macro_rules_attribute",
@@ -2194,7 +2171,6 @@ dependencies = [
  "tokio-rustls 0.24.1",
  "tokio-test",
  "tracing",
- "tracing-subscriber",
  "url",
  "wasm-bindgen-futures",
 ]
@@ -2207,7 +2183,6 @@ dependencies = [
  "bytes",
  "clap",
  "erased-serde",
- "fedimint-aead",
  "fedimint-build",
  "fedimint-client",
  "fedimint-core",
@@ -2230,7 +2205,6 @@ dependencies = [
  "serde",
  "serde_json",
  "strum 0.26.3",
- "strum_macros 0.26.4",
  "tokio",
  "tracing",
 ]
@@ -2386,8 +2360,6 @@ name = "fedimint-gateway-cli"
 version = "0.5.0-alpha"
 dependencies = [
  "anyhow",
- "async-trait",
- "axum 0.7.5",
  "bitcoin 0.30.2",
  "clap",
  "clap_complete",
@@ -2397,12 +2369,9 @@ dependencies = [
  "fedimint-logging",
  "fedimint-mint-client",
  "lightning-invoice",
- "reqwest 0.12.7",
  "serde",
  "serde_json",
  "tokio",
- "tracing",
- "url",
 ]
 
 [[package]]
@@ -2500,7 +2469,6 @@ dependencies = [
  "fedimint-mint-client",
  "fedimint-rocksdb",
  "fedimint-testing",
- "fedimint-threshold-crypto",
  "fedimint-tonic-lnd",
  "fedimint-tpe",
  "fedimint-unknown-common",
@@ -2616,7 +2584,6 @@ dependencies = [
  "anyhow",
  "bitcoin 0.30.2",
  "bitcoin_hashes 0.12.0",
- "fedimint-client",
  "fedimint-core",
  "fedimint-ln-common",
  "fedimint-tpe",
@@ -2660,16 +2627,13 @@ dependencies = [
  "fedimint-dummy-client",
  "fedimint-dummy-common",
  "fedimint-dummy-server",
- "fedimint-ln-client",
  "fedimint-ln-common",
- "fedimint-ln-server",
  "fedimint-lnv2-client",
  "fedimint-lnv2-common",
  "fedimint-lnv2-server",
  "fedimint-testing",
  "itertools 0.13.0",
  "lightning-invoice",
- "semver",
  "serde_json",
  "substring",
  "tokio",
@@ -2681,12 +2645,10 @@ name = "fedimint-load-test-tool"
 version = "0.5.0-alpha"
 dependencies = [
  "anyhow",
- "base64 0.22.1",
  "bitcoin 0.30.2",
  "clap",
  "devimint",
  "fedimint-api-client",
- "fedimint-build",
  "fedimint-client",
  "fedimint-core",
  "fedimint-ln-client",
@@ -2697,7 +2659,6 @@ dependencies = [
  "fedimint-wallet-client",
  "futures",
  "jsonrpsee-core",
- "jsonrpsee-types",
  "jsonrpsee-ws-client",
  "lightning-invoice",
  "rand",
@@ -2705,7 +2666,6 @@ dependencies = [
  "serde_json",
  "tokio",
  "tracing",
- "url",
 ]
 
 [[package]]
@@ -2733,7 +2693,6 @@ dependencies = [
  "fedimint-core",
  "fedimint-logging",
  "fedimint-meta-common",
- "futures",
  "serde",
  "serde_json",
  "strum 0.26.3",
@@ -2807,7 +2766,6 @@ dependencies = [
  "async-trait",
  "base64 0.22.1",
  "base64-url",
- "bincode",
  "bitcoin_hashes 0.12.0",
  "bls12_381",
  "clap",
@@ -2929,7 +2887,6 @@ dependencies = [
  "anyhow",
  "bitcoin 0.30.2",
  "clap",
- "fedimint-aead",
  "fedimint-build",
  "fedimint-core",
  "fedimint-logging",
@@ -2945,7 +2902,6 @@ dependencies = [
  "serde_json",
  "tokio",
  "tracing",
- "tracing-subscriber",
 ]
 
 [[package]]
@@ -2960,14 +2916,12 @@ dependencies = [
  "tempfile",
  "tokio",
  "tracing",
- "tracing-subscriber",
 ]
 
 [[package]]
 name = "fedimint-server"
 version = "0.5.0-alpha"
 dependencies = [
- "aleph-bft-types 0.13.0",
  "anyhow",
  "async-channel",
  "async-trait",
@@ -3008,17 +2962,12 @@ dependencies = [
  "strum_macros 0.26.4",
  "subtle",
  "tar",
- "tempfile",
  "test-log",
- "thiserror",
  "tokio",
  "tokio-rustls 0.24.1",
- "tokio-stream",
  "tokio-util",
  "tower",
  "tracing",
- "tracing-subscriber",
- "url",
 ]
 
 [[package]]
@@ -3045,7 +2994,6 @@ dependencies = [
  "async-trait",
  "bitcoin 0.30.2",
  "bitcoincore-rpc",
- "clap",
  "fedimint-api-client",
  "fedimint-bitcoind",
  "fedimint-client",
@@ -3057,19 +3005,13 @@ dependencies = [
  "fedimint-rocksdb",
  "fedimint-server",
  "fedimint-testing-core",
- "fedimint-tonic-lnd",
  "fs-lock",
- "futures",
  "lightning-invoice",
  "rand",
- "secp256k1-zkp",
- "serde",
  "tempfile",
  "tokio",
  "tokio-rustls 0.24.1",
- "tokio-stream",
  "tracing",
- "url",
 ]
 
 [[package]]
@@ -3077,24 +3019,15 @@ name = "fedimint-testing-core"
 version = "0.5.0-alpha"
 dependencies = [
  "anyhow",
- "async-stream",
- "async-trait",
- "bitcoin 0.30.2",
  "fedimint-client",
  "fedimint-core",
  "fedimint-logging",
  "fedimint-rocksdb",
  "futures",
- "lightning-invoice",
  "rand",
- "secp256k1-zkp",
- "serde",
  "tempfile",
  "tokio",
- "tokio-rustls 0.24.1",
- "tokio-stream",
  "tracing",
- "url",
 ]
 
 [[package]]
@@ -3253,7 +3186,6 @@ dependencies = [
  "strum_macros 0.26.4",
  "tokio",
  "tracing",
- "tracing-subscriber",
 ]
 
 [[package]]
@@ -3308,7 +3240,6 @@ dependencies = [
  "bitcoin 0.30.2",
  "bitcoincore-rpc",
  "devimint",
- "fedimint-bitcoind",
  "fedimint-client",
  "fedimint-core",
  "fedimint-dummy-client",
@@ -3337,15 +3268,10 @@ dependencies = [
  "fedimint-ln-client",
  "fedimint-ln-common",
  "fedimint-mint-client",
- "fedimint-mint-common",
  "fedimint-wallet-client",
  "futures",
  "gloo-net",
- "js-sys",
  "rand",
- "ring 0.17.8",
- "wasm-bindgen",
- "wasm-bindgen-futures",
  "wasm-bindgen-test",
 ]
 
@@ -3354,15 +3280,8 @@ name = "fedimintd"
 version = "0.5.0-alpha"
 dependencies = [
  "anyhow",
- "async-trait",
- "axum 0.7.5",
- "bincode",
  "bitcoin 0.30.2",
- "bytes",
  "clap",
- "console-subscriber",
- "fedimint-aead",
- "fedimint-bitcoind",
  "fedimint-build",
  "fedimint-core",
  "fedimint-ln-common",
@@ -3375,30 +3294,13 @@ dependencies = [
  "fedimint-mint-server",
  "fedimint-rocksdb",
  "fedimint-server",
- "fedimint-tbs",
- "fedimint-threshold-crypto",
  "fedimint-unknown-common",
  "fedimint-unknown-server",
  "fedimint-wallet-server",
  "futures",
- "http 1.1.0",
- "http-body 1.0.1",
- "hyper 1.4.1",
- "itertools 0.13.0",
- "jsonrpsee",
- "rand",
- "rcgen",
- "ring 0.17.8",
- "serde",
  "serde_json",
- "sha3",
- "thiserror",
  "tokio",
- "tokio-rustls 0.24.1",
- "tokio-util",
- "tower",
  "tracing",
- "url",
 ]
 
 [[package]]
@@ -3661,7 +3563,6 @@ dependencies = [
  "fedimint-core",
  "fedimint-ln-gateway",
  "fedimint-testing",
- "semver",
  "serde_json",
  "tokio",
  "tracing",
