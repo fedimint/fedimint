@@ -347,11 +347,12 @@ impl LightningGatewayAnnouncement {
 /// Information a gateway registers with a federation
 #[derive(Debug, Clone, Serialize, Deserialize, Encodable, Decodable, PartialEq, Eq, Hash)]
 pub struct LightningGateway {
-    /// Channel identifier assigned to the mint by the gateway.
+    /// Unique per-federation identifier assigned by the gateway.
     /// All clients in this federation should use this value as
     /// `short_channel_id` when creating invoices to be settled by this
     /// gateway.
-    pub mint_channel_id: u64,
+    #[serde(rename = "mint_channel_id")]
+    pub federation_index: u64,
     /// Key used to pay the gateway
     pub gateway_redeem_key: secp256k1::PublicKey,
     pub node_pub_key: secp256k1::PublicKey,

@@ -13,10 +13,10 @@ use crate::rpc::FederationInfo;
 use crate::state_machine::GatewayClientModule;
 use crate::{GatewayError, Result};
 
-/// The first SCID that the gateway will assign to a federation.
-/// Note: This starts at 1 because an SCID of 0 is considered invalid by LND's
-/// HTLC interceptor.
-const INITIAL_SCID: u64 = 1;
+/// The first index that the gateway will assign to a federation.
+/// Note: This starts at 1 because LNv1 uses the `federation_index` as an SCID.
+/// An SCID of 0 is considered invalid by LND's HTLC interceptor.
+const INITIAL_INDEX: u64 = 1;
 
 // TODO: Add support for client lookup by payment hash (for LNv2).
 #[derive(Debug)]
@@ -25,22 +25,23 @@ pub struct FederationManager {
     /// client while handling incoming HTLCs.
     clients: BTreeMap<FederationId, Spanned<fedimint_client::ClientHandleArc>>,
 
-    /// Map of short channel ids to `FederationId`. Use for efficient retrieval
+    /// Map of federation indices to `FederationId`. Use for efficient retrieval
     /// of the client while handling incoming HTLCs.
-    scid_to_federation: BTreeMap<u64, FederationId>,
+    /// Can be removed after LNv1 removal.
+    index_to_federation: BTreeMap<u64, FederationId>,
 
-    /// Tracker for short channel ID assignments. When connecting a new
+    /// Tracker for federation index assignments. When connecting a new
     /// federation, this value is incremented and assigned to the federation
-    /// as the `mint_channel_id`
-    next_scid: AtomicU64,
+    /// as the `federation_index`
+    next_index: AtomicU64,
 }
 
 impl FederationManager {
     pub fn new() -> Self {
         Self {
             clients: BTreeMap::new(),
-            scid_to_federation: BTreeMap::new(),
-            next_scid: AtomicU64::new(INITIAL_SCID),
+            index_to_federation: BTreeMap::new(),
+            next_index: AtomicU64::new(INITIAL_INDEX),
         }
     }
 
@@ -48,10 +49,10 @@ impl FederationManager {
         self.clients.is_empty()
     }
 
-    pub fn add_client(&mut self, scid: u64, client: Spanned<fedimint_client::ClientHandleArc>) {
+    pub fn add_client(&mut self, index: u64, client: Spanned<fedimint_client::ClientHandleArc>) {
         let federation_id = client.borrow().with_sync(|c| c.federation_id());
         self.clients.insert(federation_id, client);
-        self.scid_to_federation.insert(scid, federation_id);
+        self.index_to_federation.insert(index, federation_id);
     }
 
     pub async fn leave_federation(
@@ -80,7 +81,7 @@ impl FederationManager {
             )))?
             .into_value();
 
-        self.scid_to_federation
+        self.index_to_federation
             .retain(|_, fid| *fid != federation_id);
 
         if let Some(client) = Arc::into_inner(client) {
@@ -133,22 +134,22 @@ impl FederationManager {
         futures::future::join_all(removal_futures).await;
     }
 
-    pub fn get_client_for_scid(&self, short_channel_id: u64) -> Option<Spanned<ClientHandleArc>> {
-        let federation_id = self.scid_to_federation.get(&short_channel_id)?;
+    pub fn get_client_for_index(&self, short_channel_id: u64) -> Option<Spanned<ClientHandleArc>> {
+        let federation_id = self.index_to_federation.get(&short_channel_id)?;
         // TODO(tvolk131): Cloning the client here could cause issues with client
         // shutdown (see `remove_client` above). Perhaps this function should take a
         // lambda and pass it into `client.with_sync`.
         if let Some(client) = self.clients.get(federation_id).cloned() {
             Some(client)
         } else {
-            panic!("`FederationManager.scid_to_federation` is out of sync with `FederationManager.clients`! This is a bug.");
+            panic!("`FederationManager.index_to_federation` is out of sync with `FederationManager.clients`! This is a bug.");
         }
     }
 
-    fn get_scid_for_federation(&self, federation_id: FederationId) -> Option<u64> {
-        self.scid_to_federation.iter().find_map(|(scid, fid)| {
+    fn get_index_for_federation(&self, federation_id: FederationId) -> Option<u64> {
+        self.index_to_federation.iter().find_map(|(index, fid)| {
             if *fid == federation_id {
-                Some(*scid)
+                Some(*index)
             } else {
                 None
             }
@@ -181,7 +182,7 @@ impl FederationManager {
         federation_id: FederationId,
         dbtx: &mut DatabaseTransaction<'_, NonCommittable>,
     ) -> Result<FederationInfo> {
-        let Some(channel_id) = self.get_scid_for_federation(federation_id) else {
+        let Some(federation_index) = self.get_index_for_federation(federation_id) else {
             return Err(GatewayError::InvalidMetadata(format!(
                 "No federation with id {federation_id}"
             )));
@@ -189,7 +190,7 @@ impl FederationManager {
 
         self.clients
             .get(&federation_id)
-            .expect("`FederationManager.scid_to_federation` is out of sync with `FederationManager.clients`! This is a bug.")
+            .expect("`FederationManager.index_to_federation` is out of sync with `FederationManager.clients`! This is a bug.")
             .borrow()
             .with(|client| async move {
                 let balance_msat = client.get_balance().await;
@@ -202,7 +203,7 @@ impl FederationManager {
                 Ok(FederationInfo {
                     federation_id,
                     balance_msat,
-                    channel_id,
+                    federation_index,
                     routing_fees,
                 })
             })
@@ -215,7 +216,7 @@ impl FederationManager {
     ) -> Vec<FederationInfo> {
         let mut federation_infos = Vec::new();
         for (federation_id, client) in &self.clients {
-            let channel_id = self.get_scid_for_federation(*federation_id).expect("`FederationManager.scid_to_federation` is out of sync with `FederationManager.clients`! This is a bug.");
+            let federation_index = self.get_index_for_federation(*federation_id).expect("`FederationManager.index_to_federation` is out of sync with `FederationManager.clients`! This is a bug.");
 
             let balance_msat = client.borrow().with(|client| client.get_balance()).await;
 
@@ -227,7 +228,7 @@ impl FederationManager {
             federation_infos.push(FederationInfo {
                 federation_id: *federation_id,
                 balance_msat,
-                channel_id,
+                federation_index,
                 routing_fees,
             });
         }
@@ -265,20 +266,20 @@ impl FederationManager {
     }
 
     // TODO(tvolk131): Set this value in the constructor.
-    pub fn set_next_scid(&self, next_scid: u64) {
-        self.next_scid.store(next_scid, Ordering::SeqCst);
+    pub fn set_next_index(&self, next_index: u64) {
+        self.next_index.store(next_index, Ordering::SeqCst);
     }
 
-    pub fn pop_next_scid(&self) -> Result<u64> {
-        let next_scid = self.next_scid.fetch_add(1, Ordering::Relaxed);
+    pub fn pop_next_index(&self) -> Result<u64> {
+        let next_index = self.next_index.fetch_add(1, Ordering::Relaxed);
 
         // Check for overflow.
-        if next_scid == INITIAL_SCID.wrapping_sub(1) {
+        if next_index == INITIAL_INDEX.wrapping_sub(1) {
             return Err(GatewayError::GatewayConfigurationError(
-                "Short channel ID overflow".to_string(),
+                "Federation Index overflow".to_string(),
             ));
         }
 
-        Ok(next_scid)
+        Ok(next_index)
     }
 }

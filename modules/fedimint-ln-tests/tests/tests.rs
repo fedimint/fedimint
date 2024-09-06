@@ -752,7 +752,7 @@ mod fedimint_migration_tests {
 
         let gateway = LightningGatewayRegistration {
             info: LightningGateway {
-                mint_channel_id: 100,
+                federation_index: 100,
                 gateway_redeem_key: pk,
                 node_pub_key: pk,
                 lightning_alias: "FakeLightningAlias".to_string(),
@@ -814,7 +814,7 @@ mod fedimint_migration_tests {
         let route_hints = vec![RouteHint(vec![hop])];
 
         let gateway_info = LightningGateway {
-            mint_channel_id: 3,
+            federation_index: 3,
             gateway_redeem_key: pk,
             node_pub_key: pk,
             lightning_alias: "MyLightningNode".to_string(),
@@ -990,7 +990,7 @@ mod fedimint_migration_tests {
         .consensus_encode(&mut funded_state)
         .expect("PayInvoicePayload is encodable");
         LightningGateway {
-            mint_channel_id: 3,
+            federation_index: 3,
             gateway_redeem_key: pk,
             node_pub_key: pk,
             lightning_alias: "MyLightningNode".to_string(),

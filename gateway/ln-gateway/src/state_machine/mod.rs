@@ -112,7 +112,7 @@ pub enum GatewayMeta {
 #[derive(Debug, Clone)]
 pub struct GatewayClientInit {
     pub timelock_delta: u64,
-    pub mint_channel_id: u64,
+    pub federation_index: u64,
     pub gateway: Arc<Gateway>,
 }
 
@@ -148,7 +148,7 @@ impl ClientModuleInit for GatewayClientInit {
                 .to_secp_key(&Secp256k1::new()),
             module_api: args.module_api().clone(),
             timelock_delta: self.timelock_delta,
-            mint_channel_id: self.mint_channel_id,
+            federation_index: self.federation_index,
             client_ctx: args.context(),
             gateway: self.gateway.clone(),
         })
@@ -189,7 +189,7 @@ pub struct GatewayClientModule {
     pub notifier: ModuleNotifier<GatewayClientStateMachines>,
     pub redeem_key: KeyPair,
     timelock_delta: u64,
-    mint_channel_id: u64,
+    federation_index: u64,
     module_api: DynModuleApi,
     client_ctx: ClientContext<Self>,
     gateway: Arc<Gateway>,
@@ -243,7 +243,7 @@ impl GatewayClientModule {
     ) -> LightningGatewayAnnouncement {
         LightningGatewayAnnouncement {
             info: LightningGateway {
-                mint_channel_id: self.mint_channel_id,
+                federation_index: self.federation_index,
                 gateway_redeem_key: self.redeem_key.public_key(),
                 node_pub_key: lightning_context.lightning_public_key,
                 lightning_alias: lightning_context.lightning_alias,

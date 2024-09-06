@@ -634,7 +634,7 @@ impl GatewayPayInvoice {
                         .federation_manager
                         .read()
                         .await
-                        .get_client_for_scid(hop.short_channel_id)
+                        .get_client_for_index(hop.short_channel_id)
                 }
                 _ => None,
             },

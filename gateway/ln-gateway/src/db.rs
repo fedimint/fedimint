@@ -267,7 +267,7 @@ struct FederationIdKeyV0 {
 #[derive(Debug, Clone, Eq, PartialEq, Encodable, Decodable, Serialize, Deserialize)]
 pub struct FederationConfigV0 {
     pub invite_code: InviteCode,
-    pub mint_channel_id: u64,
+    pub federation_index: u64,
     pub timelock_delta: u64,
     #[serde(with = "serde_routing_fees")]
     pub fees: RoutingFees,
@@ -281,7 +281,10 @@ struct FederationIdKey {
 #[derive(Debug, Clone, Eq, PartialEq, Encodable, Decodable, Serialize, Deserialize)]
 pub struct FederationConfig {
     pub invite_code: InviteCode,
-    pub mint_channel_id: u64,
+    // Unique integer identifier per-federation that is assigned when the gateways joins a
+    // federation.
+    #[serde(alias = "mint_channel_id")]
+    pub federation_index: u64,
     pub timelock_delta: u64,
     #[serde(with = "serde_routing_fees")]
     pub fees: RoutingFees,
@@ -409,7 +412,7 @@ async fn migrate_to_v2(dbtx: &mut DatabaseTransaction<'_>) -> Result<(), anyhow:
         {
             let new_federation_config = FederationConfig {
                 invite_code: old_federation_config.invite_code,
-                mint_channel_id: old_federation_config.mint_channel_id,
+                federation_index: old_federation_config.federation_index,
                 timelock_delta: old_federation_config.timelock_delta,
                 fees: old_federation_config.fees,
                 connector: Connector::default(),
@@ -472,7 +475,7 @@ mod fedimint_migration_tests {
         );
         let federation_config = FederationConfigV0 {
             invite_code,
-            mint_channel_id: 2,
+            federation_index: 2,
             timelock_delta: 10,
             fees: DEFAULT_FEES,
         };
