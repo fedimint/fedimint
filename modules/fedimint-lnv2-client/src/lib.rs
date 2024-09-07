@@ -39,8 +39,7 @@ use fedimint_core::{apply, async_trait_maybe_send, Amount, OutPoint, PeerId, Tra
 use fedimint_lnv2_common::config::LightningClientConfig;
 use fedimint_lnv2_common::contracts::{IncomingContract, OutgoingContract, PaymentImage};
 use fedimint_lnv2_common::{
-    GatewayEndpoint, LightningCommonInit, LightningModuleTypes, LightningOutput, LightningOutputV0,
-    KIND,
+    LightningCommonInit, LightningModuleTypes, LightningOutput, LightningOutputV0, KIND,
 };
 use futures::StreamExt;
 use lightning_invoice::{Bolt11Invoice, Currency};
@@ -64,7 +63,7 @@ pub enum LightningOperationMeta {
 pub struct SendOperationMeta {
     pub funding_txid: TransactionId,
     pub funding_change_outpoints: Vec<OutPoint>,
-    pub gateway_api: GatewayEndpoint,
+    pub gateway_api: SafeUrl,
     pub contract: OutgoingContract,
     pub invoice: Bolt11Invoice,
 }
@@ -403,10 +402,7 @@ impl LightningClientModule {
         gateway_api: &SafeUrl,
     ) -> Result<Option<RoutingInfo>, GatewayError> {
         self.gateway_conn
-            .routing_info(
-                GatewayEndpoint::Url(gateway_api.clone()),
-                &self.federation_id,
-            )
+            .routing_info(gateway_api.clone(), &self.federation_id)
             .await
     }
 
@@ -507,7 +503,7 @@ impl LightningClientModule {
                     common: SendSMCommon {
                         operation_id,
                         funding_txid,
-                        gateway_api: GatewayEndpoint::Url(gateway_api_clone.clone()),
+                        gateway_api: gateway_api_clone.clone(),
                         contract: contract_clone.clone(),
                         invoice: LightningInvoice::Bolt11(invoice_clone.clone()),
                         refund_keypair,
@@ -528,7 +524,7 @@ impl LightningClientModule {
                     LightningOperationMeta::Send(SendOperationMeta {
                         funding_txid,
                         funding_change_outpoints,
-                        gateway_api: GatewayEndpoint::Url(gateway_api.clone()),
+                        gateway_api: gateway_api.clone(),
                         contract: contract.clone(),
                         invoice: invoice.clone(),
                     })
@@ -784,7 +780,7 @@ impl LightningClientModule {
         let invoice = self
             .gateway_conn
             .bolt11_invoice(
-                GatewayEndpoint::Url(gateway_api),
+                gateway_api,
                 self.federation_id,
                 contract.clone(),
                 invoice_amount,

@@ -14,7 +14,6 @@ use fedimint_lnv2_client::{
     Bolt11InvoiceDescription, GatewayError, LightningInvoice, PaymentFee, RoutingInfo,
 };
 use fedimint_lnv2_common::contracts::{IncomingContract, OutgoingContract, PaymentImage};
-use fedimint_lnv2_common::GatewayEndpoint;
 use lightning_invoice::{
     Bolt11Invoice, Currency, InvoiceBuilder, PaymentSecret, DEFAULT_EXPIRY_TIME,
 };
@@ -88,7 +87,7 @@ impl Default for MockGatewayConnection {
 impl GatewayConnection for MockGatewayConnection {
     async fn routing_info(
         &self,
-        _gateway_api: GatewayEndpoint,
+        _gateway_api: SafeUrl,
         _federation_id: &FederationId,
     ) -> Result<Option<RoutingInfo>, GatewayError> {
         Ok(Some(RoutingInfo {
@@ -104,7 +103,7 @@ impl GatewayConnection for MockGatewayConnection {
 
     async fn bolt11_invoice(
         &self,
-        _gateway_api: GatewayEndpoint,
+        _gateway_api: SafeUrl,
         _federation_id: FederationId,
         contract: IncomingContract,
         invoice_amount: Amount,
@@ -130,7 +129,7 @@ impl GatewayConnection for MockGatewayConnection {
 
     async fn send_payment(
         &self,
-        _gateway_api: GatewayEndpoint,
+        _gateway_api: SafeUrl,
         _federation_id: FederationId,
         contract: OutgoingContract,
         invoice: LightningInvoice,
