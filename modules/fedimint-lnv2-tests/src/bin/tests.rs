@@ -115,42 +115,65 @@ async fn test_gateway_registration(dev_fed: &DevJitFed) -> anyhow::Result<()> {
         .new_joined_client("lnv2-gateway-registration-client")
         .await?;
 
-    let gateway_api = SafeUrl::parse("https://gateway.xyz").expect("Valid Url");
+    let gw_ldk = dev_fed
+        .gw_ldk_registered()
+        .await?
+        .as_ref()
+        .expect("Gateways of version 0.5.0 or higher support LDK");
+
+    let gateway_api = SafeUrl::parse(&gw_ldk.addr).expect("LDK gateway address is invalid url");
 
     for peer in 0..dev_fed.fed().await?.members.len() {
-        assert_eq!(add_gateway(&client, peer, &gateway_api).await?, true);
+        assert!(add_gateway(&client, peer, &gateway_api.to_string()).await?);
     }
 
     assert_eq!(
         cmd!(client, "module", "lnv2", "gateway", "list")
             .out_json()
-            .await?,
-        serde_json::to_value(vec![gateway_api.clone()]).expect("JSON serialization failed")
+            .await?
+            .as_array()
+            .expect("JSON Value is not an array")
+            .len(),
+        1
     );
 
     assert_eq!(
         cmd!(client, "module", "lnv2", "gateway", "list", "--peer", "0")
             .out_json()
-            .await?,
-        serde_json::to_value(vec![gateway_api.clone()]).expect("JSON serialization failed")
+            .await?
+            .as_array()
+            .expect("JSON Value is not an array")
+            .len(),
+        1
+    );
+
+    assert_eq!(
+        cmd!(client, "module", "lnv2", "gateway", "select")
+            .out_json()
+            .await?
+            .as_str()
+            .expect("JSON Value is not a string"),
+        gateway_api.to_string().as_str()
     );
 
     for peer in 0..dev_fed.fed().await?.members.len() {
-        assert_eq!(remove_gateway(&client, peer, &gateway_api).await?, true);
+        assert!(remove_gateway(&client, peer, &gateway_api).await?);
     }
 
-    assert_eq!(
-        cmd!(client, "module", "lnv2", "gateway", "list")
-            .out_json()
-            .await?,
-        serde_json::to_value(Vec::<SafeUrl>::new()).expect("JSON serialization failed")
-    );
+    assert!(cmd!(client, "module", "lnv2", "gateway", "list")
+        .out_json()
+        .await?
+        .as_array()
+        .expect("JSON Value is not an array")
+        .is_empty(),);
 
-    assert_eq!(
+    assert!(
         cmd!(client, "module", "lnv2", "gateway", "list", "--peer", "0")
             .out_json()
-            .await?,
-        serde_json::to_value(Vec::<SafeUrl>::new()).expect("JSON serialization failed")
+            .await?
+            .as_array()
+            .expect("JSON Value is not an array")
+            .is_empty()
     );
 
     info!("Testing gateway registration successful");
@@ -363,7 +386,7 @@ async fn test_inter_federation_payments(
     Ok(())
 }
 
-async fn add_gateway(client: &Client, peer: usize, gateway_api: &SafeUrl) -> anyhow::Result<bool> {
+async fn add_gateway(client: &Client, peer: usize, gateway_api: &String) -> anyhow::Result<bool> {
     cmd!(
         client,
         "--our-id",
@@ -374,7 +397,7 @@ async fn add_gateway(client: &Client, peer: usize, gateway_api: &SafeUrl) -> any
         "lnv2",
         "gateway",
         "add",
-        gateway_api.to_string()
+        gateway_api
     )
     .out_json()
     .await?

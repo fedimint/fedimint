@@ -387,14 +387,24 @@ fn generate_ephemeral_tweak(static_pk: PublicKey) -> ([u8; 32], PublicKey) {
 }
 
 impl LightningClientModule {
-    async fn select_gateway(&self) -> Option<(SafeUrl, RoutingInfo)> {
-        for gateway in self.module_api.gateways().await.ok()? {
+    pub async fn select_gateway(&self) -> Result<(SafeUrl, RoutingInfo), SelectGatewayError> {
+        let gateways = self
+            .module_api
+            .gateways()
+            .await
+            .map_err(|e| SelectGatewayError::FederationError(e.to_string()))?;
+
+        if gateways.is_empty() {
+            return Err(SelectGatewayError::NoVettedGateways);
+        }
+
+        for gateway in gateways {
             if let Ok(Some(routing_info)) = self.routing_info(&gateway).await {
-                return Some((gateway, routing_info));
+                return Ok((gateway, routing_info));
             }
         }
 
-        None
+        Err(SelectGatewayError::FailedToFetchRoutingInfo)
     }
 
     async fn routing_info(
@@ -461,7 +471,7 @@ impl LightningClientModule {
             None => self
                 .select_gateway()
                 .await
-                .ok_or(SendPaymentError::FailedToSelectGateway)?,
+                .map_err(SendPaymentError::FailedToSelectGateway)?,
         };
 
         let (send_fee, expiration_delta) = routing_info.send_parameters(&invoice);
@@ -737,7 +747,7 @@ impl LightningClientModule {
             None => self
                 .select_gateway()
                 .await
-                .ok_or(FetchInvoiceError::FailedToSelectGateway)?,
+                .map_err(FetchInvoiceError::FailedToSelectGateway)?,
         };
 
         if !routing_info.receive_fee.le(&payment_fee_limit) {
@@ -946,6 +956,16 @@ pub enum GatewayError {
 }
 
 #[derive(Error, Debug, Clone, Eq, PartialEq)]
+pub enum SelectGatewayError {
+    #[error("Federation returned an error: {0}")]
+    FederationError(String),
+    #[error("The federation has no vetted gateways")]
+    NoVettedGateways,
+    #[error("All vetted gateways failed to respond on request of the routing info")]
+    FailedToFetchRoutingInfo,
+}
+
+#[derive(Error, Debug, Clone, Eq, PartialEq)]
 pub enum SendPaymentError {
     #[error("The invoice has not amount")]
     InvoiceMissingAmount,
@@ -955,8 +975,8 @@ pub enum SendPaymentError {
     PendingPreviousPayment(OperationId),
     #[error("A previous payment for the same invoice was successful: {}", .0.fmt_full())]
     SuccessfulPreviousPayment(OperationId),
-    #[error("Failed to select gateway")]
-    FailedToSelectGateway,
+    #[error("Failed to select gateway: {0}")]
+    FailedToSelectGateway(SelectGatewayError),
     #[error("Gateway error: {0}")]
     GatewayError(GatewayError),
     #[error("The gateway does not support our federation")]
@@ -978,8 +998,8 @@ pub enum SendPaymentError {
 
 #[derive(Error, Debug, Clone, Eq, PartialEq)]
 pub enum FetchInvoiceError {
-    #[error("Failed to select gateway")]
-    FailedToSelectGateway,
+    #[error("Failed to select gateway: {0}")]
+    FailedToSelectGateway(SelectGatewayError),
     #[error("Gateway error: {0}")]
     GatewayError(GatewayError),
     #[error("The gateway does not support our federation")]

@@ -36,7 +36,9 @@ enum Opts {
 
 #[derive(Clone, Subcommand, Serialize)]
 enum GatewayOpts {
-    /// List vetted gateways
+    /// Select an online vetted gateway
+    Select,
+    /// List all vetted gateways
     List {
         #[arg(long)]
         peer: Option<PeerId>,
@@ -59,6 +61,7 @@ pub(crate) async fn handle_cli_command(
         Opts::Receive { gateway, amount } => json(lightning.receive(amount, gateway).await?),
         Opts::AwaitReceive { operation_id } => json(lightning.await_receive(operation_id).await?),
         Opts::Gateway(gateway_opts) => match gateway_opts {
+            GatewayOpts::Select => json(lightning.select_gateway().await?.0),
             GatewayOpts::List { peer } => match peer {
                 Some(peer) => json(lightning.module_api.gateways_from_peer(peer).await?),
                 None => json(lightning.module_api.gateways().await?),
