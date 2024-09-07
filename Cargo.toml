@@ -83,11 +83,11 @@ license-file = "LICENSE"
 keywords = ["bitcoin", "lightning", "chaumian", "e-cash", "federated"]
 
 [workspace.dependencies]
-anyhow = "1.0.86"
+anyhow = "1.0.87"
 aquamarine = "0.5.0"
 assert_matches = "1.5.0"
 async-stream = "0.3.5"
-async-trait = "0.1.81"
+async-trait = "0.1.82"
 axum = "0.7.5"
 base64 = "0.22.1"
 base64-url = "3.0.0"
@@ -97,7 +97,7 @@ bitcoincore-rpc = "0.17.0"
 bitcoin_hashes = "0.12.0"
 bls12_381 = "0.8.0"
 bytes = "1.7.1"
-clap = { version = "4.5.16", features = ["derive", "env"] }
+clap = { version = "4.5.17", features = ["derive", "env"] }
 cln-rpc = "0.1.9"
 criterion = "0.5.1"
 devimint = { path = "./devimint", version = "=0.5.0-alpha" }
@@ -168,10 +168,10 @@ reqwest = { version = "0.12.7", features = [
 ring = "0.17.8"
 secp256k1 = { version = "0.27.0", default-features = false }
 semver = "1.0.23"
-serde = { version = "1.0.209", features = ["derive"] }
+serde = { version = "1.0.210", features = ["derive"] }
 serdect = "0.2.0"
 serde-big-array = "0.5.1"
-serde_json = "1.0.127"
+serde_json = "1.0.128"
 sha3 = "0.10.8"
 strum = "0.26"
 strum_macros = "0.26"
@@ -182,7 +182,7 @@ thiserror = "1.0.63"
 threshold_crypto = { version = "0.2.1", package = "fedimint-threshold-crypto" }
 tokio = "1.40.0"
 tokio-rustls = "0.24.1"
-tokio-stream = "0.1.15"
+tokio-stream = "0.1.16"
 tonic_lnd = { version = "0.2.0", package = "fedimint-tonic-lnd", features = [
     "lightningrpc",
     "routerrpc",
