@@ -80,18 +80,16 @@ impl BitcoinRpcConfig {
     pub fn get_defaults_from_env_vars() -> anyhow::Result<Self> {
         Ok(Self {
             kind: env::var(FM_DEFAULT_BITCOIN_RPC_KIND_ENV)
-                .or_else(|_| env::var(FM_BITCOIN_RPC_KIND_ENV).map(|v| {
+                .or_else(|_| env::var(FM_BITCOIN_RPC_KIND_ENV).inspect(|_v| {
                     warn!(target: LOG_CORE, "{FM_BITCOIN_RPC_KIND_ENV} is obsolete, use {FM_DEFAULT_BITCOIN_RPC_KIND_ENV} instead");
-                    v
                 })
                 )
                 .with_context(|| {
                     anyhow::anyhow!("failure looking up env var {FM_DEFAULT_BITCOIN_RPC_KIND_ENV}")
                 })?,
             url: env::var(FM_DEFAULT_BITCOIN_RPC_URL_ENV)
-                .or_else(|_| env::var(FM_BITCOIN_RPC_URL_ENV).map(|v| {
+                .or_else(|_| env::var(FM_BITCOIN_RPC_URL_ENV).inspect(|_v| {
                     warn!(target: LOG_CORE, "{FM_BITCOIN_RPC_URL_ENV} is obsolete, use {FM_DEFAULT_BITCOIN_RPC_URL_ENV} instead");
-                    v
                 })
                 )
                 .with_context(|| {
