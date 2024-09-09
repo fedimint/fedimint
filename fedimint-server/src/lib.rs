@@ -68,7 +68,7 @@ pub async fn run(
                 data_dir.clone(),
                 settings.clone(),
                 db.clone(),
-                code_version_str,
+                code_version_str.clone(),
                 task_group.make_subgroup(),
                 force_api_secrets.clone(),
             )
@@ -98,6 +98,7 @@ pub async fn run(
         &task_group,
         force_api_secrets,
         data_dir,
+        code_version_str,
     )
     .await?;
 

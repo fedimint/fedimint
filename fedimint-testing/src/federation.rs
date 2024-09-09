@@ -224,6 +224,7 @@ impl FederationTestBuilder {
             let module_init_registry = self.server_init.clone();
             let subgroup = task_group.make_subgroup();
             let checkpoint_dir = tempfile::Builder::new().tempdir().unwrap().into_path();
+            let code_version_str = env!("CARGO_PKG_VERSION");
 
             task_group.spawn("fedimintd", move |_| async move {
                 consensus::run(
@@ -235,6 +236,7 @@ impl FederationTestBuilder {
                     &subgroup,
                     fedimint_server::net::api::ApiSecrets::default(),
                     checkpoint_dir,
+                    code_version_str.to_string(),
                 )
                 .await
                 .expect("Could not initialise consensus");
