@@ -29,7 +29,9 @@ use crate::cli::{cleanup_on_exit, exec_user_command, setup, write_ready_file, Co
 use crate::envs::{FM_DATA_DIR_ENV, FM_DEVIMINT_RUN_DEPRECATED_TESTS_ENV, FM_PASSWORD_ENV};
 use crate::federation::{Client, Federation};
 use crate::util::{poll, LoadTestTool, ProcessManager};
-use crate::version_constants::{VERSION_0_3_0, VERSION_0_3_0_ALPHA, VERSION_0_4_0_ALPHA};
+use crate::version_constants::{
+    VERSION_0_3_0, VERSION_0_3_0_ALPHA, VERSION_0_4_0_ALPHA, VERSION_0_5_0_ALPHA,
+};
 use crate::{cmd, dev_fed, poll_eq, DevFed, Gatewayd, LightningNode, Lightningd, Lnd};
 
 pub struct Stats {
@@ -636,6 +638,7 @@ pub async fn cli_tests(dev_fed: DevFed) -> Result<()> {
 
     let fedimint_cli_version = crate::util::FedimintCli::version_or_default().await;
     let gatewayd_version = crate::util::Gatewayd::version_or_default().await;
+    let fedimintd_version = crate::util::FedimintdCmd::version_or_default().await;
     if fedimint_cli_version < *VERSION_0_3_0 || gatewayd_version < *VERSION_0_3_0 {
         info!("fedmint-cli version that didn't support unknown modules");
         return Ok(());
@@ -757,7 +760,6 @@ pub async fn cli_tests(dev_fed: DevFed) -> Result<()> {
     // fedimintd introduced wpkh for single guardian federations in v0.3.0 (9e35bdb)
     // The code path is backwards-compatible, however this test will fail if we
     // check against earlier fedimintd versions.
-    let fedimintd_version = crate::util::FedimintdCmd::version_or_default().await;
     if fedimintd_version >= *VERSION_0_3_0_ALPHA {
         // # Test the correct descriptor is used
         let config = cmd!(client, "config").out_json().await?;
@@ -1113,6 +1115,25 @@ pub async fn cli_tests(dev_fed: DevFed) -> Result<()> {
     let expected_wallet_balance = initial_walletng_balance - 50_000_000 - (fees_sat * 1000);
 
     assert_eq!(post_withdraw_walletng_balance, expected_wallet_balance);
+
+    // # peer-version command
+
+    // TODO(support:v0.4): peer-version command was introduced in 0.5
+    if fedimintd_version >= *VERSION_0_5_0_ALPHA {
+        let peer_0_fedimintd_version = cmd!(client, "dev", "peer-version", "--peer-id", "0")
+            .out_json()
+            .await?
+            .get("version")
+            .expect("Output didn't contain version")
+            .as_str()
+            .unwrap()
+            .to_owned();
+
+        assert_eq!(
+            semver::Version::parse(&peer_0_fedimintd_version)?,
+            fedimintd_version
+        );
+    }
 
     // # API URL announcements
     if fedimint_cli_version >= *VERSION_0_4_0_ALPHA && fedimintd_version >= *VERSION_0_4_0_ALPHA {

@@ -23,11 +23,11 @@ use fedimint_core::endpoint_constants::{
     API_ANNOUNCEMENTS_ENDPOINT, AUDIT_ENDPOINT, AUTH_ENDPOINT, AWAIT_OUTPUT_OUTCOME_ENDPOINT,
     AWAIT_SESSION_OUTCOME_ENDPOINT, AWAIT_SIGNED_SESSION_OUTCOME_ENDPOINT,
     AWAIT_TRANSACTION_ENDPOINT, BACKUP_ENDPOINT, CLIENT_CONFIG_ENDPOINT,
-    CLIENT_CONFIG_JSON_ENDPOINT, FEDERATION_ID_ENDPOINT, GUARDIAN_CONFIG_BACKUP_ENDPOINT,
-    INVITE_CODE_ENDPOINT, RECOVER_ENDPOINT, SERVER_CONFIG_CONSENSUS_HASH_ENDPOINT,
-    SESSION_COUNT_ENDPOINT, SESSION_STATUS_ENDPOINT, SHUTDOWN_ENDPOINT,
-    SIGN_API_ANNOUNCEMENT_ENDPOINT, STATUS_ENDPOINT, SUBMIT_API_ANNOUNCEMENT_ENDPOINT,
-    SUBMIT_TRANSACTION_ENDPOINT, VERSION_ENDPOINT,
+    CLIENT_CONFIG_JSON_ENDPOINT, FEDERATION_ID_ENDPOINT, FEDIMINTD_VERSION_ENDPOINT,
+    GUARDIAN_CONFIG_BACKUP_ENDPOINT, INVITE_CODE_ENDPOINT, RECOVER_ENDPOINT,
+    SERVER_CONFIG_CONSENSUS_HASH_ENDPOINT, SESSION_COUNT_ENDPOINT, SESSION_STATUS_ENDPOINT,
+    SHUTDOWN_ENDPOINT, SIGN_API_ANNOUNCEMENT_ENDPOINT, STATUS_ENDPOINT,
+    SUBMIT_API_ANNOUNCEMENT_ENDPOINT, SUBMIT_TRANSACTION_ENDPOINT, VERSION_ENDPOINT,
 };
 use fedimint_core::epoch::ConsensusItem;
 use fedimint_core::module::audit::{Audit, AuditSummary};
@@ -83,6 +83,7 @@ pub struct ConsensusApi {
     pub connection_status_channels: Arc<RwLock<BTreeMap<PeerId, PeerConnectionStatus>>>,
     pub last_ci_by_peer: Arc<RwLock<BTreeMap<PeerId, u64>>>,
     pub supported_api_versions: SupportedApiVersionsSummary,
+    pub code_version_str: String,
 }
 
 impl ConsensusApi {
@@ -389,6 +390,11 @@ impl ConsensusApi {
             .map(|(announcement_key, announcement)| (announcement_key.0, announcement))
             .collect()
             .await
+    }
+
+    /// Returns the tagged fedimintd version currently running
+    fn fedimintd_version(&self) -> String {
+        self.code_version_str.clone()
     }
 
     /// Add an API URL announcement from a peer to our database to be returned
@@ -698,6 +704,13 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConsensusApi>> {
             async |fedimint: &ConsensusApi, context, new_url: SafeUrl| -> SignedApiAnnouncement {
                 check_auth(context)?;
                 Ok(fedimint.sign_api_announcement(new_url).await)
+            }
+        },
+        api_endpoint! {
+            FEDIMINTD_VERSION_ENDPOINT,
+            ApiVersion::new(0, 4),
+            async |fedimint: &ConsensusApi, _context, _v: ()| -> String {
+                Ok(fedimint.fedimintd_version())
             }
         },
     ]

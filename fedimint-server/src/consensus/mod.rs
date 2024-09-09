@@ -53,6 +53,7 @@ pub async fn run(
     task_group: &TaskGroup,
     force_api_secrets: ApiSecrets,
     data_dir: PathBuf,
+    code_version_str: String,
 ) -> anyhow::Result<()> {
     cfg.validate_config(&cfg.local.identity, &module_init_registry)?;
 
@@ -121,6 +122,7 @@ pub async fn run(
         last_ci_by_peer: last_ci_by_peer.clone(),
         connection_status_channels: connection_status_channels.clone(),
         force_api_secret: force_api_secrets.get_active(),
+        code_version_str,
     };
 
     info!(target: LOG_CONSENSUS, "Starting Consensus Api");

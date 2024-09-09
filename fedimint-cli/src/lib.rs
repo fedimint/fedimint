@@ -555,6 +555,11 @@ Examples:
     /// meta module these are returned, otherwise the legacy mechanism
     /// (config+override file) is used.
     MetaFields,
+    /// Gets the tagged fedimintd version for a peer
+    PeerVersion {
+        #[clap(long)]
+        peer_id: u16,
+    },
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -1117,6 +1122,16 @@ impl FedimintCli {
                 Ok(CliOutput::Raw(
                     serde_json::to_value(meta_fields).expect("Can be encoded"),
                 ))
+            }
+            Command::Dev(DevCmd::PeerVersion { peer_id }) => {
+                let client = self.client_open(&cli).await?;
+                let version = client
+                    .api()
+                    .fedimintd_version(peer_id.into())
+                    .await
+                    .map_err_cli()?;
+
+                Ok(CliOutput::Raw(json!({ "version": version })))
             }
             Command::Completion { shell } => {
                 clap_complete::generate(
