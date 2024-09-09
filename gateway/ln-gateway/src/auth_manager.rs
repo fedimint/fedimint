@@ -42,6 +42,7 @@ impl AuthManager {
         challenge_response: &AuthChallengeResponse,
     ) -> anyhow::Result<Session> {
         let challenge = AuthChallenge::from_str(&challenge_response.challenge)?;
+        //TODO check password and if correct generate Session
         if !self.challenges.contains(&challenge)
             || challenge.gateway_id != self.gateway_id
             || challenge.gateway_api != self.gateway_api
@@ -125,14 +126,16 @@ pub struct AuthChallengeResponse {
     challenge: String,
     /// The response string
     response: Signature,
+    /// optional password for backwards compatibility
+    password: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Session {
     /// the unique identifier of the session.
-    id: String,
+    pub id: String,
     /// the expire time of the session
-    expiry: u64,
+    pub expiry: u64,
 }
 
 impl Session {

@@ -1,4 +1,5 @@
 use std::sync::Arc;
+use std::time::UNIX_EPOCH;
 
 use axum::extract::Request;
 use axum::http::{header, StatusCode};
@@ -12,8 +13,8 @@ use fedimint_core::config::FederationId;
 use fedimint_core::encoding::Encodable;
 use fedimint_core::task::TaskGroup;
 use fedimint_ln_common::gateway_endpoint_constants::{
-    ADDRESS_ENDPOINT, AUTH_CHALLENGE_ENDPOINT, AUTH_SESSION_ENDPOINT, BACKUP_ENDPOINT,
-    BALANCE_ENDPOINT, CLOSE_CHANNELS_WITH_PEER_ENDPOINT, CONFIGURATION_ENDPOINT,
+    ADDRESS_ENDPOINT, AUTH_CHALLENGE_ENDPOINT, AUTH_LOGIN_ENDPOINT, AUTH_SESSION_ENDPOINT,
+    BACKUP_ENDPOINT, BALANCE_ENDPOINT, CLOSE_CHANNELS_WITH_PEER_ENDPOINT, CONFIGURATION_ENDPOINT,
     CONNECT_FED_ENDPOINT, GATEWAY_INFO_ENDPOINT, GATEWAY_INFO_POST_ENDPOINT, GET_BALANCES_ENDPOINT,
     GET_FUNDING_ADDRESS_ENDPOINT, GET_GATEWAY_ID_ENDPOINT, LEAVE_FED_ENDPOINT,
     LIST_ACTIVE_CHANNELS_ENDPOINT, OPEN_CHANNEL_ENDPOINT, PAY_INVOICE_ENDPOINT,
@@ -28,6 +29,7 @@ use fedimint_lnv2_common::endpoint_constants::{
 use hex::ToHex;
 use jsonwebtoken::{decode, DecodingKey, Validation};
 use secp256k1_zkp::SECP256K1;
+use serde::Deserialize;
 use serde_json::{json, Value};
 use tokio::net::TcpListener;
 use tower_http::cors::CorsLayer;
@@ -129,6 +131,36 @@ async fn auth_after_config_middleware(
     authenticate(gateway_hashed_password, password_salt, request, next).await
 }
 
+#[derive(Deserialize)]
+pub struct SignInData {
+    pub password: String,
+}
+
+async fn authenticate_endpoint(
+    Extension(gateway): Extension<Arc<Gateway>>,
+    Json(user_data): Json<SignInData>,
+) -> Result<impl IntoResponse, StatusCode> {
+    // If the gateway's config has not been set, allow the request to continue, so
+    // that the gateway can be configured
+    let gateway_config = gateway.clone_gateway_config().await;
+    if gateway_config.is_none() {
+        return Err(StatusCode::UNAUTHORIZED);
+    }
+    //
+    // // Otherwise, validate that the Bearer token matches the gateway's hashed
+    // // password
+    let gateway_config = gateway_config.expect("Already validated the gateway config is not none");
+    let gateway_hashed_password = gateway_config.hashed_password;
+    let password_salt = gateway_config.password_salt;
+    let hashed_password = hash_password(&user_data.password, password_salt);
+    if gateway_hashed_password == hashed_password {
+        //TODO generate JWT token
+        Ok(Json(json!(())))
+    } else {
+        return Err(StatusCode::UNAUTHORIZED);
+    }
+}
+
 /// Validate that the Bearer token matches the gateway's hashed password
 async fn authenticate(
     gateway_hashed_password: sha256::Hash,
@@ -172,10 +204,17 @@ async fn authenticate_jwt(
         &DecodingKey::from_secret(secret.as_ref()),
         &Validation::default(),
     ) {
-        Ok(token_data) =>
-        //TODO how to check that the decoded token is valid
-        {
-            Ok(next.run(request).await)
+        Ok(token_data) => {
+            //TODO how to check that the session id is valid
+            let now = fedimint_core::time::now()
+                .duration_since(UNIX_EPOCH)
+                .expect("Time went backwards")
+                .as_secs();
+            if token_data.claims.expiry > now {
+                Err(StatusCode::UNAUTHORIZED)
+            } else {
+                Ok(next.run(request).await)
+            }
         }
         Err(_) => Err(StatusCode::UNAUTHORIZED),
     }
@@ -227,11 +266,17 @@ fn v1_routes(gateway: Arc<Gateway>, task_group: TaskGroup) -> Router {
         )
         .route(LIST_ACTIVE_CHANNELS_ENDPOINT, get(list_active_channels))
         .route(GET_BALANCES_ENDPOINT, get(get_balances))
+<<<<<<< HEAD
         .route(SPEND_ECASH_ENDPOINT, post(spend_ecash))
         .route(MNEMONIC_ENDPOINT, get(mnemonic))
         .route(STOP_ENDPOINT, get(stop))
         .route(SYNC_TO_CHAIN_ENDPOINT, post(sync_to_chain))
         .layer(middleware::from_fn(auth_middleware));
+||||||| parent of 2e3fc7e1b5 (feat: start gateway auth)
+        .layer(middleware::from_fn(auth_middleware));
+=======
+        .layer(middleware::from_fn(auth_jwt_middleware));
+>>>>>>> 2e3fc7e1b5 (feat: start gateway auth)
 
     // Routes that are un-authenticated before gateway configuration, then become
     // authenticated after a password has been set.
@@ -241,17 +286,19 @@ fn v1_routes(gateway: Arc<Gateway>, task_group: TaskGroup) -> Router {
         // FIXME: deprecated >= 0.3.0
         .route(GATEWAY_INFO_POST_ENDPOINT, post(handle_post_info))
         .route(GATEWAY_INFO_ENDPOINT, get(info))
-        .layer(middleware::from_fn(auth_after_config_middleware));
+        .layer(middleware::from_fn(auth_jwt_middleware));
 
-    let generate_jwt_auth_routes = Router::new()
+    let login_route = Router::new()
         .route(AUTH_CHALLENGE_ENDPOINT, post(auth_challenge))
-        .route(AUTH_SESSION_ENDPOINT, post(auth_session));
+        .route(AUTH_SESSION_ENDPOINT, post(auth_session))
+        .layer(middleware::from_fn(auth_jwt_middleware));
+    // .route(AUTH_LOGIN_ENDPOINT, post(authenticate_endpoint))
 
     Router::new()
         .merge(public_routes)
         .merge(always_authenticated_routes)
         .merge(authenticated_after_config_routes)
-        .merge(generate_jwt_auth_routes)
+        .merge(login_route)
         .layer(Extension(gateway))
         .layer(Extension(task_group))
         .layer(CorsLayer::permissive())
