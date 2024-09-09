@@ -117,7 +117,7 @@ mod tests {
     use futures::StreamExt;
     use wasm_bindgen_test::wasm_bindgen_test;
 
-    use super::*;
+    use super::{client, faucet, Result};
 
     #[wasm_bindgen_test]
     async fn build_client() -> Result<()> {

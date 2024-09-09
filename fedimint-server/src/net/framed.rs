@@ -189,12 +189,11 @@ where
         assert_eq!(dst.len(), old_len + 8);
 
         // Then we serialize the message into the buffer
-        bincode::serialize_into(dst.writer(), &item).map_err(|e| {
+        bincode::serialize_into(dst.writer(), &item).inspect_err(|_e| {
             error!(
                 target: LOG_NET_PEER,
                 "Serializing message failed: {:?}", item
             );
-            e
         })?;
 
         // Lastly we update the length field by counting how many bytes have been
