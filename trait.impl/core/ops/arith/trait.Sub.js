@@ -1,4 +1,9 @@
-(function() {var implementors = {
-"fedimint_core":[["impl <a class=\"trait\" href=\"https://doc.rust-lang.org/nightly/core/ops/arith/trait.Sub.html\" title=\"trait core::ops::arith::Sub\">Sub</a> for <a class=\"struct\" href=\"fedimint_core/amount/struct.Amount.html\" title=\"struct fedimint_core::amount::Amount\">Amount</a>"]],
-"fedimint_wallet_client":[["impl <a class=\"trait\" href=\"https://doc.rust-lang.org/nightly/core/ops/arith/trait.Sub.html\" title=\"trait core::ops::arith::Sub\">Sub</a> for <a class=\"struct\" href=\"fedimint_wallet_client/client_db/struct.TweakIdx.html\" title=\"struct fedimint_wallet_client::client_db::TweakIdx\">TweakIdx</a>"]]
-};if (window.register_implementors) {window.register_implementors(implementors);} else {window.pending_implementors = implementors;}})()
+(function() {
+    var implementors = Object.fromEntries([["fedimint_core",[["impl <a class=\"trait\" href=\"https://doc.rust-lang.org/nightly/core/ops/arith/trait.Sub.html\" title=\"trait core::ops::arith::Sub\">Sub</a> for <a class=\"struct\" href=\"fedimint_core/amount/struct.Amount.html\" title=\"struct fedimint_core::amount::Amount\">Amount</a>"]]],["fedimint_wallet_client",[["impl <a class=\"trait\" href=\"https://doc.rust-lang.org/nightly/core/ops/arith/trait.Sub.html\" title=\"trait core::ops::arith::Sub\">Sub</a> for <a class=\"struct\" href=\"fedimint_wallet_client/client_db/struct.TweakIdx.html\" title=\"struct fedimint_wallet_client::client_db::TweakIdx\">TweakIdx</a>"]]]]);
+    if (window.register_implementors) {
+        window.register_implementors(implementors);
+    } else {
+        window.pending_implementors = implementors;
+    }
+})()
+//{"start":57,"fragment_lengths":[297,337]}

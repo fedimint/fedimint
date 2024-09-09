@@ -1,3 +1,9 @@
-(function() {var implementors = {
-"fedimint_server":[["impl Network&lt;NetworkData&lt;<a class=\"struct\" href=\"fedimint_server/consensus/aleph_bft/network/struct.Hasher.html\" title=\"struct fedimint_server::consensus::aleph_bft::network::Hasher\">Hasher</a>, <a class=\"enum\" href=\"fedimint_server/consensus/aleph_bft/data_provider/enum.UnitData.html\" title=\"enum fedimint_server::consensus::aleph_bft::data_provider::UnitData\">UnitData</a>, &lt;<a class=\"struct\" href=\"fedimint_server/consensus/aleph_bft/keychain/struct.Keychain.html\" title=\"struct fedimint_server::consensus::aleph_bft::keychain::Keychain\">Keychain</a> as Keychain&gt;::Signature, &lt;<a class=\"struct\" href=\"fedimint_server/consensus/aleph_bft/keychain/struct.Keychain.html\" title=\"struct fedimint_server::consensus::aleph_bft::keychain::Keychain\">Keychain</a> as MultiKeychain&gt;::PartialMultisignature&gt;&gt; for <a class=\"struct\" href=\"fedimint_server/consensus/aleph_bft/network/struct.Network.html\" title=\"struct fedimint_server::consensus::aleph_bft::network::Network\">Network</a>"]]
-};if (window.register_implementors) {window.register_implementors(implementors);} else {window.pending_implementors = implementors;}})()
+(function() {
+    var implementors = Object.fromEntries([["fedimint_server",[["impl Network&lt;NetworkData&lt;<a class=\"struct\" href=\"fedimint_server/consensus/aleph_bft/network/struct.Hasher.html\" title=\"struct fedimint_server::consensus::aleph_bft::network::Hasher\">Hasher</a>, <a class=\"enum\" href=\"fedimint_server/consensus/aleph_bft/data_provider/enum.UnitData.html\" title=\"enum fedimint_server::consensus::aleph_bft::data_provider::UnitData\">UnitData</a>, &lt;<a class=\"struct\" href=\"fedimint_server/consensus/aleph_bft/keychain/struct.Keychain.html\" title=\"struct fedimint_server::consensus::aleph_bft::keychain::Keychain\">Keychain</a> as Keychain&gt;::Signature, &lt;<a class=\"struct\" href=\"fedimint_server/consensus/aleph_bft/keychain/struct.Keychain.html\" title=\"struct fedimint_server::consensus::aleph_bft::keychain::Keychain\">Keychain</a> as MultiKeychain&gt;::PartialMultisignature&gt;&gt; for <a class=\"struct\" href=\"fedimint_server/consensus/aleph_bft/network/struct.Network.html\" title=\"struct fedimint_server::consensus::aleph_bft::network::Network\">Network</a>"]]]]);
+    if (window.register_implementors) {
+        window.register_implementors(implementors);
+    } else {
+        window.pending_implementors = implementors;
+    }
+})()
+//{"start":57,"fragment_lengths":[1056]}
