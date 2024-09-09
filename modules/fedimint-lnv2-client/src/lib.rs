@@ -387,7 +387,7 @@ fn generate_ephemeral_tweak(static_pk: PublicKey) -> ([u8; 32], PublicKey) {
 }
 
 impl LightningClientModule {
-    pub async fn select_gateway(&self) -> Result<(SafeUrl, RoutingInfo), SelectGatewayError> {
+    async fn select_gateway(&self) -> Result<(SafeUrl, RoutingInfo), SelectGatewayError> {
         let gateways = self
             .module_api
             .gateways()
@@ -416,26 +416,30 @@ impl LightningClientModule {
             .await
     }
 
+    /// Pay an invoice. For  testing  you can optionally specify a gateway to
+    /// route with, otherwise a gateway will be selected automatically.
     pub async fn send(
         &self,
         invoice: Bolt11Invoice,
         gateway_api: Option<SafeUrl>,
     ) -> Result<OperationId, SendPaymentError> {
-        self.send_internal(
+        self.send_custom(
             invoice,
-            gateway_api,
             PaymentFee::SEND_FEE_LIMIT_DEFAULT,
             EXPIRATION_DELTA_LIMIT_DEFAULT,
+            gateway_api,
         )
         .await
     }
 
-    pub async fn send_internal(
+    /// Pay an invoice. For  testing  you can optionally specify a gateway to
+    /// route with, otherwise a gateway will be selected automatically.
+    pub async fn send_custom(
         &self,
         invoice: Bolt11Invoice,
-        gateway_api: Option<SafeUrl>,
         payment_fee_limit: PaymentFee,
         expiration_delta_limit: u64,
+        gateway_api: Option<SafeUrl>,
     ) -> Result<OperationId, SendPaymentError> {
         let amount = invoice
             .amount_milli_satoshis()
@@ -580,6 +584,8 @@ impl LightningClientModule {
         panic!("We could not find an unused operation id for sending a lightning payment");
     }
 
+    /// Subscribe to all updates of the send operation. No specific order is not
+    /// guaranteed.
     pub async fn subscribe_send(
         &self,
         operation_id: OperationId,
@@ -638,6 +644,7 @@ impl LightningClientModule {
         }))
     }
 
+    /// Await the final state of the send operation.
     pub async fn await_send(&self, operation_id: OperationId) -> anyhow::Result<FinalSendState> {
         let state = self
             .subscribe_send(operation_id)
@@ -658,73 +665,91 @@ impl LightningClientModule {
         Ok(state)
     }
 
+    /// Request an invoice. For testing you can optionally specify a gateway to
+    /// generate the invoice, otherwise a gateway will be selected
+    /// automatically.
     pub async fn receive(
         &self,
         invoice_amount: Amount,
         gateway_api: Option<SafeUrl>,
     ) -> ReceiveResult {
-        self.receive_internal(
+        self.receive_custom(
             invoice_amount,
-            gateway_api,
             INVOICE_EXPIRATION_SECONDS_DEFAULT,
             Bolt11InvoiceDescription::Direct(String::new()),
             PaymentFee::RECEIVE_FEE_LIMIT_DEFAULT,
+            gateway_api,
         )
         .await
     }
 
-    pub async fn receive_internal(
+    /// Request an invoice. For testing you can optionally specify a gateway to
+    /// generate the invoice, otherwise a gateway will be selected
+    /// automatically.
+    pub async fn receive_custom(
         &self,
         invoice_amount: Amount,
-        gateway_api: Option<SafeUrl>,
         expiry_time: u32,
         description: Bolt11InvoiceDescription,
         payment_fee_limit: PaymentFee,
+        gateway_api: Option<SafeUrl>,
     ) -> Result<(Bolt11Invoice, OperationId), FetchInvoiceError> {
         let (contract, .., invoice) = self
-            .create_contract_and_fetch_invoice_internal(
+            .create_contract_and_fetch_invoice_custom(
                 self.keypair.public_key(),
                 invoice_amount,
-                gateway_api,
                 expiry_time,
                 description,
                 payment_fee_limit,
+                gateway_api,
             )
             .await?;
 
         let operation_id = self
-            .receive_external_contract(contract)
+            .receive_incoming_contract(contract)
             .await
             .expect("The contract has been generated with our public key");
 
         Ok((invoice, operation_id))
     }
 
+    /// Create an incoming contract locked to a public key derived from the
+    /// recipient's static module public key and fetches the corresponding
+    /// invoice. To receive the payment the recipient needs to call
+    /// [`Self::receive_incoming_contract`] on the returned contract. For
+    /// testing you can optionally specify a gateway to generate the
+    /// invoice, otherwise a gateway will be selected automatically.
     pub async fn create_contract_and_fetch_invoice(
         &self,
         recipient_static_pk: PublicKey,
         invoice_amount: Amount,
         gateway_api: Option<SafeUrl>,
     ) -> Result<(IncomingContract, [u8; 32], Bolt11Invoice), FetchInvoiceError> {
-        self.create_contract_and_fetch_invoice_internal(
+        self.create_contract_and_fetch_invoice_custom(
             recipient_static_pk,
             invoice_amount,
-            gateway_api,
             INVOICE_EXPIRATION_SECONDS_DEFAULT,
             Bolt11InvoiceDescription::Direct(String::new()),
             PaymentFee::RECEIVE_FEE_LIMIT_DEFAULT,
+            gateway_api,
         )
         .await
     }
 
-    pub async fn create_contract_and_fetch_invoice_internal(
+    /// Create an incoming contract locked to a public key derived from the
+    /// recipient's static module public key and fetches the corresponding
+    /// invoice. To receive the payment the recipient needs to call
+    /// [`Self::receive_incoming_contract`] on the returned contract. For
+    /// testing you can optionally specify a gateway to generate the
+    /// invoice, otherwise a gateway will be selected automatically.
+    pub async fn create_contract_and_fetch_invoice_custom(
         &self,
         recipient_static_pk: PublicKey,
         invoice_amount: Amount,
-        gateway_api: Option<SafeUrl>,
         expiry_time: u32,
         description: Bolt11InvoiceDescription,
         payment_fee_limit: PaymentFee,
+        gateway_api: Option<SafeUrl>,
     ) -> Result<(IncomingContract, [u8; 32], Bolt11Invoice), FetchInvoiceError> {
         let (ephemeral_tweak, ephemeral_pk) = generate_ephemeral_tweak(recipient_static_pk);
 
@@ -811,13 +836,18 @@ impl LightningClientModule {
         Ok((contract, preimage, invoice))
     }
 
+    /// Await an incoming contract to be confirmed or to expire. The return
+    /// value indicates whether the contract was confirmed in time.
     pub async fn await_incoming_contract(&self, contract: IncomingContract) -> bool {
         self.module_api
             .await_incoming_contract(&contract.contract_id(), contract.commitment.expiration)
             .await
     }
 
-    pub async fn receive_external_contract(
+    /// Receive an incoming contract locked to a public key derived from our
+    /// static module public key such as a contract generated by a lightning
+    /// address provider.
+    pub async fn receive_incoming_contract(
         &self,
         contract: IncomingContract,
     ) -> Option<OperationId> {
@@ -886,6 +916,8 @@ impl LightningClientModule {
         Some((claim_keypair, agg_decryption_key))
     }
 
+    /// Subscribe to all updates of the receive operation. No specific order is
+    /// not guaranteed.
     pub async fn subscribe_receive(
         &self,
         operation_id: OperationId,
@@ -921,6 +953,7 @@ impl LightningClientModule {
         }))
     }
 
+    /// Await the final state of the receive operation.
     pub async fn await_receive(
         &self,
         operation_id: OperationId,

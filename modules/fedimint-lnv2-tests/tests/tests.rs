@@ -235,12 +235,12 @@ async fn receive_operation_expires() -> anyhow::Result<()> {
 
     let op = client
         .get_first_module::<LightningClientModule>()?
-        .receive_internal(
+        .receive_custom(
             Amount::from_sats(1000),
-            Some(mock::gateway_api()),
             5, // receive operation expires in 5 seconds
             Bolt11InvoiceDescription::Direct(String::new()),
             PaymentFee::RECEIVE_FEE_LIMIT_DEFAULT,
+            Some(mock::gateway_api()),
         )
         .await?
         .1;

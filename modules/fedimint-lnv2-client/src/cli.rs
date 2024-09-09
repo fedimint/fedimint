@@ -13,21 +13,24 @@ use crate::LightningClientModule;
 
 #[derive(Parser, Serialize)]
 enum Opts {
-    /// Pay an invoice
+    /// Pay an invoice. For  testing  you can optionally specify a gateway to
+    /// route with, otherwise a gateway will be selected automatically.
     Send {
         invoice: Bolt11Invoice,
         #[arg(long)]
         gateway: Option<SafeUrl>,
     },
-    /// Await the final state of the send operation
+    /// Await the final state of the send operation.
     AwaitSend { operation_id: OperationId },
-    /// Request an invoice
+    /// Request an invoice. For testing you can optionally specify a gateway to
+    /// generate the invoice, otherwise a gateway will be selected
+    /// automatically.
     Receive {
         amount: Amount,
         #[arg(long)]
         gateway: Option<SafeUrl>,
     },
-    /// Await the final state of the receive operation
+    /// Await the final state of the receive operation.
     AwaitReceive { operation_id: OperationId },
     /// Gateway subcommands
     #[command(subcommand)]
@@ -36,16 +39,16 @@ enum Opts {
 
 #[derive(Clone, Subcommand, Serialize)]
 enum GatewayOpts {
-    /// Select an online vetted gateway
+    /// Select an online vetted gateway; this command is intended for testing.
     Select,
-    /// List all vetted gateways
+    /// List all vetted gateways.
     List {
         #[arg(long)]
         peer: Option<PeerId>,
     },
-    /// Add a vetted gateway
+    /// Add a vetted gateway.
     Add { gateway: SafeUrl },
-    /// Remove a vetted gateway
+    /// Remove a vetted gateway.
     Remove { gateway: SafeUrl },
 }
 
