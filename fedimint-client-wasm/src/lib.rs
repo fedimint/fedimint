@@ -133,7 +133,9 @@ impl WasmClient {
                     let _ = match item {
                         Ok(item) => cb.call1(
                             &this,
-                            &JsValue::from_str(&serde_json::to_string(&item).unwrap()),
+                            &JsValue::from_str(
+                                &serde_json::to_string(&json!({"data": item})).unwrap(),
+                            ),
                         ),
                         Err(err) => cb.call1(
                             &this,
@@ -143,6 +145,12 @@ impl WasmClient {
                         ),
                     };
                 }
+
+                // Send the end message
+                let _ = cb.call1(
+                    &JsValue::null(),
+                    &JsValue::from_str(&serde_json::to_string(&json!({"end": null})).unwrap()),
+                );
             };
 
             let abortable_future = Abortable::new(future, abort_registration);
