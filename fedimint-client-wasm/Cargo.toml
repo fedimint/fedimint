@@ -25,7 +25,7 @@ fedimint-mint-client = { workspace = true }
 futures = { workspace = true }
 imbl = "2.0.0"
 js-sys = "0.3.69"
-rexie = "0.4.2"
+rexie = "0.6.2"
 serde_json = { workspace = true }
 wasm-bindgen = "=0.2.92"                                      # must match the nix provided wasm-bindgen-cli version
 wasm-bindgen-futures = "0.4.42"
