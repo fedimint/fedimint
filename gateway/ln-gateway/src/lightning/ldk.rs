@@ -4,6 +4,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use async_trait::async_trait;
+use bip39::Mnemonic;
 use bitcoin::{secp256k1, Network, OutPoint};
 use fedimint_core::runtime::spawn;
 use fedimint_core::task::TaskGroup;
@@ -64,6 +65,7 @@ impl GatewayLdkClient {
         esplora_server_url: &str,
         network: Network,
         lightning_port: u16,
+        mnemonic: Mnemonic,
     ) -> anyhow::Result<Self> {
         let mut node_builder = ldk_node::Builder::from_config(ldk_node::Config {
             network,
@@ -75,6 +77,7 @@ impl GatewayLdkClient {
             wallet_sync_interval_secs: 10,
             ..Default::default()
         });
+        node_builder.set_entropy_bip39_mnemonic(mnemonic, None);
         node_builder
             .set_esplora_server(esplora_server_url.to_string())
             .set_gossip_source_p2p();

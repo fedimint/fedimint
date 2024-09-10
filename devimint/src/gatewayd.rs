@@ -78,6 +78,10 @@ impl Gatewayd {
         Ok(gatewayd)
     }
 
+    pub async fn terminate(self) -> Result<()> {
+        self.process.terminate().await
+    }
+
     pub fn set_lightning_node(&mut self, ln_node: LightningNode) {
         self.ln = Some(ln_node);
     }
@@ -212,6 +216,31 @@ impl Gatewayd {
         })
         .await?;
         Ok(())
+    }
+
+    pub async fn recover_fed(&self, fed: &Federation) -> Result<()> {
+        let federation_id = fed.calculate_federation_id();
+        let invite_code = fed.invite_code()?;
+        info!("Recovering {federation_id}...");
+        cmd!(self, "connect-fed", invite_code.clone(), "--recover=true")
+            .run()
+            .await?;
+        Ok(())
+    }
+
+    pub async fn backup_to_fed(&self, fed: &Federation) -> Result<()> {
+        let federation_id = fed.calculate_federation_id();
+        cmd!(self, "backup", "--federation-id", federation_id)
+            .run()
+            .await?;
+        Ok(())
+    }
+
+    pub fn lightning_node_type(&self) -> LightningNodeType {
+        self.ln
+            .as_ref()
+            .expect("Gateway has no lightning node")
+            .name()
     }
 
     pub async fn get_pegin_addr(&self, fed_id: &str) -> Result<String> {

@@ -74,6 +74,11 @@ function gateway_config_test_cln() {
 }
 export -f gateway_config_test_cln
 
+function gateway_restore_test() {
+  fm-run-test "${FUNCNAME[0]}" ./scripts/tests/gateway-restore-test.sh
+}
+export -f gateway_restore_test
+
 function latency_test_reissue() {
   fm-run-test "${FUNCNAME[0]}" ./scripts/tests/latency-test.sh reissue
 }
@@ -296,6 +301,7 @@ tests_to_run_in_parallel+=(
   "gateway_reboot_test"
   "gateway_config_test_cln"
   "gateway_config_test_lnd"
+  "gateway_restore_test"
   "lnv2_module"
   "devimint_cli_test"
   "devimint_cli_test_single"

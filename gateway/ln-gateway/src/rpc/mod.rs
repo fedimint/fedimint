@@ -25,6 +25,7 @@ pub struct ConnectFedPayload {
     #[serde(default)]
     #[cfg(feature = "tor")]
     pub use_tor: Option<bool>,
+    pub recover: Option<bool>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -37,11 +38,6 @@ pub struct InfoPayload;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct BackupPayload {
-    pub federation_id: FederationId,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct RestorePayload {
     pub federation_id: FederationId,
 }
 

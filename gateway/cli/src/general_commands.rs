@@ -8,8 +8,8 @@ use fedimint_mint_client::OOBNotes;
 use ln_gateway::rpc::rpc_client::GatewayRpcClient;
 use ln_gateway::rpc::{
     BackupPayload, BalancePayload, ConfigPayload, ConnectFedPayload, DepositAddressPayload,
-    FederationRoutingFees, LeaveFedPayload, ReceiveEcashPayload, RestorePayload,
-    SetConfigurationPayload, SpendEcashPayload, WithdrawPayload,
+    FederationRoutingFees, LeaveFedPayload, ReceiveEcashPayload, SetConfigurationPayload,
+    SpendEcashPayload, WithdrawPayload,
 };
 
 use crate::print_response;
@@ -85,6 +85,9 @@ pub enum GeneralCommands {
         /// client
         #[cfg(feature = "tor")]
         use_tor: Option<bool>,
+        /// Indicates if the client should be recovered from a mnemonic
+        #[clap(long)]
+        recover: Option<bool>,
     },
     /// Leave a federation.
     LeaveFed {
@@ -93,11 +96,6 @@ pub enum GeneralCommands {
     },
     /// Make a backup of snapshot of all e-cash.
     Backup {
-        #[clap(long)]
-        federation_id: FederationId,
-    },
-    /// Restore e-cash from last available snapshot or from scratch.
-    Restore {
         #[clap(long)]
         federation_id: FederationId,
     },
@@ -214,12 +212,14 @@ impl GeneralCommands {
                 invite_code,
                 #[cfg(feature = "tor")]
                 use_tor,
+                recover,
             } => {
                 let response = create_client()
                     .connect_federation(ConnectFedPayload {
                         invite_code,
                         #[cfg(feature = "tor")]
                         use_tor,
+                        recover,
                     })
                     .await?;
 
@@ -234,11 +234,6 @@ impl GeneralCommands {
             Self::Backup { federation_id } => {
                 create_client()
                     .backup(BackupPayload { federation_id })
-                    .await?;
-            }
-            Self::Restore { federation_id } => {
-                create_client()
-                    .restore(RestorePayload { federation_id })
                     .await?;
             }
             Self::SetConfiguration {

@@ -136,6 +136,7 @@ impl FederationTest {
             invite_code: self.invite_code().to_string(),
             #[cfg(feature = "tor")]
             use_tor: Some(false), // TODO: (@leonardo) Should we get it from self.configs too ?
+            recover: Some(false),
         })
         .await
         .expect("Failed to connect federation");
