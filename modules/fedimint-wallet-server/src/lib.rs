@@ -433,6 +433,9 @@ impl ServerModule for Wallet {
 
                 let new_consensus_block_count = self.consensus_block_count(dbtx).await;
 
+                self.shutdown_if_bitcoin_backend_is_stale(dbtx, new_consensus_block_count)
+                    .await;
+
                 debug!(
                     ?peer,
                     ?current_vote,
@@ -795,6 +798,7 @@ pub struct Wallet {
     block_count_rx: watch::Receiver<Option<u32>>,
     /// Fee rate updated periodically by a background task
     fee_rate_rx: watch::Receiver<Feerate>,
+    task_group: TaskGroup,
 }
 
 impl Wallet {
@@ -840,6 +844,7 @@ impl Wallet {
             our_peer_id,
             block_count_rx,
             fee_rate_rx,
+            task_group: task_group.clone(),
         };
 
         Ok(wallet)
@@ -1298,6 +1303,48 @@ impl Wallet {
             }
         });
         (block_count_rx, fee_rate_rx)
+    }
+
+    /// Shutdown the task group shared throughout fedimintd, giving 60 seconds
+    /// for other services to gracefully shutdown.
+    async fn graceful_shutdown(&self) {
+        if let Err(e) = self
+            .task_group
+            .clone()
+            .shutdown_join_all(Some(Duration::from_secs(60)))
+            .await
+        {
+            panic!("Error while shutting down fedimintd task group: {e}");
+        }
+    }
+
+    /// If our bitcoin backend is stale, shutdown fedimintd. This is necessary
+    /// since we cannot participate in consensus if we're unable to observe the
+    /// chain.
+    ///
+    /// Our bitcoin backend is considered stale if it is more than 10 blocks
+    /// behind consensus tip (consensus block count + finality delay).
+    async fn shutdown_if_bitcoin_backend_is_stale<'b>(
+        &self,
+        dbtx: &mut DatabaseTransaction<'b>,
+        new_consensus_block_count: u32,
+    ) {
+        let stale_threshold = 10;
+        let finality_delay = self.cfg.consensus.finality_delay;
+        let consensus_tip_block_count = new_consensus_block_count + finality_delay;
+        let stale_block_count = consensus_tip_block_count - stale_threshold;
+
+        let our_block_count = match self.get_block_count() {
+            Ok(count) => count,
+            Err(_) => dbtx
+                .get_value(&BlockCountVoteKey(self.our_peer_id))
+                .await
+                .map_or(0, |count| count + finality_delay),
+        };
+
+        if our_block_count < stale_block_count {
+            self.graceful_shutdown().await;
+        }
     }
 }
 
