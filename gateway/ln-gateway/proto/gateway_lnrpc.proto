@@ -332,4 +332,7 @@ message GetBalancesResponse {
 
     // The total balance of the node's lightning wallet, in millisats.
     uint64 lightning_balance_msats = 2;
+
+    // The total inbound Liquidity balance.
+    uint64 inbound_lightning_liquidity_msats = 3;
 }
