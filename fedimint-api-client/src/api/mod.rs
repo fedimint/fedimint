@@ -597,6 +597,9 @@ pub trait IGlobalFederationApi: IRawFederationApi {
     ) -> FederationResult<SignedApiAnnouncement>;
 
     async fn shutdown(&self, session: Option<u64>, auth: ApiAuth) -> FederationResult<()>;
+
+    /// Returns the fedimintd version a peer is running
+    async fn fedimintd_version(&self, peer_id: PeerId) -> PeerResult<String>;
 }
 
 pub fn deserialize_outcome<R>(
