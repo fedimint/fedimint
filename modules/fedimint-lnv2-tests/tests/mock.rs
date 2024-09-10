@@ -11,10 +11,9 @@ use fedimint_core::{apply, async_trait_maybe_send, Amount};
 use fedimint_ln_common::bitcoin;
 use fedimint_lnv2_client::api::GatewayConnection;
 use fedimint_lnv2_client::{
-    Bolt11InvoiceDescription, GatewayError, LightningInvoice, PaymentFee, RoutingInfo,
+    Bolt11InvoiceDescription, GatewayConnectionError, LightningInvoice, PaymentFee, RoutingInfo,
 };
 use fedimint_lnv2_common::contracts::{IncomingContract, OutgoingContract, PaymentImage};
-use fedimint_lnv2_common::GatewayEndpoint;
 use lightning_invoice::{
     Bolt11Invoice, Currency, InvoiceBuilder, PaymentSecret, DEFAULT_EXPIRY_TIME,
 };
@@ -88,9 +87,9 @@ impl Default for MockGatewayConnection {
 impl GatewayConnection for MockGatewayConnection {
     async fn routing_info(
         &self,
-        _gateway_api: GatewayEndpoint,
+        _gateway_api: SafeUrl,
         _federation_id: &FederationId,
-    ) -> Result<Option<RoutingInfo>, GatewayError> {
+    ) -> Result<Option<RoutingInfo>, GatewayConnectionError> {
         Ok(Some(RoutingInfo {
             lightning_public_key: self.keypair.public_key(),
             module_public_key: self.keypair.public_key(),
@@ -104,13 +103,13 @@ impl GatewayConnection for MockGatewayConnection {
 
     async fn bolt11_invoice(
         &self,
-        _gateway_api: GatewayEndpoint,
+        _gateway_api: SafeUrl,
         _federation_id: FederationId,
         contract: IncomingContract,
         invoice_amount: Amount,
         _description: Bolt11InvoiceDescription,
         expiry_time: u32,
-    ) -> Result<Bolt11Invoice, GatewayError> {
+    ) -> Result<Bolt11Invoice, GatewayConnectionError> {
         let payment_hash = match contract.commitment.payment_image {
             PaymentImage::Hash(payment_hash) => payment_hash,
             PaymentImage::Point(..) => panic!("PaymentImage is not a payment hash"),
@@ -130,16 +129,16 @@ impl GatewayConnection for MockGatewayConnection {
 
     async fn send_payment(
         &self,
-        _gateway_api: GatewayEndpoint,
+        _gateway_api: SafeUrl,
         _federation_id: FederationId,
         contract: OutgoingContract,
         invoice: LightningInvoice,
         _auth: Signature,
-    ) -> Result<Result<[u8; 32], Signature>, GatewayError> {
+    ) -> Result<Result<[u8; 32], Signature>, GatewayConnectionError> {
         match invoice {
             LightningInvoice::Bolt11(invoice) => {
                 if *invoice.payment_secret() == PaymentSecret(GATEWAY_CRASH_PAYMENT_SECRET) {
-                    return Err(GatewayError::Unreachable(String::new()));
+                    return Err(GatewayConnectionError::Unreachable(String::new()));
                 }
 
                 if *invoice.payment_secret() == PaymentSecret(UNPAYABLE_PAYMENT_SECRET) {

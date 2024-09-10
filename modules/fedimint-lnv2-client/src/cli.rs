@@ -13,16 +13,24 @@ use crate::LightningClientModule;
 
 #[derive(Parser, Serialize)]
 enum Opts {
-    /// Pay an invoice
+    /// Pay an invoice. For  testing  you can optionally specify a gateway to
+    /// route with, otherwise a gateway will be selected automatically.
     Send {
-        gateway: SafeUrl,
         invoice: Bolt11Invoice,
+        #[arg(long)]
+        gateway: Option<SafeUrl>,
     },
-    /// Await the final state of the send operation
+    /// Await the final state of the send operation.
     AwaitSend { operation_id: OperationId },
-    /// Request an invoice
-    Receive { gateway: SafeUrl, amount: Amount },
-    /// Await the final state of the receive operation
+    /// Request an invoice. For testing you can optionally specify a gateway to
+    /// generate the invoice, otherwise a gateway will be selected
+    /// automatically.
+    Receive {
+        amount: Amount,
+        #[arg(long)]
+        gateway: Option<SafeUrl>,
+    },
+    /// Await the final state of the receive operation.
     AwaitReceive { operation_id: OperationId },
     /// Gateway subcommands
     #[command(subcommand)]
@@ -31,11 +39,16 @@ enum Opts {
 
 #[derive(Clone, Subcommand, Serialize)]
 enum GatewayOpts {
-    /// List vetted gateways
-    List { peer: Option<PeerId> },
-    /// Add a vetted gateway
+    /// Select an online vetted gateway; this command is intended for testing.
+    Select,
+    /// List all vetted gateways.
+    List {
+        #[arg(long)]
+        peer: Option<PeerId>,
+    },
+    /// Add a vetted gateway.
     Add { gateway: SafeUrl },
-    /// Remove a vetted gateway
+    /// Remove a vetted gateway.
     Remove { gateway: SafeUrl },
 }
 
@@ -46,11 +59,12 @@ pub(crate) async fn handle_cli_command(
     let opts = Opts::parse_from(iter::once(&ffi::OsString::from("lnv2")).chain(args.iter()));
 
     let value = match opts {
-        Opts::Send { gateway, invoice } => json(lightning.send(gateway, invoice).await?),
+        Opts::Send { gateway, invoice } => json(lightning.send(invoice, gateway).await?),
         Opts::AwaitSend { operation_id } => json(lightning.await_send(operation_id).await?),
-        Opts::Receive { gateway, amount } => json(lightning.receive(gateway, amount).await?),
+        Opts::Receive { gateway, amount } => json(lightning.receive(amount, gateway).await?),
         Opts::AwaitReceive { operation_id } => json(lightning.await_receive(operation_id).await?),
         Opts::Gateway(gateway_opts) => match gateway_opts {
+            GatewayOpts::Select => json(lightning.select_gateway().await?.0),
             GatewayOpts::List { peer } => match peer {
                 Some(peer) => json(lightning.module_api.gateways_from_peer(peer).await?),
                 None => json(lightning.module_api.gateways().await?),

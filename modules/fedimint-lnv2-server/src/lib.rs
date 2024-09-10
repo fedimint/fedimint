@@ -27,6 +27,7 @@ use fedimint_core::module::{
 use fedimint_core::server::DynServerModule;
 use fedimint_core::task::{timeout, TaskGroup};
 use fedimint_core::time::duration_since_epoch;
+use fedimint_core::util::SafeUrl;
 use fedimint_core::{
     apply, async_trait_maybe_send, push_db_pair_items, NumPeersExt, OutPoint, PeerId, ServerModule,
 };
@@ -41,10 +42,10 @@ use fedimint_lnv2_common::endpoint_constants::{
     REMOVE_GATEWAY_ENDPOINT,
 };
 use fedimint_lnv2_common::{
-    ContractId, GatewayEndpoint, LightningCommonInit, LightningConsensusItem, LightningInput,
-    LightningInputError, LightningInputV0, LightningModuleTypes, LightningOutput,
-    LightningOutputError, LightningOutputOutcome, LightningOutputOutcomeV0, LightningOutputV0,
-    OutgoingWitness, MODULE_CONSENSUS_VERSION,
+    ContractId, LightningCommonInit, LightningConsensusItem, LightningInput, LightningInputError,
+    LightningInputV0, LightningModuleTypes, LightningOutput, LightningOutputError,
+    LightningOutputOutcome, LightningOutputOutcomeV0, LightningOutputV0, OutgoingWitness,
+    MODULE_CONSENSUS_VERSION,
 };
 use fedimint_server::config::distributedgen::{evaluate_polynomial_g1, PeerHandleOps};
 use fedimint_server::net::api::check_auth;
@@ -587,7 +588,7 @@ impl ServerModule for Lightning {
             api_endpoint! {
                 ADD_GATEWAY_ENDPOINT,
                 ApiVersion::new(0, 0),
-                async |_module: &Lightning, context, gateway: GatewayEndpoint| -> bool {
+                async |_module: &Lightning, context, gateway: SafeUrl| -> bool {
                     check_auth(context)?;
 
                     let db = context.db();
@@ -598,7 +599,7 @@ impl ServerModule for Lightning {
             api_endpoint! {
                 REMOVE_GATEWAY_ENDPOINT,
                 ApiVersion::new(0, 0),
-                async |_module: &Lightning, context, gateway: GatewayEndpoint| -> bool {
+                async |_module: &Lightning, context, gateway: SafeUrl| -> bool {
                     check_auth(context)?;
 
                     let db = context.db();
@@ -609,7 +610,7 @@ impl ServerModule for Lightning {
             api_endpoint! {
                 GATEWAYS_ENDPOINT,
                 ApiVersion::new(0, 0),
-                async |_module: &Lightning, context, _params : () | -> Vec<GatewayEndpoint> {
+                async |_module: &Lightning, context, _params : () | -> Vec<SafeUrl> {
                     let db = context.db();
 
                     Ok(Lightning::gateways(db).await)
@@ -750,7 +751,7 @@ impl Lightning {
         Some(contract.expiration.saturating_sub(consensus_block_count))
     }
 
-    async fn add_gateway(db: Database, gateway: GatewayEndpoint) -> bool {
+    async fn add_gateway(db: Database, gateway: SafeUrl) -> bool {
         let mut dbtx = db.begin_transaction().await;
 
         let is_new_entry = dbtx.insert_entry(&GatewayKey(gateway), &()).await.is_none();
@@ -760,7 +761,7 @@ impl Lightning {
         is_new_entry
     }
 
-    async fn remove_gateway(db: Database, gateway: GatewayEndpoint) -> bool {
+    async fn remove_gateway(db: Database, gateway: SafeUrl) -> bool {
         let mut dbtx = db.begin_transaction().await;
 
         let entry_existed = dbtx.remove_entry(&GatewayKey(gateway)).await.is_some();
@@ -770,7 +771,7 @@ impl Lightning {
         entry_existed
     }
 
-    async fn gateways(db: Database) -> Vec<GatewayEndpoint> {
+    async fn gateways(db: Database) -> Vec<SafeUrl> {
         db.begin_transaction_nc()
             .await
             .find_by_prefix(&GatewayPrefix)

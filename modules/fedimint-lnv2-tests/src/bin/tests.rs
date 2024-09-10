@@ -115,56 +115,65 @@ async fn test_gateway_registration(dev_fed: &DevJitFed) -> anyhow::Result<()> {
         .new_joined_client("lnv2-gateway-registration-client")
         .await?;
 
-    let gateway = SafeUrl::parse("https://gateway.xyz").expect("Valid Url");
+    let gw_ldk = dev_fed
+        .gw_ldk_registered()
+        .await?
+        .as_ref()
+        .expect("Gateways of version 0.5.0 or higher support LDK");
+
+    let gateway_api = SafeUrl::parse(&gw_ldk.addr).expect("LDK gateway address is invalid url");
+
+    for peer in 0..dev_fed.fed().await?.members.len() {
+        assert!(add_gateway(&client, peer, &gateway_api.to_string()).await?);
+    }
 
     assert_eq!(
-        cmd!(
-            client,
-            "--our-id",
-            "0",
-            "--password",
-            "pass",
-            "module",
-            "lnv2",
-            "gateway",
-            "add",
-            gateway.clone().to_string(),
-        )
-        .out_json()
-        .await?,
-        serde_json::to_value(true).expect("JSON serialization failed")
-    );
-
-    assert_eq!(
-        cmd!(client, "module", "lnv2", "gateway", "list", "0")
+        cmd!(client, "module", "lnv2", "gateway", "list")
             .out_json()
-            .await?,
-        serde_json::to_value(vec![gateway.clone()]).expect("JSON serialization failed")
+            .await?
+            .as_array()
+            .expect("JSON Value is not an array")
+            .len(),
+        1
     );
 
     assert_eq!(
-        cmd!(
-            client,
-            "--our-id",
-            "0",
-            "--password",
-            "pass",
-            "module",
-            "lnv2",
-            "gateway",
-            "remove",
-            gateway.to_string(),
-        )
-        .out_json()
-        .await?,
-        serde_json::to_value(true).expect("JSON serialization failed")
-    );
-
-    assert_eq!(
-        cmd!(client, "module", "lnv2", "gateway", "list", "0",)
+        cmd!(client, "module", "lnv2", "gateway", "list", "--peer", "0")
             .out_json()
-            .await?,
-        serde_json::to_value(Vec::<SafeUrl>::new()).expect("JSON serialization failed")
+            .await?
+            .as_array()
+            .expect("JSON Value is not an array")
+            .len(),
+        1
+    );
+
+    assert_eq!(
+        cmd!(client, "module", "lnv2", "gateway", "select")
+            .out_json()
+            .await?
+            .as_str()
+            .expect("JSON Value is not a string"),
+        gateway_api.to_string().as_str()
+    );
+
+    for peer in 0..dev_fed.fed().await?.members.len() {
+        assert!(remove_gateway(&client, peer, &gateway_api).await?);
+    }
+
+    assert!(cmd!(client, "module", "lnv2", "gateway", "list")
+        .out_json()
+        .await?
+        .as_array()
+        .expect("JSON Value is not an array")
+        .is_empty(),);
+
+    assert!(
+        cmd!(client, "module", "lnv2", "gateway", "list", "--peer", "0")
+            .out_json()
+            .await?
+            .as_array()
+            .expect("JSON Value is not an array")
+            .is_empty()
     );
 
     info!("Testing gateway registration successful");
@@ -373,24 +382,75 @@ async fn test_inter_federation_payments(
     }
 
     info!("Testing inter federation payments successful");
+
     Ok(())
+}
+
+async fn add_gateway(client: &Client, peer: usize, gateway_api: &String) -> anyhow::Result<bool> {
+    cmd!(
+        client,
+        "--our-id",
+        peer.to_string(),
+        "--password",
+        "pass",
+        "module",
+        "lnv2",
+        "gateway",
+        "add",
+        gateway_api
+    )
+    .out_json()
+    .await?
+    .as_bool()
+    .ok_or(anyhow::anyhow!("JSON Value is not a boolean"))
+}
+
+async fn remove_gateway(
+    client: &Client,
+    peer: usize,
+    gateway_api: &SafeUrl,
+) -> anyhow::Result<bool> {
+    cmd!(
+        client,
+        "--our-id",
+        peer.to_string(),
+        "--password",
+        "pass",
+        "module",
+        "lnv2",
+        "gateway",
+        "remove",
+        gateway_api.to_string()
+    )
+    .out_json()
+    .await?
+    .as_bool()
+    .ok_or(anyhow::anyhow!("JSON Value is not a boolean"))
 }
 
 async fn receive(
     client: &Client,
-    gw_address: &str,
+    gateway_api: &str,
     amount: u64,
 ) -> anyhow::Result<(Bolt11Invoice, OperationId)> {
     Ok(serde_json::from_value::<(Bolt11Invoice, OperationId)>(
-        cmd!(client, "module", "lnv2", "receive", gw_address, amount,)
-            .out_json()
-            .await?,
+        cmd!(
+            client,
+            "module",
+            "lnv2",
+            "receive",
+            amount,
+            "--gateway",
+            gateway_api
+        )
+        .out_json()
+        .await?,
     )?)
 }
 
 async fn test_send(
     client: &Client,
-    gw_address: &String,
+    gateway_api: &String,
     invoice: &Bolt11Invoice,
     final_state: FinalSendState,
 ) -> anyhow::Result<()> {
@@ -400,8 +460,9 @@ async fn test_send(
             "module",
             "lnv2",
             "send",
-            gw_address,
-            invoice.to_string()
+            invoice.to_string(),
+            "--gateway",
+            gateway_api
         )
         .out_json()
         .await?,
