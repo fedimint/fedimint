@@ -346,7 +346,8 @@
 <a href="#345" id="345">345</a>
 <a href="#346" id="346">346</a>
 <a href="#347" id="347">347</a>
-<a href="#348" id="348">348</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap};
+<a href="#348" id="348">348</a>
+<a href="#349" id="349">349</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, HashMap};
 <span class="kw">use </span>std::sync::Arc;
 <span class="kw">use </span>std::time::Duration;
 
@@ -484,7 +485,8 @@
             invite_code: <span class="self">self</span>.invite_code().to_string(),
             <span class="attr">#[cfg(feature = <span class="string">"tor"</span>)]
             </span>use_tor: <span class="prelude-val">Some</span>(<span class="bool-val">false</span>), <span class="comment">// TODO: (@leonardo) Should we get it from self.configs too ?
-        </span>})
+            </span>recover: <span class="prelude-val">Some</span>(<span class="bool-val">false</span>),
+        })
         .<span class="kw">await
         </span>.expect(<span class="string">"Failed to connect federation"</span>);
     }

@@ -291,16 +291,7 @@
 <a href="#290" id="290">290</a>
 <a href="#291" id="291">291</a>
 <a href="#292" id="292">292</a>
-<a href="#293" id="293">293</a>
-<a href="#294" id="294">294</a>
-<a href="#295" id="295">295</a>
-<a href="#296" id="296">296</a>
-<a href="#297" id="297">297</a>
-<a href="#298" id="298">298</a>
-<a href="#299" id="299">299</a>
-<a href="#300" id="300">300</a>
-<a href="#301" id="301">301</a>
-<a href="#302" id="302">302</a></pre></div><pre class="rust"><code><span class="kw">use </span>bitcoin::address::NetworkUnchecked;
+<a href="#293" id="293">293</a></pre></div><pre class="rust"><code><span class="kw">use </span>bitcoin::address::NetworkUnchecked;
 <span class="kw">use </span>bitcoin::Address;
 <span class="kw">use </span>fedimint_core::util::SafeUrl;
 <span class="kw">use </span>fedimint_core::{Amount, TransactionId};
@@ -309,8 +300,8 @@
     CONFIGURATION_ENDPOINT, CONNECT_FED_ENDPOINT, GATEWAY_INFO_ENDPOINT,
     GATEWAY_INFO_POST_ENDPOINT, GET_BALANCES_ENDPOINT, GET_LN_ONCHAIN_ADDRESS_ENDPOINT,
     LEAVE_FED_ENDPOINT, LIST_ACTIVE_CHANNELS_ENDPOINT, MNEMONIC_ENDPOINT, OPEN_CHANNEL_ENDPOINT,
-    RECEIVE_ECASH_ENDPOINT, RESTORE_ENDPOINT, SET_CONFIGURATION_ENDPOINT, SPEND_ECASH_ENDPOINT,
-    STOP_ENDPOINT, WITHDRAW_ENDPOINT,
+    RECEIVE_ECASH_ENDPOINT, SET_CONFIGURATION_ENDPOINT, SPEND_ECASH_ENDPOINT, STOP_ENDPOINT,
+    WITHDRAW_ENDPOINT,
 };
 <span class="kw">use </span>fedimint_lnv2_common::endpoint_constants::{
     CREATE_BOLT11_INVOICE_FOR_SELF_ENDPOINT, PAY_INVOICE_SELF_ENDPOINT,
@@ -326,8 +317,7 @@
     CreateInvoiceForSelfPayload, DepositAddressPayload, FederationInfo, GatewayBalances,
     GatewayFedConfig, GatewayInfo, GetLnOnchainAddressPayload, LeaveFedPayload, MnemonicResponse,
     OpenChannelPayload, PayInvoicePayload, ReceiveEcashPayload, ReceiveEcashResponse,
-    RestorePayload, SetConfigurationPayload, SpendEcashPayload, SpendEcashResponse,
-    WithdrawPayload,
+    SetConfigurationPayload, SpendEcashPayload, SpendEcashResponse, WithdrawPayload,
 };
 <span class="kw">use </span><span class="kw">crate</span>::lightning::ChannelInfo;
 <span class="kw">use </span><span class="kw">crate</span>::CloseChannelsWithPeerResponse;
@@ -433,14 +423,6 @@
         <span class="kw">let </span>url = <span class="self">self
             </span>.base_url
             .join(BACKUP_ENDPOINT)
-            .expect(<span class="string">"invalid base url"</span>);
-        <span class="self">self</span>.call_post(url, payload).<span class="kw">await
-    </span>}
-
-    <span class="kw">pub async fn </span>restore(<span class="kw-2">&amp;</span><span class="self">self</span>, payload: RestorePayload) -&gt; GatewayRpcResult&lt;()&gt; {
-        <span class="kw">let </span>url = <span class="self">self
-            </span>.base_url
-            .join(RESTORE_ENDPOINT)
             .expect(<span class="string">"invalid base url"</span>);
         <span class="self">self</span>.call_post(url, payload).<span class="kw">await
     </span>}

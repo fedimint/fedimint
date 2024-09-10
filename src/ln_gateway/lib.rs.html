@@ -2042,7 +2042,29 @@
 <a href="#2041" id="2041">2041</a>
 <a href="#2042" id="2042">2042</a>
 <a href="#2043" id="2043">2043</a>
-<a href="#2044" id="2044">2044</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#2044" id="2044">2044</a>
+<a href="#2045" id="2045">2045</a>
+<a href="#2046" id="2046">2046</a>
+<a href="#2047" id="2047">2047</a>
+<a href="#2048" id="2048">2048</a>
+<a href="#2049" id="2049">2049</a>
+<a href="#2050" id="2050">2050</a>
+<a href="#2051" id="2051">2051</a>
+<a href="#2052" id="2052">2052</a>
+<a href="#2053" id="2053">2053</a>
+<a href="#2054" id="2054">2054</a>
+<a href="#2055" id="2055">2055</a>
+<a href="#2056" id="2056">2056</a>
+<a href="#2057" id="2057">2057</a>
+<a href="#2058" id="2058">2058</a>
+<a href="#2059" id="2059">2059</a>
+<a href="#2060" id="2060">2060</a>
+<a href="#2061" id="2061">2061</a>
+<a href="#2062" id="2062">2062</a>
+<a href="#2063" id="2063">2063</a>
+<a href="#2064" id="2064">2064</a>
+<a href="#2065" id="2065">2065</a>
+<a href="#2066" id="2066">2066</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::cast_possible_wrap)]
 #![allow(clippy::cast_sign_loss)]
@@ -2160,7 +2182,7 @@
 <span class="kw">use </span><span class="kw">crate</span>::rpc::rpc_server::{hash_password, run_webserver};
 <span class="kw">use </span><span class="kw">crate</span>::rpc::{
     BackupPayload, BalancePayload, ConnectFedPayload, DepositAddressPayload, FederationBalanceInfo,
-    GatewayBalances, RestorePayload, WithdrawPayload,
+    GatewayBalances, WithdrawPayload,
 };
 <span class="kw">use </span><span class="kw">crate</span>::types::PrettyInterceptHtlcRequest;
 
@@ -2360,11 +2382,13 @@
 
         <span class="kw">let </span>gateway_parameters = opts.to_gateway_parameters()<span class="question-mark">?</span>;
 
+        <span class="kw">let </span>mnemonic = <span class="self">Self</span>::load_or_generate_mnemonic(<span class="kw-2">&amp;</span>gateway_db).<span class="kw">await</span><span class="question-mark">?</span>;
         Gateway::new(
             Arc::new(GatewayLightningBuilder {
                 lightning_mode: opts.mode,
                 gateway_db: gateway_db.clone(),
                 ldk_data_dir: opts.data_dir.join(LDK_NODE_DB_FOLDER),
+                mnemonic,
             }),
             gateway_parameters,
             gateway_db,
@@ -3113,7 +3137,7 @@
         // federation connected.
         </span><span class="kw">let </span>federation_index = federation_manager.pop_next_index()<span class="question-mark">?</span>;
 
-        <span class="kw">let </span>gw_client_cfg = FederationConfig {
+        <span class="kw">let </span>federation_config = FederationConfig {
             invite_code,
             federation_index,
             timelock_delta: <span class="number">10</span>,
@@ -3121,11 +3145,22 @@
             connector,
         };
 
-        <span class="kw">let </span>mnemonic = <span class="self">self</span>.load_or_generate_mnemonic().<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>mnemonic = <span class="self">Self</span>::load_or_generate_mnemonic(<span class="kw-2">&amp;</span><span class="self">self</span>.gateway_db).<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>recover = payload.recover.unwrap_or(<span class="bool-val">false</span>);
+        <span class="kw">if </span>recover {
+            <span class="self">self</span>.client_builder
+                .recover(federation_config.clone(), Arc::new(<span class="self">self</span>.clone()), <span class="kw-2">&amp;</span>mnemonic)
+                .<span class="kw">await</span><span class="question-mark">?</span>;
+        }
+
         <span class="kw">let </span>client = <span class="self">self
             </span>.client_builder
-            .build(gw_client_cfg.clone(), Arc::new(<span class="self">self</span>.clone()), <span class="kw-2">&amp;</span>mnemonic)
+            .build(federation_config.clone(), Arc::new(<span class="self">self</span>.clone()), <span class="kw-2">&amp;</span>mnemonic)
             .<span class="kw">await</span><span class="question-mark">?</span>;
+
+        <span class="kw">if </span>recover {
+            client.wait_for_all_active_state_machines().<span class="kw">await</span><span class="question-mark">?</span>;
+        }
 
         <span class="comment">// Instead of using `FederationManager::federation_info`, we manually create
         // federation info here because short channel id is not yet persisted.
@@ -3144,7 +3179,7 @@
                 <span class="comment">// Route hints will be updated in the background
                 </span>Vec::new(),
                 GW_ANNOUNCEMENT_TTL,
-                gw_client_cfg.fees,
+                federation_config.fees,
                 lightning_context,
             )
             .<span class="kw">await</span><span class="question-mark">?</span>;
@@ -3160,7 +3195,7 @@
         );
 
         <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.gateway_db.begin_transaction().<span class="kw">await</span>;
-        dbtx.save_federation_config(<span class="kw-2">&amp;</span>gw_client_cfg).<span class="kw">await</span>;
+        dbtx.save_federation_config(<span class="kw-2">&amp;</span>federation_config).<span class="kw">await</span>;
         dbtx.commit_tx_result()
             .<span class="kw">await
             </span>.map_err(GatewayError::DatabaseError)<span class="question-mark">?</span>;
@@ -3194,25 +3229,32 @@
     }
 
     <span class="doccomment">/// Handles a request for the gateway to backup a connected federation's
-    /// ecash. Not currently supported.
-    </span><span class="kw">pub fn </span>handle_backup_msg(
+    /// ecash.
+    </span><span class="kw">pub async fn </span>handle_backup_msg(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        BackupPayload { federation_id: <span class="kw">_ </span>}: BackupPayload,
+        BackupPayload { federation_id }: BackupPayload,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-        <span class="macro">unimplemented!</span>(<span class="string">"Backup is not currently supported"</span>);
+        <span class="kw">let </span>federation_manager = <span class="self">self</span>.federation_manager.read().<span class="kw">await</span>;
+        <span class="kw">let </span>client = federation_manager
+            .client(<span class="kw-2">&amp;</span>federation_id)
+            .ok_or(GatewayError::ClientCreationError(<span class="macro">format!</span>(
+                <span class="string">"Gateway does has not connected to {federation_id}"
+            </span>)))<span class="question-mark">?
+            </span>.value();
+        <span class="kw">let </span>metadata: BTreeMap&lt;String, String&gt; = BTreeMap::new();
+        client
+            .backup_to_federation(fedimint_client::backup::Metadata::from_json_serialized(
+                metadata,
+            ))
+            .<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="prelude-val">Ok</span>(())
     }
 
-    <span class="doccomment">/// Handles a request for the gateway to restore a connected federation's
-    /// ecash. Not currently supported.
-    </span><span class="kw">pub fn </span>handle_restore_msg(
-        <span class="kw-2">&amp;</span><span class="self">self</span>,
-        RestorePayload { federation_id: <span class="kw">_ </span>}: RestorePayload,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-        <span class="macro">unimplemented!</span>(<span class="string">"Restore is not currently supported"</span>);
-    }
-
-    <span class="kw">pub async fn </span>handle_mnemonic_msg(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;MnemonicResponse&gt; {
-        <span class="kw">let </span>mnemonic = <span class="self">self</span>.load_or_generate_mnemonic().<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="doccomment">/// Handles an authenticated request for the gateway's mnemonic. This also
+    /// returns a vector of federations that are not using the mnemonic
+    /// backup strategy.
+    </span><span class="kw">pub async fn </span>handle_mnemonic_msg(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;MnemonicResponse&gt; {
+        <span class="kw">let </span>mnemonic = <span class="self">Self</span>::load_or_generate_mnemonic(<span class="kw-2">&amp;</span><span class="self">self</span>.gateway_db).<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>words = mnemonic
             .word_iter()
             .map(std::string::ToString::to_string)
@@ -3634,11 +3676,13 @@
             </span>)))
     }
 
-    <span class="kw">async fn </span>load_or_generate_mnemonic(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;Mnemonic&gt; {
+    <span class="doccomment">/// Loads a mnemonic from the database or generates a new one if the
+    /// mnemonic does not exist. Before generating a new mnemonic, this
+    /// function will check if a mnemonic has been provided in the environment
+    /// variable and use that if provided.
+    </span><span class="kw">async fn </span>load_or_generate_mnemonic(gateway_db: <span class="kw-2">&amp;</span>Database) -&gt; <span class="prelude-ty">Result</span>&lt;Mnemonic&gt; {
         <span class="prelude-val">Ok</span>(
-            <span class="kw">if let </span><span class="prelude-val">Ok</span>(entropy) =
-                Client::load_decodable_client_secret::&lt;Vec&lt;u8&gt;&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>.gateway_db).<span class="kw">await
-            </span>{
+            <span class="kw">if let </span><span class="prelude-val">Ok</span>(entropy) = Client::load_decodable_client_secret::&lt;Vec&lt;u8&gt;&gt;(gateway_db).<span class="kw">await </span>{
                 Mnemonic::from_entropy(<span class="kw-2">&amp;</span>entropy)
                     .map_err(|e| GatewayError::ClientCreationError(e.to_string()))<span class="question-mark">?
             </span>} <span class="kw">else </span>{
@@ -3655,7 +3699,7 @@
                     Bip39RootSecretStrategy::&lt;<span class="number">12</span>&gt;::random(<span class="kw-2">&amp;mut </span>thread_rng())
                 };
 
-                Client::store_encodable_client_secret(<span class="kw-2">&amp;</span><span class="self">self</span>.gateway_db, mnemonic.to_entropy())
+                Client::store_encodable_client_secret(gateway_db, mnemonic.to_entropy())
                     .<span class="kw">await
                     </span>.map_err(|e| GatewayError::ClientCreationError(e.to_string()))<span class="question-mark">?</span>;
                 mnemonic
@@ -3678,7 +3722,7 @@
             federation_manager.set_next_index(max_federation_index + <span class="number">1</span>);
         }
 
-        <span class="kw">let </span>mnemonic = <span class="self">self</span>.load_or_generate_mnemonic().<span class="kw">await</span><span class="question-mark">?</span>;
+        <span class="kw">let </span>mnemonic = <span class="self">Self</span>::load_or_generate_mnemonic(<span class="kw-2">&amp;</span><span class="self">self</span>.gateway_db).<span class="kw">await</span><span class="question-mark">?</span>;
 
         <span class="kw">for </span>(federation_id, config) <span class="kw">in </span>configs {
             <span class="kw">let </span>federation_index = config.federation_index;

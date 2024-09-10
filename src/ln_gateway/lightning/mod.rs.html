@@ -330,7 +330,10 @@
 <a href="#329" id="329">329</a>
 <a href="#330" id="330">330</a>
 <a href="#331" id="331">331</a>
-<a href="#332" id="332">332</a></pre></div><pre class="rust"><code><span class="kw">pub mod </span>cln;
+<a href="#332" id="332">332</a>
+<a href="#333" id="333">333</a>
+<a href="#334" id="334">334</a>
+<a href="#335" id="335">335</a></pre></div><pre class="rust"><code><span class="kw">pub mod </span>cln;
 <span class="kw">pub mod </span>ldk;
 <span class="kw">pub mod </span>lnd;
 
@@ -340,6 +343,7 @@
 <span class="kw">use </span>std::sync::Arc;
 
 <span class="kw">use </span>async_trait::async_trait;
+<span class="kw">use </span>bip39::Mnemonic;
 <span class="kw">use </span>bitcoin::Network;
 <span class="kw">use </span>clap::Subcommand;
 <span class="kw">use </span>fedimint_core::db::Database;
@@ -622,6 +626,7 @@
     <span class="kw">pub </span>lightning_mode: LightningMode,
     <span class="kw">pub </span>gateway_db: Database,
     <span class="kw">pub </span>ldk_data_dir: PathBuf,
+    <span class="kw">pub </span>mnemonic: Mnemonic,
 }
 
 <span class="attr">#[async_trait]
@@ -652,6 +657,7 @@
                     <span class="kw-2">&amp;</span>esplora_server_url,
                     network,
                     lightning_port,
+                    <span class="self">self</span>.mnemonic.clone(),
                 )
                 .unwrap(),
             ),

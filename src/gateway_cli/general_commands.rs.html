@@ -292,12 +292,7 @@
 <a href="#291" id="291">291</a>
 <a href="#292" id="292">292</a>
 <a href="#293" id="293">293</a>
-<a href="#294" id="294">294</a>
-<a href="#295" id="295">295</a>
-<a href="#296" id="296">296</a>
-<a href="#297" id="297">297</a>
-<a href="#298" id="298">298</a>
-<a href="#299" id="299">299</a></pre></div><pre class="rust"><code><span class="kw">use </span>anyhow::bail;
+<a href="#294" id="294">294</a></pre></div><pre class="rust"><code><span class="kw">use </span>anyhow::bail;
 <span class="kw">use </span>bitcoin::address::NetworkUnchecked;
 <span class="kw">use </span>bitcoin::Address;
 <span class="kw">use </span>clap::Subcommand;
@@ -307,8 +302,8 @@
 <span class="kw">use </span>ln_gateway::rpc::rpc_client::GatewayRpcClient;
 <span class="kw">use </span>ln_gateway::rpc::{
     BackupPayload, BalancePayload, ConfigPayload, ConnectFedPayload, DepositAddressPayload,
-    FederationRoutingFees, LeaveFedPayload, ReceiveEcashPayload, RestorePayload,
-    SetConfigurationPayload, SpendEcashPayload, WithdrawPayload,
+    FederationRoutingFees, LeaveFedPayload, ReceiveEcashPayload, SetConfigurationPayload,
+    SpendEcashPayload, WithdrawPayload,
 };
 
 <span class="kw">use </span><span class="kw">crate</span>::print_response;
@@ -384,6 +379,9 @@
         /// client
         </span><span class="attr">#[cfg(feature = <span class="string">"tor"</span>)]
         </span>use_tor: <span class="prelude-ty">Option</span>&lt;bool&gt;,
+        <span class="doccomment">/// Indicates if the client should be recovered from a mnemonic
+        </span><span class="attr">#[clap(long)]
+        </span>recover: <span class="prelude-ty">Option</span>&lt;bool&gt;,
     },
     <span class="doccomment">/// Leave a federation.
     </span>LeaveFed {
@@ -392,11 +390,6 @@
     },
     <span class="doccomment">/// Make a backup of snapshot of all e-cash.
     </span>Backup {
-        <span class="attr">#[clap(long)]
-        </span>federation_id: FederationId,
-    },
-    <span class="doccomment">/// Restore e-cash from last available snapshot or from scratch.
-    </span>Restore {
         <span class="attr">#[clap(long)]
         </span>federation_id: FederationId,
     },
@@ -513,12 +506,14 @@
                 invite_code,
                 <span class="attr">#[cfg(feature = <span class="string">"tor"</span>)]
                 </span>use_tor,
+                recover,
             } =&gt; {
                 <span class="kw">let </span>response = create_client()
                     .connect_federation(ConnectFedPayload {
                         invite_code,
                         <span class="attr">#[cfg(feature = <span class="string">"tor"</span>)]
                         </span>use_tor,
+                        recover,
                     })
                     .<span class="kw">await</span><span class="question-mark">?</span>;
 
@@ -533,11 +528,6 @@
             <span class="self">Self</span>::Backup { federation_id } =&gt; {
                 create_client()
                     .backup(BackupPayload { federation_id })
-                    .<span class="kw">await</span><span class="question-mark">?</span>;
-            }
-            <span class="self">Self</span>::Restore { federation_id } =&gt; {
-                create_client()
-                    .restore(RestorePayload { federation_id })
                     .<span class="kw">await</span><span class="question-mark">?</span>;
             }
             <span class="self">Self</span>::SetConfiguration {
