@@ -410,7 +410,7 @@ impl LightningClientModule {
     async fn routing_info(
         &self,
         gateway_api: &SafeUrl,
-    ) -> Result<Option<RoutingInfo>, GatewayError> {
+    ) -> Result<Option<RoutingInfo>, GatewayConnectionError> {
         self.gateway_conn
             .routing_info(gateway_api.clone(), &self.federation_id)
             .await
@@ -469,7 +469,7 @@ impl LightningClientModule {
                 gateway_api.clone(),
                 self.routing_info(&gateway_api)
                     .await
-                    .map_err(SendPaymentError::GatewayError)?
+                    .map_err(SendPaymentError::GatewayConnectionError)?
                     .ok_or(SendPaymentError::UnknownFederation)?,
             ),
             None => self
@@ -766,7 +766,7 @@ impl LightningClientModule {
                 gateway_api.clone(),
                 self.routing_info(&gateway_api)
                     .await
-                    .map_err(FetchInvoiceError::GatewayError)?
+                    .map_err(FetchInvoiceError::GatewayConnectionError)?
                     .ok_or(FetchInvoiceError::UnknownFederation)?,
             ),
             None => self
@@ -823,7 +823,7 @@ impl LightningClientModule {
                 expiry_time,
             )
             .await
-            .map_err(FetchInvoiceError::GatewayError)?;
+            .map_err(FetchInvoiceError::GatewayConnectionError)?;
 
         if invoice.payment_hash() != &preimage.consensus_hash() {
             return Err(FetchInvoiceError::InvalidInvoicePaymentHash);
@@ -979,11 +979,9 @@ impl LightningClientModule {
 }
 
 #[derive(Error, Debug, Clone, Eq, PartialEq)]
-pub enum GatewayError {
+pub enum GatewayConnectionError {
     #[error("The gateway is unreachable: {0}")]
     Unreachable(String),
-    #[error("The gateway returned an invalid response: {0}")]
-    InvalidJsonResponse(String),
     #[error("The gateway returned an error for this request: {0}")]
     Request(String),
 }
@@ -1010,8 +1008,8 @@ pub enum SendPaymentError {
     SuccessfulPreviousPayment(OperationId),
     #[error("Failed to select gateway: {0}")]
     FailedToSelectGateway(SelectGatewayError),
-    #[error("Gateway error: {0}")]
-    GatewayError(GatewayError),
+    #[error("Gateway connection error: {0}")]
+    GatewayConnectionError(GatewayConnectionError),
     #[error("The gateway does not support our federation")]
     UnknownFederation,
     #[error("The gateways fee of {0:?} exceeds the supplied limit")]
@@ -1033,8 +1031,8 @@ pub enum SendPaymentError {
 pub enum FetchInvoiceError {
     #[error("Failed to select gateway: {0}")]
     FailedToSelectGateway(SelectGatewayError),
-    #[error("Gateway error: {0}")]
-    GatewayError(GatewayError),
+    #[error("Gateway connection error: {0}")]
+    GatewayConnectionError(GatewayConnectionError),
     #[error("The gateway does not support our federation")]
     UnknownFederation,
     #[error("The gateways fee of {0:?} exceeds the supplied limit")]

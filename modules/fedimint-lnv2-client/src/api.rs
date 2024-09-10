@@ -24,7 +24,7 @@ use lightning_invoice::Bolt11Invoice;
 use secp256k1::schnorr::Signature;
 
 use crate::{
-    Bolt11InvoiceDescription, CreateBolt11InvoicePayload, GatewayError, LightningInvoice,
+    Bolt11InvoiceDescription, CreateBolt11InvoicePayload, GatewayConnectionError, LightningInvoice,
     RoutingInfo, SendPaymentPayload,
 };
 
@@ -179,7 +179,7 @@ pub trait GatewayConnection: std::fmt::Debug {
         &self,
         gateway_api: SafeUrl,
         federation_id: &FederationId,
-    ) -> Result<Option<RoutingInfo>, GatewayError>;
+    ) -> Result<Option<RoutingInfo>, GatewayConnectionError>;
 
     async fn bolt11_invoice(
         &self,
@@ -189,7 +189,7 @@ pub trait GatewayConnection: std::fmt::Debug {
         invoice_amount: Amount,
         description: Bolt11InvoiceDescription,
         expiry_time: u32,
-    ) -> Result<Bolt11Invoice, GatewayError>;
+    ) -> Result<Bolt11Invoice, GatewayConnectionError>;
 
     async fn send_payment(
         &self,
@@ -198,7 +198,7 @@ pub trait GatewayConnection: std::fmt::Debug {
         contract: OutgoingContract,
         invoice: LightningInvoice,
         auth: Signature,
-    ) -> Result<Result<[u8; 32], Signature>, GatewayError>;
+    ) -> Result<Result<[u8; 32], Signature>, GatewayConnectionError>;
 }
 
 #[derive(Debug)]
@@ -210,7 +210,7 @@ impl GatewayConnection for RealGatewayConnection {
         &self,
         gateway_api: SafeUrl,
         federation_id: &FederationId,
-    ) -> Result<Option<RoutingInfo>, GatewayError> {
+    ) -> Result<Option<RoutingInfo>, GatewayConnectionError> {
         reqwest::Client::new()
             .post(
                 gateway_api
@@ -221,10 +221,10 @@ impl GatewayConnection for RealGatewayConnection {
             .json(federation_id)
             .send()
             .await
-            .map_err(|e| GatewayError::Unreachable(e.to_string()))?
+            .map_err(|e| GatewayConnectionError::Unreachable(e.to_string()))?
             .json::<Option<RoutingInfo>>()
             .await
-            .map_err(|e| GatewayError::Request(e.to_string()))
+            .map_err(|e| GatewayConnectionError::Request(e.to_string()))
     }
 
     async fn bolt11_invoice(
@@ -235,7 +235,7 @@ impl GatewayConnection for RealGatewayConnection {
         invoice_amount: Amount,
         description: Bolt11InvoiceDescription,
         expiry_time: u32,
-    ) -> Result<Bolt11Invoice, GatewayError> {
+    ) -> Result<Bolt11Invoice, GatewayConnectionError> {
         reqwest::Client::new()
             .post(
                 gateway_api
@@ -252,10 +252,10 @@ impl GatewayConnection for RealGatewayConnection {
             })
             .send()
             .await
-            .map_err(|e| GatewayError::Unreachable(e.to_string()))?
+            .map_err(|e| GatewayConnectionError::Unreachable(e.to_string()))?
             .json::<Bolt11Invoice>()
             .await
-            .map_err(|e| GatewayError::Request(e.to_string()))
+            .map_err(|e| GatewayConnectionError::Request(e.to_string()))
     }
 
     async fn send_payment(
@@ -265,7 +265,7 @@ impl GatewayConnection for RealGatewayConnection {
         contract: OutgoingContract,
         invoice: LightningInvoice,
         auth: Signature,
-    ) -> Result<Result<[u8; 32], Signature>, GatewayError> {
+    ) -> Result<Result<[u8; 32], Signature>, GatewayConnectionError> {
         reqwest::Client::new()
             .post(
                 gateway_api
@@ -281,9 +281,9 @@ impl GatewayConnection for RealGatewayConnection {
             })
             .send()
             .await
-            .map_err(|e| GatewayError::Unreachable(e.to_string()))?
+            .map_err(|e| GatewayConnectionError::Unreachable(e.to_string()))?
             .json::<Result<[u8; 32], Signature>>()
             .await
-            .map_err(|e| GatewayError::Request(e.to_string()))
+            .map_err(|e| GatewayConnectionError::Request(e.to_string()))
     }
 }
