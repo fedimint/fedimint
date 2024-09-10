@@ -168,21 +168,7 @@
 <a href="#167" id="167">167</a>
 <a href="#168" id="168">168</a>
 <a href="#169" id="169">169</a>
-<a href="#170" id="170">170</a>
-<a href="#171" id="171">171</a>
-<a href="#172" id="172">172</a>
-<a href="#173" id="173">173</a>
-<a href="#174" id="174">174</a>
-<a href="#175" id="175">175</a>
-<a href="#176" id="176">176</a>
-<a href="#177" id="177">177</a>
-<a href="#178" id="178">178</a>
-<a href="#179" id="179">179</a>
-<a href="#180" id="180">180</a>
-<a href="#181" id="181">181</a>
-<a href="#182" id="182">182</a>
-<a href="#183" id="183">183</a>
-<a href="#184" id="184">184</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#170" id="170">170</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::module_name_repetitions)]
 #![allow(clippy::must_use_candidate)]
 
@@ -203,7 +189,6 @@
 <span class="kw">use </span>fedimint_core::core::{Decoder, ModuleInstanceId, ModuleKind};
 <span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <span class="kw">use </span>fedimint_core::module::{CommonModuleInit, ModuleCommon, ModuleConsensusVersion};
-<span class="kw">use </span>fedimint_core::util::SafeUrl;
 <span class="kw">use </span>fedimint_core::{extensible_associated_module_type, plugin_types_trait_impl_common};
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>thiserror::Error;
@@ -353,17 +338,4 @@
     LightningInputError,
     LightningOutputError
 );
-
-<span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
-</span><span class="kw">pub enum </span>GatewayEndpoint {
-    Url(SafeUrl),
-}
-
-<span class="kw">impl </span>GatewayEndpoint {
-    <span class="kw">pub fn </span>into_url(<span class="self">self</span>) -&gt; SafeUrl {
-        <span class="kw">match </span><span class="self">self </span>{
-            GatewayEndpoint::Url(url) =&gt; url,
-        }
-    }
-}
 </code></pre></div></section></main></body></html>

@@ -439,7 +439,68 @@
 <a href="#438" id="438">438</a>
 <a href="#439" id="439">439</a>
 <a href="#440" id="440">440</a>
-<a href="#441" id="441">441</a></pre></div><pre class="rust"><code><span class="kw">use </span>clap::Parser;
+<a href="#441" id="441">441</a>
+<a href="#442" id="442">442</a>
+<a href="#443" id="443">443</a>
+<a href="#444" id="444">444</a>
+<a href="#445" id="445">445</a>
+<a href="#446" id="446">446</a>
+<a href="#447" id="447">447</a>
+<a href="#448" id="448">448</a>
+<a href="#449" id="449">449</a>
+<a href="#450" id="450">450</a>
+<a href="#451" id="451">451</a>
+<a href="#452" id="452">452</a>
+<a href="#453" id="453">453</a>
+<a href="#454" id="454">454</a>
+<a href="#455" id="455">455</a>
+<a href="#456" id="456">456</a>
+<a href="#457" id="457">457</a>
+<a href="#458" id="458">458</a>
+<a href="#459" id="459">459</a>
+<a href="#460" id="460">460</a>
+<a href="#461" id="461">461</a>
+<a href="#462" id="462">462</a>
+<a href="#463" id="463">463</a>
+<a href="#464" id="464">464</a>
+<a href="#465" id="465">465</a>
+<a href="#466" id="466">466</a>
+<a href="#467" id="467">467</a>
+<a href="#468" id="468">468</a>
+<a href="#469" id="469">469</a>
+<a href="#470" id="470">470</a>
+<a href="#471" id="471">471</a>
+<a href="#472" id="472">472</a>
+<a href="#473" id="473">473</a>
+<a href="#474" id="474">474</a>
+<a href="#475" id="475">475</a>
+<a href="#476" id="476">476</a>
+<a href="#477" id="477">477</a>
+<a href="#478" id="478">478</a>
+<a href="#479" id="479">479</a>
+<a href="#480" id="480">480</a>
+<a href="#481" id="481">481</a>
+<a href="#482" id="482">482</a>
+<a href="#483" id="483">483</a>
+<a href="#484" id="484">484</a>
+<a href="#485" id="485">485</a>
+<a href="#486" id="486">486</a>
+<a href="#487" id="487">487</a>
+<a href="#488" id="488">488</a>
+<a href="#489" id="489">489</a>
+<a href="#490" id="490">490</a>
+<a href="#491" id="491">491</a>
+<a href="#492" id="492">492</a>
+<a href="#493" id="493">493</a>
+<a href="#494" id="494">494</a>
+<a href="#495" id="495">495</a>
+<a href="#496" id="496">496</a>
+<a href="#497" id="497">497</a>
+<a href="#498" id="498">498</a>
+<a href="#499" id="499">499</a>
+<a href="#500" id="500">500</a>
+<a href="#501" id="501">501</a>
+<a href="#502" id="502">502</a></pre></div><pre class="rust"><code><span class="kw">use </span>clap::Parser;
 <span class="kw">use </span>devimint::devfed::DevJitFed;
 <span class="kw">use </span>devimint::federation::{Client, Federation};
 <span class="kw">use </span>devimint::util::ProcessManager;
@@ -556,56 +617,65 @@
         </span>.new_joined_client(<span class="string">"lnv2-gateway-registration-client"</span>)
         .<span class="kw">await</span><span class="question-mark">?</span>;
 
-    <span class="kw">let </span>gateway = SafeUrl::parse(<span class="string">"https://gateway.xyz"</span>).expect(<span class="string">"Valid Url"</span>);
+    <span class="kw">let </span>gw_ldk = dev_fed
+        .gw_ldk_registered()
+        .<span class="kw">await</span><span class="question-mark">?
+        </span>.as_ref()
+        .expect(<span class="string">"Gateways of version 0.5.0 or higher support LDK"</span>);
+
+    <span class="kw">let </span>gateway_api = SafeUrl::parse(<span class="kw-2">&amp;</span>gw_ldk.addr).expect(<span class="string">"LDK gateway address is invalid url"</span>);
+
+    <span class="kw">for </span>peer <span class="kw">in </span><span class="number">0</span>..dev_fed.fed().<span class="kw">await</span><span class="question-mark">?</span>.members.len() {
+        <span class="macro">assert!</span>(add_gateway(<span class="kw-2">&amp;</span>client, peer, <span class="kw-2">&amp;</span>gateway_api.to_string()).<span class="kw">await</span><span class="question-mark">?</span>);
+    }
 
     <span class="macro">assert_eq!</span>(
-        <span class="macro">cmd!</span>(
-            client,
-            <span class="string">"--our-id"</span>,
-            <span class="string">"0"</span>,
-            <span class="string">"--password"</span>,
-            <span class="string">"pass"</span>,
-            <span class="string">"module"</span>,
-            <span class="string">"lnv2"</span>,
-            <span class="string">"gateway"</span>,
-            <span class="string">"add"</span>,
-            gateway.clone().to_string(),
-        )
-        .out_json()
-        .<span class="kw">await</span><span class="question-mark">?</span>,
-        serde_json::to_value(<span class="bool-val">true</span>).expect(<span class="string">"JSON serialization failed"</span>)
-    );
-
-    <span class="macro">assert_eq!</span>(
-        <span class="macro">cmd!</span>(client, <span class="string">"module"</span>, <span class="string">"lnv2"</span>, <span class="string">"gateway"</span>, <span class="string">"list"</span>, <span class="string">"0"</span>)
+        <span class="macro">cmd!</span>(client, <span class="string">"module"</span>, <span class="string">"lnv2"</span>, <span class="string">"gateway"</span>, <span class="string">"list"</span>)
             .out_json()
-            .<span class="kw">await</span><span class="question-mark">?</span>,
-        serde_json::to_value(<span class="macro">vec!</span>[gateway.clone()]).expect(<span class="string">"JSON serialization failed"</span>)
-    );
+            .<span class="kw">await</span><span class="question-mark">?
+            </span>.as_array()
+            .expect(<span class="string">"JSON Value is not an array"</span>)
+            .len(),
+        <span class="number">1
+    </span>);
 
     <span class="macro">assert_eq!</span>(
-        <span class="macro">cmd!</span>(
-            client,
-            <span class="string">"--our-id"</span>,
-            <span class="string">"0"</span>,
-            <span class="string">"--password"</span>,
-            <span class="string">"pass"</span>,
-            <span class="string">"module"</span>,
-            <span class="string">"lnv2"</span>,
-            <span class="string">"gateway"</span>,
-            <span class="string">"remove"</span>,
-            gateway.to_string(),
-        )
-        .out_json()
-        .<span class="kw">await</span><span class="question-mark">?</span>,
-        serde_json::to_value(<span class="bool-val">true</span>).expect(<span class="string">"JSON serialization failed"</span>)
-    );
-
-    <span class="macro">assert_eq!</span>(
-        <span class="macro">cmd!</span>(client, <span class="string">"module"</span>, <span class="string">"lnv2"</span>, <span class="string">"gateway"</span>, <span class="string">"list"</span>, <span class="string">"0"</span>,)
+        <span class="macro">cmd!</span>(client, <span class="string">"module"</span>, <span class="string">"lnv2"</span>, <span class="string">"gateway"</span>, <span class="string">"list"</span>, <span class="string">"--peer"</span>, <span class="string">"0"</span>)
             .out_json()
-            .<span class="kw">await</span><span class="question-mark">?</span>,
-        serde_json::to_value(Vec::&lt;SafeUrl&gt;::new()).expect(<span class="string">"JSON serialization failed"</span>)
+            .<span class="kw">await</span><span class="question-mark">?
+            </span>.as_array()
+            .expect(<span class="string">"JSON Value is not an array"</span>)
+            .len(),
+        <span class="number">1
+    </span>);
+
+    <span class="macro">assert_eq!</span>(
+        <span class="macro">cmd!</span>(client, <span class="string">"module"</span>, <span class="string">"lnv2"</span>, <span class="string">"gateway"</span>, <span class="string">"select"</span>)
+            .out_json()
+            .<span class="kw">await</span><span class="question-mark">?
+            </span>.as_str()
+            .expect(<span class="string">"JSON Value is not a string"</span>),
+        gateway_api.to_string().as_str()
+    );
+
+    <span class="kw">for </span>peer <span class="kw">in </span><span class="number">0</span>..dev_fed.fed().<span class="kw">await</span><span class="question-mark">?</span>.members.len() {
+        <span class="macro">assert!</span>(remove_gateway(<span class="kw-2">&amp;</span>client, peer, <span class="kw-2">&amp;</span>gateway_api).<span class="kw">await</span><span class="question-mark">?</span>);
+    }
+
+    <span class="macro">assert!</span>(<span class="macro">cmd!</span>(client, <span class="string">"module"</span>, <span class="string">"lnv2"</span>, <span class="string">"gateway"</span>, <span class="string">"list"</span>)
+        .out_json()
+        .<span class="kw">await</span><span class="question-mark">?
+        </span>.as_array()
+        .expect(<span class="string">"JSON Value is not an array"</span>)
+        .is_empty(),);
+
+    <span class="macro">assert!</span>(
+        <span class="macro">cmd!</span>(client, <span class="string">"module"</span>, <span class="string">"lnv2"</span>, <span class="string">"gateway"</span>, <span class="string">"list"</span>, <span class="string">"--peer"</span>, <span class="string">"0"</span>)
+            .out_json()
+            .<span class="kw">await</span><span class="question-mark">?
+            </span>.as_array()
+            .expect(<span class="string">"JSON Value is not an array"</span>)
+            .is_empty()
     );
 
     <span class="macro">info!</span>(<span class="string">"Testing gateway registration successful"</span>);
@@ -814,24 +884,75 @@
     }
 
     <span class="macro">info!</span>(<span class="string">"Testing inter federation payments successful"</span>);
+
     <span class="prelude-val">Ok</span>(())
+}
+
+<span class="kw">async fn </span>add_gateway(client: <span class="kw-2">&amp;</span>Client, peer: usize, gateway_api: <span class="kw-2">&amp;</span>String) -&gt; anyhow::Result&lt;bool&gt; {
+    <span class="macro">cmd!</span>(
+        client,
+        <span class="string">"--our-id"</span>,
+        peer.to_string(),
+        <span class="string">"--password"</span>,
+        <span class="string">"pass"</span>,
+        <span class="string">"module"</span>,
+        <span class="string">"lnv2"</span>,
+        <span class="string">"gateway"</span>,
+        <span class="string">"add"</span>,
+        gateway_api
+    )
+    .out_json()
+    .<span class="kw">await</span><span class="question-mark">?
+    </span>.as_bool()
+    .ok_or(<span class="macro">anyhow::anyhow!</span>(<span class="string">"JSON Value is not a boolean"</span>))
+}
+
+<span class="kw">async fn </span>remove_gateway(
+    client: <span class="kw-2">&amp;</span>Client,
+    peer: usize,
+    gateway_api: <span class="kw-2">&amp;</span>SafeUrl,
+) -&gt; anyhow::Result&lt;bool&gt; {
+    <span class="macro">cmd!</span>(
+        client,
+        <span class="string">"--our-id"</span>,
+        peer.to_string(),
+        <span class="string">"--password"</span>,
+        <span class="string">"pass"</span>,
+        <span class="string">"module"</span>,
+        <span class="string">"lnv2"</span>,
+        <span class="string">"gateway"</span>,
+        <span class="string">"remove"</span>,
+        gateway_api.to_string()
+    )
+    .out_json()
+    .<span class="kw">await</span><span class="question-mark">?
+    </span>.as_bool()
+    .ok_or(<span class="macro">anyhow::anyhow!</span>(<span class="string">"JSON Value is not a boolean"</span>))
 }
 
 <span class="kw">async fn </span>receive(
     client: <span class="kw-2">&amp;</span>Client,
-    gw_address: <span class="kw-2">&amp;</span>str,
+    gateway_api: <span class="kw-2">&amp;</span>str,
     amount: u64,
 ) -&gt; anyhow::Result&lt;(Bolt11Invoice, OperationId)&gt; {
     <span class="prelude-val">Ok</span>(serde_json::from_value::&lt;(Bolt11Invoice, OperationId)&gt;(
-        <span class="macro">cmd!</span>(client, <span class="string">"module"</span>, <span class="string">"lnv2"</span>, <span class="string">"receive"</span>, gw_address, amount,)
-            .out_json()
-            .<span class="kw">await</span><span class="question-mark">?</span>,
+        <span class="macro">cmd!</span>(
+            client,
+            <span class="string">"module"</span>,
+            <span class="string">"lnv2"</span>,
+            <span class="string">"receive"</span>,
+            amount,
+            <span class="string">"--gateway"</span>,
+            gateway_api
+        )
+        .out_json()
+        .<span class="kw">await</span><span class="question-mark">?</span>,
     )<span class="question-mark">?</span>)
 }
 
 <span class="kw">async fn </span>test_send(
     client: <span class="kw-2">&amp;</span>Client,
-    gw_address: <span class="kw-2">&amp;</span>String,
+    gateway_api: <span class="kw-2">&amp;</span>String,
     invoice: <span class="kw-2">&amp;</span>Bolt11Invoice,
     final_state: FinalSendState,
 ) -&gt; anyhow::Result&lt;()&gt; {
@@ -841,8 +962,9 @@
             <span class="string">"module"</span>,
             <span class="string">"lnv2"</span>,
             <span class="string">"send"</span>,
-            gw_address,
-            invoice.to_string()
+            invoice.to_string(),
+            <span class="string">"--gateway"</span>,
+            gateway_api
         )
         .out_json()
         .<span class="kw">await</span><span class="question-mark">?</span>,

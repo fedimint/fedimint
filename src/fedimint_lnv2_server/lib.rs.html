@@ -780,7 +780,8 @@
 <a href="#779" id="779">779</a>
 <a href="#780" id="780">780</a>
 <a href="#781" id="781">781</a>
-<a href="#782" id="782">782</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#782" id="782">782</a>
+<a href="#783" id="783">783</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_wrap)]
 #![allow(clippy::module_name_repetitions)]
 
@@ -809,6 +810,7 @@
 <span class="kw">use </span>fedimint_core::server::DynServerModule;
 <span class="kw">use </span>fedimint_core::task::{timeout, TaskGroup};
 <span class="kw">use </span>fedimint_core::time::duration_since_epoch;
+<span class="kw">use </span>fedimint_core::util::SafeUrl;
 <span class="kw">use </span>fedimint_core::{
     apply, async_trait_maybe_send, push_db_pair_items, NumPeersExt, OutPoint, PeerId, ServerModule,
 };
@@ -823,10 +825,10 @@
     REMOVE_GATEWAY_ENDPOINT,
 };
 <span class="kw">use </span>fedimint_lnv2_common::{
-    ContractId, GatewayEndpoint, LightningCommonInit, LightningConsensusItem, LightningInput,
-    LightningInputError, LightningInputV0, LightningModuleTypes, LightningOutput,
-    LightningOutputError, LightningOutputOutcome, LightningOutputOutcomeV0, LightningOutputV0,
-    OutgoingWitness, MODULE_CONSENSUS_VERSION,
+    ContractId, LightningCommonInit, LightningConsensusItem, LightningInput, LightningInputError,
+    LightningInputV0, LightningModuleTypes, LightningOutput, LightningOutputError,
+    LightningOutputOutcome, LightningOutputOutcomeV0, LightningOutputV0, OutgoingWitness,
+    MODULE_CONSENSUS_VERSION,
 };
 <span class="kw">use </span>fedimint_server::config::distributedgen::{evaluate_polynomial_g1, PeerHandleOps};
 <span class="kw">use </span>fedimint_server::net::api::check_auth;
@@ -1369,7 +1371,7 @@
             <span class="macro">api_endpoint!</span> {
                 ADD_GATEWAY_ENDPOINT,
                 ApiVersion::new(<span class="number">0</span>, <span class="number">0</span>),
-                <span class="kw">async </span>|_module: <span class="kw-2">&amp;</span>Lightning, context, gateway: GatewayEndpoint| -&gt; bool {
+                <span class="kw">async </span>|_module: <span class="kw-2">&amp;</span>Lightning, context, gateway: SafeUrl| -&gt; bool {
                     check_auth(context)<span class="question-mark">?</span>;
 
                     <span class="kw">let </span>db = context.db();
@@ -1380,7 +1382,7 @@
             <span class="macro">api_endpoint!</span> {
                 REMOVE_GATEWAY_ENDPOINT,
                 ApiVersion::new(<span class="number">0</span>, <span class="number">0</span>),
-                <span class="kw">async </span>|_module: <span class="kw-2">&amp;</span>Lightning, context, gateway: GatewayEndpoint| -&gt; bool {
+                <span class="kw">async </span>|_module: <span class="kw-2">&amp;</span>Lightning, context, gateway: SafeUrl| -&gt; bool {
                     check_auth(context)<span class="question-mark">?</span>;
 
                     <span class="kw">let </span>db = context.db();
@@ -1391,7 +1393,7 @@
             <span class="macro">api_endpoint!</span> {
                 GATEWAYS_ENDPOINT,
                 ApiVersion::new(<span class="number">0</span>, <span class="number">0</span>),
-                <span class="kw">async </span>|_module: <span class="kw-2">&amp;</span>Lightning, context, _params : () | -&gt; Vec&lt;GatewayEndpoint&gt; {
+                <span class="kw">async </span>|_module: <span class="kw-2">&amp;</span>Lightning, context, _params : () | -&gt; Vec&lt;SafeUrl&gt; {
                     <span class="kw">let </span>db = context.db();
 
                     <span class="prelude-val">Ok</span>(Lightning::gateways(db).<span class="kw">await</span>)
@@ -1532,7 +1534,7 @@
         <span class="prelude-val">Some</span>(contract.expiration.saturating_sub(consensus_block_count))
     }
 
-    <span class="kw">async fn </span>add_gateway(db: Database, gateway: GatewayEndpoint) -&gt; bool {
+    <span class="kw">async fn </span>add_gateway(db: Database, gateway: SafeUrl) -&gt; bool {
         <span class="kw">let </span><span class="kw-2">mut </span>dbtx = db.begin_transaction().<span class="kw">await</span>;
 
         <span class="kw">let </span>is_new_entry = dbtx.insert_entry(<span class="kw-2">&amp;</span>GatewayKey(gateway), <span class="kw-2">&amp;</span>()).<span class="kw">await</span>.is_none();
@@ -1542,7 +1544,7 @@
         is_new_entry
     }
 
-    <span class="kw">async fn </span>remove_gateway(db: Database, gateway: GatewayEndpoint) -&gt; bool {
+    <span class="kw">async fn </span>remove_gateway(db: Database, gateway: SafeUrl) -&gt; bool {
         <span class="kw">let </span><span class="kw-2">mut </span>dbtx = db.begin_transaction().<span class="kw">await</span>;
 
         <span class="kw">let </span>entry_existed = dbtx.remove_entry(<span class="kw-2">&amp;</span>GatewayKey(gateway)).<span class="kw">await</span>.is_some();
@@ -1552,7 +1554,7 @@
         entry_existed
     }
 
-    <span class="kw">async fn </span>gateways(db: Database) -&gt; Vec&lt;GatewayEndpoint&gt; {
+    <span class="kw">async fn </span>gateways(db: Database) -&gt; Vec&lt;SafeUrl&gt; {
         db.begin_transaction_nc()
             .<span class="kw">await
             </span>.find_by_prefix(<span class="kw-2">&amp;</span>GatewayPrefix)

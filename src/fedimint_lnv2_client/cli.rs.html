@@ -80,7 +80,21 @@
 <a href="#79" id="79">79</a>
 <a href="#80" id="80">80</a>
 <a href="#81" id="81">81</a>
-<a href="#82" id="82">82</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::{ffi, iter};
+<a href="#82" id="82">82</a>
+<a href="#83" id="83">83</a>
+<a href="#84" id="84">84</a>
+<a href="#85" id="85">85</a>
+<a href="#86" id="86">86</a>
+<a href="#87" id="87">87</a>
+<a href="#88" id="88">88</a>
+<a href="#89" id="89">89</a>
+<a href="#90" id="90">90</a>
+<a href="#91" id="91">91</a>
+<a href="#92" id="92">92</a>
+<a href="#93" id="93">93</a>
+<a href="#94" id="94">94</a>
+<a href="#95" id="95">95</a>
+<a href="#96" id="96">96</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::{ffi, iter};
 
 <span class="kw">use </span>clap::{Parser, Subcommand};
 <span class="kw">use </span>fedimint_core::core::OperationId;
@@ -95,16 +109,24 @@
 
 <span class="attr">#[derive(Parser, Serialize)]
 </span><span class="kw">enum </span>Opts {
-    <span class="doccomment">/// Pay an invoice
+    <span class="doccomment">/// Pay an invoice. For  testing  you can optionally specify a gateway to
+    /// route with, otherwise a gateway will be selected automatically.
     </span>Send {
-        gateway: SafeUrl,
         invoice: Bolt11Invoice,
+        <span class="attr">#[arg(long)]
+        </span>gateway: <span class="prelude-ty">Option</span>&lt;SafeUrl&gt;,
     },
-    <span class="doccomment">/// Await the final state of the send operation
+    <span class="doccomment">/// Await the final state of the send operation.
     </span>AwaitSend { operation_id: OperationId },
-    <span class="doccomment">/// Request an invoice
-    </span>Receive { gateway: SafeUrl, amount: Amount },
-    <span class="doccomment">/// Await the final state of the receive operation
+    <span class="doccomment">/// Request an invoice. For testing you can optionally specify a gateway to
+    /// generate the invoice, otherwise a gateway will be selected
+    /// automatically.
+    </span>Receive {
+        amount: Amount,
+        <span class="attr">#[arg(long)]
+        </span>gateway: <span class="prelude-ty">Option</span>&lt;SafeUrl&gt;,
+    },
+    <span class="doccomment">/// Await the final state of the receive operation.
     </span>AwaitReceive { operation_id: OperationId },
     <span class="doccomment">/// Gateway subcommands
     </span><span class="attr">#[command(subcommand)]
@@ -113,11 +135,16 @@
 
 <span class="attr">#[derive(Clone, Subcommand, Serialize)]
 </span><span class="kw">enum </span>GatewayOpts {
-    <span class="doccomment">/// List vetted gateways
-    </span>List { peer: <span class="prelude-ty">Option</span>&lt;PeerId&gt; },
-    <span class="doccomment">/// Add a vetted gateway
+    <span class="doccomment">/// Select an online vetted gateway; this command is intended for testing.
+    </span>Select,
+    <span class="doccomment">/// List all vetted gateways.
+    </span>List {
+        <span class="attr">#[arg(long)]
+        </span>peer: <span class="prelude-ty">Option</span>&lt;PeerId&gt;,
+    },
+    <span class="doccomment">/// Add a vetted gateway.
     </span>Add { gateway: SafeUrl },
-    <span class="doccomment">/// Remove a vetted gateway
+    <span class="doccomment">/// Remove a vetted gateway.
     </span>Remove { gateway: SafeUrl },
 }
 
@@ -128,11 +155,12 @@
     <span class="kw">let </span>opts = Opts::parse_from(iter::once(<span class="kw-2">&amp;</span>ffi::OsString::from(<span class="string">"lnv2"</span>)).chain(args.iter()));
 
     <span class="kw">let </span>value = <span class="kw">match </span>opts {
-        Opts::Send { gateway, invoice } =&gt; json(lightning.send(gateway, invoice).<span class="kw">await</span><span class="question-mark">?</span>),
+        Opts::Send { gateway, invoice } =&gt; json(lightning.send(invoice, gateway).<span class="kw">await</span><span class="question-mark">?</span>),
         Opts::AwaitSend { operation_id } =&gt; json(lightning.await_send(operation_id).<span class="kw">await</span><span class="question-mark">?</span>),
-        Opts::Receive { gateway, amount } =&gt; json(lightning.receive(gateway, amount).<span class="kw">await</span><span class="question-mark">?</span>),
+        Opts::Receive { gateway, amount } =&gt; json(lightning.receive(amount, gateway).<span class="kw">await</span><span class="question-mark">?</span>),
         Opts::AwaitReceive { operation_id } =&gt; json(lightning.await_receive(operation_id).<span class="kw">await</span><span class="question-mark">?</span>),
         Opts::Gateway(gateway_opts) =&gt; <span class="kw">match </span>gateway_opts {
+            GatewayOpts::Select =&gt; json(lightning.select_gateway().<span class="kw">await</span><span class="question-mark">?</span>.<span class="number">0</span>),
             GatewayOpts::List { peer } =&gt; <span class="kw">match </span>peer {
                 <span class="prelude-val">Some</span>(peer) =&gt; json(lightning.module_api.gateways_from_peer(peer).<span class="kw">await</span><span class="question-mark">?</span>),
                 <span class="prelude-val">None </span>=&gt; json(lightning.module_api.gateways().<span class="kw">await</span><span class="question-mark">?</span>),

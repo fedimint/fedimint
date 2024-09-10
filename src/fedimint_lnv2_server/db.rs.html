@@ -132,10 +132,12 @@
 <a href="#131" id="131">131</a>
 <a href="#132" id="132">132</a>
 <a href="#133" id="133">133</a>
-<a href="#134" id="134">134</a></pre></div><pre class="rust"><code><span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
+<a href="#134" id="134">134</a>
+<a href="#135" id="135">135</a></pre></div><pre class="rust"><code><span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
+<span class="kw">use </span>fedimint_core::util::SafeUrl;
 <span class="kw">use </span>fedimint_core::{impl_db_lookup, impl_db_record, OutPoint, PeerId};
 <span class="kw">use </span>fedimint_lnv2_common::contracts::{IncomingContract, OutgoingContract};
-<span class="kw">use </span>fedimint_lnv2_common::{ContractId, GatewayEndpoint, LightningOutputOutcome};
+<span class="kw">use </span>fedimint_lnv2_common::{ContractId, LightningOutputOutcome};
 <span class="kw">use </span>serde::{Deserialize, Serialize};
 <span class="kw">use </span>strum_macros::EnumIter;
 
@@ -254,7 +256,7 @@
 <span class="macro">impl_db_lookup!</span>(key = PreimageKey, query_prefix = PreimagePrefix);
 
 <span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
-</span><span class="kw">pub struct </span>GatewayKey(<span class="kw">pub </span>GatewayEndpoint);
+</span><span class="kw">pub struct </span>GatewayKey(<span class="kw">pub </span>SafeUrl);
 
 <span class="attr">#[derive(Debug, Encodable, Decodable)]
 </span><span class="kw">pub struct </span>GatewayPrefix;

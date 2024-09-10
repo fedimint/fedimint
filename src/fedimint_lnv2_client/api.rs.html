@@ -287,24 +287,7 @@
 <a href="#286" id="286">286</a>
 <a href="#287" id="287">287</a>
 <a href="#288" id="288">288</a>
-<a href="#289" id="289">289</a>
-<a href="#290" id="290">290</a>
-<a href="#291" id="291">291</a>
-<a href="#292" id="292">292</a>
-<a href="#293" id="293">293</a>
-<a href="#294" id="294">294</a>
-<a href="#295" id="295">295</a>
-<a href="#296" id="296">296</a>
-<a href="#297" id="297">297</a>
-<a href="#298" id="298">298</a>
-<a href="#299" id="299">299</a>
-<a href="#300" id="300">300</a>
-<a href="#301" id="301">301</a>
-<a href="#302" id="302">302</a>
-<a href="#303" id="303">303</a>
-<a href="#304" id="304">304</a>
-<a href="#305" id="305">305</a>
-<a href="#306" id="306">306</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
+<a href="#289" id="289">289</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::BTreeMap;
 <span class="kw">use </span>std::time::Duration;
 
 <span class="kw">use </span>bitcoin::secp256k1;
@@ -324,13 +307,13 @@
     OUTGOING_CONTRACT_EXPIRATION_ENDPOINT, REMOVE_GATEWAY_ENDPOINT, ROUTING_INFO_ENDPOINT,
     SEND_PAYMENT_ENDPOINT,
 };
-<span class="kw">use </span>fedimint_lnv2_common::{ContractId, GatewayEndpoint};
+<span class="kw">use </span>fedimint_lnv2_common::ContractId;
 <span class="kw">use </span>itertools::Itertools;
 <span class="kw">use </span>lightning_invoice::Bolt11Invoice;
 <span class="kw">use </span>secp256k1::schnorr::Signature;
 
 <span class="kw">use crate</span>::{
-    Bolt11InvoiceDescription, CreateBolt11InvoicePayload, GatewayError, LightningInvoice,
+    Bolt11InvoiceDescription, CreateBolt11InvoicePayload, GatewayConnectionError, LightningInvoice,
     RoutingInfo, SendPaymentPayload,
 };
 
@@ -417,7 +400,7 @@
     </span>}
 
     <span class="kw">async fn </span>gateways(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FederationResult&lt;Vec&lt;SafeUrl&gt;&gt; {
-        <span class="kw">let </span>gateways: BTreeMap&lt;PeerId, Vec&lt;GatewayEndpoint&gt;&gt; = <span class="self">self
+        <span class="kw">let </span>gateways: BTreeMap&lt;PeerId, Vec&lt;SafeUrl&gt;&gt; = <span class="self">self
             </span>.request_with_strategy(
                 FilterMapThreshold::new(
                     |<span class="kw">_</span>, gateways| <span class="prelude-val">Ok</span>(gateways),
@@ -433,7 +416,7 @@
             .flatten()
             .dedup()
             .cloned()
-            .collect::&lt;Vec&lt;GatewayEndpoint&gt;&gt;();
+            .collect::&lt;Vec&lt;SafeUrl&gt;&gt;();
 
         union.sort_by_cached_key(|r| {
             gateways
@@ -442,17 +425,12 @@
                 .count()
         });
 
-        <span class="kw">let </span>urls = union
-            .into_iter()
-            .map(fedimint_lnv2_common::GatewayEndpoint::into_url)
-            .collect();
-
-        <span class="prelude-val">Ok</span>(urls)
+        <span class="prelude-val">Ok</span>(union)
     }
 
     <span class="kw">async fn </span>gateways_from_peer(<span class="kw-2">&amp;</span><span class="self">self</span>, peer: PeerId) -&gt; PeerResult&lt;Vec&lt;SafeUrl&gt;&gt; {
         <span class="kw">let </span>gateways = <span class="self">self
-            </span>.request_single_peer_typed::&lt;Vec&lt;GatewayEndpoint&gt;&gt;(
+            </span>.request_single_peer_typed::&lt;Vec&lt;SafeUrl&gt;&gt;(
                 <span class="prelude-val">None</span>,
                 GATEWAYS_ENDPOINT.to_string(),
                 ApiRequestErased::default(),
@@ -460,21 +438,12 @@
             )
             .<span class="kw">await</span><span class="question-mark">?</span>;
 
-        <span class="kw">let </span>urls = gateways
-            .into_iter()
-            .map(fedimint_lnv2_common::GatewayEndpoint::into_url)
-            .collect();
-
-        <span class="prelude-val">Ok</span>(urls)
+        <span class="prelude-val">Ok</span>(gateways)
     }
 
     <span class="kw">async fn </span>add_gateway(<span class="kw-2">&amp;</span><span class="self">self</span>, auth: ApiAuth, gateway: SafeUrl) -&gt; FederationResult&lt;bool&gt; {
         <span class="kw">let </span>is_new_entry: bool = <span class="self">self
-            </span>.request_admin(
-                ADD_GATEWAY_ENDPOINT,
-                ApiRequestErased::new(GatewayEndpoint::Url(gateway)),
-                auth,
-            )
+            </span>.request_admin(ADD_GATEWAY_ENDPOINT, ApiRequestErased::new(gateway), auth)
             .<span class="kw">await</span><span class="question-mark">?</span>;
 
         <span class="prelude-val">Ok</span>(is_new_entry)
@@ -484,7 +453,7 @@
         <span class="kw">let </span>entry_existed: bool = <span class="self">self
             </span>.request_admin(
                 REMOVE_GATEWAY_ENDPOINT,
-                ApiRequestErased::new(GatewayEndpoint::Url(gateway)),
+                ApiRequestErased::new(gateway),
                 auth,
             )
             .<span class="kw">await</span><span class="question-mark">?</span>;
@@ -497,28 +466,28 @@
 </span><span class="kw">pub trait </span>GatewayConnection: std::fmt::Debug {
     <span class="kw">async fn </span>routing_info(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        gateway_api: GatewayEndpoint,
+        gateway_api: SafeUrl,
         federation_id: <span class="kw-2">&amp;</span>FederationId,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;RoutingInfo&gt;, GatewayError&gt;;
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;RoutingInfo&gt;, GatewayConnectionError&gt;;
 
     <span class="kw">async fn </span>bolt11_invoice(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        gateway_api: GatewayEndpoint,
+        gateway_api: SafeUrl,
         federation_id: FederationId,
         contract: IncomingContract,
         invoice_amount: Amount,
         description: Bolt11InvoiceDescription,
         expiry_time: u32,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;Bolt11Invoice, GatewayError&gt;;
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;Bolt11Invoice, GatewayConnectionError&gt;;
 
     <span class="kw">async fn </span>send_payment(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        gateway_api: GatewayEndpoint,
+        gateway_api: SafeUrl,
         federation_id: FederationId,
         contract: OutgoingContract,
         invoice: LightningInvoice,
         auth: Signature,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Result</span>&lt;[u8; <span class="number">32</span>], Signature&gt;, GatewayError&gt;;
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Result</span>&lt;[u8; <span class="number">32</span>], Signature&gt;, GatewayConnectionError&gt;;
 }
 
 <span class="attr">#[derive(Debug)]
@@ -528,13 +497,12 @@
 </span><span class="kw">impl </span>GatewayConnection <span class="kw">for </span>RealGatewayConnection {
     <span class="kw">async fn </span>routing_info(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        gateway_api: GatewayEndpoint,
+        gateway_api: SafeUrl,
         federation_id: <span class="kw-2">&amp;</span>FederationId,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;RoutingInfo&gt;, GatewayError&gt; {
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;RoutingInfo&gt;, GatewayConnectionError&gt; {
         reqwest::Client::new()
             .post(
                 gateway_api
-                    .into_url()
                     .join(ROUTING_INFO_ENDPOINT)
                     .expect(<span class="string">"'routing_info' contains no invalid characters for a URL"</span>)
                     .as_str(),
@@ -542,25 +510,24 @@
             .json(federation_id)
             .send()
             .<span class="kw">await
-            </span>.map_err(|e| GatewayError::Unreachable(e.to_string()))<span class="question-mark">?
+            </span>.map_err(|e| GatewayConnectionError::Unreachable(e.to_string()))<span class="question-mark">?
             </span>.json::&lt;<span class="prelude-ty">Option</span>&lt;RoutingInfo&gt;&gt;()
             .<span class="kw">await
-            </span>.map_err(|e| GatewayError::Request(e.to_string()))
+            </span>.map_err(|e| GatewayConnectionError::Request(e.to_string()))
     }
 
     <span class="kw">async fn </span>bolt11_invoice(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        gateway_api: GatewayEndpoint,
+        gateway_api: SafeUrl,
         federation_id: FederationId,
         contract: IncomingContract,
         invoice_amount: Amount,
         description: Bolt11InvoiceDescription,
         expiry_time: u32,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;Bolt11Invoice, GatewayError&gt; {
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;Bolt11Invoice, GatewayConnectionError&gt; {
         reqwest::Client::new()
             .post(
                 gateway_api
-                    .into_url()
                     .join(CREATE_BOLT11_INVOICE_ENDPOINT)
                     .expect(<span class="string">"'create_bolt11_invoice' contains no invalid characters for a URL"</span>)
                     .as_str(),
@@ -574,24 +541,23 @@
             })
             .send()
             .<span class="kw">await
-            </span>.map_err(|e| GatewayError::Unreachable(e.to_string()))<span class="question-mark">?
+            </span>.map_err(|e| GatewayConnectionError::Unreachable(e.to_string()))<span class="question-mark">?
             </span>.json::&lt;Bolt11Invoice&gt;()
             .<span class="kw">await
-            </span>.map_err(|e| GatewayError::Request(e.to_string()))
+            </span>.map_err(|e| GatewayConnectionError::Request(e.to_string()))
     }
 
     <span class="kw">async fn </span>send_payment(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
-        gateway_api: GatewayEndpoint,
+        gateway_api: SafeUrl,
         federation_id: FederationId,
         contract: OutgoingContract,
         invoice: LightningInvoice,
         auth: Signature,
-    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Result</span>&lt;[u8; <span class="number">32</span>], Signature&gt;, GatewayError&gt; {
+    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Result</span>&lt;[u8; <span class="number">32</span>], Signature&gt;, GatewayConnectionError&gt; {
         reqwest::Client::new()
             .post(
                 gateway_api
-                    .into_url()
                     .join(SEND_PAYMENT_ENDPOINT)
                     .expect(<span class="string">"'send_payment' contains no invalid characters for a URL"</span>)
                     .as_str(),
@@ -604,10 +570,10 @@
             })
             .send()
             .<span class="kw">await
-            </span>.map_err(|e| GatewayError::Unreachable(e.to_string()))<span class="question-mark">?
+            </span>.map_err(|e| GatewayConnectionError::Unreachable(e.to_string()))<span class="question-mark">?
             </span>.json::&lt;<span class="prelude-ty">Result</span>&lt;[u8; <span class="number">32</span>], Signature&gt;&gt;()
             .<span class="kw">await
-            </span>.map_err(|e| GatewayError::Request(e.to_string()))
+            </span>.map_err(|e| GatewayConnectionError::Request(e.to_string()))
     }
 }
 </code></pre></div></section></main></body></html>
