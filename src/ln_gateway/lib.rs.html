@@ -2014,7 +2014,35 @@
 <a href="#2013" id="2013">2013</a>
 <a href="#2014" id="2014">2014</a>
 <a href="#2015" id="2015">2015</a>
-<a href="#2016" id="2016">2016</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#2016" id="2016">2016</a>
+<a href="#2017" id="2017">2017</a>
+<a href="#2018" id="2018">2018</a>
+<a href="#2019" id="2019">2019</a>
+<a href="#2020" id="2020">2020</a>
+<a href="#2021" id="2021">2021</a>
+<a href="#2022" id="2022">2022</a>
+<a href="#2023" id="2023">2023</a>
+<a href="#2024" id="2024">2024</a>
+<a href="#2025" id="2025">2025</a>
+<a href="#2026" id="2026">2026</a>
+<a href="#2027" id="2027">2027</a>
+<a href="#2028" id="2028">2028</a>
+<a href="#2029" id="2029">2029</a>
+<a href="#2030" id="2030">2030</a>
+<a href="#2031" id="2031">2031</a>
+<a href="#2032" id="2032">2032</a>
+<a href="#2033" id="2033">2033</a>
+<a href="#2034" id="2034">2034</a>
+<a href="#2035" id="2035">2035</a>
+<a href="#2036" id="2036">2036</a>
+<a href="#2037" id="2037">2037</a>
+<a href="#2038" id="2038">2038</a>
+<a href="#2039" id="2039">2039</a>
+<a href="#2040" id="2040">2040</a>
+<a href="#2041" id="2041">2041</a>
+<a href="#2042" id="2042">2042</a>
+<a href="#2043" id="2043">2043</a>
+<a href="#2044" id="2044">2044</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::cast_possible_wrap)]
 #![allow(clippy::cast_sign_loss)]
@@ -2194,6 +2222,7 @@
     Connected,
     Running { lightning_context: LightningContext },
     Disconnected,
+    ShuttingDown { lightning_context: LightningContext },
 }
 
 <span class="kw">impl </span>Display <span class="kw">for </span>GatewayState {
@@ -2204,6 +2233,7 @@
             GatewayState::Connected =&gt; <span class="macro">write!</span>(f, <span class="string">"Connected"</span>),
             GatewayState::Running { .. } =&gt; <span class="macro">write!</span>(f, <span class="string">"Running"</span>),
             GatewayState::Disconnected =&gt; <span class="macro">write!</span>(f, <span class="string">"Disconnected"</span>),
+            GatewayState::ShuttingDown { .. } =&gt; <span class="macro">write!</span>(f, <span class="string">"ShuttingDown"</span>),
         }
     }
 }
@@ -2418,13 +2448,13 @@
     /// timer, loads the federation clients from the persisted config,
     /// begins listening for intercepted HTLCs, and starts the webserver to
     /// service requests.
-    </span><span class="kw">pub async fn </span>run(<span class="self">self</span>, tg: <span class="kw-2">&amp;</span>TaskGroup) -&gt; anyhow::Result&lt;TaskShutdownToken&gt; {
-        <span class="self">self</span>.register_clients_timer(tg);
+    </span><span class="kw">pub async fn </span>run(<span class="self">self</span>, tg: TaskGroup) -&gt; anyhow::Result&lt;TaskShutdownToken&gt; {
+        <span class="self">self</span>.register_clients_timer(<span class="kw-2">&amp;</span>tg);
         <span class="self">self</span>.load_clients().<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="self">self</span>.start_gateway(tg);
+        <span class="self">self</span>.start_gateway(<span class="kw-2">&amp;</span>tg);
         <span class="comment">// start webserver last to avoid handling requests before fully initialized
-        </span>run_webserver(Arc::new(<span class="self">self</span>), tg).<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">let </span>handle = tg.make_handle();
+        </span><span class="kw">let </span>handle = tg.make_handle();
+        run_webserver(Arc::new(<span class="self">self</span>), tg).<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>shutdown_receiver = handle.make_shutdown_rx();
         <span class="prelude-val">Ok</span>(shutdown_receiver)
     }
@@ -2569,14 +2599,19 @@
     /// complete the HTLC depending on if the gateway is able to acquire the
     /// preimage from the federation.
     </span><span class="kw">pub async fn </span>handle_htlc_stream(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="kw-2">mut </span>stream: RouteHtlcStream&lt;<span class="lifetime">'_</span>&gt;, handle: TaskHandle) {
-        <span class="kw">let </span>GatewayState::Running { lightning_context } = <span class="self">self</span>.get_state().<span class="kw">await else </span>{
-            <span class="macro">panic!</span>(<span class="string">"Gateway isn't in a running state"</span>)
-        };
-
         <span class="kw">loop </span>{
             <span class="kw">if </span>handle.is_shutting_down() {
                 <span class="kw">break</span>;
             }
+
+            <span class="kw">let </span>state = <span class="self">self</span>.get_state().<span class="kw">await</span>;
+            <span class="kw">let </span>GatewayState::Running { lightning_context } = state <span class="kw">else </span>{
+                <span class="macro">warn!</span>(
+                    <span class="question-mark">?</span>state,
+                    <span class="string">"Gateway isn't in a running state, cannot handle incoming payments."
+                </span>);
+                <span class="kw">break</span>;
+            };
 
             <span class="kw">let </span>htlc_request = <span class="kw">match </span>stream.next().<span class="kw">await </span>{
                 <span class="prelude-val">Some</span>(<span class="prelude-val">Ok</span>(htlc_request)) =&gt; htlc_request,
@@ -3477,6 +3512,26 @@
         <span class="prelude-val">Ok</span>(ReceiveEcashResponse { amount })
     }
 
+    <span class="kw">pub async fn </span>handle_shutdown_msg(<span class="kw-2">&amp;</span><span class="self">self</span>, task_group: TaskGroup) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+        <span class="kw">if let </span>GatewayState::Running { lightning_context } = <span class="self">self</span>.get_state().<span class="kw">await </span>{
+            <span class="self">self</span>.set_gateway_state(GatewayState::ShuttingDown { lightning_context })
+                .<span class="kw">await</span>;
+            <span class="self">self</span>.federation_manager
+                .read()
+                .<span class="kw">await
+                </span>.wait_for_incoming_payments()
+                .<span class="kw">await</span><span class="question-mark">?</span>;
+        }
+
+        <span class="kw">let </span>tg = task_group.clone();
+        tg.spawn(<span class="string">"Kill Gateway"</span>, |_task_handle| <span class="kw">async </span>{
+            <span class="kw">if let </span><span class="prelude-val">Err</span>(e) = task_group.shutdown_join_all(Duration::from_secs(<span class="number">180</span>)).<span class="kw">await </span>{
+                <span class="macro">error!</span>(<span class="question-mark">?</span>e, <span class="string">"Error shutting down gateway"</span>);
+            }
+        });
+        <span class="prelude-val">Ok</span>(())
+    }
+
     <span class="doccomment">/// Registers the gateway with each specified federation.
     </span><span class="kw">async fn </span>register_federations(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
@@ -3718,7 +3773,8 @@
     /// will not be connected and this will return an error.
     </span><span class="kw">pub async fn </span>get_lightning_context(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;LightningContext&gt; {
         <span class="kw">match </span><span class="self">self</span>.get_state().<span class="kw">await </span>{
-            GatewayState::Running { lightning_context } =&gt; <span class="prelude-val">Ok</span>(lightning_context),
+            GatewayState::Running { lightning_context }
+            | GatewayState::ShuttingDown { lightning_context } =&gt; <span class="prelude-val">Ok</span>(lightning_context),
             <span class="kw">_ </span>=&gt; <span class="prelude-val">Err</span>(GatewayError::LightningRpcError(
                 LightningRpcError::FailedToConnect,
             )),

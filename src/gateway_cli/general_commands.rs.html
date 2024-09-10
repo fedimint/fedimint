@@ -292,7 +292,12 @@
 <a href="#291" id="291">291</a>
 <a href="#292" id="292">292</a>
 <a href="#293" id="293">293</a>
-<a href="#294" id="294">294</a></pre></div><pre class="rust"><code><span class="kw">use </span>anyhow::bail;
+<a href="#294" id="294">294</a>
+<a href="#295" id="295">295</a>
+<a href="#296" id="296">296</a>
+<a href="#297" id="297">297</a>
+<a href="#298" id="298">298</a>
+<a href="#299" id="299">299</a></pre></div><pre class="rust"><code><span class="kw">use </span>anyhow::bail;
 <span class="kw">use </span>bitcoin::address::NetworkUnchecked;
 <span class="kw">use </span>bitcoin::Address;
 <span class="kw">use </span>clap::Subcommand;
@@ -418,6 +423,8 @@
         </span><span class="attr">#[clap(long)]
         </span>per_federation_routing_fees: <span class="prelude-ty">Option</span>&lt;Vec&lt;PerFederationRoutingFees&gt;&gt;,
     },
+    <span class="doccomment">/// Safely stop the gateway
+    </span>Stop,
     <span class="doccomment">/// Spend e-cash
     </span>SpendEcash {
         <span class="attr">#[clap(long)]
@@ -580,6 +587,9 @@
             <span class="self">Self</span>::Seed =&gt; {
                 <span class="kw">let </span>response = create_client().get_mnemonic().<span class="kw">await</span><span class="question-mark">?</span>;
                 print_response(response);
+            }
+            <span class="self">Self</span>::Stop =&gt; {
+                create_client().stop().<span class="kw">await</span><span class="question-mark">?</span>;
             }
         }
 
