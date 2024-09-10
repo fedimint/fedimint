@@ -40,11 +40,15 @@ impl GatewayClientBuilder {
         }
     }
 
+    /// Reads a plain root secret from a database to construct a database.
+    /// Only used for "legacy" federations before v0.5.0
     async fn client_plainrootsecret(&self, db: &Database) -> Result<DerivableSecret> {
         let client_secret = Client::load_decodable_client_secret::<[u8; 64]>(db).await?;
         Ok(PlainRootSecretStrategy::to_root_secret(&client_secret))
     }
 
+    /// Constructs the client builder with the modules, database, and connector
+    /// used to create clients for connected federations.
     async fn create_client_builder(
         &self,
         db: Database,
@@ -78,6 +82,51 @@ impl GatewayClientBuilder {
         Ok(client_builder)
     }
 
+    /// Recovers a client with the provided mnemonic. This function will wait
+    /// for the recoveries to finish, but a new client must be created
+    /// afterwards and waited on until the state machines have finished
+    /// for a balance to be present.
+    pub async fn recover(
+        &self,
+        config: FederationConfig,
+        gateway: Arc<Gateway>,
+        mnemonic: &Mnemonic,
+    ) -> Result<()> {
+        let client_config = config
+            .connector
+            .download_from_invite_code(&config.invite_code)
+            .await?;
+        let federation_id = config.invite_code.federation_id();
+        let db = gateway
+            .gateway_db
+            .with_prefix(config.federation_index.to_le_bytes().to_vec());
+        let client_builder = self
+            .create_client_builder(db, &config, gateway.clone())
+            .await?;
+        let secret = Self::derive_federation_secret(mnemonic, &federation_id);
+        let backup = client_builder
+            .download_backup_from_federation(
+                &secret,
+                &client_config,
+                config.invite_code.api_secret(),
+            )
+            .await?;
+        let client = client_builder
+            .recover(
+                secret.clone(),
+                client_config,
+                config.invite_code.api_secret(),
+                backup,
+            )
+            .await
+            .map(Arc::new)
+            .map_err(GatewayError::ClientStateMachineError)?;
+        client.wait_for_all_recoveries().await?;
+        Ok(())
+    }
+
+    /// Builds a new client with the provided `FederationConfig` and `Mnemonic`.
+    /// Only used for newly joined federations.
     pub async fn build(
         &self,
         config: FederationConfig,

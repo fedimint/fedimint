@@ -8,6 +8,7 @@ use std::str::FromStr;
 use std::sync::Arc;
 
 use async_trait::async_trait;
+use bip39::Mnemonic;
 use bitcoin::Network;
 use clap::Subcommand;
 use fedimint_core::db::Database;
@@ -290,6 +291,7 @@ pub struct GatewayLightningBuilder {
     pub lightning_mode: LightningMode,
     pub gateway_db: Database,
     pub ldk_data_dir: PathBuf,
+    pub mnemonic: Mnemonic,
 }
 
 #[async_trait]
@@ -320,6 +322,7 @@ impl LightningBuilder for GatewayLightningBuilder {
                     &esplora_server_url,
                     network,
                     lightning_port,
+                    self.mnemonic.clone(),
                 )
                 .unwrap(),
             ),

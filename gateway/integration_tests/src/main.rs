@@ -8,13 +8,14 @@ use std::str::FromStr;
 use clap::{Parser, Subcommand};
 use devimint::envs::FM_DATA_DIR_ENV;
 use devimint::federation::Federation;
+use devimint::util::ProcessManager;
 use devimint::version_constants::{VERSION_0_3_0, VERSION_0_5_0_ALPHA};
-use devimint::{cmd, util, Gatewayd};
+use devimint::{cmd, util, Gatewayd, LightningNode};
 use fedimint_core::config::FederationId;
 use fedimint_core::Amount;
 use fedimint_testing::gateway::LightningNodeType;
-use ln_gateway::rpc::{FederationInfo, GatewayFedConfig, GatewayInfo};
-use tracing::info;
+use ln_gateway::rpc::{FederationInfo, GatewayBalances, GatewayFedConfig, GatewayInfo};
+use tracing::{info, warn};
 
 #[derive(Parser)]
 struct GatewayTestOpts {
@@ -44,6 +45,7 @@ enum GatewayTest {
         #[arg(long)]
         new_gateway_cln_extension_path: PathBuf,
     },
+    BackupRestoreTest,
 }
 
 #[tokio::main]
@@ -71,7 +73,131 @@ async fn main() -> anyhow::Result<()> {
             )
             .await
         }
+        GatewayTest::BackupRestoreTest => Box::pin(backup_restore_test()).await,
     }
+}
+
+async fn backup_restore_test() -> anyhow::Result<()> {
+    Box::pin(devimint::run_devfed_test(
+        |dev_fed, process_mgr| async move {
+            let gatewayd_version = util::Gatewayd::version_or_default().await;
+            if gatewayd_version < *VERSION_0_5_0_ALPHA {
+                warn!("Gateway backup-restore is not supported below v0.5.0");
+                return Ok(());
+            }
+
+            let gw_ldk = dev_fed
+                .gw_ldk_registered()
+                .await?
+                .as_ref()
+                .expect("LDK Gateway should be available");
+            let fed = dev_fed.fed().await?;
+            fed.pegin_gateway(10_000_000, gw_ldk).await?;
+            let info = serde_json::from_value::<GatewayInfo>(gw_ldk.get_info().await?)?;
+            let federation_info = info
+                .federations
+                .first()
+                .expect("Should have on joined federation");
+            assert_eq!(10_000_000, federation_info.balance_msat.sats_round_down());
+            info!("Verified balance after peg-in");
+
+            let mnemonic = gw_ldk.get_mnemonic().await?.mnemonic;
+
+            // Recover without a backup
+            info!("Wiping gateway and recovering without a backup...");
+            let new_gw_ldk = stop_and_recover_gateway(
+                process_mgr.clone(),
+                mnemonic.clone(),
+                gw_ldk.to_owned(),
+                LightningNode::Ldk,
+                fed,
+            )
+            .await?;
+
+            // Recovery with a backup does not work properly prior to v0.3.0
+            let fedimintd_version = util::FedimintdCmd::version_or_default().await;
+            if fedimintd_version >= *VERSION_0_3_0 {
+                // Recover with a backup
+                info!("Wiping gateway and recovering with a backup...");
+                info!("Creating backup...");
+                new_gw_ldk.backup_to_fed(fed).await?;
+                stop_and_recover_gateway(
+                    process_mgr,
+                    mnemonic,
+                    new_gw_ldk,
+                    LightningNode::Ldk,
+                    fed,
+                )
+                .await?;
+            }
+
+            info!("backup_restore_test successful");
+            Ok(())
+        },
+    ))
+    .await
+}
+
+async fn stop_and_recover_gateway(
+    process_mgr: ProcessManager,
+    mnemonic: Vec<String>,
+    old_gw: Gatewayd,
+    new_ln: LightningNode,
+    fed: &Federation,
+) -> anyhow::Result<Gatewayd> {
+    let gateway_balances =
+        serde_json::from_value::<GatewayBalances>(cmd!(old_gw, "get-balances").out_json().await?)?;
+    let before_onchain_balance = gateway_balances.onchain_balance_sats;
+
+    // Stop the Gateway
+    let gw_type = old_gw.lightning_node_type();
+    old_gw.terminate().await?;
+    info!("Terminated Gateway");
+
+    // Delete the gateway's database
+    let data_dir: PathBuf = env::var(FM_DATA_DIR_ENV)
+        .expect("Data dir is not set")
+        .parse()
+        .expect("Could not parse data dir");
+    let gw_db = data_dir.join(gw_type.to_string()).join("gatewayd.db");
+    remove_dir_all(gw_db)?;
+    info!("Deleted the Gateway's database");
+
+    if gw_type == LightningNodeType::Ldk {
+        // Delete LDK's database as well
+        let ldk_data_dir = data_dir.join(gw_type.to_string()).join("ldk_node");
+        remove_dir_all(ldk_data_dir)?;
+        info!("Deleted LDK's database");
+    }
+
+    let seed = mnemonic.join(" ");
+    std::env::set_var("FM_GATEWAY_MNEMONIC", seed);
+    let new_gw = Gatewayd::new(&process_mgr, new_ln).await?;
+    let new_mnemonic = new_gw.get_mnemonic().await?.mnemonic;
+    assert_eq!(mnemonic, new_mnemonic);
+    info!("Verified mnemonic is the same after creating new Gateway");
+
+    let info = serde_json::from_value::<GatewayInfo>(new_gw.get_info().await?)?;
+    assert_eq!(0, info.federations.len());
+    info!("Verified new Gateway has no federations");
+
+    new_gw.recover_fed(fed).await?;
+
+    let gateway_balances =
+        serde_json::from_value::<GatewayBalances>(cmd!(new_gw, "get-balances").out_json().await?)?;
+    let ecash_balance = gateway_balances
+        .ecash_balances
+        .first()
+        .expect("Should have one joined federation");
+    assert_eq!(
+        10_000_000,
+        ecash_balance.ecash_balance_msats.sats_round_down()
+    );
+    let after_onchain_balance = gateway_balances.onchain_balance_sats;
+    assert_eq!(before_onchain_balance, after_onchain_balance);
+    info!("Verified balances after recovery");
+
+    Ok(new_gw)
 }
 
 /// TODO(v0.5.0): We do not need to run the `gatewayd-mnemonic` test from v0.4.0
@@ -120,7 +246,7 @@ async fn mnemonic_upgrade_test(
         // Gateway mnemonic is only support in >= v0.5.0
         let new_gatewayd_version = util::Gatewayd::version_or_default().await;
         if new_gatewayd_version < *VERSION_0_5_0_ALPHA {
-            info!("Gateway mnemonic test is not supported below v0.5.0");
+            warn!("Gateway mnemonic test is not supported below v0.5.0");
             return Ok(());
         }
 

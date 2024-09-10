@@ -116,7 +116,7 @@ use crate::lightning::{GatewayLightningBuilder, LightningContext, RouteHtlcStrea
 use crate::rpc::rpc_server::{hash_password, run_webserver};
 use crate::rpc::{
     BackupPayload, BalancePayload, ConnectFedPayload, DepositAddressPayload, FederationBalanceInfo,
-    GatewayBalances, RestorePayload, WithdrawPayload,
+    GatewayBalances, WithdrawPayload,
 };
 use crate::types::PrettyInterceptHtlcRequest;
 
@@ -316,11 +316,13 @@ impl Gateway {
 
         let gateway_parameters = opts.to_gateway_parameters()?;
 
+        let mnemonic = Self::load_or_generate_mnemonic(&gateway_db).await?;
         Gateway::new(
             Arc::new(GatewayLightningBuilder {
                 lightning_mode: opts.mode,
                 gateway_db: gateway_db.clone(),
                 ldk_data_dir: opts.data_dir.join(LDK_NODE_DB_FOLDER),
+                mnemonic,
             }),
             gateway_parameters,
             gateway_db,
@@ -1069,7 +1071,7 @@ impl Gateway {
         // federation connected.
         let federation_index = federation_manager.pop_next_index()?;
 
-        let gw_client_cfg = FederationConfig {
+        let federation_config = FederationConfig {
             invite_code,
             federation_index,
             timelock_delta: 10,
@@ -1077,11 +1079,22 @@ impl Gateway {
             connector,
         };
 
-        let mnemonic = self.load_or_generate_mnemonic().await?;
+        let mnemonic = Self::load_or_generate_mnemonic(&self.gateway_db).await?;
+        let recover = payload.recover.unwrap_or(false);
+        if recover {
+            self.client_builder
+                .recover(federation_config.clone(), Arc::new(self.clone()), &mnemonic)
+                .await?;
+        }
+
         let client = self
             .client_builder
-            .build(gw_client_cfg.clone(), Arc::new(self.clone()), &mnemonic)
+            .build(federation_config.clone(), Arc::new(self.clone()), &mnemonic)
             .await?;
+
+        if recover {
+            client.wait_for_all_active_state_machines().await?;
+        }
 
         // Instead of using `FederationManager::federation_info`, we manually create
         // federation info here because short channel id is not yet persisted.
@@ -1100,7 +1113,7 @@ impl Gateway {
                 // Route hints will be updated in the background
                 Vec::new(),
                 GW_ANNOUNCEMENT_TTL,
-                gw_client_cfg.fees,
+                federation_config.fees,
                 lightning_context,
             )
             .await?;
@@ -1116,7 +1129,7 @@ impl Gateway {
         );
 
         let mut dbtx = self.gateway_db.begin_transaction().await;
-        dbtx.save_federation_config(&gw_client_cfg).await;
+        dbtx.save_federation_config(&federation_config).await;
         dbtx.commit_tx_result()
             .await
             .map_err(GatewayError::DatabaseError)?;
@@ -1150,25 +1163,32 @@ impl Gateway {
     }
 
     /// Handles a request for the gateway to backup a connected federation's
-    /// ecash. Not currently supported.
-    pub fn handle_backup_msg(
+    /// ecash.
+    pub async fn handle_backup_msg(
         &self,
-        BackupPayload { federation_id: _ }: BackupPayload,
+        BackupPayload { federation_id }: BackupPayload,
     ) -> Result<()> {
-        unimplemented!("Backup is not currently supported");
+        let federation_manager = self.federation_manager.read().await;
+        let client = federation_manager
+            .client(&federation_id)
+            .ok_or(GatewayError::ClientCreationError(format!(
+                "Gateway does has not connected to {federation_id}"
+            )))?
+            .value();
+        let metadata: BTreeMap<String, String> = BTreeMap::new();
+        client
+            .backup_to_federation(fedimint_client::backup::Metadata::from_json_serialized(
+                metadata,
+            ))
+            .await?;
+        Ok(())
     }
 
-    /// Handles a request for the gateway to restore a connected federation's
-    /// ecash. Not currently supported.
-    pub fn handle_restore_msg(
-        &self,
-        RestorePayload { federation_id: _ }: RestorePayload,
-    ) -> Result<()> {
-        unimplemented!("Restore is not currently supported");
-    }
-
+    /// Handles an authenticated request for the gateway's mnemonic. This also
+    /// returns a vector of federations that are not using the mnemonic
+    /// backup strategy.
     pub async fn handle_mnemonic_msg(&self) -> Result<MnemonicResponse> {
-        let mnemonic = self.load_or_generate_mnemonic().await?;
+        let mnemonic = Self::load_or_generate_mnemonic(&self.gateway_db).await?;
         let words = mnemonic
             .word_iter()
             .map(std::string::ToString::to_string)
@@ -1590,11 +1610,13 @@ impl Gateway {
             )))
     }
 
-    async fn load_or_generate_mnemonic(&self) -> Result<Mnemonic> {
+    /// Loads a mnemonic from the database or generates a new one if the
+    /// mnemonic does not exist. Before generating a new mnemonic, this
+    /// function will check if a mnemonic has been provided in the environment
+    /// variable and use that if provided.
+    async fn load_or_generate_mnemonic(gateway_db: &Database) -> Result<Mnemonic> {
         Ok(
-            if let Ok(entropy) =
-                Client::load_decodable_client_secret::<Vec<u8>>(&self.gateway_db).await
-            {
+            if let Ok(entropy) = Client::load_decodable_client_secret::<Vec<u8>>(gateway_db).await {
                 Mnemonic::from_entropy(&entropy)
                     .map_err(|e| GatewayError::ClientCreationError(e.to_string()))?
             } else {
@@ -1611,7 +1633,7 @@ impl Gateway {
                     Bip39RootSecretStrategy::<12>::random(&mut thread_rng())
                 };
 
-                Client::store_encodable_client_secret(&self.gateway_db, mnemonic.to_entropy())
+                Client::store_encodable_client_secret(gateway_db, mnemonic.to_entropy())
                     .await
                     .map_err(|e| GatewayError::ClientCreationError(e.to_string()))?;
                 mnemonic
@@ -1634,7 +1656,7 @@ impl Gateway {
             federation_manager.set_next_index(max_federation_index + 1);
         }
 
-        let mnemonic = self.load_or_generate_mnemonic().await?;
+        let mnemonic = Self::load_or_generate_mnemonic(&self.gateway_db).await?;
 
         for (federation_id, config) in configs {
             let federation_index = config.federation_index;

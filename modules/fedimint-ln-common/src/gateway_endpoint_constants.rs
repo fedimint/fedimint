@@ -17,7 +17,6 @@ pub const OPEN_CHANNEL_ENDPOINT: &str = "/open_channel";
 pub const CLOSE_CHANNELS_WITH_PEER_ENDPOINT: &str = "/close_channels_with_peer";
 pub const RECEIVE_ECASH_ENDPOINT: &str = "/receive_ecash";
 pub const PAY_INVOICE_ENDPOINT: &str = "/pay_invoice";
-pub const RESTORE_ENDPOINT: &str = "/restore";
 pub const SET_CONFIGURATION_ENDPOINT: &str = "/set_configuration";
 pub const STOP_ENDPOINT: &str = "/stop";
 pub const SPEND_ECASH_ENDPOINT: &str = "/spend_ecash";

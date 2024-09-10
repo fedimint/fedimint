@@ -16,8 +16,7 @@ use fedimint_ln_common::gateway_endpoint_constants::{
     GATEWAY_INFO_POST_ENDPOINT, GET_BALANCES_ENDPOINT, GET_GATEWAY_ID_ENDPOINT,
     GET_LN_ONCHAIN_ADDRESS_ENDPOINT, LEAVE_FED_ENDPOINT, LIST_ACTIVE_CHANNELS_ENDPOINT,
     MNEMONIC_ENDPOINT, OPEN_CHANNEL_ENDPOINT, PAY_INVOICE_ENDPOINT, RECEIVE_ECASH_ENDPOINT,
-    RESTORE_ENDPOINT, SET_CONFIGURATION_ENDPOINT, SPEND_ECASH_ENDPOINT, STOP_ENDPOINT,
-    WITHDRAW_ENDPOINT,
+    SET_CONFIGURATION_ENDPOINT, SPEND_ECASH_ENDPOINT, STOP_ENDPOINT, WITHDRAW_ENDPOINT,
 };
 use fedimint_lnv2_client::{CreateBolt11InvoicePayload, SendPaymentPayload};
 use fedimint_lnv2_common::endpoint_constants::{
@@ -33,7 +32,7 @@ use tracing::{error, info, instrument};
 use super::{
     BackupPayload, BalancePayload, CloseChannelsWithPeerPayload, ConnectFedPayload,
     CreateInvoiceForSelfPayload, DepositAddressPayload, GetLnOnchainAddressPayload, InfoPayload,
-    LeaveFedPayload, OpenChannelPayload, PayInvoicePayload, ReceiveEcashPayload, RestorePayload,
+    LeaveFedPayload, OpenChannelPayload, PayInvoicePayload, ReceiveEcashPayload,
     SetConfigurationPayload, SpendEcashPayload, WithdrawPayload, V1_API_ENDPOINT,
 };
 use crate::rpc::ConfigPayload;
@@ -174,7 +173,6 @@ fn v1_routes(gateway: Arc<Gateway>, task_group: TaskGroup) -> Router {
         .route(CONNECT_FED_ENDPOINT, post(connect_fed))
         .route(LEAVE_FED_ENDPOINT, post(leave_fed))
         .route(BACKUP_ENDPOINT, post(backup))
-        .route(RESTORE_ENDPOINT, post(restore))
         .route(PAY_INVOICE_SELF_ENDPOINT, post(pay_invoice_self))
         .route(
             GET_LN_ONCHAIN_ADDRESS_ENDPOINT,
@@ -339,18 +337,8 @@ async fn backup(
     Extension(gateway): Extension<Arc<Gateway>>,
     Json(payload): Json<BackupPayload>,
 ) -> Result<impl IntoResponse, GatewayError> {
-    gateway.handle_backup_msg(payload)?;
-    Ok(())
-}
-
-// Restore a gateway actor state
-#[instrument(skip_all, err, fields(?payload))]
-async fn restore(
-    Extension(gateway): Extension<Arc<Gateway>>,
-    Json(payload): Json<RestorePayload>,
-) -> Result<impl IntoResponse, GatewayError> {
-    gateway.handle_restore_msg(payload)?;
-    Ok(())
+    gateway.handle_backup_msg(payload).await?;
+    Ok(Json(json!(())))
 }
 
 #[instrument(skip_all, err, fields(?payload))]
