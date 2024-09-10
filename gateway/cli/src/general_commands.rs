@@ -124,6 +124,8 @@ pub enum GeneralCommands {
         #[clap(long)]
         per_federation_routing_fees: Option<Vec<PerFederationRoutingFees>>,
     },
+    /// Safely stop the gateway
+    Stop,
     /// Spend e-cash
     SpendEcash {
         #[clap(long)]
@@ -286,6 +288,9 @@ impl GeneralCommands {
             Self::Seed => {
                 let response = create_client().get_mnemonic().await?;
                 print_response(response);
+            }
+            Self::Stop => {
+                create_client().stop().await?;
             }
         }
 

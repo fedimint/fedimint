@@ -178,6 +178,7 @@ pub enum GatewayState {
     Connected,
     Running { lightning_context: LightningContext },
     Disconnected,
+    ShuttingDown { lightning_context: LightningContext },
 }
 
 impl Display for GatewayState {
@@ -188,6 +189,7 @@ impl Display for GatewayState {
             GatewayState::Connected => write!(f, "Connected"),
             GatewayState::Running { .. } => write!(f, "Running"),
             GatewayState::Disconnected => write!(f, "Disconnected"),
+            GatewayState::ShuttingDown { .. } => write!(f, "ShuttingDown"),
         }
     }
 }
@@ -402,13 +404,13 @@ impl Gateway {
     /// timer, loads the federation clients from the persisted config,
     /// begins listening for intercepted HTLCs, and starts the webserver to
     /// service requests.
-    pub async fn run(self, tg: &TaskGroup) -> anyhow::Result<TaskShutdownToken> {
-        self.register_clients_timer(tg);
+    pub async fn run(self, tg: TaskGroup) -> anyhow::Result<TaskShutdownToken> {
+        self.register_clients_timer(&tg);
         self.load_clients().await?;
-        self.start_gateway(tg);
+        self.start_gateway(&tg);
         // start webserver last to avoid handling requests before fully initialized
-        run_webserver(Arc::new(self), tg).await?;
         let handle = tg.make_handle();
+        run_webserver(Arc::new(self), tg).await?;
         let shutdown_receiver = handle.make_shutdown_rx();
         Ok(shutdown_receiver)
     }
@@ -553,14 +555,19 @@ impl Gateway {
     /// complete the HTLC depending on if the gateway is able to acquire the
     /// preimage from the federation.
     pub async fn handle_htlc_stream(&self, mut stream: RouteHtlcStream<'_>, handle: TaskHandle) {
-        let GatewayState::Running { lightning_context } = self.get_state().await else {
-            panic!("Gateway isn't in a running state")
-        };
-
         loop {
             if handle.is_shutting_down() {
                 break;
             }
+
+            let state = self.get_state().await;
+            let GatewayState::Running { lightning_context } = state else {
+                warn!(
+                    ?state,
+                    "Gateway isn't in a running state, cannot handle incoming payments."
+                );
+                break;
+            };
 
             let htlc_request = match stream.next().await {
                 Some(Ok(htlc_request)) => htlc_request,
@@ -1461,6 +1468,26 @@ impl Gateway {
         Ok(ReceiveEcashResponse { amount })
     }
 
+    pub async fn handle_shutdown_msg(&self, task_group: TaskGroup) -> Result<()> {
+        if let GatewayState::Running { lightning_context } = self.get_state().await {
+            self.set_gateway_state(GatewayState::ShuttingDown { lightning_context })
+                .await;
+            self.federation_manager
+                .read()
+                .await
+                .wait_for_incoming_payments()
+                .await?;
+        }
+
+        let tg = task_group.clone();
+        tg.spawn("Kill Gateway", |_task_handle| async {
+            if let Err(e) = task_group.shutdown_join_all(Duration::from_secs(180)).await {
+                error!(?e, "Error shutting down gateway");
+            }
+        });
+        Ok(())
+    }
+
     /// Registers the gateway with each specified federation.
     async fn register_federations(
         &self,
@@ -1702,7 +1729,8 @@ impl Gateway {
     /// will not be connected and this will return an error.
     pub async fn get_lightning_context(&self) -> Result<LightningContext> {
         match self.get_state().await {
-            GatewayState::Running { lightning_context } => Ok(lightning_context),
+            GatewayState::Running { lightning_context }
+            | GatewayState::ShuttingDown { lightning_context } => Ok(lightning_context),
             _ => Err(GatewayError::LightningRpcError(
                 LightningRpcError::FailedToConnect,
             )),

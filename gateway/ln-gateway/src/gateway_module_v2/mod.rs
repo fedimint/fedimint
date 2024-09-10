@@ -3,6 +3,7 @@ mod receive_sm;
 mod send_sm;
 
 use std::collections::BTreeMap;
+use std::fmt;
 use std::sync::Arc;
 
 use anyhow::{anyhow, ensure};
@@ -37,7 +38,7 @@ use secp256k1::KeyPair;
 use send_sm::{SendSMState, SendStateMachine};
 use serde::{Deserialize, Serialize};
 use tpe::{AggregatePublicKey, PublicKeyShare};
-use tracing::warn;
+use tracing::{info, warn};
 
 use crate::gateway_module_v2::complete_sm::{
     CompleteSMCommon, CompleteSMState, CompleteStateMachine,
@@ -147,6 +148,22 @@ pub enum GatewayClientStateMachinesV2 {
     Send(SendStateMachine),
     Receive(ReceiveStateMachine),
     Complete(CompleteStateMachine),
+}
+
+impl fmt::Display for GatewayClientStateMachinesV2 {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            GatewayClientStateMachinesV2::Send(send) => {
+                write!(f, "{send}")
+            }
+            GatewayClientStateMachinesV2::Receive(receive) => {
+                write!(f, "{receive}")
+            }
+            GatewayClientStateMachinesV2::Complete(complete) => {
+                write!(f, "{complete}")
+            }
+        }
+    }
 }
 
 impl IntoDynInstance for GatewayClientStateMachinesV2 {
@@ -459,6 +476,34 @@ impl GatewayClientModuleV2 {
                     }
                     ReceiveSMState::Failure => return FinalReceiveState::Failure,
                 }
+            }
+        }
+    }
+
+    /// For the given `OperationId`, this function will wait until the Complete
+    /// state machine has finished or failed.
+    pub async fn await_completion(&self, operation_id: OperationId) {
+        let mut stream = self.notifier.subscribe(operation_id).await;
+
+        loop {
+            match stream.next().await {
+                Some(GatewayClientStateMachinesV2::Complete(state)) => {
+                    if state.state == CompleteSMState::Completed {
+                        info!(%state, "LNv2 completion state machine finished");
+                        return;
+                    }
+
+                    info!(%state, "Waiting for LNv2 completion state machine");
+                }
+                Some(GatewayClientStateMachinesV2::Receive(state)) => {
+                    info!(%state, "Waiting for LNv2 completion state machine");
+                    continue;
+                }
+                Some(state) => {
+                    warn!(%state, "Operation is not an LNv2 completion state machine");
+                    return;
+                }
+                None => return,
             }
         }
     }

@@ -1,4 +1,4 @@
-use std::fmt::Display;
+use std::fmt::{self, Display};
 use std::sync::Arc;
 
 use bitcoin_hashes::sha256;
@@ -67,6 +67,21 @@ pub enum GatewayPayStates {
     },
 }
 
+impl fmt::Display for GatewayPayStates {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            GatewayPayStates::PayInvoice(_) => write!(f, "PayInvoice"),
+            GatewayPayStates::CancelContract(_) => write!(f, "CancelContract"),
+            GatewayPayStates::Preimage(..) => write!(f, "Preimage"),
+            GatewayPayStates::OfferDoesNotExist(_) => write!(f, "OfferDoesNotExist"),
+            GatewayPayStates::Canceled { .. } => write!(f, "Canceled"),
+            GatewayPayStates::WaitForSwapPreimage(_) => write!(f, "WaitForSwapPreimage"),
+            GatewayPayStates::ClaimOutgoingContract(_) => write!(f, "ClaimOutgoingContract"),
+            GatewayPayStates::Failed { .. } => write!(f, "Failed"),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable, Serialize, Deserialize)]
 pub struct GatewayPayCommon {
     pub operation_id: OperationId,
@@ -76,6 +91,16 @@ pub struct GatewayPayCommon {
 pub struct GatewayPayStateMachine {
     pub common: GatewayPayCommon,
     pub state: GatewayPayStates,
+}
+
+impl fmt::Display for GatewayPayStateMachine {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "Gateway Pay State Machine Operation ID: {:?} State: {}",
+            self.common.operation_id, self.state
+        )
+    }
 }
 
 impl State for GatewayPayStateMachine {

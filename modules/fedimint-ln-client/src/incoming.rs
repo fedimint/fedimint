@@ -7,6 +7,7 @@
 //!   - `fedimint-ln-client` for internal payments without involving the gateway
 //!   - `gateway` for receiving payments into the federation
 
+use core::fmt;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -59,6 +60,19 @@ pub enum IncomingSmStates {
     Failure(String),
 }
 
+impl fmt::Display for IncomingSmStates {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            IncomingSmStates::FundingOffer(_) => write!(f, "FundingOffer"),
+            IncomingSmStates::DecryptingPreimage(_) => write!(f, "DecryptingPreimage"),
+            IncomingSmStates::Preimage(_) => write!(f, "Preimage"),
+            IncomingSmStates::RefundSubmitted { .. } => write!(f, "RefundSubmitted"),
+            IncomingSmStates::FundingFailed { .. } => write!(f, "FundingFailed"),
+            IncomingSmStates::Failure(_) => write!(f, "Failure"),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
 pub struct IncomingSmCommon {
     pub operation_id: OperationId,
@@ -70,6 +84,16 @@ pub struct IncomingSmCommon {
 pub struct IncomingStateMachine {
     pub common: IncomingSmCommon,
     pub state: IncomingSmStates,
+}
+
+impl fmt::Display for IncomingStateMachine {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "Incoming State Machine Operation ID: {:?} State: {}",
+            self.common.operation_id, self.state
+        )
+    }
 }
 
 impl State for IncomingStateMachine {

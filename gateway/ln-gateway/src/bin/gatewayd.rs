@@ -22,7 +22,7 @@ async fn main() -> Result<(), anyhow::Error> {
     let tg = TaskGroup::new();
     tg.install_kill_handler();
     let gatewayd = Gateway::new_with_default_modules().await?;
-    let shutdown_receiver = gatewayd.clone().run(&tg).await?;
+    let shutdown_receiver = gatewayd.clone().run(tg).await?;
     shutdown_receiver.await;
     gatewayd.unannounce_from_all_federations().await;
     info!("Gatewayd exiting...");

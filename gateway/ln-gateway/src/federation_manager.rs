@@ -7,8 +7,10 @@ use fedimint_client::ClientHandleArc;
 use fedimint_core::config::{FederationId, FederationIdPrefix, JsonClientConfig};
 use fedimint_core::db::{DatabaseTransaction, NonCommittable};
 use fedimint_core::util::Spanned;
+use tracing::info;
 
 use crate::db::GatewayDbtxNcExt;
+use crate::gateway_module_v2::GatewayClientModuleV2;
 use crate::rpc::FederationInfo;
 use crate::state_machine::GatewayClientModule;
 use crate::{GatewayError, Result};
@@ -92,6 +94,35 @@ impl FederationManager {
                 "Federation client is not unique, failed to shutdown client".to_string(),
             ))
         }
+    }
+
+    /// Waits for ongoing incoming LNv1 and LNv2 payments to complete before
+    /// returning.
+    pub async fn wait_for_incoming_payments(&self) -> Result<()> {
+        for client in self.clients.values() {
+            let active_operations = client.value().get_active_operations().await;
+            let operation_log = client.value().operation_log();
+            for op_id in active_operations {
+                let log_entry = operation_log.get_operation(op_id).await;
+                if let Some(entry) = log_entry {
+                    match entry.operation_module_kind() {
+                        "lnv2" => {
+                            let lnv2 =
+                                client.value().get_first_module::<GatewayClientModuleV2>()?;
+                            lnv2.await_completion(op_id).await;
+                        }
+                        "ln" => {
+                            let lnv1 = client.value().get_first_module::<GatewayClientModule>()?;
+                            lnv1.await_completion(op_id).await;
+                        }
+                        _ => continue,
+                    }
+                }
+            }
+        }
+
+        info!("Finished waiting for incoming payments");
+        Ok(())
     }
 
     async fn unannounce_from_federation(

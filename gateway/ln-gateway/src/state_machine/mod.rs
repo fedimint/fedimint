@@ -2,6 +2,7 @@ mod complete;
 pub mod pay;
 
 use std::collections::BTreeMap;
+use std::fmt;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -46,7 +47,7 @@ use futures::StreamExt;
 use lightning_invoice::RoutingFees;
 use secp256k1::KeyPair;
 use serde::{Deserialize, Serialize};
-use tracing::{debug, info, warn};
+use tracing::{debug, error, info, warn};
 
 use self::complete::GatewayCompleteStateMachine;
 use self::pay::{
@@ -519,6 +520,39 @@ impl GatewayClientModule {
         }))
     }
 
+    /// For the given `OperationId`, this function will wait until the Complete
+    /// state machine has finished or failed.
+    pub async fn await_completion(&self, operation_id: OperationId) {
+        let mut stream = self.notifier.subscribe(operation_id).await;
+        loop {
+            match stream.next().await {
+                Some(GatewayClientStateMachines::Complete(state)) => match state.state {
+                    GatewayCompleteStates::HtlcFinished => {
+                        info!(%state, "LNv1 completion state machine finished");
+                        return;
+                    }
+                    GatewayCompleteStates::Failure => {
+                        error!(%state, "LNv1 completion state machine failed");
+                        return;
+                    }
+                    _ => {
+                        info!(%state, "Waiting for LNv1 completion state machine");
+                        continue;
+                    }
+                },
+                Some(GatewayClientStateMachines::Receive(state)) => {
+                    info!(%state, "Waiting for LNv1 completion state machine");
+                    continue;
+                }
+                Some(state) => {
+                    warn!(%state, "Operation is not an LNv1 completion state machine");
+                    return;
+                }
+                None => return,
+            }
+        }
+    }
+
     /// Pay lightning invoice on behalf of federation user
     pub async fn gateway_pay_bolt11_invoice(
         &self,
@@ -662,6 +696,22 @@ pub enum GatewayClientStateMachines {
     Pay(GatewayPayStateMachine),
     Receive(IncomingStateMachine),
     Complete(GatewayCompleteStateMachine),
+}
+
+impl fmt::Display for GatewayClientStateMachines {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            GatewayClientStateMachines::Pay(pay) => {
+                write!(f, "{pay}")
+            }
+            GatewayClientStateMachines::Receive(receive) => {
+                write!(f, "{receive}")
+            }
+            GatewayClientStateMachines::Complete(complete) => {
+                write!(f, "{complete}")
+            }
+        }
+    }
 }
 
 impl IntoDynInstance for GatewayClientStateMachines {

@@ -1,3 +1,4 @@
+use std::fmt;
 use std::time::Duration;
 
 use bitcoin_hashes::Hash;
@@ -47,6 +48,17 @@ pub enum GatewayCompleteStates {
     Failure,
 }
 
+impl fmt::Display for GatewayCompleteStates {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            GatewayCompleteStates::WaitForPreimage(_) => write!(f, "WaitForPreimage"),
+            GatewayCompleteStates::CompleteHtlc(_) => write!(f, "CompleteHtlc"),
+            GatewayCompleteStates::HtlcFinished => write!(f, "HtlcFinished"),
+            GatewayCompleteStates::Failure => write!(f, "Failure"),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
 pub struct GatewayCompleteCommon {
     pub operation_id: OperationId,
@@ -59,6 +71,16 @@ pub struct GatewayCompleteCommon {
 pub struct GatewayCompleteStateMachine {
     pub common: GatewayCompleteCommon,
     pub state: GatewayCompleteStates,
+}
+
+impl fmt::Display for GatewayCompleteStateMachine {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "Gateway Complete State Machine Operation ID: {:?} State: {}",
+            self.common.operation_id, self.state
+        )
+    }
 }
 
 impl State for GatewayCompleteStateMachine {

@@ -16,7 +16,8 @@ use fedimint_ln_common::gateway_endpoint_constants::{
     GATEWAY_INFO_POST_ENDPOINT, GET_BALANCES_ENDPOINT, GET_GATEWAY_ID_ENDPOINT,
     GET_LN_ONCHAIN_ADDRESS_ENDPOINT, LEAVE_FED_ENDPOINT, LIST_ACTIVE_CHANNELS_ENDPOINT,
     MNEMONIC_ENDPOINT, OPEN_CHANNEL_ENDPOINT, PAY_INVOICE_ENDPOINT, RECEIVE_ECASH_ENDPOINT,
-    RESTORE_ENDPOINT, SET_CONFIGURATION_ENDPOINT, SPEND_ECASH_ENDPOINT, WITHDRAW_ENDPOINT,
+    RESTORE_ENDPOINT, SET_CONFIGURATION_ENDPOINT, SPEND_ECASH_ENDPOINT, STOP_ENDPOINT,
+    WITHDRAW_ENDPOINT,
 };
 use fedimint_lnv2_client::{CreateBolt11InvoicePayload, SendPaymentPayload};
 use fedimint_lnv2_common::endpoint_constants::{
@@ -39,8 +40,8 @@ use crate::rpc::ConfigPayload;
 use crate::{Gateway, GatewayError};
 
 /// Creates the webserver's routes and spawns the webserver in a separate task.
-pub async fn run_webserver(gateway: Arc<Gateway>, task_group: &TaskGroup) -> anyhow::Result<()> {
-    let v1_routes = v1_routes(gateway.clone());
+pub async fn run_webserver(gateway: Arc<Gateway>, task_group: TaskGroup) -> anyhow::Result<()> {
+    let v1_routes = v1_routes(gateway.clone(), task_group.clone());
     let api_v1 = Router::new()
         .nest(&format!("/{V1_API_ENDPOINT}"), v1_routes.clone())
         // Backwards compatibility: Continue supporting gateway APIs without versioning
@@ -147,7 +148,7 @@ async fn authenticate(
 ///   the password, they become authenticated.
 /// - Un-authenticated: anyone can request these routes. Used by fedimint
 ///   clients.
-fn v1_routes(gateway: Arc<Gateway>) -> Router {
+fn v1_routes(gateway: Arc<Gateway>, task_group: TaskGroup) -> Router {
     // Public routes on gateway webserver
     let public_routes = Router::new()
         .route(
@@ -188,6 +189,7 @@ fn v1_routes(gateway: Arc<Gateway>) -> Router {
         .route(GET_BALANCES_ENDPOINT, get(get_balances))
         .route(SPEND_ECASH_ENDPOINT, post(spend_ecash))
         .route(MNEMONIC_ENDPOINT, get(mnemonic))
+        .route(STOP_ENDPOINT, get(stop))
         .layer(middleware::from_fn(auth_middleware));
 
     // Routes that are un-authenticated before gateway configuration, then become
@@ -205,6 +207,7 @@ fn v1_routes(gateway: Arc<Gateway>) -> Router {
         .merge(always_authenticated_routes)
         .merge(authenticated_after_config_routes)
         .layer(Extension(gateway))
+        .layer(Extension(task_group))
         .layer(CorsLayer::permissive())
 }
 
@@ -460,4 +463,13 @@ async fn mnemonic(
 ) -> Result<impl IntoResponse, GatewayError> {
     let words = gateway.handle_mnemonic_msg().await?;
     Ok(Json(json!(words)))
+}
+
+#[instrument(skip_all, err)]
+async fn stop(
+    Extension(task_group): Extension<TaskGroup>,
+    Extension(gateway): Extension<Arc<Gateway>>,
+) -> Result<impl IntoResponse, GatewayError> {
+    gateway.handle_shutdown_msg(task_group).await?;
+    Ok(Json(json!(())))
 }

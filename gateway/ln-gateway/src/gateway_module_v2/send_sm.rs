@@ -1,3 +1,4 @@
+use std::fmt;
 use std::sync::Arc;
 
 use fedimint_client::sm::{ClientSMDatabaseTransaction, State, StateTransition};
@@ -30,6 +31,16 @@ impl SendStateMachine {
     }
 }
 
+impl fmt::Display for SendStateMachine {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "Send State Machine Operation ID: {:?} State: {}",
+            self.common.operation_id, self.state
+        )
+    }
+}
+
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
 pub struct SendSMCommon {
     pub operation_id: OperationId,
@@ -45,6 +56,16 @@ pub enum SendSMState {
     Sending,
     Claiming(Claiming),
     Cancelled(Cancelled),
+}
+
+impl fmt::Display for SendSMState {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            SendSMState::Sending => write!(f, "Sending"),
+            SendSMState::Claiming(_) => write!(f, "Claiming"),
+            SendSMState::Cancelled(_) => write!(f, "Cancelled"),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
