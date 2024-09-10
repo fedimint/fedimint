@@ -174,7 +174,8 @@
 <a href="#173" id="173">173</a>
 <a href="#174" id="174">174</a>
 <a href="#175" id="175">175</a>
-<a href="#176" id="176">176</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#176" id="176">176</a>
+<a href="#177" id="177">177</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::cast_possible_wrap)]
 #![allow(clippy::cast_precision_loss)]
@@ -243,7 +244,7 @@
                 data_dir.clone(),
                 settings.clone(),
                 db.clone(),
-                code_version_str,
+                code_version_str.clone(),
                 task_group.make_subgroup(),
                 force_api_secrets.clone(),
             )
@@ -273,6 +274,7 @@
         <span class="kw-2">&amp;</span>task_group,
         force_api_secrets,
         data_dir,
+        code_version_str,
     )
     .<span class="kw">await</span><span class="question-mark">?</span>;
 

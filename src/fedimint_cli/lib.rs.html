@@ -1247,7 +1247,22 @@
 <a href="#1246" id="1246">1246</a>
 <a href="#1247" id="1247">1247</a>
 <a href="#1248" id="1248">1248</a>
-<a href="#1249" id="1249">1249</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#1249" id="1249">1249</a>
+<a href="#1250" id="1250">1250</a>
+<a href="#1251" id="1251">1251</a>
+<a href="#1252" id="1252">1252</a>
+<a href="#1253" id="1253">1253</a>
+<a href="#1254" id="1254">1254</a>
+<a href="#1255" id="1255">1255</a>
+<a href="#1256" id="1256">1256</a>
+<a href="#1257" id="1257">1257</a>
+<a href="#1258" id="1258">1258</a>
+<a href="#1259" id="1259">1259</a>
+<a href="#1260" id="1260">1260</a>
+<a href="#1261" id="1261">1261</a>
+<a href="#1262" id="1262">1262</a>
+<a href="#1263" id="1263">1263</a>
+<a href="#1264" id="1264">1264</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::doc_markdown)]
 #![allow(clippy::missing_errors_doc)]
 #![allow(clippy::missing_panics_doc)]
@@ -1804,6 +1819,11 @@ Examples:
     /// meta module these are returned, otherwise the legacy mechanism
     /// (config+override file) is used.
     </span>MetaFields,
+    <span class="doccomment">/// Gets the tagged fedimintd version for a peer
+    </span>PeerVersion {
+        <span class="attr">#[clap(long)]
+        </span>peer_id: u16,
+    },
 }
 
 <span class="attr">#[derive(Debug, Serialize, Deserialize)]
@@ -2366,6 +2386,16 @@ Examples:
                 <span class="prelude-val">Ok</span>(CliOutput::Raw(
                     serde_json::to_value(meta_fields).expect(<span class="string">"Can be encoded"</span>),
                 ))
+            }
+            Command::Dev(DevCmd::PeerVersion { peer_id }) =&gt; {
+                <span class="kw">let </span>client = <span class="self">self</span>.client_open(<span class="kw-2">&amp;</span>cli).<span class="kw">await</span><span class="question-mark">?</span>;
+                <span class="kw">let </span>version = client
+                    .api()
+                    .fedimintd_version(peer_id.into())
+                    .<span class="kw">await
+                    </span>.map_err_cli()<span class="question-mark">?</span>;
+
+                <span class="prelude-val">Ok</span>(CliOutput::Raw(<span class="macro">json!</span>({ <span class="string">"version"</span>: version })))
             }
             Command::Completion { shell } =&gt; {
                 clap_complete::generate(

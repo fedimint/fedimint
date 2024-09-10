@@ -1168,7 +1168,10 @@
 <a href="#1167" id="1167">1167</a>
 <a href="#1168" id="1168">1168</a>
 <a href="#1169" id="1169">1169</a>
-<a href="#1170" id="1170">1170</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap};
+<a href="#1170" id="1170">1170</a>
+<a href="#1171" id="1171">1171</a>
+<a href="#1172" id="1172">1172</a>
+<a href="#1173" id="1173">1173</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet, HashMap};
 <span class="kw">use </span>std::fmt::Debug;
 <span class="kw">use </span>std::pin::Pin;
 <span class="kw">use </span>std::sync::Arc;
@@ -1767,6 +1770,9 @@
     ) -&gt; FederationResult&lt;SignedApiAnnouncement&gt;;
 
     <span class="kw">async fn </span>shutdown(<span class="kw-2">&amp;</span><span class="self">self</span>, session: <span class="prelude-ty">Option</span>&lt;u64&gt;, auth: ApiAuth) -&gt; FederationResult&lt;()&gt;;
+
+    <span class="doccomment">/// Returns the fedimintd version a peer is running
+    </span><span class="kw">async fn </span>fedimintd_version(<span class="kw-2">&amp;</span><span class="self">self</span>, peer_id: PeerId) -&gt; PeerResult&lt;String&gt;;
 }
 
 <span class="kw">pub fn </span>deserialize_outcome&lt;R&gt;(
