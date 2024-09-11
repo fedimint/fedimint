@@ -478,7 +478,7 @@ impl Gateway {
     async fn route_htlcs<'a>(
         &'a self,
         handle: &TaskHandle,
-        stream: RouteHtlcStream<'a>,
+        mut stream: RouteHtlcStream<'a>,
         ln_client: Arc<dyn ILnRpcClient>,
     ) -> ReceivePaymentStreamAction {
         let (lightning_public_key, lightning_alias, lightning_network) =
@@ -537,10 +537,34 @@ impl Gateway {
             .await;
         info!("Gateway is running");
 
-        // Blocks until the connection to the lightning node breaks or we receive the
-        // shutdown signal
+        // Runs until the connection to the lightning node breaks or we receive the
+        // shutdown signal.
         if handle
-            .cancel_on_shutdown(self.handle_htlc_stream(stream, handle.clone()))
+            .cancel_on_shutdown(async move {
+                loop {
+                    let state = self.get_state().await;
+                    let GatewayState::Running { lightning_context } = state else {
+                        warn!(
+                            ?state,
+                            "Gateway isn't in a running state, cannot handle incoming payments."
+                        );
+                        break;
+                    };
+
+                    let htlc_request = match stream.next().await {
+                        Some(Ok(htlc_request)) => htlc_request,
+                        other => {
+                            warn!(
+                                ?other,
+                                "Unexpected response from incoming lightning payment stream. Exiting from loop..."
+                            );
+                            break;
+                        }
+                    };
+
+                    self.handle_htlc(htlc_request, &lightning_context).await;
+                }
+            })
             .await
             .is_ok()
         {
@@ -549,40 +573,6 @@ impl Gateway {
         } else {
             info!("Received shutdown signal");
             ReceivePaymentStreamAction::NoRetry
-        }
-    }
-
-    /// Waits for intercepted HTLCs to be sent over the `stream`.
-    /// Spawns a state machine for each HTLC to either forward, cancel, or
-    /// complete the HTLC depending on if the gateway is able to acquire the
-    /// preimage from the federation.
-    pub async fn handle_htlc_stream(&self, mut stream: RouteHtlcStream<'_>, handle: TaskHandle) {
-        loop {
-            if handle.is_shutting_down() {
-                break;
-            }
-
-            let state = self.get_state().await;
-            let GatewayState::Running { lightning_context } = state else {
-                warn!(
-                    ?state,
-                    "Gateway isn't in a running state, cannot handle incoming payments."
-                );
-                break;
-            };
-
-            let htlc_request = match stream.next().await {
-                Some(Ok(htlc_request)) => htlc_request,
-                other => {
-                    warn!(
-                        ?other,
-                        "Unexpected response from HTLC stream, exiting from loop..."
-                    );
-                    break;
-                }
-            };
-
-            self.handle_htlc(htlc_request, &lightning_context).await;
         }
     }
 
