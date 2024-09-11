@@ -14,6 +14,7 @@ use fedimint_core::db::Database;
 use fedimint_core::invite_code::InviteCode;
 use fedimint_ln_client::{LightningClientInit, LightningClientModule};
 use fedimint_mint_client::MintClientInit;
+use futures::future::{AbortHandle, Abortable};
 use futures::StreamExt;
 use serde_json::json;
 use wasm_bindgen::prelude::wasm_bindgen;
@@ -22,6 +23,19 @@ use wasm_bindgen::{JsError, JsValue};
 #[wasm_bindgen]
 pub struct WasmClient {
     client: ClientHandleArc,
+}
+
+#[wasm_bindgen]
+pub struct RpcHandle {
+    abort_handle: AbortHandle,
+}
+
+#[wasm_bindgen]
+impl RpcHandle {
+    #[wasm_bindgen]
+    pub fn cancel(&self) {
+        self.abort_handle.abort();
+    }
 }
 
 #[wasm_bindgen]
@@ -93,30 +107,60 @@ impl WasmClient {
     #[wasm_bindgen]
     /// Call a fedimint client rpc the responses are returned using `cb`
     /// callback. Each rpc call *can* return multiple responses by calling
-    /// `cb` multiple times. You should ignore the promise by this function
-    /// because it has no significance.
-    pub async fn rpc(&self, module: &str, method: &str, payload: String, cb: &js_sys::Function) {
-        let mut stream = pin!(self.rpc_inner(module, method, payload));
+    /// `cb` multiple times. The returned RpcHandle can be used to cancel the
+    /// operation.
+    pub fn rpc(
+        &self,
+        module: &str,
+        method: &str,
+        payload: String,
+        cb: &js_sys::Function,
+    ) -> RpcHandle {
+        let (abort_handle, abort_registration) = AbortHandle::new_pair();
+        let rpc_handle = RpcHandle { abort_handle };
 
-        while let Some(item) = stream.next().await {
-            let this = JsValue::null();
-            let _ = match item {
-                Ok(item) => cb.call1(
-                    &this,
-                    &JsValue::from_str(&serde_json::to_string(&item).unwrap()),
-                ),
-                Err(err) => cb.call1(
-                    &this,
-                    &JsValue::from_str(
-                        &serde_json::to_string(&json!({"error": err.to_string()})).unwrap(),
-                    ),
-                ),
+        let client = self.client.clone();
+        let module = module.to_string();
+        let method = method.to_string();
+        let cb = cb.clone();
+
+        wasm_bindgen_futures::spawn_local(async move {
+            let future = async {
+                let mut stream = pin!(Self::rpc_inner(&client, &module, &method, payload));
+
+                while let Some(item) = stream.next().await {
+                    let this = JsValue::null();
+                    let _ = match item {
+                        Ok(item) => cb.call1(
+                            &this,
+                            &JsValue::from_str(
+                                &serde_json::to_string(&json!({"data": item})).unwrap(),
+                            ),
+                        ),
+                        Err(err) => cb.call1(
+                            &this,
+                            &JsValue::from_str(
+                                &serde_json::to_string(&json!({"error": err.to_string()})).unwrap(),
+                            ),
+                        ),
+                    };
+                }
+
+                // Send the end message
+                let _ = cb.call1(
+                    &JsValue::null(),
+                    &JsValue::from_str(&serde_json::to_string(&json!({"end": null})).unwrap()),
+                );
             };
-        }
-    }
 
+            let abortable_future = Abortable::new(future, abort_registration);
+            let _ = abortable_future.await;
+        });
+
+        rpc_handle
+    }
     fn rpc_inner<'a>(
-        &'a self,
+        client: &'a ClientHandleArc,
         module: &'a str,
         method: &'a str,
         payload: String,
@@ -125,14 +169,13 @@ impl WasmClient {
             let payload: serde_json::Value = serde_json::from_str(&payload)?;
             match module {
                 "" => {
-                    let mut stream = self.client.handle_global_rpc(method.to_owned(), payload);
+                    let mut stream = client.handle_global_rpc(method.to_owned(), payload);
                     while let Some(item) = stream.next().await {
                         yield item?;
                     }
                 }
                 "ln" => {
-                    let ln = self
-                        .client
+                    let ln = client
                         .get_first_module::<LightningClientModule>()?
                         .inner();
                     let mut stream = ln.handle_rpc(method.to_owned(), payload).await;
@@ -141,8 +184,7 @@ impl WasmClient {
                     }
                 }
                 "mint" => {
-                    let mint = self
-                        .client
+                    let mint = client
                         .get_first_module::<fedimint_mint_client::MintClientModule>()?
                         .inner();
                     let mut stream = mint.handle_rpc(method.to_owned(), payload).await;
