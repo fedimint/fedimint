@@ -590,9 +590,9 @@ pub async fn apply_migrations_client(
     };
 
     global_dbtx.commit_tx_result().await?;
-    info!(
+    debug!(
         target: LOG_CLIENT_DB,
-        ?kind, ?db_version, "Migration complete");
+        ?kind, ?db_version, "Client DB Version");
     Ok(())
 }
 

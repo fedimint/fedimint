@@ -252,10 +252,10 @@ impl Client {
             if module.supports_backup() {
                 let backup = module.backup(id).await?;
 
-                info!(target: LOG_CLIENT_BACKUP, module_id=id, module_kind=%kind, "Prepared module backup");
+                debug!(target: LOG_CLIENT_BACKUP, module_id=id, module_kind=%kind, "Prepared module backup");
                 modules.insert(id, backup);
             } else {
-                info!(target: LOG_CLIENT_BACKUP, module_id=id, module_kind=%kind, "Module does not support backup");
+                debug!(target: LOG_CLIENT_BACKUP, module_id=id, module_kind=%kind, "Module does not support backup");
             }
         }
 

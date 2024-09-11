@@ -2055,7 +2055,7 @@ pub async fn apply_migrations(
     };
 
     global_dbtx.commit_tx_result().await?;
-    info!(target: LOG_DB, ?kind, ?db_version, "Migration complete");
+    debug!(target: LOG_DB, ?kind, ?db_version, "DB Version");
     Ok(())
 }
 
