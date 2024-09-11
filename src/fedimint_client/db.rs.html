@@ -1359,9 +1359,9 @@
     };
 
     global_dbtx.commit_tx_result().<span class="kw">await</span><span class="question-mark">?</span>;
-    <span class="macro">info!</span>(
+    <span class="macro">debug!</span>(
         target: LOG_CLIENT_DB,
-        <span class="question-mark">?</span>kind, <span class="question-mark">?</span>db_version, <span class="string">"Migration complete"</span>);
+        <span class="question-mark">?</span>kind, <span class="question-mark">?</span>db_version, <span class="string">"Client DB Version"</span>);
     <span class="prelude-val">Ok</span>(())
 }
 
