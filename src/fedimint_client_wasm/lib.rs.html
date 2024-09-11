@@ -158,7 +158,49 @@
 <a href="#157" id="157">157</a>
 <a href="#158" id="158">158</a>
 <a href="#159" id="159">159</a>
-<a href="#160" id="160">160</a></pre></div><pre class="rust"><code><span class="attr">#![cfg(target_family = <span class="string">"wasm"</span>)]
+<a href="#160" id="160">160</a>
+<a href="#161" id="161">161</a>
+<a href="#162" id="162">162</a>
+<a href="#163" id="163">163</a>
+<a href="#164" id="164">164</a>
+<a href="#165" id="165">165</a>
+<a href="#166" id="166">166</a>
+<a href="#167" id="167">167</a>
+<a href="#168" id="168">168</a>
+<a href="#169" id="169">169</a>
+<a href="#170" id="170">170</a>
+<a href="#171" id="171">171</a>
+<a href="#172" id="172">172</a>
+<a href="#173" id="173">173</a>
+<a href="#174" id="174">174</a>
+<a href="#175" id="175">175</a>
+<a href="#176" id="176">176</a>
+<a href="#177" id="177">177</a>
+<a href="#178" id="178">178</a>
+<a href="#179" id="179">179</a>
+<a href="#180" id="180">180</a>
+<a href="#181" id="181">181</a>
+<a href="#182" id="182">182</a>
+<a href="#183" id="183">183</a>
+<a href="#184" id="184">184</a>
+<a href="#185" id="185">185</a>
+<a href="#186" id="186">186</a>
+<a href="#187" id="187">187</a>
+<a href="#188" id="188">188</a>
+<a href="#189" id="189">189</a>
+<a href="#190" id="190">190</a>
+<a href="#191" id="191">191</a>
+<a href="#192" id="192">192</a>
+<a href="#193" id="193">193</a>
+<a href="#194" id="194">194</a>
+<a href="#195" id="195">195</a>
+<a href="#196" id="196">196</a>
+<a href="#197" id="197">197</a>
+<a href="#198" id="198">198</a>
+<a href="#199" id="199">199</a>
+<a href="#200" id="200">200</a>
+<a href="#201" id="201">201</a>
+<a href="#202" id="202">202</a></pre></div><pre class="rust"><code><span class="attr">#![cfg(target_family = <span class="string">"wasm"</span>)]
 </span><span class="kw">mod </span>db;
 
 <span class="kw">use </span>std::pin::pin;
@@ -174,6 +216,7 @@
 <span class="kw">use </span>fedimint_core::invite_code::InviteCode;
 <span class="kw">use </span>fedimint_ln_client::{LightningClientInit, LightningClientModule};
 <span class="kw">use </span>fedimint_mint_client::MintClientInit;
+<span class="kw">use </span>futures::future::{AbortHandle, Abortable};
 <span class="kw">use </span>futures::StreamExt;
 <span class="kw">use </span>serde_json::json;
 <span class="kw">use </span>wasm_bindgen::prelude::wasm_bindgen;
@@ -182,6 +225,19 @@
 <span class="attr">#[wasm_bindgen]
 </span><span class="kw">pub struct </span>WasmClient {
     client: ClientHandleArc,
+}
+
+<span class="attr">#[wasm_bindgen]
+</span><span class="kw">pub struct </span>RpcHandle {
+    abort_handle: AbortHandle,
+}
+
+<span class="attr">#[wasm_bindgen]
+</span><span class="kw">impl </span>RpcHandle {
+    <span class="attr">#[wasm_bindgen]
+    </span><span class="kw">pub fn </span>cancel(<span class="kw-2">&amp;</span><span class="self">self</span>) {
+        <span class="self">self</span>.abort_handle.abort();
+    }
 }
 
 <span class="attr">#[wasm_bindgen]
@@ -253,30 +309,60 @@
     <span class="attr">#[wasm_bindgen]
     </span><span class="doccomment">/// Call a fedimint client rpc the responses are returned using `cb`
     /// callback. Each rpc call *can* return multiple responses by calling
-    /// `cb` multiple times. You should ignore the promise by this function
-    /// because it has no significance.
-    </span><span class="kw">pub async fn </span>rpc(<span class="kw-2">&amp;</span><span class="self">self</span>, module: <span class="kw-2">&amp;</span>str, method: <span class="kw-2">&amp;</span>str, payload: String, cb: <span class="kw-2">&amp;</span>js_sys::Function) {
-        <span class="kw">let </span><span class="kw-2">mut </span>stream = <span class="macro">pin!</span>(<span class="self">self</span>.rpc_inner(module, method, payload));
+    /// `cb` multiple times. The returned RpcHandle can be used to cancel the
+    /// operation.
+    </span><span class="kw">pub fn </span>rpc(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        module: <span class="kw-2">&amp;</span>str,
+        method: <span class="kw-2">&amp;</span>str,
+        payload: String,
+        cb: <span class="kw-2">&amp;</span>js_sys::Function,
+    ) -&gt; RpcHandle {
+        <span class="kw">let </span>(abort_handle, abort_registration) = AbortHandle::new_pair();
+        <span class="kw">let </span>rpc_handle = RpcHandle { abort_handle };
 
-        <span class="kw">while let </span><span class="prelude-val">Some</span>(item) = stream.next().<span class="kw">await </span>{
-            <span class="kw">let </span>this = JsValue::null();
-            <span class="kw">let _ </span>= <span class="kw">match </span>item {
-                <span class="prelude-val">Ok</span>(item) =&gt; cb.call1(
-                    <span class="kw-2">&amp;</span>this,
-                    <span class="kw-2">&amp;</span>JsValue::from_str(<span class="kw-2">&amp;</span>serde_json::to_string(<span class="kw-2">&amp;</span>item).unwrap()),
-                ),
-                <span class="prelude-val">Err</span>(err) =&gt; cb.call1(
-                    <span class="kw-2">&amp;</span>this,
-                    <span class="kw-2">&amp;</span>JsValue::from_str(
-                        <span class="kw-2">&amp;</span>serde_json::to_string(<span class="kw-2">&amp;</span><span class="macro">json!</span>({<span class="string">"error"</span>: err.to_string()})).unwrap(),
-                    ),
-                ),
+        <span class="kw">let </span>client = <span class="self">self</span>.client.clone();
+        <span class="kw">let </span>module = module.to_string();
+        <span class="kw">let </span>method = method.to_string();
+        <span class="kw">let </span>cb = cb.clone();
+
+        wasm_bindgen_futures::spawn_local(<span class="kw">async move </span>{
+            <span class="kw">let </span>future = <span class="kw">async </span>{
+                <span class="kw">let </span><span class="kw-2">mut </span>stream = <span class="macro">pin!</span>(<span class="self">Self</span>::rpc_inner(<span class="kw-2">&amp;</span>client, <span class="kw-2">&amp;</span>module, <span class="kw-2">&amp;</span>method, payload));
+
+                <span class="kw">while let </span><span class="prelude-val">Some</span>(item) = stream.next().<span class="kw">await </span>{
+                    <span class="kw">let </span>this = JsValue::null();
+                    <span class="kw">let _ </span>= <span class="kw">match </span>item {
+                        <span class="prelude-val">Ok</span>(item) =&gt; cb.call1(
+                            <span class="kw-2">&amp;</span>this,
+                            <span class="kw-2">&amp;</span>JsValue::from_str(
+                                <span class="kw-2">&amp;</span>serde_json::to_string(<span class="kw-2">&amp;</span><span class="macro">json!</span>({<span class="string">"data"</span>: item})).unwrap(),
+                            ),
+                        ),
+                        <span class="prelude-val">Err</span>(err) =&gt; cb.call1(
+                            <span class="kw-2">&amp;</span>this,
+                            <span class="kw-2">&amp;</span>JsValue::from_str(
+                                <span class="kw-2">&amp;</span>serde_json::to_string(<span class="kw-2">&amp;</span><span class="macro">json!</span>({<span class="string">"error"</span>: err.to_string()})).unwrap(),
+                            ),
+                        ),
+                    };
+                }
+
+                <span class="comment">// Send the end message
+                </span><span class="kw">let _ </span>= cb.call1(
+                    <span class="kw-2">&amp;</span>JsValue::null(),
+                    <span class="kw-2">&amp;</span>JsValue::from_str(<span class="kw-2">&amp;</span>serde_json::to_string(<span class="kw-2">&amp;</span><span class="macro">json!</span>({<span class="string">"end"</span>: null})).unwrap()),
+                );
             };
-        }
-    }
 
+            <span class="kw">let </span>abortable_future = Abortable::new(future, abort_registration);
+            <span class="kw">let _ </span>= abortable_future.<span class="kw">await</span>;
+        });
+
+        rpc_handle
+    }
     <span class="kw">fn </span>rpc_inner&lt;<span class="lifetime">'a</span>&gt;(
-        <span class="kw-2">&amp;</span><span class="lifetime">'a </span><span class="self">self</span>,
+        client: <span class="kw-2">&amp;</span><span class="lifetime">'a </span>ClientHandleArc,
         module: <span class="kw-2">&amp;</span><span class="lifetime">'a </span>str,
         method: <span class="kw-2">&amp;</span><span class="lifetime">'a </span>str,
         payload: String,
@@ -285,14 +371,13 @@
             <span class="kw">let </span>payload: serde_json::Value = serde_json::from_str(<span class="kw-2">&amp;</span>payload)<span class="question-mark">?</span>;
             <span class="kw">match </span>module {
                 <span class="string">"" </span>=&gt; {
-                    <span class="kw">let </span><span class="kw-2">mut </span>stream = <span class="self">self</span>.client.handle_global_rpc(method.to_owned(), payload);
+                    <span class="kw">let </span><span class="kw-2">mut </span>stream = client.handle_global_rpc(method.to_owned(), payload);
                     <span class="kw">while let </span><span class="prelude-val">Some</span>(item) = stream.next().<span class="kw">await </span>{
                         <span class="kw">yield </span>item<span class="question-mark">?</span>;
                     }
                 }
                 <span class="string">"ln" </span>=&gt; {
-                    <span class="kw">let </span>ln = <span class="self">self
-                        </span>.client
+                    <span class="kw">let </span>ln = client
                         .get_first_module::&lt;LightningClientModule&gt;()<span class="question-mark">?
                         </span>.inner();
                     <span class="kw">let </span><span class="kw-2">mut </span>stream = ln.handle_rpc(method.to_owned(), payload).<span class="kw">await</span>;
@@ -301,8 +386,7 @@
                     }
                 }
                 <span class="string">"mint" </span>=&gt; {
-                    <span class="kw">let </span>mint = <span class="self">self
-                        </span>.client
+                    <span class="kw">let </span>mint = client
                         .get_first_module::&lt;fedimint_mint_client::MintClientModule&gt;()<span class="question-mark">?
                         </span>.inner();
                     <span class="kw">let </span><span class="kw-2">mut </span>stream = mint.handle_rpc(method.to_owned(), payload).<span class="kw">await</span>;
