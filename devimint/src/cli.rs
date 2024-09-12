@@ -253,7 +253,7 @@ pub async fn handle_command(cmd: Cmd, common_args: CommonArgs) -> Result<()> {
                     let gw_pegin_amount = 1_000_000;
                     let client_pegin_amount = 1_000_000;
                     if !skip_setup {
-                        let ((), _, _, _) = tokio::try_join!(
+                        let (operation_id, (), (), ()) = tokio::try_join!(
                             async {
                                 let (address, operation_id) =
                                     dev_fed.internal_client().await?.get_deposit_addr().await?;
@@ -262,12 +262,7 @@ pub async fn handle_command(cmd: Cmd, common_args: CommonArgs) -> Result<()> {
                                     .await?
                                     .send_to(address, client_pegin_amount)
                                     .await?;
-                                dev_fed.bitcoind().await?.mine_blocks_no_wait(11).await?;
-                                dev_fed
-                                    .internal_client()
-                                    .await?
-                                    .await_deposit(&operation_id)
-                                    .await
+                                Ok(operation_id)
                             },
                             async {
                                 let pegin_addr = dev_fed
@@ -279,8 +274,8 @@ pub async fn handle_command(cmd: Cmd, common_args: CommonArgs) -> Result<()> {
                                     .bitcoind()
                                     .await?
                                     .send_to(pegin_addr, gw_pegin_amount)
-                                    .await?;
-                                dev_fed.bitcoind().await?.mine_blocks_no_wait(11).await
+                                    .await
+                                    .map(|_| ())
                             },
                             async {
                                 let pegin_addr = dev_fed
@@ -292,8 +287,8 @@ pub async fn handle_command(cmd: Cmd, common_args: CommonArgs) -> Result<()> {
                                     .bitcoind()
                                     .await?
                                     .send_to(pegin_addr, gw_pegin_amount)
-                                    .await?;
-                                dev_fed.bitcoind().await?.mine_blocks_no_wait(11).await
+                                    .await
+                                    .map(|_| ())
                             },
                             async {
                                 if let Some(gw_ldk) = dev_fed.gw_ldk_registered().await? {
@@ -306,12 +301,20 @@ pub async fn handle_command(cmd: Cmd, common_args: CommonArgs) -> Result<()> {
                                         .bitcoind()
                                         .await?
                                         .send_to(pegin_addr, gw_pegin_amount)
-                                        .await?;
+                                        .await
+                                        .map(|_| ())
+                                } else {
+                                    Ok(())
                                 }
-
-                                dev_fed.bitcoind().await?.mine_blocks_no_wait(11).await
                             },
                         )?;
+
+                        dev_fed.bitcoind().await?.mine_blocks_no_wait(11).await?;
+                        dev_fed
+                            .internal_client()
+                            .await?
+                            .await_deposit(&operation_id)
+                            .await?;
 
                         info!(target: LOG_DEVIMINT,
                         elapsed_ms = %pegin_start_time.elapsed().as_millis(),
