@@ -250,9 +250,10 @@ pub async fn handle_command(cmd: Cmd, common_args: CommonArgs) -> Result<()> {
                     let pegin_start_time = Instant::now();
                     debug!(target: LOG_DEVIMINT, "Peging in client and gateways");
 
-                    let gw_pegin_amount = 1_000_000;
-                    let client_pegin_amount = 1_000_000;
                     if !skip_setup {
+                        const GW_PEGIN_AMOUNT: u64 = 1_000_000;
+                        const CLIENT_PEGIN_AMOUNT: u64 = 1_000_000;
+
                         let (operation_id, (), (), ()) = tokio::try_join!(
                             async {
                                 let (address, operation_id) =
@@ -260,7 +261,7 @@ pub async fn handle_command(cmd: Cmd, common_args: CommonArgs) -> Result<()> {
                                 dev_fed
                                     .bitcoind()
                                     .await?
-                                    .send_to(address, client_pegin_amount)
+                                    .send_to(address, CLIENT_PEGIN_AMOUNT)
                                     .await?;
                                 Ok(operation_id)
                             },
@@ -273,7 +274,7 @@ pub async fn handle_command(cmd: Cmd, common_args: CommonArgs) -> Result<()> {
                                 dev_fed
                                     .bitcoind()
                                     .await?
-                                    .send_to(pegin_addr, gw_pegin_amount)
+                                    .send_to(pegin_addr, GW_PEGIN_AMOUNT)
                                     .await
                                     .map(|_| ())
                             },
@@ -286,7 +287,7 @@ pub async fn handle_command(cmd: Cmd, common_args: CommonArgs) -> Result<()> {
                                 dev_fed
                                     .bitcoind()
                                     .await?
-                                    .send_to(pegin_addr, gw_pegin_amount)
+                                    .send_to(pegin_addr, GW_PEGIN_AMOUNT)
                                     .await
                                     .map(|_| ())
                             },
@@ -300,7 +301,7 @@ pub async fn handle_command(cmd: Cmd, common_args: CommonArgs) -> Result<()> {
                                     dev_fed
                                         .bitcoind()
                                         .await?
-                                        .send_to(pegin_addr, gw_pegin_amount)
+                                        .send_to(pegin_addr, GW_PEGIN_AMOUNT)
                                         .await
                                         .map(|_| ())
                                 } else {
