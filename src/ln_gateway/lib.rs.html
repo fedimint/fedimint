@@ -2054,17 +2054,7 @@
 <a href="#2053" id="2053">2053</a>
 <a href="#2054" id="2054">2054</a>
 <a href="#2055" id="2055">2055</a>
-<a href="#2056" id="2056">2056</a>
-<a href="#2057" id="2057">2057</a>
-<a href="#2058" id="2058">2058</a>
-<a href="#2059" id="2059">2059</a>
-<a href="#2060" id="2060">2060</a>
-<a href="#2061" id="2061">2061</a>
-<a href="#2062" id="2062">2062</a>
-<a href="#2063" id="2063">2063</a>
-<a href="#2064" id="2064">2064</a>
-<a href="#2065" id="2065">2065</a>
-<a href="#2066" id="2066">2066</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#2056" id="2056">2056</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::cast_possible_wrap)]
 #![allow(clippy::cast_sign_loss)]
@@ -2544,7 +2534,7 @@
     </span><span class="kw">async fn </span>route_htlcs&lt;<span class="lifetime">'a</span>&gt;(
         <span class="kw-2">&amp;</span><span class="lifetime">'a </span><span class="self">self</span>,
         handle: <span class="kw-2">&amp;</span>TaskHandle,
-        stream: RouteHtlcStream&lt;<span class="lifetime">'a</span>&gt;,
+        <span class="kw-2">mut </span>stream: RouteHtlcStream&lt;<span class="lifetime">'a</span>&gt;,
         ln_client: Arc&lt;<span class="kw">dyn </span>ILnRpcClient&gt;,
     ) -&gt; ReceivePaymentStreamAction {
         <span class="kw">let </span>(lightning_public_key, lightning_alias, lightning_network) =
@@ -2603,10 +2593,34 @@
             .<span class="kw">await</span>;
         <span class="macro">info!</span>(<span class="string">"Gateway is running"</span>);
 
-        <span class="comment">// Blocks until the connection to the lightning node breaks or we receive the
-        // shutdown signal
+        <span class="comment">// Runs until the connection to the lightning node breaks or we receive the
+        // shutdown signal.
         </span><span class="kw">if </span>handle
-            .cancel_on_shutdown(<span class="self">self</span>.handle_htlc_stream(stream, handle.clone()))
+            .cancel_on_shutdown(<span class="kw">async move </span>{
+                <span class="kw">loop </span>{
+                    <span class="kw">let </span>state = <span class="self">self</span>.get_state().<span class="kw">await</span>;
+                    <span class="kw">let </span>GatewayState::Running { lightning_context } = state <span class="kw">else </span>{
+                        <span class="macro">warn!</span>(
+                            <span class="question-mark">?</span>state,
+                            <span class="string">"Gateway isn't in a running state, cannot handle incoming payments."
+                        </span>);
+                        <span class="kw">break</span>;
+                    };
+
+                    <span class="kw">let </span>htlc_request = <span class="kw">match </span>stream.next().<span class="kw">await </span>{
+                        <span class="prelude-val">Some</span>(<span class="prelude-val">Ok</span>(htlc_request)) =&gt; htlc_request,
+                        other =&gt; {
+                            <span class="macro">warn!</span>(
+                                <span class="question-mark">?</span>other,
+                                <span class="string">"Unexpected response from incoming lightning payment stream. Exiting from loop..."
+                            </span>);
+                            <span class="kw">break</span>;
+                        }
+                    };
+
+                    <span class="self">self</span>.handle_htlc(htlc_request, <span class="kw-2">&amp;</span>lightning_context).<span class="kw">await</span>;
+                }
+            })
             .<span class="kw">await
             </span>.is_ok()
         {
@@ -2615,40 +2629,6 @@
         } <span class="kw">else </span>{
             <span class="macro">info!</span>(<span class="string">"Received shutdown signal"</span>);
             ReceivePaymentStreamAction::NoRetry
-        }
-    }
-
-    <span class="doccomment">/// Waits for intercepted HTLCs to be sent over the `stream`.
-    /// Spawns a state machine for each HTLC to either forward, cancel, or
-    /// complete the HTLC depending on if the gateway is able to acquire the
-    /// preimage from the federation.
-    </span><span class="kw">pub async fn </span>handle_htlc_stream(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="kw-2">mut </span>stream: RouteHtlcStream&lt;<span class="lifetime">'_</span>&gt;, handle: TaskHandle) {
-        <span class="kw">loop </span>{
-            <span class="kw">if </span>handle.is_shutting_down() {
-                <span class="kw">break</span>;
-            }
-
-            <span class="kw">let </span>state = <span class="self">self</span>.get_state().<span class="kw">await</span>;
-            <span class="kw">let </span>GatewayState::Running { lightning_context } = state <span class="kw">else </span>{
-                <span class="macro">warn!</span>(
-                    <span class="question-mark">?</span>state,
-                    <span class="string">"Gateway isn't in a running state, cannot handle incoming payments."
-                </span>);
-                <span class="kw">break</span>;
-            };
-
-            <span class="kw">let </span>htlc_request = <span class="kw">match </span>stream.next().<span class="kw">await </span>{
-                <span class="prelude-val">Some</span>(<span class="prelude-val">Ok</span>(htlc_request)) =&gt; htlc_request,
-                other =&gt; {
-                    <span class="macro">warn!</span>(
-                        <span class="question-mark">?</span>other,
-                        <span class="string">"Unexpected response from HTLC stream, exiting from loop..."
-                    </span>);
-                    <span class="kw">break</span>;
-                }
-            };
-
-            <span class="self">self</span>.handle_htlc(htlc_request, <span class="kw-2">&amp;</span>lightning_context).<span class="kw">await</span>;
         }
     }
 
