@@ -5,6 +5,7 @@
 pub mod envs;
 
 use std::fmt;
+use std::ops::Range;
 use std::path::Path;
 use std::str::FromStr;
 
@@ -234,6 +235,42 @@ impl<'a> IDatabaseTransactionOpsCore for RocksDbTransaction<'a> {
         }))
     }
 
+    async fn raw_find_by_range(&mut self, range: Range<&[u8]>) -> Result<PrefixStream<'_>> {
+        // turn an `iter` into a `Stream` where every `next` is ran inside
+        // `block_in_place` to offload the blocking calls
+        fn convert_to_async_stream<'i, I>(iter: I) -> impl futures::Stream<Item = I::Item>
+        where
+            I: Iterator + Send + 'i,
+            I::Item: Send,
+        {
+            stream::unfold(iter, |mut iter| async {
+                fedimint_core::runtime::block_in_place(|| {
+                    let item = iter.next();
+                    item.map(|item| (item, iter))
+                })
+            })
+        }
+
+        Ok(fedimint_core::runtime::block_in_place(|| {
+            let range = Range {
+                start: range.start.to_vec(),
+                end: range.end.to_vec(),
+            };
+            let mut options = rocksdb::ReadOptions::default();
+            options.set_iterate_range(range.clone());
+            let iter = self.0.snapshot().iterator_opt(
+                rocksdb::IteratorMode::From(&range.start, rocksdb::Direction::Forward),
+                options,
+            );
+            let rocksdb_iter = iter.map_while(move |res| {
+                let (key_bytes, value_bytes) = res.expect("Error reading from RocksDb");
+                (key_bytes.as_ref() < range.end.as_slice())
+                    .then_some((key_bytes.to_vec(), value_bytes.to_vec()))
+            });
+            Box::pin(convert_to_async_stream(rocksdb_iter))
+        }))
+    }
+
     async fn raw_remove_by_prefix(&mut self, key_prefix: &[u8]) -> anyhow::Result<()> {
         fedimint_core::runtime::block_in_place(|| {
             // Note: delete_range is not supported in Transactions :/
@@ -327,6 +364,42 @@ impl<'a> IDatabaseTransactionOpsCore for RocksDbReadOnlyTransaction<'a> {
 
     async fn raw_remove_entry(&mut self, _key: &[u8]) -> Result<Option<Vec<u8>>> {
         panic!("Cannot remove from a read only transaction");
+    }
+
+    async fn raw_find_by_range(&mut self, range: Range<&[u8]>) -> Result<PrefixStream<'_>> {
+        // turn an `iter` into a `Stream` where every `next` is ran inside
+        // `block_in_place` to offload the blocking calls
+        fn convert_to_async_stream<'i, I>(iter: I) -> impl futures::Stream<Item = I::Item>
+        where
+            I: Iterator + Send + 'i,
+            I::Item: Send,
+        {
+            stream::unfold(iter, |mut iter| async {
+                fedimint_core::runtime::block_in_place(|| {
+                    let item = iter.next();
+                    item.map(|item| (item, iter))
+                })
+            })
+        }
+
+        Ok(fedimint_core::runtime::block_in_place(|| {
+            let range = Range {
+                start: range.start.to_vec(),
+                end: range.end.to_vec(),
+            };
+            let mut options = rocksdb::ReadOptions::default();
+            options.set_iterate_range(range.clone());
+            let iter = self.0.snapshot().iterator_opt(
+                rocksdb::IteratorMode::From(&range.start, rocksdb::Direction::Forward),
+                options,
+            );
+            let rocksdb_iter = iter.map_while(move |res| {
+                let (key_bytes, value_bytes) = res.expect("Error reading from RocksDb");
+                (key_bytes.as_ref() < range.end.as_slice())
+                    .then_some((key_bytes.to_vec(), value_bytes.to_vec()))
+            });
+            Box::pin(convert_to_async_stream(rocksdb_iter))
+        }))
     }
 
     async fn raw_find_by_prefix(&mut self, key_prefix: &[u8]) -> Result<PrefixStream<'_>> {
@@ -465,6 +538,12 @@ mod fedimint_rocksdb_tests {
             "fcb-rocksdb-test-prevent-dirty-reads",
         ))
         .await;
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_dbtx_find_by_range() {
+        fedimint_core::db::verify_find_by_range(open_temp_db("fcb-rocksdb-test-find-by-range"))
+            .await;
     }
 
     #[tokio::test(flavor = "multi_thread")]
