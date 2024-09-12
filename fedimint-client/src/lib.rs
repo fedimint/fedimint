@@ -959,7 +959,7 @@ impl Client {
         for input in &builder.inputs {
             let module = self.get_module(input.input.module_instance_id());
 
-            let item_fee = module.input_fee(&input.input).expect(
+            let item_fee = module.input_fee(input.amount, &input.input).expect(
                 "We only build transactions with input versions that are supported by the module",
             );
 

@@ -361,12 +361,21 @@ impl ClientModule for LightningClientModule {
         }
     }
 
-    fn input_fee(&self, _input: &<Self::Common as ModuleCommon>::Input) -> Option<Amount> {
-        Some(self.cfg.fee_consensus.spend_contract)
+    fn input_fee(
+        &self,
+        amount: Amount,
+        _input: &<Self::Common as ModuleCommon>::Input,
+    ) -> Option<Amount> {
+        Some(self.cfg.fee_consensus.fee(amount))
     }
 
-    fn output_fee(&self, _output: &<Self::Common as ModuleCommon>::Output) -> Option<Amount> {
-        Some(self.cfg.fee_consensus.create_contract)
+    fn output_fee(&self, output: &<Self::Common as ModuleCommon>::Output) -> Option<Amount> {
+        let amount = match output.ensure_v0_ref().ok()? {
+            LightningOutputV0::Outgoing(contract) => contract.amount,
+            LightningOutputV0::Incoming(contract) => contract.commitment.amount,
+        };
+
+        Some(self.cfg.fee_consensus.fee(amount))
     }
 
     #[cfg(feature = "cli")]

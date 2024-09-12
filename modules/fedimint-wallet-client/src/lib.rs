@@ -449,7 +449,11 @@ impl ClientModule for WalletClientModule {
         ))
     }
 
-    fn input_fee(&self, _input: &<Self::Common as ModuleCommon>::Input) -> Option<Amount> {
+    fn input_fee(
+        &self,
+        _amount: Amount,
+        _input: &<Self::Common as ModuleCommon>::Input,
+    ) -> Option<Amount> {
         Some(self.cfg().fee_consensus.peg_in_abs)
     }
 

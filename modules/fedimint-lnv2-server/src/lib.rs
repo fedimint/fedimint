@@ -442,7 +442,7 @@ impl ServerModule for Lightning {
         Ok(InputMeta {
             amount: TransactionItemAmount {
                 amount,
-                fee: self.cfg.consensus.fee_consensus.spend_contract,
+                fee: self.cfg.consensus.fee_consensus.fee(amount),
             },
             pub_key,
         })
@@ -502,12 +502,14 @@ impl ServerModule for Lightning {
             panic!("Output Outcome for {out_point:?} already exists");
         }
 
+        let amount = match output {
+            LightningOutputV0::Outgoing(contract) => contract.amount,
+            LightningOutputV0::Incoming(contract) => contract.commitment.amount,
+        };
+
         Ok(TransactionItemAmount {
-            amount: match output {
-                LightningOutputV0::Outgoing(contract) => contract.amount,
-                LightningOutputV0::Incoming(contract) => contract.commitment.amount,
-            },
-            fee: self.cfg.consensus.fee_consensus.create_contract,
+            amount,
+            fee: self.cfg.consensus.fee_consensus.fee(amount),
         })
     }
 

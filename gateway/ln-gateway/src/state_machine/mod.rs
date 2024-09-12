@@ -216,6 +216,7 @@ impl ClientModule for GatewayClientModule {
 
     fn input_fee(
         &self,
+        _amount: Amount,
         _input: &<Self::Common as fedimint_core::module::ModuleCommon>::Input,
     ) -> Option<Amount> {
         Some(self.cfg.fee_consensus.contract_input)
