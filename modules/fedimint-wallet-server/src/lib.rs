@@ -433,9 +433,6 @@ impl ServerModule for Wallet {
 
                 let new_consensus_block_count = self.consensus_block_count(dbtx).await;
 
-                self.shutdown_if_bitcoin_backend_is_stale(dbtx, new_consensus_block_count)
-                    .await;
-
                 debug!(
                     ?peer,
                     ?current_vote,
@@ -1022,6 +1019,10 @@ impl Wallet {
             "New consensus height, syncing up",
         );
 
+        // Before we can safely call our bitcoin backend to process the new consensus
+        // height, we need to ensure we observed enough confirmations
+        self.wait_for_finality_confs_or_shutdown(new_height).await;
+
         for height in old_height..new_height {
             if height % 100 == 0 {
                 debug!("Caught up to block {height}");
@@ -1318,31 +1319,36 @@ impl Wallet {
         }
     }
 
-    /// If our bitcoin backend is stale, shutdown fedimintd. This is necessary
-    /// since we cannot participate in consensus if we're unable to observe the
-    /// chain.
-    ///
-    /// Our bitcoin backend is considered stale if it is more than 10 blocks
-    /// behind consensus tip (consensus block count + finality delay).
-    async fn shutdown_if_bitcoin_backend_is_stale<'b>(
-        &self,
-        dbtx: &mut DatabaseTransaction<'b>,
-        new_consensus_block_count: u32,
-    ) {
-        let stale_threshold = 10;
-        let finality_delay = self.cfg.consensus.finality_delay;
-        let consensus_tip_block_count = new_consensus_block_count + finality_delay;
-        let stale_block_count = consensus_tip_block_count - stale_threshold;
-
-        let our_block_count = match self.get_block_count() {
-            Ok(count) => count,
-            Err(_) => dbtx
-                .get_value(&BlockCountVoteKey(self.our_peer_id))
-                .await
-                .map_or(0, |count| count + finality_delay),
+    /// Returns once our bitcoin backend observes finality delay confirmations
+    /// of the consensus block count. If we don't observe enough confirmations
+    /// after one hour, we gracefully shutdown fedimintd. This is necessary
+    /// since we can no longer participate in consensus if our bitcoin backend
+    /// is unable to observe the same chain tip as our peers.
+    async fn wait_for_finality_confs_or_shutdown(&self, consensus_block_count: u32) {
+        let backoff = if is_running_in_test_env() {
+            // every 100ms for 60s
+            backoff_util::custom_constant_backoff(Duration::from_millis(100), Some(10 * 60))
+        } else {
+            // every 10s for 1 hour
+            backoff_util::custom_constant_backoff(Duration::from_secs(10), Some(6 * 60))
         };
 
-        if our_block_count < stale_block_count {
+        let wait_for_finality_confs = || async {
+            let our_chain_tip_block_count = self.get_block_count()?;
+            let consensus_chain_tip_block_count =
+                consensus_block_count + self.cfg.consensus.finality_delay;
+
+            if consensus_chain_tip_block_count <= our_chain_tip_block_count {
+                Ok(())
+            } else {
+                Err(anyhow::anyhow!("not enough confirmations"))
+            }
+        };
+
+        if retry("wait_for_finality_confs", backoff, wait_for_finality_confs)
+            .await
+            .is_err()
+        {
             self.graceful_shutdown().await;
         }
     }

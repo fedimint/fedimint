@@ -1,7 +1,7 @@
 use std::time::Duration;
 
-pub use backon::{Backoff, FibonacciBackoff};
-use backon::{BackoffBuilder, FibonacciBuilder};
+pub use backon::{Backoff, ConstantBackoff, FibonacciBackoff};
+use backon::{BackoffBuilder, ConstantBuilder, FibonacciBuilder};
 
 /// Backoff strategy for background tasks.
 ///
@@ -40,5 +40,12 @@ pub fn custom_backoff(
         .with_min_delay(min_delay)
         .with_max_delay(max_delay)
         .with_max_times(max_retries_or.unwrap_or(usize::MAX))
+        .build()
+}
+
+pub fn custom_constant_backoff(delay: Duration, max_times: Option<usize>) -> ConstantBackoff {
+    ConstantBuilder::default()
+        .with_delay(delay)
+        .with_max_times(max_times.unwrap_or(usize::MAX))
         .build()
 }
