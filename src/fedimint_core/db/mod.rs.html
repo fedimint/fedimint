@@ -3986,7 +3986,7 @@
     <span class="kw">async fn </span>raw_remove_entry(<span class="kw-2">&amp;mut </span><span class="self">self</span>, key: <span class="kw-2">&amp;</span>[u8]) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;Vec&lt;u8&gt;&gt;&gt;;
 
     <span class="doccomment">/// Returns an stream of key-value pairs with keys that start with
-    /// `key_prefix`. No particular ordering is guaranteed.
+    /// `key_prefix`, sorted by key.
     </span><span class="kw">async fn </span>raw_find_by_prefix(<span class="kw-2">&amp;mut </span><span class="self">self</span>, key_prefix: <span class="kw-2">&amp;</span>[u8]) -&gt; <span class="prelude-ty">Result</span>&lt;PrefixStream&lt;<span class="lifetime">'_</span>&gt;&gt;;
 
     <span class="doccomment">/// Same as [`Self::raw_find_by_prefix`] but the order is descending by key.
@@ -5525,12 +5525,12 @@
         <span class="comment">// Verify finding by prefix returns the correct set of key pairs
         </span><span class="kw">let </span><span class="kw-2">mut </span>dbtx = db.begin_transaction().<span class="kw">await</span>;
 
-        <span class="kw">let </span><span class="kw-2">mut </span>returned_keys = dbtx
+        <span class="kw">let </span>returned_keys = dbtx
             .find_by_prefix(<span class="kw-2">&amp;</span>DbPrefixTestPrefix)
             .<span class="kw">await
             </span>.collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;()
             .<span class="kw">await</span>;
-        returned_keys.sort();
+
         <span class="kw">let </span>expected = <span class="macro">vec!</span>[(TestKey(<span class="number">54</span>), TestVal(<span class="number">8888</span>)), (TestKey(<span class="number">55</span>), TestVal(<span class="number">9999</span>))];
         <span class="macro">assert_eq!</span>(returned_keys, expected);
 
@@ -5543,12 +5543,12 @@
         reversed_expected.reverse();
         <span class="macro">assert_eq!</span>(reversed, reversed_expected);
 
-        <span class="kw">let </span><span class="kw-2">mut </span>returned_keys = dbtx
+        <span class="kw">let </span>returned_keys = dbtx
             .find_by_prefix(<span class="kw-2">&amp;</span>AltDbPrefixTestPrefix)
             .<span class="kw">await
             </span>.collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;()
             .<span class="kw">await</span>;
-        returned_keys.sort();
+
         <span class="kw">let </span>expected = <span class="macro">vec!</span>[
             (AltTestKey(<span class="number">54</span>), TestVal(<span class="number">6666</span>)),
             (AltTestKey(<span class="number">55</span>), TestVal(<span class="number">7777</span>)),
