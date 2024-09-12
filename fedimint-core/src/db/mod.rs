@@ -797,7 +797,7 @@ pub trait IDatabaseTransactionOpsCore: MaybeSend {
     async fn raw_remove_entry(&mut self, key: &[u8]) -> Result<Option<Vec<u8>>>;
 
     /// Returns an stream of key-value pairs with keys that start with
-    /// `key_prefix`. No particular ordering is guaranteed.
+    /// `key_prefix`, sorted by key.
     async fn raw_find_by_prefix(&mut self, key_prefix: &[u8]) -> Result<PrefixStream<'_>>;
 
     /// Same as [`Self::raw_find_by_prefix`] but the order is descending by key.
@@ -2336,12 +2336,12 @@ mod test_utils {
         // Verify finding by prefix returns the correct set of key pairs
         let mut dbtx = db.begin_transaction().await;
 
-        let mut returned_keys = dbtx
+        let returned_keys = dbtx
             .find_by_prefix(&DbPrefixTestPrefix)
             .await
             .collect::<Vec<_>>()
             .await;
-        returned_keys.sort();
+
         let expected = vec![(TestKey(54), TestVal(8888)), (TestKey(55), TestVal(9999))];
         assert_eq!(returned_keys, expected);
 
@@ -2354,12 +2354,12 @@ mod test_utils {
         reversed_expected.reverse();
         assert_eq!(reversed, reversed_expected);
 
-        let mut returned_keys = dbtx
+        let returned_keys = dbtx
             .find_by_prefix(&AltDbPrefixTestPrefix)
             .await
             .collect::<Vec<_>>()
             .await;
-        returned_keys.sort();
+
         let expected = vec![
             (AltTestKey(54), TestVal(6666)),
             (AltTestKey(55), TestVal(7777)),
