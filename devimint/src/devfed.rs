@@ -10,6 +10,7 @@ use tracing::debug;
 
 use crate::external::{
     open_channel, open_channels_between_gateways, Bitcoind, Electrs, Esplora, Lightningd, Lnd,
+    NamedGateway,
 };
 use crate::federation::{Client, Federation};
 use crate::gatewayd::Gatewayd;
@@ -272,7 +273,7 @@ impl DevJitFed {
                     let gw_cln = gw_cln.get_try().await?.deref();
                     let gw_lnd = gw_lnd.get_try().await?.deref();
 
-                    let gateways: &[(&Gatewayd, &str)] =
+                    let gateways: &[NamedGateway<'_>] =
                         if let Some(gw_ldk) = gw_ldk.get_try().await?.deref() {
                             &[(gw_cln, "CLN"), (gw_lnd, "LND"), (gw_ldk, "LDK")]
                         } else {
