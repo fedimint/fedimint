@@ -1166,7 +1166,9 @@
 <a href="#1165" id="1165">1165</a>
 <a href="#1166" id="1166">1166</a>
 <a href="#1167" id="1167">1167</a>
-<a href="#1168" id="1168">1168</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::ops::ControlFlow;
+<a href="#1168" id="1168">1168</a>
+<a href="#1169" id="1169">1169</a>
+<a href="#1170" id="1170">1170</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::ops::ControlFlow;
 <span class="kw">use </span>std::path::Path;
 <span class="kw">use </span>std::str::FromStr;
 <span class="kw">use </span>std::sync::Arc;
@@ -2030,10 +2032,12 @@
     <span class="prelude-val">Ok</span>(())
 }
 
+<span class="kw">pub type </span>NamedGateway&lt;<span class="lifetime">'a</span>&gt; = (<span class="kw-2">&amp;</span><span class="lifetime">'a </span>Gatewayd, <span class="kw-2">&amp;</span><span class="lifetime">'a </span>str);
+
 <span class="attr">#[allow(clippy::similar_names)]
 </span><span class="kw">pub async fn </span>open_channels_between_gateways(
     bitcoind: <span class="kw-2">&amp;</span>Bitcoind,
-    gateways: <span class="kw-2">&amp;</span>[(<span class="kw-2">&amp;</span>Gatewayd, <span class="kw-2">&amp;</span>str)],
+    gateways: <span class="kw-2">&amp;</span>[NamedGateway&lt;<span class="lifetime">'_</span>&gt;],
 ) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
     <span class="macro">debug!</span>(target: LOG_DEVIMINT, <span class="string">"Syncing gateway lightning nodes to chain tip..."</span>);
     futures::future::try_join_all(
@@ -2064,7 +2068,7 @@
     // Since the first gateway within each pair initiates the channel open,
     // order within each pair needs to be enforced so that each Lightning node opens
     // 1 channel.
-    </span><span class="kw">let </span>gateway_pairs: Vec&lt;(<span class="kw-2">&amp;</span>(<span class="kw-2">&amp;</span>Gatewayd, <span class="kw-2">&amp;</span>str), <span class="kw-2">&amp;</span>(<span class="kw-2">&amp;</span>Gatewayd, <span class="kw-2">&amp;</span>str))&gt; = <span class="kw">if </span>gateways.len() == <span class="number">2 </span>{
+    </span><span class="kw">let </span>gateway_pairs: Vec&lt;(<span class="kw-2">&amp;</span>NamedGateway, <span class="kw-2">&amp;</span>NamedGateway)&gt; = <span class="kw">if </span>gateways.len() == <span class="number">2 </span>{
         gateways.iter().tuple_windows::&lt;(<span class="kw">_</span>, <span class="kw">_</span>)&gt;().collect()
     } <span class="kw">else </span>{
         gateways.iter().circular_tuple_windows::&lt;(<span class="kw">_</span>, <span class="kw">_</span>)&gt;().collect()

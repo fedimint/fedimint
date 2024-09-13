@@ -436,7 +436,8 @@
 <a href="#435" id="435">435</a>
 <a href="#436" id="436">436</a>
 <a href="#437" id="437">437</a>
-<a href="#438" id="438">438</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::ops::Deref <span class="kw">as _</span>;
+<a href="#438" id="438">438</a>
+<a href="#439" id="439">439</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::ops::Deref <span class="kw">as _</span>;
 <span class="kw">use </span>std::sync::Arc;
 
 <span class="kw">use </span>anyhow::Result;
@@ -448,6 +449,7 @@
 
 <span class="kw">use </span><span class="kw">crate</span>::external::{
     open_channel, open_channels_between_gateways, Bitcoind, Electrs, Esplora, Lightningd, Lnd,
+    NamedGateway,
 };
 <span class="kw">use </span><span class="kw">crate</span>::federation::{Client, Federation};
 <span class="kw">use </span><span class="kw">crate</span>::gatewayd::Gatewayd;
@@ -710,7 +712,7 @@
                     <span class="kw">let </span>gw_cln = gw_cln.get_try().<span class="kw">await</span><span class="question-mark">?</span>.deref();
                     <span class="kw">let </span>gw_lnd = gw_lnd.get_try().<span class="kw">await</span><span class="question-mark">?</span>.deref();
 
-                    <span class="kw">let </span>gateways: <span class="kw-2">&amp;</span>[(<span class="kw-2">&amp;</span>Gatewayd, <span class="kw-2">&amp;</span>str)] =
+                    <span class="kw">let </span>gateways: <span class="kw-2">&amp;</span>[NamedGateway&lt;<span class="lifetime">'_</span>&gt;] =
                         <span class="kw">if let </span><span class="prelude-val">Some</span>(gw_ldk) = gw_ldk.get_try().<span class="kw">await</span><span class="question-mark">?</span>.deref() {
                             <span class="kw-2">&amp;</span>[(gw_cln, <span class="string">"CLN"</span>), (gw_lnd, <span class="string">"LND"</span>), (gw_ldk, <span class="string">"LDK"</span>)]
                         } <span class="kw">else </span>{
