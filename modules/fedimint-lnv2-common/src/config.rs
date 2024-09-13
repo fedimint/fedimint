@@ -64,6 +64,34 @@ pub struct LightningConfigPrivate {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable, Decodable)]
+pub struct FeeConsensus {
+    pub base: Amount,
+    pub parts_per_million: u64,
+}
+
+impl FeeConsensus {
+    pub fn fee(&self, amount: Amount) -> Amount {
+        Amount::from_msats(self.fee_msats(amount.msats))
+    }
+
+    fn fee_msats(&self, msats: u64) -> u64 {
+        self.base.msats
+            + msats
+                .saturating_mul(self.parts_per_million)
+                .saturating_div(1_000_000)
+    }
+}
+
+impl Default for FeeConsensus {
+    fn default() -> Self {
+        Self {
+            base: Amount::from_sats(1),
+            parts_per_million: 1_000,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable, Decodable)]
 pub struct LightningClientConfig {
     pub tpe_agg_pk: AggregatePublicKey,
     pub tpe_pks: BTreeMap<PeerId, PublicKeyShare>,
@@ -93,21 +121,6 @@ plugin_types_trait_impl_config!(
     LightningConfigConsensus,
     LightningClientConfig
 );
-
-#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable, Decodable)]
-pub struct FeeConsensus {
-    pub spend_contract: Amount,
-    pub create_contract: Amount,
-}
-
-impl Default for FeeConsensus {
-    fn default() -> Self {
-        Self {
-            spend_contract: Amount::from_sats(1),
-            create_contract: Amount::from_sats(1),
-        }
-    }
-}
 
 #[allow(dead_code)]
 fn migrate_config_consensus(
@@ -152,4 +165,27 @@ fn migrate_config_local(
     LightningConfigLocal {
         bitcoin_rpc: config.bitcoin_rpc,
     }
+}
+
+#[test]
+fn test_fee_consensus() {
+    assert_eq!(
+        FeeConsensus::default().fee(Amount::from_msats(999)),
+        Amount::from_sats(1)
+    );
+
+    assert_eq!(
+        FeeConsensus::default().fee(Amount::from_sats(1)),
+        Amount::from_msats(1001)
+    );
+
+    assert_eq!(
+        FeeConsensus::default().fee(Amount::from_sats(1000)),
+        Amount::from_sats(2)
+    );
+
+    assert_eq!(
+        FeeConsensus::default().fee(Amount::from_bitcoins(1)),
+        Amount::from_sats(100_001)
+    );
 }
