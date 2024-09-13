@@ -132,7 +132,7 @@ impl LightningCommands {
                 channel_size_sats,
                 push_amount_sats,
             } => {
-                create_client()
+                let funding_txid = create_client()
                     .open_channel(OpenChannelPayload {
                         pubkey,
                         host,
@@ -140,6 +140,7 @@ impl LightningCommands {
                         push_amount_sats: push_amount_sats.unwrap_or(0),
                     })
                     .await?;
+                println!("{funding_txid}");
             }
             Self::CloseChannelsWithPeer { pubkey } => {
                 let response = create_client()

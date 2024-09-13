@@ -40,7 +40,7 @@ service GatewayLightning {
   rpc GetLnOnchainAddress(EmptyRequest) returns (GetLnOnchainAddressResponse) {}
 
   /* Open a channel on the underlying lightning node. */
-  rpc OpenChannel(OpenChannelRequest) returns (EmptyResponse) {}
+  rpc OpenChannel(OpenChannelRequest) returns (OpenChannelResponse) {}
 
   /* Close all channels with a given peer on the underlying lightning node. */
   rpc CloseChannelsWithPeer(CloseChannelsWithPeerRequest) returns (CloseChannelsWithPeerResponse) {}
@@ -292,6 +292,11 @@ message OpenChannelRequest {
   // The amount of sats that should be pushed to the
   // counterparty once the channel is opened.
   uint64 push_amount_sats = 3;
+}
+
+message OpenChannelResponse {
+    // The txid of the channel funding transaction.
+    string funding_txid = 1;
 }
 
 message CloseChannelsWithPeerRequest {

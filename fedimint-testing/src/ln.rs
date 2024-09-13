@@ -18,7 +18,7 @@ use lightning_invoice::{
 use ln_gateway::gateway_lnrpc::{
     self, CloseChannelsWithPeerResponse, CreateInvoiceRequest, CreateInvoiceResponse,
     EmptyResponse, GetBalancesResponse, GetLnOnchainAddressResponse, GetNodeInfoResponse,
-    GetRouteHintsResponse, InterceptHtlcResponse, PayInvoiceResponse,
+    GetRouteHintsResponse, InterceptHtlcResponse, OpenChannelResponse, PayInvoiceResponse,
 };
 use ln_gateway::lightning::{
     ChannelInfo, HtlcResult, ILnRpcClient, LightningRpcError, RouteHtlcStream,
@@ -268,7 +268,7 @@ impl ILnRpcClient for FakeLightningTest {
         _host: String,
         _channel_size_sats: u64,
         _push_amount_sats: u64,
-    ) -> Result<EmptyResponse, LightningRpcError> {
+    ) -> Result<OpenChannelResponse, LightningRpcError> {
         Err(LightningRpcError::FailedToOpenChannel {
             failure_reason: "FakeLightningTest does not support opening channels".to_string(),
         })

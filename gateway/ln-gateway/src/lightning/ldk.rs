@@ -26,7 +26,7 @@ use crate::gateway_lnrpc::intercept_htlc_response::{Action, Settle};
 use crate::gateway_lnrpc::{
     CloseChannelsWithPeerResponse, CreateInvoiceRequest, CreateInvoiceResponse, EmptyResponse,
     GetBalancesResponse, GetLnOnchainAddressResponse, GetNodeInfoResponse, GetRouteHintsResponse,
-    InterceptHtlcRequest, InterceptHtlcResponse, PayInvoiceResponse,
+    InterceptHtlcRequest, InterceptHtlcResponse, OpenChannelResponse, PayInvoiceResponse,
 };
 
 pub struct GatewayLdkClient {
@@ -423,14 +423,15 @@ impl ILnRpcClient for GatewayLdkClient {
         host: String,
         channel_size_sats: u64,
         push_amount_sats: u64,
-    ) -> Result<EmptyResponse, LightningRpcError> {
+    ) -> Result<OpenChannelResponse, LightningRpcError> {
         let push_amount_msats_or = if push_amount_sats == 0 {
             None
         } else {
             Some(push_amount_sats * 1000)
         };
 
-        self.node
+        let user_channel_id = self
+            .node
             .connect_open_channel(
                 pubkey,
                 SocketAddress::from_str(&host).map_err(|e| {
@@ -447,7 +448,28 @@ impl ILnRpcClient for GatewayLdkClient {
                 failure_reason: e.to_string(),
             })?;
 
-        Ok(EmptyResponse {})
+        // The channel isn't always visible immediately, so we need to poll for it.
+        for _ in 0..10 {
+            let funding_txid_or = self
+                .node
+                .list_channels()
+                .iter()
+                .find(|channel| channel.user_channel_id == user_channel_id)
+                .and_then(|channel| channel.funding_txo)
+                .map(|funding_txo| funding_txo.txid);
+
+            if let Some(funding_txid) = funding_txid_or {
+                return Ok(OpenChannelResponse {
+                    funding_txid: funding_txid.to_string(),
+                });
+            }
+
+            fedimint_core::runtime::sleep(Duration::from_millis(100)).await;
+        }
+
+        Err(LightningRpcError::FailedToOpenChannel {
+            failure_reason: "Channel could not be opened".to_string(),
+        })
     }
 
     async fn close_channels_with_peer(
