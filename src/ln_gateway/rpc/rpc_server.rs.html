@@ -461,7 +461,19 @@
 <a href="#460" id="460">460</a>
 <a href="#461" id="461">461</a>
 <a href="#462" id="462">462</a>
-<a href="#463" id="463">463</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::sync::Arc;
+<a href="#463" id="463">463</a>
+<a href="#464" id="464">464</a>
+<a href="#465" id="465">465</a>
+<a href="#466" id="466">466</a>
+<a href="#467" id="467">467</a>
+<a href="#468" id="468">468</a>
+<a href="#469" id="469">469</a>
+<a href="#470" id="470">470</a>
+<a href="#471" id="471">471</a>
+<a href="#472" id="472">472</a>
+<a href="#473" id="473">473</a>
+<a href="#474" id="474">474</a>
+<a href="#475" id="475">475</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::sync::Arc;
 
 <span class="kw">use </span>axum::extract::Request;
 <span class="kw">use </span>axum::http::{header, StatusCode};
@@ -479,7 +491,8 @@
     GATEWAY_INFO_POST_ENDPOINT, GET_BALANCES_ENDPOINT, GET_GATEWAY_ID_ENDPOINT,
     GET_LN_ONCHAIN_ADDRESS_ENDPOINT, LEAVE_FED_ENDPOINT, LIST_ACTIVE_CHANNELS_ENDPOINT,
     MNEMONIC_ENDPOINT, OPEN_CHANNEL_ENDPOINT, PAY_INVOICE_ENDPOINT, RECEIVE_ECASH_ENDPOINT,
-    SET_CONFIGURATION_ENDPOINT, SPEND_ECASH_ENDPOINT, STOP_ENDPOINT, WITHDRAW_ENDPOINT,
+    SET_CONFIGURATION_ENDPOINT, SPEND_ECASH_ENDPOINT, STOP_ENDPOINT, SYNC_TO_CHAIN_ENDPOINT,
+    WITHDRAW_ENDPOINT,
 };
 <span class="kw">use </span>fedimint_lnv2_client::{CreateBolt11InvoicePayload, SendPaymentPayload};
 <span class="kw">use </span>fedimint_lnv2_common::endpoint_constants::{
@@ -496,7 +509,8 @@
     BackupPayload, BalancePayload, CloseChannelsWithPeerPayload, ConnectFedPayload,
     CreateInvoiceForSelfPayload, DepositAddressPayload, GetLnOnchainAddressPayload, InfoPayload,
     LeaveFedPayload, OpenChannelPayload, PayInvoicePayload, ReceiveEcashPayload,
-    SetConfigurationPayload, SpendEcashPayload, WithdrawPayload, V1_API_ENDPOINT,
+    SetConfigurationPayload, SpendEcashPayload, SyncToChainPayload, WithdrawPayload,
+    V1_API_ENDPOINT,
 };
 <span class="kw">use </span><span class="kw">crate</span>::rpc::ConfigPayload;
 <span class="kw">use crate</span>::{Gateway, GatewayError};
@@ -626,7 +640,8 @@
             CREATE_BOLT11_INVOICE_ENDPOINT,
             post(create_bolt11_invoice_v2),
         )
-        .route(RECEIVE_ECASH_ENDPOINT, post(receive_ecash));
+        .route(RECEIVE_ECASH_ENDPOINT, post(receive_ecash))
+        .route(SYNC_TO_CHAIN_ENDPOINT, post(sync_to_chain));
 
     <span class="comment">// Authenticated, public routes used for gateway administration
     </span><span class="kw">let </span>always_authenticated_routes = Router::new()
@@ -854,6 +869,15 @@
 ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="kw">impl </span>IntoResponse, GatewayError&gt; {
     <span class="kw">let </span>balances = gateway.handle_get_balances_msg().<span class="kw">await</span><span class="question-mark">?</span>;
     <span class="prelude-val">Ok</span>(Json(<span class="macro">json!</span>(balances)))
+}
+
+<span class="attr">#[instrument(skip_all, err)]
+</span><span class="kw">async fn </span>sync_to_chain(
+    Extension(gateway): Extension&lt;Arc&lt;Gateway&gt;&gt;,
+    Json(payload): Json&lt;SyncToChainPayload&gt;,
+) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="kw">impl </span>IntoResponse, GatewayError&gt; {
+    gateway.handle_sync_to_chain_msg(payload).<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="prelude-val">Ok</span>(Json(<span class="macro">json!</span>(())))
 }
 
 <span class="attr">#[instrument(skip_all, err)]

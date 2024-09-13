@@ -185,7 +185,12 @@
 <a href="#184" id="184">184</a>
 <a href="#185" id="185">185</a>
 <a href="#186" id="186">186</a>
-<a href="#187" id="187">187</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::time::Duration;
+<a href="#187" id="187">187</a>
+<a href="#188" id="188">188</a>
+<a href="#189" id="189">189</a>
+<a href="#190" id="190">190</a>
+<a href="#191" id="191">191</a>
+<a href="#192" id="192">192</a></pre></div><pre class="rust"><code><span class="kw">use </span>std::time::Duration;
 
 <span class="kw">use </span>clap::Subcommand;
 <span class="kw">use </span>fedimint_core::util::{backoff_util, retry};
@@ -194,6 +199,7 @@
 <span class="kw">use </span>ln_gateway::rpc::rpc_client::GatewayRpcClient;
 <span class="kw">use </span>ln_gateway::rpc::{
     CloseChannelsWithPeerPayload, GetLnOnchainAddressPayload, OpenChannelPayload,
+    SyncToChainPayload,
 };
 
 <span class="kw">use </span><span class="kw">crate</span>::print_response;
@@ -344,6 +350,10 @@
                 max_retries,
                 retry_delay_seconds,
             } =&gt; {
+                create_client()
+                    .sync_to_chain(SyncToChainPayload { block_height })
+                    .<span class="kw">await</span><span class="question-mark">?</span>;
+
                 <span class="kw">let </span>retry_duration = Duration::from_secs(
                     retry_delay_seconds.unwrap_or(DEFAULT_WAIT_FOR_CHAIN_SYNC_RETRY_DELAY_SECONDS),
                 );

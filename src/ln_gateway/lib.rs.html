@@ -2058,7 +2058,17 @@
 <a href="#2057" id="2057">2057</a>
 <a href="#2058" id="2058">2058</a>
 <a href="#2059" id="2059">2059</a>
-<a href="#2060" id="2060">2060</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
+<a href="#2060" id="2060">2060</a>
+<a href="#2061" id="2061">2061</a>
+<a href="#2062" id="2062">2062</a>
+<a href="#2063" id="2063">2063</a>
+<a href="#2064" id="2064">2064</a>
+<a href="#2065" id="2065">2065</a>
+<a href="#2066" id="2066">2066</a>
+<a href="#2067" id="2067">2067</a>
+<a href="#2068" id="2068">2068</a>
+<a href="#2069" id="2069">2069</a>
+<a href="#2070" id="2070">2070</a></pre></div><pre class="rust"><code><span class="attr">#![deny(clippy::pedantic)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::cast_possible_wrap)]
 #![allow(clippy::cast_sign_loss)]
@@ -2158,7 +2168,7 @@
     CloseChannelsWithPeerPayload, CreateInvoiceForSelfPayload, FederationInfo, GatewayFedConfig,
     GatewayInfo, LeaveFedPayload, MnemonicResponse, OpenChannelPayload, PayInvoicePayload,
     ReceiveEcashPayload, ReceiveEcashResponse, SetConfigurationPayload, SpendEcashPayload,
-    SpendEcashResponse, V1_API_ENDPOINT,
+    SpendEcashResponse, SyncToChainPayload, V1_API_ENDPOINT,
 };
 <span class="kw">use </span>state_machine::pay::OutgoingPaymentError;
 <span class="kw">use </span>state_machine::{GatewayClientModule, GatewayExtPayStates};
@@ -3456,6 +3466,16 @@
             lightning_balance_msats: lightning_node_balances.lightning_balance_msats,
             ecash_balances,
         })
+    }
+
+    <span class="kw">pub async fn </span>handle_sync_to_chain_msg(<span class="kw-2">&amp;</span><span class="self">self</span>, payload: SyncToChainPayload) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+        <span class="self">self</span>.get_lightning_context()
+            .<span class="kw">await</span><span class="question-mark">?
+            </span>.lnrpc
+            .sync_to_chain(payload.block_height)
+            .<span class="kw">await</span><span class="question-mark">?</span>;
+
+        <span class="prelude-val">Ok</span>(())
     }
 
     <span class="comment">// Handles a request the spend the gateway's ecash for a given federation.
