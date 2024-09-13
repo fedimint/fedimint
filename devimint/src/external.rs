@@ -860,10 +860,12 @@ pub async fn open_channel(
     Ok(())
 }
 
+pub type NamedGateway<'a> = (&'a Gatewayd, &'a str);
+
 #[allow(clippy::similar_names)]
 pub async fn open_channels_between_gateways(
     bitcoind: &Bitcoind,
-    gateways: &[(&Gatewayd, &str)],
+    gateways: &[NamedGateway<'_>],
 ) -> Result<()> {
     debug!(target: LOG_DEVIMINT, "Syncing gateway lightning nodes to chain tip...");
     futures::future::try_join_all(
@@ -894,7 +896,7 @@ pub async fn open_channels_between_gateways(
     // Since the first gateway within each pair initiates the channel open,
     // order within each pair needs to be enforced so that each Lightning node opens
     // 1 channel.
-    let gateway_pairs: Vec<(&(&Gatewayd, &str), &(&Gatewayd, &str))> = if gateways.len() == 2 {
+    let gateway_pairs: Vec<(&NamedGateway, &NamedGateway)> = if gateways.len() == 2 {
         gateways.iter().tuple_windows::<(_, _)>().collect()
     } else {
         gateways.iter().circular_tuple_windows::<(_, _)>().collect()
